@@ -2,7 +2,7 @@ package server
 
 import (
 	"context"
-	snykcode "github.com/snyk/snyk-lsp/snyk-code"
+	lsp2 "github.com/snyk/snyk-lsp/code/lsp"
 	"log"
 	"os"
 )
@@ -35,7 +35,7 @@ func Start() {
 
 func TextDocumentDidChangeHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeTextDocumentParams) (interface{}, error) {
-		diagnostics := snykcode.GetDiagnostics(params.TextDocument.URI, params.ContentChanges)
+		diagnostics := lsp2.GetDiagnostics(params.TextDocument.URI)
 		err := srv.Notify(ctx, "textDocument/PublishDiagnostics", lsp.PublishDiagnosticsParams{
 			URI:         params.TextDocument.URI,
 			Diagnostics: diagnostics,
@@ -46,7 +46,7 @@ func TextDocumentDidChangeHandler(srv *jrpc2.Server) handler.Func {
 
 func TestDocumentDidOpenHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.DidOpenTextDocumentParams) (interface{}, error) {
-		snykcode.RegisterDocument(params.TextDocument)
+		lsp2.RegisterDocument(params.TextDocument)
 		return nil, nil
 	})
 }
