@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/creachadair/jrpc2"
+	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/server"
 	"github.com/sourcegraph/go-lsp"
@@ -14,23 +15,36 @@ import (
 )
 
 var (
+	srv *jrpc2.Server
 	ctx = context.Background()
 )
 
 func startServer() server.Local {
 	var srv *jrpc2.Server
+	log.Printf("1: srv address: %p\n", &srv)
+
 	lspHandlers := handler.Map{
 		"initialize":             InitializeHandler(),
 		"textDocument/didOpen":   TestDocumentDidOpenHandler(),
 		"textDocument/didChange": TextDocumentDidChangeHandler(srv),
 	}
-	local := server.NewLocal(lspHandlers, &server.LocalOptions{
-		Server: &jrpc2.ServerOptions{
-			AllowPush: false,
-		},
-	})
-	srv = local.Server
-	return local
+
+	opts := &jrpc2.ServerOptions{
+		AllowPush: true,
+	}
+
+	cpipe, spipe := channel.Direct()
+
+	var loc = server.Local{
+		Server: jrpc2.NewServer(lspHandlers, opts),
+		Client: jrpc2.NewClient(cpipe, nil),
+	}
+	log.Printf("2: srv address: %p\n", &srv)
+
+	srv = loc.Server
+	loc.Server.Start(spipe)
+	log.Printf("3: srv address: %p\n", &srv)
+	return loc
 }
 
 func Test_serverShouldStart(t *testing.T) {

@@ -36,6 +36,7 @@ func Start() {
 func TextDocumentDidChangeHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeTextDocumentParams) (interface{}, error) {
 		diagnostics := lsp2.GetDiagnostics(params.TextDocument.URI)
+		log.Printf("srv address: %p\n", &srv)
 		err := srv.Notify(ctx, "textDocument/PublishDiagnostics", lsp.PublishDiagnosticsParams{
 			URI:         params.TextDocument.URI,
 			Diagnostics: diagnostics,
