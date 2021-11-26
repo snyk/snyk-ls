@@ -7,27 +7,31 @@ import (
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/server"
 	"github.com/sirupsen/logrus"
-	"github.com/snyk/snyk-lsp/code/bundle"
+	"github.com/snyk/snyk-lsp/code"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"log"
 	"strings"
 	"testing"
+	"time"
 )
 
 var (
 	ctx          = context.Background()
 	notification *jrpc2.Request
-	logger       logrus.Logger
 )
 
 func startServer() server.Local {
 	var srv *jrpc2.Server
 
 	lspHandlers := handler.Map{
-		"initialize":             InitializeHandler(),
-		"textDocument/didOpen":   TextDocumentDidOpenHandler(),
-		"textDocument/didChange": TextDocumentDidChangeHandler(&srv),
+		"initialize":                     InitializeHandler(),
+		"textDocument/didOpen":           TextDocumentDidOpenHandler(&srv),
+		"textDocument/didChange":         TextDocumentDidChangeHandler(),
+		"textDocument/didClose":          TextDocumentDidCloseHandler(),
+		"textDocument/didSave":           TextDocumentDidSaveHandler(&srv),
+		"textDocument/willSave":          TextDocumentWillSaveHandler(),
+		"textDocument/willSaveWaitUntil": TextDocumentWillSaveWaitUntilHandler(),
 	}
 
 	Logger = logrus.New()
@@ -119,14 +123,10 @@ func Test_textDocumentDidOpenHandler_shouldBeServed(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Call: %v", err)
 	}
-	var result lsp.InitializeResult
-	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatalf("Decoding result: %v", err)
-	}
-	fmt.Println(result)
+	fmt.Println(rsp)
 }
 
-func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItem(t *testing.T) {
+func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc := startServer()
 	defer loc.Close()
 
@@ -136,13 +136,21 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItem(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Call: %v", err)
 	}
+
+	// should receive diagnostics
+	diagnostics := lsp.PublishDiagnosticsParams{}
+
+	// wait for publish
+	assert.Eventually(t, func() bool { return notification != nil }, 500*time.Millisecond, 1)
+	_ = notification.UnmarshalParams(&diagnostics)
+	assert.Equal(t, didOpenParams.TextDocument.URI, diagnostics.URI)
 }
 
 func didOpenTextParams() lsp.DidOpenTextDocumentParams {
 	// see https://microsoft.github.io/language-server-protocol/specifications/specification-3-17/#documentSelector
 	didOpenParams := lsp.DidOpenTextDocumentParams{
 		TextDocument: lsp.TextDocumentItem{
-			URI:        bundle.DummyUri,
+			URI:        code.FakeDiagnosticUri,
 			LanguageID: "java",
 			Version:    0,
 			Text:       "public void",
@@ -159,14 +167,10 @@ func Test_textDocumentDidChangeHandler_shouldBeServed(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Call: %v", err)
 	}
-	var result lsp.InitializeResult
-	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatalf("Decoding result: %v", err)
-	}
-	fmt.Println(result)
+	fmt.Println(rsp)
 }
 
-func Test_textDocumentDidChangeHandler_should_publish_diagnostics(t *testing.T) {
+func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 	loc := startServer()
 	defer loc.Close()
 
@@ -189,12 +193,37 @@ func Test_textDocumentDidChangeHandler_should_publish_diagnostics(t *testing.T) 
 	if err != nil {
 		log.Fatalf("Call: %v", err)
 	}
+}
 
-	// wait for all workers done
+func Test_textDocumentDidSaveHandler_shouldBeServed(t *testing.T) {
+	loc := startServer()
+	defer loc.Close()
 
-	// should receive diagnostics
-	assert.NotNil(t, notification)
-	diagnostics := lsp.PublishDiagnosticsParams{}
-	notification.UnmarshalParams(&diagnostics)
-	assert.Equal(t, didChangeParams.TextDocument.URI, diagnostics.URI)
+	rsp, err := loc.Client.Call(ctx, "textDocument/didSave", nil)
+	if err != nil {
+		log.Fatalf("Call: %v", err)
+	}
+	fmt.Println(rsp)
+}
+
+func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
+	loc := startServer()
+	defer loc.Close()
+
+	rsp, err := loc.Client.Call(ctx, "textDocument/willSaveWaitUntil", nil)
+	if err != nil {
+		log.Fatalf("Call: %v", err)
+	}
+	fmt.Println(rsp)
+}
+
+func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
+	loc := startServer()
+	defer loc.Close()
+
+	rsp, err := loc.Client.Call(ctx, "textDocument/willSave", nil)
+	if err != nil {
+		log.Fatalf("Call: %v", err)
+	}
+	fmt.Println(rsp)
 }

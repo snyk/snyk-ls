@@ -1,7 +1,7 @@
 package lsp
 
 import (
-	"github.com/snyk/snyk-lsp/code/bundle"
+	"github.com/snyk/snyk-lsp/code"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -9,7 +9,7 @@ import (
 
 var (
 	doc = lsp.TextDocumentItem{
-		URI:        bundle.DummyUri,
+		URI:        code.FakeDiagnosticUri,
 		LanguageID: "java",
 		Version:    0,
 		Text:       "public void class",
@@ -17,30 +17,39 @@ var (
 )
 
 func Test_RegisterDocument_shouldRegisterDocumentInCache(t *testing.T) {
-	assert.Equal(t, doc.URI, RegisterDocument(doc))
-}
-
-func Test_RegisterDocument_shouldGetDocumentFromCache(t *testing.T) {
 	registeredDocuments = map[lsp.DocumentURI]lsp.TextDocumentItem{}
-	uri := RegisterDocument(doc)
-	assert.Equal(t, doc, registeredDocuments[uri])
+	RegisterDocument(doc)
+	assert.Equal(t, doc, registeredDocuments[doc.URI])
 }
 
 func Test_UnRegisterDocument_shouldDeleteDocumentFromCache(t *testing.T) {
 	registeredDocuments = map[lsp.DocumentURI]lsp.TextDocumentItem{}
-	uri := RegisterDocument(doc)
-	UnRegisterDocument(uri)
-	assert.Equal(t, lsp.TextDocumentItem{}, registeredDocuments[uri])
+	RegisterDocument(doc)
+	UnRegisterDocument(doc.URI)
+	assert.Equal(t, lsp.TextDocumentItem{}, registeredDocuments[doc.URI])
 }
 
 func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 	registeredDocuments = map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	documentDiagnostics = map[lsp.DocumentURI][]lsp.Diagnostic{}
-	uri := RegisterDocument(doc)
+	RegisterDocument(doc)
 
-	diagnostics := GetDiagnostics(uri, &bundle.FakeBackendService{BundleHash: "dummy-hash"})
+	diagnostics, _ := GetDiagnostics(doc.URI, &code.FakeBackendService{BundleHash: "dummy-hash"})
 
 	assert.NotNil(t, diagnostics)
-	assert.NotEmpty(t, documentDiagnostics[uri])
-	assert.Equal(t, len(documentDiagnostics[uri]), len(diagnostics))
+	assert.NotEmpty(t, documentDiagnostics[doc.URI])
+	assert.Equal(t, len(documentDiagnostics[doc.URI]), len(diagnostics))
+}
+
+func Test_UpdateDocument_shouldUpdateTextOfDocument(t *testing.T) {
+	registeredDocuments = map[lsp.DocumentURI]lsp.TextDocumentItem{}
+	documentDiagnostics = map[lsp.DocumentURI][]lsp.Diagnostic{}
+	RegisterDocument(doc)
+
+	change := lsp.TextDocumentContentChangeEvent{
+		Text: "hurz",
+	}
+	UpdateDocument(doc.URI, []lsp.TextDocumentContentChangeEvent{change})
+
+	assert.Equal(t, registeredDocuments[doc.URI].Text, change.Text)
 }

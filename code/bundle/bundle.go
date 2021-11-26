@@ -1,91 +1,84 @@
 package bundle
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"github.com/snyk/snyk-lsp/code/interfaces"
+	"github.com/snyk/snyk-lsp/code/structs"
+	"github.com/snyk/snyk-lsp/util"
 	"github.com/sourcegraph/go-lsp"
+	"time"
 )
 
-type File struct {
-	hash    string
-	content string
-}
-
-type BackendService interface {
-	createBundle(files map[lsp.DocumentURI]File) (string, []lsp.DocumentURI)
-	extendBundle(files map[lsp.DocumentURI]File, removedFiles []lsp.DocumentURI) []lsp.DocumentURI
-	retrieveDiagnostics() map[lsp.DocumentURI][]lsp.Diagnostic
-}
-
 type CodeBundleImpl struct {
-	Backend         BackendService
+	Backend         interfaces.BackendService
 	bundleHash      string
-	bundleDocuments map[lsp.DocumentURI]File
+	bundleDocuments map[lsp.DocumentURI]structs.File
 	missingFiles    []lsp.DocumentURI
 }
 
-func hash(content string) string {
-	bytes := sha256.Sum256([]byte(content))
-	sum256 := hex.EncodeToString(bytes[:])
-	return sum256
+type SnykAnalysisTimeoutError struct {
+	msg string
 }
 
-func (b *CodeBundleImpl) createBundleFromSource(files map[lsp.DocumentURI]lsp.TextDocumentItem) string {
+func (e SnykAnalysisTimeoutError) Error() string {
+	return e.msg
+}
+
+func (b *CodeBundleImpl) createBundleFromSource(files map[lsp.DocumentURI]lsp.TextDocumentItem) (string, []lsp.DocumentURI, error) {
 	b.addToBundleDocuments(files)
-	b.bundleHash, b.missingFiles = b.Backend.createBundle(b.bundleDocuments)
-	return b.bundleHash
+	var err error
+	b.bundleHash, b.missingFiles, err = b.Backend.CreateBundle(b.bundleDocuments)
+	return b.bundleHash, b.missingFiles, err
 }
 
 func (b *CodeBundleImpl) addToBundleDocuments(files map[lsp.DocumentURI]lsp.TextDocumentItem) {
 	if b.bundleDocuments == nil {
-		b.bundleDocuments = make(map[lsp.DocumentURI]File)
+		b.bundleDocuments = make(map[lsp.DocumentURI]structs.File)
 	}
 	for uri, doc := range files {
-		if (b.bundleDocuments[uri] == File{}) {
-			b.bundleDocuments[uri] = File{
-				hash:    hash(doc.Text),
-				content: doc.Text,
+		if (b.bundleDocuments[uri] == structs.File{}) {
+			b.bundleDocuments[uri] = structs.File{
+				Hash:    util.Hash(doc.Text),
+				Content: doc.Text,
 			}
 		}
 	}
 }
 
-func (b *CodeBundleImpl) extendBundleFromSource(
-	files map[lsp.DocumentURI]lsp.TextDocumentItem,
-	removeFiles []lsp.DocumentURI,
-) []lsp.DocumentURI {
+func (b *CodeBundleImpl) extendBundleFromSource(files map[lsp.DocumentURI]lsp.TextDocumentItem) ([]lsp.DocumentURI, error) {
+	var err error
 	b.addToBundleDocuments(files)
-	b.missingFiles = b.Backend.extendBundle(b.bundleDocuments, removeFiles)
-	//b.removeFromBundleDocuments(removeFiles) //TODO test
-	return b.missingFiles
+	var removeFiles []lsp.DocumentURI
+	// todo determine which files to change
+	b.missingFiles, err = b.Backend.ExtendBundle(b.bundleHash, b.bundleDocuments, removeFiles)
+	return b.missingFiles, err
 }
 
-func (b *CodeBundleImpl) DiagnosticData(registeredDocuments map[lsp.DocumentURI]lsp.TextDocumentItem) map[lsp.DocumentURI][]lsp.Diagnostic {
+func (b *CodeBundleImpl) DiagnosticData(registeredDocuments map[lsp.DocumentURI]lsp.TextDocumentItem) (map[lsp.DocumentURI][]lsp.Diagnostic, error) {
+	var err error
 	if b.bundleHash == "" {
-		b.bundleHash = b.createBundleFromSource(registeredDocuments)
+		// we don't have missing files, as we're creating from source
+		b.bundleHash, _, err = b.createBundleFromSource(registeredDocuments)
+		if err != nil {
+			return nil, err
+		}
 	} else {
-		//b.extendBundleFromSource(registeredDocuments, ) // TODO test: check for gaps and extend
+		// we don't have missing files, as we're creating from source
+		_, err := b.extendBundleFromSource(registeredDocuments)
+		if err != nil {
+			return nil, err
+		}
 	}
-
-	diagnosticMap := b.Backend.retrieveDiagnostics()
-
-	// only return requested diagnostics TODO test
-	//for uri := range diagnosticMap {
-	//	if (registeredDocuments[uri] == lsp.TextDocumentItem{}) {
-	//		delete(diagnosticMap, uri)
-	//	}
-	//}
-
-	for uri := range registeredDocuments {
-		diagnosticMap[uri] = diagnosticMap[DummyUri]
+	for {
+		start := time.Now()
+		data, err := b.Backend.RetrieveDiagnostics(b.bundleHash, []lsp.DocumentURI{}, 0)
+		if err != nil {
+			return nil, err
+		}
+		if data != nil {
+			return data, err
+		}
+		if time.Now().Sub(start) > 30*time.Second {
+			return nil, SnykAnalysisTimeoutError{msg: "Analysis Call Timed out."}
+		}
 	}
-
-	return diagnosticMap
 }
-
-// TODO test
-//func (b *CodeBundleImpl) removeFromBundleDocuments(files []lsp.DocumentURI) {
-//	for f := range files {
-//		delete(b.bundleDocuments, files[f])
-//	}
-//}
