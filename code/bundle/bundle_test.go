@@ -35,30 +35,33 @@ func Test_hash(t *testing.T) {
 }
 
 func Test_createBundleFromSource_shouldReturnNonEmptyBundleHash(t *testing.T) {
-	bundleDocuments = map[lsp.DocumentURI]File{}
+	b := CodeBundleImpl{Backend: &FakeBackendService{BundleHash: "test-bundle-hash"}}
+	b.bundleDocuments = map[lsp.DocumentURI]File{}
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
 
-	assert.NotEqual(t, "", createBundleFromSource(registeredDocuments))
-	assert.NotEqual(t, "", bundleHash)
+	assert.NotEqual(t, "", b.createBundleFromSource(registeredDocuments))
+	assert.NotEqual(t, "", b.bundleHash)
 }
 
 func Test_createBundleFromSource_shouldAddDocumentToBundle(t *testing.T) {
-	bundleDocuments = map[lsp.DocumentURI]File{}
+	b := CodeBundleImpl{Backend: &FakeBackendService{BundleHash: "test-bundle-hash"}}
+	b.bundleDocuments = map[lsp.DocumentURI]File{}
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
 
-	bundleHash := createBundleFromSource(registeredDocuments)
+	bundleHash := b.createBundleFromSource(registeredDocuments)
 
 	assert.NotEqual(t, "", bundleHash)
-	assert.NotEqual(t, File{}, bundleDocuments[firstDoc.URI])
-	assert.Equal(t, firstBundleFile, bundleDocuments[firstDoc.URI])
+	assert.NotEqual(t, File{}, b.bundleDocuments[firstDoc.URI])
+	assert.Equal(t, firstBundleFile, b.bundleDocuments[firstDoc.URI])
 }
 
 func Test_extendBundleFromSource_shouldAddDocumentToBundle(t *testing.T) {
-	bundleHash = "test-hash"
-	bundleDocuments = map[lsp.DocumentURI]File{}
-	bundleDocuments[firstDoc.URI] = firstBundleFile
+	b := CodeBundleImpl{Backend: &FakeBackendService{BundleHash: "test-bundle-hash"}}
+	b.bundleHash = "test-hash"
+	b.bundleDocuments = map[lsp.DocumentURI]File{}
+	b.bundleDocuments[firstDoc.URI] = firstBundleFile
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[secondDoc.URI] = secondDoc
 
@@ -67,7 +70,7 @@ func Test_extendBundleFromSource_shouldAddDocumentToBundle(t *testing.T) {
 		content: secondDoc.Text,
 	}
 
-	missingFiles := extendBundleFromSource(registeredDocuments)
+	missingFiles := b.extendBundleFromSource(registeredDocuments, []lsp.DocumentURI{})
 	assert.Empty(t, missingFiles)
-	assert.Equal(t, secondBundleFile, bundleDocuments[secondDoc.URI])
+	assert.Equal(t, secondBundleFile, b.bundleDocuments[secondDoc.URI])
 }

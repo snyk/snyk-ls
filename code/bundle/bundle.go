@@ -6,14 +6,22 @@ import (
 	"github.com/sourcegraph/go-lsp"
 )
 
-var (
-	bundleHash      = ""
-	bundleDocuments = map[lsp.DocumentURI]File{}
-)
-
 type File struct {
 	hash    string
 	content string
+}
+
+type BackendService interface {
+	createBundle(files map[lsp.DocumentURI]File) (string, []lsp.DocumentURI)
+	extendBundle(files map[lsp.DocumentURI]File, removedFiles []lsp.DocumentURI) []lsp.DocumentURI
+	retrieveDiagnostics() map[lsp.DocumentURI][]lsp.Diagnostic
+}
+
+type CodeBundleImpl struct {
+	Backend         BackendService
+	bundleHash      string
+	bundleDocuments map[lsp.DocumentURI]File
+	missingFiles    []lsp.DocumentURI
 }
 
 func hash(content string) string {
@@ -22,19 +30,19 @@ func hash(content string) string {
 	return sum256
 }
 
-func createBundleFromSource(files map[lsp.DocumentURI]lsp.TextDocumentItem) string {
-	bundleHash = "bundle-id"
-
-	addToBundleDocuments(files)
-
-	// todo create bundle via api
-	return bundleHash
+func (b *CodeBundleImpl) createBundleFromSource(files map[lsp.DocumentURI]lsp.TextDocumentItem) string {
+	b.addToBundleDocuments(files)
+	b.bundleHash, b.missingFiles = b.Backend.createBundle(b.bundleDocuments)
+	return b.bundleHash
 }
 
-func addToBundleDocuments(files map[lsp.DocumentURI]lsp.TextDocumentItem) {
+func (b *CodeBundleImpl) addToBundleDocuments(files map[lsp.DocumentURI]lsp.TextDocumentItem) {
+	if b.bundleDocuments == nil {
+		b.bundleDocuments = make(map[lsp.DocumentURI]File)
+	}
 	for uri, doc := range files {
-		if (bundleDocuments[uri] == File{}) {
-			bundleDocuments[uri] = File{
+		if (b.bundleDocuments[uri] == File{}) {
+			b.bundleDocuments[uri] = File{
 				hash:    hash(doc.Text),
 				content: doc.Text,
 			}
@@ -42,51 +50,38 @@ func addToBundleDocuments(files map[lsp.DocumentURI]lsp.TextDocumentItem) {
 	}
 }
 
-func extendBundleFromSource(files map[lsp.DocumentURI]lsp.TextDocumentItem) []lsp.DocumentURI {
-
-	// todo call extend bundle api
-	// todo get missing files from api
-	addToBundleDocuments(files)
-	var missingFiles []lsp.DocumentURI
-	return missingFiles
+func (b *CodeBundleImpl) extendBundleFromSource(
+	files map[lsp.DocumentURI]lsp.TextDocumentItem,
+	removeFiles []lsp.DocumentURI,
+) []lsp.DocumentURI {
+	b.addToBundleDocuments(files)
+	b.missingFiles = b.Backend.extendBundle(b.bundleDocuments, removeFiles)
+	//b.removeFromBundleDocuments(removeFiles) //TODO test
+	return b.missingFiles
 }
 
-func GetDiagnosticData(registeredDocuments map[lsp.DocumentURI]lsp.TextDocumentItem) map[lsp.DocumentURI][]lsp.Diagnostic {
-	if bundleHash == "" {
-		bundleHash = createBundleFromSource(registeredDocuments)
+func (b *CodeBundleImpl) DiagnosticData(registeredDocuments map[lsp.DocumentURI]lsp.TextDocumentItem) map[lsp.DocumentURI][]lsp.Diagnostic {
+	if b.bundleHash == "" {
+		b.bundleHash = b.createBundleFromSource(registeredDocuments)
 	} else {
-		extendBundleFromSource(registeredDocuments)
+		//b.extendBundleFromSource(registeredDocuments, ) // TODO test: check for gaps and extend
 	}
 
-	// todo call analysis
-	// todo convert analysis suggestion object
-	diagnosticMap := make(map[lsp.DocumentURI][]lsp.Diagnostic)
-	diagnosticMap[DummyUri()] = dummyDiagnostic()
+	diagnosticMap := b.Backend.retrieveDiagnostics()
+
+	// only return requested diagnostics TODO test
+	//for uri := range diagnosticMap {
+	//	if (registeredDocuments[uri] == lsp.TextDocumentItem{}) {
+	//		delete(diagnosticMap, uri)
+	//	}
+	//}
+
 	return diagnosticMap
 }
 
-func DummyUri() lsp.DocumentURI {
-	return "/dummy.java"
-}
-
-func dummyDiagnostic() []lsp.Diagnostic {
-	diagnostic := lsp.Diagnostic{
-		Range: lsp.Range{
-			Start: lsp.Position{
-				Line:      2,
-				Character: 5,
-			},
-			End: lsp.Position{
-				Line:      2,
-				Character: 7,
-			},
-		},
-		Severity: 0,
-		Code:     "123",
-		Source:   "snyk code",
-		Message:  "Dummy",
-	}
-	var diagnostics []lsp.Diagnostic
-	diagnostics = append(diagnostics, diagnostic)
-	return diagnostics
-}
+// TODO test
+//func (b *CodeBundleImpl) removeFromBundleDocuments(files []lsp.DocumentURI) {
+//	for f := range files {
+//		delete(b.bundleDocuments, files[f])
+//	}
+//}

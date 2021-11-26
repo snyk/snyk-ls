@@ -1,7 +1,6 @@
 package lsp
 
 import (
-	"github.com/snyk/snyk-lsp/code/bundle"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -9,7 +8,7 @@ import (
 
 var (
 	doc = lsp.TextDocumentItem{
-		URI:        bundle.DummyUri(),
+		URI:        "/dummy.java",
 		LanguageID: "java",
 		Version:    0,
 		Text:       "class",

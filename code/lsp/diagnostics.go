@@ -20,9 +20,11 @@ func UnRegisterDocument(file lsp.DocumentURI) {
 }
 
 func GetDiagnostics(uri lsp.DocumentURI) []lsp.Diagnostic {
-	diagnostics := bundle.GetDiagnosticData(registeredDocuments)
-	for uri, diagnostic := range diagnostics {
-		documentDiagnostics[uri] = diagnostic
+	bundle := bundle.CodeBundleImpl{Backend: &bundle.FakeBackendService{BundleHash: "test-bundle-hash"}}
+	diagnostics := bundle.DiagnosticData(registeredDocuments)
+	// add all diagnostics to cache
+	for uri, diagnosticSlice := range diagnostics {
+		documentDiagnostics[uri] = diagnosticSlice
 	}
 	return documentDiagnostics[uri]
 }

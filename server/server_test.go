@@ -131,7 +131,7 @@ func getDidOpenTextParams() lsp.DidOpenTextDocumentParams {
 	// see https://microsoft.github.io/language-server-protocol/specifications/specification-3-17/#documentSelector
 	didOpenParams := lsp.DidOpenTextDocumentParams{
 		TextDocument: lsp.TextDocumentItem{
-			URI:        "/test",
+			URI:        "/dummy.java",
 			LanguageID: "java",
 			Version:    0,
 			Text:       "public void",
