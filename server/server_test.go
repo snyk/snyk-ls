@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/creachadair/jrpc2"
-	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/server"
 	"github.com/sourcegraph/go-lsp"
@@ -15,45 +14,32 @@ import (
 )
 
 var (
-	srv *jrpc2.Server
 	ctx = context.Background()
 )
 
 func startServer() server.Local {
 	var srv *jrpc2.Server
-	log.Printf("1: srv address: %p\n", &srv)
 
 	lspHandlers := handler.Map{
 		"initialize":             InitializeHandler(),
 		"textDocument/didOpen":   TestDocumentDidOpenHandler(),
-		"textDocument/didChange": TextDocumentDidChangeHandler(srv),
+		"textDocument/didChange": TextDocumentDidChangeHandler(&srv),
 	}
 
-	opts := &jrpc2.ServerOptions{
-		AllowPush: true,
+	opts := &server.LocalOptions{
+		Server: &jrpc2.ServerOptions{
+			AllowPush: true,
+		},
 	}
-
-	cpipe, spipe := channel.Direct()
-
-	var loc = server.Local{
-		Server: jrpc2.NewServer(lspHandlers, opts),
-		Client: jrpc2.NewClient(cpipe, nil),
-	}
-	log.Printf("2: srv address: %p\n", &srv)
-
+	loc := server.NewLocal(lspHandlers, opts)
 	srv = loc.Server
-	loc.Server.Start(spipe)
-	log.Printf("3: srv address: %p\n", &srv)
 	return loc
 }
 
 func Test_serverShouldStart(t *testing.T) {
-	// Construct a new server with methods "Hello" and "Log".
 	loc := startServer()
 	defer loc.Close()
 
-	// We can query the server for its current status information, including a
-	// list of its methods.
 	si := loc.Server.ServerInfo()
 
 	fmt.Println(strings.Join(si.Methods, "\n"))
@@ -199,36 +185,3 @@ func Test_textDocumentDidChangeHandler_should_publish_diagnostics(t *testing.T) 
 	}
 	assert.Equal(t, didChangeParams.TextDocument.URI, response.URI)
 }
-
-//func ExampleResponse_UnmarshalResult() {
-//	loc := startServer()
-//	defer loc.Close()
-//
-//	rsp, err := loc.Client.Call(ctx, "Echo", []string{"alpha", "oscar", "kilo"})
-//	if err != nil {
-//		log.Fatalf("Call: %v", err)
-//	}
-//	var r1, r3 string
-//
-//	// Note the nil, which tells the decoder to skip that argument.
-//	if err := rsp.UnmarshalResult(&handler.Args{&r1, nil, &r3}); err != nil {
-//		log.Fatalf("Decoding result: %v", err)
-//	}
-//	fmt.Println(r1, r3)
-//	// Output:
-//	// alpha kilo
-//}
-
-//
-//func ExampleClient_CallResult() {
-//	loc := startServer()
-//	defer loc.Close()
-//
-//	var msg string
-//	if err := loc.Client.CallResult(ctx, "Hello", nil, &msg); err != nil {
-//		log.Fatalf("CallResult: %v", err)
-//	}
-//	fmt.Println(msg)
-//	// Output:
-//	// Hello, world!
-//}

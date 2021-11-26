@@ -19,7 +19,7 @@ func Start() {
 	lspHandlers := handler.Map{
 		"initialize":             InitializeHandler(),
 		"textDocument/didOpen":   TestDocumentDidOpenHandler(),
-		"textDocument/didChange": TextDocumentDidChangeHandler(server),
+		"textDocument/didChange": TextDocumentDidChangeHandler(&server),
 	}
 
 	server = jrpc2.NewServer(lspHandlers, &jrpc2.ServerOptions{
@@ -33,11 +33,11 @@ func Start() {
 	log.Fatalf("Shutting down...(%s)", err)
 }
 
-func TextDocumentDidChangeHandler(srv *jrpc2.Server) handler.Func {
+func TextDocumentDidChangeHandler(srv **jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeTextDocumentParams) (interface{}, error) {
 		diagnostics := lsp2.GetDiagnostics(params.TextDocument.URI)
 		log.Printf("srv address: %p\n", &srv)
-		err := srv.Notify(ctx, "textDocument/PublishDiagnostics", lsp.PublishDiagnosticsParams{
+		err := (*srv).Notify(ctx, "textDocument/PublishDiagnostics", lsp.PublishDiagnosticsParams{
 			URI:         params.TextDocument.URI,
 			Diagnostics: diagnostics,
 		})
