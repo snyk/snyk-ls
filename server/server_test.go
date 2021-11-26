@@ -6,6 +6,8 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/server"
+	"github.com/sirupsen/logrus"
+	"github.com/snyk/snyk-lsp/code/bundle"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"log"
@@ -16,6 +18,7 @@ import (
 var (
 	ctx          = context.Background()
 	notification *jrpc2.Request
+	logger       logrus.Logger
 )
 
 func startServer() server.Local {
@@ -23,9 +26,11 @@ func startServer() server.Local {
 
 	lspHandlers := handler.Map{
 		"initialize":             InitializeHandler(),
-		"textDocument/didOpen":   TestDocumentDidOpenHandler(),
+		"textDocument/didOpen":   TextDocumentDidOpenHandler(),
 		"textDocument/didChange": TextDocumentDidChangeHandler(&srv),
 	}
+
+	Logger = logrus.New()
 
 	opts := &server.LocalOptions{
 		Client: &jrpc2.ClientOptions{
@@ -125,7 +130,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItem(t *testing.T) {
 	loc := startServer()
 	defer loc.Close()
 
-	didOpenParams := getDidOpenTextParams()
+	didOpenParams := didOpenTextParams()
 
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
@@ -133,11 +138,11 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItem(t *testing.T) {
 	}
 }
 
-func getDidOpenTextParams() lsp.DidOpenTextDocumentParams {
+func didOpenTextParams() lsp.DidOpenTextDocumentParams {
 	// see https://microsoft.github.io/language-server-protocol/specifications/specification-3-17/#documentSelector
 	didOpenParams := lsp.DidOpenTextDocumentParams{
 		TextDocument: lsp.TextDocumentItem{
-			URI:        "/dummy.java",
+			URI:        bundle.DummyUri,
 			LanguageID: "java",
 			Version:    0,
 			Text:       "public void",
@@ -166,7 +171,7 @@ func Test_textDocumentDidChangeHandler_should_publish_diagnostics(t *testing.T) 
 	defer loc.Close()
 
 	// register our dummy document
-	didOpenParams := getDidOpenTextParams()
+	didOpenParams := didOpenTextParams()
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 
 	// send change

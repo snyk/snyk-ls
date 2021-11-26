@@ -26,5 +26,5 @@ func GetDiagnostics(uri lsp.DocumentURI, backend bundle.BackendService) []lsp.Di
 	for uri, diagnosticSlice := range diagnostics {
 		documentDiagnostics[uri] = diagnosticSlice
 	}
-	return documentDiagnostics[uri]
+	return diagnostics[uri]
 }

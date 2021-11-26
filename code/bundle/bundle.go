@@ -76,6 +76,10 @@ func (b *CodeBundleImpl) DiagnosticData(registeredDocuments map[lsp.DocumentURI]
 	//	}
 	//}
 
+	for uri := range registeredDocuments {
+		diagnosticMap[uri] = diagnosticMap[DummyUri]
+	}
+
 	return diagnosticMap
 }
 

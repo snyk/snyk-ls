@@ -3,7 +3,7 @@ package bundle
 import "github.com/sourcegraph/go-lsp"
 
 var (
-	DummyUri = lsp.DocumentURI("/Dummy.java")
+	DummyUri = lsp.DocumentURI("file:///Users/bdoetsch/workspace/infrastructure-as-code-goof/Dummy.java")
 )
 
 type FakeBackendService struct {
@@ -20,18 +20,18 @@ func (f *FakeBackendService) retrieveDiagnostics() map[lsp.DocumentURI][]lsp.Dia
 	diagnostic := lsp.Diagnostic{
 		Range: lsp.Range{
 			Start: lsp.Position{
-				Line:      2,
-				Character: 5,
+				Line:      0,
+				Character: 3,
 			},
 			End: lsp.Position{
-				Line:      2,
+				Line:      0,
 				Character: 7,
 			},
 		},
 		Severity: lsp.Error,
-		Code:     "123",
+		Code:     "SNYK-123",
 		Source:   "snyk code",
-		Message:  "This is a dummy with severity Error",
+		Message:  "This is a dummy error (severity error)",
 	}
 
 	fakes := map[lsp.DocumentURI][]lsp.Diagnostic{}
