@@ -2,6 +2,10 @@ package bundle
 
 import "github.com/sourcegraph/go-lsp"
 
+var (
+	DummyUri = lsp.DocumentURI("/Dummy.java")
+)
+
 type FakeBackendService struct {
 	BundleHash string
 }
@@ -27,12 +31,12 @@ func (f *FakeBackendService) retrieveDiagnostics() map[lsp.DocumentURI][]lsp.Dia
 		Severity: lsp.Error,
 		Code:     "123",
 		Source:   "snyk code",
-		Message:  "Dummy",
+		Message:  "This is a dummy with severity Error",
 	}
 
 	fakes := map[lsp.DocumentURI][]lsp.Diagnostic{}
 	var diagnostics []lsp.Diagnostic
 	diagnostics = append(diagnostics, diagnostic)
-	fakes["/dummy.java"] = diagnostics
+	fakes[DummyUri] = diagnostics
 	return fakes
 }

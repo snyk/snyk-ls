@@ -19,8 +19,8 @@ func UnRegisterDocument(file lsp.DocumentURI) {
 	delete(registeredDocuments, file)
 }
 
-func GetDiagnostics(uri lsp.DocumentURI) []lsp.Diagnostic {
-	bundle := bundle.CodeBundleImpl{Backend: &bundle.FakeBackendService{BundleHash: "test-bundle-hash"}}
+func GetDiagnostics(uri lsp.DocumentURI, backend bundle.BackendService) []lsp.Diagnostic {
+	bundle := bundle.CodeBundleImpl{Backend: backend}
 	diagnostics := bundle.DiagnosticData(registeredDocuments)
 	// add all diagnostics to cache
 	for uri, diagnosticSlice := range diagnostics {

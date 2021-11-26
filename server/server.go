@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"github.com/snyk/snyk-lsp/code/bundle"
 	lsp2 "github.com/snyk/snyk-lsp/code/lsp"
 	"log"
 	"os"
@@ -35,7 +36,7 @@ func Start() {
 
 func TextDocumentDidChangeHandler(srv **jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeTextDocumentParams) (interface{}, error) {
-		diagnostics := lsp2.GetDiagnostics(params.TextDocument.URI)
+		diagnostics := lsp2.GetDiagnostics(params.TextDocument.URI, &bundle.FakeBackendService{BundleHash: "dummy"})
 		log.Printf("srv address: %p\n", &srv)
 		err := (*srv).Notify(ctx, "textDocument/PublishDiagnostics", lsp.PublishDiagnosticsParams{
 			URI:         params.TextDocument.URI,

@@ -14,7 +14,8 @@ import (
 )
 
 var (
-	ctx = context.Background()
+	ctx          = context.Background()
+	notification *jrpc2.Request
 )
 
 func startServer() server.Local {
@@ -27,6 +28,11 @@ func startServer() server.Local {
 	}
 
 	opts := &server.LocalOptions{
+		Client: &jrpc2.ClientOptions{
+			OnNotify: func(request *jrpc2.Request) {
+				notification = request
+			},
+		},
 		Server: &jrpc2.ServerOptions{
 			AllowPush: true,
 		},
@@ -173,15 +179,17 @@ func Test_textDocumentDidChangeHandler_should_publish_diagnostics(t *testing.T) 
 		TextDocument:   versionedTextDocumentIdentifier,
 		ContentChanges: nil,
 	}
-	rsp, err := loc.Client.Call(ctx, "textDocument/didChange", didChangeParams)
+
+	_, err = loc.Client.Call(ctx, "textDocument/didChange", didChangeParams)
 	if err != nil {
 		log.Fatalf("Call: %v", err)
 	}
 
+	// wait for all workers done
+
 	// should receive diagnostics
-	response := lsp.PublishDiagnosticsParams{}
-	if err := rsp.UnmarshalResult(&response); err != nil {
-		log.Fatalf("Decoding result: %v", err)
-	}
-	assert.Equal(t, didChangeParams.TextDocument.URI, response.URI)
+	assert.NotNil(t, notification)
+	diagnostics := lsp.PublishDiagnosticsParams{}
+	notification.UnmarshalParams(&diagnostics)
+	assert.Equal(t, didChangeParams.TextDocument.URI, diagnostics.URI)
 }
