@@ -2,27 +2,29 @@ package code
 
 import (
 	"github.com/google/uuid"
+	"github.com/snyk/snyk-lsp/lsp"
 	"github.com/snyk/snyk-lsp/util"
-	"github.com/sourcegraph/go-lsp"
+	sglsp "github.com/sourcegraph/go-lsp"
 )
 
 var (
-	FakeDiagnosticUri = lsp.DocumentURI("file:///Users/bdoetsch/workspace/infrastructure-as-code-goof/Dummy.java")
+	FakeDiagnosticUri = sglsp.DocumentURI("file:///Users/bdoetsch/workspace/infrastructure-as-code-goof/Dummy.java")
 	FakeDiagnostic    = lsp.Diagnostic{
-		Range: lsp.Range{
-			Start: lsp.Position{
+		Range: sglsp.Range{
+			Start: sglsp.Position{
 				Line:      0,
 				Character: 3,
 			},
-			End: lsp.Position{
+			End: sglsp.Position{
 				Line:      0,
 				Character: 7,
 			},
 		},
-		Severity: lsp.Error,
-		Code:     "SNYK-123",
-		Source:   "snyk code",
-		Message:  "This is a dummy error (severity error)",
+		Severity:        sglsp.Error,
+		Code:            "SNYK-123",
+		Source:          "snyk code",
+		Message:         "This is a dummy error (severity error)",
+		CodeDescription: lsp.CodeDescription{Href: "https://snyk.io"},
 	}
 )
 
@@ -61,7 +63,7 @@ func (f *FakeBackendService) GetCallParams(callNo int, op string) []interface{} 
 	return params
 }
 
-func (f *FakeBackendService) CreateBundle(files map[lsp.DocumentURI]File) (string, []lsp.DocumentURI, error) {
+func (f *FakeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
 	params := []interface{}{files}
 	f.addCall(params, CreateBundleWithSourceOperation)
 	if f.BundleHash == "" {
@@ -71,16 +73,16 @@ func (f *FakeBackendService) CreateBundle(files map[lsp.DocumentURI]File) (strin
 	return f.BundleHash, nil, nil
 }
 
-func (f *FakeBackendService) ExtendBundle(bundleHash string, files map[lsp.DocumentURI]File, removedFiles []lsp.DocumentURI) ([]lsp.DocumentURI, error) {
+func (f *FakeBackendService) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]File, removedFiles []sglsp.DocumentURI) ([]sglsp.DocumentURI, error) {
 	params := []interface{}{bundleHash, files, removedFiles}
 	f.addCall(params, ExtendBundleWithSourceOperation)
 	return nil, nil
 }
-func (f *FakeBackendService) RetrieveDiagnostics(bundleHash string, limitToFiles []lsp.DocumentURI, severity int) (map[lsp.DocumentURI][]lsp.Diagnostic, error) {
+func (f *FakeBackendService) RetrieveDiagnostics(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, error) {
 	params := []interface{}{bundleHash, limitToFiles, severity}
 	f.addCall(params, RetrieveDiagnosticsOperation)
 
-	diagnosticMap := map[lsp.DocumentURI][]lsp.Diagnostic{}
+	diagnosticMap := map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	var diagnostics []lsp.Diagnostic
 	diagnosticMap[FakeDiagnosticUri] = append(diagnostics, FakeDiagnostic)
 	return diagnosticMap, nil

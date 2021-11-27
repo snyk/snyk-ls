@@ -3,7 +3,8 @@ package code
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/sourcegraph/go-lsp"
+	"github.com/snyk/snyk-lsp/lsp"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -20,8 +21,8 @@ type SnykCodeBackendService struct {
 }
 
 type createBundleResponse struct {
-	BundleHash   string            `json:"bundleHash"`
-	MissingFiles []lsp.DocumentURI `json:"missingFiles"`
+	BundleHash   string              `json:"bundleHash"`
+	MissingFiles []sglsp.DocumentURI `json:"missingFiles"`
 }
 
 func token() string {
@@ -32,7 +33,7 @@ func token() string {
 	return token
 }
 
-func (s *SnykCodeBackendService) CreateBundle(files map[lsp.DocumentURI]File) (string, []lsp.DocumentURI, error) {
+func (s *SnykCodeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
 	requestBody, err := json.Marshal(files)
 	if err != nil {
 		return "", nil, err
@@ -72,7 +73,7 @@ func (s *SnykCodeBackendService) doCall(method string, path string, requestBody 
 	return responseBody, err
 }
 
-func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[lsp.DocumentURI]File, removedFiles []lsp.DocumentURI) ([]lsp.DocumentURI, error) {
+func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]File, removedFiles []sglsp.DocumentURI) ([]sglsp.DocumentURI, error) {
 	requestBody, err := json.Marshal(files)
 	if err != nil {
 		return nil, err
@@ -83,12 +84,12 @@ func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[lsp.D
 	if err != nil {
 		return nil, err
 	}
-	var missingFiles []lsp.DocumentURI
+	var missingFiles []sglsp.DocumentURI
 	err = json.Unmarshal(responseBody, &missingFiles)
 	return missingFiles, err
 }
 
-func (s *SnykCodeBackendService) RetrieveDiagnostics(bundleHash string, limitToFiles []lsp.DocumentURI, severity int) (map[lsp.DocumentURI][]lsp.Diagnostic, error) {
+func (s *SnykCodeBackendService) RetrieveDiagnostics(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, error) {
 	requestBody, err := s.analysisRequestBody(bundleHash, limitToFiles, severity)
 	if err != nil {
 		return nil, err
@@ -114,7 +115,7 @@ func (s *SnykCodeBackendService) RetrieveDiagnostics(bundleHash string, limitToF
 	return s.convertToDiagnostics(response), err
 }
 
-func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, limitToFiles []lsp.DocumentURI, severity int) ([]byte, error) {
+func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) ([]byte, error) {
 	request := AnalysisRequest{
 		Key: AnalysisRequestKey{
 			Type:         "file",
@@ -129,26 +130,26 @@ func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, limitToF
 	return requestBody, err
 }
 
-func (s *SnykCodeBackendService) convertToDiagnostics(response AnalysisResponse) map[lsp.DocumentURI][]lsp.Diagnostic {
+func (s *SnykCodeBackendService) convertToDiagnostics(response AnalysisResponse) map[sglsp.DocumentURI][]lsp.Diagnostic {
 
-	//diagnostics := map[lsp.DocumentURI][]lsp.FakeDiagnostic{}
+	//diagnostics := map[sglsp.DocumentURI][]sglsp.FakeDiagnostic{}
 	//for uri, fileSuggestions := range response.Files {
 	//	for index := range fileSuggestions {
 	//		fileSuggestion := fileSuggestions[index]
 	//		suggestion := response.Suggestions[index]
 	//
-	//			FakeDiagnostic := lsp.FakeDiagnostic{
-	//				Range: lsp.Range{
-	//					Start: lsp.Position{
+	//			FakeDiagnostic := sglsp.FakeDiagnostic{
+	//				Range: sglsp.Range{
+	//					Start: sglsp.Position{
 	//						Line:      filePosition,
 	//						Character: 3,
 	//					},
-	//					End: lsp.Position{
+	//					End: sglsp.Position{
 	//						Line:      0,
 	//						Character: 7,
 	//					},
 	//				},
-	//				Severity: lsp.Error,
+	//				Severity: sglsp.Error,
 	//				Code:     "SNYK-123",
 	//				Source:   "snyk code",
 	//				Message:  "This is a dummy error (severity error)",

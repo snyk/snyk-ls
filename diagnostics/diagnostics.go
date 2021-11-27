@@ -1,26 +1,27 @@
-package lsp
+package diagnostics
 
 import (
 	"github.com/sirupsen/logrus"
 	"github.com/snyk/snyk-lsp/code"
 	"github.com/snyk/snyk-lsp/iac"
+	"github.com/snyk/snyk-lsp/lsp"
 	"github.com/snyk/snyk-lsp/oss"
-	"github.com/sourcegraph/go-lsp"
+	sglsp "github.com/sourcegraph/go-lsp"
 )
 
 var (
-	registeredDocuments = map[lsp.DocumentURI]lsp.TextDocumentItem{}
-	documentDiagnostics = map[lsp.DocumentURI][]lsp.Diagnostic{}
+	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
+	documentDiagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	myBundle            = code.CodeBundleImpl{}
 	initialized         = false
 	logger              = logrus.New()
 )
 
 func ClearDiagnosticsCache() {
-	documentDiagnostics = map[lsp.DocumentURI][]lsp.Diagnostic{}
+	documentDiagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 }
 
-func UpdateDocument(uri lsp.DocumentURI, changes []lsp.TextDocumentContentChangeEvent) {
+func UpdateDocument(uri sglsp.DocumentURI, changes []sglsp.TextDocumentContentChangeEvent) {
 	file := registeredDocuments[uri]
 	for i := range changes {
 		change := changes[i]
@@ -29,15 +30,15 @@ func UpdateDocument(uri lsp.DocumentURI, changes []lsp.TextDocumentContentChange
 	registeredDocuments[uri] = file
 }
 
-func RegisterDocument(file lsp.TextDocumentItem) {
+func RegisterDocument(file sglsp.TextDocumentItem) {
 	registeredDocuments[file.URI] = file
 }
 
-func UnRegisterDocument(file lsp.DocumentURI) {
+func UnRegisterDocument(file sglsp.DocumentURI) {
 	delete(registeredDocuments, file)
 }
 
-func GetDiagnostics(uri lsp.DocumentURI, backend code.BackendService) ([]lsp.Diagnostic, error) {
+func GetDiagnostics(uri sglsp.DocumentURI, backend code.BackendService) ([]lsp.Diagnostic, error) {
 	if !initialized {
 		myBundle = code.CodeBundleImpl{Backend: backend}
 		initialized = true
@@ -58,7 +59,7 @@ func GetDiagnostics(uri lsp.DocumentURI, backend code.BackendService) ([]lsp.Dia
 	return documentDiagnostics[uri], err
 }
 
-func fetch(uri lsp.DocumentURI, diagnosticSlice []lsp.Diagnostic) (map[lsp.DocumentURI][]lsp.Diagnostic, error) {
+func fetch(uri sglsp.DocumentURI, diagnosticSlice []lsp.Diagnostic) (map[sglsp.DocumentURI][]lsp.Diagnostic, error) {
 	diagnostics, err := myBundle.DiagnosticData(registeredDocuments)
 	logError(err, "GetDiagnostics")
 	iacDiagnostics, err := iac.HandleFile(uri)

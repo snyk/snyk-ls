@@ -89,7 +89,6 @@ func Test_initialize_shouldBeServed(t *testing.T) {
 	if err := rsp.UnmarshalResult(&result); err != nil {
 		log.Fatalf("Decoding result: %v", err)
 	}
-	fmt.Println(result)
 }
 
 func Test_initialize_shouldSupportDocumentOpening(t *testing.T) {

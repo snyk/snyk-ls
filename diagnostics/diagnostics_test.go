@@ -1,4 +1,4 @@
-package lsp
+package diagnostics
 
 import (
 	"github.com/snyk/snyk-lsp/code"

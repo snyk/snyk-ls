@@ -3,21 +3,22 @@ package oss
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/snyk/snyk-lsp/lsp"
 	"github.com/snyk/snyk-lsp/util"
-	"github.com/sourcegraph/go-lsp"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
 
 var (
-	severities = map[string]lsp.DiagnosticSeverity{
-		"high": lsp.Error,
-		"low":  lsp.Warning,
+	severities = map[string]sglsp.DiagnosticSeverity{
+		"high": sglsp.Error,
+		"low":  sglsp.Warning,
 	}
 )
 
-func HandleFile(uri lsp.DocumentURI) ([]lsp.Diagnostic, error) {
+func HandleFile(uri sglsp.DocumentURI) ([]lsp.Diagnostic, error) {
 	diagnostics, err := snyk(strings.TrimSpace(strings.ReplaceAll(string(uri), "file://", "")))
 	return diagnostics, err
 }
@@ -48,12 +49,16 @@ func snyk(path string) ([]lsp.Diagnostic, error) {
 		diagnostic := lsp.Diagnostic{
 			Source:  "snyk-lsp",
 			Message: fmt.Sprintf("%s: %s", issue.PublicID, issue.Title),
-			Range: lsp.Range{
-				Start: lsp.Position{Line: issue.LineNumber, Character: 0},
-				End:   lsp.Position{Line: issue.LineNumber, Character: 1},
+			Range: sglsp.Range{
+				Start: sglsp.Position{Line: issue.LineNumber, Character: 0},
+				End:   sglsp.Position{Line: issue.LineNumber, Character: 1},
 			},
 			Severity: lspSeverity(issue.Severity),
 			Code:     fmt.Sprintf("%s", issue.PublicID),
+			// Don't use it for now as it's not widely supported
+			//CodeDescription: lsp.CodeDescription{
+			//	Href: issue.References[0].Url,
+			//},
 		}
 		diagnostics = append(diagnostics, diagnostic)
 	}
@@ -62,17 +67,22 @@ func snyk(path string) ([]lsp.Diagnostic, error) {
 
 type testResult struct {
 	Vulnerabilities []struct {
-		PublicID   string `json:"publicId"`
-		Title      string `json:"title"`
-		Severity   string `json:"severity"`
-		LineNumber int    `json:"lineNumber"`
+		PublicID    string `json:"publicId"`
+		Title       string `json:"title"`
+		Severity    string `json:"severity"`
+		LineNumber  int    `json:"lineNumber"`
+		Description string `json:"description"`
+		References  []struct {
+			Title string  `json:"title"`
+			Url   lsp.Uri `json:"url"`
+		} `json:"references"`
 	} `json:"vulnerabilities"`
 }
 
-func lspSeverity(snykSeverity string) lsp.DiagnosticSeverity {
+func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 	lspSev, ok := severities[snykSeverity]
 	if !ok {
-		return lsp.Info
+		return sglsp.Info
 	}
 	return lspSev
 }

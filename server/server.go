@@ -8,9 +8,10 @@ import (
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/sirupsen/logrus"
 	"github.com/snyk/snyk-lsp/code"
-	snyk "github.com/snyk/snyk-lsp/lsp"
+	"github.com/snyk/snyk-lsp/diagnostics"
+	"github.com/snyk/snyk-lsp/lsp"
 	"github.com/snyk/snyk-lsp/util"
-	"github.com/sourcegraph/go-lsp"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"log"
 	"os"
 )
@@ -46,9 +47,9 @@ func Start() {
 }
 
 func TextDocumentDidChangeHandler() handler.Func {
-	return handler.New(func(ctx context.Context, params lsp.DidChangeTextDocumentParams) (interface{}, error) {
+	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (interface{}, error) {
 		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentDidChangeHandler", "params": params}).Info("RECEIVING")
-		snyk.UpdateDocument(params.TextDocument.URI, params.ContentChanges)
+		diagnostics.UpdateDocument(params.TextDocument.URI, params.ContentChanges)
 		return nil, nil
 	})
 }
@@ -58,14 +59,14 @@ func logDiagnosticSlice(diagnosticSlice []lsp.Diagnostic) {
 	util.Logger.Info("################# " + string(marshal))
 }
 
-func PublishDiagnostics(ctx context.Context, uri lsp.DocumentURI, srv **jrpc2.Server) (interface{}, error) {
-	diagnostics, err := snyk.GetDiagnostics(uri, &code.FakeBackendService{BundleHash: "dummy"})
+func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv **jrpc2.Server) (interface{}, error) {
+	diags, err := diagnostics.GetDiagnostics(uri, &code.FakeBackendService{BundleHash: "dummy"})
 	logError(err, "PublishDiagnostics")
-	logDiagnosticSlice(diagnostics)
-	if diagnostics != nil {
+	logDiagnosticSlice(diags)
+	if diags != nil {
 		diagnosticsParams := lsp.PublishDiagnosticsParams{
 			URI:         uri,
-			Diagnostics: diagnostics,
+			Diagnostics: diags,
 		}
 		util.Logger.WithFields(logrus.Fields{"method": "PublishDiagnostics", "params": diagnosticsParams}).Info("SENDING")
 		err := (*srv).Notify(ctx, "textDocument/publishDiagnostics", diagnosticsParams)
@@ -81,33 +82,33 @@ func logError(err error, method string) {
 }
 
 func TextDocumentDidOpenHandler(srv **jrpc2.Server) handler.Func {
-	return handler.New(func(ctx context.Context, params lsp.DidOpenTextDocumentParams) (interface{}, error) {
+	return handler.New(func(ctx context.Context, params sglsp.DidOpenTextDocumentParams) (interface{}, error) {
 		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentDidOpenHandler", "params": params}).Info("RECEIVING")
-		snyk.RegisterDocument(params.TextDocument)
+		diagnostics.RegisterDocument(params.TextDocument)
 		PublishDiagnostics(ctx, params.TextDocument.URI, srv)
 		return nil, nil
 	})
 }
 
 func TextDocumentDidSaveHandler(srv **jrpc2.Server) handler.Func {
-	return handler.New(func(ctx context.Context, params lsp.DidSaveTextDocumentParams) (interface{}, error) {
+	return handler.New(func(ctx context.Context, params sglsp.DidSaveTextDocumentParams) (interface{}, error) {
 		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentDidSaveHandler", "params": params}).Info("RECEIVING")
 		// clear cache when saving and get fresh diagnostics
-		snyk.ClearDiagnosticsCache()
+		diagnostics.ClearDiagnosticsCache()
 		PublishDiagnostics(ctx, params.TextDocument.URI, srv)
 		return nil, nil
 	})
 }
 
 func TextDocumentWillSaveHandler() handler.Func {
-	return handler.New(func(ctx context.Context, params WillSaveTextDocumentParams) (interface{}, error) {
+	return handler.New(func(ctx context.Context, params lsp.WillSaveTextDocumentParams) (interface{}, error) {
 		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentWillSaveHandler", "params": params}).Info("RECEIVING")
 		return nil, nil
 	})
 }
 
 func TextDocumentWillSaveWaitUntilHandler() handler.Func {
-	return handler.New(func(ctx context.Context, params WillSaveTextDocumentParams) (interface{}, error) {
+	return handler.New(func(ctx context.Context, params lsp.WillSaveTextDocumentParams) (interface{}, error) {
 		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentWillSaveWaitUntilHandler", "params": params}).Info("RECEIVING")
 		return nil, nil
 	})
@@ -115,9 +116,9 @@ func TextDocumentWillSaveWaitUntilHandler() handler.Func {
 
 //todo testing
 func TextDocumentDidCloseHandler() handler.Func {
-	return handler.New(func(ctx context.Context, params lsp.DidCloseTextDocumentParams) (interface{}, error) {
+	return handler.New(func(ctx context.Context, params sglsp.DidCloseTextDocumentParams) (interface{}, error) {
 		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentDidCloseHandler", "params": params}).Info("RECEIVING")
-		snyk.UnRegisterDocument(params.TextDocument.URI)
+		diagnostics.UnRegisterDocument(params.TextDocument.URI)
 		return nil, nil
 	})
 }
@@ -125,15 +126,15 @@ func TextDocumentDidCloseHandler() handler.Func {
 func InitializeHandler() handler.Func {
 	return handler.New(func(ctx context.Context, _ *jrpc2.Request) (interface{}, error) {
 		util.Logger.WithFields(logrus.Fields{"method": "InitializeHandler"}).Info("RECEIVING")
-		return lsp.InitializeResult{
-			Capabilities: lsp.ServerCapabilities{
-				TextDocumentSync: &lsp.TextDocumentSyncOptionsOrKind{
-					Options: &lsp.TextDocumentSyncOptions{
+		return sglsp.InitializeResult{
+			Capabilities: sglsp.ServerCapabilities{
+				TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{
+					Options: &sglsp.TextDocumentSyncOptions{
 						OpenClose:         true,
-						Change:            lsp.TDSKFull,
+						Change:            sglsp.TDSKFull,
 						WillSave:          true,
 						WillSaveWaitUntil: true,
-						Save:              &lsp.SaveOptions{IncludeText: true},
+						Save:              &sglsp.SaveOptions{IncludeText: true},
 					},
 				},
 			},
