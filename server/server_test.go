@@ -8,6 +8,7 @@ import (
 	"github.com/creachadair/jrpc2/server"
 	"github.com/sirupsen/logrus"
 	"github.com/snyk/snyk-lsp/code"
+	"github.com/snyk/snyk-lsp/util"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"log"
@@ -22,6 +23,12 @@ var (
 )
 
 func startServer() server.Local {
+	var err error
+	util.CliPath, err = util.SetupCLI()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	var srv *jrpc2.Server
 
 	lspHandlers := handler.Map{
@@ -34,7 +41,7 @@ func startServer() server.Local {
 		"textDocument/willSaveWaitUntil": TextDocumentWillSaveWaitUntilHandler(),
 	}
 
-	Logger = logrus.New()
+	util.Logger = logrus.New()
 
 	opts := &server.LocalOptions{
 		Client: &jrpc2.ClientOptions{

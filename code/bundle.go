@@ -1,17 +1,15 @@
-package bundle
+package code
 
 import (
-	"github.com/snyk/snyk-lsp/code/interfaces"
-	"github.com/snyk/snyk-lsp/code/structs"
 	"github.com/snyk/snyk-lsp/util"
 	"github.com/sourcegraph/go-lsp"
 	"time"
 )
 
 type CodeBundleImpl struct {
-	Backend         interfaces.BackendService
+	Backend         BackendService
 	bundleHash      string
-	bundleDocuments map[lsp.DocumentURI]structs.File
+	bundleDocuments map[lsp.DocumentURI]File
 	missingFiles    []lsp.DocumentURI
 }
 
@@ -32,11 +30,11 @@ func (b *CodeBundleImpl) createBundleFromSource(files map[lsp.DocumentURI]lsp.Te
 
 func (b *CodeBundleImpl) addToBundleDocuments(files map[lsp.DocumentURI]lsp.TextDocumentItem) {
 	if b.bundleDocuments == nil {
-		b.bundleDocuments = make(map[lsp.DocumentURI]structs.File)
+		b.bundleDocuments = make(map[lsp.DocumentURI]File)
 	}
 	for uri, doc := range files {
-		if (b.bundleDocuments[uri] == structs.File{}) {
-			b.bundleDocuments[uri] = structs.File{
+		if (b.bundleDocuments[uri] == File{}) {
+			b.bundleDocuments[uri] = File{
 				Hash:    util.Hash(doc.Text),
 				Content: doc.Text,
 			}

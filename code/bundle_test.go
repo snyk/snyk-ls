@@ -1,8 +1,6 @@
-package bundle
+package code
 
 import (
-	"github.com/snyk/snyk-lsp/code"
-	"github.com/snyk/snyk-lsp/code/structs"
 	"github.com/snyk/snyk-lsp/util"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
@@ -25,15 +23,15 @@ var (
 		Text:       "class2",
 	}
 
-	firstBundleFile = structs.File{
+	firstBundleFile = File{
 		Hash:    util.Hash(firstDoc.Text),
 		Content: firstDoc.Text,
 	}
 )
 
 func Test_createBundleFromSource_shouldReturnNonEmptyBundleHash(t *testing.T) {
-	b := CodeBundleImpl{Backend: &code.FakeBackendService{}}
-	b.bundleDocuments = map[lsp.DocumentURI]structs.File{}
+	b := CodeBundleImpl{Backend: &FakeBackendService{}}
+	b.bundleDocuments = map[lsp.DocumentURI]File{}
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
 
@@ -43,27 +41,27 @@ func Test_createBundleFromSource_shouldReturnNonEmptyBundleHash(t *testing.T) {
 }
 
 func Test_createBundleFromSource_shouldAddDocumentToBundle(t *testing.T) {
-	b := CodeBundleImpl{Backend: &code.FakeBackendService{BundleHash: "test-bundle-Hash"}}
-	b.bundleDocuments = map[lsp.DocumentURI]structs.File{}
+	b := CodeBundleImpl{Backend: &FakeBackendService{BundleHash: "test-bundle-Hash"}}
+	b.bundleDocuments = map[lsp.DocumentURI]File{}
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
 
 	bundleHash, _, _ := b.createBundleFromSource(registeredDocuments)
 
 	assert.NotEqual(t, "", bundleHash)
-	assert.NotEqual(t, structs.File{}, b.bundleDocuments[firstDoc.URI])
+	assert.NotEqual(t, File{}, b.bundleDocuments[firstDoc.URI])
 	assert.Equal(t, firstBundleFile, b.bundleDocuments[firstDoc.URI])
 }
 
 func Test_extendBundleFromSource_shouldAddDocumentToBundle(t *testing.T) {
-	b := CodeBundleImpl{Backend: &code.FakeBackendService{BundleHash: "test-bundle-Hash"}}
+	b := CodeBundleImpl{Backend: &FakeBackendService{BundleHash: "test-bundle-Hash"}}
 	b.bundleHash = "test-Hash"
-	b.bundleDocuments = map[lsp.DocumentURI]structs.File{}
+	b.bundleDocuments = map[lsp.DocumentURI]File{}
 	b.bundleDocuments[firstDoc.URI] = firstBundleFile
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[secondDoc.URI] = secondDoc
 
-	secondBundleFile := structs.File{
+	secondBundleFile := File{
 		Hash:    util.Hash(secondDoc.Text),
 		Content: secondDoc.Text,
 	}
@@ -75,7 +73,7 @@ func Test_extendBundleFromSource_shouldAddDocumentToBundle(t *testing.T) {
 
 func TestCodeBundleImpl_DiagnosticData_should_create_bundle_when_hash_empty(t *testing.T) {
 	hash := "testHash"
-	backendMock := &code.FakeBackendService{BundleHash: hash}
+	backendMock := &FakeBackendService{BundleHash: hash}
 	b := CodeBundleImpl{Backend: backendMock}
 	b.bundleHash = ""
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
@@ -87,16 +85,16 @@ func TestCodeBundleImpl_DiagnosticData_should_create_bundle_when_hash_empty(t *t
 	assert.Equal(t, 0, len(b.missingFiles))
 
 	// verify that create bundle has been called on backend service
-	params := backendMock.GetCallParams(0, code.CreateBundleWithSourceOperation)
+	params := backendMock.GetCallParams(0, CreateBundleWithSourceOperation)
 	assert.NotNil(t, params)
 	assert.Equal(t, 1, len(params))
-	files := params[0].(map[lsp.DocumentURI]structs.File)
+	files := params[0].(map[lsp.DocumentURI]File)
 	assert.Equal(t, files[firstDoc.URI].Content, firstDoc.Text)
 }
 
 func TestCodeBundleImpl_DiagnosticData_should_extend_bundle_when_hash_not_empty(t *testing.T) {
 	hash := ""
-	backendMock := &code.FakeBackendService{BundleHash: hash}
+	backendMock := &FakeBackendService{BundleHash: hash}
 	b := CodeBundleImpl{Backend: backendMock}
 
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
@@ -116,18 +114,18 @@ func TestCodeBundleImpl_DiagnosticData_should_extend_bundle_when_hash_not_empty(
 	assert.Equal(t, b.bundleDocuments[secondDoc.URI].Content, secondDoc.Text)
 
 	// verify that extend bundle has been called on backend service with additional file
-	params := backendMock.GetCallParams(0, code.ExtendBundleWithSourceOperation)
+	params := backendMock.GetCallParams(0, ExtendBundleWithSourceOperation)
 	assert.NotNil(t, params)
 	assert.Equal(t, 3, len(params))
 	assert.Equal(t, b.bundleHash, params[0])
-	files := params[1].(map[lsp.DocumentURI]structs.File)
+	files := params[1].(map[lsp.DocumentURI]File)
 	assert.Equal(t, files[secondDoc.URI].Content, secondDoc.Text)
 }
 
 func TestCodeBundleImpl_DiagnosticData_should_retrieve_from_backend(t *testing.T) {
-	backendMock := &code.FakeBackendService{}
+	backendMock := &FakeBackendService{}
 	b := CodeBundleImpl{Backend: backendMock}
-	code.FakeDiagnosticUri = firstDoc.URI
+	FakeDiagnosticUri = firstDoc.URI
 
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
@@ -139,10 +137,10 @@ func TestCodeBundleImpl_DiagnosticData_should_retrieve_from_backend(t *testing.T
 	diagnostics := diagnosticMap[firstDoc.URI]
 	assert.NotNil(t, diagnostics)
 	assert.Equal(t, 1, len(diagnostics))
-	assert.True(t, reflect.DeepEqual(code.FakeDiagnostic, diagnostics[0]))
+	assert.True(t, reflect.DeepEqual(FakeDiagnostic, diagnostics[0]))
 
 	// verify that extend bundle has been called on backend service with additional file
-	params := backendMock.GetCallParams(0, code.RetrieveDiagnosticsOperation)
+	params := backendMock.GetCallParams(0, RetrieveDiagnosticsOperation)
 	assert.NotNil(t, params)
 	assert.Equal(t, 3, len(params))
 	assert.Equal(t, b.bundleHash, params[0])

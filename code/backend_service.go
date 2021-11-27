@@ -3,7 +3,6 @@ package code
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/snyk/snyk-lsp/code/structs"
 	"github.com/sourcegraph/go-lsp"
 	"io"
 	"io/ioutil"
@@ -25,74 +24,6 @@ type createBundleResponse struct {
 	MissingFiles []lsp.DocumentURI `json:"missingFiles"`
 }
 
-type AnalysisRequestKey struct {
-	Type         string            `json:"type"`
-	Hash         string            `json:"hash"`
-	LimitToFiles []lsp.DocumentURI `json:"limitToFiles"`
-}
-
-type AnalysisRequest struct {
-	Key         AnalysisRequestKey `json:"key"`
-	Severity    int                `json:"severity"`
-	Prioritized int                `json:"prioritized"`
-	Legacy      bool               `json:"legacy"`
-}
-
-type Marker struct {
-	Msg []int `json:"msg"`
-	Pos []int `json:"pos"`
-}
-
-type FilePosition struct {
-	Rows   []int    `json:"rows"`
-	Cols   []int    `json:"cols"`
-	Marker []Marker `json:"marker"`
-}
-
-type FileSuggestions map[string][]FilePosition
-
-type AnalysisSeverity struct{}
-
-type CommitChangeLine struct {
-	Line       string `json:"line"`
-	LineNumber int    `json:"lineNumber"`
-	LineChange string `json:"lineChange"`
-}
-
-type ExampleCommitFix struct {
-	CommitURL string             `json:"commitURL"`
-	Lines     []CommitChangeLine `json:"lines"`
-}
-
-type Suggestion struct {
-	Id                        string             `json:"id"`
-	Message                   string             `json:"message"`
-	Severity                  int                `json:"severity"`
-	LeadURL                   string             `json:"leadURL"`
-	Rule                      string             `json:"rule"`
-	Tags                      []string           `json:"tags"`
-	Categories                []string           `json:"categories"`
-	RepoDatasetSize           int                `json:"repoDatasetSize"`
-	ExampleCommitDescriptions []string           `json:"exampleCommitDescriptions"`
-	ExampleCommitFixes        []ExampleCommitFix `json:"exampleCommitFixes"`
-	Cwe                       []string           `json:"cwe"`
-	Title                     string             `json:"title"`
-	Text                      string             `json:"text"`
-}
-
-type AnalysisResponse struct {
-	Status      string                              `json:"status"`
-	Progress    int                                 `json:"progress"`
-	Files       map[lsp.DocumentURI]FileSuggestions `json:"files"`
-	Suggestions map[string]Suggestion               `json:"suggestions"`
-}
-
-type SnykAnalysisFailedError struct {
-	msg string
-}
-
-func (e SnykAnalysisFailedError) Error() string { return e.msg }
-
 func token() string {
 	token, exist := os.LookupEnv(TokenEnvVariable)
 	if exist == false {
@@ -101,7 +32,7 @@ func token() string {
 	return token
 }
 
-func (s *SnykCodeBackendService) CreateBundle(files map[lsp.DocumentURI]structs.File) (string, []lsp.DocumentURI, error) {
+func (s *SnykCodeBackendService) CreateBundle(files map[lsp.DocumentURI]File) (string, []lsp.DocumentURI, error) {
 	requestBody, err := json.Marshal(files)
 	if err != nil {
 		return "", nil, err
@@ -141,7 +72,7 @@ func (s *SnykCodeBackendService) doCall(method string, path string, requestBody 
 	return responseBody, err
 }
 
-func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[lsp.DocumentURI]structs.File, removedFiles []lsp.DocumentURI) ([]lsp.DocumentURI, error) {
+func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[lsp.DocumentURI]File, removedFiles []lsp.DocumentURI) ([]lsp.DocumentURI, error) {
 	requestBody, err := json.Marshal(files)
 	if err != nil {
 		return nil, err
@@ -175,7 +106,7 @@ func (s *SnykCodeBackendService) RetrieveDiagnostics(bundleHash string, limitToF
 		return nil, err
 	}
 	if response.Status == "FAILED" {
-		return nil, SnykAnalysisFailedError{msg: string(responseBody)}
+		return nil, SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
 	if response.Status != "COMPLETE" {
 		return nil, nil

@@ -1,4 +1,4 @@
-package structs
+package code
 
 type File struct {
 	Hash    string `json:"hash"`

@@ -1,7 +1,6 @@
 package code
 
 import (
-	"github.com/snyk/snyk-lsp/code/structs"
 	"github.com/snyk/snyk-lsp/util"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
@@ -25,8 +24,8 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	s := &SnykCodeBackendService{
 		client: http.Client{},
 	}
-	files := map[lsp.DocumentURI]structs.File{}
-	files[uri] = structs.File{
+	files := map[lsp.DocumentURI]File{}
+	files[uri] = File{
 		Hash:    util.Hash(content),
 		Content: content,
 	}
@@ -41,14 +40,14 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 		client: http.Client{},
 	}
 	var removedFiles []lsp.DocumentURI
-	files := map[lsp.DocumentURI]structs.File{}
-	files[uri] = structs.File{
+	files := map[lsp.DocumentURI]File{}
+	files[uri] = File{
 		Hash:    util.Hash(content),
 		Content: content,
 	}
 	bundleHash, _, _ := s.CreateBundle(files)
-	filesExtend := map[lsp.DocumentURI]structs.File{}
-	filesExtend[uri2] = structs.File{
+	filesExtend := map[lsp.DocumentURI]File{}
+	filesExtend[uri2] = File{
 		Hash:    util.Hash(content2),
 		Content: content2,
 	}
@@ -61,14 +60,14 @@ func TestSnykCodeBackendService_RetrieveDiagnostics(t *testing.T) {
 		client: http.Client{},
 	}
 	var removedFiles []lsp.DocumentURI
-	files := map[lsp.DocumentURI]structs.File{}
-	files[uri] = structs.File{
+	files := map[lsp.DocumentURI]File{}
+	files[uri] = File{
 		Hash:    util.Hash(content),
 		Content: content,
 	}
 	bundleHash, _, _ := s.CreateBundle(files)
-	filesExtend := map[lsp.DocumentURI]structs.File{}
-	filesExtend[uri2] = structs.File{
+	filesExtend := map[lsp.DocumentURI]File{}
+	filesExtend[uri2] = File{
 		Hash:    util.Hash(content2),
 		Content: content2,
 	}

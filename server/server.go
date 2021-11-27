@@ -2,28 +2,25 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/sirupsen/logrus"
 	"github.com/snyk/snyk-lsp/code"
-	snyklsp "github.com/snyk/snyk-lsp/code/lsp"
+	snyk "github.com/snyk/snyk-lsp/lsp"
+	"github.com/snyk/snyk-lsp/util"
 	"github.com/sourcegraph/go-lsp"
 	"log"
 	"os"
 )
 
-var Logger *logrus.Logger
-
 func Start() {
-	logFile, err := os.OpenFile("/tmp/snyk-lsp.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+	var err error
+	util.CliPath, err = util.SetupCLI()
 	if err != nil {
-		panic(err)
+		logrus.Fatal(err)
 	}
-	defer logFile.Close()
-
-	Logger = logrus.New()
-	Logger.SetOutput(logFile)
 
 	var server *jrpc2.Server
 
@@ -41,7 +38,7 @@ func Start() {
 		AllowPush: true,
 	})
 
-	Logger.Info("Starting up...")
+	util.Logger.Info("Starting up...")
 	server = server.Start(channel.Header("")(os.Stdin, os.Stdout))
 
 	err = server.Wait()
@@ -50,21 +47,27 @@ func Start() {
 
 func TextDocumentDidChangeHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeTextDocumentParams) (interface{}, error) {
-		Logger.WithFields(logrus.Fields{"method": "TextDocumentDidChangeHandler", "params": params}).Info("RECEIVING")
-		snyklsp.UpdateDocument(params.TextDocument.URI, params.ContentChanges)
+		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentDidChangeHandler", "params": params}).Info("RECEIVING")
+		snyk.UpdateDocument(params.TextDocument.URI, params.ContentChanges)
 		return nil, nil
 	})
 }
 
+func logDiagnosticSlice(diagnosticSlice []lsp.Diagnostic) {
+	marshal, _ := json.Marshal(&diagnosticSlice)
+	util.Logger.Info("################# " + string(marshal))
+}
+
 func PublishDiagnostics(ctx context.Context, uri lsp.DocumentURI, srv **jrpc2.Server) (interface{}, error) {
-	diagnostics, err := snyklsp.GetDiagnostics(uri, &code.FakeBackendService{BundleHash: "dummy"})
+	diagnostics, err := snyk.GetDiagnostics(uri, &code.FakeBackendService{BundleHash: "dummy"})
 	logError(err, "PublishDiagnostics")
+	logDiagnosticSlice(diagnostics)
 	if diagnostics != nil {
 		diagnosticsParams := lsp.PublishDiagnosticsParams{
 			URI:         uri,
 			Diagnostics: diagnostics,
 		}
-		Logger.WithFields(logrus.Fields{"method": "PublishDiagnostics", "params": diagnosticsParams}).Info("SENDING")
+		util.Logger.WithFields(logrus.Fields{"method": "PublishDiagnostics", "params": diagnosticsParams}).Info("SENDING")
 		err := (*srv).Notify(ctx, "textDocument/publishDiagnostics", diagnosticsParams)
 		logError(err, "PublishDiagnostics")
 	}
@@ -73,14 +76,14 @@ func PublishDiagnostics(ctx context.Context, uri lsp.DocumentURI, srv **jrpc2.Se
 
 func logError(err error, method string) {
 	if err != nil {
-		Logger.WithField("method", method).Error(err)
+		util.Logger.WithField("method", method).Error(err)
 	}
 }
 
 func TextDocumentDidOpenHandler(srv **jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.DidOpenTextDocumentParams) (interface{}, error) {
-		Logger.WithFields(logrus.Fields{"method": "TextDocumentDidOpenHandler", "params": params}).Info("RECEIVING")
-		snyklsp.RegisterDocument(params.TextDocument)
+		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentDidOpenHandler", "params": params}).Info("RECEIVING")
+		snyk.RegisterDocument(params.TextDocument)
 		PublishDiagnostics(ctx, params.TextDocument.URI, srv)
 		return nil, nil
 	})
@@ -88,7 +91,9 @@ func TextDocumentDidOpenHandler(srv **jrpc2.Server) handler.Func {
 
 func TextDocumentDidSaveHandler(srv **jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.DidSaveTextDocumentParams) (interface{}, error) {
-		Logger.WithFields(logrus.Fields{"method": "TextDocumentDidSaveHandler", "params": params}).Info("RECEIVING")
+		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentDidSaveHandler", "params": params}).Info("RECEIVING")
+		// clear cache when saving and get fresh diagnostics
+		snyk.ClearDiagnosticsCache()
 		PublishDiagnostics(ctx, params.TextDocument.URI, srv)
 		return nil, nil
 	})
@@ -96,14 +101,14 @@ func TextDocumentDidSaveHandler(srv **jrpc2.Server) handler.Func {
 
 func TextDocumentWillSaveHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params WillSaveTextDocumentParams) (interface{}, error) {
-		Logger.WithFields(logrus.Fields{"method": "TextDocumentWillSaveHandler", "params": params}).Info("RECEIVING")
+		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentWillSaveHandler", "params": params}).Info("RECEIVING")
 		return nil, nil
 	})
 }
 
 func TextDocumentWillSaveWaitUntilHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params WillSaveTextDocumentParams) (interface{}, error) {
-		Logger.WithFields(logrus.Fields{"method": "TextDocumentWillSaveWaitUntilHandler", "params": params}).Info("RECEIVING")
+		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentWillSaveWaitUntilHandler", "params": params}).Info("RECEIVING")
 		return nil, nil
 	})
 }
@@ -111,15 +116,15 @@ func TextDocumentWillSaveWaitUntilHandler() handler.Func {
 //todo testing
 func TextDocumentDidCloseHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.DidCloseTextDocumentParams) (interface{}, error) {
-		Logger.WithFields(logrus.Fields{"method": "TextDocumentDidCloseHandler", "params": params}).Info("RECEIVING")
-		snyklsp.UnRegisterDocument(params.TextDocument.URI)
+		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentDidCloseHandler", "params": params}).Info("RECEIVING")
+		snyk.UnRegisterDocument(params.TextDocument.URI)
 		return nil, nil
 	})
 }
 
 func InitializeHandler() handler.Func {
 	return handler.New(func(ctx context.Context, _ *jrpc2.Request) (interface{}, error) {
-		Logger.WithFields(logrus.Fields{"method": "InitializeHandler"}).Info("RECEIVING")
+		util.Logger.WithFields(logrus.Fields{"method": "InitializeHandler"}).Info("RECEIVING")
 		return lsp.InitializeResult{
 			Capabilities: lsp.ServerCapabilities{
 				TextDocumentSync: &lsp.TextDocumentSyncOptionsOrKind{
