@@ -20,11 +20,11 @@ var (
 				Character: 7,
 			},
 		},
-		Severity:        sglsp.Error,
-		Code:            "SNYK-123",
-		Source:          "snyk code",
-		Message:         "This is a dummy error (severity error)",
-		CodeDescription: lsp.CodeDescription{Href: "https://snyk.io"},
+		Severity: sglsp.Error,
+		Code:     "SNYK-123",
+		Source:   "snyk code",
+		Message:  "This is a dummy error (severity error)",
+		//CodeDescription: lsp.CodeDescription{Href: "https://snyk.io"},
 	}
 )
 
