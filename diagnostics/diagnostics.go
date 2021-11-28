@@ -12,7 +12,7 @@ import (
 var (
 	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
 	documentDiagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
-	myBundle            = code.CodeBundleImpl{}
+	myBundle            *code.BundleImpl
 	initialized         = false
 	logger              = logrus.New()
 )
@@ -40,17 +40,17 @@ func UnRegisterDocument(file sglsp.DocumentURI) {
 
 func GetDiagnostics(uri sglsp.DocumentURI, backend code.BackendService) ([]lsp.Diagnostic, error) {
 	if !initialized {
-		myBundle = code.CodeBundleImpl{Backend: backend}
+		myBundle = &code.BundleImpl{Backend: backend}
 		initialized = true
 	}
 
 	// serve from cache
 	diagnosticSlice := documentDiagnostics[uri]
-	if len(diagnosticSlice) > 0 {
+	if diagnosticSlice != nil && len(diagnosticSlice) > 0 {
 		return diagnosticSlice, nil
 	}
 
-	diagnostics, err := fetch(uri, diagnosticSlice)
+	diagnostics, err := fetch(uri)
 
 	// add all diagnostics to cache
 	for uri, diagnosticSlice := range diagnostics {
@@ -59,16 +59,21 @@ func GetDiagnostics(uri sglsp.DocumentURI, backend code.BackendService) ([]lsp.D
 	return documentDiagnostics[uri], err
 }
 
-func fetch(uri sglsp.DocumentURI, diagnosticSlice []lsp.Diagnostic) (map[sglsp.DocumentURI][]lsp.Diagnostic, error) {
-	diagnostics, err := myBundle.DiagnosticData(registeredDocuments)
-	logError(err, "GetDiagnostics")
+func fetch(uri sglsp.DocumentURI) (map[sglsp.DocumentURI][]lsp.Diagnostic, error) {
+	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
+	var diagnosticSlice []lsp.Diagnostic
+
+	//codeDiagnostics, err := myBundle.DiagnosticData(registeredDocuments)
+	//logError(err, "GetDiagnostics")
 	iacDiagnostics, err := iac.HandleFile(uri)
+	logError(err, "GetDiagnostics")
 	ossDiagnostics, err := oss.HandleFile(uri)
 	logError(err, "GetDiagnostics")
-	diagnosticSlice = diagnostics[uri]
+
+	//diagnosticSlice = codeDiagnostics[uri]
 	diagnosticSlice = append(diagnosticSlice, iacDiagnostics...)
 	diagnosticSlice = append(diagnosticSlice, ossDiagnostics...)
-	// add this one in case diagnostics doesn't have anything
+
 	documentDiagnostics[uri] = diagnosticSlice
 	return diagnostics, err
 }

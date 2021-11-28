@@ -28,20 +28,19 @@ func startServer() server.Local {
 	if err != nil {
 		log.Fatal(err)
 	}
+	util.Logger = logrus.New()
 
 	var srv *jrpc2.Server
 
 	lspHandlers := handler.Map{
 		"initialize":                     InitializeHandler(),
-		"textDocument/didOpen":           TextDocumentDidOpenHandler(&srv),
+		"textDocument/didOpen":           TextDocumentDidOpenHandler(&srv, &code.FakeBackendService{}),
 		"textDocument/didChange":         TextDocumentDidChangeHandler(),
 		"textDocument/didClose":          TextDocumentDidCloseHandler(),
 		"textDocument/didSave":           TextDocumentDidSaveHandler(&srv),
 		"textDocument/willSave":          TextDocumentWillSaveHandler(),
 		"textDocument/willSaveWaitUntil": TextDocumentWillSaveWaitUntilHandler(),
 	}
-
-	util.Logger = logrus.New()
 
 	opts := &server.LocalOptions{
 		Client: &jrpc2.ClientOptions{
@@ -147,7 +146,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	diagnostics := lsp.PublishDiagnosticsParams{}
 
 	// wait for publish
-	assert.Eventually(t, func() bool { return notification != nil }, 500*time.Millisecond, 1)
+	assert.Eventually(t, func() bool { return notification != nil }, 500*time.Millisecond, 10*time.Millisecond)
 	_ = notification.UnmarshalParams(&diagnostics)
 	assert.Equal(t, didOpenParams.TextDocument.URI, diagnostics.URI)
 }

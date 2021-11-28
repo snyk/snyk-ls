@@ -27,7 +27,7 @@ func Start() {
 
 	lspHandlers := handler.Map{
 		"initialize":                     InitializeHandler(),
-		"textDocument/didOpen":           TextDocumentDidOpenHandler(&server),
+		"textDocument/didOpen":           TextDocumentDidOpenHandler(&server, &code.SnykCodeBackendService{}),
 		"textDocument/didChange":         TextDocumentDidChangeHandler(),
 		"textDocument/didClose":          TextDocumentDidCloseHandler(),
 		"textDocument/didSave":           TextDocumentDidSaveHandler(&server),
@@ -59,8 +59,8 @@ func logDiagnosticSlice(diagnosticSlice []lsp.Diagnostic) {
 	util.Logger.Info("################# " + string(marshal))
 }
 
-func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv **jrpc2.Server) (interface{}, error) {
-	diags, err := diagnostics.GetDiagnostics(uri, &code.FakeBackendService{BundleHash: "dummy"})
+func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv **jrpc2.Server, backendService code.BackendService) (interface{}, error) {
+	diags, err := diagnostics.GetDiagnostics(uri, backendService)
 	logError(err, "PublishDiagnostics")
 	logDiagnosticSlice(diags)
 	if diags != nil {
@@ -81,11 +81,11 @@ func logError(err error, method string) {
 	}
 }
 
-func TextDocumentDidOpenHandler(srv **jrpc2.Server) handler.Func {
+func TextDocumentDidOpenHandler(srv **jrpc2.Server, backendService code.BackendService) handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidOpenTextDocumentParams) (interface{}, error) {
 		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentDidOpenHandler", "params": params}).Info("RECEIVING")
 		diagnostics.RegisterDocument(params.TextDocument)
-		PublishDiagnostics(ctx, params.TextDocument.URI, srv)
+		PublishDiagnostics(ctx, params.TextDocument.URI, srv, backendService)
 		return nil, nil
 	})
 }
@@ -95,7 +95,7 @@ func TextDocumentDidSaveHandler(srv **jrpc2.Server) handler.Func {
 		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentDidSaveHandler", "params": params}).Info("RECEIVING")
 		// clear cache when saving and get fresh diagnostics
 		diagnostics.ClearDiagnosticsCache()
-		PublishDiagnostics(ctx, params.TextDocument.URI, srv)
+		PublishDiagnostics(ctx, params.TextDocument.URI, srv, nil)
 		return nil, nil
 	})
 }

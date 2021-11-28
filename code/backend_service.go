@@ -3,6 +3,7 @@ package code
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/sirupsen/logrus"
 	"github.com/snyk/snyk-lsp/lsp"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"io"
@@ -16,13 +17,33 @@ const (
 	ApiUrl           string = "https://deeproxy.snyk.io"
 )
 
+var (
+	severities = map[string]sglsp.DiagnosticSeverity{
+		"high": sglsp.Error,
+		"low":  sglsp.Warning,
+	}
+)
+
+func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
+	lspSev, ok := severities[snykSeverity]
+	if !ok {
+		return sglsp.Info
+	}
+	return lspSev
+}
+
 type SnykCodeBackendService struct {
 	client http.Client
 }
 
-type createBundleResponse struct {
+type bundleResponse struct {
 	BundleHash   string              `json:"bundleHash"`
 	MissingFiles []sglsp.DocumentURI `json:"missingFiles"`
+}
+
+type extendBundleRequest struct {
+	Files        map[sglsp.DocumentURI]File `json:"files"`
+	RemovedFiles []sglsp.DocumentURI        `json:"removedFiles,omitempty"`
 }
 
 func token() string {
@@ -45,7 +66,7 @@ func (s *SnykCodeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) 
 		return "", nil, err
 	}
 
-	var bundle createBundleResponse
+	var bundle bundleResponse
 	err = json.Unmarshal(responseBody, &bundle)
 	if err != nil {
 		return "", nil, err
@@ -54,6 +75,7 @@ func (s *SnykCodeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) 
 }
 
 func (s *SnykCodeBackendService) doCall(method string, path string, requestBody io.Reader) ([]byte, error) {
+	logger := logrus.New()
 	req, err := http.NewRequest(method, ApiUrl+path, requestBody)
 	if err != nil {
 		return nil, err
@@ -61,58 +83,64 @@ func (s *SnykCodeBackendService) doCall(method string, path string, requestBody 
 	req.Header.Set("Session-Token", token())
 	req.Header.Set("Content-Type", "application/json")
 
+	logger.Info(req.Body)
 	response, err := s.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer response.Body.Close()
 	responseBody, err := ioutil.ReadAll(response.Body)
+	logger.Info(string(responseBody))
 	if err != nil {
 		return nil, err
 	}
 	return responseBody, err
 }
 
-func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]File, removedFiles []sglsp.DocumentURI) ([]sglsp.DocumentURI, error) {
-	requestBody, err := json.Marshal(files)
+func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]File, removedFiles []sglsp.DocumentURI) (string, []sglsp.DocumentURI, error) {
+	requestBody, err := json.Marshal(extendBundleRequest{
+		Files:        files,
+		RemovedFiles: removedFiles,
+	})
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	b := bytes.NewBuffer(requestBody)
 
-	responseBody, err := s.doCall("PUT", "/bundle"+bundleHash, b)
+	responseBody, err := s.doCall("PUT", "/bundle/"+bundleHash, b)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
-	var missingFiles []sglsp.DocumentURI
-	err = json.Unmarshal(responseBody, &missingFiles)
-	return missingFiles, err
+	var bundleResponse bundleResponse
+	err = json.Unmarshal(responseBody, &bundleResponse)
+	return bundleResponse.BundleHash, bundleResponse.MissingFiles, err
 }
 
-func (s *SnykCodeBackendService) RetrieveDiagnostics(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, error) {
+func (s *SnykCodeBackendService) RetrieveDiagnostics(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, string, error) {
 	requestBody, err := s.analysisRequestBody(bundleHash, limitToFiles, severity)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	b := bytes.NewBuffer(requestBody)
-	responseBody, err := s.doCall("PUT", "/bundle"+bundleHash, b)
+	responseBody, err := s.doCall("POST", "/analysis", b)
+	failed := "FAILED"
 	if err != nil {
-		return nil, err
+		return nil, failed, err
 	}
 
 	var response AnalysisResponse
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	if response.Status == "FAILED" {
-		return nil, SnykAnalysisFailedError{Msg: string(responseBody)}
+	if response.Status == failed {
+		return nil, "", SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
 	if response.Status != "COMPLETE" {
-		return nil, nil
+		return nil, "", nil
 	}
-	return s.convertToDiagnostics(response), err
+	return s.convertToDiagnostics(response), response.Status, err
 }
 
 func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) ([]byte, error) {
@@ -122,45 +150,46 @@ func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, limitToF
 			Hash:         bundleHash,
 			LimitToFiles: limitToFiles,
 		},
-		Severity:    severity,
-		Prioritized: 0,
-		Legacy:      true,
+		Legacy: true,
+	}
+	if severity > 0 {
+		request.Severity = severity
+	} else {
+		request.Severity = 3 // Note
 	}
 	requestBody, err := json.Marshal(request)
 	return requestBody, err
 }
 
 func (s *SnykCodeBackendService) convertToDiagnostics(response AnalysisResponse) map[sglsp.DocumentURI][]lsp.Diagnostic {
-
-	//diagnostics := map[sglsp.DocumentURI][]sglsp.FakeDiagnostic{}
-	//for uri, fileSuggestions := range response.Files {
-	//	for index := range fileSuggestions {
-	//		fileSuggestion := fileSuggestions[index]
-	//		suggestion := response.Suggestions[index]
-	//
-	//			FakeDiagnostic := sglsp.FakeDiagnostic{
-	//				Range: sglsp.Range{
-	//					Start: sglsp.Position{
-	//						Line:      filePosition,
-	//						Character: 3,
-	//					},
-	//					End: sglsp.Position{
-	//						Line:      0,
-	//						Character: 7,
-	//					},
-	//				},
-	//				Severity: sglsp.Error,
-	//				Code:     "SNYK-123",
-	//				Source:   "snyk code",
-	//				Message:  "This is a dummy error (severity error)",
-	//			}
-	//
-	//		}
-	//	}
-	//}
-
-	// foreach FakeDiagnostic per uri
-	//diagnostics = append(diagnostics, FakeDiagnostic)
-	//return diagnostics
-	return nil
+	diags := make(map[sglsp.DocumentURI][]lsp.Diagnostic)
+	for uri, fileSuggestions := range response.Files {
+		diagSlice := make([]lsp.Diagnostic, 0)
+		for index := range fileSuggestions {
+			fileSuggestion := fileSuggestions[index]
+			suggestion := response.Suggestions[index]
+			for _, filePosition := range fileSuggestion {
+				myRange := sglsp.Range{
+					Start: sglsp.Position{
+						Line:      filePosition.Rows[0],
+						Character: filePosition.Rows[0],
+					},
+					End: sglsp.Position{
+						Line:      filePosition.Rows[1],
+						Character: filePosition.Cols[1],
+					},
+				}
+				d := lsp.Diagnostic{
+					Range:    myRange,
+					Severity: lspSeverity(suggestion.Severity),
+					Code:     suggestion.Rule,
+					Source:   "snyk code",
+					Message:  suggestion.Message,
+				}
+				diagSlice = append(diagSlice, d)
+			}
+		}
+		diags[uri] = diagSlice
+	}
+	return diags
 }

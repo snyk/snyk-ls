@@ -34,6 +34,7 @@ func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
 	documentDiagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	RegisterDocument(doc)
+	documentDiagnostics[doc.URI] = []lsp.Diagnostic{code.FakeDiagnostic}
 
 	diagnostics, _ := GetDiagnostics(doc.URI, &code.FakeBackendService{BundleHash: "dummy-hash"})
 

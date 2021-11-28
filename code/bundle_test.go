@@ -30,31 +30,30 @@ var (
 )
 
 func Test_createBundleFromSource_shouldReturnNonEmptyBundleHash(t *testing.T) {
-	b := CodeBundleImpl{Backend: &FakeBackendService{}}
+	b := BundleImpl{Backend: &FakeBackendService{}}
 	b.bundleDocuments = map[lsp.DocumentURI]File{}
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
 
-	hash, _, _ := b.createBundleFromSource(registeredDocuments)
-	assert.Equal(t, hash, b.bundleHash)
+	b.createBundleFromSource(registeredDocuments)
 	assert.NotEqual(t, "", b.bundleHash)
 }
 
 func Test_createBundleFromSource_shouldAddDocumentToBundle(t *testing.T) {
-	b := CodeBundleImpl{Backend: &FakeBackendService{BundleHash: "test-bundle-Hash"}}
+	b := BundleImpl{Backend: &FakeBackendService{BundleHash: "test-bundle-Hash"}}
 	b.bundleDocuments = map[lsp.DocumentURI]File{}
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
 
-	bundleHash, _, _ := b.createBundleFromSource(registeredDocuments)
+	b.createBundleFromSource(registeredDocuments)
 
-	assert.NotEqual(t, "", bundleHash)
+	assert.NotEqual(t, "", b.bundleHash)
 	assert.NotEqual(t, File{}, b.bundleDocuments[firstDoc.URI])
 	assert.Equal(t, firstBundleFile, b.bundleDocuments[firstDoc.URI])
 }
 
 func Test_extendBundleFromSource_shouldAddDocumentToBundle(t *testing.T) {
-	b := CodeBundleImpl{Backend: &FakeBackendService{BundleHash: "test-bundle-Hash"}}
+	b := BundleImpl{Backend: &FakeBackendService{BundleHash: "test-bundle-Hash"}}
 	b.bundleHash = "test-Hash"
 	b.bundleDocuments = map[lsp.DocumentURI]File{}
 	b.bundleDocuments[firstDoc.URI] = firstBundleFile
@@ -66,20 +65,20 @@ func Test_extendBundleFromSource_shouldAddDocumentToBundle(t *testing.T) {
 		Content: secondDoc.Text,
 	}
 
-	missingFiles, _ := b.extendBundleFromSource(registeredDocuments)
-	assert.Empty(t, missingFiles)
+	b.extendBundleFromSource(registeredDocuments)
+	assert.Empty(t, b.missingFiles)
 	assert.Equal(t, secondBundleFile, b.bundleDocuments[secondDoc.URI])
 }
 
 func TestCodeBundleImpl_DiagnosticData_should_create_bundle_when_hash_empty(t *testing.T) {
 	hash := "testHash"
 	backendMock := &FakeBackendService{BundleHash: hash}
-	b := CodeBundleImpl{Backend: backendMock}
+	b := BundleImpl{Backend: backendMock}
 	b.bundleHash = ""
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
 
-	_, _ = b.DiagnosticData(registeredDocuments)
+	b.DiagnosticData(registeredDocuments)
 
 	assert.Equal(t, hash, b.bundleHash)
 	assert.Equal(t, 0, len(b.missingFiles))
@@ -93,14 +92,14 @@ func TestCodeBundleImpl_DiagnosticData_should_create_bundle_when_hash_empty(t *t
 }
 
 func TestCodeBundleImpl_DiagnosticData_should_extend_bundle_when_hash_not_empty(t *testing.T) {
-	hash := ""
+	hash := "test"
 	backendMock := &FakeBackendService{BundleHash: hash}
-	b := CodeBundleImpl{Backend: backendMock}
+	b := BundleImpl{Backend: backendMock}
 
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
 	// create bundle with first doc
-	_, _, _ = b.createBundleFromSource(registeredDocuments)
+	_ = b.createBundleFromSource(registeredDocuments)
 
 	// now add a doc
 	registeredDocuments[secondDoc.URI] = secondDoc
@@ -124,7 +123,7 @@ func TestCodeBundleImpl_DiagnosticData_should_extend_bundle_when_hash_not_empty(
 
 func TestCodeBundleImpl_DiagnosticData_should_retrieve_from_backend(t *testing.T) {
 	backendMock := &FakeBackendService{}
-	b := CodeBundleImpl{Backend: backendMock}
+	b := BundleImpl{Backend: backendMock}
 	FakeDiagnosticUri = firstDoc.URI
 
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}

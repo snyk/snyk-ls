@@ -7,13 +7,13 @@ import (
 type AnalysisRequestKey struct {
 	Type         string            `json:"type"`
 	Hash         string            `json:"hash"`
-	LimitToFiles []lsp.DocumentURI `json:"limitToFiles"`
+	LimitToFiles []lsp.DocumentURI `json:"limitToFiles,omitempty"`
 }
 
 type AnalysisRequest struct {
 	Key         AnalysisRequestKey `json:"key"`
-	Severity    int                `json:"severity"`
-	Prioritized int                `json:"prioritized"`
+	Severity    int                `json:"severity,omitempty"`
+	Prioritized bool               `json:"prioritized,omitempty"`
 	Legacy      bool               `json:"legacy"`
 }
 
@@ -46,7 +46,7 @@ type ExampleCommitFix struct {
 type Suggestion struct {
 	Id                        string             `json:"id"`
 	Message                   string             `json:"message"`
-	Severity                  int                `json:"severity"`
+	Severity                  string             `json:"severity"`
 	LeadURL                   string             `json:"leadURL"`
 	Rule                      string             `json:"rule"`
 	Tags                      []string           `json:"tags"`

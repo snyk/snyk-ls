@@ -18,6 +18,14 @@ var (
 	}
 )
 
+func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
+	lspSev, ok := severities[snykSeverity]
+	if !ok {
+		return sglsp.Info
+	}
+	return lspSev
+}
+
 func HandleFile(uri sglsp.DocumentURI) ([]lsp.Diagnostic, error) {
 	diagnostics, err := snyk(strings.TrimSpace(strings.ReplaceAll(string(uri), "file://", "")))
 	return diagnostics, err
@@ -77,12 +85,4 @@ type testResult struct {
 			Url   lsp.Uri `json:"url"`
 		} `json:"references"`
 	} `json:"vulnerabilities"`
-}
-
-func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
-	lspSev, ok := severities[snykSeverity]
-	if !ok {
-		return sglsp.Info
-	}
-	return lspSev
 }

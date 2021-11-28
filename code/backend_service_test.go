@@ -1,30 +1,44 @@
 package code
 
 import (
+	"encoding/json"
 	"github.com/snyk/snyk-lsp/util"
-	"github.com/sourcegraph/go-lsp"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"net/http"
 	"os"
 	"testing"
+	"time"
 )
 
 const (
 	uri     = "/AnnotatorTest.java"
 	uri2    = "/AnnotatorTest2.java"
-	content = `public class AnnotatorTest {\n public static 
-						void delay(long millis) {\n try {\n Thread.sleep(millis);\n }
-						catch (InterruptedException e) {\n e.printStackTrace();\n    }\n  }\n}\n`
-	content2 = `public class AnnotatorTest {\n public static 
-						void delay(long millis) {\n try {\n Thread.sleep(millis);\n }
-						catch (InterruptedException e) {\n e.printStackTrace();\n    }\n  }\n}\n`
+	content = `public class AnnotatorTest {
+  public static void delay(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    }
+  }
+}`
+	content2 = `public class AnnotatorTest2 {
+  public static void delay(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    }
+  }
+}`
 )
 
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	s := &SnykCodeBackendService{
 		client: http.Client{},
 	}
-	files := map[lsp.DocumentURI]File{}
+	files := map[sglsp.DocumentURI]File{}
 	files[uri] = File{
 		Hash:    util.Hash(content),
 		Content: content,
@@ -39,19 +53,19 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	s := &SnykCodeBackendService{
 		client: http.Client{},
 	}
-	var removedFiles []lsp.DocumentURI
-	files := map[lsp.DocumentURI]File{}
+	var removedFiles []sglsp.DocumentURI
+	files := map[sglsp.DocumentURI]File{}
 	files[uri] = File{
 		Hash:    util.Hash(content),
 		Content: content,
 	}
 	bundleHash, _, _ := s.CreateBundle(files)
-	filesExtend := map[lsp.DocumentURI]File{}
+	filesExtend := map[sglsp.DocumentURI]File{}
 	filesExtend[uri2] = File{
 		Hash:    util.Hash(content2),
 		Content: content2,
 	}
-	missingFiles, _ := s.ExtendBundle(bundleHash, filesExtend, removedFiles)
+	_, missingFiles, _ := s.ExtendBundle(bundleHash, filesExtend, removedFiles)
 	assert.Equal(t, 0, len(missingFiles))
 }
 
@@ -59,23 +73,35 @@ func TestSnykCodeBackendService_RetrieveDiagnostics(t *testing.T) {
 	s := &SnykCodeBackendService{
 		client: http.Client{},
 	}
-	var removedFiles []lsp.DocumentURI
-	files := map[lsp.DocumentURI]File{}
+	var removedFiles []sglsp.DocumentURI
+	files := map[sglsp.DocumentURI]File{}
 	files[uri] = File{
 		Hash:    util.Hash(content),
 		Content: content,
 	}
 	bundleHash, _, _ := s.CreateBundle(files)
-	filesExtend := map[lsp.DocumentURI]File{}
+	filesExtend := map[sglsp.DocumentURI]File{}
 	filesExtend[uri2] = File{
 		Hash:    util.Hash(content2),
 		Content: content2,
 	}
-	s.ExtendBundle(bundleHash, filesExtend, removedFiles)
+	bundleHash, _, _ = s.ExtendBundle(bundleHash, filesExtend, removedFiles)
 
-	diagnostics, _ := s.RetrieveDiagnostics(bundleHash, nil, 0)
-	assert.NotEqual(t, 0, len(diagnostics[uri]))
-	assert.NotEqual(t, 0, len(diagnostics[uri2]))
+	assert.Eventually(t, func() bool {
+		limitToFiles := []sglsp.DocumentURI{uri, uri2}
+		d, callStatus, err := s.RetrieveDiagnostics(bundleHash, limitToFiles, 0)
+		if err != nil {
+			return false
+		}
+		if callStatus == "COMPLETE" && d[uri] != nil {
+			returnValue := assert.NotEqual(t, 0, len(d[uri]))
+			returnValue = returnValue && assert.NotEqual(t, 0, len(d[uri2]))
+			if returnValue {
+				return true
+			}
+		}
+		return false
+	}, 30*time.Second, 2*time.Second)
 }
 
 func TestSnykCodeBackendService_token(t *testing.T) {
@@ -87,3 +113,15 @@ func TestSnykCodeBackendService_token(t *testing.T) {
 
 // todo analysis test limit files
 // todo analysis test severities
+
+func TestSnykCodeBackendService_convertToDiagnostics(t *testing.T) {
+	s := &SnykCodeBackendService{
+		client: http.Client{},
+	}
+	bytes, _ := os.ReadFile("testdata/analysisResponse.json")
+	var analysisResponse AnalysisResponse
+	json.Unmarshal(bytes, &analysisResponse)
+	diags := s.convertToDiagnostics(analysisResponse)
+	assert.NotNil(t, diags)
+	assert.Equal(t, 1, len(diags))
+}

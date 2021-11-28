@@ -70,20 +70,21 @@ func (f *FakeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) (str
 		// create a random hash
 		f.BundleHash = util.Hash(uuid.NewString())
 	}
+
 	return f.BundleHash, nil, nil
 }
 
-func (f *FakeBackendService) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]File, removedFiles []sglsp.DocumentURI) ([]sglsp.DocumentURI, error) {
+func (f *FakeBackendService) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]File, removedFiles []sglsp.DocumentURI) (string, []sglsp.DocumentURI, error) {
 	params := []interface{}{bundleHash, files, removedFiles}
 	f.addCall(params, ExtendBundleWithSourceOperation)
-	return nil, nil
+	return bundleHash, nil, nil
 }
-func (f *FakeBackendService) RetrieveDiagnostics(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, error) {
+func (f *FakeBackendService) RetrieveDiagnostics(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, string, error) {
 	params := []interface{}{bundleHash, limitToFiles, severity}
 	f.addCall(params, RetrieveDiagnosticsOperation)
 
 	diagnosticMap := map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	var diagnostics []lsp.Diagnostic
 	diagnosticMap[FakeDiagnosticUri] = append(diagnostics, FakeDiagnostic)
-	return diagnosticMap, nil
+	return diagnosticMap, "", nil
 }
