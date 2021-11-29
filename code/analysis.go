@@ -46,7 +46,7 @@ type ExampleCommitFix struct {
 type Suggestion struct {
 	Id                        string             `json:"id"`
 	Message                   string             `json:"message"`
-	Severity                  string             `json:"severity"`
+	Severity                  int                `json:"severity"`
 	LeadURL                   string             `json:"leadURL"`
 	Rule                      string             `json:"rule"`
 	Tags                      []string           `json:"tags"`

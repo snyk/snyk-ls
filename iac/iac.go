@@ -18,30 +18,57 @@ var (
 	}
 )
 
-func HandleFile(uri sglsp.DocumentURI) ([]lsp.Diagnostic, error) {
-	diagnostics, err := snyk(strings.ReplaceAll(string(uri), "file://", ""))
-	return diagnostics, err
+func HandleFile(uri sglsp.DocumentURI) ([]lsp.Diagnostic, []sglsp.CodeLens, error) {
+	diagnostics, codeLenses, err := fetch(strings.ReplaceAll(string(uri), "file://", ""))
+	return diagnostics, codeLenses, err
 }
 
-func snyk(path string) ([]lsp.Diagnostic, error) {
+func fetch(path string) ([]lsp.Diagnostic, []sglsp.CodeLens, error) {
 	path, err := filepath.Abs(path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	resBytes, err := exec.Command(util.CliPath, "iac", "test", path, "--json").CombinedOutput()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			if exitErr.ExitCode() > 1 {
-				return nil, fmt.Errorf("error running snyk: %s: %s", err, string(resBytes))
+				return nil, nil, fmt.Errorf("error running fetch: %s: %s", err, string(resBytes))
 			}
 		} else {
-			return nil, fmt.Errorf("error running snyk: %s: %s", err, string(resBytes))
+			return nil, nil, fmt.Errorf("error running fetch: %s: %s", err, string(resBytes))
 		}
 	}
 	var res testResult
 	if err := json.Unmarshal(resBytes, &res); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	diagnostics := convertDiagnostics(res)
+	codeLenses := convertCodeLenses(res)
+	return diagnostics, codeLenses, nil
+}
+
+func convertCodeLenses(res testResult) []sglsp.CodeLens {
+	var lenses []sglsp.CodeLens
+	for _, issue := range res.IacIssues {
+		lens := sglsp.CodeLens{
+			Range: sglsp.Range{
+				Start: sglsp.Position{Line: issue.LineNumber - 1, Character: 0},
+				End:   sglsp.Position{Line: issue.LineNumber - 1, Character: 80},
+			},
+			Command: sglsp.Command{
+				Title:   "Show Description of " + issue.PublicID,
+				Command: "snyk.launchBrowser",
+				Arguments: []interface{}{
+					issue.Documentation,
+				},
+			},
+		}
+		lenses = append(lenses, lens)
+	}
+	return lenses
+}
+
+func convertDiagnostics(res testResult) []lsp.Diagnostic {
 	var diagnostics []lsp.Diagnostic
 	for _, issue := range res.IacIssues {
 		diagnostic := lsp.Diagnostic{
@@ -59,7 +86,7 @@ func snyk(path string) ([]lsp.Diagnostic, error) {
 		}
 		diagnostics = append(diagnostics, diagnostic)
 	}
-	return diagnostics, nil
+	return diagnostics
 }
 
 type testResult struct {

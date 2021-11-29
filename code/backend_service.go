@@ -3,6 +3,7 @@ package code
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/sirupsen/logrus"
 	"github.com/snyk/snyk-lsp/lsp"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -155,8 +156,6 @@ func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, limitToF
 	}
 	if severity > 0 {
 		request.Severity = severity
-	} else {
-		request.Severity = 3 // Note
 	}
 	requestBody, err := json.Marshal(request)
 	return requestBody, err
@@ -183,7 +182,7 @@ func (s *SnykCodeBackendService) convertToDiagnostics(response AnalysisResponse)
 				}
 				d := lsp.Diagnostic{
 					Range:    myRange,
-					Severity: lspSeverity(suggestion.Severity),
+					Severity: lspSeverity(fmt.Sprintf("%d", suggestion.Severity)),
 					Code:     suggestion.Rule,
 					Source:   "snyk code",
 					Message:  suggestion.Message,

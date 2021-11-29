@@ -101,7 +101,7 @@ func TestSnykCodeBackendService_RetrieveDiagnostics(t *testing.T) {
 			}
 		}
 		return false
-	}, 30*time.Second, 2*time.Second)
+	}, 60*time.Second, 2*time.Second)
 }
 
 func TestSnykCodeBackendService_token(t *testing.T) {

@@ -73,18 +73,20 @@ func fetch(
 	error,
 ) {
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
+	var codeLenses []sglsp.CodeLens
 	var diagnosticSlice []lsp.Diagnostic
 
-	// TODO comment until answer from Arvyd
 	codeDiagnostics, codeCodeLenses, err := myBundle.DiagnosticData(registeredDocuments)
 	logError(err, "GetDiagnostics")
-	iacDiagnostics, err := iac.HandleFile(uri)
+	iacDiagnostics, iacCodeLenses, err := iac.HandleFile(uri)
 	logError(err, "GetDiagnostics")
 	ossDiagnostics, err := oss.HandleFile(uri)
 	logError(err, "GetDiagnostics")
 
 	mergeDiagnosticsAndAddToCache(uri, diagnosticSlice, codeDiagnostics, iacDiagnostics, ossDiagnostics)
-	codeLenseCache[uri] = codeCodeLenses[uri]
+	codeLenses = append(codeCodeLenses[uri], iacCodeLenses...)
+
+	codeLenseCache[uri] = codeLenses
 	return diagnostics, codeLenseCache, err
 }
 

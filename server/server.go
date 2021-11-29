@@ -26,10 +26,10 @@ func Start() {
 
 	lspHandlers := handler.Map{
 		"initialize":                     InitializeHandler(),
-		"textDocument/didOpen":           TextDocumentDidOpenHandler(&server, &code.FakeBackendService{BundleHash: "hash"}),
+		"textDocument/didOpen":           TextDocumentDidOpenHandler(&server, &code.SnykCodeBackendService{}),
 		"textDocument/didChange":         TextDocumentDidChangeHandler(),
 		"textDocument/didClose":          TextDocumentDidCloseHandler(),
-		"textDocument/didSave":           TextDocumentDidSaveHandler(&server, &code.FakeBackendService{BundleHash: "hash"}),
+		"textDocument/didSave":           TextDocumentDidSaveHandler(&server, &code.SnykCodeBackendService{}),
 		"textDocument/willSave":          TextDocumentWillSaveHandler(),
 		"textDocument/willSaveWaitUntil": TextDocumentWillSaveWaitUntilHandler(),
 		"textDocument/codeLens":          TextDocumentCodeLens(),

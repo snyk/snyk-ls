@@ -1,0 +1,91 @@
+{
+  "meta": {
+    "isPrivate": true,
+    "isLicensesEnabled": false,
+    "ignoreSettings": null,
+    "org": "bastian.doetsch",
+    "projectId": "",
+    "policy": ""
+  },
+  "filesystemPolicy": false,
+  "vulnerabilities": [],
+  "dependencyCount": 0,
+  "licensesPolicy": null,
+  "ignoreSettings": null,
+  "targetFile": "testdata/RBAC.yaml",
+  "projectName": "testdata",
+  "org": "bastian.doetsch",
+  "policy": "",
+  "isPrivate": true,
+  "targetFilePath": "/Users/bdoetsch/workspace/go/src/github.com/snyk/snyk-lsp/iac/testdata/RBAC.yaml",
+  "packageManager": "k8sconfig",
+  "path": "/Users/bdoetsch/workspace/go/src/github.com/snyk/snyk-lsp/iac/testdata/RBAC.yaml",
+  "projectType": "k8sconfig",
+  "ok": false,
+  "infrastructureAsCodeIssues": [
+    {
+      "severity": "high",
+      "description": "",
+      "resolve": "Set only the necessary permissions required",
+      "id": "SNYK-CC-K8S-44",
+      "impact": "The use of wildcard rights grants is likely to provide excessive rights to the Kubernetes API.",
+      "msg": "clusterrole.rules[0].resources",
+      "subType": "ClusterRole",
+      "issue": "The role uses wildcards, which grant the role permissions to the whole cluster",
+      "publicId": "SNYK-CC-K8S-44",
+      "title": "Role with too wide permissions",
+      "references": [
+        "CWE-272",
+        "https://kubernetes.io/docs/reference/access-authn-authz/rbac/",
+        "CIS Kubernetes Benchmark 1.7.0 - 5.1.3 Minimize wildcard use in Roles and ClusterRoles"
+      ],
+      "isIgnored": false,
+      "iacDescription": {
+        "issue": "The role uses wildcards, which grant the role permissions to the whole cluster",
+        "impact": "The use of wildcard rights grants is likely to provide excessive rights to the Kubernetes API.",
+        "resolve": "Set only the necessary permissions required"
+      },
+      "lineNumber": 7,
+      "documentation": "https://snyk.io/security-rules/SNYK-CC-K8S-44",
+      "isGeneratedByCustomRule": false,
+      "path": [
+        "[DocId: 1]",
+        "clusterrole",
+        "rules[0]",
+        "resources"
+      ]
+    },
+    {
+      "severity": "high",
+      "description": "",
+      "resolve": "Set only the necessary permissions required",
+      "id": "SNYK-CC-K8S-44",
+      "impact": "The use of wildcard rights grants is likely to provide excessive rights to the Kubernetes API.",
+      "msg": "clusterrole.rules[0].verbs",
+      "subType": "ClusterRole",
+      "issue": "The role uses wildcards, which grant the role permissions to the whole cluster",
+      "publicId": "SNYK-CC-K8S-44",
+      "title": "Role with too wide permissions",
+      "references": [
+        "CWE-272",
+        "https://kubernetes.io/docs/reference/access-authn-authz/rbac/",
+        "CIS Kubernetes Benchmark 1.7.0 - 5.1.3 Minimize wildcard use in Roles and ClusterRoles"
+      ],
+      "isIgnored": false,
+      "iacDescription": {
+        "issue": "The role uses wildcards, which grant the role permissions to the whole cluster",
+        "impact": "The use of wildcard rights grants is likely to provide excessive rights to the Kubernetes API.",
+        "resolve": "Set only the necessary permissions required"
+      },
+      "lineNumber": 7,
+      "documentation": "https://snyk.io/security-rules/SNYK-CC-K8S-44",
+      "isGeneratedByCustomRule": false,
+      "path": [
+        "[DocId: 1]",
+        "clusterrole",
+        "rules[0]",
+        "verbs"
+      ]
+    }
+  ]
+}
