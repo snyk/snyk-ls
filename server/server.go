@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
@@ -54,15 +53,9 @@ func TextDocumentDidChangeHandler() handler.Func {
 	})
 }
 
-func logDiagnosticSlice(diagnosticSlice []lsp.Diagnostic) {
-	marshal, _ := json.Marshal(&diagnosticSlice)
-	util.Logger.Info("################# " + string(marshal))
-}
-
 func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv **jrpc2.Server, backendService code.BackendService) (interface{}, error) {
 	diags, err := diagnostics.GetDiagnostics(uri, backendService)
 	logError(err, "PublishDiagnostics")
-	logDiagnosticSlice(diags)
 	if diags != nil {
 		diagnosticsParams := lsp.PublishDiagnosticsParams{
 			URI:         uri,
