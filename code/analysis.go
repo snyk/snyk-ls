@@ -61,7 +61,7 @@ type Suggestion struct {
 
 type AnalysisResponse struct {
 	Status      string                              `json:"status"`
-	Progress    int                                 `json:"progress"`
+	Progress    float32                             `json:"progress"`
 	Files       map[lsp.DocumentURI]FileSuggestions `json:"files"`
 	Suggestions map[string]Suggestion               `json:"suggestions"`
 }

@@ -24,12 +24,14 @@ func Start() {
 
 	var server *jrpc2.Server
 
+	var service code.SnykCodeBackendService
+
 	lspHandlers := handler.Map{
 		"initialize":                     InitializeHandler(),
-		"textDocument/didOpen":           TextDocumentDidOpenHandler(&server, &code.SnykCodeBackendService{}),
+		"textDocument/didOpen":           TextDocumentDidOpenHandler(&server, &service),
 		"textDocument/didChange":         TextDocumentDidChangeHandler(),
 		"textDocument/didClose":          TextDocumentDidCloseHandler(),
-		"textDocument/didSave":           TextDocumentDidSaveHandler(&server, &code.SnykCodeBackendService{}),
+		"textDocument/didSave":           TextDocumentDidSaveHandler(&server, &service),
 		"textDocument/willSave":          TextDocumentWillSaveHandler(),
 		"textDocument/willSaveWaitUntil": TextDocumentWillSaveWaitUntilHandler(),
 		"textDocument/codeLens":          TextDocumentCodeLens(),

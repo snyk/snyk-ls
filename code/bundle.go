@@ -4,7 +4,27 @@ import (
 	"github.com/snyk/snyk-lsp/lsp"
 	"github.com/snyk/snyk-lsp/util"
 	sglsp "github.com/sourcegraph/go-lsp"
+	"path/filepath"
 	"time"
+)
+
+var (
+	extensions = map[string]bool{
+		".aspx": true,
+		".CS":   true,
+		".ejs":  true,
+		".es":   true,
+		".es6":  true,
+		".htm":  true,
+		".html": true,
+		".js":   true,
+		".jsx":  true,
+		".ts":   true,
+		".tsx":  true,
+		".vue":  true,
+		".py":   true,
+		".java": true,
+	}
 )
 
 type BundleImpl struct {
@@ -25,7 +45,9 @@ func (e SnykAnalysisTimeoutError) Error() string {
 func (b *BundleImpl) createBundleFromSource(files map[sglsp.DocumentURI]sglsp.TextDocumentItem) error {
 	b.addToBundleDocuments(files)
 	var err error
-	b.bundleHash, b.missingFiles, err = b.Backend.CreateBundle(b.bundleDocuments)
+	if len(b.bundleDocuments) > 0 {
+		b.bundleHash, b.missingFiles, err = b.Backend.CreateBundle(b.bundleDocuments)
+	}
 	return err
 }
 
@@ -34,10 +56,12 @@ func (b *BundleImpl) addToBundleDocuments(files map[sglsp.DocumentURI]sglsp.Text
 		b.bundleDocuments = make(map[sglsp.DocumentURI]File)
 	}
 	for uri, doc := range files {
-		if (b.bundleDocuments[uri] == File{}) {
-			b.bundleDocuments[uri] = File{
-				Hash:    util.Hash(doc.Text),
-				Content: doc.Text,
+		if extensions[filepath.Ext(string(uri))] {
+			if (b.bundleDocuments[uri] == File{}) {
+				b.bundleDocuments[uri] = File{
+					Hash:    util.Hash(doc.Text),
+					Content: doc.Text,
+				}
 			}
 		}
 	}
@@ -48,7 +72,9 @@ func (b *BundleImpl) extendBundleFromSource(files map[sglsp.DocumentURI]sglsp.Te
 	b.addToBundleDocuments(files)
 	var removeFiles []sglsp.DocumentURI
 	// todo determine which files to change
-	b.bundleHash, b.missingFiles, err = b.Backend.ExtendBundle(b.bundleHash, b.bundleDocuments, removeFiles)
+	if len(b.bundleDocuments) > 0 {
+		b.bundleHash, b.missingFiles, err = b.Backend.ExtendBundle(b.bundleHash, b.bundleDocuments, removeFiles)
+	}
 	return err
 }
 
@@ -75,24 +101,27 @@ func (b *BundleImpl) DiagnosticData(
 		}
 	}
 
-	for {
-		start := time.Now()
-		diagnostics, codeLenses, status, err := b.Backend.RetrieveDiagnostics(b.bundleHash, []sglsp.DocumentURI{}, 0)
-		if err != nil {
-			return nil, nil, err
-		}
+	if len(b.bundleDocuments) > 0 {
+		for {
+			start := time.Now()
+			diagnostics, codeLenses, status, err := b.Backend.RetrieveDiagnostics(b.bundleHash, []sglsp.DocumentURI{}, 0)
+			if err != nil {
+				return nil, nil, err
+			}
 
-		if diagnostics != nil {
-			return diagnostics, codeLenses, err
-		}
+			if diagnostics != nil {
+				return diagnostics, codeLenses, err
+			}
 
-		if status == "COMPLETE" {
-			return diagnostics, codeLenses, err
+			if status == "COMPLETE" {
+				return diagnostics, codeLenses, err
+			}
+			if time.Now().Sub(start) > 60*time.Second {
+				return nil, nil, SnykAnalysisTimeoutError{msg: "Analysis Call Timed out."}
+			}
+			time.Sleep(1 * time.Second)
 		}
-		if time.Now().Sub(start) > 6*time.Second {
-			return nil, nil, SnykAnalysisTimeoutError{msg: "Analysis Call Timed out."}
-		}
-		time.Sleep(1 * time.Second)
 	}
+	return nil, nil, nil
 
 }

@@ -24,7 +24,7 @@ var (
 		URI:        code.FakeDiagnosticUri,
 		LanguageID: "java",
 		Version:    0,
-		Text:       "public void",
+		Text:       "public class AnnotatorTest {\n  public static void delay(long millis) {\n    try {\n      Thread.sleep(millis);\n    } catch (InterruptedException e) {\n      e.printStackTrace();\n    }\n  }\n}",
 	}
 	docIdentifier = lsp.VersionedTextDocumentIdentifier{
 		TextDocumentIdentifier: lsp.TextDocumentIdentifier{URI: doc.URI},
@@ -40,6 +40,14 @@ func didOpenTextParams() lsp.DidOpenTextDocumentParams {
 	return didOpenParams
 }
 
+func didSaveTextParams() lsp.DidSaveTextDocumentParams {
+	// see https://microsoft.github.io/language-server-protocol/specifications/specification-3-17/#documentSelector
+	didSaveParams := lsp.DidSaveTextDocumentParams{
+		TextDocument: lsp.TextDocumentIdentifier{URI: doc.URI},
+	}
+	return didSaveParams
+}
+
 func startServer() server.Local {
 	var err error
 	util.CliPath, err = util.SetupCLI()
@@ -50,12 +58,14 @@ func startServer() server.Local {
 
 	var srv *jrpc2.Server
 
+	var service code.SnykCodeBackendService
+
 	lspHandlers := handler.Map{
 		"initialize":                     InitializeHandler(),
-		"textDocument/didOpen":           TextDocumentDidOpenHandler(&srv, &code.FakeBackendService{BundleHash: "hash"}),
+		"textDocument/didOpen":           TextDocumentDidOpenHandler(&srv, &service),
 		"textDocument/didChange":         TextDocumentDidChangeHandler(),
 		"textDocument/didClose":          TextDocumentDidCloseHandler(),
-		"textDocument/didSave":           TextDocumentDidSaveHandler(&srv, &code.FakeBackendService{BundleHash: "hash"}),
+		"textDocument/didSave":           TextDocumentDidSaveHandler(&srv, &service),
 		"textDocument/willSave":          TextDocumentWillSaveHandler(),
 		"textDocument/willSaveWaitUntil": TextDocumentWillSaveWaitUntilHandler(),
 		"textDocument/codeLens":          TextDocumentCodeLens(),
@@ -172,17 +182,6 @@ func Test_initialize_shouldSupportCodeLens(t *testing.T) {
 	assert.Equal(t, result.Capabilities.CodeLensProvider.ResolveProvider, true)
 }
 
-func Test_textDocumentDidOpenHandler_shouldBeServed(t *testing.T) {
-	loc := startServer()
-	defer loc.Close()
-
-	rsp, err := loc.Client.Call(ctx, "textDocument/didOpen", nil)
-	if err != nil {
-		log.Fatalf("Call: %v", err)
-	}
-	fmt.Println(rsp)
-}
-
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc := startServer()
 	defer loc.Close()
@@ -201,17 +200,6 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	assert.Eventually(t, func() bool { return notification != nil }, 5*time.Second, 10*time.Millisecond)
 	notification.UnmarshalParams(&diagnostics)
 	assert.Equal(t, didOpenParams.TextDocument.URI, diagnostics.URI)
-}
-
-func Test_textDocumentDidChangeHandler_shouldBeServed(t *testing.T) {
-	loc := startServer()
-	defer loc.Close()
-
-	rsp, err := loc.Client.Call(ctx, "textDocument/didChange", nil)
-	if err != nil {
-		log.Fatalf("Call: %v", err)
-	}
-	fmt.Println(rsp)
 }
 
 func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
@@ -233,14 +221,24 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 	}
 }
 
-func Test_textDocumentDidSaveHandler_shouldBeServed(t *testing.T) {
+func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc := startServer()
 	defer loc.Close()
 
-	_, err := loc.Client.Call(ctx, "textDocument/didSave", nil)
+	didSaveParams := didSaveTextParams()
+
+	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
 	if err != nil {
 		log.Fatalf("Call: %v", err)
 	}
+
+	// should receive diagnostics
+	diagnostics := lsp.PublishDiagnosticsParams{}
+
+	// wait for publish
+	assert.Eventually(t, func() bool { return notification != nil }, 5*time.Second, 10*time.Millisecond)
+	notification.UnmarshalParams(&diagnostics)
+	assert.Equal(t, didSaveParams.TextDocument.URI, diagnostics.URI)
 }
 
 func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
@@ -258,16 +256,6 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 	defer loc.Close()
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSave", nil)
-	if err != nil {
-		log.Fatalf("Call: %v", err)
-	}
-}
-
-func Test_textDocumentCodeLens_shouldBeServed(t *testing.T) {
-	loc := startServer()
-	defer loc.Close()
-
-	_, err := loc.Client.Call(ctx, "textDocument/codeLens", nil)
 	if err != nil {
 		log.Fatalf("Call: %v", err)
 	}
@@ -293,7 +281,7 @@ func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 
 	var codeLenses []lsp.CodeLens
 	rsp.UnmarshalResult(&codeLenses)
-	assert.Equal(t, 1, len(codeLenses))
+	assert.Equal(t, 2, len(codeLenses))
 }
 
 //func Test_codeLensResolve_shouldResolve(t *testing.T) {

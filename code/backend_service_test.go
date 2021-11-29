@@ -114,14 +114,16 @@ func TestSnykCodeBackendService_token(t *testing.T) {
 // todo analysis test limit files
 // todo analysis test severities
 
-func TestSnykCodeBackendService_convertToDiagnostics(t *testing.T) {
+func TestSnykCodeBackendService_convert_shouldConvertCodeResults(t *testing.T) {
 	s := &SnykCodeBackendService{
 		client: http.Client{},
 	}
 	bytes, _ := os.ReadFile("testdata/analysisResponse.json")
 	var analysisResponse AnalysisResponse
 	json.Unmarshal(bytes, &analysisResponse)
-	diags := s.convertToDiagnostics(analysisResponse)
+	diags, lenses := s.convert(analysisResponse)
 	assert.NotNil(t, diags)
+	assert.NotNil(t, lenses)
 	assert.Equal(t, 1, len(diags))
+	assert.Equal(t, 1, len(lenses))
 }

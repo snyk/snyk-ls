@@ -141,8 +141,8 @@ func (s *SnykCodeBackendService) RetrieveDiagnostics(bundleHash string, limitToF
 	if response.Status != "COMPLETE" {
 		return nil, nil, "", nil
 	}
-
-	return s.convertToDiagnostics(response), nil, response.Status, err
+	diags, lenses := s.convert(response)
+	return diags, lenses, response.Status, err
 }
 
 func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) ([]byte, error) {
@@ -161,11 +161,16 @@ func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, limitToF
 	return requestBody, err
 }
 
-func (s *SnykCodeBackendService) convertToDiagnostics(response AnalysisResponse) map[sglsp.DocumentURI][]lsp.Diagnostic {
+func (s *SnykCodeBackendService) convert(
+	response AnalysisResponse,
+) (
+	map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens) {
 	// todo convert to code lenses
 	diags := make(map[sglsp.DocumentURI][]lsp.Diagnostic)
+	lenses := make(map[sglsp.DocumentURI][]sglsp.CodeLens)
 	for uri, fileSuggestions := range response.Files {
 		diagSlice := make([]lsp.Diagnostic, 0)
+		lensSlice := make([]sglsp.CodeLens, 0)
 		for index := range fileSuggestions {
 			fileSuggestion := fileSuggestions[index]
 			suggestion := response.Suggestions[index]
@@ -187,10 +192,19 @@ func (s *SnykCodeBackendService) convertToDiagnostics(response AnalysisResponse)
 					Source:   "snyk code",
 					Message:  suggestion.Message,
 				}
+				l := sglsp.CodeLens{
+					Range: myRange,
+					Command: sglsp.Command{
+						Title:     "Open " + suggestion.Rule,
+						Command:   "snyk.showRule",
+						Arguments: []interface{}{suggestion.Rule}},
+				}
 				diagSlice = append(diagSlice, d)
+				lensSlice = append(lensSlice, l)
 			}
 		}
 		diags[uri] = diagSlice
+		lenses[uri] = lensSlice
 	}
-	return diags
+	return diags, lenses
 }
