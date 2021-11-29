@@ -52,38 +52,45 @@ func (b *BundleImpl) extendBundleFromSource(files map[sglsp.DocumentURI]sglsp.Te
 	return err
 }
 
-func (b *BundleImpl) DiagnosticData(registeredDocuments map[sglsp.DocumentURI]sglsp.TextDocumentItem) (map[sglsp.DocumentURI][]lsp.Diagnostic, error) {
+func (b *BundleImpl) DiagnosticData(
+	registeredDocuments map[sglsp.DocumentURI]sglsp.TextDocumentItem,
+) (
+	map[sglsp.DocumentURI][]lsp.Diagnostic,
+	map[sglsp.DocumentURI][]sglsp.CodeLens,
+	error,
+) {
 	var err error
 
 	if b.bundleHash == "" {
 		// we don't have missing files, as we're creating from source
 		err = b.createBundleFromSource(registeredDocuments)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	} else {
 		// we don't have missing files, as we're creating from source
 		err := b.extendBundleFromSource(registeredDocuments)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
+
 	for {
 		start := time.Now()
-		data, status, err := b.Backend.RetrieveDiagnostics(b.bundleHash, []sglsp.DocumentURI{}, 0)
+		diagnostics, codeLenses, status, err := b.Backend.RetrieveDiagnostics(b.bundleHash, []sglsp.DocumentURI{}, 0)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
-		if data != nil {
-			return data, err
+		if diagnostics != nil {
+			return diagnostics, codeLenses, err
 		}
 
 		if status == "COMPLETE" {
-			return data, nil
+			return diagnostics, codeLenses, err
 		}
 		if time.Now().Sub(start) > 6*time.Second {
-			return nil, SnykAnalysisTimeoutError{msg: "Analysis Call Timed out."}
+			return nil, nil, SnykAnalysisTimeoutError{msg: "Analysis Call Timed out."}
 		}
 		time.Sleep(1 * time.Second)
 	}

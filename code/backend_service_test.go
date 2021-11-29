@@ -89,7 +89,7 @@ func TestSnykCodeBackendService_RetrieveDiagnostics(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		limitToFiles := []sglsp.DocumentURI{uri, uri2}
-		d, callStatus, err := s.RetrieveDiagnostics(bundleHash, limitToFiles, 0)
+		d, _, callStatus, err := s.RetrieveDiagnostics(bundleHash, limitToFiles, 0)
 		if err != nil {
 			return false
 		}

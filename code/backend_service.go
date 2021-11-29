@@ -116,31 +116,32 @@ func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[sglsp
 	return bundleResponse.BundleHash, bundleResponse.MissingFiles, err
 }
 
-func (s *SnykCodeBackendService) RetrieveDiagnostics(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, string, error) {
+func (s *SnykCodeBackendService) RetrieveDiagnostics(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens, string, error) {
 	requestBody, err := s.analysisRequestBody(bundleHash, limitToFiles, severity)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, "", err
 	}
 
 	b := bytes.NewBuffer(requestBody)
 	responseBody, err := s.doCall("POST", "/analysis", b)
 	failed := "FAILED"
 	if err != nil {
-		return nil, failed, err
+		return nil, nil, failed, err
 	}
 
 	var response AnalysisResponse
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, "", err
 	}
 	if response.Status == failed {
-		return nil, "", SnykAnalysisFailedError{Msg: string(responseBody)}
+		return nil, nil, "", SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
 	if response.Status != "COMPLETE" {
-		return nil, "", nil
+		return nil, nil, "", nil
 	}
-	return s.convertToDiagnostics(response), response.Status, err
+
+	return s.convertToDiagnostics(response), nil, response.Status, err
 }
 
 func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) ([]byte, error) {
@@ -162,6 +163,7 @@ func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, limitToF
 }
 
 func (s *SnykCodeBackendService) convertToDiagnostics(response AnalysisResponse) map[sglsp.DocumentURI][]lsp.Diagnostic {
+	// todo convert to code lenses
 	diags := make(map[sglsp.DocumentURI][]lsp.Diagnostic)
 	for uri, fileSuggestions := range response.Files {
 		diagSlice := make([]lsp.Diagnostic, 0)

@@ -35,7 +35,7 @@ func Test_createBundleFromSource_shouldReturnNonEmptyBundleHash(t *testing.T) {
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
 
-	b.createBundleFromSource(registeredDocuments)
+	_ = b.createBundleFromSource(registeredDocuments)
 	assert.NotEqual(t, "", b.bundleHash)
 }
 
@@ -45,7 +45,7 @@ func Test_createBundleFromSource_shouldAddDocumentToBundle(t *testing.T) {
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
 
-	b.createBundleFromSource(registeredDocuments)
+	_ = b.createBundleFromSource(registeredDocuments)
 
 	assert.NotEqual(t, "", b.bundleHash)
 	assert.NotEqual(t, File{}, b.bundleDocuments[firstDoc.URI])
@@ -65,7 +65,7 @@ func Test_extendBundleFromSource_shouldAddDocumentToBundle(t *testing.T) {
 		Content: secondDoc.Text,
 	}
 
-	b.extendBundleFromSource(registeredDocuments)
+	_ = b.extendBundleFromSource(registeredDocuments)
 	assert.Empty(t, b.missingFiles)
 	assert.Equal(t, secondBundleFile, b.bundleDocuments[secondDoc.URI])
 }
@@ -78,7 +78,7 @@ func TestCodeBundleImpl_DiagnosticData_should_create_bundle_when_hash_empty(t *t
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
 
-	b.DiagnosticData(registeredDocuments)
+	_, _, _ = b.DiagnosticData(registeredDocuments)
 
 	assert.Equal(t, hash, b.bundleHash)
 	assert.Equal(t, 0, len(b.missingFiles))
@@ -105,7 +105,7 @@ func TestCodeBundleImpl_DiagnosticData_should_extend_bundle_when_hash_not_empty(
 	registeredDocuments[secondDoc.URI] = secondDoc
 
 	// execute
-	_, _ = b.DiagnosticData(registeredDocuments)
+	_, _, _ = b.DiagnosticData(registeredDocuments)
 
 	// the bundle hash should be the same
 	assert.Equal(t, backendMock.BundleHash, b.bundleHash)
@@ -130,7 +130,7 @@ func TestCodeBundleImpl_DiagnosticData_should_retrieve_from_backend(t *testing.T
 	registeredDocuments[firstDoc.URI] = firstDoc
 
 	// execute
-	diagnosticMap, _ := b.DiagnosticData(registeredDocuments)
+	diagnosticMap, _, _ := b.DiagnosticData(registeredDocuments)
 
 	assert.NotNil(t, diagnosticMap)
 	diagnostics := diagnosticMap[firstDoc.URI]
@@ -144,4 +144,17 @@ func TestCodeBundleImpl_DiagnosticData_should_retrieve_from_backend(t *testing.T
 	assert.Equal(t, 3, len(params))
 	assert.Equal(t, b.bundleHash, params[0])
 	assert.Equal(t, 0, params[2])
+}
+
+func TestCodeBundleImpl_DiagnosticData_should_return_code_lenses(t *testing.T) {
+	backendMock := &FakeBackendService{}
+	b := BundleImpl{Backend: backendMock}
+	FakeDiagnosticUri = firstDoc.URI
+
+	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
+	registeredDocuments[firstDoc.URI] = firstDoc
+
+	// execute
+	_, codeLensMap, _ := b.DiagnosticData(registeredDocuments)
+	assert.NotEqual(t, 0, len(codeLensMap[firstDoc.URI]))
 }

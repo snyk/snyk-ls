@@ -26,12 +26,14 @@ func Start() {
 
 	lspHandlers := handler.Map{
 		"initialize":                     InitializeHandler(),
-		"textDocument/didOpen":           TextDocumentDidOpenHandler(&server, &code.SnykCodeBackendService{}),
+		"textDocument/didOpen":           TextDocumentDidOpenHandler(&server, &code.FakeBackendService{BundleHash: "hash"}),
 		"textDocument/didChange":         TextDocumentDidChangeHandler(),
 		"textDocument/didClose":          TextDocumentDidCloseHandler(),
-		"textDocument/didSave":           TextDocumentDidSaveHandler(&server),
+		"textDocument/didSave":           TextDocumentDidSaveHandler(&server, &code.FakeBackendService{BundleHash: "hash"}),
 		"textDocument/willSave":          TextDocumentWillSaveHandler(),
 		"textDocument/willSaveWaitUntil": TextDocumentWillSaveWaitUntilHandler(),
+		"textDocument/codeLens":          TextDocumentCodeLens(),
+		//"codeLens/resolve":               codeLensResolve(&server),
 	}
 
 	server = jrpc2.NewServer(lspHandlers, &jrpc2.ServerOptions{
@@ -43,6 +45,20 @@ func Start() {
 
 	err = server.Wait()
 	log.Fatalf("Shutting down...(%s)", err)
+}
+
+func TextDocumentCodeLens() handler.Func {
+	return handler.New(func(ctx context.Context, params sglsp.CodeLensParams) (interface{}, error) {
+		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentCodeLens", "params": params}).Info("RECEIVING")
+
+		codeLenses, err := diagnostics.GetCodeLenses(params.TextDocument.URI)
+		if err != nil {
+			util.Logger.WithFields(logrus.Fields{"method": "TextDocumentCodeLens", "response": codeLenses}).Error(err)
+		}
+
+		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentCodeLens", "response": codeLenses}).Info("SENDING")
+		return codeLenses, err
+	})
 }
 
 func TextDocumentDidChangeHandler() handler.Func {
@@ -83,12 +99,14 @@ func TextDocumentDidOpenHandler(srv **jrpc2.Server, backendService code.BackendS
 	})
 }
 
-func TextDocumentDidSaveHandler(srv **jrpc2.Server) handler.Func {
+func TextDocumentDidSaveHandler(srv **jrpc2.Server, backendService code.BackendService) handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidSaveTextDocumentParams) (interface{}, error) {
 		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentDidSaveHandler", "params": params}).Info("RECEIVING")
 		// clear cache when saving and get fresh diagnostics
-		diagnostics.ClearDiagnosticsCache()
-		PublishDiagnostics(ctx, params.TextDocument.URI, srv, nil)
+		diagnostics.ClearDiagnosticsCache(params.TextDocument.URI)
+		diagnostics.ClearLenses(params.TextDocument.URI)
+		// todo use real backend
+		PublishDiagnostics(ctx, params.TextDocument.URI, srv, backendService)
 		return nil, nil
 	})
 }
@@ -107,7 +125,6 @@ func TextDocumentWillSaveWaitUntilHandler() handler.Func {
 	})
 }
 
-//todo testing
 func TextDocumentDidCloseHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidCloseTextDocumentParams) (interface{}, error) {
 		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentDidCloseHandler", "params": params}).Info("RECEIVING")
@@ -130,6 +147,7 @@ func InitializeHandler() handler.Func {
 						Save:              &sglsp.SaveOptions{IncludeText: true},
 					},
 				},
+				CodeLensProvider: &sglsp.CodeLensOptions{ResolveProvider: true},
 			},
 		}, nil
 	})

@@ -32,20 +32,20 @@ func Test_UnRegisterDocument_shouldDeleteDocumentFromCache(t *testing.T) {
 
 func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
-	documentDiagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
+	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	RegisterDocument(doc)
-	documentDiagnostics[doc.URI] = []lsp.Diagnostic{code.FakeDiagnostic}
+	documentDiagnosticCache[doc.URI] = []lsp.Diagnostic{code.FakeDiagnostic}
 
 	diagnostics, _ := GetDiagnostics(doc.URI, &code.FakeBackendService{BundleHash: "dummy-hash"})
 
 	assert.NotNil(t, diagnostics)
-	assert.NotEmpty(t, documentDiagnostics[doc.URI])
-	assert.Equal(t, len(documentDiagnostics[doc.URI]), len(diagnostics))
+	assert.NotEmpty(t, documentDiagnosticCache[doc.URI])
+	assert.Equal(t, len(documentDiagnosticCache[doc.URI]), len(diagnostics))
 }
 
 func Test_UpdateDocument_shouldUpdateTextOfDocument(t *testing.T) {
 	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
-	documentDiagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
+	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	RegisterDocument(doc)
 
 	change := sglsp.TextDocumentContentChangeEvent{
@@ -54,4 +54,16 @@ func Test_UpdateDocument_shouldUpdateTextOfDocument(t *testing.T) {
 	UpdateDocument(doc.URI, []sglsp.TextDocumentContentChangeEvent{change})
 
 	assert.Equal(t, registeredDocuments[doc.URI].Text, change.Text)
+}
+
+func Test_GetDiagnostics_shouldAddCodeLenses(t *testing.T) {
+	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
+	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
+	RegisterDocument(doc)
+
+	diagnostics, _ := GetDiagnostics(doc.URI, &code.FakeBackendService{BundleHash: "dummy-hash"})
+
+	assert.Equal(t, len(documentDiagnosticCache[doc.URI]), len(diagnostics))
+	lenses, _ := GetCodeLenses(doc.URI)
+	assert.Equal(t, 1, len(lenses))
 }
