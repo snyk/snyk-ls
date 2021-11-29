@@ -9,21 +9,39 @@ import (
 )
 
 var (
+	// TODO get via filters request
+	// extensions":[".java",".aspx",".cs",".cls",".ejs",".es",".es6",".htm",".html",".js",".jsx",".ts",".tsx",".vue",".py",".erb",".haml",".rb",".rhtml",".slim",".go",".c",".cc",".cpp",".cxx",".h",".hpp",".hxx",".php",".phtml"]
 	extensions = map[string]bool{
-		".aspx": true,
-		".CS":   true,
-		".ejs":  true,
-		".es":   true,
-		".es6":  true,
-		".htm":  true,
-		".html": true,
-		".js":   true,
-		".jsx":  true,
-		".ts":   true,
-		".tsx":  true,
-		".vue":  true,
-		".py":   true,
-		".java": true,
+		".java":  true,
+		".aspx":  true,
+		".cs":    true,
+		".cls":   true,
+		".ejs":   true,
+		".es":    true,
+		".es6":   true,
+		".htm":   true,
+		".html":  true,
+		".js":    true,
+		".jsx":   true,
+		".ts":    true,
+		".tsx":   true,
+		".vue":   true,
+		".py":    true,
+		".erb":   true,
+		".haml":  true,
+		".rb":    true,
+		".rhtml": true,
+		".slim":  true,
+		".go":    true,
+		".c":     true,
+		".cc":    true,
+		".cpp":   true,
+		".cxx":   true,
+		".h":     true,
+		".hpp":   true,
+		".hxx":   true,
+		".php":   true,
+		".phtml": true,
 	}
 )
 

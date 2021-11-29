@@ -72,7 +72,7 @@ func convertDiagnostics(res testResult) []lsp.Diagnostic {
 	var diagnostics []lsp.Diagnostic
 	for _, issue := range res.IacIssues {
 		diagnostic := lsp.Diagnostic{
-			Source:  "snyk-lsp",
+			Source:  "Snyk LSP",
 			Message: fmt.Sprintf("%s: %s", issue.PublicID, issue.Title),
 			Range: sglsp.Range{
 				Start: sglsp.Position{Line: issue.LineNumber - 1, Character: 0},

@@ -30,8 +30,6 @@ type FilePosition struct {
 
 type FileSuggestions map[string][]FilePosition
 
-type AnalysisSeverity struct{}
-
 type CommitChangeLine struct {
 	Line       string `json:"line"`
 	LineNumber int    `json:"lineNumber"`

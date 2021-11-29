@@ -20,8 +20,8 @@ const (
 
 var (
 	severities = map[string]sglsp.DiagnosticSeverity{
-		"high": sglsp.Error,
-		"low":  sglsp.Warning,
+		"3": sglsp.Error,
+		"2": sglsp.Warning,
 	}
 )
 
@@ -165,7 +165,6 @@ func (s *SnykCodeBackendService) convert(
 	response AnalysisResponse,
 ) (
 	map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens) {
-	// todo convert to code lenses
 	diags := make(map[sglsp.DocumentURI][]lsp.Diagnostic)
 	lenses := make(map[sglsp.DocumentURI][]sglsp.CodeLens)
 	for uri, fileSuggestions := range response.Files {
@@ -177,11 +176,11 @@ func (s *SnykCodeBackendService) convert(
 			for _, filePosition := range fileSuggestion {
 				myRange := sglsp.Range{
 					Start: sglsp.Position{
-						Line:      filePosition.Rows[0],
-						Character: filePosition.Rows[0],
+						Line:      filePosition.Rows[0] - 1,
+						Character: filePosition.Cols[0] - 1,
 					},
 					End: sglsp.Position{
-						Line:      filePosition.Rows[1],
+						Line:      filePosition.Rows[1] - 1,
 						Character: filePosition.Cols[1],
 					},
 				}
@@ -189,8 +188,8 @@ func (s *SnykCodeBackendService) convert(
 					Range:    myRange,
 					Severity: lspSeverity(fmt.Sprintf("%d", suggestion.Severity)),
 					Code:     suggestion.Rule,
-					Source:   "snyk code",
-					Message:  suggestion.Message,
+					Source:   "Snyk LSP",
+					Message:  suggestion.Title + "\n" + suggestion.Message + "\n\n" + suggestion.Text,
 				}
 				l := sglsp.CodeLens{
 					Range: myRange,

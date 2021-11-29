@@ -55,7 +55,7 @@ func snyk(path string) ([]lsp.Diagnostic, error) {
 	var diagnostics []lsp.Diagnostic
 	for _, issue := range res.Vulnerabilities {
 		diagnostic := lsp.Diagnostic{
-			Source:  "snyk-lsp",
+			Source:  "Snyk LSP",
 			Message: fmt.Sprintf("%s: %s", issue.PublicID, issue.Title),
 			Range: sglsp.Range{
 				Start: sglsp.Position{Line: issue.LineNumber, Character: 0},
