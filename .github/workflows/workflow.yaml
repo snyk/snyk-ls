@@ -34,4 +34,10 @@ jobs:
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
-        run: go test -v ./...
+        run: |
+          echo "Downloading CLI..."
+          mkdir -p ./tmp
+          curl -sSL https://static.snyk.io/cli/latest/snyk-linux > ./tmp/snyk
+          chmod +x ./tmp/snyk
+          export PATH=$PATH:./tmp
+          go test -v ./...
