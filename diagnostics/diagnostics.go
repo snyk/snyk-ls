@@ -80,7 +80,7 @@ func fetch(
 	logError(err, "GetDiagnostics")
 	iacDiagnostics, iacCodeLenses, err := iac.HandleFile(uri)
 	logError(err, "GetDiagnostics")
-	ossDiagnostics, err := oss.HandleFile(uri)
+	ossDiagnostics, err := oss.HandleFile(registeredDocuments[uri])
 	logError(err, "GetDiagnostics")
 
 	mergeDiagnosticsAndAddToCache(uri, diagnosticSlice, codeDiagnostics, iacDiagnostics, ossDiagnostics)

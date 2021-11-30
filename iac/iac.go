@@ -3,6 +3,7 @@ package iac
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"github.com/snyk/snyk-lsp/lsp"
 	"github.com/snyk/snyk-lsp/util"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -16,6 +17,7 @@ var (
 		"high": sglsp.Error,
 		"low":  sglsp.Warning,
 	}
+	logger *logrus.Logger
 )
 
 func HandleFile(uri sglsp.DocumentURI) ([]lsp.Diagnostic, []sglsp.CodeLens, error) {
@@ -24,15 +26,20 @@ func HandleFile(uri sglsp.DocumentURI) ([]lsp.Diagnostic, []sglsp.CodeLens, erro
 }
 
 func fetch(path string) ([]lsp.Diagnostic, []sglsp.CodeLens, error) {
-	path, err := filepath.Abs(path)
+	logger = logrus.New()
+	absolutePath, err := filepath.Abs(strings.ReplaceAll(path, "file://", ""))
+	logger.Info("IAC: Absolute Path: " + absolutePath)
 	if err != nil {
 		return nil, nil, err
 	}
-	resBytes, err := exec.Command(util.CliPath, "iac", "test", path, "--json").CombinedOutput()
+	cmd := exec.Command(util.CliPath, "iac", "test", path, "--json")
+	cmd.Dir = filepath.Dir(absolutePath)
+	logger.Info(fmt.Sprintf("IAC: command: %s", cmd))
+	resBytes, err := cmd.CombinedOutput()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			if exitErr.ExitCode() > 1 {
-				return nil, nil, fmt.Errorf("error running fetch: %s: %s", err, string(resBytes))
+				return nil, nil, fmt.Errorf("error running %s: %s: %s", cmd, err, string(resBytes))
 			}
 		} else {
 			return nil, nil, fmt.Errorf("error running fetch: %s: %s", err, string(resBytes))
@@ -72,14 +79,14 @@ func convertDiagnostics(res testResult) []lsp.Diagnostic {
 	var diagnostics []lsp.Diagnostic
 	for _, issue := range res.IacIssues {
 		diagnostic := lsp.Diagnostic{
-			Source:  "Snyk LSP",
-			Message: fmt.Sprintf("%s: %s", issue.PublicID, issue.Title),
+			Source: "Snyk LSP",
+			Message: fmt.Sprintf("%s: %s\n\nIssue: %s\nImpact: %s\nResolve: %s\n",
+				issue.PublicID, issue.Title, issue.IacDescription.Issue, issue.IacDescription.Impact, issue.IacDescription.Resolve),
 			Range: sglsp.Range{
 				Start: sglsp.Position{Line: issue.LineNumber - 1, Character: 0},
 				End:   sglsp.Position{Line: issue.LineNumber - 1, Character: 80},
 			},
 			Severity: lspSeverity(issue.Severity),
-			// don't use for now as it's not widely supported
 			//CodeDescription: lsp.CodeDescription{
 			//	Href: issue.Documentation,
 			//},
@@ -91,11 +98,16 @@ func convertDiagnostics(res testResult) []lsp.Diagnostic {
 
 type testResult struct {
 	IacIssues []struct {
-		PublicID      string  `json:"publicId"`
-		Title         string  `json:"title"`
-		Severity      string  `json:"severity"`
-		LineNumber    int     `json:"lineNumber"`
-		Documentation lsp.Uri `json:"documentation"`
+		PublicID       string  `json:"publicId"`
+		Title          string  `json:"title"`
+		Severity       string  `json:"severity"`
+		LineNumber     int     `json:"lineNumber"`
+		Documentation  lsp.Uri `json:"documentation"`
+		IacDescription struct {
+			Issue   string `json:"issue"`
+			Impact  string `json:"impact"`
+			Resolve string `json:"resolve"`
+		} `json:"iacDescription"`
 	} `json:"infrastructureAsCodeIssues"`
 }
 
