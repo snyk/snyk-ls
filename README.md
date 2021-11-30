@@ -1,4 +1,5 @@
 # Snyk Language Server (Snyk-LSP)
+[![Build Go binaries](https://github.com/snyk/snyk-lsp/actions/workflows/workflow.yaml/badge.svg)](https://github.com/snyk/snyk-lsp/actions/workflows/workflow.yaml)
 
 ## Supported features
 The language server integrates with Snyk OSS, Snyk Infrastructure as Code and Snyk Code. For the former two, 
@@ -67,3 +68,4 @@ ok      github.com/snyk/snyk-lsp/oss    22.427s
 ok      github.com/snyk/snyk-lsp/server 48.558s
 ok      github.com/snyk/snyk-lsp/util   9.562s
 ```
+
