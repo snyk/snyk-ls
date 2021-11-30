@@ -1,0 +1,21 @@
+name: Build Go binaries
+
+on:
+  push:
+    # We want to run the workflow on all branches.
+    # But you can restrict the runs if necessary.
+    branches:
+      - "main"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Make binaries
+        uses: sosedoff/actions/golang-build@master
+        # Uncomment to following piece to restrict targets
+        # with:
+        #   args: linux/amd64 darwin/amd64
