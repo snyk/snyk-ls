@@ -5,10 +5,12 @@ import (
 	"github.com/snyk/snyk-lsp/lsp"
 	"github.com/snyk/snyk-lsp/util"
 	sglsp "github.com/sourcegraph/go-lsp"
+	"path/filepath"
 )
 
 var (
-	FakeDiagnosticUri = sglsp.DocumentURI("file://oss/testdata/Dummy.java")
+	absolutePath, _   = filepath.Abs("testdata/Dummy.java")
+	FakeDiagnosticUri = sglsp.DocumentURI("file://" + absolutePath)
 	FakeDiagnostic    = lsp.Diagnostic{
 		Range: sglsp.Range{
 			Start: sglsp.Position{

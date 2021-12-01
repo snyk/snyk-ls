@@ -20,16 +20,19 @@ jobs:
 
       - name: Build
         run: |
-          GOOS=darwin GOARCH=amd64  go build ./...
-          GOOS=darwin GOARCH=arm64  go build ./...
-          GOOS=linux GOARCH=386     go build ./...
-          GOOS=linux GOARCH=amd64   go build ./...
-          GOOS=linux GOARCH=arm     go build ./...
-          GOOS=linux GOARCH=arm64   go build ./...
-          GOOS=windows GOARCH=386   go build ./...
-          GOOS=windows GOARCH=amd64 go build ./...
-          GOOS=windows GOARCH=arm   go build ./...
-          GOOS=windows GOARCH=arm64 go build ./...
+          mkdir -p output
+          export GOOS=darwin  && export GOARCH=amd64 && go build -o ./output/snyk-lsp.$GOOS.$GOARCH
+          export GOOS=darwin  && export GOARCH=arm64 && go build -o ./output/snyk-lsp.$GOOS.$GOARCH
+          export GOOS=linux   && export GOARCH=386   && go build -o ./output/snyk-lsp.$GOOS.$GOARCH
+          export GOOS=linux   && export GOARCH=amd64 && go build -o ./output/snyk-lsp.$GOOS.$GOARCH
+          export GOOS=linux   && export GOARCH=arm   && go build -o ./output/snyk-lsp.$GOOS.$GOARCH
+          export GOOS=linux   && export GOARCH=arm64 && go build -o ./output/snyk-lsp.$GOOS.$GOARCH
+          export GOOS=windows && export GOARCH=386   && go build -o ./output/snyk-lsp.$GOOS.$GOARCH.exe
+          export GOOS=windows && export GOARCH=amd64 && go build -o ./output/snyk-lsp.$GOOS.$GOARCH.exe
+          export GOOS=windows && export GOARCH=arm   && go build -o ./output/snyk-lsp.$GOOS.$GOARCH.exe
+          export GOOS=windows && export GOARCH=arm64 && go build -o ./output/snyk-lsp.$GOOS.$GOARCH.exe
+          chmod +x output/*
+
       - name: Test
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
@@ -41,3 +44,10 @@ jobs:
           chmod +x snyk
           export PATH=$PATH:$PWD
           go test -v ./...
+
+      - name: Upload artifacts
+          uses: actions/upload-artifact@v2
+          with:
+            name: snyk-lsp-binaries
+            path: output/*
+            if-no-files-found: error
