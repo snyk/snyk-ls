@@ -44,7 +44,6 @@ func callSnykCLI(doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
 		return nil, err
 	}
 	cmd := exec.Command(util.CliPath, "test", "--file="+absolutePath, "--json")
-	cmd.Dir = filepath.Dir(absolutePath)
 	logger.Info(fmt.Sprintf("OSS: command: %s", cmd))
 	resBytes, err := cmd.CombinedOutput()
 	if err != nil {

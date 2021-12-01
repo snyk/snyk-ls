@@ -33,7 +33,6 @@ func fetch(path string) ([]lsp.Diagnostic, []sglsp.CodeLens, error) {
 		return nil, nil, err
 	}
 	cmd := exec.Command(util.CliPath, "iac", "test", path, "--json")
-	cmd.Dir = filepath.Dir(absolutePath)
 	logger.Info(fmt.Sprintf("IAC: command: %s", cmd))
 	resBytes, err := cmd.CombinedOutput()
 	if err != nil {
