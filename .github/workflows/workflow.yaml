@@ -38,6 +38,6 @@ jobs:
           echo "Downloading CLI..."
           mkdir -p ./tmp
           curl https://static.snyk.io/cli/latest/snyk-linux > snyk
-          chmod +x ./tmp/snyk
+          chmod +x snyk
           export PATH=$PATH:$PWD
           go test -v ./...
