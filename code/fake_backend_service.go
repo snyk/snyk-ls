@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	FakeDiagnosticUri = sglsp.DocumentURI("file:///Dummy.java")
+	FakeDiagnosticUri = sglsp.DocumentURI("file://oss/testdata/Dummy.java")
 	FakeDiagnostic    = lsp.Diagnostic{
 		Range: sglsp.Range{
 			Start: sglsp.Position{
