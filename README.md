@@ -14,6 +14,11 @@ Right now the LSP supports the following actions:
 
 ## Installation
 
+### Download
+The build workflow stores the generated executables, so that they can be downloaded [here](https://github.com/snyk/snyk-lsp/actions). Just select the build you want the build artefacts from and download the zip file attached to it.
+
+### From Source
+
 - Install `go 1.17.2` or higher, set the `GOPATH` and `GOROOT`
 - enter the root directory of this repository
 - execute `go get ./...` to download all dependencies
