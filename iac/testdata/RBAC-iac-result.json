@@ -17,9 +17,9 @@
   "org": "bastian.doetsch",
   "policy": "",
   "isPrivate": true,
-  "targetFilePath": "/Users/bdoetsch/workspace/go/src/github.com/snyk/snyk-lsp/iac/testdata/RBAC.yaml",
+  "targetFilePath": "iac/testdata/RBAC.yaml",
   "packageManager": "k8sconfig",
-  "path": "/Users/bdoetsch/workspace/go/src/github.com/snyk/snyk-lsp/iac/testdata/RBAC.yaml",
+  "path": "iac/testdata/RBAC.yaml",
   "projectType": "k8sconfig",
   "ok": false,
   "infrastructureAsCodeIssues": [
