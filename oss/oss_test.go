@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func Test_snyk(t *testing.T) {
+func Test_callSnykCLI(t *testing.T) {
 	path, _ := filepath.Abs("testdata/package.json")
 	content, _ := os.ReadFile(path)
 	diagnostics, _ := callSnykCLI(lsp.TextDocumentItem{
