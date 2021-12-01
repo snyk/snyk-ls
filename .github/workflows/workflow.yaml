@@ -46,8 +46,8 @@ jobs:
           go test -v ./...
 
       - name: Upload artifacts
-          uses: actions/upload-artifact@v2
-          with:
-            name: snyk-lsp-binaries
-            path: output/*
-            if-no-files-found: error
+        uses: actions/upload-artifact@v2
+        with:
+          name: snyk-lsp-binaries
+          path: output/*
+          if-no-files-found: error
