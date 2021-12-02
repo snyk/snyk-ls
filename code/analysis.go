@@ -5,9 +5,9 @@ import (
 )
 
 type SarifResponse struct {
-	Type     string `json:"type"`
-	Progress int    `json:"progress"`
-	Status   string `json:"status"`
+	Type     string  `json:"type"`
+	Progress float32 `json:"progress"`
+	Status   string  `json:"status"`
 	Timing   struct {
 		FetchingCode int `json:"fetchingCode"`
 		Queue        int `json:"queue"`
