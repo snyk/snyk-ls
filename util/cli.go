@@ -21,8 +21,8 @@ func SetupCLI() (string, error) {
 	var bytes []byte
 	r.Body.Read(bytes)
 	r.Body.Close()
-	os.Mkdir(snykDir, 770)
-	err = os.WriteFile(downloadedCLI, bytes, 770)
+	os.Mkdir(snykDir, 0770)
+	err = os.WriteFile(downloadedCLI, bytes, 0770)
 	if err != nil {
 		return CliPath, err
 	}
