@@ -134,7 +134,7 @@ func (b *BundleImpl) DiagnosticData(
 			if status == "COMPLETE" {
 				return diagnostics, codeLenses, err
 			}
-			if time.Now().Sub(start) > 60*time.Second {
+			if time.Since(start) > 120*time.Second {
 				return nil, nil, SnykAnalysisTimeoutError{msg: "Analysis Call Timed out."}
 			}
 			time.Sleep(1 * time.Second)

@@ -69,7 +69,7 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	assert.Equal(t, 0, len(missingFiles))
 }
 
-func TestSnykCodeBackendService_RetrieveDiagnostics(t *testing.T) {
+func TestSnykCodeBackendService_RetrieveDiagnosticsIntegrationTest(t *testing.T) {
 	s := &SnykCodeBackendService{
 		client: http.Client{},
 	}
@@ -101,7 +101,7 @@ func TestSnykCodeBackendService_RetrieveDiagnostics(t *testing.T) {
 			}
 		}
 		return false
-	}, 60*time.Second, 2*time.Second)
+	}, 120*time.Second, 2*time.Second)
 }
 
 func TestSnykCodeBackendService_token(t *testing.T) {

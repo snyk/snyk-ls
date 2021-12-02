@@ -209,6 +209,9 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 	// register our dummy document
 	didOpenParams := didOpenTextParams()
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
+	if err != nil {
+		log.Fatalf("Call: %v", err)
+	}
 
 	didChangeParams := lsp.DidChangeTextDocumentParams{
 		TextDocument:   docIdentifier,
@@ -270,11 +273,11 @@ func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 	}
 
 	// populate caches
-	rsp, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenTextParams())
+	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenTextParams())
 	if err != nil {
 		util.Logger.Fatal(err)
 	}
-	rsp, err = loc.Client.Call(ctx, "textDocument/codeLens", codeLensParams)
+	rsp, err := loc.Client.Call(ctx, "textDocument/codeLens", codeLensParams)
 	if err != nil {
 		util.Logger.Fatal(err)
 	}

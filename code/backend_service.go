@@ -51,7 +51,7 @@ type extendBundleRequest struct {
 
 func token() string {
 	token, exist := os.LookupEnv(TokenEnvVariable)
-	if exist == false {
+	if !exist {
 		token = ""
 	}
 	return token

@@ -46,7 +46,7 @@ func GetDiagnostics(uri sglsp.DocumentURI, backend code.BackendService) ([]lsp.D
 
 	// serve from cache
 	diagnosticSlice := documentDiagnosticCache[uri]
-	if diagnosticSlice != nil && len(diagnosticSlice) > 0 {
+	if len(diagnosticSlice) > 0 {
 		return diagnosticSlice, nil
 	}
 
@@ -74,7 +74,6 @@ func fetch(
 ) {
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	var codeLenses []sglsp.CodeLens
-	var diagnosticSlice []lsp.Diagnostic
 
 	codeDiagnostics, codeCodeLenses, err := myBundle.DiagnosticData(registeredDocuments)
 	logError(err, "GetDiagnostics")
@@ -83,15 +82,15 @@ func fetch(
 	ossDiagnostics, err := oss.HandleFile(registeredDocuments[uri])
 	logError(err, "GetDiagnostics")
 
-	mergeDiagnosticsAndAddToCache(uri, diagnosticSlice, codeDiagnostics, iacDiagnostics, ossDiagnostics)
+	mergeDiagnosticsAndAddToCache(uri, codeDiagnostics, iacDiagnostics, ossDiagnostics)
 	codeLenses = append(codeCodeLenses[uri], iacCodeLenses...)
 
 	codeLenseCache[uri] = codeLenses
 	return diagnostics, codeLenseCache, err
 }
 
-func mergeDiagnosticsAndAddToCache(uri sglsp.DocumentURI, diagnosticSlice []lsp.Diagnostic, codeDiagnostics map[sglsp.DocumentURI][]lsp.Diagnostic, iacDiagnostics []lsp.Diagnostic, ossDiagnostics []lsp.Diagnostic) {
-	diagnosticSlice = codeDiagnostics[uri]
+func mergeDiagnosticsAndAddToCache(uri sglsp.DocumentURI, codeDiagnostics map[sglsp.DocumentURI][]lsp.Diagnostic, iacDiagnostics []lsp.Diagnostic, ossDiagnostics []lsp.Diagnostic) {
+	diagnosticSlice := codeDiagnostics[uri]
 	diagnosticSlice = append(diagnosticSlice, iacDiagnostics...)
 	diagnosticSlice = append(diagnosticSlice, ossDiagnostics...)
 	documentDiagnosticCache[uri] = diagnosticSlice

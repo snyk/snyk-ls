@@ -45,6 +45,11 @@ jobs:
           export PATH=$PATH:$PWD
           go test -v ./...
 
+      - name: Static Analysis
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          staticcheck ./...
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:

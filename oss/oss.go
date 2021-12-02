@@ -66,7 +66,7 @@ func callSnykCLI(doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
 			Message:  fmt.Sprintf("%s: %s\n\n%s", issue.Id, issue.Title, issue.Description),
 			Range:    findRange(issue, doc),
 			Severity: lspSeverity(issue.Severity),
-			Code:     fmt.Sprintf("%s", issue.Id),
+			Code:     issue.Id,
 			// Don't use it for now as it's not widely supported
 			//CodeDescription: lsp.CodeDescription{
 			//	Href: issue.References[0].Url,
