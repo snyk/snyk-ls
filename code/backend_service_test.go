@@ -107,7 +107,7 @@ func TestSnykCodeBackendService_RetrieveDiagnosticsIntegrationTest(t *testing.T)
 func TestSnykCodeBackendService_token(t *testing.T) {
 	os.Clearenv()
 	assert.Equal(t, "", token())
-	os.Setenv(TokenEnvVariable, "test")
+	_ = os.Setenv(TokenEnvVariable, "test")
 	assert.Equal(t, "test", token())
 }
 
@@ -120,7 +120,7 @@ func TestSnykCodeBackendService_convert_shouldConvertCodeResults(t *testing.T) {
 	}
 	bytes, _ := os.ReadFile("testdata/analysisResponse.json")
 	var analysisResponse AnalysisResponse
-	json.Unmarshal(bytes, &analysisResponse)
+	_ = json.Unmarshal(bytes, &analysisResponse)
 	diags, lenses := s.convertLegacyResponse(analysisResponse)
 	assert.NotNil(t, diags)
 	assert.NotNil(t, lenses)
@@ -134,7 +134,7 @@ func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing
 	}
 	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
 	var analysisResponse SarifResponse
-	json.Unmarshal(bytes, &analysisResponse)
+	_ = json.Unmarshal(bytes, &analysisResponse)
 	diags, lenses := s.convertSarifResponse(analysisResponse)
 	assert.NotNil(t, diags)
 	assert.NotNil(t, lenses)
