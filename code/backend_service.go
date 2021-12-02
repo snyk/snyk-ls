@@ -192,7 +192,7 @@ func (s *SnykCodeBackendService) convertLegacyResponse(
 					Severity: lspSeverity(fmt.Sprintf("%d", suggestion.Severity)),
 					Code:     suggestion.Rule,
 					Source:   "Snyk LSP",
-					Message:  suggestion.Rule + "\n" + suggestion.Message,
+					Message:  suggestion.Message,
 				}
 				l := sglsp.CodeLens{
 					Range: myRange,
@@ -242,7 +242,7 @@ func (s *SnykCodeBackendService) convertSarifResponse(response SarifResponse) (
 				Severity: lspSeverity(result.Level),
 				Code:     result.RuleID,
 				Source:   "Snyk LSP",
-				Message:  result.RuleID + "\n" + result.Message.Text,
+				Message:  result.Message.Text,
 			}
 			l := sglsp.CodeLens{
 				Range: myRange,
