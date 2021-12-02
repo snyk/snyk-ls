@@ -58,7 +58,7 @@ func startServer() server.Local {
 
 	var srv *jrpc2.Server
 
-	var service code.SnykCodeBackendService
+	var service code.FakeBackendService
 
 	lspHandlers := handler.Map{
 		"initialize":                     InitializeHandler(),
@@ -281,7 +281,7 @@ func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 
 	var codeLenses []lsp.CodeLens
 	rsp.UnmarshalResult(&codeLenses)
-	assert.Equal(t, 2, len(codeLenses))
+	assert.Equal(t, 1, len(codeLenses))
 }
 
 //func Test_codeLensResolve_shouldResolve(t *testing.T) {

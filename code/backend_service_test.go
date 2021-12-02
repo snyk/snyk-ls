@@ -121,9 +121,26 @@ func TestSnykCodeBackendService_convert_shouldConvertCodeResults(t *testing.T) {
 	bytes, _ := os.ReadFile("testdata/analysisResponse.json")
 	var analysisResponse AnalysisResponse
 	json.Unmarshal(bytes, &analysisResponse)
-	diags, lenses := s.convert(analysisResponse)
+	diags, lenses := s.convertLegacyResponse(analysisResponse)
 	assert.NotNil(t, diags)
 	assert.NotNil(t, lenses)
 	assert.Equal(t, 1, len(diags))
 	assert.Equal(t, 1, len(lenses))
+}
+
+func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing.T) {
+	s := &SnykCodeBackendService{
+		client: http.Client{},
+	}
+	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
+	var analysisResponse SarifResponse
+	json.Unmarshal(bytes, &analysisResponse)
+	diags, lenses := s.convertSarifResponse(analysisResponse)
+	assert.NotNil(t, diags)
+	assert.NotNil(t, lenses)
+	assert.Equal(t, 1, len(diags))
+	uri := sglsp.DocumentURI("file:///server/testdata/Dummy.java")
+	assert.Equal(t, 2, len(diags[uri]))
+	assert.Equal(t, 1, len(lenses))
+	assert.Equal(t, 2, len(lenses[uri]))
 }

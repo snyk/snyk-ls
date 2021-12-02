@@ -20,8 +20,10 @@ const (
 
 var (
 	severities = map[string]sglsp.DiagnosticSeverity{
-		"3": sglsp.Error,
-		"2": sglsp.Warning,
+		"3":       sglsp.Error,
+		"2":       sglsp.Warning,
+		"warning": sglsp.Warning, // Sarif Level
+		"error":   sglsp.Error,   // Sarif Level
 	}
 )
 
@@ -130,7 +132,7 @@ func (s *SnykCodeBackendService) RetrieveDiagnostics(bundleHash string, limitToF
 		return nil, nil, failed, err
 	}
 
-	var response AnalysisResponse
+	var response SarifResponse
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
 		return nil, nil, "", err
@@ -141,7 +143,7 @@ func (s *SnykCodeBackendService) RetrieveDiagnostics(bundleHash string, limitToF
 	if response.Status != "COMPLETE" {
 		return nil, nil, "", nil
 	}
-	diags, lenses := s.convert(response)
+	diags, lenses := s.convertSarifResponse(response)
 	return diags, lenses, response.Status, err
 }
 
@@ -152,7 +154,7 @@ func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, limitToF
 			Hash:         bundleHash,
 			LimitToFiles: limitToFiles,
 		},
-		Legacy: true,
+		Legacy: false,
 	}
 	if severity > 0 {
 		request.Severity = severity
@@ -161,10 +163,11 @@ func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, limitToF
 	return requestBody, err
 }
 
-func (s *SnykCodeBackendService) convert(
+func (s *SnykCodeBackendService) convertLegacyResponse(
 	response AnalysisResponse,
 ) (
-	map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens) {
+	map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens,
+) {
 	diags := make(map[sglsp.DocumentURI][]lsp.Diagnostic)
 	lenses := make(map[sglsp.DocumentURI][]sglsp.CodeLens)
 	for uri, fileSuggestions := range response.Files {
@@ -189,7 +192,7 @@ func (s *SnykCodeBackendService) convert(
 					Severity: lspSeverity(fmt.Sprintf("%d", suggestion.Severity)),
 					Code:     suggestion.Rule,
 					Source:   "Snyk LSP",
-					Message:  suggestion.Title + "\n" + suggestion.Message + "\n\n" + suggestion.Text,
+					Message:  suggestion.Rule + "\n" + suggestion.Message,
 				}
 				l := sglsp.CodeLens{
 					Range: myRange,
@@ -204,6 +207,55 @@ func (s *SnykCodeBackendService) convert(
 		}
 		diags[uri] = diagSlice
 		lenses[uri] = lensSlice
+	}
+	return diags, lenses
+}
+
+func (s *SnykCodeBackendService) convertSarifResponse(response SarifResponse) (
+	map[sglsp.DocumentURI][]lsp.Diagnostic,
+	map[sglsp.DocumentURI][]sglsp.CodeLens,
+) {
+	diags := make(map[sglsp.DocumentURI][]lsp.Diagnostic)
+	lenses := make(map[sglsp.DocumentURI][]sglsp.CodeLens)
+	runs := response.Sarif.Runs
+	if len(runs) == 0 {
+		return diags, lenses
+	}
+	for _, result := range runs[0].Results {
+		for _, loc := range result.Locations {
+			uri := sglsp.DocumentURI(loc.PhysicalLocation.ArtifactLocation.URI)
+			diagSlice := diags[uri]
+			lensSlice := lenses[uri]
+
+			myRange := sglsp.Range{
+				Start: sglsp.Position{
+					Line:      loc.PhysicalLocation.Region.StartLine - 1,
+					Character: loc.PhysicalLocation.Region.StartColumn - 1,
+				},
+				End: sglsp.Position{
+					Line:      loc.PhysicalLocation.Region.EndLine - 1,
+					Character: loc.PhysicalLocation.Region.EndColumn,
+				},
+			}
+			d := lsp.Diagnostic{
+				Range:    myRange,
+				Severity: lspSeverity(result.Level),
+				Code:     result.RuleID,
+				Source:   "Snyk LSP",
+				Message:  result.RuleID + "\n" + result.Message.Text,
+			}
+			l := sglsp.CodeLens{
+				Range: myRange,
+				Command: sglsp.Command{
+					Title:     "Open " + result.RuleID,
+					Command:   "snyk.showRule",
+					Arguments: []interface{}{result.RuleID}},
+			}
+			diagSlice = append(diagSlice, d)
+			lensSlice = append(lensSlice, l)
+			diags[uri] = diagSlice
+			lenses[uri] = lensSlice
+		}
 	}
 	return diags, lenses
 }
