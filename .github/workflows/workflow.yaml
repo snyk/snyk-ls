@@ -44,12 +44,18 @@ jobs:
           chmod +x snyk
           export PATH=$PATH:$PWD
           go test -v ./...
-
-      - name: Static Analysis
+      - name: Golang code analysis
+        run: |
+          go vet
+          go fmt
+      - name: Staticcheck code analysis
         run: |
           go install honnef.co/go/tools/cmd/staticcheck@latest
           staticcheck ./...
-
+      - name: Snyk
+        run: |
+          snyk test
+          snyk code test
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
