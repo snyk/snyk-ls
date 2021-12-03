@@ -34,12 +34,14 @@ jobs:
           chmod +x output/*
 
       - name: Test
+        with:
+          name: snyk-exec
+          path: snyk
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
         run: |
           echo "Downloading CLI..."
-          mkdir -p ./tmp
           curl https://static.snyk.io/cli/latest/snyk-linux > snyk
           chmod +x snyk
           export PATH=$PATH:$PWD
@@ -53,12 +55,16 @@ jobs:
           go install honnef.co/go/tools/cmd/staticcheck@latest
           staticcheck ./...
       - name: Snyk
+        with:
+          name: snyk-exec
+          path: snyk
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
         run: |
-          snyk test
-          snyk code test
+          chmod +x snyk
+          ./snyk test
+          ./snyk code test
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
