@@ -34,9 +34,6 @@ jobs:
           chmod +x output/*
 
       - name: Test
-        with:
-          name: snyk-exec
-          path: snyk
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
@@ -55,9 +52,6 @@ jobs:
           go install honnef.co/go/tools/cmd/staticcheck@latest
           staticcheck ./...
       - name: Snyk
-        with:
-          name: snyk-exec
-          path: snyk
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
