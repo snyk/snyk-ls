@@ -20,9 +20,22 @@ var (
 	logger *logrus.Logger
 )
 
+func getDetectableFiles() []string {
+	return []string{
+		"yaml",
+		"yml",
+		"json",
+		"tf",
+	}
+}
+
 func HandleFile(uri sglsp.DocumentURI) ([]lsp.Diagnostic, []sglsp.CodeLens, error) {
-	diagnostics, codeLenses, err := fetch(strings.ReplaceAll(string(uri), "file://", ""))
-	return diagnostics, codeLenses, err
+	for _, supportedFile := range getDetectableFiles() {
+		if strings.HasSuffix(string(uri), supportedFile) {
+			return fetch(string(uri))
+		}
+	}
+	return nil, nil, nil
 }
 
 func fetch(path string) ([]lsp.Diagnostic, []sglsp.CodeLens, error) {
@@ -32,7 +45,7 @@ func fetch(path string) ([]lsp.Diagnostic, []sglsp.CodeLens, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	cmd := exec.Command(util.CliPath, "iac", "test", path, "--json")
+	cmd := exec.Command(util.CliPath, "iac", "test", absolutePath, "--json")
 	logger.Info(fmt.Sprintf("IAC: command: %s", cmd))
 	resBytes, err := cmd.CombinedOutput()
 	if err != nil {

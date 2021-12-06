@@ -21,7 +21,37 @@ var (
 		"low":  sglsp.Warning,
 	}
 	logger *logrus.Logger
+	// see https://github.com/snyk/snyk/blob/master/src/lib/detect.ts#L10
 )
+
+func getDetectableFiles() []string {
+	return []string{
+		"yarn.lock",
+		"package-lock.json",
+		"package.json",
+		"Gemfile",
+		"Gemfile.lock",
+		"pom.xml",
+		"build.gradle",
+		"build.gradle.kts",
+		"build.sbt",
+		"Pipfile",
+		"requirements.txt",
+		"Gopkg.lock",
+		"go.mod",
+		"vendor/vendor.json",
+		"obj/project.assets.json",
+		"project.assets.json",
+		"packages.config",
+		"paket.dependencies",
+		"composer.lock",
+		"Podfile",
+		"Podfile.lock",
+		"poetry.lock",
+		"mix.exs",
+		"mix.lock",
+	}
+}
 
 func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 	lspSev, ok := severities[snykSeverity]
@@ -32,8 +62,12 @@ func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 }
 
 func HandleFile(doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
-	diagnostics, err := callSnykCLI(doc)
-	return diagnostics, err
+	for _, supportedFile := range getDetectableFiles() {
+		if strings.HasSuffix(string(doc.URI), supportedFile) {
+			return callSnykCLI(doc)
+		}
+	}
+	return nil, nil
 }
 
 func callSnykCLI(doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
