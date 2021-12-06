@@ -17,7 +17,6 @@ import (
 
 func Start() {
 	var err error
-	util.CliPath, err = util.SetupCLI()
 	if err != nil {
 		logrus.Fatal(err)
 	}
@@ -71,7 +70,7 @@ func TextDocumentDidChangeHandler() handler.Func {
 	})
 }
 
-func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv **jrpc2.Server, backendService code.BackendService) (interface{}, error) {
+func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv **jrpc2.Server, backendService code.BackendService) {
 	diags, err := diagnostics.GetDiagnostics(uri, backendService)
 	logError(err, "PublishDiagnostics")
 	if diags != nil {
@@ -83,7 +82,6 @@ func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv **jrpc2.
 		err := (*srv).Notify(ctx, "textDocument/publishDiagnostics", diagnosticsParams)
 		logError(err, "PublishDiagnostics")
 	}
-	return nil, nil
 }
 
 func logError(err error, method string) {
@@ -107,7 +105,6 @@ func TextDocumentDidSaveHandler(srv **jrpc2.Server, backendService code.BackendS
 		// clear cache when saving and get fresh diagnostics
 		diagnostics.ClearDiagnosticsCache(params.TextDocument.URI)
 		diagnostics.ClearLenses(params.TextDocument.URI)
-		// todo use real backend
 		PublishDiagnostics(ctx, params.TextDocument.URI, srv, backendService)
 		return nil, nil
 	})

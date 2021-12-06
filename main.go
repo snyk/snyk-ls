@@ -7,6 +7,5 @@ import (
 
 func main() {
 	util.InitLogging()
-	defer util.StopLogging()
 	server.Start()
 }

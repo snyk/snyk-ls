@@ -75,6 +75,8 @@ func fetch(
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	var codeLenses []sglsp.CodeLens
 
+	// todo: make them run in parallel as go routines
+	// waiting group with go routines
 	codeDiagnostics, codeCodeLenses, err := myBundle.DiagnosticData(registeredDocuments)
 	logError(err, "GetDiagnostics")
 	iacDiagnostics, iacCodeLenses, err := iac.HandleFile(uri)
