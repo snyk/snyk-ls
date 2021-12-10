@@ -5,22 +5,15 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"github.com/snyk/snyk-lsp/code"
 	"github.com/snyk/snyk-lsp/diagnostics"
 	"github.com/snyk/snyk-lsp/lsp"
-	"github.com/snyk/snyk-lsp/util"
 	sglsp "github.com/sourcegraph/go-lsp"
-	"log"
 	"os"
 )
 
 func Start() {
-	var err error
-	if err != nil {
-		logrus.Fatal(err)
-	}
-
 	var server *jrpc2.Server
 
 	var service code.SnykCodeBackendService
@@ -41,30 +34,30 @@ func Start() {
 		AllowPush: true,
 	})
 
-	util.Logger.Info("Starting up...")
+	log.Info().Msg("Starting up...")
 	server = server.Start(channel.Header("")(os.Stdin, os.Stdout))
 
-	err = server.Wait()
-	log.Fatalf("Shutting down...(%s)", err)
+	err := server.Wait()
+	log.Err(err).Msg("Shutting down...")
 }
 
 func TextDocumentCodeLens() handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.CodeLensParams) (interface{}, error) {
-		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentCodeLens", "params": params}).Info("RECEIVING")
+		log.Info().Str("method", "TextDocumentCodeLens").Interface("params", params).Msg("RECEIVING")
 
 		codeLenses, err := diagnostics.GetCodeLenses(params.TextDocument.URI)
 		if err != nil {
-			util.Logger.WithFields(logrus.Fields{"method": "TextDocumentCodeLens", "response": codeLenses}).Error(err)
+			log.Err(err).Str("method", "TextDocumentCodeLens")
 		}
 
-		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentCodeLens", "response": codeLenses}).Info("SENDING")
+		log.Info().Str("method", "TextDocumentCodeLens").Interface("response", codeLenses).Msg("SENDING")
 		return codeLenses, err
 	})
 }
 
 func TextDocumentDidChangeHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (interface{}, error) {
-		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentDidChangeHandler", "params": params}).Info("RECEIVING")
+		log.Info().Str("method", "TextDocumentDidChangeHandler").Interface("params", params).Msg("RECEIVING")
 		diagnostics.UpdateDocument(params.TextDocument.URI, params.ContentChanges)
 		return nil, nil
 	})
@@ -78,7 +71,7 @@ func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv **jrpc2.
 			URI:         uri,
 			Diagnostics: diags,
 		}
-		util.Logger.WithFields(logrus.Fields{"method": "PublishDiagnostics", "params": diagnosticsParams}).Info("SENDING")
+		log.Info().Str("method", "PublishDiagnostics").Interface("params", diagnosticsParams).Msg("SENDING")
 		err := (*srv).Notify(ctx, "textDocument/publishDiagnostics", diagnosticsParams)
 		logError(err, "PublishDiagnostics")
 	}
@@ -86,13 +79,13 @@ func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv **jrpc2.
 
 func logError(err error, method string) {
 	if err != nil {
-		util.Logger.WithField("method", method).Error(err)
+		log.Err(err).Str("method", method)
 	}
 }
 
 func TextDocumentDidOpenHandler(srv **jrpc2.Server, backendService code.BackendService) handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidOpenTextDocumentParams) (interface{}, error) {
-		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentDidOpenHandler", "params": params}).Info("RECEIVING")
+		log.Info().Str("method", "TextDocumentDidOpenHandler").Interface("params", params).Msg("RECEIVING")
 		diagnostics.RegisterDocument(params.TextDocument)
 		PublishDiagnostics(ctx, params.TextDocument.URI, srv, backendService)
 		return nil, nil
@@ -101,7 +94,7 @@ func TextDocumentDidOpenHandler(srv **jrpc2.Server, backendService code.BackendS
 
 func TextDocumentDidSaveHandler(srv **jrpc2.Server, backendService code.BackendService) handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidSaveTextDocumentParams) (interface{}, error) {
-		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentDidSaveHandler", "params": params}).Info("RECEIVING")
+		log.Info().Str("method", "TextDocumentDidSaveHandler").Interface("params", params).Msg("RECEIVING")
 		// clear cache when saving and get fresh diagnostics
 		diagnostics.ClearDiagnosticsCache(params.TextDocument.URI)
 		diagnostics.ClearLenses(params.TextDocument.URI)
@@ -112,21 +105,21 @@ func TextDocumentDidSaveHandler(srv **jrpc2.Server, backendService code.BackendS
 
 func TextDocumentWillSaveHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.WillSaveTextDocumentParams) (interface{}, error) {
-		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentWillSaveHandler", "params": params}).Info("RECEIVING")
+		log.Info().Str("method", "TextDocumentWillSaveHandler").Interface("params", params).Msg("RECEIVING")
 		return nil, nil
 	})
 }
 
 func TextDocumentWillSaveWaitUntilHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.WillSaveTextDocumentParams) (interface{}, error) {
-		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentWillSaveWaitUntilHandler", "params": params}).Info("RECEIVING")
+		log.Info().Str("method", "TextDocumentWillSaveWaitUntilHandler").Interface("params", params).Msg("RECEIVING")
 		return nil, nil
 	})
 }
 
 func TextDocumentDidCloseHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidCloseTextDocumentParams) (interface{}, error) {
-		util.Logger.WithFields(logrus.Fields{"method": "TextDocumentDidCloseHandler", "params": params}).Info("RECEIVING")
+		log.Info().Str("method", "TextDocumentDidCloseHandler").Interface("params", params).Msg("RECEIVING")
 		diagnostics.UnRegisterDocument(params.TextDocument.URI)
 		return nil, nil
 	})
@@ -134,7 +127,7 @@ func TextDocumentDidCloseHandler() handler.Func {
 
 func InitializeHandler() handler.Func {
 	return handler.New(func(ctx context.Context, _ *jrpc2.Request) (interface{}, error) {
-		util.Logger.WithFields(logrus.Fields{"method": "InitializeHandler"}).Info("RECEIVING")
+		log.Info().Str("method", "InitializeHandler").Msg("RECEIVING")
 		return sglsp.InitializeResult{
 			Capabilities: sglsp.ServerCapabilities{
 				TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{

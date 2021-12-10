@@ -4,10 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"github.com/snyk/snyk-lsp/lsp"
 	sglsp "github.com/sourcegraph/go-lsp"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -63,8 +62,7 @@ func (s *SnykCodeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) 
 		return "", nil, err
 	}
 
-	b := bytes.NewBuffer(requestBody)
-	responseBody, err := s.doCall("POST", "/bundle", b)
+	responseBody, err := s.doCall("POST", "/bundle", requestBody)
 	if err != nil {
 		return "", nil, err
 	}
@@ -77,23 +75,23 @@ func (s *SnykCodeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) 
 	return bundle.BundleHash, bundle.MissingFiles, nil
 }
 
-func (s *SnykCodeBackendService) doCall(method string, path string, requestBody io.Reader) ([]byte, error) {
-	logger := logrus.New()
-	req, err := http.NewRequest(method, ApiUrl+path, requestBody)
+func (s *SnykCodeBackendService) doCall(method string, path string, requestBody []byte) ([]byte, error) {
+	b := bytes.NewBuffer(requestBody)
+	req, err := http.NewRequest(method, ApiUrl+path, b)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Session-Token", token())
 	req.Header.Set("Content-Type", "application/json")
 
-	logger.Info(req.Body)
+	log.Debug().Str("requestBody", string(requestBody))
 	response, err := s.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer response.Body.Close()
 	responseBody, err := ioutil.ReadAll(response.Body)
-	logger.Info(string(responseBody))
+	log.Debug().Str("responseBody", string(responseBody))
 	if err != nil {
 		return nil, err
 	}
@@ -108,9 +106,8 @@ func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[sglsp
 	if err != nil {
 		return "", nil, err
 	}
-	b := bytes.NewBuffer(requestBody)
 
-	responseBody, err := s.doCall("PUT", "/bundle/"+bundleHash, b)
+	responseBody, err := s.doCall("PUT", "/bundle/"+bundleHash, requestBody)
 	if err != nil {
 		return "", nil, err
 	}
@@ -125,8 +122,7 @@ func (s *SnykCodeBackendService) RetrieveDiagnostics(bundleHash string, limitToF
 		return nil, nil, "", err
 	}
 
-	b := bytes.NewBuffer(requestBody)
-	responseBody, err := s.doCall("POST", "/analysis", b)
+	responseBody, err := s.doCall("POST", "/analysis", requestBody)
 	failed := "FAILED"
 	if err != nil {
 		return nil, nil, failed, err

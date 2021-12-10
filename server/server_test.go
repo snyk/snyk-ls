@@ -6,12 +6,11 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/server"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"github.com/snyk/snyk-lsp/code"
 	"github.com/snyk/snyk-lsp/util"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
-	"log"
 	"strings"
 	"testing"
 	"time"
@@ -52,9 +51,8 @@ func startServer() server.Local {
 	var err error
 	util.CliPath, err = util.SetupCLI()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err)
 	}
-	util.Logger = logrus.New()
 
 	var srv *jrpc2.Server
 
@@ -102,7 +100,7 @@ func Test_dummy_shouldNotBeServed(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "dummy", nil)
 	if err == nil {
-		log.Fatalf("Call: %v", err)
+		log.Fatal().Err(err)
 	}
 }
 
@@ -112,11 +110,11 @@ func Test_initialize_shouldBeServed(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		log.Fatalf("Call: %v", err)
+		log.Fatal().Err(err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatalf("Decoding result: %v", err)
+		log.Fatal().Err(err)
 	}
 }
 
@@ -126,11 +124,11 @@ func Test_initialize_shouldSupportDocumentOpening(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		log.Fatalf("Call: %v", err)
+		log.Fatal().Err(err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatalf("Decoding result: %v", err)
+		log.Fatal().Err(err)
 	}
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.OpenClose, true)
 }
@@ -141,11 +139,11 @@ func Test_initialize_shouldSupportDocumentChanges(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		log.Fatalf("Call: %v", err)
+		log.Fatal().Err(err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatalf("Decoding result: %v", err)
+		log.Fatal().Err(err)
 	}
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.Change, lsp.TDSKFull)
 }
@@ -156,11 +154,11 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		log.Fatalf("Call: %v", err)
+		log.Fatal().Err(err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatalf("Decoding result: %v", err)
+		log.Fatal().Err(err)
 	}
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.Save, &lsp.SaveOptions{IncludeText: true})
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.WillSave, true)
@@ -173,11 +171,11 @@ func Test_initialize_shouldSupportCodeLens(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		log.Fatalf("Call: %v", err)
+		log.Fatal().Err(err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatalf("Decoding result: %v", err)
+		log.Fatal().Err(err)
 	}
 	assert.Equal(t, result.Capabilities.CodeLensProvider.ResolveProvider, true)
 }
@@ -190,7 +188,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
-		log.Fatalf("Call: %v", err)
+		log.Fatal().Err(err)
 	}
 
 	// should receive diagnostics
@@ -210,7 +208,7 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 	didOpenParams := didOpenTextParams()
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
-		log.Fatalf("Call: %v", err)
+		log.Fatal().Err(err)
 	}
 
 	didChangeParams := lsp.DidChangeTextDocumentParams{
@@ -220,7 +218,7 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 
 	_, err = loc.Client.Call(ctx, "textDocument/didChange", didChangeParams)
 	if err != nil {
-		log.Fatalf("Call: %v", err)
+		log.Fatal().Err(err)
 	}
 }
 
@@ -232,7 +230,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 
 	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
 	if err != nil {
-		log.Fatalf("Call: %v", err)
+		log.Fatal().Err(err)
 	}
 
 	// should receive diagnostics
@@ -250,7 +248,7 @@ func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSaveWaitUntil", nil)
 	if err != nil {
-		log.Fatalf("Call: %v", err)
+		log.Fatal().Err(err)
 	}
 }
 
@@ -260,7 +258,7 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSave", nil)
 	if err != nil {
-		log.Fatalf("Call: %v", err)
+		log.Fatal().Err(err)
 	}
 }
 
@@ -275,11 +273,11 @@ func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 	// populate caches
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenTextParams())
 	if err != nil {
-		util.Logger.Fatal(err)
+
 	}
 	rsp, err := loc.Client.Call(ctx, "textDocument/codeLens", codeLensParams)
 	if err != nil {
-		util.Logger.Fatal(err)
+		log.Fatal().Err(err)
 	}
 
 	var codeLenses []lsp.CodeLens

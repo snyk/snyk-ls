@@ -1,10 +1,11 @@
 package code
 
 import (
-	"github.com/google/uuid"
+	"fmt"
 	"github.com/snyk/snyk-lsp/lsp"
 	"github.com/snyk/snyk-lsp/util"
 	sglsp "github.com/sourcegraph/go-lsp"
+	"math/rand"
 	"path/filepath"
 )
 
@@ -87,7 +88,7 @@ func (f *FakeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) (str
 	f.addCall(params, CreateBundleWithSourceOperation)
 	if f.BundleHash == "" {
 		// create a random hash
-		f.BundleHash = util.Hash(uuid.NewString())
+		f.BundleHash = util.Hash(fmt.Sprint(rand.Int()))
 	}
 
 	return f.BundleHash, nil, nil

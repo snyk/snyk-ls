@@ -3,7 +3,7 @@ package iac
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"github.com/snyk/snyk-lsp/lsp"
 	"github.com/snyk/snyk-lsp/util"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -17,7 +17,6 @@ var (
 		"high": sglsp.Error,
 		"low":  sglsp.Warning,
 	}
-	logger *logrus.Logger
 )
 
 func getDetectableFiles() []string {
@@ -39,15 +38,15 @@ func HandleFile(uri sglsp.DocumentURI) ([]lsp.Diagnostic, []sglsp.CodeLens, erro
 }
 
 func fetch(path string) ([]lsp.Diagnostic, []sglsp.CodeLens, error) {
-	logger = logrus.New()
 	absolutePath, err := filepath.Abs(strings.ReplaceAll(path, "file://", ""))
-	logger.Info("IAC: Absolute Path: " + absolutePath)
+	log.Debug().Msg("IAC: Absolute Path: " + absolutePath)
 	if err != nil {
 		return nil, nil, err
 	}
 	cmd := exec.Command(util.CliPath, "iac", "test", absolutePath, "--json")
-	logger.Info(fmt.Sprintf("IAC: command: %s", cmd))
+	log.Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
 	resBytes, err := cmd.CombinedOutput()
+	log.Debug().Msg(fmt.Sprintf("IAC: response: %s", resBytes))
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			if exitErr.ExitCode() > 1 {

@@ -1,7 +1,7 @@
 package diagnostics
 
 import (
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"github.com/snyk/snyk-lsp/code"
 	"github.com/snyk/snyk-lsp/iac"
 	"github.com/snyk/snyk-lsp/lsp"
@@ -14,7 +14,6 @@ var (
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	myBundle                *code.BundleImpl
 	initialized             = false
-	logger                  = logrus.New()
 )
 
 func ClearDiagnosticsCache(uri sglsp.DocumentURI) {
@@ -104,6 +103,6 @@ func mergeDiagnosticsAndAddToCache(uri sglsp.DocumentURI, codeDiagnostics map[sg
 
 func logError(err error, method string) {
 	if err != nil {
-		logger.WithField("method", method).Error(err)
+		log.Err(err).Str("method", method)
 	}
 }

@@ -1,15 +1,12 @@
 package oss
 
 import (
-	"github.com/sirupsen/logrus"
-	sglsp "github.com/sourcegraph/go-lsp"
-)
-
-import (
 	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"github.com/snyk/snyk-lsp/lsp"
 	"github.com/snyk/snyk-lsp/util"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -20,7 +17,6 @@ var (
 		"high": sglsp.Error,
 		"low":  sglsp.Warning,
 	}
-	logger *logrus.Logger
 	// see https://github.com/snyk/snyk/blob/master/src/lib/detect.ts#L10
 )
 
@@ -71,15 +67,15 @@ func HandleFile(doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
 }
 
 func callSnykCLI(doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
-	logger = logrus.New()
 	absolutePath, err := filepath.Abs(strings.ReplaceAll(string(doc.URI), "file://", ""))
-	logger.Info("OSS: Absolute Path: " + absolutePath)
+	log.Debug().Msg("OSS: Absolute Path: " + absolutePath)
 	if err != nil {
 		return nil, err
 	}
 	cmd := exec.Command(util.CliPath, "test", "--file="+absolutePath, "--json")
-	logger.Info(fmt.Sprintf("OSS: command: %s", cmd))
+	log.Debug().Msg(fmt.Sprintf("OSS: command: %s", cmd))
 	resBytes, err := cmd.CombinedOutput()
+	log.Debug().Msg(fmt.Sprintf("OSS: response: %s", resBytes))
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			if exitErr.ExitCode() > 1 {

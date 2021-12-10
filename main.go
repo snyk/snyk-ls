@@ -1,11 +1,13 @@
 package main
 
 import (
+	"github.com/rs/zerolog"
 	"github.com/snyk/snyk-lsp/server"
-	"github.com/snyk/snyk-lsp/util"
+	"time"
 )
 
 func main() {
-	util.InitLogging()
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	zerolog.TimeFieldFormat = time.RFC3339
 	server.Start()
 }
