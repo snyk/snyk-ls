@@ -54,6 +54,7 @@ You will at least have to update the path to the snyk-lsp executable.
 ```
 |
 main.go             starts the server
+- .github           contains CI/CD and CODEOWNERS document
 - code              snyk code functionality
 - diagnostics       business logic for caching and retrieving diagnostics
 - iac               snyk infrastructure as code functionality
@@ -66,6 +67,7 @@ main.go             starts the server
 ```go test ./...```
 
 The output should look like this (it is running against the Snyk Code API and using the real CLI):
+
 ```
 ?       github.com/snyk/snyk-lsp        [no test files]
 ok      github.com/snyk/snyk-lsp/code   24.201s
@@ -77,3 +79,24 @@ ok      github.com/snyk/snyk-lsp/server 48.558s
 ok      github.com/snyk/snyk-lsp/util   9.562s
 ```
 
+## Test Github Action locally
+
+You can test github actions locally using [act](https://github.com/nektos/act).
+
+### Install act & prerequisites
+
+```bash
+brew install act
+
+# if you don't have docker desktop you can use minikube (a one-node kubernetes distribution)
+brew install --cask virtualbox # you need to enable the virtualbox extension in macOS settings
+brew install minikube
+minikube start
+eval $(minikube docker-env) # gives you a fully functional docker environment 
+```
+
+### Run act
+
+```bash
+act --secret SNYK_TOKEN=$SNYK_TOKEN --secret DEEPROXY_API_URL=$DEEPROXY_API_URL
+```
