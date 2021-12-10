@@ -67,3 +67,24 @@ func Test_GetDiagnostics_shouldAddCodeLenses(t *testing.T) {
 	lenses, _ := GetCodeLenses(doc.URI)
 	assert.Equal(t, 1, len(lenses))
 }
+
+func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
+	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
+	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
+	backendMock := &code.FakeBackendService{BundleHash: "dummy-hash"}
+
+	empty := sglsp.TextDocumentItem{
+		URI:        code.FakeDiagnosticUri,
+		LanguageID: "java",
+		Version:    0,
+		Text:       "",
+	}
+
+	RegisterDocument(empty)
+
+	_, _ = GetDiagnostics(doc.URI, backendMock)
+
+	// verify that create bundle has NOT been called on backend service
+	params := backendMock.GetCallParams(0, code.CreateBundleWithSourceOperation)
+	assert.Nil(t, params)
+}
