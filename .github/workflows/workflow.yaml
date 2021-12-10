@@ -10,6 +10,8 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    env:
+      date: $(date '+%Y%m%d%H%M%S')
     steps:
       - uses: actions/checkout@v2
 
@@ -29,10 +31,13 @@ jobs:
           export GOOS=linux   && export GOARCH=arm64 && go build -ldflags="-s -w" -o ./output/snyk-lsp.$GOOS.$GOARCH
           export GOOS=windows && export GOARCH=386   && go build -ldflags="-s -w" -o ./output/snyk-lsp.$GOOS.$GOARCH.exe
           export GOOS=windows && export GOARCH=amd64 && go build -ldflags="-s -w" -o ./output/snyk-lsp.$GOOS.$GOARCH.exe
-          export GOOS=windows && export GOARCH=arm   && go build -ldflags="-s -w" -o ./output/snyk-lsp.$GOOS.$GOARCH.exe
-          export GOOS=windows && export GOARCH=arm64 && go build -ldflags="-s -w" -o ./output/snyk-lsp.$GOOS.$GOARCH.exe
           chmod +x output/*
-
+      - name: Compress binaries with UPX
+        uses: crazy-max/ghaction-upx@v1
+        with:
+          version: latest
+          files: output/*
+          args: "-9f"
       - name: Test
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
@@ -65,3 +70,11 @@ jobs:
           name: snyk-lsp-binaries
           path: output/*
           if-no-files-found: error
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          prerelease: true
+          title: "${{ date }}_${{ GITHUB_SHA }}"
+          files: |
+            output/*
