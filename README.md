@@ -15,9 +15,10 @@ Right now the LSP supports the following actions:
 ## Installation
 
 ### Download
-The build workflow stores the generated executables, so that they can be downloaded [here](). Just select the release
-you want the build artefacts from and download the zip file attached to it. Currently, executables for Windows, macOS
-and Linux are generated.
+The build workflow stores the generated executables, so that they can be
+downloaded [here](https://github.com/snyk/snyk-lsp/releases/tag/latest). Just select the release you want the build
+artefacts from and download the zip file attached to it. Currently, executables for Windows, macOS and Linux are
+generated.
 
 ### From Source
 
