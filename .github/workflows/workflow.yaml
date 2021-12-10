@@ -63,6 +63,7 @@ jobs:
           files: output/*
           args: "-9f"
       - uses: "marvinpinto/action-automatic-releases@latest"
+        if: ${{ !env.ACT }}
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "latest"
