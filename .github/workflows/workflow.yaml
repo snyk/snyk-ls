@@ -62,17 +62,11 @@ jobs:
           version: latest
           files: output/*
           args: "-9f"
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: snyk-lsp-binaries
-          path: output/*
-          if-no-files-found: error
       - uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "latest"
-          prerelease: true
+          prerelease: false
           title: "${{ github.sha }}"
           files: |
             output/*
