@@ -273,7 +273,7 @@ func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 	// populate caches
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenTextParams())
 	if err != nil {
-
+		log.Fatal().Err(err)
 	}
 	rsp, err := loc.Client.Call(ctx, "textDocument/codeLens", codeLensParams)
 	if err != nil {
