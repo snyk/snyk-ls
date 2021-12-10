@@ -30,12 +30,6 @@ jobs:
           export GOOS=windows && export GOARCH=386   && go build -ldflags="-s -w" -o ./output/snyk-lsp.$GOOS.$GOARCH.exe
           export GOOS=windows && export GOARCH=amd64 && go build -ldflags="-s -w" -o ./output/snyk-lsp.$GOOS.$GOARCH.exe
           chmod +x output/*
-      - name: Compress binaries with UPX
-        uses: crazy-max/ghaction-upx@v1
-        with:
-          version: latest
-          files: output/*
-          args: "-9f"
       - name: Test
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
@@ -62,6 +56,12 @@ jobs:
           chmod +x snyk
           ./snyk test
           ./snyk code test
+      - name: Compress binaries with UPX
+        uses: crazy-max/ghaction-upx@v1
+        with:
+          version: latest
+          files: output/*
+          args: "-9f"
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
