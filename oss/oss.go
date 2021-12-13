@@ -116,7 +116,7 @@ func findRange(issue ossIssue, doc sglsp.TextDocumentItem) sglsp.Range {
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
 		var packageName string
-		if len(issue.From) >= 1 {
+		if len(issue.From) > 1 {
 			split := strings.Split(issue.From[1], "@")
 			packageName = fmt.Sprintf("\"%s\": \"", split[0])
 		} else {

@@ -56,16 +56,18 @@ func startServer() server.Local {
 
 	var srv *jrpc2.Server
 
-	var service code.FakeBackendService
+	var snykCodeBackendService code.FakeBackendService
 
 	lspHandlers := handler.Map{
-		"initialize":                     InitializeHandler(),
-		"textDocument/didOpen":           TextDocumentDidOpenHandler(&srv, &service),
+		"initialize":                     InitializeHandler(&snykCodeBackendService),
+		"textDocument/didOpen":           TextDocumentDidOpenHandler(&srv, &snykCodeBackendService),
 		"textDocument/didChange":         TextDocumentDidChangeHandler(),
 		"textDocument/didClose":          TextDocumentDidCloseHandler(),
-		"textDocument/didSave":           TextDocumentDidSaveHandler(&srv, &service),
+		"textDocument/didSave":           TextDocumentDidSaveHandler(&srv, &snykCodeBackendService),
 		"textDocument/willSave":          TextDocumentWillSaveHandler(),
 		"textDocument/willSaveWaitUntil": TextDocumentWillSaveWaitUntilHandler(),
+		"shutdown":                       Shutdown(),
+		"exit":                           Exit(&srv),
 		"textDocument/codeLens":          TextDocumentCodeLens(),
 		//"codeLens/resolve":               codeLensResolve(&server),
 	}

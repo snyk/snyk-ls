@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	zerolog.TimeFieldFormat = time.RFC3339
 	server.Start()
 }

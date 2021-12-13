@@ -43,10 +43,6 @@ func GetDiagnostics(uri sglsp.DocumentURI, backend code.BackendService) ([]lsp.D
 		initialized = true
 	}
 
-	if len(registeredDocuments[uri].Text) == 0 {
-		return nil, nil
-	}
-
 	// serve from cache
 	diagnosticSlice := documentDiagnosticCache[uri]
 	if len(diagnosticSlice) > 0 {

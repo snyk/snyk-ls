@@ -13,32 +13,54 @@ import (
 	"os"
 )
 
-func Start() {
-	var server *jrpc2.Server
+var (
+	clientParams sglsp.InitializeParams
+)
 
-	var service code.SnykCodeBackendService
+func Start() {
+	var srv *jrpc2.Server
+	var snykCodeBackendService code.SnykCodeBackendService
 
 	lspHandlers := handler.Map{
-		"initialize":                     InitializeHandler(),
-		"textDocument/didOpen":           TextDocumentDidOpenHandler(&server, &service),
+		"initialize":                     InitializeHandler(&snykCodeBackendService),
+		"textDocument/didOpen":           TextDocumentDidOpenHandler(&srv, &snykCodeBackendService),
 		"textDocument/didChange":         TextDocumentDidChangeHandler(),
 		"textDocument/didClose":          TextDocumentDidCloseHandler(),
-		"textDocument/didSave":           TextDocumentDidSaveHandler(&server, &service),
+		"textDocument/didSave":           TextDocumentDidSaveHandler(&srv, &snykCodeBackendService),
 		"textDocument/willSave":          TextDocumentWillSaveHandler(),
 		"textDocument/willSaveWaitUntil": TextDocumentWillSaveWaitUntilHandler(),
+		"shutdown":                       Shutdown(),
+		"exit":                           Exit(&srv),
 		"textDocument/codeLens":          TextDocumentCodeLens(),
 		//"codeLens/resolve":               codeLensResolve(&server),
 	}
 
-	server = jrpc2.NewServer(lspHandlers, &jrpc2.ServerOptions{
+	srv = jrpc2.NewServer(lspHandlers, &jrpc2.ServerOptions{
 		AllowPush: true,
 	})
 
 	log.Info().Msg("Starting up...")
-	server = server.Start(channel.Header("")(os.Stdin, os.Stdout))
+	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
 
-	err := server.Wait()
-	log.Err(err).Msg("Shutting down...")
+	err := srv.Wait()
+	log.Err(err).Msg("Exiting...")
+}
+
+func Shutdown() jrpc2.Handler {
+	return handler.New(func(ctx context.Context) (interface{}, error) {
+		log.Info().Str("method", "Shutdown").Msg("RECEIVING")
+		log.Info().Str("method", "Shutdown").Msg("SENDING")
+		return nil, nil
+	})
+}
+
+func Exit(srv **jrpc2.Server) jrpc2.Handler {
+	return handler.New(func(ctx context.Context) (interface{}, error) {
+		log.Info().Str("method", "Exit").Msg("RECEIVING")
+		log.Info().Msg("Stopping server...")
+		(*srv).Stop()
+		return nil, nil
+	})
 }
 
 func TextDocumentCodeLens() handler.Func {
@@ -125,11 +147,13 @@ func TextDocumentDidCloseHandler() handler.Func {
 	})
 }
 
-func InitializeHandler() handler.Func {
-	return handler.New(func(ctx context.Context, _ *jrpc2.Request) (interface{}, error) {
-		log.Info().Str("method", "InitializeHandler").Msg("RECEIVING")
-		return sglsp.InitializeResult{
-			Capabilities: sglsp.ServerCapabilities{
+func InitializeHandler(snykCodeBackend code.BackendService) handler.Func {
+	return handler.New(func(ctx context.Context, params sglsp.InitializeParams) (interface{}, error) {
+		log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
+		clientParams = params
+		go diagnostics.GetDiagnostics(clientParams.RootURI, snykCodeBackend)
+		return lsp.InitializeResult{
+			Capabilities: lsp.ServerCapabilities{
 				TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{
 					Options: &sglsp.TextDocumentSyncOptions{
 						OpenClose:         true,
@@ -140,6 +164,10 @@ func InitializeHandler() handler.Func {
 					},
 				},
 				CodeLensProvider: &sglsp.CodeLensOptions{ResolveProvider: true},
+				WorkspaceFoldersServerCapabilities: &lsp.WorkspaceFoldersServerCapabilities{
+					Supported:           true,
+					ChangeNotifications: "snyk-lsp",
+				},
 			},
 		}, nil
 	})
