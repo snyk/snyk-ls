@@ -4,7 +4,6 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [ main ]
 
 jobs:
 
@@ -30,6 +29,7 @@ jobs:
           export GOOS=windows && export GOARCH=386   && go build -ldflags="-s -w" -o ./output/snyk-lsp.$GOOS.$GOARCH.exe
           export GOOS=windows && export GOARCH=amd64 && go build -ldflags="-s -w" -o ./output/snyk-lsp.$GOOS.$GOARCH.exe
           chmod +x output/*
+
       - name: Test
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
@@ -40,14 +40,17 @@ jobs:
           chmod +x snyk
           export PATH=$PATH:$PWD
           go test -v ./...
+
       - name: Golang code analysis
         run: |
           go vet
           go fmt
+
       - name: Staticcheck code analysis
         run: |
           go install honnef.co/go/tools/cmd/staticcheck@latest
           staticcheck ./...
+
       - name: Snyk
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
@@ -56,14 +59,27 @@ jobs:
           chmod +x snyk
           ./snyk test
           ./snyk code test
+
       - name: Compress binaries with UPX
         uses: crazy-max/ghaction-upx@v1
         with:
           version: latest
           files: output/*
           args: "-9f"
-      - uses: "marvinpinto/action-automatic-releases@latest"
-        if: ${{ !env.ACT }}
+
+      - name: Semantic Release
+        uses: cycjimmy/semantic-release-action@v2
+        if: ${{ !env.ACT && env.GITHUB_REF_NAME == "main" }}
+        with:
+          semantic_version: 16
+          branches: |
+            [ "main" ]
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release
+        uses: "marvinpinto/action-automatic-releases@latest"
+        if: ${{ !env.ACT && env.GITHUB_REF_TYPE == "tag" }}
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "latest"
