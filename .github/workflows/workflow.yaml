@@ -69,7 +69,7 @@ jobs:
 
       - name: Semantic Release
         uses: cycjimmy/semantic-release-action@v2
-        if: ${{ !env.ACT && env.GITHUB_REF_NAME == 'main' }}
+        if: ${{ !env.ACT && env.GITHUB_REF_NAME == "main" }}
         with:
           semantic_version: 16
           branches: |
@@ -79,7 +79,7 @@ jobs:
 
       - name: Release
         uses: "marvinpinto/action-automatic-releases@latest"
-        if: ${{ !env.ACT && env.GITHUB_REF_TYPE == 'tag' }}
+        if: ${{ !env.ACT && env.GITHUB_REF_TYPE == "tag" }}
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "latest"
