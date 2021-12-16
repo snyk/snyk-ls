@@ -69,7 +69,7 @@ jobs:
 
       - name: Semantic Release
         uses: cycjimmy/semantic-release-action@v2
-        if: ${{ !env.ACT && env.GITHUB_REF_NAME == 'main' }}
+        if: ${{ !env.ACT }}
         with:
           semantic_version: 16
           branches: |
