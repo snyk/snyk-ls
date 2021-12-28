@@ -3,8 +3,8 @@ module github.com/snyk/snyk-lsp
 go 1.17
 
 require (
-	github.com/creachadair/jrpc2 v0.34.1
-	github.com/rs/zerolog v1.26.0
+	github.com/creachadair/jrpc2 v0.35.1
+	github.com/rs/zerolog v1.26.1
 	github.com/sourcegraph/go-lsp v0.0.0-20200429204803-219e11d77f5d
 	github.com/stretchr/testify v1.7.0
 )
