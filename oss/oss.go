@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 var (
@@ -57,13 +58,30 @@ func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 	return lspSev
 }
 
-func HandleFile(doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
+func HandleFile(doc sglsp.TextDocumentItem, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
+	log.Debug().Str("method", "oss.HandleFile").Msg("started.")
+	defer log.Debug().Str("method", "oss.HandleFile").Msg("done.")
+	defer wg.Done()
 	for _, supportedFile := range getDetectableFiles() {
 		if strings.HasSuffix(string(doc.URI), supportedFile) {
-			return callSnykCLI(doc)
+			diags, err := callSnykCLI(doc)
+			if err != nil {
+				log.Err(err).Str("method", "oss.HandleFile").Msg("Error while calling Snyk CLI")
+			}
+			if len(diags) > 0 {
+				log.Debug().Str("method", "oss.HandleFile").Msg("got diags, now sending to chan.")
+				select {
+				case dChan <- lsp.DiagnosticResult{
+					Uri:         doc.URI,
+					Diagnostics: diags,
+					Err:         err,
+				}:
+				default:
+					log.Debug().Str("method", "oss.HandleFile").Msg("not sending...")
+				}
+			}
 		}
 	}
-	return nil, nil
 }
 
 func callSnykCLI(doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {

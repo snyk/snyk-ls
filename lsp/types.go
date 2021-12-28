@@ -1,7 +1,7 @@
 package lsp
 
 import (
-	"github.com/sourcegraph/go-lsp"
+	sglsp "github.com/sourcegraph/go-lsp"
 )
 
 const (
@@ -12,9 +12,21 @@ const (
 
 type TextDocumentSaveReason int
 
+type DiagnosticResult struct {
+	Uri         sglsp.DocumentURI
+	Diagnostics []Diagnostic
+	Err         error
+}
+
+type CodeLensResult struct {
+	Uri        sglsp.DocumentURI
+	CodeLenses []sglsp.CodeLens
+	Err        error
+}
+
 type WillSaveTextDocumentParams struct {
-	TextDocument lsp.TextDocumentIdentifier `json:"textDocument"`
-	Reason       TextDocumentSaveReason     `json:"reason"`
+	TextDocument sglsp.TextDocumentIdentifier `json:"textDocument"`
+	Reason       TextDocumentSaveReason       `json:"reason"`
 }
 
 type Uri string
@@ -24,21 +36,21 @@ type CodeDescription struct {
 }
 
 type PublishDiagnosticsParams struct {
-	URI         lsp.DocumentURI `json:"uri"`
-	Diagnostics []Diagnostic    `json:"diagnostics"`
+	URI         sglsp.DocumentURI `json:"uri"`
+	Diagnostics []Diagnostic      `json:"diagnostics"`
 }
 
 type Diagnostic struct {
 	/**
 	 * The range at which the message applies.
 	 */
-	Range lsp.Range `json:"range"`
+	Range sglsp.Range `json:"range"`
 
 	/**
 	 * The diagnostic's severity. Can be omitted. If omitted it is up to the
 	 * client to interpret diagnostics as error, warning, info or hint.
 	 */
-	Severity lsp.DiagnosticSeverity `json:"severity,omitempty"`
+	Severity sglsp.DiagnosticSeverity `json:"severity,omitempty"`
 
 	/**
 	 * The diagnostic's code. Can be omitted.
@@ -107,8 +119,8 @@ const (
 )
 
 type DiagnosticRelatedInformation struct {
-	Location lsp.Location `json:"location"`
-	Message  string       `json:"message"`
+	Location sglsp.Location `json:"location"`
+	Message  string         `json:"message"`
 }
 
 type InitializeResult struct {
@@ -116,26 +128,26 @@ type InitializeResult struct {
 }
 
 type ServerCapabilities struct {
-	TextDocumentSync                   *lsp.TextDocumentSyncOptionsOrKind   `json:"textDocumentSync,omitempty"`
-	HoverProvider                      bool                                 `json:"hoverProvider,omitempty"`
-	CompletionProvider                 *lsp.CompletionOptions               `json:"completionProvider,omitempty"`
-	SignatureHelpProvider              *lsp.SignatureHelpOptions            `json:"signatureHelpProvider,omitempty"`
-	DefinitionProvider                 bool                                 `json:"definitionProvider,omitempty"`
-	TypeDefinitionProvider             bool                                 `json:"typeDefinitionProvider,omitempty"`
-	ReferencesProvider                 bool                                 `json:"referencesProvider,omitempty"`
-	DocumentHighlightProvider          bool                                 `json:"documentHighlightProvider,omitempty"`
-	DocumentSymbolProvider             bool                                 `json:"documentSymbolProvider,omitempty"`
-	WorkspaceSymbolProvider            bool                                 `json:"workspaceSymbolProvider,omitempty"`
-	ImplementationProvider             bool                                 `json:"implementationProvider,omitempty"`
-	CodeActionProvider                 bool                                 `json:"codeActionProvider,omitempty"`
-	CodeLensProvider                   *lsp.CodeLensOptions                 `json:"codeLensProvider,omitempty"`
-	DocumentFormattingProvider         bool                                 `json:"documentFormattingProvider,omitempty"`
-	DocumentRangeFormattingProvider    bool                                 `json:"documentRangeFormattingProvider,omitempty"`
-	DocumentOnTypeFormattingProvider   *lsp.DocumentOnTypeFormattingOptions `json:"documentOnTypeFormattingProvider,omitempty"`
-	RenameProvider                     bool                                 `json:"renameProvider,omitempty"`
-	ExecuteCommandProvider             *lsp.ExecuteCommandOptions           `json:"executeCommandProvider,omitempty"`
-	SemanticHighlighting               *lsp.SemanticHighlightingOptions     `json:"semanticHighlighting,omitempty"`
-	WorkspaceFoldersServerCapabilities *WorkspaceFoldersServerCapabilities  `json:"workspaceFoldersServerCapabilities,omitempty"`
+	TextDocumentSync                   *sglsp.TextDocumentSyncOptionsOrKind   `json:"textDocumentSync,omitempty"`
+	HoverProvider                      bool                                   `json:"hoverProvider,omitempty"`
+	CompletionProvider                 *sglsp.CompletionOptions               `json:"completionProvider,omitempty"`
+	SignatureHelpProvider              *sglsp.SignatureHelpOptions            `json:"signatureHelpProvider,omitempty"`
+	DefinitionProvider                 bool                                   `json:"definitionProvider,omitempty"`
+	TypeDefinitionProvider             bool                                   `json:"typeDefinitionProvider,omitempty"`
+	ReferencesProvider                 bool                                   `json:"referencesProvider,omitempty"`
+	DocumentHighlightProvider          bool                                   `json:"documentHighlightProvider,omitempty"`
+	DocumentSymbolProvider             bool                                   `json:"documentSymbolProvider,omitempty"`
+	WorkspaceSymbolProvider            bool                                   `json:"workspaceSymbolProvider,omitempty"`
+	ImplementationProvider             bool                                   `json:"implementationProvider,omitempty"`
+	CodeActionProvider                 bool                                   `json:"codeActionProvider,omitempty"`
+	CodeLensProvider                   *sglsp.CodeLensOptions                 `json:"codeLensProvider,omitempty"`
+	DocumentFormattingProvider         bool                                   `json:"documentFormattingProvider,omitempty"`
+	DocumentRangeFormattingProvider    bool                                   `json:"documentRangeFormattingProvider,omitempty"`
+	DocumentOnTypeFormattingProvider   *sglsp.DocumentOnTypeFormattingOptions `json:"documentOnTypeFormattingProvider,omitempty"`
+	RenameProvider                     bool                                   `json:"renameProvider,omitempty"`
+	ExecuteCommandProvider             *sglsp.ExecuteCommandOptions           `json:"executeCommandProvider,omitempty"`
+	SemanticHighlighting               *sglsp.SemanticHighlightingOptions     `json:"semanticHighlighting,omitempty"`
+	WorkspaceFoldersServerCapabilities *WorkspaceFoldersServerCapabilities    `json:"workspaceFoldersServerCapabilities,omitempty"`
 }
 
 type WorkspaceFoldersServerCapabilities struct {
@@ -160,7 +172,7 @@ type WorkspaceFolder struct {
 	/**
 	 * The associated URI for this workspace folder.
 	 */
-	Uri lsp.DocumentURI `json:"uri,omitempty"`
+	Uri sglsp.DocumentURI `json:"uri,omitempty"`
 
 	/**
 	 * The name of the workspace folder. Used to refer to this

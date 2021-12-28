@@ -6,6 +6,7 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/server"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/snyk/snyk-lsp/code"
 	"github.com/snyk/snyk-lsp/util"
@@ -48,6 +49,8 @@ func didSaveTextParams() lsp.DidSaveTextDocumentParams {
 }
 
 func startServer() server.Local {
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+
 	var err error
 	util.CliPath, err = util.SetupCLI()
 	if err != nil {

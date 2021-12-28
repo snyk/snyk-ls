@@ -111,5 +111,5 @@ func (f *FakeBackendService) RetrieveDiagnostics(bundleHash string, limitToFiles
 	var codeLenses []sglsp.CodeLens
 	codeLensMap[FakeDiagnosticUri] = append(codeLenses, FakeCodeLens)
 
-	return diagnosticMap, codeLensMap, "", nil
+	return diagnosticMap, codeLensMap, "COMPLETE", nil
 }

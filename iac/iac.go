@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 var (
@@ -28,16 +29,47 @@ func getDetectableFiles() []string {
 	}
 }
 
-func HandleFile(uri sglsp.DocumentURI) ([]lsp.Diagnostic, []sglsp.CodeLens, error) {
+func HandleFile(uri sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
+	defer wg.Done()
+	log.Debug().Str("method", "iac.HandleFile").Msg("started.")
+	defer log.Debug().Str("method", "iac.HandleFile").Msg("done.")
 	for _, supportedFile := range getDetectableFiles() {
 		if strings.HasSuffix(string(uri), supportedFile) {
-			return fetch(string(uri))
+			diags, lenses, err := fetch(string(uri))
+			if err != nil {
+				log.Err(err).Str("method", "iac.HandleFile").Msg("Error while calling Snyk CLI")
+			}
+
+			log.Debug().Str("method", "iac.HandleFile").Msg("got diags & lenses, now sending to chan.")
+			if len(diags) > 0 {
+				select {
+				case dChan <- lsp.DiagnosticResult{
+					Uri:         uri,
+					Diagnostics: diags,
+					Err:         err,
+				}:
+				default:
+					log.Debug().Str("method", "fetch").Msg("no diags found & sent.")
+				}
+			}
+			if len(lenses) > 0 {
+				select {
+				case clChan <- lsp.CodeLensResult{
+					Uri:        uri,
+					CodeLenses: lenses,
+					Err:        err,
+				}:
+				default:
+					log.Debug().Str("method", "fetch").Msg("no lens found & sent.")
+				}
+			}
 		}
 	}
-	return nil, nil, nil
 }
 
 func fetch(path string) ([]lsp.Diagnostic, []sglsp.CodeLens, error) {
+	log.Debug().Str("method", "fetch").Msg("started.")
+	defer log.Debug().Str("method", "fetch").Msg("done.")
 	absolutePath, err := filepath.Abs(strings.ReplaceAll(path, "file://", ""))
 	log.Debug().Msg("IAC: Absolute Path: " + absolutePath)
 	if err != nil {

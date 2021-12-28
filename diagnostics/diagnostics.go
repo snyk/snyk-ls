@@ -7,6 +7,7 @@ import (
 	"github.com/snyk/snyk-lsp/lsp"
 	"github.com/snyk/snyk-lsp/oss"
 	sglsp "github.com/sourcegraph/go-lsp"
+	"sync"
 )
 
 var (
@@ -37,7 +38,7 @@ func UnRegisterDocument(file sglsp.DocumentURI) {
 	delete(registeredDocuments, file)
 }
 
-func GetDiagnostics(uri sglsp.DocumentURI, backend code.BackendService) ([]lsp.Diagnostic, error) {
+func GetDiagnostics(uri sglsp.DocumentURI, backend code.BackendService) []lsp.Diagnostic {
 	if !initialized {
 		myBundle = &code.BundleImpl{Backend: backend}
 		initialized = true
@@ -46,10 +47,10 @@ func GetDiagnostics(uri sglsp.DocumentURI, backend code.BackendService) ([]lsp.D
 	// serve from cache
 	diagnosticSlice := documentDiagnosticCache[uri]
 	if len(diagnosticSlice) > 0 {
-		return diagnosticSlice, nil
+		return diagnosticSlice
 	}
 
-	diagnostics, codeLenses, err := fetch(uri)
+	diagnostics, codeLenses := fetch(uri)
 
 	// add all diagnostics to cache
 	for uri := range diagnostics {
@@ -61,40 +62,43 @@ func GetDiagnostics(uri sglsp.DocumentURI, backend code.BackendService) ([]lsp.D
 		codeLenseCache[uri] = codeLenses[uri]
 	}
 
-	return documentDiagnosticCache[uri], err
+	return documentDiagnosticCache[uri]
 }
 
-func fetch(
-	uri sglsp.DocumentURI,
-) (
-	map[sglsp.DocumentURI][]lsp.Diagnostic,
-	map[sglsp.DocumentURI][]sglsp.CodeLens,
-	error,
-) {
+func fetch(uri sglsp.DocumentURI) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens) {
+	log.Debug().Str("method", "fetch").Msg("started.")
+	defer log.Debug().Str("method", "fetch").Msg("done.")
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	var codeLenses []sglsp.CodeLens
 
-	// todo: make them run in parallel as go routines
-	// waiting group with go routines
-	codeDiagnostics, codeCodeLenses, err := myBundle.DiagnosticData(registeredDocuments)
-	logError(err, "GetDiagnostics")
-	iacDiagnostics, iacCodeLenses, err := iac.HandleFile(uri)
-	logError(err, "GetDiagnostics")
-	ossDiagnostics, err := oss.HandleFile(registeredDocuments[uri])
-	logError(err, "GetDiagnostics")
+	wg := sync.WaitGroup{}
+	dChan := make(chan lsp.DiagnosticResult, 10)
+	clChan := make(chan lsp.CodeLensResult, 10)
+	wg.Add(3)
 
-	mergeDiagnosticsAndAddToCache(uri, codeDiagnostics, iacDiagnostics, ossDiagnostics)
-	codeLenses = append(codeCodeLenses[uri], iacCodeLenses...)
+	go myBundle.DiagnosticData(registeredDocuments, &wg, dChan, clChan)
+	go iac.HandleFile(uri, &wg, dChan, clChan)
+	go oss.HandleFile(registeredDocuments[uri], &wg, dChan, clChan)
+	wg.Wait()
+	log.Debug().Str("method", "fetch").Msg("finished waiting for goroutines.")
 
-	codeLenseCache[uri] = codeLenses
-	return diagnostics, codeLenseCache, err
-}
-
-func mergeDiagnosticsAndAddToCache(uri sglsp.DocumentURI, codeDiagnostics map[sglsp.DocumentURI][]lsp.Diagnostic, iacDiagnostics []lsp.Diagnostic, ossDiagnostics []lsp.Diagnostic) {
-	diagnosticSlice := codeDiagnostics[uri]
-	diagnosticSlice = append(diagnosticSlice, iacDiagnostics...)
-	diagnosticSlice = append(diagnosticSlice, ossDiagnostics...)
-	documentDiagnosticCache[uri] = diagnosticSlice
+	for {
+		select {
+		case result := <-dChan:
+			log.Debug().Str("method", "fetch").Msg("reading diag from chan.")
+			logError(result.Err, "fetch")
+			diagnostics[result.Uri] = append(diagnostics[result.Uri], result.Diagnostics...)
+			documentDiagnosticCache[result.Uri] = diagnostics[result.Uri]
+		case result := <-clChan:
+			log.Debug().Str("method", "fetch").Msg("reading lens from chan.")
+			logError(result.Err, "fetch")
+			codeLenses = append(codeLenses, result.CodeLenses...)
+			codeLenseCache[result.Uri] = codeLenses
+		default: // return results once channels are empty
+			log.Debug().Str("method", "fetch").Msg("done reading diags & lenses.")
+			return diagnostics, codeLenseCache
+		}
+	}
 }
 
 func logError(err error, method string) {

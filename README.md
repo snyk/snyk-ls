@@ -31,7 +31,7 @@ generated.
 - download Snyk CLI at https://static.snyk.io/cli/latest/snyk-macos | snyk-win.exe | snyk-linux 
 - rename it to `snyk` and move it to a directory in your path, e.g. `/usr/local/bin` or `$GOPATH/bin` 
 
-Update your environment
+## Update your environment
 
 ```
 export SNYK_TOKEN=<your-token-from-app.snyk.io>

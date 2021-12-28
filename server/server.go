@@ -86,8 +86,7 @@ func TextDocumentDidChangeHandler() handler.Func {
 }
 
 func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv **jrpc2.Server, backendService code.BackendService) {
-	diags, err := diagnostics.GetDiagnostics(uri, backendService)
-	logError(err, "PublishDiagnostics")
+	diags := diagnostics.GetDiagnostics(uri, backendService)
 	if diags != nil {
 		diagnosticsParams := lsp.PublishDiagnosticsParams{
 			URI:         uri,

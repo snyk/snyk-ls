@@ -36,7 +36,7 @@ func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 	RegisterDocument(doc)
 	documentDiagnosticCache[doc.URI] = []lsp.Diagnostic{code.FakeDiagnostic}
 
-	diagnostics, _ := GetDiagnostics(doc.URI, &code.FakeBackendService{BundleHash: "dummy-hash"})
+	diagnostics := GetDiagnostics(doc.URI, &code.FakeBackendService{BundleHash: "dummy-hash"})
 
 	assert.NotNil(t, diagnostics)
 	assert.NotEmpty(t, documentDiagnosticCache[doc.URI])
@@ -61,7 +61,7 @@ func Test_GetDiagnostics_shouldAddCodeLenses(t *testing.T) {
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	RegisterDocument(doc)
 
-	diagnostics, _ := GetDiagnostics(doc.URI, &code.FakeBackendService{BundleHash: "dummy-hash"})
+	diagnostics := GetDiagnostics(doc.URI, &code.FakeBackendService{BundleHash: "dummy-hash"})
 
 	assert.Equal(t, len(documentDiagnosticCache[doc.URI]), len(diagnostics))
 	lenses, _ := GetCodeLenses(doc.URI)
@@ -82,7 +82,7 @@ func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
 
 	RegisterDocument(empty)
 
-	_, _ = GetDiagnostics(doc.URI, backendMock)
+	GetDiagnostics(doc.URI, backendMock)
 
 	// verify that create bundle has NOT been called on backend service
 	params := backendMock.GetCallParams(0, code.CreateBundleWithSourceOperation)

@@ -1,10 +1,12 @@
 package code
 
 import (
+	"github.com/rs/zerolog/log"
 	"github.com/snyk/snyk-lsp/lsp"
 	"github.com/snyk/snyk-lsp/util"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -98,48 +100,69 @@ func (b *BundleImpl) extendBundleFromSource(files map[sglsp.DocumentURI]sglsp.Te
 
 func (b *BundleImpl) DiagnosticData(
 	registeredDocuments map[sglsp.DocumentURI]sglsp.TextDocumentItem,
-) (
-	map[sglsp.DocumentURI][]lsp.Diagnostic,
-	map[sglsp.DocumentURI][]sglsp.CodeLens,
-	error,
+	wg *sync.WaitGroup,
+	dChan chan lsp.DiagnosticResult,
+	clChan chan lsp.CodeLensResult,
 ) {
+	defer wg.Done()
+	defer log.Debug().Str("method", "DiagnosticData").Msg("done.")
+	log.Debug().Str("method", "DiagnosticData").Msg("started.")
 	var err error
 
 	if b.bundleHash == "" {
 		// we don't have missing files, as we're creating from source
 		err = b.createBundleFromSource(registeredDocuments)
 		if err != nil {
-			return nil, nil, err
+			log.Error().Err(err).Str("method", "DiagnosticData").Msg("error while creating bundle...")
+			dChan <- lsp.DiagnosticResult{Err: err}
+			return
 		}
 	} else {
 		// we don't have missing files, as we're creating from source
 		err := b.extendBundleFromSource(registeredDocuments)
 		if err != nil {
-			return nil, nil, err
+			log.Error().Err(err).Str("method", "DiagnosticData").Msg("error extending bundle...")
+			dChan <- lsp.DiagnosticResult{Err: err}
+			return
 		}
 	}
 
 	if len(b.bundleDocuments) > 0 {
 		for {
 			start := time.Now()
-			diagnostics, codeLenses, status, err := b.Backend.RetrieveDiagnostics(b.bundleHash, []sglsp.DocumentURI{}, 0)
+			diags, lenses, status, err := b.Backend.RetrieveDiagnostics(b.bundleHash, []sglsp.DocumentURI{}, 0)
 			if err != nil {
-				return nil, nil, err
-			}
-
-			if diagnostics != nil {
-				return diagnostics, codeLenses, err
+				log.Error().Err(err).Str("method", "DiagnosticData").Msg("error retrieving diagnostics...")
+				dChan <- lsp.DiagnosticResult{Err: err}
+				return
 			}
 
 			if status == "COMPLETE" {
-				return diagnostics, codeLenses, err
+				for u, d := range diags {
+					log.Debug().Str("method", "DiagnosticData").Msg("sending diagnostics...")
+					dChan <- lsp.DiagnosticResult{
+						Uri:         u,
+						Diagnostics: d,
+						Err:         err,
+					}
+				}
+
+				for u, l := range lenses {
+					log.Debug().Str("method", "DiagnosticData").Msg("sending code lenses...")
+					clChan <- lsp.CodeLensResult{
+						Uri:        u,
+						CodeLenses: l,
+						Err:        err,
+					}
+				}
+				return
 			}
 			if time.Since(start) > 120*time.Second {
-				return nil, nil, SnykAnalysisTimeoutError{msg: "Analysis Call Timed out."}
+				err = SnykAnalysisTimeoutError{msg: "Analysis Call Timed out."}
+				log.Error().Err(err).Str("method", "DiagnosticData").Msg("timeout...")
+				dChan <- lsp.DiagnosticResult{Err: err}
 			}
 			time.Sleep(1 * time.Second)
 		}
 	}
-	return nil, nil, nil
-
 }

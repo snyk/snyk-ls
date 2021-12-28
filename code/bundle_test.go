@@ -1,10 +1,12 @@
 package code
 
 import (
+	lsp2 "github.com/snyk/snyk-lsp/lsp"
 	"github.com/snyk/snyk-lsp/util"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"reflect"
+	"sync"
 	"testing"
 )
 
@@ -78,7 +80,14 @@ func TestCodeBundleImpl_DiagnosticData_should_create_bundle_when_hash_empty(t *t
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
 
-	_, _, _ = b.DiagnosticData(registeredDocuments)
+	dChan := make(chan lsp2.DiagnosticResult)
+	clChan := make(chan lsp2.CodeLensResult)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go b.DiagnosticData(registeredDocuments, &wg, dChan, clChan)
+
+	<-dChan
+	<-clChan
 
 	assert.Equal(t, hash, b.bundleHash)
 	assert.Equal(t, 0, len(b.missingFiles))
@@ -105,7 +114,14 @@ func TestCodeBundleImpl_DiagnosticData_should_extend_bundle_when_hash_not_empty(
 	registeredDocuments[secondDoc.URI] = secondDoc
 
 	// execute
-	_, _, _ = b.DiagnosticData(registeredDocuments)
+	dChan := make(chan lsp2.DiagnosticResult)
+	clChan := make(chan lsp2.CodeLensResult)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go b.DiagnosticData(registeredDocuments, &wg, dChan, clChan)
+
+	<-dChan
+	<-clChan
 
 	// the bundle hash should be the same
 	assert.Equal(t, backendMock.BundleHash, b.bundleHash)
@@ -128,9 +144,17 @@ func TestCodeBundleImpl_DiagnosticData_should_retrieve_from_backend(t *testing.T
 
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
+	diagnosticMap := map[lsp.DocumentURI][]lsp2.Diagnostic{}
 
 	// execute
-	diagnosticMap, _, _ := b.DiagnosticData(registeredDocuments)
+	dChan := make(chan lsp2.DiagnosticResult)
+	clChan := make(chan lsp2.CodeLensResult)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go b.DiagnosticData(registeredDocuments, &wg, dChan, clChan)
+	result := <-dChan
+	diagnosticMap[result.Uri] = result.Diagnostics
+	<-clChan
 
 	assert.NotNil(t, diagnosticMap)
 	diagnostics := diagnosticMap[firstDoc.URI]
@@ -155,6 +179,15 @@ func TestCodeBundleImpl_DiagnosticData_should_return_code_lenses(t *testing.T) {
 	registeredDocuments[firstDoc.URI] = firstDoc
 
 	// execute
-	_, codeLensMap, _ := b.DiagnosticData(registeredDocuments)
+	dChan := make(chan lsp2.DiagnosticResult)
+	clChan := make(chan lsp2.CodeLensResult)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go b.DiagnosticData(registeredDocuments, &wg, dChan, clChan)
+	<-dChan
+
+	codeLensMap := map[lsp.DocumentURI][]lsp.CodeLens{}
+	result := <-clChan
+	codeLensMap[result.Uri] = result.CodeLenses
 	assert.NotEqual(t, 0, len(codeLensMap[firstDoc.URI]))
 }
