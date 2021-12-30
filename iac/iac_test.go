@@ -2,11 +2,39 @@ package iac
 
 import (
 	"encoding/json"
+	lsp2 "github.com/snyk/snyk-lsp/lsp"
+	"github.com/snyk/snyk-lsp/util"
+	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 )
+
+func Test_HandleFile(t *testing.T) {
+	util.Load()
+	util.Format = util.FormatHtml
+	path, _ := filepath.Abs("testdata/RBAC.yaml")
+	content, _ := os.ReadFile(path)
+	doc := lsp.TextDocumentItem{
+		URI:        lsp.DocumentURI(path),
+		LanguageID: "json",
+		Version:    0,
+		Text:       string(content),
+	}
+	dChan := make(chan lsp2.DiagnosticResult, 1)
+	clChan := make(chan lsp2.CodeLensResult, 1)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go HandleFile(doc.URI, &wg, dChan, clChan)
+	diagnosticResult := <-dChan
+	assert.NotEqual(t, 0, len(diagnosticResult.Diagnostics))
+	codeLensResult := <-clChan
+	assert.NotEqual(t, 0, len(codeLensResult.CodeLenses))
+	assert.True(t, strings.Contains(diagnosticResult.Diagnostics[0].Message, "<p>"))
+}
 
 func Test_fetch_shouldProvideDiagnostics(t *testing.T) {
 	path, _ := filepath.Abs("testdata/RBAC.yaml")

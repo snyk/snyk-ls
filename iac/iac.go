@@ -3,6 +3,7 @@ package iac
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/gomarkdown/markdown"
 	"github.com/rs/zerolog/log"
 	"github.com/snyk/snyk-lsp/lsp"
 	"github.com/snyk/snyk-lsp/util"
@@ -75,7 +76,7 @@ func fetch(path string) ([]lsp.Diagnostic, []sglsp.CodeLens, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	cmd := exec.Command(util.CliPath, "iac", "test", absolutePath, "--json")
+	cmd := exec.Command(util.CliPath(), "iac", "test", absolutePath, "--json")
 	log.Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
 	resBytes, err := cmd.CombinedOutput()
 	log.Debug().Msg(fmt.Sprintf("IAC: response: %s", resBytes))
@@ -121,15 +122,26 @@ func convertCodeLenses(res testResult) []sglsp.CodeLens {
 func convertDiagnostics(res testResult) []lsp.Diagnostic {
 	var diagnostics []lsp.Diagnostic
 	for _, issue := range res.IacIssues {
+		title := issue.Title
+		description := issue.IacDescription.Issue
+		impact := issue.IacDescription.Impact
+		resolve := issue.IacDescription.Resolve
+		if util.Format == util.FormatHtml {
+			title = string(markdown.ToHTML([]byte(title), nil, nil))
+			description = string(markdown.ToHTML([]byte(description), nil, nil))
+			impact = string(markdown.ToHTML([]byte(impact), nil, nil))
+			resolve = string(markdown.ToHTML([]byte(resolve), nil, nil))
+		}
 		diagnostic := lsp.Diagnostic{
 			Source: "Snyk LSP",
 			Message: fmt.Sprintf("%s: %s\n\nIssue: %s\nImpact: %s\nResolve: %s\n",
-				issue.PublicID, issue.Title, issue.IacDescription.Issue, issue.IacDescription.Impact, issue.IacDescription.Resolve),
+				issue.PublicID, title, description, impact, resolve),
 			Range: sglsp.Range{
 				Start: sglsp.Position{Line: issue.LineNumber - 1, Character: 0},
 				End:   sglsp.Position{Line: issue.LineNumber - 1, Character: 80},
 			},
 			Severity: lspSeverity(issue.Severity),
+			Code:     issue.PublicID,
 			//CodeDescription: lsp.CodeDescription{
 			//	Href: issue.Documentation,
 			//},

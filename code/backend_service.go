@@ -6,15 +6,10 @@ import (
 	"fmt"
 	"github.com/rs/zerolog/log"
 	"github.com/snyk/snyk-lsp/lsp"
+	"github.com/snyk/snyk-lsp/util"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"io/ioutil"
 	"net/http"
-	"os"
-)
-
-const (
-	TokenEnvVariable        = "SNYK_TOKEN"
-	ApiUrl           string = "https://deeproxy.snyk.io"
 )
 
 var (
@@ -48,14 +43,6 @@ type extendBundleRequest struct {
 	RemovedFiles []sglsp.DocumentURI        `json:"removedFiles,omitempty"`
 }
 
-func token() string {
-	token, exist := os.LookupEnv(TokenEnvVariable)
-	if !exist {
-		token = ""
-	}
-	return token
-}
-
 func (s *SnykCodeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
 	requestBody, err := json.Marshal(files)
 	if err != nil {
@@ -77,21 +64,21 @@ func (s *SnykCodeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) 
 
 func (s *SnykCodeBackendService) doCall(method string, path string, requestBody []byte) ([]byte, error) {
 	b := bytes.NewBuffer(requestBody)
-	req, err := http.NewRequest(method, ApiUrl+path, b)
+	req, err := http.NewRequest(method, util.ApiUrl()+path, b)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Session-Token", token())
+	req.Header.Set("Session-Token", util.Token())
 	req.Header.Set("Content-Type", "application/json")
 
-	log.Debug().Str("requestBody", string(requestBody))
+	log.Debug().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
 	response, err := s.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer response.Body.Close()
 	responseBody, err := ioutil.ReadAll(response.Body)
-	log.Debug().Str("responseBody", string(responseBody))
+	log.Debug().Str("responseBody", string(responseBody)).Msg("RECEIVED FROM REMOTE")
 	if err != nil {
 		return nil, err
 	}

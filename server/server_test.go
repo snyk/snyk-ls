@@ -9,7 +9,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/snyk/snyk-lsp/code"
-	"github.com/snyk/snyk-lsp/util"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"strings"
@@ -50,12 +49,6 @@ func didSaveTextParams() lsp.DidSaveTextDocumentParams {
 
 func startServer() server.Local {
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
-
-	var err error
-	util.CliPath, err = util.SetupCLI()
-	if err != nil {
-		log.Fatal().Err(err)
-	}
 
 	var srv *jrpc2.Server
 

@@ -3,6 +3,7 @@ package oss
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/gomarkdown/markdown"
 	"github.com/rs/zerolog/log"
 	"github.com/snyk/snyk-lsp/lsp"
 	"github.com/snyk/snyk-lsp/util"
@@ -90,7 +91,7 @@ func callSnykCLI(doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(util.CliPath, "test", "--file="+absolutePath, "--json")
+	cmd := exec.Command(util.CliPath(), "test", "--file="+absolutePath, "--json")
 	log.Debug().Msg(fmt.Sprintf("OSS: command: %s", cmd))
 	resBytes, err := cmd.CombinedOutput()
 	log.Debug().Msg(fmt.Sprintf("OSS: response: %s", resBytes))
@@ -109,9 +110,15 @@ func callSnykCLI(doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
 	}
 	var diagnostics []lsp.Diagnostic
 	for _, issue := range res.Vulnerabilities {
+		title := issue.Title
+		description := issue.Description
+		if util.Format == util.FormatHtml {
+			title = string(markdown.ToHTML([]byte(title), nil, nil))
+			description = string(markdown.ToHTML([]byte(description), nil, nil))
+		}
 		diagnostic := lsp.Diagnostic{
 			Source:   "Snyk LSP",
-			Message:  fmt.Sprintf("%s: %s\n\n%s", issue.Id, issue.Title, issue.Description),
+			Message:  fmt.Sprintf("%s: %s\n\n%s", issue.Id, title, description),
 			Range:    findRange(issue, doc),
 			Severity: lspSeverity(issue.Severity),
 			Code:     issue.Id,

@@ -512,3 +512,4 @@ FodyWeavers.xsd
 .history/
 
 .idea
+.dccache

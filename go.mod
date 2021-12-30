@@ -3,10 +3,12 @@ module github.com/snyk/snyk-lsp
 go 1.17
 
 require (
-	github.com/creachadair/jrpc2 v0.35.1
+	github.com/creachadair/jrpc2 v0.35.2
+	github.com/gomarkdown/markdown v0.0.0-20211212230626-5af6ad2f47df
 	github.com/rs/zerolog v1.26.1
 	github.com/sourcegraph/go-lsp v0.0.0-20200429204803-219e11d77f5d
 	github.com/stretchr/testify v1.7.0
+	github.com/subosito/gotenv v1.2.0
 )
 
 require (

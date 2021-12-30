@@ -104,13 +104,6 @@ func TestSnykCodeBackendService_RetrieveDiagnosticsIntegrationTest(t *testing.T)
 	}, 120*time.Second, 2*time.Second)
 }
 
-func TestSnykCodeBackendService_token(t *testing.T) {
-	os.Clearenv()
-	assert.Equal(t, "", token())
-	_ = os.Setenv(TokenEnvVariable, "test")
-	assert.Equal(t, "test", token())
-}
-
 // todo analysis test limit files
 // todo analysis test severities
 
