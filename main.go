@@ -12,7 +12,10 @@ import (
 	"time"
 )
 
+var gitinfo string // set by build via go build -ldflags "-X main.gitinfo=xxx"
+
 func main() {
+	fmt.Println(gitinfo)
 	output, err := parseFlags(os.Args)
 	if err != nil {
 		fmt.Println(err, output)

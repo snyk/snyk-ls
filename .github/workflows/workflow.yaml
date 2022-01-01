@@ -21,14 +21,16 @@ jobs:
       - name: Build
         run: |
           mkdir -p output
-          export GOOS=darwin  && export GOARCH=amd64 && go build -ldflags="-s -w" -o ./output/snyk-lsp.$GOOS.$GOARCH
-          export GOOS=darwin  && export GOARCH=arm64 && go build -ldflags="-s -w" -o ./output/snyk-lsp.$GOOS.$GOARCH
-          export GOOS=linux   && export GOARCH=386   && go build -ldflags="-s -w" -o ./output/snyk-lsp.$GOOS.$GOARCH
-          export GOOS=linux   && export GOARCH=amd64 && go build -ldflags="-s -w" -o ./output/snyk-lsp.$GOOS.$GOARCH
-          export GOOS=linux   && export GOARCH=arm   && go build -ldflags="-s -w" -o ./output/snyk-lsp.$GOOS.$GOARCH
-          export GOOS=linux   && export GOARCH=arm64 && go build -ldflags="-s -w" -o ./output/snyk-lsp.$GOOS.$GOARCH
-          export GOOS=windows && export GOARCH=386   && go build -ldflags="-s -w" -o ./output/snyk-lsp.$GOOS.$GOARCH.exe
-          export GOOS=windows && export GOARCH=amd64 && go build -ldflags="-s -w" -o ./output/snyk-lsp.$GOOS.$GOARCH.exe
+          export LDFLAGS="-X 'main.gitinfo=$(echo "$(git show --pretty="tformat:Commit: %h\nDate: %cD\nCommitter: %cn" -s)")' -s -w"
+          echo "Building with LDFLAGS=$LDFLAGS"
+          export GOOS=darwin  && export GOARCH=amd64 && go build -ldflags="$LDFLAGS" -o ./output/snyk-lsp.$GOOS.$GOARCH
+          export GOOS=darwin  && export GOARCH=arm64 && go build -ldflags="$LDFLAGS" -o ./output/snyk-lsp.$GOOS.$GOARCH
+          export GOOS=linux   && export GOARCH=386   && go build -ldflags="$LDFLAGS" -o ./output/snyk-lsp.$GOOS.$GOARCH
+          export GOOS=linux   && export GOARCH=amd64 && go build -ldflags="$LDFLAGS" -o ./output/snyk-lsp.$GOOS.$GOARCH
+          export GOOS=linux   && export GOARCH=arm   && go build -ldflags="$LDFLAGS" -o ./output/snyk-lsp.$GOOS.$GOARCH
+          export GOOS=linux   && export GOARCH=arm64 && go build -ldflags="$LDFLAGS" -o ./output/snyk-lsp.$GOOS.$GOARCH
+          export GOOS=windows && export GOARCH=386   && go build -ldflags="$LDFLAGS" -o ./output/snyk-lsp.$GOOS.$GOARCH.exe
+          export GOOS=windows && export GOARCH=amd64 && go build -ldflags="$LDFLAGS" -o ./output/snyk-lsp.$GOOS.$GOARCH.exe
           chmod +x output/*
       - name: Test
         env:
