@@ -61,7 +61,7 @@ jobs:
         with:
           version: latest
           files: output/*
-          args: "-9f"
+          args: "-9f --lzma"
       - uses: "marvinpinto/action-automatic-releases@latest"
         if: ${{ !env.ACT }}
         with:
