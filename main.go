@@ -5,22 +5,22 @@ import (
 	"flag"
 	"fmt"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/snyk/snyk-lsp/server"
 	"github.com/snyk/snyk-lsp/util"
-	"log"
 	"os"
 	"time"
 )
 
-var gitinfo string // set by build via go build -ldflags "-X main.gitinfo=xxx"
+var gitinfo = "SNAPSHOT" // set by build via go build -ldflags "-X main.gitinfo=xxx"
 
 func main() {
-	fmt.Println(gitinfo)
 	output, err := parseFlags(os.Args)
 	if err != nil {
 		fmt.Println(err, output)
 		os.Exit(1)
 	}
+	log.Info().Msg(gitinfo)
 	util.Load()
 	server.Start()
 }
@@ -30,7 +30,7 @@ func parseFlags(args []string) (string, error) {
 	var buf bytes.Buffer
 	flags.SetOutput(&buf)
 
-	logLevelFlag := flags.String("l", "info", "sets the log-level to <trace|debug|info|warn|error|fatal>")
+	logLevelFlag := flags.String("l", "debug", "sets the log-level to <trace|debug|info|warn|error|fatal>")
 	formatFlag := flags.String(
 		"o",
 		util.FormatMd,
@@ -54,7 +54,7 @@ func parseFlags(args []string) (string, error) {
 func configureLogging(level string) {
 	logLevel, err := zerolog.ParseLevel(level)
 	if err != nil {
-		log.Println("Can't set log level from flag. Setting to default (=info)")
+		fmt.Println("Can't set log level from flag. Setting to default (=info)")
 		logLevel = zerolog.InfoLevel
 	}
 	zerolog.SetGlobalLevel(logLevel)
