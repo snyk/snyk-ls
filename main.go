@@ -30,7 +30,7 @@ func parseFlags(args []string) (string, error) {
 	var buf bytes.Buffer
 	flags.SetOutput(&buf)
 
-	logLevelFlag := flags.String("l", "debug", "sets the log-level to <trace|debug|info|warn|error|fatal>")
+	logLevelFlag := flags.String("l", "info", "sets the log-level to <trace|debug|info|warn|error|fatal>")
 	formatFlag := flags.String(
 		"o",
 		util.FormatMd,
