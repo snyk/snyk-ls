@@ -137,16 +137,16 @@ func findRange(issue ossIssue, doc sglsp.TextDocumentItem) sglsp.Range {
 	lines := strings.Split(
 		strings.ReplaceAll(doc.Text, "\r", ""),
 		"\n")
+	var packageName string
+	if len(issue.From) > 1 {
+		split := strings.Split(issue.From[1], "@")
+		packageName = fmt.Sprintf("\"%s\": \"", split[0])
+	} else {
+		packageName = fmt.Sprintf("\"%s\": \"", issue.Name)
+	}
 	var lineStart, lineEnd, characterStart, characterEnd int
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
-		var packageName string
-		if len(issue.From) > 1 {
-			split := strings.Split(issue.From[1], "@")
-			packageName = fmt.Sprintf("\"%s\": \"", split[0])
-		} else {
-			packageName = fmt.Sprintf("\"%s\": \"", issue.Name)
-		}
 		if issue.PackageManager == "npm" {
 			if strings.HasPrefix(
 				strings.TrimSpace(strings.ReplaceAll(line, "^", "")), packageName) {
@@ -157,7 +157,7 @@ func findRange(issue ossIssue, doc sglsp.TextDocumentItem) sglsp.Range {
 				break
 			} else if issue.PackageManager == "maven" {
 				// todo respect from
-				packageName = strings.Split(strings.ReplaceAll(packageName, "\"", ""), ":")[0]
+				packageName = strings.Split(strings.ReplaceAll(packageName, "\"", ""), ":")[1]
 				if filepath.Base(string(doc.URI)) == "pom.xml" &&
 					strings.Contains(
 						line, fmt.Sprintf("<artifactId>%s</artifactId>", packageName),

@@ -11,12 +11,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: set env
+        run: echo "NOW=v$(date +'%Y%m%d.%H%M%S')" >> $GITHUB_ENV
+
       - uses: actions/checkout@v2
 
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
           go-version: 1.17
+
 
       - name: Build
         run: |
@@ -68,8 +72,8 @@ jobs:
         if: ${{ !env.ACT }}
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "latest"
+          automatic_release_tag: "${{ env.NOW }}"
           prerelease: false
-          title: "${{ github.sha }}"
+          title: "${{ env.NOW }}"
           files: |
             output/*
