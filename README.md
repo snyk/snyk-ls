@@ -56,7 +56,8 @@ function:
 2. `PATH` to find the Snyk CLI, to find maven when analysing Maven projects, to find python, etc
 3. `SNYK_TOKEN` to authenticate against the Snyk backend services
 4. `DEEPROXY_API_URL` to find the Snyk Code backend service (default is `https://deeproxy.snyk.io`)
-5. `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` to define the http proxy to be used
+5. `SNYK_API` to define the endpoint address if using single tenant setup
+6. `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` to define the http proxy to be used
 
 To automatically add these variables to the environment, Snyk LSP searches for the following files, with the order
 determining precedence. If the executable is not called from an already configured environment (e.g. via
