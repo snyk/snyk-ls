@@ -69,7 +69,7 @@ jobs:
           files: output/*
           args: "-9f --lzma"
       - uses: "marvinpinto/action-automatic-releases@latest"
-        if: ${{ !env.ACT }}
+        if: ${{ github.event_name == 'push' && !env.ACT }}
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "${{ env.NOW }}"
