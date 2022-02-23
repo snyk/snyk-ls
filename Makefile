@@ -2,7 +2,10 @@
 PROJECT_NAME := snyk-lsp
 
 # build variables
+.DEFAULT_GOAL = test
 BUILD_DIR := build
+DEV_GOARCH := $(shell go env GOARCH)
+DEV_GOOS := $(shell go env GOOS)
 
 
 ## tools: Install required tooling.
@@ -32,6 +35,18 @@ test:
 	@echo "==> Running unit tests..."
 	@mkdir -p $(BUILD_DIR)
 	@go test -count=1 -v -cover -coverprofile=$(BUILD_DIR)/coverage.out -parallel=4 ./...
+
+## build: Build binary for default local system's OS and architecture.
+.PHONY: build
+build:
+	@echo "==> Building binary..."
+	@echo "    running go build for GOOS=$(DEV_GOOS) GOARCH=$(DEV_GOARCH)"
+# workaround for missing .exe extension on Windows
+ifeq ($(OS),Windows_NT)
+	@go build -o $(BUILD_DIR)/$(PROJECT_NAME).$(DEV_GOOS).$(DEV_GOARCH).exe
+else
+	@go build -o $(BUILD_DIR)/$(PROJECT_NAME).$(DEV_GOOS).$(DEV_GOARCH)
+endif
 
 help: Makefile
 	@echo "Usage: make <command>"
