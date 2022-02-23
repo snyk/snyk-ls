@@ -4,6 +4,7 @@ linters:
     - deadcode
     - errcheck
     - gofmt
+    - goimports
     - gosimple
     - ineffassign
     - misspell
