@@ -48,6 +48,12 @@ else
 	@go build -o $(BUILD_DIR)/$(PROJECT_NAME).$(DEV_GOOS).$(DEV_GOARCH)
 endif
 
+## run: Compile and run LSP server.
+.PHONY: run
+run:
+	@echo "==> Running Snyk LSP server..."
+	@go run main.go
+
 help: Makefile
 	@echo "Usage: make <command>"
 	@echo ""
