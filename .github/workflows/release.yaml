@@ -1,0 +1,60 @@
+name: Release
+on:
+  push:
+
+jobs:
+  release:
+    name: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Unshallow
+        run: git fetch --prune --unshallow
+
+      # this step can be removed if setup-go will support reading go-version from go.mod
+      - name: Determine Go version
+        run: |
+          sed -En 's/^go[[:space:]]+([[:digit:].]+)$/GO_VERSION=\1/p' go.mod >> $GITHUB_ENV
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Set up Snyk CLI
+        uses: snyk/actions/setup@master
+
+      - name: Cache Go modules
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
+
+      - name: Lint source code
+        run: |
+          make tools lint
+
+      - name: Run tests
+        env:
+          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+        run: |
+          make clean test
+
+      - name: Set up Git actions user
+        uses: fregante/setup-git-user@v1
+
+      - name: Create release tag
+        run: |
+          git tag "v$(date +'%Y%m%d.%H%M%S')"
+          sudo mv snyk-linux* /usr/local/bin/
+
+      - name: Build binaries with GoReleaser
+        uses: goreleaser/goreleaser-action@v2
+        with:
+          args: build --rm-dist
