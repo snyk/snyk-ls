@@ -2,13 +2,15 @@ package code
 
 import (
 	"encoding/json"
-	"github.com/snyk/snyk-lsp/util"
-	sglsp "github.com/sourcegraph/go-lsp"
-	"github.com/stretchr/testify/assert"
 	"net/http"
 	"os"
 	"testing"
 	"time"
+
+	sglsp "github.com/sourcegraph/go-lsp"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-lsp/util"
 )
 
 const (

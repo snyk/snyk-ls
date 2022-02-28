@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-	"github.com/snyk/snyk-lsp/server"
-	"github.com/snyk/snyk-lsp/util"
 	"os"
 	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+
+	"github.com/snyk/snyk-lsp/server"
+	"github.com/snyk/snyk-lsp/util"
 )
 
 var gitinfo = "SNAPSHOT" // set by build via go build -ldflags "-X main.gitinfo=xxx"

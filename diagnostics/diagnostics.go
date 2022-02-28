@@ -1,13 +1,15 @@
 package diagnostics
 
 import (
+	"sync"
+
 	"github.com/rs/zerolog/log"
+	sglsp "github.com/sourcegraph/go-lsp"
+
 	"github.com/snyk/snyk-lsp/code"
 	"github.com/snyk/snyk-lsp/iac"
 	"github.com/snyk/snyk-lsp/lsp"
 	"github.com/snyk/snyk-lsp/oss"
-	sglsp "github.com/sourcegraph/go-lsp"
-	"sync"
 )
 
 var (

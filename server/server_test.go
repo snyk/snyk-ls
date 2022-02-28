@@ -3,17 +3,19 @@ package server
 import (
 	"context"
 	"fmt"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/server"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/snyk/snyk-lsp/code"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
-	"strings"
-	"testing"
-	"time"
+
+	"github.com/snyk/snyk-lsp/code"
 )
 
 var (
@@ -65,7 +67,7 @@ func startServer() server.Local {
 		"shutdown":                       Shutdown(),
 		"exit":                           Exit(&srv),
 		"textDocument/codeLens":          TextDocumentCodeLens(),
-		//"codeLens/resolve":               codeLensResolve(&server),
+		// "codeLens/resolve":               codeLensResolve(&server),
 	}
 
 	opts := &server.LocalOptions{
@@ -85,7 +87,10 @@ func startServer() server.Local {
 
 func Test_serverShouldStart(t *testing.T) {
 	loc := startServer()
-	defer loc.Close()
+	// TODO(pavel): extract to setup/teardown methods
+	defer func(loc server.Local) {
+		_ = loc.Close()
+	}(loc)
 
 	si := loc.Server.ServerInfo()
 
@@ -94,7 +99,9 @@ func Test_serverShouldStart(t *testing.T) {
 
 func Test_dummy_shouldNotBeServed(t *testing.T) {
 	loc := startServer()
-	defer loc.Close()
+	defer func(loc server.Local) {
+		_ = loc.Close()
+	}(loc)
 
 	_, err := loc.Client.Call(ctx, "dummy", nil)
 	if err == nil {
@@ -104,7 +111,9 @@ func Test_dummy_shouldNotBeServed(t *testing.T) {
 
 func Test_initialize_shouldBeServed(t *testing.T) {
 	loc := startServer()
-	defer loc.Close()
+	defer func(loc server.Local) {
+		_ = loc.Close()
+	}(loc)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -118,7 +127,9 @@ func Test_initialize_shouldBeServed(t *testing.T) {
 
 func Test_initialize_shouldSupportDocumentOpening(t *testing.T) {
 	loc := startServer()
-	defer loc.Close()
+	defer func(loc server.Local) {
+		_ = loc.Close()
+	}(loc)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -133,7 +144,9 @@ func Test_initialize_shouldSupportDocumentOpening(t *testing.T) {
 
 func Test_initialize_shouldSupportDocumentChanges(t *testing.T) {
 	loc := startServer()
-	defer loc.Close()
+	defer func(loc server.Local) {
+		_ = loc.Close()
+	}(loc)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -148,7 +161,9 @@ func Test_initialize_shouldSupportDocumentChanges(t *testing.T) {
 
 func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 	loc := startServer()
-	defer loc.Close()
+	defer func(loc server.Local) {
+		_ = loc.Close()
+	}(loc)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -165,7 +180,9 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 
 func Test_initialize_shouldSupportCodeLens(t *testing.T) {
 	loc := startServer()
-	defer loc.Close()
+	defer func(loc server.Local) {
+		_ = loc.Close()
+	}(loc)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -180,7 +197,9 @@ func Test_initialize_shouldSupportCodeLens(t *testing.T) {
 
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc := startServer()
-	defer loc.Close()
+	defer func(loc server.Local) {
+		_ = loc.Close()
+	}(loc)
 
 	didOpenParams := didOpenTextParams()
 
@@ -194,13 +213,15 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 
 	// wait for publish
 	assert.Eventually(t, func() bool { return notification != nil }, 5*time.Second, 10*time.Millisecond)
-	notification.UnmarshalParams(&diagnostics)
+	_ = notification.UnmarshalParams(&diagnostics)
 	assert.Equal(t, didOpenParams.TextDocument.URI, diagnostics.URI)
 }
 
 func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 	loc := startServer()
-	defer loc.Close()
+	defer func(loc server.Local) {
+		_ = loc.Close()
+	}(loc)
 
 	// register our dummy document
 	didOpenParams := didOpenTextParams()
@@ -222,7 +243,9 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc := startServer()
-	defer loc.Close()
+	defer func(loc server.Local) {
+		_ = loc.Close()
+	}(loc)
 
 	didSaveParams := didSaveTextParams()
 
@@ -236,13 +259,15 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 
 	// wait for publish
 	assert.Eventually(t, func() bool { return notification != nil }, 5*time.Second, 10*time.Millisecond)
-	notification.UnmarshalParams(&diagnostics)
+	_ = notification.UnmarshalParams(&diagnostics)
 	assert.Equal(t, didSaveParams.TextDocument.URI, diagnostics.URI)
 }
 
 func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
 	loc := startServer()
-	defer loc.Close()
+	defer func(loc server.Local) {
+		_ = loc.Close()
+	}(loc)
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSaveWaitUntil", nil)
 	if err != nil {
@@ -252,7 +277,9 @@ func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
 
 func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 	loc := startServer()
-	defer loc.Close()
+	defer func(loc server.Local) {
+		_ = loc.Close()
+	}(loc)
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSave", nil)
 	if err != nil {
@@ -262,7 +289,9 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 
 func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 	loc := startServer()
-	defer loc.Close()
+	defer func(loc server.Local) {
+		_ = loc.Close()
+	}(loc)
 
 	codeLensParams := lsp.CodeLensParams{
 		TextDocument: docIdentifier.TextDocumentIdentifier,
@@ -279,10 +308,10 @@ func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 	}
 
 	var codeLenses []lsp.CodeLens
-	rsp.UnmarshalResult(&codeLenses)
+	_ = rsp.UnmarshalResult(&codeLenses)
 	assert.Equal(t, 1, len(codeLenses))
 }
 
-//func Test_codeLensResolve_shouldResolve(t *testing.T) {
+// func Test_codeLensResolve_shouldResolve(t *testing.T) {
 //	assert.Fail(t, "Not implemented yet")
-//}
+// }

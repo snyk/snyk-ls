@@ -1,12 +1,13 @@
 package util
 
 import (
-	"github.com/rs/zerolog/log"
-	"github.com/subosito/gotenv"
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
+
+	"github.com/rs/zerolog/log"
+	"github.com/subosito/gotenv"
 )
 
 const (

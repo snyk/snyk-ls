@@ -1,8 +1,9 @@
 package code
 
 import (
-	"github.com/snyk/snyk-lsp/lsp"
 	sglsp "github.com/sourcegraph/go-lsp"
+
+	"github.com/snyk/snyk-lsp/lsp"
 )
 
 type BackendService interface {

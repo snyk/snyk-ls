@@ -3,15 +3,17 @@ package iac
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gomarkdown/markdown"
-	"github.com/rs/zerolog/log"
-	"github.com/snyk/snyk-lsp/lsp"
-	"github.com/snyk/snyk-lsp/util"
-	sglsp "github.com/sourcegraph/go-lsp"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/gomarkdown/markdown"
+	"github.com/rs/zerolog/log"
+	sglsp "github.com/sourcegraph/go-lsp"
+
+	"github.com/snyk/snyk-lsp/lsp"
+	"github.com/snyk/snyk-lsp/util"
 )
 
 var (
@@ -142,9 +144,9 @@ func convertDiagnostics(res testResult) []lsp.Diagnostic {
 			},
 			Severity: lspSeverity(issue.Severity),
 			Code:     issue.PublicID,
-			//CodeDescription: lsp.CodeDescription{
+			// CodeDescription: lsp.CodeDescription{
 			//	Href: issue.Documentation,
-			//},
+			// },
 		}
 		diagnostics = append(diagnostics, diagnostic)
 	}

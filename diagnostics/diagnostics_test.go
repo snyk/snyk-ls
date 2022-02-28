@@ -1,11 +1,13 @@
 package diagnostics
 
 import (
-	"github.com/snyk/snyk-lsp/code"
-	"github.com/snyk/snyk-lsp/lsp"
+	"testing"
+
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
-	"testing"
+
+	"github.com/snyk/snyk-lsp/code"
+	"github.com/snyk/snyk-lsp/lsp"
 )
 
 var (

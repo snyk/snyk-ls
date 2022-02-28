@@ -1,23 +1,25 @@
 package main
 
 import (
-	"github.com/rs/zerolog"
-	"github.com/snyk/snyk-lsp/util"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-lsp/util"
 )
 
 func Test_shouldSetLogLevelViaFlag(t *testing.T) {
 	args := []string{"snyk-lsp", "-l", "debug"}
-	parseFlags(args)
+	_, _ = parseFlags(args)
 	assert.Equal(t, zerolog.DebugLevel, zerolog.GlobalLevel())
 }
 
 func Test_shouldSetOutputFormatViaFlag(t *testing.T) {
 	args := []string{"snyk-lsp", "-o", util.FormatHtml}
-	parseFlags(args)
+	_, _ = parseFlags(args)
 	assert.Equal(t, util.FormatHtml, util.Format)
 }
 
@@ -35,8 +37,11 @@ func Test_shouldSetLoadConfigFromFlag(t *testing.T) {
 	if err != nil {
 		assert.Fail(t, "Couldn't create test file")
 	}
-	defer file.Close()
-	defer os.Remove(file.Name())
+	defer func(file *os.File) {
+		_ = file.Close()
+		_ = os.Remove(file.Name())
+	}(file)
+
 	_, err = file.Write([]byte("AA=Bb"))
 	if err != nil {
 		assert.Fail(t, "Couldn't write to test file")

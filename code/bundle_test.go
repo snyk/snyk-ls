@@ -1,13 +1,15 @@
 package code
 
 import (
-	lsp2 "github.com/snyk/snyk-lsp/lsp"
-	"github.com/snyk/snyk-lsp/util"
-	"github.com/sourcegraph/go-lsp"
-	"github.com/stretchr/testify/assert"
 	"reflect"
 	"sync"
 	"testing"
+
+	"github.com/sourcegraph/go-lsp"
+	"github.com/stretchr/testify/assert"
+
+	lsp2 "github.com/snyk/snyk-lsp/lsp"
+	"github.com/snyk/snyk-lsp/util"
 )
 
 var (
