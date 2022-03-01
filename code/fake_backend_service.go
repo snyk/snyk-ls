@@ -2,11 +2,13 @@ package code
 
 import (
 	"fmt"
-	"github.com/snyk/snyk-lsp/lsp"
-	"github.com/snyk/snyk-lsp/util"
-	sglsp "github.com/sourcegraph/go-lsp"
 	"math/rand"
 	"path/filepath"
+
+	sglsp "github.com/sourcegraph/go-lsp"
+
+	"github.com/snyk/snyk-lsp/lsp"
+	"github.com/snyk/snyk-lsp/util"
 )
 
 var (
@@ -27,7 +29,7 @@ var (
 		Code:     "SNYK-123",
 		Source:   "snyk code",
 		Message:  "This is a dummy error (severity error)",
-		//CodeDescription: lsp.CodeDescription{Href: "https://snyk.io"},
+		// CodeDescription: lsp.CodeDescription{Href: "https://snyk.io"},
 	}
 	FakeCodeLens = sglsp.CodeLens{
 		Range: sglsp.Range{

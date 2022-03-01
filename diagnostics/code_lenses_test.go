@@ -1,9 +1,10 @@
 package diagnostics
 
 import (
+	"testing"
+
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 var (

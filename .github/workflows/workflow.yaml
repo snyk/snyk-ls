@@ -68,12 +68,13 @@ jobs:
           version: latest
           files: output/*
           args: "-9f --lzma"
-      - uses: "marvinpinto/action-automatic-releases@latest"
-        if: ${{ github.event_name == 'push' && !env.ACT }}
-        with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "${{ env.NOW }}"
-          prerelease: false
-          title: "${{ env.NOW }}"
-          files: |
-            output/*
+      # TODO(pavel): refactor the current workflow after https://github.com/snyk/snyk-lsp/pull/6 is merged
+#      - uses: "marvinpinto/action-automatic-releases@latest"
+#        if: ${{ github.event_name == 'push' && !env.ACT }}
+#        with:
+#          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+#          automatic_release_tag: "${{ env.NOW }}"
+#          prerelease: false
+#          title: "${{ env.NOW }}"
+#          files: |
+#            output/*

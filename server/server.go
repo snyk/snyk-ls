@@ -2,15 +2,17 @@ package server
 
 import (
 	"context"
+	"os"
+
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/rs/zerolog/log"
+	sglsp "github.com/sourcegraph/go-lsp"
+
 	"github.com/snyk/snyk-lsp/code"
 	"github.com/snyk/snyk-lsp/diagnostics"
 	"github.com/snyk/snyk-lsp/lsp"
-	sglsp "github.com/sourcegraph/go-lsp"
-	"os"
 )
 
 var (
@@ -32,7 +34,7 @@ func Start() {
 		"shutdown":                       Shutdown(),
 		"exit":                           Exit(&srv),
 		"textDocument/codeLens":          TextDocumentCodeLens(),
-		//"codeLens/resolve":               codeLensResolve(&server),
+		// "codeLens/resolve":               codeLensResolve(&server),
 	}
 
 	srv = jrpc2.NewServer(lspHandlers, &jrpc2.ServerOptions{

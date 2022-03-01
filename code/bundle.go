@@ -1,13 +1,15 @@
 package code
 
 import (
-	"github.com/rs/zerolog/log"
-	"github.com/snyk/snyk-lsp/lsp"
-	"github.com/snyk/snyk-lsp/util"
-	sglsp "github.com/sourcegraph/go-lsp"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
+	sglsp "github.com/sourcegraph/go-lsp"
+
+	"github.com/snyk/snyk-lsp/lsp"
+	"github.com/snyk/snyk-lsp/util"
 )
 
 var (

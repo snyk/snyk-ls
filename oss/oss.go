@@ -3,15 +3,17 @@ package oss
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gomarkdown/markdown"
-	"github.com/rs/zerolog/log"
-	"github.com/snyk/snyk-lsp/lsp"
-	"github.com/snyk/snyk-lsp/util"
-	sglsp "github.com/sourcegraph/go-lsp"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/gomarkdown/markdown"
+	"github.com/rs/zerolog/log"
+	sglsp "github.com/sourcegraph/go-lsp"
+
+	"github.com/snyk/snyk-lsp/lsp"
+	"github.com/snyk/snyk-lsp/util"
 )
 
 var (
@@ -123,9 +125,9 @@ func callSnykCLI(doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
 			Severity: lspSeverity(issue.Severity),
 			Code:     issue.Id,
 			// Don't use it for now as it's not widely supported
-			//CodeDescription: lsp.CodeDescription{
+			// CodeDescription: lsp.CodeDescription{
 			//	Href: issue.References[0].Url,
-			//},
+			// },
 		}
 		diagnostics = append(diagnostics, diagnostic)
 	}

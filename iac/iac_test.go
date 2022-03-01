@@ -2,15 +2,17 @@ package iac
 
 import (
 	"encoding/json"
-	lsp2 "github.com/snyk/snyk-lsp/lsp"
-	"github.com/snyk/snyk-lsp/util"
-	"github.com/sourcegraph/go-lsp"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/sourcegraph/go-lsp"
+	"github.com/stretchr/testify/assert"
+
+	lsp2 "github.com/snyk/snyk-lsp/lsp"
+	"github.com/snyk/snyk-lsp/util"
 )
 
 func Test_HandleFile(t *testing.T) {
@@ -52,7 +54,7 @@ func Test_convertCodeLenses_shouldOneCodeLensPerIssue(t *testing.T) {
 	bytes, _ := os.ReadFile("testdata/RBAC-iac-result.json")
 
 	var iacResult testResult
-	json.Unmarshal(bytes, &iacResult)
+	_ = json.Unmarshal(bytes, &iacResult)
 	assert.NotNil(t, iacResult)
 	assert.True(t, len(iacResult.IacIssues) > 0)
 

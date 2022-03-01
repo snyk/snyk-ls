@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/rs/zerolog/log"
-	"github.com/snyk/snyk-lsp/lsp"
-	"github.com/snyk/snyk-lsp/util"
-	sglsp "github.com/sourcegraph/go-lsp"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/rs/zerolog/log"
+	sglsp "github.com/sourcegraph/go-lsp"
+
+	"github.com/snyk/snyk-lsp/lsp"
+	"github.com/snyk/snyk-lsp/util"
 )
 
 var (
