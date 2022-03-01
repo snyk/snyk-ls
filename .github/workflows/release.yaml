@@ -1,6 +1,8 @@
 name: Release
 on:
   push:
+    branches:
+      - 'main'
 
 jobs:
   release:
@@ -52,9 +54,12 @@ jobs:
       - name: Create release tag
         run: |
           git tag "v$(date +'%Y%m%d.%H%M%S')"
+          git push --tags
           sudo mv snyk-linux* /usr/local/bin/
 
-      - name: Build binaries with GoReleaser
+      - name: Release binaries with GoReleaser
         uses: goreleaser/goreleaser-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          args: build --rm-dist
+          args: release --rm-dist
