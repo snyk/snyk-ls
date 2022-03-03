@@ -12,8 +12,7 @@ blobs:
   - provider: S3
     region: ${{ .Env.AWS_REGION }}
     bucket: ${{ .Env.AWS_S3_BUCKET_NAME }}
-    ids:
-      - "{{ .ProjectName }}"
+
     extra_files:
       - glob: "build/{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
       - glob: "build/metadata.json"
