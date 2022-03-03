@@ -1,4 +1,4 @@
-project_name: "snyk-lsp"
+project_name: "snyk-ls"
 
 archives:
   - format: binary
@@ -45,7 +45,6 @@ builds:
 checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
   algorithm: sha256
-
 
 dist: build
 
