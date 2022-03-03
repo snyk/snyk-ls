@@ -10,8 +10,8 @@ before:
 
 blobs:
   - provider: S3
-    region: ${{ env.AWS_REGION }}
-    bucket: ${{ env.AWS_S3_BUCKET_NAME }}
+    region: ${{ .Env.AWS_REGION }}
+    bucket: ${{ .Env.AWS_S3_BUCKET_NAME }}
     ids:
       - "{{ .ProjectName }}"
     extra_files:
