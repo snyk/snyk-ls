@@ -11,9 +11,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-
-      - name: Unshallow
-        run: git fetch --prune --unshallow
+        with:
+          fetch-depth: 0 # does an unshallow checkout with tags & branches
 
       # this step can be removed if setup-go will support reading go-version from go.mod
       - name: Determine Go version
@@ -24,9 +23,6 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: ${{ env.GO_VERSION }}
-
-      - name: Set up Snyk CLI
-        uses: snyk/actions/setup@master
 
       - name: Cache Go modules
         uses: actions/cache@v2
@@ -41,6 +37,9 @@ jobs:
         run: |
           make tools lint
 
+      - name: Set up Snyk CLI # Tests need it
+        uses: snyk/actions/setup@master
+
       - name: Run tests
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
@@ -53,7 +52,7 @@ jobs:
 
       - name: Create release tag
         run: |
-          git tag "v$(date +'%Y%m%d.%H%M%S')"
+          git tag "v$(git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)"
           git push --tags
           sudo mv snyk-linux* /usr/local/bin/
 
@@ -61,5 +60,9 @@ jobs:
         uses: goreleaser/goreleaser-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY_ID: ${{ secrets.AWS_SECRET_ACCESS_KEY_ID }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
         with:
           args: release --rm-dist

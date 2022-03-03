@@ -1,12 +1,23 @@
-project_name: "snyk-lsp"
+project_name: "snyk-ls"
 
 archives:
-  - format: zip
-    name_template: "{{ .ProjectName }}_{{ .Version}}_{{ .Os }}_{{ .Arch }}"
+  - format: binary
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 before:
   hooks:
     - go mod tidy
+
+blobs:
+  - provider: S3
+    region: ${{ env.AWS_REGION }}
+    bucket: ${{ env.AWS_S3_BUCKET_NAME }}
+    ids:
+      - "{{ .ProjectName }}"
+    extra_files:
+      - glob: "build/{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
+      - glob: "build/metadata.json"
+    folder: "{{ .ProjectName }}/"
 
 builds:
   - flags:
