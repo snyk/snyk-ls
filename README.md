@@ -114,7 +114,7 @@ export DEEPROXY_API_URL
 
 ## Configure your client
 See [here](https://docs.google.com/document/d/1nUAt4ckza1y1PEE3p4BUsnlmQkE4ltuYURJkYeusYpA/) for details.
-You will at least have to update the path to the snyk-lsp executable. 
+You will at least have to update the path to the snyk-lsp executable.
 
 ## Code Structure
 ```
@@ -122,6 +122,7 @@ You will at least have to update the path to the snyk-lsp executable.
 main.go             starts the server
 - .github           contains CI/CD and CODEOWNERS document
 - code              snyk code functionality
+- config            packages responsible for LS configuration
 - diagnostics       business logic for caching and retrieving diagnostics
 - iac               snyk infrastructure as code functionality
 - oss               snyk oss functionality
@@ -161,7 +162,7 @@ brew install act
 brew install --cask virtualbox # you need to enable the virtualbox extension in macOS settings
 brew install minikube
 minikube start
-eval $(minikube docker-env) # gives you a fully functional docker environment 
+eval $(minikube docker-env) # gives you a fully functional docker environment
 ```
 
 ### Run act

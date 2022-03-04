@@ -8,7 +8,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/util"
+	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/config/environment"
 )
 
 func Test_shouldSetLogLevelViaFlag(t *testing.T) {
@@ -18,13 +19,13 @@ func Test_shouldSetLogLevelViaFlag(t *testing.T) {
 }
 
 func Test_shouldSetOutputFormatViaFlag(t *testing.T) {
-	args := []string{"snyk-lsp", "-o", util.FormatHtml}
+	args := []string{"snyk-lsp", "-o", environment.FormatHtml}
 	_, _ = parseFlags(args)
-	assert.Equal(t, util.FormatHtml, util.Format)
+	assert.Equal(t, environment.FormatHtml, environment.Format)
 }
 
 func Test_shouldShowUsageOnUnknownFlag(t *testing.T) {
-	args := []string{"snyk-lsp", "-unknown", util.FormatHtml}
+	args := []string{"snyk-lsp", "-unknown", environment.FormatHtml}
 
 	output, err := parseFlags(args)
 
@@ -49,8 +50,18 @@ func Test_shouldSetLoadConfigFromFlag(t *testing.T) {
 	args := []string{"snyk-lsp", "-c", file.Name()}
 
 	_, _ = parseFlags(args)
-	util.Load()
+	environment.Load()
 
 	assert.Equal(t, "Bb", os.Getenv("AA"))
 	os.Clearenv()
+}
+
+func Test_shouldSetReportErrorsViaFlag(t *testing.T) {
+	args := []string{"snyk-lsp"}
+	_, _ = parseFlags(args)
+	assert.False(t, config.IsErrorReportingEnabled)
+
+	args = []string{"snyk-lsp", "-reportErrors"}
+	_, _ = parseFlags(args)
+	assert.True(t, config.IsErrorReportingEnabled)
 }
