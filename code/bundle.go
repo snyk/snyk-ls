@@ -79,7 +79,8 @@ func (b *BundleImpl) addToBundleDocuments(files map[sglsp.DocumentURI]sglsp.Text
 	}
 	for uri, doc := range files {
 		if extensions[filepath.Ext(string(uri))] {
-			if (b.bundleDocuments[uri] == File{} && len(doc.Text) > 0) {
+			const maxFileSize = 1024*4096 - 1000 // 4MB, -1000 just to be safe
+			if (b.bundleDocuments[uri] == File{} && len(doc.Text) > 0 && len(doc.Text) < maxFileSize) {
 				b.bundleDocuments[uri] = File{
 					Hash:    util.Hash(doc.Text),
 					Content: doc.Text,
