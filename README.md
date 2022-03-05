@@ -1,5 +1,6 @@
 # Snyk Language Server (Snyk-LSP)
-[![Build Go binaries](https://github.com/snyk/snyk-lsp/actions/workflows/workflow.yaml/badge.svg)](https://github.com/snyk/snyk-lsp/actions/workflows/workflow.yaml)
+[![Build Go binaries](https://github.com/snyk/snyk-lsp/actions/workflows/build.yaml/badge.svg)](https://github.com/snyk/snyk-lsp/actions/workflows/build.yaml)
+[![Release Go binaries](https://github.com/snyk/snyk-lsp/actions/workflows/release.yaml/badge.svg)](https://github.com/snyk/snyk-lsp/actions/workflows/release.yaml)
 
 ## Supported features
 The language server follows
