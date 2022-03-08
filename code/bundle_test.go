@@ -56,6 +56,26 @@ func Test_createBundleFromSource_shouldAddDocumentToBundle(t *testing.T) {
 	assert.Equal(t, firstBundleFile, b.bundleDocuments[firstDoc.URI])
 }
 
+func Test_createBundleFromSource_shouldNotAddDocumentToBundleIfTooBig(t *testing.T) {
+	b := BundleImpl{Backend: &FakeBackendService{BundleHash: "test-bundle-Hash"}}
+	b.bundleHash = "test-Hash"
+	b.bundleDocuments = map[lsp.DocumentURI]File{}
+	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
+
+	var bigFileContent []byte
+	fileSize := 4096*1024 + 1000
+	for i := 0; i < fileSize; i++ {
+		bigFileContent = append(bigFileContent, byte(i))
+	}
+	bundleDoc := secondDoc
+	bundleDoc.Text = string(bigFileContent)
+	registeredDocuments[bundleDoc.URI] = bundleDoc
+
+	b.addToBundleDocuments(registeredDocuments)
+	assert.Empty(t, b.missingFiles)
+	assert.Empty(t, b.bundleDocuments)
+}
+
 func Test_extendBundleFromSource_shouldAddDocumentToBundle(t *testing.T) {
 	b := BundleImpl{Backend: &FakeBackendService{BundleHash: "test-bundle-Hash"}}
 	b.bundleHash = "test-Hash"
