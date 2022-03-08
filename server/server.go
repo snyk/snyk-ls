@@ -10,9 +10,9 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-lsp/code"
-	"github.com/snyk/snyk-lsp/diagnostics"
-	"github.com/snyk/snyk-lsp/lsp"
+	"github.com/snyk/snyk-ls/code"
+	"github.com/snyk/snyk-ls/diagnostics"
+	"github.com/snyk/snyk-ls/lsp"
 )
 
 var (

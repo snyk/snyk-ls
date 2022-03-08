@@ -3,7 +3,7 @@ package code
 import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-lsp/lsp"
+	"github.com/snyk/snyk-ls/lsp"
 )
 
 type BackendService interface {

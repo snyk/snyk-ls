@@ -10,8 +10,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	"github.com/snyk/snyk-lsp/server"
-	"github.com/snyk/snyk-lsp/util"
+	"github.com/snyk/snyk-ls/server"
+	"github.com/snyk/snyk-ls/util"
 )
 
 var gitinfo = "SNAPSHOT" // set by build via go build -ldflags "-X main.gitinfo=xxx"

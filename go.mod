@@ -1,4 +1,4 @@
-module github.com/snyk/snyk-lsp
+module github.com/snyk/snyk-ls
 
 go 1.17
 
