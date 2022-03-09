@@ -17,7 +17,7 @@ linters:
 
 linters-settings:
   goimports:
-    local-prefixes: github.com/snyk/snyk-lsp
+    local-prefixes: github.com/snyk/snyk-ls
 
 output:
   format: tab

@@ -10,8 +10,8 @@ import (
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	lsp2 "github.com/snyk/snyk-lsp/lsp"
-	"github.com/snyk/snyk-lsp/util"
+	lsp2 "github.com/snyk/snyk-ls/lsp"
+	"github.com/snyk/snyk-ls/util"
 )
 
 func Test_HandleFile(t *testing.T) {

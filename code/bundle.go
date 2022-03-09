@@ -8,8 +8,8 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-lsp/lsp"
-	"github.com/snyk/snyk-lsp/util"
+	"github.com/snyk/snyk-ls/lsp"
+	"github.com/snyk/snyk-ls/util"
 )
 
 var (

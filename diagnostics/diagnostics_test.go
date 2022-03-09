@@ -6,8 +6,8 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-lsp/code"
-	"github.com/snyk/snyk-lsp/lsp"
+	"github.com/snyk/snyk-ls/code"
+	"github.com/snyk/snyk-ls/lsp"
 )
 
 var (

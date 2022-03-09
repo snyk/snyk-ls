@@ -10,7 +10,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-lsp/util"
+	"github.com/snyk/snyk-ls/util"
 )
 
 const (

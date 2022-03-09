@@ -8,7 +8,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-lsp/util"
+	"github.com/snyk/snyk-ls/util"
 )
 
 func Test_shouldSetLogLevelViaFlag(t *testing.T) {
