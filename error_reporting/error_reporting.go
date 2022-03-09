@@ -3,9 +3,10 @@ package error_reporting
 import (
 	"time"
 
+	"github.com/snyk/snyk-ls/config"
+
 	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog/log"
-	"github.com/snyk/snyk-ls/config"
 )
 
 const sentryDsn = "https://f760a2feb30c40198cef550edf6221de@o30291.ingest.sentry.io/6242547"
@@ -26,7 +27,7 @@ func InitErrorReporting() {
 }
 
 func FlushErrorReporting() {
-	// Set the timeout to the maximum duration the program can afford to wait.
+	// Set the timeout to the maximum duration the program can afford to wait
 	defer sentry.Flush(2 * time.Second)
 }
 

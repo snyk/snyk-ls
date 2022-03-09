@@ -4,8 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/getsentry/sentry-go"
 	"github.com/snyk/snyk-ls/config"
+
+	"github.com/getsentry/sentry-go"
 	"github.com/stretchr/testify/assert"
 )
 
