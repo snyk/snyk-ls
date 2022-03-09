@@ -54,7 +54,6 @@ jobs:
         run: |
           git tag "v$(git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)"
           git push --tags
-          sudo mv snyk-linux* /usr/local/bin/
 
       - name: Release binaries with GoReleaser
         uses: goreleaser/goreleaser-action@v2
