@@ -45,7 +45,7 @@ jobs:
         env:
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
         run: |
-          snyk test
+          snyk monitor
           snyk code test
 
       - name: Check if repo left dirty
