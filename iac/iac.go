@@ -12,8 +12,8 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/lsp"
-	"github.com/snyk/snyk-ls/util"
 )
 
 var (
@@ -78,7 +78,7 @@ func fetch(path string) ([]lsp.Diagnostic, []sglsp.CodeLens, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	cmd := exec.Command(util.CliPath(), "iac", "test", absolutePath, "--json")
+	cmd := exec.Command(environment.CliPath(), "iac", "test", absolutePath, "--json")
 	log.Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
 	resBytes, err := cmd.CombinedOutput()
 	log.Debug().Msg(fmt.Sprintf("IAC: response: %s", resBytes))
@@ -128,7 +128,7 @@ func convertDiagnostics(res testResult) []lsp.Diagnostic {
 		description := issue.IacDescription.Issue
 		impact := issue.IacDescription.Impact
 		resolve := issue.IacDescription.Resolve
-		if util.Format == util.FormatHtml {
+		if environment.Format == environment.FormatHtml {
 			title = string(markdown.ToHTML([]byte(title), nil, nil))
 			description = string(markdown.ToHTML([]byte(description), nil, nil))
 			impact = string(markdown.ToHTML([]byte(impact), nil, nil))

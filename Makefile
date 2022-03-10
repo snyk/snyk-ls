@@ -1,5 +1,5 @@
 # project variables
-PROJECT_NAME := snyk-lsp
+PROJECT_NAME := snyk-ls
 
 # build variables
 .DEFAULT_GOAL = test
@@ -43,16 +43,18 @@ build:
 	@echo "    running go build for GOOS=$(DEV_GOOS) GOARCH=$(DEV_GOARCH)"
 # workaround for missing .exe extension on Windows
 ifeq ($(OS),Windows_NT)
-	@go build -o $(BUILD_DIR)/$(PROJECT_NAME).$(DEV_GOOS).$(DEV_GOARCH).exe
+	@go build -o $(BUILD_DIR)/$(PROJECT_NAME).$(DEV_GOOS).$(DEV_GOARCH).exe \
+		-ldflags='-X 'github.com/snyk/snyk-ls/config.Development=true''
 else
-	@go build -o $(BUILD_DIR)/$(PROJECT_NAME).$(DEV_GOOS).$(DEV_GOARCH)
+	@go build -o $(BUILD_DIR)/$(PROJECT_NAME).$(DEV_GOOS).$(DEV_GOARCH) \
+		-ldflags='-X 'github.com/snyk/snyk-ls/config.Development=true''
 endif
 
 ## run: Compile and run LSP server.
 .PHONY: run
 run:
 	@echo "==> Running Snyk LSP server..."
-	@go run main.go
+	@go run main.go --reportErrors
 
 help: Makefile
 	@echo "Usage: make <command>"

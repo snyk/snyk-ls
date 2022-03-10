@@ -12,8 +12,8 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/lsp"
-	"github.com/snyk/snyk-ls/util"
 )
 
 var (
@@ -93,7 +93,7 @@ func callSnykCLI(doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(util.CliPath(), "test", "--file="+absolutePath, "--json")
+	cmd := exec.Command(environment.CliPath(), "test", "--file="+absolutePath, "--json")
 	log.Debug().Msg(fmt.Sprintf("OSS: command: %s", cmd))
 	resBytes, err := cmd.CombinedOutput()
 	log.Debug().Msg(fmt.Sprintf("OSS: response: %s", resBytes))
@@ -114,7 +114,7 @@ func callSnykCLI(doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
 	for _, issue := range res.Vulnerabilities {
 		title := issue.Title
 		description := issue.Description
-		if util.Format == util.FormatHtml {
+		if environment.Format == environment.FormatHtml {
 			title = string(markdown.ToHTML([]byte(title), nil, nil))
 			description = string(markdown.ToHTML([]byte(description), nil, nil))
 		}

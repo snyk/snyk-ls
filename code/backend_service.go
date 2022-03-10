@@ -10,8 +10,8 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/lsp"
-	"github.com/snyk/snyk-ls/util"
 )
 
 var (
@@ -66,11 +66,11 @@ func (s *SnykCodeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) 
 
 func (s *SnykCodeBackendService) doCall(method string, path string, requestBody []byte) ([]byte, error) {
 	b := bytes.NewBuffer(requestBody)
-	req, err := http.NewRequest(method, util.ApiUrl()+path, b)
+	req, err := http.NewRequest(method, environment.ApiUrl()+path, b)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Session-Token", util.Token())
+	req.Header.Set("Session-Token", environment.Token())
 	req.Header.Set("Content-Type", "application/json")
 
 	log.Debug().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")

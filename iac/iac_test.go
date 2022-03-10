@@ -11,13 +11,13 @@ import (
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/config/environment"
 	lsp2 "github.com/snyk/snyk-ls/lsp"
-	"github.com/snyk/snyk-ls/util"
 )
 
 func Test_HandleFile(t *testing.T) {
-	util.Load()
-	util.Format = util.FormatHtml
+	environment.Load()
+	environment.Format = environment.FormatHtml
 	path, _ := filepath.Abs("testdata/RBAC.yaml")
 	content, _ := os.ReadFile(path)
 	doc := lsp.TextDocumentItem{

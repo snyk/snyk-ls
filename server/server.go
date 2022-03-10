@@ -12,6 +12,7 @@ import (
 
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/diagnostics"
+	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -61,6 +62,7 @@ func Exit(srv **jrpc2.Server) jrpc2.Handler {
 		log.Info().Str("method", "Exit").Msg("RECEIVING")
 		log.Info().Msg("Stopping server...")
 		(*srv).Stop()
+		error_reporting.FlushErrorReporting()
 		return nil, nil
 	})
 }
@@ -167,7 +169,7 @@ func InitializeHandler(snykCodeBackend code.BackendService) handler.Func {
 				CodeLensProvider: &sglsp.CodeLensOptions{ResolveProvider: true},
 				WorkspaceFoldersServerCapabilities: &lsp.WorkspaceFoldersServerCapabilities{
 					Supported:           true,
-					ChangeNotifications: "snyk-lsp",
+					ChangeNotifications: "snyk-ls",
 				},
 			},
 		}, nil
