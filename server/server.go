@@ -35,6 +35,7 @@ func Start() {
 		"shutdown":                       Shutdown(),
 		"exit":                           Exit(&srv),
 		"textDocument/codeLens":          TextDocumentCodeLens(),
+		"textDocument/codeAction":        TextDocumentCodeAction(),
 		// "codeLens/resolve":               codeLensResolve(&server),
 	}
 
@@ -47,6 +48,43 @@ func Start() {
 
 	err := srv.Wait()
 	log.Err(err).Msg("Exiting...")
+}
+
+func TextDocumentCodeAction() handler.Func {
+	return handler.New(func(ctx context.Context, params sglsp.CodeActionParams) ([]lsp.CodeAction, error) {
+		log.Info().Str("method", "TextDocumentCodeAction").Interface("params", params).Msg("RECEIVING")
+
+		var codeActions []lsp.CodeAction // []
+
+		editMap := make(map[string][]sglsp.TextEdit)
+		textEdits := []sglsp.TextEdit{}
+
+		newRange := sglsp.Range{
+			Start: sglsp.Position{Line: params.Range.Start.Line, Character: params.Range.End.Character - 1},
+			End: sglsp.Position{
+				Line:      params.Range.End.Line,
+				Character: params.Range.End.Character,
+			},
+		}
+
+		edit := sglsp.TextEdit{
+			Range:   newRange,
+			NewText: "14",
+		}
+
+		textEdits = append(textEdits, edit)
+		editMap[string(params.TextDocument.URI)] = textEdits
+
+		codeActions = append(codeActions, lsp.CodeAction{
+			Title: "Fix that thing",
+			Kind:  sglsp.CAKQuickFix,
+			Edit: sglsp.WorkspaceEdit{
+				Changes: editMap,
+			},
+		})
+
+		return codeActions, nil
+	})
 }
 
 func Shutdown() jrpc2.Handler {
@@ -171,6 +209,7 @@ func InitializeHandler(snykCodeBackend code.BackendService) handler.Func {
 					Supported:           true,
 					ChangeNotifications: "snyk-ls",
 				},
+				CodeActionProvider: true,
 			},
 		}, nil
 	})
