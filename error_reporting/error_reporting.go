@@ -14,7 +14,7 @@ const sentryDsn = "https://f760a2feb30c40198cef550edf6221de@o30291.ingest.sentry
 func InitErrorReporting() {
 	err := sentry.Init(sentry.ClientOptions{
 		Dsn:         sentryDsn,
-		Environment: getEnvironment(),
+		Environment: environment(),
 		Release:     config.Version,
 		Debug:       config.IsDevelopment,
 		BeforeSend:  beforeSend,
@@ -46,7 +46,7 @@ func beforeSend(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
 	return nil
 }
 
-func getEnvironment() string {
+func environment() string {
 	if config.IsDevelopment {
 		return "development"
 	} else {

@@ -22,14 +22,14 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 	assert.True(t, captured)
 }
 
-func TestErrorReporting_GetEnvironment(t *testing.T) {
+func TestErrorReporting_Environment(t *testing.T) {
 	config.IsDevelopment = true
-	environment := getEnvironment()
-	assert.Equal(t, "development", environment)
+	curEnvironment := environment()
+	assert.Equal(t, "development", curEnvironment)
 
 	config.IsDevelopment = false
-	environment = getEnvironment()
-	assert.Equal(t, "production", environment)
+	curEnvironment = environment()
+	assert.Equal(t, "production", curEnvironment)
 }
 
 func TestErrorReporting_BeforeSend(t *testing.T) {
