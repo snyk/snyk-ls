@@ -47,3 +47,8 @@ jobs:
         run: |
           snyk test
           snyk code test
+
+      - name: Check if repo left dirty
+        run: |
+          [[ -n $(git status -s) ]] && exit 1
+
