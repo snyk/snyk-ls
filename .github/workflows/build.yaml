@@ -51,5 +51,10 @@ jobs:
       - name: Check if repo left dirty
         run: |
           GIT_STATUS=$(git status -s)
-          [[ -n $GIT_STATUS ]] && echo $GIT_STATUS && exit 1
-
+          echo $GIT_STATUS
+          if [[ "" == $GIT_STATUS ]]
+          then
+            exit 0
+          else
+            exit 1
+          fi
