@@ -1,4 +1,4 @@
-# Snyk Language Server (Snyk-LSP)
+# Snyk Language Server (Snyk-LS)
 [![Build Go binaries](https://github.com/snyk/snyk-ls/actions/workflows/build.yaml/badge.svg)](https://github.com/snyk/snyk-ls/actions/workflows/build.yaml)
 [![Release Go binaries](https://github.com/snyk/snyk-ls/actions/workflows/release.yaml/badge.svg)](https://github.com/snyk/snyk-ls/actions/workflows/release.yaml)
 
@@ -20,7 +20,7 @@ Right now the LSP supports the following actions:
 ### Download
 
 The build workflow stores the generated executables, so that they can be
-downloaded [here](https://github.com/snyk/snyk-lsp/releases/tag/latest). Just select the release you want the build
+downloaded [here](https://github.com/snyk/snyk-ls/releases/tag/latest). Just select the release you want the build
 artefacts from and download the zip file attached to it. Currently, executables for Windows, macOS and Linux are
 generated.
 
@@ -29,7 +29,7 @@ generated.
 - Install `go 1.17.5` or higher, set the `GOPATH` and `GOROOT`
 - Enter the root directory of this repository
 - Execute `go get ./...` to download all dependencies
-- Execute `go build && go install` to produce a `snyk-lsp` binary
+- Execute `go build && go install` to produce a `snyk-ls` binary
 - Download Snyk CLI at :
     - macOS: https://static.snyk.io/cli/latest/snyk-macos
     - Windows: https://static.snyk.io/cli/latest/snyk-win.exe
@@ -62,7 +62,7 @@ function:
 
 To automatically add these variables to the environment, Snyk LSP searches for the following files, with the order
 determining precedence. If the executable is not called from an already configured environment (e.g. via
-`zsh -i -c 'snyk-lsp'`), you can specify a config file with the `-c` command line flag for setting the above mentioned
+`zsh -i -c 'snyk-ls'`), you can specify a config file with the `-c` command line flag for setting the above mentioned
 variables. Snyk LSP reads the following files in the given precedence and order, not overwriting the already loaded
 variables.
 
@@ -114,7 +114,7 @@ export DEEPROXY_API_URL
 
 ## Configure your client
 See [here](https://docs.google.com/document/d/1nUAt4ckza1y1PEE3p4BUsnlmQkE4ltuYURJkYeusYpA/) for details.
-You will at least have to update the path to the snyk-lsp executable.
+You will at least have to update the path to the snyk-ls executable.
 
 ## Code Structure
 ```
@@ -139,14 +139,14 @@ go test ./...
 The output should look like this (it is running against the Snyk Code API and using the real CLI):
 
 ```
-?       github.com/snyk/snyk-lsp        [no test files]
-ok      github.com/snyk/snyk-lsp/code   24.201s
-ok      github.com/snyk/snyk-lsp/diagnostics    26.590s
-ok      github.com/snyk/snyk-lsp/iac    25.780s
-?       github.com/snyk/snyk-lsp/lsp    [no test files]
-ok      github.com/snyk/snyk-lsp/oss    22.427s
-ok      github.com/snyk/snyk-lsp/server 48.558s
-ok      github.com/snyk/snyk-lsp/util   9.562s
+?       github.com/snyk/snyk-ls        [no test files]
+ok      github.com/snyk/snyk-ls/code   24.201s
+ok      github.com/snyk/snyk-ls/diagnostics    26.590s
+ok      github.com/snyk/snyk-ls/iac    25.780s
+?       github.com/snyk/snyk-ls/lsp    [no test files]
+ok      github.com/snyk/snyk-ls/oss    22.427s
+ok      github.com/snyk/snyk-ls/server 48.558s
+ok      github.com/snyk/snyk-ls/util   9.562s
 ```
 
 ## Test Github Action locally
