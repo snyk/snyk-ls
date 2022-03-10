@@ -35,7 +35,7 @@ builds:
       - goarch: arm64
         goos: windows
     ldflags:
-      - -s -w -X github.com/snyk/snyk-lsp/config.Version={{.Version}}
+      - -s -w -X github.com/snyk/snyk-ls/config.Version={{.Version}}
     mod_timestamp: "{{ .CommitTimestamp }}"
     hooks:
       post:
