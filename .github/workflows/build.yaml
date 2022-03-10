@@ -40,3 +40,11 @@ jobs:
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
         run: |
           make clean test
+
+      - name: Snyk
+        env:
+          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+        run: |
+          snyk test
+          snyk code test
