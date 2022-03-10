@@ -40,3 +40,21 @@ jobs:
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
         run: |
           make clean test
+
+      - name: Snyk
+        env:
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+        run: |
+          snyk monitor
+          snyk code test
+
+      - name: Check if repo left dirty
+        run: |
+          GIT_STATUS=$(git status -s)
+          echo $GIT_STATUS
+          if [[ "" == $GIT_STATUS ]]
+          then
+            exit 0
+          else
+            exit 1
+          fi
