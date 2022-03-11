@@ -23,8 +23,20 @@ var (
 	configLoaded = false
 	Format       = "md"
 	ConfigFile   = ""
-	cliFileName  = "snyk"
+	cliFileName  = getSnykFileName()
 )
+
+func getSnykFileName() string {
+	var prefix = "snyk-"
+	switch runtime.GOOS {
+	case "darwin":
+		return prefix + "macos"
+	case "windows":
+		return prefix + runtime.GOOS + ".exe"
+	default:
+		return prefix + runtime.GOOS
+	}
+}
 
 func getValue(key string) string {
 	if !configLoaded {
@@ -99,7 +111,7 @@ func addSnykCliPathToEnv() {
 		cliFileName += ".exe"
 	}
 
-	snykPath, err := exec.LookPath("snyk")
+	snykPath, err := exec.LookPath(cliFileName)
 	if err == nil {
 		err := os.Setenv(cliPathKey, snykPath)
 		if err != nil {

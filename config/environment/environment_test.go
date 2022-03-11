@@ -3,7 +3,6 @@ package environment
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -67,10 +66,7 @@ func Test_addSnykCliPathToEnv_should_respect_cli_path_in_env(t *testing.T) {
 }
 
 func createDummyCliFile(t *testing.T, temp string) string {
-	cliName := "snyk"
-	if runtime.GOOS == "windows" {
-		cliName += ".exe"
-	}
+	cliName := getSnykFileName()
 	cliFile, err := os.Create(filepath.Join(temp, cliName))
 	if err != nil {
 		assert.Fail(t, "Couldn't create dummy cli file")
