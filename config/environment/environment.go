@@ -32,7 +32,13 @@ func getSnykFileName() string {
 	case "darwin":
 		return prefix + "macos"
 	case "windows":
-		return prefix + runtime.GOOS + ".exe"
+		return prefix + "win.exe"
+	case "linux":
+		if runtime.GOARCH == "amd64" {
+			return prefix + "linux"
+		} else {
+			return prefix + "linux-arm64"
+		}
 	default:
 		return prefix + runtime.GOOS
 	}
