@@ -113,10 +113,6 @@ func addSnykCliPathToEnv() {
 		return
 	}
 
-	if runtime.GOOS == "windows" {
-		cliFileName += ".exe"
-	}
-
 	snykPath, err := exec.LookPath(cliFileName)
 	if err == nil {
 		err := os.Setenv(cliPathKey, snykPath)
