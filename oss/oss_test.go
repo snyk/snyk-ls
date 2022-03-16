@@ -46,7 +46,7 @@ func Test_FindRange(t *testing.T) {
 	foundRange := findRange(issue, doc)
 	assert.Equal(t, 3, foundRange.Start.Line)
 	assert.Equal(t, 20, foundRange.Start.Character)
-	assert.Equal(t, 32, foundRange.End.Character)
+	assert.Equal(t, 31, foundRange.End.Character)
 }
 
 func Test_introducingPackageAndVersion(t *testing.T) {
