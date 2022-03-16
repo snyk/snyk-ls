@@ -145,7 +145,11 @@ func findRange(issue ossIssue, doc sglsp.TextDocumentItem) sglsp.Range {
 	case "npm":
 		finder = &NpmRangeFinder{doc: doc}
 	case "maven":
-		finder = &MavenRangeFinder{doc: doc}
+		if strings.HasSuffix(string(doc.URI), "pom.xml") {
+			finder = &MavenRangeFinder{doc: doc}
+		} else {
+			finder = &DefaultFinder{doc: doc}
+		}
 	default:
 		finder = &DefaultFinder{doc: doc}
 	}
