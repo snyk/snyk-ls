@@ -39,6 +39,16 @@ func setup() (string, []byte) {
 	return path, content
 }
 
+func Test_FindRange(t *testing.T) {
+	issue := mavenTestIssue()
+	content := "0\n1\n2\n  implementation 'a:test:4.17.4'"
+	doc := sglsp.TextDocumentItem{URI: "file://build.gradle", LanguageID: "groovy", Text: content}
+	foundRange := findRange(issue, doc)
+	assert.Equal(t, 3, foundRange.Start.Line)
+	assert.Equal(t, 20, foundRange.Start.Character)
+	assert.Equal(t, 32, foundRange.End.Character)
+}
+
 func Test_introducingPackageAndVersion(t *testing.T) {
 	var issue = ossIssue{
 		Id:             "testIssue",
@@ -59,6 +69,14 @@ func Test_introducingPackageAndVersion(t *testing.T) {
 }
 
 func Test_introducingPackageAndVersionJava(t *testing.T) {
+	issue := mavenTestIssue()
+
+	actualPackage, actualVersion := introducingPackageAndVersion(issue)
+	assert.Equal(t, "4.17.4", actualVersion)
+	assert.Equal(t, "test", actualPackage)
+}
+
+func mavenTestIssue() ossIssue {
 	var issue = ossIssue{
 		Id:             "testIssue",
 		Name:           "SNYK-TEST-ISSUE-1",
@@ -71,8 +89,5 @@ func Test_introducingPackageAndVersionJava(t *testing.T) {
 		PackageManager: "maven",
 		From:           []string{"goof@1.0.1", "a:test@4.17.4"},
 	}
-
-	actualPackage, actualVersion := introducingPackageAndVersion(issue)
-	assert.Equal(t, "4.17.4", actualVersion)
-	assert.Equal(t, "test", actualPackage)
+	return issue
 }
