@@ -20,9 +20,10 @@ func (f *DefaultFinder) Find(issue ossIssue) sglsp.Range {
 		}
 
 		if strings.Contains(line, searchPackage) {
+			endChar := len(strings.TrimRight(strings.TrimRight(strings.TrimRight(line, " "), "\""), "'"))
 			r := sglsp.Range{
 				Start: sglsp.Position{Line: i, Character: strings.Index(line, searchPackage)},
-				End:   sglsp.Position{Line: i, Character: len(line)},
+				End:   sglsp.Position{Line: i, Character: endChar},
 			}
 			log.Debug().Str("package", searchPackage).
 				Str("version", version).
