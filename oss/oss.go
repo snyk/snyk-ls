@@ -134,77 +134,50 @@ func callSnykCLI(doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
 	return diagnostics, nil
 }
 
-// todo: this needs extensive testing
-func findRange(issue ossIssue, doc sglsp.TextDocumentItem) sglsp.Range {
-	lines := strings.Split(
-		strings.ReplaceAll(doc.Text, "\r", ""),
-		"\n")
-	var packageName string
-	if len(issue.From) > 1 {
-		split := strings.Split(issue.From[1], "@")
-		packageName = fmt.Sprintf("\"%s\": \"", split[0])
-	} else {
-		packageName = fmt.Sprintf("\"%s\": \"", issue.Name)
-	}
-	var lineStart, lineEnd, characterStart, characterEnd int
-	for i := 0; i < len(lines); i++ {
-		line := lines[i]
-		if issue.PackageManager == "npm" {
-			if strings.HasPrefix(
-				strings.TrimSpace(strings.ReplaceAll(line, "^", "")), packageName) {
-				lineStart = i
-				lineEnd = i
-				characterStart = strings.Index(line, packageName)
-				characterEnd = len(line)
-				break
-			} else if issue.PackageManager == "maven" {
-				// todo respect from
-				packageName = strings.Split(strings.ReplaceAll(packageName, "\"", ""), ":")[1]
-				if filepath.Base(string(doc.URI)) == "pom.xml" &&
-					strings.Contains(
-						line, fmt.Sprintf("<artifactId>%s</artifactId>", packageName),
-					) {
-					lineStart = i
-					lineEnd = i
-					characterStart = strings.Index(line, issue.Name)
-					characterEnd = len(line)
-					break
-				} else {
-					if strings.Contains(line, packageName) {
-						lineStart = i
-						lineEnd = i
-						characterStart = strings.Index(line, packageName)
-						characterEnd = len(line)
-						break
-					}
-				}
-			}
-		}
-	}
-	// desperation run
-	lineStart, lineEnd, characterStart, characterEnd =
-		scanForContains(issue, lineStart, lineEnd, characterStart, characterEnd, lines)
-
-	return sglsp.Range{
-		Start: sglsp.Position{Line: lineStart, Character: characterStart},
-		End:   sglsp.Position{Line: lineEnd, Character: characterEnd},
-	}
+type RangeFinder interface {
+	Find(issue ossIssue) sglsp.Range
 }
 
-func scanForContains(issue ossIssue, lineStart int, lineEnd int, characterStart int, characterEnd int, lines []string) (int, int, int, int) {
-	if lineStart == 0 && lineEnd == 0 && characterStart == 0 && characterEnd == 0 {
-		for i := 0; i < len(lines); i++ {
-			line := lines[i]
-			if strings.Contains(line, issue.Name) {
-				lineStart = i
-				lineEnd = i
-				characterStart = strings.Index(line, issue.Name)
-				characterEnd = characterStart + len(issue.Name)
-				break
-			}
+func findRange(issue ossIssue, doc sglsp.TextDocumentItem) sglsp.Range {
+	var foundRange sglsp.Range
+	var finder RangeFinder
+	switch issue.PackageManager {
+	case "npm":
+		finder = &NpmRangeFinder{doc: doc}
+	case "maven":
+		if strings.HasSuffix(string(doc.URI), "pom.xml") {
+			finder = &MavenRangeFinder{doc: doc}
+		} else {
+			finder = &DefaultFinder{doc: doc}
 		}
+	default:
+		finder = &DefaultFinder{doc: doc}
 	}
-	return lineStart, lineEnd, characterStart, characterEnd
+
+	foundRange = finder.Find(issue)
+	return foundRange
+}
+
+func introducingPackageAndVersion(issue ossIssue) (string, string) {
+	var packageName string
+	var version string
+	if len(issue.From) > 1 {
+		split := strings.Split(issue.From[1], "@")
+		packageSplit := split[0]
+		switch issue.PackageManager {
+		case "maven":
+			index := strings.LastIndex(packageSplit, ":")
+			packageName = packageSplit[index+1:]
+		default:
+			packageName = packageSplit
+		}
+		version = split[1]
+	} else {
+		packageName = issue.Name
+		version = issue.Version
+	}
+	log.Debug().Str("issueId", issue.Id).Str("IntroducingPackage", packageName).Str("IntroducingVersion", version).Msg("Introducing package and version")
+	return packageName, version
 }
 
 type ossIssue struct {
