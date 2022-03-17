@@ -6,6 +6,7 @@ PROJECT_NAME := snyk-ls
 BUILD_DIR := build
 DEV_GOARCH := $(shell go env GOARCH)
 DEV_GOOS := $(shell go env GOOS)
+GOPATH := $(shell go env GOPATH)
 
 
 ## tools: Install required tooling.
@@ -16,6 +17,12 @@ ifeq (,$(wildcard ./.bin/golangci-lint*))
 else
 	@echo "==> Required tooling is already installed"
 endif
+
+##
+.PHONY: goreleaser
+goreleaser:
+	@echo "==> Installing goreleaser..."
+	@go install github.com/goreleaser/goreleaser@latest
 
 ## clean: Delete the build directory
 .PHONY: clean
@@ -53,8 +60,16 @@ endif
 ## run: Compile and run LSP server.
 .PHONY: run
 run:
-	@echo "==> Running Snyk LSP server..."
+	@echo "==> Running Snyk LS server..."
 	@go run main.go --reportErrors
+
+.PHONY: install
+install:
+	@echo "==> Creating Snapshot Release..."
+	@goreleaser release --rm-dist --snapshot
+ifneq ($(OS),Windows_NT)
+	@cp -f build/snyk-ls_$(DEV_GOOS)_$(DEV_GOARCH)/* $(GOPATH)/bin
+endif
 
 help: Makefile
 	@echo "Usage: make <command>"
