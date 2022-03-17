@@ -27,6 +27,8 @@ var (
 		".html":  true,
 		".js":    true,
 		".jsx":   true,
+		".kt":    true,
+		".kts":   true,
 		".ts":    true,
 		".tsx":   true,
 		".vue":   true,
@@ -49,11 +51,26 @@ var (
 	}
 )
 
+const (
+	maxFileSize         = 1024 * 128
+	maxBundleSize       = 1024 * 1024 * 4
+	jsonOverheadRequest = len("{\"files\":{}}")
+	jsonUriOverhead     = len("\"\":{}")
+	jsonHashSizePerFile = len("\"hash\":\"0123456789012345678901234567890123456789012345678901234567890123\"")
+	jsonContentOverhead = len(",\"content\":\"\"")
+	jsonOverheadPerFile = jsonUriOverhead + jsonContentOverhead
+)
+
 type BundleImpl struct {
 	Backend         BackendService
 	bundleHash      string
 	bundleDocuments map[sglsp.DocumentURI]File
 	missingFiles    []sglsp.DocumentURI
+}
+
+type FilesNotAdded struct {
+	bundle *BundleImpl
+	files  map[sglsp.DocumentURI]sglsp.TextDocumentItem
 }
 
 type SnykAnalysisTimeoutError struct {
@@ -64,8 +81,7 @@ func (e SnykAnalysisTimeoutError) Error() string {
 	return e.msg
 }
 
-func (b *BundleImpl) createBundleFromSource(files map[sglsp.DocumentURI]sglsp.TextDocumentItem) error {
-	b.addToBundleDocuments(files)
+func (b *BundleImpl) createBundleFromSource() error {
 	var err error
 	if len(b.bundleDocuments) > 0 {
 		b.bundleHash, b.missingFiles, err = b.Backend.CreateBundle(b.bundleDocuments)
@@ -73,21 +89,42 @@ func (b *BundleImpl) createBundleFromSource(files map[sglsp.DocumentURI]sglsp.Te
 	return err
 }
 
-func (b *BundleImpl) addToBundleDocuments(files map[sglsp.DocumentURI]sglsp.TextDocumentItem) {
+func (b *BundleImpl) addToBundleDocuments(files map[sglsp.DocumentURI]sglsp.TextDocumentItem) FilesNotAdded {
 	if b.bundleDocuments == nil {
 		b.bundleDocuments = make(map[sglsp.DocumentURI]File)
 	}
-	for uri, doc := range files {
-		if extensions[filepath.Ext(string(uri))] {
-			const maxFileSize = 1024*4096 - 1000 // 4MB, -1000 just to be safe
-			if (b.bundleDocuments[uri] == File{} && len(doc.Text) > 0 && len(doc.Text) < maxFileSize) {
-				b.bundleDocuments[uri] = File{
-					Hash:    util.Hash(doc.Text),
-					Content: doc.Text,
+
+	var nonAddedFiles = make(map[sglsp.DocumentURI]sglsp.TextDocumentItem)
+	for _, doc := range files {
+		if extensions[filepath.Ext(string(doc.URI))] {
+			if len(doc.Text) > 0 && len(doc.Text) <= maxFileSize {
+				file := b.getFileFrom(doc)
+				if b.canAdd(doc) {
+					log.Debug().Str("uri", string(doc.URI)).Str("bundle", b.bundleHash).Msg("added to bundle")
+					b.bundleDocuments[doc.URI] = file
+				} else {
+					log.Debug().Str("uri", string(doc.URI)).Str("bundle", b.bundleHash).Msg("not added to bundle")
+					nonAddedFiles[doc.URI] = doc
 				}
 			}
 		}
 	}
+	if len(nonAddedFiles) > 0 {
+		return FilesNotAdded{bundle: b, files: nonAddedFiles}
+	} else {
+		return FilesNotAdded{}
+	}
+}
+
+func (b *BundleImpl) getFileFrom(doc sglsp.TextDocumentItem) File {
+	return File{
+		Hash:    util.Hash(doc.Text),
+		Content: doc.Text,
+	}
+}
+
+func (b *BundleImpl) canAdd(doc sglsp.TextDocumentItem) bool {
+	return b.getTotalDocPayloadSize(doc.URI, b.getFileFrom(doc))+b.getSize() < maxBundleSize
 }
 
 func (b *BundleImpl) extendBundleFromSource(files map[sglsp.DocumentURI]sglsp.TextDocumentItem) error {
@@ -110,18 +147,20 @@ func (b *BundleImpl) DiagnosticData(
 	defer wg.Done()
 	defer log.Debug().Str("method", "DiagnosticData").Msg("done.")
 	log.Debug().Str("method", "DiagnosticData").Msg("started.")
-	var err error
+
+	filesNotAdded := b.addToBundleDocuments(registeredDocuments)
+	if filesNotAdded.files != nil {
+		return // TODO bundle split!
+	}
 
 	if b.bundleHash == "" {
-		// we don't have missing files, as we're creating from source
-		err = b.createBundleFromSource(registeredDocuments)
+		err := b.createBundleFromSource()
 		if err != nil {
 			log.Error().Err(err).Str("method", "DiagnosticData").Msg("error while creating bundle...")
 			dChan <- lsp.DiagnosticResult{Err: err}
 			return
 		}
 	} else {
-		// we don't have missing files, as we're creating from source
 		err := b.extendBundleFromSource(registeredDocuments)
 		if err != nil {
 			log.Error().Err(err).Str("method", "DiagnosticData").Msg("error extending bundle...")
@@ -168,4 +207,20 @@ func (b *BundleImpl) DiagnosticData(
 			time.Sleep(1 * time.Second)
 		}
 	}
+}
+
+func (b *BundleImpl) getSize() int {
+	if len(b.bundleDocuments) == 0 {
+		return 0
+	}
+	jsonCommasForFiles := len(b.bundleDocuments) - 1
+	var size = jsonOverheadRequest + jsonCommasForFiles // if more than one file, they are separated by commas in the req
+	for uri, file := range b.bundleDocuments {
+		size += b.getTotalDocPayloadSize(uri, file)
+	}
+	return size
+}
+
+func (b *BundleImpl) getTotalDocPayloadSize(uri sglsp.DocumentURI, file File) int {
+	return jsonHashSizePerFile + jsonOverheadPerFile + len([]byte(uri)) + len([]byte(file.Content))
 }
