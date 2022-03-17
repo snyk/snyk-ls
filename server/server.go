@@ -22,14 +22,14 @@ var (
 
 func Start() {
 	var srv *jrpc2.Server
-	var snykCodeBackendService code.SnykCodeBackendService
+	diagnostics.CodeBackend = &code.SnykCodeBackendService{}
 
 	lspHandlers := handler.Map{
-		"initialize":                     InitializeHandler(&snykCodeBackendService),
-		"textDocument/didOpen":           TextDocumentDidOpenHandler(&srv, &snykCodeBackendService),
+		"initialize":                     InitializeHandler(),
+		"textDocument/didOpen":           TextDocumentDidOpenHandler(&srv),
 		"textDocument/didChange":         TextDocumentDidChangeHandler(),
 		"textDocument/didClose":          TextDocumentDidCloseHandler(),
-		"textDocument/didSave":           TextDocumentDidSaveHandler(&srv, &snykCodeBackendService),
+		"textDocument/didSave":           TextDocumentDidSaveHandler(&srv),
 		"textDocument/willSave":          TextDocumentWillSaveHandler(),
 		"textDocument/willSaveWaitUntil": TextDocumentWillSaveWaitUntilHandler(),
 		"shutdown":                       Shutdown(),
@@ -89,8 +89,8 @@ func TextDocumentDidChangeHandler() handler.Func {
 	})
 }
 
-func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv **jrpc2.Server, backendService code.BackendService) {
-	diags := diagnostics.GetDiagnostics(uri, backendService)
+func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv **jrpc2.Server) {
+	diags := diagnostics.GetDiagnostics(uri)
 	if diags != nil {
 		diagnosticsParams := lsp.PublishDiagnosticsParams{
 			URI:         uri,
@@ -108,22 +108,22 @@ func logError(err error, method string) {
 	}
 }
 
-func TextDocumentDidOpenHandler(srv **jrpc2.Server, backendService code.BackendService) handler.Func {
+func TextDocumentDidOpenHandler(srv **jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidOpenTextDocumentParams) (interface{}, error) {
 		log.Info().Str("method", "TextDocumentDidOpenHandler").Interface("params", params).Msg("RECEIVING")
 		diagnostics.RegisterDocument(params.TextDocument)
-		PublishDiagnostics(ctx, params.TextDocument.URI, srv, backendService)
+		PublishDiagnostics(ctx, params.TextDocument.URI, srv)
 		return nil, nil
 	})
 }
 
-func TextDocumentDidSaveHandler(srv **jrpc2.Server, backendService code.BackendService) handler.Func {
+func TextDocumentDidSaveHandler(srv **jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidSaveTextDocumentParams) (interface{}, error) {
 		log.Info().Str("method", "TextDocumentDidSaveHandler").Interface("params", params).Msg("RECEIVING")
 		// clear cache when saving and get fresh diagnostics
 		diagnostics.ClearDiagnosticsCache(params.TextDocument.URI)
 		diagnostics.ClearLenses(params.TextDocument.URI)
-		PublishDiagnostics(ctx, params.TextDocument.URI, srv, backendService)
+		PublishDiagnostics(ctx, params.TextDocument.URI, srv)
 		return nil, nil
 	})
 }
@@ -150,11 +150,11 @@ func TextDocumentDidCloseHandler() handler.Func {
 	})
 }
 
-func InitializeHandler(snykCodeBackend code.BackendService) handler.Func {
+func InitializeHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.InitializeParams) (interface{}, error) {
 		log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
 		clientParams = params
-		go diagnostics.GetDiagnostics(clientParams.RootURI, snykCodeBackend)
+		go diagnostics.GetDiagnostics(clientParams.RootURI)
 		return lsp.InitializeResult{
 			Capabilities: lsp.ServerCapabilities{
 				TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{

@@ -63,14 +63,13 @@ const (
 
 type BundleImpl struct {
 	Backend         BackendService
-	bundleHash      string
+	BundleHash      string
 	bundleDocuments map[sglsp.DocumentURI]File
 	missingFiles    []sglsp.DocumentURI
 }
 
 type FilesNotAdded struct {
-	bundle *BundleImpl
-	files  map[sglsp.DocumentURI]sglsp.TextDocumentItem
+	Files map[sglsp.DocumentURI]sglsp.TextDocumentItem
 }
 
 type SnykAnalysisTimeoutError struct {
@@ -84,12 +83,12 @@ func (e SnykAnalysisTimeoutError) Error() string {
 func (b *BundleImpl) createBundleFromSource() error {
 	var err error
 	if len(b.bundleDocuments) > 0 {
-		b.bundleHash, b.missingFiles, err = b.Backend.CreateBundle(b.bundleDocuments)
+		b.BundleHash, b.missingFiles, err = b.Backend.CreateBundle(b.bundleDocuments)
 	}
 	return err
 }
 
-func (b *BundleImpl) addToBundleDocuments(files map[sglsp.DocumentURI]sglsp.TextDocumentItem) FilesNotAdded {
+func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]sglsp.TextDocumentItem) FilesNotAdded {
 	if b.bundleDocuments == nil {
 		b.bundleDocuments = make(map[sglsp.DocumentURI]File)
 	}
@@ -100,17 +99,17 @@ func (b *BundleImpl) addToBundleDocuments(files map[sglsp.DocumentURI]sglsp.Text
 			if len(doc.Text) > 0 && len(doc.Text) <= maxFileSize {
 				file := b.getFileFrom(doc)
 				if b.canAdd(doc) {
-					log.Debug().Str("uri", string(doc.URI)).Str("bundle", b.bundleHash).Msg("added to bundle")
+					log.Debug().Str("uri", string(doc.URI)).Str("bundle", b.BundleHash).Msg("added to bundle")
 					b.bundleDocuments[doc.URI] = file
 				} else {
-					log.Debug().Str("uri", string(doc.URI)).Str("bundle", b.bundleHash).Msg("not added to bundle")
+					log.Debug().Str("uri", string(doc.URI)).Str("bundle", b.BundleHash).Msg("not added to bundle")
 					nonAddedFiles[doc.URI] = doc
 				}
 			}
 		}
 	}
 	if len(nonAddedFiles) > 0 {
-		return FilesNotAdded{bundle: b, files: nonAddedFiles}
+		return FilesNotAdded{Files: nonAddedFiles}
 	} else {
 		return FilesNotAdded{}
 	}
@@ -127,19 +126,16 @@ func (b *BundleImpl) canAdd(doc sglsp.TextDocumentItem) bool {
 	return b.getTotalDocPayloadSize(doc.URI, b.getFileFrom(doc))+b.getSize() < maxBundleSize
 }
 
-func (b *BundleImpl) extendBundleFromSource(files map[sglsp.DocumentURI]sglsp.TextDocumentItem) error {
-	var err error
-	b.addToBundleDocuments(files)
+func (b *BundleImpl) extendBundleFromSource() error {
 	var removeFiles []sglsp.DocumentURI
-	// todo determine which files to change
+	var err error
 	if len(b.bundleDocuments) > 0 {
-		b.bundleHash, b.missingFiles, err = b.Backend.ExtendBundle(b.bundleHash, b.bundleDocuments, removeFiles)
+		b.BundleHash, b.missingFiles, err = b.Backend.ExtendBundle(b.BundleHash, b.bundleDocuments, removeFiles)
 	}
 	return err
 }
 
 func (b *BundleImpl) DiagnosticData(
-	registeredDocuments map[sglsp.DocumentURI]sglsp.TextDocumentItem,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
 	clChan chan lsp.CodeLensResult,
@@ -148,31 +144,23 @@ func (b *BundleImpl) DiagnosticData(
 	defer log.Debug().Str("method", "DiagnosticData").Msg("done.")
 	log.Debug().Str("method", "DiagnosticData").Msg("started.")
 
-	filesNotAdded := b.addToBundleDocuments(registeredDocuments)
-	if filesNotAdded.files != nil {
-		return // TODO bundle split!
-	}
-
-	if b.bundleHash == "" {
-		err := b.createBundleFromSource()
+	err := b.uploadDocuments()
+	if err != nil {
 		if err != nil {
-			log.Error().Err(err).Str("method", "DiagnosticData").Msg("error while creating bundle...")
-			dChan <- lsp.DiagnosticResult{Err: err}
-			return
-		}
-	} else {
-		err := b.extendBundleFromSource(registeredDocuments)
-		if err != nil {
-			log.Error().Err(err).Str("method", "DiagnosticData").Msg("error extending bundle...")
+			log.Error().Err(err).Str("method", "DiagnosticData").Msg("error creating/extending bundle...")
 			dChan <- lsp.DiagnosticResult{Err: err}
 			return
 		}
 	}
 
+	b.retrieveAnalysis(dChan, clChan)
+}
+
+func (b *BundleImpl) retrieveAnalysis(dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
 	if len(b.bundleDocuments) > 0 {
 		for {
 			start := time.Now()
-			diags, lenses, status, err := b.Backend.RetrieveDiagnostics(b.bundleHash, []sglsp.DocumentURI{}, 0)
+			diags, lenses, status, err := b.Backend.RetrieveDiagnostics(b.BundleHash, []sglsp.DocumentURI{}, 0)
 			if err != nil {
 				log.Error().Err(err).Str("method", "DiagnosticData").Msg("error retrieving diagnostics...")
 				dChan <- lsp.DiagnosticResult{Err: err}
@@ -207,6 +195,16 @@ func (b *BundleImpl) DiagnosticData(
 			time.Sleep(1 * time.Second)
 		}
 	}
+}
+
+func (b *BundleImpl) uploadDocuments() error {
+	var err error
+	if b.BundleHash == "" {
+		err = b.createBundleFromSource()
+	} else {
+		err = b.extendBundleFromSource()
+	}
+	return err
 }
 
 func (b *BundleImpl) getSize() int {

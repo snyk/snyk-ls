@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	lsp2 "github.com/snyk/snyk-ls/lsp"
-	"github.com/snyk/snyk-ls/util"
 )
 
 var (
@@ -28,11 +27,6 @@ var (
 		Version:    3,
 		Text:       "class2",
 	}
-
-	firstBundleFile = File{
-		Hash:    util.Hash(firstDoc.Text),
-		Content: firstDoc.Text,
-	}
 )
 
 func Test_createBundleFromSource_should_return_non_empty_bundle_hash(t *testing.T) {
@@ -40,55 +34,55 @@ func Test_createBundleFromSource_should_return_non_empty_bundle_hash(t *testing.
 	b.bundleDocuments = map[lsp.DocumentURI]File{}
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
-	_ = b.addToBundleDocuments(registeredDocuments)
+	_ = b.AddToBundleDocuments(registeredDocuments)
 	_ = b.createBundleFromSource()
-	assert.NotEqual(t, "", b.bundleHash)
+	assert.NotEqual(t, "", b.BundleHash)
 }
 
-func Test_addToBundleDocuments_should_not_add_document_to_bundle_if_too_big(t *testing.T) {
+func Test_AddToBundleDocuments_should_not_add_document_to_bundle_if_too_big(t *testing.T) {
 	b, registeredDocuments := setupBundleForTesting(128*1024 + 1)
 
-	_ = b.addToBundleDocuments(registeredDocuments)
+	_ = b.AddToBundleDocuments(registeredDocuments)
 
 	assert.Empty(t, b.missingFiles)
 	assert.Empty(t, b.bundleDocuments)
 }
 
-func Test_addToBundleDocuments_should_not_add_document_to_bundle_if_empty(t *testing.T) {
+func Test_AddToBundleDocuments_should_not_add_document_to_bundle_if_empty(t *testing.T) {
 	b, registeredDocuments := setupBundleForTesting(0)
 
-	_ = b.addToBundleDocuments(registeredDocuments)
+	_ = b.AddToBundleDocuments(registeredDocuments)
 
 	assert.Empty(t, b.missingFiles)
 	assert.Empty(t, b.bundleDocuments)
 }
 
-func Test_addToBundleDocuments_should_return_bundle_is_full_error_if_greater_than_max_payload_size(t *testing.T) {
+func Test_AddToBundleDocuments_should_return_bundle_is_full_error_if_greater_than_max_payload_size(t *testing.T) {
 	b, registeredDocuments := setupBundleForTesting(maxFileSize)
 	for i := 0; i < (maxBundleSize / maxFileSize); i++ {
 		uri := lsp.DocumentURI(strconv.Itoa(i) + ".java")
 		registeredDocuments[uri] = lsp.TextDocumentItem{URI: uri, Text: registeredDocuments[secondDoc.URI].Text}
 	}
 
-	filesNotAdded := b.addToBundleDocuments(registeredDocuments)
+	filesNotAdded := b.AddToBundleDocuments(registeredDocuments)
 
-	assert.Len(t, filesNotAdded.files, 2)
+	assert.Len(t, filesNotAdded.Files, 2)
 }
 
-func Test_addToBundleDocuments_should_not_add_unsupported_file_type(t *testing.T) {
+func Test_AddToBundleDocuments_should_not_add_unsupported_file_type(t *testing.T) {
 	b, registeredDocuments := setupBundleForTesting(1) // this adds one file to bundle documents
 	uri := lsp.DocumentURI("1")
 	registeredDocuments[uri] = lsp.TextDocumentItem{URI: uri, Text: registeredDocuments[secondDoc.URI].Text}
 
-	filesNotAdded := b.addToBundleDocuments(registeredDocuments)
+	filesNotAdded := b.AddToBundleDocuments(registeredDocuments)
 
-	assert.Len(t, filesNotAdded.files, 0)
+	assert.Len(t, filesNotAdded.Files, 0)
 	assert.Len(t, b.bundleDocuments, 1)
 }
 
 func Test_getSize_should_return_0_for_empty_bundle(t *testing.T) {
 	b, registeredDocuments := setupBundleForTesting(0)
-	_ = b.addToBundleDocuments(registeredDocuments)
+	_ = b.AddToBundleDocuments(registeredDocuments)
 
 	size := b.getSize()
 
@@ -102,7 +96,7 @@ func Test_getSize_should_return_total_bundle_size(t *testing.T) {
 		Text: "test123",
 	}
 	registeredDocuments[bundleDoc.URI] = bundleDoc
-	_ = b.addToBundleDocuments(registeredDocuments)
+	_ = b.AddToBundleDocuments(registeredDocuments)
 
 	var req = extendBundleRequest{Files: b.bundleDocuments}
 	bytes, err := json.Marshal(req)
@@ -115,27 +109,9 @@ func Test_getSize_should_return_total_bundle_size(t *testing.T) {
 	assert.Equal(t, len(bytes), size)
 }
 
-func Test_extendBundleFromSource_should_add_document_to_bundle(t *testing.T) {
-	b := BundleImpl{Backend: &FakeBackendService{BundleHash: "test-bundle-Hash"}}
-	b.bundleHash = "test-Hash"
-	b.bundleDocuments = map[lsp.DocumentURI]File{}
-	b.bundleDocuments[firstDoc.URI] = firstBundleFile
-	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
-	registeredDocuments[secondDoc.URI] = secondDoc
-
-	secondBundleFile := File{
-		Hash:    util.Hash(secondDoc.Text),
-		Content: secondDoc.Text,
-	}
-
-	_ = b.extendBundleFromSource(registeredDocuments)
-	assert.Empty(t, b.missingFiles)
-	assert.Equal(t, secondBundleFile, b.bundleDocuments[secondDoc.URI])
-}
-
 func setupBundleForTesting(contentSize int) (BundleImpl, map[lsp.DocumentURI]lsp.TextDocumentItem) {
 	b := BundleImpl{Backend: &FakeBackendService{BundleHash: "test-bundle-Hash"}}
-	b.bundleHash = "test-Hash"
+	b.BundleHash = "test-Hash"
 	b.bundleDocuments = map[lsp.DocumentURI]File{}
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 
@@ -153,20 +129,22 @@ func TestCodeBundleImpl_DiagnosticData_should_create_bundle_when_hash_empty(t *t
 	hash := "testHash"
 	backendMock := &FakeBackendService{BundleHash: hash}
 	b := BundleImpl{Backend: backendMock}
-	b.bundleHash = ""
+	b.BundleHash = ""
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
+	b.AddToBundleDocuments(registeredDocuments)
 
 	dChan := make(chan lsp2.DiagnosticResult)
 	clChan := make(chan lsp2.CodeLensResult)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go b.DiagnosticData(registeredDocuments, &wg, dChan, clChan)
+
+	go b.DiagnosticData(&wg, dChan, clChan)
 
 	<-dChan
 	<-clChan
 
-	assert.Equal(t, hash, b.bundleHash)
+	assert.Equal(t, hash, b.BundleHash)
 	assert.Equal(t, 0, len(b.missingFiles))
 
 	// verify that create bundle has been called on backend service
@@ -184,8 +162,8 @@ func TestCodeBundleImpl_DiagnosticData_should_extend_bundle_when_hash_not_empty(
 
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
-	filesNotAdded := b.addToBundleDocuments(registeredDocuments)
-	if filesNotAdded.files != nil {
+	filesNotAdded := b.AddToBundleDocuments(registeredDocuments)
+	if filesNotAdded.Files != nil {
 		assert.Fail(t, "Unexpected inability to add document to bundle", filesNotAdded)
 	}
 
@@ -194,19 +172,20 @@ func TestCodeBundleImpl_DiagnosticData_should_extend_bundle_when_hash_not_empty(
 
 	// now add a doc
 	registeredDocuments[secondDoc.URI] = secondDoc
+	b.AddToBundleDocuments(registeredDocuments)
 
 	// execute
 	dChan := make(chan lsp2.DiagnosticResult)
 	clChan := make(chan lsp2.CodeLensResult)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go b.DiagnosticData(registeredDocuments, &wg, dChan, clChan)
+	go b.DiagnosticData(&wg, dChan, clChan)
 
 	<-dChan
 	<-clChan
 
 	// the bundle hash should be the same
-	assert.Equal(t, backendMock.BundleHash, b.bundleHash)
+	assert.Equal(t, backendMock.BundleHash, b.BundleHash)
 	// the bundle documents should have been updated
 	assert.Equal(t, b.bundleDocuments[secondDoc.URI].Content, secondDoc.Text)
 
@@ -214,7 +193,7 @@ func TestCodeBundleImpl_DiagnosticData_should_extend_bundle_when_hash_not_empty(
 	params := backendMock.GetCallParams(0, ExtendBundleWithSourceOperation)
 	assert.NotNil(t, params)
 	assert.Equal(t, 3, len(params))
-	assert.Equal(t, b.bundleHash, params[0])
+	assert.Equal(t, b.BundleHash, params[0])
 	files := params[1].(map[lsp.DocumentURI]File)
 	assert.Equal(t, files[secondDoc.URI].Content, secondDoc.Text)
 }
@@ -228,12 +207,13 @@ func TestCodeBundleImpl_DiagnosticData_should_retrieve_from_backend(t *testing.T
 	registeredDocuments[firstDoc.URI] = firstDoc
 	diagnosticMap := map[lsp.DocumentURI][]lsp2.Diagnostic{}
 
+	b.AddToBundleDocuments(registeredDocuments)
 	// execute
 	dChan := make(chan lsp2.DiagnosticResult)
 	clChan := make(chan lsp2.CodeLensResult)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go b.DiagnosticData(registeredDocuments, &wg, dChan, clChan)
+	go b.DiagnosticData(&wg, dChan, clChan)
 	result := <-dChan
 	diagnosticMap[result.Uri] = result.Diagnostics
 	<-clChan
@@ -248,7 +228,7 @@ func TestCodeBundleImpl_DiagnosticData_should_retrieve_from_backend(t *testing.T
 	params := backendMock.GetCallParams(0, RetrieveDiagnosticsOperation)
 	assert.NotNil(t, params)
 	assert.Equal(t, 3, len(params))
-	assert.Equal(t, b.bundleHash, params[0])
+	assert.Equal(t, b.BundleHash, params[0])
 	assert.Equal(t, 0, params[2])
 }
 
@@ -259,13 +239,14 @@ func TestCodeBundleImpl_DiagnosticData_should_return_code_lenses(t *testing.T) {
 
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
+	b.AddToBundleDocuments(registeredDocuments)
 
 	// execute
 	dChan := make(chan lsp2.DiagnosticResult)
 	clChan := make(chan lsp2.CodeLensResult)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go b.DiagnosticData(registeredDocuments, &wg, dChan, clChan)
+	go b.DiagnosticData(&wg, dChan, clChan)
 	<-dChan
 
 	codeLensMap := map[lsp.DocumentURI][]lsp.CodeLens{}

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/code"
+	"github.com/snyk/snyk-ls/diagnostics"
 )
 
 var (
@@ -54,14 +56,19 @@ func startServer() server.Local {
 
 	var srv *jrpc2.Server
 
-	var snykCodeBackendService code.FakeBackendService
+	runIntegTest := os.Getenv("INTEG_TEST")
+	if runIntegTest == "" {
+		diagnostics.CodeBackend = &code.FakeBackendService{}
+	} else {
+		diagnostics.CodeBackend = &code.SnykCodeBackendService{}
+	}
 
 	lspHandlers := handler.Map{
-		"initialize":                     InitializeHandler(&snykCodeBackendService),
-		"textDocument/didOpen":           TextDocumentDidOpenHandler(&srv, &snykCodeBackendService),
+		"initialize":                     InitializeHandler(),
+		"textDocument/didOpen":           TextDocumentDidOpenHandler(&srv),
 		"textDocument/didChange":         TextDocumentDidChangeHandler(),
 		"textDocument/didClose":          TextDocumentDidCloseHandler(),
-		"textDocument/didSave":           TextDocumentDidSaveHandler(&srv, &snykCodeBackendService),
+		"textDocument/didSave":           TextDocumentDidSaveHandler(&srv),
 		"textDocument/willSave":          TextDocumentWillSaveHandler(),
 		"textDocument/willSaveWaitUntil": TextDocumentWillSaveWaitUntilHandler(),
 		"shutdown":                       Shutdown(),

@@ -15,8 +15,8 @@ import (
 var (
 	registeredDocuments     = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
-	myBundle                *code.BundleImpl
-	initialized             = false
+	bundles                 []*code.BundleImpl
+	CodeBackend             code.BackendService
 )
 
 func ClearDiagnosticsCache(uri sglsp.DocumentURI) {
@@ -40,12 +40,7 @@ func UnRegisterDocument(file sglsp.DocumentURI) {
 	delete(registeredDocuments, file)
 }
 
-func GetDiagnostics(uri sglsp.DocumentURI, backend code.BackendService) []lsp.Diagnostic {
-	if !initialized {
-		myBundle = &code.BundleImpl{Backend: backend}
-		initialized = true
-	}
-
+func GetDiagnostics(uri sglsp.DocumentURI) []lsp.Diagnostic {
 	// serve from cache
 	diagnosticSlice := documentDiagnosticCache[uri]
 	if len(diagnosticSlice) > 0 {
@@ -73,12 +68,17 @@ func fetch(uri sglsp.DocumentURI) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[s
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	var codeLenses []sglsp.CodeLens
 
-	wg := sync.WaitGroup{}
-	dChan := make(chan lsp.DiagnosticResult, 10)
-	clChan := make(chan lsp.CodeLensResult, 10)
-	wg.Add(3)
+	createBundles(registeredDocuments)
 
-	go myBundle.DiagnosticData(registeredDocuments, &wg, dChan, clChan)
+	wg := sync.WaitGroup{}
+	bundleCount := len(bundles)
+	dChan := make(chan lsp.DiagnosticResult, 2+bundleCount)
+	clChan := make(chan lsp.CodeLensResult, 2+bundleCount)
+	wg.Add(2 + bundleCount)
+
+	for _, myBundle := range bundles {
+		go myBundle.DiagnosticData(&wg, dChan, clChan)
+	}
 	go iac.HandleFile(uri, &wg, dChan, clChan)
 	go oss.HandleFile(registeredDocuments[uri], &wg, dChan, clChan)
 	wg.Wait()
@@ -101,6 +101,28 @@ func fetch(uri sglsp.DocumentURI) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[s
 			return diagnostics, codeLenseCache
 		}
 	}
+}
+
+func createBundles(documents map[sglsp.DocumentURI]sglsp.TextDocumentItem) {
+	var bundle *code.BundleImpl
+	toAdd := documents
+	bundleIndex := len(bundles) - 1
+	for len(toAdd) > 0 {
+		if bundleIndex == -1 {
+			bundle = createBundle()
+			log.Debug().Int("bundleCount", bundleIndex).Str("bundle", bundle.BundleHash).Msg("created new bundle")
+		} else {
+			bundle = bundles[bundleIndex]
+			log.Debug().Int("bundleCount", bundleIndex).Str("bundle", bundle.BundleHash).Msg("re-using bundle ")
+		}
+		toAdd = bundle.AddToBundleDocuments(toAdd).Files
+	}
+}
+
+func createBundle() *code.BundleImpl {
+	bundle := code.BundleImpl{Backend: CodeBackend}
+	bundles = append(bundles, &bundle)
+	return &bundle
 }
 
 func logError(err error, method string) {
