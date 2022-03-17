@@ -99,10 +99,10 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]sglsp.Text
 			if len(doc.Text) > 0 && len(doc.Text) <= maxFileSize {
 				file := b.getFileFrom(doc)
 				if b.canAdd(doc) {
-					log.Debug().Str("uri", string(doc.URI)).Str("bundle", b.BundleHash).Msg("added to bundle")
+					log.Trace().Str("uri", string(doc.URI)).Str("bundle", b.BundleHash).Msg("added to bundle")
 					b.bundleDocuments[doc.URI] = file
 				} else {
-					log.Debug().Str("uri", string(doc.URI)).Str("bundle", b.BundleHash).Msg("not added to bundle")
+					log.Trace().Str("uri", string(doc.URI)).Str("bundle", b.BundleHash).Msg("not added to bundle")
 					nonAddedFiles[doc.URI] = doc
 				}
 			}
@@ -146,11 +146,9 @@ func (b *BundleImpl) DiagnosticData(
 
 	err := b.uploadDocuments()
 	if err != nil {
-		if err != nil {
-			log.Error().Err(err).Str("method", "DiagnosticData").Msg("error creating/extending bundle...")
-			dChan <- lsp.DiagnosticResult{Err: err}
-			return
-		}
+		log.Error().Err(err).Str("method", "DiagnosticData").Msg("error creating/extending bundle...")
+		dChan <- lsp.DiagnosticResult{Err: err}
+		return
 	}
 
 	b.retrieveAnalysis(dChan, clChan)
@@ -169,7 +167,7 @@ func (b *BundleImpl) retrieveAnalysis(dChan chan lsp.DiagnosticResult, clChan ch
 
 			if status == "COMPLETE" {
 				for u, d := range diags {
-					log.Debug().Str("method", "DiagnosticData").Msg("sending diagnostics...")
+					log.Trace().Str("method", "retrieveAnalysis").Str("bundleHash", b.BundleHash).Str("uri", string(u)).Msg("sending diagnostics...")
 					dChan <- lsp.DiagnosticResult{
 						Uri:         u,
 						Diagnostics: d,
@@ -178,7 +176,7 @@ func (b *BundleImpl) retrieveAnalysis(dChan chan lsp.DiagnosticResult, clChan ch
 				}
 
 				for u, l := range lenses {
-					log.Debug().Str("method", "DiagnosticData").Msg("sending code lenses...")
+					log.Trace().Str("method", "retrieveAnalysis").Str("bundleHash", b.BundleHash).Str("uri", string(u)).Msg("sending code lenses...")
 					clChan <- lsp.CodeLensResult{
 						Uri:        u,
 						CodeLenses: l,

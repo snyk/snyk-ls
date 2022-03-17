@@ -3,7 +3,10 @@ package server
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -21,6 +24,7 @@ import (
 )
 
 var (
+	runIntegTest = false
 	ctx          = context.Background()
 	notification *jrpc2.Request
 	doc          = lsp.TextDocumentItem{
@@ -56,11 +60,11 @@ func startServer() server.Local {
 
 	var srv *jrpc2.Server
 
-	runIntegTest := os.Getenv("INTEG_TEST")
-	if runIntegTest == "" {
-		diagnostics.CodeBackend = &code.FakeBackendService{}
-	} else {
+	runIntegTest = os.Getenv("INTEG_TEST") != ""
+	if runIntegTest {
 		diagnostics.CodeBackend = &code.SnykCodeBackendService{}
+	} else {
+		diagnostics.CodeBackend = &code.FakeBackendService{}
 	}
 
 	lspHandlers := handler.Map{
@@ -215,13 +219,13 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 		log.Fatal().Err(err)
 	}
 
-	// should receive diagnostics
-	diagnostics := lsp.PublishDiagnosticsParams{}
+	// should receive diagnosticsParams
+	diagnosticsParams := lsp.PublishDiagnosticsParams{}
 
 	// wait for publish
 	assert.Eventually(t, func() bool { return notification != nil }, 5*time.Second, 10*time.Millisecond)
-	_ = notification.UnmarshalParams(&diagnostics)
-	assert.Equal(t, didOpenParams.TextDocument.URI, diagnostics.URI)
+	_ = notification.UnmarshalParams(&diagnosticsParams)
+	assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
 }
 
 func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
@@ -319,6 +323,84 @@ func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 	assert.Equal(t, 1, len(codeLenses))
 }
 
-// func Test_codeLensResolve_shouldResolve(t *testing.T) {
-//	assert.Fail(t, "Not implemented yet")
-// }
+func Test_IntegrationTestBigProjectScan(t *testing.T) {
+	loc := startServer()
+	defer func(loc server.Local) {
+		_ = loc.Close()
+	}(loc)
+
+	if !runIntegTest {
+		return
+	}
+
+	var cloneTargetDir, err = setupTestRepo()
+	defer os.RemoveAll(cloneTargetDir)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Couldn't setup test repo")
+	}
+
+	// register all files
+	err = filepath.Walk(cloneTargetDir, func(path string, info fs.FileInfo, err error) error {
+		if info.IsDir() {
+			return nil
+		}
+		content, _ := os.ReadFile(path)
+		file := lsp.TextDocumentItem{URI: lsp.DocumentURI("file://" + path), Text: string(content)}
+		diagnostics.RegisterDocument(file)
+		return err
+	})
+	if err != nil {
+		log.Fatal().Err(err).Msg("Error registering files in repo")
+	}
+
+	// set real backend
+	diagnostics.CodeBackend = &code.SnykCodeBackendService{}
+
+	testPath := cloneTargetDir + "/maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
+	testFileContent, err := os.ReadFile(testPath)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Couldn't read file content of test file")
+	}
+	didOpenParams := lsp.DidOpenTextDocumentParams{
+		TextDocument: lsp.TextDocumentItem{
+			URI:  lsp.DocumentURI("file://" + testPath),
+			Text: string(testFileContent),
+		},
+	}
+	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Call failed")
+	}
+
+	// should receive diagnosticsParams
+	diagnosticsParams := lsp.PublishDiagnosticsParams{}
+
+	assert.Eventually(t, func() bool { return notification != nil }, 10*time.Second, 10*time.Millisecond)
+	_ = notification.UnmarshalParams(&diagnosticsParams)
+
+	assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
+	assert.Len(t, diagnosticsParams.Diagnostics, 1)
+	assert.Equal(t, diagnosticsParams.Diagnostics[0].Code, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Code)
+	assert.Equal(t, diagnosticsParams.Diagnostics[0].Range, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Range)
+}
+
+func setupTestRepo() (string, error) {
+	// clone to temp dir - specific version for reproducible test results
+	cloneTargetDir, _ := os.MkdirTemp(os.TempDir(), "integ_test_repo_*")
+	clone := exec.Command("git", "clone", "https://github.com/apache/maven", cloneTargetDir)
+	reset := exec.Command("git", "reset", "--hard", "18725ec1e")
+	reset.Dir = cloneTargetDir
+	clean := exec.Command("git", "clean", "--force")
+	clean.Dir = cloneTargetDir
+
+	output, err := clone.CombinedOutput()
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+	log.Debug().Msg(string(output))
+	output, _ = reset.CombinedOutput()
+	log.Debug().Msg(string(output))
+	output, err = clean.CombinedOutput()
+	log.Debug().Msg(string(output))
+	return cloneTargetDir, err
+}

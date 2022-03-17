@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 
@@ -78,7 +79,12 @@ func (s *SnykCodeBackendService) doCall(method string, path string, requestBody 
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Warn().Err(err).Msg("Couldn't close response body in call to Snyk Code")
+		}
+	}(response.Body)
 	responseBody, err := ioutil.ReadAll(response.Body)
 	log.Debug().Str("responseBody", string(responseBody)).Msg("RECEIVED FROM REMOTE")
 	if err != nil {

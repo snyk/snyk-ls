@@ -68,17 +68,18 @@ func fetch(uri sglsp.DocumentURI) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[s
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	var codeLenses []sglsp.CodeLens
 
-	createBundles(registeredDocuments)
-
 	wg := sync.WaitGroup{}
+	dChan := make(chan lsp.DiagnosticResult, len(registeredDocuments))
+	clChan := make(chan lsp.CodeLensResult, len(registeredDocuments))
+
+	createBundles(registeredDocuments)
 	bundleCount := len(bundles)
-	dChan := make(chan lsp.DiagnosticResult, 2+bundleCount)
-	clChan := make(chan lsp.CodeLensResult, 2+bundleCount)
 	wg.Add(2 + bundleCount)
 
 	for _, myBundle := range bundles {
 		go myBundle.DiagnosticData(&wg, dChan, clChan)
 	}
+
 	go iac.HandleFile(uri, &wg, dChan, clChan)
 	go oss.HandleFile(registeredDocuments[uri], &wg, dChan, clChan)
 	wg.Wait()
@@ -87,12 +88,12 @@ func fetch(uri sglsp.DocumentURI) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[s
 	for {
 		select {
 		case result := <-dChan:
-			log.Debug().Str("method", "fetch").Msg("reading diag from chan.")
+			log.Trace().Str("method", "fetch").Str("uri", string(result.Uri)).Msg("reading diag from chan.")
 			logError(result.Err, "fetch")
 			diagnostics[result.Uri] = append(diagnostics[result.Uri], result.Diagnostics...)
 			documentDiagnosticCache[result.Uri] = diagnostics[result.Uri]
 		case result := <-clChan:
-			log.Debug().Str("method", "fetch").Msg("reading lens from chan.")
+			log.Trace().Str("method", "fetch").Str("uri", string(result.Uri)).Msg("reading lens from chan.")
 			logError(result.Err, "fetch")
 			codeLenses = append(codeLenses, result.CodeLenses...)
 			codeLenseCache[result.Uri] = codeLenses
