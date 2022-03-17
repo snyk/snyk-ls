@@ -11,7 +11,7 @@ type MavenRangeFinder struct {
 	doc lsp.TextDocumentItem
 }
 
-func (m MavenRangeFinder) Find(issue ossIssue) lsp.Range {
+func (m *MavenRangeFinder) Find(issue ossIssue) lsp.Range {
 	searchPackage, version := introducingPackageAndVersion(issue)
 	log.Debug().Interface("issue", issue).Str("searchPackage", searchPackage).Str("searchVersion", version)
 	parser := maven.Parser{}
