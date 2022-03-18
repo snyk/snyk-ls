@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -17,6 +18,18 @@ func TestToken(t *testing.T) {
 	_ = os.Setenv(snykTokenKey, "test")
 
 	assert.NotEqual(t, "", Token())
+}
+
+func Test_SnykCodeTimeoutReturnsTimeoutFromEnvironment(t *testing.T) {
+	_ = os.Setenv(snykCodeTimeoutKey, "1s")
+	duration, _ := time.ParseDuration("1s")
+	assert.Equal(t, duration, SnykCodeTimeout())
+}
+
+func Test_SnykCodeTimeoutReturnsDefaultIfNoEnvVariableFound(t *testing.T) {
+	os.Clearenv()
+	duration, _ := time.ParseDuration("10m")
+	assert.Equal(t, duration, SnykCodeTimeout())
 }
 
 func Test_addSnykCliPathToEnv_should_find_cli_and_add_path_to_env(t *testing.T) {

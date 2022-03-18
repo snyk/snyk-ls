@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/lsp"
 	"github.com/snyk/snyk-ls/util"
 )
@@ -187,7 +188,7 @@ func (b *BundleImpl) retrieveAnalysis(dChan chan lsp.DiagnosticResult, clChan ch
 				}
 				return
 			}
-			if time.Since(start) > 120*time.Second {
+			if time.Since(start) > environment.SnykCodeTimeout() {
 				err = SnykAnalysisTimeoutError{msg: "Analysis Call Timed out."}
 				log.Error().Err(err).Str("method", "DiagnosticData").Msg("timeout...")
 				dChan <- lsp.DiagnosticResult{Err: err}

@@ -5,15 +5,17 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/subosito/gotenv"
 )
 
 const (
-	cliPathKey        = "SNYK_CLI_PATH"
-	snykTokenKey      = "SNYK_TOKEN"
-	deeproxyApiUrlKey = "DEEPROXY_API_URL"
+	cliPathKey         = "SNYK_CLI_PATH"
+	snykTokenKey       = "SNYK_TOKEN"
+	deeproxyApiUrlKey  = "DEEPROXY_API_URL"
+	snykCodeTimeoutKey = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
 
 	FormatHtml = "html"
 	FormatMd   = "md"
@@ -43,6 +45,21 @@ func getSnykFileName() string {
 	default:
 		return prefix + runtime.GOOS
 	}
+}
+
+func SnykCodeTimeout() time.Duration {
+	var snykCodeTimeout time.Duration
+	var err error
+	env := os.Getenv(snykCodeTimeoutKey)
+	if env == "" {
+		snykCodeTimeout = 10 * time.Minute
+	} else {
+		snykCodeTimeout, err = time.ParseDuration(env)
+		if err != nil {
+			log.Err(err).Msg("couldn't convert timeout env variable to integer")
+		}
+	}
+	return snykCodeTimeout
 }
 
 func getValue(key string) string {

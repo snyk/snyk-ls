@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/code"
-	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -70,11 +69,7 @@ func Test_GetDiagnostics_shouldAddCodeLenses(t *testing.T) {
 
 	assert.Equal(t, len(documentDiagnosticCache[doc.URI]), len(diagnostics))
 	lenses, _ := GetCodeLenses(doc.URI)
-	if environment.RunIntegTest {
-		assert.Equal(t, 2, len(lenses))
-	} else {
-		assert.Equal(t, 1, len(lenses))
-	}
+	assert.Equal(t, 1, len(lenses))
 }
 
 func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {

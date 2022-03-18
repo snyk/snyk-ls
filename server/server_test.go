@@ -56,13 +56,13 @@ func didSaveTextParams() lsp.DidSaveTextDocumentParams {
 }
 
 func startServer() server.Local {
-	zerolog.SetGlobalLevel(zerolog.DebugLevel)
-
 	var srv *jrpc2.Server
 
 	if environment.RunIntegTest {
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 		diagnostics.CodeBackend = &code.SnykCodeBackendService{}
 	} else {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 		diagnostics.CodeBackend = &code.FakeBackendService{}
 	}
 
@@ -319,7 +319,11 @@ func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 
 	var codeLenses []lsp.CodeLens
 	_ = rsp.UnmarshalResult(&codeLenses)
-	assert.Equal(t, 1, len(codeLenses))
+	if environment.RunIntegTest {
+		assert.Equal(t, 2, len(codeLenses))
+	} else {
+		assert.Equal(t, 1, len(codeLenses))
+	}
 }
 
 func Test_IntegrationTestBigProjectScan(t *testing.T) {
