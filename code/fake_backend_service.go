@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"path/filepath"
 
+	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/lsp"
@@ -57,8 +58,7 @@ const (
 )
 
 type FakeBackendService struct {
-	BundleHash string
-	Calls      map[string][][]interface{}
+	Calls map[string][][]interface{}
 }
 
 func (f *FakeBackendService) addCall(params []interface{}, op string) {
@@ -85,15 +85,20 @@ func (f *FakeBackendService) GetCallParams(callNo int, op string) []interface{} 
 	return params
 }
 
+func (f *FakeBackendService) GetAllCalls(op string) [][]interface{} {
+	calls := f.Calls[op]
+	if calls == nil {
+		return nil
+	}
+	return calls
+}
+
 func (f *FakeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
 	params := []interface{}{files}
 	f.addCall(params, CreateBundleWithSourceOperation)
-	if f.BundleHash == "" {
-		// create a random hash
-		f.BundleHash = util.Hash(fmt.Sprint(rand.Int()))
-	}
+	BundleHash := util.Hash(fmt.Sprint(rand.Int()))
 
-	return f.BundleHash, nil, nil
+	return BundleHash, nil, nil
 }
 
 func (f *FakeBackendService) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]File, removedFiles []sglsp.DocumentURI) (string, []sglsp.DocumentURI, error) {
@@ -113,5 +118,6 @@ func (f *FakeBackendService) RetrieveDiagnostics(bundleHash string, limitToFiles
 	var codeLenses []sglsp.CodeLens
 	codeLensMap[FakeDiagnosticUri] = append(codeLenses, FakeCodeLens)
 
+	log.Trace().Str("method", "RetrieveDiagnostics").Str("bundleHash", bundleHash).Interface("fakeDiagnostic", FakeDiagnostic).Msg("fake backend call received & answered")
 	return diagnosticMap, codeLensMap, "COMPLETE", nil
 }

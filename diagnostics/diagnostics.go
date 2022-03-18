@@ -20,7 +20,7 @@ var (
 )
 
 func ClearDiagnosticsCache(uri sglsp.DocumentURI) {
-	documentDiagnosticCache[uri] = []lsp.Diagnostic{}
+	delete(documentDiagnosticCache, uri)
 }
 
 func UpdateDocument(uri sglsp.DocumentURI, changes []sglsp.TextDocumentContentChangeEvent) {
@@ -47,7 +47,7 @@ func GetDiagnostics(uri sglsp.DocumentURI) []lsp.Diagnostic {
 		return diagnosticSlice
 	}
 
-	diagnostics, codeLenses := fetch(uri)
+	diagnostics, codeLenses := fetchAllRegisteredDocumentDiagnostics(uri)
 
 	// add all diagnostics to cache
 	for uri := range diagnostics {
@@ -62,9 +62,19 @@ func GetDiagnostics(uri sglsp.DocumentURI) []lsp.Diagnostic {
 	return documentDiagnosticCache[uri]
 }
 
-func fetch(uri sglsp.DocumentURI) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens) {
-	log.Debug().Str("method", "fetch").Msg("started.")
-	defer log.Debug().Str("method", "fetch").Msg("done.")
+func getBundle(uri sglsp.DocumentURI) *code.BundleImpl {
+	for _, bundle := range bundles {
+		_, containsKey := bundle.BundleDocuments[uri]
+		if containsKey {
+			return bundle
+		}
+	}
+	return nil
+}
+
+func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens) {
+	log.Debug().Str("method", "fetchAllRegisteredDocumentDiagnostics").Msg("started.")
+	defer log.Debug().Str("method", "fetchAllRegisteredDocumentDiagnostics").Msg("done.")
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	var codeLenses []sglsp.CodeLens
 
@@ -72,7 +82,8 @@ func fetch(uri sglsp.DocumentURI) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[s
 	dChan := make(chan lsp.DiagnosticResult, len(registeredDocuments))
 	clChan := make(chan lsp.CodeLensResult, len(registeredDocuments))
 
-	createBundles(registeredDocuments)
+	createOrExtendBundles(registeredDocuments)
+
 	bundleCount := len(bundles)
 	wg.Add(2 + bundleCount)
 
@@ -83,40 +94,44 @@ func fetch(uri sglsp.DocumentURI) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[s
 	go iac.HandleFile(uri, &wg, dChan, clChan)
 	go oss.HandleFile(registeredDocuments[uri], &wg, dChan, clChan)
 	wg.Wait()
-	log.Debug().Str("method", "fetch").Msg("finished waiting for goroutines.")
+	log.Debug().Str("method", "fetchAllRegisteredDocumentDiagnostics").Msg("finished waiting for goroutines.")
 
 	for {
 		select {
 		case result := <-dChan:
-			log.Trace().Str("method", "fetch").Str("uri", string(result.Uri)).Msg("reading diag from chan.")
-			logError(result.Err, "fetch")
+			log.Trace().Str("method", "fetchAllRegisteredDocumentDiagnostics").Str("uri", string(result.Uri)).Msg("reading diag from chan.")
+			logError(result.Err, "fetchAllRegisteredDocumentDiagnostics")
 			diagnostics[result.Uri] = append(diagnostics[result.Uri], result.Diagnostics...)
 			documentDiagnosticCache[result.Uri] = diagnostics[result.Uri]
 		case result := <-clChan:
-			log.Trace().Str("method", "fetch").Str("uri", string(result.Uri)).Msg("reading lens from chan.")
-			logError(result.Err, "fetch")
+			log.Trace().Str("method", "fetchAllRegisteredDocumentDiagnostics").Str("uri", string(result.Uri)).Msg("reading lens from chan.")
+			logError(result.Err, "fetchAllRegisteredDocumentDiagnostics")
 			codeLenses = append(codeLenses, result.CodeLenses...)
 			codeLenseCache[result.Uri] = codeLenses
 		default: // return results once channels are empty
-			log.Debug().Str("method", "fetch").Msg("done reading diags & lenses.")
+			log.Debug().Str("method", "fetchAllRegisteredDocumentDiagnostics").Msg("done reading diags & lenses.")
 			return diagnostics, codeLenseCache
 		}
 	}
 }
 
-func createBundles(documents map[sglsp.DocumentURI]sglsp.TextDocumentItem) {
+func createOrExtendBundles(documents map[sglsp.DocumentURI]sglsp.TextDocumentItem) {
 	var bundle *code.BundleImpl
 	toAdd := documents
 	bundleIndex := len(bundles) - 1
+	var bundleFull bool
 	for len(toAdd) > 0 {
-		if bundleIndex == -1 {
+		if bundleIndex == -1 || bundleFull {
 			bundle = createBundle()
-			log.Debug().Int("bundleCount", bundleIndex).Str("bundle", bundle.BundleHash).Msg("created new bundle")
+			log.Debug().Int("bundleCount", len(bundles)).Str("bundle", bundle.BundleHash).Msg("created new bundle")
 		} else {
 			bundle = bundles[bundleIndex]
-			log.Debug().Int("bundleCount", bundleIndex).Str("bundle", bundle.BundleHash).Msg("re-using bundle ")
+			log.Debug().Int("bundleCount", len(bundles)).Str("bundle", bundle.BundleHash).Msg("re-using bundle ")
 		}
 		toAdd = bundle.AddToBundleDocuments(toAdd).Files
+		if len(toAdd) > 0 {
+			bundleFull = true
+		}
 	}
 }
 

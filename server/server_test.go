@@ -20,11 +20,11 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/code"
+	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/diagnostics"
 )
 
 var (
-	runIntegTest = false
 	ctx          = context.Background()
 	notification *jrpc2.Request
 	doc          = lsp.TextDocumentItem{
@@ -60,8 +60,7 @@ func startServer() server.Local {
 
 	var srv *jrpc2.Server
 
-	runIntegTest = os.Getenv("INTEG_TEST") != ""
-	if runIntegTest {
+	if environment.RunIntegTest {
 		diagnostics.CodeBackend = &code.SnykCodeBackendService{}
 	} else {
 		diagnostics.CodeBackend = &code.FakeBackendService{}
@@ -266,12 +265,12 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	}
 
 	// should receive diagnostics
-	diagnostics := lsp.PublishDiagnosticsParams{}
+	diags := lsp.PublishDiagnosticsParams{}
 
 	// wait for publish
 	assert.Eventually(t, func() bool { return notification != nil }, 5*time.Second, 10*time.Millisecond)
-	_ = notification.UnmarshalParams(&diagnostics)
-	assert.Equal(t, didSaveParams.TextDocument.URI, diagnostics.URI)
+	_ = notification.UnmarshalParams(&diags)
+	assert.Equal(t, didSaveParams.TextDocument.URI, diags.URI)
 }
 
 func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
@@ -329,7 +328,7 @@ func Test_IntegrationTestBigProjectScan(t *testing.T) {
 		_ = loc.Close()
 	}(loc)
 
-	if !runIntegTest {
+	if !environment.RunIntegTest {
 		return
 	}
 

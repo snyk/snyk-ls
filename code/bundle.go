@@ -64,7 +64,7 @@ const (
 type BundleImpl struct {
 	Backend         BackendService
 	BundleHash      string
-	bundleDocuments map[sglsp.DocumentURI]File
+	BundleDocuments map[sglsp.DocumentURI]File
 	missingFiles    []sglsp.DocumentURI
 }
 
@@ -82,15 +82,16 @@ func (e SnykAnalysisTimeoutError) Error() string {
 
 func (b *BundleImpl) createBundleFromSource() error {
 	var err error
-	if len(b.bundleDocuments) > 0 {
-		b.BundleHash, b.missingFiles, err = b.Backend.CreateBundle(b.bundleDocuments)
+	if len(b.BundleDocuments) > 0 {
+		b.BundleHash, b.missingFiles, err = b.Backend.CreateBundle(b.BundleDocuments)
+		log.Trace().Str("method", "createBundleFromSource").Str("bundleHash", b.BundleHash).Msg("created bundle on backend")
 	}
 	return err
 }
 
 func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]sglsp.TextDocumentItem) FilesNotAdded {
-	if b.bundleDocuments == nil {
-		b.bundleDocuments = make(map[sglsp.DocumentURI]File)
+	if b.BundleDocuments == nil {
+		b.BundleDocuments = make(map[sglsp.DocumentURI]File)
 	}
 
 	var nonAddedFiles = make(map[sglsp.DocumentURI]sglsp.TextDocumentItem)
@@ -100,7 +101,7 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]sglsp.Text
 				file := b.getFileFrom(doc)
 				if b.canAdd(doc) {
 					log.Trace().Str("uri", string(doc.URI)).Str("bundle", b.BundleHash).Msg("added to bundle")
-					b.bundleDocuments[doc.URI] = file
+					b.BundleDocuments[doc.URI] = file
 				} else {
 					log.Trace().Str("uri", string(doc.URI)).Str("bundle", b.BundleHash).Msg("not added to bundle")
 					nonAddedFiles[doc.URI] = doc
@@ -129,8 +130,9 @@ func (b *BundleImpl) canAdd(doc sglsp.TextDocumentItem) bool {
 func (b *BundleImpl) extendBundleFromSource() error {
 	var removeFiles []sglsp.DocumentURI
 	var err error
-	if len(b.bundleDocuments) > 0 {
-		b.BundleHash, b.missingFiles, err = b.Backend.ExtendBundle(b.BundleHash, b.bundleDocuments, removeFiles)
+	if len(b.BundleDocuments) > 0 {
+		b.BundleHash, b.missingFiles, err = b.Backend.ExtendBundle(b.BundleHash, b.BundleDocuments, removeFiles)
+		log.Trace().Str("method", "extendBundleFromSource").Str("bundleHash", b.BundleHash).Msg("extended bundle on backend")
 	}
 	return err
 }
@@ -155,7 +157,7 @@ func (b *BundleImpl) DiagnosticData(
 }
 
 func (b *BundleImpl) retrieveAnalysis(dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
-	if len(b.bundleDocuments) > 0 {
+	if len(b.BundleDocuments) > 0 {
 		for {
 			start := time.Now()
 			diags, lenses, status, err := b.Backend.RetrieveDiagnostics(b.BundleHash, []sglsp.DocumentURI{}, 0)
@@ -206,12 +208,12 @@ func (b *BundleImpl) uploadDocuments() error {
 }
 
 func (b *BundleImpl) getSize() int {
-	if len(b.bundleDocuments) == 0 {
+	if len(b.BundleDocuments) == 0 {
 		return 0
 	}
-	jsonCommasForFiles := len(b.bundleDocuments) - 1
+	jsonCommasForFiles := len(b.BundleDocuments) - 1
 	var size = jsonOverheadRequest + jsonCommasForFiles // if more than one file, they are separated by commas in the req
-	for uri, file := range b.bundleDocuments {
+	for uri, file := range b.BundleDocuments {
 		size += b.getTotalDocPayloadSize(uri, file)
 	}
 	return size

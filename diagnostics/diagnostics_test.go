@@ -1,12 +1,14 @@
 package diagnostics
 
 import (
+	"strconv"
 	"testing"
 
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/code"
+	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -68,7 +70,11 @@ func Test_GetDiagnostics_shouldAddCodeLenses(t *testing.T) {
 
 	assert.Equal(t, len(documentDiagnosticCache[doc.URI]), len(diagnostics))
 	lenses, _ := GetCodeLenses(doc.URI)
-	assert.Equal(t, 1, len(lenses))
+	if environment.RunIntegTest {
+		assert.Equal(t, 2, len(lenses))
+	} else {
+		assert.Equal(t, 1, len(lenses))
+	}
 }
 
 func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
@@ -89,4 +95,36 @@ func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
 	// verify that create bundle has NOT been called on backend service
 	params := CodeBackend.(*code.FakeBackendService).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.Nil(t, params)
+}
+
+func Test_getBundle_shouldFindUriInBundle(t *testing.T) {
+	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
+	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
+
+	lastRegisteredFile := registerEnoughFilesForTwoBundles()
+
+	CodeBackend = &code.FakeBackendService{}
+	GetDiagnostics(lastRegisteredFile.URI) // create bundles, etc
+
+	bundle := getBundle(lastRegisteredFile.URI)
+	assert.NotNil(t, bundle)
+	assert.Equal(t, lastRegisteredFile.Text, bundle.BundleDocuments[lastRegisteredFile.URI].Content)
+}
+
+func registerEnoughFilesForTwoBundles() sglsp.TextDocumentItem {
+	var file sglsp.TextDocumentItem
+	var fileContent string
+	for i := 0; i < 128*1024; i++ {
+		fileContent += "a"
+	}
+	for i := 0; i < (4096/128)+5; i++ {
+		file = sglsp.TextDocumentItem{
+			URI:        sglsp.DocumentURI("file://" + strconv.Itoa(i) + ".java"),
+			LanguageID: "java",
+			Version:    0,
+			Text:       fileContent,
+		}
+		RegisterDocument(file)
+	}
+	return file
 }
