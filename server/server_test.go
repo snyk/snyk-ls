@@ -60,10 +60,10 @@ func startServer() server.Local {
 
 	if environment.RunIntegTest {
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
-		diagnostics.CodeBackend = &code.SnykCodeBackendService{}
+		diagnostics.SnykCode = &code.SnykCodeBackendService{}
 	} else {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-		diagnostics.CodeBackend = &code.FakeBackendService{}
+		diagnostics.SnykCode = &code.FakeSnykCodeService{}
 	}
 
 	lspHandlers := handler.Map{
@@ -357,7 +357,7 @@ func Test_IntegrationTestBigProjectScan(t *testing.T) {
 	}
 
 	// set real backend
-	diagnostics.CodeBackend = &code.SnykCodeBackendService{}
+	diagnostics.SnykCode = &code.SnykCodeBackendService{}
 
 	testPath := cloneTargetDir + "/maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
 	testFileContent, err := os.ReadFile(testPath)

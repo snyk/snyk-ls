@@ -30,7 +30,7 @@ var (
 )
 
 func Test_createBundleFromSource_shouldReturnNonEmptyBundleHash(t *testing.T) {
-	b := BundleImpl{Backend: &FakeBackendService{}}
+	b := BundleImpl{SnykCode: &FakeSnykCodeService{}}
 	b.BundleDocuments = map[lsp.DocumentURI]File{}
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
@@ -110,7 +110,7 @@ func Test_getSize_shouldReturnTotalBundleSize(t *testing.T) {
 }
 
 func setupBundleForTesting(contentSize int) (BundleImpl, map[lsp.DocumentURI]lsp.TextDocumentItem) {
-	b := BundleImpl{Backend: &FakeBackendService{}}
+	b := BundleImpl{SnykCode: &FakeSnykCodeService{}}
 	b.BundleHash = "test-Hash"
 	b.BundleDocuments = map[lsp.DocumentURI]File{}
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
@@ -126,8 +126,8 @@ func setupBundleForTesting(contentSize int) (BundleImpl, map[lsp.DocumentURI]lsp
 }
 
 func TestCodeBundleImpl_DiagnosticData_shouldCreateBundleWhenHashEmpty(t *testing.T) {
-	backendMock := &FakeBackendService{}
-	b := BundleImpl{Backend: backendMock}
+	snykCodeMock := &FakeSnykCodeService{}
+	b := BundleImpl{SnykCode: snykCodeMock}
 	b.BundleHash = ""
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
@@ -146,7 +146,7 @@ func TestCodeBundleImpl_DiagnosticData_shouldCreateBundleWhenHashEmpty(t *testin
 	assert.Equal(t, 0, len(b.missingFiles))
 
 	// verify that create bundle has been called on backend service
-	params := backendMock.GetCallParams(0, CreateBundleWithSourceOperation)
+	params := snykCodeMock.GetCallParams(0, CreateBundleWithSourceOperation)
 	assert.NotNil(t, params)
 	assert.Equal(t, 1, len(params))
 	files := params[0].(map[lsp.DocumentURI]File)
@@ -154,8 +154,8 @@ func TestCodeBundleImpl_DiagnosticData_shouldCreateBundleWhenHashEmpty(t *testin
 }
 
 func TestCodeBundleImpl_DiagnosticData_shouldExtendBundleWhenHashNotEmpty(t *testing.T) {
-	backendMock := &FakeBackendService{}
-	b := BundleImpl{Backend: backendMock}
+	snykCodeMock := &FakeSnykCodeService{}
+	b := BundleImpl{SnykCode: snykCodeMock}
 
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
@@ -185,7 +185,7 @@ func TestCodeBundleImpl_DiagnosticData_shouldExtendBundleWhenHashNotEmpty(t *tes
 	assert.Equal(t, b.BundleDocuments[secondDoc.URI].Content, secondDoc.Text)
 
 	// verify that extend bundle has been called on backend service with additional file
-	params := backendMock.GetCallParams(0, ExtendBundleWithSourceOperation)
+	params := snykCodeMock.GetCallParams(0, ExtendBundleWithSourceOperation)
 	assert.NotNil(t, params)
 	assert.Equal(t, 3, len(params))
 	assert.Equal(t, b.BundleHash, params[0])
@@ -194,8 +194,8 @@ func TestCodeBundleImpl_DiagnosticData_shouldExtendBundleWhenHashNotEmpty(t *tes
 }
 
 func TestCodeBundleImpl_DiagnosticData_shouldRetrieveFromBackend(t *testing.T) {
-	backendMock := &FakeBackendService{}
-	b := BundleImpl{Backend: backendMock}
+	snykCodeMock := &FakeSnykCodeService{}
+	b := BundleImpl{SnykCode: snykCodeMock}
 	FakeDiagnosticUri = firstDoc.URI
 
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
@@ -220,7 +220,7 @@ func TestCodeBundleImpl_DiagnosticData_shouldRetrieveFromBackend(t *testing.T) {
 	assert.True(t, reflect.DeepEqual(FakeDiagnostic, diagnostics[0]))
 
 	// verify that extend bundle has been called on backend service with additional file
-	params := backendMock.GetCallParams(0, RetrieveDiagnosticsOperation)
+	params := snykCodeMock.GetCallParams(0, RunAnalysisOperation)
 	assert.NotNil(t, params)
 	assert.Equal(t, 3, len(params))
 	assert.Equal(t, b.BundleHash, params[0])
@@ -228,8 +228,8 @@ func TestCodeBundleImpl_DiagnosticData_shouldRetrieveFromBackend(t *testing.T) {
 }
 
 func TestCodeBundleImpl_DiagnosticData_shouldReturnCodeLenses(t *testing.T) {
-	backendMock := &FakeBackendService{}
-	b := BundleImpl{Backend: backendMock}
+	snykCodeMock := &FakeSnykCodeService{}
+	b := BundleImpl{SnykCode: snykCodeMock}
 	FakeDiagnosticUri = firstDoc.URI
 
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}

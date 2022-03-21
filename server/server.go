@@ -22,7 +22,7 @@ var (
 
 func Start() {
 	var srv *jrpc2.Server
-	diagnostics.CodeBackend = &code.SnykCodeBackendService{}
+	diagnostics.SnykCode = &code.SnykCodeBackendService{}
 
 	lspHandlers := handler.Map{
 		"initialize":                     InitializeHandler(),

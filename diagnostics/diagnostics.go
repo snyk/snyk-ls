@@ -16,7 +16,7 @@ var (
 	registeredDocuments     = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	bundles                 []*code.BundleImpl
-	CodeBackend             code.BackendService
+	SnykCode                code.SnykCodeService
 )
 
 func ClearDiagnosticsCache(uri sglsp.DocumentURI) {
@@ -136,7 +136,7 @@ func createOrExtendBundles(documents map[sglsp.DocumentURI]sglsp.TextDocumentIte
 }
 
 func createBundle() *code.BundleImpl {
-	bundle := code.BundleImpl{Backend: CodeBackend}
+	bundle := code.BundleImpl{SnykCode: SnykCode}
 	bundles = append(bundles, &bundle)
 	return &bundle
 }

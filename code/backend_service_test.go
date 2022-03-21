@@ -78,7 +78,7 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	assert.Equal(t, 0, len(missingFiles))
 }
 
-func TestSnykCodeBackendService_RetrieveDiagnosticsIntegrationTest(t *testing.T) {
+func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 	if !environment.RunIntegTest {
 		return
 	}
@@ -101,7 +101,7 @@ func TestSnykCodeBackendService_RetrieveDiagnosticsIntegrationTest(t *testing.T)
 
 	assert.Eventually(t, func() bool {
 		limitToFiles := []sglsp.DocumentURI{uri, uri2}
-		d, _, callStatus, err := s.RetrieveDiagnostics(bundleHash, limitToFiles, 0)
+		d, _, callStatus, err := s.RunAnalysis(bundleHash, limitToFiles, 0)
 		if err != nil {
 			return false
 		}

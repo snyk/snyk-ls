@@ -54,14 +54,14 @@ var (
 const (
 	CreateBundleWithSourceOperation = "createBundleWithSource"
 	ExtendBundleWithSourceOperation = "extendBundleWithSource"
-	RetrieveDiagnosticsOperation    = "extendBundleWithSource"
+	RunAnalysisOperation            = "extendBundleWithSource"
 )
 
-type FakeBackendService struct {
+type FakeSnykCodeService struct {
 	Calls map[string][][]interface{}
 }
 
-func (f *FakeBackendService) addCall(params []interface{}, op string) {
+func (f *FakeSnykCodeService) addCall(params []interface{}, op string) {
 	if f.Calls == nil {
 		f.Calls = make(map[string][][]interface{})
 	}
@@ -73,7 +73,7 @@ func (f *FakeBackendService) addCall(params []interface{}, op string) {
 	f.Calls[op] = append(calls, opParams)
 }
 
-func (f *FakeBackendService) GetCallParams(callNo int, op string) []interface{} {
+func (f *FakeSnykCodeService) GetCallParams(callNo int, op string) []interface{} {
 	calls := f.Calls[op]
 	if calls == nil {
 		return nil
@@ -85,7 +85,7 @@ func (f *FakeBackendService) GetCallParams(callNo int, op string) []interface{} 
 	return params
 }
 
-func (f *FakeBackendService) GetAllCalls(op string) [][]interface{} {
+func (f *FakeSnykCodeService) GetAllCalls(op string) [][]interface{} {
 	calls := f.Calls[op]
 	if calls == nil {
 		return nil
@@ -93,7 +93,7 @@ func (f *FakeBackendService) GetAllCalls(op string) [][]interface{} {
 	return calls
 }
 
-func (f *FakeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
+func (f *FakeSnykCodeService) CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
 	params := []interface{}{files}
 	f.addCall(params, CreateBundleWithSourceOperation)
 	BundleHash := util.Hash(fmt.Sprint(rand.Int()))
@@ -101,14 +101,14 @@ func (f *FakeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) (str
 	return BundleHash, nil, nil
 }
 
-func (f *FakeBackendService) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]File, removedFiles []sglsp.DocumentURI) (string, []sglsp.DocumentURI, error) {
+func (f *FakeSnykCodeService) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]File, removedFiles []sglsp.DocumentURI) (string, []sglsp.DocumentURI, error) {
 	params := []interface{}{bundleHash, files, removedFiles}
 	f.addCall(params, ExtendBundleWithSourceOperation)
 	return bundleHash, nil, nil
 }
-func (f *FakeBackendService) RetrieveDiagnostics(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens, string, error) {
+func (f *FakeSnykCodeService) RunAnalysis(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens, string, error) {
 	params := []interface{}{bundleHash, limitToFiles, severity}
-	f.addCall(params, RetrieveDiagnosticsOperation)
+	f.addCall(params, RunAnalysisOperation)
 
 	diagnosticMap := map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	var diagnostics []lsp.Diagnostic
@@ -118,6 +118,6 @@ func (f *FakeBackendService) RetrieveDiagnostics(bundleHash string, limitToFiles
 	var codeLenses []sglsp.CodeLens
 	codeLensMap[FakeDiagnosticUri] = append(codeLenses, FakeCodeLens)
 
-	log.Trace().Str("method", "RetrieveDiagnostics").Str("bundleHash", bundleHash).Interface("fakeDiagnostic", FakeDiagnostic).Msg("fake backend call received & answered")
+	log.Trace().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Interface("fakeDiagnostic", FakeDiagnostic).Msg("fake backend call received & answered")
 	return diagnosticMap, codeLensMap, "COMPLETE", nil
 }
