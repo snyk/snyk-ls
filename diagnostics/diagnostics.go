@@ -62,16 +62,6 @@ func GetDiagnostics(uri sglsp.DocumentURI) []lsp.Diagnostic {
 	return documentDiagnosticCache[uri]
 }
 
-func getBundle(uri sglsp.DocumentURI) *code.BundleImpl {
-	for _, bundle := range bundles {
-		_, containsKey := bundle.BundleDocuments[uri]
-		if containsKey {
-			return bundle
-		}
-	}
-	return nil
-}
-
 func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens) {
 	log.Debug().Str("method", "fetchAllRegisteredDocumentDiagnostics").Msg("started.")
 	defer log.Debug().Str("method", "fetchAllRegisteredDocumentDiagnostics").Msg("done.")

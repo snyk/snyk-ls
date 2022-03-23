@@ -197,7 +197,7 @@ func (b *BundleImpl) retrieveAnalysis(dChan chan lsp.DiagnosticResult, clChan ch
 				}
 				return
 			}
-			if time.Since(start) > environment.SnykCodeTimeout() {
+			if time.Since(start) > environment.SnykeCodeAnalysisTimeout() {
 				err = SnykAnalysisTimeoutError{msg: "Analysis Call Timed out."}
 				log.Error().Err(err).Str("method", "DiagnosticData").Msg("timeout...")
 				dChan <- lsp.DiagnosticResult{Err: err}

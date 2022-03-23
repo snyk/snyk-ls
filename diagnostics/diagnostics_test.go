@@ -1,7 +1,6 @@
 package diagnostics
 
 import (
-	"strconv"
 	"testing"
 
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -90,36 +89,4 @@ func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
 	// verify that create bundle has NOT been called on backend service
 	params := SnykCode.(*code.FakeSnykCodeApiService).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.Nil(t, params)
-}
-
-func Test_getBundle_shouldFindUriInBundle(t *testing.T) {
-	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
-	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
-
-	lastRegisteredFile := registerEnoughFilesForTwoBundles()
-
-	SnykCode = &code.FakeSnykCodeApiService{}
-	GetDiagnostics(lastRegisteredFile.URI) // create bundles, etc
-
-	bundle := getBundle(lastRegisteredFile.URI)
-	assert.NotNil(t, bundle)
-	assert.Equal(t, lastRegisteredFile.Text, bundle.BundleDocuments[lastRegisteredFile.URI].Content)
-}
-
-func registerEnoughFilesForTwoBundles() sglsp.TextDocumentItem {
-	var file sglsp.TextDocumentItem
-	var fileContent string
-	for i := 0; i < 128*1024; i++ {
-		fileContent += "a"
-	}
-	for i := 0; i < (4096/128)+5; i++ {
-		file = sglsp.TextDocumentItem{
-			URI:        sglsp.DocumentURI("file://" + strconv.Itoa(i) + ".java"),
-			LanguageID: "java",
-			Version:    0,
-			Text:       fileContent,
-		}
-		RegisterDocument(file)
-	}
-	return file
 }

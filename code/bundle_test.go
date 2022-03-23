@@ -57,7 +57,7 @@ func Test_AddToBundleDocuments_shouldNotAddDocumentToBundleIfEmpty(t *testing.T)
 	assert.Empty(t, b.BundleDocuments)
 }
 
-func Test_AddToBundleDocuments_shouldReturnBundleIsFullErrorIfGreaterThanMaxPayloadSize(t *testing.T) {
+func Test_AddToBundleDocuments_shouldReturnNotAddedFileIfBundleGreaterThanMaxPayloadSize(t *testing.T) {
 	b, registeredDocuments := setupBundleForTesting(maxFileSize)
 	for i := 0; i < (maxBundleSize / maxFileSize); i++ {
 		uri := lsp.DocumentURI(strconv.Itoa(i) + ".java")

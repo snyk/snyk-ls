@@ -48,7 +48,7 @@ func getSnykFileName() string {
 	}
 }
 
-func SnykCodeTimeout() time.Duration {
+func SnykeCodeAnalysisTimeout() time.Duration {
 	var snykCodeTimeout time.Duration
 	var err error
 	env := os.Getenv(snykCodeTimeoutKey)
