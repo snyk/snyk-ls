@@ -88,7 +88,7 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI) (map[sglsp.Doc
 	wg.Add(2 + bundleCount)
 
 	for _, myBundle := range bundles {
-		go myBundle.DiagnosticData(&wg, dChan, clChan)
+		go myBundle.FetchDiagnosticsData(&wg, dChan, clChan)
 	}
 
 	go iac.HandleFile(uri, &wg, dChan, clChan)

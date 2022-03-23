@@ -63,7 +63,7 @@ func Test_GetDiagnostics_shouldAddCodeLenses(t *testing.T) {
 	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	RegisterDocument(doc)
-	SnykCode = &code.FakeSnykCodeService{}
+	SnykCode = &code.FakeSnykCodeApiService{}
 
 	diagnostics := GetDiagnostics(doc.URI)
 
@@ -83,12 +83,12 @@ func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
 		Text:       "",
 	}
 	RegisterDocument(empty)
-	SnykCode = &code.FakeSnykCodeService{}
+	SnykCode = &code.FakeSnykCodeApiService{}
 
 	GetDiagnostics(doc.URI)
 
 	// verify that create bundle has NOT been called on backend service
-	params := SnykCode.(*code.FakeSnykCodeService).GetCallParams(0, code.CreateBundleWithSourceOperation)
+	params := SnykCode.(*code.FakeSnykCodeApiService).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.Nil(t, params)
 }
 
@@ -98,7 +98,7 @@ func Test_getBundle_shouldFindUriInBundle(t *testing.T) {
 
 	lastRegisteredFile := registerEnoughFilesForTwoBundles()
 
-	SnykCode = &code.FakeSnykCodeService{}
+	SnykCode = &code.FakeSnykCodeApiService{}
 	GetDiagnostics(lastRegisteredFile.URI) // create bundles, etc
 
 	bundle := getBundle(lastRegisteredFile.URI)

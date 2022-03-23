@@ -26,7 +26,8 @@ var (
 	Format       = "md"
 	ConfigFile   = ""
 	cliFileName  = getSnykFileName()
-	RunIntegTest = os.Getenv("INTEG_TESTS") != ""
+	INTEG_TESTS  = "INTEG_TESTS"
+	RunIntegTest = os.Getenv(INTEG_TESTS) != ""
 )
 
 func getSnykFileName() string {

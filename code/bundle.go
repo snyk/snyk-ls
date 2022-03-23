@@ -146,7 +146,7 @@ func (b *BundleImpl) extendBundleFromSource() error {
 	return err
 }
 
-func (b *BundleImpl) DiagnosticData(
+func (b *BundleImpl) FetchDiagnosticsData(
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
 	clChan chan lsp.CodeLensResult,
@@ -220,7 +220,7 @@ func (b *BundleImpl) getSize() int {
 		return 0
 	}
 	jsonCommasForFiles := len(b.BundleDocuments) - 1
-	var size = jsonOverheadRequest + jsonCommasForFiles // if more than one file, they are separated by commas in the req
+	var size = len(jsonOverheadRequest) + jsonCommasForFiles // if more than one file, they are separated by commas in the req
 	for uri, file := range b.BundleDocuments {
 		size += getTotalDocPayloadSize(uri, file)
 	}

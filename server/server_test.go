@@ -63,7 +63,7 @@ func startServer() server.Local {
 		diagnostics.SnykCode = &code.SnykCodeBackendService{}
 	} else {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-		diagnostics.SnykCode = &code.FakeSnykCodeService{}
+		diagnostics.SnykCode = &code.FakeSnykCodeApiService{}
 	}
 
 	lspHandlers := handler.Map{
@@ -327,14 +327,14 @@ func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 }
 
 func Test_IntegrationTestBigProjectScan(t *testing.T) {
+	if !environment.RunIntegTest {
+		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
+	}
+
 	loc := startServer()
 	defer func(loc server.Local) {
 		_ = loc.Close()
 	}(loc)
-
-	if !environment.RunIntegTest {
-		return
-	}
 
 	var cloneTargetDir, err = setupTestRepo()
 	defer os.RemoveAll(cloneTargetDir)
@@ -347,6 +347,7 @@ func Test_IntegrationTestBigProjectScan(t *testing.T) {
 		if info.IsDir() {
 			return nil
 		}
+
 		content, _ := os.ReadFile(path)
 		file := lsp.TextDocumentItem{URI: lsp.DocumentURI("file://" + path), Text: string(content)}
 		diagnostics.RegisterDocument(file)

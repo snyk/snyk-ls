@@ -57,11 +57,11 @@ const (
 	RunAnalysisOperation            = "extendBundleWithSource"
 )
 
-type FakeSnykCodeService struct {
+type FakeSnykCodeApiService struct {
 	Calls map[string][][]interface{}
 }
 
-func (f *FakeSnykCodeService) addCall(params []interface{}, op string) {
+func (f *FakeSnykCodeApiService) addCall(params []interface{}, op string) {
 	if f.Calls == nil {
 		f.Calls = make(map[string][][]interface{})
 	}
@@ -73,7 +73,7 @@ func (f *FakeSnykCodeService) addCall(params []interface{}, op string) {
 	f.Calls[op] = append(calls, opParams)
 }
 
-func (f *FakeSnykCodeService) GetCallParams(callNo int, op string) []interface{} {
+func (f *FakeSnykCodeApiService) GetCallParams(callNo int, op string) []interface{} {
 	calls := f.Calls[op]
 	if calls == nil {
 		return nil
@@ -85,7 +85,7 @@ func (f *FakeSnykCodeService) GetCallParams(callNo int, op string) []interface{}
 	return params
 }
 
-func (f *FakeSnykCodeService) GetAllCalls(op string) [][]interface{} {
+func (f *FakeSnykCodeApiService) GetAllCalls(op string) [][]interface{} {
 	calls := f.Calls[op]
 	if calls == nil {
 		return nil
@@ -93,7 +93,7 @@ func (f *FakeSnykCodeService) GetAllCalls(op string) [][]interface{} {
 	return calls
 }
 
-func (f *FakeSnykCodeService) CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
+func (f *FakeSnykCodeApiService) CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
 	params := []interface{}{files}
 	f.addCall(params, CreateBundleWithSourceOperation)
 	BundleHash := util.Hash(fmt.Sprint(rand.Int()))
@@ -101,12 +101,12 @@ func (f *FakeSnykCodeService) CreateBundle(files map[sglsp.DocumentURI]File) (st
 	return BundleHash, nil, nil
 }
 
-func (f *FakeSnykCodeService) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]File, removedFiles []sglsp.DocumentURI) (string, []sglsp.DocumentURI, error) {
+func (f *FakeSnykCodeApiService) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]File, removedFiles []sglsp.DocumentURI) (string, []sglsp.DocumentURI, error) {
 	params := []interface{}{bundleHash, files, removedFiles}
 	f.addCall(params, ExtendBundleWithSourceOperation)
 	return bundleHash, nil, nil
 }
-func (f *FakeSnykCodeService) RunAnalysis(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens, string, error) {
+func (f *FakeSnykCodeApiService) RunAnalysis(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens, string, error) {
 	params := []interface{}{bundleHash, limitToFiles, severity}
 	f.addCall(params, RunAnalysisOperation)
 

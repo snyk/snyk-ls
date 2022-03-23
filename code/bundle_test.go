@@ -30,7 +30,7 @@ var (
 )
 
 func Test_createBundleFromSource_shouldReturnNonEmptyBundleHash(t *testing.T) {
-	b := BundleImpl{SnykCode: &FakeSnykCodeService{}}
+	b := BundleImpl{SnykCode: &FakeSnykCodeApiService{}}
 	b.BundleDocuments = map[lsp.DocumentURI]File{}
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
@@ -110,7 +110,7 @@ func Test_getSize_shouldReturnTotalBundleSize(t *testing.T) {
 }
 
 func setupBundleForTesting(contentSize int) (BundleImpl, map[lsp.DocumentURI]lsp.TextDocumentItem) {
-	b := BundleImpl{SnykCode: &FakeSnykCodeService{}}
+	b := BundleImpl{SnykCode: &FakeSnykCodeApiService{}}
 	b.BundleHash = "test-Hash"
 	b.BundleDocuments = map[lsp.DocumentURI]File{}
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
@@ -126,7 +126,7 @@ func setupBundleForTesting(contentSize int) (BundleImpl, map[lsp.DocumentURI]lsp
 }
 
 func TestCodeBundleImpl_DiagnosticData_shouldCreateBundleWhenHashEmpty(t *testing.T) {
-	snykCodeMock := &FakeSnykCodeService{}
+	snykCodeMock := &FakeSnykCodeApiService{}
 	b := BundleImpl{SnykCode: snykCodeMock}
 	b.BundleHash = ""
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
@@ -138,7 +138,7 @@ func TestCodeBundleImpl_DiagnosticData_shouldCreateBundleWhenHashEmpty(t *testin
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	go b.DiagnosticData(&wg, dChan, clChan)
+	go b.FetchDiagnosticsData(&wg, dChan, clChan)
 
 	<-dChan
 	<-clChan
@@ -154,7 +154,7 @@ func TestCodeBundleImpl_DiagnosticData_shouldCreateBundleWhenHashEmpty(t *testin
 }
 
 func TestCodeBundleImpl_DiagnosticData_shouldExtendBundleWhenHashNotEmpty(t *testing.T) {
-	snykCodeMock := &FakeSnykCodeService{}
+	snykCodeMock := &FakeSnykCodeApiService{}
 	b := BundleImpl{SnykCode: snykCodeMock}
 
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
@@ -176,7 +176,7 @@ func TestCodeBundleImpl_DiagnosticData_shouldExtendBundleWhenHashNotEmpty(t *tes
 	clChan := make(chan lsp2.CodeLensResult)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go b.DiagnosticData(&wg, dChan, clChan)
+	go b.FetchDiagnosticsData(&wg, dChan, clChan)
 
 	<-dChan
 	<-clChan
@@ -194,7 +194,7 @@ func TestCodeBundleImpl_DiagnosticData_shouldExtendBundleWhenHashNotEmpty(t *tes
 }
 
 func TestCodeBundleImpl_DiagnosticData_shouldRetrieveFromBackend(t *testing.T) {
-	snykCodeMock := &FakeSnykCodeService{}
+	snykCodeMock := &FakeSnykCodeApiService{}
 	b := BundleImpl{SnykCode: snykCodeMock}
 	FakeDiagnosticUri = firstDoc.URI
 
@@ -208,7 +208,7 @@ func TestCodeBundleImpl_DiagnosticData_shouldRetrieveFromBackend(t *testing.T) {
 	clChan := make(chan lsp2.CodeLensResult)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go b.DiagnosticData(&wg, dChan, clChan)
+	go b.FetchDiagnosticsData(&wg, dChan, clChan)
 	result := <-dChan
 	diagnosticMap[result.Uri] = result.Diagnostics
 	<-clChan
@@ -228,7 +228,7 @@ func TestCodeBundleImpl_DiagnosticData_shouldRetrieveFromBackend(t *testing.T) {
 }
 
 func TestCodeBundleImpl_DiagnosticData_shouldReturnCodeLenses(t *testing.T) {
-	snykCodeMock := &FakeSnykCodeService{}
+	snykCodeMock := &FakeSnykCodeApiService{}
 	b := BundleImpl{SnykCode: snykCodeMock}
 	FakeDiagnosticUri = firstDoc.URI
 
@@ -241,7 +241,7 @@ func TestCodeBundleImpl_DiagnosticData_shouldReturnCodeLenses(t *testing.T) {
 	clChan := make(chan lsp2.CodeLensResult)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go b.DiagnosticData(&wg, dChan, clChan)
+	go b.FetchDiagnosticsData(&wg, dChan, clChan)
 	<-dChan
 
 	codeLensMap := map[lsp.DocumentURI][]lsp.CodeLens{}

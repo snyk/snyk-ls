@@ -39,8 +39,9 @@ const (
 
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	if !environment.RunIntegTest {
-		return
+		t.Skip()
 	}
+
 	s := &SnykCodeBackendService{
 		client: http.Client{},
 	}
@@ -57,11 +58,13 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	if !environment.RunIntegTest {
-		return
+		t.Skip()
 	}
+
 	s := &SnykCodeBackendService{
 		client: http.Client{},
 	}
+
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]File{}
 	files[uri] = File{
@@ -80,8 +83,9 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 
 func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 	if !environment.RunIntegTest {
-		return
+		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
 	}
+
 	s := &SnykCodeBackendService{
 		client: http.Client{},
 	}
