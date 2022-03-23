@@ -55,15 +55,15 @@ var (
 const (
 	maxFileSize         = 1024 * 128
 	maxBundleSize       = 1024 * 1024 * 4
-	jsonOverheadRequest = len("{\"files\":{}}")
-	jsonUriOverhead     = len("\"\":{}")
-	jsonHashSizePerFile = len("\"hash\":\"0123456789012345678901234567890123456789012345678901234567890123\"")
-	jsonContentOverhead = len(",\"content\":\"\"")
+	jsonOverheadRequest = "{\"files\":{}}"
+	jsonUriOverhead     = "\"\":{}"
+	jsonHashSizePerFile = "\"hash\":\"0123456789012345678901234567890123456789012345678901234567890123\""
+	jsonContentOverhead = ",\"content\":\"\""
 	jsonOverheadPerFile = jsonUriOverhead + jsonContentOverhead
 )
 
 func getTotalDocPayloadSize(uri sglsp.DocumentURI, file File) int {
-	return jsonHashSizePerFile + jsonOverheadPerFile + len([]byte(uri)) + len([]byte(file.Content))
+	return len(jsonHashSizePerFile) + len(jsonOverheadPerFile) + len([]byte(uri)) + len([]byte(file.Content))
 }
 
 type BundleImpl struct {
