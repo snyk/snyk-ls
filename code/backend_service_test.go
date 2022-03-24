@@ -89,6 +89,7 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 	s := &SnykCodeBackendService{
 		client: http.Client{},
 	}
+	shardKey := util.Hash("/")
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]File{}
 	files[uri] = File{
@@ -105,7 +106,7 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		limitToFiles := []sglsp.DocumentURI{uri, uri2}
-		d, _, callStatus, err := s.RunAnalysis(bundleHash, limitToFiles, 0)
+		d, _, callStatus, err := s.RunAnalysis(bundleHash, shardKey, limitToFiles, 0)
 		if err != nil {
 			return false
 		}

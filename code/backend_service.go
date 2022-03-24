@@ -111,8 +111,8 @@ func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[sglsp
 	return bundleResponse.BundleHash, bundleResponse.MissingFiles, err
 }
 
-func (s *SnykCodeBackendService) RunAnalysis(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens, string, error) {
-	requestBody, err := s.analysisRequestBody(bundleHash, limitToFiles, severity)
+func (s *SnykCodeBackendService) RunAnalysis(bundleHash string, shardKey string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens, string, error) {
+	requestBody, err := s.analysisRequestBody(bundleHash, shardKey, limitToFiles, severity)
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -138,7 +138,7 @@ func (s *SnykCodeBackendService) RunAnalysis(bundleHash string, limitToFiles []s
 	return diags, lenses, response.Status, err
 }
 
-func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) ([]byte, error) {
+func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, shardKey string, limitToFiles []sglsp.DocumentURI, severity int) ([]byte, error) {
 	request := AnalysisRequest{
 		Key: AnalysisRequestKey{
 			Type:         "file",
@@ -147,9 +147,13 @@ func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, limitToF
 		},
 		Legacy: false,
 	}
+	if len(shardKey) > 0 {
+		request.Key.Shard = shardKey
+	}
 	if severity > 0 {
 		request.Severity = severity
 	}
+
 	requestBody, err := json.Marshal(request)
 	return requestBody, err
 }
