@@ -251,20 +251,25 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldReturnCodeLenses(t *testing.T
 	assert.NotEqual(t, 0, len(codeLensMap[firstDoc.URI]))
 }
 
-func Test_getShardKey_shouldReturnRootPathOrTokenHash(t *testing.T) {
+func Test_getShardKey_shouldReturnRootPathHash(t *testing.T) {
 	// Case 1: rootPath exists
 	sampleRootPath := "C:\\GIT\\root"
 	// deepcode ignore HardcodedPassword/test: false positive
 	token := "TEST"
 	assert.Equal(t, util.Hash(sampleRootPath), getShardKey(sampleRootPath, token))
+}
 
+func Test_getShardKey_shouldReturnTokenHash(t *testing.T) {
 	// Case 2: rootPath empty, token exists
-	sampleRootPath = ""
+	sampleRootPath := ""
+	token := "TEST"
 	assert.Equal(t, util.Hash(token), getShardKey(sampleRootPath, token))
+}
 
+func Test_getShardKey_shouldReturnEmptyShardKey(t *testing.T) {
 	// Case 3: No token, no rootPath set
-	sampleRootPath = ""
+	sampleRootPath := ""
 	// deepcode ignore HardcodedPassword/test: false positive
-	token = ""
+	token := ""
 	assert.Equal(t, "", getShardKey(sampleRootPath, token))
 }
