@@ -129,6 +129,7 @@ type AnalysisRequestKey struct {
 	Type         string            `json:"type"`
 	Hash         string            `json:"hash"`
 	LimitToFiles []lsp.DocumentURI `json:"limitToFiles,omitempty"`
+	Shard        string            `json:"shard"`
 }
 
 type AnalysisRequest struct {

@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	lsp2 "github.com/snyk/snyk-ls/lsp"
+	"github.com/snyk/snyk-ls/util"
 )
 
 var (
@@ -125,7 +126,7 @@ func setupBundleForTesting(contentSize int) (BundleImpl, map[lsp.DocumentURI]lsp
 	return b, registeredDocuments
 }
 
-func TestCodeBundleImpl_DiagnosticData_shouldCreateBundleWhenHashEmpty(t *testing.T) {
+func TestCodeBundleImpl_FetchDiagnosticsData_shouldCreateBundleWhenHashEmpty(t *testing.T) {
 	snykCodeMock := &FakeSnykCodeApiService{}
 	b := BundleImpl{SnykCode: snykCodeMock}
 	b.BundleHash = ""
@@ -138,7 +139,7 @@ func TestCodeBundleImpl_DiagnosticData_shouldCreateBundleWhenHashEmpty(t *testin
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	go b.FetchDiagnosticsData(&wg, dChan, clChan)
+	go b.FetchDiagnosticsData("", &wg, dChan, clChan)
 
 	<-dChan
 	<-clChan
@@ -153,7 +154,7 @@ func TestCodeBundleImpl_DiagnosticData_shouldCreateBundleWhenHashEmpty(t *testin
 	assert.Equal(t, files[firstDoc.URI].Content, firstDoc.Text)
 }
 
-func TestCodeBundleImpl_DiagnosticData_shouldExtendBundleWhenHashNotEmpty(t *testing.T) {
+func TestCodeBundleImpl_FetchDiagnosticsData_shouldExtendBundleWhenHashNotEmpty(t *testing.T) {
 	snykCodeMock := &FakeSnykCodeApiService{}
 	b := BundleImpl{SnykCode: snykCodeMock}
 
@@ -176,7 +177,7 @@ func TestCodeBundleImpl_DiagnosticData_shouldExtendBundleWhenHashNotEmpty(t *tes
 	clChan := make(chan lsp2.CodeLensResult)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go b.FetchDiagnosticsData(&wg, dChan, clChan)
+	go b.FetchDiagnosticsData("", &wg, dChan, clChan)
 
 	<-dChan
 	<-clChan
@@ -193,7 +194,7 @@ func TestCodeBundleImpl_DiagnosticData_shouldExtendBundleWhenHashNotEmpty(t *tes
 	assert.Equal(t, files[secondDoc.URI].Content, secondDoc.Text)
 }
 
-func TestCodeBundleImpl_DiagnosticData_shouldRetrieveFromBackend(t *testing.T) {
+func TestCodeBundleImpl_FetchDiagnosticsData_shouldRetrieveFromBackend(t *testing.T) {
 	snykCodeMock := &FakeSnykCodeApiService{}
 	b := BundleImpl{SnykCode: snykCodeMock}
 	FakeDiagnosticUri = firstDoc.URI
@@ -208,7 +209,7 @@ func TestCodeBundleImpl_DiagnosticData_shouldRetrieveFromBackend(t *testing.T) {
 	clChan := make(chan lsp2.CodeLensResult)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go b.FetchDiagnosticsData(&wg, dChan, clChan)
+	go b.FetchDiagnosticsData("", &wg, dChan, clChan)
 	result := <-dChan
 	diagnosticMap[result.Uri] = result.Diagnostics
 	<-clChan
@@ -227,7 +228,7 @@ func TestCodeBundleImpl_DiagnosticData_shouldRetrieveFromBackend(t *testing.T) {
 	assert.Equal(t, 0, params[2])
 }
 
-func TestCodeBundleImpl_DiagnosticData_shouldReturnCodeLenses(t *testing.T) {
+func TestCodeBundleImpl_FetchDiagnosticsData_shouldReturnCodeLenses(t *testing.T) {
 	snykCodeMock := &FakeSnykCodeApiService{}
 	b := BundleImpl{SnykCode: snykCodeMock}
 	FakeDiagnosticUri = firstDoc.URI
@@ -241,11 +242,35 @@ func TestCodeBundleImpl_DiagnosticData_shouldReturnCodeLenses(t *testing.T) {
 	clChan := make(chan lsp2.CodeLensResult)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go b.FetchDiagnosticsData(&wg, dChan, clChan)
+	go b.FetchDiagnosticsData("", &wg, dChan, clChan)
 	<-dChan
 
 	codeLensMap := map[lsp.DocumentURI][]lsp.CodeLens{}
 	result := <-clChan
 	codeLensMap[result.Uri] = result.CodeLenses
 	assert.NotEqual(t, 0, len(codeLensMap[firstDoc.URI]))
+}
+
+func Test_getShardKey_shouldReturnRootPathHash(t *testing.T) {
+	// Case 1: rootPath exists
+	sampleRootPath := "C:\\GIT\\root"
+	// deepcode ignore HardcodedPassword/test: false positive
+	token := "TEST"
+	assert.Equal(t, util.Hash(sampleRootPath), getShardKey(sampleRootPath, token))
+}
+
+func Test_getShardKey_shouldReturnTokenHash(t *testing.T) {
+	// Case 2: rootPath empty, token exists
+	sampleRootPath := ""
+	// deepcode ignore HardcodedPassword/test: false positive
+	token := "TEST"
+	assert.Equal(t, util.Hash(token), getShardKey(sampleRootPath, token))
+}
+
+func Test_getShardKey_shouldReturnEmptyShardKey(t *testing.T) {
+	// Case 3: No token, no rootPath set
+	sampleRootPath := ""
+	// deepcode ignore HardcodedPassword/test: false positive
+	token := ""
+	assert.Equal(t, "", getShardKey(sampleRootPath, token))
 }

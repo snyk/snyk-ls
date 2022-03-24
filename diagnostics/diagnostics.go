@@ -40,14 +40,14 @@ func UnRegisterDocument(file sglsp.DocumentURI) {
 	delete(registeredDocuments, file)
 }
 
-func GetDiagnostics(uri sglsp.DocumentURI) []lsp.Diagnostic {
+func GetDiagnostics(rootUri sglsp.DocumentURI) []lsp.Diagnostic {
 	// serve from cache
-	diagnosticSlice := documentDiagnosticCache[uri]
+	diagnosticSlice := documentDiagnosticCache[rootUri]
 	if len(diagnosticSlice) > 0 {
 		return diagnosticSlice
 	}
 
-	diagnostics, codeLenses := fetchAllRegisteredDocumentDiagnostics(uri)
+	diagnostics, codeLenses := fetchAllRegisteredDocumentDiagnostics(rootUri)
 
 	// add all diagnostics to cache
 	for uri := range diagnostics {
@@ -59,10 +59,10 @@ func GetDiagnostics(uri sglsp.DocumentURI) []lsp.Diagnostic {
 		codeLenseCache[uri] = codeLenses[uri]
 	}
 
-	return documentDiagnosticCache[uri]
+	return documentDiagnosticCache[rootUri]
 }
 
-func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens) {
+func fetchAllRegisteredDocumentDiagnostics(rootUri sglsp.DocumentURI) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens) {
 	log.Debug().Str("method", "fetchAllRegisteredDocumentDiagnostics").Msg("started.")
 	defer log.Debug().Str("method", "fetchAllRegisteredDocumentDiagnostics").Msg("done.")
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
@@ -78,11 +78,11 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI) (map[sglsp.Doc
 	wg.Add(2 + bundleCount)
 
 	for _, myBundle := range bundles {
-		go myBundle.FetchDiagnosticsData(&wg, dChan, clChan)
+		go myBundle.FetchDiagnosticsData(string(rootUri), &wg, dChan, clChan)
 	}
 
-	go iac.HandleFile(uri, &wg, dChan, clChan)
-	go oss.HandleFile(registeredDocuments[uri], &wg, dChan, clChan)
+	go iac.HandleFile(rootUri, &wg, dChan, clChan)
+	go oss.HandleFile(registeredDocuments[rootUri], &wg, dChan, clChan)
 	wg.Wait()
 	log.Debug().Str("method", "fetchAllRegisteredDocumentDiagnostics").Msg("finished waiting for goroutines.")
 

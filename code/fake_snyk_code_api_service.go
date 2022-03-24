@@ -54,7 +54,7 @@ var (
 const (
 	CreateBundleWithSourceOperation = "createBundleWithSource"
 	ExtendBundleWithSourceOperation = "extendBundleWithSource"
-	RunAnalysisOperation            = "extendBundleWithSource"
+	RunAnalysisOperation            = "runAnalysis"
 )
 
 type FakeSnykCodeApiService struct {
@@ -106,7 +106,7 @@ func (f *FakeSnykCodeApiService) ExtendBundle(bundleHash string, files map[sglsp
 	f.addCall(params, ExtendBundleWithSourceOperation)
 	return bundleHash, nil, nil
 }
-func (f *FakeSnykCodeApiService) RunAnalysis(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens, string, error) {
+func (f *FakeSnykCodeApiService) RunAnalysis(bundleHash string, shardKey string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens, string, error) {
 	params := []interface{}{bundleHash, limitToFiles, severity}
 	f.addCall(params, RunAnalysisOperation)
 
