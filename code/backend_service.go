@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 
@@ -78,7 +79,12 @@ func (s *SnykCodeBackendService) doCall(method string, path string, requestBody 
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Err(err).Msg("Couldn't close response body in call to Snyk Code")
+		}
+	}(response.Body)
 	responseBody, err := ioutil.ReadAll(response.Body)
 	log.Debug().Str("responseBody", string(responseBody)).Msg("RECEIVED FROM REMOTE")
 	if err != nil {
@@ -105,7 +111,7 @@ func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[sglsp
 	return bundleResponse.BundleHash, bundleResponse.MissingFiles, err
 }
 
-func (s *SnykCodeBackendService) RetrieveDiagnostics(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens, string, error) {
+func (s *SnykCodeBackendService) RunAnalysis(bundleHash string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens, string, error) {
 	requestBody, err := s.analysisRequestBody(bundleHash, limitToFiles, severity)
 	if err != nil {
 		return nil, nil, "", err

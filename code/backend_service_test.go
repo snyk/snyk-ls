@@ -10,6 +10,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/util"
 )
 
@@ -37,6 +38,10 @@ const (
 )
 
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
+	if !environment.RunIntegTest {
+		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
+	}
+
 	s := &SnykCodeBackendService{
 		client: http.Client{},
 	}
@@ -52,9 +57,14 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 }
 
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
+	if !environment.RunIntegTest {
+		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
+	}
+
 	s := &SnykCodeBackendService{
 		client: http.Client{},
 	}
+
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]File{}
 	files[uri] = File{
@@ -71,7 +81,11 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	assert.Equal(t, 0, len(missingFiles))
 }
 
-func TestSnykCodeBackendService_RetrieveDiagnosticsIntegrationTest(t *testing.T) {
+func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
+	if !environment.RunIntegTest {
+		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
+	}
+
 	s := &SnykCodeBackendService{
 		client: http.Client{},
 	}
@@ -91,7 +105,7 @@ func TestSnykCodeBackendService_RetrieveDiagnosticsIntegrationTest(t *testing.T)
 
 	assert.Eventually(t, func() bool {
 		limitToFiles := []sglsp.DocumentURI{uri, uri2}
-		d, _, callStatus, err := s.RetrieveDiagnostics(bundleHash, limitToFiles, 0)
+		d, _, callStatus, err := s.RunAnalysis(bundleHash, limitToFiles, 0)
 		if err != nil {
 			return false
 		}

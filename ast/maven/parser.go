@@ -46,7 +46,7 @@ func (p *Parser) Parse(content string, uri lsp.DocumentURI) ast.Tree {
 				}
 				offsetAfter := d.InputOffset()
 				node := p.addNewNodeTo(tree.Root, offset, offsetAfter, dep)
-				log.Debug().Interface("node", node).Str("uri", string(p.tree.Document)).Msg("Added dependency node")
+				log.Debug().Interface("nodeName", node.Name).Str("uri", string(p.tree.Document)).Msg("Added dependency node")
 			}
 		default:
 		}

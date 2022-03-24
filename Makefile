@@ -6,6 +6,7 @@ PROJECT_NAME := snyk-ls
 BUILD_DIR := build
 DEV_GOARCH := $(shell go env GOARCH)
 DEV_GOOS := $(shell go env GOOS)
+GOPATH := $(shell go env GOPATH)
 
 
 ## tools: Install required tooling.
@@ -53,7 +54,7 @@ endif
 ## run: Compile and run LSP server.
 .PHONY: run
 run:
-	@echo "==> Running Snyk LSP server..."
+	@echo "==> Running Snyk LS server..."
 	@go run main.go --reportErrors
 
 help: Makefile
