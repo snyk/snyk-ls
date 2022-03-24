@@ -262,6 +262,7 @@ func Test_getShardKey_shouldReturnRootPathHash(t *testing.T) {
 func Test_getShardKey_shouldReturnTokenHash(t *testing.T) {
 	// Case 2: rootPath empty, token exists
 	sampleRootPath := ""
+	// deepcode ignore HardcodedPassword/test: false positive
 	token := "TEST"
 	assert.Equal(t, util.Hash(token), getShardKey(sampleRootPath, token))
 }
