@@ -32,34 +32,99 @@ func getDetectableFiles() []string {
 	}
 }
 
-func HandleFile(uri sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
+func ScanWorkspace(uri sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
 	defer wg.Done()
-	log.Debug().Str("method", "iac.HandleFile").Msg("started.")
-	defer log.Debug().Str("method", "iac.HandleFile").Msg("done.")
+	defer log.Debug().Str("method", "iac.ScanWorkspace").Msg("done.")
+
+	log.Debug().Str("method", "iac.ScanWorkspace").Msg("started.")
+
+	absolutePath, _ := getDocAbsolutePath(uri)
+
+	cmd := createCliCmd(absolutePath)
+	res, err := callSnykCLI(cmd)
+	if err != nil {
+		log.Err(err).Str("method", "iac.ScanWorkspace").Msg("Error while calling Snyk CLI")
+	}
+
+	var scanResults []iacScanResult
+	if err := json.Unmarshal(res, &scanResults); err != nil {
+		log.Err(err).Str("method", "iac.ScanWorkspace").Msg("Error while parsing response from CLI")
+	}
+
+	log.Info().Str("method", "iac.ScanWorkspace").Msg("got diags & lenses, now sending to chan.")
+	for i := 1; i < len(scanResults); i++ {
+		scanResult := scanResults[i]
+
+		diagnostics := convertDiagnostics(scanResult)
+		codeLenses := convertCodeLenses(scanResult)
+
+		if len(diagnostics) > 0 {
+			select {
+			case dChan <- lsp.DiagnosticResult{
+				Uri:         sglsp.DocumentURI(string(uri) + "/" + scanResult.TargetFile),
+				Diagnostics: diagnostics,
+				Err:         err,
+			}:
+			default:
+				log.Debug().Str("method", "fetch").Msg("no diags found & sent.")
+			}
+		}
+
+		if len(codeLenses) > 0 {
+			select {
+			case clChan <- lsp.CodeLensResult{
+				Uri:        sglsp.DocumentURI(string(uri) + "/" + scanResult.TargetFile),
+				CodeLenses: codeLenses,
+				Err:        err,
+			}:
+			default:
+				log.Debug().Str("method", "fetch").Msg("no lens found & sent.")
+			}
+		}
+	}
+}
+
+func ScanFile(uri sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
+	defer wg.Done()
+	defer log.Debug().Str("method", "iac.ScanFile").Msg("done.")
+
+	log.Debug().Str("method", "iac.ScanFile").Msg("started.")
+
 	for _, supportedFile := range getDetectableFiles() {
 		if strings.HasSuffix(string(uri), supportedFile) {
-			diags, lenses, err := fetch(string(uri))
+			absolutePath, _ := getDocAbsolutePath(uri)
+
+			cmd := createCliCmd(absolutePath)
+			res, err := callSnykCLI(cmd)
 			if err != nil {
-				log.Err(err).Str("method", "iac.HandleFile").Msg("Error while calling Snyk CLI")
+				log.Err(err).Str("method", "oss.ScanFile").Msg("Error while calling Snyk CLI")
 			}
 
-			log.Debug().Str("method", "iac.HandleFile").Msg("got diags & lenses, now sending to chan.")
-			if len(diags) > 0 {
+			var scanResults iacScanResult
+			if err := json.Unmarshal(res, &res); err != nil {
+				log.Err(err).Str("method", "iac.ScanFile").Msg("Error while calling Snyk CLI")
+			}
+
+			diagnostics := convertDiagnostics(scanResults)
+			codeLenses := convertCodeLenses(scanResults)
+
+			log.Debug().Str("method", "iac.ScanFile").Msg("got diags & lenses, now sending to chan.")
+			if len(diagnostics) > 0 {
 				select {
 				case dChan <- lsp.DiagnosticResult{
 					Uri:         uri,
-					Diagnostics: diags,
+					Diagnostics: diagnostics,
 					Err:         err,
 				}:
 				default:
 					log.Debug().Str("method", "fetch").Msg("no diags found & sent.")
 				}
 			}
-			if len(lenses) > 0 {
+			if len(codeLenses) > 0 {
 				select {
 				case clChan <- lsp.CodeLensResult{
 					Uri:        uri,
-					CodeLenses: lenses,
+					CodeLenses: codeLenses,
 					Err:        err,
 				}:
 				default:
@@ -70,37 +135,44 @@ func HandleFile(uri sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.Diagno
 	}
 }
 
-func fetch(path string) ([]lsp.Diagnostic, []sglsp.CodeLens, error) {
-	log.Debug().Str("method", "fetch").Msg("started.")
+func callSnykCLI(cmd *exec.Cmd) ([]byte, error) {
 	defer log.Debug().Str("method", "fetch").Msg("done.")
-	absolutePath, err := filepath.Abs(strings.ReplaceAll(path, "file://", ""))
-	log.Debug().Msg("IAC: Absolute Path: " + absolutePath)
-	if err != nil {
-		return nil, nil, err
-	}
-	cmd := exec.Command(environment.CliPath(), "iac", "test", absolutePath, "--json")
-	log.Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
+
+	log.Debug().Str("method", "fetch").Msg("started.")
+
 	resBytes, err := cmd.CombinedOutput()
-	log.Debug().Msg(fmt.Sprintf("IAC: response: %s", resBytes))
+
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			if exitErr.ExitCode() > 1 {
-				return nil, nil, fmt.Errorf("error running %s: %s: %s", cmd, err, string(resBytes))
+				return nil, fmt.Errorf("error running %s, %s", cmd, err)
 			}
 		} else {
-			return nil, nil, fmt.Errorf("error running fetch: %s: %s", err, string(resBytes))
+			return nil, fmt.Errorf("error running callSnykCLI: %s: ", err)
 		}
 	}
-	var res testResult
-	if err := json.Unmarshal(resBytes, &res); err != nil {
-		return nil, nil, err
-	}
-	diagnostics := convertDiagnostics(res)
-	codeLenses := convertCodeLenses(res)
-	return diagnostics, codeLenses, nil
+
+	return resBytes, nil
 }
 
-func convertCodeLenses(res testResult) []sglsp.CodeLens {
+func getDocAbsolutePath(docUri sglsp.DocumentURI) (string, error) {
+	absolutePath, err := filepath.Abs(strings.ReplaceAll(string(docUri), "file://", ""))
+	if err != nil {
+		return "", err
+	}
+
+	log.Debug().Msg("IAC: Absolute Path: " + absolutePath)
+	return absolutePath, nil
+}
+
+func createCliCmd(absolutePath string) *exec.Cmd {
+	cmd := exec.Command(environment.CliPath(), "iac", "test", absolutePath, "--json")
+	log.Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
+
+	return cmd
+}
+
+func convertCodeLenses(res iacScanResult) []sglsp.CodeLens {
 	var lenses []sglsp.CodeLens
 	for _, issue := range res.IacIssues {
 		lens := sglsp.CodeLens{
@@ -121,7 +193,7 @@ func convertCodeLenses(res testResult) []sglsp.CodeLens {
 	return lenses
 }
 
-func convertDiagnostics(res testResult) []lsp.Diagnostic {
+func convertDiagnostics(res iacScanResult) []lsp.Diagnostic {
 	var diagnostics []lsp.Diagnostic
 	for _, issue := range res.IacIssues {
 		title := issue.Title
@@ -153,8 +225,15 @@ func convertDiagnostics(res testResult) []lsp.Diagnostic {
 	return diagnostics
 }
 
-type testResult struct {
-	IacIssues []struct {
+type iacScanError struct {
+	Ok    bool   `json:"ok"`
+	Error string `json:"error"`
+	Path  string `json:"path"`
+}
+
+type iacScanResult struct {
+	TargetFile string `json:"targetFile`
+	IacIssues  []struct {
 		PublicID       string  `json:"publicId"`
 		Title          string  `json:"title"`
 		Severity       string  `json:"severity"`

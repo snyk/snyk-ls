@@ -79,7 +79,7 @@ func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 	return lspSev
 }
 
-func ScanWorkspace(workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult) {
+func ScanWorkspace(workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
 	log.Debug().Str("method", "oss.ScanWorkspace").Msg("started.")
 
 	defer log.Debug().Str("method", "oss.ScanWorkspace").Msg("done.")
@@ -99,7 +99,7 @@ func ScanWorkspace(workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan l
 	targetFile := lockFilesToManifestMap[scanResults.DisplayTargetFile]
 	fileContent, err := ioutil.ReadFile(path + "/" + targetFile)
 	if err != nil {
-		fmt.Println("File reading error", err)
+		log.Err(err).Str("method", "oss.ScanWorkspace").Msgf("Error while reading the file %v, err: %v", targetFile, err)
 		return
 	}
 
@@ -186,30 +186,30 @@ func createCliCmd(absolutePath string, level ScanLevel) (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-func callSnykCLI(cmd *exec.Cmd) (*ossScanResult, error) {
+func callSnykCLI(cmd *exec.Cmd) (ossScanResult, error) {
 	log.Info().Msg(fmt.Sprintf("OSS: command: %s", cmd))
 	resBytes, err := cmd.CombinedOutput()
 
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			if exitErr.ExitCode() > 1 {
-				return nil, fmt.Errorf("error running %s, %s", cmd, err)
+				return ossScanResult{}, fmt.Errorf("error running %s, %s", cmd, err)
 			}
 		} else {
-			return nil, fmt.Errorf("error running callSnykCLI: %s: ", err)
+			return ossScanResult{}, fmt.Errorf("error running callSnykCLI: %s: ", err)
 		}
 	}
 
 	var res ossScanResult
 	if err := json.Unmarshal(resBytes, &res); err != nil {
 		log.Info().Msg(fmt.Sprintf("then logging here in the error block"))
-		return nil, err
+		return ossScanResult{}, err
 	}
 
-	return &res, nil
+	return res, nil
 }
 
-func retrieveDiagnostics(res *ossScanResult, doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
+func retrieveDiagnostics(res ossScanResult, doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
 	var diagnostics []lsp.Diagnostic
 	for _, issue := range res.Vulnerabilities {
 		title := issue.Title
