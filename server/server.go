@@ -152,9 +152,13 @@ func TextDocumentDidCloseHandler() handler.Func {
 
 func InitializeHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.InitializeParams) (interface{}, error) {
-		log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
+		// log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
 		clientParams = params
-		go diagnostics.GetDiagnostics(clientParams.RootURI)
+
+		for _, workspace := range clientParams.WorkspaceFolders {
+			go diagnostics.GetDiagnostics(workspace.Uri)
+		}
+
 		return lsp.InitializeResult{
 			Capabilities: lsp.ServerCapabilities{
 				TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{

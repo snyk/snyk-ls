@@ -3,6 +3,7 @@ package oss
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -16,12 +17,29 @@ import (
 	"github.com/snyk/snyk-ls/lsp"
 )
 
+type ScanLevel int
+
+const (
+	FileLevel ScanLevel = iota + 1
+	WorkspaceLevel
+)
+
 var (
 	severities = map[string]sglsp.DiagnosticSeverity{
 		"high": sglsp.Error,
 		"low":  sglsp.Warning,
 	}
 	// see https://github.com/snyk/snyk/blob/master/src/lib/detect.ts#L10
+	lockFilesToManifestMap = map[string]string{
+		"Gemfile.lock":      "Gemfile",
+		"package-lock.json": "package.json",
+		"yarn.lock":         "package.json",
+		"Gopkg.lock":        "Gopkg.toml",
+		"go.sum":            "go.mod",
+		"composer.lock":     "composer.json",
+		"Podfile.lock":      "Podfile",
+		"poetry.lock":       "pyproject.toml",
+	}
 )
 
 func getDetectableFiles() []string {
@@ -61,18 +79,76 @@ func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 	return lspSev
 }
 
-func HandleFile(doc sglsp.TextDocumentItem, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
-	log.Debug().Str("method", "oss.HandleFile").Msg("started.")
-	defer log.Debug().Str("method", "oss.HandleFile").Msg("done.")
+func ScanWorkspace(workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult) {
+	log.Debug().Str("method", "oss.ScanWorkspace").Msg("started.")
+
+	defer log.Debug().Str("method", "oss.ScanWorkspace").Msg("done.")
 	defer wg.Done()
+
+	path, _ := getDocAbsolutePath(workspace)
+	cmd, err := createCliCmd(path, WorkspaceLevel)
+	if err != nil {
+		log.Err(err).Str("method", "oss.ScanWorkspace").Msg("Error while generating the CLI command")
+	}
+
+	scanResults, err := callSnykCLI(cmd)
+	if err != nil {
+		log.Err(err).Str("method", "oss.ScanWorkspace").Msg(fmt.Sprintf("Error while calling Snyk CLI, err: %v", err))
+	}
+
+	targetFile := lockFilesToManifestMap[scanResults.DisplayTargetFile]
+	fileContent, err := ioutil.ReadFile(path + "/" + targetFile)
+	if err != nil {
+		fmt.Println("File reading error", err)
+		return
+	}
+
+	diags, err := retrieveDiagnostics(scanResults, sglsp.TextDocumentItem{Text: string(fileContent)})
+	if err != nil {
+		log.Err(err).Str("method", "oss.ScanFile").Msg("Error while retrieving diagnositics")
+	}
+
+	if len(diags) > 0 {
+		log.Debug().Str("method", "oss.ScanWorkspace").Msg("got diags, now sending to chan.")
+		select {
+		case dChan <- lsp.DiagnosticResult{
+			Uri:         sglsp.DocumentURI(string(workspace) + "/" + targetFile),
+			Diagnostics: diags,
+			Err:         err,
+		}:
+		default:
+			log.Debug().Str("method", "oss.HandleFolder").Msg("not sending...")
+		}
+	}
+}
+
+func ScanFile(doc sglsp.TextDocumentItem, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
+	log.Debug().Str("method", "oss.ScanFile").Msg("started.")
+
+	defer log.Debug().Str("method", "oss.ScanFile").Msg("done.")
+	defer wg.Done()
+
 	for _, supportedFile := range getDetectableFiles() {
 		if strings.HasSuffix(string(doc.URI), supportedFile) {
-			diags, err := callSnykCLI(doc)
+			path, _ := getDocAbsolutePath(doc.URI)
+
+			cmd, err := createCliCmd(path, FileLevel)
 			if err != nil {
-				log.Err(err).Str("method", "oss.HandleFile").Msg("Error while calling Snyk CLI")
+				log.Err(err).Str("method", "oss.ScanFile").Msg("Error while generating the CLI command")
 			}
+
+			scanResults, err := callSnykCLI(cmd)
+			if err != nil {
+				log.Err(err).Str("method", "oss.ScanFile").Msg("Error while calling Snyk CLI")
+			}
+
+			diags, err := retrieveDiagnostics(scanResults, doc)
+			if err != nil {
+				log.Err(err).Str("method", "oss.ScanFile").Msg("Error while retrieving diagnositics")
+			}
+
 			if len(diags) > 0 {
-				log.Debug().Str("method", "oss.HandleFile").Msg("got diags, now sending to chan.")
+				log.Debug().Str("method", "oss.ScanFile").Msg("got diags, now sending to chan.")
 				select {
 				case dChan <- lsp.DiagnosticResult{
 					Uri:         doc.URI,
@@ -80,44 +156,70 @@ func HandleFile(doc sglsp.TextDocumentItem, wg *sync.WaitGroup, dChan chan lsp.D
 					Err:         err,
 				}:
 				default:
-					log.Debug().Str("method", "oss.HandleFile").Msg("not sending...")
+					log.Debug().Str("method", "oss.ScanFile").Msg("not sending...")
 				}
 			}
 		}
 	}
 }
 
-func callSnykCLI(doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
-	absolutePath, err := filepath.Abs(strings.ReplaceAll(string(doc.URI), "file://", ""))
-	log.Debug().Msg("OSS: Absolute Path: " + absolutePath)
+func getDocAbsolutePath(docUri sglsp.DocumentURI) (string, error) {
+	absolutePath, err := filepath.Abs(strings.ReplaceAll(string(docUri), "file://", ""))
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	cmd := exec.Command(environment.CliPath(), "test", "--file="+absolutePath, "--json")
+
+	log.Debug().Msg("OSS: Absolute Path: " + absolutePath)
+	return absolutePath, nil
+}
+
+func createCliCmd(absolutePath string, level ScanLevel) (*exec.Cmd, error) {
+	var cmd *exec.Cmd
+
+	if level == FileLevel {
+		cmd = exec.Command(environment.CliPath(), "test", "--file="+absolutePath, "--json")
+	} else {
+		cmd = exec.Command(environment.CliPath(), "test", absolutePath, "--json")
+	}
+
 	log.Debug().Msg(fmt.Sprintf("OSS: command: %s", cmd))
+	return cmd, nil
+}
+
+func callSnykCLI(cmd *exec.Cmd) (*ossScanResult, error) {
+	log.Info().Msg(fmt.Sprintf("OSS: command: %s", cmd))
 	resBytes, err := cmd.CombinedOutput()
-	log.Debug().Msg(fmt.Sprintf("OSS: response: %s", resBytes))
+
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			if exitErr.ExitCode() > 1 {
-				return nil, fmt.Errorf("error running %s, %s: %s", cmd, err, string(resBytes))
+				return nil, fmt.Errorf("error running %s, %s", cmd, err)
 			}
 		} else {
-			return nil, fmt.Errorf("error running callSnykCLI: %s: %s", err, string(resBytes))
+			return nil, fmt.Errorf("error running callSnykCLI: %s: ", err)
 		}
 	}
-	var res testResult
+
+	var res ossScanResult
 	if err := json.Unmarshal(resBytes, &res); err != nil {
+		log.Info().Msg(fmt.Sprintf("then logging here in the error block"))
 		return nil, err
 	}
+
+	return &res, nil
+}
+
+func retrieveDiagnostics(res *ossScanResult, doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
 	var diagnostics []lsp.Diagnostic
 	for _, issue := range res.Vulnerabilities {
 		title := issue.Title
 		description := issue.Description
+
 		if environment.Format == environment.FormatHtml {
 			title = string(markdown.ToHTML([]byte(title), nil, nil))
 			description = string(markdown.ToHTML([]byte(description), nil, nil))
 		}
+
 		diagnostic := lsp.Diagnostic{
 			Source:   "Snyk LSP",
 			Message:  fmt.Sprintf("%s: %s\n\n%s", issue.Id, title, description),
@@ -131,6 +233,7 @@ func callSnykCLI(doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
 		}
 		diagnostics = append(diagnostics, diagnostic)
 	}
+
 	return diagnostics, nil
 }
 
@@ -196,6 +299,7 @@ type ossIssue struct {
 	From           []string `json:"from"`
 }
 
-type testResult struct {
-	Vulnerabilities []ossIssue `json:"vulnerabilities"`
+type ossScanResult struct {
+	Vulnerabilities   []ossIssue `json:"vulnerabilities"`
+	DisplayTargetFile string     `json:"displayTargetFile"`
 }

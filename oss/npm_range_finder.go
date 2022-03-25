@@ -15,8 +15,10 @@ type NpmRangeFinder struct {
 func (n *NpmRangeFinder) Find(issue ossIssue) lsp.Range {
 	searchPackage, _ := introducingPackageAndVersion(issue)
 	var lines = strings.Split(strings.ReplaceAll(n.doc.Text, "\r\n", "\n"), "\n")
+
 	var start lsp.Position
 	var end lsp.Position
+
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
 		log.Trace().Interface("issueId", issue.Id).Str("line", line).Msg("scanning line for " + searchPackage)
@@ -33,6 +35,7 @@ func (n *NpmRangeFinder) Find(issue ossIssue) lsp.Range {
 			}
 		}
 	}
+
 	n.myRange = lsp.Range{
 		Start: start,
 		End:   end,

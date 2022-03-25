@@ -47,7 +47,10 @@ func GetDiagnostics(rootUri sglsp.DocumentURI) []lsp.Diagnostic {
 		return diagnosticSlice
 	}
 
-	diagnostics, codeLenses := fetchAllRegisteredDocumentDiagnostics(rootUri)
+	var diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic
+	var codeLenses map[sglsp.DocumentURI][]sglsp.CodeLens
+
+	diagnostics, codeLenses = fetchAllWorkspaceDiagnostics(rootUri)
 
 	// add all diagnostics to cache
 	for uri := range diagnostics {
@@ -60,6 +63,41 @@ func GetDiagnostics(rootUri sglsp.DocumentURI) []lsp.Diagnostic {
 	}
 
 	return documentDiagnosticCache[rootUri]
+}
+
+func fetchAllWorkspaceDiagnostics(rootUri sglsp.DocumentURI) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens) {
+	log.Debug().Str("method", "fetchAllWorkspaceDiagnostics").Msg("started.")
+	defer log.Info().Str("method", "fetchAllWorkspaceDiagnostics").Msg("done.")
+
+	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
+	// var codeLenses []sglsp.CodeLens
+
+	wg := sync.WaitGroup{}
+	dChan := make(chan lsp.DiagnosticResult, 1)
+	// clChan := make(chan lsp.CodeLensResult, 1)
+
+	wg.Add(1)
+	go oss.ScanWorkspace(rootUri, &wg, dChan)
+	wg.Wait()
+	log.Debug().Str("method", "fetchAllWorkspaceDiagnostics").Msg("finished waiting for goroutines.")
+
+	for {
+		select {
+		case result := <-dChan:
+			log.Trace().Str("method", "fetchAllWorkspaceDiagnostics").Str("uri", string(result.Uri)).Msg("reading diag from chan.")
+			logError(result.Err, "fetchAllWorkspaceDiagnostics")
+			diagnostics[result.Uri] = append(diagnostics[result.Uri], result.Diagnostics...)
+			documentDiagnosticCache[result.Uri] = diagnostics[result.Uri]
+		/* case result := <-clChan:
+		log.Trace().Str("method", "fetchAllRegisteredDocumentDiagnostics").Str("uri", string(result.Uri)).Msg("reading lens from chan.")
+		logError(result.Err, "fetchAllRegisteredDocumentDiagnostics")
+		codeLenses = append(codeLenses, result.CodeLenses...)
+		codeLenseCache[result.Uri] = codeLenses */
+		default: // return results once channels are empty
+			log.Debug().Str("method", "fetchAllRegisteredDocumentDiagnostics").Msg("done reading diags & lenses.")
+			return diagnostics, codeLenseCache
+		}
+	}
 }
 
 func fetchAllRegisteredDocumentDiagnostics(rootUri sglsp.DocumentURI) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens) {
@@ -78,11 +116,12 @@ func fetchAllRegisteredDocumentDiagnostics(rootUri sglsp.DocumentURI) (map[sglsp
 	wg.Add(2 + bundleCount)
 
 	for _, myBundle := range bundles {
+		log.Info().Msg("bundle")
 		go myBundle.FetchDiagnosticsData(string(rootUri), &wg, dChan, clChan)
 	}
 
 	go iac.HandleFile(rootUri, &wg, dChan, clChan)
-	go oss.HandleFile(registeredDocuments[rootUri], &wg, dChan, clChan)
+	go oss.ScanFile(registeredDocuments[rootUri], &wg, dChan, clChan)
 	wg.Wait()
 	log.Debug().Str("method", "fetchAllRegisteredDocumentDiagnostics").Msg("finished waiting for goroutines.")
 
