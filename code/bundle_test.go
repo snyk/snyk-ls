@@ -1,6 +1,7 @@
 package code
 
 import (
+	"bytes"
 	"encoding/json"
 	"reflect"
 	"strconv"
@@ -116,12 +117,13 @@ func setupBundleForTesting(contentSize int) (BundleImpl, map[lsp.DocumentURI]lsp
 	b.BundleDocuments = map[lsp.DocumentURI]File{}
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 
-	var fileContent string
+	buf := new(bytes.Buffer)
+	buf.Grow(contentSize)
 	for i := 0; i < contentSize; i++ {
-		fileContent += "a"
+		buf.WriteByte('a')
 	}
 	bundleDoc := secondDoc
-	bundleDoc.Text = fileContent
+	bundleDoc.Text = buf.String()
 	registeredDocuments[bundleDoc.URI] = bundleDoc
 	return b, registeredDocuments
 }
