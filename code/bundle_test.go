@@ -41,7 +41,7 @@ func Test_createBundleFromSource_shouldReturnNonEmptyBundleHash(t *testing.T) {
 }
 
 func Test_AddToBundleDocuments_shouldNotAddDocumentToBundleIfTooBig(t *testing.T) {
-	b, registeredDocuments := setupBundleForTesting(128*1024 + 1)
+	b, registeredDocuments := setupBundleForTesting(1024*1024 + 1)
 
 	_ = b.AddToBundleDocuments(registeredDocuments)
 
