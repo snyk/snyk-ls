@@ -53,7 +53,7 @@ var (
 )
 
 const (
-	maxFileSize         = 1024 * 128
+	maxFileSize         = 1024 * 1024
 	maxBundleSize       = 1024 * 1024 * 4
 	jsonOverheadRequest = "{\"files\":{}}"
 	jsonUriOverhead     = "\"\":{}"
