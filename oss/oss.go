@@ -15,13 +15,7 @@ import (
 
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/lsp"
-)
-
-type ScanLevel int
-
-const (
-	FileLevel ScanLevel = iota + 1
-	WorkspaceLevel
+	"github.com/snyk/snyk-ls/util"
 )
 
 var (
@@ -79,6 +73,26 @@ func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 	return lspSev
 }
 
+func retrieveAnalysis(scanResults ossScanResult, uri sglsp.DocumentURI, doc sglsp.TextDocumentItem, dChan chan lsp.DiagnosticResult) {
+	diags, err := retrieveDiagnostics(scanResults, doc)
+	if err != nil {
+		log.Err(err).Str("method", "oss.ScanFile").Msg("Error while retrieving diagnositics")
+	}
+
+	if len(diags) > 0 {
+		log.Debug().Str("method", "oss.ScanWorkspace").Msg("got diags, now sending to chan.")
+		select {
+		case dChan <- lsp.DiagnosticResult{
+			Uri:         uri,
+			Diagnostics: diags,
+			Err:         err,
+		}:
+		default:
+			log.Debug().Str("method", "oss.HandleFolder").Msg("not sending...")
+		}
+	}
+}
+
 func ScanWorkspace(workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
 	log.Debug().Str("method", "oss.ScanWorkspace").Msg("started.")
 
@@ -86,7 +100,7 @@ func ScanWorkspace(workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan l
 	defer wg.Done()
 
 	path, _ := getDocAbsolutePath(workspace)
-	cmd, err := createCliCmd(path, WorkspaceLevel)
+	cmd, err := createCliCmd(path, util.WorkspaceLevel)
 	if err != nil {
 		log.Err(err).Str("method", "oss.ScanWorkspace").Msg("Error while generating the CLI command")
 	}
@@ -103,23 +117,10 @@ func ScanWorkspace(workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan l
 		return
 	}
 
-	diags, err := retrieveDiagnostics(scanResults, sglsp.TextDocumentItem{Text: string(fileContent)})
-	if err != nil {
-		log.Err(err).Str("method", "oss.ScanFile").Msg("Error while retrieving diagnositics")
-	}
+	var uri = sglsp.DocumentURI(string(workspace) + "/" + targetFile)
+	var doc = sglsp.TextDocumentItem{Text: string(fileContent)}
 
-	if len(diags) > 0 {
-		log.Debug().Str("method", "oss.ScanWorkspace").Msg("got diags, now sending to chan.")
-		select {
-		case dChan <- lsp.DiagnosticResult{
-			Uri:         sglsp.DocumentURI(string(workspace) + "/" + targetFile),
-			Diagnostics: diags,
-			Err:         err,
-		}:
-		default:
-			log.Debug().Str("method", "oss.HandleFolder").Msg("not sending...")
-		}
-	}
+	retrieveAnalysis(scanResults, uri, doc, dChan)
 }
 
 func ScanFile(doc sglsp.TextDocumentItem, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
@@ -132,7 +133,8 @@ func ScanFile(doc sglsp.TextDocumentItem, wg *sync.WaitGroup, dChan chan lsp.Dia
 		if strings.HasSuffix(string(doc.URI), supportedFile) {
 			path, _ := getDocAbsolutePath(doc.URI)
 
-			cmd, err := createCliCmd(path, FileLevel)
+			cmd, err := createCliCmd(path, util.FileLevel)
+
 			if err != nil {
 				log.Err(err).Str("method", "oss.ScanFile").Msg("Error while generating the CLI command")
 			}
@@ -142,23 +144,7 @@ func ScanFile(doc sglsp.TextDocumentItem, wg *sync.WaitGroup, dChan chan lsp.Dia
 				log.Err(err).Str("method", "oss.ScanFile").Msg("Error while calling Snyk CLI")
 			}
 
-			diags, err := retrieveDiagnostics(scanResults, doc)
-			if err != nil {
-				log.Err(err).Str("method", "oss.ScanFile").Msg("Error while retrieving diagnositics")
-			}
-
-			if len(diags) > 0 {
-				log.Debug().Str("method", "oss.ScanFile").Msg("got diags, now sending to chan.")
-				select {
-				case dChan <- lsp.DiagnosticResult{
-					Uri:         doc.URI,
-					Diagnostics: diags,
-					Err:         err,
-				}:
-				default:
-					log.Debug().Str("method", "oss.ScanFile").Msg("not sending...")
-				}
-			}
+			retrieveAnalysis(scanResults, doc.URI, doc, dChan)
 		}
 	}
 }
@@ -173,10 +159,10 @@ func getDocAbsolutePath(docUri sglsp.DocumentURI) (string, error) {
 	return absolutePath, nil
 }
 
-func createCliCmd(absolutePath string, level ScanLevel) (*exec.Cmd, error) {
+func createCliCmd(absolutePath string, level util.ScanLevel) (*exec.Cmd, error) {
 	var cmd *exec.Cmd
 
-	if level == FileLevel {
+	if level == util.FileLevel {
 		cmd = exec.Command(environment.CliPath(), "test", "--file="+absolutePath, "--json")
 	} else {
 		cmd = exec.Command(environment.CliPath(), "test", absolutePath, "--json")
@@ -202,7 +188,6 @@ func callSnykCLI(cmd *exec.Cmd) (ossScanResult, error) {
 
 	var res ossScanResult
 	if err := json.Unmarshal(resBytes, &res); err != nil {
-		log.Info().Msg(fmt.Sprintf("then logging here in the error block"))
 		return ossScanResult{}, err
 	}
 

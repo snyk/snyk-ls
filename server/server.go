@@ -14,10 +14,11 @@ import (
 	"github.com/snyk/snyk-ls/diagnostics"
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/lsp"
+	"github.com/snyk/snyk-ls/util"
 )
 
 var (
-	clientParams sglsp.InitializeParams
+	clientParams lsp.InitializeParams
 )
 
 func Start() {
@@ -90,7 +91,7 @@ func TextDocumentDidChangeHandler() handler.Func {
 }
 
 func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv **jrpc2.Server) {
-	diags := diagnostics.GetDiagnostics(uri)
+	diags := diagnostics.GetDiagnostics(uri, util.FileLevel)
 	if diags != nil {
 		diagnosticsParams := lsp.PublishDiagnosticsParams{
 			URI:         uri,
@@ -151,12 +152,12 @@ func TextDocumentDidCloseHandler() handler.Func {
 }
 
 func InitializeHandler() handler.Func {
-	return handler.New(func(ctx context.Context, params sglsp.InitializeParams) (interface{}, error) {
-		// log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
+	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
+		log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
 		clientParams = params
 
 		for _, workspace := range clientParams.WorkspaceFolders {
-			go diagnostics.GetDiagnostics(workspace.Uri)
+			go diagnostics.GetDiagnostics(workspace.Uri, util.WorkspaceLevel)
 		}
 
 		return lsp.InitializeResult{

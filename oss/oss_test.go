@@ -25,7 +25,7 @@ func Test_HandleFile(t *testing.T) {
 	dChan := make(chan lsp.DiagnosticResult)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go HandleFile(doc, &wg, dChan, nil)
+	go ScanFile(doc, &wg, dChan, nil)
 	diagnosticResult := <-dChan
 	assert.NotEqual(t, 0, len(diagnosticResult.Diagnostics))
 	assert.True(t, strings.Contains(diagnosticResult.Diagnostics[0].Message, "<p>"))

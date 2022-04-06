@@ -127,6 +127,27 @@ type InitializeResult struct {
 	Capabilities ServerCapabilities `json:"capabilities,omitempty"`
 }
 
+type InitializeParams struct {
+	ProcessID int `json:"processId,omitempty"`
+
+	// RootPath is DEPRECATED in favor of the RootURI field.
+	RootPath string `json:"rootPath,omitempty"`
+
+	RootURI               sglsp.DocumentURI        `json:"rootUri,omitempty"`
+	ClientInfo            sglsp.ClientInfo         `json:"clientInfo,omitempty"`
+	Trace                 sglsp.Trace              `json:"trace,omitempty"`
+	InitializationOptions interface{}              `json:"initializationOptions,omitempty"`
+	Capabilities          sglsp.ClientCapabilities `json:"capabilities"`
+
+	WorkDoneToken    string             `json:"workDoneToken,omitempty"`
+	WorkspaceFolders []WorkspaceFolders `json:"workspaceFolders,omitempty"`
+}
+
+type WorkspaceFolders struct {
+	Name string            `json:"name,omitempty"`
+	Uri  sglsp.DocumentURI `json:"uri,omitempty"`
+}
+
 type ServerCapabilities struct {
 	TextDocumentSync                   *sglsp.TextDocumentSyncOptionsOrKind   `json:"textDocumentSync,omitempty"`
 	HoverProvider                      bool                                   `json:"hoverProvider,omitempty"`

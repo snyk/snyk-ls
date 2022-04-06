@@ -1,6 +1,9 @@
 package diagnostics
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -10,6 +13,7 @@ import (
 	"github.com/snyk/snyk-ls/iac"
 	"github.com/snyk/snyk-ls/lsp"
 	"github.com/snyk/snyk-ls/oss"
+	"github.com/snyk/snyk-ls/util"
 )
 
 var (
@@ -17,6 +21,7 @@ var (
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	bundles                 []*code.BundleImpl
 	SnykCode                code.SnykCodeService
+	mutex                   = &sync.Mutex{}
 )
 
 func ClearDiagnosticsCache(uri sglsp.DocumentURI) {
@@ -40,7 +45,47 @@ func UnRegisterDocument(file sglsp.DocumentURI) {
 	delete(registeredDocuments, file)
 }
 
-func GetDiagnostics(rootUri sglsp.DocumentURI) []lsp.Diagnostic {
+func getDocAbsolutePath(docUri sglsp.DocumentURI) (string, error) {
+	absolutePath, err := filepath.Abs(strings.ReplaceAll(string(docUri), "file://", ""))
+	if err != nil {
+		return "", err
+	}
+
+	log.Debug().Msg("OSS: Absolute Path: " + absolutePath)
+	return absolutePath, nil
+}
+
+func RegisterAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) error {
+	dir, err := getDocAbsolutePath(workspaceUri)
+	if err != nil {
+		return err
+	}
+
+	return filepath.Walk(dir,
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			filePath := "file://" + path
+
+			if info, err := os.Stat(path); err == nil && !info.IsDir() {
+				dat, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+
+				log.Info().Msgf("Registering document %v", path)
+
+				mutex.Lock()
+				RegisterDocument(sglsp.TextDocumentItem{URI: sglsp.DocumentURI(filePath), Text: string(dat)})
+				mutex.Unlock()
+			}
+
+			return nil
+		})
+}
+
+func GetDiagnostics(rootUri sglsp.DocumentURI, level util.ScanLevel) []lsp.Diagnostic {
 	// serve from cache
 	diagnosticSlice := documentDiagnosticCache[rootUri]
 	if len(diagnosticSlice) > 0 {
@@ -50,7 +95,16 @@ func GetDiagnostics(rootUri sglsp.DocumentURI) []lsp.Diagnostic {
 	var diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic
 	var codeLenses map[sglsp.DocumentURI][]sglsp.CodeLens
 
-	diagnostics, codeLenses = fetchAllWorkspaceDiagnostics(rootUri)
+	if level == util.WorkspaceLevel {
+		err := RegisterAllFilesFromWorkspace(rootUri)
+		if err != nil {
+			log.Error().Err(err).Str("method", "GetDiagnostics").Msg("Error occurred while registering files from workspace")
+		}
+
+		diagnostics, codeLenses = fetchAllWorkspaceDiagnostics(rootUri)
+	} else {
+		diagnostics, codeLenses = fetchAllRegisteredDocumentDiagnostics(rootUri)
+	}
 
 	// add all diagnostics to cache
 	for uri := range diagnostics {
@@ -72,11 +126,20 @@ func fetchAllWorkspaceDiagnostics(rootUri sglsp.DocumentURI) (map[sglsp.Document
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	var codeLenses []sglsp.CodeLens
 
-	wg := sync.WaitGroup{}
-	dChan := make(chan lsp.DiagnosticResult, 2)
-	clChan := make(chan lsp.CodeLensResult, 2)
+	createOrExtendBundles(registeredDocuments)
+	bundleCount := len(bundles)
 
-	wg.Add(2)
+	dChan := make(chan lsp.DiagnosticResult, len(registeredDocuments))
+	clChan := make(chan lsp.CodeLensResult, len(registeredDocuments))
+
+	wg := sync.WaitGroup{}
+	wg.Add(2 + bundleCount)
+
+	for _, myBundle := range bundles {
+		log.Info().Msg("bundle")
+		go myBundle.FetchDiagnosticsData(string(rootUri), &wg, dChan, clChan)
+	}
+
 	go iac.ScanWorkspace(rootUri, &wg, dChan, clChan)
 	go oss.ScanWorkspace(rootUri, &wg, dChan, clChan)
 	wg.Wait()

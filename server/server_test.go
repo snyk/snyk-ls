@@ -22,6 +22,7 @@ import (
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/diagnostics"
+	"github.com/snyk/snyk-ls/util"
 )
 
 var (
@@ -384,8 +385,8 @@ func Test_IntegrationTestBigProjectScan(t *testing.T) {
 
 	assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
 	assert.Len(t, diagnosticsParams.Diagnostics, 1)
-	assert.Equal(t, diagnosticsParams.Diagnostics[0].Code, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Code)
-	assert.Equal(t, diagnosticsParams.Diagnostics[0].Range, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Range)
+	assert.Equal(t, diagnosticsParams.Diagnostics[0].Code, diagnostics.GetDiagnostics(diagnosticsParams.URI, util.FileLevel)[0].Code)
+	assert.Equal(t, diagnosticsParams.Diagnostics[0].Range, diagnostics.GetDiagnostics(diagnosticsParams.URI, util.FileLevel)[0].Range)
 }
 
 func setupTestRepo() (string, error) {
