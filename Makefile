@@ -57,6 +57,11 @@ run:
 	@echo "==> Running Snyk LS server..."
 	@go run main.go --reportErrors
 
+.PHONY: install
+install:
+	@echo "==> Installing binary..."
+	@go install -ldflags='-X 'github.com/snyk/snyk-ls/config.Development=true''
+
 help: Makefile
 	@echo "Usage: make <command>"
 	@echo ""
