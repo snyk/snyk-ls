@@ -7,7 +7,9 @@ BUILD_DIR := build
 DEV_GOARCH := $(shell go env GOARCH)
 DEV_GOOS := $(shell go env GOOS)
 GOPATH := $(shell go env GOPATH)
-
+VERSION := $(shell git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)
+COMMIT := $(shell git show -s --oneline)
+LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/config.Development=true' -X 'github.com/snyk/snyk-ls/config.Version=v$(VERSION)-SNAPSHOT-$(COMMIT)'"
 
 ## tools: Install required tooling.
 .PHONY: tools
@@ -45,10 +47,10 @@ build:
 # workaround for missing .exe extension on Windows
 ifeq ($(OS),Windows_NT)
 	@go build -o $(BUILD_DIR)/$(PROJECT_NAME).$(DEV_GOOS).$(DEV_GOARCH).exe \
-		-ldflags='-X 'github.com/snyk/snyk-ls/config.Development=true''
+		-ldflags=-ldflags=$(LDFLAGS_DEV)
 else
 	@go build -o $(BUILD_DIR)/$(PROJECT_NAME).$(DEV_GOOS).$(DEV_GOARCH) \
-		-ldflags='-X 'github.com/snyk/snyk-ls/config.Development=true''
+		-ldflags=-ldflags=$(LDFLAGS_DEV)
 endif
 
 ## run: Compile and run LSP server.
@@ -60,7 +62,7 @@ run:
 .PHONY: install
 install:
 	@echo "==> Installing binary..."
-	@go install -ldflags='-X 'github.com/snyk/snyk-ls/config.Development=true''
+	@go install -ldflags=$(LDFLAGS_DEV)
 
 help: Makefile
 	@echo "Usage: make <command>"
