@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/fs"
@@ -22,7 +23,7 @@ import (
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/diagnostics"
-	"github.com/snyk/snyk-ls/util"
+	slsp "github.com/snyk/snyk-ls/lsp"
 )
 
 var (
@@ -91,6 +92,7 @@ func startServer() server.Local {
 			AllowPush: true,
 		},
 	}
+
 	loc := server.NewLocal(lspHandlers, opts)
 	srv = loc.Server
 	return loc
@@ -313,6 +315,7 @@ func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 	if err != nil {
 		log.Fatal().Err(err)
 	}
+
 	rsp, err := loc.Client.Call(ctx, "textDocument/codeLens", codeLensParams)
 	if err != nil {
 		log.Fatal().Err(err)
@@ -325,6 +328,82 @@ func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 	} else {
 		assert.Equal(t, 1, len(codeLenses))
 	}
+}
+
+func Test_IntegrationTestWorkspaceScan(t *testing.T) {
+	if !environment.RunIntegTest {
+		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
+	}
+
+	loc := startServer()
+	defer func(loc server.Local) {
+		_ = loc.Close()
+	}(loc)
+
+	var cloneTargetDir, err = setupTestRepo()
+	defer os.RemoveAll(cloneTargetDir)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Couldn't setup test repo")
+	}
+
+	clientParams := slsp.InitializeParams{
+		WorkspaceFolders: []slsp.WorkspaceFolders{
+			{
+				Name: "Test Repo",
+				Uri:  lsp.DocumentURI(cloneTargetDir + "/maven-compat/src/test/java/org/apache/maven/repository/legacy/"),
+			},
+		},
+	}
+
+	logBuffer := new(bytes.Buffer)
+	log.Logger = log.Output(zerolog.SyncWriter(logBuffer))
+	t.Cleanup(func() {
+		log.Logger = log.Output(os.Stderr)
+	})
+
+	_, err = loc.Client.Call(ctx, "initialize", clientParams)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Call failed")
+	}
+
+	assert.Eventually(t, func() bool {
+		capturedLogs := logBuffer.String()
+		return strings.Contains(capturedLogs, "fetchAllRegisteredDocumentDiagnostics") && strings.Contains(capturedLogs, "done")
+	}, 15*time.Second, 15*time.Millisecond)
+
+	t.Log(logBuffer.String())
+
+	// set real backend
+	/* diagnostics.SnykCode = &code.SnykCodeBackendService{}
+	testPath := cloneTargetDir + "/maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
+	testFileContent, err := os.ReadFile(testPath)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Couldn't read file content of test file")
+	}
+
+	didOpenParams := lsp.DidOpenTextDocumentParams{
+		TextDocument: lsp.TextDocumentItem{
+			URI:  lsp.DocumentURI("file://" + testPath),
+			Text: string(testFileContent),
+		},
+	}
+
+	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Call failed")
+	}
+
+	t.Log(logBuffer.String()) */
+
+	// should receive diagnosticsParams
+	// diagnosticsParams := lsp.PublishDiagnosticsParams{}
+
+	/* assert.Eventually(t, func() bool { return notification != nil }, 10*time.Second, 10*time.Millisecond)
+	_ = notification.UnmarshalParams(&diagnosticsParams) */
+
+	// assert.Len(t, diagnosticsParams.Diagnostics, 1)
+	/* assert.Equal(t, diagnosticsParams.Diagnostics[0].Code, diagnostics.GetDiagnostics(diagnosticsParams.URI, lsp.ScanFile)[0].Code)
+	assert.Equal(t, diagnosticsParams.Diagnostics[0].Range, diagnostics.GetDiagnostics(diagnosticsParams.URI, lsp.ScanFile)[0].Range) */
 }
 
 func Test_IntegrationTestBigProjectScan(t *testing.T) {
@@ -372,6 +451,7 @@ func Test_IntegrationTestBigProjectScan(t *testing.T) {
 			Text: string(testFileContent),
 		},
 	}
+
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Call failed")
@@ -385,8 +465,8 @@ func Test_IntegrationTestBigProjectScan(t *testing.T) {
 
 	assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
 	assert.Len(t, diagnosticsParams.Diagnostics, 1)
-	assert.Equal(t, diagnosticsParams.Diagnostics[0].Code, diagnostics.GetDiagnostics(diagnosticsParams.URI, util.FileLevel)[0].Code)
-	assert.Equal(t, diagnosticsParams.Diagnostics[0].Range, diagnostics.GetDiagnostics(diagnosticsParams.URI, util.FileLevel)[0].Range)
+	assert.Equal(t, diagnosticsParams.Diagnostics[0].Code, diagnostics.GetDiagnostics(diagnosticsParams.URI, slsp.ScanFile)[0].Code)
+	assert.Equal(t, diagnosticsParams.Diagnostics[0].Range, diagnostics.GetDiagnostics(diagnosticsParams.URI, slsp.ScanFile)[0].Range)
 }
 
 func setupTestRepo() (string, error) {
@@ -402,10 +482,13 @@ func setupTestRepo() (string, error) {
 	if err != nil {
 		log.Fatal().Err(err)
 	}
+
 	log.Debug().Msg(string(output))
 	output, _ = reset.CombinedOutput()
+
 	log.Debug().Msg(string(output))
 	output, err = clean.CombinedOutput()
+
 	log.Debug().Msg(string(output))
 	return cloneTargetDir, err
 }

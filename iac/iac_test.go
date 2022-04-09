@@ -16,7 +16,30 @@ import (
 	lsp2 "github.com/snyk/snyk-ls/lsp"
 )
 
-func Test_HandleFile(t *testing.T) {
+func Test_ScanWorkspace(t *testing.T) {
+	environment.Load()
+	environment.Format = environment.FormatHtml
+
+	path, _ := filepath.Abs("testdata")
+	doc := lsp.DocumentURI(path)
+
+	dChan := make(chan lsp2.DiagnosticResult, 1)
+	clChan := make(chan lsp2.CodeLensResult, 1)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go ScanWorkspace(doc, &wg, dChan, clChan)
+	wg.Wait()
+
+	diagnosticResult := <-dChan
+	assert.NotEqual(t, 0, len(diagnosticResult.Diagnostics))
+
+	codeLensResult := <-clChan
+	assert.NotEqual(t, 0, len(codeLensResult.CodeLenses))
+	assert.True(t, strings.Contains(diagnosticResult.Diagnostics[0].Message, "<p>"))
+}
+
+func Test_ScanFile(t *testing.T) {
 	environment.Load()
 	environment.Format = environment.FormatHtml
 
@@ -40,16 +63,13 @@ func Test_HandleFile(t *testing.T) {
 
 	diagnosticResult := <-dChan
 	assert.NotEqual(t, 0, len(diagnosticResult.Diagnostics))
+
 	codeLensResult := <-clChan
 	assert.NotEqual(t, 0, len(codeLensResult.CodeLenses))
 	assert.True(t, strings.Contains(diagnosticResult.Diagnostics[0].Message, "<p>"))
 }
 
-func Test_IntegrationIacDiagnosticsRetrieval(t *testing.T) {
-	if !environment.RunIntegTest {
-		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
-	}
-
+func Test_IacDiagnosticsRetrieval(t *testing.T) {
 	path, _ := filepath.Abs("testdata/RBAC.yaml")
 
 	cmd := createCliCmd(path)
@@ -67,11 +87,7 @@ func Test_IntegrationIacDiagnosticsRetrieval(t *testing.T) {
 	assert.NotEqual(t, 0, len(diagnostics))
 }
 
-func Test_IntegrationIacCodelensRetrieval(t *testing.T) {
-	if !environment.RunIntegTest {
-		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
-	}
-
+func Test_IacCodelensRetrieval(t *testing.T) {
 	path, _ := filepath.Abs("testdata/RBAC.yaml")
 
 	cmd := createCliCmd(path)

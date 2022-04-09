@@ -10,6 +10,17 @@ const (
 	FocusOut   TextDocumentSaveReason = 2
 )
 
+type ScanLevel int
+
+const (
+	ScanFile ScanLevel = iota + 1
+	ScanWorkspace
+)
+
+func (sl ScanLevel) String() string {
+	return []string{"File", "Workspace"}[sl]
+}
+
 type TextDocumentSaveReason int
 
 type DiagnosticResult struct {

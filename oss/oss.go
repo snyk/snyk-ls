@@ -15,7 +15,6 @@ import (
 
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/lsp"
-	"github.com/snyk/snyk-ls/util"
 )
 
 var (
@@ -100,7 +99,7 @@ func ScanWorkspace(workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan l
 	defer wg.Done()
 
 	path, _ := getDocAbsolutePath(workspace)
-	cmd, err := createCliCmd(path, util.WorkspaceLevel)
+	cmd, err := createCliCmd(path, lsp.ScanWorkspace)
 	if err != nil {
 		log.Err(err).Str("method", "oss.ScanWorkspace").Msg("Error while generating the CLI command")
 	}
@@ -133,7 +132,7 @@ func ScanFile(doc sglsp.TextDocumentItem, wg *sync.WaitGroup, dChan chan lsp.Dia
 		if strings.HasSuffix(string(doc.URI), supportedFile) {
 			path, _ := getDocAbsolutePath(doc.URI)
 
-			cmd, err := createCliCmd(path, util.FileLevel)
+			cmd, err := createCliCmd(path, lsp.ScanFile)
 
 			if err != nil {
 				log.Err(err).Str("method", "oss.ScanFile").Msg("Error while generating the CLI command")
@@ -159,10 +158,10 @@ func getDocAbsolutePath(docUri sglsp.DocumentURI) (string, error) {
 	return absolutePath, nil
 }
 
-func createCliCmd(absolutePath string, level util.ScanLevel) (*exec.Cmd, error) {
+func createCliCmd(absolutePath string, level lsp.ScanLevel) (*exec.Cmd, error) {
 	var cmd *exec.Cmd
 
-	if level == util.FileLevel {
+	if level == lsp.ScanFile {
 		cmd = exec.Command(environment.CliPath(), "test", "--file="+absolutePath, "--json")
 	} else {
 		cmd = exec.Command(environment.CliPath(), "test", absolutePath, "--json")
