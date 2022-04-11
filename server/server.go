@@ -155,7 +155,11 @@ func InitializeHandler() handler.Func {
 		log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
 		clientParams = params
 
-		go diagnostics.Workspace(clientParams.WorkspaceFolders)
+		if len(clientParams.WorkspaceFolders) > 0 {
+			go diagnostics.WorkspaceScan(clientParams.WorkspaceFolders)
+		} else {
+			go diagnostics.GetDiagnostics(clientParams.RootURI)
+		}
 
 		return lsp.InitializeResult{
 			Capabilities: lsp.ServerCapabilities{

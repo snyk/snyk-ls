@@ -43,15 +43,7 @@ func ScanWorkspace(
 
 	log.Debug().Str("method", "iac.ScanWorkspace").Msg("started.")
 
-	path, err := filepath.Abs(strings.ReplaceAll(string(uri), "file://", ""))
-	if err != nil {
-		log.Err(err).Str("method", "iac.ScanWorkspace").
-			Msg("Error while extracting file absolutePath")
-	}
-
-	cmd := exec.Command(environment.CliPath(), "iac", "test", path, "--json")
-	log.Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
-	res, err := scan(cmd)
+	res, err := scan(cliCmd(uri))
 	if err != nil {
 		log.Err(err).Str("method", "iac.ScanWorkspace").
 			Msg("Error while calling Snyk CLI")
@@ -65,8 +57,7 @@ func ScanWorkspace(
 
 	log.Info().Str("method", "iac.ScanWorkspace").
 		Msg("got diags & lenses, now sending to chan.")
-	for i := 1; i < len(scanResults); i++ {
-		scanResult := scanResults[i]
+	for _, scanResult := range scanResults {
 		uri := sglsp.DocumentURI(string(uri) + "/" + scanResult.TargetFile)
 		retrieveAnalysis(uri, scanResult, dChan, clChan, err)
 	}
@@ -85,15 +76,7 @@ func ScanFile(
 
 	for _, supportedFile := range getDetectableFiles() {
 		if strings.HasSuffix(string(uri), supportedFile) {
-			path, err := filepath.Abs(strings.ReplaceAll(string(uri), "file://", ""))
-			if err != nil {
-				log.Err(err).Str("method", "iac.ScanFile").
-					Msg("Error while extracting file absolutePath")
-			}
-
-			cmd := exec.Command(environment.CliPath(), "iac", "test", path, "--json")
-			log.Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
-			res, err := scan(cmd)
+			res, err := scan(cliCmd(uri))
 			if err != nil {
 				log.Err(err).Str("method", "iac.ScanFile").
 					Msg("Error while calling Snyk CLI")
@@ -108,6 +91,19 @@ func ScanFile(
 			retrieveAnalysis(uri, scanResults, dChan, clChan, err)
 		}
 	}
+}
+
+func cliCmd(uri sglsp.DocumentURI) *exec.Cmd {
+	path, err := filepath.Abs(strings.ReplaceAll(string(uri), "file://", ""))
+	if err != nil {
+		log.Err(err).Str("method", "iac.ScanFile").
+			Msg("Error while extracting file absolutePath")
+	}
+
+	cmd := exec.Command(environment.CliPath(), "iac", "test", path, "--json")
+	log.Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
+
+	return cmd
 }
 
 func scan(cmd *exec.Cmd) ([]byte, error) {

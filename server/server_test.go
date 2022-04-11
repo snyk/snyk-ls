@@ -356,7 +356,7 @@ func Test_IntegrationWorkspaceScan(t *testing.T) {
 			logBuffer.String(), "Workspace") &&
 			strings.Contains(logBuffer.String(),
 				"Workspace scan completed")
-	}, 60*time.Second, 60*time.Millisecond)
+	}, 90*time.Second, 90*time.Millisecond)
 
 	testPath := cloneTargetDir + "/maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
 
