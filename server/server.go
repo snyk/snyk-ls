@@ -90,7 +90,7 @@ func TextDocumentDidChangeHandler() handler.Func {
 }
 
 func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv **jrpc2.Server) {
-	diags := diagnostics.GetDiagnostics(uri, lsp.ScanFile)
+	diags := diagnostics.GetDiagnostics(uri)
 	if diags != nil {
 		diagnosticsParams := lsp.PublishDiagnosticsParams{
 			URI:         uri,
@@ -155,9 +155,7 @@ func InitializeHandler() handler.Func {
 		log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
 		clientParams = params
 
-		for _, workspace := range clientParams.WorkspaceFolders {
-			go diagnostics.GetDiagnostics(workspace.Uri, lsp.ScanWorkspace)
-		}
+		go diagnostics.Workspace(clientParams.WorkspaceFolders)
 
 		return lsp.InitializeResult{
 			Capabilities: lsp.ServerCapabilities{

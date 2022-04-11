@@ -38,7 +38,7 @@ func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 	RegisterDocument(doc)
 	documentDiagnosticCache[doc.URI] = []lsp.Diagnostic{code.FakeDiagnostic}
 
-	diagnostics := GetDiagnostics(doc.URI, lsp.ScanFile)
+	diagnostics := GetDiagnostics(doc.URI)
 
 	assert.NotNil(t, diagnostics)
 	assert.NotEmpty(t, documentDiagnosticCache[doc.URI])
@@ -64,7 +64,7 @@ func Test_GetDiagnostics_shouldAddCodeLenses(t *testing.T) {
 	RegisterDocument(doc)
 	SnykCode = &code.FakeSnykCodeApiService{}
 
-	diagnostics := GetDiagnostics(doc.URI, lsp.ScanFile)
+	diagnostics := GetDiagnostics(doc.URI)
 
 	assert.Equal(t, len(documentDiagnosticCache[doc.URI]), len(diagnostics))
 	lenses, _ := GetCodeLenses(doc.URI)
@@ -84,7 +84,7 @@ func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
 	RegisterDocument(empty)
 	SnykCode = &code.FakeSnykCodeApiService{}
 
-	GetDiagnostics(doc.URI, lsp.ScanFile)
+	GetDiagnostics(doc.URI)
 
 	// verify that create bundle has NOT been called on backend service
 	params := SnykCode.(*code.FakeSnykCodeApiService).GetCallParams(0, code.CreateBundleWithSourceOperation)

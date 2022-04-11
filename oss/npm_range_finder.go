@@ -42,3 +42,25 @@ func (n *NpmRangeFinder) Find(issue ossIssue) lsp.Range {
 	}
 	return n.myRange
 }
+
+func introducingPackageAndVersion(issue ossIssue) (string, string) {
+	var packageName string
+	var version string
+	if len(issue.From) > 1 {
+		split := strings.Split(issue.From[1], "@")
+		packageSplit := split[0]
+		switch issue.PackageManager {
+		case "maven":
+			index := strings.LastIndex(packageSplit, ":")
+			packageName = packageSplit[index+1:]
+		default:
+			packageName = packageSplit
+		}
+		version = split[1]
+	} else {
+		packageName = issue.Name
+		version = issue.Version
+	}
+	log.Debug().Str("issueId", issue.Id).Str("IntroducingPackage", packageName).Str("IntroducingVersion", version).Msg("Introducing package and version")
+	return packageName, version
+}

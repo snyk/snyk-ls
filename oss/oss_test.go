@@ -99,17 +99,6 @@ func Test_introducingPackageAndVersionJava(t *testing.T) {
 	assert.Equal(t, "test", actualPackage)
 }
 
-func Test_createCliCmd(t *testing.T) {
-	environment.Load()
-
-	cmd, _ := createCliCmd("/path/to/file", lsp.ScanFile)
-	assert.True(t, strings.Contains(cmd.Args[2], "--file=/path/to/file"))
-
-	cmd, _ = createCliCmd("/path/to/workspace", lsp.ScanWorkspace)
-	assert.False(t, strings.Contains(cmd.Args[2], "--file=/path/to/workspace"))
-	assert.True(t, strings.Contains(cmd.Args[2], "/path/to/workspace"))
-}
-
 func mavenTestIssue() ossIssue {
 	var issue = ossIssue{
 		Id:             "testIssue",

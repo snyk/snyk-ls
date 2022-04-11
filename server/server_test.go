@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -57,6 +55,23 @@ func didSaveTextParams() lsp.DidSaveTextDocumentParams {
 	return didSaveParams
 }
 
+func setupServer() (server.Local, func(l *server.Local)) {
+	loc := startServer()
+
+	return loc, func(loc *server.Local) {
+		loc.Close()
+	}
+}
+
+func setupLogCapture() (*bytes.Buffer, func()) {
+	logBuffer := new(bytes.Buffer)
+	log.Logger = log.Output(zerolog.SyncWriter(logBuffer))
+
+	return logBuffer, func() {
+		log.Logger = log.Output(os.Stderr)
+	}
+}
+
 func startServer() server.Local {
 	var srv *jrpc2.Server
 
@@ -95,15 +110,13 @@ func startServer() server.Local {
 
 	loc := server.NewLocal(lspHandlers, opts)
 	srv = loc.Server
+
 	return loc
 }
 
 func Test_serverShouldStart(t *testing.T) {
-	loc := startServer()
-	// TODO(pavel): extract to setup/teardown methods
-	defer func(loc server.Local) {
-		_ = loc.Close()
-	}(loc)
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
 
 	si := loc.Server.ServerInfo()
 
@@ -111,10 +124,8 @@ func Test_serverShouldStart(t *testing.T) {
 }
 
 func Test_dummy_shouldNotBeServed(t *testing.T) {
-	loc := startServer()
-	defer func(loc server.Local) {
-		_ = loc.Close()
-	}(loc)
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
 
 	_, err := loc.Client.Call(ctx, "dummy", nil)
 	if err == nil {
@@ -123,10 +134,8 @@ func Test_dummy_shouldNotBeServed(t *testing.T) {
 }
 
 func Test_initialize_shouldBeServed(t *testing.T) {
-	loc := startServer()
-	defer func(loc server.Local) {
-		_ = loc.Close()
-	}(loc)
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -139,10 +148,8 @@ func Test_initialize_shouldBeServed(t *testing.T) {
 }
 
 func Test_initialize_shouldSupportDocumentOpening(t *testing.T) {
-	loc := startServer()
-	defer func(loc server.Local) {
-		_ = loc.Close()
-	}(loc)
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -156,10 +163,8 @@ func Test_initialize_shouldSupportDocumentOpening(t *testing.T) {
 }
 
 func Test_initialize_shouldSupportDocumentChanges(t *testing.T) {
-	loc := startServer()
-	defer func(loc server.Local) {
-		_ = loc.Close()
-	}(loc)
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -173,10 +178,8 @@ func Test_initialize_shouldSupportDocumentChanges(t *testing.T) {
 }
 
 func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
-	loc := startServer()
-	defer func(loc server.Local) {
-		_ = loc.Close()
-	}(loc)
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -192,10 +195,8 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 }
 
 func Test_initialize_shouldSupportCodeLens(t *testing.T) {
-	loc := startServer()
-	defer func(loc server.Local) {
-		_ = loc.Close()
-	}(loc)
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -209,10 +210,8 @@ func Test_initialize_shouldSupportCodeLens(t *testing.T) {
 }
 
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
-	loc := startServer()
-	defer func(loc server.Local) {
-		_ = loc.Close()
-	}(loc)
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
 
 	didOpenParams := didOpenTextParams()
 
@@ -231,10 +230,8 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 }
 
 func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
-	loc := startServer()
-	defer func(loc server.Local) {
-		_ = loc.Close()
-	}(loc)
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
 
 	// register our dummy document
 	didOpenParams := didOpenTextParams()
@@ -255,10 +252,8 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 }
 
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
-	loc := startServer()
-	defer func(loc server.Local) {
-		_ = loc.Close()
-	}(loc)
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
 
 	didSaveParams := didSaveTextParams()
 
@@ -277,10 +272,8 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 }
 
 func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
-	loc := startServer()
-	defer func(loc server.Local) {
-		_ = loc.Close()
-	}(loc)
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSaveWaitUntil", nil)
 	if err != nil {
@@ -289,10 +282,8 @@ func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
 }
 
 func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
-	loc := startServer()
-	defer func(loc server.Local) {
-		_ = loc.Close()
-	}(loc)
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSave", nil)
 	if err != nil {
@@ -301,10 +292,8 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 }
 
 func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
-	loc := startServer()
-	defer func(loc server.Local) {
-		_ = loc.Close()
-	}(loc)
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
 
 	codeLensParams := lsp.CodeLensParams{
 		TextDocument: docIdentifier.TextDocumentIdentifier,
@@ -330,15 +319,16 @@ func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 	}
 }
 
-func Test_IntegrationTestWorkspaceScan(t *testing.T) {
+func Test_IntegrationWorkspaceScan(t *testing.T) {
 	if !environment.RunIntegTest {
 		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
 	}
 
-	loc := startServer()
-	defer func(loc server.Local) {
-		_ = loc.Close()
-	}(loc)
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
+
+	logBuffer, teardownLogCapture := setupLogCapture()
+	defer t.Cleanup(teardownLogCapture)
 
 	var cloneTargetDir, err = setupTestRepo()
 	defer os.RemoveAll(cloneTargetDir)
@@ -350,71 +340,43 @@ func Test_IntegrationTestWorkspaceScan(t *testing.T) {
 		WorkspaceFolders: []slsp.WorkspaceFolders{
 			{
 				Name: "Test Repo",
-				Uri:  lsp.DocumentURI(cloneTargetDir + "/maven-compat/src/test/java/org/apache/maven/repository/legacy/"),
+				Uri:  lsp.DocumentURI("file://" + cloneTargetDir),
 			},
 		},
 	}
 
-	logBuffer := new(bytes.Buffer)
-	log.Logger = log.Output(zerolog.SyncWriter(logBuffer))
-	t.Cleanup(func() {
-		log.Logger = log.Output(os.Stderr)
-	})
-
 	_, err = loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Call failed")
+		log.Fatal().Err(err).Msg("Initialization failed")
 	}
 
+	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
-		capturedLogs := logBuffer.String()
-		return strings.Contains(capturedLogs, "fetchAllRegisteredDocumentDiagnostics") && strings.Contains(capturedLogs, "done")
-	}, 15*time.Second, 15*time.Millisecond)
+		return strings.Contains(
+			logBuffer.String(), "Workspace") &&
+			strings.Contains(logBuffer.String(),
+				"Workspace scan completed")
+	}, 60*time.Second, 60*time.Millisecond)
 
-	t.Log(logBuffer.String())
-
-	// set real backend
-	/* diagnostics.SnykCode = &code.SnykCodeBackendService{}
 	testPath := cloneTargetDir + "/maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
-	testFileContent, err := os.ReadFile(testPath)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't read file content of test file")
-	}
 
-	didOpenParams := lsp.DidOpenTextDocumentParams{
-		TextDocument: lsp.TextDocumentItem{
-			URI:  lsp.DocumentURI("file://" + testPath),
-			Text: string(testFileContent),
-		},
-	}
-
-	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Call failed")
-	}
-
-	t.Log(logBuffer.String()) */
-
-	// should receive diagnosticsParams
-	// diagnosticsParams := lsp.PublishDiagnosticsParams{}
-
-	/* assert.Eventually(t, func() bool { return notification != nil }, 10*time.Second, 10*time.Millisecond)
-	_ = notification.UnmarshalParams(&diagnosticsParams) */
-
-	// assert.Len(t, diagnosticsParams.Diagnostics, 1)
-	/* assert.Equal(t, diagnosticsParams.Diagnostics[0].Code, diagnostics.GetDiagnostics(diagnosticsParams.URI, lsp.ScanFile)[0].Code)
-	assert.Equal(t, diagnosticsParams.Diagnostics[0].Range, diagnostics.GetDiagnostics(diagnosticsParams.URI, lsp.ScanFile)[0].Range) */
+	textDocumentDidOpen(&loc, testPath)
+	// serve diagnostics from the cache
+	assert.Eventually(t, func() bool {
+		return notification != nil && strings.Contains(
+			logBuffer.String(), "Diagnostics") &&
+			strings.Contains(logBuffer.String(),
+				"Cached: Diagnostics for file://"+string(lsp.DocumentURI(testPath)))
+	}, 2*time.Second, 2*time.Millisecond)
 }
 
-func Test_IntegrationTestBigProjectScan(t *testing.T) {
+func Test_IntegrationFileScan(t *testing.T) {
 	if !environment.RunIntegTest {
 		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
 	}
 
-	loc := startServer()
-	defer func(loc server.Local) {
-		_ = loc.Close()
-	}(loc)
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
 
 	var cloneTargetDir, err = setupTestRepo()
 	defer os.RemoveAll(cloneTargetDir)
@@ -422,29 +384,27 @@ func Test_IntegrationTestBigProjectScan(t *testing.T) {
 		log.Fatal().Err(err).Msg("Couldn't setup test repo")
 	}
 
-	// register all files
-	err = filepath.Walk(cloneTargetDir, func(path string, info fs.FileInfo, err error) error {
-		if info.IsDir() {
-			return nil
-		}
-
-		content, _ := os.ReadFile(path)
-		file := lsp.TextDocumentItem{URI: lsp.DocumentURI("file://" + path), Text: string(content)}
-		diagnostics.RegisterDocument(file)
-		return err
-	})
-	if err != nil {
-		log.Fatal().Err(err).Msg("Error registering files in repo")
-	}
-
-	// set real backend
-	diagnostics.SnykCode = &code.SnykCodeBackendService{}
-
 	testPath := cloneTargetDir + "/maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
+	didOpenParams, diagnosticsParams := textDocumentDidOpen(&loc, testPath)
+
+	assert.Eventually(t, func() bool { return notification != nil }, 10*time.Second, 10*time.Millisecond)
+	_ = notification.UnmarshalParams(&diagnosticsParams)
+
+	assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
+	assert.Len(t, diagnosticsParams.Diagnostics, 1)
+	assert.Equal(t, diagnosticsParams.Diagnostics[0].Code, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Code)
+	assert.Equal(t, diagnosticsParams.Diagnostics[0].Range, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Range)
+}
+
+func textDocumentDidOpen(loc *server.Local, testPath string) (lsp.DidOpenTextDocumentParams, lsp.PublishDiagnosticsParams) {
+	diagnostics.SnykCode = &code.SnykCodeBackendService{}
+	// should receive diagnosticsParams
+
 	testFileContent, err := os.ReadFile(testPath)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't read file content of test file")
 	}
+
 	didOpenParams := lsp.DidOpenTextDocumentParams{
 		TextDocument: lsp.TextDocumentItem{
 			URI:  lsp.DocumentURI("file://" + testPath),
@@ -457,16 +417,8 @@ func Test_IntegrationTestBigProjectScan(t *testing.T) {
 		log.Fatal().Err(err).Msg("Call failed")
 	}
 
-	// should receive diagnosticsParams
 	diagnosticsParams := lsp.PublishDiagnosticsParams{}
-
-	assert.Eventually(t, func() bool { return notification != nil }, 10*time.Second, 10*time.Millisecond)
-	_ = notification.UnmarshalParams(&diagnosticsParams)
-
-	assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
-	assert.Len(t, diagnosticsParams.Diagnostics, 1)
-	assert.Equal(t, diagnosticsParams.Diagnostics[0].Code, diagnostics.GetDiagnostics(diagnosticsParams.URI, slsp.ScanFile)[0].Code)
-	assert.Equal(t, diagnosticsParams.Diagnostics[0].Range, diagnostics.GetDiagnostics(diagnosticsParams.URI, slsp.ScanFile)[0].Range)
+	return didOpenParams, diagnosticsParams
 }
 
 func setupTestRepo() (string, error) {
@@ -475,6 +427,7 @@ func setupTestRepo() (string, error) {
 	clone := exec.Command("git", "clone", "https://github.com/apache/maven", cloneTargetDir)
 	reset := exec.Command("git", "reset", "--hard", "18725ec1e")
 	reset.Dir = cloneTargetDir
+
 	clean := exec.Command("git", "clean", "--force")
 	clean.Dir = cloneTargetDir
 

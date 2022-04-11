@@ -153,13 +153,13 @@ func (b *BundleImpl) FetchDiagnosticsData(
 	clChan chan lsp.CodeLensResult,
 ) {
 	defer wg.Done()
-	defer log.Debug().Str("method", "DiagnosticData").Msg("done.")
+	defer log.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
 
-	log.Debug().Str("method", "DiagnosticData").Msg("started.")
+	log.Debug().Str("method", "FetchDiagnosticsData").Msg("started.")
 
 	err := b.uploadDocuments()
 	if err != nil {
-		log.Error().Err(err).Str("method", "DiagnosticData").Msg("error creating/extending bundle...")
+		log.Error().Err(err).Str("method", "FetchDiagnosticsData").Msg("error creating/extending bundle...")
 		dChan <- lsp.DiagnosticResult{Err: err}
 		return
 	}

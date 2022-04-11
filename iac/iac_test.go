@@ -3,6 +3,7 @@ package iac
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -72,8 +73,8 @@ func Test_ScanFile(t *testing.T) {
 func Test_IacDiagnosticsRetrieval(t *testing.T) {
 	path, _ := filepath.Abs("testdata/RBAC.yaml")
 
-	cmd := createCliCmd(path)
-	res, err := callSnykCLI(cmd)
+	cmd := exec.Command(environment.CliPath(), "iac", "test", path, "--json")
+	res, err := scan(cmd)
 	if err != nil {
 		log.Err(err).Str("method", "oss.ScanFile").Msg("Error while calling Snyk CLI")
 	}
@@ -90,8 +91,8 @@ func Test_IacDiagnosticsRetrieval(t *testing.T) {
 func Test_IacCodelensRetrieval(t *testing.T) {
 	path, _ := filepath.Abs("testdata/RBAC.yaml")
 
-	cmd := createCliCmd(path)
-	res, err := callSnykCLI(cmd)
+	cmd := exec.Command(environment.CliPath(), "iac", "test", path, "--json")
+	res, err := scan(cmd)
 	if err != nil {
 		log.Err(err).Str("method", "oss.ScanFile").Msg("Error while calling Snyk CLI")
 	}

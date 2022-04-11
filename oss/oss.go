@@ -64,55 +64,35 @@ func getDetectableFiles() []string {
 	}
 }
 
-func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
-	lspSev, ok := severities[snykSeverity]
-	if !ok {
-		return sglsp.Info
-	}
-	return lspSev
-}
+func ScanWorkspace(
+	workspace sglsp.DocumentURI,
+	wg *sync.WaitGroup,
+	dChan chan lsp.DiagnosticResult,
+	clChan chan lsp.CodeLensResult,
+) {
+	defer wg.Done()
+	defer log.Debug().Str("method", "oss.ScanWorkspace").Msg("done.")
 
-func retrieveAnalysis(scanResults ossScanResult, uri sglsp.DocumentURI, doc sglsp.TextDocumentItem, dChan chan lsp.DiagnosticResult) {
-	diags, err := retrieveDiagnostics(scanResults, doc)
-	if err != nil {
-		log.Err(err).Str("method", "oss.ScanFile").Msg("Error while retrieving diagnositics")
-	}
-
-	if len(diags) > 0 {
-		log.Debug().Str("method", "oss.ScanWorkspace").Msg("got diags, now sending to chan.")
-		select {
-		case dChan <- lsp.DiagnosticResult{
-			Uri:         uri,
-			Diagnostics: diags,
-			Err:         err,
-		}:
-		default:
-			log.Debug().Str("method", "oss.HandleFolder").Msg("not sending...")
-		}
-	}
-}
-
-func ScanWorkspace(workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
 	log.Debug().Str("method", "oss.ScanWorkspace").Msg("started.")
 
-	defer log.Debug().Str("method", "oss.ScanWorkspace").Msg("done.")
-	defer wg.Done()
-
-	path, _ := getDocAbsolutePath(workspace)
-	cmd, err := createCliCmd(path, lsp.ScanWorkspace)
+	path, err := filepath.Abs(strings.ReplaceAll(string(workspace), "file://", ""))
 	if err != nil {
-		log.Err(err).Str("method", "oss.ScanWorkspace").Msg("Error while generating the CLI command")
+		log.Err(err).Str("method", "oss.ScanFile").
+			Msg("Error while extracting file absolutePath")
 	}
 
-	scanResults, err := callSnykCLI(cmd)
+	cmd := exec.Command(environment.CliPath(), "test", path, "--json")
+	scanResults, err := scan(cmd)
 	if err != nil {
-		log.Err(err).Str("method", "oss.ScanWorkspace").Msg(fmt.Sprintf("Error while calling Snyk CLI, err: %v", err))
+		log.Err(err).Str("method", "oss.ScanWorkspace").
+			Msgf("Error while calling Snyk CLI, err: %v", err)
 	}
 
 	targetFile := lockFilesToManifestMap[scanResults.DisplayTargetFile]
 	fileContent, err := ioutil.ReadFile(path + "/" + targetFile)
 	if err != nil {
-		log.Err(err).Str("method", "oss.ScanWorkspace").Msgf("Error while reading the file %v, err: %v", targetFile, err)
+		log.Err(err).Str("method", "oss.ScanWorkspace").
+			Msgf("Error while reading the file %v, err: %v", targetFile, err)
 		return
 	}
 
@@ -122,25 +102,30 @@ func ScanWorkspace(workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan l
 	retrieveAnalysis(scanResults, uri, doc, dChan)
 }
 
-func ScanFile(doc sglsp.TextDocumentItem, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
-	log.Debug().Str("method", "oss.ScanFile").Msg("started.")
-
-	defer log.Debug().Str("method", "oss.ScanFile").Msg("done.")
+func ScanFile(
+	doc sglsp.TextDocumentItem,
+	wg *sync.WaitGroup,
+	dChan chan lsp.DiagnosticResult,
+	clChan chan lsp.CodeLensResult,
+) {
 	defer wg.Done()
+	defer log.Debug().Str("method", "oss.ScanFile").Msg("done.")
+
+	log.Debug().Str("method", "oss.ScanFile").Msg("started.")
 
 	for _, supportedFile := range getDetectableFiles() {
 		if strings.HasSuffix(string(doc.URI), supportedFile) {
-			path, _ := getDocAbsolutePath(doc.URI)
-
-			cmd, err := createCliCmd(path, lsp.ScanFile)
-
+			path, err := filepath.Abs(strings.ReplaceAll(string(doc.URI), "file://", ""))
 			if err != nil {
-				log.Err(err).Str("method", "oss.ScanFile").Msg("Error while generating the CLI command")
+				log.Err(err).Str("method", "oss.ScanFile").
+					Msg("Error while extracting file absolutePath")
 			}
 
-			scanResults, err := callSnykCLI(cmd)
+			cmd := exec.Command(environment.CliPath(), "test", "--file="+path, "--json")
+			scanResults, err := scan(cmd)
 			if err != nil {
-				log.Err(err).Str("method", "oss.ScanFile").Msg("Error while calling Snyk CLI")
+				log.Err(err).Str("method", "oss.ScanFile").
+					Msg("Error while calling Snyk CLI")
 			}
 
 			retrieveAnalysis(scanResults, doc.URI, doc, dChan)
@@ -148,40 +133,17 @@ func ScanFile(doc sglsp.TextDocumentItem, wg *sync.WaitGroup, dChan chan lsp.Dia
 	}
 }
 
-func getDocAbsolutePath(docUri sglsp.DocumentURI) (string, error) {
-	absolutePath, err := filepath.Abs(strings.ReplaceAll(string(docUri), "file://", ""))
-	if err != nil {
-		return "", err
-	}
+func scan(cmd *exec.Cmd) (ossScanResult, error) {
+	log.Info().Str("method", "oss.scan").Msgf("Command: %s", cmd)
 
-	log.Debug().Msg("OSS: Absolute Path: " + absolutePath)
-	return absolutePath, nil
-}
-
-func createCliCmd(absolutePath string, level lsp.ScanLevel) (*exec.Cmd, error) {
-	var cmd *exec.Cmd
-
-	if level == lsp.ScanFile {
-		cmd = exec.Command(environment.CliPath(), "test", "--file="+absolutePath, "--json")
-	} else {
-		cmd = exec.Command(environment.CliPath(), "test", absolutePath, "--json")
-	}
-
-	log.Debug().Msg(fmt.Sprintf("OSS: command: %s", cmd))
-	return cmd, nil
-}
-
-func callSnykCLI(cmd *exec.Cmd) (ossScanResult, error) {
-	log.Info().Msg(fmt.Sprintf("OSS: command: %s", cmd))
 	resBytes, err := cmd.CombinedOutput()
-
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			if exitErr.ExitCode() > 1 {
 				return ossScanResult{}, fmt.Errorf("error running %s, %s", cmd, err)
 			}
 		} else {
-			return ossScanResult{}, fmt.Errorf("error running callSnykCLI: %s: ", err)
+			return ossScanResult{}, fmt.Errorf("error while perforing OSS scan: %s: ", err)
 		}
 	}
 
@@ -191,6 +153,35 @@ func callSnykCLI(cmd *exec.Cmd) (ossScanResult, error) {
 	}
 
 	return res, nil
+}
+
+func retrieveAnalysis(
+	scanResults ossScanResult,
+	uri sglsp.DocumentURI,
+	doc sglsp.TextDocumentItem,
+	dChan chan lsp.DiagnosticResult,
+) {
+	diags, err := retrieveDiagnostics(scanResults, doc)
+	if err != nil {
+		log.Err(err).Str("method", "oss.retrieveAnalysis").Msg("Error while retrieving diagnositics")
+	}
+
+	if len(diags) > 0 {
+		log.Debug().Str("method", "oss.retrieveAnalysis").Msg("got diags, now sending to chan.")
+		select {
+		case dChan <- lsp.DiagnosticResult{
+			Uri:         uri,
+			Diagnostics: diags,
+			Err:         err,
+		}:
+		default:
+			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("not sending...")
+		}
+	}
+}
+
+type RangeFinder interface {
+	Find(issue ossIssue) sglsp.Range
 }
 
 func retrieveDiagnostics(res ossScanResult, doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
@@ -221,8 +212,12 @@ func retrieveDiagnostics(res ossScanResult, doc sglsp.TextDocumentItem) ([]lsp.D
 	return diagnostics, nil
 }
 
-type RangeFinder interface {
-	Find(issue ossIssue) sglsp.Range
+func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
+	lspSev, ok := severities[snykSeverity]
+	if !ok {
+		return sglsp.Info
+	}
+	return lspSev
 }
 
 func findRange(issue ossIssue, doc sglsp.TextDocumentItem) sglsp.Range {
@@ -243,47 +238,4 @@ func findRange(issue ossIssue, doc sglsp.TextDocumentItem) sglsp.Range {
 
 	foundRange = finder.Find(issue)
 	return foundRange
-}
-
-func introducingPackageAndVersion(issue ossIssue) (string, string) {
-	var packageName string
-	var version string
-	if len(issue.From) > 1 {
-		split := strings.Split(issue.From[1], "@")
-		packageSplit := split[0]
-		switch issue.PackageManager {
-		case "maven":
-			index := strings.LastIndex(packageSplit, ":")
-			packageName = packageSplit[index+1:]
-		default:
-			packageName = packageSplit
-		}
-		version = split[1]
-	} else {
-		packageName = issue.Name
-		version = issue.Version
-	}
-	log.Debug().Str("issueId", issue.Id).Str("IntroducingPackage", packageName).Str("IntroducingVersion", version).Msg("Introducing package and version")
-	return packageName, version
-}
-
-type ossIssue struct {
-	Id          string `json:"id"`
-	Name        string `json:"name"`
-	Title       string `json:"title"`
-	Severity    string `json:"severity"`
-	LineNumber  int    `json:"lineNumber"`
-	Description string `json:"description"`
-	References  []struct {
-		Title string  `json:"title"`
-		Url   lsp.Uri `json:"url"`
-	} `json:"references"`
-	Version        string   `json:"version"`
-	PackageManager string   `json:"packageManager"`
-	From           []string `json:"from"`
-}
-
-type ossScanResult struct {
-	Vulnerabilities   []ossIssue `json:"vulnerabilities"`
-	DisplayTargetFile string     `json:"displayTargetFile"`
 }

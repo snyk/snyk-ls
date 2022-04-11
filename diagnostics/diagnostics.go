@@ -45,18 +45,12 @@ func UnRegisterDocument(file sglsp.DocumentURI) {
 	delete(registeredDocuments, file)
 }
 
-func getDocAbsolutePath(docUri sglsp.DocumentURI) (string, error) {
-	absolutePath, err := filepath.Abs(strings.ReplaceAll(string(docUri), "file://", ""))
-	if err != nil {
-		return "", err
-	}
+func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) error {
+	workspace, err := filepath.Abs(strings.ReplaceAll(
+		string(workspaceUri),
+		"file://", ""),
+	)
 
-	log.Debug().Msg("OSS: Absolute Path: " + absolutePath)
-	return absolutePath, nil
-}
-
-func RegisterAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) error {
-	workspace, err := getDocAbsolutePath(workspaceUri)
 	if err != nil {
 		return err
 	}
@@ -67,7 +61,10 @@ func RegisterAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) error {
 		}
 
 		content, _ := os.ReadFile(path)
-		file := sglsp.TextDocumentItem{URI: sglsp.DocumentURI("file://" + path), Text: string(content)}
+		file := sglsp.TextDocumentItem{
+			URI:  sglsp.DocumentURI("file://" + path),
+			Text: string(content),
+		}
 
 		mutex.Lock()
 		RegisterDocument(file)
@@ -77,83 +74,122 @@ func RegisterAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) error {
 	})
 }
 
-func GetDiagnostics(rootUri sglsp.DocumentURI, level lsp.ScanLevel) []lsp.Diagnostic {
+func workspaceDiagnostics(workspaceUri sglsp.DocumentURI, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	var diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic
+	var codeLenses map[sglsp.DocumentURI][]sglsp.CodeLens
+
+	err := registerAllFilesFromWorkspace(workspaceUri)
+	if err != nil {
+		log.Error().Err(err).
+			Str("method", "workspaceDiagnostics").
+			Msg("Error occurred while registering files from workspace")
+	}
+
+	diagnostics, codeLenses = fetchAllRegisteredDocumentDiagnostics(workspaceUri, ScanWorkspace)
+	addToCache(diagnostics, codeLenses)
+}
+
+func Workspace(workspaceFolders []lsp.WorkspaceFolders) {
+	var wg sync.WaitGroup
+
+	for _, workspace := range workspaceFolders {
+		wg.Add(1)
+		go workspaceDiagnostics(workspace.Uri, &wg)
+	}
+
+	wg.Wait()
+	log.Info().Str("method", "Workspace").
+		Msg("Workspace scan completed")
+}
+
+func GetDiagnostics(rootUri sglsp.DocumentURI) []lsp.Diagnostic {
 	// serve from cache
 	diagnosticSlice := documentDiagnosticCache[rootUri]
 	if len(diagnosticSlice) > 0 {
+		log.Info().Str("method", "GetDiagnostics").
+			Msgf("Cached: Diagnostics for %s", rootUri)
+
 		return diagnosticSlice
 	}
 
 	var diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic
 	var codeLenses map[sglsp.DocumentURI][]sglsp.CodeLens
 
-	if level == lsp.ScanWorkspace {
-		err := RegisterAllFilesFromWorkspace(rootUri)
-		if err != nil {
-			log.Error().Err(err).Str("method", "GetDiagnostics").Msg("Error occurred while registering files from workspace")
-		}
-	}
-
-	diagnostics, codeLenses = fetchAllRegisteredDocumentDiagnostics(rootUri, level)
-
-	// add all diagnostics to cache
-	for uri := range diagnostics {
-		documentDiagnosticCache[uri] = diagnostics[uri]
-	}
-
-	// add all code lenses to cache
-	for uri := range codeLenses {
-		codeLenseCache[uri] = codeLenses[uri]
-	}
+	diagnostics, codeLenses = fetchAllRegisteredDocumentDiagnostics(rootUri, ScanFile)
+	addToCache(diagnostics, codeLenses)
 
 	return documentDiagnosticCache[rootUri]
 }
 
-func fetchAllRegisteredDocumentDiagnostics(rootUri sglsp.DocumentURI, level lsp.ScanLevel) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens) {
-	log.Info().Str("method", "fetchAllRegisteredDocumentDiagnostics").Msg("started.")
-	defer log.Info().Str("method", "fetchAllRegisteredDocumentDiagnostics").Msg("done.")
+func fetchAllRegisteredDocumentDiagnostics(rootUri sglsp.DocumentURI, level ScanLevel) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens) {
+	log.Info().
+		Str("method", "fetchAllRegisteredDocumentDiagnostics").
+		Msg("started.")
+
+	defer log.Info().
+		Str("method", "fetchAllRegisteredDocumentDiagnostics").
+		Msg("done.")
 
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	var codeLenses []sglsp.CodeLens
 
-	wg := sync.WaitGroup{}
-	dChan := make(chan lsp.DiagnosticResult, len(registeredDocuments))
-	clChan := make(chan lsp.CodeLensResult, len(registeredDocuments))
-
 	createOrExtendBundles(registeredDocuments)
 
+	wg := sync.WaitGroup{}
 	bundleCount := len(bundles)
 	wg.Add(2 + bundleCount)
 
+	dChan := make(chan lsp.DiagnosticResult, len(registeredDocuments))
+	clChan := make(chan lsp.CodeLensResult, len(registeredDocuments))
+
 	for _, myBundle := range bundles {
-		log.Info().Msg("bundle")
 		go myBundle.FetchDiagnosticsData(string(rootUri), &wg, dChan, clChan)
 	}
 
-	if level == lsp.ScanWorkspace {
+	if level == ScanWorkspace {
 		go iac.ScanWorkspace(rootUri, &wg, dChan, clChan)
 		go oss.ScanWorkspace(rootUri, &wg, dChan, clChan)
 	} else {
 		go iac.ScanFile(rootUri, &wg, dChan, clChan)
 		go oss.ScanFile(registeredDocuments[rootUri], &wg, dChan, clChan)
 	}
+
 	wg.Wait()
-	log.Debug().Str("method", "fetchAllRegisteredDocumentDiagnostics").Msg("finished waiting for goroutines.")
+	log.Debug().
+		Str("method", "fetchAllRegisteredDocumentDiagnostics").
+		Msg("finished waiting for goroutines.")
 
 	for {
 		select {
 		case result := <-dChan:
-			log.Trace().Str("method", "fetchAllRegisteredDocumentDiagnostics").Str("uri", string(result.Uri)).Msg("reading diag from chan.")
+			log.Trace().
+				Str("method", "fetchAllRegisteredDocumentDiagnostics").
+				Str("uri", string(result.Uri)).
+				Msg("reading diag from chan.")
+
 			logError(result.Err, "fetchAllRegisteredDocumentDiagnostics")
+
 			diagnostics[result.Uri] = append(diagnostics[result.Uri], result.Diagnostics...)
 			documentDiagnosticCache[result.Uri] = diagnostics[result.Uri]
+
 		case result := <-clChan:
-			log.Trace().Str("method", "fetchAllRegisteredDocumentDiagnostics").Str("uri", string(result.Uri)).Msg("reading lens from chan.")
+			log.Trace().
+				Str("method", "fetchAllRegisteredDocumentDiagnostics").
+				Str("uri", string(result.Uri)).
+				Msg("reading lens from chan.")
+
 			logError(result.Err, "fetchAllRegisteredDocumentDiagnostics")
+
 			codeLenses = append(codeLenses, result.CodeLenses...)
 			codeLenseCache[result.Uri] = codeLenses
+
 		default: // return results once channels are empty
-			log.Debug().Str("method", "fetchAllRegisteredDocumentDiagnostics").Msg("done reading diags & lenses.")
+			log.Debug().
+				Str("method", "fetchAllRegisteredDocumentDiagnostics").
+				Msg("done reading diags & lenses.")
+
 			return diagnostics, codeLenseCache
 		}
 	}
@@ -183,6 +219,18 @@ func createBundle() *code.BundleImpl {
 	bundle := code.BundleImpl{SnykCode: SnykCode}
 	bundles = append(bundles, &bundle)
 	return &bundle
+}
+
+func addToCache(diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic, codeLenses map[sglsp.DocumentURI][]sglsp.CodeLens) {
+	// add all diagnostics to cache
+	for uri := range diagnostics {
+		documentDiagnosticCache[uri] = diagnostics[uri]
+	}
+
+	// add all code lenses to cache
+	for uri := range codeLenses {
+		codeLenseCache[uri] = codeLenses[uri]
+	}
 }
 
 func logError(err error, method string) {
