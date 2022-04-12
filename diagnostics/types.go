@@ -3,6 +3,6 @@ package diagnostics
 type ScanLevel int
 
 const (
-	ScanFile ScanLevel = iota + 1
-	ScanWorkspace
+	ScanLevelFile ScanLevel = iota + 1
+	ScanLevelWorkspace
 )

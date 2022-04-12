@@ -74,7 +74,7 @@ func (s *SnykCodeBackendService) doCall(method string, path string, requestBody 
 	req.Header.Set("Session-Token", environment.Token())
 	req.Header.Set("Content-Type", "application/json")
 
-	log.Debug().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
+	log.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
 	response, err := s.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -86,7 +86,7 @@ func (s *SnykCodeBackendService) doCall(method string, path string, requestBody 
 		}
 	}(response.Body)
 	responseBody, err := ioutil.ReadAll(response.Body)
-	log.Debug().Str("responseBody", string(responseBody)).Msg("RECEIVED FROM REMOTE")
+	log.Trace().Str("responseBody", string(responseBody)).Msg("RECEIVED FROM REMOTE")
 	if err != nil {
 		return nil, err
 	}

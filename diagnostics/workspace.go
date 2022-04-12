@@ -13,7 +13,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 )
 
-var mutex = &sync.Mutex{}
+var registeredDocsMutex = &sync.Mutex{}
 
 func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) error {
 	workspace, err := filepath.Abs(strings.ReplaceAll(
@@ -36,9 +36,9 @@ func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) error {
 			Text: string(content),
 		}
 
-		mutex.Lock()
+		registeredDocsMutex.Lock()
 		RegisterDocument(file)
-		mutex.Unlock()
+		registeredDocsMutex.Unlock()
 
 		return err
 	})
@@ -57,7 +57,7 @@ func workspaceDiagnostics(workspaceUri sglsp.DocumentURI, wg *sync.WaitGroup) {
 			Msg("Error occurred while registering files from workspace")
 	}
 
-	diagnostics, codeLenses = fetchAllRegisteredDocumentDiagnostics(workspaceUri, ScanWorkspace)
+	diagnostics, codeLenses = fetchAllRegisteredDocumentDiagnostics(workspaceUri, ScanLevelWorkspace)
 	addToCache(diagnostics, codeLenses)
 }
 

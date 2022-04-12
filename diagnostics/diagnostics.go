@@ -15,7 +15,6 @@ import (
 var (
 	registeredDocuments     = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
-	bundles                 []*code.BundleImpl
 	SnykCode                code.SnykCodeService
 )
 
@@ -53,7 +52,7 @@ func GetDiagnostics(rootUri sglsp.DocumentURI) []lsp.Diagnostic {
 	var diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic
 	var codeLenses map[sglsp.DocumentURI][]sglsp.CodeLens
 
-	diagnostics, codeLenses = fetchAllRegisteredDocumentDiagnostics(rootUri, ScanFile)
+	diagnostics, codeLenses = fetchAllRegisteredDocumentDiagnostics(rootUri, ScanLevelFile)
 	addToCache(diagnostics, codeLenses)
 
 	return documentDiagnosticCache[rootUri]
@@ -70,8 +69,10 @@ func fetchAllRegisteredDocumentDiagnostics(rootUri sglsp.DocumentURI, level Scan
 
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	var codeLenses []sglsp.CodeLens
+	var bundles = make([]*code.BundleImpl, 0, 10)
 
-	createOrExtendBundles(registeredDocuments)
+	// we need a pointer to the array of bundle pointers to be able to grow it
+	createOrExtendBundles(registeredDocuments, &bundles)
 
 	wg := sync.WaitGroup{}
 	bundleCount := len(bundles)
@@ -84,7 +85,7 @@ func fetchAllRegisteredDocumentDiagnostics(rootUri sglsp.DocumentURI, level Scan
 		go myBundle.FetchDiagnosticsData(string(rootUri), &wg, dChan, clChan)
 	}
 
-	if level == ScanWorkspace {
+	if level == ScanLevelWorkspace {
 		go iac.ScanWorkspace(rootUri, &wg, dChan, clChan)
 		go oss.ScanWorkspace(rootUri, &wg, dChan, clChan)
 	} else {
@@ -97,6 +98,18 @@ func fetchAllRegisteredDocumentDiagnostics(rootUri sglsp.DocumentURI, level Scan
 		Str("method", "fetchAllRegisteredDocumentDiagnostics").
 		Msg("finished waiting for goroutines.")
 
+	return processResults(dChan, diagnostics, clChan, codeLenses)
+}
+
+func processResults(
+	dChan chan lsp.DiagnosticResult,
+	diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic,
+	clChan chan lsp.CodeLensResult,
+	codeLenses []sglsp.CodeLens,
+) (
+	map[sglsp.DocumentURI][]lsp.Diagnostic,
+	map[sglsp.DocumentURI][]sglsp.CodeLens,
+) {
 	for {
 		select {
 		case result := <-dChan:
@@ -131,18 +144,21 @@ func fetchAllRegisteredDocumentDiagnostics(rootUri sglsp.DocumentURI, level Scan
 	}
 }
 
-func createOrExtendBundles(documents map[sglsp.DocumentURI]sglsp.TextDocumentItem) {
+func createOrExtendBundles(documents map[sglsp.DocumentURI]sglsp.TextDocumentItem, bundles *[]*code.BundleImpl) {
+	// we need a pointer to the array of bundle pointers to be able to grow it
+	log.Debug().Str("method", "createOrExtendBundles").Msg("started")
+	defer log.Debug().Str("method", "createOrExtendBundles").Msg("done")
 	var bundle *code.BundleImpl
 	toAdd := documents
-	bundleIndex := len(bundles) - 1
+	bundleIndex := len(*bundles) - 1
 	var bundleFull bool
 	for len(toAdd) > 0 {
 		if bundleIndex == -1 || bundleFull {
-			bundle = createBundle()
-			log.Debug().Int("bundleCount", len(bundles)).Str("bundle", bundle.BundleHash).Msg("created new bundle")
+			bundle = createBundle(bundles)
+			log.Debug().Int("bundleCount", len(*bundles)).Str("bundle", bundle.BundleHash).Msg("created new bundle")
 		} else {
-			bundle = bundles[bundleIndex]
-			log.Debug().Int("bundleCount", len(bundles)).Str("bundle", bundle.BundleHash).Msg("re-using bundle ")
+			bundle = (*bundles)[bundleIndex]
+			log.Debug().Int("bundleCount", len(*bundles)).Str("bundle", bundle.BundleHash).Msg("re-using bundle ")
 		}
 		toAdd = bundle.AddToBundleDocuments(toAdd).Files
 		if len(toAdd) > 0 {
@@ -151,9 +167,9 @@ func createOrExtendBundles(documents map[sglsp.DocumentURI]sglsp.TextDocumentIte
 	}
 }
 
-func createBundle() *code.BundleImpl {
+func createBundle(bundles *[]*code.BundleImpl) *code.BundleImpl {
 	bundle := code.BundleImpl{SnykCode: SnykCode}
-	bundles = append(bundles, &bundle)
+	*bundles = append(*bundles, &bundle)
 	return &bundle
 }
 
