@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	clientParams sglsp.InitializeParams
+	clientParams lsp.InitializeParams
 )
 
 func Start() {
@@ -151,10 +151,16 @@ func TextDocumentDidCloseHandler() handler.Func {
 }
 
 func InitializeHandler() handler.Func {
-	return handler.New(func(ctx context.Context, params sglsp.InitializeParams) (interface{}, error) {
+	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
 		log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
 		clientParams = params
-		go diagnostics.GetDiagnostics(clientParams.RootURI)
+
+		if len(clientParams.WorkspaceFolders) > 0 {
+			go diagnostics.WorkspaceScan(clientParams.WorkspaceFolders)
+		} else {
+			go diagnostics.GetDiagnostics(clientParams.RootURI)
+		}
+
 		return lsp.InitializeResult{
 			Capabilities: lsp.ServerCapabilities{
 				TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{

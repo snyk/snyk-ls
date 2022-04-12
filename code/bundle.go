@@ -62,6 +62,8 @@ const (
 	jsonOverheadPerFile = jsonUriOverhead + jsonContentOverhead
 )
 
+var bundleMutex = &sync.Mutex{}
+
 func getTotalDocPayloadSize(uri sglsp.DocumentURI, file File) int {
 	return len(jsonHashSizePerFile) + len(jsonOverheadPerFile) + len([]byte(uri)) + len([]byte(file.Content))
 }
@@ -95,12 +97,14 @@ func (b *BundleImpl) createBundleFromSource() error {
 }
 
 func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]sglsp.TextDocumentItem) FilesNotAdded {
+	bundleMutex.Lock()
+	defer bundleMutex.Unlock()
+
 	if b.BundleDocuments == nil {
 		b.BundleDocuments = make(map[sglsp.DocumentURI]File)
 	}
 
 	var nonAddedFiles = make(map[sglsp.DocumentURI]sglsp.TextDocumentItem)
-
 	for _, doc := range files {
 		if !extensions[filepath.Ext(string(doc.URI))] || !(len(doc.Text) > 0 && len(doc.Text) <= maxFileSize) {
 			continue
@@ -120,7 +124,6 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]sglsp.Text
 	if len(nonAddedFiles) > 0 {
 		return FilesNotAdded{Files: nonAddedFiles}
 	}
-
 	return FilesNotAdded{}
 }
 
@@ -138,11 +141,11 @@ func (b *BundleImpl) canAdd(doc sglsp.TextDocumentItem) bool {
 func (b *BundleImpl) extendBundleFromSource() error {
 	var removeFiles []sglsp.DocumentURI
 	var err error
-
 	if len(b.BundleDocuments) > 0 {
 		b.BundleHash, b.missingFiles, err = b.SnykCode.ExtendBundle(b.BundleHash, b.BundleDocuments, removeFiles)
 		log.Trace().Str("method", "extendBundleFromSource").Str("bundleHash", b.BundleHash).Msg("extended bundle on backend")
 	}
+
 	return err
 }
 
@@ -152,14 +155,17 @@ func (b *BundleImpl) FetchDiagnosticsData(
 	dChan chan lsp.DiagnosticResult,
 	clChan chan lsp.CodeLensResult,
 ) {
-	defer wg.Done()
-	defer log.Debug().Str("method", "DiagnosticData").Msg("done.")
+	bundleMutex.Lock()
+	defer bundleMutex.Unlock()
 
-	log.Debug().Str("method", "DiagnosticData").Msg("started.")
+	defer wg.Done()
+	defer log.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
+
+	log.Debug().Str("method", "FetchDiagnosticsData").Msg("started.")
 
 	err := b.uploadDocuments()
 	if err != nil {
-		log.Error().Err(err).Str("method", "DiagnosticData").Msg("error creating/extending bundle...")
+		log.Error().Err(err).Str("method", "FetchDiagnosticsData").Msg("error creating/extending bundle...")
 		dChan <- lsp.DiagnosticResult{Err: err}
 		return
 	}
