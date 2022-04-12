@@ -15,7 +15,7 @@ LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/config.Development=true' -X 'github.
 .PHONY: tools
 tools:
 ifeq (,$(wildcard ./.bin/golangci-lint*))
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b .bin/ v1.44.2
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b .bin/ v1.45.2
 else
 	@echo "==> Required tooling is already installed"
 endif
