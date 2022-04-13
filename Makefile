@@ -47,10 +47,10 @@ build:
 # workaround for missing .exe extension on Windows
 ifeq ($(OS),Windows_NT)
 	@go build -o $(BUILD_DIR)/$(PROJECT_NAME).$(DEV_GOOS).$(DEV_GOARCH).exe \
-		-ldflags=-ldflags=$(LDFLAGS_DEV)
+		-ldflags=$(LDFLAGS_DEV)
 else
 	@go build -o $(BUILD_DIR)/$(PROJECT_NAME).$(DEV_GOOS).$(DEV_GOARCH) \
-		-ldflags=-ldflags=$(LDFLAGS_DEV)
+		-ldflags=$(LDFLAGS_DEV)
 endif
 
 ## run: Compile and run LSP server.
