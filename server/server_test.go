@@ -326,26 +326,26 @@ func Test_IntegrationWorkspaceScanGoof(t *testing.T) {
 	if !environment.RunIntegTest {
 		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
 	}
-	fileToBeOpenedPath := "package.json"
-	runIntegrationTest("https://github.com/snyk/goof", "", fileToBeOpenedPath, t)
+	ossFile := "package.json"
+	codeFile := "app.js"
+	runIntegrationTest("https://github.com/snyk/goof", "", ossFile, codeFile, t)
 }
 
 func Test_IntegrationWorkspaceScanMaven(t *testing.T) {
 	if !environment.RunIntegTest {
 		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
 	}
-	fileToBeOpenedPath := "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
-	runIntegrationTest("https://github.com/apache/maven", "18725ec1e", fileToBeOpenedPath, t)
-	log.Debug().Msg("8")
+	ossFile := ""
+	codeFile := "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
+	runIntegrationTest("https://github.com/apache/maven", "18725ec1e", ossFile, codeFile, t)
 }
 
-func runIntegrationTest(repo string, commit string, fileToBeOpenedPath string, t *testing.T) {
+func runIntegrationTest(repo string, commit string, ossFile string, codeFile string, t *testing.T) {
 	diagnostics.ClearEntireDiagnosticsCache()
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
 	logBuffer, teardownLogCapture := setupLogCapture()
 	defer teardownLogCapture()
-	log.Debug().Msg("1")
 
 	var cloneTargetDir, err = setupCustomTestRepo(repo, commit)
 	defer os.RemoveAll(cloneTargetDir)
@@ -353,7 +353,6 @@ func runIntegrationTest(repo string, commit string, fileToBeOpenedPath string, t
 		log.Fatal().Err(err).Msg("Couldn't setup test repo")
 	}
 
-	log.Debug().Msg("2")
 	clientParams := slsp.InitializeParams{
 		WorkspaceFolders: []slsp.WorkspaceFolders{
 			{
@@ -363,26 +362,32 @@ func runIntegrationTest(repo string, commit string, fileToBeOpenedPath string, t
 		},
 	}
 
-	log.Debug().Msg("3")
 	_, err = loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Initialization failed")
 	}
-	log.Debug().Msg("4")
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
 		return strings.Contains(logBuffer.String(), "Workspace scan completed")
 	}, 120*time.Second, 100*time.Millisecond)
 
-	log.Debug().Msg("5")
-	textDocumentDidOpen(&loc, cloneTargetDir+string(os.PathSeparator)+fileToBeOpenedPath)
+	var testPath string
+	if ossFile != "" {
+		testPath = cloneTargetDir + string(os.PathSeparator) + ossFile
+		textDocumentDidOpen(&loc, testPath)
 
-	log.Debug().Msg("6")
+		// serve diagnostics from the cache
+		assert.Eventually(t, func() bool {
+			return notification != nil && strings.Contains(logBuffer.String(), "Cached: Diagnostics for file://"+testPath)
+		}, 5*time.Second, 2*time.Millisecond)
+	}
+	testPath = cloneTargetDir + string(os.PathSeparator) + codeFile
+	textDocumentDidOpen(&loc, testPath)
+
 	// serve diagnostics from the cache
 	assert.Eventually(t, func() bool {
-		return notification != nil && strings.Contains(logBuffer.String(), "Cached: Diagnostics for file://")
+		return notification != nil && strings.Contains(logBuffer.String(), "Cached: Diagnostics for file://"+testPath)
 	}, 5*time.Second, 2*time.Millisecond)
-	log.Debug().Msg("7")
 }
 
 func Test_IntegrationFileScan(t *testing.T) {
