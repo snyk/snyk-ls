@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -75,7 +76,8 @@ func ScanWorkspace(
 
 	log.Debug().Str("method", "oss.ScanWorkspace").Msg("started.")
 
-	path, err := filepath.Abs(strings.ReplaceAll(strings.ReplaceAll(string(workspace), "file://", ""), "file:", ""))
+	workspacePath := strings.ReplaceAll(strings.ReplaceAll(string(workspace), "file://", ""), "file:", "")
+	path, err := filepath.Abs(workspacePath)
 	if err != nil {
 		log.Err(err).Str("method", "oss.ScanWorkspace").
 			Msg("Error while extracting file absolutePath")
@@ -100,7 +102,7 @@ func ScanWorkspace(
 		return
 	}
 
-	var uri = sglsp.DocumentURI(string(workspace) + "/" + targetFile)
+	var uri = sglsp.DocumentURI("file://" + workspacePath + string(os.PathSeparator) + targetFile)
 	var doc = sglsp.TextDocumentItem{Text: string(fileContent)}
 
 	retrieveAnalysis(scanResults, uri, doc, dChan)

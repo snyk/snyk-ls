@@ -16,7 +16,7 @@ import (
 var registeredDocsMutex = &sync.Mutex{}
 
 func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) error {
-	// this is not a mistake - eclipse reports workspace folders with `file:/` pre-prended
+	// this is not a mistake - eclipse reports workspace folders with `file:` pre-prended
 	workspace, err :=
 		filepath.Abs(
 			strings.ReplaceAll(strings.ReplaceAll(string(workspaceUri), "file://", ""), "file:", ""),
