@@ -6,6 +6,7 @@ require (
 	github.com/creachadair/jrpc2 v0.35.5
 	github.com/gomarkdown/markdown v0.0.0-20220114203417-14399d5448c4
 	github.com/rs/zerolog v1.26.1
+	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/sourcegraph/go-lsp v0.0.0-20200429204803-219e11d77f5d
 	github.com/stretchr/testify v1.7.0
 	github.com/subosito/gotenv v1.2.0

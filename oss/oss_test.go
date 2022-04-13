@@ -14,6 +14,12 @@ import (
 	"github.com/snyk/snyk-ls/lsp"
 )
 
+func Test_determineTargetFile(t *testing.T) {
+	assert.Equal(t, "package.json", determineTargetFile("package-lock.json"))
+	assert.Equal(t, "pom.xml", determineTargetFile("pom.xml"))
+	assert.Equal(t, "asdf", determineTargetFile("asdf"))
+}
+
 func Test_ScanWorkspace(t *testing.T) {
 	environment.Load()
 	environment.Format = environment.FormatHtml

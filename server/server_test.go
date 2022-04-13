@@ -59,7 +59,10 @@ func setupServer() (server.Local, func(l *server.Local)) {
 	loc := startServer()
 
 	return loc, func(loc *server.Local) {
-		loc.Close()
+		err := loc.Close()
+		if err != nil {
+			log.Fatal().Err(err).Msg("Error when closing down server")
+		}
 	}
 }
 
@@ -76,7 +79,7 @@ func startServer() server.Local {
 	var srv *jrpc2.Server
 
 	if environment.RunIntegTest {
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 		diagnostics.SnykCode = &code.SnykCodeBackendService{}
 	} else {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
@@ -319,18 +322,33 @@ func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 	}
 }
 
-func Test_IntegrationWorkspaceScan(t *testing.T) {
+func Test_IntegrationWorkspaceScanGoof(t *testing.T) {
+	if !environment.RunIntegTest {
+		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
+	}
+	ossFile := "package.json"
+	codeFile := "app.js"
+	runIntegrationTest("https://github.com/snyk/goof", "0336589", ossFile, codeFile, t)
+}
+
+func Test_IntegrationWorkspaceScanMaven(t *testing.T) {
 	if !environment.RunIntegTest {
 		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
 	}
+	ossFile := ""
+	codeFile := "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
+	runIntegrationTest("https://github.com/apache/maven", "18725ec1e", ossFile, codeFile, t)
+}
 
+func runIntegrationTest(repo string, commit string, ossFile string, codeFile string, t *testing.T) {
+	diagnostics.ClearEntireDiagnosticsCache()
+	diagnostics.ClearRegisteredDocuments()
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
-
 	logBuffer, teardownLogCapture := setupLogCapture()
-	defer t.Cleanup(teardownLogCapture)
+	defer teardownLogCapture()
 
-	var cloneTargetDir, err = setupTestRepo()
+	var cloneTargetDir, err = setupCustomTestRepo(repo, commit)
 	defer os.RemoveAll(cloneTargetDir)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't setup test repo")
@@ -340,7 +358,7 @@ func Test_IntegrationWorkspaceScan(t *testing.T) {
 		WorkspaceFolders: []slsp.WorkspaceFolders{
 			{
 				Name: "Test Repo",
-				Uri:  lsp.DocumentURI("file://" + cloneTargetDir),
+				Uri:  lsp.DocumentURI("file:" + cloneTargetDir),
 			},
 		},
 	}
@@ -349,49 +367,53 @@ func Test_IntegrationWorkspaceScan(t *testing.T) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Initialization failed")
 	}
-
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
-		return strings.Contains(
-			logBuffer.String(), "Workspace") &&
-			strings.Contains(logBuffer.String(),
-				"Workspace scan completed")
-	}, 90*time.Second, 90*time.Millisecond)
+		return strings.Contains(logBuffer.String(), "Workspace scan completed")
+	}, 120*time.Second, 100*time.Millisecond)
 
-	testPath := cloneTargetDir + "/maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
+	var testPath string
+	if ossFile != "" {
+		testPath = cloneTargetDir + string(os.PathSeparator) + ossFile
+		textDocumentDidOpen(&loc, testPath)
 
+		// serve diagnostics from the cache
+		assert.Eventually(t, func() bool {
+			return notification != nil && strings.Contains(logBuffer.String(), "Cached: Diagnostics for file://"+testPath)
+		}, 5*time.Second, 2*time.Millisecond)
+	}
+	testPath = cloneTargetDir + string(os.PathSeparator) + codeFile
 	textDocumentDidOpen(&loc, testPath)
+
 	// serve diagnostics from the cache
 	assert.Eventually(t, func() bool {
-		return notification != nil && strings.Contains(
-			logBuffer.String(), "Diagnostics") &&
-			strings.Contains(logBuffer.String(),
-				"Cached: Diagnostics for file://"+string(lsp.DocumentURI(testPath)))
-	}, 2*time.Second, 2*time.Millisecond)
+		return notification != nil && strings.Contains(logBuffer.String(), "Cached: Diagnostics for file://"+testPath)
+	}, 5*time.Second, 2*time.Millisecond)
 }
 
 func Test_IntegrationFileScan(t *testing.T) {
 	if !environment.RunIntegTest {
 		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
 	}
-
+	diagnostics.ClearEntireDiagnosticsCache()
+	diagnostics.ClearRegisteredDocuments()
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
 
-	var cloneTargetDir, err = setupTestRepo()
+	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
 	defer os.RemoveAll(cloneTargetDir)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't setup test repo")
 	}
 
-	testPath := cloneTargetDir + "/maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
+	testPath := cloneTargetDir + string(os.PathSeparator) + "app.js"
 	didOpenParams, diagnosticsParams := textDocumentDidOpen(&loc, testPath)
 
 	assert.Eventually(t, func() bool { return notification != nil }, 10*time.Second, 10*time.Millisecond)
 	_ = notification.UnmarshalParams(&diagnosticsParams)
 
 	assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
-	assert.Len(t, diagnosticsParams.Diagnostics, 1)
+	assert.Len(t, diagnosticsParams.Diagnostics, 5)
 	assert.Equal(t, diagnosticsParams.Diagnostics[0].Code, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Code)
 	assert.Equal(t, diagnosticsParams.Diagnostics[0].Range, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Range)
 }
@@ -421,11 +443,11 @@ func textDocumentDidOpen(loc *server.Local, testPath string) (lsp.DidOpenTextDoc
 	return didOpenParams, diagnosticsParams
 }
 
-func setupTestRepo() (string, error) {
+func setupCustomTestRepo(url string, targetCommit string) (string, error) {
 	// clone to temp dir - specific version for reproducible test results
 	cloneTargetDir, _ := os.MkdirTemp(os.TempDir(), "integ_test_repo_*")
-	clone := exec.Command("git", "clone", "https://github.com/apache/maven", cloneTargetDir)
-	reset := exec.Command("git", "reset", "--hard", "18725ec1e")
+	clone := exec.Command("git", "clone", url, cloneTargetDir)
+	reset := exec.Command("git", "reset", "--hard", targetCommit)
 	reset.Dir = cloneTargetDir
 
 	clean := exec.Command("git", "clean", "--force")
