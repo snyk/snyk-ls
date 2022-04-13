@@ -26,6 +26,10 @@ func ClearEntireDiagnosticsCache() {
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 }
 
+func ClearRegisteredDocuments() {
+	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
+}
+
 func UpdateDocument(uri sglsp.DocumentURI, changes []sglsp.TextDocumentContentChangeEvent) {
 	file := registeredDocuments[uri]
 	for i := range changes {

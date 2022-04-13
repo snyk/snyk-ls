@@ -342,6 +342,7 @@ func Test_IntegrationWorkspaceScanMaven(t *testing.T) {
 
 func runIntegrationTest(repo string, commit string, ossFile string, codeFile string, t *testing.T) {
 	diagnostics.ClearEntireDiagnosticsCache()
+	diagnostics.ClearRegisteredDocuments()
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
 	logBuffer, teardownLogCapture := setupLogCapture()
@@ -394,7 +395,8 @@ func Test_IntegrationFileScan(t *testing.T) {
 	if !environment.RunIntegTest {
 		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
 	}
-
+	diagnostics.ClearEntireDiagnosticsCache()
+	diagnostics.ClearRegisteredDocuments()
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
 
