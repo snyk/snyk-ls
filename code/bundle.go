@@ -62,8 +62,6 @@ const (
 	jsonOverheadPerFile = jsonUriOverhead + jsonContentOverhead
 )
 
-var bundleMutex = &sync.Mutex{}
-
 func getTotalDocPayloadSize(uri sglsp.DocumentURI, file File) int {
 	return len(jsonHashSizePerFile) + len(jsonOverheadPerFile) + len([]byte(uri)) + len([]byte(file.Content))
 }
@@ -97,9 +95,6 @@ func (b *BundleImpl) createBundleFromSource() error {
 }
 
 func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]sglsp.TextDocumentItem) FilesNotAdded {
-	bundleMutex.Lock()
-	defer bundleMutex.Unlock()
-
 	if b.BundleDocuments == nil {
 		b.BundleDocuments = make(map[sglsp.DocumentURI]File)
 	}
@@ -155,9 +150,6 @@ func (b *BundleImpl) FetchDiagnosticsData(
 	dChan chan lsp.DiagnosticResult,
 	clChan chan lsp.CodeLensResult,
 ) {
-	bundleMutex.Lock()
-	defer bundleMutex.Unlock()
-
 	defer wg.Done()
 	defer log.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
 
