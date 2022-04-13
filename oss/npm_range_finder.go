@@ -30,7 +30,7 @@ func (n *NpmRangeFinder) Find(issue ossIssue) lsp.Range {
 				start.Character = strings.Index(line, searchPackage) - 1
 				end.Line = i
 				end.Character = len(strings.ReplaceAll(line, ",", ""))
-				log.Debug().Str("issueId", issue.Id).Interface("start", start).Interface("end", end).Msg("found range for " + searchPackage)
+				log.Trace().Str("issueId", issue.Id).Interface("start", start).Interface("end", end).Msg("found range for " + searchPackage)
 				break
 			}
 		}
@@ -61,6 +61,6 @@ func introducingPackageAndVersion(issue ossIssue) (string, string) {
 		packageName = issue.Name
 		version = issue.Version
 	}
-	log.Debug().Str("issueId", issue.Id).Str("IntroducingPackage", packageName).Str("IntroducingVersion", version).Msg("Introducing package and version")
+	log.Trace().Str("issueId", issue.Id).Str("IntroducingPackage", packageName).Str("IntroducingVersion", version).Msg("Introducing package and version")
 	return packageName, version
 }
