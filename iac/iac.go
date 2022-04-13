@@ -94,7 +94,7 @@ func ScanFile(
 }
 
 func cliCmd(uri sglsp.DocumentURI) *exec.Cmd {
-	path, err := filepath.Abs(strings.ReplaceAll(string(uri), "file://", ""))
+	path, err := filepath.Abs(strings.ReplaceAll(strings.ReplaceAll(string(uri), "file://", ""), "file:", ""))
 	if err != nil {
 		log.Err(err).Str("method", "iac.ScanFile").
 			Msg("Error while extracting file absolutePath")

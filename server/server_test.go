@@ -340,7 +340,7 @@ func Test_IntegrationWorkspaceScan(t *testing.T) {
 		WorkspaceFolders: []slsp.WorkspaceFolders{
 			{
 				Name: "Test Repo",
-				Uri:  lsp.DocumentURI("file://" + cloneTargetDir),
+				Uri:  lsp.DocumentURI("file:" + cloneTargetDir),
 			},
 		},
 	}
@@ -366,7 +366,7 @@ func Test_IntegrationWorkspaceScan(t *testing.T) {
 		return notification != nil && strings.Contains(
 			logBuffer.String(), "Diagnostics") &&
 			strings.Contains(logBuffer.String(),
-				"Cached: Diagnostics for file://"+string(lsp.DocumentURI(testPath)))
+				"Cached: Diagnostics for file://"+testPath)
 	}, 2*time.Second, 2*time.Millisecond)
 }
 

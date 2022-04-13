@@ -96,7 +96,7 @@ func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv **jrpc2.
 			URI:         uri,
 			Diagnostics: diags,
 		}
-		log.Info().Str("method", "PublishDiagnostics").Interface("params", diagnosticsParams).Msg("SENDING")
+		log.Info().Str("method", "PublishDiagnostics").Str("uri", string(diagnosticsParams.URI)).Msg("SENDING")
 		err := (*srv).Notify(ctx, "textDocument/publishDiagnostics", diagnosticsParams)
 		logError(err, "PublishDiagnostics")
 	}

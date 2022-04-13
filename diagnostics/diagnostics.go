@@ -39,12 +39,12 @@ func UnRegisterDocument(file sglsp.DocumentURI) {
 	delete(registeredDocuments, file)
 }
 
-func GetDiagnostics(rootUri sglsp.DocumentURI) []lsp.Diagnostic {
+func GetDiagnostics(uri sglsp.DocumentURI) []lsp.Diagnostic {
 	// serve from cache
-	diagnosticSlice := documentDiagnosticCache[rootUri]
+	diagnosticSlice := documentDiagnosticCache[uri]
 	if len(diagnosticSlice) > 0 {
 		log.Info().Str("method", "GetDiagnostics").
-			Msgf("Cached: Diagnostics for %s", rootUri)
+			Msgf("Cached: Diagnostics for %s", uri)
 
 		return diagnosticSlice
 	}
@@ -52,13 +52,13 @@ func GetDiagnostics(rootUri sglsp.DocumentURI) []lsp.Diagnostic {
 	var diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic
 	var codeLenses map[sglsp.DocumentURI][]sglsp.CodeLens
 
-	diagnostics, codeLenses = fetchAllRegisteredDocumentDiagnostics(rootUri, ScanLevelFile)
+	diagnostics, codeLenses = fetchAllRegisteredDocumentDiagnostics(uri, lsp.ScanLevelFile)
 	addToCache(diagnostics, codeLenses)
 
-	return documentDiagnosticCache[rootUri]
+	return documentDiagnosticCache[uri]
 }
 
-func fetchAllRegisteredDocumentDiagnostics(rootUri sglsp.DocumentURI, level ScanLevel) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens) {
+func fetchAllRegisteredDocumentDiagnostics(rootUri sglsp.DocumentURI, level lsp.ScanLevel) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens) {
 	log.Info().
 		Str("method", "fetchAllRegisteredDocumentDiagnostics").
 		Msg("started.")
@@ -85,7 +85,7 @@ func fetchAllRegisteredDocumentDiagnostics(rootUri sglsp.DocumentURI, level Scan
 		go myBundle.FetchDiagnosticsData(string(rootUri), &wg, dChan, clChan)
 	}
 
-	if level == ScanLevelWorkspace {
+	if level == lsp.ScanLevelWorkspace {
 		go iac.ScanWorkspace(rootUri, &wg, dChan, clChan)
 		go oss.ScanWorkspace(rootUri, &wg, dChan, clChan)
 	} else {

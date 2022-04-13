@@ -75,12 +75,16 @@ func ScanWorkspace(
 
 	log.Debug().Str("method", "oss.ScanWorkspace").Msg("started.")
 
-	path, err := filepath.Abs(strings.ReplaceAll(string(workspace), "file://", ""))
+	path, err := filepath.Abs(strings.ReplaceAll(strings.ReplaceAll(string(workspace), "file://", ""), "file:", ""))
 	if err != nil {
-		log.Err(err).Str("method", "oss.ScanFile").
+		log.Err(err).Str("method", "oss.ScanWorkspace").
 			Msg("Error while extracting file absolutePath")
 	}
 
+	if err != nil {
+		log.Err(err).Str("method", "oss.ScanWorkspace").
+			Msg("Error changing into workspace directory")
+	}
 	cmd := exec.Command(environment.CliPath(), "test", path, "--json")
 	scanResults, err := scan(cmd)
 	if err != nil {
@@ -88,7 +92,7 @@ func ScanWorkspace(
 			Msgf("Error while calling Snyk CLI, err: %v", err)
 	}
 
-	targetFile := lockFilesToManifestMap[scanResults.DisplayTargetFile]
+	targetFile := determineTargetFile(scanResults.DisplayTargetFile)
 	fileContent, err := ioutil.ReadFile(path + "/" + targetFile)
 	if err != nil {
 		log.Err(err).Str("method", "oss.ScanWorkspace").
@@ -100,6 +104,14 @@ func ScanWorkspace(
 	var doc = sglsp.TextDocumentItem{Text: string(fileContent)}
 
 	retrieveAnalysis(scanResults, uri, doc, dChan)
+}
+
+func determineTargetFile(displayTargetFile string) string {
+	targetFile := lockFilesToManifestMap[displayTargetFile]
+	if targetFile == "" {
+		return displayTargetFile
+	}
+	return targetFile
 }
 
 func ScanFile(
@@ -114,8 +126,9 @@ func ScanFile(
 	log.Debug().Str("method", "oss.ScanFile").Msg("started.")
 
 	for _, supportedFile := range getDetectableFiles() {
-		if strings.HasSuffix(string(doc.URI), supportedFile) {
-			path, err := filepath.Abs(strings.ReplaceAll(string(doc.URI), "file://", ""))
+		uri := string(doc.URI)
+		if strings.HasSuffix(uri, supportedFile) {
+			path, err := filepath.Abs(strings.ReplaceAll(strings.ReplaceAll(uri, "file://", ""), "file:", ""))
 			if err != nil {
 				log.Err(err).Str("method", "oss.ScanFile").
 					Msg("Error while extracting file absolutePath")

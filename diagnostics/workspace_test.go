@@ -78,6 +78,7 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 }
 
 func Test_RegisterAllFilesFromWorkspace_Without_Ignored(t *testing.T) {
+	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
 	_, workspace, ignoredFilePath, notIgnoredFilePath := setupIgnoreWorkspace()
 	defer os.RemoveAll(workspace)
 

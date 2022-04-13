@@ -16,10 +16,11 @@ import (
 var registeredDocsMutex = &sync.Mutex{}
 
 func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) error {
-	workspace, err := filepath.Abs(strings.ReplaceAll(
-		string(workspaceUri),
-		"file://", ""),
-	)
+	// this is not a mistake - eclipse reports workspace folders with `file:/` pre-prended
+	workspace, err :=
+		filepath.Abs(
+			strings.ReplaceAll(strings.ReplaceAll(string(workspaceUri), "file://", ""), "file:", ""),
+		)
 
 	if err != nil {
 		return err
@@ -113,7 +114,7 @@ func workspaceDiagnostics(workspaceUri sglsp.DocumentURI, wg *sync.WaitGroup) {
 			Msg("Error occurred while registering files from workspace")
 	}
 
-	diagnostics, codeLenses = fetchAllRegisteredDocumentDiagnostics(workspaceUri, ScanLevelWorkspace)
+	diagnostics, codeLenses = fetchAllRegisteredDocumentDiagnostics(workspaceUri, lsp.ScanLevelWorkspace)
 	addToCache(diagnostics, codeLenses)
 }
 
