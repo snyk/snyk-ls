@@ -328,7 +328,7 @@ func Test_IntegrationWorkspaceScanGoof(t *testing.T) {
 	}
 	ossFile := "package.json"
 	codeFile := "app.js"
-	runIntegrationTest("https://github.com/snyk/goof", "", ossFile, codeFile, t)
+	runIntegrationTest("https://github.com/snyk/goof", "0336589", ossFile, codeFile, t)
 }
 
 func Test_IntegrationWorkspaceScanMaven(t *testing.T) {
@@ -398,20 +398,20 @@ func Test_IntegrationFileScan(t *testing.T) {
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
 
-	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/apache/maven", "18725ec1e")
+	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
 	defer os.RemoveAll(cloneTargetDir)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't setup test repo")
 	}
 
-	testPath := cloneTargetDir + "/maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
+	testPath := cloneTargetDir + string(os.PathSeparator) + "app.js"
 	didOpenParams, diagnosticsParams := textDocumentDidOpen(&loc, testPath)
 
 	assert.Eventually(t, func() bool { return notification != nil }, 10*time.Second, 10*time.Millisecond)
 	_ = notification.UnmarshalParams(&diagnosticsParams)
 
 	assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
-	assert.Len(t, diagnosticsParams.Diagnostics, 1)
+	assert.Len(t, diagnosticsParams.Diagnostics, 5)
 	assert.Equal(t, diagnosticsParams.Diagnostics[0].Code, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Code)
 	assert.Equal(t, diagnosticsParams.Diagnostics[0].Range, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Range)
 }
