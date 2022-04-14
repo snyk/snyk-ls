@@ -41,14 +41,6 @@ jobs:
         run: |
           make clean test
 
-      - name: Run integration tests
-        env:
-          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
-          INTEG_TESTS: 'true'
-        run: |
-          make clean test
-
       - name: Snyk
         env:
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
@@ -56,6 +48,37 @@ jobs:
           snyk monitor
           snyk code test
 
+  integration-tests:
+    name: integration-tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Determine Go version
+        run: |
+          sed -En 's/^go[[:space:]]+([[:digit:].]+)$/GO_VERSION=\1/p' go.mod >> $GITHUB_ENV
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Run integration tests
+        env:
+          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          INTEG_TESTS: 'true'
+        run: |
+          make clean test
+  cleanup-check:
+    name: cleanup-check
+    runs-on: ubuntu-latest
+    needs: integration-tests
+    steps:
       - name: Check if repo left dirty
         run: |
           GIT_STATUS=$(git status -s)

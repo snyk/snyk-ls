@@ -47,6 +47,14 @@ jobs:
         run: |
           make clean test
 
+      - name: Run integration tests
+        env:
+          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          INTEG_TESTS: 'true'
+        run: |
+          make clean test
+
       - name: Set up Git actions user
         uses: fregante/setup-git-user@v1
 
