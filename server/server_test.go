@@ -69,6 +69,7 @@ func setupLogCapture() (*bytes.Buffer, func()) {
 
 	return logBuffer, func() {
 		log.Logger = log.Output(os.Stderr)
+		log.Debug().Str("logBuffer", logBuffer.String()).Msg("dumping logbuffer")
 	}
 }
 
