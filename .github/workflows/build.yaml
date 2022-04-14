@@ -53,8 +53,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ ubuntu-latest, macos-latest, windows-latest ]
-
+        # we cannot download the CLI on windows
+        # once we have automatic downloads of the CLI in the LS, we should add Windows runner
+        os: [ ubuntu-latest, macos-latest ]
     steps:
       - uses: actions/checkout@v2
 
@@ -67,6 +68,15 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
+      - name: Install sha256sum and snyk-macos
+        if: runner.os == 'macOS'
+        run: |
+          curl -sSL https://static.snyk.io/cli/latest/snyk-macos > /usr/local/bin/snyk-macos && chmod +x /usr/local/bin/snyk-macos
+
+      - name: Set up Snyk CLI
+        if: runner.os == 'Linux'
+        uses: snyk/actions/setup@master
+
       - name: Run integration tests
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
@@ -74,18 +84,3 @@ jobs:
           INTEG_TESTS: 'true'
         run: |
           make clean test
-  cleanup-check:
-    name: cleanup-check
-    runs-on: ubuntu-latest
-    needs: integration-tests
-    steps:
-      - name: Check if repo left dirty
-        run: |
-          GIT_STATUS=$(git status -s)
-          echo $GIT_STATUS
-          if [[ "" == $GIT_STATUS ]]
-          then
-            exit 0
-          else
-            exit 1
-          fi
