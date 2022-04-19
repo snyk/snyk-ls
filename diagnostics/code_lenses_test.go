@@ -22,48 +22,48 @@ var (
 
 func Test_CodeLenses_shouldReturnNilWithNothingInCache(t *testing.T) {
 	codeLenseCache = map[sglsp.DocumentURI][]sglsp.CodeLens{}
-	path, doc := setupDoc()
+	path, uri := setupDoc()
 	defer os.RemoveAll(path)
 
-	lenses, _ := GetCodeLenses(doc.URI)
+	lenses, _ := GetCodeLenses(uri)
 	assert.Nil(t, lenses)
 }
 
 func Test_CodeLenses_shouldReturnLensesFromCache(t *testing.T) {
 	codeLenseCache = map[sglsp.DocumentURI][]sglsp.CodeLens{}
-	path, doc := setupDoc()
+	path, uri := setupDoc()
 	defer os.RemoveAll(path)
 
-	codeLenseCache[doc.URI] = append([]sglsp.CodeLens{}, testLens)
-	lenses, _ := GetCodeLenses(doc.URI)
-	assert.Equal(t, codeLenseCache[doc.URI], lenses)
+	codeLenseCache[uri] = append([]sglsp.CodeLens{}, testLens)
+	lenses, _ := GetCodeLenses(uri)
+	assert.Equal(t, codeLenseCache[uri], lenses)
 }
 
 func Test_AddLens_shouldAddLensCache(t *testing.T) {
 	codeLenseCache = map[sglsp.DocumentURI][]sglsp.CodeLens{}
-	path, doc := setupDoc()
+	path, uri := setupDoc()
 	defer os.RemoveAll(path)
 
-	AddLens(doc.URI, testLens)
-	assert.Equal(t, testLens, codeLenseCache[doc.URI][0])
+	AddLens(uri, testLens)
+	assert.Equal(t, testLens, codeLenseCache[uri][0])
 }
 
 func Test_clearLenses_shouldEmptyLensCache(t *testing.T) {
 	codeLenseCache = map[sglsp.DocumentURI][]sglsp.CodeLens{}
-	path, doc := setupDoc()
+	path, uri := setupDoc()
 	defer os.RemoveAll(path)
 
-	AddLens(doc.URI, testLens)
-	ClearLenses(doc.URI)
-	assert.Equal(t, []sglsp.CodeLens{}, codeLenseCache[doc.URI])
+	AddLens(uri, testLens)
+	ClearLenses(uri)
+	assert.Equal(t, []sglsp.CodeLens{}, codeLenseCache[uri])
 }
 
 func Test_construct_shouldEmptyLensCache(t *testing.T) {
 	codeLenseCache = map[sglsp.DocumentURI][]sglsp.CodeLens{}
-	path, doc := setupDoc()
+	path, uri := setupDoc()
 	defer os.RemoveAll(path)
 
-	AddLens(doc.URI, testLens)
-	ClearLenses(doc.URI)
-	assert.Equal(t, []sglsp.CodeLens{}, codeLenseCache[doc.URI])
+	AddLens(uri, testLens)
+	ClearLenses(uri)
+	assert.Equal(t, []sglsp.CodeLens{}, codeLenseCache[uri])
 }

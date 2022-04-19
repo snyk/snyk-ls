@@ -114,7 +114,7 @@ func determineTargetFile(displayTargetFile string) string {
 }
 
 func ScanFile(
-	doc sglsp.TextDocumentItem,
+	uri sglsp.DocumentURI,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
 	clChan chan lsp.CodeLensResult,
@@ -125,9 +125,9 @@ func ScanFile(
 	log.Debug().Str("method", "oss.ScanFile").Msg("started.")
 
 	for _, supportedFile := range getDetectableFiles() {
-		uri := string(doc.URI)
-		if strings.HasSuffix(uri, supportedFile) {
-			path, err := filepath.Abs(strings.ReplaceAll(strings.ReplaceAll(uri, "file://", ""), "file:", ""))
+		path := string(uri)
+		if strings.HasSuffix(path, supportedFile) {
+			path, err := filepath.Abs(strings.ReplaceAll(strings.ReplaceAll(path, "file://", ""), "file:", ""))
 			if err != nil {
 				log.Err(err).Str("method", "oss.ScanFile").
 					Msg("Error while extracting file absolutePath")
@@ -138,17 +138,17 @@ func ScanFile(
 			if err != nil {
 				log.Err(err).Str("method", "oss.ScanFile").
 					Msg("Error while calling Snyk CLI")
-				reportErrorViaChan(doc.URI, dChan, err)
+				reportErrorViaChan(uri, dChan, err)
 			}
 
 			fileContent, err := os.ReadFile(path)
 			if err != nil {
 				log.Err(err).Str("method", "oss.ScanFile").
 					Msg("Error reading file " + path)
-				reportErrorViaChan(doc.URI, dChan, err)
+				reportErrorViaChan(uri, dChan, err)
 			}
 
-			retrieveAnalysis(scanResults, doc.URI, fileContent, dChan)
+			retrieveAnalysis(scanResults, uri, fileContent, dChan)
 		}
 	}
 }

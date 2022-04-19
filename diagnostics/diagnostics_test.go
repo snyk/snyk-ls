@@ -12,7 +12,7 @@ import (
 	"github.com/snyk/snyk-ls/lsp"
 )
 
-func setupDoc() (string, sglsp.TextDocumentItem) {
+func setupDoc() (string, sglsp.DocumentURI) {
 	path, err := os.MkdirTemp(os.TempDir(), "fakeDiagnosticsCodeTest")
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't create test directory")
@@ -24,77 +24,73 @@ func setupDoc() (string, sglsp.TextDocumentItem) {
 		log.Fatal().Err(err).Msg("Couldn't create test file")
 	}
 	code.FakeDiagnosticUri = sglsp.DocumentURI("file://" + filePath)
-	return path, sglsp.TextDocumentItem{
-		URI:        code.FakeDiagnosticUri,
-		LanguageID: "java",
-		Version:    0,
-	}
+	return path, code.FakeDiagnosticUri
 }
 
 func Test_RegisterDocument_shouldRegisterDocumentInCache(t *testing.T) {
-	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
-	path, doc := setupDoc()
+	registeredDocuments = map[sglsp.DocumentURI]bool{}
+	path, uri := setupDoc()
 	defer os.RemoveAll(path)
-	RegisterDocument(doc)
-	assert.Equal(t, doc, registeredDocuments[doc.URI])
+	RegisterDocument(sglsp.TextDocumentItem{URI: uri})
+	assert.Equal(t, true, registeredDocuments[uri])
 }
 
 func Test_UnRegisterDocument_shouldDeleteDocumentFromCache(t *testing.T) {
-	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
-	path, doc := setupDoc()
+	registeredDocuments = map[sglsp.DocumentURI]bool{}
+	path, uri := setupDoc()
 	defer os.RemoveAll(path)
-	RegisterDocument(doc)
-	UnRegisterDocument(doc.URI)
-	assert.Equal(t, sglsp.TextDocumentItem{}, registeredDocuments[doc.URI])
+	RegisterDocument(sglsp.TextDocumentItem{URI: uri})
+	UnRegisterDocument(uri)
+	assert.Equal(t, false, registeredDocuments[uri])
 }
 
 func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
-	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
+	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
-	path, doc := setupDoc()
+	path, uri := setupDoc()
 	defer os.RemoveAll(path)
-	RegisterDocument(doc)
-	documentDiagnosticCache[doc.URI] = []lsp.Diagnostic{code.FakeDiagnostic}
+	RegisterDocument(sglsp.TextDocumentItem{URI: uri})
+	documentDiagnosticCache[uri] = []lsp.Diagnostic{code.FakeDiagnostic}
 
-	diagnostics := GetDiagnostics(doc.URI)
+	diagnostics := GetDiagnostics(uri)
 
 	assert.NotNil(t, diagnostics)
-	assert.NotEmpty(t, documentDiagnosticCache[doc.URI])
-	assert.Equal(t, len(documentDiagnosticCache[doc.URI]), len(diagnostics))
+	assert.NotEmpty(t, documentDiagnosticCache[uri])
+	assert.Equal(t, len(documentDiagnosticCache[uri]), len(diagnostics))
 }
 
 func Test_UpdateDocument_shouldUpdateTextOfDocument(t *testing.T) {
-	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
+	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
-	path, doc := setupDoc()
+	path, uri := setupDoc()
 	defer os.RemoveAll(path)
-	RegisterDocument(doc)
+	RegisterDocument(sglsp.TextDocumentItem{URI: uri})
 
 	change := sglsp.TextDocumentContentChangeEvent{
 		Text: "hurz",
 	}
-	UpdateDocument(doc.URI, []sglsp.TextDocumentContentChangeEvent{change})
+	UpdateDocument(uri, []sglsp.TextDocumentContentChangeEvent{change})
 
-	assert.Equal(t, registeredDocuments[doc.URI].Text, change.Text)
+	assert.Equal(t, true, registeredDocuments[uri])
 }
 
 func Test_GetDiagnostics_shouldAddCodeLenses(t *testing.T) {
-	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
+	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
-	path, doc := setupDoc()
+	path, uri := setupDoc()
 	defer os.RemoveAll(path)
-	RegisterDocument(doc)
+	RegisterDocument(sglsp.TextDocumentItem{URI: uri})
 	SnykCode = &code.FakeSnykCodeApiService{}
 
-	diagnostics := GetDiagnostics(doc.URI)
+	diagnostics := GetDiagnostics(uri)
 
-	assert.Equal(t, len(documentDiagnosticCache[doc.URI]), len(diagnostics))
-	lenses, _ := GetCodeLenses(doc.URI)
+	assert.Equal(t, len(documentDiagnosticCache[uri]), len(diagnostics))
+	lenses, _ := GetCodeLenses(uri)
 	assert.Equal(t, 1, len(lenses))
 }
 
 func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
-	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
+	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 
 	empty := sglsp.TextDocumentItem{

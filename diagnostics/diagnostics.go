@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	registeredDocuments     = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
+	registeredDocuments     = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	SnykCode                code.SnykCodeService
 )
@@ -27,20 +27,16 @@ func ClearEntireDiagnosticsCache() {
 }
 
 func ClearRegisteredDocuments() {
-	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
+	registeredDocuments = map[sglsp.DocumentURI]bool{}
 }
 
 func UpdateDocument(uri sglsp.DocumentURI, changes []sglsp.TextDocumentContentChangeEvent) {
-	file := registeredDocuments[uri]
-	for i := range changes {
-		change := changes[i]
-		file.Text = change.Text
-	}
-	registeredDocuments[uri] = file
+	// don't do anything but update registered to true
+	registeredDocuments[uri] = true
 }
 
 func RegisterDocument(file sglsp.TextDocumentItem) {
-	registeredDocuments[file.URI] = file
+	registeredDocuments[file.URI] = true
 }
 
 func UnRegisterDocument(file sglsp.DocumentURI) {
@@ -98,7 +94,7 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 		go oss.ScanWorkspace(uri, &wg, dChan, clChan)
 	} else {
 		go iac.ScanFile(uri, &wg, dChan, clChan)
-		go oss.ScanFile(registeredDocuments[uri], &wg, dChan, clChan)
+		go oss.ScanFile(uri, &wg, dChan, clChan)
 	}
 
 	wg.Wait()
@@ -152,7 +148,7 @@ func processResults(
 	}
 }
 
-func createOrExtendBundles(documents map[sglsp.DocumentURI]sglsp.TextDocumentItem, bundles *[]*code.BundleImpl) {
+func createOrExtendBundles(documents map[sglsp.DocumentURI]bool, bundles *[]*code.BundleImpl) {
 	// we need a pointer to the array of bundle pointers to be able to grow it
 	log.Debug().Str("method", "createOrExtendBundles").Msg("started")
 	defer log.Debug().Str("method", "createOrExtendBundles").Msg("done")

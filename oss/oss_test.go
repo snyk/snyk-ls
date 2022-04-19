@@ -1,7 +1,6 @@
 package oss
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -45,20 +44,12 @@ func Test_ScanFile(t *testing.T) {
 	environment.Format = environment.FormatHtml
 
 	path, _ := filepath.Abs("testdata/package.json")
-	content, _ := os.ReadFile(path)
-
-	doc := sglsp.TextDocumentItem{
-		URI:        sglsp.DocumentURI(path),
-		LanguageID: "json",
-		Version:    0,
-		Text:       string(content),
-	}
 
 	dChan := make(chan lsp.DiagnosticResult)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	go ScanFile(doc, &wg, dChan, nil)
+	go ScanFile(sglsp.DocumentURI("file://"+path), &wg, dChan, nil)
 
 	diagnosticResult := <-dChan
 
