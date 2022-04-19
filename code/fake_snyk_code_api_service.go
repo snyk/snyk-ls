@@ -3,6 +3,7 @@ package code
 import (
 	"fmt"
 	"math/rand"
+	"os"
 
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -12,7 +13,7 @@ import (
 )
 
 var (
-	FakeDiagnosticUri = sglsp.DocumentURI("file://testdata/Dummy.java")
+	fakeDiagnosticUri sglsp.DocumentURI
 	FakeDiagnostic    = lsp.Diagnostic{
 		Range: sglsp.Range{
 			Start: sglsp.Position{
@@ -48,6 +49,22 @@ var (
 		},
 	}
 )
+
+func FakeDiagnosticUri() (sglsp.DocumentURI, string) {
+	temp, err := os.MkdirTemp(os.TempDir(), "fakeDiagnosticTempDir")
+	if err != nil {
+		log.Fatal().Err(err).Msg("couldn't create tempdir")
+	}
+	filePath := temp + string(os.PathSeparator) + "Dummy.java"
+	classWithQualityIssue := "public class AnnotatorTest {\n  public static void delay(long millis) {\n    try {\n      Thread.sleep(millis);\n    } catch (InterruptedException e) {\n      e.printStackTrace();\n    }\n  }\n};"
+	err = os.WriteFile(filePath, []byte(classWithQualityIssue), 0600)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Couldn't create fake diagnostic file for Snyk Code Fake Service")
+	}
+	uri := sglsp.DocumentURI("file://" + filePath)
+	fakeDiagnosticUri = uri
+	return uri, temp
+}
 
 const (
 	CreateBundleWithSourceOperation = "createBundleWithSource"
@@ -110,11 +127,11 @@ func (f *FakeSnykCodeApiService) RunAnalysis(bundleHash string, shardKey string,
 
 	diagnosticMap := map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	var diagnostics []lsp.Diagnostic
-	diagnosticMap[FakeDiagnosticUri] = append(diagnostics, FakeDiagnostic)
+	diagnosticMap[fakeDiagnosticUri] = append(diagnostics, FakeDiagnostic)
 
 	codeLensMap := map[sglsp.DocumentURI][]sglsp.CodeLens{}
 	var codeLenses []sglsp.CodeLens
-	codeLensMap[FakeDiagnosticUri] = append(codeLenses, FakeCodeLens)
+	codeLensMap[fakeDiagnosticUri] = append(codeLenses, FakeCodeLens)
 
 	log.Trace().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Interface("fakeDiagnostic", FakeDiagnostic).Msg("fake backend call received & answered")
 	return diagnosticMap, codeLensMap, "COMPLETE", nil

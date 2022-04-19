@@ -27,36 +27,33 @@ import (
 var (
 	ctx          = context.Background()
 	notification *jrpc2.Request
-	doc          = lsp.TextDocumentItem{
-		URI:        code.FakeDiagnosticUri,
-		LanguageID: "java",
-		Version:    0,
-		Text:       "public class AnnotatorTest {\n  public static void delay(long millis) {\n    try {\n      Thread.sleep(millis);\n    } catch (InterruptedException e) {\n      e.printStackTrace();\n    }\n  }\n}",
-	}
-	docIdentifier = lsp.VersionedTextDocumentIdentifier{
-		TextDocumentIdentifier: lsp.TextDocumentIdentifier{URI: doc.URI},
-		Version:                doc.Version,
-	}
 )
 
-func didOpenTextParams() lsp.DidOpenTextDocumentParams {
+func didOpenTextParams() (lsp.DidOpenTextDocumentParams, func()) {
 	// see https://microsoft.github.io/language-server-protocol/specifications/specification-3-17/#documentSelector
+	uri, path := code.FakeDiagnosticUri()
 	didOpenParams := lsp.DidOpenTextDocumentParams{
-		TextDocument: doc,
+		TextDocument: lsp.TextDocumentItem{URI: uri},
 	}
-	return didOpenParams
+	return didOpenParams, func() {
+		os.RemoveAll(path)
+	}
 }
 
-func didSaveTextParams() lsp.DidSaveTextDocumentParams {
+func didSaveTextParams() (lsp.DidSaveTextDocumentParams, func()) {
 	// see https://microsoft.github.io/language-server-protocol/specifications/specification-3-17/#documentSelector
+	uri, path := code.FakeDiagnosticUri()
 	didSaveParams := lsp.DidSaveTextDocumentParams{
-		TextDocument: lsp.TextDocumentIdentifier{URI: doc.URI},
+		TextDocument: lsp.TextDocumentIdentifier{URI: uri},
 	}
-	return didSaveParams
+	return didSaveParams, func() {
+		os.RemoveAll(path)
+	}
 }
 
 func setupServer() (server.Local, func(l *server.Local)) {
 	loc := startServer()
+	notification = nil
 
 	return loc, func(loc *server.Local) {
 		err := loc.Close()
@@ -216,7 +213,8 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
 
-	didOpenParams := didOpenTextParams()
+	didOpenParams, cleanup := didOpenTextParams()
+	defer cleanup()
 
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
@@ -237,14 +235,19 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 	defer teardownServer(&loc)
 
 	// register our dummy document
-	didOpenParams := didOpenTextParams()
+	didOpenParams, cleanup := didOpenTextParams()
+	defer cleanup()
+
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
 		log.Fatal().Err(err)
 	}
 
 	didChangeParams := lsp.DidChangeTextDocumentParams{
-		TextDocument:   docIdentifier,
+		TextDocument: lsp.VersionedTextDocumentIdentifier{
+			TextDocumentIdentifier: lsp.TextDocumentIdentifier{URI: didOpenParams.TextDocument.URI},
+			Version:                0,
+		},
 		ContentChanges: nil,
 	}
 
@@ -258,7 +261,8 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
 
-	didSaveParams := didSaveTextParams()
+	didSaveParams, cleanup := didSaveTextParams()
+	defer cleanup()
 
 	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
 	if err != nil {
@@ -266,12 +270,14 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	}
 
 	// should receive diagnostics
-	diags := lsp.PublishDiagnosticsParams{}
 
 	// wait for publish
 	assert.Eventually(t, func() bool { return notification != nil }, 5*time.Second, 10*time.Millisecond)
-	_ = notification.UnmarshalParams(&diags)
-	assert.Equal(t, didSaveParams.TextDocument.URI, diags.URI)
+	if !t.Failed() {
+		diags := lsp.PublishDiagnosticsParams{}
+		_ = notification.UnmarshalParams(&diags)
+		assert.Equal(t, didSaveParams.TextDocument.URI, diags.URI)
+	}
 }
 
 func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
@@ -297,13 +303,16 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
-
+	params, cleanup := didOpenTextParams()
+	defer cleanup()
 	codeLensParams := lsp.CodeLensParams{
-		TextDocument: docIdentifier.TextDocumentIdentifier,
+		TextDocument: lsp.TextDocumentIdentifier{
+			URI: params.TextDocument.URI,
+		},
 	}
 
 	// populate caches
-	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenTextParams())
+	_, err := loc.Client.Call(ctx, "textDocument/didOpen", params)
 	if err != nil {
 		log.Fatal().Err(err)
 	}

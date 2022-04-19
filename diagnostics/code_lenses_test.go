@@ -6,6 +6,8 @@ import (
 
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/code"
 )
 
 var (
@@ -22,7 +24,7 @@ var (
 
 func Test_CodeLenses_shouldReturnNilWithNothingInCache(t *testing.T) {
 	codeLenseCache = map[sglsp.DocumentURI][]sglsp.CodeLens{}
-	path, uri := setupDoc()
+	uri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 
 	lenses, _ := GetCodeLenses(uri)
@@ -31,7 +33,7 @@ func Test_CodeLenses_shouldReturnNilWithNothingInCache(t *testing.T) {
 
 func Test_CodeLenses_shouldReturnLensesFromCache(t *testing.T) {
 	codeLenseCache = map[sglsp.DocumentURI][]sglsp.CodeLens{}
-	path, uri := setupDoc()
+	uri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 
 	codeLenseCache[uri] = append([]sglsp.CodeLens{}, testLens)
@@ -41,7 +43,7 @@ func Test_CodeLenses_shouldReturnLensesFromCache(t *testing.T) {
 
 func Test_AddLens_shouldAddLensCache(t *testing.T) {
 	codeLenseCache = map[sglsp.DocumentURI][]sglsp.CodeLens{}
-	path, uri := setupDoc()
+	uri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 
 	AddLens(uri, testLens)
@@ -50,7 +52,7 @@ func Test_AddLens_shouldAddLensCache(t *testing.T) {
 
 func Test_clearLenses_shouldEmptyLensCache(t *testing.T) {
 	codeLenseCache = map[sglsp.DocumentURI][]sglsp.CodeLens{}
-	path, uri := setupDoc()
+	uri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 
 	AddLens(uri, testLens)
@@ -60,7 +62,7 @@ func Test_clearLenses_shouldEmptyLensCache(t *testing.T) {
 
 func Test_construct_shouldEmptyLensCache(t *testing.T) {
 	codeLenseCache = map[sglsp.DocumentURI][]sglsp.CodeLens{}
-	path, uri := setupDoc()
+	uri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 
 	AddLens(uri, testLens)
