@@ -75,19 +75,25 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 	var codeLenses []sglsp.CodeLens
 	var bundles = make([]*code.BundleImpl, 0, 10)
 
-	if level == lsp.ScanLevelFile && !registeredDocuments[uri] {
-		registeredDocuments[uri] = true
+	var bundleDocs = map[sglsp.DocumentURI]bool{}
+	if level == lsp.ScanLevelFile {
+		bundleDocs[uri] = true
+	} else {
+		registeredDocsMutex.Lock()
+		bundleDocs = registeredDocuments
+		registeredDocsMutex.Unlock()
 	}
 
 	// we need a pointer to the array of bundle pointers to be able to grow it
-	createOrExtendBundles(registeredDocuments, &bundles)
+
+	createOrExtendBundles(bundleDocs, &bundles)
 
 	wg := sync.WaitGroup{}
 	bundleCount := len(bundles)
 	wg.Add(2 + bundleCount)
 
-	dChan := make(chan lsp.DiagnosticResult, len(registeredDocuments))
-	clChan := make(chan lsp.CodeLensResult, len(registeredDocuments))
+	dChan := make(chan lsp.DiagnosticResult, 10)
+	clChan := make(chan lsp.CodeLensResult, 10)
 
 	for _, myBundle := range bundles {
 		go myBundle.FetchDiagnosticsData(string(uri), &wg, dChan, clChan)

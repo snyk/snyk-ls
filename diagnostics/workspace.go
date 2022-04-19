@@ -32,19 +32,19 @@ func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) error {
 		return err
 	}
 
+	gitIgnore := ignore.CompileIgnoreLines(patterns...)
+
 	return filepath.WalkDir(workspace, func(path string, dirEntry os.DirEntry, _ error) error {
 		if dirEntry == nil || dirEntry.IsDir() {
 			return nil
 		}
 
-		if ignored(patterns, path) {
+		if ignored(gitIgnore, path) {
 			return nil
 		}
 
-		content, err := os.ReadFile(path)
 		file := sglsp.TextDocumentItem{
-			URI:  sglsp.DocumentURI("file://" + path),
-			Text: string(content),
+			URI: sglsp.DocumentURI("file://" + path),
 		}
 
 		registeredDocsMutex.Lock()
@@ -87,17 +87,14 @@ func loadIgnorePatterns(workspace string) ([]string, error) {
 	return patterns, nil
 }
 
-func ignored(patterns []string, path string) bool {
+func ignored(gitIgnore *ignore.GitIgnore, path string) bool {
 	ignored := false
-	gitIgnore := ignore.CompileIgnoreLines(patterns...)
-	for _, pattern := range patterns {
-		ignored = gitIgnore.MatchesPath(path)
-		if ignored {
-			log.Trace().Str("method", "ignored").Str("pattern", pattern).Str("path", path).Msg("matched")
-			return true
-		}
-		log.Trace().Str("method", "ignored").Str("pattern", pattern).Str("path", path).Msg("not matched")
+	ignored = gitIgnore.MatchesPath(path)
+	if ignored {
+		log.Trace().Str("method", "ignored").Str("path", path).Msg("matched")
+		return true
 	}
+	log.Trace().Str("method", "ignored").Str("path", path).Msg("not matched")
 	return false
 }
 
