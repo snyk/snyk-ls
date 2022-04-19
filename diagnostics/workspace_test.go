@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog/log"
+	ignore "github.com/sabhiram/go-gitignore"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 )
@@ -20,7 +21,7 @@ func Test_ignored_ignoredGlob(t *testing.T) {
 	}
 	patterns := []string{"**/ignored.txt", "*.xml"}
 
-	assert.True(t, ignored(patterns, ignoredPath))
+	assert.True(t, ignored(ignore.CompileIgnoreLines(patterns...), ignoredPath))
 }
 
 func Test_ignored_notIgnored(t *testing.T) {
@@ -32,7 +33,7 @@ func Test_ignored_notIgnored(t *testing.T) {
 	}
 	patterns := []string{"**/ignored.txt", "*.xml"}
 
-	assert.False(t, ignored(patterns, notIgnoredPath))
+	assert.False(t, ignored(ignore.CompileIgnoreLines(patterns...), notIgnoredPath))
 }
 
 func Test_ignored_doubleAsterisk(t *testing.T) {
@@ -49,7 +50,7 @@ func Test_ignored_doubleAsterisk(t *testing.T) {
 		log.Fatal().Err(err).Msg("Couldn't create file " + ignoredDoubleAsteriskPath)
 	}
 	patterns := []string{"**/ignored.txt", "*.xml"}
-	assert.True(t, ignored(patterns, ignoredDoubleAsteriskPath))
+	assert.True(t, ignored(ignore.CompileIgnoreLines(patterns...), ignoredDoubleAsteriskPath))
 }
 
 func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {
