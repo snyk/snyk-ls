@@ -48,10 +48,10 @@ func setupDocs() (string, lsp.TextDocumentItem, lsp.TextDocumentItem, []byte, []
 func Test_createBundleFromSource_shouldReturnNonEmptyBundleHash(t *testing.T) {
 	b := BundleImpl{SnykCode: &FakeSnykCodeApiService{}}
 	b.BundleDocuments = map[lsp.DocumentURI]File{}
-	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
+	registeredDocuments := map[lsp.DocumentURI]bool{}
 	path, firstDoc, _, _, _ := setupDocs()
 	defer os.RemoveAll(path)
-	registeredDocuments[firstDoc.URI] = firstDoc
+	registeredDocuments[firstDoc.URI] = true
 	_ = b.AddToBundleDocuments(registeredDocuments)
 	_ = b.createBundleFromSource()
 	assert.NotEqual(t, "", b.BundleHash)
@@ -88,7 +88,7 @@ func Test_AddToBundleDocuments_shouldReturnNotAddedFileIfBundleGreaterThanMaxPay
 			log.Fatal().Err(err).Msg("Couldn't create test file " + fileName)
 		}
 		uri := lsp.DocumentURI("file://" + filePath)
-		registeredDocuments[uri] = lsp.TextDocumentItem{URI: uri}
+		registeredDocuments[uri] = true
 	}
 
 	filesNotAdded := b.AddToBundleDocuments(registeredDocuments)
@@ -99,8 +99,8 @@ func Test_AddToBundleDocuments_shouldReturnNotAddedFileIfBundleGreaterThanMaxPay
 func Test_AddToBundleDocuments_shouldNotAddUnsupportedFileType(t *testing.T) {
 	b, registeredDocuments, path, _ := setupBundleForTesting(1) // this adds one file to bundle documents
 	defer os.RemoveAll(path)
-	uri := lsp.DocumentURI("1")
-	registeredDocuments[uri] = lsp.TextDocumentItem{URI: uri}
+	uri := lsp.DocumentURI("file://1")
+	registeredDocuments[uri] = true
 
 	filesNotAdded := b.AddToBundleDocuments(registeredDocuments)
 
@@ -134,11 +134,11 @@ func Test_getSize_shouldReturnTotalBundleSize(t *testing.T) {
 	assert.Equal(t, len(jsonBytes), size)
 }
 
-func setupBundleForTesting(contentSize int) (BundleImpl, map[lsp.DocumentURI]lsp.TextDocumentItem, string, []byte) {
+func setupBundleForTesting(contentSize int) (BundleImpl, map[lsp.DocumentURI]bool, string, []byte) {
 	b := BundleImpl{SnykCode: &FakeSnykCodeApiService{}}
 	b.BundleHash = "test-Hash"
 	b.BundleDocuments = map[lsp.DocumentURI]File{}
-	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
+	registeredDocuments := map[lsp.DocumentURI]bool{}
 
 	buf := new(bytes.Buffer)
 	buf.Grow(contentSize)
@@ -155,7 +155,7 @@ func setupBundleForTesting(contentSize int) (BundleImpl, map[lsp.DocumentURI]lsp
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't write test file")
 	}
-	registeredDocuments[bundleDoc.URI] = bundleDoc
+	registeredDocuments[bundleDoc.URI] = true
 	return b, registeredDocuments, dir, buf.Bytes()
 }
 
@@ -163,10 +163,10 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldCreateBundleWhenHashEmpty(t *
 	snykCodeMock := &FakeSnykCodeApiService{}
 	b := BundleImpl{SnykCode: snykCodeMock}
 	b.BundleHash = ""
-	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
+	registeredDocuments := map[lsp.DocumentURI]bool{}
 	path, firstDoc, _, content1, _ := setupDocs()
 	defer os.RemoveAll(path)
-	registeredDocuments[firstDoc.URI] = firstDoc
+	registeredDocuments[firstDoc.URI] = true
 	b.AddToBundleDocuments(registeredDocuments)
 
 	dChan := make(chan lsp2.DiagnosticResult)
@@ -194,8 +194,8 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldExtendBundleWhenHashNotEmpty(
 	b := BundleImpl{SnykCode: snykCodeMock}
 	path, firstDoc, secondDoc, _, content2 := setupDocs()
 	defer os.RemoveAll(path)
-	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
-	registeredDocuments[firstDoc.URI] = firstDoc
+	registeredDocuments := map[lsp.DocumentURI]bool{}
+	registeredDocuments[firstDoc.URI] = true
 	filesNotAdded := b.AddToBundleDocuments(registeredDocuments)
 	if filesNotAdded.Files != nil {
 		assert.Fail(t, "Unexpected inability to add document to bundle", filesNotAdded)
@@ -205,7 +205,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldExtendBundleWhenHashNotEmpty(
 	_ = b.createBundleFromSource()
 
 	// now add a doc
-	registeredDocuments[secondDoc.URI] = secondDoc
+	registeredDocuments[secondDoc.URI] = true
 	b.AddToBundleDocuments(registeredDocuments)
 
 	// execute
@@ -237,8 +237,8 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldRetrieveFromBackend(t *testin
 	b := BundleImpl{SnykCode: snykCodeMock}
 	FakeDiagnosticUri = firstDoc.URI
 
-	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
-	registeredDocuments[firstDoc.URI] = firstDoc
+	registeredDocuments := map[lsp.DocumentURI]bool{}
+	registeredDocuments[firstDoc.URI] = true
 	diagnosticMap := map[lsp.DocumentURI][]lsp2.Diagnostic{}
 
 	b.AddToBundleDocuments(registeredDocuments)
@@ -274,8 +274,8 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldReturnCodeLenses(t *testing.T
 
 	FakeDiagnosticUri = firstDoc.URI
 
-	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
-	registeredDocuments[firstDoc.URI] = firstDoc
+	registeredDocuments := map[lsp.DocumentURI]bool{}
+	registeredDocuments[firstDoc.URI] = true
 	b.AddToBundleDocuments(registeredDocuments)
 
 	// execute

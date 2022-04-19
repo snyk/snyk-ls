@@ -78,7 +78,7 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 }
 
 func Test_RegisterAllFilesFromWorkspace_Without_Ignored(t *testing.T) {
-	registeredDocuments = map[sglsp.DocumentURI]sglsp.TextDocumentItem{}
+	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	_, workspace, ignoredFilePath, notIgnoredFilePath := setupIgnoreWorkspace()
 	defer os.RemoveAll(workspace)
 
@@ -88,7 +88,7 @@ func Test_RegisterAllFilesFromWorkspace_Without_Ignored(t *testing.T) {
 	}
 	assert.Equal(t, 2, len(registeredDocuments)) //.gitignore & notIgnoredFilePath
 	assert.NotEqual(t, sglsp.TextDocumentItem{}, registeredDocuments[sglsp.DocumentURI("file://"+notIgnoredFilePath)])
-	assert.Equal(t, sglsp.TextDocumentItem{}, registeredDocuments[sglsp.DocumentURI(ignoredFilePath)])
+	assert.Equal(t, false, registeredDocuments[sglsp.DocumentURI(ignoredFilePath)])
 }
 
 func writeTestGitIgnore(ignorePatterns string) string {

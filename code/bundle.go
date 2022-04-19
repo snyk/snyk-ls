@@ -76,7 +76,7 @@ type BundleImpl struct {
 }
 
 type FilesNotAdded struct {
-	Files map[sglsp.DocumentURI]sglsp.TextDocumentItem
+	Files map[sglsp.DocumentURI]bool
 }
 
 type SnykAnalysisTimeoutError struct {
@@ -96,18 +96,18 @@ func (b *BundleImpl) createBundleFromSource() error {
 	return err
 }
 
-func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]sglsp.TextDocumentItem) FilesNotAdded {
+func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]bool) FilesNotAdded {
 	if b.BundleDocuments == nil {
 		b.BundleDocuments = make(map[sglsp.DocumentURI]File)
 	}
 
-	var nonAddedFiles = make(map[sglsp.DocumentURI]sglsp.TextDocumentItem)
-	for _, doc := range files {
-		if !extensions[filepath.Ext(string(doc.URI))] {
+	var nonAddedFiles = make(map[sglsp.DocumentURI]bool)
+	for uri := range files {
+		if !extensions[filepath.Ext(string(uri))] {
 			continue
 		}
 
-		path := pathFromUri(doc.URI)
+		path := pathFromUri(uri)
 		fileContent, err := os.ReadFile(path)
 		if err != nil {
 			log.Error().Err(err).Msg("could not load content of file " + path)
@@ -119,14 +119,14 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]sglsp.Text
 		}
 
 		file := b.getFileFrom(fileContent)
-		if b.canAdd(string(doc.URI), fileContent) {
-			log.Trace().Str("uri", string(doc.URI)).Str("bundle", b.BundleHash).Msg("added to bundle")
-			b.BundleDocuments[doc.URI] = file
+		if b.canAdd(string(uri), fileContent) {
+			log.Trace().Str("uri", string(uri)).Str("bundle", b.BundleHash).Msg("added to bundle")
+			b.BundleDocuments[uri] = file
 			continue
 		}
 
-		log.Trace().Str("uri", string(doc.URI)).Str("bundle", b.BundleHash).Msg("not added to bundle")
-		nonAddedFiles[doc.URI] = doc
+		log.Trace().Str("uri", string(uri)).Str("bundle", b.BundleHash).Msg("not added to bundle")
+		nonAddedFiles[uri] = true
 	}
 
 	if len(nonAddedFiles) > 0 {
