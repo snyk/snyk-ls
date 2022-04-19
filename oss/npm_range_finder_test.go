@@ -30,12 +30,6 @@ func TestNpmRangeFinder_Find(t *testing.T) {
 
 	var testPath, _ = filepath.Abs("testdata/package.json")
 	var testContent, _ = os.ReadFile(testPath)
-	var doc = sglsp.TextDocumentItem{
-		URI:        sglsp.DocumentURI(testPath),
-		LanguageID: "json",
-		Version:    0,
-		Text:       string(testContent),
-	}
 
 	expectedRange := sglsp.Range{
 		Start: sglsp.Position{
@@ -48,6 +42,6 @@ func TestNpmRangeFinder_Find(t *testing.T) {
 		},
 	}
 
-	actualRange := findRange(issue, doc)
+	actualRange := findRange(issue, sglsp.DocumentURI("file://"+testPath), testContent)
 	assert.Equal(t, expectedRange, actualRange)
 }

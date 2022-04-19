@@ -3,7 +3,6 @@ package code
 import (
 	"fmt"
 	"math/rand"
-	"path/filepath"
 
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -13,8 +12,7 @@ import (
 )
 
 var (
-	absolutePath, _   = filepath.Abs("testdata/Dummy.java")
-	FakeDiagnosticUri = sglsp.DocumentURI("file://" + absolutePath)
+	FakeDiagnosticUri = sglsp.DocumentURI("file://testdata/Dummy.java")
 	FakeDiagnostic    = lsp.Diagnostic{
 		Range: sglsp.Range{
 			Start: sglsp.Position{
@@ -96,7 +94,7 @@ func (f *FakeSnykCodeApiService) GetAllCalls(op string) [][]interface{} {
 func (f *FakeSnykCodeApiService) CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
 	params := []interface{}{files}
 	f.addCall(params, CreateBundleWithSourceOperation)
-	BundleHash := util.Hash(fmt.Sprint(rand.Int()))
+	BundleHash := util.Hash([]byte(fmt.Sprint(rand.Int())))
 
 	return BundleHash, nil, nil
 }

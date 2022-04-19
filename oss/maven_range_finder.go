@@ -8,14 +8,15 @@ import (
 )
 
 type MavenRangeFinder struct {
-	doc lsp.TextDocumentItem
+	uri         lsp.DocumentURI
+	fileContent []byte
 }
 
 func (m *MavenRangeFinder) Find(issue ossIssue) lsp.Range {
 	searchPackage, version := introducingPackageAndVersion(issue)
 	log.Trace().Interface("issue", issue).Str("searchPackage", searchPackage).Str("searchVersion", version)
 	parser := maven.Parser{}
-	tree := parser.Parse(m.doc.Text, m.doc.URI)
+	tree := parser.Parse(string(m.fileContent), m.uri)
 	for _, depNode := range tree.Root.Children {
 		if searchPackage == depNode.Name {
 			log.Trace().Interface("dependency", depNode).Str("issueId", issue.Id).Msg("Found dependency for issue")

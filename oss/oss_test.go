@@ -70,8 +70,8 @@ func Test_FindRange(t *testing.T) {
 	issue := mavenTestIssue()
 	content := "0\n1\n2\n  implementation 'a:test:4.17.4'"
 
-	doc := sglsp.TextDocumentItem{URI: "file://build.gradle", LanguageID: "groovy", Text: content}
-	foundRange := findRange(issue, doc)
+	var uri = sglsp.DocumentURI("file://build.gradle")
+	foundRange := findRange(issue, uri, []byte(content))
 
 	assert.Equal(t, 3, foundRange.Start.Line)
 	assert.Equal(t, 20, foundRange.Start.Character)

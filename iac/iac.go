@@ -47,12 +47,16 @@ func ScanWorkspace(
 	if err != nil {
 		log.Err(err).Str("method", "iac.ScanWorkspace").
 			Msg("Error while calling Snyk CLI")
+		reportErrorViaChan(uri, dChan, err, clChan)
+		return
 	}
 
 	var scanResults []iacScanResult
 	if err := json.Unmarshal(res, &scanResults); err != nil {
 		log.Err(err).Str("method", "iac.ScanWorkspace").
 			Msg("Error while parsing response from CLI")
+		reportErrorViaChan(uri, dChan, err, clChan)
+		return
 	}
 
 	log.Info().Str("method", "iac.ScanWorkspace").
@@ -60,6 +64,17 @@ func ScanWorkspace(
 	for _, scanResult := range scanResults {
 		uri := sglsp.DocumentURI(string(uri) + "/" + scanResult.TargetFile)
 		retrieveAnalysis(uri, scanResult, dChan, clChan, err)
+	}
+}
+
+func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, err error, clChan chan lsp.CodeLensResult) {
+	dChan <- lsp.DiagnosticResult{
+		Uri: uri,
+		Err: err,
+	}
+	clChan <- lsp.CodeLensResult{
+		Uri: uri,
+		Err: err,
 	}
 }
 

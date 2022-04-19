@@ -47,7 +47,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	}
 	files := map[sglsp.DocumentURI]File{}
 	files[uri] = File{
-		Hash:    util.Hash(content),
+		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
 	bundleHash, missingFiles, _ := s.CreateBundle(files)
@@ -68,13 +68,13 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]File{}
 	files[uri] = File{
-		Hash:    util.Hash(content),
+		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
 	bundleHash, _, _ := s.CreateBundle(files)
 	filesExtend := map[sglsp.DocumentURI]File{}
 	filesExtend[uri2] = File{
-		Hash:    util.Hash(content2),
+		Hash:    util.Hash([]byte(content2)),
 		Content: content2,
 	}
 	_, missingFiles, _ := s.ExtendBundle(bundleHash, filesExtend, removedFiles)
@@ -89,17 +89,17 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 	s := &SnykCodeBackendService{
 		client: http.Client{},
 	}
-	shardKey := util.Hash("/")
+	shardKey := util.Hash([]byte("/"))
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]File{}
 	files[uri] = File{
-		Hash:    util.Hash(content),
+		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
 	bundleHash, _, _ := s.CreateBundle(files)
 	filesExtend := map[sglsp.DocumentURI]File{}
 	filesExtend[uri2] = File{
-		Hash:    util.Hash(content2),
+		Hash:    util.Hash([]byte(content2)),
 		Content: content2,
 	}
 	bundleHash, _, _ = s.ExtendBundle(bundleHash, filesExtend, removedFiles)
