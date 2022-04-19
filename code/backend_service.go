@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -47,6 +48,7 @@ type extendBundleRequest struct {
 }
 
 func (s *SnykCodeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
+	log.Debug().Str("method", "CreateBundle").Msg("API: Creating bundle for " + strconv.Itoa(len(files)) + " files")
 	requestBody, err := json.Marshal(files)
 	if err != nil {
 		return "", nil, err
@@ -62,6 +64,7 @@ func (s *SnykCodeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) 
 	if err != nil {
 		return "", nil, err
 	}
+	log.Debug().Str("method", "CreateBundle").Str("bundleHash", bundle.BundleHash).Msg("API: Create done")
 	return bundle.BundleHash, bundle.MissingFiles, nil
 }
 
@@ -94,6 +97,9 @@ func (s *SnykCodeBackendService) doCall(method string, path string, requestBody 
 }
 
 func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]File, removedFiles []sglsp.DocumentURI) (string, []sglsp.DocumentURI, error) {
+	log.Debug().Str("method", "ExtendBundle").Str("bundleHash", bundleHash).Msg("API: Extending bundle " + bundleHash + " for " + strconv.Itoa(len(files)) + " files")
+	defer log.Debug().Str("method", "ExtendBundle").Str("bundleHash", bundleHash).Msg("API: Extend done")
+
 	requestBody, err := json.Marshal(extendBundleRequest{
 		Files:        files,
 		RemovedFiles: removedFiles,
@@ -112,6 +118,9 @@ func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[sglsp
 }
 
 func (s *SnykCodeBackendService) RunAnalysis(bundleHash string, shardKey string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens, string, error) {
+	log.Debug().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Msg("API: Retrieving analysis for bundle")
+	defer log.Debug().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Msg("API: Retrieving analysis done")
+
 	requestBody, err := s.analysisRequestBody(bundleHash, shardKey, limitToFiles, severity)
 	if err != nil {
 		return nil, nil, "", err
@@ -128,6 +137,10 @@ func (s *SnykCodeBackendService) RunAnalysis(bundleHash string, shardKey string,
 	if err != nil {
 		return nil, nil, "", err
 	}
+
+	log.Debug().Str("method", "RunAnalysis").
+		Str("bundleHash", bundleHash).Float32("progress", response.Progress).Msgf("Status: %s", response.Status)
+
 	if response.Status == failed {
 		return nil, nil, "", SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
