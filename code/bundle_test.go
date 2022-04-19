@@ -3,11 +3,13 @@ package code
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"reflect"
 	"strconv"
 	"sync"
 	"testing"
 
+	"github.com/rs/zerolog/log"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
@@ -15,26 +17,40 @@ import (
 	"github.com/snyk/snyk-ls/util"
 )
 
-var (
-	firstDoc = lsp.TextDocumentItem{
-		URI:        "/test1.java",
-		LanguageID: "java",
-		Version:    0,
-		Text:       "class1",
+func setupDocs() (string, lsp.TextDocumentItem, lsp.TextDocumentItem, []byte, []byte) {
+	path, err := os.MkdirTemp(os.TempDir(), "firstDocTemp")
+	if err != nil {
+		log.Fatal().Err(err).Msg("Couldn't create test directory")
 	}
 
-	secondDoc = lsp.TextDocumentItem{
-		URI:        "/test2.java",
-		LanguageID: "java",
-		Version:    3,
-		Text:       "class2",
+	content1 := []byte("test1")
+	err = os.WriteFile(path+string(os.PathSeparator)+"test1.java", content1, 0660)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Couldn't create test file1")
 	}
-)
+
+	content2 := []byte("test2")
+	err = os.WriteFile(path+string(os.PathSeparator)+"test2.java", content2, 0660)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Couldn't create test file2")
+	}
+
+	firstDoc := lsp.TextDocumentItem{
+		URI: lsp.DocumentURI("file://" + path + string(os.PathSeparator) + "test1.java"),
+	}
+
+	secondDoc := lsp.TextDocumentItem{
+		URI: lsp.DocumentURI("file://" + path + string(os.PathSeparator) + "test2.java"),
+	}
+	return path, firstDoc, secondDoc, content1, content2
+}
 
 func Test_createBundleFromSource_shouldReturnNonEmptyBundleHash(t *testing.T) {
 	b := BundleImpl{SnykCode: &FakeSnykCodeApiService{}}
 	b.BundleDocuments = map[lsp.DocumentURI]File{}
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
+	path, firstDoc, _, _, _ := setupDocs()
+	defer os.RemoveAll(path)
 	registeredDocuments[firstDoc.URI] = firstDoc
 	_ = b.AddToBundleDocuments(registeredDocuments)
 	_ = b.createBundleFromSource()
@@ -42,7 +58,8 @@ func Test_createBundleFromSource_shouldReturnNonEmptyBundleHash(t *testing.T) {
 }
 
 func Test_AddToBundleDocuments_shouldNotAddDocumentToBundleIfTooBig(t *testing.T) {
-	b, registeredDocuments := setupBundleForTesting(1024*1024 + 1)
+	b, registeredDocuments, path, _ := setupBundleForTesting(1024*1024 + 1)
+	defer os.RemoveAll(path)
 
 	_ = b.AddToBundleDocuments(registeredDocuments)
 
@@ -51,7 +68,8 @@ func Test_AddToBundleDocuments_shouldNotAddDocumentToBundleIfTooBig(t *testing.T
 }
 
 func Test_AddToBundleDocuments_shouldNotAddDocumentToBundleIfEmpty(t *testing.T) {
-	b, registeredDocuments := setupBundleForTesting(0)
+	b, registeredDocuments, path, _ := setupBundleForTesting(0)
+	defer os.RemoveAll(path)
 
 	_ = b.AddToBundleDocuments(registeredDocuments)
 
@@ -60,10 +78,17 @@ func Test_AddToBundleDocuments_shouldNotAddDocumentToBundleIfEmpty(t *testing.T)
 }
 
 func Test_AddToBundleDocuments_shouldReturnNotAddedFileIfBundleGreaterThanMaxPayloadSize(t *testing.T) {
-	b, registeredDocuments := setupBundleForTesting(maxFileSize)
+	b, registeredDocuments, path, content := setupBundleForTesting(maxFileSize)
+	defer os.RemoveAll(path)
 	for i := 0; i < (maxBundleSize / maxFileSize); i++ {
-		uri := lsp.DocumentURI(strconv.Itoa(i) + ".java")
-		registeredDocuments[uri] = lsp.TextDocumentItem{URI: uri, Text: registeredDocuments[secondDoc.URI].Text}
+		fileName := strconv.Itoa(i) + ".java"
+		filePath := path + string(os.PathSeparator) + fileName
+		err := os.WriteFile(filePath, content, 0660)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Couldn't create test file " + fileName)
+		}
+		uri := lsp.DocumentURI("file://" + filePath)
+		registeredDocuments[uri] = lsp.TextDocumentItem{URI: uri}
 	}
 
 	filesNotAdded := b.AddToBundleDocuments(registeredDocuments)
@@ -72,9 +97,10 @@ func Test_AddToBundleDocuments_shouldReturnNotAddedFileIfBundleGreaterThanMaxPay
 }
 
 func Test_AddToBundleDocuments_shouldNotAddUnsupportedFileType(t *testing.T) {
-	b, registeredDocuments := setupBundleForTesting(1) // this adds one file to bundle documents
+	b, registeredDocuments, path, _ := setupBundleForTesting(1) // this adds one file to bundle documents
+	defer os.RemoveAll(path)
 	uri := lsp.DocumentURI("1")
-	registeredDocuments[uri] = lsp.TextDocumentItem{URI: uri, Text: registeredDocuments[secondDoc.URI].Text}
+	registeredDocuments[uri] = lsp.TextDocumentItem{URI: uri}
 
 	filesNotAdded := b.AddToBundleDocuments(registeredDocuments)
 
@@ -83,7 +109,8 @@ func Test_AddToBundleDocuments_shouldNotAddUnsupportedFileType(t *testing.T) {
 }
 
 func Test_getSize_shouldReturn0ForEmptyBundle(t *testing.T) {
-	b, registeredDocuments := setupBundleForTesting(0)
+	b, registeredDocuments, path, _ := setupBundleForTesting(0)
+	defer os.RemoveAll(path)
 	_ = b.AddToBundleDocuments(registeredDocuments)
 
 	size := b.getSize()
@@ -92,26 +119,22 @@ func Test_getSize_shouldReturn0ForEmptyBundle(t *testing.T) {
 }
 
 func Test_getSize_shouldReturnTotalBundleSize(t *testing.T) {
-	b, registeredDocuments := setupBundleForTesting(1)
-	bundleDoc := lsp.TextDocumentItem{
-		URI:  "file://hurz",
-		Text: "test123",
-	}
-	registeredDocuments[bundleDoc.URI] = bundleDoc
+	b, registeredDocuments, path, _ := setupBundleForTesting(1)
+	defer os.RemoveAll(path)
 	_ = b.AddToBundleDocuments(registeredDocuments)
 
 	var req = extendBundleRequest{Files: b.BundleDocuments}
-	bytes, err := json.Marshal(req)
+	jsonBytes, err := json.Marshal(req)
 	if err != nil {
 		assert.Fail(t, err.Error(), "Couldn't marshal ", req)
 	}
 
 	size := b.getSize()
 
-	assert.Equal(t, len(bytes), size)
+	assert.Equal(t, len(jsonBytes), size)
 }
 
-func setupBundleForTesting(contentSize int) (BundleImpl, map[lsp.DocumentURI]lsp.TextDocumentItem) {
+func setupBundleForTesting(contentSize int) (BundleImpl, map[lsp.DocumentURI]lsp.TextDocumentItem, string, []byte) {
 	b := BundleImpl{SnykCode: &FakeSnykCodeApiService{}}
 	b.BundleHash = "test-Hash"
 	b.BundleDocuments = map[lsp.DocumentURI]File{}
@@ -122,10 +145,18 @@ func setupBundleForTesting(contentSize int) (BundleImpl, map[lsp.DocumentURI]lsp
 	for i := 0; i < contentSize; i++ {
 		buf.WriteByte('a')
 	}
-	bundleDoc := secondDoc
-	bundleDoc.Text = buf.String()
+	dir, err := os.MkdirTemp(os.TempDir(), "setupBundleForTesting")
+	if err != nil {
+		log.Fatal().Err(err).Msg("Couldn't create test directory")
+	}
+	filePath := dir + string(os.PathSeparator) + "bundleDoc.java"
+	bundleDoc := lsp.TextDocumentItem{URI: lsp.DocumentURI("file://" + filePath)}
+	err = os.WriteFile(filePath, buf.Bytes(), 0660)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Couldn't write test file")
+	}
 	registeredDocuments[bundleDoc.URI] = bundleDoc
-	return b, registeredDocuments
+	return b, registeredDocuments, dir, buf.Bytes()
 }
 
 func TestCodeBundleImpl_FetchDiagnosticsData_shouldCreateBundleWhenHashEmpty(t *testing.T) {
@@ -133,6 +164,8 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldCreateBundleWhenHashEmpty(t *
 	b := BundleImpl{SnykCode: snykCodeMock}
 	b.BundleHash = ""
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
+	path, firstDoc, _, content1, _ := setupDocs()
+	defer os.RemoveAll(path)
 	registeredDocuments[firstDoc.URI] = firstDoc
 	b.AddToBundleDocuments(registeredDocuments)
 
@@ -153,13 +186,14 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldCreateBundleWhenHashEmpty(t *
 	assert.NotNil(t, params)
 	assert.Equal(t, 1, len(params))
 	files := params[0].(map[lsp.DocumentURI]File)
-	assert.Equal(t, files[firstDoc.URI].Content, firstDoc.Text)
+	assert.Equal(t, files[firstDoc.URI].Content, string(content1))
 }
 
 func TestCodeBundleImpl_FetchDiagnosticsData_shouldExtendBundleWhenHashNotEmpty(t *testing.T) {
 	snykCodeMock := &FakeSnykCodeApiService{}
 	b := BundleImpl{SnykCode: snykCodeMock}
-
+	path, firstDoc, secondDoc, _, content2 := setupDocs()
+	defer os.RemoveAll(path)
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
 	registeredDocuments[firstDoc.URI] = firstDoc
 	filesNotAdded := b.AddToBundleDocuments(registeredDocuments)
@@ -185,7 +219,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldExtendBundleWhenHashNotEmpty(
 	<-clChan
 
 	// the bundle documents should have been updated
-	assert.Equal(t, b.BundleDocuments[secondDoc.URI].Content, secondDoc.Text)
+	assert.Equal(t, b.BundleDocuments[secondDoc.URI].Content, string(content2))
 
 	// verify that extend bundle has been called on backend service with additional file
 	params := snykCodeMock.GetCallParams(0, ExtendBundleWithSourceOperation)
@@ -193,11 +227,13 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldExtendBundleWhenHashNotEmpty(
 	assert.Equal(t, 3, len(params))
 	assert.Equal(t, b.BundleHash, params[0])
 	files := params[1].(map[lsp.DocumentURI]File)
-	assert.Equal(t, files[secondDoc.URI].Content, secondDoc.Text)
+	assert.Equal(t, files[secondDoc.URI].Content, string(content2))
 }
 
 func TestCodeBundleImpl_FetchDiagnosticsData_shouldRetrieveFromBackend(t *testing.T) {
 	snykCodeMock := &FakeSnykCodeApiService{}
+	path, firstDoc, _, _, _ := setupDocs()
+	defer os.RemoveAll(path)
 	b := BundleImpl{SnykCode: snykCodeMock}
 	FakeDiagnosticUri = firstDoc.URI
 
@@ -233,6 +269,9 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldRetrieveFromBackend(t *testin
 func TestCodeBundleImpl_FetchDiagnosticsData_shouldReturnCodeLenses(t *testing.T) {
 	snykCodeMock := &FakeSnykCodeApiService{}
 	b := BundleImpl{SnykCode: snykCodeMock}
+	path, firstDoc, _, _, _ := setupDocs()
+	defer os.RemoveAll(path)
+
 	FakeDiagnosticUri = firstDoc.URI
 
 	registeredDocuments := map[lsp.DocumentURI]lsp.TextDocumentItem{}
@@ -258,7 +297,7 @@ func Test_getShardKey_shouldReturnRootPathHash(t *testing.T) {
 	sampleRootPath := "C:\\GIT\\root"
 	// deepcode ignore HardcodedPassword/test: false positive
 	token := "TEST"
-	assert.Equal(t, util.Hash(sampleRootPath), getShardKey(sampleRootPath, token))
+	assert.Equal(t, util.Hash([]byte(sampleRootPath)), getShardKey(sampleRootPath, token))
 }
 
 func Test_getShardKey_shouldReturnTokenHash(t *testing.T) {
@@ -266,7 +305,7 @@ func Test_getShardKey_shouldReturnTokenHash(t *testing.T) {
 	sampleRootPath := ""
 	// deepcode ignore HardcodedPassword/test: false positive
 	token := "TEST"
-	assert.Equal(t, util.Hash(token), getShardKey(sampleRootPath, token))
+	assert.Equal(t, util.Hash([]byte(token)), getShardKey(sampleRootPath, token))
 }
 
 func Test_getShardKey_shouldReturnEmptyShardKey(t *testing.T) {

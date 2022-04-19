@@ -83,29 +83,26 @@ func ScanWorkspace(
 			Msg("Error while extracting file absolutePath")
 	}
 
-	if err != nil {
-		log.Err(err).Str("method", "oss.ScanWorkspace").
-			Msg("Error changing into workspace directory")
-	}
 	cmd := exec.Command(environment.CliPath(), "test", path, "--json")
 	scanResults, err := scan(cmd)
 	if err != nil {
 		log.Err(err).Str("method", "oss.ScanWorkspace").
 			Msgf("Error while calling Snyk CLI, err: %v", err)
-	}
-
-	targetFile := determineTargetFile(scanResults.DisplayTargetFile)
-	fileContent, err := ioutil.ReadFile(path + "/" + targetFile)
-	if err != nil {
-		log.Err(err).Str("method", "oss.ScanWorkspace").
-			Msgf("Error while reading the file %v, err: %v", targetFile, err)
+		reportErrorViaChan(workspace, dChan, err)
 		return
 	}
 
+	targetFile := determineTargetFile(scanResults.DisplayTargetFile)
 	var uri = sglsp.DocumentURI("file://" + workspacePath + string(os.PathSeparator) + targetFile)
-	var doc = sglsp.TextDocumentItem{Text: string(fileContent)}
+	fileContent, err := ioutil.ReadFile(path + "/" + targetFile)
+	if err != nil {
+		log.Err(err).Str("method", "oss.ScanWorkspace").
+			Msgf("Error while reading the fi le %v, err: %v", targetFile, err)
+		reportErrorViaChan(workspace, dChan, err)
+		return
+	}
 
-	retrieveAnalysis(scanResults, uri, doc, dChan)
+	retrieveAnalysis(scanResults, uri, fileContent, dChan)
 }
 
 func determineTargetFile(displayTargetFile string) string {
@@ -141,11 +138,32 @@ func ScanFile(
 			if err != nil {
 				log.Err(err).Str("method", "oss.ScanFile").
 					Msg("Error while calling Snyk CLI")
+				reportErrorViaChan(doc.URI, dChan, err)
 			}
 
-			retrieveAnalysis(scanResults, doc.URI, doc, dChan)
+			fileContent, err := os.ReadFile(path)
+			if err != nil {
+				log.Err(err).Str("method", "oss.ScanFile").
+					Msg("Error reading file " + path)
+				reportErrorViaChan(doc.URI, dChan, err)
+			}
+
+			retrieveAnalysis(scanResults, doc.URI, fileContent, dChan)
 		}
 	}
+}
+
+func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, err error) chan lsp.DiagnosticResult {
+	select {
+	case dChan <- lsp.DiagnosticResult{
+		Uri:         uri,
+		Diagnostics: nil,
+		Err:         err,
+	}:
+	default:
+		log.Debug().Str("method", "oss.retrieveAnalysis").Msg("not sending...")
+	}
+	return dChan
 }
 
 func scan(cmd *exec.Cmd) (ossScanResult, error) {
@@ -173,15 +191,15 @@ func scan(cmd *exec.Cmd) (ossScanResult, error) {
 func retrieveAnalysis(
 	scanResults ossScanResult,
 	uri sglsp.DocumentURI,
-	doc sglsp.TextDocumentItem,
+	fileContent []byte,
 	dChan chan lsp.DiagnosticResult,
 ) {
-	diags, err := retrieveDiagnostics(scanResults, doc)
+	diags, err := retrieveDiagnostics(scanResults, uri, fileContent)
 	if err != nil {
 		log.Err(err).Str("method", "oss.retrieveAnalysis").Msg("Error while retrieving diagnositics")
 	}
 
-	if len(diags) > 0 {
+	if len(diags) > 0 || err != nil {
 		log.Debug().Str("method", "oss.retrieveAnalysis").Msg("got diags, now sending to chan.")
 		select {
 		case dChan <- lsp.DiagnosticResult{
@@ -199,7 +217,7 @@ type RangeFinder interface {
 	Find(issue ossIssue) sglsp.Range
 }
 
-func retrieveDiagnostics(res ossScanResult, doc sglsp.TextDocumentItem) ([]lsp.Diagnostic, error) {
+func retrieveDiagnostics(res ossScanResult, uri sglsp.DocumentURI, fileContent []byte) ([]lsp.Diagnostic, error) {
 	var diagnostics []lsp.Diagnostic
 	for _, issue := range res.Vulnerabilities {
 		title := issue.Title
@@ -213,7 +231,7 @@ func retrieveDiagnostics(res ossScanResult, doc sglsp.TextDocumentItem) ([]lsp.D
 		diagnostic := lsp.Diagnostic{
 			Source:   "Snyk LSP",
 			Message:  fmt.Sprintf("%s: %s\n\n%s", issue.Id, title, description),
-			Range:    findRange(issue, doc),
+			Range:    findRange(issue, uri, fileContent),
 			Severity: lspSeverity(issue.Severity),
 			Code:     issue.Id,
 			// Don't use it for now as it's not widely supported
@@ -235,20 +253,20 @@ func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 	return lspSev
 }
 
-func findRange(issue ossIssue, doc sglsp.TextDocumentItem) sglsp.Range {
+func findRange(issue ossIssue, uri sglsp.DocumentURI, fileContent []byte) sglsp.Range {
 	var foundRange sglsp.Range
 	var finder RangeFinder
 	switch issue.PackageManager {
 	case "npm":
-		finder = &NpmRangeFinder{doc: doc}
+		finder = &NpmRangeFinder{uri: uri, fileContent: fileContent}
 	case "maven":
-		if strings.HasSuffix(string(doc.URI), "pom.xml") {
-			finder = &MavenRangeFinder{doc: doc}
+		if strings.HasSuffix(string(uri), "pom.xml") {
+			finder = &MavenRangeFinder{uri: uri, fileContent: fileContent}
 		} else {
-			finder = &DefaultFinder{doc: doc}
+			finder = &DefaultFinder{uri: uri, fileContent: fileContent}
 		}
 	default:
-		finder = &DefaultFinder{doc: doc}
+		finder = &DefaultFinder{uri: uri, fileContent: fileContent}
 	}
 
 	foundRange = finder.Find(issue)

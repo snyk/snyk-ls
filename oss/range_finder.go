@@ -8,12 +8,13 @@ import (
 )
 
 type DefaultFinder struct {
-	doc sglsp.TextDocumentItem
+	uri         sglsp.DocumentURI
+	fileContent []byte
 }
 
 func (f *DefaultFinder) Find(issue ossIssue) sglsp.Range {
 	searchPackage, version := introducingPackageAndVersion(issue)
-	lines := strings.Split(strings.ReplaceAll(f.doc.Text, "\r", ""), "\n")
+	lines := strings.Split(strings.ReplaceAll(string(f.fileContent), "\r", ""), "\n")
 	for i, line := range lines {
 		if isComment(line) {
 			continue
@@ -28,7 +29,7 @@ func (f *DefaultFinder) Find(issue ossIssue) sglsp.Range {
 			log.Debug().Str("package", searchPackage).
 				Str("version", version).
 				Str("issueId", issue.Id).
-				Str("uri", string(f.doc.URI)).
+				Str("uri", string(f.uri)).
 				Interface("range", r).Msg("found range")
 			return r
 		}

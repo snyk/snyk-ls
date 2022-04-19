@@ -8,13 +8,14 @@ import (
 )
 
 type NpmRangeFinder struct {
-	doc     lsp.TextDocumentItem
-	myRange lsp.Range
+	uri         lsp.DocumentURI
+	fileContent []byte
+	myRange     lsp.Range
 }
 
 func (n *NpmRangeFinder) Find(issue ossIssue) lsp.Range {
 	searchPackage, _ := introducingPackageAndVersion(issue)
-	var lines = strings.Split(strings.ReplaceAll(n.doc.Text, "\r\n", "\n"), "\n")
+	var lines = strings.Split(strings.ReplaceAll(string(n.fileContent), "\r\n", "\n"), "\n")
 
 	var start lsp.Position
 	var end lsp.Position

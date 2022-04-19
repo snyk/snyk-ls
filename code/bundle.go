@@ -1,7 +1,9 @@
 package code
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -62,8 +64,8 @@ const (
 	jsonOverheadPerFile = jsonUriOverhead + jsonContentOverhead
 )
 
-func getTotalDocPayloadSize(uri sglsp.DocumentURI, file File) int {
-	return len(jsonHashSizePerFile) + len(jsonOverheadPerFile) + len([]byte(uri)) + len([]byte(file.Content))
+func getTotalDocPayloadSize(uri string, content []byte) int {
+	return len(jsonHashSizePerFile) + len(jsonOverheadPerFile) + len([]byte(uri)) + len(content)
 }
 
 type BundleImpl struct {
@@ -101,12 +103,23 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]sglsp.Text
 
 	var nonAddedFiles = make(map[sglsp.DocumentURI]sglsp.TextDocumentItem)
 	for _, doc := range files {
-		if !extensions[filepath.Ext(string(doc.URI))] || !(len(doc.Text) > 0 && len(doc.Text) <= maxFileSize) {
+		if !extensions[filepath.Ext(string(doc.URI))] {
 			continue
 		}
 
-		file := b.getFileFrom(doc)
-		if b.canAdd(doc) {
+		path := pathFromUri(doc.URI)
+		fileContent, err := os.ReadFile(path)
+		if err != nil {
+			log.Error().Err(err).Msg("could not load content of file " + path)
+			continue
+		}
+
+		if !(len(fileContent) > 0 && len(fileContent) <= maxFileSize) {
+			continue
+		}
+
+		file := b.getFileFrom(fileContent)
+		if b.canAdd(string(doc.URI), fileContent) {
 			log.Trace().Str("uri", string(doc.URI)).Str("bundle", b.BundleHash).Msg("added to bundle")
 			b.BundleDocuments[doc.URI] = file
 			continue
@@ -122,15 +135,20 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]sglsp.Text
 	return FilesNotAdded{}
 }
 
-func (b *BundleImpl) getFileFrom(doc sglsp.TextDocumentItem) File {
+func pathFromUri(uri sglsp.DocumentURI) string {
+	var path = strings.TrimPrefix(string(uri), "file://")
+	return strings.TrimPrefix(path, "file:")
+}
+
+func (b *BundleImpl) getFileFrom(content []byte) File {
 	return File{
-		Hash:    util.Hash(doc.Text),
-		Content: doc.Text,
+		Hash:    util.Hash(content),
+		Content: string(content),
 	}
 }
 
-func (b *BundleImpl) canAdd(doc sglsp.TextDocumentItem) bool {
-	return getTotalDocPayloadSize(doc.URI, b.getFileFrom(doc))+b.getSize() < maxBundleSize
+func (b *BundleImpl) canAdd(uri string, content []byte) bool {
+	return getTotalDocPayloadSize(uri, content)+b.getSize() < maxBundleSize
 }
 
 func (b *BundleImpl) extendBundleFromSource() error {
@@ -223,17 +241,17 @@ func (b *BundleImpl) getSize() int {
 	jsonCommasForFiles := len(b.BundleDocuments) - 1
 	var size = len(jsonOverheadRequest) + jsonCommasForFiles // if more than one file, they are separated by commas in the req
 	for uri, file := range b.BundleDocuments {
-		size += getTotalDocPayloadSize(uri, file)
+		size += getTotalDocPayloadSize(string(uri), []byte(file.Content))
 	}
 	return size
 }
 
 func getShardKey(rootPath string, authToken string) string {
 	if len(rootPath) > 0 {
-		return util.Hash(rootPath)
+		return util.Hash([]byte(rootPath))
 	}
 	if len(authToken) > 0 {
-		return util.Hash(authToken)
+		return util.Hash([]byte(authToken))
 	}
 
 	return ""
