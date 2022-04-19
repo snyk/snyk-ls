@@ -4,7 +4,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
@@ -12,24 +11,9 @@ import (
 	"github.com/snyk/snyk-ls/lsp"
 )
 
-func setupDoc() (string, sglsp.DocumentURI) {
-	path, err := os.MkdirTemp(os.TempDir(), "fakeDiagnosticsCodeTest")
-	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't create test directory")
-	}
-	var filePath = path + string(os.PathSeparator) + "faketest.java"
-	err = os.WriteFile(filePath, []byte("public void class"), 0600)
-	if err != nil {
-		os.RemoveAll(path)
-		log.Fatal().Err(err).Msg("Couldn't create test file")
-	}
-	code.FakeDiagnosticUri = sglsp.DocumentURI("file://" + filePath)
-	return path, code.FakeDiagnosticUri
-}
-
 func Test_RegisterDocument_shouldRegisterDocumentInCache(t *testing.T) {
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
-	path, uri := setupDoc()
+	uri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 	RegisterDocument(sglsp.TextDocumentItem{URI: uri})
 	assert.Equal(t, true, registeredDocuments[uri])
@@ -37,7 +21,7 @@ func Test_RegisterDocument_shouldRegisterDocumentInCache(t *testing.T) {
 
 func Test_UnRegisterDocument_shouldDeleteDocumentFromCache(t *testing.T) {
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
-	path, uri := setupDoc()
+	uri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 	RegisterDocument(sglsp.TextDocumentItem{URI: uri})
 	UnRegisterDocument(uri)
@@ -47,7 +31,7 @@ func Test_UnRegisterDocument_shouldDeleteDocumentFromCache(t *testing.T) {
 func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
-	path, uri := setupDoc()
+	uri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 	RegisterDocument(sglsp.TextDocumentItem{URI: uri})
 	documentDiagnosticCache[uri] = []lsp.Diagnostic{code.FakeDiagnostic}
@@ -62,7 +46,7 @@ func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 func Test_UpdateDocument_shouldUpdateTextOfDocument(t *testing.T) {
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
-	path, uri := setupDoc()
+	uri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 	RegisterDocument(sglsp.TextDocumentItem{URI: uri})
 
@@ -77,7 +61,7 @@ func Test_UpdateDocument_shouldUpdateTextOfDocument(t *testing.T) {
 func Test_GetDiagnostics_shouldAddCodeLenses(t *testing.T) {
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
-	path, uri := setupDoc()
+	uri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 	RegisterDocument(sglsp.TextDocumentItem{URI: uri})
 	SnykCode = &code.FakeSnykCodeApiService{}
@@ -92,9 +76,8 @@ func Test_GetDiagnostics_shouldAddCodeLenses(t *testing.T) {
 func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
-
 	empty := sglsp.TextDocumentItem{
-		URI:        code.FakeDiagnosticUri,
+		URI:        "file://test123",
 		LanguageID: "java",
 		Version:    0,
 		Text:       "",

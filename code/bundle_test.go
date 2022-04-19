@@ -232,13 +232,12 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldExtendBundleWhenHashNotEmpty(
 
 func TestCodeBundleImpl_FetchDiagnosticsData_shouldRetrieveFromBackend(t *testing.T) {
 	snykCodeMock := &FakeSnykCodeApiService{}
-	path, firstDoc, _, _, _ := setupDocs()
+	uri, path := FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 	b := BundleImpl{SnykCode: snykCodeMock}
-	FakeDiagnosticUri = firstDoc.URI
 
 	registeredDocuments := map[lsp.DocumentURI]bool{}
-	registeredDocuments[firstDoc.URI] = true
+	registeredDocuments[uri] = true
 	diagnosticMap := map[lsp.DocumentURI][]lsp2.Diagnostic{}
 
 	b.AddToBundleDocuments(registeredDocuments)
@@ -253,7 +252,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldRetrieveFromBackend(t *testin
 	<-clChan
 
 	assert.NotNil(t, diagnosticMap)
-	diagnostics := diagnosticMap[firstDoc.URI]
+	diagnostics := diagnosticMap[uri]
 	assert.NotNil(t, diagnostics)
 	assert.Equal(t, 1, len(diagnostics))
 	assert.True(t, reflect.DeepEqual(FakeDiagnostic, diagnostics[0]))
@@ -269,13 +268,11 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldRetrieveFromBackend(t *testin
 func TestCodeBundleImpl_FetchDiagnosticsData_shouldReturnCodeLenses(t *testing.T) {
 	snykCodeMock := &FakeSnykCodeApiService{}
 	b := BundleImpl{SnykCode: snykCodeMock}
-	path, firstDoc, _, _, _ := setupDocs()
+	uri, path := FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 
-	FakeDiagnosticUri = firstDoc.URI
-
 	registeredDocuments := map[lsp.DocumentURI]bool{}
-	registeredDocuments[firstDoc.URI] = true
+	registeredDocuments[uri] = true
 	b.AddToBundleDocuments(registeredDocuments)
 
 	// execute
@@ -289,7 +286,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldReturnCodeLenses(t *testing.T
 	codeLensMap := map[lsp.DocumentURI][]lsp.CodeLens{}
 	result := <-clChan
 	codeLensMap[result.Uri] = result.CodeLenses
-	assert.NotEqual(t, 0, len(codeLensMap[firstDoc.URI]))
+	assert.NotEqual(t, 0, len(codeLensMap[uri]))
 }
 
 func Test_getShardKey_shouldReturnRootPathHash(t *testing.T) {

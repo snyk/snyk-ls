@@ -75,6 +75,10 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 	var codeLenses []sglsp.CodeLens
 	var bundles = make([]*code.BundleImpl, 0, 10)
 
+	if level == lsp.ScanLevelFile && !registeredDocuments[uri] {
+		registeredDocuments[uri] = true
+	}
+
 	// we need a pointer to the array of bundle pointers to be able to grow it
 	createOrExtendBundles(registeredDocuments, &bundles)
 
