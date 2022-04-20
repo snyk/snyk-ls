@@ -11,7 +11,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/util"
+	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 func Test_ignored_ignoredGlob(t *testing.T) {
@@ -86,12 +86,12 @@ func Test_RegisterAllFilesFromWorkspace_Without_Ignored(t *testing.T) {
 	_, workspace, ignoredFilePath, notIgnoredFilePath, _ := setupIgnoreWorkspace()
 	defer os.RemoveAll(workspace)
 
-	_, err := registerAllFilesFromWorkspace(util.PathToUri(workspace))
+	_, err := registerAllFilesFromWorkspace(uri.PathToUri(workspace))
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error while registering " + workspace)
 	}
 	assert.Equal(t, 2, len(registeredDocuments)) //.gitignore & notIgnoredFilePath
-	assert.NotEqual(t, sglsp.TextDocumentItem{}, registeredDocuments[util.PathToUri(notIgnoredFilePath)])
+	assert.NotEqual(t, sglsp.TextDocumentItem{}, registeredDocuments[uri.PathToUri(notIgnoredFilePath)])
 	assert.Equal(t, false, registeredDocuments[sglsp.DocumentURI(ignoredFilePath)])
 }
 
@@ -100,7 +100,7 @@ func Test_RegisterAllFilesFromWorkspace_SkipIgnoredDirs(t *testing.T) {
 	_, workspace, _, _, ignoredFileInDir := setupIgnoreWorkspace()
 	defer os.RemoveAll(workspace)
 
-	walkedFiles, err := registerAllFilesFromWorkspace(util.PathToUri(workspace))
+	walkedFiles, err := registerAllFilesFromWorkspace(uri.PathToUri(workspace))
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error while registering " + workspace)
 	}

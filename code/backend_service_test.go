@@ -11,11 +11,12 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/util"
 )
 
 const (
-	uri     = "/AnnotatorTest.java"
+	uri1    = "/AnnotatorTest.java"
 	uri2    = "/AnnotatorTest2.java"
 	content = `public class AnnotatorTest {
   public static void delay(long millis) {
@@ -46,7 +47,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 		client: http.Client{},
 	}
 	files := map[sglsp.DocumentURI]File{}
-	files[uri] = File{
+	files[uri1] = File{
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
@@ -67,7 +68,7 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]File{}
-	files[uri] = File{
+	files[uri1] = File{
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
@@ -92,7 +93,7 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]File{}
-	files[uri] = File{
+	files[uri1] = File{
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
@@ -105,13 +106,13 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 	bundleHash, _, _ = s.ExtendBundle(bundleHash, filesExtend, removedFiles)
 
 	assert.Eventually(t, func() bool {
-		limitToFiles := []sglsp.DocumentURI{uri, uri2}
+		limitToFiles := []sglsp.DocumentURI{uri1, uri2}
 		d, _, callStatus, err := s.RunAnalysis(bundleHash, shardKey, limitToFiles, 0)
 		if err != nil {
 			return false
 		}
-		if callStatus == "COMPLETE" && d[uri] != nil {
-			returnValue := assert.NotEqual(t, 0, len(d[uri]))
+		if callStatus == "COMPLETE" && d[uri1] != nil {
+			returnValue := assert.NotEqual(t, 0, len(d[uri1]))
 			returnValue = returnValue && assert.NotEqual(t, 0, len(d[uri2]))
 			if returnValue {
 				return true
@@ -149,8 +150,8 @@ func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing
 	assert.NotNil(t, diags)
 	assert.NotNil(t, lenses)
 	assert.Equal(t, 1, len(diags))
-	uri := util.PathToUri("/server/testdata/Dummy.java")
-	assert.Equal(t, 2, len(diags[uri]))
+	u := uri.PathToUri("/server/testdata/Dummy.java")
+	assert.Equal(t, 2, len(diags[u]))
 	assert.Equal(t, 1, len(lenses))
-	assert.Equal(t, 2, len(lenses[uri]))
+	assert.Equal(t, 2, len(lenses[u]))
 }

@@ -10,6 +10,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 	"github.com/snyk/snyk-ls/util"
 )
@@ -101,12 +102,12 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]bool) File
 	}
 
 	var nonAddedFiles = make(map[sglsp.DocumentURI]bool)
-	for uri := range files {
-		if !extensions[filepath.Ext(string(uri))] {
+	for documentURI := range files {
+		if !extensions[filepath.Ext(string(documentURI))] {
 			continue
 		}
 
-		path := util.PathFromUri(uri)
+		path := uri.PathFromUri(documentURI)
 		fileContent, err := os.ReadFile(path)
 		if err != nil {
 			log.Error().Err(err).Msg("could not load content of file " + path)
@@ -118,14 +119,14 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]bool) File
 		}
 
 		file := b.getFileFrom(fileContent)
-		if b.canAdd(string(uri), fileContent) {
-			log.Trace().Str("uri", string(uri)).Str("bundle", b.BundleHash).Msg("added to bundle")
-			b.BundleDocuments[uri] = file
+		if b.canAdd(string(documentURI), fileContent) {
+			log.Trace().Str("uri1", string(documentURI)).Str("bundle", b.BundleHash).Msg("added to bundle")
+			b.BundleDocuments[documentURI] = file
 			continue
 		}
 
-		log.Trace().Str("uri", string(uri)).Str("bundle", b.BundleHash).Msg("not added to bundle")
-		nonAddedFiles[uri] = true
+		log.Trace().Str("uri1", string(documentURI)).Str("bundle", b.BundleHash).Msg("not added to bundle")
+		nonAddedFiles[documentURI] = true
 	}
 
 	if len(nonAddedFiles) > 0 {
@@ -193,7 +194,7 @@ func (b *BundleImpl) retrieveAnalysis(rootPath string, dChan chan lsp.Diagnostic
 
 		if status == "COMPLETE" {
 			for u, d := range diags {
-				log.Trace().Str("method", "retrieveAnalysis").Str("bundleHash", b.BundleHash).Str("uri", string(u)).Msg("sending diagnostics...")
+				log.Trace().Str("method", "retrieveAnalysis").Str("bundleHash", b.BundleHash).Str("uri1", string(u)).Msg("sending diagnostics...")
 				dChan <- lsp.DiagnosticResult{
 					Uri:         u,
 					Diagnostics: d,
@@ -202,7 +203,7 @@ func (b *BundleImpl) retrieveAnalysis(rootPath string, dChan chan lsp.Diagnostic
 			}
 
 			for u, l := range lenses {
-				log.Trace().Str("method", "retrieveAnalysis").Str("bundleHash", b.BundleHash).Str("uri", string(u)).Msg("sending code lenses...")
+				log.Trace().Str("method", "retrieveAnalysis").Str("bundleHash", b.BundleHash).Str("uri1", string(u)).Msg("sending code lenses...")
 				clChan <- lsp.CodeLensResult{
 					Uri:        u,
 					CodeLenses: l,

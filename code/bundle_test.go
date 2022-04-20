@@ -14,6 +14,7 @@ import (
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/internal/uri"
 	lsp2 "github.com/snyk/snyk-ls/lsp"
 	"github.com/snyk/snyk-ls/util"
 )
@@ -37,11 +38,11 @@ func setupDocs() (string, lsp.TextDocumentItem, lsp.TextDocumentItem, []byte, []
 	}
 
 	firstDoc := lsp.TextDocumentItem{
-		URI: util.PathToUri(filepath.Join(path, "test1.java")),
+		URI: uri.PathToUri(filepath.Join(path, "test1.java")),
 	}
 
 	secondDoc := lsp.TextDocumentItem{
-		URI: util.PathToUri(filepath.Join(path, "test2.java")),
+		URI: uri.PathToUri(filepath.Join(path, "test2.java")),
 	}
 	return path, firstDoc, secondDoc, content1, content2
 }
@@ -88,8 +89,8 @@ func Test_AddToBundleDocuments_shouldReturnNotAddedFileIfBundleGreaterThanMaxPay
 		if err != nil {
 			log.Fatal().Err(err).Msg("Couldn't create test file " + fileName)
 		}
-		uri := util.PathToUri(filePath)
-		registeredDocuments[uri] = true
+		documentUri := uri.PathToUri(filePath)
+		registeredDocuments[documentUri] = true
 	}
 
 	filesNotAdded := b.AddToBundleDocuments(registeredDocuments)
@@ -100,8 +101,8 @@ func Test_AddToBundleDocuments_shouldReturnNotAddedFileIfBundleGreaterThanMaxPay
 func Test_AddToBundleDocuments_shouldNotAddUnsupportedFileType(t *testing.T) {
 	b, registeredDocuments, path, _ := setupBundleForTesting(1) // this adds one file to bundle documents
 	defer os.RemoveAll(path)
-	uri := util.PathToUri("1")
-	registeredDocuments[uri] = true
+	documentUri := uri.PathToUri("1")
+	registeredDocuments[documentUri] = true
 
 	filesNotAdded := b.AddToBundleDocuments(registeredDocuments)
 
@@ -151,7 +152,7 @@ func setupBundleForTesting(contentSize int) (BundleImpl, map[lsp.DocumentURI]boo
 		log.Fatal().Err(err).Msg("Couldn't create test directory")
 	}
 	filePath := dir + string(os.PathSeparator) + "bundleDoc.java"
-	bundleDoc := lsp.TextDocumentItem{URI: util.PathToUri(filePath)}
+	bundleDoc := lsp.TextDocumentItem{URI: uri.PathToUri(filePath)}
 	err = os.WriteFile(filePath, buf.Bytes(), 0660)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't write test file")
@@ -233,12 +234,12 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldExtendBundleWhenHashNotEmpty(
 
 func TestCodeBundleImpl_FetchDiagnosticsData_shouldRetrieveFromBackend(t *testing.T) {
 	snykCodeMock := &FakeSnykCodeApiService{}
-	uri, path := FakeDiagnosticUri()
+	diagnosticUri, path := FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 	b := BundleImpl{SnykCode: snykCodeMock}
 
 	registeredDocuments := map[lsp.DocumentURI]bool{}
-	registeredDocuments[uri] = true
+	registeredDocuments[diagnosticUri] = true
 	diagnosticMap := map[lsp.DocumentURI][]lsp2.Diagnostic{}
 
 	b.AddToBundleDocuments(registeredDocuments)
@@ -253,7 +254,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldRetrieveFromBackend(t *testin
 	<-clChan
 
 	assert.NotNil(t, diagnosticMap)
-	diagnostics := diagnosticMap[uri]
+	diagnostics := diagnosticMap[diagnosticUri]
 	assert.NotNil(t, diagnostics)
 	assert.Equal(t, 1, len(diagnostics))
 	assert.True(t, reflect.DeepEqual(FakeDiagnostic, diagnostics[0]))
@@ -269,11 +270,11 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldRetrieveFromBackend(t *testin
 func TestCodeBundleImpl_FetchDiagnosticsData_shouldReturnCodeLenses(t *testing.T) {
 	snykCodeMock := &FakeSnykCodeApiService{}
 	b := BundleImpl{SnykCode: snykCodeMock}
-	uri, path := FakeDiagnosticUri()
+	diagnosticUri, path := FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 
 	registeredDocuments := map[lsp.DocumentURI]bool{}
-	registeredDocuments[uri] = true
+	registeredDocuments[diagnosticUri] = true
 	b.AddToBundleDocuments(registeredDocuments)
 
 	// execute
@@ -287,7 +288,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldReturnCodeLenses(t *testing.T
 	codeLensMap := map[lsp.DocumentURI][]lsp.CodeLens{}
 	result := <-clChan
 	codeLensMap[result.Uri] = result.CodeLenses
-	assert.NotEqual(t, 0, len(codeLensMap[uri]))
+	assert.NotEqual(t, 0, len(codeLensMap[diagnosticUri]))
 }
 
 func Test_getShardKey_shouldReturnRootPathHash(t *testing.T) {

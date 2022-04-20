@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 	"github.com/snyk/snyk-ls/util"
 )
@@ -50,7 +51,7 @@ var (
 	}
 )
 
-func FakeDiagnosticUri() (uri sglsp.DocumentURI, path string) {
+func FakeDiagnosticUri() (documentURI sglsp.DocumentURI, path string) {
 	temp, err := os.MkdirTemp(os.TempDir(), "fakeDiagnosticTempDir")
 	if err != nil {
 		log.Fatal().Err(err).Msg("couldn't create tempdir")
@@ -61,9 +62,9 @@ func FakeDiagnosticUri() (uri sglsp.DocumentURI, path string) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't create fake diagnostic file for Snyk Code Fake Service")
 	}
-	uri = util.PathToUri(filePath)
-	fakeDiagnosticUri = uri
-	return uri, temp
+	documentURI = uri.PathToUri(filePath)
+	fakeDiagnosticUri = documentURI
+	return documentURI, temp
 }
 
 const (

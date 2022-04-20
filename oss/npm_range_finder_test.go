@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config/environment"
-	"github.com/snyk/snyk-ls/util"
+	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 func TestNpmRangeFinder_Find(t *testing.T) {
@@ -43,6 +43,6 @@ func TestNpmRangeFinder_Find(t *testing.T) {
 		},
 	}
 
-	actualRange := findRange(issue, util.PathToUri(testPath), testContent)
+	actualRange := findRange(issue, uri.PathToUri(testPath), testContent)
 	assert.Equal(t, expectedRange, actualRange)
 }

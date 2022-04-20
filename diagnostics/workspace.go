@@ -10,8 +10,8 @@ import (
 	ignore "github.com/sabhiram/go-gitignore"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
-	"github.com/snyk/snyk-ls/util"
 )
 
 var registeredDocsMutex = &sync.Mutex{}
@@ -19,7 +19,7 @@ var scannedWorkspaceFoldersMutex = &sync.Mutex{}
 var ScannedWorkspaceFolders = make(map[lsp.WorkspaceFolder]bool)
 
 func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) (walkedFiles []string, err error) {
-	workspace, err := filepath.Abs(util.PathFromUri(workspaceUri))
+	workspace, err := filepath.Abs(uri.PathFromUri(workspaceUri))
 
 	if err != nil {
 		return nil, err
@@ -46,12 +46,8 @@ func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) (walkedFiles 
 			return nil
 		}
 
-		file := sglsp.TextDocumentItem{
-			URI: util.PathToUri(path),
-		}
-
+		file := sglsp.TextDocumentItem{URI: uri.PathToUri(path)}
 		RegisterDocument(file)
-
 		return err
 	})
 }

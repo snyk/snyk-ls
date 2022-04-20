@@ -15,8 +15,8 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
-	"github.com/snyk/snyk-ls/util"
 )
 
 var (
@@ -77,7 +77,7 @@ func ScanWorkspace(
 
 	log.Debug().Str("method", "oss.ScanWorkspace").Msg("started.")
 
-	workspacePath := util.PathFromUri(workspace)
+	workspacePath := uri.PathFromUri(workspace)
 	path, err := filepath.Abs(workspacePath)
 	if err != nil {
 		log.Err(err).Str("method", "oss.ScanWorkspace").
@@ -94,7 +94,7 @@ func ScanWorkspace(
 	}
 
 	targetFile := determineTargetFile(scanResults.DisplayTargetFile)
-	var uri = util.PathToUri(filepath.Join(workspacePath, targetFile))
+	var workspaceUri = uri.PathToUri(filepath.Join(workspacePath, targetFile))
 	fileContent, err := ioutil.ReadFile(path + "/" + targetFile)
 	if err != nil {
 		log.Err(err).Str("method", "oss.ScanWorkspace").
@@ -103,7 +103,7 @@ func ScanWorkspace(
 		return
 	}
 
-	retrieveAnalysis(scanResults, uri, fileContent, dChan)
+	retrieveAnalysis(scanResults, workspaceUri, fileContent, dChan)
 }
 
 func determineTargetFile(displayTargetFile string) string {
@@ -115,7 +115,7 @@ func determineTargetFile(displayTargetFile string) string {
 }
 
 func ScanFile(
-	uri sglsp.DocumentURI,
+	documentURI sglsp.DocumentURI,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
 	clChan chan lsp.CodeLensResult,
@@ -126,7 +126,7 @@ func ScanFile(
 	log.Debug().Str("method", "oss.ScanFile").Msg("started.")
 
 	for _, supportedFile := range getDetectableFiles() {
-		path := util.PathFromUri(uri)
+		path := uri.PathFromUri(documentURI)
 		if strings.HasSuffix(path, supportedFile) {
 			path, err := filepath.Abs(path)
 			if err != nil {
@@ -139,17 +139,17 @@ func ScanFile(
 			if err != nil {
 				log.Err(err).Str("method", "oss.ScanFile").
 					Msg("Error while calling Snyk CLI")
-				reportErrorViaChan(uri, dChan, err)
+				reportErrorViaChan(documentURI, dChan, err)
 			}
 
 			fileContent, err := os.ReadFile(path)
 			if err != nil {
 				log.Err(err).Str("method", "oss.ScanFile").
 					Msg("Error reading file " + path)
-				reportErrorViaChan(uri, dChan, err)
+				reportErrorViaChan(documentURI, dChan, err)
 			}
 
-			retrieveAnalysis(scanResults, uri, fileContent, dChan)
+			retrieveAnalysis(scanResults, documentURI, fileContent, dChan)
 		}
 	}
 }

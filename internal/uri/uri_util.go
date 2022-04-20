@@ -1,4 +1,4 @@
-package util
+package uri
 
 import (
 	"strings"
@@ -13,4 +13,8 @@ func PathFromUri(uri sglsp.DocumentURI) string {
 
 func PathToUri(path string) sglsp.DocumentURI {
 	return sglsp.DocumentURI("file://" + path)
+}
+
+func FolderContains(folderPath string, path string) bool {
+	return strings.HasPrefix(path, folderPath)
 }

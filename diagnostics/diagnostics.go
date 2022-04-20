@@ -1,7 +1,6 @@
 package diagnostics
 
 import (
-	"strings"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -9,9 +8,9 @@ import (
 
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/iac"
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 	"github.com/snyk/snyk-ls/oss"
-	"github.com/snyk/snyk-ls/util"
 )
 
 var (
@@ -29,11 +28,11 @@ func ClearDiagnosticsCache(uri sglsp.DocumentURI) {
 
 func ClearWorkspaceFolderDiagnostics(folder lsp.WorkspaceFolder) {
 	diagnosticsMutex.Lock()
-	for uri := range documentDiagnosticCache {
-		path := util.PathFromUri(uri)
-		folderPath := util.PathFromUri(folder.Uri)
-		if strings.HasPrefix(path, folderPath) {
-			delete(documentDiagnosticCache, uri)
+	for u := range documentDiagnosticCache {
+		path := uri.PathFromUri(u)
+		folderPath := uri.PathFromUri(folder.Uri)
+		if uri.FolderContains(folderPath, path) {
+			delete(documentDiagnosticCache, u)
 			log.Debug().Str("method", "ClearWorkspaceFolderDiagnostics").Str("path", path).Str("workspaceFolder", folderPath).Msg("Cleared diagnostics.")
 		}
 	}

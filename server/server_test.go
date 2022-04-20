@@ -20,8 +20,8 @@ import (
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/diagnostics"
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
-	"github.com/snyk/snyk-ls/util"
 )
 
 var (
@@ -404,7 +404,7 @@ func runIntegrationTest(repo string, commit string, ossFile string, codeFile str
 
 		// serve diagnostics from the cache
 		assert.Eventually(t, func() bool {
-			return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(util.PathToUri(testPath))) > 0
+			return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
 		}, 5*time.Second, 2*time.Millisecond)
 	}
 	testPath = cloneTargetDir + string(os.PathSeparator) + codeFile
@@ -412,7 +412,7 @@ func runIntegrationTest(repo string, commit string, ossFile string, codeFile str
 
 	// serve diagnostics from the cache
 	assert.Eventually(t, func() bool {
-		return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(util.PathToUri(testPath))) > 0
+		return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
 	}, 5*time.Second, 2*time.Millisecond)
 }
 
@@ -454,7 +454,7 @@ func textDocumentDidOpen(loc *server.Local, testPath string) (sglsp.DidOpenTextD
 
 	didOpenParams := sglsp.DidOpenTextDocumentParams{
 		TextDocument: sglsp.TextDocumentItem{
-			URI:  util.PathToUri(testPath),
+			URI:  uri.PathToUri(testPath),
 			Text: string(testFileContent),
 		},
 	}

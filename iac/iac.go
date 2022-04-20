@@ -13,8 +13,8 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
-	"github.com/snyk/snyk-ls/util"
 )
 
 var (
@@ -109,8 +109,8 @@ func ScanFile(
 	}
 }
 
-func cliCmd(uri sglsp.DocumentURI) *exec.Cmd {
-	path, err := filepath.Abs(util.PathFromUri(uri))
+func cliCmd(u sglsp.DocumentURI) *exec.Cmd {
+	path, err := filepath.Abs(uri.PathFromUri(u))
 	if err != nil {
 		log.Err(err).Str("method", "iac.ScanFile").
 			Msg("Error while extracting file absolutePath")
