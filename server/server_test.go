@@ -337,7 +337,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 		log.Fatal().Err(err).Msg("error calling server")
 	}
 
-	assert.True(t, diagnostics.ScannedWorkspaceFolders[folder])
+	assert.True(t, diagnostics.IsWorkspaceFolderScanned(folder))
 
 	_, err = loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", lsp.DidChangeWorkspaceFoldersParams{
 		Event: lsp.WorkspaceFoldersChangeEvent{
@@ -348,7 +348,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 		log.Fatal().Err(err).Msg("error calling server")
 	}
 
-	assert.False(t, diagnostics.ScannedWorkspaceFolders[folder])
+	assert.False(t, diagnostics.IsWorkspaceFolderScanned(folder))
 }
 
 func Test_IntegrationWorkspaceScanGoof(t *testing.T) {
@@ -394,7 +394,7 @@ func runIntegrationTest(repo string, commit string, ossFile string, codeFile str
 	}
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
-		return diagnostics.ScannedWorkspaceFolders[folder] == true
+		return diagnostics.IsWorkspaceFolderScanned(folder)
 	}, 120*time.Second, 100*time.Millisecond)
 
 	var testPath string

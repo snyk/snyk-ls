@@ -16,7 +16,7 @@ import (
 
 var registeredDocsMutex = &sync.Mutex{}
 var scannedWorkspaceFoldersMutex = &sync.Mutex{}
-var ScannedWorkspaceFolders = make(map[lsp.WorkspaceFolder]bool)
+var scannedWorkspaceFolders = make(map[lsp.WorkspaceFolder]bool)
 
 func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) (walkedFiles []string, err error) {
 	workspace, err := filepath.Abs(uri.PathFromUri(workspaceUri))
@@ -50,6 +50,24 @@ func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) (walkedFiles 
 		RegisterDocument(file)
 		return err
 	})
+}
+
+func IsWorkspaceFolderScanned(folder lsp.WorkspaceFolder) bool {
+	scannedWorkspaceFoldersMutex.Lock()
+	defer scannedWorkspaceFoldersMutex.Unlock()
+	return scannedWorkspaceFolders[folder]
+}
+
+func setFolderScanned(folder lsp.WorkspaceFolder) {
+	scannedWorkspaceFoldersMutex.Lock()
+	scannedWorkspaceFolders[folder] = true
+	scannedWorkspaceFoldersMutex.Unlock()
+}
+
+func removeFolderFromScanned(folder lsp.WorkspaceFolder) {
+	scannedWorkspaceFoldersMutex.Lock()
+	delete(scannedWorkspaceFolders, folder)
+	scannedWorkspaceFoldersMutex.Unlock()
 }
 
 func loadIgnorePatterns(workspace string) (patterns []string, err error) {
@@ -110,9 +128,7 @@ func workspaceDiagnostics(workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
 
 	diagnostics, codeLenses = fetchAllRegisteredDocumentDiagnostics(workspace.Uri, lsp.ScanLevelWorkspace)
 	addToCache(diagnostics, codeLenses)
-	scannedWorkspaceFoldersMutex.Lock()
-	ScannedWorkspaceFolders[workspace] = true
-	scannedWorkspaceFoldersMutex.Unlock()
+	setFolderScanned(workspace)
 }
 
 func WorkspaceScan(workspaceFolders []lsp.WorkspaceFolder) {

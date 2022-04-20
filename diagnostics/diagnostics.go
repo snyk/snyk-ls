@@ -37,10 +37,8 @@ func ClearWorkspaceFolderDiagnostics(folder lsp.WorkspaceFolder) {
 		}
 	}
 	diagnosticsMutex.Unlock()
-	scannedWorkspaceFoldersMutex.Lock()
-	ScannedWorkspaceFolders[folder] = false
+	removeFolderFromScanned(folder)
 	log.Debug().Str("method", "ClearWorkspaceFolderDiagnostics").Str("workspaceFolder", string(folder.Uri)).Msg("Removed")
-	scannedWorkspaceFoldersMutex.Unlock()
 }
 
 func ClearEntireDiagnosticsCache() {
