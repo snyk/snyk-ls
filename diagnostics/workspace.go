@@ -15,7 +15,7 @@ import (
 
 var registeredDocsMutex = &sync.Mutex{}
 
-func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) error {
+func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) (walkedFiles []string, err error) {
 	// this is not a mistake - eclipse reports workspace folders with `file:` pre-prended
 	workspace, err :=
 		filepath.Abs(
@@ -23,21 +23,25 @@ func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) error {
 		)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var patterns []string
 	patterns, err = loadIgnorePatterns(workspace)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	gitIgnore := ignore.CompileIgnoreLines(patterns...)
-
-	return filepath.WalkDir(workspace, func(path string, dirEntry os.DirEntry, _ error) error {
+	return walkedFiles, filepath.WalkDir(workspace, func(path string, dirEntry os.DirEntry, _ error) error {
 		if dirEntry == nil || dirEntry.IsDir() {
+			if ignored(gitIgnore, path) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
+
+		walkedFiles = append(walkedFiles, path)
 
 		if ignored(gitIgnore, path) {
 			return nil
@@ -55,13 +59,13 @@ func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) error {
 	})
 }
 
-func loadIgnorePatterns(workspace string) ([]string, error) {
+func loadIgnorePatterns(workspace string) (patterns []string, err error) {
 	var ignores = ""
 	log.Debug().
 		Str("method", "loadIgnorePatterns").
 		Str("workspace", workspace).
 		Msg("searching for ignore files")
-	err := filepath.WalkDir(workspace, func(path string, dirEntry os.DirEntry, _ error) error {
+	err = filepath.WalkDir(workspace, func(path string, dirEntry os.DirEntry, _ error) error {
 		if dirEntry == nil || dirEntry.IsDir() {
 			return nil
 		}
@@ -82,7 +86,7 @@ func loadIgnorePatterns(workspace string) ([]string, error) {
 		return nil, err
 	}
 
-	patterns := strings.Split(ignores, "\n")
+	patterns = strings.Split(ignores, "\n")
 	log.Debug().Interface("ignorePatterns", patterns).Msg("Loaded ignore patterns")
 	return patterns, nil
 }
@@ -104,7 +108,7 @@ func workspaceDiagnostics(workspaceUri sglsp.DocumentURI, wg *sync.WaitGroup) {
 	var diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic
 	var codeLenses map[sglsp.DocumentURI][]sglsp.CodeLens
 
-	err := registerAllFilesFromWorkspace(workspaceUri)
+	_, err := registerAllFilesFromWorkspace(workspaceUri)
 	if err != nil {
 		log.Error().Err(err).
 			Str("method", "workspaceDiagnostics").

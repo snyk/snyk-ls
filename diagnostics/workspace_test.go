@@ -2,6 +2,7 @@ package diagnostics
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -54,7 +55,7 @@ func Test_ignored_doubleAsterisk(t *testing.T) {
 }
 
 func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {
-	expectedPatterns, tempDir, _, _ := setupIgnoreWorkspace()
+	expectedPatterns, tempDir, _, _, _ := setupIgnoreWorkspace()
 	defer os.RemoveAll(tempDir)
 
 	actualPatterns, err := loadIgnorePatterns(tempDir)
@@ -80,10 +81,10 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 
 func Test_RegisterAllFilesFromWorkspace_Without_Ignored(t *testing.T) {
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
-	_, workspace, ignoredFilePath, notIgnoredFilePath := setupIgnoreWorkspace()
+	_, workspace, ignoredFilePath, notIgnoredFilePath, _ := setupIgnoreWorkspace()
 	defer os.RemoveAll(workspace)
 
-	err := registerAllFilesFromWorkspace(sglsp.DocumentURI("file://" + workspace))
+	_, err := registerAllFilesFromWorkspace(sglsp.DocumentURI("file://" + workspace))
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error while registering " + workspace)
 	}
@@ -92,31 +93,54 @@ func Test_RegisterAllFilesFromWorkspace_Without_Ignored(t *testing.T) {
 	assert.Equal(t, false, registeredDocuments[sglsp.DocumentURI(ignoredFilePath)])
 }
 
-func writeTestGitIgnore(ignorePatterns string) string {
-	temp, err := os.MkdirTemp(os.TempDir(), "loadIgnorePatterns")
+func Test_RegisterAllFilesFromWorkspace_SkipIgnoredDirs(t *testing.T) {
+	registeredDocuments = map[sglsp.DocumentURI]bool{}
+	_, workspace, _, _, ignoredFileInDir := setupIgnoreWorkspace()
+	defer os.RemoveAll(workspace)
+
+	walkedFiles, err := registerAllFilesFromWorkspace(sglsp.DocumentURI("file://" + workspace))
+	if err != nil {
+		log.Fatal().Err(err).Msg("Error while registering " + workspace)
+	}
+	assert.NotContains(t, walkedFiles, ignoredFileInDir)
+}
+
+func writeTestGitIgnore(ignorePatterns string) (tempDir string) {
+	tempDir, err := os.MkdirTemp(os.TempDir(), "loadIgnorePatterns")
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't create temp dir")
 	}
-	err = os.WriteFile(temp+string(os.PathSeparator)+".gitignore", []byte(ignorePatterns), 0600)
+	filePath := filepath.Join(tempDir, ".gitignore")
+	err = os.WriteFile(filePath, []byte(ignorePatterns), 0600)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't write .gitignore")
 	}
-	return temp
+	return tempDir
 }
 
-func setupIgnoreWorkspace() (string, string, string, string) {
-	expectedPatterns := "*.xml\n**/*.txt\nbin"
-	tempDir := writeTestGitIgnore(expectedPatterns)
+func setupIgnoreWorkspace() (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {
+	expectedPatterns = "*.xml\n**/*.txt\nbin"
+	tempDir = writeTestGitIgnore(expectedPatterns)
 
-	ignoredFilePath := tempDir + string(os.PathSeparator) + "ignored.xml"
+	ignoredFilePath = filepath.Join(tempDir) + "ignored.xml"
 	err := os.WriteFile(ignoredFilePath, []byte("test"), 0600)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't write ignored file ignored.xml")
 	}
-	notIgnoredFilePath := tempDir + string(os.PathSeparator) + "not-ignored.java"
+	notIgnoredFilePath = filepath.Join(tempDir, "not-ignored.java")
 	err = os.WriteFile(notIgnoredFilePath, []byte("test"), 0600)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't write ignored file not-ignored.java")
 	}
-	return expectedPatterns, tempDir, ignoredFilePath, notIgnoredFilePath
+	ignoredDir := filepath.Join(tempDir, "bin")
+	err = os.Mkdir(ignoredDir, 0700)
+	if err != nil {
+		log.Fatal().Err(err).Msgf("Couldn't write ignoreDirectory %s", ignoredDir)
+	}
+	ignoredFileInDir = filepath.Join(ignoredDir, "shouldNotBeWalked.java")
+	err = os.WriteFile(ignoredFileInDir, []byte("public bla"), 0600)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Couldn't write ignored file not-ignored.java")
+	}
+	return expectedPatterns, tempDir, ignoredFilePath, notIgnoredFilePath, ignoredFileInDir
 }

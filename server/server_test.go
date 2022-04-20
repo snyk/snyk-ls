@@ -349,6 +349,19 @@ func Test_IntegrationWorkspaceScanMaven(t *testing.T) {
 	runIntegrationTest("https://github.com/apache/maven", "18725ec1e", ossFile, codeFile, t)
 }
 
+func Test_IntegrationWorkspaceIgnoreDefinitelyTyped(t *testing.T) {
+	t.Skip() // todo
+	if !environment.RunIntegTest {
+		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
+	}
+	repo, err := setupCustomTestRepo("https://github.com/DefinitelyTyped/DefinitelyTyped", "")
+	if err != nil {
+		log.Fatal().Err(err).Msg("Error cloning DefinitelyTyped")
+	}
+	defer os.RemoveAll(repo)
+
+}
+
 func runIntegrationTest(repo string, commit string, ossFile string, codeFile string, t *testing.T) {
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
