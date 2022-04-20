@@ -35,7 +35,7 @@ func Start() {
 		"shutdown":                            Shutdown(),
 		"exit":                                Exit(&srv),
 		"textDocument/codeLens":               TextDocumentCodeLens(),
-		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFolders(),
+		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
 		// "codeLens/resolve":               codeLensResolve(&server),
 	}
 
@@ -50,10 +50,10 @@ func Start() {
 	log.Err(err).Msg("Exiting...")
 }
 
-func WorkspaceDidChangeWorkspaceFolders() jrpc2.Handler {
+func WorkspaceDidChangeWorkspaceFoldersHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) (interface{}, error) {
-		log.Info().Str("method", "WorkspaceDidChangeWorkspaceFolders").Msg("RECEIVING")
-		log.Info().Str("method", "WorkspaceDidChangeWorkspaceFolders").Msg("SENDING")
+		log.Info().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Msg("RECEIVING")
+		log.Info().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Msg("SENDING")
 
 		for _, folder := range params.Event.Removed {
 			diagnostics.ClearWorkspaceFolderDiagnostics(folder)

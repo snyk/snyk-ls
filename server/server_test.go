@@ -85,7 +85,7 @@ func startServer() server.Local {
 		"shutdown":                            Shutdown(),
 		"exit":                                Exit(&srv),
 		"textDocument/codeLens":               TextDocumentCodeLens(),
-		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFolders(),
+		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
 		// "codeLens/resolve":               codeLensResolve(&server),
 	}
 
