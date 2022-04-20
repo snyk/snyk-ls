@@ -8,47 +8,81 @@ import (
 
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/iac"
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 	"github.com/snyk/snyk-ls/oss"
 )
 
 var (
+	diagnosticsMutex        = &sync.Mutex{}
 	registeredDocuments     = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	SnykCode                code.SnykCodeService
 )
 
 func ClearDiagnosticsCache(uri sglsp.DocumentURI) {
+	diagnosticsMutex.Lock()
 	delete(documentDiagnosticCache, uri)
+	diagnosticsMutex.Unlock()
+}
+
+func ClearWorkspaceFolderDiagnostics(folder lsp.WorkspaceFolder) {
+	diagnosticsMutex.Lock()
+	for u := range documentDiagnosticCache {
+		path := uri.PathFromUri(u)
+		folderPath := uri.PathFromUri(folder.Uri)
+		if uri.FolderContains(folderPath, path) {
+			delete(documentDiagnosticCache, u)
+			log.Debug().Str("method", "ClearWorkspaceFolderDiagnostics").Str("path", path).Str("workspaceFolder", folderPath).Msg("Cleared diagnostics.")
+		}
+	}
+	diagnosticsMutex.Unlock()
+	removeFolderFromScanned(folder)
+	log.Debug().Str("method", "ClearWorkspaceFolderDiagnostics").Str("workspaceFolder", string(folder.Uri)).Msg("Removed")
 }
 
 func ClearEntireDiagnosticsCache() {
+	diagnosticsMutex.Lock()
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
+	diagnosticsMutex.Unlock()
 }
 
 func ClearRegisteredDocuments() {
+	registeredDocsMutex.Lock()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
+	registeredDocsMutex.Unlock()
 }
 
 func UpdateDocument(uri sglsp.DocumentURI, changes []sglsp.TextDocumentContentChangeEvent) {
 	// don't do anything but update registered to true
+	registeredDocsMutex.Lock()
 	registeredDocuments[uri] = true
+	registeredDocsMutex.Unlock()
 }
 
 func RegisterDocument(file sglsp.TextDocumentItem) {
+	registeredDocsMutex.Lock()
 	registeredDocuments[file.URI] = true
+	registeredDocsMutex.Unlock()
 }
 
 func UnRegisterDocument(file sglsp.DocumentURI) {
+	registeredDocsMutex.Lock()
 	delete(registeredDocuments, file)
+	registeredDocsMutex.Unlock()
+}
+
+func DocumentDiagnosticsFromCache(file sglsp.DocumentURI) []lsp.Diagnostic {
+	diagnosticsMutex.Lock()
+	defer diagnosticsMutex.Unlock()
+	return documentDiagnosticCache[file]
 }
 
 func GetDiagnostics(uri sglsp.DocumentURI) []lsp.Diagnostic {
 	// serve from cache
 	diagnosticSlice := documentDiagnosticCache[uri]
 	if len(diagnosticSlice) > 0 {
-		log.Info().Str("method", "GetDiagnostics").
-			Msgf("Cached: Diagnostics for %s", uri)
+		log.Info().Str("method", "GetDiagnostics").Msgf("Cached: Diagnostics for %s", uri)
 
 		return diagnosticSlice
 	}
@@ -146,8 +180,10 @@ func processResults(
 
 			logError(result.Err, "fetchAllRegisteredDocumentDiagnostics")
 
+			diagnosticsMutex.Lock()
 			codeLenses = append(codeLenses, result.CodeLenses...)
 			codeLenseCache[result.Uri] = codeLenses
+			diagnosticsMutex.Unlock()
 
 		default: // return results once channels are empty
 			log.Debug().
@@ -191,6 +227,7 @@ func createBundle(bundles *[]*code.BundleImpl) *code.BundleImpl {
 
 func addToCache(diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic, codeLenses map[sglsp.DocumentURI][]sglsp.CodeLens) {
 	// add all diagnostics to cache
+	diagnosticsMutex.Lock()
 	for uri := range diagnostics {
 		documentDiagnosticCache[uri] = diagnostics[uri]
 	}
@@ -199,6 +236,7 @@ func addToCache(diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic, codeLenses m
 	for uri := range codeLenses {
 		codeLenseCache[uri] = codeLenses[uri]
 	}
+	diagnosticsMutex.Unlock()
 }
 
 func logError(err error, method string) {

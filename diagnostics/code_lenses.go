@@ -9,10 +9,13 @@ func GetCodeLenses(uri sglsp.DocumentURI) ([]sglsp.CodeLens, error) {
 }
 
 func AddLens(uri sglsp.DocumentURI, lens sglsp.CodeLens) {
-	// todo rewrite as set
+	diagnosticsMutex.Lock()
 	codeLenseCache[uri] = append(codeLenseCache[uri], lens)
+	diagnosticsMutex.Unlock()
 }
 
 func ClearLenses(uri sglsp.DocumentURI) {
+	diagnosticsMutex.Lock()
 	codeLenseCache[uri] = []sglsp.CodeLens{}
+	diagnosticsMutex.Unlock()
 }

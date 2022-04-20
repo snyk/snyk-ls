@@ -139,13 +139,8 @@ type InitializeParams struct {
 	InitializationOptions interface{}              `json:"initializationOptions,omitempty"`
 	Capabilities          sglsp.ClientCapabilities `json:"capabilities"`
 
-	WorkDoneToken    string             `json:"workDoneToken,omitempty"`
-	WorkspaceFolders []WorkspaceFolders `json:"workspaceFolders,omitempty"`
-}
-
-type WorkspaceFolders struct {
-	Name string            `json:"name,omitempty"`
-	Uri  sglsp.DocumentURI `json:"uri,omitempty"`
+	WorkDoneToken    string            `json:"workDoneToken,omitempty"`
+	WorkspaceFolders []WorkspaceFolder `json:"workspaceFolders,omitempty"`
 }
 
 type ServerCapabilities struct {
@@ -190,18 +185,27 @@ type WorkspaceFoldersServerCapabilities struct {
 }
 
 type WorkspaceFolder struct {
-	/**
-	 * The associated URI for this workspace folder.
-	 */
+	// The associated Uri for this workspace folder.
 	Uri sglsp.DocumentURI `json:"uri,omitempty"`
 
-	/**
-	 * The name of the workspace folder. Used to refer to this
-	 * workspace folder in the user interface.
-	 */
+	// The Name of the workspace folder. Used to refer to this
+	// workspace folder in the user interface.
 	Name string `json:"name,omitempty"`
 }
 
+type DidChangeWorkspaceFoldersParams struct {
+	// The actual workspace folder change Event.
+	Event WorkspaceFoldersChangeEvent `json:"Event,omitempty"`
+}
+
+// WorkspaceFoldersChangeEvent The workspace folder change event.
+type WorkspaceFoldersChangeEvent struct {
+	// The array of Added workspace folders
+	Added []WorkspaceFolder `json:"Added,omitempty"`
+
+	// The array of the Removed workspace folders
+	Removed []WorkspaceFolder `json:"Removed,omitempty"`
+}
 type ScanLevel int
 
 const (

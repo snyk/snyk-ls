@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -49,7 +50,7 @@ func Test_ScanFile(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	go ScanFile(sglsp.DocumentURI("file://"+path), &wg, dChan, nil)
+	go ScanFile(uri.PathToUri(path), &wg, dChan, nil)
 
 	diagnosticResult := <-dChan
 
@@ -61,8 +62,8 @@ func Test_FindRange(t *testing.T) {
 	issue := mavenTestIssue()
 	content := "0\n1\n2\n  implementation 'a:test:4.17.4'"
 
-	var uri = sglsp.DocumentURI("file://build.gradle")
-	foundRange := findRange(issue, uri, []byte(content))
+	var documentUri = uri.PathToUri("build.gradle")
+	foundRange := findRange(issue, documentUri, []byte(content))
 
 	assert.Equal(t, 3, foundRange.Start.Line)
 	assert.Equal(t, 20, foundRange.Start.Character)

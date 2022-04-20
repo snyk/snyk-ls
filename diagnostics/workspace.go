@@ -10,17 +10,16 @@ import (
 	ignore "github.com/sabhiram/go-gitignore"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
 var registeredDocsMutex = &sync.Mutex{}
+var scannedWorkspaceFoldersMutex = &sync.Mutex{}
+var scannedWorkspaceFolders = make(map[lsp.WorkspaceFolder]bool)
 
 func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) (walkedFiles []string, err error) {
-	// this is not a mistake - eclipse reports workspace folders with `file:` pre-prended
-	workspace, err :=
-		filepath.Abs(
-			strings.ReplaceAll(strings.ReplaceAll(string(workspaceUri), "file://", ""), "file:", ""),
-		)
+	workspace, err := filepath.Abs(uri.PathFromUri(workspaceUri))
 
 	if err != nil {
 		return nil, err
@@ -47,16 +46,28 @@ func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) (walkedFiles 
 			return nil
 		}
 
-		file := sglsp.TextDocumentItem{
-			URI: sglsp.DocumentURI("file://" + path),
-		}
-
-		registeredDocsMutex.Lock()
+		file := sglsp.TextDocumentItem{URI: uri.PathToUri(path)}
 		RegisterDocument(file)
-		registeredDocsMutex.Unlock()
-
 		return err
 	})
+}
+
+func IsWorkspaceFolderScanned(folder lsp.WorkspaceFolder) bool {
+	scannedWorkspaceFoldersMutex.Lock()
+	defer scannedWorkspaceFoldersMutex.Unlock()
+	return scannedWorkspaceFolders[folder]
+}
+
+func setFolderScanned(folder lsp.WorkspaceFolder) {
+	scannedWorkspaceFoldersMutex.Lock()
+	scannedWorkspaceFolders[folder] = true
+	scannedWorkspaceFoldersMutex.Unlock()
+}
+
+func removeFolderFromScanned(folder lsp.WorkspaceFolder) {
+	scannedWorkspaceFoldersMutex.Lock()
+	delete(scannedWorkspaceFolders, folder)
+	scannedWorkspaceFoldersMutex.Unlock()
 }
 
 func loadIgnorePatterns(workspace string) (patterns []string, err error) {
@@ -102,29 +113,30 @@ func ignored(gitIgnore *ignore.GitIgnore, path string) bool {
 	return false
 }
 
-func workspaceDiagnostics(workspaceUri sglsp.DocumentURI, wg *sync.WaitGroup) {
+func workspaceDiagnostics(workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	var diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic
 	var codeLenses map[sglsp.DocumentURI][]sglsp.CodeLens
 
-	_, err := registerAllFilesFromWorkspace(workspaceUri)
+	_, err := registerAllFilesFromWorkspace(workspace.Uri)
 	if err != nil {
 		log.Error().Err(err).
 			Str("method", "workspaceDiagnostics").
 			Msg("Error occurred while registering files from workspace")
 	}
 
-	diagnostics, codeLenses = fetchAllRegisteredDocumentDiagnostics(workspaceUri, lsp.ScanLevelWorkspace)
+	diagnostics, codeLenses = fetchAllRegisteredDocumentDiagnostics(workspace.Uri, lsp.ScanLevelWorkspace)
 	addToCache(diagnostics, codeLenses)
+	setFolderScanned(workspace)
 }
 
-func WorkspaceScan(workspaceFolders []lsp.WorkspaceFolders) {
+func WorkspaceScan(workspaceFolders []lsp.WorkspaceFolder) {
 	var wg sync.WaitGroup
 
 	for _, workspace := range workspaceFolders {
 		wg.Add(1)
-		go workspaceDiagnostics(workspace.Uri, &wg)
+		go workspaceDiagnostics(workspace, &wg)
 	}
 
 	wg.Wait()

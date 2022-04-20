@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -15,13 +14,14 @@ import (
 	"github.com/creachadair/jrpc2/server"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/sourcegraph/go-lsp"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/diagnostics"
-	slsp "github.com/snyk/snyk-ls/lsp"
+	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/lsp"
 )
 
 var (
@@ -29,22 +29,22 @@ var (
 	notification *jrpc2.Request
 )
 
-func didOpenTextParams() (lsp.DidOpenTextDocumentParams, func()) {
+func didOpenTextParams() (sglsp.DidOpenTextDocumentParams, func()) {
 	// see https://microsoft.github.io/language-server-protocol/specifications/specification-3-17/#documentSelector
 	uri, path := code.FakeDiagnosticUri()
-	didOpenParams := lsp.DidOpenTextDocumentParams{
-		TextDocument: lsp.TextDocumentItem{URI: uri},
+	didOpenParams := sglsp.DidOpenTextDocumentParams{
+		TextDocument: sglsp.TextDocumentItem{URI: uri},
 	}
 	return didOpenParams, func() {
 		os.RemoveAll(path)
 	}
 }
 
-func didSaveTextParams() (lsp.DidSaveTextDocumentParams, func()) {
+func didSaveTextParams() (sglsp.DidSaveTextDocumentParams, func()) {
 	// see https://microsoft.github.io/language-server-protocol/specifications/specification-3-17/#documentSelector
 	uri, path := code.FakeDiagnosticUri()
-	didSaveParams := lsp.DidSaveTextDocumentParams{
-		TextDocument: lsp.TextDocumentIdentifier{URI: uri},
+	didSaveParams := sglsp.DidSaveTextDocumentParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: uri},
 	}
 	return didSaveParams, func() {
 		os.RemoveAll(path)
@@ -63,16 +63,6 @@ func setupServer() (server.Local, func(l *server.Local)) {
 	}
 }
 
-func setupLogCapture() (*bytes.Buffer, func()) {
-	logBuffer := new(bytes.Buffer)
-	log.Logger = log.Output(zerolog.SyncWriter(logBuffer))
-
-	return logBuffer, func() {
-		log.Logger = log.Output(os.Stderr)
-		log.Debug().Str("logBuffer", logBuffer.String()).Msg("dumping logbuffer")
-	}
-}
-
 func startServer() server.Local {
 	var srv *jrpc2.Server
 
@@ -85,16 +75,17 @@ func startServer() server.Local {
 	}
 
 	lspHandlers := handler.Map{
-		"initialize":                     InitializeHandler(),
-		"textDocument/didOpen":           TextDocumentDidOpenHandler(&srv),
-		"textDocument/didChange":         TextDocumentDidChangeHandler(),
-		"textDocument/didClose":          TextDocumentDidCloseHandler(),
-		"textDocument/didSave":           TextDocumentDidSaveHandler(&srv),
-		"textDocument/willSave":          TextDocumentWillSaveHandler(),
-		"textDocument/willSaveWaitUntil": TextDocumentWillSaveWaitUntilHandler(),
-		"shutdown":                       Shutdown(),
-		"exit":                           Exit(&srv),
-		"textDocument/codeLens":          TextDocumentCodeLens(),
+		"initialize":                          InitializeHandler(),
+		"textDocument/didOpen":                TextDocumentDidOpenHandler(&srv),
+		"textDocument/didChange":              TextDocumentDidChangeHandler(),
+		"textDocument/didClose":               TextDocumentDidCloseHandler(),
+		"textDocument/didSave":                TextDocumentDidSaveHandler(&srv),
+		"textDocument/willSave":               TextDocumentWillSaveHandler(),
+		"textDocument/willSaveWaitUntil":      TextDocumentWillSaveWaitUntilHandler(),
+		"shutdown":                            Shutdown(),
+		"exit":                                Exit(&srv),
+		"textDocument/codeLens":               TextDocumentCodeLens(),
+		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
 		// "codeLens/resolve":               codeLensResolve(&server),
 	}
 
@@ -130,7 +121,7 @@ func Test_dummy_shouldNotBeServed(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "dummy", nil)
 	if err == nil {
-		log.Fatal().Err(err)
+		log.Fatal().Err(err).Msg("call succeeded")
 	}
 }
 
@@ -175,7 +166,7 @@ func Test_initialize_shouldSupportDocumentChanges(t *testing.T) {
 	if err := rsp.UnmarshalResult(&result); err != nil {
 		log.Fatal().Err(err)
 	}
-	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.Change, lsp.TDSKFull)
+	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.Change, sglsp.TDSKFull)
 }
 
 func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
@@ -190,7 +181,7 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 	if err := rsp.UnmarshalResult(&result); err != nil {
 		log.Fatal().Err(err)
 	}
-	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.Save, &lsp.SaveOptions{IncludeText: true})
+	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.Save, &sglsp.SaveOptions{IncludeText: true})
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.WillSave, true)
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.WillSaveWaitUntil, true)
 }
@@ -244,9 +235,9 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 		log.Fatal().Err(err)
 	}
 
-	didChangeParams := lsp.DidChangeTextDocumentParams{
-		TextDocument: lsp.VersionedTextDocumentIdentifier{
-			TextDocumentIdentifier: lsp.TextDocumentIdentifier{URI: didOpenParams.TextDocument.URI},
+	didChangeParams := sglsp.DidChangeTextDocumentParams{
+		TextDocument: sglsp.VersionedTextDocumentIdentifier{
+			TextDocumentIdentifier: sglsp.TextDocumentIdentifier{URI: didOpenParams.TextDocument.URI},
 			Version:                0,
 		},
 		ContentChanges: nil,
@@ -306,8 +297,8 @@ func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 	defer teardownServer(&loc)
 	params, cleanup := didOpenTextParams()
 	defer cleanup()
-	codeLensParams := lsp.CodeLensParams{
-		TextDocument: lsp.TextDocumentIdentifier{
+	codeLensParams := sglsp.CodeLensParams{
+		TextDocument: sglsp.TextDocumentIdentifier{
 			URI: params.TextDocument.URI,
 		},
 	}
@@ -323,13 +314,41 @@ func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 		log.Fatal().Err(err)
 	}
 
-	var codeLenses []lsp.CodeLens
+	var codeLenses []sglsp.CodeLens
 	_ = rsp.UnmarshalResult(&codeLenses)
 	if environment.RunIntegTest {
 		assert.Equal(t, 2, len(codeLenses))
 	} else {
 		assert.Equal(t, 1, len(codeLenses))
 	}
+}
+
+func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) {
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
+
+	folder := lsp.WorkspaceFolder{Name: "test1", Uri: sglsp.DocumentURI("test1")}
+	_, err := loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", lsp.DidChangeWorkspaceFoldersParams{
+		Event: lsp.WorkspaceFoldersChangeEvent{
+			Added: []lsp.WorkspaceFolder{folder},
+		},
+	})
+	if err != nil {
+		log.Fatal().Err(err).Msg("error calling server")
+	}
+
+	assert.True(t, diagnostics.IsWorkspaceFolderScanned(folder))
+
+	_, err = loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", lsp.DidChangeWorkspaceFoldersParams{
+		Event: lsp.WorkspaceFoldersChangeEvent{
+			Removed: []lsp.WorkspaceFolder{folder},
+		},
+	})
+	if err != nil {
+		log.Fatal().Err(err).Msg("error calling server")
+	}
+
+	assert.False(t, diagnostics.IsWorkspaceFolderScanned(folder))
 }
 
 func Test_IntegrationWorkspaceScanGoof(t *testing.T) {
@@ -343,7 +362,7 @@ func Test_IntegrationWorkspaceScanGoof(t *testing.T) {
 
 func Test_IntegrationWorkspaceScanMaven(t *testing.T) {
 	if !environment.RunIntegTest {
-		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
+		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
 	}
 	ossFile := ""
 	codeFile := "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
@@ -355,22 +374,18 @@ func runIntegrationTest(repo string, commit string, ossFile string, codeFile str
 	diagnostics.ClearRegisteredDocuments()
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
-	logBuffer, teardownLogCapture := setupLogCapture()
-	defer teardownLogCapture()
 
 	var cloneTargetDir, err = setupCustomTestRepo(repo, commit)
 	defer os.RemoveAll(cloneTargetDir)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't setup test repo")
 	}
-
-	clientParams := slsp.InitializeParams{
-		WorkspaceFolders: []slsp.WorkspaceFolders{
-			{
-				Name: "Test Repo",
-				Uri:  lsp.DocumentURI("file:" + cloneTargetDir),
-			},
-		},
+	folder := lsp.WorkspaceFolder{
+		Name: "Test Repo",
+		Uri:  sglsp.DocumentURI("file:" + cloneTargetDir),
+	}
+	clientParams := lsp.InitializeParams{
+		WorkspaceFolders: []lsp.WorkspaceFolder{folder},
 	}
 
 	_, err = loc.Client.Call(ctx, "initialize", clientParams)
@@ -379,7 +394,7 @@ func runIntegrationTest(repo string, commit string, ossFile string, codeFile str
 	}
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
-		return strings.Contains(logBuffer.String(), "Workspace scan completed")
+		return diagnostics.IsWorkspaceFolderScanned(folder)
 	}, 120*time.Second, 100*time.Millisecond)
 
 	var testPath string
@@ -389,7 +404,7 @@ func runIntegrationTest(repo string, commit string, ossFile string, codeFile str
 
 		// serve diagnostics from the cache
 		assert.Eventually(t, func() bool {
-			return notification != nil && strings.Contains(logBuffer.String(), "Cached: Diagnostics for file://"+testPath)
+			return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
 		}, 5*time.Second, 2*time.Millisecond)
 	}
 	testPath = cloneTargetDir + string(os.PathSeparator) + codeFile
@@ -397,13 +412,13 @@ func runIntegrationTest(repo string, commit string, ossFile string, codeFile str
 
 	// serve diagnostics from the cache
 	assert.Eventually(t, func() bool {
-		return notification != nil && strings.Contains(logBuffer.String(), "Cached: Diagnostics for file://"+testPath)
+		return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
 	}, 5*time.Second, 2*time.Millisecond)
 }
 
 func Test_IntegrationFileScan(t *testing.T) {
 	if !environment.RunIntegTest {
-		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
+		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
 	}
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
@@ -428,7 +443,7 @@ func Test_IntegrationFileScan(t *testing.T) {
 	assert.Equal(t, diagnosticsParams.Diagnostics[0].Range, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Range)
 }
 
-func textDocumentDidOpen(loc *server.Local, testPath string) (lsp.DidOpenTextDocumentParams, lsp.PublishDiagnosticsParams) {
+func textDocumentDidOpen(loc *server.Local, testPath string) (sglsp.DidOpenTextDocumentParams, lsp.PublishDiagnosticsParams) {
 	diagnostics.SnykCode = &code.SnykCodeBackendService{}
 	// should receive diagnosticsParams
 
@@ -437,9 +452,9 @@ func textDocumentDidOpen(loc *server.Local, testPath string) (lsp.DidOpenTextDoc
 		log.Fatal().Err(err).Msg("Couldn't read file content of test file")
 	}
 
-	didOpenParams := lsp.DidOpenTextDocumentParams{
-		TextDocument: lsp.TextDocumentItem{
-			URI:  lsp.DocumentURI("file://" + testPath),
+	didOpenParams := sglsp.DidOpenTextDocumentParams{
+		TextDocument: sglsp.TextDocumentItem{
+			URI:  uri.PathToUri(testPath),
 			Text: string(testFileContent),
 		},
 	}
@@ -465,7 +480,7 @@ func setupCustomTestRepo(url string, targetCommit string) (string, error) {
 
 	output, err := clone.CombinedOutput()
 	if err != nil {
-		log.Fatal().Err(err)
+		log.Fatal().Err(err).Msg("clone didn't work")
 	}
 
 	log.Debug().Msg(string(output))
