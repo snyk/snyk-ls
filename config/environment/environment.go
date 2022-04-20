@@ -90,7 +90,6 @@ func Load() {
 
 	addSnykCliPathToEnv()
 
-	//log.Debug().Interface("environment", os.Environ()).Msg("Config loaded.")
 	configLoaded = true
 }
 
