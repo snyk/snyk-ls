@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -61,16 +60,6 @@ func setupServer() (server.Local, func(l *server.Local)) {
 		if err != nil {
 			log.Fatal().Err(err).Msg("Error when closing down server")
 		}
-	}
-}
-
-func setupLogCapture() (*bytes.Buffer, func()) {
-	logBuffer := new(bytes.Buffer)
-	log.Logger = log.Output(zerolog.SyncWriter(logBuffer))
-
-	return logBuffer, func() {
-		log.Logger = log.Output(os.Stderr)
-		log.Debug().Str("logBuffer", logBuffer.String()).Msg("dumping logbuffer")
 	}
 }
 
