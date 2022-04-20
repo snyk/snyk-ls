@@ -78,6 +78,7 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 	var bundleDocs = map[sglsp.DocumentURI]bool{}
 	if level == lsp.ScanLevelFile {
 		bundleDocs[uri] = true
+		registeredDocuments[uri] = true
 	} else {
 		registeredDocsMutex.Lock()
 		bundleDocs = registeredDocuments
@@ -92,8 +93,8 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 	bundleCount := len(bundles)
 	wg.Add(2 + bundleCount)
 
-	dChan := make(chan lsp.DiagnosticResult, 10)
-	clChan := make(chan lsp.CodeLensResult, 10)
+	dChan := make(chan lsp.DiagnosticResult, len(registeredDocuments))
+	clChan := make(chan lsp.CodeLensResult, len(registeredDocuments))
 
 	for _, myBundle := range bundles {
 		go myBundle.FetchDiagnosticsData(string(uri), &wg, dChan, clChan)
@@ -169,13 +170,14 @@ func createOrExtendBundles(documents map[sglsp.DocumentURI]bool, bundles *[]*cod
 	for len(toAdd) > 0 {
 		if bundleIndex == -1 || bundleFull {
 			bundle = createBundle(bundles)
-			log.Debug().Int("bundleCount", len(*bundles)).Str("bundle", bundle.BundleHash).Msg("created new bundle")
+			log.Debug().Int("bundleCount", len(*bundles)).Msg("created new bundle")
 		} else {
 			bundle = (*bundles)[bundleIndex]
-			log.Debug().Int("bundleCount", len(*bundles)).Str("bundle", bundle.BundleHash).Msg("re-using bundle ")
+			log.Debug().Int("bundleCount", len(*bundles)).Msg("re-using bundle ")
 		}
 		toAdd = bundle.AddToBundleDocuments(toAdd).Files
 		if len(toAdd) > 0 {
+			log.Debug().Int("bundleCount", len(*bundles)).Msgf("File count: %d", len(bundle.BundleDocuments))
 			bundleFull = true
 		}
 	}
