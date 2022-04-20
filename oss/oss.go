@@ -16,6 +16,7 @@ import (
 
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/lsp"
+	"github.com/snyk/snyk-ls/util"
 )
 
 var (
@@ -76,7 +77,7 @@ func ScanWorkspace(
 
 	log.Debug().Str("method", "oss.ScanWorkspace").Msg("started.")
 
-	workspacePath := strings.ReplaceAll(strings.ReplaceAll(string(workspace), "file://", ""), "file:", "")
+	workspacePath := util.PathFromUri(workspace)
 	path, err := filepath.Abs(workspacePath)
 	if err != nil {
 		log.Err(err).Str("method", "oss.ScanWorkspace").
@@ -93,7 +94,7 @@ func ScanWorkspace(
 	}
 
 	targetFile := determineTargetFile(scanResults.DisplayTargetFile)
-	var uri = sglsp.DocumentURI("file://" + workspacePath + string(os.PathSeparator) + targetFile)
+	var uri = util.PathToUri(filepath.Join(workspacePath, targetFile))
 	fileContent, err := ioutil.ReadFile(path + "/" + targetFile)
 	if err != nil {
 		log.Err(err).Str("method", "oss.ScanWorkspace").
@@ -125,9 +126,9 @@ func ScanFile(
 	log.Debug().Str("method", "oss.ScanFile").Msg("started.")
 
 	for _, supportedFile := range getDetectableFiles() {
-		path := string(uri)
+		path := util.PathFromUri(uri)
 		if strings.HasSuffix(path, supportedFile) {
-			path, err := filepath.Abs(strings.ReplaceAll(strings.ReplaceAll(path, "file://", ""), "file:", ""))
+			path, err := filepath.Abs(path)
 			if err != nil {
 				log.Err(err).Str("method", "oss.ScanFile").
 					Msg("Error while extracting file absolutePath")

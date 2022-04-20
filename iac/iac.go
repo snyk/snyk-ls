@@ -14,6 +14,7 @@ import (
 
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/lsp"
+	"github.com/snyk/snyk-ls/util"
 )
 
 var (
@@ -109,7 +110,7 @@ func ScanFile(
 }
 
 func cliCmd(uri sglsp.DocumentURI) *exec.Cmd {
-	path, err := filepath.Abs(strings.ReplaceAll(strings.ReplaceAll(string(uri), "file://", ""), "file:", ""))
+	path, err := filepath.Abs(util.PathFromUri(uri))
 	if err != nil {
 		log.Err(err).Str("method", "iac.ScanFile").
 			Msg("Error while extracting file absolutePath")

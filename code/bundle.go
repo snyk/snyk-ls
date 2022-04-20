@@ -3,7 +3,6 @@ package code
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -107,7 +106,7 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]bool) File
 			continue
 		}
 
-		path := pathFromUri(uri)
+		path := util.PathFromUri(uri)
 		fileContent, err := os.ReadFile(path)
 		if err != nil {
 			log.Error().Err(err).Msg("could not load content of file " + path)
@@ -133,11 +132,6 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]bool) File
 		return FilesNotAdded{Files: nonAddedFiles}
 	}
 	return FilesNotAdded{}
-}
-
-func pathFromUri(uri sglsp.DocumentURI) string {
-	var path = strings.TrimPrefix(string(uri), "file://")
-	return strings.TrimPrefix(path, "file:")
 }
 
 func (b *BundleImpl) getFileFrom(content []byte) File {

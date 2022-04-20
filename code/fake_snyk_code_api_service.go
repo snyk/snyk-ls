@@ -50,7 +50,7 @@ var (
 	}
 )
 
-func FakeDiagnosticUri() (sglsp.DocumentURI, string) {
+func FakeDiagnosticUri() (uri sglsp.DocumentURI, path string) {
 	temp, err := os.MkdirTemp(os.TempDir(), "fakeDiagnosticTempDir")
 	if err != nil {
 		log.Fatal().Err(err).Msg("couldn't create tempdir")
@@ -61,7 +61,7 @@ func FakeDiagnosticUri() (sglsp.DocumentURI, string) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't create fake diagnostic file for Snyk Code Fake Service")
 	}
-	uri := sglsp.DocumentURI("file://" + filePath)
+	uri = util.PathToUri(filePath)
 	fakeDiagnosticUri = uri
 	return uri, temp
 }

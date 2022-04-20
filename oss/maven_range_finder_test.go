@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/util"
 )
 
 func TestMavenRangeFinder_Find(t *testing.T) {
@@ -41,6 +42,6 @@ func TestMavenRangeFinder_Find(t *testing.T) {
 		},
 	}
 
-	actualRange := findRange(issue, lsp.DocumentURI("file://"+testPath), testContent)
+	actualRange := findRange(issue, util.PathToUri(testPath), testContent)
 	assert.Equal(t, expectedRange, actualRange)
 }

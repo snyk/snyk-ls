@@ -149,7 +149,7 @@ func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing
 	assert.NotNil(t, diags)
 	assert.NotNil(t, lenses)
 	assert.Equal(t, 1, len(diags))
-	uri := sglsp.DocumentURI("file:///server/testdata/Dummy.java")
+	uri := util.PathToUri("/server/testdata/Dummy.java")
 	assert.Equal(t, 2, len(diags[uri]))
 	assert.Equal(t, 1, len(lenses))
 	assert.Equal(t, 2, len(lenses[uri]))

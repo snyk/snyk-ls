@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"sync"
@@ -36,11 +37,11 @@ func setupDocs() (string, lsp.TextDocumentItem, lsp.TextDocumentItem, []byte, []
 	}
 
 	firstDoc := lsp.TextDocumentItem{
-		URI: lsp.DocumentURI("file://" + path + string(os.PathSeparator) + "test1.java"),
+		URI: util.PathToUri(filepath.Join(path, "test1.java")),
 	}
 
 	secondDoc := lsp.TextDocumentItem{
-		URI: lsp.DocumentURI("file://" + path + string(os.PathSeparator) + "test2.java"),
+		URI: util.PathToUri(filepath.Join(path, "test2.java")),
 	}
 	return path, firstDoc, secondDoc, content1, content2
 }
@@ -87,7 +88,7 @@ func Test_AddToBundleDocuments_shouldReturnNotAddedFileIfBundleGreaterThanMaxPay
 		if err != nil {
 			log.Fatal().Err(err).Msg("Couldn't create test file " + fileName)
 		}
-		uri := lsp.DocumentURI("file://" + filePath)
+		uri := util.PathToUri(filePath)
 		registeredDocuments[uri] = true
 	}
 
@@ -99,7 +100,7 @@ func Test_AddToBundleDocuments_shouldReturnNotAddedFileIfBundleGreaterThanMaxPay
 func Test_AddToBundleDocuments_shouldNotAddUnsupportedFileType(t *testing.T) {
 	b, registeredDocuments, path, _ := setupBundleForTesting(1) // this adds one file to bundle documents
 	defer os.RemoveAll(path)
-	uri := lsp.DocumentURI("file://1")
+	uri := util.PathToUri("1")
 	registeredDocuments[uri] = true
 
 	filesNotAdded := b.AddToBundleDocuments(registeredDocuments)
@@ -150,7 +151,7 @@ func setupBundleForTesting(contentSize int) (BundleImpl, map[lsp.DocumentURI]boo
 		log.Fatal().Err(err).Msg("Couldn't create test directory")
 	}
 	filePath := dir + string(os.PathSeparator) + "bundleDoc.java"
-	bundleDoc := lsp.TextDocumentItem{URI: lsp.DocumentURI("file://" + filePath)}
+	bundleDoc := lsp.TextDocumentItem{URI: util.PathToUri(filePath)}
 	err = os.WriteFile(filePath, buf.Bytes(), 0660)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't write test file")

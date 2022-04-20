@@ -11,6 +11,7 @@ import (
 
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/lsp"
+	"github.com/snyk/snyk-ls/util"
 )
 
 func Test_determineTargetFile(t *testing.T) {
@@ -49,7 +50,7 @@ func Test_ScanFile(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	go ScanFile(sglsp.DocumentURI("file://"+path), &wg, dChan, nil)
+	go ScanFile(util.PathToUri(path), &wg, dChan, nil)
 
 	diagnosticResult := <-dChan
 
@@ -61,7 +62,7 @@ func Test_FindRange(t *testing.T) {
 	issue := mavenTestIssue()
 	content := "0\n1\n2\n  implementation 'a:test:4.17.4'"
 
-	var uri = sglsp.DocumentURI("file://build.gradle")
+	var uri = util.PathToUri("build.gradle")
 	foundRange := findRange(issue, uri, []byte(content))
 
 	assert.Equal(t, 3, foundRange.Start.Line)

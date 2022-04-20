@@ -21,8 +21,8 @@ func Test_ScanWorkspace(t *testing.T) {
 	environment.Load()
 	environment.Format = environment.FormatHtml
 
-	path, _ := filepath.Abs("file:testdata")
-	doc := lsp.DocumentURI(path)
+	path, _ := filepath.Abs("testdata")
+	doc := lsp.DocumentURI("file:" + path)
 
 	dChan := make(chan lsp2.DiagnosticResult, 1)
 	clChan := make(chan lsp2.CodeLensResult, 1)

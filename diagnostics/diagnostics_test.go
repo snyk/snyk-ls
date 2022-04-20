@@ -9,6 +9,7 @@ import (
 
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/lsp"
+	"github.com/snyk/snyk-ls/util"
 )
 
 func Test_RegisterDocument_shouldRegisterDocumentInCache(t *testing.T) {
@@ -77,7 +78,7 @@ func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	empty := sglsp.TextDocumentItem{
-		URI:        "file://test123",
+		URI:        util.PathToUri("test123"),
 		LanguageID: "java",
 		Version:    0,
 		Text:       "",
@@ -90,4 +91,19 @@ func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
 	// verify that create bundle has NOT been called on backend service
 	params := SnykCode.(*code.FakeSnykCodeApiService).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.Nil(t, params)
+}
+
+func Test_ClearWorkspaceFolderDiagnostics_shouldRemoveDiagnosticsOfAllFilesInFolder(t *testing.T) {
+	registeredDocuments = map[sglsp.DocumentURI]bool{}
+	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
+	uri, path := code.FakeDiagnosticUri()
+	defer os.RemoveAll(path)
+	RegisterDocument(sglsp.TextDocumentItem{URI: uri})
+	SnykCode = &code.FakeSnykCodeApiService{}
+	diagnostics := GetDiagnostics(uri)
+	assert.Equal(t, len(documentDiagnosticCache[uri]), len(diagnostics))
+
+	ClearWorkspaceFolderDiagnostics(lsp.WorkspaceFolder{Uri: util.PathToUri(path)})
+
+	assert.Empty(t, documentDiagnosticCache)
 }

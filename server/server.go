@@ -25,16 +25,17 @@ func Start() {
 	diagnostics.SnykCode = &code.SnykCodeBackendService{}
 
 	lspHandlers := handler.Map{
-		"initialize":                     InitializeHandler(),
-		"textDocument/didOpen":           TextDocumentDidOpenHandler(&srv),
-		"textDocument/didChange":         TextDocumentDidChangeHandler(),
-		"textDocument/didClose":          TextDocumentDidCloseHandler(),
-		"textDocument/didSave":           TextDocumentDidSaveHandler(&srv),
-		"textDocument/willSave":          TextDocumentWillSaveHandler(),
-		"textDocument/willSaveWaitUntil": TextDocumentWillSaveWaitUntilHandler(),
-		"shutdown":                       Shutdown(),
-		"exit":                           Exit(&srv),
-		"textDocument/codeLens":          TextDocumentCodeLens(),
+		"initialize":                          InitializeHandler(),
+		"textDocument/didOpen":                TextDocumentDidOpenHandler(&srv),
+		"textDocument/didChange":              TextDocumentDidChangeHandler(),
+		"textDocument/didClose":               TextDocumentDidCloseHandler(),
+		"textDocument/didSave":                TextDocumentDidSaveHandler(&srv),
+		"textDocument/willSave":               TextDocumentWillSaveHandler(),
+		"textDocument/willSaveWaitUntil":      TextDocumentWillSaveWaitUntilHandler(),
+		"shutdown":                            Shutdown(),
+		"exit":                                Exit(&srv),
+		"textDocument/codeLens":               TextDocumentCodeLens(),
+		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFolders(),
 		// "codeLens/resolve":               codeLensResolve(&server),
 	}
 
@@ -47,6 +48,20 @@ func Start() {
 
 	err := srv.Wait()
 	log.Err(err).Msg("Exiting...")
+}
+
+func WorkspaceDidChangeWorkspaceFolders() jrpc2.Handler {
+	return handler.New(func(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) (interface{}, error) {
+		log.Info().Str("method", "WorkspaceDidChangeWorkspaceFolders").Msg("RECEIVING")
+		log.Info().Str("method", "WorkspaceDidChangeWorkspaceFolders").Msg("SENDING")
+
+		for _, folder := range params.Event.Removed {
+			diagnostics.ClearWorkspaceFolderDiagnostics(folder)
+		}
+		diagnostics.WorkspaceScan(params.Event.Added)
+
+		return nil, nil
+	})
 }
 
 func Shutdown() jrpc2.Handler {
