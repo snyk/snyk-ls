@@ -51,30 +51,30 @@ func (d *Downloader) Download(r *Release) error {
 
 	var cliReader = resp.Body
 
-	tmpDir, err := os.MkdirTemp("", "")
+	tmpDirPath := filepath.Join(xdg.DataHome, "snyk-ls", "downloads")
+	err = os.MkdirAll(tmpDirPath, 0700)
 	if err != nil {
 		return err
 	}
 	defer func(path string) {
 		_ = os.RemoveAll(path)
-	}(tmpDir)
+	}(tmpDirPath)
 
-	cliTmpPath := filepath.Join(tmpDir, cliDiscovery.ExecutableName())
-	cliFile, err := os.Create(cliTmpPath)
+	cliTmpPath := filepath.Join(tmpDirPath, cliDiscovery.ExecutableName())
+	cliTmpFile, err := os.Create(cliTmpPath)
 	if err != nil {
 		return err
 	}
 	defer func(file *os.File) {
 		_ = file.Close()
-	}(cliFile)
+	}(cliTmpFile)
 
-	bytesCopied, err := io.Copy(cliFile, cliReader)
+	bytesCopied, err := io.Copy(cliTmpFile, cliReader)
 	if err != nil {
 		return err
 	}
-	log.Info().Int64("bytes_copied", bytesCopied).Msgf("copied to %s", cliFile.Name())
+	log.Info().Int64("bytes_copied", bytesCopied).Msgf("copied to %s", cliTmpFile.Name())
 
-	// download checksum
 	checksumInfo, err := cliDiscovery.ChecksumInfo(r)
 	if err != nil {
 		return err
@@ -89,25 +89,33 @@ func (d *Downloader) Download(r *Release) error {
 		return err
 	}
 
-	err = compareChecksum(h, cliFile.Name())
+	err = compareChecksum(h, cliTmpFile.Name())
 	if err != nil {
 		return err
 	}
 
 	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
-	err = os.MkdirAll(lsPath, 0750)
+	err = os.MkdirAll(lsPath, 0700)
 	if err != nil {
 		return err
 	}
 	dstCliFile := filepath.Join(lsPath, cliDiscovery.ExecutableName())
 	log.Info().Str("path", dstCliFile).Msg("copying Snyk CLI to user directory")
-	err = os.Rename(cliFile.Name(), dstCliFile)
+
+	// for Windows, we have to remove original file first before move/rename
+	if _, err := os.Stat(dstCliFile); err == nil {
+		err = os.Remove(dstCliFile)
+		if err != nil {
+			return err
+		}
+	}
+	err = os.Rename(cliTmpFile.Name(), dstCliFile)
 	if err != nil {
 		return err
 	}
 
 	log.Info().Str("path", dstCliFile).Msg("setting executable bit for Snyk CLI")
-	err = cliFile.Chmod(0755)
+	err = cliTmpFile.Chmod(0755)
 	if err != nil {
 		return err
 	}

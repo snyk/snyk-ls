@@ -25,7 +25,7 @@ func HashSumFromHexDigest(hexDigest string) (HashSum, error) {
 	return sumBytes, nil
 }
 
-func compareChecksum(verifiedHashSum HashSum, filename string) error {
+func compareChecksum(expectedSum HashSum, filename string) error {
 	h := sha256.New()
 
 	r, err := os.Open(filename)
@@ -43,9 +43,9 @@ func compareChecksum(verifiedHashSum HashSum, filename string) error {
 	}
 
 	calculatedSum := h.Sum(nil)
-	if !bytes.Equal(calculatedSum, verifiedHashSum) {
+	if !bytes.Equal(calculatedSum, expectedSum) {
 		return fmt.Errorf("checksum mismatch (expected %q, calculated %q)",
-			verifiedHashSum,
+			expectedSum,
 			hex.EncodeToString(calculatedSum))
 	}
 
