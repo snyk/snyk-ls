@@ -11,6 +11,7 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog/log"
 
+	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/snyk/cli/install/httpclient"
 )
 
@@ -41,6 +42,7 @@ func (d *Downloader) Download(r *Release) error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		error_reporting.CaptureError(err)
 		return fmt.Errorf("failed to download Snyk CLI from %q: %s", downloadURL, resp.Status)
 	}
 	defer func(Body io.ReadCloser) {
