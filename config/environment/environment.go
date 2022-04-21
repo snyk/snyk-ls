@@ -1,14 +1,16 @@
 package environment
 
 import (
+	"context"
 	"os"
-	"os/exec"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/subosito/gotenv"
+
+	"github.com/snyk/snyk-ls/internal/snyk/cli/install"
 )
 
 const (
@@ -25,7 +27,6 @@ var (
 	configLoaded = false
 	Format       = "md"
 	ConfigFile   = ""
-	cliFileName  = getSnykFileName()
 	INTEG_TESTS  = "INTEG_TESTS"
 	RunIntegTest = os.Getenv(INTEG_TESTS) != ""
 )
@@ -132,13 +133,25 @@ func addSnykCliPathToEnv() {
 		return
 	}
 
-	snykPath, err := exec.LookPath(cliFileName)
+	i := install.NewInstaller()
+	cliPath, err := i.Find()
+	if err != nil {
+		log.Info().Msg("could not find Snyk CLI in user directories and PATH.")
+	}
+
+	if cliPath == "" {
+		cliPath, err = i.Install(context.Background())
+		if err != nil {
+			log.Err(err).Msg("could not download Snyk CLI binary")
+		}
+	}
+
 	if err == nil {
-		err := os.Setenv(cliPathKey, snykPath)
+		err := os.Setenv(cliPathKey, cliPath)
 		if err != nil {
 			log.Err(err).Msg("Couldn't update environment with Snyk cli path")
 		}
-		log.Info().Interface("snyk", snykPath).Msg("Snyk CLI found.")
+		log.Info().Interface("snyk", cliPath).Msg("Snyk CLI found.")
 	}
 }
 

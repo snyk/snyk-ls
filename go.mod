@@ -12,12 +12,12 @@ require (
 	github.com/subosito/gotenv v1.2.0
 )
 
-require golang.org/x/sys v0.0.0-20211007075335-d3039528d8ac // indirect
-
 require (
+	github.com/adrg/xdg v0.4.0
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/getsentry/sentry-go v0.12.0
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
+	golang.org/x/sys v0.0.0-20211025201205-69cdffdb9359 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )

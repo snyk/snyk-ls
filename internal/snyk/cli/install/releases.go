@@ -37,19 +37,19 @@ type ReleaseAsset struct {
 }
 
 type CLIRelease struct {
-	BaseURL string
+	baseURL string
 }
 
 func NewCLIRelease() *CLIRelease {
 	return &CLIRelease{
-		BaseURL: defaultBaseURL,
+		baseURL: defaultBaseURL,
 	}
 }
 
 func (r *CLIRelease) GetLatestRelease(ctx context.Context) (*Release, error) {
 	client := httpclient.NewHTTPClient()
 
-	releaseURL := fmt.Sprintf("%s/cli/latest/release.json", r.BaseURL)
+	releaseURL := fmt.Sprintf("%s/cli/latest/release.json", r.baseURL)
 	log.Ctx(ctx).Trace().Str("url", releaseURL).Msg("requesting version for Snyk CLI")
 
 	resp, err := client.Get(releaseURL)
