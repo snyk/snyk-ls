@@ -225,10 +225,12 @@ func (s *SnykCodeBackendService) convertSarifResponse(response SarifResponse) (
 ) {
 	diags := make(map[sglsp.DocumentURI][]lsp.Diagnostic)
 	lenses := make(map[sglsp.DocumentURI][]sglsp.CodeLens)
+
 	runs := response.Sarif.Runs
 	if len(runs) == 0 {
 		return diags, lenses
 	}
+
 	for _, result := range runs[0].Results {
 		for _, loc := range result.Locations {
 			uri := sglsp.DocumentURI(loc.PhysicalLocation.ArtifactLocation.URI)
@@ -245,6 +247,7 @@ func (s *SnykCodeBackendService) convertSarifResponse(response SarifResponse) (
 					Character: loc.PhysicalLocation.Region.EndColumn,
 				},
 			}
+
 			d := lsp.Diagnostic{
 				Range:    myRange,
 				Severity: lspSeverity(result.Level),
@@ -252,6 +255,7 @@ func (s *SnykCodeBackendService) convertSarifResponse(response SarifResponse) (
 				Source:   "Snyk LSP",
 				Message:  result.Message.Text,
 			}
+
 			l := sglsp.CodeLens{
 				Range: myRange,
 				Command: sglsp.Command{
@@ -259,11 +263,13 @@ func (s *SnykCodeBackendService) convertSarifResponse(response SarifResponse) (
 					Command:   "snyk.showRule",
 					Arguments: []interface{}{result.RuleID}},
 			}
+
 			diagSlice = append(diagSlice, d)
 			lensSlice = append(lensSlice, l)
 			diags[uri] = diagSlice
 			lenses[uri] = lensSlice
 		}
 	}
+
 	return diags, lenses
 }

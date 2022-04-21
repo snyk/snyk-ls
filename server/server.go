@@ -14,6 +14,7 @@ import (
 	"github.com/snyk/snyk-ls/diagnostics"
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/lsp"
+	"github.com/snyk/snyk-ls/oss"
 )
 
 var (
@@ -36,7 +37,8 @@ func Start() {
 		"exit":                                Exit(&srv),
 		"textDocument/codeLens":               TextDocumentCodeLens(),
 		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
-		"textDocument/hover":                  TextDocumentHover(&srv),
+		"textDocument/hover":                  TextDocumentHover(),
+		"textDocument/signatureHelp":          TextDocumentSignatureHelp(),
 		// "codeLens/resolve":               codeLensResolve(&server),
 	}
 
@@ -83,14 +85,27 @@ func Exit(srv **jrpc2.Server) jrpc2.Handler {
 	})
 }
 
-func TextDocumentHover(srv **jrpc2.Server) jrpc2.Handler {
+func TextDocumentSignatureHelp() jrpc2.Handler {
+	return handler.New(func(ctx context.Context, params interface{}) (interface{}, error) {
+		return sglsp.SignatureHelp{
+			Signatures: []sglsp.SignatureInformation{{
+				Label:         "STOP Hardcoding secrets in the code!!",
+				Documentation: "Please see this documentation for more information",
+			}},
+		}, nil
+	})
+}
+
+func TextDocumentHover() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.HoverParams) (lsp.HoverResult, error) {
+		log.Info().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
+		log.Info().Str("method", "TextDocumentHover").Interface("params", params).Msg("SENDING")
 		diags := diagnostics.GetDiagnostics(params.TextDocument.URI)
 
 		var hover string
 		for _, d := range diags {
 			if d.Range.Start.Line == params.Position.Line {
-				hover += d.Message
+				hover += oss.DiagnosticDetails[string(params.TextDocument.URI)+d.Code] + "\n\n\n"
 			}
 		}
 
@@ -102,6 +117,7 @@ func TextDocumentHover(srv **jrpc2.Server) jrpc2.Handler {
 		}, nil
 	})
 }
+
 func TextDocumentCodeLens() handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.CodeLensParams) (interface{}, error) {
 		log.Info().Str("method", "TextDocumentCodeLens").Interface("params", params).Msg("RECEIVING")
@@ -211,6 +227,9 @@ func InitializeHandler() handler.Func {
 				WorkspaceFoldersServerCapabilities: &lsp.WorkspaceFoldersServerCapabilities{
 					Supported:           true,
 					ChangeNotifications: "snyk-ls",
+				},
+				SignatureHelpProvider: &sglsp.SignatureHelpOptions{
+					TriggerCharacters: []string{"token"},
 				},
 				HoverProvider: true,
 			},

@@ -66,6 +66,8 @@ func getDetectableFiles() []string {
 	}
 }
 
+var DiagnosticDetails = map[string]string{}
+
 func ScanWorkspace(
 	workspace sglsp.DocumentURI,
 	wg *sync.WaitGroup,
@@ -231,7 +233,7 @@ func retrieveDiagnostics(res ossScanResult, uri sglsp.DocumentURI, fileContent [
 
 		diagnostic := lsp.Diagnostic{
 			Source:   "Snyk LSP",
-			Message:  fmt.Sprintf("%s: %s\n\n%s", issue.Id, title, description),
+			Message:  fmt.Sprintf("%s: %s", issue.Id, title),
 			Range:    findRange(issue, uri, fileContent),
 			Severity: lspSeverity(issue.Severity),
 			Code:     issue.Id,
@@ -240,6 +242,7 @@ func retrieveDiagnostics(res ossScanResult, uri sglsp.DocumentURI, fileContent [
 			//	Href: issue.References[0].Url,
 			// },
 		}
+		DiagnosticDetails[string(uri)+diagnostic.Code] = issue.Description
 		diagnostics = append(diagnostics, diagnostic)
 	}
 
