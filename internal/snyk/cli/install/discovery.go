@@ -49,3 +49,11 @@ func (d *Discovery) ChecksumURL(r *Release) (string, error) {
 	}
 	return r.checksumURL(), nil
 }
+
+// ChecksumInfo returns OS specific checksum information for Snyk CLI.
+func (d *Discovery) ChecksumInfo(r *Release) (string, error) {
+	if r == nil {
+		return "", fmt.Errorf("release cannot be nil")
+	}
+	return r.checksumInfo(), nil
+}

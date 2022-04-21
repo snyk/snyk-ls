@@ -9,3 +9,7 @@ func (r *Release) downloadURL() string {
 func (r *Release) checksumURL() string {
 	return r.Assets.LinuxARM64.ChecksumURL
 }
+
+func (r *Release) checksumInfo() string {
+	return r.Assets.LinuxARM64.ChecksumInfo
+}

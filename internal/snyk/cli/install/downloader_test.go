@@ -14,8 +14,8 @@ func TestDownloader_Download(t *testing.T) {
 	r := &Release{
 		Assets: &ReleaseAssets{
 			MacOS: &ReleaseAsset{
-				URL:         "https://static.snyk.io/cli/v1.906.0/snyk-macos",
-				ChecksumURL: "https://static.snyk.io/cli/v1.906.0/snyk-macos.sha256",
+				URL:          "https://static.snyk.io/cli/v1.906.0/snyk-macos",
+				ChecksumInfo: "89f8e03e185d1e1994ae90035d3842019b19978607a15f1fe648f725601fbb7a  snyk-macos",
 			},
 		},
 	}

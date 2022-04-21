@@ -2,10 +2,11 @@ package httpclient
 
 import (
 	"net/http"
+	"time"
 )
 
 func NewHTTPClient() *http.Client {
-	client := http.DefaultClient
-	// TODO: timeouts, proxy etc handling?
-	return client
+	return &http.Client{
+		Timeout: 10 * time.Minute,
+	}
 }

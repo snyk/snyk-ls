@@ -75,34 +75,11 @@ func (d *Downloader) Download(r *Release) error {
 	log.Info().Int64("bytes_copied", bytesCopied).Msgf("copied to %s", cliFile.Name())
 
 	// download checksum
-	checksumURL, err := cliDiscovery.ChecksumURL(r)
+	checksumInfo, err := cliDiscovery.ChecksumInfo(r)
 	if err != nil {
 		return err
 	}
-	if checksumURL == "" {
-		return fmt.Errorf("no checksum found for current OS")
-	}
-
-	log.Info().Str("checksum_url", checksumURL).Msg("downloading Snyk CLI checksum")
-	resp, err = client.Get(checksumURL)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to download checksums from %q: %s", checksumURL, resp.Status)
-	}
-	defer func(Body io.ReadCloser) {
-		_ = Body.Close()
-	}(resp.Body)
-
-	checksumBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	checksum := string(checksumBytes)
-
-	line := strings.TrimSpace(checksum)
+	line := strings.TrimSpace(checksumInfo)
 	parts := strings.Fields(line)
 	if len(parts) != 2 {
 		return fmt.Errorf("unexpected checksum line format: %q", line)
