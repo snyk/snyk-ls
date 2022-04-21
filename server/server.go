@@ -36,6 +36,7 @@ func Start() {
 		"exit":                                Exit(&srv),
 		"textDocument/codeLens":               TextDocumentCodeLens(),
 		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
+		"textDocument/hover":                  TextDocumentHover(&srv),
 		// "codeLens/resolve":               codeLensResolve(&server),
 	}
 
@@ -82,6 +83,25 @@ func Exit(srv **jrpc2.Server) jrpc2.Handler {
 	})
 }
 
+func TextDocumentHover(srv **jrpc2.Server) jrpc2.Handler {
+	return handler.New(func(ctx context.Context, params lsp.HoverParams) (lsp.HoverResult, error) {
+		diags := diagnostics.GetDiagnostics(params.TextDocument.URI)
+
+		var hover string
+		for _, d := range diags {
+			if d.Range.Start.Line == params.Position.Line {
+				hover += d.Message
+			}
+		}
+
+		return lsp.HoverResult{
+			Contents: lsp.MarkupContent{
+				Kind:  "markdown",
+				Value: hover,
+			},
+		}, nil
+	})
+}
 func TextDocumentCodeLens() handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.CodeLensParams) (interface{}, error) {
 		log.Info().Str("method", "TextDocumentCodeLens").Interface("params", params).Msg("RECEIVING")
@@ -192,6 +212,7 @@ func InitializeHandler() handler.Func {
 					Supported:           true,
 					ChangeNotifications: "snyk-ls",
 				},
+				HoverProvider: true,
 			},
 		}, nil
 	})

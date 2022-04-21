@@ -127,6 +127,20 @@ type InitializeResult struct {
 	Capabilities ServerCapabilities `json:"capabilities,omitempty"`
 }
 
+type HoverParams struct {
+	TextDocument sglsp.TextDocumentIdentifier `json:"textDocument"`
+	Position     sglsp.Position               `json:"position"`
+}
+
+type MarkupContent struct {
+	Kind  string `json:"kind"`
+	Value string `json:"value"`
+}
+
+type HoverResult struct {
+	Contents MarkupContent `json:"contents"`
+}
+
 type InitializeParams struct {
 	ProcessID int `json:"processId,omitempty"`
 
