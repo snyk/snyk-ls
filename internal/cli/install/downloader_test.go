@@ -5,10 +5,15 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog/log"
-	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/lsp"
+
+	"github.com/stretchr/testify/assert"
 )
+
+var progressCh = make(chan lsp.ProgressParams, 1000)
+var progressCancelCh = make(chan lsp.ProgressToken, 1)
 
 func TestDownloader_Download(t *testing.T) {
 	testutil.IntegTest(t)
@@ -24,9 +29,15 @@ func TestDownloader_Download(t *testing.T) {
 	// remove any existing lockfile
 	_ = os.RemoveAll(lockFileName)
 
-	err = d.Download(r)
+	progressCh := make(chan lsp.ProgressParams, 100000)
+	cancelProgressCh := make(chan lsp.ProgressToken, 1)
+
+	err = d.Download(r, progressCh, cancelProgressCh)
 
 	assert.NoError(t, err)
+	assert.NotEmpty(t, progressCh)
+	assert.True(t, len(progressCh) > 3) // has at least started, reported & finished progress
+
 	//make sure cleanup works
 	_, err = os.Stat(lockFileName)
 	if err == nil {
@@ -53,9 +64,43 @@ func Test_DoNotDownloadIfLockfileFound(t *testing.T) {
 		_ = os.RemoveAll(name)
 	}(lockFileName)
 
-	err = d.Download(r)
+	err = d.Download(r, progressCh, progressCancelCh)
 
 	assert.Error(t, err)
+}
+
+func Test_DoNotDownloadIfCancelled(t *testing.T) {
+	Mutex.Lock()
+	defer Mutex.Unlock()
+	r := getTestAsset()
+	d := &Downloader{}
+
+	lockFileName, err := d.lockFileName()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// remove any existing lockfile
+	_ = os.RemoveAll(lockFileName)
+
+	progressCh := make(chan lsp.ProgressParams, 100000)
+	cancelProgressCh := make(chan lsp.ProgressToken, 1)
+
+	// simulate cancellation when some progress received
+	go func() {
+		prog := <-progressCh
+		cancelProgressCh <- prog.Token
+	}()
+
+	err = d.Download(r, progressCh, cancelProgressCh)
+
+	assert.Error(t, err)
+
+	// make sure cancellation cleanup works
+	_, err = os.Stat(lockFileName)
+	if err == nil {
+		os.RemoveAll(lockFileName)
+		assert.Error(t, err)
+	}
 }
 
 func getTestAsset() *Release {

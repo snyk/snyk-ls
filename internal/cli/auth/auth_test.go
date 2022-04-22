@@ -41,7 +41,7 @@ func TestAuthenticate(t *testing.T) {
 	_ = environment.SetCliPath(find)
 	Authenticate()
 	assert.Eventually(t, func() bool {
-		payload := notification.Receive()
+		payload, _ := notification.Receive()
 		return payload != lsp.AuthenticationParams{}
 	}, time.Second*10, time.Millisecond*100)
 }

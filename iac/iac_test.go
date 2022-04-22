@@ -19,6 +19,7 @@ import (
 
 func Test_ScanWorkspace(t *testing.T) {
 	testutil.IntegTest(t)
+	testutil.CreateDummyProgressListener(t)
 	environment.Load()
 	preconditions.EnsureReadyForAnalysisAndWait()
 	environment.Format = environment.FormatHtml
