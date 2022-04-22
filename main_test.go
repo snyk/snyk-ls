@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,9 +95,11 @@ func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
 
 	assert.Eventuallyf(t, func() bool {
 		bytes, err := os.ReadFile(environment.LogPath)
+		fmt.Println("Read file " + environment.LogPath)
 		if err != nil {
-			t.Fatal("Couldn't read logfile")
+			return false
 		}
+		fmt.Println("Read bytes:" + string(bytes)) // no logger usage here
 		return len(bytes) == 70
 	}, 2*time.Second, 10*time.Millisecond, "didn't write to logfile")
 
