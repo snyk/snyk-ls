@@ -86,6 +86,7 @@ func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		environment.LogPath = ""
 	}(logPath)
 
 	configureLogging("debug")
