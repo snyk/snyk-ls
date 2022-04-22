@@ -24,6 +24,12 @@ func Test_shouldSetLogLevelViaFlag(t *testing.T) {
 
 func Test_shouldSetLogFileViaFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-f", "a.txt"}
+	defer func() {
+		err := os.Remove("a.txt")
+		if err != nil {
+			t.Fatal("couldn't delete test file")
+		}
+	}()
 	_, _ = parseFlags(args)
 	assert.Equal(t, environment.LogPath, "a.txt")
 }
