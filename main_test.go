@@ -97,6 +97,6 @@ func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
 			t.Fatal("Couldn't read logfile")
 		}
 		return len(bytes) == 70
-	}, 1*time.Second, 10*time.Millisecond, "didn't write to logfile")
+	}, 2*time.Second, 10*time.Millisecond, "didn't write to logfile")
 
 }
