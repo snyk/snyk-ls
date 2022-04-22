@@ -76,7 +76,7 @@ func Test_shouldSetReportErrorsViaFlag(t *testing.T) {
 }
 
 func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
-	logPath, err := os.MkdirTemp("", "")
+	logPath, err := os.MkdirTemp(os.TempDir(), "testlogconfig")
 	if err != nil {
 		t.Fatal(err)
 	}

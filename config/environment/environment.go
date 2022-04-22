@@ -28,7 +28,7 @@ var (
 	cliFileName  = getSnykFileName()
 	INTEG_TESTS  = "INTEG_TESTS"
 	RunIntegTest = os.Getenv(INTEG_TESTS) != ""
-	LogPath      = ""
+	LogPath      string
 )
 
 func getSnykFileName() string {
