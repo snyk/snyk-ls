@@ -14,6 +14,7 @@ import (
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/diagnostics"
 	"github.com/snyk/snyk-ls/error_reporting"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -26,7 +27,7 @@ func Start() {
 	diagnostics.SnykCode = &code.SnykCodeBackendService{}
 
 	lspHandlers := handler.Map{
-		"initialize":                          InitializeHandler(),
+		"initialize":                          InitializeHandler(&srv), // todo: type messages
 		"textDocument/didOpen":                TextDocumentDidOpenHandler(&srv),
 		"textDocument/didChange":              TextDocumentDidChangeHandler(),
 		"textDocument/didClose":               TextDocumentDidCloseHandler(),
@@ -38,6 +39,7 @@ func Start() {
 		"textDocument/codeLens":               TextDocumentCodeLens(),
 		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
 		"workspace/didChangeConfiguration":    WorkspaceDidChangeConfiguration(),
+		"window/workDoneProgress/cancel":      WindowWorkDoneProgressCancelHandler(),
 		// "codeLens/resolve":               codeLensResolve(&server),
 	}
 
@@ -70,6 +72,8 @@ func Shutdown() jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (interface{}, error) {
 		log.Info().Str("method", "Shutdown").Msg("RECEIVING")
 		log.Info().Str("method", "Shutdown").Msg("SENDING")
+
+		disposeProgressListener()
 		return nil, nil
 	})
 }
@@ -168,7 +172,15 @@ func TextDocumentDidCloseHandler() handler.Func {
 	})
 }
 
-func InitializeHandler() handler.Func {
+func WindowWorkDoneProgressCancelHandler() handler.Func {
+	return handler.New(func(ctx context.Context, params lsp.WorkdoneProgressCancelParams) (interface{}, error) {
+		log.Info().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
+		CancelProgress(params.Token)
+		return nil, nil
+	})
+}
+
+func InitializeHandler(srv **jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
 		log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
 		clientParams = params
@@ -177,6 +189,10 @@ func InitializeHandler() handler.Func {
 			go diagnostics.WorkspaceScan(clientParams.WorkspaceFolders)
 		} else {
 			go diagnostics.GetDiagnostics(clientParams.RootURI)
+		}
+
+		if clientParams.Capabilities.Window.WorkDoneProgress {
+			go createProgressListener(progress.ProgressChannel, *srv)
 		}
 
 		return lsp.InitializeResult{

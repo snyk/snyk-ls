@@ -1,12 +1,14 @@
 package install
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,9 +18,40 @@ import (
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/cli/install/httpclient"
+	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/lsp"
 )
 
 type Downloader struct{}
+
+// writeCounter counts the number of bytes written to it.
+type writeCounter struct {
+	total         int64 // total size
+	downloaded    int64 // downloaded # of bytes transferred
+	onProgress    func(downloaded int64, total int64, progressToken lsp.ProgressToken)
+	progressToken lsp.ProgressToken
+}
+
+// Write implements the io.Writer interface.
+//
+// Always completes and never returns an error.
+func (wc *writeCounter) Write(p []byte) (n int, e error) {
+	n = len(p)
+	wc.downloaded += int64(n)
+	wc.onProgress(wc.downloaded, wc.total, wc.progressToken)
+	return
+}
+
+func newWriter(size int64, onProgress func(downloaded, total int64, progressToken lsp.ProgressToken)) io.Writer {
+	return &writeCounter{total: size, onProgress: onProgress}
+}
+
+func onProgress(downloaded, total int64, progressToken lsp.ProgressToken) {
+	fmt.Printf("Downloaded %d bytes for a total of %d\n", downloaded, total)
+	percentage := float64(downloaded) / float64(total) * 100
+	progress.ReportProgress(progressToken, uint32(percentage), progress.ProgressChannel)
+}
+
 
 func (d *Downloader) lockFileName() (string, error) {
 	path, err := d.lsPath()
@@ -69,9 +102,44 @@ func (d *Downloader) Download(r *Release) error {
 	client := httpclient.NewHTTPClient()
 
 	log.Info().Str("download_url", downloadURL).Msg("downloading Snyk CLI")
-	resp, err := client.Get(downloadURL)
+	pr := progress.New("Snyk CLI download", "Downloading Snyk CLI", true)
+	progress.BeginProgress(pr, progress.ProgressChannel)
+
+	cx, _ := context.WithCancel(context.Background()) // todo: use cancel() when message gets received
+	req, _ := http.NewRequest("GET", downloadURL, nil)
+	req = req.WithContext(cx)
+	errorCh := make(chan error)
+
+	var resp *http.Response
+
+	// Determinate the file size
+	resp, err = client.Head(downloadURL)
 	if err != nil {
 		return err
+	}
+	contentLength := resp.Header.Get("content-length")
+	length, err := strconv.Atoi(contentLength)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		resp, err = http.DefaultClient.Do(req)
+		select {
+		case <-cx.Done():
+			// Already timedout
+		default:
+			errorCh <- err
+		}
+	}()
+
+	select {
+	case err := <-errorCh:
+		if err != nil {
+			return err // HTTP error
+		}
+	case <-cx.Done():
+		return cx.Err() // todo: verify if that's cancellation issued case?
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -82,7 +150,8 @@ func (d *Downloader) Download(r *Release) error {
 		_ = Body.Close()
 	}(resp.Body)
 
-	var cliReader = resp.Body
+	// pipe stream
+	cliReader := io.TeeReader(resp.Body, newWriter(int64(length), onProgress))
 
 	_ = os.MkdirAll(xdg.DataHome, 0755)
 	tmpDirPath, err := os.MkdirTemp(xdg.DataHome, "downloads")
@@ -119,7 +188,11 @@ func (d *Downloader) Download(r *Release) error {
 		return err
 	}
 
-	return d.moveToDestination(&cliDiscovery, cliTmpFile.Name())
+	err = d.moveToDestination(&cliDiscovery, cliTmpFile.Name())
+
+	progress.EndProgress(pr.Token, "Snyk CLI has been downloaded.", progress.ProgressChannel)
+
+	return err
 }
 
 func (d *Downloader) createLockFile() error {
