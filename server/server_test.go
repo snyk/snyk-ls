@@ -395,7 +395,7 @@ func runIntegrationTest(repo string, commit string, ossFile string, codeFile str
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
 		return diagnostics.IsWorkspaceFolderScanned(folder)
-	}, 120*time.Second, 100*time.Millisecond)
+	}, 600*time.Second, 100*time.Millisecond)
 
 	var testPath string
 	if ossFile != "" {
