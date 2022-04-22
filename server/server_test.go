@@ -31,9 +31,9 @@ var (
 
 func didOpenTextParams() (sglsp.DidOpenTextDocumentParams, func()) {
 	// see https://microsoft.github.io/language-server-protocol/specifications/specification-3-17/#documentSelector
-	uri, path := code.FakeDiagnosticUri()
+	diagnosticUri, path := code.FakeDiagnosticUri()
 	didOpenParams := sglsp.DidOpenTextDocumentParams{
-		TextDocument: sglsp.TextDocumentItem{URI: uri},
+		TextDocument: sglsp.TextDocumentItem{URI: diagnosticUri},
 	}
 	return didOpenParams, func() {
 		os.RemoveAll(path)
@@ -42,9 +42,9 @@ func didOpenTextParams() (sglsp.DidOpenTextDocumentParams, func()) {
 
 func didSaveTextParams() (sglsp.DidSaveTextDocumentParams, func()) {
 	// see https://microsoft.github.io/language-server-protocol/specifications/specification-3-17/#documentSelector
-	uri, path := code.FakeDiagnosticUri()
+	diagnosticUri, path := code.FakeDiagnosticUri()
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
-		TextDocument: sglsp.TextDocumentIdentifier{URI: uri},
+		TextDocument: sglsp.TextDocumentIdentifier{URI: diagnosticUri},
 	}
 	return didSaveParams, func() {
 		os.RemoveAll(path)
@@ -395,7 +395,7 @@ func runIntegrationTest(repo string, commit string, ossFile string, codeFile str
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
 		return diagnostics.IsWorkspaceFolderScanned(folder)
-	}, 120*time.Second, 100*time.Millisecond)
+	}, 600*time.Second, 100*time.Millisecond)
 
 	var testPath string
 	if ossFile != "" {
