@@ -13,7 +13,7 @@ var params = lsp.AuthenticationParams{Token: "test event"}
 
 func TestSendReceive(t *testing.T) {
 	Send(params.Token)
-	output := Receive()
+	output, _ := Receive()
 	assert.Equal(t, params, output)
 }
 

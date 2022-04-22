@@ -24,6 +24,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/cli/install"
 	"github.com/snyk/snyk-ls/internal/hover"
+	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -31,7 +33,8 @@ import (
 
 var (
 	ctx                 = context.Background()
-	notificationRequest *jrpc2.Request
+	notificationMessage *jrpc2.Request
+	callbackMessage     *jrpc2.Request
 )
 
 func didOpenTextParams() (sglsp.DidOpenTextDocumentParams, func()) {
@@ -56,16 +59,22 @@ func didSaveTextParams() (sglsp.DidSaveTextDocumentParams, func()) {
 	}
 }
 
-func setupServer() (server.Local, func(l *server.Local)) {
+func setupServer() (localServer server.Local, teardown func(l *server.Local)) {
 	loc := startServer()
-	notificationRequest = nil
+	notificationMessage = nil
+	callbackMessage = nil
+	// get rid of messages from previous tests
+	notification.CleanChannels()
+	progress.CleanChannels()
 
 	return loc, func(loc *server.Local) {
+		notification.DisposeListener()
 		err := loc.Close()
 		if err != nil {
 			log.Fatal().Err(err).Msg("Error when closing down server")
 		}
-		notificationRequest = nil
+		notificationMessage = nil
+		callbackMessage = nil
 	}
 }
 
@@ -88,12 +97,17 @@ func startServer() server.Local {
 		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
 		"textDocument/hover":                  TextDocumentHover(),
 		"workspace/didChangeConfiguration":    WorkspaceDidChangeConfiguration(),
+		"window/workDoneProgress/cancel":      WindowWorkDoneProgressCancelHandler(),
 	}
 
 	opts := &server.LocalOptions{
 		Client: &jrpc2.ClientOptions{
 			OnNotify: func(request *jrpc2.Request) {
-				notificationRequest = request
+				notificationMessage = request
+			},
+			OnCallback: func(ctx context.Context, request *jrpc2.Request) (interface{}, error) {
+				callbackMessage = request
+				return callbackMessage, nil
 			},
 		},
 		Server: &jrpc2.ServerOptions{
@@ -205,9 +219,9 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	diagnosticsParams := lsp.PublishDiagnosticsParams{}
 
 	// wait for publish
-	assert.Eventually(t, func() bool { return notificationRequest != nil }, 5*time.Second, 10*time.Millisecond)
-	if notificationRequest != nil {
-		_ = notificationRequest.UnmarshalParams(&diagnosticsParams)
+	assert.Eventually(t, func() bool { return notificationMessage != nil }, 5*time.Second, 10*time.Millisecond)
+	if notificationMessage != nil {
+		_ = notificationMessage.UnmarshalParams(&diagnosticsParams)
 		assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
 	}
 }
@@ -216,6 +230,8 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	testutil.IntegTest(t)
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
+
+	testutil.CreateDummyProgressListener(t)
 
 	// remove cli for testing
 	install.Mutex.Lock()
@@ -299,10 +315,10 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	// should receive diagnostics
 
 	// wait for publish
-	assert.Eventually(t, func() bool { return notificationRequest != nil }, 5*time.Second, 10*time.Millisecond)
+	assert.Eventually(t, func() bool { return notificationMessage != nil }, 5*time.Second, 10*time.Millisecond)
 	if !t.Failed() {
 		diags := lsp.PublishDiagnosticsParams{}
-		_ = notificationRequest.UnmarshalParams(&diags)
+		_ = notificationMessage.UnmarshalParams(&diags)
 		assert.Equal(t, didSaveParams.TextDocument.URI, diags.URI)
 	}
 }
@@ -331,6 +347,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	testutil.IntegTest(t)
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
+	testutil.CreateDummyProgressListener(t)
 
 	folder := lsp.WorkspaceFolder{Name: "test1", Uri: sglsp.DocumentURI("test1")}
 	_, err := loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", lsp.DidChangeWorkspaceFoldersParams{
@@ -410,7 +427,7 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 		textDocumentDidOpen(&loc, testPath)
 		// serve diagnostics from file scan
 		assert.Eventually(t, func() bool {
-			return notificationRequest != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
+			return notificationMessage != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
 		}, 5*time.Second, 2*time.Millisecond)
 	}
 
@@ -424,7 +441,7 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 
 	// serve diagnostics from workspace & file scan
 	assert.Eventually(t, func() bool {
-		return notificationRequest != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
+		return notificationMessage != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
 	}, 5*time.Second, 2*time.Millisecond)
 }
 
@@ -503,8 +520,8 @@ func Test_IntegrationFileScan(t *testing.T) {
 	testPath := cloneTargetDir + string(os.PathSeparator) + "app.js"
 	didOpenParams, diagnosticsParams := textDocumentDidOpen(&loc, testPath)
 
-	assert.Eventually(t, func() bool { return notificationRequest != nil }, 10*time.Second, 10*time.Millisecond)
-	_ = notificationRequest.UnmarshalParams(&diagnosticsParams)
+	assert.Eventually(t, func() bool { return notificationMessage != nil }, 10*time.Second, 10*time.Millisecond)
+	_ = notificationMessage.UnmarshalParams(&diagnosticsParams)
 
 	assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
 	assert.Len(t, diagnosticsParams.Diagnostics, 6)

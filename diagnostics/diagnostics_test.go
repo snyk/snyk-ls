@@ -12,6 +12,7 @@ import (
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/internal/cli"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -95,6 +96,7 @@ func (m *mockCli) Execute(cmd []string) (resp []byte, err error) {
 }
 
 func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
+	testutil.CreateDummyProgressListener(t)
 	_ = os.Setenv(environment.ActivateSnykCodeKey, "false")
 	_ = os.Setenv(environment.ActivateSnykIacKey, "false")
 	_ = os.Setenv(environment.ActivateSnykOssKey, "true")

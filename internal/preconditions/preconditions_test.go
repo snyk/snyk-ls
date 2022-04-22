@@ -7,9 +7,13 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
+	testutil.IntegTest(t)
+	testutil.CreateDummyProgressListener(t)
+
 	os.Clearenv()
 	if !environment.Authenticated() {
 		_ = environment.SetToken("dummy") // we don't want to authenticate

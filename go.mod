@@ -5,6 +5,7 @@ go 1.17
 require (
 	github.com/creachadair/jrpc2 v0.39.0
 	github.com/gomarkdown/markdown v0.0.0-20220419181919-412bcf14cd2e
+	github.com/google/uuid v1.3.0
 	github.com/rs/zerolog v1.26.1
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/sourcegraph/go-lsp v0.0.0-20200429204803-219e11d77f5d

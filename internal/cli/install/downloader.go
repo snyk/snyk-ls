@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,9 +17,39 @@ import (
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/cli/install/httpclient"
+	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/lsp"
 )
 
 type Downloader struct{}
+
+// writeCounter counts the number of bytes written to it.
+type writeCounter struct {
+	total         int64 // total size
+	downloaded    int64 // downloaded # of bytes transferred
+	onProgress    func(downloaded int64, total int64, progressToken lsp.ProgressToken, progressCh chan lsp.ProgressParams)
+	progressToken lsp.ProgressToken
+	progressCh    chan lsp.ProgressParams
+}
+
+// Write implements the io.Writer interface.
+//
+// Always completes and never returns an error.
+func (wc *writeCounter) Write(p []byte) (n int, e error) {
+	n = len(p)
+	wc.downloaded += int64(n)
+	wc.onProgress(wc.downloaded, wc.total, wc.progressToken, wc.progressCh)
+	return
+}
+
+func newWriter(size int64, progressToken lsp.ProgressToken, progressCh chan lsp.ProgressParams, onProgress func(downloaded, total int64, progressToken lsp.ProgressToken, progressCh chan lsp.ProgressParams)) io.Writer {
+	return &writeCounter{total: size, progressToken: progressToken, progressCh: progressCh, onProgress: onProgress}
+}
+
+func onProgress(downloaded, total int64, progressToken lsp.ProgressToken, progressCh chan lsp.ProgressParams) {
+	percentage := float64(downloaded) / float64(total) * 100 // todo: don't report every byte
+	progress.ReportProgress(progressToken, uint32(percentage), progressCh)
+}
 
 func (d *Downloader) lockFileName() (string, error) {
 	path, err := d.lsPath()
@@ -28,7 +59,7 @@ func (d *Downloader) lockFileName() (string, error) {
 	return filepath.Join(path, "snyk-cli-download.lock"), nil
 }
 
-func (d *Downloader) Download(r *Release) error {
+func (d *Downloader) Download(r *Release, progressCh chan lsp.ProgressParams, cancelProgressCh chan lsp.ProgressToken) error {
 	if r == nil {
 		return fmt.Errorf("release cannot be nil")
 	}
@@ -49,10 +80,7 @@ func (d *Downloader) Download(r *Release) error {
 		return err
 	}
 	defer func(name string) {
-		err := os.Remove(name)
-		if err != nil {
-			log.Error().Str("method", "Download").Str("lockfile", lockFileName).Msg("couldn't clean up lockfile")
-		}
+		cleanupLockFile(name)
 	}(lockFileName)
 
 	cliDiscovery := Discovery{}
@@ -69,10 +97,37 @@ func (d *Downloader) Download(r *Release) error {
 	client := httpclient.NewHTTPClient()
 
 	log.Info().Str("download_url", downloadURL).Msg("downloading Snyk CLI")
-	resp, err := client.Get(downloadURL)
+	prog := progress.New("Downloading Snyk CLI...", "", true)
+	progress.BeginProgress(prog, progressCh)
+	doneCh := make(chan bool)
+
+	var resp *http.Response
+
+	// Determine the binary size
+	length, err := getContentLength(client, downloadURL)
 	if err != nil {
 		return err
 	}
+
+	resp, err = client.Get(downloadURL)
+	if err != nil {
+		return err
+	}
+
+	go func(body io.ReadCloser) {
+		for {
+			select {
+			case token := <-cancelProgressCh:
+				if token == prog.Token {
+					body.Close()
+					cleanupLockFile(lockFileName)
+					log.Info().Str("method", "Download").Msg("Cancellation received. Aborting download.")
+				}
+			case <-doneCh:
+				return
+			}
+		}
+	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		error_reporting.CaptureError(err)
@@ -80,9 +135,12 @@ func (d *Downloader) Download(r *Release) error {
 	}
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
+		doneCh <- true
+		log.Info().Str("method", "Download").Msg("finished downloading Snyk CLI")
 	}(resp.Body)
 
-	var cliReader = resp.Body
+	// pipe stream
+	cliReader := io.TeeReader(resp.Body, newWriter(int64(length), prog.Token, progressCh, onProgress))
 
 	_ = os.MkdirAll(xdg.DataHome, 0755)
 	tmpDirPath, err := os.MkdirTemp(xdg.DataHome, "downloads")
@@ -119,7 +177,31 @@ func (d *Downloader) Download(r *Release) error {
 		return err
 	}
 
-	return d.moveToDestination(&cliDiscovery, cliTmpFile.Name())
+	err = d.moveToDestination(&cliDiscovery, cliTmpFile.Name())
+
+	progress.EndProgress(prog.Token, "Snyk CLI has been downloaded.", progressCh)
+
+	return err
+}
+
+func cleanupLockFile(lockFileName string) {
+	err := os.Remove(lockFileName)
+	if err != nil {
+		log.Error().Str("method", "Download").Str("lockfile", lockFileName).Msg("couldn't clean up lockfile")
+	}
+}
+
+func getContentLength(client *http.Client, downloadURL string) (int, error) {
+	resp, err := client.Head(downloadURL)
+	if err != nil {
+		return 0, err
+	}
+	contentLength := resp.Header.Get("content-length")
+	length, err := strconv.Atoi(contentLength)
+	if err != nil {
+		return 0, err
+	}
+	return length, nil
 }
 
 func (d *Downloader) createLockFile() error {

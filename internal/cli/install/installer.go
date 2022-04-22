@@ -3,6 +3,8 @@ package install
 import (
 	"context"
 	"sync"
+
+	"github.com/snyk/snyk-ls/internal/progress"
 )
 
 var Mutex = &sync.Mutex{}
@@ -39,7 +41,7 @@ func (i *Install) Install(ctx context.Context) (string, error) {
 	}
 
 	d := &Downloader{}
-	err = d.Download(latestRelease)
+	err = d.Download(latestRelease, progress.ProgressChannel, progress.CancelProgressChannel)
 	if err != nil {
 		return "", err
 	}
