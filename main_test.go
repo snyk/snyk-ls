@@ -2,10 +2,13 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config"
@@ -16,6 +19,12 @@ func Test_shouldSetLogLevelViaFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-l", "debug"}
 	_, _ = parseFlags(args)
 	assert.Equal(t, zerolog.DebugLevel, zerolog.GlobalLevel())
+}
+
+func Test_shouldSetLogFileViaFlag(t *testing.T) {
+	args := []string{"snyk-ls", "-f", "a.txt"}
+	_, _ = parseFlags(args)
+	assert.Equal(t, environment.LogPath, "a.txt")
 }
 
 func Test_shouldSetOutputFormatViaFlag(t *testing.T) {
@@ -64,4 +73,30 @@ func Test_shouldSetReportErrorsViaFlag(t *testing.T) {
 	args = []string{"snyk-ls", "-reportErrors"}
 	_, _ = parseFlags(args)
 	assert.True(t, config.IsErrorReportingEnabled)
+}
+
+func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
+	logPath, err := os.MkdirTemp("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	environment.LogPath = filepath.Join(logPath, "a.txt")
+	defer func(name string) {
+		err := os.RemoveAll(logPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(logPath)
+
+	configureLogging("debug")
+	log.Error().Msg("test")
+
+	assert.Eventuallyf(t, func() bool {
+		bytes, err := os.ReadFile(environment.LogPath)
+		if err != nil {
+			t.Fatal("Couldn't read logfile")
+		}
+		return len(bytes) == 70
+	}, 1*time.Second, 10*time.Millisecond, "didn't write to logfile")
+
 }
