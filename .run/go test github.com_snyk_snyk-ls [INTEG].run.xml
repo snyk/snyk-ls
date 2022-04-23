@@ -1,16 +1,16 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="go test github.com/snyk/snyk-ls/server [INTEG]" type="GoTestRunConfiguration" factoryName="Go Test">
-    <module name="snyk-lsp" />
-    <working_directory value="$PROJECT_DIR$/" />
+  <configuration default="false" name="go test github.com/snyk/snyk-ls [INTEG]" type="GoTestRunConfiguration"
+                 factoryName="Go Test">
+    <module name="snyk-lsp"/>
+    <working_directory value="$PROJECT_DIR$/"/>
     <envs>
-      <env name="INTEG_TESTS" value="true" />
+      <env name="INTEG_TESTS" value="true"/>
     </envs>
-    <root_directory value="$PROJECT_DIR$" />
-    <kind value="PACKAGE" />
-    <package value="github.com/snyk/snyk-ls/server" />
-    <directory value="$PROJECT_DIR$/server" />
-    <filePath value="$PROJECT_DIR$" />
-    <framework value="gotest" />
-    <method v="2" />
+    <root_directory value="$PROJECT_DIR$"/>
+    <kind value="DIRECTORY"/>
+    <directory value="$PROJECT_DIR$"/>
+    <filePath value="$PROJECT_DIR$"/>
+    <framework value="gotest"/>
+    <method v="2"/>
   </configuration>
 </component>
