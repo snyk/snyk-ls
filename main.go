@@ -71,7 +71,7 @@ func configureLogging(level string) {
 	zerolog.TimeFieldFormat = time.RFC3339
 
 	if environment.LogPath != "" {
-		file, err := os.Create(environment.LogPath)
+		file, err := os.OpenFile(environment.LogPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 		if err != nil {
 			log.Err(err).Msg("couldn't open logfile")
 		}
