@@ -1,6 +1,6 @@
 module github.com/snyk/snyk-ls
 
-go 1.17
+go 1.18
 
 require (
 	github.com/creachadair/jrpc2 v0.37.0
