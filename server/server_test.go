@@ -324,6 +324,9 @@ func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 }
 
 func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) {
+	if !environment.RunIntegTest {
+		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
+	}
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
 

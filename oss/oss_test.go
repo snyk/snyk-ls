@@ -21,6 +21,9 @@ func Test_determineTargetFile(t *testing.T) {
 }
 
 func Test_ScanWorkspace(t *testing.T) {
+	if !environment.RunIntegTest {
+		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
+	}
 	environment.Load()
 	environment.Format = environment.FormatHtml
 
@@ -41,6 +44,9 @@ func Test_ScanWorkspace(t *testing.T) {
 }
 
 func Test_ScanFile(t *testing.T) {
+	if !environment.RunIntegTest {
+		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
+	}
 	environment.Load()
 	environment.Format = environment.FormatHtml
 

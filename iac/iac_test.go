@@ -18,6 +18,9 @@ import (
 )
 
 func Test_ScanWorkspace(t *testing.T) {
+	if !environment.RunIntegTest {
+		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
+	}
 	environment.Load()
 	environment.Format = environment.FormatHtml
 
@@ -41,6 +44,9 @@ func Test_ScanWorkspace(t *testing.T) {
 }
 
 func Test_ScanFile(t *testing.T) {
+	if !environment.RunIntegTest {
+		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
+	}
 	environment.Load()
 	environment.Format = environment.FormatHtml
 
@@ -71,6 +77,9 @@ func Test_ScanFile(t *testing.T) {
 }
 
 func Test_IacDiagnosticsRetrieval(t *testing.T) {
+	if !environment.RunIntegTest {
+		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
+	}
 	path, _ := filepath.Abs("testdata/RBAC.yaml")
 
 	cmd := exec.Command(environment.CliPath(), "iac", "test", path, "--json")
@@ -89,6 +98,9 @@ func Test_IacDiagnosticsRetrieval(t *testing.T) {
 }
 
 func Test_IacCodelensRetrieval(t *testing.T) {
+	if !environment.RunIntegTest {
+		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
+	}
 	path, _ := filepath.Abs("testdata/RBAC.yaml")
 
 	cmd := exec.Command(environment.CliPath(), "iac", "test", path, "--json")

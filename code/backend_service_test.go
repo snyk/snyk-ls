@@ -125,20 +125,6 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 // todo analysis test limit files
 // todo analysis test severities
 
-func TestSnykCodeBackendService_convert_shouldConvertCodeResults(t *testing.T) {
-	s := &SnykCodeBackendService{
-		client: http.Client{},
-	}
-	bytes, _ := os.ReadFile("testdata/analysisResponse.json")
-	var analysisResponse AnalysisResponse
-	_ = json.Unmarshal(bytes, &analysisResponse)
-	diags, lenses := s.convertLegacyResponse(analysisResponse)
-	assert.NotNil(t, diags)
-	assert.NotNil(t, lenses)
-	assert.Equal(t, 1, len(diags))
-	assert.Equal(t, 1, len(lenses))
-}
-
 func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing.T) {
 	s := &SnykCodeBackendService{
 		client: http.Client{},

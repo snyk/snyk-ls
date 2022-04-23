@@ -3,7 +3,6 @@ package code
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -169,54 +168,6 @@ func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, shardKey
 
 	requestBody, err := json.Marshal(request)
 	return requestBody, err
-}
-
-func (s *SnykCodeBackendService) convertLegacyResponse(
-	response AnalysisResponse,
-) (
-	map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens,
-) {
-	diags := make(map[sglsp.DocumentURI][]lsp.Diagnostic)
-	lenses := make(map[sglsp.DocumentURI][]sglsp.CodeLens)
-	for uri, fileSuggestions := range response.Files {
-		diagSlice := make([]lsp.Diagnostic, 0)
-		lensSlice := make([]sglsp.CodeLens, 0)
-		for index := range fileSuggestions {
-			fileSuggestion := fileSuggestions[index]
-			suggestion := response.Suggestions[index]
-			for _, filePosition := range fileSuggestion {
-				myRange := sglsp.Range{
-					Start: sglsp.Position{
-						Line:      filePosition.Rows[0] - 1,
-						Character: filePosition.Cols[0] - 1,
-					},
-					End: sglsp.Position{
-						Line:      filePosition.Rows[1] - 1,
-						Character: filePosition.Cols[1],
-					},
-				}
-				d := lsp.Diagnostic{
-					Range:    myRange,
-					Severity: lspSeverity(fmt.Sprintf("%d", suggestion.Severity)),
-					Code:     suggestion.Rule,
-					Source:   "Snyk LSP",
-					Message:  suggestion.Message,
-				}
-				l := sglsp.CodeLens{
-					Range: myRange,
-					Command: sglsp.Command{
-						Title:     "Open " + suggestion.Rule,
-						Command:   "snyk.showRule",
-						Arguments: []interface{}{suggestion.Rule}},
-				}
-				diagSlice = append(diagSlice, d)
-				lensSlice = append(lensSlice, l)
-			}
-		}
-		diags[uri] = diagSlice
-		lenses[uri] = lensSlice
-	}
-	return diags, lenses
 }
 
 func (s *SnykCodeBackendService) convertSarifResponse(response SarifResponse) (
