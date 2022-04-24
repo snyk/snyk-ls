@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/code"
+	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -73,6 +74,47 @@ func Test_GetDiagnostics_shouldAddCodeLenses(t *testing.T) {
 	lenses, _ := GetCodeLenses(diagnosticUri)
 	assert.Equal(t, 1, len(lenses))
 }
+
+func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
+	// disable snyk code
+	_ = os.Setenv(environment.ActivateSnykCodeKey, "false")
+	defer os.Clearenv()
+	registeredDocuments = map[sglsp.DocumentURI]bool{}
+	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
+	diagnosticUri, path := code.FakeDiagnosticUri()
+	defer os.RemoveAll(path)
+	RegisterDocument(sglsp.TextDocumentItem{URI: diagnosticUri})
+	SnykCode = &code.FakeSnykCodeApiService{}
+
+	diagnostics := GetDiagnostics(diagnosticUri)
+
+	assert.Equal(t, len(documentDiagnosticCache[diagnosticUri]), len(diagnostics))
+	params := SnykCode.(*code.FakeSnykCodeApiService).GetCallParams(0, code.CreateBundleWithSourceOperation)
+	assert.Nil(t, params)
+}
+
+func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
+	// disable snyk code
+	_ = os.Setenv(environment.ActivateSnykCodeKey, "true")
+	defer os.Clearenv()
+	registeredDocuments = map[sglsp.DocumentURI]bool{}
+	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
+	diagnosticUri, path := code.FakeDiagnosticUri()
+	defer os.RemoveAll(path)
+	RegisterDocument(sglsp.TextDocumentItem{URI: diagnosticUri})
+	SnykCode = &code.FakeSnykCodeApiService{}
+
+	diagnostics := GetDiagnostics(diagnosticUri)
+
+	assert.Equal(t, len(documentDiagnosticCache[diagnosticUri]), len(diagnostics))
+	params := SnykCode.(*code.FakeSnykCodeApiService).GetCallParams(0, code.CreateBundleWithSourceOperation)
+	assert.NotNil(t, params)
+}
+
+func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T)       { t.Fatal("not implemented") }
+func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) { t.Fatal("not implemented") }
+func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T)       { t.Fatal("not implemented") }
+func Test_GetDiagnostics_shouldNotIacIfNotEnabled(t *testing.T)    { t.Fatal("not implemented") }
 
 func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
 	registeredDocuments = map[sglsp.DocumentURI]bool{}

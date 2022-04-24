@@ -7,6 +7,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/code"
+	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/iac"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -119,27 +120,39 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 		registeredDocsMutex.Unlock()
 	}
 
-	// we need a pointer to the array of bundle pointers to be able to grow it
-
-	createOrExtendBundles(bundleDocs, &bundles)
-
+	enabledProducts := environment.EnabledProductsFromEnv()
 	wg := sync.WaitGroup{}
-	bundleCount := len(bundles)
-	wg.Add(2 + bundleCount)
-
 	dChan := make(chan lsp.DiagnosticResult, len(registeredDocuments))
 	clChan := make(chan lsp.CodeLensResult, len(registeredDocuments))
 
-	for _, myBundle := range bundles {
-		go myBundle.FetchDiagnosticsData(string(uri), &wg, dChan, clChan)
+	if enabledProducts.Code {
+		// we need a pointer to the array of bundle pointers to be able to grow it
+		createOrExtendBundles(bundleDocs, &bundles)
+		bundleCount := len(bundles)
+		wg.Add(bundleCount)
+		for _, myBundle := range bundles {
+			go myBundle.FetchDiagnosticsData(string(uri), &wg, dChan, clChan)
+		}
 	}
 
 	if level == lsp.ScanLevelWorkspace {
-		go iac.ScanWorkspace(uri, &wg, dChan, clChan)
-		go oss.ScanWorkspace(uri, &wg, dChan, clChan)
+		if enabledProducts.Iac {
+			wg.Add(1)
+			go iac.ScanWorkspace(uri, &wg, dChan, clChan)
+		}
+		if enabledProducts.OpenSource {
+			wg.Add(1)
+			go oss.ScanWorkspace(uri, &wg, dChan, clChan)
+		}
 	} else {
-		go iac.ScanFile(uri, &wg, dChan, clChan)
-		go oss.ScanFile(uri, &wg, dChan, clChan)
+		if enabledProducts.Iac {
+			wg.Add(1)
+			go iac.ScanFile(uri, &wg, dChan, clChan)
+		}
+		if enabledProducts.OpenSource {
+			wg.Add(1)
+			go oss.ScanFile(uri, &wg, dChan, clChan)
+		}
 	}
 
 	wg.Wait()

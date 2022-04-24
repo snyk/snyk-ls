@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-const integTestEnvVar = "INTEG_TEST"
+const integTestEnvVar = "INTEG_TESTS"
 
 func IntegTest(t *testing.T) {
 	t.Helper()
