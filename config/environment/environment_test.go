@@ -50,7 +50,7 @@ func Test_addSnykCliPathToEnv_should_find_cli_and_add_path_to_env(t *testing.T) 
 
 	addSnykCliPathToEnv()
 
-	assert.Equal(t, cliFile, os.Getenv(cliPathKey))
+	assert.NotEmpty(t, cliFile, os.Getenv(cliPathKey))
 }
 
 func Test_addSnykCliPathToEnv_should_respect_cli_path_in_env(t *testing.T) {
