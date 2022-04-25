@@ -18,17 +18,16 @@ const (
 	snykTokenKey       = "SNYK_TOKEN"
 	deeproxyApiUrlKey  = "DEEPROXY_API_URL"
 	snykCodeTimeoutKey = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
-
-	FormatHtml = "html"
-	FormatMd   = "md"
+	IntegTests         = "INTEG_TESTS"
+	FormatHtml         = "html"
+	FormatMd           = "md"
 )
 
 var (
 	configLoaded = false
 	Format       = "md"
 	ConfigFile   = ""
-	INTEG_TESTS  = "INTEG_TESTS"
-	RunIntegTest = os.Getenv(INTEG_TESTS) != ""
+	RunIntegTest = os.Getenv(IntegTests) != ""
 	LogPath      string
 )
 
@@ -50,7 +49,7 @@ func getSnykFileName() string {
 	}
 }
 
-func SnykeCodeAnalysisTimeout() time.Duration {
+func SnykCodeAnalysisTimeout() time.Duration {
 	var snykCodeTimeout time.Duration
 	var err error
 	env := os.Getenv(snykCodeTimeoutKey)

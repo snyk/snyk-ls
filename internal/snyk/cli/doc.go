@@ -1,2 +1,2 @@
-// Package cli provides implementations for downloading or locating Snyk CLI binaries and verifying checksums.
+// Package cli provides implementations for handling the Snyk CLI
 package cli

@@ -40,7 +40,7 @@ const (
 
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	if !environment.RunIntegTest {
-		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
+		t.Skip("set" + environment.IntegTests + "to run integration tests")
 	}
 
 	s := &SnykCodeBackendService{
@@ -59,7 +59,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	if !environment.RunIntegTest {
-		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
+		t.Skip("set" + environment.IntegTests + "to run integration tests")
 	}
 
 	s := &SnykCodeBackendService{
@@ -84,7 +84,7 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 
 func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 	if !environment.RunIntegTest {
-		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
+		t.Skip("set" + environment.IntegTests + "to run integration tests")
 	}
 
 	s := &SnykCodeBackendService{

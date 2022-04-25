@@ -325,7 +325,7 @@ func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 
 func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) {
 	if !environment.RunIntegTest {
-		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
+		t.Skip("set " + environment.IntegTests + " to run integration tests")
 	}
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
@@ -356,7 +356,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 
 func Test_IntegrationWorkspaceScanGoof(t *testing.T) {
 	if !environment.RunIntegTest {
-		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
+		t.Skip("set " + environment.IntegTests + " to run integration tests")
 	}
 	ossFile := "package.json"
 	codeFile := "app.js"
@@ -365,7 +365,7 @@ func Test_IntegrationWorkspaceScanGoof(t *testing.T) {
 
 func Test_IntegrationWorkspaceScanMaven(t *testing.T) {
 	if !environment.RunIntegTest {
-		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
+		t.Skip("set " + environment.IntegTests + " to run integration tests")
 	}
 	ossFile := ""
 	codeFile := "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
@@ -421,7 +421,7 @@ func runIntegrationTest(repo string, commit string, ossFile string, codeFile str
 
 func Test_IntegrationFileScan(t *testing.T) {
 	if !environment.RunIntegTest {
-		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
+		t.Skip("set " + environment.IntegTests + " to run integration tests")
 	}
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()

@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/internal/snyk/cli"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -22,7 +23,7 @@ func Test_determineTargetFile(t *testing.T) {
 
 func Test_ScanWorkspace(t *testing.T) {
 	if !environment.RunIntegTest {
-		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
+		t.Skip("set " + environment.IntegTests + " to run integration tests")
 	}
 	environment.Load()
 	environment.Format = environment.FormatHtml
@@ -34,8 +35,8 @@ func Test_ScanWorkspace(t *testing.T) {
 	dChan := make(chan lsp.DiagnosticResult)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-
-	go ScanWorkspace(doc, &wg, dChan, nil)
+	snykCli := &cli.SnykCli{}
+	go ScanWorkspace(snykCli, doc, &wg, dChan, nil)
 
 	diagnosticResult := <-dChan
 
@@ -45,7 +46,7 @@ func Test_ScanWorkspace(t *testing.T) {
 
 func Test_ScanFile(t *testing.T) {
 	if !environment.RunIntegTest {
-		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
+		t.Skip("set " + environment.IntegTests + " to run integration tests")
 	}
 	environment.Load()
 	environment.Format = environment.FormatHtml
@@ -55,8 +56,8 @@ func Test_ScanFile(t *testing.T) {
 	dChan := make(chan lsp.DiagnosticResult)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-
-	go ScanFile(uri.PathToUri(path), &wg, dChan, nil)
+	snykCli := &cli.SnykCli{}
+	go ScanFile(snykCli, uri.PathToUri(path), &wg, dChan, nil)
 
 	diagnosticResult := <-dChan
 

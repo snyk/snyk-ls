@@ -12,7 +12,10 @@ require (
 	github.com/subosito/gotenv v1.2.0
 )
 
-require golang.org/x/sys v0.0.0-20220422013727-9388b58f7150 // indirect
+require (
+	github.com/stretchr/objx v0.1.0 // indirect
+	golang.org/x/sys v0.0.0-20220422013727-9388b58f7150 // indirect
+)
 
 require (
 	github.com/adrg/xdg v0.4.0

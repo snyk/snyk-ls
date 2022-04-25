@@ -3,7 +3,6 @@ package iac
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -14,12 +13,14 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/internal/snyk/cli"
+	"github.com/snyk/snyk-ls/internal/uri"
 	lsp2 "github.com/snyk/snyk-ls/lsp"
 )
 
 func Test_ScanWorkspace(t *testing.T) {
 	if !environment.RunIntegTest {
-		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
+		t.Skip("set " + environment.IntegTests + " to run integration tests")
 	}
 	environment.Load()
 	environment.Format = environment.FormatHtml
@@ -32,7 +33,8 @@ func Test_ScanWorkspace(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go ScanWorkspace(doc, &wg, dChan, clChan)
+	snykCli := cli.SnykCli{}
+	go ScanWorkspace(snykCli, doc, &wg, dChan, clChan)
 	wg.Wait()
 
 	diagnosticResult := <-dChan
@@ -45,7 +47,7 @@ func Test_ScanWorkspace(t *testing.T) {
 
 func Test_ScanFile(t *testing.T) {
 	if !environment.RunIntegTest {
-		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
+		t.Skip("set " + environment.IntegTests + " to run integration tests")
 	}
 	environment.Load()
 	environment.Format = environment.FormatHtml
@@ -65,7 +67,8 @@ func Test_ScanFile(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go ScanFile(doc.URI, &wg, dChan, clChan)
+	snykCli := cli.SnykCli{}
+	go ScanFile(snykCli, doc.URI, &wg, dChan, clChan)
 	wg.Wait()
 
 	diagnosticResult := <-dChan
@@ -78,12 +81,13 @@ func Test_ScanFile(t *testing.T) {
 
 func Test_IacDiagnosticsRetrieval(t *testing.T) {
 	if !environment.RunIntegTest {
-		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
+		t.Skip("set " + environment.IntegTests + " to run integration tests")
 	}
 	path, _ := filepath.Abs("testdata/RBAC.yaml")
 
-	cmd := exec.Command(environment.CliPath(), "iac", "test", path, "--json")
-	res, err := scan(cmd)
+	cmd := cliCmd(uri.PathToUri(path))
+	var snykCli = cli.SnykCli{}
+	res, err := snykCli.Execute(cmd)
 	if err != nil {
 		log.Err(err).Str("method", "oss.ScanFile").Msg("Error while calling Snyk CLI")
 	}
@@ -99,12 +103,13 @@ func Test_IacDiagnosticsRetrieval(t *testing.T) {
 
 func Test_IacCodelensRetrieval(t *testing.T) {
 	if !environment.RunIntegTest {
-		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
+		t.Skip("set " + environment.IntegTests + " to run integration tests")
 	}
 	path, _ := filepath.Abs("testdata/RBAC.yaml")
 
-	cmd := exec.Command(environment.CliPath(), "iac", "test", path, "--json")
-	res, err := scan(cmd)
+	cmd := cliCmd(uri.PathToUri(path))
+	var snykCli = cli.SnykCli{}
+	res, err := snykCli.Execute(cmd)
 	if err != nil {
 		log.Err(err).Str("method", "oss.ScanFile").Msg("Error while calling Snyk CLI")
 	}

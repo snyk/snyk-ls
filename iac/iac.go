@@ -13,6 +13,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/internal/snyk/cli"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -34,7 +35,8 @@ func getDetectableFiles() []string {
 }
 
 func ScanWorkspace(
-	uri sglsp.DocumentURI,
+	Cli cli.Executor,
+	documentURI sglsp.DocumentURI,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
 	clChan chan lsp.CodeLensResult,
@@ -44,27 +46,28 @@ func ScanWorkspace(
 
 	log.Debug().Str("method", "iac.ScanWorkspace").Msg("started.")
 
-	res, err := scan(cliCmd(uri))
+	res, err := Cli.Execute(cliCmd(documentURI))
 	if err != nil {
-		log.Err(err).Str("method", "iac.ScanWorkspace").
-			Msg("Error while calling Snyk CLI")
-		reportErrorViaChan(uri, dChan, err, clChan)
-		return
+		if err.(*exec.ExitError).ExitCode() > 1 {
+			log.Err(err).Str("method", "iac.ScanWorkspace").Msg("Error while calling Snyk CLI")
+			reportErrorViaChan(documentURI, dChan, err, clChan)
+			return
+		}
 	}
 
 	var scanResults []iacScanResult
 	if err := json.Unmarshal(res, &scanResults); err != nil {
 		log.Err(err).Str("method", "iac.ScanWorkspace").
 			Msg("Error while parsing response from CLI")
-		reportErrorViaChan(uri, dChan, err, clChan)
+		reportErrorViaChan(documentURI, dChan, err, clChan)
 		return
 	}
 
 	log.Info().Str("method", "iac.ScanWorkspace").
 		Msg("got diags & lenses, now sending to chan.")
 	for _, scanResult := range scanResults {
-		uri := sglsp.DocumentURI(string(uri) + "/" + scanResult.TargetFile)
-		retrieveAnalysis(uri, scanResult, dChan, clChan, err)
+		u := sglsp.DocumentURI(string(documentURI) + "/" + scanResult.TargetFile)
+		retrieveAnalysis(u, scanResult, dChan, clChan, err)
 	}
 }
 
@@ -80,7 +83,8 @@ func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, 
 }
 
 func ScanFile(
-	uri sglsp.DocumentURI,
+	Cli cli.Executor,
+	documentURI sglsp.DocumentURI,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
 	clChan chan lsp.CodeLensResult,
@@ -91,11 +95,14 @@ func ScanFile(
 	log.Debug().Str("method", "iac.ScanFile").Msg("started.")
 
 	for _, supportedFile := range getDetectableFiles() {
-		if strings.HasSuffix(string(uri), supportedFile) {
-			res, err := scan(cliCmd(uri))
+		if strings.HasSuffix(string(documentURI), supportedFile) {
+			res, err := Cli.Execute(cliCmd(documentURI))
 			if err != nil {
-				log.Err(err).Str("method", "iac.ScanFile").
-					Msg("Error while calling Snyk CLI")
+				if err.(*exec.ExitError).ExitCode() > 1 {
+					log.Err(err).Str("method", "iac.ScanFile").Msg("Error while calling Snyk CLI")
+					reportErrorViaChan(documentURI, dChan, err, clChan)
+					return
+				}
 			}
 
 			var scanResults iacScanResult
@@ -104,38 +111,21 @@ func ScanFile(
 					Msg("Error while calling Snyk CLI")
 			}
 
-			retrieveAnalysis(uri, scanResults, dChan, clChan, err)
+			retrieveAnalysis(documentURI, scanResults, dChan, clChan, err)
 		}
 	}
 }
 
-func cliCmd(u sglsp.DocumentURI) *exec.Cmd {
+func cliCmd(u sglsp.DocumentURI) []string {
 	path, err := filepath.Abs(uri.PathFromUri(u))
 	if err != nil {
 		log.Err(err).Str("method", "iac.ScanFile").
 			Msg("Error while extracting file absolutePath")
 	}
 
-	cmd := exec.Command(environment.CliPath(), "iac", "test", path, "--json")
+	cmd := []string{environment.CliPath(), "iac", "test", path, "--json"}
 	log.Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
-
 	return cmd
-}
-
-func scan(cmd *exec.Cmd) ([]byte, error) {
-	resBytes, err := cmd.CombinedOutput()
-
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			if exitErr.ExitCode() > 1 {
-				return nil, fmt.Errorf("error running %s, %s", cmd, err)
-			}
-		} else {
-			return nil, fmt.Errorf("error while performing IAC scan: %s: ", err)
-		}
-	}
-
-	return resBytes, nil
 }
 
 func retrieveAnalysis(

@@ -9,6 +9,7 @@ import (
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/iac"
+	"github.com/snyk/snyk-ls/internal/snyk/cli"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 	"github.com/snyk/snyk-ls/oss"
@@ -19,6 +20,7 @@ var (
 	registeredDocuments     = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	SnykCode                code.SnykCodeService
+	Cli                     cli.Executor = &cli.SnykCli{}
 )
 
 func ClearDiagnosticsCache(uri sglsp.DocumentURI) {
@@ -51,13 +53,6 @@ func ClearEntireDiagnosticsCache() {
 func ClearRegisteredDocuments() {
 	registeredDocsMutex.Lock()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
-	registeredDocsMutex.Unlock()
-}
-
-func UpdateDocument(uri sglsp.DocumentURI, changes []sglsp.TextDocumentContentChangeEvent) {
-	// don't do anything but update registered to true
-	registeredDocsMutex.Lock()
-	registeredDocuments[uri] = true
 	registeredDocsMutex.Unlock()
 }
 
@@ -110,49 +105,20 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 	var codeLenses []sglsp.CodeLens
 	var bundles = make([]*code.BundleImpl, 0, 10)
 
-	var bundleDocs = map[sglsp.DocumentURI]bool{}
-	if level == lsp.ScanLevelFile {
-		bundleDocs[uri] = true
-		registeredDocuments[uri] = true
-	} else {
-		registeredDocsMutex.Lock()
-		bundleDocs = registeredDocuments
-		registeredDocsMutex.Unlock()
-	}
-
 	enabledProducts := environment.EnabledProductsFromEnv()
 	wg := sync.WaitGroup{}
-	dChan := make(chan lsp.DiagnosticResult, len(registeredDocuments))
-	clChan := make(chan lsp.CodeLensResult, len(registeredDocuments))
 
-	if enabledProducts.Code {
-		// we need a pointer to the array of bundle pointers to be able to grow it
-		createOrExtendBundles(bundleDocs, &bundles)
-		bundleCount := len(bundles)
-		wg.Add(bundleCount)
-		for _, myBundle := range bundles {
-			go myBundle.FetchDiagnosticsData(string(uri), &wg, dChan, clChan)
-		}
-	}
+	var dChan chan lsp.DiagnosticResult
+	var clChan chan lsp.CodeLensResult
 
 	if level == lsp.ScanLevelWorkspace {
-		if enabledProducts.Iac {
-			wg.Add(1)
-			go iac.ScanWorkspace(uri, &wg, dChan, clChan)
-		}
-		if enabledProducts.OpenSource {
-			wg.Add(1)
-			go oss.ScanWorkspace(uri, &wg, dChan, clChan)
-		}
+		dChan = make(chan lsp.DiagnosticResult, len(registeredDocuments))
+		clChan = make(chan lsp.CodeLensResult, len(registeredDocuments))
+		workspaceLevelFetch(uri, enabledProducts, bundles, &wg, dChan, clChan)
 	} else {
-		if enabledProducts.Iac {
-			wg.Add(1)
-			go iac.ScanFile(uri, &wg, dChan, clChan)
-		}
-		if enabledProducts.OpenSource {
-			wg.Add(1)
-			go oss.ScanFile(uri, &wg, dChan, clChan)
-		}
+		dChan = make(chan lsp.DiagnosticResult, 1)
+		clChan = make(chan lsp.CodeLensResult, 1)
+		fileLevelFetch(uri, enabledProducts, bundles, &wg, dChan, clChan)
 	}
 
 	wg.Wait()
@@ -161,6 +127,47 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 		Msg("finished waiting for goroutines.")
 
 	return processResults(dChan, diagnostics, clChan, codeLenses)
+}
+
+func workspaceLevelFetch(uri sglsp.DocumentURI, enabledProducts environment.EnabledProducts, bundles []*code.BundleImpl, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
+	if enabledProducts.Code {
+		registeredDocsMutex.Lock()
+		var bundleDocs = registeredDocuments
+		registeredDocsMutex.Unlock()
+		// we need a pointer to the array of bundle pointers to be able to grow it
+		createOrExtendBundles(bundleDocs, &bundles)
+		wg.Add(len(bundles))
+		for _, myBundle := range bundles {
+			go myBundle.FetchDiagnosticsData(string(uri), wg, dChan, clChan)
+		}
+	}
+	if enabledProducts.Iac {
+		wg.Add(1)
+		go iac.ScanWorkspace(Cli, uri, wg, dChan, clChan)
+	}
+	if enabledProducts.OpenSource {
+		wg.Add(1)
+		go oss.ScanWorkspace(Cli, uri, wg, dChan, clChan)
+	}
+}
+
+func fileLevelFetch(uri sglsp.DocumentURI, enabledProducts environment.EnabledProducts, bundles []*code.BundleImpl, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
+	if enabledProducts.Code {
+		var bundleDocs = map[sglsp.DocumentURI]bool{}
+		bundleDocs[uri] = true
+		registeredDocuments[uri] = true
+		createOrExtendBundles(bundleDocs, &bundles)
+		wg.Add(1)
+		go bundles[0].FetchDiagnosticsData(string(uri), wg, dChan, clChan)
+	}
+	if enabledProducts.Iac {
+		wg.Add(1)
+		go iac.ScanFile(Cli, uri, wg, dChan, clChan)
+	}
+	if enabledProducts.OpenSource {
+		wg.Add(1)
+		go oss.ScanFile(Cli, uri, wg, dChan, clChan)
+	}
 }
 
 func processResults(

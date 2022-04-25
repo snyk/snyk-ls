@@ -15,6 +15,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/internal/snyk/cli"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -66,12 +67,7 @@ func getDetectableFiles() []string {
 	}
 }
 
-func ScanWorkspace(
-	workspace sglsp.DocumentURI,
-	wg *sync.WaitGroup,
-	dChan chan lsp.DiagnosticResult,
-	clChan chan lsp.CodeLensResult,
-) {
+func ScanWorkspace(Cli cli.Executor, workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "oss.ScanWorkspace").Msg("done.")
 
@@ -84,16 +80,26 @@ func ScanWorkspace(
 			Msg("Error while extracting file absolutePath")
 	}
 
-	cmd := exec.Command(environment.CliPath(), "test", path, "--json")
-	scanResults, err := scan(cmd)
+	cmd := []string{environment.CliPath(), "test", path, "--json"}
+	res, err := Cli.Execute(cmd)
 	if err != nil {
-		log.Err(err).Str("method", "oss.ScanWorkspace").
-			Msgf("Error while calling Snyk CLI, err: %v", err)
+		if err.(*exec.ExitError).ExitCode() > 1 {
+			log.Err(err).Str("method", "oss.ScanWorkspace").
+				Msgf("Error while calling Snyk CLI, err: %v", err)
+			reportErrorViaChan(workspace, dChan, err)
+			return
+		}
+	}
+
+	var scanResult ossScanResult
+	err = json.Unmarshal(res, &scanResult)
+	if err != nil {
+		log.Err(err).Str("method", "scanWorkspace").Msg("couldn't unmarshal response")
 		reportErrorViaChan(workspace, dChan, err)
 		return
 	}
 
-	targetFile := determineTargetFile(scanResults.DisplayTargetFile)
+	targetFile := determineTargetFile(scanResult.DisplayTargetFile)
 	var workspaceUri = uri.PathToUri(filepath.Join(workspacePath, targetFile))
 	fileContent, err := ioutil.ReadFile(path + "/" + targetFile)
 	if err != nil {
@@ -103,7 +109,7 @@ func ScanWorkspace(
 		return
 	}
 
-	retrieveAnalysis(scanResults, workspaceUri, fileContent, dChan)
+	retrieveAnalysis(scanResult, workspaceUri, fileContent, dChan)
 }
 
 func determineTargetFile(displayTargetFile string) string {
@@ -114,12 +120,7 @@ func determineTargetFile(displayTargetFile string) string {
 	return targetFile
 }
 
-func ScanFile(
-	documentURI sglsp.DocumentURI,
-	wg *sync.WaitGroup,
-	dChan chan lsp.DiagnosticResult,
-	clChan chan lsp.CodeLensResult,
-) {
+func ScanFile(Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "oss.ScanFile").Msg("done.")
 
@@ -127,30 +128,42 @@ func ScanFile(
 
 	for _, supportedFile := range getDetectableFiles() {
 		path := uri.PathFromUri(documentURI)
-		if strings.HasSuffix(path, supportedFile) {
-			path, err := filepath.Abs(path)
-			if err != nil {
-				log.Err(err).Str("method", "oss.ScanFile").
-					Msg("Error while extracting file absolutePath")
-			}
-
-			cmd := exec.Command(environment.CliPath(), "test", "--file="+path, "--json")
-			scanResults, err := scan(cmd)
-			if err != nil {
-				log.Err(err).Str("method", "oss.ScanFile").
-					Msg("Error while calling Snyk CLI")
-				reportErrorViaChan(documentURI, dChan, err)
-			}
-
-			fileContent, err := os.ReadFile(path)
-			if err != nil {
-				log.Err(err).Str("method", "oss.ScanFile").
-					Msg("Error reading file " + path)
-				reportErrorViaChan(documentURI, dChan, err)
-			}
-
-			retrieveAnalysis(scanResults, documentURI, fileContent, dChan)
+		if !strings.HasSuffix(path, supportedFile) {
+			continue
 		}
+		path, err := filepath.Abs(path)
+		if err != nil {
+			log.Err(err).Str("method", "oss.ScanFile").
+				Msg("Error while extracting file absolutePath")
+		}
+
+		cmd := []string{environment.CliPath(), "test", "--file=" + path, "--json"}
+		res, err := Cli.Execute(cmd)
+		if err != nil {
+			if err.(*exec.ExitError).ExitCode() > 1 {
+				log.Err(err).Str("method", "oss.ScanFile").
+					Msgf("Error while calling Snyk CLI, err: %v", err)
+				reportErrorViaChan(documentURI, dChan, err)
+				return
+			}
+		}
+
+		var scanResults ossScanResult
+		err = json.Unmarshal(res, &scanResults)
+		if err != nil {
+			log.Err(err).Str("method", "scanFile").Msg("couldn't unmarshal response")
+			reportErrorViaChan(documentURI, dChan, err)
+			return
+		}
+
+		fileContent, err := os.ReadFile(path)
+		if err != nil {
+			log.Err(err).Str("method", "oss.ScanFile").
+				Msg("Error reading file " + path)
+			reportErrorViaChan(documentURI, dChan, err)
+		}
+
+		retrieveAnalysis(scanResults, documentURI, fileContent, dChan)
 	}
 }
 
@@ -165,28 +178,6 @@ func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, 
 		log.Debug().Str("method", "oss.retrieveAnalysis").Msg("not sending...")
 	}
 	return dChan
-}
-
-func scan(cmd *exec.Cmd) (ossScanResult, error) {
-	log.Info().Str("method", "oss.scan").Msgf("Command: %s", cmd)
-
-	resBytes, err := cmd.CombinedOutput()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			if exitErr.ExitCode() > 1 {
-				return ossScanResult{}, fmt.Errorf("error running %s, %s", cmd, err)
-			}
-		} else {
-			return ossScanResult{}, fmt.Errorf("error while perforing OSS scan: %s: ", err)
-		}
-	}
-
-	var res ossScanResult
-	if err := json.Unmarshal(resBytes, &res); err != nil {
-		return ossScanResult{}, err
-	}
-
-	return res, nil
 }
 
 func retrieveAnalysis(
