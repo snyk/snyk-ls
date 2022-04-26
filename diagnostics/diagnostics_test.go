@@ -152,7 +152,7 @@ func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
 	diagnostics := GetDiagnostics(documentURI)
 
 	assert.Equal(t, len(documentDiagnosticCache[documentURI]), len(diagnostics))
-	assert.Equal(t, 0, len(cli.Calls))
+	assert.Equal(t, 0, len(mockCli.Calls))
 }
 
 func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
