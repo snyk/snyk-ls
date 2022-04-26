@@ -84,9 +84,7 @@ func startServer() server.Local {
 		"textDocument/willSaveWaitUntil":      TextDocumentWillSaveWaitUntilHandler(),
 		"shutdown":                            Shutdown(),
 		"exit":                                Exit(&srv),
-		"textDocument/codeLens":               TextDocumentCodeLens(),
 		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
-		// "codeLens/resolve":               codeLensResolve(&server),
 	}
 
 	opts := &server.LocalOptions{
@@ -186,21 +184,6 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.WillSaveWaitUntil, true)
 }
 
-func Test_initialize_shouldSupportCodeLens(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
-
-	rsp, err := loc.Client.Call(ctx, "initialize", nil)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-	var result lsp.InitializeResult
-	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatal().Err(err)
-	}
-	assert.Equal(t, result.Capabilities.CodeLensProvider.ResolveProvider, true)
-}
-
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
@@ -289,37 +272,6 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 	_, err := loc.Client.Call(ctx, "textDocument/willSave", nil)
 	if err != nil {
 		log.Fatal().Err(err)
-	}
-}
-
-func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
-	params, cleanup := didOpenTextParams()
-	defer cleanup()
-	codeLensParams := sglsp.CodeLensParams{
-		TextDocument: sglsp.TextDocumentIdentifier{
-			URI: params.TextDocument.URI,
-		},
-	}
-
-	// populate caches
-	_, err := loc.Client.Call(ctx, "textDocument/didOpen", params)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-
-	rsp, err := loc.Client.Call(ctx, "textDocument/codeLens", codeLensParams)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-
-	var codeLenses []sglsp.CodeLens
-	_ = rsp.UnmarshalResult(&codeLenses)
-	if environment.RunIntegTest {
-		assert.Equal(t, 2, len(codeLenses))
-	} else {
-		assert.Equal(t, 1, len(codeLenses))
 	}
 }
 
@@ -438,7 +390,7 @@ func Test_IntegrationFileScan(t *testing.T) {
 	_ = notification.UnmarshalParams(&diagnosticsParams)
 
 	assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
-	assert.Len(t, diagnosticsParams.Diagnostics, 5)
+	assert.Len(t, diagnosticsParams.Diagnostics, 6)
 	assert.Equal(t, diagnosticsParams.Diagnostics[0].Code, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Code)
 	assert.Equal(t, diagnosticsParams.Diagnostics[0].Range, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Range)
 }

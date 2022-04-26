@@ -59,21 +59,6 @@ func Test_UpdateDocument_shouldUpdateTextOfDocument(t *testing.T) {
 	assert.Equal(t, true, registeredDocuments[diagnosticUri])
 }
 
-func Test_GetDiagnostics_shouldAddCodeLenses(t *testing.T) {
-	registeredDocuments = map[sglsp.DocumentURI]bool{}
-	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
-	diagnosticUri, path := code.FakeDiagnosticUri()
-	defer os.RemoveAll(path)
-	RegisterDocument(sglsp.TextDocumentItem{URI: diagnosticUri})
-	SnykCode = &code.FakeSnykCodeApiService{}
-
-	diagnostics := GetDiagnostics(diagnosticUri)
-
-	assert.Equal(t, len(documentDiagnosticCache[diagnosticUri]), len(diagnostics))
-	lenses, _ := GetCodeLenses(diagnosticUri)
-	assert.Equal(t, 1, len(lenses))
-}
-
 func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}

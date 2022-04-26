@@ -34,9 +34,8 @@ func Start() {
 		"textDocument/willSaveWaitUntil":      TextDocumentWillSaveWaitUntilHandler(),
 		"shutdown":                            Shutdown(),
 		"exit":                                Exit(&srv),
-		"textDocument/codeLens":               TextDocumentCodeLens(),
 		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
-		// "codeLens/resolve":               codeLensResolve(&server),
+		"textDocument/hover":                  TextDocumentHover(),
 	}
 
 	srv = jrpc2.NewServer(lspHandlers, &jrpc2.ServerOptions{
@@ -82,20 +81,6 @@ func Exit(srv **jrpc2.Server) jrpc2.Handler {
 	})
 }
 
-func TextDocumentCodeLens() handler.Func {
-	return handler.New(func(ctx context.Context, params sglsp.CodeLensParams) (interface{}, error) {
-		log.Info().Str("method", "TextDocumentCodeLens").Interface("params", params).Msg("RECEIVING")
-
-		codeLenses, err := diagnostics.GetCodeLenses(params.TextDocument.URI)
-		if err != nil {
-			log.Err(err).Str("method", "TextDocumentCodeLens")
-		}
-
-		log.Info().Str("method", "TextDocumentCodeLens").Interface("response", codeLenses).Msg("SENDING")
-		return codeLenses, err
-	})
-}
-
 func TextDocumentDidChangeHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (interface{}, error) {
 		log.Info().Str("method", "TextDocumentDidChangeHandler").Interface("params", params).Msg("RECEIVING")
@@ -137,7 +122,6 @@ func TextDocumentDidSaveHandler(srv **jrpc2.Server) handler.Func {
 		log.Info().Str("method", "TextDocumentDidSaveHandler").Interface("params", params).Msg("RECEIVING")
 		// clear cache when saving and get fresh diagnostics
 		diagnostics.ClearDiagnosticsCache(params.TextDocument.URI)
-		diagnostics.ClearLenses(params.TextDocument.URI)
 		PublishDiagnostics(ctx, params.TextDocument.URI, srv)
 		return nil, nil
 	})
@@ -165,6 +149,27 @@ func TextDocumentDidCloseHandler() handler.Func {
 	})
 }
 
+func TextDocumentHover() jrpc2.Handler {
+	return handler.New(func(ctx context.Context, params lsp.HoverParams) (lsp.HoverResult, error) {
+		log.Info().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
+		diags := diagnostics.GetDiagnostics(params.TextDocument.URI)
+
+		var hover string
+		for _, d := range diags {
+			if d.Range.Start.Line == params.Position.Line {
+				log.Info().Msgf("Issue details: %v", d.Message)
+				hover += d.Message + "\n\n\n"
+			}
+		}
+
+		return lsp.HoverResult{
+			Contents: lsp.MarkupContent{
+				Kind:  "markdown",
+				Value: hover,
+			},
+		}, nil
+	})
+}
 func InitializeHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
 		log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
@@ -187,11 +192,11 @@ func InitializeHandler() handler.Func {
 						Save:              &sglsp.SaveOptions{IncludeText: true},
 					},
 				},
-				CodeLensProvider: &sglsp.CodeLensOptions{ResolveProvider: true},
 				WorkspaceFoldersServerCapabilities: &lsp.WorkspaceFoldersServerCapabilities{
 					Supported:           true,
 					ChangeNotifications: "snyk-ls",
 				},
+				HoverProvider: true,
 			},
 		}, nil
 	})

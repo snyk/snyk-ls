@@ -32,7 +32,7 @@ func Test_ScanWorkspace(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	go ScanWorkspace(doc, &wg, dChan, nil)
+	go ScanWorkspace(doc, &wg, dChan)
 
 	diagnosticResult := <-dChan
 
@@ -50,7 +50,7 @@ func Test_ScanFile(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	go ScanFile(uri.PathToUri(path), &wg, dChan, nil)
+	go ScanFile(uri.PathToUri(path), &wg, dChan)
 
 	diagnosticResult := <-dChan
 

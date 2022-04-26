@@ -117,7 +117,6 @@ func workspaceDiagnostics(workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	var diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic
-	var codeLenses map[sglsp.DocumentURI][]sglsp.CodeLens
 
 	_, err := registerAllFilesFromWorkspace(workspace.Uri)
 	if err != nil {
@@ -126,8 +125,8 @@ func workspaceDiagnostics(workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
 			Msg("Error occurred while registering files from workspace")
 	}
 
-	diagnostics, codeLenses = fetchAllRegisteredDocumentDiagnostics(workspace.Uri, lsp.ScanLevelWorkspace)
-	addToCache(diagnostics, codeLenses)
+	diagnostics = fetchAllRegisteredDocumentDiagnostics(workspace.Uri, lsp.ScanLevelWorkspace)
+	addToCache(diagnostics)
 	setFolderScanned(workspace)
 }
 

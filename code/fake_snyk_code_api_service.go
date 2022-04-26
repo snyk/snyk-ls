@@ -32,23 +32,6 @@ var (
 		Message:  "This is a dummy error (severity error)",
 		// CodeDescription: lsp.CodeDescription{Href: "https://snyk.io"},
 	}
-	FakeCodeLens = sglsp.CodeLens{
-		Range: sglsp.Range{
-			Start: sglsp.Position{
-				Line:      0,
-				Character: 5,
-			},
-			End: sglsp.Position{
-				Line:      3,
-				Character: 80,
-			},
-		},
-		Command: sglsp.Command{
-			Title:     "Fake Lens Title",
-			Command:   "Fake Lens Command",
-			Arguments: []interface{}{"FakeArgs"},
-		},
-	}
 )
 
 func FakeDiagnosticUri() (documentURI sglsp.DocumentURI, path string) {
@@ -117,12 +100,22 @@ func (f *FakeSnykCodeApiService) CreateBundle(files map[sglsp.DocumentURI]File) 
 	return BundleHash, nil, nil
 }
 
-func (f *FakeSnykCodeApiService) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]File, removedFiles []sglsp.DocumentURI) (string, []sglsp.DocumentURI, error) {
+func (f *FakeSnykCodeApiService) ExtendBundle(
+	bundleHash string,
+	files map[sglsp.DocumentURI]File,
+	removedFiles []sglsp.DocumentURI,
+) (string, []sglsp.DocumentURI, error) {
 	params := []interface{}{bundleHash, files, removedFiles}
 	f.addCall(params, ExtendBundleWithSourceOperation)
 	return bundleHash, nil, nil
 }
-func (f *FakeSnykCodeApiService) RunAnalysis(bundleHash string, shardKey string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens, string, error) {
+
+func (f *FakeSnykCodeApiService) RunAnalysis(
+	bundleHash string,
+	shardKey string,
+	limitToFiles []sglsp.DocumentURI,
+	severity int,
+) (map[sglsp.DocumentURI][]lsp.Diagnostic, string, error) {
 	params := []interface{}{bundleHash, limitToFiles, severity}
 	f.addCall(params, RunAnalysisOperation)
 
@@ -130,10 +123,6 @@ func (f *FakeSnykCodeApiService) RunAnalysis(bundleHash string, shardKey string,
 	var diagnostics []lsp.Diagnostic
 	diagnosticMap[fakeDiagnosticUri] = append(diagnostics, FakeDiagnostic)
 
-	codeLensMap := map[sglsp.DocumentURI][]sglsp.CodeLens{}
-	var codeLenses []sglsp.CodeLens
-	codeLensMap[fakeDiagnosticUri] = append(codeLenses, FakeCodeLens)
-
 	log.Trace().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Interface("fakeDiagnostic", FakeDiagnostic).Msg("fake backend call received & answered")
-	return diagnosticMap, codeLensMap, "COMPLETE", nil
+	return diagnosticMap, "COMPLETE", nil
 }

@@ -87,16 +87,13 @@ func GetDiagnostics(uri sglsp.DocumentURI) []lsp.Diagnostic {
 		return diagnosticSlice
 	}
 
-	var diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic
-	var codeLenses map[sglsp.DocumentURI][]sglsp.CodeLens
-
-	diagnostics, codeLenses = fetchAllRegisteredDocumentDiagnostics(uri, lsp.ScanLevelFile)
-	addToCache(diagnostics, codeLenses)
+	var diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic = fetchAllRegisteredDocumentDiagnostics(uri, lsp.ScanLevelFile)
+	addToCache(diagnostics)
 
 	return documentDiagnosticCache[uri]
 }
 
-func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.ScanLevel) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens) {
+func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.ScanLevel) map[sglsp.DocumentURI][]lsp.Diagnostic {
 	log.Info().
 		Str("method", "fetchAllRegisteredDocumentDiagnostics").
 		Msg("started.")
@@ -106,7 +103,6 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 		Msg("done.")
 
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
-	var codeLenses []sglsp.CodeLens
 	var bundles = make([]*code.BundleImpl, 0, 10)
 
 	var bundleDocs = map[sglsp.DocumentURI]bool{}
@@ -128,18 +124,23 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 	wg.Add(2 + bundleCount)
 
 	dChan := make(chan lsp.DiagnosticResult, len(registeredDocuments))
-	clChan := make(chan lsp.CodeLensResult, len(registeredDocuments))
+	// hoverChan := make(chan lsp.HoverDetails, len(registeredDocuments))
 
 	for _, myBundle := range bundles {
-		go myBundle.FetchDiagnosticsData(string(uri), &wg, dChan, clChan)
+		go myBundle.FetchDiagnosticsData(
+			string(uri),
+			&wg,
+			dChan,
+			// hoverChan,
+		)
 	}
 
 	if level == lsp.ScanLevelWorkspace {
-		go iac.ScanWorkspace(uri, &wg, dChan, clChan)
-		go oss.ScanWorkspace(uri, &wg, dChan, clChan)
+		go iac.ScanWorkspace(uri, &wg, dChan)
+		go oss.ScanWorkspace(uri, &wg, dChan)
 	} else {
-		go iac.ScanFile(uri, &wg, dChan, clChan)
-		go oss.ScanFile(uri, &wg, dChan, clChan)
+		go iac.ScanFile(uri, &wg, dChan)
+		go oss.ScanFile(uri, &wg, dChan)
 	}
 
 	wg.Wait()
@@ -147,18 +148,13 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 		Str("method", "fetchAllRegisteredDocumentDiagnostics").
 		Msg("finished waiting for goroutines.")
 
-	return processResults(dChan, diagnostics, clChan, codeLenses)
+	return processResults(dChan, diagnostics)
 }
 
 func processResults(
 	dChan chan lsp.DiagnosticResult,
 	diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic,
-	clChan chan lsp.CodeLensResult,
-	codeLenses []sglsp.CodeLens,
-) (
-	map[sglsp.DocumentURI][]lsp.Diagnostic,
-	map[sglsp.DocumentURI][]sglsp.CodeLens,
-) {
+) map[sglsp.DocumentURI][]lsp.Diagnostic {
 	for {
 		select {
 		case result := <-dChan:
@@ -172,25 +168,12 @@ func processResults(
 			diagnostics[result.Uri] = append(diagnostics[result.Uri], result.Diagnostics...)
 			documentDiagnosticCache[result.Uri] = diagnostics[result.Uri]
 
-		case result := <-clChan:
-			log.Trace().
-				Str("method", "fetchAllRegisteredDocumentDiagnostics").
-				Str("uri", string(result.Uri)).
-				Msg("reading lens from chan.")
-
-			logError(result.Err, "fetchAllRegisteredDocumentDiagnostics")
-
-			diagnosticsMutex.Lock()
-			codeLenses = append(codeLenses, result.CodeLenses...)
-			codeLenseCache[result.Uri] = codeLenses
-			diagnosticsMutex.Unlock()
-
 		default: // return results once channels are empty
 			log.Debug().
 				Str("method", "fetchAllRegisteredDocumentDiagnostics").
-				Msg("done reading diags & lenses.")
+				Msg("done reading diags.")
 
-			return diagnostics, codeLenseCache
+			return diagnostics
 		}
 	}
 }
@@ -225,17 +208,13 @@ func createBundle(bundles *[]*code.BundleImpl) *code.BundleImpl {
 	return &bundle
 }
 
-func addToCache(diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic, codeLenses map[sglsp.DocumentURI][]sglsp.CodeLens) {
+func addToCache(diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic) {
 	// add all diagnostics to cache
 	diagnosticsMutex.Lock()
 	for uri := range diagnostics {
 		documentDiagnosticCache[uri] = diagnostics[uri]
 	}
 
-	// add all code lenses to cache
-	for uri := range codeLenses {
-		codeLenseCache[uri] = codeLenses[uri]
-	}
 	diagnosticsMutex.Unlock()
 }
 

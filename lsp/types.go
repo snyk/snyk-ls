@@ -12,16 +12,16 @@ const (
 
 type TextDocumentSaveReason int
 
+type HoverDetails struct {
+	Id      string
+	Kind    string
+	Message string
+}
+
 type DiagnosticResult struct {
 	Uri         sglsp.DocumentURI
 	Diagnostics []Diagnostic
 	Err         error
-}
-
-type CodeLensResult struct {
-	Uri        sglsp.DocumentURI
-	CodeLenses []sglsp.CodeLens
-	Err        error
 }
 
 type WillSaveTextDocumentParams struct {
@@ -121,6 +121,20 @@ const (
 type DiagnosticRelatedInformation struct {
 	Location sglsp.Location `json:"location"`
 	Message  string         `json:"message"`
+}
+
+type HoverParams struct {
+	TextDocument sglsp.TextDocumentIdentifier `json:"textDocument"`
+	Position     sglsp.Position               `json:"position"`
+}
+
+type MarkupContent struct {
+	Kind  string `json:"kind"`
+	Value string `json:"value"`
+}
+
+type HoverResult struct {
+	Contents MarkupContent `json:"contents"`
 }
 
 type InitializeResult struct {

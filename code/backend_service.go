@@ -117,38 +117,45 @@ func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[sglsp
 	return bundleResponse.BundleHash, bundleResponse.MissingFiles, err
 }
 
-func (s *SnykCodeBackendService) RunAnalysis(bundleHash string, shardKey string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens, string, error) {
+func (s *SnykCodeBackendService) RunAnalysis(
+	bundleHash string,
+	shardKey string,
+	limitToFiles []sglsp.DocumentURI,
+	severity int,
+) (map[sglsp.DocumentURI][]lsp.Diagnostic, string, error) {
 	log.Debug().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Msg("API: Retrieving analysis for bundle")
 	defer log.Debug().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Msg("API: Retrieving analysis done")
 
 	requestBody, err := s.analysisRequestBody(bundleHash, shardKey, limitToFiles, severity)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, "", err
 	}
 
 	responseBody, err := s.doCall("POST", "/analysis", requestBody)
 	failed := "FAILED"
 	if err != nil {
-		return nil, nil, failed, err
+		return nil, failed, err
 	}
 
 	var response SarifResponse
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, "", err
 	}
 
 	log.Debug().Str("method", "RunAnalysis").
 		Str("bundleHash", bundleHash).Float32("progress", response.Progress).Msgf("Status: %s", response.Status)
 
 	if response.Status == failed {
-		return nil, nil, "", SnykAnalysisFailedError{Msg: string(responseBody)}
+		return nil, "", SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
+
 	if response.Status != "COMPLETE" {
-		return nil, nil, "", nil
+		return nil, "", nil
 	}
-	diags, lenses := s.convertSarifResponse(response)
-	return diags, lenses, response.Status, err
+
+	diags := s.convertSarifResponse(response)
+	return diags, response.Status, err
 }
 
 func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, shardKey string, limitToFiles []sglsp.DocumentURI, severity int) ([]byte, error) {
@@ -173,14 +180,10 @@ func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, shardKey
 
 func (s *SnykCodeBackendService) convertLegacyResponse(
 	response AnalysisResponse,
-) (
-	map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens,
-) {
+) map[sglsp.DocumentURI][]lsp.Diagnostic {
 	diags := make(map[sglsp.DocumentURI][]lsp.Diagnostic)
-	lenses := make(map[sglsp.DocumentURI][]sglsp.CodeLens)
 	for uri, fileSuggestions := range response.Files {
 		diagSlice := make([]lsp.Diagnostic, 0)
-		lensSlice := make([]sglsp.CodeLens, 0)
 		for index := range fileSuggestions {
 			fileSuggestion := fileSuggestions[index]
 			suggestion := response.Suggestions[index]
@@ -202,38 +205,25 @@ func (s *SnykCodeBackendService) convertLegacyResponse(
 					Source:   "Snyk LSP",
 					Message:  suggestion.Message,
 				}
-				l := sglsp.CodeLens{
-					Range: myRange,
-					Command: sglsp.Command{
-						Title:     "Open " + suggestion.Rule,
-						Command:   "snyk.showRule",
-						Arguments: []interface{}{suggestion.Rule}},
-				}
 				diagSlice = append(diagSlice, d)
-				lensSlice = append(lensSlice, l)
 			}
 		}
 		diags[uri] = diagSlice
-		lenses[uri] = lensSlice
 	}
-	return diags, lenses
+	return diags
 }
 
-func (s *SnykCodeBackendService) convertSarifResponse(response SarifResponse) (
-	map[sglsp.DocumentURI][]lsp.Diagnostic,
-	map[sglsp.DocumentURI][]sglsp.CodeLens,
-) {
+func (s *SnykCodeBackendService) convertSarifResponse(response SarifResponse) map[sglsp.DocumentURI][]lsp.Diagnostic {
 	diags := make(map[sglsp.DocumentURI][]lsp.Diagnostic)
-	lenses := make(map[sglsp.DocumentURI][]sglsp.CodeLens)
 	runs := response.Sarif.Runs
 	if len(runs) == 0 {
-		return diags, lenses
+		return diags
 	}
+
 	for _, result := range runs[0].Results {
 		for _, loc := range result.Locations {
 			uri := sglsp.DocumentURI(loc.PhysicalLocation.ArtifactLocation.URI)
 			diagSlice := diags[uri]
-			lensSlice := lenses[uri]
 
 			myRange := sglsp.Range{
 				Start: sglsp.Position{
@@ -252,18 +242,9 @@ func (s *SnykCodeBackendService) convertSarifResponse(response SarifResponse) (
 				Source:   "Snyk LSP",
 				Message:  result.Message.Text,
 			}
-			l := sglsp.CodeLens{
-				Range: myRange,
-				Command: sglsp.Command{
-					Title:     "Open " + result.RuleID,
-					Command:   "snyk.showRule",
-					Arguments: []interface{}{result.RuleID}},
-			}
 			diagSlice = append(diagSlice, d)
-			lensSlice = append(lensSlice, l)
 			diags[uri] = diagSlice
-			lenses[uri] = lensSlice
 		}
 	}
-	return diags, lenses
+	return diags
 }

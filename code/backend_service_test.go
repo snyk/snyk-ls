@@ -107,7 +107,7 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		limitToFiles := []sglsp.DocumentURI{uri1, uri2}
-		d, _, callStatus, err := s.RunAnalysis(bundleHash, shardKey, limitToFiles, 0)
+		d, callStatus, err := s.RunAnalysis(bundleHash, shardKey, limitToFiles, 0)
 		if err != nil {
 			return false
 		}
@@ -132,11 +132,9 @@ func TestSnykCodeBackendService_convert_shouldConvertCodeResults(t *testing.T) {
 	bytes, _ := os.ReadFile("testdata/analysisResponse.json")
 	var analysisResponse AnalysisResponse
 	_ = json.Unmarshal(bytes, &analysisResponse)
-	diags, lenses := s.convertLegacyResponse(analysisResponse)
+	diags := s.convertLegacyResponse(analysisResponse)
 	assert.NotNil(t, diags)
-	assert.NotNil(t, lenses)
 	assert.Equal(t, 1, len(diags))
-	assert.Equal(t, 1, len(lenses))
 }
 
 func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing.T) {
@@ -146,12 +144,9 @@ func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing
 	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
 	var analysisResponse SarifResponse
 	_ = json.Unmarshal(bytes, &analysisResponse)
-	diags, lenses := s.convertSarifResponse(analysisResponse)
+	diags := s.convertSarifResponse(analysisResponse)
 	assert.NotNil(t, diags)
-	assert.NotNil(t, lenses)
 	assert.Equal(t, 1, len(diags))
 	u := uri.PathToUri("/server/testdata/Dummy.java")
 	assert.Equal(t, 2, len(diags[u]))
-	assert.Equal(t, 1, len(lenses))
-	assert.Equal(t, 2, len(lenses[u]))
 }

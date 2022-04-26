@@ -70,7 +70,6 @@ func ScanWorkspace(
 	workspace sglsp.DocumentURI,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
-	clChan chan lsp.CodeLensResult,
 ) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "oss.ScanWorkspace").Msg("done.")
@@ -118,7 +117,6 @@ func ScanFile(
 	documentURI sglsp.DocumentURI,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
-	clChan chan lsp.CodeLensResult,
 ) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "oss.ScanFile").Msg("done.")
@@ -218,20 +216,25 @@ type RangeFinder interface {
 	Find(issue ossIssue) sglsp.Range
 }
 
-func retrieveDiagnostics(res ossScanResult, uri sglsp.DocumentURI, fileContent []byte) ([]lsp.Diagnostic, error) {
+func retrieveDiagnostics(
+	res ossScanResult,
+	uri sglsp.DocumentURI,
+	fileContent []byte,
+) ([]lsp.Diagnostic, error) {
 	var diagnostics []lsp.Diagnostic
+
 	for _, issue := range res.Vulnerabilities {
 		title := issue.Title
-		description := issue.Description
+		// description := issue.Description
 
 		if environment.Format == environment.FormatHtml {
 			title = string(markdown.ToHTML([]byte(title), nil, nil))
-			description = string(markdown.ToHTML([]byte(description), nil, nil))
+			// description = string(markdown.ToHTML([]byte(description), nil, nil))
 		}
 
 		diagnostic := lsp.Diagnostic{
 			Source:   "Snyk LSP",
-			Message:  fmt.Sprintf("%s: %s\n\n%s", issue.Id, title, description),
+			Message:  fmt.Sprintf("%s: %s", issue.Id, title),
 			Range:    findRange(issue, uri, fileContent),
 			Severity: lspSeverity(issue.Severity),
 			Code:     issue.Id,
@@ -240,6 +243,7 @@ func retrieveDiagnostics(res ossScanResult, uri sglsp.DocumentURI, fileContent [
 			//	Href: issue.References[0].Url,
 			// },
 		}
+
 		diagnostics = append(diagnostics, diagnostic)
 	}
 

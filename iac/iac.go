@@ -37,7 +37,6 @@ func ScanWorkspace(
 	uri sglsp.DocumentURI,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
-	clChan chan lsp.CodeLensResult,
 ) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "iac.ScanWorkspace").Msg("done.")
@@ -48,7 +47,7 @@ func ScanWorkspace(
 	if err != nil {
 		log.Err(err).Str("method", "iac.ScanWorkspace").
 			Msg("Error while calling Snyk CLI")
-		reportErrorViaChan(uri, dChan, err, clChan)
+		reportErrorViaChan(uri, dChan, err)
 		return
 	}
 
@@ -56,24 +55,20 @@ func ScanWorkspace(
 	if err := json.Unmarshal(res, &scanResults); err != nil {
 		log.Err(err).Str("method", "iac.ScanWorkspace").
 			Msg("Error while parsing response from CLI")
-		reportErrorViaChan(uri, dChan, err, clChan)
+		reportErrorViaChan(uri, dChan, err)
 		return
 	}
 
 	log.Info().Str("method", "iac.ScanWorkspace").
-		Msg("got diags & lenses, now sending to chan.")
+		Msg("got diags now sending to chan.")
 	for _, scanResult := range scanResults {
 		uri := sglsp.DocumentURI(string(uri) + "/" + scanResult.TargetFile)
-		retrieveAnalysis(uri, scanResult, dChan, clChan, err)
+		retrieveAnalysis(uri, scanResult, dChan, err)
 	}
 }
 
-func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, err error, clChan chan lsp.CodeLensResult) {
+func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, err error) {
 	dChan <- lsp.DiagnosticResult{
-		Uri: uri,
-		Err: err,
-	}
-	clChan <- lsp.CodeLensResult{
 		Uri: uri,
 		Err: err,
 	}
@@ -83,7 +78,6 @@ func ScanFile(
 	uri sglsp.DocumentURI,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
-	clChan chan lsp.CodeLensResult,
 ) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "iac.ScanFile").Msg("done.")
@@ -104,7 +98,7 @@ func ScanFile(
 					Msg("Error while calling Snyk CLI")
 			}
 
-			retrieveAnalysis(uri, scanResults, dChan, clChan, err)
+			retrieveAnalysis(uri, scanResults, dChan, err)
 		}
 	}
 }
@@ -142,11 +136,9 @@ func retrieveAnalysis(
 	uri sglsp.DocumentURI,
 	scanResult iacScanResult,
 	dChan chan lsp.DiagnosticResult,
-	clChan chan lsp.CodeLensResult,
 	diagnosticsError error,
 ) {
 	diagnostics := convertDiagnostics(scanResult)
-	codeLenses := convertCodeLenses(scanResult)
 
 	if len(diagnostics) > 0 {
 		select {
@@ -159,39 +151,6 @@ func retrieveAnalysis(
 			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("no diags found & sent.")
 		}
 	}
-
-	if len(codeLenses) > 0 {
-		select {
-		case clChan <- lsp.CodeLensResult{
-			Uri:        uri,
-			CodeLenses: codeLenses,
-			Err:        diagnosticsError,
-		}:
-		default:
-			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("no lens found & sent.")
-		}
-	}
-}
-
-func convertCodeLenses(res iacScanResult) []sglsp.CodeLens {
-	var lenses []sglsp.CodeLens
-	for _, issue := range res.IacIssues {
-		lens := sglsp.CodeLens{
-			Range: sglsp.Range{
-				Start: sglsp.Position{Line: issue.LineNumber - 1, Character: 0},
-				End:   sglsp.Position{Line: issue.LineNumber - 1, Character: 80},
-			},
-			Command: sglsp.Command{
-				Title:   "Show Description of " + issue.PublicID,
-				Command: "snyk.launchBrowser",
-				Arguments: []interface{}{
-					issue.Documentation,
-				},
-			},
-		}
-		lenses = append(lenses, lens)
-	}
-	return lenses
 }
 
 func convertDiagnostics(res iacScanResult) []lsp.Diagnostic {

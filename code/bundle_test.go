@@ -172,14 +172,12 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldCreateBundleWhenHashEmpty(t *
 	b.AddToBundleDocuments(registeredDocuments)
 
 	dChan := make(chan lsp2.DiagnosticResult)
-	clChan := make(chan lsp2.CodeLensResult)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	go b.FetchDiagnosticsData("", &wg, dChan, clChan)
+	go b.FetchDiagnosticsData("", &wg, dChan)
 
 	<-dChan
-	<-clChan
 
 	assert.Equal(t, 0, len(b.missingFiles))
 
@@ -212,13 +210,11 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldExtendBundleWhenHashNotEmpty(
 
 	// execute
 	dChan := make(chan lsp2.DiagnosticResult)
-	clChan := make(chan lsp2.CodeLensResult)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go b.FetchDiagnosticsData("", &wg, dChan, clChan)
+	go b.FetchDiagnosticsData("", &wg, dChan)
 
 	<-dChan
-	<-clChan
 
 	// the bundle documents should have been updated
 	assert.Equal(t, b.BundleDocuments[secondDoc.URI].Content, string(content2))
@@ -245,13 +241,12 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldRetrieveFromBackend(t *testin
 	b.AddToBundleDocuments(registeredDocuments)
 	// execute
 	dChan := make(chan lsp2.DiagnosticResult)
-	clChan := make(chan lsp2.CodeLensResult)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go b.FetchDiagnosticsData("", &wg, dChan, clChan)
+
+	go b.FetchDiagnosticsData("", &wg, dChan)
 	result := <-dChan
 	diagnosticMap[result.Uri] = result.Diagnostics
-	<-clChan
 
 	assert.NotNil(t, diagnosticMap)
 	diagnostics := diagnosticMap[diagnosticUri]
@@ -265,30 +260,6 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldRetrieveFromBackend(t *testin
 	assert.Equal(t, 3, len(params))
 	assert.Equal(t, b.BundleHash, params[0])
 	assert.Equal(t, 0, params[2])
-}
-
-func TestCodeBundleImpl_FetchDiagnosticsData_shouldReturnCodeLenses(t *testing.T) {
-	snykCodeMock := &FakeSnykCodeApiService{}
-	b := BundleImpl{SnykCode: snykCodeMock}
-	diagnosticUri, path := FakeDiagnosticUri()
-	defer os.RemoveAll(path)
-
-	registeredDocuments := map[lsp.DocumentURI]bool{}
-	registeredDocuments[diagnosticUri] = true
-	b.AddToBundleDocuments(registeredDocuments)
-
-	// execute
-	dChan := make(chan lsp2.DiagnosticResult)
-	clChan := make(chan lsp2.CodeLensResult)
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go b.FetchDiagnosticsData("", &wg, dChan, clChan)
-	<-dChan
-
-	codeLensMap := map[lsp.DocumentURI][]lsp.CodeLens{}
-	result := <-clChan
-	codeLensMap[result.Uri] = result.CodeLenses
-	assert.NotEqual(t, 0, len(codeLensMap[diagnosticUri]))
 }
 
 func Test_getShardKey_shouldReturnRootPathHash(t *testing.T) {
