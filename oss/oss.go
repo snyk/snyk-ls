@@ -70,6 +70,7 @@ func ScanWorkspace(
 	workspace sglsp.DocumentURI,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
+	hoverChan chan lsp.Hover,
 ) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "oss.ScanWorkspace").Msg("done.")
@@ -102,7 +103,13 @@ func ScanWorkspace(
 		return
 	}
 
-	retrieveAnalysis(scanResults, workspaceUri, fileContent, dChan)
+	retrieveAnalysis(
+		scanResults,
+		workspaceUri,
+		fileContent,
+		dChan,
+		hoverChan,
+	)
 }
 
 func determineTargetFile(displayTargetFile string) string {
@@ -117,6 +124,7 @@ func ScanFile(
 	documentURI sglsp.DocumentURI,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
+	hoverChan chan lsp.Hover,
 ) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "oss.ScanFile").Msg("done.")
@@ -147,7 +155,7 @@ func ScanFile(
 				reportErrorViaChan(documentURI, dChan, err)
 			}
 
-			retrieveAnalysis(scanResults, documentURI, fileContent, dChan)
+			retrieveAnalysis(scanResults, documentURI, fileContent, dChan, hoverChan)
 		}
 	}
 }
@@ -192,13 +200,14 @@ func retrieveAnalysis(
 	uri sglsp.DocumentURI,
 	fileContent []byte,
 	dChan chan lsp.DiagnosticResult,
+	hoverChan chan lsp.Hover,
 ) {
-	diags, err := retrieveDiagnostics(scanResults, uri, fileContent)
+	diags, hoverDetails, err := retrieveDiagnostics(scanResults, uri, fileContent)
 	if err != nil {
 		log.Err(err).Str("method", "oss.retrieveAnalysis").Msg("Error while retrieving diagnositics")
 	}
 
-	if len(diags) > 0 || err != nil {
+	if len(diags) > 0 || len(hoverDetails) > 0 || err != nil {
 		log.Debug().Str("method", "oss.retrieveAnalysis").Msg("got diags, now sending to chan.")
 		select {
 		case dChan <- lsp.DiagnosticResult{
@@ -206,6 +215,12 @@ func retrieveAnalysis(
 			Diagnostics: diags,
 			Err:         err,
 		}:
+
+		case hoverChan <- lsp.Hover{
+			Uri:   uri,
+			Hover: hoverDetails,
+		}:
+			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("got hover, now sending to chan.")
 		default:
 			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("not sending...")
 		}
@@ -220,8 +235,9 @@ func retrieveDiagnostics(
 	res ossScanResult,
 	uri sglsp.DocumentURI,
 	fileContent []byte,
-) ([]lsp.Diagnostic, error) {
+) ([]lsp.Diagnostic, []lsp.HoverDetails, error) {
 	var diagnostics []lsp.Diagnostic
+	var hoverDetails []lsp.HoverDetails
 
 	for _, issue := range res.Vulnerabilities {
 		title := issue.Title
@@ -243,11 +259,16 @@ func retrieveDiagnostics(
 			//	Href: issue.References[0].Url,
 			// },
 		}
-
 		diagnostics = append(diagnostics, diagnostic)
+
+		hover := lsp.HoverDetails{
+			Range:   findRange(issue, uri, fileContent),
+			Message: issue.Description,
+		}
+		hoverDetails = append(hoverDetails, hover)
 	}
 
-	return diagnostics, nil
+	return diagnostics, hoverDetails, nil
 }
 
 func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {

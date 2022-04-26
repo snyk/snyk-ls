@@ -8,6 +8,7 @@ import (
 
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/iac"
+	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 	"github.com/snyk/snyk-ls/oss"
@@ -124,7 +125,7 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 	wg.Add(2 + bundleCount)
 
 	dChan := make(chan lsp.DiagnosticResult, len(registeredDocuments))
-	// hoverChan := make(chan lsp.HoverDetails, len(registeredDocuments))
+	hoverChan := hover.Channel()
 
 	for _, myBundle := range bundles {
 		go myBundle.FetchDiagnosticsData(
@@ -137,10 +138,10 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 
 	if level == lsp.ScanLevelWorkspace {
 		go iac.ScanWorkspace(uri, &wg, dChan)
-		go oss.ScanWorkspace(uri, &wg, dChan)
+		go oss.ScanWorkspace(uri, &wg, dChan, hoverChan)
 	} else {
 		go iac.ScanFile(uri, &wg, dChan)
-		go oss.ScanFile(uri, &wg, dChan)
+		go oss.ScanFile(uri, &wg, dChan, hoverChan)
 	}
 
 	wg.Wait()
@@ -148,11 +149,12 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 		Str("method", "fetchAllRegisteredDocumentDiagnostics").
 		Msg("finished waiting for goroutines.")
 
-	return processResults(dChan, diagnostics)
+	return processResults(dChan, hoverChan, diagnostics)
 }
 
 func processResults(
 	dChan chan lsp.DiagnosticResult,
+	hoverChan chan lsp.Hover,
 	diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic,
 ) map[sglsp.DocumentURI][]lsp.Diagnostic {
 	for {

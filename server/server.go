@@ -13,6 +13,7 @@ import (
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/diagnostics"
 	"github.com/snyk/snyk-ls/error_reporting"
+	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -152,28 +153,18 @@ func TextDocumentDidCloseHandler() handler.Func {
 func TextDocumentHover() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.HoverParams) (lsp.HoverResult, error) {
 		log.Info().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
-		diags := diagnostics.GetDiagnostics(params.TextDocument.URI)
+		diagnostics.GetDiagnostics(params.TextDocument.URI)
 
-		var hover string
-		for _, d := range diags {
-			if d.Range.Start.Line == params.Position.Line {
-				log.Info().Msgf("Issue details: %v", d.Message)
-				hover += d.Message + "\n\n\n"
-			}
-		}
-
-		return lsp.HoverResult{
-			Contents: lsp.MarkupContent{
-				Kind:  "markdown",
-				Value: hover,
-			},
-		}, nil
+		hover := hover.GetHover(params.TextDocument.URI, params.Position)
+		return hover, nil
 	})
 }
 func InitializeHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
 		log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
 		clientParams = params
+
+		go hover.CreateHoverListener()
 
 		if len(clientParams.WorkspaceFolders) > 0 {
 			go diagnostics.WorkspaceScan(clientParams.WorkspaceFolders)

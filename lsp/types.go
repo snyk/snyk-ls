@@ -13,9 +13,13 @@ const (
 type TextDocumentSaveReason int
 
 type HoverDetails struct {
-	Id      string
-	Kind    string
+	Range   sglsp.Range
 	Message string
+}
+
+type Hover struct {
+	Uri   sglsp.DocumentURI
+	Hover []HoverDetails
 }
 
 type DiagnosticResult struct {
