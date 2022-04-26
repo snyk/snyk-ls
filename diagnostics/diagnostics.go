@@ -137,10 +137,10 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 	}
 
 	if level == lsp.ScanLevelWorkspace {
-		go iac.ScanWorkspace(uri, &wg, dChan)
+		go iac.ScanWorkspace(uri, &wg, dChan, hoverChan)
 		go oss.ScanWorkspace(uri, &wg, dChan, hoverChan)
 	} else {
-		go iac.ScanFile(uri, &wg, dChan)
+		go iac.ScanFile(uri, &wg, dChan, hoverChan)
 		go oss.ScanFile(uri, &wg, dChan, hoverChan)
 	}
 

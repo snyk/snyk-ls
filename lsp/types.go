@@ -13,6 +13,7 @@ const (
 type TextDocumentSaveReason int
 
 type HoverDetails struct {
+	Id      string
 	Range   sglsp.Range
 	Message string
 }

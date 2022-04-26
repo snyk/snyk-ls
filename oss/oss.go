@@ -262,8 +262,9 @@ func retrieveDiagnostics(
 		diagnostics = append(diagnostics, diagnostic)
 
 		hover := lsp.HoverDetails{
+			Id:      issue.Id,
 			Range:   findRange(issue, uri, fileContent),
-			Message: issue.Description,
+			Message: fmt.Sprintf("\n%s", issue.Description),
 		}
 		hoverDetails = append(hoverDetails, hover)
 	}
