@@ -18,10 +18,10 @@ import (
 type Downloader struct{}
 
 func (d *Downloader) Download(r *Release) error {
+	log.Debug().Str("method", "Download").Interface("release", r).Msg("attempting download")
 	if r == nil {
 		return fmt.Errorf("release cannot be nil")
 	}
-
 	cliDiscovery := Discovery{}
 
 	// download CLI binary
