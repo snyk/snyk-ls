@@ -110,12 +110,12 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 	var clChan chan lsp.CodeLensResult
 
 	if level == lsp.ScanLevelWorkspace {
-		dChan = make(chan lsp.DiagnosticResult, len(registeredDocuments))
-		clChan = make(chan lsp.CodeLensResult, len(registeredDocuments))
+		dChan = make(chan lsp.DiagnosticResult, 3*len(registeredDocuments))
+		clChan = make(chan lsp.CodeLensResult, 3*len(registeredDocuments))
 		workspaceLevelFetch(uri, environment.CurrentEnabledProducts, bundles, &wg, dChan, clChan)
 	} else {
-		dChan = make(chan lsp.DiagnosticResult, 1)
-		clChan = make(chan lsp.CodeLensResult, 1)
+		dChan = make(chan lsp.DiagnosticResult, 3)
+		clChan = make(chan lsp.CodeLensResult, 3)
 		fileLevelFetch(uri, environment.CurrentEnabledProducts, bundles, &wg, dChan, clChan)
 	}
 

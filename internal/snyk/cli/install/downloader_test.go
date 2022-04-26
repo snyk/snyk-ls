@@ -4,10 +4,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestDownloader_Download(t *testing.T) {
-	//testutil.IntegTest(t)
+	testutil.IntegTest(t)
 
 	r := &Release{
 		Assets: &ReleaseAssets{

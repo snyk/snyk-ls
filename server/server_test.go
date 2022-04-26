@@ -364,11 +364,18 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	assert.False(t, diagnostics.IsWorkspaceFolderScanned(folder))
 }
 
-func Test_IntegrationWorkspaceScanGoof(t *testing.T) {
+func Test_IntegrationWorkspaceScanOssAndCode(t *testing.T) {
 	testutil.IntegTest(t)
 	ossFile := "package.json"
 	codeFile := "app.js"
 	runIntegrationTest("https://github.com/snyk/goof", "0336589", ossFile, codeFile, t)
+}
+
+func Test_IntegrationWorkspaceScanIacAndCode(t *testing.T) {
+	testutil.IntegTest(t)
+	iacFile := "main.tf"
+	codeFile := "app.js"
+	runIntegrationTest("https://github.com/deepcodeg/snykcon-goof.git", "eba8407", iacFile, codeFile, t)
 }
 
 func Test_IntegrationWorkspaceScanMaven(t *testing.T) {
@@ -378,7 +385,7 @@ func Test_IntegrationWorkspaceScanMaven(t *testing.T) {
 	runIntegrationTest("https://github.com/apache/maven", "18725ec1e", ossFile, codeFile, t)
 }
 
-func runIntegrationTest(repo string, commit string, ossFile string, codeFile string, t *testing.T) {
+func runIntegrationTest(repo string, commit string, file1 string, file2 string, t *testing.T) {
 	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
 	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearWorkspaceFolderScanned()
@@ -404,28 +411,38 @@ func runIntegrationTest(repo string, commit string, ossFile string, codeFile str
 	if err != nil {
 		log.Fatal().Err(err).Msg("Initialization failed")
 	}
+
+	var testPath string
+	if file1 != "" {
+		testPath = filepath.Join(cloneTargetDir, file1)
+		textDocumentDidOpen(&loc, testPath)
+		// serve diagnostics from file scan
+		assert.Eventually(t, func() bool {
+			return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
+		}, 5*time.Second, 2*time.Millisecond)
+	}
+
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
 		return diagnostics.IsWorkspaceFolderScanned(folder)
 	}, 600*time.Second, 100*time.Millisecond)
 
-	var testPath string
-	if ossFile != "" {
-		testPath = filepath.Join(cloneTargetDir, ossFile)
-		textDocumentDidOpen(&loc, testPath)
+	testPath = filepath.Join(cloneTargetDir, file2)
+	textDocumentDidOpen(&loc, testPath)
 
-		// serve diagnostics from the cache
+	// serve diagnostics from workspace & file scan
+	assert.Eventually(t, func() bool {
+		return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
+	}, 5*time.Second, 2*time.Millisecond)
+
+	if file1 != "" {
+		testPath = filepath.Join(cloneTargetDir, file1)
+		textDocumentDidOpen(&loc, testPath)
+		// serve diagnostics from file scan
 		assert.Eventually(t, func() bool {
 			return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
 		}, 5*time.Second, 2*time.Millisecond)
 	}
-	testPath = filepath.Join(cloneTargetDir, codeFile)
-	textDocumentDidOpen(&loc, testPath)
-
-	// serve diagnostics from the cache
-	assert.Eventually(t, func() bool {
-		return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
-	}, 5*time.Second, 2*time.Millisecond)
 }
 
 func Test_IntegrationFileScan(t *testing.T) {

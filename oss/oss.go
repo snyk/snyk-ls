@@ -138,7 +138,7 @@ func ScanFile(Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGrou
 				Msg("Error while extracting file absolutePath")
 		}
 
-		cmd := cli.CliCmd([]string{environment.CliPath(), "test", "--file=" + path, "--json"})
+		cmd := cli.CliCmd([]string{environment.CliPath(), "test", filepath.Dir(path), "--json"})
 		res, err := Cli.Execute(cmd)
 		if err != nil {
 			if err.(*exec.ExitError).ExitCode() > 1 {
@@ -164,6 +164,7 @@ func ScanFile(Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGrou
 			log.Err(err).Str("method", "oss.ScanFile").
 				Msg("Error reading file " + path)
 			reportErrorViaChan(documentURI, dChan, err)
+			return
 		}
 
 		retrieveAnalysis(scanResults, documentURI, fileContent, dChan)
@@ -178,7 +179,7 @@ func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, 
 		Err:         err,
 	}:
 	default:
-		log.Debug().Str("method", "oss.retrieveAnalysis").Msg("not sending...")
+		log.Debug().Str("method", "oss.reportErrorViaChan").Msg("not sending...")
 	}
 	return dChan
 }
@@ -192,16 +193,18 @@ func retrieveAnalysis(
 	diags, err := retrieveDiagnostics(scanResults, uri, fileContent)
 	if err != nil {
 		log.Err(err).Str("method", "oss.retrieveAnalysis").Msg("Error while retrieving diagnositics")
+		reportErrorViaChan(uri, dChan, err)
+		return
 	}
 
-	if len(diags) > 0 || err != nil {
+	if len(diags) > 0 {
 		log.Debug().Str("method", "oss.retrieveAnalysis").Msg("got diags, now sending to chan.")
 		select {
 		case dChan <- lsp.DiagnosticResult{
 			Uri:         uri,
 			Diagnostics: diags,
-			Err:         err,
 		}:
+			log.Debug().Str("method", "oss.retrieveAnalysis").Int("diagnosticCount", len(diags)).Msg("found sth")
 		default:
 			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("not sending...")
 		}

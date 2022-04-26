@@ -66,8 +66,8 @@ func ScanWorkspace(
 	log.Info().Str("method", "iac.ScanWorkspace").
 		Msg("got diags & lenses, now sending to chan.")
 	for _, scanResult := range scanResults {
-		u := sglsp.DocumentURI(string(documentURI) + "/" + scanResult.TargetFile)
-		retrieveAnalysis(u, scanResult, dChan, clChan, err)
+		u := uri.PathToUri(filepath.Join(uri.PathFromUri(documentURI), scanResult.TargetFile))
+		retrieveAnalysis(u, scanResult, dChan, clChan)
 	}
 }
 
@@ -109,9 +109,11 @@ func ScanFile(
 			if err := json.Unmarshal(res, &scanResults); err != nil {
 				log.Err(err).Str("method", "iac.ScanFile").
 					Msg("Error while calling Snyk CLI")
+				reportErrorViaChan(documentURI, dChan, err, clChan)
+				return
 			}
-
-			retrieveAnalysis(documentURI, scanResults, dChan, clChan, err)
+			log.Debug().Interface("iacScanResult", scanResults).Msg("got it all unmarshalled, general!")
+			retrieveAnalysis(documentURI, scanResults, dChan, clChan)
 		}
 	}
 }
@@ -132,7 +134,6 @@ func retrieveAnalysis(
 	scanResult iacScanResult,
 	dChan chan lsp.DiagnosticResult,
 	clChan chan lsp.CodeLensResult,
-	diagnosticsError error,
 ) {
 	diagnostics := convertDiagnostics(scanResult)
 	codeLenses := convertCodeLenses(scanResult)
@@ -142,10 +143,10 @@ func retrieveAnalysis(
 		case dChan <- lsp.DiagnosticResult{
 			Uri:         uri,
 			Diagnostics: diagnostics,
-			Err:         diagnosticsError,
 		}:
+			log.Debug().Str("method", "iac.retrieveAnalysis").Interface("diagnostics", diagnostics).Msg("found sth")
 		default:
-			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("no diags found & sent.")
+			log.Debug().Str("method", "iac.retrieveAnalysis").Msg("no diags found & sent.")
 		}
 	}
 
@@ -154,10 +155,10 @@ func retrieveAnalysis(
 		case clChan <- lsp.CodeLensResult{
 			Uri:        uri,
 			CodeLenses: codeLenses,
-			Err:        diagnosticsError,
 		}:
+			log.Debug().Str("method", "iac.retrieveAnalysis").Interface("codeLenses", codeLenses).Msg("found lens")
 		default:
-			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("no lens found & sent.")
+			log.Debug().Str("method", "iac.retrieveAnalysis").Msg("no lens found & sent.")
 		}
 	}
 }

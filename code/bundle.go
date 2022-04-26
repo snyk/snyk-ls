@@ -64,8 +64,8 @@ const (
 	jsonOverheadPerFile = jsonUriOverhead + jsonContentOverhead
 )
 
-func getTotalDocPayloadSize(uri string, content []byte) int {
-	return len(jsonHashSizePerFile) + len(jsonOverheadPerFile) + len([]byte(uri)) + len(content)
+func getTotalDocPayloadSize(documentURI string, content []byte) int {
+	return len(jsonHashSizePerFile) + len(jsonOverheadPerFile) + len([]byte(documentURI)) + len(content)
 }
 
 type BundleImpl struct {
@@ -235,8 +235,9 @@ func (b *BundleImpl) getSize() int {
 	}
 	jsonCommasForFiles := len(b.BundleDocuments) - 1
 	var size = len(jsonOverheadRequest) + jsonCommasForFiles // if more than one file, they are separated by commas in the req
-	for uri, file := range b.BundleDocuments {
-		size += getTotalDocPayloadSize(string(uri), []byte(file.Content))
+	for documentURI, file := range b.BundleDocuments {
+		// we explicitly want the document URI as string, not to convert
+		size += getTotalDocPayloadSize(string(documentURI), []byte(file.Content))
 	}
 	return size
 }
