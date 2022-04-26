@@ -76,7 +76,11 @@ func Token() string {
 }
 
 func ApiUrl() string {
-	return strings.Trim(getValue(deeproxyApiUrlKey), "/")
+	trim := strings.Trim(getValue(deeproxyApiUrlKey), "/")
+	if trim == "" {
+		trim = "https://deeproxy.snyk.io"
+	}
+	return trim
 }
 
 func CliPath() string {

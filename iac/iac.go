@@ -99,7 +99,7 @@ func ScanFile(
 			res, err := Cli.Execute(cliCmd(documentURI))
 			if err != nil {
 				if err.(*exec.ExitError).ExitCode() > 1 {
-					log.Err(err).Str("method", "iac.ScanFile").Msg("Error while calling Snyk CLI")
+					log.Err(err).Str("method", "iac.ScanFile").Str("response", string(res)).Msg("Error while calling Snyk CLI")
 					reportErrorViaChan(documentURI, dChan, err, clChan)
 					return
 				}
@@ -122,8 +122,7 @@ func cliCmd(u sglsp.DocumentURI) []string {
 		log.Err(err).Str("method", "iac.ScanFile").
 			Msg("Error while extracting file absolutePath")
 	}
-
-	cmd := []string{environment.CliPath(), "iac", "test", path, "--json"}
+	cmd := cli.CliCmd([]string{environment.CliPath(), "iac", "test", path, "--json"})
 	log.Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
 	return cmd
 }

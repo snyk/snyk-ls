@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,8 @@ import (
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/diagnostics"
+	"github.com/snyk/snyk-ls/internal/snyk/cli"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -86,6 +89,7 @@ func startServer() server.Local {
 		"exit":                                Exit(&srv),
 		"textDocument/codeLens":               TextDocumentCodeLens(),
 		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
+		"workspace/didChangeConfiguration":    WorkspaceDidChangeConfiguration(),
 		// "codeLens/resolve":               codeLensResolve(&server),
 	}
 
@@ -202,6 +206,8 @@ func Test_initialize_shouldSupportCodeLens(t *testing.T) {
 }
 
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	cli.CurrentSettings = cli.Settings{}
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
 
@@ -218,8 +224,10 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 
 	// wait for publish
 	assert.Eventually(t, func() bool { return notification != nil }, 5*time.Second, 10*time.Millisecond)
-	_ = notification.UnmarshalParams(&diagnosticsParams)
-	assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
+	if notification != nil {
+		_ = notification.UnmarshalParams(&diagnosticsParams)
+		assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
+	}
 }
 
 func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
@@ -250,6 +258,8 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 }
 
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	cli.CurrentSettings = cli.Settings{}
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
 
@@ -293,6 +303,8 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 }
 
 func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	cli.CurrentSettings = cli.Settings{}
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
 	params, cleanup := didOpenTextParams()
@@ -324,9 +336,7 @@ func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
 }
 
 func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) {
-	if !environment.RunIntegTest {
-		t.Skip("set " + environment.IntegTests + " to run integration tests")
-	}
+	testutil.IntegTest(t)
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
 
@@ -355,24 +365,23 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 }
 
 func Test_IntegrationWorkspaceScanGoof(t *testing.T) {
-	if !environment.RunIntegTest {
-		t.Skip("set " + environment.IntegTests + " to run integration tests")
-	}
+	testutil.IntegTest(t)
 	ossFile := "package.json"
 	codeFile := "app.js"
 	runIntegrationTest("https://github.com/snyk/goof", "0336589", ossFile, codeFile, t)
 }
 
 func Test_IntegrationWorkspaceScanMaven(t *testing.T) {
-	if !environment.RunIntegTest {
-		t.Skip("set " + environment.IntegTests + " to run integration tests")
-	}
+	testutil.IntegTest(t)
 	ossFile := ""
 	codeFile := "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
 	runIntegrationTest("https://github.com/apache/maven", "18725ec1e", ossFile, codeFile, t)
 }
 
 func runIntegrationTest(repo string, commit string, ossFile string, codeFile string, t *testing.T) {
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	cli.CurrentSettings = cli.Settings{}
+	diagnostics.ClearWorkspaceFolderScanned()
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
 	loc, teardownServer := setupServer()
@@ -402,7 +411,7 @@ func runIntegrationTest(repo string, commit string, ossFile string, codeFile str
 
 	var testPath string
 	if ossFile != "" {
-		testPath = cloneTargetDir + string(os.PathSeparator) + ossFile
+		testPath = filepath.Join(cloneTargetDir, ossFile)
 		textDocumentDidOpen(&loc, testPath)
 
 		// serve diagnostics from the cache
@@ -410,7 +419,7 @@ func runIntegrationTest(repo string, commit string, ossFile string, codeFile str
 			return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
 		}, 5*time.Second, 2*time.Millisecond)
 	}
-	testPath = cloneTargetDir + string(os.PathSeparator) + codeFile
+	testPath = filepath.Join(cloneTargetDir, codeFile)
 	textDocumentDidOpen(&loc, testPath)
 
 	// serve diagnostics from the cache
@@ -420,9 +429,9 @@ func runIntegrationTest(repo string, commit string, ossFile string, codeFile str
 }
 
 func Test_IntegrationFileScan(t *testing.T) {
-	if !environment.RunIntegTest {
-		t.Skip("set " + environment.IntegTests + " to run integration tests")
-	}
+	testutil.IntegTest(t)
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
 	loc, teardownServer := setupServer()
@@ -441,7 +450,7 @@ func Test_IntegrationFileScan(t *testing.T) {
 	_ = notification.UnmarshalParams(&diagnosticsParams)
 
 	assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
-	assert.Len(t, diagnosticsParams.Diagnostics, 5)
+	assert.Len(t, diagnosticsParams.Diagnostics, 6)
 	assert.Equal(t, diagnosticsParams.Diagnostics[0].Code, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Code)
 	assert.Equal(t, diagnosticsParams.Diagnostics[0].Range, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Range)
 }

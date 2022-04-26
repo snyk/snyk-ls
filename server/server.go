@@ -36,6 +36,7 @@ func Start() {
 		"exit":                                Exit(&srv),
 		"textDocument/codeLens":               TextDocumentCodeLens(),
 		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
+		"workspace/didChangeConfiguration":    WorkspaceDidChangeConfiguration(),
 		// "codeLens/resolve":               codeLensResolve(&server),
 	}
 

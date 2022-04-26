@@ -206,9 +206,19 @@ type WorkspaceFoldersChangeEvent struct {
 	// The array of the Removed workspace folders
 	Removed []WorkspaceFolder `json:"Removed,omitempty"`
 }
-type ScanLevel int
 
-const (
-	ScanLevelFile ScanLevel = iota + 1
-	ScanLevelWorkspace
-)
+type Settings struct {
+	ActivateSnykOpenSource string `json:"activateSnykOpenSource,omitempty"`
+	ActivateSnykCode       string `json:"activateSnykCode,omitempty"`
+	ActivateSnykIac        string `json:"activateSnykIac,omitempty"`
+	Insecure               string `json:"insecure,omitempty"`
+	Endpoint               string `json:"endpoint,omitempty"`
+	AdditionalParams       string `json:"additionalParams,omitempty"`
+	AdditionalEnv          string `json:"additionalEnv,omitempty"`
+	Path                   string `json:"path,omitempty"`
+}
+
+type DidChangeConfigurationParams struct {
+	// The actual changed settings
+	Settings Settings `json:"settings"`
+}

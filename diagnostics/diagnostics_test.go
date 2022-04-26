@@ -11,6 +11,7 @@ import (
 
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/internal/snyk/cli"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -65,6 +66,7 @@ func Test_GetDiagnostics_shouldAddCodeLenses(t *testing.T) {
 func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
 	// disable snyk code
 	_ = os.Setenv(environment.ActivateSnykCodeKey, "false")
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
 	defer os.Clearenv()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
@@ -83,6 +85,7 @@ func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
 func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
 	// disable snyk code
 	_ = os.Setenv(environment.ActivateSnykCodeKey, "true")
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
 	defer os.Clearenv()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
@@ -109,40 +112,42 @@ func (m *mockCli) Execute(cmd []string) (resp []byte, err error) {
 }
 
 func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
-	// disable snyk code
+	os.Clearenv()
 	_ = os.Setenv(environment.ActivateSnykCodeKey, "false")
 	_ = os.Setenv(environment.ActivateSnykIacKey, "false")
 	_ = os.Setenv(environment.ActivateSnykOssKey, "true")
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
 	defer os.Clearenv()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	documentURI := sglsp.DocumentURI("package.json")
 	RegisterDocument(sglsp.TextDocumentItem{URI: documentURI})
 	SnykCode = &code.FakeSnykCodeApiService{}
-	cli := mockCli{}
-	Cli = &cli
-	cli.Mock.On("Execute", mock.Anything).Return("test", nil)
+	mockCli := mockCli{}
+	Cli = &mockCli
+	mockCli.Mock.On("Execute", mock.Anything).Return("test", nil)
 
 	diagnostics := GetDiagnostics(documentURI)
 
 	assert.Equal(t, len(documentDiagnosticCache[documentURI]), len(diagnostics))
-	assert.Equal(t, 1, len(cli.Calls))
+	assert.Equal(t, 1, len(mockCli.Calls))
 }
 
 func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
-	// disable snyk code
+	os.Clearenv()
 	_ = os.Setenv(environment.ActivateSnykCodeKey, "false")
 	_ = os.Setenv(environment.ActivateSnykIacKey, "false")
 	_ = os.Setenv(environment.ActivateSnykOssKey, "false")
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
 	defer os.Clearenv()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	documentURI := sglsp.DocumentURI("package.json")
 	RegisterDocument(sglsp.TextDocumentItem{URI: documentURI})
 	SnykCode = &code.FakeSnykCodeApiService{}
-	cli := mockCli{}
-	Cli = &cli
-	cli.Mock.On("Execute", mock.Anything).Return("test", nil)
+	mockCli := mockCli{}
+	Cli = &mockCli
+	mockCli.Mock.On("Execute", mock.Anything).Return("test", nil)
 
 	diagnostics := GetDiagnostics(documentURI)
 
@@ -151,44 +156,54 @@ func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
 }
 
 func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
-	// disable snyk code
+	os.Clearenv()
 	_ = os.Setenv(environment.ActivateSnykCodeKey, "false")
 	_ = os.Setenv(environment.ActivateSnykIacKey, "true")
 	_ = os.Setenv(environment.ActivateSnykOssKey, "false")
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
 	defer os.Clearenv()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	documentURI := sglsp.DocumentURI("package.json")
 	RegisterDocument(sglsp.TextDocumentItem{URI: documentURI})
 	SnykCode = &code.FakeSnykCodeApiService{}
-	cli := mockCli{}
-	Cli = &cli
-	cli.Mock.On("Execute", mock.Anything).Return("test", nil)
+	cli.CurrentSettings.AdditionalParameters = []string{"-d", "--all-projects"}
+	cli.CurrentSettings.Insecure = true
+	cli.CurrentSettings.Endpoint = "asd"
+	mockCli := mockCli{}
+	Cli = &mockCli
+	mockCli.Mock.On("Execute", mock.Anything).Return("test", nil)
 
 	diagnostics := GetDiagnostics(documentURI)
 
 	assert.Equal(t, len(documentDiagnosticCache[documentURI]), len(diagnostics))
-	assert.Equal(t, 1, len(cli.Calls))
+	assert.Equal(t, 1, len(mockCli.Calls))
+	call := mockCli.Calls[0]
+	assert.Contains(t, call.Arguments[0], "--insecure")
+	assert.Contains(t, call.Arguments[0], "-d")
+	assert.Contains(t, call.Arguments[0], "--all-projects")
+	assert.Equal(t, "asd", os.Getenv("SNYK_API"))
 }
 
 func Test_GetDiagnostics_shouldNotIacIfNotEnabled(t *testing.T) { // disable snyk code
 	_ = os.Setenv(environment.ActivateSnykCodeKey, "false")
 	_ = os.Setenv(environment.ActivateSnykIacKey, "false")
 	_ = os.Setenv(environment.ActivateSnykOssKey, "false")
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
 	defer os.Clearenv()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	documentURI := sglsp.DocumentURI("package.json")
 	RegisterDocument(sglsp.TextDocumentItem{URI: documentURI})
 	SnykCode = &code.FakeSnykCodeApiService{}
-	cli := mockCli{}
-	Cli = &cli
-	cli.Mock.On("Execute", mock.Anything).Return("test", nil)
+	mockCli := mockCli{}
+	Cli = &mockCli
+	mockCli.Mock.On("Execute", mock.Anything).Return("test", nil)
 
 	diagnostics := GetDiagnostics(documentURI)
 
 	assert.Equal(t, len(documentDiagnosticCache[documentURI]), len(diagnostics))
-	assert.Equal(t, 0, len(cli.Calls))
+	assert.Equal(t, 0, len(mockCli.Calls))
 }
 
 func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {

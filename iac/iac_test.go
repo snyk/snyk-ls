@@ -14,14 +14,13 @@ import (
 
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/internal/snyk/cli"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	lsp2 "github.com/snyk/snyk-ls/lsp"
 )
 
 func Test_ScanWorkspace(t *testing.T) {
-	if !environment.RunIntegTest {
-		t.Skip("set " + environment.IntegTests + " to run integration tests")
-	}
+	testutil.IntegTest(t)
 	environment.Load()
 	environment.Format = environment.FormatHtml
 
@@ -46,9 +45,7 @@ func Test_ScanWorkspace(t *testing.T) {
 }
 
 func Test_ScanFile(t *testing.T) {
-	if !environment.RunIntegTest {
-		t.Skip("set " + environment.IntegTests + " to run integration tests")
-	}
+	testutil.IntegTest(t)
 	environment.Load()
 	environment.Format = environment.FormatHtml
 
@@ -80,9 +77,7 @@ func Test_ScanFile(t *testing.T) {
 }
 
 func Test_IacDiagnosticsRetrieval(t *testing.T) {
-	if !environment.RunIntegTest {
-		t.Skip("set " + environment.IntegTests + " to run integration tests")
-	}
+	testutil.IntegTest(t)
 	path, _ := filepath.Abs("testdata/RBAC.yaml")
 
 	cmd := cliCmd(uri.PathToUri(path))
@@ -102,9 +97,7 @@ func Test_IacDiagnosticsRetrieval(t *testing.T) {
 }
 
 func Test_IacCodelensRetrieval(t *testing.T) {
-	if !environment.RunIntegTest {
-		t.Skip("set " + environment.IntegTests + " to run integration tests")
-	}
+	testutil.IntegTest(t)
 	path, _ := filepath.Abs("testdata/RBAC.yaml")
 
 	cmd := cliCmd(uri.PathToUri(path))

@@ -18,6 +18,8 @@ const (
 	ActivateSnykAdvisorKey   = "ACTIVATE_SNYK_ADVISOR"
 )
 
+var CurrentEnabledProducts = EnabledProductsFromEnv()
+
 func EnabledProductsFromEnv() EnabledProducts {
 	oss := getValue(ActivateSnykOssKey)
 	code := getValue(ActivateSnykCodeKey)

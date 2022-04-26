@@ -79,7 +79,6 @@ func GetDiagnostics(uri sglsp.DocumentURI) []lsp.Diagnostic {
 	diagnosticSlice := documentDiagnosticCache[uri]
 	if len(diagnosticSlice) > 0 {
 		log.Info().Str("method", "GetDiagnostics").Msgf("Cached: Diagnostics for %s", uri)
-
 		return diagnosticSlice
 	}
 
@@ -105,7 +104,6 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 	var codeLenses []sglsp.CodeLens
 	var bundles = make([]*code.BundleImpl, 0, 10)
 
-	enabledProducts := environment.EnabledProductsFromEnv()
 	wg := sync.WaitGroup{}
 
 	var dChan chan lsp.DiagnosticResult
@@ -114,11 +112,11 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 	if level == lsp.ScanLevelWorkspace {
 		dChan = make(chan lsp.DiagnosticResult, len(registeredDocuments))
 		clChan = make(chan lsp.CodeLensResult, len(registeredDocuments))
-		workspaceLevelFetch(uri, enabledProducts, bundles, &wg, dChan, clChan)
+		workspaceLevelFetch(uri, environment.CurrentEnabledProducts, bundles, &wg, dChan, clChan)
 	} else {
 		dChan = make(chan lsp.DiagnosticResult, 1)
 		clChan = make(chan lsp.CodeLensResult, 1)
-		fileLevelFetch(uri, enabledProducts, bundles, &wg, dChan, clChan)
+		fileLevelFetch(uri, environment.CurrentEnabledProducts, bundles, &wg, dChan, clChan)
 	}
 
 	wg.Wait()
@@ -187,10 +185,14 @@ func processResults(
 				Str("uri", string(result.Uri)).
 				Msg("reading diag from chan.")
 
-			logError(result.Err, "fetchAllRegisteredDocumentDiagnostics")
-
-			diagnostics[result.Uri] = append(diagnostics[result.Uri], result.Diagnostics...)
-			documentDiagnosticCache[result.Uri] = diagnostics[result.Uri]
+			if result.Err == nil {
+				diagnosticsMutex.Lock()
+				diagnostics[result.Uri] = append(diagnostics[result.Uri], result.Diagnostics...)
+				documentDiagnosticCache[result.Uri] = diagnostics[result.Uri]
+				diagnosticsMutex.Unlock()
+			} else {
+				log.Err(result.Err).Str("method", "fetchAllRegisteredDocumentDiagnostics")
+			}
 
 		case result := <-clChan:
 			log.Trace().
@@ -198,12 +200,14 @@ func processResults(
 				Str("uri", string(result.Uri)).
 				Msg("reading lens from chan.")
 
-			logError(result.Err, "fetchAllRegisteredDocumentDiagnostics")
-
-			diagnosticsMutex.Lock()
-			codeLenses = append(codeLenses, result.CodeLenses...)
-			codeLenseCache[result.Uri] = codeLenses
-			diagnosticsMutex.Unlock()
+			if result.Err == nil {
+				diagnosticsMutex.Lock()
+				codeLenses = append(codeLenses, result.CodeLenses...)
+				codeLenseCache[result.Uri] = codeLenses
+				diagnosticsMutex.Unlock()
+			} else {
+				log.Err(result.Err).Str("method", "fetchAllRegisteredDocumentDiagnostics")
+			}
 
 		default: // return results once channels are empty
 			log.Debug().
@@ -248,19 +252,13 @@ func createBundle(bundles *[]*code.BundleImpl) *code.BundleImpl {
 func addToCache(diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic, codeLenses map[sglsp.DocumentURI][]sglsp.CodeLens) {
 	// add all diagnostics to cache
 	diagnosticsMutex.Lock()
-	for uri := range diagnostics {
-		documentDiagnosticCache[uri] = diagnostics[uri]
+	for documentURI := range diagnostics {
+		documentDiagnosticCache[documentURI] = diagnostics[documentURI]
 	}
 
 	// add all code lenses to cache
-	for uri := range codeLenses {
-		codeLenseCache[uri] = codeLenses[uri]
+	for documentURI := range codeLenses {
+		codeLenseCache[documentURI] = codeLenses[documentURI]
 	}
 	diagnosticsMutex.Unlock()
-}
-
-func logError(err error, method string) {
-	if err != nil {
-		log.Err(err).Str("method", method)
-	}
 }

@@ -80,7 +80,7 @@ func ScanWorkspace(Cli cli.Executor, workspace sglsp.DocumentURI, wg *sync.WaitG
 			Msg("Error while extracting file absolutePath")
 	}
 
-	cmd := []string{environment.CliPath(), "test", path, "--json"}
+	cmd := cli.CliCmd([]string{environment.CliPath(), "test", path, "--json"})
 	res, err := Cli.Execute(cmd)
 	if err != nil {
 		if err.(*exec.ExitError).ExitCode() > 1 {
@@ -100,16 +100,17 @@ func ScanWorkspace(Cli cli.Executor, workspace sglsp.DocumentURI, wg *sync.WaitG
 	}
 
 	targetFile := determineTargetFile(scanResult.DisplayTargetFile)
-	var workspaceUri = uri.PathToUri(filepath.Join(workspacePath, targetFile))
-	fileContent, err := ioutil.ReadFile(path + "/" + targetFile)
+	targetFilePath := filepath.Join(workspacePath, targetFile)
+	targetFileUri := uri.PathToUri(targetFilePath)
+	fileContent, err := ioutil.ReadFile(targetFilePath)
 	if err != nil {
 		log.Err(err).Str("method", "oss.ScanWorkspace").
 			Msgf("Error while reading the fi le %v, err: %v", targetFile, err)
-		reportErrorViaChan(workspace, dChan, err)
+		reportErrorViaChan(targetFileUri, dChan, err)
 		return
 	}
 
-	retrieveAnalysis(scanResult, workspaceUri, fileContent, dChan)
+	retrieveAnalysis(scanResult, targetFileUri, fileContent, dChan)
 }
 
 func determineTargetFile(displayTargetFile string) string {
@@ -137,11 +138,13 @@ func ScanFile(Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGrou
 				Msg("Error while extracting file absolutePath")
 		}
 
-		cmd := []string{environment.CliPath(), "test", "--file=" + path, "--json"}
+		cmd := cli.CliCmd([]string{environment.CliPath(), "test", "--file=" + path, "--json"})
 		res, err := Cli.Execute(cmd)
 		if err != nil {
 			if err.(*exec.ExitError).ExitCode() > 1 {
-				log.Err(err).Str("method", "oss.ScanFile").
+				log.Err(err).
+					Str("method", "oss.ScanFile").
+					Str("response", string(res)).
 					Msgf("Error while calling Snyk CLI, err: %v", err)
 				reportErrorViaChan(documentURI, dChan, err)
 				return

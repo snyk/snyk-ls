@@ -1,9 +1,9 @@
 module github.com/snyk/snyk-ls
 
-go 1.18
+go 1.17
 
 require (
-	github.com/creachadair/jrpc2 v0.37.0
+	github.com/creachadair/jrpc2 v0.39.0
 	github.com/gomarkdown/markdown v0.0.0-20220419181919-412bcf14cd2e
 	github.com/rs/zerolog v1.26.1
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06

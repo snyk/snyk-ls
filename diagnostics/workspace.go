@@ -58,6 +58,12 @@ func IsWorkspaceFolderScanned(folder lsp.WorkspaceFolder) bool {
 	return scannedWorkspaceFolders[folder]
 }
 
+func ClearWorkspaceFolderScanned() {
+	scannedWorkspaceFoldersMutex.Lock()
+	defer scannedWorkspaceFoldersMutex.Unlock()
+	scannedWorkspaceFolders = make(map[lsp.WorkspaceFolder]bool)
+}
+
 func setFolderScanned(folder lsp.WorkspaceFolder) {
 	scannedWorkspaceFoldersMutex.Lock()
 	scannedWorkspaceFolders[folder] = true
