@@ -122,29 +122,33 @@ func (s *SnykCodeBackendService) RunAnalysis(bundleHash string, shardKey string,
 
 	requestBody, err := s.analysisRequestBody(bundleHash, shardKey, limitToFiles, severity)
 	if err != nil {
+		log.Err(err).Str("method", "RunAnalysis").Str("requestBody", string(requestBody)).Msg("error creating request body")
 		return nil, nil, "", err
 	}
 
 	responseBody, err := s.doCall("POST", "/analysis", requestBody)
 	failed := "FAILED"
 	if err != nil {
+		log.Err(err).Str("method", "RunAnalysis").Str("responseBody", string(responseBody)).Msg("error response from analysis")
 		return nil, nil, failed, err
 	}
 
 	var response SarifResponse
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
-		return nil, nil, "", err
+		log.Err(err).Str("method", "RunAnalysis").Str("responseBody", string(responseBody)).Msg("error unmarshalling")
+		return nil, nil, failed, err
 	}
 
 	log.Debug().Str("method", "RunAnalysis").
 		Str("bundleHash", bundleHash).Float32("progress", response.Progress).Msgf("Status: %s", response.Status)
 
 	if response.Status == failed {
-		return nil, nil, "", SnykAnalysisFailedError{Msg: string(responseBody)}
+		log.Err(err).Str("method", "RunAnalysis").Str("responseStatus", response.Status).Msg("analysis failed")
+		return nil, nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
 	if response.Status != "COMPLETE" {
-		return nil, nil, "", nil
+		return nil, nil, response.Status, nil
 	}
 	diags, lenses := s.convertSarifResponse(response)
 	return diags, lenses, response.Status, err
