@@ -17,7 +17,7 @@ func TestDownloader_Download(t *testing.T) {
 			},
 			Linux: &ReleaseAsset{
 				URL:          "https://static.snyk.io/cli/v1.912.0/snyk-linux",
-				ChecksumInfo: "956027e8f417df8203da7e614045a7255de0da418ae3ce4664b8eb6fba7b392b  snyk-linux",
+				ChecksumInfo: "c5761b9704bfe8d793001cd183cd84d39c12ca5cad674758aa3b747ec73d8df8  snyk-linux",
 			},
 			LinuxARM64: &ReleaseAsset{
 				URL:          "https://static.snyk.io/cli/v1.912.0/snyk-linux-arm64",
