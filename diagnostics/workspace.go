@@ -10,7 +10,7 @@ import (
 	ignore "github.com/sabhiram/go-gitignore"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -139,7 +139,7 @@ func workspaceDiagnostics(workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
 }
 
 func WorkspaceScan(workspaceFolders []lsp.WorkspaceFolder) {
-	environment.EnsureCLI() // first would trigger download
+	preconditions.EnsureReadyForAnalysisAndWait()
 	var wg sync.WaitGroup
 	for _, workspace := range workspaceFolders {
 		wg.Add(1)

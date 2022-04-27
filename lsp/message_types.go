@@ -241,3 +241,7 @@ type DidChangeConfigurationParams struct {
 	// The actual changed settings
 	Settings Settings `json:"settings"`
 }
+
+type AuthenticationParams struct {
+	Token string `json:"token"`
+}

@@ -2,7 +2,6 @@ package environment
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -30,71 +29,6 @@ func Test_SnykCodeAnalysisTimeoutReturnsDefaultIfNoEnvVariableFound(t *testing.T
 	os.Clearenv()
 	duration, _ := time.ParseDuration("10m")
 	assert.Equal(t, duration, SnykCodeAnalysisTimeout())
-}
-
-func Test_EnsureCLI_should_find_cli_and_add_path_to_env(t *testing.T) {
-	os.Clearenv()
-	temp, err := os.MkdirTemp("", "snyk-cli-test")
-	if err != nil {
-		assert.Fail(t, "Couldn't create test directory")
-	}
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(temp)
-
-	cliFile := createDummyCliFile(t, temp)
-	err = os.Setenv("PATH", temp)
-	if err != nil {
-		assert.Fail(t, "Couldn't update PATH")
-	}
-
-	EnsureCLI()
-
-	assert.NotEmpty(t, cliFile, os.Getenv(cliPathKey))
-}
-
-func Test_EnsureCLI_should_respect_cli_path_in_env(t *testing.T) {
-	os.Clearenv()
-	err := os.Setenv(cliPathKey, "testCliPath")
-	if err != nil {
-		t.Fatal(t, "Couldn't set cli path in environment")
-	}
-	temp, err := os.MkdirTemp("", "snyk-cli-test")
-	if err != nil {
-		t.Fatal(t, "Couldn't create test directory")
-	}
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(temp)
-
-	createDummyCliFile(t, temp)
-	err = os.Setenv("PATH", temp)
-	if err != nil {
-		t.Fatal(t, "Couldn't update PATH")
-	}
-
-	EnsureCLI()
-
-	assert.Equal(t, "testCliPath", os.Getenv(cliPathKey))
-}
-
-func createDummyCliFile(t *testing.T, temp string) string {
-	cliName := getSnykFileName()
-	cliFile, err := os.Create(filepath.Join(temp, cliName))
-	if err != nil {
-		assert.Fail(t, "Couldn't create dummy cli file")
-	}
-	err = cliFile.Chmod(0770)
-	if err != nil {
-		assert.Fail(t, "Couldn't make dummy cli file executable")
-	}
-
-	_, err = cliFile.Write([]byte("huhu"))
-	if err != nil {
-		assert.Fail(t, "Can't write dummy data to cli file")
-	}
-	_ = cliFile.Close()
-	return cliFile.Name()
 }
 
 func Test_updatePath(t *testing.T) {
@@ -129,4 +63,12 @@ func Test_loadFile(t *testing.T) {
 	assert.Equal(t, "D", os.Getenv("C"))
 
 	os.Clearenv()
+}
+
+func TestSetToken(t *testing.T) {
+	oldToken := Token()
+	err := SetToken("asdf")
+	assert.NoError(t, err)
+	assert.Equal(t, Token(), "asdf")
+	_ = SetToken(oldToken)
 }

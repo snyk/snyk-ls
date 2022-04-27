@@ -1,12 +1,15 @@
-package exec
+package auth
 
 import (
 	"context"
+	"errors"
 	"os/exec"
 	"strings"
 
 	"github.com/rs/zerolog/log"
 )
+
+var ErrEmptyAPIToken = errors.New("snyk-cli: api token is empty")
 
 // GetToken represents the `snyk config get api` command.
 func GetToken(ctx context.Context) (string, error) {
@@ -26,6 +29,10 @@ func GetToken(ctx context.Context) (string, error) {
 	token := out.String()
 	token = strings.TrimSuffix(token, "\r")
 	token = strings.TrimSuffix(token, "\n")
+
+	if token == "" {
+		return "", ErrEmptyAPIToken
+	}
 
 	return token, err
 }

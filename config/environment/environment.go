@@ -1,17 +1,12 @@
 package environment
 
 import (
-	"context"
 	"os"
-	"runtime"
 	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/subosito/gotenv"
-
-	"github.com/snyk/snyk-ls/error_reporting"
-	"github.com/snyk/snyk-ls/internal/cli/install"
 )
 
 const (
@@ -29,24 +24,6 @@ var (
 	ConfigFile   = ""
 	LogPath      string
 )
-
-func getSnykFileName() string {
-	var prefix = "snyk-"
-	switch runtime.GOOS {
-	case "darwin":
-		return prefix + "macos"
-	case "windows":
-		return prefix + "win.exe"
-	case "linux":
-		if runtime.GOARCH == "amd64" {
-			return prefix + "linux"
-		} else {
-			return prefix + "linux-arm64"
-		}
-	default:
-		return prefix + runtime.GOOS
-	}
-}
 
 func SnykCodeAnalysisTimeout() time.Duration {
 	var snykCodeTimeout time.Duration
@@ -72,6 +49,10 @@ func getValue(key string) string {
 
 func Token() string {
 	return getValue(snykTokenKey)
+}
+
+func SetToken(token string) error {
+	return os.Setenv(snykTokenKey, token)
 }
 
 func ApiUrl() string {
@@ -128,36 +109,16 @@ func updatePath(pathExtension string) {
 	}
 }
 
-func EnsureCLI() {
-	install.Mutex.Lock()
-	defer install.Mutex.Unlock()
-	if os.Getenv(cliPathKey) != "" {
-		return
-	}
-
-	i := install.NewInstaller()
-	cliPath, err := i.Find()
-	if err != nil {
-		log.Info().Msg("could not find Snyk CLI in user directories and PATH.")
-	}
-
-	if cliPath == "" {
-		cliPath, err = i.Install(context.Background())
-		if err != nil {
-			log.Err(err).Msg("could not download Snyk CLI binary")
-			error_reporting.CaptureError(err)
-			cliPath, _ = i.Find()
-		}
-	}
-
-	if cliPath != "" {
-		err := os.Setenv(cliPathKey, cliPath)
-		if err != nil {
-			log.Err(err).Msg("Couldn't update environment with Snyk cli path")
-		}
-		log.Info().Interface("snyk", cliPath).Msg("Snyk CLI found.")
-	}
+func Authenticated() bool {
+	return Token() != ""
 }
+
+func CliInstalled() bool {
+	cliInstalled := os.Getenv(cliPathKey) != ""
+	return cliInstalled
+}
+
+func SetCliPath(cliPath string) error { return os.Setenv(cliPathKey, cliPath) }
 
 // The order of the files is important - first file variable definitions win!
 func configFiles() []string {

@@ -16,6 +16,7 @@ import (
 
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/internal/cli"
+	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -78,7 +79,6 @@ func ScanWorkspace(
 ) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "oss.ScanWorkspace").Msg("done.")
-
 	log.Debug().Str("method", "oss.ScanWorkspace").Msg("started.")
 
 	workspacePath := uri.PathFromUri(workspace)
@@ -88,7 +88,7 @@ func ScanWorkspace(
 			Msg("Error while extracting file absolutePath")
 	}
 
-	cmd := cli.CliCmd([]string{environment.CliPath(), "test", path, "--json"})
+	cmd := cli.ExpandParametersFromConfig([]string{environment.CliPath(), "test", path, "--json"})
 	res, err := Cli.Execute(cmd)
 	if err != nil {
 		switch err := err.(type) {
@@ -144,19 +144,19 @@ func ScanFile(
 ) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "oss.ScanFile").Msg("done.")
-
 	log.Debug().Str("method", "oss.ScanFile").Msg("started.")
 
 	if !IsSupported(documentURI) {
 		return
 	}
+
 	path, err := filepath.Abs(uri.PathFromUri(documentURI))
 	if err != nil {
 		log.Err(err).Str("method", "oss.ScanFile").
 			Msg("Error while extracting file absolutePath")
 	}
-
-	cmd := cli.CliCmd([]string{environment.CliPath(), "test", filepath.Dir(path), "--json"})
+	preconditions.EnsureReadyForAnalysisAndWait()
+	cmd := cli.ExpandParametersFromConfig([]string{environment.CliPath(), "test", filepath.Dir(path), "--json"})
 	res, err := Cli.Execute(cmd)
 	if err != nil {
 		switch err := err.(type) {

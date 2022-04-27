@@ -53,6 +53,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        # TODO: we should add windows runner
+        # FIXME: current bundle calculation is determining too low byte sizes and thus a test is failing on windows.
         os: [ ubuntu-latest, macos-latest ]
     steps:
       - uses: actions/checkout@v2
