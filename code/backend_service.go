@@ -144,6 +144,12 @@ func (s *SnykCodeBackendService) RunAnalysis(bundleHash string, shardKey string,
 		log.Err(err).Str("method", "RunAnalysis").Str("responseStatus", response.Status).Msg("analysis failed")
 		return nil, nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
+
+	if response.Status == "" {
+		log.Err(err).Str("method", "RunAnalysis").Str("responseStatus", response.Status).Msg("unknown response status (empty)")
+		return nil, nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
+	}
+
 	if response.Status != "COMPLETE" {
 		return nil, nil, response.Status, nil
 	}
