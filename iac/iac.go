@@ -45,7 +45,6 @@ func ScanWorkspace(
 ) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "iac.ScanWorkspace").Msg("done.")
-
 	log.Debug().Str("method", "iac.ScanWorkspace").Msg("started.")
 
 	res, err := Cli.Execute(cliCmd(documentURI))
@@ -96,7 +95,6 @@ func ScanFile(
 ) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "iac.ScanFile").Msg("done.")
-
 	log.Debug().Str("method", "iac.ScanFile").Msg("started.")
 
 	if !IsSupported(documentURI) {
@@ -137,7 +135,7 @@ func cliCmd(u sglsp.DocumentURI) []string {
 		log.Err(err).Str("method", "iac.ScanFile").
 			Msg("Error while extracting file absolutePath")
 	}
-	cmd := cli.CliCmd([]string{environment.CliPath(), "iac", "test", path, "--json"})
+	cmd := cli.ExpandParametersFromConfig([]string{environment.CliPath(), "iac", "test", path, "--json"})
 	log.Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
 	return cmd
 }

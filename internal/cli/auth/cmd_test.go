@@ -1,4 +1,4 @@
-package exec
+package auth
 
 import (
 	"os/exec"

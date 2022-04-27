@@ -11,10 +11,11 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/code"
-	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/diagnostics"
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/hover"
+	notification2 "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -27,17 +28,17 @@ func Start() {
 	diagnostics.SnykCode = &code.SnykCodeBackendService{}
 
 	lspHandlers := handler.Map{
-		"initialize":                          InitializeHandler(),
+		"initialize":                          InitializeHandler(&srv),
 		"textDocument/didOpen":                TextDocumentDidOpenHandler(&srv),
 		"textDocument/didChange":              TextDocumentDidChangeHandler(),
 		"textDocument/didClose":               TextDocumentDidCloseHandler(),
 		"textDocument/didSave":                TextDocumentDidSaveHandler(&srv),
+		"textDocument/hover":                  TextDocumentHover(),
 		"textDocument/willSave":               TextDocumentWillSaveHandler(),
 		"textDocument/willSaveWaitUntil":      TextDocumentWillSaveWaitUntilHandler(),
 		"shutdown":                            Shutdown(),
 		"exit":                                Exit(&srv),
 		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
-		"textDocument/hover":                  TextDocumentHover(),
 		"workspace/didChangeConfiguration":    WorkspaceDidChangeConfiguration(),
 	}
 
@@ -114,7 +115,7 @@ func logError(err error, method string) {
 func TextDocumentDidOpenHandler(srv **jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidOpenTextDocumentParams) (interface{}, error) {
 		log.Info().Str("method", "TextDocumentDidOpenHandler").Str("documentURI", string(params.TextDocument.URI)).Msg("RECEIVING")
-		environment.EnsureCLI() // first would trigger download
+		preconditions.EnsureReadyForAnalysisAndWait()
 		diagnostics.RegisterDocument(params.TextDocument)
 		PublishDiagnostics(ctx, params.TextDocument.URI, srv)
 		return nil, nil
@@ -162,9 +163,11 @@ func TextDocumentHover() jrpc2.Handler {
 		return hoverResult, nil
 	})
 }
-func InitializeHandler() handler.Func {
+
+func InitializeHandler(srv **jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
 		log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
+		defer log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("SENDING")
 		clientParams = params
 
 		if len(clientParams.WorkspaceFolders) > 0 {
@@ -172,6 +175,7 @@ func InitializeHandler() handler.Func {
 		} else {
 			go diagnostics.GetDiagnostics(clientParams.RootURI)
 		}
+		registerAuthentificationNotifier(srv)
 
 		go hover.CreateHoverListener()
 
@@ -194,4 +198,11 @@ func InitializeHandler() handler.Func {
 			},
 		}, nil
 	})
+}
+
+func registerAuthentificationNotifier(srv **jrpc2.Server) {
+	callbackFunction := func(params lsp.AuthenticationParams) {
+		authenticationNotification(srv, params)
+	}
+	go notification2.CreateListener(callbackFunction)
 }

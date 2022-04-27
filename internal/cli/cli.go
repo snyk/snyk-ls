@@ -33,7 +33,7 @@ func (c SnykCli) Execute(cmd []string) (resp []byte, err error) {
 	return output, err
 }
 
-func CliCmd(base []string) []string {
+func ExpandParametersFromConfig(base []string) []string {
 	var additionalParams []string
 	if CurrentSettings.Insecure {
 		additionalParams = append(additionalParams, "--insecure")

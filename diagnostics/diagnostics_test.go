@@ -52,7 +52,6 @@ func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
 	// disable snyk code
 	_ = os.Setenv(environment.ActivateSnykCodeKey, "false")
 	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
-	defer os.Clearenv()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	diagnosticUri, path := code.FakeDiagnosticUri()
@@ -71,7 +70,6 @@ func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
 	// disable snyk code
 	_ = os.Setenv(environment.ActivateSnykCodeKey, "true")
 	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
-	defer os.Clearenv()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	diagnosticUri, path := code.FakeDiagnosticUri()
@@ -97,12 +95,10 @@ func (m *mockCli) Execute(cmd []string) (resp []byte, err error) {
 }
 
 func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
-	os.Clearenv()
 	_ = os.Setenv(environment.ActivateSnykCodeKey, "false")
 	_ = os.Setenv(environment.ActivateSnykIacKey, "false")
 	_ = os.Setenv(environment.ActivateSnykOssKey, "true")
 	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
-	defer os.Clearenv()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	documentURI := sglsp.DocumentURI("package.json")
@@ -119,12 +115,10 @@ func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
 }
 
 func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
-	os.Clearenv()
 	_ = os.Setenv(environment.ActivateSnykCodeKey, "false")
 	_ = os.Setenv(environment.ActivateSnykIacKey, "false")
 	_ = os.Setenv(environment.ActivateSnykOssKey, "false")
 	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
-	defer os.Clearenv()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	documentURI := sglsp.DocumentURI("package.json")
@@ -142,12 +136,10 @@ func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
 
 func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
 	environment.Load()
-	os.Clearenv()
 	_ = os.Setenv(environment.ActivateSnykCodeKey, "false")
 	_ = os.Setenv(environment.ActivateSnykIacKey, "true")
 	_ = os.Setenv(environment.ActivateSnykOssKey, "false")
 	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
-	defer os.Clearenv()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	documentURI := sglsp.DocumentURI("package.json")
@@ -176,7 +168,6 @@ func Test_GetDiagnostics_shouldNotIacIfNotEnabled(t *testing.T) { // disable sny
 	_ = os.Setenv(environment.ActivateSnykIacKey, "false")
 	_ = os.Setenv(environment.ActivateSnykOssKey, "false")
 	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
-	defer os.Clearenv()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	documentURI := sglsp.DocumentURI("package.json")
