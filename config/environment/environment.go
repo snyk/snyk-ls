@@ -18,17 +18,14 @@ const (
 	snykTokenKey       = "SNYK_TOKEN"
 	deeproxyApiUrlKey  = "DEEPROXY_API_URL"
 	snykCodeTimeoutKey = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
-
-	FormatHtml = "html"
-	FormatMd   = "md"
+	FormatHtml         = "html"
+	FormatMd           = "md"
 )
 
 var (
 	configLoaded = false
 	Format       = "md"
 	ConfigFile   = ""
-	INTEG_TESTS  = "INTEG_TESTS"
-	RunIntegTest = os.Getenv(INTEG_TESTS) != ""
 	LogPath      string
 )
 
@@ -50,7 +47,7 @@ func getSnykFileName() string {
 	}
 }
 
-func SnykeCodeAnalysisTimeout() time.Duration {
+func SnykCodeAnalysisTimeout() time.Duration {
 	var snykCodeTimeout time.Duration
 	var err error
 	env := os.Getenv(snykCodeTimeoutKey)
@@ -77,7 +74,11 @@ func Token() string {
 }
 
 func ApiUrl() string {
-	return strings.Trim(getValue(deeproxyApiUrlKey), "/")
+	trim := strings.Trim(getValue(deeproxyApiUrlKey), "/")
+	if trim == "" {
+		trim = "https://deeproxy.snyk.io"
+	}
+	return trim
 }
 
 func CliPath() string {

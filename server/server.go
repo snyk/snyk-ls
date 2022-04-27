@@ -36,6 +36,7 @@ func Start() {
 		"exit":                                Exit(&srv),
 		"textDocument/codeLens":               TextDocumentCodeLens(),
 		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
+		"workspace/didChangeConfiguration":    WorkspaceDidChangeConfiguration(),
 		// "codeLens/resolve":               codeLensResolve(&server),
 	}
 
@@ -99,7 +100,6 @@ func TextDocumentCodeLens() handler.Func {
 func TextDocumentDidChangeHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (interface{}, error) {
 		log.Info().Str("method", "TextDocumentDidChangeHandler").Interface("params", params).Msg("RECEIVING")
-		diagnostics.UpdateDocument(params.TextDocument.URI, params.ContentChanges)
 		return nil, nil
 	})
 }

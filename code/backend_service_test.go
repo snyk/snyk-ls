@@ -10,7 +10,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/util"
 )
@@ -39,9 +39,7 @@ const (
 )
 
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
-	if !environment.RunIntegTest {
-		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
-	}
+	testutil.IntegTest(t)
 
 	s := &SnykCodeBackendService{
 		client: http.Client{},
@@ -58,9 +56,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 }
 
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
-	if !environment.RunIntegTest {
-		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
-	}
+	testutil.IntegTest(t)
 
 	s := &SnykCodeBackendService{
 		client: http.Client{},
@@ -83,9 +79,7 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 }
 
 func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
-	if !environment.RunIntegTest {
-		t.Skip("set" + environment.INTEG_TESTS + "to run integration tests")
-	}
+	testutil.IntegTest(t)
 
 	s := &SnykCodeBackendService{
 		client: http.Client{},
@@ -124,20 +118,6 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 
 // todo analysis test limit files
 // todo analysis test severities
-
-func TestSnykCodeBackendService_convert_shouldConvertCodeResults(t *testing.T) {
-	s := &SnykCodeBackendService{
-		client: http.Client{},
-	}
-	bytes, _ := os.ReadFile("testdata/analysisResponse.json")
-	var analysisResponse AnalysisResponse
-	_ = json.Unmarshal(bytes, &analysisResponse)
-	diags, lenses := s.convertLegacyResponse(analysisResponse)
-	assert.NotNil(t, diags)
-	assert.NotNil(t, lenses)
-	assert.Equal(t, 1, len(diags))
-	assert.Equal(t, 1, len(lenses))
-}
 
 func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing.T) {
 	s := &SnykCodeBackendService{

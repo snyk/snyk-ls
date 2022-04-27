@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,8 @@ import (
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/diagnostics"
+	"github.com/snyk/snyk-ls/internal/snyk/cli"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -66,13 +69,8 @@ func setupServer() (server.Local, func(l *server.Local)) {
 func startServer() server.Local {
 	var srv *jrpc2.Server
 
-	if environment.RunIntegTest {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-		diagnostics.SnykCode = &code.SnykCodeBackendService{}
-	} else {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-		diagnostics.SnykCode = &code.FakeSnykCodeApiService{}
-	}
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	diagnostics.SnykCode = &code.FakeSnykCodeApiService{}
 
 	lspHandlers := handler.Map{
 		"initialize":                          InitializeHandler(),
@@ -86,6 +84,7 @@ func startServer() server.Local {
 		"exit":                                Exit(&srv),
 		"textDocument/codeLens":               TextDocumentCodeLens(),
 		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
+		"workspace/didChangeConfiguration":    WorkspaceDidChangeConfiguration(),
 		// "codeLens/resolve":               codeLensResolve(&server),
 	}
 
@@ -202,6 +201,8 @@ func Test_initialize_shouldSupportCodeLens(t *testing.T) {
 }
 
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	cli.CurrentSettings = cli.Settings{}
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
 
@@ -218,8 +219,10 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 
 	// wait for publish
 	assert.Eventually(t, func() bool { return notification != nil }, 5*time.Second, 10*time.Millisecond)
-	_ = notification.UnmarshalParams(&diagnosticsParams)
-	assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
+	if notification != nil {
+		_ = notification.UnmarshalParams(&diagnosticsParams)
+		assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
+	}
 }
 
 func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
@@ -250,6 +253,8 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 }
 
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	cli.CurrentSettings = cli.Settings{}
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
 
@@ -292,38 +297,8 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 	}
 }
 
-func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
-	params, cleanup := didOpenTextParams()
-	defer cleanup()
-	codeLensParams := sglsp.CodeLensParams{
-		TextDocument: sglsp.TextDocumentIdentifier{
-			URI: params.TextDocument.URI,
-		},
-	}
-
-	// populate caches
-	_, err := loc.Client.Call(ctx, "textDocument/didOpen", params)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-
-	rsp, err := loc.Client.Call(ctx, "textDocument/codeLens", codeLensParams)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-
-	var codeLenses []sglsp.CodeLens
-	_ = rsp.UnmarshalResult(&codeLenses)
-	if environment.RunIntegTest {
-		assert.Equal(t, 2, len(codeLenses))
-	} else {
-		assert.Equal(t, 1, len(codeLenses))
-	}
-}
-
 func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) {
+	testutil.IntegTest(t)
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
 
@@ -351,25 +326,31 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	assert.False(t, diagnostics.IsWorkspaceFolderScanned(folder))
 }
 
-func Test_IntegrationWorkspaceScanGoof(t *testing.T) {
-	if !environment.RunIntegTest {
-		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
-	}
+func Test_IntegrationWorkspaceScanOssAndCode(t *testing.T) {
+	testutil.IntegTest(t)
 	ossFile := "package.json"
 	codeFile := "app.js"
 	runIntegrationTest("https://github.com/snyk/goof", "0336589", ossFile, codeFile, t)
 }
 
+func Test_IntegrationWorkspaceScanIacAndCode(t *testing.T) {
+	testutil.IntegTest(t)
+	iacFile := "main.tf"
+	codeFile := "app.js"
+	runIntegrationTest("https://github.com/deepcodeg/snykcon-goof.git", "eba8407", iacFile, codeFile, t)
+}
+
 func Test_IntegrationWorkspaceScanMaven(t *testing.T) {
-	if !environment.RunIntegTest {
-		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
-	}
+	testutil.IntegTest(t)
 	ossFile := ""
 	codeFile := "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
 	runIntegrationTest("https://github.com/apache/maven", "18725ec1e", ossFile, codeFile, t)
 }
 
-func runIntegrationTest(repo string, commit string, ossFile string, codeFile string, t *testing.T) {
+func runIntegrationTest(repo string, commit string, file1 string, file2 string, t *testing.T) {
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	cli.CurrentSettings = cli.Settings{}
+	diagnostics.ClearWorkspaceFolderScanned()
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
 	loc, teardownServer := setupServer()
@@ -392,34 +373,44 @@ func runIntegrationTest(repo string, commit string, ossFile string, codeFile str
 	if err != nil {
 		log.Fatal().Err(err).Msg("Initialization failed")
 	}
+
+	var testPath string
+	if file1 != "" {
+		testPath = filepath.Join(cloneTargetDir, file1)
+		textDocumentDidOpen(&loc, testPath)
+		// serve diagnostics from file scan
+		assert.Eventually(t, func() bool {
+			return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
+		}, 5*time.Second, 2*time.Millisecond)
+	}
+
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
 		return diagnostics.IsWorkspaceFolderScanned(folder)
 	}, 600*time.Second, 100*time.Millisecond)
 
-	var testPath string
-	if ossFile != "" {
-		testPath = cloneTargetDir + string(os.PathSeparator) + ossFile
-		textDocumentDidOpen(&loc, testPath)
+	testPath = filepath.Join(cloneTargetDir, file2)
+	textDocumentDidOpen(&loc, testPath)
 
-		// serve diagnostics from the cache
+	// serve diagnostics from workspace & file scan
+	assert.Eventually(t, func() bool {
+		return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
+	}, 5*time.Second, 2*time.Millisecond)
+
+	if file1 != "" {
+		testPath = filepath.Join(cloneTargetDir, file1)
+		textDocumentDidOpen(&loc, testPath)
+		// serve diagnostics from file scan
 		assert.Eventually(t, func() bool {
 			return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
 		}, 5*time.Second, 2*time.Millisecond)
 	}
-	testPath = cloneTargetDir + string(os.PathSeparator) + codeFile
-	textDocumentDidOpen(&loc, testPath)
-
-	// serve diagnostics from the cache
-	assert.Eventually(t, func() bool {
-		return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
-	}, 5*time.Second, 2*time.Millisecond)
 }
 
 func Test_IntegrationFileScan(t *testing.T) {
-	if !environment.RunIntegTest {
-		t.Skip("set " + environment.INTEG_TESTS + " to run integration tests")
-	}
+	testutil.IntegTest(t)
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
 	loc, teardownServer := setupServer()
@@ -438,7 +429,7 @@ func Test_IntegrationFileScan(t *testing.T) {
 	_ = notification.UnmarshalParams(&diagnosticsParams)
 
 	assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
-	assert.Len(t, diagnosticsParams.Diagnostics, 5)
+	assert.Len(t, diagnosticsParams.Diagnostics, 6)
 	assert.Equal(t, diagnosticsParams.Diagnostics[0].Code, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Code)
 	assert.Equal(t, diagnosticsParams.Diagnostics[0].Range, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Range)
 }
