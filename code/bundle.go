@@ -103,7 +103,7 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]bool) File
 
 	var nonAddedFiles = make(map[sglsp.DocumentURI]bool)
 	for documentURI := range files {
-		if !extensions[filepath.Ext(string(documentURI))] {
+		if IsSupported(documentURI) {
 			continue
 		}
 
@@ -133,6 +133,10 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]bool) File
 		return FilesNotAdded{Files: nonAddedFiles}
 	}
 	return FilesNotAdded{}
+}
+
+func IsSupported(documentURI sglsp.DocumentURI) bool {
+	return !extensions[filepath.Ext(string(documentURI))]
 }
 
 func (b *BundleImpl) getFileFrom(content []byte) File {
