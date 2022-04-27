@@ -3,12 +3,13 @@
                  factoryName="Go Test">
     <module name="snyk-lsp"/>
     <working_directory value="$PROJECT_DIR$/"/>
+    <go_parameters value="-p=1"/>
     <envs>
       <env name="INTEG_TESTS" value="true"/>
     </envs>
     <root_directory value="$PROJECT_DIR$"/>
-    <kind value="PACKAGE"/>
-    <package value="github.com/snyk/snyk-ls/server"/>
+    <kind value="DIRECTORY"/>
+    <package value="github.com/snyk/snyk-ls/"/>
     <directory value="$PROJECT_DIR$"/>
     <filePath value="$PROJECT_DIR$"/>
     <framework value="gotest"/>

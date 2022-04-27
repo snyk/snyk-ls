@@ -26,13 +26,13 @@ func Test_SnykCodeAnalysisTimeoutReturnsTimeoutFromEnvironment(t *testing.T) {
 	assert.Equal(t, duration, SnykCodeAnalysisTimeout())
 }
 
-func Test_SnykeCodeAnalysisTimeoutReturnsDefaultIfNoEnvVariableFound(t *testing.T) {
+func Test_SnykCodeAnalysisTimeoutReturnsDefaultIfNoEnvVariableFound(t *testing.T) {
 	os.Clearenv()
 	duration, _ := time.ParseDuration("10m")
 	assert.Equal(t, duration, SnykCodeAnalysisTimeout())
 }
 
-func Test_addSnykCliPathToEnv_should_find_cli_and_add_path_to_env(t *testing.T) {
+func Test_EnsureCLI_should_find_cli_and_add_path_to_env(t *testing.T) {
 	os.Clearenv()
 	temp, err := os.MkdirTemp("", "snyk-cli-test")
 	if err != nil {
@@ -48,20 +48,20 @@ func Test_addSnykCliPathToEnv_should_find_cli_and_add_path_to_env(t *testing.T) 
 		assert.Fail(t, "Couldn't update PATH")
 	}
 
-	addSnykCliPathToEnv()
+	EnsureCLI()
 
 	assert.NotEmpty(t, cliFile, os.Getenv(cliPathKey))
 }
 
-func Test_addSnykCliPathToEnv_should_respect_cli_path_in_env(t *testing.T) {
+func Test_EnsureCLI_should_respect_cli_path_in_env(t *testing.T) {
 	os.Clearenv()
 	err := os.Setenv(cliPathKey, "testCliPath")
 	if err != nil {
-		assert.Fail(t, "Couldn't set cli path in environment")
+		t.Fatal(t, "Couldn't set cli path in environment")
 	}
 	temp, err := os.MkdirTemp("", "snyk-cli-test")
 	if err != nil {
-		assert.Fail(t, "Couldn't create test directory")
+		t.Fatal(t, "Couldn't create test directory")
 	}
 	defer func(path string) {
 		_ = os.RemoveAll(path)
@@ -70,10 +70,10 @@ func Test_addSnykCliPathToEnv_should_respect_cli_path_in_env(t *testing.T) {
 	createDummyCliFile(t, temp)
 	err = os.Setenv("PATH", temp)
 	if err != nil {
-		assert.Fail(t, "Couldn't update PATH")
+		t.Fatal(t, "Couldn't update PATH")
 	}
 
-	addSnykCliPathToEnv()
+	EnsureCLI()
 
 	assert.Equal(t, "testCliPath", os.Getenv(cliPathKey))
 }

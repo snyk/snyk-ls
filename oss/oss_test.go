@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config/environment"
-	"github.com/snyk/snyk-ls/internal/snyk/cli"
+	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -25,6 +25,7 @@ func Test_determineTargetFile(t *testing.T) {
 func Test_ScanWorkspace(t *testing.T) {
 	testutil.IntegTest(t)
 	environment.Load()
+	environment.EnsureCLI()
 	environment.Format = environment.FormatHtml
 
 	path, _ := filepath.Abs("testdata")
@@ -46,6 +47,7 @@ func Test_ScanWorkspace(t *testing.T) {
 func Test_ScanFile(t *testing.T) {
 	testutil.IntegTest(t)
 	environment.Load()
+	environment.EnsureCLI()
 	environment.Format = environment.FormatHtml
 
 	path, _ := filepath.Abs("testdata/package.json")

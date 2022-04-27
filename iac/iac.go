@@ -12,7 +12,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config/environment"
-	"github.com/snyk/snyk-ls/internal/snyk/cli"
+	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -50,8 +50,15 @@ func ScanWorkspace(
 
 	res, err := Cli.Execute(cliCmd(documentURI))
 	if err != nil {
-		if err.(*exec.ExitError).ExitCode() > 1 {
-			log.Err(err).Str("method", "iac.ScanWorkspace").Msg("Error while calling Snyk CLI")
+		switch err := err.(type) {
+		case *exec.ExitError:
+			if err.ExitCode() > 1 {
+				log.Err(err).Str("method", "iac.ScanWorkspace").Str("output", string(res)).Msg("Error while calling Snyk CLI")
+				reportErrorViaChan(documentURI, dChan, err, clChan)
+				return
+			}
+			log.Warn().Err(err).Str("method", "iac.ScanWorkspace").Msg("Error while calling Snyk CLI")
+		default:
 			reportErrorViaChan(documentURI, dChan, err, clChan)
 			return
 		}
@@ -101,8 +108,15 @@ func ScanFile(
 	}
 	res, err := Cli.Execute(cliCmd(documentURI))
 	if err != nil {
-		if err.(*exec.ExitError).ExitCode() > 1 {
-			log.Err(err).Str("method", "iac.ScanFile").Str("response", string(res)).Msg("Error while calling Snyk CLI")
+		switch err := err.(type) {
+		case *exec.ExitError:
+			if err.ExitCode() > 1 {
+				log.Err(err).Str("method", "iac.ScanWorkspace").Str("output", string(res)).Msg("Error while calling Snyk CLI")
+				reportErrorViaChan(documentURI, dChan, err, clChan)
+				return
+			}
+			log.Warn().Err(err).Str("method", "iac.ScanWorkspace").Msg("Error while calling Snyk CLI")
+		default:
 			reportErrorViaChan(documentURI, dChan, err, clChan)
 			return
 		}
@@ -145,7 +159,7 @@ func retrieveAnalysis(
 			Uri:         uri,
 			Diagnostics: diagnostics,
 		}:
-			log.Debug().Str("method", "iac.retrieveAnalysis").Interface("diagnostics", diagnostics).Msg("found sth")
+			log.Debug().Str("method", "iac.retrieveAnalysis").Interface("diagnosticCount", len(diagnostics)).Msg("found sth")
 		default:
 			log.Debug().Str("method", "iac.retrieveAnalysis").Msg("no diags found & sent.")
 		}
@@ -157,7 +171,7 @@ func retrieveAnalysis(
 			Uri:        uri,
 			CodeLenses: codeLenses,
 		}:
-			log.Debug().Str("method", "iac.retrieveAnalysis").Interface("codeLenses", codeLenses).Msg("found lens")
+			log.Debug().Str("method", "iac.retrieveAnalysis").Interface("codeLenseCount", len(codeLenses)).Msg("found lens")
 		default:
 			log.Debug().Str("method", "iac.retrieveAnalysis").Msg("no lens found & sent.")
 		}

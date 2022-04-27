@@ -21,7 +21,8 @@ import (
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/diagnostics"
-	"github.com/snyk/snyk-ls/internal/snyk/cli"
+	"github.com/snyk/snyk-ls/internal/cli"
+	"github.com/snyk/snyk-ls/internal/cli/install"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -223,6 +224,49 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 		_ = notification.UnmarshalParams(&diagnosticsParams)
 		assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
 	}
+}
+
+func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
+	testutil.IntegTest(t)
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
+
+	// remove cli for testing
+	install.Mutex.Lock()
+	installer := install.NewInstaller()
+	for {
+		find, err := installer.Find()
+		if err == nil {
+			err = os.Remove(find)
+			log.Debug().Msgf("Test: removing cli at %s", find)
+			if err != nil {
+				t.Fatal("couldn't remove cli for test")
+			}
+		} else {
+			break
+		}
+	}
+	install.Mutex.Unlock()
+	err := os.Unsetenv("SNYK_CLI_PATH")
+	if err != nil {
+		t.Fatal("couldn't unset environment")
+	}
+	environment.Load()
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	cli.CurrentSettings = cli.Settings{}
+
+	didOpenParams, cleanup := didOpenTextParams()
+	defer cleanup()
+
+	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+
+	assert.Eventually(t, func() bool {
+		find, _ := installer.Find()
+		return find != ""
+	}, 120*time.Second, 10*time.Millisecond)
 }
 
 func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
@@ -461,8 +505,13 @@ func textDocumentDidOpen(loc *server.Local, testPath string) (sglsp.DidOpenTextD
 
 func setupCustomTestRepo(url string, targetCommit string) (string, error) {
 	// clone to temp dir - specific version for reproducible test results
-	cloneTargetDir, _ := os.MkdirTemp(os.TempDir(), "integ_test_repo_*")
-	clone := exec.Command("git", "clone", url, cloneTargetDir)
+	cloneTargetDir, err := os.MkdirTemp(os.TempDir(), "integ_test_repo_")
+	if err != nil {
+		log.Fatal().Err(err).Msg("couldn't create temp dir")
+	}
+	cmd := []string{"clone", url, cloneTargetDir}
+	log.Debug().Interface("cmd", cmd).Msg("clone command")
+	clone := exec.Command("git", cmd...)
 	reset := exec.Command("git", "reset", "--hard", targetCommit)
 	reset.Dir = cloneTargetDir
 

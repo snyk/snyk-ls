@@ -11,6 +11,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/code"
+	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/diagnostics"
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/lsp"
@@ -47,8 +48,8 @@ func Start() {
 	log.Info().Msg("Starting up...")
 	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
 
-	err := srv.Wait()
-	log.Err(err).Msg("Exiting...")
+	_ = srv.Wait()
+	log.Info().Msg("Exiting...")
 }
 
 func WorkspaceDidChangeWorkspaceFoldersHandler() jrpc2.Handler {
@@ -120,12 +121,15 @@ func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv **jrpc2.
 func logError(err error, method string) {
 	if err != nil {
 		log.Err(err).Str("method", method)
+		error_reporting.CaptureError(err)
 	}
 }
 
 func TextDocumentDidOpenHandler(srv **jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidOpenTextDocumentParams) (interface{}, error) {
-		log.Info().Str("method", "TextDocumentDidOpenHandler").Interface("params", params).Msg("RECEIVING")
+		log.Info().Str("method", "TextDocumentDidOpenHandler").Str("documentURI", string(params.TextDocument.URI)).Msg("RECEIVING")
+		environment.EnsureCLI() // first would trigger download
+		environment.EnsureCLI() // block on download if necessary
 		diagnostics.RegisterDocument(params.TextDocument)
 		PublishDiagnostics(ctx, params.TextDocument.URI, srv)
 		return nil, nil
