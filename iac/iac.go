@@ -96,26 +96,27 @@ func ScanFile(
 
 	log.Debug().Str("method", "iac.ScanFile").Msg("started.")
 
-	if IsSupported(documentURI) {
-		res, err := Cli.Execute(cliCmd(documentURI))
-		if err != nil {
-			if err.(*exec.ExitError).ExitCode() > 1 {
-				log.Err(err).Str("method", "iac.ScanFile").Str("response", string(res)).Msg("Error while calling Snyk CLI")
-				reportErrorViaChan(documentURI, dChan, err, clChan)
-				return
-			}
-		}
-
-		var scanResults iacScanResult
-		if err := json.Unmarshal(res, &scanResults); err != nil {
-			log.Err(err).Str("method", "iac.ScanFile").
-				Msg("Error while calling Snyk CLI")
+	if !IsSupported(documentURI) {
+		return
+	}
+	res, err := Cli.Execute(cliCmd(documentURI))
+	if err != nil {
+		if err.(*exec.ExitError).ExitCode() > 1 {
+			log.Err(err).Str("method", "iac.ScanFile").Str("response", string(res)).Msg("Error while calling Snyk CLI")
 			reportErrorViaChan(documentURI, dChan, err, clChan)
 			return
 		}
-		log.Debug().Interface("iacScanResult", scanResults).Msg("got it all unmarshalled, general!")
-		retrieveAnalysis(documentURI, scanResults, dChan, clChan)
 	}
+
+	var scanResults iacScanResult
+	if err := json.Unmarshal(res, &scanResults); err != nil {
+		log.Err(err).Str("method", "iac.ScanFile").
+			Msg("Error while calling Snyk CLI")
+		reportErrorViaChan(documentURI, dChan, err, clChan)
+		return
+	}
+	log.Debug().Interface("iacScanResult", scanResults).Msg("got it all unmarshalled, general!")
+	retrieveAnalysis(documentURI, scanResults, dChan, clChan)
 }
 
 func cliCmd(u sglsp.DocumentURI) []string {
