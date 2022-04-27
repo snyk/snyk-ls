@@ -185,14 +185,14 @@ func processResults(
 				Str("uri", string(result.Uri)).
 				Msg("reading diag from chan.")
 
-			if result.Err == nil {
-				diagnosticsMutex.Lock()
-				diagnostics[result.Uri] = append(diagnostics[result.Uri], result.Diagnostics...)
-				documentDiagnosticCache[result.Uri] = diagnostics[result.Uri]
-				diagnosticsMutex.Unlock()
-			} else {
+			if result.Err != nil {
 				log.Err(result.Err).Str("method", "fetchAllRegisteredDocumentDiagnostics")
+				break
 			}
+			diagnosticsMutex.Lock()
+			diagnostics[result.Uri] = append(diagnostics[result.Uri], result.Diagnostics...)
+			documentDiagnosticCache[result.Uri] = diagnostics[result.Uri]
+			diagnosticsMutex.Unlock()
 
 		case result := <-clChan:
 			log.Trace().
@@ -200,15 +200,14 @@ func processResults(
 				Str("uri", string(result.Uri)).
 				Msg("reading lens from chan.")
 
-			if result.Err == nil {
-				diagnosticsMutex.Lock()
-				codeLenses = append(codeLenses, result.CodeLenses...)
-				codeLenseCache[result.Uri] = codeLenses
-				diagnosticsMutex.Unlock()
-			} else {
+			if result.Err != nil {
 				log.Err(result.Err).Str("method", "fetchAllRegisteredDocumentDiagnostics")
+				break
 			}
-
+			diagnosticsMutex.Lock()
+			codeLenses = append(codeLenses, result.CodeLenses...)
+			codeLenseCache[result.Uri] = codeLenses
+			diagnosticsMutex.Unlock()
 		default: // return results once channels are empty
 			log.Debug().
 				Str("method", "fetchAllRegisteredDocumentDiagnostics").

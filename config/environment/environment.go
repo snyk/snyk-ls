@@ -18,7 +18,6 @@ const (
 	snykTokenKey       = "SNYK_TOKEN"
 	deeproxyApiUrlKey  = "DEEPROXY_API_URL"
 	snykCodeTimeoutKey = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
-	IntegTests         = "INTEG_TESTS"
 	FormatHtml         = "html"
 	FormatMd           = "md"
 )
@@ -27,7 +26,6 @@ var (
 	configLoaded = false
 	Format       = "md"
 	ConfigFile   = ""
-	RunIntegTest = os.Getenv(IntegTests) != ""
 	LogPath      string
 )
 

@@ -69,13 +69,8 @@ func setupServer() (server.Local, func(l *server.Local)) {
 func startServer() server.Local {
 	var srv *jrpc2.Server
 
-	if environment.RunIntegTest {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-		diagnostics.SnykCode = &code.SnykCodeBackendService{}
-	} else {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-		diagnostics.SnykCode = &code.FakeSnykCodeApiService{}
-	}
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	diagnostics.SnykCode = &code.FakeSnykCodeApiService{}
 
 	lspHandlers := handler.Map{
 		"initialize":                          InitializeHandler(),
@@ -299,39 +294,6 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 	_, err := loc.Client.Call(ctx, "textDocument/willSave", nil)
 	if err != nil {
 		log.Fatal().Err(err)
-	}
-}
-
-func Test_textDocumentCodeLens_shouldReturnCodeLenses(t *testing.T) {
-	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
-	cli.CurrentSettings = cli.Settings{}
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
-	params, cleanup := didOpenTextParams()
-	defer cleanup()
-	codeLensParams := sglsp.CodeLensParams{
-		TextDocument: sglsp.TextDocumentIdentifier{
-			URI: params.TextDocument.URI,
-		},
-	}
-
-	// populate caches
-	_, err := loc.Client.Call(ctx, "textDocument/didOpen", params)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-
-	rsp, err := loc.Client.Call(ctx, "textDocument/codeLens", codeLensParams)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-
-	var codeLenses []sglsp.CodeLens
-	_ = rsp.UnmarshalResult(&codeLenses)
-	if environment.RunIntegTest {
-		assert.Equal(t, 2, len(codeLenses))
-	} else {
-		assert.Equal(t, 1, len(codeLenses))
 	}
 }
 
