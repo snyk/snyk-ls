@@ -172,10 +172,11 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldCreateBundleWhenHashEmpty(t *
 	b.AddToBundleDocuments(registeredDocuments)
 
 	dChan := make(chan lsp2.DiagnosticResult)
+	hoverChan := make(chan lsp2.Hover)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	go b.FetchDiagnosticsData("", &wg, dChan)
+	go b.FetchDiagnosticsData("", &wg, dChan, hoverChan)
 
 	<-dChan
 
@@ -210,9 +211,10 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldExtendBundleWhenHashNotEmpty(
 
 	// execute
 	dChan := make(chan lsp2.DiagnosticResult)
+	hoverChan := make(chan lsp2.Hover)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go b.FetchDiagnosticsData("", &wg, dChan)
+	go b.FetchDiagnosticsData("", &wg, dChan, hoverChan)
 
 	<-dChan
 
@@ -241,10 +243,11 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldRetrieveFromBackend(t *testin
 	b.AddToBundleDocuments(registeredDocuments)
 	// execute
 	dChan := make(chan lsp2.DiagnosticResult)
+	hoverChan := make(chan lsp2.Hover)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	go b.FetchDiagnosticsData("", &wg, dChan)
+	go b.FetchDiagnosticsData("", &wg, dChan, hoverChan)
 	result := <-dChan
 	diagnosticMap[result.Uri] = result.Diagnostics
 

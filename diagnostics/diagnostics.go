@@ -132,7 +132,7 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 			string(uri),
 			&wg,
 			dChan,
-			// hoverChan,
+			hoverChan,
 		)
 	}
 

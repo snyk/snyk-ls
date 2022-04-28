@@ -29,10 +29,11 @@ func Test_ScanWorkspace(t *testing.T) {
 	doc := sglsp.DocumentURI(path)
 
 	dChan := make(chan lsp.DiagnosticResult)
+	hoverChan := make(chan lsp.Hover)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	go ScanWorkspace(doc, &wg, dChan)
+	go ScanWorkspace(doc, &wg, dChan, hoverChan)
 
 	diagnosticResult := <-dChan
 
@@ -47,10 +48,11 @@ func Test_ScanFile(t *testing.T) {
 	path, _ := filepath.Abs("testdata/package.json")
 
 	dChan := make(chan lsp.DiagnosticResult)
+	hoverChan := make(chan lsp.Hover)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	go ScanFile(uri.PathToUri(path), &wg, dChan)
+	go ScanFile(uri.PathToUri(path), &wg, dChan, hoverChan)
 
 	diagnosticResult := <-dChan
 

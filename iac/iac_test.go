@@ -25,10 +25,11 @@ func Test_ScanWorkspace(t *testing.T) {
 	doc := lsp.DocumentURI("file:" + path)
 
 	dChan := make(chan lsp2.DiagnosticResult, 1)
+	hoverChan := make(chan lsp2.Hover, 1)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go ScanWorkspace(doc, &wg, dChan)
+	go ScanWorkspace(doc, &wg, dChan, hoverChan)
 	wg.Wait()
 
 	diagnosticResult := <-dChan
@@ -52,10 +53,11 @@ func Test_ScanFile(t *testing.T) {
 	}
 
 	dChan := make(chan lsp2.DiagnosticResult, 1)
+	hoverChan := make(chan lsp2.Hover, 1)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go ScanFile(doc.URI, &wg, dChan)
+	go ScanFile(doc.URI, &wg, dChan, hoverChan)
 	wg.Wait()
 
 	diagnosticResult := <-dChan
@@ -78,6 +80,7 @@ func Test_IacDiagnosticsRetrieval(t *testing.T) {
 		log.Err(err).Str("method", "iac.ScanFile").Msg("Error while calling Snyk CLI")
 	}
 
-	diagnostics := convertDiagnostics(scanResults)
+	diagnostics, hovers := convertDiagnostics(scanResults)
 	assert.NotEqual(t, 0, len(diagnostics))
+	assert.NotEqual(t, 0, len(hovers))
 }

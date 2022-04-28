@@ -122,40 +122,40 @@ func (s *SnykCodeBackendService) RunAnalysis(
 	shardKey string,
 	limitToFiles []sglsp.DocumentURI,
 	severity int,
-) (map[sglsp.DocumentURI][]lsp.Diagnostic, string, error) {
+) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, string, error) {
 	log.Debug().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Msg("API: Retrieving analysis for bundle")
 	defer log.Debug().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Msg("API: Retrieving analysis done")
 
 	requestBody, err := s.analysisRequestBody(bundleHash, shardKey, limitToFiles, severity)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, "", err
 	}
 
 	responseBody, err := s.doCall("POST", "/analysis", requestBody)
 	failed := "FAILED"
 	if err != nil {
-		return nil, failed, err
+		return nil, nil, failed, err
 	}
 
 	var response SarifResponse
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, "", err
 	}
 
 	log.Debug().Str("method", "RunAnalysis").
 		Str("bundleHash", bundleHash).Float32("progress", response.Progress).Msgf("Status: %s", response.Status)
 
 	if response.Status == failed {
-		return nil, "", SnykAnalysisFailedError{Msg: string(responseBody)}
+		return nil, nil, "", SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
 
 	if response.Status != "COMPLETE" {
-		return nil, "", nil
+		return nil, nil, "", nil
 	}
 
-	diags := s.convertSarifResponse(response)
-	return diags, response.Status, err
+	diags, hovers := s.convertSarifResponse(response)
+	return diags, hovers, response.Status, err
 }
 
 func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, shardKey string, limitToFiles []sglsp.DocumentURI, severity int) ([]byte, error) {
@@ -213,17 +213,23 @@ func (s *SnykCodeBackendService) convertLegacyResponse(
 	return diags
 }
 
-func (s *SnykCodeBackendService) convertSarifResponse(response SarifResponse) map[sglsp.DocumentURI][]lsp.Diagnostic {
+func (s *SnykCodeBackendService) convertSarifResponse(response SarifResponse) (
+	map[sglsp.DocumentURI][]lsp.Diagnostic,
+	map[sglsp.DocumentURI][]lsp.HoverDetails,
+) {
 	diags := make(map[sglsp.DocumentURI][]lsp.Diagnostic)
+	hovers := make(map[sglsp.DocumentURI][]lsp.HoverDetails)
+
 	runs := response.Sarif.Runs
 	if len(runs) == 0 {
-		return diags
+		return diags, hovers
 	}
 
 	for _, result := range runs[0].Results {
 		for _, loc := range result.Locations {
 			uri := sglsp.DocumentURI(loc.PhysicalLocation.ArtifactLocation.URI)
 			diagSlice := diags[uri]
+			hoverSlice := hovers[uri]
 
 			myRange := sglsp.Range{
 				Start: sglsp.Position{
@@ -235,16 +241,27 @@ func (s *SnykCodeBackendService) convertSarifResponse(response SarifResponse) ma
 					Character: loc.PhysicalLocation.Region.EndColumn,
 				},
 			}
+
 			d := lsp.Diagnostic{
 				Range:    myRange,
 				Severity: lspSeverity(result.Level),
 				Code:     result.RuleID,
 				Source:   "Snyk LSP",
-				Message:  result.Message.Text,
+				Message:  fmt.Sprintf("Vulnerability Id: %s", result.RuleID),
 			}
+
 			diagSlice = append(diagSlice, d)
 			diags[uri] = diagSlice
+
+			h := lsp.HoverDetails{
+				Id:      result.RuleID,
+				Range:   myRange,
+				Message: fmt.Sprintf("#### %s \n", result.Message.Text),
+			}
+
+			hoverSlice = append(hoverSlice, h)
+			hovers[uri] = hoverSlice
 		}
 	}
-	return diags
+	return diags, hovers
 }

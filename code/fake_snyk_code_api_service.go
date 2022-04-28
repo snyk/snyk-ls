@@ -15,17 +15,24 @@ import (
 
 var (
 	fakeDiagnosticUri sglsp.DocumentURI
-	FakeDiagnostic    = lsp.Diagnostic{
-		Range: sglsp.Range{
-			Start: sglsp.Position{
-				Line:      0,
-				Character: 3,
-			},
-			End: sglsp.Position{
-				Line:      0,
-				Character: 7,
-			},
+
+	fakeRange = sglsp.Range{
+		Start: sglsp.Position{
+			Line:      0,
+			Character: 3,
 		},
+		End: sglsp.Position{
+			Line:      0,
+			Character: 7,
+		},
+	}
+	FakeHover = lsp.HoverDetails{
+		Id:      "12",
+		Range:   fakeRange,
+		Message: "You have been hacked!",
+	}
+	FakeDiagnostic = lsp.Diagnostic{
+		Range:    fakeRange,
 		Severity: sglsp.Error,
 		Code:     "SNYK-123",
 		Source:   "snyk code",
@@ -115,14 +122,19 @@ func (f *FakeSnykCodeApiService) RunAnalysis(
 	shardKey string,
 	limitToFiles []sglsp.DocumentURI,
 	severity int,
-) (map[sglsp.DocumentURI][]lsp.Diagnostic, string, error) {
+) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, string, error) {
 	params := []interface{}{bundleHash, limitToFiles, severity}
 	f.addCall(params, RunAnalysisOperation)
 
 	diagnosticMap := map[sglsp.DocumentURI][]lsp.Diagnostic{}
+	hoverMap := map[sglsp.DocumentURI][]lsp.HoverDetails{}
+
 	var diagnostics []lsp.Diagnostic
+	var hovers []lsp.HoverDetails
+
 	diagnosticMap[fakeDiagnosticUri] = append(diagnostics, FakeDiagnostic)
+	hoverMap[fakeDiagnosticUri] = append(hovers, FakeHover)
 
 	log.Trace().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Interface("fakeDiagnostic", FakeDiagnostic).Msg("fake backend call received & answered")
-	return diagnosticMap, "COMPLETE", nil
+	return diagnosticMap, hoverMap, "COMPLETE", nil
 }

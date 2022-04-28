@@ -161,7 +161,7 @@ func (b *BundleImpl) FetchDiagnosticsData(
 	rootPath string,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
-	// hoverChan chan lsp.HoverDetails,
+	hoverChan chan lsp.Hover,
 ) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
@@ -175,12 +175,13 @@ func (b *BundleImpl) FetchDiagnosticsData(
 		return
 	}
 
-	b.retrieveAnalysis(rootPath, dChan)
+	b.retrieveAnalysis(rootPath, dChan, hoverChan)
 }
 
 func (b *BundleImpl) retrieveAnalysis(
 	rootPath string,
 	dChan chan lsp.DiagnosticResult,
+	hoverChan chan lsp.Hover,
 ) {
 	if len(b.BundleDocuments) <= 0 {
 		return
@@ -188,7 +189,7 @@ func (b *BundleImpl) retrieveAnalysis(
 
 	for {
 		start := time.Now()
-		diags, status, err := b.SnykCode.RunAnalysis(
+		diags, hovers, status, err := b.SnykCode.RunAnalysis(
 			b.BundleHash,
 			getShardKey(rootPath, environment.Token()),
 			[]sglsp.DocumentURI{},
@@ -203,9 +204,7 @@ func (b *BundleImpl) retrieveAnalysis(
 
 		if status == "COMPLETE" {
 			for u, d := range diags {
-				log.Trace().
-					Str("method", "retrieveAnalysis").
-					Str("bundleHash", b.BundleHash).
+				log.Trace().Str("method", "retrieveAnalysis").Str("bundleHash", b.BundleHash).
 					Str("uri1", string(u)).
 					Msg("sending diagnostics...")
 
@@ -215,6 +214,7 @@ func (b *BundleImpl) retrieveAnalysis(
 					Err:         err,
 				}
 			}
+			sendHoversViaChan(hovers, hoverChan)
 
 			return
 		}
@@ -225,6 +225,15 @@ func (b *BundleImpl) retrieveAnalysis(
 			dChan <- lsp.DiagnosticResult{Err: err}
 		}
 		time.Sleep(1 * time.Second)
+	}
+}
+
+func sendHoversViaChan(hovers map[sglsp.DocumentURI][]lsp.HoverDetails, hoverChan chan lsp.Hover) {
+	for uri, hover := range hovers {
+		hoverChan <- lsp.Hover{
+			Uri:   uri,
+			Hover: hover,
+		}
 	}
 }
 

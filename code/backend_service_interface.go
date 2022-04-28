@@ -22,6 +22,7 @@ type SnykCodeService interface {
 		severity int,
 	) (
 		map[sglsp.DocumentURI][]lsp.Diagnostic,
+		map[sglsp.DocumentURI][]lsp.HoverDetails,
 		string,
 		error,
 	)

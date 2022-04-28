@@ -143,19 +143,17 @@ func retrieveAnalysis(
 ) {
 	diagnostics, hoverDetails := convertDiagnostics(scanResult)
 
-	if len(diagnostics) > 0 || len(hoverDetails) > 0 {
+	if len(diagnostics) > 0 {
 		select {
 		case dChan <- lsp.DiagnosticResult{
 			Uri:         uri,
 			Diagnostics: diagnostics,
 			Err:         diagnosticsError,
 		}:
-
-		case hoverChan <- lsp.Hover{
-			Uri:   uri,
-			Hover: hoverDetails,
-		}:
-			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("got hover, now sending to chan.")
+			hoverChan <- lsp.Hover{
+				Uri:   uri,
+				Hover: hoverDetails,
+			}
 
 		default:
 			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("no diags found & sent.")

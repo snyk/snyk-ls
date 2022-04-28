@@ -123,6 +123,7 @@ func TextDocumentDidSaveHandler(srv **jrpc2.Server) handler.Func {
 		log.Info().Str("method", "TextDocumentDidSaveHandler").Interface("params", params).Msg("RECEIVING")
 		// clear cache when saving and get fresh diagnostics
 		diagnostics.ClearDiagnosticsCache(params.TextDocument.URI)
+		hover.DeleteHover(params.TextDocument.URI)
 		PublishDiagnostics(ctx, params.TextDocument.URI, srv)
 		return nil, nil
 	})
@@ -155,8 +156,8 @@ func TextDocumentHover() jrpc2.Handler {
 		log.Info().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
 		diagnostics.GetDiagnostics(params.TextDocument.URI)
 
-		hover := hover.GetHover(params.TextDocument.URI, params.Position)
-		return hover, nil
+		hoverResult := hover.GetHover(params.TextDocument.URI, params.Position)
+		return hoverResult, nil
 	})
 }
 func InitializeHandler() handler.Func {
@@ -164,13 +165,13 @@ func InitializeHandler() handler.Func {
 		log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
 		clientParams = params
 
-		go hover.CreateHoverListener()
-
 		if len(clientParams.WorkspaceFolders) > 0 {
 			go diagnostics.WorkspaceScan(clientParams.WorkspaceFolders)
 		} else {
 			go diagnostics.GetDiagnostics(clientParams.RootURI)
 		}
+
+		go hover.CreateHoverListener()
 
 		return lsp.InitializeResult{
 			Capabilities: lsp.ServerCapabilities{

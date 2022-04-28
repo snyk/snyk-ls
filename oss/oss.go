@@ -207,7 +207,7 @@ func retrieveAnalysis(
 		log.Err(err).Str("method", "oss.retrieveAnalysis").Msg("Error while retrieving diagnositics")
 	}
 
-	if len(diags) > 0 || len(hoverDetails) > 0 || err != nil {
+	if len(diags) > 0 || err != nil {
 		log.Debug().Str("method", "oss.retrieveAnalysis").Msg("got diags, now sending to chan.")
 		select {
 		case dChan <- lsp.DiagnosticResult{
@@ -215,12 +215,11 @@ func retrieveAnalysis(
 			Diagnostics: diags,
 			Err:         err,
 		}:
+			hoverChan <- lsp.Hover{
+				Uri:   uri,
+				Hover: hoverDetails,
+			}
 
-		case hoverChan <- lsp.Hover{
-			Uri:   uri,
-			Hover: hoverDetails,
-		}:
-			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("got hover, now sending to chan.")
 		default:
 			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("not sending...")
 		}
@@ -241,11 +240,11 @@ func retrieveDiagnostics(
 
 	for _, issue := range res.Vulnerabilities {
 		title := issue.Title
-		// description := issue.Description
+		description := issue.Description
 
 		if environment.Format == environment.FormatHtml {
 			title = string(markdown.ToHTML([]byte(title), nil, nil))
-			// description = string(markdown.ToHTML([]byte(description), nil, nil))
+			description = string(markdown.ToHTML([]byte(description), nil, nil))
 		}
 
 		diagnostic := lsp.Diagnostic{
@@ -261,10 +260,24 @@ func retrieveDiagnostics(
 		}
 		diagnostics = append(diagnostics, diagnostic)
 
+		summary := fmt.Sprintf("### Vulnerability %s %s %s \n #### Fixed in: %s | Exploit maturity: %s",
+			createCveLink(issue.Identifiers.CVE),
+			createCweLink(issue.Identifiers.CWE),
+			createIssueUrl(issue.Id),
+			createFixedIn(issue.FixedIn),
+			strings.ToUpper(issue.Severity),
+		)
+
 		hover := lsp.HoverDetails{
-			Id:      issue.Id,
-			Range:   findRange(issue, uri, fileContent),
-			Message: fmt.Sprintf("\n%s", issue.Description),
+			Id:    issue.Id,
+			Range: findRange(issue, uri, fileContent),
+			Message: fmt.Sprintf("\n### %s: %s affecting %s package \n%s \n%s",
+				issue.Id,
+				title,
+				issue.PackageName,
+				summary,
+				description,
+			),
 		}
 		hoverDetails = append(hoverDetails, hover)
 	}
@@ -278,6 +291,40 @@ func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 		return sglsp.Info
 	}
 	return lspSev
+}
+
+func createCveLink(cve []string) string {
+	var formattedCve string
+	for _, c := range cve {
+		formattedCve += fmt.Sprintf("| [%s](https://cve.mitre.org/cgi-bin/cvename.cgi?name=%s)", c, c)
+	}
+	return formattedCve
+}
+
+func createIssueUrl(id string) string {
+	return fmt.Sprintf("| [%s](https://snyk.io/vuln/%s)", id, id)
+}
+
+func createFixedIn(fixedIn []string) string {
+	var f string
+	if len(fixedIn) < 1 {
+		f += "Not Fixed"
+	} else {
+		f += "@" + fixedIn[0]
+		for _, version := range fixedIn[1:] {
+			f += fmt.Sprintf(", %s", version)
+		}
+	}
+	return f
+}
+
+func createCweLink(cwe []string) string {
+	var formattedCwe string
+	for _, c := range cwe {
+		id := strings.Replace(c, "CWE-", "", -1)
+		formattedCwe += fmt.Sprintf("| [%s](https://cwe.mitre.org/data/definitions/%s.html)", c, id)
+	}
+	return formattedCwe
 }
 
 func findRange(issue ossIssue, uri sglsp.DocumentURI, fileContent []byte) sglsp.Range {
