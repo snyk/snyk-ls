@@ -117,9 +117,6 @@ func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[sglsp
 }
 
 func (s *SnykCodeBackendService) RunAnalysis(bundleHash string, shardKey string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens, string, error) {
-	log.Debug().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Msg("API: Retrieving analysis for bundle")
-	defer log.Debug().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Msg("API: Retrieving analysis done")
-
 	requestBody, err := s.analysisRequestBody(bundleHash, shardKey, limitToFiles, severity)
 	if err != nil {
 		log.Err(err).Str("method", "RunAnalysis").Str("requestBody", string(requestBody)).Msg("error creating request body")
@@ -147,6 +144,12 @@ func (s *SnykCodeBackendService) RunAnalysis(bundleHash string, shardKey string,
 		log.Err(err).Str("method", "RunAnalysis").Str("responseStatus", response.Status).Msg("analysis failed")
 		return nil, nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
+
+	if response.Status == "" {
+		log.Err(err).Str("method", "RunAnalysis").Str("responseStatus", response.Status).Msg("unknown response status (empty)")
+		return nil, nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
+	}
+
 	if response.Status != "COMPLETE" {
 		return nil, nil, response.Status, nil
 	}

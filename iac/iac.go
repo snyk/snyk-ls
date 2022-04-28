@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/gomarkdown/markdown"
@@ -25,13 +24,16 @@ var (
 	}
 )
 
-func getDetectableFiles() []string {
-	return []string{
-		"yaml",
-		"yml",
-		"json",
-		"tf",
-	}
+var extensions = map[string]bool{
+	".yaml": true,
+	".yml":  true,
+	".json": true,
+	".tf":   true,
+}
+
+func IsSupported(documentURI sglsp.DocumentURI) bool {
+	ext := filepath.Ext(uri.PathFromUri(documentURI))
+	return extensions[ext]
 }
 
 func ScanWorkspace(
@@ -94,28 +96,27 @@ func ScanFile(
 
 	log.Debug().Str("method", "iac.ScanFile").Msg("started.")
 
-	for _, supportedFile := range getDetectableFiles() {
-		if strings.HasSuffix(string(documentURI), supportedFile) {
-			res, err := Cli.Execute(cliCmd(documentURI))
-			if err != nil {
-				if err.(*exec.ExitError).ExitCode() > 1 {
-					log.Err(err).Str("method", "iac.ScanFile").Str("response", string(res)).Msg("Error while calling Snyk CLI")
-					reportErrorViaChan(documentURI, dChan, err, clChan)
-					return
-				}
-			}
-
-			var scanResults iacScanResult
-			if err := json.Unmarshal(res, &scanResults); err != nil {
-				log.Err(err).Str("method", "iac.ScanFile").
-					Msg("Error while calling Snyk CLI")
-				reportErrorViaChan(documentURI, dChan, err, clChan)
-				return
-			}
-			log.Debug().Interface("iacScanResult", scanResults).Msg("got it all unmarshalled, general!")
-			retrieveAnalysis(documentURI, scanResults, dChan, clChan)
+	if !IsSupported(documentURI) {
+		return
+	}
+	res, err := Cli.Execute(cliCmd(documentURI))
+	if err != nil {
+		if err.(*exec.ExitError).ExitCode() > 1 {
+			log.Err(err).Str("method", "iac.ScanFile").Str("response", string(res)).Msg("Error while calling Snyk CLI")
+			reportErrorViaChan(documentURI, dChan, err, clChan)
+			return
 		}
 	}
+
+	var scanResults iacScanResult
+	if err := json.Unmarshal(res, &scanResults); err != nil {
+		log.Err(err).Str("method", "iac.ScanFile").
+			Msg("Error while calling Snyk CLI")
+		reportErrorViaChan(documentURI, dChan, err, clChan)
+		return
+	}
+	log.Debug().Interface("iacScanResult", scanResults).Msg("got it all unmarshalled, general!")
+	retrieveAnalysis(documentURI, scanResults, dChan, clChan)
 }
 
 func cliCmd(u sglsp.DocumentURI) []string {

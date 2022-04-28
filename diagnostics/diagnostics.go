@@ -57,8 +57,13 @@ func ClearRegisteredDocuments() {
 }
 
 func RegisterDocument(file sglsp.TextDocumentItem) {
+	documentURI := file.URI
+	if !(code.IsSupported(documentURI) || iac.IsSupported(documentURI) || oss.IsSupported(documentURI)) {
+		return
+	}
 	registeredDocsMutex.Lock()
-	registeredDocuments[file.URI] = true
+
+	registeredDocuments[documentURI] = true
 	registeredDocsMutex.Unlock()
 }
 
@@ -127,25 +132,25 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 	return processResults(dChan, diagnostics, clChan, codeLenses)
 }
 
-func workspaceLevelFetch(uri sglsp.DocumentURI, enabledProducts environment.EnabledProducts, bundles []*code.BundleImpl, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
+func workspaceLevelFetch(documentURI sglsp.DocumentURI, enabledProducts environment.EnabledProducts, bundles []*code.BundleImpl, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
+	if enabledProducts.Iac {
+		wg.Add(1)
+		go iac.ScanWorkspace(Cli, documentURI, wg, dChan, clChan)
+	}
+	if enabledProducts.OpenSource {
+		wg.Add(1)
+		go oss.ScanWorkspace(Cli, documentURI, wg, dChan, clChan)
+	}
 	if enabledProducts.Code {
 		registeredDocsMutex.Lock()
 		var bundleDocs = registeredDocuments
 		registeredDocsMutex.Unlock()
 		// we need a pointer to the array of bundle pointers to be able to grow it
 		createOrExtendBundles(bundleDocs, &bundles)
-		wg.Add(len(bundles))
 		for _, myBundle := range bundles {
-			go myBundle.FetchDiagnosticsData(string(uri), wg, dChan, clChan)
+			wg.Add(1)
+			go myBundle.FetchDiagnosticsData(string(documentURI), wg, dChan, clChan)
 		}
-	}
-	if enabledProducts.Iac {
-		wg.Add(1)
-		go iac.ScanWorkspace(Cli, uri, wg, dChan, clChan)
-	}
-	if enabledProducts.OpenSource {
-		wg.Add(1)
-		go oss.ScanWorkspace(Cli, uri, wg, dChan, clChan)
 	}
 }
 

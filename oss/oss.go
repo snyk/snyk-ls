@@ -38,33 +38,35 @@ var (
 	}
 )
 
-func getDetectableFiles() []string {
-	return []string{
-		"yarn.lock",
-		"package-lock.json",
-		"package.json",
-		"Gemfile",
-		"Gemfile.lock",
-		"pom.xml",
-		"build.gradle",
-		"build.gradle.kts",
-		"build.sbt",
-		"Pipfile",
-		"requirements.txt",
-		"Gopkg.lock",
-		"go.mod",
-		"vendor/vendor.json",
-		"obj/project.assets.json",
-		"project.assets.json",
-		"packages.config",
-		"paket.dependencies",
-		"composer.lock",
-		"Podfile",
-		"Podfile.lock",
-		"poetry.lock",
-		"mix.exs",
-		"mix.lock",
-	}
+var supportedFiles = map[string]bool{
+	"yarn.lock":               true,
+	"package-lock.json":       true,
+	"package.json":            true,
+	"Gemfile":                 true,
+	"Gemfile.lock":            true,
+	"pom.xml":                 true,
+	"build.gradle":            true,
+	"build.gradle.kts":        true,
+	"build.sbt":               true,
+	"Pipfile":                 true,
+	"requirements.txt":        true,
+	"Gopkg.lock":              true,
+	"go.mod":                  true,
+	"vendor/vendor.json":      true,
+	"obj/project.assets.json": true,
+	"project.assets.json":     true,
+	"packages.config":         true,
+	"paket.dependencies":      true,
+	"composer.lock":           true,
+	"Podfile":                 true,
+	"Podfile.lock":            true,
+	"poetry.lock":             true,
+	"mix.exs":                 true,
+	"mix.lock":                true,
+}
+
+func IsSupported(documentURI sglsp.DocumentURI) bool {
+	return supportedFiles[filepath.Base(uri.PathFromUri(documentURI))]
 }
 
 func ScanWorkspace(Cli cli.Executor, workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
@@ -127,48 +129,45 @@ func ScanFile(Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGrou
 
 	log.Debug().Str("method", "oss.ScanFile").Msg("started.")
 
-	for _, supportedFile := range getDetectableFiles() {
-		path := uri.PathFromUri(documentURI)
-		if !strings.HasSuffix(path, supportedFile) {
-			continue
-		}
-		path, err := filepath.Abs(path)
-		if err != nil {
-			log.Err(err).Str("method", "oss.ScanFile").
-				Msg("Error while extracting file absolutePath")
-		}
-
-		cmd := cli.CliCmd([]string{environment.CliPath(), "test", filepath.Dir(path), "--json"})
-		res, err := Cli.Execute(cmd)
-		if err != nil {
-			if err.(*exec.ExitError).ExitCode() > 1 {
-				log.Err(err).
-					Str("method", "oss.ScanFile").
-					Str("response", string(res)).
-					Msgf("Error while calling Snyk CLI, err: %v", err)
-				reportErrorViaChan(documentURI, dChan, err)
-				return
-			}
-		}
-
-		var scanResults ossScanResult
-		err = json.Unmarshal(res, &scanResults)
-		if err != nil {
-			log.Err(err).Str("method", "scanFile").Msg("couldn't unmarshal response")
-			reportErrorViaChan(documentURI, dChan, err)
-			return
-		}
-
-		fileContent, err := os.ReadFile(path)
-		if err != nil {
-			log.Err(err).Str("method", "oss.ScanFile").
-				Msg("Error reading file " + path)
-			reportErrorViaChan(documentURI, dChan, err)
-			return
-		}
-
-		retrieveAnalysis(scanResults, documentURI, fileContent, dChan)
+	if !IsSupported(documentURI) {
+		return
 	}
+	path, err := filepath.Abs(uri.PathFromUri(documentURI))
+	if err != nil {
+		log.Err(err).Str("method", "oss.ScanFile").
+			Msg("Error while extracting file absolutePath")
+	}
+
+	cmd := cli.CliCmd([]string{environment.CliPath(), "test", filepath.Dir(path), "--json"})
+	res, err := Cli.Execute(cmd)
+	if err != nil {
+		if err.(*exec.ExitError).ExitCode() > 1 {
+			log.Err(err).
+				Str("method", "oss.ScanFile").
+				Str("response", string(res)).
+				Msgf("Error while calling Snyk CLI, err: %v", err)
+			reportErrorViaChan(documentURI, dChan, err)
+			return
+		}
+	}
+
+	var scanResults ossScanResult
+	err = json.Unmarshal(res, &scanResults)
+	if err != nil {
+		log.Err(err).Str("method", "scanFile").Msg("couldn't unmarshal response")
+		reportErrorViaChan(documentURI, dChan, err)
+		return
+	}
+
+	fileContent, err := os.ReadFile(path)
+	if err != nil {
+		log.Err(err).Str("method", "oss.ScanFile").
+			Msg("Error reading file " + path)
+		reportErrorViaChan(documentURI, dChan, err)
+		return
+	}
+
+	retrieveAnalysis(scanResults, documentURI, fileContent, dChan)
 }
 
 func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, err error) chan lsp.DiagnosticResult {

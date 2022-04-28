@@ -55,13 +55,14 @@ var (
 )
 
 const (
-	maxFileSize         = 1024 * 1024
-	maxBundleSize       = 1024 * 1024 * 4
-	jsonOverheadRequest = "{\"files\":{}}"
-	jsonUriOverhead     = "\"\":{}"
-	jsonHashSizePerFile = "\"hash\":\"0123456789012345678901234567890123456789012345678901234567890123\""
-	jsonContentOverhead = ",\"content\":\"\""
-	jsonOverheadPerFile = jsonUriOverhead + jsonContentOverhead
+	maxFileSize               = 1024 * 1024
+	maxBundleSize             = 1024 * 1024 * 4
+	jsonOverheadRequest       = "{\"files\":{}}"
+	jsonOverHeadRequestLength = len(jsonOverheadRequest)
+	jsonUriOverhead           = "\"\":{}"
+	jsonHashSizePerFile       = "\"hash\":\"0123456789012345678901234567890123456789012345678901234567890123\""
+	jsonContentOverhead       = ",\"content\":\"\""
+	jsonOverheadPerFile       = jsonUriOverhead + jsonContentOverhead
 )
 
 func getTotalDocPayloadSize(documentURI string, content []byte) int {
@@ -69,10 +70,11 @@ func getTotalDocPayloadSize(documentURI string, content []byte) int {
 }
 
 type BundleImpl struct {
-	SnykCode        SnykCodeService
-	BundleHash      string
-	BundleDocuments map[sglsp.DocumentURI]File
-	missingFiles    []sglsp.DocumentURI
+	SnykCode         SnykCodeService
+	BundleHash       string
+	BundleDocuments  map[sglsp.DocumentURI]File
+	missingFiles     []sglsp.DocumentURI
+	allDocumentsSize int
 }
 
 type FilesNotAdded struct {
@@ -103,7 +105,7 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]bool) File
 
 	var nonAddedFiles = make(map[sglsp.DocumentURI]bool)
 	for documentURI := range files {
-		if !extensions[filepath.Ext(string(documentURI))] {
+		if !IsSupported(documentURI) {
 			continue
 		}
 
@@ -135,6 +137,10 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]bool) File
 	return FilesNotAdded{}
 }
 
+func IsSupported(documentURI sglsp.DocumentURI) bool {
+	return extensions[filepath.Ext(uri.PathFromUri(documentURI))]
+}
+
 func (b *BundleImpl) getFileFrom(content []byte) File {
 	return File{
 		Hash:    util.Hash(content),
@@ -143,7 +149,10 @@ func (b *BundleImpl) getFileFrom(content []byte) File {
 }
 
 func (b *BundleImpl) canAdd(uri string, content []byte) bool {
-	return getTotalDocPayloadSize(uri, content)+b.getSize() < maxBundleSize
+	docPayloadSize := getTotalDocPayloadSize(uri, content)
+	newSize := docPayloadSize + b.getSize()
+	b.allDocumentsSize += docPayloadSize
+	return newSize < maxBundleSize
 }
 
 func (b *BundleImpl) extendBundleFromSource() error {
@@ -234,12 +243,8 @@ func (b *BundleImpl) getSize() int {
 		return 0
 	}
 	jsonCommasForFiles := len(b.BundleDocuments) - 1
-	var size = len(jsonOverheadRequest) + jsonCommasForFiles // if more than one file, they are separated by commas in the req
-	for documentURI, file := range b.BundleDocuments {
-		// we explicitly want the document URI as string, not to convert
-		size += getTotalDocPayloadSize(string(documentURI), []byte(file.Content))
-	}
-	return size
+	var size = jsonOverHeadRequestLength + jsonCommasForFiles // if more than one file, they are separated by commas in the req
+	return size + b.allDocumentsSize
 }
 
 func getShardKey(rootPath string, authToken string) string {
