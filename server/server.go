@@ -157,7 +157,6 @@ func TextDocumentDidCloseHandler() handler.Func {
 func TextDocumentHover() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.HoverParams) (lsp.HoverResult, error) {
 		log.Info().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
-		diagnostics.GetDiagnostics(params.TextDocument.URI)
 
 		hoverResult := hover.GetHover(params.TextDocument.URI, params.Position)
 		return hoverResult, nil

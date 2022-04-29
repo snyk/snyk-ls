@@ -228,9 +228,10 @@ func (s *SnykCodeBackendService) convertSarifResponse(response SarifResponse) (
 			diags[uri] = diagSlice
 
 			h := lsp.HoverDetails{
-				Id:      result.RuleID,
-				Range:   myRange,
-				Message: fmt.Sprintf("#### %s \n", result.Message.Text),
+				Id:    result.RuleID,
+				Range: myRange,
+				// Todo: Add more details here
+				Message: fmt.Sprintf(" %s \n", result.Message.Text),
 			}
 
 			hoverSlice = append(hoverSlice, h)

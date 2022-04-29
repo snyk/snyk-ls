@@ -191,7 +191,7 @@ func convertDiagnostics(res iacScanResult) ([]lsp.Diagnostic, []lsp.HoverDetails
 		}
 
 		diagnostic := lsp.Diagnostic{
-			Source:   "Snyk LSP",
+			Source:   "Snyk LS",
 			Range:    diagsRange,
 			Message:  fmt.Sprintf("%s: %s\n\n", issue.PublicID, title),
 			Severity: lspSeverity(issue.Severity),

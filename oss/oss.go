@@ -271,7 +271,7 @@ func retrieveDiagnostics(
 		}
 		diagnostics = append(diagnostics, diagnostic)
 
-		summary := fmt.Sprintf("### Vulnerability %s %s %s \n #### Fixed in: %s | Exploit maturity: %s",
+		summary := fmt.Sprintf("### Vulnerability %s %s %s \n **Fixed in: %s | Exploit maturity: %s**",
 			createCveLink(issue.Identifiers.CVE),
 			createCweLink(issue.Identifiers.CWE),
 			createIssueUrl(issue.Id),
