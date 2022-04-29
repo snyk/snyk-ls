@@ -48,22 +48,6 @@ func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 	assert.Equal(t, len(documentDiagnosticCache[diagnosticUri]), len(diagnostics))
 }
 
-func Test_UpdateDocument_shouldUpdateTextOfDocument(t *testing.T) {
-	registeredDocuments = map[sglsp.DocumentURI]bool{}
-	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
-	diagnosticUri, path := code.FakeDiagnosticUri()
-	defer os.RemoveAll(path)
-	RegisterDocument(sglsp.TextDocumentItem{URI: diagnosticUri})
-
-	change := sglsp.TextDocumentContentChangeEvent{
-		Text: "hurz",
-	}
-
-	UpdateDocument(diagnosticUri, []sglsp.TextDocumentContentChangeEvent{change})
-
-	assert.Equal(t, true, registeredDocuments[diagnosticUri])
-}
-
 func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
 	// disable snyk code
 	_ = os.Setenv(environment.ActivateSnykCodeKey, "false")

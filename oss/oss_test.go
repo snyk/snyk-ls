@@ -33,10 +33,11 @@ func Test_ScanWorkspace(t *testing.T) {
 
 	dChan := make(chan lsp.DiagnosticResult)
 	hoverChan := make(chan lsp.Hover)
+
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-
 	snykCli := &cli.SnykCli{}
+
 	go ScanWorkspace(snykCli, doc, &wg, dChan, hoverChan)
 
 	diagnosticResult := <-dChan
