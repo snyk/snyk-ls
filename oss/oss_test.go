@@ -33,14 +33,19 @@ func Test_ScanWorkspace(t *testing.T) {
 	doc := sglsp.DocumentURI(path)
 
 	dChan := make(chan lsp.DiagnosticResult)
+	hoverChan := make(chan lsp.Hover)
+
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	snykCli := &cli.SnykCli{}
-	go ScanWorkspace(snykCli, doc, &wg, dChan, nil)
+
+	go ScanWorkspace(snykCli, doc, &wg, dChan, hoverChan)
 
 	diagnosticResult := <-dChan
+	hoverResult := <-hoverChan
 
 	assert.NotEqual(t, 0, len(diagnosticResult.Diagnostics))
+	assert.NotEqual(t, 0, len(hoverResult.Hover))
 	assert.True(t, strings.Contains(diagnosticResult.Diagnostics[0].Message, "<p>"))
 }
 
@@ -53,14 +58,18 @@ func Test_ScanFile(t *testing.T) {
 	path, _ := filepath.Abs("testdata/package.json")
 
 	dChan := make(chan lsp.DiagnosticResult)
+	hoverChan := make(chan lsp.Hover)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
+
 	snykCli := &cli.SnykCli{}
-	go ScanFile(snykCli, uri.PathToUri(path), &wg, dChan, nil)
+	go ScanFile(snykCli, uri.PathToUri(path), &wg, dChan, hoverChan)
 
 	diagnosticResult := <-dChan
+	hoverResult := <-hoverChan
 
 	assert.NotEqual(t, 0, len(diagnosticResult.Diagnostics))
+	assert.NotEqual(t, 0, len(hoverResult.Hover))
 	assert.True(t, strings.Contains(diagnosticResult.Diagnostics[0].Message, "<p>"))
 }
 

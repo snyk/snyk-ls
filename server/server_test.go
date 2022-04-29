@@ -23,6 +23,7 @@ import (
 	"github.com/snyk/snyk-ls/diagnostics"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/cli/install"
+	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -83,10 +84,9 @@ func startServer() server.Local {
 		"textDocument/willSaveWaitUntil":      TextDocumentWillSaveWaitUntilHandler(),
 		"shutdown":                            Shutdown(),
 		"exit":                                Exit(&srv),
-		"textDocument/codeLens":               TextDocumentCodeLens(),
 		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
+		"textDocument/hover":                  TextDocumentHover(),
 		"workspace/didChangeConfiguration":    WorkspaceDidChangeConfiguration(),
-		// "codeLens/resolve":               codeLensResolve(&server),
 	}
 
 	opts := &server.LocalOptions{
@@ -184,21 +184,6 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.Save, &sglsp.SaveOptions{IncludeText: true})
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.WillSave, true)
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.WillSaveWaitUntil, true)
-}
-
-func Test_initialize_shouldSupportCodeLens(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
-
-	rsp, err := loc.Client.Call(ctx, "initialize", nil)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-	var result lsp.InitializeResult
-	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatal().Err(err)
-	}
-	assert.Equal(t, result.Capabilities.CodeLensProvider.ResolveProvider, true)
 }
 
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
@@ -440,15 +425,63 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 	assert.Eventually(t, func() bool {
 		return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
 	}, 5*time.Second, 2*time.Millisecond)
+}
 
-	if file1 != "" {
-		testPath = filepath.Join(cloneTargetDir, file1)
-		textDocumentDidOpen(&loc, testPath)
-		// serve diagnostics from file scan
-		assert.Eventually(t, func() bool {
-			return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
-		}, 5*time.Second, 2*time.Millisecond)
+func Test_IntegrationHoverResults(t *testing.T) {
+	testutil.IntegTest(t)
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	cli.CurrentSettings = cli.Settings{}
+	diagnostics.ClearEntireDiagnosticsCache()
+	diagnostics.ClearRegisteredDocuments()
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
+
+	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
+	defer os.RemoveAll(cloneTargetDir)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Couldn't setup test repo")
 	}
+	folder := lsp.WorkspaceFolder{
+		Name: "Test Repo",
+		Uri:  sglsp.DocumentURI("file:" + cloneTargetDir),
+	}
+	clientParams := lsp.InitializeParams{
+		WorkspaceFolders: []lsp.WorkspaceFolder{folder},
+	}
+
+	_, err = loc.Client.Call(ctx, "initialize", clientParams)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Initialization failed")
+	}
+
+	// wait till the whole workspace is scanned
+	assert.Eventually(t, func() bool {
+		return diagnostics.IsWorkspaceFolderScanned(folder)
+	}, 600*time.Second, 100*time.Millisecond)
+
+	testPath := cloneTargetDir + string(os.PathSeparator) + "package.json"
+	testPosition := sglsp.Position{
+		Line:      17,
+		Character: 7,
+	}
+
+	hoverResp, err := loc.Client.Call(ctx, "textDocument/hover", lsp.HoverParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(testPath)},
+		Position:     testPosition,
+	})
+
+	if err != nil {
+		log.Fatal().Err(err).Msg("Hover retrieval failed")
+	}
+
+	hoverResult := lsp.HoverResult{}
+	err = hoverResp.UnmarshalResult(&hoverResult)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Hover retrieval failed")
+	}
+
+	assert.Equal(t, hoverResult.Contents.Value, hover.GetHover(uri.PathToUri(testPath), testPosition).Contents.Value)
+	assert.Equal(t, hoverResult.Contents.Kind, "markdown")
 }
 
 func Test_IntegrationFileScan(t *testing.T) {

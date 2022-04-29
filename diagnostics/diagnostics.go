@@ -11,6 +11,7 @@ import (
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/iac"
 	"github.com/snyk/snyk-ls/internal/cli"
+	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 	"github.com/snyk/snyk-ls/oss"
@@ -59,7 +60,9 @@ func ClearRegisteredDocuments() {
 
 func RegisterDocument(file sglsp.TextDocumentItem) {
 	documentURI := file.URI
-	if !(code.IsSupported(documentURI) || iac.IsSupported(documentURI) || oss.IsSupported(documentURI)) {
+	if !(code.IsSupported(documentURI) ||
+		iac.IsSupported(documentURI) ||
+		oss.IsSupported(documentURI)) {
 		return
 	}
 	registeredDocsMutex.Lock()
@@ -88,16 +91,13 @@ func GetDiagnostics(uri sglsp.DocumentURI) []lsp.Diagnostic {
 		return diagnosticSlice
 	}
 
-	var diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic
-	var codeLenses map[sglsp.DocumentURI][]sglsp.CodeLens
-
-	diagnostics, codeLenses = fetchAllRegisteredDocumentDiagnostics(uri, lsp.ScanLevelFile)
-	addToCache(diagnostics, codeLenses)
+	var diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic = fetchAllRegisteredDocumentDiagnostics(uri, lsp.ScanLevelFile)
+	addToCache(diagnostics)
 
 	return documentDiagnosticCache[uri]
 }
 
-func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.ScanLevel) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens) {
+func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.ScanLevel) map[sglsp.DocumentURI][]lsp.Diagnostic {
 	log.Info().
 		Str("method", "fetchAllRegisteredDocumentDiagnostics").
 		Msg("started.")
@@ -107,22 +107,19 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 		Msg("done.")
 
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
-	var codeLenses []sglsp.CodeLens
 	var bundles = make([]*code.BundleImpl, 0, 10)
 
 	wg := sync.WaitGroup{}
 
 	var dChan chan lsp.DiagnosticResult
-	var clChan chan lsp.CodeLensResult
+	hoverChan := hover.Channel()
 
 	if level == lsp.ScanLevelWorkspace {
 		dChan = make(chan lsp.DiagnosticResult, 3*len(registeredDocuments))
-		clChan = make(chan lsp.CodeLensResult, 3*len(registeredDocuments))
-		workspaceLevelFetch(uri, environment.CurrentEnabledProducts, bundles, &wg, dChan, clChan)
+		workspaceLevelFetch(uri, environment.CurrentEnabledProducts, bundles, &wg, dChan, hoverChan)
 	} else {
 		dChan = make(chan lsp.DiagnosticResult, 3)
-		clChan = make(chan lsp.CodeLensResult, 3)
-		fileLevelFetch(uri, environment.CurrentEnabledProducts, bundles, &wg, dChan, clChan)
+		fileLevelFetch(uri, environment.CurrentEnabledProducts, bundles, &wg, dChan, hoverChan)
 	}
 
 	wg.Wait()
@@ -130,17 +127,24 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 		Str("method", "fetchAllRegisteredDocumentDiagnostics").
 		Msg("finished waiting for goroutines.")
 
-	return processResults(dChan, diagnostics, clChan, codeLenses)
+	return processResults(dChan, hoverChan, diagnostics)
 }
 
-func workspaceLevelFetch(documentURI sglsp.DocumentURI, enabledProducts environment.EnabledProducts, bundles []*code.BundleImpl, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
+func workspaceLevelFetch(
+	documentURI sglsp.DocumentURI,
+	enabledProducts environment.EnabledProducts,
+	bundles []*code.BundleImpl,
+	wg *sync.WaitGroup,
+	dChan chan lsp.DiagnosticResult,
+	hoverChan chan lsp.Hover,
+) {
 	if enabledProducts.Iac {
 		wg.Add(1)
-		go iac.ScanWorkspace(Cli, documentURI, wg, dChan, clChan)
+		go iac.ScanWorkspace(Cli, documentURI, wg, dChan, hoverChan)
 	}
 	if enabledProducts.OpenSource {
 		wg.Add(1)
-		go oss.ScanWorkspace(Cli, documentURI, wg, dChan, clChan)
+		go oss.ScanWorkspace(Cli, documentURI, wg, dChan, hoverChan)
 	}
 	if enabledProducts.Code {
 		registeredDocsMutex.Lock()
@@ -150,39 +154,42 @@ func workspaceLevelFetch(documentURI sglsp.DocumentURI, enabledProducts environm
 		createOrExtendBundles(bundleDocs, &bundles)
 		for _, myBundle := range bundles {
 			wg.Add(1)
-			go myBundle.FetchDiagnosticsData(string(documentURI), wg, dChan, clChan)
+			go myBundle.FetchDiagnosticsData(string(documentURI), wg, dChan, hoverChan)
 		}
 	}
 }
 
-func fileLevelFetch(uri sglsp.DocumentURI, enabledProducts environment.EnabledProducts, bundles []*code.BundleImpl, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
+func fileLevelFetch(
+	uri sglsp.DocumentURI,
+	enabledProducts environment.EnabledProducts,
+	bundles []*code.BundleImpl,
+	wg *sync.WaitGroup,
+	dChan chan lsp.DiagnosticResult,
+	hoverChan chan lsp.Hover,
+) {
 	if enabledProducts.Code {
 		var bundleDocs = map[sglsp.DocumentURI]bool{}
 		bundleDocs[uri] = true
 		registeredDocuments[uri] = true
 		createOrExtendBundles(bundleDocs, &bundles)
 		wg.Add(1)
-		go bundles[0].FetchDiagnosticsData(string(uri), wg, dChan, clChan)
+		go bundles[0].FetchDiagnosticsData(string(uri), wg, dChan, hoverChan)
 	}
 	if enabledProducts.Iac {
 		wg.Add(1)
-		go iac.ScanFile(Cli, uri, wg, dChan, clChan)
+		go iac.ScanFile(Cli, uri, wg, dChan, hoverChan)
 	}
 	if enabledProducts.OpenSource {
 		wg.Add(1)
-		go oss.ScanFile(Cli, uri, wg, dChan, clChan)
+		go oss.ScanFile(Cli, uri, wg, dChan, hoverChan)
 	}
 }
 
 func processResults(
 	dChan chan lsp.DiagnosticResult,
+	hoverChan chan lsp.Hover,
 	diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic,
-	clChan chan lsp.CodeLensResult,
-	codeLenses []sglsp.CodeLens,
-) (
-	map[sglsp.DocumentURI][]lsp.Diagnostic,
-	map[sglsp.DocumentURI][]sglsp.CodeLens,
-) {
+) map[sglsp.DocumentURI][]lsp.Diagnostic {
 	for {
 		select {
 		case result := <-dChan:
@@ -201,26 +208,12 @@ func processResults(
 			documentDiagnosticCache[result.Uri] = diagnostics[result.Uri]
 			diagnosticsMutex.Unlock()
 
-		case result := <-clChan:
-			log.Trace().
-				Str("method", "fetchAllRegisteredDocumentDiagnostics").
-				Str("uri", string(result.Uri)).
-				Msg("reading lens from chan.")
-
-			if result.Err != nil {
-				log.Err(result.Err).Str("method", "fetchAllRegisteredDocumentDiagnostics")
-				break
-			}
-			diagnosticsMutex.Lock()
-			codeLenses = append(codeLenses, result.CodeLenses...)
-			codeLenseCache[result.Uri] = codeLenses
-			diagnosticsMutex.Unlock()
 		default: // return results once channels are empty
 			log.Debug().
 				Str("method", "fetchAllRegisteredDocumentDiagnostics").
-				Msg("done reading diags & lenses.")
+				Msg("done reading diags.")
 
-			return diagnostics, codeLenseCache
+			return diagnostics
 		}
 	}
 }
@@ -255,16 +248,12 @@ func createBundle(bundles *[]*code.BundleImpl) *code.BundleImpl {
 	return &bundle
 }
 
-func addToCache(diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic, codeLenses map[sglsp.DocumentURI][]sglsp.CodeLens) {
+func addToCache(diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic) {
 	// add all diagnostics to cache
 	diagnosticsMutex.Lock()
 	for documentURI := range diagnostics {
 		documentDiagnosticCache[documentURI] = diagnostics[documentURI]
 	}
 
-	// add all code lenses to cache
-	for documentURI := range codeLenses {
-		codeLenseCache[documentURI] = codeLenses[documentURI]
-	}
 	diagnosticsMutex.Unlock()
 }

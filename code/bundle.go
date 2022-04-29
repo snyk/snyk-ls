@@ -170,7 +170,7 @@ func (b *BundleImpl) FetchDiagnosticsData(
 	rootPath string,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
-	clChan chan lsp.CodeLensResult,
+	hoverChan chan lsp.Hover,
 ) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
@@ -184,49 +184,65 @@ func (b *BundleImpl) FetchDiagnosticsData(
 		return
 	}
 
-	b.retrieveAnalysis(rootPath, dChan, clChan)
+	b.retrieveAnalysis(rootPath, dChan, hoverChan)
 }
 
-func (b *BundleImpl) retrieveAnalysis(rootPath string, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
+func (b *BundleImpl) retrieveAnalysis(
+	rootPath string,
+	dChan chan lsp.DiagnosticResult,
+	hoverChan chan lsp.Hover,
+) {
 	if len(b.BundleDocuments) <= 0 {
 		return
 	}
 
 	for {
 		start := time.Now()
-		diags, lenses, status, err := b.SnykCode.RunAnalysis(b.BundleHash, getShardKey(rootPath, environment.Token()), []sglsp.DocumentURI{}, 0)
+		diags, hovers, status, err := b.SnykCode.RunAnalysis(
+			b.BundleHash,
+			getShardKey(rootPath, environment.Token()),
+			[]sglsp.DocumentURI{},
+			0)
+
 		if err != nil {
-			log.Error().Err(err).Str("method", "DiagnosticData").Msg("error retrieving diagnostics...")
+			log.Error().Err(err).
+				Str("method", "DiagnosticData").Msg("error retrieving diagnostics...")
 			dChan <- lsp.DiagnosticResult{Err: err}
 			return
 		}
 
 		if status == "COMPLETE" {
 			for u, d := range diags {
-				log.Trace().Str("method", "retrieveAnalysis").Str("bundleHash", b.BundleHash).Str("uri1", string(u)).Msg("sending diagnostics...")
+				log.Trace().Str("method", "retrieveAnalysis").Str("bundleHash", b.BundleHash).
+					Str("uri1", string(u)).
+					Msg("sending diagnostics...")
+
 				dChan <- lsp.DiagnosticResult{
 					Uri:         u,
 					Diagnostics: d,
 					Err:         err,
 				}
 			}
+			sendHoversViaChan(hovers, hoverChan)
 
-			for u, l := range lenses {
-				log.Trace().Str("method", "retrieveAnalysis").Str("bundleHash", b.BundleHash).Str("uri1", string(u)).Msg("sending code lenses...")
-				clChan <- lsp.CodeLensResult{
-					Uri:        u,
-					CodeLenses: l,
-					Err:        err,
-				}
-			}
 			return
 		}
+
 		if time.Since(start) > environment.SnykCodeAnalysisTimeout() {
 			err = SnykAnalysisTimeoutError{msg: "Analysis Call Timed out."}
 			log.Error().Err(err).Str("method", "DiagnosticData").Msg("timeout...")
 			dChan <- lsp.DiagnosticResult{Err: err}
 		}
 		time.Sleep(1 * time.Second)
+	}
+}
+
+func sendHoversViaChan(hovers map[sglsp.DocumentURI][]lsp.HoverDetails, hoverChan chan lsp.Hover) {
+	for uri, hover := range hovers {
+		hoverChan <- lsp.Hover{
+			Uri:   uri,
+			Hover: hover,
+		}
 	}
 }
 

@@ -69,7 +69,13 @@ func IsSupported(documentURI sglsp.DocumentURI) bool {
 	return supportedFiles[filepath.Base(uri.PathFromUri(documentURI))]
 }
 
-func ScanWorkspace(Cli cli.Executor, workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
+func ScanWorkspace(
+	Cli cli.Executor,
+	workspace sglsp.DocumentURI,
+	wg *sync.WaitGroup,
+	dChan chan lsp.DiagnosticResult,
+	hoverChan chan lsp.Hover,
+) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "oss.ScanWorkspace").Msg("done.")
 
@@ -118,7 +124,7 @@ func ScanWorkspace(Cli cli.Executor, workspace sglsp.DocumentURI, wg *sync.WaitG
 		return
 	}
 
-	retrieveAnalysis(scanResult, targetFileUri, fileContent, dChan)
+	retrieveAnalysis(scanResult, targetFileUri, fileContent, dChan, hoverChan)
 }
 
 func determineTargetFile(displayTargetFile string) string {
@@ -129,7 +135,13 @@ func determineTargetFile(displayTargetFile string) string {
 	return targetFile
 }
 
-func ScanFile(Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, clChan chan lsp.CodeLensResult) {
+func ScanFile(
+	Cli cli.Executor,
+	documentURI sglsp.DocumentURI,
+	wg *sync.WaitGroup,
+	dChan chan lsp.DiagnosticResult,
+	hoverChan chan lsp.Hover,
+) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "oss.ScanFile").Msg("done.")
 
@@ -177,7 +189,7 @@ func ScanFile(Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGrou
 		return
 	}
 
-	retrieveAnalysis(scanResults, documentURI, fileContent, dChan)
+	retrieveAnalysis(scanResults, documentURI, fileContent, dChan, hoverChan)
 }
 
 func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, err error) chan lsp.DiagnosticResult {
@@ -198,8 +210,9 @@ func retrieveAnalysis(
 	uri sglsp.DocumentURI,
 	fileContent []byte,
 	dChan chan lsp.DiagnosticResult,
+	hoverChan chan lsp.Hover,
 ) {
-	diags, err := retrieveDiagnostics(scanResults, uri, fileContent)
+	diags, hoverDetails, err := retrieveDiagnostics(scanResults, uri, fileContent)
 	if err != nil {
 		log.Err(err).Str("method", "oss.retrieveAnalysis").Msg("Error while retrieving diagnositics")
 		reportErrorViaChan(uri, dChan, err)
@@ -213,6 +226,10 @@ func retrieveAnalysis(
 			Uri:         uri,
 			Diagnostics: diags,
 		}:
+			hoverChan <- lsp.Hover{
+				Uri:   uri,
+				Hover: hoverDetails,
+			}
 			log.Debug().Str("method", "oss.retrieveAnalysis").Int("diagnosticCount", len(diags)).Msg("found sth")
 		default:
 			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("not sending...")
@@ -224,8 +241,14 @@ type RangeFinder interface {
 	Find(issue ossIssue) sglsp.Range
 }
 
-func retrieveDiagnostics(res ossScanResult, uri sglsp.DocumentURI, fileContent []byte) ([]lsp.Diagnostic, error) {
+func retrieveDiagnostics(
+	res ossScanResult,
+	uri sglsp.DocumentURI,
+	fileContent []byte,
+) ([]lsp.Diagnostic, []lsp.HoverDetails, error) {
 	var diagnostics []lsp.Diagnostic
+	var hoverDetails []lsp.HoverDetails
+
 	for _, issue := range res.Vulnerabilities {
 		title := issue.Title
 		description := issue.Description
@@ -237,7 +260,7 @@ func retrieveDiagnostics(res ossScanResult, uri sglsp.DocumentURI, fileContent [
 
 		diagnostic := lsp.Diagnostic{
 			Source:   "Snyk LSP",
-			Message:  fmt.Sprintf("%s: %s\n\n%s", issue.Id, title, description),
+			Message:  fmt.Sprintf("%s: %s", issue.Id, title),
 			Range:    findRange(issue, uri, fileContent),
 			Severity: lspSeverity(issue.Severity),
 			Code:     issue.Id,
@@ -247,9 +270,30 @@ func retrieveDiagnostics(res ossScanResult, uri sglsp.DocumentURI, fileContent [
 			// },
 		}
 		diagnostics = append(diagnostics, diagnostic)
+
+		summary := fmt.Sprintf("### Vulnerability %s %s %s \n **Fixed in: %s | Exploit maturity: %s**",
+			createCveLink(issue.Identifiers.CVE),
+			createCweLink(issue.Identifiers.CWE),
+			createIssueUrl(issue.Id),
+			createFixedIn(issue.FixedIn),
+			strings.ToUpper(issue.Severity),
+		)
+
+		hover := lsp.HoverDetails{
+			Id:    issue.Id,
+			Range: findRange(issue, uri, fileContent),
+			Message: fmt.Sprintf("\n### %s: %s affecting %s package \n%s \n%s",
+				issue.Id,
+				title,
+				issue.PackageName,
+				summary,
+				description,
+			),
+		}
+		hoverDetails = append(hoverDetails, hover)
 	}
 
-	return diagnostics, nil
+	return diagnostics, hoverDetails, nil
 }
 
 func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
@@ -258,6 +302,40 @@ func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 		return sglsp.Info
 	}
 	return lspSev
+}
+
+func createCveLink(cve []string) string {
+	var formattedCve string
+	for _, c := range cve {
+		formattedCve += fmt.Sprintf("| [%s](https://cve.mitre.org/cgi-bin/cvename.cgi?name=%s)", c, c)
+	}
+	return formattedCve
+}
+
+func createIssueUrl(id string) string {
+	return fmt.Sprintf("| [%s](https://snyk.io/vuln/%s)", id, id)
+}
+
+func createFixedIn(fixedIn []string) string {
+	var f string
+	if len(fixedIn) < 1 {
+		f += "Not Fixed"
+	} else {
+		f += "@" + fixedIn[0]
+		for _, version := range fixedIn[1:] {
+			f += fmt.Sprintf(", %s", version)
+		}
+	}
+	return f
+}
+
+func createCweLink(cwe []string) string {
+	var formattedCwe string
+	for _, c := range cwe {
+		id := strings.Replace(c, "CWE-", "", -1)
+		formattedCwe += fmt.Sprintf("| [%s](https://cwe.mitre.org/data/definitions/%s.html)", c, id)
+	}
+	return formattedCwe
 }
 
 func findRange(issue ossIssue, uri sglsp.DocumentURI, fileContent []byte) sglsp.Range {

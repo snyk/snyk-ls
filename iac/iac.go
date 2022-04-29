@@ -41,7 +41,7 @@ func ScanWorkspace(
 	documentURI sglsp.DocumentURI,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
-	clChan chan lsp.CodeLensResult,
+	hoverChan chan lsp.Hover,
 ) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "iac.ScanWorkspace").Msg("done.")
@@ -54,12 +54,12 @@ func ScanWorkspace(
 		case *exec.ExitError:
 			if err.ExitCode() > 1 {
 				log.Err(err).Str("method", "iac.ScanWorkspace").Str("output", string(res)).Msg("Error while calling Snyk CLI")
-				reportErrorViaChan(documentURI, dChan, err, clChan)
+				reportErrorViaChan(documentURI, dChan, err)
 				return
 			}
 			log.Warn().Err(err).Str("method", "iac.ScanWorkspace").Msg("Error while calling Snyk CLI")
 		default:
-			reportErrorViaChan(documentURI, dChan, err, clChan)
+			reportErrorViaChan(documentURI, dChan, err)
 			return
 		}
 	}
@@ -68,24 +68,20 @@ func ScanWorkspace(
 	if err := json.Unmarshal(res, &scanResults); err != nil {
 		log.Err(err).Str("method", "iac.ScanWorkspace").
 			Msg("Error while parsing response from CLI")
-		reportErrorViaChan(documentURI, dChan, err, clChan)
+		reportErrorViaChan(documentURI, dChan, err)
 		return
 	}
 
 	log.Info().Str("method", "iac.ScanWorkspace").
-		Msg("got diags & lenses, now sending to chan.")
+		Msg("got diags now sending to chan.")
 	for _, scanResult := range scanResults {
 		u := uri.PathToUri(filepath.Join(uri.PathFromUri(documentURI), scanResult.TargetFile))
-		retrieveAnalysis(u, scanResult, dChan, clChan)
+		retrieveAnalysis(u, scanResult, dChan, hoverChan)
 	}
 }
 
-func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, err error, clChan chan lsp.CodeLensResult) {
+func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, err error) {
 	dChan <- lsp.DiagnosticResult{
-		Uri: uri,
-		Err: err,
-	}
-	clChan <- lsp.CodeLensResult{
 		Uri: uri,
 		Err: err,
 	}
@@ -96,7 +92,7 @@ func ScanFile(
 	documentURI sglsp.DocumentURI,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
-	clChan chan lsp.CodeLensResult,
+	hoverChan chan lsp.Hover,
 ) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "iac.ScanFile").Msg("done.")
@@ -106,18 +102,19 @@ func ScanFile(
 	if !IsSupported(documentURI) {
 		return
 	}
+
 	res, err := Cli.Execute(cliCmd(documentURI))
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:
 			if err.ExitCode() > 1 {
 				log.Err(err).Str("method", "iac.ScanFile").Str("output", string(res)).Msg("Error while calling Snyk CLI")
-				reportErrorViaChan(documentURI, dChan, err, clChan)
+				reportErrorViaChan(documentURI, dChan, err)
 				return
 			}
 			log.Warn().Err(err).Str("method", "iac.ScanFile").Msg("Error while calling Snyk CLI")
 		default:
-			reportErrorViaChan(documentURI, dChan, err, clChan)
+			reportErrorViaChan(documentURI, dChan, err)
 			return
 		}
 	}
@@ -126,11 +123,12 @@ func ScanFile(
 	if err := json.Unmarshal(res, &scanResults); err != nil {
 		log.Err(err).Str("method", "iac.ScanFile").
 			Msg("Error while calling Snyk CLI")
-		reportErrorViaChan(documentURI, dChan, err, clChan)
+		reportErrorViaChan(documentURI, dChan, err)
 		return
 	}
+
 	log.Debug().Interface("iacScanResult", scanResults).Msg("got it all unmarshalled, general!")
-	retrieveAnalysis(documentURI, scanResults, dChan, clChan)
+	retrieveAnalysis(documentURI, scanResults, dChan, hoverChan)
 }
 
 func cliCmd(u sglsp.DocumentURI) []string {
@@ -148,10 +146,9 @@ func retrieveAnalysis(
 	uri sglsp.DocumentURI,
 	scanResult iacScanResult,
 	dChan chan lsp.DiagnosticResult,
-	clChan chan lsp.CodeLensResult,
+	hoverChan chan lsp.Hover,
 ) {
-	diagnostics := convertDiagnostics(scanResult)
-	codeLenses := convertCodeLenses(scanResult)
+	diagnostics, hoverDetails := convertDiagnostics(scanResult)
 
 	if len(diagnostics) > 0 {
 		select {
@@ -159,76 +156,60 @@ func retrieveAnalysis(
 			Uri:         uri,
 			Diagnostics: diagnostics,
 		}:
+			hoverChan <- lsp.Hover{
+				Uri:   uri,
+				Hover: hoverDetails,
+			}
+
 			log.Debug().Str("method", "iac.retrieveAnalysis").Interface("diagnosticCount", len(diagnostics)).Msg("found sth")
 		default:
 			log.Debug().Str("method", "iac.retrieveAnalysis").Msg("no diags found & sent.")
 		}
 	}
-
-	if len(codeLenses) > 0 {
-		select {
-		case clChan <- lsp.CodeLensResult{
-			Uri:        uri,
-			CodeLenses: codeLenses,
-		}:
-			log.Debug().Str("method", "iac.retrieveAnalysis").Interface("codeLenseCount", len(codeLenses)).Msg("found lens")
-		default:
-			log.Debug().Str("method", "iac.retrieveAnalysis").Msg("no lens found & sent.")
-		}
-	}
 }
 
-func convertCodeLenses(res iacScanResult) []sglsp.CodeLens {
-	var lenses []sglsp.CodeLens
-	for _, issue := range res.IacIssues {
-		lens := sglsp.CodeLens{
-			Range: sglsp.Range{
-				Start: sglsp.Position{Line: issue.LineNumber - 1, Character: 0},
-				End:   sglsp.Position{Line: issue.LineNumber - 1, Character: 80},
-			},
-			Command: sglsp.Command{
-				Title:   "Show Description of " + issue.PublicID,
-				Command: "snyk.launchBrowser",
-				Arguments: []interface{}{
-					issue.Documentation,
-				},
-			},
-		}
-		lenses = append(lenses, lens)
-	}
-	return lenses
-}
-
-func convertDiagnostics(res iacScanResult) []lsp.Diagnostic {
+func convertDiagnostics(res iacScanResult) ([]lsp.Diagnostic, []lsp.HoverDetails) {
 	var diagnostics []lsp.Diagnostic
+	var hoverDetails []lsp.HoverDetails
+
 	for _, issue := range res.IacIssues {
 		title := issue.Title
 		description := issue.IacDescription.Issue
 		impact := issue.IacDescription.Impact
 		resolve := issue.IacDescription.Resolve
+
+		diagsRange := sglsp.Range{
+			Start: sglsp.Position{Line: issue.LineNumber - 1, Character: 0},
+			End:   sglsp.Position{Line: issue.LineNumber - 1, Character: 80},
+		}
+
 		if environment.Format == environment.FormatHtml {
 			title = string(markdown.ToHTML([]byte(title), nil, nil))
 			description = string(markdown.ToHTML([]byte(description), nil, nil))
 			impact = string(markdown.ToHTML([]byte(impact), nil, nil))
 			resolve = string(markdown.ToHTML([]byte(resolve), nil, nil))
 		}
+
 		diagnostic := lsp.Diagnostic{
-			Source: "Snyk LSP",
-			Message: fmt.Sprintf("%s: %s\n\nIssue: %s\nImpact: %s\nResolve: %s\n",
-				issue.PublicID, title, description, impact, resolve),
-			Range: sglsp.Range{
-				Start: sglsp.Position{Line: issue.LineNumber - 1, Character: 0},
-				End:   sglsp.Position{Line: issue.LineNumber - 1, Character: 80},
-			},
+			Source:   "Snyk LS",
+			Range:    diagsRange,
+			Message:  fmt.Sprintf("%s: %s\n\n", issue.PublicID, title),
 			Severity: lspSeverity(issue.Severity),
 			Code:     issue.PublicID,
-			// CodeDescription: lsp.CodeDescription{
-			//	Href: issue.Documentation,
-			// },
 		}
+
 		diagnostics = append(diagnostics, diagnostic)
+
+		hover := lsp.HoverDetails{
+			Id:    issue.PublicID,
+			Range: diagsRange,
+			Message: fmt.Sprintf("\n### %s: %s\n\n**Issue:** %s\n\n**Impact:** %s\n\n**Resolve:** %s\n",
+				issue.PublicID, title, description, impact, resolve),
+		}
+		hoverDetails = append(hoverDetails, hover)
 	}
-	return diagnostics
+
+	return diagnostics, hoverDetails
 }
 
 func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {

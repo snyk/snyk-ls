@@ -23,39 +23,29 @@ const (
 var (
 	mutex             = &sync.Mutex{}
 	fakeDiagnosticUri sglsp.DocumentURI
-	FakeDiagnostic    = lsp.Diagnostic{
-		Range: sglsp.Range{
-			Start: sglsp.Position{
-				Line:      0,
-				Character: 3,
-			},
-			End: sglsp.Position{
-				Line:      0,
-				Character: 7,
-			},
+
+	fakeRange = sglsp.Range{
+		Start: sglsp.Position{
+			Line:      0,
+			Character: 3,
 		},
+		End: sglsp.Position{
+			Line:      0,
+			Character: 7,
+		},
+	}
+	FakeHover = lsp.HoverDetails{
+		Id:      "12",
+		Range:   fakeRange,
+		Message: "You have been hacked!",
+	}
+	FakeDiagnostic = lsp.Diagnostic{
+		Range:    fakeRange,
 		Severity: sglsp.Error,
 		Code:     "SNYK-123",
 		Source:   "snyk code",
 		Message:  "This is a dummy error (severity error)",
 		// CodeDescription: lsp.CodeDescription{Href: "https://snyk.io"},
-	}
-	FakeCodeLens = sglsp.CodeLens{
-		Range: sglsp.Range{
-			Start: sglsp.Position{
-				Line:      0,
-				Character: 5,
-			},
-			End: sglsp.Position{
-				Line:      3,
-				Character: 80,
-			},
-		},
-		Command: sglsp.Command{
-			Title:     "Fake Lens Title",
-			Command:   "Fake Lens Command",
-			Arguments: []interface{}{"FakeArgs"},
-		},
 	}
 )
 
@@ -125,23 +115,34 @@ func (f *FakeSnykCodeApiService) CreateBundle(files map[sglsp.DocumentURI]File) 
 	return BundleHash, nil, nil
 }
 
-func (f *FakeSnykCodeApiService) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]File, removedFiles []sglsp.DocumentURI) (string, []sglsp.DocumentURI, error) {
+func (f *FakeSnykCodeApiService) ExtendBundle(
+	bundleHash string,
+	files map[sglsp.DocumentURI]File,
+	removedFiles []sglsp.DocumentURI,
+) (string, []sglsp.DocumentURI, error) {
 	params := []interface{}{bundleHash, files, removedFiles}
 	f.addCall(params, ExtendBundleWithSourceOperation)
 	return bundleHash, nil, nil
 }
-func (f *FakeSnykCodeApiService) RunAnalysis(bundleHash string, shardKey string, limitToFiles []sglsp.DocumentURI, severity int) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]sglsp.CodeLens, string, error) {
+
+func (f *FakeSnykCodeApiService) RunAnalysis(
+	bundleHash string,
+	shardKey string,
+	limitToFiles []sglsp.DocumentURI,
+	severity int,
+) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, string, error) {
 	params := []interface{}{bundleHash, limitToFiles, severity}
 	f.addCall(params, RunAnalysisOperation)
 
 	diagnosticMap := map[sglsp.DocumentURI][]lsp.Diagnostic{}
-	var diagnostics []lsp.Diagnostic
-	diagnosticMap[fakeDiagnosticUri] = append(diagnostics, FakeDiagnostic)
+	hoverMap := map[sglsp.DocumentURI][]lsp.HoverDetails{}
 
-	codeLensMap := map[sglsp.DocumentURI][]sglsp.CodeLens{}
-	var codeLenses []sglsp.CodeLens
-	codeLensMap[fakeDiagnosticUri] = append(codeLenses, FakeCodeLens)
+	var diagnostics []lsp.Diagnostic
+	var hovers []lsp.HoverDetails
+
+	diagnosticMap[fakeDiagnosticUri] = append(diagnostics, FakeDiagnostic)
+	hoverMap[fakeDiagnosticUri] = append(hovers, FakeHover)
 
 	log.Trace().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Interface("fakeDiagnostic", FakeDiagnostic).Msg("fake backend call received & answered")
-	return diagnosticMap, codeLensMap, "COMPLETE", nil
+	return diagnosticMap, hoverMap, "COMPLETE", nil
 }

@@ -124,14 +124,17 @@ func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing
 		client: http.Client{},
 	}
 	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
+
 	var analysisResponse SarifResponse
 	_ = json.Unmarshal(bytes, &analysisResponse)
-	diags, lenses := s.convertSarifResponse(analysisResponse)
+
+	diags, hovers := s.convertSarifResponse(analysisResponse)
 	assert.NotNil(t, diags)
-	assert.NotNil(t, lenses)
+	assert.NotNil(t, hovers)
+
 	assert.Equal(t, 1, len(diags))
+	assert.Equal(t, 1, len(hovers))
+
 	u := uri.PathToUri("/server/testdata/Dummy.java")
 	assert.Equal(t, 2, len(diags[u]))
-	assert.Equal(t, 1, len(lenses))
-	assert.Equal(t, 2, len(lenses[u]))
 }

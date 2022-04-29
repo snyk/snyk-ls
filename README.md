@@ -10,7 +10,7 @@ data provider, for the latter it is connecting directly to the Snyk Code API.
 
 Right now the LSP supports the following actions:
 
-- Send Diagnostics & CodeLenses to client on opening a document. Code Lenses only for Code & IaC.
+- Send Diagnostics to client on opening a document.
 - Cache diagnostics until Save.
 - Invalidate caches on saving a document and retrieve everything anew.
 - Provide range calculations for Snyk OSS (best-effort)
