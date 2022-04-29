@@ -2,7 +2,10 @@ package install
 
 import (
 	"context"
+	"sync"
 )
+
+var Mutex = &sync.Mutex{}
 
 type Installer interface {
 	Find() (string, error)

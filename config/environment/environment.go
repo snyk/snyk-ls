@@ -10,7 +10,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/subosito/gotenv"
 
-	"github.com/snyk/snyk-ls/internal/snyk/cli/install"
+	"github.com/snyk/snyk-ls/error_reporting"
+	"github.com/snyk/snyk-ls/internal/cli/install"
 )
 
 const (
@@ -91,8 +92,6 @@ func Load() {
 		loadFile(fileName)
 	}
 
-	addSnykCliPathToEnv()
-
 	configLoaded = true
 }
 
@@ -129,7 +128,9 @@ func updatePath(pathExtension string) {
 	}
 }
 
-func addSnykCliPathToEnv() {
+func EnsureCLI() {
+	install.Mutex.Lock()
+	defer install.Mutex.Unlock()
 	if os.Getenv(cliPathKey) != "" {
 		return
 	}
@@ -144,10 +145,12 @@ func addSnykCliPathToEnv() {
 		cliPath, err = i.Install(context.Background())
 		if err != nil {
 			log.Err(err).Msg("could not download Snyk CLI binary")
+			error_reporting.CaptureError(err)
+			cliPath, _ = i.Find()
 		}
 	}
 
-	if err == nil {
+	if cliPath != "" {
 		err := os.Setenv(cliPathKey, cliPath)
 		if err != nil {
 			log.Err(err).Msg("Couldn't update environment with Snyk cli path")

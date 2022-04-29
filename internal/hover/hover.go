@@ -28,6 +28,23 @@ func validateAndExtractMessage(hover lsp.HoverDetails, pos sglsp.Position) strin
 	return message
 }
 
+func registerHovers(result lsp.Hover) {
+	mutex.Lock()
+	for _, newHover := range result.Hover {
+		key := result.Uri
+		hoverIndex := fmt.Sprintf("%v", newHover.Range) + newHover.Id
+
+		if !hoverIndexes[key][hoverIndex] {
+			hovers[key] = append(hovers[key], newHover)
+
+			indexMap := map[string]bool{}
+			indexMap[hoverIndex] = true
+			hoverIndexes[key] = indexMap
+		}
+	}
+	mutex.Unlock()
+}
+
 func DeleteHover(documentUri sglsp.DocumentURI) {
 	delete(hovers, documentUri)
 	delete(hoverIndexes, documentUri)
@@ -67,19 +84,6 @@ func CreateHoverListener() {
 			Str("uri", string(result.Uri)).
 			Msg("reading hover from chan.")
 
-		mutex.Lock()
-		for _, newHover := range result.Hover {
-			key := result.Uri
-			hoverIndex := fmt.Sprintf("%v", newHover.Range) + newHover.Id
-
-			if !hoverIndexes[key][hoverIndex] {
-				hovers[key] = append(hovers[key], newHover)
-
-				indexMap := map[string]bool{}
-				indexMap[hoverIndex] = true
-				hoverIndexes[key] = indexMap
-			}
-		}
-		mutex.Unlock()
+		registerHovers(result)
 	}
 }

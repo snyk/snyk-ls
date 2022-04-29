@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config/environment"
-	"github.com/snyk/snyk-ls/internal/snyk/cli"
+	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	lsp2 "github.com/snyk/snyk-ls/lsp"
@@ -22,6 +22,7 @@ import (
 func Test_ScanWorkspace(t *testing.T) {
 	testutil.IntegTest(t)
 	environment.Load()
+	environment.EnsureCLI()
 	environment.Format = environment.FormatHtml
 
 	path, _ := filepath.Abs("testdata")
@@ -37,7 +38,10 @@ func Test_ScanWorkspace(t *testing.T) {
 	wg.Wait()
 
 	diagnosticResult := <-dChan
+	hoverResult := <-hoverChan
+
 	assert.NotEqual(t, 0, len(diagnosticResult.Diagnostics))
+	assert.NotEqual(t, 0, len(hoverResult.Hover))
 
 	assert.True(t, strings.Contains(diagnosticResult.Diagnostics[0].Message, "<p>"))
 }
@@ -45,6 +49,7 @@ func Test_ScanWorkspace(t *testing.T) {
 func Test_ScanFile(t *testing.T) {
 	testutil.IntegTest(t)
 	environment.Load()
+	environment.EnsureCLI()
 	environment.Format = environment.FormatHtml
 
 	path, _ := filepath.Abs("testdata/RBAC.yaml")
@@ -67,6 +72,9 @@ func Test_ScanFile(t *testing.T) {
 	wg.Wait()
 
 	diagnosticResult := <-dChan
+	hoverResult := <-hoverChan
+
+	assert.NotEqual(t, 0, len(hoverResult.Hover))
 	assert.NotEqual(t, 0, len(diagnosticResult.Diagnostics))
 
 	assert.True(t, strings.Contains(diagnosticResult.Diagnostics[0].Message, "<p>"))

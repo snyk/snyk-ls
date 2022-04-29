@@ -15,7 +15,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config/environment"
-	"github.com/snyk/snyk-ls/internal/snyk/cli"
+	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -91,9 +91,15 @@ func ScanWorkspace(
 	cmd := cli.CliCmd([]string{environment.CliPath(), "test", path, "--json"})
 	res, err := Cli.Execute(cmd)
 	if err != nil {
-		if err.(*exec.ExitError).ExitCode() > 1 {
-			log.Err(err).Str("method", "oss.ScanWorkspace").
-				Msgf("Error while calling Snyk CLI, err: %v", err)
+		switch err := err.(type) {
+		case *exec.ExitError:
+			if err.ExitCode() > 1 {
+				log.Err(err).Str("method", "oss.ScanWorkspace").Str("output", string(res)).Msg("Error while calling Snyk CLI")
+				reportErrorViaChan(workspace, dChan, err)
+				return
+			}
+			log.Warn().Err(err).Str("method", "oss.ScanWorkspace").Msg("Error while calling Snyk CLI")
+		default:
 			reportErrorViaChan(workspace, dChan, err)
 			return
 		}
@@ -153,11 +159,15 @@ func ScanFile(
 	cmd := cli.CliCmd([]string{environment.CliPath(), "test", filepath.Dir(path), "--json"})
 	res, err := Cli.Execute(cmd)
 	if err != nil {
-		if err.(*exec.ExitError).ExitCode() > 1 {
-			log.Err(err).
-				Str("method", "oss.ScanFile").
-				Str("response", string(res)).
-				Msgf("Error while calling Snyk CLI, err: %v", err)
+		switch err := err.(type) {
+		case *exec.ExitError:
+			if err.ExitCode() > 1 {
+				log.Err(err).Str("method", "oss.ScanFile").Str("output", string(res)).Msg("Error while calling Snyk CLI")
+				reportErrorViaChan(documentURI, dChan, err)
+				return
+			}
+			log.Warn().Err(err).Str("method", "oss.ScanFile").Msg("Error while calling Snyk CLI")
+		default:
 			reportErrorViaChan(documentURI, dChan, err)
 			return
 		}

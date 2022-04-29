@@ -11,7 +11,7 @@ import (
 
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config/environment"
-	"github.com/snyk/snyk-ls/internal/snyk/cli"
+	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -141,6 +141,7 @@ func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
 }
 
 func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
+	environment.Load()
 	os.Clearenv()
 	_ = os.Setenv(environment.ActivateSnykCodeKey, "false")
 	_ = os.Setenv(environment.ActivateSnykIacKey, "true")
@@ -157,7 +158,7 @@ func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
 	cli.CurrentSettings.Endpoint = "asd"
 	mockCli := mockCli{}
 	Cli = &mockCli
-	mockCli.Mock.On("Execute", mock.Anything).Return("test", nil)
+	mockCli.Mock.On("Execute", mock.Anything).Return("{}", nil)
 
 	diagnostics := GetDiagnostics(documentURI)
 

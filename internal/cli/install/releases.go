@@ -9,7 +9,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/snyk/snyk-ls/internal/snyk/cli/install/httpclient"
+	"github.com/snyk/snyk-ls/internal/cli/install/httpclient"
 )
 
 const defaultBaseURL = "https://static.snyk.io"

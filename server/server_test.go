@@ -21,7 +21,9 @@ import (
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/diagnostics"
-	"github.com/snyk/snyk-ls/internal/snyk/cli"
+	"github.com/snyk/snyk-ls/internal/cli"
+	"github.com/snyk/snyk-ls/internal/cli/install"
+	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -83,6 +85,7 @@ func startServer() server.Local {
 		"shutdown":                            Shutdown(),
 		"exit":                                Exit(&srv),
 		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
+		"textDocument/hover":                  TextDocumentHover(),
 		"workspace/didChangeConfiguration":    WorkspaceDidChangeConfiguration(),
 	}
 
@@ -206,6 +209,49 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 		_ = notification.UnmarshalParams(&diagnosticsParams)
 		assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
 	}
+}
+
+func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
+	testutil.IntegTest(t)
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
+
+	// remove cli for testing
+	install.Mutex.Lock()
+	installer := install.NewInstaller()
+	for {
+		find, err := installer.Find()
+		if err == nil {
+			err = os.Remove(find)
+			log.Debug().Msgf("Test: removing cli at %s", find)
+			if err != nil {
+				t.Fatal("couldn't remove cli for test")
+			}
+		} else {
+			break
+		}
+	}
+	install.Mutex.Unlock()
+	err := os.Unsetenv("SNYK_CLI_PATH")
+	if err != nil {
+		t.Fatal("couldn't unset environment")
+	}
+	environment.Load()
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	cli.CurrentSettings = cli.Settings{}
+
+	didOpenParams, cleanup := didOpenTextParams()
+	defer cleanup()
+
+	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+
+	assert.Eventually(t, func() bool {
+		find, _ := installer.Find()
+		return find != ""
+	}, 120*time.Second, 10*time.Millisecond)
 }
 
 func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
@@ -379,15 +425,63 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 	assert.Eventually(t, func() bool {
 		return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
 	}, 5*time.Second, 2*time.Millisecond)
+}
 
-	if file1 != "" {
-		testPath = filepath.Join(cloneTargetDir, file1)
-		textDocumentDidOpen(&loc, testPath)
-		// serve diagnostics from file scan
-		assert.Eventually(t, func() bool {
-			return notification != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
-		}, 5*time.Second, 2*time.Millisecond)
+func Test_IntegrationHoverResults(t *testing.T) {
+	testutil.IntegTest(t)
+	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	cli.CurrentSettings = cli.Settings{}
+	diagnostics.ClearEntireDiagnosticsCache()
+	diagnostics.ClearRegisteredDocuments()
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
+
+	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
+	defer os.RemoveAll(cloneTargetDir)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Couldn't setup test repo")
 	}
+	folder := lsp.WorkspaceFolder{
+		Name: "Test Repo",
+		Uri:  sglsp.DocumentURI("file:" + cloneTargetDir),
+	}
+	clientParams := lsp.InitializeParams{
+		WorkspaceFolders: []lsp.WorkspaceFolder{folder},
+	}
+
+	_, err = loc.Client.Call(ctx, "initialize", clientParams)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Initialization failed")
+	}
+
+	// wait till the whole workspace is scanned
+	assert.Eventually(t, func() bool {
+		return diagnostics.IsWorkspaceFolderScanned(folder)
+	}, 600*time.Second, 100*time.Millisecond)
+
+	testPath := cloneTargetDir + string(os.PathSeparator) + "package.json"
+	testPosition := sglsp.Position{
+		Line:      17,
+		Character: 7,
+	}
+
+	hoverResp, err := loc.Client.Call(ctx, "textDocument/hover", lsp.HoverParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(testPath)},
+		Position:     testPosition,
+	})
+
+	if err != nil {
+		log.Fatal().Err(err).Msg("Hover retrieval failed")
+	}
+
+	hoverResult := lsp.HoverResult{}
+	err = hoverResp.UnmarshalResult(&hoverResult)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Hover retrieval failed")
+	}
+
+	assert.Equal(t, hoverResult.Contents.Value, hover.GetHover(uri.PathToUri(testPath), testPosition).Contents.Value)
+	assert.Equal(t, hoverResult.Contents.Kind, "markdown")
 }
 
 func Test_IntegrationFileScan(t *testing.T) {
@@ -444,8 +538,13 @@ func textDocumentDidOpen(loc *server.Local, testPath string) (sglsp.DidOpenTextD
 
 func setupCustomTestRepo(url string, targetCommit string) (string, error) {
 	// clone to temp dir - specific version for reproducible test results
-	cloneTargetDir, _ := os.MkdirTemp(os.TempDir(), "integ_test_repo_*")
-	clone := exec.Command("git", "clone", url, cloneTargetDir)
+	cloneTargetDir, err := os.MkdirTemp(os.TempDir(), "integ_test_repo_")
+	if err != nil {
+		log.Fatal().Err(err).Msg("couldn't create temp dir")
+	}
+	cmd := []string{"clone", url, cloneTargetDir}
+	log.Debug().Interface("cmd", cmd).Msg("clone command")
+	clone := exec.Command("git", cmd...)
 	reset := exec.Command("git", "reset", "--hard", targetCommit)
 	reset.Dir = cloneTargetDir
 

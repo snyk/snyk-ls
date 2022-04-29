@@ -42,7 +42,7 @@ func Test_ignored_notIgnored(t *testing.T) {
 func Test_ignored_doubleAsterisk(t *testing.T) {
 	ignoredDoubleAsteriskPath := "test-ignore/ignored.txt"
 	testIgnoreDir := "test-ignore"
-	err := os.Mkdir(testIgnoreDir, 0700)
+	err := os.Mkdir(testIgnoreDir, 0755)
 	defer os.RemoveAll(testIgnoreDir)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't create testIgnoreDir" + testIgnoreDir)
@@ -124,7 +124,7 @@ func setupIgnoreWorkspace() (expectedPatterns string, tempDir string, ignoredFil
 	expectedPatterns = "*.xml\n**/*.txt\nbin"
 	tempDir = writeTestGitIgnore(expectedPatterns)
 
-	ignoredFilePath = filepath.Join(tempDir) + "ignored.xml"
+	ignoredFilePath = filepath.Join(tempDir, "ignored.xml")
 	err := os.WriteFile(ignoredFilePath, []byte("test"), 0600)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't write ignored file ignored.xml")
@@ -135,7 +135,7 @@ func setupIgnoreWorkspace() (expectedPatterns string, tempDir string, ignoredFil
 		log.Fatal().Err(err).Msg("Couldn't write ignored file not-ignored.java")
 	}
 	ignoredDir := filepath.Join(tempDir, "bin")
-	err = os.Mkdir(ignoredDir, 0700)
+	err = os.Mkdir(ignoredDir, 0755)
 	if err != nil {
 		log.Fatal().Err(err).Msgf("Couldn't write ignoreDirectory %s", ignoredDir)
 	}

@@ -8,9 +8,10 @@ import (
 
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/iac"
+	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/hover"
-	"github.com/snyk/snyk-ls/internal/snyk/cli"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 	"github.com/snyk/snyk-ls/oss"
@@ -21,7 +22,7 @@ var (
 	registeredDocuments     = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	SnykCode                code.SnykCodeService
-	Cli                     cli.Executor = &cli.SnykCli{}
+	Cli                     cli.Executor = cli.SnykCli{}
 )
 
 func ClearDiagnosticsCache(uri sglsp.DocumentURI) {
@@ -199,6 +200,7 @@ func processResults(
 
 			if result.Err != nil {
 				log.Err(result.Err).Str("method", "fetchAllRegisteredDocumentDiagnostics")
+				error_reporting.CaptureError(result.Err)
 				break
 			}
 			diagnosticsMutex.Lock()

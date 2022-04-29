@@ -1,8 +1,10 @@
 package install
 
 import (
+	"os"
 	"testing"
 
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -10,7 +12,53 @@ import (
 
 func TestDownloader_Download(t *testing.T) {
 	testutil.IntegTest(t)
+	Mutex.Lock()
+	defer Mutex.Unlock()
+	r := getTestAsset()
+	d := &Downloader{}
 
+	lockFileName, err := d.lockFileName()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// remove any existing lockfile
+	_ = os.RemoveAll(lockFileName)
+
+	err = d.Download(r)
+
+	assert.NoError(t, err)
+	//make sure cleanup works
+	_, err = os.Stat(lockFileName)
+	if err == nil {
+		os.RemoveAll(lockFileName)
+	}
+	assert.Error(t, err)
+}
+
+func Test_DoNotDownloadIfLockfileFound(t *testing.T) {
+	Mutex.Lock()
+	defer Mutex.Unlock()
+	r := getTestAsset()
+	d := &Downloader{}
+
+	lockFileName, err := d.lockFileName()
+	if err != nil {
+		log.Fatal().Err(err).Msg("error getting logfile name")
+	}
+	_, err = os.Create(lockFileName)
+	if err != nil {
+		t.Fatal("couldn't create lockfile")
+	}
+	defer func(name string) {
+		_ = os.RemoveAll(name)
+	}(lockFileName)
+
+	err = d.Download(r)
+
+	assert.Error(t, err)
+}
+
+func getTestAsset() *Release {
 	r := &Release{
 		Assets: &ReleaseAssets{
 			MacOS: &ReleaseAsset{
@@ -31,9 +79,5 @@ func TestDownloader_Download(t *testing.T) {
 			},
 		},
 	}
-
-	d := &Downloader{}
-	err := d.Download(r)
-
-	assert.NoError(t, err)
+	return r
 }

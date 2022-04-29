@@ -29,6 +29,36 @@ func setupFakeHover() sglsp.DocumentURI {
 	return filePath
 }
 
+func Test_registerHovers(t *testing.T) {
+	documentUri := uri.PathToUri("fake-file.json")
+	hover := lsp.Hover{
+		Uri: documentUri,
+		Hover: []lsp.HoverDetails{
+			{
+				Id: "test-id",
+				Range: sglsp.Range{
+					Start: sglsp.Position{
+						Line:      10,
+						Character: 14,
+					},
+					End: sglsp.Position{
+						Line:      56,
+						Character: 87,
+					},
+				},
+				Message: "Very important hover",
+			},
+		},
+	}
+
+	registerHovers(hover)
+	// assert de-duplication
+	registerHovers(hover)
+
+	assert.Equal(t, len(hovers[documentUri]), 1)
+	assert.Equal(t, len(hoverIndexes[documentUri]), 1)
+}
+
 func Test_DeleteHover(t *testing.T) {
 	filePath := setupFakeHover()
 	DeleteHover(filePath)
