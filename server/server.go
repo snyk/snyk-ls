@@ -129,7 +129,6 @@ func TextDocumentDidOpenHandler(srv **jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidOpenTextDocumentParams) (interface{}, error) {
 		log.Info().Str("method", "TextDocumentDidOpenHandler").Str("documentURI", string(params.TextDocument.URI)).Msg("RECEIVING")
 		environment.EnsureCLI() // first would trigger download
-		environment.EnsureCLI() // block on download if necessary
 		diagnostics.RegisterDocument(params.TextDocument)
 		PublishDiagnostics(ctx, params.TextDocument.URI, srv)
 		return nil, nil

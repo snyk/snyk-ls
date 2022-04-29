@@ -111,11 +111,11 @@ func ScanFile(
 		switch err := err.(type) {
 		case *exec.ExitError:
 			if err.ExitCode() > 1 {
-				log.Err(err).Str("method", "iac.ScanWorkspace").Str("output", string(res)).Msg("Error while calling Snyk CLI")
+				log.Err(err).Str("method", "iac.ScanFile").Str("output", string(res)).Msg("Error while calling Snyk CLI")
 				reportErrorViaChan(documentURI, dChan, err, clChan)
 				return
 			}
-			log.Warn().Err(err).Str("method", "iac.ScanWorkspace").Msg("Error while calling Snyk CLI")
+			log.Warn().Err(err).Str("method", "iac.ScanFile").Msg("Error while calling Snyk CLI")
 		default:
 			reportErrorViaChan(documentURI, dChan, err, clChan)
 			return

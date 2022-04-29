@@ -17,7 +17,7 @@ type Settings struct {
 }
 
 var CurrentSettings Settings
-var Mutex = &sync.RWMutex{}
+var Mutex = &sync.Mutex{}
 
 type Executor interface {
 	Execute(cmd []string) (resp []byte, err error)

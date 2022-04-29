@@ -141,7 +141,6 @@ func workspaceDiagnostics(workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
 
 func WorkspaceScan(workspaceFolders []lsp.WorkspaceFolder) {
 	environment.EnsureCLI() // first would trigger download
-	environment.EnsureCLI() // block on download if necessary
 	var wg sync.WaitGroup
 	for _, workspace := range workspaceFolders {
 		wg.Add(1)
