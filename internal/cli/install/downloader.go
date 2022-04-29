@@ -1,7 +1,6 @@
 package install
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -49,6 +48,7 @@ func newWriter(size int64, progressToken lsp.ProgressToken, onProgress func(down
 func onProgress(downloaded, total int64, progressToken lsp.ProgressToken) {
 	percentage := float64(downloaded) / float64(total) * 100
 	progress.ReportProgress(progressToken, uint32(percentage), progress.ProgressChannel)
+	time.Sleep(time.Millisecond * 3) // todo: remove artificial download delay
 }
 
 func (d *Downloader) lockFileName() (string, error) {
@@ -100,45 +100,36 @@ func (d *Downloader) Download(r *Release) error {
 	client := httpclient.NewHTTPClient()
 
 	log.Info().Str("download_url", downloadURL).Msg("downloading Snyk CLI")
-	pr := progress.New("Snyk CLI download", "Downloading Snyk CLI", true)
-	progress.BeginProgress(pr, progress.ProgressChannel)
-
-	cx, _ := context.WithCancel(context.Background()) // todo: use cancel() when message gets received
-	req, _ := http.NewRequest("GET", downloadURL, nil)
-	req = req.WithContext(cx)
-	errorCh := make(chan error)
+	prog := progress.New("Snyk CLI download", "Downloading Snyk CLI", true)
+	progress.BeginProgress(prog, progress.ProgressChannel)
+	doneCh := make(chan bool)
 
 	var resp *http.Response
 
-	// Determinate the file size
-	resp, err = client.Head(downloadURL)
-	if err != nil {
-		return err
-	}
-	contentLength := resp.Header.Get("content-length")
-	length, err := strconv.Atoi(contentLength)
+	// Determine the binary size
+	length, err := getContentLength(resp, err, client, downloadURL)
 	if err != nil {
 		return err
 	}
 
-	go func() {
-		resp, err = http.DefaultClient.Do(req)
-		select {
-		case <-cx.Done():
-			// Already timedout
-		default:
-			errorCh <- err
-		}
-	}()
-
-	select {
-	case err := <-errorCh:
-		if err != nil {
-			return err // HTTP error
-		}
-	case <-cx.Done():
-		return cx.Err() // todo: verify if that's cancellation issued case?
+	resp, err = client.Get(downloadURL)
+	if err != nil {
+		return err
 	}
+
+	go func(body io.ReadCloser) {
+		for {
+			select {
+			case token := <-progress.CancelProgressChannel:
+				if token == prog.Token {
+					body.Close()
+					log.Info().Str("method", "Download").Msg("Cancellation received. Aborting download.")
+				}
+			case <-doneCh:
+				return
+			}
+		}
+	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		error_reporting.CaptureError(err)
@@ -146,10 +137,13 @@ func (d *Downloader) Download(r *Release) error {
 	}
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
+		doneCh <- true
+		log.Info().Str("method", "Download").Msg("finished downloading Snyk CLI")
 	}(resp.Body)
 
+	time.Sleep(time.Second * 3) // todo: remove artificial download delay
 	// pipe stream
-	cliReader := io.TeeReader(resp.Body, newWriter(int64(length), pr.Token, onProgress))
+	cliReader := io.TeeReader(resp.Body, newWriter(int64(length), prog.Token, onProgress))
 
 	_ = os.MkdirAll(xdg.DataHome, 0755)
 	tmpDirPath, err := os.MkdirTemp(xdg.DataHome, "downloads")
@@ -188,9 +182,23 @@ func (d *Downloader) Download(r *Release) error {
 
 	err = d.moveToDestination(&cliDiscovery, cliTmpFile.Name())
 
-	progress.EndProgress(pr.Token, "Snyk CLI has been downloaded.", progress.ProgressChannel)
+	// successCh <- true
+	progress.EndProgress(prog.Token, "Snyk CLI has been downloaded.", progress.ProgressChannel)
 
 	return err
+}
+
+func getContentLength(resp *http.Response, err error, client *http.Client, downloadURL string) (int, error) {
+	resp, err = client.Head(downloadURL)
+	if err != nil {
+		return 0, err
+	}
+	contentLength := resp.Header.Get("content-length")
+	length, err := strconv.Atoi(contentLength)
+	if err != nil {
+		return 0, err
+	}
+	return length, nil
 }
 
 func (d *Downloader) createLockFile() error {
