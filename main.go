@@ -17,6 +17,12 @@ import (
 )
 
 func main() {
+	defer func() {
+		if err := recover(); err != nil {
+			error_reporting.CaptureError(fmt.Errorf("%v", err))
+			error_reporting.FlushErrorReporting()
+		}
+	}()
 	output, err := parseFlags(os.Args)
 	if err != nil {
 		fmt.Println(err, output)
