@@ -42,16 +42,14 @@ func (wc *writeCounter) Write(p []byte) (n int, e error) {
 	return
 }
 
-func newWriter(size int64, onProgress func(downloaded, total int64, progressToken lsp.ProgressToken)) io.Writer {
-	return &writeCounter{total: size, onProgress: onProgress}
+func newWriter(size int64, progressToken lsp.ProgressToken, onProgress func(downloaded, total int64, progressToken lsp.ProgressToken)) io.Writer {
+	return &writeCounter{total: size, progressToken: progressToken, onProgress: onProgress}
 }
 
 func onProgress(downloaded, total int64, progressToken lsp.ProgressToken) {
-	fmt.Printf("Downloaded %d bytes for a total of %d\n", downloaded, total)
 	percentage := float64(downloaded) / float64(total) * 100
 	progress.ReportProgress(progressToken, uint32(percentage), progress.ProgressChannel)
 }
-
 
 func (d *Downloader) lockFileName() (string, error) {
 	path, err := d.lsPath()
@@ -151,7 +149,7 @@ func (d *Downloader) Download(r *Release) error {
 	}(resp.Body)
 
 	// pipe stream
-	cliReader := io.TeeReader(resp.Body, newWriter(int64(length), onProgress))
+	cliReader := io.TeeReader(resp.Body, newWriter(int64(length), pr.Token, onProgress))
 
 	_ = os.MkdirAll(xdg.DataHome, 0755)
 	tmpDirPath, err := os.MkdirTemp(xdg.DataHome, "downloads")

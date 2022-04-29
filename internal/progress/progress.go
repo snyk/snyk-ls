@@ -2,6 +2,7 @@ package progress
 
 import (
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -57,6 +58,10 @@ func EndProgress(token lsp.ProgressToken, message string, channel chan lsp.Progr
 }
 
 func send(progress lsp.ProgressParams, channel chan lsp.ProgressParams) {
+	if progress.Token == "" {
+		log.Error().Str("method", "EndProgress").Msg("progress token must be set")
+	}
+
 	channel <- progress
 }
 
