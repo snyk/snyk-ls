@@ -90,7 +90,7 @@ func Test_RegisterAllFilesFromWorkspace_Without_Ignored(t *testing.T) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error while registering " + workspace)
 	}
-	assert.Equal(t, 2, len(registeredDocuments)) //.gitignore & notIgnoredFilePath
+	assert.Equal(t, 1, len(registeredDocuments)) //.gitignore is not supported by any product, so not registered
 	assert.NotEqual(t, sglsp.TextDocumentItem{}, registeredDocuments[uri.PathToUri(notIgnoredFilePath)])
 	assert.Equal(t, false, registeredDocuments[sglsp.DocumentURI(ignoredFilePath)])
 }

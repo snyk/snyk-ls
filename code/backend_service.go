@@ -128,30 +128,39 @@ func (s *SnykCodeBackendService) RunAnalysis(
 
 	requestBody, err := s.analysisRequestBody(bundleHash, shardKey, limitToFiles, severity)
 	if err != nil {
+		log.Err(err).Str("method", "RunAnalysis").Str("requestBody", string(requestBody)).Msg("error creating request body")
 		return nil, nil, "", err
 	}
 
 	responseBody, err := s.doCall("POST", "/analysis", requestBody)
 	failed := "FAILED"
 	if err != nil {
+		log.Err(err).Str("method", "RunAnalysis").Str("responseBody", string(responseBody)).Msg("error response from analysis")
 		return nil, nil, failed, err
 	}
 
 	var response SarifResponse
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
-		return nil, nil, "", err
+		log.Err(err).Str("method", "RunAnalysis").Str("responseBody", string(responseBody)).Msg("error unmarshalling")
+		return nil, nil, failed, err
 	}
 
 	log.Debug().Str("method", "RunAnalysis").
 		Str("bundleHash", bundleHash).Float32("progress", response.Progress).Msgf("Status: %s", response.Status)
 
 	if response.Status == failed {
-		return nil, nil, "", SnykAnalysisFailedError{Msg: string(responseBody)}
+		log.Err(err).Str("method", "RunAnalysis").Str("responseStatus", response.Status).Msg("analysis failed")
+		return nil, nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
+	}
+
+	if response.Status == "" {
+		log.Err(err).Str("method", "RunAnalysis").Str("responseStatus", response.Status).Msg("unknown response status (empty)")
+		return nil, nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
 
 	if response.Status != "COMPLETE" {
-		return nil, nil, "", nil
+		return nil, nil, response.Status, nil
 	}
 
 	diags, hovers := s.convertSarifResponse(response)
@@ -176,41 +185,6 @@ func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, shardKey
 
 	requestBody, err := json.Marshal(request)
 	return requestBody, err
-}
-
-func (s *SnykCodeBackendService) convertLegacyResponse(
-	response AnalysisResponse,
-) map[sglsp.DocumentURI][]lsp.Diagnostic {
-	diags := make(map[sglsp.DocumentURI][]lsp.Diagnostic)
-	for uri, fileSuggestions := range response.Files {
-		diagSlice := make([]lsp.Diagnostic, 0)
-		for index := range fileSuggestions {
-			fileSuggestion := fileSuggestions[index]
-			suggestion := response.Suggestions[index]
-			for _, filePosition := range fileSuggestion {
-				myRange := sglsp.Range{
-					Start: sglsp.Position{
-						Line:      filePosition.Rows[0] - 1,
-						Character: filePosition.Cols[0] - 1,
-					},
-					End: sglsp.Position{
-						Line:      filePosition.Rows[1] - 1,
-						Character: filePosition.Cols[1],
-					},
-				}
-				d := lsp.Diagnostic{
-					Range:    myRange,
-					Severity: lspSeverity(fmt.Sprintf("%d", suggestion.Severity)),
-					Code:     suggestion.Rule,
-					Source:   "Snyk LSP",
-					Message:  suggestion.Message,
-				}
-				diagSlice = append(diagSlice, d)
-			}
-		}
-		diags[uri] = diagSlice
-	}
-	return diags
 }
 
 func (s *SnykCodeBackendService) convertSarifResponse(response SarifResponse) (

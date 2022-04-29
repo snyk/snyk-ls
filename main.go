@@ -34,6 +34,7 @@ func parseFlags(args []string) (string, error) {
 	flags.SetOutput(&buf)
 
 	logLevelFlag := flags.String("l", "info", "sets the log-level to <trace|debug|info|warn|error|fatal>")
+	logPathFlag := flags.String("f", "", "sets the log file for the language server")
 	formatFlag := flags.String(
 		"o",
 		environment.FormatMd,
@@ -52,6 +53,7 @@ func parseFlags(args []string) (string, error) {
 		return buf.String(), err
 	}
 
+	environment.LogPath = *logPathFlag
 	configureLogging(*logLevelFlag)
 	environment.Format = *formatFlag
 	environment.ConfigFile = *configFlag
@@ -67,4 +69,15 @@ func configureLogging(level string) {
 	}
 	zerolog.SetGlobalLevel(logLevel)
 	zerolog.TimeFieldFormat = time.RFC3339
+
+	if environment.LogPath != "" {
+		file, err := os.OpenFile(environment.LogPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+		if err != nil {
+			log.Err(err).Msg("couldn't open logfile")
+		}
+		log.Info().Msgf("Logging to file %s", environment.LogPath)
+		log.Logger = log.Output(file)
+	} else {
+		log.Info().Msgf("Logging to console")
+	}
 }

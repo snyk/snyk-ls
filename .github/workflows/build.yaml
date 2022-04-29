@@ -84,3 +84,24 @@ jobs:
           INTEG_TESTS: 'true'
         run: |
           make clean test
+
+  test-release:
+    name: test-release
+    needs: integration-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Determine Go version
+        run: |
+          sed -En 's/^go[[:space:]]+([[:digit:].]+)$/GO_VERSION=\1/p' go.mod >> $GITHUB_ENV
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Do test release with goreleaser
+        uses: goreleaser/goreleaser-action@v2
+        with:
+          args: release --snapshot --rm-dist --skip-publish

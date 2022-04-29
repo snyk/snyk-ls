@@ -1,14 +1,16 @@
 package environment
 
 import (
+	"context"
 	"os"
-	"os/exec"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/subosito/gotenv"
+
+	"github.com/snyk/snyk-ls/internal/snyk/cli/install"
 )
 
 const (
@@ -16,18 +18,15 @@ const (
 	snykTokenKey       = "SNYK_TOKEN"
 	deeproxyApiUrlKey  = "DEEPROXY_API_URL"
 	snykCodeTimeoutKey = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
-
-	FormatHtml = "html"
-	FormatMd   = "md"
+	FormatHtml         = "html"
+	FormatMd           = "md"
 )
 
 var (
 	configLoaded = false
 	Format       = "md"
 	ConfigFile   = ""
-	cliFileName  = getSnykFileName()
-	INTEG_TESTS  = "INTEG_TESTS"
-	RunIntegTest = os.Getenv(INTEG_TESTS) != ""
+	LogPath      string
 )
 
 func getSnykFileName() string {
@@ -48,7 +47,7 @@ func getSnykFileName() string {
 	}
 }
 
-func SnykeCodeAnalysisTimeout() time.Duration {
+func SnykCodeAnalysisTimeout() time.Duration {
 	var snykCodeTimeout time.Duration
 	var err error
 	env := os.Getenv(snykCodeTimeoutKey)
@@ -75,7 +74,11 @@ func Token() string {
 }
 
 func ApiUrl() string {
-	return strings.Trim(getValue(deeproxyApiUrlKey), "/")
+	trim := strings.Trim(getValue(deeproxyApiUrlKey), "/")
+	if trim == "" {
+		trim = "https://deeproxy.snyk.io"
+	}
+	return trim
 }
 
 func CliPath() string {
@@ -131,13 +134,25 @@ func addSnykCliPathToEnv() {
 		return
 	}
 
-	snykPath, err := exec.LookPath(cliFileName)
+	i := install.NewInstaller()
+	cliPath, err := i.Find()
+	if err != nil {
+		log.Info().Msg("could not find Snyk CLI in user directories and PATH.")
+	}
+
+	if cliPath == "" {
+		cliPath, err = i.Install(context.Background())
+		if err != nil {
+			log.Err(err).Msg("could not download Snyk CLI binary")
+		}
+	}
+
 	if err == nil {
-		err := os.Setenv(cliPathKey, snykPath)
+		err := os.Setenv(cliPathKey, cliPath)
 		if err != nil {
 			log.Err(err).Msg("Couldn't update environment with Snyk cli path")
 		}
-		log.Info().Interface("snyk", snykPath).Msg("Snyk CLI found.")
+		log.Info().Interface("snyk", cliPath).Msg("Snyk CLI found.")
 	}
 }
 

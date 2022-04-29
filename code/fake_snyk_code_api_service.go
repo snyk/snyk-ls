@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"sync"
 
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -13,7 +14,14 @@ import (
 	"github.com/snyk/snyk-ls/util"
 )
 
+const (
+	CreateBundleWithSourceOperation = "createBundleWithSource"
+	ExtendBundleWithSourceOperation = "extendBundleWithSource"
+	RunAnalysisOperation            = "runAnalysis"
+)
+
 var (
+	mutex             = &sync.Mutex{}
 	fakeDiagnosticUri sglsp.DocumentURI
 
 	fakeRange = sglsp.Range{
@@ -57,17 +65,13 @@ func FakeDiagnosticUri() (documentURI sglsp.DocumentURI, path string) {
 	return documentURI, temp
 }
 
-const (
-	CreateBundleWithSourceOperation = "createBundleWithSource"
-	ExtendBundleWithSourceOperation = "extendBundleWithSource"
-	RunAnalysisOperation            = "runAnalysis"
-)
-
 type FakeSnykCodeApiService struct {
 	Calls map[string][][]interface{}
 }
 
 func (f *FakeSnykCodeApiService) addCall(params []interface{}, op string) {
+	mutex.Lock()
+	defer mutex.Unlock()
 	if f.Calls == nil {
 		f.Calls = make(map[string][][]interface{})
 	}
@@ -80,6 +84,8 @@ func (f *FakeSnykCodeApiService) addCall(params []interface{}, op string) {
 }
 
 func (f *FakeSnykCodeApiService) GetCallParams(callNo int, op string) []interface{} {
+	mutex.Lock()
+	defer mutex.Unlock()
 	calls := f.Calls[op]
 	if calls == nil {
 		return nil
@@ -92,6 +98,8 @@ func (f *FakeSnykCodeApiService) GetCallParams(callNo int, op string) []interfac
 }
 
 func (f *FakeSnykCodeApiService) GetAllCalls(op string) [][]interface{} {
+	mutex.Lock()
+	defer mutex.Unlock()
 	calls := f.Calls[op]
 	if calls == nil {
 		return nil

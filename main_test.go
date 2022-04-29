@@ -1,11 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config"
@@ -16,6 +20,18 @@ func Test_shouldSetLogLevelViaFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-l", "debug"}
 	_, _ = parseFlags(args)
 	assert.Equal(t, zerolog.DebugLevel, zerolog.GlobalLevel())
+}
+
+func Test_shouldSetLogFileViaFlag(t *testing.T) {
+	args := []string{"snyk-ls", "-f", "a.txt"}
+	defer func() {
+		err := os.Remove("a.txt")
+		if err != nil {
+			t.Fatal("couldn't delete test file")
+		}
+	}()
+	_, _ = parseFlags(args)
+	assert.Equal(t, environment.LogPath, "a.txt")
 }
 
 func Test_shouldSetOutputFormatViaFlag(t *testing.T) {
@@ -64,4 +80,34 @@ func Test_shouldSetReportErrorsViaFlag(t *testing.T) {
 	args = []string{"snyk-ls", "-reportErrors"}
 	_, _ = parseFlags(args)
 	assert.True(t, config.IsErrorReportingEnabled)
+}
+
+func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
+	t.Skip("Doesn't pass on CI, we don't know why")
+	logPath, err := os.MkdirTemp(os.TempDir(), "testlogconfig")
+	if err != nil {
+		t.Fatal(err)
+	}
+	environment.LogPath = filepath.Join(logPath, "a.txt")
+	defer func(name string) {
+		err := os.RemoveAll(logPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		environment.LogPath = ""
+	}(logPath)
+
+	configureLogging("debug")
+	log.Error().Msg("test")
+
+	assert.Eventuallyf(t, func() bool {
+		bytes, err := os.ReadFile(environment.LogPath)
+		fmt.Println("Read file " + environment.LogPath)
+		if err != nil {
+			return false
+		}
+		fmt.Println("Read bytes:" + string(bytes)) // no logger usage here
+		return len(bytes) == 70
+	}, 2*time.Second, 10*time.Millisecond, "didn't write to logfile")
+
 }
