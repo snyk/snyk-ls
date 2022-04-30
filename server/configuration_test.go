@@ -44,3 +44,47 @@ func TestWorkspaceDidChangeConfiguration(t *testing.T) {
 	assert.Equal(t, "d", os.Getenv("c"))
 	assert.True(t, strings.Contains(os.Getenv("PATH"), "addPath"))
 }
+
+func TestWorkspaceDidChangeConfiguration_IncompleteEnvVars(t *testing.T) {
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
+	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
+		AdditionalEnv: "a=",
+	}}
+	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
+	if err != nil {
+		log.Fatal().Err(err).Msg("error calling server")
+	}
+
+	assert.Empty(t, os.Getenv("a"))
+}
+
+func TestWorkspaceDidChangeConfiguration_EmptyEnvVars(t *testing.T) {
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
+	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
+		AdditionalEnv: "",
+	}}
+	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
+	if err != nil {
+		log.Fatal().Err(err).Msg("error calling server")
+	}
+
+	assert.Empty(t, os.Getenv("a"))
+}
+
+func TestWorkspaceDidChangeConfiguration_WeirdEnvVars(t *testing.T) {
+	loc, teardownServer := setupServer()
+	defer teardownServer(&loc)
+	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
+		AdditionalEnv: "a=; b",
+	}}
+	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
+	if err != nil {
+		log.Fatal().Err(err).Msg("error calling server")
+	}
+
+	assert.Empty(t, os.Getenv("a"))
+	assert.Empty(t, os.Getenv("b"))
+	assert.Empty(t, os.Getenv(";"))
+}

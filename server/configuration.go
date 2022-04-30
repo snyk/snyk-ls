@@ -17,6 +17,8 @@ import (
 
 func WorkspaceDidChangeConfiguration() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeConfigurationParams) (interface{}, error) {
+		log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("RECEIVED")
+		defer log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("DONE")
 		var err error
 		environment.CurrentEnabledProducts.Code, err = strconv.ParseBool(params.Settings.ActivateSnykCode)
 		if err != nil {
@@ -35,12 +37,16 @@ func WorkspaceDidChangeConfiguration() jrpc2.Handler {
 			log.Err(err).Msg("couldn't parse insecure setting")
 		}
 
-		cli.CurrentSettings.Endpoint = params.Settings.Endpoint
+		cli.CurrentSettings.Endpoint = strings.Trim(params.Settings.Endpoint, " ")
 
 		cli.CurrentSettings.AdditionalParameters = strings.Split(params.Settings.AdditionalParams, " ")
+
 		envVars := strings.Split(params.Settings.AdditionalEnv, ";")
 		for _, envVar := range envVars {
 			v := strings.Split(envVar, "=")
+			if len(v) != 2 {
+				continue
+			}
 			err = os.Setenv(v[0], v[1])
 			if err != nil {
 				log.Err(err).Msgf("couldn't set env variable %s", envVar)
