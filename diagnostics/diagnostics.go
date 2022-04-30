@@ -1,6 +1,7 @@
 package diagnostics
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -12,6 +13,7 @@ import (
 	"github.com/snyk/snyk-ls/iac"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/hover"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 	"github.com/snyk/snyk-ls/oss"
@@ -91,13 +93,13 @@ func GetDiagnostics(uri sglsp.DocumentURI) []lsp.Diagnostic {
 		return diagnosticSlice
 	}
 
-	var diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic = fetchAllRegisteredDocumentDiagnostics(uri, lsp.ScanLevelFile)
+	var diagnostics = fetchAllRegisteredDocumentDiagnostics(uri, lsp.ScanLevelFile)
 	addToCache(diagnostics)
 
 	return documentDiagnosticCache[uri]
 }
 
-func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.ScanLevel) map[sglsp.DocumentURI][]lsp.Diagnostic {
+func fetchAllRegisteredDocumentDiagnostics(documentURI sglsp.DocumentURI, level lsp.ScanLevel) map[sglsp.DocumentURI][]lsp.Diagnostic {
 	log.Info().
 		Str("method", "fetchAllRegisteredDocumentDiagnostics").
 		Msg("started.")
@@ -109,6 +111,10 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	var bundles = make([]*code.BundleImpl, 0, 10)
 
+	p := progress.New(fmt.Sprintf("Scanning for issues in %s", uri.PathFromUri(documentURI)), "", false)
+	progress.BeginProgress(p, progress.ProgressChannel)
+	defer progress.EndProgress(p.Token, fmt.Sprintf("Scan complete. Found %d issues.", len(diagnostics)), progress.ProgressChannel)
+
 	wg := sync.WaitGroup{}
 
 	var dChan chan lsp.DiagnosticResult
@@ -116,12 +122,12 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 
 	if level == lsp.ScanLevelWorkspace {
 		dChan = make(chan lsp.DiagnosticResult, 3*len(registeredDocuments))
-		workspaceLevelFetch(uri, environment.CurrentEnabledProducts, bundles, &wg, dChan, hoverChan)
+		workspaceLevelFetch(documentURI, environment.CurrentEnabledProducts, bundles, &wg, dChan, hoverChan)
 	} else {
 		dChan = make(chan lsp.DiagnosticResult, 3)
-		fileLevelFetch(uri, environment.CurrentEnabledProducts, bundles, &wg, dChan, hoverChan)
+		fileLevelFetch(documentURI, environment.CurrentEnabledProducts, bundles, &wg, dChan, hoverChan)
 	}
-
+	progress.ReportProgress(p.Token, 50, progress.ProgressChannel)
 	wg.Wait()
 	log.Debug().
 		Str("method", "fetchAllRegisteredDocumentDiagnostics").

@@ -107,7 +107,7 @@ func (d *Downloader) Download(r *Release) error {
 	var resp *http.Response
 
 	// Determine the binary size
-	length, err := getContentLength(resp, err, client, downloadURL)
+	length, err := getContentLength(client, downloadURL)
 	if err != nil {
 		return err
 	}
@@ -122,7 +122,10 @@ func (d *Downloader) Download(r *Release) error {
 			select {
 			case token := <-progress.CancelProgressChannel:
 				if token == prog.Token {
-					body.Close()
+					err := body.Close()
+					if err != nil {
+						return
+					}
 					log.Info().Str("method", "Download").Msg("Cancellation received. Aborting download.")
 				}
 			case <-doneCh:
@@ -188,12 +191,12 @@ func (d *Downloader) Download(r *Release) error {
 	return err
 }
 
-func getContentLength(resp *http.Response, err error, client *http.Client, downloadURL string) (int, error) {
-	resp, err = client.Head(downloadURL)
+func getContentLength(client *http.Client, downloadURL string) (int, error) {
+	head, err := client.Head(downloadURL)
 	if err != nil {
 		return 0, err
 	}
-	contentLength := resp.Header.Get("content-length")
+	contentLength := head.Header.Get("content-length")
 	length, err := strconv.Atoi(contentLength)
 	if err != nil {
 		return 0, err

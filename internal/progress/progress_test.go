@@ -3,8 +3,9 @@ package progress
 import (
 	"testing"
 
-	"github.com/snyk/snyk-ls/lsp"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/lsp"
 )
 
 func TestCreateProgress(t *testing.T) {

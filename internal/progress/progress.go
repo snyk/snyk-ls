@@ -3,11 +3,12 @@ package progress
 import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+
 	"github.com/snyk/snyk-ls/lsp"
 )
 
-var ProgressChannel = make(chan lsp.ProgressParams)
-var CancelProgressChannel = make(chan lsp.ProgressToken)
+var ProgressChannel = make(chan lsp.ProgressParams, 1)
+var CancelProgressChannel = make(chan lsp.ProgressToken, 1)
 
 func New(title, message string, cancellable bool) lsp.ProgressParams {
 	uuid := uuid.New().String()

@@ -191,9 +191,9 @@ func InitializeHandler(srv **jrpc2.Server) handler.Func {
 
 		go hover.CreateHoverListener()
 
-		if clientParams.Capabilities.Window.WorkDoneProgress {
-			go createProgressListener(progress.ProgressChannel, *srv)
-		}
+		//if clientParams.Capabilities.Window.WorkDoneProgress {
+		go createProgressListener(progress.ProgressChannel, *srv)
+		//}
 
 		return lsp.InitializeResult{
 			Capabilities: lsp.ServerCapabilities{

@@ -213,7 +213,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	diagnosticsParams := lsp.PublishDiagnosticsParams{}
 
 	// wait for publish
-	assert.Eventually(t, func() bool { return notification != nil }, 5*time.Second, 10*time.Millisecond)
+	assert.Eventually(t, func() bool { return notificationMessage != nil }, 5*time.Second, 10*time.Millisecond)
 	if notificationMessage != nil {
 		_ = notificationMessage.UnmarshalParams(&diagnosticsParams)
 		assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
@@ -463,16 +463,16 @@ func Test_IntegrationHoverResults(t *testing.T) {
 		log.Fatal().Err(err).Msg("Initialization failed")
 	}
 
-	// wait till the whole workspace is scanned
-	assert.Eventually(t, func() bool {
-			return notificationMessage != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
-		}, 5*time.Second, 2*time.Millisecond)
-
 	testPath := cloneTargetDir + string(os.PathSeparator) + "package.json"
 	testPosition := sglsp.Position{
 		Line:      17,
 		Character: 7,
 	}
+
+	// wait till the whole workspace is scanned
+	assert.Eventually(t, func() bool {
+		return notificationMessage != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
+	}, 5*time.Second, 2*time.Millisecond)
 
 	hoverResp, err := loc.Client.Call(ctx, "textDocument/hover", lsp.HoverParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(testPath)},
