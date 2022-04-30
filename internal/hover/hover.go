@@ -2,8 +2,10 @@ package hover
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 
 	"github.com/rs/zerolog/log"
@@ -11,7 +13,7 @@ import (
 )
 
 var hovers = map[sglsp.DocumentURI][]lsp.HoverDetails{}
-var hoverIndexes = make(map[sglsp.DocumentURI]map[string]bool)
+var hoverIndexes = map[string]bool{}
 
 var hoverChan = make(chan lsp.Hover, 4)
 var mutex = &sync.Mutex{}
@@ -34,14 +36,11 @@ func registerHovers(result lsp.Hover) {
 
 	for _, newHover := range result.Hover {
 		key := result.Uri
-		hoverIndex := fmt.Sprintf("%v", newHover.Range) + newHover.Id
+		hoverIndex := uri.PathFromUri(key) + fmt.Sprintf("%v%v", newHover.Range, newHover.Id)
 
-		if !hoverIndexes[key][hoverIndex] {
+		if !hoverIndexes[hoverIndex] {
 			hovers[key] = append(hovers[key], newHover)
-
-			indexMap := map[string]bool{}
-			indexMap[hoverIndex] = true
-			hoverIndexes[key] = indexMap
+			hoverIndexes[hoverIndex] = true
 		}
 	}
 }
@@ -51,7 +50,12 @@ func DeleteHover(documentUri sglsp.DocumentURI) {
 	defer mutex.Unlock()
 
 	delete(hovers, documentUri)
-	delete(hoverIndexes, documentUri)
+	for key := range hoverIndexes {
+		document := uri.PathFromUri(documentUri)
+		if strings.Contains(key, document) {
+			delete(hoverIndexes, key)
+		}
+	}
 }
 
 func Channel() chan lsp.Hover {
@@ -63,7 +67,7 @@ func ClearAllHovers() {
 	defer mutex.Unlock()
 
 	hovers = map[sglsp.DocumentURI][]lsp.HoverDetails{}
-	hoverIndexes = make(map[sglsp.DocumentURI]map[string]bool)
+	hoverIndexes = map[string]bool{}
 }
 
 func GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) lsp.HoverResult {
