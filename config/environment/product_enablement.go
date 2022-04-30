@@ -11,7 +11,7 @@ type EnabledProducts struct {
 }
 
 const (
-	ActivateSnykOssKey       = "ACTIVATE_SNYK_OSS"
+	ActivateSnykOssKey       = "ACTIVATE_SNYK_OPEN_SOURCE"
 	ActivateSnykCodeKey      = "ACTIVATE_SNYK_CODE"
 	ActivateSnykIacKey       = "ACTIVATE_SNYK_IAC"
 	ActivateSnykContainerKey = "ACTIVATE_SNYK_CONTAINER"
