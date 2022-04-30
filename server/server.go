@@ -16,6 +16,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/preconditions"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -40,6 +41,7 @@ func Start() {
 		"exit":                                Exit(&srv),
 		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
 		"workspace/didChangeConfiguration":    WorkspaceDidChangeConfiguration(),
+		"window/workDoneProgress/cancel":      WindowWorkDoneProgressCancelHandler(),
 	}
 
 	srv = jrpc2.NewServer(lspHandlers, &jrpc2.ServerOptions{
@@ -71,6 +73,8 @@ func Shutdown() jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (interface{}, error) {
 		log.Info().Str("method", "Shutdown").Msg("RECEIVING")
 		log.Info().Str("method", "Shutdown").Msg("SENDING")
+
+		disposeProgressListener()
 		return nil, nil
 	})
 }
@@ -155,6 +159,14 @@ func TextDocumentDidCloseHandler() handler.Func {
 	})
 }
 
+func WindowWorkDoneProgressCancelHandler() handler.Func {
+	return handler.New(func(ctx context.Context, params lsp.WorkdoneProgressCancelParams) (interface{}, error) {
+		log.Info().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
+		CancelProgress(params.Token)
+		return nil, nil
+	})
+}
+
 func TextDocumentHover() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.HoverParams) (lsp.HoverResult, error) {
 		log.Info().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
@@ -178,6 +190,10 @@ func InitializeHandler(srv **jrpc2.Server) handler.Func {
 		registerNotifier(srv)
 
 		go hover.CreateHoverListener()
+
+		if clientParams.Capabilities.Window.WorkDoneProgress {
+			go createProgressListener(progress.ProgressChannel, *srv)
+		}
 
 		return lsp.InitializeResult{
 			Capabilities: lsp.ServerCapabilities{
