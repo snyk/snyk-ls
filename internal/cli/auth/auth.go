@@ -10,6 +10,7 @@ import (
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/lsp"
 )
 
 // Auth represents the `snyk auth` command.
@@ -54,5 +55,5 @@ func Authenticate() {
 			error_reporting.CaptureError(err)
 		}
 	}
-	notification.Send(token)
+	notification.Send(lsp.AuthenticationParams{Token: token})
 }

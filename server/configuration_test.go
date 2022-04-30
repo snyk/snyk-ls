@@ -14,10 +14,10 @@ import (
 )
 
 func TestWorkspaceDidChangeConfiguration(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
-	os.Unsetenv("a")
-	os.Unsetenv("c")
+	loc := setupServer(t)
+
+	t.Setenv("a", "")
+	t.Setenv("c", "")
 	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
 		ActivateSnykOpenSource: "false",
 		ActivateSnykCode:       "false",
@@ -46,8 +46,8 @@ func TestWorkspaceDidChangeConfiguration(t *testing.T) {
 }
 
 func TestWorkspaceDidChangeConfiguration_IncompleteEnvVars(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
+
 	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
 		AdditionalEnv: "a=",
 	}}
@@ -60,8 +60,8 @@ func TestWorkspaceDidChangeConfiguration_IncompleteEnvVars(t *testing.T) {
 }
 
 func TestWorkspaceDidChangeConfiguration_EmptyEnvVars(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
+
 	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
 		AdditionalEnv: "",
 	}}
@@ -74,8 +74,8 @@ func TestWorkspaceDidChangeConfiguration_EmptyEnvVars(t *testing.T) {
 }
 
 func TestWorkspaceDidChangeConfiguration_WeirdEnvVars(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
+
 	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
 		AdditionalEnv: "a=; b",
 	}}

@@ -59,23 +59,23 @@ func didSaveTextParams() (sglsp.DidSaveTextDocumentParams, func()) {
 	}
 }
 
-func setupServer() (localServer server.Local, teardown func(l *server.Local)) {
+func setupServer(t *testing.T) server.Local {
 	loc := startServer()
 	notificationMessage = nil
-	callbackMessage = nil
 	// get rid of messages from previous tests
 	notification.CleanChannels()
 	progress.CleanChannels()
-
-	return loc, func(loc *server.Local) {
-		notification.DisposeListener()
+	t.Cleanup(func() {
 		err := loc.Close()
 		if err != nil {
-			log.Fatal().Err(err).Msg("Error when closing down server")
+			log.Error().Err(err).Msg("Error when closing down server")
 		}
+		notification.DisposeListener()
+		notification.CleanChannels()
 		notificationMessage = nil
 		callbackMessage = nil
-	}
+	})
+	return loc
 }
 
 func startServer() server.Local {
@@ -122,8 +122,7 @@ func startServer() server.Local {
 }
 
 func Test_serverShouldStart(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	si := loc.Server.ServerInfo()
 
@@ -131,8 +130,7 @@ func Test_serverShouldStart(t *testing.T) {
 }
 
 func Test_dummy_shouldNotBeServed(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	_, err := loc.Client.Call(ctx, "dummy", nil)
 	if err == nil {
@@ -141,8 +139,7 @@ func Test_dummy_shouldNotBeServed(t *testing.T) {
 }
 
 func Test_initialize_shouldBeServed(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -155,8 +152,7 @@ func Test_initialize_shouldBeServed(t *testing.T) {
 }
 
 func Test_initialize_shouldSupportDocumentOpening(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -170,8 +166,7 @@ func Test_initialize_shouldSupportDocumentOpening(t *testing.T) {
 }
 
 func Test_initialize_shouldSupportDocumentChanges(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -185,8 +180,7 @@ func Test_initialize_shouldSupportDocumentChanges(t *testing.T) {
 }
 
 func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -204,8 +198,7 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
 	cli.CurrentSettings = cli.Settings{}
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	didOpenParams, cleanup := didOpenTextParams()
 	defer cleanup()
@@ -228,8 +221,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 
 func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	testutil.IntegTest(t)
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	testutil.CreateDummyProgressListener(t)
 
@@ -272,8 +264,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 }
 
 func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	// register our dummy document
 	didOpenParams, cleanup := didOpenTextParams()
@@ -301,8 +292,7 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
 	cli.CurrentSettings = cli.Settings{}
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	didSaveParams, cleanup := didSaveTextParams()
 	defer cleanup()
@@ -324,8 +314,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 }
 
 func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSaveWaitUntil", nil)
 	if err != nil {
@@ -334,8 +323,7 @@ func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
 }
 
 func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSave", nil)
 	if err != nil {
@@ -345,8 +333,7 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 
 func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) {
 	testutil.IntegTest(t)
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 	testutil.CreateDummyProgressListener(t)
 
 	folder := lsp.WorkspaceFolder{Name: "test1", Uri: sglsp.DocumentURI("test1")}
@@ -400,8 +387,7 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 	diagnostics.ClearWorkspaceFolderScanned()
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	var cloneTargetDir, err = setupCustomTestRepo(repo, commit)
 	defer os.RemoveAll(cloneTargetDir)
@@ -451,8 +437,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
 	defer os.RemoveAll(cloneTargetDir)
@@ -508,8 +493,7 @@ func Test_IntegrationFileScan(t *testing.T) {
 	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
 	defer os.RemoveAll(cloneTargetDir)

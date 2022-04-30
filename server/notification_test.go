@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/lsp"
 
@@ -56,8 +57,7 @@ func TestCreateProgressListener(t *testing.T) {
 }
 
 func TestServerInitializeShouldStartProgressListener(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	clientParams := lsp.InitializeParams{
 		Capabilities: sglsp.ClientCapabilities{
@@ -92,8 +92,7 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 }
 
 func TestServerInitializeShouldNotStartProgressListener(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	clientParams := lsp.InitializeParams{
 		Capabilities: sglsp.ClientCapabilities{
@@ -122,8 +121,7 @@ func TestServerInitializeShouldNotStartProgressListener(t *testing.T) {
 }
 
 func TestShutdownDisposesProgressListener(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -138,8 +136,7 @@ func TestShutdownDisposesProgressListener(t *testing.T) {
 }
 
 func TestCancelProgress(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -160,23 +157,25 @@ func TestCancelProgress(t *testing.T) {
 }
 
 func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
 		log.Fatal().Err(err)
 	}
+	preconditions.EnsureReadyForAnalysisAndWait()
 	var expected = lsp.AuthenticationParams{Token: "test token"}
 	var actual = lsp.AuthenticationParams{}
-	notification.Send(expected.Token)
+	notification.Send(expected)
 	assert.Eventually(t, func() bool {
-		return notificationMessage != nil
-	}, time.Minute, time.Millisecond)
-	if !t.Failed() {
+		if notificationMessage == nil {
+			return false
+		}
 		err := notificationMessage.UnmarshalParams(&actual)
-		assert.NoError(t, err)
-		assert.True(t, notificationMessage.IsNotification())
-		assert.Equal(t, expected, actual)
-	}
+		return err == nil && actual.Token == expected.Token
+	}, time.Minute, time.Millisecond)
+	assert.True(t, notificationMessage.IsNotification())
+
+	assert.NoError(t, err)
+	assert.Equal(t, expected, actual)
 }

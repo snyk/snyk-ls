@@ -8,7 +8,11 @@ import (
 )
 
 func TestGetEnabledProducts_DefaultValues(t *testing.T) {
-	os.Clearenv()
+	t.Setenv(ActivateSnykOssKey, "")
+	t.Setenv(ActivateSnykCodeKey, "")
+	t.Setenv(ActivateSnykIacKey, "")
+	t.Setenv(ActivateSnykContainerKey, "")
+	t.Setenv(ActivateSnykAdvisorKey, "")
 	assert.Equal(t, true, EnabledProductsFromEnv().OpenSource)
 	assert.Equal(t, true, EnabledProductsFromEnv().Code)
 	assert.Equal(t, true, EnabledProductsFromEnv().Iac)
@@ -17,15 +21,10 @@ func TestGetEnabledProducts_DefaultValues(t *testing.T) {
 }
 
 func TestGetEnabledProducts_Oss(t *testing.T) {
-	os.Clearenv()
-	defer os.Clearenv()
-	err := os.Setenv(ActivateSnykOssKey, "false")
-	if err != nil {
-		t.Fatal("couldn't set environment")
-	}
+	t.Setenv(ActivateSnykOssKey, "false")
 	assert.Equal(t, false, EnabledProductsFromEnv().OpenSource)
 
-	err = os.Setenv(ActivateSnykOssKey, "true")
+	err := os.Setenv(ActivateSnykOssKey, "true")
 	if err != nil {
 		t.Fatal("couldn't set environment")
 	}
@@ -33,15 +32,10 @@ func TestGetEnabledProducts_Oss(t *testing.T) {
 }
 
 func TestGetEnabledProducts_Code(t *testing.T) {
-	os.Clearenv()
-	defer os.Clearenv()
-	err := os.Setenv(ActivateSnykCodeKey, "false")
-	if err != nil {
-		t.Fatal("couldn't set environment")
-	}
+	t.Setenv(ActivateSnykCodeKey, "false")
 	assert.Equal(t, false, EnabledProductsFromEnv().Code)
 
-	err = os.Setenv(ActivateSnykCodeKey, "true")
+	err := os.Setenv(ActivateSnykCodeKey, "true")
 	if err != nil {
 		t.Fatal("couldn't set environment")
 	}
@@ -49,15 +43,10 @@ func TestGetEnabledProducts_Code(t *testing.T) {
 }
 
 func TestGetEnabledProducts_Iac(t *testing.T) {
-	os.Clearenv()
-	defer os.Clearenv()
-	err := os.Setenv(ActivateSnykIacKey, "false")
-	if err != nil {
-		t.Fatal("couldn't set environment")
-	}
+	t.Setenv(ActivateSnykIacKey, "false")
 	assert.Equal(t, false, EnabledProductsFromEnv().Iac)
 
-	err = os.Setenv(ActivateSnykIacKey, "true")
+	err := os.Setenv(ActivateSnykIacKey, "true")
 	if err != nil {
 		t.Fatal("couldn't set environment")
 	}
@@ -65,15 +54,10 @@ func TestGetEnabledProducts_Iac(t *testing.T) {
 }
 
 func TestGetEnabledProducts_Container(t *testing.T) {
-	os.Clearenv()
-	defer os.Clearenv()
-	err := os.Setenv(ActivateSnykContainerKey, "false")
-	if err != nil {
-		t.Fatal("couldn't set environment")
-	}
+	t.Setenv(ActivateSnykContainerKey, "false")
 	assert.Equal(t, false, EnabledProductsFromEnv().Container)
 
-	err = os.Setenv(ActivateSnykContainerKey, "true")
+	err := os.Setenv(ActivateSnykContainerKey, "true")
 	if err != nil {
 		t.Fatal("couldn't set environment")
 	}
@@ -81,15 +65,10 @@ func TestGetEnabledProducts_Container(t *testing.T) {
 }
 
 func TestGetEnabledProducts_Advisor(t *testing.T) {
-	os.Clearenv()
-	defer os.Clearenv()
-	err := os.Setenv(ActivateSnykAdvisorKey, "false")
-	if err != nil {
-		t.Fatal("couldn't set environment")
-	}
+	t.Setenv(ActivateSnykAdvisorKey, "false")
 	assert.Equal(t, false, EnabledProductsFromEnv().Advisor)
 
-	err = os.Setenv(ActivateSnykAdvisorKey, "true")
+	err := os.Setenv(ActivateSnykAdvisorKey, "true")
 	if err != nil {
 		t.Fatal("couldn't set environment")
 	}

@@ -68,6 +68,7 @@ func ClearAllHovers() {
 
 	hovers = map[sglsp.DocumentURI][]lsp.HoverDetails{}
 	hoverIndexes = map[string]bool{}
+	hoverChan = make(chan lsp.Hover, 4)
 }
 
 func GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) lsp.HoverResult {
