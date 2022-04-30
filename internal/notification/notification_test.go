@@ -12,15 +12,15 @@ import (
 var params = lsp.AuthenticationParams{Token: "test event"}
 
 func TestSendReceive(t *testing.T) {
-	Send(params.Token)
+	Send(params)
 	output := Receive()
 	assert.Equal(t, params, output)
 }
 
 func TestCreateListener(t *testing.T) {
-	Send(params.Token)
+	Send(params)
 	called := false
-	CreateListener(func(event lsp.AuthenticationParams) {
+	CreateListener(func(event interface{}) {
 		called = true
 	})
 	assert.Eventually(t, func() bool {

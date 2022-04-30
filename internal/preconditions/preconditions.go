@@ -5,11 +5,13 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/cli/auth"
 	"github.com/snyk/snyk-ls/internal/cli/install"
+	"github.com/snyk/snyk-ls/internal/notification"
 )
 
 func EnsureReadyForAnalysisAndWait() {
@@ -27,6 +29,7 @@ func EnsureReadyForAnalysisAndWait() {
 	}
 
 	if !authenticated {
+		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Authenticating to Snyk. This could open a browser window."})
 		auth.Authenticate()
 	}
 }
@@ -39,6 +42,8 @@ func installCli() {
 	}
 
 	if cliPath == "" {
+		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Snyk CLI needs to be installed."})
+
 		cliPath, err = i.Install(context.Background())
 		if err != nil {
 			log.Err(err).Str("method", "installCli").Msg("could not download Snyk CLI binary")
@@ -53,5 +58,7 @@ func installCli() {
 			log.Err(err).Str("method", "installCli").Msg("Couldn't update environment with Snyk cli path")
 		}
 		log.Info().Str("method", "installCli").Str("snyk", cliPath).Msg("Snyk CLI found.")
+	} else {
+		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Warning, Message: "Could not find, nor install Snyk CLI"})
 	}
 }

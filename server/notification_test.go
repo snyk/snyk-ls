@@ -12,7 +12,7 @@ import (
 	"github.com/snyk/snyk-ls/lsp"
 )
 
-func Test_AuthenticationShouldSendNotificationToClient(t *testing.T) {
+func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	loc, teardownServer := setupServer()
 	defer teardownServer(&loc)
 
@@ -21,18 +21,18 @@ func Test_AuthenticationShouldSendNotificationToClient(t *testing.T) {
 		log.Fatal().Err(err)
 	}
 	preconditions.EnsureReadyForAnalysisAndWait()
-	var params = lsp.AuthenticationParams{}
-	testToken := "test token"
-	notification.Send(testToken)
+	var expected = lsp.AuthenticationParams{Token: "test token"}
+	var actual = lsp.AuthenticationParams{}
+	notification.Send(expected)
 	assert.Eventually(t, func() bool {
 		if notificationRequest == nil {
 			return false
 		}
-		err := notificationRequest.UnmarshalParams(&params)
-		return err == nil
-	}, time.Minute*1, time.Millisecond*2)
+		err := notificationRequest.UnmarshalParams(&actual)
+		return err == nil && actual.Token == expected.Token
+	}, time.Minute, time.Millisecond)
 	assert.True(t, notificationRequest.IsNotification())
 
 	assert.NoError(t, err)
-	assert.Equal(t, testToken, params.Token)
+	assert.Equal(t, expected, actual)
 }

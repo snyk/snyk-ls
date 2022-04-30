@@ -14,7 +14,7 @@ import (
 	"github.com/snyk/snyk-ls/diagnostics"
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/hover"
-	notification2 "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -175,7 +175,7 @@ func InitializeHandler(srv **jrpc2.Server) handler.Func {
 		} else {
 			go diagnostics.GetDiagnostics(clientParams.RootURI)
 		}
-		registerAuthentificationNotifier(srv)
+		registerNotifier(srv)
 
 		go hover.CreateHoverListener()
 
@@ -200,9 +200,31 @@ func InitializeHandler(srv **jrpc2.Server) handler.Func {
 	})
 }
 
-func registerAuthentificationNotifier(srv **jrpc2.Server) {
-	callbackFunction := func(params lsp.AuthenticationParams) {
-		authenticationNotification(srv, params)
+func registerNotifier(srv **jrpc2.Server) {
+	callbackFunction := func(params interface{}) {
+		switch params := params.(type) {
+		case lsp.AuthenticationParams:
+			notifier(srv, "$/hasAuthenticated", params)
+			log.Info().Str("method", "notifyCallback").
+				Msg("sending token")
+		case sglsp.ShowMessageParams:
+			notifier(srv, "window/showMessage", params)
+			log.Info().
+				Str("method", "notifyCallback").
+				Interface("message", params).
+				Msg("showing message")
+		case lsp.PublishDiagnosticsParams:
+			notifier(srv, "textDocument/publishDiagnostics", params)
+			log.Info().
+				Str("method", "notifyCallback").
+				Interface("documentURI", params.URI).
+				Msg("publishing diagnostics")
+		default:
+			log.Warn().
+				Str("method", "notifyCallback").
+				Interface("params", params).
+				Msg("received unconfigured notification object")
+		}
 	}
-	go notification2.CreateListener(callbackFunction)
+	go notification.CreateListener(callbackFunction)
 }
