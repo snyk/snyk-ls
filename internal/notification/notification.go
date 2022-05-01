@@ -2,7 +2,7 @@ package notification
 
 type Event string
 
-var channel = make(chan interface{}, 1)
+var channel = make(chan interface{}, 100)
 
 func Send(msg interface{}) {
 	channel <- msg
