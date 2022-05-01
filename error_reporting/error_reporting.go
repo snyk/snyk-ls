@@ -1,9 +1,13 @@
 package error_reporting
 
 import (
+	"fmt"
 	"time"
 
+	sglsp "github.com/sourcegraph/go-lsp"
+
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/internal/notification"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog/log"
@@ -34,6 +38,10 @@ func FlushErrorReporting() {
 func CaptureError(err error) bool {
 	if config.IsErrorReportingEnabled {
 		sentry.CaptureException(err)
+		notification.Send(sglsp.ShowMessageParams{
+			Type:    sglsp.MTError,
+			Message: fmt.Sprintf("Snyk encountered an error while scanning: %v", err),
+		})
 		return true
 	}
 	return false
