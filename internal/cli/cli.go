@@ -24,6 +24,8 @@ type Executor interface {
 }
 
 func (c SnykCli) Execute(cmd []string) (resp []byte, err error) {
+	Mutex.Lock()
+	defer Mutex.Unlock()
 	log.Info().Str("method", "SnykCli.Execute").Interface("cmd", cmd).Msg("calling Snyk CLI")
 	command := exec.Command(cmd[0], cmd[1:]...)
 	output, err := command.CombinedOutput()
