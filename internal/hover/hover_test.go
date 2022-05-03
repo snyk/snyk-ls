@@ -22,14 +22,13 @@ func setupFakeHover() sglsp.DocumentURI {
 
 	filePath := uri.PathToUri("file:///fake-file.txt")
 	hovers[filePath] = fakeHover
-	indexMap := map[string]bool{}
-	indexMap["hoverKey"] = true
-	hoverIndexes[filePath] = indexMap
+	hoverIndexes[uri.PathFromUri(filePath+"rangepositionstuff")] = true
 
 	return filePath
 }
 
 func Test_registerHovers(t *testing.T) {
+	defer ClearAllHovers()
 	documentUri := uri.PathToUri("fake-file.json")
 	hover := lsp.Hover{
 		Uri: documentUri,
@@ -56,23 +55,23 @@ func Test_registerHovers(t *testing.T) {
 	registerHovers(hover)
 
 	assert.Equal(t, len(hovers[documentUri]), 1)
-	assert.Equal(t, len(hoverIndexes[documentUri]), 1)
+	assert.Equal(t, len(hoverIndexes), 1)
 }
 
 func Test_DeleteHover(t *testing.T) {
-	filePath := setupFakeHover()
-	DeleteHover(filePath)
+	documentUri := setupFakeHover()
+	DeleteHover(documentUri)
 
-	assert.Equal(t, len(hovers[filePath]), 0)
-	assert.Equal(t, len(hoverIndexes[filePath]), 0)
+	assert.Equal(t, len(hovers[documentUri]), 0)
+	assert.Equal(t, len(hoverIndexes), 0)
 }
 
 func Test_ClearAllHovers(t *testing.T) {
-	filePath := setupFakeHover()
+	documentUri := setupFakeHover()
 	ClearAllHovers()
 
-	assert.Equal(t, len(hovers[filePath]), 0)
-	assert.Equal(t, len(hoverIndexes[filePath]), 0)
+	assert.Equal(t, len(hovers[documentUri]), 0)
+	assert.Equal(t, len(hoverIndexes), 0)
 }
 
 func Test_GetHoverMultiline(t *testing.T) {
