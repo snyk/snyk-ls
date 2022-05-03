@@ -70,6 +70,42 @@ func WorkspaceDidChangeWorkspaceFoldersHandler() jrpc2.Handler {
 	})
 }
 
+func InitializeHandler(srv **jrpc2.Server) handler.Func {
+	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
+		log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
+		clientParams = params
+
+		// async processing listener
+		go hover.CreateHoverListener()
+		go createProgressListener(progress.ProgressChannel, *srv)
+		go registerNotifier(*srv)
+
+		if len(clientParams.WorkspaceFolders) > 0 {
+			go diagnostics.WorkspaceScan(clientParams.WorkspaceFolders)
+		} else {
+			go diagnostics.GetDiagnostics(clientParams.RootURI)
+		}
+
+		return lsp.InitializeResult{
+			Capabilities: lsp.ServerCapabilities{
+				TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{
+					Options: &sglsp.TextDocumentSyncOptions{
+						OpenClose:         true,
+						WillSave:          true,
+						WillSaveWaitUntil: true,
+						Save:              &sglsp.SaveOptions{IncludeText: true},
+					},
+				},
+				WorkspaceFoldersServerCapabilities: &lsp.WorkspaceFoldersServerCapabilities{
+					Supported:           true,
+					ChangeNotifications: "snyk-ls",
+				},
+				HoverProvider: true,
+			},
+		}, nil
+	})
+}
+
 func Shutdown() jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (interface{}, error) {
 		log.Info().Str("method", "Shutdown").Msg("RECEIVING")
@@ -77,6 +113,7 @@ func Shutdown() jrpc2.Handler {
 		error_reporting.FlushErrorReporting()
 
 		disposeProgressListener()
+		notification.DisposeListener()
 		return nil, nil
 	})
 }
@@ -125,7 +162,7 @@ func TextDocumentDidOpenHandler(srv **jrpc2.Server) handler.Func {
 		go func() {
 			preconditions.EnsureReadyForAnalysisAndWait()
 			diagnostics.RegisterDocument(params.TextDocument)
-			PublishDiagnostics(ctx, params.TextDocument.URI, srv)
+			PublishDiagnostics(ctx, params.TextDocument.URI, srv) // todo: remove in favor of notifier
 		}()
 
 		return nil, nil
@@ -138,7 +175,7 @@ func TextDocumentDidSaveHandler(srv **jrpc2.Server) handler.Func {
 		// clear cache when saving and get fresh diagnostics
 		diagnostics.ClearDiagnosticsCache(params.TextDocument.URI)
 		hover.DeleteHover(params.TextDocument.URI)
-		PublishDiagnostics(ctx, params.TextDocument.URI, srv)
+		PublishDiagnostics(ctx, params.TextDocument.URI, srv) // todo: remove in favor of notifier
 		return nil, nil
 	})
 }
@@ -182,46 +219,6 @@ func WindowWorkDoneProgressCancelHandler() handler.Func {
 	})
 }
 
-func InitializeHandler(srv **jrpc2.Server) handler.Func {
-	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
-		log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
-		defer log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("SENDING")
-		clientParams = params
-
-		if len(clientParams.WorkspaceFolders) > 0 {
-			go diagnostics.WorkspaceScan(clientParams.WorkspaceFolders)
-		} else {
-			go diagnostics.GetDiagnostics(clientParams.RootURI)
-		}
-		registerNotifier(*srv)
-
-		go hover.CreateHoverListener()
-
-		if clientParams.Capabilities.Window.WorkDoneProgress {
-			go createProgressListener(progress.ProgressChannel, *srv)
-		}
-
-		return lsp.InitializeResult{
-			Capabilities: lsp.ServerCapabilities{
-				TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{
-					Options: &sglsp.TextDocumentSyncOptions{
-						OpenClose:         true,
-						Change:            sglsp.TDSKFull,
-						WillSave:          true,
-						WillSaveWaitUntil: true,
-						Save:              &sglsp.SaveOptions{IncludeText: true},
-					},
-				},
-				WorkspaceFoldersServerCapabilities: &lsp.WorkspaceFoldersServerCapabilities{
-					Supported:           true,
-					ChangeNotifications: "snyk-ls",
-				},
-				HoverProvider: true,
-			},
-		}, nil
-	})
-}
-
 func registerNotifier(srv *jrpc2.Server) {
 	callbackFunction := func(params interface{}) {
 		switch params := params.(type) {
@@ -248,5 +245,5 @@ func registerNotifier(srv *jrpc2.Server) {
 				Msg("received unconfigured notification object")
 		}
 	}
-	go notification.CreateListener(callbackFunction)
+	notification.CreateListener(callbackFunction)
 }

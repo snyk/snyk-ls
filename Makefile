@@ -37,7 +37,7 @@ lint: tools
 test:
 	@echo "==> Running unit tests..."
 	@mkdir -p $(BUILD_DIR)
-	@go test -count=1 -v -cover -coverprofile=$(BUILD_DIR)/coverage.out -p=1 -timeout=300s ./...
+	@go test -p=1 -count=1 -v -cover -coverprofile=$(BUILD_DIR)/coverage.out -race -timeout=300s ./...
 
 ## build: Build binary for default local system's OS and architecture.
 .PHONY: build

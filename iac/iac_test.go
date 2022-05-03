@@ -12,6 +12,7 @@ import (
 
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/internal/cli"
+	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	lsp2 "github.com/snyk/snyk-ls/lsp"
@@ -46,6 +47,7 @@ func Test_ScanWorkspace(t *testing.T) {
 }
 
 func Test_ScanFile(t *testing.T) {
+	hover.ClearAllHovers()
 	testutil.IntegTest(t)
 	environment.Load()
 	preconditions.EnsureReadyForAnalysisAndWait()

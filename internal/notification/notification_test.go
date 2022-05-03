@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -18,13 +19,13 @@ func TestSendReceive(t *testing.T) {
 }
 
 func TestCreateListener(t *testing.T) {
-	Send(params)
-	defer DisposeListener()
-	called := false
+	called := testutil.AtomicBool{}
 	CreateListener(func(event interface{}) {
-		called = true
+		called.Set(true)
 	})
+	defer DisposeListener()
+	Send(params)
 	assert.Eventually(t, func() bool {
-		return called
-	}, 1*time.Second, 1*time.Millisecond)
+		return called.Get()
+	}, 2*time.Second, time.Second)
 }

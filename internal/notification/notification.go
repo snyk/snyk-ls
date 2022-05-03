@@ -3,12 +3,7 @@ package notification
 type Event string
 
 var channel = make(chan interface{}, 100)
-var stopChannel = make(chan bool, 1)
-
-func CleanChannels() {
-	channel = make(chan interface{}, 100)
-	stopChannel = make(chan bool, 1)
-}
+var stopChannel = make(chan bool, 1000)
 
 func Send(msg interface{}) {
 	channel <- msg
@@ -24,6 +19,16 @@ func Receive() (payload interface{}, stop bool) {
 }
 
 func CreateListener(callback func(params interface{})) {
+	// cleanup stopchannel before starting
+	for {
+		select {
+		case <-stopChannel:
+			continue
+		default:
+			break
+		}
+		break
+	}
 	go func() {
 		for {
 			payload, stop := Receive()

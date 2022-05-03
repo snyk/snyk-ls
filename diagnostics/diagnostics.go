@@ -1,6 +1,7 @@
 package diagnostics
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -12,6 +13,7 @@ import (
 	"github.com/snyk/snyk-ls/iac"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/hover"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 	"github.com/snyk/snyk-ls/oss"
@@ -66,7 +68,6 @@ func RegisterDocument(file sglsp.TextDocumentItem) {
 		return
 	}
 	registeredDocsMutex.Lock()
-
 	registeredDocuments[documentURI] = true
 	registeredDocsMutex.Unlock()
 }
@@ -85,19 +86,23 @@ func DocumentDiagnosticsFromCache(file sglsp.DocumentURI) []lsp.Diagnostic {
 
 func GetDiagnostics(uri sglsp.DocumentURI) []lsp.Diagnostic {
 	// serve from cache
+	diagnosticsMutex.Lock()
 	diagnosticSlice := documentDiagnosticCache[uri]
+	diagnosticsMutex.Unlock()
 	if len(diagnosticSlice) > 0 {
 		log.Info().Str("method", "GetDiagnostics").Msgf("Cached: Diagnostics for %s", uri)
 		return diagnosticSlice
 	}
 
-	var diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic = fetchAllRegisteredDocumentDiagnostics(uri, lsp.ScanLevelFile)
+	var diagnostics = fetchAllRegisteredDocumentDiagnostics(uri, lsp.ScanLevelFile)
 	addToCache(diagnostics)
-
-	return documentDiagnosticCache[uri]
+	diagnosticsMutex.Lock()
+	defer diagnosticsMutex.Unlock()
+	cache := documentDiagnosticCache[uri]
+	return cache
 }
 
-func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.ScanLevel) map[sglsp.DocumentURI][]lsp.Diagnostic {
+func fetchAllRegisteredDocumentDiagnostics(documentURI sglsp.DocumentURI, level lsp.ScanLevel) map[sglsp.DocumentURI][]lsp.Diagnostic {
 	log.Info().
 		Str("method", "fetchAllRegisteredDocumentDiagnostics").
 		Msg("started.")
@@ -109,6 +114,10 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	var bundles = make([]*code.BundleImpl, 0, 10)
 
+	p := progress.New(fmt.Sprintf("Scanning for issues in %s", uri.PathFromUri(documentURI)), "", false)
+	progress.BeginProgress(p, progress.ProgressChannel)
+	defer progress.EndProgress(p.Token, fmt.Sprintf("Scan complete. Found %d issues.", len(diagnostics)), progress.ProgressChannel)
+
 	wg := sync.WaitGroup{}
 
 	var dChan chan lsp.DiagnosticResult
@@ -116,12 +125,12 @@ func fetchAllRegisteredDocumentDiagnostics(uri sglsp.DocumentURI, level lsp.Scan
 
 	if level == lsp.ScanLevelWorkspace {
 		dChan = make(chan lsp.DiagnosticResult, 3*len(registeredDocuments))
-		workspaceLevelFetch(uri, environment.CurrentEnabledProducts, bundles, &wg, dChan, hoverChan)
+		workspaceLevelFetch(documentURI, environment.CurrentEnabledProducts, bundles, &wg, dChan, hoverChan)
 	} else {
 		dChan = make(chan lsp.DiagnosticResult, 3)
-		fileLevelFetch(uri, environment.CurrentEnabledProducts, bundles, &wg, dChan, hoverChan)
+		fileLevelFetch(documentURI, environment.CurrentEnabledProducts, bundles, &wg, dChan, hoverChan)
 	}
-
+	progress.ReportProgress(p.Token, 50, progress.ProgressChannel)
 	wg.Wait()
 	log.Debug().
 		Str("method", "fetchAllRegisteredDocumentDiagnostics").
@@ -160,7 +169,7 @@ func workspaceLevelFetch(
 }
 
 func fileLevelFetch(
-	uri sglsp.DocumentURI,
+	documentURI sglsp.DocumentURI,
 	enabledProducts environment.EnabledProducts,
 	bundles []*code.BundleImpl,
 	wg *sync.WaitGroup,
@@ -169,19 +178,19 @@ func fileLevelFetch(
 ) {
 	if enabledProducts.Code {
 		var bundleDocs = map[sglsp.DocumentURI]bool{}
-		bundleDocs[uri] = true
-		registeredDocuments[uri] = true
+		bundleDocs[documentURI] = true
+		RegisterDocument(sglsp.TextDocumentItem{URI: documentURI})
 		createOrExtendBundles(bundleDocs, &bundles)
 		wg.Add(1)
-		go bundles[0].FetchDiagnosticsData(string(uri), wg, dChan, hoverChan)
+		go bundles[0].FetchDiagnosticsData(string(documentURI), wg, dChan, hoverChan)
 	}
 	if enabledProducts.Iac {
 		wg.Add(1)
-		go iac.ScanFile(Cli, uri, wg, dChan, hoverChan)
+		go iac.ScanFile(Cli, documentURI, wg, dChan, hoverChan)
 	}
 	if enabledProducts.OpenSource {
 		wg.Add(1)
-		go oss.ScanFile(Cli, uri, wg, dChan, hoverChan)
+		go oss.ScanFile(Cli, documentURI, wg, dChan, hoverChan)
 	}
 }
 

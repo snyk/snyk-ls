@@ -8,12 +8,7 @@ import (
 )
 
 var ProgressChannel = make(chan lsp.ProgressParams, 100)
-var CancelProgressChannel = make(chan lsp.ProgressToken, 1)
-
-func CleanChannels() {
-	ProgressChannel = make(chan lsp.ProgressParams, 100)
-	CancelProgressChannel = make(chan lsp.ProgressToken, 1)
-}
+var CancelProgressChannel = make(chan lsp.ProgressToken, 100)
 
 func New(title, message string, cancellable bool) lsp.ProgressParams {
 	uuid := uuid.New().String()
