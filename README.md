@@ -94,7 +94,7 @@ generated.
 - Install `go 1.17.5` or higher, set the `GOPATH` and `GOROOT`
 - Enter the root directory of this repository
 - Execute `go get ./...` to download all dependencies
-- Execute `go install` to produce a `snyk-ls` binary
+- Execute `make build && make install` to produce a `snyk-ls` binary
 
 ## Configuration
 
