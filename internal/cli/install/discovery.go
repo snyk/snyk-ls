@@ -11,6 +11,8 @@ import (
 
 type Discovery struct{}
 
+var userDirFolderName = "snyk-ls"
+
 // LookPath searches for the Snyk CLI executable in the directories named by the PATH environment variable.
 func (d *Discovery) LookPath() (string, error) {
 	path, err := exec.LookPath(executableName)
@@ -22,7 +24,7 @@ func (d *Discovery) LookPath() (string, error) {
 
 // LookUserDir searches for the Snyk CLI executable in the  XDG_DATA_HOME/snyk-ls directory.
 func (d *Discovery) LookUserDir() (string, error) {
-	path := filepath.Join(xdg.DataHome, "snyk-ls", executableName)
+	path := filepath.Join(xdg.DataHome, userDirFolderName, executableName)
 	if _, err := os.Stat(path); err == nil {
 		return path, nil
 	}
@@ -30,7 +32,10 @@ func (d *Discovery) LookUserDir() (string, error) {
 }
 
 // ExecutableName returns OS specific filename for Snyk CLI.
-func (d *Discovery) ExecutableName() string {
+func (d *Discovery) ExecutableName(isUpdate bool) string {
+	if isUpdate {
+		return executableName + ".latest"
+	}
 	return executableName
 }
 

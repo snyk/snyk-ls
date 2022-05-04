@@ -1,14 +1,12 @@
 package install
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/adrg/xdg"
@@ -49,6 +47,7 @@ func newWriter(size int64, progressToken lsp.ProgressToken, progressCh chan lsp.
 func onProgress(downloaded, total int64, progressToken lsp.ProgressToken, progressCh chan lsp.ProgressParams) {
 	percentage := float64(downloaded) / float64(total) * 100 // todo: don't report every byte
 	progress.ReportProgress(progressToken, uint32(percentage), progressCh)
+	time.Sleep(time.Millisecond * 2)
 }
 
 func (d *Downloader) lockFileName() (string, error) {
@@ -59,29 +58,15 @@ func (d *Downloader) lockFileName() (string, error) {
 	return filepath.Join(path, "snyk-cli-download.lock"), nil
 }
 
-func (d *Downloader) Download(r *Release, progressCh chan lsp.ProgressParams, cancelProgressCh chan lsp.ProgressToken) error {
+func (d *Downloader) Download(r *Release, isUpdate bool, progressCh chan lsp.ProgressParams, cancelProgressCh chan lsp.ProgressToken) error {
 	if r == nil {
 		return fmt.Errorf("release cannot be nil")
 	}
-	log.Debug().Str("method", "Download").Str("release", r.Version).Msg("attempting download")
-
-	lockFileName, err := d.lockFileName()
-	if err != nil {
-		return err
+	kindStr := "download"
+	if isUpdate {
+		kindStr = "update"
 	}
-	fileInfo, err := os.Stat(lockFileName)
-	if err == nil && (time.Since(fileInfo.ModTime()) < 1*time.Hour) {
-		msg := fmt.Sprintf("lockfile from %v found, not downloading", fileInfo.ModTime())
-		log.Error().Str("method", "Download").Str("lockfile", lockFileName).Msg(msg)
-		return errors.New(msg)
-	}
-	err = d.createLockFile()
-	if err != nil {
-		return err
-	}
-	defer func(name string) {
-		cleanupLockFile(name)
-	}(lockFileName)
+	log.Debug().Str("method", "Download").Str("release", r.Version).Msgf("attempting %s", kindStr)
 
 	cliDiscovery := Discovery{}
 
@@ -96,8 +81,14 @@ func (d *Downloader) Download(r *Release, progressCh chan lsp.ProgressParams, ca
 
 	client := httpclient.NewHTTPClient()
 
-	log.Info().Str("download_url", downloadURL).Msg("downloading Snyk CLI")
-	prog := progress.New("Downloading Snyk CLI...", "", true)
+	log.Info().Str("download_url", downloadURL).Msgf("Snyk CLI %s in progress...", kindStr)
+	var prog lsp.ProgressParams
+	if isUpdate {
+		prog = progress.New("Updating Snyk CLI...", "", true)
+	} else {
+		prog = progress.New("Downloading Snyk CLI...", "We download Snyk CLI to run security scans.", true)
+	}
+
 	progress.BeginProgress(prog, progressCh)
 	doneCh := make(chan bool)
 
@@ -120,8 +111,7 @@ func (d *Downloader) Download(r *Release, progressCh chan lsp.ProgressParams, ca
 			case token := <-cancelProgressCh:
 				if token == prog.Token {
 					body.Close()
-					cleanupLockFile(lockFileName)
-					log.Info().Str("method", "Download").Msg("Cancellation received. Aborting download.")
+					log.Info().Str("method", "Download").Msgf("Cancellation received. Aborting %s.", kindStr)
 				}
 			case <-doneCh:
 				return
@@ -131,12 +121,12 @@ func (d *Downloader) Download(r *Release, progressCh chan lsp.ProgressParams, ca
 
 	if resp.StatusCode != http.StatusOK {
 		error_reporting.CaptureError(err)
-		return fmt.Errorf("failed to download Snyk CLI from %q: %s", downloadURL, resp.Status)
+		return fmt.Errorf("failed to %s Snyk CLI from %q: %s", kindStr, downloadURL, resp.Status)
 	}
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
 		doneCh <- true
-		log.Info().Str("method", "Download").Msg("finished downloading Snyk CLI")
+		log.Info().Str("method", "Download").Msgf("finished Snyk CLI %s", kindStr)
 	}(resp.Body)
 
 	// pipe stream
@@ -152,14 +142,11 @@ func (d *Downloader) Download(r *Release, progressCh chan lsp.ProgressParams, ca
 		_ = os.RemoveAll(path)
 	}(tmpDirPath)
 
-	cliTmpPath := filepath.Join(tmpDirPath, cliDiscovery.ExecutableName())
+	cliTmpPath := filepath.Join(tmpDirPath, cliDiscovery.ExecutableName(isUpdate))
 	cliTmpFile, err := os.Create(cliTmpPath)
 	if err != nil {
 		return err
 	}
-	defer func(file *os.File) {
-		_ = file.Close()
-	}(cliTmpFile)
 
 	bytesCopied, err := io.Copy(cliTmpFile, cliReader)
 	if err != nil {
@@ -167,7 +154,7 @@ func (d *Downloader) Download(r *Release, progressCh chan lsp.ProgressParams, ca
 	}
 	log.Info().Int64("bytes_copied", bytesCopied).Msgf("copied to %s", cliTmpFile.Name())
 
-	expectedChecksum, err := d.expectedChecksum(r, &cliDiscovery)
+	expectedChecksum, err := expectedChecksum(r, &cliDiscovery)
 	if err != nil {
 		return err
 	}
@@ -177,18 +164,16 @@ func (d *Downloader) Download(r *Release, progressCh chan lsp.ProgressParams, ca
 		return err
 	}
 
-	err = d.moveToDestination(&cliDiscovery, cliTmpFile.Name())
+	_ = cliTmpFile.Close() // close file to allow moving it on Windows
+	err = d.moveToDestination(cliDiscovery.ExecutableName(isUpdate), cliTmpFile.Name())
 
-	progress.EndProgress(prog.Token, "Snyk CLI has been downloaded.", progressCh)
+	if isUpdate {
+		progress.EndProgress(prog.Token, "Snyk CLI has been updated.", progressCh)
+	} else {
+		progress.EndProgress(prog.Token, "Snyk CLI has been downloaded.", progressCh)
+	}
 
 	return err
-}
-
-func cleanupLockFile(lockFileName string) {
-	err := os.Remove(lockFileName)
-	if err != nil {
-		log.Error().Str("method", "Download").Str("lockfile", lockFileName).Msg("couldn't clean up lockfile")
-	}
 }
 
 func getContentLength(client *http.Client, downloadURL string) (int, error) {
@@ -220,29 +205,12 @@ func (d *Downloader) createLockFile() error {
 	return nil
 }
 
-func (d *Downloader) expectedChecksum(r *Release, cliDiscovery *Discovery) (HashSum, error) {
-	checksumInfo, err := cliDiscovery.ChecksumInfo(r)
-	if err != nil {
-		return nil, err
-	}
-	line := strings.TrimSpace(checksumInfo)
-	parts := strings.Fields(line)
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("unexpected checksum line format: %q", line)
-	}
-	h, err := HashSumFromHexDigest(parts[0])
-	if err != nil {
-		return nil, err
-	}
-	return h, nil
-}
-
-func (d *Downloader) moveToDestination(cliDiscovery *Discovery, cliTmpFile string) (err error) {
+func (d *Downloader) moveToDestination(dest string, fullSrcPath string) (err error) {
 	lsPath, err := d.lsPath()
 	if err != nil {
 		return err
 	}
-	dstCliFile := filepath.Join(lsPath, cliDiscovery.ExecutableName())
+	dstCliFile := filepath.Join(lsPath, dest)
 	log.Info().Str("method", "moveToDestination").Str("path", dstCliFile).Msg("copying Snyk CLI to user directory")
 
 	// for Windows, we have to remove original file first before move/rename
@@ -254,8 +222,8 @@ func (d *Downloader) moveToDestination(cliDiscovery *Discovery, cliTmpFile strin
 	}
 	cli.Mutex.Lock()
 	defer cli.Mutex.Unlock()
-	log.Info().Str("method", "moveToDestination").Str("tempFilePath", cliTmpFile).Msg("tempfile path")
-	err = os.Rename(cliTmpFile, dstCliFile)
+	log.Info().Str("method", "moveToDestination").Str("tempFilePath", fullSrcPath).Msg("tempfile path")
+	err = os.Rename(fullSrcPath, dstCliFile)
 	if err != nil {
 		return err
 	}
@@ -269,7 +237,7 @@ func (d *Downloader) moveToDestination(cliDiscovery *Discovery, cliTmpFile strin
 }
 
 func (d *Downloader) lsPath() (string, error) {
-	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
+	lsPath := filepath.Join(xdg.DataHome, userDirFolderName)
 	err := os.MkdirAll(lsPath, 0755)
 	if err != nil {
 		log.Err(err).Str("method", "lsPath").Msgf("couldn't create %s", lsPath)
