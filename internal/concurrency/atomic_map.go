@@ -31,8 +31,10 @@ func (m *AtomicMap) Length() int {
 
 func (m *AtomicMap) Put(key interface{}, value interface{}) {
 	m.mut.Lock()
+	if !m.Contains(key) {
+		m.length.Store(m.Length() + 1)
+	}
 	m.m.Store(key, value)
-	m.length.Store(m.Length() + 1)
 	m.mut.Unlock()
 }
 
@@ -48,8 +50,10 @@ func (m *AtomicMap) ClearAll() {
 
 func (m *AtomicMap) Delete(key interface{}) {
 	m.mut.Lock()
+	if m.Contains(key) {
+		m.length.Store(m.length.Load().(int) - 1)
+	}
 	m.m.Delete(key)
-	m.length.Store(m.length.Load().(int) - 1)
 	m.mut.Unlock()
 }
 
