@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
@@ -77,10 +78,10 @@ func (i *Install) Update(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
-	return i.updateRelease(latestRelease, ctx)
+	return i.updateFromRelease(latestRelease, ctx)
 }
 
-func (i *Install) updateRelease(r *Release, ctx context.Context) (bool, error) {
+func (i *Install) updateFromRelease(r *Release, ctx context.Context) (bool, error) {
 	d := &Downloader{}
 	lockFileName, err := createLockFile(d)
 	if err != nil {
@@ -129,32 +130,31 @@ func replaceOutdatedCli(d *Downloader, cliDiscovery Discovery) error {
 	latestCliFile := filepath.Join(lsPath, cliDiscovery.ExecutableName(true))
 
 	if runtime.GOOS == "windows" {
-		oldExecutableName := outdatedCliFile + "~"
+		tildeExecutableName := outdatedCliFile + "~"
 
 		// Cleanup an old executable, if left after previous update.
 		// There should be no chance that this is still running due to 4-day update cycle. Any CLI run should be guaranteed to terminate within 4 days.
-		if _, err := os.Stat(oldExecutableName); err == nil {
-			err = os.Remove(oldExecutableName)
+		if _, err := os.Stat(tildeExecutableName); err == nil {
+			err = os.Remove(tildeExecutableName)
 			if err != nil {
 				log.Warn().Err(err).Str("method", "replaceOutdatedCli").Msg("couldn't remove old CLI on Windows")
 			}
 		}
 
 		// Windows allows to rename a running executable even with opened file handle. Another executable can take name of the old executable.
-		err = os.Rename(outdatedCliFile, oldExecutableName) // 1. rename current executable to old
+		err = os.Rename(outdatedCliFile, tildeExecutableName)
 		if err != nil {
 			log.Warn().Err(err).Str("method", "replaceOutdatedCli").Msg("couldn't rename current CLI on Windows")
 			return err
 		}
-		err = os.Rename(latestCliFile, outdatedCliFile) // 2. move latest executable in place of the current
+		err = os.Rename(latestCliFile, outdatedCliFile)
 		if err != nil {
 			log.Warn().Err(err).Str("method", "replaceOutdatedCli").Msg("couldn't move latest CLI on Windows")
 			return err
 		}
-		defer func(oldExecutableName string) {
-			// attempt to cleanup the old executable, if scans aren't running at the moment. If errors, the cleanup will happen on the next update
-			_ = os.Remove(oldExecutableName)
-		}(oldExecutableName)
+
+		// attempt to cleanup the old executable, if scans aren't running at the moment. If errors, the cleanup will happen on the next update
+		_ = os.Remove(tildeExecutableName)
 
 		return nil
 	}

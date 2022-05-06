@@ -93,6 +93,7 @@ func isOutdatedCli() bool {
 	fileInfo, err := os.Stat(cliPath) // todo: we can save stat calls by caching mod time
 	if err != nil {
 		log.Err(err).Str("method", "isOutdatedCli").Msg("Failed to stat CLI file.")
+		return false
 	}
 
 	fourDaysAgo := time.Now().Add(-time.Hour * 24 * 4)

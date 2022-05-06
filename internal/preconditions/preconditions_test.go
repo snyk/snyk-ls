@@ -24,12 +24,15 @@ func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 }
 
 func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
-	tempDir := testutil.CreateTempDir(t)
+	tempDir := t.TempDir()
 	tempFile := testutil.CreateTempFile(tempDir, t)
 	err := environment.SetCliPath(tempFile.Name())
 	if err != nil {
 		t.Fatal(t, "Couldn't set cli path in environment")
 	}
+	defer func() {
+		_ = environment.SetCliPath("")
+	}()
 
 	EnsureReadyForAnalysisAndWait()
 
@@ -37,10 +40,8 @@ func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
 }
 
 func Test_isOutdatedCli_DetectsOutdatedCli(t *testing.T) {
-	testutil.IntegTest(t)
-
 	// prepare user directory with OS specific dummy CLI binary
-	temp := testutil.CreateTempDir(t)
+	temp := t.TempDir()
 	file := testutil.CreateTempFile(temp, t)
 
 	err := environment.SetCliPath(file.Name())
@@ -48,7 +49,7 @@ func Test_isOutdatedCli_DetectsOutdatedCli(t *testing.T) {
 		t.Fatal(t, "Failed to set cli path to the temp cli file")
 	}
 
-	outdatedTime := time.Now().Add(-time.Hour*24*4 + 1)
+	outdatedTime := time.Now().Add(-time.Hour*24*4 - time.Second*1)
 	err = os.Chtimes(file.Name(), outdatedTime, outdatedTime)
 	if err != nil {
 		t.Fatal(t, "Failed to set the access and modification times of the temp cli file")
@@ -62,17 +63,18 @@ func Test_isOutdatedCli_DetectsOutdatedCli(t *testing.T) {
 }
 
 func Test_isOutdatedCli_DetectsLatestCli(t *testing.T) {
-	testutil.IntegTest(t)
-
 	// prepare user directory with OS specific dummy CLI binary
-	temp := testutil.CreateTempDir(t)
+	temp := t.TempDir()
 	file := testutil.CreateTempFile(temp, t)
 	err := environment.SetCliPath(file.Name())
 	if err != nil {
 		t.Fatal(t, "Failed to set cli path to the temp cli file")
 	}
+	defer func() {
+		_ = environment.SetCliPath("")
+	}()
 
-	latestTime := time.Now().Add(time.Hour * 24 * 4)
+	latestTime := time.Now().Add(time.Hour * 24 * 4) // exactly 4 days is considered as not outdated.
 	err = os.Chtimes(file.Name(), latestTime, latestTime)
 	if err != nil {
 		t.Fatal(t, "Failed to set the access and modification times of the temp cli file")

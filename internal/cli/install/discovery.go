@@ -11,7 +11,7 @@ import (
 
 type Discovery struct{}
 
-var userDirFolderName = "snyk-ls"
+const userDirFolderName = "snyk-ls"
 
 // LookPath searches for the Snyk CLI executable in the directories named by the PATH environment variable.
 func (d *Discovery) LookPath() (string, error) {

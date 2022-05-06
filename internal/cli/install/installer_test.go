@@ -20,7 +20,7 @@ func TestInstaller_Find(t *testing.T) {
 
 	// prepare temp directory with OS specific dummy CLI binary
 	d := &Discovery{}
-	cliDir := testutil.CreateTempDir(t)
+	cliDir := t.TempDir()
 	cliFilePath := filepath.Join(cliDir, d.ExecutableName(false))
 	f, _ := os.Create(cliFilePath)
 	defer func(f *os.File) {
@@ -52,7 +52,7 @@ func TestInstaller_Find_emptyPath(t *testing.T) {
 	assert.Empty(t, execPath)
 }
 
-func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) { // todo: move to installer
+func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 	Mutex.Lock()
 	defer Mutex.Unlock()
 	r := getTestAsset()
@@ -77,17 +77,19 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) { // todo:
 }
 
 func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
-	testutil.IntegTest(t)
 	// prepare
 	ctx := context.Background()
 	i := NewInstaller()
 
-	temp := testutil.CreateTempDir(t)
+	temp := t.TempDir()
 	fakeCliFile := testutil.CreateTempFile(temp, t)
 	err := environment.SetCliPath(fakeCliFile.Name())
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error setting CLI path")
 	}
+	defer func() {
+		_ = environment.SetCliPath("")
+	}()
 
 	checksum, err := getChecksum(fakeCliFile.Name())
 	if err != nil {
@@ -116,7 +118,7 @@ func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 	}
 
 	// act
-	updated, _ := i.updateRelease(r, ctx)
+	updated, _ := i.updateFromRelease(r, ctx)
 
 	// assert
 	assert.False(t, updated)
@@ -152,6 +154,10 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error setting CLI path")
 	}
+	defer func() {
+		_ = environment.SetCliPath("")
+	}()
+
 	r := NewCLIRelease()
 	release, err := r.GetLatestRelease(ctx)
 	if err != nil {

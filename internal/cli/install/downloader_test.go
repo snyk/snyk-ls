@@ -10,9 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var progressCh = make(chan lsp.ProgressParams, 1000)
-var progressCancelCh = make(chan lsp.ProgressToken, 1)
-
 func TestDownloader_Download(t *testing.T) {
 	testutil.IntegTest(t)
 	Mutex.Lock()
