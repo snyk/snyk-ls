@@ -236,11 +236,11 @@ func TestCodeBundleImpl_FetchDiagnosticsData_shouldRetrieveFromBackend(t *testin
 	defer os.RemoveAll(path)
 	b := BundleImpl{SnykCode: snykCodeMock}
 
-	registeredDocuments := map[lsp.DocumentURI]bool{}
-	registeredDocuments[diagnosticUri] = true
+	bundleDocs := map[lsp.DocumentURI]bool{}
+	bundleDocs[diagnosticUri] = true
 	diagnosticMap := map[lsp.DocumentURI][]lsp2.Diagnostic{}
 
-	b.AddToBundleDocuments(registeredDocuments)
+	b.AddToBundleDocuments(bundleDocs)
 	// execute
 	dChan := make(chan lsp2.DiagnosticResult)
 	hoverChan := make(chan lsp2.Hover)

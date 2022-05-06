@@ -2,13 +2,16 @@ package server
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/rs/zerolog/log"
 
+	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/lsp"
 
@@ -18,14 +21,14 @@ import (
 
 type ServerImplMock struct{}
 
-var notified bool
+var notified = concurrency.AtomicBool{}
 
-func (b *ServerImplMock) Callback(ctx context.Context, method string, params interface{}) (*jrpc2.Response, error) { // todo: check if better way exists, mocking? go mock / testify
-	notified = true
+func (b *ServerImplMock) Callback(_ context.Context, _ string, _ interface{}) (*jrpc2.Response, error) { // todo: check if better way exists, mocking? go mock / testify
+	notified.Set(true)
 	return nil, nil
 }
-func (b *ServerImplMock) Notify(ctx context.Context, method string, params interface{}) error {
-	notified = true
+func (b *ServerImplMock) Notify(_ context.Context, _ string, _ interface{}) error {
+	notified.Set(true)
 	return nil
 }
 
@@ -46,18 +49,17 @@ func TestCreateProgressListener(t *testing.T) {
 	server := ServerImplMock{}
 
 	go createProgressListener(progressChannel, &server)
-	defer func() { notified = false }()
+	defer func() { notified.Set(false) }()
 
 	assert.Eventually(t, func() bool {
-		return notified
+		return notified.Get()
 	}, 2*time.Second, 10*time.Millisecond)
 
 	disposeProgressListener()
 }
 
 func TestServerInitializeShouldStartProgressListener(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	clientParams := lsp.InitializeParams{
 		Capabilities: sglsp.ClientCapabilities{
@@ -80,66 +82,26 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 	progress.BeginProgress(expectedProgress, progress.ProgressChannel)
 
 	// should receive progress notification
-
-	// wait for notification
-	assert.Eventually(t, func() bool { return notificationMessage != nil }, 5*time.Second, 10*time.Millisecond)
-	if !t.Failed() {
-		actualProgress := lsp.ProgressParams{}
-		_ = notificationMessage.UnmarshalParams(&actualProgress)
-		assert.Equal(t, expectedProgress.Token, actualProgress.Token)
-		assert.Equal(t, expectedProgress.Value, expectedProgress.Value)
-	}
-}
-
-func TestServerInitializeShouldNotStartProgressListener(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
-
-	clientParams := lsp.InitializeParams{
-		Capabilities: sglsp.ClientCapabilities{
-			Window: sglsp.WindowClientCapabilities{
-				WorkDoneProgress: false,
-			},
+	assert.Eventually(
+		t,
+		func() bool {
+			callbacks := jsonRPCRecorder.FindCallbacksByMethod("window/workDoneProgress/create")
+			for _, c := range callbacks {
+				actualProgress := lsp.ProgressParams{}
+				_ = c.UnmarshalParams(&actualProgress)
+				if expectedProgress.Token == actualProgress.Token {
+					return true
+				}
+			}
+			return false
 		},
-	}
-
-	rsp, err := loc.Client.Call(ctx, "initialize", clientParams)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-	var result lsp.InitializeResult
-	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatal().Err(err)
-	}
-
-	expectedProgress := progress.New("title", "message", true)
-	progress.ProgressChannel <- expectedProgress
-
-	// should not receive progress notification
-
-	// ensure callback doesn't happen
-	assert.Never(t, func() bool { return notificationMessage != nil }, 5*time.Second, 10*time.Millisecond)
-}
-
-func TestShutdownDisposesProgressListener(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
-
-	_, err := loc.Client.Call(ctx, "initialize", nil)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-
-	expectedProgress := progress.New("title", "message", true)
-	progress.ProgressChannel <- expectedProgress
-
-	// should not receive progress notification after shutdown
-	assert.Nil(t, notificationMessage)
+		5*time.Second,
+		10*time.Millisecond,
+	)
 }
 
 func TestCancelProgress(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -160,23 +122,33 @@ func TestCancelProgress(t *testing.T) {
 }
 
 func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
 		log.Fatal().Err(err)
 	}
+	preconditions.EnsureReadyForAnalysisAndWait()
 	var expected = lsp.AuthenticationParams{Token: "test token"}
-	var actual = lsp.AuthenticationParams{}
-	notification.Send(expected.Token)
-	assert.Eventually(t, func() bool {
-		return notificationMessage != nil
-	}, time.Minute, time.Millisecond)
-	if !t.Failed() {
-		err := notificationMessage.UnmarshalParams(&actual)
-		assert.NoError(t, err)
-		assert.True(t, notificationMessage.IsNotification())
-		assert.Equal(t, expected, actual)
-	}
+
+	notification.Send(expected)
+	assert.Eventually(
+		t,
+		func() bool {
+			notifications := jsonRPCRecorder.FindNotificationsByMethod("$/hasAuthenticated")
+			if len(notifications) < 1 {
+				return false
+			}
+			for _, n := range notifications {
+				var actual = lsp.AuthenticationParams{}
+				_ = n.UnmarshalParams(&actual)
+				if reflect.DeepEqual(expected, actual) {
+					return true
+				}
+			}
+			return false
+		},
+		120*time.Second,
+		10*time.Millisecond,
+	)
 }

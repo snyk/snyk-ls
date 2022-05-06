@@ -29,6 +29,7 @@ func main() {
 		os.Exit(1)
 	}
 	log.Info().Msg(config.Version)
+	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
 	error_reporting.InitErrorReporting()
 	environment.Load()
 	server.Start()

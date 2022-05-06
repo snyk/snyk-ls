@@ -8,90 +8,70 @@ import (
 )
 
 func TestGetEnabledProducts_DefaultValues(t *testing.T) {
-	os.Clearenv()
-	assert.Equal(t, true, EnabledProductsFromEnv().OpenSource)
-	assert.Equal(t, true, EnabledProductsFromEnv().Code)
-	assert.Equal(t, true, EnabledProductsFromEnv().Iac)
-	assert.Equal(t, false, EnabledProductsFromEnv().Container)
-	assert.Equal(t, false, EnabledProductsFromEnv().Advisor)
+	t.Setenv(ActivateSnykOssKey, "set it to anything to make sure it is reset")
+	t.Setenv(ActivateSnykCodeKey, "set it to anything to make sure it is reset")
+	t.Setenv(ActivateSnykIacKey, "set it to anything to make sure it is reset")
+	t.Setenv(ActivateSnykContainerKey, "set it to anything to make sure it is reset")
+	t.Setenv(ActivateSnykAdvisorKey, "set it to anything to make sure it is reset")
+	os.Unsetenv(ActivateSnykOssKey)
+	os.Unsetenv(ActivateSnykCodeKey)
+	os.Unsetenv(ActivateSnykIacKey)
+	os.Unsetenv(ActivateSnykContainerKey)
+	os.Unsetenv(ActivateSnykAdvisorKey)
+	EnabledProductsFromEnv()
+	assert.Equal(t, true, CurrentEnabledProducts.OpenSource.Get())
+	assert.Equal(t, true, CurrentEnabledProducts.Code.Get())
+	assert.Equal(t, true, CurrentEnabledProducts.Iac.Get())
+	assert.Equal(t, false, CurrentEnabledProducts.Container.Get())
+	assert.Equal(t, false, CurrentEnabledProducts.Advisor.Get())
 }
 
 func TestGetEnabledProducts_Oss(t *testing.T) {
-	os.Clearenv()
-	defer os.Clearenv()
-	err := os.Setenv(ActivateSnykOssKey, "false")
-	if err != nil {
-		t.Fatal("couldn't set environment")
-	}
-	assert.Equal(t, false, EnabledProductsFromEnv().OpenSource)
+	t.Setenv(ActivateSnykOssKey, "false")
+	EnabledProductsFromEnv()
+	assert.Equal(t, false, CurrentEnabledProducts.OpenSource.Get())
 
-	err = os.Setenv(ActivateSnykOssKey, "true")
-	if err != nil {
-		t.Fatal("couldn't set environment")
-	}
-	assert.Equal(t, true, EnabledProductsFromEnv().OpenSource)
+	t.Setenv(ActivateSnykOssKey, "true")
+	EnabledProductsFromEnv()
+	assert.Equal(t, true, CurrentEnabledProducts.OpenSource.Get())
 }
 
 func TestGetEnabledProducts_Code(t *testing.T) {
-	os.Clearenv()
-	defer os.Clearenv()
-	err := os.Setenv(ActivateSnykCodeKey, "false")
-	if err != nil {
-		t.Fatal("couldn't set environment")
-	}
-	assert.Equal(t, false, EnabledProductsFromEnv().Code)
+	t.Setenv(ActivateSnykCodeKey, "false")
+	EnabledProductsFromEnv()
+	assert.Equal(t, false, CurrentEnabledProducts.Code.Get())
 
-	err = os.Setenv(ActivateSnykCodeKey, "true")
-	if err != nil {
-		t.Fatal("couldn't set environment")
-	}
-	assert.Equal(t, true, EnabledProductsFromEnv().Code)
+	t.Setenv(ActivateSnykCodeKey, "true")
+	EnabledProductsFromEnv()
+	assert.Equal(t, true, CurrentEnabledProducts.Code.Get())
 }
 
 func TestGetEnabledProducts_Iac(t *testing.T) {
-	os.Clearenv()
-	defer os.Clearenv()
-	err := os.Setenv(ActivateSnykIacKey, "false")
-	if err != nil {
-		t.Fatal("couldn't set environment")
-	}
-	assert.Equal(t, false, EnabledProductsFromEnv().Iac)
+	t.Setenv(ActivateSnykIacKey, "false")
+	EnabledProductsFromEnv()
+	assert.Equal(t, false, CurrentEnabledProducts.Iac.Get())
 
-	err = os.Setenv(ActivateSnykIacKey, "true")
-	if err != nil {
-		t.Fatal("couldn't set environment")
-	}
-	assert.Equal(t, true, EnabledProductsFromEnv().Iac)
+	t.Setenv(ActivateSnykIacKey, "true")
+	EnabledProductsFromEnv()
+	assert.Equal(t, true, CurrentEnabledProducts.Iac.Get())
 }
 
 func TestGetEnabledProducts_Container(t *testing.T) {
-	os.Clearenv()
-	defer os.Clearenv()
-	err := os.Setenv(ActivateSnykContainerKey, "false")
-	if err != nil {
-		t.Fatal("couldn't set environment")
-	}
-	assert.Equal(t, false, EnabledProductsFromEnv().Container)
+	t.Setenv(ActivateSnykContainerKey, "false")
+	EnabledProductsFromEnv()
+	assert.Equal(t, false, CurrentEnabledProducts.Container.Get())
 
-	err = os.Setenv(ActivateSnykContainerKey, "true")
-	if err != nil {
-		t.Fatal("couldn't set environment")
-	}
-	assert.Equal(t, true, EnabledProductsFromEnv().Container)
+	t.Setenv(ActivateSnykContainerKey, "true")
+	EnabledProductsFromEnv()
+	assert.Equal(t, true, CurrentEnabledProducts.Container.Get())
 }
 
 func TestGetEnabledProducts_Advisor(t *testing.T) {
-	os.Clearenv()
-	defer os.Clearenv()
-	err := os.Setenv(ActivateSnykAdvisorKey, "false")
-	if err != nil {
-		t.Fatal("couldn't set environment")
-	}
-	assert.Equal(t, false, EnabledProductsFromEnv().Advisor)
+	t.Setenv(ActivateSnykAdvisorKey, "false")
+	EnabledProductsFromEnv()
+	assert.Equal(t, false, CurrentEnabledProducts.Advisor.Get())
 
-	err = os.Setenv(ActivateSnykAdvisorKey, "true")
-	if err != nil {
-		t.Fatal("couldn't set environment")
-	}
-	assert.Equal(t, true, EnabledProductsFromEnv().Advisor)
+	t.Setenv(ActivateSnykAdvisorKey, "true")
+	EnabledProductsFromEnv()
+	assert.Equal(t, true, CurrentEnabledProducts.Advisor.Get())
 }

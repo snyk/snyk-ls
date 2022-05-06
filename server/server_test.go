@@ -25,16 +25,14 @@ import (
 	"github.com/snyk/snyk-ls/internal/cli/install"
 	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
 var (
-	ctx                 = context.Background()
-	notificationMessage *jrpc2.Request
-	callbackMessage     *jrpc2.Request
+	ctx             = context.Background()
+	jsonRPCRecorder = testutil.JsonRPCRecorder{}
 )
 
 func didOpenTextParams() (sglsp.DidOpenTextDocumentParams, func()) {
@@ -59,30 +57,38 @@ func didSaveTextParams() (sglsp.DidSaveTextDocumentParams, func()) {
 	}
 }
 
-func setupServer() (localServer server.Local, teardown func(l *server.Local)) {
+func setupServer(t *testing.T) server.Local {
+	diagnostics.SnykCode = &code.FakeSnykCodeApiService{}
+	diagnostics.ClearEntireDiagnosticsCache()
+	diagnostics.ClearRegisteredDocuments()
+	diagnostics.ClearWorkspaceFolderScanned()
+	cleanupChannels()
+	jsonRPCRecorder.ClearCallbacks()
+	jsonRPCRecorder.ClearNotifications()
 	loc := startServer()
-	notificationMessage = nil
-	callbackMessage = nil
-	// get rid of messages from previous tests
-	notification.CleanChannels()
-	progress.CleanChannels()
 
-	return loc, func(loc *server.Local) {
-		notification.DisposeListener()
+	t.Cleanup(func() {
 		err := loc.Close()
 		if err != nil {
-			log.Fatal().Err(err).Msg("Error when closing down server")
+			log.Error().Err(err).Msg("Error when closing down server")
 		}
-		notificationMessage = nil
-		callbackMessage = nil
-	}
+		cleanupChannels()
+		jsonRPCRecorder.ClearCallbacks()
+		jsonRPCRecorder.ClearNotifications()
+	})
+	return loc
+}
+
+func cleanupChannels() {
+	notification.DisposeListener()
+	disposeProgressListener()
+	hover.ClearAllHovers()
 }
 
 func startServer() server.Local {
 	var srv *jrpc2.Server
 
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	diagnostics.SnykCode = &code.FakeSnykCodeApiService{}
 
 	lspHandlers := handler.Map{
 		"initialize":                          InitializeHandler(&srv),
@@ -103,11 +109,11 @@ func startServer() server.Local {
 	opts := &server.LocalOptions{
 		Client: &jrpc2.ClientOptions{
 			OnNotify: func(request *jrpc2.Request) {
-				notificationMessage = request
+				jsonRPCRecorder.Record(*request)
 			},
 			OnCallback: func(ctx context.Context, request *jrpc2.Request) (interface{}, error) {
-				callbackMessage = request
-				return callbackMessage, nil
+				jsonRPCRecorder.Record(*request)
+				return *request, nil
 			},
 		},
 		Server: &jrpc2.ServerOptions{
@@ -122,8 +128,7 @@ func startServer() server.Local {
 }
 
 func Test_serverShouldStart(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	si := loc.Server.ServerInfo()
 
@@ -131,8 +136,7 @@ func Test_serverShouldStart(t *testing.T) {
 }
 
 func Test_dummy_shouldNotBeServed(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	_, err := loc.Client.Call(ctx, "dummy", nil)
 	if err == nil {
@@ -141,8 +145,7 @@ func Test_dummy_shouldNotBeServed(t *testing.T) {
 }
 
 func Test_initialize_shouldBeServed(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -155,8 +158,7 @@ func Test_initialize_shouldBeServed(t *testing.T) {
 }
 
 func Test_initialize_shouldSupportDocumentOpening(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -169,24 +171,8 @@ func Test_initialize_shouldSupportDocumentOpening(t *testing.T) {
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.OpenClose, true)
 }
 
-func Test_initialize_shouldSupportDocumentChanges(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
-
-	rsp, err := loc.Client.Call(ctx, "initialize", nil)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-	var result lsp.InitializeResult
-	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatal().Err(err)
-	}
-	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.Change, sglsp.TDSKFull)
-}
-
 func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -202,10 +188,9 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 }
 
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
-	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	environment.CurrentEnabledProducts.Code.Set(true)
 	cli.CurrentSettings = cli.Settings{}
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	didOpenParams, cleanup := didOpenTextParams()
 	defer cleanup()
@@ -215,21 +200,18 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 		log.Fatal().Err(err)
 	}
 
-	// should receive diagnosticsParams
-	diagnosticsParams := lsp.PublishDiagnosticsParams{}
-
 	// wait for publish
-	assert.Eventually(t, func() bool { return notificationMessage != nil }, 5*time.Second, 10*time.Millisecond)
-	if notificationMessage != nil {
-		_ = notificationMessage.UnmarshalParams(&diagnosticsParams)
-		assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
-	}
+	assert.Eventually(
+		t,
+		checkForPublishedDiagnostics(uri.PathFromUri(didOpenParams.TextDocument.URI), -1),
+		120*time.Second,
+		10*time.Millisecond,
+	)
 }
 
 func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	testutil.IntegTest(t)
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	testutil.CreateDummyProgressListener(t)
 
@@ -254,7 +236,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 		t.Fatal("couldn't unset environment")
 	}
 	environment.Load()
-	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	environment.EnabledProductsFromEnv()
 	cli.CurrentSettings = cli.Settings{}
 
 	didOpenParams, cleanup := didOpenTextParams()
@@ -272,8 +254,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 }
 
 func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	// register our dummy document
 	didOpenParams, cleanup := didOpenTextParams()
@@ -299,10 +280,9 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 }
 
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
-	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	environment.EnabledProductsFromEnv()
 	cli.CurrentSettings = cli.Settings{}
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	didSaveParams, cleanup := didSaveTextParams()
 	defer cleanup()
@@ -312,20 +292,17 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 		log.Fatal().Err(err)
 	}
 
-	// should receive diagnostics
-
 	// wait for publish
-	assert.Eventually(t, func() bool { return notificationMessage != nil }, 5*time.Second, 10*time.Millisecond)
-	if !t.Failed() {
-		diags := lsp.PublishDiagnosticsParams{}
-		_ = notificationMessage.UnmarshalParams(&diags)
-		assert.Equal(t, didSaveParams.TextDocument.URI, diags.URI)
-	}
+	assert.Eventually(
+		t,
+		checkForPublishedDiagnostics(uri.PathFromUri(didSaveParams.TextDocument.URI), -1),
+		120*time.Second,
+		10*time.Millisecond,
+	)
 }
 
 func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSaveWaitUntil", nil)
 	if err != nil {
@@ -334,8 +311,7 @@ func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
 }
 
 func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSave", nil)
 	if err != nil {
@@ -345,8 +321,7 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 
 func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) {
 	testutil.IntegTest(t)
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 	testutil.CreateDummyProgressListener(t)
 
 	folder := lsp.WorkspaceFolder{Name: "test1", Uri: sglsp.DocumentURI("test1")}
@@ -395,13 +370,16 @@ func Test_IntegrationWorkspaceScanMaven(t *testing.T) {
 }
 
 func runIntegrationTest(repo string, commit string, file1 string, file2 string, t *testing.T) {
-	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	environment.CurrentEnabledProducts.Code.Set(true)
+	environment.CurrentEnabledProducts.OpenSource.Set(true)
+	environment.CurrentEnabledProducts.Iac.Set(true)
 	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearWorkspaceFolderScanned()
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	jsonRPCRecorder.ClearCallbacks()
+	jsonRPCRecorder.ClearNotifications()
+	loc := setupServer(t)
 
 	var cloneTargetDir, err = setupCustomTestRepo(repo, commit)
 	defer os.RemoveAll(cloneTargetDir)
@@ -426,33 +404,50 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 		testPath = filepath.Join(cloneTargetDir, file1)
 		textDocumentDidOpen(&loc, testPath)
 		// serve diagnostics from file scan
-		assert.Eventually(t, func() bool {
-			return notificationMessage != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
-		}, 5*time.Second, 2*time.Millisecond)
+		assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), 120*time.Second, 10*time.Millisecond)
 	}
 
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
 		return diagnostics.IsWorkspaceFolderScanned(folder)
-	}, 600*time.Second, 100*time.Millisecond)
+	}, 600*time.Second, 2*time.Millisecond)
 
 	testPath = filepath.Join(cloneTargetDir, file2)
 	textDocumentDidOpen(&loc, testPath)
 
-	// serve diagnostics from workspace & file scan
-	assert.Eventually(t, func() bool {
-		return notificationMessage != nil && len(diagnostics.DocumentDiagnosticsFromCache(uri.PathToUri(testPath))) > 0
-	}, 5*time.Second, 2*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), 120*time.Second, 10*time.Millisecond)
+}
+
+// Check if published diagnostics for given testPath match the expectedNumber.
+// If expectedNumber == -1 assume check for expectedNumber > 0
+func checkForPublishedDiagnostics(testPath string, expectedNumber int) func() bool {
+	return func() bool {
+		notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
+		if len(notifications) < 1 {
+			return false
+		}
+		for _, n := range notifications {
+			diagnosticsParams := lsp.PublishDiagnosticsParams{}
+			_ = n.UnmarshalParams(&diagnosticsParams)
+			if diagnosticsParams.URI == uri.PathToUri(testPath) {
+				if expectedNumber == -1 {
+					return len(diagnostics.DocumentDiagnosticsFromCache(diagnosticsParams.URI)) > 0
+				} else {
+					return len(diagnostics.DocumentDiagnosticsFromCache(diagnosticsParams.URI)) == expectedNumber
+				}
+			}
+		}
+		return false
+	}
 }
 
 func Test_IntegrationHoverResults(t *testing.T) {
 	testutil.IntegTest(t)
-	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	environment.EnabledProductsFromEnv()
 	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
 	defer os.RemoveAll(cloneTargetDir)
@@ -504,12 +499,11 @@ func Test_IntegrationHoverResults(t *testing.T) {
 
 func Test_IntegrationFileScan(t *testing.T) {
 	testutil.IntegTest(t)
-	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	environment.EnabledProductsFromEnv()
 	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
-	loc, teardownServer := setupServer()
-	defer teardownServer(&loc)
+	loc := setupServer(t)
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
 	defer os.RemoveAll(cloneTargetDir)
@@ -517,19 +511,13 @@ func Test_IntegrationFileScan(t *testing.T) {
 		log.Fatal().Err(err).Msg("Couldn't setup test repo")
 	}
 
-	testPath := cloneTargetDir + string(os.PathSeparator) + "app.js"
-	didOpenParams, diagnosticsParams := textDocumentDidOpen(&loc, testPath)
+	testPath := filepath.Join(cloneTargetDir, "app.js")
+	_ = textDocumentDidOpen(&loc, testPath)
 
-	assert.Eventually(t, func() bool { return notificationMessage != nil }, 10*time.Second, 10*time.Millisecond)
-	_ = notificationMessage.UnmarshalParams(&diagnosticsParams)
-
-	assert.Equal(t, didOpenParams.TextDocument.URI, diagnosticsParams.URI)
-	assert.Len(t, diagnosticsParams.Diagnostics, 6)
-	assert.Equal(t, diagnosticsParams.Diagnostics[0].Code, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Code)
-	assert.Equal(t, diagnosticsParams.Diagnostics[0].Range, diagnostics.GetDiagnostics(diagnosticsParams.URI)[0].Range)
+	assert.Eventually(t, checkForPublishedDiagnostics(testPath, 6), 120*time.Second, 10*time.Millisecond)
 }
 
-func textDocumentDidOpen(loc *server.Local, testPath string) (sglsp.DidOpenTextDocumentParams, lsp.PublishDiagnosticsParams) {
+func textDocumentDidOpen(loc *server.Local, testPath string) sglsp.DidOpenTextDocumentParams {
 	diagnostics.SnykCode = &code.SnykCodeBackendService{}
 	// should receive diagnosticsParams
 
@@ -550,8 +538,7 @@ func textDocumentDidOpen(loc *server.Local, testPath string) (sglsp.DidOpenTextD
 		log.Fatal().Err(err).Msg("Call failed")
 	}
 
-	diagnosticsParams := lsp.PublishDiagnosticsParams{}
-	return didOpenParams, diagnosticsParams
+	return didOpenParams
 }
 
 func setupCustomTestRepo(url string, targetCommit string) (string, error) {

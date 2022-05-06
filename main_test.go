@@ -46,7 +46,6 @@ func Test_shouldShowUsageOnUnknownFlag(t *testing.T) {
 	assert.NotNil(t, err)
 }
 func Test_shouldSetLoadConfigFromFlag(t *testing.T) {
-	os.Clearenv()
 	file, err := os.CreateTemp(".", "configFlagTest")
 	if err != nil {
 		assert.Fail(t, "Couldn't create test file")
@@ -63,10 +62,10 @@ func Test_shouldSetLoadConfigFromFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-c", file.Name()}
 
 	_, _ = parseFlags(args)
+	t.Setenv("Bb", "")
 	environment.Load()
 
 	assert.Equal(t, "Bb", os.Getenv("AA"))
-	os.Clearenv()
 }
 
 func Test_shouldSetReportErrorsViaFlag(t *testing.T) {

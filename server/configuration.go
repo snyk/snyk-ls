@@ -17,30 +17,43 @@ import (
 
 func WorkspaceDidChangeConfiguration() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeConfigurationParams) (interface{}, error) {
+		log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("RECEIVED")
+		defer log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("DONE")
 		var err error
-		environment.CurrentEnabledProducts.Code, err = strconv.ParseBool(params.Settings.ActivateSnykCode)
+		parseBool, err := strconv.ParseBool(params.Settings.ActivateSnykCode)
 		if err != nil {
 			log.Err(err).Msg("couldn't parse code setting")
+		} else {
+			environment.CurrentEnabledProducts.Code.Set(parseBool)
 		}
-		environment.CurrentEnabledProducts.OpenSource, err = strconv.ParseBool(params.Settings.ActivateSnykOpenSource)
+		parseBool, err = strconv.ParseBool(params.Settings.ActivateSnykOpenSource)
 		if err != nil {
 			log.Err(err).Msg("couldn't parse open source setting")
+		} else {
+			environment.CurrentEnabledProducts.OpenSource.Set(parseBool)
 		}
-		environment.CurrentEnabledProducts.Iac, err = strconv.ParseBool(params.Settings.ActivateSnykIac)
+		parseBool, err = strconv.ParseBool(params.Settings.ActivateSnykIac)
 		if err != nil {
 			log.Err(err).Msg("couldn't parse iac setting")
+		} else {
+			environment.CurrentEnabledProducts.Iac.Set(parseBool)
 		}
+
 		cli.CurrentSettings.Insecure, err = strconv.ParseBool(params.Settings.Insecure)
 		if err != nil {
 			log.Err(err).Msg("couldn't parse insecure setting")
 		}
 
-		cli.CurrentSettings.Endpoint = params.Settings.Endpoint
+		cli.CurrentSettings.Endpoint = strings.Trim(params.Settings.Endpoint, " ")
 
 		cli.CurrentSettings.AdditionalParameters = strings.Split(params.Settings.AdditionalParams, " ")
+
 		envVars := strings.Split(params.Settings.AdditionalEnv, ";")
 		for _, envVar := range envVars {
 			v := strings.Split(envVar, "=")
+			if len(v) != 2 {
+				continue
+			}
 			err = os.Setenv(v[0], v[1])
 			if err != nil {
 				log.Err(err).Msgf("couldn't set env variable %s", envVar)

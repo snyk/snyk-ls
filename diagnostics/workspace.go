@@ -10,14 +10,13 @@ import (
 	ignore "github.com/sabhiram/go-gitignore"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
-var registeredDocsMutex = &sync.Mutex{}
-var scannedWorkspaceFoldersMutex = &sync.Mutex{}
-var scannedWorkspaceFolders = make(map[lsp.WorkspaceFolder]bool)
+var scannedWorkspaceFolders = sync.Map{}
 
 func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) (walkedFiles []string, err error) {
 	workspace, err := filepath.Abs(uri.PathFromUri(workspaceUri))
@@ -54,27 +53,20 @@ func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) (walkedFiles 
 }
 
 func IsWorkspaceFolderScanned(folder lsp.WorkspaceFolder) bool {
-	scannedWorkspaceFoldersMutex.Lock()
-	defer scannedWorkspaceFoldersMutex.Unlock()
-	return scannedWorkspaceFolders[folder]
+	_, found := scannedWorkspaceFolders.Load(folder)
+	return found
 }
 
 func ClearWorkspaceFolderScanned() {
-	scannedWorkspaceFoldersMutex.Lock()
-	defer scannedWorkspaceFoldersMutex.Unlock()
-	scannedWorkspaceFolders = make(map[lsp.WorkspaceFolder]bool)
+	scannedWorkspaceFolders = sync.Map{}
 }
 
 func setFolderScanned(folder lsp.WorkspaceFolder) {
-	scannedWorkspaceFoldersMutex.Lock()
-	scannedWorkspaceFolders[folder] = true
-	scannedWorkspaceFoldersMutex.Unlock()
+	scannedWorkspaceFolders.Store(folder, true)
 }
 
 func removeFolderFromScanned(folder lsp.WorkspaceFolder) {
-	scannedWorkspaceFoldersMutex.Lock()
-	delete(scannedWorkspaceFolders, folder)
-	scannedWorkspaceFoldersMutex.Unlock()
+	scannedWorkspaceFolders.Delete(folder)
 }
 
 func loadIgnorePatterns(workspace string) (patterns []string, err error) {
@@ -135,11 +127,18 @@ func workspaceDiagnostics(workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
 	diagnostics = fetchAllRegisteredDocumentDiagnostics(workspace.Uri, lsp.ScanLevelWorkspace)
 	addToCache(diagnostics)
 	setFolderScanned(workspace)
-	// TODO: iterate over diagnostics and send them to client via publish diagnostics
+	for documentURI, d := range diagnostics {
+		notification.Send(lsp.PublishDiagnosticsParams{
+			URI:         documentURI,
+			Diagnostics: d,
+		})
+	}
 }
 
 func WorkspaceScan(workspaceFolders []lsp.WorkspaceFolder) {
 	preconditions.EnsureReadyForAnalysisAndWait()
+	notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Starting workspace scan."})
+	defer notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Workspace scan completed."})
 	var wg sync.WaitGroup
 	for _, workspace := range workspaceFolders {
 		wg.Add(1)

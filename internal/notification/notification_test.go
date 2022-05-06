@@ -6,24 +6,26 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
 var params = lsp.AuthenticationParams{Token: "test event"}
 
 func TestSendReceive(t *testing.T) {
-	Send(params.Token)
+	Send(params)
 	output, _ := Receive()
 	assert.Equal(t, params, output)
 }
 
 func TestCreateListener(t *testing.T) {
-	Send(params.Token)
-	called := false
-	CreateListener(func(event lsp.AuthenticationParams) {
-		called = true
+	called := concurrency.AtomicBool{}
+	CreateListener(func(event interface{}) {
+		called.Set(true)
 	})
+	defer DisposeListener()
+	Send(params)
 	assert.Eventually(t, func() bool {
-		return called
-	}, 1*time.Second, 1*time.Millisecond)
+		return called.Get()
+	}, 2*time.Second, time.Second)
 }

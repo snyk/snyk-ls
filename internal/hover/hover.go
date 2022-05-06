@@ -15,7 +15,8 @@ import (
 var hovers = map[sglsp.DocumentURI][]lsp.HoverDetails{}
 var hoverIndexes = map[string]bool{}
 
-var hoverChan = make(chan lsp.Hover, 4)
+var hoverChan = make(chan lsp.Hover, 100)
+var stopChannel = make(chan bool, 100)
 var mutex = &sync.Mutex{}
 
 func validateAndExtractMessage(hover lsp.HoverDetails, pos sglsp.Position) string {
@@ -65,7 +66,7 @@ func Channel() chan lsp.Hover {
 func ClearAllHovers() {
 	mutex.Lock()
 	defer mutex.Unlock()
-
+	stopChannel <- true
 	hovers = map[sglsp.DocumentURI][]lsp.HoverDetails{}
 	hoverIndexes = map[string]bool{}
 }
@@ -88,13 +89,36 @@ func GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) lsp.HoverResult {
 }
 
 func CreateHoverListener() {
+	// cleanup before start
 	for {
-		result := <-hoverChan
-		log.Trace().
-			Str("method", "CreateHoverListener").
-			Str("uri", string(result.Uri)).
-			Msg("reading hover from chan.")
+		select {
+		case <-stopChannel:
+			continue
+		default:
+		}
+		break
+	}
+	for {
+		select {
+		case result := <-hoverChan:
+			log.Trace().
+				Str("method", "CreateHoverListener").
+				Str("uri", string(result.Uri)).
+				Msg("reading hover from chan.")
 
-		registerHovers(result)
+			registerHovers(result)
+			continue
+		case <-stopChannel:
+		}
+		break
+	}
+	// cleanup on shutdown
+	for {
+		select {
+		case <-hoverChan:
+			continue
+		default:
+		}
+		break
 	}
 }

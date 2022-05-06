@@ -14,12 +14,11 @@ func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 	testutil.IntegTest(t)
 	testutil.CreateDummyProgressListener(t)
 
-	os.Clearenv()
+	_ = environment.SetCliPath("")
 	if !environment.Authenticated() {
 		_ = environment.SetToken("dummy") // we don't want to authenticate
 	}
 	EnsureReadyForAnalysisAndWait()
-
 	assert.NotEmpty(t, environment.CliPath())
 }
 
