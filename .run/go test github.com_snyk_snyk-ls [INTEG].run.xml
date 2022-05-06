@@ -3,7 +3,7 @@
                  factoryName="Go Test">
     <module name="snyk-lsp"/>
     <working_directory value="$PROJECT_DIR$/"/>
-    <go_parameters value="-p=1 -count=1 -race -timeout=300s"/>
+    <go_parameters value="-p=1 -race -timeout=120s -count=1"/>
     <envs>
       <env name="INTEG_TESTS" value="true"/>
     </envs>
