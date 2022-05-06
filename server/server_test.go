@@ -185,7 +185,7 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 }
 
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
-	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	environment.EnabledProductsFromEnv()
 	cli.CurrentSettings = cli.Settings{}
 	loc := setupServer(t)
 
@@ -233,7 +233,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 		t.Fatal("couldn't unset environment")
 	}
 	environment.Load()
-	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	environment.EnabledProductsFromEnv()
 	cli.CurrentSettings = cli.Settings{}
 
 	didOpenParams, cleanup := didOpenTextParams()
@@ -277,7 +277,7 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 }
 
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
-	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	environment.EnabledProductsFromEnv()
 	cli.CurrentSettings = cli.Settings{}
 	loc := setupServer(t)
 
@@ -367,7 +367,7 @@ func Test_IntegrationWorkspaceScanMaven(t *testing.T) {
 }
 
 func runIntegrationTest(repo string, commit string, file1 string, file2 string, t *testing.T) {
-	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	environment.EnabledProductsFromEnv()
 	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearWorkspaceFolderScanned()
 	diagnostics.ClearEntireDiagnosticsCache()
@@ -436,7 +436,7 @@ func checkForPublishedDiagnostics(testPath string, expectedNumber int) func() bo
 
 func Test_IntegrationHoverResults(t *testing.T) {
 	testutil.IntegTest(t)
-	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	environment.EnabledProductsFromEnv()
 	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
@@ -492,7 +492,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 
 func Test_IntegrationFileScan(t *testing.T) {
 	testutil.IntegTest(t)
-	environment.CurrentEnabledProducts = environment.EnabledProductsFromEnv()
+	environment.EnabledProductsFromEnv()
 	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()

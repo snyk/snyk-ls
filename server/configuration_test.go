@@ -34,9 +34,9 @@ func TestWorkspaceDidChangeConfiguration(t *testing.T) {
 	}
 
 	p := environment.CurrentEnabledProducts
-	assert.Equal(t, false, p.Code)
-	assert.Equal(t, false, p.OpenSource)
-	assert.Equal(t, false, p.Iac)
+	assert.Equal(t, false, p.Code.Get())
+	assert.Equal(t, false, p.OpenSource.Get())
+	assert.Equal(t, false, p.Iac.Get())
 	assert.Equal(t, true, cli.CurrentSettings.Insecure)
 	assert.Equal(t, []string{"--all-projects", "-d"}, cli.CurrentSettings.AdditionalParameters)
 	assert.Equal(t, params.Settings.Endpoint, cli.CurrentSettings.Endpoint)

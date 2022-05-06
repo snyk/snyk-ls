@@ -147,15 +147,15 @@ func workspaceLevelFetch(
 	dChan chan lsp.DiagnosticResult,
 	hoverChan chan lsp.Hover,
 ) {
-	if enabledProducts.Iac {
+	if enabledProducts.Iac.Get() {
 		wg.Add(1)
 		go iac.ScanWorkspace(Cli, documentURI, wg, dChan, hoverChan)
 	}
-	if enabledProducts.OpenSource {
+	if enabledProducts.OpenSource.Get() {
 		wg.Add(1)
 		go oss.ScanWorkspace(Cli, documentURI, wg, dChan, hoverChan)
 	}
-	if enabledProducts.Code {
+	if enabledProducts.Code.Get() {
 		registeredDocsMutex.Lock()
 		var bundleDocs = registeredDocuments
 		registeredDocsMutex.Unlock()
@@ -176,7 +176,7 @@ func fileLevelFetch(
 	dChan chan lsp.DiagnosticResult,
 	hoverChan chan lsp.Hover,
 ) {
-	if enabledProducts.Code {
+	if enabledProducts.Code.Get() {
 		var bundleDocs = map[sglsp.DocumentURI]bool{}
 		bundleDocs[documentURI] = true
 		RegisterDocument(sglsp.TextDocumentItem{URI: documentURI})
@@ -184,11 +184,11 @@ func fileLevelFetch(
 		wg.Add(1)
 		go bundles[0].FetchDiagnosticsData(string(documentURI), wg, dChan, hoverChan)
 	}
-	if enabledProducts.Iac {
+	if enabledProducts.Iac.Get() {
 		wg.Add(1)
 		go iac.ScanFile(Cli, documentURI, wg, dChan, hoverChan)
 	}
-	if enabledProducts.OpenSource {
+	if enabledProducts.OpenSource.Get() {
 		wg.Add(1)
 		go oss.ScanFile(Cli, documentURI, wg, dChan, hoverChan)
 	}

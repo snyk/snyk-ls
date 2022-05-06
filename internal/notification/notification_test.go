@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -19,7 +19,7 @@ func TestSendReceive(t *testing.T) {
 }
 
 func TestCreateListener(t *testing.T) {
-	called := testutil.AtomicBool{}
+	called := concurrency.AtomicBool{}
 	CreateListener(func(event interface{}) {
 		called.Set(true)
 	})

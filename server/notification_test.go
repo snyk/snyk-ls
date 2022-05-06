@@ -9,10 +9,10 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/rs/zerolog/log"
 
+	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/progress"
-	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/lsp"
 
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -21,7 +21,7 @@ import (
 
 type ServerImplMock struct{}
 
-var notified = testutil.AtomicBool{}
+var notified = concurrency.AtomicBool{}
 
 func (b *ServerImplMock) Callback(_ context.Context, _ string, _ interface{}) (*jrpc2.Response, error) { // todo: check if better way exists, mocking? go mock / testify
 	notified.Set(true)
