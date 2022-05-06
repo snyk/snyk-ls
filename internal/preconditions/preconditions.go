@@ -20,6 +20,11 @@ func EnsureReadyForAnalysisAndWait() {
 	defer install.Mutex.Unlock()
 	cliInstalled := environment.CliInstalled()
 	authenticated := environment.Authenticated()
+
+	if cliInstalled && isOutdatedCli() {
+		go updateCli()
+	}
+
 	if cliInstalled && authenticated {
 		return
 	}
@@ -27,11 +32,6 @@ func EnsureReadyForAnalysisAndWait() {
 	for !environment.CliInstalled() {
 		installCli()
 		time.Sleep(2 * time.Second)
-	}
-
-	// if outdated, update
-	if isOutdatedCli() {
-		go updateCli()
 	}
 
 	if !authenticated {

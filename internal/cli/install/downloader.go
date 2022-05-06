@@ -125,6 +125,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool, progressCh chan lsp.Pro
 	}
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
+		_ = os.Remove(cliDiscovery.ExecutableName(isUpdate))
 		doneCh <- true
 		log.Info().Str("method", "Download").Msgf("finished Snyk CLI %s", kindStr)
 	}(resp.Body)
