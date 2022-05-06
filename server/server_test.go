@@ -58,6 +58,10 @@ func didSaveTextParams() (sglsp.DidSaveTextDocumentParams, func()) {
 }
 
 func setupServer(t *testing.T) server.Local {
+	diagnostics.SnykCode = &code.FakeSnykCodeApiService{}
+	diagnostics.ClearEntireDiagnosticsCache()
+	diagnostics.ClearRegisteredDocuments()
+	diagnostics.ClearWorkspaceFolderScanned()
 	cleanupChannels()
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
@@ -85,7 +89,6 @@ func startServer() server.Local {
 	var srv *jrpc2.Server
 
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	diagnostics.SnykCode = &code.FakeSnykCodeApiService{}
 
 	lspHandlers := handler.Map{
 		"initialize":                          InitializeHandler(&srv),
@@ -367,11 +370,15 @@ func Test_IntegrationWorkspaceScanMaven(t *testing.T) {
 }
 
 func runIntegrationTest(repo string, commit string, file1 string, file2 string, t *testing.T) {
-	environment.EnabledProductsFromEnv()
+	environment.CurrentEnabledProducts.Code.Set(true)
+	environment.CurrentEnabledProducts.OpenSource.Set(true)
+	environment.CurrentEnabledProducts.Iac.Set(true)
 	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearWorkspaceFolderScanned()
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
+	jsonRPCRecorder.ClearCallbacks()
+	jsonRPCRecorder.ClearNotifications()
 	loc := setupServer(t)
 
 	var cloneTargetDir, err = setupCustomTestRepo(repo, commit)
