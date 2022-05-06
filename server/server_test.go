@@ -58,7 +58,7 @@ func didSaveTextParams() (sglsp.DidSaveTextDocumentParams, func()) {
 }
 
 func setupServer(t *testing.T) server.Local {
-	diagnostics.SnykCode = &code.FakeSnykCodeApiService{}
+	diagnostics.SetSnykCodeService(&code.FakeSnykCodeApiService{})
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
 	diagnostics.ClearWorkspaceFolderScanned()
@@ -518,7 +518,7 @@ func Test_IntegrationFileScan(t *testing.T) {
 }
 
 func textDocumentDidOpen(loc *server.Local, testPath string) sglsp.DidOpenTextDocumentParams {
-	diagnostics.SnykCode = &code.SnykCodeBackendService{}
+	diagnostics.SetSnykCodeService(&code.FakeSnykCodeApiService{})
 	// should receive diagnosticsParams
 
 	testFileContent, err := os.ReadFile(testPath)

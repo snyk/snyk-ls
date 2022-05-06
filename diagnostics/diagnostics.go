@@ -20,12 +20,26 @@ import (
 	"github.com/snyk/snyk-ls/oss"
 )
 
+const snykCodeServiceKey = "service"
+
 var (
-	registeredDocuments     = concurrency.AtomicMap{}
-	documentDiagnosticCache = concurrency.AtomicMap{}
-	SnykCode                code.SnykCodeService
+	registeredDocuments                  = concurrency.AtomicMap{}
+	documentDiagnosticCache              = concurrency.AtomicMap{}
+	snykCode                             = concurrency.AtomicMap{}
 	Cli                     cli.Executor = cli.SnykCli{}
 )
+
+func SnykCode() code.SnykCodeService {
+	var sc code.SnykCodeService
+	if snykCode.Contains(snykCodeServiceKey) {
+		sc = snykCode.Get(snykCodeServiceKey).(code.SnykCodeService)
+	}
+	return sc
+}
+
+func SetSnykCodeService(service code.SnykCodeService) {
+	snykCode.Put(snykCodeServiceKey, service)
+}
 
 func ClearDiagnosticsCache(documentURI sglsp.DocumentURI) {
 	documentDiagnosticCache.Delete(documentURI)
@@ -246,7 +260,7 @@ func createOrExtendBundles(documents map[sglsp.DocumentURI]bool, bundles *[]*cod
 }
 
 func createBundle(bundles *[]*code.BundleImpl) *code.BundleImpl {
-	bundle := code.BundleImpl{SnykCode: SnykCode}
+	bundle := code.BundleImpl{SnykCode: SnykCode()}
 	*bundles = append(*bundles, &bundle)
 	return &bundle
 }
