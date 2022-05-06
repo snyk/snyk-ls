@@ -2,6 +2,7 @@ package preconditions
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -19,6 +20,11 @@ func EnsureReadyForAnalysisAndWait() {
 	defer install.Mutex.Unlock()
 	cliInstalled := environment.CliInstalled()
 	authenticated := environment.Authenticated()
+
+	if cliInstalled && isOutdatedCli() {
+		go updateCli()
+	}
+
 	if cliInstalled && authenticated {
 		return
 	}
@@ -61,4 +67,36 @@ func installCli() {
 	} else {
 		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Warning, Message: "Could not find, nor install Snyk CLI"})
 	}
+}
+
+func updateCli() {
+	install.Mutex.Lock()
+	defer install.Mutex.Unlock()
+
+	i := install.NewInstaller()
+	updated, err := i.Update(context.Background())
+	if err != nil {
+		log.Err(err).Str("method", "updateCli").Msg("Failed to update CLI")
+		error_reporting.CaptureError(err)
+	}
+
+	if updated {
+		log.Info().Str("method", "updateCli").Msg("CLI updated.")
+	} else {
+		log.Info().Str("method", "updateCli").Msg("CLI is latest.")
+	}
+}
+
+func isOutdatedCli() bool {
+	cliPath := environment.CliPath()
+
+	fileInfo, err := os.Stat(cliPath) // todo: we can save stat calls by caching mod time
+	if err != nil {
+		log.Err(err).Str("method", "isOutdatedCli").Msg("Failed to stat CLI file.")
+		return false
+	}
+
+	fourDaysAgo := time.Now().Add(-time.Hour * 24 * 4)
+
+	return fileInfo.ModTime().Before(fourDaysAgo)
 }
