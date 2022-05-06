@@ -132,13 +132,6 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	var expected = lsp.AuthenticationParams{Token: "test token"}
 
 	notification.Send(expected)
-	//assert.Eventually(t, func() bool {
-	//	if notificationMessage == nil {
-	//		return false
-	//	}
-	//	err := notificationMessage.UnmarshalParams(&actual)
-	//	return err == nil && actual.Token == expected.Token
-	//}, time.Minute, time.Millisecond)
 	assert.Eventually(
 		t,
 		func() bool {
