@@ -58,12 +58,12 @@ func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 	RegisterDocument(sglsp.TextDocumentItem{URI: diagnosticUri})
-	SnykCode = &code.FakeSnykCodeApiService{}
+	SetSnykCodeService(&code.FakeSnykCodeApiService{})
 
 	diagnostics := GetDiagnostics(diagnosticUri)
 
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
-	params := SnykCode.(*code.FakeSnykCodeApiService).GetCallParams(0, code.CreateBundleWithSourceOperation)
+	params := SnykCode().(*code.FakeSnykCodeApiService).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.Nil(t, params)
 }
 
@@ -76,12 +76,12 @@ func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 	RegisterDocument(sglsp.TextDocumentItem{URI: diagnosticUri})
-	SnykCode = &code.FakeSnykCodeApiService{}
+	SetSnykCodeService(&code.FakeSnykCodeApiService{})
 
 	diagnostics := GetDiagnostics(diagnosticUri)
 
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
-	params := SnykCode.(*code.FakeSnykCodeApiService).GetCallParams(0, code.CreateBundleWithSourceOperation)
+	params := SnykCode().(*code.FakeSnykCodeApiService).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.NotNil(t, params)
 }
 
@@ -105,7 +105,7 @@ func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
 	ClearEntireDiagnosticsCache()
 	documentURI := sglsp.DocumentURI("package.json")
 	RegisterDocument(sglsp.TextDocumentItem{URI: documentURI})
-	SnykCode = &code.FakeSnykCodeApiService{}
+	SetSnykCodeService(&code.FakeSnykCodeApiService{})
 	mockCli := mockCli{}
 	Cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything).Return("test", nil)
@@ -125,7 +125,7 @@ func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
 	ClearEntireDiagnosticsCache()
 	documentURI := sglsp.DocumentURI("package.json")
 	RegisterDocument(sglsp.TextDocumentItem{URI: documentURI})
-	SnykCode = &code.FakeSnykCodeApiService{}
+	SetSnykCodeService(&code.FakeSnykCodeApiService{})
 	mockCli := mockCli{}
 	Cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything).Return("test", nil)
@@ -146,7 +146,7 @@ func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
 	ClearEntireDiagnosticsCache()
 	documentURI := sglsp.DocumentURI("package.json")
 	RegisterDocument(sglsp.TextDocumentItem{URI: documentURI})
-	SnykCode = &code.FakeSnykCodeApiService{}
+	SetSnykCodeService(&code.FakeSnykCodeApiService{})
 	cli.CurrentSettings.AdditionalParameters = []string{"-d", "--all-projects"}
 	cli.CurrentSettings.Insecure = true
 	cli.CurrentSettings.Endpoint = "asd"
@@ -174,7 +174,7 @@ func Test_GetDiagnostics_shouldNotIacIfNotEnabled(t *testing.T) { // disable sny
 	ClearEntireDiagnosticsCache()
 	documentURI := sglsp.DocumentURI("package.json")
 	RegisterDocument(sglsp.TextDocumentItem{URI: documentURI})
-	SnykCode = &code.FakeSnykCodeApiService{}
+	SetSnykCodeService(&code.FakeSnykCodeApiService{})
 	mockCli := mockCli{}
 	Cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything).Return("test", nil)
@@ -195,12 +195,12 @@ func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
 		Text:       "",
 	}
 	RegisterDocument(empty)
-	SnykCode = &code.FakeSnykCodeApiService{}
+	SetSnykCodeService(&code.FakeSnykCodeApiService{})
 
 	GetDiagnostics(empty.URI)
 
 	// verify that create bundle has NOT been called on backend service
-	params := SnykCode.(*code.FakeSnykCodeApiService).GetCallParams(0, code.CreateBundleWithSourceOperation)
+	params := SnykCode().(*code.FakeSnykCodeApiService).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.Nil(t, params)
 }
 
@@ -210,7 +210,7 @@ func Test_ClearWorkspaceFolderDiagnostics_shouldRemoveDiagnosticsOfAllFilesInFol
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 	RegisterDocument(sglsp.TextDocumentItem{URI: diagnosticUri})
-	SnykCode = &code.FakeSnykCodeApiService{}
+	SetSnykCodeService(&code.FakeSnykCodeApiService{})
 	diagnostics := GetDiagnostics(diagnosticUri)
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
 

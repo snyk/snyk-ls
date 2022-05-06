@@ -26,7 +26,7 @@ var (
 
 func Start() {
 	var srv *jrpc2.Server
-	diagnostics.SnykCode = &code.SnykCodeBackendService{}
+	diagnostics.SetSnykCodeService(&code.SnykCodeBackendService{})
 
 	lspHandlers := handler.Map{
 		"initialize":                          InitializeHandler(&srv),
