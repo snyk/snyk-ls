@@ -185,7 +185,7 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 }
 
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
-	environment.EnabledProductsFromEnv()
+	environment.CurrentEnabledProducts.Code.Set(true)
 	cli.CurrentSettings = cli.Settings{}
 	loc := setupServer(t)
 

@@ -24,7 +24,7 @@ func TestInstaller_Find(t *testing.T) {
 	_, _ = f.WriteString("dummy-cli-file")
 	_ = f.Chmod(0777)
 
-	_ = os.Setenv("PATH", cliDir)
+	t.Setenv("PATH", cliDir)
 
 	i := NewInstaller()
 
@@ -38,7 +38,7 @@ func TestInstaller_Find_emptyPath(t *testing.T) {
 	testutil.IntegTest(t)
 	t.Skipf("removes real binaries from user directory")
 
-	_ = os.Setenv("PATH", "")
+	t.Setenv("PATH", "")
 	i := NewInstaller()
 
 	execPath, err := i.Find()

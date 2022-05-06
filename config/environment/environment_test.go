@@ -13,15 +13,13 @@ func init() {
 }
 
 func TestToken(t *testing.T) {
-	t.Setenv(snykTokenKey, "")
-	_ = os.Setenv(snykTokenKey, "test")
+	t.Setenv(snykTokenKey, "test")
 
 	assert.NotEqual(t, "", Token())
 }
 
 func Test_SnykCodeAnalysisTimeoutReturnsTimeoutFromEnvironment(t *testing.T) {
-	t.Setenv(snykCodeTimeoutKey, "")
-	_ = os.Setenv(snykCodeTimeoutKey, "1s")
+	t.Setenv(snykCodeTimeoutKey, "1s")
 	duration, _ := time.ParseDuration("1s")
 	assert.Equal(t, duration, SnykCodeAnalysisTimeout())
 }

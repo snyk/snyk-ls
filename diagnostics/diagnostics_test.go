@@ -51,7 +51,7 @@ func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 
 func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
 	// disable snyk code
-	_ = os.Setenv(environment.ActivateSnykCodeKey, "false")
+	t.Setenv(environment.ActivateSnykCodeKey, "false")
 	environment.EnabledProductsFromEnv()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
@@ -69,7 +69,7 @@ func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
 
 func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
 	// disable snyk code
-	_ = os.Setenv(environment.ActivateSnykCodeKey, "true")
+	t.Setenv(environment.ActivateSnykCodeKey, "true")
 	environment.EnabledProductsFromEnv()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
@@ -97,9 +97,9 @@ func (m *mockCli) Execute(cmd []string) (resp []byte, err error) {
 
 func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
-	_ = os.Setenv(environment.ActivateSnykCodeKey, "false")
-	_ = os.Setenv(environment.ActivateSnykIacKey, "false")
-	_ = os.Setenv(environment.ActivateSnykOssKey, "true")
+	t.Setenv(environment.ActivateSnykCodeKey, "false")
+	t.Setenv(environment.ActivateSnykIacKey, "false")
+	t.Setenv(environment.ActivateSnykOssKey, "true")
 	environment.EnabledProductsFromEnv()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
@@ -117,9 +117,9 @@ func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
 }
 
 func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
-	_ = os.Setenv(environment.ActivateSnykCodeKey, "false")
-	_ = os.Setenv(environment.ActivateSnykIacKey, "false")
-	_ = os.Setenv(environment.ActivateSnykOssKey, "false")
+	t.Setenv(environment.ActivateSnykCodeKey, "false")
+	t.Setenv(environment.ActivateSnykIacKey, "false")
+	t.Setenv(environment.ActivateSnykOssKey, "false")
 	environment.EnabledProductsFromEnv()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
@@ -138,9 +138,9 @@ func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
 
 func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
 	environment.Load()
-	_ = os.Setenv(environment.ActivateSnykCodeKey, "false")
-	_ = os.Setenv(environment.ActivateSnykIacKey, "true")
-	_ = os.Setenv(environment.ActivateSnykOssKey, "false")
+	t.Setenv(environment.ActivateSnykCodeKey, "false")
+	t.Setenv(environment.ActivateSnykIacKey, "true")
+	t.Setenv(environment.ActivateSnykOssKey, "false")
 	environment.EnabledProductsFromEnv()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
@@ -166,9 +166,9 @@ func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
 }
 
 func Test_GetDiagnostics_shouldNotIacIfNotEnabled(t *testing.T) { // disable snyk code
-	_ = os.Setenv(environment.ActivateSnykCodeKey, "false")
-	_ = os.Setenv(environment.ActivateSnykIacKey, "false")
-	_ = os.Setenv(environment.ActivateSnykOssKey, "false")
+	t.Setenv(environment.ActivateSnykCodeKey, "false")
+	t.Setenv(environment.ActivateSnykIacKey, "false")
+	t.Setenv(environment.ActivateSnykOssKey, "false")
 	environment.EnabledProductsFromEnv()
 	registeredDocuments = map[sglsp.DocumentURI]bool{}
 	documentDiagnosticCache = map[sglsp.DocumentURI][]lsp.Diagnostic{}
