@@ -41,6 +41,10 @@ func SetSnykCodeService(service code.SnykCodeService) {
 	snykCode.Put(snykCodeServiceKey, service)
 }
 
+func ClearSnykCodeService() {
+	snykCode.ClearAll()
+}
+
 func ClearDiagnosticsCache(documentURI sglsp.DocumentURI) {
 	documentDiagnosticCache.Delete(documentURI)
 }
