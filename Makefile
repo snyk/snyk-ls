@@ -37,7 +37,15 @@ lint: tools
 test:
 	@echo "==> Running unit tests..."
 	@mkdir -p $(BUILD_DIR)
-	@go test -p=1 -count=1 -v -cover -coverprofile=$(BUILD_DIR)/coverage.out -race -timeout=300s ./...
+	@go test -p=1 -count=1 -v -cover -coverprofile=$(BUILD_DIR)/coverage.out -timeout=5m ./...
+
+.PHONY: race-test
+race-test:
+	@echo "==> Running integration tests with race-detector..."
+	@mkdir -p $(BUILD_DIR)
+	@export INTEG_TESTS=true
+	@go test -p=1 -count=1 -v -cover -coverprofile=$(BUILD_DIR)/coverage.out -timeout=5m -race ./...
+
 
 ## build: Build binary for default local system's OS and architecture.
 .PHONY: build
