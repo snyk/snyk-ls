@@ -1,32 +1,40 @@
 package error_reporting
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/internal/notification"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/rs/zerolog/log"
 )
 
 const sentryDsn = "https://f760a2feb30c40198cef550edf6221de@o30291.ingest.sentry.io/6242547"
 
+var logger = environment.Logger
+
 func InitErrorReporting() {
 	err := sentry.Init(sentry.ClientOptions{
 		Dsn:         sentryDsn,
-		Environment: environment(),
+		Environment: determineEnvironment(),
 		Release:     config.Version,
 		Debug:       config.IsDevelopment,
 		BeforeSend:  beforeSend,
 	})
 	if err != nil {
-		log.Error().Str("method", "InitErrorReporting").Msg(err.Error())
+		logger.
+			WithField("method", "InitErrorReporting").
+			WithError(err).
+			Error(context.Background(), "couldn't initialize Sentry")
 	} else {
-		log.Info().Msg("Error reporting initialized.")
+		logger.
+			WithField("method", "InitErrorReporting").
+			Info(context.Background(), "Sentry initialized")
 	}
 }
 
@@ -54,7 +62,7 @@ func beforeSend(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
 	return nil
 }
 
-func environment() string {
+func determineEnvironment() string {
 	if config.IsDevelopment {
 		return "development"
 	} else {

@@ -2,6 +2,7 @@ package code
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,7 +10,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config/environment"
@@ -47,14 +47,14 @@ type extendBundleRequest struct {
 	RemovedFiles []sglsp.DocumentURI        `json:"removedFiles,omitempty"`
 }
 
-func (s *SnykCodeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
-	log.Debug().Str("method", "CreateBundle").Msg("API: Creating bundle for " + strconv.Itoa(len(files)) + " files")
+func (s *SnykCodeBackendService) CreateBundle(ctx context.Context, files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
+	logger.WithField("method", "CreateBundle").Debug(ctx, "API: Creating bundle for "+strconv.Itoa(len(files))+" files")
 	requestBody, err := json.Marshal(files)
 	if err != nil {
 		return "", nil, err
 	}
 
-	responseBody, err := s.doCall("POST", "/bundle", requestBody)
+	responseBody, err := s.doCall(ctx, "POST", "/bundle", requestBody)
 	if err != nil {
 		return "", nil, err
 	}
@@ -64,11 +64,13 @@ func (s *SnykCodeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) 
 	if err != nil {
 		return "", nil, err
 	}
-	log.Debug().Str("method", "CreateBundle").Str("bundleHash", bundle.BundleHash).Msg("API: Create done")
+	logger.
+		WithField("method", "CreateBundle").
+		WithField("bundleHash", bundle.BundleHash).Debug(ctx, "API: Create done")
 	return bundle.BundleHash, bundle.MissingFiles, nil
 }
 
-func (s *SnykCodeBackendService) doCall(method string, path string, requestBody []byte) ([]byte, error) {
+func (s *SnykCodeBackendService) doCall(ctx context.Context, method string, path string, requestBody []byte) ([]byte, error) {
 	b := bytes.NewBuffer(requestBody)
 	req, err := http.NewRequest(method, environment.ApiUrl()+path, b)
 	if err != nil {
@@ -77,7 +79,7 @@ func (s *SnykCodeBackendService) doCall(method string, path string, requestBody 
 	req.Header.Set("Session-Token", environment.Token())
 	req.Header.Set("Content-Type", "application/json")
 
-	log.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
+	logger.WithField("requestBody", string(requestBody)).Trace(ctx, " SENT TO REMOTE")
 	response, err := s.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -85,20 +87,27 @@ func (s *SnykCodeBackendService) doCall(method string, path string, requestBody 
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			log.Err(err).Msg("Couldn't close response body in call to Snyk Code")
+			logger.WithError(err).Error(ctx, "Couldn't close response body in call to Snyk Code")
 		}
 	}(response.Body)
 	responseBody, err := ioutil.ReadAll(response.Body)
-	log.Trace().Str("responseBody", string(responseBody)).Msg("RECEIVED FROM REMOTE")
+	logger.
+		WithField("method", "doCall").
+		WithField("responseBody", string(responseBody)).
+		Trace(ctx, "RECEIVED FROM REMOTE")
 	if err != nil {
 		return nil, err
 	}
 	return responseBody, err
 }
 
-func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]File, removedFiles []sglsp.DocumentURI) (string, []sglsp.DocumentURI, error) {
-	log.Debug().Str("method", "ExtendBundle").Str("bundleHash", bundleHash).Msg("API: Extending bundle " + bundleHash + " for " + strconv.Itoa(len(files)) + " files")
-	defer log.Debug().Str("method", "ExtendBundle").Str("bundleHash", bundleHash).Msg("API: Extend done")
+func (s *SnykCodeBackendService) ExtendBundle(ctx context.Context, bundleHash string, files map[sglsp.DocumentURI]File, removedFiles []sglsp.DocumentURI) (string, []sglsp.DocumentURI, error) {
+	logger.
+		WithField("method", "ExtendBundle").
+		WithField("bundleHash", bundleHash).Debug(ctx, "API: Extending bundle with "+strconv.Itoa(len(files))+" files")
+	defer logger.
+		WithField("method", "ExtendBundle").
+		WithField("bundleHash", bundleHash).Debug(ctx, "API: Extend done")
 
 	requestBody, err := json.Marshal(extendBundleRequest{
 		Files:        files,
@@ -108,7 +117,7 @@ func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[sglsp
 		return "", nil, err
 	}
 
-	responseBody, err := s.doCall("PUT", "/bundle/"+bundleHash, requestBody)
+	responseBody, err := s.doCall(ctx, "PUT", "/bundle/"+bundleHash, requestBody)
 	if err != nil {
 		return "", nil, err
 	}
@@ -118,44 +127,78 @@ func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[sglsp
 }
 
 func (s *SnykCodeBackendService) RunAnalysis(
+	ctx context.Context,
 	bundleHash string,
 	shardKey string,
 	limitToFiles []sglsp.DocumentURI,
 	severity int,
 ) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, string, error) {
-	log.Debug().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Msg("API: Retrieving analysis for bundle")
-	defer log.Debug().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Msg("API: Retrieving analysis done")
-
+	logger.
+		WithField("method", "RunAnalysis").
+		WithField("bundleHash", bundleHash).Debug(ctx, "API: Retrieving analysis for bundle")
+	defer logger.
+		WithField("method", "RunAnalysis").
+		WithField("bundleHash", bundleHash).Debug(ctx, "API: Retrieving done")
 	requestBody, err := s.analysisRequestBody(bundleHash, shardKey, limitToFiles, severity)
 	if err != nil {
-		log.Err(err).Str("method", "RunAnalysis").Str("requestBody", string(requestBody)).Msg("error creating request body")
+		logger.
+			WithField("method", "RunAnalysis").
+			WithField("bundleHash", bundleHash).
+			WithError(err).
+			Error(ctx, "error creating request body")
 		return nil, nil, "", err
 	}
 
-	responseBody, err := s.doCall("POST", "/analysis", requestBody)
+	responseBody, err := s.doCall(ctx, "POST", "/analysis", requestBody)
 	failed := "FAILED"
 	if err != nil {
-		log.Err(err).Str("method", "RunAnalysis").Str("responseBody", string(responseBody)).Msg("error response from analysis")
+		logger.
+			WithField("method", "RunAnalysis").
+			WithField("bundleHash", bundleHash).
+			WithField("responseBody", string(responseBody)).
+			WithError(err).
+			Error(ctx, "Error response from analysis")
 		return nil, nil, failed, err
 	}
 
 	var response SarifResponse
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
-		log.Err(err).Str("method", "RunAnalysis").Str("responseBody", string(responseBody)).Msg("error unmarshalling")
+		logger.
+			WithField("method", "RunAnalysis").
+			WithField("bundleHash", bundleHash).
+			WithField("responseBody", string(responseBody)).
+			WithError(err).
+			Error(ctx, "Couldn't unmarshall")
 		return nil, nil, failed, err
 	}
 
-	log.Debug().Str("method", "RunAnalysis").
-		Str("bundleHash", bundleHash).Float32("progress", response.Progress).Msgf("Status: %s", response.Status)
+	logger.
+		WithField("method", "RunAnalysis").
+		WithField("bundleHash", bundleHash).
+		WithField("progress", response.Progress).
+		WithField("status", response.Status).
+		Debug(ctx, "Progress received")
 
 	if response.Status == failed {
-		log.Err(err).Str("method", "RunAnalysis").Str("responseStatus", response.Status).Msg("analysis failed")
+		logger.
+			WithField("method", "RunAnalysis").
+			WithField("bundleHash", bundleHash).
+			WithField("progress", response.Progress).
+			WithField("status", response.Status).
+			WithField("responseBody", string(responseBody)).
+			WithError(err).
+			Error(ctx, "Analysis failed")
 		return nil, nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
 
 	if response.Status == "" {
-		log.Err(err).Str("method", "RunAnalysis").Str("responseStatus", response.Status).Msg("unknown response status (empty)")
+		logger.
+			WithField("method", "RunAnalysis").
+			WithField("bundleHash", bundleHash).
+			WithField("progress", response.Progress).
+			WithField("responseBody", string(responseBody)).
+			Error(ctx, "unknown response status (empty)")
 		return nil, nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
 

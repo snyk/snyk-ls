@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config/environment"
@@ -30,7 +29,7 @@ func TestWorkspaceDidChangeConfiguration(t *testing.T) {
 	}}
 	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
 	if err != nil {
-		log.Fatal().Err(err).Msg("error calling server")
+		t.Fatal(err, "error calling server")
 	}
 
 	p := environment.CurrentEnabledProducts
@@ -53,7 +52,7 @@ func TestWorkspaceDidChangeConfiguration_IncompleteEnvVars(t *testing.T) {
 	}}
 	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
 	if err != nil {
-		log.Fatal().Err(err).Msg("error calling server")
+		t.Fatal(err, "error calling server")
 	}
 
 	assert.Empty(t, os.Getenv("a"))
@@ -67,7 +66,7 @@ func TestWorkspaceDidChangeConfiguration_EmptyEnvVars(t *testing.T) {
 	}}
 	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
 	if err != nil {
-		log.Fatal().Err(err).Msg("error calling server")
+		t.Fatal(err, "error calling server")
 	}
 
 	assert.Empty(t, os.Getenv("a"))
@@ -81,7 +80,7 @@ func TestWorkspaceDidChangeConfiguration_WeirdEnvVars(t *testing.T) {
 	}}
 	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
 	if err != nil {
-		log.Fatal().Err(err).Msg("error calling server")
+		t.Fatal(err, "error calling server")
 	}
 
 	assert.Empty(t, os.Getenv("a"))

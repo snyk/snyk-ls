@@ -1,9 +1,9 @@
 package oss
 
 import (
+	"context"
 	"strings"
 
-	"github.com/rs/zerolog/log"
 	"github.com/sourcegraph/go-lsp"
 )
 
@@ -13,8 +13,8 @@ type NpmRangeFinder struct {
 	myRange     lsp.Range
 }
 
-func (n *NpmRangeFinder) Find(issue ossIssue) lsp.Range {
-	searchPackage, _ := introducingPackageAndVersion(issue)
+func (n *NpmRangeFinder) Find(ctx context.Context, issue ossIssue) lsp.Range {
+	searchPackage, version := introducingPackageAndVersion(ctx, issue)
 	var lines = strings.Split(strings.ReplaceAll(string(n.fileContent), "\r\n", "\n"), "\n")
 
 	var start lsp.Position
@@ -22,7 +22,13 @@ func (n *NpmRangeFinder) Find(issue ossIssue) lsp.Range {
 
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
-		log.Trace().Interface("issueId", issue.Id).Str("line", line).Msg("scanning line for " + searchPackage)
+		logger.
+			WithField("method", "NpmRangeFinder.Find").
+			WithField("searchPackage", searchPackage).
+			WithField("searchVersion", version).
+			WithField("issueId", issue.Id).
+			WithField("line", line).
+			Trace(ctx, "searching...")
 		elems := strings.Split(line, ":")
 		if len(elems) > 1 {
 			jsonKey := strings.Trim(strings.Trim(elems[0], " "), "\"")
@@ -31,7 +37,12 @@ func (n *NpmRangeFinder) Find(issue ossIssue) lsp.Range {
 				start.Character = strings.Index(line, searchPackage) - 1
 				end.Line = i
 				end.Character = len(strings.ReplaceAll(line, ",", ""))
-				log.Trace().Str("issueId", issue.Id).Interface("start", start).Interface("end", end).Msg("found range for " + searchPackage)
+				logger.
+					WithField("method", "NpmRangeFinder.Find").
+					WithField("issueId", issue.Id).
+					WithField("start", start).
+					WithField("end", end).
+					Trace(ctx, "found range for "+searchPackage)
 				break
 			}
 		}
@@ -44,7 +55,7 @@ func (n *NpmRangeFinder) Find(issue ossIssue) lsp.Range {
 	return n.myRange
 }
 
-func introducingPackageAndVersion(issue ossIssue) (string, string) {
+func introducingPackageAndVersion(ctx context.Context, issue ossIssue) (string, string) {
 	var packageName string
 	var version string
 	if len(issue.From) > 1 {
@@ -62,6 +73,11 @@ func introducingPackageAndVersion(issue ossIssue) (string, string) {
 		packageName = issue.Name
 		version = issue.Version
 	}
-	log.Trace().Str("issueId", issue.Id).Str("IntroducingPackage", packageName).Str("IntroducingVersion", version).Msg("Introducing package and version")
+	logger.
+		WithField("method", "NpmRangeFinder.introducingPackageAndVersion").
+		WithField("IntroducingPackage", packageName).
+		WithField("IntroducingVersion", version).
+		WithField("issueId", issue.Id).
+		Trace(ctx, "Introducing package and version")
 	return packageName, version
 }

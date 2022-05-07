@@ -1,14 +1,15 @@
 package maven
 
 import (
+	"context"
 	"encoding/xml"
 	"io"
 	"strings"
 
-	"github.com/rs/zerolog/log"
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/ast"
+	"github.com/snyk/snyk-ls/config/environment"
 )
 
 type Parser struct {
@@ -22,7 +23,7 @@ type dependency struct {
 	Scope      string `xml:"scope"`
 }
 
-func (p *Parser) Parse(content string, uri lsp.DocumentURI) ast.Tree {
+func (p *Parser) Parse(ctx context.Context, content string, uri lsp.DocumentURI) ast.Tree {
 	tree := p.initTree(uri, content)
 	d := xml.NewDecoder(strings.NewReader(content))
 	var offset int64
@@ -33,7 +34,10 @@ func (p *Parser) Parse(content string, uri lsp.DocumentURI) ast.Tree {
 			// EOF means we're done.
 			break
 		} else if err != nil {
-			log.Err(err).Msg("Couldn't parse XML")
+			environment.Logger.
+				WithField("method", "Parse").
+				WithError(err).
+				Error(ctx, "couldn't parse code setting")
 		}
 
 		switch xmlType := token.(type) {
@@ -42,11 +46,18 @@ func (p *Parser) Parse(content string, uri lsp.DocumentURI) ast.Tree {
 			if xmlType.Name.Local == "dependency" {
 				var dep dependency
 				if err = d.DecodeElement(&dep, &xmlType); err != nil {
-					log.Err(err).Msg("Couldn't decode dependency")
+					environment.Logger.
+						WithField("method", "Parse").
+						WithField("uri", string(p.tree.Document)).
+						Error(ctx, "couldn't decode dependency")
 				}
 				offsetAfter := d.InputOffset()
 				node := p.addNewNodeTo(tree.Root, offset, offsetAfter, dep)
-				log.Debug().Interface("nodeName", node.Name).Str("uri", string(p.tree.Document)).Msg("Added dependency node")
+				environment.Logger.
+					WithField("method", "Parse").
+					WithField("nodeName", node.Name).
+					WithField("uri", string(p.tree.Document)).
+					Debug(ctx, "added dependency node")
 			}
 		default:
 		}

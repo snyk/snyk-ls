@@ -191,3 +191,8 @@ type SnykAnalysisFailedError struct {
 }
 
 func (e SnykAnalysisFailedError) Error() string { return e.Msg }
+
+type File struct {
+	Hash    string `json:"hash"`
+	Content string `json:"content"`
+}

@@ -1,12 +1,12 @@
 package code
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"os"
 	"sync"
 
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -52,13 +52,13 @@ var (
 func FakeDiagnosticUri() (documentURI sglsp.DocumentURI, path string) {
 	temp, err := os.MkdirTemp(os.TempDir(), "fakeDiagnosticTempDir")
 	if err != nil {
-		log.Fatal().Err(err).Msg("couldn't create tempdir")
+		logger.WithError(err).Error(context.Background(), "couldn't create temp dir")
 	}
 	filePath := temp + string(os.PathSeparator) + "Dummy.java"
 	classWithQualityIssue := "public class AnnotatorTest {\n  public static void delay(long millis) {\n    try {\n      Thread.sleep(millis);\n    } catch (InterruptedException e) {\n      e.printStackTrace();\n    }\n  }\n};"
 	err = os.WriteFile(filePath, []byte(classWithQualityIssue), 0600)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't create fake diagnostic file for Snyk Code Fake Service")
+		logger.WithError(err).Error(context.Background(), "couldn't create fake diagnostic file")
 	}
 	documentURI = uri.PathToUri(filePath)
 	fakeDiagnosticUri = documentURI
@@ -107,7 +107,7 @@ func (f *FakeSnykCodeApiService) GetAllCalls(op string) [][]interface{} {
 	return calls
 }
 
-func (f *FakeSnykCodeApiService) CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
+func (f *FakeSnykCodeApiService) CreateBundle(_ context.Context, files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
 	params := []interface{}{files}
 	f.addCall(params, CreateBundleWithSourceOperation)
 	BundleHash := util.Hash([]byte(fmt.Sprint(rand.Int())))
@@ -116,6 +116,7 @@ func (f *FakeSnykCodeApiService) CreateBundle(files map[sglsp.DocumentURI]File) 
 }
 
 func (f *FakeSnykCodeApiService) ExtendBundle(
+	_ context.Context,
 	bundleHash string,
 	files map[sglsp.DocumentURI]File,
 	removedFiles []sglsp.DocumentURI,
@@ -126,8 +127,9 @@ func (f *FakeSnykCodeApiService) ExtendBundle(
 }
 
 func (f *FakeSnykCodeApiService) RunAnalysis(
+	ctx context.Context,
 	bundleHash string,
-	shardKey string,
+	_ string,
 	limitToFiles []sglsp.DocumentURI,
 	severity int,
 ) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, string, error) {
@@ -143,6 +145,10 @@ func (f *FakeSnykCodeApiService) RunAnalysis(
 	diagnosticMap[fakeDiagnosticUri] = append(diagnostics, FakeDiagnostic)
 	hoverMap[fakeDiagnosticUri] = append(hovers, FakeHover)
 
-	log.Trace().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Interface("fakeDiagnostic", FakeDiagnostic).Msg("fake backend call received & answered")
+	logger.
+		WithField("method", "RunAnalysis").
+		WithField("bundleHash", bundleHash).
+		WithField("fakeDiagnostic", FakeDiagnostic).
+		Trace(ctx, "fake backend call received & answered")
 	return diagnosticMap, hoverMap, "COMPLETE", nil
 }

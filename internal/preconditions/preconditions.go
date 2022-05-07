@@ -5,7 +5,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config/environment"
@@ -14,6 +13,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/cli/install"
 	"github.com/snyk/snyk-ls/internal/notification"
 )
+
+var logger = environment.Logger
 
 func EnsureReadyForAnalysisAndWait() {
 	install.Mutex.Lock()
@@ -43,16 +44,22 @@ func EnsureReadyForAnalysisAndWait() {
 func installCli() {
 	i := install.NewInstaller()
 	cliPath, err := i.Find()
+	ctx := context.Background()
 	if err != nil {
-		log.Info().Str("method", "installCli").Msg("could not find Snyk CLI in user directories and PATH.")
+		logger.
+			WithField("method", "installCli").
+			Info(ctx, "could not find Snyk CLI in user directories and PATH")
 	}
 
 	if cliPath == "" {
 		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Snyk CLI needs to be installed."})
 
-		cliPath, err = i.Install(context.Background())
+		cliPath, err = i.Install(ctx)
 		if err != nil {
-			log.Err(err).Str("method", "installCli").Msg("could not download Snyk CLI binary")
+			logger.
+				WithField("method", "installCli").
+				WithError(err).
+				Error(ctx, "could not download Snyk CLI binary")
 			error_reporting.CaptureError(err)
 			cliPath, _ = i.Find()
 		}
@@ -61,9 +68,15 @@ func installCli() {
 	if cliPath != "" {
 		err := environment.SetCliPath(cliPath)
 		if err != nil {
-			log.Err(err).Str("method", "installCli").Msg("Couldn't update environment with Snyk cli path")
+			logger.
+				WithField("method", "installCli").
+				WithError(err).
+				Error(ctx, "Couldn't update environment with Snyk cli path")
 		}
-		log.Info().Str("method", "installCli").Str("snyk", cliPath).Msg("Snyk CLI found.")
+		logger.
+			WithField("method", "installCli").
+			WithField("snyk", cliPath).
+			Info(ctx, "Snyk CLI found")
 	} else {
 		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Warning, Message: "Could not find, nor install Snyk CLI"})
 	}
@@ -72,18 +85,22 @@ func installCli() {
 func updateCli() {
 	install.Mutex.Lock()
 	defer install.Mutex.Unlock()
+	ctx := context.Background()
 
 	i := install.NewInstaller()
-	updated, err := i.Update(context.Background())
+	updated, err := i.Update(ctx)
 	if err != nil {
-		log.Err(err).Str("method", "updateCli").Msg("Failed to update CLI")
+		logger.
+			WithField("method", "updateCli").
+			WithError(err).
+			Error(ctx, "Failed to update CLI")
 		error_reporting.CaptureError(err)
 	}
 
 	if updated {
-		log.Info().Str("method", "updateCli").Msg("CLI updated.")
+		logger.WithField("method", "updateCli").Info(ctx, "CLI updated")
 	} else {
-		log.Info().Str("method", "updateCli").Msg("CLI is latest.")
+		logger.WithField("method", "updateCli").Info(ctx, "CLI is already latest")
 	}
 }
 
@@ -92,7 +109,10 @@ func isOutdatedCli() bool {
 
 	fileInfo, err := os.Stat(cliPath) // todo: we can save stat calls by caching mod time
 	if err != nil {
-		log.Err(err).Str("method", "isOutdatedCli").Msg("Failed to stat CLI file.")
+		logger.
+			WithField("method", "isOutdatedCli").
+			WithError(err).
+			Error(context.Background(), "Failed to stat CLI file")
 		return false
 	}
 

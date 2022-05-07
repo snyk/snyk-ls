@@ -1,12 +1,12 @@
 package code
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config/environment"
@@ -89,16 +89,19 @@ func (e SnykAnalysisTimeoutError) Error() string {
 	return e.msg
 }
 
-func (b *BundleImpl) createBundleFromSource() error {
+func (b *BundleImpl) createBundleFromSource(ctx context.Context) error {
 	var err error
 	if len(b.BundleDocuments) > 0 {
-		b.BundleHash, b.missingFiles, err = b.SnykCode.CreateBundle(b.BundleDocuments)
-		log.Trace().Str("method", "createBundleFromSource").Str("bundleHash", b.BundleHash).Msg("created bundle on backend")
+		b.BundleHash, b.missingFiles, err = b.SnykCode.CreateBundle(ctx, b.BundleDocuments)
+		logger.
+			WithField("method", "createBundleFromSource").
+			WithField("bundleHash", b.BundleHash).
+			Trace(ctx, "created bundle on backend")
 	}
 	return err
 }
 
-func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]bool) FilesNotAdded {
+func (b *BundleImpl) AddToBundleDocuments(ctx context.Context, files map[sglsp.DocumentURI]bool) FilesNotAdded {
 	if b.BundleDocuments == nil {
 		b.BundleDocuments = make(map[sglsp.DocumentURI]File)
 	}
@@ -112,7 +115,12 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]bool) File
 		path := uri.PathFromUri(documentURI)
 		fileContent, err := os.ReadFile(path)
 		if err != nil {
-			log.Error().Err(err).Msg("could not load content of file " + path)
+			logger.
+				WithField("method", "AddToBundleDocuments").
+				WithField("bundleHash", b.BundleHash).
+				WithField("path", path).
+				WithError(err).
+				Trace(ctx, "could not load file")
 			continue
 		}
 
@@ -121,13 +129,21 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]bool) File
 		}
 
 		file := b.getFileFrom(fileContent)
-		if b.canAdd(string(documentURI), fileContent) {
-			log.Trace().Str("uri1", string(documentURI)).Str("bundle", b.BundleHash).Msg("added to bundle")
+		if b.canAdd(string(documentURI), fileContent) { // todo check if it should be path or document uri
+			logger.
+				WithField("method", "AddToBundleDocuments").
+				WithField("bundleHash", b.BundleHash).
+				WithField("uri1", string(documentURI)).
+				Trace(ctx, "added to bundle")
 			b.BundleDocuments[documentURI] = file
 			continue
 		}
 
-		log.Trace().Str("uri1", string(documentURI)).Str("bundle", b.BundleHash).Msg("not added to bundle")
+		logger.
+			WithField("method", "AddToBundleDocuments").
+			WithField("bundleHash", b.BundleHash).
+			WithField("uri1", string(documentURI)).
+			Trace(ctx, "not added to bundle")
 		nonAddedFiles[documentURI] = true
 	}
 
@@ -155,39 +171,52 @@ func (b *BundleImpl) canAdd(uri string, content []byte) bool {
 	return newSize < maxBundleSize
 }
 
-func (b *BundleImpl) extendBundleFromSource() error {
+func (b *BundleImpl) extendBundleFromSource(ctx context.Context) error {
 	var removeFiles []sglsp.DocumentURI
 	var err error
 	if len(b.BundleDocuments) > 0 {
-		b.BundleHash, b.missingFiles, err = b.SnykCode.ExtendBundle(b.BundleHash, b.BundleDocuments, removeFiles)
-		log.Trace().Str("method", "extendBundleFromSource").Str("bundleHash", b.BundleHash).Msg("extended bundle on backend")
+		b.BundleHash, b.missingFiles, err = b.SnykCode.ExtendBundle(ctx, b.BundleHash, b.BundleDocuments, removeFiles)
+		logger.
+			WithField("method", "extendBundleFromSource").
+			WithField("bundleHash", b.BundleHash).
+			Trace(ctx, "extended bundle on backend")
 	}
-
 	return err
 }
 
 func (b *BundleImpl) FetchDiagnosticsData(
+	ctx context.Context,
 	rootPath string,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
 	hoverChan chan lsp.Hover,
 ) {
 	defer wg.Done()
-	defer log.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
+	defer logger.
+		WithField("method", "FetchDiagnosticsData").
+		WithField("bundleHash", b.BundleHash).
+		Debug(ctx, "Done")
+	logger.
+		WithField("method", "FetchDiagnosticsData").
+		WithField("bundleHash", b.BundleHash).
+		Debug(ctx, "Started")
 
-	log.Debug().Str("method", "FetchDiagnosticsData").Msg("started.")
-
-	err := b.uploadDocuments()
+	err := b.uploadDocuments(ctx)
 	if err != nil {
-		log.Error().Err(err).Str("method", "FetchDiagnosticsData").Msg("error creating/extending bundle...")
+		logger.
+			WithField("method", "FetchDiagnosticsData").
+			WithField("bundleHash", b.BundleHash).
+			WithError(err).
+			Error(ctx, "Couldn't create/extend bundle")
 		dChan <- lsp.DiagnosticResult{Err: err}
 		return
 	}
 
-	b.retrieveAnalysis(rootPath, dChan, hoverChan)
+	b.retrieveAnalysis(ctx, rootPath, dChan, hoverChan)
 }
 
 func (b *BundleImpl) retrieveAnalysis(
+	ctx context.Context,
 	rootPath string,
 	dChan chan lsp.DiagnosticResult,
 	hoverChan chan lsp.Hover,
@@ -198,24 +227,29 @@ func (b *BundleImpl) retrieveAnalysis(
 
 	for {
 		start := time.Now()
-		diags, hovers, status, err := b.SnykCode.RunAnalysis(
+		diags, hovers, status, err := b.SnykCode.RunAnalysis(ctx,
 			b.BundleHash,
 			getShardKey(rootPath, environment.Token()),
 			[]sglsp.DocumentURI{},
 			0)
 
 		if err != nil {
-			log.Error().Err(err).
-				Str("method", "DiagnosticData").Msg("error retrieving diagnostics...")
+			logger.
+				WithField("method", "retrieveAnalysis").
+				WithField("bundleHash", b.BundleHash).
+				WithError(err).
+				Error(ctx, "Couldn't retrieve diagnostics")
 			dChan <- lsp.DiagnosticResult{Err: err}
 			return
 		}
 
 		if status == "COMPLETE" {
 			for u, d := range diags {
-				log.Trace().Str("method", "retrieveAnalysis").Str("bundleHash", b.BundleHash).
-					Str("uri1", string(u)).
-					Msg("sending diagnostics...")
+				logger.
+					WithField("method", "retrieveAnalysis").
+					WithField("bundleHash", b.BundleHash).
+					WithField("uri", string(u)).
+					Trace(ctx, "sending diagnostics")
 
 				dChan <- lsp.DiagnosticResult{
 					Uri:         u,
@@ -228,9 +262,13 @@ func (b *BundleImpl) retrieveAnalysis(
 			return
 		}
 
-		if time.Since(start) > environment.SnykCodeAnalysisTimeout() {
+		if time.Since(start) > environment.SnykCodeAnalysisTimeout(ctx) {
 			err = SnykAnalysisTimeoutError{msg: "Analysis Call Timed out."}
-			log.Error().Err(err).Str("method", "DiagnosticData").Msg("timeout...")
+			logger.
+				WithField("method", "retrieveAnalysis").
+				WithField("bundleHash", b.BundleHash).
+				WithError(err).
+				Error(ctx, "Analysis timed out")
 			dChan <- lsp.DiagnosticResult{Err: err}
 		}
 		time.Sleep(1 * time.Second)
@@ -238,20 +276,20 @@ func (b *BundleImpl) retrieveAnalysis(
 }
 
 func sendHoversViaChan(hovers map[sglsp.DocumentURI][]lsp.HoverDetails, hoverChan chan lsp.Hover) {
-	for uri, hover := range hovers {
+	for documentURI, hover := range hovers {
 		hoverChan <- lsp.Hover{
-			Uri:   uri,
+			Uri:   documentURI,
 			Hover: hover,
 		}
 	}
 }
 
-func (b *BundleImpl) uploadDocuments() error {
+func (b *BundleImpl) uploadDocuments(ctx context.Context) error {
 	if b.BundleHash == "" {
-		return b.createBundleFromSource()
+		return b.createBundleFromSource(ctx)
 	}
 
-	return b.extendBundleFromSource()
+	return b.extendBundleFromSource(ctx)
 }
 
 func (b *BundleImpl) getSize() int {

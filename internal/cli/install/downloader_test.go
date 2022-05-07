@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -16,8 +17,8 @@ func TestDownloader_Download(t *testing.T) {
 	defer Mutex.Unlock()
 	r := getTestAsset()
 	d := &Downloader{}
-
-	lockFileName, err := d.lockFileName()
+	ctx := context.Background()
+	lockFileName, err := d.lockFileName(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +28,7 @@ func TestDownloader_Download(t *testing.T) {
 	progressCh := make(chan lsp.ProgressParams, 100000)
 	cancelProgressCh := make(chan lsp.ProgressToken, 1)
 
-	err = d.Download(r, false, progressCh, cancelProgressCh)
+	err = d.Download(ctx, r, false, progressCh, cancelProgressCh)
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, progressCh)
@@ -46,8 +47,9 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	defer Mutex.Unlock()
 	r := getTestAsset()
 	d := &Downloader{}
+	ctx := context.Background()
 
-	lockFileName, err := d.lockFileName()
+	lockFileName, err := d.lockFileName(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +65,7 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 		cancelProgressCh <- prog.Token
 	}()
 
-	err = d.Download(r, false, progressCh, cancelProgressCh)
+	err = d.Download(ctx, r, false, progressCh, cancelProgressCh)
 
 	assert.Error(t, err)
 

@@ -11,13 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 
 var Mutex = &sync.Mutex{}
+var logger = environment.Logger
 
 type Installer interface {
 	Find() (string, error)
@@ -55,15 +54,15 @@ func (i *Install) Install(ctx context.Context) (string, error) {
 
 func (i *Install) installRelease(release *Release, ctx context.Context) (string, error) {
 	d := &Downloader{}
-	lockFileName, err := createLockFile(d)
+	lockFileName, err := createLockFile(ctx, d)
 	if err != nil {
 		return "", err
 	}
 	defer func(name string) {
-		cleanupLockFile(name)
+		cleanupLockFile(ctx, name)
 	}(lockFileName)
 
-	err = d.Download(release, false, progress.ProgressChannel, progress.CancelProgressChannel)
+	err = d.Download(ctx, release, false, progress.Channel, progress.CancelProgressChannel)
 	if err != nil {
 		return "", err
 	}
@@ -83,12 +82,12 @@ func (i *Install) Update(ctx context.Context) (bool, error) {
 
 func (i *Install) updateFromRelease(r *Release, ctx context.Context) (bool, error) {
 	d := &Downloader{}
-	lockFileName, err := createLockFile(d)
+	lockFileName, err := createLockFile(ctx, d)
 	if err != nil {
 		return false, err
 	}
 	defer func(name string) {
-		cleanupLockFile(name)
+		cleanupLockFile(ctx, name)
 	}(lockFileName)
 
 	cliDiscovery := Discovery{}
@@ -97,20 +96,20 @@ func (i *Install) updateFromRelease(r *Release, ctx context.Context) (bool, erro
 		return false, err
 	}
 
-	err = compareChecksum(latestChecksum, environment.CliPath())
+	err = compareChecksum(ctx, latestChecksum, environment.CliPath())
 	if err == nil {
 		// checksum match, no new version available
 		return false, nil
 	}
 
 	// Carry out the download of the latest release
-	err = d.Download(r, true, progress.ProgressChannel, progress.CancelProgressChannel)
+	err = d.Download(ctx, r, true, progress.Channel, progress.CancelProgressChannel)
 	if err != nil {
 		// download failed
 		return false, err
 	}
 
-	err = replaceOutdatedCli(d, cliDiscovery)
+	err = replaceOutdatedCli(ctx, d, cliDiscovery)
 	if err != nil {
 		return false, err
 	}
@@ -118,10 +117,11 @@ func (i *Install) updateFromRelease(r *Release, ctx context.Context) (bool, erro
 	return true, nil
 }
 
-func replaceOutdatedCli(d *Downloader, cliDiscovery Discovery) error {
-	log.Info().Str("method", "replaceOutdatedCli").Msg("replacing outdated CLI with latest")
-
-	lsPath, err := d.lsPath()
+func replaceOutdatedCli(ctx context.Context, d *Downloader, cliDiscovery Discovery) error {
+	logger.
+		WithField("method", "replaceOutdatedCli").
+		Info(ctx, "replacing outdated CLI with latest")
+	lsPath, err := d.lsPath(ctx)
 	if err != nil {
 		return err
 	}
@@ -137,19 +137,28 @@ func replaceOutdatedCli(d *Downloader, cliDiscovery Discovery) error {
 		if _, err := os.Stat(tildeExecutableName); err == nil {
 			err = os.Remove(tildeExecutableName)
 			if err != nil {
-				log.Warn().Err(err).Str("method", "replaceOutdatedCli").Msg("couldn't remove old CLI on Windows")
+				logger.
+					WithField("method", "replaceOutdatedCli").
+					WithError(err).
+					Warn(ctx, "couldn't remove old CLI on Windows")
 			}
 		}
 
 		// Windows allows to rename a running executable even with opened file handle. Another executable can take name of the old executable.
 		err = os.Rename(outdatedCliFile, tildeExecutableName)
 		if err != nil {
-			log.Warn().Err(err).Str("method", "replaceOutdatedCli").Msg("couldn't rename current CLI on Windows")
+			logger.
+				WithField("method", "replaceOutdatedCli").
+				WithError(err).
+				Warn(ctx, "couldn't rename current CLI on Windows")
 			return err
 		}
 		err = os.Rename(latestCliFile, outdatedCliFile)
 		if err != nil {
-			log.Warn().Err(err).Str("method", "replaceOutdatedCli").Msg("couldn't move latest CLI on Windows")
+			logger.
+				WithField("method", "replaceOutdatedCli").
+				WithError(err).
+				Warn(ctx, "couldn't move latest CLI on Windows")
 			return err
 		}
 
@@ -162,7 +171,10 @@ func replaceOutdatedCli(d *Downloader, cliDiscovery Discovery) error {
 	// Unix systems keep executable in memory, fine to move.
 	err = os.Rename(latestCliFile, outdatedCliFile)
 	if err != nil {
-		log.Warn().Err(err).Str("method", "replaceOutdatedCli").Msg("couldn't move latest CLI to replace current CLI")
+		logger.
+			WithField("method", "replaceOutdatedCli").
+			WithError(err).
+			Warn(ctx, "couldn't move latest CLI to replace current CLI")
 		return err
 	}
 	return nil
@@ -185,27 +197,35 @@ func expectedChecksum(r *Release, cliDiscovery *Discovery) (HashSum, error) {
 	return h, nil
 }
 
-func createLockFile(d *Downloader) (lockfileName string, err error) {
-	lockFileName, err := d.lockFileName()
+func createLockFile(ctx context.Context, d *Downloader) (lockfileName string, err error) {
+	lockFileName, err := d.lockFileName(ctx)
 	if err != nil {
 		return "", err
 	}
 	fileInfo, err := os.Stat(lockFileName)
 	if err == nil && (time.Since(fileInfo.ModTime()) < 1*time.Hour) {
 		msg := fmt.Sprintf("installer lockfile from %v found", fileInfo.ModTime())
-		log.Error().Str("method", "Download").Str("lockfile", lockFileName).Msg(msg)
+		logger.
+			WithField("method", "createLockFile").
+			WithField("lockfile", lockfileName).
+			WithError(err).
+			Error(ctx, msg)
 		return "", errors.New(msg)
 	}
-	err = d.createLockFile()
+	err = d.createLockFile(ctx)
 	if err != nil {
 		return "", err
 	}
 	return lockFileName, nil
 }
 
-func cleanupLockFile(lockFileName string) {
+func cleanupLockFile(ctx context.Context, lockFileName string) {
 	err := os.Remove(lockFileName)
 	if err != nil {
-		log.Error().Str("method", "Download").Str("lockfile", lockFileName).Msg("couldn't clean up lockfile")
+		logger.
+			WithField("method", "cleanupLockFile").
+			WithField("lockfile", lockFileName).
+			WithError(err).
+			Error(ctx, "couldn't clean up lockfile")
 	}
 }

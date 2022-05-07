@@ -1,10 +1,10 @@
 package diagnostics
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/code"
@@ -27,6 +27,7 @@ var (
 	documentDiagnosticCache concurrency.AtomicMap
 	snykCode                concurrency.AtomicMap
 	Cli                     cli.Executor
+	logger                  = environment.Logger
 )
 
 func init() {
@@ -56,19 +57,26 @@ func ClearDiagnosticsCache(documentURI sglsp.DocumentURI) {
 	documentDiagnosticCache.Delete(documentURI)
 }
 
-func ClearWorkspaceFolderDiagnostics(folder lsp.WorkspaceFolder) {
+func ClearWorkspaceFolderDiagnostics(ctx context.Context, folder lsp.WorkspaceFolder) {
 	f := func(u interface{}, value interface{}) bool {
 		path := uri.PathFromUri(u.(sglsp.DocumentURI))
 		folderPath := uri.PathFromUri(folder.Uri)
 		if uri.FolderContains(folderPath, path) {
 			documentDiagnosticCache.Delete(u)
-			log.Debug().Str("method", "ClearWorkspaceFolderDiagnostics").Str("path", path).Str("workspaceFolder", folderPath).Msg("Cleared diagnostics.")
+			logger.
+				WithField("method", "ClearWorkspaceFolderDiagnostics").
+				WithField("path", path).
+				WithField("workspaceFolder", folderPath).
+				Debug(ctx, "Cleared diagnostics")
 		}
 		return true
 	}
 	documentDiagnosticCache.Range(f)
 	removeFolderFromScanned(folder)
-	log.Debug().Str("method", "ClearWorkspaceFolderDiagnostics").Str("workspaceFolder", string(folder.Uri)).Msg("Removed")
+	logger.
+		WithField("method", "ClearWorkspaceFolderDiagnostics").
+		WithField("workspaceFolder", folder.Uri).
+		Debug(ctx, "Removed")
 }
 
 func ClearEntireDiagnosticsCache() {
@@ -101,35 +109,45 @@ func DocumentDiagnosticsFromCache(file sglsp.DocumentURI) []lsp.Diagnostic {
 	return diagnostics.([]lsp.Diagnostic)
 }
 
-func GetDiagnostics(documentURI sglsp.DocumentURI) []lsp.Diagnostic {
+func GetDiagnostics(ctx context.Context, documentURI sglsp.DocumentURI) []lsp.Diagnostic {
 	// serve from cache
 	diagnosticSlice := DocumentDiagnosticsFromCache(documentURI)
 	if len(diagnosticSlice) > 0 {
-		log.Info().Str("method", "GetDiagnostics").Msgf("Cached: Diagnostics for %s", documentURI)
+		logger.
+			WithField("method", "GetDiagnostics").
+			WithField("documentURI", documentURI).
+			Debug(ctx, "Cached diagnostics found")
 		return diagnosticSlice
 	}
 
-	diagnostics := fetchAllRegisteredDocumentDiagnostics(documentURI, lsp.ScanLevelFile)
+	diagnostics := fetchAllRegisteredDocumentDiagnostics(context.Background(), documentURI, lsp.ScanLevelFile)
 	addToCache(diagnostics)
 	cache := DocumentDiagnosticsFromCache(documentURI)
 	return cache
 }
 
-func fetchAllRegisteredDocumentDiagnostics(documentURI sglsp.DocumentURI, level lsp.ScanLevel) map[sglsp.DocumentURI][]lsp.Diagnostic {
-	log.Info().
-		Str("method", "fetchAllRegisteredDocumentDiagnostics").
-		Msg("started.")
+func fetchAllRegisteredDocumentDiagnostics(
+	ctx context.Context,
+	documentURI sglsp.DocumentURI,
+	level lsp.ScanLevel,
+) map[sglsp.DocumentURI][]lsp.Diagnostic {
 
-	defer log.Info().
-		Str("method", "fetchAllRegisteredDocumentDiagnostics").
-		Msg("done.")
+	logger.
+		WithField("method", "fetchAllRegisteredDocumentDiagnostics").
+		WithField("documentURI", documentURI).
+		Info(ctx, "started")
+
+	defer logger.
+		WithField("method", "fetchAllRegisteredDocumentDiagnostics").
+		WithField("documentURI", documentURI).
+		Info(ctx, "done")
 
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	var bundles = make([]*code.BundleImpl, 0, 10)
 
 	p := progress.New(fmt.Sprintf("Scanning for issues in %s", uri.PathFromUri(documentURI)), "", false)
-	progress.BeginProgress(p, progress.ProgressChannel)
-	defer progress.EndProgress(p.Token, fmt.Sprintf("Scan complete. Found %d issues.", len(diagnostics)), progress.ProgressChannel)
+	progress.BeginProgress(p, progress.Channel)
+	defer progress.EndProgress(p.Token, fmt.Sprintf("Scan complete. Found %d issues.", len(diagnostics)), progress.Channel)
 
 	wg := sync.WaitGroup{}
 
@@ -138,21 +156,24 @@ func fetchAllRegisteredDocumentDiagnostics(documentURI sglsp.DocumentURI, level 
 
 	if level == lsp.ScanLevelWorkspace {
 		dChan = make(chan lsp.DiagnosticResult, 10000)
-		workspaceLevelFetch(documentURI, environment.CurrentEnabledProducts, bundles, &wg, dChan, hoverChan)
+		workspaceLevelFetch(ctx, documentURI, environment.CurrentEnabledProducts, bundles, &wg, dChan, hoverChan)
 	} else {
 		dChan = make(chan lsp.DiagnosticResult, 10000)
-		fileLevelFetch(documentURI, environment.CurrentEnabledProducts, bundles, &wg, dChan, hoverChan)
+		fileLevelFetch(ctx, documentURI, environment.CurrentEnabledProducts, bundles, &wg, dChan, hoverChan)
 	}
-	progress.ReportProgress(p.Token, 50, progress.ProgressChannel)
+	progress.ReportProgress(p.Token, 50, progress.Channel)
 	wg.Wait()
-	log.Debug().
-		Str("method", "fetchAllRegisteredDocumentDiagnostics").
-		Msg("finished waiting for goroutines.")
 
-	return processResults(dChan, diagnostics)
+	logger.
+		WithField("method", "fetchAllRegisteredDocumentDiagnostics").
+		WithField("documentURI", documentURI).
+		Debug(ctx, "finished waiting for goroutines")
+
+	return processResults(ctx, dChan, diagnostics)
 }
 
 func workspaceLevelFetch(
+	ctx context.Context,
 	documentURI sglsp.DocumentURI,
 	enabledProducts environment.EnabledProducts,
 	bundles []*code.BundleImpl,
@@ -162,19 +183,19 @@ func workspaceLevelFetch(
 ) {
 	if enabledProducts.Iac.Get() {
 		wg.Add(1)
-		go iac.ScanWorkspace(Cli, documentURI, wg, dChan, hoverChan)
+		go iac.ScanWorkspace(ctx, Cli, documentURI, wg, dChan, hoverChan)
 	}
 	if enabledProducts.OpenSource.Get() {
 		wg.Add(1)
-		go oss.ScanWorkspace(Cli, documentURI, wg, dChan, hoverChan)
+		go oss.ScanWorkspace(ctx, Cli, documentURI, wg, dChan, hoverChan)
 	}
 	if enabledProducts.Code.Get() {
 		var bundleDocs = ToDocumentURIMap(&registeredDocuments)
 		// we need a pointer to the array of bundle pointers to be able to grow it
-		createOrExtendBundles(bundleDocs, &bundles)
+		createOrExtendBundles(ctx, bundleDocs, &bundles)
 		for _, myBundle := range bundles {
 			wg.Add(1)
-			go myBundle.FetchDiagnosticsData(string(documentURI), wg, dChan, hoverChan)
+			go myBundle.FetchDiagnosticsData(ctx, string(documentURI), wg, dChan, hoverChan)
 		}
 	}
 }
@@ -191,6 +212,7 @@ func ToDocumentURIMap(input *concurrency.AtomicMap) map[sglsp.DocumentURI]bool {
 }
 
 func fileLevelFetch(
+	ctx context.Context,
 	documentURI sglsp.DocumentURI,
 	enabledProducts environment.EnabledProducts,
 	bundles []*code.BundleImpl,
@@ -202,34 +224,39 @@ func fileLevelFetch(
 		var bundleDocs = map[sglsp.DocumentURI]bool{}
 		bundleDocs[documentURI] = true
 		RegisterDocument(sglsp.TextDocumentItem{URI: documentURI})
-		createOrExtendBundles(bundleDocs, &bundles)
+		createOrExtendBundles(ctx, bundleDocs, &bundles)
 		wg.Add(1)
-		go bundles[0].FetchDiagnosticsData(string(documentURI), wg, dChan, hoverChan)
+		go bundles[0].FetchDiagnosticsData(ctx, string(documentURI), wg, dChan, hoverChan)
 	}
 	if enabledProducts.Iac.Get() {
 		wg.Add(1)
-		go iac.ScanFile(Cli, documentURI, wg, dChan, hoverChan)
+		go iac.ScanFile(ctx, Cli, documentURI, wg, dChan, hoverChan)
 	}
 	if enabledProducts.OpenSource.Get() {
 		wg.Add(1)
-		go oss.ScanFile(Cli, documentURI, wg, dChan, hoverChan)
+		go oss.ScanFile(ctx, Cli, documentURI, wg, dChan, hoverChan)
 	}
 }
 
 func processResults(
+	ctx context.Context,
 	dChan chan lsp.DiagnosticResult,
 	diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic,
 ) map[sglsp.DocumentURI][]lsp.Diagnostic {
 	for {
 		select {
 		case result := <-dChan:
-			log.Trace().
-				Str("method", "fetchAllRegisteredDocumentDiagnostics").
-				Str("uri", string(result.Uri)).
-				Msg("reading diag from chan.")
+			logger.
+				WithField("method", "processResults").
+				WithField("documentURI", string(result.Uri)).
+				Trace(ctx, "reading diag from chan.")
 
 			if result.Err != nil {
-				log.Err(result.Err).Str("method", "fetchAllRegisteredDocumentDiagnostics")
+				logger.
+					WithField("method", "processResults").
+					WithField("documentURI", string(result.Uri)).
+					WithError(result.Err).
+					Error(ctx, "started")
 				error_reporting.CaptureError(result.Err)
 				break
 			}
@@ -237,19 +264,20 @@ func processResults(
 			documentDiagnosticCache.Put(result.Uri, diagnostics)
 
 		default: // return results once channels are empty
-			log.Debug().
-				Str("method", "fetchAllRegisteredDocumentDiagnostics").
-				Msg("done reading diags.")
+			logger.
+				WithField("method", "processResults").
+				Debug(ctx, "done reading diagnostics")
 
 			return diagnostics
 		}
 	}
 }
 
-func createOrExtendBundles(documents map[sglsp.DocumentURI]bool, bundles *[]*code.BundleImpl) {
+func createOrExtendBundles(ctx context.Context, documents map[sglsp.DocumentURI]bool, bundles *[]*code.BundleImpl) {
 	// we need a pointer to the array of bundle pointers to be able to grow it
-	log.Debug().Str("method", "createOrExtendBundles").Msg("started")
-	defer log.Debug().Str("method", "createOrExtendBundles").Msg("done")
+	logger.WithField("method", "createOrExtendBundles").Info(ctx, "started")
+	defer logger.WithField("method", "createOrExtendBundles").Info(ctx, "done")
+
 	var bundle *code.BundleImpl
 	toAdd := documents
 	bundleIndex := len(*bundles) - 1
@@ -257,14 +285,21 @@ func createOrExtendBundles(documents map[sglsp.DocumentURI]bool, bundles *[]*cod
 	for len(toAdd) > 0 {
 		if bundleIndex == -1 || bundleFull {
 			bundle = createBundle(bundles)
-			log.Debug().Int("bundleCount", len(*bundles)).Msg("created new bundle")
+			logger.WithField("method", "createOrExtendBundles").
+				WithField("bundleCount", len(*bundles)).
+				Debug(ctx, "created new bundle")
 		} else {
 			bundle = (*bundles)[bundleIndex]
-			log.Debug().Int("bundleCount", len(*bundles)).Msg("re-using bundle ")
+			logger.WithField("method", "createOrExtendBundles").
+				WithField("bundleCount", len(*bundles)).
+				Debug(ctx, "extending bundle")
 		}
-		toAdd = bundle.AddToBundleDocuments(toAdd).Files
+		toAdd = bundle.AddToBundleDocuments(ctx, toAdd).Files
 		if len(toAdd) > 0 {
-			log.Debug().Int("bundleCount", len(*bundles)).Msgf("File count: %d", len(bundle.BundleDocuments))
+			logger.WithField("method", "createOrExtendBundles").
+				WithField("bundleCount", len(*bundles)).
+				WithField("fileCount", len(bundle.BundleDocuments)).
+				Debug(ctx, "filled up bundle")
 			bundleFull = true
 		}
 	}

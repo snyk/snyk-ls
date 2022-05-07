@@ -7,10 +7,10 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/code"
+	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/diagnostics"
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/hover"
@@ -22,6 +22,7 @@ import (
 
 var (
 	clientParams lsp.InitializeParams
+	logger       = environment.Logger
 )
 
 func Start() {
@@ -49,22 +50,23 @@ func Start() {
 		AllowPush: true,
 	})
 
-	log.Info().Msg("Starting up...")
+	ctx := context.Background()
+	logger.WithField("method", "Start").Info(ctx, "Starting up...")
 	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
 
 	_ = srv.Wait()
-	log.Info().Msg("Exiting...")
+	logger.WithField("method", "Start").Info(ctx, "Exiting...")
 }
 
 func WorkspaceDidChangeWorkspaceFoldersHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) (interface{}, error) {
-		log.Info().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Msg("RECEIVING")
-		log.Info().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Msg("SENDING")
+		logger.WithField("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Info(ctx, "RECEIVING")
+		defer logger.WithField("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Info(ctx, "SENDING")
 
 		for _, folder := range params.Event.Removed {
-			diagnostics.ClearWorkspaceFolderDiagnostics(folder)
+			diagnostics.ClearWorkspaceFolderDiagnostics(context.Background(), folder)
 		}
-		diagnostics.WorkspaceScan(params.Event.Added)
+		diagnostics.WorkspaceScan(context.Background(), params.Event.Added)
 
 		return nil, nil
 	})
@@ -72,18 +74,20 @@ func WorkspaceDidChangeWorkspaceFoldersHandler() jrpc2.Handler {
 
 func InitializeHandler(srv **jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
-		log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
+		logger.WithField("method", "InitializeHandler").WithField("params", params).Info(ctx, "RECEIVING")
+		defer logger.WithField("method", "InitializeHandler").Info(ctx, "SENDING")
+
 		clientParams = params
 
 		// async processing listener
 		go hover.CreateHoverListener()
-		go createProgressListener(progress.ProgressChannel, *srv)
+		go createProgressListener(progress.Channel, *srv)
 		go registerNotifier(*srv)
 
 		if len(clientParams.WorkspaceFolders) > 0 {
-			go diagnostics.WorkspaceScan(clientParams.WorkspaceFolders)
+			go diagnostics.WorkspaceScan(context.Background(), clientParams.WorkspaceFolders)
 		} else {
-			go diagnostics.GetDiagnostics(clientParams.RootURI)
+			go diagnostics.GetDiagnostics(context.Background(), clientParams.RootURI)
 		}
 
 		return lsp.InitializeResult{
@@ -108,8 +112,9 @@ func InitializeHandler(srv **jrpc2.Server) handler.Func {
 
 func Shutdown() jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (interface{}, error) {
-		log.Info().Str("method", "Shutdown").Msg("RECEIVING")
-		log.Info().Str("method", "Shutdown").Msg("SENDING")
+		logger.WithField("method", "Shutdown").Info(ctx, "RECEIVING")
+		defer logger.WithField("method", "Shutdown").Info(ctx, "SENDING")
+
 		error_reporting.FlushErrorReporting()
 
 		disposeProgressListener()
@@ -120,8 +125,9 @@ func Shutdown() jrpc2.Handler {
 
 func Exit(srv **jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (interface{}, error) {
-		log.Info().Str("method", "Exit").Msg("RECEIVING")
-		log.Info().Msg("Stopping server...")
+		logger.WithField("method", "Exit").Info(ctx, "RECEIVING")
+		defer logger.WithField("method", "Exit").Info(ctx, "Stopping server...")
+
 		(*srv).Stop()
 		error_reporting.FlushErrorReporting()
 		return nil, nil
@@ -130,34 +136,39 @@ func Exit(srv **jrpc2.Server) jrpc2.Handler {
 
 func TextDocumentDidChangeHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (interface{}, error) {
-		log.Info().Str("method", "TextDocumentDidChangeHandler").Interface("params", params).Msg("RECEIVING")
+		logger.WithField("method", "TextDocumentDidChangeHandler").Info(ctx, "RECEIVING")
 		return nil, nil
 	})
 }
 
 func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv **jrpc2.Server) {
-	diags := diagnostics.GetDiagnostics(uri)
+	diags := diagnostics.GetDiagnostics(ctx, uri)
 	if diags != nil {
 		diagnosticsParams := lsp.PublishDiagnosticsParams{
 			URI:         uri,
 			Diagnostics: diags,
 		}
-		log.Info().Str("method", "PublishDiagnostics").Str("uri", string(diagnosticsParams.URI)).Msg("SENDING")
+		logger.WithField("method", "PublishDiagnostics").
+			WithField("uri", diagnosticsParams.URI).
+			Info(ctx, "SENDING")
 		err := (*srv).Notify(ctx, "textDocument/publishDiagnostics", diagnosticsParams)
-		logError(err, "PublishDiagnostics")
+		logError(ctx, err, "PublishDiagnostics")
 	}
 }
 
-func logError(err error, method string) {
+func logError(ctx context.Context, err error, method string) {
 	if err != nil {
-		log.Err(err).Str("method", method)
+		logger.WithField("method", method).WithError(err).Error(ctx, "error")
 		error_reporting.CaptureError(err)
 	}
 }
 
 func TextDocumentDidOpenHandler(srv **jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidOpenTextDocumentParams) (interface{}, error) {
-		log.Info().Str("method", "TextDocumentDidOpenHandler").Str("documentURI", string(params.TextDocument.URI)).Msg("RECEIVING")
+		logger.
+			WithField("method", "TextDocumentDidOpenHandler").
+			WithField("documentURI", string(params.TextDocument.URI)).
+			Info(ctx, "RECEIVING")
 
 		go func() {
 			preconditions.EnsureReadyForAnalysisAndWait()
@@ -171,7 +182,10 @@ func TextDocumentDidOpenHandler(srv **jrpc2.Server) handler.Func {
 
 func TextDocumentDidSaveHandler(srv **jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidSaveTextDocumentParams) (interface{}, error) {
-		log.Info().Str("method", "TextDocumentDidSaveHandler").Interface("params", params).Msg("RECEIVING")
+		logger.
+			WithField("method", "TextDocumentDidSaveHandler").
+			WithField("params", params).
+			Info(ctx, "RECEIVING")
 		// clear cache when saving and get fresh diagnostics
 		diagnostics.ClearDiagnosticsCache(params.TextDocument.URI)
 		hover.DeleteHover(params.TextDocument.URI)
@@ -182,21 +196,30 @@ func TextDocumentDidSaveHandler(srv **jrpc2.Server) handler.Func {
 
 func TextDocumentWillSaveHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.WillSaveTextDocumentParams) (interface{}, error) {
-		log.Info().Str("method", "TextDocumentWillSaveHandler").Interface("params", params).Msg("RECEIVING")
+		logger.
+			WithField("method", "TextDocumentWillSaveHandler").
+			WithField("params", params).
+			Info(ctx, "RECEIVING")
 		return nil, nil
 	})
 }
 
 func TextDocumentWillSaveWaitUntilHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.WillSaveTextDocumentParams) (interface{}, error) {
-		log.Info().Str("method", "TextDocumentWillSaveWaitUntilHandler").Interface("params", params).Msg("RECEIVING")
+		logger.
+			WithField("method", "TextDocumentWillSaveWaitUntilHandler").
+			WithField("params", params).
+			Info(ctx, "RECEIVING")
 		return nil, nil
 	})
 }
 
 func TextDocumentDidCloseHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidCloseTextDocumentParams) (interface{}, error) {
-		log.Info().Str("method", "TextDocumentDidCloseHandler").Interface("params", params).Msg("RECEIVING")
+		logger.
+			WithField("method", "TextDocumentDidCloseHandler").
+			WithField("params", params).
+			Info(ctx, "RECEIVING")
 		diagnostics.UnRegisterDocument(params.TextDocument.URI)
 		return nil, nil
 	})
@@ -204,7 +227,10 @@ func TextDocumentDidCloseHandler() handler.Func {
 
 func TextDocumentHover() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.HoverParams) (lsp.HoverResult, error) {
-		log.Info().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
+		logger.
+			WithField("method", "TextDocumentHover").
+			WithField("params", params).
+			Info(ctx, "RECEIVING")
 
 		hoverResult := hover.GetHover(params.TextDocument.URI, params.Position)
 		return hoverResult, nil
@@ -213,7 +239,10 @@ func TextDocumentHover() jrpc2.Handler {
 
 func WindowWorkDoneProgressCancelHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.WorkdoneProgressCancelParams) (interface{}, error) {
-		log.Info().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
+		logger.
+			WithField("method", "WindowWorkDoneProgressCancelHandler").
+			WithField("params", params).
+			Info(ctx, "RECEIVING")
 		CancelProgress(params.Token)
 		return nil, nil
 	})
@@ -224,25 +253,26 @@ func registerNotifier(srv *jrpc2.Server) {
 		switch params := params.(type) {
 		case lsp.AuthenticationParams:
 			notifier(srv, "$/hasAuthenticated", params)
-			log.Info().Str("method", "notifyCallback").
-				Msg("sending token")
+			logger.
+				WithField("method", "notifyCallback").
+				Info(context.Background(), "sending token")
 		case sglsp.ShowMessageParams:
 			notifier(srv, "window/showMessage", params)
-			log.Info().
-				Str("method", "notifyCallback").
-				Interface("message", params).
-				Msg("showing message")
+			logger.
+				WithField("method", "notifyCallback").
+				WithField("params", params).
+				Info(context.Background(), "showing message")
 		case lsp.PublishDiagnosticsParams:
 			notifier(srv, "textDocument/publishDiagnostics", params)
-			log.Info().
-				Str("method", "notifyCallback").
-				Interface("documentURI", params.URI).
-				Msg("publishing diagnostics")
+			logger.
+				WithField("method", "notifyCallback").
+				WithField("documentURI", params.URI).
+				Info(context.Background(), "publishing diagnostics")
 		default:
-			log.Warn().
-				Str("method", "notifyCallback").
-				Interface("params", params).
-				Msg("received unconfigured notification object")
+			logger.
+				WithField("method", "notifyCallback").
+				WithField("params", params).
+				Warn(context.Background(), "received unconfigured notification type")
 		}
 	}
 	notification.CreateListener(callbackFunction)

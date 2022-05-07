@@ -1,6 +1,7 @@
 package code
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -49,7 +50,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
-	bundleHash, missingFiles, _ := s.CreateBundle(files)
+	bundleHash, missingFiles, _ := s.CreateBundle(context.Background(), files)
 	assert.NotNil(t, bundleHash)
 	assert.NotEqual(t, "", bundleHash)
 	assert.Equal(t, 0, len(missingFiles))
@@ -68,13 +69,13 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
-	bundleHash, _, _ := s.CreateBundle(files)
+	bundleHash, _, _ := s.CreateBundle(context.Background(), files)
 	filesExtend := map[sglsp.DocumentURI]File{}
 	filesExtend[uri2] = File{
 		Hash:    util.Hash([]byte(content2)),
 		Content: content2,
 	}
-	_, missingFiles, _ := s.ExtendBundle(bundleHash, filesExtend, removedFiles)
+	_, missingFiles, _ := s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
 	assert.Equal(t, 0, len(missingFiles))
 }
 
@@ -91,17 +92,17 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
-	bundleHash, _, _ := s.CreateBundle(files)
+	bundleHash, _, _ := s.CreateBundle(context.Background(), files)
 	filesExtend := map[sglsp.DocumentURI]File{}
 	filesExtend[uri2] = File{
 		Hash:    util.Hash([]byte(content2)),
 		Content: content2,
 	}
-	bundleHash, _, _ = s.ExtendBundle(bundleHash, filesExtend, removedFiles)
+	bundleHash, _, _ = s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
 
 	assert.Eventually(t, func() bool {
 		limitToFiles := []sglsp.DocumentURI{uri1, uri2}
-		d, _, callStatus, err := s.RunAnalysis(bundleHash, shardKey, limitToFiles, 0)
+		d, _, callStatus, err := s.RunAnalysis(context.Background(), bundleHash, shardKey, limitToFiles, 0)
 		if err != nil {
 			return false
 		}

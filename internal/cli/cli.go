@@ -1,11 +1,12 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"sync"
 
-	"github.com/rs/zerolog/log"
+	"github.com/snyk/snyk-ls/config/environment"
 )
 
 type SnykCli struct{}
@@ -18,22 +19,29 @@ type Settings struct {
 
 var CurrentSettings Settings
 var Mutex = &sync.Mutex{}
+var logger = environment.Logger
 
 type Executor interface {
-	Execute(cmd []string) (resp []byte, err error)
+	Execute(ctx context.Context, cmd []string) (resp []byte, err error)
 }
 
-func (c SnykCli) Execute(cmd []string) (resp []byte, err error) {
+func (c SnykCli) Execute(ctx context.Context, cmd []string) (resp []byte, err error) {
 	Mutex.Lock()
 	defer Mutex.Unlock()
-	log.Info().Str("method", "SnykCli.Execute").Interface("cmd", cmd).Msg("calling Snyk CLI")
+	logger.
+		WithField("method", "SnykCli.Execute").
+		WithField("cmd", cmd).
+		Info(ctx, "calling Snyk CLI")
 	command := exec.Command(cmd[0], cmd[1:]...)
 	output, err := command.CombinedOutput()
-	log.Trace().Str("method", "SnykCli.Execute").Str("response", string(output))
+	logger.
+		WithField("method", "SnykCli.Execute").
+		WithField("response", string(output)).
+		Trace(ctx, "CLI output")
 	return output, err
 }
 
-func ExpandParametersFromConfig(base []string) []string {
+func ExpandParametersFromConfig(ctx context.Context, base []string) []string {
 	var additionalParams []string
 	if CurrentSettings.Insecure {
 		additionalParams = append(additionalParams, "--insecure")
@@ -44,7 +52,10 @@ func ExpandParametersFromConfig(base []string) []string {
 	if CurrentSettings.Endpoint != "" {
 		err := os.Setenv("SNYK_API", CurrentSettings.Endpoint)
 		if err != nil {
-			log.Err(err).Msg("couldn't set endpoint in environment")
+			logger.
+				WithField("method", "ExpandParametersFromConfig").
+				WithError(err).
+				Error(ctx, "couldn't set endpoint in environment")
 		}
 	}
 	return append(base, additionalParams...)

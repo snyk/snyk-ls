@@ -1,9 +1,9 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="go test github.com/snyk/snyk-ls [INTEG]" type="GoTestRunConfiguration"
                  factoryName="Go Test">
-    <module name="snyk-lsp"/>
+    <module name="snyk-ls"/>
     <working_directory value="$PROJECT_DIR$/"/>
-    <go_parameters value="-p=1 -race -timeout=300s -count=1"/>
+    <go_parameters value="-p=1 -timeout=300s -count=1"/>
     <envs>
       <env name="INTEG_TESTS" value="true"/>
     </envs>

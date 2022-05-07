@@ -1,6 +1,7 @@
 package iac
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,7 +35,7 @@ func Test_ScanWorkspace(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	snykCli := cli.SnykCli{}
-	go ScanWorkspace(snykCli, doc, &wg, dChan, hoverChan)
+	go ScanWorkspace(context.Background(), snykCli, doc, &wg, dChan, hoverChan)
 	wg.Wait()
 
 	diagnosticResult := <-dChan
@@ -69,7 +70,7 @@ func Test_ScanFile(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	snykCli := cli.SnykCli{}
-	go ScanFile(snykCli, doc.URI, &wg, dChan, hoverChan)
+	go ScanFile(context.Background(), snykCli, doc.URI, &wg, dChan, hoverChan)
 	wg.Wait()
 
 	diagnosticResult := <-dChan

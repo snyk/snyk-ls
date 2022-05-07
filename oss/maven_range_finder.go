@@ -1,7 +1,8 @@
 package oss
 
 import (
-	"github.com/rs/zerolog/log"
+	"context"
+
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/ast/maven"
@@ -12,14 +13,22 @@ type MavenRangeFinder struct {
 	fileContent []byte
 }
 
-func (m *MavenRangeFinder) Find(issue ossIssue) lsp.Range {
-	searchPackage, version := introducingPackageAndVersion(issue)
-	log.Trace().Interface("issue", issue).Str("searchPackage", searchPackage).Str("searchVersion", version)
+func (m *MavenRangeFinder) Find(ctx context.Context, issue ossIssue) lsp.Range {
+	searchPackage, version := introducingPackageAndVersion(ctx, issue)
+	logger.
+		WithField("method", "MavenRangeFinder.Find").
+		WithField("searchPackage", searchPackage).
+		WithField("searchVersion", version).
+		Trace(ctx, "searching...")
 	parser := maven.Parser{}
-	tree := parser.Parse(string(m.fileContent), m.uri)
+	tree := parser.Parse(ctx, string(m.fileContent), m.uri)
 	for _, depNode := range tree.Root.Children {
 		if searchPackage == depNode.Name {
-			log.Trace().Interface("dependency", depNode).Str("issueId", issue.Id).Msg("Found dependency for issue")
+			logger.
+				WithField("method", "MavenRangeFinder.Find").
+				WithField("dependency", depNode).
+				WithField("issueId", issue.Id).
+				Trace(ctx, "Found dependency for issue")
 			return lsp.Range{
 				Start: lsp.Position{Line: depNode.Line, Character: depNode.StartChar},
 				End:   lsp.Position{Line: depNode.Line, Character: depNode.EndChar},

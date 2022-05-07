@@ -1,6 +1,7 @@
 package environment
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -18,7 +19,7 @@ func TestGetEnabledProducts_DefaultValues(t *testing.T) {
 	os.Unsetenv(ActivateSnykIacKey)
 	os.Unsetenv(ActivateSnykContainerKey)
 	os.Unsetenv(ActivateSnykAdvisorKey)
-	EnabledProductsFromEnv()
+	EnabledProductsFromEnv(context.Background())
 	assert.Equal(t, true, CurrentEnabledProducts.OpenSource.Get())
 	assert.Equal(t, true, CurrentEnabledProducts.Code.Get())
 	assert.Equal(t, true, CurrentEnabledProducts.Iac.Get())
@@ -28,50 +29,50 @@ func TestGetEnabledProducts_DefaultValues(t *testing.T) {
 
 func TestGetEnabledProducts_Oss(t *testing.T) {
 	t.Setenv(ActivateSnykOssKey, "false")
-	EnabledProductsFromEnv()
+	EnabledProductsFromEnv(context.Background())
 	assert.Equal(t, false, CurrentEnabledProducts.OpenSource.Get())
 
 	t.Setenv(ActivateSnykOssKey, "true")
-	EnabledProductsFromEnv()
+	EnabledProductsFromEnv(context.Background())
 	assert.Equal(t, true, CurrentEnabledProducts.OpenSource.Get())
 }
 
 func TestGetEnabledProducts_Code(t *testing.T) {
 	t.Setenv(ActivateSnykCodeKey, "false")
-	EnabledProductsFromEnv()
+	EnabledProductsFromEnv(context.Background())
 	assert.Equal(t, false, CurrentEnabledProducts.Code.Get())
 
 	t.Setenv(ActivateSnykCodeKey, "true")
-	EnabledProductsFromEnv()
+	EnabledProductsFromEnv(context.Background())
 	assert.Equal(t, true, CurrentEnabledProducts.Code.Get())
 }
 
 func TestGetEnabledProducts_Iac(t *testing.T) {
 	t.Setenv(ActivateSnykIacKey, "false")
-	EnabledProductsFromEnv()
+	EnabledProductsFromEnv(context.Background())
 	assert.Equal(t, false, CurrentEnabledProducts.Iac.Get())
 
 	t.Setenv(ActivateSnykIacKey, "true")
-	EnabledProductsFromEnv()
+	EnabledProductsFromEnv(context.Background())
 	assert.Equal(t, true, CurrentEnabledProducts.Iac.Get())
 }
 
 func TestGetEnabledProducts_Container(t *testing.T) {
 	t.Setenv(ActivateSnykContainerKey, "false")
-	EnabledProductsFromEnv()
+	EnabledProductsFromEnv(context.Background())
 	assert.Equal(t, false, CurrentEnabledProducts.Container.Get())
 
 	t.Setenv(ActivateSnykContainerKey, "true")
-	EnabledProductsFromEnv()
+	EnabledProductsFromEnv(context.Background())
 	assert.Equal(t, true, CurrentEnabledProducts.Container.Get())
 }
 
 func TestGetEnabledProducts_Advisor(t *testing.T) {
 	t.Setenv(ActivateSnykAdvisorKey, "false")
-	EnabledProductsFromEnv()
+	EnabledProductsFromEnv(context.Background())
 	assert.Equal(t, false, CurrentEnabledProducts.Advisor.Get())
 
 	t.Setenv(ActivateSnykAdvisorKey, "true")
-	EnabledProductsFromEnv()
+	EnabledProductsFromEnv(context.Background())
 	assert.Equal(t, true, CurrentEnabledProducts.Advisor.Get())
 }

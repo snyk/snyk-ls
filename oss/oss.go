@@ -1,6 +1,7 @@
 package oss
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -11,7 +12,6 @@ import (
 	"sync"
 
 	"github.com/gomarkdown/markdown"
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config/environment"
@@ -66,11 +66,14 @@ var supportedFiles = map[string]bool{
 	"mix.lock":                true,
 }
 
+var logger = environment.Logger
+
 func IsSupported(documentURI sglsp.DocumentURI) bool {
 	return supportedFiles[filepath.Base(uri.PathFromUri(documentURI))]
 }
 
 func ScanWorkspace(
+	ctx context.Context,
 	Cli cli.Executor,
 	workspace sglsp.DocumentURI,
 	wg *sync.WaitGroup,
@@ -78,29 +81,41 @@ func ScanWorkspace(
 	hoverChan chan lsp.Hover,
 ) {
 	defer wg.Done()
-	defer log.Debug().Str("method", "oss.ScanWorkspace").Msg("done.")
-	log.Debug().Str("method", "oss.ScanWorkspace").Msg("started.")
+	logger.WithField("method", "oss.ScanWorkspace").Debug(ctx, "started")
+	defer logger.WithField("method", "oss.ScanWorkspace").Debug(ctx, "done")
 
 	workspacePath := uri.PathFromUri(workspace)
 	path, err := filepath.Abs(workspacePath)
 	if err != nil {
-		log.Err(err).Str("method", "oss.ScanWorkspace").
-			Msg("Error while extracting file absolutePath")
+		logger.
+			WithField("method", "oss.ScanWorkspace").
+			WithError(err).
+			Error(ctx, "couldn't get absolute path")
 	}
 
-	cmd := cli.ExpandParametersFromConfig([]string{environment.CliPath(), "test", path, "--json"})
-	res, err := Cli.Execute(cmd)
+	cmd := cli.ExpandParametersFromConfig(
+		ctx,
+		[]string{environment.CliPath(), "test", path, "--json"},
+	)
+	res, err := Cli.Execute(ctx, cmd)
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:
 			if err.ExitCode() > 1 {
-				log.Err(err).Str("method", "oss.ScanWorkspace").Str("output", string(res)).Msg("Error while calling Snyk CLI")
-				reportErrorViaChan(workspace, dChan, err)
+				logger.
+					WithField("method", "oss.ScanWorkspace").
+					WithField("output", string(res)).
+					WithError(err).
+					Error(ctx, "Error while calling Snyk CLI")
+				reportErrorViaChan(ctx, workspace, dChan, err)
 				return
 			}
-			log.Warn().Err(err).Str("method", "oss.ScanWorkspace").Msg("Error while calling Snyk CLI")
+			logger.
+				WithField("method", "oss.ScanWorkspace").
+				WithError(err).
+				Warn(ctx, "exit code 1")
 		default:
-			reportErrorViaChan(workspace, dChan, err)
+			reportErrorViaChan(ctx, workspace, dChan, err)
 			return
 		}
 	}
@@ -108,8 +123,11 @@ func ScanWorkspace(
 	var scanResult ossScanResult
 	err = json.Unmarshal(res, &scanResult)
 	if err != nil {
-		log.Err(err).Str("method", "scanWorkspace").Msg("couldn't unmarshal response")
-		reportErrorViaChan(workspace, dChan, err)
+		logger.
+			WithField("method", "oss.ScanWorkspace").
+			WithError(err).
+			Error(ctx, "couldn't unmarshal response")
+		reportErrorViaChan(ctx, workspace, dChan, err)
 		return
 	}
 
@@ -118,13 +136,16 @@ func ScanWorkspace(
 	targetFileUri := uri.PathToUri(targetFilePath)
 	fileContent, err := ioutil.ReadFile(targetFilePath)
 	if err != nil {
-		log.Err(err).Str("method", "oss.ScanWorkspace").
-			Msgf("Error while reading the fi le %v, err: %v", targetFile, err)
-		reportErrorViaChan(targetFileUri, dChan, err)
+		logger.
+			WithField("method", "oss.ScanWorkspace").
+			WithField("file", targetFile).
+			WithError(err).
+			Error(ctx, "Error while reading the file ")
+		reportErrorViaChan(ctx, targetFileUri, dChan, err)
 		return
 	}
 
-	retrieveAnalysis(scanResult, targetFileUri, fileContent, dChan, hoverChan)
+	retrieveAnalysis(ctx, scanResult, targetFileUri, fileContent, dChan, hoverChan)
 }
 
 func determineTargetFile(displayTargetFile string) string {
@@ -136,6 +157,7 @@ func determineTargetFile(displayTargetFile string) string {
 }
 
 func ScanFile(
+	ctx context.Context,
 	Cli cli.Executor,
 	documentURI sglsp.DocumentURI,
 	wg *sync.WaitGroup,
@@ -143,8 +165,8 @@ func ScanFile(
 	hoverChan chan lsp.Hover,
 ) {
 	defer wg.Done()
-	defer log.Debug().Str("method", "oss.ScanFile").Msg("done.")
-	log.Debug().Str("method", "oss.ScanFile").Msg("started.")
+	logger.WithField("method", "oss.ScanFile").Debug(ctx, "started")
+	defer logger.WithField("method", "oss.ScanFile").Debug(ctx, "done")
 
 	if !IsSupported(documentURI) {
 		return
@@ -152,23 +174,36 @@ func ScanFile(
 
 	path, err := filepath.Abs(uri.PathFromUri(documentURI))
 	if err != nil {
-		log.Err(err).Str("method", "oss.ScanFile").
-			Msg("Error while extracting file absolutePath")
+		logger.
+			WithField("method", "oss.ScanFile").
+			WithError(err).
+			Error(ctx, "couldn't get absolute path")
 	}
 	preconditions.EnsureReadyForAnalysisAndWait()
-	cmd := cli.ExpandParametersFromConfig([]string{environment.CliPath(), "test", filepath.Dir(path), "--json"})
-	res, err := Cli.Execute(cmd)
+	cmd := cli.ExpandParametersFromConfig(
+		ctx,
+		[]string{environment.CliPath(), "test", filepath.Dir(path), "--json"},
+	)
+	res, err := Cli.Execute(ctx, cmd)
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:
 			if err.ExitCode() > 1 {
-				log.Err(err).Str("method", "oss.ScanFile").Str("output", string(res)).Msg("Error while calling Snyk CLI")
-				reportErrorViaChan(documentURI, dChan, err)
+				logger.
+					WithField("method", "oss.ScanFile").
+					WithField("output", string(res)).
+					WithError(err).
+					Error(ctx, "Error while calling Snyk CLI")
+				reportErrorViaChan(ctx, documentURI, dChan, err)
 				return
 			}
-			log.Warn().Err(err).Str("method", "oss.ScanFile").Msg("Error while calling Snyk CLI")
+			logger.
+				WithField("method", "oss.ScanFile").
+				WithField("output", string(res)).
+				WithError(err).
+				Warn(ctx, "exit code 1")
 		default:
-			reportErrorViaChan(documentURI, dChan, err)
+			reportErrorViaChan(ctx, documentURI, dChan, err)
 			return
 		}
 	}
@@ -176,23 +211,29 @@ func ScanFile(
 	var scanResults ossScanResult
 	err = json.Unmarshal(res, &scanResults)
 	if err != nil {
-		log.Err(err).Str("method", "scanFile").Msg("couldn't unmarshal response")
-		reportErrorViaChan(documentURI, dChan, err)
+		logger.
+			WithField("method", "oss.ScanFile").
+			WithError(err).
+			Error(ctx, "couldn't unmarshal response")
+		reportErrorViaChan(ctx, documentURI, dChan, err)
 		return
 	}
 
 	fileContent, err := os.ReadFile(path)
 	if err != nil {
-		log.Err(err).Str("method", "oss.ScanFile").
-			Msg("Error reading file " + path)
-		reportErrorViaChan(documentURI, dChan, err)
+		logger.
+			WithField("method", "oss.ScanFile").
+			WithField("file", path).
+			WithError(err).
+			Error(ctx, "Error while reading the file ")
+		reportErrorViaChan(ctx, documentURI, dChan, err)
 		return
 	}
 
-	retrieveAnalysis(scanResults, documentURI, fileContent, dChan, hoverChan)
+	retrieveAnalysis(ctx, scanResults, documentURI, fileContent, dChan, hoverChan)
 }
 
-func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, err error) chan lsp.DiagnosticResult {
+func reportErrorViaChan(ctx context.Context, uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, err error) chan lsp.DiagnosticResult {
 	select {
 	case dChan <- lsp.DiagnosticResult{
 		Uri:         uri,
@@ -200,12 +241,15 @@ func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, 
 		Err:         err,
 	}:
 	default:
-		log.Debug().Str("method", "oss.reportErrorViaChan").Msg("not sending...")
+		logger.
+			WithField("method", "oss.reportErrorViaChan").
+			Debug(ctx, "not sending...")
 	}
 	return dChan
 }
 
 func retrieveAnalysis(
+	ctx context.Context,
 	scanResults ossScanResult,
 	uri sglsp.DocumentURI,
 	fileContent []byte,
@@ -214,13 +258,18 @@ func retrieveAnalysis(
 ) {
 	diags, hoverDetails, err := retrieveDiagnostics(scanResults, uri, fileContent)
 	if err != nil {
-		log.Err(err).Str("method", "oss.retrieveAnalysis").Msg("Error while retrieving diagnositics")
-		reportErrorViaChan(uri, dChan, err)
+		logger.
+			WithField("method", "oss.retrieveAnalysis").
+			WithError(err).
+			Error(ctx, "Error while retrieving diagnostics")
+		reportErrorViaChan(ctx, uri, dChan, err)
 		return
 	}
 
 	if len(diags) > 0 {
-		log.Debug().Str("method", "oss.retrieveAnalysis").Msg("got diags, now sending to chan.")
+		logger.
+			WithField("method", "oss.retrieveAnalysis").
+			Debug(ctx, "got diagnostics, now sending to chan.")
 		select {
 		case dChan <- lsp.DiagnosticResult{
 			Uri:         uri,
@@ -230,15 +279,16 @@ func retrieveAnalysis(
 				Uri:   uri,
 				Hover: hoverDetails,
 			}
-			log.Debug().Str("method", "oss.retrieveAnalysis").Int("diagnosticCount", len(diags)).Msg("found sth")
+			logger.
+				WithField("method", "oss.retrieveAnalysis").
+				WithField("diagnosticCount", len(diags)).
+				Debug(ctx, "found diagnostics")
 		default:
-			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("not sending...")
+			logger.
+				WithField("method", "oss.retrieveAnalysis").
+				Debug(ctx, "not sending")
 		}
 	}
-}
-
-type RangeFinder interface {
-	Find(issue ossIssue) sglsp.Range
 }
 
 func retrieveDiagnostics(
@@ -354,6 +404,6 @@ func findRange(issue ossIssue, uri sglsp.DocumentURI, fileContent []byte) sglsp.
 		finder = &DefaultFinder{uri: uri, fileContent: fileContent}
 	}
 
-	foundRange = finder.Find(issue)
+	foundRange = finder.Find(context.Background(), issue)
 	return foundRange
 }

@@ -10,6 +10,7 @@ GOPATH := $(shell go env GOPATH)
 VERSION := $(shell git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)
 COMMIT := $(shell git show -s --oneline)
 LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/config.Development=true' -X 'github.com/snyk/snyk-ls/config.Version=v$(VERSION)-SNAPSHOT-$(COMMIT)'"
+GOPRIVATE="github.com/snyk"
 
 ## tools: Install required tooling.
 .PHONY: tools

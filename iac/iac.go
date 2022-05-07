@@ -1,6 +1,7 @@
 package iac
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -8,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/gomarkdown/markdown"
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config/environment"
@@ -22,6 +22,7 @@ var (
 		"high": sglsp.Error,
 		"low":  sglsp.Warning,
 	}
+	logger = environment.Logger
 )
 
 var extensions = map[string]bool{
@@ -37,6 +38,7 @@ func IsSupported(documentURI sglsp.DocumentURI) bool {
 }
 
 func ScanWorkspace(
+	ctx context.Context,
 	Cli cli.Executor,
 	documentURI sglsp.DocumentURI,
 	wg *sync.WaitGroup,
@@ -44,19 +46,26 @@ func ScanWorkspace(
 	hoverChan chan lsp.Hover,
 ) {
 	defer wg.Done()
-	defer log.Debug().Str("method", "iac.ScanWorkspace").Msg("done.")
-	log.Debug().Str("method", "iac.ScanWorkspace").Msg("started.")
+	logger.WithField("method", "iac.ScanWorkspace").Debug(ctx, "started")
+	defer logger.WithField("method", "iac.ScanWorkspace").Debug(ctx, "done")
 
-	res, err := Cli.Execute(cliCmd(documentURI))
+	res, err := Cli.Execute(ctx, cliCmd(ctx, documentURI))
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:
 			if err.ExitCode() > 1 {
-				log.Err(err).Str("method", "iac.ScanWorkspace").Str("output", string(res)).Msg("Error while calling Snyk CLI")
+				logger.
+					WithField("method", "iac.ScanWorkspace").
+					WithField("output", string(res)).
+					WithError(err).
+					Error(ctx, "error while calling cli")
 				reportErrorViaChan(documentURI, dChan, err)
 				return
 			}
-			log.Warn().Err(err).Str("method", "iac.ScanWorkspace").Msg("Error while calling Snyk CLI")
+			logger.
+				WithField("method", "iac.ScanWorkspace").
+				WithError(err).
+				Warn(ctx, "exit code 1 while calling cli")
 		default:
 			reportErrorViaChan(documentURI, dChan, err)
 			return
@@ -65,17 +74,20 @@ func ScanWorkspace(
 
 	var scanResults []iacScanResult
 	if err := json.Unmarshal(res, &scanResults); err != nil {
-		log.Err(err).Str("method", "iac.ScanWorkspace").
-			Msg("Error while parsing response from CLI")
+		logger.
+			WithField("method", "iac.ScanWorkspace").
+			WithError(err).
+			Error(ctx, "couldn't unmarshall")
 		reportErrorViaChan(documentURI, dChan, err)
 		return
 	}
 
-	log.Info().Str("method", "iac.ScanWorkspace").
-		Msg("got diags now sending to chan.")
+	logger.
+		WithField("method", "iac.ScanWorkspace").
+		Debug(ctx, "got diagnostics, now sending to channel")
 	for _, scanResult := range scanResults {
 		u := uri.PathToUri(filepath.Join(uri.PathFromUri(documentURI), scanResult.TargetFile))
-		retrieveAnalysis(u, scanResult, dChan, hoverChan)
+		retrieveAnalysis(ctx, u, scanResult, dChan, hoverChan)
 	}
 }
 
@@ -87,6 +99,7 @@ func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, 
 }
 
 func ScanFile(
+	ctx context.Context,
 	Cli cli.Executor,
 	documentURI sglsp.DocumentURI,
 	wg *sync.WaitGroup,
@@ -94,23 +107,30 @@ func ScanFile(
 	hoverChan chan lsp.Hover,
 ) {
 	defer wg.Done()
-	defer log.Debug().Str("method", "iac.ScanFile").Msg("done.")
-	log.Debug().Str("method", "iac.ScanFile").Msg("started.")
+	logger.WithField("method", "iac.ScanFile").Debug(ctx, "started")
+	defer logger.WithField("method", "iac.ScanFile").Debug(ctx, "done")
 
 	if !IsSupported(documentURI) {
 		return
 	}
 
-	res, err := Cli.Execute(cliCmd(documentURI))
+	res, err := Cli.Execute(ctx, cliCmd(ctx, documentURI))
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:
 			if err.ExitCode() > 1 {
-				log.Err(err).Str("method", "iac.ScanFile").Str("output", string(res)).Msg("Error while calling Snyk CLI")
+				logger.
+					WithField("method", "iac.ScanFile").
+					WithField("output", string(res)).
+					WithError(err).
+					Error(ctx, "error while calling cli")
 				reportErrorViaChan(documentURI, dChan, err)
 				return
 			}
-			log.Warn().Err(err).Str("method", "iac.ScanFile").Msg("Error while calling Snyk CLI")
+			logger.
+				WithField("method", "iac.ScanFile").
+				WithError(err).
+				Warn(ctx, "exit code 1 while calling cli")
 		default:
 			reportErrorViaChan(documentURI, dChan, err)
 			return
@@ -119,28 +139,44 @@ func ScanFile(
 
 	var scanResults iacScanResult
 	if err := json.Unmarshal(res, &scanResults); err != nil {
-		log.Err(err).Str("method", "iac.ScanFile").
-			Msg("Error while calling Snyk CLI")
+		logger.
+			WithField("method", "iac.ScanFile").
+			WithError(err).
+			Error(ctx, "couldn't unmarshall")
 		reportErrorViaChan(documentURI, dChan, err)
 		return
 	}
 
-	log.Debug().Interface("iacScanResult", scanResults).Msg("got it all unmarshalled, general!")
-	retrieveAnalysis(documentURI, scanResults, dChan, hoverChan)
+	logger.
+		WithField("method", "iac.ScanWorkspace").
+		WithField("iacScanResult", scanResults).
+		Debug(ctx, "got it all unmarshalled, general!")
+
+	retrieveAnalysis(ctx, documentURI, scanResults, dChan, hoverChan)
 }
 
-func cliCmd(u sglsp.DocumentURI) []string {
+func cliCmd(ctx context.Context, u sglsp.DocumentURI) []string {
 	path, err := filepath.Abs(uri.PathFromUri(u))
 	if err != nil {
-		log.Err(err).Str("method", "iac.ScanFile").
-			Msg("Error while extracting file absolutePath")
+		logger.
+			WithField("method", "cliCmd").
+			WithError(err).
+			Error(ctx, "couldn't determine absolute path")
 	}
-	cmd := cli.ExpandParametersFromConfig([]string{environment.CliPath(), "iac", "test", path, "--json"})
-	log.Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
+	cmd := cli.ExpandParametersFromConfig(
+		ctx,
+		[]string{environment.CliPath(), "iac", "test", path, "--json"},
+	)
+
+	logger.
+		WithField("method", "cliCmd").
+		WithField("cmd", cmd).
+		Debug(ctx, "CLI IaC command")
 	return cmd
 }
 
 func retrieveAnalysis(
+	ctx context.Context,
 	uri sglsp.DocumentURI,
 	scanResult iacScanResult,
 	dChan chan lsp.DiagnosticResult,
@@ -150,18 +186,18 @@ func retrieveAnalysis(
 
 	if len(diagnostics) > 0 {
 		select {
-		case dChan <- lsp.DiagnosticResult{
-			Uri:         uri,
-			Diagnostics: diagnostics,
-		}:
-			hoverChan <- lsp.Hover{
-				Uri:   uri,
-				Hover: hoverDetails,
-			}
+		case dChan <- lsp.DiagnosticResult{Uri: uri, Diagnostics: diagnostics}:
+			hoverChan <- lsp.Hover{Uri: uri, Hover: hoverDetails}
 
-			log.Debug().Str("method", "iac.retrieveAnalysis").Interface("diagnosticCount", len(diagnostics)).Msg("found sth")
+			logger.
+				WithField("method", "iac.retrieveAnalysis").
+				WithField("diagnosticCount", len(diagnostics)).
+				Debug(ctx, "found diagnostics")
 		default:
-			log.Debug().Str("method", "iac.retrieveAnalysis").Msg("no diags found & sent.")
+			logger.
+				WithField("method", "iac.retrieveAnalysis").
+				WithField("diagnosticCount", len(diagnostics)).
+				Debug(ctx, "no diagnostics sent")
 		}
 	}
 }

@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config/environment"
@@ -57,10 +56,11 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 	defer Mutex.Unlock()
 	r := getTestAsset()
 	d := &Downloader{}
+	ctx := context.Background()
 
-	lockFileName, err := d.lockFileName()
+	lockFileName, err := d.lockFileName(ctx)
 	if err != nil {
-		log.Fatal().Err(err).Msg("error getting logfile name")
+		t.Fatal(err, "error getting logfile name")
 	}
 	_, err = os.Create(lockFileName)
 	if err != nil {
@@ -85,15 +85,15 @@ func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 	fakeCliFile := testutil.CreateTempFile(temp, t)
 	err := environment.SetCliPath(fakeCliFile.Name())
 	if err != nil {
-		log.Fatal().Err(err).Msg("Error setting CLI path")
+		t.Fatal(err, "Error setting CLI path")
 	}
 	defer func() {
 		_ = environment.SetCliPath("")
 	}()
 
-	checksum, err := getChecksum(fakeCliFile.Name())
+	checksum, err := getChecksum(ctx, fakeCliFile.Name())
 	if err != nil {
-		log.Fatal().Err(err).Msg("Error calculating temp file checksum")
+		t.Fatal(err, "Error calculating temp file checksum")
 	}
 	checksumString := hex.EncodeToString(checksum)
 
@@ -133,9 +133,9 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	i := NewInstaller()
 	d := &Downloader{}
 
-	lsPath, err := d.lsPath()
+	lsPath, err := d.lsPath(ctx)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Error creating user dir for snyk-ls")
+		t.Fatal(err, "Error creating user dir for snyk-ls")
 	}
 
 	fakeCliFile := testutil.CreateTempFile(lsPath, t)
@@ -144,7 +144,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	cliFilePath := path.Join(lsPath, cliDiscovery.ExecutableName(false))
 	err = os.Rename(fakeCliFile.Name(), cliFilePath) // rename temp file to CLI file
 	if err != nil {
-		log.Fatal().Err(err).Msg("Error renaming temp file")
+		t.Fatal(err, "Error renaming temp file")
 	}
 	defer func(f string) {
 		_ = os.Remove(f)
@@ -152,7 +152,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 
 	err = environment.SetCliPath(cliFilePath)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Error setting CLI path")
+		t.Fatal(err, "Error setting CLI path")
 	}
 	defer func() {
 		_ = environment.SetCliPath("")
@@ -161,11 +161,11 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	r := NewCLIRelease()
 	release, err := r.GetLatestRelease(ctx)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Error getting latest release info")
+		t.Fatal(err, "Error getting latest release info")
 	}
 	expectedChecksum, err := expectedChecksum(release, &cliDiscovery)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Error calculating expected checksum")
+		t.Fatal(err, "Error calculating expected checksum")
 	}
 
 	// act
@@ -175,5 +175,5 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	assert.True(t, updated)
 	assert.NoError(t, err)
 	assert.FileExists(t, cliFilePath)
-	assert.Nil(t, compareChecksum(expectedChecksum, cliFilePath))
+	assert.Nil(t, compareChecksum(ctx, expectedChecksum, cliFilePath))
 }

@@ -1,20 +1,23 @@
 package progress
 
 import (
-	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
+	"context"
 
+	"github.com/google/uuid"
+
+	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
-var ProgressChannel = make(chan lsp.ProgressParams, 100)
+var Channel = make(chan lsp.ProgressParams, 100)
 var CancelProgressChannel = make(chan lsp.ProgressToken, 100)
+var logger = environment.Logger
 
 func New(title, message string, cancellable bool) lsp.ProgressParams {
-	uuid := uuid.New().String()
+	u := uuid.New().String()
 
 	return lsp.ProgressParams{
-		Token: lsp.ProgressToken(uuid),
+		Token: lsp.ProgressToken(u),
 		Value: lsp.WorkDoneProgressBegin{
 			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "begin"},
 			Title:                title,
@@ -60,7 +63,9 @@ func EndProgress(token lsp.ProgressToken, message string, channel chan lsp.Progr
 
 func send(progress lsp.ProgressParams, channel chan lsp.ProgressParams) {
 	if progress.Token == "" {
-		log.Error().Str("method", "EndProgress").Msg("progress token must be set")
+		logger.
+			WithField("method", "send").
+			Error(context.Background(), "progress token must be set")
 	}
 
 	channel <- progress

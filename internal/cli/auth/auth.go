@@ -5,13 +5,13 @@ import (
 	"errors"
 	"os/exec"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/lsp"
 )
+
+var logger = environment.Logger
 
 // Auth represents the `snyk auth` command.
 func Auth(ctx context.Context) error {
@@ -23,7 +23,9 @@ func Auth(ctx context.Context) error {
 }
 
 func authCmd(ctx context.Context) (*exec.Cmd, error) {
-	log.Info().Msg("authenticate Snyk CLI with a Snyk account")
+	logger.
+		WithField("method", "authCmd").
+		Debug(ctx, "authenticate Snyk CLI with a Snyk account")
 
 	// flags and other arguments should be added here (e.g. --insecure etc)
 	args := []string{"auth"}
@@ -38,20 +40,32 @@ func Authenticate() {
 		if errors.Is(err, ErrEmptyAPIToken) {
 			err := Auth(ctx)
 			if err != nil {
-				log.Err(err).Str("method", "Authenticate")
+				logger.
+					WithField("method", "Authenticate").
+					WithError(err).
+					Error(ctx, "couldn't authenticate")
 			}
 			token, err = GetToken(ctx)
 			if err != nil {
-				log.Err(err).Str("method", "Authenticate")
+				logger.
+					WithField("method", "Authenticate").
+					WithError(err).
+					Error(ctx, "couldn't get token")
 			}
 		} else {
-			log.Err(err).Str("method", "Authenticate")
+			logger.
+				WithField("method", "Authenticate").
+				WithError(err).
+				Error(ctx, "couldn't get token")
 		}
 		error_reporting.CaptureError(err)
 	} else {
 		err = environment.SetToken(token)
 		if err != nil {
-			log.Err(err).Str("method", "Authenticate")
+			logger.
+				WithField("method", "Authenticate").
+				WithError(err).
+				Error(ctx, "couldn't add token to environment")
 			error_reporting.CaptureError(err)
 		}
 	}

@@ -13,8 +13,6 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/server"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
@@ -70,7 +68,7 @@ func setupServer(t *testing.T) server.Local {
 	t.Cleanup(func() {
 		err := loc.Close()
 		if err != nil {
-			log.Error().Err(err).Msg("Error when closing down server")
+			t.Fatal(t, err, "Error when closing down server")
 		}
 		cleanupChannels()
 		jsonRPCRecorder.ClearCallbacks()
@@ -88,8 +86,6 @@ func cleanupChannels() {
 
 func startServer() server.Local {
 	var srv *jrpc2.Server
-
-	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 
 	lspHandlers := handler.Map{
 		"initialize":                          InitializeHandler(&srv),
@@ -141,7 +137,7 @@ func Test_dummy_shouldNotBeServed(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "dummy", nil)
 	if err == nil {
-		log.Fatal().Err(err).Msg("call succeeded")
+		t.Fatal(t, err, "call succeeded (and it shouldn't)")
 	}
 }
 
@@ -150,11 +146,11 @@ func Test_initialize_shouldBeServed(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 }
 
@@ -163,11 +159,11 @@ func Test_initialize_shouldSupportDocumentOpening(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.OpenClose, true)
 }
@@ -177,11 +173,11 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.Save, &sglsp.SaveOptions{IncludeText: true})
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.WillSave, true)
@@ -198,7 +194,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 
 	// wait for publish
@@ -223,7 +219,9 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 		find, err := installer.Find()
 		if err == nil {
 			err = os.Remove(find)
-			log.Debug().Msgf("Test: removing cli at %s", find)
+			logger.
+				WithField("method", "Test_textDocumentDidOpenHandler_shouldDownloadCLI").
+				Debug(ctx, "removing cli at "+find)
 			if err != nil {
 				t.Fatal("couldn't remove cli for test")
 			}
@@ -237,7 +235,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 		t.Fatal("couldn't unset environment")
 	}
 	environment.Load()
-	environment.EnabledProductsFromEnv()
+	environment.EnabledProductsFromEnv(context.Background())
 	cli.CurrentSettings = cli.Settings{}
 
 	didOpenParams, cleanup := didOpenTextParams()
@@ -245,7 +243,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 
 	assert.Eventually(t, func() bool {
@@ -263,7 +261,7 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 
 	didChangeParams := sglsp.DidChangeTextDocumentParams{
@@ -276,12 +274,12 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 
 	_, err = loc.Client.Call(ctx, "textDocument/didChange", didChangeParams)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 }
 
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
-	environment.EnabledProductsFromEnv()
+	environment.EnabledProductsFromEnv(context.Background())
 	cli.CurrentSettings = cli.Settings{}
 	loc := setupServer(t)
 
@@ -290,7 +288,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 
 	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 
 	// wait for publish
@@ -307,7 +305,7 @@ func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSaveWaitUntil", nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 }
 
@@ -316,7 +314,7 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSave", nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 }
 
@@ -332,7 +330,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 		},
 	})
 	if err != nil {
-		log.Fatal().Err(err).Msg("error calling server")
+		t.Fatal(err, "error calling server")
 	}
 
 	assert.True(t, diagnostics.IsWorkspaceFolderScanned(folder))
@@ -343,7 +341,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 		},
 	})
 	if err != nil {
-		log.Fatal().Err(err).Msg("error calling server")
+		t.Fatal(err, "error calling server")
 	}
 
 	assert.False(t, diagnostics.IsWorkspaceFolderScanned(folder))
@@ -383,10 +381,10 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 	loc := setupServer(t)
 	diagnostics.SetSnykCodeService(&code.SnykCodeBackendService{})
 
-	var cloneTargetDir, err = setupCustomTestRepo(repo, commit)
+	var cloneTargetDir, err = setupCustomTestRepo(t, repo, commit)
 	defer os.RemoveAll(cloneTargetDir)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't setup test repo")
+		t.Fatal(err, "Couldn't setup test repo")
 	}
 	folder := lsp.WorkspaceFolder{
 		Name: "Test Repo",
@@ -398,13 +396,13 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 
 	_, err = loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Initialization failed")
+		t.Fatal(err, "Initialization failed")
 	}
 
 	var testPath string
 	if file1 != "" {
 		testPath = filepath.Join(cloneTargetDir, file1)
-		textDocumentDidOpen(&loc, testPath)
+		textDocumentDidOpen(t, &loc, testPath)
 		// serve diagnostics from file scan
 		assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), 120*time.Second, 10*time.Millisecond)
 	}
@@ -415,7 +413,7 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 	}, 600*time.Second, 2*time.Millisecond)
 
 	testPath = filepath.Join(cloneTargetDir, file2)
-	textDocumentDidOpen(&loc, testPath)
+	textDocumentDidOpen(t, &loc, testPath)
 
 	assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), 120*time.Second, 10*time.Millisecond)
 }
@@ -445,16 +443,16 @@ func checkForPublishedDiagnostics(testPath string, expectedNumber int) func() bo
 
 func Test_IntegrationHoverResults(t *testing.T) {
 	testutil.IntegTest(t)
-	environment.EnabledProductsFromEnv()
+	environment.EnabledProductsFromEnv(context.Background())
 	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
 	loc := setupServer(t)
 
-	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
+	var cloneTargetDir, err = setupCustomTestRepo(t, "https://github.com/snyk/goof", "0336589")
 	defer os.RemoveAll(cloneTargetDir)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't setup test repo")
+		t.Fatal(err, "Couldn't setup test repo")
 	}
 	folder := lsp.WorkspaceFolder{
 		Name: "Test Repo",
@@ -466,7 +464,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 
 	_, err = loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Initialization failed")
+		t.Fatal(err, "Initialization failed")
 	}
 
 	// wait till the whole workspace is scanned
@@ -486,13 +484,13 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	})
 
 	if err != nil {
-		log.Fatal().Err(err).Msg("Hover retrieval failed")
+		t.Fatal(err, "Hover retrieval failed")
 	}
 
 	hoverResult := lsp.HoverResult{}
 	err = hoverResp.UnmarshalResult(&hoverResult)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Hover retrieval failed")
+		t.Fatal(err, "Hover retrieval failed")
 	}
 
 	assert.Equal(t, hoverResult.Contents.Value, hover.GetHover(uri.PathToUri(testPath), testPosition).Contents.Value)
@@ -501,29 +499,29 @@ func Test_IntegrationHoverResults(t *testing.T) {
 
 func Test_IntegrationFileScan(t *testing.T) {
 	testutil.IntegTest(t)
-	environment.EnabledProductsFromEnv()
+	environment.EnabledProductsFromEnv(context.Background())
 	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
 	loc := setupServer(t)
 	diagnostics.SetSnykCodeService(&code.SnykCodeBackendService{})
 
-	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
+	var cloneTargetDir, err = setupCustomTestRepo(t, "https://github.com/snyk/goof", "0336589")
 	defer os.RemoveAll(cloneTargetDir)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't setup test repo")
+		t.Fatal(err, "Couldn't setup test repo")
 	}
 
 	testPath := filepath.Join(cloneTargetDir, "app.js")
-	_ = textDocumentDidOpen(&loc, testPath)
+	_ = textDocumentDidOpen(t, &loc, testPath)
 
 	assert.Eventually(t, checkForPublishedDiagnostics(testPath, 6), 120*time.Second, 10*time.Millisecond)
 }
 
-func textDocumentDidOpen(loc *server.Local, testPath string) sglsp.DidOpenTextDocumentParams {
+func textDocumentDidOpen(t *testing.T, loc *server.Local, testPath string) sglsp.DidOpenTextDocumentParams {
 	testFileContent, err := os.ReadFile(testPath)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't read file content of test file")
+		t.Fatal(err, "Couldn't read file content of test file")
 	}
 
 	didOpenParams := sglsp.DidOpenTextDocumentParams{
@@ -535,20 +533,23 @@ func textDocumentDidOpen(loc *server.Local, testPath string) sglsp.DidOpenTextDo
 
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Call failed")
+		t.Fatal(err, "Call failed")
 	}
 
 	return didOpenParams
 }
 
-func setupCustomTestRepo(url string, targetCommit string) (string, error) {
+func setupCustomTestRepo(t *testing.T, url string, targetCommit string) (string, error) {
 	// clone to temp dir - specific version for reproducible test results
 	cloneTargetDir, err := os.MkdirTemp(os.TempDir(), "integ_test_repo_")
 	if err != nil {
-		log.Fatal().Err(err).Msg("couldn't create temp dir")
+		t.Fatal(err, "couldn't create temp dir")
 	}
 	cmd := []string{"clone", url, cloneTargetDir}
-	log.Debug().Interface("cmd", cmd).Msg("clone command")
+	logger.
+		WithField("method", "setupCustomTestRepo").
+		WithField("cmd", cmd).
+		Debug(ctx, "clone command")
 	clone := exec.Command("git", cmd...)
 	reset := exec.Command("git", "reset", "--hard", targetCommit)
 	reset.Dir = cloneTargetDir
@@ -556,17 +557,12 @@ func setupCustomTestRepo(url string, targetCommit string) (string, error) {
 	clean := exec.Command("git", "clean", "--force")
 	clean.Dir = cloneTargetDir
 
-	output, err := clone.CombinedOutput()
+	_, err = clone.CombinedOutput()
 	if err != nil {
-		log.Fatal().Err(err).Msg("clone didn't work")
+		t.Fatal(err, "clone didn't work")
 	}
 
-	log.Debug().Msg(string(output))
-	output, _ = reset.CombinedOutput()
-
-	log.Debug().Msg(string(output))
-	output, err = clean.CombinedOutput()
-
-	log.Debug().Msg(string(output))
+	_, _ = reset.CombinedOutput()
+	_, err = clean.CombinedOutput()
 	return cloneTargetDir, err
 }

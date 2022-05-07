@@ -1,14 +1,15 @@
 package hover
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
 
+	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 )
 
@@ -18,6 +19,7 @@ var hoverIndexes = map[string]bool{}
 var hoverChan = make(chan lsp.Hover, 100)
 var stopChannel = make(chan bool, 100)
 var mutex = &sync.Mutex{}
+var logger = environment.Logger
 
 func validateAndExtractMessage(hover lsp.HoverDetails, pos sglsp.Position) string {
 	var message string
@@ -101,10 +103,10 @@ func CreateHoverListener() {
 	for {
 		select {
 		case result := <-hoverChan:
-			log.Trace().
-				Str("method", "CreateHoverListener").
-				Str("uri", string(result.Uri)).
-				Msg("reading hover from chan.")
+			logger.
+				WithField("method", "CreateHoverListener").
+				WithField("uri", string(result.Uri)).
+				Trace(context.Background(), "reading hover from chan")
 
 			registerHovers(result)
 			continue

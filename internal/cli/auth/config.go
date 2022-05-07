@@ -5,8 +5,6 @@ import (
 	"errors"
 	"os/exec"
 	"strings"
-
-	"github.com/rs/zerolog/log"
 )
 
 var ErrEmptyAPIToken = errors.New("snyk-cli: api token is empty")
@@ -38,7 +36,9 @@ func GetToken(ctx context.Context) (string, error) {
 }
 
 func configGetAPICmd(ctx context.Context) (*exec.Cmd, error) {
-	log.Info().Msg("get Snyk API token")
+	logger.
+		WithField("method", "configGetAPICmd").
+		Info(ctx, "get Snyk API token command")
 
 	args := []string{"config", "get", "api"}
 

@@ -7,8 +7,6 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/snyk/snyk-ls/internal/cli/install/httpclient"
 )
 
@@ -50,7 +48,10 @@ func (r *CLIRelease) GetLatestRelease(ctx context.Context) (*Release, error) {
 	client := httpclient.NewHTTPClient()
 
 	releaseURL := fmt.Sprintf("%s/cli/latest/release.json", r.baseURL)
-	log.Ctx(ctx).Trace().Str("url", releaseURL).Msg("requesting version for Snyk CLI")
+	logger.
+		WithField("method", "GetLatestRelease").
+		WithField("url", releaseURL).
+		Trace(ctx, "requesting version for Snyk CLI")
 
 	resp, err := client.Get(releaseURL)
 	if err != nil {
@@ -65,7 +66,10 @@ func (r *CLIRelease) GetLatestRelease(ctx context.Context) (*Release, error) {
 		_ = Body.Close()
 	}(resp.Body)
 
-	log.Ctx(ctx).Trace().Str("response_status", resp.Status).Msg("received")
+	logger.
+		WithField("method", "GetLatestRelease").
+		WithField("response_status", resp.Status).
+		Trace(ctx, "received")
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

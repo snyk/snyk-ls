@@ -1,11 +1,12 @@
 package environment
 
 import (
+	"context"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"github.com/snyk/go-common/log"
 	"github.com/subosito/gotenv"
 )
 
@@ -22,10 +23,16 @@ var (
 	configLoaded = false
 	Format       = "md"
 	ConfigFile   = ""
-	LogPath      string
+	LogLevel     log.Level
+	Logger       log.Logger
 )
 
-func SnykCodeAnalysisTimeout() time.Duration {
+func init() {
+	LogLevel = log.Debug
+	Logger = log.SnykDefaultLogger("Snyk LS", false, LogLevel)
+}
+
+func SnykCodeAnalysisTimeout(ctx context.Context) time.Duration {
 	var snykCodeTimeout time.Duration
 	var err error
 	env := os.Getenv(snykCodeTimeoutKey)
@@ -34,7 +41,7 @@ func SnykCodeAnalysisTimeout() time.Duration {
 	} else {
 		snykCodeTimeout, err = time.ParseDuration(env)
 		if err != nil {
-			log.Err(err).Msg("couldn't convert timeout env variable to integer")
+			Logger.Error(ctx, "couldn't convert timeout env variable to integer")
 		}
 	}
 	return snykCodeTimeout
@@ -70,16 +77,16 @@ func CliPath() string {
 func Load() {
 	files := configFiles()
 	for _, fileName := range files {
-		loadFile(fileName)
+		loadFile(context.Background(), fileName)
 	}
 
 	configLoaded = true
 }
 
-func loadFile(fileName string) {
+func loadFile(ctx context.Context, fileName string) {
 	file, err := os.Open(fileName)
 	if err != nil {
-		log.Info().Str("method", "loadFile").Msg("Couldn't load " + fileName)
+		Logger.WithField("method", "loadFile").Info(ctx, "Couldn't load "+fileName)
 		return
 	}
 	defer file.Close()
@@ -89,23 +96,26 @@ func loadFile(fileName string) {
 		if !exists {
 			err := os.Setenv(k, v)
 			if err != nil {
-				log.Warn().Str("method", "loadFile").Msg("Couldn't set environment variable " + k)
+				Logger.WithField("method", "loadFile").Warn(ctx, "Couldn't set environment variable "+k)
 			}
 		} else {
 			// add to path, don't ignore additional paths
 			if k == "PATH" {
-				updatePath(v)
+				updatePath(ctx, v)
 			}
 		}
 	}
-	updatePath(".")
-	log.Debug().Str("fileName", fileName).Msg("loaded.")
+	updatePath(ctx, ".")
+	Logger.
+		WithField("method", "loadFile").
+		WithField("fileName", fileName).
+		Debug(ctx, "loaded")
 }
 
-func updatePath(pathExtension string) {
+func updatePath(ctx context.Context, pathExtension string) {
 	err := os.Setenv("PATH", os.Getenv("PATH")+string(os.PathListSeparator)+pathExtension)
 	if err != nil {
-		log.Warn().Str("method", "loadFile").Msg("Couldn't update path ")
+		Logger.WithField("method", "loadFile").Warn(ctx, "Couldn't update path")
 	}
 }
 

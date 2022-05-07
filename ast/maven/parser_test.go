@@ -1,6 +1,7 @@
 package maven
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,7 +15,7 @@ func TestCreateDependencyTree(t *testing.T) {
 	var testContent, _ = os.ReadFile(testPath)
 	doc := lsp.DocumentURI(testPath)
 	parser := Parser{}
-	tree := parser.Parse(string(testContent), doc)
+	tree := parser.Parse(context.Background(), string(testContent), doc)
 	children := tree.Root.Children
 	assert.Len(t, children, 2, "Should have extracted 2 deps from pom.xml")
 

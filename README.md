@@ -107,7 +107,8 @@ level is `info`
 
 `-o <FORMAT>` allows to specify the output format (`md` or `html`) for issues
 
-`-f <FILE>` allows you to specify a log file instead of logging to the console
+Currently, logging to file is not implemented, as we switched to snyk/go-common which doesn't support it easily out of
+the box.
 
 ### Configuration
 

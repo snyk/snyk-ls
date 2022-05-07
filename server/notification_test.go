@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/creachadair/jrpc2"
-	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -71,15 +70,16 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
+
 	}
 
 	expectedProgress := progress.New("title", "message", true)
-	progress.BeginProgress(expectedProgress, progress.ProgressChannel)
+	progress.BeginProgress(expectedProgress, progress.Channel)
 
 	// should receive progress notification
 	assert.Eventually(
@@ -105,7 +105,7 @@ func TestCancelProgress(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 
 	expectedWorkdoneProgressCancelParams := lsp.WorkdoneProgressCancelParams{
@@ -113,7 +113,7 @@ func TestCancelProgress(t *testing.T) {
 	}
 	_, err = loc.Client.Call(ctx, "window/workDoneProgress/cancel", expectedWorkdoneProgressCancelParams)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 
 	actualToken := <-progress.CancelProgressChannel
@@ -126,7 +126,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	preconditions.EnsureReadyForAnalysisAndWait()
 	var expected = lsp.AuthenticationParams{Token: "test token"}

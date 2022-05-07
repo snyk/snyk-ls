@@ -2,13 +2,12 @@ package install
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
-
-	"github.com/rs/zerolog/log"
 )
 
 type HashSum []byte
@@ -25,8 +24,8 @@ func HashSumFromHexDigest(hexDigest string) (HashSum, error) {
 	return sumBytes, nil
 }
 
-func compareChecksum(expectedSum HashSum, filename string) error {
-	calculatedSum, err := getChecksum(filename)
+func compareChecksum(ctx context.Context, expectedSum HashSum, filename string) error {
+	calculatedSum, err := getChecksum(ctx, filename)
 	if err != nil {
 		return err
 	}
@@ -37,12 +36,14 @@ func compareChecksum(expectedSum HashSum, filename string) error {
 			hex.EncodeToString(calculatedSum))
 	}
 
-	log.Info().Msgf("checksum matches: %q", hex.EncodeToString(calculatedSum))
+	logger.
+		WithField("method", "compareChecksum").
+		Debug(ctx, "checksum matches:"+hex.EncodeToString(calculatedSum))
 
 	return nil
 }
 
-func getChecksum(filename string) ([]byte, error) {
+func getChecksum(ctx context.Context, filename string) ([]byte, error) {
 	h := sha256.New()
 
 	r, err := os.Open(filename)
@@ -53,7 +54,10 @@ func getChecksum(filename string) ([]byte, error) {
 		_ = r.Close()
 	}(r)
 
-	log.Info().Msgf("copying %q to calculate checksum", filename)
+	logger.
+		WithField("method", "getChecksum").
+		WithField("fileName", filename).
+		Info(ctx, "copying file to calculate checksum")
 	_, err = io.Copy(h, r)
 	if err != nil {
 		return nil, err

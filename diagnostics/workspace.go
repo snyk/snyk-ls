@@ -1,12 +1,12 @@
 package diagnostics
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
-	"github.com/rs/zerolog/log"
 	ignore "github.com/sabhiram/go-gitignore"
 	sglsp "github.com/sourcegraph/go-lsp"
 
@@ -18,7 +18,10 @@ import (
 
 var scannedWorkspaceFolders = sync.Map{}
 
-func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) (walkedFiles []string, err error) {
+func registerAllFilesFromWorkspace(
+	ctx context.Context,
+	workspaceUri sglsp.DocumentURI,
+) (walkedFiles []string, err error) {
 	workspace, err := filepath.Abs(uri.PathFromUri(workspaceUri))
 
 	if err != nil {
@@ -26,7 +29,7 @@ func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) (walkedFiles 
 	}
 
 	var patterns []string
-	patterns, err = loadIgnorePatterns(workspace)
+	patterns, err = loadIgnorePatterns(ctx, workspace)
 	if err != nil {
 		return nil, err
 	}
@@ -69,12 +72,13 @@ func removeFolderFromScanned(folder lsp.WorkspaceFolder) {
 	scannedWorkspaceFolders.Delete(folder)
 }
 
-func loadIgnorePatterns(workspace string) (patterns []string, err error) {
+func loadIgnorePatterns(ctx context.Context, workspace string) (patterns []string, err error) {
 	var ignores = ""
-	log.Debug().
-		Str("method", "loadIgnorePatterns").
-		Str("workspace", workspace).
-		Msg("searching for ignore files")
+	logger.
+		WithField("method", "loadIgnorePatterns").
+		WithField("workspace", workspace).
+		Debug(ctx, "searching for ignore files")
+
 	err = filepath.WalkDir(workspace, func(path string, dirEntry os.DirEntry, _ error) error {
 		if dirEntry == nil || dirEntry.IsDir() {
 			return nil
@@ -83,10 +87,16 @@ func loadIgnorePatterns(workspace string) (patterns []string, err error) {
 		if !(strings.HasSuffix(path, ".gitignore") || strings.HasSuffix(path, ".dcignore")) {
 			return nil
 		}
-		log.Debug().Str("method", "loadIgnorePatterns").Str("file", path).Msg("found ignore file")
+		logger.
+			WithField("method", "loadIgnorePatterns").
+			WithField("file", path).
+			Debug(ctx, "found ignore file")
 		content, err := os.ReadFile(path)
 		if err != nil {
-			log.Err(err).Msg("Can't read" + path)
+			logger.
+				WithField("method", "loadIgnorePatterns").
+				WithField("file", path).
+				Error(ctx, "can't read file")
 		}
 		ignores += string(content)
 		return err
@@ -97,34 +107,32 @@ func loadIgnorePatterns(workspace string) (patterns []string, err error) {
 	}
 
 	patterns = strings.Split(ignores, "\n")
-	log.Debug().Interface("ignorePatterns", patterns).Msg("Loaded ignore patterns")
+	logger.
+		WithField("method", "loadIgnorePatterns").
+		WithField("ignorePatterns", patterns).
+		Debug(ctx, "loaded Ignore Patterns")
 	return patterns, nil
 }
 
 func ignored(gitIgnore *ignore.GitIgnore, path string) bool {
-	ignored := false
-	ignored = gitIgnore.MatchesPath(path)
-	if ignored {
-		log.Trace().Str("method", "ignored").Str("path", path).Msg("matched")
-		return true
-	}
-	log.Trace().Str("method", "ignored").Str("path", path).Msg("not matched")
-	return false
+	return gitIgnore.MatchesPath(path)
 }
 
-func workspaceDiagnostics(workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
+func workspaceDiagnostics(ctx context.Context, workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	var diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic
 
-	_, err := registerAllFilesFromWorkspace(workspace.Uri)
+	_, err := registerAllFilesFromWorkspace(ctx, workspace.Uri)
 	if err != nil {
-		log.Error().Err(err).
-			Str("method", "workspaceDiagnostics").
-			Msg("Error occurred while registering files from workspace")
+		logger.
+			WithField("method", "workspaceDiagnostics").
+			WithField("workspace", workspace).
+			WithError(err).
+			Error(ctx, "couldn't register all files in workspace")
 	}
 
-	diagnostics = fetchAllRegisteredDocumentDiagnostics(workspace.Uri, lsp.ScanLevelWorkspace)
+	diagnostics = fetchAllRegisteredDocumentDiagnostics(ctx, workspace.Uri, lsp.ScanLevelWorkspace)
 	addToCache(diagnostics)
 	setFolderScanned(workspace)
 	for documentURI, d := range diagnostics {
@@ -135,17 +143,16 @@ func workspaceDiagnostics(workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
 	}
 }
 
-func WorkspaceScan(workspaceFolders []lsp.WorkspaceFolder) {
+func WorkspaceScan(ctx context.Context, workspaceFolders []lsp.WorkspaceFolder) {
 	preconditions.EnsureReadyForAnalysisAndWait()
 	notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Starting workspace scan."})
 	defer notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Workspace scan completed."})
 	var wg sync.WaitGroup
 	for _, workspace := range workspaceFolders {
 		wg.Add(1)
-		go workspaceDiagnostics(workspace, &wg)
+		go workspaceDiagnostics(ctx, workspace, &wg)
 	}
 
 	wg.Wait()
-	log.Info().Str("method", "Workspace").
-		Msg("Workspace scan completed")
+	logger.WithField("method", "WorkspaceScan").Info(ctx, "Workspace scan completed")
 }

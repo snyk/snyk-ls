@@ -1,6 +1,7 @@
 package oss
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -30,6 +31,7 @@ func Test_ScanWorkspace(t *testing.T) {
 	environment.Load()
 	preconditions.EnsureReadyForAnalysisAndWait()
 	environment.Format = environment.FormatHtml
+	ctx := context.Background()
 
 	path, _ := filepath.Abs("testdata")
 
@@ -42,7 +44,7 @@ func Test_ScanWorkspace(t *testing.T) {
 	wg.Add(1)
 	snykCli := &cli.SnykCli{}
 
-	go ScanWorkspace(snykCli, doc, &wg, dChan, hoverChan)
+	go ScanWorkspace(ctx, snykCli, doc, &wg, dChan, hoverChan)
 
 	diagnosticResult := <-dChan
 	hoverResult := <-hoverChan
@@ -58,6 +60,7 @@ func Test_ScanFile(t *testing.T) {
 	environment.Load()
 	preconditions.EnsureReadyForAnalysisAndWait()
 	environment.Format = environment.FormatHtml
+	ctx := context.Background()
 
 	path, _ := filepath.Abs("testdata/package.json")
 
@@ -67,7 +70,7 @@ func Test_ScanFile(t *testing.T) {
 	wg.Add(1)
 
 	snykCli := &cli.SnykCli{}
-	go ScanFile(snykCli, uri.PathToUri(path), &wg, dChan, hoverChan)
+	go ScanFile(ctx, snykCli, uri.PathToUri(path), &wg, dChan, hoverChan)
 
 	diagnosticResult := <-dChan
 	hoverResult := <-hoverChan
@@ -103,7 +106,7 @@ func Test_introducingPackageAndVersion(t *testing.T) {
 		From:           []string{"goof@1.0.1", "lodash@4.17.4"},
 	}
 
-	actualPackage, actualVersion := introducingPackageAndVersion(issue)
+	actualPackage, actualVersion := introducingPackageAndVersion(context.Background(), issue)
 	assert.Equal(t, "4.17.4", actualVersion)
 	assert.Equal(t, "lodash", actualPackage)
 }
@@ -111,7 +114,7 @@ func Test_introducingPackageAndVersion(t *testing.T) {
 func Test_introducingPackageAndVersionJava(t *testing.T) {
 	issue := mavenTestIssue()
 
-	actualPackage, actualVersion := introducingPackageAndVersion(issue)
+	actualPackage, actualVersion := introducingPackageAndVersion(context.Background(), issue)
 	assert.Equal(t, "4.17.4", actualVersion)
 	assert.Equal(t, "test", actualPackage)
 }

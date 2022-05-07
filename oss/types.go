@@ -1,6 +1,8 @@
 package oss
 
-import "github.com/snyk/snyk-ls/lsp"
+import (
+	"github.com/snyk/snyk-ls/lsp"
+)
 
 type identifiers struct {
 	CVE []string `json:"CVE"`

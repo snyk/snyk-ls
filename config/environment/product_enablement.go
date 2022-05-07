@@ -1,10 +1,9 @@
 package environment
 
 import (
+	"context"
 	"strconv"
 	"sync"
-
-	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/internal/concurrency"
 )
@@ -43,7 +42,7 @@ func (e *EnabledProducts) initializeDefaultProductEnablement() {
 	e.Advisor.Set(false)
 }
 
-func EnabledProductsFromEnv() {
+func EnabledProductsFromEnv(ctx context.Context) {
 	oss := getValue(ActivateSnykOssKey)
 	code := getValue(ActivateSnykCodeKey)
 	iac := getValue(ActivateSnykIacKey)
@@ -53,7 +52,10 @@ func EnabledProductsFromEnv() {
 	if oss != "" {
 		parseBool, err := strconv.ParseBool(oss)
 		if err != nil {
-			log.Warn().Err(err).Str("method", "EnabledProductsFromEnv").Msgf("couldn't parse oss config %s", oss)
+			Logger.
+				WithField("method", "EnabledProductsFromEnv").
+				WithField("oss", oss).
+				Warn(ctx, "couldn't parse config")
 		}
 		CurrentEnabledProducts.OpenSource.Set(parseBool)
 	}
@@ -61,7 +63,10 @@ func EnabledProductsFromEnv() {
 	if code != "" {
 		parseBool, err := strconv.ParseBool(code)
 		if err != nil {
-			log.Warn().Err(err).Str("method", "EnabledProductsFromEnv").Msgf("couldn't parse code config %s", code)
+			Logger.
+				WithField("method", "EnabledProductsFromEnv").
+				WithField("code", code).
+				Warn(ctx, "couldn't parse config")
 		}
 		CurrentEnabledProducts.Code.Set(parseBool)
 	}
@@ -69,7 +74,10 @@ func EnabledProductsFromEnv() {
 	if iac != "" {
 		parseBool, err := strconv.ParseBool(iac)
 		if err != nil {
-			log.Warn().Err(err).Str("method", "EnabledProductsFromEnv").Msgf("couldn't parse iac config %s", iac)
+			Logger.
+				WithField("method", "EnabledProductsFromEnv").
+				WithField("iac", iac).
+				Warn(ctx, "couldn't parse config")
 		}
 		CurrentEnabledProducts.Iac.Set(parseBool)
 	}
@@ -77,14 +85,20 @@ func EnabledProductsFromEnv() {
 	if container != "" {
 		parseBool, err := strconv.ParseBool(container)
 		if err != nil {
-			log.Warn().Err(err).Str("method", "EnabledProductsFromEnv").Msgf("couldn't parse container config %s", container)
+			Logger.
+				WithField("method", "EnabledProductsFromEnv").
+				WithField("container", container).
+				Warn(ctx, "couldn't parse config")
 		}
 		CurrentEnabledProducts.Container.Set(parseBool)
 	}
 	if advisor != "" {
 		parseBool, err := strconv.ParseBool(advisor)
 		if err != nil {
-			log.Warn().Err(err).Str("method", "EnabledProductsFromEnv").Msgf("couldn't parse advisor config %s", advisor)
+			Logger.
+				WithField("method", "EnabledProductsFromEnv").
+				WithField("advisor", advisor).
+				Warn(ctx, "couldn't parse config")
 		}
 		CurrentEnabledProducts.Advisor.Set(parseBool)
 	}

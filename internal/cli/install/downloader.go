@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,7 +11,6 @@ import (
 	"time"
 
 	"github.com/adrg/xdg"
-	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/cli"
@@ -50,15 +50,21 @@ func onProgress(downloaded, total int64, progressToken lsp.ProgressToken, progre
 	time.Sleep(time.Millisecond * 2)
 }
 
-func (d *Downloader) lockFileName() (string, error) {
-	path, err := d.lsPath()
+func (d *Downloader) lockFileName(ctx context.Context) (string, error) {
+	path, err := d.lsPath(ctx)
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(path, "snyk-cli-download.lock"), nil
 }
 
-func (d *Downloader) Download(r *Release, isUpdate bool, progressCh chan lsp.ProgressParams, cancelProgressCh chan lsp.ProgressToken) error {
+func (d *Downloader) Download(
+	ctx context.Context,
+	r *Release,
+	isUpdate bool,
+	progressCh chan lsp.ProgressParams,
+	cancelProgressCh chan lsp.ProgressToken,
+) error {
 	if r == nil {
 		return fmt.Errorf("release cannot be nil")
 	}
@@ -66,7 +72,11 @@ func (d *Downloader) Download(r *Release, isUpdate bool, progressCh chan lsp.Pro
 	if isUpdate {
 		kindStr = "update"
 	}
-	log.Debug().Str("method", "Download").Str("release", r.Version).Msgf("attempting %s", kindStr)
+
+	logger.
+		WithField("method", "Download").
+		WithField("release", r.Version).
+		Debug(ctx, "attempting "+kindStr)
 
 	cliDiscovery := Discovery{}
 
@@ -81,7 +91,11 @@ func (d *Downloader) Download(r *Release, isUpdate bool, progressCh chan lsp.Pro
 
 	client := httpclient.NewHTTPClient()
 
-	log.Info().Str("download_url", downloadURL).Msgf("Snyk CLI %s in progress...", kindStr)
+	logger.
+		WithField("method", "Download").
+		WithField("downloadURL", downloadURL).
+		Info(ctx, fmt.Sprintf("Snyk CLI %s in progress...", kindStr))
+
 	var prog lsp.ProgressParams
 	if isUpdate {
 		prog = progress.New("Updating Snyk CLI...", "", true)
@@ -110,8 +124,10 @@ func (d *Downloader) Download(r *Release, isUpdate bool, progressCh chan lsp.Pro
 			select {
 			case token := <-cancelProgressCh:
 				if token == prog.Token {
-					body.Close()
-					log.Info().Str("method", "Download").Msgf("Cancellation received. Aborting %s.", kindStr)
+					_ = body.Close()
+					logger.
+						WithField("method", "Download").
+						Info(ctx, "Cancellation received. Aborting "+kindStr)
 				}
 			case <-doneCh:
 				return
@@ -127,7 +143,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool, progressCh chan lsp.Pro
 		_ = Body.Close()
 		_ = os.Remove(cliDiscovery.ExecutableName(isUpdate))
 		doneCh <- true
-		log.Info().Str("method", "Download").Msgf("finished Snyk CLI %s", kindStr)
+		logger.WithField("method", "Download").Info(ctx, "finished Snyk CLI "+kindStr)
 	}(resp.Body)
 
 	// pipe stream
@@ -136,7 +152,10 @@ func (d *Downloader) Download(r *Release, isUpdate bool, progressCh chan lsp.Pro
 	_ = os.MkdirAll(xdg.DataHome, 0755)
 	tmpDirPath, err := os.MkdirTemp(xdg.DataHome, "downloads")
 	if err != nil {
-		log.Err(err).Str("method", "Download").Msg("couldn't create tmpdir")
+		logger.
+			WithField("method", "Download").
+			WithError(err).
+			Error(ctx, "couldn't create tmpdir ")
 		return err
 	}
 	defer func(path string) {
@@ -153,20 +172,23 @@ func (d *Downloader) Download(r *Release, isUpdate bool, progressCh chan lsp.Pro
 	if err != nil {
 		return err
 	}
-	log.Info().Int64("bytes_copied", bytesCopied).Msgf("copied to %s", cliTmpFile.Name())
+	logger.
+		WithField("method", "Download").
+		WithField("bytesCopied", bytesCopied).
+		Info(ctx, "copied to "+cliTmpFile.Name())
 
 	expectedChecksum, err := expectedChecksum(r, &cliDiscovery)
 	if err != nil {
 		return err
 	}
 
-	err = compareChecksum(expectedChecksum, cliTmpFile.Name())
+	err = compareChecksum(ctx, expectedChecksum, cliTmpFile.Name())
 	if err != nil {
 		return err
 	}
 
 	_ = cliTmpFile.Close() // close file to allow moving it on Windows
-	err = d.moveToDestination(cliDiscovery.ExecutableName(isUpdate), cliTmpFile.Name())
+	err = d.moveToDestination(ctx, cliDiscovery.ExecutableName(isUpdate), cliTmpFile.Name())
 
 	if isUpdate {
 		progress.EndProgress(prog.Token, "Snyk CLI has been updated.", progressCh)
@@ -190,29 +212,40 @@ func getContentLength(client *http.Client, downloadURL string) (int, error) {
 	return length, nil
 }
 
-func (d *Downloader) createLockFile() error {
-	lockFile, err := d.lockFileName()
+func (d *Downloader) createLockFile(ctx context.Context) error {
+	lockFile, err := d.lockFileName(ctx)
 	if err != nil {
-		log.Err(err).Str("method", "createLockFile").Str("lockfile", lockFile).Msg("error getting lock file name")
+		logger.
+			WithField("method", "createLockFile").
+			WithField("lockfile", lockFile).
+			WithError(err).
+			Error(ctx, "error getting lock file name")
 		return err
 	}
 
 	file, err := os.Create(lockFile)
 	if err != nil {
-		log.Err(err).Str("method", "createLockFile").Str("lockfile", lockFile).Msg("couldn't create lockfile")
+		logger.
+			WithField("method", "createLockFile").
+			WithField("lockfile", lockFile).
+			WithError(err).
+			Error(ctx, "couldn't create lockfile")
 		return err
 	}
 	defer file.Close()
 	return nil
 }
 
-func (d *Downloader) moveToDestination(dest string, fullSrcPath string) (err error) {
-	lsPath, err := d.lsPath()
+func (d *Downloader) moveToDestination(ctx context.Context, dest string, fullSrcPath string) (err error) {
+	lsPath, err := d.lsPath(ctx)
 	if err != nil {
 		return err
 	}
 	dstCliFile := filepath.Join(lsPath, dest)
-	log.Info().Str("method", "moveToDestination").Str("path", dstCliFile).Msg("copying Snyk CLI to user directory")
+	logger.
+		WithField("method", "moveToDestination").
+		WithField("path", dstCliFile).
+		Info(ctx, "copying Snyk CLI to user directory")
 
 	// for Windows, we have to remove original file first before move/rename
 	if _, err := os.Stat(dstCliFile); err == nil {
@@ -223,13 +256,19 @@ func (d *Downloader) moveToDestination(dest string, fullSrcPath string) (err err
 	}
 	cli.Mutex.Lock()
 	defer cli.Mutex.Unlock()
-	log.Info().Str("method", "moveToDestination").Str("tempFilePath", fullSrcPath).Msg("tempfile path")
+	logger.
+		WithField("method", "moveToDestination").
+		WithField("tempFilePath", fullSrcPath).
+		Info(ctx, "tempfile path")
 	err = os.Rename(fullSrcPath, dstCliFile)
 	if err != nil {
 		return err
 	}
 
-	log.Info().Str("method", "moveToDestination").Str("path", dstCliFile).Msg("setting executable bit for Snyk CLI")
+	logger.
+		WithField("method", "moveToDestination").
+		WithField("path", dstCliFile).
+		Info(ctx, "setting executable bit for Snyk CLI")
 	err = os.Chmod(dstCliFile, 0755)
 	if err != nil {
 		return err
@@ -237,11 +276,13 @@ func (d *Downloader) moveToDestination(dest string, fullSrcPath string) (err err
 	return nil
 }
 
-func (d *Downloader) lsPath() (string, error) {
+func (d *Downloader) lsPath(ctx context.Context) (string, error) {
 	lsPath := filepath.Join(xdg.DataHome, userDirFolderName)
 	err := os.MkdirAll(lsPath, 0755)
 	if err != nil {
-		log.Err(err).Str("method", "lsPath").Msgf("couldn't create %s", lsPath)
+		logger.
+			WithField("method", "lsPath").
+			Info(ctx, "couldn't create "+lsPath)
 		return "", err
 	}
 	return lsPath, nil

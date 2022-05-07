@@ -24,11 +24,11 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 
 func TestErrorReporting_Environment(t *testing.T) {
 	config.IsDevelopment = true
-	curEnvironment := environment()
+	curEnvironment := determineEnvironment()
 	assert.Equal(t, "development", curEnvironment)
 
 	config.IsDevelopment = false
-	curEnvironment = environment()
+	curEnvironment = determineEnvironment()
 	assert.Equal(t, "production", curEnvironment)
 }
 
