@@ -2,6 +2,7 @@ package environment
 
 import (
 	"strconv"
+	"sync"
 
 	"github.com/rs/zerolog/log"
 
@@ -24,16 +25,22 @@ const (
 	ActivateSnykAdvisorKey   = "ACTIVATE_SNYK_ADVISOR"
 )
 
-var CurrentEnabledProducts = initializeDefaultProductEnablement()
+var CurrentEnabledProducts EnabledProducts
+var initializeMutex = &sync.Mutex{}
 
-func initializeDefaultProductEnablement() EnabledProducts {
-	prods := EnabledProducts{}
-	prods.OpenSource.Set(true)
-	prods.Code.Set(true)
-	prods.Iac.Set(true)
-	prods.Container.Set(false)
-	prods.Advisor.Set(false)
-	return prods
+func init() {
+	initializeMutex.Lock()
+	CurrentEnabledProducts = EnabledProducts{}
+	CurrentEnabledProducts.initializeDefaultProductEnablement()
+	initializeMutex.Unlock()
+}
+
+func (e *EnabledProducts) initializeDefaultProductEnablement() {
+	e.OpenSource.Set(true)
+	e.Code.Set(true)
+	e.Iac.Set(true)
+	e.Container.Set(false)
+	e.Advisor.Set(false)
 }
 
 func EnabledProductsFromEnv() {
