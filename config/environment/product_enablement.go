@@ -2,7 +2,6 @@ package environment
 
 import (
 	"strconv"
-	"sync"
 
 	"github.com/rs/zerolog/log"
 
@@ -26,13 +25,10 @@ const (
 )
 
 var CurrentEnabledProducts EnabledProducts
-var initializeMutex = &sync.Mutex{}
 
 func init() {
-	initializeMutex.Lock()
 	CurrentEnabledProducts = EnabledProducts{}
 	CurrentEnabledProducts.initializeDefaultProductEnablement()
-	initializeMutex.Unlock()
 }
 
 func (e *EnabledProducts) initializeDefaultProductEnablement() {
