@@ -23,11 +23,18 @@ import (
 const snykCodeServiceKey = "service"
 
 var (
-	registeredDocuments                  = concurrency.AtomicMap{}
-	documentDiagnosticCache              = concurrency.AtomicMap{}
-	snykCode                             = concurrency.AtomicMap{}
-	Cli                     cli.Executor = cli.SnykCli{}
+	registeredDocuments     concurrency.AtomicMap
+	documentDiagnosticCache concurrency.AtomicMap
+	snykCode                concurrency.AtomicMap
+	Cli                     cli.Executor
 )
+
+func init() {
+	registeredDocuments = concurrency.AtomicMap{}
+	documentDiagnosticCache = concurrency.AtomicMap{}
+	snykCode = concurrency.AtomicMap{}
+	Cli = cli.SnykCli{}
+}
 
 func SnykCode() code.SnykCodeService {
 	var sc code.SnykCodeService

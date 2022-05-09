@@ -24,16 +24,19 @@ const (
 	ActivateSnykAdvisorKey   = "ACTIVATE_SNYK_ADVISOR"
 )
 
-var CurrentEnabledProducts = initializeDefaultProductEnablement()
+var CurrentEnabledProducts EnabledProducts
 
-func initializeDefaultProductEnablement() EnabledProducts {
-	prods := EnabledProducts{}
-	prods.OpenSource.Set(true)
-	prods.Code.Set(true)
-	prods.Iac.Set(true)
-	prods.Container.Set(false)
-	prods.Advisor.Set(false)
-	return prods
+func init() {
+	CurrentEnabledProducts = EnabledProducts{}
+	CurrentEnabledProducts.initializeDefaultProductEnablement()
+}
+
+func (e *EnabledProducts) initializeDefaultProductEnablement() {
+	e.OpenSource.Set(true)
+	e.Code.Set(true)
+	e.Iac.Set(true)
+	e.Container.Set(false)
+	e.Advisor.Set(false)
 }
 
 func EnabledProductsFromEnv() {
