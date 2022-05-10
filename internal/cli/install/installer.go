@@ -14,7 +14,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/config/environment"
-	"github.com/snyk/snyk-ls/internal/progress"
 )
 
 var Mutex = &sync.Mutex{}
@@ -54,7 +53,7 @@ func (i *Install) Install(ctx context.Context) (string, error) {
 }
 
 func (i *Install) installRelease(release *Release, ctx context.Context) (string, error) {
-	d := &Downloader{}
+	d := NewDownloader()
 	lockFileName, err := createLockFile(d)
 	if err != nil {
 		return "", err
@@ -63,7 +62,7 @@ func (i *Install) installRelease(release *Release, ctx context.Context) (string,
 		cleanupLockFile(name)
 	}(lockFileName)
 
-	err = d.Download(release, false, progress.ProgressChannel, progress.CancelProgressChannel)
+	err = d.Download(release, false)
 	if err != nil {
 		return "", err
 	}
@@ -104,7 +103,7 @@ func (i *Install) updateFromRelease(r *Release, ctx context.Context) (bool, erro
 	}
 
 	// Carry out the download of the latest release
-	err = d.Download(r, true, progress.ProgressChannel, progress.CancelProgressChannel)
+	err = d.Download(r, true)
 	if err != nil {
 		// download failed
 		return false, err

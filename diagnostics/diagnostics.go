@@ -127,9 +127,9 @@ func fetchAllRegisteredDocumentDiagnostics(documentURI sglsp.DocumentURI, level 
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 	var bundles = make([]*code.BundleImpl, 0, 10)
 
-	p := progress.New(fmt.Sprintf("Scanning for issues in %s", uri.PathFromUri(documentURI)), "", false)
-	progress.BeginProgress(p, progress.ProgressChannel)
-	defer progress.EndProgress(p.Token, fmt.Sprintf("Scan complete. Found %d issues.", len(diagnostics)), progress.ProgressChannel)
+	p := progress.NewTracker(false)
+	p.Begin(fmt.Sprintf("Scanning for issues in %s", uri.PathFromUri(documentURI)), "")
+	defer p.End(fmt.Sprintf("Scan complete. Found %d issues.", len(diagnostics)))
 
 	wg := sync.WaitGroup{}
 
@@ -143,7 +143,7 @@ func fetchAllRegisteredDocumentDiagnostics(documentURI sglsp.DocumentURI, level 
 		dChan = make(chan lsp.DiagnosticResult, 10000)
 		fileLevelFetch(documentURI, environment.CurrentEnabledProducts, bundles, &wg, dChan, hoverChan)
 	}
-	progress.ReportProgress(p.Token, 50, progress.ProgressChannel)
+	p.Report(50)
 	wg.Wait()
 	log.Debug().
 		Str("method", "fetchAllRegisteredDocumentDiagnostics").

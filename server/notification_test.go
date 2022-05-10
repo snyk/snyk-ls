@@ -78,9 +78,8 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 		log.Fatal().Err(err)
 	}
 
-	expectedProgress := progress.New("title", "message", true)
-	progress.BeginProgress(expectedProgress, progress.ProgressChannel)
-
+	progressTracker := progress.NewTracker(true)
+	progressTracker.Begin("title", "message")
 	// should receive progress notification
 	assert.Eventually(
 		t,
@@ -89,7 +88,7 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 			for _, c := range callbacks {
 				actualProgress := lsp.ProgressParams{}
 				_ = c.UnmarshalParams(&actualProgress)
-				if expectedProgress.Token == actualProgress.Token {
+				if progressTracker.GetToken() == actualProgress.Token {
 					return true
 				}
 			}
