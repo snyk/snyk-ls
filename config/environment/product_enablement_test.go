@@ -20,7 +20,7 @@ func TestGetEnabledProducts_DefaultValues(t *testing.T) {
 	os.Unsetenv(ActivateSnykAdvisorKey)
 	EnabledProductsFromEnv()
 	assert.Equal(t, true, CurrentEnabledProducts.OpenSource.Get())
-	assert.Equal(t, true, CurrentEnabledProducts.Code.Get())
+	assert.Equal(t, false, CurrentEnabledProducts.Code.Get())
 	assert.Equal(t, true, CurrentEnabledProducts.Iac.Get())
 	assert.Equal(t, false, CurrentEnabledProducts.Container.Get())
 	assert.Equal(t, false, CurrentEnabledProducts.Advisor.Get())

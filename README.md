@@ -115,9 +115,9 @@ level is `info`
 
 Snyk LS and Snyk CLI support and need certain environment variables to function:
 
-1. `ACTIVATE_SNYK_OPEN_SOURCE` `true|false` to toggle Snyk Open Source scans
-2. `ACTIVATE_SNYK_CODE` `true|false` to toggle Snyk Code scans
-3. `ACTIVATE_SNYK_IAC` `true|false` to toggle Snyk Infrastructure-as-Code scans
+1. `ACTIVATE_SNYK_OPEN_SOURCE` `true (default)|false` to toggle Snyk Open Source scans
+2. `ACTIVATE_SNYK_CODE` `true|false(default)` to toggle Snyk Code scans
+3. `ACTIVATE_SNYK_IAC` `true(default)|false` to toggle Snyk Infrastructure-as-Code scans
 4. `DEEPROXY_API_URL` to find the Snyk Code backend service (default is `https://deeproxy.snyk.io`)
 5. `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` to define the http proxy to be used
 6. `JAVA_HOME` to analyse Java JVM-based projects via Snyk CLI
