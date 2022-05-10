@@ -33,7 +33,7 @@ func init() {
 
 func (e *EnabledProducts) initializeDefaultProductEnablement() {
 	e.OpenSource.Set(true)
-	e.Code.Set(true)
+	e.Code.Set(false)
 	e.Iac.Set(true)
 	e.Container.Set(false)
 	e.Advisor.Set(false)
