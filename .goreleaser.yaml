@@ -37,9 +37,6 @@ builds:
     ldflags:
       - -s -w -X github.com/snyk/snyk-ls/config.Version={{.Version}}
     mod_timestamp: "{{ .CommitTimestamp }}"
-#    hooks:
-#      post:
-#       - upx -9fv --lzma "{{ .Path }}"
 
 checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
