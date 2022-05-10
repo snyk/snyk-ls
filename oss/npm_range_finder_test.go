@@ -8,13 +8,12 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 func TestNpmRangeFinder_Find(t *testing.T) {
-	environment.Load()
-	environment.Format = environment.FormatHtml
+	config.CurrentConfig.SetFormat(config.FormatHtml)
 
 	var issue = ossIssue{
 		Id:             "testIssue",

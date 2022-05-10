@@ -11,7 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -135,7 +135,7 @@ func cliCmd(u sglsp.DocumentURI) []string {
 		log.Err(err).Str("method", "iac.ScanFile").
 			Msg("Error while extracting file absolutePath")
 	}
-	cmd := cli.ExpandParametersFromConfig([]string{environment.CliPath(), "iac", "test", path, "--json"})
+	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig.CliPath(), "iac", "test", path, "--json"})
 	log.Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
 	return cmd
 }
@@ -181,7 +181,7 @@ func convertDiagnostics(res iacScanResult) ([]lsp.Diagnostic, []lsp.HoverDetails
 			End:   sglsp.Position{Line: issue.LineNumber - 1, Character: 80},
 		}
 
-		if environment.Format == environment.FormatHtml {
+		if config.CurrentConfig.Format() == config.FormatHtml {
 			title = string(markdown.ToHTML([]byte(title), nil, nil))
 			description = string(markdown.ToHTML([]byte(description), nil, nil))
 			impact = string(markdown.ToHTML([]byte(impact), nil, nil))

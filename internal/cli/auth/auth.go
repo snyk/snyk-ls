@@ -7,7 +7,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/lsp"
@@ -49,7 +49,7 @@ func Authenticate() {
 		}
 		error_reporting.CaptureError(err)
 	} else {
-		err = environment.SetToken(token)
+		err = config.CurrentConfig.SetToken(token)
 		if err != nil {
 			log.Err(err).Str("method", "Authenticate")
 			error_reporting.CaptureError(err)

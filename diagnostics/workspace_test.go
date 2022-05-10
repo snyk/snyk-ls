@@ -81,26 +81,24 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 	assert.Equal(t, []string{""}, actualPatterns)
 }
 
-func Test_RegisterAllFilesFromWorkspace_Without_Ignored(t *testing.T) {
-	ClearRegisteredDocuments()
+func Test_GetWorkspaceFiles(t *testing.T) {
 	_, workspace, ignoredFilePath, notIgnoredFilePath, _ := setupIgnoreWorkspace()
 	defer os.RemoveAll(workspace)
 
-	_, err := registerAllFilesFromWorkspace(uri.PathToUri(workspace))
+	files, err := getWorkspaceFiles(uri.PathToUri(workspace))
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error while registering " + workspace)
 	}
-	assert.Equal(t, 1, registeredDocuments.Length()) //.gitignore is not supported by any product, so not registered
+	assert.Len(t, files, 2)
 	assert.NotEqual(t, sglsp.TextDocumentItem{}, DocumentDiagnosticsFromCache(uri.PathToUri(notIgnoredFilePath)))
 	assert.Nil(t, DocumentDiagnosticsFromCache(uri.PathToUri(ignoredFilePath)))
 }
 
-func Test_RegisterAllFilesFromWorkspace_SkipIgnoredDirs(t *testing.T) {
-	ClearRegisteredDocuments()
+func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 	_, workspace, _, _, ignoredFileInDir := setupIgnoreWorkspace()
 	defer os.RemoveAll(workspace)
 
-	walkedFiles, err := registerAllFilesFromWorkspace(uri.PathToUri(workspace))
+	walkedFiles, err := getWorkspaceFiles(uri.PathToUri(workspace))
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error while registering " + workspace)
 	}

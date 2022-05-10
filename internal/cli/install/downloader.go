@@ -16,18 +16,22 @@ import (
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/cli/install/httpclient"
 	"github.com/snyk/snyk-ls/internal/progress"
-	"github.com/snyk/snyk-ls/lsp"
 )
 
-type Downloader struct{}
+type Downloader struct {
+	progressTracker *progress.Tracker
+}
+
+func NewDownloader() *Downloader {
+	return &Downloader{progressTracker: progress.NewTracker(true)}
+}
 
 // writeCounter counts the number of bytes written to it.
 type writeCounter struct {
-	total         int64 // total size
-	downloaded    int64 // downloaded # of bytes transferred
-	onProgress    func(downloaded int64, total int64, progressToken lsp.ProgressToken, progressCh chan lsp.ProgressParams)
-	progressToken lsp.ProgressToken
-	progressCh    chan lsp.ProgressParams
+	total           int64 // total size
+	downloaded      int64 // downloaded # of bytes transferred
+	onProgress      func(downloaded int64, total int64, progressTracker *progress.Tracker)
+	progressTracker *progress.Tracker
 }
 
 // Write implements the io.Writer interface.
@@ -36,17 +40,17 @@ type writeCounter struct {
 func (wc *writeCounter) Write(p []byte) (n int, e error) {
 	n = len(p)
 	wc.downloaded += int64(n)
-	wc.onProgress(wc.downloaded, wc.total, wc.progressToken, wc.progressCh)
+	wc.onProgress(wc.downloaded, wc.total, wc.progressTracker)
 	return
 }
 
-func newWriter(size int64, progressToken lsp.ProgressToken, progressCh chan lsp.ProgressParams, onProgress func(downloaded, total int64, progressToken lsp.ProgressToken, progressCh chan lsp.ProgressParams)) io.Writer {
-	return &writeCounter{total: size, progressToken: progressToken, progressCh: progressCh, onProgress: onProgress}
+func newWriter(size int64, progressTracker *progress.Tracker, onProgress func(downloaded, total int64, progressTracker *progress.Tracker)) io.Writer {
+	return &writeCounter{total: size, progressTracker: progressTracker, onProgress: onProgress}
 }
 
-func onProgress(downloaded, total int64, progressToken lsp.ProgressToken, progressCh chan lsp.ProgressParams) {
+func onProgress(downloaded, total int64, progressTracker *progress.Tracker) {
 	percentage := float64(downloaded) / float64(total) * 100 // todo: don't report every byte
-	progress.ReportProgress(progressToken, uint32(percentage), progressCh)
+	progressTracker.Report(uint32(percentage))
 	time.Sleep(time.Millisecond * 2)
 }
 
@@ -58,7 +62,7 @@ func (d *Downloader) lockFileName() (string, error) {
 	return filepath.Join(path, "snyk-cli-download.lock"), nil
 }
 
-func (d *Downloader) Download(r *Release, isUpdate bool, progressCh chan lsp.ProgressParams, cancelProgressCh chan lsp.ProgressToken) error {
+func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	if r == nil {
 		return fmt.Errorf("release cannot be nil")
 	}
@@ -82,14 +86,13 @@ func (d *Downloader) Download(r *Release, isUpdate bool, progressCh chan lsp.Pro
 	client := httpclient.NewHTTPClient()
 
 	log.Info().Str("download_url", downloadURL).Msgf("Snyk CLI %s in progress...", kindStr)
-	var prog lsp.ProgressParams
+
 	if isUpdate {
-		prog = progress.New("Updating Snyk CLI...", "", true)
+		d.progressTracker.Begin("Updating Snyk CLI...", "")
 	} else {
-		prog = progress.New("Downloading Snyk CLI...", "We download Snyk CLI to run security scans.", true)
+		d.progressTracker.Begin("Downloading Snyk CLI...", "We download Snyk CLI to run security scans.")
 	}
 
-	progress.BeginProgress(prog, progressCh)
 	doneCh := make(chan bool)
 
 	var resp *http.Response
@@ -106,17 +109,11 @@ func (d *Downloader) Download(r *Release, isUpdate bool, progressCh chan lsp.Pro
 	}
 
 	go func(body io.ReadCloser) {
-		for {
-			select {
-			case token := <-cancelProgressCh:
-				if token == prog.Token {
-					body.Close()
-					log.Info().Str("method", "Download").Msgf("Cancellation received. Aborting %s.", kindStr)
-				}
-			case <-doneCh:
-				return
-			}
-		}
+		d.progressTracker.CancelOrDone(func() {
+			body.Close()
+
+			log.Info().Str("method", "Download").Msgf("Cancellation received. Aborting %s.", kindStr)
+		}, doneCh)
 	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
@@ -131,7 +128,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool, progressCh chan lsp.Pro
 	}(resp.Body)
 
 	// pipe stream
-	cliReader := io.TeeReader(resp.Body, newWriter(int64(length), prog.Token, progressCh, onProgress))
+	cliReader := io.TeeReader(resp.Body, newWriter(int64(length), d.progressTracker, onProgress))
 
 	_ = os.MkdirAll(xdg.DataHome, 0755)
 	tmpDirPath, err := os.MkdirTemp(xdg.DataHome, "downloads")
@@ -169,9 +166,9 @@ func (d *Downloader) Download(r *Release, isUpdate bool, progressCh chan lsp.Pro
 	err = d.moveToDestination(cliDiscovery.ExecutableName(isUpdate), cliTmpFile.Name())
 
 	if isUpdate {
-		progress.EndProgress(prog.Token, "Snyk CLI has been updated.", progressCh)
+		d.progressTracker.End("Snyk CLI has been updated.")
 	} else {
-		progress.EndProgress(prog.Token, "Snyk CLI has been downloaded.", progressCh)
+		d.progressTracker.End("Snyk CLI has been downloaded.")
 	}
 
 	return err

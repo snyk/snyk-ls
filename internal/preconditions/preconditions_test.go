@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -15,28 +15,29 @@ func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 	testutil.IntegTest(t)
 	testutil.CreateDummyProgressListener(t)
 
-	_ = environment.SetCliPath("")
-	if !environment.Authenticated() {
-		_ = environment.SetToken("dummy") // we don't want to authenticate
+	_ = config.CurrentConfig.SetCliPath("")
+	if !config.CurrentConfig.Authenticated() {
+		_ = config.CurrentConfig.SetToken("dummy") // we don't want to authenticate
 	}
 	EnsureReadyForAnalysisAndWait()
-	assert.NotEmpty(t, environment.CliPath())
+	assert.NotEmpty(t, config.CurrentConfig.CliPath())
 }
 
 func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
+	testutil.UnitTest(t)
 	tempDir := t.TempDir()
 	tempFile := testutil.CreateTempFile(tempDir, t)
-	err := environment.SetCliPath(tempFile.Name())
+	err := config.CurrentConfig.SetCliPath(tempFile.Name())
 	if err != nil {
-		t.Fatal(t, "Couldn't set cli path in environment")
+		t.Fatal(t, "Couldn't set cli path in config.CurrentConfig")
 	}
 	defer func() {
-		_ = environment.SetCliPath("")
+		_ = config.CurrentConfig.SetCliPath("")
 	}()
 
 	EnsureReadyForAnalysisAndWait()
 
-	assert.Equal(t, tempFile.Name(), environment.CliPath())
+	assert.Equal(t, tempFile.Name(), config.CurrentConfig.CliPath())
 }
 
 func Test_isOutdatedCli_DetectsOutdatedCli(t *testing.T) {
@@ -44,7 +45,7 @@ func Test_isOutdatedCli_DetectsOutdatedCli(t *testing.T) {
 	temp := t.TempDir()
 	file := testutil.CreateTempFile(temp, t)
 
-	err := environment.SetCliPath(file.Name())
+	err := config.CurrentConfig.SetCliPath(file.Name())
 	if err != nil {
 		t.Fatal(t, "Failed to set cli path to the temp cli file")
 	}
@@ -66,12 +67,12 @@ func Test_isOutdatedCli_DetectsLatestCli(t *testing.T) {
 	// prepare user directory with OS specific dummy CLI binary
 	temp := t.TempDir()
 	file := testutil.CreateTempFile(temp, t)
-	err := environment.SetCliPath(file.Name())
+	err := config.CurrentConfig.SetCliPath(file.Name())
 	if err != nil {
 		t.Fatal(t, "Failed to set cli path to the temp cli file")
 	}
 	defer func() {
-		_ = environment.SetCliPath("")
+		_ = config.CurrentConfig.SetCliPath("")
 	}()
 
 	latestTime := time.Now().Add(time.Hour * 24 * 4) // exactly 4 days is considered as not outdated.

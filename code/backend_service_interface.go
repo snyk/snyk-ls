@@ -6,14 +6,14 @@ import (
 	"github.com/snyk/snyk-ls/lsp"
 )
 
-type SnykCodeService interface {
+type SnykCodeClient interface {
 	GetFilters() (configFiles []string, extensions []string, err error)
 
-	CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error)
+	CreateBundle(files map[sglsp.DocumentURI]BundleFile) (string, []sglsp.DocumentURI, error)
 
 	ExtendBundle(
 		bundleHash string,
-		files map[sglsp.DocumentURI]File,
+		files map[sglsp.DocumentURI]BundleFile,
 		removedFiles []sglsp.DocumentURI,
 	) (string, []sglsp.DocumentURI, error)
 
@@ -25,7 +25,7 @@ type SnykCodeService interface {
 	) (
 		map[sglsp.DocumentURI][]lsp.Diagnostic,
 		map[sglsp.DocumentURI][]lsp.HoverDetails,
-		string,
+		AnalysisStatus,
 		error,
 	)
 }

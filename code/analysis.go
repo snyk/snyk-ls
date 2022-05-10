@@ -139,53 +139,6 @@ type AnalysisRequest struct {
 	Legacy      bool               `json:"legacy"`
 }
 
-type Marker struct {
-	Msg []int `json:"msg"`
-	Pos []int `json:"pos"`
-}
-
-type FilePosition struct {
-	Rows   []int    `json:"rows"`
-	Cols   []int    `json:"cols"`
-	Marker []Marker `json:"marker"`
-}
-
-type FileSuggestions map[string][]FilePosition
-
-type CommitChangeLine struct {
-	Line       string `json:"line"`
-	LineNumber int    `json:"lineNumber"`
-	LineChange string `json:"lineChange"`
-}
-
-type ExampleCommitFix struct {
-	CommitURL string             `json:"commitURL"`
-	Lines     []CommitChangeLine `json:"lines"`
-}
-
-type Suggestion struct {
-	Id                        string             `json:"id"`
-	Message                   string             `json:"message"`
-	Severity                  int                `json:"severity"`
-	LeadURL                   string             `json:"leadURL"`
-	Rule                      string             `json:"rule"`
-	Tags                      []string           `json:"tags"`
-	Categories                []string           `json:"categories"`
-	RepoDatasetSize           int                `json:"repoDatasetSize"`
-	ExampleCommitDescriptions []string           `json:"exampleCommitDescriptions"`
-	ExampleCommitFixes        []ExampleCommitFix `json:"exampleCommitFixes"`
-	Cwe                       []string           `json:"cwe"`
-	Title                     string             `json:"title"`
-	Text                      string             `json:"text"`
-}
-
-type AnalysisResponse struct {
-	Status      string                              `json:"status"`
-	Progress    float32                             `json:"progress"`
-	Files       map[lsp.DocumentURI]FileSuggestions `json:"files"`
-	Suggestions map[string]Suggestion               `json:"suggestions"`
-}
-
 type SnykAnalysisFailedError struct {
 	Msg string
 }

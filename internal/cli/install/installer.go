@@ -13,8 +13,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/snyk/snyk-ls/config/environment"
-	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/config"
 )
 
 var Mutex = &sync.Mutex{}
@@ -50,11 +49,11 @@ func (i *Install) Install(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	return i.installRelease(latestRelease, ctx)
+	return i.installRelease(latestRelease)
 }
 
-func (i *Install) installRelease(release *Release, ctx context.Context) (string, error) {
-	d := &Downloader{}
+func (i *Install) installRelease(release *Release) (string, error) {
+	d := NewDownloader()
 	lockFileName, err := createLockFile(d)
 	if err != nil {
 		return "", err
@@ -63,7 +62,7 @@ func (i *Install) installRelease(release *Release, ctx context.Context) (string,
 		cleanupLockFile(name)
 	}(lockFileName)
 
-	err = d.Download(release, false, progress.ProgressChannel, progress.CancelProgressChannel)
+	err = d.Download(release, false)
 	if err != nil {
 		return "", err
 	}
@@ -78,11 +77,11 @@ func (i *Install) Update(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
-	return i.updateFromRelease(latestRelease, ctx)
+	return i.updateFromRelease(latestRelease)
 }
 
-func (i *Install) updateFromRelease(r *Release, ctx context.Context) (bool, error) {
-	d := &Downloader{}
+func (i *Install) updateFromRelease(r *Release) (bool, error) {
+	d := NewDownloader()
 	lockFileName, err := createLockFile(d)
 	if err != nil {
 		return false, err
@@ -97,14 +96,14 @@ func (i *Install) updateFromRelease(r *Release, ctx context.Context) (bool, erro
 		return false, err
 	}
 
-	err = compareChecksum(latestChecksum, environment.CliPath())
+	err = compareChecksum(latestChecksum, config.CurrentConfig.CliPath())
 	if err == nil {
 		// checksum match, no new version available
 		return false, nil
 	}
 
 	// Carry out the download of the latest release
-	err = d.Download(r, true, progress.ProgressChannel, progress.CancelProgressChannel)
+	err = d.Download(r, true)
 	if err != nil {
 		// download failed
 		return false, err

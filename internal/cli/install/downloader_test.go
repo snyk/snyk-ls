@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/lsp"
 
@@ -15,8 +16,9 @@ func TestDownloader_Download(t *testing.T) {
 	Mutex.Lock()
 	defer Mutex.Unlock()
 	r := getTestAsset()
-	d := &Downloader{}
-
+	progressCh := make(chan lsp.ProgressParams, 100000)
+	cancelProgressCh := make(chan lsp.ProgressToken, 1)
+	d := &Downloader{progressTracker: progress.NewTestingTracker(progressCh, cancelProgressCh)}
 	lockFileName, err := d.lockFileName()
 	if err != nil {
 		t.Fatal(err)
@@ -24,10 +26,7 @@ func TestDownloader_Download(t *testing.T) {
 	// remove any existing lockfile
 	_ = os.RemoveAll(lockFileName)
 
-	progressCh := make(chan lsp.ProgressParams, 100000)
-	cancelProgressCh := make(chan lsp.ProgressToken, 1)
-
-	err = d.Download(r, false, progressCh, cancelProgressCh)
+	err = d.Download(r, false)
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, progressCh)
@@ -44,8 +43,11 @@ func TestDownloader_Download(t *testing.T) {
 func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	Mutex.Lock()
 	defer Mutex.Unlock()
+	progressCh := make(chan lsp.ProgressParams, 100000)
+	cancelProgressCh := make(chan lsp.ProgressToken, 1)
+	d := &Downloader{progressTracker: progress.NewTestingTracker(progressCh, cancelProgressCh)}
+
 	r := getTestAsset()
-	d := &Downloader{}
 
 	lockFileName, err := d.lockFileName()
 	if err != nil {
@@ -54,16 +56,13 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	// remove any existing lockfile
 	_ = os.RemoveAll(lockFileName)
 
-	progressCh := make(chan lsp.ProgressParams, 100000)
-	cancelProgressCh := make(chan lsp.ProgressToken, 1)
-
 	// simulate cancellation when some progress received
 	go func() {
 		prog := <-progressCh
 		cancelProgressCh <- prog.Token
 	}()
 
-	err = d.Download(r, false, progressCh, cancelProgressCh)
+	err = d.Download(r, false)
 
 	assert.Error(t, err)
 

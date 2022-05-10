@@ -8,13 +8,14 @@ import (
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 func TestMavenRangeFinder_Find(t *testing.T) {
-	environment.Load()
-	environment.Format = environment.FormatHtml
+	testutil.UnitTest(t)
+	config.CurrentConfig.SetFormat(config.FormatHtml)
 
 	var issue = ossIssue{
 		Id:             "testIssue",

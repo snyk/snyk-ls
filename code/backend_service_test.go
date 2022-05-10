@@ -11,7 +11,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/util"
@@ -44,9 +44,9 @@ const (
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewService(environment.ApiUrl())
-	files := map[sglsp.DocumentURI]File{}
-	files[uri1] = File{
+	s := NewHTTPRepository(config.CurrentConfig.SnykCodeApi())
+	files := map[sglsp.DocumentURI]BundleFile{}
+	files[uri1] = BundleFile{
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
@@ -59,17 +59,17 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewService(environment.ApiUrl())
+	s := NewHTTPRepository(config.CurrentConfig.SnykCodeApi())
 
 	var removedFiles []sglsp.DocumentURI
-	files := map[sglsp.DocumentURI]File{}
-	files[uri1] = File{
+	files := map[sglsp.DocumentURI]BundleFile{}
+	files[uri1] = BundleFile{
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
 	bundleHash, _, _ := s.CreateBundle(files)
-	filesExtend := map[sglsp.DocumentURI]File{}
-	filesExtend[uri2] = File{
+	filesExtend := map[sglsp.DocumentURI]BundleFile{}
+	filesExtend[uri2] = BundleFile{
 		Hash:    util.Hash([]byte(content2)),
 		Content: content2,
 	}
@@ -80,17 +80,17 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewService(environment.ApiUrl())
+	s := NewHTTPRepository(config.CurrentConfig.SnykCodeApi())
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []sglsp.DocumentURI
-	files := map[sglsp.DocumentURI]File{}
-	files[uri1] = File{
+	files := map[sglsp.DocumentURI]BundleFile{}
+	files[uri1] = BundleFile{
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
 	bundleHash, _, _ := s.CreateBundle(files)
-	filesExtend := map[sglsp.DocumentURI]File{}
-	filesExtend[uri2] = File{
+	filesExtend := map[sglsp.DocumentURI]BundleFile{}
+	filesExtend[uri2] = BundleFile{
 		Hash:    util.Hash([]byte(content2)),
 		Content: content2,
 	}
@@ -102,7 +102,7 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		if callStatus == "COMPLETE" && d[uri1] != nil {
+		if callStatus.message == "COMPLETE" && d[uri1] != nil {
 			returnValue := assert.NotEqual(t, 0, len(d[uri1]))
 			returnValue = returnValue && assert.NotEqual(t, 0, len(d[uri2]))
 			if returnValue {
@@ -117,7 +117,7 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 // todo analysis test severities
 
 func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing.T) {
-	s := NewService("")
+	s := NewHTTPRepository("")
 	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
 
 	var analysisResponse SarifResponse
@@ -135,6 +135,7 @@ func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing
 }
 
 func TestSnykCodeBackendService_GetFilters_returns(t *testing.T) {
+	testutil.UnitTest(t)
 	pact := &dsl.Pact{
 		Consumer: "SnykLS",
 		Provider: "SnykCodeApi",
@@ -157,7 +158,7 @@ func TestSnykCodeBackendService_GetFilters_returns(t *testing.T) {
 	})
 
 	test := func() error {
-		s := NewService(fmt.Sprintf("http://localhost:%d", pact.Server.Port))
+		s := NewHTTPRepository(fmt.Sprintf("http://localhost:%d", pact.Server.Port))
 		if _, _, err := s.GetFilters(); err != nil {
 			return err
 		}

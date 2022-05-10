@@ -18,6 +18,7 @@ const (
 	CreateBundleWithSourceOperation = "createBundleWithSource"
 	ExtendBundleWithSourceOperation = "extendBundleWithSource"
 	RunAnalysisOperation            = "runAnalysis"
+	GetFiltersOperation             = "getFilters"
 )
 
 var (
@@ -66,11 +67,15 @@ func FakeDiagnosticUri() (documentURI sglsp.DocumentURI, path string) {
 	return documentURI, temp
 }
 
-type FakeSnykCodeApiService struct {
-	Calls map[string][][]interface{}
+type FakeSnykCodeClient struct {
+	Calls               map[string][][]interface{}
+	HasCreatedNewBundle bool
+	HasExtendedBundle   bool
+	TotalBundleCount    int
+	ExtendedBundleCount int
 }
 
-func (f *FakeSnykCodeApiService) addCall(params []interface{}, op string) {
+func (f *FakeSnykCodeClient) addCall(params []interface{}, op string) {
 	mutex.Lock()
 	defer mutex.Unlock()
 	if f.Calls == nil {
@@ -84,7 +89,7 @@ func (f *FakeSnykCodeApiService) addCall(params []interface{}, op string) {
 	f.Calls[op] = append(calls, opParams)
 }
 
-func (f *FakeSnykCodeApiService) GetCallParams(callNo int, op string) []interface{} {
+func (f *FakeSnykCodeClient) GetCallParams(callNo int, op string) []interface{} {
 	mutex.Lock()
 	defer mutex.Unlock()
 	calls := f.Calls[op]
@@ -98,7 +103,14 @@ func (f *FakeSnykCodeApiService) GetCallParams(callNo int, op string) []interfac
 	return params
 }
 
-func (f *FakeSnykCodeApiService) GetAllCalls(op string) [][]interface{} {
+func (f *FakeSnykCodeClient) Clear() {
+	f.ExtendedBundleCount = 0
+	f.TotalBundleCount = 0
+	f.HasExtendedBundle = false
+	f.HasExtendedBundle = false
+}
+
+func (f *FakeSnykCodeClient) GetAllCalls(op string) [][]interface{} {
 	mutex.Lock()
 	defer mutex.Unlock()
 	calls := f.Calls[op]
@@ -108,34 +120,39 @@ func (f *FakeSnykCodeApiService) GetAllCalls(op string) [][]interface{} {
 	return calls
 }
 
-func (f *FakeSnykCodeApiService) GetFilters() (configFiles []string, extensions []string, err error) {
+func (f *FakeSnykCodeClient) GetFilters() (configFiles []string, extensions []string, err error) {
+	params := []interface{}{configFiles, extensions, err}
+	f.addCall(params, GetFiltersOperation)
 	return make([]string, 0), FakeFilters, nil
 }
 
-func (f *FakeSnykCodeApiService) CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
+func (f *FakeSnykCodeClient) CreateBundle(files map[sglsp.DocumentURI]BundleFile) (string, []sglsp.DocumentURI, error) {
+	f.TotalBundleCount++
+	f.HasCreatedNewBundle = true
 	params := []interface{}{files}
 	f.addCall(params, CreateBundleWithSourceOperation)
-	BundleHash := util.Hash([]byte(fmt.Sprint(rand.Int())))
-
-	return BundleHash, nil, nil
+	return util.Hash([]byte(fmt.Sprint(rand.Int()))), nil, nil
 }
 
-func (f *FakeSnykCodeApiService) ExtendBundle(
+func (f *FakeSnykCodeClient) ExtendBundle(
 	bundleHash string,
-	files map[sglsp.DocumentURI]File,
+	files map[sglsp.DocumentURI]BundleFile,
 	removedFiles []sglsp.DocumentURI,
 ) (string, []sglsp.DocumentURI, error) {
+	f.HasExtendedBundle = true
+	f.TotalBundleCount++
+	f.ExtendedBundleCount++
 	params := []interface{}{bundleHash, files, removedFiles}
 	f.addCall(params, ExtendBundleWithSourceOperation)
-	return bundleHash, nil, nil
+	return util.Hash([]byte(fmt.Sprint(rand.Int()))), nil, nil
 }
 
-func (f *FakeSnykCodeApiService) RunAnalysis(
+func (f *FakeSnykCodeClient) RunAnalysis(
 	bundleHash string,
-	shardKey string,
+	_ string,
 	limitToFiles []sglsp.DocumentURI,
 	severity int,
-) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, string, error) {
+) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, AnalysisStatus, error) {
 	params := []interface{}{bundleHash, limitToFiles, severity}
 	f.addCall(params, RunAnalysisOperation)
 
@@ -149,5 +166,5 @@ func (f *FakeSnykCodeApiService) RunAnalysis(
 	hoverMap[fakeDiagnosticUri] = append(hovers, FakeHover)
 
 	log.Trace().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Interface("fakeDiagnostic", FakeDiagnostic).Msg("fake backend call received & answered")
-	return diagnosticMap, hoverMap, "COMPLETE", nil
+	return diagnosticMap, hoverMap, AnalysisStatus{message: "COMPLETE", percentage: 100}, nil
 }

@@ -10,8 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
+
+	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/di"
+
+	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -19,9 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/code"
-	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/diagnostics"
-	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/cli/install"
 	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -58,9 +60,8 @@ func didSaveTextParams() (sglsp.DidSaveTextDocumentParams, func()) {
 }
 
 func setupServer(t *testing.T) server.Local {
-	diagnostics.SetSnykCodeService(&code.FakeSnykCodeApiService{})
+	di.TestInit()
 	diagnostics.ClearEntireDiagnosticsCache()
-	diagnostics.ClearRegisteredDocuments()
 	diagnostics.ClearWorkspaceFolderScanned()
 	cleanupChannels()
 	jsonRPCRecorder.ClearCallbacks()
@@ -75,7 +76,6 @@ func setupServer(t *testing.T) server.Local {
 		cleanupChannels()
 		jsonRPCRecorder.ClearCallbacks()
 		jsonRPCRecorder.ClearNotifications()
-		diagnostics.ClearSnykCodeService()
 	})
 	return loc
 }
@@ -90,22 +90,6 @@ func startServer() server.Local {
 	var srv *jrpc2.Server
 
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
-
-	lspHandlers := handler.Map{
-		"initialize":                          InitializeHandler(&srv),
-		"textDocument/didOpen":                TextDocumentDidOpenHandler(&srv),
-		"textDocument/didChange":              TextDocumentDidChangeHandler(),
-		"textDocument/didClose":               TextDocumentDidCloseHandler(),
-		"textDocument/didSave":                TextDocumentDidSaveHandler(&srv),
-		"textDocument/willSave":               TextDocumentWillSaveHandler(),
-		"textDocument/willSaveWaitUntil":      TextDocumentWillSaveWaitUntilHandler(),
-		"shutdown":                            Shutdown(),
-		"exit":                                Exit(&srv),
-		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
-		"textDocument/hover":                  TextDocumentHover(),
-		"workspace/didChangeConfiguration":    WorkspaceDidChangeConfiguration(),
-		"window/workDoneProgress/cancel":      WindowWorkDoneProgressCancelHandler(),
-	}
 
 	opts := &server.LocalOptions{
 		Client: &jrpc2.ClientOptions{
@@ -122,8 +106,10 @@ func startServer() server.Local {
 		},
 	}
 
-	loc := server.NewLocal(lspHandlers, opts)
+	handlers := &handler.Map{}
+	loc := server.NewLocal(handlers, opts)
 	srv = loc.Server
+	initHandlers(srv, handlers)
 
 	return loc
 }
@@ -189,8 +175,8 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 }
 
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
-	environment.CurrentEnabledProducts.Code.Set(true)
-	cli.CurrentSettings = cli.Settings{}
+	testutil.UnitTest(t)
+	config.CurrentConfig.SetSnykCodeEnabled(true)
 	loc := setupServer(t)
 
 	didOpenParams, cleanup := didOpenTextParams()
@@ -236,9 +222,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal("couldn't unset environment")
 	}
-	environment.Load()
-	environment.EnabledProductsFromEnv()
-	cli.CurrentSettings = cli.Settings{}
+	config.CurrentConfig = config.New()
 
 	didOpenParams, cleanup := didOpenTextParams()
 	defer cleanup()
@@ -281,8 +265,8 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 }
 
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
-	environment.EnabledProductsFromEnv()
-	cli.CurrentSettings = cli.Settings{}
+	testutil.UnitTest(t)
+	config.CurrentConfig.SetSnykCodeEnabled(true)
 	loc := setupServer(t)
 
 	didSaveParams, cleanup := didSaveTextParams()
@@ -363,7 +347,7 @@ func Test_IntegrationWorkspaceScanIacAndCode(t *testing.T) {
 	runIntegrationTest("https://github.com/deepcodeg/snykcon-goof.git", "eba8407", iacFile, codeFile, t)
 }
 
-func Test_IntegrationWorkspaceScanMaven(t *testing.T) {
+func Test_IntegrationWorkspaceScanWithTwoUploadBatches(t *testing.T) {
 	testutil.IntegTest(t)
 	ossFile := ""
 	codeFile := "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
@@ -371,17 +355,16 @@ func Test_IntegrationWorkspaceScanMaven(t *testing.T) {
 }
 
 func runIntegrationTest(repo string, commit string, file1 string, file2 string, t *testing.T) {
-	environment.CurrentEnabledProducts.Code.Set(true)
-	environment.CurrentEnabledProducts.OpenSource.Set(true)
-	environment.CurrentEnabledProducts.Iac.Set(true)
-	cli.CurrentSettings = cli.Settings{}
+	testutil.UnitTest(t)
+	config.CurrentConfig.SetSnykCodeEnabled(true)
+	config.CurrentConfig.SetSnykIacEnabled(true)
+	config.CurrentConfig.SetSnykOssEnabled(true)
 	diagnostics.ClearWorkspaceFolderScanned()
 	diagnostics.ClearEntireDiagnosticsCache()
-	diagnostics.ClearRegisteredDocuments()
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
 	loc := setupServer(t)
-	diagnostics.SetSnykCodeService(code.NewService(environment.ApiUrl()))
+	di.Init()
 
 	var cloneTargetDir, err = setupCustomTestRepo(repo, commit)
 	defer os.RemoveAll(cloneTargetDir)
@@ -445,10 +428,7 @@ func checkForPublishedDiagnostics(testPath string, expectedNumber int) func() bo
 
 func Test_IntegrationHoverResults(t *testing.T) {
 	testutil.IntegTest(t)
-	environment.EnabledProductsFromEnv()
-	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearEntireDiagnosticsCache()
-	diagnostics.ClearRegisteredDocuments()
 	loc := setupServer(t)
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
@@ -499,14 +479,12 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	assert.Equal(t, hoverResult.Contents.Kind, "markdown")
 }
 
-func Test_IntegrationFileScan(t *testing.T) {
+func Test_IntegrationSnykCodeFileScan(t *testing.T) {
 	testutil.IntegTest(t)
-	environment.EnabledProductsFromEnv()
-	cli.CurrentSettings = cli.Settings{}
+	config.CurrentConfig.SetSnykCodeEnabled(true)
 	diagnostics.ClearEntireDiagnosticsCache()
-	diagnostics.ClearRegisteredDocuments()
 	loc := setupServer(t)
-	diagnostics.SetSnykCodeService(code.NewService(environment.ApiUrl()))
+	di.Init()
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
 	defer os.RemoveAll(cloneTargetDir)
@@ -521,6 +499,9 @@ func Test_IntegrationFileScan(t *testing.T) {
 }
 
 func textDocumentDidOpen(loc *server.Local, testPath string) sglsp.DidOpenTextDocumentParams {
+	di.Init()
+	// should receive diagnosticsParams
+
 	testFileContent, err := os.ReadFile(testPath)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't read file content of test file")

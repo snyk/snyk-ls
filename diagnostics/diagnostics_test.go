@@ -10,39 +10,18 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/snyk/snyk-ls/code"
-	"github.com/snyk/snyk-ls/config/environment"
-	"github.com/snyk/snyk-ls/internal/cli"
+	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
-func Test_RegisterDocument_shouldRegisterDocumentInCache(t *testing.T) {
-	ClearRegisteredDocuments()
-	diagnosticUri, path := code.FakeDiagnosticUri()
-	defer os.RemoveAll(path)
-	SetSnykCodeService(&code.FakeSnykCodeApiService{})
-	RegisterDocument(sglsp.TextDocumentItem{URI: diagnosticUri})
-	assert.Equal(t, true, registeredDocuments.Get(diagnosticUri))
-}
-
-func Test_UnRegisterDocument_shouldDeleteDocumentFromCache(t *testing.T) {
-	ClearRegisteredDocuments()
-	diagnosticUri, path := code.FakeDiagnosticUri()
-	defer os.RemoveAll(path)
-	SetSnykCodeService(&code.FakeSnykCodeApiService{})
-	RegisterDocument(sglsp.TextDocumentItem{URI: diagnosticUri})
-	UnRegisterDocument(diagnosticUri)
-	assert.Nil(t, registeredDocuments.Get(diagnosticUri))
-}
-
 func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
-	ClearRegisteredDocuments()
 	ClearEntireDiagnosticsCache()
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
-	SetSnykCodeService(&code.FakeSnykCodeApiService{})
-	RegisterDocument(sglsp.TextDocumentItem{URI: diagnosticUri})
+	di.TestInit()
 	documentDiagnosticCache.Put(diagnosticUri, []lsp.Diagnostic{code.FakeDiagnostic})
 
 	diagnostics := GetDiagnostics(diagnosticUri)
@@ -54,38 +33,33 @@ func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 
 func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
 	// disable snyk code
-	t.Setenv(environment.ActivateSnykCodeKey, "false")
-	environment.EnabledProductsFromEnv()
-	ClearRegisteredDocuments()
+	t.Setenv(config.ActivateSnykCodeKey, "false")
+	testutil.UnitTest(t)
 	ClearEntireDiagnosticsCache()
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
-	SetSnykCodeService(&code.FakeSnykCodeApiService{})
-	RegisterDocument(sglsp.TextDocumentItem{URI: diagnosticUri})
-	SetSnykCodeService(&code.FakeSnykCodeApiService{})
+	di.TestInit()
 
 	diagnostics := GetDiagnostics(diagnosticUri)
 
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
-	params := SnykCode().(*code.FakeSnykCodeApiService).GetCallParams(0, code.CreateBundleWithSourceOperation)
+	params := di.SnykCodeClient.(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.Nil(t, params)
 }
 
 func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
 	// disable snyk code
-	t.Setenv(environment.ActivateSnykCodeKey, "true")
-	environment.EnabledProductsFromEnv()
-	ClearRegisteredDocuments()
+	t.Setenv(config.ActivateSnykCodeKey, "true")
+	testutil.UnitTest(t)
 	ClearEntireDiagnosticsCache()
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
-	SetSnykCodeService(&code.FakeSnykCodeApiService{})
-	RegisterDocument(sglsp.TextDocumentItem{URI: diagnosticUri})
+	di.TestInit()
 
 	diagnostics := GetDiagnostics(diagnosticUri)
 
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
-	params := SnykCode().(*code.FakeSnykCodeApiService).GetCallParams(0, code.CreateBundleWithSourceOperation)
+	params := di.SnykCodeClient.(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.NotNil(t, params)
 }
 
@@ -101,15 +75,13 @@ func (m *mockCli) Execute(cmd []string) (resp []byte, err error) {
 
 func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
-	t.Setenv(environment.ActivateSnykCodeKey, "false")
-	t.Setenv(environment.ActivateSnykIacKey, "false")
-	t.Setenv(environment.ActivateSnykOssKey, "true")
-	environment.EnabledProductsFromEnv()
-	ClearRegisteredDocuments()
+	t.Setenv(config.ActivateSnykCodeKey, "false")
+	t.Setenv(config.ActivateSnykIacKey, "false")
+	t.Setenv(config.ActivateSnykOssKey, "true")
+	testutil.UnitTest(t)
 	ClearEntireDiagnosticsCache()
 	documentURI := sglsp.DocumentURI("package.json")
-	SetSnykCodeService(&code.FakeSnykCodeApiService{})
-	RegisterDocument(sglsp.TextDocumentItem{URI: documentURI})
+	di.TestInit()
 	mockCli := mockCli{}
 	Cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything).Return("test", nil)
@@ -121,15 +93,13 @@ func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
 }
 
 func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
-	t.Setenv(environment.ActivateSnykCodeKey, "false")
-	t.Setenv(environment.ActivateSnykIacKey, "false")
-	t.Setenv(environment.ActivateSnykOssKey, "false")
-	environment.EnabledProductsFromEnv()
-	ClearRegisteredDocuments()
+	t.Setenv(config.ActivateSnykCodeKey, "false")
+	t.Setenv(config.ActivateSnykIacKey, "false")
+	t.Setenv(config.ActivateSnykOssKey, "false")
+	testutil.UnitTest(t)
 	ClearEntireDiagnosticsCache()
 	documentURI := sglsp.DocumentURI("package.json")
-	SetSnykCodeService(&code.FakeSnykCodeApiService{})
-	RegisterDocument(sglsp.TextDocumentItem{URI: documentURI})
+	di.TestInit()
 	mockCli := mockCli{}
 	Cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything).Return("test", nil)
@@ -141,19 +111,19 @@ func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
 }
 
 func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
-	environment.Load()
-	t.Setenv(environment.ActivateSnykCodeKey, "false")
-	t.Setenv(environment.ActivateSnykIacKey, "true")
-	t.Setenv(environment.ActivateSnykOssKey, "false")
-	environment.EnabledProductsFromEnv()
-	ClearRegisteredDocuments()
+	t.Setenv(config.ActivateSnykCodeKey, "false")
+	t.Setenv(config.ActivateSnykIacKey, "true")
+	t.Setenv(config.ActivateSnykOssKey, "false")
+	testutil.UnitTest(t)
 	ClearEntireDiagnosticsCache()
 	documentURI := sglsp.DocumentURI("package.json")
-	SetSnykCodeService(&code.FakeSnykCodeApiService{})
-	RegisterDocument(sglsp.TextDocumentItem{URI: documentURI})
-	cli.CurrentSettings.AdditionalParameters = []string{"-d", "--all-projects"}
-	cli.CurrentSettings.Insecure = true
-	cli.CurrentSettings.Endpoint = "asd"
+	di.TestInit()
+	settings := config.CurrentConfig.CliSettings()
+	settings.AdditionalParameters = []string{"-d", "--all-projects"}
+	settings.Insecure = true
+	settings.Endpoint = "asd"
+	config.CurrentConfig.SetCliSettings(settings)
+
 	mockCli := mockCli{}
 	Cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything).Return("{}", nil)
@@ -170,15 +140,13 @@ func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
 }
 
 func Test_GetDiagnostics_shouldNotIacIfNotEnabled(t *testing.T) { // disable snyk code
-	t.Setenv(environment.ActivateSnykCodeKey, "false")
-	t.Setenv(environment.ActivateSnykIacKey, "false")
-	t.Setenv(environment.ActivateSnykOssKey, "false")
-	environment.EnabledProductsFromEnv()
-	ClearRegisteredDocuments()
+	t.Setenv(config.ActivateSnykCodeKey, "false")
+	t.Setenv(config.ActivateSnykIacKey, "false")
+	t.Setenv(config.ActivateSnykOssKey, "false")
+	testutil.UnitTest(t)
 	ClearEntireDiagnosticsCache()
 	documentURI := sglsp.DocumentURI("package.json")
-	SetSnykCodeService(&code.FakeSnykCodeApiService{})
-	RegisterDocument(sglsp.TextDocumentItem{URI: documentURI})
+	di.TestInit()
 	mockCli := mockCli{}
 	Cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything).Return("test", nil)
@@ -190,7 +158,6 @@ func Test_GetDiagnostics_shouldNotIacIfNotEnabled(t *testing.T) { // disable sny
 }
 
 func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
-	ClearRegisteredDocuments()
 	ClearEntireDiagnosticsCache()
 	empty := sglsp.TextDocumentItem{
 		URI:        uri.PathToUri("test123"),
@@ -198,23 +165,20 @@ func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
 		Version:    0,
 		Text:       "",
 	}
-	SetSnykCodeService(&code.FakeSnykCodeApiService{})
-	RegisterDocument(empty)
+	di.TestInit()
 
 	GetDiagnostics(empty.URI)
 
 	// verify that create bundle has NOT been called on backend service
-	params := SnykCode().(*code.FakeSnykCodeApiService).GetCallParams(0, code.CreateBundleWithSourceOperation)
+	params := di.SnykCodeClient.(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.Nil(t, params)
 }
 
 func Test_ClearWorkspaceFolderDiagnostics_shouldRemoveDiagnosticsOfAllFilesInFolder(t *testing.T) {
-	ClearRegisteredDocuments()
 	ClearEntireDiagnosticsCache()
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
-	SetSnykCodeService(&code.FakeSnykCodeApiService{})
-	RegisterDocument(sglsp.TextDocumentItem{URI: diagnosticUri})
+	di.TestInit()
 	diagnostics := GetDiagnostics(diagnosticUri)
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
 
