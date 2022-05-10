@@ -20,36 +20,16 @@ import (
 	"github.com/snyk/snyk-ls/oss"
 )
 
-const snykCodeServiceKey = "service"
-
 var (
 	registeredDocuments     concurrency.AtomicMap
 	documentDiagnosticCache concurrency.AtomicMap
-	snykCode                concurrency.AtomicMap
 	Cli                     cli.Executor
 )
 
 func init() {
 	registeredDocuments = concurrency.AtomicMap{}
 	documentDiagnosticCache = concurrency.AtomicMap{}
-	snykCode = concurrency.AtomicMap{}
 	Cli = cli.SnykCli{}
-}
-
-func SnykCode() code.SnykCodeService {
-	var sc code.SnykCodeService
-	if snykCode.Contains(snykCodeServiceKey) {
-		sc = snykCode.Get(snykCodeServiceKey).(code.SnykCodeService)
-	}
-	return sc
-}
-
-func SetSnykCodeService(service code.SnykCodeService) {
-	snykCode.Put(snykCodeServiceKey, service)
-}
-
-func ClearSnykCodeService() {
-	snykCode.ClearAll()
 }
 
 func ClearDiagnosticsCache(documentURI sglsp.DocumentURI) {
@@ -125,7 +105,6 @@ func fetchAllRegisteredDocumentDiagnostics(documentURI sglsp.DocumentURI, level 
 		Msg("done.")
 
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
-	var bundles = make([]*code.BundleImpl, 0, 10)
 
 	p := progress.NewTracker(false)
 	p.Begin(fmt.Sprintf("Scanning for issues in %s", uri.PathFromUri(documentURI)), "")
@@ -138,10 +117,10 @@ func fetchAllRegisteredDocumentDiagnostics(documentURI sglsp.DocumentURI, level 
 
 	if level == lsp.ScanLevelWorkspace {
 		dChan = make(chan lsp.DiagnosticResult, 10000)
-		workspaceLevelFetch(documentURI, environment.CurrentEnabledProducts, bundles, &wg, dChan, hoverChan)
+		workspaceLevelFetch(documentURI, environment.CurrentEnabledProducts, &wg, dChan, hoverChan)
 	} else {
 		dChan = make(chan lsp.DiagnosticResult, 10000)
-		fileLevelFetch(documentURI, environment.CurrentEnabledProducts, bundles, &wg, dChan, hoverChan)
+		fileLevelFetch(documentURI, environment.CurrentEnabledProducts, &wg, dChan, hoverChan)
 	}
 	p.Report(50)
 	wg.Wait()
@@ -155,7 +134,6 @@ func fetchAllRegisteredDocumentDiagnostics(documentURI sglsp.DocumentURI, level 
 func workspaceLevelFetch(
 	documentURI sglsp.DocumentURI,
 	enabledProducts environment.EnabledProducts,
-	bundles []*code.BundleImpl,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
 	hoverChan chan lsp.Hover,
@@ -169,42 +147,20 @@ func workspaceLevelFetch(
 		go oss.ScanWorkspace(Cli, documentURI, wg, dChan, hoverChan)
 	}
 	if enabledProducts.Code.Get() {
-		var bundleDocs = ToDocumentURIMap(&registeredDocuments)
-		// we need a pointer to the array of bundle pointers to be able to grow it
-		createOrExtendBundles(bundleDocs, &bundles)
-		for _, myBundle := range bundles {
-			wg.Add(1)
-			go myBundle.FetchDiagnosticsData(string(documentURI), wg, dChan, hoverChan)
-		}
+		code.ScanWorkspace(&registeredDocuments, documentURI, wg, dChan, hoverChan)
 	}
-}
-
-// ToDocumentURIMap Copies the atomic map over to a typed map
-func ToDocumentURIMap(input *concurrency.AtomicMap) map[sglsp.DocumentURI]bool {
-	output := map[sglsp.DocumentURI]bool{}
-	f := func(key interface{}, value interface{}) bool {
-		output[key.(sglsp.DocumentURI)] = value.(bool)
-		return true
-	}
-	input.Range(f)
-	return output
 }
 
 func fileLevelFetch(
 	documentURI sglsp.DocumentURI,
 	enabledProducts environment.EnabledProducts,
-	bundles []*code.BundleImpl,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
 	hoverChan chan lsp.Hover,
 ) {
 	if enabledProducts.Code.Get() {
-		var bundleDocs = map[sglsp.DocumentURI]bool{}
-		bundleDocs[documentURI] = true
 		RegisterDocument(sglsp.TextDocumentItem{URI: documentURI})
-		createOrExtendBundles(bundleDocs, &bundles)
-		wg.Add(1)
-		go bundles[0].FetchDiagnosticsData(string(documentURI), wg, dChan, hoverChan)
+		code.ScanFile(documentURI, wg, dChan, hoverChan)
 	}
 	if enabledProducts.Iac.Get() {
 		wg.Add(1)
@@ -244,36 +200,6 @@ func processResults(
 			return diagnostics
 		}
 	}
-}
-
-func createOrExtendBundles(documents map[sglsp.DocumentURI]bool, bundles *[]*code.BundleImpl) {
-	// we need a pointer to the array of bundle pointers to be able to grow it
-	log.Debug().Str("method", "createOrExtendBundles").Msg("started")
-	defer log.Debug().Str("method", "createOrExtendBundles").Msg("done")
-	var bundle *code.BundleImpl
-	toAdd := documents
-	bundleIndex := len(*bundles) - 1
-	var bundleFull bool
-	for len(toAdd) > 0 {
-		if bundleIndex == -1 || bundleFull {
-			bundle = createBundle(bundles)
-			log.Debug().Int("bundleCount", len(*bundles)).Msg("created new bundle")
-		} else {
-			bundle = (*bundles)[bundleIndex]
-			log.Debug().Int("bundleCount", len(*bundles)).Msg("re-using bundle ")
-		}
-		toAdd = bundle.AddToBundleDocuments(toAdd).Files
-		if len(toAdd) > 0 {
-			log.Debug().Int("bundleCount", len(*bundles)).Msgf("File count: %d", len(bundle.BundleDocuments))
-			bundleFull = true
-		}
-	}
-}
-
-func createBundle(bundles *[]*code.BundleImpl) *code.BundleImpl {
-	bundle := code.BundleImpl{SnykCode: SnykCode()}
-	*bundles = append(*bundles, &bundle)
-	return &bundle
 }
 
 func addToCache(diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic) {

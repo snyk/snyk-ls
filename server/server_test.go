@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/snyk/snyk-ls/di"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -58,7 +59,7 @@ func didSaveTextParams() (sglsp.DidSaveTextDocumentParams, func()) {
 }
 
 func setupServer(t *testing.T) server.Local {
-	diagnostics.SetSnykCodeService(&code.FakeSnykCodeApiService{})
+	di.TestInit()
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
 	diagnostics.ClearWorkspaceFolderScanned()
@@ -75,7 +76,6 @@ func setupServer(t *testing.T) server.Local {
 		cleanupChannels()
 		jsonRPCRecorder.ClearCallbacks()
 		jsonRPCRecorder.ClearNotifications()
-		diagnostics.ClearSnykCodeService()
 	})
 	return loc
 }
@@ -381,7 +381,7 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
 	loc := setupServer(t)
-	diagnostics.SetSnykCodeService(code.NewService(environment.ApiUrl()))
+	di.Init()
 
 	var cloneTargetDir, err = setupCustomTestRepo(repo, commit)
 	defer os.RemoveAll(cloneTargetDir)
@@ -506,7 +506,7 @@ func Test_IntegrationFileScan(t *testing.T) {
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
 	loc := setupServer(t)
-	diagnostics.SetSnykCodeService(code.NewService(environment.ApiUrl()))
+	di.Init()
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
 	defer os.RemoveAll(cloneTargetDir)
@@ -521,6 +521,9 @@ func Test_IntegrationFileScan(t *testing.T) {
 }
 
 func textDocumentDidOpen(loc *server.Local, testPath string) sglsp.DidOpenTextDocumentParams {
+	di.Init()
+	// should receive diagnosticsParams
+
 	testFileContent, err := os.ReadFile(testPath)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't read file content of test file")

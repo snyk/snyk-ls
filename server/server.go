@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"github.com/snyk/snyk-ls/di"
 	"os"
 
 	"github.com/creachadair/jrpc2"
@@ -10,8 +11,6 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/code"
-	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/diagnostics"
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/hover"
@@ -27,8 +26,7 @@ var (
 
 func Start() {
 	var srv *jrpc2.Server
-	snykCodeService := code.NewService(environment.ApiUrl())
-	diagnostics.SetSnykCodeService(snykCodeService)
+	di.Init()
 
 	lspHandlers := handler.Map{
 		"initialize":                          InitializeHandler(&srv),

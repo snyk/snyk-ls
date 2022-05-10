@@ -2,7 +2,6 @@ package code
 
 import (
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -10,14 +9,9 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config/environment"
-	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 	"github.com/snyk/snyk-ls/util"
-)
-
-var (
-	supportedExtensions = concurrency.AtomicMap{}
 )
 
 const (
@@ -30,10 +24,6 @@ const (
 	jsonContentOverhead       = ",\"content\":\"\""
 	jsonOverheadPerFile       = jsonUriOverhead + jsonContentOverhead
 )
-
-func getTotalDocPayloadSize(documentURI string, content []byte) int {
-	return len(jsonHashSizePerFile) + len(jsonOverheadPerFile) + len([]byte(documentURI)) + len(content)
-}
 
 type BundleImpl struct {
 	SnykCode         SnykCodeService
@@ -101,26 +91,6 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]bool) File
 		return FilesNotAdded{Files: nonAddedFiles}
 	}
 	return FilesNotAdded{}
-}
-
-func IsSupported(service SnykCodeService, documentURI sglsp.DocumentURI) bool {
-	if supportedExtensions.Length() == 0 {
-		// query
-		_, exts, err := service.GetFilters()
-		if err != nil {
-			log.Error().Err(err).Msg("could not get filters")
-			return false
-		}
-
-		// cache
-		for _, ext := range exts {
-			supportedExtensions.Put(ext, true)
-		}
-	}
-
-	supported := supportedExtensions.Get(filepath.Ext(uri.PathFromUri(documentURI)))
-
-	return supported != nil && supported.(bool)
 }
 
 func (b *BundleImpl) getFileFrom(content []byte) File {
@@ -219,15 +189,6 @@ func (b *BundleImpl) retrieveAnalysis(
 	}
 }
 
-func sendHoversViaChan(hovers map[sglsp.DocumentURI][]lsp.HoverDetails, hoverChan chan lsp.Hover) {
-	for uri, hover := range hovers {
-		hoverChan <- lsp.Hover{
-			Uri:   uri,
-			Hover: hover,
-		}
-	}
-}
-
 func (b *BundleImpl) uploadDocuments() error {
 	if b.BundleHash == "" {
 		return b.createBundleFromSource()
@@ -254,4 +215,17 @@ func getShardKey(rootPath string, authToken string) string {
 	}
 
 	return ""
+}
+
+func getTotalDocPayloadSize(documentURI string, content []byte) int {
+	return len(jsonHashSizePerFile) + len(jsonOverheadPerFile) + len([]byte(documentURI)) + len(content)
+}
+
+func sendHoversViaChan(hovers map[sglsp.DocumentURI][]lsp.HoverDetails, hoverChan chan lsp.Hover) {
+	for uri, hover := range hovers {
+		hoverChan <- lsp.Hover{
+			Uri:   uri,
+			Hover: hover,
+		}
+	}
 }
