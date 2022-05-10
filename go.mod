@@ -14,6 +14,8 @@ require (
 )
 
 require (
+	github.com/hashicorp/go-version v1.3.0 // indirect
+	github.com/hashicorp/logutils v0.0.0-20150609070431-0dc08b1671f3 // indirect
 	github.com/stretchr/objx v0.1.0 // indirect
 	golang.org/x/sys v0.0.0-20220422013727-9388b58f7150 // indirect
 )
@@ -22,6 +24,7 @@ require (
 	github.com/adrg/xdg v0.4.0
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/getsentry/sentry-go v0.13.0
+	github.com/pact-foundation/pact-go v1.6.9
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect

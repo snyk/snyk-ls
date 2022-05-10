@@ -11,6 +11,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/code"
+	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/diagnostics"
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/hover"
@@ -26,7 +27,8 @@ var (
 
 func Start() {
 	var srv *jrpc2.Server
-	diagnostics.SetSnykCodeService(&code.SnykCodeBackendService{})
+	snykCodeService := code.NewService(environment.ApiUrl())
+	diagnostics.SetSnykCodeService(snykCodeService)
 
 	lspHandlers := handler.Map{
 		"initialize":                          InitializeHandler(&srv),

@@ -2,14 +2,16 @@ package code
 
 import (
 	"encoding/json"
-	"net/http"
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/pact-foundation/pact-go/dsl"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/util"
@@ -36,14 +38,13 @@ const (
     }
   }
 }`
+	pactDir = "./pacts"
 )
 
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := &SnykCodeBackendService{
-		client: http.Client{},
-	}
+	s := NewService(environment.ApiUrl())
 	files := map[sglsp.DocumentURI]File{}
 	files[uri1] = File{
 		Hash:    util.Hash([]byte(content)),
@@ -58,9 +59,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := &SnykCodeBackendService{
-		client: http.Client{},
-	}
+	s := NewService(environment.ApiUrl())
 
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]File{}
@@ -81,9 +80,7 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := &SnykCodeBackendService{
-		client: http.Client{},
-	}
+	s := NewService(environment.ApiUrl())
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]File{}
@@ -120,9 +117,7 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 // todo analysis test severities
 
 func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing.T) {
-	s := &SnykCodeBackendService{
-		client: http.Client{},
-	}
+	s := NewService("")
 	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
 
 	var analysisResponse SarifResponse
@@ -137,4 +132,40 @@ func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing
 
 	u := uri.PathToUri("/server/testdata/Dummy.java")
 	assert.Equal(t, 2, len(diags[u]))
+}
+
+func TestSnykCodeBackendService_GetFilters_returns(t *testing.T) {
+	pact := &dsl.Pact{
+		Consumer: "SnykLS",
+		Provider: "SnykCodeApi",
+		PactDir:  pactDir,
+	}
+	defer pact.Teardown()
+
+	pact.AddInteraction().WithRequest(dsl.Request{
+		Method: "GET",
+		Path:   dsl.String("/filters"),
+		Headers: dsl.MapMatcher{
+			"Content-Type": dsl.String("application/json"),
+		},
+	}).WillRespondWith(dsl.Response{
+		Status: 200,
+		Headers: dsl.MapMatcher{
+			"Content-Type": dsl.String("application/json"),
+		},
+		Body: dsl.Match(filtersResponse{}),
+	})
+
+	test := func() error {
+		s := NewService(fmt.Sprintf("http://localhost:%d", pact.Server.Port))
+		if _, _, err := s.GetFilters(); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	err := pact.Verify(test)
+
+	assert.NoError(t, err)
 }

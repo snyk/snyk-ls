@@ -381,7 +381,7 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
 	loc := setupServer(t)
-	diagnostics.SetSnykCodeService(&code.SnykCodeBackendService{})
+	diagnostics.SetSnykCodeService(code.NewService(environment.ApiUrl()))
 
 	var cloneTargetDir, err = setupCustomTestRepo(repo, commit)
 	defer os.RemoveAll(cloneTargetDir)
@@ -506,7 +506,7 @@ func Test_IntegrationFileScan(t *testing.T) {
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearRegisteredDocuments()
 	loc := setupServer(t)
-	diagnostics.SetSnykCodeService(&code.SnykCodeBackendService{})
+	diagnostics.SetSnykCodeService(code.NewService(environment.ApiUrl()))
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
 	defer os.RemoveAll(cloneTargetDir)

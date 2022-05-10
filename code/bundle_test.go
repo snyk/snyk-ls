@@ -288,3 +288,21 @@ func Test_getShardKey_shouldReturnEmptyShardKey(t *testing.T) {
 	token := ""
 	assert.Equal(t, "", getShardKey(sampleRootPath, token))
 }
+
+func Test_IsSupportedLanguage_shouldReturnTrueForSupportedLanguages(t *testing.T) {
+	documentURI := uri.PathToUri("C:\\some\\path\\Test.java")
+	supported := IsSupported(&FakeSnykCodeApiService{}, documentURI)
+	assert.True(t, supported)
+}
+
+func Test_IsSupportedLanguage_shouldReturnFalseForUnsupportedLanguages(t *testing.T) {
+	documentURI := uri.PathToUri("C:\\some\\path\\Test.rs")
+	supported := IsSupported(&FakeSnykCodeApiService{}, documentURI)
+	assert.False(t, supported)
+}
+
+func Test_IsSupportedLanguage_shouldCacheSupportedExtensions(t *testing.T) {
+	documentURI := uri.PathToUri("C:\\some\\path\\Test.rs")
+	IsSupported(&FakeSnykCodeApiService{}, documentURI)
+	assert.Len(t, supportedExtensions, len(FakeFilters))
+}

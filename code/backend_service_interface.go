@@ -7,6 +7,8 @@ import (
 )
 
 type SnykCodeService interface {
+	GetFilters() (configFiles []string, extensions []string, err error)
+
 	CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error)
 
 	ExtendBundle(

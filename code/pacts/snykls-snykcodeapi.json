@@ -1,0 +1,61 @@
+{
+  "consumer": {
+    "name": "SnykLS"
+  },
+  "provider": {
+    "name": "SnykCodeApi"
+  },
+  "interactions": [
+    {
+      "description": "",
+      "request": {
+        "method": "GET",
+        "path": "/filters",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "configFiles": [
+            "string",
+            "string"
+          ],
+          "extensions": [
+            "string",
+            "string"
+          ]
+        },
+        "matchingRules": {
+          "$.body.configFiles": {
+            "min": 2
+          },
+          "$.body.configFiles[*].*": {
+            "match": "type"
+          },
+          "$.body.configFiles[*]": {
+            "match": "type"
+          },
+          "$.body.extensions": {
+            "min": 2
+          },
+          "$.body.extensions[*].*": {
+            "match": "type"
+          },
+          "$.body.extensions[*]": {
+            "match": "type"
+          }
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "pactSpecification": {
+      "version": "2.0.0"
+    }
+  }
+}

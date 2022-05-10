@@ -16,42 +16,7 @@ import (
 )
 
 var (
-	// TODO get via filters request [ROAD-803]
-	// extensions":[".java",".aspx",".cs",".cls",".ejs",".es",".es6",".htm",".html",".js",".jsx",".ts",".tsx",".vue",".py",".erb",".haml",".rb",".rhtml",".slim",".go",".c",".cc",".cpp",".cxx",".h",".hpp",".hxx",".php",".phtml"]
-	extensions = map[string]bool{
-		".java":  true,
-		".aspx":  true,
-		".cs":    true,
-		".cls":   true,
-		".ejs":   true,
-		".es":    true,
-		".es6":   true,
-		".htm":   true,
-		".html":  true,
-		".js":    true,
-		".jsx":   true,
-		".kt":    true,
-		".kts":   true,
-		".ts":    true,
-		".tsx":   true,
-		".vue":   true,
-		".py":    true,
-		".erb":   true,
-		".haml":  true,
-		".rb":    true,
-		".rhtml": true,
-		".slim":  true,
-		".go":    true,
-		".c":     true,
-		".cc":    true,
-		".cpp":   true,
-		".cxx":   true,
-		".h":     true,
-		".hpp":   true,
-		".hxx":   true,
-		".php":   true,
-		".phtml": true,
-	}
+	supportedExtensions = map[string]bool{}
 )
 
 const (
@@ -105,7 +70,7 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]bool) File
 
 	var nonAddedFiles = make(map[sglsp.DocumentURI]bool)
 	for documentURI := range files {
-		if !IsSupported(documentURI) {
+		if !IsSupported(b.SnykCode, documentURI) {
 			continue
 		}
 
@@ -137,8 +102,22 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]bool) File
 	return FilesNotAdded{}
 }
 
-func IsSupported(documentURI sglsp.DocumentURI) bool {
-	return extensions[filepath.Ext(uri.PathFromUri(documentURI))]
+func IsSupported(service SnykCodeService, documentURI sglsp.DocumentURI) bool {
+	if len(supportedExtensions) == 0 {
+		// query
+		_, exts, err := service.GetFilters()
+		if err != nil {
+			log.Error().Err(err).Msg("could not get filters")
+			return false
+		}
+
+		// cache
+		for _, ext := range exts {
+			supportedExtensions[ext] = true
+		}
+	}
+
+	return supportedExtensions[filepath.Ext(uri.PathFromUri(documentURI))]
 }
 
 func (b *BundleImpl) getFileFrom(content []byte) File {
