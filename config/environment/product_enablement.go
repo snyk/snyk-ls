@@ -37,6 +37,7 @@ func (e *EnabledProducts) initializeDefaultProductEnablement() {
 	e.Iac.Set(true)
 	e.Container.Set(false)
 	e.Advisor.Set(false)
+	EnabledProductsFromEnv() // todo test
 }
 
 func EnabledProductsFromEnv() {
