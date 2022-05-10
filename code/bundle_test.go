@@ -304,5 +304,5 @@ func Test_IsSupportedLanguage_shouldReturnFalseForUnsupportedLanguages(t *testin
 func Test_IsSupportedLanguage_shouldCacheSupportedExtensions(t *testing.T) {
 	documentURI := uri.PathToUri("C:\\some\\path\\Test.rs")
 	IsSupported(&FakeSnykCodeApiService{}, documentURI)
-	assert.Len(t, supportedExtensions, len(FakeFilters))
+	assert.Equal(t, supportedExtensions.Length(), len(FakeFilters))
 }

@@ -22,17 +22,15 @@
         },
         "body": {
           "configFiles": [
-            "string",
             "string"
           ],
           "extensions": [
-            "string",
             "string"
           ]
         },
         "matchingRules": {
           "$.body.configFiles": {
-            "min": 2
+            "min": 1
           },
           "$.body.configFiles[*].*": {
             "match": "type"
@@ -41,7 +39,7 @@
             "match": "type"
           },
           "$.body.extensions": {
-            "min": 2
+            "min": 1
           },
           "$.body.extensions[*].*": {
             "match": "type"

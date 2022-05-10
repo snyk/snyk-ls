@@ -10,13 +10,14 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 	"github.com/snyk/snyk-ls/util"
 )
 
 var (
-	supportedExtensions = map[string]bool{}
+	supportedExtensions = concurrency.AtomicMap{}
 )
 
 const (
@@ -103,7 +104,7 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]bool) File
 }
 
 func IsSupported(service SnykCodeService, documentURI sglsp.DocumentURI) bool {
-	if len(supportedExtensions) == 0 {
+	if supportedExtensions.Length() == 0 {
 		// query
 		_, exts, err := service.GetFilters()
 		if err != nil {
@@ -113,11 +114,13 @@ func IsSupported(service SnykCodeService, documentURI sglsp.DocumentURI) bool {
 
 		// cache
 		for _, ext := range exts {
-			supportedExtensions[ext] = true
+			supportedExtensions.Put(ext, true)
 		}
 	}
 
-	return supportedExtensions[filepath.Ext(uri.PathFromUri(documentURI))]
+	supported := supportedExtensions.Get(filepath.Ext(uri.PathFromUri(documentURI)))
+
+	return supported != nil && supported.(bool)
 }
 
 func (b *BundleImpl) getFileFrom(content []byte) File {
