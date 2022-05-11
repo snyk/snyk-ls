@@ -44,8 +44,8 @@ type bundleResponse struct {
 }
 
 type extendBundleRequest struct {
-	Files        map[sglsp.DocumentURI]File `json:"files"`
-	RemovedFiles []sglsp.DocumentURI        `json:"removedFiles,omitempty"`
+	Files        map[sglsp.DocumentURI]BundleFile `json:"files"`
+	RemovedFiles []sglsp.DocumentURI              `json:"removedFiles,omitempty"`
 }
 
 type filtersResponse struct {
@@ -73,7 +73,7 @@ func (s *SnykCodeBackendService) GetFilters() (configFiles []string, extensions 
 	return filters.ConfigFiles, filters.Extensions, nil
 }
 
-func (s *SnykCodeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
+func (s *SnykCodeBackendService) CreateBundle(files map[sglsp.DocumentURI]BundleFile) (string, []sglsp.DocumentURI, error) {
 	log.Debug().Str("method", "CreateBundle").Msg("API: Creating bundle for " + strconv.Itoa(len(files)) + " files")
 	requestBody, err := json.Marshal(files)
 	if err != nil {
@@ -122,7 +122,7 @@ func (s *SnykCodeBackendService) doCall(method string, path string, requestBody 
 	return responseBody, err
 }
 
-func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]File, removedFiles []sglsp.DocumentURI) (string, []sglsp.DocumentURI, error) {
+func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]BundleFile, removedFiles []sglsp.DocumentURI) (string, []sglsp.DocumentURI, error) {
 	log.Debug().Str("method", "ExtendBundle").Str("bundleHash", bundleHash).Msg("API: Extending bundle " + bundleHash + " for " + strconv.Itoa(len(files)) + " files")
 	defer log.Debug().Str("method", "ExtendBundle").Str("bundleHash", bundleHash).Msg("API: Extend done")
 

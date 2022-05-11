@@ -1,10 +1,10 @@
 package install
 
 import (
-	"github.com/snyk/snyk-ls/internal/progress"
 	"os"
 	"testing"
 
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/lsp"
 

@@ -9,11 +9,11 @@ import (
 type SnykCodeService interface {
 	GetFilters() (configFiles []string, extensions []string, err error)
 
-	CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error)
+	CreateBundle(files map[sglsp.DocumentURI]BundleFile) (string, []sglsp.DocumentURI, error)
 
 	ExtendBundle(
 		bundleHash string,
-		files map[sglsp.DocumentURI]File,
+		files map[sglsp.DocumentURI]BundleFile,
 		removedFiles []sglsp.DocumentURI,
 	) (string, []sglsp.DocumentURI, error)
 

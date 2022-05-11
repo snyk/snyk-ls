@@ -67,7 +67,11 @@ func FakeDiagnosticUri() (documentURI sglsp.DocumentURI, path string) {
 }
 
 type FakeSnykCodeApiService struct {
-	Calls map[string][][]interface{}
+	Calls               map[string][][]interface{}
+	HasCreatedNewBundle bool
+	HasExtendedBundle   bool
+	TotalBundleCount    int
+	ExtendedBundleCount int
 }
 
 func (f *FakeSnykCodeApiService) addCall(params []interface{}, op string) {
@@ -98,6 +102,13 @@ func (f *FakeSnykCodeApiService) GetCallParams(callNo int, op string) []interfac
 	return params
 }
 
+func (f *FakeSnykCodeApiService) Clear() {
+	f.ExtendedBundleCount = 0
+	f.TotalBundleCount = 0
+	f.HasExtendedBundle = false
+	f.HasExtendedBundle = false
+}
+
 func (f *FakeSnykCodeApiService) GetAllCalls(op string) [][]interface{} {
 	mutex.Lock()
 	defer mutex.Unlock()
@@ -112,22 +123,25 @@ func (f *FakeSnykCodeApiService) GetFilters() (configFiles []string, extensions 
 	return make([]string, 0), FakeFilters, nil
 }
 
-func (f *FakeSnykCodeApiService) CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
+func (f *FakeSnykCodeApiService) CreateBundle(files map[sglsp.DocumentURI]BundleFile) (string, []sglsp.DocumentURI, error) {
+	f.TotalBundleCount++
+	f.HasCreatedNewBundle = true
 	params := []interface{}{files}
 	f.addCall(params, CreateBundleWithSourceOperation)
-	BundleHash := util.Hash([]byte(fmt.Sprint(rand.Int())))
-
-	return BundleHash, nil, nil
+	return util.Hash([]byte(fmt.Sprint(rand.Int()))), nil, nil
 }
 
 func (f *FakeSnykCodeApiService) ExtendBundle(
 	bundleHash string,
-	files map[sglsp.DocumentURI]File,
+	files map[sglsp.DocumentURI]BundleFile,
 	removedFiles []sglsp.DocumentURI,
 ) (string, []sglsp.DocumentURI, error) {
+	f.HasExtendedBundle = true
+	f.TotalBundleCount++
+	f.ExtendedBundleCount++
 	params := []interface{}{bundleHash, files, removedFiles}
 	f.addCall(params, ExtendBundleWithSourceOperation)
-	return bundleHash, nil, nil
+	return util.Hash([]byte(fmt.Sprint(rand.Int()))), nil, nil
 }
 
 func (f *FakeSnykCodeApiService) RunAnalysis(

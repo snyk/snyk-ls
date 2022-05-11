@@ -11,15 +11,10 @@ var ProgressChannel = make(chan lsp.ProgressParams, 100)
 var CancelProgressChannel = make(chan lsp.ProgressToken, 100)
 
 type Tracker struct {
-	channel        chan lsp.ProgressParams
-	cancelChannel  chan lsp.ProgressToken
-	token          lsp.ProgressToken
-	title, message string
-	cancellable    bool
-	stats          struct {
-		totalFiles     int
-		processedFiles int
-	}
+	channel       chan lsp.ProgressParams
+	cancelChannel chan lsp.ProgressToken
+	token         lsp.ProgressToken
+	cancellable   bool
 }
 
 func NewTestingTracker(channel chan lsp.ProgressParams, cancelChannel chan lsp.ProgressToken) *Tracker {

@@ -117,12 +117,11 @@ func fetchAllRegisteredDocumentDiagnostics(documentURI sglsp.DocumentURI, level 
 
 	if level == lsp.ScanLevelWorkspace {
 		dChan = make(chan lsp.DiagnosticResult, 10000)
-		workspaceLevelFetch(documentURI, environment.CurrentEnabledProducts, &wg, dChan, hoverChan)
+		workspaceLevelFetch(documentURI, environment.CurrentEnabledProducts, p, &wg, dChan, hoverChan)
 	} else {
 		dChan = make(chan lsp.DiagnosticResult, 10000)
-		fileLevelFetch(documentURI, environment.CurrentEnabledProducts, &wg, dChan, hoverChan)
+		fileLevelFetch(documentURI, environment.CurrentEnabledProducts, p, &wg, dChan, hoverChan)
 	}
-	p.Report(50)
 	wg.Wait()
 	log.Debug().
 		Str("method", "fetchAllRegisteredDocumentDiagnostics").
@@ -131,36 +130,26 @@ func fetchAllRegisteredDocumentDiagnostics(documentURI sglsp.DocumentURI, level 
 	return processResults(dChan, diagnostics)
 }
 
-func workspaceLevelFetch(
-	documentURI sglsp.DocumentURI,
-	enabledProducts environment.EnabledProducts,
-	wg *sync.WaitGroup,
-	dChan chan lsp.DiagnosticResult,
-	hoverChan chan lsp.Hover,
-) {
+func workspaceLevelFetch(documentURI sglsp.DocumentURI, enabledProducts environment.EnabledProducts, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	if enabledProducts.Iac.Get() {
 		wg.Add(1)
 		go iac.ScanWorkspace(Cli, documentURI, wg, dChan, hoverChan)
+		p.Report(50)
 	}
 	if enabledProducts.OpenSource.Get() {
 		wg.Add(1)
 		go oss.ScanWorkspace(Cli, documentURI, wg, dChan, hoverChan)
+		p.Report(50)
 	}
 	if enabledProducts.Code.Get() {
-		code.ScanWorkspace(&registeredDocuments, documentURI, wg, dChan, hoverChan)
+		code.ScanWorkspace(&registeredDocuments, documentURI, p, wg, dChan, hoverChan)
 	}
 }
 
-func fileLevelFetch(
-	documentURI sglsp.DocumentURI,
-	enabledProducts environment.EnabledProducts,
-	wg *sync.WaitGroup,
-	dChan chan lsp.DiagnosticResult,
-	hoverChan chan lsp.Hover,
-) {
+func fileLevelFetch(documentURI sglsp.DocumentURI, enabledProducts environment.EnabledProducts, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	if enabledProducts.Code.Get() {
 		RegisterDocument(sglsp.TextDocumentItem{URI: documentURI})
-		code.ScanFile(documentURI, wg, dChan, hoverChan)
+		code.ScanFile(documentURI, p, wg, dChan, hoverChan)
 	}
 	if enabledProducts.Iac.Get() {
 		wg.Add(1)
@@ -170,6 +159,7 @@ func fileLevelFetch(
 		wg.Add(1)
 		go oss.ScanFile(Cli, documentURI, wg, dChan, hoverChan)
 	}
+	p.Report(50)
 }
 
 func processResults(
