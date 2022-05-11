@@ -26,6 +26,23 @@ func TestGetEnabledProducts_DefaultValues(t *testing.T) {
 	assert.Equal(t, false, CurrentEnabledProducts.Advisor.Get())
 }
 
+func TestInitializeDefaultProductEnablement(t *testing.T) {
+	t.Setenv(ActivateSnykOssKey, "false")
+	t.Setenv(ActivateSnykCodeKey, "true")
+	t.Setenv(ActivateSnykIacKey, "false")
+	t.Setenv(ActivateSnykAdvisorKey, "true")
+	t.Setenv(ActivateSnykContainerKey, "true")
+
+	CurrentEnabledProducts = EnabledProducts{}
+	CurrentEnabledProducts.initializeDefaultProductEnablement()
+
+	assert.Equal(t, false, CurrentEnabledProducts.OpenSource.Get())
+	assert.Equal(t, true, CurrentEnabledProducts.Code.Get())
+	assert.Equal(t, false, CurrentEnabledProducts.Iac.Get())
+	assert.Equal(t, true, CurrentEnabledProducts.Container.Get())
+	assert.Equal(t, true, CurrentEnabledProducts.Advisor.Get())
+}
+
 func TestGetEnabledProducts_Oss(t *testing.T) {
 	t.Setenv(ActivateSnykOssKey, "false")
 	EnabledProductsFromEnv()
