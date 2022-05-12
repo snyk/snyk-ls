@@ -81,7 +81,7 @@ func ClearRegisteredDocuments() {
 
 func RegisterDocument(file sglsp.TextDocumentItem) {
 	documentURI := file.URI
-	if !(code.IsSupported(documentURI) ||
+	if !(code.IsSupported(SnykCode(), documentURI) ||
 		iac.IsSupported(documentURI) ||
 		oss.IsSupported(documentURI)) {
 		return

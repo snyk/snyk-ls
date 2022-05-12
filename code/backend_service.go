@@ -35,6 +35,7 @@ func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 
 type SnykCodeBackendService struct {
 	client http.Client
+	host   string
 }
 
 type bundleResponse struct {
@@ -45,6 +46,31 @@ type bundleResponse struct {
 type extendBundleRequest struct {
 	Files        map[sglsp.DocumentURI]File `json:"files"`
 	RemovedFiles []sglsp.DocumentURI        `json:"removedFiles,omitempty"`
+}
+
+type filtersResponse struct {
+	ConfigFiles []string `json:"configFiles" pact:"min=1"`
+	Extensions  []string `json:"extensions" pact:"min=1"`
+}
+
+func NewService(host string) *SnykCodeBackendService {
+	return &SnykCodeBackendService{http.Client{}, host}
+}
+
+func (s *SnykCodeBackendService) GetFilters() (configFiles []string, extensions []string, err error) {
+	log.Debug().Str("method", "GetFilters").Msg("API: Getting file extension filters")
+	responseBody, err := s.doCall("GET", "/filters", nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var filters filtersResponse
+	err = json.Unmarshal(responseBody, &filters)
+	if err != nil {
+		return nil, nil, err
+	}
+	log.Debug().Str("method", "GetFilters").Msg("API: Finished getting filters")
+	return filters.ConfigFiles, filters.Extensions, nil
 }
 
 func (s *SnykCodeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
@@ -70,7 +96,7 @@ func (s *SnykCodeBackendService) CreateBundle(files map[sglsp.DocumentURI]File) 
 
 func (s *SnykCodeBackendService) doCall(method string, path string, requestBody []byte) ([]byte, error) {
 	b := bytes.NewBuffer(requestBody)
-	req, err := http.NewRequest(method, environment.ApiUrl()+path, b)
+	req, err := http.NewRequest(method, s.host+path, b)
 	if err != nil {
 		return nil, err
 	}

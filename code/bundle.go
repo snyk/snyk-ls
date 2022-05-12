@@ -10,48 +10,14 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 	"github.com/snyk/snyk-ls/util"
 )
 
 var (
-	// TODO get via filters request [ROAD-803]
-	// extensions":[".java",".aspx",".cs",".cls",".ejs",".es",".es6",".htm",".html",".js",".jsx",".ts",".tsx",".vue",".py",".erb",".haml",".rb",".rhtml",".slim",".go",".c",".cc",".cpp",".cxx",".h",".hpp",".hxx",".php",".phtml"]
-	extensions = map[string]bool{
-		".java":  true,
-		".aspx":  true,
-		".cs":    true,
-		".cls":   true,
-		".ejs":   true,
-		".es":    true,
-		".es6":   true,
-		".htm":   true,
-		".html":  true,
-		".js":    true,
-		".jsx":   true,
-		".kt":    true,
-		".kts":   true,
-		".ts":    true,
-		".tsx":   true,
-		".vue":   true,
-		".py":    true,
-		".erb":   true,
-		".haml":  true,
-		".rb":    true,
-		".rhtml": true,
-		".slim":  true,
-		".go":    true,
-		".c":     true,
-		".cc":    true,
-		".cpp":   true,
-		".cxx":   true,
-		".h":     true,
-		".hpp":   true,
-		".hxx":   true,
-		".php":   true,
-		".phtml": true,
-	}
+	supportedExtensions = concurrency.AtomicMap{}
 )
 
 const (
@@ -105,7 +71,7 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]bool) File
 
 	var nonAddedFiles = make(map[sglsp.DocumentURI]bool)
 	for documentURI := range files {
-		if !IsSupported(documentURI) {
+		if !IsSupported(b.SnykCode, documentURI) {
 			continue
 		}
 
@@ -137,8 +103,24 @@ func (b *BundleImpl) AddToBundleDocuments(files map[sglsp.DocumentURI]bool) File
 	return FilesNotAdded{}
 }
 
-func IsSupported(documentURI sglsp.DocumentURI) bool {
-	return extensions[filepath.Ext(uri.PathFromUri(documentURI))]
+func IsSupported(service SnykCodeService, documentURI sglsp.DocumentURI) bool {
+	if supportedExtensions.Length() == 0 {
+		// query
+		_, exts, err := service.GetFilters()
+		if err != nil {
+			log.Error().Err(err).Msg("could not get filters")
+			return false
+		}
+
+		// cache
+		for _, ext := range exts {
+			supportedExtensions.Put(ext, true)
+		}
+	}
+
+	supported := supportedExtensions.Get(filepath.Ext(uri.PathFromUri(documentURI)))
+
+	return supported != nil && supported.(bool)
 }
 
 func (b *BundleImpl) getFileFrom(content []byte) File {

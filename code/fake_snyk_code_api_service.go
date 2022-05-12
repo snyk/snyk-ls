@@ -47,6 +47,7 @@ var (
 		Message:  "This is a dummy error (severity error)",
 		// CodeDescription: lsp.CodeDescription{Href: "https://snyk.io"},
 	}
+	FakeFilters = []string{".cjs", ".ejs", ".es", ".es6", ".htm", ".html", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".vue", ".java", ".erb", ".haml", ".rb", ".rhtml", ".slim", ".kt", ".swift", ".cls", ".config", ".pom", ".wxs", ".xml", ".xsd", ".aspx", ".cs", ".py", ".go", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".php", ".phtml"}
 )
 
 func FakeDiagnosticUri() (documentURI sglsp.DocumentURI, path string) {
@@ -105,6 +106,10 @@ func (f *FakeSnykCodeApiService) GetAllCalls(op string) [][]interface{} {
 		return nil
 	}
 	return calls
+}
+
+func (f *FakeSnykCodeApiService) GetFilters() (configFiles []string, extensions []string, err error) {
+	return make([]string, 0), FakeFilters, nil
 }
 
 func (f *FakeSnykCodeApiService) CreateBundle(files map[sglsp.DocumentURI]File) (string, []sglsp.DocumentURI, error) {
