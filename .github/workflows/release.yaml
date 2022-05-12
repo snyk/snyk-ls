@@ -24,6 +24,20 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
+      - name: Cache Pact CLI tools
+        id: cache-pact
+        uses: actions/cache@v3
+        with:
+          path: ~/pact
+          key: ${{ runner.os }}-pact
+
+      - name: Set up Pact CLI tools
+        shell: bash
+        if: steps.cache-pact.outputs.cache-hit != 'true'
+        run: |
+          cd ~
+          curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | bash
+
       - name: Cache Go modules
         uses: actions/cache@v2
         with:
@@ -45,6 +59,7 @@ jobs:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
         run: |
+          export PATH=$PATH:~/pact/bin
           make clean test
 
       - name: Run integration tests
@@ -53,6 +68,7 @@ jobs:
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
           INTEG_TESTS: 'true'
         run: |
+          export PATH=$PATH:~/pact/bin
           make clean test
 
       - name: Set up Git actions user
