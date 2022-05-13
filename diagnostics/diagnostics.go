@@ -115,12 +115,12 @@ func workspaceLevelFetch(workspaceURI sglsp.DocumentURI, enabledProducts environ
 	if enabledProducts.Iac.Get() {
 		wg.Add(1)
 		go iac.ScanWorkspace(Cli, workspaceURI, wg, dChan, hoverChan)
-		p.Report(50)
+		p.Report(10)
 	}
 	if enabledProducts.OpenSource.Get() {
 		wg.Add(1)
 		go oss.ScanWorkspace(Cli, workspaceURI, wg, dChan, hoverChan)
-		p.Report(50)
+		p.Report(20)
 	}
 	if enabledProducts.Code.Get() {
 		//TODO wire up

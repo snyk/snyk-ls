@@ -33,7 +33,7 @@ func (sc *SnykCode) uploadAndAnalyze(files []sglsp.DocumentURI, p *progress.Trac
 		return
 	}
 	uploadedBundle, err := sc.BundleUploader.Upload(files, func(status UploadStatus) {
-		p.Report(uint32((status.UploadedFiles / status.TotalFiles) * 50))
+		p.Report(20 + uint32((status.UploadedFiles/status.TotalFiles)*50))
 	})
 
 	// TODO LSP error handling should be pushed UP to the LSP layer
