@@ -25,7 +25,7 @@ type SnykCodeClient interface {
 	) (
 		map[sglsp.DocumentURI][]lsp.Diagnostic,
 		map[sglsp.DocumentURI][]lsp.HoverDetails,
-		string,
+		AnalysisStatus,
 		error,
 	)
 }

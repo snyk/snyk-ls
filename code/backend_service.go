@@ -143,23 +143,28 @@ func (s *SnykCodeHTTPClient) ExtendBundle(bundleHash string, files map[sglsp.Doc
 	return bundleResponse.BundleHash, bundleResponse.MissingFiles, err
 }
 
+type AnalysisStatus struct {
+	message    string
+	percentage int
+}
+
 func (s *SnykCodeHTTPClient) RunAnalysis(
 	bundleHash string,
 	shardKey string,
 	limitToFiles []sglsp.DocumentURI,
 	severity int,
-) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, string, error) {
+) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, AnalysisStatus, error) {
 	log.Debug().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Msg("API: Retrieving analysis for bundle")
 	defer log.Debug().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Msg("API: Retrieving analysis done")
 
 	requestBody, err := s.analysisRequestBody(bundleHash, shardKey, limitToFiles, severity)
 	if err != nil {
 		log.Err(err).Str("method", "RunAnalysis").Str("requestBody", string(requestBody)).Msg("error creating request body")
-		return nil, nil, "", err
+		return nil, nil, AnalysisStatus{}, err
 	}
 
 	responseBody, err := s.doCall("POST", "/analysis", requestBody)
-	failed := "FAILED"
+	failed := AnalysisStatus{message: "FAILED"}
 	if err != nil {
 		log.Err(err).Str("method", "RunAnalysis").Str("responseBody", string(responseBody)).Msg("error response from analysis")
 		return nil, nil, failed, err
@@ -175,7 +180,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 	log.Debug().Str("method", "RunAnalysis").
 		Str("bundleHash", bundleHash).Float32("progress", response.Progress).Msgf("Status: %s", response.Status)
 
-	if response.Status == failed {
+	if response.Status == failed.message {
 		log.Err(err).Str("method", "RunAnalysis").Str("responseStatus", response.Status).Msg("analysis failed")
 		return nil, nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
@@ -184,13 +189,13 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		log.Err(err).Str("method", "RunAnalysis").Str("responseStatus", response.Status).Msg("unknown response status (empty)")
 		return nil, nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
-
+	status := AnalysisStatus{message: response.Status, percentage: int(response.Progress * 100)}
 	if response.Status != "COMPLETE" {
-		return nil, nil, response.Status, nil
+		return nil, nil, status, nil
 	}
 
 	diags, hovers := s.convertSarifResponse(response)
-	return diags, hovers, response.Status, err
+	return diags, hovers, status, err
 }
 
 func (s *SnykCodeHTTPClient) analysisRequestBody(bundleHash string, shardKey string, limitToFiles []sglsp.DocumentURI, severity int) ([]byte, error) {

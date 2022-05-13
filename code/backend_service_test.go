@@ -102,7 +102,7 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		if callStatus == "COMPLETE" && d[uri1] != nil {
+		if callStatus.message == "COMPLETE" && d[uri1] != nil {
 			returnValue := assert.NotEqual(t, 0, len(d[uri1]))
 			returnValue = returnValue && assert.NotEqual(t, 0, len(d[uri2]))
 			if returnValue {

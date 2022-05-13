@@ -149,10 +149,10 @@ func (f *FakeSnykCodeClient) ExtendBundle(
 
 func (f *FakeSnykCodeClient) RunAnalysis(
 	bundleHash string,
-	shardKey string,
+	_ string,
 	limitToFiles []sglsp.DocumentURI,
 	severity int,
-) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, string, error) {
+) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, AnalysisStatus, error) {
 	params := []interface{}{bundleHash, limitToFiles, severity}
 	f.addCall(params, RunAnalysisOperation)
 
@@ -166,5 +166,5 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	hoverMap[fakeDiagnosticUri] = append(hovers, FakeHover)
 
 	log.Trace().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Interface("fakeDiagnostic", FakeDiagnostic).Msg("fake backend call received & answered")
-	return diagnosticMap, hoverMap, "COMPLETE", nil
+	return diagnosticMap, hoverMap, AnalysisStatus{message: "COMPLETE", percentage: 100}, nil
 }

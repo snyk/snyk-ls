@@ -9,6 +9,7 @@ import (
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/internal/progress"
 	lsp2 "github.com/snyk/snyk-ls/lsp"
 	"github.com/snyk/snyk-ls/util"
 )
@@ -77,7 +78,9 @@ func (b *Bundle) retrieveAnalysis(
 	if len(b.UploadBatches) == 0 {
 		return
 	}
-
+	p := progress.NewTracker(false)
+	p.Begin("Snyk Code analysis", "Retrieving results...")
+	defer p.End("Analysis complete.")
 	for {
 		start := time.Now()
 		diags, hovers, status, err := b.SnykCode.RunAnalysis(
@@ -93,7 +96,7 @@ func (b *Bundle) retrieveAnalysis(
 			return
 		}
 
-		if status == "COMPLETE" {
+		if status.message == "COMPLETE" {
 			for u, d := range diags {
 				log.Trace().Str("method", "retrieveAnalysis").Str("bundleHash", b.BundleHash).
 					Str("uri1", string(u)).
@@ -106,7 +109,6 @@ func (b *Bundle) retrieveAnalysis(
 				}
 			}
 			sendHoversViaChan(hovers, hoverChan)
-
 			return
 		}
 
