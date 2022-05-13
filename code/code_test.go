@@ -1,19 +1,20 @@
 package code
 
 import (
-	"github.com/snyk/snyk-ls/internal/progress"
-	"github.com/snyk/snyk-ls/internal/uri"
-	lsp2 "github.com/snyk/snyk-ls/lsp"
-	"github.com/sourcegraph/go-lsp"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sync"
 	"testing"
+
+	"github.com/sourcegraph/go-lsp"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/uri"
+	lsp2 "github.com/snyk/snyk-ls/lsp"
 )
 
-// todo these tests tap into some implementation details and get on the way of refactoring,
 // can we replace them with more succinct higher level integration tests?[keeping them for sanity for the time being]
 func setupDocs() (string, lsp.TextDocumentItem, lsp.TextDocumentItem, []byte, []byte) {
 	path, _ := os.MkdirTemp(os.TempDir(), "firstDocTemp")
@@ -36,8 +37,8 @@ func setupDocs() (string, lsp.TextDocumentItem, lsp.TextDocumentItem, []byte, []
 
 func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 	t.Run("should create bundle when hash empty", func(t *testing.T) {
-		snykCodeMock := &FakeSnykCodeApiService{}
-		BundlerThatNeedsToBecomeAProp = Bundler{SnykCode: snykCodeMock}
+		snykCodeMock := &FakeSnykCodeClient{}
+		code := NewSnykCode(NewBundler(snykCodeMock))
 		path, firstDoc, _, content1, _ := setupDocs()
 		registeredDocuments := []lsp.DocumentURI{firstDoc.URI}
 		defer os.RemoveAll(path)
@@ -47,7 +48,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 
-		go uploadAndAnalyze(registeredDocuments, progress.NewTracker(true), &wg, "", dChan, hoverChan)
+		go code.uploadAndAnalyze(registeredDocuments, progress.NewTracker(true), &wg, "", dChan, hoverChan)
 
 		<-dChan
 
@@ -60,8 +61,8 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 	})
 
 	t.Run("should retrieve from backend", func(t *testing.T) {
-		snykCodeMock := &FakeSnykCodeApiService{}
-		BundlerThatNeedsToBecomeAProp = Bundler{SnykCode: snykCodeMock}
+		snykCodeMock := &FakeSnykCodeClient{}
+		code := NewSnykCode(NewBundler(snykCodeMock))
 		diagnosticUri, path := FakeDiagnosticUri()
 		defer os.RemoveAll(path)
 		diagnosticMap := map[lsp.DocumentURI][]lsp2.Diagnostic{}
@@ -72,7 +73,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 
-		go uploadAndAnalyze([]lsp.DocumentURI{diagnosticUri}, progress.NewTracker(true), &wg, "", dChan, hoverChan)
+		go code.uploadAndAnalyze([]lsp.DocumentURI{diagnosticUri}, progress.NewTracker(true), &wg, "", dChan, hoverChan)
 		result := <-dChan
 		diagnosticMap[result.Uri] = result.Diagnostics
 

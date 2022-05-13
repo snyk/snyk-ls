@@ -44,7 +44,7 @@ const (
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewService(environment.ApiUrl())
+	s := NewHTTPRepository(environment.ApiUrl())
 	files := map[sglsp.DocumentURI]BundleFile{}
 	files[uri1] = BundleFile{
 		Hash:    util.Hash([]byte(content)),
@@ -59,7 +59,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewService(environment.ApiUrl())
+	s := NewHTTPRepository(environment.ApiUrl())
 
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]BundleFile{}
@@ -80,7 +80,7 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewService(environment.ApiUrl())
+	s := NewHTTPRepository(environment.ApiUrl())
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]BundleFile{}
@@ -117,7 +117,7 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 // todo analysis test severities
 
 func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing.T) {
-	s := NewService("")
+	s := NewHTTPRepository("")
 	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
 
 	var analysisResponse SarifResponse
@@ -157,7 +157,7 @@ func TestSnykCodeBackendService_GetFilters_returns(t *testing.T) {
 	})
 
 	test := func() error {
-		s := NewService(fmt.Sprintf("http://localhost:%d", pact.Server.Port))
+		s := NewHTTPRepository(fmt.Sprintf("http://localhost:%d", pact.Server.Port))
 		if _, _, err := s.GetFilters(); err != nil {
 			return err
 		}

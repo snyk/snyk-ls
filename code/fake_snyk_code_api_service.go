@@ -18,6 +18,7 @@ const (
 	CreateBundleWithSourceOperation = "createBundleWithSource"
 	ExtendBundleWithSourceOperation = "extendBundleWithSource"
 	RunAnalysisOperation            = "runAnalysis"
+	GetFiltersOperation             = "getFilters"
 )
 
 var (
@@ -66,7 +67,7 @@ func FakeDiagnosticUri() (documentURI sglsp.DocumentURI, path string) {
 	return documentURI, temp
 }
 
-type FakeSnykCodeApiService struct {
+type FakeSnykCodeClient struct {
 	Calls               map[string][][]interface{}
 	HasCreatedNewBundle bool
 	HasExtendedBundle   bool
@@ -74,7 +75,7 @@ type FakeSnykCodeApiService struct {
 	ExtendedBundleCount int
 }
 
-func (f *FakeSnykCodeApiService) addCall(params []interface{}, op string) {
+func (f *FakeSnykCodeClient) addCall(params []interface{}, op string) {
 	mutex.Lock()
 	defer mutex.Unlock()
 	if f.Calls == nil {
@@ -88,7 +89,7 @@ func (f *FakeSnykCodeApiService) addCall(params []interface{}, op string) {
 	f.Calls[op] = append(calls, opParams)
 }
 
-func (f *FakeSnykCodeApiService) GetCallParams(callNo int, op string) []interface{} {
+func (f *FakeSnykCodeClient) GetCallParams(callNo int, op string) []interface{} {
 	mutex.Lock()
 	defer mutex.Unlock()
 	calls := f.Calls[op]
@@ -102,14 +103,14 @@ func (f *FakeSnykCodeApiService) GetCallParams(callNo int, op string) []interfac
 	return params
 }
 
-func (f *FakeSnykCodeApiService) Clear() {
+func (f *FakeSnykCodeClient) Clear() {
 	f.ExtendedBundleCount = 0
 	f.TotalBundleCount = 0
 	f.HasExtendedBundle = false
 	f.HasExtendedBundle = false
 }
 
-func (f *FakeSnykCodeApiService) GetAllCalls(op string) [][]interface{} {
+func (f *FakeSnykCodeClient) GetAllCalls(op string) [][]interface{} {
 	mutex.Lock()
 	defer mutex.Unlock()
 	calls := f.Calls[op]
@@ -119,11 +120,13 @@ func (f *FakeSnykCodeApiService) GetAllCalls(op string) [][]interface{} {
 	return calls
 }
 
-func (f *FakeSnykCodeApiService) GetFilters() (configFiles []string, extensions []string, err error) {
+func (f *FakeSnykCodeClient) GetFilters() (configFiles []string, extensions []string, err error) {
+	params := []interface{}{configFiles, extensions, err}
+	f.addCall(params, GetFiltersOperation)
 	return make([]string, 0), FakeFilters, nil
 }
 
-func (f *FakeSnykCodeApiService) CreateBundle(files map[sglsp.DocumentURI]BundleFile) (string, []sglsp.DocumentURI, error) {
+func (f *FakeSnykCodeClient) CreateBundle(files map[sglsp.DocumentURI]BundleFile) (string, []sglsp.DocumentURI, error) {
 	f.TotalBundleCount++
 	f.HasCreatedNewBundle = true
 	params := []interface{}{files}
@@ -131,7 +134,7 @@ func (f *FakeSnykCodeApiService) CreateBundle(files map[sglsp.DocumentURI]Bundle
 	return util.Hash([]byte(fmt.Sprint(rand.Int()))), nil, nil
 }
 
-func (f *FakeSnykCodeApiService) ExtendBundle(
+func (f *FakeSnykCodeClient) ExtendBundle(
 	bundleHash string,
 	files map[sglsp.DocumentURI]BundleFile,
 	removedFiles []sglsp.DocumentURI,
@@ -144,7 +147,7 @@ func (f *FakeSnykCodeApiService) ExtendBundle(
 	return util.Hash([]byte(fmt.Sprint(rand.Int()))), nil, nil
 }
 
-func (f *FakeSnykCodeApiService) RunAnalysis(
+func (f *FakeSnykCodeClient) RunAnalysis(
 	bundleHash string,
 	shardKey string,
 	limitToFiles []sglsp.DocumentURI,

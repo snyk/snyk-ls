@@ -1,51 +1,141 @@
 package code
 
 import (
-	sglsp "github.com/sourcegraph/go-lsp"
-)
+	"errors"
+	"sync"
+	"time"
 
-const (
-	maxFileSize               = 1024 * 1024
-	maxBundleSize             = 1024 * 1024 * 4
-	jsonOverheadRequest       = "{\"files\":{}}"
-	jsonOverHeadRequestLength = len(jsonOverheadRequest)
-	jsonUriOverhead           = "\"\":{}"
-	jsonHashSizePerFile       = "\"hash\":\"0123456789012345678901234567890123456789012345678901234567890123\""
-	jsonContentOverhead       = ",\"content\":\"\""
-	jsonOverheadPerFile       = jsonUriOverhead + jsonContentOverhead
+	"github.com/rs/zerolog/log"
+	"github.com/sourcegraph/go-lsp"
+
+	"github.com/snyk/snyk-ls/config/environment"
+	lsp2 "github.com/snyk/snyk-ls/lsp"
+	"github.com/snyk/snyk-ls/util"
 )
 
 type Bundle struct {
-	hash      string
-	documents map[sglsp.DocumentURI]BundleFile
-	size      int
+	SnykCode      SnykCodeClient
+	BundleHash    string
+	UploadBatches []*UploadBatch
 }
 
-func NewBundle() Bundle {
-	return Bundle{
-		documents: map[sglsp.DocumentURI]BundleFile{},
+func (b *Bundle) Upload(uploadBatch *UploadBatch) error {
+	if len(b.UploadBatches) == 0 {
+		err := b.createBundle(uploadBatch)
+		if err != nil {
+			return err
+		}
+	} else {
+		err := b.extendBundle(uploadBatch)
+		if err != nil {
+			return err
+		}
+	}
+	b.UploadBatches = append(b.UploadBatches, uploadBatch)
+	return nil
+}
+
+func (b *Bundle) createBundle(bundle *UploadBatch) error {
+	var err error
+	if bundle.hasContent() {
+		b.BundleHash, _, err = b.SnykCode.CreateBundle(bundle.documents)
+		log.Trace().Str("bundleHash", b.BundleHash).Msg("created bundle on backend")
+	}
+	return err
+}
+
+func (b *Bundle) extendBundle(segment *UploadBatch) error {
+	var removeFiles []lsp.DocumentURI
+	var err error
+	if segment.hasContent() {
+		b.BundleHash, _, err = b.SnykCode.ExtendBundle(b.BundleHash, segment.documents, removeFiles)
+		log.Trace().Str("bundleHash", b.BundleHash).Msg("extended bundle on backend")
+	}
+
+	return err
+}
+
+func (b *Bundle) FetchDiagnosticsData(
+	rootPath string,
+	wg *sync.WaitGroup,
+	dChan chan lsp2.DiagnosticResult,
+	hoverChan chan lsp2.Hover,
+) {
+	defer wg.Done()
+	defer log.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
+
+	log.Debug().Str("method", "FetchDiagnosticsData").Msg("started.")
+
+	b.retrieveAnalysis(rootPath, dChan, hoverChan)
+}
+
+func (b *Bundle) retrieveAnalysis(
+	rootPath string,
+	dChan chan lsp2.DiagnosticResult,
+	hoverChan chan lsp2.Hover,
+) {
+	if len(b.UploadBatches) == 0 {
+		return
+	}
+
+	for {
+		start := time.Now()
+		diags, hovers, status, err := b.SnykCode.RunAnalysis(
+			b.BundleHash,
+			getShardKey(rootPath, environment.Token()),
+			[]lsp.DocumentURI{},
+			0)
+
+		if err != nil {
+			log.Error().Err(err).
+				Str("method", "DiagnosticData").Msg("error retrieving diagnostics...")
+			dChan <- lsp2.DiagnosticResult{Err: err}
+			return
+		}
+
+		if status == "COMPLETE" {
+			for u, d := range diags {
+				log.Trace().Str("method", "retrieveAnalysis").Str("bundleHash", b.BundleHash).
+					Str("uri1", string(u)).
+					Msg("sending diagnostics...")
+
+				dChan <- lsp2.DiagnosticResult{
+					Uri:         u,
+					Diagnostics: d,
+					Err:         err,
+				}
+			}
+			sendHoversViaChan(hovers, hoverChan)
+
+			return
+		}
+
+		if time.Since(start) > environment.SnykCodeAnalysisTimeout() {
+			err = errors.New("analysis call timed out")
+			log.Error().Err(err).Str("method", "DiagnosticData").Msg("timeout...")
+			dChan <- lsp2.DiagnosticResult{Err: err}
+		}
+		time.Sleep(1 * time.Second)
 	}
 }
 
-func (b *Bundle) getSize() int {
-	if len(b.documents) == 0 {
-		return 0
+func getShardKey(rootPath string, authToken string) string {
+	if len(rootPath) > 0 {
+		return util.Hash([]byte(rootPath))
 	}
-	jsonCommasForFiles := len(b.documents) - 1
-	var size = jsonOverHeadRequestLength + jsonCommasForFiles // if more than one file, they are separated by commas in the req
-	// todo: calculate json payload length instead of summing up constant overheads
-	return size + b.size
+	if len(authToken) > 0 {
+		return util.Hash([]byte(authToken))
+	}
+
+	return ""
 }
 
-func (b *Bundle) hasContent() bool {
-	return len(b.documents) > 0
-}
-
-func getTotalDocPayloadSize(documentURI string, content []byte) int {
-	return len(jsonHashSizePerFile) + len(jsonOverheadPerFile) + len([]byte(documentURI)) + len(content)
-}
-
-type BundleFile struct {
-	Hash    string `json:"hash"`
-	Content string `json:"content"`
+//todo : move lsp presetantion concerns up
+func sendHoversViaChan(hovers map[lsp.DocumentURI][]lsp2.HoverDetails, hoverChan chan lsp2.Hover) {
+	for uri, hover := range hovers {
+		hoverChan <- lsp2.Hover{
+			Uri:   uri,
+			Hover: hover,
+		}
+	}
 }

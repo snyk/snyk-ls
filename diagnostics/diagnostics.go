@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/snyk/snyk-ls/di"
+
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/iac"
@@ -21,13 +22,11 @@ import (
 )
 
 var (
-	registeredDocuments     concurrency.AtomicMap
 	documentDiagnosticCache concurrency.AtomicMap
 	Cli                     cli.Executor
 )
 
 func init() {
-	registeredDocuments = concurrency.AtomicMap{}
 	documentDiagnosticCache = concurrency.AtomicMap{}
 	Cli = cli.SnykCli{}
 }
@@ -53,24 +52,6 @@ func ClearWorkspaceFolderDiagnostics(folder lsp.WorkspaceFolder) {
 
 func ClearEntireDiagnosticsCache() {
 	documentDiagnosticCache.ClearAll()
-}
-
-func ClearRegisteredDocuments() {
-	registeredDocuments.ClearAll()
-}
-
-func RegisterDocument(file sglsp.TextDocumentItem) {
-	documentURI := file.URI
-	if !(code.IsSupported(SnykCode(), documentURI) ||
-		iac.IsSupported(documentURI) ||
-		oss.IsSupported(documentURI)) {
-		return
-	}
-	registeredDocuments.Put(documentURI, true)
-}
-
-func UnRegisterDocument(file sglsp.DocumentURI) {
-	registeredDocuments.Delete(file)
 }
 
 func DocumentDiagnosticsFromCache(file sglsp.DocumentURI) []lsp.Diagnostic {
@@ -130,26 +111,34 @@ func fetchAllRegisteredDocumentDiagnostics(documentURI sglsp.DocumentURI, level 
 	return processResults(dChan, diagnostics)
 }
 
-func workspaceLevelFetch(documentURI sglsp.DocumentURI, enabledProducts environment.EnabledProducts, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+func workspaceLevelFetch(workspaceURI sglsp.DocumentURI, enabledProducts environment.EnabledProducts, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	if enabledProducts.Iac.Get() {
 		wg.Add(1)
-		go iac.ScanWorkspace(Cli, documentURI, wg, dChan, hoverChan)
+		go iac.ScanWorkspace(Cli, workspaceURI, wg, dChan, hoverChan)
 		p.Report(50)
 	}
 	if enabledProducts.OpenSource.Get() {
 		wg.Add(1)
-		go oss.ScanWorkspace(Cli, documentURI, wg, dChan, hoverChan)
+		go oss.ScanWorkspace(Cli, workspaceURI, wg, dChan, hoverChan)
 		p.Report(50)
 	}
 	if enabledProducts.Code.Get() {
-		code.ScanWorkspace(&registeredDocuments, documentURI, p, wg, dChan, hoverChan)
+		//TODO wire up
+		files, err := getWorkspaceFiles(workspaceURI)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("method", "workspaceLevelFetch").
+				Str("workspaceURI", string(workspaceURI)).
+				Msg("error getting workspace files")
+		}
+		di.SnykCode.ScanWorkspace(files, workspaceURI, p, wg, dChan, hoverChan)
 	}
 }
 
 func fileLevelFetch(documentURI sglsp.DocumentURI, enabledProducts environment.EnabledProducts, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	if enabledProducts.Code.Get() {
-		RegisterDocument(sglsp.TextDocumentItem{URI: documentURI})
-		code.ScanFile(documentURI, p, wg, dChan, hoverChan)
+		di.SnykCode.ScanFile(documentURI, p, wg, dChan, hoverChan)
 	}
 	if enabledProducts.Iac.Get() {
 		wg.Add(1)

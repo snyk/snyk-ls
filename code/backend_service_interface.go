@@ -6,7 +6,7 @@ import (
 	"github.com/snyk/snyk-ls/lsp"
 )
 
-type SnykCodeService interface {
+type SnykCodeClient interface {
 	GetFilters() (configFiles []string, extensions []string, err error)
 
 	CreateBundle(files map[sglsp.DocumentURI]BundleFile) (string, []sglsp.DocumentURI, error)

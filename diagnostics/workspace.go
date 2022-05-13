@@ -18,21 +18,21 @@ import (
 
 var scannedWorkspaceFolders = sync.Map{}
 
-func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) (walkedFiles []string, err error) {
-	workspace, err := filepath.Abs(uri.PathFromUri(workspaceUri))
+func getWorkspaceFiles(workspaceURI sglsp.DocumentURI) (files []sglsp.DocumentURI, err error) {
+	workspace, err := filepath.Abs(uri.PathFromUri(workspaceURI))
 
 	if err != nil {
-		return nil, err
+		return files, err
 	}
 
 	var patterns []string
 	patterns, err = loadIgnorePatterns(workspace)
 	if err != nil {
-		return nil, err
+		return files, err
 	}
 
 	gitIgnore := ignore.CompileIgnoreLines(patterns...)
-	return walkedFiles, filepath.WalkDir(workspace, func(path string, dirEntry os.DirEntry, _ error) error {
+	err = filepath.WalkDir(workspace, func(path string, dirEntry os.DirEntry, _ error) error {
 		if dirEntry == nil || dirEntry.IsDir() {
 			if ignored(gitIgnore, path) {
 				return filepath.SkipDir
@@ -40,16 +40,17 @@ func registerAllFilesFromWorkspace(workspaceUri sglsp.DocumentURI) (walkedFiles 
 			return nil
 		}
 
-		walkedFiles = append(walkedFiles, path)
-
 		if ignored(gitIgnore, path) {
 			return nil
 		}
 
-		file := sglsp.TextDocumentItem{URI: uri.PathToUri(path)}
-		RegisterDocument(file)
+		files = append(files, uri.PathToUri(path))
 		return err
 	})
+	if err != nil {
+		return files, err
+	}
+	return files, nil
 }
 
 func IsWorkspaceFolderScanned(folder lsp.WorkspaceFolder) bool {
@@ -117,7 +118,7 @@ func workspaceDiagnostics(workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
 
 	var diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic
 
-	_, err := registerAllFilesFromWorkspace(workspace.Uri)
+	_, err := getWorkspaceFiles(workspace.Uri)
 	if err != nil {
 		log.Error().Err(err).
 			Str("method", "workspaceDiagnostics").

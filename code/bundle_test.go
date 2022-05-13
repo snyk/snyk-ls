@@ -1,44 +1,93 @@
 package code
 
 import (
-	sglsp "github.com/sourcegraph/go-lsp"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/sourcegraph/go-lsp"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/util"
 )
 
-func Test_getSize(t *testing.T) {
-	t.Run("returns bundle size", func(t *testing.T) {
-		bundle := NewBundle()
-		bundle.documents = map[sglsp.DocumentURI]BundleFile{"uri": {}}
-
-		size := bundle.getSize()
-		// todo MAGIC NUMBER the get size method is a bit hard to follow, can we implement/test it differently?
-		assert.Equal(t, 12, size)
+func Test_getShardKey(t *testing.T) {
+	t.Run("should return root path hash", func(t *testing.T) {
+		// Case 1: rootPath exists
+		sampleRootPath := "C:\\GIT\\root"
+		// deepcode ignore HardcodedPassword/test: false positive
+		token := "TEST"
+		assert.Equal(t, util.Hash([]byte(sampleRootPath)), getShardKey(sampleRootPath, token))
 	})
 
-	t.Run("when empty bundle should return 0", func(t *testing.T) {
-		bundle := NewBundle()
+	t.Run("should return token hash", func(t *testing.T) {
+		// Case 2: rootPath empty, token exists
+		sampleRootPath := ""
+		// deepcode ignore HardcodedPassword/test: false positive
+		token := "TEST"
+		assert.Equal(t, util.Hash([]byte(token)), getShardKey(sampleRootPath, token))
+	})
 
-		size := bundle.getSize()
-
-		assert.Equal(t, 0, size)
+	t.Run("should return empty shard key", func(t *testing.T) {
+		// Case 3: No token, no rootPath set
+		sampleRootPath := ""
+		// deepcode ignore HardcodedPassword/test: false positive
+		token := ""
+		assert.Equal(t, "", getShardKey(sampleRootPath, token))
 	})
 }
 
-func Test_IsSupportedLanguage_shouldReturnTrueForSupportedLanguages(t *testing.T) {
-	documentURI := uri.PathToUri("C:\\some\\path\\Test.java")
-	supported := IsSupported(&FakeSnykCodeApiService{}, documentURI)
-	assert.True(t, supported)
+func Test_BundleGroup_AddBundle(t *testing.T) {
+	t.Run("when no documents - creates nothing", func(t *testing.T) {
+		fakeSnykCode := FakeSnykCodeClient{}
+		bundle := Bundle{
+			SnykCode: &fakeSnykCode,
+		}
+
+		emptyBundle := &UploadBatch{}
+		_ = bundle.Upload(emptyBundle)
+
+		assert.False(t, fakeSnykCode.HasCreatedNewBundle)
+		assert.False(t, fakeSnykCode.HasExtendedBundle)
+	})
+
+	t.Run("when no bundles - creates new bundle and sets hash", func(t *testing.T) {
+		fakeSnykCode := FakeSnykCodeClient{}
+		bundle := Bundle{
+			SnykCode: &fakeSnykCode,
+		}
+
+		_ = bundle.Upload(bundleWithFiles)
+
+		assert.True(t, fakeSnykCode.HasCreatedNewBundle)
+		assert.False(t, fakeSnykCode.HasExtendedBundle)
+		assert.NotEmpty(t, bundle.BundleHash)
+	})
+
+	t.Run("when existing bundles - extends bundle and updates hash", func(t *testing.T) {
+		fakeSnykCode := FakeSnykCodeClient{}
+		bundle := Bundle{
+			SnykCode: &fakeSnykCode,
+		}
+
+		_ = bundle.Upload(bundleWithFiles)
+		oldHash := bundle.BundleHash
+		_ = bundle.Upload(bundleWithMultipleFiles)
+		newHash := bundle.BundleHash
+
+		assert.True(t, fakeSnykCode.HasExtendedBundle)
+		assert.Equal(t, fakeSnykCode.TotalBundleCount, 2)
+		assert.Equal(t, fakeSnykCode.ExtendedBundleCount, 1)
+		assert.NotEqual(t, oldHash, newHash)
+	})
 }
 
-func Test_IsSupportedLanguage_shouldReturnFalseForUnsupportedLanguages(t *testing.T) {
-	documentURI := uri.PathToUri("C:\\some\\path\\Test.rs")
-	supported := IsSupported(&FakeSnykCodeApiService{}, documentURI)
-	assert.False(t, supported)
+var bundleWithFiles = &UploadBatch{
+	hash:      "bundleWithFilesHash",
+	documents: map[lsp.DocumentURI]BundleFile{lsp.DocumentURI("file"): {}},
 }
-
-func Test_IsSupportedLanguage_shouldCacheSupportedExtensions(t *testing.T) {
-	documentURI := uri.PathToUri("C:\\some\\path\\Test.rs")
-	IsSupported(&FakeSnykCodeApiService{}, documentURI)
-	assert.Equal(t, supportedExtensions.Length(), len(FakeFilters))
+var bundleWithMultipleFiles = &UploadBatch{
+	hash: "bundleWithMultipleFilesHash",
+	documents: map[lsp.DocumentURI]BundleFile{
+		lsp.DocumentURI("file"):    {},
+		lsp.DocumentURI("another"): {},
+	},
 }

@@ -77,11 +77,11 @@ func (i *Install) Update(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
-	return i.updateFromRelease(latestRelease, ctx)
+	return i.updateFromRelease(latestRelease)
 }
 
-func (i *Install) updateFromRelease(r *Release, ctx context.Context) (bool, error) {
-	d := &Downloader{}
+func (i *Install) updateFromRelease(r *Release) (bool, error) {
+	d := NewDownloader()
 	lockFileName, err := createLockFile(d)
 	if err != nil {
 		return false, err

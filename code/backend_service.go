@@ -33,7 +33,7 @@ func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 	return lspSev
 }
 
-type SnykCodeBackendService struct {
+type SnykCodeHTTPClient struct {
 	client http.Client
 	host   string
 }
@@ -53,11 +53,11 @@ type filtersResponse struct {
 	Extensions  []string `json:"extensions" pact:"min=1"`
 }
 
-func NewService(host string) *SnykCodeBackendService {
-	return &SnykCodeBackendService{http.Client{}, host}
+func NewHTTPRepository(host string) *SnykCodeHTTPClient {
+	return &SnykCodeHTTPClient{http.Client{}, host}
 }
 
-func (s *SnykCodeBackendService) GetFilters() (configFiles []string, extensions []string, err error) {
+func (s *SnykCodeHTTPClient) GetFilters() (configFiles []string, extensions []string, err error) {
 	log.Debug().Str("method", "GetFilters").Msg("API: Getting file extension filters")
 	responseBody, err := s.doCall("GET", "/filters", nil)
 	if err != nil {
@@ -73,7 +73,7 @@ func (s *SnykCodeBackendService) GetFilters() (configFiles []string, extensions 
 	return filters.ConfigFiles, filters.Extensions, nil
 }
 
-func (s *SnykCodeBackendService) CreateBundle(files map[sglsp.DocumentURI]BundleFile) (string, []sglsp.DocumentURI, error) {
+func (s *SnykCodeHTTPClient) CreateBundle(files map[sglsp.DocumentURI]BundleFile) (string, []sglsp.DocumentURI, error) {
 	log.Debug().Str("method", "CreateBundle").Msg("API: Creating bundle for " + strconv.Itoa(len(files)) + " files")
 	requestBody, err := json.Marshal(files)
 	if err != nil {
@@ -94,7 +94,7 @@ func (s *SnykCodeBackendService) CreateBundle(files map[sglsp.DocumentURI]Bundle
 	return bundle.BundleHash, bundle.MissingFiles, nil
 }
 
-func (s *SnykCodeBackendService) doCall(method string, path string, requestBody []byte) ([]byte, error) {
+func (s *SnykCodeHTTPClient) doCall(method string, path string, requestBody []byte) ([]byte, error) {
 	b := bytes.NewBuffer(requestBody)
 	req, err := http.NewRequest(method, s.host+path, b)
 	if err != nil {
@@ -122,7 +122,7 @@ func (s *SnykCodeBackendService) doCall(method string, path string, requestBody 
 	return responseBody, err
 }
 
-func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]BundleFile, removedFiles []sglsp.DocumentURI) (string, []sglsp.DocumentURI, error) {
+func (s *SnykCodeHTTPClient) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]BundleFile, removedFiles []sglsp.DocumentURI) (string, []sglsp.DocumentURI, error) {
 	log.Debug().Str("method", "ExtendBundle").Str("bundleHash", bundleHash).Msg("API: Extending bundle " + bundleHash + " for " + strconv.Itoa(len(files)) + " files")
 	defer log.Debug().Str("method", "ExtendBundle").Str("bundleHash", bundleHash).Msg("API: Extend done")
 
@@ -143,7 +143,7 @@ func (s *SnykCodeBackendService) ExtendBundle(bundleHash string, files map[sglsp
 	return bundleResponse.BundleHash, bundleResponse.MissingFiles, err
 }
 
-func (s *SnykCodeBackendService) RunAnalysis(
+func (s *SnykCodeHTTPClient) RunAnalysis(
 	bundleHash string,
 	shardKey string,
 	limitToFiles []sglsp.DocumentURI,
@@ -193,7 +193,7 @@ func (s *SnykCodeBackendService) RunAnalysis(
 	return diags, hovers, response.Status, err
 }
 
-func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, shardKey string, limitToFiles []sglsp.DocumentURI, severity int) ([]byte, error) {
+func (s *SnykCodeHTTPClient) analysisRequestBody(bundleHash string, shardKey string, limitToFiles []sglsp.DocumentURI, severity int) ([]byte, error) {
 	request := AnalysisRequest{
 		Key: AnalysisRequestKey{
 			Type:         "file",
@@ -213,7 +213,7 @@ func (s *SnykCodeBackendService) analysisRequestBody(bundleHash string, shardKey
 	return requestBody, err
 }
 
-func (s *SnykCodeBackendService) convertSarifResponse(response SarifResponse) (
+func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
 	map[sglsp.DocumentURI][]lsp.Diagnostic,
 	map[sglsp.DocumentURI][]lsp.HoverDetails,
 ) {
@@ -257,7 +257,7 @@ func (s *SnykCodeBackendService) convertSarifResponse(response SarifResponse) (
 				Id:    result.RuleID,
 				Range: myRange,
 				// Todo: Add more details here
-				Message: fmt.Sprintf(" %s \n", result.Message.Text),
+				Message: fmt.Sprintf("Snyk: %s \n", result.Message.Text),
 			}
 
 			hoverSlice = append(hoverSlice, h)

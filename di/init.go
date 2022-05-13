@@ -5,15 +5,28 @@ import (
 	"github.com/snyk/snyk-ls/config/environment"
 )
 
-var SnykCode code.SnykCodeService
+var SnykCodeClient code.SnykCodeClient
+var SnykCodeBundleUploader *code.BundleUploader
+
+var SnykCode *code.SnykCode
 
 func Init() {
-	SnykCode = code.NewService(environment.ApiUrl())
-	code.BundlerThatNeedsToBecomeAProp = code.Bundler{SnykCode: SnykCode}
+	initInfrastructure()
+	initDomain()
+}
+
+func initDomain() {
+	SnykCode = code.NewSnykCode(SnykCodeBundleUploader)
+}
+
+func initInfrastructure() {
+	SnykCodeClient = code.NewHTTPRepository(environment.ApiUrl())
+	SnykCodeBundleUploader = code.NewBundler(SnykCodeClient)
 }
 
 //TODO move out of prod logic
 func TestInit() {
-	SnykCode = &code.FakeSnykCodeApiService{}
-	code.BundlerThatNeedsToBecomeAProp = code.Bundler{SnykCode: SnykCode}
+	SnykCodeClient = &code.FakeSnykCodeClient{}
+	SnykCodeBundleUploader = code.NewBundler(SnykCodeClient)
+	SnykCode = code.NewSnykCode(SnykCodeBundleUploader)
 }

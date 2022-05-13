@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/snyk/snyk-ls/di"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,8 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
+
+	"github.com/snyk/snyk-ls/di"
+
+	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -61,7 +63,6 @@ func didSaveTextParams() (sglsp.DidSaveTextDocumentParams, func()) {
 func setupServer(t *testing.T) server.Local {
 	di.TestInit()
 	diagnostics.ClearEntireDiagnosticsCache()
-	diagnostics.ClearRegisteredDocuments()
 	diagnostics.ClearWorkspaceFolderScanned()
 	cleanupChannels()
 	jsonRPCRecorder.ClearCallbacks()
@@ -91,22 +92,6 @@ func startServer() server.Local {
 
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 
-	lspHandlers := handler.Map{
-		"initialize":                          InitializeHandler(&srv),
-		"textDocument/didOpen":                TextDocumentDidOpenHandler(&srv),
-		"textDocument/didChange":              TextDocumentDidChangeHandler(),
-		"textDocument/didClose":               TextDocumentDidCloseHandler(),
-		"textDocument/didSave":                TextDocumentDidSaveHandler(&srv),
-		"textDocument/willSave":               TextDocumentWillSaveHandler(),
-		"textDocument/willSaveWaitUntil":      TextDocumentWillSaveWaitUntilHandler(),
-		"shutdown":                            Shutdown(),
-		"exit":                                Exit(&srv),
-		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
-		"textDocument/hover":                  TextDocumentHover(),
-		"workspace/didChangeConfiguration":    WorkspaceDidChangeConfiguration(),
-		"window/workDoneProgress/cancel":      WindowWorkDoneProgressCancelHandler(),
-	}
-
 	opts := &server.LocalOptions{
 		Client: &jrpc2.ClientOptions{
 			OnNotify: func(request *jrpc2.Request) {
@@ -122,8 +107,10 @@ func startServer() server.Local {
 		},
 	}
 
-	loc := server.NewLocal(lspHandlers, opts)
+	handlers := &handler.Map{}
+	loc := server.NewLocal(handlers, opts)
 	srv = loc.Server
+	initHandlers(srv, handlers)
 
 	return loc
 }
@@ -377,7 +364,6 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearWorkspaceFolderScanned()
 	diagnostics.ClearEntireDiagnosticsCache()
-	diagnostics.ClearRegisteredDocuments()
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
 	loc := setupServer(t)
@@ -448,7 +434,6 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	environment.EnabledProductsFromEnv()
 	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearEntireDiagnosticsCache()
-	diagnostics.ClearRegisteredDocuments()
 	loc := setupServer(t)
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
@@ -504,7 +489,6 @@ func Test_IntegrationFileScan(t *testing.T) {
 	environment.EnabledProductsFromEnv()
 	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearEntireDiagnosticsCache()
-	diagnostics.ClearRegisteredDocuments()
 	loc := setupServer(t)
 	di.Init()
 
