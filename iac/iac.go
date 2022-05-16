@@ -176,9 +176,15 @@ func convertDiagnostics(res iacScanResult) ([]lsp.Diagnostic, []lsp.HoverDetails
 		impact := issue.IacDescription.Impact
 		resolve := issue.IacDescription.Resolve
 
+		if issue.LineNumber > 0 {
+			issue.LineNumber -= 1
+		} else {
+			issue.LineNumber = 0
+		}
+
 		diagsRange := sglsp.Range{
-			Start: sglsp.Position{Line: issue.LineNumber - 1, Character: 0},
-			End:   sglsp.Position{Line: issue.LineNumber - 1, Character: 80},
+			Start: sglsp.Position{Line: issue.LineNumber, Character: 0},
+			End:   sglsp.Position{Line: issue.LineNumber, Character: 80},
 		}
 
 		if config.CurrentConfig.Format() == config.FormatHtml {
