@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"sync"
 
-
-	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/di"
-
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/code"
+	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/iac"
 	"github.com/snyk/snyk-ls/internal/cli"
