@@ -334,28 +334,25 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 }
 
 func Test_IntegrationWorkspaceScanOssAndCode(t *testing.T) {
-	testutil.IntegTest(t)
 	ossFile := "package.json"
 	codeFile := "app.js"
 	runIntegrationTest("https://github.com/snyk/goof", "0336589", ossFile, codeFile, t)
 }
 
 func Test_IntegrationWorkspaceScanIacAndCode(t *testing.T) {
-	testutil.IntegTest(t)
 	iacFile := "main.tf"
 	codeFile := "app.js"
 	runIntegrationTest("https://github.com/deepcodeg/snykcon-goof.git", "eba8407", iacFile, codeFile, t)
 }
 
 func Test_IntegrationWorkspaceScanWithTwoUploadBatches(t *testing.T) {
-	testutil.IntegTest(t)
 	ossFile := ""
 	codeFile := "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
 	runIntegrationTest("https://github.com/apache/maven", "18725ec1e", ossFile, codeFile, t)
 }
 
 func runIntegrationTest(repo string, commit string, file1 string, file2 string, t *testing.T) {
-	testutil.UnitTest(t)
+	testutil.IntegTest(t)
 	config.CurrentConfig.SetSnykCodeEnabled(true)
 	config.CurrentConfig.SetSnykIacEnabled(true)
 	config.CurrentConfig.SetSnykOssEnabled(true)
