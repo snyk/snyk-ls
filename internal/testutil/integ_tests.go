@@ -19,7 +19,7 @@ func IntegTest(t *testing.T) {
 
 func CreateDummyProgressListener(t *testing.T) {
 	t.Helper()
-	var dummyProgressStopChannel chan bool = make(chan bool, 1)
+	var dummyProgressStopChannel = make(chan bool, 1)
 
 	t.Cleanup(func() {
 		dummyProgressStopChannel <- true
@@ -28,7 +28,7 @@ func CreateDummyProgressListener(t *testing.T) {
 	go func() {
 		for {
 			select {
-			case <-progress.ProgressChannel:
+			case <-progress.Channel:
 				continue
 			case <-dummyProgressStopChannel:
 				return

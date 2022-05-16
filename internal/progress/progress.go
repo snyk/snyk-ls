@@ -7,14 +7,90 @@ import (
 	"github.com/snyk/snyk-ls/lsp"
 )
 
-var ProgressChannel = make(chan lsp.ProgressParams, 100)
+var Channel = make(chan lsp.ProgressParams, 100)
 var CancelProgressChannel = make(chan lsp.ProgressToken, 100)
 
-func New(title, message string, cancellable bool) lsp.ProgressParams {
-	uuid := uuid.New().String()
+type Tracker struct {
+	channel       chan lsp.ProgressParams
+	cancelChannel chan lsp.ProgressToken
+	token         lsp.ProgressToken
+	cancellable   bool
+}
+
+func NewTestingTracker(channel chan lsp.ProgressParams, cancelChannel chan lsp.ProgressToken) *Tracker {
+	return &Tracker{
+		channel:       channel,
+		cancelChannel: cancelChannel,
+		token:         "token",
+		cancellable:   true,
+	}
+}
+
+func NewTracker(cancellable bool) *Tracker {
+	return &Tracker{
+		channel:       Channel,
+		cancelChannel: CancelProgressChannel,
+		cancellable:   cancellable,
+	}
+}
+
+func (t *Tracker) Begin(title, message string) {
+	params := newProgressParams(title, message, t.cancellable)
+	t.token = params.Token
+
+	t.send(lsp.ProgressParams{
+		Token: t.token,
+		Value: nil,
+	})
+
+	t.send(params)
+}
+
+func (t *Tracker) Report(percentage int) {
+	progress := lsp.ProgressParams{
+		Token: t.token,
+		Value: lsp.WorkDoneProgressReport{
+			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "report"},
+			Percentage:           percentage,
+		},
+	}
+
+	t.send(progress)
+}
+
+func (t *Tracker) End(message string) {
+	progress := lsp.ProgressParams{
+		Token: t.token,
+		Value: lsp.WorkDoneProgressEnd{
+			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "end"},
+			Message:              message,
+		},
+	}
+
+	t.send(progress)
+}
+func (t *Tracker) CancelOrDone(onCancel func(), doneCh chan bool) {
+	for {
+		select {
+		case token := <-t.cancelChannel:
+			if token == t.token {
+				onCancel()
+			}
+		case <-doneCh:
+			return
+		}
+	}
+}
+
+func (t *Tracker) GetToken() lsp.ProgressToken {
+	return t.token
+}
+
+func newProgressParams(title, message string, cancellable bool) lsp.ProgressParams {
+	id := uuid.New().String()
 
 	return lsp.ProgressParams{
-		Token: lsp.ProgressToken(uuid),
+		Token: lsp.ProgressToken(id),
 		Value: lsp.WorkDoneProgressBegin{
 			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "begin"},
 			Title:                title,
@@ -25,47 +101,9 @@ func New(title, message string, cancellable bool) lsp.ProgressParams {
 	}
 }
 
-func BeginProgress(progress lsp.ProgressParams, channel chan lsp.ProgressParams) {
-	send(lsp.ProgressParams{
-		Token: progress.Token,
-		Value: nil,
-	}, channel)
-
-	send(progress, channel)
-}
-
-func ReportProgress(token lsp.ProgressToken, percentage uint32, channel chan lsp.ProgressParams) {
-	progress := lsp.ProgressParams{
-		Token: token,
-		Value: lsp.WorkDoneProgressReport{
-			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "report"},
-			Percentage:           percentage,
-		},
-	}
-
-	send(progress, channel)
-}
-
-func EndProgress(token lsp.ProgressToken, message string, channel chan lsp.ProgressParams) {
-	progress := lsp.ProgressParams{
-		Token: token,
-		Value: lsp.WorkDoneProgressEnd{
-			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "end"},
-			Message:              message,
-		},
-	}
-
-	send(progress, channel)
-}
-
-func send(progress lsp.ProgressParams, channel chan lsp.ProgressParams) {
+func (t *Tracker) send(progress lsp.ProgressParams) {
 	if progress.Token == "" {
 		log.Error().Str("method", "EndProgress").Msg("progress token must be set")
 	}
-
-	channel <- progress
-}
-
-func readProgress(channel chan lsp.ProgressParams) lsp.ProgressParams {
-	return <-channel
+	t.channel <- progress
 }

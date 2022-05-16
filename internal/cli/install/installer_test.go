@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/snyk/snyk-ls/internal/progress"
+
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 
@@ -78,7 +80,6 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 
 func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 	// prepare
-	ctx := context.Background()
 	i := NewInstaller()
 
 	temp := t.TempDir()
@@ -118,7 +119,7 @@ func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 	}
 
 	// act
-	updated, _ := i.updateFromRelease(r, ctx)
+	updated, _ := i.updateFromRelease(r)
 
 	// assert
 	assert.False(t, updated)
@@ -131,7 +132,8 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	// prepare
 	ctx := context.Background()
 	i := NewInstaller()
-	d := &Downloader{}
+	tracker := progress.NewTracker(true)
+	d := &Downloader{progressTracker: tracker}
 
 	lsPath, err := d.lsPath()
 	if err != nil {

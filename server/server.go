@@ -4,14 +4,14 @@ import (
 	"context"
 	"os"
 
+	"github.com/snyk/snyk-ls/di"
+
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/code"
-	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/diagnostics"
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/hover"
@@ -27,35 +27,35 @@ var (
 
 func Start() {
 	var srv *jrpc2.Server
-	snykCodeService := code.NewService(environment.ApiUrl())
-	diagnostics.SetSnykCodeService(snykCodeService)
+	di.Init()
 
-	lspHandlers := handler.Map{
-		"initialize":                          InitializeHandler(&srv),
-		"textDocument/didOpen":                TextDocumentDidOpenHandler(&srv),
-		"textDocument/didChange":              TextDocumentDidChangeHandler(),
-		"textDocument/didClose":               TextDocumentDidCloseHandler(),
-		"textDocument/didSave":                TextDocumentDidSaveHandler(&srv),
-		"textDocument/hover":                  TextDocumentHover(),
-		"textDocument/willSave":               TextDocumentWillSaveHandler(),
-		"textDocument/willSaveWaitUntil":      TextDocumentWillSaveWaitUntilHandler(),
-		"shutdown":                            Shutdown(),
-		"exit":                                Exit(&srv),
-		"workspace/didChangeWorkspaceFolders": WorkspaceDidChangeWorkspaceFoldersHandler(),
-		"workspace/didChangeConfiguration":    WorkspaceDidChangeConfiguration(),
-		"window/workDoneProgress/cancel":      WindowWorkDoneProgressCancelHandler(),
-		// "codeLens/resolve":               codeLensResolve(&server),
-	}
-
-	srv = jrpc2.NewServer(lspHandlers, &jrpc2.ServerOptions{
+	handlers := handler.Map{}
+	srv = jrpc2.NewServer(handlers, &jrpc2.ServerOptions{
 		AllowPush: true,
 	})
+	initHandlers(srv, &handlers)
 
 	log.Info().Msg("Starting up...")
 	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
 
 	_ = srv.Wait()
 	log.Info().Msg("Exiting...")
+}
+
+func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
+	(*handlers)["initialize"] = InitializeHandler(srv)
+	(*handlers)["textDocument/didOpen"] = TextDocumentDidOpenHandler(srv)
+	(*handlers)["textDocument/didChange"] = NoOpHandler()
+	(*handlers)["textDocument/didClose"] = NoOpHandler()
+	(*handlers)["textDocument/didSave"] = TextDocumentDidSaveHandler(srv)
+	(*handlers)["textDocument/hover"] = TextDocumentHover()
+	(*handlers)["textDocument/willSave"] = NoOpHandler()
+	(*handlers)["textDocument/willSaveWaitUntil"] = NoOpHandler()
+	(*handlers)["shutdown"] = Shutdown()
+	(*handlers)["exit"] = Exit(srv)
+	(*handlers)["workspace/didChangeWorkspaceFolders"] = WorkspaceDidChangeWorkspaceFoldersHandler()
+	(*handlers)["workspace/didChangeConfiguration"] = WorkspaceDidChangeConfiguration()
+	(*handlers)["window/workDoneProgress/cancel"] = WindowWorkDoneProgressCancelHandler()
 }
 
 func WorkspaceDidChangeWorkspaceFoldersHandler() jrpc2.Handler {
@@ -72,15 +72,15 @@ func WorkspaceDidChangeWorkspaceFoldersHandler() jrpc2.Handler {
 	})
 }
 
-func InitializeHandler(srv **jrpc2.Server) handler.Func {
+func InitializeHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
 		log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
 		clientParams = params
 
 		// async processing listener
 		go hover.CreateHoverListener()
-		go createProgressListener(progress.ProgressChannel, *srv)
-		go registerNotifier(*srv)
+		go createProgressListener(progress.Channel, srv)
+		go registerNotifier(srv)
 
 		if len(clientParams.WorkspaceFolders) > 0 {
 			go diagnostics.WorkspaceScan(clientParams.WorkspaceFolders)
@@ -120,7 +120,7 @@ func Shutdown() jrpc2.Handler {
 	})
 }
 
-func Exit(srv **jrpc2.Server) jrpc2.Handler {
+func Exit(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (interface{}, error) {
 		log.Info().Str("method", "Exit").Msg("RECEIVING")
 		log.Info().Msg("Stopping server...")
@@ -130,14 +130,7 @@ func Exit(srv **jrpc2.Server) jrpc2.Handler {
 	})
 }
 
-func TextDocumentDidChangeHandler() handler.Func {
-	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (interface{}, error) {
-		log.Info().Str("method", "TextDocumentDidChangeHandler").Interface("params", params).Msg("RECEIVING")
-		return nil, nil
-	})
-}
-
-func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv **jrpc2.Server) {
+func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv *jrpc2.Server) {
 	diags := diagnostics.GetDiagnostics(uri)
 	if diags != nil {
 		diagnosticsParams := lsp.PublishDiagnosticsParams{
@@ -157,13 +150,12 @@ func logError(err error, method string) {
 	}
 }
 
-func TextDocumentDidOpenHandler(srv **jrpc2.Server) handler.Func {
+func TextDocumentDidOpenHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidOpenTextDocumentParams) (interface{}, error) {
 		log.Info().Str("method", "TextDocumentDidOpenHandler").Str("documentURI", string(params.TextDocument.URI)).Msg("RECEIVING")
 
 		go func() {
 			preconditions.EnsureReadyForAnalysisAndWait()
-			diagnostics.RegisterDocument(params.TextDocument)
 			PublishDiagnostics(ctx, params.TextDocument.URI, srv) // todo: remove in favor of notifier
 		}()
 
@@ -171,35 +163,13 @@ func TextDocumentDidOpenHandler(srv **jrpc2.Server) handler.Func {
 	})
 }
 
-func TextDocumentDidSaveHandler(srv **jrpc2.Server) handler.Func {
+func TextDocumentDidSaveHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidSaveTextDocumentParams) (interface{}, error) {
 		log.Info().Str("method", "TextDocumentDidSaveHandler").Interface("params", params).Msg("RECEIVING")
 		// clear cache when saving and get fresh diagnostics
 		diagnostics.ClearDiagnosticsCache(params.TextDocument.URI)
 		hover.DeleteHover(params.TextDocument.URI)
 		PublishDiagnostics(ctx, params.TextDocument.URI, srv) // todo: remove in favor of notifier
-		return nil, nil
-	})
-}
-
-func TextDocumentWillSaveHandler() handler.Func {
-	return handler.New(func(ctx context.Context, params lsp.WillSaveTextDocumentParams) (interface{}, error) {
-		log.Info().Str("method", "TextDocumentWillSaveHandler").Interface("params", params).Msg("RECEIVING")
-		return nil, nil
-	})
-}
-
-func TextDocumentWillSaveWaitUntilHandler() handler.Func {
-	return handler.New(func(ctx context.Context, params lsp.WillSaveTextDocumentParams) (interface{}, error) {
-		log.Info().Str("method", "TextDocumentWillSaveWaitUntilHandler").Interface("params", params).Msg("RECEIVING")
-		return nil, nil
-	})
-}
-
-func TextDocumentDidCloseHandler() handler.Func {
-	return handler.New(func(ctx context.Context, params sglsp.DidCloseTextDocumentParams) (interface{}, error) {
-		log.Info().Str("method", "TextDocumentDidCloseHandler").Interface("params", params).Msg("RECEIVING")
-		diagnostics.UnRegisterDocument(params.TextDocument.URI)
 		return nil, nil
 	})
 }
@@ -217,6 +187,13 @@ func WindowWorkDoneProgressCancelHandler() handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.WorkdoneProgressCancelParams) (interface{}, error) {
 		log.Info().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
 		CancelProgress(params.Token)
+		return nil, nil
+	})
+}
+
+func NoOpHandler() handler.Func {
+	return handler.New(func(ctx context.Context, params sglsp.DidCloseTextDocumentParams) (interface{}, error) {
+		log.Info().Str("method", "NoOpHandler").Interface("params", params).Msg("RECEIVING")
 		return nil, nil
 	})
 }

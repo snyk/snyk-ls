@@ -53,7 +53,7 @@ func createProgressListener(progressChannel chan lsp.ProgressParams, server Serv
 					CancelProgress(p.Token)
 				}
 			} else {
-				log.Debug().Str("method", "createProgressListener").Msg("sending create progress report")
+				log.Debug().Str("method", "createProgressListener").Interface("progress", p).Msg("sending create progress report")
 				_ = server.Notify(context.Background(), "$/progress", p)
 			}
 		case <-progressStopChan:
