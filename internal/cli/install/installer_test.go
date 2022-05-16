@@ -73,7 +73,7 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 	}(lockFileName)
 
 	i := NewInstaller()
-	_, err = i.installRelease(r)
+	_, err = i.installRelease(r, context.Background())
 
 	assert.Error(t, err)
 }

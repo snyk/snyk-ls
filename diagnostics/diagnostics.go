@@ -7,7 +7,6 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/error_reporting"
@@ -135,7 +134,6 @@ func workspaceLevelFetch(workspaceURI sglsp.DocumentURI, p *progress.Tracker, wg
 		p.Report(80)
 	}
 }
-
 
 func fileLevelFetch(documentURI sglsp.DocumentURI, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	if config.CurrentConfig.IsSnykCodeEnabled() {
