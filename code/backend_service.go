@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"strconv"
 
@@ -178,7 +179,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 	}
 
 	log.Debug().Str("method", "RunAnalysis").
-		Str("bundleHash", bundleHash).Float32("progress", response.Progress).Msgf("Status: %s", response.Status)
+		Str("bundleHash", bundleHash).Float64("progress", response.Progress).Msgf("Status: %s", response.Status)
 
 	if response.Status == failed.message {
 		log.Err(err).Str("method", "RunAnalysis").Str("responseStatus", response.Status).Msg("analysis failed")
@@ -189,7 +190,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		log.Err(err).Str("method", "RunAnalysis").Str("responseStatus", response.Status).Msg("unknown response status (empty)")
 		return nil, nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
-	status := AnalysisStatus{message: response.Status, percentage: int(response.Progress * 100)}
+	status := AnalysisStatus{message: response.Status, percentage: int(math.RoundToEven(response.Progress * 100))}
 	if response.Status != "COMPLETE" {
 		return nil, nil, status, nil
 	}

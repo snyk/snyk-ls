@@ -10,12 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/creachadair/jrpc2/handler"
-
-	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
 
 	"github.com/creachadair/jrpc2"
+	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/server"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -23,6 +21,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/code"
+	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/diagnostics"
 	"github.com/snyk/snyk-ls/internal/cli/install"
 	"github.com/snyk/snyk-ls/internal/hover"

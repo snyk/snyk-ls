@@ -6,7 +6,7 @@ import (
 
 type SarifResponse struct {
 	Type     string  `json:"type"`
-	Progress float32 `json:"progress"`
+	Progress float64 `json:"progress"`
 	Status   string  `json:"status"`
 	Timing   struct {
 		FetchingCode int `json:"fetchingCode"`

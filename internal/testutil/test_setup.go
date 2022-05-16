@@ -35,7 +35,7 @@ func CreateDummyProgressListener(t *testing.T) {
 	go func() {
 		for {
 			select {
-			case <-progress.ProgressChannel:
+			case <-progress.Channel:
 				continue
 			case <-dummyProgressStopChannel:
 				return

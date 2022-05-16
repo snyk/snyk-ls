@@ -49,10 +49,10 @@ func (i *Install) Install(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	return i.installRelease(latestRelease)
+	return i.installRelease(latestRelease, ctx)
 }
 
-func (i *Install) installRelease(release *Release) (string, error) {
+func (i *Install) installRelease(release *Release, ctx context.Context) (string, error) {
 	d := NewDownloader()
 	lockFileName, err := createLockFile(d)
 	if err != nil {

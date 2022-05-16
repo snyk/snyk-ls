@@ -1,6 +1,7 @@
 package code
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 
@@ -8,6 +9,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/internal/concurrency"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/util"
 )
@@ -25,30 +27,34 @@ func NewBundler(SnykCode SnykCodeClient) *BundleUploader {
 }
 
 // TODO remove all LSP dependencies (e.g. DocumentURI)
-func (b *BundleUploader) Upload(files []sglsp.DocumentURI, onPartialUpload func(status UploadStatus)) (Bundle, error) {
+func (b *BundleUploader) Upload(files []sglsp.DocumentURI) (Bundle, error) {
 	uploadBatches := b.groupInBatches(files)
 	uploadedFiles := 0
 	bundle := Bundle{
 		SnykCode: b.SnykCode,
 	}
-	for _, uploadBatch := range uploadBatches {
+	t := progress.NewTracker(false)
+	t.Begin("Snyk Code", "Uploading batches...")
+	defer t.End("Upload done.")
+	for i, uploadBatch := range uploadBatches {
 		err := bundle.Upload(uploadBatch)
 		if err != nil {
 			return Bundle{}, err
 		}
 		uploadedFiles += len(uploadBatch.documents)
-		onPartialUpload(UploadStatus{
-			UploadedFiles: uploadedFiles,
-			TotalFiles:    len(files),
-		})
+		percentage := float64(i) / float64(len(uploadBatches)) * 100
+		t.Report(int(math.RoundToEven(percentage)))
 	}
 	return bundle, nil
 }
 
 func (b *BundleUploader) groupInBatches(files []sglsp.DocumentURI) []*UploadBatch {
+	t := progress.NewTracker(false)
+	t.Begin("Snyk Code", "Creating batches...")
+	defer t.End("Batches created.")
 	uploadBatch := NewUploadBatch()
 	batches := []*UploadBatch{&uploadBatch}
-	for _, documentURI := range files {
+	for i, documentURI := range files {
 		if !b.isSupported(documentURI) {
 			continue
 		}
@@ -67,17 +73,16 @@ func (b *BundleUploader) groupInBatches(files []sglsp.DocumentURI) []*UploadBatc
 		if uploadBatch.canFitFile(string(documentURI), fileContent) {
 			log.Trace().Str("uri1", string(documentURI)).Int("size", len(fileContent)).Msgf("added to bundle #%v", len(batches))
 			uploadBatch.documents[documentURI] = file
-			continue
 		} else {
 			log.Trace().Str("uri1", string(documentURI)).Int("size", len(fileContent)).Msgf("created new bundle - %v bundles in this upload so far", len(batches))
 			newUploadBatch := NewUploadBatch()
 			newUploadBatch.documents[documentURI] = file
 			batches = append(batches, &newUploadBatch)
 			uploadBatch = newUploadBatch
-			continue
 		}
+		percentage := float64(i) / float64(len(files)) * 100
+		t.Report(int(math.RoundToEven(percentage)))
 	}
-
 	return batches
 }
 

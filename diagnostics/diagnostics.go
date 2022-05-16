@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
 
@@ -131,13 +132,15 @@ func workspaceLevelFetch(workspaceURI sglsp.DocumentURI, p *progress.Tracker, wg
 				Str("workspaceURI", string(workspaceURI)).
 				Msg("error getting workspace files")
 		}
-		di.SnykCode.ScanWorkspace(files, workspaceURI, p, wg, dChan, hoverChan)
+		di.SnykCode.ScanWorkspace(files, workspaceURI, wg, dChan, hoverChan)
+		p.Report(80)
 	}
 }
 
+
 func fileLevelFetch(documentURI sglsp.DocumentURI, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	if config.CurrentConfig.IsSnykCodeEnabled() {
-		di.SnykCode.ScanFile(documentURI, p, wg, dChan, hoverChan)
+		di.SnykCode.ScanFile(documentURI, wg, dChan, hoverChan)
 	}
 	if config.CurrentConfig.IsSnykIacEnabled() {
 		wg.Add(1)
@@ -147,7 +150,7 @@ func fileLevelFetch(documentURI sglsp.DocumentURI, p *progress.Tracker, wg *sync
 		wg.Add(1)
 		go oss.ScanFile(Cli, documentURI, wg, dChan, hoverChan)
 	}
-	p.Report(50)
+	p.Report(80)
 }
 
 func processResults(
