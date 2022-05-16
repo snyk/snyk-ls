@@ -131,5 +131,3 @@ func createFileOfSize(filename string, contentSize int, dir string) lsp.Document
 	}
 	return bundleDoc.URI
 }
-
-func noop(status UploadStatus) {}
