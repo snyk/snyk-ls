@@ -70,9 +70,10 @@ func (b *BundleUploader) groupInBatches(files []sglsp.DocumentURI) []*UploadBatc
 			continue
 		} else {
 			log.Trace().Str("uri1", string(documentURI)).Int("size", len(fileContent)).Msgf("created new bundle - %v bundles in this upload so far", len(batches))
-			uploadBatch = NewUploadBatch()
-			uploadBatch.documents[documentURI] = file
-			batches = append(batches, &uploadBatch)
+			newUploadBatch := NewUploadBatch()
+			newUploadBatch.documents[documentURI] = file
+			batches = append(batches, &newUploadBatch)
+			uploadBatch = newUploadBatch
 			continue
 		}
 	}

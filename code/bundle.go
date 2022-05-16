@@ -36,11 +36,11 @@ func (b *Bundle) Upload(uploadBatch *UploadBatch) error {
 	return nil
 }
 
-func (b *Bundle) createBundle(bundle *UploadBatch) error {
+func (b *Bundle) createBundle(uploadBatch *UploadBatch) error {
 	var err error
-	if bundle.hasContent() {
-		b.BundleHash, _, err = b.SnykCode.CreateBundle(bundle.documents)
-		log.Trace().Str("bundleHash", b.BundleHash).Msg("created bundle on backend")
+	if uploadBatch.hasContent() {
+		b.BundleHash, _, err = b.SnykCode.CreateBundle(uploadBatch.documents)
+		log.Trace().Str("bundleHash", b.BundleHash).Msg("created uploadBatch on backend")
 	}
 	return err
 }

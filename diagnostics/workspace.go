@@ -116,16 +116,7 @@ func ignored(gitIgnore *ignore.GitIgnore, path string) bool {
 func workspaceDiagnostics(workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	var diagnostics map[sglsp.DocumentURI][]lsp.Diagnostic
-
-	_, err := getWorkspaceFiles(workspace.Uri)
-	if err != nil {
-		log.Error().Err(err).
-			Str("method", "workspaceDiagnostics").
-			Msg("Error occurred while registering files from workspace")
-	}
-
-	diagnostics = fetchAllRegisteredDocumentDiagnostics(workspace.Uri, lsp.ScanLevelWorkspace)
+	diagnostics := fetchAllRegisteredDocumentDiagnostics(workspace.Uri, lsp.ScanLevelWorkspace)
 	addToCache(diagnostics)
 	setFolderScanned(workspace)
 	for documentURI, d := range diagnostics {

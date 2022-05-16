@@ -123,7 +123,6 @@ func workspaceLevelFetch(workspaceURI sglsp.DocumentURI, enabledProducts environ
 		p.Report(20)
 	}
 	if enabledProducts.Code.Get() {
-		//TODO wire up
 		files, err := getWorkspaceFiles(workspaceURI)
 		if err != nil {
 			log.Warn().
