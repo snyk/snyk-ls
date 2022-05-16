@@ -10,7 +10,6 @@ import (
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	lsp2 "github.com/snyk/snyk-ls/lsp"
 )
@@ -48,7 +47,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 
-		go code.uploadAndAnalyze(registeredDocuments, progress.NewTracker(true), &wg, "", dChan, hoverChan)
+		go code.uploadAndAnalyze(registeredDocuments, &wg, "", dChan, hoverChan)
 
 		<-dChan
 
@@ -73,7 +72,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 
-		go code.uploadAndAnalyze([]lsp.DocumentURI{diagnosticUri}, progress.NewTracker(true), &wg, "", dChan, hoverChan)
+		go code.uploadAndAnalyze([]lsp.DocumentURI{diagnosticUri}, &wg, "", dChan, hoverChan)
 		result := <-dChan
 		diagnosticMap[result.Uri] = result.Diagnostics
 

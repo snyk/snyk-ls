@@ -7,7 +7,7 @@ import (
 	"github.com/snyk/snyk-ls/lsp"
 )
 
-var ProgressChannel = make(chan lsp.ProgressParams, 100)
+var Channel = make(chan lsp.ProgressParams, 100)
 var CancelProgressChannel = make(chan lsp.ProgressToken, 100)
 
 type Tracker struct {
@@ -28,7 +28,7 @@ func NewTestingTracker(channel chan lsp.ProgressParams, cancelChannel chan lsp.P
 
 func NewTracker(cancellable bool) *Tracker {
 	return &Tracker{
-		channel:       ProgressChannel,
+		channel:       Channel,
 		cancelChannel: CancelProgressChannel,
 		cancellable:   cancellable,
 	}
@@ -46,7 +46,7 @@ func (t *Tracker) Begin(title, message string) {
 	t.send(params)
 }
 
-func (t *Tracker) Report(percentage uint32) {
+func (t *Tracker) Report(percentage int) {
 	progress := lsp.ProgressParams{
 		Token: t.token,
 		Value: lsp.WorkDoneProgressReport{
@@ -105,6 +105,5 @@ func (t *Tracker) send(progress lsp.ProgressParams) {
 	if progress.Token == "" {
 		log.Error().Str("method", "EndProgress").Msg("progress token must be set")
 	}
-
 	t.channel <- progress
 }

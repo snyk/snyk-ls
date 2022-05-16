@@ -19,7 +19,7 @@ func Test_Bundler_Upload(t *testing.T) {
 		var bundler = BundleUploader{SnykCode: snykCodeService}
 		files := []lsp.DocumentURI{createFileOfSize("bundleDoc.java", 10, temporaryDir)}
 
-		_, err := bundler.Upload(files, noop)
+		_, err := bundler.Upload(files)
 
 		assert.True(t, snykCodeService.HasCreatedNewBundle)
 		assert.Equal(t, snykCodeService.TotalBundleCount, 1)
@@ -37,7 +37,7 @@ func Test_Bundler_Upload(t *testing.T) {
 			createFileOfSize("bundleDoc5.java", 100, temporaryDir),
 		}
 
-		_, err := bundler.Upload(files, noop)
+		_, err := bundler.Upload(files)
 
 		assert.True(t, snykCodeService.HasCreatedNewBundle)
 		assert.True(t, snykCodeService.HasExtendedBundle)
@@ -51,7 +51,7 @@ func Test_Bundler_Upload(t *testing.T) {
 		var bundler = BundleUploader{SnykCode: snykCodeService}
 		files := []lsp.DocumentURI{createFileOfSize("bundleDoc.java", 1024*1024+1, temporaryDir)}
 
-		_, err := bundler.Upload(files, noop)
+		_, err := bundler.Upload(files)
 
 		assert.False(t, snykCodeService.HasCreatedNewBundle)
 		assert.Nil(t, err)
@@ -62,7 +62,7 @@ func Test_Bundler_Upload(t *testing.T) {
 		var bundler = BundleUploader{SnykCode: snykCodeService}
 		files := []lsp.DocumentURI{createFileOfSize("bundleDoc.java", 0, temporaryDir)}
 
-		_, err := bundler.Upload(files, noop)
+		_, err := bundler.Upload(files)
 
 		assert.False(t, snykCodeService.HasCreatedNewBundle)
 		assert.Nil(t, err)
@@ -73,7 +73,7 @@ func Test_Bundler_Upload(t *testing.T) {
 		var bundler = BundleUploader{SnykCode: snykCodeService}
 		files := []lsp.DocumentURI{createFileOfSize("bundleDoc.mr_robot", 1, temporaryDir)}
 
-		_, err := bundler.Upload(files, noop)
+		_, err := bundler.Upload(files)
 
 		assert.False(t, snykCodeService.HasCreatedNewBundle)
 		assert.Nil(t, err)

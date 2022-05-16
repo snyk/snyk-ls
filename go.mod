@@ -3,8 +3,8 @@ module github.com/snyk/snyk-ls
 go 1.17
 
 require (
-	github.com/creachadair/jrpc2 v0.39.0
-	github.com/gomarkdown/markdown v0.0.0-20220419181919-412bcf14cd2e
+	github.com/creachadair/jrpc2 v0.41.0
+	github.com/gomarkdown/markdown v0.0.0-20220510115730-2372b9aa33e5
 	github.com/google/uuid v1.3.0
 	github.com/rs/zerolog v1.26.1
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
@@ -17,7 +17,7 @@ require (
 	github.com/hashicorp/go-version v1.3.0 // indirect
 	github.com/hashicorp/logutils v0.0.0-20150609070431-0dc08b1671f3 // indirect
 	github.com/stretchr/objx v0.1.0 // indirect
-	golang.org/x/sys v0.0.0-20220422013727-9388b58f7150 // indirect
+	golang.org/x/sys v0.0.0-20220513210249-45d2b4557a2a // indirect
 )
 
 require (
@@ -26,6 +26,6 @@ require (
 	github.com/getsentry/sentry-go v0.13.0
 	github.com/pact-foundation/pact-go v1.6.9
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
+	golang.org/x/sync v0.0.0-20220513210516-0976fa681c29 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )

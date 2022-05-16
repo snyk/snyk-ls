@@ -118,6 +118,7 @@ func (b *Bundle) retrieveAnalysis(
 			dChan <- lsp2.DiagnosticResult{Err: err}
 		}
 		time.Sleep(1 * time.Second)
+		p.Report(status.percentage)
 	}
 }
 

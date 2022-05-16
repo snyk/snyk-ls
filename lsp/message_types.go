@@ -294,7 +294,7 @@ type WorkDoneProgressBegin struct {
 	 * The value should be steadily rising. Clients are free to ignore values
 	 * that are not following this rule. The value range is [0, 100].
 	 */
-	Percentage uint32 `json:"percentage,omitempty"`
+	Percentage int `json:"percentage,omitempty"`
 }
 
 type WorkDoneProgressReport struct {
@@ -322,7 +322,7 @@ type WorkDoneProgressReport struct {
 	 * The value should be steadily rising. Clients are free to ignore values
 	 * that are not following this rule. The value range is [0, 100]
 	 */
-	Percentage uint32 `json:"percentage,omitempty"`
+	Percentage int `json:"percentage,omitempty"`
 }
 type WorkDoneProgressEnd struct {
 	WorkDoneProgressKind

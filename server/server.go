@@ -79,7 +79,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 
 		// async processing listener
 		go hover.CreateHoverListener()
-		go createProgressListener(progress.ProgressChannel, srv)
+		go createProgressListener(progress.Channel, srv)
 		go registerNotifier(srv)
 
 		if len(clientParams.WorkspaceFolders) > 0 {

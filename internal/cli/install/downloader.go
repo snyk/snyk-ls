@@ -50,7 +50,7 @@ func newWriter(size int64, progressTracker *progress.Tracker, onProgress func(do
 
 func onProgress(downloaded, total int64, progressTracker *progress.Tracker) {
 	percentage := float64(downloaded) / float64(total) * 100 // todo: don't report every byte
-	progressTracker.Report(uint32(percentage))
+	progressTracker.Report(int(percentage))
 	time.Sleep(time.Millisecond * 2)
 }
 

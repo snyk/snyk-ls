@@ -131,13 +131,14 @@ func workspaceLevelFetch(workspaceURI sglsp.DocumentURI, enabledProducts environ
 				Str("workspaceURI", string(workspaceURI)).
 				Msg("error getting workspace files")
 		}
-		di.SnykCode.ScanWorkspace(files, workspaceURI, p, wg, dChan, hoverChan)
+		di.SnykCode.ScanWorkspace(files, workspaceURI, wg, dChan, hoverChan)
+		p.Report(80)
 	}
 }
 
 func fileLevelFetch(documentURI sglsp.DocumentURI, enabledProducts environment.EnabledProducts, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	if enabledProducts.Code.Get() {
-		di.SnykCode.ScanFile(documentURI, p, wg, dChan, hoverChan)
+		di.SnykCode.ScanFile(documentURI, wg, dChan, hoverChan)
 	}
 	if enabledProducts.Iac.Get() {
 		wg.Add(1)
@@ -147,7 +148,7 @@ func fileLevelFetch(documentURI sglsp.DocumentURI, enabledProducts environment.E
 		wg.Add(1)
 		go oss.ScanFile(Cli, documentURI, wg, dChan, hoverChan)
 	}
-	p.Report(50)
+	p.Report(80)
 }
 
 func processResults(
