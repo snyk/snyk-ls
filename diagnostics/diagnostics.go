@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/snyk/snyk-ls/di"
-
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/iac"
 	"github.com/snyk/snyk-ls/internal/cli"
@@ -98,10 +97,10 @@ func fetchAllRegisteredDocumentDiagnostics(documentURI sglsp.DocumentURI, level 
 
 	if level == lsp.ScanLevelWorkspace {
 		dChan = make(chan lsp.DiagnosticResult, 10000)
-		workspaceLevelFetch(documentURI, environment.CurrentEnabledProducts, p, &wg, dChan, hoverChan)
+		workspaceLevelFetch(documentURI, p, &wg, dChan, hoverChan)
 	} else {
 		dChan = make(chan lsp.DiagnosticResult, 10000)
-		fileLevelFetch(documentURI, environment.CurrentEnabledProducts, p, &wg, dChan, hoverChan)
+		fileLevelFetch(documentURI, p, &wg, dChan, hoverChan)
 	}
 	wg.Wait()
 	log.Debug().
@@ -111,18 +110,18 @@ func fetchAllRegisteredDocumentDiagnostics(documentURI sglsp.DocumentURI, level 
 	return processResults(dChan, diagnostics)
 }
 
-func workspaceLevelFetch(workspaceURI sglsp.DocumentURI, enabledProducts environment.EnabledProducts, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
-	if enabledProducts.Iac.Get() {
+func workspaceLevelFetch(workspaceURI sglsp.DocumentURI, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+	if config.CurrentConfig.IsSnykIacEnabled() {
 		wg.Add(1)
 		go iac.ScanWorkspace(Cli, workspaceURI, wg, dChan, hoverChan)
 		p.Report(10)
 	}
-	if enabledProducts.OpenSource.Get() {
+	if config.CurrentConfig.IsSnykOssEnabled() {
 		wg.Add(1)
 		go oss.ScanWorkspace(Cli, workspaceURI, wg, dChan, hoverChan)
 		p.Report(20)
 	}
-	if enabledProducts.Code.Get() {
+	if config.CurrentConfig.IsSnykCodeEnabled() {
 		files, err := getWorkspaceFiles(workspaceURI)
 		if err != nil {
 			log.Warn().
@@ -136,15 +135,15 @@ func workspaceLevelFetch(workspaceURI sglsp.DocumentURI, enabledProducts environ
 	}
 }
 
-func fileLevelFetch(documentURI sglsp.DocumentURI, enabledProducts environment.EnabledProducts, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
-	if enabledProducts.Code.Get() {
+func fileLevelFetch(documentURI sglsp.DocumentURI, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+	if config.CurrentConfig.IsSnykCodeEnabled() {
 		di.SnykCode.ScanFile(documentURI, wg, dChan, hoverChan)
 	}
-	if enabledProducts.Iac.Get() {
+	if config.CurrentConfig.IsSnykIacEnabled() {
 		wg.Add(1)
 		go iac.ScanFile(Cli, documentURI, wg, dChan, hoverChan)
 	}
-	if enabledProducts.OpenSource.Get() {
+	if config.CurrentConfig.IsSnykOssEnabled() {
 		wg.Add(1)
 		go oss.ScanFile(Cli, documentURI, wg, dChan, hoverChan)
 	}

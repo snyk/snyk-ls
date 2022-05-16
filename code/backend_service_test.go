@@ -11,7 +11,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/util"
@@ -44,7 +44,7 @@ const (
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewHTTPRepository(environment.ApiUrl())
+	s := NewHTTPRepository(config.CurrentConfig.SnykCodeApi())
 	files := map[sglsp.DocumentURI]BundleFile{}
 	files[uri1] = BundleFile{
 		Hash:    util.Hash([]byte(content)),
@@ -59,7 +59,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewHTTPRepository(environment.ApiUrl())
+	s := NewHTTPRepository(config.CurrentConfig.SnykCodeApi())
 
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]BundleFile{}
@@ -80,7 +80,7 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewHTTPRepository(environment.ApiUrl())
+	s := NewHTTPRepository(config.CurrentConfig.SnykCodeApi())
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]BundleFile{}
@@ -135,6 +135,7 @@ func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing
 }
 
 func TestSnykCodeBackendService_GetFilters_returns(t *testing.T) {
+	testutil.UnitTest(t)
 	pact := &dsl.Pact{
 		Consumer: "SnykLS",
 		Provider: "SnykCodeApi",

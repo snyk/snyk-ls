@@ -13,7 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -101,7 +101,7 @@ func (s *SnykCodeHTTPClient) doCall(method string, path string, requestBody []by
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Session-Token", environment.Token())
+	req.Header.Set("Session-Token", config.CurrentConfig.Token())
 	req.Header.Set("Content-Type", "application/json")
 
 	log.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")

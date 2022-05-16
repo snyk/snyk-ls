@@ -8,7 +8,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/cli/auth"
 	"github.com/snyk/snyk-ls/internal/cli/install"
@@ -18,8 +18,8 @@ import (
 func EnsureReadyForAnalysisAndWait() {
 	install.Mutex.Lock()
 	defer install.Mutex.Unlock()
-	cliInstalled := environment.CliInstalled()
-	authenticated := environment.Authenticated()
+	cliInstalled := config.CurrentConfig.CliInstalled()
+	authenticated := config.CurrentConfig.Authenticated()
 
 	if cliInstalled && isOutdatedCli() {
 		go updateCli()
@@ -29,7 +29,7 @@ func EnsureReadyForAnalysisAndWait() {
 		return
 	}
 
-	for !environment.CliInstalled() {
+	for !config.CurrentConfig.CliInstalled() {
 		installCli()
 		time.Sleep(2 * time.Second)
 	}
@@ -59,9 +59,9 @@ func installCli() {
 	}
 
 	if cliPath != "" {
-		err := environment.SetCliPath(cliPath)
+		err := config.CurrentConfig.SetCliPath(cliPath)
 		if err != nil {
-			log.Err(err).Str("method", "installCli").Msg("Couldn't update environment with Snyk cli path")
+			log.Err(err).Str("method", "installCli").Msg("Couldn't update config.CurrentConfig with Snyk cli path")
 		}
 		log.Info().Str("method", "installCli").Str("snyk", cliPath).Msg("Snyk CLI found.")
 	} else {
@@ -88,7 +88,7 @@ func updateCli() {
 }
 
 func isOutdatedCli() bool {
-	cliPath := environment.CliPath()
+	cliPath := config.CurrentConfig.CliPath()
 
 	fileInfo, err := os.Stat(cliPath) // todo: we can save stat calls by caching mod time
 	if err != nil {

@@ -13,7 +13,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/config"
 )
 
 var Mutex = &sync.Mutex{}
@@ -96,7 +96,7 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 		return false, err
 	}
 
-	err = compareChecksum(latestChecksum, environment.CliPath())
+	err = compareChecksum(latestChecksum, config.CurrentConfig.CliPath())
 	if err == nil {
 		// checksum match, no new version available
 		return false, nil

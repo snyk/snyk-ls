@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func Test_shouldSetLogLevelViaFlag(t *testing.T) {
@@ -28,17 +28,17 @@ func Test_shouldSetLogFileViaFlag(t *testing.T) {
 		_ = os.Remove("a.txt")
 	}()
 	_, _ = parseFlags(args)
-	assert.Equal(t, environment.LogPath, "a.txt")
+	assert.Equal(t, config.CurrentConfig.LogPath(), "a.txt")
 }
 
 func Test_shouldSetOutputFormatViaFlag(t *testing.T) {
-	args := []string{"snyk-ls", "-o", environment.FormatHtml}
+	args := []string{"snyk-ls", "-o", config.FormatHtml}
 	_, _ = parseFlags(args)
-	assert.Equal(t, environment.FormatHtml, environment.Format)
+	assert.Equal(t, config.FormatHtml, config.CurrentConfig.Format())
 }
 
 func Test_shouldShowUsageOnUnknownFlag(t *testing.T) {
-	args := []string{"snyk-ls", "-unknown", environment.FormatHtml}
+	args := []string{"snyk-ls", "-unknown", config.FormatHtml}
 
 	output, err := parseFlags(args)
 
@@ -61,49 +61,49 @@ func Test_shouldSetLoadConfigFromFlag(t *testing.T) {
 	}
 	args := []string{"snyk-ls", "-c", file.Name()}
 
-	_, _ = parseFlags(args)
 	t.Setenv("Bb", "")
-	environment.Load()
 
+	_, _ = parseFlags(args)
 	assert.Equal(t, "Bb", os.Getenv("AA"))
 }
 
 func Test_shouldSetReportErrorsViaFlag(t *testing.T) {
+	testutil.UnitTest(t)
 	args := []string{"snyk-ls"}
 	_, _ = parseFlags(args)
-	assert.False(t, config.IsErrorReportingEnabled)
+
+	assert.False(t, config.CurrentConfig.IsErrorReportingEnabled())
 
 	args = []string{"snyk-ls", "-reportErrors"}
 	_, _ = parseFlags(args)
-	assert.True(t, config.IsErrorReportingEnabled)
+	assert.True(t, config.CurrentConfig.IsErrorReportingEnabled())
 }
 
 func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
-	t.Skip("Doesn't pass on CI, we don't know why")
+	testutil.UnitTest(t)
 	logPath, err := os.MkdirTemp(os.TempDir(), "testlogconfig")
 	if err != nil {
 		t.Fatal(err)
 	}
-	environment.LogPath = filepath.Join(logPath, "a.txt")
+	config.CurrentConfig.SetLogPath(filepath.Join(logPath, "a.txt"))
 	defer func(name string) {
 		err := os.RemoveAll(logPath)
 		if err != nil {
 			t.Fatal(err)
 		}
-		environment.LogPath = ""
+		config.CurrentConfig.SetLogPath("")
 	}(logPath)
 
-	configureLogging("debug")
+	config.CurrentConfig.ConfigureLogging("debug")
 	log.Error().Msg("test")
 
 	assert.Eventuallyf(t, func() bool {
-		bytes, err := os.ReadFile(environment.LogPath)
-		fmt.Println("Read file " + environment.LogPath)
+		bytes, err := os.ReadFile(config.CurrentConfig.LogPath())
+		fmt.Println("Read file " + config.CurrentConfig.LogPath())
 		if err != nil {
 			return false
 		}
 		fmt.Println("Read bytes:" + string(bytes)) // no logger usage here
-		return len(bytes) == 70
+		return len(bytes) > 0
 	}, 2*time.Second, 10*time.Millisecond, "didn't write to logfile")
-
 }

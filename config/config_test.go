@@ -1,4 +1,4 @@
-package environment
+package config
 
 import (
 	"os"
@@ -8,26 +8,31 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func init() {
-	Load()
+func TestSetToken(t *testing.T) {
+	CurrentConfig = New() // can't use testutil here because of cyclical imports
+	oldToken := CurrentConfig.Token()
+	err := CurrentConfig.SetToken("asdf")
+	assert.NoError(t, err)
+	assert.Equal(t, CurrentConfig.Token(), "asdf")
+	_ = CurrentConfig.SetToken(oldToken)
 }
 
 func TestToken(t *testing.T) {
 	t.Setenv(snykTokenKey, "test")
-
-	assert.NotEqual(t, "", Token())
+	c := New()
+	assert.NotEqual(t, "", c.Token())
 }
 
 func Test_SnykCodeAnalysisTimeoutReturnsTimeoutFromEnvironment(t *testing.T) {
 	t.Setenv(snykCodeTimeoutKey, "1s")
 	duration, _ := time.ParseDuration("1s")
-	assert.Equal(t, duration, SnykCodeAnalysisTimeout())
+	assert.Equal(t, duration, snykCodeAnalysisTimeoutFromEnv())
 }
 
 func Test_SnykCodeAnalysisTimeoutReturnsDefaultIfNoEnvVariableFound(t *testing.T) {
 	t.Setenv(snykCodeTimeoutKey, "")
 	duration, _ := time.ParseDuration("10m")
-	assert.Equal(t, duration, SnykCodeAnalysisTimeout())
+	assert.Equal(t, duration, snykCodeAnalysisTimeoutFromEnv())
 }
 
 func Test_updatePath(t *testing.T) {
@@ -58,16 +63,8 @@ func Test_loadFile(t *testing.T) {
 		assert.Fail(t, "Couldn't write to test file")
 	}
 
-	loadFile(file.Name())
+	CurrentConfig.loadFile(file.Name())
 
 	assert.Equal(t, "B", os.Getenv("A"))
 	assert.Equal(t, "D", os.Getenv("C"))
-}
-
-func TestSetToken(t *testing.T) {
-	oldToken := Token()
-	err := SetToken("asdf")
-	assert.NoError(t, err)
-	assert.Equal(t, Token(), "asdf")
-	_ = SetToken(oldToken)
 }

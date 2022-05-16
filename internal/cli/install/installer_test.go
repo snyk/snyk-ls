@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/internal/progress"
 
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/config/environment"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -79,17 +79,18 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 }
 
 func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
+	testutil.UnitTest(t)
 	// prepare
 	i := NewInstaller()
 
 	temp := t.TempDir()
 	fakeCliFile := testutil.CreateTempFile(temp, t)
-	err := environment.SetCliPath(fakeCliFile.Name())
+	err := config.CurrentConfig.SetCliPath(fakeCliFile.Name())
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error setting CLI path")
 	}
 	defer func() {
-		_ = environment.SetCliPath("")
+		_ = config.CurrentConfig.SetCliPath("")
 	}()
 
 	checksum, err := getChecksum(fakeCliFile.Name())
@@ -152,12 +153,12 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 		_ = os.Remove(f)
 	}(cliFilePath)
 
-	err = environment.SetCliPath(cliFilePath)
+	err = config.CurrentConfig.SetCliPath(cliFilePath)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error setting CLI path")
 	}
 	defer func() {
-		_ = environment.SetCliPath("")
+		_ = config.CurrentConfig.SetCliPath("")
 	}()
 
 	r := NewCLIRelease()

@@ -8,12 +8,13 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/config/environment"
-	"github.com/snyk/snyk-ls/internal/cli"
+	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
 func TestWorkspaceDidChangeConfiguration(t *testing.T) {
+	testutil.UnitTest(t)
 	loc := setupServer(t)
 
 	t.Setenv("a", "")
@@ -27,22 +28,24 @@ func TestWorkspaceDidChangeConfiguration(t *testing.T) {
 		AdditionalParams:       "--all-projects -d",
 		AdditionalEnv:          "a=b;c=d",
 		Path:                   "addPath",
+		SendErrorReports:       "true",
 	}}
 	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
 	if err != nil {
 		log.Fatal().Err(err).Msg("error calling server")
 	}
 
-	p := environment.CurrentEnabledProducts
-	assert.Equal(t, false, p.Code.Get())
-	assert.Equal(t, false, p.OpenSource.Get())
-	assert.Equal(t, false, p.Iac.Get())
-	assert.Equal(t, true, cli.CurrentSettings.Insecure)
-	assert.Equal(t, []string{"--all-projects", "-d"}, cli.CurrentSettings.AdditionalParameters)
-	assert.Equal(t, params.Settings.Endpoint, cli.CurrentSettings.Endpoint)
+	c := config.CurrentConfig
+	assert.Equal(t, false, c.IsSnykCodeEnabled())
+	assert.Equal(t, false, c.IsSnykOssEnabled())
+	assert.Equal(t, false, c.IsSnykIacEnabled())
+	assert.Equal(t, true, c.CliSettings().Insecure)
+	assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalParameters)
+	assert.Equal(t, params.Settings.Endpoint, c.CliSettings().Endpoint)
 	assert.Equal(t, "b", os.Getenv("a"))
 	assert.Equal(t, "d", os.Getenv("c"))
 	assert.True(t, strings.Contains(os.Getenv("PATH"), "addPath"))
+	assert.True(t, config.CurrentConfig.IsErrorReportingEnabled())
 }
 
 func TestWorkspaceDidChangeConfiguration_IncompleteEnvVars(t *testing.T) {

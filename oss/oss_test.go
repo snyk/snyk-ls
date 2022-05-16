@@ -9,7 +9,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/preconditions"
@@ -27,9 +27,8 @@ func Test_determineTargetFile(t *testing.T) {
 func Test_ScanWorkspace(t *testing.T) {
 	testutil.IntegTest(t)
 	testutil.CreateDummyProgressListener(t)
-	environment.Load()
+	config.CurrentConfig.SetFormat(config.FormatHtml)
 	preconditions.EnsureReadyForAnalysisAndWait()
-	environment.Format = environment.FormatHtml
 
 	path, _ := filepath.Abs("testdata")
 
@@ -55,9 +54,8 @@ func Test_ScanWorkspace(t *testing.T) {
 func Test_ScanFile(t *testing.T) {
 	hover.ClearAllHovers()
 	testutil.IntegTest(t)
-	environment.Load()
+	config.CurrentConfig.SetFormat(config.FormatHtml)
 	preconditions.EnsureReadyForAnalysisAndWait()
-	environment.Format = environment.FormatHtml
 
 	path, _ := filepath.Abs("testdata/package.json")
 

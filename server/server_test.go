@@ -10,11 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/creachadair/jrpc2/handler"
-
-	"github.com/snyk/snyk-ls/di"
-
 	"github.com/creachadair/jrpc2"
+	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/server"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -22,9 +19,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/code"
-	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/diagnostics"
-	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/cli/install"
 	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -176,8 +173,8 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 }
 
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
-	environment.CurrentEnabledProducts.Code.Set(true)
-	cli.CurrentSettings = cli.Settings{}
+	testutil.UnitTest(t)
+	config.CurrentConfig.SetSnykCodeEnabled(true)
 	loc := setupServer(t)
 
 	didOpenParams, cleanup := didOpenTextParams()
@@ -223,9 +220,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal("couldn't unset environment")
 	}
-	environment.Load()
-	environment.EnabledProductsFromEnv()
-	cli.CurrentSettings = cli.Settings{}
+	config.CurrentConfig = config.New()
 
 	didOpenParams, cleanup := didOpenTextParams()
 	defer cleanup()
@@ -268,8 +263,8 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 }
 
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
-	environment.EnabledProductsFromEnv()
-	cli.CurrentSettings = cli.Settings{}
+	testutil.UnitTest(t)
+	config.CurrentConfig.SetSnykCodeEnabled(true)
 	loc := setupServer(t)
 
 	didSaveParams, cleanup := didSaveTextParams()
@@ -337,31 +332,28 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 }
 
 func Test_IntegrationWorkspaceScanOssAndCode(t *testing.T) {
-	testutil.IntegTest(t)
 	ossFile := "package.json"
 	codeFile := "app.js"
 	runIntegrationTest("https://github.com/snyk/goof", "0336589", ossFile, codeFile, t)
 }
 
 func Test_IntegrationWorkspaceScanIacAndCode(t *testing.T) {
-	testutil.IntegTest(t)
 	iacFile := "main.tf"
 	codeFile := "app.js"
 	runIntegrationTest("https://github.com/deepcodeg/snykcon-goof.git", "eba8407", iacFile, codeFile, t)
 }
 
-func Test_IntegrationWorkspaceScanMaven(t *testing.T) {
-	testutil.IntegTest(t)
+func Test_IntegrationWorkspaceScanWithTwoUploadBatches(t *testing.T) {
 	ossFile := ""
 	codeFile := "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
 	runIntegrationTest("https://github.com/apache/maven", "18725ec1e", ossFile, codeFile, t)
 }
 
 func runIntegrationTest(repo string, commit string, file1 string, file2 string, t *testing.T) {
-	environment.CurrentEnabledProducts.Code.Set(true)
-	environment.CurrentEnabledProducts.OpenSource.Set(true)
-	environment.CurrentEnabledProducts.Iac.Set(true)
-	cli.CurrentSettings = cli.Settings{}
+	testutil.IntegTest(t)
+	config.CurrentConfig.SetSnykCodeEnabled(true)
+	config.CurrentConfig.SetSnykIacEnabled(true)
+	config.CurrentConfig.SetSnykOssEnabled(true)
 	diagnostics.ClearWorkspaceFolderScanned()
 	diagnostics.ClearEntireDiagnosticsCache()
 	jsonRPCRecorder.ClearCallbacks()
@@ -431,8 +423,6 @@ func checkForPublishedDiagnostics(testPath string, expectedNumber int) func() bo
 
 func Test_IntegrationHoverResults(t *testing.T) {
 	testutil.IntegTest(t)
-	environment.EnabledProductsFromEnv()
-	cli.CurrentSettings = cli.Settings{}
 	diagnostics.ClearEntireDiagnosticsCache()
 	loc := setupServer(t)
 
@@ -484,10 +474,9 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	assert.Equal(t, hoverResult.Contents.Kind, "markdown")
 }
 
-func Test_IntegrationFileScan(t *testing.T) {
+func Test_IntegrationSnykCodeFileScan(t *testing.T) {
 	testutil.IntegTest(t)
-	environment.EnabledProductsFromEnv()
-	cli.CurrentSettings = cli.Settings{}
+	config.CurrentConfig.SetSnykCodeEnabled(true)
 	diagnostics.ClearEntireDiagnosticsCache()
 	loc := setupServer(t)
 	di.Init()

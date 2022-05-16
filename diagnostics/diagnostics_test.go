@@ -10,9 +10,8 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/snyk/snyk-ls/code"
-	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
-	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -34,8 +33,8 @@ func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 
 func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
 	// disable snyk code
-	t.Setenv(environment.ActivateSnykCodeKey, "false")
-	environment.EnabledProductsFromEnv()
+	t.Setenv(config.ActivateSnykCodeKey, "false")
+	testutil.UnitTest(t)
 	ClearEntireDiagnosticsCache()
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
@@ -50,8 +49,8 @@ func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
 
 func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
 	// disable snyk code
-	t.Setenv(environment.ActivateSnykCodeKey, "true")
-	environment.EnabledProductsFromEnv()
+	t.Setenv(config.ActivateSnykCodeKey, "true")
+	testutil.UnitTest(t)
 	ClearEntireDiagnosticsCache()
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
@@ -76,10 +75,10 @@ func (m *mockCli) Execute(cmd []string) (resp []byte, err error) {
 
 func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
-	t.Setenv(environment.ActivateSnykCodeKey, "false")
-	t.Setenv(environment.ActivateSnykIacKey, "false")
-	t.Setenv(environment.ActivateSnykOssKey, "true")
-	environment.EnabledProductsFromEnv()
+	t.Setenv(config.ActivateSnykCodeKey, "false")
+	t.Setenv(config.ActivateSnykIacKey, "false")
+	t.Setenv(config.ActivateSnykOssKey, "true")
+	testutil.UnitTest(t)
 	ClearEntireDiagnosticsCache()
 	documentURI := sglsp.DocumentURI("package.json")
 	di.TestInit()
@@ -94,10 +93,10 @@ func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
 }
 
 func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
-	t.Setenv(environment.ActivateSnykCodeKey, "false")
-	t.Setenv(environment.ActivateSnykIacKey, "false")
-	t.Setenv(environment.ActivateSnykOssKey, "false")
-	environment.EnabledProductsFromEnv()
+	t.Setenv(config.ActivateSnykCodeKey, "false")
+	t.Setenv(config.ActivateSnykIacKey, "false")
+	t.Setenv(config.ActivateSnykOssKey, "false")
+	testutil.UnitTest(t)
 	ClearEntireDiagnosticsCache()
 	documentURI := sglsp.DocumentURI("package.json")
 	di.TestInit()
@@ -112,17 +111,19 @@ func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
 }
 
 func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
-	environment.Load()
-	t.Setenv(environment.ActivateSnykCodeKey, "false")
-	t.Setenv(environment.ActivateSnykIacKey, "true")
-	t.Setenv(environment.ActivateSnykOssKey, "false")
-	environment.EnabledProductsFromEnv()
+	t.Setenv(config.ActivateSnykCodeKey, "false")
+	t.Setenv(config.ActivateSnykIacKey, "true")
+	t.Setenv(config.ActivateSnykOssKey, "false")
+	testutil.UnitTest(t)
 	ClearEntireDiagnosticsCache()
 	documentURI := sglsp.DocumentURI("package.json")
 	di.TestInit()
-	cli.CurrentSettings.AdditionalParameters = []string{"-d", "--all-projects"}
-	cli.CurrentSettings.Insecure = true
-	cli.CurrentSettings.Endpoint = "asd"
+	settings := config.CurrentConfig.CliSettings()
+	settings.AdditionalParameters = []string{"-d", "--all-projects"}
+	settings.Insecure = true
+	settings.Endpoint = "asd"
+	config.CurrentConfig.SetCliSettings(settings)
+
 	mockCli := mockCli{}
 	Cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything).Return("{}", nil)
@@ -139,10 +140,10 @@ func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
 }
 
 func Test_GetDiagnostics_shouldNotIacIfNotEnabled(t *testing.T) { // disable snyk code
-	t.Setenv(environment.ActivateSnykCodeKey, "false")
-	t.Setenv(environment.ActivateSnykIacKey, "false")
-	t.Setenv(environment.ActivateSnykOssKey, "false")
-	environment.EnabledProductsFromEnv()
+	t.Setenv(config.ActivateSnykCodeKey, "false")
+	t.Setenv(config.ActivateSnykIacKey, "false")
+	t.Setenv(config.ActivateSnykOssKey, "false")
+	testutil.UnitTest(t)
 	ClearEntireDiagnosticsCache()
 	documentURI := sglsp.DocumentURI("package.json")
 	di.TestInit()

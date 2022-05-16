@@ -2,7 +2,7 @@ package di
 
 import (
 	"github.com/snyk/snyk-ls/code"
-	"github.com/snyk/snyk-ls/config/environment"
+	"github.com/snyk/snyk-ls/config"
 )
 
 var SnykCodeClient code.SnykCodeClient
@@ -20,7 +20,7 @@ func initDomain() {
 }
 
 func initInfrastructure() {
-	SnykCodeClient = code.NewHTTPRepository(environment.ApiUrl())
+	SnykCodeClient = code.NewHTTPRepository(config.CurrentConfig.SnykCodeApi())
 	SnykCodeBundleUploader = code.NewBundler(SnykCodeClient)
 }
 

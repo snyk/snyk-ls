@@ -20,7 +20,7 @@ func InitErrorReporting() {
 		Dsn:         sentryDsn,
 		Environment: environment(),
 		Release:     config.Version,
-		Debug:       config.IsDevelopment,
+		Debug:       config.IsDevelopment(),
 		BeforeSend:  beforeSend,
 	})
 	if err != nil {
@@ -36,7 +36,7 @@ func FlushErrorReporting() {
 }
 
 func CaptureError(err error) bool {
-	if config.IsErrorReportingEnabled {
+	if config.CurrentConfig.IsErrorReportingEnabled() {
 		sentry.CaptureException(err)
 		notification.Send(sglsp.ShowMessageParams{
 			Type:    sglsp.MTError,
@@ -48,14 +48,14 @@ func CaptureError(err error) bool {
 }
 
 func beforeSend(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
-	if config.IsErrorReportingEnabled {
+	if config.CurrentConfig.IsErrorReportingEnabled() {
 		return event
 	}
 	return nil
 }
 
 func environment() string {
-	if config.IsDevelopment {
+	if config.IsDevelopment() {
 		return "development"
 	} else {
 		return "production"

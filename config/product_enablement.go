@@ -1,0 +1,63 @@
+package config
+
+import (
+	"os"
+	"strconv"
+
+	"github.com/rs/zerolog/log"
+)
+
+const (
+	ActivateSnykOssKey       = "ACTIVATE_SNYK_OPEN_SOURCE"
+	ActivateSnykCodeKey      = "ACTIVATE_SNYK_CODE"
+	ActivateSnykIacKey       = "ACTIVATE_SNYK_IAC"
+	ActivateSnykContainerKey = "ACTIVATE_SNYK_CONTAINER"
+	ActivateSnykAdvisorKey   = "ACTIVATE_SNYK_ADVISOR"
+)
+
+func (c *Config) enabledProductsFromEnv() {
+	oss := os.Getenv(ActivateSnykOssKey)
+	code := os.Getenv(ActivateSnykCodeKey)
+	iac := os.Getenv(ActivateSnykIacKey)
+	container := os.Getenv(ActivateSnykContainerKey)
+	advisor := os.Getenv(ActivateSnykAdvisorKey)
+
+	if oss != "" {
+		parseBool, err := strconv.ParseBool(oss)
+		if err != nil {
+			log.Warn().Err(err).Str("method", "enabledProductsFromEnv").Msgf("couldn't parse oss config %s", oss)
+		}
+		c.isSnykOssEnabled.Set(parseBool)
+	}
+
+	if code != "" {
+		parseBool, err := strconv.ParseBool(code)
+		if err != nil {
+			log.Warn().Err(err).Str("method", "enabledProductsFromEnv").Msgf("couldn't parse code config %s", code)
+		}
+		c.isSnykCodeEnabled.Set(parseBool)
+	}
+
+	if iac != "" {
+		parseBool, err := strconv.ParseBool(iac)
+		if err != nil {
+			log.Warn().Err(err).Str("method", "enabledProductsFromEnv").Msgf("couldn't parse iac config %s", iac)
+		}
+		c.isSnykIacEnabled.Set(parseBool)
+	}
+
+	if container != "" {
+		parseBool, err := strconv.ParseBool(container)
+		if err != nil {
+			log.Warn().Err(err).Str("method", "enabledProductsFromEnv").Msgf("couldn't parse container config %s", container)
+		}
+		c.isSnykContainerEnabled.Set(parseBool)
+	}
+	if advisor != "" {
+		parseBool, err := strconv.ParseBool(advisor)
+		if err != nil {
+			log.Warn().Err(err).Str("method", "enabledProductsFromEnv").Msgf("couldn't parse advisor config %s", advisor)
+		}
+		c.isSnykAdvisorEnabled.Set(parseBool)
+	}
+}

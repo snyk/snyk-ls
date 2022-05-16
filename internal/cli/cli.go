@@ -6,17 +6,12 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog/log"
+
+	"github.com/snyk/snyk-ls/config"
 )
 
 type SnykCli struct{}
 
-type Settings struct {
-	Insecure             bool
-	Endpoint             string
-	AdditionalParameters []string
-}
-
-var CurrentSettings Settings
 var Mutex = &sync.Mutex{}
 
 type Executor interface {
@@ -35,14 +30,15 @@ func (c SnykCli) Execute(cmd []string) (resp []byte, err error) {
 
 func ExpandParametersFromConfig(base []string) []string {
 	var additionalParams []string
-	if CurrentSettings.Insecure {
+	settings := config.CurrentConfig.CliSettings()
+	if settings.Insecure {
 		additionalParams = append(additionalParams, "--insecure")
 	}
-	if len(CurrentSettings.AdditionalParameters) > 0 {
-		additionalParams = append(additionalParams, CurrentSettings.AdditionalParameters...)
+	if len(settings.AdditionalParameters) > 0 {
+		additionalParams = append(additionalParams, settings.AdditionalParameters...)
 	}
-	if CurrentSettings.Endpoint != "" {
-		err := os.Setenv("SNYK_API", CurrentSettings.Endpoint)
+	if settings.Endpoint != "" {
+		err := os.Setenv("SNYK_API", settings.Endpoint)
 		if err != nil {
 			log.Err(err).Msg("couldn't set endpoint in environment")
 		}
