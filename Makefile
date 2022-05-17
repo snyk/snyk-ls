@@ -37,7 +37,7 @@ lint: tools
 test:
 	@echo "==> Running unit tests..."
 	@mkdir -p $(BUILD_DIR)
-	@go test -p=1 -count=1 -v -cover -coverprofile=$(BUILD_DIR)/coverage.out -timeout=5m ./...
+	@go test -p=1 -count=1 -v -cover -coverprofile=$(BUILD_DIR)/coverage.out -timeout=15m ./...
 
 .PHONY: race-test
 race-test:
