@@ -1,6 +1,7 @@
 package code
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -45,6 +46,12 @@ func (sc *SnykCode) uploadAndAnalyze(files []sglsp.DocumentURI, wg *sync.WaitGro
 	// TODO LSP error handling should be pushed UP to the LSP layer
 	if err != nil {
 		log.Error().Err(err).Msg("error uploading files...")
+		dChan <- lsp.DiagnosticResult{Err: err}
+		return
+	}
+	if uploadedBundle.BundleHash == "" {
+		err = fmt.Errorf("got empty bundle hash\nFileCount: %v\n, documentURI %s", len(files), documentURI)
+		log.Error().Err(err).Msg(err.Error())
 		dChan <- lsp.DiagnosticResult{Err: err}
 		return
 	}

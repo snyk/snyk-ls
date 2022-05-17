@@ -40,7 +40,7 @@ func (b *Bundle) createBundle(uploadBatch *UploadBatch) error {
 	var err error
 	if uploadBatch.hasContent() {
 		b.BundleHash, _, err = b.SnykCode.CreateBundle(uploadBatch.documents)
-		log.Trace().Str("bundleHash", b.BundleHash).Msg("created uploadBatch on backend")
+		log.Debug().Str("bundleHash", b.BundleHash).Msg("created uploadBatch on backend")
 	}
 	return err
 }
