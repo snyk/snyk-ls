@@ -94,8 +94,9 @@ func ScanWorkspace(
 		switch err := err.(type) {
 		case *exec.ExitError:
 			if err.ExitCode() > 1 {
-				log.Err(err).Str("method", "oss.ScanWorkspace").Str("output", string(res)).Msg("Error while calling Snyk CLI")
-				reportErrorViaChan(workspace, dChan, err)
+				errorOutput := string(res)
+				log.Err(err).Str("method", "oss.ScanWorkspace").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
+				reportErrorViaChan(workspace, dChan, fmt.Errorf("%v: %v", err, errorOutput))
 				return
 			}
 			log.Warn().Err(err).Str("method", "oss.ScanWorkspace").Msg("Error while calling Snyk CLI")
@@ -119,7 +120,7 @@ func ScanWorkspace(
 	fileContent, err := ioutil.ReadFile(targetFilePath)
 	if err != nil {
 		log.Err(err).Str("method", "oss.ScanWorkspace").
-			Msgf("Error while reading the fi le %v, err: %v", targetFile, err)
+			Msgf("Error while reading the file %v, err: %v", targetFile, err)
 		reportErrorViaChan(targetFileUri, dChan, err)
 		return
 	}
@@ -162,8 +163,9 @@ func ScanFile(
 		switch err := err.(type) {
 		case *exec.ExitError:
 			if err.ExitCode() > 1 {
-				log.Err(err).Str("method", "oss.ScanFile").Str("output", string(res)).Msg("Error while calling Snyk CLI")
-				reportErrorViaChan(documentURI, dChan, err)
+				errorOutput := string(res)
+				log.Err(err).Str("method", "oss.ScanFile").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
+				reportErrorViaChan(documentURI, dChan, fmt.Errorf("%v: %v", err, errorOutput))
 				return
 			}
 			log.Warn().Err(err).Str("method", "oss.ScanFile").Msg("Error while calling Snyk CLI")

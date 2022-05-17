@@ -12,11 +12,16 @@ var SnykCode *code.SnykCode
 
 func Init() {
 	initInfrastructure()
-	initDomain()
+	initApplication()
 }
 
-func initDomain() {
-	SnykCode = code.NewSnykCode(SnykCodeBundleUploader)
+func initApplication() {
+	endpoint := config.CurrentConfig.CliSettings().Endpoint
+	if endpoint == "" {
+		endpoint = code.DefaultEndpointURL
+	}
+	SnykApiClient := code.NewSnykApiClient(endpoint)
+	SnykCode = code.NewSnykCode(SnykCodeBundleUploader, SnykApiClient)
 }
 
 func initInfrastructure() {
@@ -26,7 +31,9 @@ func initInfrastructure() {
 
 //TODO move out of prod logic
 func TestInit() {
-	SnykCodeClient = &code.FakeSnykCodeClient{}
+	fakeClient := &code.FakeSnykCodeClient{}
+	SnykCodeClient = fakeClient
 	SnykCodeBundleUploader = code.NewBundler(SnykCodeClient)
-	SnykCode = code.NewSnykCode(SnykCodeBundleUploader)
+	fakeApiClient := &code.FakeApiClient{CodeEnabled: true}
+	SnykCode = code.NewSnykCode(SnykCodeBundleUploader, fakeApiClient)
 }

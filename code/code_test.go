@@ -37,7 +37,7 @@ func setupDocs() (string, lsp.TextDocumentItem, lsp.TextDocumentItem, []byte, []
 func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 	t.Run("should create bundle when hash empty", func(t *testing.T) {
 		snykCodeMock := &FakeSnykCodeClient{}
-		code := NewSnykCode(NewBundler(snykCodeMock))
+		code := NewSnykCode(NewBundler(snykCodeMock), &FakeApiClient{CodeEnabled: true})
 		path, firstDoc, _, content1, _ := setupDocs()
 		registeredDocuments := []lsp.DocumentURI{firstDoc.URI}
 		defer os.RemoveAll(path)
@@ -61,7 +61,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 
 	t.Run("should retrieve from backend", func(t *testing.T) {
 		snykCodeMock := &FakeSnykCodeClient{}
-		code := NewSnykCode(NewBundler(snykCodeMock))
+		code := NewSnykCode(NewBundler(snykCodeMock), &FakeApiClient{CodeEnabled: true})
 		diagnosticUri, path := FakeDiagnosticUri()
 		defer os.RemoveAll(path)
 		diagnosticMap := map[lsp.DocumentURI][]lsp2.Diagnostic{}

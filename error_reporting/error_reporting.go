@@ -36,12 +36,13 @@ func FlushErrorReporting() {
 }
 
 func CaptureError(err error) bool {
+	notification.Send(sglsp.ShowMessageParams{
+		Type:    sglsp.MTError,
+		Message: fmt.Sprintf("Snyk encountered an error: %v", err),
+	})
 	if config.CurrentConfig.IsErrorReportingEnabled() {
+		log.Debug().Err(err).Str("method", "CaptureError").Msgf("Sending error to Sentry")
 		sentry.CaptureException(err)
-		notification.Send(sglsp.ShowMessageParams{
-			Type:    sglsp.MTError,
-			Message: fmt.Sprintf("Snyk encountered an error while scanning: %v", err),
-		})
 		return true
 	}
 	return false

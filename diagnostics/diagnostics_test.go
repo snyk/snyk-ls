@@ -32,9 +32,8 @@ func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 }
 
 func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
-	// disable snyk code
-	t.Setenv(config.ActivateSnykCodeKey, "false")
 	testutil.UnitTest(t)
+	config.CurrentConfig.SetSnykCodeEnabled(false)
 	ClearEntireDiagnosticsCache()
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
@@ -47,10 +46,26 @@ func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
 	assert.Nil(t, params)
 }
 
-func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
-	// disable snyk code
-	t.Setenv(config.ActivateSnykCodeKey, "true")
+func Test_GetDiagnostics_shouldNotRunCodeIfNotSastEnabled(t *testing.T) {
 	testutil.UnitTest(t)
+	config.CurrentConfig.SetSnykCodeEnabled(true)
+	ClearEntireDiagnosticsCache()
+	diagnosticUri, path := code.FakeDiagnosticUri()
+	defer os.RemoveAll(path)
+	di.TestInit()
+	fakeApiClient := di.SnykCode.SnykApiClient.(*code.FakeApiClient)
+	fakeApiClient.CodeEnabled = false
+
+	diagnostics := GetDiagnostics(diagnosticUri)
+
+	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
+	assert.Len(t, fakeApiClient.GetAllCalls(code.SastEnabledOperation), 1)
+	assert.Len(t, di.SnykCodeClient.(*code.FakeSnykCodeClient).GetAllCalls(code.CreateBundleWithSourceOperation), 0)
+}
+
+func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
+	testutil.UnitTest(t)
+	config.CurrentConfig.SetSnykCodeEnabled(true)
 	ClearEntireDiagnosticsCache()
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
