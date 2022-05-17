@@ -12,10 +12,10 @@ var SnykCode *code.SnykCode
 
 func Init() {
 	initInfrastructure()
-	initDomain()
+	initApplication()
 }
 
-func initDomain() {
+func initApplication() {
 	endpoint := config.CurrentConfig.CliSettings().Endpoint
 	if endpoint == "" {
 		endpoint = code.DefaultEndpointURL
