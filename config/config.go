@@ -73,7 +73,7 @@ func New() *Config {
 	c.snykCodeApiUrl = snykCodeApiUrlFromEnv()
 	c.snykCodeAnalysisTimeout = snykCodeAnalysisTimeoutFromEnv()
 	c.token = tokenFromEnv()
-	c.enabledProductsFromEnv()
+	c.clientSettingsFromEnv()
 	return c
 }
 

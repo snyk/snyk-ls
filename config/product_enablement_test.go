@@ -18,14 +18,39 @@ func TestGetEnabledProducts_DefaultValues(t *testing.T) {
 	os.Unsetenv(ActivateSnykIacKey)
 	os.Unsetenv(ActivateSnykContainerKey)
 	os.Unsetenv(ActivateSnykAdvisorKey)
+	CurrentConfig = New()
 
-	CurrentConfig.enabledProductsFromEnv()
+	CurrentConfig.clientSettingsFromEnv()
 
 	assert.Equal(t, true, CurrentConfig.IsSnykOssEnabled())
 	assert.Equal(t, false, CurrentConfig.IsSnykCodeEnabled())
 	assert.Equal(t, true, CurrentConfig.IsSnykIacEnabled())
 	assert.Equal(t, false, CurrentConfig.IsSnykContainerEnabled())
 	assert.Equal(t, false, CurrentConfig.IsSnykAdvisorEnabled())
+}
+
+func TestConfig_IsErrorReportingEnabledFromEnv_DefaultValues(t *testing.T) {
+	t.Setenv(SendErrorReportsKey, "set it to anything to make sure it is reset")
+	os.Unsetenv(SendErrorReportsKey)
+	CurrentConfig = New()
+	CurrentConfig.clientSettingsFromEnv()
+
+	assert.Equal(t, false, CurrentConfig.IsErrorReportingEnabled())
+}
+func TestConfig_IsErrorReportingEnabledFromEnv(t *testing.T) {
+	t.Setenv(SendErrorReportsKey, "true")
+	CurrentConfig = New()
+	CurrentConfig.clientSettingsFromEnv()
+
+	assert.Equal(t, true, CurrentConfig.IsErrorReportingEnabled())
+}
+
+func TestConfig_IsErrorReportingEnabledFromEnv_Error(t *testing.T) {
+	t.Setenv(SendErrorReportsKey, "hurz")
+	CurrentConfig = New()
+	CurrentConfig.clientSettingsFromEnv()
+
+	assert.Equal(t, false, CurrentConfig.IsErrorReportingEnabled())
 }
 
 func TestInitializeDefaultProductEnablement(t *testing.T) {
@@ -46,50 +71,50 @@ func TestInitializeDefaultProductEnablement(t *testing.T) {
 
 func TestGetEnabledProducts_Oss(t *testing.T) {
 	t.Setenv(ActivateSnykOssKey, "false")
-	CurrentConfig.enabledProductsFromEnv()
+	CurrentConfig.clientSettingsFromEnv()
 	assert.Equal(t, false, CurrentConfig.isSnykOssEnabled.Get())
 
 	t.Setenv(ActivateSnykOssKey, "true")
-	CurrentConfig.enabledProductsFromEnv()
+	CurrentConfig.clientSettingsFromEnv()
 	assert.Equal(t, true, CurrentConfig.isSnykOssEnabled.Get())
 }
 
 func TestGetEnabledProducts_Code(t *testing.T) {
 	t.Setenv(ActivateSnykCodeKey, "false")
-	CurrentConfig.enabledProductsFromEnv()
+	CurrentConfig.clientSettingsFromEnv()
 	assert.Equal(t, false, CurrentConfig.IsSnykCodeEnabled())
 
 	t.Setenv(ActivateSnykCodeKey, "true")
-	CurrentConfig.enabledProductsFromEnv()
+	CurrentConfig.clientSettingsFromEnv()
 	assert.Equal(t, true, CurrentConfig.IsSnykCodeEnabled())
 }
 
 func TestGetEnabledProducts_Iac(t *testing.T) {
 	t.Setenv(ActivateSnykIacKey, "false")
-	CurrentConfig.enabledProductsFromEnv()
+	CurrentConfig.clientSettingsFromEnv()
 	assert.Equal(t, false, CurrentConfig.IsSnykIacEnabled())
 
 	t.Setenv(ActivateSnykIacKey, "true")
-	CurrentConfig.enabledProductsFromEnv()
+	CurrentConfig.clientSettingsFromEnv()
 	assert.Equal(t, true, CurrentConfig.IsSnykIacEnabled())
 }
 
 func TestGetEnabledProducts_Container(t *testing.T) {
 	t.Setenv(ActivateSnykContainerKey, "false")
-	CurrentConfig.enabledProductsFromEnv()
+	CurrentConfig.clientSettingsFromEnv()
 	assert.Equal(t, false, CurrentConfig.IsSnykContainerEnabled())
 
 	t.Setenv(ActivateSnykContainerKey, "true")
-	CurrentConfig.enabledProductsFromEnv()
+	CurrentConfig.clientSettingsFromEnv()
 	assert.Equal(t, true, CurrentConfig.IsSnykContainerEnabled())
 }
 
 func TestGetEnabledProducts_Advisor(t *testing.T) {
 	t.Setenv(ActivateSnykAdvisorKey, "false")
-	CurrentConfig.enabledProductsFromEnv()
+	CurrentConfig.clientSettingsFromEnv()
 	assert.Equal(t, false, CurrentConfig.IsSnykAdvisorEnabled())
 
 	t.Setenv(ActivateSnykAdvisorKey, "true")
-	CurrentConfig.enabledProductsFromEnv()
+	CurrentConfig.clientSettingsFromEnv()
 	assert.Equal(t, true, CurrentConfig.IsSnykAdvisorEnabled())
 }

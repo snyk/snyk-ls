@@ -64,7 +64,9 @@ func parseFlags(args []string) (string, error) {
 	c.ConfigureLogging(*logLevelFlag)
 
 	c.SetFormat(*formatFlag)
-	c.SetErrorReportingEnabled(*reportErrorsFlag)
+	if os.Getenv(config.SendErrorReportsKey) == "" {
+		c.SetErrorReportingEnabled(*reportErrorsFlag)
+	}
 
 	config.CurrentConfig = c
 	return buf.String(), nil
