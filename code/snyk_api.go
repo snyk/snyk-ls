@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -50,13 +51,15 @@ func (s *SnykApiClientImpl) SastEnabled() (sastEnabled bool, localCodeEngineEnab
 	path := "/cli-config/settings/sast"
 	responseBody, err := s.doCall("GET", path, nil)
 	if err != nil {
-		log.Err(err).Str("method", "SastEnabled").Msg("couldn't unmarshal sastResponse")
+		err = fmt.Errorf("%v: %v", err, responseBody)
+		log.Err(err).Str("method", "SastEnabled").Msg("error when calling sastEnabled endpoint")
 		return false, false, false, err
 	}
 
 	var response sastResponse
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
+		err = fmt.Errorf("%v: %v", err, responseBody)
 		log.Err(err).Str("method", "SastEnabled").Msg("couldn't unmarshal sastResponse")
 		return false, false, false, err
 	}
