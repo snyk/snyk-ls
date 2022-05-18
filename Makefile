@@ -17,8 +17,17 @@ tools:
 ifeq (,$(wildcard ./.bin/golangci-lint*))
 	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b .bin/ v1.45.2
 else
-	@echo "==> Required tooling is already installed"
+	@echo "==> golangci-lint is already installed"
 endif
+	@if [ ! -d ./bin/pact ]; then\
+		echo "--- 🛠 Installing Pact CLI dependencies";\
+		curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | bash;\
+		mkdir ./.bin/pact;\
+		mv ./pact/* ./.bin/pact;\
+		export PATH=$PATH:$PWD/.bin/pact;\
+	else \
+		echo "==> Pact CLI is already installed";\
+	fi
 
 ## clean: Delete the build directory
 .PHONY: clean
