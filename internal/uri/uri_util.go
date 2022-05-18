@@ -10,8 +10,9 @@ import (
 
 func PathFromUri(uri sglsp.DocumentURI) string {
 	var path = strings.TrimPrefix(string(uri), "file://")
-	if runtime.GOOS == "windows" {
-		path = strings.TrimPrefix(path, "/")
+	if runtime.GOOS == "windows" &&
+		!strings.HasPrefix(path, "//") { // UNC path
+		path = strings.TrimPrefix(path, "/") // /C:/... --> C:/...
 	}
 	return filepath.Clean(strings.TrimPrefix(path, "file:"))
 }
