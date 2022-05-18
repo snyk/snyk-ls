@@ -139,12 +139,7 @@ func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing
 
 func TestSnykCodeBackendService_GetFilters_returns(t *testing.T) {
 	testutil.UnitTest(t)
-	pact := &dsl.Pact{
-		Consumer: "SnykLS",
-		Provider: "SnykCodeApi",
-		PactDir:  pactDir,
-	}
-	defer pact.Teardown()
+	pact := testutil.Pact(t, pactDir, "SnykCodeApi")
 
 	pact.AddInteraction().WithRequest(dsl.Request{
 		Method: "GET",
