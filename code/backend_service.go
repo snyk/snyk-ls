@@ -14,6 +14,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config"
+	uri2 "github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -233,7 +234,7 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
 
 	for _, result := range runs[0].Results {
 		for _, loc := range result.Locations {
-			uri := sglsp.DocumentURI(loc.PhysicalLocation.ArtifactLocation.URI)
+			uri := uri2.PathToUri(loc.PhysicalLocation.ArtifactLocation.URI)
 			diagSlice := diags[uri]
 			hoverSlice := hovers[uri]
 
