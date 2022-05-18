@@ -99,7 +99,7 @@ func (b *Bundle) retrieveAnalysis(
 		if status.message == "COMPLETE" {
 			for u, d := range diags {
 				log.Trace().Str("method", "retrieveAnalysis").Str("bundleHash", b.BundleHash).
-					Str("uri1", string(u)).
+					Str("path1", string(u)).
 					Msg("sending diagnostics...")
 
 				dChan <- lsp2.DiagnosticResult{

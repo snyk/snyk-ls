@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	uri1    = "/AnnotatorTest.java"
-	uri2    = "/AnnotatorTest2.java"
+	path1   = "/AnnotatorTest.java"
+	path2   = "/AnnotatorTest2.java"
 	content = `public class AnnotatorTest {
   public static void delay(long millis) {
     try {
@@ -46,7 +46,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 
 	s := NewHTTPRepository(config.CurrentConfig.SnykCodeApi())
 	files := map[sglsp.DocumentURI]BundleFile{}
-	files[uri1] = BundleFile{
+	files[path1] = BundleFile{
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
@@ -63,13 +63,13 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]BundleFile{}
-	files[uri1] = BundleFile{
+	files[path1] = BundleFile{
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
 	bundleHash, _, _ := s.CreateBundle(files)
 	filesExtend := map[sglsp.DocumentURI]BundleFile{}
-	filesExtend[uri2] = BundleFile{
+	filesExtend[path2] = BundleFile{
 		Hash:    util.Hash([]byte(content2)),
 		Content: content2,
 	}
@@ -84,27 +84,30 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]BundleFile{}
-	files[uri1] = BundleFile{
+	files[path1] = BundleFile{
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
 	bundleHash, _, _ := s.CreateBundle(files)
 	filesExtend := map[sglsp.DocumentURI]BundleFile{}
-	filesExtend[uri2] = BundleFile{
+	filesExtend[path2] = BundleFile{
 		Hash:    util.Hash([]byte(content2)),
 		Content: content2,
 	}
 	bundleHash, _, _ = s.ExtendBundle(bundleHash, filesExtend, removedFiles)
 
 	assert.Eventually(t, func() bool {
-		limitToFiles := []sglsp.DocumentURI{uri1, uri2}
+		limitToFiles := []sglsp.DocumentURI{path1, path2}
 		d, _, callStatus, err := s.RunAnalysis(bundleHash, shardKey, limitToFiles, 0)
 		if err != nil {
 			return false
 		}
-		if callStatus.message == "COMPLETE" && d[uri1] != nil {
-			returnValue := assert.NotEqual(t, 0, len(d[uri1]))
-			returnValue = returnValue && assert.NotEqual(t, 0, len(d[uri2]))
+		path1DocumentURI := uri.PathToUri(path1)
+		path2DocumentURI := uri.PathToUri(path2)
+		documentDiagnostic := d[path1DocumentURI]
+		if callStatus.message == "COMPLETE" && documentDiagnostic != nil {
+			returnValue := assert.NotEqual(t, 0, len(d[path1DocumentURI]))
+			returnValue = returnValue && assert.NotEqual(t, 0, len(d[path2DocumentURI]))
 			if returnValue {
 				return true
 			}
