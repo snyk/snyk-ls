@@ -234,7 +234,11 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
 
 	for _, result := range runs[0].Results {
 		for _, loc := range result.Locations {
-			uri := uri2.PathToUri(loc.PhysicalLocation.ArtifactLocation.URI)
+			// convert the uri to a path according to our conversion
+			path := uri2.PathFromUri(sglsp.DocumentURI(loc.PhysicalLocation.ArtifactLocation.URI))
+			// then convert it back to cater for special cases under windows
+			uri := uri2.PathToUri(path)
+
 			diagSlice := diags[uri]
 			hoverSlice := hovers[uri]
 
