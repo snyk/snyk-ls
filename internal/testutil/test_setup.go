@@ -20,18 +20,44 @@ func IntegTest(t *testing.T) {
 		t.SkipNow()
 	}
 	config.CurrentConfig = config.New()
+	CLIDownloadLockFileCleanUp(t)
 }
 
 func UnitTest(t *testing.T) {
 	t.Helper()
 	config.CurrentConfig = config.New()
+	CLIDownloadLockFileCleanUp(t)
+}
+
+func CLIDownloadLockFileCleanUp(t *testing.T) {
+	t.Helper()
+	// remove lock file before test and after test
+	lockFileName := config.CurrentConfig.CLIDownloadLockFileName()
+	file, _ := os.Open(lockFileName)
+	file.Close()
+	_ = os.Remove(lockFileName)
+	t.Cleanup(func() {
+		_ = os.Remove(lockFileName)
+	})
+}
+
+func NotOnWindows(t *testing.T, reason string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skipf("Not on windows, because %s", reason)
+	}
+}
+
+func OnlyOnWindows(t *testing.T, reason string) {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		t.Skipf("Only on windows, because %s", reason)
+	}
 }
 
 func Pact(t *testing.T, pactDir string, provider string) *dsl.Pact {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skipf("We don't have pact on Windows in CI/CD")
-	}
+	NotOnWindows(t, "we don't have a pact cli")
 	pact := &dsl.Pact{
 		Consumer: "SnykLS",
 		Provider: provider,

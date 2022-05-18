@@ -1,26 +1,35 @@
 package uri
 
 import (
-	"runtime"
 	"testing"
 
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestPathFromUri(t *testing.T) {
 	assert.Equal(t, "asdf", PathFromUri("file://asdf"))
 	assert.Equal(t, "asdf", PathFromUri("file:asdf"))
+
+}
+
+func TestPathFromUri_OnWindows(t *testing.T) {
+	testutil.OnlyOnWindows(t, "windows specific paths are tested")
+	assert.Equal(t, "C:\\folder\\test", PathFromUri("file:///C:/folder/test"))
+}
+
+func TestPathToUri_OnWindows(t *testing.T) {
+	testutil.OnlyOnWindows(t, "windows specific paths are tested")
+	assert.Equal(t, lsp.DocumentURI("file:///C:/folder/file"), PathToUri("C:\\folder\\file"))
+	assert.Equal(t, lsp.DocumentURI("file:///C:/folder/file"), PathToUri("C:/folder/file"))
+	assert.Equal(t, lsp.DocumentURI("file://shares/c$/folder/file"), PathToUri("//shares/c$/folder/file"))
 }
 
 func TestPathToUri(t *testing.T) {
 	assert.Equal(t, lsp.DocumentURI("file://asdf"), PathToUri("asdf"))
 	assert.Equal(t, lsp.DocumentURI("file:///asdf"), PathToUri("//asdf"))
-	if runtime.GOOS == "windows" {
-		assert.Equal(t, lsp.DocumentURI("file:///C:/folder/file"), PathToUri("C:\\folder\\file"))
-		assert.Equal(t, lsp.DocumentURI("file:///C:/folder/file"), PathToUri("C:/folder/file"))
-		assert.Equal(t, lsp.DocumentURI("file://share/c$/folder/file"), PathToUri("//shares/c$/folder/file"))
-	}
 }
 
 func TestFolderContains(t *testing.T) {
