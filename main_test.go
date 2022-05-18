@@ -85,11 +85,14 @@ func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	config.CurrentConfig.SetLogPath(filepath.Join(logPath, "a.txt"))
+	logFile := filepath.Join(logPath, "a.txt")
+	config.CurrentConfig.SetLogPath(logFile)
 	defer func(name string) {
+		file, _ := os.Open(logFile)
+		file.Close()
 		err := os.RemoveAll(logPath)
 		if err != nil {
-			t.Fatal(err)
+			t.Logf("clean up didn't work")
 		}
 		config.CurrentConfig.SetLogPath("")
 	}(logPath)

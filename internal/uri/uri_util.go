@@ -37,6 +37,7 @@ func PathFromUri(uri sglsp.DocumentURI) string {
 // Windows:"\\var\log.txt" -> "file://var/log.txt"
 // Windows:"//var\log.txt" -> "file://var/log.txt"
 func PathToUri(path string) sglsp.DocumentURI {
+	path = filepath.Clean(path)
 	if isWindows() {
 		if isDrivePath(path) {
 			path = "/" + filepath.Clean(path)
@@ -47,7 +48,7 @@ func PathToUri(path string) sglsp.DocumentURI {
 			path = strings.TrimPrefix(path, "\\\\")
 		}
 	}
-	return sglsp.DocumentURI("file://" + filepath.Clean(filepath.ToSlash(path)))
+	return sglsp.DocumentURI("file://" + filepath.ToSlash(path))
 }
 
 func isWindows() bool {
@@ -55,6 +56,9 @@ func isWindows() bool {
 }
 
 func isDrivePath(path string) bool {
+	if len(path) < 3 {
+		return false
+	}
 	sep := path[2]
 	return len(path) > 2 && unicode.IsLetter(rune(path[0])) && path[1] == ':' && (sep == '/' || sep == '\\')
 }

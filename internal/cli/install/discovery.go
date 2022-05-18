@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 
 	"github.com/adrg/xdg"
+
+	"github.com/snyk/snyk-ls/config"
 )
 
 type Discovery struct{}
-
-const userDirFolderName = "snyk-ls"
 
 // LookPath searches for the Snyk CLI executable in the directories named by the PATH environment variable.
 func (d *Discovery) LookPath() (string, error) {
@@ -24,7 +24,8 @@ func (d *Discovery) LookPath() (string, error) {
 
 // LookUserDir searches for the Snyk CLI executable in the  XDG_DATA_HOME/snyk-ls directory.
 func (d *Discovery) LookUserDir() (string, error) {
-	path := filepath.Join(xdg.DataHome, userDirFolderName, executableName)
+	folder := config.CurrentConfig.UserDirFolder()
+	path := filepath.Join(xdg.DataHome, folder, executableName)
 	if _, err := os.Stat(path); err == nil {
 		return path, nil
 	}

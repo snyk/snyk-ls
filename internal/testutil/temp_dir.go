@@ -13,6 +13,7 @@ func CreateTempFile(tempDir string, t *testing.T) *os.File {
 	}
 
 	t.Cleanup(func() {
+		file.Close()
 		_ = os.Remove(file.Name())
 	})
 	return file
