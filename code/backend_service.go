@@ -14,6 +14,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -233,9 +234,13 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
 
 	for _, result := range runs[0].Results {
 		for _, loc := range result.Locations {
-			uri := sglsp.DocumentURI(loc.PhysicalLocation.ArtifactLocation.URI)
-			diagSlice := diags[uri]
-			hoverSlice := hovers[uri]
+			// convert the documentURI to a path according to our conversion
+			path := uri.PathFromUri(sglsp.DocumentURI(loc.PhysicalLocation.ArtifactLocation.URI))
+			// then convert it back to cater for special cases under windows
+			documentURI := uri.PathToUri(path)
+
+			diagSlice := diags[documentURI]
+			hoverSlice := hovers[documentURI]
 
 			myRange := sglsp.Range{
 				Start: sglsp.Position{
@@ -257,7 +262,7 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
 			}
 
 			diagSlice = append(diagSlice, d)
-			diags[uri] = diagSlice
+			diags[documentURI] = diagSlice
 
 			h := lsp.HoverDetails{
 				Id:    result.RuleID,
@@ -267,7 +272,7 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
 			}
 
 			hoverSlice = append(hoverSlice, h)
-			hovers[uri] = hoverSlice
+			hovers[documentURI] = hoverSlice
 		}
 	}
 	return diags, hovers

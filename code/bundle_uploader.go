@@ -61,7 +61,7 @@ func (b *BundleUploader) groupInBatches(files []sglsp.DocumentURI) []*UploadBatc
 
 		fileContent, err := loadContent(documentURI)
 		if err != nil {
-			log.Error().Err(err).Str("uri1", string(documentURI)).Msg("could not load content of file")
+			log.Error().Err(err).Str("path1", string(documentURI)).Msg("could not load content of file")
 			continue
 		}
 
@@ -71,10 +71,10 @@ func (b *BundleUploader) groupInBatches(files []sglsp.DocumentURI) []*UploadBatc
 
 		file := getFileFrom(fileContent)
 		if uploadBatch.canFitFile(string(documentURI), fileContent) {
-			log.Trace().Str("uri1", string(documentURI)).Int("size", len(fileContent)).Msgf("added to bundle #%v", len(batches))
+			log.Trace().Str("path1", string(documentURI)).Int("size", len(fileContent)).Msgf("added to bundle #%v", len(batches))
 			uploadBatch.documents[documentURI] = file
 		} else {
-			log.Trace().Str("uri1", string(documentURI)).Int("size", len(fileContent)).Msgf("created new bundle - %v bundles in this upload so far", len(batches))
+			log.Trace().Str("path1", string(documentURI)).Int("size", len(fileContent)).Msgf("created new bundle - %v bundles in this upload so far", len(batches))
 			newUploadBatch := NewUploadBatch()
 			newUploadBatch.documents[documentURI] = file
 			batches = append(batches, &newUploadBatch)
