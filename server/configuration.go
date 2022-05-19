@@ -23,8 +23,16 @@ func WorkspaceDidChangeConfiguration() jrpc2.Handler {
 		updateEnvironment(params)
 		updatePath(params)
 		updateTelemetry(params)
+		updateOrganization(params)
 		return nil, nil
 	})
+}
+
+func updateOrganization(params lsp.DidChangeConfigurationParams) {
+	org := strings.TrimSpace(params.Settings.Organization)
+	if org != "" {
+		config.CurrentConfig().SetOrganization(org)
+	}
 }
 
 func updateTelemetry(params lsp.DidChangeConfigurationParams) {
@@ -32,7 +40,7 @@ func updateTelemetry(params lsp.DidChangeConfigurationParams) {
 	if err != nil {
 		log.Err(err).Msgf("couldn't read send error reports %s", params.Settings.SendErrorReports)
 	}
-	config.CurrentConfig.SetErrorReportingEnabled(parseBool)
+	config.CurrentConfig().SetErrorReportingEnabled(parseBool)
 }
 
 func updatePath(params lsp.DidChangeConfigurationParams) {
@@ -65,7 +73,7 @@ func updateCliConfig(params lsp.DidChangeConfigurationParams) {
 	}
 	settings.Endpoint = strings.Trim(params.Settings.Endpoint, " ")
 	settings.AdditionalParameters = strings.Split(params.Settings.AdditionalParams, " ")
-	config.CurrentConfig.SetCliSettings(settings)
+	config.CurrentConfig().SetCliSettings(settings)
 }
 
 func updateProductEnablement(params lsp.DidChangeConfigurationParams) {
@@ -73,18 +81,18 @@ func updateProductEnablement(params lsp.DidChangeConfigurationParams) {
 	if err != nil {
 		log.Err(err).Msg("couldn't parse code setting")
 	} else {
-		config.CurrentConfig.SetSnykCodeEnabled(parseBool)
+		config.CurrentConfig().SetSnykCodeEnabled(parseBool)
 	}
 	parseBool, err = strconv.ParseBool(params.Settings.ActivateSnykOpenSource)
 	if err != nil {
 		log.Err(err).Msg("couldn't parse open source setting")
 	} else {
-		config.CurrentConfig.SetSnykOssEnabled(parseBool)
+		config.CurrentConfig().SetSnykOssEnabled(parseBool)
 	}
 	parseBool, err = strconv.ParseBool(params.Settings.ActivateSnykIac)
 	if err != nil {
 		log.Err(err).Msg("couldn't parse iac setting")
 	} else {
-		config.CurrentConfig.SetSnykIacEnabled(parseBool)
+		config.CurrentConfig().SetSnykIacEnabled(parseBool)
 	}
 }

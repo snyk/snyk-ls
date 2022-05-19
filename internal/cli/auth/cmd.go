@@ -10,7 +10,7 @@ import (
 )
 
 func buildCLICmd(ctx context.Context, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, config.CurrentConfig.CliPath(), args...)
+	cmd := exec.CommandContext(ctx, config.CurrentConfig().CliPath(), args...)
 	log.Info().Str("command", cmd.String()).Msg("running Snyk CLI command")
 	return cmd
 }

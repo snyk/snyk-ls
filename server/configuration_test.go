@@ -35,7 +35,7 @@ func TestWorkspaceDidChangeConfiguration(t *testing.T) {
 		log.Fatal().Err(err).Msg("error calling server")
 	}
 
-	c := config.CurrentConfig
+	c := config.CurrentConfig()
 	assert.Equal(t, false, c.IsSnykCodeEnabled())
 	assert.Equal(t, false, c.IsSnykOssEnabled())
 	assert.Equal(t, false, c.IsSnykIacEnabled())
@@ -45,7 +45,7 @@ func TestWorkspaceDidChangeConfiguration(t *testing.T) {
 	assert.Equal(t, "b", os.Getenv("a"))
 	assert.Equal(t, "d", os.Getenv("c"))
 	assert.True(t, strings.Contains(os.Getenv("PATH"), "addPath"))
-	assert.True(t, config.CurrentConfig.IsErrorReportingEnabled())
+	assert.True(t, config.CurrentConfig().IsErrorReportingEnabled())
 }
 
 func TestWorkspaceDidChangeConfiguration_IncompleteEnvVars(t *testing.T) {
@@ -90,4 +90,32 @@ func TestWorkspaceDidChangeConfiguration_WeirdEnvVars(t *testing.T) {
 	assert.Empty(t, os.Getenv("a"))
 	assert.Empty(t, os.Getenv("b"))
 	assert.Empty(t, os.Getenv(";"))
+}
+
+func TestWorkspaceDidChangeConfiguration_UpdateOrganization(t *testing.T) {
+	loc := setupServer(t)
+
+	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
+		Organization: "snyk-test-org",
+	}}
+	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
+	if err != nil {
+		log.Fatal().Err(err).Msg("error calling server")
+	}
+
+	assert.Equal(t, "snyk-test-org", config.CurrentConfig().GetOrganization())
+}
+
+func TestWorkspaceDidChangeConfiguration_IgnoreBlankOrganization(t *testing.T) {
+	loc := setupServer(t)
+
+	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
+		Organization: " ",
+	}}
+	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
+	if err != nil {
+		log.Fatal().Err(err).Msg("error calling server")
+	}
+
+	assert.Equal(t, "", config.CurrentConfig().GetOrganization())
 }

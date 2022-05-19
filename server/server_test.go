@@ -58,7 +58,8 @@ func didSaveTextParams() (sglsp.DidSaveTextDocumentParams, func()) {
 }
 
 func setupServer(t *testing.T) server.Local {
-	di.TestInit()
+	testutil.UnitTest(t)
+	di.TestInit(t)
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearWorkspaceFolderScanned()
 	cleanupChannels()
@@ -173,9 +174,8 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 }
 
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
-	testutil.UnitTest(t)
-	config.CurrentConfig.SetSnykCodeEnabled(true)
 	loc := setupServer(t)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
 
 	didOpenParams, cleanup := didOpenTextParams()
 	defer cleanup()
@@ -220,7 +220,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal("couldn't unset environment")
 	}
-	config.CurrentConfig = config.New()
+	config.SetCurrentConfig(config.New())
 
 	didOpenParams, cleanup := didOpenTextParams()
 	defer cleanup()
@@ -263,9 +263,8 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 }
 
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
-	testutil.UnitTest(t)
-	config.CurrentConfig.SetSnykCodeEnabled(true)
 	loc := setupServer(t)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
 
 	didSaveParams, cleanup := didSaveTextParams()
 	defer cleanup()
@@ -351,14 +350,14 @@ func Test_IntegrationWorkspaceScanWithTwoUploadBatches(t *testing.T) {
 
 func runIntegrationTest(repo string, commit string, file1 string, file2 string, t *testing.T) {
 	testutil.IntegTest(t)
-	config.CurrentConfig.SetSnykCodeEnabled(true)
-	config.CurrentConfig.SetSnykIacEnabled(true)
-	config.CurrentConfig.SetSnykOssEnabled(true)
+	loc := setupServer(t)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
+	config.CurrentConfig().SetSnykIacEnabled(true)
+	config.CurrentConfig().SetSnykOssEnabled(true)
 	diagnostics.ClearWorkspaceFolderScanned()
 	diagnostics.ClearEntireDiagnosticsCache()
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
-	loc := setupServer(t)
 	di.Init()
 
 	var cloneTargetDir, err = setupCustomTestRepo(repo, commit)
@@ -476,9 +475,9 @@ func Test_IntegrationHoverResults(t *testing.T) {
 
 func Test_IntegrationSnykCodeFileScan(t *testing.T) {
 	testutil.IntegTest(t)
-	config.CurrentConfig.SetSnykCodeEnabled(true)
-	diagnostics.ClearEntireDiagnosticsCache()
 	loc := setupServer(t)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
+	diagnostics.ClearEntireDiagnosticsCache()
 	di.Init()
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")

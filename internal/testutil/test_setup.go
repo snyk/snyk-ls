@@ -16,12 +16,12 @@ func IntegTest(t *testing.T) {
 		t.Logf("%s is not set", integTestEnvVar)
 		t.SkipNow()
 	}
-	config.CurrentConfig = config.New()
+	config.SetCurrentConfig(config.New())
 }
 
 func UnitTest(t *testing.T) {
 	t.Helper()
-	config.CurrentConfig = config.New()
+	config.SetCurrentConfig(config.New())
 }
 
 func CreateDummyProgressListener(t *testing.T) {

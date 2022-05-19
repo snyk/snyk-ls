@@ -27,7 +27,8 @@ const (
 var (
 	Version       = "SNAPSHOT"
 	Development   = "false"
-	CurrentConfig *Config
+	currentConfig *Config
+	initMutex     = &sync.Mutex{}
 )
 
 type CliSettings struct {
@@ -49,10 +50,23 @@ type Config struct {
 	isSnykContainerEnabled  concurrency.AtomicBool
 	isSnykAdvisorEnabled    concurrency.AtomicBool
 	logPath                 string
+	organization            string
 	snykCodeAnalysisTimeout time.Duration
 	snykCodeApiUrl          string
 	token                   string
 	m                       sync.Mutex
+}
+
+func CurrentConfig() *Config {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return currentConfig
+}
+
+func SetCurrentConfig(config *Config) {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	currentConfig = config
 }
 
 func IsDevelopment() bool {
@@ -228,4 +242,12 @@ func (c *Config) configFiles() []string {
 		home + "/.snyk.env",
 	}
 	return append(files, stdFiles...)
+}
+
+func (c *Config) GetOrganization() string {
+	return c.organization
+}
+
+func (c *Config) SetOrganization(organization string) {
+	c.organization = organization
 }

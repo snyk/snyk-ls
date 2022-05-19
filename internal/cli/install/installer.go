@@ -96,7 +96,7 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 		return false, err
 	}
 
-	err = compareChecksum(latestChecksum, config.CurrentConfig.CliPath())
+	err = compareChecksum(latestChecksum, config.CurrentConfig().CliPath())
 	if err == nil {
 		// checksum match, no new version available
 		return false, nil

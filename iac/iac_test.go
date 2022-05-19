@@ -22,7 +22,7 @@ func Test_ScanWorkspace(t *testing.T) {
 	testutil.IntegTest(t)
 	testutil.CreateDummyProgressListener(t)
 	preconditions.EnsureReadyForAnalysisAndWait()
-	config.CurrentConfig.SetFormat(config.FormatHtml)
+	config.CurrentConfig().SetFormat(config.FormatHtml)
 
 	path, _ := filepath.Abs("testdata")
 	doc := lsp.DocumentURI("file:" + path)
@@ -48,7 +48,7 @@ func Test_ScanWorkspace(t *testing.T) {
 func Test_ScanFile(t *testing.T) {
 	hover.ClearAllHovers()
 	testutil.IntegTest(t)
-	config.CurrentConfig.SetFormat(config.FormatHtml)
+	config.CurrentConfig().SetFormat(config.FormatHtml)
 	preconditions.EnsureReadyForAnalysisAndWait()
 
 	path, _ := filepath.Abs("testdata/RBAC.yaml")

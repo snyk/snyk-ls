@@ -15,11 +15,11 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 	testutil.UnitTest(t)
 	error := errors.New("test error")
 
-	config.CurrentConfig.SetErrorReportingEnabled(false)
+	config.CurrentConfig().SetErrorReportingEnabled(false)
 	captured := CaptureError(error)
 	assert.False(t, captured)
 
-	config.CurrentConfig.SetErrorReportingEnabled(true)
+	config.CurrentConfig().SetErrorReportingEnabled(true)
 	captured = CaptureError(error)
 	assert.True(t, captured)
 }
@@ -39,11 +39,11 @@ func TestErrorReporting_BeforeSend(t *testing.T) {
 	testutil.UnitTest(t)
 	testEvent := sentry.NewEvent()
 
-	config.CurrentConfig.SetErrorReportingEnabled(true)
+	config.CurrentConfig().SetErrorReportingEnabled(true)
 	result := beforeSend(testEvent, nil)
 	assert.Equal(t, testEvent, result)
 
-	config.CurrentConfig.SetErrorReportingEnabled(false)
+	config.CurrentConfig().SetErrorReportingEnabled(false)
 	result = beforeSend(testEvent, nil)
 	assert.Equal(t, (*sentry.Event)(nil), result)
 }

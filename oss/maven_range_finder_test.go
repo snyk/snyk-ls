@@ -15,7 +15,7 @@ import (
 
 func TestMavenRangeFinder_Find(t *testing.T) {
 	testutil.UnitTest(t)
-	config.CurrentConfig.SetFormat(config.FormatHtml)
+	config.CurrentConfig().SetFormat(config.FormatHtml)
 
 	var issue = ossIssue{
 		Id:             "testIssue",

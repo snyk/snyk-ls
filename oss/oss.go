@@ -88,7 +88,7 @@ func ScanWorkspace(
 			Msg("Error while extracting file absolutePath")
 	}
 
-	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig.CliPath(), "test", path, "--json"})
+	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", path, "--json"})
 	res, err := Cli.Execute(cmd)
 	if err != nil {
 		switch err := err.(type) {
@@ -157,7 +157,7 @@ func ScanFile(
 			Msg("Error while extracting file absolutePath")
 	}
 	preconditions.EnsureReadyForAnalysisAndWait()
-	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig.CliPath(), "test", filepath.Dir(path), "--json"})
+	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", filepath.Dir(path), "--json"})
 	res, err := Cli.Execute(cmd)
 	if err != nil {
 		switch err := err.(type) {
@@ -255,7 +255,7 @@ func retrieveDiagnostics(
 		title := issue.Title
 		description := issue.Description
 
-		if config.CurrentConfig.Format() == config.FormatHtml {
+		if config.CurrentConfig().Format() == config.FormatHtml {
 			title = string(markdown.ToHTML([]byte(title), nil, nil))
 			description = string(markdown.ToHTML([]byte(description), nil, nil))
 		}

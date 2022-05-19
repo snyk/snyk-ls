@@ -18,8 +18,8 @@ import (
 func EnsureReadyForAnalysisAndWait() {
 	install.Mutex.Lock()
 	defer install.Mutex.Unlock()
-	cliInstalled := config.CurrentConfig.CliInstalled()
-	authenticated := config.CurrentConfig.Authenticated()
+	cliInstalled := config.CurrentConfig().CliInstalled()
+	authenticated := config.CurrentConfig().Authenticated()
 
 	if cliInstalled && isOutdatedCli() {
 		go updateCli()
@@ -29,7 +29,7 @@ func EnsureReadyForAnalysisAndWait() {
 		return
 	}
 
-	for !config.CurrentConfig.CliInstalled() {
+	for !config.CurrentConfig().CliInstalled() {
 		installCli()
 		time.Sleep(2 * time.Second)
 	}
@@ -59,9 +59,9 @@ func installCli() {
 	}
 
 	if cliPath != "" {
-		err := config.CurrentConfig.SetCliPath(cliPath)
+		err := config.CurrentConfig().SetCliPath(cliPath)
 		if err != nil {
-			log.Err(err).Str("method", "installCli").Msg("Couldn't update config.CurrentConfig with Snyk cli path")
+			log.Err(err).Str("method", "installCli").Msg("Couldn't update config.CurrentConfig() with Snyk cli path")
 		}
 		log.Info().Str("method", "installCli").Str("snyk", cliPath).Msg("Snyk CLI found.")
 	} else {
@@ -88,7 +88,7 @@ func updateCli() {
 }
 
 func isOutdatedCli() bool {
-	cliPath := config.CurrentConfig.CliPath()
+	cliPath := config.CurrentConfig().CliPath()
 
 	fileInfo, err := os.Stat(cliPath) // todo: we can save stat calls by caching mod time
 	if err != nil {

@@ -28,13 +28,13 @@ func Test_shouldSetLogFileViaFlag(t *testing.T) {
 		_ = os.Remove("a.txt")
 	}()
 	_, _ = parseFlags(args)
-	assert.Equal(t, config.CurrentConfig.LogPath(), "a.txt")
+	assert.Equal(t, config.CurrentConfig().LogPath(), "a.txt")
 }
 
 func Test_shouldSetOutputFormatViaFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-o", config.FormatHtml}
 	_, _ = parseFlags(args)
-	assert.Equal(t, config.FormatHtml, config.CurrentConfig.Format())
+	assert.Equal(t, config.FormatHtml, config.CurrentConfig().Format())
 }
 
 func Test_shouldShowUsageOnUnknownFlag(t *testing.T) {
@@ -72,11 +72,11 @@ func Test_shouldSetReportErrorsViaFlag(t *testing.T) {
 	args := []string{"snyk-ls"}
 	_, _ = parseFlags(args)
 
-	assert.False(t, config.CurrentConfig.IsErrorReportingEnabled())
+	assert.False(t, config.CurrentConfig().IsErrorReportingEnabled())
 
 	args = []string{"snyk-ls", "-reportErrors"}
 	_, _ = parseFlags(args)
-	assert.True(t, config.CurrentConfig.IsErrorReportingEnabled())
+	assert.True(t, config.CurrentConfig().IsErrorReportingEnabled())
 }
 
 func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
@@ -85,21 +85,21 @@ func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	config.CurrentConfig.SetLogPath(filepath.Join(logPath, "a.txt"))
+	config.CurrentConfig().SetLogPath(filepath.Join(logPath, "a.txt"))
 	defer func(name string) {
 		err := os.RemoveAll(logPath)
 		if err != nil {
 			t.Fatal(err)
 		}
-		config.CurrentConfig.SetLogPath("")
+		config.CurrentConfig().SetLogPath("")
 	}(logPath)
 
-	config.CurrentConfig.ConfigureLogging("debug")
+	config.CurrentConfig().ConfigureLogging("debug")
 	log.Error().Msg("test")
 
 	assert.Eventuallyf(t, func() bool {
-		bytes, err := os.ReadFile(config.CurrentConfig.LogPath())
-		fmt.Println("Read file " + config.CurrentConfig.LogPath())
+		bytes, err := os.ReadFile(config.CurrentConfig().LogPath())
+		fmt.Println("Read file " + config.CurrentConfig().LogPath())
 		if err != nil {
 			return false
 		}

@@ -102,7 +102,7 @@ func (s *SnykCodeHTTPClient) doCall(method string, path string, requestBody []by
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Session-Token", config.CurrentConfig.Token())
+	req.Header.Set("Session-Token", config.CurrentConfig().Token())
 	req.Header.Set("Content-Type", "application/json")
 
 	log.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")

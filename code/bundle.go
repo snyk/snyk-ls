@@ -85,7 +85,7 @@ func (b *Bundle) retrieveAnalysis(
 		start := time.Now()
 		diags, hovers, status, err := b.SnykCode.RunAnalysis(
 			b.BundleHash,
-			getShardKey(rootPath, config.CurrentConfig.Token()),
+			getShardKey(rootPath, config.CurrentConfig().Token()),
 			[]lsp.DocumentURI{},
 			0)
 
@@ -112,7 +112,7 @@ func (b *Bundle) retrieveAnalysis(
 			return
 		}
 
-		if time.Since(start) > config.CurrentConfig.SnykCodeAnalysisTimeout() {
+		if time.Since(start) > config.CurrentConfig().SnykCodeAnalysisTimeout() {
 			err = errors.New("analysis call timed out")
 			log.Error().Err(err).Str("method", "DiagnosticData").Msg("timeout...")
 			dChan <- lsp2.DiagnosticResult{Err: err}

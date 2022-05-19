@@ -137,7 +137,7 @@ func cliCmd(u sglsp.DocumentURI) []string {
 		log.Err(err).Str("method", "iac.ScanFile").
 			Msg("Error while extracting file absolutePath")
 	}
-	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig.CliPath(), "iac", "test", path, "--json"})
+	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "iac", "test", path, "--json"})
 	log.Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
 	return cmd
 }
@@ -189,7 +189,7 @@ func convertDiagnostics(res iacScanResult) ([]lsp.Diagnostic, []lsp.HoverDetails
 			End:   sglsp.Position{Line: issue.LineNumber, Character: 80},
 		}
 
-		if config.CurrentConfig.Format() == config.FormatHtml {
+		if config.CurrentConfig().Format() == config.FormatHtml {
 			title = string(markdown.ToHTML([]byte(title), nil, nil))
 			description = string(markdown.ToHTML([]byte(description), nil, nil))
 			impact = string(markdown.ToHTML([]byte(impact), nil, nil))

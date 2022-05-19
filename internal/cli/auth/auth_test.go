@@ -37,7 +37,7 @@ func TestAuthenticate(t *testing.T) {
 			return
 		}
 	}
-	_ = config.CurrentConfig.SetCliPath(find)
+	_ = config.CurrentConfig().SetCliPath(find)
 	Authenticate()
 	assert.Eventually(t, func() bool {
 		payload, _ := notification.Receive()

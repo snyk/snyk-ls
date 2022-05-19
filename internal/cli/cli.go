@@ -30,7 +30,7 @@ func (c SnykCli) Execute(cmd []string) (resp []byte, err error) {
 
 func ExpandParametersFromConfig(base []string) []string {
 	var additionalParams []string
-	settings := config.CurrentConfig.CliSettings()
+	settings := config.CurrentConfig().CliSettings()
 	if settings.Insecure {
 		additionalParams = append(additionalParams, "--insecure")
 	}

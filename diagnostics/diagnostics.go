@@ -111,17 +111,17 @@ func fetchAllRegisteredDocumentDiagnostics(documentURI sglsp.DocumentURI, level 
 }
 
 func workspaceLevelFetch(workspaceURI sglsp.DocumentURI, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
-	if config.CurrentConfig.IsSnykIacEnabled() {
+	if config.CurrentConfig().IsSnykIacEnabled() {
 		wg.Add(1)
 		go iac.ScanWorkspace(Cli, workspaceURI, wg, dChan, hoverChan)
 		p.Report(10)
 	}
-	if config.CurrentConfig.IsSnykOssEnabled() {
+	if config.CurrentConfig().IsSnykOssEnabled() {
 		wg.Add(1)
 		go oss.ScanWorkspace(Cli, workspaceURI, wg, dChan, hoverChan)
 		p.Report(20)
 	}
-	if config.CurrentConfig.IsSnykCodeEnabled() {
+	if config.CurrentConfig().IsSnykCodeEnabled() {
 		files, err := getWorkspaceFiles(workspaceURI)
 		if err != nil {
 			log.Warn().
@@ -136,14 +136,14 @@ func workspaceLevelFetch(workspaceURI sglsp.DocumentURI, p *progress.Tracker, wg
 }
 
 func fileLevelFetch(documentURI sglsp.DocumentURI, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
-	if config.CurrentConfig.IsSnykCodeEnabled() {
+	if config.CurrentConfig().IsSnykCodeEnabled() {
 		di.SnykCode.ScanFile(documentURI, wg, dChan, hoverChan)
 	}
-	if config.CurrentConfig.IsSnykIacEnabled() {
+	if config.CurrentConfig().IsSnykIacEnabled() {
 		wg.Add(1)
 		go iac.ScanFile(Cli, documentURI, wg, dChan, hoverChan)
 	}
-	if config.CurrentConfig.IsSnykOssEnabled() {
+	if config.CurrentConfig().IsSnykOssEnabled() {
 		wg.Add(1)
 		go oss.ScanFile(Cli, documentURI, wg, dChan, hoverChan)
 	}
