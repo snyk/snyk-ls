@@ -85,7 +85,7 @@ func (b *Bundle) retrieveAnalysis(
 		start := time.Now()
 		diags, hovers, status, err := b.SnykCode.RunAnalysis(
 			b.BundleHash,
-			getShardKey(rootPath, config.CurrentConfig().Token()),
+			b.getShardKey(rootPath, config.CurrentConfig().Token()),
 			[]lsp.DocumentURI{},
 			0)
 
@@ -122,7 +122,10 @@ func (b *Bundle) retrieveAnalysis(
 	}
 }
 
-func getShardKey(rootPath string, authToken string) string {
+func (b *Bundle) getShardKey(rootPath string, authToken string) string {
+	if b.BundleHash != "" {
+		return util.Hash([]byte(b.BundleHash))
+	}
 	if len(rootPath) > 0 {
 		return util.Hash([]byte(rootPath))
 	}

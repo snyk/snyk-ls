@@ -10,12 +10,13 @@ import (
 )
 
 func Test_getShardKey(t *testing.T) {
+	b := Bundle{BundleHash: ""}
 	t.Run("should return root path hash", func(t *testing.T) {
 		// Case 1: rootPath exists
 		sampleRootPath := "C:\\GIT\\root"
 		// deepcode ignore HardcodedPassword/test: false positive
 		token := "TEST"
-		assert.Equal(t, util.Hash([]byte(sampleRootPath)), getShardKey(sampleRootPath, token))
+		assert.Equal(t, util.Hash([]byte(sampleRootPath)), b.getShardKey(sampleRootPath, token))
 	})
 
 	t.Run("should return token hash", func(t *testing.T) {
@@ -23,7 +24,7 @@ func Test_getShardKey(t *testing.T) {
 		sampleRootPath := ""
 		// deepcode ignore HardcodedPassword/test: false positive
 		token := "TEST"
-		assert.Equal(t, util.Hash([]byte(token)), getShardKey(sampleRootPath, token))
+		assert.Equal(t, util.Hash([]byte(token)), b.getShardKey(sampleRootPath, token))
 	})
 
 	t.Run("should return empty shard key", func(t *testing.T) {
@@ -31,7 +32,16 @@ func Test_getShardKey(t *testing.T) {
 		sampleRootPath := ""
 		// deepcode ignore HardcodedPassword/test: false positive
 		token := ""
-		assert.Equal(t, "", getShardKey(sampleRootPath, token))
+		assert.Equal(t, "", b.getShardKey(sampleRootPath, token))
+	})
+
+	t.Run("should return hashed bundleHash as shard key", func(t *testing.T) {
+		b.BundleHash = "Hashy Mc Hashface"
+		// Case 4: bundleHash is existent, we can hash & use it. Hashing, as the bundle hash is PII
+		sampleRootPath := "C:\\git"
+		// deepcode ignore HardcodedPassword/test: false positive
+		token := "TEST"
+		assert.Equal(t, util.Hash([]byte(b.BundleHash)), b.getShardKey(sampleRootPath, token))
 	})
 }
 
