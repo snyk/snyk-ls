@@ -7,10 +7,11 @@
   },
   "interactions": [
     {
-      "description": "",
+      "description": "happy path with org as query param",
       "request": {
         "method": "GET",
         "path": "/cli-config/settings/sast",
+        "query": "org=test-org+with+characters+%28e.g.+%25%29+to+be+encoded%21",
         "headers": {
           "Authorization": "token fc763eba-0905-41c5-a27f-3934ab26786c",
           "Content-Type": "application/json"

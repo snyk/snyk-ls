@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 
 	"github.com/rs/zerolog/log"
 
@@ -49,6 +50,10 @@ func NewSnykApiClient(host string) SnykApiClient {
 func (s *SnykApiClientImpl) SastEnabled() (sastEnabled bool, localCodeEngineEnabled bool, reportFalsePositivesEnabled bool, err error) {
 	log.Debug().Str("method", "SastEnabled").Msg("API: Getting SastEnabled")
 	path := "/cli-config/settings/sast"
+	organization := config.CurrentConfig().GetOrganization()
+	if organization != "" {
+		path += "?org=" + url.QueryEscape(organization)
+	}
 	responseBody, err := s.doCall("GET", path, nil)
 	if err != nil {
 		err = fmt.Errorf("%v: %v", err, responseBody)
