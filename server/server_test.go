@@ -30,6 +30,8 @@ import (
 	"github.com/snyk/snyk-ls/lsp"
 )
 
+const maxIntegTestDuration = 15 * time.Minute
+
 var (
 	ctx             = context.Background()
 	jsonRPCRecorder = testutil.JsonRPCRecorder{}
@@ -233,7 +235,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		find, _ := installer.Find()
 		return find != ""
-	}, 120*time.Second, 10*time.Millisecond)
+	}, maxIntegTestDuration, 10*time.Millisecond)
 }
 
 func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
@@ -383,7 +385,7 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 		testPath = filepath.Join(cloneTargetDir, file1)
 		textDocumentDidOpen(&loc, testPath)
 		// serve diagnostics from file scan
-		assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), 120*time.Second, 10*time.Millisecond)
+		assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
 	}
 
 	// wait till the whole workspace is scanned
@@ -394,7 +396,7 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 	testPath = filepath.Join(cloneTargetDir, file2)
 	textDocumentDidOpen(&loc, testPath)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), 120*time.Second, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
 }
 
 // Check if published diagnostics for given testPath match the expectedNumber.
@@ -446,7 +448,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
 		return diagnostics.IsWorkspaceFolderScanned(folder)
-	}, 600*time.Second, 100*time.Millisecond)
+	}, maxIntegTestDuration, 100*time.Millisecond)
 
 	testPath := cloneTargetDir + string(os.PathSeparator) + "package.json"
 	testPosition := sglsp.Position{
@@ -472,7 +474,6 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	assert.Equal(t, hoverResult.Contents.Value, hover.GetHover(uri.PathToUri(testPath), testPosition).Contents.Value)
 	assert.Equal(t, hoverResult.Contents.Kind, "markdown")
 }
-
 func Test_IntegrationSnykCodeFileScan(t *testing.T) {
 	testutil.IntegTest(t)
 	loc := setupServer(t)
@@ -489,7 +490,7 @@ func Test_IntegrationSnykCodeFileScan(t *testing.T) {
 	testPath := filepath.Join(cloneTargetDir, "app.js")
 	_ = textDocumentDidOpen(&loc, testPath)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(testPath, 6), 120*time.Second, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(testPath, 6), maxIntegTestDuration, 10*time.Millisecond)
 }
 
 func textDocumentDidOpen(loc *server.Local, testPath string) sglsp.DidOpenTextDocumentParams {
