@@ -56,7 +56,7 @@ func onProgress(downloaded, total int64, progressTracker *progress.Tracker) {
 }
 
 func (d *Downloader) lockFileName() string {
-	return config.CurrentConfig.CLIDownloadLockFileName()
+	return config.CurrentConfig().CLIDownloadLockFileName()
 }
 
 func (d *Downloader) Download(r *Release, isUpdate bool) error {
@@ -198,7 +198,7 @@ func (d *Downloader) createLockFile() error {
 }
 
 func (d *Downloader) moveToDestination(dest string, fullSrcPath string) (err error) {
-	lsPath := config.CurrentConfig.LsPath()
+	lsPath := config.CurrentConfig().LsPath()
 	dstCliFile := filepath.Join(lsPath, dest)
 	log.Info().Str("method", "moveToDestination").Str("path", dstCliFile).Msg("copying Snyk CLI to user directory")
 

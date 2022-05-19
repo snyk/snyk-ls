@@ -58,7 +58,7 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 	defer Mutex.Unlock()
 	r := getTestAsset()
 
-	lockFileName := config.CurrentConfig.CLIDownloadLockFileName()
+	lockFileName := config.CurrentConfig().CLIDownloadLockFileName()
 	file, err := os.Create(lockFileName)
 	if err != nil {
 		t.Fatal("couldn't create lockfile")
@@ -127,7 +127,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	ctx := context.Background()
 	i := NewInstaller()
 
-	lsPath := config.CurrentConfig.LsPath()
+	lsPath := config.CurrentConfig().LsPath()
 
 	fakeCliFile := testutil.CreateTempFile(lsPath, t)
 	fakeCliFile.Close()
