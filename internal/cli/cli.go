@@ -34,6 +34,10 @@ func ExpandParametersFromConfig(base []string) []string {
 	if settings.Insecure {
 		additionalParams = append(additionalParams, "--insecure")
 	}
+	if config.CurrentConfig().GetOrganization() != "" {
+		additionalParams = append(additionalParams, "--org="+config.CurrentConfig().GetOrganization())
+	}
+
 	if len(settings.AdditionalParameters) > 0 {
 		additionalParams = append(additionalParams, settings.AdditionalParameters...)
 	}
