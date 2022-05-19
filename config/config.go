@@ -3,11 +3,13 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/adrg/xdg"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/subosito/gotenv"
@@ -133,8 +135,11 @@ func (c *Config) CliPath() string {
 	defer c.m.Unlock()
 	return c.cliPath
 }
-func (c *Config) CliSettings() CliSettings               { return c.cliSettings }
-func (c *Config) Format() string                         { return c.format }
+func (c *Config) CliSettings() CliSettings { return c.cliSettings }
+func (c *Config) Format() string           { return c.format }
+func (c *Config) CLIDownloadLockFileName() string {
+	return filepath.Join(c.LsPath(), "snyk-cli-download.lock")
+}
 func (c *Config) IsErrorReportingEnabled() bool          { return c.isErrorReportingEnabled.Get() }
 func (c *Config) IsSnykOssEnabled() bool                 { return c.isSnykOssEnabled.Get() }
 func (c *Config) IsSnykCodeEnabled() bool                { return c.isSnykCodeEnabled.Get() }
@@ -250,4 +255,17 @@ func (c *Config) GetOrganization() string {
 
 func (c *Config) SetOrganization(organization string) {
 	c.organization = organization
+}
+
+func (c *Config) UserDirFolder() string {
+	return "snyk-ls"
+}
+func (c *Config) LsPath() string {
+	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
+	err := os.MkdirAll(lsPath, 0755)
+	if err != nil {
+		log.Err(err).Str("method", "lsPath").Msgf("couldn't create %s", lsPath)
+		return ""
+	}
+	return lsPath
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog/log"
 
+	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/cli/install/httpclient"
@@ -54,12 +55,8 @@ func onProgress(downloaded, total int64, progressTracker *progress.Tracker) {
 	time.Sleep(time.Millisecond * 2)
 }
 
-func (d *Downloader) lockFileName() (string, error) {
-	path, err := d.lsPath()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(path, "snyk-cli-download.lock"), nil
+func (d *Downloader) lockFileName() string {
+	return config.CurrentConfig.CLIDownloadLockFileName()
 }
 
 func (d *Downloader) Download(r *Release, isUpdate bool) error {
@@ -110,7 +107,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 
 	go func(body io.ReadCloser) {
 		d.progressTracker.CancelOrDone(func() {
-			body.Close()
+			_ = body.Close()
 
 			log.Info().Str("method", "Download").Msgf("Cancellation received. Aborting %s.", kindStr)
 		}, doneCh)
@@ -120,9 +117,9 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 		error_reporting.CaptureError(err)
 		return fmt.Errorf("failed to %s Snyk CLI from %q: %s", kindStr, downloadURL, resp.Status)
 	}
+	executablePath := cliDiscovery.ExecutableName(isUpdate)
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
-		_ = os.Remove(cliDiscovery.ExecutableName(isUpdate))
 		doneCh <- true
 		log.Info().Str("method", "Download").Msgf("finished Snyk CLI %s", kindStr)
 	}(resp.Body)
@@ -136,15 +133,16 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 		log.Err(err).Str("method", "Download").Msg("couldn't create tmpdir")
 		return err
 	}
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(tmpDirPath)
 
-	cliTmpPath := filepath.Join(tmpDirPath, cliDiscovery.ExecutableName(isUpdate))
+	cliTmpPath := filepath.Join(tmpDirPath, executablePath)
 	cliTmpFile, err := os.Create(cliTmpPath)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		_ = cliTmpFile.Close()
+		_ = os.RemoveAll(tmpDirPath)
+	}()
 
 	bytesCopied, err := io.Copy(cliTmpFile, cliReader)
 	if err != nil {
@@ -163,7 +161,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	}
 
 	_ = cliTmpFile.Close() // close file to allow moving it on Windows
-	err = d.moveToDestination(cliDiscovery.ExecutableName(isUpdate), cliTmpFile.Name())
+	err = d.moveToDestination(executablePath, cliTmpFile.Name())
 
 	if isUpdate {
 		d.progressTracker.End("Snyk CLI has been updated.")
@@ -188,11 +186,7 @@ func getContentLength(client *http.Client, downloadURL string) (int, error) {
 }
 
 func (d *Downloader) createLockFile() error {
-	lockFile, err := d.lockFileName()
-	if err != nil {
-		log.Err(err).Str("method", "createLockFile").Str("lockfile", lockFile).Msg("error getting lock file name")
-		return err
-	}
+	lockFile := d.lockFileName()
 
 	file, err := os.Create(lockFile)
 	if err != nil {
@@ -204,10 +198,7 @@ func (d *Downloader) createLockFile() error {
 }
 
 func (d *Downloader) moveToDestination(dest string, fullSrcPath string) (err error) {
-	lsPath, err := d.lsPath()
-	if err != nil {
-		return err
-	}
+	lsPath := config.CurrentConfig.LsPath()
 	dstCliFile := filepath.Join(lsPath, dest)
 	log.Info().Str("method", "moveToDestination").Str("path", dstCliFile).Msg("copying Snyk CLI to user directory")
 
@@ -232,14 +223,4 @@ func (d *Downloader) moveToDestination(dest string, fullSrcPath string) (err err
 		return err
 	}
 	return nil
-}
-
-func (d *Downloader) lsPath() (string, error) {
-	lsPath := filepath.Join(xdg.DataHome, userDirFolderName)
-	err := os.MkdirAll(lsPath, 0755)
-	if err != nil {
-		log.Err(err).Str("method", "lsPath").Msgf("couldn't create %s", lsPath)
-		return "", err
-	}
-	return lsPath, nil
 }

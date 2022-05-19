@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/gomarkdown/markdown"
@@ -53,6 +54,9 @@ func ScanWorkspace(
 		case *exec.ExitError:
 			if err.ExitCode() > 1 {
 				errorOutput := string(res)
+				if strings.Contains(errorOutput, "Could not find any valid IaC files") {
+					return
+				}
 				log.Err(err).Str("method", "iac.ScanWorkspace").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
 				reportErrorViaChan(documentURI, dChan, fmt.Errorf("%v: %v", err, errorOutput))
 				return
@@ -108,6 +112,9 @@ func ScanFile(
 		case *exec.ExitError:
 			if err.ExitCode() > 1 {
 				errorOutput := string(res)
+				if strings.Contains(errorOutput, "Could not find any valid IaC files") {
+					return
+				}
 				log.Err(err).Str("method", "iac.ScanFile").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
 				reportErrorViaChan(documentURI, dChan, fmt.Errorf("%v: %v", err, errorOutput))
 				return

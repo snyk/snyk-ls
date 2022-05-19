@@ -8,11 +8,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/internal/progress"
-
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/config"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -58,19 +57,13 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 	Mutex.Lock()
 	defer Mutex.Unlock()
 	r := getTestAsset()
-	d := &Downloader{}
 
-	lockFileName, err := d.lockFileName()
-	if err != nil {
-		log.Fatal().Err(err).Msg("error getting logfile name")
-	}
-	_, err = os.Create(lockFileName)
+	lockFileName := config.CurrentConfig.CLIDownloadLockFileName()
+	file, err := os.Create(lockFileName)
 	if err != nil {
 		t.Fatal("couldn't create lockfile")
 	}
-	defer func(name string) {
-		_ = os.RemoveAll(name)
-	}(lockFileName)
+	file.Close()
 
 	i := NewInstaller()
 	_, err = i.installRelease(r, context.Background())
@@ -133,19 +126,14 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	// prepare
 	ctx := context.Background()
 	i := NewInstaller()
-	tracker := progress.NewTracker(true)
-	d := &Downloader{progressTracker: tracker}
 
-	lsPath, err := d.lsPath()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Error creating user dir for snyk-ls")
-	}
+	lsPath := config.CurrentConfig.LsPath()
 
 	fakeCliFile := testutil.CreateTempFile(lsPath, t)
 	fakeCliFile.Close()
 	cliDiscovery := Discovery{}
 	cliFilePath := path.Join(lsPath, cliDiscovery.ExecutableName(false))
-	err = os.Rename(fakeCliFile.Name(), cliFilePath) // rename temp file to CLI file
+	err := os.Rename(fakeCliFile.Name(), cliFilePath) // rename temp file to CLI file
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error renaming temp file")
 	}

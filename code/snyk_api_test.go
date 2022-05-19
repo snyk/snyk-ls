@@ -12,12 +12,7 @@ import (
 
 func TestSnykApiService_GetSastEnablement_returns(t *testing.T) {
 	testutil.UnitTest(t)
-	pact := &dsl.Pact{
-		Consumer: "SnykLS",
-		Provider: "SnykApi",
-		PactDir:  pactDir,
-	}
-	defer pact.Teardown()
+	pact := testutil.Pact(t, pactDir, "SnykApi")
 
 	expectedResponse := sastResponse{
 		SastEnabled:                 true,

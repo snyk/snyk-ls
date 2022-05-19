@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/lsp"
@@ -19,14 +20,11 @@ func TestDownloader_Download(t *testing.T) {
 	progressCh := make(chan lsp.ProgressParams, 100000)
 	cancelProgressCh := make(chan lsp.ProgressToken, 1)
 	d := &Downloader{progressTracker: progress.NewTestingTracker(progressCh, cancelProgressCh)}
-	lockFileName, err := d.lockFileName()
-	if err != nil {
-		t.Fatal(err)
-	}
+	lockFileName := d.lockFileName()
 	// remove any existing lockfile
 	_ = os.RemoveAll(lockFileName)
 
-	err = d.Download(r, false)
+	err := d.Download(r, false)
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, progressCh)
@@ -41,6 +39,7 @@ func TestDownloader_Download(t *testing.T) {
 }
 
 func Test_DoNotDownloadIfCancelled(t *testing.T) {
+	testutil.UnitTest(t)
 	Mutex.Lock()
 	defer Mutex.Unlock()
 	progressCh := make(chan lsp.ProgressParams, 100000)
@@ -49,27 +48,19 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 
 	r := getTestAsset()
 
-	lockFileName, err := d.lockFileName()
-	if err != nil {
-		t.Fatal(err)
-	}
-	// remove any existing lockfile
-	_ = os.RemoveAll(lockFileName)
-
 	// simulate cancellation when some progress received
 	go func() {
 		prog := <-progressCh
 		cancelProgressCh <- prog.Token
 	}()
 
-	err = d.Download(r, false)
+	err := d.Download(r, false)
 
 	assert.Error(t, err)
 
 	// make sure cancellation cleanup works
-	_, err = os.Stat(lockFileName)
+	_, err = os.Stat(config.CurrentConfig.CLIDownloadLockFileName())
 	if err == nil {
-		os.RemoveAll(lockFileName)
 		assert.Error(t, err)
 	}
 }

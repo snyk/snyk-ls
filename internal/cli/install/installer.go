@@ -120,10 +120,7 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 func replaceOutdatedCli(d *Downloader, cliDiscovery Discovery) error {
 	log.Info().Str("method", "replaceOutdatedCli").Msg("replacing outdated CLI with latest")
 
-	lsPath, err := d.lsPath()
-	if err != nil {
-		return err
-	}
+	lsPath := config.CurrentConfig.LsPath()
 
 	outdatedCliFile := filepath.Join(lsPath, cliDiscovery.ExecutableName(false))
 	latestCliFile := filepath.Join(lsPath, cliDiscovery.ExecutableName(true))
@@ -141,7 +138,7 @@ func replaceOutdatedCli(d *Downloader, cliDiscovery Discovery) error {
 		}
 
 		// Windows allows to rename a running executable even with opened file handle. Another executable can take name of the old executable.
-		err = os.Rename(outdatedCliFile, tildeExecutableName)
+		err := os.Rename(outdatedCliFile, tildeExecutableName)
 		if err != nil {
 			log.Warn().Err(err).Str("method", "replaceOutdatedCli").Msg("couldn't rename current CLI on Windows")
 			return err
@@ -159,7 +156,7 @@ func replaceOutdatedCli(d *Downloader, cliDiscovery Discovery) error {
 	}
 
 	// Unix systems keep executable in memory, fine to move.
-	err = os.Rename(latestCliFile, outdatedCliFile)
+	err := os.Rename(latestCliFile, outdatedCliFile)
 	if err != nil {
 		log.Warn().Err(err).Str("method", "replaceOutdatedCli").Msg("couldn't move latest CLI to replace current CLI")
 		return err
@@ -185,10 +182,7 @@ func expectedChecksum(r *Release, cliDiscovery *Discovery) (HashSum, error) {
 }
 
 func createLockFile(d *Downloader) (lockfileName string, err error) {
-	lockFileName, err := d.lockFileName()
-	if err != nil {
-		return "", err
-	}
+	lockFileName := config.CurrentConfig.CLIDownloadLockFileName()
 	fileInfo, err := os.Stat(lockFileName)
 	if err == nil && (time.Since(fileInfo.ModTime()) < 1*time.Hour) {
 		msg := fmt.Sprintf("installer lockfile from %v found", fileInfo.ModTime())
@@ -203,6 +197,8 @@ func createLockFile(d *Downloader) (lockfileName string, err error) {
 }
 
 func cleanupLockFile(lockFileName string) {
+	file, _ := os.Open(lockFileName)
+	file.Close()
 	err := os.Remove(lockFileName)
 	if err != nil {
 		log.Error().Str("method", "Download").Str("lockfile", lockFileName).Msg("couldn't clean up lockfile")

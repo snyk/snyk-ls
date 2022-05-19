@@ -68,9 +68,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # TODO: we should add windows runner
-        # FIXME: current bundle calculation is determining too low byte sizes and thus a test is failing on windows.
-        os: [ ubuntu-latest, macos-latest ]
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
     steps:
       - uses: actions/checkout@v2
 
@@ -84,6 +82,7 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Cache Pact CLI tools
+        if: matrix.os != 'windows-latest'
         id: cache-pact
         uses: actions/cache@v3
         with:
@@ -92,18 +91,28 @@ jobs:
 
       - name: Set up Pact CLI tools
         shell: bash
-        if: steps.cache-pact.outputs.cache-hit != 'true'
+        if: steps.cache-pact.outputs.cache-hit != 'true' && matrix.os != 'windows-latest'
         run: |
           cd ~
           curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | bash
 
-      - name: Run integration tests
+      - name: Run integration tests with Pact
+        if: matrix.os != 'windows-latest'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
           INTEG_TESTS: 'true'
         run: |
           export PATH=$PATH:~/pact/bin
+          make clean test
+
+      - name: Run integration tests without Pact
+        if: matrix.os == 'windows-latest'
+        env:
+          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          INTEG_TESTS: 'true'
+        run: |
           make clean test
 
   test-release:
