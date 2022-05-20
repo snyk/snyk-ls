@@ -14,7 +14,7 @@ const (
 	ActivateSnykContainerKey = "ACTIVATE_SNYK_CONTAINER"
 	ActivateSnykAdvisorKey   = "ACTIVATE_SNYK_ADVISOR"
 	SendErrorReportsKey      = "SEND_ERROR_REPORTS"
-	Organization             = "SNYK_ORGANIZATION"
+	Organization             = "SNYK_CFG_ORG"
 )
 
 func (c *Config) clientSettingsFromEnv() {

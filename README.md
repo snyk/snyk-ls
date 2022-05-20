@@ -122,11 +122,10 @@ Snyk LS and Snyk CLI support and need certain environment variables to function:
 5. `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` to define the http proxy to be used
 6. `JAVA_HOME` to analyse Java JVM-based projects via Snyk CLI
 7. `PATH` to find the Snyk CLI, to find maven when analysing Maven projects, to find python, etc
-8. `SEND_ERROR_REPORTS` to authenticate against the Snyk backend services (alternatively, the CLI has a token storage
-   after
+8. `SEND_ERROR_REPORTS` to allow sending of error reports
 9. `SNYK_API` to define the endpoint address if using single tenant setup
 10. `SNYK_CLI_PATH` to specify where the Snyk CLI is located
-11. `SNYK_ORGANIZATION` to specify the Snyk organization to be used
+11. `SNYK_CFG_ORG` to specify the Snyk organization to be used
 12. `SNYK_TOKEN` to authenticate against the Snyk backend services (alternatively, the CLI has a token storage after
 
 #### Auto-Configuration

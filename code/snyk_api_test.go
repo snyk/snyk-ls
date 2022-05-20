@@ -50,6 +50,7 @@ func TestSnykApiService_GetSastEnablement_returns(t *testing.T) {
 
 	assert.NoError(t, err)
 }
+
 func TestSnykApiService_GetSastEnablementWithOrg_returns(t *testing.T) {
 	testutil.UnitTest(t)
 	pact := testutil.Pact(t, pactDir, "SnykApi")

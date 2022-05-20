@@ -34,8 +34,13 @@ func ExpandParametersFromConfig(base []string) []string {
 	if settings.Insecure {
 		additionalParams = append(additionalParams, "--insecure")
 	}
-	if config.CurrentConfig().GetOrganization() != "" {
-		additionalParams = append(additionalParams, "--org="+config.CurrentConfig().GetOrganization())
+
+	organization := config.CurrentConfig().GetOrganization()
+	if organization != "" {
+		err := os.Setenv("SNYK_CFG_ORG", organization)
+		if err != nil {
+			log.Err(err).Msg("couldn't add organization to environment")
+		}
 	}
 
 	if len(settings.AdditionalParameters) > 0 {
@@ -44,7 +49,7 @@ func ExpandParametersFromConfig(base []string) []string {
 	if settings.Endpoint != "" {
 		err := os.Setenv("SNYK_API", settings.Endpoint)
 		if err != nil {
-			log.Err(err).Msg("couldn't set endpoint in environment")
+			log.Err(err).Msg("couldn't add endpoint to environment")
 		}
 	}
 	return append(base, additionalParams...)

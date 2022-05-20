@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -20,8 +21,8 @@ func TestExpandParametersFromConfig(t *testing.T) {
 	config.CurrentConfig().SetCliSettings(settings)
 	var cmd []string
 	cmd = ExpandParametersFromConfig(cmd)
-	assert.Contains(t, cmd, "--org=test-org")
 	assert.Contains(t, cmd, "--insecure")
 	assert.Contains(t, cmd, "--all-projects")
 	assert.Contains(t, cmd, "-d")
+	assert.Equal(t, config.CurrentConfig().GetOrganization(), os.Getenv(config.Organization))
 }

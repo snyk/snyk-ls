@@ -56,7 +56,7 @@ type Config struct {
 	snykCodeAnalysisTimeout time.Duration
 	snykCodeApiUrl          string
 	token                   string
-	m                       sync.Mutex
+	cliPathAccessMutex      sync.Mutex
 }
 
 func CurrentConfig() *Config {
@@ -131,8 +131,8 @@ func (c *Config) loadFile(fileName string) {
 func (c *Config) Authenticated() bool { return c.token != "" }
 func (c *Config) CliInstalled() bool  { return c.cliPath != "" }
 func (c *Config) CliPath() string {
-	c.m.Lock()
-	defer c.m.Unlock()
+	c.cliPathAccessMutex.Lock()
+	defer c.cliPathAccessMutex.Unlock()
 	return c.cliPath
 }
 func (c *Config) CliSettings() CliSettings { return c.cliSettings }
@@ -152,8 +152,8 @@ func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnal
 func (c *Config) Token() string                          { return c.token }
 
 func (c *Config) SetCliPath(cliPath string) error {
-	c.m.Lock()
-	defer c.m.Unlock()
+	c.cliPathAccessMutex.Lock()
+	defer c.cliPathAccessMutex.Unlock()
 	c.cliPath = cliPath
 	return os.Setenv(cliPathKey, cliPath)
 }
