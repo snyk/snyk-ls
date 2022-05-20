@@ -23,6 +23,10 @@ func (c SnykCli) Execute(cmd []string) (resp []byte, err error) {
 	Mutex.Lock()
 	defer Mutex.Unlock()
 	log.Info().Str("method", "SnykCli.Execute").Interface("cmd", cmd).Msg("calling Snyk CLI")
+	cwd, _ := os.Getwd()
+	defer func(dir string) {
+		_ = os.Chdir(dir)
+	}(cwd)
 	err = c.changeToExecutionDir()
 	if err != nil {
 		return nil, err

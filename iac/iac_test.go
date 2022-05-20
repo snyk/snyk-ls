@@ -51,14 +51,13 @@ func Test_ScanFile(t *testing.T) {
 	config.CurrentConfig.SetFormat(config.FormatHtml)
 	preconditions.EnsureReadyForAnalysisAndWait()
 
-	path, _ := filepath.Abs("testdata/RBAC.yaml")
-	content, _ := os.ReadFile(path)
+	workingDir, _ := os.Getwd()
+	path, _ := filepath.Abs(workingDir + "/testdata/RBAC.yaml")
 
 	doc := lsp.TextDocumentItem{
 		URI:        lsp.DocumentURI(path),
 		LanguageID: "yaml",
 		Version:    0,
-		Text:       string(content),
 	}
 
 	dChan := make(chan lsp2.DiagnosticResult, 1)
