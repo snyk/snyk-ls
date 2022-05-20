@@ -58,7 +58,7 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 	defer Mutex.Unlock()
 	r := getTestAsset()
 
-	lockFileName := config.CurrentConfig.CLIDownloadLockFileName()
+	lockFileName := config.CurrentConfig().CLIDownloadLockFileName()
 	file, err := os.Create(lockFileName)
 	if err != nil {
 		t.Fatal("couldn't create lockfile")
@@ -78,12 +78,12 @@ func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 
 	temp := t.TempDir()
 	fakeCliFile := testutil.CreateTempFile(temp, t)
-	err := config.CurrentConfig.SetCliPath(fakeCliFile.Name())
+	err := config.CurrentConfig().SetCliPath(fakeCliFile.Name())
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error setting CLI path")
 	}
 	defer func() {
-		_ = config.CurrentConfig.SetCliPath("")
+		_ = config.CurrentConfig().SetCliPath("")
 	}()
 
 	checksum, err := getChecksum(fakeCliFile.Name())
@@ -127,7 +127,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	ctx := context.Background()
 	i := NewInstaller()
 
-	lsPath := config.CurrentConfig.LsPath()
+	lsPath := config.CurrentConfig().LsPath()
 
 	fakeCliFile := testutil.CreateTempFile(lsPath, t)
 	fakeCliFile.Close()
@@ -141,12 +141,12 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 		_ = os.Remove(f)
 	}(cliFilePath)
 
-	err = config.CurrentConfig.SetCliPath(cliFilePath)
+	err = config.CurrentConfig().SetCliPath(cliFilePath)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error setting CLI path")
 	}
 	defer func() {
-		_ = config.CurrentConfig.SetCliPath("")
+		_ = config.CurrentConfig().SetCliPath("")
 	}()
 
 	r := NewCLIRelease()

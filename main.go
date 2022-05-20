@@ -68,6 +68,6 @@ func parseFlags(args []string) (string, error) {
 		c.SetErrorReportingEnabled(*reportErrorsFlag)
 	}
 
-	config.CurrentConfig = c
+	config.SetCurrentConfig(c)
 	return buf.String(), nil
 }

@@ -9,12 +9,12 @@ import (
 )
 
 func TestSetToken(t *testing.T) {
-	CurrentConfig = New() // can't use testutil here because of cyclical imports
-	oldToken := CurrentConfig.Token()
-	err := CurrentConfig.SetToken("asdf")
+	SetCurrentConfig(New()) // can't use testutil here because of cyclical imports
+	oldToken := CurrentConfig().Token()
+	err := CurrentConfig().SetToken("asdf")
 	assert.NoError(t, err)
-	assert.Equal(t, CurrentConfig.Token(), "asdf")
-	_ = CurrentConfig.SetToken(oldToken)
+	assert.Equal(t, CurrentConfig().Token(), "asdf")
+	_ = CurrentConfig().SetToken(oldToken)
 }
 
 func TestToken(t *testing.T) {
@@ -63,7 +63,7 @@ func Test_loadFile(t *testing.T) {
 		assert.Fail(t, "Couldn't write to test file")
 	}
 
-	CurrentConfig.loadFile(file.Name())
+	CurrentConfig().loadFile(file.Name())
 
 	assert.Equal(t, "B", os.Getenv("A"))
 	assert.Equal(t, "D", os.Getenv("C"))

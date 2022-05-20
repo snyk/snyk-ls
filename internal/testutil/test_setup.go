@@ -19,20 +19,20 @@ func IntegTest(t *testing.T) {
 		t.Logf("%s is not set", integTestEnvVar)
 		t.SkipNow()
 	}
-	config.CurrentConfig = config.New()
+	config.SetCurrentConfig(config.New())
 	CLIDownloadLockFileCleanUp(t)
 }
 
 func UnitTest(t *testing.T) {
 	t.Helper()
-	config.CurrentConfig = config.New()
+	config.SetCurrentConfig(config.New())
 	CLIDownloadLockFileCleanUp(t)
 }
 
 func CLIDownloadLockFileCleanUp(t *testing.T) {
 	t.Helper()
 	// remove lock file before test and after test
-	lockFileName := config.CurrentConfig.CLIDownloadLockFileName()
+	lockFileName := config.CurrentConfig().CLIDownloadLockFileName()
 	file, _ := os.Open(lockFileName)
 	file.Close()
 	_ = os.Remove(lockFileName)

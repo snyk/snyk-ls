@@ -59,7 +59,7 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	assert.Error(t, err)
 
 	// make sure cancellation cleanup works
-	_, err = os.Stat(config.CurrentConfig.CLIDownloadLockFileName())
+	_, err = os.Stat(config.CurrentConfig().CLIDownloadLockFileName())
 	if err == nil {
 		assert.Error(t, err)
 	}

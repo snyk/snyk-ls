@@ -49,7 +49,7 @@ func Authenticate() {
 		}
 		error_reporting.CaptureError(err)
 	} else {
-		err = config.CurrentConfig.SetToken(token)
+		err = config.CurrentConfig().SetToken(token)
 		if err != nil {
 			log.Err(err).Str("method", "Authenticate")
 			error_reporting.CaptureError(err)

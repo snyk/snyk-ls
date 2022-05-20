@@ -11,6 +11,11 @@ VERSION := $(shell git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)
 COMMIT := $(shell git show -s --oneline)
 LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/config.Development=true' -X 'github.com/snyk/snyk-ls/config.Version=v$(VERSION)-SNAPSHOT-$(COMMIT)'"
 
+PARALLEL := "-p=1"
+NOCACHE := "-count=1"
+VERBOSE := "-v"
+TIMEOUT := "-timeout=15m"
+
 ## tools: Install required tooling.
 .PHONY: tools
 tools:
@@ -46,14 +51,14 @@ lint: tools
 test:
 	@echo "==> Running unit tests..."
 	@mkdir -p $(BUILD_DIR)
-	@go test -p=1 -count=1 -v -cover -coverprofile=$(BUILD_DIR)/coverage.out -timeout=15m ./...
+	@go test $(PARALLEL) $(NOCACHE) $(TIMEOUT) $(VERBOSE) -cover -coverprofile=$(BUILD_DIR)/coverage.out ./...
 
 .PHONY: race-test
 race-test:
 	@echo "==> Running integration tests with race-detector..."
 	@mkdir -p $(BUILD_DIR)
 	@export INTEG_TESTS=true
-	@go test -p=1 -count=1 -v -cover -coverprofile=$(BUILD_DIR)/coverage.out -timeout=5m -race ./...
+	@go test $(PARALLEL) $(NOCACHE) $(TIMEOUT) $(VERBOSE) -race ./...
 
 
 ## build: Build binary for default local system's OS and architecture.

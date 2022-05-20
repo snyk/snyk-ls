@@ -52,19 +52,19 @@ Right now the language server supports the following actions:
 
 ```go
 ServerCapabilities{
-  TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{
-    Options: &sglsp.TextDocumentSyncOptions{
-      OpenClose:         true,
-      WillSave:          true,
-      WillSaveWaitUntil: true,
-      Save:              SaveOptions{IncludeText: false},
-    },
-  },
-  WorkspaceFoldersServerCapabilities: WorkspaceFoldersServerCapabilities{
-	  Supported:           true,
-    ChangeNotifications: "snyk-ls",
-  },
-  HoverProvider: true,
+TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{
+Options: &sglsp.TextDocumentSyncOptions{
+OpenClose:         true,
+WillSave:          true,
+WillSaveWaitUntil: true,
+Save:              SaveOptions{IncludeText: false},
+},
+},
+WorkspaceFoldersServerCapabilities: WorkspaceFoldersServerCapabilities{
+Supported:           true,
+ChangeNotifications: "snyk-ls",
+},
+HoverProvider: true,
 }
 ```
 
@@ -122,10 +122,11 @@ Snyk LS and Snyk CLI support and need certain environment variables to function:
 5. `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` to define the http proxy to be used
 6. `JAVA_HOME` to analyse Java JVM-based projects via Snyk CLI
 7. `PATH` to find the Snyk CLI, to find maven when analysing Maven projects, to find python, etc
-8. `SNYK_API` to define the endpoint address if using single tenant setup
-9. `SNYK_CLI_PATH` to specify where the Snyk CLI is located and to prevent automatic downloads
-10. `SNYK_TOKEN` to authenticate against the Snyk backend services (alternatively, the CLI has a token storage after
-    authenticating with it)
+8. `SEND_ERROR_REPORTS` to allow sending of error reports
+9. `SNYK_API` to define the endpoint address if using single tenant setup
+10. `SNYK_CLI_PATH` to specify where the Snyk CLI is located
+11. `SNYK_CFG_ORG` to specify the Snyk organization to be used
+12. `SNYK_TOKEN` to authenticate against the Snyk backend services (alternatively, the CLI has a token storage after
 
 #### Auto-Configuration
 
@@ -139,13 +140,6 @@ variables.
 given config file via -c flag
 <working-dir>/.snyk.env
 $HOME/.snyk.env
-$HOME/.zshrc.local
-$HOME/.zshrc
-$HOME/.bashrc
-$HOME/.profile
-/etc/launchd.conf
-/etc/profile
-/etc/environment
 ```
 
 Any lines that contain an environment variable in the format

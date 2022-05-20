@@ -13,7 +13,7 @@ import (
 )
 
 func TestNpmRangeFinder_Find(t *testing.T) {
-	config.CurrentConfig.SetFormat(config.FormatHtml)
+	config.CurrentConfig().SetFormat(config.FormatHtml)
 
 	var issue = ossIssue{
 		Id:             "testIssue",

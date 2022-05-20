@@ -44,7 +44,7 @@ const (
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewHTTPRepository(config.CurrentConfig.SnykCodeApi())
+	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi())
 	files := map[sglsp.DocumentURI]BundleFile{}
 	files[path1] = BundleFile{
 		Hash:    util.Hash([]byte(content)),
@@ -59,7 +59,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewHTTPRepository(config.CurrentConfig.SnykCodeApi())
+	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi())
 
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]BundleFile{}
@@ -80,7 +80,7 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewHTTPRepository(config.CurrentConfig.SnykCodeApi())
+	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi())
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]BundleFile{}

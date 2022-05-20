@@ -40,7 +40,7 @@ func CaptureError(err error) bool {
 		Type:    sglsp.MTError,
 		Message: fmt.Sprintf("Snyk encountered an error: %v", err),
 	})
-	if config.CurrentConfig.IsErrorReportingEnabled() {
+	if config.CurrentConfig().IsErrorReportingEnabled() {
 		log.Debug().Err(err).Str("method", "CaptureError").Msgf("Sending error to Sentry")
 		sentry.CaptureException(err)
 		return true
@@ -49,7 +49,7 @@ func CaptureError(err error) bool {
 }
 
 func beforeSend(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
-	if config.CurrentConfig.IsErrorReportingEnabled() {
+	if config.CurrentConfig().IsErrorReportingEnabled() {
 		return event
 	}
 	return nil

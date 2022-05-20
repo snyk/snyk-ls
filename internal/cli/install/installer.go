@@ -96,7 +96,7 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 		return false, err
 	}
 
-	err = compareChecksum(latestChecksum, config.CurrentConfig.CliPath())
+	err = compareChecksum(latestChecksum, config.CurrentConfig().CliPath())
 	if err == nil {
 		// checksum match, no new version available
 		return false, nil
@@ -120,7 +120,7 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 func replaceOutdatedCli(d *Downloader, cliDiscovery Discovery) error {
 	log.Info().Str("method", "replaceOutdatedCli").Msg("replacing outdated CLI with latest")
 
-	lsPath := config.CurrentConfig.LsPath()
+	lsPath := config.CurrentConfig().LsPath()
 
 	outdatedCliFile := filepath.Join(lsPath, cliDiscovery.ExecutableName(false))
 	latestCliFile := filepath.Join(lsPath, cliDiscovery.ExecutableName(true))
@@ -182,7 +182,7 @@ func expectedChecksum(r *Release, cliDiscovery *Discovery) (HashSum, error) {
 }
 
 func createLockFile(d *Downloader) (lockfileName string, err error) {
-	lockFileName := config.CurrentConfig.CLIDownloadLockFileName()
+	lockFileName := config.CurrentConfig().CLIDownloadLockFileName()
 	fileInfo, err := os.Stat(lockFileName)
 	if err == nil && (time.Since(fileInfo.ModTime()) < 1*time.Hour) {
 		msg := fmt.Sprintf("installer lockfile from %v found", fileInfo.ModTime())

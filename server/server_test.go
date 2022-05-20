@@ -30,6 +30,8 @@ import (
 	"github.com/snyk/snyk-ls/lsp"
 )
 
+const maxIntegTestDuration = 15 * time.Minute
+
 var (
 	ctx             = context.Background()
 	jsonRPCRecorder = testutil.JsonRPCRecorder{}
@@ -58,7 +60,8 @@ func didSaveTextParams() (sglsp.DidSaveTextDocumentParams, func()) {
 }
 
 func setupServer(t *testing.T) server.Local {
-	di.TestInit()
+	testutil.UnitTest(t)
+	di.TestInit(t)
 	diagnostics.ClearEntireDiagnosticsCache()
 	diagnostics.ClearWorkspaceFolderScanned()
 	cleanupChannels()
@@ -173,9 +176,8 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 }
 
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
-	testutil.UnitTest(t)
-	config.CurrentConfig.SetSnykCodeEnabled(true)
 	loc := setupServer(t)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
 
 	didOpenParams, cleanup := didOpenTextParams()
 	defer cleanup()
@@ -220,7 +222,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal("couldn't unset environment")
 	}
-	config.CurrentConfig = config.New()
+	config.SetCurrentConfig(config.New())
 
 	didOpenParams, cleanup := didOpenTextParams()
 	defer cleanup()
@@ -233,7 +235,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		find, _ := installer.Find()
 		return find != ""
-	}, 120*time.Second, 10*time.Millisecond)
+	}, maxIntegTestDuration, 10*time.Millisecond)
 }
 
 func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
@@ -263,9 +265,8 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 }
 
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
-	testutil.UnitTest(t)
-	config.CurrentConfig.SetSnykCodeEnabled(true)
 	loc := setupServer(t)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
 
 	didSaveParams, cleanup := didSaveTextParams()
 	defer cleanup()
@@ -351,14 +352,14 @@ func Test_IntegrationWorkspaceScanWithTwoUploadBatches(t *testing.T) {
 
 func runIntegrationTest(repo string, commit string, file1 string, file2 string, t *testing.T) {
 	testutil.IntegTest(t)
-	config.CurrentConfig.SetSnykCodeEnabled(true)
-	config.CurrentConfig.SetSnykIacEnabled(true)
-	config.CurrentConfig.SetSnykOssEnabled(true)
+	loc := setupServer(t)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
+	config.CurrentConfig().SetSnykIacEnabled(true)
+	config.CurrentConfig().SetSnykOssEnabled(true)
 	diagnostics.ClearWorkspaceFolderScanned()
 	diagnostics.ClearEntireDiagnosticsCache()
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
-	loc := setupServer(t)
 	di.Init()
 
 	var cloneTargetDir, err = setupCustomTestRepo(repo, commit)
@@ -384,7 +385,7 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 		testPath = filepath.Join(cloneTargetDir, file1)
 		textDocumentDidOpen(&loc, testPath)
 		// serve diagnostics from file scan
-		assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), 120*time.Second, 10*time.Millisecond)
+		assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
 	}
 
 	// wait till the whole workspace is scanned
@@ -395,7 +396,7 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 	testPath = filepath.Join(cloneTargetDir, file2)
 	textDocumentDidOpen(&loc, testPath)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), 120*time.Second, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
 }
 
 // Check if published diagnostics for given testPath match the expectedNumber.
@@ -447,7 +448,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
 		return diagnostics.IsWorkspaceFolderScanned(folder)
-	}, 600*time.Second, 100*time.Millisecond)
+	}, maxIntegTestDuration, 100*time.Millisecond)
 
 	testPath := cloneTargetDir + string(os.PathSeparator) + "package.json"
 	testPosition := sglsp.Position{
@@ -473,12 +474,11 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	assert.Equal(t, hoverResult.Contents.Value, hover.GetHover(uri.PathToUri(testPath), testPosition).Contents.Value)
 	assert.Equal(t, hoverResult.Contents.Kind, "markdown")
 }
-
 func Test_IntegrationSnykCodeFileScan(t *testing.T) {
 	testutil.IntegTest(t)
-	config.CurrentConfig.SetSnykCodeEnabled(true)
-	diagnostics.ClearEntireDiagnosticsCache()
 	loc := setupServer(t)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
+	diagnostics.ClearEntireDiagnosticsCache()
 	di.Init()
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
@@ -490,7 +490,7 @@ func Test_IntegrationSnykCodeFileScan(t *testing.T) {
 	testPath := filepath.Join(cloneTargetDir, "app.js")
 	_ = textDocumentDidOpen(&loc, testPath)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(testPath, 6), 120*time.Second, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(testPath, 6), maxIntegTestDuration, 10*time.Millisecond)
 }
 
 func textDocumentDidOpen(loc *server.Local, testPath string) sglsp.DidOpenTextDocumentParams {

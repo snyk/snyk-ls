@@ -236,6 +236,7 @@ type Settings struct {
 	AdditionalEnv          string `json:"additionalEnv,omitempty"`
 	Path                   string `json:"path,omitempty"`
 	SendErrorReports       string `json:"sendErrorReports,omitempty"`
+	Organization           string `json:"organization,omitempty"`
 }
 
 type DidChangeConfigurationParams struct {
