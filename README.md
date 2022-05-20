@@ -126,7 +126,7 @@ Snyk LS and Snyk CLI support and need certain environment variables to function:
 9. `SNYK_API` to define the endpoint address if using single tenant setup
 10. `SNYK_CLI_PATH` to specify where the Snyk CLI is located
 11. `SNYK_CFG_ORG` to specify the Snyk organization to be used
-12. `SNYK_TOKEN` to authenticate against the Snyk backend services (alternatively, the CLI has a token storage after
+12. `SNYK_TOKEN` to authenticate against the Snyk backend services
 
 #### Auto-Configuration
 
