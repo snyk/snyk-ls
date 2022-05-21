@@ -48,7 +48,7 @@ func ScanWorkspace(
 	defer log.Debug().Str("method", "iac.ScanWorkspace").Msg("done.")
 	log.Debug().Str("method", "iac.ScanWorkspace").Msg("started.")
 
-	res, err := Cli.Execute(cliCmd(documentURI))
+	res, err := Cli.Execute(cliCmd(documentURI), uri.PathFromUri(documentURI))
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:
@@ -106,7 +106,7 @@ func ScanFile(
 		return
 	}
 
-	res, err := Cli.Execute(cliCmd(documentURI))
+	res, err := Cli.Execute(cliCmd(documentURI), filepath.Dir(uri.PathFromUri(documentURI)))
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:

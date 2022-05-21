@@ -89,7 +89,7 @@ func ScanWorkspace(
 	}
 
 	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", path, "--json"})
-	res, err := Cli.Execute(cmd)
+	res, err := Cli.Execute(cmd, workspacePath)
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:
@@ -157,8 +157,9 @@ func ScanFile(
 			Msg("Error while extracting file absolutePath")
 	}
 	preconditions.EnsureReadyForAnalysisAndWait()
-	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", filepath.Dir(path), "--json"})
-	res, err := Cli.Execute(cmd)
+	workDir := filepath.Dir(path)
+	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", workDir, "--json"})
+	res, err := Cli.Execute(cmd, workDir)
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:
