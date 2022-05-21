@@ -100,13 +100,17 @@ func ScanWorkspace(
 			//  1: action_needed, vulnerabilities found
 			//  2: failure, try to re-run command
 			//  3: failure, no supported projects detected
-			if err.ExitCode() != 1 && err.ExitCode() != 3 && err.ExitCode() != 0 {
-				errorOutput := string(res)
+			errorOutput := string(res)
+			if err.ExitCode() != 0 && err.ExitCode() != 1 && err.ExitCode() != 3 {
 				log.Err(err).Str("method", "oss.ScanWorkspace").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
 				reportErrorViaChan(workspace, dChan, fmt.Errorf("%v: %v", err, errorOutput))
 				return
 			}
-			log.Warn().Err(err).Str("method", "oss.ScanWorkspace").Msg("Error while calling Snyk CLI")
+			if err.ExitCode() == 3 {
+				log.Debug().Str("method", "oss.ScanFile").Msg("no supported projects/files detected.")
+				return
+			}
+			log.Err(err).Str("method", "oss.ScanWorkspace").Msg("Error while calling Snyk CLI")
 		default:
 			reportErrorViaChan(workspace, dChan, err)
 			return
@@ -177,13 +181,17 @@ func ScanFile(
 			//  1: action_needed, vulnerabilities found
 			//  2: failure, try to re-run command
 			//  3: failure, no supported projects detected
-			if err.ExitCode() != 1 && err.ExitCode() != 3 && err.ExitCode() != 0 {
+			if err.ExitCode() != 0 && err.ExitCode() != 1 && err.ExitCode() != 3 {
 				errorOutput := string(res)
 				log.Err(err).Str("method", "oss.ScanFile").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
 				reportErrorViaChan(documentURI, dChan, fmt.Errorf("%v: %v", err, errorOutput))
 				return
 			}
-			log.Warn().Err(err).Str("method", "oss.ScanFile").Msg("Error while calling Snyk CLI")
+			if err.ExitCode() == 3 {
+				log.Debug().Str("method", "oss.ScanFile").Msg("no supported projects/files detected.")
+				return
+			}
+			log.Err(err).Str("method", "oss.ScanFile").Msg("Error while calling Snyk CLI")
 		default:
 			reportErrorViaChan(documentURI, dChan, err)
 			return
