@@ -10,9 +10,9 @@ import (
 )
 
 func TestPathFromUri(t *testing.T) {
+	testutil.NotOnWindows(t, "different behaviour for uris")
 	assert.Equal(t, "asdf", PathFromUri("file://asdf"))
 	assert.Equal(t, "asdf", PathFromUri("file:asdf"))
-
 }
 
 func TestPathFromUri_OnWindows(t *testing.T) {
