@@ -29,6 +29,9 @@ func NewBundler(SnykCode SnykCodeClient) *BundleUploader {
 // TODO remove all LSP dependencies (e.g. DocumentURI)
 func (b *BundleUploader) Upload(files []sglsp.DocumentURI) (Bundle, error) {
 	uploadBatches := b.groupInBatches(files)
+	if len(uploadBatches) == 0 {
+		return Bundle{}, nil
+	}
 	uploadedFiles := 0
 	bundle := Bundle{
 		SnykCode: b.SnykCode,
@@ -52,8 +55,8 @@ func (b *BundleUploader) groupInBatches(files []sglsp.DocumentURI) []*UploadBatc
 	t := progress.NewTracker(false)
 	t.Begin("Snyk Code", "Creating batches...")
 	defer t.End("Batches created.")
+	var batches []*UploadBatch
 	uploadBatch := NewUploadBatch()
-	batches := []*UploadBatch{&uploadBatch}
 	for i, documentURI := range files {
 		if !b.isSupported(documentURI) {
 			continue
@@ -70,11 +73,16 @@ func (b *BundleUploader) groupInBatches(files []sglsp.DocumentURI) []*UploadBatc
 		}
 
 		file := getFileFrom(fileContent)
+
+		if len(batches) == 0 { // first batch added after first file found
+			batches = append(batches, &uploadBatch)
+		}
+
 		if uploadBatch.canFitFile(string(documentURI), fileContent) {
-			log.Trace().Str("path1", string(documentURI)).Int("size", len(fileContent)).Msgf("added to bundle #%v", len(batches))
+			log.Trace().Str("path", string(documentURI)).Int("size", len(fileContent)).Msgf("added to bundle #%v", len(batches))
 			uploadBatch.documents[documentURI] = file
 		} else {
-			log.Trace().Str("path1", string(documentURI)).Int("size", len(fileContent)).Msgf("created new bundle - %v bundles in this upload so far", len(batches))
+			log.Trace().Str("path", string(documentURI)).Int("size", len(fileContent)).Msgf("created new bundle - %v bundles in this upload so far", len(batches))
 			newUploadBatch := NewUploadBatch()
 			newUploadBatch.documents[documentURI] = file
 			batches = append(batches, &newUploadBatch)

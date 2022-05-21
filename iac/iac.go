@@ -112,7 +112,8 @@ func ScanFile(
 		case *exec.ExitError:
 			if err.ExitCode() > 1 {
 				errorOutput := string(res)
-				if strings.Contains(errorOutput, "Could not find any valid IaC files") {
+				if strings.Contains(errorOutput, "Could not find any valid IaC files") ||
+					strings.Contains(errorOutput, "CustomError: Not a recognised option did you mean --file") {
 					return
 				}
 				log.Err(err).Str("method", "iac.ScanFile").Str("output", errorOutput).Msg("Error while calling Snyk CLI")

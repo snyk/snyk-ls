@@ -104,6 +104,8 @@ func (s *SnykCodeHTTPClient) doCall(method string, path string, requestBody []by
 	}
 	req.Header.Set("Session-Token", config.CurrentConfig().Token())
 	req.Header.Set("Content-Type", "application/json")
+	// https://www.keycdn.com/blog/http-cache-headers
+	req.Header.Set("Cache-Control", "private, max-age=0, no-cache")
 
 	log.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
 	response, err := s.client.Do(req)

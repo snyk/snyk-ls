@@ -93,7 +93,14 @@ func ScanWorkspace(
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:
-			if err.ExitCode() > 1 {
+			// Exit codes
+			//  Possible exit codes and their meaning:
+			//
+			//  0: success, no vulnerabilities found
+			//  1: action_needed, vulnerabilities found
+			//  2: failure, try to re-run command
+			//  3: failure, no supported projects detected
+			if err.ExitCode() != 1 && err.ExitCode() != 3 && err.ExitCode() != 0 {
 				errorOutput := string(res)
 				log.Err(err).Str("method", "oss.ScanWorkspace").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
 				reportErrorViaChan(workspace, dChan, fmt.Errorf("%v: %v", err, errorOutput))
@@ -163,7 +170,14 @@ func ScanFile(
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:
-			if err.ExitCode() > 1 {
+			// Exit codes
+			//  Possible exit codes and their meaning:
+			//
+			//  0: success, no vulnerabilities found
+			//  1: action_needed, vulnerabilities found
+			//  2: failure, try to re-run command
+			//  3: failure, no supported projects detected
+			if err.ExitCode() != 1 && err.ExitCode() != 3 && err.ExitCode() != 0 {
 				errorOutput := string(res)
 				log.Err(err).Str("method", "oss.ScanFile").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
 				reportErrorViaChan(documentURI, dChan, fmt.Errorf("%v: %v", err, errorOutput))
