@@ -18,6 +18,7 @@ func TestPathFromUri(t *testing.T) {
 func TestPathFromUri_OnWindows(t *testing.T) {
 	testutil.OnlyOnWindows(t, "windows specific paths are tested")
 	assert.Equal(t, "C:\\folder\\test", PathFromUri("file:///C:/folder/test"))
+	assert.Equal(t, "\\\\shares\\c$\\test", PathFromUri("file://shares/c$/test"))
 }
 
 func TestPathToUri_OnWindows(t *testing.T) {
