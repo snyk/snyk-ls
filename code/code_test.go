@@ -1,6 +1,7 @@
 package code
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -47,7 +48,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 
-		go code.uploadAndAnalyze(registeredDocuments, &wg, "", dChan, hoverChan)
+		go code.uploadAndAnalyze(context.Background(), registeredDocuments, &wg, "", dChan, hoverChan)
 
 		<-dChan
 
@@ -72,7 +73,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 
-		go code.uploadAndAnalyze([]lsp.DocumentURI{diagnosticUri}, &wg, "", dChan, hoverChan)
+		go code.uploadAndAnalyze(context.Background(), []lsp.DocumentURI{diagnosticUri}, &wg, "", dChan, hoverChan)
 		result := <-dChan
 		diagnosticMap[result.Uri] = result.Diagnostics
 

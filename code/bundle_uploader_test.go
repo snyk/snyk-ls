@@ -2,6 +2,7 @@ package code
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"testing"
 
@@ -19,7 +20,7 @@ func Test_Bundler_Upload(t *testing.T) {
 		var bundler = BundleUploader{SnykCode: snykCodeService}
 		files := []lsp.DocumentURI{createFileOfSize("bundleDoc.java", 10, temporaryDir)}
 
-		_, err := bundler.Upload(files)
+		_, err := bundler.Upload(context.Background(), files)
 
 		assert.True(t, snykCodeService.HasCreatedNewBundle)
 		assert.Equal(t, snykCodeService.TotalBundleCount, 1)
@@ -37,7 +38,7 @@ func Test_Bundler_Upload(t *testing.T) {
 			createFileOfSize("bundleDoc5.java", 100, temporaryDir),
 		}
 
-		_, err := bundler.Upload(files)
+		_, err := bundler.Upload(context.Background(), files)
 
 		assert.True(t, snykCodeService.HasCreatedNewBundle)
 		assert.True(t, snykCodeService.HasExtendedBundle)
@@ -51,7 +52,7 @@ func Test_Bundler_Upload(t *testing.T) {
 		var bundler = BundleUploader{SnykCode: snykCodeService}
 		files := []lsp.DocumentURI{createFileOfSize("bundleDoc.java", 1024*1024+1, temporaryDir)}
 
-		_, err := bundler.Upload(files)
+		_, err := bundler.Upload(context.Background(), files)
 
 		assert.False(t, snykCodeService.HasCreatedNewBundle)
 		assert.Nil(t, err)
@@ -62,7 +63,7 @@ func Test_Bundler_Upload(t *testing.T) {
 		var bundler = BundleUploader{SnykCode: snykCodeService}
 		files := []lsp.DocumentURI{createFileOfSize("bundleDoc.java", 0, temporaryDir)}
 
-		_, err := bundler.Upload(files)
+		_, err := bundler.Upload(context.Background(), files)
 
 		assert.False(t, snykCodeService.HasCreatedNewBundle)
 		assert.Nil(t, err)
@@ -73,7 +74,7 @@ func Test_Bundler_Upload(t *testing.T) {
 		var bundler = BundleUploader{SnykCode: snykCodeService}
 		files := []lsp.DocumentURI{createFileOfSize("bundleDoc.mr_robot", 1, temporaryDir)}
 
-		_, err := bundler.Upload(files)
+		_, err := bundler.Upload(context.Background(), files)
 
 		assert.False(t, snykCodeService.HasCreatedNewBundle)
 		assert.Nil(t, err)
@@ -90,20 +91,20 @@ func Test_IsSupportedLanguage(t *testing.T) {
 
 	t.Run("should return true for supported languages", func(t *testing.T) {
 		documentURI := uri.PathToUri("C:\\some\\path\\Test.java")
-		supported := bundler.isSupported(documentURI)
+		supported := bundler.isSupported(context.Background(), documentURI)
 		assert.True(t, supported)
 	})
 
 	t.Run("should return false for unsupported languages", func(t *testing.T) {
 		documentURI := uri.PathToUri("C:\\some\\path\\Test.rs")
-		supported := bundler.isSupported(documentURI)
+		supported := bundler.isSupported(context.Background(), documentURI)
 		assert.False(t, supported)
 	})
 
 	t.Run("should cache supported extensions", func(t *testing.T) {
 		documentURI := uri.PathToUri("C:\\some\\path\\Test.rs")
-		bundler.isSupported(documentURI)
-		bundler.isSupported(documentURI)
+		bundler.isSupported(context.Background(), documentURI)
+		bundler.isSupported(context.Background(), documentURI)
 		assert.Len(t, snykCodeMock.Calls, 1)
 	})
 }

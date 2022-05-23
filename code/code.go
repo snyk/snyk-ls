@@ -31,7 +31,7 @@ func (sc *SnykCode) ScanFile(ctx context.Context, documentURI sglsp.DocumentURI,
 	method := "code.ScanFile"
 	s.StartSpan(ctx, method, "")
 	defer s.Finish()
-	sc.uploadAndAnalyze([]sglsp.DocumentURI{documentURI}, wg, documentURI, dChan, hoverChan)
+	sc.uploadAndAnalyze(ctx, []sglsp.DocumentURI{documentURI}, wg, documentURI, dChan, hoverChan)
 }
 
 func (sc *SnykCode) ScanWorkspace(ctx context.Context, documents []sglsp.DocumentURI, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
@@ -39,10 +39,10 @@ func (sc *SnykCode) ScanWorkspace(ctx context.Context, documents []sglsp.Documen
 	method := "code.ScanWorkspace"
 	s.StartSpan(ctx, method, "")
 	defer s.Finish()
-	sc.uploadAndAnalyze(documents, wg, documentURI, dChan, hoverChan)
+	sc.uploadAndAnalyze(ctx, documents, wg, documentURI, dChan, hoverChan)
 }
 
-func (sc *SnykCode) uploadAndAnalyze(files []sglsp.DocumentURI, wg *sync.WaitGroup, documentURI sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+func (sc *SnykCode) uploadAndAnalyze(ctx context.Context, files []sglsp.DocumentURI, wg *sync.WaitGroup, documentURI sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	if len(files) == 0 {
 		return
 	}
@@ -51,7 +51,7 @@ func (sc *SnykCode) uploadAndAnalyze(files []sglsp.DocumentURI, wg *sync.WaitGro
 		return
 	}
 
-	uploadedBundle, err := sc.BundleUploader.Upload(files)
+	uploadedBundle, err := sc.BundleUploader.Upload(ctx, files)
 	// TODO LSP error handling should be pushed UP to the LSP layer
 	if err != nil {
 		log.Error().Err(err).Msg("error uploading files...")
@@ -64,7 +64,7 @@ func (sc *SnykCode) uploadAndAnalyze(files []sglsp.DocumentURI, wg *sync.WaitGro
 	}
 
 	wg.Add(1)
-	uploadedBundle.FetchDiagnosticsData(string(documentURI), wg, dChan, hoverChan)
+	uploadedBundle.FetchDiagnosticsData(ctx, string(documentURI), wg, dChan, hoverChan)
 }
 
 func (sc *SnykCode) isSastEnabled() bool {

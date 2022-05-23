@@ -2,6 +2,7 @@ package code
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -59,9 +61,9 @@ func NewHTTPRepository(host string) *SnykCodeHTTPClient {
 	return &SnykCodeHTTPClient{http.Client{}, host}
 }
 
-func (s *SnykCodeHTTPClient) GetFilters() (configFiles []string, extensions []string, err error) {
+func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (configFiles []string, extensions []string, err error) {
 	log.Debug().Str("method", "GetFilters").Msg("API: Getting file extension filters")
-	responseBody, err := s.doCall("GET", "/filters", nil)
+	responseBody, err := s.doCall(ctx, "GET", "/filters", nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -75,14 +77,17 @@ func (s *SnykCodeHTTPClient) GetFilters() (configFiles []string, extensions []st
 	return filters.ConfigFiles, filters.Extensions, nil
 }
 
-func (s *SnykCodeHTTPClient) CreateBundle(files map[sglsp.DocumentURI]BundleFile) (string, []sglsp.DocumentURI, error) {
+func (s *SnykCodeHTTPClient) CreateBundle(
+	ctx context.Context,
+	files map[sglsp.DocumentURI]BundleFile,
+) (string, []sglsp.DocumentURI, error) {
 	log.Debug().Str("method", "CreateBundle").Msg("API: Creating bundle for " + strconv.Itoa(len(files)) + " files")
 	requestBody, err := json.Marshal(files)
 	if err != nil {
 		return "", nil, err
 	}
 
-	responseBody, err := s.doCall("POST", "/bundle", requestBody)
+	responseBody, err := s.doCall(ctx, "POST", "/bundle", requestBody)
 	if err != nil {
 		return "", nil, err
 	}
@@ -96,7 +101,17 @@ func (s *SnykCodeHTTPClient) CreateBundle(files map[sglsp.DocumentURI]BundleFile
 	return bundle.BundleHash, bundle.MissingFiles, nil
 }
 
-func (s *SnykCodeHTTPClient) doCall(method string, path string, requestBody []byte) ([]byte, error) {
+func (s *SnykCodeHTTPClient) doCall(
+	ctx context.Context,
+	method string,
+	path string,
+	requestBody []byte,
+) ([]byte, error) {
+
+	span := instrumentation.New()
+	span.StartSpan(ctx, "doCall", "")
+	defer span.Finish()
+
 	b := bytes.NewBuffer(requestBody)
 	req, err := http.NewRequest(method, s.host+path, b)
 	if err != nil {
@@ -126,7 +141,12 @@ func (s *SnykCodeHTTPClient) doCall(method string, path string, requestBody []by
 	return responseBody, err
 }
 
-func (s *SnykCodeHTTPClient) ExtendBundle(bundleHash string, files map[sglsp.DocumentURI]BundleFile, removedFiles []sglsp.DocumentURI) (string, []sglsp.DocumentURI, error) {
+func (s *SnykCodeHTTPClient) ExtendBundle(
+	ctx context.Context,
+	bundleHash string,
+	files map[sglsp.DocumentURI]BundleFile,
+	removedFiles []sglsp.DocumentURI,
+) (string, []sglsp.DocumentURI, error) {
 	log.Debug().Str("method", "ExtendBundle").Str("bundleHash", bundleHash).Msg("API: Extending bundle " + bundleHash + " for " + strconv.Itoa(len(files)) + " files")
 	defer log.Debug().Str("method", "ExtendBundle").Str("bundleHash", bundleHash).Msg("API: Extend done")
 
@@ -138,7 +158,7 @@ func (s *SnykCodeHTTPClient) ExtendBundle(bundleHash string, files map[sglsp.Doc
 		return "", nil, err
 	}
 
-	responseBody, err := s.doCall("PUT", "/bundle/"+bundleHash, requestBody)
+	responseBody, err := s.doCall(ctx, "PUT", "/bundle/"+bundleHash, requestBody)
 	if err != nil {
 		return "", nil, err
 	}
@@ -153,6 +173,7 @@ type AnalysisStatus struct {
 }
 
 func (s *SnykCodeHTTPClient) RunAnalysis(
+	ctx context.Context,
 	bundleHash string,
 	shardKey string,
 	limitToFiles []sglsp.DocumentURI,
@@ -167,7 +188,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		return nil, nil, AnalysisStatus{}, err
 	}
 
-	responseBody, err := s.doCall("POST", "/analysis", requestBody)
+	responseBody, err := s.doCall(ctx, "POST", "/analysis", requestBody)
 	failed := AnalysisStatus{message: "FAILED"}
 	if err != nil {
 		log.Err(err).Str("method", "RunAnalysis").Str("responseBody", string(responseBody)).Msg("error response from analysis")

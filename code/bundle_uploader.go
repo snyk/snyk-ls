@@ -1,6 +1,7 @@
 package code
 
 import (
+	"context"
 	"math"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/internal/concurrency"
+	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -27,8 +29,12 @@ func NewBundler(SnykCode SnykCodeClient) *BundleUploader {
 }
 
 // TODO remove all LSP dependencies (e.g. DocumentURI)
-func (b *BundleUploader) Upload(files []sglsp.DocumentURI) (Bundle, error) {
-	uploadBatches := b.groupInBatches(files)
+func (b *BundleUploader) Upload(ctx context.Context, files []sglsp.DocumentURI) (Bundle, error) {
+	method := "code.Upload"
+	s := instrumentation.New()
+	s.StartSpan(ctx, method, "")
+	defer s.Finish()
+	uploadBatches := b.groupInBatches(ctx, files)
 	if len(uploadBatches) == 0 {
 		return Bundle{}, nil
 	}
@@ -40,7 +46,7 @@ func (b *BundleUploader) Upload(files []sglsp.DocumentURI) (Bundle, error) {
 	t.Begin("Snyk Code", "Uploading batches...")
 	defer t.End("Upload done.")
 	for i, uploadBatch := range uploadBatches {
-		err := bundle.Upload(uploadBatch)
+		err := bundle.Upload(ctx, uploadBatch)
 		if err != nil {
 			return Bundle{}, err
 		}
@@ -51,14 +57,20 @@ func (b *BundleUploader) Upload(files []sglsp.DocumentURI) (Bundle, error) {
 	return bundle, nil
 }
 
-func (b *BundleUploader) groupInBatches(files []sglsp.DocumentURI) []*UploadBatch {
+func (b *BundleUploader) groupInBatches(ctx context.Context, files []sglsp.DocumentURI) []*UploadBatch {
 	t := progress.NewTracker(false)
 	t.Begin("Snyk Code", "Creating batches...")
 	defer t.End("Batches created.")
+
+	method := "code.groupInBatches"
+	s := instrumentation.New()
+	s.StartSpan(ctx, method, "")
+	defer s.Finish()
+
 	var batches []*UploadBatch
 	uploadBatch := NewUploadBatch()
 	for i, documentURI := range files {
-		if !b.isSupported(documentURI) {
+		if !b.isSupported(ctx, documentURI) {
 			continue
 		}
 
@@ -94,10 +106,10 @@ func (b *BundleUploader) groupInBatches(files []sglsp.DocumentURI) []*UploadBatc
 	return batches
 }
 
-func (b *BundleUploader) isSupported(documentURI sglsp.DocumentURI) bool {
+func (b *BundleUploader) isSupported(ctx context.Context, documentURI sglsp.DocumentURI) bool {
 	if b.supportedExtensions.Length() == 0 {
 		// query
-		_, exts, err := b.SnykCode.GetFilters()
+		_, exts, err := b.SnykCode.GetFilters(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("could not get filters")
 			return false
