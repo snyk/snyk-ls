@@ -23,7 +23,11 @@ type sentrySpan struct {
 }
 
 func (s *sentrySpan) StartSpan(ctx context.Context, operation string) {
-	s.span = sentry.StartSpan(ctx, operation)
+	s.span = sentry.StartSpan(
+		ctx,
+		operation,
+		sentry.TransactionName(operation),
+	)
 	s.span.SetTag("version", config.Version)
 	s.span.SetTag("organization", config.CurrentConfig().GetOrganization())
 }
