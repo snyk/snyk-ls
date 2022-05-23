@@ -18,25 +18,25 @@ type noopImpl struct {
 	ctx context.Context
 }
 
-type spanImpl struct {
+type sentrySpan struct {
 	span *sentry.Span
 }
 
-func (s *spanImpl) StartSpan(ctx context.Context, operation string) {
+func (s *sentrySpan) StartSpan(ctx context.Context, operation string) {
 	s.span = sentry.StartSpan(ctx, operation)
 }
 
-func (s *spanImpl) Finish() {
+func (s *sentrySpan) Finish() {
 	s.span.Finish()
 }
 
-func (s *spanImpl) Context() context.Context {
+func (s *sentrySpan) Context() context.Context {
 	return s.span.Context()
 }
 
 func New() Span {
 	if config.CurrentConfig().IsTelemetryEnabled() {
-		return &spanImpl{}
+		return &sentrySpan{}
 	}
 	return &noopImpl{}
 }
