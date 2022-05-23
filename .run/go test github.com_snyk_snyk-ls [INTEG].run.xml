@@ -2,7 +2,7 @@
   <configuration default="false" name="go test github.com/snyk/snyk-ls [INTEG]" type="GoTestRunConfiguration" factoryName="Go Test">
     <module name="snyk-ls"/>
     <working_directory value="$PROJECT_DIR$/" />
-    <go_parameters value="-timeout=300s -p=1 -race"/>
+    <go_parameters value="-timeout=300s -p=1 -race -count=1"/>
     <envs>
       <env name="INTEG_TESTS" value="true" />
     </envs>

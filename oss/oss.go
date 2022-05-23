@@ -91,28 +91,7 @@ func ScanWorkspace(
 	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", path, "--json"})
 	res, err := Cli.Execute(cmd, workspacePath)
 	if err != nil {
-		switch err := err.(type) {
-		case *exec.ExitError:
-			// Exit codes
-			//  Possible exit codes and their meaning:
-			//
-			//  0: success, no vulnerabilities found
-			//  1: action_needed, vulnerabilities found
-			//  2: failure, try to re-run command
-			//  3: failure, no supported projects detected
-			errorOutput := string(res)
-			if err.ExitCode() != 0 && err.ExitCode() != 1 && err.ExitCode() != 3 {
-				log.Err(err).Str("method", "oss.ScanWorkspace").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
-				reportErrorViaChan(workspace, dChan, fmt.Errorf("%v: %v", err, errorOutput))
-				return
-			}
-			if err.ExitCode() == 3 {
-				log.Debug().Str("method", "oss.ScanFile").Msg("no supported projects/files detected.")
-				return
-			}
-			log.Err(err).Str("method", "oss.ScanWorkspace").Msg("Error while calling Snyk CLI")
-		default:
-			reportErrorViaChan(workspace, dChan, err)
+		if handleError(err, res, workspace, dChan) {
 			return
 		}
 	}
@@ -137,6 +116,36 @@ func ScanWorkspace(
 	}
 
 	retrieveAnalysis(scanResult, targetFileUri, fileContent, dChan, hoverChan)
+}
+
+func handleError(err error, res []byte, workspace sglsp.DocumentURI, dChan chan lsp.DiagnosticResult) bool {
+	switch err := err.(type) {
+	case *exec.ExitError:
+		// Exit codes
+		//  Possible exit codes and their meaning:
+		//
+		//  0: success, no vulnerabilities found
+		//  1: action_needed, vulnerabilities found
+		//  2: failure, try to re-run command
+		//  3: failure, no supported projects detected
+		errorOutput := string(res)
+		switch err.ExitCode() {
+		case 1:
+		case 2:
+			log.Err(err).Str("method", "oss.Scan").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
+			reportErrorViaChan(workspace, dChan, fmt.Errorf("%v: %v", err, errorOutput))
+			return true
+		case 3:
+			log.Debug().Str("method", "oss.Scan").Msg("no supported projects/files detected.")
+			return true
+		default:
+			log.Err(err).Str("method", "oss.Scan").Msg("Error while calling Snyk CLI")
+		}
+	default:
+		reportErrorViaChan(workspace, dChan, err)
+		return true
+	}
+	return false
 }
 
 func determineTargetFile(displayTargetFile string) string {
@@ -172,28 +181,7 @@ func ScanFile(
 	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", workDir, "--json"})
 	res, err := Cli.Execute(cmd, workDir)
 	if err != nil {
-		switch err := err.(type) {
-		case *exec.ExitError:
-			// Exit codes
-			//  Possible exit codes and their meaning:
-			//
-			//  0: success, no vulnerabilities found
-			//  1: action_needed, vulnerabilities found
-			//  2: failure, try to re-run command
-			//  3: failure, no supported projects detected
-			if err.ExitCode() != 0 && err.ExitCode() != 1 && err.ExitCode() != 3 {
-				errorOutput := string(res)
-				log.Err(err).Str("method", "oss.ScanFile").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
-				reportErrorViaChan(documentURI, dChan, fmt.Errorf("%v: %v", err, errorOutput))
-				return
-			}
-			if err.ExitCode() == 3 {
-				log.Debug().Str("method", "oss.ScanFile").Msg("no supported projects/files detected.")
-				return
-			}
-			log.Err(err).Str("method", "oss.ScanFile").Msg("Error while calling Snyk CLI")
-		default:
-			reportErrorViaChan(documentURI, dChan, err)
+		if handleError(err, res, documentURI, dChan) {
 			return
 		}
 	}
@@ -237,12 +225,7 @@ func retrieveAnalysis(
 	dChan chan lsp.DiagnosticResult,
 	hoverChan chan lsp.Hover,
 ) {
-	diags, hoverDetails, err := retrieveDiagnostics(scanResults, uri, fileContent)
-	if err != nil {
-		log.Err(err).Str("method", "oss.retrieveAnalysis").Msg("Error while retrieving diagnositics")
-		reportErrorViaChan(uri, dChan, err)
-		return
-	}
+	diags, hoverDetails := retrieveDiagnostics(scanResults, uri, fileContent)
 
 	if len(diags) > 0 {
 		log.Debug().Str("method", "oss.retrieveAnalysis").Msg("got diags, now sending to chan.")
@@ -270,7 +253,7 @@ func retrieveDiagnostics(
 	res ossScanResult,
 	uri sglsp.DocumentURI,
 	fileContent []byte,
-) ([]lsp.Diagnostic, []lsp.HoverDetails, error) {
+) ([]lsp.Diagnostic, []lsp.HoverDetails) {
 	var diagnostics []lsp.Diagnostic
 	var hoverDetails []lsp.HoverDetails
 
@@ -318,7 +301,7 @@ func retrieveDiagnostics(
 		hoverDetails = append(hoverDetails, hover)
 	}
 
-	return diagnostics, hoverDetails, nil
+	return diagnostics, hoverDetails
 }
 
 func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
