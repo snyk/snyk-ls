@@ -51,6 +51,7 @@ type Config struct {
 	isSnykIacEnabled        concurrency.AtomicBool
 	isSnykContainerEnabled  concurrency.AtomicBool
 	isSnykAdvisorEnabled    concurrency.AtomicBool
+	isTelemetryEnabled      concurrency.AtomicBool
 	logPath                 string
 	organization            string
 	snykCodeAnalysisTimeout time.Duration
@@ -268,4 +269,21 @@ func (c *Config) LsPath() string {
 		return ""
 	}
 	return lsPath
+}
+
+func (c *Config) IsTelemetryEnabled() bool {
+	return c.isTelemetryEnabled.Get()
+}
+
+func (c *Config) SetTelemetryEnabled(enabled bool) {
+	c.isTelemetryEnabled.Set(enabled)
+}
+
+func (c *Config) telemetryEnablementFromEnv() {
+	value := os.Getenv(EnableTelemetry)
+	if value == "0" {
+		c.isTelemetryEnabled.Set(true)
+	} else {
+		c.isTelemetryEnabled.Set(false)
+	}
 }

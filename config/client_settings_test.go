@@ -61,6 +61,22 @@ func TestConfig_OrganizationFromEnv(t *testing.T) {
 	assert.Equal(t, "snyk-test-org", CurrentConfig().GetOrganization())
 }
 
+func TestConfig_EnableTelemetryFromEnv(t *testing.T) {
+	t.Setenv(EnableTelemetry, "0")
+	SetCurrentConfig(New())
+	CurrentConfig().clientSettingsFromEnv()
+
+	assert.Equal(t, true, CurrentConfig().IsTelemetryEnabled())
+}
+
+func TestConfig_DisableTelemetryFromEnv(t *testing.T) {
+	t.Setenv(EnableTelemetry, "1")
+	SetCurrentConfig(New())
+	CurrentConfig().clientSettingsFromEnv()
+
+	assert.Equal(t, false, CurrentConfig().IsTelemetryEnabled())
+}
+
 func TestInitializeDefaultProductEnablement(t *testing.T) {
 	t.Setenv(ActivateSnykOssKey, "false")
 	t.Setenv(ActivateSnykCodeKey, "true")

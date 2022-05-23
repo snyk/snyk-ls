@@ -41,6 +41,12 @@ func updateTelemetry(params lsp.DidChangeConfigurationParams) {
 		log.Err(err).Msgf("couldn't read send error reports %s", params.Settings.SendErrorReports)
 	}
 	config.CurrentConfig().SetErrorReportingEnabled(parseBool)
+
+	parseBool, err = strconv.ParseBool(params.Settings.EnableTelemetry)
+	if err != nil {
+		log.Err(err).Msgf("couldn't read send error reports %s", params.Settings.SendErrorReports)
+	}
+	config.CurrentConfig().SetTelemetryEnabled(parseBool)
 }
 
 func updatePath(params lsp.DidChangeConfigurationParams) {

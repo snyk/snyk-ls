@@ -119,3 +119,17 @@ func TestWorkspaceDidChangeConfiguration_IgnoreBlankOrganization(t *testing.T) {
 
 	assert.Equal(t, "", config.CurrentConfig().GetOrganization())
 }
+
+func TestWorkspaceDidChangeConfiguration_UpdateSendTelemetry(t *testing.T) {
+	loc := setupServer(t)
+
+	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
+		EnableTelemetry: "true",
+	}}
+	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
+	if err != nil {
+		log.Fatal().Err(err).Msg("error calling server")
+	}
+
+	assert.Equal(t, true, config.CurrentConfig().IsTelemetryEnabled())
+}
