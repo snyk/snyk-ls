@@ -1,6 +1,7 @@
 package oss
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/internal/cli"
+	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -70,21 +72,19 @@ func IsSupported(documentURI sglsp.DocumentURI) bool {
 	return supportedFiles[filepath.Base(uri.PathFromUri(documentURI))]
 }
 
-func ScanWorkspace(
-	Cli cli.Executor,
-	workspace sglsp.DocumentURI,
-	wg *sync.WaitGroup,
-	dChan chan lsp.DiagnosticResult,
-	hoverChan chan lsp.Hover,
-) {
+func ScanWorkspace(ctx context.Context, Cli cli.Executor, workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	defer wg.Done()
-	defer log.Debug().Str("method", "oss.ScanWorkspace").Msg("done.")
-	log.Debug().Str("method", "oss.ScanWorkspace").Msg("started.")
+	s := instrumentation.New()
+	method := "oss.ScanWorkspace"
+	s.StartSpan(ctx, method)
+	defer s.Finish()
+	defer log.Debug().Str("method", method).Msg("done.")
+	log.Debug().Str("method", method).Msg("started.")
 
 	workspacePath := uri.PathFromUri(workspace)
 	path, err := filepath.Abs(workspacePath)
 	if err != nil {
-		log.Err(err).Str("method", "oss.ScanWorkspace").
+		log.Err(err).Str("method", method).
 			Msg("Error while extracting file absolutePath")
 	}
 
@@ -95,11 +95,11 @@ func ScanWorkspace(
 		case *exec.ExitError:
 			if err.ExitCode() > 1 {
 				errorOutput := string(res)
-				log.Err(err).Str("method", "oss.ScanWorkspace").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
+				log.Err(err).Str("method", method).Str("output", errorOutput).Msg("Error while calling Snyk CLI")
 				reportErrorViaChan(workspace, dChan, fmt.Errorf("%v: %v", err, errorOutput))
 				return
 			}
-			log.Warn().Err(err).Str("method", "oss.ScanWorkspace").Msg("Error while calling Snyk CLI")
+			log.Warn().Err(err).Str("method", method).Msg("Error while calling Snyk CLI")
 		default:
 			reportErrorViaChan(workspace, dChan, err)
 			return
@@ -109,7 +109,7 @@ func ScanWorkspace(
 	var scanResult ossScanResult
 	err = json.Unmarshal(res, &scanResult)
 	if err != nil {
-		log.Err(err).Str("method", "scanWorkspace").Msg("couldn't unmarshal response")
+		log.Err(err).Str("method", method).Msg("couldn't unmarshal response")
 		reportErrorViaChan(workspace, dChan, err)
 		return
 	}
@@ -119,7 +119,7 @@ func ScanWorkspace(
 	targetFileUri := uri.PathToUri(targetFilePath)
 	fileContent, err := ioutil.ReadFile(targetFilePath)
 	if err != nil {
-		log.Err(err).Str("method", "oss.ScanWorkspace").
+		log.Err(err).Str("method", method).
 			Msgf("Error while reading the file %v, err: %v", targetFile, err)
 		reportErrorViaChan(targetFileUri, dChan, err)
 		return
@@ -137,6 +137,7 @@ func determineTargetFile(displayTargetFile string) string {
 }
 
 func ScanFile(
+	ctx context.Context,
 	Cli cli.Executor,
 	documentURI sglsp.DocumentURI,
 	wg *sync.WaitGroup,
@@ -144,8 +145,12 @@ func ScanFile(
 	hoverChan chan lsp.Hover,
 ) {
 	defer wg.Done()
-	defer log.Debug().Str("method", "oss.ScanFile").Msg("done.")
-	log.Debug().Str("method", "oss.ScanFile").Msg("started.")
+	s := instrumentation.New()
+	method := "oss.ScanFile"
+	s.StartSpan(ctx, method)
+	defer s.Finish()
+	defer log.Debug().Str("method", method).Msg("done.")
+	log.Debug().Str("method", method).Msg("started.")
 
 	if !IsSupported(documentURI) {
 		return
@@ -153,10 +158,10 @@ func ScanFile(
 
 	path, err := filepath.Abs(uri.PathFromUri(documentURI))
 	if err != nil {
-		log.Err(err).Str("method", "oss.ScanFile").
+		log.Err(err).Str("method", method).
 			Msg("Error while extracting file absolutePath")
 	}
-	preconditions.EnsureReadyForAnalysisAndWait()
+	preconditions.EnsureReadyForAnalysisAndWait(ctx)
 	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", filepath.Dir(path), "--json"})
 	res, err := Cli.Execute(cmd)
 	if err != nil {
@@ -164,11 +169,11 @@ func ScanFile(
 		case *exec.ExitError:
 			if err.ExitCode() > 1 {
 				errorOutput := string(res)
-				log.Err(err).Str("method", "oss.ScanFile").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
+				log.Err(err).Str("method", method).Str("output", errorOutput).Msg("Error while calling Snyk CLI")
 				reportErrorViaChan(documentURI, dChan, fmt.Errorf("%v: %v", err, errorOutput))
 				return
 			}
-			log.Warn().Err(err).Str("method", "oss.ScanFile").Msg("Error while calling Snyk CLI")
+			log.Warn().Err(err).Str("method", method).Msg("Error while calling Snyk CLI")
 		default:
 			reportErrorViaChan(documentURI, dChan, err)
 			return
@@ -178,14 +183,14 @@ func ScanFile(
 	var scanResults ossScanResult
 	err = json.Unmarshal(res, &scanResults)
 	if err != nil {
-		log.Err(err).Str("method", "scanFile").Msg("couldn't unmarshal response")
+		log.Err(err).Str("method", method).Msg("couldn't unmarshal response")
 		reportErrorViaChan(documentURI, dChan, err)
 		return
 	}
 
 	fileContent, err := os.ReadFile(path)
 	if err != nil {
-		log.Err(err).Str("method", "oss.ScanFile").
+		log.Err(err).Str("method", method).
 			Msg("Error reading file " + path)
 		reportErrorViaChan(documentURI, dChan, err)
 		return

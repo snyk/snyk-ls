@@ -1,14 +1,16 @@
 package code
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -25,11 +27,19 @@ func NewSnykCode(bundleUploader *BundleUploader, apiClient SnykApiClient) *SnykC
 	return sc
 }
 
-func (sc *SnykCode) ScanFile(documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+func (sc *SnykCode) ScanFile(ctx context.Context, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+	s := instrumentation.New()
+	method := "ScanFile"
+	s.StartSpan(ctx, method)
+	defer s.Finish()
 	sc.uploadAndAnalyze([]sglsp.DocumentURI{documentURI}, wg, documentURI, dChan, hoverChan)
 }
 
-func (sc *SnykCode) ScanWorkspace(documents []sglsp.DocumentURI, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+func (sc *SnykCode) ScanWorkspace(ctx context.Context, documents []sglsp.DocumentURI, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+	s := instrumentation.New()
+	method := "ScanWorkspace"
+	s.StartSpan(ctx, method)
+	defer s.Finish()
 	sc.uploadAndAnalyze(documents, wg, documentURI, dChan, hoverChan)
 }
 

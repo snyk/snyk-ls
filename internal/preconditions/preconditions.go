@@ -9,13 +9,13 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/cli/auth"
 	"github.com/snyk/snyk-ls/internal/cli/install"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 )
 
-func EnsureReadyForAnalysisAndWait() {
+func EnsureReadyForAnalysisAndWait(ctx context.Context) {
 	install.Mutex.Lock()
 	defer install.Mutex.Unlock()
 	cliInstalled := config.CurrentConfig().CliInstalled()
@@ -30,7 +30,7 @@ func EnsureReadyForAnalysisAndWait() {
 	}
 
 	for !config.CurrentConfig().CliInstalled() {
-		installCli()
+		installCli(ctx)
 		time.Sleep(2 * time.Second)
 	}
 
@@ -40,7 +40,7 @@ func EnsureReadyForAnalysisAndWait() {
 	}
 }
 
-func installCli() {
+func installCli(ctx context.Context) {
 	i := install.NewInstaller()
 	cliPath, err := i.Find()
 	if err != nil {

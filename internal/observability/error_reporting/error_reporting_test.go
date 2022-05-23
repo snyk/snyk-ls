@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/internal/observability"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -27,11 +28,11 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 func TestErrorReporting_Environment(t *testing.T) {
 	testutil.UnitTest(t)
 	config.Development = "true"
-	curEnvironment := environment()
+	curEnvironment := observability.Environment()
 	assert.Equal(t, "development", curEnvironment)
 
 	config.Development = "false"
-	curEnvironment = environment()
+	curEnvironment = observability.Environment()
 	assert.Equal(t, "production", curEnvironment)
 }
 
@@ -40,10 +41,10 @@ func TestErrorReporting_BeforeSend(t *testing.T) {
 	testEvent := sentry.NewEvent()
 
 	config.CurrentConfig().SetErrorReportingEnabled(true)
-	result := beforeSend(testEvent, nil)
+	result := observability.BeforeSend(testEvent, nil)
 	assert.Equal(t, testEvent, result)
 
 	config.CurrentConfig().SetErrorReportingEnabled(false)
-	result = beforeSend(testEvent, nil)
+	result = observability.BeforeSend(testEvent, nil)
 	assert.Equal(t, (*sentry.Event)(nil), result)
 }

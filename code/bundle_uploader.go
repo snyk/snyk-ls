@@ -11,7 +11,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
-	"github.com/snyk/snyk-ls/util"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type BundleUploader struct {

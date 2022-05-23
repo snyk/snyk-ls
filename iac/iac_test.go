@@ -1,6 +1,7 @@
 package iac
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,7 +22,8 @@ import (
 func Test_ScanWorkspace(t *testing.T) {
 	testutil.IntegTest(t)
 	testutil.CreateDummyProgressListener(t)
-	preconditions.EnsureReadyForAnalysisAndWait()
+	ctx := context.Background()
+	preconditions.EnsureReadyForAnalysisAndWait(ctx)
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 
 	path, _ := filepath.Abs("testdata")
@@ -33,7 +35,7 @@ func Test_ScanWorkspace(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	snykCli := cli.SnykCli{}
-	go ScanWorkspace(snykCli, doc, &wg, dChan, hoverChan)
+	go ScanWorkspace(ctx, snykCli, doc, &wg, dChan, hoverChan)
 	wg.Wait()
 
 	diagnosticResult := <-dChan
@@ -49,7 +51,8 @@ func Test_ScanFile(t *testing.T) {
 	hover.ClearAllHovers()
 	testutil.IntegTest(t)
 	config.CurrentConfig().SetFormat(config.FormatHtml)
-	preconditions.EnsureReadyForAnalysisAndWait()
+	ctx := context.Background()
+	preconditions.EnsureReadyForAnalysisAndWait(ctx)
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/RBAC.yaml")
@@ -66,7 +69,7 @@ func Test_ScanFile(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	snykCli := cli.SnykCli{}
-	go ScanFile(snykCli, doc.URI, &wg, dChan, hoverChan)
+	go ScanFile(ctx, snykCli, doc.URI, &wg, dChan, hoverChan)
 	wg.Wait()
 
 	diagnosticResult := <-dChan

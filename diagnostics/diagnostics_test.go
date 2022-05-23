@@ -1,6 +1,7 @@
 package diagnostics
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -24,7 +25,7 @@ func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 	di.TestInit(t)
 	documentDiagnosticCache.Put(diagnosticUri, []lsp.Diagnostic{code.FakeDiagnostic})
 
-	diagnostics := GetDiagnostics(diagnosticUri)
+	diagnostics := GetDiagnostics(context.Background(), diagnosticUri)
 
 	assert.NotNil(t, diagnostics)
 	assert.NotEmpty(t, DocumentDiagnosticsFromCache(diagnosticUri))
@@ -39,7 +40,7 @@ func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 
-	diagnostics := GetDiagnostics(diagnosticUri)
+	diagnostics := GetDiagnostics(context.Background(), diagnosticUri)
 
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
 	params := di.SnykCodeClient.(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)
@@ -56,7 +57,7 @@ func Test_GetDiagnostics_shouldNotRunCodeIfNotSastEnabled(t *testing.T) {
 	fakeApiClient := di.SnykCode.SnykApiClient.(*code.FakeApiClient)
 	fakeApiClient.CodeEnabled = false
 
-	diagnostics := GetDiagnostics(diagnosticUri)
+	diagnostics := GetDiagnostics(context.Background(), diagnosticUri)
 
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
 	assert.Len(t, fakeApiClient.GetAllCalls(code.SastEnabledOperation), 1)
@@ -71,7 +72,7 @@ func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 
-	diagnostics := GetDiagnostics(diagnosticUri)
+	diagnostics := GetDiagnostics(context.Background(), diagnosticUri)
 
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
 	params := di.SnykCodeClient.(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)
@@ -101,7 +102,7 @@ func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
 	Cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything).Return("test", nil)
 
-	diagnostics := GetDiagnostics(documentURI)
+	diagnostics := GetDiagnostics(context.Background(), documentURI)
 
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(documentURI)), len(diagnostics))
 	assert.Equal(t, 1, len(mockCli.Calls))
@@ -119,7 +120,7 @@ func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
 	Cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything).Return("test", nil)
 
-	diagnostics := GetDiagnostics(documentURI)
+	diagnostics := GetDiagnostics(context.Background(), documentURI)
 
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(documentURI)), len(diagnostics))
 	assert.Equal(t, 0, len(mockCli.Calls))
@@ -143,7 +144,7 @@ func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
 	Cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything).Return("{}", nil)
 
-	diagnostics := GetDiagnostics(documentURI)
+	diagnostics := GetDiagnostics(context.Background(), documentURI)
 
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(documentURI)), len(diagnostics))
 	assert.Equal(t, 1, len(mockCli.Calls))
@@ -166,7 +167,7 @@ func Test_GetDiagnostics_shouldNotIacIfNotEnabled(t *testing.T) { // disable sny
 	Cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything).Return("test", nil)
 
-	diagnostics := GetDiagnostics(documentURI)
+	diagnostics := GetDiagnostics(context.Background(), documentURI)
 
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(documentURI)), len(diagnostics))
 	assert.Equal(t, 0, len(mockCli.Calls))
@@ -182,7 +183,7 @@ func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
 	}
 	di.TestInit(t)
 
-	GetDiagnostics(empty.URI)
+	GetDiagnostics(context.Background(), empty.URI)
 
 	// verify that create bundle has NOT been called on backend service
 	params := di.SnykCodeClient.(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)
@@ -194,7 +195,7 @@ func Test_ClearWorkspaceFolderDiagnostics_shouldRemoveDiagnosticsOfAllFilesInFol
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 	di.TestInit(t)
-	diagnostics := GetDiagnostics(diagnosticUri)
+	diagnostics := GetDiagnostics(context.Background(), diagnosticUri)
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
 
 	ClearWorkspaceFolderDiagnostics(lsp.WorkspaceFolder{Uri: uri.PathToUri(path)})

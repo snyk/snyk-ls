@@ -9,7 +9,8 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/server"
 )
 
@@ -27,7 +28,7 @@ func main() {
 	}
 	log.Info().Msg(config.Version)
 	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
-	error_reporting.InitErrorReporting()
+	observability.Initialize()
 	server.Start()
 }
 

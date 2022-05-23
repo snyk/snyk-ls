@@ -1,6 +1,7 @@
 package oss
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -28,7 +29,8 @@ func Test_ScanWorkspace(t *testing.T) {
 	testutil.IntegTest(t)
 	testutil.CreateDummyProgressListener(t)
 	config.CurrentConfig().SetFormat(config.FormatHtml)
-	preconditions.EnsureReadyForAnalysisAndWait()
+	ctx := context.Background()
+	preconditions.EnsureReadyForAnalysisAndWait(ctx)
 
 	path, _ := filepath.Abs("testdata")
 
@@ -41,7 +43,7 @@ func Test_ScanWorkspace(t *testing.T) {
 	wg.Add(1)
 	snykCli := &cli.SnykCli{}
 
-	go ScanWorkspace(snykCli, doc, &wg, dChan, hoverChan)
+	go ScanWorkspace(ctx, snykCli, doc, &wg, dChan, hoverChan)
 
 	diagnosticResult := <-dChan
 	hoverResult := <-hoverChan
@@ -55,7 +57,8 @@ func Test_ScanFile(t *testing.T) {
 	hover.ClearAllHovers()
 	testutil.IntegTest(t)
 	config.CurrentConfig().SetFormat(config.FormatHtml)
-	preconditions.EnsureReadyForAnalysisAndWait()
+	ctx := context.Background()
+	preconditions.EnsureReadyForAnalysisAndWait(ctx)
 
 	path, _ := filepath.Abs("testdata/package.json")
 
@@ -65,7 +68,7 @@ func Test_ScanFile(t *testing.T) {
 	wg.Add(1)
 
 	snykCli := &cli.SnykCli{}
-	go ScanFile(snykCli, uri.PathToUri(path), &wg, dChan, hoverChan)
+	go ScanFile(ctx, snykCli, uri.PathToUri(path), &wg, dChan, hoverChan)
 
 	diagnosticResult := <-dChan
 	hoverResult := <-hoverChan

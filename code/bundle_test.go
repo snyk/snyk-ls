@@ -6,7 +6,7 @@ import (
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/util"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func Test_getShardKey(t *testing.T) {

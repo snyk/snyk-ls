@@ -1,6 +1,7 @@
 package preconditions
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -19,7 +20,7 @@ func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 	if !config.CurrentConfig().Authenticated() {
 		_ = config.CurrentConfig().SetToken("dummy") // we don't want to authenticate
 	}
-	EnsureReadyForAnalysisAndWait()
+	EnsureReadyForAnalysisAndWait(context.Background())
 	assert.NotEmpty(t, config.CurrentConfig().CliPath())
 }
 
@@ -35,7 +36,7 @@ func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
 		_ = config.CurrentConfig().SetCliPath("")
 	}()
 
-	EnsureReadyForAnalysisAndWait()
+	EnsureReadyForAnalysisAndWait(context.Background())
 
 	assert.Equal(t, tempFile.Name(), config.CurrentConfig().CliPath())
 }

@@ -1,6 +1,7 @@
 package diagnostics
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -9,11 +10,12 @@ import (
 
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
-	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/iac"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/hover"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -61,7 +63,7 @@ func DocumentDiagnosticsFromCache(file sglsp.DocumentURI) []lsp.Diagnostic {
 	return diagnostics.([]lsp.Diagnostic)
 }
 
-func GetDiagnostics(documentURI sglsp.DocumentURI) []lsp.Diagnostic {
+func GetDiagnostics(ctx context.Context, documentURI sglsp.DocumentURI) []lsp.Diagnostic {
 	// serve from cache
 	diagnosticSlice := DocumentDiagnosticsFromCache(documentURI)
 	if len(diagnosticSlice) > 0 {
@@ -69,20 +71,20 @@ func GetDiagnostics(documentURI sglsp.DocumentURI) []lsp.Diagnostic {
 		return diagnosticSlice
 	}
 
-	diagnostics := fetchAllRegisteredDocumentDiagnostics(documentURI, lsp.ScanLevelFile)
+	diagnostics := fetchAllRegisteredDocumentDiagnostics(ctx, documentURI, lsp.ScanLevelFile)
 	addToCache(diagnostics)
 	cache := DocumentDiagnosticsFromCache(documentURI)
 	return cache
 }
 
-func fetchAllRegisteredDocumentDiagnostics(documentURI sglsp.DocumentURI, level lsp.ScanLevel) map[sglsp.DocumentURI][]lsp.Diagnostic {
-	log.Info().
-		Str("method", "fetchAllRegisteredDocumentDiagnostics").
-		Msg("started.")
+func fetchAllRegisteredDocumentDiagnostics(ctx context.Context, documentURI sglsp.DocumentURI, level lsp.ScanLevel) map[sglsp.DocumentURI][]lsp.Diagnostic {
+	s := instrumentation.New()
+	method := "fetchAllRegisteredDocumentDiagnostics"
+	s.StartSpan(ctx, method)
+	defer s.Finish()
 
-	defer log.Info().
-		Str("method", "fetchAllRegisteredDocumentDiagnostics").
-		Msg("done.")
+	log.Info().Str("method", method).Msg("started.")
+	defer log.Info().Str("method", method).Msg("done.")
 
 	var diagnostics = map[sglsp.DocumentURI][]lsp.Diagnostic{}
 
@@ -97,10 +99,10 @@ func fetchAllRegisteredDocumentDiagnostics(documentURI sglsp.DocumentURI, level 
 
 	if level == lsp.ScanLevelWorkspace {
 		dChan = make(chan lsp.DiagnosticResult, 10000)
-		workspaceLevelFetch(documentURI, p, &wg, dChan, hoverChan)
+		workspaceLevelFetch(s.Context(), documentURI, p, &wg, dChan, hoverChan)
 	} else {
 		dChan = make(chan lsp.DiagnosticResult, 10000)
-		fileLevelFetch(documentURI, p, &wg, dChan, hoverChan)
+		fileLevelFetch(s.Context(), documentURI, p, &wg, dChan, hoverChan)
 	}
 	wg.Wait()
 	log.Debug().
@@ -110,15 +112,15 @@ func fetchAllRegisteredDocumentDiagnostics(documentURI sglsp.DocumentURI, level 
 	return processResults(dChan, diagnostics)
 }
 
-func workspaceLevelFetch(workspaceURI sglsp.DocumentURI, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+func workspaceLevelFetch(ctx context.Context, workspaceURI sglsp.DocumentURI, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	if config.CurrentConfig().IsSnykIacEnabled() {
 		wg.Add(1)
-		go iac.ScanWorkspace(Cli, workspaceURI, wg, dChan, hoverChan)
+		go iac.ScanWorkspace(ctx, Cli, workspaceURI, wg, dChan, hoverChan)
 		p.Report(10)
 	}
 	if config.CurrentConfig().IsSnykOssEnabled() {
 		wg.Add(1)
-		go oss.ScanWorkspace(Cli, workspaceURI, wg, dChan, hoverChan)
+		go oss.ScanWorkspace(ctx, Cli, workspaceURI, wg, dChan, hoverChan)
 		p.Report(20)
 	}
 	if config.CurrentConfig().IsSnykCodeEnabled() {
@@ -130,22 +132,22 @@ func workspaceLevelFetch(workspaceURI sglsp.DocumentURI, p *progress.Tracker, wg
 				Str("workspaceURI", string(workspaceURI)).
 				Msg("error getting workspace files")
 		}
-		di.SnykCode.ScanWorkspace(files, workspaceURI, wg, dChan, hoverChan)
+		di.SnykCode.ScanWorkspace(ctx, files, workspaceURI, wg, dChan, hoverChan)
 		p.Report(80)
 	}
 }
 
-func fileLevelFetch(documentURI sglsp.DocumentURI, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+func fileLevelFetch(ctx context.Context, documentURI sglsp.DocumentURI, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	if config.CurrentConfig().IsSnykCodeEnabled() {
-		di.SnykCode.ScanFile(documentURI, wg, dChan, hoverChan)
+		di.SnykCode.ScanFile(ctx, documentURI, wg, dChan, hoverChan)
 	}
 	if config.CurrentConfig().IsSnykIacEnabled() {
 		wg.Add(1)
-		go iac.ScanFile(Cli, documentURI, wg, dChan, hoverChan)
+		go iac.ScanFile(ctx, Cli, documentURI, wg, dChan, hoverChan)
 	}
 	if config.CurrentConfig().IsSnykOssEnabled() {
 		wg.Add(1)
-		go oss.ScanFile(Cli, documentURI, wg, dChan, hoverChan)
+		go oss.ScanFile(ctx, Cli, documentURI, wg, dChan, hoverChan)
 	}
 	p.Report(80)
 }

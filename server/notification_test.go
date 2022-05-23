@@ -127,7 +127,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	if err != nil {
 		log.Fatal().Err(err)
 	}
-	preconditions.EnsureReadyForAnalysisAndWait()
+	preconditions.EnsureReadyForAnalysisAndWait(context.Background())
 	var expected = lsp.AuthenticationParams{Token: "test token"}
 
 	notification.Send(expected)

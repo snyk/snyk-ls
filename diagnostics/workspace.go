@@ -1,6 +1,7 @@
 package diagnostics
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -113,10 +115,14 @@ func ignored(gitIgnore *ignore.GitIgnore, path string) bool {
 	return false
 }
 
-func workspaceDiagnostics(workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
+func workspaceDiagnostics(ctx context.Context, workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
 	defer wg.Done()
+	s := instrumentation.New()
+	method := "workspaceDiagnostics"
+	s.StartSpan(ctx, method)
+	defer s.Finish()
 
-	diagnostics := fetchAllRegisteredDocumentDiagnostics(workspace.Uri, lsp.ScanLevelWorkspace)
+	diagnostics := fetchAllRegisteredDocumentDiagnostics(s.Context(), workspace.Uri, lsp.ScanLevelWorkspace)
 	addToCache(diagnostics)
 	setFolderScanned(workspace)
 	for documentURI, d := range diagnostics {
@@ -127,14 +133,18 @@ func workspaceDiagnostics(workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
 	}
 }
 
-func WorkspaceScan(workspaceFolders []lsp.WorkspaceFolder) {
-	preconditions.EnsureReadyForAnalysisAndWait()
+func WorkspaceScan(ctx context.Context, workspaceFolders []lsp.WorkspaceFolder) {
+	s := instrumentation.New()
+	method := "WorkspaceScan"
+	s.StartSpan(ctx, method)
+	defer s.Finish()
+	preconditions.EnsureReadyForAnalysisAndWait(s.Context())
 	notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Starting workspace scan."})
 	defer notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Workspace scan completed."})
 	var wg sync.WaitGroup
 	for _, workspace := range workspaceFolders {
 		wg.Add(1)
-		go workspaceDiagnostics(workspace, &wg)
+		go workspaceDiagnostics(s.Context(), workspace, &wg)
 	}
 
 	wg.Wait()
