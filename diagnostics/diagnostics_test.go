@@ -83,8 +83,8 @@ type mockCli struct {
 	mock.Mock
 }
 
-func (m *mockCli) Execute(cmd []string) (resp []byte, err error) {
-	args := m.Called(cmd)
+func (m *mockCli) Execute(cmd []string, workDir string) (resp []byte, err error) {
+	args := m.Called(cmd, workDir)
 	log.Debug().Interface("cmd", cmd).Msg("Using mock CLI")
 	return []byte(args.String(0)), args.Error(1)
 }
@@ -100,7 +100,7 @@ func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
 	documentURI := sglsp.DocumentURI("package.json")
 	mockCli := mockCli{}
 	Cli = &mockCli
-	mockCli.Mock.On("Execute", mock.Anything).Return("test", nil)
+	mockCli.Mock.On("Execute", mock.Anything, mock.Anything).Return("test", nil)
 
 	diagnostics := GetDiagnostics(context.Background(), documentURI)
 
@@ -118,7 +118,7 @@ func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
 	documentURI := sglsp.DocumentURI("package.json")
 	mockCli := mockCli{}
 	Cli = &mockCli
-	mockCli.Mock.On("Execute", mock.Anything).Return("test", nil)
+	mockCli.Mock.On("Execute", mock.Anything, mock.Anything).Return("test", nil)
 
 	diagnostics := GetDiagnostics(context.Background(), documentURI)
 
@@ -142,7 +142,7 @@ func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
 
 	mockCli := mockCli{}
 	Cli = &mockCli
-	mockCli.Mock.On("Execute", mock.Anything).Return("{}", nil)
+	mockCli.Mock.On("Execute", mock.Anything, mock.Anything).Return("{}", nil)
 
 	diagnostics := GetDiagnostics(context.Background(), documentURI)
 
@@ -165,7 +165,7 @@ func Test_GetDiagnostics_shouldNotIacIfNotEnabled(t *testing.T) { // disable sny
 	documentURI := sglsp.DocumentURI("package.json")
 	mockCli := mockCli{}
 	Cli = &mockCli
-	mockCli.Mock.On("Execute", mock.Anything).Return("test", nil)
+	mockCli.Mock.On("Execute", mock.Anything, mock.Anything).Return("test", nil)
 
 	diagnostics := GetDiagnostics(context.Background(), documentURI)
 

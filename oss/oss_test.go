@@ -2,12 +2,12 @@ package oss
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
-	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config"
@@ -32,9 +32,9 @@ func Test_ScanWorkspace(t *testing.T) {
 	ctx := context.Background()
 	preconditions.EnsureReadyForAnalysisAndWait(ctx)
 
-	path, _ := filepath.Abs("testdata")
-
-	doc := sglsp.DocumentURI(path)
+	workingDir, _ := os.Getwd()
+	path, _ := filepath.Abs(workingDir + "/testdata")
+	doc := uri.PathToUri(path)
 
 	dChan := make(chan lsp.DiagnosticResult)
 	hoverChan := make(chan lsp.Hover)
@@ -60,7 +60,8 @@ func Test_ScanFile(t *testing.T) {
 	ctx := context.Background()
 	preconditions.EnsureReadyForAnalysisAndWait(ctx)
 
-	path, _ := filepath.Abs("testdata/package.json")
+	workingDir, _ := os.Getwd()
+	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
 	dChan := make(chan lsp.DiagnosticResult)
 	hoverChan := make(chan lsp.Hover)

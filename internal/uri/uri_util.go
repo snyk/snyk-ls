@@ -23,9 +23,14 @@ func FolderContains(folderPath string, path string) bool {
 // `file:///root is converted to `/root` on Linux and macOS
 func PathFromUri(uri sglsp.DocumentURI) string {
 	var path = removeScheme(uri)
-	if isWindows() && isDriveURI(uri) { // UNC path
-		path = strings.TrimPrefix(path, "/") // /C:/... --> C:/...
+	if isWindows() {
+		if isDriveURI(uri) {
+			path = strings.TrimPrefix(path, "/") // /C:/... --> C:/...
+		} else { // UNC path
+			path = "\\\\" + path
+		}
 	}
+
 	return filepath.Clean(path)
 }
 
