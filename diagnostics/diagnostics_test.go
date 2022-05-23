@@ -19,6 +19,7 @@ import (
 )
 
 func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
+	testutil.UnitTest(t)
 	ClearEntireDiagnosticsCache()
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
