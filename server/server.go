@@ -11,8 +11,6 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/di"
-	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
-
 	"github.com/snyk/snyk-ls/diagnostics"
 	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -79,19 +77,15 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
 		clientParams = params
 
-		s := instrumentation.New()
-		s.StartSpan(ctx, method)
-		defer s.Finish()
-
 		// async processing listener
 		go hover.CreateHoverListener()
 		go createProgressListener(progress.Channel, srv)
 		go registerNotifier(srv)
 
 		if len(clientParams.WorkspaceFolders) > 0 {
-			go diagnostics.WorkspaceScan(s.Context(), clientParams.WorkspaceFolders)
+			go diagnostics.WorkspaceScan(ctx, clientParams.WorkspaceFolders)
 		} else {
-			go diagnostics.GetDiagnostics(s.Context(), clientParams.RootURI)
+			go diagnostics.GetDiagnostics(ctx, clientParams.RootURI)
 		}
 
 		return lsp.InitializeResult{
@@ -137,10 +131,7 @@ func Exit(srv *jrpc2.Server) jrpc2.Handler {
 }
 
 func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv *jrpc2.Server) {
-	s := instrumentation.New()
 	method := "PublishDiagnostics"
-	s.StartSpan(ctx, method)
-	defer s.Finish()
 	diags := diagnostics.GetDiagnostics(ctx, uri)
 	if diags != nil {
 		diagnosticsParams := lsp.PublishDiagnosticsParams{
@@ -165,10 +156,7 @@ func TextDocumentDidOpenHandler(srv *jrpc2.Server) handler.Func {
 		method := "TextDocumentDidOpenHandler"
 		log.Info().Str("method", method).Str("documentURI", string(params.TextDocument.URI)).Msg("RECEIVING")
 		go func() {
-			s := instrumentation.New()
-			s.StartSpan(ctx, method)
-			defer s.Finish()
-			preconditions.EnsureReadyForAnalysisAndWait(s.Context())
+			preconditions.EnsureReadyForAnalysisAndWait(ctx)
 			PublishDiagnostics(ctx, params.TextDocument.URI, srv) // todo: remove in favor of notifier
 		}()
 		return nil, nil
@@ -179,14 +167,11 @@ func TextDocumentDidSaveHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidSaveTextDocumentParams) (interface{}, error) {
 		method := "TextDocumentDidSaveHandler"
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
-		s := instrumentation.New()
-		s.StartSpan(ctx, method)
-		defer s.Finish()
 
 		// clear cache when saving and get fresh diagnostics
 		diagnostics.ClearDiagnosticsCache(params.TextDocument.URI)
 		hover.DeleteHover(params.TextDocument.URI)
-		PublishDiagnostics(s.Context(), params.TextDocument.URI, srv) // todo: remove in favor of notifier
+		PublishDiagnostics(ctx, params.TextDocument.URI, srv) // todo: remove in favor of notifier
 		return nil, nil
 	})
 }

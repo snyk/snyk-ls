@@ -117,12 +117,8 @@ func ignored(gitIgnore *ignore.GitIgnore, path string) bool {
 
 func workspaceDiagnostics(ctx context.Context, workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
 	defer wg.Done()
-	s := instrumentation.New()
-	method := "workspaceDiagnostics"
-	s.StartSpan(ctx, method)
-	defer s.Finish()
 
-	diagnostics := fetchAllRegisteredDocumentDiagnostics(s.Context(), workspace.Uri, lsp.ScanLevelWorkspace)
+	diagnostics := fetchAllRegisteredDocumentDiagnostics(ctx, workspace.Uri, lsp.ScanLevelWorkspace)
 	addToCache(diagnostics)
 	setFolderScanned(workspace)
 	for documentURI, d := range diagnostics {
@@ -136,7 +132,7 @@ func workspaceDiagnostics(ctx context.Context, workspace lsp.WorkspaceFolder, wg
 func WorkspaceScan(ctx context.Context, workspaceFolders []lsp.WorkspaceFolder) {
 	s := instrumentation.New()
 	method := "WorkspaceScan"
-	s.StartSpan(ctx, method)
+	s.StartSpan(ctx, method, method)
 	defer s.Finish()
 	preconditions.EnsureReadyForAnalysisAndWait(s.Context())
 	notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Starting workspace scan."})

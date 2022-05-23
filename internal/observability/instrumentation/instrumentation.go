@@ -9,7 +9,7 @@ import (
 )
 
 type Span interface {
-	StartSpan(ctx context.Context, name string)
+	StartSpan(ctx context.Context, operation string, transactionName string)
 	Finish()
 	Context() context.Context
 }
@@ -22,12 +22,12 @@ type sentrySpan struct {
 	span *sentry.Span
 }
 
-func (s *sentrySpan) StartSpan(ctx context.Context, operation string) {
-	s.span = sentry.StartSpan(
-		ctx,
-		operation,
-		sentry.TransactionName(operation),
-	)
+func (s *sentrySpan) StartSpan(ctx context.Context, operation string, transactionName string) {
+	var options []sentry.SpanOption
+	if transactionName != "" {
+		options = append(options, sentry.TransactionName(transactionName))
+	}
+	s.span = sentry.StartSpan(ctx, operation, options...)
 	s.span.SetTag("version", config.Version)
 	s.span.SetTag("organization", config.CurrentConfig().GetOrganization())
 }
@@ -47,9 +47,8 @@ func New() Span {
 	return &noopImpl{}
 }
 
-func (n *noopImpl) StartSpan(ctx context.Context, _ string) {
+func (n *noopImpl) StartSpan(ctx context.Context, _ string, _ string) {
 	n.ctx = ctx
 }
-func (n *noopImpl) StartChildSpan(_ string)  {}
 func (n *noopImpl) Finish()                  {}
 func (n *noopImpl) Context() context.Context { return n.ctx }

@@ -76,7 +76,7 @@ func ScanWorkspace(ctx context.Context, Cli cli.Executor, workspace sglsp.Docume
 	defer wg.Done()
 	s := instrumentation.New()
 	method := "oss.ScanWorkspace"
-	s.StartSpan(ctx, method)
+	s.StartSpan(ctx, method, "")
 	defer s.Finish()
 	defer log.Debug().Str("method", method).Msg("done.")
 	log.Debug().Str("method", method).Msg("started.")
@@ -167,7 +167,7 @@ func ScanFile(
 	defer wg.Done()
 	s := instrumentation.New()
 	method := "oss.ScanFile"
-	s.StartSpan(ctx, method)
+	s.StartSpan(ctx, method, "")
 	defer s.Finish()
 	defer log.Debug().Str("method", method).Msg("done.")
 	log.Debug().Str("method", method).Msg("started.")

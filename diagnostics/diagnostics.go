@@ -65,9 +65,13 @@ func DocumentDiagnosticsFromCache(file sglsp.DocumentURI) []lsp.Diagnostic {
 
 func GetDiagnostics(ctx context.Context, documentURI sglsp.DocumentURI) []lsp.Diagnostic {
 	// serve from cache
+	s := instrumentation.New()
+	method := "GetDiagnostics"
+	s.StartSpan(ctx, method, method)
+	defer s.Finish()
 	diagnosticSlice := DocumentDiagnosticsFromCache(documentURI)
 	if len(diagnosticSlice) > 0 {
-		log.Info().Str("method", "GetDiagnostics").Msgf("Cached: Diagnostics for %s", documentURI)
+		log.Info().Str("method", method).Msgf("Cached: Diagnostics for %s", documentURI)
 		return diagnosticSlice
 	}
 
@@ -78,10 +82,7 @@ func GetDiagnostics(ctx context.Context, documentURI sglsp.DocumentURI) []lsp.Di
 }
 
 func fetchAllRegisteredDocumentDiagnostics(ctx context.Context, documentURI sglsp.DocumentURI, level lsp.ScanLevel) map[sglsp.DocumentURI][]lsp.Diagnostic {
-	s := instrumentation.New()
 	method := "fetchAllRegisteredDocumentDiagnostics"
-	s.StartSpan(ctx, method)
-	defer s.Finish()
 
 	log.Info().Str("method", method).Msg("started.")
 	defer log.Info().Str("method", method).Msg("done.")
@@ -99,10 +100,10 @@ func fetchAllRegisteredDocumentDiagnostics(ctx context.Context, documentURI sgls
 
 	if level == lsp.ScanLevelWorkspace {
 		dChan = make(chan lsp.DiagnosticResult, 10000)
-		workspaceLevelFetch(s.Context(), documentURI, p, &wg, dChan, hoverChan)
+		workspaceLevelFetch(ctx, documentURI, p, &wg, dChan, hoverChan)
 	} else {
 		dChan = make(chan lsp.DiagnosticResult, 10000)
-		fileLevelFetch(s.Context(), documentURI, p, &wg, dChan, hoverChan)
+		fileLevelFetch(ctx, documentURI, p, &wg, dChan, hoverChan)
 	}
 	wg.Wait()
 	log.Debug().

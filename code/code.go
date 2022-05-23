@@ -29,7 +29,7 @@ func NewSnykCode(bundleUploader *BundleUploader, apiClient SnykApiClient) *SnykC
 func (sc *SnykCode) ScanFile(ctx context.Context, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	s := instrumentation.New()
 	method := "code.ScanFile"
-	s.StartSpan(ctx, method)
+	s.StartSpan(ctx, method, "")
 	defer s.Finish()
 	sc.uploadAndAnalyze([]sglsp.DocumentURI{documentURI}, wg, documentURI, dChan, hoverChan)
 }
@@ -37,7 +37,7 @@ func (sc *SnykCode) ScanFile(ctx context.Context, documentURI sglsp.DocumentURI,
 func (sc *SnykCode) ScanWorkspace(ctx context.Context, documents []sglsp.DocumentURI, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	s := instrumentation.New()
 	method := "code.ScanWorkspace"
-	s.StartSpan(ctx, method)
+	s.StartSpan(ctx, method, "")
 	defer s.Finish()
 	sc.uploadAndAnalyze(documents, wg, documentURI, dChan, hoverChan)
 }
