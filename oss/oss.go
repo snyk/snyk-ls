@@ -74,10 +74,11 @@ func IsSupported(documentURI sglsp.DocumentURI) bool {
 
 func ScanWorkspace(ctx context.Context, Cli cli.Executor, workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	defer wg.Done()
-	s := instrumentation.New()
+
 	method := "oss.ScanWorkspace"
-	s.StartSpan(ctx, method, "")
+	s := instrumentation.StartSpan(ctx, method)
 	defer s.Finish()
+
 	defer log.Debug().Str("method", method).Msg("done.")
 	log.Debug().Str("method", method).Msg("started.")
 
@@ -165,10 +166,11 @@ func ScanFile(
 	hoverChan chan lsp.Hover,
 ) {
 	defer wg.Done()
-	s := instrumentation.New()
+
 	method := "oss.ScanFile"
-	s.StartSpan(ctx, method, "")
+	s := instrumentation.StartSpan(ctx, method)
 	defer s.Finish()
+
 	defer log.Debug().Str("method", method).Msg("done.")
 	log.Debug().Str("method", method).Msg("started.")
 

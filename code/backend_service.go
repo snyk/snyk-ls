@@ -108,8 +108,7 @@ func (s *SnykCodeHTTPClient) doCall(
 	requestBody []byte,
 ) ([]byte, error) {
 
-	span := instrumentation.New()
-	span.StartSpan(ctx, "doCall", "")
+	span := instrumentation.StartSpan(ctx, "doCall")
 	defer span.Finish()
 
 	b := bytes.NewBuffer(requestBody)

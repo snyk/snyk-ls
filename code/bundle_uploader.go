@@ -31,8 +31,7 @@ func NewBundler(SnykCode SnykCodeClient) *BundleUploader {
 // TODO remove all LSP dependencies (e.g. DocumentURI)
 func (b *BundleUploader) Upload(ctx context.Context, files []sglsp.DocumentURI) (Bundle, error) {
 	method := "code.Upload"
-	s := instrumentation.New()
-	s.StartSpan(ctx, method, "")
+	s := instrumentation.StartSpan(ctx, method)
 	defer s.Finish()
 	uploadBatches := b.groupInBatches(ctx, files)
 	if len(uploadBatches) == 0 {
@@ -63,8 +62,7 @@ func (b *BundleUploader) groupInBatches(ctx context.Context, files []sglsp.Docum
 	defer t.End("Batches created.")
 
 	method := "code.groupInBatches"
-	s := instrumentation.New()
-	s.StartSpan(ctx, method, "")
+	s := instrumentation.StartSpan(ctx, method)
 	defer s.Finish()
 
 	var batches []*UploadBatch

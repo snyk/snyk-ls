@@ -65,10 +65,10 @@ func DocumentDiagnosticsFromCache(file sglsp.DocumentURI) []lsp.Diagnostic {
 
 func GetDiagnostics(ctx context.Context, documentURI sglsp.DocumentURI) []lsp.Diagnostic {
 	// serve from cache
-	s := instrumentation.New()
 	method := "GetDiagnostics"
-	s.StartSpan(ctx, method, method)
+	s := instrumentation.NewTransaction(ctx, method, method)
 	defer s.Finish()
+
 	diagnosticSlice := DocumentDiagnosticsFromCache(documentURI)
 	if len(diagnosticSlice) > 0 {
 		log.Info().Str("method", method).Msgf("Cached: Diagnostics for %s", documentURI)

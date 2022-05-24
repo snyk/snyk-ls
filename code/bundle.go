@@ -86,8 +86,7 @@ func (b *Bundle) retrieveAnalysis(
 	defer p.End("Analysis complete.")
 
 	method := "code.retrieveAnalysis"
-	s := instrumentation.New()
-	s.StartSpan(ctx, method, "")
+	s := instrumentation.StartSpan(ctx, method)
 	defer s.Finish()
 
 	for {
