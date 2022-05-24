@@ -10,7 +10,8 @@ require (
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/sourcegraph/go-lsp v0.0.0-20200429204803-219e11d77f5d
 	github.com/stretchr/testify v1.7.0
-	github.com/subosito/gotenv v1.2.0
+	github.com/subosito/gotenv v1.3.0
+	go.lsp.dev/uri v0.3.0
 )
 
 require (
