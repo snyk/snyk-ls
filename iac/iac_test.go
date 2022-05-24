@@ -15,6 +15,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/uri"
 	lsp2 "github.com/snyk/snyk-ls/lsp"
 )
 
@@ -24,8 +25,9 @@ func Test_ScanWorkspace(t *testing.T) {
 	preconditions.EnsureReadyForAnalysisAndWait()
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 
-	path, _ := filepath.Abs("testdata")
-	doc := lsp.DocumentURI("file:" + path)
+	getwd, _ := os.Getwd()
+	path := filepath.Clean(getwd + "/testdata")
+	doc := uri.PathToUri(path)
 
 	dChan := make(chan lsp2.DiagnosticResult, 1)
 	hoverChan := make(chan lsp2.Hover, 1)
@@ -55,7 +57,7 @@ func Test_ScanFile(t *testing.T) {
 	path, _ := filepath.Abs(workingDir + "/testdata/RBAC.yaml")
 
 	doc := lsp.TextDocumentItem{
-		URI:        lsp.DocumentURI(path),
+		URI:        uri.PathToUri(path),
 		LanguageID: "yaml",
 		Version:    0,
 	}

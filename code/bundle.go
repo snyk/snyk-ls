@@ -64,9 +64,7 @@ func (b *Bundle) FetchDiagnosticsData(
 ) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
-
 	log.Debug().Str("method", "FetchDiagnosticsData").Msg("started.")
-
 	b.retrieveAnalysis(rootPath, dChan, hoverChan)
 }
 
@@ -75,7 +73,8 @@ func (b *Bundle) retrieveAnalysis(
 	dChan chan lsp2.DiagnosticResult,
 	hoverChan chan lsp2.Hover,
 ) {
-	if len(b.UploadBatches) == 0 {
+	if b.BundleHash == "" || len(b.UploadBatches) == 0 {
+		log.Warn().Str("method", "retrieveAnalysis").Str("rootPath", rootPath).Msg("bundle hash is empty")
 		return
 	}
 	p := progress.NewTracker(false)
@@ -87,11 +86,15 @@ func (b *Bundle) retrieveAnalysis(
 			b.BundleHash,
 			b.getShardKey(rootPath, config.CurrentConfig().Token()),
 			[]lsp.DocumentURI{},
-			0)
+			0,
+		)
 
 		if err != nil {
 			log.Error().Err(err).
-				Str("method", "DiagnosticData").Msg("error retrieving diagnostics...")
+				Str("method", "retrieveAnalysis").
+				Str("bundleHash", b.BundleHash).
+				Int("fileCount", len(b.UploadBatches)).
+				Msg("error retrieving diagnostics...")
 			dChan <- lsp2.DiagnosticResult{Err: err}
 			return
 		}
@@ -99,7 +102,7 @@ func (b *Bundle) retrieveAnalysis(
 		if status.message == "COMPLETE" {
 			for u, d := range diags {
 				log.Trace().Str("method", "retrieveAnalysis").Str("bundleHash", b.BundleHash).
-					Str("path1", string(u)).
+					Str("path", string(u)).
 					Msg("sending diagnostics...")
 
 				dChan <- lsp2.DiagnosticResult{

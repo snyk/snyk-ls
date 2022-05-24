@@ -1,6 +1,8 @@
 package progress
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
@@ -15,6 +17,7 @@ type Tracker struct {
 	cancelChannel chan lsp.ProgressToken
 	token         lsp.ProgressToken
 	cancellable   bool
+	lastReport    time.Time
 }
 
 func NewTestingTracker(channel chan lsp.ProgressParams, cancelChannel chan lsp.ProgressToken) *Tracker {
@@ -44,9 +47,13 @@ func (t *Tracker) Begin(title, message string) {
 	})
 
 	t.send(params)
+	t.lastReport = time.Now()
 }
 
 func (t *Tracker) Report(percentage int) {
+	if time.Now().Before(t.lastReport.Add(time.Second)) {
+		return
+	}
 	progress := lsp.ProgressParams{
 		Token: t.token,
 		Value: lsp.WorkDoneProgressReport{
@@ -54,8 +61,8 @@ func (t *Tracker) Report(percentage int) {
 			Percentage:           percentage,
 		},
 	}
-
 	t.send(progress)
+	t.lastReport = time.Now()
 }
 
 func (t *Tracker) End(message string) {
