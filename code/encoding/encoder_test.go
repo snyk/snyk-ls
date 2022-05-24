@@ -33,28 +33,32 @@ func deflate(data []byte) ([]byte, error) {
 	return data, nil
 }
 
-func TestEncoder(t *testing.T) {
+func FuzzEncoder(f *testing.F) {
 	// prepare
-	strToEncode := "Hello world"
-	buf := new(bytes.Buffer)
-	newEnc := NewEncoder(buf)
+	f.Add("Hello world")
+	f.Add(`"{\"/AnnotatorTest.java\":{\"hash\":\"ce51731ff7f221c9d1f9536ca907e67e56f6f7c377ec1ebd5abeb15abf088823\",\"content\":\"public class AnnotatorTest {\\n  public static void delay(long millis) {\\n    try {\\n      Thread.sleep(millis);\\n    } catch (InterruptedException e) {\\n      e.printStackTrace();\\n    }\\n  }\\n}\"}}"`)
 
-	// act
-	_, err := newEnc.Write([]byte(strToEncode))
-	if err != nil {
-		t.Fatal(err)
-	}
+	f.Fuzz(func(t *testing.T, strToEncode string) {
+		buf := new(bytes.Buffer)
+		newEnc := NewEncoder(buf)
 
-	// assert
-	deflatedBytes, err := deflate(buf.Bytes())
-	if err != nil {
-		t.Fatal(err)
-	}
+		// act
+		_, err := newEnc.Write([]byte(strToEncode))
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	decoded, err := decodeBase64(deflatedBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
+		// assert
+		deflatedBytes, err := deflate(buf.Bytes())
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	assert.Equal(t, strToEncode, string(decoded))
+		decoded, err := decodeBase64(deflatedBytes)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		assert.Equal(t, strToEncode, string(decoded))
+	})
 }
