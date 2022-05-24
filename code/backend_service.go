@@ -106,6 +106,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 
 	span := instrumentation.StartSpan(ctx, "doCall")
 	defer span.Finish()
+
 	b := new(bytes.Buffer)
 
 	mustBeEncoded := method == http.MethodPost || method == http.MethodPut
@@ -119,8 +120,6 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 		b = bytes.NewBuffer(requestBody)
 	}
 
-
-	b := bytes.NewBuffer(requestBody)
 	req, err := http.NewRequest(method, s.host+path, b)
 	if err != nil {
 		return nil, err
