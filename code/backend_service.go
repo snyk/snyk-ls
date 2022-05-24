@@ -116,6 +116,7 @@ func (s *SnykCodeHTTPClient) doCall(
 	if err != nil {
 		return nil, err
 	}
+
 	req.Header.Set("Session-Token", config.CurrentConfig().Token())
 	req.Header.Set("Content-Type", "application/json")
 	// https://www.keycdn.com/blog/http-cache-headers
