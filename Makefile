@@ -24,7 +24,7 @@ ifeq (,$(wildcard ./.bin/golangci-lint*))
 else
 	@echo "==> golangci-lint is already installed"
 endif
-	@if [ ! -d ./bin/pact ]; then\
+	@if [ ! -d ./.bin/pact ]; then\
 		echo "--- 🛠 Installing Pact CLI dependencies";\
 		curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | bash;\
 		mkdir ./.bin/pact;\
