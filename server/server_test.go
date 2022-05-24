@@ -434,7 +434,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	}
 	folder := lsp.WorkspaceFolder{
 		Name: "Test Repo",
-		Uri:  sglsp.DocumentURI("file:" + cloneTargetDir),
+		Uri:  uri.PathToUri(cloneTargetDir),
 	}
 	clientParams := lsp.InitializeParams{
 		WorkspaceFolders: []lsp.WorkspaceFolder{folder},
