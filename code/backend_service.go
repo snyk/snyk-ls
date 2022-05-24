@@ -119,9 +119,9 @@ func (s *SnykCodeHTTPClient) doCall(method string, path string, requestBody []by
 	req.Header.Set("Session-Token", config.CurrentConfig().Token())
 	// https://www.keycdn.com/blog/http-cache-headers
 	req.Header.Set("Cache-Control", "private, max-age=0, no-cache")
-	req.Header.Set("Content-Encoding", "gzip")
 	if mustBeEncoded {
 		req.Header.Set("Content-Type", "application/octet-stream")
+		req.Header.Set("Content-Encoding", "gzip")
 	} else {
 		req.Header.Set("Content-Type", "application/json")
 	}
