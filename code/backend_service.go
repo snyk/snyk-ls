@@ -14,6 +14,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/code/encoding"
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -101,15 +102,23 @@ func (s *SnykCodeHTTPClient) CreateBundle(
 	return bundle.BundleHash, bundle.MissingFiles, nil
 }
 
-func (s *SnykCodeHTTPClient) doCall(
-	ctx context.Context,
-	method string,
-	path string,
-	requestBody []byte,
-) ([]byte, error) {
+func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path string, requestBody []byte) ([]byte, error) {
 
 	span := instrumentation.StartSpan(ctx, "doCall")
 	defer span.Finish()
+	b := new(bytes.Buffer)
+
+	mustBeEncoded := method == http.MethodPost || method == http.MethodPut
+	if mustBeEncoded {
+		enc := encoding.NewEncoder(b)
+		_, err := enc.Write(requestBody)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		b = bytes.NewBuffer(requestBody)
+	}
+
 
 	b := bytes.NewBuffer(requestBody)
 	req, err := http.NewRequest(method, s.host+path, b)
@@ -118,9 +127,14 @@ func (s *SnykCodeHTTPClient) doCall(
 	}
 
 	req.Header.Set("Session-Token", config.CurrentConfig().Token())
-	req.Header.Set("Content-Type", "application/json")
 	// https://www.keycdn.com/blog/http-cache-headers
 	req.Header.Set("Cache-Control", "private, max-age=0, no-cache")
+	if mustBeEncoded {
+		req.Header.Set("Content-Type", "application/octet-stream")
+		req.Header.Set("Content-Encoding", "gzip")
+	} else {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	log.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
 	response, err := s.client.Do(req)
