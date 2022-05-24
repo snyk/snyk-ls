@@ -74,6 +74,7 @@ func (b *Bundle) retrieveAnalysis(
 	hoverChan chan lsp2.Hover,
 ) {
 	if b.BundleHash == "" || len(b.UploadBatches) == 0 {
+		log.Warn().Str("method", "retrieveAnalysis").Str("rootPath", rootPath).Msg("bundle hash is empty")
 		return
 	}
 	p := progress.NewTracker(false)
