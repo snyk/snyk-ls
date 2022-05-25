@@ -1,6 +1,7 @@
 package code
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"os"
@@ -10,8 +11,8 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/util"
 	"github.com/snyk/snyk-ls/lsp"
-	"github.com/snyk/snyk-ls/util"
 )
 
 const (
@@ -120,13 +121,13 @@ func (f *FakeSnykCodeClient) GetAllCalls(op string) [][]interface{} {
 	return calls
 }
 
-func (f *FakeSnykCodeClient) GetFilters() (configFiles []string, extensions []string, err error) {
+func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (configFiles []string, extensions []string, err error) {
 	params := []interface{}{configFiles, extensions, err}
 	f.addCall(params, GetFiltersOperation)
 	return make([]string, 0), FakeFilters, nil
 }
 
-func (f *FakeSnykCodeClient) CreateBundle(files map[sglsp.DocumentURI]BundleFile) (string, []sglsp.DocumentURI, error) {
+func (f *FakeSnykCodeClient) CreateBundle(_ context.Context, files map[sglsp.DocumentURI]BundleFile) (string, []sglsp.DocumentURI, error) {
 	f.TotalBundleCount++
 	f.HasCreatedNewBundle = true
 	params := []interface{}{files}
@@ -135,6 +136,7 @@ func (f *FakeSnykCodeClient) CreateBundle(files map[sglsp.DocumentURI]BundleFile
 }
 
 func (f *FakeSnykCodeClient) ExtendBundle(
+	_ context.Context,
 	bundleHash string,
 	files map[sglsp.DocumentURI]BundleFile,
 	removedFiles []sglsp.DocumentURI,
@@ -148,6 +150,7 @@ func (f *FakeSnykCodeClient) ExtendBundle(
 }
 
 func (f *FakeSnykCodeClient) RunAnalysis(
+	_ context.Context,
 	bundleHash string,
 	_ string,
 	limitToFiles []sglsp.DocumentURI,

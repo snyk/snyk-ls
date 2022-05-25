@@ -1,6 +1,7 @@
 package diagnostics
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	ignore "github.com/sabhiram/go-gitignore"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -113,10 +115,10 @@ func ignored(gitIgnore *ignore.GitIgnore, path string) bool {
 	return false
 }
 
-func workspaceDiagnostics(workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
+func workspaceDiagnostics(ctx context.Context, workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	diagnostics := fetchAllRegisteredDocumentDiagnostics(workspace.Uri, lsp.ScanLevelWorkspace)
+	diagnostics := fetchAllRegisteredDocumentDiagnostics(ctx, workspace.Uri, lsp.ScanLevelWorkspace)
 	addToCache(diagnostics)
 	setFolderScanned(workspace)
 	for documentURI, d := range diagnostics {
@@ -127,14 +129,18 @@ func workspaceDiagnostics(workspace lsp.WorkspaceFolder, wg *sync.WaitGroup) {
 	}
 }
 
-func WorkspaceScan(workspaceFolders []lsp.WorkspaceFolder) {
-	preconditions.EnsureReadyForAnalysisAndWait()
+func WorkspaceScan(ctx context.Context, workspaceFolders []lsp.WorkspaceFolder) {
+	method := "WorkspaceScan"
+	s := di.Instrumentor().NewTransaction(ctx, method, method)
+	defer di.Instrumentor().Finish(s)
+
+	preconditions.EnsureReadyForAnalysisAndWait(ctx)
 	notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Starting workspace scan."})
 	defer notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Workspace scan completed."})
 	var wg sync.WaitGroup
 	for _, workspace := range workspaceFolders {
 		wg.Add(1)
-		go workspaceDiagnostics(workspace, &wg)
+		go workspaceDiagnostics(s.Context(), workspace, &wg)
 	}
 
 	wg.Wait()

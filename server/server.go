@@ -4,18 +4,17 @@ import (
 	"context"
 	"os"
 
-	"github.com/snyk/snyk-ls/di"
-
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/diagnostics"
-	"github.com/snyk/snyk-ls/error_reporting"
 	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/lsp"
@@ -66,7 +65,7 @@ func WorkspaceDidChangeWorkspaceFoldersHandler() jrpc2.Handler {
 		for _, folder := range params.Event.Removed {
 			diagnostics.ClearWorkspaceFolderDiagnostics(folder)
 		}
-		diagnostics.WorkspaceScan(params.Event.Added)
+		diagnostics.WorkspaceScan(ctx, params.Event.Added)
 
 		return nil, nil
 	})
@@ -74,7 +73,8 @@ func WorkspaceDidChangeWorkspaceFoldersHandler() jrpc2.Handler {
 
 func InitializeHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
-		log.Info().Str("method", "InitializeHandler").Interface("params", params).Msg("RECEIVING")
+		method := "InitializeHandler"
+		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
 		clientParams = params
 
 		// async processing listener
@@ -83,9 +83,9 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 		go registerNotifier(srv)
 
 		if len(clientParams.WorkspaceFolders) > 0 {
-			go diagnostics.WorkspaceScan(clientParams.WorkspaceFolders)
+			go diagnostics.WorkspaceScan(ctx, clientParams.WorkspaceFolders)
 		} else {
-			go diagnostics.GetDiagnostics(clientParams.RootURI)
+			go diagnostics.GetDiagnostics(ctx, clientParams.RootURI)
 		}
 
 		return lsp.InitializeResult{
@@ -131,15 +131,16 @@ func Exit(srv *jrpc2.Server) jrpc2.Handler {
 }
 
 func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv *jrpc2.Server) {
-	diags := diagnostics.GetDiagnostics(uri)
+	method := "PublishDiagnostics"
+	diags := diagnostics.GetDiagnostics(ctx, uri)
 	if diags != nil {
 		diagnosticsParams := lsp.PublishDiagnosticsParams{
 			URI:         uri,
 			Diagnostics: diags,
 		}
-		log.Info().Str("method", "PublishDiagnostics").Str("uri", string(diagnosticsParams.URI)).Msg("SENDING")
+		log.Info().Str("method", method).Str("uri", string(diagnosticsParams.URI)).Msg("SENDING")
 		err := (*srv).Notify(ctx, "textDocument/publishDiagnostics", diagnosticsParams)
-		logError(err, "PublishDiagnostics")
+		logError(err, method)
 	}
 }
 
@@ -152,20 +153,21 @@ func logError(err error, method string) {
 
 func TextDocumentDidOpenHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidOpenTextDocumentParams) (interface{}, error) {
-		log.Info().Str("method", "TextDocumentDidOpenHandler").Str("documentURI", string(params.TextDocument.URI)).Msg("RECEIVING")
-
+		method := "TextDocumentDidOpenHandler"
+		log.Info().Str("method", method).Str("documentURI", string(params.TextDocument.URI)).Msg("RECEIVING")
 		go func() {
-			preconditions.EnsureReadyForAnalysisAndWait()
+			preconditions.EnsureReadyForAnalysisAndWait(ctx)
 			PublishDiagnostics(ctx, params.TextDocument.URI, srv) // todo: remove in favor of notifier
 		}()
-
 		return nil, nil
 	})
 }
 
 func TextDocumentDidSaveHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params sglsp.DidSaveTextDocumentParams) (interface{}, error) {
-		log.Info().Str("method", "TextDocumentDidSaveHandler").Interface("params", params).Msg("RECEIVING")
+		method := "TextDocumentDidSaveHandler"
+		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
+
 		// clear cache when saving and get fresh diagnostics
 		diagnostics.ClearDiagnosticsCache(params.TextDocument.URI)
 		hover.DeleteHover(params.TextDocument.URI)
@@ -225,4 +227,5 @@ func registerNotifier(srv *jrpc2.Server) {
 		}
 	}
 	notification.CreateListener(callbackFunction)
+	log.Info().Str("method", "registerNotifier").Msg("registered notifier")
 }

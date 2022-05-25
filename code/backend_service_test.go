@@ -1,6 +1,7 @@
 package code
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,9 +13,10 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
-	"github.com/snyk/snyk-ls/util"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 const (
@@ -44,13 +46,13 @@ const (
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi())
+	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), &performance.TestInstrumentor{})
 	files := map[sglsp.DocumentURI]BundleFile{}
 	files[path1] = BundleFile{
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
-	bundleHash, missingFiles, _ := s.CreateBundle(files)
+	bundleHash, missingFiles, _ := s.CreateBundle(context.Background(), files)
 	assert.NotNil(t, bundleHash)
 	assert.NotEqual(t, "", bundleHash)
 	assert.Equal(t, 0, len(missingFiles))
@@ -59,7 +61,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi())
+	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), &performance.TestInstrumentor{})
 
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]BundleFile{}
@@ -67,20 +69,20 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
-	bundleHash, _, _ := s.CreateBundle(files)
+	bundleHash, _, _ := s.CreateBundle(context.Background(), files)
 	filesExtend := map[sglsp.DocumentURI]BundleFile{}
 	filesExtend[path2] = BundleFile{
 		Hash:    util.Hash([]byte(content2)),
 		Content: content2,
 	}
-	_, missingFiles, _ := s.ExtendBundle(bundleHash, filesExtend, removedFiles)
+	_, missingFiles, _ := s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
 	assert.Equal(t, 0, len(missingFiles))
 }
 
 func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi())
+	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), &performance.TestInstrumentor{})
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]BundleFile{}
@@ -88,17 +90,17 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
-	bundleHash, _, _ := s.CreateBundle(files)
+	bundleHash, _, _ := s.CreateBundle(context.Background(), files)
 	filesExtend := map[sglsp.DocumentURI]BundleFile{}
 	filesExtend[path2] = BundleFile{
 		Hash:    util.Hash([]byte(content2)),
 		Content: content2,
 	}
-	bundleHash, _, _ = s.ExtendBundle(bundleHash, filesExtend, removedFiles)
+	bundleHash, _, _ = s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
 
 	assert.Eventually(t, func() bool {
 		limitToFiles := []sglsp.DocumentURI{path1, path2}
-		d, _, callStatus, err := s.RunAnalysis(bundleHash, shardKey, limitToFiles, 0)
+		d, _, callStatus, err := s.RunAnalysis(context.Background(), bundleHash, shardKey, limitToFiles, 0)
 		if err != nil {
 			return false
 		}
@@ -120,7 +122,7 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 // todo analysis test severities
 
 func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing.T) {
-	s := NewHTTPRepository("")
+	s := NewHTTPRepository("", &performance.TestInstrumentor{})
 	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
 
 	var analysisResponse SarifResponse
@@ -156,8 +158,8 @@ func TestSnykCodeBackendService_GetFilters_returns(t *testing.T) {
 	})
 
 	test := func() error {
-		s := NewHTTPRepository(fmt.Sprintf("http://localhost:%d", pact.Server.Port))
-		if _, _, err := s.GetFilters(); err != nil {
+		s := NewHTTPRepository(fmt.Sprintf("http://localhost:%d", pact.Server.Port), &performance.TestInstrumentor{})
+		if _, _, err := s.GetFilters(context.Background()); err != nil {
 			return err
 		}
 

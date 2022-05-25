@@ -1,6 +1,7 @@
 package code
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
@@ -9,25 +10,27 @@ import (
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/util"
 	lsp2 "github.com/snyk/snyk-ls/lsp"
-	"github.com/snyk/snyk-ls/util"
 )
 
 type Bundle struct {
 	SnykCode      SnykCodeClient
 	BundleHash    string
 	UploadBatches []*UploadBatch
+	instrumentor  performance.Instrumentor
 }
 
-func (b *Bundle) Upload(uploadBatch *UploadBatch) error {
+func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {
 	if len(b.UploadBatches) == 0 {
-		err := b.createBundle(uploadBatch)
+		err := b.createBundle(ctx, uploadBatch)
 		if err != nil {
 			return err
 		}
 	} else {
-		err := b.extendBundle(uploadBatch)
+		err := b.extendBundle(ctx, uploadBatch)
 		if err != nil {
 			return err
 		}
@@ -36,20 +39,20 @@ func (b *Bundle) Upload(uploadBatch *UploadBatch) error {
 	return nil
 }
 
-func (b *Bundle) createBundle(uploadBatch *UploadBatch) error {
+func (b *Bundle) createBundle(ctx context.Context, uploadBatch *UploadBatch) error {
 	var err error
 	if uploadBatch.hasContent() {
-		b.BundleHash, _, err = b.SnykCode.CreateBundle(uploadBatch.documents)
+		b.BundleHash, _, err = b.SnykCode.CreateBundle(ctx, uploadBatch.documents)
 		log.Debug().Str("bundleHash", b.BundleHash).Msg("created uploadBatch on backend")
 	}
 	return err
 }
 
-func (b *Bundle) extendBundle(segment *UploadBatch) error {
+func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) error {
 	var removeFiles []lsp.DocumentURI
 	var err error
-	if segment.hasContent() {
-		b.BundleHash, _, err = b.SnykCode.ExtendBundle(b.BundleHash, segment.documents, removeFiles)
+	if uploadBatch.hasContent() {
+		b.BundleHash, _, err = b.SnykCode.ExtendBundle(ctx, b.BundleHash, uploadBatch.documents, removeFiles)
 		log.Trace().Str("bundleHash", b.BundleHash).Msg("extended bundle on backend")
 	}
 
@@ -57,6 +60,7 @@ func (b *Bundle) extendBundle(segment *UploadBatch) error {
 }
 
 func (b *Bundle) FetchDiagnosticsData(
+	ctx context.Context,
 	rootPath string,
 	wg *sync.WaitGroup,
 	dChan chan lsp2.DiagnosticResult,
@@ -65,10 +69,11 @@ func (b *Bundle) FetchDiagnosticsData(
 	defer wg.Done()
 	defer log.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
 	log.Debug().Str("method", "FetchDiagnosticsData").Msg("started.")
-	b.retrieveAnalysis(rootPath, dChan, hoverChan)
+	b.retrieveAnalysis(ctx, rootPath, dChan, hoverChan)
 }
 
 func (b *Bundle) retrieveAnalysis(
+	ctx context.Context,
 	rootPath string,
 	dChan chan lsp2.DiagnosticResult,
 	hoverChan chan lsp2.Hover,
@@ -77,12 +82,18 @@ func (b *Bundle) retrieveAnalysis(
 		log.Warn().Str("method", "retrieveAnalysis").Str("rootPath", rootPath).Msg("bundle hash is empty")
 		return
 	}
+
 	p := progress.NewTracker(false)
 	p.Begin("Snyk Code analysis", "Retrieving results...")
 	defer p.End("Analysis complete.")
+
+	method := "code.retrieveAnalysis"
+	s := b.instrumentor.StartSpan(ctx, method)
+	defer b.instrumentor.Finish(s)
+
 	for {
 		start := time.Now()
-		diags, hovers, status, err := b.SnykCode.RunAnalysis(
+		diags, hovers, status, err := b.SnykCode.RunAnalysis(s.Context(),
 			b.BundleHash,
 			b.getShardKey(rootPath, config.CurrentConfig().Token()),
 			[]lsp.DocumentURI{},

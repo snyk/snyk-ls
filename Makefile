@@ -20,7 +20,7 @@ TIMEOUT := "-timeout=15m"
 .PHONY: tools
 tools:
 ifeq (,$(wildcard ./.bin/golangci-lint*))
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b .bin/ v1.45.2
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b .bin/ v1.46.2
 else
 	@echo "==> golangci-lint is already installed"
 endif

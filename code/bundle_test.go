@@ -1,12 +1,13 @@
 package code
 
 import (
+	"context"
 	"testing"
 
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/util"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func Test_getShardKey(t *testing.T) {
@@ -53,7 +54,7 @@ func Test_BundleGroup_AddBundle(t *testing.T) {
 		}
 
 		emptyBundle := &UploadBatch{}
-		_ = bundle.Upload(emptyBundle)
+		_ = bundle.Upload(context.Background(), emptyBundle)
 
 		assert.False(t, fakeSnykCode.HasCreatedNewBundle)
 		assert.False(t, fakeSnykCode.HasExtendedBundle)
@@ -65,7 +66,7 @@ func Test_BundleGroup_AddBundle(t *testing.T) {
 			SnykCode: &fakeSnykCode,
 		}
 
-		_ = bundle.Upload(bundleWithFiles)
+		_ = bundle.Upload(context.Background(), bundleWithFiles)
 
 		assert.True(t, fakeSnykCode.HasCreatedNewBundle)
 		assert.False(t, fakeSnykCode.HasExtendedBundle)
@@ -78,9 +79,9 @@ func Test_BundleGroup_AddBundle(t *testing.T) {
 			SnykCode: &fakeSnykCode,
 		}
 
-		_ = bundle.Upload(bundleWithFiles)
+		_ = bundle.Upload(context.Background(), bundleWithFiles)
 		oldHash := bundle.BundleHash
-		_ = bundle.Upload(bundleWithMultipleFiles)
+		_ = bundle.Upload(context.Background(), bundleWithMultipleFiles)
 		newHash := bundle.BundleHash
 
 		assert.True(t, fakeSnykCode.HasExtendedBundle)

@@ -1,6 +1,7 @@
 package oss
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,8 +11,10 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/hover"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -26,9 +29,11 @@ func Test_determineTargetFile(t *testing.T) {
 
 func Test_ScanWorkspace(t *testing.T) {
 	testutil.IntegTest(t)
+	di.TestInit(t)
 	testutil.CreateDummyProgressListener(t)
 	config.CurrentConfig().SetFormat(config.FormatHtml)
-	preconditions.EnsureReadyForAnalysisAndWait()
+	ctx := context.Background()
+	preconditions.EnsureReadyForAnalysisAndWait(ctx)
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata")
@@ -41,7 +46,7 @@ func Test_ScanWorkspace(t *testing.T) {
 	wg.Add(1)
 	snykCli := &cli.SnykCli{}
 
-	go ScanWorkspace(snykCli, doc, &wg, dChan, hoverChan)
+	go ScanWorkspace(ctx, snykCli, doc, &wg, dChan, hoverChan)
 
 	diagnosticResult := <-dChan
 	hoverResult := <-hoverChan
@@ -49,13 +54,19 @@ func Test_ScanWorkspace(t *testing.T) {
 	assert.NotEqual(t, 0, len(diagnosticResult.Diagnostics))
 	assert.NotEqual(t, 0, len(hoverResult.Hover))
 	assert.True(t, strings.Contains(diagnosticResult.Diagnostics[0].Message, "<p>"))
+	recorder := &di.Instrumentor().(*performance.TestInstrumentor).SpanRecorder
+	spans := recorder.Spans()
+	assert.Len(t, spans, 1)
+	assert.Equal(t, "oss.ScanWorkspace", spans[0].GetOperation())
 }
 
 func Test_ScanFile(t *testing.T) {
 	hover.ClearAllHovers()
 	testutil.IntegTest(t)
 	config.CurrentConfig().SetFormat(config.FormatHtml)
-	preconditions.EnsureReadyForAnalysisAndWait()
+	ctx := context.Background()
+	preconditions.EnsureReadyForAnalysisAndWait(ctx)
+	di.TestInit(t)
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
@@ -66,7 +77,7 @@ func Test_ScanFile(t *testing.T) {
 	wg.Add(1)
 
 	snykCli := &cli.SnykCli{}
-	go ScanFile(snykCli, uri.PathToUri(path), &wg, dChan, hoverChan)
+	go ScanFile(ctx, snykCli, uri.PathToUri(path), &wg, dChan, hoverChan)
 
 	diagnosticResult := <-dChan
 	hoverResult := <-hoverChan
@@ -74,6 +85,9 @@ func Test_ScanFile(t *testing.T) {
 	assert.NotEqual(t, 0, len(diagnosticResult.Diagnostics))
 	assert.NotEqual(t, 0, len(hoverResult.Hover))
 	assert.True(t, strings.Contains(diagnosticResult.Diagnostics[0].Message, "<p>"))
+	recorder := &di.Instrumentor().(*performance.TestInstrumentor).SpanRecorder
+	spans := recorder.Spans()
+	assert.Equal(t, "oss.ScanFile", spans[0].GetOperation())
 }
 
 func Test_FindRange(t *testing.T) {

@@ -15,21 +15,30 @@ const (
 	ActivateSnykAdvisorKey   = "ACTIVATE_SNYK_ADVISOR"
 	SendErrorReportsKey      = "SEND_ERROR_REPORTS"
 	Organization             = "SNYK_CFG_ORG"
+	EnableTelemetry          = "SNYK_CFG_DISABLE_ANALYTICS"
 )
 
 func (c *Config) clientSettingsFromEnv() {
 	c.productEnablementFromEnv()
+	c.errorReportsEnablementFromEnv()
+	c.orgFromEnv()
+	c.telemetryEnablementFromEnv()
+}
+
+func (c *Config) orgFromEnv() {
+	org := os.Getenv(Organization)
+	if org != "" {
+		c.organization = org
+	}
+}
+
+func (c *Config) errorReportsEnablementFromEnv() {
 	errorReports := os.Getenv(SendErrorReportsKey)
 	errorReportingEnabled, err := strconv.ParseBool(errorReports)
 	if errorReports != "" && err != nil {
 		log.Warn().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse error reports config %s", errorReports)
 	}
 	c.SetErrorReportingEnabled(errorReportingEnabled)
-
-	org := os.Getenv(Organization)
-	if org != "" {
-		c.organization = org
-	}
 }
 
 func (c *Config) productEnablementFromEnv() {

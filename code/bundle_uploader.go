@@ -1,6 +1,7 @@
 package code
 
 import (
+	"context"
 	"math"
 	"os"
 	"path/filepath"
@@ -9,38 +10,46 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/internal/concurrency"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
-	"github.com/snyk/snyk-ls/util"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type BundleUploader struct {
 	SnykCode            SnykCodeClient
 	supportedExtensions concurrency.AtomicMap
+	instrumentor        performance.Instrumentor
 }
 
-func NewBundler(SnykCode SnykCodeClient) *BundleUploader {
+func NewBundler(SnykCode SnykCodeClient, instrumentor performance.Instrumentor) *BundleUploader {
 	return &BundleUploader{
 		SnykCode:            SnykCode,
+		instrumentor:        instrumentor,
 		supportedExtensions: concurrency.AtomicMap{},
 	}
 }
 
 // TODO remove all LSP dependencies (e.g. DocumentURI)
-func (b *BundleUploader) Upload(files []sglsp.DocumentURI) (Bundle, error) {
-	uploadBatches := b.groupInBatches(files)
+func (b *BundleUploader) Upload(ctx context.Context, files []sglsp.DocumentURI) (Bundle, error) {
+	method := "code.Upload"
+	s := b.instrumentor.StartSpan(ctx, method)
+	defer b.instrumentor.Finish(s)
+
+	uploadBatches := b.groupInBatches(s.Context(), files)
 	if len(uploadBatches) == 0 {
 		return Bundle{}, nil
 	}
 	uploadedFiles := 0
 	bundle := Bundle{
-		SnykCode: b.SnykCode,
+		SnykCode:     b.SnykCode,
+		instrumentor: b.instrumentor,
 	}
 	t := progress.NewTracker(false)
 	t.Begin("Snyk Code", "Uploading batches...")
 	defer t.End("Upload done.")
 	for i, uploadBatch := range uploadBatches {
-		err := bundle.Upload(uploadBatch)
+		err := bundle.Upload(s.Context(), uploadBatch)
 		if err != nil {
 			return Bundle{}, err
 		}
@@ -51,14 +60,19 @@ func (b *BundleUploader) Upload(files []sglsp.DocumentURI) (Bundle, error) {
 	return bundle, nil
 }
 
-func (b *BundleUploader) groupInBatches(files []sglsp.DocumentURI) []*UploadBatch {
+func (b *BundleUploader) groupInBatches(ctx context.Context, files []sglsp.DocumentURI) []*UploadBatch {
 	t := progress.NewTracker(false)
 	t.Begin("Snyk Code", "Creating batches...")
 	defer t.End("Batches created.")
+
+	method := "code.groupInBatches"
+	s := b.instrumentor.StartSpan(ctx, method)
+	defer b.instrumentor.Finish(s)
+
 	var batches []*UploadBatch
 	uploadBatch := NewUploadBatch()
 	for i, documentURI := range files {
-		if !b.isSupported(documentURI) {
+		if !b.isSupported(ctx, documentURI) {
 			continue
 		}
 
@@ -94,10 +108,10 @@ func (b *BundleUploader) groupInBatches(files []sglsp.DocumentURI) []*UploadBatc
 	return batches
 }
 
-func (b *BundleUploader) isSupported(documentURI sglsp.DocumentURI) bool {
+func (b *BundleUploader) isSupported(ctx context.Context, documentURI sglsp.DocumentURI) bool {
 	if b.supportedExtensions.Length() == 0 {
 		// query
-		_, exts, err := b.SnykCode.GetFilters()
+		_, exts, err := b.SnykCode.GetFilters(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("could not get filters")
 			return false

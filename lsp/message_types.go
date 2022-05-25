@@ -237,6 +237,7 @@ type Settings struct {
 	Path                   string `json:"path,omitempty"`
 	SendErrorReports       string `json:"sendErrorReports,omitempty"`
 	Organization           string `json:"organization,omitempty"`
+	EnableTelemetry        string `json:"enableTelemetry,omitempty"`
 }
 
 type DidChangeConfigurationParams struct {

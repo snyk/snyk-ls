@@ -1,6 +1,7 @@
 package iac
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -13,6 +14,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -37,16 +39,15 @@ func IsSupported(documentURI sglsp.DocumentURI) bool {
 	return extensions[ext]
 }
 
-func ScanWorkspace(
-	Cli cli.Executor,
-	documentURI sglsp.DocumentURI,
-	wg *sync.WaitGroup,
-	dChan chan lsp.DiagnosticResult,
-	hoverChan chan lsp.Hover,
-) {
+func ScanWorkspace(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	defer wg.Done()
-	defer log.Debug().Str("method", "iac.ScanWorkspace").Msg("done.")
-	log.Debug().Str("method", "iac.ScanWorkspace").Msg("started.")
+
+	method := "iac.ScanWorkspace"
+	s := di.Instrumentor().StartSpan(ctx, method)
+	defer di.Instrumentor().Finish(s)
+
+	defer log.Debug().Str("method", method).Msg("done.")
+	log.Debug().Str("method", method).Msg("started.")
 
 	res, err := Cli.Execute(cliCmd(documentURI), uri.PathFromUri(documentURI))
 	if err != nil {
@@ -57,11 +58,11 @@ func ScanWorkspace(
 				if strings.Contains(errorOutput, "Could not find any valid IaC files") {
 					return
 				}
-				log.Err(err).Str("method", "iac.ScanWorkspace").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
+				log.Err(err).Str("method", method).Str("output", errorOutput).Msg("Error while calling Snyk CLI")
 				reportErrorViaChan(documentURI, dChan, fmt.Errorf("%v: %v", err, errorOutput))
 				return
 			}
-			log.Warn().Err(err).Str("method", "iac.ScanWorkspace").Msg("Error while calling Snyk CLI")
+			log.Warn().Err(err).Str("method", method).Msg("Error while calling Snyk CLI")
 		default:
 			reportErrorViaChan(documentURI, dChan, err)
 			return
@@ -70,13 +71,13 @@ func ScanWorkspace(
 
 	var scanResults []iacScanResult
 	if err := json.Unmarshal(res, &scanResults); err != nil {
-		log.Err(err).Str("method", "iac.ScanWorkspace").
+		log.Err(err).Str("method", method).
 			Msg("Error while parsing response from CLI")
 		reportErrorViaChan(documentURI, dChan, err)
 		return
 	}
 
-	log.Info().Str("method", "iac.ScanWorkspace").
+	log.Info().Str("method", method).
 		Msg("got diags now sending to chan.")
 	for _, scanResult := range scanResults {
 		u := uri.PathToUri(filepath.Join(uri.PathFromUri(documentURI), scanResult.TargetFile))
@@ -91,16 +92,15 @@ func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, 
 	}
 }
 
-func ScanFile(
-	Cli cli.Executor,
-	documentURI sglsp.DocumentURI,
-	wg *sync.WaitGroup,
-	dChan chan lsp.DiagnosticResult,
-	hoverChan chan lsp.Hover,
-) {
+func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	defer wg.Done()
-	defer log.Debug().Str("method", "iac.ScanFile").Msg("done.")
-	log.Debug().Str("method", "iac.ScanFile").Msg("started.")
+
+	method := "iac.ScanFile"
+	s := di.Instrumentor().StartSpan(ctx, method)
+	defer di.Instrumentor().Finish(s)
+
+	defer log.Debug().Str("method", method).Msg("done.")
+	log.Debug().Str("method", method).Msg("started.")
 
 	if !IsSupported(documentURI) {
 		return
