@@ -13,10 +13,14 @@ type Span interface {
 	Finish()
 	Context() context.Context
 	SetTransactionName(name string)
+	startSpan()
 }
 
 type noopImpl struct {
-	ctx context.Context
+	ctx       context.Context
+	started   bool
+	finished  bool
+	hasTXName bool
 }
 
 type sentrySpan struct {
@@ -58,23 +62,31 @@ func (s *sentrySpan) Context() context.Context {
 }
 
 func StartSpan(ctx context.Context, operation string) Span {
-	return createAndStart(ctx, operation, "")
-}
-
-func NewTransaction(ctx context.Context, transactionName string, operation string) Span {
-	s := createAndStart(ctx, transactionName, operation)
+	s := create(ctx, operation, "")
+	s.startSpan()
 	return s
 }
 
-func createAndStart(ctx context.Context, transactionName string, operation string) Span {
-	if config.CurrentConfig().IsTelemetryEnabled() {
-		s := &sentrySpan{ctx: ctx, transactionName: transactionName, operation: operation}
-		s.startSpan()
-	}
-	return &noopImpl{ctx: ctx}
+func NewTransaction(ctx context.Context, txName string, operation string) Span {
+	s := create(ctx, txName, operation)
+	return s
 }
 
-func (n *noopImpl) StartSpan()                  {}
-func (n *noopImpl) Finish()                     {}
-func (n *noopImpl) Context() context.Context    { return n.ctx }
-func (n *noopImpl) SetTransactionName(_ string) {}
+func create(ctx context.Context, txName string, operation string) Span {
+	var s Span
+	if config.CurrentConfig().IsTelemetryEnabled() {
+		s = &sentrySpan{ctx: ctx, operation: operation}
+	} else {
+		s = &noopImpl{ctx: ctx}
+	}
+	s.SetTransactionName(txName)
+	return s
+}
+
+func (n *noopImpl) Finish() {
+	n.started = false
+	n.finished = true
+}
+func (n *noopImpl) Context() context.Context         { return n.ctx }
+func (n *noopImpl) SetTransactionName(txName string) { n.hasTXName = true }
+func (n *noopImpl) startSpan()                       { n.started = true }
