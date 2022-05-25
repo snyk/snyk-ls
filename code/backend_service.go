@@ -132,7 +132,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 		b = bytes.NewBuffer(requestBody)
 	}
 
-	req, err := http.NewRequestWithContext(span.Context(), method, s.host+path, b)
+	req, err := http.NewRequest(method, s.host+path, b)
 	if err != nil {
 		return nil, err
 	}

@@ -57,7 +57,7 @@ func (s *sentrySpan) Finish() {
 }
 
 func (s *sentrySpan) SetTransactionName(name string) {
-	if s.txName != "" {
+	if name != "" && s.txName == "" {
 		s.txName = name
 	}
 }
