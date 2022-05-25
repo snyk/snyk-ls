@@ -15,4 +15,5 @@ type Span interface {
 	Finish()
 	GetOperation() string
 	GetTxName() string
+	Context() context.Context
 }

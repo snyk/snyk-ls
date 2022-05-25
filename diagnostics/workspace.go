@@ -140,7 +140,7 @@ func WorkspaceScan(ctx context.Context, workspaceFolders []lsp.WorkspaceFolder) 
 	var wg sync.WaitGroup
 	for _, workspace := range workspaceFolders {
 		wg.Add(1)
-		go workspaceDiagnostics(ctx, workspace, &wg)
+		go workspaceDiagnostics(s.Context(), workspace, &wg)
 	}
 
 	wg.Wait()

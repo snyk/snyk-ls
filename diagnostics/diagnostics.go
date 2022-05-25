@@ -74,7 +74,7 @@ func GetDiagnostics(ctx context.Context, documentURI sglsp.DocumentURI) []lsp.Di
 		return diagnosticSlice
 	}
 
-	diagnostics := fetchAllRegisteredDocumentDiagnostics(ctx, documentURI, lsp.ScanLevelFile)
+	diagnostics := fetchAllRegisteredDocumentDiagnostics(s.Context(), documentURI, lsp.ScanLevelFile)
 	addToCache(diagnostics)
 	cache := DocumentDiagnosticsFromCache(documentURI)
 	return cache

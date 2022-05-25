@@ -93,7 +93,7 @@ func (b *Bundle) retrieveAnalysis(
 
 	for {
 		start := time.Now()
-		diags, hovers, status, err := b.SnykCode.RunAnalysis(ctx,
+		diags, hovers, status, err := b.SnykCode.RunAnalysis(s.Context(),
 			b.BundleHash,
 			b.getShardKey(rootPath, config.CurrentConfig().Token()),
 			[]lsp.DocumentURI{},

@@ -51,7 +51,7 @@ func TestNewTransaction(t *testing.T) {
 
 	span := i.NewTransaction(context.Background(), "testTransaction", "testOp").(*noopSpan)
 
-	assert.Equal(t, span.started, false)
+	assert.Equal(t, span.started, true)
 	assert.Equal(t, span.finished, false)
 	assert.Equal(t, span.txName != "", true)
 }

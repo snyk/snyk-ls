@@ -65,8 +65,13 @@ func NewHTTPRepository(host string, instrumentor instrumentation.Instrumentor) *
 }
 
 func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (configFiles []string, extensions []string, err error) {
-	log.Debug().Str("method", "GetFilters").Msg("API: Getting file extension filters")
-	responseBody, err := s.doCall(ctx, "GET", "/filters", nil)
+	method := "code.GetFilters"
+	log.Debug().Str("method", method).Msg("API: Getting file extension filters")
+
+	span := s.instrumentor.StartSpan(ctx, method)
+	defer s.instrumentor.Finish(span)
+
+	responseBody, err := s.doCall(span.Context(), "GET", "/filters", nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -76,7 +81,7 @@ func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (configFiles []stri
 	if err != nil {
 		return nil, nil, err
 	}
-	log.Debug().Str("method", "GetFilters").Msg("API: Finished getting filters")
+	log.Debug().Str("method", method).Msg("API: Finished getting filters")
 	return filters.ConfigFiles, filters.Extensions, nil
 }
 
@@ -84,13 +89,19 @@ func (s *SnykCodeHTTPClient) CreateBundle(
 	ctx context.Context,
 	files map[sglsp.DocumentURI]BundleFile,
 ) (string, []sglsp.DocumentURI, error) {
-	log.Debug().Str("method", "CreateBundle").Msg("API: Creating bundle for " + strconv.Itoa(len(files)) + " files")
+
+	method := "code.CreateBundle"
+	log.Debug().Str("method", method).Msg("API: Creating bundle for " + strconv.Itoa(len(files)) + " files")
+
+	span := s.instrumentor.StartSpan(ctx, method)
+	defer s.instrumentor.Finish(span)
+
 	requestBody, err := json.Marshal(files)
 	if err != nil {
 		return "", nil, err
 	}
 
-	responseBody, err := s.doCall(ctx, "POST", "/bundle", requestBody)
+	responseBody, err := s.doCall(span.Context(), "POST", "/bundle", requestBody)
 	if err != nil {
 		return "", nil, err
 	}
@@ -100,7 +111,7 @@ func (s *SnykCodeHTTPClient) CreateBundle(
 	if err != nil {
 		return "", nil, err
 	}
-	log.Debug().Str("method", "CreateBundle").Str("bundleHash", bundle.BundleHash).Msg("API: Create done")
+	log.Debug().Str("method", method).Str("bundleHash", bundle.BundleHash).Msg("API: Create done")
 	return bundle.BundleHash, bundle.MissingFiles, nil
 }
 
@@ -121,7 +132,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 		b = bytes.NewBuffer(requestBody)
 	}
 
-	req, err := http.NewRequest(method, s.host+path, b)
+	req, err := http.NewRequestWithContext(span.Context(), method, s.host+path, b)
 	if err != nil {
 		return nil, err
 	}
@@ -165,8 +176,13 @@ func (s *SnykCodeHTTPClient) ExtendBundle(
 	files map[sglsp.DocumentURI]BundleFile,
 	removedFiles []sglsp.DocumentURI,
 ) (string, []sglsp.DocumentURI, error) {
-	log.Debug().Str("method", "ExtendBundle").Str("bundleHash", bundleHash).Msg("API: Extending bundle " + bundleHash + " for " + strconv.Itoa(len(files)) + " files")
-	defer log.Debug().Str("method", "ExtendBundle").Str("bundleHash", bundleHash).Msg("API: Extend done")
+
+	method := "code.ExtendBundle"
+	log.Debug().Str("method", method).Str("bundleHash", bundleHash).Msg("API: Extending bundle " + bundleHash + " for " + strconv.Itoa(len(files)) + " files")
+	defer log.Debug().Str("method", method).Str("bundleHash", bundleHash).Msg("API: Extend done")
+
+	span := s.instrumentor.StartSpan(ctx, method)
+	defer s.instrumentor.Finish(span)
 
 	requestBody, err := json.Marshal(extendBundleRequest{
 		Files:        files,
@@ -176,7 +192,7 @@ func (s *SnykCodeHTTPClient) ExtendBundle(
 		return "", nil, err
 	}
 
-	responseBody, err := s.doCall(ctx, "PUT", "/bundle/"+bundleHash, requestBody)
+	responseBody, err := s.doCall(span.Context(), "PUT", "/bundle/"+bundleHash, requestBody)
 	if err != nil {
 		return "", nil, err
 	}
@@ -197,39 +213,43 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 	limitToFiles []sglsp.DocumentURI,
 	severity int,
 ) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, AnalysisStatus, error) {
-	log.Debug().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Msg("API: Retrieving analysis for bundle")
-	defer log.Debug().Str("method", "RunAnalysis").Str("bundleHash", bundleHash).Msg("API: Retrieving analysis done")
+	method := "code.RunAnalysis"
+	span := s.instrumentor.StartSpan(ctx, method)
+	defer s.instrumentor.Finish(span)
+
+	log.Debug().Str("method", method).Str("bundleHash", bundleHash).Msg("API: Retrieving analysis for bundle")
+	defer log.Debug().Str("method", method).Str("bundleHash", bundleHash).Msg("API: Retrieving analysis done")
 
 	requestBody, err := s.analysisRequestBody(bundleHash, shardKey, limitToFiles, severity)
 	if err != nil {
-		log.Err(err).Str("method", "RunAnalysis").Str("requestBody", string(requestBody)).Msg("error creating request body")
+		log.Err(err).Str("method", method).Str("requestBody", string(requestBody)).Msg("error creating request body")
 		return nil, nil, AnalysisStatus{}, err
 	}
 
-	responseBody, err := s.doCall(ctx, "POST", "/analysis", requestBody)
+	responseBody, err := s.doCall(span.Context(), "POST", "/analysis", requestBody)
 	failed := AnalysisStatus{message: "FAILED"}
 	if err != nil {
-		log.Err(err).Str("method", "RunAnalysis").Str("responseBody", string(responseBody)).Msg("error response from analysis")
+		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response from analysis")
 		return nil, nil, failed, err
 	}
 
 	var response SarifResponse
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
-		log.Err(err).Str("method", "RunAnalysis").Str("responseBody", string(responseBody)).Msg("error unmarshalling")
+		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
 		return nil, nil, failed, err
 	}
 
-	log.Debug().Str("method", "RunAnalysis").
+	log.Debug().Str("method", method).
 		Str("bundleHash", bundleHash).Float64("progress", response.Progress).Msgf("Status: %s", response.Status)
 
 	if response.Status == failed.message {
-		log.Err(err).Str("method", "RunAnalysis").Str("responseStatus", response.Status).Msg("analysis failed")
+		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("analysis failed")
 		return nil, nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
 
 	if response.Status == "" {
-		log.Err(err).Str("method", "RunAnalysis").Str("responseStatus", response.Status).Msg("unknown response status (empty)")
+		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
 		return nil, nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
 	status := AnalysisStatus{message: response.Status, percentage: int(math.RoundToEven(response.Progress * 100))}

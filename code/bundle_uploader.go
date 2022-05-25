@@ -35,7 +35,8 @@ func (b *BundleUploader) Upload(ctx context.Context, files []sglsp.DocumentURI) 
 	method := "code.Upload"
 	s := b.instrumentor.StartSpan(ctx, method)
 	defer b.instrumentor.Finish(s)
-	uploadBatches := b.groupInBatches(ctx, files)
+
+	uploadBatches := b.groupInBatches(s.Context(), files)
 	if len(uploadBatches) == 0 {
 		return Bundle{}, nil
 	}
@@ -48,7 +49,7 @@ func (b *BundleUploader) Upload(ctx context.Context, files []sglsp.DocumentURI) 
 	t.Begin("Snyk Code", "Uploading batches...")
 	defer t.End("Upload done.")
 	for i, uploadBatch := range uploadBatches {
-		err := bundle.Upload(ctx, uploadBatch)
+		err := bundle.Upload(s.Context(), uploadBatch)
 		if err != nil {
 			return Bundle{}, err
 		}

@@ -30,6 +30,10 @@ func (s *sentrySpan) GetOperation() string {
 	return s.operation
 }
 
+func (s *sentrySpan) Context() context.Context {
+	return s.span.Context()
+}
+
 func (s *sentrySpan) StartSpan(ctx context.Context) {
 	var options []sentry.SpanOption
 	if s.txName != "" {
@@ -81,4 +85,7 @@ func (n *noopSpan) GetOperation() string {
 }
 func (n *noopSpan) GetTxName() string {
 	return n.txName
+}
+func (n *noopSpan) Context() context.Context {
+	return context.Background()
 }
