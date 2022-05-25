@@ -6,13 +6,12 @@ type Instrumentor interface {
 	StartSpan(ctx context.Context, operation string) Span
 	NewTransaction(ctx context.Context, txName string, operation string) Span
 	Finish(span Span)
-	CreateSpan(ctx context.Context, txName string, operation string) Span
+	CreateSpan(txName string, operation string) Span
 }
 
 type Span interface {
-	Context() context.Context
 	SetTransactionName(name string)
-	StartSpan()
+	StartSpan(ctx context.Context)
 	Finish()
 	GetOperation() string
 	GetTxName() string

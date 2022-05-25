@@ -10,7 +10,6 @@ import (
 )
 
 type noopSpan struct {
-	ctx       context.Context
 	operation string
 	txName    string
 	started   bool
@@ -19,7 +18,6 @@ type noopSpan struct {
 
 type sentrySpan struct {
 	span      *sentry.Span
-	ctx       context.Context
 	txName    string
 	operation string
 }
@@ -32,15 +30,15 @@ func (s *sentrySpan) GetOperation() string {
 	return s.operation
 }
 
-func (s *sentrySpan) StartSpan() {
+func (s *sentrySpan) StartSpan(ctx context.Context) {
 	var options []sentry.SpanOption
 	if s.txName != "" {
 		options = append(options, sentry.TransactionName(s.txName))
 	}
-	s.span = sentry.StartSpan(s.ctx, s.operation, options...)
+	s.span = sentry.StartSpan(ctx, s.operation, options...)
 	s.span.SetTag("organization", config.CurrentConfig().GetOrganization())
 	log.Debug().
-		Str("method", "instrumentation.StartSpan").
+		Str("method", "sentrySpan.StartSpan").
 		Str("operation", s.operation).
 		Str("txName", s.txName).
 		Msg("starting span")
@@ -55,12 +53,11 @@ func (s *sentrySpan) Finish() {
 }
 
 func (s *sentrySpan) SetTransactionName(name string) {
-	s.txName = name
+	if s.txName != "" {
+		s.txName = name
+	}
 }
 
-func (s *sentrySpan) Context() context.Context {
-	return s.span.Context()
-}
 func (n *noopSpan) Finish() {
 	n.started = false
 	n.finished = true
@@ -70,9 +67,8 @@ func (n *noopSpan) Finish() {
 		Msg("finishing span")
 }
 
-func (n *noopSpan) Context() context.Context         { return n.ctx }
 func (n *noopSpan) SetTransactionName(txName string) { n.txName = txName }
-func (n *noopSpan) StartSpan() {
+func (n *noopSpan) StartSpan(_ context.Context) {
 	log.Debug().
 		Str("method", "noopSpan.StartSpan").
 		Str("operation", n.operation).

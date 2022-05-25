@@ -227,4 +227,5 @@ func registerNotifier(srv *jrpc2.Server) {
 		}
 	}
 	notification.CreateListener(callbackFunction)
+	log.Info().Str("method", "registerNotifier").Msg("registered notifier")
 }

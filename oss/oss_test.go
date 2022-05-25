@@ -87,7 +87,6 @@ func Test_ScanFile(t *testing.T) {
 	assert.True(t, strings.Contains(diagnosticResult.Diagnostics[0].Message, "<p>"))
 	recorder := &di.Instrumentor().(*instrumentation.TestInstrumentor).SpanRecorder
 	spans := recorder.Spans()
-	assert.Len(t, spans, 1)
 	assert.Equal(t, "oss.ScanFile", spans[0].GetOperation())
 }
 

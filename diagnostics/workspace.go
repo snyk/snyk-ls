@@ -134,13 +134,13 @@ func WorkspaceScan(ctx context.Context, workspaceFolders []lsp.WorkspaceFolder) 
 	s := di.Instrumentor().NewTransaction(ctx, method, method)
 	defer di.Instrumentor().Finish(s)
 
-	preconditions.EnsureReadyForAnalysisAndWait(s.Context())
+	preconditions.EnsureReadyForAnalysisAndWait(ctx)
 	notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Starting workspace scan."})
 	defer notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Workspace scan completed."})
 	var wg sync.WaitGroup
 	for _, workspace := range workspaceFolders {
 		wg.Add(1)
-		go workspaceDiagnostics(s.Context(), workspace, &wg)
+		go workspaceDiagnostics(ctx, workspace, &wg)
 	}
 
 	wg.Wait()

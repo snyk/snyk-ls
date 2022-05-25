@@ -26,7 +26,7 @@ func TestCreate(t *testing.T) {
 			config.CurrentConfig().SetTelemetryEnabled(test.configValue)
 			i := InstrumentorImpl{}
 
-			typeOf := reflect.TypeOf(i.CreateSpan(context.Background(), "testTransaction", "testOperation")).String()
+			typeOf := reflect.TypeOf(i.CreateSpan("testTransaction", "testOperation")).String()
 
 			assert.Equal(t, test.expectedType, typeOf)
 		})

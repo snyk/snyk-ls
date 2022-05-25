@@ -43,14 +43,14 @@ type TestInstrumentor struct {
 }
 
 func (i *TestInstrumentor) StartSpan(ctx context.Context, operation string) Span {
-	span := i.CreateSpan(ctx, "", operation)
-	span.StartSpan()
+	span := i.CreateSpan("", operation)
+	span.StartSpan(ctx)
 	i.SpanRecorder.Record(span)
 	return span
 }
 
 func (i *TestInstrumentor) NewTransaction(ctx context.Context, txName string, operation string) Span {
-	s := i.CreateSpan(ctx, txName, operation)
+	s := i.CreateSpan(txName, operation)
 	i.SpanRecorder.Record(s)
 	return s
 }
@@ -59,9 +59,8 @@ func (i *TestInstrumentor) Finish(span Span) {
 	i.SpanRecorder.Finish(span)
 }
 
-func (i *TestInstrumentor) CreateSpan(ctx context.Context, txName string, operation string) Span {
+func (i *TestInstrumentor) CreateSpan(txName string, operation string) Span {
 	return &noopSpan{
-		ctx:       ctx,
 		operation: operation,
 		txName:    txName,
 		started:   false,

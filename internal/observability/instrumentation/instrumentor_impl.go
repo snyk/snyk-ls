@@ -13,22 +13,23 @@ func (i *InstrumentorImpl) Finish(span Span) {
 }
 
 func (i *InstrumentorImpl) StartSpan(ctx context.Context, operation string) Span {
-	s := i.CreateSpan(ctx, "", operation)
-	s.StartSpan()
+	s := i.CreateSpan("", operation)
+	s.StartSpan(ctx)
 	return s
 }
 
 func (i *InstrumentorImpl) NewTransaction(ctx context.Context, txName string, operation string) Span {
-	s := i.CreateSpan(ctx, txName, operation)
+	s := i.CreateSpan(txName, operation)
+	s.StartSpan(ctx)
 	return s
 }
 
-func (i *InstrumentorImpl) CreateSpan(ctx context.Context, txName string, operation string) Span {
+func (i *InstrumentorImpl) CreateSpan(txName string, operation string) Span {
 	var s Span
-	if config.CurrentConfig().IsTelemetryEnabled() {
-		s = &sentrySpan{ctx: ctx, operation: operation}
+	if config.CurrentConfig() != nil && config.CurrentConfig().IsTelemetryEnabled() {
+		s = &sentrySpan{operation: operation}
 	} else {
-		s = &noopSpan{ctx: ctx, operation: operation}
+		s = &noopSpan{operation: operation}
 	}
 	s.SetTransactionName(txName)
 	return s
