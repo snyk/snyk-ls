@@ -16,6 +16,7 @@ import (
 
 	"github.com/snyk/snyk-ls/code/encoding"
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -39,8 +40,9 @@ func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 }
 
 type SnykCodeHTTPClient struct {
-	client http.Client
-	host   string
+	client       http.Client
+	host         string
+	instrumentor instrumentation.Instrumentor
 }
 
 type bundleResponse struct {
@@ -58,8 +60,8 @@ type filtersResponse struct {
 	Extensions  []string `json:"extensions" pact:"min=1"`
 }
 
-func NewHTTPRepository(host string) *SnykCodeHTTPClient {
-	return &SnykCodeHTTPClient{http.Client{}, host}
+func NewHTTPRepository(host string, instrumentor instrumentation.Instrumentor) *SnykCodeHTTPClient {
+	return &SnykCodeHTTPClient{http.Client{}, host, instrumentor}
 }
 
 func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (configFiles []string, extensions []string, err error) {
@@ -103,9 +105,8 @@ func (s *SnykCodeHTTPClient) CreateBundle(
 }
 
 func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path string, requestBody []byte) ([]byte, error) {
-
-	span := instrumentation.StartSpan(ctx, "doCall")
-	defer span.Finish()
+	span := s.instrumentor.StartSpan(ctx, "code.doCall")
+	defer s.instrumentor.Finish(span)
 
 	b := new(bytes.Buffer)
 
@@ -138,6 +139,8 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 	log.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
 	response, err := s.client.Do(req)
 	if err != nil {
+		log.Err(err).Str("method", method).Msgf("got http error")
+		error_reporting.CaptureError(err)
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
@@ -149,6 +152,8 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 	responseBody, err := ioutil.ReadAll(response.Body)
 	log.Trace().Str("responseBody", string(responseBody)).Msg("RECEIVED FROM REMOTE")
 	if err != nil {
+		log.Err(err).Str("method", method).Msgf("error reading response body")
+		error_reporting.CaptureError(err)
 		return nil, err
 	}
 	return responseBody, err

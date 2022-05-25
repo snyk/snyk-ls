@@ -11,8 +11,8 @@ import (
 	ignore "github.com/sabhiram/go-gitignore"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -131,8 +131,8 @@ func workspaceDiagnostics(ctx context.Context, workspace lsp.WorkspaceFolder, wg
 
 func WorkspaceScan(ctx context.Context, workspaceFolders []lsp.WorkspaceFolder) {
 	method := "WorkspaceScan"
-	s := instrumentation.NewTransaction(ctx, method, method)
-	defer s.Finish()
+	s := di.Instrumentor().NewTransaction(ctx, method, method)
+	defer di.Instrumentor().Finish(s)
 
 	preconditions.EnsureReadyForAnalysisAndWait(s.Context())
 	notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Starting workspace scan."})

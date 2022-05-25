@@ -49,14 +49,14 @@ func Test_loadFile(t *testing.T) {
 	envData := []byte("A=B\nC=D")
 	file, err := os.CreateTemp(".", "config_test_loadFile")
 	if err != nil {
-		assert.Fail(t, "Couldn't create temp file", err)
+		assert.Fail(t, "Couldn't CreateSpan temp file", err)
 	}
 	defer func(file *os.File) {
 		_ = file.Close()
 		_ = os.Remove(file.Name())
 	}(file)
 	if err != nil {
-		assert.Fail(t, "Couldn't create test file")
+		assert.Fail(t, "Couldn't CreateSpan test file")
 	}
 	_, _ = file.Write(envData)
 	if err != nil {

@@ -18,14 +18,15 @@ func TestCreate(t *testing.T) {
 		configValue  bool
 	}{
 		{name: "Telemetry Activated", expectedType: "*instrumentation.sentrySpan", configValue: true},
-		{name: "Telemetry Deactivated", expectedType: "*instrumentation.noopImpl", configValue: false},
+		{name: "Telemetry Deactivated", expectedType: "*instrumentation.noopSpan", configValue: false},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testutil.UnitTest(t)
 			config.CurrentConfig().SetTelemetryEnabled(test.configValue)
+			i := InstrumentorImpl{}
 
-			typeOf := reflect.TypeOf(create(context.Background(), "testTransaction", "testOperation")).String()
+			typeOf := reflect.TypeOf(i.CreateSpan(context.Background(), "testTransaction", "testOperation")).String()
 
 			assert.Equal(t, test.expectedType, typeOf)
 		})
@@ -35,8 +36,9 @@ func TestCreate(t *testing.T) {
 func TestStartSpanCreatesAndStartsSpan(t *testing.T) {
 	testutil.UnitTest(t)
 	config.CurrentConfig().SetTelemetryEnabled(false)
+	i := &InstrumentorImpl{}
 
-	span := StartSpan(context.Background(), "testOp").(*noopImpl)
+	span := i.StartSpan(context.Background(), "testOp").(*noopSpan)
 
 	assert.Equal(t, span.started, true)
 	assert.Equal(t, span.finished, false)
@@ -45,10 +47,11 @@ func TestStartSpanCreatesAndStartsSpan(t *testing.T) {
 func TestNewTransaction(t *testing.T) {
 	testutil.UnitTest(t)
 	config.CurrentConfig().SetTelemetryEnabled(false)
+	i := &InstrumentorImpl{}
 
-	span := NewTransaction(context.Background(), "testTransaction", "testOp").(*noopImpl)
+	span := i.NewTransaction(context.Background(), "testTransaction", "testOp").(*noopSpan)
 
 	assert.Equal(t, span.started, false)
 	assert.Equal(t, span.finished, false)
-	assert.Equal(t, span.hasTXName, true)
+	assert.Equal(t, span.txName != "", true)
 }

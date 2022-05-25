@@ -9,7 +9,6 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -27,14 +26,14 @@ func NewSnykCode(bundleUploader *BundleUploader, apiClient SnykApiClient) *SnykC
 }
 
 func (sc *SnykCode) ScanFile(ctx context.Context, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
-	s := instrumentation.StartSpan(ctx, "code.ScanFile")
-	defer s.Finish()
+	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanFile")
+	sc.BundleUploader.instrumentor.Finish(span)
 	sc.uploadAndAnalyze(ctx, []sglsp.DocumentURI{documentURI}, wg, documentURI, dChan, hoverChan)
 }
 
 func (sc *SnykCode) ScanWorkspace(ctx context.Context, documents []sglsp.DocumentURI, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
-	s := instrumentation.StartSpan(ctx, "code.ScanWorkspace")
-	defer s.Finish()
+	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
+	sc.BundleUploader.instrumentor.Finish(span)
 	sc.uploadAndAnalyze(ctx, documents, wg, documentURI, dChan, hoverChan)
 }
 

@@ -16,8 +16,8 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/cli"
-	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -76,8 +76,8 @@ func ScanWorkspace(ctx context.Context, Cli cli.Executor, workspace sglsp.Docume
 	defer wg.Done()
 
 	method := "oss.ScanWorkspace"
-	s := instrumentation.StartSpan(ctx, method)
-	defer s.Finish()
+	s := di.Instrumentor().StartSpan(ctx, method)
+	defer di.Instrumentor().Finish(s)
 
 	defer log.Debug().Str("method", method).Msg("done.")
 	log.Debug().Str("method", method).Msg("started.")
@@ -168,8 +168,8 @@ func ScanFile(
 	defer wg.Done()
 
 	method := "oss.ScanFile"
-	s := instrumentation.StartSpan(ctx, method)
-	defer s.Finish()
+	s := di.Instrumentor().StartSpan(ctx, method)
+	defer di.Instrumentor().Finish(s)
 
 	defer log.Debug().Str("method", method).Msg("done.")
 	log.Debug().Str("method", method).Msg("started.")

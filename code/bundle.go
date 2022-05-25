@@ -20,6 +20,7 @@ type Bundle struct {
 	SnykCode      SnykCodeClient
 	BundleHash    string
 	UploadBatches []*UploadBatch
+	instrumentor  instrumentation.Instrumentor
 }
 
 func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {
@@ -87,8 +88,8 @@ func (b *Bundle) retrieveAnalysis(
 	defer p.End("Analysis complete.")
 
 	method := "code.retrieveAnalysis"
-	s := instrumentation.StartSpan(ctx, method)
-	defer s.Finish()
+	s := b.instrumentor.StartSpan(ctx, method)
+	defer b.instrumentor.Finish(s)
 
 	for {
 		start := time.Now()

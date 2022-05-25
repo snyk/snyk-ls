@@ -12,8 +12,10 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/hover"
+	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -23,6 +25,7 @@ import (
 func Test_ScanWorkspace(t *testing.T) {
 	testutil.IntegTest(t)
 	testutil.CreateDummyProgressListener(t)
+	di.TestInit(t)
 	ctx := context.Background()
 	preconditions.EnsureReadyForAnalysisAndWait(ctx)
 	config.CurrentConfig().SetFormat(config.FormatHtml)
@@ -47,11 +50,18 @@ func Test_ScanWorkspace(t *testing.T) {
 	assert.NotEqual(t, 0, len(hoverResult.Hover))
 
 	assert.True(t, strings.Contains(diagnosticResult.Diagnostics[0].Message, "<p>"))
+
+	recorder := &di.Instrumentor().(*instrumentation.TestInstrumentor).SpanRecorder
+	spans := recorder.Spans()
+	assert.Len(t, spans, 1)
+	assert.Equal(t, "iac.ScanWorkspace", spans[0].GetOperation())
+	assert.Equal(t, "", spans[0].GetTxName())
 }
 
 func Test_ScanFile(t *testing.T) {
-	hover.ClearAllHovers()
 	testutil.IntegTest(t)
+	di.TestInit(t)
+	hover.ClearAllHovers()
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 	ctx := context.Background()
 	preconditions.EnsureReadyForAnalysisAndWait(ctx)
@@ -81,4 +91,10 @@ func Test_ScanFile(t *testing.T) {
 	assert.NotEqual(t, 0, len(diagnosticResult.Diagnostics))
 
 	assert.True(t, strings.Contains(diagnosticResult.Diagnostics[0].Message, "<p>"))
+
+	recorder := &di.Instrumentor().(*instrumentation.TestInstrumentor).SpanRecorder
+	spans := recorder.Spans()
+	assert.Len(t, spans, 1)
+	assert.Equal(t, "iac.ScanFile", spans[0].GetOperation())
+	assert.Equal(t, "", spans[0].GetTxName())
 }

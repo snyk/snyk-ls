@@ -265,7 +265,7 @@ func (c *Config) LsPath() string {
 	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
 	err := os.MkdirAll(lsPath, 0755)
 	if err != nil {
-		log.Err(err).Str("method", "lsPath").Msgf("couldn't create %s", lsPath)
+		log.Err(err).Str("method", "lsPath").Msgf("couldn't CreateSpan %s", lsPath)
 		return ""
 	}
 	return lsPath

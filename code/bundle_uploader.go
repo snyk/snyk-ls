@@ -19,11 +19,13 @@ import (
 type BundleUploader struct {
 	SnykCode            SnykCodeClient
 	supportedExtensions concurrency.AtomicMap
+	instrumentor        instrumentation.Instrumentor
 }
 
-func NewBundler(SnykCode SnykCodeClient) *BundleUploader {
+func NewBundler(SnykCode SnykCodeClient, instrumentor instrumentation.Instrumentor) *BundleUploader {
 	return &BundleUploader{
 		SnykCode:            SnykCode,
+		instrumentor:        instrumentor,
 		supportedExtensions: concurrency.AtomicMap{},
 	}
 }
@@ -31,15 +33,16 @@ func NewBundler(SnykCode SnykCodeClient) *BundleUploader {
 // TODO remove all LSP dependencies (e.g. DocumentURI)
 func (b *BundleUploader) Upload(ctx context.Context, files []sglsp.DocumentURI) (Bundle, error) {
 	method := "code.Upload"
-	s := instrumentation.StartSpan(ctx, method)
-	defer s.Finish()
+	s := b.instrumentor.StartSpan(ctx, method)
+	defer b.instrumentor.Finish(s)
 	uploadBatches := b.groupInBatches(ctx, files)
 	if len(uploadBatches) == 0 {
 		return Bundle{}, nil
 	}
 	uploadedFiles := 0
 	bundle := Bundle{
-		SnykCode: b.SnykCode,
+		SnykCode:     b.SnykCode,
+		instrumentor: b.instrumentor,
 	}
 	t := progress.NewTracker(false)
 	t.Begin("Snyk Code", "Uploading batches...")
@@ -62,8 +65,8 @@ func (b *BundleUploader) groupInBatches(ctx context.Context, files []sglsp.Docum
 	defer t.End("Batches created.")
 
 	method := "code.groupInBatches"
-	s := instrumentation.StartSpan(ctx, method)
-	defer s.Finish()
+	s := b.instrumentor.StartSpan(ctx, method)
+	defer b.instrumentor.Finish(s)
 
 	var batches []*UploadBatch
 	uploadBatch := NewUploadBatch()

@@ -11,6 +11,7 @@ import (
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
 	"github.com/snyk/snyk-ls/internal/uri"
 	lsp2 "github.com/snyk/snyk-ls/lsp"
 )
@@ -38,7 +39,7 @@ func setupDocs() (string, lsp.TextDocumentItem, lsp.TextDocumentItem, []byte, []
 func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 	t.Run("should create bundle when hash empty", func(t *testing.T) {
 		snykCodeMock := &FakeSnykCodeClient{}
-		code := NewSnykCode(NewBundler(snykCodeMock), &FakeApiClient{CodeEnabled: true})
+		code := NewSnykCode(NewBundler(snykCodeMock, &instrumentation.TestInstrumentor{}), &FakeApiClient{CodeEnabled: true})
 		path, firstDoc, _, content1, _ := setupDocs()
 		registeredDocuments := []lsp.DocumentURI{firstDoc.URI}
 		defer os.RemoveAll(path)
@@ -62,7 +63,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 
 	t.Run("should retrieve from backend", func(t *testing.T) {
 		snykCodeMock := &FakeSnykCodeClient{}
-		code := NewSnykCode(NewBundler(snykCodeMock), &FakeApiClient{CodeEnabled: true})
+		code := NewSnykCode(NewBundler(snykCodeMock, &instrumentation.TestInstrumentor{}), &FakeApiClient{CodeEnabled: true})
 		diagnosticUri, path := FakeDiagnosticUri()
 		defer os.RemoveAll(path)
 		diagnosticMap := map[lsp.DocumentURI][]lsp2.Diagnostic{}

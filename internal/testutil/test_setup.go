@@ -43,14 +43,16 @@ func CLIDownloadLockFileCleanUp(t *testing.T) {
 
 func NotOnWindows(t *testing.T, reason string) {
 	t.Helper()
-	if runtime.GOOS == "windows" {
+	if //goland:noinspection GoBoolExpressions
+	runtime.GOOS == "windows" {
 		t.Skipf("Not on windows, because %s", reason)
 	}
 }
 
 func OnlyOnWindows(t *testing.T, reason string) {
 	t.Helper()
-	if runtime.GOOS != "windows" {
+	if //goland:noinspection GoBoolExpressions
+	runtime.GOOS != "windows" {
 		t.Skipf("Only on windows, because %s", reason)
 	}
 }

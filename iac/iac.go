@@ -14,8 +14,8 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/cli"
-	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -43,8 +43,8 @@ func ScanWorkspace(ctx context.Context, Cli cli.Executor, documentURI sglsp.Docu
 	defer wg.Done()
 
 	method := "iac.ScanWorkspace"
-	s := instrumentation.StartSpan(ctx, method)
-	defer s.Finish()
+	s := di.Instrumentor().StartSpan(ctx, method)
+	defer di.Instrumentor().Finish(s)
 
 	defer log.Debug().Str("method", method).Msg("done.")
 	log.Debug().Str("method", method).Msg("started.")
@@ -94,9 +94,10 @@ func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, 
 
 func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	defer wg.Done()
+
 	method := "iac.ScanFile"
-	s := instrumentation.StartSpan(ctx, method)
-	defer s.Finish()
+	s := di.Instrumentor().StartSpan(ctx, method)
+	defer di.Instrumentor().Finish(s)
 
 	defer log.Debug().Str("method", method).Msg("done.")
 	log.Debug().Str("method", method).Msg("started.")

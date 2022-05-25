@@ -15,7 +15,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -66,8 +65,8 @@ func DocumentDiagnosticsFromCache(file sglsp.DocumentURI) []lsp.Diagnostic {
 func GetDiagnostics(ctx context.Context, documentURI sglsp.DocumentURI) []lsp.Diagnostic {
 	// serve from cache
 	method := "GetDiagnostics"
-	s := instrumentation.NewTransaction(ctx, method, method)
-	defer s.Finish()
+	s := di.Instrumentor().NewTransaction(ctx, method, method)
+	defer di.Instrumentor().Finish(s)
 
 	diagnosticSlice := DocumentDiagnosticsFromCache(documentURI)
 	if len(diagnosticSlice) > 0 {
