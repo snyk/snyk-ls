@@ -17,8 +17,8 @@ func TestCreate(t *testing.T) {
 		expectedType string
 		configValue  bool
 	}{
-		{name: "Telemetry Activated", expectedType: "*instrumentation.sentrySpan", configValue: true},
-		{name: "Telemetry Deactivated", expectedType: "*instrumentation.noopSpan", configValue: false},
+		{name: "Telemetry Activated", expectedType: "*performance.sentrySpan", configValue: true},
+		{name: "Telemetry Deactivated", expectedType: "*performance.noopSpan", configValue: false},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
