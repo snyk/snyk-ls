@@ -10,7 +10,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/internal/concurrency"
-	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -19,10 +19,10 @@ import (
 type BundleUploader struct {
 	SnykCode            SnykCodeClient
 	supportedExtensions concurrency.AtomicMap
-	instrumentor        instrumentation.Instrumentor
+	instrumentor        performance.Instrumentor
 }
 
-func NewBundler(SnykCode SnykCodeClient, instrumentor instrumentation.Instrumentor) *BundleUploader {
+func NewBundler(SnykCode SnykCodeClient, instrumentor performance.Instrumentor) *BundleUploader {
 	return &BundleUploader{
 		SnykCode:            SnykCode,
 		instrumentor:        instrumentor,

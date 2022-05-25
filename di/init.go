@@ -6,14 +6,14 @@ import (
 
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 )
 
 var SnykCodeClient code.SnykCodeClient
 var SnykCodeBundleUploader *code.BundleUploader
 var SnykCode *code.SnykCode
 
-var instrumentor instrumentation.Instrumentor
+var instrumentor performance.Instrumentor
 
 var initMutex = &sync.Mutex{}
 
@@ -33,14 +33,14 @@ func initApplication() {
 	SnykCode = code.NewSnykCode(SnykCodeBundleUploader, SnykApiClient)
 }
 
-func Instrumentor() instrumentation.Instrumentor {
+func Instrumentor() performance.Instrumentor {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return instrumentor
 }
 
 func initInfrastructure() {
-	instrumentor = &instrumentation.InstrumentorImpl{}
+	instrumentor = &performance.InstrumentorImpl{}
 	SnykCodeClient = code.NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), instrumentor)
 	SnykCodeBundleUploader = code.NewBundler(SnykCodeClient, instrumentor)
 }
@@ -50,7 +50,7 @@ func TestInit(t *testing.T) {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	t.Helper()
-	instrumentor = &instrumentation.TestInstrumentor{}
+	instrumentor = &performance.TestInstrumentor{}
 	fakeClient := &code.FakeSnykCodeClient{}
 	SnykCodeClient = fakeClient
 	SnykCodeBundleUploader = code.NewBundler(SnykCodeClient, instrumentor)

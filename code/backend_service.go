@@ -17,7 +17,7 @@ import (
 	"github.com/snyk/snyk-ls/code/encoding"
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -42,7 +42,7 @@ func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 type SnykCodeHTTPClient struct {
 	client       http.Client
 	host         string
-	instrumentor instrumentation.Instrumentor
+	instrumentor performance.Instrumentor
 }
 
 type bundleResponse struct {
@@ -60,7 +60,7 @@ type filtersResponse struct {
 	Extensions  []string `json:"extensions" pact:"min=1"`
 }
 
-func NewHTTPRepository(host string, instrumentor instrumentation.Instrumentor) *SnykCodeHTTPClient {
+func NewHTTPRepository(host string, instrumentor performance.Instrumentor) *SnykCodeHTTPClient {
 	return &SnykCodeHTTPClient{http.Client{}, host, instrumentor}
 }
 

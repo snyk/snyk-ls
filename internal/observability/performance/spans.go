@@ -1,4 +1,4 @@
-package instrumentation
+package performance
 
 import (
 	"context"

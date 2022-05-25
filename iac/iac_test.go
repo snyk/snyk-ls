@@ -15,7 +15,7 @@ import (
 	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/hover"
-	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -51,7 +51,7 @@ func Test_ScanWorkspace(t *testing.T) {
 
 	assert.True(t, strings.Contains(diagnosticResult.Diagnostics[0].Message, "<p>"))
 
-	recorder := &di.Instrumentor().(*instrumentation.TestInstrumentor).SpanRecorder
+	recorder := &di.Instrumentor().(*performance.TestInstrumentor).SpanRecorder
 	spans := recorder.Spans()
 	assert.Len(t, spans, 1)
 	assert.Equal(t, "iac.ScanWorkspace", spans[0].GetOperation())
@@ -92,7 +92,7 @@ func Test_ScanFile(t *testing.T) {
 
 	assert.True(t, strings.Contains(diagnosticResult.Diagnostics[0].Message, "<p>"))
 
-	recorder := &di.Instrumentor().(*instrumentation.TestInstrumentor).SpanRecorder
+	recorder := &di.Instrumentor().(*performance.TestInstrumentor).SpanRecorder
 	spans := recorder.Spans()
 	assert.Len(t, spans, 1)
 	assert.Equal(t, "iac.ScanFile", spans[0].GetOperation())

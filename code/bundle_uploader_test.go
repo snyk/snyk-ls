@@ -10,7 +10,7 @@ import (
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -18,7 +18,7 @@ func Test_Bundler_Upload(t *testing.T) {
 	temporaryDir := setup()
 	t.Run("adds files to bundle", func(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{}
-		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &instrumentation.TestInstrumentor{}}
+		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &performance.TestInstrumentor{}}
 		files := []lsp.DocumentURI{createFileOfSize("bundleDoc.java", 10, temporaryDir)}
 
 		_, err := bundler.Upload(context.Background(), files)
@@ -30,7 +30,7 @@ func Test_Bundler_Upload(t *testing.T) {
 
 	t.Run("when loads of files breaks down in 4MB bundles", func(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{}
-		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &instrumentation.TestInstrumentor{}}
+		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &performance.TestInstrumentor{}}
 		files := []lsp.DocumentURI{
 			createFileOfSize("bundleDoc1.java", (1024*1024)-1, temporaryDir),
 			createFileOfSize("bundleDoc2.java", (1024*1024)-1, temporaryDir),
@@ -50,7 +50,7 @@ func Test_Bundler_Upload(t *testing.T) {
 
 	t.Run("when too big ignores file", func(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{}
-		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &instrumentation.TestInstrumentor{}}
+		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &performance.TestInstrumentor{}}
 		files := []lsp.DocumentURI{createFileOfSize("bundleDoc.java", 1024*1024+1, temporaryDir)}
 
 		_, err := bundler.Upload(context.Background(), files)
@@ -61,7 +61,7 @@ func Test_Bundler_Upload(t *testing.T) {
 
 	t.Run("when empty file ignores file", func(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{}
-		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &instrumentation.TestInstrumentor{}}
+		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &performance.TestInstrumentor{}}
 		files := []lsp.DocumentURI{createFileOfSize("bundleDoc.java", 0, temporaryDir)}
 
 		_, err := bundler.Upload(context.Background(), files)
@@ -72,7 +72,7 @@ func Test_Bundler_Upload(t *testing.T) {
 
 	t.Run("when unsupported ignores file", func(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{}
-		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &instrumentation.TestInstrumentor{}}
+		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &performance.TestInstrumentor{}}
 		files := []lsp.DocumentURI{createFileOfSize("bundleDoc.mr_robot", 1, temporaryDir)}
 
 		_, err := bundler.Upload(context.Background(), files)
@@ -88,7 +88,7 @@ func Test_Bundler_Upload(t *testing.T) {
 
 func Test_IsSupportedLanguage(t *testing.T) {
 	snykCodeMock := &FakeSnykCodeClient{}
-	bundler := NewBundler(snykCodeMock, &instrumentation.TestInstrumentor{})
+	bundler := NewBundler(snykCodeMock, &performance.TestInstrumentor{})
 
 	t.Run("should return true for supported languages", func(t *testing.T) {
 		documentURI := uri.PathToUri("C:\\some\\path\\Test.java")

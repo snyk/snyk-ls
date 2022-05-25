@@ -10,7 +10,7 @@ import (
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/util"
 	lsp2 "github.com/snyk/snyk-ls/lsp"
@@ -20,7 +20,7 @@ type Bundle struct {
 	SnykCode      SnykCodeClient
 	BundleHash    string
 	UploadBatches []*UploadBatch
-	instrumentor  instrumentation.Instrumentor
+	instrumentor  performance.Instrumentor
 }
 
 func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {

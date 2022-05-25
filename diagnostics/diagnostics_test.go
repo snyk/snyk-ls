@@ -13,7 +13,7 @@ import (
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
-	"github.com/snyk/snyk-ls/internal/observability/instrumentation"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -32,7 +32,7 @@ func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 	assert.NotNil(t, diagnostics)
 	assert.NotEmpty(t, DocumentDiagnosticsFromCache(diagnosticUri))
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
-	recorder := &di.Instrumentor().(*instrumentation.TestInstrumentor).SpanRecorder
+	recorder := &di.Instrumentor().(*performance.TestInstrumentor).SpanRecorder
 	spans := recorder.Spans()
 	assert.Len(t, spans, 1)
 	assert.Equal(t, "GetDiagnostics", spans[0].GetOperation())
