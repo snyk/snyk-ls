@@ -29,6 +29,7 @@ func Test_determineTargetFile(t *testing.T) {
 
 func Test_ScanWorkspace(t *testing.T) {
 	testutil.IntegTest(t)
+	di.TestInit(t)
 	testutil.CreateDummyProgressListener(t)
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 	ctx := context.Background()
@@ -57,7 +58,6 @@ func Test_ScanWorkspace(t *testing.T) {
 	spans := recorder.Spans()
 	assert.Len(t, spans, 1)
 	assert.Equal(t, "oss.ScanWorkspace", spans[0].GetOperation())
-	assert.Equal(t, "oss.ScanWorkspace", spans[0].GetTxName())
 }
 
 func Test_ScanFile(t *testing.T) {
@@ -66,6 +66,7 @@ func Test_ScanFile(t *testing.T) {
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 	ctx := context.Background()
 	preconditions.EnsureReadyForAnalysisAndWait(ctx)
+	di.TestInit(t)
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
@@ -88,7 +89,6 @@ func Test_ScanFile(t *testing.T) {
 	spans := recorder.Spans()
 	assert.Len(t, spans, 1)
 	assert.Equal(t, "oss.ScanFile", spans[0].GetOperation())
-	assert.Equal(t, "oss.ScanFile", spans[0].GetTxName())
 }
 
 func Test_FindRange(t *testing.T) {
