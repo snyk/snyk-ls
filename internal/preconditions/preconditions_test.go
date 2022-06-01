@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -25,6 +26,7 @@ func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 }
 
 func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
+	di.TestInit(t)
 	testutil.UnitTest(t)
 	tempDir := t.TempDir()
 	tempFile := testutil.CreateTempFile(tempDir, t)

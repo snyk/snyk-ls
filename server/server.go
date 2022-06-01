@@ -14,7 +14,6 @@ import (
 	"github.com/snyk/snyk-ls/diagnostics"
 	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/lsp"
@@ -112,7 +111,7 @@ func Shutdown() jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (interface{}, error) {
 		log.Info().Str("method", "Shutdown").Msg("RECEIVING")
 		log.Info().Str("method", "Shutdown").Msg("SENDING")
-		error_reporting.FlushErrorReporting()
+		di.ErrorReporter.FlushErrorReporting()
 
 		disposeProgressListener()
 		notification.DisposeListener()
@@ -125,7 +124,7 @@ func Exit(srv *jrpc2.Server) jrpc2.Handler {
 		log.Info().Str("method", "Exit").Msg("RECEIVING")
 		log.Info().Msg("Stopping server...")
 		(*srv).Stop()
-		error_reporting.FlushErrorReporting()
+		di.ErrorReporter.FlushErrorReporting()
 		return nil, nil
 	})
 }
@@ -147,7 +146,7 @@ func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv *jrpc2.S
 func logError(err error, method string) {
 	if err != nil {
 		log.Err(err).Str("method", method)
-		error_reporting.CaptureError(err)
+		di.ErrorReporter.CaptureError(err)
 	}
 }
 

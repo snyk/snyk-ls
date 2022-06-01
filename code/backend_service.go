@@ -41,9 +41,10 @@ func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 }
 
 type SnykCodeHTTPClient struct {
-	client       http.Client
-	host         string
-	instrumentor performance.Instrumentor
+	client        http.Client
+	host          string
+	instrumentor  performance.Instrumentor
+	errorReporter error_reporting.ErrorReporter
 }
 
 type bundleResponse struct {
@@ -61,8 +62,8 @@ type filtersResponse struct {
 	Extensions  []string `json:"extensions" pact:"min=1"`
 }
 
-func NewHTTPRepository(host string, instrumentor performance.Instrumentor) *SnykCodeHTTPClient {
-	return &SnykCodeHTTPClient{http.Client{}, host, instrumentor}
+func NewHTTPRepository(host string, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter) *SnykCodeHTTPClient {
+	return &SnykCodeHTTPClient{http.Client{}, host, instrumentor, errorReporter}
 }
 
 func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (configFiles []string, extensions []string, err error) {
@@ -158,7 +159,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 	response, err := s.client.Do(req)
 	if err != nil {
 		log.Err(err).Str("method", method).Msgf("got http error")
-		error_reporting.CaptureError(err)
+		s.errorReporter.CaptureError(err)
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
@@ -171,7 +172,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 	log.Trace().Str("responseBody", string(responseBody)).Str("snyk-request-id", requestId).Msg("RECEIVED FROM REMOTE")
 	if err != nil {
 		log.Err(err).Str("method", method).Msgf("error reading response body")
-		error_reporting.CaptureError(err)
+		s.errorReporter.CaptureError(err)
 		return nil, err
 	}
 	return responseBody, err

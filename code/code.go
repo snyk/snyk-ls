@@ -15,12 +15,14 @@ import (
 type SnykCode struct {
 	BundleUploader *BundleUploader
 	SnykApiClient  SnykApiClient
+	errorReporter  error_reporting.ErrorReporter
 }
 
-func NewSnykCode(bundleUploader *BundleUploader, apiClient SnykApiClient) *SnykCode {
+func NewSnykCode(bundleUploader *BundleUploader, apiClient SnykApiClient, reporter error_reporting.ErrorReporter) *SnykCode {
 	sc := &SnykCode{
 		BundleUploader: bundleUploader,
 		SnykApiClient:  apiClient,
+		errorReporter:  reporter,
 	}
 	return sc
 }
@@ -66,7 +68,7 @@ func (sc *SnykCode) isSastEnabled() bool {
 	sastEnabled, localCodeEngineEnabled, _, err := sc.SnykApiClient.SastEnabled()
 	if err != nil {
 		log.Error().Err(err).Str("method", "isSastEnabled").Msg("couldn't get sast enablement")
-		error_reporting.CaptureError(err)
+		sc.errorReporter.CaptureError(err)
 		return false
 	}
 	if !sastEnabled {

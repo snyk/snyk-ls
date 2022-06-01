@@ -2,6 +2,7 @@ package code
 
 const (
 	SastEnabledOperation = "sastEnabled"
+	ActiveUserOperation  = "activeUser"
 )
 
 type FakeApiClient struct {
@@ -54,4 +55,9 @@ func (f *FakeApiClient) GetAllCalls(op string) [][]interface{} {
 func (f *FakeApiClient) SastEnabled() (sastEnabled bool, localCodeEngineEnabled bool, reportFalsePositivesEnabled bool, err error) {
 	f.addCall([]interface{}{}, SastEnabledOperation)
 	return f.CodeEnabled, false, false, nil
+}
+
+func (f *FakeApiClient) GetActiveUser() (user ActiveUser, err error) {
+	f.addCall([]interface{}{}, ActiveUserOperation)
+	return ActiveUser{}, nil
 }

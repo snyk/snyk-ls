@@ -14,7 +14,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/hover"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -166,7 +165,7 @@ func processResults(
 
 			if result.Err != nil {
 				log.Err(result.Err).Str("method", "fetchAllRegisteredDocumentDiagnostics")
-				error_reporting.CaptureError(result.Err)
+				di.ErrorReporter.CaptureError(result.Err)
 				break
 			}
 			diagnostics[result.Uri] = append(diagnostics[result.Uri], result.Diagnostics...)

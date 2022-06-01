@@ -1,10 +1,5 @@
 package user_behaviour
 
-type commonProperties struct {
-	Ide  IDE  `json:"ide"`
-	Itly bool `json:"itly"`
-}
-
 type AnalysisIsReadyProperties struct {
 	AnalysisType AnalysisType `json:"analysisType"`
 	Result       Result       `json:"result"`

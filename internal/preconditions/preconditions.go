@@ -9,10 +9,10 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/cli/auth"
 	"github.com/snyk/snyk-ls/internal/cli/install"
 	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 )
 
 func EnsureReadyForAnalysisAndWait(ctx context.Context) {
@@ -53,7 +53,7 @@ func installCli(ctx context.Context) {
 		cliPath, err = i.Install(context.Background())
 		if err != nil {
 			log.Err(err).Str("method", "installCli").Msg("could not download Snyk CLI binary")
-			error_reporting.CaptureError(err)
+			di.ErrorReporter.CaptureError(err)
 			cliPath, _ = i.Find()
 		}
 	}
@@ -77,7 +77,7 @@ func updateCli() {
 	updated, err := i.Update(context.Background())
 	if err != nil {
 		log.Err(err).Str("method", "updateCli").Msg("Failed to update CLI")
-		error_reporting.CaptureError(err)
+		di.ErrorReporter.CaptureError(err)
 	}
 
 	if updated {
