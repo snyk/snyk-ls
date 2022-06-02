@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -64,14 +65,14 @@ func NewHTTPRepository(host string, instrumentor performance.Instrumentor) *Snyk
 	return &SnykCodeHTTPClient{http.Client{}, host, instrumentor}
 }
 
-func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (configFiles []string, extensions []string, err error) {
+func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context, requestId string) (configFiles []string, extensions []string, err error) {
 	method := "code.GetFilters"
 	log.Debug().Str("method", method).Msg("API: Getting file extension filters")
 
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
 
-	responseBody, err := s.doCall(span.Context(), "GET", "/filters", nil)
+	responseBody, err := s.doCall(span.Context(), "GET", "/filters", nil, requestId)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -88,6 +89,7 @@ func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (configFiles []stri
 func (s *SnykCodeHTTPClient) CreateBundle(
 	ctx context.Context,
 	files map[sglsp.DocumentURI]BundleFile,
+	requestId string,
 ) (string, []sglsp.DocumentURI, error) {
 
 	method := "code.CreateBundle"
@@ -101,7 +103,7 @@ func (s *SnykCodeHTTPClient) CreateBundle(
 		return "", nil, err
 	}
 
-	responseBody, err := s.doCall(span.Context(), "POST", "/bundle", requestBody)
+	responseBody, err := s.doCall(span.Context(), "POST", "/bundle", requestBody, requestId)
 	if err != nil {
 		return "", nil, err
 	}
@@ -115,9 +117,13 @@ func (s *SnykCodeHTTPClient) CreateBundle(
 	return bundle.BundleHash, bundle.MissingFiles, nil
 }
 
-func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path string, requestBody []byte) ([]byte, error) {
+func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path string, requestBody []byte, requestId string) ([]byte, error) {
 	span := s.instrumentor.StartSpan(ctx, "code.doCall")
 	defer s.instrumentor.Finish(span)
+
+	if requestId == "" {
+		return nil, errors.New("Empty code request id was provided.")
+	}
 
 	b := new(bytes.Buffer)
 
@@ -138,6 +144,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 	}
 
 	req.Header.Set("Session-Token", config.CurrentConfig().Token())
+	req.Header.Set("snyk-request-id", requestId)
 	// https://www.keycdn.com/blog/http-cache-headers
 	req.Header.Set("Cache-Control", "private, max-age=0, no-cache")
 	if mustBeEncoded {
@@ -147,7 +154,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	log.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
+	log.Trace().Str("requestBody", string(requestBody)).Str("snyk-request-id", requestId).Msg("SEND TO REMOTE")
 	response, err := s.client.Do(req)
 	if err != nil {
 		log.Err(err).Str("method", method).Msgf("got http error")
@@ -175,6 +182,7 @@ func (s *SnykCodeHTTPClient) ExtendBundle(
 	bundleHash string,
 	files map[sglsp.DocumentURI]BundleFile,
 	removedFiles []sglsp.DocumentURI,
+	requestId string,
 ) (string, []sglsp.DocumentURI, error) {
 
 	method := "code.ExtendBundle"
@@ -192,7 +200,7 @@ func (s *SnykCodeHTTPClient) ExtendBundle(
 		return "", nil, err
 	}
 
-	responseBody, err := s.doCall(span.Context(), "PUT", "/bundle/"+bundleHash, requestBody)
+	responseBody, err := s.doCall(span.Context(), "PUT", "/bundle/"+bundleHash, requestBody, requestId)
 	if err != nil {
 		return "", nil, err
 	}
@@ -212,6 +220,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 	shardKey string,
 	limitToFiles []sglsp.DocumentURI,
 	severity int,
+	requestId string,
 ) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, AnalysisStatus, error) {
 	method := "code.RunAnalysis"
 	span := s.instrumentor.StartSpan(ctx, method)
@@ -226,7 +235,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		return nil, nil, AnalysisStatus{}, err
 	}
 
-	responseBody, err := s.doCall(span.Context(), "POST", "/analysis", requestBody)
+	responseBody, err := s.doCall(span.Context(), "POST", "/analysis", requestBody, requestId)
 	failed := AnalysisStatus{message: "FAILED"}
 	if err != nil {
 		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response from analysis")

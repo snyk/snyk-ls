@@ -121,13 +121,13 @@ func (f *FakeSnykCodeClient) GetAllCalls(op string) [][]interface{} {
 	return calls
 }
 
-func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (configFiles []string, extensions []string, err error) {
+func (f *FakeSnykCodeClient) GetFilters(_ context.Context, requestId string) (configFiles []string, extensions []string, err error) {
 	params := []interface{}{configFiles, extensions, err}
 	f.addCall(params, GetFiltersOperation)
 	return make([]string, 0), FakeFilters, nil
 }
 
-func (f *FakeSnykCodeClient) CreateBundle(_ context.Context, files map[sglsp.DocumentURI]BundleFile) (string, []sglsp.DocumentURI, error) {
+func (f *FakeSnykCodeClient) CreateBundle(_ context.Context, files map[sglsp.DocumentURI]BundleFile, requestId string) (string, []sglsp.DocumentURI, error) {
 	f.TotalBundleCount++
 	f.HasCreatedNewBundle = true
 	params := []interface{}{files}
@@ -140,6 +140,7 @@ func (f *FakeSnykCodeClient) ExtendBundle(
 	bundleHash string,
 	files map[sglsp.DocumentURI]BundleFile,
 	removedFiles []sglsp.DocumentURI,
+	requestId string,
 ) (string, []sglsp.DocumentURI, error) {
 	f.HasExtendedBundle = true
 	f.TotalBundleCount++
@@ -155,6 +156,7 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	_ string,
 	limitToFiles []sglsp.DocumentURI,
 	severity int,
+	requestId string,
 ) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, AnalysisStatus, error) {
 	params := []interface{}{bundleHash, limitToFiles, severity}
 	f.addCall(params, RunAnalysisOperation)

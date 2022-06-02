@@ -21,6 +21,7 @@ type Bundle struct {
 	BundleHash    string
 	UploadBatches []*UploadBatch
 	instrumentor  performance.Instrumentor
+	requestId     string
 }
 
 func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {
@@ -42,7 +43,7 @@ func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {
 func (b *Bundle) createBundle(ctx context.Context, uploadBatch *UploadBatch) error {
 	var err error
 	if uploadBatch.hasContent() {
-		b.BundleHash, _, err = b.SnykCode.CreateBundle(ctx, uploadBatch.documents)
+		b.BundleHash, _, err = b.SnykCode.CreateBundle(ctx, uploadBatch.documents, b.requestId)
 		log.Debug().Str("bundleHash", b.BundleHash).Msg("created uploadBatch on backend")
 	}
 	return err
@@ -52,7 +53,7 @@ func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) err
 	var removeFiles []lsp.DocumentURI
 	var err error
 	if uploadBatch.hasContent() {
-		b.BundleHash, _, err = b.SnykCode.ExtendBundle(ctx, b.BundleHash, uploadBatch.documents, removeFiles)
+		b.BundleHash, _, err = b.SnykCode.ExtendBundle(ctx, b.BundleHash, uploadBatch.documents, removeFiles, b.requestId)
 		log.Trace().Str("bundleHash", b.BundleHash).Msg("extended bundle on backend")
 	}
 
@@ -98,6 +99,7 @@ func (b *Bundle) retrieveAnalysis(
 			b.getShardKey(rootPath, config.CurrentConfig().Token()),
 			[]lsp.DocumentURI{},
 			0,
+			b.requestId,
 		)
 
 		if err != nil {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
@@ -92,20 +93,20 @@ func Test_IsSupportedLanguage(t *testing.T) {
 
 	t.Run("should return true for supported languages", func(t *testing.T) {
 		documentURI := uri.PathToUri("C:\\some\\path\\Test.java")
-		supported := bundler.isSupported(context.Background(), documentURI)
+		supported := bundler.isSupported(context.Background(), documentURI, uuid.New().String())
 		assert.True(t, supported)
 	})
 
 	t.Run("should return false for unsupported languages", func(t *testing.T) {
 		documentURI := uri.PathToUri("C:\\some\\path\\Test.rs")
-		supported := bundler.isSupported(context.Background(), documentURI)
+		supported := bundler.isSupported(context.Background(), documentURI, uuid.New().String())
 		assert.False(t, supported)
 	})
 
 	t.Run("should cache supported extensions", func(t *testing.T) {
 		documentURI := uri.PathToUri("C:\\some\\path\\Test.rs")
-		bundler.isSupported(context.Background(), documentURI)
-		bundler.isSupported(context.Background(), documentURI)
+		bundler.isSupported(context.Background(), documentURI, uuid.New().String())
+		bundler.isSupported(context.Background(), documentURI, uuid.New().String())
 		assert.Len(t, snykCodeMock.Calls, 1)
 	})
 }

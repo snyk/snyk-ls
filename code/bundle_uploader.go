@@ -36,7 +36,9 @@ func (b *BundleUploader) Upload(ctx context.Context, files []sglsp.DocumentURI) 
 	s := b.instrumentor.StartSpan(ctx, method)
 	defer b.instrumentor.Finish(s)
 
-	uploadBatches := b.groupInBatches(s.Context(), files)
+	requestId := s.GetTraceId() // use span trace id as code-request-id
+
+	uploadBatches := b.groupInBatches(s.Context(), files, requestId)
 	if len(uploadBatches) == 0 {
 		return Bundle{}, nil
 	}
@@ -44,6 +46,7 @@ func (b *BundleUploader) Upload(ctx context.Context, files []sglsp.DocumentURI) 
 	bundle := Bundle{
 		SnykCode:     b.SnykCode,
 		instrumentor: b.instrumentor,
+		requestId:    requestId,
 	}
 	t := progress.NewTracker(false)
 	t.Begin("Snyk Code", "Uploading batches...")
@@ -60,7 +63,7 @@ func (b *BundleUploader) Upload(ctx context.Context, files []sglsp.DocumentURI) 
 	return bundle, nil
 }
 
-func (b *BundleUploader) groupInBatches(ctx context.Context, files []sglsp.DocumentURI) []*UploadBatch {
+func (b *BundleUploader) groupInBatches(ctx context.Context, files []sglsp.DocumentURI, filterRequestId string) []*UploadBatch {
 	t := progress.NewTracker(false)
 	t.Begin("Snyk Code", "Creating batches...")
 	defer t.End("Batches created.")
@@ -72,7 +75,7 @@ func (b *BundleUploader) groupInBatches(ctx context.Context, files []sglsp.Docum
 	var batches []*UploadBatch
 	uploadBatch := NewUploadBatch()
 	for i, documentURI := range files {
-		if !b.isSupported(ctx, documentURI) {
+		if !b.isSupported(ctx, documentURI, filterRequestId) {
 			continue
 		}
 
@@ -108,10 +111,10 @@ func (b *BundleUploader) groupInBatches(ctx context.Context, files []sglsp.Docum
 	return batches
 }
 
-func (b *BundleUploader) isSupported(ctx context.Context, documentURI sglsp.DocumentURI) bool {
+func (b *BundleUploader) isSupported(ctx context.Context, documentURI sglsp.DocumentURI, filterRequestId string) bool {
 	if b.supportedExtensions.Length() == 0 {
 		// query
-		_, exts, err := b.SnykCode.GetFilters(ctx)
+		_, exts, err := b.SnykCode.GetFilters(ctx, filterRequestId)
 		if err != nil {
 			log.Error().Err(err).Msg("could not get filters")
 			return false

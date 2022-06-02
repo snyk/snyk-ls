@@ -30,6 +30,10 @@ func (s *sentrySpan) GetOperation() string {
 	return s.operation
 }
 
+func (s *sentrySpan) GetTraceId() string {
+	return s.span.TraceID.String()
+}
+
 func (s *sentrySpan) Context() context.Context {
 	return s.span.Context()
 }
@@ -86,6 +90,10 @@ func (n *noopSpan) GetOperation() string {
 func (n *noopSpan) GetTxName() string {
 	return n.txName
 }
+func (n *noopSpan) GetTraceId() string {
+	return "00000000-0000-0000-0000-000000000000"
+}
+
 func (n *noopSpan) Context() context.Context {
 	return context.Background()
 }
