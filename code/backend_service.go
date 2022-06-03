@@ -216,26 +216,22 @@ type AnalysisStatus struct {
 
 func (s *SnykCodeHTTPClient) RunAnalysis(
 	ctx context.Context,
-	bundleHash string,
-	shardKey string,
-	limitToFiles []sglsp.DocumentURI,
-	severity int,
-	requestId string,
+	options AnalysisOptions,
 ) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, AnalysisStatus, error) {
 	method := "code.RunAnalysis"
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
 
-	log.Debug().Str("method", method).Str("bundleHash", bundleHash).Msg("API: Retrieving analysis for bundle")
-	defer log.Debug().Str("method", method).Str("bundleHash", bundleHash).Msg("API: Retrieving analysis done")
+	log.Debug().Str("method", method).Str("bundleHash", options.bundleHash).Msg("API: Retrieving analysis for bundle")
+	defer log.Debug().Str("method", method).Str("bundleHash", options.bundleHash).Msg("API: Retrieving analysis done")
 
-	requestBody, err := s.analysisRequestBody(bundleHash, shardKey, limitToFiles, severity)
+	requestBody, err := analysisRequestBody(&options)
 	if err != nil {
 		log.Err(err).Str("method", method).Str("requestBody", string(requestBody)).Msg("error creating request body")
 		return nil, nil, AnalysisStatus{}, err
 	}
 
-	responseBody, err := s.doCall(span.Context(), "POST", "/analysis", requestBody, requestId)
+	responseBody, err := s.doCall(span.Context(), "POST", "/analysis", requestBody, options.requestId)
 	failed := AnalysisStatus{message: "FAILED"}
 	if err != nil {
 		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response from analysis")
@@ -250,7 +246,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 	}
 
 	log.Debug().Str("method", method).
-		Str("bundleHash", bundleHash).Float64("progress", response.Progress).Msgf("Status: %s", response.Status)
+		Str("bundleHash", options.bundleHash).Float64("progress", response.Progress).Msgf("Status: %s", response.Status)
 
 	if response.Status == failed.message {
 		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("analysis failed")
@@ -270,20 +266,35 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 	return diags, hovers, status, err
 }
 
-func (s *SnykCodeHTTPClient) analysisRequestBody(bundleHash string, shardKey string, limitToFiles []sglsp.DocumentURI, severity int) ([]byte, error) {
+func analysisRequestBody(options *AnalysisOptions) ([]byte, error) {
+	unknown := "unknown"
+	orgName := unknown
+	if config.CurrentConfig().GetOrganization() != "" {
+		orgName = config.CurrentConfig().GetOrganization()
+	}
+
 	request := AnalysisRequest{
 		Key: AnalysisRequestKey{
 			Type:         "file",
-			Hash:         bundleHash,
-			LimitToFiles: limitToFiles,
+			Hash:         options.bundleHash,
+			LimitToFiles: options.limitToFiles,
 		},
 		Legacy: false,
+		AnalysisContext: AnalysisContext{
+			Initiatior: "IDE",
+			Flow:       "language-server",
+			Org: AnalysisContextOrg{
+				Name:        orgName,
+				DisplayName: unknown,
+				PublicId:    unknown,
+			},
+		},
 	}
-	if len(shardKey) > 0 {
-		request.Key.Shard = shardKey
+	if len(options.shardKey) > 0 {
+		request.Key.Shard = options.shardKey
 	}
-	if severity > 0 {
-		request.Severity = severity
+	if options.severity > 0 {
+		request.Severity = options.severity
 	}
 
 	requestBody, err := json.Marshal(request)

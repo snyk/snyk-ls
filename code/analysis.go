@@ -132,11 +132,25 @@ type AnalysisRequestKey struct {
 	Shard        string            `json:"shard"`
 }
 
+type AnalysisContextOrg struct {
+	Name        string          `json:"name"`
+	DisplayName string          `json:"displayName"`
+	PublicId    string          `json:"publicId"`
+	Flags       map[string]bool `json:"flags"`
+}
+
+type AnalysisContext struct {
+	Initiatior string             `json:"initiatior"`
+	Flow       string             `json:"flow,omitempty"`
+	Org        AnalysisContextOrg `json:"org,omitempty"`
+}
+
 type AnalysisRequest struct {
-	Key         AnalysisRequestKey `json:"key"`
-	Severity    int                `json:"severity,omitempty"`
-	Prioritized bool               `json:"prioritized,omitempty"`
-	Legacy      bool               `json:"legacy"`
+	Key             AnalysisRequestKey `json:"key"`
+	Severity        int                `json:"severity,omitempty"`
+	Prioritized     bool               `json:"prioritized,omitempty"`
+	Legacy          bool               `json:"legacy"`
+	AnalysisContext AnalysisContext    `json:"analysisContext"`
 }
 
 type SnykAnalysisFailedError struct {

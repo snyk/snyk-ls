@@ -8,6 +8,14 @@ import (
 	"github.com/snyk/snyk-ls/lsp"
 )
 
+type AnalysisOptions struct {
+	bundleHash   string
+	shardKey     string
+	limitToFiles []sglsp.DocumentURI
+	severity     int
+	requestId    string
+}
+
 type SnykCodeClient interface {
 	GetFilters(ctx context.Context, requestId string) (configFiles []string, extensions []string, err error)
 
@@ -27,11 +35,7 @@ type SnykCodeClient interface {
 
 	RunAnalysis(
 		ctx context.Context,
-		bundleHash string,
-		shardKey string,
-		limitToFiles []sglsp.DocumentURI,
-		severity int,
-		requestId string,
+		options AnalysisOptions,
 	) (
 		map[sglsp.DocumentURI][]lsp.Diagnostic,
 		map[sglsp.DocumentURI][]lsp.HoverDetails,

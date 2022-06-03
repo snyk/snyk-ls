@@ -101,7 +101,15 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		limitToFiles := []sglsp.DocumentURI{path1, path2}
-		d, _, callStatus, err := s.RunAnalysis(context.Background(), bundleHash, shardKey, limitToFiles, 0, uuid.New().String())
+
+		analysisOptions := AnalysisOptions{
+			bundleHash:   bundleHash,
+			shardKey:     shardKey,
+			limitToFiles: limitToFiles,
+			severity:     0,
+			requestId:    uuid.New().String(),
+		}
+		d, _, callStatus, err := s.RunAnalysis(context.Background(), analysisOptions)
 		if err != nil {
 			return false
 		}
@@ -148,7 +156,8 @@ func TestSnykCodeBackendService_GetFilters_returns(t *testing.T) {
 		Method: "GET",
 		Path:   dsl.String("/filters"),
 		Headers: dsl.MapMatcher{
-			"Content-Type": dsl.String("application/json"),
+			"Content-Type":    dsl.String("application/json"),
+			"snyk-request-id": dsl.Regex("fc763eba-0905-41c5-a27f-3934ab26786c", `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`),
 		},
 	}).WillRespondWith(dsl.Response{
 		Status: 200,
@@ -170,4 +179,54 @@ func TestSnykCodeBackendService_GetFilters_returns(t *testing.T) {
 	err := pact.Verify(test)
 
 	assert.NoError(t, err)
+}
+
+func TestSnykCodeBackendService_analysisRequestBody_FillsOrgParameter(t *testing.T) {
+	testutil.UnitTest(t)
+
+	// prepare
+	config.SetCurrentConfig(config.New())
+	org := "test-org"
+	config.CurrentConfig().SetOrganization(org)
+
+	analysisOpts := &AnalysisOptions{
+		bundleHash: "test-hash",
+		shardKey:   "test-key",
+		severity:   0,
+		requestId:  uuid.New().String(),
+	}
+
+	expectedRequest := AnalysisRequest{
+		Key: AnalysisRequestKey{
+			Type:         "file",
+			Hash:         analysisOpts.bundleHash,
+			LimitToFiles: analysisOpts.limitToFiles,
+			Shard:        analysisOpts.shardKey,
+		},
+		Legacy: false,
+		AnalysisContext: AnalysisContext{
+			Initiatior: "IDE",
+			Flow:       "language-server",
+			Org: AnalysisContextOrg{
+				Name:        org,
+				DisplayName: "unknown",
+				PublicId:    "unknown",
+			},
+		},
+	}
+
+	// act
+	bytes, err := analysisRequestBody(analysisOpts)
+	if err != nil {
+		assert.Fail(t, "Couldn't obtain analysis request body")
+	}
+
+	// assert
+	var actualRequest AnalysisRequest
+	err = json.Unmarshal(bytes, &actualRequest)
+	if err != nil {
+		assert.Fail(t, "Couldn't unmarshal analysis request body")
+	}
+
+	assert.Equal(t, expectedRequest, actualRequest)
 }

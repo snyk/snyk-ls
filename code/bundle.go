@@ -92,15 +92,17 @@ func (b *Bundle) retrieveAnalysis(
 	s := b.instrumentor.StartSpan(ctx, method)
 	defer b.instrumentor.Finish(s)
 
+	analysisOptions := AnalysisOptions{
+		bundleHash:   b.BundleHash,
+		shardKey:     b.getShardKey(rootPath, config.CurrentConfig().Token()),
+		limitToFiles: []lsp.DocumentURI{},
+		severity:     0,
+		requestId:    b.requestId,
+	}
+
 	for {
 		start := time.Now()
-		diags, hovers, status, err := b.SnykCode.RunAnalysis(s.Context(),
-			b.BundleHash,
-			b.getShardKey(rootPath, config.CurrentConfig().Token()),
-			[]lsp.DocumentURI{},
-			0,
-			b.requestId,
-		)
+		diags, hovers, status, err := b.SnykCode.RunAnalysis(s.Context(), analysisOptions)
 
 		if err != nil {
 			log.Error().Err(err).
