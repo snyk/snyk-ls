@@ -166,6 +166,6 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	diagnosticMap[fakeDiagnosticUri] = append(diagnostics, FakeDiagnostic)
 	hoverMap[fakeDiagnosticUri] = append(hovers, FakeHover)
 
-	log.Trace().Str("method", "RunAnalysis").Str("bundleHash", options.bundleHash).Interface("fakeDiagnostic", FakeDiagnostic).Msg("fake backend call received & answered")
+	log.Trace().Str("method", "RunAnalysis").Str("requestId", options.requestId).Interface("fakeDiagnostic", FakeDiagnostic).Msg("fake backend call received & answered")
 	return diagnosticMap, hoverMap, AnalysisStatus{message: "COMPLETE", percentage: 100}, nil
 }

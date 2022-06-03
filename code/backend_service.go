@@ -113,7 +113,7 @@ func (s *SnykCodeHTTPClient) CreateBundle(
 	if err != nil {
 		return "", nil, err
 	}
-	log.Debug().Str("method", method).Str("bundleHash", bundle.BundleHash).Msg("API: Create done")
+	log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Create done")
 	return bundle.BundleHash, bundle.MissingFiles, nil
 }
 
@@ -186,8 +186,8 @@ func (s *SnykCodeHTTPClient) ExtendBundle(
 ) (string, []sglsp.DocumentURI, error) {
 
 	method := "code.ExtendBundle"
-	log.Debug().Str("method", method).Str("bundleHash", bundleHash).Msg("API: Extending bundle " + bundleHash + " for " + strconv.Itoa(len(files)) + " files")
-	defer log.Debug().Str("method", method).Str("bundleHash", bundleHash).Msg("API: Extend done")
+	log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Extending bundle for " + strconv.Itoa(len(files)) + " files")
+	defer log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Extend done")
 
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
@@ -222,8 +222,8 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
 
-	log.Debug().Str("method", method).Str("bundleHash", options.bundleHash).Msg("API: Retrieving analysis for bundle")
-	defer log.Debug().Str("method", method).Str("bundleHash", options.bundleHash).Msg("API: Retrieving analysis done")
+	log.Debug().Str("method", method).Str("requestId", options.requestId).Msg("API: Retrieving analysis for bundle")
+	defer log.Debug().Str("method", method).Str("requestId", options.requestId).Msg("API: Retrieving analysis done")
 
 	requestBody, err := analysisRequestBody(&options)
 	if err != nil {
@@ -246,7 +246,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 	}
 
 	log.Debug().Str("method", method).
-		Str("bundleHash", options.bundleHash).Float64("progress", response.Progress).Msgf("Status: %s", response.Status)
+		Str("requestId", options.requestId).Float64("progress", response.Progress).Msgf("Status: %s", response.Status)
 
 	if response.Status == failed.message {
 		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("analysis failed")

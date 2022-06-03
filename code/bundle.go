@@ -44,7 +44,7 @@ func (b *Bundle) createBundle(ctx context.Context, uploadBatch *UploadBatch) err
 	var err error
 	if uploadBatch.hasContent() {
 		b.BundleHash, _, err = b.SnykCode.CreateBundle(ctx, uploadBatch.documents, b.requestId)
-		log.Debug().Str("bundleHash", b.BundleHash).Msg("created uploadBatch on backend")
+		log.Debug().Str("requestId", b.requestId).Msg("created uploadBatch on backend")
 	}
 	return err
 }
@@ -54,7 +54,7 @@ func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) err
 	var err error
 	if uploadBatch.hasContent() {
 		b.BundleHash, _, err = b.SnykCode.ExtendBundle(ctx, b.BundleHash, uploadBatch.documents, removeFiles, b.requestId)
-		log.Trace().Str("bundleHash", b.BundleHash).Msg("extended bundle on backend")
+		log.Trace().Str("requestId", b.requestId).Msg("extended bundle on backend")
 	}
 
 	return err
@@ -107,7 +107,7 @@ func (b *Bundle) retrieveAnalysis(
 		if err != nil {
 			log.Error().Err(err).
 				Str("method", "retrieveAnalysis").
-				Str("bundleHash", b.BundleHash).
+				Str("requestId", b.requestId).
 				Int("fileCount", len(b.UploadBatches)).
 				Msg("error retrieving diagnostics...")
 			dChan <- lsp2.DiagnosticResult{Err: err}
@@ -116,7 +116,7 @@ func (b *Bundle) retrieveAnalysis(
 
 		if status.message == "COMPLETE" {
 			for u, d := range diags {
-				log.Trace().Str("method", "retrieveAnalysis").Str("bundleHash", b.BundleHash).
+				log.Trace().Str("method", "retrieveAnalysis").Str("requestId", b.requestId).
 					Str("path", string(u)).
 					Msg("sending diagnostics...")
 
