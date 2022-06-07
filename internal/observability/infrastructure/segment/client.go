@@ -33,8 +33,8 @@ func getSegmentPublicKey() string {
 	}
 }
 
-func NewNoopClient() user_behaviour.Analytics {
-	return &noopClient{}
+func NewNoopRecordingClient() user_behaviour.Analytics {
+	return &AnalyticsRecorder{}
 }
 
 func (s *Client) Close() error {
@@ -94,20 +94,31 @@ func (s *Client) getSerialisedProperties(props interface{}) segment.Properties {
 	return set
 }
 
-type noopClient struct {
+type AnalyticsRecorder struct {
+	Analytics []interface{}
 }
 
-func (n noopClient) AnalysisIsReady(properties user_behaviour.AnalysisIsReadyProperties) {
+func (n *AnalyticsRecorder) AnalysisIsReady(properties user_behaviour.AnalysisIsReadyProperties) {
+	n.Analytics = append(n.Analytics, properties)
+	log.Info().Str("method", "AnalysisIsReady").Msg("no op")
 }
 
-func (n noopClient) AnalysisIsTriggered(properties user_behaviour.AnalysisIsTriggeredProperties) {
+func (n *AnalyticsRecorder) AnalysisIsTriggered(properties user_behaviour.AnalysisIsTriggeredProperties) {
+	n.Analytics = append(n.Analytics, properties)
+	log.Info().Str("method", "AnalysisIsTriggered").Msg("no op")
 }
 
-func (n noopClient) IssueHoverIsDisplayed(properties user_behaviour.IssueHoverIsDisplayedProperties) {
+func (n *AnalyticsRecorder) IssueHoverIsDisplayed(properties user_behaviour.IssueHoverIsDisplayedProperties) {
+	n.Analytics = append(n.Analytics, properties)
+	log.Info().Str("method", "IssueHoverIsDisplayed").Msg("no op")
 }
 
-func (n noopClient) PluginIsUninstalled(properties user_behaviour.PluginIsUninstalledProperties) {
+func (n *AnalyticsRecorder) PluginIsUninstalled(properties user_behaviour.PluginIsUninstalledProperties) {
+	n.Analytics = append(n.Analytics, properties)
+	log.Info().Str("method", "PluginIsUninstalled").Msg("no op")
 }
 
-func (n noopClient) PluginIsInstalled(properties user_behaviour.PluginIsInstalledProperties) {
+func (n *AnalyticsRecorder) PluginIsInstalled(properties user_behaviour.PluginIsInstalledProperties) {
+	n.Analytics = append(n.Analytics, properties)
+	log.Info().Str("method", "PluginIsInstalled").Msg("no op")
 }

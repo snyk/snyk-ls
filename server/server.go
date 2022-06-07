@@ -150,7 +150,7 @@ func logError(err error, method string) {
 	}
 }
 
-func TextDocumentDidOpenHandler(srv *jrpc2.Server) handler.Func {
+func TextDocumentDidOpenHandler(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidOpenTextDocumentParams) (interface{}, error) {
 		method := "TextDocumentDidOpenHandler"
 		log.Info().Str("method", method).Str("documentURI", string(params.TextDocument.URI)).Msg("RECEIVING")
@@ -162,7 +162,7 @@ func TextDocumentDidOpenHandler(srv *jrpc2.Server) handler.Func {
 	})
 }
 
-func TextDocumentDidSaveHandler(srv *jrpc2.Server) handler.Func {
+func TextDocumentDidSaveHandler(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidSaveTextDocumentParams) (interface{}, error) {
 		method := "TextDocumentDidSaveHandler"
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
@@ -184,7 +184,7 @@ func TextDocumentHover() jrpc2.Handler {
 	})
 }
 
-func WindowWorkDoneProgressCancelHandler() handler.Func {
+func WindowWorkDoneProgressCancelHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.WorkdoneProgressCancelParams) (interface{}, error) {
 		log.Info().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
 		CancelProgress(params.Token)
@@ -192,7 +192,7 @@ func WindowWorkDoneProgressCancelHandler() handler.Func {
 	})
 }
 
-func NoOpHandler() handler.Func {
+func NoOpHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidCloseTextDocumentParams) (interface{}, error) {
 		log.Info().Str("method", "NoOpHandler").Interface("params", params).Msg("RECEIVING")
 		return nil, nil

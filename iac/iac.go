@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/cli"
+	"github.com/snyk/snyk-ls/internal/observability/user_behaviour"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -41,72 +43,45 @@ func IsSupported(documentURI sglsp.DocumentURI) bool {
 
 func ScanWorkspace(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	defer wg.Done()
-
-	method := "iac.ScanWorkspace"
-	s := di.Instrumentor().StartSpan(ctx, method)
-	defer di.Instrumentor().Finish(s)
-
-	defer log.Debug().Str("method", method).Msg("done.")
-	log.Debug().Str("method", method).Msg("started.")
-
-	res, err := Cli.Execute(cliCmd(documentURI), uri.PathFromUri(documentURI))
+	scanResults, err := doScan(ctx, Cli, documentURI)
 	if err != nil {
-		switch err := err.(type) {
-		case *exec.ExitError:
-			if err.ExitCode() > 1 {
-				errorOutput := string(res)
-				if strings.Contains(errorOutput, "Could not find any valid IaC files") {
-					return
-				}
-				log.Err(err).Str("method", method).Str("output", errorOutput).Msg("Error while calling Snyk CLI")
-				reportErrorViaChan(documentURI, dChan, fmt.Errorf("%v: %v", err, errorOutput))
-				return
-			}
-			log.Warn().Err(err).Str("method", method).Msg("Error while calling Snyk CLI")
-		default:
-			reportErrorViaChan(documentURI, dChan, err)
-			return
-		}
-	}
-
-	var scanResults []iacScanResult
-	if err := json.Unmarshal(res, &scanResults); err != nil {
-		log.Err(err).Str("method", method).
-			Msg("Error while parsing response from CLI")
 		reportErrorViaChan(documentURI, dChan, err)
-		return
 	}
-
-	log.Info().Str("method", method).
-		Msg("got diags now sending to chan.")
 	for _, scanResult := range scanResults {
 		u := uri.PathToUri(filepath.Join(uri.PathFromUri(documentURI), scanResult.TargetFile))
 		retrieveAnalysis(u, scanResult, dChan, hoverChan)
 	}
-}
-
-func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, err error) {
-	dChan <- lsp.DiagnosticResult{
-		Uri: uri,
-		Err: err,
-	}
+	analyticsResult(err)
 }
 
 func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	defer wg.Done()
+	if !IsSupported(documentURI) {
+		return
+	}
+	scanResults, err := doScan(ctx, Cli, documentURI)
+	if err != nil {
+		reportErrorViaChan(documentURI, dChan, err)
+	}
+	retrieveAnalysis(documentURI, scanResults[0], dChan, hoverChan)
+	analyticsResult(err)
+}
 
-	method := "iac.ScanFile"
+func doScan(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI) (scanResults []iacScanResult, err error) {
+	method := "iac.doScan"
 	s := di.Instrumentor().StartSpan(ctx, method)
 	defer di.Instrumentor().Finish(s)
 
 	defer log.Debug().Str("method", method).Msg("done.")
 	log.Debug().Str("method", method).Msg("started.")
 
-	if !IsSupported(documentURI) {
-		return
+	var workspaceUri string
+	if !isDirectory(documentURI) {
+		workspaceUri = filepath.Dir(uri.PathFromUri(documentURI))
+	} else {
+		workspaceUri = uri.PathFromUri(documentURI)
 	}
-
-	res, err := Cli.Execute(cliCmd(documentURI), filepath.Dir(uri.PathFromUri(documentURI)))
+	res, err := Cli.Execute(cliCmd(documentURI), workspaceUri)
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:
@@ -114,29 +89,45 @@ func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentU
 				errorOutput := string(res)
 				if strings.Contains(errorOutput, "Could not find any valid IaC files") ||
 					strings.Contains(errorOutput, "CustomError: Not a recognised option did you mean --file") {
-					return
+					return scanResults, nil
 				}
-				log.Err(err).Str("method", "iac.ScanFile").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
-				reportErrorViaChan(documentURI, dChan, fmt.Errorf("%v: %v", err, errorOutput))
-				return
+				log.Err(err).Str("method", method).Str("output", errorOutput).Msg("Error while calling Snyk CLI")
+				return nil, fmt.Errorf("%v: %v", err, errorOutput)
 			}
-			log.Warn().Err(err).Str("method", "iac.ScanFile").Msg("Error while calling Snyk CLI")
+			log.Warn().Err(err).Str("method", method).Msg("Error while calling Snyk CLI")
 		default:
-			reportErrorViaChan(documentURI, dChan, err)
-			return
+			return nil, err
 		}
 	}
 
-	var scanResults iacScanResult
-	if err := json.Unmarshal(res, &scanResults); err != nil {
-		log.Err(err).Str("method", "iac.ScanFile").
-			Msg("Error while calling Snyk CLI")
-		reportErrorViaChan(documentURI, dChan, err)
-		return
+	if isDirectory(documentURI) {
+		if err := json.Unmarshal(res, &scanResults); err != nil {
+			return nil, err
+		}
+	} else {
+		var scanResult iacScanResult
+		if err := json.Unmarshal(res, &scanResult); err != nil {
+			return nil, err
+		}
+		scanResults = append(scanResults, scanResult)
 	}
+	return scanResults, nil
+}
 
-	log.Debug().Interface("iacScanResult", scanResults).Msg("got it all unmarshalled, general!")
-	retrieveAnalysis(documentURI, scanResults, dChan, hoverChan)
+func isDirectory(documentURI sglsp.DocumentURI) bool {
+	workspaceUri := uri.PathFromUri(documentURI)
+	stat, err := os.Stat(workspaceUri)
+	if err != nil {
+		log.Err(err).Err(err).Msg("Error while checking file")
+	}
+	return stat.IsDir()
+}
+
+func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, err error) {
+	dChan <- lsp.DiagnosticResult{
+		Uri: uri,
+		Err: err,
+	}
 }
 
 func cliCmd(u sglsp.DocumentURI) []string {
@@ -232,4 +223,17 @@ func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 		return sglsp.Info
 	}
 	return lspSev
+}
+
+func analyticsResult(err error) {
+	var result user_behaviour.Result
+	if err == nil {
+		result = user_behaviour.Success
+	} else {
+		result = user_behaviour.Error
+	}
+	di.Analytics.AnalysisIsReady(user_behaviour.AnalysisIsReadyProperties{
+		AnalysisType: user_behaviour.InfrastructureAsCode,
+		Result:       result,
+	})
 }

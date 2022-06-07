@@ -14,6 +14,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/hover"
+	"github.com/snyk/snyk-ls/internal/observability/user_behaviour"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -89,6 +90,12 @@ func fetchAllRegisteredDocumentDiagnostics(ctx context.Context, documentURI sgls
 
 	p := progress.NewTracker(false)
 	p.Begin(fmt.Sprintf("Scanning for issues in %s", uri.PathFromUri(documentURI)), "")
+	di.Analytics.AnalysisIsTriggered(
+		user_behaviour.AnalysisIsTriggeredProperties{
+			AnalysisType:    user_behaviour.GetEnabledAnalysisTypes(),
+			TriggeredByUser: false,
+		},
+	)
 	defer p.End(fmt.Sprintf("Scan complete. Found %d issues.", len(diagnostics)))
 
 	wg := sync.WaitGroup{}
@@ -103,6 +110,9 @@ func fetchAllRegisteredDocumentDiagnostics(ctx context.Context, documentURI sgls
 		dChan = make(chan lsp.DiagnosticResult, 10000)
 		fileLevelFetch(ctx, documentURI, p, &wg, dChan, hoverChan)
 	}
+	log.Debug().
+		Str("method", "fetchAllRegisteredDocumentDiagnostics").
+		Msg("waiting for goroutines.")
 	wg.Wait()
 	log.Debug().
 		Str("method", "fetchAllRegisteredDocumentDiagnostics").
