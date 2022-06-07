@@ -17,12 +17,13 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/oss"
 	"github.com/snyk/snyk-ls/infrastructure/segment"
 	sentry2 "github.com/snyk/snyk-ls/infrastructure/sentry"
+	snyk_api "github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/cli/auth"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 )
 
-var snykApiClient code2.SnykApiClient
+var snykApiClient snyk_api.SnykApiClient
 var snykCodeClient code2.SnykCodeClient
 var snykCodeBundleUploader *code2.BundleUploader
 var snykCodeScanner *code2.Scanner
@@ -65,9 +66,9 @@ func initInfrastructure() {
 	instrumentor = sentry2.NewInstrumentor()
 	endpoint := config.CurrentConfig().CliSettings().Endpoint
 	if endpoint == "" {
-		endpoint = code2.DefaultEndpointURL
+		endpoint = snyk_api.DefaultEndpointURL
 	}
-	snykApiClient = code2.NewSnykApiClient(endpoint)
+	snykApiClient = snyk_api.NewSnykApiClient(endpoint)
 	analytics = analyticsFactory(snykApiClient)
 	authenticator = auth.New(errorReporter)
 	snykCli = cli.NewExecutor(authenticator)
@@ -79,7 +80,7 @@ func initInfrastructure() {
 	environmentInitializer = preconditions.New(authenticator, errorReporter)
 }
 
-func analyticsFactory(apiClient code2.SnykApiClient) ux2.Analytics {
+func analyticsFactory(apiClient snyk_api.SnykApiClient) ux2.Analytics {
 	var a ux2.Analytics
 	user, err := apiClient.GetActiveUser()
 	if err != nil || user.Id == "" {
@@ -111,7 +112,7 @@ func TestInit(t *testing.T) {
 	snykCodeClient = fakeClient
 	snykCli = cli.NewExecutor(authenticator)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
-	fakeApiClient := &code2.FakeApiClient{CodeEnabled: true}
+	fakeApiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
 	snykCodeScanner = code2.New(snykCodeBundleUploader, fakeApiClient, errorReporter, analytics)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)

@@ -46,7 +46,7 @@ lint: tools
 	@echo "==> Linting code with 'golangci-lint'..."
 	@.bin/golangci-lint run ./...
 
-## test: Run all unit tests.
+## test: Run all tests.
 .PHONY: test
 test:
 	@echo "==> Running unit tests..."
