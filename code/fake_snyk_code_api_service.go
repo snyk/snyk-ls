@@ -121,13 +121,13 @@ func (f *FakeSnykCodeClient) GetAllCalls(op string) [][]interface{} {
 	return calls
 }
 
-func (f *FakeSnykCodeClient) GetFilters(_ context.Context, requestId string) (configFiles []string, extensions []string, err error) {
+func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (configFiles []string, extensions []string, err error) {
 	params := []interface{}{configFiles, extensions, err}
 	f.addCall(params, GetFiltersOperation)
 	return make([]string, 0), FakeFilters, nil
 }
 
-func (f *FakeSnykCodeClient) CreateBundle(_ context.Context, files map[sglsp.DocumentURI]BundleFile, requestId string) (string, []sglsp.DocumentURI, error) {
+func (f *FakeSnykCodeClient) CreateBundle(_ context.Context, files map[sglsp.DocumentURI]BundleFile) (string, []sglsp.DocumentURI, error) {
 	f.TotalBundleCount++
 	f.HasCreatedNewBundle = true
 	params := []interface{}{files}
@@ -140,7 +140,6 @@ func (f *FakeSnykCodeClient) ExtendBundle(
 	bundleHash string,
 	files map[sglsp.DocumentURI]BundleFile,
 	removedFiles []sglsp.DocumentURI,
-	requestId string,
 ) (string, []sglsp.DocumentURI, error) {
 	f.HasExtendedBundle = true
 	f.TotalBundleCount++
@@ -166,6 +165,6 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	diagnosticMap[fakeDiagnosticUri] = append(diagnostics, FakeDiagnostic)
 	hoverMap[fakeDiagnosticUri] = append(hovers, FakeHover)
 
-	log.Trace().Str("method", "RunAnalysis").Str("requestId", options.requestId).Interface("fakeDiagnostic", FakeDiagnostic).Msg("fake backend call received & answered")
+	log.Trace().Str("method", "RunAnalysis").Interface("fakeDiagnostic", FakeDiagnostic).Msg("fake backend call received & answered")
 	return diagnosticMap, hoverMap, AnalysisStatus{message: "COMPLETE", percentage: 100}, nil
 }

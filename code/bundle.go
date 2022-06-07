@@ -43,7 +43,7 @@ func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {
 func (b *Bundle) createBundle(ctx context.Context, uploadBatch *UploadBatch) error {
 	var err error
 	if uploadBatch.hasContent() {
-		b.BundleHash, _, err = b.SnykCode.CreateBundle(ctx, uploadBatch.documents, b.requestId)
+		b.BundleHash, _, err = b.SnykCode.CreateBundle(ctx, uploadBatch.documents)
 		log.Debug().Str("requestId", b.requestId).Msg("created uploadBatch on backend")
 	}
 	return err
@@ -53,7 +53,7 @@ func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) err
 	var removeFiles []lsp.DocumentURI
 	var err error
 	if uploadBatch.hasContent() {
-		b.BundleHash, _, err = b.SnykCode.ExtendBundle(ctx, b.BundleHash, uploadBatch.documents, removeFiles, b.requestId)
+		b.BundleHash, _, err = b.SnykCode.ExtendBundle(ctx, b.BundleHash, uploadBatch.documents, removeFiles)
 		log.Trace().Str("requestId", b.requestId).Msg("extended bundle on backend")
 	}
 
@@ -97,7 +97,6 @@ func (b *Bundle) retrieveAnalysis(
 		shardKey:     b.getShardKey(rootPath, config.CurrentConfig().Token()),
 		limitToFiles: []lsp.DocumentURI{},
 		severity:     0,
-		requestId:    b.requestId,
 	}
 
 	for {

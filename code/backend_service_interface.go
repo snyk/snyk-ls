@@ -13,16 +13,14 @@ type AnalysisOptions struct {
 	shardKey     string
 	limitToFiles []sglsp.DocumentURI
 	severity     int
-	requestId    string
 }
 
 type SnykCodeClient interface {
-	GetFilters(ctx context.Context, requestId string) (configFiles []string, extensions []string, err error)
+	GetFilters(ctx context.Context) (configFiles []string, extensions []string, err error)
 
 	CreateBundle(
 		ctx context.Context,
 		files map[sglsp.DocumentURI]BundleFile,
-		requestId string,
 	) (string, []sglsp.DocumentURI, error)
 
 	ExtendBundle(
@@ -30,7 +28,6 @@ type SnykCodeClient interface {
 		bundleHash string,
 		files map[sglsp.DocumentURI]BundleFile,
 		removedFiles []sglsp.DocumentURI,
-		requestId string,
 	) (string, []sglsp.DocumentURI, error)
 
 	RunAnalysis(

@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/pact-foundation/pact-go/dsl"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
@@ -53,7 +52,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
-	bundleHash, missingFiles, _ := s.CreateBundle(context.Background(), files, uuid.New().String())
+	bundleHash, missingFiles, _ := s.CreateBundle(context.Background(), files)
 	assert.NotNil(t, bundleHash)
 	assert.NotEqual(t, "", bundleHash)
 	assert.Equal(t, 0, len(missingFiles))
@@ -70,13 +69,13 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
-	bundleHash, _, _ := s.CreateBundle(context.Background(), files, uuid.New().String())
+	bundleHash, _, _ := s.CreateBundle(context.Background(), files)
 	filesExtend := map[sglsp.DocumentURI]BundleFile{}
 	filesExtend[path2] = BundleFile{
 		Hash:    util.Hash([]byte(content2)),
 		Content: content2,
 	}
-	_, missingFiles, _ := s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles, uuid.New().String())
+	_, missingFiles, _ := s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
 	assert.Equal(t, 0, len(missingFiles))
 }
 
@@ -91,13 +90,13 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
-	bundleHash, _, _ := s.CreateBundle(context.Background(), files, uuid.New().String())
+	bundleHash, _, _ := s.CreateBundle(context.Background(), files)
 	filesExtend := map[sglsp.DocumentURI]BundleFile{}
 	filesExtend[path2] = BundleFile{
 		Hash:    util.Hash([]byte(content2)),
 		Content: content2,
 	}
-	bundleHash, _, _ = s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles, uuid.New().String())
+	bundleHash, _, _ = s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
 
 	assert.Eventually(t, func() bool {
 		limitToFiles := []sglsp.DocumentURI{path1, path2}
@@ -107,7 +106,6 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 			shardKey:     shardKey,
 			limitToFiles: limitToFiles,
 			severity:     0,
-			requestId:    uuid.New().String(),
 		}
 		d, _, callStatus, err := s.RunAnalysis(context.Background(), analysisOptions)
 		if err != nil {
@@ -169,7 +167,7 @@ func TestSnykCodeBackendService_GetFilters_returns(t *testing.T) {
 
 	test := func() error {
 		s := NewHTTPRepository(fmt.Sprintf("http://localhost:%d", pact.Server.Port), &performance.TestInstrumentor{})
-		if _, _, err := s.GetFilters(context.Background(), uuid.New().String()); err != nil {
+		if _, _, err := s.GetFilters(context.Background()); err != nil {
 			return err
 		}
 
@@ -193,7 +191,6 @@ func TestSnykCodeBackendService_analysisRequestBody_FillsOrgParameter(t *testing
 		bundleHash: "test-hash",
 		shardKey:   "test-key",
 		severity:   0,
-		requestId:  uuid.New().String(),
 	}
 
 	expectedRequest := AnalysisRequest{

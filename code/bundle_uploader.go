@@ -37,8 +37,7 @@ func (b *BundleUploader) Upload(ctx context.Context, files []sglsp.DocumentURI) 
 	defer b.instrumentor.Finish(s)
 
 	requestId := s.GetTraceId() // use span trace id as code-request-id
-
-	uploadBatches := b.groupInBatches(s.Context(), files, requestId)
+	uploadBatches := b.groupInBatches(s.Context(), files)
 	if len(uploadBatches) == 0 {
 		return Bundle{}, nil
 	}
@@ -63,7 +62,7 @@ func (b *BundleUploader) Upload(ctx context.Context, files []sglsp.DocumentURI) 
 	return bundle, nil
 }
 
-func (b *BundleUploader) groupInBatches(ctx context.Context, files []sglsp.DocumentURI, filterRequestId string) []*UploadBatch {
+func (b *BundleUploader) groupInBatches(ctx context.Context, files []sglsp.DocumentURI) []*UploadBatch {
 	t := progress.NewTracker(false)
 	t.Begin("Snyk Code", "Creating batches...")
 	defer t.End("Batches created.")
@@ -75,7 +74,7 @@ func (b *BundleUploader) groupInBatches(ctx context.Context, files []sglsp.Docum
 	var batches []*UploadBatch
 	uploadBatch := NewUploadBatch()
 	for i, documentURI := range files {
-		if !b.isSupported(ctx, documentURI, filterRequestId) {
+		if !b.isSupported(ctx, documentURI) {
 			continue
 		}
 
@@ -111,10 +110,10 @@ func (b *BundleUploader) groupInBatches(ctx context.Context, files []sglsp.Docum
 	return batches
 }
 
-func (b *BundleUploader) isSupported(ctx context.Context, documentURI sglsp.DocumentURI, filterRequestId string) bool {
+func (b *BundleUploader) isSupported(ctx context.Context, documentURI sglsp.DocumentURI) bool {
 	if b.supportedExtensions.Length() == 0 {
 		// query
-		_, exts, err := b.SnykCode.GetFilters(ctx, filterRequestId)
+		_, exts, err := b.SnykCode.GetFilters(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("could not get filters")
 			return false
