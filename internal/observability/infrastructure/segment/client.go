@@ -105,9 +105,9 @@ type SegmentLogger struct {
 }
 
 func (s SegmentLogger) Logf(format string, args ...interface{}) {
-	log.Debug().Msgf(format, args)
+	log.Debug().Msgf(format, args...)
 }
 
 func (s SegmentLogger) Errorf(format string, args ...interface{}) {
-	log.Error().Msgf(format, args)
+	log.Error().Msgf(format, args...)
 }

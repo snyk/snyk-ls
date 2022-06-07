@@ -99,9 +99,7 @@ func (s *SnykApiClientImpl) GetActiveUser() (activeUser ActiveUser, err error) {
 		return ActiveUser{}, err
 	}
 	log.Debug().Str("method", "GetActiveUser").Msgf("Retrieved user %v", response)
-	return ActiveUser{
-		Id: response.Id,
-	}, nil
+	return ActiveUser(response), nil
 }
 
 func (s *SnykApiClientImpl) doCall(method string, path string, requestBody []byte) (responseBody []byte, err error) {
