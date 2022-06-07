@@ -223,7 +223,7 @@ func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, 
 	default:
 		log.Debug().Str("method", "oss.reportErrorViaChan").Msg("not sending...")
 	}
-	analyticsResult(err)
+	trackResult(err)
 	return dChan
 }
 
@@ -252,7 +252,7 @@ func retrieveAnalysis(
 			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("not sending...")
 		}
 	}
-	analyticsResult(nil)
+	trackResult(nil)
 }
 
 type RangeFinder interface {
@@ -376,7 +376,7 @@ func findRange(issue ossIssue, uri sglsp.DocumentURI, fileContent []byte) sglsp.
 	return foundRange
 }
 
-func analyticsResult(err error) {
+func trackResult(err error) {
 	var result user_behaviour.Result
 	if err == nil {
 		result = user_behaviour.Success

@@ -51,7 +51,7 @@ func ScanWorkspace(ctx context.Context, Cli cli.Executor, documentURI sglsp.Docu
 		u := uri.PathToUri(filepath.Join(uri.PathFromUri(documentURI), scanResult.TargetFile))
 		retrieveAnalysis(u, scanResult, dChan, hoverChan)
 	}
-	analyticsResult(err)
+	trackResult(err)
 }
 
 func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
@@ -64,7 +64,7 @@ func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentU
 		reportErrorViaChan(documentURI, dChan, err)
 	}
 	retrieveAnalysis(documentURI, scanResults[0], dChan, hoverChan)
-	analyticsResult(err)
+	trackResult(err)
 }
 
 func doScan(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI) (scanResults []iacScanResult, err error) {
@@ -225,7 +225,7 @@ func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 	return lspSev
 }
 
-func analyticsResult(err error) {
+func trackResult(err error) {
 	var result user_behaviour.Result
 	if err == nil {
 		result = user_behaviour.Success

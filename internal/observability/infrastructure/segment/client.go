@@ -33,10 +33,6 @@ func getSegmentPublicKey() string {
 	}
 }
 
-func NewNoopRecordingClient() user_behaviour.Analytics {
-	return &AnalyticsRecorder{}
-}
-
 func (s *Client) Close() error {
 	return s.segment.Close()
 }
@@ -92,33 +88,4 @@ func (s *Client) getSerialisedProperties(props interface{}) segment.Properties {
 	}
 
 	return set
-}
-
-type AnalyticsRecorder struct {
-	Analytics []interface{}
-}
-
-func (n *AnalyticsRecorder) AnalysisIsReady(properties user_behaviour.AnalysisIsReadyProperties) {
-	n.Analytics = append(n.Analytics, properties)
-	log.Info().Str("method", "AnalysisIsReady").Msg("no op")
-}
-
-func (n *AnalyticsRecorder) AnalysisIsTriggered(properties user_behaviour.AnalysisIsTriggeredProperties) {
-	n.Analytics = append(n.Analytics, properties)
-	log.Info().Str("method", "AnalysisIsTriggered").Msg("no op")
-}
-
-func (n *AnalyticsRecorder) IssueHoverIsDisplayed(properties user_behaviour.IssueHoverIsDisplayedProperties) {
-	n.Analytics = append(n.Analytics, properties)
-	log.Info().Str("method", "IssueHoverIsDisplayed").Msg("no op")
-}
-
-func (n *AnalyticsRecorder) PluginIsUninstalled(properties user_behaviour.PluginIsUninstalledProperties) {
-	n.Analytics = append(n.Analytics, properties)
-	log.Info().Str("method", "PluginIsUninstalled").Msg("no op")
-}
-
-func (n *AnalyticsRecorder) PluginIsInstalled(properties user_behaviour.PluginIsInstalledProperties) {
-	n.Analytics = append(n.Analytics, properties)
-	log.Info().Str("method", "PluginIsInstalled").Msg("no op")
 }
