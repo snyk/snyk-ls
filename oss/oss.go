@@ -18,6 +18,7 @@ import (
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/cli"
+	"github.com/snyk/snyk-ls/internal/observability/user_behaviour"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -119,44 +120,6 @@ func ScanWorkspace(ctx context.Context, Cli cli.Executor, workspace sglsp.Docume
 	retrieveAnalysis(scanResult, targetFileUri, fileContent, dChan, hoverChan)
 }
 
-func handleError(err error, res []byte, workspace sglsp.DocumentURI, dChan chan lsp.DiagnosticResult) bool {
-	switch err := err.(type) {
-	case *exec.ExitError:
-		// Exit codes
-		//  Possible exit codes and their meaning:
-		//
-		//  0: success, no vulnerabilities found
-		//  1: action_needed, vulnerabilities found
-		//  2: failure, try to re-run command
-		//  3: failure, no supported projects detected
-		errorOutput := string(res)
-		switch err.ExitCode() {
-		case 1:
-		case 2:
-			log.Err(err).Str("method", "oss.Scan").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
-			reportErrorViaChan(workspace, dChan, fmt.Errorf("%v: %v", err, errorOutput))
-			return true
-		case 3:
-			log.Debug().Str("method", "oss.Scan").Msg("no supported projects/files detected.")
-			return true
-		default:
-			log.Err(err).Str("method", "oss.Scan").Msg("Error while calling Snyk CLI")
-		}
-	default:
-		reportErrorViaChan(workspace, dChan, err)
-		return true
-	}
-	return false
-}
-
-func determineTargetFile(displayTargetFile string) string {
-	targetFile := lockFilesToManifestMap[displayTargetFile]
-	if targetFile == "" {
-		return displayTargetFile
-	}
-	return targetFile
-}
-
 func ScanFile(
 	ctx context.Context,
 	Cli cli.Executor,
@@ -212,6 +175,44 @@ func ScanFile(
 	retrieveAnalysis(scanResults, documentURI, fileContent, dChan, hoverChan)
 }
 
+func determineTargetFile(displayTargetFile string) string {
+	targetFile := lockFilesToManifestMap[displayTargetFile]
+	if targetFile == "" {
+		return displayTargetFile
+	}
+	return targetFile
+}
+
+func handleError(err error, res []byte, workspace sglsp.DocumentURI, dChan chan lsp.DiagnosticResult) bool {
+	switch err := err.(type) {
+	case *exec.ExitError:
+		// Exit codes
+		//  Possible exit codes and their meaning:
+		//
+		//  0: success, no vulnerabilities found
+		//  1: action_needed, vulnerabilities found
+		//  2: failure, try to re-run command
+		//  3: failure, no supported projects detected
+		errorOutput := string(res)
+		switch err.ExitCode() {
+		case 1:
+		case 2:
+			log.Err(err).Str("method", "oss.Scan").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
+			reportErrorViaChan(workspace, dChan, fmt.Errorf("%v: %v", err, errorOutput))
+			return true
+		case 3:
+			log.Debug().Str("method", "oss.Scan").Msg("no supported projects/files detected.")
+			return true
+		default:
+			log.Err(err).Str("method", "oss.Scan").Msg("Error while calling Snyk CLI")
+		}
+	default:
+		reportErrorViaChan(workspace, dChan, err)
+		return true
+	}
+	return false
+}
+
 func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, err error) chan lsp.DiagnosticResult {
 	select {
 	case dChan <- lsp.DiagnosticResult{
@@ -222,6 +223,7 @@ func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, 
 	default:
 		log.Debug().Str("method", "oss.reportErrorViaChan").Msg("not sending...")
 	}
+	analyticsResult(err)
 	return dChan
 }
 
@@ -250,6 +252,7 @@ func retrieveAnalysis(
 			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("not sending...")
 		}
 	}
+	analyticsResult(nil)
 }
 
 type RangeFinder interface {
@@ -371,4 +374,17 @@ func findRange(issue ossIssue, uri sglsp.DocumentURI, fileContent []byte) sglsp.
 
 	foundRange = finder.Find(issue)
 	return foundRange
+}
+
+func analyticsResult(err error) {
+	var result user_behaviour.Result
+	if err == nil {
+		result = user_behaviour.Success
+	} else {
+		result = user_behaviour.Error
+	}
+	di.Analytics.AnalysisIsReady(user_behaviour.AnalysisIsReadyProperties{
+		AnalysisType: user_behaviour.OpenSource,
+		Result:       result,
+	})
 }
