@@ -63,7 +63,9 @@ func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentU
 	if err != nil {
 		reportErrorViaChan(documentURI, dChan, err)
 	}
-	retrieveAnalysis(documentURI, scanResults[0], dChan, hoverChan)
+	if len(scanResults) > 0 {
+		retrieveAnalysis(documentURI, scanResults[0], dChan, hoverChan)
+	}
 	trackResult(err)
 }
 
@@ -85,6 +87,7 @@ func doScan(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:
+			log.Warn().Err(err).Str("method", method).Msg("Error while calling Snyk CLI")
 			if err.ExitCode() > 1 {
 				errorOutput := string(res)
 				if strings.Contains(errorOutput, "Could not find any valid IaC files") ||
@@ -94,8 +97,8 @@ func doScan(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI
 				log.Err(err).Str("method", method).Str("output", errorOutput).Msg("Error while calling Snyk CLI")
 				return nil, fmt.Errorf("%v: %v", err, errorOutput)
 			}
-			log.Warn().Err(err).Str("method", method).Msg("Error while calling Snyk CLI")
 		default:
+			log.Warn().Err(err).Str("method", method).Msg("Error while calling Snyk CLI")
 			return nil, err
 		}
 	}

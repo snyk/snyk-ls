@@ -98,6 +98,7 @@ func (s *SnykApiClientImpl) GetActiveUser() (activeUser ActiveUser, err error) {
 		log.Err(err).Str("method", "GetActiveUser").Msg("couldn't unmarshal GetActiveUser")
 		return ActiveUser{}, err
 	}
+	log.Debug().Str("method", "GetActiveUser").Msgf("Retrieved user %v", response)
 	return ActiveUser{
 		Id: response.Id,
 	}, nil

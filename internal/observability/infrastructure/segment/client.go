@@ -17,18 +17,24 @@ type Client struct {
 }
 
 func NewSegmentClient(userId string, IDE user_behaviour.IDE) user_behaviour.Analytics {
+	client, err := segment.NewWithConfig(getSegmentPublicKey(), segment.Config{Logger: SegmentLogger{}})
+	if err != nil {
+		log.Error().Str("method", "NewSegmentClient").Err(err).Msg("Error creating segment client")
+	}
 	segmentClient := &Client{
 		userId:  userId,
 		IDE:     IDE,
-		segment: segment.New(getSegmentPublicKey()),
+		segment: client,
 	}
 	return segmentClient
 }
 
 func getSegmentPublicKey() string {
 	if config.IsDevelopment() {
+		log.Info().Str("method", "getSegmentPublicKey").Msg("Configured segment client with dev key")
 		return developmentPublicKey
 	} else {
+		log.Info().Str("method", "getSegmentPublicKey").Msg("Configured segment client with prod key")
 		return productionPublicKey
 	}
 }
@@ -38,22 +44,27 @@ func (s *Client) Close() error {
 }
 
 func (s *Client) AnalysisIsReady(properties user_behaviour.AnalysisIsReadyProperties) {
+	log.Info().Str("method", "AnalysisIsReady").Msg("Analytics enqueued")
 	s.enqueueEvent(properties, "Analysis Is Ready")
 }
 
 func (s *Client) AnalysisIsTriggered(properties user_behaviour.AnalysisIsTriggeredProperties) {
+	log.Info().Str("method", "AnalysisIsTriggered").Msg("Analytics enqueued")
 	s.enqueueEvent(properties, "Analysis Is Triggered")
 }
 
 func (s *Client) IssueHoverIsDisplayed(properties user_behaviour.IssueHoverIsDisplayedProperties) {
+	log.Info().Str("method", "IssueHoverIsDisplayed").Msg("Analytics enqueued")
 	s.enqueueEvent(properties, "Issue Hover Is Displayed")
 }
 
 func (s *Client) PluginIsUninstalled(properties user_behaviour.PluginIsUninstalledProperties) {
+	log.Info().Str("method", "PluginIsUninstalled").Msg("Analytics enqueued")
 	s.enqueueEvent(properties, "Plugin Is Uninstalled")
 }
 
 func (s *Client) PluginIsInstalled(properties user_behaviour.PluginIsInstalledProperties) {
+	log.Info().Str("method", "PluginIsInstalled").Msg("Analytics enqueued")
 	s.enqueueEvent(properties, "Plugin Is Installed")
 }
 
@@ -88,4 +99,15 @@ func (s *Client) getSerialisedProperties(props interface{}) segment.Properties {
 	}
 
 	return set
+}
+
+type SegmentLogger struct {
+}
+
+func (s SegmentLogger) Logf(format string, args ...interface{}) {
+	log.Debug().Msgf(format, args)
+}
+
+func (s SegmentLogger) Errorf(format string, args ...interface{}) {
+	log.Error().Msgf(format, args)
 }

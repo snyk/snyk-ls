@@ -55,6 +55,8 @@ func initInfrastructure() {
 	user, err := SnykApiClient.GetActiveUser()
 	if err != nil {
 		log.Warn().Err(err).Msg("Error retrieving current user")
+	}
+	if err != nil || user.Id == "" {
 		ErrorReporter.CaptureError(errors.Wrap(err, "cannot retrieve active user, configuring noop analytics"))
 		Analytics = user_behaviour.NewNoopRecordingClient()
 	}

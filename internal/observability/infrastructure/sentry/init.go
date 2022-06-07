@@ -28,7 +28,7 @@ func initializeSentry() {
 	if err != nil {
 		log.Error().Str("method", "Initialize").Msg(err.Error())
 	} else {
-		log.Info().Msg("Error reporting initialized.")
+		log.Info().Msg("Error reporting initialized")
 	}
 }
 
