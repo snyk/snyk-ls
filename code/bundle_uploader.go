@@ -36,6 +36,7 @@ func (b *BundleUploader) Upload(ctx context.Context, files []sglsp.DocumentURI) 
 	s := b.instrumentor.StartSpan(ctx, method)
 	defer b.instrumentor.Finish(s)
 
+	requestId := s.GetTraceId() // use span trace id as code-request-id
 	uploadBatches := b.groupInBatches(s.Context(), files)
 	if len(uploadBatches) == 0 {
 		return Bundle{}, nil
@@ -44,6 +45,7 @@ func (b *BundleUploader) Upload(ctx context.Context, files []sglsp.DocumentURI) 
 	bundle := Bundle{
 		SnykCode:     b.SnykCode,
 		instrumentor: b.instrumentor,
+		requestId:    requestId,
 	}
 	t := progress.NewTracker(false)
 	t.Begin("Snyk Code", "Uploading batches...")

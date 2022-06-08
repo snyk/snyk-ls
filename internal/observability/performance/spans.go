@@ -2,24 +2,44 @@ package performance
 
 import (
 	"context"
+	"errors"
 
 	"github.com/getsentry/sentry-go"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/config"
 )
+
+type traceIdContextKey string
 
 type noopSpan struct {
 	operation string
 	txName    string
 	started   bool
 	finished  bool
+	ctx       context.Context
 }
 
 type sentrySpan struct {
 	span      *sentry.Span
 	txName    string
 	operation string
+	ctx       context.Context
+}
+
+func GetTraceId(ctx context.Context) (string, error) {
+	v, ok := ctx.Value(traceIdContextKey("trace_id")).(string)
+	if !ok {
+		return "", errors.New("\"trace_id\" context key not found")
+	}
+
+	return v, nil
+}
+
+// Returns a child context with "trace_id" set to the given traceId
+func getContextWithTraceId(ctx context.Context, traceId string) context.Context {
+	return context.WithValue(ctx, traceIdContextKey("trace_id"), traceId)
 }
 
 func (s *sentrySpan) GetTxName() string {
@@ -30,8 +50,12 @@ func (s *sentrySpan) GetOperation() string {
 	return s.operation
 }
 
+func (s *sentrySpan) GetTraceId() string {
+	return s.ctx.Value(traceIdContextKey("trace_id")).(string)
+}
+
 func (s *sentrySpan) Context() context.Context {
-	return s.span.Context()
+	return s.ctx
 }
 
 func (s *sentrySpan) StartSpan(ctx context.Context) {
@@ -41,6 +65,8 @@ func (s *sentrySpan) StartSpan(ctx context.Context) {
 	}
 	s.span = sentry.StartSpan(ctx, s.operation, options...)
 	s.span.SetTag("organization", config.CurrentConfig().GetOrganization())
+	s.ctx = getContextWithTraceId(s.span.Context(), s.span.TraceID.String())
+
 	log.Debug().
 		Str("method", "sentrySpan.StartSpan").
 		Str("operation", s.operation).
@@ -72,11 +98,16 @@ func (n *noopSpan) Finish() {
 }
 
 func (n *noopSpan) SetTransactionName(txName string) { n.txName = txName }
-func (n *noopSpan) StartSpan(_ context.Context) {
+func (n *noopSpan) StartSpan(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	log.Debug().
 		Str("method", "noopSpan.StartSpan").
 		Str("operation", n.operation).
 		Msg("starting span")
+	n.ctx = getContextWithTraceId(ctx, uuid.New().String())
 	n.started = true
 }
 
@@ -86,6 +117,10 @@ func (n *noopSpan) GetOperation() string {
 func (n *noopSpan) GetTxName() string {
 	return n.txName
 }
+func (n *noopSpan) GetTraceId() string {
+	return n.ctx.Value(traceIdContextKey("trace_id")).(string)
+}
+
 func (n *noopSpan) Context() context.Context {
-	return context.Background()
+	return n.ctx
 }

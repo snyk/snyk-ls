@@ -21,6 +21,7 @@ type Bundle struct {
 	BundleHash    string
 	UploadBatches []*UploadBatch
 	instrumentor  performance.Instrumentor
+	requestId     string
 }
 
 func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {
@@ -43,7 +44,7 @@ func (b *Bundle) createBundle(ctx context.Context, uploadBatch *UploadBatch) err
 	var err error
 	if uploadBatch.hasContent() {
 		b.BundleHash, _, err = b.SnykCode.CreateBundle(ctx, uploadBatch.documents)
-		log.Debug().Str("bundleHash", b.BundleHash).Msg("created uploadBatch on backend")
+		log.Debug().Str("requestId", b.requestId).Msg("created uploadBatch on backend")
 	}
 	return err
 }
@@ -53,7 +54,7 @@ func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) err
 	var err error
 	if uploadBatch.hasContent() {
 		b.BundleHash, _, err = b.SnykCode.ExtendBundle(ctx, b.BundleHash, uploadBatch.documents, removeFiles)
-		log.Trace().Str("bundleHash", b.BundleHash).Msg("extended bundle on backend")
+		log.Trace().Str("requestId", b.requestId).Msg("extended bundle on backend")
 	}
 
 	return err
@@ -91,19 +92,21 @@ func (b *Bundle) retrieveAnalysis(
 	s := b.instrumentor.StartSpan(ctx, method)
 	defer b.instrumentor.Finish(s)
 
+	analysisOptions := AnalysisOptions{
+		bundleHash:   b.BundleHash,
+		shardKey:     b.getShardKey(rootPath, config.CurrentConfig().Token()),
+		limitToFiles: []lsp.DocumentURI{},
+		severity:     0,
+	}
+
 	for {
 		start := time.Now()
-		diags, hovers, status, err := b.SnykCode.RunAnalysis(s.Context(),
-			b.BundleHash,
-			b.getShardKey(rootPath, config.CurrentConfig().Token()),
-			[]lsp.DocumentURI{},
-			0,
-		)
+		diags, hovers, status, err := b.SnykCode.RunAnalysis(s.Context(), analysisOptions)
 
 		if err != nil {
 			log.Error().Err(err).
 				Str("method", "retrieveAnalysis").
-				Str("bundleHash", b.BundleHash).
+				Str("requestId", b.requestId).
 				Int("fileCount", len(b.UploadBatches)).
 				Msg("error retrieving diagnostics...")
 			dChan <- lsp2.DiagnosticResult{Err: err}
@@ -112,7 +115,7 @@ func (b *Bundle) retrieveAnalysis(
 
 		if status.message == "COMPLETE" {
 			for u, d := range diags {
-				log.Trace().Str("method", "retrieveAnalysis").Str("bundleHash", b.BundleHash).
+				log.Trace().Str("method", "retrieveAnalysis").Str("requestId", b.requestId).
 					Str("path", string(u)).
 					Msg("sending diagnostics...")
 

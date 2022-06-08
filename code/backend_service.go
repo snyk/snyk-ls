@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -111,13 +112,18 @@ func (s *SnykCodeHTTPClient) CreateBundle(
 	if err != nil {
 		return "", nil, err
 	}
-	log.Debug().Str("method", method).Str("bundleHash", bundle.BundleHash).Msg("API: Create done")
+	log.Debug().Str("method", method).Msg("API: Create done")
 	return bundle.BundleHash, bundle.MissingFiles, nil
 }
 
 func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path string, requestBody []byte) ([]byte, error) {
 	span := s.instrumentor.StartSpan(ctx, "code.doCall")
 	defer s.instrumentor.Finish(span)
+
+	requestId, err := performance.GetTraceId(ctx)
+	if err != nil {
+		return nil, errors.New("Code request id was not provided. " + err.Error())
+	}
 
 	b := new(bytes.Buffer)
 
@@ -138,6 +144,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 	}
 
 	req.Header.Set("Session-Token", config.CurrentConfig().Token())
+	req.Header.Set("snyk-request-id", requestId)
 	// https://www.keycdn.com/blog/http-cache-headers
 	req.Header.Set("Cache-Control", "private, max-age=0, no-cache")
 	if mustBeEncoded {
@@ -147,7 +154,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	log.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
+	log.Trace().Str("requestBody", string(requestBody)).Str("snyk-request-id", requestId).Msg("SEND TO REMOTE")
 	response, err := s.client.Do(req)
 	if err != nil {
 		log.Err(err).Str("method", method).Msgf("got http error")
@@ -161,7 +168,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 		}
 	}(response.Body)
 	responseBody, err := ioutil.ReadAll(response.Body)
-	log.Trace().Str("responseBody", string(responseBody)).Msg("RECEIVED FROM REMOTE")
+	log.Trace().Str("responseBody", string(responseBody)).Str("snyk-request-id", requestId).Msg("RECEIVED FROM REMOTE")
 	if err != nil {
 		log.Err(err).Str("method", method).Msgf("error reading response body")
 		error_reporting.CaptureError(err)
@@ -178,8 +185,8 @@ func (s *SnykCodeHTTPClient) ExtendBundle(
 ) (string, []sglsp.DocumentURI, error) {
 
 	method := "code.ExtendBundle"
-	log.Debug().Str("method", method).Str("bundleHash", bundleHash).Msg("API: Extending bundle " + bundleHash + " for " + strconv.Itoa(len(files)) + " files")
-	defer log.Debug().Str("method", method).Str("bundleHash", bundleHash).Msg("API: Extend done")
+	log.Debug().Str("method", method).Msg("API: Extending bundle for " + strconv.Itoa(len(files)) + " files")
+	defer log.Debug().Str("method", method).Msg("API: Extend done")
 
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
@@ -208,19 +215,21 @@ type AnalysisStatus struct {
 
 func (s *SnykCodeHTTPClient) RunAnalysis(
 	ctx context.Context,
-	bundleHash string,
-	shardKey string,
-	limitToFiles []sglsp.DocumentURI,
-	severity int,
+	options AnalysisOptions,
 ) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, AnalysisStatus, error) {
 	method := "code.RunAnalysis"
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
 
-	log.Debug().Str("method", method).Str("bundleHash", bundleHash).Msg("API: Retrieving analysis for bundle")
-	defer log.Debug().Str("method", method).Str("bundleHash", bundleHash).Msg("API: Retrieving analysis done")
+	requestId, err := performance.GetTraceId(span.Context())
+	if err != nil {
+		log.Err(err).Str("method", method).Msg("Failed to obtain request id. " + err.Error())
+		return nil, nil, AnalysisStatus{}, err
+	}
+	log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis for bundle")
+	defer log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis done")
 
-	requestBody, err := s.analysisRequestBody(bundleHash, shardKey, limitToFiles, severity)
+	requestBody, err := analysisRequestBody(&options)
 	if err != nil {
 		log.Err(err).Str("method", method).Str("requestBody", string(requestBody)).Msg("error creating request body")
 		return nil, nil, AnalysisStatus{}, err
@@ -240,8 +249,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		return nil, nil, failed, err
 	}
 
-	log.Debug().Str("method", method).
-		Str("bundleHash", bundleHash).Float64("progress", response.Progress).Msgf("Status: %s", response.Status)
+	log.Debug().Str("method", method).Str("requestId", requestId).Float64("progress", response.Progress).Msgf("Status: %s", response.Status)
 
 	if response.Status == failed.message {
 		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("analysis failed")
@@ -261,20 +269,35 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 	return diags, hovers, status, err
 }
 
-func (s *SnykCodeHTTPClient) analysisRequestBody(bundleHash string, shardKey string, limitToFiles []sglsp.DocumentURI, severity int) ([]byte, error) {
+func analysisRequestBody(options *AnalysisOptions) ([]byte, error) {
+	unknown := "unknown"
+	orgName := unknown
+	if config.CurrentConfig().GetOrganization() != "" {
+		orgName = config.CurrentConfig().GetOrganization()
+	}
+
 	request := AnalysisRequest{
 		Key: AnalysisRequestKey{
 			Type:         "file",
-			Hash:         bundleHash,
-			LimitToFiles: limitToFiles,
+			Hash:         options.bundleHash,
+			LimitToFiles: options.limitToFiles,
 		},
 		Legacy: false,
+		AnalysisContext: AnalysisContext{
+			Initiatior: "IDE",
+			Flow:       "language-server",
+			Org: AnalysisContextOrg{
+				Name:        orgName,
+				DisplayName: unknown,
+				PublicId:    unknown,
+			},
+		},
 	}
-	if len(shardKey) > 0 {
-		request.Key.Shard = shardKey
+	if len(options.shardKey) > 0 {
+		request.Key.Shard = options.shardKey
 	}
-	if severity > 0 {
-		request.Severity = severity
+	if options.severity > 0 {
+		request.Severity = options.severity
 	}
 
 	requestBody, err := json.Marshal(request)
