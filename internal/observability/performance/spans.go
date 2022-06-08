@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/getsentry/sentry-go"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/config"
@@ -17,6 +18,7 @@ type noopSpan struct {
 	txName    string
 	started   bool
 	finished  bool
+	ctx       context.Context
 }
 
 type sentrySpan struct {
@@ -96,11 +98,16 @@ func (n *noopSpan) Finish() {
 }
 
 func (n *noopSpan) SetTransactionName(txName string) { n.txName = txName }
-func (n *noopSpan) StartSpan(_ context.Context) {
+func (n *noopSpan) StartSpan(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	log.Debug().
 		Str("method", "noopSpan.StartSpan").
 		Str("operation", n.operation).
 		Msg("starting span")
+	n.ctx = getContextWithTraceId(ctx, uuid.New().String())
 	n.started = true
 }
 
@@ -111,9 +118,9 @@ func (n *noopSpan) GetTxName() string {
 	return n.txName
 }
 func (n *noopSpan) GetTraceId() string {
-	return "00000000-0000-0000-0000-000000000000"
+	return n.ctx.Value(traceIdContextKey("trace_id")).(string)
 }
 
 func (n *noopSpan) Context() context.Context {
-	return getContextWithTraceId(context.Background(), n.GetTraceId())
+	return n.ctx
 }

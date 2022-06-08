@@ -221,7 +221,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
 
-	requestId, err := performance.GetTraceId(ctx)
+	requestId, err := performance.GetTraceId(span.Context())
 	if err != nil {
 		log.Err(err).Str("method", method).Msg("Failed to obtain request id. " + err.Error())
 		return nil, nil, AnalysisStatus{}, err
