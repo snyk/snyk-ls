@@ -221,8 +221,13 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
 
-	log.Debug().Str("method", method).Msg("API: Retrieving analysis for bundle")
-	defer log.Debug().Str("method", method).Msg("API: Retrieving analysis done")
+	requestId, err := performance.GetTraceId(ctx)
+	if err != nil {
+		log.Err(err).Str("method", method).Msg("Failed to obtain request id. " + err.Error())
+		return nil, nil, AnalysisStatus{}, err
+	}
+	log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis for bundle")
+	defer log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis done")
 
 	requestBody, err := analysisRequestBody(&options)
 	if err != nil {
@@ -244,7 +249,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		return nil, nil, failed, err
 	}
 
-	log.Debug().Str("method", method).Float64("progress", response.Progress).Msgf("Status: %s", response.Status)
+	log.Debug().Str("method", method).Str("requestId", requestId).Float64("progress", response.Progress).Msgf("Status: %s", response.Status)
 
 	if response.Status == failed.message {
 		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("analysis failed")
