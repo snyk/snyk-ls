@@ -15,7 +15,7 @@ import (
 	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/observability/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
-	"github.com/snyk/snyk-ls/internal/observability/user_behaviour"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/uri"
 	lsp2 "github.com/snyk/snyk-ls/lsp"
 )
@@ -43,7 +43,7 @@ func setupDocs() (string, lsp.TextDocumentItem, lsp.TextDocumentItem, []byte, []
 func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 	t.Run("should create bundle when hash empty", func(t *testing.T) {
 		snykCodeMock := &code.FakeSnykCodeClient{}
-		c := code.NewSnykCode(code.NewBundler(snykCodeMock, &performance.TestInstrumentor{}), &code.FakeApiClient{CodeEnabled: true}, sentry.NewTestErrorReporter(), user_behaviour.NewNoopRecordingClient())
+		c := code.NewSnykCode(code.NewBundler(snykCodeMock, &performance.TestInstrumentor{}), &code.FakeApiClient{CodeEnabled: true}, sentry.NewTestErrorReporter(), ux.NewNoopRecordingClient())
 		path, firstDoc, _, content1, _ := setupDocs()
 		registeredDocuments := []lsp.DocumentURI{firstDoc.URI}
 		defer os.RemoveAll(path)
@@ -67,7 +67,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 
 	t.Run("should retrieve from backend", func(t *testing.T) {
 		snykCodeMock := &code.FakeSnykCodeClient{}
-		c := code.NewSnykCode(code.NewBundler(snykCodeMock, &performance.TestInstrumentor{}), &code.FakeApiClient{CodeEnabled: true}, sentry.NewTestErrorReporter(), user_behaviour.NewNoopRecordingClient())
+		c := code.NewSnykCode(code.NewBundler(snykCodeMock, &performance.TestInstrumentor{}), &code.FakeApiClient{CodeEnabled: true}, sentry.NewTestErrorReporter(), ux.NewNoopRecordingClient())
 		diagnosticUri, path := code.FakeDiagnosticUri()
 		defer os.RemoveAll(path)
 		diagnosticMap := map[lsp.DocumentURI][]lsp2.Diagnostic{}
@@ -97,7 +97,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 
 	t.Run("should track analytics", func(t *testing.T) {
 		snykCodeMock := &code.FakeSnykCodeClient{}
-		c := code.NewSnykCode(code.NewBundler(snykCodeMock, &performance.TestInstrumentor{}), &code.FakeApiClient{CodeEnabled: true}, sentry.NewTestErrorReporter(), user_behaviour.NewNoopRecordingClient())
+		c := code.NewSnykCode(code.NewBundler(snykCodeMock, &performance.TestInstrumentor{}), &code.FakeApiClient{CodeEnabled: true}, sentry.NewTestErrorReporter(), ux.NewNoopRecordingClient())
 		diagnosticUri, path := code.FakeDiagnosticUri()
 		defer os.RemoveAll(path)
 
@@ -110,10 +110,10 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		go c.UploadAndAnalyze(context.Background(), []lsp.DocumentURI{diagnosticUri}, &wg, "", dChan, hoverChan)
 		wg.Wait()
 
-		assert.Len(t, di.Analytics.(*user_behaviour.AnalyticsRecorder).Analytics, 1)
-		assert.Equal(t, user_behaviour.AnalysisIsReadyProperties{
-			AnalysisType: user_behaviour.CodeSecurity,
-			Result:       user_behaviour.Success,
-		}, di.Analytics.(*user_behaviour.AnalyticsRecorder).Analytics[0])
+		assert.Len(t, di.Analytics.(*ux.AnalyticsRecorder).Analytics, 1)
+		assert.Equal(t, ux.AnalysisIsReadyProperties{
+			AnalysisType: ux.CodeSecurity,
+			Result:       ux.Success,
+		}, di.Analytics.(*ux.AnalyticsRecorder).Analytics[0])
 	})
 }

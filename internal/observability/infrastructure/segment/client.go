@@ -7,17 +7,17 @@ import (
 	segment "github.com/segmentio/analytics-go"
 
 	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/internal/observability/user_behaviour"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 type Client struct {
 	userId  string
-	IDE     user_behaviour.IDE
+	IDE     ux.IDE
 	segment segment.Client
 }
 
-func NewSegmentClient(userId string, IDE user_behaviour.IDE) user_behaviour.Analytics {
-	client, err := segment.NewWithConfig(getSegmentPublicKey(), segment.Config{Logger: SegmentLogger{}})
+func NewSegmentClient(userId string, IDE ux.IDE) ux.Analytics {
+	client, err := segment.NewWithConfig(getSegmentPublicKey(), segment.Config{Logger: &segmentLogger{}})
 	if err != nil {
 		log.Error().Str("method", "NewSegmentClient").Err(err).Msg("Error creating segment client")
 	}
@@ -43,27 +43,27 @@ func (s *Client) Close() error {
 	return s.segment.Close()
 }
 
-func (s *Client) AnalysisIsReady(properties user_behaviour.AnalysisIsReadyProperties) {
+func (s *Client) AnalysisIsReady(properties ux.AnalysisIsReadyProperties) {
 	log.Info().Str("method", "AnalysisIsReady").Msg("Analytics enqueued")
 	s.enqueueEvent(properties, "Analysis Is Ready")
 }
 
-func (s *Client) AnalysisIsTriggered(properties user_behaviour.AnalysisIsTriggeredProperties) {
+func (s *Client) AnalysisIsTriggered(properties ux.AnalysisIsTriggeredProperties) {
 	log.Info().Str("method", "AnalysisIsTriggered").Msg("Analytics enqueued")
 	s.enqueueEvent(properties, "Analysis Is Triggered")
 }
 
-func (s *Client) IssueHoverIsDisplayed(properties user_behaviour.IssueHoverIsDisplayedProperties) {
+func (s *Client) IssueHoverIsDisplayed(properties ux.IssueHoverIsDisplayedProperties) {
 	log.Info().Str("method", "IssueHoverIsDisplayed").Msg("Analytics enqueued")
 	s.enqueueEvent(properties, "Issue Hover Is Displayed")
 }
 
-func (s *Client) PluginIsUninstalled(properties user_behaviour.PluginIsUninstalledProperties) {
+func (s *Client) PluginIsUninstalled(properties ux.PluginIsUninstalledProperties) {
 	log.Info().Str("method", "PluginIsUninstalled").Msg("Analytics enqueued")
 	s.enqueueEvent(properties, "Plugin Is Uninstalled")
 }
 
-func (s *Client) PluginIsInstalled(properties user_behaviour.PluginIsInstalledProperties) {
+func (s *Client) PluginIsInstalled(properties ux.PluginIsInstalledProperties) {
 	log.Info().Str("method", "PluginIsInstalled").Msg("Analytics enqueued")
 	s.enqueueEvent(properties, "Plugin Is Installed")
 }
@@ -101,13 +101,12 @@ func (s *Client) getSerialisedProperties(props interface{}) segment.Properties {
 	return set
 }
 
-type SegmentLogger struct {
-}
+type segmentLogger struct{}
 
-func (s SegmentLogger) Logf(format string, args ...interface{}) {
+func (s *segmentLogger) Logf(format string, args ...interface{}) {
 	log.Debug().Msgf(format, args...)
 }
 
-func (s SegmentLogger) Errorf(format string, args ...interface{}) {
+func (s *segmentLogger) Errorf(format string, args ...interface{}) {
 	log.Error().Msgf(format, args...)
 }

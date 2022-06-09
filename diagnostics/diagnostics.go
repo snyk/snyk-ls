@@ -14,7 +14,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/hover"
-	"github.com/snyk/snyk-ls/internal/observability/user_behaviour"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -91,8 +91,8 @@ func fetchAllRegisteredDocumentDiagnostics(ctx context.Context, documentURI sgls
 	p := progress.NewTracker(false)
 	p.Begin(fmt.Sprintf("Scanning for issues in %s", uri.PathFromUri(documentURI)), "")
 	di.Analytics.AnalysisIsTriggered(
-		user_behaviour.AnalysisIsTriggeredProperties{
-			AnalysisType:    user_behaviour.GetEnabledAnalysisTypes(),
+		ux.AnalysisIsTriggeredProperties{
+			AnalysisType:    ux.GetEnabledAnalysisTypes(),
 			TriggeredByUser: false,
 		},
 	)

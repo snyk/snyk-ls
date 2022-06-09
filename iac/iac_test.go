@@ -16,7 +16,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
-	"github.com/snyk/snyk-ls/internal/observability/user_behaviour"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -126,9 +126,9 @@ func Test_Analytics(t *testing.T) {
 	go ScanFile(ctx, snykCli, doc.URI, &wg, dChan, hoverChan)
 	wg.Wait()
 
-	assert.Len(t, di.Analytics.(*user_behaviour.AnalyticsRecorder).Analytics, 1)
-	assert.Equal(t, user_behaviour.AnalysisIsReadyProperties{
-		AnalysisType: user_behaviour.InfrastructureAsCode,
-		Result:       user_behaviour.Success,
-	}, di.Analytics.(*user_behaviour.AnalyticsRecorder).Analytics[0])
+	assert.Len(t, di.Analytics.(*ux.AnalyticsRecorder).Analytics, 1)
+	assert.Equal(t, ux.AnalysisIsReadyProperties{
+		AnalysisType: ux.InfrastructureAsCode,
+		Result:       ux.Success,
+	}, di.Analytics.(*ux.AnalyticsRecorder).Analytics[0])
 }

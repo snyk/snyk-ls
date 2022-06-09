@@ -18,7 +18,7 @@ import (
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/cli"
-	"github.com/snyk/snyk-ls/internal/observability/user_behaviour"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -223,7 +223,7 @@ func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, 
 	default:
 		log.Debug().Str("method", "oss.reportErrorViaChan").Msg("not sending...")
 	}
-	trackResult(err)
+	trackResult(err == nil)
 	return dChan
 }
 
@@ -252,7 +252,7 @@ func retrieveAnalysis(
 			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("not sending...")
 		}
 	}
-	trackResult(nil)
+	trackResult(true)
 }
 
 type RangeFinder interface {
@@ -376,15 +376,15 @@ func findRange(issue ossIssue, uri sglsp.DocumentURI, fileContent []byte) sglsp.
 	return foundRange
 }
 
-func trackResult(err error) {
-	var result user_behaviour.Result
-	if err == nil {
-		result = user_behaviour.Success
+func trackResult(success bool) {
+	var result ux.Result
+	if success {
+		result = ux.Success
 	} else {
-		result = user_behaviour.Error
+		result = ux.Error
 	}
-	di.Analytics.AnalysisIsReady(user_behaviour.AnalysisIsReadyProperties{
-		AnalysisType: user_behaviour.OpenSource,
+	di.Analytics.AnalysisIsReady(ux.AnalysisIsReadyProperties{
+		AnalysisType: ux.OpenSource,
 		Result:       result,
 	})
 }

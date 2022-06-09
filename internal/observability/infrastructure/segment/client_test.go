@@ -6,11 +6,11 @@ import (
 	segment "github.com/segmentio/analytics-go"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/internal/observability/user_behaviour"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 func Test(t *testing.T) {
-	s := NewSegmentClient("user", user_behaviour.VisualStudioCode)
+	s := NewSegmentClient("user", ux.VisualStudioCode)
 	fakeSegmentClient := &FakeSegmentClient{}
 	s.(*Client).segment = fakeSegmentClient
 	tests := []struct {
@@ -21,9 +21,9 @@ func Test(t *testing.T) {
 		{
 			name: "Analysis Is Ready",
 			track: func() {
-				s.AnalysisIsReady(user_behaviour.AnalysisIsReadyProperties{
-					AnalysisType: user_behaviour.CodeQuality,
-					Result:       user_behaviour.Success,
+				s.AnalysisIsReady(ux.AnalysisIsReadyProperties{
+					AnalysisType: ux.CodeQuality,
+					Result:       ux.Success,
 				})
 			},
 			output: segment.Track{
@@ -39,8 +39,8 @@ func Test(t *testing.T) {
 		{
 			name: "Analysis Is Triggered",
 			track: func() {
-				s.AnalysisIsTriggered(user_behaviour.AnalysisIsTriggeredProperties{
-					AnalysisType:    []user_behaviour.AnalysisType{user_behaviour.CodeSecurity, user_behaviour.CodeQuality},
+				s.AnalysisIsTriggered(ux.AnalysisIsTriggeredProperties{
+					AnalysisType:    []ux.AnalysisType{ux.CodeSecurity, ux.CodeQuality},
 					TriggeredByUser: true,
 				})
 			},
@@ -60,10 +60,10 @@ func Test(t *testing.T) {
 		{
 			name: "Issue Hover Is Displayed",
 			track: func() {
-				s.IssueHoverIsDisplayed(user_behaviour.IssueHoverIsDisplayedProperties{
+				s.IssueHoverIsDisplayed(ux.IssueHoverIsDisplayedProperties{
 					IssueId:   "javascript%2Fdc_interfile_project%2FHttpToHttps",
-					IssueType: user_behaviour.CodeSecurityVulnerability,
-					Severity:  user_behaviour.Medium,
+					IssueType: ux.CodeSecurityVulnerability,
+					Severity:  ux.Medium,
 				})
 			},
 			output: segment.Track{
@@ -80,7 +80,7 @@ func Test(t *testing.T) {
 		{
 			name: "Plugin Is Uninstalled",
 			track: func() {
-				s.PluginIsUninstalled(user_behaviour.PluginIsUninstalledProperties{})
+				s.PluginIsUninstalled(ux.PluginIsUninstalledProperties{})
 			},
 			output: segment.Track{
 				UserId: "user",
@@ -93,7 +93,7 @@ func Test(t *testing.T) {
 		{
 			name: "Plugin Is Installed",
 			track: func() {
-				s.PluginIsInstalled(user_behaviour.PluginIsInstalledProperties{})
+				s.PluginIsInstalled(ux.PluginIsInstalledProperties{})
 			},
 			output: segment.Track{
 				UserId: "user",

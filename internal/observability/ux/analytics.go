@@ -1,4 +1,4 @@
-package user_behaviour
+package ux
 
 type Analytics interface {
 	AnalysisIsReady(properties AnalysisIsReadyProperties)

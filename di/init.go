@@ -13,7 +13,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/infrastructure/segment"
 	"github.com/snyk/snyk-ls/internal/observability/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
-	"github.com/snyk/snyk-ls/internal/observability/user_behaviour"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 var SnykApiClient code.SnykApiClient
@@ -23,7 +23,7 @@ var SnykCode *code.SnykCode
 
 var instrumentor performance.Instrumentor
 var ErrorReporter error_reporting.ErrorReporter
-var Analytics user_behaviour.Analytics
+var Analytics ux.Analytics
 
 var initMutex = &sync.Mutex{}
 
@@ -58,9 +58,9 @@ func initInfrastructure() {
 	}
 	if err != nil || user.Id == "" {
 		ErrorReporter.CaptureError(errors.Wrap(err, "cannot retrieve active user, configuring noop analytics"))
-		Analytics = user_behaviour.NewNoopRecordingClient()
+		Analytics = ux.NewNoopRecordingClient()
 	}
-	Analytics = segment.NewSegmentClient(user.Id, user_behaviour.Eclipse)
+	Analytics = segment.NewSegmentClient(user.Id, ux.Eclipse)
 	SnykCodeClient = code.NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), instrumentor, ErrorReporter)
 	SnykCodeBundleUploader = code.NewBundler(SnykCodeClient, instrumentor)
 }
@@ -70,7 +70,7 @@ func TestInit(t *testing.T) {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	t.Helper()
-	Analytics = user_behaviour.NewNoopRecordingClient()
+	Analytics = ux.NewNoopRecordingClient()
 	instrumentor = &performance.TestInstrumentor{}
 	ErrorReporter = sentry.NewTestErrorReporter()
 	fakeClient := &code.FakeSnykCodeClient{}

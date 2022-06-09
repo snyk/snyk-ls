@@ -9,7 +9,7 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/observability/user_behaviour"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -17,10 +17,10 @@ type SnykCode struct {
 	BundleUploader *BundleUploader
 	SnykApiClient  SnykApiClient
 	errorReporter  error_reporting.ErrorReporter
-	analytics      user_behaviour.Analytics
+	analytics      ux.Analytics
 }
 
-func NewSnykCode(bundleUploader *BundleUploader, apiClient SnykApiClient, reporter error_reporting.ErrorReporter, analytics user_behaviour.Analytics) *SnykCode {
+func NewSnykCode(bundleUploader *BundleUploader, apiClient SnykApiClient, reporter error_reporting.ErrorReporter, analytics ux.Analytics) *SnykCode {
 	sc := &SnykCode{
 		BundleUploader: bundleUploader,
 		SnykApiClient:  apiClient,
@@ -56,7 +56,7 @@ func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []sglsp.Document
 	if err != nil {
 		log.Error().Err(err).Msg("error uploading files...")
 		dChan <- lsp.DiagnosticResult{Err: err}
-		sc.trackResult(err)
+		sc.trackResult(err == nil)
 		return
 	}
 	if uploadedBundle.BundleHash == "" {
@@ -66,7 +66,7 @@ func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []sglsp.Document
 
 	wg.Add(1)
 	uploadedBundle.FetchDiagnosticsData(ctx, string(documentURI), wg, dChan, hoverChan)
-	sc.trackResult(nil)
+	sc.trackResult(true)
 }
 
 func (sc *SnykCode) isSastEnabled() bool {
@@ -93,15 +93,15 @@ type UploadStatus struct {
 	TotalFiles    int
 }
 
-func (sc *SnykCode) trackResult(err error) {
-	var result user_behaviour.Result
-	if err == nil {
-		result = user_behaviour.Success
+func (sc *SnykCode) trackResult(success bool) {
+	var result ux.Result
+	if success {
+		result = ux.Success
 	} else {
-		result = user_behaviour.Error
+		result = ux.Error
 	}
-	sc.analytics.AnalysisIsReady(user_behaviour.AnalysisIsReadyProperties{
-		AnalysisType: user_behaviour.CodeSecurity,
+	sc.analytics.AnalysisIsReady(ux.AnalysisIsReadyProperties{
+		AnalysisType: ux.CodeSecurity,
 		Result:       result,
 	})
 }

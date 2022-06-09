@@ -1,4 +1,4 @@
-package user_behaviour
+package ux
 
 type AnalysisIsReadyProperties struct {
 	AnalysisType AnalysisType `json:"analysisType"`

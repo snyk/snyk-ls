@@ -1,4 +1,4 @@
-package user_behaviour
+package ux
 
 import (
 	"github.com/snyk/snyk-ls/config"

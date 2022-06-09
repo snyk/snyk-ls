@@ -17,7 +17,7 @@ import (
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/cli"
-	"github.com/snyk/snyk-ls/internal/observability/user_behaviour"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -51,7 +51,7 @@ func ScanWorkspace(ctx context.Context, Cli cli.Executor, documentURI sglsp.Docu
 		u := uri.PathToUri(filepath.Join(uri.PathFromUri(documentURI), scanResult.TargetFile))
 		retrieveAnalysis(u, scanResult, dChan, hoverChan)
 	}
-	trackResult(err)
+	trackResult(err == nil)
 }
 
 func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
@@ -66,7 +66,7 @@ func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentU
 	if len(scanResults) > 0 {
 		retrieveAnalysis(documentURI, scanResults[0], dChan, hoverChan)
 	}
-	trackResult(err)
+	trackResult(err == nil)
 }
 
 func doScan(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI) (scanResults []iacScanResult, err error) {
@@ -228,15 +228,15 @@ func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 	return lspSev
 }
 
-func trackResult(err error) {
-	var result user_behaviour.Result
-	if err == nil {
-		result = user_behaviour.Success
+func trackResult(success bool) {
+	var result ux.Result
+	if success {
+		result = ux.Success
 	} else {
-		result = user_behaviour.Error
+		result = ux.Error
 	}
-	di.Analytics.AnalysisIsReady(user_behaviour.AnalysisIsReadyProperties{
-		AnalysisType: user_behaviour.InfrastructureAsCode,
+	di.Analytics.AnalysisIsReady(ux.AnalysisIsReadyProperties{
+		AnalysisType: ux.InfrastructureAsCode,
 		Result:       result,
 	})
 }
