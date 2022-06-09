@@ -122,6 +122,7 @@ func isDirectory(documentURI sglsp.DocumentURI) bool {
 	stat, err := os.Stat(workspaceUri)
 	if err != nil {
 		log.Err(err).Err(err).Msg("Error while checking file")
+		return false
 	}
 	return stat.IsDir()
 }

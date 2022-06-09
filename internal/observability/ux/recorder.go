@@ -2,7 +2,7 @@ package ux
 
 import "github.com/rs/zerolog/log"
 
-func NewNoopRecordingClient() Analytics {
+func NewNoopRecordingClient() *AnalyticsRecorder {
 	return &AnalyticsRecorder{}
 }
 

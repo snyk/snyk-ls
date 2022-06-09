@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/code"
-	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/observability/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
@@ -97,23 +96,22 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 
 	t.Run("should track analytics", func(t *testing.T) {
 		snykCodeMock := &code.FakeSnykCodeClient{}
-		c := code.NewSnykCode(code.NewBundler(snykCodeMock, &performance.TestInstrumentor{}), &code.FakeApiClient{CodeEnabled: true}, sentry.NewTestErrorReporter(), ux.NewNoopRecordingClient())
+		analytics := ux.NewNoopRecordingClient()
+		c := code.NewSnykCode(code.NewBundler(snykCodeMock, &performance.TestInstrumentor{}), &code.FakeApiClient{CodeEnabled: true}, sentry.NewTestErrorReporter(), analytics)
 		diagnosticUri, path := code.FakeDiagnosticUri()
 		defer os.RemoveAll(path)
 
 		// execute
-		dChan := make(chan lsp2.DiagnosticResult)
-		hoverChan := make(chan lsp2.Hover)
+		dChan := make(chan lsp2.DiagnosticResult, 100)
+		hoverChan := make(chan lsp2.Hover, 100)
 		wg := sync.WaitGroup{}
-		wg.Add(1)
 
-		go c.UploadAndAnalyze(context.Background(), []lsp.DocumentURI{diagnosticUri}, &wg, "", dChan, hoverChan)
-		wg.Wait()
+		c.UploadAndAnalyze(context.Background(), []lsp.DocumentURI{diagnosticUri}, &wg, "", dChan, hoverChan)
 
-		assert.Len(t, di.Analytics.(*ux.AnalyticsRecorder).Analytics, 1)
+		assert.Len(t, analytics.Analytics, 1)
 		assert.Equal(t, ux.AnalysisIsReadyProperties{
 			AnalysisType: ux.CodeSecurity,
 			Result:       ux.Success,
-		}, di.Analytics.(*ux.AnalyticsRecorder).Analytics[0])
+		}, analytics.Analytics[0])
 	})
 }
