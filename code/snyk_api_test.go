@@ -101,7 +101,6 @@ func TestSnykApiService_GetSastEnablementWithOrg_returns(t *testing.T) {
 func TestSnykApiService_GetActiveUser(t *testing.T) {
 	testutil.UnitTest(t)
 	pact := testutil.Pact(t, pactDir, "SnykApi")
-	userId := "fc763eba-0905-41c5-a27f-3934ab26786a"
 	interaction := pact.AddInteraction().
 		WithRequest(dsl.Request{
 			Method: "GET",
@@ -116,7 +115,7 @@ func TestSnykApiService_GetActiveUser(t *testing.T) {
 			"Content-Type": dsl.String("application/json"),
 		},
 		Body: activeUserResponse{
-			Id: userId,
+			Id: "fc763eba-0905-41c5-a27f-3934ab26786a",
 		},
 	})
 	interaction.Description = "Get active user"
@@ -127,7 +126,7 @@ func TestSnykApiService_GetActiveUser(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		assert.Equal(t, userId, user.Id)
+		assert.Equal(t, "fc763eba-0905-41c5-a27f-3934ab26786a", user.Id)
 		return nil
 	}
 
