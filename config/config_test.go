@@ -18,7 +18,7 @@ func TestSetToken(t *testing.T) {
 }
 
 func TestToken(t *testing.T) {
-	t.Setenv(snykTokenKey, "test")
+	t.Setenv(SnykTokenKey, "test")
 	c := New()
 	assert.NotEqual(t, "", c.Token())
 }

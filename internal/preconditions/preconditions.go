@@ -9,6 +9,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/cli/auth"
 	"github.com/snyk/snyk-ls/internal/cli/install"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -18,6 +19,11 @@ import (
 func EnsureReadyForAnalysisAndWait(ctx context.Context) {
 	install.Mutex.Lock()
 	defer install.Mutex.Unlock()
+
+	// lock all CLI executions
+	cli.Mutex.Lock()
+	defer cli.Mutex.Unlock()
+
 	cliInstalled := config.CurrentConfig().CliInstalled()
 	authenticated := config.CurrentConfig().Authenticated()
 
@@ -36,7 +42,7 @@ func EnsureReadyForAnalysisAndWait(ctx context.Context) {
 
 	if !authenticated {
 		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Authenticating to Snyk. This could open a browser window."})
-		auth.Authenticate()
+		auth.Authenticate(ctx)
 	}
 }
 

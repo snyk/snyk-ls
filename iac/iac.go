@@ -49,7 +49,7 @@ func ScanWorkspace(ctx context.Context, Cli cli.Executor, documentURI sglsp.Docu
 	defer log.Debug().Str("method", method).Msg("done.")
 	log.Debug().Str("method", method).Msg("started.")
 
-	res, err := Cli.Execute(cliCmd(documentURI), uri.PathFromUri(documentURI))
+	res, err := Cli.Execute(cliCmd(Cli, documentURI), uri.PathFromUri(documentURI))
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:
@@ -106,7 +106,7 @@ func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentU
 		return
 	}
 
-	res, err := Cli.Execute(cliCmd(documentURI), filepath.Dir(uri.PathFromUri(documentURI)))
+	res, err := Cli.Execute(cliCmd(Cli, documentURI), filepath.Dir(uri.PathFromUri(documentURI)))
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:
@@ -139,13 +139,13 @@ func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentU
 	retrieveAnalysis(documentURI, scanResults, dChan, hoverChan)
 }
 
-func cliCmd(u sglsp.DocumentURI) []string {
+func cliCmd(Cli cli.Executor, u sglsp.DocumentURI) []string {
 	path, err := filepath.Abs(uri.PathFromUri(u))
 	if err != nil {
 		log.Err(err).Str("method", "iac.ScanFile").
 			Msg("Error while extracting file absolutePath")
 	}
-	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "iac", "test", path, "--json"})
+	cmd := Cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "iac", "test", path, "--json"})
 	log.Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
 	return cmd
 }

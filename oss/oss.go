@@ -89,7 +89,7 @@ func ScanWorkspace(ctx context.Context, Cli cli.Executor, workspace sglsp.Docume
 			Msg("Error while extracting file absolutePath")
 	}
 
-	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", path, "--json"})
+	cmd := Cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", path, "--json"})
 	res, err := Cli.Execute(cmd, workspacePath)
 	if err != nil {
 		if handleError(err, res, workspace, dChan) {
@@ -185,7 +185,7 @@ func ScanFile(
 	}
 	preconditions.EnsureReadyForAnalysisAndWait(ctx)
 	workDir := filepath.Dir(path)
-	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", workDir, "--json"})
+	cmd := Cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", workDir, "--json"})
 	res, err := Cli.Execute(cmd, workDir)
 	if err != nil {
 		if handleError(err, res, documentURI, dChan) {

@@ -19,7 +19,7 @@ import (
 
 const (
 	cliPathKey         = "SNYK_CLI_PATH"
-	snykTokenKey       = "SNYK_TOKEN"
+	SnykTokenKey       = "SNYK_TOKEN"
 	deeproxyApiUrlKey  = "DEEPROXY_API_URL"
 	FormatHtml         = "html"
 	FormatMd           = "md"
@@ -170,7 +170,7 @@ func (c *Config) SetSnykContainerEnabled(enabled bool) { c.isSnykContainerEnable
 func (c *Config) SetSnykAdvisorEnabled(enabled bool) { c.isSnykAdvisorEnabled.Set(enabled) }
 func (c *Config) SetToken(token string) error {
 	c.token = token
-	return os.Setenv(snykTokenKey, token)
+	return os.Setenv(SnykTokenKey, token)
 }
 func (c *Config) SetFormat(format string) { c.format = format }
 
@@ -203,7 +203,7 @@ func (c *Config) SetConfigFile(configFile string) { c.configFile = configFile }
 
 func cliPathFromEnv() string { return os.Getenv(cliPathKey) }
 
-func tokenFromEnv() string { return os.Getenv(snykTokenKey) }
+func tokenFromEnv() string { return os.Getenv(SnykTokenKey) }
 
 func snykCodeApiUrlFromEnv() string {
 	trim := strings.Trim(os.Getenv(deeproxyApiUrlKey), "/")

@@ -13,7 +13,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/cli/install/httpclient"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/progress"
@@ -209,8 +208,7 @@ func (d *Downloader) moveToDestination(dest string, fullSrcPath string) (err err
 			return err
 		}
 	}
-	cli.Mutex.Lock()
-	defer cli.Mutex.Unlock()
+
 	log.Info().Str("method", "moveToDestination").Str("tempFilePath", fullSrcPath).Msg("tempfile path")
 	err = os.Rename(fullSrcPath, dstCliFile)
 	if err != nil {

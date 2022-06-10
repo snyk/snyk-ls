@@ -128,7 +128,7 @@ func Test_dummy_shouldNotBeServed(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "dummy", nil)
 	if err == nil {
-		log.Fatal().Err(err).Msg("call succeeded")
+		t.Fatal(t, err, "call succeeded")
 	}
 }
 
@@ -315,7 +315,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 		},
 	})
 	if err != nil {
-		log.Fatal().Err(err).Msg("error calling server")
+		t.Fatal(t, err, "error calling server")
 	}
 
 	assert.True(t, diagnostics.IsWorkspaceFolderScanned(folder))
@@ -326,7 +326,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 		},
 	})
 	if err != nil {
-		log.Fatal().Err(err).Msg("error calling server")
+		t.Fatal(t, err, "error calling server")
 	}
 
 	assert.False(t, diagnostics.IsWorkspaceFolderScanned(folder))
@@ -365,7 +365,7 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 	var cloneTargetDir, err = setupCustomTestRepo(repo, commit)
 	defer os.RemoveAll(cloneTargetDir)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't setup test repo")
+		t.Fatal(t, err, "Couldn't setup test repo")
 	}
 	folder := lsp.WorkspaceFolder{
 		Name: "Test Repo",
@@ -377,7 +377,7 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 
 	_, err = loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Initialization failed")
+		t.Fatal(t, err, "Initialization failed")
 	}
 
 	var testPath string
@@ -430,7 +430,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
 	defer os.RemoveAll(cloneTargetDir)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't setup test repo")
+		t.Fatal(t, err, "Couldn't setup test repo")
 	}
 	folder := lsp.WorkspaceFolder{
 		Name: "Test Repo",
@@ -442,7 +442,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 
 	_, err = loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Initialization failed")
+		t.Fatal(t, err, "Initialization failed")
 	}
 
 	// wait till the whole workspace is scanned
@@ -462,13 +462,13 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	})
 
 	if err != nil {
-		log.Fatal().Err(err).Msg("Hover retrieval failed")
+		t.Fatal(t, err, "Hover retrieval failed")
 	}
 
 	hoverResult := lsp.HoverResult{}
 	err = hoverResp.UnmarshalResult(&hoverResult)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Hover retrieval failed")
+		t.Fatal(t, err, "Hover retrieval failed")
 	}
 
 	assert.Equal(t, hoverResult.Contents.Value, hover.GetHover(uri.PathToUri(testPath), testPosition).Contents.Value)
@@ -484,7 +484,7 @@ func Test_IntegrationSnykCodeFileScan(t *testing.T) {
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
 	defer os.RemoveAll(cloneTargetDir)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't setup test repo")
+		t.Fatal(t, err, "Couldn't setup test repo")
 	}
 
 	testPath := filepath.Join(cloneTargetDir, "app.js")
