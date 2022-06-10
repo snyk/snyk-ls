@@ -111,11 +111,11 @@ func Test_Analytics(t *testing.T) {
 	go ScanFile(ctx, snykCli, uri.PathToUri(path), &wg, dChan, hoverChan)
 	wg.Wait()
 
-	assert.Len(t, di.Analytics.(*ux.AnalyticsRecorder).Analytics, 1)
+	assert.GreaterOrEqual(t, len(di.Analytics.(*ux.AnalyticsRecorder).GetAnalytics()), 1)
 	assert.Equal(t, ux.AnalysisIsReadyProperties{
 		AnalysisType: ux.OpenSource,
 		Result:       ux.Success,
-	}, di.Analytics.(*ux.AnalyticsRecorder).Analytics[0])
+	}, di.Analytics.(*ux.AnalyticsRecorder).GetAnalytics()[0])
 }
 
 func Test_FindRange(t *testing.T) {

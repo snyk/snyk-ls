@@ -44,27 +44,27 @@ func (s *Client) Close() error {
 }
 
 func (s *Client) AnalysisIsReady(properties ux.AnalysisIsReadyProperties) {
-	log.Info().Str("method", "AnalysisIsReady").Msg("Analytics enqueued")
+	log.Info().Str("method", "AnalysisIsReady").Msg("analytics enqueued")
 	s.enqueueEvent(properties, "Analysis Is Ready")
 }
 
 func (s *Client) AnalysisIsTriggered(properties ux.AnalysisIsTriggeredProperties) {
-	log.Info().Str("method", "AnalysisIsTriggered").Msg("Analytics enqueued")
+	log.Info().Str("method", "AnalysisIsTriggered").Msg("analytics enqueued")
 	s.enqueueEvent(properties, "Analysis Is Triggered")
 }
 
 func (s *Client) IssueHoverIsDisplayed(properties ux.IssueHoverIsDisplayedProperties) {
-	log.Info().Str("method", "IssueHoverIsDisplayed").Msg("Analytics enqueued")
+	log.Info().Str("method", "IssueHoverIsDisplayed").Msg("analytics enqueued")
 	s.enqueueEvent(properties, "Issue Hover Is Displayed")
 }
 
 func (s *Client) PluginIsUninstalled(properties ux.PluginIsUninstalledProperties) {
-	log.Info().Str("method", "PluginIsUninstalled").Msg("Analytics enqueued")
+	log.Info().Str("method", "PluginIsUninstalled").Msg("analytics enqueued")
 	s.enqueueEvent(properties, "Plugin Is Uninstalled")
 }
 
 func (s *Client) PluginIsInstalled(properties ux.PluginIsInstalledProperties) {
-	log.Info().Str("method", "PluginIsInstalled").Msg("Analytics enqueued")
+	log.Info().Str("method", "PluginIsInstalled").Msg("analytics enqueued")
 	s.enqueueEvent(properties, "Plugin Is Installed")
 }
 

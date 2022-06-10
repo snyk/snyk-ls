@@ -108,10 +108,10 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 
 		c.UploadAndAnalyze(context.Background(), []lsp.DocumentURI{diagnosticUri}, &wg, "", dChan, hoverChan)
 
-		assert.Len(t, analytics.Analytics, 1)
+		assert.Len(t, analytics.GetAnalytics(), 1)
 		assert.Equal(t, ux.AnalysisIsReadyProperties{
 			AnalysisType: ux.CodeSecurity,
 			Result:       ux.Success,
-		}, analytics.Analytics[0])
+		}, analytics.GetAnalytics()[0])
 	})
 }
