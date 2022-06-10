@@ -236,7 +236,7 @@ func trackResult(success bool) {
 	} else {
 		result = ux.Error
 	}
-	di.Analytics.AnalysisIsReady(ux.AnalysisIsReadyProperties{
+	di.Analytics().AnalysisIsReady(ux.AnalysisIsReadyProperties{
 		AnalysisType: ux.InfrastructureAsCode,
 		Result:       result,
 	})

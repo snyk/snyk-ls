@@ -50,7 +50,7 @@ func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
 	diagnostics := GetDiagnostics(context.Background(), diagnosticUri)
 
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
-	params := di.SnykCodeClient.(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)
+	params := di.SnykCodeClient().(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.Nil(t, params)
 }
 
@@ -61,14 +61,14 @@ func Test_GetDiagnostics_shouldNotRunCodeIfNotSastEnabled(t *testing.T) {
 	ClearEntireDiagnosticsCache()
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
-	fakeApiClient := di.SnykCode.SnykApiClient.(*code.FakeApiClient)
+	fakeApiClient := di.SnykCode().SnykApiClient.(*code.FakeApiClient)
 	fakeApiClient.CodeEnabled = false
 
 	diagnostics := GetDiagnostics(context.Background(), diagnosticUri)
 
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
 	assert.Len(t, fakeApiClient.GetAllCalls(code.SastEnabledOperation), 1)
-	assert.Len(t, di.SnykCodeClient.(*code.FakeSnykCodeClient).GetAllCalls(code.CreateBundleWithSourceOperation), 0)
+	assert.Len(t, di.SnykCodeClient().(*code.FakeSnykCodeClient).GetAllCalls(code.CreateBundleWithSourceOperation), 0)
 }
 
 func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
@@ -82,7 +82,7 @@ func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
 	diagnostics := GetDiagnostics(context.Background(), diagnosticUri)
 
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
-	params := di.SnykCodeClient.(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)
+	params := di.SnykCodeClient().(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.NotNil(t, params)
 }
 
@@ -193,7 +193,7 @@ func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
 	GetDiagnostics(context.Background(), empty.URI)
 
 	// verify that create bundle has NOT been called on backend service
-	params := di.SnykCodeClient.(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)
+	params := di.SnykCodeClient().(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.Nil(t, params)
 }
 

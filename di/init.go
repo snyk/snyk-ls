@@ -16,14 +16,14 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
-var SnykApiClient code.SnykApiClient
-var SnykCodeClient code.SnykCodeClient
-var SnykCodeBundleUploader *code.BundleUploader
-var SnykCode *code.SnykCode
+var snykApiClient code.SnykApiClient
+var snykCodeClient code.SnykCodeClient
+var snykCodeBundleUploader *code.BundleUploader
+var snykCode *code.SnykCode
 
 var instrumentor performance.Instrumentor
-var ErrorReporter error_reporting.ErrorReporter
-var Analytics ux.Analytics
+var errorReporter error_reporting.ErrorReporter
+var analytics ux.Analytics
 
 var initMutex = &sync.Mutex{}
 
@@ -35,34 +35,28 @@ func Init() {
 }
 
 func initApplication() {
-	SnykCode = code.NewSnykCode(SnykCodeBundleUploader, SnykApiClient, ErrorReporter, Analytics)
-}
-
-func Instrumentor() performance.Instrumentor {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return instrumentor
+	snykCode = code.NewSnykCode(snykCodeBundleUploader, snykApiClient, errorReporter, analytics)
 }
 
 func initInfrastructure() {
-	ErrorReporter = sentry.NewSentryErrorReporter()
+	errorReporter = sentry.NewSentryErrorReporter()
 	endpoint := config.CurrentConfig().CliSettings().Endpoint
 	if endpoint == "" {
 		endpoint = code.DefaultEndpointURL
 	}
-	SnykApiClient = code.NewSnykApiClient(endpoint)
+	snykApiClient = code.NewSnykApiClient(endpoint)
 	instrumentor = sentry.NewInstrumentor()
-	user, err := SnykApiClient.GetActiveUser()
+	user, err := snykApiClient.GetActiveUser()
 	if err != nil {
 		log.Warn().Err(err).Msg("Error retrieving current user")
 	}
 	if err != nil || user.Id == "" {
-		ErrorReporter.CaptureError(errors.Wrap(err, "cannot retrieve active user, configuring noop analytics"))
-		Analytics = ux.NewNoopRecordingClient()
+		errorReporter.CaptureError(errors.Wrap(err, "cannot retrieve active user, configuring noop analytics"))
+		analytics = ux.NewNoopRecordingClient()
 	}
-	Analytics = segment.NewSegmentClient(user.Id, ux.Eclipse)
-	SnykCodeClient = code.NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), instrumentor, ErrorReporter)
-	SnykCodeBundleUploader = code.NewBundler(SnykCodeClient, instrumentor)
+	analytics = segment.NewSegmentClient(user.Id, ux.Eclipse)
+	snykCodeClient = code.NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), instrumentor, errorReporter)
+	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 }
 
 //TODO move out of prod logic
@@ -70,15 +64,49 @@ func TestInit(t *testing.T) {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	t.Helper()
-	Analytics = ux.NewNoopRecordingClient()
+	analytics = ux.NewNoopRecordingClient()
 	instrumentor = &performance.TestInstrumentor{}
-	ErrorReporter = sentry.NewTestErrorReporter()
+	errorReporter = sentry.NewTestErrorReporter()
 	fakeClient := &code.FakeSnykCodeClient{}
-	SnykCodeClient = fakeClient
-	SnykCodeBundleUploader = code.NewBundler(SnykCodeClient, instrumentor)
+	snykCodeClient = fakeClient
+	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 	fakeApiClient := &code.FakeApiClient{CodeEnabled: true}
-	SnykCode = code.NewSnykCode(SnykCodeBundleUploader, fakeApiClient, ErrorReporter, Analytics)
+	snykCode = code.NewSnykCode(snykCodeBundleUploader, fakeApiClient, errorReporter, analytics)
 	t.Cleanup(func() {
 		fakeClient.Clear()
 	})
+}
+
+/*
+Accessors: This should go away, since all dependencies should be satisfied at startup-time
+*/
+
+func Instrumentor() performance.Instrumentor {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return instrumentor
+}
+
+func Analytics() ux.Analytics {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return analytics
+}
+
+func ErrorReporter() error_reporting.ErrorReporter {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return errorReporter
+}
+
+func SnykCode() *code.SnykCode {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return snykCode
+}
+
+func SnykCodeClient() code.SnykCodeClient {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return snykCodeClient
 }

@@ -53,7 +53,7 @@ func installCli(ctx context.Context) {
 		cliPath, err = i.Install(context.Background())
 		if err != nil {
 			log.Err(err).Str("method", "installCli").Msg("could not download Snyk CLI binary")
-			di.ErrorReporter.CaptureError(err)
+			di.ErrorReporter().CaptureError(err)
 			cliPath, _ = i.Find()
 		}
 	}
@@ -77,7 +77,7 @@ func updateCli() {
 	updated, err := i.Update(context.Background())
 	if err != nil {
 		log.Err(err).Str("method", "updateCli").Msg("Failed to update CLI")
-		di.ErrorReporter.CaptureError(err)
+		di.ErrorReporter().CaptureError(err)
 	}
 
 	if updated {

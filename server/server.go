@@ -111,7 +111,7 @@ func Shutdown() jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (interface{}, error) {
 		log.Info().Str("method", "Shutdown").Msg("RECEIVING")
 		log.Info().Str("method", "Shutdown").Msg("SENDING")
-		di.ErrorReporter.FlushErrorReporting()
+		di.ErrorReporter().FlushErrorReporting()
 
 		disposeProgressListener()
 		notification.DisposeListener()
@@ -124,7 +124,7 @@ func Exit(srv *jrpc2.Server) jrpc2.Handler {
 		log.Info().Str("method", "Exit").Msg("RECEIVING")
 		log.Info().Msg("Stopping server...")
 		(*srv).Stop()
-		di.ErrorReporter.FlushErrorReporting()
+		di.ErrorReporter().FlushErrorReporting()
 		return nil, nil
 	})
 }
@@ -146,7 +146,7 @@ func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv *jrpc2.S
 func logError(err error, method string) {
 	if err != nil {
 		log.Err(err).Str("method", method)
-		di.ErrorReporter.CaptureError(err)
+		di.ErrorReporter().CaptureError(err)
 	}
 }
 

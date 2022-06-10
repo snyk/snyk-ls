@@ -90,7 +90,7 @@ func fetchAllRegisteredDocumentDiagnostics(ctx context.Context, documentURI sgls
 
 	p := progress.NewTracker(false)
 	p.Begin(fmt.Sprintf("Scanning for issues in %s", uri.PathFromUri(documentURI)), "")
-	di.Analytics.AnalysisIsTriggered(
+	di.Analytics().AnalysisIsTriggered(
 		ux.AnalysisIsTriggeredProperties{
 			AnalysisType:    ux.GetEnabledAnalysisTypes(),
 			TriggeredByUser: false,
@@ -141,14 +141,14 @@ func workspaceLevelFetch(ctx context.Context, workspaceURI sglsp.DocumentURI, p 
 				Str("workspaceURI", string(workspaceURI)).
 				Msg("error getting workspace files")
 		}
-		di.SnykCode.ScanWorkspace(ctx, files, workspaceURI, wg, dChan, hoverChan)
+		di.SnykCode().ScanWorkspace(ctx, files, workspaceURI, wg, dChan, hoverChan)
 		p.Report(80)
 	}
 }
 
 func fileLevelFetch(ctx context.Context, documentURI sglsp.DocumentURI, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	if config.CurrentConfig().IsSnykCodeEnabled() {
-		di.SnykCode.ScanFile(ctx, documentURI, wg, dChan, hoverChan)
+		di.SnykCode().ScanFile(ctx, documentURI, wg, dChan, hoverChan)
 	}
 	if config.CurrentConfig().IsSnykIacEnabled() {
 		wg.Add(1)
@@ -175,7 +175,7 @@ func processResults(
 
 			if result.Err != nil {
 				log.Err(result.Err).Str("method", "fetchAllRegisteredDocumentDiagnostics")
-				di.ErrorReporter.CaptureError(result.Err)
+				di.ErrorReporter().CaptureError(result.Err)
 				break
 			}
 			diagnostics[result.Uri] = append(diagnostics[result.Uri], result.Diagnostics...)

@@ -114,7 +114,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		di.ErrorReporter.CaptureError(err)
+		di.ErrorReporter().CaptureError(err)
 		return fmt.Errorf("failed to %s Snyk CLI from %q: %s", kindStr, downloadURL, resp.Status)
 	}
 	executablePath := cliDiscovery.ExecutableName(isUpdate)
