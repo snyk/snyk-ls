@@ -7,11 +7,10 @@
   },
   "interactions": [
     {
-      "description": "happy path with org as query param",
+      "description": "Get active user",
       "request": {
         "method": "GET",
-        "path": "/cli-config/settings/sast",
-        "query": "org=test-org+with+characters+%28e.g.+%25%29+to+be+encoded%21",
+        "path": "/user/me",
         "headers": {
           "Authorization": "token fc763eba-0905-41c5-a27f-3934ab26786c",
           "Content-Type": "application/json"
@@ -29,46 +28,7 @@
           "Content-Type": "application/json"
         },
         "body": {
-          "localCodeEngine": {
-            "allowCloudUpload": true,
-            "enabled": true,
-            "url": "string"
-          },
-          "org": "string",
-          "reportFalsePositivesEnabled": true,
-          "sastEnabled": true,
-          "supportedLanguages": [
-            "string"
-          ]
-        },
-        "matchingRules": {
-          "$.body.localCodeEngine.allowCloudUpload": {
-            "match": "type"
-          },
-          "$.body.localCodeEngine.enabled": {
-            "match": "type"
-          },
-          "$.body.localCodeEngine.url": {
-            "match": "type"
-          },
-          "$.body.org": {
-            "match": "type"
-          },
-          "$.body.reportFalsePositivesEnabled": {
-            "match": "type"
-          },
-          "$.body.sastEnabled": {
-            "match": "type"
-          },
-          "$.body.supportedLanguages": {
-            "min": 1
-          },
-          "$.body.supportedLanguages[*].*": {
-            "match": "type"
-          },
-          "$.body.supportedLanguages[*]": {
-            "match": "type"
-          }
+          "id": "fc763eba-0905-41c5-a27f-3934ab26786a"
         }
       }
     }

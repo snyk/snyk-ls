@@ -75,6 +75,16 @@ else
 		-ldflags=$(LDFLAGS_DEV)
 endif
 
+## build: Build binary for debugging
+.PHONY: build-debug
+build-debug:
+	@make clean
+	@echo "==> Building binary..."
+	@echo "    running go build for with debug flags"
+	@go build -o $(BUILD_DIR)/$(PROJECT_NAME) \
+		-ldflags=$(LDFLAGS_DEV) \
+		-gcflags="all=-N -l"
+
 ## run: Compile and run LSP server.
 .PHONY: run
 run:

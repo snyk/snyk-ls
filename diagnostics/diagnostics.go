@@ -14,7 +14,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/hover"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -90,6 +90,12 @@ func fetchAllRegisteredDocumentDiagnostics(ctx context.Context, documentURI sgls
 
 	p := progress.NewTracker(false)
 	p.Begin(fmt.Sprintf("Scanning for issues in %s", uri.PathFromUri(documentURI)), "")
+	di.Analytics().AnalysisIsTriggered(
+		ux.AnalysisIsTriggeredProperties{
+			AnalysisType:    ux.GetEnabledAnalysisTypes(),
+			TriggeredByUser: false,
+		},
+	)
 	defer p.End(fmt.Sprintf("Scan complete. Found %d issues.", len(diagnostics)))
 
 	wg := sync.WaitGroup{}
@@ -104,6 +110,9 @@ func fetchAllRegisteredDocumentDiagnostics(ctx context.Context, documentURI sgls
 		dChan = make(chan lsp.DiagnosticResult, 10000)
 		fileLevelFetch(ctx, documentURI, p, &wg, dChan, hoverChan)
 	}
+	log.Debug().
+		Str("method", "fetchAllRegisteredDocumentDiagnostics").
+		Msg("waiting for goroutines.")
 	wg.Wait()
 	log.Debug().
 		Str("method", "fetchAllRegisteredDocumentDiagnostics").
@@ -132,14 +141,14 @@ func workspaceLevelFetch(ctx context.Context, workspaceURI sglsp.DocumentURI, p 
 				Str("workspaceURI", string(workspaceURI)).
 				Msg("error getting workspace files")
 		}
-		di.SnykCode.ScanWorkspace(ctx, files, workspaceURI, wg, dChan, hoverChan)
+		di.SnykCode().ScanWorkspace(ctx, files, workspaceURI, wg, dChan, hoverChan)
 		p.Report(80)
 	}
 }
 
 func fileLevelFetch(ctx context.Context, documentURI sglsp.DocumentURI, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
 	if config.CurrentConfig().IsSnykCodeEnabled() {
-		di.SnykCode.ScanFile(ctx, documentURI, wg, dChan, hoverChan)
+		di.SnykCode().ScanFile(ctx, documentURI, wg, dChan, hoverChan)
 	}
 	if config.CurrentConfig().IsSnykIacEnabled() {
 		wg.Add(1)
@@ -166,7 +175,7 @@ func processResults(
 
 			if result.Err != nil {
 				log.Err(result.Err).Str("method", "fetchAllRegisteredDocumentDiagnostics")
-				error_reporting.CaptureError(result.Err)
+				di.ErrorReporter().CaptureError(result.Err)
 				break
 			}
 			diagnostics[result.Uri] = append(diagnostics[result.Uri], result.Diagnostics...)

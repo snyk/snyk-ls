@@ -9,8 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/internal/observability"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/server"
 )
 
@@ -18,8 +17,8 @@ func main() {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Error().Interface("err", err).Msg("🚨 Panicking 🚨")
-			error_reporting.CaptureError(fmt.Errorf("%v", err))
-			error_reporting.FlushErrorReporting()
+			di.ErrorReporter().CaptureError(fmt.Errorf("%v", err))
+			di.ErrorReporter().FlushErrorReporting()
 		}
 	}()
 	output, err := parseFlags(os.Args)
@@ -29,7 +28,6 @@ func main() {
 	}
 	log.Info().Msg(config.Version)
 	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
-	observability.Initialize()
 	server.Start()
 }
 
