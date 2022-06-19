@@ -100,7 +100,15 @@ func ScanWorkspace(ctx context.Context, Cli cli.Executor, workspace sglsp.Docume
 	var scanResult ossScanResult
 	err = json.Unmarshal(res, &scanResult)
 	if err != nil {
-		log.Err(err).Str("method", method).Msg("couldn't unmarshal response")
+		switch err := err.(type) {
+		case *json.UnmarshalTypeError:
+			log.Err(err).Str("method", method).
+				Str("struct", err.Struct).
+				Str("field", err.Field).
+				Str("value", err.Value).
+				Interface("type", err.Type).
+				Str("response", string(res)).Msg("couldn't unmarshal response")
+		}
 		reportErrorViaChan(workspace, dChan, err)
 		return
 	}
@@ -132,6 +140,7 @@ func handleError(err error, res []byte, workspace sglsp.DocumentURI, dChan chan 
 		errorOutput := string(res)
 		switch err.ExitCode() {
 		case 1:
+			return false
 		case 2:
 			log.Err(err).Str("method", "oss.Scan").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
 			reportErrorViaChan(workspace, dChan, fmt.Errorf("%v: %v", err, errorOutput))
@@ -146,7 +155,7 @@ func handleError(err error, res []byte, workspace sglsp.DocumentURI, dChan chan 
 		reportErrorViaChan(workspace, dChan, err)
 		return true
 	}
-	return false
+	return true
 }
 
 func determineTargetFile(displayTargetFile string) string {
