@@ -27,11 +27,15 @@ type Executor interface {
 
 func (c SnykCli) Execute(cmd []string, workingDir string) (resp []byte, err error) {
 	log.Info().Str("method", "SnykCli.Execute").Interface("cmd", cmd).Msg("calling Snyk CLI")
-	Mutex.Lock()
+	if isIacCommand(cmd) {
+		Mutex.Lock()
+	}
 	command := exec.Command(cmd[0], cmd[1:]...)
 	command.Dir = workingDir
 	output, err := command.CombinedOutput()
-	Mutex.Unlock()
+	if isIacCommand(cmd) {
+		Mutex.Unlock()
+	}
 	if err != nil {
 		ctx := context.Background()
 		retry := c.HandleErrors(ctx, string(output), err)
@@ -43,6 +47,10 @@ func (c SnykCli) Execute(cmd []string, workingDir string) (resp []byte, err erro
 	}
 	log.Trace().Str("method", "SnykCli.Execute").Str("response", string(output))
 	return output, err
+}
+
+func isIacCommand(cmd []string) bool {
+	return len(cmd) > 1 && cmd[1] == "iac"
 }
 
 func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
