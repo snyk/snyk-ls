@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -97,34 +96,55 @@ func ScanWorkspace(ctx context.Context, Cli cli.Executor, workspace sglsp.Docume
 		}
 	}
 
-	var scanResult ossScanResult
-	err = json.Unmarshal(res, &scanResult)
+	unmarshallAndRetrieveAnalysis(res, workspace, dChan, hoverChan)
+}
+
+func unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+	scanResults, done, err := unmarshallOssJson(res)
+	if err != nil {
+		reportErrorViaChan(documentURI, dChan, err)
+	}
+
+	if done {
+		return
+	}
+
+	for _, scanResult := range scanResults {
+		targetFile := determineTargetFile(scanResult.DisplayTargetFile)
+		targetFilePath := filepath.Join(uri.PathFromUri(documentURI), targetFile)
+		targetFileUri := uri.PathToUri(targetFilePath)
+		fileContent, err := ioutil.ReadFile(targetFilePath)
+		if err != nil {
+			log.Err(err).Str("method", "unmarshallAndRetrieveAnalysis").
+				Msgf("Error while reading the file %v, err: %v", targetFile, err)
+			reportErrorViaChan(targetFileUri, dChan, err)
+			return
+		}
+		retrieveAnalysis(scanResult, targetFileUri, fileContent, dChan, hoverChan)
+	}
+}
+
+func unmarshallOssJson(res []byte) (scanResults []ossScanResult, done bool, err error) {
+	err = json.Unmarshal(res, &scanResults)
 	if err != nil {
 		switch err := err.(type) {
 		case *json.UnmarshalTypeError:
-			log.Err(err).Str("method", method).
-				Str("struct", err.Struct).
-				Str("field", err.Field).
-				Str("value", err.Value).
-				Interface("type", err.Type).
-				Str("response", string(res)).Msg("couldn't unmarshal response")
+			var scanResult ossScanResult
+			// fallback: try to unmarshal into single object if not an array of scan results
+			err2 := json.Unmarshal(res, &scanResult)
+			if err2 != nil {
+				log.Err(err).Str("method", "unmarshalOssJson").Msg("couldn't unmarshal response as array")
+				log.Err(err2).Str("method", "unmarshalOssJson").Msg("couldn't unmarshal response as single result")
+				return nil, true, err2
+			}
+			scanResults = append(scanResults, scanResult)
+			return scanResults, false, err2
+		default:
+			log.Err(err).Str("method", "unmarshalOssJson").Msg("couldn't unmarshal response as array")
+			return nil, true, err
 		}
-		reportErrorViaChan(workspace, dChan, err)
-		return
 	}
-
-	targetFile := determineTargetFile(scanResult.DisplayTargetFile)
-	targetFilePath := filepath.Join(workspacePath, targetFile)
-	targetFileUri := uri.PathToUri(targetFilePath)
-	fileContent, err := ioutil.ReadFile(targetFilePath)
-	if err != nil {
-		log.Err(err).Str("method", method).
-			Msgf("Error while reading the file %v, err: %v", targetFile, err)
-		reportErrorViaChan(targetFileUri, dChan, err)
-		return
-	}
-
-	retrieveAnalysis(scanResult, targetFileUri, fileContent, dChan, hoverChan)
+	return scanResults, false, err
 }
 
 func handleError(err error, res []byte, workspace sglsp.DocumentURI, dChan chan lsp.DiagnosticResult) bool {
@@ -202,23 +222,24 @@ func ScanFile(
 		}
 	}
 
-	var scanResults ossScanResult
-	err = json.Unmarshal(res, &scanResults)
-	if err != nil {
-		log.Err(err).Str("method", method).Msg("couldn't unmarshal response")
-		reportErrorViaChan(documentURI, dChan, err)
-		return
-	}
-
-	fileContent, err := os.ReadFile(path)
-	if err != nil {
-		log.Err(err).Str("method", method).
-			Msg("Error reading file " + path)
-		reportErrorViaChan(documentURI, dChan, err)
-		return
-	}
-
-	retrieveAnalysis(scanResults, documentURI, fileContent, dChan, hoverChan)
+	//var scanResults ossScanResult
+	//err = json.Unmarshal(res, &scanResults)
+	//if err != nil {
+	//	log.Err(err).Str("method", method).Msg("couldn't unmarshal response")
+	//	reportErrorViaChan(documentURI, dChan, err)
+	//	return
+	//}
+	//
+	//fileContent, err := os.ReadFile(path)
+	//if err != nil {
+	//	log.Err(err).Str("method", method).
+	//		Msg("Error reading file " + path)
+	//	reportErrorViaChan(documentURI, dChan, err)
+	//	return
+	//}
+	//
+	//retrieveAnalysis(scanResults, documentURI, fileContent, dChan, hoverChan)
+	unmarshallAndRetrieveAnalysis(res, documentURI, dChan, hoverChan)
 }
 
 func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, err error) chan lsp.DiagnosticResult {
