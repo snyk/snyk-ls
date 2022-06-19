@@ -24,11 +24,30 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 		AdditionalParameters: []string{"--all-projects", "-d"},
 	}
 	config.CurrentConfig().SetCliSettings(settings)
-	var cmd []string
+	var cmd = []string{"a", "b"}
 	cmd = SnykCli{}.ExpandParametersFromConfig(cmd)
 	assert.Contains(t, cmd, "--insecure")
 	assert.Contains(t, cmd, "--all-projects")
 	assert.Contains(t, cmd, "-d")
+	assert.Equal(t, config.CurrentConfig().GetOrganization(), os.Getenv(config.Organization))
+	assert.Equal(t, "test-endpoint", os.Getenv("SNYK_API"))
+}
+
+func Test_ExpandParametersFromConfigNoAllProjectsForIac(t *testing.T) {
+	testutil.UnitTest(t)
+	config.CurrentConfig().SetOrganization("test-org")
+	settings := config.CliSettings{
+		Insecure:             true,
+		Endpoint:             "test-endpoint",
+		AdditionalParameters: []string{"--all-projects", "-d"},
+	}
+	config.CurrentConfig().SetCliSettings(settings)
+	var cmd = []string{"a", "iac"}
+	cmd = SnykCli{}.ExpandParametersFromConfig(cmd)
+	assert.Contains(t, cmd, "--insecure")
+	assert.NotContains(t, cmd, "--all-projects")
+	assert.Contains(t, cmd, "-d")
+	assert.Contains(t, cmd, "--org="+config.CurrentConfig().GetOrganization())
 	assert.Equal(t, config.CurrentConfig().GetOrganization(), os.Getenv(config.Organization))
 	assert.Equal(t, "test-endpoint", os.Getenv("SNYK_API"))
 }

@@ -58,17 +58,26 @@ func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
 		if err != nil {
 			log.Err(err).Msg("couldn't add organization to environment")
 		}
+		additionalParams = append(additionalParams, "--org="+organization)
 	}
 
-	if len(settings.AdditionalParameters) > 0 {
-		additionalParams = append(additionalParams, settings.AdditionalParameters...)
-	}
 	if settings.Endpoint != "" {
 		err := os.Setenv("SNYK_API", settings.Endpoint)
 		if err != nil {
 			log.Err(err).Msg("couldn't add endpoint to environment")
 		}
 	}
+
+	if len(settings.AdditionalParameters) > 0 {
+		//additionalParams = append(additionalParams, settings.AdditionalParameters...)
+		for _, parameter := range settings.AdditionalParameters {
+			if base[1] == "iac" && parameter == "--all-projects" {
+				continue
+			}
+			additionalParams = append(additionalParams, parameter)
+		}
+	}
+
 	return append(base, additionalParams...)
 }
 
