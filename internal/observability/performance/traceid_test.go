@@ -15,7 +15,7 @@ func TestGetContextWithTraceId(t *testing.T) {
 		uuid := uuid.New().String()
 
 		// act
-		newCtx := getContextWithTraceId(ctx, uuid)
+		newCtx := GetContextWithTraceId(ctx, uuid)
 
 		// assert
 		traceId, err := GetTraceId(newCtx)

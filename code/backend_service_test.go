@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/internal/observability/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -46,7 +47,7 @@ const (
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), &performance.TestInstrumentor{})
+	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
 	files := map[sglsp.DocumentURI]BundleFile{}
 	files[path1] = BundleFile{
 		Hash:    util.Hash([]byte(content)),
@@ -61,7 +62,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), &performance.TestInstrumentor{})
+	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
 
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]BundleFile{}
@@ -82,7 +83,7 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), &performance.TestInstrumentor{})
+	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]BundleFile{}
@@ -129,7 +130,7 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 // todo analysis test severities
 
 func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing.T) {
-	s := NewHTTPRepository("", &performance.TestInstrumentor{})
+	s := NewHTTPRepository("", &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
 	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
 
 	var analysisResponse SarifResponse
@@ -166,7 +167,7 @@ func TestSnykCodeBackendService_GetFilters_returns(t *testing.T) {
 	})
 
 	test := func() error {
-		s := NewHTTPRepository(fmt.Sprintf("http://localhost:%d", pact.Server.Port), &performance.TestInstrumentor{})
+		s := NewHTTPRepository(fmt.Sprintf("http://localhost:%d", pact.Server.Port), &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
 		if _, _, err := s.GetFilters(context.Background()); err != nil {
 			return err
 		}

@@ -8,8 +8,8 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -38,16 +38,16 @@ func Authenticate(ctx context.Context) {
 			err := Auth(ctx)
 			if err != nil {
 				log.Err(err).Str("method", "Authenticate").Msg("error while authenticating")
-				error_reporting.CaptureError(err)
+				di.ErrorReporter().CaptureError(err)
 			}
 			token, err = GetToken(ctx)
 			if err != nil {
 				log.Err(err).Str("method", "Authenticate").Msg("error getting token after reauthenticating")
-				error_reporting.CaptureError(err)
+				di.ErrorReporter().CaptureError(err)
 			}
 		} else {
 			log.Err(err).Str("method", "Authenticate").Msg("error while getting token, and is not an ErrEmptyApiToken")
-			error_reporting.CaptureError(err)
+			di.ErrorReporter().CaptureError(err)
 		}
 	} else {
 		err = config.CurrentConfig().SetToken(token)

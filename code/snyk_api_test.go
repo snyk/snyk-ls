@@ -97,3 +97,40 @@ func TestSnykApiService_GetSastEnablementWithOrg_returns(t *testing.T) {
 
 	assert.NoError(t, err)
 }
+
+func TestSnykApiService_GetActiveUser(t *testing.T) {
+	testutil.UnitTest(t)
+	pact := testutil.Pact(t, pactDir, "SnykApi")
+	interaction := pact.AddInteraction().
+		WithRequest(dsl.Request{
+			Method: "GET",
+			Path:   dsl.String("/user/me"),
+			Headers: dsl.MapMatcher{
+				"Content-Type":  dsl.String("application/json"),
+				"Authorization": dsl.Regex("token fc763eba-0905-41c5-a27f-3934ab26786c", `^token [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`),
+			},
+		}).WillRespondWith(dsl.Response{
+		Status: 200,
+		Headers: dsl.MapMatcher{
+			"Content-Type": dsl.String("application/json"),
+		},
+		Body: activeUserResponse{
+			Id: "fc763eba-0905-41c5-a27f-3934ab26786a",
+		},
+	})
+	interaction.Description = "Get active user"
+
+	test := func() error {
+		s := NewSnykApiClient(fmt.Sprintf("http://localhost:%d", pact.Server.Port))
+		user, err := s.GetActiveUser()
+		if err != nil {
+			return err
+		}
+		assert.Equal(t, "fc763eba-0905-41c5-a27f-3934ab26786a", user.Id)
+		return nil
+	}
+
+	err := pact.Verify(test)
+
+	assert.NoError(t, err)
+}

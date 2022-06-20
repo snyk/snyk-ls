@@ -60,10 +60,10 @@ func (i *TestInstrumentor) Finish(span Span) {
 }
 
 func (i *TestInstrumentor) CreateSpan(txName string, operation string) Span {
-	return &noopSpan{
-		operation: operation,
-		txName:    txName,
-		started:   false,
-		finished:  false,
+	return &NoopSpan{
+		Operation: operation,
+		TxName:    txName,
+		Started:   false,
+		Finished:  false,
 	}
 }

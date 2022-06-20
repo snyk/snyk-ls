@@ -16,6 +16,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -89,6 +90,33 @@ func Test_ScanFile(t *testing.T) {
 	recorder := &di.Instrumentor().(*performance.TestInstrumentor).SpanRecorder
 	spans := recorder.Spans()
 	assert.Equal(t, "oss.ScanFile", spans[0].GetOperation())
+}
+
+func Test_Analytics(t *testing.T) {
+	hover.ClearAllHovers()
+	testutil.IntegTest(t)
+	config.CurrentConfig().SetFormat(config.FormatHtml)
+	ctx := context.Background()
+	preconditions.EnsureReadyForAnalysisAndWait(ctx)
+	di.TestInit(t)
+
+	workingDir, _ := os.Getwd()
+	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
+
+	dChan := make(chan lsp.DiagnosticResult)
+	hoverChan := make(chan lsp.Hover)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	snykCli := &cli.SnykCli{}
+	go ScanFile(ctx, snykCli, uri.PathToUri(path), &wg, dChan, hoverChan)
+	wg.Wait()
+
+	assert.GreaterOrEqual(t, len(di.Analytics().(*ux.AnalyticsRecorder).GetAnalytics()), 1)
+	assert.Equal(t, ux.AnalysisIsReadyProperties{
+		AnalysisType: ux.OpenSource,
+		Result:       ux.Success,
+	}, di.Analytics().(*ux.AnalyticsRecorder).GetAnalytics()[0])
 }
 
 func Test_FindRange(t *testing.T) {

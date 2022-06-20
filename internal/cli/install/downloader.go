@@ -13,8 +13,8 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/cli/install/httpclient"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 
@@ -113,7 +113,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		error_reporting.CaptureError(err)
+		di.ErrorReporter().CaptureError(err)
 		return fmt.Errorf("failed to %s Snyk CLI from %q: %s", kindStr, downloadURL, resp.Status)
 	}
 	executablePath := cliDiscovery.ExecutableName(isUpdate)

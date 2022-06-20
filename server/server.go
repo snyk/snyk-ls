@@ -14,7 +14,6 @@ import (
 	"github.com/snyk/snyk-ls/diagnostics"
 	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/lsp"
@@ -112,7 +111,7 @@ func Shutdown() jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (interface{}, error) {
 		log.Info().Str("method", "Shutdown").Msg("RECEIVING")
 		log.Info().Str("method", "Shutdown").Msg("SENDING")
-		error_reporting.FlushErrorReporting()
+		di.ErrorReporter().FlushErrorReporting()
 
 		disposeProgressListener()
 		notification.DisposeListener()
@@ -125,7 +124,7 @@ func Exit(srv *jrpc2.Server) jrpc2.Handler {
 		log.Info().Str("method", "Exit").Msg("RECEIVING")
 		log.Info().Msg("Stopping server...")
 		(*srv).Stop()
-		error_reporting.FlushErrorReporting()
+		di.ErrorReporter().FlushErrorReporting()
 		return nil, nil
 	})
 }
@@ -147,11 +146,11 @@ func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv *jrpc2.S
 func logError(err error, method string) {
 	if err != nil {
 		log.Err(err).Str("method", method)
-		error_reporting.CaptureError(err)
+		di.ErrorReporter().CaptureError(err)
 	}
 }
 
-func TextDocumentDidOpenHandler(srv *jrpc2.Server) handler.Func {
+func TextDocumentDidOpenHandler(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidOpenTextDocumentParams) (interface{}, error) {
 		method := "TextDocumentDidOpenHandler"
 		log.Info().Str("method", method).Str("documentURI", string(params.TextDocument.URI)).Msg("RECEIVING")
@@ -163,7 +162,7 @@ func TextDocumentDidOpenHandler(srv *jrpc2.Server) handler.Func {
 	})
 }
 
-func TextDocumentDidSaveHandler(srv *jrpc2.Server) handler.Func {
+func TextDocumentDidSaveHandler(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidSaveTextDocumentParams) (interface{}, error) {
 		method := "TextDocumentDidSaveHandler"
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
@@ -185,7 +184,7 @@ func TextDocumentHover() jrpc2.Handler {
 	})
 }
 
-func WindowWorkDoneProgressCancelHandler() handler.Func {
+func WindowWorkDoneProgressCancelHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.WorkdoneProgressCancelParams) (interface{}, error) {
 		log.Info().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
 		CancelProgress(params.Token)
@@ -193,7 +192,7 @@ func WindowWorkDoneProgressCancelHandler() handler.Func {
 	})
 }
 
-func NoOpHandler() handler.Func {
+func NoOpHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidCloseTextDocumentParams) (interface{}, error) {
 		log.Info().Str("method", "NoOpHandler").Interface("params", params).Msg("RECEIVING")
 		return nil, nil

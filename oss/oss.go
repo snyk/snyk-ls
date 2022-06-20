@@ -17,6 +17,7 @@ import (
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/cli"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -222,23 +223,6 @@ func ScanFile(
 		}
 	}
 
-	//var scanResults ossScanResult
-	//err = json.Unmarshal(res, &scanResults)
-	//if err != nil {
-	//	log.Err(err).Str("method", method).Msg("couldn't unmarshal response")
-	//	reportErrorViaChan(documentURI, dChan, err)
-	//	return
-	//}
-	//
-	//fileContent, err := os.ReadFile(path)
-	//if err != nil {
-	//	log.Err(err).Str("method", method).
-	//		Msg("Error reading file " + path)
-	//	reportErrorViaChan(documentURI, dChan, err)
-	//	return
-	//}
-	//
-	//retrieveAnalysis(scanResults, documentURI, fileContent, dChan, hoverChan)
 	unmarshallAndRetrieveAnalysis(res, documentURI, dChan, hoverChan)
 }
 
@@ -252,6 +236,7 @@ func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, 
 	default:
 		log.Debug().Str("method", "oss.reportErrorViaChan").Msg("not sending...")
 	}
+	trackResult(err == nil)
 	return dChan
 }
 
@@ -280,6 +265,7 @@ func retrieveAnalysis(
 			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("not sending...")
 		}
 	}
+	trackResult(true)
 }
 
 type RangeFinder interface {
@@ -401,4 +387,17 @@ func findRange(issue ossIssue, uri sglsp.DocumentURI, fileContent []byte) sglsp.
 
 	foundRange = finder.Find(issue)
 	return foundRange
+}
+
+func trackResult(success bool) {
+	var result ux.Result
+	if success {
+		result = ux.Success
+	} else {
+		result = ux.Error
+	}
+	di.Analytics().AnalysisIsReady(ux.AnalysisIsReadyProperties{
+		AnalysisType: ux.OpenSource,
+		Result:       result,
+	})
 }
