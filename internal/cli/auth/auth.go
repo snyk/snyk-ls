@@ -31,28 +31,28 @@ func authCmd(ctx context.Context) (*exec.Cmd, error) {
 	return buildCLICmd(ctx, args...), nil
 }
 
-func Authenticate() {
-	ctx := context.Background()
+func Authenticate(ctx context.Context) {
 	token, err := GetToken(ctx)
 	if err != nil {
 		if errors.Is(err, ErrEmptyAPIToken) {
 			err := Auth(ctx)
 			if err != nil {
-				log.Err(err).Str("method", "Authenticate")
+				log.Err(err).Str("method", "Authenticate").Msg("error while authenticating")
+				di.ErrorReporter().CaptureError(err)
 			}
 			token, err = GetToken(ctx)
 			if err != nil {
-				log.Err(err).Str("method", "Authenticate")
+				log.Err(err).Str("method", "Authenticate").Msg("error getting token after reauthenticating")
+				di.ErrorReporter().CaptureError(err)
 			}
 		} else {
-			log.Err(err).Str("method", "Authenticate")
+			log.Err(err).Str("method", "Authenticate").Msg("error while getting token, and is not an ErrEmptyApiToken")
+			di.ErrorReporter().CaptureError(err)
 		}
-		di.ErrorReporter().CaptureError(err)
 	} else {
 		err = config.CurrentConfig().SetToken(token)
 		if err != nil {
-			log.Err(err).Str("method", "Authenticate")
-			di.ErrorReporter().CaptureError(err)
+			log.Err(err).Str("method", "Authenticate").Msg("couldn't set newly obtained token to env")
 		}
 	}
 	notification.Send(lsp.AuthenticationParams{Token: token})

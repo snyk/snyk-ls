@@ -2,6 +2,7 @@ package oss
 
 import (
 	"context"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -172,4 +173,52 @@ func mavenTestIssue() ossIssue {
 	}
 
 	return issue
+}
+
+func TestUnmarshalOssJsonSingle(t *testing.T) {
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(t, "couldn't get working dir")
+	}
+	var path = filepath.Join(dir, "testdata", "oss-result.json")
+	fileContent, err := ioutil.ReadFile(path)
+	if err != nil {
+		t.Fatal(t, "couldn't read test result file")
+	}
+	scanResults, done, err := unmarshallOssJson(fileContent)
+	assert.NoError(t, err)
+	assert.False(t, done)
+	assert.Len(t, scanResults, 1)
+}
+
+func TestUnmarshalOssJsonArray(t *testing.T) {
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(t, "couldn't get working dir")
+	}
+	var path = filepath.Join(dir, "testdata", "oss-result-array.json")
+	fileContent, err := ioutil.ReadFile(path)
+	if err != nil {
+		t.Fatal(t, "couldn't read test result file")
+	}
+	scanResults, done, err := unmarshallOssJson(fileContent)
+	assert.NoError(t, err)
+	assert.False(t, done)
+	assert.Len(t, scanResults, 3)
+}
+
+func TestUnmarshalOssErroneousJson(t *testing.T) {
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(t, "couldn't get working dir")
+	}
+	var path = filepath.Join(dir, "testdata", "pom.xml")
+	fileContent, err := ioutil.ReadFile(path)
+	if err != nil {
+		t.Fatal(t, "couldn't read test result file")
+	}
+	scanResults, done, err := unmarshallOssJson(fileContent)
+	assert.Error(t, err)
+	assert.True(t, done)
+	assert.Nil(t, scanResults)
 }

@@ -1,0 +1,1483 @@
+[
+  {
+    "vulnerabilities": [],
+    "ok": true,
+    "dependencyCount": 0,
+    "org": "snyk-developer-workflows",
+    "policy": "# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.\nversion: v1.25.0\nignore: {}\npatch: {}\n",
+    "isPrivate": true,
+    "licensesPolicy": {
+      "severities": {},
+      "orgLicenseRules": {
+        "GPL-2.0": {
+          "licenseType": "GPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "GPL-3.0": {
+          "licenseType": "GPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "LGPL-2.0": {
+          "licenseType": "LGPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "LGPL-3.0": {
+          "licenseType": "LGPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "EPL-1.0": {
+          "licenseType": "EPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "EPL-2.0": {
+          "licenseType": "EPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CPOL-1.02": {
+          "licenseType": "CPOL-1.02",
+          "severity": "high",
+          "instructions": ""
+        },
+        "MPL-1.0": {
+          "licenseType": "MPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "MPL-1.1": {
+          "licenseType": "MPL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "MPL-2.0": {
+          "licenseType": "MPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "MPL-2.0-no-copyleft-exception": {
+          "licenseType": "MPL-2.0-no-copyleft-exception",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AGPL-3.0": {
+          "licenseType": "AGPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AGPL-1.0": {
+          "licenseType": "AGPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "MS-RL": {
+          "licenseType": "MS-RL",
+          "severity": "high",
+          "instructions": ""
+        },
+        "GPL-2.0-with-classpath-exception": {
+          "licenseType": "GPL-2.0-with-classpath-exception",
+          "severity": "high",
+          "instructions": ""
+        },
+        "APSL-1.0": {
+          "licenseType": "APSL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "APSL-1.1": {
+          "licenseType": "APSL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "APSL-1.2": {
+          "licenseType": "APSL-1.2",
+          "severity": "high",
+          "instructions": ""
+        },
+        "APSL-2.0": {
+          "licenseType": "APSL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CPAL-1.0": {
+          "licenseType": "CPAL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "EUPL-1.0": {
+          "licenseType": "EUPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "EUPL-1.1": {
+          "licenseType": "EUPL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "OSL-3.0": {
+          "licenseType": "OSL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Artistic-1.0": {
+          "licenseType": "Artistic-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Artistic-1.0-Perl": {
+          "licenseType": "Artistic-1.0-Perl",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Artistic-1.0-cl8": {
+          "licenseType": "Artistic-1.0-cl8",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Artistic-2.0": {
+          "licenseType": "Artistic-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "RPSL-1.0": {
+          "licenseType": "RPSL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "RPL-1.1": {
+          "licenseType": "RPL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "RPL-1.5": {
+          "licenseType": "RPL-1.5",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-1.0": {
+          "licenseType": "CC-BY-NC-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-2.0": {
+          "licenseType": "CC-BY-NC-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-2.5": {
+          "licenseType": "CC-BY-NC-2.5",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-3.0": {
+          "licenseType": "CC-BY-NC-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-4.0": {
+          "licenseType": "CC-BY-NC-4.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-ND-1.0": {
+          "licenseType": "CC-BY-NC-ND-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-ND-2.0": {
+          "licenseType": "CC-BY-NC-ND-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-ND-2.5": {
+          "licenseType": "CC-BY-NC-ND-2.5",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-ND-3.0": {
+          "licenseType": "CC-BY-NC-ND-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-ND-4.0": {
+          "licenseType": "CC-BY-NC-ND-4.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-SA-1.0": {
+          "licenseType": "CC-BY-NC-SA-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-SA-2.0": {
+          "licenseType": "CC-BY-NC-SA-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-SA-2.5": {
+          "licenseType": "CC-BY-NC-SA-2.5",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-SA-3.0": {
+          "licenseType": "CC-BY-NC-SA-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-SA-4.0": {
+          "licenseType": "CC-BY-NC-SA-4.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-ND-1.0": {
+          "licenseType": "CC-BY-ND-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-ND-2.0": {
+          "licenseType": "CC-BY-ND-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-ND-2.5": {
+          "licenseType": "CC-BY-ND-2.5",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-ND-3.0": {
+          "licenseType": "CC-BY-ND-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-ND-4.0": {
+          "licenseType": "CC-BY-ND-4.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-SA-1.0": {
+          "licenseType": "CC-BY-SA-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-SA-4.0": {
+          "licenseType": "CC-BY-SA-4.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-SA-3.0": {
+          "licenseType": "CC-BY-SA-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-SA-2.5": {
+          "licenseType": "CC-BY-SA-2.5",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-SA-2.0": {
+          "licenseType": "CC-BY-SA-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "GPL-1.0": {
+          "licenseType": "GPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "LGPL-2.1": {
+          "licenseType": "LGPL-2.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CDDL-1.0": {
+          "licenseType": "CDDL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CDDL-1.1": {
+          "licenseType": "CDDL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "OSL-1.0": {
+          "licenseType": "OSL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "OSL-1.1": {
+          "licenseType": "OSL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "OSL-2.0": {
+          "licenseType": "OSL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "OSL-2.1": {
+          "licenseType": "OSL-2.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CPL-1.0": {
+          "licenseType": "CPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Sleepycat": {
+          "licenseType": "Sleepycat",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AFL-1.1": {
+          "licenseType": "AFL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AFL-1.2": {
+          "licenseType": "AFL-1.2",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AFL-2.0": {
+          "licenseType": "AFL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AFL-2.1": {
+          "licenseType": "AFL-2.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AFL-3.0": {
+          "licenseType": "AFL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "OCLC-2.0": {
+          "licenseType": "OCLC-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "LGPLLR": {
+          "licenseType": "LGPLLR",
+          "severity": "high",
+          "instructions": ""
+        },
+        "QPL-1.0": {
+          "licenseType": "QPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "SISSL": {
+          "licenseType": "SISSL",
+          "severity": "high",
+          "instructions": ""
+        },
+        "SISSL-1.2": {
+          "licenseType": "SISSL-1.2",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Watcom-1.0": {
+          "licenseType": "Watcom-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CECILL-1.0": {
+          "licenseType": "CECILL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CECILL-1.1": {
+          "licenseType": "CECILL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CECILL-2.0": {
+          "licenseType": "CECILL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CECILL-2.1": {
+          "licenseType": "CECILL-2.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CECILL-B": {
+          "licenseType": "CECILL-B",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CECILL-C": {
+          "licenseType": "CECILL-C",
+          "severity": "high",
+          "instructions": ""
+        }
+      }
+    },
+    "packageManager": "maven",
+    "ignoreSettings": {
+      "adminOnly": false,
+      "reasonRequired": false,
+      "disregardFilesystemIgnores": false
+    },
+    "summary": "No known vulnerabilities",
+    "filesystemPolicy": false,
+    "uniqueCount": 0,
+    "projectName": "org.apache.maven:maven-bom",
+    "foundProjectCount": 19,
+    "displayTargetFile": "pom.xml",
+    "path": "/Users/bdoetsch/workspace/maven"
+  },
+  {
+    "vulnerabilities": [],
+    "ok": true,
+    "dependencyCount": 2,
+    "org": "snyk-developer-workflows",
+    "policy": "# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.\nversion: v1.25.0\nignore: {}\npatch: {}\n",
+    "isPrivate": true,
+    "licensesPolicy": {
+      "severities": {},
+      "orgLicenseRules": {
+        "GPL-2.0": {
+          "licenseType": "GPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "GPL-3.0": {
+          "licenseType": "GPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "LGPL-2.0": {
+          "licenseType": "LGPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "LGPL-3.0": {
+          "licenseType": "LGPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "EPL-1.0": {
+          "licenseType": "EPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "EPL-2.0": {
+          "licenseType": "EPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CPOL-1.02": {
+          "licenseType": "CPOL-1.02",
+          "severity": "high",
+          "instructions": ""
+        },
+        "MPL-1.0": {
+          "licenseType": "MPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "MPL-1.1": {
+          "licenseType": "MPL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "MPL-2.0": {
+          "licenseType": "MPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "MPL-2.0-no-copyleft-exception": {
+          "licenseType": "MPL-2.0-no-copyleft-exception",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AGPL-3.0": {
+          "licenseType": "AGPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AGPL-1.0": {
+          "licenseType": "AGPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "MS-RL": {
+          "licenseType": "MS-RL",
+          "severity": "high",
+          "instructions": ""
+        },
+        "GPL-2.0-with-classpath-exception": {
+          "licenseType": "GPL-2.0-with-classpath-exception",
+          "severity": "high",
+          "instructions": ""
+        },
+        "APSL-1.0": {
+          "licenseType": "APSL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "APSL-1.1": {
+          "licenseType": "APSL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "APSL-1.2": {
+          "licenseType": "APSL-1.2",
+          "severity": "high",
+          "instructions": ""
+        },
+        "APSL-2.0": {
+          "licenseType": "APSL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CPAL-1.0": {
+          "licenseType": "CPAL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "EUPL-1.0": {
+          "licenseType": "EUPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "EUPL-1.1": {
+          "licenseType": "EUPL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "OSL-3.0": {
+          "licenseType": "OSL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Artistic-1.0": {
+          "licenseType": "Artistic-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Artistic-1.0-Perl": {
+          "licenseType": "Artistic-1.0-Perl",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Artistic-1.0-cl8": {
+          "licenseType": "Artistic-1.0-cl8",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Artistic-2.0": {
+          "licenseType": "Artistic-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "RPSL-1.0": {
+          "licenseType": "RPSL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "RPL-1.1": {
+          "licenseType": "RPL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "RPL-1.5": {
+          "licenseType": "RPL-1.5",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-1.0": {
+          "licenseType": "CC-BY-NC-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-2.0": {
+          "licenseType": "CC-BY-NC-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-2.5": {
+          "licenseType": "CC-BY-NC-2.5",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-3.0": {
+          "licenseType": "CC-BY-NC-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-4.0": {
+          "licenseType": "CC-BY-NC-4.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-ND-1.0": {
+          "licenseType": "CC-BY-NC-ND-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-ND-2.0": {
+          "licenseType": "CC-BY-NC-ND-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-ND-2.5": {
+          "licenseType": "CC-BY-NC-ND-2.5",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-ND-3.0": {
+          "licenseType": "CC-BY-NC-ND-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-ND-4.0": {
+          "licenseType": "CC-BY-NC-ND-4.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-SA-1.0": {
+          "licenseType": "CC-BY-NC-SA-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-SA-2.0": {
+          "licenseType": "CC-BY-NC-SA-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-SA-2.5": {
+          "licenseType": "CC-BY-NC-SA-2.5",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-SA-3.0": {
+          "licenseType": "CC-BY-NC-SA-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-SA-4.0": {
+          "licenseType": "CC-BY-NC-SA-4.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-ND-1.0": {
+          "licenseType": "CC-BY-ND-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-ND-2.0": {
+          "licenseType": "CC-BY-ND-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-ND-2.5": {
+          "licenseType": "CC-BY-ND-2.5",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-ND-3.0": {
+          "licenseType": "CC-BY-ND-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-ND-4.0": {
+          "licenseType": "CC-BY-ND-4.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-SA-1.0": {
+          "licenseType": "CC-BY-SA-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-SA-4.0": {
+          "licenseType": "CC-BY-SA-4.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-SA-3.0": {
+          "licenseType": "CC-BY-SA-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-SA-2.5": {
+          "licenseType": "CC-BY-SA-2.5",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-SA-2.0": {
+          "licenseType": "CC-BY-SA-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "GPL-1.0": {
+          "licenseType": "GPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "LGPL-2.1": {
+          "licenseType": "LGPL-2.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CDDL-1.0": {
+          "licenseType": "CDDL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CDDL-1.1": {
+          "licenseType": "CDDL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "OSL-1.0": {
+          "licenseType": "OSL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "OSL-1.1": {
+          "licenseType": "OSL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "OSL-2.0": {
+          "licenseType": "OSL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "OSL-2.1": {
+          "licenseType": "OSL-2.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CPL-1.0": {
+          "licenseType": "CPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Sleepycat": {
+          "licenseType": "Sleepycat",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AFL-1.1": {
+          "licenseType": "AFL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AFL-1.2": {
+          "licenseType": "AFL-1.2",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AFL-2.0": {
+          "licenseType": "AFL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AFL-2.1": {
+          "licenseType": "AFL-2.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AFL-3.0": {
+          "licenseType": "AFL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "OCLC-2.0": {
+          "licenseType": "OCLC-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "LGPLLR": {
+          "licenseType": "LGPLLR",
+          "severity": "high",
+          "instructions": ""
+        },
+        "QPL-1.0": {
+          "licenseType": "QPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "SISSL": {
+          "licenseType": "SISSL",
+          "severity": "high",
+          "instructions": ""
+        },
+        "SISSL-1.2": {
+          "licenseType": "SISSL-1.2",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Watcom-1.0": {
+          "licenseType": "Watcom-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CECILL-1.0": {
+          "licenseType": "CECILL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CECILL-1.1": {
+          "licenseType": "CECILL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CECILL-2.0": {
+          "licenseType": "CECILL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CECILL-2.1": {
+          "licenseType": "CECILL-2.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CECILL-B": {
+          "licenseType": "CECILL-B",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CECILL-C": {
+          "licenseType": "CECILL-C",
+          "severity": "high",
+          "instructions": ""
+        }
+      }
+    },
+    "packageManager": "maven",
+    "ignoreSettings": {
+      "adminOnly": false,
+      "reasonRequired": false,
+      "disregardFilesystemIgnores": false
+    },
+    "summary": "No known vulnerabilities",
+    "filesystemPolicy": false,
+    "uniqueCount": 0,
+    "projectName": "org.apache.maven:maven-artifact",
+    "foundProjectCount": 19,
+    "displayTargetFile": "maven-artifact/pom.xml",
+    "path": "/Users/bdoetsch/workspace/maven"
+  },
+  {
+    "vulnerabilities": [
+      {
+        "CVSSv3": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N/E:F",
+        "alternativeIds": [],
+        "creationTime": "2021-04-27T10:51:05.462338Z",
+        "credit": [
+          "Lukas Euler"
+        ],
+        "cvssScore": 5.3,
+        "description": "## Overview\n[commons-io:commons-io](https://search.maven.org/artifact/commons-io/commons-io) is a The Apache Commons IO library contains utility classes, stream implementations, file filters, file comparators, endian transformation classes, and much more.\n\nAffected versions of this package are vulnerable to Directory Traversal via calling the method FileNameUtils.normalize using an improper string like `//../foo` or `\\\\..\\foo`, which may allow access to files in the parent directory.\n\n## Details\n\nA Directory Traversal attack (also known as path traversal) aims to access files and directories that are stored outside the intended folder. By manipulating files with \"dot-dot-slash (../)\" sequences and its variations, or by using absolute file paths, it may be possible to access arbitrary files and directories stored on file system, including application source code, configuration, and other critical system files.\n\nDirectory Traversal vulnerabilities can be generally divided into two types:\n\n- **Information Disclosure**: Allows the attacker to gain information about the folder structure or read the contents of sensitive files on the system.\n\n`st` is a module for serving static files on web pages, and contains a [vulnerability of this type](https://snyk.io/vuln/npm:st:20140206). In our example, we will serve files from the `public` route.\n\nIf an attacker requests the following URL from our server, it will in turn leak the sensitive private key of the root user.\n\n```\ncurl http://localhost:8080/public/%2e%2e/%2e%2e/%2e%2e/%2e%2e/%2e%2e/root/.ssh/id_rsa\n```\n**Note** `%2e` is the URL encoded version of `.` (dot).\n\n- **Writing arbitrary files**: Allows the attacker to create or replace existing files. This type of vulnerability is also known as `Zip-Slip`. \n\nOne way to achieve this is by using a malicious `zip` archive that holds path traversal filenames. When each filename in the zip archive gets concatenated to the target extraction folder, without validation, the final path ends up outside of the target folder. If an executable or a configuration file is overwritten with a file containing malicious code, the problem can turn into an arbitrary code execution issue quite easily.\n\nThe following is an example of a `zip` archive with one benign file and one malicious file. Extracting the malicious file will result in traversing out of the target folder, ending up in `/root/.ssh/` overwriting the `authorized_keys` file:\n\n```\n2018-04-15 22:04:29 .....           19           19  good.txt\n2018-04-15 22:04:42 .....           20           20  ../../../../../../root/.ssh/authorized_keys\n```\n\n## Remediation\nUpgrade `commons-io:commons-io` to version 2.7 or higher.\n## References\n- [GitHub Commit](https://github.com/apache/commons-io/commit/fe7543eee5cd4b2f9e78aa44c31031b68eba204d)\n- [Jira Issue](https://issues.apache.org/jira/browse/IO-556)\n- [PoC](https://github.com/AlAIAL90/CVE-2021-29425)\n",
+        "disclosureTime": "2021-04-26T16:04:00Z",
+        "exploit": "Functional",
+        "functions": [],
+        "fixedIn": [
+          "2.7"
+        ],
+        "id": "SNYK-JAVA-COMMONSIO-1277109",
+        "identifiers": {
+          "CWE": [
+            "CWE-22",
+            "CWE-20"
+          ],
+          "GHSA": [
+            "GHSA-gwrp-pvrq-jmwv"
+          ],
+          "CVE": [
+            "CVE-2021-29425"
+          ]
+        },
+        "language": "java",
+        "malicious": false,
+        "modificationTime": "2021-12-01T15:25:00.738443Z",
+        "moduleName": "commons-io:commons-io",
+        "packageManager": "maven",
+        "packageName": "commons-io:commons-io",
+        "patches": [],
+        "proprietary": false,
+        "publicationTime": "2021-04-27T14:26:12Z",
+        "references": [
+          {
+            "title": "GitHub Commit",
+            "url": "https://github.com/apache/commons-io/commit/fe7543eee5cd4b2f9e78aa44c31031b68eba204d"
+          },
+          {
+            "title": "Jira Issue",
+            "url": "https://issues.apache.org/jira/browse/IO-556"
+          },
+          {
+            "title": "PoC",
+            "url": "https://github.com/AlAIAL90/CVE-2021-29425"
+          }
+        ],
+        "severity": "medium",
+        "socialTrendAlert": false,
+        "title": "Directory Traversal",
+        "insights": {
+          "triageAdvice": null
+        },
+        "functions_new": [],
+        "semver": {
+          "vulnerable": [
+            "[0, 2.7)"
+          ]
+        },
+        "mavenModuleName": {
+          "groupId": "commons-io",
+          "artifactId": "commons-io"
+        },
+        "severityWithCritical": "medium",
+        "from": [
+          "org.apache.maven:maven-slf4j-provider@4.0.0-alpha-1-SNAPSHOT",
+          "org.apache.maven.shared:maven-shared-utils@3.3.4",
+          "commons-io:commons-io@2.6"
+        ],
+        "upgradePath": [],
+        "isUpgradable": false,
+        "isPatchable": false,
+        "name": "commons-io:commons-io",
+        "version": "2.6"
+      }
+    ],
+    "ok": false,
+    "dependencyCount": 4,
+    "org": "snyk-developer-workflows",
+    "policy": "# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.\nversion: v1.25.0\nignore: {}\npatch: {}\n",
+    "isPrivate": true,
+    "licensesPolicy": {
+      "severities": {},
+      "orgLicenseRules": {
+        "GPL-2.0": {
+          "licenseType": "GPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "GPL-3.0": {
+          "licenseType": "GPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "LGPL-2.0": {
+          "licenseType": "LGPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "LGPL-3.0": {
+          "licenseType": "LGPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "EPL-1.0": {
+          "licenseType": "EPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "EPL-2.0": {
+          "licenseType": "EPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CPOL-1.02": {
+          "licenseType": "CPOL-1.02",
+          "severity": "high",
+          "instructions": ""
+        },
+        "MPL-1.0": {
+          "licenseType": "MPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "MPL-1.1": {
+          "licenseType": "MPL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "MPL-2.0": {
+          "licenseType": "MPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "MPL-2.0-no-copyleft-exception": {
+          "licenseType": "MPL-2.0-no-copyleft-exception",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AGPL-3.0": {
+          "licenseType": "AGPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AGPL-1.0": {
+          "licenseType": "AGPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "MS-RL": {
+          "licenseType": "MS-RL",
+          "severity": "high",
+          "instructions": ""
+        },
+        "GPL-2.0-with-classpath-exception": {
+          "licenseType": "GPL-2.0-with-classpath-exception",
+          "severity": "high",
+          "instructions": ""
+        },
+        "APSL-1.0": {
+          "licenseType": "APSL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "APSL-1.1": {
+          "licenseType": "APSL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "APSL-1.2": {
+          "licenseType": "APSL-1.2",
+          "severity": "high",
+          "instructions": ""
+        },
+        "APSL-2.0": {
+          "licenseType": "APSL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CPAL-1.0": {
+          "licenseType": "CPAL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "EUPL-1.0": {
+          "licenseType": "EUPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "EUPL-1.1": {
+          "licenseType": "EUPL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "OSL-3.0": {
+          "licenseType": "OSL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Artistic-1.0": {
+          "licenseType": "Artistic-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Artistic-1.0-Perl": {
+          "licenseType": "Artistic-1.0-Perl",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Artistic-1.0-cl8": {
+          "licenseType": "Artistic-1.0-cl8",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Artistic-2.0": {
+          "licenseType": "Artistic-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "RPSL-1.0": {
+          "licenseType": "RPSL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "RPL-1.1": {
+          "licenseType": "RPL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "RPL-1.5": {
+          "licenseType": "RPL-1.5",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-1.0": {
+          "licenseType": "CC-BY-NC-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-2.0": {
+          "licenseType": "CC-BY-NC-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-2.5": {
+          "licenseType": "CC-BY-NC-2.5",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-3.0": {
+          "licenseType": "CC-BY-NC-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-4.0": {
+          "licenseType": "CC-BY-NC-4.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-ND-1.0": {
+          "licenseType": "CC-BY-NC-ND-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-ND-2.0": {
+          "licenseType": "CC-BY-NC-ND-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-ND-2.5": {
+          "licenseType": "CC-BY-NC-ND-2.5",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-ND-3.0": {
+          "licenseType": "CC-BY-NC-ND-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-ND-4.0": {
+          "licenseType": "CC-BY-NC-ND-4.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-SA-1.0": {
+          "licenseType": "CC-BY-NC-SA-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-SA-2.0": {
+          "licenseType": "CC-BY-NC-SA-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-SA-2.5": {
+          "licenseType": "CC-BY-NC-SA-2.5",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-SA-3.0": {
+          "licenseType": "CC-BY-NC-SA-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-NC-SA-4.0": {
+          "licenseType": "CC-BY-NC-SA-4.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-ND-1.0": {
+          "licenseType": "CC-BY-ND-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-ND-2.0": {
+          "licenseType": "CC-BY-ND-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-ND-2.5": {
+          "licenseType": "CC-BY-ND-2.5",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-ND-3.0": {
+          "licenseType": "CC-BY-ND-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-ND-4.0": {
+          "licenseType": "CC-BY-ND-4.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-SA-1.0": {
+          "licenseType": "CC-BY-SA-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-SA-4.0": {
+          "licenseType": "CC-BY-SA-4.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-SA-3.0": {
+          "licenseType": "CC-BY-SA-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-SA-2.5": {
+          "licenseType": "CC-BY-SA-2.5",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CC-BY-SA-2.0": {
+          "licenseType": "CC-BY-SA-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "GPL-1.0": {
+          "licenseType": "GPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "LGPL-2.1": {
+          "licenseType": "LGPL-2.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CDDL-1.0": {
+          "licenseType": "CDDL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CDDL-1.1": {
+          "licenseType": "CDDL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "OSL-1.0": {
+          "licenseType": "OSL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "OSL-1.1": {
+          "licenseType": "OSL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "OSL-2.0": {
+          "licenseType": "OSL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "OSL-2.1": {
+          "licenseType": "OSL-2.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CPL-1.0": {
+          "licenseType": "CPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Sleepycat": {
+          "licenseType": "Sleepycat",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AFL-1.1": {
+          "licenseType": "AFL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AFL-1.2": {
+          "licenseType": "AFL-1.2",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AFL-2.0": {
+          "licenseType": "AFL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AFL-2.1": {
+          "licenseType": "AFL-2.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AFL-3.0": {
+          "licenseType": "AFL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "OCLC-2.0": {
+          "licenseType": "OCLC-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "LGPLLR": {
+          "licenseType": "LGPLLR",
+          "severity": "high",
+          "instructions": ""
+        },
+        "QPL-1.0": {
+          "licenseType": "QPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "SISSL": {
+          "licenseType": "SISSL",
+          "severity": "high",
+          "instructions": ""
+        },
+        "SISSL-1.2": {
+          "licenseType": "SISSL-1.2",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Watcom-1.0": {
+          "licenseType": "Watcom-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CECILL-1.0": {
+          "licenseType": "CECILL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CECILL-1.1": {
+          "licenseType": "CECILL-1.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CECILL-2.0": {
+          "licenseType": "CECILL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CECILL-2.1": {
+          "licenseType": "CECILL-2.1",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CECILL-B": {
+          "licenseType": "CECILL-B",
+          "severity": "high",
+          "instructions": ""
+        },
+        "CECILL-C": {
+          "licenseType": "CECILL-C",
+          "severity": "high",
+          "instructions": ""
+        }
+      }
+    },
+    "packageManager": "maven",
+    "ignoreSettings": {
+      "adminOnly": false,
+      "reasonRequired": false,
+      "disregardFilesystemIgnores": false
+    },
+    "summary": "1 vulnerable dependency path",
+    "remediation": {
+      "unresolved": [
+        {
+          "CVSSv3": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N/E:F",
+          "alternativeIds": [],
+          "creationTime": "2021-04-27T10:51:05.462338Z",
+          "credit": [
+            "Lukas Euler"
+          ],
+          "cvssScore": 5.3,
+          "description": "## Overview\n[commons-io:commons-io](https://search.maven.org/artifact/commons-io/commons-io) is a The Apache Commons IO library contains utility classes, stream implementations, file filters, file comparators, endian transformation classes, and much more.\n\nAffected versions of this package are vulnerable to Directory Traversal via calling the method FileNameUtils.normalize using an improper string like `//../foo` or `\\\\..\\foo`, which may allow access to files in the parent directory.\n\n## Details\n\nA Directory Traversal attack (also known as path traversal) aims to access files and directories that are stored outside the intended folder. By manipulating files with \"dot-dot-slash (../)\" sequences and its variations, or by using absolute file paths, it may be possible to access arbitrary files and directories stored on file system, including application source code, configuration, and other critical system files.\n\nDirectory Traversal vulnerabilities can be generally divided into two types:\n\n- **Information Disclosure**: Allows the attacker to gain information about the folder structure or read the contents of sensitive files on the system.\n\n`st` is a module for serving static files on web pages, and contains a [vulnerability of this type](https://snyk.io/vuln/npm:st:20140206). In our example, we will serve files from the `public` route.\n\nIf an attacker requests the following URL from our server, it will in turn leak the sensitive private key of the root user.\n\n```\ncurl http://localhost:8080/public/%2e%2e/%2e%2e/%2e%2e/%2e%2e/%2e%2e/root/.ssh/id_rsa\n```\n**Note** `%2e` is the URL encoded version of `.` (dot).\n\n- **Writing arbitrary files**: Allows the attacker to create or replace existing files. This type of vulnerability is also known as `Zip-Slip`. \n\nOne way to achieve this is by using a malicious `zip` archive that holds path traversal filenames. When each filename in the zip archive gets concatenated to the target extraction folder, without validation, the final path ends up outside of the target folder. If an executable or a configuration file is overwritten with a file containing malicious code, the problem can turn into an arbitrary code execution issue quite easily.\n\nThe following is an example of a `zip` archive with one benign file and one malicious file. Extracting the malicious file will result in traversing out of the target folder, ending up in `/root/.ssh/` overwriting the `authorized_keys` file:\n\n```\n2018-04-15 22:04:29 .....           19           19  good.txt\n2018-04-15 22:04:42 .....           20           20  ../../../../../../root/.ssh/authorized_keys\n```\n\n## Remediation\nUpgrade `commons-io:commons-io` to version 2.7 or higher.\n## References\n- [GitHub Commit](https://github.com/apache/commons-io/commit/fe7543eee5cd4b2f9e78aa44c31031b68eba204d)\n- [Jira Issue](https://issues.apache.org/jira/browse/IO-556)\n- [PoC](https://github.com/AlAIAL90/CVE-2021-29425)\n",
+          "disclosureTime": "2021-04-26T16:04:00Z",
+          "exploit": "Functional",
+          "functions": [],
+          "fixedIn": [
+            "2.7"
+          ],
+          "id": "SNYK-JAVA-COMMONSIO-1277109",
+          "identifiers": {
+            "CWE": [
+              "CWE-22",
+              "CWE-20"
+            ],
+            "GHSA": [
+              "GHSA-gwrp-pvrq-jmwv"
+            ],
+            "CVE": [
+              "CVE-2021-29425"
+            ]
+          },
+          "language": "java",
+          "malicious": false,
+          "modificationTime": "2021-12-01T15:25:00.738443Z",
+          "moduleName": "commons-io:commons-io",
+          "packageManager": "maven",
+          "packageName": "commons-io:commons-io",
+          "patches": [],
+          "proprietary": false,
+          "publicationTime": "2021-04-27T14:26:12Z",
+          "references": [
+            {
+              "title": "GitHub Commit",
+              "url": "https://github.com/apache/commons-io/commit/fe7543eee5cd4b2f9e78aa44c31031b68eba204d"
+            },
+            {
+              "title": "Jira Issue",
+              "url": "https://issues.apache.org/jira/browse/IO-556"
+            },
+            {
+              "title": "PoC",
+              "url": "https://github.com/AlAIAL90/CVE-2021-29425"
+            }
+          ],
+          "severity": "medium",
+          "socialTrendAlert": false,
+          "title": "Directory Traversal",
+          "insights": {
+            "triageAdvice": null
+          },
+          "functions_new": [],
+          "semver": {
+            "vulnerable": [
+              "[0, 2.7)"
+            ]
+          },
+          "mavenModuleName": {
+            "groupId": "commons-io",
+            "artifactId": "commons-io"
+          },
+          "from": [
+            "org.apache.maven:maven-slf4j-provider@4.0.0-alpha-1-SNAPSHOT",
+            "org.apache.maven.shared:maven-shared-utils@3.3.4",
+            "commons-io:commons-io@2.6"
+          ],
+          "upgradePath": [],
+          "isUpgradable": false,
+          "isPatchable": false,
+          "isPinnable": false,
+          "isRuntime": false,
+          "name": "commons-io:commons-io",
+          "version": "2.6",
+          "severityWithCritical": "medium"
+        }
+      ],
+      "upgrade": {},
+      "patch": {},
+      "ignore": {},
+      "pin": {}
+    },
+    "filesystemPolicy": false,
+    "filtered": {
+      "ignore": [],
+      "patch": []
+    },
+    "uniqueCount": 1,
+    "projectName": "org.apache.maven:maven-slf4j-provider",
+    "foundProjectCount": 19,
+    "displayTargetFile": "maven-slf4j-provider/pom.xml",
+    "path": "/Users/bdoetsch/workspace/maven"
+  }
+]

@@ -19,6 +19,28 @@ import (
 	"github.com/snyk/snyk-ls/lsp"
 )
 
+type mockCli struct {
+	mock.Mock
+}
+
+func (m *mockCli) Execute(cmd []string, workDir string) (resp []byte, err error) {
+	args := m.Called(cmd, workDir)
+	log.Debug().Interface("cmd", cmd).Msg("Using mock CLI")
+	return []byte(args.String(0)), args.Error(1)
+}
+
+func (m *mockCli) ExpandParametersFromConfig(base []string) []string {
+	args := m.Called(base)
+	log.Debug().Interface("base", base).Msg("Using mock CLI")
+	return args.Get(0).([]string)
+}
+
+func (m *mockCli) HandleErrors(ctx context.Context, output string, err error) (fail bool) {
+	args := m.Called(err)
+	log.Debug().Err(err).Msg("Using mock CLI")
+	return args.Bool(0)
+}
+
 func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 	testutil.UnitTest(t)
 	ClearEntireDiagnosticsCache()
@@ -86,16 +108,6 @@ func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
 	assert.NotNil(t, params)
 }
 
-type mockCli struct {
-	mock.Mock
-}
-
-func (m *mockCli) Execute(cmd []string, workDir string) (resp []byte, err error) {
-	args := m.Called(cmd, workDir)
-	log.Debug().Interface("cmd", cmd).Msg("Using mock CLI")
-	return []byte(args.String(0)), args.Error(1)
-}
-
 func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
 	testutil.UnitTest(t)
@@ -108,11 +120,12 @@ func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
 	mockCli := mockCli{}
 	Cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything, mock.Anything).Return("test", nil)
+	mockCli.Mock.On("ExpandParametersFromConfig", mock.Anything).Return([]string{"test", "iac", "--insecure", "-d", "--all-projects"})
 
 	diagnostics := GetDiagnostics(context.Background(), documentURI)
 
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(documentURI)), len(diagnostics))
-	assert.Equal(t, 1, len(mockCli.Calls))
+	assert.Equal(t, 2, len(mockCli.Calls))
 }
 
 func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
@@ -126,6 +139,7 @@ func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
 	mockCli := mockCli{}
 	Cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything, mock.Anything).Return("test", nil)
+	mockCli.Mock.On("ExpandParametersFromConfig", mock.Anything).Return([]string{"test", "iac", "--insecure", "-d", "--all-projects"})
 
 	diagnostics := GetDiagnostics(context.Background(), documentURI)
 
@@ -150,16 +164,16 @@ func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
 	mockCli := mockCli{}
 	Cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything, mock.Anything).Return("{}", nil)
+	mockCli.Mock.On("ExpandParametersFromConfig", mock.Anything).Return([]string{"test", "iac", "--insecure", "-d", "--all-projects"})
 
 	diagnostics := GetDiagnostics(context.Background(), documentURI)
 
 	assert.Equal(t, len(DocumentDiagnosticsFromCache(documentURI)), len(diagnostics))
-	assert.Equal(t, 1, len(mockCli.Calls))
-	call := mockCli.Calls[0]
+	assert.Equal(t, 2, len(mockCli.Calls))
+	call := mockCli.Calls[1]
 	assert.Contains(t, call.Arguments[0], "--insecure")
 	assert.Contains(t, call.Arguments[0], "-d")
 	assert.Contains(t, call.Arguments[0], "--all-projects")
-	assert.Equal(t, "asd", os.Getenv("SNYK_API"))
 }
 
 func Test_GetDiagnostics_shouldNotIacIfNotEnabled(t *testing.T) { // disable snyk code
@@ -173,6 +187,7 @@ func Test_GetDiagnostics_shouldNotIacIfNotEnabled(t *testing.T) { // disable sny
 	mockCli := mockCli{}
 	Cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything, mock.Anything).Return("test", nil)
+	mockCli.Mock.On("ExpandParametersFromConfig", mock.Anything).Return([]string{"test", "iac", "--insecure", "-d", "--all-projects"})
 
 	diagnostics := GetDiagnostics(context.Background(), documentURI)
 

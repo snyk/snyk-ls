@@ -83,7 +83,8 @@ func doScan(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI
 	} else {
 		workspaceUri = uri.PathFromUri(documentURI)
 	}
-	res, err := Cli.Execute(cliCmd(documentURI), workspaceUri)
+
+	res, err := Cli.Execute(cliCmd(Cli, documentURI), workspaceUri)
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:
@@ -134,13 +135,13 @@ func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, 
 	}
 }
 
-func cliCmd(u sglsp.DocumentURI) []string {
+func cliCmd(Cli cli.Executor, u sglsp.DocumentURI) []string {
 	path, err := filepath.Abs(uri.PathFromUri(u))
 	if err != nil {
 		log.Err(err).Str("method", "iac.ScanFile").
 			Msg("Error while extracting file absolutePath")
 	}
-	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "iac", "test", path, "--json"})
+	cmd := Cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "iac", "test", path, "--json"})
 	log.Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
 	return cmd
 }

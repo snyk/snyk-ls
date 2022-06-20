@@ -20,7 +20,7 @@ func Test_ignored_ignoredGlob(t *testing.T) {
 	err := os.WriteFile(ignoredPath, []byte("test"), 0600)
 	defer os.RemoveAll(ignoredPath)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't create file " + ignoredPath)
+		t.Fatal(t, err, "Couldn't create file "+ignoredPath)
 	}
 	patterns := []string{"**/ignored.txt", "*.xml"}
 
@@ -32,7 +32,7 @@ func Test_ignored_notIgnored(t *testing.T) {
 	err := os.WriteFile(notIgnoredPath, []byte("test"), 0600)
 	defer os.RemoveAll(notIgnoredPath)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't create file " + notIgnoredPath)
+		t.Fatal(t, err, "Couldn't create file "+notIgnoredPath)
 	}
 	patterns := []string{"**/ignored.txt", "*.xml"}
 
@@ -45,12 +45,12 @@ func Test_ignored_doubleAsterisk(t *testing.T) {
 	err := os.Mkdir(testIgnoreDir, 0755)
 	defer os.RemoveAll(testIgnoreDir)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't create testIgnoreDir" + testIgnoreDir)
+		t.Fatal(t, err, "Couldn't create testIgnoreDir"+testIgnoreDir)
 	}
 	err = os.WriteFile(ignoredDoubleAsteriskPath, []byte("test"), 0600)
 	defer os.RemoveAll(ignoredDoubleAsteriskPath)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't create file " + ignoredDoubleAsteriskPath)
+		t.Fatal(t, err, "Couldn't create file "+ignoredDoubleAsteriskPath)
 	}
 	patterns := []string{"**/ignored.txt", "*.xml"}
 	assert.True(t, ignored(ignore.CompileIgnoreLines(patterns...), ignoredDoubleAsteriskPath))
@@ -62,7 +62,7 @@ func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {
 
 	actualPatterns, err := loadIgnorePatterns(tempDir)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't load .gitignore from workspace " + tempDir)
+		t.Fatal(t, err, "Couldn't load .gitignore from workspace "+tempDir)
 	}
 	assert.Equal(t, strings.Split(expectedPatterns, "\n"), actualPatterns)
 }
@@ -71,12 +71,12 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 	temp, err := os.MkdirTemp(os.TempDir(), "loadIgnoreTest")
 	defer os.RemoveAll(temp)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't set up test directory")
+		t.Fatal(t, err, "Couldn't set up test directory")
 	}
 	var actualPatterns []string
 	actualPatterns, err = loadIgnorePatterns(temp)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't load .gitignore from workspace")
+		t.Fatal(t, err, "Couldn't load .gitignore from workspace")
 	}
 	assert.Equal(t, []string{""}, actualPatterns)
 }
@@ -87,7 +87,7 @@ func Test_GetWorkspaceFiles(t *testing.T) {
 
 	files, err := getWorkspaceFiles(uri.PathToUri(workspace))
 	if err != nil {
-		log.Fatal().Err(err).Msg("Error while registering " + workspace)
+		t.Fatal(t, err, "Error while registering "+workspace)
 	}
 	assert.Len(t, files, 2)
 	assert.NotEqual(t, sglsp.TextDocumentItem{}, DocumentDiagnosticsFromCache(uri.PathToUri(notIgnoredFilePath)))
@@ -100,7 +100,7 @@ func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 
 	walkedFiles, err := getWorkspaceFiles(uri.PathToUri(workspace))
 	if err != nil {
-		log.Fatal().Err(err).Msg("Error while registering " + workspace)
+		t.Fatal(t, err, "Error while registering "+workspace)
 	}
 	assert.NotContains(t, walkedFiles, ignoredFileInDir)
 }

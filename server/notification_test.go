@@ -71,11 +71,11 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 
 	progressTracker := progress.NewTracker(true)

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -90,7 +89,7 @@ func ScanWorkspace(ctx context.Context, Cli cli.Executor, workspace sglsp.Docume
 			Msg("Error while extracting file absolutePath")
 	}
 
-	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", path, "--json"})
+	cmd := Cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", path, "--json"})
 	res, err := Cli.Execute(cmd, workspacePath)
 	if err != nil {
 		if handleError(err, res, workspace, dChan) {
@@ -98,26 +97,94 @@ func ScanWorkspace(ctx context.Context, Cli cli.Executor, workspace sglsp.Docume
 		}
 	}
 
-	var scanResult ossScanResult
-	err = json.Unmarshal(res, &scanResult)
+	unmarshallAndRetrieveAnalysis(res, workspace, dChan, hoverChan)
+}
+
+func unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+	scanResults, done, err := unmarshallOssJson(res)
 	if err != nil {
-		log.Err(err).Str("method", method).Msg("couldn't unmarshal response")
+		reportErrorViaChan(documentURI, dChan, err)
+	}
+
+	if done {
+		return
+	}
+
+	for _, scanResult := range scanResults {
+		targetFile := determineTargetFile(scanResult.DisplayTargetFile)
+		targetFilePath := filepath.Join(uri.PathFromUri(documentURI), targetFile)
+		targetFileUri := uri.PathToUri(targetFilePath)
+		fileContent, err := ioutil.ReadFile(targetFilePath)
+		if err != nil {
+			log.Err(err).Str("method", "unmarshallAndRetrieveAnalysis").
+				Msgf("Error while reading the file %v, err: %v", targetFile, err)
+			reportErrorViaChan(targetFileUri, dChan, err)
+			return
+		}
+		retrieveAnalysis(scanResult, targetFileUri, fileContent, dChan, hoverChan)
+	}
+}
+
+func unmarshallOssJson(res []byte) (scanResults []ossScanResult, done bool, err error) {
+	err = json.Unmarshal(res, &scanResults)
+	if err != nil {
+		switch err := err.(type) {
+		case *json.UnmarshalTypeError:
+			var scanResult ossScanResult
+			// fallback: try to unmarshal into single object if not an array of scan results
+			err2 := json.Unmarshal(res, &scanResult)
+			if err2 != nil {
+				log.Err(err).Str("method", "unmarshalOssJson").Msg("couldn't unmarshal response as array")
+				log.Err(err2).Str("method", "unmarshalOssJson").Msg("couldn't unmarshal response as single result")
+				return nil, true, err2
+			}
+			scanResults = append(scanResults, scanResult)
+			return scanResults, false, err2
+		default:
+			log.Err(err).Str("method", "unmarshalOssJson").Msg("couldn't unmarshal response as array")
+			return nil, true, err
+		}
+	}
+	return scanResults, false, err
+}
+
+func handleError(err error, res []byte, workspace sglsp.DocumentURI, dChan chan lsp.DiagnosticResult) bool {
+	switch err := err.(type) {
+	case *exec.ExitError:
+		// Exit codes
+		//  Possible exit codes and their meaning:
+		//
+		//  0: success, no vulnerabilities found
+		//  1: action_needed, vulnerabilities found
+		//  2: failure, try to re-run command
+		//  3: failure, no supported projects detected
+		errorOutput := string(res)
+		switch err.ExitCode() {
+		case 1:
+			return false
+		case 2:
+			log.Err(err).Str("method", "oss.Scan").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
+			reportErrorViaChan(workspace, dChan, fmt.Errorf("%v: %v", err, errorOutput))
+			return true
+		case 3:
+			log.Debug().Str("method", "oss.Scan").Msg("no supported projects/files detected.")
+			return true
+		default:
+			log.Err(err).Str("method", "oss.Scan").Msg("Error while calling Snyk CLI")
+		}
+	default:
 		reportErrorViaChan(workspace, dChan, err)
-		return
+		return true
 	}
+	return true
+}
 
-	targetFile := determineTargetFile(scanResult.DisplayTargetFile)
-	targetFilePath := filepath.Join(workspacePath, targetFile)
-	targetFileUri := uri.PathToUri(targetFilePath)
-	fileContent, err := ioutil.ReadFile(targetFilePath)
-	if err != nil {
-		log.Err(err).Str("method", method).
-			Msgf("Error while reading the file %v, err: %v", targetFile, err)
-		reportErrorViaChan(targetFileUri, dChan, err)
-		return
+func determineTargetFile(displayTargetFile string) string {
+	targetFile := lockFilesToManifestMap[displayTargetFile]
+	if targetFile == "" {
+		return displayTargetFile
 	}
-
-	retrieveAnalysis(scanResult, targetFileUri, fileContent, dChan, hoverChan)
+	return targetFile
 }
 
 func ScanFile(
@@ -134,8 +201,8 @@ func ScanFile(
 	s := di.Instrumentor().StartSpan(ctx, method)
 	defer di.Instrumentor().Finish(s)
 
-	defer log.Debug().Str("method", method).Msg("done.")
 	log.Debug().Str("method", method).Msg("started.")
+	defer log.Debug().Str("method", method).Msg("done.")
 
 	if !IsSupported(documentURI) {
 		return
@@ -148,7 +215,7 @@ func ScanFile(
 	}
 	preconditions.EnsureReadyForAnalysisAndWait(ctx)
 	workDir := filepath.Dir(path)
-	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", workDir, "--json"})
+	cmd := Cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", workDir, "--json"})
 	res, err := Cli.Execute(cmd, workDir)
 	if err != nil {
 		if handleError(err, res, documentURI, dChan) {
@@ -156,61 +223,7 @@ func ScanFile(
 		}
 	}
 
-	var scanResults ossScanResult
-	err = json.Unmarshal(res, &scanResults)
-	if err != nil {
-		log.Err(err).Str("method", method).Msg("couldn't unmarshal response")
-		reportErrorViaChan(documentURI, dChan, err)
-		return
-	}
-
-	fileContent, err := os.ReadFile(path)
-	if err != nil {
-		log.Err(err).Str("method", method).
-			Msg("Error reading file " + path)
-		reportErrorViaChan(documentURI, dChan, err)
-		return
-	}
-
-	retrieveAnalysis(scanResults, documentURI, fileContent, dChan, hoverChan)
-}
-
-func determineTargetFile(displayTargetFile string) string {
-	targetFile := lockFilesToManifestMap[displayTargetFile]
-	if targetFile == "" {
-		return displayTargetFile
-	}
-	return targetFile
-}
-
-func handleError(err error, res []byte, workspace sglsp.DocumentURI, dChan chan lsp.DiagnosticResult) bool {
-	switch err := err.(type) {
-	case *exec.ExitError:
-		// Exit codes
-		//  Possible exit codes and their meaning:
-		//
-		//  0: success, no vulnerabilities found
-		//  1: action_needed, vulnerabilities found
-		//  2: failure, try to re-run command
-		//  3: failure, no supported projects detected
-		errorOutput := string(res)
-		switch err.ExitCode() {
-		case 1:
-		case 2:
-			log.Err(err).Str("method", "oss.Scan").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
-			reportErrorViaChan(workspace, dChan, fmt.Errorf("%v: %v", err, errorOutput))
-			return true
-		case 3:
-			log.Debug().Str("method", "oss.Scan").Msg("no supported projects/files detected.")
-			return true
-		default:
-			log.Err(err).Str("method", "oss.Scan").Msg("Error while calling Snyk CLI")
-		}
-	default:
-		reportErrorViaChan(workspace, dChan, err)
-		return true
-	}
-	return false
+	unmarshallAndRetrieveAnalysis(res, uri.PathToUri(workDir), dChan, hoverChan)
 }
 
 func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, err error) chan lsp.DiagnosticResult {
