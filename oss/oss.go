@@ -201,8 +201,8 @@ func ScanFile(
 	s := di.Instrumentor().StartSpan(ctx, method)
 	defer di.Instrumentor().Finish(s)
 
-	defer log.Debug().Str("method", method).Msg("done.")
 	log.Debug().Str("method", method).Msg("started.")
+	defer log.Debug().Str("method", method).Msg("done.")
 
 	if !IsSupported(documentURI) {
 		return
@@ -223,7 +223,7 @@ func ScanFile(
 		}
 	}
 
-	unmarshallAndRetrieveAnalysis(res, documentURI, dChan, hoverChan)
+	unmarshallAndRetrieveAnalysis(res, uri.PathToUri(workDir), dChan, hoverChan)
 }
 
 func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, err error) chan lsp.DiagnosticResult {
