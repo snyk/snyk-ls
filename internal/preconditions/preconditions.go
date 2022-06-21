@@ -3,6 +3,7 @@ package preconditions
 import (
 	"context"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -59,7 +60,7 @@ func installCli(ctx context.Context) {
 		cliPath, err = i.Install(context.Background())
 		if err != nil {
 			log.Err(err).Str("method", "installCli").Msg("could not download Snyk CLI binary")
-			di.ErrorReporter().CaptureError(err)
+			handleInstallerError(err)
 			cliPath, _ = i.Find()
 		}
 	}
@@ -75,6 +76,13 @@ func installCli(ctx context.Context) {
 	}
 }
 
+func handleInstallerError(err error) {
+	// we don't want to report errors caused by concurrent downloads, they will resolve themselves after 1h
+	if !strings.Contains(err.Error(), "installer lockfile from ") {
+		di.ErrorReporter().CaptureError(err)
+	}
+}
+
 func updateCli() {
 	install.Mutex.Lock()
 	defer install.Mutex.Unlock()
@@ -83,7 +91,7 @@ func updateCli() {
 	updated, err := i.Update(context.Background())
 	if err != nil {
 		log.Err(err).Str("method", "updateCli").Msg("Failed to update CLI")
-		di.ErrorReporter().CaptureError(err)
+		handleInstallerError(err)
 	}
 
 	if updated {
