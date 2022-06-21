@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
 	"github.com/snyk/snyk-ls/lsp"
@@ -36,7 +37,7 @@ var (
 			Character: 7,
 		},
 	}
-	FakeHover = lsp.HoverDetails{
+	FakeHover = hover.Hover{
 		Id:      "12",
 		Range:   fakeRange,
 		Message: "You have been hacked!",
@@ -152,15 +153,15 @@ func (f *FakeSnykCodeClient) ExtendBundle(
 func (f *FakeSnykCodeClient) RunAnalysis(
 	_ context.Context,
 	options AnalysisOptions,
-) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, AnalysisStatus, error) {
+) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]hover.Hover, AnalysisStatus, error) {
 	params := []interface{}{options.bundleHash, options.limitToFiles, options.severity}
 	f.addCall(params, RunAnalysisOperation)
 
 	diagnosticMap := map[sglsp.DocumentURI][]lsp.Diagnostic{}
-	hoverMap := map[sglsp.DocumentURI][]lsp.HoverDetails{}
+	hoverMap := map[sglsp.DocumentURI][]hover.Hover{}
 
 	var diagnostics []lsp.Diagnostic
-	var hovers []lsp.HoverDetails
+	var hovers []hover.Hover
 
 	diagnosticMap[fakeDiagnosticUri] = append(diagnostics, FakeDiagnostic)
 	hoverMap[fakeDiagnosticUri] = append(hovers, FakeHover)

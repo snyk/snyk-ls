@@ -13,8 +13,8 @@ import (
 
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/internal/cli"
-	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/preconditions"
@@ -36,7 +36,7 @@ func Test_ScanWorkspace(t *testing.T) {
 	doc := uri.PathToUri(path)
 
 	dChan := make(chan lsp2.DiagnosticResult, 1)
-	hoverChan := make(chan lsp2.Hover, 1)
+	hoverChan := make(chan hover.DocumentHovers, 1)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -77,7 +77,7 @@ func Test_ScanFile(t *testing.T) {
 	}
 
 	dChan := make(chan lsp2.DiagnosticResult, 1)
-	hoverChan := make(chan lsp2.Hover, 1)
+	hoverChan := make(chan hover.DocumentHovers, 1)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -118,7 +118,7 @@ func Test_Analytics(t *testing.T) {
 	}
 
 	dChan := make(chan lsp2.DiagnosticResult, 1)
-	hoverChan := make(chan lsp2.Hover, 1)
+	hoverChan := make(chan hover.DocumentHovers, 1)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)

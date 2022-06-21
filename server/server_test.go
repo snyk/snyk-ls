@@ -22,8 +22,8 @@ import (
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/diagnostics"
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/internal/cli/install"
-	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -456,7 +456,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 		Character: 7,
 	}
 
-	hoverResp, err := loc.Client.Call(ctx, "textDocument/hover", lsp.HoverParams{
+	hoverResp, err := loc.Client.Call(ctx, "textDocument/hover", hover.Params{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(testPath)},
 		Position:     testPosition,
 	})
@@ -465,7 +465,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 		t.Fatal(t, err, "Hover retrieval failed")
 	}
 
-	hoverResult := lsp.HoverResult{}
+	hoverResult := hover.Result{}
 	err = hoverResp.UnmarshalResult(&hoverResult)
 	if err != nil {
 		t.Fatal(t, err, "Hover retrieval failed")

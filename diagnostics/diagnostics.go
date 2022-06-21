@@ -10,10 +10,10 @@ import (
 
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/iac"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/concurrency"
-	"github.com/snyk/snyk-ls/internal/hover"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -121,7 +121,7 @@ func fetchAllRegisteredDocumentDiagnostics(ctx context.Context, documentURI sgls
 	return processResults(dChan, diagnostics)
 }
 
-func workspaceLevelFetch(ctx context.Context, workspaceURI sglsp.DocumentURI, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+func workspaceLevelFetch(ctx context.Context, workspaceURI sglsp.DocumentURI, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan hover.DocumentHovers) {
 	if config.CurrentConfig().IsSnykIacEnabled() {
 		wg.Add(1)
 		go iac.ScanWorkspace(ctx, Cli, workspaceURI, wg, dChan, hoverChan)
@@ -146,7 +146,7 @@ func workspaceLevelFetch(ctx context.Context, workspaceURI sglsp.DocumentURI, p 
 	}
 }
 
-func fileLevelFetch(ctx context.Context, documentURI sglsp.DocumentURI, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+func fileLevelFetch(ctx context.Context, documentURI sglsp.DocumentURI, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan hover.DocumentHovers) {
 	if config.CurrentConfig().IsSnykCodeEnabled() {
 		di.SnykCode().ScanFile(ctx, documentURI, wg, dChan, hoverChan)
 	}

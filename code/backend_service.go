@@ -17,6 +17,7 @@ import (
 
 	"github.com/snyk/snyk-ls/code/encoding"
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -217,7 +218,7 @@ type AnalysisStatus struct {
 func (s *SnykCodeHTTPClient) RunAnalysis(
 	ctx context.Context,
 	options AnalysisOptions,
-) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, AnalysisStatus, error) {
+) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]hover.Hover, AnalysisStatus, error) {
 	method := "code.RunAnalysis"
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
@@ -307,10 +308,10 @@ func analysisRequestBody(options *AnalysisOptions) ([]byte, error) {
 
 func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
 	map[sglsp.DocumentURI][]lsp.Diagnostic,
-	map[sglsp.DocumentURI][]lsp.HoverDetails,
+	map[sglsp.DocumentURI][]hover.Hover,
 ) {
 	diags := make(map[sglsp.DocumentURI][]lsp.Diagnostic)
-	hovers := make(map[sglsp.DocumentURI][]lsp.HoverDetails)
+	hovers := make(map[sglsp.DocumentURI][]hover.Hover)
 
 	runs := response.Sarif.Runs
 	if len(runs) == 0 {
@@ -349,7 +350,7 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
 			diagSlice = append(diagSlice, d)
 			diags[documentURI] = diagSlice
 
-			h := lsp.HoverDetails{
+			h := hover.Hover{
 				Id:    result.RuleID,
 				Range: myRange,
 				// Todo: Add more details here

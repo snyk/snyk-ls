@@ -16,6 +16,7 @@ import (
 
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -41,7 +42,7 @@ func IsSupported(documentURI sglsp.DocumentURI) bool {
 	return extensions[ext]
 }
 
-func ScanWorkspace(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+func ScanWorkspace(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan hover.DocumentHovers) {
 	defer wg.Done()
 	scanResults, err := doScan(ctx, Cli, documentURI)
 	if err != nil {
@@ -54,7 +55,7 @@ func ScanWorkspace(ctx context.Context, Cli cli.Executor, documentURI sglsp.Docu
 	trackResult(err == nil)
 }
 
-func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan hover.DocumentHovers) {
 	defer wg.Done()
 	if !IsSupported(documentURI) {
 		return
@@ -150,7 +151,7 @@ func retrieveAnalysis(
 	uri sglsp.DocumentURI,
 	scanResult iacScanResult,
 	dChan chan lsp.DiagnosticResult,
-	hoverChan chan lsp.Hover,
+	hoverChan chan hover.DocumentHovers,
 ) {
 	diagnostics, hoverDetails := convertDiagnostics(scanResult)
 
@@ -160,7 +161,7 @@ func retrieveAnalysis(
 			Uri:         uri,
 			Diagnostics: diagnostics,
 		}:
-			hoverChan <- lsp.Hover{
+			hoverChan <- hover.DocumentHovers{
 				Uri:   uri,
 				Hover: hoverDetails,
 			}
@@ -172,9 +173,9 @@ func retrieveAnalysis(
 	}
 }
 
-func convertDiagnostics(res iacScanResult) ([]lsp.Diagnostic, []lsp.HoverDetails) {
+func convertDiagnostics(res iacScanResult) ([]lsp.Diagnostic, []hover.Hover) {
 	var diagnostics []lsp.Diagnostic
-	var hoverDetails []lsp.HoverDetails
+	var hoverDetails []hover.Hover
 
 	for _, issue := range res.IacIssues {
 		title := issue.Title
@@ -210,7 +211,7 @@ func convertDiagnostics(res iacScanResult) ([]lsp.Diagnostic, []lsp.HoverDetails
 
 		diagnostics = append(diagnostics, diagnostic)
 
-		hover := lsp.HoverDetails{
+		hover := hover.Hover{
 			Id:    issue.PublicID,
 			Range: diagsRange,
 			Message: fmt.Sprintf("\n### %s: %s\n\n**Issue:** %s\n\n**Impact:** %s\n\n**Resolve:** %s\n",

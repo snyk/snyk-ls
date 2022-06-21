@@ -5,6 +5,7 @@ import (
 
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -35,7 +36,7 @@ type SnykCodeClient interface {
 		options AnalysisOptions,
 	) (
 		map[sglsp.DocumentURI][]lsp.Diagnostic,
-		map[sglsp.DocumentURI][]lsp.HoverDetails,
+		map[sglsp.DocumentURI][]hover.Hover,
 		AnalysisStatus,
 		error,
 	)

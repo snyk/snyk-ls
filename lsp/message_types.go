@@ -12,17 +12,6 @@ const (
 
 type TextDocumentSaveReason int
 
-type HoverDetails struct {
-	Id      string
-	Range   sglsp.Range
-	Message string
-}
-
-type Hover struct {
-	Uri   sglsp.DocumentURI
-	Hover []HoverDetails
-}
-
 type DiagnosticResult struct {
 	Uri         sglsp.DocumentURI
 	Diagnostics []Diagnostic
@@ -126,20 +115,6 @@ const (
 type DiagnosticRelatedInformation struct {
 	Location sglsp.Location `json:"location"`
 	Message  string         `json:"message"`
-}
-
-type HoverParams struct {
-	TextDocument sglsp.TextDocumentIdentifier `json:"textDocument"`
-	Position     sglsp.Position               `json:"position"`
-}
-
-type MarkupContent struct {
-	Kind  string `json:"kind"`
-	Value string `json:"value"`
-}
-
-type HoverResult struct {
-	Contents MarkupContent `json:"contents"`
 }
 
 type InitializeResult struct {
