@@ -88,7 +88,7 @@ func (b *BundleUploader) groupInBatches(ctx context.Context, files []sglsp.Docum
 			continue
 		}
 
-		file := getFileFrom(fileContent)
+		file := getFileFrom(documentURI, fileContent)
 
 		if len(batches) == 0 { // first batch added after first file found
 			batches = append(batches, &uploadBatch)
@@ -136,9 +136,11 @@ func loadContent(documentURI sglsp.DocumentURI) ([]byte, error) {
 	return fileContent, err
 }
 
-func getFileFrom(content []byte) BundleFile {
-	return BundleFile{
+func getFileFrom(documentURI sglsp.DocumentURI, content []byte) BundleFile {
+	file := BundleFile{
 		Hash:    util.Hash(content),
 		Content: string(content),
 	}
+	log.Trace().Str("method", "getFileFrom").Str("hash", file.Hash).Str("documentURI", string(documentURI)).Send()
+	return file
 }
