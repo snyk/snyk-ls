@@ -31,22 +31,17 @@ func NewBundler(SnykCode SnykCodeClient, instrumentor performance.Instrumentor) 
 }
 
 // TODO remove all LSP dependencies (e.g. DocumentURI)
-func (b *BundleUploader) Upload(ctx context.Context, files []sglsp.DocumentURI) (Bundle, error) {
+func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, files map[sglsp.DocumentURI]BundleFile) (Bundle, error) {
 	method := "code.Upload"
 	s := b.instrumentor.StartSpan(ctx, method)
 	defer b.instrumentor.Finish(s)
 
-	requestId := s.GetTraceId() // use span trace id as code-request-id
-	uploadBatches := b.groupInBatches(s.Context(), files)
+	uploadBatches := b.groupInBatches(s.Context(), bundle, files)
 	if len(uploadBatches) == 0 {
-		return Bundle{}, nil
+		return bundle, nil
 	}
+
 	uploadedFiles := 0
-	bundle := Bundle{
-		SnykCode:     b.SnykCode,
-		instrumentor: b.instrumentor,
-		requestId:    requestId,
-	}
 	t := progress.NewTracker(false)
 	t.Begin("Snyk Code", "Uploading batches...")
 	defer t.End("Upload done.")
@@ -59,10 +54,15 @@ func (b *BundleUploader) Upload(ctx context.Context, files []sglsp.DocumentURI) 
 		percentage := float64(i) / float64(len(uploadBatches)) * 100
 		t.Report(int(math.RoundToEven(percentage)))
 	}
+
 	return bundle, nil
 }
 
-func (b *BundleUploader) groupInBatches(ctx context.Context, files []sglsp.DocumentURI) []*UploadBatch {
+func (b *BundleUploader) groupInBatches(
+	ctx context.Context,
+	bundle Bundle,
+	files map[sglsp.DocumentURI]BundleFile,
+) []*UploadBatch {
 	t := progress.NewTracker(false)
 	t.Begin("Snyk Code", "Creating batches...")
 	defer t.End("Batches created.")
@@ -73,27 +73,14 @@ func (b *BundleUploader) groupInBatches(ctx context.Context, files []sglsp.Docum
 
 	var batches []*UploadBatch
 	uploadBatch := NewUploadBatch()
-	for i, documentURI := range files {
-		if !b.isSupported(ctx, documentURI) {
-			continue
-		}
-
-		fileContent, err := loadContent(documentURI)
-		if err != nil {
-			log.Error().Err(err).Str("path1", string(documentURI)).Msg("could not load content of file")
-			continue
-		}
-
-		if !(len(fileContent) > 0 && len(fileContent) <= maxFileSize) {
-			continue
-		}
-
-		file := getFileFrom(documentURI, fileContent)
-
+	var i = 0
+	for _, documentURI := range bundle.missingFiles {
 		if len(batches) == 0 { // first batch added after first file found
 			batches = append(batches, &uploadBatch)
 		}
 
+		file := files[documentURI]
+		var fileContent = []byte(file.Content)
 		if uploadBatch.canFitFile(string(documentURI), fileContent) {
 			log.Trace().Str("path", string(documentURI)).Int("size", len(fileContent)).Msgf("added to bundle #%v", len(batches))
 			uploadBatch.documents[documentURI] = file

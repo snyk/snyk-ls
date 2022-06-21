@@ -12,10 +12,12 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/code"
+	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/internal/observability/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/util"
 	lsp2 "github.com/snyk/snyk-ls/lsp"
 )
 
@@ -39,12 +41,56 @@ func setupDocs() (string, lsp.TextDocumentItem, lsp.TextDocumentItem, []byte, []
 	return path, firstDoc, secondDoc, content1, content2
 }
 
+/* 	t.Run("when too big ignores file", func(t *testing.T) {
+	snykCodeService := &FakeSnykCodeClient{}
+	var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &performance.TestInstrumentor{}}
+	documentURI, bundleFile := createTempFileInDir("bundleDoc.java", 1024*1024+1, temporaryDir)
+	bundleFileMap := map[lsp.DocumentURI]BundleFile{}
+	bundleFileMap[documentURI] = bundleFile
+
+	_, err := bundler.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: []lsp.DocumentURI{documentURI}}, bundleFileMap)
+
+	assert.False(t, snykCodeService.HasExtendedBundle)
+	assert.Nil(t, err)
+})
+
+t.Run("when empty file ignores file", func(t *testing.T) {
+	snykCodeService := &FakeSnykCodeClient{}
+	var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &performance.TestInstrumentor{}}
+
+	documentURI, bundleFile := createTempFileInDir("bundleDoc.java", 0, temporaryDir)
+	bundleFileMap := map[lsp.DocumentURI]BundleFile{}
+	bundleFileMap[documentURI] = bundleFile
+
+	_, err := bundler.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: []lsp.DocumentURI{documentURI}}, bundleFileMap)
+
+	assert.False(t, snykCodeService.HasExtendedBundle)
+	assert.Nil(t, err)
+})
+
+t.Run("when unsupported ignores file", func(t *testing.T) {
+	snykCodeService := &FakeSnykCodeClient{}
+	var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &performance.TestInstrumentor{}}
+
+	documentURI, bundleFile := createTempFileInDir("bundleDoc.mr_robot", 1, temporaryDir)
+	bundleFileMap := map[lsp.DocumentURI]BundleFile{}
+	bundleFileMap[documentURI] = bundleFile
+
+	_, err := bundler.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: []lsp.DocumentURI{documentURI}}, bundleFileMap)
+
+	assert.False(t, snykCodeService.HasExtendedBundle)
+	assert.Nil(t, err)
+})
+
+*/
+
 func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 	t.Run("should create bundle when hash empty", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
 		snykCodeMock := &code.FakeSnykCodeClient{}
 		c := code.NewSnykCode(code.NewBundler(snykCodeMock, &performance.TestInstrumentor{}), &code.FakeApiClient{CodeEnabled: true}, sentry.NewTestErrorReporter(), ux.NewNoopRecordingClient())
 		path, firstDoc, _, content1, _ := setupDocs()
-		registeredDocuments := []lsp.DocumentURI{firstDoc.URI}
+		docs := []lsp.DocumentURI{firstDoc.URI}
 		defer os.RemoveAll(path)
 
 		dChan := make(chan lsp2.DiagnosticResult)
@@ -52,7 +98,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 
-		go c.UploadAndAnalyze(context.Background(), registeredDocuments, &wg, "", dChan, hoverChan)
+		go c.UploadAndAnalyze(context.Background(), docs, &wg, "", dChan, hoverChan)
 
 		<-dChan
 
@@ -60,8 +106,8 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		params := snykCodeMock.GetCallParams(0, code.CreateBundleWithSourceOperation)
 		assert.NotNil(t, params)
 		assert.Equal(t, 1, len(params))
-		files := params[0].(map[lsp.DocumentURI]code.BundleFile)
-		assert.Equal(t, files[firstDoc.URI].Content, string(content1))
+		files := params[0].(map[lsp.DocumentURI]string)
+		assert.Equal(t, files[firstDoc.URI], util.Hash(content1))
 	})
 
 	t.Run("should retrieve from backend", func(t *testing.T) {

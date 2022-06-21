@@ -48,11 +48,8 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	testutil.IntegTest(t)
 
 	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
-	files := map[sglsp.DocumentURI]BundleFile{}
-	files[path1] = BundleFile{
-		Hash:    util.Hash([]byte(content)),
-		Content: content,
-	}
+	files := map[sglsp.DocumentURI]string{}
+	files[path1] = util.Hash([]byte(content))
 	bundleHash, missingFiles, _ := s.CreateBundle(context.Background(), files)
 	assert.NotNil(t, bundleHash)
 	assert.NotEqual(t, "", bundleHash)
@@ -61,23 +58,31 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	testutil.IntegTest(t)
-
 	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
-
 	var removedFiles []sglsp.DocumentURI
-	files := map[sglsp.DocumentURI]BundleFile{}
-	files[path1] = BundleFile{
+	files := map[sglsp.DocumentURI]string{}
+	files[path1] = util.Hash([]byte(content))
+	bundleHash, missingFiles, _ := s.CreateBundle(context.Background(), files)
+	filesExtend := createTestExtendMap()
+
+	bundleHash, missingFiles, _ = s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
+
+	assert.Equal(t, 0, len(missingFiles))
+	assert.NotEmpty(t, bundleHash)
+}
+
+func createTestExtendMap() map[sglsp.DocumentURI]BundleFile {
+	filesExtend := map[sglsp.DocumentURI]BundleFile{}
+
+	filesExtend[path1] = BundleFile{
 		Hash:    util.Hash([]byte(content)),
 		Content: content,
 	}
-	bundleHash, _, _ := s.CreateBundle(context.Background(), files)
-	filesExtend := map[sglsp.DocumentURI]BundleFile{}
 	filesExtend[path2] = BundleFile{
 		Hash:    util.Hash([]byte(content2)),
 		Content: content2,
 	}
-	_, missingFiles, _ := s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
-	assert.Equal(t, 0, len(missingFiles))
+	return filesExtend
 }
 
 func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
@@ -86,18 +91,12 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []sglsp.DocumentURI
-	files := map[sglsp.DocumentURI]BundleFile{}
-	files[path1] = BundleFile{
-		Hash:    util.Hash([]byte(content)),
-		Content: content,
-	}
+	files := map[sglsp.DocumentURI]string{}
+	files[path1] = util.Hash([]byte(content))
 	bundleHash, _, _ := s.CreateBundle(context.Background(), files)
-	filesExtend := map[sglsp.DocumentURI]BundleFile{}
-	filesExtend[path2] = BundleFile{
-		Hash:    util.Hash([]byte(content2)),
-		Content: content2,
-	}
-	bundleHash, _, _ = s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
+	filesExtend := createTestExtendMap()
+	bundleHash, missingFiles, _ := s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
+	assert.Len(t, missingFiles, 0, "all files should be uploaded now")
 
 	assert.Eventually(t, func() bool {
 		limitToFiles := []sglsp.DocumentURI{path1, path2}

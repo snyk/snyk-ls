@@ -43,6 +43,8 @@ func (sc *SnykCode) ScanWorkspace(ctx context.Context, documents []sglsp.Documen
 }
 
 func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []sglsp.DocumentURI, wg *sync.WaitGroup, documentURI sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.UploadAndAnalyze")
+	defer sc.BundleUploader.instrumentor.Finish(span)
 	if len(files) == 0 {
 		return
 	}
@@ -51,12 +53,21 @@ func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []sglsp.Document
 		return
 	}
 
-	uploadedBundle, err := sc.BundleUploader.Upload(ctx, files)
+	requestId := span.GetTraceId() // use span trace id as code-request-id
+
+	bundle, bundleFiles, err := sc.createBundle(span.Context(), requestId, files)
+
+	if err != nil {
+		msg := "error creating bundle..."
+		sc.handleCreationAndUploadError(err, msg, dChan)
+		return
+	}
+
+	uploadedBundle, err := sc.BundleUploader.Upload(ctx, bundle, bundleFiles)
 	// TODO LSP error handling should be pushed UP to the LSP layer
 	if err != nil {
-		log.Error().Err(err).Msg("error uploading files...")
-		dChan <- lsp.DiagnosticResult{Err: err}
-		sc.trackResult(err == nil)
+		msg := "error uploading files..."
+		sc.handleCreationAndUploadError(err, msg, dChan)
 		return
 	}
 	if uploadedBundle.BundleHash == "" {
@@ -67,6 +78,45 @@ func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []sglsp.Document
 	wg.Add(1)
 	uploadedBundle.FetchDiagnosticsData(ctx, string(documentURI), wg, dChan, hoverChan)
 	sc.trackResult(true)
+}
+
+func (sc *SnykCode) handleCreationAndUploadError(err error, msg string, dChan chan lsp.DiagnosticResult) {
+	log.Error().Err(err).Msg(msg)
+	dChan <- lsp.DiagnosticResult{Err: err}
+	sc.trackResult(err == nil)
+	return
+}
+
+func (sc *SnykCode) createBundle(ctx context.Context, requestId string, files []sglsp.DocumentURI) (b Bundle, bundleFiles map[sglsp.DocumentURI]BundleFile, err error) {
+	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.createBundle")
+	defer sc.BundleUploader.instrumentor.Finish(span)
+	b = Bundle{
+		SnykCode:     sc.BundleUploader.SnykCode,
+		instrumentor: sc.BundleUploader.instrumentor,
+		requestId:    requestId,
+	}
+
+	fileHashes := make(map[sglsp.DocumentURI]string)
+	bundleFiles = make(map[sglsp.DocumentURI]BundleFile)
+	for _, documentURI := range files {
+		if !sc.BundleUploader.isSupported(ctx, documentURI) {
+			continue
+		}
+		fileContent, err := loadContent(documentURI)
+		if err != nil {
+			log.Error().Err(err).Str("documentURI", string(documentURI)).Msg("could not load content of file")
+			continue
+		}
+
+		if !(len(fileContent) > 0 && len(fileContent) <= maxFileSize) {
+			continue
+		}
+		file := getFileFrom(documentURI, fileContent)
+		bundleFiles[documentURI] = file
+		fileHashes[documentURI] = file.Hash
+	}
+	b.BundleHash, b.missingFiles, err = sc.BundleUploader.SnykCode.CreateBundle(span.Context(), fileHashes)
+	return b, bundleFiles, err
 }
 
 func (sc *SnykCode) isSastEnabled() bool {

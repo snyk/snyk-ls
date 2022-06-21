@@ -127,12 +127,15 @@ func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (configFiles []string
 	return make([]string, 0), FakeFilters, nil
 }
 
-func (f *FakeSnykCodeClient) CreateBundle(_ context.Context, files map[sglsp.DocumentURI]BundleFile) (string, []sglsp.DocumentURI, error) {
+func (f *FakeSnykCodeClient) CreateBundle(_ context.Context, files map[sglsp.DocumentURI]string) (bundleHash string, missingFiles []sglsp.DocumentURI, err error) {
 	f.TotalBundleCount++
 	f.HasCreatedNewBundle = true
 	params := []interface{}{files}
 	f.addCall(params, CreateBundleWithSourceOperation)
-	return util.Hash([]byte(fmt.Sprint(rand.Int()))), nil, nil
+	for documentURI := range files {
+		missingFiles = append(missingFiles, documentURI)
+	}
+	return util.Hash([]byte(fmt.Sprint(rand.Int()))), missingFiles, nil
 }
 
 func (f *FakeSnykCodeClient) ExtendBundle(

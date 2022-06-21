@@ -20,7 +20,7 @@ type SnykCodeClient interface {
 
 	CreateBundle(
 		ctx context.Context,
-		files map[sglsp.DocumentURI]BundleFile,
+		files map[sglsp.DocumentURI]string,
 	) (string, []sglsp.DocumentURI, error)
 
 	ExtendBundle(

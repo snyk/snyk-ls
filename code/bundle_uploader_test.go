@@ -12,78 +12,62 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func Test_Bundler_Upload(t *testing.T) {
 	temporaryDir := setup()
 	t.Run("adds files to bundle", func(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{}
-		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &performance.TestInstrumentor{}}
-		files := []lsp.DocumentURI{createFileOfSize("bundleDoc.java", 10, temporaryDir)}
+		var bundleUploader = BundleUploader{SnykCode: snykCodeService, instrumentor: &performance.TestInstrumentor{}}
+		documentURI, bundleFile := createTempFileInDir("bundleDoc.java", 10, temporaryDir)
+		bundleFileMap := map[lsp.DocumentURI]BundleFile{}
+		bundleFileMap[documentURI] = bundleFile
 
-		_, err := bundler.Upload(context.Background(), files)
+		_, err := bundleUploader.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: []lsp.DocumentURI{documentURI}}, bundleFileMap)
 
-		assert.True(t, snykCodeService.HasCreatedNewBundle)
-		assert.Equal(t, snykCodeService.TotalBundleCount, 1)
-		assert.Nil(t, err)
+		assert.Equal(t, 1, snykCodeService.TotalBundleCount)
+		assert.NoError(t, err)
 	})
 
 	t.Run("when loads of files breaks down in 4MB bundles", func(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{}
 		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &performance.TestInstrumentor{}}
-		files := []lsp.DocumentURI{
-			createFileOfSize("bundleDoc1.java", (1024*1024)-1, temporaryDir),
-			createFileOfSize("bundleDoc2.java", (1024*1024)-1, temporaryDir),
-			createFileOfSize("bundleDoc3.java", (1024*1024)-1, temporaryDir),
-			createFileOfSize("bundleDoc4.java", (1024*1024)-1, temporaryDir),
-			createFileOfSize("bundleDoc5.java", 100, temporaryDir),
-		}
 
-		_, err := bundler.Upload(context.Background(), files)
+		bundleFileMap := map[lsp.DocumentURI]BundleFile{}
+		var missingFiles []lsp.DocumentURI
+		documentURI, bundleFile := createTempFileInDir("bundleDoc1.java", (1024*1024)-1, temporaryDir)
+		bundleFileMap[documentURI] = bundleFile
+		missingFiles = append(missingFiles, documentURI)
+		documentURI, bundleFile = createTempFileInDir("bundleDoc2.java", (1024*1024)-1, temporaryDir)
+		bundleFileMap[documentURI] = bundleFile
+		missingFiles = append(missingFiles, documentURI)
+		documentURI, bundleFile = createTempFileInDir("bundleDoc3.java", (1024*1024)-1, temporaryDir)
+		bundleFileMap[documentURI] = bundleFile
+		missingFiles = append(missingFiles, documentURI)
+		documentURI, bundleFile = createTempFileInDir("bundleDoc4.java", (1024*1024)-1, temporaryDir)
+		bundleFileMap[documentURI] = bundleFile
+		missingFiles = append(missingFiles, documentURI)
+		documentURI, bundleFile = createTempFileInDir("bundleDoc5.java", 100, temporaryDir)
+		bundleFileMap[documentURI] = bundleFile
+		missingFiles = append(missingFiles, documentURI)
 
-		assert.True(t, snykCodeService.HasCreatedNewBundle)
+		_, err := bundler.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: missingFiles}, bundleFileMap)
+
 		assert.True(t, snykCodeService.HasExtendedBundle)
-		assert.Equal(t, snykCodeService.TotalBundleCount, 2)
-		assert.Equal(t, snykCodeService.ExtendedBundleCount, 1)
-		assert.Nil(t, err)
-	})
-
-	t.Run("when too big ignores file", func(t *testing.T) {
-		snykCodeService := &FakeSnykCodeClient{}
-		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &performance.TestInstrumentor{}}
-		files := []lsp.DocumentURI{createFileOfSize("bundleDoc.java", 1024*1024+1, temporaryDir)}
-
-		_, err := bundler.Upload(context.Background(), files)
-
-		assert.False(t, snykCodeService.HasCreatedNewBundle)
-		assert.Nil(t, err)
-	})
-
-	t.Run("when empty file ignores file", func(t *testing.T) {
-		snykCodeService := &FakeSnykCodeClient{}
-		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &performance.TestInstrumentor{}}
-		files := []lsp.DocumentURI{createFileOfSize("bundleDoc.java", 0, temporaryDir)}
-
-		_, err := bundler.Upload(context.Background(), files)
-
-		assert.False(t, snykCodeService.HasCreatedNewBundle)
-		assert.Nil(t, err)
-	})
-
-	t.Run("when unsupported ignores file", func(t *testing.T) {
-		snykCodeService := &FakeSnykCodeClient{}
-		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &performance.TestInstrumentor{}}
-		files := []lsp.DocumentURI{createFileOfSize("bundleDoc.mr_robot", 1, temporaryDir)}
-
-		_, err := bundler.Upload(context.Background(), files)
-
-		assert.False(t, snykCodeService.HasCreatedNewBundle)
+		assert.Equal(t, 2, snykCodeService.TotalBundleCount)
+		assert.Equal(t, 2, snykCodeService.ExtendedBundleCount)
 		assert.Nil(t, err)
 	})
 
 	t.Cleanup(func() {
 		defer os.RemoveAll(temporaryDir)
 	})
+}
+
+func createTempFileInDir(name string, size int, temporaryDir string) (lsp.DocumentURI, BundleFile) {
+	documentURI, fileContent := createFileOfSize(name, size, temporaryDir)
+	return documentURI, BundleFile{Hash: util.Hash(fileContent), Content: string(fileContent)}
 }
 
 func Test_IsSupportedLanguage(t *testing.T) {
@@ -118,7 +102,7 @@ func setup() string {
 	return dir
 }
 
-func createFileOfSize(filename string, contentSize int, dir string) lsp.DocumentURI {
+func createFileOfSize(filename string, contentSize int, dir string) (lsp.DocumentURI, []byte) {
 	buf := new(bytes.Buffer)
 	buf.Grow(contentSize)
 	for i := 0; i < contentSize; i++ {
@@ -131,5 +115,5 @@ func createFileOfSize(filename string, contentSize int, dir string) lsp.Document
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't write test file")
 	}
-	return bundleDoc.URI
+	return bundleDoc.URI, buf.Bytes()
 }

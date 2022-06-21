@@ -22,38 +22,23 @@ type Bundle struct {
 	UploadBatches []*UploadBatch
 	instrumentor  performance.Instrumentor
 	requestId     string
+	missingFiles  []lsp.DocumentURI
 }
 
 func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {
-	if len(b.UploadBatches) == 0 {
-		err := b.createBundle(ctx, uploadBatch)
-		if err != nil {
-			return err
-		}
-	} else {
-		err := b.extendBundle(ctx, uploadBatch)
-		if err != nil {
-			return err
-		}
+	err := b.extendBundle(ctx, uploadBatch)
+	if err != nil {
+		return err
 	}
 	b.UploadBatches = append(b.UploadBatches, uploadBatch)
 	return nil
-}
-
-func (b *Bundle) createBundle(ctx context.Context, uploadBatch *UploadBatch) error {
-	var err error
-	if uploadBatch.hasContent() {
-		b.BundleHash, _, err = b.SnykCode.CreateBundle(ctx, uploadBatch.documents)
-		log.Debug().Str("requestId", b.requestId).Msg("created uploadBatch on backend")
-	}
-	return err
 }
 
 func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) error {
 	var removeFiles []lsp.DocumentURI
 	var err error
 	if uploadBatch.hasContent() {
-		b.BundleHash, _, err = b.SnykCode.ExtendBundle(ctx, b.BundleHash, uploadBatch.documents, removeFiles)
+		b.BundleHash, b.missingFiles, err = b.SnykCode.ExtendBundle(ctx, b.BundleHash, uploadBatch.documents, removeFiles)
 		log.Trace().Str("requestId", b.requestId).Msg("extended bundle on backend")
 	}
 
@@ -79,7 +64,7 @@ func (b *Bundle) retrieveAnalysis(
 	dChan chan lsp2.DiagnosticResult,
 	hoverChan chan lsp2.Hover,
 ) {
-	if b.BundleHash == "" || len(b.UploadBatches) == 0 {
+	if b.BundleHash == "" {
 		log.Warn().Str("method", "retrieveAnalysis").Str("rootPath", rootPath).Msg("bundle hash is empty")
 		return
 	}
