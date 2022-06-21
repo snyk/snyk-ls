@@ -9,6 +9,9 @@ jobs:
     name: goreleaser
     runs-on: ubuntu-latest
     steps:
+      - name: Prepare git
+        run: git config --global core.autocrlf false
+
       - name: Checkout
         uses: actions/checkout@v2
         with:
