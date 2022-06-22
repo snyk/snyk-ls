@@ -8,75 +8,97 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/domain/snyk/issues"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-var hovers = map[sglsp.DocumentURI][]Hover[Context]{}
-var hoverIndexes = map[string]bool{}
+type Service struct {
+	hovers       map[sglsp.DocumentURI][]Hover[Context]
+	hoverIndexes map[string]bool
+	hoverChan    chan DocumentHovers
+	stopChannel  chan bool
+	mutex        *sync.Mutex
+	analytics    ux.Analytics
+}
 
-var hoverChan = make(chan DocumentHovers, 100)
-var stopChannel = make(chan bool, 100)
-var mutex = &sync.Mutex{}
+func NewService(analytics ux.Analytics) *Service {
+	s := &Service{}
+	s.hovers = map[sglsp.DocumentURI][]Hover[Context]{}
+	s.hoverIndexes = map[string]bool{}
+	s.hoverChan = make(chan DocumentHovers, 100)
+	s.stopChannel = make(chan bool, 100)
+	s.mutex = &sync.Mutex{}
+	s.analytics = analytics
+	go s.createHoverListener()
+	return s
+}
 
-func validateAndExtractMessage(hover Hover[Context], pos sglsp.Position) string {
-	var message string
-	if hover.Range.Start.Line < pos.Line && hover.Range.End.Line > pos.Line ||
-		(hover.Range.Start.Line == pos.Line &&
-			hover.Range.Start.Character <= pos.Character &&
-			hover.Range.End.Character >= pos.Character) {
+func (s *Service) validateAndExtractMessage(hover Hover[Context], pos sglsp.Position) (message string) {
+	if s.isHoverForPosition(hover, pos) {
 		message = hover.Message
 	}
 
 	return message
 }
 
-func registerHovers(result DocumentHovers) {
-	mutex.Lock()
-	defer mutex.Unlock()
+func (s *Service) isHoverForPosition(hover Hover[Context], pos sglsp.Position) bool {
+	return hover.Range.Start.Line < pos.Line && hover.Range.End.Line > pos.Line ||
+		(hover.Range.Start.Line == pos.Line &&
+			hover.Range.Start.Character <= pos.Character &&
+			hover.Range.End.Character >= pos.Character)
+}
+
+func (s *Service) registerHovers(result DocumentHovers) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
 	for _, newHover := range result.Hover {
 		key := result.Uri
 		hoverIndex := uri.PathFromUri(key) + fmt.Sprintf("%v%v", newHover.Range, newHover.Id)
 
-		if !hoverIndexes[hoverIndex] {
-			hovers[key] = append(hovers[key], newHover)
-			hoverIndexes[hoverIndex] = true
+		if !s.hoverIndexes[hoverIndex] {
+			s.hovers[key] = append(s.hovers[key], newHover)
+			s.hoverIndexes[hoverIndex] = true
 		}
 	}
 }
 
-func DeleteHover(documentUri sglsp.DocumentURI) {
-	mutex.Lock()
-	defer mutex.Unlock()
+func (s *Service) DeleteHover(documentUri sglsp.DocumentURI) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
-	delete(hovers, documentUri)
-	for key := range hoverIndexes {
+	delete(s.hovers, documentUri)
+	for key := range s.hoverIndexes {
 		document := uri.PathFromUri(documentUri)
 		if strings.Contains(key, document) {
-			delete(hoverIndexes, key)
+			delete(s.hoverIndexes, key)
 		}
 	}
 }
 
-func Channel() chan DocumentHovers {
-	return hoverChan
+func (s *Service) Channel() chan DocumentHovers {
+	return s.hoverChan
 }
 
-func ClearAllHovers() {
-	mutex.Lock()
-	defer mutex.Unlock()
-	stopChannel <- true
-	hovers = map[sglsp.DocumentURI][]Hover[Context]{}
-	hoverIndexes = map[string]bool{}
+func (s *Service) ClearAllHovers() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.stopChannel <- true
+	s.hovers = map[sglsp.DocumentURI][]Hover[Context]{}
+	s.hoverIndexes = map[string]bool{}
 }
 
-func GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) Result {
-	mutex.Lock()
-	defer mutex.Unlock()
+func (s *Service) GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) Result {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
 	var hoverMessage string
-	for _, hover := range hovers[fileUri] {
-		hoverMessage += validateAndExtractMessage(hover, pos)
+	for _, hover := range s.hovers[fileUri] {
+		if s.isHoverForPosition(hover, pos) {
+			s.trackHoverDetails(hover)
+			hoverMessage += hover.Message
+		}
 	}
 
 	return Result{
@@ -87,11 +109,21 @@ func GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) Result {
 	}
 }
 
-func CreateHoverListener() {
+func (s *Service) trackHoverDetails(hover Hover[Context]) {
+	switch hover.Context.(type) {
+	case issues.Issue:
+		issue := hover.Context.(issues.Issue)
+		s.analytics.IssueHoverIsDisplayed(ux.NewIssueHoverIsDisplayedProperties(issue))
+	default:
+		log.Warn().Msgf("unknown context for hover %v", hover)
+	}
+}
+
+func (s *Service) createHoverListener() {
 	// cleanup before start
 	for {
 		select {
-		case <-stopChannel:
+		case <-s.stopChannel:
 			continue
 		default:
 		}
@@ -99,22 +131,22 @@ func CreateHoverListener() {
 	}
 	for {
 		select {
-		case result := <-hoverChan:
+		case result := <-s.hoverChan:
 			log.Trace().
-				Str("method", "CreateHoverListener").
+				Str("method", "createHoverListener").
 				Str("uri", string(result.Uri)).
 				Msg("reading hover from chan.")
 
-			registerHovers(result)
+			s.registerHovers(result)
 			continue
-		case <-stopChannel:
+		case <-s.stopChannel:
 		}
 		break
 	}
 	// cleanup on shutdown
 	for {
 		select {
-		case <-hoverChan:
+		case <-s.hoverChan:
 			continue
 		default:
 		}

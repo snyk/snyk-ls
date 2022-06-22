@@ -9,6 +9,7 @@ import (
 
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/infrastructure/segment"
 	"github.com/snyk/snyk-ls/internal/observability/infrastructure/sentry"
@@ -24,6 +25,7 @@ var snykCode *code.SnykCode
 var instrumentor performance.Instrumentor
 var errorReporter error_reporting.ErrorReporter
 var analytics ux.Analytics
+var hoverService *hover.Service
 
 var initMutex = &sync.Mutex{}
 
@@ -31,11 +33,16 @@ func Init() {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	initInfrastructure()
+	initDomain()
 	initApplication()
 }
 
 func initApplication() {
 	snykCode = code.NewSnykCode(snykCodeBundleUploader, snykApiClient, errorReporter, analytics)
+}
+
+func initDomain() {
+	hoverService = hover.NewService(analytics)
 }
 
 func initInfrastructure() {
@@ -64,6 +71,7 @@ func TestInit(t *testing.T) {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	t.Helper()
+	hoverService = hover.NewService(analytics)
 	analytics = ux.NewNoopRecordingClient()
 	instrumentor = &performance.TestInstrumentor{}
 	errorReporter = sentry.NewTestErrorReporter()
@@ -78,7 +86,8 @@ func TestInit(t *testing.T) {
 }
 
 /*
-Accessors: This should go away, since all dependencies should be satisfied at startup-time
+TODO Accessors: This should go away, since all dependencies should be satisfied at startup-time, if needed for testing
+they can be returned by the test helper for unit/integration tests
 */
 
 func Instrumentor() performance.Instrumentor {
@@ -109,4 +118,10 @@ func SnykCodeClient() code.SnykCodeClient {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return snykCodeClient
+}
+
+func HoverService() *hover.Service {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return hoverService
 }

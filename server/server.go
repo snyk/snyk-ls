@@ -83,7 +83,6 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 		workspace.Set(w)
 
 		// async processing listener
-		go hover.CreateHoverListener()
 		go createProgressListener(progress.Channel, srv)
 		go registerNotifier(srv)
 
@@ -180,7 +179,7 @@ func TextDocumentDidSaveHandler(srv *jrpc2.Server) jrpc2.Handler {
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 		folder := workspace.Get().GetFolder(filePath)
 		folder.ClearDiagnosticsCache(filePath)
-		hover.DeleteHover(params.TextDocument.URI)
+		di.HoverService().DeleteHover(params.TextDocument.URI)
 		PublishDiagnostics(ctx, params.TextDocument.URI, srv) // todo: remove in favor of notifier
 		return nil, nil
 	})
@@ -190,7 +189,7 @@ func TextDocumentHover() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params hover.Params) (hover.Result, error) {
 		log.Info().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
 
-		hoverResult := hover.GetHover(params.TextDocument.URI, params.Position)
+		hoverResult := di.HoverService().GetHover(params.TextDocument.URI, params.Position)
 		return hoverResult, nil
 	})
 }

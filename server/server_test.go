@@ -71,7 +71,7 @@ func setupServer(t *testing.T) server.Local {
 func cleanupChannels() {
 	notification.DisposeListener()
 	disposeProgressListener()
-	hover.ClearAllHovers()
+	di.HoverService().ClearAllHovers()
 }
 
 func startServer() server.Local {
@@ -476,7 +476,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 		t.Fatal(t, err, "Hover retrieval failed")
 	}
 
-	assert.Equal(t, hoverResult.Contents.Value, hover.GetHover(uri.PathToUri(testPath), testPosition).Contents.Value)
+	assert.Equal(t, hoverResult.Contents.Value, di.HoverService().GetHover(uri.PathToUri(testPath), testPosition).Contents.Value)
 	assert.Equal(t, hoverResult.Contents.Kind, "markdown")
 }
 func Test_IntegrationSnykCodeFileScan(t *testing.T) {

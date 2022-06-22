@@ -63,7 +63,6 @@ func Test_ScanWorkspace(t *testing.T) {
 func Test_ScanFile(t *testing.T) {
 	testutil.IntegTest(t)
 	di.TestInit(t)
-	hover.ClearAllHovers()
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 	ctx := context.Background()
 	preconditions.EnsureReadyForAnalysisAndWait(ctx)
@@ -104,7 +103,6 @@ func Test_ScanFile(t *testing.T) {
 func Test_Analytics(t *testing.T) {
 	testutil.IntegTest(t)
 	di.TestInit(t)
-	hover.ClearAllHovers()
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 	ctx := context.Background()
 	preconditions.EnsureReadyForAnalysisAndWait(ctx)

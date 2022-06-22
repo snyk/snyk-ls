@@ -53,7 +53,7 @@ func (f *Folder) FetchAllRegisteredDocumentDiagnostics(ctx context.Context, path
 	wg := sync.WaitGroup{}
 
 	var dChan chan lsp.DiagnosticResult
-	hoverChan := hover.Channel()
+	hoverChan := di.HoverService().Channel()
 
 	if level == lsp.ScanLevelWorkspace {
 		dChan = make(chan lsp.DiagnosticResult, 10000)
