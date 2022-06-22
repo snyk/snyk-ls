@@ -78,7 +78,7 @@ func (f *Folder) ClearScannedStatus() {
 	f.status = Unscanned
 }
 
-func (f *Folder) SetStatus(status WorkspaceFolderStatus) {
+func (f *Folder) SetStatus(status FolderStatus) {
 	f.status = status
 }
 
@@ -142,6 +142,6 @@ func (f *Folder) Contains(path string) bool {
 	return uri.FolderContains(f.path, path)
 }
 
-func (f *Folder) Path() string                  { return f.path }
-func (f *Folder) Name() string                  { return f.name }
-func (f *Folder) Status() WorkspaceFolderStatus { return f.status }
+func (f *Folder) Path() string         { return f.path }
+func (f *Folder) Name() string         { return f.name }
+func (f *Folder) Status() FolderStatus { return f.status }

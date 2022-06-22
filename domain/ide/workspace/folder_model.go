@@ -5,13 +5,13 @@ import (
 	"github.com/snyk/snyk-ls/internal/concurrency"
 )
 
-type WorkspaceFolderStatus int
+type FolderStatus int
 type ProductLine string
 type ProductLineAttributes map[string]interface{}
 
 const (
-	Unscanned WorkspaceFolderStatus = iota
-	Scanned   WorkspaceFolderStatus = iota
+	Unscanned FolderStatus = iota
+	Scanned   FolderStatus = iota
 
 	SnykCode       ProductLine = "Snyk Code"
 	SnykOpenSource ProductLine = "Snyk Open Source"
@@ -22,9 +22,9 @@ type Folder struct {
 	parent                  *Workspace
 	path                    string
 	name                    string
-	status                  WorkspaceFolderStatus
+	status                  FolderStatus
 	productLineAttributes   map[ProductLine]ProductLineAttributes
 	ignorePatterns          []string
-	documentDiagnosticCache concurrency.AtomicMap
-	cli                     cli.Executor
+	documentDiagnosticCache concurrency.AtomicMap //fixme
+	cli                     cli.Executor          //fixme
 }
