@@ -308,10 +308,10 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	file := testutil.CreateTempFile(t.TempDir(), t)
 	w := workspace.Get()
 
-	folder := lsp.WorkspaceFolder{Name: filepath.Dir(file.Name()), Uri: uri.PathToUri(file.Name())}
+	f := lsp.WorkspaceFolder{Name: filepath.Dir(file.Name()), Uri: uri.PathToUri(file.Name())}
 	_, err := loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", lsp.DidChangeWorkspaceFoldersParams{
 		Event: lsp.WorkspaceFoldersChangeEvent{
-			Added: []lsp.WorkspaceFolder{folder},
+			Added: []lsp.WorkspaceFolder{f},
 		},
 	})
 	if err != nil {
@@ -319,20 +319,20 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	}
 
 	assert.Eventually(t, func() bool {
-		folder := w.GetFolder("test1")
+		folder := w.GetFolder(uri.PathFromUri(f.Uri))
 		return folder != nil && folder.IsScanned()
 	}, 120*time.Second, time.Millisecond)
 
 	_, err = loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", lsp.DidChangeWorkspaceFoldersParams{
 		Event: lsp.WorkspaceFoldersChangeEvent{
-			Removed: []lsp.WorkspaceFolder{folder},
+			Removed: []lsp.WorkspaceFolder{f},
 		},
 	})
 	if err != nil {
 		t.Fatal(t, err, "error calling server")
 	}
 
-	assert.Nil(t, w.GetFolder("test1"))
+	assert.Nil(t, w.GetFolder(uri.PathFromUri(f.Uri)))
 }
 
 func Test_IntegrationWorkspaceScanOssAndCode(t *testing.T) {
