@@ -107,8 +107,8 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		params := snykCodeMock.GetCallParams(0, code.CreateBundleWithSourceOperation)
 		assert.NotNil(t, params)
 		assert.Equal(t, 1, len(params))
-		files := params[0].(map[lsp.DocumentURI]string)
-		assert.Equal(t, files[firstDoc.URI], util.Hash(content1))
+		files := params[0].(map[string]string)
+		assert.Equal(t, files[uri.PathFromUri(firstDoc.URI)], util.Hash(content1))
 	})
 
 	t.Run("should retrieve from backend", func(t *testing.T) {

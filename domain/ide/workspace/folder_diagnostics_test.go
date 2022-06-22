@@ -44,7 +44,7 @@ func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 	di.TestInit(t)
-	workspace := &Workspace{}
+	workspace := New()
 	f := NewFolder(path, "Test", workspace)
 	workspace.AddFolder(f)
 	f.documentDiagnosticCache.Put(diagnosticUri, []lsp.Diagnostic{code.FakeDiagnostic})
@@ -57,8 +57,8 @@ func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 	recorder := &di.Instrumentor().(*performance.TestInstrumentor).SpanRecorder
 	spans := recorder.Spans()
 	assert.Len(t, spans, 1)
-	assert.Equal(t, "GetDiagnostics", spans[0].GetOperation())
-	assert.Equal(t, "GetDiagnostics", spans[0].GetTxName())
+	assert.Equal(t, "Workspace.GetDiagnostics", spans[0].GetOperation())
+	assert.Equal(t, "Workspace.GetDiagnostics", spans[0].GetTxName())
 }
 
 func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
@@ -67,7 +67,7 @@ func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
 	config.CurrentConfig().SetSnykCodeEnabled(false)
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
-	workspace := &Workspace{}
+	workspace := New()
 	f := NewFolder(path, "Test", workspace)
 	workspace.AddFolder(f)
 
@@ -86,7 +86,7 @@ func Test_GetDiagnostics_shouldNotRunCodeIfNotSastEnabled(t *testing.T) {
 	defer os.RemoveAll(path)
 	fakeApiClient := di.SnykCode().SnykApiClient.(*code.FakeApiClient)
 	fakeApiClient.CodeEnabled = false
-	workspace := &Workspace{}
+	workspace := New()
 	f := NewFolder(path, "Test", workspace)
 	workspace.AddFolder(f)
 
@@ -103,7 +103,7 @@ func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
-	workspace := &Workspace{}
+	workspace := New()
 	f := NewFolder(path, "Test", workspace)
 	workspace.AddFolder(f)
 
@@ -118,13 +118,13 @@ func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
 	testutil.UnitTest(t)
 	di.TestInit(t)
-	workspace := &Workspace{}
-	f := NewFolder(".", "Test", workspace)
+	workspace := New()
+	f := NewFolder("/test", "Test", workspace)
 	workspace.AddFolder(f)
 	config.CurrentConfig().SetSnykCodeEnabled(false)
 	config.CurrentConfig().SetSnykIacEnabled(false)
 	config.CurrentConfig().SetSnykOssEnabled(true)
-	filePath := "package.json"
+	filePath := "/test/package.json"
 	mockCli := mockCli{}
 	f.cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything, mock.Anything).Return("test", nil)
@@ -142,10 +142,10 @@ func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
 	config.CurrentConfig().SetSnykCodeEnabled(false)
 	config.CurrentConfig().SetSnykIacEnabled(false)
 	config.CurrentConfig().SetSnykOssEnabled(false)
-	workspace := &Workspace{}
-	f := NewFolder(".", "Test", workspace)
+	workspace := New()
+	f := NewFolder("/test", "Test", workspace)
 	workspace.AddFolder(f)
-	filePath := "package.json"
+	filePath := "/test/package.json"
 	mockCli := mockCli{}
 	f.cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything, mock.Anything).Return("test", nil)
@@ -163,10 +163,10 @@ func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
 	config.CurrentConfig().SetSnykCodeEnabled(false)
 	config.CurrentConfig().SetSnykIacEnabled(true)
 	config.CurrentConfig().SetSnykOssEnabled(false)
-	workspace := &Workspace{}
-	f := NewFolder(".", "Test", workspace)
+	workspace := New()
+	f := NewFolder("/test", "Test", workspace)
 	workspace.AddFolder(f)
-	filePath := "package.json"
+	filePath := "/test/package.json"
 	settings := config.CurrentConfig().CliSettings()
 	settings.AdditionalParameters = []string{"-d", "--all-projects"}
 	settings.Insecure = true
@@ -194,10 +194,10 @@ func Test_GetDiagnostics_shouldNotIacIfNotEnabled(t *testing.T) { // disable sny
 	config.CurrentConfig().SetSnykCodeEnabled(false)
 	config.CurrentConfig().SetSnykIacEnabled(false)
 	config.CurrentConfig().SetSnykOssEnabled(false)
-	workspace := &Workspace{}
-	f := NewFolder(".", "Test", workspace)
+	workspace := New()
+	f := NewFolder("/test", "Test", workspace)
 	workspace.AddFolder(f)
-	filePath := "package.json"
+	filePath := "/test/package.json"
 	mockCli := mockCli{}
 	f.cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything, mock.Anything).Return("test", nil)
@@ -211,11 +211,11 @@ func Test_GetDiagnostics_shouldNotIacIfNotEnabled(t *testing.T) { // disable sny
 
 func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
 	di.TestInit(t)
-	workspace := &Workspace{}
-	f := NewFolder(".", "Test", workspace)
+	workspace := New()
+	f := NewFolder("/test", "Test", workspace)
 	workspace.AddFolder(f)
 
-	workspace.GetDiagnostics(context.Background(), "test123")
+	workspace.GetDiagnostics(context.Background(), "/test/test123")
 
 	// verify that create bundle has NOT been called on backend service
 	params := di.SnykCodeClient().(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)

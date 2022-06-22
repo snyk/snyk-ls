@@ -30,7 +30,7 @@ var (
 	Version       = "SNAPSHOT"
 	Development   = "false"
 	currentConfig *Config
-	initMutex     = &sync.Mutex{}
+	mutex         = &sync.Mutex{}
 )
 
 type CliSettings struct {
@@ -61,14 +61,14 @@ type Config struct {
 }
 
 func CurrentConfig() *Config {
-	initMutex.Lock()
-	defer initMutex.Unlock()
+	mutex.Lock()
+	defer mutex.Unlock()
 	return currentConfig
 }
 
 func SetCurrentConfig(config *Config) {
-	initMutex.Lock()
-	defer initMutex.Unlock()
+	mutex.Lock()
+	defer mutex.Unlock()
 	currentConfig = config
 }
 
@@ -134,7 +134,7 @@ func (c *Config) CliInstalled() bool  { return c.cliPath != "" }
 func (c *Config) CliPath() string {
 	c.cliPathAccessMutex.Lock()
 	defer c.cliPathAccessMutex.Unlock()
-	return c.cliPath
+	return filepath.Clean(c.cliPath)
 }
 func (c *Config) CliSettings() CliSettings { return c.cliSettings }
 func (c *Config) Format() string           { return c.format }

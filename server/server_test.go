@@ -37,13 +37,12 @@ var (
 	jsonRPCRecorder = testutil.JsonRPCRecorder{}
 )
 
-func didOpenTextParams() (sglsp.DidOpenTextDocumentParams, func()) {
-	// see https://microsoft.github.io/language-server-protocol/specifications/specification-3-17/#documentSelector
+func didOpenTextParams() (sglsp.DidOpenTextDocumentParams, string, func()) {
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	didOpenParams := sglsp.DidOpenTextDocumentParams{
 		TextDocument: sglsp.TextDocumentItem{URI: uri.PathToUri(diagnosticUri)},
 	}
-	return didOpenParams, func() {
+	return didOpenParams, path, func() {
 		os.RemoveAll(path)
 	}
 }
@@ -54,7 +53,7 @@ func setupServer(t *testing.T) server.Local {
 	cleanupChannels()
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
-	workspace.Set(&workspace.Workspace{})
+	workspace.Set(workspace.New())
 	loc := startServer()
 
 	t.Cleanup(func() {
@@ -167,8 +166,9 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	loc := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 
-	didOpenParams, cleanup := didOpenTextParams()
+	didOpenParams, dir, cleanup := didOpenTextParams()
 	defer cleanup()
+	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", workspace.Get()))
 
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
@@ -212,8 +212,10 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	}
 	config.SetCurrentConfig(config.New())
 
-	didOpenParams, cleanup := didOpenTextParams()
+	didOpenParams, dir, cleanup := didOpenTextParams()
 	defer cleanup()
+
+	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", workspace.Get()))
 
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
@@ -230,8 +232,10 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 	loc := setupServer(t)
 
 	// register our dummy document
-	didOpenParams, cleanup := didOpenTextParams()
+	didOpenParams, dir, cleanup := didOpenTextParams()
 	defer cleanup()
+
+	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", workspace.Get()))
 
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
@@ -261,7 +265,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	}
 	defer os.RemoveAll(tempDir)
 
-	w := &workspace.Workspace{}
+	w := workspace.Get()
 	f := workspace.NewFolder(tempDir, "Test", w)
 	w.AddFolder(f)
 
@@ -301,9 +305,10 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	testutil.IntegTest(t)
 	loc := setupServer(t)
 	testutil.CreateDummyProgressListener(t)
-	w := &workspace.Workspace{}
+	file := testutil.CreateTempFile(t.TempDir(), t)
+	w := workspace.Get()
 
-	folder := lsp.WorkspaceFolder{Name: "test1", Uri: sglsp.DocumentURI("test1")}
+	folder := lsp.WorkspaceFolder{Name: filepath.Dir(file.Name()), Uri: uri.PathToUri(file.Name())}
 	_, err := loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", lsp.DidChangeWorkspaceFoldersParams{
 		Event: lsp.WorkspaceFoldersChangeEvent{
 			Added: []lsp.WorkspaceFolder{folder},
@@ -313,7 +318,10 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 		t.Fatal(t, err, "error calling server")
 	}
 
-	assert.True(t, w.GetFolder("test1").IsScanned())
+	assert.Eventually(t, func() bool {
+		folder := w.GetFolder("test1")
+		return folder != nil && folder.IsScanned()
+	}, 120*time.Second, time.Millisecond)
 
 	_, err = loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", lsp.DidChangeWorkspaceFoldersParams{
 		Event: lsp.WorkspaceFoldersChangeEvent{
@@ -360,7 +368,7 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 	if err != nil {
 		t.Fatal(t, err, "Couldn't setup test repo")
 	}
-	w := &workspace.Workspace{}
+	w := workspace.Get()
 	f := workspace.NewFolder(cloneTargetDir, repo, w)
 	w.AddFolder(f)
 

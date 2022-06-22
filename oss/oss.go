@@ -73,7 +73,7 @@ func IsSupported(documentURI sglsp.DocumentURI) bool {
 	return supportedFiles[filepath.Base(uri.PathFromUri(documentURI))]
 }
 
-func ScanWorkspace(ctx context.Context, Cli cli.Executor, workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan hover.DocumentHovers) {
+func ScanWorkspace(ctx context.Context, cli cli.Executor, workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan hover.DocumentHovers) {
 	defer wg.Done()
 
 	method := "oss.ScanWorkspace"
@@ -84,14 +84,9 @@ func ScanWorkspace(ctx context.Context, Cli cli.Executor, workspace sglsp.Docume
 	log.Debug().Str("method", method).Msg("started.")
 
 	workspacePath := uri.PathFromUri(workspace)
-	path, err := filepath.Abs(workspacePath)
-	if err != nil {
-		log.Err(err).Str("method", method).
-			Msg("Error while extracting file absolutePath")
-	}
 
-	cmd := Cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", path, "--json"})
-	res, err := Cli.Execute(cmd, workspacePath)
+	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", "--json"})
+	res, err := cli.Execute(cmd, workspacePath)
 	if err != nil {
 		if handleError(err, res, workspace, dChan) {
 			return

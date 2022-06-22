@@ -14,7 +14,7 @@ import (
 
 func TestAddBundleHashToWorkspaceFolder(t *testing.T) {
 	testutil.UnitTest(t)
-	workspace := &Workspace{}
+	workspace := New()
 	f := NewFolder(".", "Test", workspace)
 	workspace.AddFolder(f)
 	key := "bundleHash"
@@ -28,7 +28,7 @@ func TestAddBundleHashToWorkspaceFolder(t *testing.T) {
 func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {
 	expectedPatterns, tempDir, _, _, _ := setupIgnoreWorkspace()
 	defer os.RemoveAll(tempDir)
-	workspace := &Workspace{}
+	workspace := New()
 	f := NewFolder(tempDir, "Test", workspace)
 	workspace.AddFolder(f)
 
@@ -47,7 +47,7 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 		t.Fatal("can't create temp dir")
 	}
 	defer os.RemoveAll(tempDir)
-	workspace := &Workspace{}
+	workspace := New()
 	f := NewFolder(tempDir, "Test", workspace)
 	workspace.AddFolder(f)
 
@@ -63,7 +63,7 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 func Test_GetWorkspaceFolderFiles(t *testing.T) {
 	_, tempDir, ignoredFilePath, notIgnoredFilePath, _ := setupIgnoreWorkspace()
 	defer os.RemoveAll(tempDir)
-	workspace := &Workspace{}
+	workspace := New()
 	f := NewFolder(tempDir, "Test", workspace)
 	workspace.AddFolder(f)
 
@@ -80,7 +80,7 @@ func Test_GetWorkspaceFolderFiles(t *testing.T) {
 func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 	_, tempDir, _, _, ignoredFileInDir := setupIgnoreWorkspace()
 	defer os.RemoveAll(tempDir)
-	workspace := &Workspace{}
+	workspace := New()
 	f := NewFolder(tempDir, "Test", workspace)
 	workspace.AddFolder(f)
 

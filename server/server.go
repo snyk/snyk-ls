@@ -67,23 +67,23 @@ func WorkspaceDidChangeWorkspaceFoldersHandler() jrpc2.Handler {
 			w.DeleteFolder(uri.PathFromUri(folder.Uri))
 		}
 		for _, folder := range params.Event.Added {
-			AddFolderAndScan(ctx, folder, w)
+			AddFolder(folder, w)
 		}
+		w.Scan(ctx)
 		return nil, nil
 	})
 }
 
-func AddFolderAndScan(ctx context.Context, folder lsp.WorkspaceFolder, w *workspace.Workspace) {
+func AddFolder(folder lsp.WorkspaceFolder, w *workspace.Workspace) {
 	f := workspace.NewFolder(uri.PathFromUri(folder.Uri), folder.Name, w)
 	w.AddFolder(f)
-	go w.Scan(ctx)
 }
 
 func InitializeHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
 		method := "InitializeHandler"
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
-		w := &workspace.Workspace{}
+		w := workspace.New()
 		workspace.Set(w)
 
 		// async processing listener
@@ -93,11 +93,12 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 
 		if len(params.WorkspaceFolders) > 0 {
 			for _, workspaceFolder := range clientParams.WorkspaceFolders {
-				AddFolderAndScan(ctx, workspaceFolder, w)
+				AddFolder(workspaceFolder, w)
 			}
 		} else {
-			AddFolderAndScan(ctx, lsp.WorkspaceFolder{Uri: uri.PathToUri(params.RootPath), Name: params.ClientInfo.Name}, w)
+			AddFolder(lsp.WorkspaceFolder{Uri: uri.PathToUri(params.RootPath), Name: params.ClientInfo.Name}, w)
 		}
+		w.Scan(ctx)
 
 		return lsp.InitializeResult{
 			Capabilities: lsp.ServerCapabilities{
@@ -181,7 +182,8 @@ func TextDocumentDidSaveHandler(srv *jrpc2.Server) jrpc2.Handler {
 
 		// clear cache when saving and get fresh diagnostics
 		filePath := uri.PathFromUri(params.TextDocument.URI)
-		workspace.Get().GetFolder(filePath).ClearDiagnosticsCache(filePath)
+		folder := workspace.Get().GetFolder(filePath)
+		folder.ClearDiagnosticsCache(filePath)
 		hover.DeleteHover(params.TextDocument.URI)
 		PublishDiagnostics(ctx, params.TextDocument.URI, srv) // todo: remove in favor of notifier
 		return nil, nil

@@ -376,7 +376,7 @@
               {
                 "physicalLocation": {
                   "artifactLocation": {
-                    "uri": "file:///server/testdata/Dummy.java",
+                    "uri": "/server/testdata/Dummy.java",
                     "uriBaseId": "%SRCROOT%"
                   },
                   "region": {
@@ -402,7 +402,7 @@
                           "id": 0,
                           "physicalLocation": {
                             "artifactLocation": {
-                              "uri": "file:///server/testdata/Dummy.java",
+                              "uri": "/server/testdata/Dummy.java",
                               "uriBaseId": "%SRCROOT%"
                             },
                             "region": {
@@ -419,7 +419,7 @@
                           "id": 1,
                           "physicalLocation": {
                             "artifactLocation": {
-                              "uri": "file:///server/testdata/Dummy.java",
+                              "uri": "/server/testdata/Dummy.java",
                               "uriBaseId": "%SRCROOT%"
                             },
                             "region": {
@@ -469,7 +469,7 @@
               {
                 "physicalLocation": {
                   "artifactLocation": {
-                    "uri": "file:///server/testdata/Dummy.java",
+                    "uri": "/server/testdata/Dummy.java",
                     "uriBaseId": "%SRCROOT%"
                   },
                   "region": {
@@ -495,7 +495,7 @@
                           "id": 0,
                           "physicalLocation": {
                             "artifactLocation": {
-                              "uri": "file:///server/testdata/Dummy.java",
+                              "uri": "/server/testdata/Dummy.java",
                               "uriBaseId": "%SRCROOT%"
                             },
                             "region": {

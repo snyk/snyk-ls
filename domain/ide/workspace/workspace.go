@@ -10,18 +10,27 @@ import (
 	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/preconditions"
-	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
 var instance *Workspace
+var mutex = &sync.Mutex{}
 
-func init() {
-	instance = &Workspace{workspaceFolders: make(map[string]*Folder, 0)}
+func Get() *Workspace {
+	mutex.Lock()
+	defer mutex.Unlock()
+	return instance
 }
 
-func Get() *Workspace  { return instance }
-func Set(w *Workspace) { instance = w }
+func Set(w *Workspace) {
+	mutex.Lock()
+	defer mutex.Unlock()
+	instance = w
+}
+
+func New() *Workspace {
+	return &Workspace{workspaceFolders: make(map[string]*Folder, 0)}
+}
 
 func (w *Workspace) DeleteFolder(folder string) {
 	w.mutex.Lock()
@@ -32,6 +41,9 @@ func (w *Workspace) DeleteFolder(folder string) {
 func (w *Workspace) AddFolder(f *Folder) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
+	if w.workspaceFolders == nil {
+		w.workspaceFolders = map[string]*Folder{}
+	}
 	w.workspaceFolders[f.path] = f
 }
 
@@ -51,6 +63,11 @@ func (w *Workspace) GetDiagnostics(ctx context.Context, path string) []lsp.Diagn
 	defer di.Instrumentor().Finish(s)
 
 	folder := w.GetFolder(path)
+
+	if folder == nil {
+		log.Warn().Str("method", method).Msgf("No workspace folder configured for %s", path)
+		return []lsp.Diagnostic{}
+	}
 
 	diagnosticSlice := folder.DocumentDiagnosticsFromCache(path)
 	if len(diagnosticSlice) > 0 {
@@ -80,14 +97,4 @@ func (w *Workspace) Scan(ctx context.Context) {
 	wg.Wait()
 	log.Info().Str("method", "Workspace").
 		Msg("Workspace scan completed")
-}
-
-// todo test
-func (w *Workspace) getWorkspaceFolderOfDocument(documentPath string) (folder *Folder) {
-	for _, folder := range w.workspaceFolders {
-		if uri.FolderContains(folder.path, documentPath) {
-			return folder
-		}
-	}
-	return &Folder{}
 }
