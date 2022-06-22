@@ -17,6 +17,7 @@ import (
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/snyk/issues"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/preconditions"
@@ -25,9 +26,13 @@ import (
 )
 
 var (
-	severities = map[string]sglsp.DiagnosticSeverity{
+	lspSeverities = map[string]sglsp.DiagnosticSeverity{
 		"high": sglsp.Error,
 		"low":  sglsp.Warning,
+	}
+	issuesSeverity = map[string]issues.Severity{
+		"high": issues.High,
+		"low":  issues.Medium,
 	}
 	// see https://github.com/snyk/snyk/blob/master/src/lib/detect.ts#L10
 	lockFilesToManifestMap = map[string]string{
@@ -277,63 +282,89 @@ func retrieveDiagnostics(
 	res ossScanResult,
 	uri sglsp.DocumentURI,
 	fileContent []byte,
-) ([]lsp.Diagnostic, []hover.Hover) {
+) ([]lsp.Diagnostic, []hover.Hover[hover.Context]) {
 	var diagnostics []lsp.Diagnostic
-	var hoverDetails []hover.Hover
+	var hoverDetails []hover.Hover[hover.Context]
 
 	for _, issue := range res.Vulnerabilities {
-		title := issue.Title
-		description := issue.Description
-
-		if config.CurrentConfig().Format() == config.FormatHtml {
-			title = string(markdown.ToHTML([]byte(title), nil, nil))
-			description = string(markdown.ToHTML([]byte(description), nil, nil))
-		}
-
-		diagnostic := lsp.Diagnostic{
-			Source:   "Snyk LSP",
-			Message:  fmt.Sprintf("%s: %s", issue.Id, title),
-			Range:    findRange(issue, uri, fileContent),
-			Severity: lspSeverity(issue.Severity),
-			Code:     issue.Id,
-			// Don't use it for now as it's not widely supported
-			// CodeDescription: lsp.CodeDescription{
-			//	Href: issue.References[0].Url,
-			// },
-		}
-		diagnostics = append(diagnostics, diagnostic)
-
-		summary := fmt.Sprintf("### Vulnerability %s %s %s \n **Fixed in: %s | Exploit maturity: %s**",
-			createCveLink(issue.Identifiers.CVE),
-			createCweLink(issue.Identifiers.CWE),
-			createIssueUrl(issue.Id),
-			createFixedIn(issue.FixedIn),
-			strings.ToUpper(issue.Severity),
-		)
-
-		hover := hover.Hover{
-			Id:    issue.Id,
-			Range: findRange(issue, uri, fileContent),
-			Message: fmt.Sprintf("\n### %s: %s affecting %s package \n%s \n%s",
-				issue.Id,
-				title,
-				issue.PackageName,
-				summary,
-				description,
-			),
-		}
-		hoverDetails = append(hoverDetails, hover)
+		issueRange := findRange(issue, uri, fileContent)
+		diagnostics = append(diagnostics, toDiagnostics(issue, issueRange))
+		hoverDetails = append(hoverDetails, toHover(issue, issueRange))
 	}
 
 	return diagnostics, hoverDetails
 }
 
+func toDiagnostics(issue ossIssue, issueRange sglsp.Range) lsp.Diagnostic {
+	title := issue.Title
+	description := issue.Description
+
+	if config.CurrentConfig().Format() == config.FormatHtml {
+		title = string(markdown.ToHTML([]byte(title), nil, nil))
+		description = string(markdown.ToHTML([]byte(description), nil, nil))
+	}
+	return lsp.Diagnostic{
+		Source:   "Snyk LSP",
+		Message:  fmt.Sprintf("%s: %s", issue.Id, title),
+		Range:    issueRange,
+		Severity: lspSeverity(issue.Severity),
+		Code:     issue.Id,
+		// Don't use it for now as it's not widely supported
+		// CodeDescription: lsp.CodeDescription{
+		//	Href: issue.References[0].Url,
+		// },
+	}
+}
+
+func toHover(issue ossIssue, issueRange sglsp.Range) hover.Hover[hover.Context] {
+	title := issue.Title
+	description := issue.Description
+
+	if config.CurrentConfig().Format() == config.FormatHtml {
+		title = string(markdown.ToHTML([]byte(title), nil, nil))
+		description = string(markdown.ToHTML([]byte(description), nil, nil))
+	}
+	summary := fmt.Sprintf("### Vulnerability %s %s %s \n **Fixed in: %s | Exploit maturity: %s**",
+		createCveLink(issue.Identifiers.CVE),
+		createCweLink(issue.Identifiers.CWE),
+		createIssueUrl(issue.Id),
+		createFixedIn(issue.FixedIn),
+		strings.ToUpper(issue.Severity),
+	)
+
+	hover := hover.Hover[hover.Context]{
+		Id:    issue.Id,
+		Range: issueRange,
+		Message: fmt.Sprintf("\n### %s: %s affecting %s package \n%s \n%s",
+			issue.Id,
+			title,
+			issue.PackageName,
+			summary,
+			description,
+		),
+		Context: issues.Issue{
+			ID:        issue.Id,
+			Severity:  toIssueSeverity(issue.Severity),
+			IssueType: issues.DependencyVulnerability,
+		},
+	}
+	return hover
+}
+
 func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
-	lspSev, ok := severities[snykSeverity]
+	lspSev, ok := lspSeverities[snykSeverity]
 	if !ok {
 		return sglsp.Info
 	}
 	return lspSev
+}
+
+func toIssueSeverity(snykSeverity string) issues.Severity {
+	sev, ok := issuesSeverity[snykSeverity]
+	if !ok {
+		return issues.Low
+	}
+	return sev
 }
 
 func createCveLink(cve []string) string {
