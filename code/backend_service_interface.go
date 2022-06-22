@@ -5,6 +5,7 @@ import (
 
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -20,22 +21,22 @@ type SnykCodeClient interface {
 
 	CreateBundle(
 		ctx context.Context,
-		files map[sglsp.DocumentURI]string,
-	) (string, []sglsp.DocumentURI, error)
+		files map[string]string,
+	) (newBundleHash string, missingFiles []string, err error)
 
 	ExtendBundle(
 		ctx context.Context,
 		bundleHash string,
-		files map[sglsp.DocumentURI]BundleFile,
-		removedFiles []sglsp.DocumentURI,
-	) (string, []sglsp.DocumentURI, error)
+		files map[string]BundleFile,
+		removedFiles []string,
+	) (newBundleHash string, missingFiles []string, err error)
 
 	RunAnalysis(
 		ctx context.Context,
 		options AnalysisOptions,
 	) (
-		map[sglsp.DocumentURI][]lsp.Diagnostic,
-		map[sglsp.DocumentURI][]lsp.HoverDetails,
+		map[string][]lsp.Diagnostic,
+		map[sglsp.DocumentURI][]hover.Hover,
 		AnalysisStatus,
 		error,
 	)

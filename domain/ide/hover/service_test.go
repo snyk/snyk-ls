@@ -4,15 +4,14 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/snyk/snyk-ls/internal/uri"
-	"github.com/snyk/snyk-ls/lsp"
-
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 func setupFakeHover() sglsp.DocumentURI {
-	fakeHover := []lsp.HoverDetails{
+	fakeHover := []Hover{
 		{Range: sglsp.Range{
 			Start: sglsp.Position{Line: 3, Character: 56},
 			End:   sglsp.Position{Line: 5, Character: 80},
@@ -30,9 +29,9 @@ func setupFakeHover() sglsp.DocumentURI {
 func Test_registerHovers(t *testing.T) {
 	defer ClearAllHovers()
 	documentUri := uri.PathToUri("fake-file.json")
-	hover := lsp.Hover{
+	hover := DocumentHovers{
 		Uri: documentUri,
-		Hover: []lsp.HoverDetails{
+		Hover: []Hover{
 			{
 				Id: "test-id",
 				Range: sglsp.Range{
@@ -76,67 +75,67 @@ func Test_ClearAllHovers(t *testing.T) {
 
 func Test_GetHoverMultiline(t *testing.T) {
 	tests := []struct {
-		hoverDetails []lsp.HoverDetails
+		hoverDetails []Hover
 		query        sglsp.Position
-		expected     lsp.HoverResult
+		expected     Result
 	}{
 		// multiline range
 		{
-			hoverDetails: []lsp.HoverDetails{{Range: sglsp.Range{
+			hoverDetails: []Hover{{Range: sglsp.Range{
 				Start: sglsp.Position{Line: 3, Character: 56},
 				End:   sglsp.Position{Line: 5, Character: 80},
 			},
 				Message: "## Vulnerabilities found"}},
 			query: sglsp.Position{Line: 4, Character: 66},
-			expected: lsp.HoverResult{Contents: lsp.MarkupContent{
+			expected: Result{Contents: MarkupContent{
 				Kind: "markdown", Value: "## Vulnerabilities found"},
 			},
 		},
 		// exact line but within character range
 		{
-			hoverDetails: []lsp.HoverDetails{{Range: sglsp.Range{
+			hoverDetails: []Hover{{Range: sglsp.Range{
 				Start: sglsp.Position{Line: 4, Character: 56},
 				End:   sglsp.Position{Line: 4, Character: 80},
 			},
 				Message: "## Vulnerabilities found"}},
 			query: sglsp.Position{Line: 4, Character: 66},
-			expected: lsp.HoverResult{Contents: lsp.MarkupContent{
+			expected: Result{Contents: MarkupContent{
 				Kind: "markdown", Value: "## Vulnerabilities found"},
 			},
 		},
 		// exact line and exact character
 		{
-			hoverDetails: []lsp.HoverDetails{{Range: sglsp.Range{
+			hoverDetails: []Hover{{Range: sglsp.Range{
 				Start: sglsp.Position{Line: 4, Character: 56},
 				End:   sglsp.Position{Line: 4, Character: 56},
 			},
 				Message: "## Vulnerabilities found"}},
 			query: sglsp.Position{Line: 4, Character: 56},
-			expected: lsp.HoverResult{Contents: lsp.MarkupContent{
+			expected: Result{Contents: MarkupContent{
 				Kind: "markdown", Value: "## Vulnerabilities found"},
 			},
 		},
 		// hover left of the character position on exact line
 		{
-			hoverDetails: []lsp.HoverDetails{{Range: sglsp.Range{
+			hoverDetails: []Hover{{Range: sglsp.Range{
 				Start: sglsp.Position{Line: 4, Character: 56},
 				End:   sglsp.Position{Line: 4, Character: 86},
 			},
 				Message: "## Vulnerabilities found"}},
 			query: sglsp.Position{Line: 4, Character: 45},
-			expected: lsp.HoverResult{Contents: lsp.MarkupContent{
+			expected: Result{Contents: MarkupContent{
 				Kind: "markdown", Value: ""},
 			},
 		},
 		// hover right of the character position on exact line
 		{
-			hoverDetails: []lsp.HoverDetails{{Range: sglsp.Range{
+			hoverDetails: []Hover{{Range: sglsp.Range{
 				Start: sglsp.Position{Line: 4, Character: 56},
 				End:   sglsp.Position{Line: 4, Character: 86},
 			},
 				Message: "## Vulnerabilities found"}},
 			query: sglsp.Position{Line: 4, Character: 105},
-			expected: lsp.HoverResult{Contents: lsp.MarkupContent{
+			expected: Result{Contents: MarkupContent{
 				Kind: "markdown", Value: ""},
 			},
 		},

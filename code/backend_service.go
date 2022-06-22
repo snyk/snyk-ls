@@ -17,6 +17,7 @@ import (
 
 	"github.com/snyk/snyk-ls/code/encoding"
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -48,13 +49,13 @@ type SnykCodeHTTPClient struct {
 }
 
 type bundleResponse struct {
-	BundleHash   string              `json:"bundleHash"`
-	MissingFiles []sglsp.DocumentURI `json:"missingFiles"`
+	BundleHash   string   `json:"bundleHash"`
+	MissingFiles []string `json:"missingFiles"`
 }
 
 type extendBundleRequest struct {
-	Files        map[sglsp.DocumentURI]BundleFile `json:"files"`
-	RemovedFiles []sglsp.DocumentURI              `json:"removedFiles,omitempty"`
+	Files        map[string]BundleFile `json:"files"`
+	RemovedFiles []string              `json:"removedFiles,omitempty"`
 }
 
 type filtersResponse struct {
@@ -89,8 +90,8 @@ func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (configFiles []stri
 
 func (s *SnykCodeHTTPClient) CreateBundle(
 	ctx context.Context,
-	files map[sglsp.DocumentURI]string,
-) (string, []sglsp.DocumentURI, error) {
+	files map[string]string,
+) (string, []string, error) {
 
 	method := "code.CreateBundle"
 	log.Debug().Str("method", method).Msg("API: Creating bundle for " + strconv.Itoa(len(files)) + " files")
@@ -181,9 +182,9 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 func (s *SnykCodeHTTPClient) ExtendBundle(
 	ctx context.Context,
 	bundleHash string,
-	files map[sglsp.DocumentURI]BundleFile,
-	removedFiles []sglsp.DocumentURI,
-) (string, []sglsp.DocumentURI, error) {
+	files map[string]BundleFile,
+	removedFiles []string,
+) (string, []string, error) {
 
 	method := "code.ExtendBundle"
 	log.Debug().Str("method", method).Msg("API: Extending bundle for " + strconv.Itoa(len(files)) + " files")
@@ -217,7 +218,7 @@ type AnalysisStatus struct {
 func (s *SnykCodeHTTPClient) RunAnalysis(
 	ctx context.Context,
 	options AnalysisOptions,
-) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, AnalysisStatus, error) {
+) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]hover.Hover, AnalysisStatus, error) {
 	method := "code.RunAnalysis"
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
@@ -307,10 +308,10 @@ func analysisRequestBody(options *AnalysisOptions) ([]byte, error) {
 
 func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
 	map[sglsp.DocumentURI][]lsp.Diagnostic,
-	map[sglsp.DocumentURI][]lsp.HoverDetails,
+	map[sglsp.DocumentURI][]hover.Hover,
 ) {
 	diags := make(map[sglsp.DocumentURI][]lsp.Diagnostic)
-	hovers := make(map[sglsp.DocumentURI][]lsp.HoverDetails)
+	hovers := make(map[sglsp.DocumentURI][]hover.Hover)
 
 	runs := response.Sarif.Runs
 	if len(runs) == 0 {
@@ -349,7 +350,7 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
 			diagSlice = append(diagSlice, d)
 			diags[documentURI] = diagSlice
 
-			h := lsp.HoverDetails{
+			h := hover.Hover{
 				Id:    result.RuleID,
 				Range: myRange,
 				// Todo: Add more details here

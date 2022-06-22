@@ -1,4 +1,4 @@
-package diagnostics
+package workspace
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog/log"
-	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
@@ -15,7 +14,6 @@ import (
 	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -43,17 +41,19 @@ func (m *mockCli) HandleErrors(ctx context.Context, output string, err error) (f
 
 func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 	testutil.UnitTest(t)
-	ClearEntireDiagnosticsCache()
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 	di.TestInit(t)
-	documentDiagnosticCache.Put(diagnosticUri, []lsp.Diagnostic{code.FakeDiagnostic})
+	workspace := &Workspace{}
+	f := NewFolder(path, "Test", workspace)
+	workspace.AddFolder(f)
+	f.documentDiagnosticCache.Put(diagnosticUri, []lsp.Diagnostic{code.FakeDiagnostic})
 
-	diagnostics := GetDiagnostics(context.Background(), diagnosticUri)
+	diagnostics := workspace.GetDiagnostics(context.Background(), diagnosticUri)
 
 	assert.NotNil(t, diagnostics)
-	assert.NotEmpty(t, DocumentDiagnosticsFromCache(diagnosticUri))
-	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
+	assert.NotEmpty(t, f.documentDiagnosticsFromCache(diagnosticUri))
+	assert.Equal(t, len(f.documentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
 	recorder := &di.Instrumentor().(*performance.TestInstrumentor).SpanRecorder
 	spans := recorder.Spans()
 	assert.Len(t, spans, 1)
@@ -65,13 +65,15 @@ func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
 	testutil.UnitTest(t)
 	di.TestInit(t)
 	config.CurrentConfig().SetSnykCodeEnabled(false)
-	ClearEntireDiagnosticsCache()
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
+	workspace := &Workspace{}
+	f := NewFolder(path, "Test", workspace)
+	workspace.AddFolder(f)
 
-	diagnostics := GetDiagnostics(context.Background(), diagnosticUri)
+	diagnostics := workspace.GetDiagnostics(context.Background(), diagnosticUri)
 
-	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
+	assert.Equal(t, len(f.documentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
 	params := di.SnykCodeClient().(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.Nil(t, params)
 }
@@ -80,15 +82,17 @@ func Test_GetDiagnostics_shouldNotRunCodeIfNotSastEnabled(t *testing.T) {
 	testutil.UnitTest(t)
 	di.TestInit(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
-	ClearEntireDiagnosticsCache()
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
 	fakeApiClient := di.SnykCode().SnykApiClient.(*code.FakeApiClient)
 	fakeApiClient.CodeEnabled = false
+	workspace := &Workspace{}
+	f := NewFolder(path, "Test", workspace)
+	workspace.AddFolder(f)
 
-	diagnostics := GetDiagnostics(context.Background(), diagnosticUri)
+	diagnostics := workspace.GetDiagnostics(context.Background(), diagnosticUri)
 
-	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
+	assert.Equal(t, len(f.documentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
 	assert.Len(t, fakeApiClient.GetAllCalls(code.SastEnabledOperation), 1)
 	assert.Len(t, di.SnykCodeClient().(*code.FakeSnykCodeClient).GetAllCalls(code.CreateBundleWithSourceOperation), 0)
 }
@@ -97,13 +101,15 @@ func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
 	testutil.UnitTest(t)
 	di.TestInit(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
-	ClearEntireDiagnosticsCache()
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	defer os.RemoveAll(path)
+	workspace := &Workspace{}
+	f := NewFolder(path, "Test", workspace)
+	workspace.AddFolder(f)
 
-	diagnostics := GetDiagnostics(context.Background(), diagnosticUri)
+	diagnostics := workspace.GetDiagnostics(context.Background(), diagnosticUri)
 
-	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
+	assert.Equal(t, len(f.documentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
 	params := di.SnykCodeClient().(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.NotNil(t, params)
 }
@@ -112,49 +118,55 @@ func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
 	testutil.UnitTest(t)
 	di.TestInit(t)
-	ClearEntireDiagnosticsCache()
+	workspace := &Workspace{}
+	f := NewFolder(".", "Test", workspace)
+	workspace.AddFolder(f)
 	config.CurrentConfig().SetSnykCodeEnabled(false)
 	config.CurrentConfig().SetSnykIacEnabled(false)
 	config.CurrentConfig().SetSnykOssEnabled(true)
-	documentURI := sglsp.DocumentURI("package.json")
+	filePath := "package.json"
 	mockCli := mockCli{}
-	Cli = &mockCli
+	f.cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything, mock.Anything).Return("test", nil)
 	mockCli.Mock.On("ExpandParametersFromConfig", mock.Anything).Return([]string{"test", "iac", "--insecure", "-d", "--all-projects"})
 
-	diagnostics := GetDiagnostics(context.Background(), documentURI)
+	diagnostics := workspace.GetDiagnostics(context.Background(), filePath)
 
-	assert.Equal(t, len(DocumentDiagnosticsFromCache(documentURI)), len(diagnostics))
+	assert.Equal(t, len(f.documentDiagnosticsFromCache(filePath)), len(diagnostics))
 	assert.Equal(t, 2, len(mockCli.Calls))
 }
 
 func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
 	testutil.UnitTest(t)
 	di.TestInit(t)
-	ClearEntireDiagnosticsCache()
 	config.CurrentConfig().SetSnykCodeEnabled(false)
 	config.CurrentConfig().SetSnykIacEnabled(false)
 	config.CurrentConfig().SetSnykOssEnabled(false)
-	documentURI := sglsp.DocumentURI("package.json")
+	workspace := &Workspace{}
+	f := NewFolder(".", "Test", workspace)
+	workspace.AddFolder(f)
+	filePath := "package.json"
 	mockCli := mockCli{}
-	Cli = &mockCli
+	f.cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything, mock.Anything).Return("test", nil)
 	mockCli.Mock.On("ExpandParametersFromConfig", mock.Anything).Return([]string{"test", "iac", "--insecure", "-d", "--all-projects"})
 
-	diagnostics := GetDiagnostics(context.Background(), documentURI)
+	diagnostics := workspace.GetDiagnostics(context.Background(), filePath)
 
-	assert.Equal(t, len(DocumentDiagnosticsFromCache(documentURI)), len(diagnostics))
+	assert.Equal(t, len(f.documentDiagnosticsFromCache(filePath)), len(diagnostics))
 	assert.Equal(t, 0, len(mockCli.Calls))
 }
 
 func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
 	testutil.UnitTest(t)
 	di.TestInit(t)
-	ClearEntireDiagnosticsCache()
 	config.CurrentConfig().SetSnykCodeEnabled(false)
 	config.CurrentConfig().SetSnykIacEnabled(true)
 	config.CurrentConfig().SetSnykOssEnabled(false)
-	documentURI := sglsp.DocumentURI("package.json")
+	workspace := &Workspace{}
+	f := NewFolder(".", "Test", workspace)
+	workspace.AddFolder(f)
+	filePath := "package.json"
 	settings := config.CurrentConfig().CliSettings()
 	settings.AdditionalParameters = []string{"-d", "--all-projects"}
 	settings.Insecure = true
@@ -162,13 +174,13 @@ func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
 	config.CurrentConfig().SetCliSettings(settings)
 
 	mockCli := mockCli{}
-	Cli = &mockCli
+	f.cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything, mock.Anything).Return("{}", nil)
 	mockCli.Mock.On("ExpandParametersFromConfig", mock.Anything).Return([]string{"test", "iac", "--insecure", "-d", "--all-projects"})
 
-	diagnostics := GetDiagnostics(context.Background(), documentURI)
+	diagnostics := workspace.GetDiagnostics(context.Background(), filePath)
 
-	assert.Equal(t, len(DocumentDiagnosticsFromCache(documentURI)), len(diagnostics))
+	assert.Equal(t, len(f.documentDiagnosticsFromCache(filePath)), len(diagnostics))
 	assert.Equal(t, 2, len(mockCli.Calls))
 	call := mockCli.Calls[1]
 	assert.Contains(t, call.Arguments[0], "--insecure")
@@ -179,48 +191,33 @@ func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
 func Test_GetDiagnostics_shouldNotIacIfNotEnabled(t *testing.T) { // disable snyk code
 	testutil.UnitTest(t)
 	di.TestInit(t)
-	ClearEntireDiagnosticsCache()
 	config.CurrentConfig().SetSnykCodeEnabled(false)
 	config.CurrentConfig().SetSnykIacEnabled(false)
 	config.CurrentConfig().SetSnykOssEnabled(false)
-	documentURI := sglsp.DocumentURI("package.json")
+	workspace := &Workspace{}
+	f := NewFolder(".", "Test", workspace)
+	workspace.AddFolder(f)
+	filePath := "package.json"
 	mockCli := mockCli{}
-	Cli = &mockCli
+	f.cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything, mock.Anything).Return("test", nil)
 	mockCli.Mock.On("ExpandParametersFromConfig", mock.Anything).Return([]string{"test", "iac", "--insecure", "-d", "--all-projects"})
 
-	diagnostics := GetDiagnostics(context.Background(), documentURI)
+	diagnostics := workspace.GetDiagnostics(context.Background(), filePath)
 
-	assert.Equal(t, len(DocumentDiagnosticsFromCache(documentURI)), len(diagnostics))
+	assert.Equal(t, len(f.documentDiagnosticsFromCache(filePath)), len(diagnostics))
 	assert.Equal(t, 0, len(mockCli.Calls))
 }
 
 func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {
-	ClearEntireDiagnosticsCache()
-	empty := sglsp.TextDocumentItem{
-		URI:        uri.PathToUri("test123"),
-		LanguageID: "java",
-		Version:    0,
-		Text:       "",
-	}
 	di.TestInit(t)
+	workspace := &Workspace{}
+	f := NewFolder(".", "Test", workspace)
+	workspace.AddFolder(f)
 
-	GetDiagnostics(context.Background(), empty.URI)
+	workspace.GetDiagnostics(context.Background(), "test123")
 
 	// verify that create bundle has NOT been called on backend service
 	params := di.SnykCodeClient().(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.Nil(t, params)
-}
-
-func Test_ClearWorkspaceFolderDiagnostics_shouldRemoveDiagnosticsOfAllFilesInFolder(t *testing.T) {
-	ClearEntireDiagnosticsCache()
-	diagnosticUri, path := code.FakeDiagnosticUri()
-	defer os.RemoveAll(path)
-	di.TestInit(t)
-	diagnostics := GetDiagnostics(context.Background(), diagnosticUri)
-	assert.Equal(t, len(DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
-
-	ClearWorkspaceFolderDiagnostics(lsp.WorkspaceFolder{Uri: uri.PathToUri(path)})
-
-	assert.Equal(t, 0, documentDiagnosticCache.Length())
 }

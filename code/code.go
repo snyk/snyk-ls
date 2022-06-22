@@ -7,6 +7,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
@@ -30,19 +31,19 @@ func NewSnykCode(bundleUploader *BundleUploader, apiClient SnykApiClient, report
 	return sc
 }
 
-func (sc *SnykCode) ScanFile(ctx context.Context, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+func (sc *SnykCode) ScanFile(ctx context.Context, filePath string, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan hover.DocumentHovers) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanFile")
 	defer sc.BundleUploader.instrumentor.Finish(span)
-	sc.UploadAndAnalyze(span.Context(), []sglsp.DocumentURI{documentURI}, wg, documentURI, dChan, hoverChan)
+	sc.UploadAndAnalyze(span.Context(), []string{filePath}, wg, filePath, dChan, hoverChan)
 }
 
-func (sc *SnykCode) ScanWorkspace(ctx context.Context, documents []sglsp.DocumentURI, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+func (sc *SnykCode) ScanWorkspace(ctx context.Context, files []string, workspacePath string, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan hover.DocumentHovers) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
-	sc.UploadAndAnalyze(span.Context(), documents, wg, documentURI, dChan, hoverChan)
+	sc.UploadAndAnalyze(span.Context(), files, wg, workspacePath, dChan, hoverChan)
 }
 
-func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []sglsp.DocumentURI, wg *sync.WaitGroup, documentURI sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []string, wg *sync.WaitGroup, path string, dChan chan lsp.DiagnosticResult, hoverChan chan hover.DocumentHovers) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.UploadAndAnalyze")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 	if len(files) == 0 {
@@ -76,7 +77,7 @@ func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []sglsp.Document
 	}
 
 	wg.Add(1)
-	uploadedBundle.FetchDiagnosticsData(ctx, string(documentURI), wg, dChan, hoverChan)
+	uploadedBundle.FetchDiagnosticsData(ctx, string(path), wg, dChan, hoverChan)
 	sc.trackResult(true)
 }
 
@@ -87,7 +88,7 @@ func (sc *SnykCode) handleCreationAndUploadError(err error, msg string, dChan ch
 	return
 }
 
-func (sc *SnykCode) createBundle(ctx context.Context, requestId string, files []sglsp.DocumentURI) (b Bundle, bundleFiles map[sglsp.DocumentURI]BundleFile, err error) {
+func (sc *SnykCode) createBundle(ctx context.Context, requestId string, filePaths []string) (b Bundle, bundleFiles map[string]BundleFile, err error) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.createBundle")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 	b = Bundle{
@@ -96,24 +97,24 @@ func (sc *SnykCode) createBundle(ctx context.Context, requestId string, files []
 		requestId:    requestId,
 	}
 
-	fileHashes := make(map[sglsp.DocumentURI]string)
-	bundleFiles = make(map[sglsp.DocumentURI]BundleFile)
-	for _, documentURI := range files {
-		if !sc.BundleUploader.isSupported(ctx, documentURI) {
+	fileHashes := make(map[string]string)
+	bundleFiles = make(map[string]BundleFile)
+	for _, filePath := range filePaths {
+		if !sc.BundleUploader.isSupported(ctx, filePath) {
 			continue
 		}
-		fileContent, err := loadContent(documentURI)
+		fileContent, err := loadContent(filePath)
 		if err != nil {
-			log.Error().Err(err).Str("documentURI", string(documentURI)).Msg("could not load content of file")
+			log.Error().Err(err).Str("filePath", filePath).Msg("could not load content of file")
 			continue
 		}
 
 		if !(len(fileContent) > 0 && len(fileContent) <= maxFileSize) {
 			continue
 		}
-		file := getFileFrom(documentURI, fileContent)
-		bundleFiles[documentURI] = file
-		fileHashes[documentURI] = file.Hash
+		file := getFileFrom(filePath, fileContent)
+		bundleFiles[filePath] = file
+		fileHashes[filePath] = file.Hash
 	}
 	b.BundleHash, b.missingFiles, err = sc.BundleUploader.SnykCode.CreateBundle(span.Context(), fileHashes)
 	return b, bundleFiles, err

@@ -13,6 +13,7 @@ import (
 
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/internal/observability/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
@@ -90,11 +91,11 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		snykCodeMock := &code.FakeSnykCodeClient{}
 		c := code.NewSnykCode(code.NewBundler(snykCodeMock, &performance.TestInstrumentor{}), &code.FakeApiClient{CodeEnabled: true}, sentry.NewTestErrorReporter(), ux.NewNoopRecordingClient())
 		path, firstDoc, _, content1, _ := setupDocs()
-		docs := []lsp.DocumentURI{firstDoc.URI}
+		docs := []string{uri.PathFromUri(firstDoc.URI)}
 		defer os.RemoveAll(path)
 
 		dChan := make(chan lsp2.DiagnosticResult)
-		hoverChan := make(chan lsp2.Hover)
+		hoverChan := make(chan hover.DocumentHovers)
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 
@@ -115,17 +116,17 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		c := code.NewSnykCode(code.NewBundler(snykCodeMock, &performance.TestInstrumentor{}), &code.FakeApiClient{CodeEnabled: true}, sentry.NewTestErrorReporter(), ux.NewNoopRecordingClient())
 		diagnosticUri, path := code.FakeDiagnosticUri()
 		defer os.RemoveAll(path)
-		diagnosticMap := map[lsp.DocumentURI][]lsp2.Diagnostic{}
+		diagnosticMap := map[string][]lsp2.Diagnostic{}
 
 		// execute
 		dChan := make(chan lsp2.DiagnosticResult)
-		hoverChan := make(chan lsp2.Hover)
+		hoverChan := make(chan hover.DocumentHovers)
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 
-		go c.UploadAndAnalyze(context.Background(), []lsp.DocumentURI{diagnosticUri}, &wg, "", dChan, hoverChan)
+		go c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, &wg, "", dChan, hoverChan)
 		result := <-dChan
-		diagnosticMap[result.Uri] = result.Diagnostics
+		diagnosticMap[uri.PathFromUri(result.Uri)] = result.Diagnostics
 
 		assert.NotNil(t, diagnosticMap)
 		diagnostics := diagnosticMap[diagnosticUri]
@@ -149,10 +150,10 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 
 		// execute
 		dChan := make(chan lsp2.DiagnosticResult, 100)
-		hoverChan := make(chan lsp2.Hover, 100)
+		hoverChan := make(chan hover.DocumentHovers, 100)
 		wg := sync.WaitGroup{}
 
-		c.UploadAndAnalyze(context.Background(), []lsp.DocumentURI{diagnosticUri}, &wg, "", dChan, hoverChan)
+		c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, &wg, "", dChan, hoverChan)
 
 		assert.Len(t, analytics.GetAnalytics(), 1)
 		assert.Equal(t, ux.AnalysisIsReadyProperties{

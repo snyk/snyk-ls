@@ -7,12 +7,10 @@ import (
 	"path/filepath"
 
 	"github.com/rs/zerolog/log"
-	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/progress"
-	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -31,7 +29,7 @@ func NewBundler(SnykCode SnykCodeClient, instrumentor performance.Instrumentor) 
 }
 
 // TODO remove all LSP dependencies (e.g. DocumentURI)
-func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, files map[sglsp.DocumentURI]BundleFile) (Bundle, error) {
+func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, files map[string]BundleFile) (Bundle, error) {
 	method := "code.Upload"
 	s := b.instrumentor.StartSpan(ctx, method)
 	defer b.instrumentor.Finish(s)
@@ -61,7 +59,7 @@ func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, files map[sg
 func (b *BundleUploader) groupInBatches(
 	ctx context.Context,
 	bundle Bundle,
-	files map[sglsp.DocumentURI]BundleFile,
+	files map[string]BundleFile,
 ) []*UploadBatch {
 	t := progress.NewTracker(false)
 	t.Begin("Snyk Code", "Creating batches...")
@@ -97,7 +95,7 @@ func (b *BundleUploader) groupInBatches(
 	return batches
 }
 
-func (b *BundleUploader) isSupported(ctx context.Context, documentURI sglsp.DocumentURI) bool {
+func (b *BundleUploader) isSupported(ctx context.Context, file string) bool {
 	if b.supportedExtensions.Length() == 0 {
 		// query
 		_, exts, err := b.SnykCode.GetFilters(ctx)
@@ -112,22 +110,21 @@ func (b *BundleUploader) isSupported(ctx context.Context, documentURI sglsp.Docu
 		}
 	}
 
-	supported := b.supportedExtensions.Get(filepath.Ext(uri.PathFromUri(documentURI)))
+	supported := b.supportedExtensions.Get(filepath.Ext(file))
 
 	return supported != nil && supported.(bool)
 }
 
-func loadContent(documentURI sglsp.DocumentURI) ([]byte, error) {
-	path := uri.PathFromUri(documentURI)
-	fileContent, err := os.ReadFile(path)
+func loadContent(filePath string) ([]byte, error) {
+	fileContent, err := os.ReadFile(filePath)
 	return fileContent, err
 }
 
-func getFileFrom(documentURI sglsp.DocumentURI, content []byte) BundleFile {
+func getFileFrom(filePath string, content []byte) BundleFile {
 	file := BundleFile{
 		Hash:    util.Hash(content),
 		Content: string(content),
 	}
-	log.Trace().Str("method", "getFileFrom").Str("hash", file.Hash).Str("documentURI", string(documentURI)).Send()
+	log.Trace().Str("method", "getFileFrom").Str("hash", file.Hash).Str("filePath", filePath).Send()
 	return file
 }

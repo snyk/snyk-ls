@@ -5,21 +5,20 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/snyk/snyk-ls/internal/uri"
-	"github.com/snyk/snyk-ls/lsp"
-
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
+
+	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-var hovers = map[sglsp.DocumentURI][]lsp.HoverDetails{}
+var hovers = map[sglsp.DocumentURI][]Hover{}
 var hoverIndexes = map[string]bool{}
 
-var hoverChan = make(chan lsp.Hover, 100)
+var hoverChan = make(chan DocumentHovers, 100)
 var stopChannel = make(chan bool, 100)
 var mutex = &sync.Mutex{}
 
-func validateAndExtractMessage(hover lsp.HoverDetails, pos sglsp.Position) string {
+func validateAndExtractMessage(hover Hover, pos sglsp.Position) string {
 	var message string
 	if hover.Range.Start.Line < pos.Line && hover.Range.End.Line > pos.Line ||
 		(hover.Range.Start.Line == pos.Line &&
@@ -31,7 +30,7 @@ func validateAndExtractMessage(hover lsp.HoverDetails, pos sglsp.Position) strin
 	return message
 }
 
-func registerHovers(result lsp.Hover) {
+func registerHovers(result DocumentHovers) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
@@ -59,7 +58,7 @@ func DeleteHover(documentUri sglsp.DocumentURI) {
 	}
 }
 
-func Channel() chan lsp.Hover {
+func Channel() chan DocumentHovers {
 	return hoverChan
 }
 
@@ -67,11 +66,11 @@ func ClearAllHovers() {
 	mutex.Lock()
 	defer mutex.Unlock()
 	stopChannel <- true
-	hovers = map[sglsp.DocumentURI][]lsp.HoverDetails{}
+	hovers = map[sglsp.DocumentURI][]Hover{}
 	hoverIndexes = map[string]bool{}
 }
 
-func GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) lsp.HoverResult {
+func GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) Result {
 	mutex.Lock()
 	defer mutex.Unlock()
 
@@ -80,8 +79,8 @@ func GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) lsp.HoverResult {
 		hoverMessage += validateAndExtractMessage(hover, pos)
 	}
 
-	return lsp.HoverResult{
-		Contents: lsp.MarkupContent{
+	return Result{
+		Contents: MarkupContent{
 			Kind:  "markdown",
 			Value: hoverMessage,
 		},

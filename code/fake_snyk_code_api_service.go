@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
 	"github.com/snyk/snyk-ls/lsp"
@@ -24,7 +25,7 @@ const (
 
 var (
 	mutex             = &sync.Mutex{}
-	fakeDiagnosticUri sglsp.DocumentURI
+	fakeDiagnosticUri string
 
 	fakeRange = sglsp.Range{
 		Start: sglsp.Position{
@@ -36,7 +37,7 @@ var (
 			Character: 7,
 		},
 	}
-	FakeHover = lsp.HoverDetails{
+	FakeHover = hover.Hover{
 		Id:      "12",
 		Range:   fakeRange,
 		Message: "You have been hacked!",
@@ -52,20 +53,19 @@ var (
 	FakeFilters = []string{".cjs", ".ejs", ".es", ".es6", ".htm", ".html", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".vue", ".java", ".erb", ".haml", ".rb", ".rhtml", ".slim", ".kt", ".swift", ".cls", ".config", ".pom", ".wxs", ".xml", ".xsd", ".aspx", ".cs", ".py", ".go", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".php", ".phtml"}
 )
 
-func FakeDiagnosticUri() (documentURI sglsp.DocumentURI, path string) {
+func FakeDiagnosticUri() (filePath string, path string) {
 	temp, err := os.MkdirTemp(os.TempDir(), "fakeDiagnosticTempDir")
 	if err != nil {
 		log.Fatal().Err(err).Msg("couldn't create tempdir")
 	}
-	filePath := temp + string(os.PathSeparator) + "Dummy.java"
+	filePath = temp + string(os.PathSeparator) + "Dummy.java"
 	classWithQualityIssue := "public class AnnotatorTest {\n  public static void delay(long millis) {\n    try {\n      Thread.sleep(millis);\n    } catch (InterruptedException e) {\n      e.printStackTrace();\n    }\n  }\n};"
 	err = os.WriteFile(filePath, []byte(classWithQualityIssue), 0600)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't create fake diagnostic file for Snyk Code Fake Service")
 	}
-	documentURI = uri.PathToUri(filePath)
-	fakeDiagnosticUri = documentURI
-	return documentURI, temp
+	fakeDiagnosticUri = filePath
+	return filePath, temp
 }
 
 type FakeSnykCodeClient struct {
@@ -127,13 +127,13 @@ func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (configFiles []string
 	return make([]string, 0), FakeFilters, nil
 }
 
-func (f *FakeSnykCodeClient) CreateBundle(_ context.Context, files map[sglsp.DocumentURI]string) (bundleHash string, missingFiles []sglsp.DocumentURI, err error) {
+func (f *FakeSnykCodeClient) CreateBundle(_ context.Context, files map[string]string) (bundleHash string, missingFiles []string, err error) {
 	f.TotalBundleCount++
 	f.HasCreatedNewBundle = true
 	params := []interface{}{files}
 	f.addCall(params, CreateBundleWithSourceOperation)
-	for documentURI := range files {
-		missingFiles = append(missingFiles, documentURI)
+	for filePath := range files {
+		missingFiles = append(missingFiles, filePath)
 	}
 	return util.Hash([]byte(fmt.Sprint(rand.Int()))), missingFiles, nil
 }
@@ -141,9 +141,9 @@ func (f *FakeSnykCodeClient) CreateBundle(_ context.Context, files map[sglsp.Doc
 func (f *FakeSnykCodeClient) ExtendBundle(
 	_ context.Context,
 	bundleHash string,
-	files map[sglsp.DocumentURI]BundleFile,
-	removedFiles []sglsp.DocumentURI,
-) (string, []sglsp.DocumentURI, error) {
+	files map[string]BundleFile,
+	removedFiles []string,
+) (string, []string, error) {
 	f.HasExtendedBundle = true
 	f.TotalBundleCount++
 	f.ExtendedBundleCount++
@@ -155,18 +155,18 @@ func (f *FakeSnykCodeClient) ExtendBundle(
 func (f *FakeSnykCodeClient) RunAnalysis(
 	_ context.Context,
 	options AnalysisOptions,
-) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]lsp.HoverDetails, AnalysisStatus, error) {
+) (map[string][]lsp.Diagnostic, map[sglsp.DocumentURI][]hover.Hover, AnalysisStatus, error) {
 	params := []interface{}{options.bundleHash, options.limitToFiles, options.severity}
 	f.addCall(params, RunAnalysisOperation)
 
-	diagnosticMap := map[sglsp.DocumentURI][]lsp.Diagnostic{}
-	hoverMap := map[sglsp.DocumentURI][]lsp.HoverDetails{}
+	diagnosticMap := map[string][]lsp.Diagnostic{}
+	hoverMap := map[sglsp.DocumentURI][]hover.Hover{}
 
 	var diagnostics []lsp.Diagnostic
-	var hovers []lsp.HoverDetails
+	var hovers []hover.Hover
 
 	diagnosticMap[fakeDiagnosticUri] = append(diagnostics, FakeDiagnostic)
-	hoverMap[fakeDiagnosticUri] = append(hovers, FakeHover)
+	hoverMap[uri.PathToUri(fakeDiagnosticUri)] = append(hovers, FakeHover)
 
 	log.Trace().Str("method", "RunAnalysis").Interface("fakeDiagnostic", FakeDiagnostic).Msg("fake backend call received & answered")
 	return diagnosticMap, hoverMap, AnalysisStatus{message: "COMPLETE", percentage: 100}, nil

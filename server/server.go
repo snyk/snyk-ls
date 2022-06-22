@@ -12,7 +12,7 @@ import (
 
 	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/diagnostics"
-	"github.com/snyk/snyk-ls/internal/hover"
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/progress"
@@ -176,7 +176,7 @@ func TextDocumentDidSaveHandler(srv *jrpc2.Server) jrpc2.Handler {
 }
 
 func TextDocumentHover() jrpc2.Handler {
-	return handler.New(func(ctx context.Context, params lsp.HoverParams) (lsp.HoverResult, error) {
+	return handler.New(func(ctx context.Context, params hover.Params) (hover.Result, error) {
 		log.Info().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
 
 		hoverResult := hover.GetHover(params.TextDocument.URI, params.Position)

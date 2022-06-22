@@ -1,9 +1,5 @@
 package code
 
-import (
-	sglsp "github.com/sourcegraph/go-lsp"
-)
-
 const (
 	maxFileSize               = 1024 * 1024
 	maxUploadBatchSize        = 1024 * 1024 * 4
@@ -17,13 +13,13 @@ const (
 
 type UploadBatch struct {
 	hash      string
-	documents map[sglsp.DocumentURI]BundleFile
+	documents map[string]BundleFile
 	size      int
 }
 
 func NewUploadBatch() UploadBatch {
 	return UploadBatch{
-		documents: map[sglsp.DocumentURI]BundleFile{},
+		documents: map[string]BundleFile{},
 	}
 }
 

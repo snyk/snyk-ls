@@ -10,8 +10,10 @@ import (
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
 	lsp2 "github.com/snyk/snyk-ls/lsp"
 )
@@ -22,7 +24,7 @@ type Bundle struct {
 	UploadBatches []*UploadBatch
 	instrumentor  performance.Instrumentor
 	requestId     string
-	missingFiles  []lsp.DocumentURI
+	missingFiles  []string
 }
 
 func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {
@@ -35,7 +37,7 @@ func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {
 }
 
 func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) error {
-	var removeFiles []lsp.DocumentURI
+	var removeFiles []string
 	var err error
 	if uploadBatch.hasContent() {
 		b.BundleHash, b.missingFiles, err = b.SnykCode.ExtendBundle(ctx, b.BundleHash, uploadBatch.documents, removeFiles)
@@ -50,7 +52,7 @@ func (b *Bundle) FetchDiagnosticsData(
 	rootPath string,
 	wg *sync.WaitGroup,
 	dChan chan lsp2.DiagnosticResult,
-	hoverChan chan lsp2.Hover,
+	hoverChan chan hover.DocumentHovers,
 ) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
@@ -62,7 +64,7 @@ func (b *Bundle) retrieveAnalysis(
 	ctx context.Context,
 	rootPath string,
 	dChan chan lsp2.DiagnosticResult,
-	hoverChan chan lsp2.Hover,
+	hoverChan chan hover.DocumentHovers,
 ) {
 	if b.BundleHash == "" {
 		log.Warn().Str("method", "retrieveAnalysis").Str("rootPath", rootPath).Msg("bundle hash is empty")
@@ -99,14 +101,14 @@ func (b *Bundle) retrieveAnalysis(
 		}
 
 		if status.message == "COMPLETE" {
-			for u, d := range diags {
+			for filePath, diag := range diags {
 				log.Trace().Str("method", "retrieveAnalysis").Str("requestId", b.requestId).
-					Str("path", string(u)).
+					Str("path", filePath).
 					Msg("sending diagnostics...")
 
 				dChan <- lsp2.DiagnosticResult{
-					Uri:         u,
-					Diagnostics: d,
+					Uri:         uri.PathToUri(filePath),
+					Diagnostics: diag,
 					Err:         err,
 				}
 			}
@@ -139,11 +141,11 @@ func (b *Bundle) getShardKey(rootPath string, authToken string) string {
 }
 
 //todo : move lsp presetantion concerns up
-func sendHoversViaChan(hovers map[lsp.DocumentURI][]lsp2.HoverDetails, hoverChan chan lsp2.Hover) {
-	for uri, hover := range hovers {
-		hoverChan <- lsp2.Hover{
+func sendHoversViaChan(hovers map[lsp.DocumentURI][]hover.Hover, hoverChan chan hover.DocumentHovers) {
+	for uri, h := range hovers {
+		hoverChan <- hover.DocumentHovers{
 			Uri:   uri,
-			Hover: hover,
+			Hover: h,
 		}
 	}
 }

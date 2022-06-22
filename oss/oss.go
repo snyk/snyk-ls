@@ -16,6 +16,7 @@ import (
 
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/preconditions"
@@ -72,7 +73,7 @@ func IsSupported(documentURI sglsp.DocumentURI) bool {
 	return supportedFiles[filepath.Base(uri.PathFromUri(documentURI))]
 }
 
-func ScanWorkspace(ctx context.Context, Cli cli.Executor, workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+func ScanWorkspace(ctx context.Context, Cli cli.Executor, workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan hover.DocumentHovers) {
 	defer wg.Done()
 
 	method := "oss.ScanWorkspace"
@@ -100,7 +101,7 @@ func ScanWorkspace(ctx context.Context, Cli cli.Executor, workspace sglsp.Docume
 	unmarshallAndRetrieveAnalysis(res, workspace, dChan, hoverChan)
 }
 
-func unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, hoverChan chan lsp.Hover) {
+func unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, hoverChan chan hover.DocumentHovers) {
 	scanResults, done, err := unmarshallOssJson(res)
 	if err != nil {
 		reportErrorViaChan(documentURI, dChan, err)
@@ -193,7 +194,7 @@ func ScanFile(
 	documentURI sglsp.DocumentURI,
 	wg *sync.WaitGroup,
 	dChan chan lsp.DiagnosticResult,
-	hoverChan chan lsp.Hover,
+	hoverChan chan hover.DocumentHovers,
 ) {
 	defer wg.Done()
 
@@ -245,7 +246,7 @@ func retrieveAnalysis(
 	uri sglsp.DocumentURI,
 	fileContent []byte,
 	dChan chan lsp.DiagnosticResult,
-	hoverChan chan lsp.Hover,
+	hoverChan chan hover.DocumentHovers,
 ) {
 	diags, hoverDetails := retrieveDiagnostics(scanResults, uri, fileContent)
 
@@ -256,7 +257,7 @@ func retrieveAnalysis(
 			Uri:         uri,
 			Diagnostics: diags,
 		}:
-			hoverChan <- lsp.Hover{
+			hoverChan <- hover.DocumentHovers{
 				Uri:   uri,
 				Hover: hoverDetails,
 			}
@@ -276,9 +277,9 @@ func retrieveDiagnostics(
 	res ossScanResult,
 	uri sglsp.DocumentURI,
 	fileContent []byte,
-) ([]lsp.Diagnostic, []lsp.HoverDetails) {
+) ([]lsp.Diagnostic, []hover.Hover) {
 	var diagnostics []lsp.Diagnostic
-	var hoverDetails []lsp.HoverDetails
+	var hoverDetails []hover.Hover
 
 	for _, issue := range res.Vulnerabilities {
 		title := issue.Title
@@ -310,7 +311,7 @@ func retrieveDiagnostics(
 			strings.ToUpper(issue.Severity),
 		)
 
-		hover := lsp.HoverDetails{
+		hover := hover.Hover{
 			Id:    issue.Id,
 			Range: findRange(issue, uri, fileContent),
 			Message: fmt.Sprintf("\n### %s: %s affecting %s package \n%s \n%s",
