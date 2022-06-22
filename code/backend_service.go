@@ -308,10 +308,10 @@ func analysisRequestBody(options *AnalysisOptions) ([]byte, error) {
 
 func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
 	map[string][]lsp.Diagnostic,
-	map[sglsp.DocumentURI][]hover.Context,
+	map[sglsp.DocumentURI][]hover.Hover[hover.Context],
 ) {
 	diags := make(map[string][]lsp.Diagnostic)
-	hovers := make(map[sglsp.DocumentURI][]hover.Context)
+	hovers := make(map[sglsp.DocumentURI][]hover.Hover[hover.Context])
 
 	runs := response.Sarif.Runs
 	if len(runs) == 0 {

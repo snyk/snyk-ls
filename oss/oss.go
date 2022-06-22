@@ -88,8 +88,10 @@ func ScanWorkspace(ctx context.Context, cli cli.Executor, workspace sglsp.Docume
 	defer log.Debug().Str("method", method).Msg("done.")
 	log.Debug().Str("method", method).Msg("started.")
 
-	workspacePath := uri.PathFromUri(workspace)
-
+	workspacePath, err := filepath.Abs(uri.PathFromUri(workspace))
+	if err != nil {
+		log.Err(err).Str("workspacePath", workspacePath).Msg("couldn't get absolute path")
+	}
 	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", "--json"})
 	res, err := cli.Execute(cmd, workspacePath)
 	if err != nil {

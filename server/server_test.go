@@ -368,10 +368,6 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 	if err != nil {
 		t.Fatal(t, err, "Couldn't setup test repo")
 	}
-	w := workspace.Get()
-	f := workspace.NewFolder(cloneTargetDir, repo, w)
-	w.AddFolder(f)
-
 	folder := lsp.WorkspaceFolder{
 		Name: "Test Repo",
 		Uri:  uri.PathToUri(cloneTargetDir),
@@ -396,14 +392,14 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
-		f := w.GetFolder(cloneTargetDir)
+		f := workspace.Get().GetFolder(cloneTargetDir)
 		return f != nil && f.IsScanned()
 	}, 600*time.Second, 2*time.Millisecond)
 
 	testPath = filepath.Join(cloneTargetDir, file2)
 	textDocumentDidOpen(&loc, testPath)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(w, testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(workspace.Get(), testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
 }
 
 // Check if published diagnostics for given testPath match the expectedNumber.

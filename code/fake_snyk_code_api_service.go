@@ -155,12 +155,12 @@ func (f *FakeSnykCodeClient) ExtendBundle(
 func (f *FakeSnykCodeClient) RunAnalysis(
 	_ context.Context,
 	options AnalysisOptions,
-) (map[string][]lsp.Diagnostic, map[sglsp.DocumentURI][]hover.Context, AnalysisStatus, error) {
+) (map[string][]lsp.Diagnostic, map[sglsp.DocumentURI][]hover.Hover[hover.Context], AnalysisStatus, error) {
 	params := []interface{}{options.bundleHash, options.limitToFiles, options.severity}
 	f.addCall(params, RunAnalysisOperation)
 
 	diagnosticMap := map[string][]lsp.Diagnostic{}
-	hoverMap := map[sglsp.DocumentURI][]hover.Context{}
+	hoverMap := map[sglsp.DocumentURI][]hover.Hover[hover.Context]{}
 
 	var diagnostics []lsp.Diagnostic
 	var hovers []hover.Hover[hover.Context]
