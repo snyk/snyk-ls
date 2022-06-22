@@ -24,7 +24,7 @@ func (f *Folder) ClearDiagnosticsCache(filePath string) {
 	f.ClearScannedStatus()
 }
 
-func (f *Folder) documentDiagnosticsFromCache(file string) []lsp.Diagnostic {
+func (f *Folder) DocumentDiagnosticsFromCache(file string) []lsp.Diagnostic {
 	diagnostics := f.documentDiagnosticCache.Get(file)
 	if diagnostics == nil {
 		return nil

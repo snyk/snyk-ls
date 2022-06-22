@@ -21,8 +21,8 @@ import (
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
-	"github.com/snyk/snyk-ls/diagnostics"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/internal/cli/install"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -41,20 +41,9 @@ func didOpenTextParams() (sglsp.DidOpenTextDocumentParams, func()) {
 	// see https://microsoft.github.io/language-server-protocol/specifications/specification-3-17/#documentSelector
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	didOpenParams := sglsp.DidOpenTextDocumentParams{
-		TextDocument: sglsp.TextDocumentItem{URI: diagnosticUri},
+		TextDocument: sglsp.TextDocumentItem{URI: uri.PathToUri(diagnosticUri)},
 	}
 	return didOpenParams, func() {
-		os.RemoveAll(path)
-	}
-}
-
-func didSaveTextParams() (sglsp.DidSaveTextDocumentParams, func()) {
-	// see https://microsoft.github.io/language-server-protocol/specifications/specification-3-17/#documentSelector
-	diagnosticUri, path := code.FakeDiagnosticUri()
-	didSaveParams := sglsp.DidSaveTextDocumentParams{
-		TextDocument: sglsp.TextDocumentIdentifier{URI: diagnosticUri},
-	}
-	return didSaveParams, func() {
 		os.RemoveAll(path)
 	}
 }
@@ -62,11 +51,10 @@ func didSaveTextParams() (sglsp.DidSaveTextDocumentParams, func()) {
 func setupServer(t *testing.T) server.Local {
 	testutil.UnitTest(t)
 	di.TestInit(t)
-	diagnostics.ClearEntireDiagnosticsCache()
-	diagnostics.ClearWorkspaceFolderScanned()
 	cleanupChannels()
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
+	workspace.Set(&workspace.Workspace{})
 	loc := startServer()
 
 	t.Cleanup(func() {
@@ -190,7 +178,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	// wait for publish
 	assert.Eventually(
 		t,
-		checkForPublishedDiagnostics(uri.PathFromUri(didOpenParams.TextDocument.URI), -1),
+		checkForPublishedDiagnostics(workspace.Get(), uri.PathFromUri(didOpenParams.TextDocument.URI), -1),
 		120*time.Second,
 		10*time.Millisecond,
 	)
@@ -267,11 +255,15 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
+	diagnosticUri, tempDir := code.FakeDiagnosticUri()
+	didSaveParams := sglsp.DidSaveTextDocumentParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(diagnosticUri)},
+	}
+	defer os.RemoveAll(tempDir)
 
-	didSaveParams, cleanup := didSaveTextParams()
-	defer cleanup()
-	diagnostics.SetWorkspaceFolderScanned(lsp.WorkspaceFolder{Uri: didSaveParams.TextDocument.URI, Name: "saveTest"})
-	defer diagnostics.ClearWorkspaceFolderScanned()
+	w := &workspace.Workspace{}
+	f := workspace.NewFolder(tempDir, "Test", w)
+	w.AddFolder(f)
 
 	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
 	if err != nil {
@@ -281,7 +273,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	// wait for publish
 	assert.Eventually(
 		t,
-		checkForPublishedDiagnostics(uri.PathFromUri(didSaveParams.TextDocument.URI), -1),
+		checkForPublishedDiagnostics(workspace.Get(), uri.PathFromUri(didSaveParams.TextDocument.URI), -1),
 		120*time.Second,
 		10*time.Millisecond,
 	)
@@ -309,6 +301,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	testutil.IntegTest(t)
 	loc := setupServer(t)
 	testutil.CreateDummyProgressListener(t)
+	w := &workspace.Workspace{}
 
 	folder := lsp.WorkspaceFolder{Name: "test1", Uri: sglsp.DocumentURI("test1")}
 	_, err := loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", lsp.DidChangeWorkspaceFoldersParams{
@@ -320,7 +313,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 		t.Fatal(t, err, "error calling server")
 	}
 
-	assert.True(t, diagnostics.IsWorkspaceFolderScanned(folder))
+	assert.True(t, w.GetFolder("test1").IsScanned())
 
 	_, err = loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", lsp.DidChangeWorkspaceFoldersParams{
 		Event: lsp.WorkspaceFoldersChangeEvent{
@@ -331,7 +324,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 		t.Fatal(t, err, "error calling server")
 	}
 
-	assert.False(t, diagnostics.IsWorkspaceFolderScanned(folder))
+	assert.Nil(t, w.GetFolder("test1"))
 }
 
 func Test_IntegrationWorkspaceScanOssAndCode(t *testing.T) {
@@ -358,8 +351,6 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	config.CurrentConfig().SetSnykIacEnabled(true)
 	config.CurrentConfig().SetSnykOssEnabled(true)
-	diagnostics.ClearWorkspaceFolderScanned()
-	diagnostics.ClearEntireDiagnosticsCache()
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
 	di.Init()
@@ -369,10 +360,15 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 	if err != nil {
 		t.Fatal(t, err, "Couldn't setup test repo")
 	}
+	w := &workspace.Workspace{}
+	f := workspace.NewFolder(cloneTargetDir, repo, w)
+	w.AddFolder(f)
+
 	folder := lsp.WorkspaceFolder{
 		Name: "Test Repo",
 		Uri:  uri.PathToUri(cloneTargetDir),
 	}
+
 	clientParams := lsp.InitializeParams{
 		WorkspaceFolders: []lsp.WorkspaceFolder{folder},
 	}
@@ -387,23 +383,24 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 		testPath = filepath.Join(cloneTargetDir, file1)
 		textDocumentDidOpen(&loc, testPath)
 		// serve diagnostics from file scan
-		assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
+		assert.Eventually(t, checkForPublishedDiagnostics(workspace.Get(), testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
 	}
 
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
-		return diagnostics.IsWorkspaceFolderScanned(folder)
+		f := w.GetFolder(cloneTargetDir)
+		return f != nil && f.IsScanned()
 	}, 600*time.Second, 2*time.Millisecond)
 
 	testPath = filepath.Join(cloneTargetDir, file2)
 	textDocumentDidOpen(&loc, testPath)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(w, testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
 }
 
 // Check if published diagnostics for given testPath match the expectedNumber.
 // If expectedNumber == -1 assume check for expectedNumber > 0
-func checkForPublishedDiagnostics(testPath string, expectedNumber int) func() bool {
+func checkForPublishedDiagnostics(w *workspace.Workspace, testPath string, expectedNumber int) func() bool {
 	return func() bool {
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
 		if len(notifications) < 1 {
@@ -413,10 +410,11 @@ func checkForPublishedDiagnostics(testPath string, expectedNumber int) func() bo
 			diagnosticsParams := lsp.PublishDiagnosticsParams{}
 			_ = n.UnmarshalParams(&diagnosticsParams)
 			if diagnosticsParams.URI == uri.PathToUri(testPath) {
+				f := w.GetFolder(testPath)
 				if expectedNumber == -1 {
-					return len(diagnostics.DocumentDiagnosticsFromCache(diagnosticsParams.URI)) > 0
+					return f != nil && len(f.DocumentDiagnosticsFromCache(testPath)) > 0
 				} else {
-					return len(diagnostics.DocumentDiagnosticsFromCache(diagnosticsParams.URI)) == expectedNumber
+					return f != nil && len(f.DocumentDiagnosticsFromCache(testPath)) == expectedNumber
 				}
 			}
 		}
@@ -426,7 +424,6 @@ func checkForPublishedDiagnostics(testPath string, expectedNumber int) func() bo
 
 func Test_IntegrationHoverResults(t *testing.T) {
 	testutil.IntegTest(t)
-	diagnostics.ClearEntireDiagnosticsCache()
 	loc := setupServer(t)
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
@@ -449,7 +446,9 @@ func Test_IntegrationHoverResults(t *testing.T) {
 
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
-		return diagnostics.IsWorkspaceFolderScanned(folder)
+		w := workspace.Get()
+		f := w.GetFolder(cloneTargetDir)
+		return f != nil && f.IsScanned()
 	}, maxIntegTestDuration, 100*time.Millisecond)
 
 	testPath := cloneTargetDir + string(os.PathSeparator) + "package.json"
@@ -480,7 +479,6 @@ func Test_IntegrationSnykCodeFileScan(t *testing.T) {
 	testutil.IntegTest(t)
 	loc := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
-	diagnostics.ClearEntireDiagnosticsCache()
 	di.Init()
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
@@ -492,7 +490,7 @@ func Test_IntegrationSnykCodeFileScan(t *testing.T) {
 	testPath := filepath.Join(cloneTargetDir, "app.js")
 	_ = textDocumentDidOpen(&loc, testPath)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(testPath, 6), maxIntegTestDuration, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(workspace.Get(), testPath, 6), maxIntegTestDuration, 10*time.Millisecond)
 }
 
 func textDocumentDidOpen(loc *server.Local, testPath string) sglsp.DidOpenTextDocumentParams {

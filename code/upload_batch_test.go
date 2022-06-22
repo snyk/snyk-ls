@@ -3,14 +3,13 @@ package code
 import (
 	"testing"
 
-	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 )
 
 func Test_getSize(t *testing.T) {
 	t.Run("returns overhead", func(t *testing.T) {
 		bundle := NewUploadBatch()
-		bundle.documents = map[sglsp.DocumentURI]BundleFile{
+		bundle.documents = map[string]BundleFile{
 			"uri": {},
 		}
 

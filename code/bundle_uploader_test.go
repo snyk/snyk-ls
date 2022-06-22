@@ -7,11 +7,9 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog/log"
-	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/internal/observability/performance"
-	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -21,10 +19,10 @@ func Test_Bundler_Upload(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{}
 		var bundleUploader = BundleUploader{SnykCode: snykCodeService, instrumentor: &performance.TestInstrumentor{}}
 		documentURI, bundleFile := createTempFileInDir("bundleDoc.java", 10, temporaryDir)
-		bundleFileMap := map[lsp.DocumentURI]BundleFile{}
+		bundleFileMap := map[string]BundleFile{}
 		bundleFileMap[documentURI] = bundleFile
 
-		_, err := bundleUploader.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: []lsp.DocumentURI{documentURI}}, bundleFileMap)
+		_, err := bundleUploader.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: []string{documentURI}}, bundleFileMap)
 
 		assert.Equal(t, 1, snykCodeService.TotalBundleCount)
 		assert.NoError(t, err)
@@ -34,23 +32,23 @@ func Test_Bundler_Upload(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{}
 		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: &performance.TestInstrumentor{}}
 
-		bundleFileMap := map[lsp.DocumentURI]BundleFile{}
-		var missingFiles []lsp.DocumentURI
-		documentURI, bundleFile := createTempFileInDir("bundleDoc1.java", (1024*1024)-1, temporaryDir)
-		bundleFileMap[documentURI] = bundleFile
-		missingFiles = append(missingFiles, documentURI)
-		documentURI, bundleFile = createTempFileInDir("bundleDoc2.java", (1024*1024)-1, temporaryDir)
-		bundleFileMap[documentURI] = bundleFile
-		missingFiles = append(missingFiles, documentURI)
-		documentURI, bundleFile = createTempFileInDir("bundleDoc3.java", (1024*1024)-1, temporaryDir)
-		bundleFileMap[documentURI] = bundleFile
-		missingFiles = append(missingFiles, documentURI)
-		documentURI, bundleFile = createTempFileInDir("bundleDoc4.java", (1024*1024)-1, temporaryDir)
-		bundleFileMap[documentURI] = bundleFile
-		missingFiles = append(missingFiles, documentURI)
-		documentURI, bundleFile = createTempFileInDir("bundleDoc5.java", 100, temporaryDir)
-		bundleFileMap[documentURI] = bundleFile
-		missingFiles = append(missingFiles, documentURI)
+		bundleFileMap := map[string]BundleFile{}
+		var missingFiles []string
+		path, bundleFile := createTempFileInDir("bundleDoc1.java", (1024*1024)-1, temporaryDir)
+		bundleFileMap[path] = bundleFile
+		missingFiles = append(missingFiles, path)
+		path, bundleFile = createTempFileInDir("bundleDoc2.java", (1024*1024)-1, temporaryDir)
+		bundleFileMap[path] = bundleFile
+		missingFiles = append(missingFiles, path)
+		path, bundleFile = createTempFileInDir("bundleDoc3.java", (1024*1024)-1, temporaryDir)
+		bundleFileMap[path] = bundleFile
+		missingFiles = append(missingFiles, path)
+		path, bundleFile = createTempFileInDir("bundleDoc4.java", (1024*1024)-1, temporaryDir)
+		bundleFileMap[path] = bundleFile
+		missingFiles = append(missingFiles, path)
+		path, bundleFile = createTempFileInDir("bundleDoc5.java", 100, temporaryDir)
+		bundleFileMap[path] = bundleFile
+		missingFiles = append(missingFiles, path)
 
 		_, err := bundler.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: missingFiles}, bundleFileMap)
 
@@ -65,7 +63,7 @@ func Test_Bundler_Upload(t *testing.T) {
 	})
 }
 
-func createTempFileInDir(name string, size int, temporaryDir string) (lsp.DocumentURI, BundleFile) {
+func createTempFileInDir(name string, size int, temporaryDir string) (string, BundleFile) {
 	documentURI, fileContent := createFileOfSize(name, size, temporaryDir)
 	return documentURI, BundleFile{Hash: util.Hash(fileContent), Content: string(fileContent)}
 }
@@ -75,21 +73,21 @@ func Test_IsSupportedLanguage(t *testing.T) {
 	bundler := NewBundler(snykCodeMock, &performance.TestInstrumentor{})
 
 	t.Run("should return true for supported languages", func(t *testing.T) {
-		documentURI := uri.PathToUri("C:\\some\\path\\Test.java")
-		supported := bundler.isSupported(context.Background(), documentURI)
+		path := "C:\\some\\path\\Test.java"
+		supported := bundler.isSupported(context.Background(), path)
 		assert.True(t, supported)
 	})
 
 	t.Run("should return false for unsupported languages", func(t *testing.T) {
-		documentURI := uri.PathToUri("C:\\some\\path\\Test.rs")
-		supported := bundler.isSupported(context.Background(), documentURI)
+		path := "C:\\some\\path\\Test.rs"
+		supported := bundler.isSupported(context.Background(), path)
 		assert.False(t, supported)
 	})
 
 	t.Run("should cache supported extensions", func(t *testing.T) {
-		documentURI := uri.PathToUri("C:\\some\\path\\Test.rs")
-		bundler.isSupported(context.Background(), documentURI)
-		bundler.isSupported(context.Background(), documentURI)
+		path := "C:\\some\\path\\Test.rs"
+		bundler.isSupported(context.Background(), path)
+		bundler.isSupported(context.Background(), path)
 		assert.Len(t, snykCodeMock.Calls, 1)
 	})
 }
@@ -102,7 +100,7 @@ func setup() string {
 	return dir
 }
 
-func createFileOfSize(filename string, contentSize int, dir string) (lsp.DocumentURI, []byte) {
+func createFileOfSize(filename string, contentSize int, dir string) (string, []byte) {
 	buf := new(bytes.Buffer)
 	buf.Grow(contentSize)
 	for i := 0; i < contentSize; i++ {
@@ -110,10 +108,9 @@ func createFileOfSize(filename string, contentSize int, dir string) (lsp.Documen
 	}
 
 	filePath := dir + string(os.PathSeparator) + filename
-	bundleDoc := lsp.TextDocumentItem{URI: uri.PathToUri(filePath)}
 	err := os.WriteFile(filePath, buf.Bytes(), 0660)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't write test file")
 	}
-	return bundleDoc.URI, buf.Bytes()
+	return filePath, buf.Bytes()
 }

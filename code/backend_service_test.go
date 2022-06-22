@@ -16,7 +16,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -48,7 +47,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	testutil.IntegTest(t)
 
 	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
-	files := map[sglsp.DocumentURI]string{}
+	files := map[string]string{}
 	files[path1] = util.Hash([]byte(content))
 	bundleHash, missingFiles, _ := s.CreateBundle(context.Background(), files)
 	assert.NotNil(t, bundleHash)
@@ -59,8 +58,8 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	testutil.IntegTest(t)
 	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
-	var removedFiles []sglsp.DocumentURI
-	files := map[sglsp.DocumentURI]string{}
+	var removedFiles []string
+	files := map[string]string{}
 	files[path1] = util.Hash([]byte(content))
 	bundleHash, _, _ := s.CreateBundle(context.Background(), files)
 	filesExtend := createTestExtendMap()
@@ -71,8 +70,8 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	assert.NotEmpty(t, bundleHash)
 }
 
-func createTestExtendMap() map[sglsp.DocumentURI]BundleFile {
-	filesExtend := map[sglsp.DocumentURI]BundleFile{}
+func createTestExtendMap() map[string]BundleFile {
+	filesExtend := map[string]BundleFile{}
 
 	filesExtend[path1] = BundleFile{
 		Hash:    util.Hash([]byte(content)),
@@ -90,8 +89,8 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 
 	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
 	shardKey := util.Hash([]byte("/"))
-	var removedFiles []sglsp.DocumentURI
-	files := map[sglsp.DocumentURI]string{}
+	var removedFiles []string
+	files := map[string]string{}
 	files[path1] = util.Hash([]byte(content))
 	bundleHash, _, _ := s.CreateBundle(context.Background(), files)
 	filesExtend := createTestExtendMap()
@@ -111,12 +110,10 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		path1DocumentURI := uri.PathToUri(path1)
-		path2DocumentURI := uri.PathToUri(path2)
-		documentDiagnostic := d[path1DocumentURI]
+		documentDiagnostic := d[path1]
 		if callStatus.message == "COMPLETE" && documentDiagnostic != nil {
-			returnValue := assert.NotEqual(t, 0, len(d[path1DocumentURI]))
-			returnValue = returnValue && assert.NotEqual(t, 0, len(d[path2DocumentURI]))
+			returnValue := assert.NotEqual(t, 0, len(d[path1]))
+			returnValue = returnValue && assert.NotEqual(t, 0, len(d[path2]))
 			if returnValue {
 				return true
 			}
@@ -142,8 +139,8 @@ func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing
 	assert.Equal(t, 1, len(diags))
 	assert.Equal(t, 1, len(hovers))
 
-	u := uri.PathToUri("/server/testdata/Dummy.java")
-	assert.Equal(t, 2, len(diags[u]))
+	path := "/server/testdata/Dummy.java"
+	assert.Equal(t, 2, len(diags[path]))
 }
 
 func TestSnykCodeBackendService_GetFilters_returns(t *testing.T) {

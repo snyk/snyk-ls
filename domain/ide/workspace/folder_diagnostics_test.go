@@ -52,8 +52,8 @@ func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
 	diagnostics := workspace.GetDiagnostics(context.Background(), diagnosticUri)
 
 	assert.NotNil(t, diagnostics)
-	assert.NotEmpty(t, f.documentDiagnosticsFromCache(diagnosticUri))
-	assert.Equal(t, len(f.documentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
+	assert.NotEmpty(t, f.DocumentDiagnosticsFromCache(diagnosticUri))
+	assert.Equal(t, len(f.DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
 	recorder := &di.Instrumentor().(*performance.TestInstrumentor).SpanRecorder
 	spans := recorder.Spans()
 	assert.Len(t, spans, 1)
@@ -73,7 +73,7 @@ func Test_GetDiagnostics_shouldNotRunCodeIfNotEnabled(t *testing.T) {
 
 	diagnostics := workspace.GetDiagnostics(context.Background(), diagnosticUri)
 
-	assert.Equal(t, len(f.documentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
+	assert.Equal(t, len(f.DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
 	params := di.SnykCodeClient().(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.Nil(t, params)
 }
@@ -92,7 +92,7 @@ func Test_GetDiagnostics_shouldNotRunCodeIfNotSastEnabled(t *testing.T) {
 
 	diagnostics := workspace.GetDiagnostics(context.Background(), diagnosticUri)
 
-	assert.Equal(t, len(f.documentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
+	assert.Equal(t, len(f.DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
 	assert.Len(t, fakeApiClient.GetAllCalls(code.SastEnabledOperation), 1)
 	assert.Len(t, di.SnykCodeClient().(*code.FakeSnykCodeClient).GetAllCalls(code.CreateBundleWithSourceOperation), 0)
 }
@@ -109,7 +109,7 @@ func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
 
 	diagnostics := workspace.GetDiagnostics(context.Background(), diagnosticUri)
 
-	assert.Equal(t, len(f.documentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
+	assert.Equal(t, len(f.DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
 	params := di.SnykCodeClient().(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.NotNil(t, params)
 }
@@ -132,7 +132,7 @@ func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
 
 	diagnostics := workspace.GetDiagnostics(context.Background(), filePath)
 
-	assert.Equal(t, len(f.documentDiagnosticsFromCache(filePath)), len(diagnostics))
+	assert.Equal(t, len(f.DocumentDiagnosticsFromCache(filePath)), len(diagnostics))
 	assert.Equal(t, 2, len(mockCli.Calls))
 }
 
@@ -153,7 +153,7 @@ func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
 
 	diagnostics := workspace.GetDiagnostics(context.Background(), filePath)
 
-	assert.Equal(t, len(f.documentDiagnosticsFromCache(filePath)), len(diagnostics))
+	assert.Equal(t, len(f.DocumentDiagnosticsFromCache(filePath)), len(diagnostics))
 	assert.Equal(t, 0, len(mockCli.Calls))
 }
 
@@ -180,7 +180,7 @@ func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
 
 	diagnostics := workspace.GetDiagnostics(context.Background(), filePath)
 
-	assert.Equal(t, len(f.documentDiagnosticsFromCache(filePath)), len(diagnostics))
+	assert.Equal(t, len(f.DocumentDiagnosticsFromCache(filePath)), len(diagnostics))
 	assert.Equal(t, 2, len(mockCli.Calls))
 	call := mockCli.Calls[1]
 	assert.Contains(t, call.Arguments[0], "--insecure")
@@ -205,7 +205,7 @@ func Test_GetDiagnostics_shouldNotIacIfNotEnabled(t *testing.T) { // disable sny
 
 	diagnostics := workspace.GetDiagnostics(context.Background(), filePath)
 
-	assert.Equal(t, len(f.documentDiagnosticsFromCache(filePath)), len(diagnostics))
+	assert.Equal(t, len(f.DocumentDiagnosticsFromCache(filePath)), len(diagnostics))
 	assert.Equal(t, 0, len(mockCli.Calls))
 }
 

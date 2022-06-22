@@ -218,7 +218,7 @@ type AnalysisStatus struct {
 func (s *SnykCodeHTTPClient) RunAnalysis(
 	ctx context.Context,
 	options AnalysisOptions,
-) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]hover.Hover, AnalysisStatus, error) {
+) (map[string][]lsp.Diagnostic, map[sglsp.DocumentURI][]hover.Hover, AnalysisStatus, error) {
 	method := "code.RunAnalysis"
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
@@ -307,10 +307,10 @@ func analysisRequestBody(options *AnalysisOptions) ([]byte, error) {
 }
 
 func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
-	map[sglsp.DocumentURI][]lsp.Diagnostic,
+	map[string][]lsp.Diagnostic,
 	map[sglsp.DocumentURI][]hover.Hover,
 ) {
-	diags := make(map[sglsp.DocumentURI][]lsp.Diagnostic)
+	diags := make(map[string][]lsp.Diagnostic)
 	hovers := make(map[sglsp.DocumentURI][]hover.Hover)
 
 	runs := response.Sarif.Runs
@@ -321,11 +321,11 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
 	for _, result := range runs[0].Results {
 		for _, loc := range result.Locations {
 			// convert the documentURI to a path according to our conversion
-			path := uri.PathFromUri(sglsp.DocumentURI(loc.PhysicalLocation.ArtifactLocation.URI))
+			path := loc.PhysicalLocation.ArtifactLocation.URI
 			// then convert it back to cater for special cases under windows
 			documentURI := uri.PathToUri(path)
 
-			diagSlice := diags[documentURI]
+			diagSlice := diags[path]
 			hoverSlice := hovers[documentURI]
 
 			myRange := sglsp.Range{
@@ -348,7 +348,7 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
 			}
 
 			diagSlice = append(diagSlice, d)
-			diags[documentURI] = diagSlice
+			diags[path] = diagSlice
 
 			h := hover.Hover{
 				Id:    result.RuleID,

@@ -14,19 +14,34 @@ import (
 	"github.com/snyk/snyk-ls/lsp"
 )
 
-// TODO test AddFolder
-func (w *Workspace) AddFolder(f *Folder) {
-	w.workspaceFolders = append(w.workspaceFolders, f)
+var instance *Workspace
+
+func init() {
+	instance = &Workspace{workspaceFolders: make(map[string]*Folder, 0)}
 }
 
-// TODO test GetFolder
+func Get() *Workspace  { return instance }
+func Set(w *Workspace) { instance = w }
+
+func (w *Workspace) DeleteFolder(folder string) {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	delete(w.workspaceFolders, folder)
+}
+
+func (w *Workspace) AddFolder(f *Folder) {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	w.workspaceFolders[f.path] = f
+}
+
 func (w *Workspace) GetFolder(path string) (folder *Folder) {
 	for _, folder := range w.workspaceFolders {
 		if folder.Contains(path) {
 			return folder
 		}
 	}
-	return &Folder{}
+	return nil
 }
 
 func (w *Workspace) GetDiagnostics(ctx context.Context, path string) []lsp.Diagnostic {
@@ -37,14 +52,14 @@ func (w *Workspace) GetDiagnostics(ctx context.Context, path string) []lsp.Diagn
 
 	folder := w.GetFolder(path)
 
-	diagnosticSlice := folder.documentDiagnosticsFromCache(path)
+	diagnosticSlice := folder.DocumentDiagnosticsFromCache(path)
 	if len(diagnosticSlice) > 0 {
 		log.Info().Str("method", method).Msgf("Cached: Diagnostics for %s", path)
 		return diagnosticSlice
 	}
 
 	folder.FetchAllRegisteredDocumentDiagnostics(s.Context(), path, lsp.ScanLevelFile)
-	return folder.documentDiagnosticsFromCache(path)
+	return folder.DocumentDiagnosticsFromCache(path)
 }
 
 func (w *Workspace) Scan(ctx context.Context) {
@@ -68,7 +83,7 @@ func (w *Workspace) Scan(ctx context.Context) {
 }
 
 // todo test
-func (w Workspace) getWorkspaceFolderOfDocument(documentPath string) (folder *Folder) {
+func (w *Workspace) getWorkspaceFolderOfDocument(documentPath string) (folder *Folder) {
 	for _, folder := range w.workspaceFolders {
 		if uri.FolderContains(folder.path, documentPath) {
 			return folder

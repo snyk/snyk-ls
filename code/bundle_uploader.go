@@ -79,11 +79,11 @@ func (b *BundleUploader) groupInBatches(
 
 		file := files[documentURI]
 		var fileContent = []byte(file.Content)
-		if uploadBatch.canFitFile(string(documentURI), fileContent) {
-			log.Trace().Str("path", string(documentURI)).Int("size", len(fileContent)).Msgf("added to bundle #%v", len(batches))
+		if uploadBatch.canFitFile(documentURI, fileContent) {
+			log.Trace().Str("path", documentURI).Int("size", len(fileContent)).Msgf("added to bundle #%v", len(batches))
 			uploadBatch.documents[documentURI] = file
 		} else {
-			log.Trace().Str("path", string(documentURI)).Int("size", len(fileContent)).Msgf("created new bundle - %v bundles in this upload so far", len(batches))
+			log.Trace().Str("path", documentURI).Int("size", len(fileContent)).Msgf("created new bundle - %v bundles in this upload so far", len(batches))
 			newUploadBatch := NewUploadBatch()
 			newUploadBatch.documents[documentURI] = file
 			batches = append(batches, &newUploadBatch)

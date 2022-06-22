@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/internal/util"
@@ -92,12 +91,12 @@ func Test_BundleGroup_AddBundle(t *testing.T) {
 
 var bundleWithFiles = &UploadBatch{
 	hash:      "bundleWithFilesHash",
-	documents: map[lsp.DocumentURI]BundleFile{lsp.DocumentURI("file"): {}},
+	documents: map[string]BundleFile{"file": {}},
 }
 var bundleWithMultipleFiles = &UploadBatch{
 	hash: "bundleWithMultipleFilesHash",
-	documents: map[lsp.DocumentURI]BundleFile{
-		lsp.DocumentURI("file"):    {},
-		lsp.DocumentURI("another"): {},
+	documents: map[string]BundleFile{
+		"file":    {},
+		"another": {},
 	},
 }

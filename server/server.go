@@ -11,11 +11,12 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/di"
-	"github.com/snyk/snyk-ls/diagnostics"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
@@ -61,30 +62,41 @@ func WorkspaceDidChangeWorkspaceFoldersHandler() jrpc2.Handler {
 		log.Info().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Msg("RECEIVING")
 		log.Info().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Msg("SENDING")
 
+		w := workspace.Get()
 		for _, folder := range params.Event.Removed {
-			diagnostics.ClearWorkspaceFolderDiagnostics(folder)
+			w.DeleteFolder(uri.PathFromUri(folder.Uri))
 		}
-		diagnostics.WorkspaceScan(ctx, params.Event.Added)
-
+		for _, folder := range params.Event.Added {
+			AddFolderAndScan(ctx, folder, w)
+		}
 		return nil, nil
 	})
+}
+
+func AddFolderAndScan(ctx context.Context, folder lsp.WorkspaceFolder, w *workspace.Workspace) {
+	f := workspace.NewFolder(uri.PathFromUri(folder.Uri), folder.Name, w)
+	w.AddFolder(f)
+	go w.Scan(ctx)
 }
 
 func InitializeHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
 		method := "InitializeHandler"
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
-		clientParams = params
+		w := &workspace.Workspace{}
+		workspace.Set(w)
 
 		// async processing listener
 		go hover.CreateHoverListener()
 		go createProgressListener(progress.Channel, srv)
 		go registerNotifier(srv)
 
-		if len(clientParams.WorkspaceFolders) > 0 {
-			go diagnostics.WorkspaceScan(ctx, clientParams.WorkspaceFolders)
+		if len(params.WorkspaceFolders) > 0 {
+			for _, workspaceFolder := range clientParams.WorkspaceFolders {
+				AddFolderAndScan(ctx, workspaceFolder, w)
+			}
 		} else {
-			go diagnostics.GetDiagnostics(ctx, clientParams.RootURI)
+			AddFolderAndScan(ctx, lsp.WorkspaceFolder{Uri: uri.PathToUri(params.RootPath), Name: params.ClientInfo.Name}, w)
 		}
 
 		return lsp.InitializeResult{
@@ -129,12 +141,12 @@ func Exit(srv *jrpc2.Server) jrpc2.Handler {
 	})
 }
 
-func PublishDiagnostics(ctx context.Context, uri sglsp.DocumentURI, srv *jrpc2.Server) {
+func PublishDiagnostics(ctx context.Context, documentURI sglsp.DocumentURI, srv *jrpc2.Server) {
 	method := "PublishDiagnostics"
-	diags := diagnostics.GetDiagnostics(ctx, uri)
+	diags := workspace.Get().GetDiagnostics(ctx, uri.PathFromUri(documentURI))
 	if diags != nil {
 		diagnosticsParams := lsp.PublishDiagnosticsParams{
-			URI:         uri,
+			URI:         documentURI,
 			Diagnostics: diags,
 		}
 		log.Info().Str("method", method).Str("uri", string(diagnosticsParams.URI)).Msg("SENDING")
@@ -168,7 +180,8 @@ func TextDocumentDidSaveHandler(srv *jrpc2.Server) jrpc2.Handler {
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
 
 		// clear cache when saving and get fresh diagnostics
-		diagnostics.ClearDiagnosticsCache(params.TextDocument.URI)
+		filePath := uri.PathFromUri(params.TextDocument.URI)
+		workspace.Get().GetFolder(filePath).ClearDiagnosticsCache(filePath)
 		hover.DeleteHover(params.TextDocument.URI)
 		PublishDiagnostics(ctx, params.TextDocument.URI, srv) // todo: remove in favor of notifier
 		return nil, nil

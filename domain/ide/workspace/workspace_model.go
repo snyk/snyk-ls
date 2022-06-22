@@ -1,5 +1,8 @@
 package workspace
 
+import "sync"
+
 type Workspace struct {
-	workspaceFolders []*Folder
+	mutex            sync.Mutex
+	workspaceFolders map[string]*Folder
 }

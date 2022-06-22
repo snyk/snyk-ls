@@ -77,7 +77,7 @@ func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []string, wg *sy
 	}
 
 	wg.Add(1)
-	uploadedBundle.FetchDiagnosticsData(ctx, string(path), wg, dChan, hoverChan)
+	uploadedBundle.FetchDiagnosticsData(ctx, path, wg, dChan, hoverChan)
 	sc.trackResult(true)
 }
 
