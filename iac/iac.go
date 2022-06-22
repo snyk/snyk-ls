@@ -17,6 +17,7 @@ import (
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/snyk/issues"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -24,9 +25,13 @@ import (
 )
 
 var (
-	severities = map[string]sglsp.DiagnosticSeverity{
+	lspSeverities = map[string]sglsp.DiagnosticSeverity{
 		"high": sglsp.Error,
 		"low":  sglsp.Warning,
+	}
+	issueSeverities = map[string]issues.Severity{
+		"high": issues.High,
+		"low":  issues.Low,
 	}
 )
 
@@ -153,7 +158,7 @@ func retrieveAnalysis(
 	dChan chan lsp.DiagnosticResult,
 	hoverChan chan hover.DocumentHovers,
 ) {
-	diagnostics, hoverDetails := convertDiagnostics(scanResult)
+	diagnostics, hoverDetails := processResults(scanResult)
 
 	if len(diagnostics) > 0 {
 		select {
@@ -173,62 +178,22 @@ func retrieveAnalysis(
 	}
 }
 
-func convertDiagnostics(res iacScanResult) ([]lsp.Diagnostic, []hover.Hover) {
+func processResults(res iacScanResult) ([]lsp.Diagnostic, []hover.Hover[hover.Context]) {
 	var diagnostics []lsp.Diagnostic
-	var hoverDetails []hover.Hover
+	var hoverDetails []hover.Hover[hover.Context]
 
 	for _, issue := range res.IacIssues {
-		title := issue.Title
-		description := issue.IacDescription.Issue
-		impact := issue.IacDescription.Impact
-		resolve := issue.IacDescription.Resolve
-
 		if issue.LineNumber > 0 {
 			issue.LineNumber -= 1
 		} else {
 			issue.LineNumber = 0
 		}
 
-		diagsRange := sglsp.Range{
-			Start: sglsp.Position{Line: issue.LineNumber, Character: 0},
-			End:   sglsp.Position{Line: issue.LineNumber, Character: 80},
-		}
-
-		if config.CurrentConfig().Format() == config.FormatHtml {
-			title = string(markdown.ToHTML([]byte(title), nil, nil))
-			description = string(markdown.ToHTML([]byte(description), nil, nil))
-			impact = string(markdown.ToHTML([]byte(impact), nil, nil))
-			resolve = string(markdown.ToHTML([]byte(resolve), nil, nil))
-		}
-
-		diagnostic := lsp.Diagnostic{
-			Source:   "Snyk LS",
-			Range:    diagsRange,
-			Message:  fmt.Sprintf("%s: %s\n\n", issue.PublicID, title),
-			Severity: lspSeverity(issue.Severity),
-			Code:     issue.PublicID,
-		}
-
-		diagnostics = append(diagnostics, diagnostic)
-
-		hover := hover.Hover{
-			Id:    issue.PublicID,
-			Range: diagsRange,
-			Message: fmt.Sprintf("\n### %s: %s\n\n**Issue:** %s\n\n**Impact:** %s\n\n**Resolve:** %s\n",
-				issue.PublicID, title, description, impact, resolve),
-		}
-		hoverDetails = append(hoverDetails, hover)
+		diagnostics = append(diagnostics, toDiagnostic(issue))
+		hoverDetails = append(hoverDetails, toHover(issue))
 	}
 
 	return diagnostics, hoverDetails
-}
-
-func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
-	lspSev, ok := severities[snykSeverity]
-	if !ok {
-		return sglsp.Info
-	}
-	return lspSev
 }
 
 func trackResult(success bool) {
@@ -242,4 +207,67 @@ func trackResult(success bool) {
 		AnalysisType: ux.InfrastructureAsCode,
 		Result:       result,
 	})
+}
+
+func toHover(issue iacIssue) hover.Hover[hover.Context] {
+	title := issue.Title
+	description := issue.IacDescription.Issue
+	impact := issue.IacDescription.Impact
+	resolve := issue.IacDescription.Resolve
+
+	if config.CurrentConfig().Format() == config.FormatHtml {
+		title = string(markdown.ToHTML([]byte(title), nil, nil))
+		description = string(markdown.ToHTML([]byte(description), nil, nil))
+		impact = string(markdown.ToHTML([]byte(impact), nil, nil))
+		resolve = string(markdown.ToHTML([]byte(resolve), nil, nil))
+	}
+
+	return hover.Hover[hover.Context]{
+		Id: issue.PublicID,
+		Range: sglsp.Range{
+			Start: sglsp.Position{Line: issue.LineNumber, Character: 0},
+			End:   sglsp.Position{Line: issue.LineNumber, Character: 80},
+		},
+		Message: fmt.Sprintf("\n### %s: %s\n\n**Issue:** %s\n\n**Impact:** %s\n\n**Resolve:** %s\n",
+			issue.PublicID, title, description, impact, resolve),
+		Context: issues.Issue{
+			ID:        issue.PublicID,
+			Severity:  toIssueSeverity(issue.Severity),
+			IssueType: issues.InfrastructureIssue,
+		},
+	}
+}
+
+func toDiagnostic(issue iacIssue) lsp.Diagnostic {
+	title := issue.Title
+	if config.CurrentConfig().Format() == config.FormatHtml {
+		title = string(markdown.ToHTML([]byte(title), nil, nil))
+	}
+
+	diagnostic := lsp.Diagnostic{
+		Source: "Snyk LS",
+		Range: sglsp.Range{
+			Start: sglsp.Position{Line: issue.LineNumber, Character: 0},
+			End:   sglsp.Position{Line: issue.LineNumber, Character: 80},
+		},
+		Message:  fmt.Sprintf("%s: %s\n\n", issue.PublicID, title),
+		Severity: lspSeverity(issue.Severity),
+		Code:     issue.PublicID,
+	}
+	return diagnostic
+}
+
+func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
+	lspSev, ok := lspSeverities[snykSeverity]
+	if !ok {
+		return sglsp.Info
+	}
+	return lspSev
+}
+func toIssueSeverity(snykSeverity string) issues.Severity {
+	severity, ok := issueSeverities[snykSeverity]
+	if !ok {
+		return issues.Medium
+	}
+	return severity
 }

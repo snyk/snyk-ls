@@ -155,7 +155,7 @@ func (b *Bundle) getShardKey(rootPath string, authToken string) string {
 }
 
 //todo : move lsp presetantion concerns up
-func sendHoversViaChan(hovers map[lsp.DocumentURI][]hover.Hover, hoverChan chan hover.DocumentHovers) {
+func sendHoversViaChan(hovers map[lsp.DocumentURI][]hover.Hover[hover.Context], hoverChan chan hover.DocumentHovers) {
 	for uri, h := range hovers {
 		hoverChan <- hover.DocumentHovers{
 			Uri:   uri,

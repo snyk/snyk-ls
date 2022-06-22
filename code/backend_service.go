@@ -218,7 +218,7 @@ type AnalysisStatus struct {
 func (s *SnykCodeHTTPClient) RunAnalysis(
 	ctx context.Context,
 	options AnalysisOptions,
-) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]hover.Hover, AnalysisStatus, error) {
+) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]hover.Hover[hover.Context], AnalysisStatus, error) {
 	method := "code.RunAnalysis"
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
@@ -308,10 +308,10 @@ func analysisRequestBody(options *AnalysisOptions) ([]byte, error) {
 
 func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
 	map[sglsp.DocumentURI][]lsp.Diagnostic,
-	map[sglsp.DocumentURI][]hover.Hover,
+	map[sglsp.DocumentURI][]hover.Hover[hover.Context],
 ) {
 	diags := make(map[sglsp.DocumentURI][]lsp.Diagnostic)
-	hovers := make(map[sglsp.DocumentURI][]hover.Hover)
+	hovers := make(map[sglsp.DocumentURI][]hover.Hover[hover.Context])
 
 	runs := response.Sarif.Runs
 	if len(runs) == 0 {
@@ -350,7 +350,7 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
 			diagSlice = append(diagSlice, d)
 			diags[documentURI] = diagSlice
 
-			h := hover.Hover{
+			h := hover.Hover[hover.Context]{
 				Id:    result.RuleID,
 				Range: myRange,
 				// Todo: Add more details here

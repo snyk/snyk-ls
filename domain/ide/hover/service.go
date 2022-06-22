@@ -11,14 +11,14 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-var hovers = map[sglsp.DocumentURI][]Hover{}
+var hovers = map[sglsp.DocumentURI][]Hover[Context]{}
 var hoverIndexes = map[string]bool{}
 
 var hoverChan = make(chan DocumentHovers, 100)
 var stopChannel = make(chan bool, 100)
 var mutex = &sync.Mutex{}
 
-func validateAndExtractMessage(hover Hover, pos sglsp.Position) string {
+func validateAndExtractMessage(hover Hover[Context], pos sglsp.Position) string {
 	var message string
 	if hover.Range.Start.Line < pos.Line && hover.Range.End.Line > pos.Line ||
 		(hover.Range.Start.Line == pos.Line &&
@@ -66,7 +66,7 @@ func ClearAllHovers() {
 	mutex.Lock()
 	defer mutex.Unlock()
 	stopChannel <- true
-	hovers = map[sglsp.DocumentURI][]Hover{}
+	hovers = map[sglsp.DocumentURI][]Hover[Context]{}
 	hoverIndexes = map[string]bool{}
 }
 

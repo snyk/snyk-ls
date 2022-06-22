@@ -37,7 +37,7 @@ var (
 			Character: 7,
 		},
 	}
-	FakeHover = hover.Hover{
+	FakeHover = hover.Hover[hover.Context]{
 		Id:      "12",
 		Range:   fakeRange,
 		Message: "You have been hacked!",
@@ -153,15 +153,15 @@ func (f *FakeSnykCodeClient) ExtendBundle(
 func (f *FakeSnykCodeClient) RunAnalysis(
 	_ context.Context,
 	options AnalysisOptions,
-) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]hover.Hover, AnalysisStatus, error) {
+) (map[sglsp.DocumentURI][]lsp.Diagnostic, map[sglsp.DocumentURI][]hover.Hover[hover.Context], AnalysisStatus, error) {
 	params := []interface{}{options.bundleHash, options.limitToFiles, options.severity}
 	f.addCall(params, RunAnalysisOperation)
 
 	diagnosticMap := map[sglsp.DocumentURI][]lsp.Diagnostic{}
-	hoverMap := map[sglsp.DocumentURI][]hover.Hover{}
+	hoverMap := map[sglsp.DocumentURI][]hover.Hover[hover.Context]{}
 
 	var diagnostics []lsp.Diagnostic
-	var hovers []hover.Hover
+	var hovers []hover.Hover[hover.Context]
 
 	diagnosticMap[fakeDiagnosticUri] = append(diagnostics, FakeDiagnostic)
 	hoverMap[fakeDiagnosticUri] = append(hovers, FakeHover)
