@@ -4,15 +4,18 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 )
 
-type Hover struct {
+type Context interface{}
+
+type Hover[T Context] struct {
 	Id      string
 	Range   sglsp.Range
 	Message string
+	Context T
 }
 
 type DocumentHovers struct {
 	Uri   sglsp.DocumentURI
-	Hover []Hover
+	Hover []Hover[Context]
 }
 
 type Params struct {

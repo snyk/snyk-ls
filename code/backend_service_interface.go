@@ -36,7 +36,7 @@ type SnykCodeClient interface {
 		options AnalysisOptions,
 	) (
 		map[string][]lsp.Diagnostic,
-		map[sglsp.DocumentURI][]hover.Hover,
+		map[sglsp.DocumentURI][]hover.Context,
 		AnalysisStatus,
 		error,
 	)

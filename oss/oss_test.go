@@ -9,11 +9,13 @@ import (
 	"sync"
 	"testing"
 
+	lsp2 "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/snyk/issues"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
@@ -221,4 +223,80 @@ func TestUnmarshalOssErroneousJson(t *testing.T) {
 	assert.Error(t, err)
 	assert.True(t, done)
 	assert.Nil(t, scanResults)
+}
+
+func Test_toHover_asHTML(t *testing.T) {
+	testutil.UnitTest(t)
+	config.CurrentConfig().SetFormat(config.FormatHtml)
+
+	content := "0\n1\n2\n  implementation 'a:test:4.17.4'"
+	var documentUri = uri.PathToUri("build.gradle")
+
+	var issue = ossIssue{
+		Id:             "testIssue",
+		Name:           "SNYK-TEST-ISSUE-1",
+		Title:          "THOU SHALL NOT PASS",
+		Severity:       "low",
+		LineNumber:     0,
+		Description:    "Getting into Moria is an issue!",
+		References:     nil,
+		Version:        "",
+		PackageManager: "npm",
+		From:           []string{"goof@1.0.1", "lodash@4.17.4"},
+	}
+
+	h := toHover(issue, findRange(issue, documentUri, []byte(content)))
+
+	assert.Equal(
+		t,
+		hover.Hover[hover.Context]{
+			Id:      "testIssue",
+			Range:   lsp2.Range{Start: lsp2.Position{Line: 0, Character: 0}, End: lsp2.Position{Line: 0, Character: 0}},
+			Message: "\n### testIssue: <p>THOU SHALL NOT PASS</p>\n affecting  package \n### Vulnerability   | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \n<p>Getting into Moria is an issue!</p>\n",
+			Context: issues.Issue{
+				ID:        "testIssue",
+				Severity:  issues.Medium,
+				IssueType: issues.DependencyVulnerability,
+			},
+		},
+		h,
+	)
+}
+
+func Test_toHover_asMarkdown(t *testing.T) {
+	testutil.UnitTest(t)
+	config.CurrentConfig().SetFormat(config.FormatMd)
+
+	content := "0\n1\n2\n  implementation 'a:test:4.17.4'"
+	var documentUri = uri.PathToUri("build.gradle")
+
+	var issue = ossIssue{
+		Id:             "testIssue",
+		Name:           "SNYK-TEST-ISSUE-1",
+		Title:          "THOU SHALL NOT PASS",
+		Severity:       "high",
+		LineNumber:     0,
+		Description:    "Getting into Moria is an issue!",
+		References:     nil,
+		Version:        "",
+		PackageManager: "npm",
+		From:           []string{"goof@1.0.1", "lodash@4.17.4"},
+	}
+
+	h := toHover(issue, findRange(issue, documentUri, []byte(content)))
+
+	assert.Equal(
+		t,
+		hover.Hover[hover.Context]{
+			Id:      "testIssue",
+			Range:   lsp2.Range{Start: lsp2.Position{Line: 0, Character: 0}, End: lsp2.Position{Line: 0, Character: 0}},
+			Message: "\n### testIssue: THOU SHALL NOT PASS affecting  package \n### Vulnerability   | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: HIGH** \nGetting into Moria is an issue!",
+			Context: issues.Issue{
+				ID:        "testIssue",
+				Severity:  issues.High,
+				IssueType: issues.DependencyVulnerability,
+			},
+		},
+		h,
+	)
 }

@@ -11,7 +11,7 @@ import (
 )
 
 func setupFakeHover() sglsp.DocumentURI {
-	fakeHover := []Hover{
+	fakeHover := []Hover[Context]{
 		{Range: sglsp.Range{
 			Start: sglsp.Position{Line: 3, Character: 56},
 			End:   sglsp.Position{Line: 5, Character: 80},
@@ -31,7 +31,7 @@ func Test_registerHovers(t *testing.T) {
 	documentUri := uri.PathToUri("fake-file.json")
 	hover := DocumentHovers{
 		Uri: documentUri,
-		Hover: []Hover{
+		Hover: []Hover[Context]{
 			{
 				Id: "test-id",
 				Range: sglsp.Range{
@@ -75,13 +75,13 @@ func Test_ClearAllHovers(t *testing.T) {
 
 func Test_GetHoverMultiline(t *testing.T) {
 	tests := []struct {
-		hoverDetails []Hover
+		hoverDetails []Hover[Context]
 		query        sglsp.Position
 		expected     Result
 	}{
 		// multiline range
 		{
-			hoverDetails: []Hover{{Range: sglsp.Range{
+			hoverDetails: []Hover[Context]{{Range: sglsp.Range{
 				Start: sglsp.Position{Line: 3, Character: 56},
 				End:   sglsp.Position{Line: 5, Character: 80},
 			},
@@ -93,7 +93,7 @@ func Test_GetHoverMultiline(t *testing.T) {
 		},
 		// exact line but within character range
 		{
-			hoverDetails: []Hover{{Range: sglsp.Range{
+			hoverDetails: []Hover[Context]{{Range: sglsp.Range{
 				Start: sglsp.Position{Line: 4, Character: 56},
 				End:   sglsp.Position{Line: 4, Character: 80},
 			},
@@ -105,7 +105,7 @@ func Test_GetHoverMultiline(t *testing.T) {
 		},
 		// exact line and exact character
 		{
-			hoverDetails: []Hover{{Range: sglsp.Range{
+			hoverDetails: []Hover[Context]{{Range: sglsp.Range{
 				Start: sglsp.Position{Line: 4, Character: 56},
 				End:   sglsp.Position{Line: 4, Character: 56},
 			},
@@ -117,7 +117,7 @@ func Test_GetHoverMultiline(t *testing.T) {
 		},
 		// hover left of the character position on exact line
 		{
-			hoverDetails: []Hover{{Range: sglsp.Range{
+			hoverDetails: []Hover[Context]{{Range: sglsp.Range{
 				Start: sglsp.Position{Line: 4, Character: 56},
 				End:   sglsp.Position{Line: 4, Character: 86},
 			},
@@ -129,7 +129,7 @@ func Test_GetHoverMultiline(t *testing.T) {
 		},
 		// hover right of the character position on exact line
 		{
-			hoverDetails: []Hover{{Range: sglsp.Range{
+			hoverDetails: []Hover[Context]{{Range: sglsp.Range{
 				Start: sglsp.Position{Line: 4, Character: 56},
 				End:   sglsp.Position{Line: 4, Character: 86},
 			},
