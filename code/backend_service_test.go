@@ -62,10 +62,10 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	var removedFiles []sglsp.DocumentURI
 	files := map[sglsp.DocumentURI]string{}
 	files[path1] = util.Hash([]byte(content))
-	bundleHash, missingFiles, _ := s.CreateBundle(context.Background(), files)
+	bundleHash, _, _ := s.CreateBundle(context.Background(), files)
 	filesExtend := createTestExtendMap()
 
-	bundleHash, missingFiles, _ = s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
+	bundleHash, missingFiles, _ := s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
 
 	assert.Equal(t, 0, len(missingFiles))
 	assert.NotEmpty(t, bundleHash)
