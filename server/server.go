@@ -92,7 +92,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 		go registerNotifier(srv)
 
 		if len(params.WorkspaceFolders) > 0 {
-			for _, workspaceFolder := range clientParams.WorkspaceFolders {
+			for _, workspaceFolder := range params.WorkspaceFolders {
 				AddFolder(workspaceFolder, w)
 			}
 		} else {
