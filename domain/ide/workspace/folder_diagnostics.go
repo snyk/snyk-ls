@@ -91,7 +91,6 @@ func (f *Folder) workspaceLevelFetch(ctx context.Context, path string, p *progre
 }
 
 func (f *Folder) doSnykCodeWorkspaceScan(ctx context.Context, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan hover.DocumentHovers) {
-	//files, err := getWorkspaceFiles(workspacePath)
 	files, err := f.parent.GetFolder(f.path).Files()
 	if err != nil {
 		log.Warn().

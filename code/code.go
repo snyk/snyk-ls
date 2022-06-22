@@ -85,7 +85,6 @@ func (sc *SnykCode) handleCreationAndUploadError(err error, msg string, dChan ch
 	log.Error().Err(err).Msg(msg)
 	dChan <- lsp.DiagnosticResult{Err: err}
 	sc.trackResult(err == nil)
-	return
 }
 
 func (sc *SnykCode) createBundle(ctx context.Context, requestId string, filePaths []string) (b Bundle, bundleFiles map[string]BundleFile, err error) {

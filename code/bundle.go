@@ -41,7 +41,7 @@ func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) err
 	var err error
 	if uploadBatch.hasContent() {
 		b.BundleHash, b.missingFiles, err = b.SnykCode.ExtendBundle(ctx, b.BundleHash, uploadBatch.documents, removeFiles)
-		log.Trace().Str("requestId", b.requestId).Msg("extended bundle on backend")
+		log.Debug().Str("requestId", b.requestId).Interface("missingFiles", b.missingFiles).Msg("extended bundle on backend")
 	}
 
 	return err
