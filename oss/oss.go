@@ -294,15 +294,15 @@ func retrieveDiagnostics(
 
 func toDiagnostics(issue ossIssue, issueRange sglsp.Range) lsp.Diagnostic {
 	title := issue.Title
-	description := issue.Description
+	//description := issue.Description
 
 	if config.CurrentConfig().Format() == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
-		description = string(markdown.ToHTML([]byte(description), nil, nil))
+		//description = string(markdown.ToHTML([]byte(description), nil, nil))
 	}
 	return lsp.Diagnostic{
-		Source:   "Snyk LSP",
-		Message:  fmt.Sprintf("%s: %s", issue.Id, title),
+		Source:   "Snyk LS",
+		Message:  fmt.Sprintf("%s: Upgrade %s to %s", title, issue.PackageName, issue.FixedIn),
 		Range:    issueRange,
 		Severity: lspSeverity(issue.Severity),
 		Code:     issue.Id,

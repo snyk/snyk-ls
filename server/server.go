@@ -20,10 +20,6 @@ import (
 	"github.com/snyk/snyk-ls/lsp"
 )
 
-var (
-	clientParams lsp.InitializeParams
-)
-
 func Start() {
 	var srv *jrpc2.Server
 	di.Init()

@@ -492,6 +492,11 @@ func Test_IntegrationSnykCodeFileScan(t *testing.T) {
 	}
 
 	testPath := filepath.Join(cloneTargetDir, "app.js")
+
+	w := workspace.Get()
+	f := workspace.NewFolder(cloneTargetDir, "Test", w)
+	w.AddFolder(f)
+
 	_ = textDocumentDidOpen(&loc, testPath)
 
 	assert.Eventually(t, checkForPublishedDiagnostics(workspace.Get(), testPath, 6), maxIntegTestDuration, 10*time.Millisecond)
