@@ -42,7 +42,7 @@ func (s *span) StartSpan(ctx context.Context) {
 	s.span.SetTag("organization", config.CurrentConfig().GetOrganization())
 	s.ctx = performance.GetContextWithTraceId(s.span.Context(), s.span.TraceID.String())
 
-	log.Debug().
+	log.Trace().
 		Str("method", "sentrySpan.StartSpan").
 		Str("operation", s.operation).
 		Str("txName", s.txName).
@@ -50,7 +50,7 @@ func (s *span) StartSpan(ctx context.Context) {
 }
 
 func (s *span) Finish() {
-	log.Debug().
+	log.Trace().
 		Str("method", "span.Finish").
 		Str("operation", s.span.Op).
 		Msg("finishing span")

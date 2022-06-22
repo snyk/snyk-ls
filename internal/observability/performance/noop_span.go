@@ -18,7 +18,7 @@ type NoopSpan struct {
 func (n *NoopSpan) Finish() {
 	n.Started = false
 	n.Finished = true
-	log.Debug().
+	log.Trace().
 		Str("method", "NoopSpan.Finish").
 		Str("operation", n.Operation).
 		Msg("finishing span")
@@ -30,7 +30,7 @@ func (n *NoopSpan) StartSpan(ctx context.Context) {
 		ctx = context.Background()
 	}
 
-	log.Debug().
+	log.Trace().
 		Str("method", "NoopSpan.StartSpan").
 		Str("operation", n.Operation).
 		Msg("starting span")
