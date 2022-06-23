@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/snyk/issues"
 	"github.com/snyk/snyk-ls/internal/observability/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -125,22 +127,47 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 // todo analysis test limit files
 // todo analysis test severities
 
-func TestSnykCodeBackendService_convert_shouldConvertSarifCodeResults(t *testing.T) {
+func TestSnykCodeBackendService_convert_shouldConvertDiagnostics(t *testing.T) {
 	s := NewHTTPRepository("", &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
 	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
 
 	var analysisResponse SarifResponse
 	_ = json.Unmarshal(bytes, &analysisResponse)
 
-	diags, hovers := s.convertSarifResponse(analysisResponse)
+	diags, _ := s.convertSarifResponse(analysisResponse)
 	assert.NotNil(t, diags)
-	assert.NotNil(t, hovers)
 
 	assert.Equal(t, 1, len(diags))
-	assert.Equal(t, 1, len(hovers))
 
 	path := "/server/testdata/Dummy.java"
 	assert.Equal(t, 2, len(diags[path]))
+}
+
+func TestSnykCodeBackendService_convert_shouldConverHover(t *testing.T) {
+	s := NewHTTPRepository("", &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
+	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
+
+	var analysisResponse SarifResponse
+	_ = json.Unmarshal(bytes, &analysisResponse)
+
+	_, hovers := s.convertSarifResponse(analysisResponse)
+	assert.NotNil(t, hovers)
+
+	assert.Equal(t, 1, len(hovers))
+	assert.Equal(t, 2, len(hovers["file:///server/testdata/Dummy.java"]))
+	assert.Equal(
+		t,
+		hover.Hover[hover.Context]{
+			Id:      "java/DontUsePrintStackTrace",
+			Range:   sglsp.Range{Start: sglsp.Position{Line: 5, Character: 6}, End: sglsp.Position{Line: 5, Character: 7}},
+			Message: "Printing the stack trace of java.lang.InterruptedException. Production code should not use printStackTrace. (Snyk)",
+			Context: issues.Issue{
+				ID:        "java/DontUsePrintStackTrace",
+				Severity:  issues.Low,
+				IssueType: issues.CodeSecurityVulnerability,
+			},
+		},
+		hovers["file:///server/testdata/Dummy.java"][0])
 }
 
 func TestSnykCodeBackendService_GetFilters_returns(t *testing.T) {

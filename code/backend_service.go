@@ -18,6 +18,7 @@ import (
 	"github.com/snyk/snyk-ls/code/encoding"
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/snyk/issues"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -25,20 +26,35 @@ import (
 )
 
 var (
-	severities = map[string]sglsp.DiagnosticSeverity{
+	lspSeverities = map[string]sglsp.DiagnosticSeverity{
 		"3":       sglsp.Error,
 		"2":       sglsp.Warning,
 		"warning": sglsp.Warning, // Sarif Level
 		"error":   sglsp.Error,   // Sarif Level
 	}
+
+	issueSeverities = map[string]issues.Severity{
+		"3":       issues.High,
+		"2":       issues.Medium,
+		"warning": issues.Medium, // Sarif Level
+		"error":   issues.High,   // Sarif Level
+	}
 )
 
 func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
-	lspSev, ok := severities[snykSeverity]
+	lspSev, ok := lspSeverities[snykSeverity]
 	if !ok {
 		return sglsp.Info
 	}
 	return lspSev
+}
+
+func issueSeverity(snykSeverity string) issues.Severity {
+	sev, ok := issueSeverities[snykSeverity]
+	if !ok {
+		return issues.Low
+	}
+	return sev
 }
 
 type SnykCodeHTTPClient struct {
@@ -353,7 +369,11 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
 			h := hover.Hover[hover.Context]{
 				Id:    result.RuleID,
 				Range: myRange,
-				// Todo: Add more details here
+				Context: issues.Issue{
+					ID:        result.RuleID,
+					Severity:  issueSeverity(result.Level),
+					IssueType: issues.CodeSecurityVulnerability,
+				},
 				Message: fmt.Sprintf("%s (Snyk)", result.Message.Text),
 			}
 
