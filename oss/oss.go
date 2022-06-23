@@ -78,7 +78,7 @@ func IsSupported(documentURI sglsp.DocumentURI) bool {
 	return supportedFiles[filepath.Base(uri.PathFromUri(documentURI))]
 }
 
-func ScanWorkspace(ctx context.Context, cli cli.Executor, workspace sglsp.DocumentURI, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan hover.DocumentHovers) {
+func ScanWorkspace(ctx context.Context, cli cli.Executor, workspace sglsp.DocumentURI, wg *sync.WaitGroup, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	defer wg.Done()
 
 	method := "oss.ScanWorkspace"
@@ -95,18 +95,18 @@ func ScanWorkspace(ctx context.Context, cli cli.Executor, workspace sglsp.Docume
 	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", "--json"})
 	res, err := cli.Execute(cmd, workspacePath)
 	if err != nil {
-		if handleError(err, res, workspace, dChan) {
+		if handleError(err, res) {
 			return
 		}
 	}
 
-	unmarshallAndRetrieveAnalysis(res, workspace, dChan, hoverChan)
+	unmarshallAndRetrieveAnalysis(res, workspace, output)
 }
 
-func unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, hoverChan chan hover.DocumentHovers) {
+func unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.DocumentURI, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	scanResults, done, err := unmarshallOssJson(res)
 	if err != nil {
-		reportErrorViaChan(documentURI, dChan, err)
+		di.ErrorReporter().CaptureError(err)
 	}
 
 	if done {
@@ -121,10 +121,10 @@ func unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.DocumentURI, dC
 		if err != nil {
 			log.Err(err).Str("method", "unmarshallAndRetrieveAnalysis").
 				Msgf("Error while reading the file %v, err: %v", targetFile, err)
-			reportErrorViaChan(targetFileUri, dChan, err)
+			di.ErrorReporter().CaptureError(err)
 			return
 		}
-		retrieveAnalysis(scanResult, targetFileUri, fileContent, dChan, hoverChan)
+		retrieveAnalysis(scanResult, targetFileUri, fileContent, output)
 	}
 }
 
@@ -151,7 +151,7 @@ func unmarshallOssJson(res []byte) (scanResults []ossScanResult, done bool, err 
 	return scanResults, false, err
 }
 
-func handleError(err error, res []byte, workspace sglsp.DocumentURI, dChan chan lsp.DiagnosticResult) bool {
+func handleError(err error, res []byte) bool {
 	switch err := err.(type) {
 	case *exec.ExitError:
 		// Exit codes
@@ -167,7 +167,7 @@ func handleError(err error, res []byte, workspace sglsp.DocumentURI, dChan chan 
 			return false
 		case 2:
 			log.Err(err).Str("method", "oss.Scan").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
-			reportErrorViaChan(workspace, dChan, fmt.Errorf("%v: %v", err, errorOutput))
+			di.ErrorReporter().CaptureError(err)
 			return true
 		case 3:
 			log.Debug().Str("method", "oss.Scan").Msg("no supported projects/files detected.")
@@ -176,7 +176,7 @@ func handleError(err error, res []byte, workspace sglsp.DocumentURI, dChan chan 
 			log.Err(err).Str("method", "oss.Scan").Msg("Error while calling Snyk CLI")
 		}
 	default:
-		reportErrorViaChan(workspace, dChan, err)
+		di.ErrorReporter().CaptureError(err)
 		return true
 	}
 	return true
@@ -195,8 +195,7 @@ func ScanFile(
 	Cli cli.Executor,
 	documentURI sglsp.DocumentURI,
 	wg *sync.WaitGroup,
-	dChan chan lsp.DiagnosticResult,
-	hoverChan chan hover.DocumentHovers,
+	output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers),
 ) {
 	defer wg.Done()
 
@@ -221,52 +220,24 @@ func ScanFile(
 	cmd := Cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", workDir, "--json"})
 	res, err := Cli.Execute(cmd, workDir)
 	if err != nil {
-		if handleError(err, res, documentURI, dChan) {
+		if handleError(err, res) {
 			return
 		}
 	}
 
-	unmarshallAndRetrieveAnalysis(res, uri.PathToUri(workDir), dChan, hoverChan)
-}
-
-func reportErrorViaChan(uri sglsp.DocumentURI, dChan chan lsp.DiagnosticResult, err error) chan lsp.DiagnosticResult {
-	select {
-	case dChan <- lsp.DiagnosticResult{
-		Uri:         uri,
-		Diagnostics: nil,
-		Err:         err,
-	}:
-	default:
-		log.Debug().Str("method", "oss.reportErrorViaChan").Msg("not sending...")
-	}
-	trackResult(err == nil)
-	return dChan
+	unmarshallAndRetrieveAnalysis(res, uri.PathToUri(workDir), output)
 }
 
 func retrieveAnalysis(
 	scanResults ossScanResult,
-	uri sglsp.DocumentURI,
+	documentURI sglsp.DocumentURI,
 	fileContent []byte,
-	dChan chan lsp.DiagnosticResult,
-	hoverChan chan hover.DocumentHovers,
+	output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers),
 ) {
-	diags, hoverDetails := retrieveDiagnostics(scanResults, uri, fileContent)
+	diagnostics, hoverDetails := retrieveDiagnostics(scanResults, documentURI, fileContent)
 
-	if len(diags) > 0 {
-		log.Debug().Str("method", "oss.retrieveAnalysis").Msg("got diags, now sending to chan.")
-		select {
-		case dChan <- lsp.DiagnosticResult{
-			Uri:         uri,
-			Diagnostics: diags,
-		}:
-			hoverChan <- hover.DocumentHovers{
-				Uri:   uri,
-				Hover: hoverDetails,
-			}
-			log.Debug().Str("method", "oss.retrieveAnalysis").Int("diagnosticCount", len(diags)).Msg("found sth")
-		default:
-			log.Debug().Str("method", "oss.retrieveAnalysis").Msg("not sending...")
-		}
+	if len(diagnostics) > 0 {
+		output(map[string][]lsp.Diagnostic{uri.PathFromUri(documentURI): diagnostics}, []hover.DocumentHovers{{Uri: documentURI, Hover: hoverDetails}})
 	}
 	trackResult(true)
 }
@@ -329,7 +300,7 @@ func toHover(issue ossIssue, issueRange sglsp.Range) hover.Hover[hover.Context] 
 		strings.ToUpper(issue.Severity),
 	)
 
-	hover := hover.Hover[hover.Context]{
+	h := hover.Hover[hover.Context]{
 		Id:    issue.Id,
 		Range: issueRange,
 		Message: fmt.Sprintf("\n### %s: %s affecting %s package \n%s \n%s",
@@ -345,7 +316,7 @@ func toHover(issue ossIssue, issueRange sglsp.Range) hover.Hover[hover.Context] 
 			IssueType: issues.DependencyVulnerability,
 		},
 	}
-	return hover
+	return h
 }
 
 func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {

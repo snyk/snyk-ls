@@ -37,7 +37,7 @@ func (sc *SnykCode) ScanFile(ctx context.Context, filePath string, wg *sync.Wait
 	sc.UploadAndAnalyze(span.Context(), []string{filePath}, wg, filePath, dChan, hoverChan)
 }
 
-func (sc *SnykCode) ScanWorkspace(ctx context.Context, files []string, workspacePath string, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan hover.DocumentHovers) {
+func (sc *SnykCode) ScanWorkspace(ctx context.Context, files []string, workspacePath string, wg *sync.WaitGroup, hoverChan func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 	sc.UploadAndAnalyze(span.Context(), files, wg, workspacePath, dChan, hoverChan)

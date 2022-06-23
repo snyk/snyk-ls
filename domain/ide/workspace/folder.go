@@ -12,7 +12,6 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/concurrency"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
 	"github.com/snyk/snyk-ls/lsp"
@@ -118,16 +117,8 @@ func (f *Folder) loadIgnorePatterns() (patterns []string, err error) {
 func (f *Folder) Scan(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 	// TODO: don't return issues, handle sending diagnostics from the product line
-	issues := f.FetchAllRegisteredDocumentDiagnostics(ctx, f.path, lsp.ScanLevelWorkspace)
-	f.AddToCache(issues)
+	f.FetchAllRegisteredDocumentDiagnostics(ctx, f.path, lsp.ScanLevelWorkspace)
 	f.status = Scanned
-	for documentURI, d := range issues {
-		// todo: get rid of lsp type
-		notification.Send(lsp.PublishDiagnosticsParams{
-			URI:         uri.PathToUri(documentURI),
-			Diagnostics: d,
-		})
-	}
 }
 
 func (f *Folder) GetProductAttribute(productLine ProductLine, name string) interface{} {

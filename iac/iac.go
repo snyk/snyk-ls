@@ -19,7 +19,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk/issues"
 	"github.com/snyk/snyk-ls/internal/cli"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -48,7 +47,7 @@ func IsSupported(documentURI sglsp.DocumentURI) bool {
 	return extensions[ext]
 }
 
-func ScanWorkspace(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, hoverChan chan hover.DocumentHovers) {
+func ScanWorkspace(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	defer wg.Done()
 	scanResults, err := doScan(ctx, Cli, documentURI)
 	if err != nil {
@@ -56,12 +55,12 @@ func ScanWorkspace(ctx context.Context, Cli cli.Executor, documentURI sglsp.Docu
 	}
 	for _, scanResult := range scanResults {
 		u := uri.PathToUri(filepath.Join(uri.PathFromUri(documentURI), scanResult.TargetFile))
-		retrieveAnalysis(u, scanResult, hoverChan)
+		retrieveAnalysis(u, scanResult, output)
 	}
 	trackResult(err == nil)
 }
 
-func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, hoverChan chan hover.DocumentHovers) {
+func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	defer wg.Done()
 	if !IsSupported(documentURI) {
 		return
@@ -71,7 +70,7 @@ func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentU
 		di.ErrorReporter().CaptureError(err)
 	}
 	if len(scanResults) > 0 {
-		retrieveAnalysis(documentURI, scanResults[0], hoverChan)
+		retrieveAnalysis(documentURI, scanResults[0], output)
 	}
 	trackResult(err == nil)
 }
@@ -145,28 +144,12 @@ func cliCmd(Cli cli.Executor, u sglsp.DocumentURI) []string {
 	return cmd
 }
 
-func retrieveAnalysis(uri sglsp.DocumentURI, scanResult iacScanResult, hoverChan chan hover.DocumentHovers) {
+func retrieveAnalysis(documentURI sglsp.DocumentURI, scanResult iacScanResult, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	diagnostics, hoverDetails := convertScanResult(scanResult)
 
-	if len(hoverDetails) > 0 {
-		select {
-		case hoverChan <- hover.DocumentHovers{Uri: uri, Hover: hoverDetails}:
-			log.Debug().Str("method", "iac.retrieveAnalysis").Interface("hoverDetailsCount", len(hoverDetails)).Msg("found sth")
-		default:
-			log.Debug().Str("method", "iac.retrieveAnalysis").Msg("no diags found & sent.")
-		}
+	if len(diagnostics) > 0 {
+		output(map[string][]lsp.Diagnostic{uri.PathFromUri(documentURI): diagnostics}, []hover.DocumentHovers{{Uri: documentURI, Hover: hoverDetails}})
 	}
-
-	/*
-		ProductLine a/sync I/O in(files) -> out(issues)
-		ProductLineService Scan -> taking all product lines runs scan -> wires up results
-		ProductLineService.Scan(input, output func(issues){notification.whatever})
-	*/
-
-	notification.Send(lsp.PublishDiagnosticsParams{
-		URI:         uri,
-		Diagnostics: diagnostics,
-	})
 }
 
 func convertScanResult(res iacScanResult) ([]lsp.Diagnostic, []hover.Hover[hover.Context]) {
