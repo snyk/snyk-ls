@@ -33,8 +33,8 @@ func (s *gdprAwareSentryErrorReporter) CaptureError(err error) bool {
 		Message: fmt.Sprintf("Snyk encountered an error: %v", err),
 	})
 	if config.CurrentConfig().IsErrorReportingEnabled() {
-		log.Debug().Err(err).Str("method", "CaptureError").Msgf("Sending error to Sentry")
-		sentry.CaptureException(err)
+		eventId := sentry.CaptureException(err)
+		log.Info().Err(err).Str("method", "CaptureError").Msgf("Sent error to Sentry (ID: %s)", eventId)
 		return true
 	}
 	return false

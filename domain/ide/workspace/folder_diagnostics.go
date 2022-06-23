@@ -32,7 +32,7 @@ func (f *Folder) DocumentDiagnosticsFromCache(file string) []lsp.Diagnostic {
 	return diagnostics.([]lsp.Diagnostic)
 }
 
-func (f *Folder) FetchAllRegisteredDocumentDiagnostics(ctx context.Context, path string, level lsp.ScanLevel) map[string][]lsp.Diagnostic {
+func (f *Folder) FetchAllRegisteredDocumentDiagnostics(ctx context.Context, path string, level lsp.ScanLevel) {
 	method := "ide.workspace.Folder.FetchAllRegisteredDocumentDiagnostics"
 
 	log.Info().Str("method", method).Msg("started.")
@@ -57,7 +57,7 @@ func (f *Folder) FetchAllRegisteredDocumentDiagnostics(ctx context.Context, path
 
 	if level == lsp.ScanLevelWorkspace {
 		dChan = make(chan lsp.DiagnosticResult, 10000)
-		f.workspaceLevelFetch(ctx, path, p, &wg, dChan, hoverChan)
+		f.workspaceLevelFetch(ctx, path, p, &wg, hoverChan)
 	} else {
 		dChan = make(chan lsp.DiagnosticResult, 10000)
 		f.fileLevelFetch(ctx, path, p, &wg, dChan, hoverChan)
@@ -73,20 +73,21 @@ func (f *Folder) FetchAllRegisteredDocumentDiagnostics(ctx context.Context, path
 	return f.processResults(dChan, diagnostics)
 }
 
-func (f *Folder) workspaceLevelFetch(ctx context.Context, path string, p *progress.Tracker, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan hover.DocumentHovers) {
+func (f *Folder) workspaceLevelFetch(ctx context.Context, path string, p *progress.Tracker, wg *sync.WaitGroup, hoverChan chan hover.DocumentHovers) {
 	if config.CurrentConfig().IsSnykIacEnabled() {
 		wg.Add(1)
-		go iac.ScanWorkspace(ctx, f.cli, uri.PathToUri(path), wg, dChan, hoverChan)
+		go iac.ScanWorkspace(ctx, f.cli, uri.PathToUri(path), wg, hoverChan)
 		p.Report(10)
 	}
 	if config.CurrentConfig().IsSnykOssEnabled() {
 		wg.Add(1)
-		go oss.ScanWorkspace(ctx, f.cli, uri.PathToUri(path), wg, dChan, hoverChan)
+		go oss.ScanWorkspace(ctx, f.cli, uri.PathToUri(path), wg, hoverChan)
 		p.Report(20)
 	}
 	if config.CurrentConfig().IsSnykCodeEnabled() {
-		f.doSnykCodeWorkspaceScan(ctx, wg, dChan, hoverChan)
-		p.Report(80)
+		wg.Add(1)
+		f.doSnykCodeWorkspaceScan(ctx, wg, hoverChan)
+		go p.Report(30)
 	}
 }
 
