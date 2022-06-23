@@ -343,8 +343,8 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
 				Range:    myRange,
 				Severity: lspSeverity(result.Level),
 				Code:     result.RuleID,
-				Source:   "Snyk LSP",
-				Message:  fmt.Sprintf("Vulnerability Id: %s", result.RuleID),
+				Source:   "Snyk LS",
+				Message:  fmt.Sprintf("%s (Snyk)", result.Message.Text),
 			}
 
 			diagSlice = append(diagSlice, d)
@@ -354,7 +354,7 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (
 				Id:    result.RuleID,
 				Range: myRange,
 				// Todo: Add more details here
-				Message: fmt.Sprintf("Snyk: %s \n", result.Message.Text),
+				Message: fmt.Sprintf("%s (Snyk)", result.Message.Text),
 			}
 
 			hoverSlice = append(hoverSlice, h)

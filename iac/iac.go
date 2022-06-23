@@ -250,7 +250,7 @@ func toDiagnostic(issue iacIssue) lsp.Diagnostic {
 			Start: sglsp.Position{Line: issue.LineNumber, Character: 0},
 			End:   sglsp.Position{Line: issue.LineNumber, Character: 80},
 		},
-		Message:  fmt.Sprintf("%s: %s\n\n", issue.PublicID, title),
+		Message:  fmt.Sprintf("%s (Snyk)", title),
 		Severity: lspSeverity(issue.Severity),
 		Code:     issue.PublicID,
 	}
