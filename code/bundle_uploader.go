@@ -28,7 +28,6 @@ func NewBundler(SnykCode SnykCodeClient, instrumentor performance.Instrumentor) 
 	}
 }
 
-// TODO remove all LSP dependencies (e.g. DocumentURI)
 func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, files map[string]BundleFile) (Bundle, error) {
 	method := "code.Upload"
 	s := b.instrumentor.StartSpan(ctx, method)

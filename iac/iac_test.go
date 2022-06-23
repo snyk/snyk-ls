@@ -38,7 +38,7 @@ func Test_ScanWorkspace(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	snykCli := cli.SnykCli{}
-	go ScanWorkspace(ctx, snykCli, doc, &wg, func(issues map[string][]lsp2.Diagnostic, hovers []hover.DocumentHovers) {
+	ScanWorkspace(ctx, snykCli, doc, &wg, func(issues map[string][]lsp2.Diagnostic, hovers []hover.DocumentHovers) {
 		assert.Greater(t, len(issues), 0)
 		assert.Greater(t, len(issues), 0)
 	})
@@ -70,7 +70,7 @@ func Test_ScanFile(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	snykCli := cli.SnykCli{}
-	go ScanFile(ctx, snykCli, doc.URI, &wg, func(issues map[string][]lsp2.Diagnostic, hovers []hover.DocumentHovers) {
+	ScanFile(ctx, snykCli, doc.URI, &wg, func(issues map[string][]lsp2.Diagnostic, hovers []hover.DocumentHovers) {
 		assert.Greater(t, len(issues), 0)
 		assert.Greater(t, len(issues), 0)
 	})
@@ -102,7 +102,7 @@ func Test_Analytics(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	snykCli := cli.SnykCli{}
-	go ScanFile(ctx, snykCli, doc.URI, &wg, func(issues map[string][]lsp2.Diagnostic, hovers []hover.DocumentHovers) {
+	ScanFile(ctx, snykCli, doc.URI, &wg, func(issues map[string][]lsp2.Diagnostic, hovers []hover.DocumentHovers) {
 		assert.Greater(t, len(issues), 0)
 		assert.Greater(t, len(issues), 0)
 	})

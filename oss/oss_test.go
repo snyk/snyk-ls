@@ -53,7 +53,7 @@ func Test_ScanWorkspace(t *testing.T) {
 		foundHovers = hovers
 	}
 
-	go ScanWorkspace(ctx, snykCli, doc, &wg, output)
+	ScanWorkspace(ctx, snykCli, doc, &wg, output)
 
 	assert.NotEqual(t, 0, len(diagnosticMap))
 	assert.NotEqual(t, 0, len(foundHovers))
@@ -85,7 +85,7 @@ func Test_ScanFile(t *testing.T) {
 		foundHovers = hovers
 	}
 
-	go ScanFile(ctx, snykCli, uri.PathToUri(path), &wg, output)
+	ScanFile(ctx, snykCli, uri.PathToUri(path), &wg, output)
 
 	assert.NotEqual(t, 0, len(diagnosticMap))
 	assert.NotEqual(t, 0, len(foundHovers))
@@ -109,7 +109,7 @@ func Test_Analytics(t *testing.T) {
 	wg.Add(1)
 
 	snykCli := &cli.SnykCli{}
-	go ScanFile(ctx, snykCli, uri.PathToUri(path), &wg, testutil.NoopOutput)
+	ScanFile(ctx, snykCli, uri.PathToUri(path), &wg, testutil.NoopOutput)
 	wg.Wait()
 
 	assert.GreaterOrEqual(t, len(di.Analytics().(*ux.AnalyticsRecorder).GetAnalytics()), 1)

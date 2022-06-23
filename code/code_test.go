@@ -98,7 +98,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 
-		go c.UploadAndAnalyze(context.Background(), docs, &wg, "", testutil.NoopOutput)
+		c.UploadAndAnalyze(context.Background(), docs, &wg, "", testutil.NoopOutput)
 
 		// verify that create bundle has been called on backend service
 		params := snykCodeMock.GetCallParams(0, code.CreateBundleWithSourceOperation)
@@ -123,7 +123,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 			diagnosticMap = issues
 		}
 
-		go c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, &wg, "", output)
+		c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, &wg, "", output)
 
 		assert.NotNil(t, diagnosticMap)
 		diagnostics := diagnosticMap[diagnosticUri]
