@@ -35,7 +35,6 @@ func Test_ScanWorkspace(t *testing.T) {
 	testutil.IntegTest(t)
 	di.TestInit(t)
 	testutil.CreateDummyProgressListener(t)
-	config.CurrentConfig().SetFormat(config.FormatHtml)
 	ctx := context.Background()
 	preconditions.EnsureReadyForAnalysisAndWait(ctx)
 
@@ -43,21 +42,21 @@ func Test_ScanWorkspace(t *testing.T) {
 	path, _ := filepath.Abs(workingDir + "/testdata")
 	doc := uri.PathToUri(path)
 
-	dChan := make(chan lsp.DiagnosticResult)
-	hoverChan := make(chan hover.DocumentHovers)
-
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	snykCli := &cli.SnykCli{}
 
-	go ScanWorkspace(ctx, snykCli, doc, &wg, dChan, hoverChan)
+	diagnosticMap := map[string][]lsp.Diagnostic{}
+	var foundHovers []hover.DocumentHovers
+	output := func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers) {
+		diagnosticMap = issues
+		foundHovers = hovers
+	}
 
-	diagnosticResult := <-dChan
-	hoverResult := <-hoverChan
+	go ScanWorkspace(ctx, snykCli, doc, &wg, output)
 
-	assert.NotEqual(t, 0, len(diagnosticResult.Diagnostics))
-	assert.NotEqual(t, 0, len(hoverResult.Hover))
-	assert.True(t, strings.Contains(diagnosticResult.Diagnostics[0].Message, "<p>"))
+	assert.NotEqual(t, 0, len(diagnosticMap))
+	assert.NotEqual(t, 0, len(foundHovers))
 	recorder := &di.Instrumentor().(*performance.TestInstrumentor).SpanRecorder
 	spans := recorder.Spans()
 	assert.Len(t, spans, 1)
@@ -74,20 +73,23 @@ func Test_ScanFile(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
-	dChan := make(chan lsp.DiagnosticResult)
-	hoverChan := make(chan hover.DocumentHovers)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
 	snykCli := &cli.SnykCli{}
-	go ScanFile(ctx, snykCli, uri.PathToUri(path), &wg, dChan, hoverChan)
 
-	diagnosticResult := <-dChan
-	hoverResult := <-hoverChan
+	diagnosticMap := map[string][]lsp.Diagnostic{}
+	var foundHovers []hover.DocumentHovers
+	output := func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers) {
+		diagnosticMap = issues
+		foundHovers = hovers
+	}
 
-	assert.NotEqual(t, 0, len(diagnosticResult.Diagnostics))
-	assert.NotEqual(t, 0, len(hoverResult.Hover))
-	assert.True(t, strings.Contains(diagnosticResult.Diagnostics[0].Message, "<p>"))
+	go ScanFile(ctx, snykCli, uri.PathToUri(path), &wg, output)
+
+	assert.NotEqual(t, 0, len(diagnosticMap))
+	assert.NotEqual(t, 0, len(foundHovers))
+	assert.True(t, strings.Contains(diagnosticMap[path][0].Message, "<p>"))
 	recorder := &di.Instrumentor().(*performance.TestInstrumentor).SpanRecorder
 	spans := recorder.Spans()
 	assert.Equal(t, "oss.ScanFile", spans[0].GetOperation())
@@ -103,13 +105,11 @@ func Test_Analytics(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
-	dChan := make(chan lsp.DiagnosticResult)
-	hoverChan := make(chan hover.DocumentHovers)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
 	snykCli := &cli.SnykCli{}
-	go ScanFile(ctx, snykCli, uri.PathToUri(path), &wg, dChan, hoverChan)
+	go ScanFile(ctx, snykCli, uri.PathToUri(path), &wg, testutil.NoopOutput)
 	wg.Wait()
 
 	assert.GreaterOrEqual(t, len(di.Analytics().(*ux.AnalyticsRecorder).GetAnalytics()), 1)

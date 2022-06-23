@@ -17,6 +17,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
 	lsp2 "github.com/snyk/snyk-ls/lsp"
@@ -94,14 +95,10 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		docs := []string{uri.PathFromUri(firstDoc.URI)}
 		defer os.RemoveAll(path)
 
-		dChan := make(chan lsp2.DiagnosticResult)
-		hoverChan := make(chan hover.DocumentHovers)
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 
-		go c.UploadAndAnalyze(context.Background(), docs, &wg, "", dChan, hoverChan)
-
-		<-dChan
+		go c.UploadAndAnalyze(context.Background(), docs, &wg, "", testutil.NoopOutput)
 
 		// verify that create bundle has been called on backend service
 		params := snykCodeMock.GetCallParams(0, code.CreateBundleWithSourceOperation)
@@ -116,17 +113,17 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		c := code.NewSnykCode(code.NewBundler(snykCodeMock, &performance.TestInstrumentor{}), &code.FakeApiClient{CodeEnabled: true}, sentry.NewTestErrorReporter(), ux.NewNoopRecordingClient())
 		diagnosticUri, path := code.FakeDiagnosticUri()
 		defer os.RemoveAll(path)
-		diagnosticMap := map[string][]lsp2.Diagnostic{}
 
 		// execute
-		dChan := make(chan lsp2.DiagnosticResult)
-		hoverChan := make(chan hover.DocumentHovers)
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 
-		go c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, &wg, "", dChan, hoverChan)
-		result := <-dChan
-		diagnosticMap[uri.PathFromUri(result.Uri)] = result.Diagnostics
+		diagnosticMap := map[string][]lsp2.Diagnostic{}
+		output := func(issues map[string][]lsp2.Diagnostic, hovers []hover.DocumentHovers) {
+			diagnosticMap = issues
+		}
+
+		go c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, &wg, "", output)
 
 		assert.NotNil(t, diagnosticMap)
 		diagnostics := diagnosticMap[diagnosticUri]
@@ -149,11 +146,9 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		defer os.RemoveAll(path)
 
 		// execute
-		dChan := make(chan lsp2.DiagnosticResult, 100)
-		hoverChan := make(chan hover.DocumentHovers, 100)
 		wg := sync.WaitGroup{}
 
-		c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, &wg, "", dChan, hoverChan)
+		c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, &wg, "", testutil.NoopOutput)
 
 		assert.Len(t, analytics.GetAnalytics(), 1)
 		assert.Equal(t, ux.AnalysisIsReadyProperties{
