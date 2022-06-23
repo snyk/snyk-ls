@@ -66,10 +66,7 @@ func installCli(ctx context.Context) {
 	}
 
 	if cliPath != "" {
-		err := config.CurrentConfig().SetCliPath(cliPath)
-		if err != nil {
-			log.Err(err).Str("method", "installCli").Msg("Couldn't update config.CurrentConfig() with Snyk cli path")
-		}
+		config.CurrentConfig().SetCliPath(cliPath)
 		log.Info().Str("method", "installCli").Str("snyk", cliPath).Msg("Snyk CLI found.")
 	} else {
 		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Warning, Message: "Could not find, nor install Snyk CLI"})

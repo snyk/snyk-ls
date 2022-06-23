@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sync"
 	"testing"
 
 	"github.com/sourcegraph/go-lsp"
@@ -95,10 +94,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		docs := []string{uri.PathFromUri(firstDoc.URI)}
 		defer os.RemoveAll(path)
 
-		wg := sync.WaitGroup{}
-		wg.Add(1)
-
-		c.UploadAndAnalyze(context.Background(), docs, &wg, "", testutil.NoopOutput)
+		c.UploadAndAnalyze(context.Background(), docs, "", testutil.NoopOutput)
 
 		// verify that create bundle has been called on backend service
 		params := snykCodeMock.GetCallParams(0, code.CreateBundleWithSourceOperation)
@@ -115,15 +111,12 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		defer os.RemoveAll(path)
 
 		// execute
-		wg := sync.WaitGroup{}
-		wg.Add(1)
-
 		diagnosticMap := map[string][]lsp2.Diagnostic{}
 		output := func(issues map[string][]lsp2.Diagnostic, hovers []hover.DocumentHovers) {
 			diagnosticMap = issues
 		}
 
-		c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, &wg, "", output)
+		c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, "", output)
 
 		assert.NotNil(t, diagnosticMap)
 		diagnostics := diagnosticMap[diagnosticUri]
@@ -146,9 +139,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		defer os.RemoveAll(path)
 
 		// execute
-		wg := sync.WaitGroup{}
-
-		c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, &wg, "", testutil.NoopOutput)
+		c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, "", testutil.NoopOutput)
 
 		assert.Len(t, analytics.GetAnalytics(), 1)
 		assert.Equal(t, ux.AnalysisIsReadyProperties{

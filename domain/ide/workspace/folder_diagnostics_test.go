@@ -3,7 +3,9 @@ package workspace
 import (
 	"context"
 	"os"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
@@ -19,24 +21,37 @@ import (
 
 type mockCli struct {
 	mock.Mock
+	mutex sync.Mutex
 }
 
 func (m *mockCli) Execute(cmd []string, workDir string) (resp []byte, err error) {
+	mutex.Lock()
+	defer mutex.Unlock()
 	args := m.Called(cmd, workDir)
 	log.Debug().Interface("cmd", cmd).Msg("Using mock CLI")
 	return []byte(args.String(0)), args.Error(1)
 }
 
 func (m *mockCli) ExpandParametersFromConfig(base []string) []string {
+	mutex.Lock()
+	defer mutex.Unlock()
 	args := m.Called(base)
 	log.Debug().Interface("base", base).Msg("Using mock CLI")
 	return args.Get(0).([]string)
 }
 
 func (m *mockCli) HandleErrors(ctx context.Context, output string, err error) (fail bool) {
+	mutex.Lock()
+	defer mutex.Unlock()
 	args := m.Called(err)
 	log.Debug().Err(err).Msg("Using mock CLI")
 	return args.Bool(0)
+}
+
+func (m *mockCli) Calls() []mock.Call {
+	mutex.Lock()
+	defer mutex.Unlock()
+	return m.Mock.Calls
 }
 
 func Test_GetDiagnostics_shouldReturnDiagnosticForCachedFile(t *testing.T) {
@@ -114,8 +129,8 @@ func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
 	assert.NotNil(t, params)
 }
 
+// todo get rid of CLI once we introduce product line abstraction
 func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
-	testutil.CreateDummyProgressListener(t)
 	testutil.UnitTest(t)
 	di.TestInit(t)
 	workspace := New()
@@ -124,16 +139,16 @@ func Test_GetDiagnostics_shouldRunOssIfEnabled(t *testing.T) {
 	config.CurrentConfig().SetSnykCodeEnabled(false)
 	config.CurrentConfig().SetSnykIacEnabled(false)
 	config.CurrentConfig().SetSnykOssEnabled(true)
-	filePath := "/test/package.json"
 	mockCli := mockCli{}
 	f.cli = &mockCli
 	mockCli.Mock.On("Execute", mock.Anything, mock.Anything).Return("test", nil)
 	mockCli.Mock.On("ExpandParametersFromConfig", mock.Anything).Return([]string{"test", "iac", "--insecure", "-d", "--all-projects"})
 
-	diagnostics := workspace.GetDiagnostics(context.Background(), filePath)
+	workspace.GetDiagnostics(context.Background(), "/test/package.json")
 
-	assert.Equal(t, len(f.DocumentDiagnosticsFromCache(filePath)), len(diagnostics))
-	assert.Equal(t, 2, len(mockCli.Calls))
+	assert.Eventually(t, func() bool {
+		return len(mockCli.Calls()) == 2
+	}, 2*time.Second, time.Millisecond)
 }
 
 func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
@@ -154,38 +169,28 @@ func Test_GetDiagnostics_shouldNotRunOssIfNotEnabled(t *testing.T) {
 	diagnostics := workspace.GetDiagnostics(context.Background(), filePath)
 
 	assert.Equal(t, len(f.DocumentDiagnosticsFromCache(filePath)), len(diagnostics))
-	assert.Equal(t, 0, len(mockCli.Calls))
+	assert.Equal(t, 0, len(mockCli.Calls()))
 }
 
 func Test_GetDiagnostics_shouldRunIacIfEnabled(t *testing.T) {
 	testutil.UnitTest(t)
 	di.TestInit(t)
-	config.CurrentConfig().SetSnykCodeEnabled(false)
-	config.CurrentConfig().SetSnykIacEnabled(true)
-	config.CurrentConfig().SetSnykOssEnabled(false)
 	workspace := New()
 	f := NewFolder("/test", "Test", workspace)
 	workspace.AddFolder(f)
-	filePath := "/test/package.json"
-	settings := config.CurrentConfig().CliSettings()
-	settings.AdditionalParameters = []string{"-d", "--all-projects"}
-	settings.Insecure = true
-	settings.Endpoint = "asd"
-	config.CurrentConfig().SetCliSettings(settings)
-
+	config.CurrentConfig().SetSnykCodeEnabled(false)
+	config.CurrentConfig().SetSnykIacEnabled(true)
+	config.CurrentConfig().SetSnykOssEnabled(false)
 	mockCli := mockCli{}
 	f.cli = &mockCli
-	mockCli.Mock.On("Execute", mock.Anything, mock.Anything).Return("{}", nil)
+	mockCli.Mock.On("Execute", mock.Anything, mock.Anything).Return("test", nil)
 	mockCli.Mock.On("ExpandParametersFromConfig", mock.Anything).Return([]string{"test", "iac", "--insecure", "-d", "--all-projects"})
 
-	diagnostics := workspace.GetDiagnostics(context.Background(), filePath)
+	workspace.GetDiagnostics(context.Background(), "/test/package.json")
 
-	assert.Equal(t, len(f.DocumentDiagnosticsFromCache(filePath)), len(diagnostics))
-	assert.Equal(t, 2, len(mockCli.Calls))
-	call := mockCli.Calls[1]
-	assert.Contains(t, call.Arguments[0], "--insecure")
-	assert.Contains(t, call.Arguments[0], "-d")
-	assert.Contains(t, call.Arguments[0], "--all-projects")
+	assert.Eventually(t, func() bool {
+		return len(mockCli.Calls()) == 2
+	}, 2*time.Second, time.Millisecond)
 }
 
 func Test_GetDiagnostics_shouldNotIacIfNotEnabled(t *testing.T) { // disable snyk code
@@ -206,7 +211,7 @@ func Test_GetDiagnostics_shouldNotIacIfNotEnabled(t *testing.T) { // disable sny
 	diagnostics := workspace.GetDiagnostics(context.Background(), filePath)
 
 	assert.Equal(t, len(f.DocumentDiagnosticsFromCache(filePath)), len(diagnostics))
-	assert.Equal(t, 0, len(mockCli.Calls))
+	assert.Equal(t, 0, len(mockCli.Calls()))
 }
 
 func Test_GetDiagnostics_shouldNotTryToAnalyseEmptyFiles(t *testing.T) {

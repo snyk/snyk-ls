@@ -354,8 +354,8 @@ func Test_IntegrationWorkspaceScanWithTwoUploadBatches(t *testing.T) {
 }
 
 func runIntegrationTest(repo string, commit string, file1 string, file2 string, t *testing.T) {
-	testutil.IntegTest(t)
 	loc := setupServer(t)
+	testutil.IntegTest(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	config.CurrentConfig().SetSnykIacEnabled(true)
 	config.CurrentConfig().SetSnykOssEnabled(true)

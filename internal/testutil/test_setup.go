@@ -25,7 +25,10 @@ func IntegTest(t *testing.T) {
 
 func UnitTest(t *testing.T) {
 	t.Helper()
-	config.SetCurrentConfig(config.New())
+	c := config.New()
+	c.SetToken("00000000-0000-0000-0000-000000000001")
+	c.SetCliPath("dummy")
+	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t)
 }
 

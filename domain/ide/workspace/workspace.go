@@ -56,6 +56,8 @@ func (w *Workspace) GetFolder(path string) (folder *Folder) {
 	return nil
 }
 
+// 1. Trigger scan across all product lines
+// 2. Fetch issues
 func (w *Workspace) GetDiagnostics(ctx context.Context, path string) []lsp.Diagnostic {
 	// serve from cache
 	method := "Workspace.GetDiagnostics"
@@ -88,13 +90,7 @@ func (w *Workspace) Scan(ctx context.Context) {
 	notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Workspace scan started"})
 	defer notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Workspace scan completed"})
 
-	var wg sync.WaitGroup
 	for _, folder := range w.workspaceFolders {
-		wg.Add(1)
-		go folder.Scan(s.Context(), &wg)
+		go folder.Scan(s.Context())
 	}
-
-	wg.Wait()
-	log.Info().Str("method", "Workspace").
-		Msg("Workspace scan completed")
 }

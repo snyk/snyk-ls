@@ -152,11 +152,10 @@ func (c *Config) SnykCodeApi() string                    { return c.snykCodeApiU
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
 func (c *Config) Token() string                          { return c.token }
 
-func (c *Config) SetCliPath(cliPath string) error {
+func (c *Config) SetCliPath(cliPath string) {
 	c.cliPathAccessMutex.Lock()
 	defer c.cliPathAccessMutex.Unlock()
 	c.cliPath = cliPath
-	return os.Setenv(cliPathKey, cliPath)
 }
 
 func (c *Config) SetCliSettings(settings CliSettings)   { c.cliSettings = settings }
@@ -168,9 +167,8 @@ func (c *Config) SetSnykIacEnabled(enabled bool)        { c.isSnykIacEnabled.Set
 func (c *Config) SetSnykContainerEnabled(enabled bool) { c.isSnykContainerEnabled.Set(enabled) }
 
 func (c *Config) SetSnykAdvisorEnabled(enabled bool) { c.isSnykAdvisorEnabled.Set(enabled) }
-func (c *Config) SetToken(token string) error {
+func (c *Config) SetToken(token string) {
 	c.token = token
-	return os.Setenv(SnykTokenKey, token)
 }
 func (c *Config) SetFormat(format string) { c.format = format }
 

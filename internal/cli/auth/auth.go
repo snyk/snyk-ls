@@ -50,10 +50,7 @@ func Authenticate(ctx context.Context) {
 			di.ErrorReporter().CaptureError(err)
 		}
 	} else {
-		err = config.CurrentConfig().SetToken(token)
-		if err != nil {
-			log.Err(err).Str("method", "Authenticate").Msg("couldn't set newly obtained token to env")
-		}
+		config.CurrentConfig().SetToken(token)
 	}
 	notification.Send(lsp.AuthenticationParams{Token: token})
 }

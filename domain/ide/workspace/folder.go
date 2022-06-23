@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/rs/zerolog/log"
 	ignore "github.com/sabhiram/go-gitignore"
@@ -114,9 +113,7 @@ func (f *Folder) loadIgnorePatterns() (patterns []string, err error) {
 	return patterns, nil
 }
 
-func (f *Folder) Scan(ctx context.Context, wg *sync.WaitGroup) {
-	defer wg.Done()
-	// TODO: don't return issues, handle sending diagnostics from the product line
+func (f *Folder) Scan(ctx context.Context) {
 	f.FetchAllRegisteredDocumentDiagnostics(ctx, f.path, lsp.ScanLevelWorkspace)
 	f.status = Scanned
 }

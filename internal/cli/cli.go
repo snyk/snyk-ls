@@ -59,7 +59,7 @@ func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
 	if settings.Insecure {
 		additionalParams = append(additionalParams, "--insecure")
 	}
-
+	//TODO why are we setting org both in the os env & as a param??
 	organization := config.CurrentConfig().GetOrganization()
 	if organization != "" {
 		err := os.Setenv("SNYK_CFG_ORG", organization)

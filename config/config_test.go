@@ -11,10 +11,9 @@ import (
 func TestSetToken(t *testing.T) {
 	SetCurrentConfig(New()) // can't use testutil here because of cyclical imports
 	oldToken := CurrentConfig().Token()
-	err := CurrentConfig().SetToken("asdf")
-	assert.NoError(t, err)
+	CurrentConfig().SetToken("asdf")
 	assert.Equal(t, CurrentConfig().Token(), "asdf")
-	_ = CurrentConfig().SetToken(oldToken)
+	CurrentConfig().SetToken(oldToken)
 }
 
 func TestToken(t *testing.T) {

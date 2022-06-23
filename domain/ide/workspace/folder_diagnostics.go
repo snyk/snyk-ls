@@ -3,7 +3,6 @@ package workspace
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/rs/zerolog/log"
 
@@ -51,42 +50,29 @@ func (f *Folder) FetchAllRegisteredDocumentDiagnostics(ctx context.Context, path
 	)
 	defer p.End(fmt.Sprintf("Scan complete. Found %d issues.", len(diagnostics)))
 
-	wg := sync.WaitGroup{}
-
 	if level == lsp.ScanLevelWorkspace {
-		f.workspaceLevelFetch(ctx, path, p, &wg, f.processResults)
+		f.workspaceLevelFetch(ctx, path, p, f.processResults)
 	} else {
-		f.fileLevelFetch(ctx, path, p, &wg, f.processResults)
+		f.fileLevelFetch(ctx, path, p, f.processResults)
 	}
-	log.Debug().
-		Str("method", "fetchAllRegisteredDocumentDiagnostics").
-		Msg("waiting for goroutines.")
-	wg.Wait()
-	log.Debug().
-		Str("method", "fetchAllRegisteredDocumentDiagnostics").
-		Msg("finished waiting for goroutines.")
-
 }
 
-func (f *Folder) workspaceLevelFetch(ctx context.Context, path string, p *progress.Tracker, wg *sync.WaitGroup, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
+func (f *Folder) workspaceLevelFetch(ctx context.Context, path string, p *progress.Tracker, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	if config.CurrentConfig().IsSnykIacEnabled() {
-		wg.Add(1)
-		go iac.ScanWorkspace(ctx, f.cli, uri.PathToUri(path), wg, output)
+		go iac.ScanWorkspace(ctx, f.cli, uri.PathToUri(path), output)
 		p.Report(10)
 	}
 	if config.CurrentConfig().IsSnykOssEnabled() {
-		wg.Add(1)
-		go oss.ScanWorkspace(ctx, f.cli, uri.PathToUri(path), wg, output)
+		go oss.ScanWorkspace(ctx, f.cli, uri.PathToUri(path), output)
 		p.Report(20)
 	}
 	if config.CurrentConfig().IsSnykCodeEnabled() {
-		wg.Add(1)
-		f.doSnykCodeWorkspaceScan(ctx, wg, output)
+		f.doSnykCodeWorkspaceScan(ctx, output)
 		go p.Report(30)
 	}
 }
 
-func (f *Folder) doSnykCodeWorkspaceScan(ctx context.Context, wg *sync.WaitGroup, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
+func (f *Folder) doSnykCodeWorkspaceScan(ctx context.Context, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	files, err := f.parent.GetFolder(f.path).Files()
 	if err != nil {
 		log.Warn().
@@ -95,22 +81,20 @@ func (f *Folder) doSnykCodeWorkspaceScan(ctx context.Context, wg *sync.WaitGroup
 			Str("workspacePath", f.path).
 			Msg("error getting workspace files")
 	}
-	di.SnykCode().ScanWorkspace(ctx, files, f.path, wg, output)
+	di.SnykCode().ScanWorkspace(ctx, files, f.path, output)
 }
 
-func (f *Folder) fileLevelFetch(ctx context.Context, path string, p *progress.Tracker, wg *sync.WaitGroup, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
+func (f *Folder) fileLevelFetch(ctx context.Context, path string, p *progress.Tracker, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	if config.CurrentConfig().IsSnykIacEnabled() {
-		wg.Add(1)
-		go iac.ScanFile(ctx, f.cli, uri.PathToUri(path), wg, output)
+		go iac.ScanFile(ctx, f.cli, uri.PathToUri(path), output)
 		p.Report(10)
 	}
 	if config.CurrentConfig().IsSnykOssEnabled() {
-		wg.Add(1)
-		go oss.ScanFile(ctx, f.cli, uri.PathToUri(path), wg, output)
+		go oss.ScanFile(ctx, f.cli, uri.PathToUri(path), output)
 		p.Report(20)
 	}
 	if config.CurrentConfig().IsSnykCodeEnabled() {
-		f.doSnykCodeWorkspaceScan(ctx, wg, output)
+		f.doSnykCodeWorkspaceScan(ctx, output)
 		p.Report(80)
 	}
 }

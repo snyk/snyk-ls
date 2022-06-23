@@ -59,13 +59,13 @@ func Test_HandleErrors_MissingTokenError(t *testing.T) {
 	t.Setenv(config.SnykTokenKey, "dummy")
 	os.Unsetenv(config.SnykTokenKey)
 	testutil.IntegTest(t)
-	_ = config.CurrentConfig().SetToken("")
+	config.CurrentConfig().SetToken("")
 	ctx := context.Background()
 	path, err := install.NewInstaller().Find()
 	if err != nil {
 		t.Fatal(t, err)
 	}
-	_ = config.CurrentConfig().SetCliPath(path)
+	config.CurrentConfig().SetCliPath(path)
 	cli := SnykCli{}
 	err = errors.New("exit status 2")
 
@@ -85,7 +85,7 @@ func Test_Execute_HandlesErrors(t *testing.T) {
 	t.Skipf("opens authentication browser window, only activate for dev testing")
 	testutil.IntegTest(t)
 	testutil.NotOnWindows(t, "moving around CLI config, and file moves under Windows are not very resilient")
-	_ = config.CurrentConfig().SetToken("")
+	config.CurrentConfig().SetToken("")
 	path, err := install.NewInstaller().Find()
 	if err != nil {
 		t.Fatal(t, err)
@@ -98,7 +98,7 @@ func Test_Execute_HandlesErrors(t *testing.T) {
 		_ = os.Rename(oldpath, newpath)
 	}(cliConfigBackup, cliConfig)
 
-	_ = config.CurrentConfig().SetCliPath(path)
+	config.CurrentConfig().SetCliPath(path)
 	cli := SnykCli{}
 
 	response, err := cli.Execute([]string{path, "test"}, ".")

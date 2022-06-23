@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 
 	lsp2 "github.com/sourcegraph/go-lsp"
@@ -42,8 +41,6 @@ func Test_ScanWorkspace(t *testing.T) {
 	path, _ := filepath.Abs(workingDir + "/testdata")
 	doc := uri.PathToUri(path)
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
 	snykCli := &cli.SnykCli{}
 
 	diagnosticMap := map[string][]lsp.Diagnostic{}
@@ -53,7 +50,7 @@ func Test_ScanWorkspace(t *testing.T) {
 		foundHovers = hovers
 	}
 
-	ScanWorkspace(ctx, snykCli, doc, &wg, output)
+	ScanWorkspace(ctx, snykCli, doc, output)
 
 	assert.NotEqual(t, 0, len(diagnosticMap))
 	assert.NotEqual(t, 0, len(foundHovers))
@@ -73,9 +70,6 @@ func Test_ScanFile(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-
 	snykCli := &cli.SnykCli{}
 
 	diagnosticMap := map[string][]lsp.Diagnostic{}
@@ -85,7 +79,7 @@ func Test_ScanFile(t *testing.T) {
 		foundHovers = hovers
 	}
 
-	ScanFile(ctx, snykCli, uri.PathToUri(path), &wg, output)
+	ScanFile(ctx, snykCli, uri.PathToUri(path), output)
 
 	assert.NotEqual(t, 0, len(diagnosticMap))
 	assert.NotEqual(t, 0, len(foundHovers))
@@ -105,12 +99,8 @@ func Test_Analytics(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-
 	snykCli := &cli.SnykCli{}
-	ScanFile(ctx, snykCli, uri.PathToUri(path), &wg, testutil.NoopOutput)
-	wg.Wait()
+	ScanFile(ctx, snykCli, uri.PathToUri(path), testutil.NoopOutput)
 
 	assert.GreaterOrEqual(t, len(di.Analytics().(*ux.AnalyticsRecorder).GetAnalytics()), 1)
 	assert.Equal(t, ux.AnalysisIsReadyProperties{

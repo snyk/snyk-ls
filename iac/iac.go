@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/gomarkdown/markdown"
 	"github.com/rs/zerolog/log"
@@ -47,8 +46,7 @@ func IsSupported(documentURI sglsp.DocumentURI) bool {
 	return extensions[ext]
 }
 
-func ScanWorkspace(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
-	defer wg.Done()
+func ScanWorkspace(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	scanResults, err := doScan(ctx, Cli, documentURI)
 	if err != nil {
 		di.ErrorReporter().CaptureError(err)
@@ -60,8 +58,7 @@ func ScanWorkspace(ctx context.Context, Cli cli.Executor, documentURI sglsp.Docu
 	trackResult(err == nil)
 }
 
-func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, wg *sync.WaitGroup, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
-	defer wg.Done()
+func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	if !IsSupported(documentURI) {
 		return
 	}

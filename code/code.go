@@ -2,7 +2,6 @@ package code
 
 import (
 	"context"
-	"sync"
 
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -31,13 +30,13 @@ func NewSnykCode(bundleUploader *BundleUploader, apiClient SnykApiClient, report
 	return sc
 }
 
-func (sc *SnykCode) ScanWorkspace(ctx context.Context, files []string, workspacePath string, wg *sync.WaitGroup, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
+func (sc *SnykCode) ScanWorkspace(ctx context.Context, files []string, workspacePath string, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
-	sc.UploadAndAnalyze(span.Context(), files, wg, workspacePath, output)
+	sc.UploadAndAnalyze(span.Context(), files, workspacePath, output)
 }
 
-func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []string, wg *sync.WaitGroup, path string, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
+func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []string, path string, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.UploadAndAnalyze")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 	if len(files) == 0 {
@@ -70,8 +69,7 @@ func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []string, wg *sy
 		return
 	}
 
-	wg.Add(1)
-	uploadedBundle.FetchDiagnosticsData(ctx, path, wg, output)
+	uploadedBundle.FetchDiagnosticsData(ctx, path, output)
 	sc.trackResult(true)
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"github.com/sourcegraph/go-lsp"
@@ -35,14 +34,11 @@ func Test_ScanWorkspace(t *testing.T) {
 	path := filepath.Clean(getwd + "/testdata")
 	doc := uri.PathToUri(path)
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
 	snykCli := cli.SnykCli{}
-	ScanWorkspace(ctx, snykCli, doc, &wg, func(issues map[string][]lsp2.Diagnostic, hovers []hover.DocumentHovers) {
+	ScanWorkspace(ctx, snykCli, doc, func(issues map[string][]lsp2.Diagnostic, hovers []hover.DocumentHovers) {
 		assert.Greater(t, len(issues), 0)
 		assert.Greater(t, len(issues), 0)
 	})
-	wg.Wait()
 
 	recorder := &di.Instrumentor().(*performance.TestInstrumentor).SpanRecorder
 	spans := recorder.Spans()
@@ -67,14 +63,11 @@ func Test_ScanFile(t *testing.T) {
 		Version:    0,
 	}
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
 	snykCli := cli.SnykCli{}
-	ScanFile(ctx, snykCli, doc.URI, &wg, func(issues map[string][]lsp2.Diagnostic, hovers []hover.DocumentHovers) {
+	ScanFile(ctx, snykCli, doc.URI, func(issues map[string][]lsp2.Diagnostic, hovers []hover.DocumentHovers) {
 		assert.Greater(t, len(issues), 0)
 		assert.Greater(t, len(issues), 0)
 	})
-	wg.Wait()
 
 	recorder := &di.Instrumentor().(*performance.TestInstrumentor).SpanRecorder
 	spans := recorder.Spans()
@@ -99,14 +92,11 @@ func Test_Analytics(t *testing.T) {
 		Version:    0,
 	}
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
 	snykCli := cli.SnykCli{}
-	ScanFile(ctx, snykCli, doc.URI, &wg, func(issues map[string][]lsp2.Diagnostic, hovers []hover.DocumentHovers) {
+	ScanFile(ctx, snykCli, doc.URI, func(issues map[string][]lsp2.Diagnostic, hovers []hover.DocumentHovers) {
 		assert.Greater(t, len(issues), 0)
 		assert.Greater(t, len(issues), 0)
 	})
-	wg.Wait()
 
 	assert.GreaterOrEqual(t, len(di.Analytics().(*ux.AnalyticsRecorder).GetAnalytics()), 1)
 	assert.Equal(t, ux.AnalysisIsReadyProperties{

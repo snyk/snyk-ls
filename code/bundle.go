@@ -3,7 +3,6 @@ package code
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -50,10 +49,8 @@ func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) err
 func (b *Bundle) FetchDiagnosticsData(
 	ctx context.Context,
 	rootPath string,
-	wg *sync.WaitGroup,
 	output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers),
 ) {
-	defer wg.Done()
 	defer log.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
 	log.Debug().Str("method", "FetchDiagnosticsData").Msg("started.")
 	b.retrieveAnalysis(ctx, rootPath, output)

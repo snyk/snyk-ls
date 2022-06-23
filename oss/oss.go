@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/gomarkdown/markdown"
 	"github.com/rs/zerolog/log"
@@ -78,9 +77,7 @@ func IsSupported(documentURI sglsp.DocumentURI) bool {
 	return supportedFiles[filepath.Base(uri.PathFromUri(documentURI))]
 }
 
-func ScanWorkspace(ctx context.Context, cli cli.Executor, workspace sglsp.DocumentURI, wg *sync.WaitGroup, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
-	defer wg.Done()
-
+func ScanWorkspace(ctx context.Context, cli cli.Executor, workspace sglsp.DocumentURI, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	method := "oss.ScanWorkspace"
 	s := di.Instrumentor().StartSpan(ctx, method)
 	defer di.Instrumentor().Finish(s)
@@ -192,13 +189,10 @@ func determineTargetFile(displayTargetFile string) string {
 
 func ScanFile(
 	ctx context.Context,
-	Cli cli.Executor,
+	cli cli.Executor,
 	documentURI sglsp.DocumentURI,
-	wg *sync.WaitGroup,
 	output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers),
 ) {
-	defer wg.Done()
-
 	method := "oss.ScanFile"
 	s := di.Instrumentor().StartSpan(ctx, method)
 	defer di.Instrumentor().Finish(s)
@@ -217,8 +211,8 @@ func ScanFile(
 	}
 	preconditions.EnsureReadyForAnalysisAndWait(ctx)
 	workDir := filepath.Dir(path)
-	cmd := Cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", workDir, "--json"})
-	res, err := Cli.Execute(cmd, workDir)
+	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", workDir, "--json"})
+	res, err := cli.Execute(cmd, workDir)
 	if err != nil {
 		if handleError(err, res) {
 			return
