@@ -275,7 +275,7 @@ func toDiagnostics(issue ossIssue, issueRange sglsp.Range) lsp.Diagnostic {
 	}
 	return lsp.Diagnostic{
 		Source:   "Snyk LS",
-		Message:  fmt.Sprintf("%s: Upgrade %s to %s (Snyk)", title, issue.PackageName, issue.FixedIn),
+		Message:  fmt.Sprintf("%s affecting package %s. Fixed in: %s (Snyk)", title, issue.PackageName, issue.FixedIn),
 		Range:    issueRange,
 		Severity: lspSeverity(issue.Severity),
 		Code:     issue.Id,
