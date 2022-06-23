@@ -87,8 +87,7 @@ func (w *Workspace) Scan(ctx context.Context) {
 	defer di.Instrumentor().Finish(s)
 
 	preconditions.EnsureReadyForAnalysisAndWait(ctx)
-	notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Workspace scan started"})
-	defer notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Workspace scan completed"})
+	notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Workspace scan started."})
 
 	for _, folder := range w.workspaceFolders {
 		go folder.Scan(s.Context())

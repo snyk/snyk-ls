@@ -24,6 +24,7 @@ type Bundle struct {
 	instrumentor  performance.Instrumentor
 	requestId     string
 	missingFiles  []string
+	rootPath      string
 }
 
 func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {
@@ -48,26 +49,21 @@ func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) err
 
 func (b *Bundle) FetchDiagnosticsData(
 	ctx context.Context,
-	rootPath string,
 	output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers),
 ) {
 	defer log.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
 	log.Debug().Str("method", "FetchDiagnosticsData").Msg("started.")
-	b.retrieveAnalysis(ctx, rootPath, output)
+	b.retrieveAnalysis(ctx, output)
 }
 
-func (b *Bundle) retrieveAnalysis(
-	ctx context.Context,
-	rootPath string,
-	output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers),
-) {
+func (b *Bundle) retrieveAnalysis(ctx context.Context, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	if b.BundleHash == "" {
-		log.Warn().Str("method", "retrieveAnalysis").Str("rootPath", rootPath).Msg("bundle hash is empty")
+		log.Warn().Str("method", "retrieveAnalysis").Str("rootPath", b.rootPath).Msg("bundle hash is empty")
 		return
 	}
 
 	p := progress.NewTracker(false)
-	p.Begin("Snyk Code analysis", "Retrieving results...")
+	p.Begin("Snyk Code analysis for "+b.rootPath, "Retrieving results...")
 	defer p.End("Analysis complete.")
 
 	method := "code.retrieveAnalysis"
@@ -76,7 +72,7 @@ func (b *Bundle) retrieveAnalysis(
 
 	analysisOptions := AnalysisOptions{
 		bundleHash:   b.BundleHash,
-		shardKey:     b.getShardKey(rootPath, config.CurrentConfig().Token()),
+		shardKey:     b.getShardKey(b.rootPath, config.CurrentConfig().Token()),
 		limitToFiles: []sglsp.DocumentURI{},
 		severity:     0,
 	}

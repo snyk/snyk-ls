@@ -20,6 +20,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/preconditions"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -77,15 +78,18 @@ func IsSupported(documentURI sglsp.DocumentURI) bool {
 	return supportedFiles[filepath.Base(uri.PathFromUri(documentURI))]
 }
 
-func ScanWorkspace(ctx context.Context, cli cli.Executor, workspace sglsp.DocumentURI, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
+func ScanWorkspace(ctx context.Context, cli cli.Executor, documentURI sglsp.DocumentURI, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	method := "oss.ScanWorkspace"
 	s := di.Instrumentor().StartSpan(ctx, method)
 	defer di.Instrumentor().Finish(s)
+	p := progress.NewTracker(false)
+	p.Begin(fmt.Sprintf("Scanning for Snyk Open Source issues in %s", documentURI), "Scanning Workspace.")
+	defer p.End("Snyk Open Source scan completed.")
 
 	defer log.Debug().Str("method", method).Msg("done.")
 	log.Debug().Str("method", method).Msg("started.")
 
-	workspacePath, err := filepath.Abs(uri.PathFromUri(workspace))
+	workspacePath, err := filepath.Abs(uri.PathFromUri(documentURI))
 	if err != nil {
 		log.Err(err).Str("workspacePath", workspacePath).Msg("couldn't get absolute path")
 	}
@@ -97,7 +101,8 @@ func ScanWorkspace(ctx context.Context, cli cli.Executor, workspace sglsp.Docume
 		}
 	}
 
-	unmarshallAndRetrieveAnalysis(res, workspace, output)
+	unmarshallAndRetrieveAnalysis(res, documentURI, output)
+
 }
 
 func unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.DocumentURI, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
@@ -196,6 +201,9 @@ func ScanFile(
 	method := "oss.ScanFile"
 	s := di.Instrumentor().StartSpan(ctx, method)
 	defer di.Instrumentor().Finish(s)
+	p := progress.NewTracker(false)
+	p.Begin(fmt.Sprintf("Scanning for Snyk Open Source issues in %s", documentURI), "Scanning Single File.")
+	defer p.End("Snyk Open Source scan completed.")
 
 	log.Debug().Str("method", method).Msg("started.")
 	defer log.Debug().Str("method", method).Msg("done.")

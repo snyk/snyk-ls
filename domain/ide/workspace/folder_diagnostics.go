@@ -2,7 +2,6 @@ package workspace
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/rs/zerolog/log"
 
@@ -12,7 +11,6 @@ import (
 	"github.com/snyk/snyk-ls/iac"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 	"github.com/snyk/snyk-ls/oss"
@@ -38,37 +36,29 @@ func (f *Folder) FetchAllRegisteredDocumentDiagnostics(ctx context.Context, path
 	log.Info().Str("method", method).Msg("started.")
 	defer log.Info().Str("method", method).Msg("done.")
 
-	var diagnostics = map[string][]lsp.Diagnostic{}
-
-	p := progress.NewTracker(false)
-	p.Begin(fmt.Sprintf("Scanning for issues in %s", path), "")
 	di.Analytics().AnalysisIsTriggered(
 		ux.AnalysisIsTriggeredProperties{
 			AnalysisType:    ux.GetEnabledAnalysisTypes(),
 			TriggeredByUser: false,
 		},
 	)
-	defer p.End(fmt.Sprintf("Scan complete. Found %d issues.", len(diagnostics)))
 
 	if level == lsp.ScanLevelWorkspace {
-		f.workspaceLevelFetch(ctx, path, p, f.processResults)
+		f.workspaceLevelFetch(ctx, path, f.processResults)
 	} else {
-		f.fileLevelFetch(ctx, path, p, f.processResults)
+		f.fileLevelFetch(ctx, path, f.processResults)
 	}
 }
 
-func (f *Folder) workspaceLevelFetch(ctx context.Context, path string, p *progress.Tracker, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
+func (f *Folder) workspaceLevelFetch(ctx context.Context, path string, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	if config.CurrentConfig().IsSnykIacEnabled() {
 		go iac.ScanWorkspace(ctx, f.cli, uri.PathToUri(path), output)
-		p.Report(10)
 	}
 	if config.CurrentConfig().IsSnykOssEnabled() {
 		go oss.ScanWorkspace(ctx, f.cli, uri.PathToUri(path), output)
-		p.Report(20)
 	}
 	if config.CurrentConfig().IsSnykCodeEnabled() {
-		f.doSnykCodeWorkspaceScan(ctx, output)
-		go p.Report(30)
+		go f.doSnykCodeWorkspaceScan(ctx, output)
 	}
 }
 
@@ -84,18 +74,15 @@ func (f *Folder) doSnykCodeWorkspaceScan(ctx context.Context, output func(issues
 	di.SnykCode().ScanWorkspace(ctx, files, f.path, output)
 }
 
-func (f *Folder) fileLevelFetch(ctx context.Context, path string, p *progress.Tracker, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
+func (f *Folder) fileLevelFetch(ctx context.Context, path string, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	if config.CurrentConfig().IsSnykIacEnabled() {
 		go iac.ScanFile(ctx, f.cli, uri.PathToUri(path), output)
-		p.Report(10)
 	}
 	if config.CurrentConfig().IsSnykOssEnabled() {
 		go oss.ScanFile(ctx, f.cli, uri.PathToUri(path), output)
-		p.Report(20)
 	}
 	if config.CurrentConfig().IsSnykCodeEnabled() {
-		f.doSnykCodeWorkspaceScan(ctx, output)
-		p.Report(80)
+		go f.doSnykCodeWorkspaceScan(ctx, output)
 	}
 }
 

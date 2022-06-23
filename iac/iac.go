@@ -19,6 +19,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/issues"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
 )
@@ -47,6 +48,10 @@ func IsSupported(documentURI sglsp.DocumentURI) bool {
 }
 
 func ScanWorkspace(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
+	p := progress.NewTracker(false)
+	p.Begin(fmt.Sprintf("Scanning for Snyk IaC issues in %s", documentURI), "Scanning Workspace.")
+	defer p.End("Snyk Iac Scan completed.")
+
 	scanResults, err := doScan(ctx, Cli, documentURI)
 	if err != nil {
 		di.ErrorReporter().CaptureError(err)
@@ -59,10 +64,15 @@ func ScanWorkspace(ctx context.Context, Cli cli.Executor, documentURI sglsp.Docu
 }
 
 func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
+	p := progress.NewTracker(false)
+	p.Begin(fmt.Sprintf("Scanning for Snyk IaC issues in %s", documentURI), "Scanning single file.")
+	defer p.End("Snyk Iac Scan completed.")
+
 	if !IsSupported(documentURI) {
 		return
 	}
 	scanResults, err := doScan(ctx, Cli, documentURI)
+	p.Report(80)
 	if err != nil {
 		di.ErrorReporter().CaptureError(err)
 	}
@@ -70,6 +80,7 @@ func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentU
 		retrieveAnalysis(documentURI, scanResults[0], output)
 	}
 	trackResult(err == nil)
+	p.End("Snyk Iac Scan completed.")
 }
 
 func doScan(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI) (scanResults []iacScanResult, err error) {

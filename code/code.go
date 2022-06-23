@@ -49,7 +49,7 @@ func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []string, path s
 
 	requestId := span.GetTraceId() // use span trace id as code-request-id
 
-	bundle, bundleFiles, err := sc.createBundle(span.Context(), requestId, files)
+	bundle, bundleFiles, err := sc.createBundle(span.Context(), requestId, path, files)
 
 	if err != nil {
 		msg := "error creating bundle..."
@@ -69,7 +69,7 @@ func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []string, path s
 		return
 	}
 
-	uploadedBundle.FetchDiagnosticsData(ctx, path, output)
+	uploadedBundle.FetchDiagnosticsData(ctx, output)
 	sc.trackResult(true)
 }
 
@@ -79,13 +79,14 @@ func (sc *SnykCode) handleCreationAndUploadError(err error, msg string) {
 	sc.trackResult(err == nil)
 }
 
-func (sc *SnykCode) createBundle(ctx context.Context, requestId string, filePaths []string) (b Bundle, bundleFiles map[string]BundleFile, err error) {
+func (sc *SnykCode) createBundle(ctx context.Context, requestId string, rootPath string, filePaths []string) (b Bundle, bundleFiles map[string]BundleFile, err error) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.createBundle")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 	b = Bundle{
 		SnykCode:     sc.BundleUploader.SnykCode,
 		instrumentor: sc.BundleUploader.instrumentor,
 		requestId:    requestId,
+		rootPath:     rootPath,
 	}
 
 	fileHashes := make(map[string]string)
