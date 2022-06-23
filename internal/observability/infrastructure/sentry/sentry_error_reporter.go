@@ -34,7 +34,7 @@ func (s *gdprAwareSentryErrorReporter) CaptureError(err error) bool {
 	})
 	if config.CurrentConfig().IsErrorReportingEnabled() {
 		eventId := sentry.CaptureException(err)
-		log.Info().Err(err).Str("method", "CaptureError").Msgf("Sent error to Sentry (ID: %s)", eventId)
+		log.Info().Err(err).Str("method", "CaptureError").Msgf("Sent error to Sentry (ID: %v)", eventId)
 		return true
 	}
 	return false
