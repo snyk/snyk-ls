@@ -52,10 +52,10 @@ func Test_ScanWorkspace(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		notificationMutex.Lock()
 		defer notificationMutex.Unlock()
-		return len(diagnostics) > 0
+		return len(*diagnostics) > 0
 	}, 1*time.Second, time.Millisecond)
 
-	assert.Greater(t, 0, len(hoverResult.Hover))
+	assert.Greater(t, len(hoverResult.Hover), 0)
 
 	recorder := &di.Instrumentor().(*performance.TestInstrumentor).SpanRecorder
 	spans := recorder.Spans()
