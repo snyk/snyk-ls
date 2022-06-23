@@ -31,19 +31,13 @@ func NewSnykCode(bundleUploader *BundleUploader, apiClient SnykApiClient, report
 	return sc
 }
 
-func (sc *SnykCode) ScanFile(ctx context.Context, filePath string, wg *sync.WaitGroup, dChan chan lsp.DiagnosticResult, hoverChan chan hover.DocumentHovers) {
-	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanFile")
-	defer sc.BundleUploader.instrumentor.Finish(span)
-	sc.UploadAndAnalyze(span.Context(), []string{filePath}, wg, filePath, dChan, hoverChan)
-}
-
-func (sc *SnykCode) ScanWorkspace(ctx context.Context, files []string, workspacePath string, wg *sync.WaitGroup, hoverChan func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
+func (sc *SnykCode) ScanWorkspace(ctx context.Context, files []string, workspacePath string, wg *sync.WaitGroup, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
-	sc.UploadAndAnalyze(span.Context(), files, wg, workspacePath, dChan, hoverChan)
+	sc.UploadAndAnalyze(span.Context(), files, wg, workspacePath, output)
 }
 
-func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []string, wg *sync.WaitGroup, path string, dChan chan lsp.DiagnosticResult, hoverChan chan hover.DocumentHovers) {
+func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []string, wg *sync.WaitGroup, path string, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.UploadAndAnalyze")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 	if len(files) == 0 {
@@ -60,7 +54,7 @@ func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []string, wg *sy
 
 	if err != nil {
 		msg := "error creating bundle..."
-		sc.handleCreationAndUploadError(err, msg, dChan)
+		sc.handleCreationAndUploadError(err, msg)
 		return
 	}
 
@@ -68,7 +62,7 @@ func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []string, wg *sy
 	// TODO LSP error handling should be pushed UP to the LSP layer
 	if err != nil {
 		msg := "error uploading files..."
-		sc.handleCreationAndUploadError(err, msg, dChan)
+		sc.handleCreationAndUploadError(err, msg)
 		return
 	}
 	if uploadedBundle.BundleHash == "" {
@@ -77,13 +71,13 @@ func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []string, wg *sy
 	}
 
 	wg.Add(1)
-	uploadedBundle.FetchDiagnosticsData(ctx, path, wg, dChan, hoverChan)
+	uploadedBundle.FetchDiagnosticsData(ctx, path, wg, output)
 	sc.trackResult(true)
 }
 
-func (sc *SnykCode) handleCreationAndUploadError(err error, msg string, dChan chan lsp.DiagnosticResult) {
+func (sc *SnykCode) handleCreationAndUploadError(err error, msg string) {
 	log.Error().Err(err).Msg(msg)
-	dChan <- lsp.DiagnosticResult{Err: err}
+	//di.ErrorReporter().CaptureError(err) import cycle
 	sc.trackResult(err == nil)
 }
 

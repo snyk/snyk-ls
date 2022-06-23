@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
@@ -16,7 +15,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk/issues"
 	"github.com/snyk/snyk-ls/internal/cli"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/preconditions"
@@ -32,30 +30,19 @@ func Test_ScanWorkspace(t *testing.T) {
 	ctx := context.Background()
 	preconditions.EnsureReadyForAnalysisAndWait(ctx)
 	config.CurrentConfig().SetFormat(config.FormatHtml)
-	notificationMutex, diagnostics := createNotificationListener()
-	defer notification.DisposeListener()
 
 	getwd, _ := os.Getwd()
 	path := filepath.Clean(getwd + "/testdata")
 	doc := uri.PathToUri(path)
 
-	hoverChan := make(chan hover.DocumentHovers, 1)
-
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	snykCli := cli.SnykCli{}
-	go ScanWorkspace(ctx, snykCli, doc, &wg, hoverChan)
+	go ScanWorkspace(ctx, snykCli, doc, &wg, func(issues map[string][]lsp2.Diagnostic, hovers []hover.DocumentHovers) {
+		assert.Greater(t, len(issues), 0)
+		assert.Greater(t, len(issues), 0)
+	})
 	wg.Wait()
-
-	hoverResult := <-hoverChan
-
-	assert.Eventually(t, func() bool {
-		notificationMutex.Lock()
-		defer notificationMutex.Unlock()
-		return len(*diagnostics) > 0
-	}, 1*time.Second, time.Millisecond)
-
-	assert.Greater(t, len(hoverResult.Hover), 0)
 
 	recorder := &di.Instrumentor().(*performance.TestInstrumentor).SpanRecorder
 	spans := recorder.Spans()
@@ -70,8 +57,6 @@ func Test_ScanFile(t *testing.T) {
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 	ctx := context.Background()
 	preconditions.EnsureReadyForAnalysisAndWait(ctx)
-	notificationMutex, diagnostics := createNotificationListener()
-	defer notification.DisposeListener()
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/RBAC.yaml")
@@ -82,42 +67,20 @@ func Test_ScanFile(t *testing.T) {
 		Version:    0,
 	}
 
-	hoverChan := make(chan hover.DocumentHovers, 1)
-
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	snykCli := cli.SnykCli{}
-	go ScanFile(ctx, snykCli, doc.URI, &wg, hoverChan)
+	go ScanFile(ctx, snykCli, doc.URI, &wg, func(issues map[string][]lsp2.Diagnostic, hovers []hover.DocumentHovers) {
+		assert.Greater(t, len(issues), 0)
+		assert.Greater(t, len(issues), 0)
+	})
 	wg.Wait()
-
-	hoverResult := <-hoverChan
-
-	assert.NotEqual(t, 0, len(hoverResult.Hover))
-	assert.Eventually(t, func() bool {
-		notificationMutex.Lock()
-		defer notificationMutex.Unlock()
-		return len(*diagnostics) > 0
-	}, 1*time.Second, time.Millisecond)
 
 	recorder := &di.Instrumentor().(*performance.TestInstrumentor).SpanRecorder
 	spans := recorder.Spans()
 	assert.Len(t, spans, 1)
 	assert.Equal(t, "iac.doScan", spans[0].GetOperation())
 	assert.Equal(t, "", spans[0].GetTxName())
-}
-
-func createNotificationListener() (*sync.Mutex, *[]lsp2.Diagnostic) {
-	notificationMutex := &sync.Mutex{}
-	var diagnostics []lsp2.Diagnostic
-	notification.CreateListener(func(params interface{}) {
-		switch p := params.(type) {
-		case lsp2.PublishDiagnosticsParams:
-			notificationMutex.Lock()
-			diagnostics = append(diagnostics, p.Diagnostics...)
-			notificationMutex.Unlock()
-		}
-	})
-	return notificationMutex, &diagnostics
 }
 
 func Test_Analytics(t *testing.T) {
@@ -136,12 +99,13 @@ func Test_Analytics(t *testing.T) {
 		Version:    0,
 	}
 
-	hoverChan := make(chan hover.DocumentHovers, 1)
-
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	snykCli := cli.SnykCli{}
-	go ScanFile(ctx, snykCli, doc.URI, &wg, hoverChan)
+	go ScanFile(ctx, snykCli, doc.URI, &wg, func(issues map[string][]lsp2.Diagnostic, hovers []hover.DocumentHovers) {
+		assert.Greater(t, len(issues), 0)
+		assert.Greater(t, len(issues), 0)
+	})
 	wg.Wait()
 
 	assert.GreaterOrEqual(t, len(di.Analytics().(*ux.AnalyticsRecorder).GetAnalytics()), 1)

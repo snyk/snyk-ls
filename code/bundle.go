@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
-	"github.com/sourcegraph/go-lsp"
+	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -15,7 +15,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
-	lsp2 "github.com/snyk/snyk-ls/lsp"
+	"github.com/snyk/snyk-ls/lsp"
 )
 
 type Bundle struct {
@@ -51,20 +51,18 @@ func (b *Bundle) FetchDiagnosticsData(
 	ctx context.Context,
 	rootPath string,
 	wg *sync.WaitGroup,
-	dChan chan lsp2.DiagnosticResult,
-	hoverChan chan hover.DocumentHovers,
+	output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers),
 ) {
 	defer wg.Done()
 	defer log.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
 	log.Debug().Str("method", "FetchDiagnosticsData").Msg("started.")
-	b.retrieveAnalysis(ctx, rootPath, dChan, hoverChan)
+	b.retrieveAnalysis(ctx, rootPath, output)
 }
 
 func (b *Bundle) retrieveAnalysis(
 	ctx context.Context,
 	rootPath string,
-	dChan chan lsp2.DiagnosticResult,
-	hoverChan chan hover.DocumentHovers,
+	output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers),
 ) {
 	if b.BundleHash == "" {
 		log.Warn().Str("method", "retrieveAnalysis").Str("rootPath", rootPath).Msg("bundle hash is empty")
@@ -82,7 +80,7 @@ func (b *Bundle) retrieveAnalysis(
 	analysisOptions := AnalysisOptions{
 		bundleHash:   b.BundleHash,
 		shardKey:     b.getShardKey(rootPath, config.CurrentConfig().Token()),
-		limitToFiles: []lsp.DocumentURI{},
+		limitToFiles: []sglsp.DocumentURI{},
 		severity:     0,
 	}
 
@@ -96,30 +94,32 @@ func (b *Bundle) retrieveAnalysis(
 				Str("requestId", b.requestId).
 				Int("fileCount", len(b.UploadBatches)).
 				Msg("error retrieving diagnostics...")
-			dChan <- lsp2.DiagnosticResult{Err: err}
+			//di.ErrorReporter().CaptureError(err) FIXME import cycle
 			return
 		}
 
 		if status.message == "COMPLETE" {
-			for filePath, diag := range diags {
+			for filePath, diagnostics := range diags {
 				log.Trace().Str("method", "retrieveAnalysis").Str("requestId", b.requestId).
 					Str("path", filePath).
 					Msg("sending diagnostics...")
 
-				dChan <- lsp2.DiagnosticResult{
-					Uri:         uri.PathToUri(filePath),
-					Diagnostics: diag,
-					Err:         err,
+				if len(diagnostics) > 0 {
+					documentURI := uri.PathToUri(filePath)
+					output(
+						map[string][]lsp.Diagnostic{filePath: diagnostics},
+						[]hover.DocumentHovers{{Uri: documentURI, Hover: hovers[documentURI]}},
+					)
 				}
 			}
-			sendHoversViaChan(hovers, hoverChan)
+
 			return
 		}
 
 		if time.Since(start) > config.CurrentConfig().SnykCodeAnalysisTimeout() {
 			err = errors.New("analysis call timed out")
-			log.Error().Err(err).Str("method", "DiagnosticData").Msg("timeout...")
-			dChan <- lsp2.DiagnosticResult{Err: err}
+			log.Error().Err(err).Str("method", "retrieveAnalysis").Msg("timeout...")
+			//di.ErrorReporter().CaptureError(err) // FIXME import cycle
 		}
 		time.Sleep(1 * time.Second)
 		p.Report(status.percentage)
@@ -138,14 +138,4 @@ func (b *Bundle) getShardKey(rootPath string, authToken string) string {
 	}
 
 	return ""
-}
-
-//todo : move lsp presetantion concerns up
-func sendHoversViaChan(hovers map[lsp.DocumentURI][]hover.Hover[hover.Context], hoverChan chan hover.DocumentHovers) {
-	for uri, h := range hovers {
-		hoverChan <- hover.DocumentHovers{
-			Uri:   uri,
-			Hover: h,
-		}
-	}
 }
