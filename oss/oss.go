@@ -256,10 +256,17 @@ func retrieveDiagnostics(
 	var diagnostics []lsp.Diagnostic
 	var hoverDetails []hover.Hover[hover.Context]
 
+	duplicateCheckMap := map[string]bool{}
+
 	for _, issue := range res.Vulnerabilities {
+		key := issue.Id + "@" + issue.PackageName
+		if duplicateCheckMap[key] {
+			continue
+		}
 		issueRange := findRange(issue, uri, fileContent)
 		diagnostics = append(diagnostics, toDiagnostics(issue, issueRange))
 		hoverDetails = append(hoverDetails, toHover(issue, issueRange))
+		duplicateCheckMap[key] = true
 	}
 
 	return diagnostics, hoverDetails
