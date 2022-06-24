@@ -14,6 +14,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 )
 
 var Mutex = &sync.Mutex{}
@@ -23,10 +24,14 @@ type Installer interface {
 	Install(ctx context.Context) (string, error)
 }
 
-type Install struct{}
+type Install struct {
+	errorReporter error_reporting.ErrorReporter
+}
 
-func NewInstaller() *Install {
-	return &Install{}
+func NewInstaller(errorReporter error_reporting.ErrorReporter) *Install {
+	return &Install{
+		errorReporter: errorReporter,
+	}
 }
 
 func (i *Install) Find() (string, error) {
@@ -49,11 +54,11 @@ func (i *Install) Install(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	return i.installRelease(latestRelease, ctx)
+	return i.installRelease(latestRelease)
 }
 
-func (i *Install) installRelease(release *Release, ctx context.Context) (string, error) {
-	d := NewDownloader()
+func (i *Install) installRelease(release *Release) (string, error) {
+	d := NewDownloader(i.errorReporter)
 	lockFileName, err := createLockFile(d)
 	if err != nil {
 		return "", err
@@ -81,7 +86,7 @@ func (i *Install) Update(ctx context.Context) (bool, error) {
 }
 
 func (i *Install) updateFromRelease(r *Release) (bool, error) {
-	d := NewDownloader()
+	d := NewDownloader(i.errorReporter)
 	lockFileName, err := createLockFile(d)
 	if err != nil {
 		return false, err
@@ -109,7 +114,7 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 		return false, err
 	}
 
-	err = replaceOutdatedCli(d, cliDiscovery)
+	err = replaceOutdatedCli(cliDiscovery)
 	if err != nil {
 		return false, err
 	}
@@ -117,7 +122,7 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 	return true, nil
 }
 
-func replaceOutdatedCli(d *Downloader, cliDiscovery Discovery) error {
+func replaceOutdatedCli(cliDiscovery Discovery) error {
 	log.Info().Str("method", "replaceOutdatedCli").Msg("replacing outdated CLI with latest")
 
 	lsPath := config.CurrentConfig().LsPath()

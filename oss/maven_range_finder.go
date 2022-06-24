@@ -7,12 +7,12 @@ import (
 	"github.com/snyk/snyk-ls/ast/maven"
 )
 
-type MavenRangeFinder struct {
+type mavenRangeFinder struct {
 	uri         lsp.DocumentURI
 	fileContent []byte
 }
 
-func (m *MavenRangeFinder) Find(issue ossIssue) lsp.Range {
+func (m *mavenRangeFinder) find(issue ossIssue) lsp.Range {
 	searchPackage, version := introducingPackageAndVersion(issue)
 	log.Trace().Interface("issue", issue).Str("searchPackage", searchPackage).Str("searchVersion", version)
 	parser := maven.Parser{}

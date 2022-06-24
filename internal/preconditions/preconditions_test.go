@@ -9,25 +9,29 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/di"
+	"github.com/snyk/snyk-ls/internal/cli/auth"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 	testutil.IntegTest(t)
+	reporter := error_reporting.NewTestErrorReporter()
+	environmentInitializer := New(auth.New(reporter), reporter)
 	testutil.CreateDummyProgressListener(t)
 
 	config.CurrentConfig().SetCliPath("")
 	if !config.CurrentConfig().Authenticated() {
 		config.CurrentConfig().SetToken("dummy") // we don't want to authenticate
 	}
-	WaitUntilCLIAndAuthReady(context.Background())
+	environmentInitializer.WaitUntilCLIAndAuthReady(context.Background())
 	assert.NotEmpty(t, config.CurrentConfig().CliPath())
 }
 
 func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
-	di.TestInit(t)
 	testutil.UnitTest(t)
+	reporter := error_reporting.NewTestErrorReporter()
+	environmentInitializer := New(auth.New(reporter), reporter)
 	tempDir := t.TempDir()
 	tempFile := testutil.CreateTempFile(tempDir, t)
 	config.CurrentConfig().SetCliPath(tempFile.Name())
@@ -35,12 +39,14 @@ func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
 		config.CurrentConfig().SetCliPath("")
 	}()
 
-	WaitUntilCLIAndAuthReady(context.Background())
+	environmentInitializer.WaitUntilCLIAndAuthReady(context.Background())
 
 	assert.Equal(t, tempFile.Name(), config.CurrentConfig().CliPath())
 }
 
 func Test_isOutdatedCli_DetectsOutdatedCli(t *testing.T) {
+	reporter := error_reporting.NewTestErrorReporter()
+	environmentInitializer := New(auth.New(reporter), reporter)
 	// prepare user directory with OS specific dummy CLI binary
 	temp := t.TempDir()
 	file := testutil.CreateTempFile(temp, t)
@@ -54,13 +60,15 @@ func Test_isOutdatedCli_DetectsOutdatedCli(t *testing.T) {
 	}
 
 	// act
-	isOutdated := isOutdatedCli()
+	isOutdated := environmentInitializer.isOutdatedCli()
 
 	// assert
 	assert.True(t, isOutdated)
 }
 
 func Test_isOutdatedCli_DetectsLatestCli(t *testing.T) {
+	reporter := error_reporting.NewTestErrorReporter()
+	environmentInitializer := New(auth.New(reporter), reporter)
 	// prepare user directory with OS specific dummy CLI binary
 	temp := t.TempDir()
 	file := testutil.CreateTempFile(temp, t)
@@ -76,7 +84,7 @@ func Test_isOutdatedCli_DetectsLatestCli(t *testing.T) {
 	}
 
 	// act
-	isOutdated := isOutdatedCli()
+	isOutdated := environmentInitializer.isOutdatedCli()
 
 	// assert
 	assert.False(t, isOutdated)

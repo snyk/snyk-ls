@@ -11,7 +11,6 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/lsp"
 
@@ -127,7 +126,6 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	if err != nil {
 		log.Fatal().Err(err)
 	}
-	preconditions.WaitUntilCLIAndAuthReady(context.Background())
 	var expected = lsp.AuthenticationParams{Token: "test token"}
 
 	notification.Send(expected)

@@ -13,7 +13,15 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-type Service struct {
+type Service interface {
+	DeleteHover(documentUri sglsp.DocumentURI)
+	Channel() chan DocumentHovers
+	ClearAllHovers()
+	GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) Result
+	SetAnalytics(analytics ux.Analytics)
+}
+
+type DefaultHoverService struct {
 	hovers       map[sglsp.DocumentURI][]Hover[Context]
 	hoverIndexes map[string]bool
 	hoverChan    chan DocumentHovers
@@ -22,8 +30,8 @@ type Service struct {
 	analytics    ux.Analytics
 }
 
-func NewService(analytics ux.Analytics) *Service {
-	s := &Service{}
+func NewDefaultService(analytics ux.Analytics) Service {
+	s := &DefaultHoverService{}
 	s.hovers = map[sglsp.DocumentURI][]Hover[Context]{}
 	s.hoverIndexes = map[string]bool{}
 	s.hoverChan = make(chan DocumentHovers, 100)
@@ -34,7 +42,7 @@ func NewService(analytics ux.Analytics) *Service {
 	return s
 }
 
-func (s *Service) validateAndExtractMessage(hover Hover[Context], pos sglsp.Position) (message string) {
+func (s *DefaultHoverService) validateAndExtractMessage(hover Hover[Context], pos sglsp.Position) (message string) {
 	if s.isHoverForPosition(hover, pos) {
 		message = hover.Message
 	}
@@ -42,14 +50,14 @@ func (s *Service) validateAndExtractMessage(hover Hover[Context], pos sglsp.Posi
 	return message
 }
 
-func (s *Service) isHoverForPosition(hover Hover[Context], pos sglsp.Position) bool {
+func (s *DefaultHoverService) isHoverForPosition(hover Hover[Context], pos sglsp.Position) bool {
 	return hover.Range.Start.Line < pos.Line && hover.Range.End.Line > pos.Line ||
 		(hover.Range.Start.Line == pos.Line &&
 			hover.Range.Start.Character <= pos.Character &&
 			hover.Range.End.Character >= pos.Character)
 }
 
-func (s *Service) registerHovers(result DocumentHovers) {
+func (s *DefaultHoverService) registerHovers(result DocumentHovers) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -64,7 +72,7 @@ func (s *Service) registerHovers(result DocumentHovers) {
 	}
 }
 
-func (s *Service) DeleteHover(documentUri sglsp.DocumentURI) {
+func (s *DefaultHoverService) DeleteHover(documentUri sglsp.DocumentURI) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -77,11 +85,11 @@ func (s *Service) DeleteHover(documentUri sglsp.DocumentURI) {
 	}
 }
 
-func (s *Service) Channel() chan DocumentHovers {
+func (s *DefaultHoverService) Channel() chan DocumentHovers {
 	return s.hoverChan
 }
 
-func (s *Service) ClearAllHovers() {
+func (s *DefaultHoverService) ClearAllHovers() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.stopChannel <- true
@@ -89,7 +97,7 @@ func (s *Service) ClearAllHovers() {
 	s.hoverIndexes = map[string]bool{}
 }
 
-func (s *Service) GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) Result {
+func (s *DefaultHoverService) GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) Result {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -109,7 +117,7 @@ func (s *Service) GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) Result
 	}
 }
 
-func (s *Service) trackHoverDetails(hover Hover[Context]) {
+func (s *DefaultHoverService) trackHoverDetails(hover Hover[Context]) {
 	switch hover.Context.(type) {
 	case issues.Issue:
 		issue := hover.Context.(issues.Issue)
@@ -119,7 +127,7 @@ func (s *Service) trackHoverDetails(hover Hover[Context]) {
 	}
 }
 
-func (s *Service) createHoverListener() {
+func (s *DefaultHoverService) createHoverListener() {
 	// cleanup before start
 	for {
 		select {
@@ -154,6 +162,37 @@ func (s *Service) createHoverListener() {
 	}
 }
 
-func (s *Service) SetAnalytics(analytics ux.Analytics) {
+func (s *DefaultHoverService) SetAnalytics(analytics ux.Analytics) {
 	s.analytics = analytics
+}
+
+type TestHoverService struct{}
+
+func NewTestHoverService() *TestHoverService {
+	return &TestHoverService{}
+}
+
+func (t TestHoverService) DeleteHover(documentUri sglsp.DocumentURI) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (t TestHoverService) Channel() chan DocumentHovers {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (t TestHoverService) ClearAllHovers() {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (t TestHoverService) GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) Result {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (t TestHoverService) SetAnalytics(analytics ux.Analytics) {
+	//TODO implement me
+	panic("implement me")
 }

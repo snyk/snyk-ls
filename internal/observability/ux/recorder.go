@@ -6,50 +6,50 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func NewNoopRecordingClient() *AnalyticsRecorder {
-	return &AnalyticsRecorder{}
+func NewTestAnalytics() *TestAnalytics {
+	return &TestAnalytics{}
 }
 
-type AnalyticsRecorder struct {
+type TestAnalytics struct {
 	analytics []interface{}
 	mutex     sync.Mutex
 }
 
-func (n *AnalyticsRecorder) GetAnalytics() []interface{} {
+func (n *TestAnalytics) GetAnalytics() []interface{} {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	return n.analytics
 }
 
-func (n *AnalyticsRecorder) AnalysisIsReady(properties AnalysisIsReadyProperties) {
+func (n *TestAnalytics) AnalysisIsReady(properties AnalysisIsReadyProperties) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.analytics = append(n.analytics, properties)
 	log.Info().Str("method", "AnalysisIsReady").Msgf("no op - args %v", properties)
 }
 
-func (n *AnalyticsRecorder) AnalysisIsTriggered(properties AnalysisIsTriggeredProperties) {
+func (n *TestAnalytics) AnalysisIsTriggered(properties AnalysisIsTriggeredProperties) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.analytics = append(n.analytics, properties)
 	log.Info().Str("method", "AnalysisIsTriggered").Msgf("no op - args %v", properties)
 }
 
-func (n *AnalyticsRecorder) IssueHoverIsDisplayed(properties IssueHoverIsDisplayedProperties) {
+func (n *TestAnalytics) IssueHoverIsDisplayed(properties IssueHoverIsDisplayedProperties) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.analytics = append(n.analytics, properties)
 	log.Info().Str("method", "IssueHoverIsDisplayed").Msgf("no op - args %v", properties)
 }
 
-func (n *AnalyticsRecorder) PluginIsUninstalled(properties PluginIsUninstalledProperties) {
+func (n *TestAnalytics) PluginIsUninstalled(properties PluginIsUninstalledProperties) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.analytics = append(n.analytics, properties)
 	log.Info().Str("method", "PluginIsUninstalled").Msgf("no op - args %v", properties)
 }
 
-func (n *AnalyticsRecorder) PluginIsInstalled(properties PluginIsInstalledProperties) {
+func (n *TestAnalytics) PluginIsInstalled(properties PluginIsInstalledProperties) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.analytics = append(n.analytics, properties)

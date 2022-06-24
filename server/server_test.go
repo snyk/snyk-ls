@@ -23,8 +23,11 @@ import (
 	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/cli/install"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -48,12 +51,12 @@ func didOpenTextParams() (sglsp.DidOpenTextDocumentParams, string, func()) {
 }
 
 func setupServer(t *testing.T) server.Local {
-	testutil.UnitTest(t)
-	di.TestInit(t)
+	testutil.IntegTest(t)
+	di.Init()
 	cleanupChannels()
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
-	workspace.Set(workspace.New())
+	workspace.Set(workspace.New(performance.NewTestInstrumentor()))
 	loc := startServer()
 
 	t.Cleanup(func() {
@@ -168,7 +171,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 
 	didOpenParams, dir, cleanup := didOpenTextParams()
 	defer cleanup()
-	workspace.Get().AddFolder(workspace.NewFolder(dir, "test"))
+	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService()))
 
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
@@ -179,7 +182,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	assert.Eventually(
 		t,
 		checkForPublishedDiagnostics(workspace.Get(), uri.PathFromUri(didOpenParams.TextDocument.URI), -1),
-		120*time.Second,
+		2*time.Second,
 		10*time.Millisecond,
 	)
 }
@@ -192,7 +195,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 
 	// remove cli for testing
 	install.Mutex.Lock()
-	installer := install.NewInstaller()
+	installer := install.NewInstaller(error_reporting.NewTestErrorReporter())
 	for {
 		find, err := installer.Find()
 		if err == nil {
@@ -215,7 +218,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	didOpenParams, dir, cleanup := didOpenTextParams()
 	defer cleanup()
 
-	workspace.Get().AddFolder(workspace.NewFolder(dir, "test"))
+	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", snyk.NewTestScanner(), hover.NewTestHoverService()))
 
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
@@ -235,7 +238,7 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 	didOpenParams, dir, cleanup := didOpenTextParams()
 	defer cleanup()
 
-	workspace.Get().AddFolder(workspace.NewFolder(dir, "test"))
+	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", snyk.NewTestScanner(), hover.NewTestHoverService()))
 
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
@@ -266,7 +269,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	defer os.RemoveAll(tempDir)
 
 	w := workspace.Get()
-	f := workspace.NewFolder(tempDir, "Test")
+	f := workspace.NewFolder(tempDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
 	w.AddFolder(f)
 
 	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
@@ -278,7 +281,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	assert.Eventually(
 		t,
 		checkForPublishedDiagnostics(workspace.Get(), uri.PathFromUri(didSaveParams.TextDocument.URI), -1),
-		120*time.Second,
+		2*time.Second,
 		10*time.Millisecond,
 	)
 }
@@ -416,9 +419,9 @@ func checkForPublishedDiagnostics(w *workspace.Workspace, testPath string, expec
 			if diagnosticsParams.URI == uri.PathToUri(testPath) {
 				f := w.GetFolderContaining(testPath)
 				if expectedNumber == -1 {
-					return f != nil && len(f.documentDiagnosticsFromCache(testPath)) > 0
+					return f != nil && len(diagnosticsParams.Diagnostics) > 0
 				} else {
-					return f != nil && len(f.documentDiagnosticsFromCache(testPath)) == expectedNumber
+					return f != nil && len(diagnosticsParams.Diagnostics) == expectedNumber
 				}
 			}
 		}
@@ -494,7 +497,7 @@ func Test_IntegrationSnykCodeFileScan(t *testing.T) {
 	testPath := filepath.Join(cloneTargetDir, "app.js")
 
 	w := workspace.Get()
-	f := workspace.NewFolder(cloneTargetDir, "Test")
+	f := workspace.NewFolder(cloneTargetDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
 	w.AddFolder(f)
 
 	_ = textDocumentDidOpen(&loc, testPath)

@@ -30,7 +30,11 @@ func TestNpmRangeFinder_Find(t *testing.T) {
 
 	var testPath, _ = filepath.Abs("testdata/package.json")
 	var testContent, _ = os.ReadFile(testPath)
-
+	npmRangeFinder := NpmRangeFinder{
+		uri:         uri.PathToUri(testPath),
+		fileContent: testContent,
+		myRange:     sglsp.Range{},
+	}
 	expectedRange := sglsp.Range{
 		Start: sglsp.Position{
 			Line:      17,
@@ -42,6 +46,6 @@ func TestNpmRangeFinder_Find(t *testing.T) {
 		},
 	}
 
-	actualRange := findRange(issue, uri.PathToUri(testPath), testContent)
+	actualRange := npmRangeFinder.find(issue)
 	assert.Equal(t, expectedRange, actualRange)
 }

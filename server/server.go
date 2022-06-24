@@ -70,7 +70,7 @@ func WorkspaceDidChangeWorkspaceFoldersHandler() jrpc2.Handler {
 }
 
 func AddFolder(lspFolder lsp.WorkspaceFolder, w *workspace.Workspace) {
-	f := workspace.NewFolder(uri.PathFromUri(lspFolder.Uri), lspFolder.Name, di.Scanner())
+	f := workspace.NewFolder(uri.PathFromUri(lspFolder.Uri), lspFolder.Name, di.Scanner(), di.HoverService())
 	w.AddFolder(f)
 }
 
@@ -78,7 +78,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
 		method := "InitializeHandler"
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
-		w := workspace.New()
+		w := workspace.New(di.Instrumentor())
 		workspace.Set(w)
 
 		// async processing listener

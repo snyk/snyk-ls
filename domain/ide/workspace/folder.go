@@ -10,6 +10,7 @@ import (
 	ignore "github.com/sabhiram/go-gitignore"
 
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/ide/workspace/deleteme"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -137,7 +138,7 @@ func (f *Folder) ClearDiagnosticsCache(filePath string) {
 
 func (f *Folder) scan(ctx context.Context, path string) {
 	diagnosticSlice := f.documentDiagnosticsFromCache(path)
-	if len(diagnosticSlice) > 0 {
+	if diagnosticSlice != nil {
 		log.Info().Str("method", "domain.ide.workspace.folder.scan").Msgf("Cached results found: Skipping scan for %s", path)
 		return
 	}
@@ -151,7 +152,7 @@ func (f *Folder) scan(ctx context.Context, path string) {
 			Msg("error getting workspace files")
 	}
 	//todo f.path & codeFiles need to go away, for that we need to unify the code interface & iac/oss
-	f.scanner.Scan(ctx, path, f.processResults, f.path, codeFiles)
+	f.scanner.Scan(ctx, path, f.processResults(path), f.path, codeFiles)
 }
 
 func (f *Folder) documentDiagnosticsFromCache(file string) []lsp.Diagnostic {
@@ -162,20 +163,20 @@ func (f *Folder) documentDiagnosticsFromCache(file string) []lsp.Diagnostic {
 	return diagnostics.([]lsp.Diagnostic)
 }
 
-func (f *Folder) processResults(diagnostics map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers) {
-	f.processDiagnostics(diagnostics)
-	f.processHovers(hovers)
+func (f *Folder) processResults(path string) deleteme.ResultProcessor {
+	return func(diagnostics []lsp.Diagnostic, hovers []hover.DocumentHovers) {
+		f.processDiagnostics(path, diagnostics)
+		f.processHovers(hovers)
+	}
 }
 
-func (f *Folder) processDiagnostics(diagnostics map[string][]lsp.Diagnostic) {
-	// add all diagnostics to cache
-	for filePath := range diagnostics {
-		f.documentDiagnosticCache.Put(filePath, diagnostics[filePath])
-		notification.Send(lsp.PublishDiagnosticsParams{
-			URI:         uri.PathToUri(filePath),
-			Diagnostics: diagnostics[filePath],
-		})
-	}
+func (f *Folder) processDiagnostics(path string, diagnostics []lsp.Diagnostic) {
+	f.documentDiagnosticCache.Put(path, diagnostics)
+
+	notification.Send(lsp.PublishDiagnosticsParams{
+		URI:         uri.PathToUri(path),
+		Diagnostics: diagnostics,
+	})
 }
 
 func (f *Folder) processHovers(hovers []hover.DocumentHovers) {

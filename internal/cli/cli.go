@@ -15,12 +15,15 @@ import (
 
 type SnykCli struct {
 	recursionLevel int
+	authenticator  *auth.Authenticator
 }
 
 var Mutex = &sync.Mutex{}
 
-func NewExecutor() Executor {
-	return &SnykCli{}
+func NewExecutor(authenticator *auth.Authenticator) Executor {
+	return &SnykCli{
+		authenticator: authenticator,
+	}
 }
 
 type Executor interface {
@@ -107,8 +110,28 @@ func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
 
 func (c SnykCli) HandleErrors(ctx context.Context, output string, err error) (fail bool) {
 	if strings.Contains(output, "`snyk` requires an authenticated account. Please run `snyk auth` and try again.") {
-		auth.Authenticate(ctx)
+		c.authenticator.Authenticate(ctx)
 		return true
 	}
+	return false
+}
+
+type TestExecutor struct {
+	ExecuteResponse string
+}
+
+func NewTestExecutor() *TestExecutor {
+	return &TestExecutor{ExecuteResponse: "{}"}
+}
+
+func (t TestExecutor) Execute(cmd []string, workingDir string) (resp []byte, err error) {
+	return []byte(t.ExecuteResponse), err
+}
+
+func (t TestExecutor) ExpandParametersFromConfig(base []string) []string {
+	return nil
+}
+
+func (t TestExecutor) HandleErrors(ctx context.Context, output string, err error) (fail bool) {
 	return false
 }

@@ -11,13 +11,15 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/code"
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/lsp"
 )
 
 func TestAddBundleHashToWorkspaceFolder(t *testing.T) {
 	testutil.UnitTest(t)
-	f := NewFolder(".", "Test")
+	f := NewFolder(".", "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
 	key := "bundleHash"
 	value := "testHash"
 
@@ -29,7 +31,7 @@ func TestAddBundleHashToWorkspaceFolder(t *testing.T) {
 func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {
 	expectedPatterns, tempDir, _, _, _ := setupIgnoreWorkspace()
 	defer os.RemoveAll(tempDir)
-	f := NewFolder(tempDir, "Test")
+	f := NewFolder(tempDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
 
 	actualPatterns, err := f.loadIgnorePatterns()
 	if err != nil {
@@ -46,7 +48,7 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 		t.Fatal("can't create temp dir")
 	}
 	defer os.RemoveAll(tempDir)
-	f := NewFolder(tempDir, "Test")
+	f := NewFolder(tempDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
 
 	actualPatterns, err := f.loadIgnorePatterns()
 	if err != nil {
@@ -60,7 +62,7 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 func Test_GetWorkspaceFolderFiles(t *testing.T) {
 	_, tempDir, ignoredFilePath, notIgnoredFilePath, _ := setupIgnoreWorkspace()
 	defer os.RemoveAll(tempDir)
-	f := NewFolder(tempDir, "Test")
+	f := NewFolder(tempDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
 
 	files, err := f.Files()
 	if err != nil {
@@ -75,7 +77,7 @@ func Test_GetWorkspaceFolderFiles(t *testing.T) {
 func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 	_, tempDir, _, _, ignoredFileInDir := setupIgnoreWorkspace()
 	defer os.RemoveAll(tempDir)
-	f := NewFolder(tempDir, "Test")
+	f := NewFolder(tempDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
 
 	walkedFiles, err := f.Files()
 	if err != nil {
@@ -86,11 +88,13 @@ func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 
 func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
 	diagnosticUri, path := code.FakeDiagnosticUri()
-	scannerRecorder := snyk.NewScannerRecorder()
-	f := NewFolder(path, "Test", scannerRecorder)
+	scannerRecorder := snyk.NewTestScanner()
+	scannerRecorder.Diagnostics = []lsp.Diagnostic{}
+	f := NewFolder(path, "Test", scannerRecorder, hover.NewTestHoverService())
+	ctx := context.Background()
 
-	f.ScanFile(context.Background(), diagnosticUri)
-	f.ScanFile(context.Background(), diagnosticUri)
+	f.ScanFile(ctx, diagnosticUri)
+	f.ScanFile(ctx, diagnosticUri)
 
 	assert.Equal(t, 1, scannerRecorder.Calls)
 }

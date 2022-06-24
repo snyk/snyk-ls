@@ -1,14 +1,12 @@
-package sentry
+package error_reporting
 
 import (
 	"github.com/rs/zerolog/log"
-
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 )
 
 type testErrorReporter struct{}
 
-func NewTestErrorReporter() error_reporting.ErrorReporter {
+func NewTestErrorReporter() ErrorReporter {
 	return &testErrorReporter{}
 }
 

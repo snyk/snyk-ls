@@ -14,10 +14,12 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/ide/workspace/deleteme"
 	"github.com/snyk/snyk-ls/domain/snyk/issues"
 	"github.com/snyk/snyk-ls/internal/cli"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -42,51 +44,67 @@ var extensions = map[string]bool{
 	".tf":   true,
 }
 
-func IsSupported(documentURI sglsp.DocumentURI) bool {
+type Scanner struct {
+	instrumentor  performance.Instrumentor
+	errorReporter error_reporting.ErrorReporter
+	analytics     ux.Analytics
+	cli           cli.Executor
+}
+
+func New(instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics, cli cli.Executor) *Scanner {
+	return &Scanner{
+		instrumentor:  instrumentor,
+		errorReporter: errorReporter,
+		analytics:     analytics,
+		cli:           cli,
+	}
+}
+
+func (iac *Scanner) IsSupported(documentURI sglsp.DocumentURI) bool {
 	ext := filepath.Ext(uri.PathFromUri(documentURI))
 	return extensions[ext]
 }
 
-func ScanWorkspace(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
+func (iac *Scanner) ScanWorkspace(ctx context.Context, documentURI sglsp.DocumentURI, output deleteme.ResultProcessor) {
 	p := progress.NewTracker(false)
 	p.Begin(fmt.Sprintf("Scanning for Snyk IaC issues in %s", documentURI), "Scanning Workspace.")
 	defer p.End("Snyk Iac Scan completed.")
 
-	scanResults, err := doScan(ctx, Cli, documentURI)
+	scanResults, err := iac.doScan(ctx, documentURI)
 	if err != nil {
-		di.ErrorReporter().CaptureError(err)
+		iac.errorReporter.CaptureError(err)
 	}
 	for _, scanResult := range scanResults {
 		u := uri.PathToUri(filepath.Join(uri.PathFromUri(documentURI), scanResult.TargetFile))
-		retrieveAnalysis(u, scanResult, output)
+		iac.retrieveAnalysis(u, scanResult, output)
 	}
-	trackResult(err == nil)
+	iac.trackResult(err == nil)
 }
 
-func ScanFile(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
+func (iac *Scanner) ScanFile(ctx context.Context, documentURI sglsp.DocumentURI, output deleteme.ResultProcessor) {
 	p := progress.NewTracker(false)
 	p.Begin(fmt.Sprintf("Scanning for Snyk IaC issues in %s", documentURI), "Scanning single file.")
 	defer p.End("Snyk Iac Scan completed.")
 
-	if !IsSupported(documentURI) {
+	if !iac.IsSupported(documentURI) {
 		return
 	}
-	scanResults, err := doScan(ctx, Cli, documentURI)
+	scanResults, err := iac.doScan(ctx, documentURI)
 	p.Report(80)
 	if err != nil {
-		di.ErrorReporter().CaptureError(err)
+		iac.errorReporter.CaptureError(err)
 	}
 	if len(scanResults) > 0 {
-		retrieveAnalysis(documentURI, scanResults[0], output)
+		iac.retrieveAnalysis(documentURI, scanResults[0], output)
 	}
-	trackResult(err == nil)
+	iac.trackResult(err == nil)
 	p.End("Snyk Iac Scan completed.")
 }
 
-func doScan(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI) (scanResults []iacScanResult, err error) {
+func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI) (scanResults []iacScanResult, err error) {
 	method := "iac.doScan"
-	s := di.Instrumentor().StartSpan(ctx, method)
-	defer di.Instrumentor().Finish(s)
+	s := iac.instrumentor.StartSpan(ctx, method)
+	defer iac.instrumentor.Finish(s)
 
 	defer log.Debug().Str("method", method).Msg("done.")
 	log.Debug().Str("method", method).Msg("started.")
@@ -98,7 +116,7 @@ func doScan(ctx context.Context, Cli cli.Executor, documentURI sglsp.DocumentURI
 		workspaceUri = uri.PathFromUri(documentURI)
 	}
 
-	res, err := Cli.Execute(cliCmd(Cli, documentURI), workspaceUri)
+	res, err := iac.cli.Execute(iac.cliCmd(documentURI), workspaceUri)
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:
@@ -141,26 +159,26 @@ func isDirectory(documentURI sglsp.DocumentURI) bool {
 	return stat.IsDir()
 }
 
-func cliCmd(Cli cli.Executor, u sglsp.DocumentURI) []string {
+func (iac *Scanner) cliCmd(u sglsp.DocumentURI) []string {
 	path, err := filepath.Abs(uri.PathFromUri(u))
 	if err != nil {
 		log.Err(err).Str("method", "iac.ScanFile").
 			Msg("Error while extracting file absolutePath")
 	}
-	cmd := Cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "iac", "test", path, "--json"})
+	cmd := iac.cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "iac", "test", path, "--json"})
 	log.Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
 	return cmd
 }
 
-func retrieveAnalysis(documentURI sglsp.DocumentURI, scanResult iacScanResult, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
-	diagnostics, hoverDetails := convertScanResult(scanResult)
+func (iac *Scanner) retrieveAnalysis(documentURI sglsp.DocumentURI, scanResult iacScanResult, output deleteme.ResultProcessor) {
+	diagnostics, hoverDetails := iac.convertScanResult(scanResult)
 
 	if len(diagnostics) > 0 {
-		output(map[string][]lsp.Diagnostic{uri.PathFromUri(documentURI): diagnostics}, []hover.DocumentHovers{{Uri: documentURI, Hover: hoverDetails}})
+		output(diagnostics, []hover.DocumentHovers{{Uri: documentURI, Hover: hoverDetails}})
 	}
 }
 
-func convertScanResult(res iacScanResult) ([]lsp.Diagnostic, []hover.Hover[hover.Context]) {
+func (iac *Scanner) convertScanResult(res iacScanResult) ([]lsp.Diagnostic, []hover.Hover[hover.Context]) {
 	var diagnostics []lsp.Diagnostic
 	var hoverDetails []hover.Hover[hover.Context]
 
@@ -171,27 +189,27 @@ func convertScanResult(res iacScanResult) ([]lsp.Diagnostic, []hover.Hover[hover
 			issue.LineNumber = 0
 		}
 
-		diagnostics = append(diagnostics, toDiagnostic(issue))
-		hoverDetails = append(hoverDetails, toHover(issue))
+		diagnostics = append(diagnostics, iac.toDiagnostic(issue))
+		hoverDetails = append(hoverDetails, iac.toHover(issue))
 	}
 
 	return diagnostics, hoverDetails
 }
 
-func trackResult(success bool) {
+func (iac *Scanner) trackResult(success bool) {
 	var result ux.Result
 	if success {
 		result = ux.Success
 	} else {
 		result = ux.Error
 	}
-	di.Analytics().AnalysisIsReady(ux.AnalysisIsReadyProperties{
+	iac.analytics.AnalysisIsReady(ux.AnalysisIsReadyProperties{
 		AnalysisType: ux.InfrastructureAsCode,
 		Result:       result,
 	})
 }
 
-func toHover(issue iacIssue) hover.Hover[hover.Context] {
+func (iac *Scanner) toHover(issue iacIssue) hover.Hover[hover.Context] {
 	title := issue.Title
 	description := issue.IacDescription.Issue
 	impact := issue.IacDescription.Impact
@@ -214,13 +232,13 @@ func toHover(issue iacIssue) hover.Hover[hover.Context] {
 			issue.PublicID, title, description, impact, resolve),
 		Context: issues.Issue{
 			ID:        issue.PublicID,
-			Severity:  toIssueSeverity(issue.Severity),
+			Severity:  iac.toIssueSeverity(issue.Severity),
 			IssueType: issues.InfrastructureIssue,
 		},
 	}
 }
 
-func toDiagnostic(issue iacIssue) lsp.Diagnostic {
+func (iac *Scanner) toDiagnostic(issue iacIssue) lsp.Diagnostic {
 	title := issue.Title
 	if config.CurrentConfig().Format() == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
@@ -233,20 +251,20 @@ func toDiagnostic(issue iacIssue) lsp.Diagnostic {
 			End:   sglsp.Position{Line: issue.LineNumber, Character: 80},
 		},
 		Message:  fmt.Sprintf("%s (Snyk)", title),
-		Severity: lspSeverity(issue.Severity),
+		Severity: iac.lspSeverity(issue.Severity),
 		Code:     issue.PublicID,
 	}
 	return diagnostic
 }
 
-func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
+func (iac *Scanner) lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 	lspSev, ok := lspSeverities[snykSeverity]
 	if !ok {
 		return sglsp.Info
 	}
 	return lspSev
 }
-func toIssueSeverity(snykSeverity string) issues.Severity {
+func (iac *Scanner) toIssueSeverity(snykSeverity string) issues.Severity {
 	severity, ok := issueSeverities[snykSeverity]
 	if !ok {
 		return issues.Medium

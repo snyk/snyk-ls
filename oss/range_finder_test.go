@@ -31,6 +31,10 @@ func TestDefaultFinder_Find(t *testing.T) {
 	}
 	var testPath, _ = filepath.Abs("testdata/go.mod")
 	var testContent, _ = os.ReadFile(testPath)
+	defaultFinder := DefaultFinder{
+		uri:         uri.PathToUri(testPath),
+		fileContent: testContent,
+	}
 
 	expectedRange := lsp.Range{
 		Start: lsp.Position{
@@ -43,6 +47,6 @@ func TestDefaultFinder_Find(t *testing.T) {
 		},
 	}
 
-	actualRange := findRange(issue, uri.PathToUri(testPath), testContent)
+	actualRange := defaultFinder.find(issue)
 	assert.Equal(t, expectedRange, actualRange)
 }

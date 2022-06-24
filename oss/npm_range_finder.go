@@ -13,7 +13,7 @@ type NpmRangeFinder struct {
 	myRange     lsp.Range
 }
 
-func (n *NpmRangeFinder) Find(issue ossIssue) lsp.Range {
+func (n *NpmRangeFinder) find(issue ossIssue) lsp.Range {
 	searchPackage, _ := introducingPackageAndVersion(issue)
 	var lines = strings.Split(strings.ReplaceAll(string(n.fileContent), "\r\n", "\n"), "\n")
 

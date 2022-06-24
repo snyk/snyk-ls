@@ -12,7 +12,7 @@ type DefaultFinder struct {
 	fileContent []byte
 }
 
-func (f *DefaultFinder) Find(issue ossIssue) sglsp.Range {
+func (f *DefaultFinder) find(issue ossIssue) sglsp.Range {
 	searchPackage, version := introducingPackageAndVersion(issue)
 	lines := strings.Split(strings.ReplaceAll(string(f.fileContent), "\r", ""), "\n")
 	for i, line := range lines {

@@ -13,7 +13,7 @@ import (
 )
 
 func setupFakeHover() sglsp.DocumentURI {
-	target := NewService(ux.NewNoopRecordingClient())
+	target := NewDefaultService(ux.NewTestAnalytics()).(*DefaultHoverService)
 	fakeHover := []Hover[Context]{
 		{Range: sglsp.Range{
 			Start: sglsp.Position{Line: 3, Character: 56},
@@ -30,7 +30,7 @@ func setupFakeHover() sglsp.DocumentURI {
 }
 
 func Test_registerHovers(t *testing.T) {
-	target := NewService(ux.NewNoopRecordingClient())
+	target := NewDefaultService(ux.NewTestAnalytics()).(*DefaultHoverService)
 	documentUri := uri.PathToUri("fake-file.json")
 	hover := DocumentHovers{
 		Uri: documentUri,
@@ -61,7 +61,7 @@ func Test_registerHovers(t *testing.T) {
 }
 
 func Test_DeleteHover(t *testing.T) {
-	target := NewService(ux.NewNoopRecordingClient())
+	target := NewDefaultService(ux.NewTestAnalytics()).(*DefaultHoverService)
 	documentUri := setupFakeHover()
 	target.DeleteHover(documentUri)
 
@@ -70,7 +70,7 @@ func Test_DeleteHover(t *testing.T) {
 }
 
 func Test_ClearAllHovers(t *testing.T) {
-	target := NewService(ux.NewNoopRecordingClient())
+	target := NewDefaultService(ux.NewTestAnalytics()).(*DefaultHoverService)
 	documentUri := setupFakeHover()
 	target.ClearAllHovers()
 
@@ -79,7 +79,7 @@ func Test_ClearAllHovers(t *testing.T) {
 }
 
 func Test_GetHoverMultiline(t *testing.T) {
-	target := NewService(ux.NewNoopRecordingClient())
+	target := NewDefaultService(ux.NewTestAnalytics()).(*DefaultHoverService)
 
 	tests := []struct {
 		hoverDetails []Hover[Context]
@@ -161,8 +161,8 @@ func Test_GetHoverMultiline(t *testing.T) {
 }
 
 func Test_TracksAnalytics(t *testing.T) {
-	analytics := ux.NewNoopRecordingClient()
-	target := NewService(analytics)
+	analytics := ux.NewTestAnalytics()
+	target := NewDefaultService(analytics).(*DefaultHoverService)
 
 	path := uri.PathToUri("path/to/package.json")
 	target.ClearAllHovers()

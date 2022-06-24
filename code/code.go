@@ -6,22 +6,21 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/ide/workspace/deleteme"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
-	"github.com/snyk/snyk-ls/lsp"
 )
 
-type SnykCode struct {
+type Scanner struct {
 	BundleUploader *BundleUploader
 	SnykApiClient  SnykApiClient
 	errorReporter  error_reporting.ErrorReporter
 	analytics      ux.Analytics
 }
 
-func NewSnykCode(bundleUploader *BundleUploader, apiClient SnykApiClient, reporter error_reporting.ErrorReporter, analytics ux.Analytics) *SnykCode {
-	sc := &SnykCode{
+func NewSnykCode(bundleUploader *BundleUploader, apiClient SnykApiClient, reporter error_reporting.ErrorReporter, analytics ux.Analytics) *Scanner {
+	sc := &Scanner{
 		BundleUploader: bundleUploader,
 		SnykApiClient:  apiClient,
 		errorReporter:  reporter,
@@ -30,13 +29,13 @@ func NewSnykCode(bundleUploader *BundleUploader, apiClient SnykApiClient, report
 	return sc
 }
 
-func (sc *SnykCode) ScanWorkspace(ctx context.Context, files []string, workspacePath string, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
+func (sc *Scanner) ScanWorkspace(ctx context.Context, files []string, workspacePath string, output deleteme.ResultProcessor) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 	sc.UploadAndAnalyze(span.Context(), files, workspacePath, output)
 }
 
-func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []string, path string, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
+func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path string, output deleteme.ResultProcessor) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.UploadAndAnalyze")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 	if len(files) == 0 {
@@ -73,13 +72,13 @@ func (sc *SnykCode) UploadAndAnalyze(ctx context.Context, files []string, path s
 	sc.trackResult(true)
 }
 
-func (sc *SnykCode) handleCreationAndUploadError(err error, msg string) {
+func (sc *Scanner) handleCreationAndUploadError(err error, msg string) {
 	log.Error().Err(err).Msg(msg)
 	//di.ErrorReporter().CaptureError(err) import cycle
 	sc.trackResult(err == nil)
 }
 
-func (sc *SnykCode) createBundle(ctx context.Context, requestId string, rootPath string, filePaths []string) (b Bundle, bundleFiles map[string]BundleFile, err error) {
+func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath string, filePaths []string) (b Bundle, bundleFiles map[string]BundleFile, err error) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.createBundle")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 	b = Bundle{
@@ -112,7 +111,7 @@ func (sc *SnykCode) createBundle(ctx context.Context, requestId string, rootPath
 	return b, bundleFiles, err
 }
 
-func (sc *SnykCode) isSastEnabled() bool {
+func (sc *Scanner) isSastEnabled() bool {
 	sastEnabled, localCodeEngineEnabled, _, err := sc.SnykApiClient.SastEnabled()
 	if err != nil {
 		log.Error().Err(err).Str("method", "isSastEnabled").Msg("couldn't get sast enablement")
@@ -136,7 +135,7 @@ type UploadStatus struct {
 	TotalFiles    int
 }
 
-func (sc *SnykCode) trackResult(success bool) {
+func (sc *Scanner) trackResult(success bool) {
 	var result ux.Result
 	if success {
 		result = ux.Success
@@ -149,6 +148,6 @@ func (sc *SnykCode) trackResult(success bool) {
 	})
 }
 
-func (sc *SnykCode) SetAnalytics(analytics ux.Analytics) {
+func (sc *Scanner) SetAnalytics(analytics ux.Analytics) {
 	sc.analytics = analytics
 }

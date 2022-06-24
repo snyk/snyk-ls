@@ -10,6 +10,10 @@ type SpanRecorder struct {
 	spans []Span
 }
 
+func newSpanRecorder() *SpanRecorder {
+	return &SpanRecorder{mutex: sync.Mutex{}, spans: []Span{}}
+}
+
 func (s *SpanRecorder) Record(span Span) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -39,7 +43,11 @@ func (s *SpanRecorder) Finish(span Span) {
 }
 
 type TestInstrumentor struct {
-	SpanRecorder SpanRecorder
+	SpanRecorder *SpanRecorder
+}
+
+func NewTestInstrumentor() *TestInstrumentor {
+	return &TestInstrumentor{SpanRecorder: newSpanRecorder()}
 }
 
 func (i *TestInstrumentor) StartSpan(ctx context.Context, operation string) Span {

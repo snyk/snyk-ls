@@ -15,7 +15,7 @@ import (
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk/issues"
-	"github.com/snyk/snyk-ls/internal/observability/infrastructure/sentry"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -48,7 +48,7 @@ const (
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
+	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	files := map[string]string{}
 	files[path1] = util.Hash([]byte(content))
 	bundleHash, missingFiles, _ := s.CreateBundle(context.Background(), files)
@@ -59,7 +59,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	testutil.IntegTest(t)
-	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
+	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	var removedFiles []string
 	files := map[string]string{}
 	files[path1] = util.Hash([]byte(content))
@@ -89,7 +89,7 @@ func createTestExtendMap() map[string]BundleFile {
 func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 	testutil.IntegTest(t)
 
-	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
+	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []string
 	files := map[string]string{}
@@ -128,7 +128,7 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 // todo analysis test severities
 
 func TestSnykCodeBackendService_convert_shouldConvertDiagnostics(t *testing.T) {
-	s := NewHTTPRepository("", &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
+	s := NewHTTPRepository("", performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
 
 	var analysisResponse SarifResponse
@@ -144,7 +144,7 @@ func TestSnykCodeBackendService_convert_shouldConvertDiagnostics(t *testing.T) {
 }
 
 func TestSnykCodeBackendService_convert_shouldConverHover(t *testing.T) {
-	s := NewHTTPRepository("", &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
+	s := NewHTTPRepository("", performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
 
 	var analysisResponse SarifResponse
@@ -190,7 +190,7 @@ func TestSnykCodeBackendService_GetFilters_returns(t *testing.T) {
 	})
 
 	test := func() error {
-		s := NewHTTPRepository(fmt.Sprintf("http://localhost:%d", pact.Server.Port), &performance.TestInstrumentor{}, sentry.NewTestErrorReporter())
+		s := NewHTTPRepository(fmt.Sprintf("http://localhost:%d", pact.Server.Port), performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 		if _, _, err := s.GetFilters(context.Background()); err != nil {
 			return err
 		}

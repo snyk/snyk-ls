@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -31,7 +32,7 @@ func TestInstaller_Find(t *testing.T) {
 
 	t.Setenv("PATH", cliDir)
 
-	i := NewInstaller()
+	i := NewInstaller(error_reporting.NewTestErrorReporter())
 
 	execPath, err := i.Find()
 
@@ -44,7 +45,7 @@ func TestInstaller_Find_emptyPath(t *testing.T) {
 	t.Skipf("removes real binaries from user directory")
 
 	t.Setenv("PATH", "")
-	i := NewInstaller()
+	i := NewInstaller(error_reporting.NewTestErrorReporter())
 
 	execPath, err := i.Find()
 
@@ -64,8 +65,8 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 	}
 	file.Close()
 
-	i := NewInstaller()
-	_, err = i.installRelease(r, context.Background())
+	i := NewInstaller(error_reporting.NewTestErrorReporter())
+	_, err = i.installRelease(r)
 
 	assert.Error(t, err)
 }
@@ -73,7 +74,7 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 	testutil.UnitTest(t)
 	// prepare
-	i := NewInstaller()
+	i := NewInstaller(error_reporting.NewTestErrorReporter())
 
 	temp := t.TempDir()
 	fakeCliFile := testutil.CreateTempFile(temp, t)
@@ -121,7 +122,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 
 	// prepare
 	ctx := context.Background()
-	i := NewInstaller()
+	i := NewInstaller(error_reporting.NewTestErrorReporter())
 
 	lsPath := config.CurrentConfig().LsPath()
 

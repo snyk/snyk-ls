@@ -14,10 +14,12 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/ide/workspace/deleteme"
 	"github.com/snyk/snyk-ls/domain/snyk/issues"
 	"github.com/snyk/snyk-ls/internal/cli"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -73,14 +75,30 @@ var supportedFiles = map[string]bool{
 	"mix.lock":                true,
 }
 
-func IsSupported(documentURI sglsp.DocumentURI) bool {
+type Scanner struct {
+	instrumentor  performance.Instrumentor
+	errorReporter error_reporting.ErrorReporter
+	analytics     ux.Analytics
+	cli           cli.Executor
+}
+
+func New(instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics, cli cli.Executor) *Scanner {
+	return &Scanner{
+		instrumentor:  instrumentor,
+		errorReporter: errorReporter,
+		analytics:     analytics,
+		cli:           cli,
+	}
+}
+
+func (oss *Scanner) IsSupported(documentURI sglsp.DocumentURI) bool {
 	return supportedFiles[filepath.Base(uri.PathFromUri(documentURI))]
 }
 
-func ScanWorkspace(ctx context.Context, cli cli.Executor, documentURI sglsp.DocumentURI, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
+func (oss *Scanner) ScanWorkspace(ctx context.Context, documentURI sglsp.DocumentURI, output deleteme.ResultProcessor) {
 	method := "oss.ScanWorkspace"
-	s := di.Instrumentor().StartSpan(ctx, method)
-	defer di.Instrumentor().Finish(s)
+	s := oss.instrumentor.StartSpan(ctx, method)
+	defer oss.instrumentor.Finish(s)
 	p := progress.NewTracker(false)
 	p.Begin(fmt.Sprintf("Scanning for Snyk Open Source issues in %s", documentURI), "Scanning Workspace.")
 	defer p.End("Snyk Open Source scan completed.")
@@ -92,22 +110,22 @@ func ScanWorkspace(ctx context.Context, cli cli.Executor, documentURI sglsp.Docu
 	if err != nil {
 		log.Err(err).Str("workspacePath", workspacePath).Msg("couldn't get absolute path")
 	}
-	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", "--json"})
-	res, err := cli.Execute(cmd, workspacePath)
+	cmd := oss.cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", "--json"})
+	res, err := oss.cli.Execute(cmd, workspacePath)
 	if err != nil {
-		if handleError(err, res) {
+		if oss.handleError(err, res) {
 			return
 		}
 	}
 
-	unmarshallAndRetrieveAnalysis(res, documentURI, output)
+	oss.unmarshallAndRetrieveAnalysis(res, documentURI, output)
 
 }
 
-func unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.DocumentURI, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
-	scanResults, done, err := unmarshallOssJson(res)
+func (oss *Scanner) unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.DocumentURI, output deleteme.ResultProcessor) {
+	scanResults, done, err := oss.unmarshallOssJson(res)
 	if err != nil {
-		di.ErrorReporter().CaptureError(err)
+		oss.errorReporter.CaptureError(err)
 	}
 
 	if done {
@@ -115,21 +133,21 @@ func unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.DocumentURI, ou
 	}
 
 	for _, scanResult := range scanResults {
-		targetFile := determineTargetFile(scanResult.DisplayTargetFile)
+		targetFile := oss.determineTargetFile(scanResult.DisplayTargetFile)
 		targetFilePath := filepath.Join(uri.PathFromUri(documentURI), targetFile)
 		targetFileUri := uri.PathToUri(targetFilePath)
 		fileContent, err := ioutil.ReadFile(targetFilePath)
 		if err != nil {
 			log.Err(err).Str("method", "unmarshallAndRetrieveAnalysis").
 				Msgf("Error while reading the file %v, err: %v", targetFile, err)
-			di.ErrorReporter().CaptureError(err)
+			oss.errorReporter.CaptureError(err)
 			return
 		}
-		retrieveAnalysis(scanResult, targetFileUri, fileContent, output)
+		oss.retrieveAnalysis(scanResult, targetFileUri, fileContent, output)
 	}
 }
 
-func unmarshallOssJson(res []byte) (scanResults []ossScanResult, done bool, err error) {
+func (oss *Scanner) unmarshallOssJson(res []byte) (scanResults []ossScanResult, done bool, err error) {
 	err = json.Unmarshal(res, &scanResults)
 	if err != nil {
 		switch err := err.(type) {
@@ -152,7 +170,7 @@ func unmarshallOssJson(res []byte) (scanResults []ossScanResult, done bool, err 
 	return scanResults, false, err
 }
 
-func handleError(err error, res []byte) bool {
+func (oss *Scanner) handleError(err error, res []byte) bool {
 	switch err := err.(type) {
 	case *exec.ExitError:
 		// Exit codes
@@ -168,7 +186,7 @@ func handleError(err error, res []byte) bool {
 			return false
 		case 2:
 			log.Err(err).Str("method", "oss.Scan").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
-			di.ErrorReporter().CaptureError(err)
+			oss.errorReporter.CaptureError(err)
 			return true
 		case 3:
 			log.Debug().Str("method", "oss.Scan").Msg("no supported projects/files detected.")
@@ -177,13 +195,13 @@ func handleError(err error, res []byte) bool {
 			log.Err(err).Str("method", "oss.Scan").Msg("Error while calling Snyk CLI")
 		}
 	default:
-		di.ErrorReporter().CaptureError(err)
+		oss.errorReporter.CaptureError(err)
 		return true
 	}
 	return true
 }
 
-func determineTargetFile(displayTargetFile string) string {
+func (oss *Scanner) determineTargetFile(displayTargetFile string) string {
 	targetFile := lockFilesToManifestMap[displayTargetFile]
 	if targetFile == "" {
 		return displayTargetFile
@@ -191,15 +209,14 @@ func determineTargetFile(displayTargetFile string) string {
 	return targetFile
 }
 
-func ScanFile(
+func (oss *Scanner) ScanFile(
 	ctx context.Context,
-	cli cli.Executor,
 	documentURI sglsp.DocumentURI,
-	output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers),
+	output deleteme.ResultProcessor,
 ) {
 	method := "oss.ScanFile"
-	s := di.Instrumentor().StartSpan(ctx, method)
-	defer di.Instrumentor().Finish(s)
+	s := oss.instrumentor.StartSpan(ctx, method)
+	defer oss.instrumentor.Finish(s)
 	p := progress.NewTracker(false)
 	p.Begin(fmt.Sprintf("Scanning for Snyk Open Source issues in %s", documentURI), "Scanning Single File.")
 	defer p.End("Snyk Open Source scan completed.")
@@ -207,7 +224,7 @@ func ScanFile(
 	log.Debug().Str("method", method).Msg("started.")
 	defer log.Debug().Str("method", method).Msg("done.")
 
-	if !IsSupported(documentURI) {
+	if !oss.IsSupported(documentURI) {
 		return
 	}
 
@@ -217,36 +234,36 @@ func ScanFile(
 			Msg("Error while extracting file absolutePath")
 	}
 	workDir := filepath.Dir(path)
-	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", workDir, "--json"})
-	res, err := cli.Execute(cmd, workDir)
+	cmd := oss.cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", workDir, "--json"})
+	res, err := oss.cli.Execute(cmd, workDir)
 	if err != nil {
-		if handleError(err, res) {
+		if oss.handleError(err, res) {
 			return
 		}
 	}
 
-	unmarshallAndRetrieveAnalysis(res, uri.PathToUri(workDir), output)
+	oss.unmarshallAndRetrieveAnalysis(res, uri.PathToUri(workDir), output)
 }
 
-func retrieveAnalysis(
+func (oss *Scanner) retrieveAnalysis(
 	scanResults ossScanResult,
 	documentURI sglsp.DocumentURI,
 	fileContent []byte,
-	output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers),
+	output deleteme.ResultProcessor,
 ) {
-	diagnostics, hoverDetails := retrieveDiagnostics(scanResults, documentURI, fileContent)
+	diagnostics, hoverDetails := oss.retrieveDiagnostics(scanResults, documentURI, fileContent)
 
 	if len(diagnostics) > 0 {
-		output(map[string][]lsp.Diagnostic{uri.PathFromUri(documentURI): diagnostics}, []hover.DocumentHovers{{Uri: documentURI, Hover: hoverDetails}})
+		output(diagnostics, []hover.DocumentHovers{{Uri: documentURI, Hover: hoverDetails}})
 	}
-	trackResult(true)
+	oss.trackResult(true)
 }
 
 type RangeFinder interface {
-	Find(issue ossIssue) sglsp.Range
+	find(issue ossIssue) sglsp.Range
 }
 
-func retrieveDiagnostics(
+func (oss *Scanner) retrieveDiagnostics(
 	res ossScanResult,
 	uri sglsp.DocumentURI,
 	fileContent []byte,
@@ -262,16 +279,16 @@ func retrieveDiagnostics(
 		if duplicateCheckMap[key] {
 			continue
 		}
-		issueRange := findRange(issue, uri, fileContent)
-		diagnostics = append(diagnostics, toDiagnostics(issue, issueRange))
-		hoverDetails = append(hoverDetails, toHover(issue, issueRange))
+		issueRange := oss.findRange(issue, uri, fileContent)
+		diagnostics = append(diagnostics, oss.toDiagnostics(issue, issueRange))
+		hoverDetails = append(hoverDetails, oss.toHover(issue, issueRange))
 		duplicateCheckMap[key] = true
 	}
 
 	return diagnostics, hoverDetails
 }
 
-func toDiagnostics(issue ossIssue, issueRange sglsp.Range) lsp.Diagnostic {
+func (oss *Scanner) toDiagnostics(issue ossIssue, issueRange sglsp.Range) lsp.Diagnostic {
 	title := issue.Title
 	//description := issue.Description
 
@@ -283,7 +300,7 @@ func toDiagnostics(issue ossIssue, issueRange sglsp.Range) lsp.Diagnostic {
 		Source:   "Snyk LS",
 		Message:  fmt.Sprintf("%s affecting package %s. Fixed in: %s (Snyk)", title, issue.PackageName, issue.FixedIn),
 		Range:    issueRange,
-		Severity: lspSeverity(issue.Severity),
+		Severity: oss.lspSeverity(issue.Severity),
 		Code:     issue.Id,
 		// Don't use it for now as it's not widely supported
 		// CodeDescription: lsp.CodeDescription{
@@ -292,7 +309,7 @@ func toDiagnostics(issue ossIssue, issueRange sglsp.Range) lsp.Diagnostic {
 	}
 }
 
-func toHover(issue ossIssue, issueRange sglsp.Range) hover.Hover[hover.Context] {
+func (oss *Scanner) toHover(issue ossIssue, issueRange sglsp.Range) hover.Hover[hover.Context] {
 	title := issue.Title
 	description := issue.Description
 
@@ -301,10 +318,10 @@ func toHover(issue ossIssue, issueRange sglsp.Range) hover.Hover[hover.Context] 
 		description = string(markdown.ToHTML([]byte(description), nil, nil))
 	}
 	summary := fmt.Sprintf("### Vulnerability %s %s %s \n **Fixed in: %s | Exploit maturity: %s**",
-		createCveLink(issue.Identifiers.CVE),
-		createCweLink(issue.Identifiers.CWE),
-		createIssueUrl(issue.Id),
-		createFixedIn(issue.FixedIn),
+		oss.createCveLink(issue.Identifiers.CVE),
+		oss.createCweLink(issue.Identifiers.CWE),
+		oss.createIssueUrl(issue.Id),
+		oss.createFixedIn(issue.FixedIn),
 		strings.ToUpper(issue.Severity),
 	)
 
@@ -320,14 +337,14 @@ func toHover(issue ossIssue, issueRange sglsp.Range) hover.Hover[hover.Context] 
 		),
 		Context: issues.Issue{
 			ID:        issue.Id,
-			Severity:  toIssueSeverity(issue.Severity),
+			Severity:  oss.toIssueSeverity(issue.Severity),
 			IssueType: issues.DependencyVulnerability,
 		},
 	}
 	return h
 }
 
-func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
+func (oss *Scanner) lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 	lspSev, ok := lspSeverities[snykSeverity]
 	if !ok {
 		return sglsp.Info
@@ -335,7 +352,7 @@ func lspSeverity(snykSeverity string) sglsp.DiagnosticSeverity {
 	return lspSev
 }
 
-func toIssueSeverity(snykSeverity string) issues.Severity {
+func (oss *Scanner) toIssueSeverity(snykSeverity string) issues.Severity {
 	sev, ok := issuesSeverity[snykSeverity]
 	if !ok {
 		return issues.Low
@@ -343,7 +360,7 @@ func toIssueSeverity(snykSeverity string) issues.Severity {
 	return sev
 }
 
-func createCveLink(cve []string) string {
+func (oss *Scanner) createCveLink(cve []string) string {
 	var formattedCve string
 	for _, c := range cve {
 		formattedCve += fmt.Sprintf("| [%s](https://cve.mitre.org/cgi-bin/cvename.cgi?name=%s)", c, c)
@@ -351,11 +368,11 @@ func createCveLink(cve []string) string {
 	return formattedCve
 }
 
-func createIssueUrl(id string) string {
+func (oss *Scanner) createIssueUrl(id string) string {
 	return fmt.Sprintf("| [%s](https://snyk.io/vuln/%s)", id, id)
 }
 
-func createFixedIn(fixedIn []string) string {
+func (oss *Scanner) createFixedIn(fixedIn []string) string {
 	var f string
 	if len(fixedIn) < 1 {
 		f += "Not Fixed"
@@ -368,7 +385,7 @@ func createFixedIn(fixedIn []string) string {
 	return f
 }
 
-func createCweLink(cwe []string) string {
+func (oss *Scanner) createCweLink(cwe []string) string {
 	var formattedCwe string
 	for _, c := range cwe {
 		id := strings.Replace(c, "CWE-", "", -1)
@@ -377,7 +394,7 @@ func createCweLink(cwe []string) string {
 	return formattedCwe
 }
 
-func findRange(issue ossIssue, uri sglsp.DocumentURI, fileContent []byte) sglsp.Range {
+func (oss *Scanner) findRange(issue ossIssue, uri sglsp.DocumentURI, fileContent []byte) sglsp.Range {
 	var foundRange sglsp.Range
 	var finder RangeFinder
 	switch issue.PackageManager {
@@ -385,7 +402,7 @@ func findRange(issue ossIssue, uri sglsp.DocumentURI, fileContent []byte) sglsp.
 		finder = &NpmRangeFinder{uri: uri, fileContent: fileContent}
 	case "maven":
 		if strings.HasSuffix(string(uri), "pom.xml") {
-			finder = &MavenRangeFinder{uri: uri, fileContent: fileContent}
+			finder = &mavenRangeFinder{uri: uri, fileContent: fileContent}
 		} else {
 			finder = &DefaultFinder{uri: uri, fileContent: fileContent}
 		}
@@ -393,18 +410,18 @@ func findRange(issue ossIssue, uri sglsp.DocumentURI, fileContent []byte) sglsp.
 		finder = &DefaultFinder{uri: uri, fileContent: fileContent}
 	}
 
-	foundRange = finder.Find(issue)
+	foundRange = finder.find(issue)
 	return foundRange
 }
 
-func trackResult(success bool) {
+func (oss *Scanner) trackResult(success bool) {
 	var result ux.Result
 	if success {
 		result = ux.Success
 	} else {
 		result = ux.Error
 	}
-	di.Analytics().AnalysisIsReady(ux.AnalysisIsReadyProperties{
+	oss.analytics.AnalysisIsReady(ux.AnalysisIsReadyProperties{
 		AnalysisType: ux.OpenSource,
 		Result:       result,
 	})

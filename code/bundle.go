@@ -10,11 +10,11 @@ import (
 
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/ide/workspace/deleteme"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
-	"github.com/snyk/snyk-ls/lsp"
 )
 
 type Bundle struct {
@@ -49,14 +49,14 @@ func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) err
 
 func (b *Bundle) FetchDiagnosticsData(
 	ctx context.Context,
-	output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers),
+	output deleteme.ResultProcessor,
 ) {
 	defer log.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
 	log.Debug().Str("method", "FetchDiagnosticsData").Msg("started.")
 	b.retrieveAnalysis(ctx, output)
 }
 
-func (b *Bundle) retrieveAnalysis(ctx context.Context, output func(issues map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers)) {
+func (b *Bundle) retrieveAnalysis(ctx context.Context, output deleteme.ResultProcessor) {
 	if b.BundleHash == "" {
 		log.Warn().Str("method", "retrieveAnalysis").Str("rootPath", b.rootPath).Msg("bundle hash is empty")
 		return
@@ -100,7 +100,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context, output func(issues map[st
 				if len(diagnostics) > 0 {
 					documentURI := uri.PathToUri(filePath)
 					output(
-						map[string][]lsp.Diagnostic{filePath: diagnostics},
+						diagnostics,
 						[]hover.DocumentHovers{{Uri: documentURI, Hover: hovers[documentURI]}},
 					)
 				}
