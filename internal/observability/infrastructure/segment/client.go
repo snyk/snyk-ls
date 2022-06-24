@@ -16,6 +16,9 @@ type Client struct {
 	segment segment.Client
 }
 
+// NewSegmentClient TODO use deviceID, e.g. hash of SNYK TOKEN if user is empty
+// https://github.com/snyk/snyk-intellij-plugin/blob/d2f1ef7fd80acb84bfd8678efada324d12d6a246/src/main/kotlin/snyk/amplitude/api/AmplitudeExperimentApiClient.kt
+// https://github.com/MatthewKing/DeviceId
 func NewSegmentClient(userId string, IDE ux.IDE) ux.Analytics {
 	client, err := segment.NewWithConfig(getSegmentPublicKey(), segment.Config{Logger: &segmentLogger{}})
 	if err != nil {

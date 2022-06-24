@@ -53,6 +53,4 @@ func Authenticate(ctx context.Context) {
 		config.CurrentConfig().SetToken(token)
 	}
 	notification.Send(lsp.AuthenticationParams{Token: token})
-	// initialize analytics anew, as we now have a user!
-	di.InitializeAnalytics()
 }

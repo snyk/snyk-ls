@@ -148,3 +148,7 @@ func (sc *SnykCode) trackResult(success bool) {
 		Result:       result,
 	})
 }
+
+func (sc *SnykCode) SetAnalytics(analytics ux.Analytics) {
+	sc.analytics = analytics
+}

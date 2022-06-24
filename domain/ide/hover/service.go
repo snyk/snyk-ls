@@ -153,3 +153,7 @@ func (s *Service) createHoverListener() {
 		break
 	}
 }
+
+func (s *Service) SetAnalytics(analytics ux.Analytics) {
+	s.analytics = analytics
+}

@@ -52,7 +52,6 @@ func initInfrastructure() {
 	}
 	snykApiClient = code.NewSnykApiClient(endpoint)
 	instrumentor = sentry.NewInstrumentor()
-	InitializeAnalytics()
 	snykCodeClient = code.NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), instrumentor, errorReporter)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 }
@@ -67,8 +66,12 @@ func InitializeAnalytics() {
 		}
 		errorReporter.CaptureError(err)
 		analytics = ux.NewNoopRecordingClient()
+	} else {
+		analytics = segment.NewSegmentClient(user.Id, ux.Eclipse) // FIXME: Don't hardcode Eclipse here
 	}
-	analytics = segment.NewSegmentClient(user.Id, ux.Eclipse) // FIXME: Don't hardcode Eclipse here
+	// FIXME: we need to initialize analytics differently
+	snykCode.SetAnalytics(analytics)
+	hoverService.SetAnalytics(analytics)
 }
 
 //TODO move out of prod logic
@@ -104,6 +107,9 @@ func Instrumentor() performance.Instrumentor {
 func Analytics() ux.Analytics {
 	initMutex.Lock()
 	defer initMutex.Unlock()
+	if analytics == nil {
+		InitializeAnalytics()
+	}
 	return analytics
 }
 
