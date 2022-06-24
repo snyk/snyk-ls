@@ -108,8 +108,10 @@ func Test_GetDiagnostics_shouldNotRunCodeIfNotSastEnabled(t *testing.T) {
 	diagnostics := workspace.GetDiagnostics(context.Background(), diagnosticUri)
 
 	assert.Equal(t, len(f.DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
-	assert.Len(t, fakeApiClient.GetAllCalls(code.SastEnabledOperation), 1)
-	assert.Len(t, di.SnykCodeClient().(*code.FakeSnykCodeClient).GetAllCalls(code.CreateBundleWithSourceOperation), 0)
+	assert.Eventually(t, func() bool {
+		return len(fakeApiClient.GetAllCalls(code.SastEnabledOperation)) == 1 &&
+			len(di.SnykCodeClient().(*code.FakeSnykCodeClient).GetAllCalls(code.CreateBundleWithSourceOperation)) == 0
+	}, time.Second*10, time.Millisecond)
 }
 
 func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
@@ -124,7 +126,10 @@ func Test_GetDiagnostics_shouldRunCodeIfEnabled(t *testing.T) {
 
 	diagnostics := workspace.GetDiagnostics(context.Background(), diagnosticUri)
 
-	assert.Equal(t, len(f.DocumentDiagnosticsFromCache(diagnosticUri)), len(diagnostics))
+	assert.Eventually(t, func() bool {
+		return len(f.DocumentDiagnosticsFromCache(diagnosticUri)) == len(diagnostics)
+	}, time.Second*10, time.Millisecond)
+
 	params := di.SnykCodeClient().(*code.FakeSnykCodeClient).GetCallParams(0, code.CreateBundleWithSourceOperation)
 	assert.NotNil(t, params)
 }
