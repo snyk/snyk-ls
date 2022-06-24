@@ -21,7 +21,7 @@ func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 	if !config.CurrentConfig().Authenticated() {
 		config.CurrentConfig().SetToken("dummy") // we don't want to authenticate
 	}
-	EnsureReadyForAnalysisAndWait(context.Background())
+	WaitUntilCLIAndAuthReady(context.Background())
 	assert.NotEmpty(t, config.CurrentConfig().CliPath())
 }
 
@@ -35,7 +35,7 @@ func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
 		config.CurrentConfig().SetCliPath("")
 	}()
 
-	EnsureReadyForAnalysisAndWait(context.Background())
+	WaitUntilCLIAndAuthReady(context.Background())
 
 	assert.Equal(t, tempFile.Name(), config.CurrentConfig().CliPath())
 }

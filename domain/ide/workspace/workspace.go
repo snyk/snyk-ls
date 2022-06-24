@@ -4,18 +4,31 @@ import (
 	"context"
 	"sync"
 
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/di"
 	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/preconditions"
-	"github.com/snyk/snyk-ls/lsp"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 )
 
+//todo can we do without a singleton?
 var instance *Workspace
 var mutex = &sync.Mutex{}
 
+// Workspace represents the highest entity in an IDE that contains code. A workspace may contain multiple folders
+type Workspace struct {
+	mutex        sync.Mutex
+	folders      map[string]*Folder
+	instrumentor performance.Instrumentor
+}
+
+func New(instrumentor performance.Instrumentor) *Workspace {
+	return &Workspace{
+		folders:      make(map[string]*Folder, 0),
+		instrumentor: instrumentor,
+	}
+}
+
+//todo can we move to di?
 func Get() *Workspace {
 	mutex.Lock()
 	defer mutex.Unlock()
@@ -28,27 +41,23 @@ func Set(w *Workspace) {
 	instance = w
 }
 
-func New() *Workspace {
-	return &Workspace{workspaceFolders: make(map[string]*Folder, 0)}
-}
-
 func (w *Workspace) DeleteFolder(folder string) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
-	delete(w.workspaceFolders, folder)
+	delete(w.folders, folder)
 }
 
 func (w *Workspace) AddFolder(f *Folder) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
-	if w.workspaceFolders == nil {
-		w.workspaceFolders = map[string]*Folder{}
+	if w.folders == nil {
+		w.folders = map[string]*Folder{}
 	}
-	w.workspaceFolders[f.path] = f
+	w.folders[f.Path()] = f
 }
 
-func (w *Workspace) GetFolder(path string) (folder *Folder) {
-	for _, folder := range w.workspaceFolders {
+func (w *Workspace) GetFolderContaining(path string) (folder *Folder) {
+	for _, folder := range w.folders {
 		if folder.Contains(path) {
 			return folder
 		}
@@ -56,40 +65,14 @@ func (w *Workspace) GetFolder(path string) (folder *Folder) {
 	return nil
 }
 
-// 1. Trigger scan across all product lines
-// 2. Fetch issues
-func (w *Workspace) GetDiagnostics(ctx context.Context, path string) []lsp.Diagnostic {
-	// serve from cache
-	method := "Workspace.GetDiagnostics"
-	s := di.Instrumentor().NewTransaction(ctx, method, method)
-	defer di.Instrumentor().Finish(s)
+func (w *Workspace) ScanWorkspace(ctx context.Context) {
+	method := "domain.ide.workspace.ScanWorkspace"
+	s := w.instrumentor.NewTransaction(ctx, method, method)
+	defer w.instrumentor.Finish(s)
 
-	folder := w.GetFolder(path)
-
-	if folder == nil {
-		log.Warn().Str("method", method).Msgf("No workspace folder configured for %s", path)
-		return []lsp.Diagnostic{}
-	}
-
-	diagnosticSlice := folder.DocumentDiagnosticsFromCache(path)
-	if len(diagnosticSlice) > 0 {
-		log.Info().Str("method", method).Msgf("Cached: Diagnostics for %s", path)
-		return diagnosticSlice
-	}
-
-	folder.FetchAllRegisteredDocumentDiagnostics(s.Context(), path, lsp.ScanLevelFile)
-	return folder.DocumentDiagnosticsFromCache(path)
-}
-
-func (w *Workspace) Scan(ctx context.Context) {
-	method := "domain.ide.Workspace.Scan"
-	s := di.Instrumentor().NewTransaction(ctx, method, method)
-	defer di.Instrumentor().Finish(s)
-
-	preconditions.EnsureReadyForAnalysisAndWait(ctx)
 	notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Workspace scan started."})
 
-	for _, folder := range w.workspaceFolders {
-		go folder.Scan(s.Context())
+	for _, folder := range w.folders {
+		go folder.ScanFolder(s.Context())
 	}
 }

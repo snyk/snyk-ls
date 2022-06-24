@@ -14,7 +14,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -39,10 +38,10 @@ func Start() {
 
 func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 	(*handlers)["initialize"] = InitializeHandler(srv)
-	(*handlers)["textDocument/didOpen"] = TextDocumentDidOpenHandler(srv)
+	(*handlers)["textDocument/didOpen"] = TextDocumentDidOpenHandler()
 	(*handlers)["textDocument/didChange"] = NoOpHandler()
 	(*handlers)["textDocument/didClose"] = NoOpHandler()
-	(*handlers)["textDocument/didSave"] = TextDocumentDidSaveHandler(srv)
+	(*handlers)["textDocument/didSave"] = TextDocumentDidSaveHandler()
 	(*handlers)["textDocument/hover"] = TextDocumentHover()
 	(*handlers)["textDocument/willSave"] = NoOpHandler()
 	(*handlers)["textDocument/willSaveWaitUntil"] = NoOpHandler()
@@ -65,13 +64,13 @@ func WorkspaceDidChangeWorkspaceFoldersHandler() jrpc2.Handler {
 		for _, folder := range params.Event.Added {
 			AddFolder(folder, w)
 		}
-		w.Scan(ctx)
+		w.ScanWorkspace(ctx)
 		return nil, nil
 	})
 }
 
-func AddFolder(folder lsp.WorkspaceFolder, w *workspace.Workspace) {
-	f := workspace.NewFolder(uri.PathFromUri(folder.Uri), folder.Name, w)
+func AddFolder(lspFolder lsp.WorkspaceFolder, w *workspace.Workspace) {
+	f := workspace.NewFolder(uri.PathFromUri(lspFolder.Uri), lspFolder.Name, di.Scanner())
 	w.AddFolder(f)
 }
 
@@ -93,7 +92,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 		} else {
 			AddFolder(lsp.WorkspaceFolder{Uri: uri.PathToUri(params.RootPath), Name: params.ClientInfo.Name}, w)
 		}
-		w.Scan(ctx)
+		w.ScanWorkspace(ctx)
 
 		return lsp.InitializeResult{
 			Capabilities: lsp.ServerCapabilities{
@@ -137,20 +136,6 @@ func Exit(srv *jrpc2.Server) jrpc2.Handler {
 	})
 }
 
-func PublishDiagnostics(ctx context.Context, documentURI sglsp.DocumentURI, srv *jrpc2.Server) {
-	method := "PublishDiagnostics"
-	diags := workspace.Get().GetDiagnostics(ctx, uri.PathFromUri(documentURI))
-	if diags != nil {
-		diagnosticsParams := lsp.PublishDiagnosticsParams{
-			URI:         documentURI,
-			Diagnostics: diags,
-		}
-		log.Info().Str("method", method).Str("uri", string(diagnosticsParams.URI)).Msg("SENDING")
-		err := (*srv).Notify(ctx, "textDocument/publishDiagnostics", diagnosticsParams)
-		logError(err, method)
-	}
-}
-
 func logError(err error, method string) {
 	if err != nil {
 		log.Err(err).Str("method", method)
@@ -158,29 +143,27 @@ func logError(err error, method string) {
 	}
 }
 
-func TextDocumentDidOpenHandler(srv *jrpc2.Server) jrpc2.Handler {
+func TextDocumentDidOpenHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidOpenTextDocumentParams) (interface{}, error) {
 		method := "TextDocumentDidOpenHandler"
-		log.Info().Str("method", method).Str("documentURI", string(params.TextDocument.URI)).Msg("RECEIVING")
-		go func() {
-			preconditions.EnsureReadyForAnalysisAndWait(ctx)
-			PublishDiagnostics(ctx, params.TextDocument.URI, srv) // todo: remove in favor of notifier
-		}()
+		filePath := uri.PathFromUri(params.TextDocument.URI)
+		log.Info().Str("method", method).Str("documentURI", filePath).Msg("RECEIVING")
+		workspace.Get().GetFolderContaining(filePath).ScanFile(ctx, filePath)
 		return nil, nil
 	})
 }
 
-func TextDocumentDidSaveHandler(srv *jrpc2.Server) jrpc2.Handler {
+func TextDocumentDidSaveHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidSaveTextDocumentParams) (interface{}, error) {
 		method := "TextDocumentDidSaveHandler"
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
-
-		// clear cache when saving and get fresh diagnostics
 		filePath := uri.PathFromUri(params.TextDocument.URI)
-		folder := workspace.Get().GetFolder(filePath)
-		folder.ClearDiagnosticsCache(filePath)
+
+		// todo can we push cache management down?
+		f := workspace.Get().GetFolderContaining(filePath)
+		f.ClearDiagnosticsCache(filePath)
 		di.HoverService().DeleteHover(params.TextDocument.URI)
-		PublishDiagnostics(ctx, params.TextDocument.URI, srv) // todo: remove in favor of notifier
+		workspace.Get().GetFolderContaining(filePath).ScanFile(ctx, filePath)
 		return nil, nil
 	})
 }

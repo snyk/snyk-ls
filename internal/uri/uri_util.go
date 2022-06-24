@@ -14,6 +14,7 @@ func FolderContains(folderPath string, path string) bool {
 	return strings.HasPrefix(path, folderPath)
 }
 
+//todo can we create a path domain type?
 // PathFromUri converts the given uri to a file path
 func PathFromUri(documentURI sglsp.DocumentURI) string {
 	u := string(documentURI)

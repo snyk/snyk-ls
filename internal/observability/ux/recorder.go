@@ -25,33 +25,33 @@ func (n *AnalyticsRecorder) AnalysisIsReady(properties AnalysisIsReadyProperties
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.analytics = append(n.analytics, properties)
-	log.Info().Str("method", "AnalysisIsReady").Msg("no op")
+	log.Info().Str("method", "AnalysisIsReady").Msgf("no op - args %v", properties)
 }
 
 func (n *AnalyticsRecorder) AnalysisIsTriggered(properties AnalysisIsTriggeredProperties) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.analytics = append(n.analytics, properties)
-	log.Info().Str("method", "AnalysisIsTriggered").Msg("no op")
+	log.Info().Str("method", "AnalysisIsTriggered").Msgf("no op - args %v", properties)
 }
 
 func (n *AnalyticsRecorder) IssueHoverIsDisplayed(properties IssueHoverIsDisplayedProperties) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.analytics = append(n.analytics, properties)
-	log.Info().Str("method", "IssueHoverIsDisplayed").Msg("no op")
+	log.Info().Str("method", "IssueHoverIsDisplayed").Msgf("no op - args %v", properties)
 }
 
 func (n *AnalyticsRecorder) PluginIsUninstalled(properties PluginIsUninstalledProperties) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.analytics = append(n.analytics, properties)
-	log.Info().Str("method", "PluginIsUninstalled").Msg("no op")
+	log.Info().Str("method", "PluginIsUninstalled").Msgf("no op - args %v", properties)
 }
 
 func (n *AnalyticsRecorder) PluginIsInstalled(properties PluginIsInstalledProperties) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.analytics = append(n.analytics, properties)
-	log.Info().Str("method", "PluginIsInstalled").Msg("no op")
+	log.Info().Str("method", "PluginIsInstalled").Msgf("no op - args %v", properties)
 }

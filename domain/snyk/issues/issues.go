@@ -1,3 +1,4 @@
+//todo remove issues folder and lift up once the snyk domain does not depend on the IDE domain (snyk must return issues not hovers)
 package issues
 
 //Issue models a problem, vulnerability, or situation within your code that requires your attention

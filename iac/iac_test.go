@@ -27,7 +27,7 @@ func Test_ScanWorkspace(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
 	di.TestInit(t)
 	ctx := context.Background()
-	preconditions.EnsureReadyForAnalysisAndWait(ctx)
+	preconditions.WaitUntilCLIAndAuthReady(ctx)
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 
 	getwd, _ := os.Getwd()
@@ -52,7 +52,7 @@ func Test_ScanFile(t *testing.T) {
 	di.TestInit(t)
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 	ctx := context.Background()
-	preconditions.EnsureReadyForAnalysisAndWait(ctx)
+	preconditions.WaitUntilCLIAndAuthReady(ctx)
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/RBAC.yaml")
@@ -81,7 +81,7 @@ func Test_Analytics(t *testing.T) {
 	di.TestInit(t)
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 	ctx := context.Background()
-	preconditions.EnsureReadyForAnalysisAndWait(ctx)
+	preconditions.WaitUntilCLIAndAuthReady(ctx)
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/RBAC.yaml")

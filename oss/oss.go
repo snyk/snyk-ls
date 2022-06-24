@@ -19,7 +19,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/issues"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
-	"github.com/snyk/snyk-ls/internal/preconditions"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/lsp"
@@ -217,7 +216,6 @@ func ScanFile(
 		log.Err(err).Str("method", method).
 			Msg("Error while extracting file absolutePath")
 	}
-	preconditions.EnsureReadyForAnalysisAndWait(ctx)
 	workDir := filepath.Dir(path)
 	cmd := cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", workDir, "--json"})
 	res, err := cli.Execute(cmd, workDir)

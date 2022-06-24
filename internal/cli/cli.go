@@ -19,6 +19,10 @@ type SnykCli struct {
 
 var Mutex = &sync.Mutex{}
 
+func NewExecutor() Executor {
+	return &SnykCli{}
+}
+
 type Executor interface {
 	Execute(cmd []string, workingDir string) (resp []byte, err error)
 	ExpandParametersFromConfig(base []string) []string

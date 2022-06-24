@@ -168,7 +168,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 
 	didOpenParams, dir, cleanup := didOpenTextParams()
 	defer cleanup()
-	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", workspace.Get()))
+	workspace.Get().AddFolder(workspace.NewFolder(dir, "test"))
 
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
@@ -215,7 +215,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	didOpenParams, dir, cleanup := didOpenTextParams()
 	defer cleanup()
 
-	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", workspace.Get()))
+	workspace.Get().AddFolder(workspace.NewFolder(dir, "test"))
 
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
@@ -235,7 +235,7 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 	didOpenParams, dir, cleanup := didOpenTextParams()
 	defer cleanup()
 
-	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", workspace.Get()))
+	workspace.Get().AddFolder(workspace.NewFolder(dir, "test"))
 
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
@@ -266,7 +266,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	defer os.RemoveAll(tempDir)
 
 	w := workspace.Get()
-	f := workspace.NewFolder(tempDir, "Test", w)
+	f := workspace.NewFolder(tempDir, "Test")
 	w.AddFolder(f)
 
 	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
@@ -319,7 +319,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	}
 
 	assert.Eventually(t, func() bool {
-		folder := w.GetFolder(uri.PathFromUri(f.Uri))
+		folder := w.GetFolderContaining(uri.PathFromUri(f.Uri))
 		return folder != nil && folder.IsScanned()
 	}, 120*time.Second, time.Millisecond)
 
@@ -332,7 +332,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 		t.Fatal(t, err, "error calling server")
 	}
 
-	assert.Nil(t, w.GetFolder(uri.PathFromUri(f.Uri)))
+	assert.Nil(t, w.GetFolderContaining(uri.PathFromUri(f.Uri)))
 }
 
 func Test_IntegrationWorkspaceScanOssAndCode(t *testing.T) {
@@ -392,7 +392,7 @@ func runIntegrationTest(repo string, commit string, file1 string, file2 string, 
 
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
-		f := workspace.Get().GetFolder(cloneTargetDir)
+		f := workspace.Get().GetFolderContaining(cloneTargetDir)
 		return f != nil && f.IsScanned()
 	}, 600*time.Second, 2*time.Millisecond)
 
@@ -414,11 +414,11 @@ func checkForPublishedDiagnostics(w *workspace.Workspace, testPath string, expec
 			diagnosticsParams := lsp.PublishDiagnosticsParams{}
 			_ = n.UnmarshalParams(&diagnosticsParams)
 			if diagnosticsParams.URI == uri.PathToUri(testPath) {
-				f := w.GetFolder(testPath)
+				f := w.GetFolderContaining(testPath)
 				if expectedNumber == -1 {
-					return f != nil && len(f.DocumentDiagnosticsFromCache(testPath)) > 0
+					return f != nil && len(f.documentDiagnosticsFromCache(testPath)) > 0
 				} else {
-					return f != nil && len(f.DocumentDiagnosticsFromCache(testPath)) == expectedNumber
+					return f != nil && len(f.documentDiagnosticsFromCache(testPath)) == expectedNumber
 				}
 			}
 		}
@@ -451,7 +451,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
 		w := workspace.Get()
-		f := w.GetFolder(cloneTargetDir)
+		f := w.GetFolderContaining(cloneTargetDir)
 		return f != nil && f.IsScanned()
 	}, maxIntegTestDuration, 100*time.Millisecond)
 
@@ -494,7 +494,7 @@ func Test_IntegrationSnykCodeFileScan(t *testing.T) {
 	testPath := filepath.Join(cloneTargetDir, "app.js")
 
 	w := workspace.Get()
-	f := workspace.NewFolder(cloneTargetDir, "Test", w)
+	f := workspace.NewFolder(cloneTargetDir, "Test")
 	w.AddFolder(f)
 
 	_ = textDocumentDidOpen(&loc, testPath)

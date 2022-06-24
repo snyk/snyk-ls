@@ -9,6 +9,8 @@ import (
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/infrastructure/segment"
 	"github.com/snyk/snyk-ls/internal/observability/infrastructure/sentry"
@@ -24,7 +26,10 @@ var snykCode *code.SnykCode
 var instrumentor performance.Instrumentor
 var errorReporter error_reporting.ErrorReporter
 var analytics ux.Analytics
+var snykCli cli.Executor
+
 var hoverService *hover.Service
+var scanner snyk.Scanner
 
 var initMutex = &sync.Mutex{}
 
@@ -42,9 +47,11 @@ func initApplication() {
 
 func initDomain() {
 	hoverService = hover.NewService(analytics)
+	scanner = snyk.NewDefaultScanner(snykCli, instrumentor, analytics)
 }
 
 func initInfrastructure() {
+	snykCli = cli.NewExecutor()
 	errorReporter = sentry.NewSentryErrorReporter()
 	endpoint := config.CurrentConfig().CliSettings().Endpoint
 	if endpoint == "" {
@@ -125,14 +132,14 @@ func SnykCode() *code.SnykCode {
 	return snykCode
 }
 
-func SnykCodeClient() code.SnykCodeClient {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return snykCodeClient
-}
-
 func HoverService() *hover.Service {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return hoverService
+}
+
+func Scanner() snyk.Scanner {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return scanner
 }

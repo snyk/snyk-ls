@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,14 +10,14 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/code"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestAddBundleHashToWorkspaceFolder(t *testing.T) {
 	testutil.UnitTest(t)
-	workspace := New()
-	f := NewFolder(".", "Test", workspace)
-	workspace.AddFolder(f)
+	f := NewFolder(".", "Test")
 	key := "bundleHash"
 	value := "testHash"
 
@@ -28,9 +29,7 @@ func TestAddBundleHashToWorkspaceFolder(t *testing.T) {
 func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {
 	expectedPatterns, tempDir, _, _, _ := setupIgnoreWorkspace()
 	defer os.RemoveAll(tempDir)
-	workspace := New()
-	f := NewFolder(tempDir, "Test", workspace)
-	workspace.AddFolder(f)
+	f := NewFolder(tempDir, "Test")
 
 	actualPatterns, err := f.loadIgnorePatterns()
 	if err != nil {
@@ -47,9 +46,7 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 		t.Fatal("can't create temp dir")
 	}
 	defer os.RemoveAll(tempDir)
-	workspace := New()
-	f := NewFolder(tempDir, "Test", workspace)
-	workspace.AddFolder(f)
+	f := NewFolder(tempDir, "Test")
 
 	actualPatterns, err := f.loadIgnorePatterns()
 	if err != nil {
@@ -63,9 +60,7 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 func Test_GetWorkspaceFolderFiles(t *testing.T) {
 	_, tempDir, ignoredFilePath, notIgnoredFilePath, _ := setupIgnoreWorkspace()
 	defer os.RemoveAll(tempDir)
-	workspace := New()
-	f := NewFolder(tempDir, "Test", workspace)
-	workspace.AddFolder(f)
+	f := NewFolder(tempDir, "Test")
 
 	files, err := f.Files()
 	if err != nil {
@@ -80,15 +75,24 @@ func Test_GetWorkspaceFolderFiles(t *testing.T) {
 func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 	_, tempDir, _, _, ignoredFileInDir := setupIgnoreWorkspace()
 	defer os.RemoveAll(tempDir)
-	workspace := New()
-	f := NewFolder(tempDir, "Test", workspace)
-	workspace.AddFolder(f)
+	f := NewFolder(tempDir, "Test")
 
 	walkedFiles, err := f.Files()
 	if err != nil {
 		t.Fatal(t, err, "Error while registering "+tempDir)
 	}
 	assert.NotContains(t, walkedFiles, ignoredFileInDir)
+}
+
+func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
+	diagnosticUri, path := code.FakeDiagnosticUri()
+	scannerRecorder := snyk.NewScannerRecorder()
+	f := NewFolder(path, "Test", scannerRecorder)
+
+	f.ScanFile(context.Background(), diagnosticUri)
+	f.ScanFile(context.Background(), diagnosticUri)
+
+	assert.Equal(t, 1, scannerRecorder.Calls)
 }
 
 func writeTestGitIgnore(ignorePatterns string) (tempDir string) {

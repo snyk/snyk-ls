@@ -17,7 +17,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 )
 
-func EnsureReadyForAnalysisAndWait(ctx context.Context) {
+func WaitUntilCLIAndAuthReady(ctx context.Context) {
 	install.Mutex.Lock()
 	defer install.Mutex.Unlock()
 

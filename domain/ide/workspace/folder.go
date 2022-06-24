@@ -9,26 +9,54 @@ import (
 	"github.com/rs/zerolog/log"
 	ignore "github.com/sabhiram/go-gitignore"
 
-	"github.com/snyk/snyk-ls/internal/cli"
+	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/concurrency"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
 	"github.com/snyk/snyk-ls/lsp"
 )
 
-func NewFolder(path string, name string, parent *Workspace) *Folder {
+type FolderStatus int
+type ProductLine string
+type ProductLineAttributes map[string]interface{}
+
+const (
+	Unscanned FolderStatus = iota
+	Scanned   FolderStatus = iota
+
+	SnykCode       ProductLine = "Snyk Code"
+	SnykOpenSource ProductLine = "Snyk Open Source"
+	SnykIac        ProductLine = "Snyk IaC"
+)
+
+// Folder contains files that can be scanned,
+//it orchestrates snyk scans and provides a caching layer to avoid unnecessary computing
+type Folder struct {
+	path                    string
+	name                    string
+	status                  FolderStatus
+	productLineAttributes   map[ProductLine]ProductLineAttributes
+	ignorePatterns          []string
+	documentDiagnosticCache concurrency.AtomicMap
+	scanner                 snyk.Scanner
+	hoverService            hover.Service
+}
+
+func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hover.Service) *Folder {
 	folder := Folder{
-		parent:                parent,
+		scanner:               scanner,
 		path:                  path,
 		name:                  name,
 		status:                Unscanned,
 		productLineAttributes: make(map[ProductLine]ProductLineAttributes),
+		hoverService:          hoverService,
 	}
 	folder.productLineAttributes[SnykCode] = ProductLineAttributes{}
 	folder.productLineAttributes[SnykIac] = ProductLineAttributes{}
 	folder.productLineAttributes[SnykOpenSource] = ProductLineAttributes{}
 	folder.documentDiagnosticCache = concurrency.AtomicMap{}
-	folder.cli = cli.SnykCli{}
 	return &folder
 }
 
@@ -80,6 +108,84 @@ func (f *Folder) SetStatus(status FolderStatus) {
 	f.status = status
 }
 
+func (f *Folder) ScanFolder(ctx context.Context) {
+	f.scan(ctx, f.path)
+	f.status = Scanned
+}
+
+func (f *Folder) ScanFile(ctx context.Context, path string) {
+	f.scan(ctx, path)
+}
+
+func (f *Folder) GetProductAttribute(productLine ProductLine, name string) interface{} {
+	return f.productLineAttributes[productLine][name]
+}
+
+func (f *Folder) AddProductAttribute(productLine ProductLine, name string, value interface{}) {
+	f.productLineAttributes[productLine][name] = value
+}
+
+func (f *Folder) Contains(path string) bool {
+	return uri.FolderContains(f.path, path)
+}
+
+// todo: can we manage the cache internally without leaking it, e.g. by using as a key an MD5 hash rather than a path and defining a TTL?
+func (f *Folder) ClearDiagnosticsCache(filePath string) {
+	f.documentDiagnosticCache.Delete(filePath)
+	f.ClearScannedStatus()
+}
+
+func (f *Folder) scan(ctx context.Context, path string) {
+	diagnosticSlice := f.documentDiagnosticsFromCache(path)
+	if len(diagnosticSlice) > 0 {
+		log.Info().Str("method", "domain.ide.workspace.folder.scan").Msgf("Cached results found: Skipping scan for %s", path)
+		return
+	}
+
+	codeFiles, err := f.Files()
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("method", "doSnykCodeWorkspaceScan").
+			Str("workspacePath", f.path).
+			Msg("error getting workspace files")
+	}
+	//todo f.path & codeFiles need to go away, for that we need to unify the code interface & iac/oss
+	f.scanner.Scan(ctx, path, f.processResults, f.path, codeFiles)
+}
+
+func (f *Folder) documentDiagnosticsFromCache(file string) []lsp.Diagnostic {
+	diagnostics := f.documentDiagnosticCache.Get(file)
+	if diagnostics == nil {
+		return nil
+	}
+	return diagnostics.([]lsp.Diagnostic)
+}
+
+func (f *Folder) processResults(diagnostics map[string][]lsp.Diagnostic, hovers []hover.DocumentHovers) {
+	f.processDiagnostics(diagnostics)
+	f.processHovers(hovers)
+}
+
+func (f *Folder) processDiagnostics(diagnostics map[string][]lsp.Diagnostic) {
+	// add all diagnostics to cache
+	for filePath := range diagnostics {
+		f.documentDiagnosticCache.Put(filePath, diagnostics[filePath])
+		notification.Send(lsp.PublishDiagnosticsParams{
+			URI:         uri.PathToUri(filePath),
+			Diagnostics: diagnostics[filePath],
+		})
+	}
+}
+
+func (f *Folder) processHovers(hovers []hover.DocumentHovers) {
+	for _, h := range hovers {
+		select {
+		case f.hoverService.Channel() <- h:
+		}
+	}
+}
+
 func (f *Folder) loadIgnorePatterns() (patterns []string, err error) {
 	var ignores = ""
 	log.Debug().
@@ -111,23 +217,6 @@ func (f *Folder) loadIgnorePatterns() (patterns []string, err error) {
 	f.ignorePatterns = patterns
 	log.Debug().Interface("ignorePatterns", patterns).Msg("Loaded and set ignore patterns")
 	return patterns, nil
-}
-
-func (f *Folder) Scan(ctx context.Context) {
-	f.FetchAllRegisteredDocumentDiagnostics(ctx, f.path, lsp.ScanLevelWorkspace)
-	f.status = Scanned
-}
-
-func (f *Folder) GetProductAttribute(productLine ProductLine, name string) interface{} {
-	return f.productLineAttributes[productLine][name]
-}
-
-func (f *Folder) AddProductAttribute(productLine ProductLine, name string, value interface{}) {
-	f.productLineAttributes[productLine][name] = value
-}
-
-func (f *Folder) Contains(path string) bool {
-	return uri.FolderContains(f.path, path)
 }
 
 func (f *Folder) Path() string         { return f.path }

@@ -35,7 +35,7 @@ func Test_ScanWorkspace(t *testing.T) {
 	di.TestInit(t)
 	testutil.CreateDummyProgressListener(t)
 	ctx := context.Background()
-	preconditions.EnsureReadyForAnalysisAndWait(ctx)
+	preconditions.WaitUntilCLIAndAuthReady(ctx)
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata")
@@ -64,7 +64,7 @@ func Test_ScanFile(t *testing.T) {
 	testutil.IntegTest(t)
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 	ctx := context.Background()
-	preconditions.EnsureReadyForAnalysisAndWait(ctx)
+	preconditions.WaitUntilCLIAndAuthReady(ctx)
 	di.TestInit(t)
 
 	workingDir, _ := os.Getwd()
@@ -93,7 +93,7 @@ func Test_Analytics(t *testing.T) {
 	testutil.IntegTest(t)
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 	ctx := context.Background()
-	preconditions.EnsureReadyForAnalysisAndWait(ctx)
+	preconditions.WaitUntilCLIAndAuthReady(ctx)
 	di.TestInit(t)
 
 	workingDir, _ := os.Getwd()
