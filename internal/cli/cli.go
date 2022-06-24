@@ -26,12 +26,13 @@ type Executor interface {
 }
 
 func (c SnykCli) Execute(cmd []string, workingDir string) (resp []byte, err error) {
-	log.Info().Str("method", "SnykCli.Execute").Interface("cmd", cmd).Msg("calling Snyk CLI")
+	method := "SnykCli.Execute"
+	log.Info().Str("method", method).Interface("cmd", cmd).Msg("calling Snyk CLI")
 	if isIacCommand(cmd) {
 		Mutex.Lock()
 	}
-	command := exec.Command(cmd[0], cmd[1:]...)
-	command.Dir = workingDir
+
+	command := c.getCommand(cmd, workingDir)
 	output, err := command.CombinedOutput()
 	if isIacCommand(cmd) {
 		Mutex.Unlock()
@@ -45,8 +46,35 @@ func (c SnykCli) Execute(cmd []string, workingDir string) (resp []byte, err erro
 			output, err = c.Execute(cmd, workingDir)
 		}
 	}
-	log.Trace().Str("method", "SnykCli.Execute").Str("response", string(output))
+	log.Trace().Str("method", method).Str("response", string(output))
 	return output, err
+}
+
+func (c SnykCli) getCommand(cmd []string, workingDir string) *exec.Cmd {
+	command := exec.Command(cmd[0], cmd[1:]...)
+	command.Dir = workingDir
+	cliEnv := c.addConfigValuesToEnv(os.Environ())
+	command.Env = cliEnv
+	log.Trace().Str("method", "getCommand").Interface("command", command).Interface("env", command.Env).Str("dir", command.Dir).Send()
+	return command
+}
+
+func (c SnykCli) addConfigValuesToEnv(env []string) (updatedEnv []string) {
+	updatedEnv = env
+
+	organization := config.CurrentConfig().GetOrganization()
+	if organization != "" {
+		updatedEnv = append(updatedEnv, "SNYK_CFG_ORG="+organization)
+	}
+
+	endpoint := config.CurrentConfig().CliSettings().Endpoint
+	if endpoint != "" {
+		updatedEnv = append(updatedEnv, "SNYK_API="+endpoint)
+	}
+
+	// always add token
+	updatedEnv = append(updatedEnv, "SNYK_TOKEN="+config.CurrentConfig().Token())
+	return
 }
 
 func isIacCommand(cmd []string) bool {
@@ -58,22 +86,6 @@ func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
 	settings := config.CurrentConfig().CliSettings()
 	if settings.Insecure {
 		additionalParams = append(additionalParams, "--insecure")
-	}
-	//TODO why are we setting org both in the os env & as a param??
-	organization := config.CurrentConfig().GetOrganization()
-	if organization != "" {
-		err := os.Setenv("SNYK_CFG_ORG", organization)
-		if err != nil {
-			log.Err(err).Msg("couldn't add organization to environment")
-		}
-		additionalParams = append(additionalParams, "--org="+organization)
-	}
-
-	if settings.Endpoint != "" {
-		err := os.Setenv("SNYK_API", settings.Endpoint)
-		if err != nil {
-			log.Err(err).Msg("couldn't add endpoint to environment")
-		}
 	}
 
 	if len(settings.AdditionalParameters) > 0 {

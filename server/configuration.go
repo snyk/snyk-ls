@@ -49,6 +49,7 @@ func updateTelemetry(params lsp.DidChangeConfigurationParams) {
 	config.CurrentConfig().SetTelemetryEnabled(parseBool)
 }
 
+// TODO store in config, move parsing to CLI
 func updatePath(params lsp.DidChangeConfigurationParams) {
 	err := os.Setenv("PATH", os.Getenv("PATH")+string(os.PathSeparator)+params.Settings.Path)
 	if err != nil {
@@ -56,6 +57,7 @@ func updatePath(params lsp.DidChangeConfigurationParams) {
 	}
 }
 
+// TODO store in config, move parsing to CLI
 func updateEnvironment(params lsp.DidChangeConfigurationParams) {
 	envVars := strings.Split(params.Settings.AdditionalEnv, ";")
 	for _, envVar := range envVars {

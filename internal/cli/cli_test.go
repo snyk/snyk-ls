@@ -29,8 +29,6 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	assert.Contains(t, cmd, "--insecure")
 	assert.Contains(t, cmd, "--all-projects")
 	assert.Contains(t, cmd, "-d")
-	assert.Equal(t, config.CurrentConfig().GetOrganization(), os.Getenv(config.Organization))
-	assert.Equal(t, "test-endpoint", os.Getenv("SNYK_API"))
 }
 
 func Test_ExpandParametersFromConfigNoAllProjectsForIac(t *testing.T) {
@@ -47,9 +45,6 @@ func Test_ExpandParametersFromConfigNoAllProjectsForIac(t *testing.T) {
 	assert.Contains(t, cmd, "--insecure")
 	assert.NotContains(t, cmd, "--all-projects")
 	assert.Contains(t, cmd, "-d")
-	assert.Contains(t, cmd, "--org="+config.CurrentConfig().GetOrganization())
-	assert.Equal(t, config.CurrentConfig().GetOrganization(), os.Getenv(config.Organization))
-	assert.Equal(t, "test-endpoint", os.Getenv("SNYK_API"))
 }
 
 //goland:noinspection GoErrorStringFormat
@@ -105,4 +100,27 @@ func Test_Execute_HandlesErrors(t *testing.T) {
 
 	assert.Error(t, err, string(response))
 	assert.Equal(t, "exit status 3", err.Error()) // no supported target files found
+}
+
+func TestAddConfigToEnv(t *testing.T) {
+	testutil.UnitTest(t)
+	cli := SnykCli{}
+	config.CurrentConfig().SetOrganization("testOrg")
+	config.CurrentConfig().SetCliSettings(config.CliSettings{Endpoint: "testEndpoint"})
+
+	updatedEnv := cli.addConfigValuesToEnv([]string{})
+
+	assert.Contains(t, updatedEnv, "SNYK_CFG_ORG="+config.CurrentConfig().GetOrganization())
+	assert.Contains(t, updatedEnv, "SNYK_API="+config.CurrentConfig().CliSettings().Endpoint)
+	assert.Contains(t, updatedEnv, "SNYK_TOKEN="+config.CurrentConfig().Token())
+}
+
+func TestGetCommand_AddsToEnvironmentAndSetsDir(t *testing.T) {
+	testutil.UnitTest(t)
+	config.CurrentConfig().SetOrganization("TestGetCommand_AddsToEnvironmentAndSetsDirOrg")
+
+	cmd := SnykCli{}.getCommand([]string{"executable", "arg"}, os.TempDir())
+
+	assert.Equal(t, os.TempDir(), cmd.Dir)
+	assert.Contains(t, cmd.Env, "SNYK_CFG_ORG=TestGetCommand_AddsToEnvironmentAndSetsDirOrg")
 }
