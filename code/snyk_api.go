@@ -87,7 +87,7 @@ func (s *SnykApiClientImpl) GetActiveUser() (activeUser ActiveUser, err error) {
 	responseBody, err := s.doCall("GET", path, nil)
 	if err != nil {
 		err = fmt.Errorf("%v: %v", err, responseBody)
-		log.Err(err).Str("method", "GetActiveUser").Msg("error when calling GetActiveUser endpoint")
+		log.Err(err).Str("method", "GetActiveUser").Msg("error when calling SnykApi.GetActiveUser endpoint")
 		return ActiveUser{}, err
 	}
 

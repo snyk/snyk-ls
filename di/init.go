@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/config"
@@ -53,17 +52,23 @@ func initInfrastructure() {
 	}
 	snykApiClient = code.NewSnykApiClient(endpoint)
 	instrumentor = sentry.NewInstrumentor()
-	user, err := snykApiClient.GetActiveUser()
-	if err != nil {
-		log.Warn().Err(err).Msg("Error retrieving current user")
-	}
-	if err != nil || user.Id == "" {
-		errorReporter.CaptureError(errors.Wrap(err, "cannot retrieve active user, configuring noop analytics"))
-		analytics = ux.NewNoopRecordingClient()
-	}
-	analytics = segment.NewSegmentClient(user.Id, ux.Eclipse)
+	InitializeAnalytics()
 	snykCodeClient = code.NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), instrumentor, errorReporter)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
+}
+
+func InitializeAnalytics() {
+	user, err := snykApiClient.GetActiveUser()
+	if err != nil || user.Id == "" {
+		if err == nil {
+			err = errors.New("cannot retrieve active user, configuring noop analytics")
+		} else {
+			err = errors.Wrap(err, "cannot retrieve active user, configuring noop analytics")
+		}
+		errorReporter.CaptureError(err)
+		analytics = ux.NewNoopRecordingClient()
+	}
+	analytics = segment.NewSegmentClient(user.Id, ux.Eclipse) // FIXME: Don't hardcode Eclipse here
 }
 
 //TODO move out of prod logic

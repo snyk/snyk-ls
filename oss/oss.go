@@ -256,6 +256,7 @@ func retrieveDiagnostics(
 	var diagnostics []lsp.Diagnostic
 	var hoverDetails []hover.Hover[hover.Context]
 
+	// TODO write test for duplicate check
 	duplicateCheckMap := map[string]bool{}
 
 	for _, issue := range res.Vulnerabilities {
