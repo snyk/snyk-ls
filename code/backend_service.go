@@ -17,6 +17,7 @@ import (
 
 	"github.com/snyk/snyk-ls/code/encoding"
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/internal/httpclient"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -63,7 +64,7 @@ type filtersResponse struct {
 }
 
 func NewHTTPRepository(host string, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter) *SnykCodeHTTPClient {
-	return &SnykCodeHTTPClient{http.Client{}, host, instrumentor, errorReporter}
+	return &SnykCodeHTTPClient{*httpclient.NewHTTPClient(), host, instrumentor, errorReporter}
 }
 
 func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (configFiles []string, extensions []string, err error) {

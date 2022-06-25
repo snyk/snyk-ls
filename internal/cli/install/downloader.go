@@ -14,7 +14,7 @@ import (
 
 	"github.com/snyk/snyk-ls/config"
 	"github.com/snyk/snyk-ls/di"
-	"github.com/snyk/snyk-ls/internal/cli/install/httpclient"
+	"github.com/snyk/snyk-ls/internal/httpclient"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 

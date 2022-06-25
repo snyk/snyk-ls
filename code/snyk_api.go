@@ -13,13 +13,14 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/internal/httpclient"
 )
 
-const DefaultEndpointURL = "https://snyk.io/api/"
+const DefaultEndpointURL = "https://snyk.io/api"
 
 type SnykApiClientImpl struct {
 	host   string
-	client http.Client
+	client *http.Client
 }
 
 type localCodeEngine struct {
@@ -51,7 +52,8 @@ type SnykApiClient interface {
 
 func NewSnykApiClient(host string) SnykApiClient {
 	s := SnykApiClientImpl{
-		host: host,
+		host:   host,
+		client: httpclient.NewHTTPClient(),
 	}
 	return &s
 }
