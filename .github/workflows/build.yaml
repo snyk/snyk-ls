@@ -151,6 +151,21 @@ jobs:
           export PATH=$PATH:~/pact/bin
           make clean race-test
 
+
+  proxy-test:
+    name: proxy-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Run proxy tests
+        env:
+          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          INTEG_TESTS: 'true'
+        run: |
+          make clean proxy-test
+
   test-release:
     name: test-release
     needs: [ integration-tests, unit-tests, race-test ]
