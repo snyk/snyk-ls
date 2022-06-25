@@ -168,7 +168,7 @@ jobs:
 
   test-release:
     name: test-release
-    needs: [ integration-tests, unit-tests, race-test ]
+    needs: [ integration-tests, unit-tests, race-test, proxy-test ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
