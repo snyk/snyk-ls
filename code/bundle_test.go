@@ -12,11 +12,12 @@ import (
 
 func Test_getShardKey(t *testing.T) {
 	b := Bundle{BundleHash: ""}
+	const testToken = "TEST"
 	t.Run("should return root path hash", func(t *testing.T) {
 		// Case 1: rootPath exists
 		sampleRootPath := "C:\\GIT\\root"
 		// deepcode ignore HardcodedPassword/test: false positive
-		token := "TEST"
+		token := testToken
 		assert.Equal(t, util.Hash([]byte(sampleRootPath)), b.getShardKey(sampleRootPath, token))
 	})
 
@@ -24,7 +25,7 @@ func Test_getShardKey(t *testing.T) {
 		// Case 2: rootPath empty, token exists
 		sampleRootPath := ""
 		// deepcode ignore HardcodedPassword/test: false positive
-		token := "TEST"
+		token := testToken
 		assert.Equal(t, util.Hash([]byte(token)), b.getShardKey(sampleRootPath, token))
 	})
 
@@ -41,7 +42,7 @@ func Test_getShardKey(t *testing.T) {
 		// Case 4: bundleHash is existent, we can hash & use it. Hashing, as the bundle hash is PII
 		sampleRootPath := "C:\\git"
 		// deepcode ignore HardcodedPassword/test: false positive
-		token := "TEST"
+		token := testToken
 		assert.Equal(t, util.Hash([]byte(b.BundleHash)), b.getShardKey(sampleRootPath, token))
 	})
 }

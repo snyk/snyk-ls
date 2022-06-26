@@ -24,6 +24,8 @@ import (
 	"github.com/snyk/snyk-ls/lsp"
 )
 
+const completeStatus = "COMPLETE"
+
 var (
 	severities = map[string]sglsp.DiagnosticSeverity{
 		"3":       sglsp.Error,
@@ -263,7 +265,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		return nil, nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
 	status := AnalysisStatus{message: response.Status, percentage: int(math.RoundToEven(response.Progress * 100))}
-	if response.Status != "COMPLETE" {
+	if response.Status != completeStatus {
 		return nil, nil, status, nil
 	}
 

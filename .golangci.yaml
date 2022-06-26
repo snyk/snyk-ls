@@ -14,6 +14,12 @@ linters:
     - unused
     - varcheck
     - govet
+    - gocyclo
+    - dupl
+    - errchkjson
+    - exhaustive
+    - gocognit
+    - goconst
 
 linters-settings:
   goimports:
