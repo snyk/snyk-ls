@@ -20,6 +20,7 @@ linters:
     - exhaustive
     - gocognit
     - goconst
+    - tenv
 
 linters-settings:
   goimports:
