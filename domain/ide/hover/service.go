@@ -42,14 +42,6 @@ func NewDefaultService(analytics ux.Analytics) Service {
 	return s
 }
 
-func (s *DefaultHoverService) validateAndExtractMessage(hover Hover[Context], pos sglsp.Position) (message string) {
-	if s.isHoverForPosition(hover, pos) {
-		message = hover.Message
-	}
-
-	return message
-}
-
 func (s *DefaultHoverService) isHoverForPosition(hover Hover[Context], pos sglsp.Position) bool {
 	return hover.Range.Start.Line < pos.Line && hover.Range.End.Line > pos.Line ||
 		(hover.Range.Start.Line == pos.Line &&

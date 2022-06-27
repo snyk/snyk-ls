@@ -181,9 +181,7 @@ func (f *Folder) processDiagnostics(path string, diagnostics []lsp.Diagnostic) {
 
 func (f *Folder) processHovers(hovers []hover.DocumentHovers) {
 	for _, h := range hovers {
-		select {
-		case f.hoverService.Channel() <- h:
-		}
+		f.hoverService.Channel() <- h
 	}
 }
 
