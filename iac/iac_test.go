@@ -6,13 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace/deleteme"
-	"github.com/snyk/snyk-ls/domain/snyk/issues"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -85,7 +82,31 @@ func Test_toHover_asHTML(t *testing.T) {
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux.NewTestAnalytics(), cli.NewTestExecutor())
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 
-	h := scanner.toHover(iacIssue{
+	h := scanner.toHover(sampleIssue())
+
+	assert.Equal(
+		t,
+		"\n### PublicID: <p>Title</p>\n\n\n**Issue:** <p>Issue</p>\n\n\n**Impact:** <p>Impact</p>\n\n\n**Resolve:** <p>Resolve</p>\n\n",
+		h.Message,
+	)
+}
+
+func Test_toHover_asMD(t *testing.T) {
+	testutil.UnitTest(t)
+	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux.NewTestAnalytics(), cli.NewTestExecutor())
+	config.CurrentConfig().SetFormat(config.FormatMd)
+
+	h := scanner.toHover(sampleIssue())
+
+	assert.Equal(
+		t,
+		"\n### PublicID: Title\n\n**Issue:** Issue\n\n**Impact:** Impact\n\n**Resolve:** Resolve\n",
+		h.Message,
+	)
+}
+
+func sampleIssue() iacIssue {
+	return iacIssue{
 		PublicID:      "PublicID",
 		Title:         "Title",
 		Severity:      "low",
@@ -96,52 +117,5 @@ func Test_toHover_asHTML(t *testing.T) {
 			Impact:  "Impact",
 			Resolve: "Resolve",
 		},
-	})
-
-	assert.Equal(
-		t,
-		hover.Hover[hover.Context]{
-			Id: "PublicID",
-			Range: lsp.Range{
-				Start: lsp.Position{Line: 3, Character: 0},
-				End:   lsp.Position{Line: 3, Character: 80},
-			},
-			Message: "\n### PublicID: <p>Title</p>\n\n\n**Issue:** <p>Issue</p>\n\n\n**Impact:** <p>Impact</p>\n\n\n**Resolve:** <p>Resolve</p>\n\n",
-			Context: issues.Issue{ID: "PublicID", Severity: issues.Low, IssueType: issues.InfrastructureIssue},
-		},
-		h,
-	)
-}
-
-func Test_toHover_asMD(t *testing.T) {
-	testutil.UnitTest(t)
-	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux.NewTestAnalytics(), cli.NewTestExecutor())
-	config.CurrentConfig().SetFormat(config.FormatMd)
-
-	h := scanner.toHover(iacIssue{
-		PublicID:      "PublicID",
-		Title:         "Title",
-		Severity:      "high",
-		LineNumber:    3,
-		Documentation: "4",
-		IacDescription: iacDescription{
-			Issue:   "Issue",
-			Impact:  "Impact",
-			Resolve: "Resolve",
-		},
-	})
-
-	assert.Equal(
-		t,
-		hover.Hover[hover.Context]{
-			Id: "PublicID",
-			Range: lsp.Range{
-				Start: lsp.Position{Line: 3, Character: 0},
-				End:   lsp.Position{Line: 3, Character: 80},
-			},
-			Message: "\n### PublicID: Title\n\n**Issue:** Issue\n\n**Impact:** Impact\n\n**Resolve:** Resolve\n",
-			Context: issues.Issue{ID: "PublicID", Severity: issues.High, IssueType: issues.InfrastructureIssue},
-		},
-		h,
-	)
+	}
 }

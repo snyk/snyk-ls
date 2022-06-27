@@ -51,8 +51,8 @@ func didOpenTextParams() (sglsp.DidOpenTextDocumentParams, string, func()) {
 }
 
 func setupServer(t *testing.T) server.Local {
-	testutil.IntegTest(t)
-	di.Init()
+	testutil.UnitTest(t)
+	di.TestInit(t)
 	cleanupChannels()
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
@@ -168,7 +168,7 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
-
+	_, _ = loc.Client.Call(ctx, "initialize", nil)
 	didOpenParams, dir, cleanup := didOpenTextParams()
 	defer cleanup()
 	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService()))
@@ -262,15 +262,13 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
+	_, _ = loc.Client.Call(ctx, "initialize", nil)
 	diagnosticUri, tempDir := code.FakeDiagnosticUri()
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(diagnosticUri)},
 	}
 	defer os.RemoveAll(tempDir)
-
-	w := workspace.Get()
-	f := workspace.NewFolder(tempDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
-	w.AddFolder(f)
+	workspace.Get().AddFolder(workspace.NewFolder(tempDir, "Test", di.Scanner(), di.HoverService()))
 
 	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
 	if err != nil {
@@ -418,10 +416,9 @@ func checkForPublishedDiagnostics(w *workspace.Workspace, testPath string, expec
 			_ = n.UnmarshalParams(&diagnosticsParams)
 			if diagnosticsParams.URI == uri.PathToUri(testPath) {
 				f := w.GetFolderContaining(testPath)
-				if expectedNumber == -1 {
-					return f != nil && len(diagnosticsParams.Diagnostics) > 0
-				} else {
-					return f != nil && len(diagnosticsParams.Diagnostics) == expectedNumber
+				hasExpectedDiagnostics := f != nil && (expectedNumber == -1 && len(diagnosticsParams.Diagnostics) > 0) || (len(diagnosticsParams.Diagnostics) == expectedNumber)
+				if hasExpectedDiagnostics {
+					return hasExpectedDiagnostics
 				}
 			}
 		}

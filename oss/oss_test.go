@@ -7,13 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	lsp2 "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace/deleteme"
-	"github.com/snyk/snyk-ls/domain/snyk/issues"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -51,7 +48,7 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 func Test_FindRange(t *testing.T) {
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux.NewTestAnalytics(), cli.NewTestExecutor())
 	issue := mavenTestIssue()
-	content := "0\n1\n2\n  implementation 'a:test:4.17.4'"
+	const content = "0\n1\n2\n  implementation 'a:test:4.17.4'"
 
 	var documentUri = uri.PathToUri("build.gradle")
 	foundRange := scanner.findRange(issue, documentUri, []byte(content))
@@ -168,34 +165,13 @@ func Test_toHover_asHTML(t *testing.T) {
 	content := "0\n1\n2\n  implementation 'a:test:4.17.4'"
 	var documentUri = uri.PathToUri("build.gradle")
 
-	var issue = ossIssue{
-		Id:             "testIssue",
-		Name:           "SNYK-TEST-ISSUE-1",
-		Title:          "THOU SHALL NOT PASS",
-		Severity:       "low",
-		LineNumber:     0,
-		Description:    "Getting into Moria is an issue!",
-		References:     nil,
-		Version:        "",
-		PackageManager: "npm",
-		From:           []string{"goof@1.0.1", "lodash@4.17.4"},
-	}
-
+	var issue = sampleIssue()
 	h := scanner.toHover(issue, scanner.findRange(issue, documentUri, []byte(content)))
 
 	assert.Equal(
 		t,
-		hover.Hover[hover.Context]{
-			Id:      "testIssue",
-			Range:   lsp2.Range{Start: lsp2.Position{Line: 0, Character: 0}, End: lsp2.Position{Line: 0, Character: 0}},
-			Message: "\n### testIssue: <p>THOU SHALL NOT PASS</p>\n affecting  package \n### Vulnerability   | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \n<p>Getting into Moria is an issue!</p>\n",
-			Context: issues.Issue{
-				ID:        "testIssue",
-				Severity:  issues.Medium,
-				IssueType: issues.DependencyVulnerability,
-			},
-		},
-		h,
+		"\n### testIssue: <p>THOU SHALL NOT PASS</p>\n affecting  package \n### Vulnerability   | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \n<p>Getting into Moria is an issue!</p>\n",
+		h.Message,
 	)
 }
 
@@ -208,11 +184,22 @@ func Test_toHover_asMarkdown(t *testing.T) {
 	content := "0\n1\n2\n  implementation 'a:test:4.17.4'"
 	var documentUri = uri.PathToUri("build.gradle")
 
-	var issue = ossIssue{
+	var issue = sampleIssue()
+	h := scanner.toHover(issue, scanner.findRange(issue, documentUri, []byte(content)))
+
+	assert.Equal(
+		t,
+		"\n### testIssue: THOU SHALL NOT PASS affecting  package \n### Vulnerability   | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \nGetting into Moria is an issue!",
+		h.Message,
+	)
+}
+
+func sampleIssue() ossIssue {
+	return ossIssue{
 		Id:             "testIssue",
 		Name:           "SNYK-TEST-ISSUE-1",
 		Title:          "THOU SHALL NOT PASS",
-		Severity:       "high",
+		Severity:       "low",
 		LineNumber:     0,
 		Description:    "Getting into Moria is an issue!",
 		References:     nil,
@@ -220,21 +207,4 @@ func Test_toHover_asMarkdown(t *testing.T) {
 		PackageManager: "npm",
 		From:           []string{"goof@1.0.1", "lodash@4.17.4"},
 	}
-
-	h := scanner.toHover(issue, scanner.findRange(issue, documentUri, []byte(content)))
-
-	assert.Equal(
-		t,
-		hover.Hover[hover.Context]{
-			Id:      "testIssue",
-			Range:   lsp2.Range{Start: lsp2.Position{Line: 0, Character: 0}, End: lsp2.Position{Line: 0, Character: 0}},
-			Message: "\n### testIssue: THOU SHALL NOT PASS affecting  package \n### Vulnerability   | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: HIGH** \nGetting into Moria is an issue!",
-			Context: issues.Issue{
-				ID:        "testIssue",
-				Severity:  issues.High,
-				IssueType: issues.DependencyVulnerability,
-			},
-		},
-		h,
-	)
 }

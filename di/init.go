@@ -96,12 +96,11 @@ func analyticsFactory(apiClient code.SnykApiClient) ux.Analytics {
 	return a
 }
 
-//TODO move out of prod logic
+//TODO this is becoming a hot mess we need to unify integ. test strategies
 func TestInit(t *testing.T) {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	t.Helper()
-	hoverService = hover.NewDefaultService(analytics)
 	analytics = ux.NewTestAnalytics()
 	instrumentor = performance.NewTestInstrumentor()
 	errorReporter = error_reporting.NewTestErrorReporter()
@@ -109,10 +108,14 @@ func TestInit(t *testing.T) {
 	environmentInitializer = preconditions.New(authenticator, errorReporter)
 	fakeClient := &code.FakeSnykCodeClient{}
 	snykCodeClient = fakeClient
+	snykCli = cli.NewExecutor(authenticator)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 	fakeApiClient := &code.FakeApiClient{CodeEnabled: true}
 	snykCodeScanner = code.NewSnykCode(snykCodeBundleUploader, fakeApiClient, errorReporter, analytics)
-	scanner = snyk.NewTestScanner()
+	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
+	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
+	scanner = snyk.NewDefaultScanner(snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner, environmentInitializer, instrumentor, analytics)
+	hoverService = hover.NewDefaultService(analytics)
 	t.Cleanup(func() {
 		fakeClient.Clear()
 	})
