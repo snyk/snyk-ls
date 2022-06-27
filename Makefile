@@ -60,6 +60,12 @@ race-test:
 	@export INTEG_TESTS=true
 	@go test $(PARALLEL) $(NOCACHE) $(TIMEOUT) $(VERBOSE) -race ./...
 
+.PHONY: proxy-test
+proxy-test:
+	@echo "==> Running integration tests with proxy"
+	@docker build -t "snyk-ls:$(VERSION)" -f .github/docker-based-tests/Dockerfile .
+	@docker run --rm --cap-add=NET_ADMIN --name "snyk-ls" --env "SNYK_TOKEN=$(SNYK_TOKEN)" snyk-ls:$(VERSION) go test $(PARALLEL) $(NOCACHE) $(TIMEOUT) $(VERBOSE) ./...
+
 
 ## build: Build binary for default local system's OS and architecture.
 .PHONY: build

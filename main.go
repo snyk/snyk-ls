@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime/debug"
 
 	"github.com/rs/zerolog/log"
 
@@ -16,7 +17,9 @@ import (
 func main() {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Error().Interface("err", err).Msg("🚨 Panicking 🚨")
+			fmt.Println("🚨 Panicking 🚨")
+			fmt.Println(err)
+			debug.PrintStack()
 			di.ErrorReporter().CaptureError(fmt.Errorf("%v", err))
 			di.ErrorReporter().FlushErrorReporting()
 		}
