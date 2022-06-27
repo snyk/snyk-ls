@@ -36,7 +36,13 @@ func EnsureReadyForAnalysisAndWait(ctx context.Context) {
 		return
 	}
 
-	for !config.CurrentConfig().CliInstalled() {
+	for i := 0; !config.CurrentConfig().CliInstalled(); i++ {
+		if i > 2 {
+			config.CurrentConfig().SetSnykIacEnabled(false)
+			config.CurrentConfig().SetSnykOssEnabled(false)
+			log.Warn().Str("method", "EnsureReadyForAnalysisAndWait").Msg("Disabling Snyk OSS and Snyk Iac as no CLI found after 3 tries")
+			break
+		}
 		installCli(ctx)
 		time.Sleep(2 * time.Second)
 	}

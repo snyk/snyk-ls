@@ -151,9 +151,22 @@ jobs:
           export PATH=$PATH:~/pact/bin
           make clean race-test
 
+
+  proxy-test:
+    name: proxy-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Run proxy tests
+        env:
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+        run: |
+          make clean proxy-test
+
   test-release:
     name: test-release
-    needs: [ integration-tests, unit-tests, race-test ]
+    needs: [ integration-tests, unit-tests, race-test, proxy-test ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2

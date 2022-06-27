@@ -14,6 +14,13 @@ linters:
     - unused
     - varcheck
     - govet
+    - gocyclo
+    - dupl
+    - errchkjson
+    - exhaustive
+    - gocognit
+    - goconst
+    - tenv
 
 linters-settings:
   goimports:

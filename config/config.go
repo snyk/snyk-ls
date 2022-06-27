@@ -63,6 +63,9 @@ type Config struct {
 func CurrentConfig() *Config {
 	initMutex.Lock()
 	defer initMutex.Unlock()
+	if currentConfig == nil {
+		currentConfig = New()
+	}
 	return currentConfig
 }
 
