@@ -481,8 +481,9 @@ func Test_IntegrationHoverResults(t *testing.T) {
 func Test_IntegrationSnykCodeFileScan(t *testing.T) {
 	testutil.IntegTest(t)
 	loc := setupServer(t)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
 	di.Init()
+	config.CurrentConfig().SetSnykCodeEnabled(true)
+	_, _ = loc.Client.Call(ctx, "initialize", nil)
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
 	defer os.RemoveAll(cloneTargetDir)
@@ -498,13 +499,10 @@ func Test_IntegrationSnykCodeFileScan(t *testing.T) {
 
 	_ = textDocumentDidOpen(&loc, testPath)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(workspace.Get(), testPath, 6), maxIntegTestDuration, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(w, testPath, 6), maxIntegTestDuration, 10*time.Millisecond)
 }
 
 func textDocumentDidOpen(loc *server.Local, testPath string) sglsp.DidOpenTextDocumentParams {
-	di.Init()
-	// should receive diagnosticsParams
-
 	testFileContent, err := os.ReadFile(testPath)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't read file content of test file")
