@@ -67,7 +67,6 @@ func (f *Folder) Files() (filePaths []string, err error) {
 	if err != nil {
 		return filePaths, err
 	}
-
 	if f.ignorePatterns == nil {
 		_, err = f.loadIgnorePatterns()
 		if err != nil {
@@ -76,7 +75,15 @@ func (f *Folder) Files() (filePaths []string, err error) {
 	}
 
 	gitIgnore := ignore.CompileIgnoreLines(f.ignorePatterns...)
-	err = filepath.WalkDir(workspace, func(path string, dirEntry os.DirEntry, _ error) error {
+	err = filepath.WalkDir(workspace, func(path string, dirEntry os.DirEntry, err error) error {
+		if err != nil {
+			log.Debug().
+				Str("method", "Files - walker").
+				Str("path", path).
+				Err(err).
+				Msg("error traversing files")
+			return nil
+		}
 		if dirEntry == nil || dirEntry.IsDir() {
 			if util.Ignored(gitIgnore, path) {
 				return filepath.SkipDir
@@ -255,7 +262,15 @@ func (f *Folder) loadIgnorePatterns() (patterns []string, err error) {
 		Str("method", "loadIgnorePatterns").
 		Str("workspace", f.path).
 		Msg("searching for ignore files")
-	err = filepath.WalkDir(f.path, func(path string, dirEntry os.DirEntry, _ error) error {
+	err = filepath.WalkDir(f.path, func(path string, dirEntry os.DirEntry, err error) error {
+		if err != nil {
+			log.Debug().
+				Str("method", "loadIgnorePatterns - walker").
+				Str("path", path).
+				Err(err).
+				Msg("error traversing files")
+			return nil
+		}
 		if dirEntry == nil || dirEntry.IsDir() {
 			return nil
 		}
