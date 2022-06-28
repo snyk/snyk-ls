@@ -8,15 +8,15 @@ import (
 
 	"github.com/rs/zerolog/log"
 	ignore "github.com/sabhiram/go-gitignore"
+	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/domain/ide/hover"
-	"github.com/snyk/snyk-ls/domain/ide/workspace/deleteme"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
-	"github.com/snyk/snyk-ls/lsp"
+	"github.com/snyk/snyk-ls/presentation/lsp"
 )
 
 type FolderStatus int
@@ -137,8 +137,8 @@ func (f *Folder) ClearDiagnosticsCache(filePath string) {
 }
 
 func (f *Folder) scan(ctx context.Context, path string) {
-	diagnosticSlice := f.documentDiagnosticsFromCache(path)
-	if diagnosticSlice != nil {
+	issuesSlice := f.documentDiagnosticsFromCache(path)
+	if issuesSlice != nil {
 		log.Info().Str("method", "domain.ide.workspace.folder.scan").Msgf("Cached results found: Skipping scan for %s", path)
 		return
 	}
@@ -155,33 +155,97 @@ func (f *Folder) scan(ctx context.Context, path string) {
 	f.scanner.Scan(ctx, path, f.processResults(path), f.path, codeFiles)
 }
 
-func (f *Folder) documentDiagnosticsFromCache(file string) []lsp.Diagnostic {
-	diagnostics := f.documentDiagnosticCache.Get(file)
-	if diagnostics == nil {
+func (f *Folder) documentDiagnosticsFromCache(file string) []snyk.Issue {
+	issues := f.documentDiagnosticCache.Get(file)
+	if issues == nil {
 		return nil
 	}
-	return diagnostics.([]lsp.Diagnostic)
+	return issues.([]snyk.Issue)
 }
 
-func (f *Folder) processResults(path string) deleteme.ResultProcessor {
-	return func(diagnostics []lsp.Diagnostic, hovers []hover.DocumentHovers) {
-		f.processDiagnostics(path, diagnostics)
-		f.processHovers(hovers)
+func (f *Folder) processResults(path string) snyk.ScanResultProcessor {
+	return func(issues []snyk.Issue) {
+		f.processDiagnostics(path, issues)
+		f.processHovers(path, issues)
 	}
 }
 
-func (f *Folder) processDiagnostics(path string, diagnostics []lsp.Diagnostic) {
-	f.documentDiagnosticCache.Put(path, diagnostics)
+func (f *Folder) processDiagnostics(path string, issues []snyk.Issue) {
+	f.documentDiagnosticCache.Put(path, issues)
 
 	notification.Send(lsp.PublishDiagnosticsParams{
 		URI:         uri.PathToUri(path),
-		Diagnostics: diagnostics,
+		Diagnostics: toDiagnostic(issues),
 	})
 }
 
-func (f *Folder) processHovers(hovers []hover.DocumentHovers) {
-	for _, h := range hovers {
-		f.hoverService.Channel() <- h
+func (f *Folder) processHovers(path string, issues []snyk.Issue) {
+	f.hoverService.Channel() <- toHoversDocument(path, issues)
+}
+
+func toHoversDocument(path string, i []snyk.Issue) hover.DocumentHovers {
+	return hover.DocumentHovers{
+		Uri:   uri.PathToUri(path),
+		Hover: toHovers(i),
+	}
+}
+
+func toHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
+	for _, i := range issues {
+		message := ""
+		if len(i.LegacyMessage) > 0 {
+			message = i.LegacyMessage
+		} else {
+			message = i.Message
+		}
+		hovers = append(hovers, hover.Hover[hover.Context]{
+			Id:      i.ID,
+			Range:   toLspRange(i.Range),
+			Message: message,
+			Context: i,
+		})
+	}
+	return hovers
+}
+
+func toDiagnostic(issues []snyk.Issue) (diagnostics []lsp.Diagnostic) {
+	for _, issue := range issues {
+		diagnostics = append(diagnostics, lsp.Diagnostic{
+			Range:    toLspRange(issue.Range),
+			Severity: toSeverity(issue.Severity),
+			Code:     issue.ID,
+			Source:   "LS Server",
+			Message:  issue.Message,
+		})
+	}
+	return diagnostics
+}
+
+func toSeverity(severity snyk.Severity) sglsp.DiagnosticSeverity {
+	switch severity {
+	case snyk.Critical:
+		return sglsp.Error
+	case snyk.High:
+		return sglsp.Error
+	case snyk.Medium:
+		return sglsp.Warning
+	case snyk.Low:
+		return sglsp.Information
+	}
+	return sglsp.Info
+}
+
+func toLspRange(r snyk.Range) sglsp.Range {
+	return sglsp.Range{
+		Start: toLspPosition(r.Start),
+		End:   toLspPosition(r.End),
+	}
+}
+
+func toLspPosition(p snyk.Position) sglsp.Position {
+	return sglsp.Position{
+		Line:      p.Line,
+		Character: p.Character,
 	}
 }
 

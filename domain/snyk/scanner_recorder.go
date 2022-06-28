@@ -2,33 +2,31 @@ package snyk
 
 import (
 	"context"
-
-	"github.com/snyk/snyk-ls/domain/ide/hover"
-	"github.com/snyk/snyk-ls/domain/ide/workspace/deleteme"
-	"github.com/snyk/snyk-ls/lsp"
 )
 
 type TestScanner struct {
-	Calls       int
-	Hovers      []hover.DocumentHovers
-	Diagnostics []lsp.Diagnostic
+	Calls  int
+	Issues []Issue
 }
 
 func NewTestScanner() *TestScanner {
 	return &TestScanner{
-		Calls:       0,
-		Hovers:      []hover.DocumentHovers{},
-		Diagnostics: []lsp.Diagnostic{},
+		Calls:  0,
+		Issues: []Issue{},
 	}
+}
+
+func (s *TestScanner) IsEnabled() bool {
+	return true
 }
 
 func (s *TestScanner) Scan(
 	ctx context.Context,
 	path string,
-	processResults deleteme.ResultProcessor,
+	processResults ScanResultProcessor,
 	naughtyHack1 string,
 	naughtyHack2 []string,
 ) {
-	processResults(s.Diagnostics, s.Hovers)
+	processResults(s.Issues)
 	s.Calls++
 }

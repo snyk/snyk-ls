@@ -10,11 +10,10 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/code"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/snyk/snyk-ls/lsp"
 )
 
 func TestAddBundleHashToWorkspaceFolder(t *testing.T) {
@@ -89,7 +88,7 @@ func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
 	diagnosticUri, path := code.FakeDiagnosticUri()
 	scannerRecorder := snyk.NewTestScanner()
-	scannerRecorder.Diagnostics = []lsp.Diagnostic{}
+	scannerRecorder.Issues = []snyk.Issue{}
 	f := NewFolder(path, "Test", scannerRecorder, hover.NewTestHoverService())
 	ctx := context.Background()
 

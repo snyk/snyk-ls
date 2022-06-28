@@ -7,7 +7,7 @@ import (
 
 	"github.com/pact-foundation/pact-go/dsl"
 
-	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 

@@ -3,86 +3,75 @@ package snyk
 import (
 	"context"
 
-	"github.com/snyk/snyk-ls/code"
-	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/domain/ide/workspace/deleteme"
-	"github.com/snyk/snyk-ls/iac"
-	"github.com/snyk/snyk-ls/internal/observability/performance"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
+	"github.com/snyk/snyk-ls/domain/observability/performance"
+	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/internal/preconditions"
-	"github.com/snyk/snyk-ls/internal/uri"
-	"github.com/snyk/snyk-ls/oss"
 )
 
 type Scanner interface {
 	Scan(
 		ctx context.Context,
 		path string,
-		processResults deleteme.ResultProcessor,
-		//todo deliberately calling this garbage because they need to go away
-		naughtyHack1 string,
-		naughtyHack2 []string,
+		processResults ScanResultProcessor,
+		//todo deliberately calling this garbage because they need to go away - these nonsensical params are here because
+		//code and cli based scans have a slightly different modus operandi. We need to unify that and clean this interface
+		legacyWorkspacePath string,
+		legacyFilesToScan []string,
 	)
+	IsEnabled() bool
 }
 
-type DefaultScanner struct {
-	snykCodeScanner             *code.Scanner
-	infrastructureAsCodeScanner *iac.Scanner
-	openSourceScanner           *oss.Scanner
-	initializer                 *preconditions.EnvironmentInitializer
-	instrumentor                performance.Instrumentor
-	analytics                   ux.Analytics
+//DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
+type DelegatingConcurrentScanner struct {
+	scanners     []Scanner
+	initializer  *preconditions.EnvironmentInitializer
+	instrumentor performance.Instrumentor
+	analytics    ux2.Analytics
 }
 
-func NewDefaultScanner(
-	snykCodeScanner *code.Scanner,
-	infrastructureAsCodeScanner *iac.Scanner,
-	openSourceScanner *oss.Scanner,
+func NewDelegatingScanner(
 	initializer *preconditions.EnvironmentInitializer,
 	instrumentor performance.Instrumentor,
-	analytics ux.Analytics,
+	analytics ux2.Analytics,
+	scanners ...Scanner,
 ) Scanner {
-	return &DefaultScanner{
-		instrumentor:                instrumentor,
-		analytics:                   analytics,
-		snykCodeScanner:             snykCodeScanner,
-		infrastructureAsCodeScanner: infrastructureAsCodeScanner,
-		openSourceScanner:           openSourceScanner,
-		initializer:                 initializer,
+	return &DelegatingConcurrentScanner{
+		instrumentor: instrumentor,
+		analytics:    analytics,
+		initializer:  initializer,
+		scanners:     scanners,
 	}
 }
 
-//todo callback here should be using issues
-func (sc *DefaultScanner) Scan(
+func (sc *DelegatingConcurrentScanner) IsEnabled() bool {
+	return true
+}
+
+func (sc *DelegatingConcurrentScanner) Scan(
 	ctx context.Context,
 	path string,
-	processResults deleteme.ResultProcessor,
-	//todo deliberately calling this garbage because they need to go away
-	naughtyHack1 string,
-	naughtyHack2 []string,
+	processResults ScanResultProcessor,
+	legacyWorkspacePath string,
+	legacyFilesToScan []string,
 ) {
-	method := "ide.workspace.folder.DefaultScanner.ScanFile"
+	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
 	s := sc.instrumentor.NewTransaction(ctx, method, method)
 	//TODO this is not correct as it runs async
 	defer sc.instrumentor.Finish(s)
 
 	sc.analytics.AnalysisIsTriggered(
-		ux.AnalysisIsTriggeredProperties{
-			AnalysisType:    ux.GetEnabledAnalysisTypes(),
+		ux2.AnalysisIsTriggeredProperties{
+			AnalysisType:    ux2.GetEnabledAnalysisTypes(),
 			TriggeredByUser: false,
 		},
 	)
 
 	//todo split into cli / auth preconditions and push down to appropriate infra layers
 	sc.initializer.WaitUntilCLIAndAuthReady(ctx)
-	if config.CurrentConfig().IsSnykIacEnabled() {
-		go sc.infrastructureAsCodeScanner.ScanFile(ctx, uri.PathToUri(path), processResults)
-	}
-	if config.CurrentConfig().IsSnykOssEnabled() {
-		go sc.openSourceScanner.ScanFile(ctx, uri.PathToUri(path), processResults)
-	}
-	if config.CurrentConfig().IsSnykCodeEnabled() {
-		//todo can we make code receive a path like we do with oss & iac???
-		go sc.snykCodeScanner.ScanWorkspace(ctx, naughtyHack2, naughtyHack1, processResults)
+
+	for _, scanner := range sc.scanners {
+		if scanner.IsEnabled() {
+			go scanner.Scan(ctx, path, processResults, legacyWorkspacePath, legacyFilesToScan)
+		}
 	}
 }

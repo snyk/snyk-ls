@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/internal/concurrency"
-	"github.com/snyk/snyk-ls/lsp"
+	"github.com/snyk/snyk-ls/presentation/lsp"
 )
 
 var params = lsp.AuthenticationParams{Token: "test event"}

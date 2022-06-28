@@ -10,8 +10,8 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/di"
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/internal/cli/install"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )

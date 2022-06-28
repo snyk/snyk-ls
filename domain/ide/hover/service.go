@@ -8,8 +8,9 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/domain/snyk/issues"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
+	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/domain/observability/ux/converters"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -18,7 +19,7 @@ type Service interface {
 	Channel() chan DocumentHovers
 	ClearAllHovers()
 	GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) Result
-	SetAnalytics(analytics ux.Analytics)
+	SetAnalytics(analytics ux2.Analytics)
 }
 
 type DefaultHoverService struct {
@@ -27,10 +28,10 @@ type DefaultHoverService struct {
 	hoverChan    chan DocumentHovers
 	stopChannel  chan bool
 	mutex        *sync.Mutex
-	analytics    ux.Analytics
+	analytics    ux2.Analytics
 }
 
-func NewDefaultService(analytics ux.Analytics) Service {
+func NewDefaultService(analytics ux2.Analytics) Service {
 	s := &DefaultHoverService{}
 	s.hovers = map[sglsp.DocumentURI][]Hover[Context]{}
 	s.hoverIndexes = map[string]bool{}
@@ -111,9 +112,9 @@ func (s *DefaultHoverService) GetHover(fileUri sglsp.DocumentURI, pos sglsp.Posi
 
 func (s *DefaultHoverService) trackHoverDetails(hover Hover[Context]) {
 	switch hover.Context.(type) {
-	case issues.Issue:
-		issue := hover.Context.(issues.Issue)
-		s.analytics.IssueHoverIsDisplayed(ux.NewIssueHoverIsDisplayedProperties(issue))
+	case snyk.Issue:
+		issue := hover.Context.(snyk.Issue)
+		s.analytics.IssueHoverIsDisplayed(converters.NewIssueHoverIsDisplayedProperties(issue))
 	default:
 		log.Warn().Msgf("unknown context for hover %v", hover)
 	}
@@ -154,14 +155,18 @@ func (s *DefaultHoverService) createHoverListener() {
 	}
 }
 
-func (s *DefaultHoverService) SetAnalytics(analytics ux.Analytics) {
+func (s *DefaultHoverService) SetAnalytics(analytics ux2.Analytics) {
 	s.analytics = analytics
 }
 
-type TestHoverService struct{}
+type TestHoverService struct {
+	hovers chan DocumentHovers
+}
 
 func NewTestHoverService() *TestHoverService {
-	return &TestHoverService{}
+	return &TestHoverService{
+		hovers: make(chan DocumentHovers, 10000),
+	}
 }
 
 func (t TestHoverService) DeleteHover(documentUri sglsp.DocumentURI) {
@@ -170,8 +175,7 @@ func (t TestHoverService) DeleteHover(documentUri sglsp.DocumentURI) {
 }
 
 func (t TestHoverService) Channel() chan DocumentHovers {
-	//TODO implement me
-	panic("implement me")
+	return t.hovers
 }
 
 func (t TestHoverService) ClearAllHovers() {
@@ -184,7 +188,7 @@ func (t TestHoverService) GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position
 	panic("implement me")
 }
 
-func (t TestHoverService) SetAnalytics(analytics ux.Analytics) {
+func (t TestHoverService) SetAnalytics(analytics ux2.Analytics) {
 	//TODO implement me
 	panic("implement me")
 }

@@ -7,13 +7,13 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/domain/snyk/issues"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
+	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 func setupFakeHover() sglsp.DocumentURI {
-	target := NewDefaultService(ux.NewTestAnalytics()).(*DefaultHoverService)
+	target := NewDefaultService(ux2.NewTestAnalytics()).(*DefaultHoverService)
 	fakeHover := []Hover[Context]{
 		{Range: sglsp.Range{
 			Start: sglsp.Position{Line: 3, Character: 56},
@@ -30,7 +30,7 @@ func setupFakeHover() sglsp.DocumentURI {
 }
 
 func Test_registerHovers(t *testing.T) {
-	target := NewDefaultService(ux.NewTestAnalytics()).(*DefaultHoverService)
+	target := NewDefaultService(ux2.NewTestAnalytics()).(*DefaultHoverService)
 	documentUri := uri.PathToUri("fake-file.json")
 	hover := DocumentHovers{
 		Uri: documentUri,
@@ -61,7 +61,7 @@ func Test_registerHovers(t *testing.T) {
 }
 
 func Test_DeleteHover(t *testing.T) {
-	target := NewDefaultService(ux.NewTestAnalytics()).(*DefaultHoverService)
+	target := NewDefaultService(ux2.NewTestAnalytics()).(*DefaultHoverService)
 	documentUri := setupFakeHover()
 	target.DeleteHover(documentUri)
 
@@ -70,7 +70,7 @@ func Test_DeleteHover(t *testing.T) {
 }
 
 func Test_ClearAllHovers(t *testing.T) {
-	target := NewDefaultService(ux.NewTestAnalytics()).(*DefaultHoverService)
+	target := NewDefaultService(ux2.NewTestAnalytics()).(*DefaultHoverService)
 	documentUri := setupFakeHover()
 	target.ClearAllHovers()
 
@@ -79,7 +79,7 @@ func Test_ClearAllHovers(t *testing.T) {
 }
 
 func Test_GetHoverMultiline(t *testing.T) {
-	target := NewDefaultService(ux.NewTestAnalytics()).(*DefaultHoverService)
+	target := NewDefaultService(ux2.NewTestAnalytics()).(*DefaultHoverService)
 
 	tests := []struct {
 		hoverDetails []Hover[Context]
@@ -161,17 +161,17 @@ func Test_GetHoverMultiline(t *testing.T) {
 }
 
 func Test_TracksAnalytics(t *testing.T) {
-	analytics := ux.NewTestAnalytics()
+	analytics := ux2.NewTestAnalytics()
 	target := NewDefaultService(analytics).(*DefaultHoverService)
 
 	path := uri.PathToUri("path/to/package.json")
 	target.ClearAllHovers()
 	target.hovers[path] = []Hover[Context]{
 		{
-			Context: issues.Issue{
+			Context: snyk.Issue{
 				ID:        "issue",
-				Severity:  issues.Medium,
-				IssueType: issues.ContainerVulnerability,
+				Severity:  snyk.Medium,
+				IssueType: snyk.ContainerVulnerability,
 			},
 			Range: sglsp.Range{
 				Start: sglsp.Position{Line: 3, Character: 56},
@@ -182,9 +182,9 @@ func Test_TracksAnalytics(t *testing.T) {
 
 	target.GetHover(path, sglsp.Position{Line: 4, Character: 66})
 	assert.Len(t, analytics.GetAnalytics(), 1)
-	assert.Equal(t, ux.IssueHoverIsDisplayedProperties{
+	assert.Equal(t, ux2.IssueHoverIsDisplayedProperties{
 		IssueId:   "issue",
-		IssueType: ux.ContainerVulnerability,
-		Severity:  ux.Medium,
+		IssueType: ux2.ContainerVulnerability,
+		Severity:  ux2.Medium,
 	}, analytics.GetAnalytics()[0])
 }

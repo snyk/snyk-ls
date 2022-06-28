@@ -8,7 +8,7 @@ import (
 
 	"github.com/adrg/xdg"
 
-	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/application/config"
 )
 
 type Discovery struct{}
