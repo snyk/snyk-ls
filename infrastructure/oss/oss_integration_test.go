@@ -20,8 +20,8 @@ func Test_Scan(t *testing.T) {
 	testutil.IntegTest(t)
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 	ctx := context.Background()
-	di.EnvironmentInitializer().WaitUntilCLIAndAuthReady(ctx)
 	di.TestInit(t)
+	di.EnvironmentInitializer().WaitUntilCLIAndAuthReady(ctx)
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
