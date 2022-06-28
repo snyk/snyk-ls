@@ -24,7 +24,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/cli/install"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -238,7 +237,7 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 	didOpenParams, dir, cleanup := didOpenTextParams()
 	defer cleanup()
 
-	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", snyk.NewTestScanner(), hover.NewTestHoverService()))
+	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService()))
 
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
@@ -494,7 +493,7 @@ func Test_IntegrationSnykCodeFileScan(t *testing.T) {
 	testPath := filepath.Join(cloneTargetDir, "app.js")
 
 	w := workspace.Get()
-	f := workspace.NewFolder(cloneTargetDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
+	f := workspace.NewFolder(cloneTargetDir, "Test", di.Scanner(), di.HoverService())
 	w.AddFolder(f)
 
 	_ = textDocumentDidOpen(&loc, testPath)
