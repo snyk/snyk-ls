@@ -482,6 +482,7 @@ func Test_IntegrationSnykCodeFileScan(t *testing.T) {
 	testutil.IntegTest(t)
 	loc := setupServer(t)
 	di.Init()
+	config.SetCurrentConfig(config.New())
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	_, _ = loc.Client.Call(ctx, "initialize", nil)
 
