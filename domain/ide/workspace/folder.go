@@ -184,17 +184,23 @@ func (f *Folder) documentDiagnosticsFromCache(file string) []snyk.Issue {
 }
 
 func (f *Folder) processResults(issues []snyk.Issue) {
+	method := "processResults"
+	log.Debug().Str("method", method).Int("issues to be processed", len(issues)).Send()
 	var issuesByFile = map[string][]snyk.Issue{}
 
 	for _, issue := range issues {
+		log.Debug().Str("method", method).Str("affectedFilePath", issue.AffectedFilePath).Str("ID", issue.ID).Msg("starting processing")
 		currentIssues := f.documentDiagnosticCache.Get(issue.AffectedFilePath)
 		needsToRefreshCache := issuesByFile[issue.AffectedFilePath] == nil
 		if needsToRefreshCache || currentIssues == nil {
+			log.Debug().Str("method", method).Str("affectedFilePath", issue.AffectedFilePath).Str("ID", issue.ID).Msg("Creating new issue array for path")
 			currentIssues = []snyk.Issue{}
 		}
 		currentIssues = append(currentIssues.([]snyk.Issue), issue)
+		log.Debug().Str("method", method).Str("affectedFilePath", issue.AffectedFilePath).Str("ID", issue.ID).Msg("added to issue array")
 
 		f.documentDiagnosticCache.Put(issue.AffectedFilePath, currentIssues)
+		log.Debug().Str("method", method).Str("affectedFilePath", issue.AffectedFilePath).Str("ID", issue.ID).Msg("updated cache")
 		issuesByFile[issue.AffectedFilePath] = currentIssues.([]snyk.Issue)
 	}
 
@@ -204,6 +210,7 @@ func (f *Folder) processResults(issues []snyk.Issue) {
 
 func (f *Folder) processDiagnostics(issuesByFile map[string][]snyk.Issue) {
 	for path, issues := range issuesByFile {
+		log.Debug().Str("method", "processDiagnostics").Str("affectedFilePath", path).Int("issueCount", len(issues)).Send()
 		notification.Send(lsp.PublishDiagnosticsParams{
 			URI:         uri.PathToUri(path),
 			Diagnostics: toDiagnostic(issues),

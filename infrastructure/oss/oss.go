@@ -96,7 +96,7 @@ func (oss *Scanner) Scan(ctx context.Context, path string, output snyk.ScanResul
 	s := oss.instrumentor.StartSpan(ctx, method)
 	defer oss.instrumentor.Finish(s)
 	p := progress.NewTracker(false)
-	p.Begin(fmt.Sprintf("Scanning for Snyk Open Source issues in %s", documentURI), "Scanning Single File.")
+	p.Begin("Scanning for Snyk Open Source issues", path)
 	defer p.End("Snyk Open Source scan completed.")
 
 	log.Debug().Str("method", method).Msg("started.")

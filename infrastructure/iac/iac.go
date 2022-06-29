@@ -60,7 +60,7 @@ func (iac *Scanner) IsEnabled() bool {
 func (iac *Scanner) Scan(ctx context.Context, path string, output snyk.ScanResultProcessor, _ string, _ []string) {
 	documentURI := uri.PathToUri(path) //todo get rid of lsp dep
 	p := progress.NewTracker(false)
-	p.Begin(fmt.Sprintf("Scanning for Snyk IaC issues in %s", documentURI), "Scanning single file.")
+	p.Begin("Scanning for Snyk IaC issues", path)
 	defer p.End("Snyk Iac Scan completed.")
 
 	if !iac.isSupported(documentURI) {
