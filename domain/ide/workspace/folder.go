@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/rs/zerolog/log"
 	ignore "github.com/sabhiram/go-gitignore"
@@ -43,6 +44,7 @@ type Folder struct {
 	documentDiagnosticCache concurrency.AtomicMap
 	scanner                 snyk.Scanner
 	hoverService            hover.Service
+	mutex                   sync.Mutex
 }
 
 func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hover.Service) *Folder {
@@ -105,19 +107,27 @@ func (f *Folder) Files() (filePaths []string, err error) {
 }
 
 func (f *Folder) IsScanned() bool {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
 	return f.status == Scanned
 }
 
 func (f *Folder) ClearScannedStatus() {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
 	f.status = Unscanned
 }
 
 func (f *Folder) SetStatus(status FolderStatus) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
 	f.status = status
 }
 
 func (f *Folder) ScanFolder(ctx context.Context) {
 	f.scan(ctx, f.path)
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
 	f.status = Scanned
 }
 

@@ -95,6 +95,8 @@ func (f *FakeSnykCodeClient) GetCallParams(callNo int, op string) []interface{} 
 }
 
 func (f *FakeSnykCodeClient) Clear() {
+	mutex.Lock()
+	defer mutex.Unlock()
 	f.ExtendedBundleCount = 0
 	f.TotalBundleCount = 0
 	f.HasExtendedBundle = false
@@ -112,12 +114,16 @@ func (f *FakeSnykCodeClient) GetAllCalls(op string) [][]interface{} {
 }
 
 func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (configFiles []string, extensions []string, err error) {
+	mutex.Lock()
+	defer mutex.Unlock()
 	params := []interface{}{configFiles, extensions, err}
 	f.addCall(params, GetFiltersOperation)
 	return make([]string, 0), FakeFilters, nil
 }
 
 func (f *FakeSnykCodeClient) CreateBundle(_ context.Context, files map[string]string) (bundleHash string, missingFiles []string, err error) {
+	mutex.Lock()
+	defer mutex.Unlock()
 	f.TotalBundleCount++
 	f.HasCreatedNewBundle = true
 	params := []interface{}{files}
@@ -134,6 +140,8 @@ func (f *FakeSnykCodeClient) ExtendBundle(
 	files map[string]BundleFile,
 	removedFiles []string,
 ) (string, []string, error) {
+	mutex.Lock()
+	defer mutex.Unlock()
 	f.HasExtendedBundle = true
 	f.TotalBundleCount++
 	f.ExtendedBundleCount++
@@ -146,6 +154,8 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	_ context.Context,
 	options AnalysisOptions,
 ) (map[string][]snyk.Issue, AnalysisStatus, error) {
+	mutex.Lock()
+	defer mutex.Unlock()
 	params := []interface{}{options.bundleHash, options.limitToFiles, options.severity}
 	f.addCall(params, RunAnalysisOperation)
 
