@@ -157,6 +157,7 @@ func (f *Folder) scan(ctx context.Context, path string) {
 	issuesSlice := f.documentDiagnosticsFromCache(path)
 	if issuesSlice != nil {
 		log.Info().Str("method", "domain.ide.workspace.folder.scan").Msgf("Cached results found: Skipping scan for %s", path)
+		f.processResults(issuesSlice)
 		return
 	}
 
@@ -185,7 +186,8 @@ func (f *Folder) processResults(issues []snyk.Issue) {
 
 	for _, issue := range issues {
 		currentIssues := f.documentDiagnosticCache.Get(issue.AffectedFilePath)
-		if currentIssues == nil {
+		needsToRefreshCache := issuesByFile[issue.AffectedFilePath] == nil
+		if needsToRefreshCache || currentIssues == nil {
 			currentIssues = []snyk.Issue{}
 		}
 		currentIssues = append(currentIssues.([]snyk.Issue), issue)

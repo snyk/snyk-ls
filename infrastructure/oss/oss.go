@@ -28,6 +28,8 @@ var (
 		"high": snyk.High,
 		"low":  snyk.Medium,
 	}
+
+	//todo do we really need this? shouldn't we simply ignore diagnostics in locks???
 	// see https://github.com/snyk/snyk/blob/master/src/lib/detect.ts#L10
 	lockFilesToManifestMap = map[string]string{
 		"Gemfile.lock":      "Gemfile",
@@ -232,7 +234,7 @@ type RangeFinder interface {
 
 func (oss *Scanner) retrieveDiagnostics(
 	res ossScanResult,
-	uri sglsp.DocumentURI,
+	documentUri sglsp.DocumentURI,
 	fileContent []byte,
 ) []snyk.Issue {
 	var issues []snyk.Issue
@@ -245,9 +247,8 @@ func (oss *Scanner) retrieveDiagnostics(
 		if duplicateCheckMap[key] {
 			continue
 		}
-		issueRange := oss.findRange(issue, uri, fileContent)
-		targetFile := oss.determineTargetFile(res.DisplayTargetFile)
-		issues = append(issues, oss.toIssue(targetFile, issue, issueRange))
+		issueRange := oss.findRange(issue, documentUri, fileContent)
+		issues = append(issues, oss.toIssue(uri.PathFromUri(documentUri), issue, issueRange))
 		duplicateCheckMap[key] = true
 	}
 
