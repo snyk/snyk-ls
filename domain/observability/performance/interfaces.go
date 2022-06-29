@@ -16,7 +16,7 @@ type Span interface {
 	GetOperation() string
 	GetTxName() string
 
-	// Returns UUID of the trace
+	// GetTraceId Returns UUID of the trace
 	GetTraceId() string
 	Context() context.Context
 }

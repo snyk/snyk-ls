@@ -69,6 +69,7 @@ func (f *Folder) Files() (filePaths []string, err error) {
 	if err != nil {
 		return filePaths, err
 	}
+	f.mutex.Lock()
 	if f.ignorePatterns == nil {
 		_, err = f.loadIgnorePatterns()
 		if err != nil {
@@ -77,6 +78,7 @@ func (f *Folder) Files() (filePaths []string, err error) {
 	}
 
 	gitIgnore := ignore.CompileIgnoreLines(f.ignorePatterns...)
+	f.mutex.Unlock()
 	err = filepath.WalkDir(workspace, func(path string, dirEntry os.DirEntry, err error) error {
 		if err != nil {
 			log.Debug().

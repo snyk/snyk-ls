@@ -124,11 +124,11 @@ func (sc *Scanner) isSastEnabled() bool {
 		return false
 	}
 	if !sastEnabled {
-		notification.Send(sglsp.ShowMessageParams{Message: "Snyk Code is disabled by your organisation's configuration."})
+		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Warning, Message: "Snyk Code is disabled by your organisation's configuration."})
 		return false
 	} else {
 		if localCodeEngineEnabled {
-			notification.Send(sglsp.ShowMessageParams{Message: "Snyk Code is configured to use a Local Code Engine instance. This setup is not yet supported."})
+			notification.Send(sglsp.ShowMessageParams{Type: sglsp.Warning, Message: "Snyk Code is configured to use a Local Code Engine instance. This setup is not yet supported."})
 			return false
 		}
 		return true
