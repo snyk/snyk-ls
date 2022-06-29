@@ -55,6 +55,7 @@ func FakeDiagnosticUri() (filePath string, path string) {
 		log.Fatal().Err(err).Msg("Couldn't create fake diagnostic file for Snyk Code Fake Service")
 	}
 	fakeDiagnosticUri = filePath
+	FakeIssue.AffectedFilePath = filePath
 	return filePath, temp
 }
 
@@ -67,8 +68,6 @@ type FakeSnykCodeClient struct {
 }
 
 func (f *FakeSnykCodeClient) addCall(params []interface{}, op string) {
-	mutex.Lock()
-	defer mutex.Unlock()
 	if f.Calls == nil {
 		f.Calls = make(map[string][][]interface{})
 	}

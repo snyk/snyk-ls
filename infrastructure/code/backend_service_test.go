@@ -143,11 +143,12 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	assert.Equal(
 		t,
 		snyk.Issue{
-			ID:        "java/DontUsePrintStackTrace",
-			Range:     snyk.Range{Start: snyk.Position{Line: 5, Character: 6}, End: snyk.Position{Line: 5, Character: 7}},
-			Message:   "Printing the stack trace of java.lang.InterruptedException. Production code should not use printStackTrace. (Snyk)",
-			IssueType: snyk.CodeSecurityVulnerability,
-			Severity:  snyk.Low,
+			ID:               "java/DontUsePrintStackTrace",
+			Range:            snyk.Range{Start: snyk.Position{Line: 5, Character: 6}, End: snyk.Position{Line: 5, Character: 7}},
+			Message:          "Printing the stack trace of java.lang.InterruptedException. Production code should not use printStackTrace. (Snyk)",
+			IssueType:        snyk.CodeSecurityVulnerability,
+			Severity:         snyk.Low,
+			AffectedFilePath: path,
 		},
 		issues[path][0],
 	)

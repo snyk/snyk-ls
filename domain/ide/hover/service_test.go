@@ -164,14 +164,16 @@ func Test_TracksAnalytics(t *testing.T) {
 	analytics := ux2.NewTestAnalytics()
 	target := NewDefaultService(analytics).(*DefaultHoverService)
 
-	path := uri.PathToUri("path/to/package.json")
+	path := "path/to/package.json"
+	documentURI := uri.PathToUri(path)
 	target.ClearAllHovers()
-	target.hovers[path] = []Hover[Context]{
+	target.hovers[documentURI] = []Hover[Context]{
 		{
 			Context: snyk.Issue{
-				ID:        "issue",
-				Severity:  snyk.Medium,
-				IssueType: snyk.ContainerVulnerability,
+				ID:               "issue",
+				Severity:         snyk.Medium,
+				IssueType:        snyk.ContainerVulnerability,
+				AffectedFilePath: path,
 			},
 			Range: sglsp.Range{
 				Start: sglsp.Position{Line: 3, Character: 56},
@@ -180,7 +182,7 @@ func Test_TracksAnalytics(t *testing.T) {
 			Message: "## Vulnerabilities found"},
 	}
 
-	target.GetHover(path, sglsp.Position{Line: 4, Character: 66})
+	target.GetHover(documentURI, sglsp.Position{Line: 4, Character: 66})
 	assert.Len(t, analytics.GetAnalytics(), 1)
 	assert.Equal(t, ux2.IssueHoverIsDisplayedProperties{
 		IssueId:   "issue",

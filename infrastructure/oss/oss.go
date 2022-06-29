@@ -246,14 +246,15 @@ func (oss *Scanner) retrieveDiagnostics(
 			continue
 		}
 		issueRange := oss.findRange(issue, uri, fileContent)
-		issues = append(issues, oss.toIssues(issue, issueRange))
+		targetFile := oss.determineTargetFile(res.DisplayTargetFile)
+		issues = append(issues, oss.toIssue(targetFile, issue, issueRange))
 		duplicateCheckMap[key] = true
 	}
 
 	return issues
 }
 
-func (oss *Scanner) toIssues(issue ossIssue, issueRange snyk.Range) snyk.Issue {
+func (oss *Scanner) toIssue(affectedFilePath string, issue ossIssue, issueRange snyk.Range) snyk.Issue {
 	title := issue.Title
 	//description := issue.Description
 
@@ -262,11 +263,12 @@ func (oss *Scanner) toIssues(issue ossIssue, issueRange snyk.Range) snyk.Issue {
 		//description = string(markdown.ToHTML([]byte(description), nil, nil))
 	}
 	return snyk.Issue{
-		ID:            issue.Id,
-		Message:       fmt.Sprintf("%s affecting package %s. Fixed in: %s (Snyk)", title, issue.PackageName, issue.FixedIn),
-		LegacyMessage: oss.getExtendedMessage(issue),
-		Range:         issueRange,
-		Severity:      oss.toIssueSeverity(issue.Severity),
+		ID:               issue.Id,
+		Message:          fmt.Sprintf("%s affecting package %s. Fixed in: %s (Snyk)", title, issue.PackageName, issue.FixedIn),
+		LegacyMessage:    oss.getExtendedMessage(issue),
+		Range:            issueRange,
+		Severity:         oss.toIssueSeverity(issue.Severity),
+		AffectedFilePath: affectedFilePath,
 	}
 }
 

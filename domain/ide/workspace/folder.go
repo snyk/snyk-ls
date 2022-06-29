@@ -169,7 +169,7 @@ func (f *Folder) scan(ctx context.Context, path string) {
 			Msg("error getting workspace files")
 	}
 	//todo f.path & codeFiles need to go away, for that we need to unify the code interface & iac/oss
-	f.scanner.Scan(ctx, path, f.processResults(path), f.path, codeFiles)
+	f.scanner.Scan(ctx, path, f.processResults, f.path, codeFiles)
 }
 
 func (f *Folder) documentDiagnosticsFromCache(file string) []snyk.Issue {
@@ -180,24 +180,37 @@ func (f *Folder) documentDiagnosticsFromCache(file string) []snyk.Issue {
 	return issues.([]snyk.Issue)
 }
 
-func (f *Folder) processResults(path string) snyk.ScanResultProcessor {
-	return func(issues []snyk.Issue) {
-		f.processDiagnostics(path, issues)
-		f.processHovers(path, issues)
+func (f *Folder) processResults(issues []snyk.Issue) {
+	var issuesByFile = map[string][]snyk.Issue{}
+
+	for _, issue := range issues {
+		currentIssues := f.documentDiagnosticCache.Get(issue.AffectedFilePath)
+		if currentIssues == nil {
+			currentIssues = []snyk.Issue{}
+		}
+		currentIssues = append(currentIssues.([]snyk.Issue), issue)
+
+		f.documentDiagnosticCache.Put(issue.AffectedFilePath, currentIssues)
+		issuesByFile[issue.AffectedFilePath] = currentIssues.([]snyk.Issue)
+	}
+
+	f.processDiagnostics(issuesByFile)
+	f.processHovers(issuesByFile)
+}
+
+func (f *Folder) processDiagnostics(issuesByFile map[string][]snyk.Issue) {
+	for path, issues := range issuesByFile {
+		notification.Send(lsp.PublishDiagnosticsParams{
+			URI:         uri.PathToUri(path),
+			Diagnostics: toDiagnostic(issues),
+		})
 	}
 }
 
-func (f *Folder) processDiagnostics(path string, issues []snyk.Issue) {
-	f.documentDiagnosticCache.Put(path, issues)
-
-	notification.Send(lsp.PublishDiagnosticsParams{
-		URI:         uri.PathToUri(path),
-		Diagnostics: toDiagnostic(issues),
-	})
-}
-
-func (f *Folder) processHovers(path string, issues []snyk.Issue) {
-	f.hoverService.Channel() <- toHoversDocument(path, issues)
+func (f *Folder) processHovers(issuesByFile map[string][]snyk.Issue) {
+	for path, issues := range issuesByFile {
+		f.hoverService.Channel() <- toHoversDocument(path, issues)
+	}
 }
 
 func toHoversDocument(path string, i []snyk.Issue) hover.DocumentHovers {

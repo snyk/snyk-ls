@@ -87,6 +87,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 
 		if len(params.WorkspaceFolders) > 0 {
 			for _, workspaceFolder := range params.WorkspaceFolders {
+				log.Info().Str("method", method).Msgf("Adding workspaceFolder %v", workspaceFolder)
 				AddFolder(workspaceFolder, w)
 			}
 		} else {

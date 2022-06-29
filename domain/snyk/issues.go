@@ -16,6 +16,12 @@ type Issue struct {
 	Message string
 	//todo this contains a formatted longest message for hovers, this needs to be pushed up and rendered in presentation
 	LegacyMessage string
+	// AffectedFilePath is the file path to the file where the issue was found
+	AffectedFilePath string
+}
+
+func (i Issue) String() string {
+	return fmt.Sprintf("%s, ID: %s, Range: %s", i.AffectedFilePath, i.ID, i.Range)
 }
 
 type Position struct {

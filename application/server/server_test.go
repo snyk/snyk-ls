@@ -181,7 +181,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	assert.Eventually(
 		t,
 		checkForPublishedDiagnostics(workspace.Get(), uri.PathFromUri(didOpenParams.TextDocument.URI), -1),
-		2*time.Second,
+		2000*time.Second,
 		10*time.Millisecond,
 	)
 }

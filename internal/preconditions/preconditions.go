@@ -56,7 +56,9 @@ func (e *EnvironmentInitializer) WaitUntilCLIAndAuthReady(ctx context.Context) {
 			break
 		}
 		e.installCli()
-		time.Sleep(2 * time.Second)
+		if !config.CurrentConfig().CliInstalled() {
+			time.Sleep(2 * time.Second)
+		}
 	}
 
 	if !authenticated {

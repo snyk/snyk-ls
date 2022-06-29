@@ -170,7 +170,7 @@ func (iac *Scanner) convertScanResult(res iacScanResult) []snyk.Issue {
 			issue.LineNumber = 0
 		}
 
-		issues = append(issues, iac.toIssue(issue))
+		issues = append(issues, iac.toIssue(res.TargetFile, issue))
 	}
 
 	return issues
@@ -208,7 +208,7 @@ func (iac *Scanner) getExtendedMessage(issue iacIssue) string {
 
 }
 
-func (iac *Scanner) toIssue(issue iacIssue) snyk.Issue {
+func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue) snyk.Issue {
 	title := issue.Title
 	if config.CurrentConfig().Format() == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
@@ -220,9 +220,10 @@ func (iac *Scanner) toIssue(issue iacIssue) snyk.Issue {
 			Start: snyk.Position{Line: issue.LineNumber, Character: 0},
 			End:   snyk.Position{Line: issue.LineNumber, Character: 80},
 		},
-		Message:       fmt.Sprintf("%s (Snyk)", title),
-		LegacyMessage: iac.getExtendedMessage(issue),
-		Severity:      iac.toIssueSeverity(issue.Severity),
+		Message:          fmt.Sprintf("%s (Snyk)", title),
+		LegacyMessage:    iac.getExtendedMessage(issue),
+		Severity:         iac.toIssueSeverity(issue.Severity),
+		AffectedFilePath: affectedFilePath,
 	}
 }
 
