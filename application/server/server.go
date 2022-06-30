@@ -225,6 +225,7 @@ func registerNotifier(srv *jrpc2.Server) {
 				Str("method", "notifyCallback").
 				Interface("documentURI", params.URI).
 				Interface("source", source).
+				Interface("diagnosticCount", len(params.Diagnostics)).
 				Msg("publishing diagnostics")
 		default:
 			log.Warn().
