@@ -148,7 +148,12 @@ func (oss *Scanner) unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.
 			oss.errorReporter.CaptureError(err)
 			return
 		}
-		oss.retrieveAnalysis(scanResult, targetFileUri, fileContent, output)
+		issues := oss.retrieveIssues(scanResult, targetFileUri, fileContent)
+
+		if len(issues) > 0 {
+			output(issues)
+		}
+		oss.trackResult(true)
 	}
 }
 
@@ -214,25 +219,11 @@ func (oss *Scanner) determineTargetFile(displayTargetFile string) string {
 	return targetFile
 }
 
-func (oss *Scanner) retrieveAnalysis(
-	scanResults ossScanResult,
-	documentURI sglsp.DocumentURI,
-	fileContent []byte,
-	output snyk.ScanResultProcessor,
-) {
-	issues := oss.retrieveDiagnostics(scanResults, documentURI, fileContent)
-
-	if len(issues) > 0 {
-		output(issues)
-	}
-	oss.trackResult(true)
-}
-
 type RangeFinder interface {
 	find(issue ossIssue) snyk.Range
 }
 
-func (oss *Scanner) retrieveDiagnostics(
+func (oss *Scanner) retrieveIssues(
 	res ossScanResult,
 	documentUri sglsp.DocumentURI,
 	fileContent []byte,
@@ -270,6 +261,7 @@ func (oss *Scanner) toIssue(affectedFilePath string, issue ossIssue, issueRange 
 		Range:            issueRange,
 		Severity:         oss.toIssueSeverity(issue.Severity),
 		AffectedFilePath: affectedFilePath,
+		ProductLine:      snyk.ProductLineOpenSource,
 	}
 }
 

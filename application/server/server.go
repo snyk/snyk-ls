@@ -208,9 +208,14 @@ func registerNotifier(srv *jrpc2.Server) {
 				Msg("showing message")
 		case lsp.PublishDiagnosticsParams:
 			notifier(srv, "textDocument/publishDiagnostics", params)
+			source := "LSP"
+			if len(params.Diagnostics) > 0 {
+				source = params.Diagnostics[0].Source
+			}
 			log.Info().
 				Str("method", "notifyCallback").
 				Interface("documentURI", params.URI).
+				Interface("source", source).
 				Msg("publishing diagnostics")
 		default:
 			log.Warn().

@@ -21,16 +21,10 @@ import (
 )
 
 type FolderStatus int
-type ProductLine string
-type ProductLineAttributes map[string]interface{}
 
 const (
 	Unscanned FolderStatus = iota
 	Scanned   FolderStatus = iota
-
-	SnykCode       ProductLine = "Snyk Code"
-	SnykOpenSource ProductLine = "Snyk Open Source"
-	SnykIac        ProductLine = "Snyk IaC"
 )
 
 // Folder contains files that can be scanned,
@@ -39,7 +33,7 @@ type Folder struct {
 	path                    string
 	name                    string
 	status                  FolderStatus
-	productLineAttributes   map[ProductLine]ProductLineAttributes
+	productLineAttributes   map[snyk.ProductLine]snyk.ProductLineAttributes
 	ignorePatterns          []string
 	documentDiagnosticCache concurrency.AtomicMap
 	scanner                 snyk.Scanner
@@ -53,12 +47,12 @@ func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hove
 		path:                  path,
 		name:                  name,
 		status:                Unscanned,
-		productLineAttributes: make(map[ProductLine]ProductLineAttributes),
+		productLineAttributes: make(map[snyk.ProductLine]snyk.ProductLineAttributes),
 		hoverService:          hoverService,
 	}
-	folder.productLineAttributes[SnykCode] = ProductLineAttributes{}
-	folder.productLineAttributes[SnykIac] = ProductLineAttributes{}
-	folder.productLineAttributes[SnykOpenSource] = ProductLineAttributes{}
+	folder.productLineAttributes[snyk.ProductLineCode] = snyk.ProductLineAttributes{}
+	folder.productLineAttributes[snyk.ProductLineInfrastructureAsCode] = snyk.ProductLineAttributes{}
+	folder.productLineAttributes[snyk.ProductLineOpenSource] = snyk.ProductLineAttributes{}
 	folder.documentDiagnosticCache = concurrency.AtomicMap{}
 	return &folder
 }
@@ -137,11 +131,11 @@ func (f *Folder) ScanFile(ctx context.Context, path string) {
 	f.scan(ctx, path)
 }
 
-func (f *Folder) GetProductAttribute(productLine ProductLine, name string) interface{} {
+func (f *Folder) GetProductAttribute(productLine snyk.ProductLine, name string) interface{} {
 	return f.productLineAttributes[productLine][name]
 }
 
-func (f *Folder) AddProductAttribute(productLine ProductLine, name string, value interface{}) {
+func (f *Folder) AddProductAttribute(productLine snyk.ProductLine, name string, value interface{}) {
 	f.productLineAttributes[productLine][name] = value
 }
 
@@ -185,22 +179,22 @@ func (f *Folder) documentDiagnosticsFromCache(file string) []snyk.Issue {
 
 func (f *Folder) processResults(issues []snyk.Issue) {
 	method := "processResults"
-	log.Debug().Str("method", method).Int("issues to be processed", len(issues)).Send()
+	log.Trace().Str("method", method).Int("issues to be processed", len(issues)).Send()
 	var issuesByFile = map[string][]snyk.Issue{}
 
 	for _, issue := range issues {
-		log.Debug().Str("method", method).Str("affectedFilePath", issue.AffectedFilePath).Str("ID", issue.ID).Msg("starting processing")
+		log.Trace().Str("method", method).Str("affectedFilePath", issue.AffectedFilePath).Str("ID", issue.ID).Msg("starting processing")
 		currentIssues := f.documentDiagnosticCache.Get(issue.AffectedFilePath)
 		needsToRefreshCache := issuesByFile[issue.AffectedFilePath] == nil
 		if needsToRefreshCache || currentIssues == nil {
-			log.Debug().Str("method", method).Str("affectedFilePath", issue.AffectedFilePath).Str("ID", issue.ID).Msg("Creating new issue array for path")
+			log.Trace().Str("method", method).Str("affectedFilePath", issue.AffectedFilePath).Str("ID", issue.ID).Msg("Creating new issue array for path")
 			currentIssues = []snyk.Issue{}
 		}
 		currentIssues = append(currentIssues.([]snyk.Issue), issue)
-		log.Debug().Str("method", method).Str("affectedFilePath", issue.AffectedFilePath).Str("ID", issue.ID).Msg("added to issue array")
+		log.Trace().Str("method", method).Str("affectedFilePath", issue.AffectedFilePath).Str("ID", issue.ID).Msg("added to issue array")
 
 		f.documentDiagnosticCache.Put(issue.AffectedFilePath, currentIssues)
-		log.Debug().Str("method", method).Str("affectedFilePath", issue.AffectedFilePath).Str("ID", issue.ID).Msg("updated cache")
+		log.Trace().Str("method", method).Str("affectedFilePath", issue.AffectedFilePath).Str("ID", issue.ID).Msg("updated cache")
 		issuesByFile[issue.AffectedFilePath] = currentIssues.([]snyk.Issue)
 	}
 
@@ -255,7 +249,7 @@ func toDiagnostic(issues []snyk.Issue) (diagnostics []lsp.Diagnostic) {
 			Range:    toLspRange(issue.Range),
 			Severity: toSeverity(issue.Severity),
 			Code:     issue.ID,
-			Source:   "LS Server",
+			Source:   string(issue.ProductLine),
 			Message:  issue.Message,
 		})
 	}

@@ -338,6 +338,7 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) map[st
 				Message:          fmt.Sprintf("%s (Snyk)", result.Message.Text),
 				IssueType:        snyk.CodeSecurityVulnerability,
 				AffectedFilePath: path,
+				ProductLine:      snyk.ProductLineCode,
 			}
 
 			issuesSlice = append(issuesSlice, d)
