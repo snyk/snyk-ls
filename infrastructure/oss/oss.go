@@ -93,6 +93,7 @@ func (oss *Scanner) IsEnabled() bool {
 func (oss *Scanner) Scan(ctx context.Context, path string, _ string, _ []string) (issues []snyk.Issue) {
 	documentURI := uri.PathToUri(path) //todo get rid of lsp dep
 	if !oss.isSupported(documentURI) {
+		log.Debug().Msgf("OSS Scan not supported for %s", path)
 		return issues
 	}
 	method := "oss.Scan"
@@ -110,7 +111,14 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string, _ []string)
 		log.Err(err).Str("method", method).
 			Msg("Error while extracting file absolutePath")
 	}
-	workDir := filepath.Dir(path)
+
+	var workDir string
+	if uri.IsDirectory(documentURI) {
+		workDir = path
+	} else {
+		workDir = filepath.Dir(path)
+	}
+	
 	cmd := oss.cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", workDir, "--json"})
 	res, err := oss.cli.Execute(cmd, workDir)
 	if err != nil {
