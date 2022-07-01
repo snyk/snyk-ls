@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -81,7 +80,7 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string, _ []string)
 
 func (iac *Scanner) isSupported(documentURI sglsp.DocumentURI) bool {
 	ext := filepath.Ext(uri.PathFromUri(documentURI))
-	return extensions[ext]
+	return uri.IsDirectory(documentURI) || extensions[ext]
 }
 
 func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI) (scanResults []iacScanResult, err error) {
@@ -93,7 +92,7 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI) (
 	log.Debug().Str("method", method).Msg("started.")
 
 	var workspaceUri string
-	if !isDirectory(documentURI) {
+	if !uri.IsDirectory(documentURI) {
 		workspaceUri = filepath.Dir(uri.PathFromUri(documentURI))
 	} else {
 		workspaceUri = uri.PathFromUri(documentURI)
@@ -118,7 +117,7 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI) (
 		}
 	}
 
-	if isDirectory(documentURI) {
+	if uri.IsDirectory(documentURI) {
 		if err := json.Unmarshal(res, &scanResults); err != nil {
 			return nil, err
 		}
@@ -130,16 +129,6 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI) (
 		scanResults = append(scanResults, scanResult)
 	}
 	return scanResults, nil
-}
-
-func isDirectory(documentURI sglsp.DocumentURI) bool {
-	workspaceUri := uri.PathFromUri(documentURI)
-	stat, err := os.Stat(workspaceUri)
-	if err != nil {
-		log.Err(err).Err(err).Msg("Error while checking file")
-		return false
-	}
-	return stat.IsDir()
 }
 
 func (iac *Scanner) cliCmd(u sglsp.DocumentURI) []string {

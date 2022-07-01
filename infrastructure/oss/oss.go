@@ -95,7 +95,7 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string, _ []string)
 	if !oss.isSupported(documentURI) {
 		return issues
 	}
-	method := "oss.ScanFile"
+	method := "oss.Scan"
 	s := oss.instrumentor.StartSpan(ctx, method)
 	defer oss.instrumentor.Finish(s)
 	p := progress.NewTracker(false)
@@ -124,7 +124,7 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string, _ []string)
 }
 
 func (oss *Scanner) isSupported(documentURI sglsp.DocumentURI) bool {
-	return supportedFiles[filepath.Base(uri.PathFromUri(documentURI))]
+	return uri.IsDirectory(documentURI) || supportedFiles[filepath.Base(uri.PathFromUri(documentURI))]
 }
 
 func (oss *Scanner) unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.DocumentURI) (issues []snyk.Issue) {

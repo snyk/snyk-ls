@@ -31,5 +31,5 @@ func Test_Scan(t *testing.T) {
 	assert.True(t, strings.Contains(issues[0].Message, "<p>"))
 	recorder := &di.Instrumentor().(*performance.TestInstrumentor).SpanRecorder
 	spans := (*recorder).Spans()
-	assert.Equal(t, "oss.ScanFile", spans[0].GetOperation())
+	assert.Equal(t, "oss.Scan", spans[0].GetOperation())
 }
