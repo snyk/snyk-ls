@@ -121,14 +121,22 @@ func (f *Folder) SetStatus(status FolderStatus) {
 }
 
 func (f *Folder) ScanFolder(ctx context.Context) {
-	f.scan(ctx, f.path)
+	codeFiles, err := f.Files()
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("method", "doSnykCodeWorkspaceScan").
+			Str("workspacePath", f.path).
+			Msg("error getting workspace files")
+	}
+	f.scan(ctx, f.path, codeFiles)
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 	f.status = Scanned
 }
 
 func (f *Folder) ScanFile(ctx context.Context, path string) {
-	f.scan(ctx, path)
+	f.scan(ctx, path, []string{path})
 }
 
 func (f *Folder) GetProductAttribute(productLine snyk.ProductLine, name string) interface{} {
@@ -149,7 +157,7 @@ func (f *Folder) ClearDiagnosticsCache(filePath string) {
 	f.ClearScannedStatus()
 }
 
-func (f *Folder) scan(ctx context.Context, path string) {
+func (f *Folder) scan(ctx context.Context, path string, codeFiles []string) {
 	issuesSlice := f.documentDiagnosticsFromCache(path)
 	if issuesSlice != nil {
 		log.Info().Str("method", "domain.ide.workspace.folder.scan").Msgf("Cached results found: Skipping scan for %s", path)
@@ -157,14 +165,6 @@ func (f *Folder) scan(ctx context.Context, path string) {
 		return
 	}
 
-	codeFiles, err := f.Files()
-	if err != nil {
-		log.Warn().
-			Err(err).
-			Str("method", "doSnykCodeWorkspaceScan").
-			Str("workspacePath", f.path).
-			Msg("error getting workspace files")
-	}
 	//todo f.path & codeFiles need to go away, for that we need to unify the code interface & iac/oss
 	f.scanner.Scan(ctx, path, f.processResults, f.path, codeFiles)
 }
@@ -178,23 +178,17 @@ func (f *Folder) documentDiagnosticsFromCache(file string) []snyk.Issue {
 }
 
 func (f *Folder) processResults(issues []snyk.Issue) {
-	method := "processResults"
-	log.Trace().Str("method", method).Int("issues to be processed", len(issues)).Send()
 	var issuesByFile = map[string][]snyk.Issue{}
 
 	for _, issue := range issues {
-		log.Trace().Str("method", method).Str("affectedFilePath", issue.AffectedFilePath).Str("ID", issue.ID).Msg("starting processing")
 		currentIssues := f.documentDiagnosticCache.Get(issue.AffectedFilePath)
 		needsToRefreshCache := issuesByFile[issue.AffectedFilePath] == nil
 		if needsToRefreshCache || currentIssues == nil {
-			log.Trace().Str("method", method).Str("affectedFilePath", issue.AffectedFilePath).Str("ID", issue.ID).Msg("Creating new issue array for path")
 			currentIssues = []snyk.Issue{}
 		}
 		currentIssues = append(currentIssues.([]snyk.Issue), issue)
-		log.Trace().Str("method", method).Str("affectedFilePath", issue.AffectedFilePath).Str("ID", issue.ID).Msg("added to issue array")
 
 		f.documentDiagnosticCache.Put(issue.AffectedFilePath, currentIssues)
-		log.Trace().Str("method", method).Str("affectedFilePath", issue.AffectedFilePath).Str("ID", issue.ID).Msg("updated cache")
 		issuesByFile[issue.AffectedFilePath] = currentIssues.([]snyk.Issue)
 	}
 

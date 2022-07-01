@@ -13,7 +13,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -36,7 +35,7 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 	filepath, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, executor)
-	scanner.Scan(context.Background(), filepath, snyk.NoopResultProcessor, "", nil)
+	scanner.Scan(context.Background(), filepath, "", nil)
 
 	assert.Len(t, analytics.GetAnalytics(), 1)
 	assert.Equal(t, ux2.AnalysisIsReadyProperties{

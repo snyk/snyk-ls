@@ -34,7 +34,7 @@ type SnykCodeClient interface {
 		ctx context.Context,
 		options AnalysisOptions,
 	) (
-		map[string][]snyk.Issue,
+		[]snyk.Issue,
 		AnalysisStatus,
 		error,
 	)

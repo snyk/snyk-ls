@@ -27,8 +27,8 @@ func Start() {
 	handlers := handler.Map{}
 	srv = jrpc2.NewServer(handlers, &jrpc2.ServerOptions{
 		Logger: func(text string) {
-			if len(text) > 100 {
-				log.Debug().Msgf("JSON RPC Log: %s... [TRUNCATED]", text[:100])
+			if len(text) > 300 {
+				log.Debug().Msgf("JSON RPC Log: %s... [TRUNCATED]", text[:300])
 			} else {
 				log.Debug().Msgf("JSON RPC Log: %s", text)
 			}
@@ -45,7 +45,7 @@ func Start() {
 	if status.Err != nil {
 		log.Err(status.Err).Msg("server stopped because of error")
 	} else {
-		log.Debug().Msgf("server stopped gracefully stopped=%s closed=%s", status.Stopped, status.Closed)
+		log.Debug().Msgf("server stopped gracefully stopped=%v closed=%v", status.Stopped, status.Closed)
 	}
 	log.Info().Msg("Exiting...")
 }
@@ -246,7 +246,7 @@ func registerNotifier(srv *jrpc2.Server) {
 type RPCLogger struct{}
 
 func (R RPCLogger) LogRequest(ctx context.Context, req *jrpc2.Request) {
-	log.Debug().Msgf("Incoming JSON-RPC request. Method=%s. ID=%s. Is notification=%s.", req.Method(), req.ID(), req.IsNotification())
+	log.Debug().Msgf("Incoming JSON-RPC request. Method=%s. ID=%s. Is notification=%v.", req.Method(), req.ID(), req.IsNotification())
 }
 
 func (R RPCLogger) LogResponse(ctx context.Context, rsp *jrpc2.Response) {

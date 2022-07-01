@@ -2,6 +2,9 @@ package snyk
 
 import (
 	"context"
+	"sync"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
@@ -18,12 +21,11 @@ type Scanner interface {
 		legacyWorkspacePath string,
 		legacyFilesToScan []string,
 	)
-	IsEnabled() bool
 }
 
 //DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
 type DelegatingConcurrentScanner struct {
-	scanners     []Scanner
+	scanners     []ProductLineScanner
 	initializer  *preconditions.EnvironmentInitializer
 	instrumentor performance.Instrumentor
 	analytics    ux2.Analytics
@@ -33,7 +35,7 @@ func NewDelegatingScanner(
 	initializer *preconditions.EnvironmentInitializer,
 	instrumentor performance.Instrumentor,
 	analytics ux2.Analytics,
-	scanners ...Scanner,
+	scanners ...ProductLineScanner,
 ) Scanner {
 	return &DelegatingConcurrentScanner{
 		instrumentor: instrumentor,
@@ -41,10 +43,6 @@ func NewDelegatingScanner(
 		initializer:  initializer,
 		scanners:     scanners,
 	}
-}
-
-func (sc *DelegatingConcurrentScanner) IsEnabled() bool {
-	return true
 }
 
 func (sc *DelegatingConcurrentScanner) Scan(
@@ -68,10 +66,23 @@ func (sc *DelegatingConcurrentScanner) Scan(
 
 	//todo split into cli / auth preconditions and push down to appropriate infra layers
 	sc.initializer.WaitUntilCLIAndAuthReady(ctx)
-
+	var issues []Issue
+	wg := sync.WaitGroup{}
 	for _, scanner := range sc.scanners {
 		if scanner.IsEnabled() {
-			go scanner.Scan(ctx, path, processResults, legacyWorkspacePath, legacyFilesToScan)
+			wg.Add(1)
+			go func(s ProductLineScanner) {
+				log.Debug().Msgf("Scanning %s with %T: STARTED", path, s)
+				foundIssues := s.Scan(ctx, path, legacyWorkspacePath, legacyFilesToScan)
+				issues = append(issues, foundIssues...)
+				wg.Done()
+				log.Debug().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
+			}(scanner)
+		} else {
+			log.Debug().Msgf("Skipping scan with %T because it is not enabled", scanner)
 		}
 	}
+	wg.Wait()
+	log.Debug().Msgf("Scanning %s complete", path)
+	processResults(issues)
 }

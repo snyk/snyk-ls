@@ -22,9 +22,9 @@ func TestAddBundleHashToWorkspaceFolder(t *testing.T) {
 	key := "bundleHash"
 	value := "testHash"
 
-	f.AddProductAttribute(SnykCode, key, value)
+	f.AddProductAttribute(snyk.ProductLineCode, key, value)
 
-	assert.Equal(t, value, f.GetProductAttribute(SnykCode, key))
+	assert.Equal(t, value, f.GetProductAttribute(snyk.ProductLineCode, key))
 }
 
 func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {

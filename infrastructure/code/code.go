@@ -34,21 +34,21 @@ func (sc *Scanner) IsEnabled() bool {
 	return config.CurrentConfig().IsSnykCodeEnabled()
 }
 
-func (sc *Scanner) Scan(ctx context.Context, _ string, output snyk.ScanResultProcessor, workspacePath string, files []string) {
+func (sc *Scanner) Scan(ctx context.Context, _ string, workspacePath string, files []string) []snyk.Issue {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
-	sc.UploadAndAnalyze(span.Context(), files, workspacePath, output)
+	return sc.UploadAndAnalyze(span.Context(), files, workspacePath)
 }
 
-func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path string, output snyk.ScanResultProcessor) {
+func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path string) (issues []snyk.Issue) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.uploadAndAnalyze")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 	if len(files) == 0 {
-		return
+		return issues
 	}
 
 	if !sc.isSastEnabled() {
-		return
+		return issues
 	}
 
 	requestId := span.GetTraceId() // use span trace id as code-request-id
@@ -58,7 +58,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path st
 	if err != nil {
 		msg := "error creating bundle..."
 		sc.handleCreationAndUploadError(err, msg)
-		return
+		return issues
 	}
 
 	uploadedBundle, err := sc.BundleUploader.Upload(ctx, bundle, bundleFiles)
@@ -66,15 +66,16 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path st
 	if err != nil {
 		msg := "error uploading files..."
 		sc.handleCreationAndUploadError(err, msg)
-		return
+		return issues
 	}
 	if uploadedBundle.BundleHash == "" {
 		log.Info().Msg("empty bundle, no Snyk Code analysis")
-		return
+		return issues
 	}
 
-	uploadedBundle.FetchDiagnosticsData(ctx, output)
+	issues = uploadedBundle.FetchDiagnosticsData(ctx)
 	sc.trackResult(true)
+	return issues
 }
 
 func (sc *Scanner) handleCreationAndUploadError(err error, msg string) {

@@ -88,6 +88,7 @@ func analyticsFactory(apiClient code2.SnykApiClient) ux2.Analytics {
 		} else {
 			err = errors.Wrap(err, "cannot retrieve active user, configuring noop analytics")
 		}
+		//todo this should be silently captured as it does not affect UX
 		errorReporter.CaptureError(err)
 		a = ux2.NewTestAnalytics()
 	} else {

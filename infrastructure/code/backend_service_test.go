@@ -111,10 +111,8 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		documentDiagnostic := d[path1]
-		if callStatus.message == "COMPLETE" && documentDiagnostic != nil {
-			returnValue := assert.NotEqual(t, 0, len(d[path1]))
-			returnValue = returnValue && assert.NotEqual(t, 0, len(d[path2]))
+		if callStatus.message == "COMPLETE" && d != nil {
+			returnValue := assert.NotEqual(t, 0, len(d))
 			if returnValue {
 				return true
 			}
@@ -136,10 +134,8 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	issues := s.convertSarifResponse(analysisResponse)
 	assert.NotNil(t, issues)
 
-	assert.Equal(t, 1, len(issues))
-
 	path := "/server/testdata/Dummy.java"
-	assert.Equal(t, 2, len(issues[path]))
+	assert.Equal(t, 2, len(issues))
 	assert.Equal(
 		t,
 		snyk.Issue{
@@ -150,7 +146,7 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 			Severity:         snyk.Low,
 			AffectedFilePath: path,
 		},
-		issues[path][0],
+		issues[0],
 	)
 }
 

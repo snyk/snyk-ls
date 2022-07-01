@@ -14,7 +14,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	code2 "github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -92,7 +91,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		docs := []string{uri.PathFromUri(firstDoc.URI)}
 		defer os.RemoveAll(path)
 
-		c.UploadAndAnalyze(context.Background(), docs, "", snyk.NoopResultProcessor)
+		c.UploadAndAnalyze(context.Background(), docs, "")
 
 		// verify that create bundle has been called on backend service
 		params := snykCodeMock.GetCallParams(0, code2.CreateBundleWithSourceOperation)
@@ -108,13 +107,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		diagnosticUri, path := code2.FakeDiagnosticUri()
 		defer os.RemoveAll(path)
 
-		// execute
-		var issues []snyk.Issue
-		output := func(i []snyk.Issue) {
-			issues = i
-		}
-
-		c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, "", output)
+		issues := c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, "")
 
 		assert.NotNil(t, issues)
 		assert.Equal(t, 1, len(issues))
@@ -135,7 +128,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		defer os.RemoveAll(path)
 
 		// execute
-		c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, "", snyk.NoopResultProcessor)
+		c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, "")
 
 		assert.Len(t, analytics.GetAnalytics(), 1)
 		assert.Equal(t, ux2.AnalysisIsReadyProperties{

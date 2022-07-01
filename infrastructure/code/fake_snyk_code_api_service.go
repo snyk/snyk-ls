@@ -152,18 +152,14 @@ func (f *FakeSnykCodeClient) ExtendBundle(
 func (f *FakeSnykCodeClient) RunAnalysis(
 	_ context.Context,
 	options AnalysisOptions,
-) (map[string][]snyk.Issue, AnalysisStatus, error) {
+) ([]snyk.Issue, AnalysisStatus, error) {
 	mutex.Lock()
 	defer mutex.Unlock()
 	params := []interface{}{options.bundleHash, options.limitToFiles, options.severity}
 	f.addCall(params, RunAnalysisOperation)
 
-	issuesMap := map[string][]snyk.Issue{}
-
-	var issues []snyk.Issue
-
-	issuesMap[fakeDiagnosticUri] = append(issues, FakeIssue)
+	issues := []snyk.Issue{FakeIssue}
 
 	log.Trace().Str("method", "RunAnalysis").Interface("fakeDiagnostic", FakeIssue).Msg("fake backend call received & answered")
-	return issuesMap, AnalysisStatus{message: "COMPLETE", percentage: 100}, nil
+	return issues, AnalysisStatus{message: "COMPLETE", percentage: 100}, nil
 }

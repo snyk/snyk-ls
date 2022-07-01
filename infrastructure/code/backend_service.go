@@ -218,7 +218,7 @@ type AnalysisStatus struct {
 func (s *SnykCodeHTTPClient) RunAnalysis(
 	ctx context.Context,
 	options AnalysisOptions,
-) (map[string][]snyk.Issue, AnalysisStatus, error) {
+) ([]snyk.Issue, AnalysisStatus, error) {
 	method := "code.RunAnalysis"
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
@@ -306,9 +306,7 @@ func analysisRequestBody(options *AnalysisOptions) ([]byte, error) {
 	return requestBody, err
 }
 
-func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) map[string][]snyk.Issue {
-	issues := make(map[string][]snyk.Issue)
-
+func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (issues []snyk.Issue) {
 	runs := response.Sarif.Runs
 	if len(runs) == 0 {
 		return issues
@@ -318,7 +316,6 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) map[st
 		for _, loc := range result.Locations {
 			// convert the documentURI to a path according to our conversion
 			path := loc.PhysicalLocation.ArtifactLocation.URI
-			issuesSlice := issues[path]
 
 			myRange := snyk.Range{
 				Start: snyk.Position{
@@ -341,8 +338,7 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) map[st
 				ProductLine:      snyk.ProductLineCode,
 			}
 
-			issuesSlice = append(issuesSlice, d)
-			issues[path] = issuesSlice
+			issues = append(issues, d)
 		}
 	}
 	return issues

@@ -14,8 +14,7 @@ import (
 )
 
 type SnykCli struct {
-	recursionLevel int
-	authenticator  *auth.Authenticator
+	authenticator *auth.Authenticator
 }
 
 var Mutex = &sync.Mutex{}
@@ -35,6 +34,12 @@ type Executor interface {
 func (c SnykCli) Execute(cmd []string, workingDir string) (resp []byte, err error) {
 	method := "SnykCli.Execute"
 	log.Info().Str("method", method).Interface("cmd", cmd).Msg("calling Snyk CLI")
+	output, err := c.doExecute(cmd, workingDir, true)
+	log.Trace().Str("method", method).Str("response", string(output))
+	return output, err
+}
+
+func (c SnykCli) doExecute(cmd []string, workingDir string, firstAttempt bool) ([]byte, error) {
 	if isIacCommand(cmd) {
 		Mutex.Lock()
 	}
@@ -46,14 +51,11 @@ func (c SnykCli) Execute(cmd []string, workingDir string) (resp []byte, err erro
 	}
 	if err != nil {
 		ctx := context.Background()
-		retry := c.HandleErrors(ctx, string(output), err)
-		// recurse
-		if c.recursionLevel == 0 && retry {
-			c.recursionLevel++
-			output, err = c.Execute(cmd, workingDir)
+		shouldRetry := c.HandleErrors(ctx, string(output), err)
+		if firstAttempt && shouldRetry {
+			output, err = c.doExecute(cmd, workingDir, false)
 		}
 	}
-	log.Trace().Str("method", method).Str("response", string(output))
 	return output, err
 }
 
@@ -79,7 +81,6 @@ func (c SnykCli) addConfigValuesToEnv(env []string) (updatedEnv []string) {
 		updatedEnv = append(updatedEnv, "SNYK_API="+endpoint)
 	}
 
-	// always add token
 	updatedEnv = append(updatedEnv, "SNYK_TOKEN="+config.CurrentConfig().Token())
 	return
 }
@@ -96,7 +97,6 @@ func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
 	}
 
 	if len(settings.AdditionalParameters) > 0 {
-		//additionalParams = append(additionalParams, settings.AdditionalParameters...)
 		for _, parameter := range settings.AdditionalParameters {
 			if base[1] == "iac" && parameter == "--all-projects" {
 				continue

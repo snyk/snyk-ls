@@ -57,25 +57,26 @@ func (iac *Scanner) IsEnabled() bool {
 	return config.CurrentConfig().IsSnykIacEnabled()
 }
 
-func (iac *Scanner) Scan(ctx context.Context, path string, output snyk.ScanResultProcessor, _ string, _ []string) {
+func (iac *Scanner) Scan(ctx context.Context, path string, _ string, _ []string) (issues []snyk.Issue) {
 	documentURI := uri.PathToUri(path) //todo get rid of lsp dep
+	if !iac.isSupported(documentURI) {
+		return
+	}
 	p := progress.NewTracker(false)
 	p.Begin("Scanning for Snyk IaC issues", path)
 	defer p.End("Snyk Iac Scan completed.")
 
-	if !iac.isSupported(documentURI) {
-		return
-	}
 	scanResults, err := iac.doScan(ctx, documentURI)
 	p.Report(80)
 	if err != nil {
 		iac.errorReporter.CaptureError(err)
 	}
 	if len(scanResults) > 0 {
-		iac.retrieveAnalysis(scanResults[0], output)
+		issues = iac.retrieveAnalysis(scanResults[0])
 	}
 	iac.trackResult(err == nil)
 	p.End("Snyk Iac Scan completed.")
+	return issues
 }
 
 func (iac *Scanner) isSupported(documentURI sglsp.DocumentURI) bool {
@@ -152,27 +153,18 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI) []string {
 	return cmd
 }
 
-func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, output snyk.ScanResultProcessor) {
-	issues := iac.convertScanResult(scanResult)
-
-	if len(issues) > 0 {
-		output(issues)
-	}
-}
-
-func (iac *Scanner) convertScanResult(res iacScanResult) []snyk.Issue {
+func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult) []snyk.Issue {
 	var issues []snyk.Issue
 
-	for _, issue := range res.IacIssues {
+	for _, issue := range scanResult.IacIssues {
 		if issue.LineNumber > 0 {
 			issue.LineNumber -= 1
 		} else {
 			issue.LineNumber = 0
 		}
 
-		issues = append(issues, iac.toIssue(res.TargetFile, issue))
+		issues = append(issues, iac.toIssue(scanResult.TargetFile, issue))
 	}
-
 	return issues
 }
 

@@ -12,7 +12,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -26,12 +25,7 @@ func Test_Scan(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
-	var issues []snyk.Issue
-	output := func(i []snyk.Issue) {
-		issues = i
-	}
-
-	di.OpenSourceScanner().Scan(ctx, path, output, "", nil)
+	issues := di.OpenSourceScanner().Scan(ctx, path, "", nil)
 
 	assert.NotEqual(t, 0, len(issues))
 	assert.True(t, strings.Contains(issues[0].Message, "<p>"))

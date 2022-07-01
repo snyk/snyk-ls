@@ -49,17 +49,16 @@ func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) err
 
 func (b *Bundle) FetchDiagnosticsData(
 	ctx context.Context,
-	output snyk.ScanResultProcessor,
-) {
+) []snyk.Issue {
 	defer log.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
 	log.Debug().Str("method", "FetchDiagnosticsData").Msg("started.")
-	b.retrieveAnalysis(ctx, output)
+	return b.retrieveAnalysis(ctx)
 }
 
-func (b *Bundle) retrieveAnalysis(ctx context.Context, output snyk.ScanResultProcessor) {
+func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
 	if b.BundleHash == "" {
 		log.Warn().Str("method", "retrieveAnalysis").Str("rootPath", b.rootPath).Msg("bundle hash is empty")
-		return
+		return []snyk.Issue{}
 	}
 
 	p := progress.NewTracker(false)
@@ -88,27 +87,21 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context, output snyk.ScanResultPro
 				Int("fileCount", len(b.UploadBatches)).
 				Msg("error retrieving diagnostics...")
 			b.errorReporter.CaptureError(err)
-			return
+			return []snyk.Issue{}
 		}
 
 		if status.message == "COMPLETE" {
-			for filePath, i := range issues {
-				log.Trace().Str("method", "retrieveAnalysis").Str("requestId", b.requestId).
-					Str("path", filePath).
-					Msg("sending diagnostics...")
-
-				if len(i) > 0 {
-					output(i)
-				}
-			}
-
-			return
+			log.Trace().Str("method", "retrieveAnalysis").Str("requestId", b.requestId).
+				Msg("sending diagnostics...")
+			return issues
 		}
 
 		if time.Since(start) > config.CurrentConfig().SnykCodeAnalysisTimeout() {
-			err = errors.New("analysis call timed out")
+			err := errors.New("analysis call timed out")
 			log.Error().Err(err).Str("method", "retrieveAnalysis").Msg("timeout...")
-			//di.ErrorReporter().CaptureError(err) // FIXME import cycle
+			b.errorReporter.CaptureError(err)
+			p.End("Snyk Code Analysis timed out")
+			return []snyk.Issue{}
 		}
 		time.Sleep(1 * time.Second)
 		p.Report(status.percentage)

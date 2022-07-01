@@ -12,7 +12,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/cli"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -25,7 +24,7 @@ func Test_ScanWorkspace_IsInstrumented(t *testing.T) {
 	scanner := New(instrumentor, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
 	getwd, _ := os.Getwd()
 
-	scanner.Scan(context.Background(), filepath.Clean(getwd+"/testdata.yml"), snyk.NoopResultProcessor, "", nil)
+	scanner.Scan(context.Background(), filepath.Clean(getwd+"/testdata.yml"), "", nil)
 
 	spans := instrumentor.SpanRecorder.Spans()
 	assert.Len(t, spans, 1)
@@ -38,7 +37,7 @@ func Test_ScanFile_IsInstrumented(t *testing.T) {
 	instrumentor := performance.NewTestInstrumentor()
 	scanner := New(instrumentor, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
 
-	scanner.Scan(context.Background(), "fake.yml", snyk.NoopResultProcessor, "", nil)
+	scanner.Scan(context.Background(), "fake.yml", "", nil)
 
 	spans := instrumentor.SpanRecorder.Spans()
 	assert.Len(t, spans, 1)
@@ -51,7 +50,7 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 	analytics := ux2.NewTestAnalytics()
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, cli.NewTestExecutor())
 
-	scanner.Scan(context.Background(), "fake.yml", snyk.NoopResultProcessor, "", nil)
+	scanner.Scan(context.Background(), "fake.yml", "", nil)
 
 	assert.Len(t, analytics.GetAnalytics(), 1)
 	assert.Equal(t, ux2.AnalysisIsReadyProperties{
@@ -67,7 +66,7 @@ func Test_ErroredWorkspaceScan_TracksAnalytics(t *testing.T) {
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, executor)
 
 	executor.ExecuteResponse = "invalid JSON"
-	scanner.Scan(context.Background(), "fake.yml", snyk.NoopResultProcessor, "", nil)
+	scanner.Scan(context.Background(), "fake.yml", "", nil)
 
 	assert.Len(t, analytics.GetAnalytics(), 1)
 	assert.Equal(t, ux2.AnalysisIsReadyProperties{

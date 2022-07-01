@@ -90,8 +90,11 @@ func (oss *Scanner) IsEnabled() bool {
 	return config.CurrentConfig().IsSnykOssEnabled()
 }
 
-func (oss *Scanner) Scan(ctx context.Context, path string, output snyk.ScanResultProcessor, _ string, _ []string) {
+func (oss *Scanner) Scan(ctx context.Context, path string, _ string, _ []string) (issues []snyk.Issue) {
 	documentURI := uri.PathToUri(path) //todo get rid of lsp dep
+	if !oss.isSupported(documentURI) {
+		return issues
+	}
 	method := "oss.ScanFile"
 	s := oss.instrumentor.StartSpan(ctx, method)
 	defer oss.instrumentor.Finish(s)
@@ -101,10 +104,6 @@ func (oss *Scanner) Scan(ctx context.Context, path string, output snyk.ScanResul
 
 	log.Debug().Str("method", method).Msg("started.")
 	defer log.Debug().Str("method", method).Msg("done.")
-
-	if !oss.isSupported(documentURI) {
-		return
-	}
 
 	path, err := filepath.Abs(uri.PathFromUri(documentURI))
 	if err != nil {
@@ -120,14 +119,15 @@ func (oss *Scanner) Scan(ctx context.Context, path string, output snyk.ScanResul
 		}
 	}
 
-	oss.unmarshallAndRetrieveAnalysis(res, uri.PathToUri(workDir), output)
+	issues = oss.unmarshallAndRetrieveAnalysis(res, uri.PathToUri(workDir))
+	return issues
 }
 
 func (oss *Scanner) isSupported(documentURI sglsp.DocumentURI) bool {
 	return supportedFiles[filepath.Base(uri.PathFromUri(documentURI))]
 }
 
-func (oss *Scanner) unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.DocumentURI, output snyk.ScanResultProcessor) {
+func (oss *Scanner) unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.DocumentURI) (issues []snyk.Issue) {
 	scanResults, done, err := oss.unmarshallOssJson(res)
 	if err != nil {
 		oss.errorReporter.CaptureError(err)
@@ -148,13 +148,11 @@ func (oss *Scanner) unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.
 			oss.errorReporter.CaptureError(err)
 			return
 		}
-		issues := oss.retrieveIssues(scanResult, targetFileUri, fileContent)
+		issues = oss.retrieveIssues(scanResult, targetFileUri, fileContent)
 
-		if len(issues) > 0 {
-			output(issues)
-		}
 		oss.trackResult(true)
 	}
+	return issues
 }
 
 func (oss *Scanner) unmarshallOssJson(res []byte) (scanResults []ossScanResult, done bool, err error) {
