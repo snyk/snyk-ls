@@ -30,10 +30,6 @@ func New(authenticator *auth.Authenticator, errorReporter error_reporting.ErrorR
 }
 
 func (e *EnvironmentInitializer) WaitUntilCLIAndAuthReady(ctx context.Context) {
-	install.Mutex.Lock()
-	defer install.Mutex.Unlock()
-
-	// lock all CLI executions
 	cli.Mutex.Lock()
 	defer cli.Mutex.Unlock()
 
@@ -101,8 +97,8 @@ func (e *EnvironmentInitializer) handleInstallerError(err error) {
 }
 
 func (e *EnvironmentInitializer) updateCli() {
-	install.Mutex.Lock()
-	defer install.Mutex.Unlock()
+	cli.Mutex.Lock()
+	defer cli.Mutex.Unlock()
 
 	i := install.NewInstaller(e.errorReporter)
 	updated, err := i.Update(context.Background())

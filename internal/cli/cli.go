@@ -17,7 +17,7 @@ type SnykCli struct {
 	authenticator *auth.Authenticator
 }
 
-var Mutex = &sync.Mutex{}
+var Mutex = &sync.RWMutex{}
 
 func NewExecutor(authenticator *auth.Authenticator) Executor {
 	return &SnykCli{
@@ -32,6 +32,8 @@ type Executor interface {
 }
 
 func (c SnykCli) Execute(cmd []string, workingDir string) (resp []byte, err error) {
+	Mutex.RLock()
+	defer Mutex.RUnlock()
 	method := "SnykCli.Execute"
 	log.Info().Str("method", method).Interface("cmd", cmd).Msg("calling Snyk CLI")
 	output, err := c.doExecute(cmd, workingDir, true)
@@ -40,15 +42,8 @@ func (c SnykCli) Execute(cmd []string, workingDir string) (resp []byte, err erro
 }
 
 func (c SnykCli) doExecute(cmd []string, workingDir string, firstAttempt bool) ([]byte, error) {
-	if isIacCommand(cmd) {
-		Mutex.Lock()
-	}
-
 	command := c.getCommand(cmd, workingDir)
 	output, err := command.CombinedOutput()
-	if isIacCommand(cmd) {
-		Mutex.Unlock()
-	}
 	if err != nil {
 		ctx := context.Background()
 		shouldRetry := c.HandleErrors(ctx, string(output), err)

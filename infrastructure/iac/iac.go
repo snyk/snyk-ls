@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/gomarkdown/markdown"
 	"github.com/rs/zerolog/log"
@@ -41,6 +42,7 @@ type Scanner struct {
 	errorReporter error_reporting.ErrorReporter
 	analytics     ux2.Analytics
 	cli           cli.Executor
+	mutex         sync.Mutex
 }
 
 func New(instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux2.Analytics, cli cli.Executor) *Scanner {
@@ -49,6 +51,7 @@ func New(instrumentor performance.Instrumentor, errorReporter error_reporting.Er
 		errorReporter: errorReporter,
 		analytics:     analytics,
 		cli:           cli,
+		mutex:         sync.Mutex{},
 	}
 }
 
@@ -97,8 +100,9 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI) (
 	} else {
 		workspaceUri = uri.PathFromUri(documentURI)
 	}
-
+	iac.mutex.Lock()
 	res, err := iac.cli.Execute(iac.cliCmd(documentURI), workspaceUri)
+	iac.mutex.Unlock()
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:
