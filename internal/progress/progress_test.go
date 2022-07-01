@@ -72,3 +72,23 @@ func TestEndProgress(t *testing.T) {
 
 	assert.Equal(t, output, <-channel)
 }
+
+func TestEndProgressTwice(t *testing.T) {
+	output := lsp.ProgressParams{
+		Token: "token",
+		Value: lsp.WorkDoneProgressEnd{
+			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "end"},
+			Message:              "end message",
+		},
+	}
+
+	channel := make(chan lsp.ProgressParams, 2)
+	progress := NewTestingTracker(channel, nil)
+
+	workProgressEnd := output.Value.(lsp.WorkDoneProgressEnd)
+	progress.End(workProgressEnd.Message)
+
+	assert.Panics(t, func() {
+		progress.End(workProgressEnd.Message)
+	})
+}

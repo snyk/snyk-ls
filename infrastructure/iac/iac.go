@@ -68,16 +68,24 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string, _ []string)
 	p.Begin("Scanning for Snyk IaC issues", path)
 	defer p.End("Snyk Iac Scan completed.")
 
-	scanResults, err := iac.doScan(ctx, documentURI)
+	var workspacePath string
+	if uri.IsDirectory(documentURI) {
+		workspacePath = uri.PathFromUri(documentURI)
+	} else {
+		workspacePath = filepath.Dir(uri.PathFromUri(documentURI))
+	}
+
+	scanResults, err := iac.doScan(ctx, documentURI, workspacePath)
 	p.Report(80)
 	if err != nil {
 		iac.errorReporter.CaptureError(err)
 	}
 	if len(scanResults) > 0 {
-		issues = iac.retrieveAnalysis(scanResults[0])
+		for _, s := range scanResults {
+			issues = append(issues, iac.retrieveAnalysis(s, workspacePath)...)
+		}
 	}
 	iac.trackResult(err == nil)
-	p.End("Snyk Iac Scan completed.")
 	return issues
 }
 
@@ -86,27 +94,20 @@ func (iac *Scanner) isSupported(documentURI sglsp.DocumentURI) bool {
 	return uri.IsDirectory(documentURI) || extensions[ext]
 }
 
-func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI) (scanResults []iacScanResult, err error) {
+func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, workspacePath string) (scanResults []iacScanResult, err error) {
 	method := "iac.doScan"
 	s := iac.instrumentor.StartSpan(ctx, method)
 	defer iac.instrumentor.Finish(s)
 
-	defer log.Debug().Str("method", method).Msg("done.")
-	log.Debug().Str("method", method).Msg("started.")
-
-	var workspaceUri string
-	if !uri.IsDirectory(documentURI) {
-		workspaceUri = filepath.Dir(uri.PathFromUri(documentURI))
-	} else {
-		workspaceUri = uri.PathFromUri(documentURI)
-	}
 	iac.mutex.Lock()
-	res, err := iac.cli.Execute(iac.cliCmd(documentURI), workspaceUri)
-	iac.mutex.Unlock()
+	defer iac.mutex.Unlock()
+
+	res, err := iac.cli.Execute(iac.cliCmd(documentURI), workspacePath)
+
 	if err != nil {
-		switch err := err.(type) {
+		switch errorType := err.(type) {
 		case *exec.ExitError:
-			if err.ExitCode() > 1 {
+			if errorType.ExitCode() > 1 {
 				errorOutput := string(res)
 				if strings.Contains(errorOutput, "Could not find any valid IaC files") ||
 					strings.Contains(errorOutput, "CustomError: Not a recognised option did you mean --file") {
@@ -122,12 +123,12 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI) (
 	}
 
 	if uri.IsDirectory(documentURI) {
-		if err := json.Unmarshal(res, &scanResults); err != nil {
+		if err = json.Unmarshal(res, &scanResults); err != nil {
 			return nil, err
 		}
 	} else {
 		var scanResult iacScanResult
-		if err := json.Unmarshal(res, &scanResult); err != nil {
+		if err = json.Unmarshal(res, &scanResult); err != nil {
 			return nil, err
 		}
 		scanResults = append(scanResults, scanResult)
@@ -146,7 +147,10 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI) []string {
 	return cmd
 }
 
-func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult) []snyk.Issue {
+func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath string) []snyk.Issue {
+	targetFile := filepath.Join(workspacePath, scanResult.TargetFile)
+	log.Debug().Msgf("found %v IAC issues for file %s", len(scanResult.IacIssues), targetFile)
+
 	var issues []snyk.Issue
 
 	for _, issue := range scanResult.IacIssues {
@@ -156,7 +160,7 @@ func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult) []snyk.Issue {
 			issue.LineNumber = 0
 		}
 
-		issues = append(issues, iac.toIssue(scanResult.TargetFile, issue))
+		issues = append(issues, iac.toIssue(targetFile, issue))
 	}
 	return issues
 }
