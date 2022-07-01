@@ -20,6 +20,7 @@ import (
 )
 
 func Start() {
+	log.Debug().Msg("Starting server...")
 	var srv *jrpc2.Server
 	di.Init()
 
@@ -34,14 +35,18 @@ func Start() {
 		},
 		RPCLog:    RPCLogger{},
 		AllowPush: true,
-		//Concurrency: 10000,
 	})
 	initHandlers(srv, &handlers)
 
 	log.Info().Msg("Starting up...")
 	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
 
-	_ = srv.Wait()
+	status := srv.WaitStatus()
+	if status.Err != nil {
+		log.Err(status.Err).Msg("server stopped because of error")
+	} else {
+		log.Debug().Msgf("server stopped gracefully stopped=%s closed=%s", status.Stopped, status.Closed)
+	}
 	log.Info().Msg("Exiting...")
 }
 
