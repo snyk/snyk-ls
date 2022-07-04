@@ -193,7 +193,6 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
 
 	// remove cli for testing
-	install.Mutex.Lock()
 	installer := install.NewInstaller(error_reporting.NewTestErrorReporter())
 	for {
 		find, err := installer.Find()
@@ -207,7 +206,6 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 			break
 		}
 	}
-	install.Mutex.Unlock()
 	err := os.Unsetenv("SNYK_CLI_PATH")
 	if err != nil {
 		t.Fatal("couldn't unset environment")

@@ -65,14 +65,13 @@ func (sc *DelegatingConcurrentScanner) Scan(
 
 	//todo split into cli / auth preconditions and push down to appropriate infra layers
 	sc.initializer.WaitUntilCLIAndAuthReady(ctx)
-	var issues []Issue
 	for _, scanner := range sc.scanners {
 		if scanner.IsEnabled() {
 			go func(s ProductLineScanner) {
 				log.Debug().Msgf("Scanning %s with %T: STARTED", path, s)
+				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
 				foundIssues := s.Scan(ctx, path, legacyWorkspacePath, legacyFilesToScan)
-				issues = append(issues, foundIssues...)
-				processResults(issues)
+				processResults(foundIssues)
 				log.Debug().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
 			}(scanner)
 		} else {

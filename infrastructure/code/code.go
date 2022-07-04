@@ -88,10 +88,11 @@ func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath 
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.createBundle")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 	b = Bundle{
-		SnykCode:     sc.BundleUploader.SnykCode,
-		instrumentor: sc.BundleUploader.instrumentor,
-		requestId:    requestId,
-		rootPath:     rootPath,
+		SnykCode:      sc.BundleUploader.SnykCode,
+		instrumentor:  sc.BundleUploader.instrumentor,
+		requestId:     requestId,
+		rootPath:      rootPath,
+		errorReporter: sc.errorReporter,
 	}
 
 	fileHashes := make(map[string]string)

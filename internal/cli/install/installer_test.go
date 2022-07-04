@@ -53,8 +53,6 @@ func TestInstaller_Find_emptyPath(t *testing.T) {
 }
 
 func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
-	Mutex.Lock()
-	defer Mutex.Unlock()
 	r := getTestAsset()
 
 	lockFileName := config.CurrentConfig().CLIDownloadLockFileName()

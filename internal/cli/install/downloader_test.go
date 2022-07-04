@@ -14,8 +14,6 @@ import (
 
 func TestDownloader_Download(t *testing.T) {
 	testutil.IntegTest(t)
-	Mutex.Lock()
-	defer Mutex.Unlock()
 	r := getTestAsset()
 	progressCh := make(chan lsp.ProgressParams, 100000)
 	cancelProgressCh := make(chan lsp.ProgressToken, 1)
@@ -40,8 +38,6 @@ func TestDownloader_Download(t *testing.T) {
 
 func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	testutil.UnitTest(t)
-	Mutex.Lock()
-	defer Mutex.Unlock()
 	progressCh := make(chan lsp.ProgressParams, 100000)
 	cancelProgressCh := make(chan lsp.ProgressToken, 1)
 	d := &Downloader{progressTracker: progress.NewTestingTracker(progressCh, cancelProgressCh)}
