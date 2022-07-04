@@ -152,3 +152,97 @@ func setupIgnoreWorkspace() (expectedPatterns string, tempDir string, ignoredFil
 	}
 	return expectedPatterns, tempDir, ignoredFilePath, notIgnoredFilePath, ignoredFileInDir
 }
+
+func TestProcessResults_SendsDiagnosticsAndHovers(t *testing.T) {
+	t.Skipf("test this once we have uniform abstractions for hover & diagnostics")
+	testutil.UnitTest(t)
+	hoverService := hover.NewTestHoverService()
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hoverService)
+
+	issues := []snyk.Issue{
+		{ID: "id1", AffectedFilePath: "path1"},
+		{ID: "id2", AffectedFilePath: "path2"},
+	}
+	f.processResults(issues)
+	// todo ideally there's a hover & diagnostic service that are symmetric and don't leak implementation details (e.g. channels)
+	//assert.hoverService.GetAll()
+}
+
+func TestProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
+	testutil.UnitTest(t)
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewTestHoverService())
+
+	f.processResults([]snyk.Issue{
+		{ID: "id1", AffectedFilePath: "path1"},
+		{ID: "id2", AffectedFilePath: "path2"},
+	})
+
+	assert.Equal(t, 2, f.documentDiagnosticCache.Length())
+	assert.NotNil(t, f.documentDiagnosticCache.Get("path1"))
+	assert.NotNil(t, f.documentDiagnosticCache.Get("path2"))
+	assert.Len(t, f.documentDiagnosticCache.Get("path1"), 1)
+	assert.Len(t, f.documentDiagnosticCache.Get("path2"), 1)
+}
+
+func TestProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
+	testutil.UnitTest(t)
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewTestHoverService())
+
+	f.processResults([]snyk.Issue{
+		{ID: "id1", AffectedFilePath: "path1"},
+		{ID: "id2", AffectedFilePath: "path1"},
+	})
+
+	assert.Equal(t, 1, f.documentDiagnosticCache.Length())
+	assert.NotNil(t, f.documentDiagnosticCache.Get("path1"))
+	assert.Len(t, f.documentDiagnosticCache.Get("path1"), 2)
+}
+
+func TestProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
+	testutil.UnitTest(t)
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewTestHoverService())
+
+	f.processResults([]snyk.Issue{
+		{ID: "id1", AffectedFilePath: "path1"},
+		{ID: "id2", AffectedFilePath: "path2"},
+	})
+	f.processResults([]snyk.Issue{{ID: "id3", AffectedFilePath: "path3"}})
+
+	assert.Equal(t, 3, f.documentDiagnosticCache.Length())
+	assert.NotNil(t, f.documentDiagnosticCache.Get("path1"))
+	assert.NotNil(t, f.documentDiagnosticCache.Get("path2"))
+	assert.NotNil(t, f.documentDiagnosticCache.Get("path3"))
+}
+
+func TestProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
+	testutil.UnitTest(t)
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewTestHoverService())
+
+	f.processResults([]snyk.Issue{
+		{ID: "id1", AffectedFilePath: "path1"},
+		{ID: "id2", AffectedFilePath: "path1"},
+	})
+	f.processResults([]snyk.Issue{{ID: "id3", AffectedFilePath: "path1"}})
+
+	assert.Equal(t, 1, f.documentDiagnosticCache.Length())
+	assert.NotNil(t, f.documentDiagnosticCache.Get("path1"))
+	assert.Len(t, f.documentDiagnosticCache.Get("path1"), 3)
+}
+
+func TestProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing.T) {
+	testutil.UnitTest(t)
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewTestHoverService())
+
+	f.processResults([]snyk.Issue{
+		{ID: "id1", AffectedFilePath: "path1"},
+		{ID: "id2", AffectedFilePath: "path1"},
+	})
+	f.processResults([]snyk.Issue{
+		{ID: "id1", AffectedFilePath: "path1"},
+		{ID: "id3", AffectedFilePath: "path1"},
+	})
+
+	assert.Equal(t, 1, f.documentDiagnosticCache.Length())
+	assert.NotNil(t, f.documentDiagnosticCache.Get("path1"))
+	assert.Len(t, f.documentDiagnosticCache.Get("path1"), 3)
+}

@@ -179,21 +179,39 @@ func (f *Folder) documentDiagnosticsFromCache(file string) []snyk.Issue {
 
 func (f *Folder) processResults(issues []snyk.Issue) {
 	var issuesByFile = map[string][]snyk.Issue{}
-
+	dedupMap := f.createDedupMap()
 	for _, issue := range issues {
-		currentIssues := f.documentDiagnosticCache.Get(issue.AffectedFilePath)
-		needsToRefreshCache := issuesByFile[issue.AffectedFilePath] == nil
-		if needsToRefreshCache || currentIssues == nil {
-			currentIssues = []snyk.Issue{}
+		cachedIssues := f.documentDiagnosticCache.Get(issue.AffectedFilePath)
+		if cachedIssues == nil {
+			cachedIssues = []snyk.Issue{}
 		}
-		currentIssues = append(currentIssues.([]snyk.Issue), issue)
-
-		f.documentDiagnosticCache.Put(issue.AffectedFilePath, currentIssues)
-		issuesByFile[issue.AffectedFilePath] = currentIssues.([]snyk.Issue)
+		if !dedupMap[f.getUniqueIssueID(issue)] {
+			cachedIssues = append(cachedIssues.([]snyk.Issue), issue)
+		}
+		f.documentDiagnosticCache.Put(issue.AffectedFilePath, cachedIssues)
+		issuesByFile[issue.AffectedFilePath] = cachedIssues.([]snyk.Issue)
 	}
 
 	f.processDiagnostics(issuesByFile)
 	f.processHovers(issuesByFile)
+}
+
+func (f *Folder) createDedupMap() (dedupMap map[string]bool) {
+	dedupMap = make(map[string]bool)
+	f.documentDiagnosticCache.Range(func(key interface{}, value interface{}) bool {
+		issues := value.([]snyk.Issue)
+		for _, issue := range issues {
+			uniqueID := f.getUniqueIssueID(issue)
+			dedupMap[uniqueID] = true
+		}
+		return true
+	})
+	return dedupMap
+}
+
+func (f *Folder) getUniqueIssueID(issue snyk.Issue) string {
+	uniqueID := issue.ID + "|" + issue.AffectedFilePath
+	return uniqueID
 }
 
 func (f *Folder) processDiagnostics(issuesByFile map[string][]snyk.Issue) {
