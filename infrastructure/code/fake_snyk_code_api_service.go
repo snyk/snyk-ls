@@ -21,8 +21,7 @@ const (
 )
 
 var (
-	mutex             = &sync.Mutex{}
-	fakeDiagnosticUri string
+	mutex = &sync.Mutex{}
 
 	fakeRange = snyk.Range{
 		Start: snyk.Position{
@@ -54,7 +53,6 @@ func FakeDiagnosticUri() (filePath string, path string) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't create fake diagnostic file for Snyk Code Fake Service")
 	}
-	fakeDiagnosticUri = filePath
 	FakeIssue.AffectedFilePath = filePath
 	return filePath, temp
 }

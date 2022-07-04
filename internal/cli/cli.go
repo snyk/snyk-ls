@@ -80,10 +80,6 @@ func (c SnykCli) addConfigValuesToEnv(env []string) (updatedEnv []string) {
 	return
 }
 
-func isIacCommand(cmd []string) bool {
-	return len(cmd) > 1 && cmd[1] == "iac"
-}
-
 func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
 	var additionalParams []string
 	settings := config.CurrentConfig().CliSettings()
