@@ -10,8 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/config"
-
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -31,7 +31,7 @@ func TestInstaller_Find(t *testing.T) {
 
 	t.Setenv("PATH", cliDir)
 
-	i := NewInstaller()
+	i := NewInstaller(error_reporting.NewTestErrorReporter())
 
 	execPath, err := i.Find()
 
@@ -44,7 +44,7 @@ func TestInstaller_Find_emptyPath(t *testing.T) {
 	t.Skipf("removes real binaries from user directory")
 
 	t.Setenv("PATH", "")
-	i := NewInstaller()
+	i := NewInstaller(error_reporting.NewTestErrorReporter())
 
 	execPath, err := i.Find()
 
@@ -53,8 +53,6 @@ func TestInstaller_Find_emptyPath(t *testing.T) {
 }
 
 func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
-	Mutex.Lock()
-	defer Mutex.Unlock()
 	r := getTestAsset()
 
 	lockFileName := config.CurrentConfig().CLIDownloadLockFileName()
@@ -64,8 +62,8 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 	}
 	file.Close()
 
-	i := NewInstaller()
-	_, err = i.installRelease(r, context.Background())
+	i := NewInstaller(error_reporting.NewTestErrorReporter())
+	_, err = i.installRelease(r)
 
 	assert.Error(t, err)
 }
@@ -73,16 +71,13 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 	testutil.UnitTest(t)
 	// prepare
-	i := NewInstaller()
+	i := NewInstaller(error_reporting.NewTestErrorReporter())
 
 	temp := t.TempDir()
 	fakeCliFile := testutil.CreateTempFile(temp, t)
-	err := config.CurrentConfig().SetCliPath(fakeCliFile.Name())
-	if err != nil {
-		t.Fatal(t, err, "Error setting CLI path")
-	}
+	config.CurrentConfig().SetCliPath(fakeCliFile.Name())
 	defer func() {
-		_ = config.CurrentConfig().SetCliPath("")
+		config.CurrentConfig().SetCliPath("")
 	}()
 
 	checksum, err := getChecksum(fakeCliFile.Name())
@@ -124,7 +119,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 
 	// prepare
 	ctx := context.Background()
-	i := NewInstaller()
+	i := NewInstaller(error_reporting.NewTestErrorReporter())
 
 	lsPath := config.CurrentConfig().LsPath()
 
@@ -140,12 +135,9 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 		_ = os.Remove(f)
 	}(cliFilePath)
 
-	err = config.CurrentConfig().SetCliPath(cliFilePath)
-	if err != nil {
-		t.Fatal(t, err, "Error setting CLI path")
-	}
+	config.CurrentConfig().SetCliPath(cliFilePath)
 	defer func() {
-		_ = config.CurrentConfig().SetCliPath("")
+		config.CurrentConfig().SetCliPath("")
 	}()
 
 	r := NewCLIRelease()

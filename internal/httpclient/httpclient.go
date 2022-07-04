@@ -9,7 +9,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/snyk/snyk-ls/config"
+	"github.com/snyk/snyk-ls/application/config"
 )
 
 func NewHTTPClient() *http.Client {

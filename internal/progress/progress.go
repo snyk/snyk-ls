@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	"github.com/snyk/snyk-ls/lsp"
+	"github.com/snyk/snyk-ls/presentation/lsp"
 )
 
 var Channel = make(chan lsp.ProgressParams, 100)
@@ -18,6 +18,7 @@ type Tracker struct {
 	token         lsp.ProgressToken
 	cancellable   bool
 	lastReport    time.Time
+	finished      bool
 }
 
 func NewTestingTracker(channel chan lsp.ProgressParams, cancelChannel chan lsp.ProgressToken) *Tracker {
@@ -34,6 +35,7 @@ func NewTracker(cancellable bool) *Tracker {
 		channel:       Channel,
 		cancelChannel: CancelProgressChannel,
 		cancellable:   cancellable,
+		finished:      false,
 	}
 }
 
@@ -66,6 +68,10 @@ func (t *Tracker) Report(percentage int) {
 }
 
 func (t *Tracker) End(message string) {
+	if t.finished {
+		panic("Called end progress twice. This breaks LSP in Eclipse fix me now and avoid headaches later")
+	}
+	t.finished = true
 	progress := lsp.ProgressParams{
 		Token: t.token,
 		Value: lsp.WorkDoneProgressEnd{

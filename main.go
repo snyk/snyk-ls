@@ -9,9 +9,9 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/di"
-	"github.com/snyk/snyk-ls/server"
+	config2 "github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/application/server"
 )
 
 func main() {
@@ -29,7 +29,7 @@ func main() {
 		fmt.Println(err, output)
 		os.Exit(1)
 	}
-	log.Info().Msg(config.Version)
+	log.Info().Msg(config2.Version)
 	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
 	server.Start()
 }
@@ -43,8 +43,8 @@ func parseFlags(args []string) (string, error) {
 	logPathFlag := flags.String("f", "", "sets the log file for the language server")
 	formatFlag := flags.String(
 		"o",
-		config.FormatMd,
-		"sets format of diagnostics. Accepted values \""+config.FormatMd+"\" and \""+config.FormatHtml+"\"")
+		config2.FormatMd,
+		"sets format of diagnostics. Accepted values \""+config2.FormatMd+"\" and \""+config2.FormatHtml+"\"")
 	configFlag := flags.String(
 		"c",
 		"",
@@ -58,7 +58,7 @@ func parseFlags(args []string) (string, error) {
 	if err != nil {
 		return buf.String(), err
 	}
-	c := config.New()
+	c := config2.New()
 
 	c.SetConfigFile(*configFlag)
 	c.Load()
@@ -67,10 +67,10 @@ func parseFlags(args []string) (string, error) {
 	c.ConfigureLogging(*logLevelFlag)
 
 	c.SetFormat(*formatFlag)
-	if os.Getenv(config.SendErrorReportsKey) == "" {
+	if os.Getenv(config2.SendErrorReportsKey) == "" {
 		c.SetErrorReportingEnabled(*reportErrorsFlag)
 	}
 
-	config.SetCurrentConfig(c)
+	config2.SetCurrentConfig(c)
 	return buf.String(), nil
 }

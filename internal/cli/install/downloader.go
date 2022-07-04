@@ -12,18 +12,19 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog/log"
 
-	"github.com/snyk/snyk-ls/config"
-	"github.com/snyk/snyk-ls/di"
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/httpclient"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 
 type Downloader struct {
 	progressTracker *progress.Tracker
+	errorReporter   error_reporting.ErrorReporter
 }
 
-func NewDownloader() *Downloader {
-	return &Downloader{progressTracker: progress.NewTracker(true)}
+func NewDownloader(errorReporter error_reporting.ErrorReporter) *Downloader {
+	return &Downloader{progressTracker: progress.NewTracker(true), errorReporter: errorReporter}
 }
 
 // writeCounter counts the number of bytes written to it.
@@ -113,7 +114,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		di.ErrorReporter().CaptureError(err)
+		d.errorReporter.CaptureError(err)
 		return fmt.Errorf("failed to %s Snyk CLI from %q: %s", kindStr, downloadURL, resp.Status)
 	}
 	executablePath := cliDiscovery.ExecutableName(isUpdate)
