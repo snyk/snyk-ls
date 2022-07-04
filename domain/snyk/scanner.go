@@ -2,7 +2,6 @@ package snyk
 
 import (
 	"context"
-	"sync"
 
 	"github.com/rs/zerolog/log"
 
@@ -67,22 +66,18 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	//todo split into cli / auth preconditions and push down to appropriate infra layers
 	sc.initializer.WaitUntilCLIAndAuthReady(ctx)
 	var issues []Issue
-	wg := sync.WaitGroup{}
 	for _, scanner := range sc.scanners {
 		if scanner.IsEnabled() {
-			wg.Add(1)
 			go func(s ProductLineScanner) {
 				log.Debug().Msgf("Scanning %s with %T: STARTED", path, s)
 				foundIssues := s.Scan(ctx, path, legacyWorkspacePath, legacyFilesToScan)
 				issues = append(issues, foundIssues...)
-				wg.Done()
+				processResults(issues)
 				log.Debug().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
 			}(scanner)
 		} else {
 			log.Debug().Msgf("Skipping scan with %T because it is not enabled", scanner)
 		}
 	}
-	wg.Wait()
 	log.Debug().Msgf("Scanning %s complete", path)
-	processResults(issues)
 }
