@@ -5,9 +5,9 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
-	"github.com/snyk/snyk-ls/internal/preconditions"
 )
 
 type Scanner interface {
@@ -25,13 +25,13 @@ type Scanner interface {
 //DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
 type DelegatingConcurrentScanner struct {
 	scanners     []ProductLineScanner
-	initializer  *preconditions.EnvironmentInitializer
+	initializer  initialize.Initializer
 	instrumentor performance.Instrumentor
 	analytics    ux2.Analytics
 }
 
 func NewDelegatingScanner(
-	initializer *preconditions.EnvironmentInitializer,
+	initializer initialize.Initializer,
 	instrumentor performance.Instrumentor,
 	analytics ux2.Analytics,
 	scanners ...ProductLineScanner,
@@ -64,7 +64,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	)
 
 	//todo split into cli / auth preconditions and push down to appropriate infra layers
-	sc.initializer.WaitUntilCLIAndAuthReady(ctx)
+	sc.initializer.Init()
 	for _, scanner := range sc.scanners {
 		if scanner.IsEnabled() {
 			go func(s ProductLineScanner) {

@@ -132,3 +132,17 @@ func TestWorkspaceDidChangeConfiguration_UpdateSendTelemetry(t *testing.T) {
 
 	assert.Equal(t, true, config.CurrentConfig().IsTelemetryEnabled())
 }
+
+func TestWorkspaceDidChangeConfiguration_UpdateAutoUpdate(t *testing.T) {
+	loc := setupServer(t)
+
+	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
+		ManageBinariesAutomatically: "true",
+	}}
+	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
+	if err != nil {
+		t.Fatal(t, err, "error calling server")
+	}
+
+	assert.Equal(t, true, config.CurrentConfig().ManageBinariesAutomatically())
+}

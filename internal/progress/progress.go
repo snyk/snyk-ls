@@ -21,7 +21,7 @@ type Tracker struct {
 	finished      bool
 }
 
-func NewTestingTracker(channel chan lsp.ProgressParams, cancelChannel chan lsp.ProgressToken) *Tracker {
+func NewTestTracker(channel chan lsp.ProgressParams, cancelChannel chan lsp.ProgressToken) *Tracker {
 	return &Tracker{
 		channel:       channel,
 		cancelChannel: cancelChannel,

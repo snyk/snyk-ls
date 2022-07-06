@@ -19,6 +19,7 @@ import (
 type Installer interface {
 	Find() (string, error)
 	Install(ctx context.Context) (string, error)
+	Update(ctx context.Context) (bool, error)
 }
 
 type Install struct {
@@ -205,4 +206,27 @@ func cleanupLockFile(lockFileName string) {
 	if err != nil {
 		log.Error().Str("method", "Download").Str("lockfile", lockFileName).Msg("couldn't clean up lockfile")
 	}
+}
+
+type TestInstaller struct {
+	Updates  int
+	Installs int
+}
+
+func (t *TestInstaller) Find() (string, error) {
+	return "", nil
+}
+
+func (t *TestInstaller) Install(ctx context.Context) (string, error) {
+	t.Installs++
+	return "", nil
+}
+
+func (t *TestInstaller) Update(ctx context.Context) (bool, error) {
+	t.Updates++
+	return true, nil
+}
+
+func NewTestInstaller() *TestInstaller {
+	return &TestInstaller{}
 }

@@ -10,7 +10,7 @@ import (
 
 func TestBeginProgress(t *testing.T) {
 	channel := make(chan lsp.ProgressParams, 2)
-	progress := NewTestingTracker(channel, nil)
+	progress := NewTestTracker(channel, nil)
 
 	progress.Begin("title", "message")
 
@@ -47,7 +47,7 @@ func TestReportProgress(t *testing.T) {
 		},
 	}
 	channel := make(chan lsp.ProgressParams, 2)
-	progress := NewTestingTracker(channel, nil)
+	progress := NewTestTracker(channel, nil)
 
 	workProgressReport := output.Value.(lsp.WorkDoneProgressReport)
 	progress.Report(workProgressReport.Percentage)
@@ -65,7 +65,7 @@ func TestEndProgress(t *testing.T) {
 	}
 
 	channel := make(chan lsp.ProgressParams, 2)
-	progress := NewTestingTracker(channel, nil)
+	progress := NewTestTracker(channel, nil)
 
 	workProgressEnd := output.Value.(lsp.WorkDoneProgressEnd)
 	progress.End(workProgressEnd.Message)
@@ -83,7 +83,7 @@ func TestEndProgressTwice(t *testing.T) {
 	}
 
 	channel := make(chan lsp.ProgressParams, 2)
-	progress := NewTestingTracker(channel, nil)
+	progress := NewTestTracker(channel, nil)
 
 	workProgressEnd := output.Value.(lsp.WorkDoneProgressEnd)
 	progress.End(workProgressEnd.Message)

@@ -24,6 +24,7 @@ func WorkspaceDidChangeConfiguration() jrpc2.Handler {
 		updatePath(params)
 		updateTelemetry(params)
 		updateOrganization(params)
+		manageBinariesAutomatically(params)
 		return nil, nil
 	})
 }
@@ -47,6 +48,14 @@ func updateTelemetry(params lsp.DidChangeConfigurationParams) {
 		log.Err(err).Msgf("couldn't read send error reports %s", params.Settings.SendErrorReports)
 	}
 	config.CurrentConfig().SetTelemetryEnabled(parseBool)
+}
+
+func manageBinariesAutomatically(params lsp.DidChangeConfigurationParams) {
+	parseBool, err := strconv.ParseBool(params.Settings.ManageBinariesAutomatically)
+	if err != nil {
+		log.Err(err).Msgf("couldn't read manage binaries automatically %s", params.Settings.ManageBinariesAutomatically)
+	}
+	config.CurrentConfig().SetManageBinariesAutomatically(parseBool)
 }
 
 // TODO store in config, move parsing to CLI

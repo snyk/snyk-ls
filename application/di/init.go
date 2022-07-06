@@ -8,19 +8,20 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	error_reporting2 "github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	performance2 "github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	cli2 "github.com/snyk/snyk-ls/infrastructure/cli"
+	auth2 "github.com/snyk/snyk-ls/infrastructure/cli/auth"
+	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	code2 "github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/iac"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
 	"github.com/snyk/snyk-ls/infrastructure/segment"
 	sentry2 "github.com/snyk/snyk-ls/infrastructure/sentry"
 	snyk_api "github.com/snyk/snyk-ls/infrastructure/snyk_api"
-	"github.com/snyk/snyk-ls/internal/cli"
-	"github.com/snyk/snyk-ls/internal/cli/auth"
-	"github.com/snyk/snyk-ls/internal/preconditions"
 )
 
 var snykApiClient snyk_api.SnykApiClient
@@ -29,13 +30,13 @@ var snykCodeBundleUploader *code2.BundleUploader
 var snykCodeScanner *code2.Scanner
 var infrastructureAsCodeScanner *iac.Scanner
 var openSourceScanner *oss.Scanner
-var environmentInitializer *preconditions.EnvironmentInitializer
-var authenticator *auth.Authenticator
+var environmentInitializer initialize.Initializer
+var authenticator *auth2.Authenticator
 
 var instrumentor performance2.Instrumentor
 var errorReporter error_reporting2.ErrorReporter
 var analytics ux2.Analytics
-var snykCli cli.Executor
+var snykCli cli2.Executor
 
 var hoverService hover.Service
 var scanner snyk.Scanner
@@ -70,14 +71,17 @@ func initInfrastructure() {
 	}
 	snykApiClient = snyk_api.NewSnykApiClient(endpoint)
 	analytics = analyticsFactory(snykApiClient)
-	authenticator = auth.New(errorReporter)
-	snykCli = cli.NewExecutor(authenticator)
+	authenticator = auth2.New(errorReporter)
+	snykCli = cli2.NewExecutor(authenticator)
 	snykCodeClient = code2.NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), instrumentor, errorReporter)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
 	snykCodeScanner = code2.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics)
-	environmentInitializer = preconditions.New(authenticator, errorReporter)
+	environmentInitializer = initialize.NewDelegatingInitializer(
+		cli2.NewInitializer(errorReporter, install.NewInstaller(errorReporter)),
+		auth2.NewInitializer(authenticator),
+	)
 }
 
 func analyticsFactory(apiClient snyk_api.SnykApiClient) ux2.Analytics {
@@ -106,11 +110,14 @@ func TestInit(t *testing.T) {
 	analytics = ux2.NewTestAnalytics()
 	instrumentor = performance2.NewTestInstrumentor()
 	errorReporter = error_reporting2.NewTestErrorReporter()
-	authenticator = auth.New(errorReporter)
-	environmentInitializer = preconditions.New(authenticator, errorReporter)
+	authenticator = auth2.New(errorReporter)
+	environmentInitializer = initialize.NewDelegatingInitializer(
+		cli2.NewInitializer(errorReporter, install.NewInstaller(errorReporter)),
+		auth2.NewInitializer(authenticator),
+	)
 	fakeClient := &code2.FakeSnykCodeClient{}
 	snykCodeClient = fakeClient
-	snykCli = cli.NewExecutor(authenticator)
+	snykCli = cli2.NewExecutor(authenticator)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	fakeApiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
 	snykCodeScanner = code2.New(snykCodeBundleUploader, fakeApiClient, errorReporter, analytics)
@@ -140,7 +147,7 @@ func ErrorReporter() error_reporting2.ErrorReporter {
 	return errorReporter
 }
 
-func SnykCli() cli.Executor {
+func SnykCli() cli2.Executor {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return snykCli
@@ -158,7 +165,7 @@ func Scanner() snyk.Scanner {
 	return scanner
 }
 
-func EnvironmentInitializer() *preconditions.EnvironmentInitializer {
+func Initializer() initialize.Initializer {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return environmentInitializer
