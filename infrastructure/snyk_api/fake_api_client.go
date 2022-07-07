@@ -1,4 +1,6 @@
-package code
+package snyk_api
+
+import "sync"
 
 const (
 	SastEnabledOperation = "sastEnabled"
@@ -9,6 +11,10 @@ type FakeApiClient struct {
 	Calls       map[string][][]interface{}
 	CodeEnabled bool
 }
+
+var (
+	mutex = &sync.Mutex{}
+)
 
 func (f *FakeApiClient) addCall(params []interface{}, op string) {
 	mutex.Lock()

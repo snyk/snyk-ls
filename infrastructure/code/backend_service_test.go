@@ -3,12 +3,10 @@ package code
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/pact-foundation/pact-go/dsl"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
@@ -41,11 +39,10 @@ const (
     }
   }
 }`
-	pactDir = "./pacts"
 )
 
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
-	testutil.IntegTest(t)
+	testutil.SmokeTest(t)
 
 	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	files := map[string]string{}
@@ -57,7 +54,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 }
 
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
-	testutil.IntegTest(t)
+	testutil.SmokeTest(t)
 	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	var removedFiles []string
 	files := map[string]string{}
@@ -85,8 +82,8 @@ func createTestExtendMap() map[string]BundleFile {
 	return filesExtend
 }
 
-func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
-	testutil.IntegTest(t)
+func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
+	testutil.SmokeTest(t)
 
 	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	shardKey := util.Hash([]byte("/"))
@@ -107,15 +104,12 @@ func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
 			limitToFiles: limitToFiles,
 			severity:     0,
 		}
-		d, callStatus, err := s.RunAnalysis(context.Background(), analysisOptions)
+		issues, callStatus, err := s.RunAnalysis(context.Background(), analysisOptions)
 		if err != nil {
 			return false
 		}
-		if callStatus.message == "COMPLETE" && d != nil {
-			returnValue := assert.NotEqual(t, 0, len(d))
-			if returnValue {
-				return true
-			}
+		if callStatus.message == "COMPLETE" && issues != nil {
+			return assert.NotEqual(t, 0, len(issues))
 		}
 		return false
 	}, 120*time.Second, 2*time.Second)
@@ -149,39 +143,6 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 		},
 		issues[0],
 	)
-}
-
-func TestSnykCodeBackendService_GetFilters_returns(t *testing.T) {
-	testutil.UnitTest(t)
-	pact := testutil.Pact(t, pactDir, "SnykCodeApi")
-
-	pact.AddInteraction().WithRequest(dsl.Request{
-		Method: "GET",
-		Path:   dsl.String("/filters"),
-		Headers: dsl.MapMatcher{
-			"Content-Type":    dsl.String("application/json"),
-			"snyk-request-id": dsl.Regex("fc763eba-0905-41c5-a27f-3934ab26786c", `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`),
-		},
-	}).WillRespondWith(dsl.Response{
-		Status: 200,
-		Headers: dsl.MapMatcher{
-			"Content-Type": dsl.String("application/json"),
-		},
-		Body: dsl.Match(filtersResponse{}),
-	})
-
-	test := func() error {
-		s := NewHTTPRepository(fmt.Sprintf("http://localhost:%d", pact.Server.Port), performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
-		if _, _, err := s.GetFilters(context.Background()); err != nil {
-			return err
-		}
-
-		return nil
-	}
-
-	err := pact.Verify(test)
-
-	assert.NoError(t, err)
 }
 
 func TestSnykCodeBackendService_analysisRequestBody_FillsOrgParameter(t *testing.T) {

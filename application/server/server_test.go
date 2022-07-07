@@ -333,27 +333,27 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	assert.Nil(t, w.GetFolderContaining(uri.PathFromUri(f.Uri)))
 }
 
-func Test_IntegrationWorkspaceScanOssAndCode(t *testing.T) {
+func Test_SmokeWorkspaceScanOssAndCode(t *testing.T) {
 	ossFile := "package.json"
 	codeFile := "app.js"
-	runIntegrationTest("https://github.com/snyk/goof", "0336589", ossFile, codeFile, t)
+	runSmokeTest("https://github.com/snyk/goof", "0336589", ossFile, codeFile, t)
 }
 
-func Test_IntegrationWorkspaceScanIacAndCode(t *testing.T) {
+func Test_SmokeWorkspaceScanIacAndCode(t *testing.T) {
 	iacFile := "main.tf"
 	codeFile := "app.js"
-	runIntegrationTest("https://github.com/deepcodeg/snykcon-goof.git", "eba8407", iacFile, codeFile, t)
+	runSmokeTest("https://github.com/deepcodeg/snykcon-goof.git", "eba8407", iacFile, codeFile, t)
 }
 
-func Test_IntegrationWorkspaceScanWithTwoUploadBatches(t *testing.T) {
+func Test_SmokeWorkspaceScanWithTwoUploadBatches(t *testing.T) {
 	ossFile := ""
 	codeFile := "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
-	runIntegrationTest("https://github.com/apache/maven", "18725ec1e", ossFile, codeFile, t)
+	runSmokeTest("https://github.com/apache/maven", "18725ec1e", ossFile, codeFile, t)
 }
 
-func runIntegrationTest(repo string, commit string, file1 string, file2 string, t *testing.T) {
+func runSmokeTest(repo string, commit string, file1 string, file2 string, t *testing.T) {
 	loc := setupServer(t)
-	testutil.IntegTest(t)
+	testutil.SmokeTest(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	config.CurrentConfig().SetSnykIacEnabled(true)
 	config.CurrentConfig().SetSnykOssEnabled(true)

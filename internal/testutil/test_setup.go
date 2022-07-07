@@ -11,16 +11,17 @@ import (
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 
-const integTestEnvVar = "INTEG_TESTS"
+const (
+	integTestEnvVar = "INTEG_TESTS"
+	smokeTestEnvVar = "SMOKE_TESTS"
+)
 
 func IntegTest(t *testing.T) {
-	t.Helper()
-	if os.Getenv(integTestEnvVar) == "" {
-		t.Logf("%s is not set", integTestEnvVar)
-		t.SkipNow()
-	}
-	config.SetCurrentConfig(config.New())
-	CLIDownloadLockFileCleanUp(t)
+	prepareTestHelper(t, integTestEnvVar)
+}
+
+func SmokeTest(t *testing.T) {
+	prepareTestHelper(t, smokeTestEnvVar)
 }
 
 func UnitTest(t *testing.T) {
@@ -93,4 +94,14 @@ func CreateDummyProgressListener(t *testing.T) {
 		}
 	}()
 
+}
+
+func prepareTestHelper(t *testing.T, envVar string) {
+	t.Helper()
+	if os.Getenv(envVar) == "" {
+		t.Logf("%s is not set", envVar)
+		t.SkipNow()
+	}
+	config.SetCurrentConfig(config.New())
+	CLIDownloadLockFileCleanUp(t)
 }

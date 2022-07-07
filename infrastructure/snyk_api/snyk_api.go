@@ -1,4 +1,4 @@
-package code
+package snyk_api
 
 import (
 	"bytes"

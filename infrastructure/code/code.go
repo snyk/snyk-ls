@@ -10,17 +10,18 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
 )
 
 type Scanner struct {
 	BundleUploader *BundleUploader
-	SnykApiClient  SnykApiClient
+	SnykApiClient  snyk_api.SnykApiClient
 	errorReporter  error_reporting.ErrorReporter
 	analytics      ux2.Analytics
 }
 
-func New(bundleUploader *BundleUploader, apiClient SnykApiClient, reporter error_reporting.ErrorReporter, analytics ux2.Analytics) *Scanner {
+func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter error_reporting.ErrorReporter, analytics ux2.Analytics) *Scanner {
 	sc := &Scanner{
 		BundleUploader: bundleUploader,
 		SnykApiClient:  apiClient,

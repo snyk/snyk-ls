@@ -15,6 +15,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	code2 "github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -86,7 +87,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 	t.Run("should create bundle when hash empty", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 		snykCodeMock := &code2.FakeSnykCodeClient{}
-		c := code2.New(code2.NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &code2.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
+		c := code2.New(code2.NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
 		path, firstDoc, _, content1, _ := setupDocs()
 		docs := []string{uri.PathFromUri(firstDoc.URI)}
 		defer os.RemoveAll(path)
@@ -103,7 +104,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 
 	t.Run("should retrieve from backend", func(t *testing.T) {
 		snykCodeMock := &code2.FakeSnykCodeClient{}
-		c := code2.New(code2.NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &code2.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
+		c := code2.New(code2.NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
 		diagnosticUri, path := code2.FakeDiagnosticUri()
 		defer os.RemoveAll(path)
 
@@ -123,7 +124,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 	t.Run("should track analytics", func(t *testing.T) {
 		snykCodeMock := &code2.FakeSnykCodeClient{}
 		analytics := ux2.NewTestAnalytics()
-		c := code2.New(code2.NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &code2.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), analytics)
+		c := code2.New(code2.NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), analytics)
 		diagnosticUri, path := code2.FakeDiagnosticUri()
 		defer os.RemoveAll(path)
 

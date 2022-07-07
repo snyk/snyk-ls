@@ -25,8 +25,9 @@ func NewTestingTracker(channel chan lsp.ProgressParams, cancelChannel chan lsp.P
 	return &Tracker{
 		channel:       channel,
 		cancelChannel: cancelChannel,
-		token:         "token",
-		cancellable:   true,
+		// deepcode ignore HardcodedPassword: false positive
+		token:       "token",
+		cancellable: true,
 	}
 }
 
