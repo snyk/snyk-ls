@@ -44,7 +44,7 @@ const (
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	testutil.SmokeTest(t)
 
-	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
+	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	files := map[string]string{}
 	files[path1] = util.Hash([]byte(content))
 	bundleHash, missingFiles, _ := s.CreateBundle(context.Background(), files)
@@ -55,7 +55,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	testutil.SmokeTest(t)
-	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
+	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	var removedFiles []string
 	files := map[string]string{}
 	files[path1] = util.Hash([]byte(content))
@@ -85,7 +85,7 @@ func createTestExtendMap() map[string]BundleFile {
 func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 	testutil.SmokeTest(t)
 
-	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
+	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []string
 	files := map[string]string{}
@@ -119,7 +119,7 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 // todo analysis test severities
 
 func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
-	s := NewHTTPRepository("", performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
+	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
 
 	var analysisResponse SarifResponse

@@ -19,7 +19,6 @@ import (
 const DefaultEndpointURL = "https://snyk.io/api"
 
 type SnykApiClientImpl struct {
-	host   string
 	client *http.Client
 }
 
@@ -50,9 +49,8 @@ type SnykApiClient interface {
 	GetActiveUser() (user ActiveUser, err error)
 }
 
-func NewSnykApiClient(host string) SnykApiClient {
+func NewSnykApiClient() SnykApiClient {
 	s := SnykApiClientImpl{
-		host:   host,
 		client: httpclient.NewHTTPClient(),
 	}
 	return &s
@@ -105,8 +103,9 @@ func (s *SnykApiClientImpl) GetActiveUser() (activeUser ActiveUser, err error) {
 }
 
 func (s *SnykApiClientImpl) doCall(method string, path string, requestBody []byte) (responseBody []byte, err error) {
+	host := config.CurrentConfig().SnykApi()
 	b := bytes.NewBuffer(requestBody)
-	req, err := http.NewRequest(method, s.host+path, b)
+	req, err := http.NewRequest(method, host+path, b)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +127,7 @@ func (s *SnykApiClientImpl) doCall(method string, path string, requestBody []byt
 		}
 	}(response.Body)
 	responseBody, err = ioutil.ReadAll(response.Body)
-	log.Trace().Str("responseBody", string(responseBody)).Msg("RECEIVED FROM REMOTE")
+	log.Trace().Str("response.Status", response.Status).Str("responseBody", string(responseBody)).Msg("RECEIVED FROM REMOTE")
 	if err != nil {
 		return nil, err
 	}

@@ -2,8 +2,10 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,12 +20,14 @@ import (
 )
 
 const (
-	cliPathKey         = "SNYK_CLI_PATH"
-	SnykTokenKey       = "SNYK_TOKEN"
-	deeproxyApiUrlKey  = "DEEPROXY_API_URL"
-	FormatHtml         = "html"
-	FormatMd           = "md"
-	snykCodeTimeoutKey = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
+	cliPathKey            = "SNYK_CLI_PATH"
+	SnykTokenKey          = "SNYK_TOKEN"
+	deeproxyApiUrlKey     = "DEEPROXY_API_URL"
+	FormatHtml            = "html"
+	FormatMd              = "md"
+	snykCodeTimeoutKey    = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
+	defaultSnykApiUrl     = "https://snyk.io/api"
+	defaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
 )
 
 var (
@@ -56,6 +60,7 @@ type Config struct {
 	logPath                     string
 	organization                string
 	snykCodeAnalysisTimeout     time.Duration
+	snykApiUrl                  string
 	snykCodeApiUrl              string
 	token                       string
 	cliPathAccessMutex          sync.Mutex
@@ -93,7 +98,8 @@ func New() *Config {
 	c.isSnykIacEnabled.Set(true)
 	c.manageBinariesAutomatically.Set(true)
 	c.logPath = ""
-	c.snykCodeApiUrl = snykCodeApiUrlFromEnv()
+	c.snykApiUrl = defaultSnykApiUrl
+	c.snykCodeApiUrl = defaultDeeproxyApiUrl
 	c.snykCodeAnalysisTimeout = snykCodeAnalysisTimeoutFromEnv()
 	c.token = tokenFromEnv()
 	c.clientSettingsFromEnv()
@@ -158,6 +164,7 @@ func (c *Config) IsSnykIacEnabled() bool                 { return c.isSnykIacEna
 func (c *Config) IsSnykContainerEnabled() bool           { return c.isSnykContainerEnabled.Get() }
 func (c *Config) IsSnykAdvisorEnabled() bool             { return c.isSnykAdvisorEnabled.Get() }
 func (c *Config) LogPath() string                        { return c.logPath }
+func (c *Config) SnykApi() string                        { return c.snykApiUrl }
 func (c *Config) SnykCodeApi() string                    { return c.snykCodeApiUrl }
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
 func (c *Config) Token() string                          { return c.token }
@@ -168,7 +175,42 @@ func (c *Config) SetCliPath(cliPath string) {
 	c.cliPath = cliPath
 }
 
-func (c *Config) SetCliSettings(settings CliSettings)   { c.cliSettings = settings }
+func (c *Config) SetCliSettings(settings CliSettings) {
+	if settings.Endpoint != c.cliSettings.Endpoint {
+		// Reset token
+		c.token = ""
+
+		// Update Snyk API endpoint
+		c.SetSnykApi(settings.Endpoint)
+
+		// Update Code API endpoint
+		snykCodeApiUrl, err := getCodeApiUrlFromCustomEndpoint(settings.Endpoint)
+		if err != nil {
+			log.Error().Err(err).Msg("Couldn't obtain Snyk Code API url from CLI endpoint.")
+		}
+
+		c.SetSnykCodeApi(snykCodeApiUrl)
+	}
+
+	c.cliSettings = settings
+}
+
+func (c *Config) SetSnykApi(snykApiUrl string) {
+	if snykApiUrl == "" {
+		c.snykApiUrl = defaultSnykApiUrl
+		return
+	}
+	c.snykApiUrl = snykApiUrl
+}
+
+func (c *Config) SetSnykCodeApi(snykCodeApiUrl string) {
+	if snykCodeApiUrl == "" {
+		c.snykCodeApiUrl = defaultDeeproxyApiUrl
+		return
+	}
+	c.snykCodeApiUrl = snykCodeApiUrl
+}
+
 func (c *Config) SetErrorReportingEnabled(enabled bool) { c.isErrorReportingEnabled.Set(enabled) }
 func (c *Config) SetSnykOssEnabled(enabled bool)        { c.isSnykOssEnabled.Set(enabled) }
 func (c *Config) SetSnykCodeEnabled(enabled bool)       { c.isSnykCodeEnabled.Set(enabled) }
@@ -213,12 +255,28 @@ func cliPathFromEnv() string { return os.Getenv(cliPathKey) }
 
 func tokenFromEnv() string { return os.Getenv(SnykTokenKey) }
 
-func snykCodeApiUrlFromEnv() string {
-	trim := strings.Trim(os.Getenv(deeproxyApiUrlKey), "/")
-	if trim == "" {
-		trim = "https://deeproxy.snyk.io"
+func getCodeApiUrlFromCustomEndpoint(endpoint string) (string, error) {
+	// Code API endpoint can be set via env variable for debugging using local API instance
+	deeproxyEnvVarUrl := strings.Trim(os.Getenv(deeproxyApiUrlKey), "/")
+	if deeproxyEnvVarUrl != "" {
+		return deeproxyEnvVarUrl, nil
 	}
-	return trim
+
+	if endpoint == "" {
+		return defaultDeeproxyApiUrl, nil
+	}
+
+	// Use Snyk API endpoint to determine deeproxy API URL
+	endpointUrl, err := url.Parse(strings.Trim(endpoint, " "))
+	if err != nil {
+		return "", err
+	}
+
+	m := regexp.MustCompile(`^(ap[pi]\.)?`)
+	endpointUrl.Host = m.ReplaceAllString(endpointUrl.Host, "deeproxy.")
+	endpointUrl.Path = ""
+
+	return endpointUrl.String(), nil
 }
 
 func snykCodeAnalysisTimeoutFromEnv() time.Duration {

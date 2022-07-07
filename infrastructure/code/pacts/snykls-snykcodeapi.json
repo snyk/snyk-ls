@@ -61,6 +61,43 @@
       }
     },
     {
+      "description": "Create bundle",
+      "providerState": "New bundle and invalid token",
+      "request": {
+        "method": "POST",
+        "path": "/bundle",
+        "headers": {
+          "Content-Encoding": "gzip",
+          "Content-Type": "application/octet-stream",
+          "Session-Token": "fc763eba-0905-41c5-a27f-3934ab26786c",
+          "snyk-request-id": "fc763eba-0905-41c5-a27f-3934ab26786c"
+        },
+        "body": "AA==",
+        "matchingRules": {
+          "$.headers.Session-Token": {
+            "match": "regex",
+            "regex": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+          },
+          "$.headers.snyk-request-id": {
+            "match": "regex",
+            "regex": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+          },
+          "$.body": {
+            "match": "type"
+          }
+        }
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8"
+        },
+        "body": {
+          "message": "Invalid auth token provided"
+        }
+      }
+    },
+    {
       "description": "Extend bundle",
       "providerState": "Existing bundle",
       "request": {

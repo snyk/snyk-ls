@@ -13,6 +13,12 @@
           }
         },
         "problemMatcher": []
+      },
+      {
+        "label": "Build for debug",
+        "type": "shell",
+        "command": "make build-debug",
+        "group": "build"
       }
     ]
 }

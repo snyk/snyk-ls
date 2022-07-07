@@ -9,6 +9,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -70,6 +71,41 @@ func TestSnykCodeBackendServicePact(t *testing.T) { // nolint:gocognit // this i
 			}
 
 			return nil
+		}
+
+		err := pact.Verify(test)
+
+		if err != nil {
+			t.Fatalf("Error on verify: %v", err)
+		}
+	})
+
+	t.Run("Create bundle with invalid token", func(t *testing.T) {
+		pact.AddInteraction().Given("New bundle and invalid token").UponReceiving("Create bundle").WithRequest(dsl.Request{
+			Method:  "POST",
+			Path:    dsl.String("/bundle"),
+			Headers: getPutPostHeaderMatcher(),
+			Body:    getPutPostBodyMatcher(),
+		}).WillRespondWith(dsl.Response{
+			Status: 401,
+			Headers: dsl.MapMatcher{
+				"Content-Type": dsl.String("application/json; charset=utf-8"),
+			},
+			Body: map[string]string{
+				"message": "Invalid auth token provided",
+			},
+		})
+
+		test := func() error {
+			files := make(map[string]string)
+			files[path1] = util.Hash([]byte(content))
+			_, _, err := client.CreateBundle(context.Background(), files)
+
+			if err != nil {
+				return nil
+			}
+
+			return fmt.Errorf("no error returned")
 		}
 
 		err := pact.Verify(test)
@@ -207,7 +243,9 @@ func setupPact() {
 	// Proactively start service to get access to the port
 	pact.Setup(true)
 
-	client = NewHTTPRepository(fmt.Sprintf("http://localhost:%d", pact.Server.Port), performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
+	config.CurrentConfig().SetSnykCodeApi(fmt.Sprintf("http://localhost:%d", pact.Server.Port))
+
+	client = NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 }
 
 func getPutPostHeaderMatcher() dsl.MapMatcher {

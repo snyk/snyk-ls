@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/presentation/lsp"
 )
 
@@ -18,18 +19,18 @@ func WorkspaceDidChangeConfiguration() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeConfigurationParams) (interface{}, error) {
 		log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("RECEIVED")
 		defer log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("DONE")
-		UpdateSettings(params.Settings)
+		UpdateSettings(ctx, params.Settings)
 		return nil, nil
 	})
 }
 
-func UpdateSettings(settings lsp.Settings) {
+func UpdateSettings(ctx context.Context, settings lsp.Settings) {
 	emptySettings := lsp.Settings{}
 	if settings == emptySettings {
 		return
 	}
 	updateProductEnablement(settings)
-	updateCliConfig(settings)
+	updateCliConfig(ctx, settings)
 	updateEnvironment(settings)
 	updatePath(settings)
 	updateTelemetry(settings)
@@ -90,7 +91,7 @@ func updateEnvironment(settings lsp.Settings) {
 	}
 }
 
-func updateCliConfig(settings lsp.Settings) {
+func updateCliConfig(ctx context.Context, settings lsp.Settings) {
 	var err error
 	cliSettings := config.CliSettings{}
 	cliSettings.Insecure, err = strconv.ParseBool(settings.Insecure)
@@ -99,6 +100,15 @@ func updateCliConfig(settings lsp.Settings) {
 	}
 	cliSettings.Endpoint = strings.Trim(settings.Endpoint, " ")
 	cliSettings.AdditionalParameters = strings.Split(settings.AdditionalParams, " ")
+
+	if cliSettings.Endpoint != config.CurrentConfig().CliSettings().Endpoint {
+		// Reset CLI token
+		err = di.Authenticator().ClearAuthentication(ctx) // TODO: check if ctx is correct
+		if err != nil {
+			log.Err(err).Msg("couldn't reset token")
+		}
+	}
+
 	config.CurrentConfig().SetCliSettings(cliSettings)
 }
 

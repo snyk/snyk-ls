@@ -72,9 +72,7 @@ func (c SnykCli) addConfigValuesToEnv(env []string) (updatedEnv []string) {
 	}
 
 	endpoint := config.CurrentConfig().CliSettings().Endpoint
-	if endpoint != "" {
-		updatedEnv = append(updatedEnv, "SNYK_API="+endpoint)
-	}
+	updatedEnv = append(updatedEnv, "SNYK_API="+endpoint)
 
 	updatedEnv = append(updatedEnv, "SNYK_TOKEN="+config.CurrentConfig().Token())
 	return
