@@ -17,23 +17,11 @@ const (
 )
 
 func IntegTest(t *testing.T) {
-	t.Helper()
-	if os.Getenv(integTestEnvVar) == "" {
-		t.Logf("%s is not set", integTestEnvVar)
-		t.SkipNow()
-	}
-	config.SetCurrentConfig(config.New())
-	CLIDownloadLockFileCleanUp(t)
+	prepareTestHelper(t, integTestEnvVar)
 }
 
 func SmokeTest(t *testing.T) {
-	t.Helper()
-	if os.Getenv(smokeTestEnvVar) == "" {
-		t.Logf("%s is not set", smokeTestEnvVar)
-		t.SkipNow()
-	}
-	config.SetCurrentConfig(config.New())
-	CLIDownloadLockFileCleanUp(t)
+	prepareTestHelper(t, smokeTestEnvVar)
 }
 
 func UnitTest(t *testing.T) {
@@ -106,4 +94,14 @@ func CreateDummyProgressListener(t *testing.T) {
 		}
 	}()
 
+}
+
+func prepareTestHelper(t *testing.T, envVar string) {
+	t.Helper()
+	if os.Getenv(envVar) == "" {
+		t.Logf("%s is not set", envVar)
+		t.SkipNow()
+	}
+	config.SetCurrentConfig(config.New())
+	CLIDownloadLockFileCleanUp(t)
 }

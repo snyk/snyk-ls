@@ -82,7 +82,7 @@ func createTestExtendMap() map[string]BundleFile {
 	return filesExtend
 }
 
-func TestSnykCodeBackendService_RunAnalysisIntegration(t *testing.T) {
+func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 	testutil.SmokeTest(t)
 
 	s := NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
