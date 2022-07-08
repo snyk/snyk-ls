@@ -28,17 +28,16 @@ func NewInitializer(errorReporter error_reporting.ErrorReporter, installer insta
 }
 
 func (i *Initializer) Init() {
-	if !config.CurrentConfig().ManageBinariesAutomatically() {
-		if !config.CurrentConfig().CliInstalled() {
-			notification.Send(sglsp.ShowMessageParams{Type: sglsp.Warning, Message: "Automatic CLI downloads are disabled and no CLI path is configured. Enable automatic downloads or set a valid CLI path."})
-		}
-		return
-	}
-
 	Mutex.Lock()
 	defer Mutex.Unlock()
 
 	cliInstalled := config.CurrentConfig().CliInstalled()
+	if !config.CurrentConfig().ManageBinariesAutomatically() {
+		if !cliInstalled {
+			notification.Send(sglsp.ShowMessageParams{Type: sglsp.Warning, Message: "Automatic CLI downloads are disabled and no CLI path is configured. Enable automatic downloads or set a valid CLI path."})
+		}
+		return
+	}
 
 	if cliInstalled && i.isOutdatedCli() {
 		go i.updateCli()
