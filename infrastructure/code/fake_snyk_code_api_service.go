@@ -33,7 +33,7 @@ var (
 			Character: 7,
 		},
 	}
-	FakeIssue = snyk.Issue{
+	fakeIssue = snyk.Issue{
 		ID:       "SNYK-123",
 		Range:    fakeRange,
 		Severity: snyk.High,
@@ -42,7 +42,17 @@ var (
 	FakeFilters = []string{".cjs", ".ejs", ".es", ".es6", ".htm", ".html", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".vue", ".java", ".erb", ".haml", ".rb", ".rhtml", ".slim", ".kt", ".swift", ".cls", ".config", ".pom", ".wxs", ".xml", ".xsd", ".aspx", ".cs", ".py", ".go", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".php", ".phtml"}
 )
 
+func FakeIssue() snyk.Issue {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	return fakeIssue
+}
+
 func FakeDiagnosticUri() (filePath string, path string) {
+	mutex.Lock()
+	defer mutex.Unlock()
+
 	temp, err := os.MkdirTemp(os.TempDir(), "fakeDiagnosticTempDir")
 	if err != nil {
 		log.Fatal().Err(err).Msg("couldn't create tempdir")
@@ -53,7 +63,7 @@ func FakeDiagnosticUri() (filePath string, path string) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't create fake diagnostic file for Snyk Code Fake Service")
 	}
-	FakeIssue.AffectedFilePath = filePath
+	fakeIssue.AffectedFilePath = filePath
 	return filePath, temp
 }
 
@@ -156,8 +166,8 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	params := []interface{}{options.bundleHash, options.limitToFiles, options.severity}
 	f.addCall(params, RunAnalysisOperation)
 
-	issues := []snyk.Issue{FakeIssue}
+	issues := []snyk.Issue{FakeIssue()}
 
-	log.Trace().Str("method", "RunAnalysis").Interface("fakeDiagnostic", FakeIssue).Msg("fake backend call received & answered")
+	log.Trace().Str("method", "RunAnalysis").Interface("fakeDiagnostic", FakeIssue()).Msg("fake backend call received & answered")
 	return issues, AnalysisStatus{message: "COMPLETE", percentage: 100}, nil
 }

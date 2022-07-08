@@ -112,7 +112,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 
 		assert.NotNil(t, issues)
 		assert.Equal(t, 1, len(issues))
-		assert.True(t, reflect.DeepEqual(code2.FakeIssue, issues[0]))
+		assert.True(t, reflect.DeepEqual(code2.FakeIssue(), issues[0]))
 
 		// verify that extend bundle has been called on backend service with additional file
 		params := snykCodeMock.GetCallParams(0, code2.RunAnalysisOperation)
