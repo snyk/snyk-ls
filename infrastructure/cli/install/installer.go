@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -209,8 +210,23 @@ func cleanupLockFile(lockFileName string) {
 }
 
 type TestInstaller struct {
-	Updates  int
-	Installs int
+	updates  int
+	installs int
+	mutex    sync.Mutex
+}
+
+func (t *TestInstaller) Updates() int {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	return t.updates
+}
+
+func (t *TestInstaller) Installs() int {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	return t.installs
 }
 
 func (t *TestInstaller) Find() (string, error) {
@@ -218,15 +234,23 @@ func (t *TestInstaller) Find() (string, error) {
 }
 
 func (t *TestInstaller) Install(ctx context.Context) (string, error) {
-	t.Installs++
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	t.installs++
 	return "", nil
 }
 
 func (t *TestInstaller) Update(ctx context.Context) (bool, error) {
-	t.Updates++
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	t.updates++
 	return true, nil
 }
 
 func NewTestInstaller() *TestInstaller {
-	return &TestInstaller{}
+	return &TestInstaller{
+		mutex: sync.Mutex{},
+	}
 }

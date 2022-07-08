@@ -51,7 +51,7 @@ func TestInitializer_whenNoCli_Installs(t *testing.T) {
 	go initializer.Init()
 
 	assert.Eventually(t, func() bool {
-		return installer.Installs > 0
+		return installer.Installs() > 0
 	}, time.Second, time.Millisecond)
 }
 
@@ -65,7 +65,7 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_DoesNotInstall(t *testing.T) {
 	time.Sleep(time.Second)
 
 	assert.Eventually(t, func() bool {
-		return installer.Installs == 0
+		return installer.Installs() == 0
 	}, time.Second, time.Millisecond)
 }
 
@@ -79,7 +79,7 @@ func TestInitializer_whenOutdated_Updates(t *testing.T) {
 	initializer.Init()
 
 	assert.Eventually(t, func() bool {
-		return installer.Updates == 1 && installer.Installs == 0
+		return installer.Updates() == 1 && installer.Installs() == 0
 	}, time.Second, time.Millisecond)
 }
 
@@ -94,7 +94,7 @@ func TestInitializer_whenUpToDate_DoesNotUpdates(t *testing.T) {
 	initializer.Init()
 
 	assert.Eventually(t, func() bool {
-		return installer.Updates == 0 && installer.Installs == 0
+		return installer.Updates() == 0 && installer.Installs() == 0
 	}, time.Second, time.Millisecond)
 }
 
@@ -109,7 +109,7 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_PreventsUpdate(t *testing.T) {
 	initializer.Init()
 
 	assert.Eventually(t, func() bool {
-		return installer.Updates == 0
+		return installer.Updates() == 0
 	}, time.Second, time.Millisecond)
 }
 
@@ -123,7 +123,7 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_PreventsInstall(t *testing.T) {
 	initializer.Init()
 
 	assert.Eventually(t, func() bool {
-		return installer.Installs == 0
+		return installer.Installs() == 0
 	}, time.Second, time.Millisecond)
 }
 
@@ -138,7 +138,7 @@ func TestInitializer_whenBinaryUpdatesAllowed_Updates(t *testing.T) {
 	initializer.Init()
 
 	assert.Eventually(t, func() bool {
-		return installer.Updates == 1 && installer.Installs == 0
+		return installer.Updates() == 1 && installer.Installs() == 0
 	}, time.Second, time.Millisecond)
 }
 
