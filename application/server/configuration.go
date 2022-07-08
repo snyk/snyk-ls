@@ -54,8 +54,9 @@ func manageBinariesAutomatically(params lsp.DidChangeConfigurationParams) {
 	parseBool, err := strconv.ParseBool(params.Settings.ManageBinariesAutomatically)
 	if err != nil {
 		log.Err(err).Msgf("couldn't read manage binaries automatically %s", params.Settings.ManageBinariesAutomatically)
+	} else {
+		config.CurrentConfig().SetManageBinariesAutomatically(parseBool)
 	}
-	config.CurrentConfig().SetManageBinariesAutomatically(parseBool)
 }
 
 // TODO store in config, move parsing to CLI

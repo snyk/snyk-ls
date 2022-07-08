@@ -90,6 +90,7 @@ func New() *Config {
 	c.isErrorReportingEnabled.Set(false)
 	c.isSnykOssEnabled.Set(true)
 	c.isSnykIacEnabled.Set(true)
+	c.manageBinariesAutomatically.Set(true)
 	c.logPath = ""
 	c.snykCodeApiUrl = snykCodeApiUrlFromEnv()
 	c.snykCodeAnalysisTimeout = snykCodeAnalysisTimeoutFromEnv()
