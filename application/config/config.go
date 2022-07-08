@@ -135,7 +135,7 @@ func (c *Config) loadFile(fileName string) {
 }
 
 func (c *Config) Authenticated() bool { return c.token != "" }
-func (c *Config) CliInstalled() bool  { return c.cliPath != "" }
+func (c *Config) CliInstalled() bool  { return c.CliPath() != "" }
 func (c *Config) CliPath() string {
 	c.cliPathAccessMutex.Lock()
 	defer c.cliPathAccessMutex.Unlock()
