@@ -136,17 +136,17 @@ func TestWorkspaceDidChangeConfiguration_UpdateSendTelemetry(t *testing.T) {
 func TestWorkspaceDidChangeConfiguration_UpdateAutoUpdate(t *testing.T) {
 	loc := setupServer(t)
 
-	loc.Client.Call(ctx, "workspace/didChangeConfiguration", lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
+	_, _ = loc.Client.Call(ctx, "workspace/didChangeConfiguration", lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
 		ManageBinariesAutomatically: "false",
 	}})
 	assert.Equal(t, false, config.CurrentConfig().ManageBinariesAutomatically())
 
-	loc.Client.Call(ctx, "workspace/didChangeConfiguration", lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
+	_, _ = loc.Client.Call(ctx, "workspace/didChangeConfiguration", lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
 		ManageBinariesAutomatically: "true",
 	}})
 	assert.Equal(t, true, config.CurrentConfig().ManageBinariesAutomatically())
 
-	loc.Client.Call(ctx, "workspace/didChangeConfiguration", lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
+	_, _ = loc.Client.Call(ctx, "workspace/didChangeConfiguration", lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
 		ManageBinariesAutomatically: "dog",
 	}})
 	assert.Equal(t, true, config.CurrentConfig().ManageBinariesAutomatically())
