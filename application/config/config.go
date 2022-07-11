@@ -86,7 +86,8 @@ func New() *Config {
 	c.cliSettings = CliSettings{}
 	c.configFile = ""
 	c.format = "md"
-	c.isErrorReportingEnabled.Set(false)
+	c.isErrorReportingEnabled.Set(true)
+	c.isTelemetryEnabled.Set(true)
 	c.isSnykOssEnabled.Set(true)
 	c.isSnykIacEnabled.Set(true)
 	c.logPath = ""
@@ -282,9 +283,9 @@ func (c *Config) SetTelemetryEnabled(enabled bool) {
 
 func (c *Config) telemetryEnablementFromEnv() {
 	value := os.Getenv(EnableTelemetry)
-	if value == "0" {
-		c.isTelemetryEnabled.Set(true)
-	} else {
+	if value == "1" {
 		c.isTelemetryEnabled.Set(false)
+	} else {
+		c.isTelemetryEnabled.Set(true)
 	}
 }
