@@ -21,7 +21,7 @@ const (
 )
 
 var (
-	mutex = &sync.Mutex{}
+	FakeSnykCodeApiServiceMutex = &sync.Mutex{}
 
 	fakeRange = snyk.Range{
 		Start: snyk.Position{
@@ -33,7 +33,7 @@ var (
 			Character: 7,
 		},
 	}
-	fakeIssue = snyk.Issue{
+	FakeIssue = snyk.Issue{
 		ID:       "SNYK-123",
 		Range:    fakeRange,
 		Severity: snyk.High,
@@ -42,16 +42,9 @@ var (
 	FakeFilters = []string{".cjs", ".ejs", ".es", ".es6", ".htm", ".html", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".vue", ".java", ".erb", ".haml", ".rb", ".rhtml", ".slim", ".kt", ".swift", ".cls", ".config", ".pom", ".wxs", ".xml", ".xsd", ".aspx", ".cs", ".py", ".go", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".php", ".phtml"}
 )
 
-func FakeIssue() snyk.Issue {
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	return fakeIssue
-}
-
 func FakeDiagnosticUri() (filePath string, path string) {
-	mutex.Lock()
-	defer mutex.Unlock()
+	FakeSnykCodeApiServiceMutex.Lock()
+	defer FakeSnykCodeApiServiceMutex.Unlock()
 
 	temp, err := os.MkdirTemp(os.TempDir(), "fakeDiagnosticTempDir")
 	if err != nil {
@@ -63,7 +56,7 @@ func FakeDiagnosticUri() (filePath string, path string) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't create fake diagnostic file for Snyk Code Fake Service")
 	}
-	fakeIssue.AffectedFilePath = filePath
+	FakeIssue.AffectedFilePath = filePath
 	return filePath, temp
 }
 
@@ -88,8 +81,8 @@ func (f *FakeSnykCodeClient) addCall(params []interface{}, op string) {
 }
 
 func (f *FakeSnykCodeClient) GetCallParams(callNo int, op string) []interface{} {
-	mutex.Lock()
-	defer mutex.Unlock()
+	FakeSnykCodeApiServiceMutex.Lock()
+	defer FakeSnykCodeApiServiceMutex.Unlock()
 	calls := f.Calls[op]
 	if calls == nil {
 		return nil
@@ -102,8 +95,8 @@ func (f *FakeSnykCodeClient) GetCallParams(callNo int, op string) []interface{} 
 }
 
 func (f *FakeSnykCodeClient) Clear() {
-	mutex.Lock()
-	defer mutex.Unlock()
+	FakeSnykCodeApiServiceMutex.Lock()
+	defer FakeSnykCodeApiServiceMutex.Unlock()
 	f.ExtendedBundleCount = 0
 	f.TotalBundleCount = 0
 	f.HasExtendedBundle = false
@@ -111,8 +104,8 @@ func (f *FakeSnykCodeClient) Clear() {
 }
 
 func (f *FakeSnykCodeClient) GetAllCalls(op string) [][]interface{} {
-	mutex.Lock()
-	defer mutex.Unlock()
+	FakeSnykCodeApiServiceMutex.Lock()
+	defer FakeSnykCodeApiServiceMutex.Unlock()
 	calls := f.Calls[op]
 	if calls == nil {
 		return nil
@@ -121,16 +114,16 @@ func (f *FakeSnykCodeClient) GetAllCalls(op string) [][]interface{} {
 }
 
 func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (configFiles []string, extensions []string, err error) {
-	mutex.Lock()
-	defer mutex.Unlock()
+	FakeSnykCodeApiServiceMutex.Lock()
+	defer FakeSnykCodeApiServiceMutex.Unlock()
 	params := []interface{}{configFiles, extensions, err}
 	f.addCall(params, GetFiltersOperation)
 	return make([]string, 0), FakeFilters, nil
 }
 
 func (f *FakeSnykCodeClient) CreateBundle(_ context.Context, files map[string]string) (bundleHash string, missingFiles []string, err error) {
-	mutex.Lock()
-	defer mutex.Unlock()
+	FakeSnykCodeApiServiceMutex.Lock()
+	defer FakeSnykCodeApiServiceMutex.Unlock()
 	f.TotalBundleCount++
 	f.HasCreatedNewBundle = true
 	params := []interface{}{files}
@@ -147,8 +140,8 @@ func (f *FakeSnykCodeClient) ExtendBundle(
 	files map[string]BundleFile,
 	removedFiles []string,
 ) (string, []string, error) {
-	mutex.Lock()
-	defer mutex.Unlock()
+	FakeSnykCodeApiServiceMutex.Lock()
+	defer FakeSnykCodeApiServiceMutex.Unlock()
 	f.HasExtendedBundle = true
 	f.TotalBundleCount++
 	f.ExtendedBundleCount++
@@ -161,13 +154,13 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	_ context.Context,
 	options AnalysisOptions,
 ) ([]snyk.Issue, AnalysisStatus, error) {
-	mutex.Lock()
-	defer mutex.Unlock()
+	FakeSnykCodeApiServiceMutex.Lock()
+	defer FakeSnykCodeApiServiceMutex.Unlock()
 	params := []interface{}{options.bundleHash, options.limitToFiles, options.severity}
 	f.addCall(params, RunAnalysisOperation)
 
-	issues := []snyk.Issue{FakeIssue()}
+	issues := []snyk.Issue{FakeIssue}
 
-	log.Trace().Str("method", "RunAnalysis").Interface("fakeDiagnostic", FakeIssue()).Msg("fake backend call received & answered")
+	log.Trace().Str("method", "RunAnalysis").Interface("fakeDiagnostic", FakeIssue).Msg("fake backend call received & answered")
 	return issues, AnalysisStatus{message: "COMPLETE", percentage: 100}, nil
 }
