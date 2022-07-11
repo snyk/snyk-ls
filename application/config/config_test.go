@@ -16,6 +16,20 @@ func TestSetToken(t *testing.T) {
 	CurrentConfig().SetToken(oldToken)
 }
 
+func TestConfigDefaults(t *testing.T) {
+	c := New()
+
+	assert.True(t, c.IsTelemetryEnabled(), "Telemetry should be enabled by default")
+	assert.True(t, c.IsErrorReportingEnabled(), "Error Reporting should be enabled by default")
+	assert.False(t, c.IsSnykAdvisorEnabled(), "Advisor should be disabled by default")
+	assert.False(t, c.IsSnykCodeEnabled(), "Snyk Code should be disabled by default")
+	assert.False(t, c.IsSnykContainerEnabled(), "Snyk Container should be enabled by default")
+	assert.True(t, c.IsSnykOssEnabled(), "Snyk Open Source should be enabled by default")
+	assert.True(t, c.IsSnykIacEnabled(), "Snyk IaC should be enabled by default")
+	assert.Equal(t, "", c.LogPath(), "Logpath should be empty by default")
+	assert.Equal(t, "md", c.Format(), "Output format should be md by default")
+}
+
 func TestToken(t *testing.T) {
 	t.Setenv(SnykTokenKey, "test")
 	c := New()

@@ -34,11 +34,11 @@ func (c *Config) orgFromEnv() {
 
 func (c *Config) errorReportsEnablementFromEnv() {
 	errorReports := os.Getenv(SendErrorReportsKey)
-	errorReportingEnabled, err := strconv.ParseBool(errorReports)
-	if errorReports != "" && err != nil {
-		log.Warn().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse error reports config %s", errorReports)
+	if errorReports == "false" {
+		c.SetErrorReportingEnabled(false)
+	} else {
+		c.SetErrorReportingEnabled(true)
 	}
-	c.SetErrorReportingEnabled(errorReportingEnabled)
 }
 
 func (c *Config) productEnablementFromEnv() {

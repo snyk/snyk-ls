@@ -35,7 +35,7 @@ func TestConfig_IsErrorReportingEnabledFromEnv_DefaultValues(t *testing.T) {
 	SetCurrentConfig(New())
 	CurrentConfig().clientSettingsFromEnv()
 
-	assert.Equal(t, false, CurrentConfig().IsErrorReportingEnabled())
+	assert.Equal(t, true, CurrentConfig().IsErrorReportingEnabled())
 }
 func TestConfig_IsErrorReportingEnabledFromEnv(t *testing.T) {
 	t.Setenv(SendErrorReportsKey, "true")
@@ -50,7 +50,7 @@ func TestConfig_IsErrorReportingEnabledFromEnv_Error(t *testing.T) {
 	SetCurrentConfig(New())
 	CurrentConfig().clientSettingsFromEnv()
 
-	assert.Equal(t, false, CurrentConfig().IsErrorReportingEnabled())
+	assert.Equal(t, true, CurrentConfig().IsErrorReportingEnabled())
 }
 
 func TestConfig_OrganizationFromEnv(t *testing.T) {

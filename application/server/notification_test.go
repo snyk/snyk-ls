@@ -114,9 +114,11 @@ func TestCancelProgress(t *testing.T) {
 		log.Fatal().Err(err)
 	}
 
-	actualToken := <-progress.CancelProgressChannel
+	assert.Eventually(t, func() bool {
+		actualToken := <-progress.CancelProgressChannel
+		return expectedWorkdoneProgressCancelParams.Token == actualToken
+	}, time.Second*5, time.Millisecond)
 
-	assert.Equal(t, expectedWorkdoneProgressCancelParams.Token, actualToken)
 }
 
 func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
