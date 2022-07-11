@@ -12,7 +12,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/internal/cli/install"
+	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 

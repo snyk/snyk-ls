@@ -1,4 +1,4 @@
-package preconditions
+package cli
 
 import (
 	"context"
@@ -11,61 +11,58 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/cli"
-	"github.com/snyk/snyk-ls/internal/cli/auth"
-	"github.com/snyk/snyk-ls/internal/cli/install"
+	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/internal/notification"
 )
 
-type EnvironmentInitializer struct {
-	authenticator *auth.Authenticator
+type Initializer struct {
 	errorReporter error_reporting.ErrorReporter
+	installer     install.Installer
 }
 
-func New(authenticator *auth.Authenticator, errorReporter error_reporting.ErrorReporter) *EnvironmentInitializer {
-	return &EnvironmentInitializer{
-		authenticator: authenticator,
+func NewInitializer(errorReporter error_reporting.ErrorReporter, installer install.Installer) *Initializer {
+	return &Initializer{
 		errorReporter: errorReporter,
+		installer:     installer,
 	}
 }
 
-func (e *EnvironmentInitializer) WaitUntilCLIAndAuthReady(ctx context.Context) {
-	cli.Mutex.Lock()
-	defer cli.Mutex.Unlock()
+func (i *Initializer) Init() {
+	Mutex.Lock()
+	defer Mutex.Unlock()
 
 	cliInstalled := config.CurrentConfig().CliInstalled()
-	authenticated := config.CurrentConfig().Authenticated()
-
-	if cliInstalled && e.isOutdatedCli() {
-		go e.updateCli()
-	}
-
-	if cliInstalled && authenticated {
+	if !config.CurrentConfig().ManageBinariesAutomatically() {
+		if !cliInstalled {
+			notification.Send(sglsp.ShowMessageParams{Type: sglsp.Warning, Message: "Automatic CLI downloads are disabled and no CLI path is configured. Enable automatic downloads or set a valid CLI path."})
+		}
 		return
 	}
 
-	for i := 0; !config.CurrentConfig().CliInstalled(); i++ {
-		if i > 2 {
+	if cliInstalled && i.isOutdatedCli() {
+		go i.updateCli()
+	}
+
+	if cliInstalled {
+		return
+	}
+
+	for attempt := 0; !config.CurrentConfig().CliInstalled(); attempt++ {
+		if attempt > 2 {
 			config.CurrentConfig().SetSnykIacEnabled(false)
 			config.CurrentConfig().SetSnykOssEnabled(false)
-			log.Warn().Str("method", "EnsureReadyForAnalysisAndWait").Msg("Disabling Snyk OSS and Snyk Iac as no CLI found after 3 tries")
+			log.Warn().Str("method", "cli.Init").Msg("Disabling Snyk OSS and Snyk Iac as no CLI found after 3 tries")
 			break
 		}
-		e.installCli()
+		i.installCli()
 		if !config.CurrentConfig().CliInstalled() {
 			time.Sleep(2 * time.Second)
 		}
 	}
-
-	if !authenticated {
-		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Authenticating to Snyk. This could open a browser window."})
-		e.authenticator.Authenticate(ctx)
-	}
 }
 
-func (e *EnvironmentInitializer) installCli() {
-	i := install.NewInstaller(e.errorReporter)
-	cliPath, err := i.Find()
+func (i *Initializer) installCli() {
+	cliPath, err := i.installer.Find()
 	if err != nil {
 		log.Info().Str("method", "installCli").Msg("could not find Snyk CLI in user directories and PATH.")
 	}
@@ -73,11 +70,11 @@ func (e *EnvironmentInitializer) installCli() {
 	if cliPath == "" {
 		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Snyk CLI needs to be installed."})
 
-		cliPath, err = i.Install(context.Background())
+		cliPath, err = i.installer.Install(context.Background())
 		if err != nil {
 			log.Err(err).Str("method", "installCli").Msg("could not download Snyk CLI binary")
-			e.handleInstallerError(err)
-			cliPath, _ = i.Find()
+			i.handleInstallerError(err)
+			cliPath, _ = i.installer.Find()
 		}
 	}
 
@@ -89,22 +86,21 @@ func (e *EnvironmentInitializer) installCli() {
 	}
 }
 
-func (e *EnvironmentInitializer) handleInstallerError(err error) {
+func (i *Initializer) handleInstallerError(err error) {
 	// we don't want to report errors caused by concurrent downloads, they will resolve themselves after 1h
 	if !strings.Contains(err.Error(), "installer lockfile from ") {
-		e.errorReporter.CaptureError(err)
+		i.errorReporter.CaptureError(err)
 	}
 }
 
-func (e *EnvironmentInitializer) updateCli() {
-	cli.Mutex.Lock()
-	defer cli.Mutex.Unlock()
+func (i *Initializer) updateCli() {
+	Mutex.Lock()
+	defer Mutex.Unlock()
 
-	i := install.NewInstaller(e.errorReporter)
-	updated, err := i.Update(context.Background())
+	updated, err := i.installer.Update(context.Background())
 	if err != nil {
 		log.Err(err).Str("method", "updateCli").Msg("Failed to update CLI")
-		e.handleInstallerError(err)
+		i.handleInstallerError(err)
 	}
 
 	if updated {
@@ -114,7 +110,7 @@ func (e *EnvironmentInitializer) updateCli() {
 	}
 }
 
-func (e *EnvironmentInitializer) isOutdatedCli() bool {
+func (i *Initializer) isOutdatedCli() bool {
 	cliPath := config.CurrentConfig().CliPath()
 
 	fileInfo, err := os.Stat(cliPath) // todo: we can save stat calls by caching mod time

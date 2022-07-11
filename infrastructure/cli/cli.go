@@ -10,7 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/cli/auth"
+	"github.com/snyk/snyk-ls/infrastructure/cli/auth"
 )
 
 type SnykCli struct {
@@ -80,6 +80,7 @@ func (c SnykCli) addConfigValuesToEnv(env []string) (updatedEnv []string) {
 	return
 }
 
+//todo no need to export that, we could have a simpler interface that looks more like an actual CLI
 func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
 	var additionalParams []string
 	settings := config.CurrentConfig().CliSettings()

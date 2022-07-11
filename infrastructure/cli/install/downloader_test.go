@@ -17,7 +17,7 @@ func TestDownloader_Download(t *testing.T) {
 	r := getTestAsset()
 	progressCh := make(chan lsp.ProgressParams, 100000)
 	cancelProgressCh := make(chan lsp.ProgressToken, 1)
-	d := &Downloader{progressTracker: progress.NewTestingTracker(progressCh, cancelProgressCh)}
+	d := &Downloader{progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh)}
 	lockFileName := d.lockFileName()
 	// remove any existing lockfile
 	_ = os.RemoveAll(lockFileName)
@@ -40,7 +40,7 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	testutil.UnitTest(t)
 	progressCh := make(chan lsp.ProgressParams, 100000)
 	cancelProgressCh := make(chan lsp.ProgressToken, 1)
-	d := &Downloader{progressTracker: progress.NewTestingTracker(progressCh, cancelProgressCh)}
+	d := &Downloader{progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh)}
 
 	r := getTestAsset()
 

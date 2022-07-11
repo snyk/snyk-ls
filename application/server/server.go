@@ -92,6 +92,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
 		method := "InitializeHandler"
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
+		UpdateSettings(params.InitializationOptions)
 		w := workspace.New(di.Instrumentor())
 		workspace.Set(w)
 

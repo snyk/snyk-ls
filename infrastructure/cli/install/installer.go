@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -19,6 +20,7 @@ import (
 type Installer interface {
 	Find() (string, error)
 	Install(ctx context.Context) (string, error)
+	Update(ctx context.Context) (bool, error)
 }
 
 type Install struct {
@@ -204,5 +206,51 @@ func cleanupLockFile(lockFileName string) {
 	err := os.Remove(lockFileName)
 	if err != nil {
 		log.Error().Str("method", "Download").Str("lockfile", lockFileName).Msg("couldn't clean up lockfile")
+	}
+}
+
+type TestInstaller struct {
+	updates  int
+	installs int
+	mutex    sync.RWMutex
+}
+
+func (t *TestInstaller) Updates() int {
+	t.mutex.RLock()
+	defer t.mutex.RUnlock()
+
+	return t.updates
+}
+
+func (t *TestInstaller) Installs() int {
+	t.mutex.RLock()
+	defer t.mutex.RUnlock()
+
+	return t.installs
+}
+
+func (t *TestInstaller) Find() (string, error) {
+	return "", nil
+}
+
+func (t *TestInstaller) Install(ctx context.Context) (string, error) {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	t.installs++
+	return "", nil
+}
+
+func (t *TestInstaller) Update(ctx context.Context) (bool, error) {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	t.updates++
+	return true, nil
+}
+
+func NewTestInstaller() *TestInstaller {
+	return &TestInstaller{
+		mutex: sync.RWMutex{},
 	}
 }

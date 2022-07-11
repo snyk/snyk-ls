@@ -24,8 +24,8 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
+	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
-	"github.com/snyk/snyk-ls/internal/cli/install"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -162,6 +162,24 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.Save, &sglsp.SaveOptions{IncludeText: true})
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.WillSave, true)
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.WillSaveWaitUntil, true)
+}
+
+func Test_initialize_updatesSettings(t *testing.T) {
+	loc := setupServer(t)
+
+	clientParams := lsp.InitializeParams{
+		InitializationOptions: lsp.Settings{Organization: "fancy org"},
+	}
+
+	rsp, err := loc.Client.Call(ctx, "initialize", clientParams)
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+	var result lsp.InitializeResult
+	if err := rsp.UnmarshalResult(&result); err != nil {
+		log.Fatal().Err(err)
+	}
+	assert.Equal(t, "fancy org", config.CurrentConfig().GetOrganization())
 }
 
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {

@@ -18,7 +18,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/cli"
+	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 )

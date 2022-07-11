@@ -13,6 +13,7 @@ import (
 	"github.com/snyk/snyk-ls/presentation/lsp"
 )
 
+// todo authenticate does both CLI and non-cli stuff. Can we separate concerns here?
 type Authenticator struct {
 	errorReporter error_reporting.ErrorReporter
 }

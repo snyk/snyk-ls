@@ -40,24 +40,25 @@ type CliSettings struct {
 }
 
 type Config struct {
-	configLoaded            concurrency.AtomicBool
-	cliPath                 string
-	cliSettings             CliSettings
-	configFile              string
-	format                  string
-	isErrorReportingEnabled concurrency.AtomicBool
-	isSnykCodeEnabled       concurrency.AtomicBool
-	isSnykOssEnabled        concurrency.AtomicBool
-	isSnykIacEnabled        concurrency.AtomicBool
-	isSnykContainerEnabled  concurrency.AtomicBool
-	isSnykAdvisorEnabled    concurrency.AtomicBool
-	isTelemetryEnabled      concurrency.AtomicBool
-	logPath                 string
-	organization            string
-	snykCodeAnalysisTimeout time.Duration
-	snykCodeApiUrl          string
-	token                   string
-	cliPathAccessMutex      sync.Mutex
+	configLoaded                concurrency.AtomicBool
+	cliPath                     string
+	cliSettings                 CliSettings
+	configFile                  string
+	format                      string
+	isErrorReportingEnabled     concurrency.AtomicBool
+	isSnykCodeEnabled           concurrency.AtomicBool
+	isSnykOssEnabled            concurrency.AtomicBool
+	isSnykIacEnabled            concurrency.AtomicBool
+	isSnykContainerEnabled      concurrency.AtomicBool
+	isSnykAdvisorEnabled        concurrency.AtomicBool
+	isTelemetryEnabled          concurrency.AtomicBool
+	manageBinariesAutomatically concurrency.AtomicBool
+	logPath                     string
+	organization                string
+	snykCodeAnalysisTimeout     time.Duration
+	snykCodeApiUrl              string
+	token                       string
+	cliPathAccessMutex          sync.Mutex
 }
 
 func CurrentConfig() *Config {
@@ -89,6 +90,7 @@ func New() *Config {
 	c.isErrorReportingEnabled.Set(false)
 	c.isSnykOssEnabled.Set(true)
 	c.isSnykIacEnabled.Set(true)
+	c.manageBinariesAutomatically.Set(true)
 	c.logPath = ""
 	c.snykCodeApiUrl = snykCodeApiUrlFromEnv()
 	c.snykCodeAnalysisTimeout = snykCodeAnalysisTimeoutFromEnv()
@@ -133,7 +135,11 @@ func (c *Config) loadFile(fileName string) {
 }
 
 func (c *Config) Authenticated() bool { return c.token != "" }
-func (c *Config) CliInstalled() bool  { return c.cliPath != "" }
+func (c *Config) CliInstalled() bool {
+	c.cliPathAccessMutex.Lock()
+	defer c.cliPathAccessMutex.Unlock()
+	return c.cliPath != ""
+}
 func (c *Config) CliPath() string {
 	c.cliPathAccessMutex.Lock()
 	defer c.cliPathAccessMutex.Unlock()
@@ -270,6 +276,14 @@ func (c *Config) LsPath() string {
 		return ""
 	}
 	return lsPath
+}
+
+func (c *Config) ManageBinariesAutomatically() bool {
+	return c.manageBinariesAutomatically.Get()
+}
+
+func (c *Config) SetManageBinariesAutomatically(enabled bool) {
+	c.manageBinariesAutomatically.Set(enabled)
 }
 
 func (c *Config) IsTelemetryEnabled() bool {
