@@ -130,7 +130,7 @@ type InitializeParams struct {
 	RootURI               sglsp.DocumentURI        `json:"rootUri,omitempty"`
 	ClientInfo            sglsp.ClientInfo         `json:"clientInfo,omitempty"`
 	Trace                 sglsp.Trace              `json:"trace,omitempty"`
-	InitializationOptions interface{}              `json:"initializationOptions,omitempty"`
+	InitializationOptions Settings                 `json:"initializationOptions,omitempty"`
 	Capabilities          sglsp.ClientCapabilities `json:"capabilities"`
 
 	WorkDoneToken    string            `json:"workDoneToken,omitempty"`

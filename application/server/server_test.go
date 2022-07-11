@@ -164,6 +164,24 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.WillSaveWaitUntil, true)
 }
 
+func Test_initialize_updatesSettings(t *testing.T) {
+	loc := setupServer(t)
+
+	clientParams := lsp.InitializeParams{
+		InitializationOptions: lsp.Settings{Organization: "fancy org"},
+	}
+
+	rsp, err := loc.Client.Call(ctx, "initialize", clientParams)
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+	var result lsp.InitializeResult
+	if err := rsp.UnmarshalResult(&result); err != nil {
+		log.Fatal().Err(err)
+	}
+	assert.Equal(t, "fancy org", config.CurrentConfig().GetOrganization())
+}
+
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
