@@ -103,7 +103,7 @@ func updateCliConfig(ctx context.Context, settings lsp.Settings) {
 
 	if cliSettings.Endpoint != config.CurrentConfig().CliSettings().Endpoint {
 		// Reset CLI token
-		err = di.Authenticator().ClearAuthentication(ctx) // TODO: check if ctx is correct
+		err = di.Authenticator().ClearAuthentication(ctx)
 		if err != nil {
 			log.Err(err).Msg("couldn't reset token")
 		}

@@ -42,7 +42,6 @@ func (a *CliAuthenticationProvider) Authenticate(ctx context.Context) error {
 	return err
 }
 
-// todo: move to provider
 func (a *CliAuthenticationProvider) authCmd(ctx context.Context) (*exec.Cmd, error) {
 	log.Info().Msg("authenticate Snyk CLI with a Snyk account")
 

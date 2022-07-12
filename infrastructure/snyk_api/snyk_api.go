@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -131,5 +132,19 @@ func (s *SnykApiClientImpl) doCall(method string, path string, requestBody []byt
 	if err != nil {
 		return nil, err
 	}
+
+	err = checkResponseCode(response)
+	if err != nil {
+		return nil, err
+	}
+
 	return responseBody, err
+}
+
+func checkResponseCode(r *http.Response) error {
+	if r.StatusCode >= 200 && r.StatusCode <= 299 {
+		return nil
+	}
+
+	return errors.New("Unexpected response code: " + r.Status)
 }
