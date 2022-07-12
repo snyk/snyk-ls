@@ -134,7 +134,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	assert.Eventually(
 		t,
 		func() bool {
-			notifications := jsonRPCRecorder.FindNotificationsByMethod("$/hasAuthenticated")
+			notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated")
 			if len(notifications) < 1 {
 				return false
 			}
@@ -147,7 +147,38 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 			}
 			return false
 		},
-		120*time.Second,
+		2*time.Second,
+		10*time.Millisecond,
+	)
+}
+
+func Test_CliHasDownloadedNotification(t *testing.T) {
+	loc := setupServer(t)
+
+	_, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+	var expected = lsp.CliDownloadedParams{CliPath: "path"}
+
+	notification.Send(expected)
+	assert.Eventually(
+		t,
+		func() bool {
+			notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasDownloadedCli")
+			if len(notifications) < 1 {
+				return false
+			}
+			for _, n := range notifications {
+				var actual = lsp.CliDownloadedParams{}
+				_ = n.UnmarshalParams(&actual)
+				if reflect.DeepEqual(expected, actual) {
+					return true
+				}
+			}
+			return false
+		},
+		2*time.Second,
 		10*time.Millisecond,
 	)
 }

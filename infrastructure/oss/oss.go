@@ -125,7 +125,7 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string, _ []string)
 		workDir = filepath.Dir(path)
 	}
 
-	cmd := oss.cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", workDir, "--json"})
+	cmd := oss.cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliSettings().Path(), "test", workDir, "--json"})
 	res, err := oss.cli.Execute(cmd, workDir)
 	if err != nil {
 		if oss.handleError(err, res, cmd) {

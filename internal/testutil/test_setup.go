@@ -28,7 +28,9 @@ func UnitTest(t *testing.T) {
 	t.Helper()
 	c := config.New()
 	c.SetToken("00000000-0000-0000-0000-000000000001")
-	c.SetCliPath("dummy")
+	settings := &config.CliSettings{}
+	settings.SetPath("dummy")
+	c.SetCliSettings(settings)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t)
 }

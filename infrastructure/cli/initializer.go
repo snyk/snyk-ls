@@ -13,6 +13,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/presentation/lsp"
 )
 
 type Initializer struct {
@@ -31,7 +32,7 @@ func (i *Initializer) Init() {
 	Mutex.Lock()
 	defer Mutex.Unlock()
 
-	cliInstalled := config.CurrentConfig().CliInstalled()
+	cliInstalled := config.CurrentConfig().CliSettings().Installed()
 	if !config.CurrentConfig().ManageBinariesAutomatically() {
 		if !cliInstalled {
 			notification.Send(sglsp.ShowMessageParams{Type: sglsp.Warning, Message: "Automatic CLI downloads are disabled and no CLI path is configured. Enable automatic downloads or set a valid CLI path."})
@@ -47,7 +48,7 @@ func (i *Initializer) Init() {
 		return
 	}
 
-	for attempt := 0; !config.CurrentConfig().CliInstalled(); attempt++ {
+	for attempt := 0; !config.CurrentConfig().CliSettings().Installed(); attempt++ {
 		if attempt > 2 {
 			config.CurrentConfig().SetSnykIacEnabled(false)
 			config.CurrentConfig().SetSnykOssEnabled(false)
@@ -55,22 +56,29 @@ func (i *Initializer) Init() {
 			break
 		}
 		i.installCli()
-		if !config.CurrentConfig().CliInstalled() {
+		if !config.CurrentConfig().CliSettings().Installed() {
 			time.Sleep(2 * time.Second)
 		}
 	}
 }
 
 func (i *Initializer) installCli() {
-	cliPath, err := i.installer.Find()
-	if err != nil {
-		log.Info().Str("method", "installCli").Msg("could not find Snyk CLI in user directories and PATH.")
+	var err error
+	var cliPath string
+	if config.CurrentConfig().CliSettings().Defined() {
+		cliPath = config.CurrentConfig().CliSettings().Path()
+	} else {
+		cliPath, err = i.installer.Find()
+		if err != nil {
+			log.Info().Str("method", "installCli").Msg("could not find Snyk CLI in user directories and PATH.")
+		}
 	}
 
 	if cliPath == "" {
 		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Snyk CLI needs to be installed."})
 
 		cliPath, err = i.installer.Install(context.Background())
+		notification.Send(lsp.CliDownloadedParams{CliPath: cliPath})
 		if err != nil {
 			log.Err(err).Str("method", "installCli").Msg("could not download Snyk CLI binary")
 			i.handleInstallerError(err)
@@ -79,7 +87,8 @@ func (i *Initializer) installCli() {
 	}
 
 	if cliPath != "" {
-		config.CurrentConfig().SetCliPath(cliPath)
+		config.CurrentConfig().CliSettings().SetPath(cliPath)
+		notification.Send(lsp.CliDownloadedParams{CliPath: cliPath})
 		log.Info().Str("method", "installCli").Str("snyk", cliPath).Msg("Snyk CLI found.")
 	} else {
 		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Warning, Message: "Could not find, nor install Snyk CLI"})
@@ -111,7 +120,7 @@ func (i *Initializer) updateCli() {
 }
 
 func (i *Initializer) isOutdatedCli() bool {
-	cliPath := config.CurrentConfig().CliPath()
+	cliPath := config.CurrentConfig().CliSettings().Path()
 
 	fileInfo, err := os.Stat(cliPath) // todo: we can save stat calls by caching mod time
 	if err != nil {

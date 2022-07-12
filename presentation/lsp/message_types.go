@@ -214,6 +214,7 @@ type Settings struct {
 	Organization                string `json:"organization,omitempty"`
 	EnableTelemetry             string `json:"enableTelemetry,omitempty"`
 	ManageBinariesAutomatically string `json:"manageBinariesAutomatically,omitempty"`
+	CliPath                     string `json:"cliPath,omitempty"`
 }
 
 type DidChangeConfigurationParams struct {
@@ -223,6 +224,10 @@ type DidChangeConfigurationParams struct {
 
 type AuthenticationParams struct {
 	Token string `json:"token"`
+}
+
+type CliDownloadedParams struct {
+	CliPath string `json:"cliPath"`
 }
 
 type ProgressToken string

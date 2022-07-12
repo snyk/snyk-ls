@@ -20,7 +20,6 @@ import (
 )
 
 const (
-	cliPathKey            = "SNYK_CLI_PATH"
 	SnykTokenKey          = "SNYK_TOKEN"
 	deeproxyApiUrlKey     = "DEEPROXY_API_URL"
 	FormatHtml            = "html"
@@ -41,12 +40,38 @@ type CliSettings struct {
 	Insecure             bool
 	Endpoint             string
 	AdditionalParameters []string
+	path                 string
+	cliPathAccessMutex   sync.Mutex
+}
+
+func (c *CliSettings) Installed() bool {
+	c.cliPathAccessMutex.Lock()
+	defer c.cliPathAccessMutex.Unlock()
+	stat, err := os.Stat(c.path)
+	return c.path != "" && err == nil && !stat.IsDir()
+}
+
+func (c *CliSettings) Defined() bool {
+	c.cliPathAccessMutex.Lock()
+	defer c.cliPathAccessMutex.Unlock()
+	return c.path != ""
+}
+
+func (c *CliSettings) Path() string {
+	c.cliPathAccessMutex.Lock()
+	defer c.cliPathAccessMutex.Unlock()
+	return filepath.Clean(c.path)
+}
+
+func (c *CliSettings) SetPath(path string) {
+	c.cliPathAccessMutex.Lock()
+	defer c.cliPathAccessMutex.Unlock()
+	c.path = path
 }
 
 type Config struct {
 	configLoaded                concurrency.AtomicBool
-	cliPath                     string
-	cliSettings                 CliSettings
+	cliSettings                 *CliSettings
 	configFile                  string
 	format                      string
 	isErrorReportingEnabled     concurrency.AtomicBool
@@ -63,7 +88,6 @@ type Config struct {
 	snykApiUrl                  string
 	snykCodeApiUrl              string
 	token                       string
-	cliPathAccessMutex          sync.Mutex
 }
 
 func CurrentConfig() *Config {
@@ -88,8 +112,7 @@ func IsDevelopment() bool {
 
 func New() *Config {
 	c := &Config{}
-	c.cliPath = cliPathFromEnv()
-	c.cliSettings = CliSettings{}
+	c.cliSettings = &CliSettings{}
 	c.configFile = ""
 	c.format = "md"
 	c.isErrorReportingEnabled.Set(true)
@@ -141,19 +164,9 @@ func (c *Config) loadFile(fileName string) {
 	log.Debug().Str("fileName", fileName).Msg("loaded.")
 }
 
-func (c *Config) Authenticated() bool { return c.token != "" }
-func (c *Config) CliInstalled() bool {
-	c.cliPathAccessMutex.Lock()
-	defer c.cliPathAccessMutex.Unlock()
-	return c.cliPath != ""
-}
-func (c *Config) CliPath() string {
-	c.cliPathAccessMutex.Lock()
-	defer c.cliPathAccessMutex.Unlock()
-	return filepath.Clean(c.cliPath)
-}
-func (c *Config) CliSettings() CliSettings { return c.cliSettings }
-func (c *Config) Format() string           { return c.format }
+func (c *Config) Authenticated() bool       { return c.token != "" }
+func (c *Config) CliSettings() *CliSettings { return c.cliSettings }
+func (c *Config) Format() string            { return c.format }
 func (c *Config) CLIDownloadLockFileName() string {
 	return filepath.Join(c.LsPath(), "snyk-cli-download.lock")
 }
@@ -169,13 +182,7 @@ func (c *Config) SnykCodeApi() string                    { return c.snykCodeApiU
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
 func (c *Config) Token() string                          { return c.token }
 
-func (c *Config) SetCliPath(cliPath string) {
-	c.cliPathAccessMutex.Lock()
-	defer c.cliPathAccessMutex.Unlock()
-	c.cliPath = cliPath
-}
-
-func (c *Config) SetCliSettings(settings CliSettings) {
+func (c *Config) SetCliSettings(settings *CliSettings) {
 	if settings.Endpoint != c.cliSettings.Endpoint {
 		// Reset token
 		c.token = ""
@@ -250,8 +257,6 @@ func (c *Config) ConfigureLogging(level string) {
 }
 
 func (c *Config) SetConfigFile(configFile string) { c.configFile = configFile }
-
-func cliPathFromEnv() string { return os.Getenv(cliPathKey) }
 
 func tokenFromEnv() string { return os.Getenv(SnykTokenKey) }
 

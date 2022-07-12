@@ -221,9 +221,13 @@ func registerNotifier(srv *jrpc2.Server) {
 	callbackFunction := func(params interface{}) {
 		switch params := params.(type) {
 		case lsp.AuthenticationParams:
-			notifier(srv, "$/hasAuthenticated", params)
+			notifier(srv, "$/snyk.hasAuthenticated", params)
 			log.Info().Str("method", "notifyCallback").
 				Msg("sending token")
+		case lsp.CliDownloadedParams:
+			notifier(srv, "$/snyk.hasDownloadedCli", params)
+			log.Info().Str("method", "notifyCallback").
+				Msg("sending cli path")
 		case sglsp.ShowMessageParams:
 			notifier(srv, "window/showMessage", params)
 			log.Info().

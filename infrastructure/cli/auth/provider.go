@@ -117,7 +117,7 @@ func (a *CliAuthenticationProvider) configUnsetAPICmd(ctx context.Context) (*exe
 }
 
 func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, config.CurrentConfig().CliPath(), args...)
+	cmd := exec.CommandContext(ctx, config.CurrentConfig().CliSettings().Path(), args...)
 
 	endpoint := config.CurrentConfig().CliSettings().Endpoint
 	cmd.Env = append(cmd.Env, "SNYK_API="+endpoint)

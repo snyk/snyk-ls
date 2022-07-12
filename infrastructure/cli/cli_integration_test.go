@@ -31,7 +31,7 @@ func Test_HandleErrors_MissingTokenError(t *testing.T) {
 	if err != nil {
 		t.Fatal(t, err)
 	}
-	config.CurrentConfig().SetCliPath(path)
+	config.CurrentConfig().CliSettings().SetPath(path)
 	cli := di.SnykCli()
 	err = errors.New("exit status 2")
 
@@ -64,7 +64,7 @@ func Test_Execute_HandlesErrors(t *testing.T) {
 		_ = os.Rename(oldpath, newpath)
 	}(cliConfigBackup, cliConfig)
 
-	config.CurrentConfig().SetCliPath(path)
+	config.CurrentConfig().CliSettings().SetPath(path)
 	cli := di.SnykCli()
 
 	response, err := cli.Execute([]string{path, "test"}, ".")

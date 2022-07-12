@@ -18,7 +18,7 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 		Endpoint:             "test-endpoint",
 		AdditionalParameters: []string{"--all-projects", "-d"},
 	}
-	config.CurrentConfig().SetCliSettings(settings)
+	config.CurrentConfig().SetCliSettings(&settings)
 	var cmd = []string{"a", "b"}
 	cmd = SnykCli{}.ExpandParametersFromConfig(cmd)
 	assert.Contains(t, cmd, "--insecure")
@@ -34,7 +34,7 @@ func Test_ExpandParametersFromConfigNoAllProjectsForIac(t *testing.T) {
 		Endpoint:             "test-endpoint",
 		AdditionalParameters: []string{"--all-projects", "-d"},
 	}
-	config.CurrentConfig().SetCliSettings(settings)
+	config.CurrentConfig().SetCliSettings(&settings)
 	var cmd = []string{"a", "iac"}
 	cmd = SnykCli{}.ExpandParametersFromConfig(cmd)
 	assert.Contains(t, cmd, "--insecure")
@@ -46,7 +46,7 @@ func TestAddConfigToEnv(t *testing.T) {
 	testutil.UnitTest(t)
 	cli := SnykCli{}
 	config.CurrentConfig().SetOrganization("testOrg")
-	config.CurrentConfig().SetCliSettings(config.CliSettings{Endpoint: "testEndpoint"})
+	config.CurrentConfig().SetCliSettings(&config.CliSettings{Endpoint: "testEndpoint"})
 
 	updatedEnv := cli.addConfigValuesToEnv([]string{})
 
