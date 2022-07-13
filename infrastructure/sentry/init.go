@@ -1,6 +1,7 @@
 package sentry
 
 import (
+	"github.com/denisbrodbeck/machineid"
 	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog/log"
 
@@ -29,6 +30,19 @@ func initializeSentry() {
 		log.Error().Str("method", "Initialize").Msg(err.Error())
 	} else {
 		log.Info().Msg("Error reporting initialized")
+	}
+	addUserId()
+}
+
+func addUserId() {
+	id, machineErr := machineid.ProtectedID("Snyk-LS")
+	if machineErr != nil && config.CurrentConfig().IsErrorReportingEnabled() {
+		log.Err(machineErr).Str("method", "initializeSentry").Msg("cannot retrieve machine id")
+		sentry.CaptureException(machineErr)
+	} else {
+		sentry.ConfigureScope(func(scope *sentry.Scope) {
+			scope.SetUser(sentry.User{ID: id})
+		})
 	}
 }
 

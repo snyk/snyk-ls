@@ -12,7 +12,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/presentation/lsp"
+	"github.com/snyk/snyk-ls/application/server/lsp"
 )
 
 func WorkspaceDidChangeConfiguration() jrpc2.Handler {
@@ -29,13 +29,28 @@ func UpdateSettings(ctx context.Context, settings lsp.Settings) {
 	if settings == emptySettings {
 		return
 	}
+	config.CurrentConfig().SetToken(settings.Token)
 	updateProductEnablement(settings)
-	updateCliConfig(ctx, settings)
+	updateCliConfig(settings)
+	updateApiEndpoints(ctx, settings)
 	updateEnvironment(settings)
 	updatePath(settings)
 	updateTelemetry(settings)
 	updateOrganization(settings)
 	manageBinariesAutomatically(settings)
+}
+
+func updateApiEndpoints(ctx context.Context, settings lsp.Settings) {
+	snykApiUrl := strings.Trim(settings.Endpoint, " ")
+	endpointsUpdated := config.CurrentConfig().UpdateApiEndpoints(snykApiUrl)
+
+	if endpointsUpdated {
+		// Reset CLI token
+		err := di.Authenticator().ClearAuthentication(ctx)
+		if err != nil {
+			log.Err(err).Msg("couldn't reset token")
+		}
+	}
 }
 
 func updateOrganization(settings lsp.Settings) {
@@ -91,24 +106,15 @@ func updateEnvironment(settings lsp.Settings) {
 	}
 }
 
-func updateCliConfig(ctx context.Context, settings lsp.Settings) {
+func updateCliConfig(settings lsp.Settings) {
 	var err error
 	cliSettings := &config.CliSettings{}
 	cliSettings.Insecure, err = strconv.ParseBool(settings.Insecure)
 	if err != nil {
 		log.Err(err).Msg("couldn't parse insecure setting")
 	}
-	cliSettings.Endpoint = strings.Trim(settings.Endpoint, " ")
 	cliSettings.AdditionalParameters = strings.Split(settings.AdditionalParams, " ")
 	cliSettings.SetPath(settings.CliPath)
-
-	if cliSettings.Endpoint != config.CurrentConfig().CliSettings().Endpoint {
-		// Reset CLI token
-		err = di.Authenticator().ClearAuthentication(ctx)
-		if err != nil {
-			log.Err(err).Msg("couldn't reset token")
-		}
-	}
 
 	config.CurrentConfig().SetCliSettings(cliSettings)
 }

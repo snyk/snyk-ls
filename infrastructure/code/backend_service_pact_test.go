@@ -32,7 +32,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) { // nolint:gocognit // this i
 	testutil.NotOnWindows(t, "we don't have a pact cli")
 	testutil.UnitTest(t)
 
-	setupPact()
+	setupPact(t)
 	defer pact.Teardown()
 
 	defer func() {
@@ -233,7 +233,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) { // nolint:gocognit // this i
 	})
 }
 
-func setupPact() {
+func setupPact(t *testing.T) {
 	pact = dsl.Pact{
 		Consumer: consumer,
 		Provider: pactProvider,
@@ -243,7 +243,8 @@ func setupPact() {
 	// Proactively start service to get access to the port
 	pact.Setup(true)
 
-	config.CurrentConfig().SetSnykCodeApi(fmt.Sprintf("http://localhost:%d", pact.Server.Port))
+	t.Setenv("DEEPROXY_API_URL", fmt.Sprintf("http://localhost:%d", pact.Server.Port))
+	config.CurrentConfig().UpdateApiEndpoints("http://localhost")
 
 	client = NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 }

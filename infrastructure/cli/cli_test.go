@@ -15,7 +15,6 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	config.CurrentConfig().SetOrganization("test-org")
 	settings := config.CliSettings{
 		Insecure:             true,
-		Endpoint:             "test-endpoint",
 		AdditionalParameters: []string{"--all-projects", "-d"},
 	}
 	config.CurrentConfig().SetCliSettings(&settings)
@@ -31,7 +30,6 @@ func Test_ExpandParametersFromConfigNoAllProjectsForIac(t *testing.T) {
 	config.CurrentConfig().SetOrganization("test-org")
 	settings := config.CliSettings{
 		Insecure:             true,
-		Endpoint:             "test-endpoint",
 		AdditionalParameters: []string{"--all-projects", "-d"},
 	}
 	config.CurrentConfig().SetCliSettings(&settings)
@@ -42,17 +40,30 @@ func Test_ExpandParametersFromConfigNoAllProjectsForIac(t *testing.T) {
 	assert.Contains(t, cmd, "-d")
 }
 
-func TestAddConfigToEnv(t *testing.T) {
-	testutil.UnitTest(t)
-	cli := SnykCli{}
-	config.CurrentConfig().SetOrganization("testOrg")
-	config.CurrentConfig().SetCliSettings(&config.CliSettings{Endpoint: "testEndpoint"})
+func TestAddConfigValuesToEnv(t *testing.T) {
+	t.Run("Adds values to env", func(t *testing.T) {
+		testutil.UnitTest(t)
+		cli := SnykCli{}
+		config.CurrentConfig().SetOrganization("testOrg")
+		config.CurrentConfig().UpdateApiEndpoints("https://app.snyk.io/api")
 
-	updatedEnv := cli.addConfigValuesToEnv([]string{})
+		updatedEnv := cli.addConfigValuesToEnv([]string{})
 
-	assert.Contains(t, updatedEnv, "SNYK_CFG_ORG="+config.CurrentConfig().GetOrganization())
-	assert.Contains(t, updatedEnv, "SNYK_API="+config.CurrentConfig().CliSettings().Endpoint)
-	assert.Contains(t, updatedEnv, "SNYK_TOKEN="+config.CurrentConfig().Token())
+		assert.Contains(t, updatedEnv, "SNYK_CFG_ORG="+config.CurrentConfig().GetOrganization())
+		assert.Contains(t, updatedEnv, "SNYK_API=https://app.snyk.io/api")
+		assert.Contains(t, updatedEnv, "SNYK_TOKEN="+config.CurrentConfig().Token())
+		assert.NotContains(t, updatedEnv, "SNYK_CFG_DISABLE_ANALYTICS=1")
+	})
+
+	t.Run("Disables analytics, if telemetry disabled", func(t *testing.T) {
+		testutil.UnitTest(t)
+		cli := SnykCli{}
+		config.CurrentConfig().SetTelemetryEnabled(false)
+
+		updatedEnv := cli.addConfigValuesToEnv([]string{})
+
+		assert.Contains(t, updatedEnv, "SNYK_CFG_DISABLE_ANALYTICS=1")
+	})
 }
 
 func TestGetCommand_AddsToEnvironmentAndSetsDir(t *testing.T) {

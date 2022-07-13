@@ -20,7 +20,6 @@ import (
 )
 
 const (
-	SnykTokenKey          = "SNYK_TOKEN"
 	deeproxyApiUrlKey     = "DEEPROXY_API_URL"
 	FormatHtml            = "html"
 	FormatMd              = "md"
@@ -39,7 +38,6 @@ var (
 
 type CliSettings struct {
 	Insecure             bool
-	Endpoint             string
 	AdditionalParameters []string
 	cliPath              string
 	cliPathAccessMutex   sync.Mutex
@@ -125,7 +123,7 @@ func New() *Config {
 	c.snykApiUrl = defaultSnykApiUrl
 	c.snykCodeApiUrl = defaultDeeproxyApiUrl
 	c.snykCodeAnalysisTimeout = snykCodeAnalysisTimeoutFromEnv()
-	c.token = tokenFromEnv()
+	c.token = ""
 	c.clientSettingsFromEnv()
 	return c
 }
@@ -184,34 +182,31 @@ func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnal
 func (c *Config) Token() string                          { return c.token }
 
 func (c *Config) SetCliSettings(settings *CliSettings) {
-	if settings.Endpoint != c.cliSettings.Endpoint {
-		// Reset token
-		c.token = ""
+	c.cliSettings = settings
+}
 
-		// Update Snyk API endpoint
-		c.SetSnykApi(settings.Endpoint)
+func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
+	if snykApiUrl == "" {
+		snykApiUrl = defaultSnykApiUrl
+	}
+
+	if snykApiUrl != c.snykApiUrl {
+		c.snykApiUrl = snykApiUrl
 
 		// Update Code API endpoint
-		snykCodeApiUrl, err := getCodeApiUrlFromCustomEndpoint(settings.Endpoint)
+		snykCodeApiUrl, err := getCodeApiUrlFromCustomEndpoint(snykApiUrl)
 		if err != nil {
 			log.Error().Err(err).Msg("Couldn't obtain Snyk Code API url from CLI endpoint.")
 		}
 
-		c.SetSnykCodeApi(snykCodeApiUrl)
+		c.setSnykCodeApi(snykCodeApiUrl)
+		return true
 	}
 
-	c.cliSettings = settings
+	return false
 }
 
-func (c *Config) SetSnykApi(snykApiUrl string) {
-	if snykApiUrl == "" {
-		c.snykApiUrl = defaultSnykApiUrl
-		return
-	}
-	c.snykApiUrl = snykApiUrl
-}
-
-func (c *Config) SetSnykCodeApi(snykCodeApiUrl string) {
+func (c *Config) setSnykCodeApi(snykCodeApiUrl string) {
 	if snykCodeApiUrl == "" {
 		c.snykCodeApiUrl = defaultDeeproxyApiUrl
 		return
@@ -258,8 +253,6 @@ func (c *Config) ConfigureLogging(level string) {
 }
 
 func (c *Config) SetConfigFile(configFile string) { c.configFile = configFile }
-
-func tokenFromEnv() string { return os.Getenv(SnykTokenKey) }
 
 func getCodeApiUrlFromCustomEndpoint(endpoint string) (string, error) {
 	// Code API endpoint can be set via env variable for debugging using local API instance

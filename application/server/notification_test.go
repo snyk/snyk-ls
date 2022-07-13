@@ -9,13 +9,13 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/rs/zerolog/log"
 
+	sglsp "github.com/sourcegraph/go-lsp"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
-	"github.com/snyk/snyk-ls/presentation/lsp"
-
-	sglsp "github.com/sourcegraph/go-lsp"
-	"github.com/stretchr/testify/assert"
 )
 
 type ServerImplMock struct{}

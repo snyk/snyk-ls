@@ -221,6 +221,7 @@ type Settings struct {
 	EnableTelemetry             string `json:"enableTelemetry,omitempty"`
 	ManageBinariesAutomatically string `json:"manageBinariesAutomatically,omitempty"`
 	CliPath                     string `json:"cliPath,omitempty"`
+	Token                       string `json:"token,omitempty"`
 }
 
 type DidChangeConfigurationParams struct {

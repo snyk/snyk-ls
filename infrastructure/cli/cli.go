@@ -8,20 +8,33 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog/log"
+	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/infrastructure/cli/auth"
+	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/notification"
+)
+
+const (
+	OrganizationEnvVar     = "SNYK_CFG_ORG"
+	ApiEnvVar              = "SNYK_API"
+	TokenEnvVar            = "SNYK_TOKEN"
+	DisableAnalyticsEnvVar = "SNYK_CFG_DISABLE_ANALYTICS"
 )
 
 type SnykCli struct {
-	authenticator *auth.Authenticator
+	authenticator snyk.AuthenticationProvider
+	errorReporter error_reporting.ErrorReporter
 }
 
 var Mutex = &sync.RWMutex{}
 
-func NewExecutor(authenticator *auth.Authenticator) Executor {
+func NewExecutor(authenticator snyk.AuthenticationProvider, errorReporter error_reporting.ErrorReporter) Executor {
 	return &SnykCli{
-		authenticator: authenticator,
+		authenticator,
+		errorReporter,
 	}
 }
 
@@ -63,18 +76,23 @@ func (c SnykCli) getCommand(cmd []string, workingDir string) *exec.Cmd {
 	return command
 }
 
+// AddConfigValuesToEnv adds the config values to the environment. Since we append, our values are overwriting existing env  variables.
 func (c SnykCli) addConfigValuesToEnv(env []string) (updatedEnv []string) {
 	updatedEnv = env
 
 	organization := config.CurrentConfig().GetOrganization()
 	if organization != "" {
-		updatedEnv = append(updatedEnv, "SNYK_CFG_ORG="+organization)
+		updatedEnv = append(updatedEnv, OrganizationEnvVar+"="+organization)
 	}
 
-	endpoint := config.CurrentConfig().CliSettings().Endpoint
-	updatedEnv = append(updatedEnv, "SNYK_API="+endpoint)
-
-	updatedEnv = append(updatedEnv, "SNYK_TOKEN="+config.CurrentConfig().Token())
+	config := config.CurrentConfig()
+	updatedEnv = append(updatedEnv, TokenEnvVar+"="+config.Token())
+	if config.SnykApi() != "" {
+		updatedEnv = append(updatedEnv, ApiEnvVar+"="+config.SnykApi())
+	}
+	if !config.IsTelemetryEnabled() {
+		updatedEnv = append(updatedEnv, DisableAnalyticsEnvVar+"=1")
+	}
 	return
 }
 
@@ -100,7 +118,18 @@ func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
 
 func (c SnykCli) HandleErrors(ctx context.Context, output string, err error) (fail bool) {
 	if strings.Contains(output, "`snyk` requires an authenticated account. Please run `snyk auth` and try again.") {
-		c.authenticator.Authenticate(ctx)
+		log.Info().Msg("Snyk failed to obtain authentication information. Trying to authenticate again...")
+		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Snyk failed to obtain authentication information, trying to authenticate again. This could open a browser window."})
+
+		token, err := c.authenticator.Authenticate(ctx)
+		if token == "" || err != nil {
+			log.Error().Err(err).Msg("Failed to authenticate. Terminating server.")
+			c.errorReporter.CaptureError(err)
+			os.Exit(1) // terminate server since unrecoverable from authentication error
+		}
+
+		config.CurrentConfig().SetToken(token)
+		notification.Send(lsp.AuthenticationParams{Token: token})
 		return true
 	}
 	return false

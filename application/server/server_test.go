@@ -20,6 +20,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -29,7 +30,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
-	"github.com/snyk/snyk-ls/presentation/lsp"
 )
 
 const maxIntegTestDuration = 15 * time.Minute
@@ -219,8 +219,8 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 }
 
 func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
-	testutil.IntegTest(t)
 	loc := setupServer(t)
+	testutil.IntegTest(t)
 
 	testutil.CreateDummyProgressListener(t)
 
@@ -242,7 +242,9 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal("couldn't unset environment")
 	}
-	config.SetCurrentConfig(config.New())
+	c := config.New()
+	c.SetToken(testutil.GetEnvironmentToken())
+	config.SetCurrentConfig(c)
 
 	didOpenParams, dir, cleanup := didOpenTextParams()
 	defer cleanup()
@@ -332,8 +334,8 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 }
 
 func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) {
-	testutil.IntegTest(t)
 	loc := setupServer(t)
+	testutil.IntegTest(t)
 	testutil.CreateDummyProgressListener(t)
 	file := testutil.CreateTempFile(t.TempDir(), t)
 	w := workspace.Get()
@@ -368,7 +370,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 func Test_SmokeWorkspaceScanOssAndCode(t *testing.T) {
 	ossFile := "package.json"
 	codeFile := "app.js"
-	runSmokeTest("https://github.com/snyk/goof", "0336589", ossFile, codeFile, t)
+	runSmokeTest("https://github.com/snyk-labs/nodejs-goof", "0336589", ossFile, codeFile, t)
 }
 
 func Test_SmokeWorkspaceScanIacAndCode(t *testing.T) {
@@ -456,10 +458,10 @@ func checkForPublishedDiagnostics(w *workspace.Workspace, testPath string, expec
 }
 
 func Test_IntegrationHoverResults(t *testing.T) {
-	testutil.IntegTest(t)
 	loc := setupServer(t)
+	testutil.IntegTest(t)
 
-	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
+	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589")
 	defer os.RemoveAll(cloneTargetDir)
 	if err != nil {
 		t.Fatal(t, err, "Couldn't setup test repo")
@@ -508,15 +510,14 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	assert.Equal(t, hoverResult.Contents.Value, di.HoverService().GetHover(uri.PathToUri(testPath), testPosition).Contents.Value)
 	assert.Equal(t, hoverResult.Contents.Kind, "markdown")
 }
-func Test_IntegrationSnykCodeFileScan(t *testing.T) {
-	testutil.IntegTest(t)
+func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	loc := setupServer(t)
+	testutil.SmokeTest(t)
 	di.Init()
-	config.SetCurrentConfig(config.New())
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	_, _ = loc.Client.Call(ctx, "initialize", nil)
 
-	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk/goof", "0336589")
+	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589")
 	defer os.RemoveAll(cloneTargetDir)
 	if err != nil {
 		t.Fatal(t, err, "Couldn't setup test repo")

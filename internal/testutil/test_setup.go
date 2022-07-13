@@ -104,8 +104,12 @@ func prepareTestHelper(t *testing.T, envVar string) {
 		t.Logf("%s is not set", envVar)
 		t.SkipNow()
 	}
-	config.SetCurrentConfig(config.New())
-	config.CurrentConfig().SetErrorReportingEnabled(false)
-	config.CurrentConfig().SetTelemetryEnabled(false)
+
+	c := config.New()
+	c.SetToken(GetEnvironmentToken())
+	c.SetErrorReportingEnabled(false)
+	c.SetTelemetryEnabled(false)
+	config.SetCurrentConfig(c)
+
 	CLIDownloadLockFileCleanUp(t)
 }

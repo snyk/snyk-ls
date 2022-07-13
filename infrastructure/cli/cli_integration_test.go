@@ -19,11 +19,9 @@ import (
 //todo these tests are hard to understand can we simplify?
 
 //goland:noinspection GoErrorStringFormat
-func Test_HandleErrors_MissingTokenError(t *testing.T) {
+func Test_HandleErrors_MissingTokenError(t *testing.T) { // todo: check if still working
 	t.Skip("This test cannot be run automatically, as long as auth is calling an external website.")
 	// todo check if an endpoint that is an http mock can be used for auth
-	t.Setenv(config.SnykTokenKey, "dummy")
-	os.Unsetenv(config.SnykTokenKey)
 	testutil.IntegTest(t)
 	config.CurrentConfig().SetToken("")
 	ctx := context.Background()
@@ -46,8 +44,6 @@ func Test_HandleErrors_MissingTokenError(t *testing.T) {
 func Test_Execute_HandlesErrors(t *testing.T) {
 	// exit status 2: MissingApiTokenError: `snyk` requires an authenticated account. Please run `snyk auth` and try again.
 	//    at Object.apiTokenExists (C:\snapshot\snyk\dist\cli\webpack:\snyk\src\lib\api-token.ts:22:11)
-	t.Setenv(config.SnykTokenKey, "dummy")
-	os.Unsetenv(config.SnykTokenKey)
 	t.Skipf("opens authentication browser window, only activate for dev testing")
 	testutil.IntegTest(t)
 	testutil.NotOnWindows(t, "moving around CLI config, and file moves under Windows are not very resilient")
