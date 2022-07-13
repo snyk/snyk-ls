@@ -80,7 +80,7 @@ jobs:
 
       - name: Create release tag
         run: |
-          git tag "v$(git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)"
+          git tag "v$(git show -s --format=%cd --date=format:%Y%m%d.%H%M%S%z)"
           git push --tags
 
       - name: Release binaries with GoReleaser
