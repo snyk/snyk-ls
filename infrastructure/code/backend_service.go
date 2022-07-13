@@ -43,7 +43,6 @@ func issueSeverity(snykSeverity string) snyk.Severity {
 
 type SnykCodeHTTPClient struct {
 	client        http.Client
-	host          string
 	instrumentor  performance2.Instrumentor
 	errorReporter error_reporting.ErrorReporter
 }
@@ -63,8 +62,8 @@ type filtersResponse struct {
 	Extensions  []string `json:"extensions" pact:"min=1"`
 }
 
-func NewHTTPRepository(host string, instrumentor performance2.Instrumentor, errorReporter error_reporting.ErrorReporter) *SnykCodeHTTPClient {
-	return &SnykCodeHTTPClient{*httpclient.NewHTTPClient(), host, instrumentor, errorReporter}
+func NewHTTPRepository(instrumentor performance2.Instrumentor, errorReporter error_reporting.ErrorReporter) *SnykCodeHTTPClient {
+	return &SnykCodeHTTPClient{*httpclient.NewHTTPClient(), instrumentor, errorReporter}
 }
 
 func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (configFiles []string, extensions []string, err error) {
@@ -140,7 +139,9 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 		b = bytes.NewBuffer(requestBody)
 	}
 
-	req, err := http.NewRequest(method, s.host+path, b)
+	host := config.CurrentConfig().SnykCodeApi()
+
+	req, err := http.NewRequest(method, host+path, b)
 	if err != nil {
 		return nil, err
 	}
@@ -163,6 +164,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 		s.errorReporter.CaptureError(err)
 		return nil, err
 	}
+
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
@@ -170,12 +172,18 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 		}
 	}(response.Body)
 	responseBody, err := ioutil.ReadAll(response.Body)
-	log.Trace().Str("responseBody", string(responseBody)).Str("snyk-request-id", requestId).Msg("RECEIVED FROM REMOTE")
+	log.Trace().Str("response.Status", response.Status).Str("responseBody", string(responseBody)).Str("snyk-request-id", requestId).Msg("RECEIVED FROM REMOTE")
 	if err != nil {
 		log.Err(err).Str("method", method).Msgf("error reading response body")
 		s.errorReporter.CaptureError(err)
 		return nil, err
 	}
+
+	err = checkResponseCode(response)
+	if err != nil {
+		return nil, err
+	}
+
 	return responseBody, err
 }
 
@@ -342,4 +350,12 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (issue
 		}
 	}
 	return issues
+}
+
+func checkResponseCode(r *http.Response) error {
+	if r.StatusCode >= 200 && r.StatusCode <= 299 {
+		return nil
+	}
+
+	return errors.New("Unexpected response code: " + r.Status)
 }

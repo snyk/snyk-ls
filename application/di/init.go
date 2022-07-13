@@ -6,7 +6,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	error_reporting2 "github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -65,15 +64,11 @@ func initDomain() {
 func initInfrastructure() {
 	errorReporter = sentry2.NewSentryErrorReporter()
 	instrumentor = sentry2.NewInstrumentor()
-	endpoint := config.CurrentConfig().CliSettings().Endpoint
-	if endpoint == "" {
-		endpoint = snyk_api.DefaultEndpointURL
-	}
-	snykApiClient = snyk_api.NewSnykApiClient(endpoint)
+	snykApiClient = snyk_api.NewSnykApiClient()
 	analytics = analyticsFactory(snykApiClient)
-	authenticator = auth2.New(errorReporter)
+	authenticator = auth2.New(errorReporter, auth2.NewCliAuthenticationProvider())
 	snykCli = cli2.NewExecutor(authenticator)
-	snykCodeClient = code2.NewHTTPRepository(config.CurrentConfig().SnykCodeApi(), instrumentor, errorReporter)
+	snykCodeClient = code2.NewHTTPRepository(instrumentor, errorReporter)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
@@ -110,7 +105,7 @@ func TestInit(t *testing.T) {
 	analytics = ux2.NewTestAnalytics()
 	instrumentor = performance2.NewTestInstrumentor()
 	errorReporter = error_reporting2.NewTestErrorReporter()
-	authenticator = auth2.New(errorReporter)
+	authenticator = auth2.New(errorReporter, auth2.NewCliAuthenticationProvider())
 	environmentInitializer = initialize.NewDelegatingInitializer(
 		cli2.NewInitializer(errorReporter, install.NewInstaller(errorReporter)),
 		auth2.NewInitializer(authenticator),
@@ -151,6 +146,12 @@ func SnykCli() cli2.Executor {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return snykCli
+}
+
+func Authenticator() *auth2.Authenticator {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return authenticator
 }
 
 func HoverService() hover.Service {

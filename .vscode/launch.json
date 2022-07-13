@@ -11,6 +11,13 @@
             "mode": "auto",
             "program": "${workspaceFolder}",
             "buildFlags": "-ldflags='-X 'github.com/snyk/snyk-ls/config.Development=true''"
+        },
+        {
+          "name": "Attach to Process",
+          "type": "go",
+          "request": "attach",
+          "mode": "local",
+          "processId": "snyk-ls",
         }
     ]
 }

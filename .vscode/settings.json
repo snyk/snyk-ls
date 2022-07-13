@@ -1,0 +1,10 @@
+{
+  "go.buildOnSave": "workspace",
+  "go.lintTool": "golangci-lint",
+  "go.formatTool": "goimports",
+  "go.formatFlags": ["-w", "-s"],
+  "gopls": {
+    "formatting.local": "github.com/snyk/snyk-ls"
+  },
+  "go.toolsManagement.autoUpdate": true,
+}
