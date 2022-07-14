@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/gomarkdown/markdown"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
@@ -102,7 +103,8 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 	iac.mutex.Lock()
 	defer iac.mutex.Unlock()
 
-	res, err := iac.cli.Execute(iac.cliCmd(documentURI), workspacePath)
+	cmd := iac.cliCmd(documentURI)
+	res, err := iac.cli.Execute(cmd, workspacePath)
 
 	if err != nil {
 		switch errorType := err.(type) {
@@ -114,7 +116,8 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 					return scanResults, nil
 				}
 				log.Err(err).Str("method", method).Str("output", errorOutput).Msg("Error while calling Snyk CLI")
-				return nil, fmt.Errorf("%v: %v", err, errorOutput)
+				err = errors.Wrap(err, fmt.Sprintf("Snyk CLI error executing %v. Output: %s", cmd, errorOutput))
+				return nil, err
 			}
 		default:
 			log.Err(err).Str("method", method).Msg("Error while calling Snyk CLI")
@@ -122,13 +125,18 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 		}
 	}
 
-	if uri.IsDirectory(documentURI) {
+	output := string(res)
+	if strings.HasPrefix(output, "[") {
 		if err = json.Unmarshal(res, &scanResults); err != nil {
+			err = errors.Wrap(err, fmt.Sprintf("Cannot unmarshall %s", output))
+			log.Err(err).Str("method", method).Msg("Cannot unmarshall")
 			return nil, err
 		}
 	} else {
 		var scanResult iacScanResult
 		if err = json.Unmarshal(res, &scanResult); err != nil {
+			err = errors.Wrap(err, fmt.Sprintf("Cannot unmarshall %s", output))
+			log.Err(err).Str("method", method).Msg("Cannot unmarshall")
 			return nil, err
 		}
 		scanResults = append(scanResults, scanResult)

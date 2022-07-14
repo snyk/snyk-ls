@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/gomarkdown/markdown"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
@@ -122,7 +123,7 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string, _ []string)
 	cmd := oss.cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliPath(), "test", workDir, "--json"})
 	res, err := oss.cli.Execute(cmd, workDir)
 	if err != nil {
-		if oss.handleError(err, res) {
+		if oss.handleError(err, res, cmd) {
 			return
 		}
 	}
@@ -164,30 +165,29 @@ func (oss *Scanner) unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.
 }
 
 func (oss *Scanner) unmarshallOssJson(res []byte) (scanResults []ossScanResult, done bool, err error) {
-	err = json.Unmarshal(res, &scanResults)
-	if err != nil {
-		switch err := err.(type) {
-		case *json.UnmarshalTypeError:
-			var scanResult ossScanResult
-			// fallback: try to unmarshal into single object if not an array of scan results
-			err2 := json.Unmarshal(res, &scanResult)
-			if err2 != nil {
-				log.Err(err).Str("method", "unmarshalOssJson").Msg("couldn't unmarshal response as array")
-				log.Err(err2).Str("method", "unmarshalOssJson").Msg("couldn't unmarshal response as single result")
-				return nil, true, err2
-			}
-			scanResults = append(scanResults, scanResult)
-			return scanResults, false, err2
-		default:
-			log.Err(err).Str("method", "unmarshalOssJson").Msg("couldn't unmarshal response as array")
+	output := string(res)
+	if strings.HasPrefix(output, "[") {
+		err = json.Unmarshal(res, &scanResults)
+		if err != nil {
+			err = errors.Wrap(err, fmt.Sprintf("Couldn't unmarshal CLI response. Input: %s", output))
 			return nil, true, err
 		}
+	} else {
+		var scanResult ossScanResult
+		err = json.Unmarshal(res, &scanResult)
+		if err != nil {
+			if err != nil {
+				err = errors.Wrap(err, fmt.Sprintf("Couldn't unmarshal CLI response. Input: %s", output))
+				return nil, true, err
+			}
+		}
+		scanResults = append(scanResults, scanResult)
 	}
 	return scanResults, false, err
 }
 
-func (oss *Scanner) handleError(err error, res []byte) bool {
-	switch err := err.(type) {
+func (oss *Scanner) handleError(err error, res []byte, cmd []string) bool {
+	switch errorType := err.(type) {
 	case *exec.ExitError:
 		// Exit codes
 		//  Possible exit codes and their meaning:
@@ -197,7 +197,8 @@ func (oss *Scanner) handleError(err error, res []byte) bool {
 		//  2: failure, try to re-run command
 		//  3: failure, no supported projects detected
 		errorOutput := string(res)
-		switch err.ExitCode() {
+		err = errors.Wrap(err, fmt.Sprintf("Snyk CLI error executing %v. Output: %s", cmd, errorOutput))
+		switch errorType.ExitCode() {
 		case 1:
 			return false
 		case 2:
