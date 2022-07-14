@@ -22,7 +22,7 @@ func NewHTTPClient() *http.Client {
 	client := &http.Client{Transport: tr}
 	client.Timeout = 10 * time.Minute
 	buffer := bytes.NewBuffer([]byte(""))
-	req, err := http.NewRequest("GET", "http://api.snyk.io", buffer)
+	req, err := http.NewRequest("GET", "https://api.snyk.io", buffer)
 	if err != nil {
 		log.Err(err).Str("method", method).Send()
 	}
