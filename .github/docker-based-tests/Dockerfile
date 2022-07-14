@@ -18,6 +18,7 @@ ENV http_proxy="http://localhost:3128"
 ENV https_proxy="http://localhost:3128"
 ENV no_proxy "localhost,127.0.0.1"
 ENV INTEG_TESTS=true
+ENV SMOKE_TESTS=true
 
 RUN env
 USER snyk

@@ -3,6 +3,7 @@ package code
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -46,11 +47,12 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 
 	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	files := map[string]string{}
-	files[path1] = util.Hash([]byte(content))
+	randomAddition := fmt.Sprintf("\n public void random() { System.out.println(\"%d\") }", time.Now().UnixMicro())
+	files[path1] = util.Hash([]byte(content + randomAddition))
 	bundleHash, missingFiles, _ := s.CreateBundle(context.Background(), files)
 	assert.NotNil(t, bundleHash)
 	assert.NotEqual(t, "", bundleHash)
-	assert.Equal(t, 0, len(missingFiles))
+	assert.Equal(t, 1, len(missingFiles))
 }
 
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
