@@ -35,6 +35,10 @@ func (sc *Scanner) IsEnabled() bool {
 	return config.CurrentConfig().IsSnykCodeEnabled()
 }
 
+func (sc *Scanner) ProductLine() snyk.ProductLine {
+	return snyk.ProductLineCode
+}
+
 func (sc *Scanner) Scan(ctx context.Context, _ string, workspacePath string, files []string) []snyk.Issue {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
@@ -62,7 +66,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path st
 		return issues
 	}
 
-	uploadedBundle, err := sc.BundleUploader.Upload(ctx, bundle, bundleFiles)
+	uploadedBundle, err := sc.BundleUploader.Upload(span.Context(), bundle, bundleFiles)
 	// TODO LSP error handling should be pushed UP to the LSP layer
 	if err != nil {
 		msg := "error uploading files..."
@@ -74,7 +78,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path st
 		return issues
 	}
 
-	issues = uploadedBundle.FetchDiagnosticsData(ctx)
+	issues = uploadedBundle.FetchDiagnosticsData(span.Context())
 	sc.trackResult(true)
 	return issues
 }
@@ -99,7 +103,7 @@ func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath 
 	fileHashes := make(map[string]string)
 	bundleFiles = make(map[string]BundleFile)
 	for _, filePath := range filePaths {
-		if !sc.BundleUploader.isSupported(ctx, filePath) {
+		if !sc.BundleUploader.isSupported(span.Context(), filePath) {
 			continue
 		}
 		fileContent, err := loadContent(filePath)

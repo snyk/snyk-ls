@@ -60,6 +60,10 @@ func (iac *Scanner) IsEnabled() bool {
 	return config.CurrentConfig().IsSnykIacEnabled()
 }
 
+func (iac *Scanner) ProductLine() snyk.ProductLine {
+	return snyk.ProductLineInfrastructureAsCode
+}
+
 func (iac *Scanner) Scan(ctx context.Context, path string, _ string, _ []string) (issues []snyk.Issue) {
 	documentURI := uri.PathToUri(path) //todo get rid of lsp dep
 	if !iac.isSupported(documentURI) {

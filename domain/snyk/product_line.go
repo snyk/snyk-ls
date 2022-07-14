@@ -14,6 +14,7 @@ type ProductLineScanner interface {
 	) (issues []Issue)
 
 	IsEnabled() bool
+	ProductLine() ProductLine
 }
 type ProductLine string
 type ProductLineAttributes map[string]interface{}

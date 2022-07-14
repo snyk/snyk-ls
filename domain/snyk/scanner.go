@@ -52,9 +52,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	legacyFilesToScan []string,
 ) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
-	s := sc.instrumentor.NewTransaction(ctx, method, method)
-	//TODO this is not correct as it runs async
-	defer sc.instrumentor.Finish(s)
 
 	sc.analytics.AnalysisIsTriggered(
 		ux2.AnalysisIsTriggeredProperties{
@@ -68,9 +65,11 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	for _, scanner := range sc.scanners {
 		if scanner.IsEnabled() {
 			go func(s ProductLineScanner) {
+				span := sc.instrumentor.NewTransaction(ctx, string(s.ProductLine()), method)
+				defer sc.instrumentor.Finish(span)
 				log.Debug().Msgf("Scanning %s with %T: STARTED", path, s)
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
-				foundIssues := s.Scan(ctx, path, legacyWorkspacePath, legacyFilesToScan)
+				foundIssues := s.Scan(span.Context(), path, legacyWorkspacePath, legacyFilesToScan)
 				processResults(foundIssues)
 				log.Debug().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
 			}(scanner)
