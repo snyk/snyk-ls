@@ -76,7 +76,7 @@ func (f *Folder) Files() (filePaths []string, err error) {
 	err = filepath.WalkDir(workspace, func(path string, dirEntry os.DirEntry, err error) error {
 		if err != nil {
 			log.Debug().
-				Str("method", "Files - walker").
+				Str("method", "domain.ide.workspace.Folder.Files").
 				Str("path", path).
 				Err(err).
 				Msg("error traversing files")
@@ -125,7 +125,7 @@ func (f *Folder) ScanFolder(ctx context.Context) {
 	if err != nil {
 		log.Warn().
 			Err(err).
-			Str("method", "doSnykCodeWorkspaceScan").
+			Str("method", "domain.ide.workspace.Folder.ScanFolder").
 			Str("workspacePath", f.path).
 			Msg("error getting workspace files")
 	}
