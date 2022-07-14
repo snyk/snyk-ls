@@ -20,6 +20,12 @@ func (s *TestScanner) IsEnabled() bool {
 	return true
 }
 
+const TestProductLine ProductLine = "Test ProductLine"
+
+func (s *TestScanner) ProductLine() ProductLine {
+	return TestProductLine
+}
+
 func (s *TestScanner) Scan(
 	ctx context.Context,
 	path string,

@@ -91,6 +91,10 @@ func (oss *Scanner) IsEnabled() bool {
 	return config.CurrentConfig().IsSnykOssEnabled()
 }
 
+func (oss *Scanner) ProductLine() snyk.ProductLine {
+	return snyk.ProductLineOpenSource
+}
+
 func (oss *Scanner) Scan(ctx context.Context, path string, _ string, _ []string) (issues []snyk.Issue) {
 	documentURI := uri.PathToUri(path) //todo get rid of lsp dep
 	if !oss.isSupported(documentURI) {
