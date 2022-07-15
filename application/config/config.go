@@ -32,7 +32,7 @@ const (
 
 var (
 	Version       = "SNAPSHOT"
-	Development   = "false"
+	Development   = "true"
 	currentConfig *Config
 	mutex         = &sync.Mutex{}
 )
