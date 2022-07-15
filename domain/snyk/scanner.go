@@ -24,7 +24,7 @@ type Scanner interface {
 
 //DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
 type DelegatingConcurrentScanner struct {
-	scanners     []ProductLineScanner
+	scanners     []ProductScanner
 	initializer  initialize.Initializer
 	instrumentor performance.Instrumentor
 	analytics    ux2.Analytics
@@ -34,7 +34,7 @@ func NewDelegatingScanner(
 	initializer initialize.Initializer,
 	instrumentor performance.Instrumentor,
 	analytics ux2.Analytics,
-	scanners ...ProductLineScanner,
+	scanners ...ProductScanner,
 ) Scanner {
 	return &DelegatingConcurrentScanner{
 		instrumentor: instrumentor,
@@ -64,8 +64,8 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	sc.initializer.Init()
 	for _, scanner := range sc.scanners {
 		if scanner.IsEnabled() {
-			go func(s ProductLineScanner) {
-				span := sc.instrumentor.NewTransaction(context.WithValue(ctx, s.ProductLine(), s), string(s.ProductLine()), method)
+			go func(s ProductScanner) {
+				span := sc.instrumentor.NewTransaction(context.WithValue(ctx, s.Product(), s), string(s.Product()), method)
 				defer sc.instrumentor.Finish(span)
 				log.Debug().Msgf("Scanning %s with %T: STARTED", path, s)
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream

@@ -60,8 +60,8 @@ func (iac *Scanner) IsEnabled() bool {
 	return config.CurrentConfig().IsSnykIacEnabled()
 }
 
-func (iac *Scanner) ProductLine() snyk.ProductLine {
-	return snyk.ProductLineInfrastructureAsCode
+func (iac *Scanner) Product() snyk.Product {
+	return snyk.ProductInfrastructureAsCode
 }
 
 func (iac *Scanner) Scan(ctx context.Context, path string, _ string, _ []string) (issues []snyk.Issue) {
@@ -225,7 +225,7 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue) snyk.Issue 
 		LegacyMessage:    iac.getExtendedMessage(issue),
 		Severity:         iac.toIssueSeverity(issue.Severity),
 		AffectedFilePath: affectedFilePath,
-		ProductLine:      snyk.ProductLineInfrastructureAsCode,
+		ProductLine:      snyk.ProductInfrastructureAsCode,
 	}
 }
 

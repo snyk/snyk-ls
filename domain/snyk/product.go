@@ -2,7 +2,7 @@ package snyk
 
 import "context"
 
-type ProductLineScanner interface {
+type ProductScanner interface {
 	Scan(
 		//todo do we need context?
 		ctx context.Context,
@@ -14,13 +14,13 @@ type ProductLineScanner interface {
 	) (issues []Issue)
 
 	IsEnabled() bool
-	ProductLine() ProductLine
+	Product() Product
 }
-type ProductLine string
-type ProductLineAttributes map[string]interface{}
+type Product string
+type ProductAttributes map[string]interface{}
 
 const (
-	ProductLineCode                 ProductLine = "Snyk Code"
-	ProductLineOpenSource           ProductLine = "Snyk Open Source"
-	ProductLineInfrastructureAsCode ProductLine = "Snyk IaC"
+	ProductCode                 Product = "Snyk Code"
+	ProductOpenSource           Product = "Snyk Open Source"
+	ProductInfrastructureAsCode Product = "Snyk IaC"
 )

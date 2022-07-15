@@ -91,8 +91,8 @@ func (oss *Scanner) IsEnabled() bool {
 	return config.CurrentConfig().IsSnykOssEnabled()
 }
 
-func (oss *Scanner) ProductLine() snyk.ProductLine {
-	return snyk.ProductLineOpenSource
+func (oss *Scanner) Product() snyk.Product {
+	return snyk.ProductOpenSource
 }
 
 func (oss *Scanner) Scan(ctx context.Context, path string, _ string, _ []string) (issues []snyk.Issue) {
@@ -272,7 +272,7 @@ func (oss *Scanner) toIssue(affectedFilePath string, issue ossIssue, issueRange 
 		Range:            issueRange,
 		Severity:         oss.toIssueSeverity(issue.Severity),
 		AffectedFilePath: affectedFilePath,
-		ProductLine:      snyk.ProductLineOpenSource,
+		ProductLine:      snyk.ProductOpenSource,
 	}
 }
 
