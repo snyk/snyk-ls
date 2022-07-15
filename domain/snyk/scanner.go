@@ -77,5 +77,5 @@ func (sc *DelegatingConcurrentScanner) Scan(
 			log.Debug().Msgf("Skipping scan with %T because it is not enabled", scanner)
 		}
 	}
-	log.Debug().Msgf("Scanning %s complete", path)
+	log.Debug().Msgf("All product line scanners started for %s", path)
 }
