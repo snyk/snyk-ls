@@ -65,7 +65,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	for _, scanner := range sc.scanners {
 		if scanner.IsEnabled() {
 			go func(s ProductLineScanner) {
-				span := sc.instrumentor.NewTransaction(ctx, string(s.ProductLine()), method)
+				span := sc.instrumentor.NewTransaction(context.WithValue(ctx, s.ProductLine(), s), string(s.ProductLine()), method)
 				defer sc.instrumentor.Finish(span)
 				log.Debug().Msgf("Scanning %s with %T: STARTED", path, s)
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
