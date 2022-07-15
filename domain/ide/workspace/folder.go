@@ -33,7 +33,7 @@ type Folder struct {
 	path                    string
 	name                    string
 	status                  FolderStatus
-	productLineAttributes   map[snyk.ProductLine]snyk.ProductLineAttributes
+	productLineAttributes   map[snyk.Product]snyk.ProductAttributes
 	ignorePatterns          []string
 	documentDiagnosticCache concurrency.AtomicMap
 	scanner                 snyk.Scanner
@@ -47,12 +47,12 @@ func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hove
 		path:                  path,
 		name:                  name,
 		status:                Unscanned,
-		productLineAttributes: make(map[snyk.ProductLine]snyk.ProductLineAttributes),
+		productLineAttributes: make(map[snyk.Product]snyk.ProductAttributes),
 		hoverService:          hoverService,
 	}
-	folder.productLineAttributes[snyk.ProductLineCode] = snyk.ProductLineAttributes{}
-	folder.productLineAttributes[snyk.ProductLineInfrastructureAsCode] = snyk.ProductLineAttributes{}
-	folder.productLineAttributes[snyk.ProductLineOpenSource] = snyk.ProductLineAttributes{}
+	folder.productLineAttributes[snyk.ProductCode] = snyk.ProductAttributes{}
+	folder.productLineAttributes[snyk.ProductInfrastructureAsCode] = snyk.ProductAttributes{}
+	folder.productLineAttributes[snyk.ProductOpenSource] = snyk.ProductAttributes{}
 	folder.documentDiagnosticCache = concurrency.AtomicMap{}
 	return &folder
 }
@@ -139,11 +139,11 @@ func (f *Folder) ScanFile(ctx context.Context, path string) {
 	f.scan(ctx, path, []string{path})
 }
 
-func (f *Folder) GetProductAttribute(productLine snyk.ProductLine, name string) interface{} {
+func (f *Folder) GetProductAttribute(productLine snyk.Product, name string) interface{} {
 	return f.productLineAttributes[productLine][name]
 }
 
-func (f *Folder) AddProductAttribute(productLine snyk.ProductLine, name string, value interface{}) {
+func (f *Folder) AddProductAttribute(productLine snyk.Product, name string, value interface{}) {
 	f.productLineAttributes[productLine][name] = value
 }
 

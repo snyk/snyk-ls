@@ -35,8 +35,8 @@ func (sc *Scanner) IsEnabled() bool {
 	return config.CurrentConfig().IsSnykCodeEnabled()
 }
 
-func (sc *Scanner) ProductLine() snyk.ProductLine {
-	return snyk.ProductLineCode
+func (sc *Scanner) Product() snyk.Product {
+	return snyk.ProductCode
 }
 
 func (sc *Scanner) Scan(ctx context.Context, _ string, workspacePath string, files []string) []snyk.Issue {

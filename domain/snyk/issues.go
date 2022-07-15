@@ -18,7 +18,7 @@ type Issue struct {
 	LegacyMessage string
 	// AffectedFilePath is the file path to the file where the issue was found
 	AffectedFilePath string
-	ProductLine      ProductLine
+	ProductLine      Product
 }
 
 func (i Issue) String() string {
