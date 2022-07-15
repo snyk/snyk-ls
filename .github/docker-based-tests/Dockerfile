@@ -18,7 +18,7 @@ RUN chmod 777 /app && chown -R snyk /app
 # maven setup
 RUN mkdir -p /home/snyk/.m2
 RUN cp /app/.github/docker-based-tests/settings.xml /home/snyk/.m2/settings.xml
-RUN chmod 777 /home/snyk/.m2/settings.xml && chown -R snyk /home/snyk/.m2/settings.xml
+RUN chmod 777 /home/snyk/.m2/settings.xml && chown -R snyk /home/snyk/.m2
 
 ENV http_proxy="http://localhost:3128"
 ENV https_proxy="http://localhost:3128"
