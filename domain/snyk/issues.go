@@ -22,6 +22,7 @@ type Issue struct {
 	AffectedFilePath string
 	Product          Product
 	References       []uri.URI
+	CodeActions      []CodeAction
 }
 
 func (i Issue) String() string {

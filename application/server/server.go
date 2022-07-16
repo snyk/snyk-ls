@@ -57,6 +57,7 @@ func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 	(*handlers)["textDocument/didClose"] = NoOpHandler()
 	(*handlers)["textDocument/didSave"] = TextDocumentDidSaveHandler()
 	(*handlers)["textDocument/hover"] = TextDocumentHover()
+	(*handlers)["textDocument/codeAction"] = CodeAction()
 	(*handlers)["textDocument/willSave"] = NoOpHandler()
 	(*handlers)["textDocument/willSaveWaitUntil"] = NoOpHandler()
 	(*handlers)["shutdown"] = Shutdown()
@@ -66,10 +67,22 @@ func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 	(*handlers)["window/workDoneProgress/cancel"] = WindowWorkDoneProgressCancelHandler()
 }
 
+func CodeAction() jrpc2.Handler {
+	return handler.New(func(ctx context.Context, params sglsp.CodeActionParams) ([]lsp.CodeAction, error) {
+		log.Info().Str("method", "CodeActionHandler").Msg("RECEIVING")
+		defer log.Info().Str("method", "CodeActionHandler").Msg("SENDING")
+
+		filePath := uri.PathFromUri(params.TextDocument.URI)
+		requestedRange := workspace.FromRange(params.Range)
+		actions := workspace.Get().GetFolderContaining(filePath).CodeActions(filePath, requestedRange)
+		return workspace.ToCodeActions(actions), nil
+	})
+}
+
 func WorkspaceDidChangeWorkspaceFoldersHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) (interface{}, error) {
 		log.Info().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Msg("RECEIVING")
-		log.Info().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Msg("SENDING")
+		defer log.Info().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Msg("SENDING")
 
 		w := workspace.Get()
 		for _, folder := range params.Event.Removed {
@@ -124,7 +137,8 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 					Supported:           true,
 					ChangeNotifications: "snyk-ls",
 				},
-				HoverProvider: true,
+				HoverProvider:      true,
+				CodeActionProvider: true,
 			},
 		}, nil
 	})
@@ -133,7 +147,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 func Shutdown() jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (interface{}, error) {
 		log.Info().Str("method", "Shutdown").Msg("RECEIVING")
-		log.Info().Str("method", "Shutdown").Msg("SENDING")
+		defer log.Info().Str("method", "Shutdown").Msg("SENDING")
 		di.ErrorReporter().FlushErrorReporting()
 
 		disposeProgressListener()

@@ -9,7 +9,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 	ignore "github.com/sabhiram/go-gitignore"
-	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -219,7 +218,7 @@ func (f *Folder) processDiagnostics(issuesByFile map[string][]snyk.Issue) {
 		log.Debug().Str("method", "processDiagnostics").Str("affectedFilePath", path).Int("issueCount", len(issues)).Send()
 		notification.Send(lsp.PublishDiagnosticsParams{
 			URI:         uri.PathToUri(path),
-			Diagnostics: toDiagnostic(issues),
+			Diagnostics: toDiagnostics(issues),
 		})
 	}
 }
@@ -227,83 +226,6 @@ func (f *Folder) processDiagnostics(issuesByFile map[string][]snyk.Issue) {
 func (f *Folder) processHovers(issuesByFile map[string][]snyk.Issue) {
 	for path, issues := range issuesByFile {
 		f.hoverService.Channel() <- toHoversDocument(path, issues)
-	}
-}
-
-func toHoversDocument(path string, i []snyk.Issue) hover.DocumentHovers {
-	return hover.DocumentHovers{
-		Uri:   uri.PathToUri(path),
-		Hover: toHovers(i),
-	}
-}
-
-func toHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
-	for _, i := range issues {
-		message := ""
-		if len(i.LegacyMessage) > 0 {
-			message = i.LegacyMessage
-		} else {
-			message = i.Message
-		}
-		hovers = append(hovers, hover.Hover[hover.Context]{
-			Id:      i.ID,
-			Range:   toLspRange(i.Range),
-			Message: message,
-			Context: i,
-		})
-	}
-	return hovers
-}
-
-func toDiagnostic(issues []snyk.Issue) (diagnostics []lsp.Diagnostic) {
-	for _, issue := range issues {
-		var codeDescription lsp.CodeDescription
-		switch issue.Product { //nolint:exhaustive
-		case snyk.ProductOpenSource:
-			codeDescription = lsp.CodeDescription{Href: lsp.Uri("https://security.snyk.io/vuln/" + issue.ID)}
-		case snyk.ProductInfrastructureAsCode:
-			codeDescription = lsp.CodeDescription{Href: lsp.Uri("https://snyk.io/security-rules/" + issue.ID)}
-		default:
-			codeDescription = lsp.CodeDescription{}
-		}
-
-		diagnostics = append(diagnostics, lsp.Diagnostic{
-			Range:           toLspRange(issue.Range),
-			Severity:        toSeverity(issue.Severity),
-			Code:            issue.ID,
-			Source:          string(issue.Product),
-			Message:         issue.Message,
-			CodeDescription: codeDescription,
-		})
-	}
-	return diagnostics
-}
-
-func toSeverity(severity snyk.Severity) sglsp.DiagnosticSeverity {
-	switch severity {
-	case snyk.Critical:
-		return sglsp.Error
-	case snyk.High:
-		return sglsp.Error
-	case snyk.Medium:
-		return sglsp.Warning
-	case snyk.Low:
-		return sglsp.Information
-	}
-	return sglsp.Info
-}
-
-func toLspRange(r snyk.Range) sglsp.Range {
-	return sglsp.Range{
-		Start: toLspPosition(r.Start),
-		End:   toLspPosition(r.End),
-	}
-}
-
-func toLspPosition(p snyk.Position) sglsp.Position {
-	return sglsp.Position{
-		Line:      p.Line,
-		Character: p.Character,
 	}
 }
 
@@ -351,3 +273,26 @@ func (f *Folder) loadIgnorePatterns() (patterns []string, err error) {
 func (f *Folder) Path() string         { return f.path }
 func (f *Folder) Name() string         { return f.name }
 func (f *Folder) Status() FolderStatus { return f.status }
+
+func (f *Folder) CodeActions(filePath string, requestedRange snyk.Range) (codeActions []snyk.CodeAction) {
+	method := "domain.ide.workspace.folder.getCodeActions"
+	issues := f.documentDiagnosticsFromCache(filePath)
+	for _, issue := range issues {
+		if rangesOverlap(issue.Range, requestedRange) {
+			log.Debug().Str("method", method).Msg("appending code action for issue " + issue.String())
+			codeActions = append(codeActions, issue.CodeActions...)
+		}
+	}
+
+	log.Debug().Str("method", method).Msgf(
+		"found %s code actions for %s, %s",
+		len(codeActions),
+		filePath,
+		requestedRange,
+	)
+	return codeActions
+}
+
+func rangesOverlap(r snyk.Range, r2 snyk.Range) bool {
+	return r.Start.Line <= r2.Start.Line && r.End.Line >= r2.Start.Line
+}

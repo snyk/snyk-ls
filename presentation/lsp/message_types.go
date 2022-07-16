@@ -315,3 +315,200 @@ type WorkDoneProgressEnd struct {
 type WorkdoneProgressCancelParams struct {
 	Token ProgressToken `json:"token"`
 }
+
+type CodeActionContext struct {
+	/**
+	 * An array of diagnostics known on the client side overlapping the range provided to the
+	 * `textDocument/codeAction` request. They are provided so that the server knows which
+	 * errors are currently presented to the user for the given range. There is no guarantee
+	 * that these accurately reflect the error state of the resource. The primary parameter
+	 * to compute code actions is the provided range.
+	 */
+	Diagnostics []Diagnostic `json:"diagnostics"`
+	/**
+	 * Requested kind of actions to return.
+	 *
+	 * Actions not of this kind are filtered out by the client before being shown. So servers
+	 * can omit computing them.
+	 */
+	Only []CodeActionKind `json:"only,omitempty"`
+	/**
+	 * The reason why code actions were requested.
+	 *
+	 * @since 3.17.0
+	 */
+	TriggerKind CodeActionTriggerKind `json:"triggerKind,omitempty"`
+}
+
+type CodeActionKind string
+
+/**
+ * Empty kind.
+ */
+const Empty CodeActionKind = ""
+
+/**
+ * Base kind for quickfix actions 'quickfix'.
+ */
+const QuickFix CodeActionKind = "quickfix"
+
+/**
+ * Base kind for refactoring actions 'refactor'.
+ */
+const Refactor CodeActionKind = "refactor"
+
+/**
+ * Base kind for refactoring extraction actions: 'refactor.extract'.
+ *
+ * Example extract actions:
+ *
+ * - Extract method
+ * - Extract function
+ * - Extract variable
+ * - Extract interface from class
+ * - ...
+ */
+const RefactorExtract CodeActionKind = "refactor.extract"
+
+/**
+ * Base kind for refactoring inline actions: 'refactor.inline'.
+ *
+ * Example inline actions:
+ *
+ * - Inline function
+ * - Inline variable
+ * - Inline constant
+ * - ...
+ */
+const RefactorInline CodeActionKind = "refactor.inline"
+
+/**
+ * Base kind for refactoring rewrite actions: 'refactor.rewrite'.
+ *
+ * Example rewrite actions:
+ *
+ * - Convert JavaScript function to class
+ * - Add or remove parameter
+ * - Encapsulate field
+ * - Make method static
+ * - Move method to base class
+ * - ...
+ */
+const RefactorRewrite CodeActionKind = "refactor.rewrite"
+
+/**
+ * Base kind for source actions: `source`.
+ *
+ * Source code actions apply to the entire file.
+ */
+const Source CodeActionKind = "source"
+
+/**
+ * Base kind for an organize imports source action
+ * `source.organizeImports`.
+ */
+const SourceOrganizeImports CodeActionKind = "source.organizeImports"
+
+/**
+ * Base kind for a "fix all" source action `source.fixAll`.
+ *
+ * ""Fix all"" actions automatically fix errors that have a clear fix that
+ * do not require user input. They should not suppress errors or perform
+ * unsafe fixes such as generating new types or classes.
+ *
+ * @since 3.17.0
+ */
+const SourceFixAll CodeActionKind = "source.fixAll"
+
+type CodeActionParams struct {
+	/**
+	 * The document in which the command was invoked.
+	 */
+	TextDocument sglsp.TextDocumentIdentifier `json:"textDocument"`
+	/**
+	 * The range for which the command was invoked.
+	 */
+	Range sglsp.Range `json:"range"`
+	/**
+	 * Context carrying additional information.
+	 */
+	Context CodeActionContext `json:"context"`
+}
+
+/**
+ * A CodeAction represents a change that can be performed in code, e.g. to fix a problem or
+ * to refactor code.
+ *
+ * A CodeAction must set either `edit` and/or a `command`. If both are supplied, the `edit` is applied first, then the `command` is executed.
+ */
+type CodeAction struct {
+	/**
+	 * A short, human-readable, title for this code action.
+	 */
+	Title string `json:"title"`
+	/**
+	 * The kind of the code action.
+	 *
+	 * Used to filter code actions.
+	 */
+	Kind CodeActionKind `json:"kind,omitempty"`
+	/**
+	 * The diagnostics that this code action resolves.
+	 */
+	Diagnostics []Diagnostic `json:"diagnostics,omitempty"`
+	/**
+	 * Marks this as a preferred action. Preferred actions are used by the `auto fix` command and can be targeted
+	 * by keybindings.
+	 *
+	 * A quick fix should be marked preferred if it properly addresses the underlying error.
+	 * A refactoring should be marked preferred if it is the most reasonable choice of actions to take.
+	 *
+	 * @since 3.15.0
+	 */
+	IsPreferred bool `json:"isPreferred,omitempty"`
+	/**
+	 * Marks that the code action cannot currently be applied.
+	 *
+	 * Clients should follow the following guidelines regarding disabled code actions:
+	 *
+	 *   - Disabled code actions are not shown in automatic [lightbulb](https://code.visualstudio.com/docs/editor/editingevolved#_code-action)
+	 *     code action menu.
+	 *
+	 *   - Disabled actions are shown as faded out in the code action menu when the user request a more specific type
+	 *     of code action, such as refactorings.
+	 *
+	 *   - If the user has a [keybinding](https://code.visualstudio.com/docs/editor/refactoring#_keybindings-for-code-actions)
+	 *     that auto applies a code action and only a disabled code actions are returned, the client should show the user an
+	 *     error message with `reason` in the editor.
+	 *
+	 * @since 3.16.0
+	 */
+	Disabled *struct {
+		/**
+		 * Human readable description of why the code action is currently disabled.
+		 *
+		 * This is displayed in the code actions UI.
+		 */
+		Reason string `json:"reason"`
+	} `json:"disabled,omitempty"`
+	/**
+	 * The workspace edit this code action performs.
+	 */
+	Edit sglsp.WorkspaceEdit `json:"edit,omitempty"`
+
+	/**
+	 * A command this code action executes. If a code action
+	 * provides a edit and a command, first the edit is
+	 * executed and then the command.
+	 */
+	//Command sglsp.Command `json:"command,omitempty"`
+	/**
+	 * A data entry field that is preserved on a code action between
+	 * a `textDocument/codeAction` and a `codeAction/resolve` request.
+	 *
+	 * @since 3.16.0
+	 */
+	Data interface{} `json:"data,omitempty"`
+}
+
+type CodeActionTriggerKind float64

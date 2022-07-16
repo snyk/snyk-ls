@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -282,7 +283,8 @@ func (oss *Scanner) toIssue(affectedFilePath string, issue ossIssue, issueRange 
 		action,
 		resolution,
 	)
-	return snyk.Issue{
+
+	snykIssue := snyk.Issue{
 		ID:               issue.Id,
 		Message:          message,
 		LegacyMessage:    oss.getExtendedMessage(issue),
@@ -291,6 +293,11 @@ func (oss *Scanner) toIssue(affectedFilePath string, issue ossIssue, issueRange 
 		AffectedFilePath: affectedFilePath,
 		Product:          snyk.ProductOpenSource,
 	}
+	upgradeAction := oss.UpgradeAction(issue, snykIssue)
+	if upgradeAction.Title != "" {
+		snykIssue.CodeActions = []snyk.CodeAction{upgradeAction}
+	}
+	return snykIssue
 }
 
 //todo this needs to be pushed up to presentation
@@ -386,4 +393,50 @@ func (oss *Scanner) trackResult(success bool) {
 		AnalysisType: ux2.OpenSource,
 		Result:       result,
 	})
+}
+
+func (oss *Scanner) UpgradeAction(ossIssue ossIssue, snykIssue snyk.Issue) snyk.CodeAction {
+	if !ossIssue.IsUpgradable {
+		return snyk.CodeAction{}
+	}
+
+	upgrade := ossIssue.UpgradePath[1]
+	upgradeSplit := strings.Split(upgrade.(string), "@")
+	packageName := upgradeSplit[0]
+	version := upgradeSplit[1]
+	versionRange := oss.getRangeOfVersion(ossIssue, snykIssue)
+	changes := map[string][]snyk.TextEdit{}
+	textEdit := snyk.TextEdit{NewText: version, Range: versionRange}
+	changes[snykIssue.AffectedFilePath] = []snyk.TextEdit{textEdit}
+	edit := snyk.WorkspaceEdit{Changes: changes}
+	return snyk.CodeAction{
+		Title:       fmt.Sprintf("Upgrade %s to %s", packageName, version),
+		Issues:      []snyk.Issue{snykIssue},
+		IsPreferred: false,
+		Edit:        edit,
+	}
+}
+
+// todo move to rangefinder?
+func (oss *Scanner) getRangeOfVersion(issue ossIssue, snykIssue snyk.Issue) snyk.Range {
+	bytes, err := os.ReadFile(snykIssue.AffectedFilePath)
+	if err != nil {
+		oss.errorReporter.CaptureError(errors.Wrap(err, "Couldn't read file "+snykIssue.AffectedFilePath))
+	}
+	content := string(bytes)
+	lines := strings.Split(content, "\n")
+	affectedLine := lines[snykIssue.Range.Start.Line]
+	_, version := introducingPackageAndVersion(issue)
+	start := strings.Index(affectedLine, version)
+	end := start + len(version)
+	return snyk.Range{
+		Start: snyk.Position{
+			Line:      snykIssue.Range.Start.Line,
+			Character: start,
+		},
+		End: snyk.Position{
+			Line:      snykIssue.Range.Start.Line,
+			Character: end,
+		},
+	}
 }
