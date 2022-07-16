@@ -18,11 +18,11 @@ type Issue struct {
 	//todo this contains a formatted longest message for hovers, this needs to be pushed up and rendered in presentation
 	LegacyMessage string
 	// AffectedFilePath is the file path to the file where the issue was found
-	AffectedFilePath string
-	Product          Product
-	References       []*url.URL
-	// IssueDescriptionURL contains a Uri to display more information
+	AffectedFilePath    string
+	Product             Product
+	References          []*url.URL
 	IssueDescriptionURL *url.URL
+	CodeActions         []CodeAction
 }
 
 func (i Issue) String() string {
