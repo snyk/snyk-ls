@@ -7,28 +7,32 @@ import (
 )
 
 type identifiers struct {
-	CWE  []string `json:"CWE"`
-	GHSA []string `json:"GHSA"`
-	CVE  []string `json:"CVE"`
+	CWE  []string `json:"CWE,omitempty"`
+	GHSA []string `json:"GHSA,omitempty"`
+	CVE  []string `json:"CVE,omitempty"`
+}
+
+type reference struct {
+	Title string  `json:"title"`
+	Url   lsp.Uri `json:"url"`
 }
 
 type ossIssue struct {
-	Id          string `json:"id"`
-	Name        string `json:"name"`
-	Title       string `json:"title"`
-	Severity    string `json:"severity"`
-	LineNumber  int    `json:"lineNumber"`
-	Description string `json:"description"`
-	References  []struct {
-		Title string  `json:"title"`
-		Url   lsp.Uri `json:"url"`
-	} `json:"references"`
+	Id             string      `json:"id"`
+	Name           string      `json:"name"`
+	Title          string      `json:"title"`
+	Severity       string      `json:"severity"`
+	LineNumber     int         `json:"lineNumber"`
+	Description    string      `json:"description"`
+	References     []reference `json:"references,omitempty"`
 	Version        string      `json:"version"`
 	PackageManager string      `json:"packageManager"`
 	PackageName    string      `json:"packageName"`
 	From           []string    `json:"from"`
-	Identifiers    identifiers `json:"identifiers"`
+	Identifiers    identifiers `json:"identifiers,omitempty"`
 	FixedIn        []string    `json:"fixedIn,omitempty"`
+	UpgradePath    []any       `json:"upgradePath,omitempty"`
+	IsUpgradable   bool        `json:"isUpgradable,omitempty"`
 }
 
 type licensesPolicy struct {

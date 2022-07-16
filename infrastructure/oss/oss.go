@@ -259,20 +259,37 @@ func (oss *Scanner) retrieveIssues(
 
 func (oss *Scanner) toIssue(affectedFilePath string, issue ossIssue, issueRange snyk.Range) snyk.Issue {
 	title := issue.Title
-	//description := issue.Description
 
 	if config.CurrentConfig().Format() == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
-		//description = string(markdown.ToHTML([]byte(description), nil, nil))
 	}
+	var action = "No fix available."
+	var resolution = ""
+	if issue.IsUpgradable {
+		action = "Upgrade to:"
+		resolution = issue.UpgradePath[1].(string)
+	} else {
+		if len(issue.FixedIn) > 0 {
+			action = "No direct upgrade path, fixed in:"
+			resolution = fmt.Sprintf("%s@%s", issue.PackageName, issue.FixedIn[0])
+		}
+	}
+
+	message := fmt.Sprintf(
+		"%s affecting package %s. %s %s (Snyk)",
+		title,
+		issue.PackageName,
+		action,
+		resolution,
+	)
 	return snyk.Issue{
 		ID:               issue.Id,
-		Message:          fmt.Sprintf("%s affecting package %s. Fixed in: %s (Snyk)", title, issue.PackageName, issue.FixedIn),
+		Message:          message,
 		LegacyMessage:    oss.getExtendedMessage(issue),
 		Range:            issueRange,
 		Severity:         oss.toIssueSeverity(issue.Severity),
 		AffectedFilePath: affectedFilePath,
-		ProductLine:      snyk.ProductOpenSource,
+		Product:          snyk.ProductOpenSource,
 	}
 }
 

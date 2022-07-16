@@ -225,7 +225,7 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue) snyk.Issue 
 		LegacyMessage:    iac.getExtendedMessage(issue),
 		Severity:         iac.toIssueSeverity(issue.Severity),
 		AffectedFilePath: affectedFilePath,
-		ProductLine:      snyk.ProductInfrastructureAsCode,
+		Product:          snyk.ProductInfrastructureAsCode,
 	}
 }
 

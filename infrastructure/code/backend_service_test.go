@@ -141,7 +141,7 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 			IssueType:        snyk.CodeSecurityVulnerability,
 			Severity:         snyk.Low,
 			AffectedFilePath: path,
-			ProductLine:      "Snyk Code",
+			Product:          "Snyk Code",
 		},
 		issues[0],
 	)
