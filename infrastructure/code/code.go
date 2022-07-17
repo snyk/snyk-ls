@@ -119,7 +119,9 @@ func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath 
 		bundleFiles[filePath] = file
 		fileHashes[filePath] = file.Hash
 	}
-	b.BundleHash, b.missingFiles, err = sc.BundleUploader.SnykCode.CreateBundle(span.Context(), fileHashes)
+	if len(fileHashes) > 0 {
+		b.BundleHash, b.missingFiles, err = sc.BundleUploader.SnykCode.CreateBundle(span.Context(), fileHashes)
+	}
 	return b, bundleFiles, err
 }
 
