@@ -18,6 +18,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
+// todo test issue parsing & conversion
+
 func Test_determineTargetFile(t *testing.T) {
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
 	assert.Equal(t, "package.json", scanner.determineTargetFile("package-lock.json"))
@@ -32,10 +34,10 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 	executor := cli.NewTestExecutor()
 	fileContent, _ := ioutil.ReadFile(workingDir + "/testdata/oss-result.json")
 	executor.ExecuteResponse = string(fileContent)
-	filepath, _ := filepath.Abs(workingDir + "/testdata/package.json")
+	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, executor)
-	scanner.Scan(context.Background(), filepath, "", nil)
+	scanner.Scan(context.Background(), path, "", nil)
 
 	assert.Len(t, analytics.GetAnalytics(), 1)
 	assert.Equal(t, ux2.AnalysisIsReadyProperties{

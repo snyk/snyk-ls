@@ -40,6 +40,7 @@ func setupDocs() (string, lsp.TextDocumentItem, lsp.TextDocumentItem, []byte, []
 	return path, firstDoc, secondDoc, content1, content2
 }
 
+//todo have a look at commented tests and reactive/update them
 /* 	t.Run("when too big ignores file", func(t *testing.T) {
 	snykCodeService := &FakeSnykCodeClient{}
 	var bundler = BundleUploader{Scanner: snykCodeService, instrumentor: performance.NewTestInstrumentor()}

@@ -2,8 +2,7 @@ package snyk
 
 import (
 	"fmt"
-
-	"go.lsp.dev/uri"
+	"net/url"
 )
 
 //Issue models a problem, vulnerability, or situation within your code that requires your attention
@@ -21,8 +20,10 @@ type Issue struct {
 	// AffectedFilePath is the file path to the file where the issue was found
 	AffectedFilePath string
 	Product          Product
-	References       []uri.URI
+	References       []*url.URL
 	CodeActions      []CodeAction
+	// CodeDescription contains a Uri to display more information
+	CodeDescription *url.URL
 }
 
 func (i Issue) String() string {

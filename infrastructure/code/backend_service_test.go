@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -132,6 +133,7 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 
 	path := "/server/testdata/Dummy.java"
 	assert.Equal(t, 2, len(issues))
+	codeDescriptionUrl, _ := url.Parse(codeDescriptionURL)
 	assert.Equal(
 		t,
 		snyk.Issue{
@@ -142,6 +144,7 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 			Severity:         snyk.Low,
 			AffectedFilePath: path,
 			Product:          "Snyk Code",
+			CodeDescription:  codeDescriptionUrl,
 		},
 		issues[0],
 	)

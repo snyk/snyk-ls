@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -292,6 +293,7 @@ func (oss *Scanner) toIssue(affectedFilePath string, issue ossIssue, issueRange 
 		Severity:         oss.toIssueSeverity(issue.Severity),
 		AffectedFilePath: affectedFilePath,
 		Product:          snyk.ProductOpenSource,
+		CodeDescription:  oss.createIssueURL(issue.Id),
 	}
 	upgradeAction := oss.UpgradeAction(issue, snykIssue)
 	if upgradeAction.Title != "" {
@@ -312,7 +314,7 @@ func (oss *Scanner) getExtendedMessage(issue ossIssue) string {
 	summary := fmt.Sprintf("### Vulnerability %s %s %s \n **Fixed in: %s | Exploit maturity: %s**",
 		oss.createCveLink(issue.Identifiers.CVE),
 		oss.createCweLink(issue.Identifiers.CWE),
-		oss.createIssueUrl(issue.Id),
+		oss.createIssueUrlMarkdown(issue.Id),
 		oss.createFixedIn(issue.FixedIn),
 		strings.ToUpper(issue.Severity),
 	)
@@ -336,8 +338,16 @@ func (oss *Scanner) createCveLink(cve []string) string {
 	return formattedCve
 }
 
-func (oss *Scanner) createIssueUrl(id string) string {
-	return fmt.Sprintf("| [%s](https://snyk.io/vuln/%s)", id, id)
+func (oss *Scanner) createIssueUrlMarkdown(id string) string {
+	return fmt.Sprintf("| [%s](%s)", id, oss.createIssueURL(id).String())
+}
+
+func (oss *Scanner) createIssueURL(id string) *url.URL {
+	parse, err := url.Parse("https://snyk.io/vuln/" + id)
+	if err != nil {
+		oss.errorReporter.CaptureError(errors.Wrap(err, "unable to create issue link for oss issue "+id))
+	}
+	return parse
 }
 
 func (oss *Scanner) createFixedIn(fixedIn []string) string {
