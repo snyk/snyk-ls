@@ -178,7 +178,12 @@ func TextDocumentDidOpenHandler() jrpc2.Handler {
 		method := "TextDocumentDidOpenHandler"
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 		log.Info().Str("method", method).Str("documentURI", filePath).Msg("RECEIVING")
-		workspace.Get().GetFolderContaining(filePath).ScanFile(ctx, filePath)
+		folder := workspace.Get().GetFolderContaining(filePath)
+		if folder != nil {
+			folder.ScanFile(ctx, filePath)
+		} else {
+			log.Warn().Str("method", method).Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
+		}
 		return nil, nil
 	})
 }
@@ -191,9 +196,13 @@ func TextDocumentDidSaveHandler() jrpc2.Handler {
 
 		// todo can we push cache management down?
 		f := workspace.Get().GetFolderContaining(filePath)
-		f.ClearDiagnosticsCache(filePath)
-		di.HoverService().DeleteHover(params.TextDocument.URI)
-		workspace.Get().GetFolderContaining(filePath).ScanFile(ctx, filePath)
+		if f != nil {
+			f.ClearDiagnosticsCache(filePath)
+			di.HoverService().DeleteHover(params.TextDocument.URI)
+			f.ScanFile(ctx, filePath)
+		} else {
+			log.Warn().Str("method", method).Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
+		}
 		return nil, nil
 	})
 }
