@@ -25,6 +25,7 @@ import (
 )
 
 const completeStatus = "COMPLETE"
+const codeDescriptionURL = "https://docs.snyk.io/products/snyk-code/security-rules-used-by-snyk-code"
 
 var (
 	issueSeverities = map[string]snyk.Severity{
@@ -357,7 +358,7 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (issue
 }
 
 func (s *SnykCodeHTTPClient) createRuleLink() *url.URL {
-	parse, err := url.Parse("https://docs.snyk.io/products/snyk-code/security-rules-used-by-snyk-code")
+	parse, err := url.Parse(codeDescriptionURL)
 	if err != nil {
 		s.errorReporter.CaptureError(errors2.Wrap(err, "Unable to create Snyk Code rule link"))
 	}
