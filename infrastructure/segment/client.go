@@ -72,13 +72,15 @@ func (s *Client) PluginIsInstalled(properties ux2.PluginIsInstalledProperties) {
 }
 
 func (s *Client) enqueueEvent(properties interface{}, event string) {
-	err := s.segment.Enqueue(segment.Track{
-		UserId:     s.userId,
-		Event:      event,
-		Properties: s.getSerialisedProperties(properties),
-	})
-	if err != nil {
-		log.Warn().Err(err).Msg("Couldn't enqueue analytics")
+	if config.CurrentConfig().IsTelemetryEnabled() {
+		err := s.segment.Enqueue(segment.Track{
+			UserId:     s.userId,
+			Event:      event,
+			Properties: s.getSerialisedProperties(properties),
+		})
+		if err != nil {
+			log.Warn().Err(err).Msg("Couldn't enqueue analytics")
+		}
 	}
 }
 

@@ -103,5 +103,7 @@ func prepareTestHelper(t *testing.T, envVar string) {
 		t.SkipNow()
 	}
 	config.SetCurrentConfig(config.New())
+	config.CurrentConfig().SetErrorReportingEnabled(false)
+	config.CurrentConfig().SetTelemetryEnabled(false)
 	CLIDownloadLockFileCleanUp(t)
 }
