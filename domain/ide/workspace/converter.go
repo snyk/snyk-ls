@@ -90,30 +90,6 @@ func toPosition(p snyk.Position) sglsp.Position {
 	}
 }
 
-func toDiagnostics(issues []snyk.Issue) (diagnostics []lsp.Diagnostic) {
-	for _, issue := range issues {
-		var codeDescription lsp.CodeDescription
-		switch issue.Product { //nolint:exhaustive
-		case snyk.ProductOpenSource:
-			codeDescription = lsp.CodeDescription{Href: lsp.Uri("https://security.snyk.io/vuln/" + issue.ID)}
-		case snyk.ProductInfrastructureAsCode:
-			codeDescription = lsp.CodeDescription{Href: lsp.Uri("https://snyk.io/security-rules/" + issue.ID)}
-		default:
-			codeDescription = lsp.CodeDescription{}
-		}
-
-		diagnostics = append(diagnostics, lsp.Diagnostic{
-			Range:           toRange(issue.Range),
-			Severity:        toSeverity(issue.Severity),
-			Code:            issue.ID,
-			Source:          string(issue.Product),
-			Message:         issue.Message,
-			CodeDescription: codeDescription,
-		})
-	}
-	return diagnostics
-}
-
 func toHoversDocument(path string, i []snyk.Issue) hover.DocumentHovers {
 	return hover.DocumentHovers{
 		Uri:   uri.PathToUri(path),
@@ -137,4 +113,22 @@ func toHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
 		})
 	}
 	return hovers
+}
+
+func toDiagnostics(issues []snyk.Issue) (diagnostics []lsp.Diagnostic) {
+	for _, issue := range issues {
+		s := "https://security.snyk.io/"
+		if issue.CodeDescription != nil {
+			s = issue.CodeDescription.String()
+		}
+		diagnostics = append(diagnostics, lsp.Diagnostic{
+			Range:           toRange(issue.Range),
+			Severity:        toSeverity(issue.Severity),
+			Code:            issue.ID,
+			Source:          string(issue.Product),
+			Message:         issue.Message,
+			CodeDescription: lsp.CodeDescription{Href: lsp.Uri(s)},
+		})
+	}
+	return diagnostics
 }

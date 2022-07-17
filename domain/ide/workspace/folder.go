@@ -229,49 +229,6 @@ func (f *Folder) processHovers(issuesByFile map[string][]snyk.Issue) {
 	}
 }
 
-func toHoversDocument(path string, i []snyk.Issue) hover.DocumentHovers {
-	return hover.DocumentHovers{
-		Uri:   uri.PathToUri(path),
-		Hover: toHovers(i),
-	}
-}
-
-func toHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
-	for _, i := range issues {
-		message := ""
-		if len(i.LegacyMessage) > 0 {
-			message = i.LegacyMessage
-		} else {
-			message = i.Message
-		}
-		hovers = append(hovers, hover.Hover[hover.Context]{
-			Id:      i.ID,
-			Range:   toLspRange(i.Range),
-			Message: message,
-			Context: i,
-		})
-	}
-	return hovers
-}
-
-func toDiagnostic(issues []snyk.Issue) (diagnostics []lsp.Diagnostic) {
-	for _, issue := range issues {
-		s := "https://security.snyk.io/"
-		if issue.CodeDescription != nil {
-			s = issue.CodeDescription.String()
-		}
-		diagnostics = append(diagnostics, lsp.Diagnostic{
-			Range:           toLspRange(issue.Range),
-			Severity:        toSeverity(issue.Severity),
-			Code:            issue.ID,
-			Source:          string(issue.Product),
-			Message:         issue.Message,
-			CodeDescription: lsp.CodeDescription{Href: lsp.Uri(s)},
-		})
-	}
-	return diagnostics
-}
-
 func (f *Folder) loadIgnorePatterns() (patterns []string, err error) {
 	var ignores = ""
 	log.Debug().
