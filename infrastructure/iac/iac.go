@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -226,7 +227,16 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue) snyk.Issue 
 		Severity:         iac.toIssueSeverity(issue.Severity),
 		AffectedFilePath: affectedFilePath,
 		Product:          snyk.ProductInfrastructureAsCode,
+		CodeDescription:  iac.createIssueURL(issue.PublicID),
 	}
+}
+
+func (iac *Scanner) createIssueURL(id string) *url.URL {
+	parse, err := url.Parse("https://snyk.io/security-rules/" + id)
+	if err != nil {
+		iac.errorReporter.CaptureError(errors.Wrap(err, "unable to create issue link for iac issue "+id))
+	}
+	return parse
 }
 
 func (iac *Scanner) toIssueSeverity(snykSeverity string) snyk.Severity {

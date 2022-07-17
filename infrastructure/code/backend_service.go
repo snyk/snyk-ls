@@ -10,8 +10,10 @@ import (
 	"io/ioutil"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 
+	errors2 "github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -319,6 +321,7 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (issue
 	if len(runs) == 0 {
 		return issues
 	}
+	ruleLink := s.createRuleLink()
 
 	for _, result := range runs[0].Results {
 		for _, loc := range result.Locations {
@@ -344,12 +347,21 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (issue
 				IssueType:        snyk.CodeSecurityVulnerability,
 				AffectedFilePath: path,
 				Product:          snyk.ProductCode,
+				CodeDescription:  ruleLink,
 			}
 
 			issues = append(issues, d)
 		}
 	}
 	return issues
+}
+
+func (s *SnykCodeHTTPClient) createRuleLink() *url.URL {
+	parse, err := url.Parse("https://docs.snyk.io/products/snyk-code/security-rules-used-by-snyk-code")
+	if err != nil {
+		s.errorReporter.CaptureError(errors2.Wrap(err, "Unable to create Snyk Code rule link"))
+	}
+	return parse
 }
 
 func checkResponseCode(r *http.Response) error {
