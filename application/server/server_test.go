@@ -410,7 +410,7 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 	assert.Eventually(t, func() bool {
 		f := workspace.Get().GetFolderContaining(cloneTargetDir)
 		return f != nil && f.IsScanned()
-	}, 600*time.Second, 2*time.Millisecond)
+	}, maxIntegTestDuration, 2*time.Millisecond)
 
 	testPath = filepath.Join(cloneTargetDir, file2)
 	textDocumentDidOpen(&loc, testPath)
