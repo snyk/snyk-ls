@@ -2,24 +2,12 @@
 version: v1.25.0
 # ignores vulnerabilities until expiry date; change duration by modifying expiry date
 ignore:
-  SNYK-CC-K8S-44:
-    - 'iac/testdata/RBAC-copy.yaml > [DocId: 1] > clusterrole > rules[0] > resources':
+  '*':
+    - 'iac/testdata/*':
         reason: test data
         expires: 2099-07-21T16:41:24.198Z
         created: 2022-06-21T16:41:24.199Z
-    - 'iac/testdata/RBAC.yaml > [DocId: 1] > clusterrole > rules[0] > resources':
-        reason: test data
-        expires: 2099-07-21T16:41:30.895Z
-        created: 2022-06-21T16:41:30.897Z
-    - 'iac/testdata/RBAC.yaml > [DocId: 1] > clusterrole > rules[0] > verbs':
-        reason: test data
-        expires: 2099-07-21T16:41:34.582Z
-        created: 2022-06-21T16:41:34.585Z
-    - 'iac/testdata/RBAC-copy.yaml > [DocId: 1] > clusterrole > rules[0] > verbs':
-        reason: test data
-        expires: 2099-07-21T16:42:27.604Z
-        created: 2022-06-21T16:42:27.608Z
-  'snyk:lic:golang:github.com:hashicorp:go-version:MPL-2.0':
+  'snyk:lic:golang:*:MPL-2.0':
     - '*':
         reason: https://docs.google.com/spreadsheets/d/1gOS6DzCAb9O9RzJqFaD52y5QRkcA5XGgiaOJeQEZ-Ao/edit#gid=0
         expires: 2099-07-21T16:46:25.562Z
