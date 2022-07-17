@@ -35,7 +35,7 @@ func (c SnykCli) Execute(cmd []string, workingDir string) (resp []byte, err erro
 	Mutex.RLock()
 	defer Mutex.RUnlock()
 	method := "SnykCli.Execute"
-	log.Info().Str("method", method).Interface("cmd", cmd).Msg("calling Snyk CLI")
+	log.Info().Str("method", method).Interface("cmd", cmd).Str("workingDir", workingDir).Msg("calling Snyk CLI")
 	output, err := c.doExecute(cmd, workingDir, true)
 	log.Trace().Str("method", method).Str("response", string(output))
 	return output, err

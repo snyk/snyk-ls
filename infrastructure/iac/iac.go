@@ -211,7 +211,7 @@ func (iac *Scanner) getExtendedMessage(issue iacIssue) string {
 }
 
 func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue) snyk.Issue {
-	title := issue.Title
+	title := issue.IacDescription.Issue
 	if config.CurrentConfig().Format() == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 	}
