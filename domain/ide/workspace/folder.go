@@ -33,7 +33,7 @@ type Folder struct {
 	path                    string
 	name                    string
 	status                  FolderStatus
-	productLineAttributes   map[snyk.Product]snyk.ProductAttributes
+	productAttributes       map[snyk.Product]snyk.ProductAttributes
 	ignorePatterns          []string
 	documentDiagnosticCache concurrency.AtomicMap
 	scanner                 snyk.Scanner
@@ -43,16 +43,16 @@ type Folder struct {
 
 func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hover.Service) *Folder {
 	folder := Folder{
-		scanner:               scanner,
-		path:                  path,
-		name:                  name,
-		status:                Unscanned,
-		productLineAttributes: make(map[snyk.Product]snyk.ProductAttributes),
-		hoverService:          hoverService,
+		scanner:           scanner,
+		path:              path,
+		name:              name,
+		status:            Unscanned,
+		productAttributes: make(map[snyk.Product]snyk.ProductAttributes),
+		hoverService:      hoverService,
 	}
-	folder.productLineAttributes[snyk.ProductCode] = snyk.ProductAttributes{}
-	folder.productLineAttributes[snyk.ProductInfrastructureAsCode] = snyk.ProductAttributes{}
-	folder.productLineAttributes[snyk.ProductOpenSource] = snyk.ProductAttributes{}
+	folder.productAttributes[snyk.ProductCode] = snyk.ProductAttributes{}
+	folder.productAttributes[snyk.ProductInfrastructureAsCode] = snyk.ProductAttributes{}
+	folder.productAttributes[snyk.ProductOpenSource] = snyk.ProductAttributes{}
 	folder.documentDiagnosticCache = concurrency.AtomicMap{}
 	return &folder
 }
@@ -139,12 +139,12 @@ func (f *Folder) ScanFile(ctx context.Context, path string) {
 	f.scan(ctx, path, []string{path})
 }
 
-func (f *Folder) GetProductAttribute(productLine snyk.Product, name string) interface{} {
-	return f.productLineAttributes[productLine][name]
+func (f *Folder) GetProductAttribute(product snyk.Product, name string) interface{} {
+	return f.productAttributes[product][name]
 }
 
-func (f *Folder) AddProductAttribute(productLine snyk.Product, name string, value interface{}) {
-	f.productLineAttributes[productLine][name] = value
+func (f *Folder) AddProductAttribute(product snyk.Product, name string, value interface{}) {
+	f.productAttributes[product][name] = value
 }
 
 func (f *Folder) Contains(path string) bool {
@@ -257,12 +257,17 @@ func toHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
 
 func toDiagnostic(issues []snyk.Issue) (diagnostics []lsp.Diagnostic) {
 	for _, issue := range issues {
+		s := ""
+		if issue.IssueDescriptionURL != nil {
+			s = issue.IssueDescriptionURL.String()
+		}
 		diagnostics = append(diagnostics, lsp.Diagnostic{
-			Range:    toLspRange(issue.Range),
-			Severity: toSeverity(issue.Severity),
-			Code:     issue.ID,
-			Source:   string(issue.ProductLine),
-			Message:  issue.Message,
+			Range:           toLspRange(issue.Range),
+			Severity:        toSeverity(issue.Severity),
+			Code:            issue.ID,
+			Source:          string(issue.Product),
+			Message:         issue.Message,
+			CodeDescription: lsp.CodeDescription{Href: lsp.Uri(s)},
 		})
 	}
 	return diagnostics

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -132,16 +133,18 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 
 	path := "/server/testdata/Dummy.java"
 	assert.Equal(t, 2, len(issues))
+	issueDescriptionURL, _ := url.Parse(codeDescriptionURL)
 	assert.Equal(
 		t,
 		snyk.Issue{
-			ID:               "java/DontUsePrintStackTrace",
-			Range:            snyk.Range{Start: snyk.Position{Line: 5, Character: 6}, End: snyk.Position{Line: 5, Character: 7}},
-			Message:          "Printing the stack trace of java.lang.InterruptedException. Production code should not use printStackTrace. (Snyk)",
-			IssueType:        snyk.CodeSecurityVulnerability,
-			Severity:         snyk.Low,
-			AffectedFilePath: path,
-			ProductLine:      "Snyk Code",
+			ID:                  "java/DontUsePrintStackTrace",
+			Range:               snyk.Range{Start: snyk.Position{Line: 5, Character: 6}, End: snyk.Position{Line: 5, Character: 7}},
+			Message:             "Printing the stack trace of java.lang.InterruptedException. Production code should not use printStackTrace. (Snyk)",
+			IssueType:           snyk.CodeSecurityVulnerability,
+			Severity:            snyk.Low,
+			AffectedFilePath:    path,
+			Product:             "Snyk Code",
+			IssueDescriptionURL: issueDescriptionURL,
 		},
 		issues[0],
 	)

@@ -20,10 +20,10 @@ func (s *TestScanner) IsEnabled() bool {
 	return true
 }
 
-const TestProductLine Product = "Test Product"
+const TestProduct Product = "Test Product"
 
-func (s *TestScanner) ProductLine() Product {
-	return TestProductLine
+func (s *TestScanner) Product() Product {
+	return TestProduct
 }
 
 func (s *TestScanner) Scan(

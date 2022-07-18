@@ -2,6 +2,7 @@ package snyk
 
 import (
 	"fmt"
+	"net/url"
 )
 
 //Issue models a problem, vulnerability, or situation within your code that requires your attention
@@ -18,7 +19,10 @@ type Issue struct {
 	LegacyMessage string
 	// AffectedFilePath is the file path to the file where the issue was found
 	AffectedFilePath string
-	ProductLine      Product
+	Product          Product
+	References       []*url.URL
+	// IssueDescriptionURL contains a Uri to display more information
+	IssueDescriptionURL *url.URL
 }
 
 func (i Issue) String() string {
