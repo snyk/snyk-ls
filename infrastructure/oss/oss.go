@@ -286,14 +286,14 @@ func (oss *Scanner) toIssue(affectedFilePath string, issue ossIssue, issueRange 
 	)
 
 	snykIssue := snyk.Issue{
-		ID:               issue.Id,
-		Message:          message,
-		LegacyMessage:    oss.getExtendedMessage(issue),
-		Range:            issueRange,
-		Severity:         oss.toIssueSeverity(issue.Severity),
-		AffectedFilePath: affectedFilePath,
-		Product:          snyk.ProductOpenSource,
-		CodeDescription:  oss.createIssueURL(issue.Id),
+		ID:                  issue.Id,
+		Message:             message,
+		LegacyMessage:       oss.getExtendedMessage(issue),
+		Range:               issueRange,
+		Severity:            oss.toIssueSeverity(issue.Severity),
+		AffectedFilePath:    affectedFilePath,
+		Product:             snyk.ProductOpenSource,
+		IssueDescriptionURL: oss.createIssueURL(issue.Id),
 	}
 	upgradeAction := oss.UpgradeAction(issue, snykIssue)
 	if upgradeAction.Title != "" {

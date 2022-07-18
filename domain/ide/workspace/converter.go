@@ -118,8 +118,8 @@ func toHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
 func toDiagnostics(issues []snyk.Issue) (diagnostics []lsp.Diagnostic) {
 	for _, issue := range issues {
 		s := "https://security.snyk.io/"
-		if issue.CodeDescription != nil {
-			s = issue.CodeDescription.String()
+		if issue.IssueDescriptionURL != nil {
+			s = issue.IssueDescriptionURL.String()
 		}
 		diagnostics = append(diagnostics, lsp.Diagnostic{
 			Range:           toRange(issue.Range),
