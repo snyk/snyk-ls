@@ -65,7 +65,7 @@ func (i *Initializer) Init() {
 func (i *Initializer) installCli() {
 	var err error
 	var cliPath string
-	if config.CurrentConfig().CliSettings().Defined() {
+	if config.CurrentConfig().CliSettings().IsPathDefined() {
 		cliPath = config.CurrentConfig().CliSettings().Path()
 	} else {
 		cliPath, err = i.installer.Find()

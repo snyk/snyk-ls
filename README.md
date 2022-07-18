@@ -71,12 +71,24 @@ HoverProvider: true,
 ### Custom additions to Language Server Protocol
 
 - Authentication Notification
-  - method: `$/hasAuthenticated`
+  - method: `$/snyk.hasAuthenticated`
   - payload: `HasAuthenticatedParam`
+  
   ```go
   type AuthenticationParams struct {
     // The Snyk Token retrieved from authentication
     Token string `json:"token"`
+  }
+  ```
+
+
+- Cli Downloaded Notification
+  - method: `$/snyk.hasDownloadedCli`
+  - payload: `HasDownloadedCliParam`
+  
+  ```go
+  type CliDownloadedParams struct {
+    CliPath string `json:"cliPath"`
   }
   ```
 

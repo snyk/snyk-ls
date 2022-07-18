@@ -40,33 +40,33 @@ type CliSettings struct {
 	Insecure             bool
 	Endpoint             string
 	AdditionalParameters []string
-	path                 string
+	cliPath              string
 	cliPathAccessMutex   sync.Mutex
 }
 
 func (c *CliSettings) Installed() bool {
 	c.cliPathAccessMutex.Lock()
 	defer c.cliPathAccessMutex.Unlock()
-	stat, err := os.Stat(c.path)
-	return c.path != "" && err == nil && !stat.IsDir()
+	stat, err := os.Stat(c.cliPath)
+	return c.cliPath != "" && err == nil && !stat.IsDir()
 }
 
-func (c *CliSettings) Defined() bool {
+func (c *CliSettings) IsPathDefined() bool {
 	c.cliPathAccessMutex.Lock()
 	defer c.cliPathAccessMutex.Unlock()
-	return c.path != ""
+	return c.cliPath != ""
 }
 
 func (c *CliSettings) Path() string {
 	c.cliPathAccessMutex.Lock()
 	defer c.cliPathAccessMutex.Unlock()
-	return filepath.Clean(c.path)
+	return filepath.Clean(c.cliPath)
 }
 
 func (c *CliSettings) SetPath(path string) {
 	c.cliPathAccessMutex.Lock()
 	defer c.cliPathAccessMutex.Unlock()
-	c.path = path
+	c.cliPath = path
 }
 
 type Config struct {
