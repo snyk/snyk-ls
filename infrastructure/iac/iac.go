@@ -222,12 +222,12 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue) snyk.Issue 
 			Start: snyk.Position{Line: issue.LineNumber, Character: 0},
 			End:   snyk.Position{Line: issue.LineNumber, Character: 80},
 		},
-		Message:          fmt.Sprintf("%s (Snyk)", title),
-		LegacyMessage:    iac.getExtendedMessage(issue),
-		Severity:         iac.toIssueSeverity(issue.Severity),
-		AffectedFilePath: affectedFilePath,
-		Product:          snyk.ProductInfrastructureAsCode,
-		CodeDescription:  iac.createIssueURL(issue.PublicID),
+		Message:             fmt.Sprintf("%s (Snyk)", title),
+		LegacyMessage:       iac.getExtendedMessage(issue),
+		Severity:            iac.toIssueSeverity(issue.Severity),
+		AffectedFilePath:    affectedFilePath,
+		Product:             snyk.ProductInfrastructureAsCode,
+		IssueDescriptionURL: iac.createIssueURL(issue.PublicID),
 	}
 }
 

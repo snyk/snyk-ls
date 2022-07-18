@@ -341,14 +341,14 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (issue
 			}
 
 			d := snyk.Issue{
-				ID:               result.RuleID,
-				Range:            myRange,
-				Severity:         issueSeverity(result.Level),
-				Message:          fmt.Sprintf("%s (Snyk)", result.Message.Text),
-				IssueType:        snyk.CodeSecurityVulnerability,
-				AffectedFilePath: path,
-				Product:          snyk.ProductCode,
-				CodeDescription:  ruleLink,
+				ID:                  result.RuleID,
+				Range:               myRange,
+				Severity:            issueSeverity(result.Level),
+				Message:             fmt.Sprintf("%s (Snyk)", result.Message.Text),
+				IssueType:           snyk.CodeSecurityVulnerability,
+				AffectedFilePath:    path,
+				Product:             snyk.ProductCode,
+				IssueDescriptionURL: ruleLink,
 			}
 
 			issues = append(issues, d)

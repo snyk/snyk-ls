@@ -21,8 +21,8 @@ type Issue struct {
 	AffectedFilePath string
 	Product          Product
 	References       []*url.URL
-	// CodeDescription contains a Uri to display more information
-	CodeDescription *url.URL
+	// IssueDescriptionURL contains a Uri to display more information
+	IssueDescriptionURL *url.URL
 }
 
 func (i Issue) String() string {
