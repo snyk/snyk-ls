@@ -134,6 +134,20 @@ func Test_initialize_shouldBeServed(t *testing.T) {
 	}
 }
 
+func Test_initialize_containsServerInfo(t *testing.T) {
+	loc := setupServer(t)
+
+	rsp, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+	var result lsp.InitializeResult
+	if err := rsp.UnmarshalResult(&result); err != nil {
+		log.Fatal().Err(err)
+	}
+	assert.NotEmpty(t, result.ServerInfo.Version)
+}
+
 func Test_initialize_shouldSupportDocumentOpening(t *testing.T) {
 	loc := setupServer(t)
 

@@ -118,7 +118,13 @@ type DiagnosticRelatedInformation struct {
 }
 
 type InitializeResult struct {
+	ServerInfo   ServerInfo         `json:"serverInfo,omitempty"`
 	Capabilities ServerCapabilities `json:"capabilities,omitempty"`
+}
+
+type ServerInfo struct {
+	Name    string `json:"name,omitempty"`
+	Version string `json:"version,omitempty"`
 }
 
 type InitializeParams struct {

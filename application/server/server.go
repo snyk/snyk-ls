@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
@@ -111,6 +112,10 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 		w.ScanWorkspace(ctx)
 
 		return lsp.InitializeResult{
+			ServerInfo: lsp.ServerInfo{
+				Name:    "snyk-ls",
+				Version: config.LsProtocolVersion,
+			},
 			Capabilities: lsp.ServerCapabilities{
 				TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{
 					Options: &sglsp.TextDocumentSyncOptions{

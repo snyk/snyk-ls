@@ -14,6 +14,10 @@ import (
 	"github.com/snyk/snyk-ls/application/server"
 )
 
+// LsProtocolVersion defines the version of LSP. For breaking changes, we bump it. This value is defined in
+// the .goreleaser.yaml file
+var LsProtocolVersion = "development"
+
 func main() {
 	defer func() {
 		if err := recover(); err != nil {
