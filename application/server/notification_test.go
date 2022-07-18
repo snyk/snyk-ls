@@ -152,25 +152,25 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	)
 }
 
-func Test_CliHasDownloadedNotification(t *testing.T) {
+func Test_IsAvailableCliNotification(t *testing.T) {
 	loc := setupServer(t)
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
 		log.Fatal().Err(err)
 	}
-	var expected = lsp.CliDownloadedParams{CliPath: "path"}
+	var expected = lsp.SnykIsAvailableCli{CliPath: "path"}
 
 	notification.Send(expected)
 	assert.Eventually(
 		t,
 		func() bool {
-			notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasDownloadedCli")
+			notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.isAvailableCli")
 			if len(notifications) < 1 {
 				return false
 			}
 			for _, n := range notifications {
-				var actual = lsp.CliDownloadedParams{}
+				var actual = lsp.SnykIsAvailableCli{}
 				_ = n.UnmarshalParams(&actual)
 				if reflect.DeepEqual(expected, actual) {
 					return true

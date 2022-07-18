@@ -4,8 +4,8 @@ go 1.18
 
 require (
 	github.com/creachadair/jrpc2 v0.41.0
-	github.com/gomarkdown/markdown v0.0.0-20220627144906-e9a81102ebeb
 	github.com/denisbrodbeck/machineid v1.0.1
+	github.com/gomarkdown/markdown v0.0.0-20220627144906-e9a81102ebeb
 	github.com/google/uuid v1.3.0
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.27.0

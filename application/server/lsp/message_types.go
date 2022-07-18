@@ -233,7 +233,7 @@ type AuthenticationParams struct {
 	Token string `json:"token"`
 }
 
-type CliDownloadedParams struct {
+type SnykIsAvailableCli struct {
 	CliPath string `json:"cliPath"`
 }
 

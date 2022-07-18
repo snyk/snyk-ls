@@ -229,8 +229,8 @@ func registerNotifier(srv *jrpc2.Server) {
 			notifier(srv, "$/snyk.hasAuthenticated", params)
 			log.Info().Str("method", "notifyCallback").
 				Msg("sending token")
-		case lsp.CliDownloadedParams:
-			notifier(srv, "$/snyk.hasDownloadedCli", params)
+		case lsp.SnykIsAvailableCli:
+			notifier(srv, "$/snyk.isAvailableCli", params)
 			log.Info().Str("method", "notifyCallback").
 				Msg("sending cli path")
 		case sglsp.ShowMessageParams:

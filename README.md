@@ -63,7 +63,7 @@ Right now the language server supports the following actions:
   ```
 
 - Cli Path Notification
-  - method: `$/snyk.hasDownloadedCli`
+  - method: `$/snyk.isAvailableCli`
   - payload:
   ```json
   {

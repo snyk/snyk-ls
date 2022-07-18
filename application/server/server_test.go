@@ -145,7 +145,7 @@ func Test_initialize_containsServerInfo(t *testing.T) {
 	if err := rsp.UnmarshalResult(&result); err != nil {
 		log.Fatal().Err(err)
 	}
-	assert.NotEmpty(t, result.ServerInfo.Version)
+	assert.Equal(t, config.LsProtocolVersion, result.ServerInfo.Version)
 }
 
 func Test_initialize_shouldSupportDocumentOpening(t *testing.T) {
