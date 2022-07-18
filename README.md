@@ -50,45 +50,24 @@ Right now the language server supports the following actions:
 - $/progress
 - textDocument/publishDiagnostics
 
-```go
-ServerCapabilities{
-TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{
-Options: &sglsp.TextDocumentSyncOptions{
-OpenClose:         true,
-WillSave:          true,
-WillSaveWaitUntil: true,
-Save:              SaveOptions{IncludeText: false},
-},
-},
-WorkspaceFoldersServerCapabilities: WorkspaceFoldersServerCapabilities{
-Supported:           true,
-ChangeNotifications: "snyk-ls",
-},
-HoverProvider: true,
-}
-```
 
 ### Custom additions to Language Server Protocol
 
 - Authentication Notification
   - method: `$/snyk.hasAuthenticated`
-  - payload: `HasAuthenticatedParam`
-  
-  ```go
-  type AuthenticationParams struct {
-    // The Snyk Token retrieved from authentication
-    Token string `json:"token"`
+  - payload:
+  ```json
+  {
+    "token": "the snyk token"
   }
   ```
 
-
-- Cli Downloaded Notification
+- Cli Path Notification
   - method: `$/snyk.hasDownloadedCli`
-  - payload: `HasDownloadedCliParam`
-  
-  ```go
-  type CliDownloadedParams struct {
-    CliPath string `json:"cliPath"`
+  - payload:
+  ```json
+  {
+    "cliPath": "/a/path/to/cli-executable"
   }
   ```
 
@@ -123,22 +102,35 @@ level is `info`
 
 ### Configuration
 
+#### LSP Initialization Options
+As part of the [Initialize message](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize)
+within `initializationOptions?: LSPAny;` we support the following settings:
+
+```json
+{
+  "activateSnykOpenSource": "true", // Enables Snyk Open Source - defaults to true
+  "activateSnykCode": "false", // Enables Snyk Code, if enabled for your organization - defaults to false
+  "activateSnykIac":  "true", // Enables Infrastructure as Code - defaults to true
+  "insecure": "false", // Allows custom CAs (Certification Authorities)
+  "endpoint":  "https://example.com", // Snyk API Endpoint required for non-default multi-tenant and single-tenant setups
+  "additionalParams": "--all-projects", // Any extra params for the Snyk CLI, separated by spaces
+  "additionalEnv":  "MAVEN_OPTS=-Djava.awt.headless=true;FOO=BAR", // Additional environment variables, separated by semicolons
+  "path": "/usr/local/bin", // Adds to the system path used by the CLI
+  "sendErrorReports":  "true", // Whether or not to report errors to Snyk - defaults to true
+  "organization": "a string", // The name of your organization, e.g. the output of: curl -H "Authorization: token $(snyk config get api)"  https://snyk.io/api/cli-config/settings/sast | jq .org
+  "enableTelemetry":  "true", // Whether or not user analytics can be tracked
+  "manageBinariesAutomatically": "true", // Whether or not CLI/LS binaries will be downloaded & updated automatically
+  "cliPath":  "/a/patch/snyk-cli" // The path where the CLI can be found, or where it should be downloaded to
+  "token":  "secret-token" // The Snyk token, e.g.: snyk config get api
+}
+```
 #### Environment variables
 
 Snyk LS and Snyk CLI support and need certain environment variables to function:
 
-1. `ACTIVATE_SNYK_OPEN_SOURCE` `true (default)|false` to toggle Snyk Open Source scans
-2. `ACTIVATE_SNYK_CODE` `true|false(default)` to toggle Snyk Code scans
-3. `ACTIVATE_SNYK_IAC` `true(default)|false` to toggle Snyk Infrastructure-as-Code scans
-4. `DEEPROXY_API_URL` to find the Snyk Code backend service (default is `https://deeproxy.snyk.io`)
-5. `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` to define the http proxy to be used
-6. `JAVA_HOME` to analyse Java JVM-based projects via Snyk CLI
-7. `PATH` to find the Snyk CLI, to find maven when analysing Maven projects, to find python, etc
-8. `SEND_ERROR_REPORTS` to allow sending of error reports
-9. `SNYK_API` to define the endpoint address if using single tenant setup
-10. `SNYK_CLI_PATH` to specify where the Snyk CLI is located
-11. `SNYK_CFG_ORG` to specify the Snyk organization to be used
-12. `SNYK_TOKEN` to authenticate against the Snyk backend services
+1. `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` to define the http proxy to be used
+1. `JAVA_HOME` to analyse Java JVM-based projects via Snyk CLI
+1. `PATH` to find maven when analysing Maven projects, to find python, etc
 
 #### Auto-Configuration
 
@@ -171,21 +163,15 @@ Language Server.
 
 #### Snyk CLI
 
-To find the Snyk CLI,
+To find the automatically managed Snyk CLI,
 the [XDG Data Home](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html#variables)
 and `PATH` path are automatically scanned for the OS-dependent file, e.g. `snyk-macos` on macOS,
 `snyk-linux` on Linux and `snyk-win.exe` on Windows, and the first path where it is found is added to the environment.
 It is later used for all functionality that depends on the CLI.
 
-If the CLI `SNYK_CLI_PATH` is not set, and no CLI is found, Snyk LS starts
-a [download](https://static.snyk.io/cli/latest)
-of the CLI and installs it into the `XDG_DATA_HOME/snyk-ls` folder. During the download, a
-lockfile `snyk-cli-download.lock` is created in the same directory which may need to be removed if the download is
-interrupted and retried within one hour. After one hour, the lockfile is ignored.
-
 #### Setting environment variables globally
 
-If you want to have the environment variables available system wide, you would need to add the variables
+If you want to have the environment variables available system-wide, you would need to add the variables
 to `/etc/environment` or on macOS to `/etc/launchd.conf` or set them via `launchctl` in a shell script. The former two
 locations are automatically read by snyk lsp. On Windows, a user variable can be defined via the UI for the user or
 system-wide. In a file like `~/.profile` it would like this:
