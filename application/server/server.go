@@ -142,7 +142,8 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 	})
 }
 
-func monitorClientProcess(pid int) {
+func monitorClientProcess(pid int) time.Duration {
+	start := time.Now()
 	for {
 		exists, err := process.PidExists(int32(pid))
 		if !exists || err != nil {
@@ -150,6 +151,7 @@ func monitorClientProcess(pid int) {
 		}
 		time.Sleep(time.Millisecond * 100)
 	}
+	return time.Now().Sub(start)
 }
 
 func Shutdown() jrpc2.Handler {

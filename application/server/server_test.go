@@ -587,5 +587,7 @@ func Test_MonitorClientProcess(t *testing.T) {
 		_ = cmd.Wait()
 	}()
 	pid := <-pidChan
-	monitorClientProcess(pid)
+	// make sure that we actually waited & monitored
+	expectedMinimumDuration, _ := time.ParseDuration("900ms")
+	assert.True(t, monitorClientProcess(pid) > expectedMinimumDuration)
 }
