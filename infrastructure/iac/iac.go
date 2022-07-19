@@ -228,6 +228,7 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue) snyk.Issue 
 		AffectedFilePath:    affectedFilePath,
 		Product:             snyk.ProductInfrastructureAsCode,
 		IssueDescriptionURL: iac.createIssueURL(issue.PublicID),
+		IssueType:           snyk.InfrastructureIssue,
 	}
 }
 
