@@ -30,12 +30,6 @@ func TestConfigDefaults(t *testing.T) {
 	assert.Equal(t, "md", c.Format(), "Output format should be md by default")
 }
 
-func TestToken(t *testing.T) {
-	t.Setenv(SnykTokenKey, "test")
-	c := New()
-	assert.NotEqual(t, "", c.Token())
-}
-
 func Test_SnykCodeAnalysisTimeoutReturnsTimeoutFromEnvironment(t *testing.T) {
 	t.Setenv(snykCodeTimeoutKey, "1s")
 	duration, _ := time.ParseDuration("1s")

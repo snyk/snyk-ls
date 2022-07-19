@@ -159,6 +159,6 @@ func setupPact() {
 	// Proactively start service to get access to the port
 	pact.Setup(true)
 
-	config.CurrentConfig().SetSnykApi(fmt.Sprintf("http://localhost:%d", pact.Server.Port))
+	config.CurrentConfig().UpdateApiEndpoints(fmt.Sprintf("http://localhost:%d", pact.Server.Port))
 	client = NewSnykApiClient()
 }

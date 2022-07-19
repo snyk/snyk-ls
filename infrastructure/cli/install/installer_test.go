@@ -75,9 +75,9 @@ func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 
 	temp := t.TempDir()
 	fakeCliFile := testutil.CreateTempFile(temp, t)
-	config.CurrentConfig().SetCliPath(fakeCliFile.Name())
+	config.CurrentConfig().CliSettings().SetPath(fakeCliFile.Name())
 	defer func() {
-		config.CurrentConfig().SetCliPath("")
+		config.CurrentConfig().CliSettings().SetPath("")
 	}()
 
 	checksum, err := getChecksum(fakeCliFile.Name())
@@ -135,9 +135,9 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 		_ = os.Remove(f)
 	}(cliFilePath)
 
-	config.CurrentConfig().SetCliPath(cliFilePath)
+	config.CurrentConfig().CliSettings().SetPath(cliFilePath)
 	defer func() {
-		config.CurrentConfig().SetCliPath("")
+		config.CurrentConfig().CliSettings().SetPath("")
 	}()
 
 	r := NewCLIRelease()

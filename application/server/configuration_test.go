@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -8,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/snyk/snyk-ls/presentation/lsp"
 )
 
 func TestWorkspaceDidChangeConfiguration(t *testing.T) {
@@ -28,6 +29,7 @@ func TestWorkspaceDidChangeConfiguration(t *testing.T) {
 		AdditionalEnv:          "a=b;c=d",
 		Path:                   "addPath",
 		SendErrorReports:       "true",
+		Token:                  "token",
 	}}
 	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
 	if err != nil {
@@ -40,114 +42,119 @@ func TestWorkspaceDidChangeConfiguration(t *testing.T) {
 	assert.Equal(t, false, c.IsSnykIacEnabled())
 	assert.Equal(t, true, c.CliSettings().Insecure)
 	assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalParameters)
-	assert.Equal(t, params.Settings.Endpoint, c.CliSettings().Endpoint)
+	assert.Equal(t, params.Settings.Endpoint, c.SnykApi())
 	assert.Equal(t, "b", os.Getenv("a"))
 	assert.Equal(t, "d", os.Getenv("c"))
 	assert.True(t, strings.Contains(os.Getenv("PATH"), "addPath"))
 	assert.True(t, config.CurrentConfig().IsErrorReportingEnabled())
+	assert.Equal(t, "token", config.CurrentConfig().Token())
 }
 
-func TestWorkspaceDidChangeConfiguration_IncompleteEnvVars(t *testing.T) {
-	loc := setupServer(t)
+func Test_UpdateSettings(t *testing.T) {
+	testutil.UnitTest(t)
 
-	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
-		AdditionalEnv: "a=",
-	}}
-	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
-	if err != nil {
-		t.Fatal(t, err, "error calling server")
-	}
+	t.Run("all settings", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
 
-	assert.Empty(t, os.Getenv("a"))
-}
+		settings := lsp.Settings{
+			ActivateSnykOpenSource:      "false",
+			ActivateSnykCode:            "false",
+			ActivateSnykIac:             "false",
+			Insecure:                    "true",
+			Endpoint:                    "https://snyk.io/api",
+			AdditionalParams:            "--all-projects -d",
+			AdditionalEnv:               "a=b;c=d",
+			Path:                        "addPath",
+			SendErrorReports:            "true",
+			Organization:                "org",
+			EnableTelemetry:             "false",
+			ManageBinariesAutomatically: "false",
+			CliPath:                     "C:\\Users\\CliPath\\snyk-ls.exe",
+			Token:                       "a fancy token",
+		}
 
-func TestWorkspaceDidChangeConfiguration_EmptyEnvVars(t *testing.T) {
-	loc := setupServer(t)
+		UpdateSettings(context.Background(), settings)
 
-	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
-		AdditionalEnv: "",
-	}}
-	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
-	if err != nil {
-		t.Fatal(t, err, "error calling server")
-	}
+		c := config.CurrentConfig()
+		assert.Equal(t, false, c.IsSnykCodeEnabled())
+		assert.Equal(t, false, c.IsSnykOssEnabled())
+		assert.Equal(t, false, c.IsSnykIacEnabled())
+		assert.Equal(t, true, c.CliSettings().Insecure)
+		assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalParameters)
+		assert.Equal(t, "https://snyk.io/api", c.SnykApi())
+		assert.Equal(t, "b", os.Getenv("a"))
+		assert.Equal(t, "d", os.Getenv("c"))
+		assert.True(t, strings.Contains(os.Getenv("PATH"), "addPath"))
+		assert.True(t, c.IsErrorReportingEnabled())
+		assert.Equal(t, "org", c.GetOrganization())
+		assert.False(t, c.IsTelemetryEnabled())
+		assert.False(t, c.ManageBinariesAutomatically())
+		assert.Equal(t, "C:\\Users\\CliPath\\snyk-ls.exe", c.CliSettings().Path())
+		assert.Equal(t, "a fancy token", c.Token())
+	})
 
-	assert.Empty(t, os.Getenv("a"))
-}
+	t.Run("blank organisation is ignored", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
 
-func TestWorkspaceDidChangeConfiguration_WeirdEnvVars(t *testing.T) {
-	loc := setupServer(t)
+		UpdateSettings(context.Background(), lsp.Settings{Organization: " "})
 
-	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
-		AdditionalEnv: "a=; b",
-	}}
-	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
-	if err != nil {
-		t.Fatal(t, err, "error calling server")
-	}
+		c := config.CurrentConfig()
+		assert.Equal(t, "", c.GetOrganization())
+	})
 
-	assert.Empty(t, os.Getenv("a"))
-	assert.Empty(t, os.Getenv("b"))
-	assert.Empty(t, os.Getenv(";"))
-}
+	t.Run("incomplete env vars", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
 
-func TestWorkspaceDidChangeConfiguration_UpdateOrganization(t *testing.T) {
-	loc := setupServer(t)
+		UpdateSettings(context.Background(), lsp.Settings{AdditionalEnv: "a="})
 
-	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
-		Organization: "snyk-test-org",
-	}}
-	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
-	if err != nil {
-		t.Fatal(t, err, "error calling server")
-	}
+		assert.Empty(t, os.Getenv("a"))
+	})
 
-	assert.Equal(t, "snyk-test-org", config.CurrentConfig().GetOrganization())
-}
+	t.Run("empty env vars", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
 
-func TestWorkspaceDidChangeConfiguration_IgnoreBlankOrganization(t *testing.T) {
-	loc := setupServer(t)
+		UpdateSettings(context.Background(), lsp.Settings{AdditionalEnv: " "})
 
-	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
-		Organization: " ",
-	}}
-	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
-	if err != nil {
-		t.Fatal(t, err, "error calling server")
-	}
+		assert.Empty(t, os.Getenv("a"))
+	})
 
-	assert.Equal(t, "", config.CurrentConfig().GetOrganization())
-}
+	t.Run("broken env variables", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
 
-func TestWorkspaceDidChangeConfiguration_UpdateSendTelemetry(t *testing.T) {
-	loc := setupServer(t)
+		UpdateSettings(context.Background(), lsp.Settings{AdditionalEnv: "a=; b"})
 
-	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
-		EnableTelemetry: "true",
-	}}
-	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
-	if err != nil {
-		t.Fatal(t, err, "error calling server")
-	}
+		c := config.CurrentConfig()
+		assert.Equal(t, "", c.GetOrganization())
+		assert.Empty(t, os.Getenv("a"))
+		assert.Empty(t, os.Getenv("b"))
+		assert.Empty(t, os.Getenv(";"))
+	})
 
-	assert.Equal(t, true, config.CurrentConfig().IsTelemetryEnabled())
-}
+	t.Run("manage binaries automatically", func(t *testing.T) {
+		t.Run("true", func(t *testing.T) {
+			UpdateSettings(context.Background(), lsp.Settings{
+				ManageBinariesAutomatically: "true",
+			})
 
-func TestWorkspaceDidChangeConfiguration_UpdateAutoUpdate(t *testing.T) {
-	loc := setupServer(t)
+			assert.True(t, config.CurrentConfig().ManageBinariesAutomatically())
+		})
+		t.Run("false", func(t *testing.T) {
+			UpdateSettings(context.Background(), lsp.Settings{
+				ManageBinariesAutomatically: "false",
+			})
 
-	_, _ = loc.Client.Call(ctx, "workspace/didChangeConfiguration", lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
-		ManageBinariesAutomatically: "false",
-	}})
-	assert.Equal(t, false, config.CurrentConfig().ManageBinariesAutomatically())
+			assert.False(t, config.CurrentConfig().ManageBinariesAutomatically())
+		})
+		t.Run("invalid value does not update", func(t *testing.T) {
+			UpdateSettings(context.Background(), lsp.Settings{
+				ManageBinariesAutomatically: "true",
+			})
 
-	_, _ = loc.Client.Call(ctx, "workspace/didChangeConfiguration", lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
-		ManageBinariesAutomatically: "true",
-	}})
-	assert.Equal(t, true, config.CurrentConfig().ManageBinariesAutomatically())
+			UpdateSettings(context.Background(), lsp.Settings{
+				ManageBinariesAutomatically: "dog",
+			})
 
-	_, _ = loc.Client.Call(ctx, "workspace/didChangeConfiguration", lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
-		ManageBinariesAutomatically: "dog",
-	}})
-	assert.Equal(t, true, config.CurrentConfig().ManageBinariesAutomatically())
+			assert.True(t, config.CurrentConfig().ManageBinariesAutomatically())
+		})
+	})
 }

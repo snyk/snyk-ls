@@ -9,13 +9,13 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/rs/zerolog/log"
 
+	sglsp "github.com/sourcegraph/go-lsp"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
-	"github.com/snyk/snyk-ls/presentation/lsp"
-
-	sglsp "github.com/sourcegraph/go-lsp"
-	"github.com/stretchr/testify/assert"
 )
 
 type ServerImplMock struct{}
@@ -134,7 +134,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	assert.Eventually(
 		t,
 		func() bool {
-			notifications := jsonRPCRecorder.FindNotificationsByMethod("$/hasAuthenticated")
+			notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated")
 			if len(notifications) < 1 {
 				return false
 			}
@@ -147,7 +147,38 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 			}
 			return false
 		},
-		120*time.Second,
+		2*time.Second,
+		10*time.Millisecond,
+	)
+}
+
+func Test_IsAvailableCliNotification(t *testing.T) {
+	loc := setupServer(t)
+
+	_, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+	var expected = lsp.SnykIsAvailableCli{CliPath: "path"}
+
+	notification.Send(expected)
+	assert.Eventually(
+		t,
+		func() bool {
+			notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.isAvailableCli")
+			if len(notifications) < 1 {
+				return false
+			}
+			for _, n := range notifications {
+				var actual = lsp.SnykIsAvailableCli{}
+				_ = n.UnmarshalParams(&actual)
+				if reflect.DeepEqual(expected, actual) {
+					return true
+				}
+			}
+			return false
+		},
+		2*time.Second,
 		10*time.Millisecond,
 	)
 }

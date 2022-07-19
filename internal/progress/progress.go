@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	"github.com/snyk/snyk-ls/presentation/lsp"
+	"github.com/snyk/snyk-ls/application/server/lsp"
 )
 
 var Channel = make(chan lsp.ProgressParams, 100)

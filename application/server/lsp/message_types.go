@@ -118,7 +118,13 @@ type DiagnosticRelatedInformation struct {
 }
 
 type InitializeResult struct {
+	ServerInfo   ServerInfo         `json:"serverInfo,omitempty"`
 	Capabilities ServerCapabilities `json:"capabilities,omitempty"`
+}
+
+type ServerInfo struct {
+	Name    string `json:"name,omitempty"`
+	Version string `json:"version,omitempty"`
 }
 
 type InitializeParams struct {
@@ -214,6 +220,8 @@ type Settings struct {
 	Organization                string `json:"organization,omitempty"`
 	EnableTelemetry             string `json:"enableTelemetry,omitempty"`
 	ManageBinariesAutomatically string `json:"manageBinariesAutomatically,omitempty"`
+	CliPath                     string `json:"cliPath,omitempty"`
+	Token                       string `json:"token,omitempty"`
 }
 
 type DidChangeConfigurationParams struct {
@@ -223,6 +231,10 @@ type DidChangeConfigurationParams struct {
 
 type AuthenticationParams struct {
 	Token string `json:"token"`
+}
+
+type SnykIsAvailableCli struct {
+	CliPath string `json:"cliPath"`
 }
 
 type ProgressToken string
