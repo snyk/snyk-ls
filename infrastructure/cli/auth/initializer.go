@@ -11,6 +11,7 @@ import (
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/internal/notification"
 )
 
@@ -27,8 +28,10 @@ func NewInitializer(authenticator snyk.AuthenticationProvider, errorReporter err
 }
 
 func (i *Initializer) Init() {
-	authenticated := config.CurrentConfig().Authenticated()
+	cli.Mutex.Lock()
+	defer cli.Mutex.Unlock()
 
+	authenticated := config.CurrentConfig().Authenticated()
 	if authenticated {
 		return
 	}

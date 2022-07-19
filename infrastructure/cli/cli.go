@@ -29,7 +29,7 @@ type SnykCli struct {
 	errorReporter error_reporting.ErrorReporter
 }
 
-var Mutex = &sync.RWMutex{}
+var Mutex = &sync.Mutex{}
 
 func NewExecutor(authenticator snyk.AuthenticationProvider, errorReporter error_reporting.ErrorReporter) Executor {
 	return &SnykCli{
@@ -45,8 +45,6 @@ type Executor interface {
 }
 
 func (c SnykCli) Execute(cmd []string, workingDir string) (resp []byte, err error) {
-	Mutex.RLock()
-	defer Mutex.RUnlock()
 	method := "SnykCli.Execute"
 	log.Info().Str("method", method).Interface("cmd", cmd).Str("workingDir", workingDir).Msg("calling Snyk CLI")
 	output, err := c.doExecute(cmd, workingDir, true)
