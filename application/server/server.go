@@ -102,6 +102,11 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 		go createProgressListener(progress.Channel, srv)
 		go registerNotifier(srv)
 		go func() {
+			if params.ProcessID != 0 {
+				// if started on its own, no need to exit or to monitor
+				return
+			}
+
 			monitorClientProcess(params.ProcessID)
 			log.Info().Msgf("Shutting down as client pid %d not running anymore.", params.ProcessID)
 			os.Exit(0)
