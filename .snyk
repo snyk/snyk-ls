@@ -2,14 +2,27 @@
 version: v1.25.0
 # ignores vulnerabilities until expiry date; change duration by modifying expiry date
 ignore:
-  '*':
-    - 'iac/testdata/*':
-        reason: test data
-        expires: 2099-07-21T16:41:24.198Z
-        created: 2022-06-21T16:41:24.199Z
   'snyk:lic:golang:*:MPL-2.0':
     - '*':
-        reason: https://docs.google.com/spreadsheets/d/1gOS6DzCAb9O9RzJqFaD52y5QRkcA5XGgiaOJeQEZ-Ao/edit#gid=0
+        reason: >-
+          https://docs.google.com/spreadsheets/d/1gOS6DzCAb9O9RzJqFaD52y5QRkcA5XGgiaOJeQEZ-Ao/edit#gid=0
         expires: 2099-07-21T16:46:25.562Z
         created: 2022-06-21T16:46:25.566Z
+  SNYK-CC-K8S-44:
+    - 'infrastructure/iac/testdata/RBAC-copy.yaml > [DocId: 1] > clusterrole > rules[0] > verbs':
+        reason: Test data
+        expires: 2099-08-18T11:28:11.797Z
+        created: 2022-07-19T11:28:11.800Z
+    - 'infrastructure/iac/testdata/RBAC-copy.yaml > [DocId: 1] > clusterrole > rules[0] > resources':
+        reason: Test data
+        expires: 2099-08-18T11:29:16.008Z
+        created: 2022-07-19T11:29:16.011Z
+    - 'infrastructure/iac/testdata/RBAC.yaml > [DocId: 1] > clusterrole > rules[0] > verbs':
+        reason: Test data
+        expires: 2099-08-18T11:29:20.184Z
+        created: 2022-07-19T11:29:20.187Z
+    - 'infrastructure/iac/testdata/RBAC.yaml > [DocId: 1] > clusterrole > rules[0] > resources':
+        reason: Test data
+        expires: 2099-08-18T11:29:24.503Z
+        created: 2022-07-19T11:29:24.505Z
 patch: {}
