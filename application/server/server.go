@@ -149,7 +149,7 @@ func monitorClientProcess(pid int) time.Duration {
 		if !exists || err != nil {
 			break
 		}
-		time.Sleep(time.Millisecond * 100)
+		time.Sleep(time.Millisecond * 500)
 	}
 	return time.Since(start)
 }
