@@ -6,8 +6,8 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/rs/zerolog/log"
 
+	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/internal/progress"
-	"github.com/snyk/snyk-ls/presentation/lsp"
 )
 
 func notifier(srv *jrpc2.Server, method string, params interface{}) {

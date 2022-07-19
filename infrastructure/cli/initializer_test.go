@@ -18,12 +18,12 @@ func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), install.NewTestInstaller())
 	testutil.CreateDummyProgressListener(t)
 
-	config.CurrentConfig().SetCliPath("")
+	config.CurrentConfig().CliSettings().SetPath("")
 	if !config.CurrentConfig().Authenticated() {
 		config.CurrentConfig().SetToken("dummy") // we don't want to authenticate
 	}
 	initializer.Init()
-	assert.NotEmpty(t, config.CurrentConfig().CliPath())
+	assert.NotEmpty(t, config.CurrentConfig().CliSettings().Path())
 }
 
 func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
@@ -32,14 +32,14 @@ func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
 
 	tempDir := t.TempDir()
 	tempFile := testutil.CreateTempFile(tempDir, t)
-	config.CurrentConfig().SetCliPath(tempFile.Name())
+	config.CurrentConfig().CliSettings().SetPath(tempFile.Name())
 	defer func() {
-		config.CurrentConfig().SetCliPath("")
+		config.CurrentConfig().CliSettings().SetPath("")
 	}()
 
 	initializer.Init()
 
-	assert.Equal(t, tempFile.Name(), config.CurrentConfig().CliPath())
+	assert.Equal(t, tempFile.Name(), config.CurrentConfig().CliSettings().Path())
 }
 
 func TestInitializer_whenNoCli_Installs(t *testing.T) {
@@ -147,7 +147,7 @@ func createDummyCliBinaryWithCreatedDate(t *testing.T, binaryCreationDate time.T
 	temp := t.TempDir()
 	file := testutil.CreateTempFile(temp, t)
 
-	config.CurrentConfig().SetCliPath(file.Name())
+	config.CurrentConfig().CliSettings().SetPath(file.Name())
 
 	err := os.Chtimes(file.Name(), binaryCreationDate, binaryCreationDate)
 	if err != nil {

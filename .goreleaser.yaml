@@ -1,5 +1,4 @@
 project_name: "snyk-ls"
-
 archives:
   - format: binary
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
@@ -16,7 +15,7 @@ blobs:
     extra_files:
       - glob: "build/{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
       - glob: "build/metadata.json"
-    folder: "{{ .ProjectName }}/"
+    folder: "{{ .ProjectName }}/{{ .Env.LS_PROTOCOL_VERSION }}/"
 
 builds:
   - flags:
@@ -35,7 +34,7 @@ builds:
       - goarch: arm64
         goos: windows
     ldflags:
-      - -s -w -X github.com/snyk/snyk-ls/application/config.Version={{.Version}} -X 'github.com/snyk/snyk-ls/application/config.Development=false'
+      - -s -w -X github.com/snyk/snyk-ls/application/config.Version={{.Version}} -X github.com/snyk/snyk-ls/application/config.LsProtocolVersion={{.Env.LS_PROTOCOL_VERSION}} -X 'github.com/snyk/snyk-ls/application/config.Development=false'
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 checksum:
@@ -47,3 +46,4 @@ dist: build
 env:
   - GO111MODULE=on
   - CGO_ENABLED=0
+  - LS_PROTOCOL_VERSION=2

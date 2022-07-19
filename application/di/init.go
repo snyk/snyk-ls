@@ -30,7 +30,7 @@ var snykCodeScanner *code2.Scanner
 var infrastructureAsCodeScanner *iac.Scanner
 var openSourceScanner *oss.Scanner
 var environmentInitializer initialize.Initializer
-var authenticator *auth2.Authenticator
+var authenticator snyk.AuthenticationProvider
 
 var instrumentor performance2.Instrumentor
 var errorReporter error_reporting2.ErrorReporter
@@ -66,8 +66,8 @@ func initInfrastructure() {
 	instrumentor = sentry2.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient()
 	analytics = analyticsFactory(snykApiClient)
-	authenticator = auth2.New(errorReporter, auth2.NewCliAuthenticationProvider())
-	snykCli = cli2.NewExecutor(authenticator)
+	authenticator = auth2.NewCliAuthenticationProvider(errorReporter)
+	snykCli = cli2.NewExecutor(authenticator, errorReporter)
 	snykCodeClient = code2.NewHTTPRepository(instrumentor, errorReporter)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
@@ -75,7 +75,7 @@ func initInfrastructure() {
 	snykCodeScanner = code2.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics)
 	environmentInitializer = initialize.NewDelegatingInitializer(
 		cli2.NewInitializer(errorReporter, install.NewInstaller(errorReporter)),
-		auth2.NewInitializer(authenticator),
+		auth2.NewInitializer(authenticator, errorReporter),
 	)
 }
 
@@ -105,14 +105,14 @@ func TestInit(t *testing.T) {
 	analytics = ux2.NewTestAnalytics()
 	instrumentor = performance2.NewTestInstrumentor()
 	errorReporter = error_reporting2.NewTestErrorReporter()
-	authenticator = auth2.New(errorReporter, auth2.NewCliAuthenticationProvider())
+	authenticator = auth2.NewCliAuthenticationProvider(errorReporter)
 	environmentInitializer = initialize.NewDelegatingInitializer(
 		cli2.NewInitializer(errorReporter, install.NewInstaller(errorReporter)),
-		auth2.NewInitializer(authenticator),
+		auth2.NewInitializer(authenticator, errorReporter),
 	)
 	fakeClient := &code2.FakeSnykCodeClient{}
 	snykCodeClient = fakeClient
-	snykCli = cli2.NewExecutor(authenticator)
+	snykCli = cli2.NewExecutor(authenticator, errorReporter)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	fakeApiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
 	snykCodeScanner = code2.New(snykCodeBundleUploader, fakeApiClient, errorReporter, analytics)
@@ -148,7 +148,7 @@ func SnykCli() cli2.Executor {
 	return snykCli
 }
 
-func Authenticator() *auth2.Authenticator {
+func Authenticator() snyk.AuthenticationProvider {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return authenticator

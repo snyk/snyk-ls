@@ -10,13 +10,14 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
-	"github.com/snyk/snyk-ls/presentation/lsp"
 )
 
 func Start() {
@@ -111,6 +112,10 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 		w.ScanWorkspace(ctx)
 
 		return lsp.InitializeResult{
+			ServerInfo: lsp.ServerInfo{
+				Name:    "snyk-ls",
+				Version: config.LsProtocolVersion,
+			},
 			Capabilities: lsp.ServerCapabilities{
 				TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{
 					Options: &sglsp.TextDocumentSyncOptions{
@@ -221,9 +226,13 @@ func registerNotifier(srv *jrpc2.Server) {
 	callbackFunction := func(params interface{}) {
 		switch params := params.(type) {
 		case lsp.AuthenticationParams:
-			notifier(srv, "$/hasAuthenticated", params)
+			notifier(srv, "$/snyk.hasAuthenticated", params)
 			log.Info().Str("method", "notifyCallback").
 				Msg("sending token")
+		case lsp.SnykIsAvailableCli:
+			notifier(srv, "$/snyk.isAvailableCli", params)
+			log.Info().Str("method", "notifyCallback").
+				Msg("sending cli path")
 		case sglsp.ShowMessageParams:
 			notifier(srv, "window/showMessage", params)
 			log.Info().
