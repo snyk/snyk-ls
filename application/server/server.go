@@ -151,7 +151,7 @@ func monitorClientProcess(pid int) time.Duration {
 		}
 		time.Sleep(time.Millisecond * 100)
 	}
-	return time.Now().Sub(start)
+	return time.Since(start)
 }
 
 func Shutdown() jrpc2.Handler {
