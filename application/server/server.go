@@ -3,11 +3,13 @@ package server
 import (
 	"context"
 	"os"
+	"time"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/rs/zerolog/log"
+	"github.com/shirou/gopsutil/process"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/di"
@@ -99,6 +101,11 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 		// async processing listener
 		go createProgressListener(progress.Channel, srv)
 		go registerNotifier(srv)
+		go func() {
+			monitorClientProcess(params.ProcessID)
+			log.Info().Msgf("Shutting down as client pid %d not running anymore.", params.ProcessID)
+			os.Exit(0)
+		}()
 
 		if len(params.WorkspaceFolders) > 0 {
 			for _, workspaceFolder := range params.WorkspaceFolders {
@@ -128,6 +135,16 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 			},
 		}, nil
 	})
+}
+
+func monitorClientProcess(pid int) {
+	for {
+		exists, err := process.PidExists(int32(pid))
+		if !exists || err != nil {
+			break
+		}
+		time.Sleep(time.Millisecond * 100)
+	}
 }
 
 func Shutdown() jrpc2.Handler {

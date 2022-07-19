@@ -569,3 +569,23 @@ func setupCustomTestRepo(url string, targetCommit string) (string, error) {
 	log.Debug().Msg(string(output))
 	return cloneTargetDir, err
 }
+
+func Test_MonitorClientProcess(t *testing.T) {
+	testutil.UnitTest(t)
+	testutil.NotOnWindows(t, "sleep has a different syntax on windows")
+
+	// start process that just sleeps
+	pidChan := make(chan int)
+	go func() {
+		cmd := exec.Command("sleep", "1")
+		err := cmd.Start()
+		if err != nil {
+			t.Fail()
+			return
+		}
+		pidChan <- cmd.Process.Pid
+		_ = cmd.Wait()
+	}()
+	pid := <-pidChan
+	monitorClientProcess(pid)
+}
