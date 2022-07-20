@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -586,13 +587,17 @@ func setupCustomTestRepo(url string, targetCommit string) (string, error) {
 }
 
 func Test_MonitorClientProcess(t *testing.T) {
-	testutil.UnitTest(t)
-	testutil.NotOnWindows(t, "sleep has a different syntax on windows")
+	testutil.IntegTest(t) // because we want to test it on windows, too
 
 	// start process that just sleeps
 	pidChan := make(chan int)
 	go func() {
-		cmd := exec.Command("sleep", "1")
+		var cmd *exec.Cmd
+		if runtime.GOOS != "windows" {
+			cmd = exec.Command("sleep", "2")
+		} else {
+			cmd = exec.Command("timeout", "2")
+		}
 		err := cmd.Start()
 		if err != nil {
 			t.Fail()
