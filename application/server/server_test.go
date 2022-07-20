@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -583,4 +584,30 @@ func setupCustomTestRepo(url string, targetCommit string) (string, error) {
 
 	log.Debug().Msg(string(output))
 	return cloneTargetDir, err
+}
+
+func Test_MonitorClientProcess(t *testing.T) {
+	testutil.IntegTest(t) // because we want to test it on windows, too
+
+	// start process that just sleeps
+	pidChan := make(chan int)
+	go func() {
+		var cmd *exec.Cmd
+		if runtime.GOOS != "windows" {
+			cmd = exec.Command("sleep", "2")
+		} else {
+			cmd = exec.Command("timeout", "2")
+		}
+		err := cmd.Start()
+		if err != nil {
+			t.Fail()
+			return
+		}
+		pidChan <- cmd.Process.Pid
+		_ = cmd.Wait()
+	}()
+	pid := <-pidChan
+	// make sure that we actually waited & monitored
+	expectedMinimumDuration, _ := time.ParseDuration("900ms")
+	assert.True(t, monitorClientProcess(pid) > expectedMinimumDuration)
 }
