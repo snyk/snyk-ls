@@ -208,7 +208,6 @@ func (oss *Scanner) handleError(err error, res []byte, cmd []string) bool {
 			return false
 		case 2:
 			log.Err(err).Str("method", "oss.Scan").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
-			oss.errorReporter.CaptureError(err)
 			return true
 		case 3:
 			log.Debug().Str("method", "oss.Scan").Msg("no supported projects/files detected.")
