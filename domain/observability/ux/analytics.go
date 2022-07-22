@@ -6,4 +6,5 @@ type Analytics interface {
 	IssueHoverIsDisplayed(properties IssueHoverIsDisplayedProperties)
 	PluginIsUninstalled(properties PluginIsUninstalledProperties)
 	PluginIsInstalled(properties PluginIsInstalledProperties)
+	GetOrUpdateUserInfo() string
 }

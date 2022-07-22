@@ -55,3 +55,7 @@ func (n *TestAnalytics) PluginIsInstalled(properties PluginIsInstalledProperties
 	n.analytics = append(n.analytics, properties)
 	log.Info().Str("method", "PluginIsInstalled").Msgf("no op - args %v", properties)
 }
+
+func (n *TestAnalytics) GetOrUpdateUserInfo() string {
+	return "TestUser"
+}

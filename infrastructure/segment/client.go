@@ -3,31 +3,34 @@ package segment
 import (
 	"encoding/json"
 
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	segment "github.com/segmentio/analytics-go"
 
 	"github.com/snyk/snyk-ls/application/config"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 )
 
 type Client struct {
-	userId  string
-	IDE     ux2.IDE
-	segment segment.Client
+	userId        string
+	IDE           ux2.IDE
+	segment       segment.Client
+	snykApiClient snyk_api.SnykApiClient
 }
 
 // NewSegmentClient TODO use deviceID, e.g. hash of SNYK TOKEN if user is empty
 // https://github.com/snyk/snyk-intellij-plugin/blob/d2f1ef7fd80acb84bfd8678efada324d12d6a246/src/main/kotlin/snyk/amplitude/api/AmplitudeExperimentApiClient.kt
 // https://github.com/MatthewKing/DeviceId
-func NewSegmentClient(userId string, IDE ux2.IDE) ux2.Analytics {
+func NewSegmentClient(snykApiClient snyk_api.SnykApiClient, IDE ux2.IDE) ux2.Analytics {
 	client, err := segment.NewWithConfig(getSegmentPublicKey(), segment.Config{Logger: &segmentLogger{}})
 	if err != nil {
 		log.Error().Str("method", "NewSegmentClient").Err(err).Msg("Error creating segment client")
 	}
 	segmentClient := &Client{
-		userId:  userId,
-		IDE:     IDE,
-		segment: client,
+		IDE:           IDE,
+		segment:       client,
+		snykApiClient: snykApiClient,
 	}
 	return segmentClient
 }
@@ -73,8 +76,9 @@ func (s *Client) PluginIsInstalled(properties ux2.PluginIsInstalledProperties) {
 
 func (s *Client) enqueueEvent(properties interface{}, event string) {
 	if config.CurrentConfig().IsTelemetryEnabled() {
+		userId := s.GetOrUpdateUserInfo()
 		err := s.segment.Enqueue(segment.Track{
-			UserId:     s.userId,
+			UserId:     userId,
 			Event:      event,
 			Properties: s.getSerialisedProperties(properties),
 		})
@@ -82,6 +86,24 @@ func (s *Client) enqueueEvent(properties interface{}, event string) {
 			log.Warn().Err(err).Msg("Couldn't enqueue analytics")
 		}
 	}
+}
+
+func (s *Client) GetOrUpdateUserInfo() string {
+	userId := s.userId
+	if userId == "" {
+		user, err := s.snykApiClient.GetActiveUser()
+		if err != nil {
+			log.
+				Warn().
+				Err(errors.Wrap(err, "could not retrieve active user from API")).
+				Str("method", "infrastructure.segment.client").Msg("using deviceId instead of user id")
+			userId = config.CurrentConfig().DeviceID()
+		} else {
+			s.userId = user.Id
+			userId = user.Id
+		}
+	}
+	return userId
 }
 
 func (s *Client) getSerialisedProperties(props interface{}) segment.Properties {
