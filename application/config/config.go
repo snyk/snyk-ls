@@ -12,11 +12,14 @@ import (
 	"time"
 
 	"github.com/adrg/xdg"
+	"github.com/denisbrodbeck/machineid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/subosito/gotenv"
+	"github.com/xtgo/uuid"
 
 	"github.com/snyk/snyk-ls/internal/concurrency"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 const (
@@ -87,6 +90,7 @@ type Config struct {
 	snykApiUrl                  string
 	snykCodeApiUrl              string
 	token                       string
+	deviceId                    string ``
 }
 
 func CurrentConfig() *Config {
@@ -125,6 +129,17 @@ func New() *Config {
 	c.snykCodeAnalysisTimeout = snykCodeAnalysisTimeoutFromEnv()
 	c.token = ""
 	c.clientSettingsFromEnv()
+	id, machineErr := machineid.ProtectedID("Snyk-LS")
+	if machineErr != nil {
+		log.Err(machineErr).Str("method", "config.New").Msg("cannot retrieve machine id")
+		if c.token != "" {
+			c.deviceId = util.Hash([]byte(c.token))
+		} else {
+			c.deviceId = uuid.NewTime().String()
+		}
+	} else {
+		c.deviceId = id
+	}
 	return c
 }
 
@@ -359,4 +374,8 @@ func (c *Config) telemetryEnablementFromEnv() {
 	} else {
 		c.isTelemetryEnabled.Set(true)
 	}
+}
+
+func (c *Config) DeviceID() string {
+	return c.deviceId
 }
