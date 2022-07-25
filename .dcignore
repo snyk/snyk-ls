@@ -1545,3 +1545,6 @@ build/
 
 # Elisp
 *~
+
+# ignore TLS verify warning
+internal/httpclient/httpclient.go
