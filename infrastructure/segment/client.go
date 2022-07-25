@@ -76,7 +76,7 @@ func (s *Client) PluginIsInstalled(properties ux2.PluginIsInstalledProperties) {
 
 func (s *Client) enqueueEvent(properties interface{}, event string) {
 	if config.CurrentConfig().IsTelemetryEnabled() {
-		userId := s.GetOrUpdateUserInfo()
+		userId := s.getOrUpdateUserInfo()
 		err := s.segment.Enqueue(segment.Track{
 			UserId:     userId,
 			Event:      event,
@@ -88,7 +88,7 @@ func (s *Client) enqueueEvent(properties interface{}, event string) {
 	}
 }
 
-func (s *Client) GetOrUpdateUserInfo() string {
+func (s *Client) getOrUpdateUserInfo() string {
 	userId := s.userId
 	if userId == "" {
 		user, err := s.snykApiClient.GetActiveUser()

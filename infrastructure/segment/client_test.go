@@ -13,7 +13,7 @@ import (
 
 func TestClient_GetUserInfo(t *testing.T) {
 	s, _, fakeApiClient := setupUnitTest(t)
-	userId := s.GetOrUpdateUserInfo()
+	userId := s.getOrUpdateUserInfo()
 	assert.Equal(t, 1, len(fakeApiClient.GetAllCalls(snyk_api.ActiveUserOperation)))
 	assert.NotEmpty(t, userId)
 }
@@ -119,12 +119,12 @@ func Test_AnalyticEvents(t *testing.T) {
 	}
 }
 
-func setupUnitTest(t *testing.T) (ux.Analytics, *FakeSegmentClient, *snyk_api.FakeApiClient) {
+func setupUnitTest(t *testing.T) (*Client, *FakeSegmentClient, *snyk_api.FakeApiClient) {
 	testutil.UnitTest(t)
 	fakeApiClient := &snyk_api.FakeApiClient{}
-	s := NewSegmentClient(fakeApiClient, ux.VisualStudioCode)
+	s := NewSegmentClient(fakeApiClient, ux.VisualStudioCode).(*Client)
 	fakeSegmentClient := &FakeSegmentClient{}
-	s.(*Client).segment = fakeSegmentClient
+	s.segment = fakeSegmentClient
 	return s, fakeSegmentClient, fakeApiClient
 }
 
