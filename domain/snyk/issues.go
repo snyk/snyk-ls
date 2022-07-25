@@ -18,46 +18,16 @@ type Issue struct {
 	//todo this contains a formatted longest message for hovers, this needs to be pushed up and rendered in presentation
 	LegacyMessage string
 	// AffectedFilePath is the file path to the file where the issue was found
-	AffectedFilePath    string
-	Product             Product
-	References          []*url.URL
+	AffectedFilePath string
+	Product          Product
+	References       []*url.URL
+	// IssueDescriptionURL contains a Uri to display more information
 	IssueDescriptionURL *url.URL
 	CodeActions         []CodeAction
 }
 
 func (i Issue) String() string {
 	return fmt.Sprintf("%s, ID: %s, Range: %s", i.AffectedFilePath, i.ID, i.Range)
-}
-
-type Position struct {
-	/**
-	 * Line position in a document (zero-based).
-	 */
-	Line int
-	/**
-	 * Character offset on a line in a document (zero-based).
-	 */
-	Character int
-}
-
-func (p Position) String() string {
-	return fmt.Sprintf("%d:%d", p.Line, p.Character)
-}
-
-type Range struct {
-	/**
-	 * The range's start position.
-	 */
-	Start Position
-
-	/**
-	 * The range's end position.
-	 */
-	End Position
-}
-
-func (r Range) String() string {
-	return fmt.Sprintf("%s-%s", r.Start, r.End)
 }
 
 type Severity int8

@@ -278,7 +278,7 @@ func (f *Folder) CodeActions(filePath string, requestedRange snyk.Range) (codeAc
 	method := "domain.ide.workspace.folder.getCodeActions"
 	issues := f.documentDiagnosticsFromCache(filePath)
 	for _, issue := range issues {
-		if rangesOverlap(issue.Range, requestedRange) {
+		if issue.Range.Contains(requestedRange) {
 			log.Debug().Str("method", method).Msg("appending code action for issue " + issue.String())
 			codeActions = append(codeActions, issue.CodeActions...)
 		}
@@ -291,8 +291,4 @@ func (f *Folder) CodeActions(filePath string, requestedRange snyk.Range) (codeAc
 		requestedRange,
 	)
 	return codeActions
-}
-
-func rangesOverlap(r snyk.Range, r2 snyk.Range) bool {
-	return r.Start.Line <= r2.Start.Line && r.End.Line >= r2.Start.Line
 }
