@@ -1,10 +1,11 @@
-package code_test
+package code
 
 import (
 	"context"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/sourcegraph/go-lsp"
@@ -14,7 +15,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
-	code2 "github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -40,55 +40,85 @@ func setupDocs() (string, lsp.TextDocumentItem, lsp.TextDocumentItem, []byte, []
 	return path, firstDoc, secondDoc, content1, content2
 }
 
-//todo have a look at commented tests and reactive/update them
-/* 	t.Run("when too big ignores file", func(t *testing.T) {
-	snykCodeService := &FakeSnykCodeClient{}
-	var bundler = BundleUploader{Scanner: snykCodeService, instrumentor: performance.NewTestInstrumentor()}
-	documentURI, bundleFile := createTempFileInDir("bundleDoc.java", 1024*1024+1, temporaryDir)
-	bundleFileMap := map[lsp.DocumentURI]BundleFile{}
-	bundleFileMap[documentURI] = bundleFile
+func TestCreateBundle(t *testing.T) {
+	t.Run("when < maxFileSize creates bundle", func(t *testing.T) {
+		snykCodeMock, dir, c, file := setupCreateBundleTest(t, "java")
+		data := strings.Repeat("a", maxFileSize-10)
+		err := os.WriteFile(file, []byte(data), 0600)
+		if err != nil {
+			t.Fatal(t, err)
+		}
+		_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
+		if err != nil {
+			t.Fatal(t, err)
+		}
+		assert.Len(t, missingFiles, 1, "bundle should have 1 missing files")
+		assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 1, "bundle should called createBundle once")
+	})
 
-	_, err := bundler.Upload(context.Background(), Bundle{Scanner: snykCodeService, missingFiles: []lsp.DocumentURI{documentURI}}, bundleFileMap)
+	t.Run("when too big ignores file", func(t *testing.T) {
+		snykCodeMock, dir, c, file := setupCreateBundleTest(t, "java")
+		data := strings.Repeat("a", maxFileSize+1)
+		err := os.WriteFile(file, []byte(data), 0600)
+		if err != nil {
+			t.Fatal(t, err)
+		}
+		_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
+		if err != nil {
+			t.Fatal(t, err)
+		}
+		assert.Len(t, missingFiles, 0, "bundle should not have missing files")
+		assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")
+	})
 
-	assert.False(t, snykCodeService.HasExtendedBundle)
-	assert.Nil(t, err)
-})
+	t.Run("when empty file ignores file", func(t *testing.T) {
+		snykCodeMock, dir, c, file := setupCreateBundleTest(t, "java")
+		_, err := os.Create(file)
+		if err != nil {
+			t.Fatal(t, err)
+		}
+		_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
+		if err != nil {
+			t.Fatal(t, err)
+		}
+		assert.Len(t, missingFiles, 0, "bundle should not have missing files")
+		assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")
+	})
 
-t.Run("when empty file ignores file", func(t *testing.T) {
-	snykCodeService := &FakeSnykCodeClient{}
-	var bundler = BundleUploader{Scanner: snykCodeService, instrumentor: performance.NewTestInstrumentor()}
+	t.Run("when unsupported ignores file", func(t *testing.T) {
+		snykCodeMock, dir, c, file := setupCreateBundleTest(t, "unsupported")
+		_, err := os.Create(file)
+		if err != nil {
+			t.Fatal(t, err)
+		}
+		_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
+		if err != nil {
+			t.Fatal(t, err)
+		}
+		assert.Len(t, missingFiles, 0, "bundle should not have missing files")
+		assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")
+	})
+}
 
-	documentURI, bundleFile := createTempFileInDir("bundleDoc.java", 0, temporaryDir)
-	bundleFileMap := map[lsp.DocumentURI]BundleFile{}
-	bundleFileMap[documentURI] = bundleFile
-
-	_, err := bundler.Upload(context.Background(), Bundle{Scanner: snykCodeService, missingFiles: []lsp.DocumentURI{documentURI}}, bundleFileMap)
-
-	assert.False(t, snykCodeService.HasExtendedBundle)
-	assert.Nil(t, err)
-})
-
-t.Run("when unsupported ignores file", func(t *testing.T) {
-	snykCodeService := &FakeSnykCodeClient{}
-	var bundler = BundleUploader{Scanner: snykCodeService, instrumentor: performance.NewTestInstrumentor()}
-
-	documentURI, bundleFile := createTempFileInDir("bundleDoc.mr_robot", 1, temporaryDir)
-	bundleFileMap := map[lsp.DocumentURI]BundleFile{}
-	bundleFileMap[documentURI] = bundleFile
-
-	_, err := bundler.Upload(context.Background(), Bundle{Scanner: snykCodeService, missingFiles: []lsp.DocumentURI{documentURI}}, bundleFileMap)
-
-	assert.False(t, snykCodeService.HasExtendedBundle)
-	assert.Nil(t, err)
-})
-
-*/
+func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient, string, *Scanner, string) {
+	config.SetCurrentConfig(config.New())
+	snykCodeMock := &FakeSnykCodeClient{}
+	dir := t.TempDir()
+	c := New(
+		NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
+		&snyk_api.FakeApiClient{CodeEnabled: true},
+		error_reporting.NewTestErrorReporter(),
+		ux2.NewTestAnalytics(),
+	)
+	file := filepath.Join(dir, "file."+extension)
+	return snykCodeMock, dir, c, file
+}
 
 func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 	t.Run("should create bundle when hash empty", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
-		snykCodeMock := &code2.FakeSnykCodeClient{}
-		c := code2.New(code2.NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
+		snykCodeMock := &FakeSnykCodeClient{}
+		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
 		path, firstDoc, _, content1, _ := setupDocs()
 		docs := []string{uri.PathFromUri(firstDoc.URI)}
 		defer os.RemoveAll(path)
@@ -96,7 +126,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		c.UploadAndAnalyze(context.Background(), docs, "")
 
 		// verify that create bundle has been called on backend service
-		params := snykCodeMock.GetCallParams(0, code2.CreateBundleWithSourceOperation)
+		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
 		assert.NotNil(t, params)
 		assert.Equal(t, 1, len(params))
 		files := params[0].(map[string]string)
@@ -104,29 +134,29 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 	})
 
 	t.Run("should retrieve from backend", func(t *testing.T) {
-		snykCodeMock := &code2.FakeSnykCodeClient{}
-		c := code2.New(code2.NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
-		diagnosticUri, path := code2.FakeDiagnosticUri()
+		snykCodeMock := &FakeSnykCodeClient{}
+		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
+		diagnosticUri, path := FakeDiagnosticUri()
 		defer os.RemoveAll(path)
 
 		issues := c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, "")
 
 		assert.NotNil(t, issues)
 		assert.Equal(t, 1, len(issues))
-		assert.True(t, reflect.DeepEqual(code2.FakeIssue, issues[0]))
+		assert.True(t, reflect.DeepEqual(FakeIssue, issues[0]))
 
 		// verify that extend bundle has been called on backend service with additional file
-		params := snykCodeMock.GetCallParams(0, code2.RunAnalysisOperation)
+		params := snykCodeMock.GetCallParams(0, RunAnalysisOperation)
 		assert.NotNil(t, params)
 		assert.Equal(t, 3, len(params))
 		assert.Equal(t, 0, params[2])
 	})
 
 	t.Run("should track analytics", func(t *testing.T) {
-		snykCodeMock := &code2.FakeSnykCodeClient{}
+		snykCodeMock := &FakeSnykCodeClient{}
 		analytics := ux2.NewTestAnalytics()
-		c := code2.New(code2.NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), analytics)
-		diagnosticUri, path := code2.FakeDiagnosticUri()
+		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), analytics)
+		diagnosticUri, path := FakeDiagnosticUri()
 		defer os.RemoveAll(path)
 
 		// execute

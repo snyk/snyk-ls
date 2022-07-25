@@ -15,6 +15,10 @@ import (
 
 func Test_Bundler_Upload(t *testing.T) {
 	temporaryDir := setup()
+	t.Cleanup(func() {
+		defer os.RemoveAll(temporaryDir)
+	})
+
 	t.Run("adds files to bundle", func(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{}
 		var bundleUploader = BundleUploader{SnykCode: snykCodeService, instrumentor: performance.NewTestInstrumentor()}
@@ -56,10 +60,6 @@ func Test_Bundler_Upload(t *testing.T) {
 		assert.Equal(t, 2, snykCodeService.TotalBundleCount)
 		assert.Equal(t, 2, snykCodeService.ExtendedBundleCount)
 		assert.Nil(t, err)
-	})
-
-	t.Cleanup(func() {
-		defer os.RemoveAll(temporaryDir)
 	})
 }
 

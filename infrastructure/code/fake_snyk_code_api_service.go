@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	CreateBundleWithSourceOperation = "createBundleWithSource"
+	CreateBundleOperation           = "createBundle"
 	ExtendBundleWithSourceOperation = "extendBundleWithSource"
 	RunAnalysisOperation            = "runAnalysis"
 	GetFiltersOperation             = "getFilters"
@@ -127,7 +127,7 @@ func (f *FakeSnykCodeClient) CreateBundle(_ context.Context, files map[string]st
 	f.TotalBundleCount++
 	f.HasCreatedNewBundle = true
 	params := []interface{}{files}
-	f.addCall(params, CreateBundleWithSourceOperation)
+	f.addCall(params, CreateBundleOperation)
 	for filePath := range files {
 		missingFiles = append(missingFiles, filePath)
 	}
