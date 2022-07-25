@@ -586,6 +586,7 @@ func setupCustomTestRepo(url string, targetCommit string) (string, error) {
 	return cloneTargetDir, err
 }
 
+//goland:noinspection ALL
 func Test_MonitorClientProcess(t *testing.T) {
 	testutil.IntegTest(t) // because we want to test it on windows, too
 
@@ -596,7 +597,7 @@ func Test_MonitorClientProcess(t *testing.T) {
 		if runtime.GOOS != "windows" {
 			cmd = exec.Command("sleep", "2")
 		} else {
-			cmd = exec.Command("timeout", "2")
+			cmd = exec.Command("timeout", "/t", "2")
 		}
 		err := cmd.Start()
 		if err != nil {
