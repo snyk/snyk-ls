@@ -63,13 +63,13 @@ func updateOrganization(settings lsp.Settings) {
 func updateTelemetry(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.SendErrorReports)
 	if err != nil {
-		log.Err(err).Msgf("couldn't read send error reports %s", settings.SendErrorReports)
+		log.Warn().Err(err).Msgf("couldn't read send error reports %s", settings.SendErrorReports)
 	}
 	config.CurrentConfig().SetErrorReportingEnabled(parseBool)
 
 	parseBool, err = strconv.ParseBool(settings.EnableTelemetry)
 	if err != nil {
-		log.Err(err).Msgf("couldn't read send error reports %s", settings.SendErrorReports)
+		log.Warn().Err(err).Msgf("couldn't read enable telemetry %s", settings.SendErrorReports)
 	}
 	config.CurrentConfig().SetTelemetryEnabled(parseBool)
 }
@@ -77,7 +77,7 @@ func updateTelemetry(settings lsp.Settings) {
 func manageBinariesAutomatically(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ManageBinariesAutomatically)
 	if err != nil {
-		log.Err(err).Msgf("couldn't read manage binaries automatically %s", settings.ManageBinariesAutomatically)
+		log.Warn().Err(err).Msgf("couldn't read manage binaries automatically %s", settings.ManageBinariesAutomatically)
 	} else {
 		config.CurrentConfig().SetManageBinariesAutomatically(parseBool)
 	}
@@ -111,7 +111,7 @@ func updateCliConfig(settings lsp.Settings) {
 	cliSettings := &config.CliSettings{}
 	cliSettings.Insecure, err = strconv.ParseBool(settings.Insecure)
 	if err != nil {
-		log.Err(err).Msg("couldn't parse insecure setting")
+		log.Warn().Err(err).Msg("couldn't parse insecure setting")
 	}
 	cliSettings.AdditionalParameters = strings.Split(settings.AdditionalParams, " ")
 	cliSettings.SetPath(settings.CliPath)
@@ -122,19 +122,19 @@ func updateCliConfig(settings lsp.Settings) {
 func updateProductEnablement(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ActivateSnykCode)
 	if err != nil {
-		log.Err(err).Msg("couldn't parse code setting")
+		log.Warn().Err(err).Msg("couldn't parse code setting")
 	} else {
 		config.CurrentConfig().SetSnykCodeEnabled(parseBool)
 	}
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykOpenSource)
 	if err != nil {
-		log.Err(err).Msg("couldn't parse open source setting")
+		log.Warn().Err(err).Msg("couldn't parse open source setting")
 	} else {
 		config.CurrentConfig().SetSnykOssEnabled(parseBool)
 	}
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykIac)
 	if err != nil {
-		log.Err(err).Msg("couldn't parse iac setting")
+		log.Warn().Err(err).Msg("couldn't parse iac setting")
 	} else {
 		config.CurrentConfig().SetSnykIacEnabled(parseBool)
 	}

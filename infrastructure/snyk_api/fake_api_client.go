@@ -65,5 +65,5 @@ func (f *FakeApiClient) SastEnabled() (sastEnabled bool, localCodeEngineEnabled 
 
 func (f *FakeApiClient) GetActiveUser() (user ActiveUser, err error) {
 	f.addCall([]interface{}{}, ActiveUserOperation)
-	return ActiveUser{}, nil
+	return ActiveUser{Id: "FakeUser"}, nil
 }

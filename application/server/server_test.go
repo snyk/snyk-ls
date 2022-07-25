@@ -597,18 +597,18 @@ func Test_MonitorClientProcess(t *testing.T) {
 		if runtime.GOOS != "windows" {
 			cmd = exec.Command("sleep", "2")
 		} else {
-			cmd = exec.Command("timeout", "/t", "2")
+			cmd = exec.Command("cmd.exe", "/c", "timeout", "/t", "2")
 		}
 		err := cmd.Start()
 		if err != nil {
+			log.Err(err).Msg("Couldn't sleep. Stopping test")
 			t.Fail()
-			return
 		}
 		pidChan <- cmd.Process.Pid
 		_ = cmd.Wait()
 	}()
 	pid := <-pidChan
 	// make sure that we actually waited & monitored
-	expectedMinimumDuration, _ := time.ParseDuration("900ms")
+	expectedMinimumDuration, _ := time.ParseDuration("999ms")
 	assert.True(t, monitorClientProcess(pid) > expectedMinimumDuration)
 }

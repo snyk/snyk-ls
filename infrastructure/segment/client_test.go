@@ -7,12 +7,19 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-func Test(t *testing.T) {
-	s := NewSegmentClient("user", ux.VisualStudioCode)
-	fakeSegmentClient := &FakeSegmentClient{}
-	s.(*Client).segment = fakeSegmentClient
+func TestClient_GetUserInfo(t *testing.T) {
+	s, _, fakeApiClient := setupUnitTest(t)
+	userId := s.getOrUpdateUserInfo()
+	assert.Equal(t, 1, len(fakeApiClient.GetAllCalls(snyk_api.ActiveUserOperation)))
+	assert.NotEmpty(t, userId)
+}
+
+func Test_AnalyticEvents(t *testing.T) {
+	s, fakeSegmentClient, _ := setupUnitTest(t)
 	tests := []struct {
 		name   string
 		track  func()
@@ -110,6 +117,15 @@ func Test(t *testing.T) {
 			assert.ObjectsAreEqual(test.output, fakeSegmentClient.trackedEvents[0])
 		})
 	}
+}
+
+func setupUnitTest(t *testing.T) (*Client, *FakeSegmentClient, *snyk_api.FakeApiClient) {
+	testutil.UnitTest(t)
+	fakeApiClient := &snyk_api.FakeApiClient{}
+	s := NewSegmentClient(fakeApiClient, ux.VisualStudioCode).(*Client)
+	fakeSegmentClient := &FakeSegmentClient{}
+	s.segment = fakeSegmentClient
+	return s, fakeSegmentClient, fakeApiClient
 }
 
 type FakeSegmentClient struct {

@@ -4,11 +4,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/pkg/errors"
-
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
-	error_reporting2 "github.com/snyk/snyk-ls/domain/observability/error_reporting"
+	errorreporting "github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	performance2 "github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -20,7 +18,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/oss"
 	"github.com/snyk/snyk-ls/infrastructure/segment"
 	sentry2 "github.com/snyk/snyk-ls/infrastructure/sentry"
-	snyk_api "github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 )
 
 var snykApiClient snyk_api.SnykApiClient
@@ -33,7 +31,7 @@ var environmentInitializer initialize.Initializer
 var authenticator snyk.AuthenticationProvider
 
 var instrumentor performance2.Instrumentor
-var errorReporter error_reporting2.ErrorReporter
+var errorReporter errorreporting.ErrorReporter
 var analytics ux2.Analytics
 var snykCli cli2.Executor
 
@@ -65,7 +63,7 @@ func initInfrastructure() {
 	errorReporter = sentry2.NewSentryErrorReporter()
 	instrumentor = sentry2.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient()
-	analytics = analyticsFactory(snykApiClient)
+	analytics = segment.NewSegmentClient(snykApiClient, ux2.Eclipse) // todo: Don't hardcode Eclipse here
 	authenticator = auth2.NewCliAuthenticationProvider(errorReporter)
 	snykCli = cli2.NewExecutor(authenticator, errorReporter)
 	snykCodeClient = code2.NewHTTPRepository(instrumentor, errorReporter)
@@ -79,24 +77,6 @@ func initInfrastructure() {
 	)
 }
 
-func analyticsFactory(apiClient snyk_api.SnykApiClient) ux2.Analytics {
-	var a ux2.Analytics
-	user, err := apiClient.GetActiveUser()
-	if err != nil || user.Id == "" {
-		if err == nil {
-			err = errors.New("cannot retrieve active user, configuring noop analytics")
-		} else {
-			err = errors.Wrap(err, "cannot retrieve active user, configuring noop analytics")
-		}
-		//todo this should be silently captured as it does not affect UX
-		errorReporter.CaptureError(err)
-		a = ux2.NewTestAnalytics()
-	} else {
-		a = segment.NewSegmentClient(user.Id, ux2.Eclipse) // todo: Don't hardcode Eclipse here
-	}
-	return a
-}
-
 //TODO this is becoming a hot mess we need to unify integ. test strategies
 func TestInit(t *testing.T) {
 	initMutex.Lock()
@@ -104,7 +84,7 @@ func TestInit(t *testing.T) {
 	t.Helper()
 	analytics = ux2.NewTestAnalytics()
 	instrumentor = performance2.NewTestInstrumentor()
-	errorReporter = error_reporting2.NewTestErrorReporter()
+	errorReporter = errorreporting.NewTestErrorReporter()
 	authenticator = auth2.NewCliAuthenticationProvider(errorReporter)
 	environmentInitializer = initialize.NewDelegatingInitializer(
 		cli2.NewInitializer(errorReporter, install.NewInstaller(errorReporter)),
@@ -136,7 +116,7 @@ func Instrumentor() performance2.Instrumentor {
 	return instrumentor
 }
 
-func ErrorReporter() error_reporting2.ErrorReporter {
+func ErrorReporter() errorreporting.ErrorReporter {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return errorReporter
