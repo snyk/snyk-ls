@@ -23,41 +23,11 @@ type Issue struct {
 	References       []*url.URL
 	// IssueDescriptionURL contains a Uri to display more information
 	IssueDescriptionURL *url.URL
+	CodeActions         []CodeAction
 }
 
 func (i Issue) String() string {
 	return fmt.Sprintf("%s, ID: %s, Range: %s", i.AffectedFilePath, i.ID, i.Range)
-}
-
-type Position struct {
-	/**
-	 * Line position in a document (zero-based).
-	 */
-	Line int
-	/**
-	 * Character offset on a line in a document (zero-based).
-	 */
-	Character int
-}
-
-func (p Position) String() string {
-	return fmt.Sprintf("%d:%d", p.Line, p.Character)
-}
-
-type Range struct {
-	/**
-	 * The range's start position.
-	 */
-	Start Position
-
-	/**
-	 * The range's end position.
-	 */
-	End Position
-}
-
-func (r Range) String() string {
-	return fmt.Sprintf("%s-%s", r.Start, r.End)
 }
 
 type Severity int8
