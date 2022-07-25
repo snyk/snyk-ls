@@ -278,7 +278,7 @@ func (f *Folder) CodeActions(filePath string, requestedRange snyk.Range) (codeAc
 	method := "domain.ide.workspace.folder.getCodeActions"
 	issues := f.documentDiagnosticsFromCache(filePath)
 	for _, issue := range issues {
-		if issue.Range.Contains(requestedRange) {
+		if issue.Range.Overlaps(requestedRange) {
 			log.Debug().Str("method", method).Msg("appending code action for issue " + issue.String())
 			codeActions = append(codeActions, issue.CodeActions...)
 		}
