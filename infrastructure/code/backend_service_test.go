@@ -155,9 +155,9 @@ func referencesForSampleSarifResponse() []snyk.Reference {
 
 func TestGetCodeFlowCommands(t *testing.T) {
 	_, sarifResponse := setupConversionTests(t)
-	commands := getCodeFlowCommands(sarifResponse.Sarif.Runs[0].Results[0], FakeIssue.Range)
+	commands := getCodeFlowCommands(sarifResponse.Sarif.Runs[0].Results[0])
 	assert.NotEmpty(t, commands)
-	assert.Equal(t, ShowCodeFlowCommand, commands[0].Command)
+	assert.Equal(t, snyk.NavigateToRangeCommand, commands[0].Command)
 }
 
 func setupConversionTests(t *testing.T) ([]snyk.Issue, SarifResponse) {

@@ -15,6 +15,7 @@ import (
 	"github.com/denisbrodbeck/machineid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/sourcegraph/go-lsp"
 	"github.com/subosito/gotenv"
 	"github.com/xtgo/uuid"
 
@@ -90,7 +91,8 @@ type Config struct {
 	snykApiUrl                  string
 	snykCodeApiUrl              string
 	token                       string
-	deviceId                    string ``
+	deviceId                    string
+	clientCapabilities          lsp.ClientCapabilities
 }
 
 func CurrentConfig() *Config {
@@ -378,4 +380,12 @@ func (c *Config) telemetryEnablementFromEnv() {
 
 func (c *Config) DeviceID() string {
 	return c.deviceId
+}
+
+func (c *Config) ClientCapabilities() lsp.ClientCapabilities {
+	return c.clientCapabilities
+}
+
+func (c *Config) SetClientCapabilities(capabilities lsp.ClientCapabilities) {
+	c.clientCapabilities = capabilities
 }

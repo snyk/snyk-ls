@@ -1,5 +1,7 @@
 package snyk
 
+const NavigateToRangeCommand = "snyk.navigateToRange"
+
 type Command struct {
 	/**
 	 * Title of the command, like `save`.

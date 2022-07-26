@@ -27,7 +27,6 @@ import (
 
 const completeStatus = "COMPLETE"
 const codeDescriptionURL = "https://docs.snyk.io/products/snyk-code/security-rules-used-by-snyk-code"
-const ShowCodeFlowCommand = "snyk.code.showCodeFlow"
 
 var (
 	issueSeverities = map[string]snyk.Severity{
@@ -355,7 +354,7 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (issue
 				Product:             snyk.ProductCode,
 				IssueDescriptionURL: ruleLink,
 				References:          s.references(rules, result.RuleID),
-				Commands:            getCodeFlowCommands(result, myRange),
+				Commands:            getCodeFlowCommands(result),
 			}
 
 			issues = append(issues, d)
@@ -429,19 +428,41 @@ func (s *SnykCodeHTTPClient) getFormattedMessage(r run, result result) (msg stri
 	return msg
 }
 
-func getCodeFlowCommands(r result, myRange snyk.Range) (commands []snyk.Command) {
+func getCodeFlowCommands(r result) (commands []snyk.Command) {
 	flows := r.CodeFlows
+	dedupMap := map[string]bool{}
 	for _, cFlow := range flows {
 		threadFlows := cFlow.ThreadFlows
 		for _, tFlow := range threadFlows {
-			for locationIndex, tFlowLocation := range tFlow.Locations {
-				path := tFlowLocation.Location.PhysicalLocation.ArtifactLocation.URI
-				commands = append(commands,
-					snyk.Command{
-						Title:     fmt.Sprintf("Snyk CodeFlow[%d] %s:L%d", locationIndex, filepath.Base(path), myRange.Start.Line),
-						Command:   ShowCodeFlowCommand,
+			for _, tFlowLocation := range tFlow.Locations {
+				method := "getCodeFlowCommands"
+				physicalLoc := tFlowLocation.Location.PhysicalLocation
+				path := physicalLoc.ArtifactLocation.URI
+				region := physicalLoc.Region
+				myRange :=
+					snyk.Range{
+						Start: snyk.Position{
+							Line:      region.StartLine - 1,
+							Character: region.StartColumn - 1,
+						},
+						End: snyk.Position{
+							Line:      region.EndLine - 1,
+							Character: region.EndColumn,
+						}}
+
+				// IntelliJ does a distinct by start line
+				key := fmt.Sprintf("%sL%d", path, region.StartLine)
+				if !dedupMap[key] {
+					command := snyk.Command{
+						Title:     fmt.Sprintf("Snyk Data Flow [%d] %s:L%d", len(commands), filepath.Base(path), region.StartLine),
+						Command:   snyk.NavigateToRangeCommand,
 						Arguments: []interface{}{path, myRange},
-					})
+					}
+
+					commands = append(commands, command)
+					dedupMap[key] = true
+					log.Debug().Str("method", method).Interface("command", command).Send()
+				}
 			}
 		}
 	}

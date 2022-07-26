@@ -21,11 +21,6 @@ const (
 )
 
 var (
-	FakeCommand = snyk.Command{
-		Title:     "Fake Snyk Code Command",
-		Command:   "snyk.fake.doStuff",
-		Arguments: []interface{}{"fakeArg1"},
-	}
 	FakeSnykCodeApiServiceMutex = &sync.Mutex{}
 
 	fakeRange = snyk.Range{
@@ -38,6 +33,12 @@ var (
 			Character: 7,
 		},
 	}
+	FakeCommand = snyk.Command{
+		Title:     "Code Flow blah blah fake",
+		Command:   snyk.NavigateToRangeCommand,
+		Arguments: []interface{}{"path", fakeRange},
+	}
+
 	FakeIssue = snyk.Issue{
 		ID:       "SNYK-123",
 		Range:    fakeRange,

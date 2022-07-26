@@ -525,3 +525,38 @@ type CodeAction struct {
 }
 
 type CodeActionTriggerKind float64
+
+/**
+ * Params to show a document.
+ *
+ * @since 3.16.0
+ */
+type ShowDocumentParams struct {
+	/**
+	 * The document uri to show.
+	 */
+	Uri sglsp.DocumentURI `json:"uri"`
+
+	/**
+	 * Indicates to show the resource in an external program.
+	 * To show for example `https://code.visualstudio.com/`
+	 * in the default WEB browser set `external` to `true`.
+	 */
+	External bool `json:"external"`
+
+	/**
+	 * An optional property to indicate whether the editor
+	 * showing the document should take focus or not.
+	 * Clients might ignore this property if an external
+	 * program is started.
+	 */
+	TakeFocus bool `json:"takeFocus"`
+
+	/**
+	 * An optional selection range if the document is a text
+	 * document. Clients might ignore the property if an
+	 * external program is started or the file is not a text
+	 * file.
+	 */
+	Selection sglsp.Range `json:"selection"`
+}
