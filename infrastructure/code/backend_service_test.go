@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -99,7 +98,7 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 	assert.Len(t, missingFiles, 0, "all files should be uploaded now")
 
 	assert.Eventually(t, func() bool {
-		limitToFiles := []sglsp.DocumentURI{path1, path2}
+		limitToFiles := []string{path1, path2}
 
 		analysisOptions := AnalysisOptions{
 			bundleHash:   bundleHash,
@@ -122,6 +121,7 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 // todo analysis test severities
 
 func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
+	testutil.UnitTest(t)
 	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
 

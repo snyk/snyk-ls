@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/pact-foundation/pact-go/dsl"
-	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -177,7 +176,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) { // nolint:gocognit // this i
 			analysisOptions := AnalysisOptions{
 				bundleHash:   bundleHash,
 				shardKey:     "shardKey",
-				limitToFiles: []sglsp.DocumentURI{},
+				limitToFiles: []string{},
 				severity:     0,
 			}
 

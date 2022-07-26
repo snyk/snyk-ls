@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
-	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -72,7 +71,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
 	analysisOptions := AnalysisOptions{
 		bundleHash:   b.BundleHash,
 		shardKey:     b.getShardKey(b.rootPath, config.CurrentConfig().Token()),
-		limitToFiles: []sglsp.DocumentURI{}, //todo remove lsp dependencies
+		limitToFiles: []string{},
 		severity:     0,
 	}
 

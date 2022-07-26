@@ -3,15 +3,13 @@ package code
 import (
 	"context"
 
-	sglsp "github.com/sourcegraph/go-lsp"
-
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 type AnalysisOptions struct {
 	bundleHash   string
 	shardKey     string
-	limitToFiles []sglsp.DocumentURI
+	limitToFiles []string
 	severity     int
 }
 

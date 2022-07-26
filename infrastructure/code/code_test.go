@@ -11,11 +11,11 @@ import (
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -101,7 +101,7 @@ func TestCreateBundle(t *testing.T) {
 }
 
 func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient, string, *Scanner, string) {
-	config.SetCurrentConfig(config.New())
+	testutil.UnitTest(t)
 	snykCodeMock := &FakeSnykCodeClient{}
 	dir := t.TempDir()
 	c := New(
@@ -116,7 +116,7 @@ func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient,
 
 func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 	t.Run("should create bundle when hash empty", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{}
 		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
 		path, firstDoc, _, content1, _ := setupDocs()
@@ -134,6 +134,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 	})
 
 	t.Run("should retrieve from backend", func(t *testing.T) {
+		testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{}
 		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
 		diagnosticUri, path := FakeDiagnosticUri()
@@ -153,6 +154,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 	})
 
 	t.Run("should track analytics", func(t *testing.T) {
+		testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{}
 		analytics := ux2.NewTestAnalytics()
 		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), analytics)
