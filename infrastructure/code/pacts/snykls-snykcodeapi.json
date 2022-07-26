@@ -245,6 +245,7 @@
                     "level": "string",
                     "locations": [
                       {
+                        "id": 1,
                         "physicalLocation": {
                           "artifactLocation": {
                             "uri": "string",
@@ -440,6 +441,9 @@
             "min": 1
           },
           "$.body.sarif.runs[*].results[*].locations[*].*": {
+            "match": "type"
+          },
+          "$.body.sarif.runs[*].results[*].locations[*].id": {
             "match": "type"
           },
           "$.body.sarif.runs[*].results[*].locations[*].physicalLocation.artifactLocation.uri": {
