@@ -179,6 +179,71 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.WillSaveWaitUntil, true)
 }
 
+func Test_initialize_shouldSupportCodeLenses(t *testing.T) {
+	loc := setupServer(t)
+
+	rsp, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+	var result lsp.InitializeResult
+	if err := rsp.UnmarshalResult(&result); err != nil {
+		log.Fatal().Err(err)
+	}
+	assert.Equal(t, result.Capabilities.CodeLensProvider.ResolveProvider, false)
+}
+
+func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
+	loc := setupServer(t)
+
+	config.CurrentConfig().SetSnykCodeEnabled(true)
+	config.CurrentConfig().SetSnykOssEnabled(false)
+	config.CurrentConfig().SetSnykIacEnabled(false)
+	config.CurrentConfig().SetManageBinariesAutomatically(false)
+
+	rsp, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		t.Fatal(t, err)
+	}
+	var result lsp.InitializeResult
+	if err := rsp.UnmarshalResult(&result); err != nil {
+		t.Fatal(t, err)
+	}
+
+	didOpenParams, dir, cleanup := didOpenTextParams()
+	defer cleanup()
+	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService()))
+
+	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
+	if err != nil {
+		t.Fatal(t, err)
+	}
+
+	rsp, _ = loc.Client.Call(ctx, "textDocument/codeLens", sglsp.CodeLensParams{
+		TextDocument: sglsp.TextDocumentIdentifier{
+			URI: didOpenParams.TextDocument.URI,
+		},
+	})
+	var lenses []sglsp.CodeLens
+	if err := rsp.UnmarshalResult(&lenses); err != nil {
+		t.Fatal(t, err)
+	}
+	assert.NotNil(t, lenses)
+	assert.Len(t, lenses, 1)
+	assert.Equal(t, lenses[0].Command.Command, code.FakeCommand.Command)
+}
+
+func Test_GetCodeLensFromCommand(t *testing.T) {
+	testutil.UnitTest(t)
+	issue := code.FakeIssue
+	command := code.FakeCommand
+	codeLens := getCodeLensFromCommand(issue, command)
+	assert.Equal(t, workspace.ToRange(issue.Range), codeLens.Range)
+	assert.Equal(t, command.Command, codeLens.Command.Command)
+	assert.Equal(t, command.Title, codeLens.Command.Title)
+	assert.Equal(t, command.Arguments, codeLens.Command.Arguments)
+}
+
 func Test_initialize_updatesSettings(t *testing.T) {
 	loc := setupServer(t)
 

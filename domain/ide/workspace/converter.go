@@ -59,7 +59,7 @@ func toTextEdits(edits []snyk.TextEdit) (lspEdits []sglsp.TextEdit) {
 
 func toTextEdit(edit snyk.TextEdit) sglsp.TextEdit {
 	return sglsp.TextEdit{
-		Range:   toRange(edit.Range),
+		Range:   ToRange(edit.Range),
 		NewText: edit.NewText,
 	}
 }
@@ -78,7 +78,7 @@ func toSeverity(severity snyk.Severity) sglsp.DiagnosticSeverity {
 	return sglsp.Info
 }
 
-func toRange(r snyk.Range) sglsp.Range {
+func ToRange(r snyk.Range) sglsp.Range {
 	return sglsp.Range{
 		Start: toPosition(r.Start),
 		End:   toPosition(r.End),
@@ -99,7 +99,7 @@ func toDiagnostics(issues []snyk.Issue) (diagnostics []lsp.Diagnostic) {
 			s = issue.IssueDescriptionURL.String()
 		}
 		diagnostics = append(diagnostics, lsp.Diagnostic{
-			Range:           toRange(issue.Range),
+			Range:           ToRange(issue.Range),
 			Severity:        toSeverity(issue.Severity),
 			Code:            issue.ID,
 			Source:          string(issue.Product),
@@ -135,7 +135,7 @@ func toHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
 
 		hovers = append(hovers, hover.Hover[hover.Context]{
 			Id:      i.ID,
-			Range:   toRange(i.Range),
+			Range:   ToRange(i.Range),
 			Message: message,
 			Context: i,
 		})
