@@ -1,6 +1,8 @@
 package workspace
 
 import (
+	"fmt"
+
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/server/lsp"
@@ -127,7 +129,7 @@ func toHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
 		if len(i.References) > 0 {
 			message += "\n\nReferences:\n\n"
 			for _, reference := range i.References {
-				message += reference.String() + "\n"
+				message += fmt.Sprintf("[%s](%s)\n\n", reference.Title, reference.Url)
 			}
 		}
 

@@ -135,21 +135,16 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	assert.Equal(t, 2, len(issues))
 	issueDescriptionURL, _ := url.Parse(codeDescriptionURL)
 	references := referencesForSampleSarifResponse()
-	assert.Equal(
-		t,
-		snyk.Issue{
-			ID:                  "java/DontUsePrintStackTrace",
-			Range:               snyk.Range{Start: snyk.Position{Line: 5, Character: 6}, End: snyk.Position{Line: 5, Character: 7}},
-			Message:             "Printing the stack trace of java.lang.InterruptedException. Production code should not use printStackTrace. (Snyk)",
-			IssueType:           snyk.CodeSecurityVulnerability,
-			Severity:            snyk.Low,
-			AffectedFilePath:    path,
-			Product:             "Snyk Code",
-			IssueDescriptionURL: issueDescriptionURL,
-			References:          references,
-		},
-		issues[0],
-	)
+	issue := issues[0]
+	assert.Equal(t, "java/DontUsePrintStackTrace", issue.ID)
+	assert.Equal(t, "Printing the stack trace of java.lang.InterruptedException. Production code should not use printStackTrace. (Snyk)", issue.Message)
+	assert.Equal(t, snyk.CodeSecurityVulnerability, issue.IssueType)
+	assert.Equal(t, snyk.Low, issue.Severity)
+	assert.Equal(t, path, issue.AffectedFilePath)
+	assert.Equal(t, snyk.ProductCode, issue.Product)
+	assert.Equal(t, issueDescriptionURL, issue.IssueDescriptionURL)
+	assert.Equal(t, references, issue.References)
+	assert.Contains(t, issue.FormattedMessage, "Example Commit Fixes")
 }
 
 func referencesForSampleSarifResponse() []*url.URL {

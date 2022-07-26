@@ -352,7 +352,7 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (issue
 				AffectedFilePath:    path,
 				Product:             snyk.ProductCode,
 				IssueDescriptionURL: ruleLink,
-				References:          references(rules, result.RuleID),
+				References:          s.references(rules, result.RuleID),
 			}
 
 			issues = append(issues, d)
@@ -365,18 +365,18 @@ func (s *SnykCodeHTTPClient) getMessage(result result) string {
 	return fmt.Sprintf("%s (Snyk)", result.Message.Text)
 }
 
-func references(rules []rule, ruleID string) (references []*url.URL) {
+func (s *SnykCodeHTTPClient) references(rules []rule, ruleID string) (references []snyk.Reference) {
 	for _, r := range rules {
 		if r.ID != ruleID {
 			continue
 		}
-		return getCommitExampleURLs(r)
+		return s.getReference(r)
 	}
 	return references
 }
 
-func getCommitExampleURLs(r rule) (references []*url.URL) {
-	for _, exampleFix := range r.Properties.ExampleCommitFixes {
+func (s *SnykCodeHTTPClient) getReference(r rule) (references []snyk.Reference) {
+	for i, exampleFix := range r.Properties.ExampleCommitFixes {
 		commitURLString := exampleFix.CommitURL
 		commitURL, err := url.Parse(commitURLString)
 		if err != nil {
@@ -386,7 +386,7 @@ func getCommitExampleURLs(r rule) (references []*url.URL) {
 				Msgf("cannot parse commit url")
 			continue
 		}
-		references = append(references, commitURL)
+		references = append(references, snyk.Reference{Title: s.getFixDescriptionsForRule(r, i), Url: commitURL})
 	}
 	return references
 }
@@ -400,7 +400,7 @@ func (s *SnykCodeHTTPClient) createRuleLink() *url.URL {
 }
 
 func (s *SnykCodeHTTPClient) getFormattedMessage(r run, result result) (msg string) {
-	msg = result.Message.Text + "\n\n"
+	msg = fmt.Sprintf("## Description\n\n%s\n\n---", result.Message.Text)
 	rules := r.Tool.Driver.Rules
 	for _, rule := range rules {
 		if rule.ID != result.RuleID {
@@ -409,9 +409,9 @@ func (s *SnykCodeHTTPClient) getFormattedMessage(r run, result result) (msg stri
 		if len(rule.Properties.ExampleCommitFixes) > 0 {
 			msg += "\n## Example Commit Fixes: \n\n"
 			for i, fix := range rule.Properties.ExampleCommitFixes {
-				fixDescription := rule.Properties.ExampleCommitDescriptions
-				if len(fixDescription) > i {
-					msg += fmt.Sprintf("### [%s](%s)", fixDescription[i], fix.CommitURL)
+				fixDescription := s.getFixDescriptionsForRule(rule, i)
+				if fixDescription != "" {
+					msg += fmt.Sprintf("### [%s](%s)", fixDescription, fix.CommitURL)
 				}
 				msg += "\n```\n"
 				for _, line := range fix.Lines {
@@ -420,9 +420,18 @@ func (s *SnykCodeHTTPClient) getFormattedMessage(r run, result result) (msg stri
 				}
 				msg += "```\n\n"
 			}
+			msg += "---"
 		}
 	}
 	return msg
+}
+
+func (s *SnykCodeHTTPClient) getFixDescriptionsForRule(rule rule, commitFixIndex int) string {
+	fixDescriptions := rule.Properties.ExampleCommitDescriptions
+	if len(fixDescriptions) > commitFixIndex {
+		return fixDescriptions[commitFixIndex]
+	}
+	return ""
 }
 
 func (s *SnykCodeHTTPClient) lineChangeChar(line string) string {
