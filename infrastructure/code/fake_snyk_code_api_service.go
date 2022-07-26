@@ -21,6 +21,11 @@ const (
 )
 
 var (
+	FakeCommand = snyk.Command{
+		Title:     "Fake Snyk Code Command",
+		Command:   "snyk.fake.doStuff",
+		Arguments: []interface{}{"fakeArg1"},
+	}
 	FakeSnykCodeApiServiceMutex = &sync.Mutex{}
 
 	fakeRange = snyk.Range{
@@ -38,6 +43,7 @@ var (
 		Range:    fakeRange,
 		Severity: snyk.High,
 		Message:  "This is a dummy error (severity error)",
+		Commands: []snyk.Command{FakeCommand},
 	}
 	FakeFilters = []string{".cjs", ".ejs", ".es", ".es6", ".htm", ".html", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".vue", ".java", ".erb", ".haml", ".rb", ".rhtml", ".slim", ".kt", ".swift", ".cls", ".config", ".pom", ".wxs", ".xml", ".xsd", ".aspx", ".cs", ".py", ".go", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".php", ".phtml"}
 )

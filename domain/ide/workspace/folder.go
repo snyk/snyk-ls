@@ -157,7 +157,7 @@ func (f *Folder) ClearDiagnosticsCache(filePath string) {
 }
 
 func (f *Folder) scan(ctx context.Context, path string, codeFiles []string) {
-	issuesSlice := f.documentDiagnosticsFromCache(path)
+	issuesSlice := f.DocumentDiagnosticsFromCache(path)
 	if issuesSlice != nil {
 		log.Info().Str("method", "domain.ide.workspace.folder.scan").Msgf("Cached results found: Skipping scan for %s", path)
 		f.processResults(issuesSlice)
@@ -168,7 +168,7 @@ func (f *Folder) scan(ctx context.Context, path string, codeFiles []string) {
 	f.scanner.Scan(ctx, path, f.processResults, f.path, codeFiles)
 }
 
-func (f *Folder) documentDiagnosticsFromCache(file string) []snyk.Issue {
+func (f *Folder) DocumentDiagnosticsFromCache(file string) []snyk.Issue {
 	issues := f.documentDiagnosticCache.Get(file)
 	if issues == nil {
 		return nil
@@ -276,7 +276,7 @@ func (f *Folder) Status() FolderStatus { return f.status }
 
 func (f *Folder) CodeActions(filePath string, requestedRange snyk.Range) (codeActions []snyk.CodeAction) {
 	method := "domain.ide.workspace.folder.getCodeActions"
-	issues := f.documentDiagnosticsFromCache(filePath)
+	issues := f.DocumentDiagnosticsFromCache(filePath)
 	for _, issue := range issues {
 		if issue.Range.Overlaps(requestedRange) {
 			log.Debug().Str("method", method).Msg("appending code action for issue " + issue.String())

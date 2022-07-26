@@ -17,6 +17,7 @@ import (
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -61,6 +62,7 @@ func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 	(*handlers)["textDocument/didSave"] = TextDocumentDidSaveHandler()
 	(*handlers)["textDocument/hover"] = TextDocumentHover()
 	(*handlers)["textDocument/codeAction"] = CodeAction()
+	(*handlers)["textDocument/codeLens"] = CodeLensHandler()
 	(*handlers)["textDocument/willSave"] = NoOpHandler()
 	(*handlers)["textDocument/willSaveWaitUntil"] = NoOpHandler()
 	(*handlers)["shutdown"] = Shutdown()
@@ -68,6 +70,38 @@ func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 	(*handlers)["workspace/didChangeWorkspaceFolders"] = WorkspaceDidChangeWorkspaceFoldersHandler()
 	(*handlers)["workspace/didChangeConfiguration"] = WorkspaceDidChangeConfiguration()
 	(*handlers)["window/workDoneProgress/cancel"] = WindowWorkDoneProgressCancelHandler()
+}
+
+func CodeLensHandler() jrpc2.Handler {
+	return handler.New(func(ctx context.Context, params sglsp.CodeLensParams) ([]sglsp.CodeLens, error) {
+		log.Info().Str("method", "CodeLensHandler").Msg("RECEIVING")
+		defer log.Info().Str("method", "CodeLensHandler").Msg("SENDING")
+
+		filePath := uri.PathFromUri(params.TextDocument.URI)
+		f := workspace.Get().GetFolderContaining(filePath)
+		if f != nil {
+			issues := f.DocumentDiagnosticsFromCache(filePath)
+			var lenses []sglsp.CodeLens
+			for _, issue := range issues {
+				for _, command := range issue.Commands {
+					lenses = append(lenses, getCodeLensFromCommand(issue, command))
+				}
+			}
+			return lenses, nil
+		}
+		return nil, nil
+	})
+}
+
+func getCodeLensFromCommand(issue snyk.Issue, command snyk.Command) sglsp.CodeLens {
+	return sglsp.CodeLens{
+		Range: workspace.ToRange(issue.Range),
+		Command: sglsp.Command{
+			Title:     command.Title,
+			Command:   command.Command,
+			Arguments: command.Arguments,
+		},
+	}
 }
 
 func CodeAction() jrpc2.Handler {
@@ -156,6 +190,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 				},
 				HoverProvider:      true,
 				CodeActionProvider: true,
+				CodeLensProvider:   &sglsp.CodeLensOptions{ResolveProvider: false},
 			},
 		}, nil
 	})
