@@ -11,6 +11,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 
 	errors2 "github.com/pkg/errors"
@@ -26,6 +27,7 @@ import (
 
 const completeStatus = "COMPLETE"
 const codeDescriptionURL = "https://docs.snyk.io/products/snyk-code/security-rules-used-by-snyk-code"
+const ShowCodeFlowCommand = "snyk.code.showCodeFlow"
 
 var (
 	issueSeverities = map[string]snyk.Severity{
@@ -353,6 +355,7 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (issue
 				Product:             snyk.ProductCode,
 				IssueDescriptionURL: ruleLink,
 				References:          s.references(rules, result.RuleID),
+				Commands:            getCodeFlowCommands(result, myRange),
 			}
 
 			issues = append(issues, d)
@@ -424,6 +427,25 @@ func (s *SnykCodeHTTPClient) getFormattedMessage(r run, result result) (msg stri
 		}
 	}
 	return msg
+}
+
+func getCodeFlowCommands(r result, myRange snyk.Range) (commands []snyk.Command) {
+	flows := r.CodeFlows
+	for _, cFlow := range flows {
+		threadFlows := cFlow.ThreadFlows
+		for _, tFlow := range threadFlows {
+			for locationIndex, tFlowLocation := range tFlow.Locations {
+				path := tFlowLocation.Location.PhysicalLocation.ArtifactLocation.URI
+				commands = append(commands,
+					snyk.Command{
+						Title:     fmt.Sprintf("Snyk CodeFlow[%d] %s:L%d", locationIndex, filepath.Base(path), myRange.Start.Line),
+						Command:   ShowCodeFlowCommand,
+						Arguments: []interface{}{path, myRange},
+					})
+			}
+		}
+	}
+	return commands
 }
 
 func (s *SnykCodeHTTPClient) getFixDescriptionsForRule(rule rule, commitFixIndex int) string {

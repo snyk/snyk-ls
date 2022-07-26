@@ -40,6 +40,10 @@ func (sc *Scanner) Product() snyk.Product {
 	return snyk.ProductCode
 }
 
+func (sc *Scanner) SupportedCommands() []snyk.CommandName {
+	return []snyk.CommandName{ShowCodeFlowCommand}
+}
+
 func (sc *Scanner) Scan(ctx context.Context, _ string, workspacePath string, files []string) []snyk.Issue {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)

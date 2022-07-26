@@ -121,16 +121,7 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 // todo analysis test severities
 
 func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
-	testutil.UnitTest(t)
-	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
-	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
-
-	var analysisResponse SarifResponse
-	_ = json.Unmarshal(bytes, &analysisResponse)
-
-	issues := s.convertSarifResponse(analysisResponse)
-	assert.NotNil(t, issues)
-
+	issues, _ := setupConversionTests(t)
 	path := "/server/testdata/Dummy.java"
 	assert.Equal(t, 2, len(issues))
 	issueDescriptionURL, _ := url.Parse(codeDescriptionURL)
@@ -145,18 +136,41 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	assert.Equal(t, issueDescriptionURL, issue.IssueDescriptionURL)
 	assert.Equal(t, references, issue.References)
 	assert.Contains(t, issue.FormattedMessage, "Example Commit Fixes")
+	assert.NotEmpty(t, issue.Commands, "should have commands filled from codeflow")
 }
 
-func referencesForSampleSarifResponse() []*url.URL {
+func referencesForSampleSarifResponse() []snyk.Reference {
+
 	exampleCommitFix1, _ := url.Parse("https://github.com/apache/flink/commit/5d7c5620804eddd59206b24c87ffc89c12fd1184?diff=split#diff-86ec3e3884662ba3b5f4bb5050221fd6L94")
 	exampleCommitFix2, _ := url.Parse("https://github.com/rtr-nettest/open-rmbt/commit/0fa9d5547c5300cf8162b8f31a40aea6847a5c32?diff=split#diff-7e23eb1aa3b7b4d5db89bfd2860277e5L75")
 	exampleCommitFix3, _ := url.Parse("https://github.com/wso2/developer-studio/commit/cfd84b83349e67de4b0239733bc6ed01287856b7?diff=split#diff-645425e844adc2eab8197719cbb2fe8dL285")
-	references := []*url.URL{
-		exampleCommitFix1,
-		exampleCommitFix2,
-		exampleCommitFix3,
+
+	references := []snyk.Reference{
+		{Title: "improve logging and testing", Url: exampleCommitFix1},
+		{Title: "more tests, exceptions", Url: exampleCommitFix2},
+		{Title: "log errors to the log file", Url: exampleCommitFix3},
 	}
 	return references
+}
+
+func TestGetCodeFlowCommands(t *testing.T) {
+	_, sarifResponse := setupConversionTests(t)
+	commands := getCodeFlowCommands(sarifResponse.Sarif.Runs[0].Results[0], FakeIssue.Range)
+	assert.NotEmpty(t, commands)
+	assert.Equal(t, ShowCodeFlowCommand, commands[0].Command)
+}
+
+func setupConversionTests(t *testing.T) ([]snyk.Issue, SarifResponse) {
+	testutil.UnitTest(t)
+	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
+	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
+
+	var analysisResponse SarifResponse
+	_ = json.Unmarshal(bytes, &analysisResponse)
+
+	issues := s.convertSarifResponse(analysisResponse)
+	assert.NotNil(t, issues)
+	return issues, analysisResponse
 }
 
 func TestSnykCodeBackendService_analysisRequestBody_FillsOrgParameter(t *testing.T) {
