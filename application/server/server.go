@@ -2,12 +2,14 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"time"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/shirou/gopsutil/process"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -63,6 +65,7 @@ func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 	(*handlers)["textDocument/hover"] = TextDocumentHover()
 	(*handlers)["textDocument/codeAction"] = CodeAction()
 	(*handlers)["textDocument/codeLens"] = CodeLensHandler()
+	(*handlers)["codeLens/resolve"] = CodeLensResolveHandler()
 	(*handlers)["textDocument/willSave"] = NoOpHandler()
 	(*handlers)["textDocument/willSaveWaitUntil"] = NoOpHandler()
 	(*handlers)["shutdown"] = Shutdown()
@@ -70,6 +73,58 @@ func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 	(*handlers)["workspace/didChangeWorkspaceFolders"] = WorkspaceDidChangeWorkspaceFoldersHandler()
 	(*handlers)["workspace/didChangeConfiguration"] = WorkspaceDidChangeConfiguration()
 	(*handlers)["window/workDoneProgress/cancel"] = WindowWorkDoneProgressCancelHandler()
+	(*handlers)["workspace/executeCommand"] = ExecuteCommandHandler(srv)
+}
+
+func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
+	return handler.New(func(ctx context.Context, params sglsp.ExecuteCommandParams) (interface{}, error) {
+		method := "ExecuteCommandHandler"
+		log.Info().Str("method", method).Interface("command", params).Msg("RECEIVING")
+		defer log.Info().Str("method", method).Interface("command", params).Msg("SENDING")
+		args := params.Arguments
+		if params.Command == snyk.NavigateToRangeCommand && len(args) == 2 {
+			showCodeFlowDocument(srv, args)
+		}
+		return nil, nil
+	})
+}
+
+func showCodeFlowDocument(srv *jrpc2.Server, args []interface{}) {
+	method := "showCodeFlowDocument"
+	// convert to correct type
+	var myRange snyk.Range
+	marshal, err := json.Marshal(args[1])
+	if err != nil {
+		log.Err(errors.Wrap(err, "couldn't marshal range to json")).Str("method", method).Send()
+	}
+	err = json.Unmarshal(marshal, &myRange)
+	if err != nil {
+		log.Err(errors.Wrap(err, "couldn't unmarshal range from json")).Str("method", method).Send()
+	}
+
+	params := lsp.ShowDocumentParams{
+		Uri:       uri.PathToUri(args[0].(string)),
+		External:  false,
+		TakeFocus: true,
+		Selection: workspace.ToRange(myRange),
+	}
+	log.Info().
+		Str("method", "registerNotifier").
+		Interface("params", params).
+		Msg("showing Document")
+	rsp, err := srv.Callback(context.Background(), "window/showDocument", params)
+	log.Debug().Str("method", method).Interface("callback", rsp).Send()
+	if err != nil {
+		logError(err, "showCodeFlowDocument")
+	}
+}
+
+func CodeLensResolveHandler() jrpc2.Handler {
+	return handler.New(func(ctx context.Context, params sglsp.CodeLens) (sglsp.CodeLens, error) {
+		log.Info().Str("method", "CodeLensResolveHandler").Interface("codeLens", params).Msg("RECEIVING")
+		defer log.Info().Str("method", "CodeLensResolveHandler").Interface("codeLens", params).Msg("SENDING")
+		return params, nil
+	})
 }
 
 func CodeLensHandler() jrpc2.Handler {
@@ -105,14 +160,15 @@ func getCodeLensFromCommand(issue snyk.Issue, command snyk.Command) sglsp.CodeLe
 }
 
 func CodeAction() jrpc2.Handler {
-	return handler.New(func(ctx context.Context, params sglsp.CodeActionParams) ([]lsp.CodeAction, error) {
-		log.Info().Str("method", "CodeActionHandler").Msg("RECEIVING")
-		defer log.Info().Str("method", "CodeActionHandler").Msg("SENDING")
+	return handler.New(func(ctx context.Context, params lsp.CodeActionParams) ([]lsp.CodeAction, error) {
+		log.Info().Str("method", "CodeActionHandler").Interface("action", params).Msg("RECEIVING")
+		defer log.Info().Str("method", "CodeActionHandler").Interface("action", params).Msg("SENDING")
 
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 		requestedRange := workspace.FromRange(params.Range)
 		actions := workspace.Get().GetFolderContaining(filePath).CodeActions(filePath, requestedRange)
-		return workspace.ToCodeActions(actions), nil
+		codeActions := workspace.ToCodeActions(actions)
+		return codeActions, nil
 	})
 }
 
@@ -143,6 +199,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 		method := "InitializeHandler"
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
 		UpdateSettings(ctx, params.InitializationOptions)
+		config.CurrentConfig().SetClientCapabilities(params.Capabilities)
 		w := workspace.New(di.Instrumentor())
 		workspace.Set(w)
 
@@ -169,7 +226,6 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 			AddFolder(lsp.WorkspaceFolder{Uri: uri.PathToUri(params.RootPath), Name: params.ClientInfo.Name}, w)
 		}
 		w.ScanWorkspace(ctx)
-
 		return lsp.InitializeResult{
 			ServerInfo: lsp.ServerInfo{
 				Name:    "snyk-ls",
@@ -189,8 +245,11 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 					ChangeNotifications: "snyk-ls",
 				},
 				HoverProvider:      true,
-				CodeActionProvider: true,
-				CodeLensProvider:   &sglsp.CodeLensOptions{ResolveProvider: false},
+				CodeActionProvider: false,
+				CodeLensProvider:   &sglsp.CodeLensOptions{ResolveProvider: true},
+				ExecuteCommandProvider: &sglsp.ExecuteCommandOptions{
+					Commands: []string{snyk.NavigateToRangeCommand},
+				},
 			},
 		}, nil
 	})
@@ -300,16 +359,16 @@ func registerNotifier(srv *jrpc2.Server) {
 		switch params := params.(type) {
 		case lsp.AuthenticationParams:
 			notifier(srv, "$/snyk.hasAuthenticated", params)
-			log.Info().Str("method", "notifyCallback").
+			log.Info().Str("method", "registerNotifier").
 				Msg("sending token")
 		case lsp.SnykIsAvailableCli:
 			notifier(srv, "$/snyk.isAvailableCli", params)
-			log.Info().Str("method", "notifyCallback").
+			log.Info().Str("method", "registerNotifier").
 				Msg("sending cli path")
 		case sglsp.ShowMessageParams:
 			notifier(srv, "window/showMessage", params)
 			log.Info().
-				Str("method", "notifyCallback").
+				Str("method", "registerNotifier").
 				Interface("message", params).
 				Msg("showing message")
 		case lsp.PublishDiagnosticsParams:
@@ -319,14 +378,14 @@ func registerNotifier(srv *jrpc2.Server) {
 				source = params.Diagnostics[0].Source
 			}
 			log.Info().
-				Str("method", "notifyCallback").
+				Str("method", "registerNotifier").
 				Interface("documentURI", params.URI).
 				Interface("source", source).
 				Interface("diagnosticCount", len(params.Diagnostics)).
 				Msg("publishing diagnostics")
 		default:
 			log.Warn().
-				Str("method", "notifyCallback").
+				Str("method", "registerNotifier").
 				Interface("params", params).
 				Msg("received unconfigured notification object")
 		}
@@ -338,10 +397,12 @@ func registerNotifier(srv *jrpc2.Server) {
 type RPCLogger struct{}
 
 func (R RPCLogger) LogRequest(ctx context.Context, req *jrpc2.Request) {
-	log.Debug().Msgf("Incoming JSON-RPC request. Method=%s. ID=%s. Is notification=%v.", req.Method(), req.ID(), req.IsNotification())
+	log.Debug().Str("paramString", req.ParamString()).Msgf("Incoming JSON-RPC request. Method=%s. ID=%s. Is notification=%v.", req.Method(), req.ID(), req.IsNotification())
 }
 
 func (R RPCLogger) LogResponse(ctx context.Context, rsp *jrpc2.Response) {
-	log.Err(rsp.Error()).Msg("Outgoing JSON-RPC response error")
+	if rsp.Error() != nil {
+		log.Err(rsp.Error()).Msg("Outgoing JSON-RPC response error")
+	}
 	log.Debug().Msgf("Outgoing JSON-RPC response. ID=%s", rsp.ID())
 }

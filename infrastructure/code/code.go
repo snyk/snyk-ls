@@ -41,7 +41,7 @@ func (sc *Scanner) Product() snyk.Product {
 }
 
 func (sc *Scanner) SupportedCommands() []snyk.CommandName {
-	return []snyk.CommandName{ShowCodeFlowCommand}
+	return []snyk.CommandName{snyk.NavigateToRangeCommand}
 }
 
 func (sc *Scanner) Scan(ctx context.Context, _ string, workspacePath string, files []string) []snyk.Issue {
