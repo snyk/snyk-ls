@@ -6,6 +6,11 @@ import (
 )
 
 //Issue models a problem, vulnerability, or situation within your code that requires your attention
+type Reference struct {
+	Title string
+	Url   *url.URL
+}
+
 type Issue struct {
 	//ID uniquely identifies the issue, it is intended to be human-readable
 	ID        string
@@ -22,7 +27,7 @@ type Issue struct {
 	// Product is the Snyk product, e.g. Snyk Open Source
 	Product Product
 	// References deliver additional information
-	References []*url.URL
+	References []Reference
 	// IssueDescriptionURL contains a Uri to display more information
 	IssueDescriptionURL *url.URL
 	// CodeActions can contain workspace edits or commands to be executed
