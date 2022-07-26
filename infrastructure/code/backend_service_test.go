@@ -134,6 +134,7 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	path := "/server/testdata/Dummy.java"
 	assert.Equal(t, 2, len(issues))
 	issueDescriptionURL, _ := url.Parse(codeDescriptionURL)
+	references := referencesForSampleSarifResponse()
 	assert.Equal(
 		t,
 		snyk.Issue{
@@ -145,9 +146,22 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 			AffectedFilePath:    path,
 			Product:             "Snyk Code",
 			IssueDescriptionURL: issueDescriptionURL,
+			References:          references,
 		},
 		issues[0],
 	)
+}
+
+func referencesForSampleSarifResponse() []*url.URL {
+	exampleCommitFix1, _ := url.Parse("https://github.com/apache/flink/commit/5d7c5620804eddd59206b24c87ffc89c12fd1184?diff=split#diff-86ec3e3884662ba3b5f4bb5050221fd6L94")
+	exampleCommitFix2, _ := url.Parse("https://github.com/rtr-nettest/open-rmbt/commit/0fa9d5547c5300cf8162b8f31a40aea6847a5c32?diff=split#diff-7e23eb1aa3b7b4d5db89bfd2860277e5L75")
+	exampleCommitFix3, _ := url.Parse("https://github.com/wso2/developer-studio/commit/cfd84b83349e67de4b0239733bc6ed01287856b7?diff=split#diff-645425e844adc2eab8197719cbb2fe8dL285")
+	references := []*url.URL{
+		exampleCommitFix1,
+		exampleCommitFix2,
+		exampleCommitFix3,
+	}
+	return references
 }
 
 func TestSnykCodeBackendService_analysisRequestBody_FillsOrgParameter(t *testing.T) {
@@ -197,4 +211,11 @@ func TestSnykCodeBackendService_analysisRequestBody_FillsOrgParameter(t *testing
 	}
 
 	assert.Equal(t, expectedRequest, actualRequest)
+}
+
+func Test_LineChangeChar(t *testing.T) {
+	s := SnykCodeHTTPClient{}
+	assert.Equal(t, " ", s.lineChangeChar("none"))
+	assert.Equal(t, "+", s.lineChangeChar("added"))
+	assert.Equal(t, "-", s.lineChangeChar("removed"))
 }

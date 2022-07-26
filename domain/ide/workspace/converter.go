@@ -118,11 +118,19 @@ func toHoversDocument(path string, i []snyk.Issue) hover.DocumentHovers {
 func toHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
 	for _, i := range issues {
 		message := ""
-		if len(i.LegacyMessage) > 0 {
-			message = i.LegacyMessage
+		if len(i.FormattedMessage) > 0 {
+			message = i.FormattedMessage
 		} else {
 			message = i.Message
 		}
+
+		if len(i.References) > 0 {
+			message += "\n\nReferences:\n\n"
+			for _, reference := range i.References {
+				message += reference.String() + "\n"
+			}
+		}
+
 		hovers = append(hovers, hover.Hover[hover.Context]{
 			Id:      i.ID,
 			Range:   toRange(i.Range),

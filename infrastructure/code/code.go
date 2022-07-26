@@ -3,6 +3,7 @@ package code
 import (
 	"context"
 
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
@@ -84,8 +85,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path st
 }
 
 func (sc *Scanner) handleCreationAndUploadError(err error, msg string) {
-	log.Error().Err(err).Msg(msg)
-	//di.ErrorReporter().CaptureError(err) import cycle
+	sc.errorReporter.CaptureError(errors.Wrap(err, msg))
 	sc.trackResult(err == nil)
 }
 

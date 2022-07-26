@@ -82,7 +82,7 @@ type result struct {
 	Locations    []location       `json:"locations"`
 	Fingerprints fingerprints     `json:"fingerprints"`
 	CodeFlows    []codeFlow       `json:"codeFlows"`
-	Properties   resultProperties `json:"properties"`
+	Properties   resultProperties `json:"ruleProperties"`
 }
 
 type exampleCommitFix struct {
@@ -99,7 +99,7 @@ type help struct {
 	Text     string `json:"text"`
 }
 
-type properties struct {
+type ruleProperties struct {
 	Tags                      []string           `json:"tags"`
 	Categories                []string           `json:"categories"`
 	ExampleCommitFixes        []exampleCommitFix `json:"exampleCommitFixes"`
@@ -122,7 +122,7 @@ type rule struct {
 	ShortDescription     shortDescription     `json:"shortDescription"`
 	DefaultConfiguration defaultConfiguration `json:"defaultConfiguration"`
 	Help                 help                 `json:"help"`
-	Properties           properties           `json:"properties"`
+	Properties           ruleProperties       `json:"properties"`
 }
 
 type driver struct {
@@ -147,7 +147,7 @@ type runProperties struct {
 type run struct {
 	Tool       tool          `json:"tool"`
 	Results    []result      `json:"results"`
-	Properties runProperties `json:"properties"`
+	Properties runProperties `json:"ruleProperties"`
 }
 
 type AnalysisRequestKey struct {

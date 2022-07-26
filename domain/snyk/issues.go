@@ -15,15 +15,20 @@ type Issue struct {
 	Range Range
 	// Message is a human-readable description of the issue
 	Message string
-	//todo this contains a formatted longest message for hovers, this needs to be pushed up and rendered in presentation
-	LegacyMessage string
+	// todo [jc] this contains a formatted longest message for hovers, this needs to be pushed up and rendered in presentation. [bd] shouldn't the content and formatting be decided by the product?
+	FormattedMessage string
 	// AffectedFilePath is the file path to the file where the issue was found
 	AffectedFilePath string
-	Product          Product
-	References       []*url.URL
+	// Product is the Snyk product, e.g. Snyk Open Source
+	Product Product
+	// References deliver additional information
+	References []*url.URL
 	// IssueDescriptionURL contains a Uri to display more information
 	IssueDescriptionURL *url.URL
-	CodeActions         []CodeAction
+	// CodeActions can contain workspace edits or commands to be executed
+	CodeActions []CodeAction
+	// Commands that can be executed
+	Commands []Command
 }
 
 func (i Issue) String() string {
