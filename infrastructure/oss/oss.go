@@ -285,7 +285,7 @@ func (oss *Scanner) toIssue(affectedFilePath string, issue ossIssue, issueRange 
 	return snyk.Issue{
 		ID:                  issue.Id,
 		Message:             message,
-		LegacyMessage:       oss.getExtendedMessage(issue),
+		FormattedMessage:    oss.getExtendedMessage(issue),
 		Range:               issueRange,
 		Severity:            oss.toIssueSeverity(issue.Severity),
 		AffectedFilePath:    affectedFilePath,

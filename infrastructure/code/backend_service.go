@@ -324,7 +324,9 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (issue
 	}
 	ruleLink := s.createRuleLink()
 
-	for _, result := range runs[0].Results {
+	run := runs[0]
+	rules := run.Tool.Driver.Rules
+	for _, result := range run.Results {
 		for _, loc := range result.Locations {
 			// convert the documentURI to a path according to our conversion
 			path := loc.PhysicalLocation.ArtifactLocation.URI
@@ -344,11 +346,13 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (issue
 				ID:                  result.RuleID,
 				Range:               myRange,
 				Severity:            issueSeverity(result.Level),
-				Message:             fmt.Sprintf("%s (Snyk)", result.Message.Text),
+				Message:             s.getMessage(result),
+				FormattedMessage:    s.getFormattedMessage(run, result),
 				IssueType:           snyk.CodeSecurityVulnerability,
 				AffectedFilePath:    path,
 				Product:             snyk.ProductCode,
 				IssueDescriptionURL: ruleLink,
+				References:          references(rules, result.RuleID),
 			}
 
 			issues = append(issues, d)
@@ -357,12 +361,79 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (issue
 	return issues
 }
 
+func (s *SnykCodeHTTPClient) getMessage(result result) string {
+	return fmt.Sprintf("%s (Snyk)", result.Message.Text)
+}
+
+func references(rules []rule, ruleID string) (references []*url.URL) {
+	for _, r := range rules {
+		if r.ID != ruleID {
+			continue
+		}
+		return getCommitExampleURLs(r)
+	}
+	return references
+}
+
+func getCommitExampleURLs(r rule) (references []*url.URL) {
+	for _, exampleFix := range r.Properties.ExampleCommitFixes {
+		commitURLString := exampleFix.CommitURL
+		commitURL, err := url.Parse(commitURLString)
+		if err != nil {
+			log.Err(err).
+				Str("method", "code.references").
+				Str("commitURL", commitURLString).
+				Msgf("cannot parse commit url")
+			continue
+		}
+		references = append(references, commitURL)
+	}
+	return references
+}
+
 func (s *SnykCodeHTTPClient) createRuleLink() *url.URL {
 	parse, err := url.Parse(codeDescriptionURL)
 	if err != nil {
 		s.errorReporter.CaptureError(errors2.Wrap(err, "Unable to create Snyk Code rule link"))
 	}
 	return parse
+}
+
+func (s *SnykCodeHTTPClient) getFormattedMessage(r run, result result) (msg string) {
+	msg = result.Message.Text + "\n\n"
+	rules := r.Tool.Driver.Rules
+	for _, rule := range rules {
+		if rule.ID != result.RuleID {
+			continue
+		}
+		if len(rule.Properties.ExampleCommitFixes) > 0 {
+			msg += "\n## Example Commit Fixes: \n\n"
+			for i, fix := range rule.Properties.ExampleCommitFixes {
+				fixDescription := rule.Properties.ExampleCommitDescriptions
+				if len(fixDescription) > i {
+					msg += fmt.Sprintf("### [%s](%s)", fixDescription[i], fix.CommitURL)
+				}
+				msg += "\n```\n"
+				for _, line := range fix.Lines {
+					lineChangeChar := s.lineChangeChar(line.LineChange)
+					msg += fmt.Sprintf("%s %04d : %s\n", lineChangeChar, line.LineNumber, line.Line)
+				}
+				msg += "```\n\n"
+			}
+		}
+	}
+	return msg
+}
+
+func (s *SnykCodeHTTPClient) lineChangeChar(line string) string {
+	switch line {
+	case "none":
+		return " "
+	case "added":
+		return "+"
+	default:
+		return "-"
+	}
 }
 
 func checkResponseCode(r *http.Response) error {
