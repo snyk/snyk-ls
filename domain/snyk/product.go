@@ -15,6 +15,7 @@ type ProductScanner interface {
 
 	IsEnabled() bool
 	Product() Product
+	SupportedCommands() []CommandName
 }
 type Product string
 type ProductAttributes map[string]interface{}

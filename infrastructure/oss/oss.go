@@ -88,6 +88,10 @@ func New(instrumentor performance.Instrumentor, errorReporter error_reporting.Er
 	}
 }
 
+func (oss *Scanner) SupportedCommands() []snyk.CommandName {
+	return []snyk.CommandName{}
+}
+
 func (oss *Scanner) IsEnabled() bool {
 	return config.CurrentConfig().IsSnykOssEnabled()
 }

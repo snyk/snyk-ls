@@ -15,3 +15,5 @@ type Command struct {
 	 */
 	Arguments []interface{}
 }
+
+type CommandName string
