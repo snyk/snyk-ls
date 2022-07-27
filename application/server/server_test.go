@@ -195,28 +195,38 @@ func Test_initialize_shouldSupportCodeLenses(t *testing.T) {
 
 func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	loc := setupServer(t)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
-	config.CurrentConfig().SetSnykOssEnabled(false)
-	config.CurrentConfig().SetSnykIacEnabled(false)
-	config.CurrentConfig().SetManageBinariesAutomatically(false)
 
+	clientParams := lsp.InitializeParams{
+		InitializationOptions: lsp.Settings{
+			ActivateSnykCode:            "true",
+			ActivateSnykOpenSource:      "false",
+			ActivateSnykIac:             "false",
+			Organization:                "fancy org",
+			Token:                       "xxx",
+			ManageBinariesAutomatically: "false",
+			CliPath:                     "dummy",
+		},
+	}
+	_, err := loc.Client.Call(ctx, "initialize", clientParams)
+	if err != nil {
+		log.Fatal().Err(err)
+	}
 	didOpenParams, dir, cleanup := didOpenTextParams()
 	defer cleanup()
 	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService()))
 
-	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
+	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
 		t.Fatal(t, err)
 	}
 
-	assert.Eventually(t, func() bool {
-		rsp, _ := loc.Client.Call(ctx, "textDocument/codeLens", sglsp.CodeLensParams{
-			TextDocument: sglsp.TextDocumentIdentifier{
-				URI: didOpenParams.TextDocument.URI,
-			},
-		})
-		return rsp != nil
-	}, time.Second*2, time.Millisecond)
+	// wait for publish
+	assert.Eventually(
+		t,
+		checkForPublishedDiagnostics(workspace.Get(), uri.PathFromUri(didOpenParams.TextDocument.URI), -1),
+		2*time.Second,
+		10*time.Millisecond,
+	)
 
 	rsp, _ := loc.Client.Call(ctx, "textDocument/codeLens", sglsp.CodeLensParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
@@ -247,7 +257,7 @@ func Test_initialize_updatesSettings(t *testing.T) {
 	loc := setupServer(t)
 
 	clientParams := lsp.InitializeParams{
-		InitializationOptions: lsp.Settings{Organization: "fancy org"},
+		InitializationOptions: lsp.Settings{Organization: "fancy org", Token: "xxx"},
 	}
 
 	rsp, err := loc.Client.Call(ctx, "initialize", clientParams)
@@ -259,6 +269,7 @@ func Test_initialize_updatesSettings(t *testing.T) {
 		log.Fatal().Err(err)
 	}
 	assert.Equal(t, "fancy org", config.CurrentConfig().GetOrganization())
+	assert.Equal(t, "xxx", config.CurrentConfig().Token())
 }
 
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
