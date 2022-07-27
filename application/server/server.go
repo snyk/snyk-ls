@@ -65,7 +65,6 @@ func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 	(*handlers)["textDocument/hover"] = TextDocumentHover()
 	(*handlers)["textDocument/codeAction"] = CodeAction()
 	(*handlers)["textDocument/codeLens"] = CodeLensHandler()
-	(*handlers)["codeLens/resolve"] = CodeLensResolveHandler()
 	(*handlers)["textDocument/willSave"] = NoOpHandler()
 	(*handlers)["textDocument/willSaveWaitUntil"] = NoOpHandler()
 	(*handlers)["shutdown"] = Shutdown()
@@ -117,14 +116,6 @@ func showCodeFlowDocument(srv *jrpc2.Server, args []interface{}) {
 	if err != nil {
 		logError(err, "showCodeFlowDocument")
 	}
-}
-
-func CodeLensResolveHandler() jrpc2.Handler {
-	return handler.New(func(ctx context.Context, params sglsp.CodeLens) (sglsp.CodeLens, error) {
-		log.Info().Str("method", "CodeLensResolveHandler").Interface("codeLens", params).Msg("RECEIVING")
-		defer log.Info().Str("method", "CodeLensResolveHandler").Interface("codeLens", params).Msg("SENDING")
-		return params, nil
-	})
 }
 
 func CodeLensHandler() jrpc2.Handler {
@@ -246,7 +237,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 				},
 				HoverProvider:      true,
 				CodeActionProvider: false,
-				CodeLensProvider:   &sglsp.CodeLensOptions{ResolveProvider: true},
+				CodeLensProvider:   &sglsp.CodeLensOptions{ResolveProvider: false},
 				ExecuteCommandProvider: &sglsp.ExecuteCommandOptions{
 					Commands: []string{snyk.NavigateToRangeCommand},
 				},

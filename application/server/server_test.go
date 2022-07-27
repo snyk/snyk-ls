@@ -190,83 +190,35 @@ func Test_initialize_shouldSupportCodeLenses(t *testing.T) {
 	if err := rsp.UnmarshalResult(&result); err != nil {
 		log.Fatal().Err(err)
 	}
-	assert.Equal(t, result.Capabilities.CodeLensProvider.ResolveProvider, true)
-}
-
-func Test_TextDocumentCodeLenseResolve_shouldExecuteCommand(t *testing.T) {
-	loc := setupServer(t)
-	config.CurrentConfig().SetSnykOssEnabled(false)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
-	config.CurrentConfig().SetSnykIacEnabled(false)
-	config.CurrentConfig().SetManageBinariesAutomatically(false)
-	config.CurrentConfig().SetToken("dummy")
-
-	rsp, err := loc.Client.Call(ctx, "initialize", nil)
-	if err != nil {
-		t.Fatal(t, err)
-	}
-	var result lsp.InitializeResult
-	if err := rsp.UnmarshalResult(&result); err != nil {
-		t.Fatal(t, err)
-	}
-
-	didOpenParams, dir, cleanup := didOpenTextParams()
-	defer cleanup()
-	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService()))
-
-	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
-	if err != nil {
-		t.Fatal(t, err)
-	}
-
-	rsp, _ = loc.Client.Call(ctx, "textDocument/codeLens", sglsp.CodeLensParams{
-		TextDocument: sglsp.TextDocumentIdentifier{
-			URI: didOpenParams.TextDocument.URI,
-		},
-	})
-	var lenses []sglsp.CodeLens
-	if err := rsp.UnmarshalResult(&lenses); err != nil {
-		t.Fatal(t, err)
-	}
-
-	assert.NotEmpty(t, lenses)
-
-	var lens sglsp.CodeLens
-	rsp, _ = loc.Client.Call(ctx, "codelens/resolve", lenses[0])
-	if err := rsp.UnmarshalResult(&lens); err != nil {
-		t.Fatal(t, err)
-	}
-	assert.NoError(t, err)
-	assert.NotNil(t, lens)
-	assert.NotEmpty(t, lens)
+	assert.Equal(t, result.Capabilities.CodeLensProvider.ResolveProvider, false)
 }
 
 func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	loc := setupServer(t)
-	config.CurrentConfig().SetSnykOssEnabled(false)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
+	config.CurrentConfig().SetSnykOssEnabled(false)
 	config.CurrentConfig().SetSnykIacEnabled(false)
 	config.CurrentConfig().SetManageBinariesAutomatically(false)
-	config.CurrentConfig().SetToken("dummy")
-	rsp, err := loc.Client.Call(ctx, "initialize", nil)
-	if err != nil {
-		t.Fatal(t, err)
-	}
-	var result lsp.InitializeResult
-	if err := rsp.UnmarshalResult(&result); err != nil {
-		t.Fatal(t, err)
-	}
 
 	didOpenParams, dir, cleanup := didOpenTextParams()
 	defer cleanup()
 	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService()))
 
-	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
+	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
 		t.Fatal(t, err)
 	}
 
-	rsp, _ = loc.Client.Call(ctx, "textDocument/codeLens", sglsp.CodeLensParams{
+	assert.Eventually(t, func() bool {
+		rsp, _ := loc.Client.Call(ctx, "textDocument/codeLens", sglsp.CodeLensParams{
+			TextDocument: sglsp.TextDocumentIdentifier{
+				URI: didOpenParams.TextDocument.URI,
+			},
+		})
+		return rsp != nil
+	}, time.Second*2, time.Millisecond)
+
+	rsp, _ := loc.Client.Call(ctx, "textDocument/codeLens", sglsp.CodeLensParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
 			URI: didOpenParams.TextDocument.URI,
 		},
