@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rs/zerolog/log"
+	"github.com/adrg/xdg"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/domain/observability/performance"
@@ -14,7 +14,7 @@ import (
 )
 
 func Test_Bundler_Upload(t *testing.T) {
-	temporaryDir := setup()
+	temporaryDir := setup(t)
 	t.Cleanup(func() {
 		defer os.RemoveAll(temporaryDir)
 	})
@@ -22,7 +22,7 @@ func Test_Bundler_Upload(t *testing.T) {
 	t.Run("adds files to bundle", func(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{}
 		var bundleUploader = BundleUploader{SnykCode: snykCodeService, instrumentor: performance.NewTestInstrumentor()}
-		documentURI, bundleFile := createTempFileInDir("bundleDoc.java", 10, temporaryDir)
+		documentURI, bundleFile := createTempFileInDir("bundleDoc.java", 10, temporaryDir, t)
 		bundleFileMap := map[string]BundleFile{}
 		bundleFileMap[documentURI] = bundleFile
 
@@ -38,19 +38,19 @@ func Test_Bundler_Upload(t *testing.T) {
 
 		bundleFileMap := map[string]BundleFile{}
 		var missingFiles []string
-		path, bundleFile := createTempFileInDir("bundleDoc1.java", (1024*1024)-1, temporaryDir)
+		path, bundleFile := createTempFileInDir("bundleDoc1.java", (1024*1024)-1, temporaryDir, t)
 		bundleFileMap[path] = bundleFile
 		missingFiles = append(missingFiles, path)
-		path, bundleFile = createTempFileInDir("bundleDoc2.java", (1024*1024)-1, temporaryDir)
+		path, bundleFile = createTempFileInDir("bundleDoc2.java", (1024*1024)-1, temporaryDir, t)
 		bundleFileMap[path] = bundleFile
 		missingFiles = append(missingFiles, path)
-		path, bundleFile = createTempFileInDir("bundleDoc3.java", (1024*1024)-1, temporaryDir)
+		path, bundleFile = createTempFileInDir("bundleDoc3.java", (1024*1024)-1, temporaryDir, t)
 		bundleFileMap[path] = bundleFile
 		missingFiles = append(missingFiles, path)
-		path, bundleFile = createTempFileInDir("bundleDoc4.java", (1024*1024)-1, temporaryDir)
+		path, bundleFile = createTempFileInDir("bundleDoc4.java", (1024*1024)-1, temporaryDir, t)
 		bundleFileMap[path] = bundleFile
 		missingFiles = append(missingFiles, path)
-		path, bundleFile = createTempFileInDir("bundleDoc5.java", 100, temporaryDir)
+		path, bundleFile = createTempFileInDir("bundleDoc5.java", 100, temporaryDir, t)
 		bundleFileMap[path] = bundleFile
 		missingFiles = append(missingFiles, path)
 
@@ -63,8 +63,8 @@ func Test_Bundler_Upload(t *testing.T) {
 	})
 }
 
-func createTempFileInDir(name string, size int, temporaryDir string) (string, BundleFile) {
-	documentURI, fileContent := createFileOfSize(name, size, temporaryDir)
+func createTempFileInDir(name string, size int, temporaryDir string, t *testing.T) (string, BundleFile) {
+	documentURI, fileContent := createFileOfSize(name, size, temporaryDir, t)
 	return documentURI, BundleFile{Hash: util.Hash(fileContent), Content: string(fileContent)}
 }
 
@@ -92,15 +92,15 @@ func Test_IsSupportedLanguage(t *testing.T) {
 	})
 }
 
-func setup() string {
-	dir, err := os.MkdirTemp(os.TempDir(), "createFileOfSize")
+func setup(t *testing.T) string {
+	dir, err := os.MkdirTemp(xdg.DataHome, "createFileOfSize")
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't create test directory")
+		t.Fatal(t, err, "Couldn't create test directory")
 	}
 	return dir
 }
 
-func createFileOfSize(filename string, contentSize int, dir string) (string, []byte) {
+func createFileOfSize(filename string, contentSize int, dir string, t *testing.T) (string, []byte) {
 	buf := new(bytes.Buffer)
 	buf.Grow(contentSize)
 	for i := 0; i < contentSize; i++ {
@@ -110,7 +110,7 @@ func createFileOfSize(filename string, contentSize int, dir string) (string, []b
 	filePath := dir + string(os.PathSeparator) + filename
 	err := os.WriteFile(filePath, buf.Bytes(), 0660)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't write test file")
+		t.Fatal(t, err, "Couldn't write test file")
 	}
 	return filePath, buf.Bytes()
 }

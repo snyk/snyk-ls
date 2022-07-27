@@ -159,17 +159,24 @@ func Test_getFormmattedMessage(t *testing.T) {
 	run := sarifResponse.Sarif.Runs[0]
 	result := run.Results[0]
 
-	msg := s.getFormattedMessage(run, result)
+	message := s.getMessage(result)
+
+	commitFixesForHover := s.exampleCommitFixesForHover(run.Tool.Driver.Rules[0])
+
+	msg := s.getFormattedMessage(message, commitFixesForHover, "codeFlow")
 
 	assert.Contains(t, msg, "Example Commit Fixes")
+	assert.Contains(t, msg, "codeFlow")
 }
 
 func TestGetCodeFlowCommands(t *testing.T) {
 	testutil.UnitTest(t)
 	s, _, sarifResponse := setupConversionTests(t)
 
-	commands := s.getCodeFlow(sarifResponse.Sarif.Runs[0].Results[0])
+	result := sarifResponse.Sarif.Runs[0].Results[0]
+	commands, markdown := s.getCodeFlow(result)
 	assert.NotEmpty(t, commands)
+	assert.NotEmpty(t, markdown)
 	assert.Equal(t, snyk.NavigateToRangeCommand, commands[0].Command)
 }
 

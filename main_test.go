@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/adrg/xdg"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
@@ -81,7 +82,7 @@ func Test_shouldSetReportErrorsViaFlag(t *testing.T) {
 
 func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
 	testutil.UnitTest(t)
-	logPath, err := os.MkdirTemp(os.TempDir(), "testlogconfig")
+	logPath, err := os.MkdirTemp(xdg.DataHome, "testlogconfig")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,9 +1,9 @@
 package cli
 
 import (
-	"os"
 	"testing"
 
+	"github.com/adrg/xdg"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -70,8 +70,8 @@ func TestGetCommand_AddsToEnvironmentAndSetsDir(t *testing.T) {
 	testutil.UnitTest(t)
 	config.CurrentConfig().SetOrganization("TestGetCommand_AddsToEnvironmentAndSetsDirOrg")
 
-	cmd := SnykCli{}.getCommand([]string{"executable", "arg"}, os.TempDir())
+	cmd := SnykCli{}.getCommand([]string{"executable", "arg"}, xdg.DataHome)
 
-	assert.Equal(t, os.TempDir(), cmd.Dir)
+	assert.Equal(t, xdg.DataHome, cmd.Dir)
 	assert.Contains(t, cmd.Env, "SNYK_CFG_ORG=TestGetCommand_AddsToEnvironmentAndSetsDirOrg")
 }

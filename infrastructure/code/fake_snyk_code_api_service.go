@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/adrg/xdg"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -53,7 +54,7 @@ func FakeDiagnosticUri() (filePath string, path string) {
 	FakeSnykCodeApiServiceMutex.Lock()
 	defer FakeSnykCodeApiServiceMutex.Unlock()
 
-	temp, err := os.MkdirTemp(os.TempDir(), "fakeDiagnosticTempDir")
+	temp, err := os.MkdirTemp(xdg.DataHome, "fakeDiagnosticTempDir")
 	if err != nil {
 		log.Fatal().Err(err).Msg("couldn't create tempdir")
 	}

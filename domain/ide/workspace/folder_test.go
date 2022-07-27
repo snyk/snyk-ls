@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/adrg/xdg"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 
@@ -28,7 +29,7 @@ func TestAddBundleHashToWorkspaceFolder(t *testing.T) {
 }
 
 func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {
-	expectedPatterns, tempDir, _, _, _ := setupIgnoreWorkspace()
+	expectedPatterns, tempDir, _, _, _ := setupIgnoreWorkspace(t)
 	defer os.RemoveAll(tempDir)
 	f := NewFolder(tempDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
 
@@ -42,7 +43,7 @@ func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {
 }
 
 func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
-	tempDir, err := os.MkdirTemp(os.TempDir(), "loadIgnoreTest")
+	tempDir, err := os.MkdirTemp(xdg.DataHome, "loadIgnoreTest")
 	if err != nil {
 		t.Fatal("can't create temp dir")
 	}
@@ -59,7 +60,7 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 }
 
 func Test_GetWorkspaceFolderFiles(t *testing.T) {
-	_, tempDir, ignoredFilePath, notIgnoredFilePath, _ := setupIgnoreWorkspace()
+	_, tempDir, ignoredFilePath, notIgnoredFilePath, _ := setupIgnoreWorkspace(t)
 	defer os.RemoveAll(tempDir)
 	f := NewFolder(tempDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
 
@@ -74,7 +75,7 @@ func Test_GetWorkspaceFolderFiles(t *testing.T) {
 }
 
 func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
-	_, tempDir, _, _, ignoredFileInDir := setupIgnoreWorkspace()
+	_, tempDir, _, _, ignoredFileInDir := setupIgnoreWorkspace(t)
 	defer os.RemoveAll(tempDir)
 	f := NewFolder(tempDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
 
@@ -113,32 +114,32 @@ func Test_Scan_WhenCachedResultsButNoIssues_shouldNotReScan(t *testing.T) {
 	assert.Equal(t, 1, scannerRecorder.Calls)
 }
 
-func writeTestGitIgnore(ignorePatterns string) (tempDir string) {
-	tempDir, err := os.MkdirTemp(os.TempDir(), "loadIgnorePatterns")
+func writeTestGitIgnore(ignorePatterns string, t *testing.T) (tempDir string) {
+	tempDir, err := os.MkdirTemp(xdg.DataHome, "loadIgnorePatterns")
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't create temp dir")
+		t.Fatal(t, err, "Couldn't create temp dir")
 	}
 	filePath := filepath.Join(tempDir, ".gitignore")
 	err = os.WriteFile(filePath, []byte(ignorePatterns), 0600)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't write .gitignore")
+		t.Fatal(t, err, "Couldn't write .gitignore")
 	}
 	return tempDir
 }
 
-func setupIgnoreWorkspace() (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {
+func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {
 	expectedPatterns = "*.xml\n**/*.txt\nbin"
-	tempDir = writeTestGitIgnore(expectedPatterns)
+	tempDir = writeTestGitIgnore(expectedPatterns, t)
 
 	ignoredFilePath = filepath.Join(tempDir, "ignored.xml")
 	err := os.WriteFile(ignoredFilePath, []byte("test"), 0600)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't write ignored file ignored.xml")
+		t.Fatal(t, err, "Couldn't write ignored file ignored.xml")
 	}
 	notIgnoredFilePath = filepath.Join(tempDir, "not-ignored.java")
 	err = os.WriteFile(notIgnoredFilePath, []byte("test"), 0600)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't write ignored file not-ignored.java")
+		t.Fatal(t, err, "Couldn't write ignored file not-ignored.java")
 	}
 	ignoredDir := filepath.Join(tempDir, "bin")
 	err = os.Mkdir(ignoredDir, 0755)
@@ -148,7 +149,7 @@ func setupIgnoreWorkspace() (expectedPatterns string, tempDir string, ignoredFil
 	ignoredFileInDir = filepath.Join(ignoredDir, "shouldNotBeWalked.java")
 	err = os.WriteFile(ignoredFileInDir, []byte("public bla"), 0600)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't write ignored file not-ignored.java")
+		t.Fatal(t, err, "Couldn't write ignored file not-ignored.java")
 	}
 	return expectedPatterns, tempDir, ignoredFilePath, notIgnoredFilePath, ignoredFileInDir
 }
