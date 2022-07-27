@@ -633,7 +633,7 @@ func textDocumentDidOpen(loc *server.Local, testPath string) sglsp.DidOpenTextDo
 
 func setupCustomTestRepo(url string, targetCommit string) (string, error) {
 	// clone to temp dir - specific version for reproducible test results
-	cloneTargetDir, err := os.MkdirTemp(os.TempDir(), "integ_test_repo_")
+	cloneTargetDir, err := os.MkdirTemp(".", "integ_test_repo_")
 	if err != nil {
 		log.Fatal().Err(err).Msg("couldn't create temp dir")
 	}

@@ -22,7 +22,9 @@ import (
 	performance2 "github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code/encoding"
+	"github.com/snyk/snyk-ls/internal/files"
 	"github.com/snyk/snyk-ls/internal/httpclient"
+	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 const completeStatus = "COMPLETE"
@@ -343,18 +345,22 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (issue
 				},
 			}
 
+			commands, markdown := s.getCodeFlow(result)
+			message := s.getMessage(result)
+			rule := s.getRule(rules, result.RuleID)
+			formattedMessage := s.getFormattedMessage(message, s.exampleCommitFixesForHover(rule), markdown)
 			d := snyk.Issue{
 				ID:                  result.RuleID,
 				Range:               myRange,
 				Severity:            issueSeverity(result.Level),
-				Message:             s.getMessage(result),
-				FormattedMessage:    s.getFormattedMessage(run, result),
+				Message:             message,
+				FormattedMessage:    formattedMessage,
 				IssueType:           snyk.CodeSecurityVulnerability,
 				AffectedFilePath:    path,
 				Product:             snyk.ProductCode,
 				IssueDescriptionURL: ruleLink,
-				References:          s.references(rules, result.RuleID),
-				Commands:            getCodeFlowCommands(result),
+				References:          s.getReference(rule),
+				Commands:            commands,
 			}
 
 			issues = append(issues, d)
@@ -363,18 +369,17 @@ func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (issue
 	return issues
 }
 
-func (s *SnykCodeHTTPClient) getMessage(result result) string {
-	return fmt.Sprintf("%s (Snyk)", result.Message.Text)
+func (s *SnykCodeHTTPClient) getRule(rules []rule, id string) rule {
+	for _, r := range rules {
+		if r.ID == id {
+			return r
+		}
+	}
+	return rule{}
 }
 
-func (s *SnykCodeHTTPClient) references(rules []rule, ruleID string) (references []snyk.Reference) {
-	for _, r := range rules {
-		if r.ID != ruleID {
-			continue
-		}
-		return s.getReference(r)
-	}
-	return references
+func (s *SnykCodeHTTPClient) getMessage(result result) string {
+	return fmt.Sprintf("%s (Snyk)", result.Message.Text)
 }
 
 func (s *SnykCodeHTTPClient) getReference(r rule) (references []snyk.Reference) {
@@ -401,41 +406,41 @@ func (s *SnykCodeHTTPClient) createRuleLink() *url.URL {
 	return parse
 }
 
-func (s *SnykCodeHTTPClient) getFormattedMessage(r run, result result) (msg string) {
-	msg = fmt.Sprintf("## Description\n\n%s\n\n---", result.Message.Text)
-	rules := r.Tool.Driver.Rules
-	for _, rule := range rules {
-		if rule.ID != result.RuleID {
-			continue
-		}
-		if len(rule.Properties.ExampleCommitFixes) > 0 {
-			msg += "\n## Example Commit Fixes: \n\n"
-			for i, fix := range rule.Properties.ExampleCommitFixes {
-				fixDescription := s.getFixDescriptionsForRule(rule, i)
-				if fixDescription != "" {
-					msg += fmt.Sprintf("### [%s](%s)", fixDescription, fix.CommitURL)
-				}
-				msg += "\n```\n"
-				for _, line := range fix.Lines {
-					lineChangeChar := s.lineChangeChar(line.LineChange)
-					msg += fmt.Sprintf("%s %04d : %s\n", lineChangeChar, line.LineNumber, line.Line)
-				}
-				msg += "```\n\n"
+func (s *SnykCodeHTTPClient) getFormattedMessage(message string, commitFixes string, codeFlow string) (msg string) {
+	msg = fmt.Sprintf("## Description\n\n%s\n\n---\n", message)
+	msg += codeFlow + commitFixes
+	return msg
+}
+
+func (s *SnykCodeHTTPClient) exampleCommitFixesForHover(rule rule) (msg string) {
+	if len(rule.Properties.ExampleCommitFixes) > 0 {
+		msg += "\n## Example Commit Fixes: \n\n"
+		for i, fix := range rule.Properties.ExampleCommitFixes {
+			fixDescription := s.getFixDescriptionsForRule(rule, i)
+			if fixDescription != "" {
+				msg += fmt.Sprintf("### [%s](%s)", fixDescription, fix.CommitURL)
 			}
-			msg += "---"
+			msg += "\n```\n"
+			for _, line := range fix.Lines {
+				lineChangeChar := s.lineChangeChar(line.LineChange)
+				msg += fmt.Sprintf("%s %04d : %s\n", lineChangeChar, line.LineNumber, line.Line)
+			}
+			msg += "```\n\n"
 		}
+		msg += "---"
 	}
 	return msg
 }
 
-func getCodeFlowCommands(r result) (commands []snyk.Command) {
+func (s *SnykCodeHTTPClient) getCodeFlow(r result) (commands []snyk.Command, markdown string) {
 	flows := r.CodeFlows
 	dedupMap := map[string]bool{}
+	markdown = "## Snyk Data Flow\n\n"
 	for _, cFlow := range flows {
 		threadFlows := cFlow.ThreadFlows
 		for _, tFlow := range threadFlows {
 			for _, tFlowLocation := range tFlow.Locations {
-				method := "getCodeFlowCommands"
+				method := "getCodeFlow"
 				physicalLoc := tFlowLocation.Location.PhysicalLocation
 				path := physicalLoc.ArtifactLocation.URI
 				region := physicalLoc.Region
@@ -451,22 +456,56 @@ func getCodeFlowCommands(r result) (commands []snyk.Command) {
 						}}
 
 				// IntelliJ does a distinct by start line
-				key := fmt.Sprintf("%sL%d", path, region.StartLine)
+				key := fmt.Sprintf("%sL%4d", path, region.StartLine)
 				if !dedupMap[key] {
-					command := snyk.Command{
-						Title:     fmt.Sprintf("Snyk Data Flow [%d] %s:L%d", len(commands), filepath.Base(path), region.StartLine),
-						Command:   snyk.NavigateToRangeCommand,
-						Arguments: []interface{}{path, myRange},
-					}
-
+					pos := len(commands)
+					command := s.codeFlowToCommand(path, pos, region, myRange)
 					commands = append(commands, command)
+
+					markdown += s.codeFlowToMarkdown(path, pos, myRange)
 					dedupMap[key] = true
 					log.Debug().Str("method", method).Interface("command", command).Send()
+					log.Debug().Str("method", method).Interface("markdown", markdown).Send()
 				}
 			}
 		}
 	}
-	return commands
+	return commands, markdown
+}
+
+func (s *SnykCodeHTTPClient) codeFlowToMarkdown(path string, pos int, myRange snyk.Range) string {
+	fileName := filepath.Base(path)
+	fileURI := uri.PathToUri(path)
+	line := myRange.Start.Line + 1 // range is 0-based
+	char := myRange.Start.Character
+	fileUtil := files.New(s.errorReporter)
+	lineOfCode := fileUtil.GetLineOfCode(path, line)
+	markdown := fmt.Sprintf(
+		"%d. [%s:%d](%s#%d#%d) `%s`\n\n",
+		pos,
+		fileName,
+		line,
+		fileURI,
+		line,
+		char,
+		lineOfCode,
+	)
+	return markdown
+}
+
+func (s *SnykCodeHTTPClient) codeFlowToCommand(
+	path string,
+	index int,
+	region region,
+	myRange snyk.Range,
+) snyk.Command {
+	command := snyk.Command{
+		Title:     fmt.Sprintf("Snyk Data Flow (%d) %s:%d", index, filepath.Base(path), region.StartLine),
+		Command:   snyk.NavigateToRangeCommand,
+		Arguments: []interface{}{path, myRange},
+	}
+
+	return command
 }
 
 func (s *SnykCodeHTTPClient) getFixDescriptionsForRule(rule rule, commitFixIndex int) string {

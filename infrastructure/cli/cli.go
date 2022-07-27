@@ -68,9 +68,13 @@ func (c SnykCli) doExecute(cmd []string, workingDir string, firstAttempt bool) (
 func (c SnykCli) getCommand(cmd []string, workingDir string) *exec.Cmd {
 	command := exec.Command(cmd[0], cmd[1:]...)
 	command.Dir = workingDir
+	err := os.Chdir(workingDir)
+	if err != nil {
+		log.Warn().Err(err).Str("method", "cli.getCommand").Msgf("cannot change to dir %s", workingDir)
+	}
 	cliEnv := c.addConfigValuesToEnv(os.Environ())
 	command.Env = cliEnv
-	log.Trace().Str("method", "getCommand").Interface("command", command).Interface("env", command.Env).Str("dir", command.Dir).Send()
+	log.Debug().Str("method", "getCommand").Interface("command", command).Send()
 	return command
 }
 
