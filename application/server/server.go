@@ -82,14 +82,14 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 		defer log.Info().Str("method", method).Interface("command", params).Msg("SENDING")
 		args := params.Arguments
 		if params.Command == snyk.NavigateToRangeCommand && len(args) == 2 {
-			showCodeFlowDocument(srv, args)
+			navigateToLocation(srv, args)
 		}
 		return nil, nil
 	})
 }
 
-func showCodeFlowDocument(srv *jrpc2.Server, args []interface{}) {
-	method := "showCodeFlowDocument"
+func navigateToLocation(srv *jrpc2.Server, args []interface{}) {
+	method := "navigateToLocation"
 	// convert to correct type
 	var myRange snyk.Range
 	marshal, err := json.Marshal(args[1])
@@ -108,13 +108,13 @@ func showCodeFlowDocument(srv *jrpc2.Server, args []interface{}) {
 		Selection: workspace.ToRange(myRange),
 	}
 	log.Info().
-		Str("method", "registerNotifier").
+		Str("method", "navigateToLocation").
 		Interface("params", params).
 		Msg("showing Document")
 	rsp, err := srv.Callback(context.Background(), "window/showDocument", params)
 	log.Debug().Str("method", method).Interface("callback", rsp).Send()
 	if err != nil {
-		logError(err, "showCodeFlowDocument")
+		logError(err, "navigateToLocation")
 	}
 }
 
