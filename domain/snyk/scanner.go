@@ -60,7 +60,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 		},
 	)
 
-	//todo split into cli / auth preconditions and push down to appropriate infra layers
 	sc.initializer.Init()
 	for _, scanner := range sc.scanners {
 		if scanner.IsEnabled() {

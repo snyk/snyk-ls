@@ -388,7 +388,7 @@ func registerNotifier(srv *jrpc2.Server) {
 type RPCLogger struct{}
 
 func (R RPCLogger) LogRequest(ctx context.Context, req *jrpc2.Request) {
-	log.Debug().Str("paramString", req.ParamString()).Msgf("Incoming JSON-RPC request. Method=%s. ID=%s. Is notification=%v.", req.Method(), req.ID(), req.IsNotification())
+	log.Debug().Msgf("Incoming JSON-RPC request. Method=%s. ID=%s. Is notification=%v.", req.Method(), req.ID(), req.IsNotification())
 }
 
 func (R RPCLogger) LogResponse(ctx context.Context, rsp *jrpc2.Response) {
