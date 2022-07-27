@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/adrg/xdg"
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/server"
@@ -213,7 +214,8 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	}
 	didOpenParams, dir, cleanup := didOpenTextParams()
 	defer cleanup()
-	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService()))
+	folder := workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService())
+	workspace.Get().AddFolder(folder)
 
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
@@ -223,8 +225,10 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	// wait for publish
 	assert.Eventually(
 		t,
-		checkForPublishedDiagnostics(workspace.Get(), uri.PathFromUri(didOpenParams.TextDocument.URI), -1),
-		2*time.Second,
+		func() bool {
+			return folder.DocumentDiagnosticsFromCache(uri.PathFromUri(didOpenParams.TextDocument.URI)) != nil
+		},
+		10*time.Second,
 		10*time.Millisecond,
 	)
 
@@ -275,6 +279,8 @@ func Test_initialize_updatesSettings(t *testing.T) {
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
+	config.CurrentConfig().SetSnykIacEnabled(false)
+	config.CurrentConfig().SetSnykOssEnabled(false)
 	_, _ = loc.Client.Call(ctx, "initialize", nil)
 	didOpenParams, dir, cleanup := didOpenTextParams()
 	defer cleanup()
@@ -471,7 +477,7 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 	jsonRPCRecorder.ClearNotifications()
 	di.Init()
 
-	var cloneTargetDir, err = setupCustomTestRepo(repo, commit)
+	var cloneTargetDir, err = setupCustomTestRepo(repo, commit, t)
 	defer os.RemoveAll(cloneTargetDir)
 	if err != nil {
 		t.Fatal(t, err, "Couldn't setup test repo")
@@ -493,7 +499,7 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 	var testPath string
 	if file1 != "" {
 		testPath = filepath.Join(cloneTargetDir, file1)
-		textDocumentDidOpen(&loc, testPath)
+		textDocumentDidOpen(&loc, testPath, t)
 		// serve diagnostics from file scan
 		assert.Eventually(t, checkForPublishedDiagnostics(workspace.Get(), testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
 	}
@@ -505,7 +511,7 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 	}, maxIntegTestDuration, 2*time.Millisecond)
 
 	testPath = filepath.Join(cloneTargetDir, file2)
-	textDocumentDidOpen(&loc, testPath)
+	textDocumentDidOpen(&loc, testPath, t)
 
 	assert.Eventually(t, checkForPublishedDiagnostics(workspace.Get(), testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
 }
@@ -537,7 +543,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	loc := setupServer(t)
 	testutil.IntegTest(t)
 
-	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589")
+	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589", t)
 	defer os.RemoveAll(cloneTargetDir)
 	if err != nil {
 		t.Fatal(t, err, "Couldn't setup test repo")
@@ -593,7 +599,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	_, _ = loc.Client.Call(ctx, "initialize", nil)
 
-	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589")
+	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589", t)
 	defer os.RemoveAll(cloneTargetDir)
 	if err != nil {
 		t.Fatal(t, err, "Couldn't setup test repo")
@@ -605,15 +611,15 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	f := workspace.NewFolder(cloneTargetDir, "Test", di.Scanner(), di.HoverService())
 	w.AddFolder(f)
 
-	_ = textDocumentDidOpen(&loc, testPath)
+	_ = textDocumentDidOpen(&loc, testPath, t)
 
 	assert.Eventually(t, checkForPublishedDiagnostics(w, testPath, 6), maxIntegTestDuration, 10*time.Millisecond)
 }
 
-func textDocumentDidOpen(loc *server.Local, testPath string) sglsp.DidOpenTextDocumentParams {
+func textDocumentDidOpen(loc *server.Local, testPath string, t *testing.T) sglsp.DidOpenTextDocumentParams {
 	testFileContent, err := os.ReadFile(testPath)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't read file content of test file")
+		t.Fatal(t, err, "Couldn't read file content of test file")
 	}
 
 	didOpenParams := sglsp.DidOpenTextDocumentParams{
@@ -625,30 +631,33 @@ func textDocumentDidOpen(loc *server.Local, testPath string) sglsp.DidOpenTextDo
 
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Call failed")
+		t.Fatal(t, err, "Call failed")
 	}
 
 	return didOpenParams
 }
 
-func setupCustomTestRepo(url string, targetCommit string) (string, error) {
-	// clone to temp dir - specific version for reproducible test results
-	cloneTargetDir, err := os.MkdirTemp(".", "integ_test_repo_")
+func setupCustomTestRepo(url string, targetCommit string, t *testing.T) (string, error) {
+	workDir := xdg.DataHome // tempdir doesn't work well as it gets too long on macOS
+	tempDir, err := os.MkdirTemp(workDir, "")
 	if err != nil {
-		log.Fatal().Err(err).Msg("couldn't create temp dir")
+		t.Fatal(t, err, "couldn't create tempDir")
 	}
-	cmd := []string{"clone", url, cloneTargetDir}
+	repoDir := "1"
+	absoluteCloneRepoDir := filepath.Join(tempDir, repoDir)
+	cmd := []string{"clone", url, repoDir}
 	log.Debug().Interface("cmd", cmd).Msg("clone command")
 	clone := exec.Command("git", cmd...)
+	clone.Dir = tempDir
 	reset := exec.Command("git", "reset", "--hard", targetCommit)
-	reset.Dir = cloneTargetDir
+	reset.Dir = absoluteCloneRepoDir
 
 	clean := exec.Command("git", "clean", "--force")
-	clean.Dir = cloneTargetDir
+	clean.Dir = absoluteCloneRepoDir
 
 	output, err := clone.CombinedOutput()
 	if err != nil {
-		log.Fatal().Err(err).Msg("clone didn't work")
+		t.Fatal(t, err, "clone didn't work")
 	}
 
 	log.Debug().Msg(string(output))
@@ -658,7 +667,7 @@ func setupCustomTestRepo(url string, targetCommit string) (string, error) {
 	output, err = clean.CombinedOutput()
 
 	log.Debug().Msg(string(output))
-	return cloneTargetDir, err
+	return absoluteCloneRepoDir, err
 }
 
 //goland:noinspection ALL

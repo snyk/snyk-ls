@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/adrg/xdg"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
@@ -22,7 +23,7 @@ import (
 
 // can we replace them with more succinct higher level integration tests?[keeping them for sanity for the time being]
 func setupDocs() (string, lsp.TextDocumentItem, lsp.TextDocumentItem, []byte, []byte) {
-	path, _ := os.MkdirTemp(os.TempDir(), "firstDocTemp")
+	path, _ := os.MkdirTemp(xdg.DataHome, "firstDocTemp")
 
 	content1 := []byte("test1")
 	_ = os.WriteFile(path+string(os.PathSeparator)+"test1.java", content1, 0660)

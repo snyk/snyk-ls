@@ -21,6 +21,7 @@ import (
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -212,12 +213,18 @@ func (oss *Scanner) handleError(err error, res []byte, cmd []string) bool {
 			return false
 		case 2:
 			log.Err(err).Str("method", "oss.Scan").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
+			// we want a user notification, but don't want to send it to sentry
+			notification.Send(sglsp.ShowMessageParams{
+				Type:    sglsp.MTError,
+				Message: fmt.Sprintf("Snyk encountered an error: %v", err),
+			})
 			return true
 		case 3:
 			log.Debug().Str("method", "oss.Scan").Msg("no supported projects/files detected.")
 			return true
 		default:
 			log.Err(err).Str("method", "oss.Scan").Msg("Error while calling Snyk CLI")
+			oss.errorReporter.CaptureError(err)
 		}
 	default:
 		oss.errorReporter.CaptureError(err)

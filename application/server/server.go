@@ -236,7 +236,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 					ChangeNotifications: "snyk-ls",
 				},
 				HoverProvider:      true,
-				CodeActionProvider: false,
+				CodeActionProvider: true,
 				CodeLensProvider:   &sglsp.CodeLensOptions{ResolveProvider: false},
 				ExecuteCommandProvider: &sglsp.ExecuteCommandOptions{
 					Commands: []string{snyk.NavigateToRangeCommand},
