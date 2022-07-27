@@ -46,6 +46,7 @@ func TestCreateBundle(t *testing.T) {
 		snykCodeMock, dir, c, file := setupCreateBundleTest(t, "java")
 		data := strings.Repeat("a", maxFileSize-10)
 		err := os.WriteFile(file, []byte(data), 0600)
+
 		if err != nil {
 			t.Fatal(t, err)
 		}
@@ -74,7 +75,10 @@ func TestCreateBundle(t *testing.T) {
 
 	t.Run("when empty file ignores file", func(t *testing.T) {
 		snykCodeMock, dir, c, file := setupCreateBundleTest(t, "java")
-		_, err := os.Create(file)
+		fd, err := os.Create(file)
+		t.Cleanup(func() {
+			fd.Close()
+		})
 		if err != nil {
 			t.Fatal(t, err)
 		}
@@ -88,7 +92,10 @@ func TestCreateBundle(t *testing.T) {
 
 	t.Run("when unsupported ignores file", func(t *testing.T) {
 		snykCodeMock, dir, c, file := setupCreateBundleTest(t, "unsupported")
-		_, err := os.Create(file)
+		fd, err := os.Create(file)
+		t.Cleanup(func() {
+			fd.Close()
+		})
 		if err != nil {
 			t.Fatal(t, err)
 		}
