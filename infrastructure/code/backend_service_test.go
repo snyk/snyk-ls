@@ -121,7 +121,7 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 // todo analysis test severities
 
 func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
-	issues, _ := setupConversionTests(t)
+	_, issues, _ := setupConversionTests(t)
 	path := "/server/testdata/Dummy.java"
 	assert.Equal(t, 2, len(issues))
 	issueDescriptionURL, _ := url.Parse(codeDescriptionURL)
@@ -153,14 +153,27 @@ func referencesForSampleSarifResponse() []snyk.Reference {
 	return references
 }
 
+func Test_getFormmattedMessage(t *testing.T) {
+	testutil.UnitTest(t)
+	s, _, sarifResponse := setupConversionTests(t)
+	run := sarifResponse.Sarif.Runs[0]
+	result := run.Results[0]
+
+	msg := s.getFormattedMessage(run, result)
+
+	assert.Contains(t, msg, "Example Commit Fixes")
+}
+
 func TestGetCodeFlowCommands(t *testing.T) {
-	_, sarifResponse := setupConversionTests(t)
-	commands := getCodeFlowCommands(sarifResponse.Sarif.Runs[0].Results[0])
+	testutil.UnitTest(t)
+	s, _, sarifResponse := setupConversionTests(t)
+
+	commands := s.getCodeFlow(sarifResponse.Sarif.Runs[0].Results[0])
 	assert.NotEmpty(t, commands)
 	assert.Equal(t, snyk.NavigateToRangeCommand, commands[0].Command)
 }
 
-func setupConversionTests(t *testing.T) ([]snyk.Issue, SarifResponse) {
+func setupConversionTests(t *testing.T) (*SnykCodeHTTPClient, []snyk.Issue, SarifResponse) {
 	testutil.UnitTest(t)
 	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
@@ -170,7 +183,7 @@ func setupConversionTests(t *testing.T) ([]snyk.Issue, SarifResponse) {
 
 	issues := s.convertSarifResponse(analysisResponse)
 	assert.NotNil(t, issues)
-	return issues, analysisResponse
+	return s, issues, analysisResponse
 }
 
 func TestSnykCodeBackendService_analysisRequestBody_FillsOrgParameter(t *testing.T) {
