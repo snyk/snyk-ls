@@ -6,8 +6,11 @@ import (
 
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 //todo can we do without a singleton?
@@ -71,4 +74,15 @@ func (w *Workspace) ScanWorkspace(ctx context.Context) {
 	for _, folder := range w.folders {
 		go folder.ScanFolder(ctx)
 	}
+}
+
+func (w *Workspace) ProcessFolderChange(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) {
+	for _, folder := range params.Event.Removed {
+		w.DeleteFolder(uri.PathFromUri(folder.Uri))
+	}
+	for _, folder := range params.Event.Added {
+		f := NewFolder(uri.PathFromUri(folder.Uri), folder.Name, di.Scanner(), di.HoverService())
+		w.AddFolder(f)
+	}
+	w.ScanWorkspace(ctx)
 }

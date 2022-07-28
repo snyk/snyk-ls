@@ -87,7 +87,7 @@ func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 }
 
 func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
-	filePath, folderPath := code.FakeDiagnosticUri()
+	filePath, folderPath := code.FakeDiagnosticPath()
 	scannerRecorder := snyk.NewTestScanner()
 	scannerRecorder.Issues = []snyk.Issue{{AffectedFilePath: filePath}}
 	f := NewFolder(folderPath, "Test", scannerRecorder, hover.NewTestHoverService())
@@ -102,7 +102,7 @@ func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
 //todo: unignore this test
 func Test_Scan_WhenCachedResultsButNoIssues_shouldNotReScan(t *testing.T) {
 	t.Skip("this feature is not implemented yet")
-	filePath, folderPath := code.FakeDiagnosticUri()
+	filePath, folderPath := code.FakeDiagnosticPath()
 	scannerRecorder := snyk.NewTestScanner()
 	scannerRecorder.Issues = []snyk.Issue{}
 	f := NewFolder(folderPath, "Test", scannerRecorder, hover.NewTestHoverService())
