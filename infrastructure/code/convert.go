@@ -3,6 +3,7 @@ package code
 import (
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 
@@ -83,21 +84,24 @@ func (r *result) getCodeFlow() (dataflow []dataflowElement) {
 	return dataflow
 }
 
-func (r *result) getFormattedMessage(rule rule) (msg string) {
-	msg = fmt.Sprintf("## Description\n\n%s", r.getMessage())
-	const horizontalLine = "\n---\n"
-	msg += horizontalLine
-	msg += fmt.Sprintf("## Data Flow\n\n%s\n\n---\n", r.getMessage())
+func (r *result) getFormattedMessage(rule rule) string {
+	const horizontalLine = "\n\n---\n\n"
+	var builder strings.Builder
+	builder.Grow(500)
+	builder.WriteString("## Description\n\n")
+	builder.WriteString(r.getMessage())
+	builder.WriteString(horizontalLine)
+	builder.WriteString("## Data Flow\n\n")
 	for _, elem := range r.getCodeFlow() {
-		msg += elem.toMarkDown()
+		builder.WriteString(elem.toMarkDown())
 	}
-	msg += horizontalLine
-	msg += "## Example Commit Fixes\n\n"
+	builder.WriteString(horizontalLine)
+	builder.WriteString("## Example Commit Fixes\n\n")
 	for _, fix := range rule.getExampleCommits() {
-		msg += fix.toMarkdown()
+		builder.WriteString(fix.toMarkdown())
 	}
-	msg += horizontalLine
-	return msg
+	builder.WriteString(horizontalLine)
+	return builder.String()
 }
 
 func (r *result) getMessage() string {
