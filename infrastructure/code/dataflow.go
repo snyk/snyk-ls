@@ -39,7 +39,12 @@ func (d *dataflowElement) toMarkDown() (markdown string) {
 		d.position,
 		fileName,
 		line,
-		uri.AddRangeToUri(fileURI, d.flowRange),
+		uri.AddRangeToUri(fileURI, uri.Range{
+			StartLine: d.flowRange.Start.Line,
+			EndLine:   d.flowRange.End.Line,
+			StartChar: d.flowRange.Start.Character,
+			EndChar:   d.flowRange.End.Character,
+		}),
 		d.content,
 	)
 	return markdown

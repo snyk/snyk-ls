@@ -46,17 +46,25 @@ func IsDirectory(documentURI sglsp.DocumentURI) bool {
 	return stat.IsDir()
 }
 
+// Range gives a position in a document. All attributes are 0-based
+type Range struct {
+	StartLine int
+	EndLine   int
+	StartChar int
+	EndChar   int
+}
+
 // AddRangeToUri adds a fragment to the URI to allow for exact navigation
-// A range of Start Line 0, Character 1, End Line 1, Character 10
+// A range of Start Line 0, Char 1, End Line 1, Char 10
 // translates to file://..#L1,2-L2,11. This is similar to vscode
 // see e.g. https://github.com/microsoft/vscode/blob/b51955e4c878c8facdd775709740c8aa5d1192d6/src/vs/platform/opener/common/opener.ts#L162
-func AddRangeToUri(u sglsp.DocumentURI, r sglsp.Range) sglsp.DocumentURI {
+func AddRangeToUri(u sglsp.DocumentURI, r Range) sglsp.DocumentURI {
 	if rangeFragmentRegexp.Match([]byte(u)) || strings.HasSuffix(string(u), "/") {
 		return u
 	}
-	startChar := int(math.Max(1, float64(r.Start.Character+1)))
-	endChar := int(math.Max(1, float64(r.End.Character+1)))
-	startLine := int(math.Max(1, float64(r.Start.Line+1)))
-	endLine := int(math.Max(1, float64(r.End.Line+1)))
+	startChar := int(math.Max(1, float64(r.StartChar+1)))
+	endChar := int(math.Max(1, float64(r.EndChar+1)))
+	startLine := int(math.Max(1, float64(r.StartLine+1)))
+	endLine := int(math.Max(1, float64(r.EndLine+1)))
 	return sglsp.DocumentURI(fmt.Sprintf("%s#L%d,%d-L%d,%d", u, startLine, startChar, endLine, endChar))
 }
