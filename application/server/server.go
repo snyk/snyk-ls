@@ -17,6 +17,8 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/domain/ide/codeaction"
+	"github.com/snyk/snyk-ls/domain/ide/codelens"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -63,7 +65,7 @@ func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 	(*handlers)["textDocument/didClose"] = NoOpHandler()
 	(*handlers)["textDocument/didSave"] = TextDocumentDidSaveHandler()
 	(*handlers)["textDocument/hover"] = TextDocumentHover()
-	(*handlers)["textDocument/codeAction"] = CodeAction()
+	(*handlers)["textDocument/codeAction"] = CodeActionHandler()
 	(*handlers)["textDocument/codeLens"] = CodeLensHandler()
 	(*handlers)["textDocument/willSave"] = NoOpHandler()
 	(*handlers)["textDocument/willSaveWaitUntil"] = NoOpHandler()
@@ -123,43 +125,17 @@ func CodeLensHandler() jrpc2.Handler {
 		log.Info().Str("method", "CodeLensHandler").Msg("RECEIVING")
 		defer log.Info().Str("method", "CodeLensHandler").Msg("SENDING")
 
-		filePath := uri.PathFromUri(params.TextDocument.URI)
-		f := workspace.Get().GetFolderContaining(filePath)
-		if f != nil {
-			issues := f.DocumentDiagnosticsFromCache(filePath)
-			var lenses []sglsp.CodeLens
-			for _, issue := range issues {
-				for _, command := range issue.Commands {
-					lenses = append(lenses, getCodeLensFromCommand(issue, command))
-				}
-			}
-			return lenses, nil
-		}
-		return nil, nil
+		lenses := codelens.GetFor(uri.PathFromUri(params.TextDocument.URI))
+		return lenses, nil
 	})
 }
 
-func getCodeLensFromCommand(issue snyk.Issue, command snyk.Command) sglsp.CodeLens {
-	return sglsp.CodeLens{
-		Range: workspace.ToRange(issue.Range),
-		Command: sglsp.Command{
-			Title:     command.Title,
-			Command:   command.Command,
-			Arguments: command.Arguments,
-		},
-	}
-}
-
-func CodeAction() jrpc2.Handler {
-	return handler.New(func(ctx context.Context, params lsp.CodeActionParams) ([]lsp.CodeAction, error) {
+func CodeActionHandler() jrpc2.Handler {
+	return handler.New(func(ctx context.Context, params sglsp.CodeActionParams) ([]lsp.CodeAction, error) {
 		log.Info().Str("method", "CodeActionHandler").Interface("action", params).Msg("RECEIVING")
 		defer log.Info().Str("method", "CodeActionHandler").Interface("action", params).Msg("SENDING")
-
-		filePath := uri.PathFromUri(params.TextDocument.URI)
-		requestedRange := workspace.FromRange(params.Range)
-		actions := workspace.Get().GetFolderContaining(filePath).CodeActions(filePath, requestedRange)
-		codeActions := workspace.ToCodeActions(actions)
-		return codeActions, nil
+		actions := codeaction.GetFor(uri.PathFromUri(params.TextDocument.URI), params.Range)
+		return actions, nil
 	})
 }
 
@@ -167,22 +143,9 @@ func WorkspaceDidChangeWorkspaceFoldersHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) (interface{}, error) {
 		log.Info().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Msg("RECEIVING")
 		defer log.Info().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Msg("SENDING")
-
-		w := workspace.Get()
-		for _, folder := range params.Event.Removed {
-			w.DeleteFolder(uri.PathFromUri(folder.Uri))
-		}
-		for _, folder := range params.Event.Added {
-			AddFolder(folder, w)
-		}
-		w.ScanWorkspace(ctx)
+		workspace.Get().ProcessFolderChange(ctx, params)
 		return nil, nil
 	})
-}
-
-func AddFolder(lspFolder lsp.WorkspaceFolder, w *workspace.Workspace) {
-	f := workspace.NewFolder(uri.PathFromUri(lspFolder.Uri), lspFolder.Name, di.Scanner(), di.HoverService())
-	w.AddFolder(f)
 }
 
 func InitializeHandler(srv *jrpc2.Server) handler.Func {
@@ -211,10 +174,16 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 		if len(params.WorkspaceFolders) > 0 {
 			for _, workspaceFolder := range params.WorkspaceFolders {
 				log.Info().Str("method", method).Msgf("Adding workspaceFolder %v", workspaceFolder)
-				AddFolder(workspaceFolder, w)
+				f := workspace.NewFolder(
+					uri.PathFromUri(workspaceFolder.Uri),
+					workspaceFolder.Name,
+					di.Scanner(),
+					di.HoverService(),
+				)
+				w.AddFolder(f)
 			}
 		} else {
-			AddFolder(lsp.WorkspaceFolder{Uri: uri.PathToUri(params.RootPath), Name: params.ClientInfo.Name}, w)
+			w.AddFolder(workspace.NewFolder(params.RootPath, params.ClientInfo.Name, di.Scanner(), di.HoverService()))
 		}
 		w.ScanWorkspace(ctx)
 		return lsp.InitializeResult{

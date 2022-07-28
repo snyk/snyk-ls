@@ -5,16 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
 	"net/http"
-	"net/url"
-	"path/filepath"
 	"strconv"
 
-	errors2 "github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -22,9 +18,7 @@ import (
 	performance2 "github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code/encoding"
-	"github.com/snyk/snyk-ls/internal/files"
 	"github.com/snyk/snyk-ls/internal/httpclient"
-	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 const completeStatus = "COMPLETE"
@@ -185,7 +179,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 		return nil, err
 	}
 
-	err = checkResponseCode(response)
+	err = s.checkResponseCode(response)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +239,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 	log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis for bundle")
 	defer log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis done")
 
-	requestBody, err := analysisRequestBody(&options)
+	requestBody, err := s.analysisRequestBody(&options)
 	if err != nil {
 		log.Err(err).Str("method", method).Str("requestBody", string(requestBody)).Msg("error creating request body")
 		return nil, AnalysisStatus{}, err
@@ -281,11 +275,11 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		return nil, status, nil
 	}
 
-	issues := s.convertSarifResponse(response)
+	issues := response.toIssues()
 	return issues, status, err
 }
 
-func analysisRequestBody(options *AnalysisOptions) ([]byte, error) {
+func (s *SnykCodeHTTPClient) analysisRequestBody(options *AnalysisOptions) ([]byte, error) {
 	unknown := "unknown"
 	orgName := unknown
 	if config.CurrentConfig().GetOrganization() != "" {
@@ -320,211 +314,7 @@ func analysisRequestBody(options *AnalysisOptions) ([]byte, error) {
 	return requestBody, err
 }
 
-func (s *SnykCodeHTTPClient) convertSarifResponse(response SarifResponse) (issues []snyk.Issue) {
-	runs := response.Sarif.Runs
-	if len(runs) == 0 {
-		return issues
-	}
-	ruleLink := s.createRuleLink()
-
-	run := runs[0]
-	rules := run.Tool.Driver.Rules
-	for _, result := range run.Results {
-		for _, loc := range result.Locations {
-			// convert the documentURI to a path according to our conversion
-			path := loc.PhysicalLocation.ArtifactLocation.URI
-
-			myRange := snyk.Range{
-				Start: snyk.Position{
-					Line:      loc.PhysicalLocation.Region.StartLine - 1,
-					Character: loc.PhysicalLocation.Region.StartColumn - 1,
-				},
-				End: snyk.Position{
-					Line:      loc.PhysicalLocation.Region.EndLine - 1,
-					Character: loc.PhysicalLocation.Region.EndColumn,
-				},
-			}
-
-			commands, markdown := s.getCodeFlow(result)
-			message := s.getMessage(result)
-			rule := s.getRule(rules, result.RuleID)
-			formattedMessage := s.getFormattedMessage(message, s.exampleCommitFixesForHover(rule), markdown)
-			d := snyk.Issue{
-				ID:                  result.RuleID,
-				Range:               myRange,
-				Severity:            issueSeverity(result.Level),
-				Message:             message,
-				FormattedMessage:    formattedMessage,
-				IssueType:           snyk.CodeSecurityVulnerability,
-				AffectedFilePath:    path,
-				Product:             snyk.ProductCode,
-				IssueDescriptionURL: ruleLink,
-				References:          s.getReference(rule),
-				Commands:            commands,
-			}
-
-			issues = append(issues, d)
-		}
-	}
-	return issues
-}
-
-func (s *SnykCodeHTTPClient) getRule(rules []rule, id string) rule {
-	for _, r := range rules {
-		if r.ID == id {
-			return r
-		}
-	}
-	return rule{}
-}
-
-func (s *SnykCodeHTTPClient) getMessage(result result) string {
-	return fmt.Sprintf("%s (Snyk)", result.Message.Text)
-}
-
-func (s *SnykCodeHTTPClient) getReference(r rule) (references []snyk.Reference) {
-	for i, exampleFix := range r.Properties.ExampleCommitFixes {
-		commitURLString := exampleFix.CommitURL
-		commitURL, err := url.Parse(commitURLString)
-		if err != nil {
-			log.Err(err).
-				Str("method", "code.references").
-				Str("commitURL", commitURLString).
-				Msgf("cannot parse commit url")
-			continue
-		}
-		references = append(references, snyk.Reference{Title: s.getFixDescriptionsForRule(r, i), Url: commitURL})
-	}
-	return references
-}
-
-func (s *SnykCodeHTTPClient) createRuleLink() *url.URL {
-	parse, err := url.Parse(codeDescriptionURL)
-	if err != nil {
-		s.errorReporter.CaptureError(errors2.Wrap(err, "Unable to create Snyk Code rule link"))
-	}
-	return parse
-}
-
-func (s *SnykCodeHTTPClient) getFormattedMessage(message string, commitFixes string, codeFlow string) (msg string) {
-	msg = fmt.Sprintf("## Description\n\n%s\n\n---\n", message)
-	msg += codeFlow + commitFixes
-	return msg
-}
-
-func (s *SnykCodeHTTPClient) exampleCommitFixesForHover(rule rule) (msg string) {
-	if len(rule.Properties.ExampleCommitFixes) > 0 {
-		msg += "\n## Example Commit Fixes: \n\n"
-		for i, fix := range rule.Properties.ExampleCommitFixes {
-			fixDescription := s.getFixDescriptionsForRule(rule, i)
-			if fixDescription != "" {
-				msg += fmt.Sprintf("### [%s](%s)", fixDescription, fix.CommitURL)
-			}
-			msg += "\n```\n"
-			for _, line := range fix.Lines {
-				lineChangeChar := s.lineChangeChar(line.LineChange)
-				msg += fmt.Sprintf("%s %04d : %s\n", lineChangeChar, line.LineNumber, line.Line)
-			}
-			msg += "```\n\n"
-		}
-		msg += "---"
-	}
-	return msg
-}
-
-func (s *SnykCodeHTTPClient) getCodeFlow(r result) (commands []snyk.Command, markdown string) {
-	flows := r.CodeFlows
-	dedupMap := map[string]bool{}
-	markdown = "## Snyk Data Flow\n\n"
-	for _, cFlow := range flows {
-		threadFlows := cFlow.ThreadFlows
-		for _, tFlow := range threadFlows {
-			for _, tFlowLocation := range tFlow.Locations {
-				method := "getCodeFlow"
-				physicalLoc := tFlowLocation.Location.PhysicalLocation
-				path := physicalLoc.ArtifactLocation.URI
-				region := physicalLoc.Region
-				myRange :=
-					snyk.Range{
-						Start: snyk.Position{
-							Line:      region.StartLine - 1,
-							Character: region.StartColumn - 1,
-						},
-						End: snyk.Position{
-							Line:      region.EndLine - 1,
-							Character: region.EndColumn,
-						}}
-
-				// IntelliJ does a distinct by start line
-				key := fmt.Sprintf("%sL%4d", path, region.StartLine)
-				if !dedupMap[key] {
-					pos := len(commands)
-					command := s.codeFlowToCommand(path, pos, region, myRange)
-					commands = append(commands, command)
-
-					markdown += s.codeFlowToMarkdown(path, pos, myRange)
-					dedupMap[key] = true
-					log.Debug().Str("method", method).Interface("command", command).Send()
-					log.Debug().Str("method", method).Interface("markdown", markdown).Send()
-				}
-			}
-		}
-	}
-	return commands, markdown
-}
-
-func (s *SnykCodeHTTPClient) codeFlowToMarkdown(path string, pos int, myRange snyk.Range) string {
-	fileName := filepath.Base(path)
-	fileURI := uri.PathToUri(path)
-	line := myRange.Start.Line + 1 // range is 0-based
-	fileUtil := files.New(s.errorReporter)
-	lineOfCode := fileUtil.GetLineOfCode(path, line)
-	markdown := fmt.Sprintf(
-		"%d. [%s:%d](%s) `%s`\n\n",
-		pos,
-		fileName,
-		line,
-		uri.AddRangeToUri(fileURI, myRange),
-		lineOfCode,
-	)
-	return markdown
-}
-
-func (s *SnykCodeHTTPClient) codeFlowToCommand(
-	path string,
-	index int,
-	region region,
-	myRange snyk.Range,
-) snyk.Command {
-	command := snyk.Command{
-		Title:     fmt.Sprintf("Snyk Data Flow (%d) %s:%d", index, filepath.Base(path), region.StartLine),
-		Command:   snyk.NavigateToRangeCommand,
-		Arguments: []interface{}{path, myRange},
-	}
-
-	return command
-}
-
-func (s *SnykCodeHTTPClient) getFixDescriptionsForRule(rule rule, commitFixIndex int) string {
-	fixDescriptions := rule.Properties.ExampleCommitDescriptions
-	if len(fixDescriptions) > commitFixIndex {
-		return fixDescriptions[commitFixIndex]
-	}
-	return ""
-}
-
-func (s *SnykCodeHTTPClient) lineChangeChar(line string) string {
-	switch line {
-	case "none":
-		return " "
-	case "added":
-		return "+"
-	default:
-		return "-"
-	}
-}
-
-func checkResponseCode(r *http.Response) error {
+func (s *SnykCodeHTTPClient) checkResponseCode(r *http.Response) error {
 	if r.StatusCode >= 200 && r.StatusCode <= 299 {
 		return nil
 	}

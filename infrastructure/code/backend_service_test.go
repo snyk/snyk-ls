@@ -2,19 +2,14 @@ package code
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/url"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -119,132 +114,3 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 
 // todo analysis test limit files
 // todo analysis test severities
-
-func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
-	_, issues, _ := setupConversionTests(t)
-	path := "/server/testdata/Dummy.java"
-	assert.Equal(t, 2, len(issues))
-	issueDescriptionURL, _ := url.Parse(codeDescriptionURL)
-	references := referencesForSampleSarifResponse()
-	issue := issues[0]
-	assert.Equal(t, "java/DontUsePrintStackTrace", issue.ID)
-	assert.Equal(t, "Printing the stack trace of java.lang.InterruptedException. Production code should not use printStackTrace. (Snyk)", issue.Message)
-	assert.Equal(t, snyk.CodeSecurityVulnerability, issue.IssueType)
-	assert.Equal(t, snyk.Low, issue.Severity)
-	assert.Equal(t, path, issue.AffectedFilePath)
-	assert.Equal(t, snyk.ProductCode, issue.Product)
-	assert.Equal(t, issueDescriptionURL, issue.IssueDescriptionURL)
-	assert.Equal(t, references, issue.References)
-	assert.Contains(t, issue.FormattedMessage, "Example Commit Fixes")
-	assert.NotEmpty(t, issue.Commands, "should have commands filled from codeflow")
-}
-
-func referencesForSampleSarifResponse() []snyk.Reference {
-
-	exampleCommitFix1, _ := url.Parse("https://github.com/apache/flink/commit/5d7c5620804eddd59206b24c87ffc89c12fd1184?diff=split#diff-86ec3e3884662ba3b5f4bb5050221fd6L94")
-	exampleCommitFix2, _ := url.Parse("https://github.com/rtr-nettest/open-rmbt/commit/0fa9d5547c5300cf8162b8f31a40aea6847a5c32?diff=split#diff-7e23eb1aa3b7b4d5db89bfd2860277e5L75")
-	exampleCommitFix3, _ := url.Parse("https://github.com/wso2/developer-studio/commit/cfd84b83349e67de4b0239733bc6ed01287856b7?diff=split#diff-645425e844adc2eab8197719cbb2fe8dL285")
-
-	references := []snyk.Reference{
-		{Title: "improve logging and testing", Url: exampleCommitFix1},
-		{Title: "more tests, exceptions", Url: exampleCommitFix2},
-		{Title: "log errors to the log file", Url: exampleCommitFix3},
-	}
-	return references
-}
-
-func Test_getFormmattedMessage(t *testing.T) {
-	testutil.UnitTest(t)
-	s, _, sarifResponse := setupConversionTests(t)
-	run := sarifResponse.Sarif.Runs[0]
-	result := run.Results[0]
-
-	message := s.getMessage(result)
-
-	commitFixesForHover := s.exampleCommitFixesForHover(run.Tool.Driver.Rules[0])
-
-	msg := s.getFormattedMessage(message, commitFixesForHover, "codeFlow")
-
-	assert.Contains(t, msg, "Example Commit Fixes")
-	assert.Contains(t, msg, "codeFlow")
-}
-
-func TestGetCodeFlowCommands(t *testing.T) {
-	testutil.UnitTest(t)
-	s, _, sarifResponse := setupConversionTests(t)
-
-	result := sarifResponse.Sarif.Runs[0].Results[0]
-	commands, markdown := s.getCodeFlow(result)
-	assert.NotEmpty(t, commands)
-	assert.NotEmpty(t, markdown)
-	assert.Equal(t, snyk.NavigateToRangeCommand, commands[0].Command)
-}
-
-func setupConversionTests(t *testing.T) (*SnykCodeHTTPClient, []snyk.Issue, SarifResponse) {
-	testutil.UnitTest(t)
-	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
-	bytes, _ := os.ReadFile("testdata/sarifResponse.json")
-
-	var analysisResponse SarifResponse
-	_ = json.Unmarshal(bytes, &analysisResponse)
-
-	issues := s.convertSarifResponse(analysisResponse)
-	assert.NotNil(t, issues)
-	return s, issues, analysisResponse
-}
-
-func TestSnykCodeBackendService_analysisRequestBody_FillsOrgParameter(t *testing.T) {
-	testutil.UnitTest(t)
-
-	// prepare
-	config.SetCurrentConfig(config.New())
-	org := "test-org"
-	config.CurrentConfig().SetOrganization(org)
-
-	analysisOpts := &AnalysisOptions{
-		bundleHash: "test-hash",
-		shardKey:   "test-key",
-		severity:   0,
-	}
-
-	expectedRequest := AnalysisRequest{
-		Key: AnalysisRequestKey{
-			Type:         "file",
-			Hash:         analysisOpts.bundleHash,
-			LimitToFiles: analysisOpts.limitToFiles,
-			Shard:        analysisOpts.shardKey,
-		},
-		Legacy: false,
-		AnalysisContext: AnalysisContext{
-			Initiatior: "IDE",
-			Flow:       "language-server",
-			Org: AnalysisContextOrg{
-				Name:        org,
-				DisplayName: "unknown",
-				PublicId:    "unknown",
-			},
-		},
-	}
-
-	// act
-	bytes, err := analysisRequestBody(analysisOpts)
-	if err != nil {
-		assert.Fail(t, "Couldn't obtain analysis request body")
-	}
-
-	// assert
-	var actualRequest AnalysisRequest
-	err = json.Unmarshal(bytes, &actualRequest)
-	if err != nil {
-		assert.Fail(t, "Couldn't unmarshal analysis request body")
-	}
-
-	assert.Equal(t, expectedRequest, actualRequest)
-}
-
-func Test_LineChangeChar(t *testing.T) {
-	s := SnykCodeHTTPClient{}
-	assert.Equal(t, " ", s.lineChangeChar("none"))
-	assert.Equal(t, "+", s.lineChangeChar("added"))
-	assert.Equal(t, "-", s.lineChangeChar("removed"))
-}

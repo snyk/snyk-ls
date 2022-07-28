@@ -27,6 +27,7 @@ func SmokeTest(t *testing.T) {
 func UnitTest(t *testing.T) {
 	t.Helper()
 	c := config.New()
+	c.SetManageBinariesAutomatically(false)
 	c.SetToken("00000000-0000-0000-0000-000000000001")
 	settings := &config.CliSettings{}
 	settings.SetPath("dummy")
@@ -112,4 +113,11 @@ func prepareTestHelper(t *testing.T, envVar string) {
 	config.SetCurrentConfig(c)
 
 	CLIDownloadLockFileCleanUp(t)
+}
+
+func OnlyEnableCodeAndDisableBinaryManagement() {
+	config.CurrentConfig().SetSnykIacEnabled(false)
+	config.CurrentConfig().SetSnykOssEnabled(false)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
+	config.CurrentConfig().SetManageBinariesAutomatically(false)
 }

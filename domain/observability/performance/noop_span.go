@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 )
 
 type NoopSpan struct {
@@ -18,10 +17,6 @@ type NoopSpan struct {
 func (n *NoopSpan) Finish() {
 	n.Started = false
 	n.Finished = true
-	log.Trace().
-		Str("method", "NoopSpan.Finish").
-		Str("operation", n.Operation).
-		Msg("finishing span")
 }
 
 func (n *NoopSpan) SetTransactionName(txName string) { n.TxName = txName }
@@ -29,11 +24,6 @@ func (n *NoopSpan) StartSpan(ctx context.Context) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-
-	log.Trace().
-		Str("method", "NoopSpan.StartSpan").
-		Str("operation", n.Operation).
-		Msg("starting span")
 	n.ctx = GetContextWithTraceId(ctx, uuid.New().String())
 	n.Started = true
 }

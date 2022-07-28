@@ -39,6 +39,15 @@ func toCodeAction(action snyk.CodeAction) lsp.CodeAction {
 		Diagnostics: toDiagnostics(action.Issues),
 		IsPreferred: false,
 		Edit:        toWorkspaceEdit(action.Edit),
+		Command:     ToCommand(action.Command),
+	}
+}
+
+func ToCommand(command snyk.Command) sglsp.Command {
+	return sglsp.Command{
+		Title:     command.Title,
+		Command:   command.Command,
+		Arguments: command.Arguments,
 	}
 }
 

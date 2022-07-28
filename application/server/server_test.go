@@ -42,7 +42,7 @@ var (
 )
 
 func didOpenTextParams() (sglsp.DidOpenTextDocumentParams, string, func()) {
-	diagnosticUri, path := code.FakeDiagnosticUri()
+	diagnosticUri, path := code.FakeDiagnosticPath()
 	didOpenParams := sglsp.DidOpenTextDocumentParams{
 		TextDocument: sglsp.TextDocumentItem{URI: uri.PathToUri(diagnosticUri)},
 	}
@@ -226,10 +226,12 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	assert.Eventually(
 		t,
 		func() bool {
-			return folder.DocumentDiagnosticsFromCache(uri.PathFromUri(didOpenParams.TextDocument.URI)) != nil
+			path := uri.PathFromUri(didOpenParams.TextDocument.URI)
+			return workspace.Get().GetFolderContaining(path).DocumentDiagnosticsFromCache(path) != nil
 		},
-		10*time.Second,
-		10*time.Millisecond,
+		5*time.Second,
+		time.Millisecond,
+		"Couldn't get diagnostics from cache",
 	)
 
 	rsp, _ := loc.Client.Call(ctx, "textDocument/codeLens", sglsp.CodeLensParams{
@@ -244,17 +246,6 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	assert.NotNil(t, lenses)
 	assert.Len(t, lenses, 1)
 	assert.Equal(t, lenses[0].Command.Command, code.FakeCommand.Command)
-}
-
-func Test_GetCodeLensFromCommand(t *testing.T) {
-	testutil.UnitTest(t)
-	issue := code.FakeIssue
-	command := code.FakeCommand
-	codeLens := getCodeLensFromCommand(issue, command)
-	assert.Equal(t, workspace.ToRange(issue.Range), codeLens.Range)
-	assert.Equal(t, command.Command, codeLens.Command.Command)
-	assert.Equal(t, command.Title, codeLens.Command.Title)
-	assert.Equal(t, command.Arguments, codeLens.Command.Arguments)
 }
 
 func Test_initialize_updatesSettings(t *testing.T) {
@@ -376,7 +367,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	loc := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	_, _ = loc.Client.Call(ctx, "initialize", nil)
-	diagnosticUri, tempDir := code.FakeDiagnosticUri()
+	diagnosticUri, tempDir := code.FakeDiagnosticPath()
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(diagnosticUri)},
 	}

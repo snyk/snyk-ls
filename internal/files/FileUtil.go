@@ -3,33 +3,27 @@ package files
 import (
 	"os"
 	"strings"
-
-	"github.com/pkg/errors"
-
-	errorreporting "github.com/snyk/snyk-ls/domain/observability/error_reporting"
 )
 
-type FileUtil struct {
-	errorReporter errorreporting.ErrorReporter
-}
+type FileUtil struct{}
 
-func New(errorReporter errorreporting.ErrorReporter) *FileUtil {
-	return &FileUtil{errorReporter: errorReporter}
+func New() *FileUtil {
+	return &FileUtil{}
 }
 
 // GetLineOfCode returns the line of code from file (1-based)
-func (f *FileUtil) GetLineOfCode(filePath string, line int) string {
-	lines := f.readFile(filePath)
+func (f *FileUtil) GetLineOfCode(filePath string, line int) (string, error) {
+	lines, err := f.readFile(filePath)
 	if len(lines) >= line {
-		return lines[line-1]
+		return lines[line-1], nil
 	}
-	return ""
+	return "", err
 }
 
-func (f *FileUtil) readFile(filePath string) (lines []string) {
+func (f *FileUtil) readFile(filePath string) (lines []string, err error) {
 	bytes, err := os.ReadFile(filePath)
 	if err != nil {
-		f.errorReporter.CaptureError(errors.Wrap(err, "Couldn't read file "+filePath))
+		return nil, err
 	}
-	return strings.Split(string(bytes), "\n")
+	return strings.Split(string(bytes), "\n"), nil
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/adrg/xdg"
@@ -41,16 +42,26 @@ var (
 	}
 
 	FakeIssue = snyk.Issue{
-		ID:       "SNYK-123",
-		Range:    fakeRange,
-		Severity: snyk.High,
-		Message:  "This is a dummy error (severity error)",
-		Commands: []snyk.Command{FakeCommand},
+		ID:          "SNYK-123",
+		Range:       fakeRange,
+		Severity:    snyk.High,
+		Message:     "This is a dummy error (severity error)",
+		Commands:    []snyk.Command{FakeCommand},
+		CodeActions: []snyk.CodeAction{FakeCodeAction},
 	}
+
+	FakeCodeAction = snyk.CodeAction{
+		Title:       "FakeAction",
+		Issues:      []snyk.Issue{},
+		IsPreferred: false,
+		Edit:        snyk.WorkspaceEdit{},
+		Command:     FakeCommand,
+	}
+
 	FakeFilters = []string{".cjs", ".ejs", ".es", ".es6", ".htm", ".html", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".vue", ".java", ".erb", ".haml", ".rb", ".rhtml", ".slim", ".kt", ".swift", ".cls", ".config", ".pom", ".wxs", ".xml", ".xsd", ".aspx", ".cs", ".py", ".go", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".php", ".phtml"}
 )
 
-func FakeDiagnosticUri() (filePath string, path string) {
+func FakeDiagnosticPath() (filePath string, path string) {
 	FakeSnykCodeApiServiceMutex.Lock()
 	defer FakeSnykCodeApiServiceMutex.Unlock()
 
@@ -58,7 +69,7 @@ func FakeDiagnosticUri() (filePath string, path string) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("couldn't create tempdir")
 	}
-	filePath = temp + string(os.PathSeparator) + "Dummy.java"
+	filePath = filepath.Join(temp, "Dummy.java")
 	classWithQualityIssue := "public class AnnotatorTest {\n  public static void delay(long millis) {\n    try {\n      Thread.sleep(millis);\n    } catch (InterruptedException e) {\n      e.printStackTrace();\n    }\n  }\n};"
 	err = os.WriteFile(filePath, []byte(classWithQualityIssue), 0600)
 	if err != nil {
