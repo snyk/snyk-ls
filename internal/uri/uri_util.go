@@ -46,6 +46,10 @@ func IsDirectory(documentURI sglsp.DocumentURI) bool {
 	return stat.IsDir()
 }
 
+// AddRangeToUri adds a fragment to the URI to allow for exact navigation
+// A range of Start Line 0, Character 1, End Line 1, Character 10
+// translates to file://..#L1,2-L2,11. This is similar to vscode
+// see e.g. https://github.com/microsoft/vscode/blob/b51955e4c878c8facdd775709740c8aa5d1192d6/src/vs/platform/opener/common/opener.ts#L162
 func AddRangeToUri(u sglsp.DocumentURI, r sglsp.Range) sglsp.DocumentURI {
 	if rangeFragmentRegexp.Match([]byte(u)) || strings.HasSuffix(string(u), "/") {
 		return u
