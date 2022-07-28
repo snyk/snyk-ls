@@ -10,8 +10,6 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"go.lsp.dev/uri"
-
-	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 const fileScheme = "file://"
@@ -48,7 +46,7 @@ func IsDirectory(documentURI sglsp.DocumentURI) bool {
 	return stat.IsDir()
 }
 
-func AddRangeToUri(u sglsp.DocumentURI, r snyk.Range) sglsp.DocumentURI {
+func AddRangeToUri(u sglsp.DocumentURI, r sglsp.Range) sglsp.DocumentURI {
 	if rangeFragmentRegexp.Match([]byte(u)) || strings.HasSuffix(string(u), "/") {
 		return u
 	}
