@@ -18,15 +18,30 @@ func TestGetLineOfCode(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "Line3", actual)
 	})
-	t.Run("incorrect line", func(t *testing.T) {
+	t.Run("above maximum line number should cause err", func(t *testing.T) {
 		fileName := setupCodeFile(t)
 		f := New()
 
 		actual, err := f.GetLineOfCode(fileName, 5)
-		assert.NoError(t, err)
+		assert.Error(t, err)
 		assert.Equal(t, "", actual)
 	})
+	t.Run("negative line number should cause err", func(t *testing.T) {
+		fileName := setupCodeFile(t)
+		f := New()
 
+		actual, err := f.GetLineOfCode(fileName, -1)
+		assert.Error(t, err)
+		assert.Equal(t, "", actual)
+	})
+	t.Run("0 line number should cause err", func(t *testing.T) {
+		fileName := setupCodeFile(t)
+		f := New()
+
+		actual, err := f.GetLineOfCode(fileName, 0)
+		assert.Error(t, err)
+		assert.Equal(t, "", actual)
+	})
 }
 
 func setupCodeFile(t *testing.T) string {
