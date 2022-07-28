@@ -8,8 +8,6 @@ import (
 
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 var dir, _ = os.Getwd()
@@ -35,46 +33,40 @@ func TestUri_AddRangeToUri(t *testing.T) {
 	})
 	t.Run("range with 0 end line, should be changed to 1", func(t *testing.T) {
 		r := getTestRange()
-		r.End.Line = 0
+		r.EndLine = 0
 		actual := string(AddRangeToUri("file://asdf", r))
 		assert.Equal(t, "file://asdf#L1,6-L1,11", actual)
 	})
 	t.Run("range with 0 start char, should be changed to 1", func(t *testing.T) {
 		r := getTestRange()
-		r.Start.Character = 0
+		r.StartChar = 0
 		actual := string(AddRangeToUri("file://asdf", r))
 		assert.Equal(t, "file://asdf#L1,1-L2,11", actual)
 	})
 	t.Run("range with 0 end char, should be changed to 1", func(t *testing.T) {
 		r := getTestRange()
-		r.End.Character = 0
+		r.EndChar = 0
 		actual := string(AddRangeToUri("file://asdf", r))
 		assert.Equal(t, "file://asdf#L1,6-L2,1", actual)
 	})
 	t.Run("range ending with `/` should not be changed", func(t *testing.T) {
 		r := getTestRange()
-		r.End.Character = 0
 		actual := string(AddRangeToUri("file://asdf/", r))
 		assert.Equal(t, "file://asdf/", actual)
 	})
 	t.Run("range already having a location fragment should not be changed", func(t *testing.T) {
 		r := getTestRange()
-		r.End.Character = 0
 		actual := string(AddRangeToUri("file://asdf#L1,1-L1,1", r))
 		assert.Equal(t, "file://asdf#L1,1-L1,1", actual)
 	})
 }
 
-func getTestRange() snyk.Range {
-	r := snyk.Range{
-		Start: snyk.Position{
-			Line:      0,
-			Character: 5,
-		},
-		End: snyk.Position{
-			Line:      1,
-			Character: 10,
-		},
+func getTestRange() Range {
+	r := Range{
+		StartLine: 0,
+		StartChar: 5,
+		EndLine:   1,
+		EndChar:   10,
 	}
 	return r
 }
