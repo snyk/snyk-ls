@@ -66,7 +66,6 @@ func (r *result) getCodeFlow() (dataflow []dataflowElement) {
 							Character: region.EndColumn,
 						}}
 
-				// IntelliJ does a distinct by start line
 				key := fmt.Sprintf("%sL%4d", path, region.StartLine)
 				if !dedupMap[key] {
 					d := dataflowElement{
