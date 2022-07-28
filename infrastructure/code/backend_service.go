@@ -477,17 +477,14 @@ func (s *SnykCodeHTTPClient) codeFlowToMarkdown(path string, pos int, myRange sn
 	fileName := filepath.Base(path)
 	fileURI := uri.PathToUri(path)
 	line := myRange.Start.Line + 1 // range is 0-based
-	char := myRange.Start.Character
 	fileUtil := files.New(s.errorReporter)
 	lineOfCode := fileUtil.GetLineOfCode(path, line)
 	markdown := fmt.Sprintf(
-		"%d. [%s:%d](%s#%d#%d) `%s`\n\n",
+		"%d. [%s:%d](%s) `%s`\n\n",
 		pos,
 		fileName,
 		line,
-		fileURI,
-		line,
-		char,
+		uri.AddRangeToUri(fileURI, myRange),
 		lineOfCode,
 	)
 	return markdown
