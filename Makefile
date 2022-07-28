@@ -81,7 +81,7 @@ else
 		-ldflags=$(LDFLAGS_DEV)
 endif
 
-## build: Build binary for debugging
+## build-debug: Build binary for debugging
 .PHONY: build-debug
 build-debug:
 	@make clean
