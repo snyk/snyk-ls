@@ -32,6 +32,26 @@ func (r *rule) getReferences() (references []snyk.Reference) {
 	return references
 }
 
+func (r *rule) cwe() string {
+	if len(r.Properties.Cwe) == 0 {
+		return ""
+	}
+	builder := strings.Builder{}
+	builder.Grow(100)
+	builder.WriteString("CWE: ")
+	for i, cwe := range r.Properties.Cwe {
+		if i > 0 {
+			builder.WriteString(" | ")
+		}
+		builder.WriteString(fmt.Sprintf(
+			"[%s](%s)",
+			cwe,
+			fmt.Sprintf("https://cwe.mitre.org/data/definitions/%s.html", strings.Split(cwe, "-")[1])))
+	}
+	builder.WriteString("\n\n\n")
+	return builder.String()
+}
+
 func (c *exampleCommit) toReference() (reference snyk.Reference) {
 	commitURLString := c.fix.CommitURL
 	commitURL, err := url.Parse(commitURLString)
@@ -88,6 +108,7 @@ func (r *result) getFormattedMessage(rule rule) string {
 	var builder strings.Builder
 	builder.Grow(500)
 	builder.WriteString("## Description\n\n")
+	builder.WriteString(rule.cwe())
 	builder.WriteString(r.getMessage())
 	builder.WriteString(horizontalLine)
 	builder.WriteString("## Data Flow\n\n")

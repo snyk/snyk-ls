@@ -106,6 +106,7 @@ type ruleProperties struct {
 	ExampleCommitDescriptions []string           `json:"exampleCommitDescriptions"`
 	Precision                 string             `json:"precision"`
 	RepoDatasetSize           int                `json:"repoDatasetSize"`
+	Cwe                       []string           `json:"cwe"`
 }
 
 type defaultConfiguration struct {
