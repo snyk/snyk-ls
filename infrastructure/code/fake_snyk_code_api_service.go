@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"testing"
 
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog/log"
@@ -61,19 +62,25 @@ var (
 	FakeFilters = []string{".cjs", ".ejs", ".es", ".es6", ".htm", ".html", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".vue", ".java", ".erb", ".haml", ".rb", ".rhtml", ".slim", ".kt", ".swift", ".cls", ".config", ".pom", ".wxs", ".xml", ".xsd", ".aspx", ".cs", ".py", ".go", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".php", ".phtml"}
 )
 
-func FakeDiagnosticPath() (filePath string, path string) {
+func FakeDiagnosticPath(t *testing.T) (filePath string, path string) {
 	FakeSnykCodeApiServiceMutex.Lock()
 	defer FakeSnykCodeApiServiceMutex.Unlock()
 
 	temp, err := os.MkdirTemp(xdg.DataHome, "fakeDiagnosticTempDir")
 	if err != nil {
-		log.Fatal().Err(err).Msg("couldn't create tempdir")
+		t.Fatal(t, err, "couldn't create tempdir")
 	}
+	temp = filepath.Clean(temp)
+	temp, err = filepath.Abs(temp)
+	if err != nil {
+		t.Fatal(t, err, "couldn't get abs path of tempdir")
+	}
+
 	filePath = filepath.Join(temp, "Dummy.java")
 	classWithQualityIssue := "public class AnnotatorTest {\n  public static void delay(long millis) {\n    try {\n      Thread.sleep(millis);\n    } catch (InterruptedException e) {\n      e.printStackTrace();\n    }\n  }\n};"
 	err = os.WriteFile(filePath, []byte(classWithQualityIssue), 0600)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't create fake diagnostic file for Snyk Code Fake Service")
+		t.Fatal(t, err, "couldn't create temp file for fake diagnostic")
 	}
 	FakeIssue.AffectedFilePath = filePath
 	return filePath, temp

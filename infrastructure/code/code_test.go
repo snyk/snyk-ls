@@ -145,7 +145,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{}
 		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
-		diagnosticUri, path := FakeDiagnosticPath()
+		diagnosticUri, path := FakeDiagnosticPath(t)
 		defer os.RemoveAll(path)
 
 		issues := c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, "")
@@ -166,7 +166,7 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		snykCodeMock := &FakeSnykCodeClient{}
 		analytics := ux2.NewTestAnalytics()
 		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), analytics)
-		diagnosticUri, path := FakeDiagnosticPath()
+		diagnosticUri, path := FakeDiagnosticPath(t)
 		defer os.RemoveAll(path)
 
 		// execute
