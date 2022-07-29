@@ -134,6 +134,7 @@ type InitializeParams struct {
 	// RootPath is DEPRECATED in favor of the RootURI field.
 	RootPath string `json:"rootPath,omitempty"`
 
+	// The rootUri of the workspace. Is null if no folder is open. If both `rootPath` and `rootUri` are set `rootUri` wins.
 	RootURI               sglsp.DocumentURI        `json:"rootUri,omitempty"`
 	ClientInfo            sglsp.ClientInfo         `json:"clientInfo,omitempty"`
 	Trace                 sglsp.Trace              `json:"trace,omitempty"`

@@ -71,16 +71,10 @@ func (i *Initializer) installCli() {
 		cliPath, err = i.installer.Find()
 		if err != nil {
 			log.Info().Str("method", "installCli").Msg("could not find Snyk CLI in user directories and PATH.")
+			cliPath = config.CurrentConfig().DefaultBinaryInstallPath()
 		} else {
 			log.Info().Str("method", "installCli").Msgf("found CLI at %s", cliPath)
-			config.CurrentConfig().CliSettings().SetPath(cliPath)
 		}
-	}
-
-	// If CLI was not found, set default CLI path
-	if cliPath == "" {
-		// Set the CLI path in the CliSettings early, as the installer/downloader depends on it
-		cliPath = config.CurrentConfig().LsPath()
 		config.CurrentConfig().CliSettings().SetPath(cliPath)
 	}
 
@@ -98,11 +92,6 @@ func (i *Initializer) installCli() {
 	}
 
 	if cliPath != "" {
-		config.CurrentConfig().CliSettings().SetPath(cliPath)
-		if i.isOutdatedCli() { // could happen if we just find a CLI on the system via find
-			i.updateCli()
-		}
-
 		notification.Send(lsp.SnykIsAvailableCli{CliPath: cliPath})
 		log.Info().Str("method", "installCli").Str("snyk", cliPath).Msg("Snyk CLI found.")
 	} else {

@@ -12,7 +12,8 @@ func GetFor(filePath string, r sglsp.Range) (actions []lsp.CodeAction) {
 	requestedRange := converter.FromRange(r)
 	folder := workspace.Get().GetFolderContaining(filePath)
 	if folder != nil {
-		return converter.ToCodeActions(folder.CodeActions(filePath, requestedRange))
+		issues := folder.IssuesFor(filePath, requestedRange)
+		return converter.ToCodeActions(issues)
 	}
 	return actions
 }

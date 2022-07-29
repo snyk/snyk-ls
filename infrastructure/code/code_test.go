@@ -110,16 +110,22 @@ func TestCreateBundle(t *testing.T) {
 
 func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient, string, *Scanner, string) {
 	testutil.UnitTest(t)
-	snykCodeMock := &FakeSnykCodeClient{}
 	dir := t.TempDir()
-	c := New(
+	snykCodeMock, c := setupTestScanner()
+	file := filepath.Join(dir, "file."+extension)
+	return snykCodeMock, dir, c, file
+}
+
+func setupTestScanner() (*FakeSnykCodeClient, *Scanner) {
+	snykCodeMock := &FakeSnykCodeClient{}
+	scanner := New(
 		NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 	)
-	file := filepath.Join(dir, "file."+extension)
-	return snykCodeMock, dir, c, file
+
+	return snykCodeMock, scanner
 }
 
 func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
@@ -178,4 +184,100 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 			Result:       ux2.Success,
 		}, analytics.GetAnalytics()[0])
 	})
+}
+
+func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {
+	expectedPatterns, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+	defer os.RemoveAll(tempDir)
+	_, sc := setupTestScanner()
+
+	_, err := sc.loadIgnorePatternsAndCountFiles(tempDir)
+	if err != nil {
+		t.Fatal(t, err, "Couldn't load .gitignore from workspace "+tempDir)
+	}
+
+	assert.Equal(t, strings.Split(expectedPatterns, "\n"), sc.ignorePatterns)
+}
+
+func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
+	tempDir, err := os.MkdirTemp(xdg.DataHome, "loadIgnoreTest")
+	if err != nil {
+		t.Fatal("can't create temp dir")
+	}
+	defer os.RemoveAll(tempDir)
+	_, sc := setupTestScanner()
+
+	_, err = sc.loadIgnorePatternsAndCountFiles(tempDir)
+	if err != nil {
+		t.Fatal(t, err, "Couldn't load .gitignore from workspace")
+	}
+
+	assert.Equal(t, []string{""}, sc.ignorePatterns)
+}
+
+func Test_GetWorkspaceFolderFiles(t *testing.T) {
+	_, tempDir, ignoredFilePath, notIgnoredFilePath, _ := setupIgnoreWorkspace(t)
+	defer os.RemoveAll(tempDir)
+	_, sc := setupTestScanner()
+
+	files, err := sc.files(tempDir)
+	if err != nil {
+		t.Fatal(t, err, "Error getting workspace folder files: "+tempDir)
+	}
+
+	assert.Len(t, files, 2)
+	assert.Contains(t, files, notIgnoredFilePath)
+	assert.NotContains(t, files, ignoredFilePath)
+}
+
+func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
+	_, tempDir, _, _, ignoredFileInDir := setupIgnoreWorkspace(t)
+	defer os.RemoveAll(tempDir)
+	_, sc := setupTestScanner()
+
+	walkedFiles, err := sc.files(tempDir)
+	if err != nil {
+		t.Fatal(t, err, "Error while registering "+tempDir)
+	}
+	assert.NotContains(t, walkedFiles, ignoredFileInDir)
+}
+
+func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {
+	expectedPatterns = "*.xml\n**/*.txt\nbin"
+	tempDir = writeTestGitIgnore(expectedPatterns, t)
+
+	ignoredFilePath = filepath.Join(tempDir, "ignored.xml")
+	err := os.WriteFile(ignoredFilePath, []byte("test"), 0600)
+	if err != nil {
+		t.Fatal(t, err, "Couldn't write ignored file ignored.xml")
+	}
+	notIgnoredFilePath = filepath.Join(tempDir, "not-ignored.java")
+	err = os.WriteFile(notIgnoredFilePath, []byte("test"), 0600)
+	if err != nil {
+		t.Fatal(t, err, "Couldn't write ignored file not-ignored.java")
+	}
+	ignoredDir := filepath.Join(tempDir, "bin")
+	err = os.Mkdir(ignoredDir, 0755)
+	if err != nil {
+		t.Fatal(t, err, "Couldn't write ignoreDirectory %s", ignoredDir)
+	}
+	ignoredFileInDir = filepath.Join(ignoredDir, "shouldNotBeWalked.java")
+	err = os.WriteFile(ignoredFileInDir, []byte("public bla"), 0600)
+	if err != nil {
+		t.Fatal(t, err, "Couldn't write ignored file not-ignored.java")
+	}
+	return expectedPatterns, tempDir, ignoredFilePath, notIgnoredFilePath, ignoredFileInDir
+}
+
+func writeTestGitIgnore(ignorePatterns string, t *testing.T) (tempDir string) {
+	tempDir, err := os.MkdirTemp(xdg.DataHome, "loadIgnorePatternsAndCountFiles")
+	if err != nil {
+		t.Fatal(t, err, "Couldn't create temp dir")
+	}
+	filePath := filepath.Join(tempDir, ".gitignore")
+	err = os.WriteFile(filePath, []byte(ignorePatterns), 0600)
+	if err != nil {
+		t.Fatal(t, err, "Couldn't write .gitignore")
+	}
+	return tempDir
 }

@@ -25,18 +25,20 @@ func FromPosition(pos sglsp.Position) snyk.Position {
 	}
 }
 
-func ToCodeActions(codeActions []snyk.CodeAction) (actions []lsp.CodeAction) {
-	for _, action := range codeActions {
-		actions = append(actions, ToCodeAction(action))
+func ToCodeActions(issues []snyk.Issue) (actions []lsp.CodeAction) {
+	for _, issue := range issues {
+		for _, action := range issue.CodeActions {
+			actions = append(actions, ToCodeAction(issue, action))
+		}
 	}
 	return actions
 }
 
-func ToCodeAction(action snyk.CodeAction) lsp.CodeAction {
+func ToCodeAction(issue snyk.Issue, action snyk.CodeAction) lsp.CodeAction {
 	return lsp.CodeAction{
 		Title:       action.Title,
 		Kind:        lsp.QuickFix,
-		Diagnostics: ToDiagnostics(action.Issues),
+		Diagnostics: ToDiagnostics([]snyk.Issue{issue}),
 		IsPreferred: action.IsPreferred,
 		Edit:        ToWorkspaceEdit(action.Edit),
 		Command:     ToCommand(action.Command),

@@ -5,10 +5,6 @@ type CodeAction struct {
 	 * A short, human-readable, title for this code action.
 	 */
 	Title string
-	/**
-	 * The issues that this code action resolves.
-	 */
-	Issues []Issue
 
 	/**
 	 * Marks this as a preferred action. Preferred actions are used by the `auto fix` command and can be targeted

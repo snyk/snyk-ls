@@ -7,7 +7,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/files"
+	"github.com/snyk/snyk-ls/infrastructure/filesystem"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -26,7 +26,7 @@ func (d *dataflowElement) toMarkDown() (markdown string) {
 	fileName := filepath.Base(d.filePath)
 	fileURI := uri.PathToUri(d.filePath)
 	line := d.flowRange.Start.Line + 1 // range is 0-based
-	fileUtil := files.New()
+	fileUtil := filesystem.New()
 	if d.content == "" {
 		var err error
 		d.content, err = fileUtil.GetLineOfCode(d.filePath, line)

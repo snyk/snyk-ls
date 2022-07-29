@@ -17,7 +17,6 @@ func (i *ossIssue) GetCodeActions() (actions []snyk.CodeAction) {
 	return []snyk.CodeAction{
 		{
 			Title:       title,
-			Issues:      []snyk.Issue{},
 			IsPreferred: true,
 			Edit:        snyk.WorkspaceEdit{},
 			Command: snyk.Command{
