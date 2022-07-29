@@ -93,6 +93,7 @@ type Config struct {
 	token                       string
 	deviceId                    string
 	clientCapabilities          lsp.ClientCapabilities
+	m                           sync.Mutex
 }
 
 func CurrentConfig() *Config {
@@ -196,7 +197,11 @@ func (c *Config) LogPath() string                        { return c.logPath }
 func (c *Config) SnykApi() string                        { return c.snykApiUrl }
 func (c *Config) SnykCodeApi() string                    { return c.snykCodeApiUrl }
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
-func (c *Config) Token() string                          { return c.token }
+func (c *Config) Token() string {
+	c.m.Lock()
+	defer c.m.Unlock()
+	return c.token
+}
 
 func (c *Config) SetCliSettings(settings *CliSettings) {
 	c.cliSettings = settings
@@ -240,6 +245,8 @@ func (c *Config) SetSnykContainerEnabled(enabled bool) { c.isSnykContainerEnable
 
 func (c *Config) SetSnykAdvisorEnabled(enabled bool) { c.isSnykAdvisorEnabled.Set(enabled) }
 func (c *Config) SetToken(token string) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.token = token
 }
 func (c *Config) SetFormat(format string) { c.format = format }
