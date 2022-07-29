@@ -18,6 +18,7 @@ import (
 )
 
 func getSarifResponseJson(filePath string) string {
+	filePath = strings.ReplaceAll(filePath, `\`, `\\`)
 	return fmt.Sprintf(`{
   "type": "sarif",
   "progress": 1,
@@ -635,7 +636,12 @@ func setupConversionTests(t *testing.T) (string, []snyk.Issue, SarifResponse) {
 		t.Fatal(t, err, "couldn't write test file")
 	}
 	var analysisResponse SarifResponse
-	_ = json.Unmarshal([]byte(getSarifResponseJson(path)), &analysisResponse)
+	responseJson := getSarifResponseJson(path)
+	err = json.Unmarshal([]byte(responseJson), &analysisResponse)
+
+	if err != nil {
+		t.Fatal(t, err, "couldn't unmarshal sarif response")
+	}
 
 	issues := analysisResponse.toIssues()
 	assert.NotNil(t, issues)

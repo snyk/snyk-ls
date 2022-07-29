@@ -41,14 +41,15 @@ var (
 	jsonRPCRecorder = testutil.JsonRPCRecorder{}
 )
 
-func didOpenTextParams() (sglsp.DidOpenTextDocumentParams, string, func()) {
-	diagnosticUri, path := code.FakeDiagnosticPath()
+func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, string) {
+	filePath, dirPath := code.FakeDiagnosticPath(t)
 	didOpenParams := sglsp.DidOpenTextDocumentParams{
-		TextDocument: sglsp.TextDocumentItem{URI: uri.PathToUri(diagnosticUri)},
+		TextDocument: sglsp.TextDocumentItem{URI: uri.PathToUri(filePath)},
 	}
-	return didOpenParams, path, func() {
-		os.RemoveAll(path)
-	}
+	t.Cleanup(func() {
+		os.RemoveAll(dirPath)
+	})
+	return didOpenParams, dirPath
 }
 
 func setupServer(t *testing.T) server.Local {
@@ -197,7 +198,10 @@ func Test_initialize_shouldSupportCodeLenses(t *testing.T) {
 func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	loc := setupServer(t)
 
+	didOpenParams, dir := didOpenTextParams(t)
+
 	clientParams := lsp.InitializeParams{
+		RootURI: uri.PathToUri(dir),
 		InitializationOptions: lsp.Settings{
 			ActivateSnykCode:            "true",
 			ActivateSnykOpenSource:      "false",
@@ -210,16 +214,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	}
 	_, err := loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
-		log.Fatal().Err(err)
-	}
-	didOpenParams, dir, cleanup := didOpenTextParams()
-	defer cleanup()
-	folder := workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService())
-	workspace.Get().AddFolder(folder)
-
-	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
-	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(t, err, "couldn't initialize")
 	}
 
 	// wait for publish
@@ -239,6 +234,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 			URI: didOpenParams.TextDocument.URI,
 		},
 	})
+
 	var lenses []sglsp.CodeLens
 	if err := rsp.UnmarshalResult(&lenses); err != nil {
 		t.Fatal(t, err)
@@ -273,8 +269,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	config.CurrentConfig().SetSnykIacEnabled(false)
 	config.CurrentConfig().SetSnykOssEnabled(false)
 	_, _ = loc.Client.Call(ctx, "initialize", nil)
-	didOpenParams, dir, cleanup := didOpenTextParams()
-	defer cleanup()
+	didOpenParams, dir := didOpenTextParams(t)
 	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService()))
 
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
@@ -319,8 +314,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	c.SetToken(testutil.GetEnvironmentToken())
 	config.SetCurrentConfig(c)
 
-	didOpenParams, dir, cleanup := didOpenTextParams()
-	defer cleanup()
+	didOpenParams, dir := didOpenTextParams(t)
 
 	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService()))
 
@@ -339,8 +333,7 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 	loc := setupServer(t)
 
 	// register our dummy document
-	didOpenParams, dir, cleanup := didOpenTextParams()
-	defer cleanup()
+	didOpenParams, dir := didOpenTextParams(t)
 
 	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService()))
 
@@ -367,7 +360,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	loc := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	_, _ = loc.Client.Call(ctx, "initialize", nil)
-	diagnosticUri, tempDir := code.FakeDiagnosticPath()
+	diagnosticUri, tempDir := code.FakeDiagnosticPath(t)
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(diagnosticUri)},
 	}

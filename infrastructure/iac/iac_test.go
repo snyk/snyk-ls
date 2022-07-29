@@ -2,8 +2,6 @@ package iac
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,21 +17,7 @@ import (
 //todo iac is undertested, at a very least we should make sure the CLI gets the right commands in
 // todo test issue parsing & conversion
 
-func Test_ScanWorkspace_IsInstrumented(t *testing.T) {
-	testutil.UnitTest(t)
-	instrumentor := performance.NewTestInstrumentor()
-	scanner := New(instrumentor, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
-	getwd, _ := os.Getwd()
-
-	scanner.Scan(context.Background(), filepath.Clean(getwd+"/testdata.yml"), "", nil)
-
-	spans := instrumentor.SpanRecorder.Spans()
-	assert.Len(t, spans, 1)
-	assert.Equal(t, "iac.doScan", spans[0].GetOperation())
-	assert.Equal(t, "", spans[0].GetTxName())
-}
-
-func Test_ScanFile_IsInstrumented(t *testing.T) {
+func Test_Scan_IsInstrumented(t *testing.T) {
 	testutil.UnitTest(t)
 	instrumentor := performance.NewTestInstrumentor()
 	scanner := New(instrumentor, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
