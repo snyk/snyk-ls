@@ -104,28 +104,32 @@ func (r *result) getCodeFlow() (dataflow []dataflowElement) {
 }
 
 func (r *result) getFormattedMessage(rule rule) string {
-	const horizontalLine = "\n\n---\n\n"
+	const separator = "\n\n\n\n"
 	var builder strings.Builder
 	builder.Grow(500)
 	builder.WriteString("## Description\n\n")
 	builder.WriteString(rule.cwe())
-	builder.WriteString(r.getMessage())
-	builder.WriteString(horizontalLine)
+	builder.WriteString(r.Message.Text)
+	builder.WriteString(separator)
 	builder.WriteString("## Data Flow\n\n")
 	for _, elem := range r.getCodeFlow() {
 		builder.WriteString(elem.toMarkDown())
 	}
-	builder.WriteString(horizontalLine)
+	builder.WriteString(separator)
 	builder.WriteString("## Example Commit Fixes\n\n")
 	for _, fix := range rule.getExampleCommits() {
 		builder.WriteString(fix.toMarkdown())
 	}
-	builder.WriteString(horizontalLine)
+	builder.WriteString(separator)
 	return builder.String()
 }
 
 func (r *result) getMessage() string {
-	return fmt.Sprintf("%s (Snyk)", r.Message.Text)
+	text := r.Message.Text
+	if len(text) > 100 {
+		text = text[:100] + "..."
+	}
+	return fmt.Sprintf("%s (Snyk)", text)
 }
 
 func (r *rule) getFixDescriptionsForRule(commitFixIndex int) string {
