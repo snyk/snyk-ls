@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/adrg/xdg"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -569,11 +570,11 @@ func getSarifResponseJson(filePath string) string {
 
 func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	path, issues, _ := setupConversionTests(t)
-
-	assert.Equal(t, 2, len(issues))
 	issueDescriptionURL, _ := url.Parse(codeDescriptionURL)
 	references := referencesForSampleSarifResponse()
+
 	issue := issues[0]
+
 	assert.Equal(t, "java/DontUsePrintStackTrace", issue.ID)
 	assert.Equal(t, "Printing the stack trace of java.lang.InterruptedException. Production code should not use printStackTrace. (Snyk)", issue.Message)
 	assert.Equal(t, snyk.CodeSecurityVulnerability, issue.IssueType)
@@ -624,11 +625,12 @@ func TestGetCodeFlowCommands(t *testing.T) {
 
 func setupConversionTests(t *testing.T) (string, []snyk.Issue, SarifResponse) {
 	testutil.UnitTest(t)
-	path := filepath.Join(t.TempDir(), "Dummy.java")
-	err := os.WriteFile(path, []byte(strings.Repeat("aa\n", 1000)), 0660)
-	defer func(name string) {
-		_ = os.Remove(name)
-	}(path)
+	temp, err := os.MkdirTemp(xdg.DataHome, "conversionTests")
+	if err != nil {
+		t.Fatal(t, err, "couldn't create directory for conversion tests")
+	}
+	path := filepath.Join(temp, "Dummy.java")
+	err = os.WriteFile(path, []byte(strings.Repeat("aa\n", 1000)), 0660)
 	if err != nil {
 		t.Fatal(t, err, "couldn't write test file")
 	}
@@ -637,6 +639,7 @@ func setupConversionTests(t *testing.T) (string, []snyk.Issue, SarifResponse) {
 
 	issues := analysisResponse.toIssues()
 	assert.NotNil(t, issues)
+	assert.Equal(t, 2, len(issues))
 	return path, issues, analysisResponse
 }
 
