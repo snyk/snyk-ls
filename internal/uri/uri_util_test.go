@@ -29,25 +29,25 @@ func TestUri_AddRangeToUri(t *testing.T) {
 	t.Run("range with 0 start line, should be changed to 1", func(t *testing.T) {
 		r := getTestRange()
 		actual := string(AddRangeToUri("file://asdf", r))
-		assert.Equal(t, "file://asdf#L1,6-L2,11", actual)
+		assert.Equal(t, "file://asdf#1,6-2,11", actual)
 	})
 	t.Run("range with 0 end line, should be changed to 1", func(t *testing.T) {
 		r := getTestRange()
 		r.EndLine = 0
 		actual := string(AddRangeToUri("file://asdf", r))
-		assert.Equal(t, "file://asdf#L1,6-L1,11", actual)
+		assert.Equal(t, "file://asdf#1,6-1,11", actual)
 	})
 	t.Run("range with 0 start char, should be changed to 1", func(t *testing.T) {
 		r := getTestRange()
 		r.StartChar = 0
 		actual := string(AddRangeToUri("file://asdf", r))
-		assert.Equal(t, "file://asdf#L1,1-L2,11", actual)
+		assert.Equal(t, "file://asdf#1,1-2,11", actual)
 	})
 	t.Run("range with 0 end char, should be changed to 1", func(t *testing.T) {
 		r := getTestRange()
 		r.EndChar = 0
 		actual := string(AddRangeToUri("file://asdf", r))
-		assert.Equal(t, "file://asdf#L1,6-L2,1", actual)
+		assert.Equal(t, "file://asdf#1,6-2,1", actual)
 	})
 	t.Run("range ending with `/` should not be changed", func(t *testing.T) {
 		r := getTestRange()

@@ -66,5 +66,5 @@ func AddRangeToUri(u sglsp.DocumentURI, r Range) sglsp.DocumentURI {
 	endChar := int(math.Max(1, float64(r.EndChar+1)))
 	startLine := int(math.Max(1, float64(r.StartLine+1)))
 	endLine := int(math.Max(1, float64(r.EndLine+1)))
-	return sglsp.DocumentURI(fmt.Sprintf("%s#L%d,%d-L%d,%d", u, startLine, startChar, endLine, endChar))
+	return sglsp.DocumentURI(fmt.Sprintf("%s#%d,%d-%d,%d", u, startLine, startChar, endLine, endChar))
 }
