@@ -19,6 +19,7 @@ import (
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/codeaction"
 	"github.com/snyk/snyk-ls/domain/ide/codelens"
+	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -107,7 +108,7 @@ func navigateToLocation(srv *jrpc2.Server, args []interface{}) {
 		Uri:       uri.PathToUri(args[0].(string)),
 		External:  false,
 		TakeFocus: true,
-		Selection: workspace.ToRange(myRange),
+		Selection: converter.ToRange(myRange),
 	}
 	log.Info().
 		Str("method", "navigateToLocation").

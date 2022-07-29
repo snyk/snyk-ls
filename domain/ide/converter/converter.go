@@ -1,4 +1,4 @@
-package workspace
+package converter
 
 import (
 	"fmt"
@@ -27,18 +27,18 @@ func FromPosition(pos sglsp.Position) snyk.Position {
 
 func ToCodeActions(codeActions []snyk.CodeAction) (actions []lsp.CodeAction) {
 	for _, action := range codeActions {
-		actions = append(actions, toCodeAction(action))
+		actions = append(actions, ToCodeAction(action))
 	}
 	return actions
 }
 
-func toCodeAction(action snyk.CodeAction) lsp.CodeAction {
+func ToCodeAction(action snyk.CodeAction) lsp.CodeAction {
 	return lsp.CodeAction{
 		Title:       action.Title,
 		Kind:        lsp.QuickFix,
-		Diagnostics: toDiagnostics(action.Issues),
+		Diagnostics: ToDiagnostics(action.Issues),
 		IsPreferred: false,
-		Edit:        toWorkspaceEdit(action.Edit),
+		Edit:        ToWorkspaceEdit(action.Edit),
 		Command:     ToCommand(action.Command),
 	}
 }
@@ -51,29 +51,29 @@ func ToCommand(command snyk.Command) sglsp.Command {
 	}
 }
 
-func toWorkspaceEdit(edit snyk.WorkspaceEdit) sglsp.WorkspaceEdit {
+func ToWorkspaceEdit(edit snyk.WorkspaceEdit) sglsp.WorkspaceEdit {
 	lspMap := map[string][]sglsp.TextEdit{}
 	for k, v := range edit.Changes {
-		lspMap[string(uri.PathToUri(k))] = toTextEdits(v)
+		lspMap[string(uri.PathToUri(k))] = ToTextEdits(v)
 	}
 	return sglsp.WorkspaceEdit{Changes: lspMap}
 }
 
-func toTextEdits(edits []snyk.TextEdit) (lspEdits []sglsp.TextEdit) {
+func ToTextEdits(edits []snyk.TextEdit) (lspEdits []sglsp.TextEdit) {
 	for _, edit := range edits {
-		lspEdits = append(lspEdits, toTextEdit(edit))
+		lspEdits = append(lspEdits, ToTextEdit(edit))
 	}
 	return lspEdits
 }
 
-func toTextEdit(edit snyk.TextEdit) sglsp.TextEdit {
+func ToTextEdit(edit snyk.TextEdit) sglsp.TextEdit {
 	return sglsp.TextEdit{
 		Range:   ToRange(edit.Range),
 		NewText: edit.NewText,
 	}
 }
 
-func toSeverity(severity snyk.Severity) sglsp.DiagnosticSeverity {
+func ToSeverity(severity snyk.Severity) sglsp.DiagnosticSeverity {
 	switch severity {
 	case snyk.Critical:
 		return sglsp.Error
@@ -89,19 +89,19 @@ func toSeverity(severity snyk.Severity) sglsp.DiagnosticSeverity {
 
 func ToRange(r snyk.Range) sglsp.Range {
 	return sglsp.Range{
-		Start: toPosition(r.Start),
-		End:   toPosition(r.End),
+		Start: ToPosition(r.Start),
+		End:   ToPosition(r.End),
 	}
 }
 
-func toPosition(p snyk.Position) sglsp.Position {
+func ToPosition(p snyk.Position) sglsp.Position {
 	return sglsp.Position{
 		Line:      p.Line,
 		Character: p.Character,
 	}
 }
 
-func toDiagnostics(issues []snyk.Issue) (diagnostics []lsp.Diagnostic) {
+func ToDiagnostics(issues []snyk.Issue) (diagnostics []lsp.Diagnostic) {
 	for _, issue := range issues {
 		s := ""
 		if issue.IssueDescriptionURL != nil {
@@ -109,7 +109,7 @@ func toDiagnostics(issues []snyk.Issue) (diagnostics []lsp.Diagnostic) {
 		}
 		diagnostics = append(diagnostics, lsp.Diagnostic{
 			Range:           ToRange(issue.Range),
-			Severity:        toSeverity(issue.Severity),
+			Severity:        ToSeverity(issue.Severity),
 			Code:            issue.ID,
 			Source:          string(issue.Product),
 			Message:         issue.Message,
@@ -119,14 +119,14 @@ func toDiagnostics(issues []snyk.Issue) (diagnostics []lsp.Diagnostic) {
 	return diagnostics
 }
 
-func toHoversDocument(path string, i []snyk.Issue) hover.DocumentHovers {
+func ToHoversDocument(path string, i []snyk.Issue) hover.DocumentHovers {
 	return hover.DocumentHovers{
 		Uri:   uri.PathToUri(path),
-		Hover: toHovers(i),
+		Hover: ToHovers(i),
 	}
 }
 
-func toHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
+func ToHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
 	for _, i := range issues {
 		message := ""
 		if len(i.FormattedMessage) > 0 {

@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -19,7 +20,7 @@ func Test_GetCodeLensFromCommand(t *testing.T) {
 	issue := code.FakeIssue
 	command := code.FakeCommand
 	codeLens := getCodeLensFromCommand(issue, command)
-	assert.Equal(t, workspace.ToRange(issue.Range), codeLens.Range)
+	assert.Equal(t, converter.ToRange(issue.Range), codeLens.Range)
 	assert.Equal(t, command.Command, codeLens.Command.Command)
 	assert.Equal(t, command.Title, codeLens.Command.Title)
 	assert.Equal(t, command.Arguments, codeLens.Command.Arguments)
