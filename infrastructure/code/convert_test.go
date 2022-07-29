@@ -704,3 +704,19 @@ func Test_LineChangeChar(t *testing.T) {
 	assert.Equal(t, "+", e.lineChangeChar("added"))
 	assert.Equal(t, "-", e.lineChangeChar("removed"))
 }
+
+func Test_rule_cwe(t *testing.T) {
+	t.Run("display CWE if reported", func(t *testing.T) {
+		cut := rule{Properties: ruleProperties{
+			Cwe: []string{"CWE-23", "CWE-24"},
+		}}
+		assert.Contains(t, cut.cwe(), "https://cwe.mitre.org/data/definitions/23.html")
+		assert.Contains(t, cut.cwe(), "https://cwe.mitre.org/data/definitions/24.html")
+	})
+	t.Run("dont display CWE if not reported", func(t *testing.T) {
+		cut := rule{Properties: ruleProperties{
+			Cwe: []string{},
+		}}
+		assert.NotContains(t, cut.cwe(), "CWE:")
+	})
+}
