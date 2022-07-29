@@ -16,7 +16,7 @@ import (
 )
 
 func TestGetFor(t *testing.T) {
-	testutil.UnitTest(t)
+	testutil.IntegTest(t)
 	di.TestInit(t)
 	testutil.OnlyEnableCodeAndDisableBinaryManagement()
 

@@ -27,7 +27,7 @@ func Test_GetCodeLensFromCommand(t *testing.T) {
 }
 
 func TestGetFor(t *testing.T) {
-	testutil.UnitTest(t)
+	testutil.IntegTest(t)
 	di.TestInit(t)
 	testutil.OnlyEnableCodeAndDisableBinaryManagement()
 	filePath, dir := code.FakeDiagnosticPath()
