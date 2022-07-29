@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -29,7 +30,7 @@ func TestGetFor(t *testing.T) {
 		return folder.DocumentDiagnosticsFromCache(filePath) != nil
 	}, time.Second*2, time.Millisecond)
 
-	actions := GetFor(filePath, workspace.ToRange(code.FakeIssue.Range))
+	actions := GetFor(filePath, converter.ToRange(code.FakeIssue.Range))
 
 	assert.NotNil(t, actions)
 	assert.Equal(t, 1, len(actions))

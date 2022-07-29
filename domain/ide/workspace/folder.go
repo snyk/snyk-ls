@@ -11,6 +11,7 @@ import (
 	ignore "github.com/sabhiram/go-gitignore"
 
 	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/concurrency"
@@ -218,14 +219,14 @@ func (f *Folder) processDiagnostics(issuesByFile map[string][]snyk.Issue) {
 		log.Debug().Str("method", "processDiagnostics").Str("affectedFilePath", path).Int("issueCount", len(issues)).Send()
 		notification.Send(lsp.PublishDiagnosticsParams{
 			URI:         uri.PathToUri(path),
-			Diagnostics: toDiagnostics(issues),
+			Diagnostics: converter.ToDiagnostics(issues),
 		})
 	}
 }
 
 func (f *Folder) processHovers(issuesByFile map[string][]snyk.Issue) {
 	for path, issues := range issuesByFile {
-		f.hoverService.Channel() <- toHoversDocument(path, issues)
+		f.hoverService.Channel() <- converter.ToHoversDocument(path, issues)
 	}
 }
 
