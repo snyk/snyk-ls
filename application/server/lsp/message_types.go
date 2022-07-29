@@ -47,9 +47,10 @@ type Diagnostic struct {
 	Severity sglsp.DiagnosticSeverity `json:"severity,omitempty"`
 
 	/**
-	 * The diagnostic's code. Can be omitted.
+	 * The diagnostic's code. Can be omitted. Can be string or int, thus we need
+	 * any type
 	 */
-	Code string `json:"code,omitempty"`
+	Code any `json:"code,omitempty"`
 
 	/**
 	 * A human-readable string describing the source of this

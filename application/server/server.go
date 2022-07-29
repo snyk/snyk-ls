@@ -131,7 +131,7 @@ func CodeLensHandler() jrpc2.Handler {
 }
 
 func CodeActionHandler() jrpc2.Handler {
-	return handler.New(func(ctx context.Context, params sglsp.CodeActionParams) ([]lsp.CodeAction, error) {
+	return handler.New(func(ctx context.Context, params lsp.CodeActionParams) ([]lsp.CodeAction, error) {
 		log.Info().Str("method", "CodeActionHandler").Interface("action", params).Msg("RECEIVING")
 		defer log.Info().Str("method", "CodeActionHandler").Interface("action", params).Msg("SENDING")
 		actions := codeaction.GetFor(uri.PathFromUri(params.TextDocument.URI), params.Range)
