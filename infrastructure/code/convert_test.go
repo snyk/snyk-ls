@@ -577,7 +577,7 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	issue := issues[0]
 
 	assert.Equal(t, "java/DontUsePrintStackTrace", issue.ID)
-	assert.Equal(t, "Printing the stack trace of java.lang.InterruptedException. Production code should not use printStackTrace. (Snyk)", issue.Message)
+	assert.Equal(t, "Printing the stack trace of java.lang.InterruptedException. Production code should not use printStac... (Snyk)", issue.Message)
 	assert.Equal(t, snyk.CodeSecurityVulnerability, issue.IssueType)
 	assert.Equal(t, snyk.Low, issue.Severity)
 	assert.Equal(t, path, issue.AffectedFilePath)
