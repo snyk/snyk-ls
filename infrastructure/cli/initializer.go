@@ -74,7 +74,7 @@ func (i *Initializer) installCli() {
 		}
 	}
 
-	if cliPath == "" {
+	if cliPath == "" || !config.CurrentConfig().CliSettings().Installed() {
 		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Snyk CLI needs to be installed."})
 
 		cliPath, err = i.installer.Install(context.Background())
