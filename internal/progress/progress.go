@@ -40,8 +40,13 @@ func NewTracker(cancellable bool) *Tracker {
 	}
 }
 
-func (t *Tracker) Begin(title, message string) {
-	params := newProgressParams(title, message, t.cancellable)
+func (t *Tracker) BeginUnquantifiableLength(title, message string) {
+	// 0 is interpreted by Eclipse as unquantified
+	t.begin(title, message, true)
+}
+
+func (t *Tracker) begin(title string, message string, unquantifiableLength bool) {
+	params := newProgressParams(title, message, t.cancellable, unquantifiableLength)
 	t.token = params.Token
 
 	t.send(lsp.ProgressParams{
@@ -51,6 +56,10 @@ func (t *Tracker) Begin(title, message string) {
 
 	t.send(params)
 	t.lastReport = time.Now()
+}
+
+func (t *Tracker) Begin(title, message string) {
+	t.begin(title, message, false)
 }
 
 func (t *Tracker) Report(percentage int) {
@@ -100,9 +109,12 @@ func (t *Tracker) GetToken() lsp.ProgressToken {
 	return t.token
 }
 
-func newProgressParams(title, message string, cancellable bool) lsp.ProgressParams {
+func newProgressParams(title, message string, cancellable, unquantifiableLength bool) lsp.ProgressParams {
 	id := uuid.New().String()
-
+	percentage := 1
+	if unquantifiableLength {
+		percentage = 0
+	}
 	return lsp.ProgressParams{
 		Token: lsp.ProgressToken(id),
 		Value: lsp.WorkDoneProgressBegin{
@@ -110,7 +122,7 @@ func newProgressParams(title, message string, cancellable bool) lsp.ProgressPara
 			Title:                title,
 			Message:              message,
 			Cancellable:          cancellable,
-			Percentage:           0,
+			Percentage:           percentage,
 		},
 	}
 }
