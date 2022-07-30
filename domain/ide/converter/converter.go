@@ -37,7 +37,7 @@ func ToCodeAction(action snyk.CodeAction) lsp.CodeAction {
 		Title:       action.Title,
 		Kind:        lsp.QuickFix,
 		Diagnostics: ToDiagnostics(action.Issues),
-		IsPreferred: false,
+		IsPreferred: action.IsPreferred,
 		Edit:        ToWorkspaceEdit(action.Edit),
 		Command:     ToCommand(action.Command),
 	}

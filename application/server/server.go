@@ -19,6 +19,7 @@ import (
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/codeaction"
 	"github.com/snyk/snyk-ls/domain/ide/codelens"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
@@ -84,8 +85,14 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 		log.Info().Str("method", method).Interface("command", params).Msg("RECEIVING")
 		defer log.Info().Str("method", method).Interface("command", params).Msg("SENDING")
 		args := params.Arguments
-		if params.Command == snyk.NavigateToRangeCommand && len(args) == 2 {
+		switch params.Command {
+		case snyk.NavigateToRangeCommand:
+			if len(args) < 2 {
+				log.Warn().Str("method", method).Msg("received NavigateToRangeCommand without range")
+			}
 			navigateToLocation(srv, args)
+		case snyk.OpenBrowserCommand:
+			command.OpenBrowser(params.Arguments[0].(string))
 		}
 		return nil, nil
 	})
@@ -209,7 +216,10 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 				CodeActionProvider: true,
 				CodeLensProvider:   &sglsp.CodeLensOptions{ResolveProvider: false},
 				ExecuteCommandProvider: &sglsp.ExecuteCommandOptions{
-					Commands: []string{snyk.NavigateToRangeCommand},
+					Commands: []string{
+						snyk.NavigateToRangeCommand,
+						snyk.OpenBrowserCommand,
+					},
 				},
 			},
 		}, nil
