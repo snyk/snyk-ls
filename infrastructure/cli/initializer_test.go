@@ -2,6 +2,7 @@ package cli
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -44,6 +45,10 @@ func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
 
 func TestInitializer_whenNoCli_Installs(t *testing.T) {
 	config.CurrentConfig().SetManageBinariesAutomatically(true)
+	settings := &config.CliSettings{}
+	testCliPath := filepath.Join(t.TempDir(), "dummy.cli")
+	settings.SetPath(testCliPath)
+	config.CurrentConfig().SetCliSettings(settings)
 
 	installer := install.NewTestInstaller()
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
