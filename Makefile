@@ -8,7 +8,7 @@ DEV_GOARCH := $(shell go env GOARCH)
 DEV_GOOS := $(shell go env GOOS)
 GOPATH := $(shell go env GOPATH)
 VERSION := $(shell git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)
-COMMIT := $(shell git show -s --oneline)
+COMMIT := $(shell git show -s --format=%h)
 LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true' -X 'github.com/snyk/snyk-ls/application/config.Version=v$(VERSION)-SNAPSHOT-$(COMMIT)'"
 
 PARALLEL := "-p=1"
