@@ -86,3 +86,10 @@ func (w *Workspace) ProcessFolderChange(ctx context.Context, params lsp.DidChang
 	}
 	w.ScanWorkspace(ctx)
 }
+
+func (w *Workspace) ClearCache(ctx context.Context) {
+	for _, folder := range w.folders {
+		folder.ClearScannedStatus()
+		folder.ClearCompleteDiagnosticsCache()
+	}
+}

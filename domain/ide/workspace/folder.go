@@ -293,3 +293,7 @@ func (f *Folder) CodeActions(filePath string, requestedRange snyk.Range) (codeAc
 	)
 	return codeActions
 }
+
+func (f *Folder) ClearCompleteDiagnosticsCache() {
+	f.documentDiagnosticCache.ClearAll()
+}

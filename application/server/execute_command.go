@@ -25,6 +25,7 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 			}
 			navigateToLocation(srv, args)
 		case snyk.WorkspaceScanCommand:
+			workspace.Get().ClearCache(ctx)
 			workspace.Get().ScanWorkspace(ctx)
 		}
 		return nil, nil
