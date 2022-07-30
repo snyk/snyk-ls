@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/creachadair/jrpc2"
-	"github.com/rs/zerolog/log"
-
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
@@ -103,7 +101,7 @@ func TestCancelProgress(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 
 	expectedWorkdoneProgressCancelParams := lsp.WorkdoneProgressCancelParams{
@@ -111,7 +109,7 @@ func TestCancelProgress(t *testing.T) {
 	}
 	_, err = loc.Client.Call(ctx, "window/workDoneProgress/cancel", expectedWorkdoneProgressCancelParams)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 
 	assert.Eventually(t, func() bool {
@@ -126,7 +124,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	var expected = lsp.AuthenticationParams{Token: "test token"}
 
@@ -157,7 +155,7 @@ func Test_IsAvailableCliNotification(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	var expected = lsp.SnykIsAvailableCli{CliPath: "path"}
 

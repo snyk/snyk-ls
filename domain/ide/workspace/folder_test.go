@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/adrg/xdg"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -144,7 +143,7 @@ func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string
 	ignoredDir := filepath.Join(tempDir, "bin")
 	err = os.Mkdir(ignoredDir, 0755)
 	if err != nil {
-		log.Fatal().Err(err).Msgf("Couldn't write ignoreDirectory %s", ignoredDir)
+		t.Fatal(t, err, "Couldn't write ignoreDirectory %s", ignoredDir)
 	}
 	ignoredFileInDir = filepath.Join(ignoredDir, "shouldNotBeWalked.java")
 	err = os.WriteFile(ignoredFileInDir, []byte("public bla"), 0600)

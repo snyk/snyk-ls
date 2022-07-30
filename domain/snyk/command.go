@@ -1,6 +1,9 @@
 package snyk
 
-const NavigateToRangeCommand = "snyk.navigateToRange"
+const (
+	NavigateToRangeCommand = "snyk.navigateToRange"
+	WorkspaceScanCommand   = "snyk.workspace.scan"
+)
 
 type Command struct {
 	/**

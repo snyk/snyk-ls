@@ -129,11 +129,11 @@ func Test_initialize_shouldBeServed(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 }
 
@@ -142,11 +142,11 @@ func Test_initialize_containsServerInfo(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	assert.Equal(t, config.LsProtocolVersion, result.ServerInfo.Version)
 }
@@ -156,11 +156,11 @@ func Test_initialize_shouldSupportDocumentOpening(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.OpenClose, true)
 }
@@ -170,11 +170,11 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.Save, &sglsp.SaveOptions{IncludeText: true})
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.WillSave, true)
@@ -186,11 +186,11 @@ func Test_initialize_shouldSupportCodeLenses(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	assert.Equal(t, result.Capabilities.CodeLensProvider.ResolveProvider, false)
 }
@@ -253,11 +253,11 @@ func Test_initialize_updatesSettings(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 	assert.Equal(t, "fancy org", config.CurrentConfig().GetOrganization())
 	assert.Equal(t, "xxx", config.CurrentConfig().Token())
@@ -274,7 +274,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 
 	// wait for publish
@@ -320,7 +320,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 
 	assert.Eventually(t, func() bool {
@@ -339,7 +339,7 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 
 	didChangeParams := sglsp.DidChangeTextDocumentParams{
@@ -352,7 +352,7 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 
 	_, err = loc.Client.Call(ctx, "textDocument/didChange", didChangeParams)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 }
 
@@ -369,7 +369,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 
 	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 
 	// wait for publish
@@ -386,7 +386,7 @@ func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSaveWaitUntil", nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 }
 
@@ -395,7 +395,7 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSave", nil)
 	if err != nil {
-		log.Fatal().Err(err)
+		t.Fatal(t, err)
 	}
 }
 
