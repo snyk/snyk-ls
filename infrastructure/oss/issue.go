@@ -13,7 +13,7 @@ import (
 )
 
 func (i *ossIssue) GetCodeActions() (actions []snyk.CodeAction) {
-	title := fmt.Sprintf("Open description of %s in browser", i.Title)
+	title := fmt.Sprintf("Open description of '%s' in browser (Snyk)", i.Title)
 	return []snyk.CodeAction{
 		{
 			Title:       title,
