@@ -1,6 +1,7 @@
 package snyk
 
 const NavigateToRangeCommand = "snyk.navigateToRange"
+const OpenBrowserCommand = "snyk.openBrowser"
 
 type Command struct {
 	/**
