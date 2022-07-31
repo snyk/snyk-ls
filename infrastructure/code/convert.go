@@ -115,7 +115,7 @@ func (r *result) priorityScore() string {
 	}
 	var builder strings.Builder
 	builder.Grow(20)
-	builder.WriteString(fmt.Sprintf("## Priority Score %d", priorityScore))
+	builder.WriteString(fmt.Sprintf(" | Priority Score %d", priorityScore))
 	return builder.String()
 }
 
@@ -123,6 +123,7 @@ func (r *result) getFormattedMessage(rule rule) string {
 	const separator = "\n\n\n\n"
 	var builder strings.Builder
 	builder.Grow(500)
+	builder.WriteString(fmt.Sprintf("### %s", issueSeverityToMarkdown(issueSeverity(r.Level))))
 	builder.WriteString(r.priorityScore())
 	cwe := rule.cwe()
 	if cwe != "" {
@@ -132,17 +133,30 @@ func (r *result) getFormattedMessage(rule rule) string {
 	builder.WriteString("\n\n\n\n")
 	builder.WriteString(r.Message.Text)
 	builder.WriteString(separator)
-	builder.WriteString("## Data Flow\n\n")
+	builder.WriteString("### Data Flow\n\n")
 	for _, elem := range r.getCodeFlow() {
 		builder.WriteString(elem.toMarkDown())
 	}
 	builder.WriteString(separator)
-	builder.WriteString("## Example Commit Fixes\n\n")
+	builder.WriteString("### Example Commit Fixes\n\n")
 	for _, fix := range rule.getExampleCommits() {
 		builder.WriteString(fix.toMarkdown())
 	}
 	builder.WriteString(separator)
 	return builder.String()
+}
+
+func issueSeverityToMarkdown(severity snyk.Severity) string {
+	switch severity {
+	case snyk.High:
+		return "🚨 High Severity"
+	case snyk.Medium:
+		return "⚠️ Medium Severity"
+	case snyk.Low:
+		return "⬇️ Low Severity"
+	default:
+		return "⬇️ Low Severity"
+	}
 }
 
 func (r *result) getMessage() string {
