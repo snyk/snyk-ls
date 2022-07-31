@@ -148,6 +148,8 @@ func (r *result) getFormattedMessage(rule rule) string {
 
 func issueSeverityToMarkdown(severity snyk.Severity) string {
 	switch severity {
+	case snyk.Critical:
+		return "🔥 Critical Severity"
 	case snyk.High:
 		return "🚨 High Severity"
 	case snyk.Medium:
