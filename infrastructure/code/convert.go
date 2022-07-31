@@ -124,8 +124,11 @@ func (r *result) getFormattedMessage(rule rule) string {
 	var builder strings.Builder
 	builder.Grow(500)
 	builder.WriteString(r.priorityScore())
-	builder.WriteString(" | ")
-	builder.WriteString(rule.cwe())
+	cwe := rule.cwe()
+	if cwe != "" {
+		builder.WriteString(" | ")
+	}
+	builder.WriteString(cwe)
 	builder.WriteString("\n\n\n\n")
 	builder.WriteString(r.Message.Text)
 	builder.WriteString(separator)
