@@ -258,9 +258,7 @@
                       "markdown": "string",
                       "text": "string"
                     },
-                    "ruleId": "string",
-                    "ruleIndex": 1,
-                    "ruleProperties": {
+                    "properties": {
                       "priorityScore": 1,
                       "priorityScoreFactors": [
                         {
@@ -268,7 +266,9 @@
                           "type": "string"
                         }
                       ]
-                    }
+                    },
+                    "ruleId": "string",
+                    "ruleIndex": 1
                   }
                 ],
                 "ruleProperties": {
@@ -296,6 +296,9 @@
                         "name": "string",
                         "properties": {
                           "categories": [
+                            "string"
+                          ],
+                          "cwe": [
                             "string"
                           ],
                           "exampleCommitDescriptions": [
@@ -464,25 +467,25 @@
           "$.body.sarif.runs[*].results[*].message.text": {
             "match": "type"
           },
+          "$.body.sarif.runs[*].results[*].properties.priorityScore": {
+            "match": "type"
+          },
+          "$.body.sarif.runs[*].results[*].properties.priorityScoreFactors": {
+            "min": 1
+          },
+          "$.body.sarif.runs[*].results[*].properties.priorityScoreFactors[*].*": {
+            "match": "type"
+          },
+          "$.body.sarif.runs[*].results[*].properties.priorityScoreFactors[*].label": {
+            "match": "type"
+          },
+          "$.body.sarif.runs[*].results[*].properties.priorityScoreFactors[*].type": {
+            "match": "type"
+          },
           "$.body.sarif.runs[*].results[*].ruleId": {
             "match": "type"
           },
           "$.body.sarif.runs[*].results[*].ruleIndex": {
-            "match": "type"
-          },
-          "$.body.sarif.runs[*].results[*].ruleProperties.priorityScore": {
-            "match": "type"
-          },
-          "$.body.sarif.runs[*].results[*].ruleProperties.priorityScoreFactors": {
-            "min": 1
-          },
-          "$.body.sarif.runs[*].results[*].ruleProperties.priorityScoreFactors[*].*": {
-            "match": "type"
-          },
-          "$.body.sarif.runs[*].results[*].ruleProperties.priorityScoreFactors[*].label": {
-            "match": "type"
-          },
-          "$.body.sarif.runs[*].results[*].ruleProperties.priorityScoreFactors[*].type": {
             "match": "type"
           },
           "$.body.sarif.runs[*].ruleProperties.coverage": {
@@ -531,6 +534,15 @@
             "match": "type"
           },
           "$.body.sarif.runs[*].tool.driver.rules[*].properties.categories[*]": {
+            "match": "type"
+          },
+          "$.body.sarif.runs[*].tool.driver.rules[*].properties.cwe": {
+            "min": 1
+          },
+          "$.body.sarif.runs[*].tool.driver.rules[*].properties.cwe[*].*": {
+            "match": "type"
+          },
+          "$.body.sarif.runs[*].tool.driver.rules[*].properties.cwe[*]": {
             "match": "type"
           },
           "$.body.sarif.runs[*].tool.driver.rules[*].properties.exampleCommitDescriptions": {
