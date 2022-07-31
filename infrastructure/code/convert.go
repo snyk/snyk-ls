@@ -33,12 +33,17 @@ func (r *rule) getReferences() (references []snyk.Reference) {
 }
 
 func (r *rule) cwe() string {
-	if len(r.Properties.Cwe) == 0 {
+	count := len(r.Properties.Cwe)
+	if count == 0 {
 		return ""
 	}
 	builder := strings.Builder{}
 	builder.Grow(100)
-	builder.WriteString("CWE: ")
+	ending := "y"
+	if count > 1 {
+		ending = "ies"
+	}
+	builder.WriteString(fmt.Sprintf("Vulnerabilit%s: ", ending))
 	for i, cwe := range r.Properties.Cwe {
 		if i > 0 {
 			builder.WriteString(" | ")
@@ -103,12 +108,25 @@ func (r *result) getCodeFlow() (dataflow []dataflowElement) {
 	return dataflow
 }
 
+func (r *result) priorityScore() string {
+	priorityScore := r.Properties.PriorityScore
+	if priorityScore == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	builder.Grow(20)
+	builder.WriteString(fmt.Sprintf("## Priority Score %d", priorityScore))
+	return builder.String()
+}
+
 func (r *result) getFormattedMessage(rule rule) string {
 	const separator = "\n\n\n\n"
 	var builder strings.Builder
 	builder.Grow(500)
-	builder.WriteString("## Description\n\n")
+	builder.WriteString(r.priorityScore())
+	builder.WriteString(" | ")
 	builder.WriteString(rule.cwe())
+	builder.WriteString("\n\n\n\n")
 	builder.WriteString(r.Message.Text)
 	builder.WriteString(separator)
 	builder.WriteString("## Data Flow\n\n")

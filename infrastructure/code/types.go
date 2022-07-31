@@ -82,7 +82,7 @@ type result struct {
 	Locations    []location       `json:"locations"`
 	Fingerprints fingerprints     `json:"fingerprints"`
 	CodeFlows    []codeFlow       `json:"codeFlows"`
-	Properties   resultProperties `json:"ruleProperties"`
+	Properties   resultProperties `json:"properties"`
 }
 
 type exampleCommitFix struct {
