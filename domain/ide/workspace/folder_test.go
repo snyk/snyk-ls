@@ -32,12 +32,11 @@ func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	f := NewFolder(tempDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
 
-	actualPatterns, err := f.loadIgnorePatterns()
+	_, err := f.loadIgnorePatternsAndCountFiles()
 	if err != nil {
 		t.Fatal(t, err, "Couldn't load .gitignore from workspace "+tempDir)
 	}
 
-	assert.Equal(t, strings.Split(expectedPatterns, "\n"), actualPatterns)
 	assert.Equal(t, strings.Split(expectedPatterns, "\n"), f.ignorePatterns)
 }
 
@@ -49,12 +48,11 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	f := NewFolder(tempDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
 
-	actualPatterns, err := f.loadIgnorePatterns()
+	_, err = f.loadIgnorePatternsAndCountFiles()
 	if err != nil {
 		t.Fatal(t, err, "Couldn't load .gitignore from workspace")
 	}
 
-	assert.Equal(t, []string{""}, actualPatterns)
 	assert.Equal(t, []string{""}, f.ignorePatterns)
 }
 
@@ -114,7 +112,7 @@ func Test_Scan_WhenCachedResultsButNoIssues_shouldNotReScan(t *testing.T) {
 }
 
 func writeTestGitIgnore(ignorePatterns string, t *testing.T) (tempDir string) {
-	tempDir, err := os.MkdirTemp(xdg.DataHome, "loadIgnorePatterns")
+	tempDir, err := os.MkdirTemp(xdg.DataHome, "loadIgnorePatternsAndCountFiles")
 	if err != nil {
 		t.Fatal(t, err, "Couldn't create temp dir")
 	}

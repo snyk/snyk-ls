@@ -62,7 +62,7 @@ func (t *Tracker) Begin(title, message string) {
 	t.begin(title, message, false)
 }
 
-func (t *Tracker) Report(percentage int) {
+func (t *Tracker) ReportWithMessage(percentage int, message string) {
 	if time.Now().Before(t.lastReport.Add(time.Second)) {
 		return
 	}
@@ -71,10 +71,15 @@ func (t *Tracker) Report(percentage int) {
 		Value: lsp.WorkDoneProgressReport{
 			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "report"},
 			Percentage:           percentage,
+			Message:              message,
 		},
 	}
 	t.send(progress)
 	t.lastReport = time.Now()
+}
+
+func (t *Tracker) Report(percentage int) {
+	t.ReportWithMessage(percentage, "")
 }
 
 func (t *Tracker) End(message string) {
