@@ -183,4 +183,4 @@ jobs:
       - name: Do test release with goreleaser
         uses: goreleaser/goreleaser-action@v2
         with:
-          args: release --snapshot --rm-dist --skip-publish
+          args: build --rm-dist --single-target
