@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -124,9 +125,12 @@ func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...str
 		args = append(args, "--insecure")
 	}
 	cmd := exec.CommandContext(ctx, config.CurrentConfig().CliSettings().Path(), args...)
+	cmd.Env = os.Environ()
 
 	endpoint := config.CurrentConfig().SnykApi()
-	cmd.Env = append(cmd.Env, cli.ApiEnvVar+"="+endpoint)
+	if endpoint != "" {
+		cmd.Env = append(cmd.Env, cli.ApiEnvVar+"="+endpoint)
+	}
 	if !config.CurrentConfig().IsTelemetryEnabled() {
 		cmd.Env = append(cmd.Env, cli.DisableAnalyticsEnvVar+"=1")
 	}
