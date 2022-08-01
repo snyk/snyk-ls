@@ -219,6 +219,8 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue) snyk.Issue 
 	if config.CurrentConfig().Format() == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 	}
+	codeActionTitle := fmt.Sprintf("Open description of '%s' in browser (Snyk)", issue.Title)
+	issueURL := iac.createIssueURL(issue.PublicID)
 
 	return snyk.Issue{
 		ID: issue.PublicID,
@@ -231,8 +233,17 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue) snyk.Issue 
 		Severity:            iac.toIssueSeverity(issue.Severity),
 		AffectedFilePath:    affectedFilePath,
 		Product:             snyk.ProductInfrastructureAsCode,
-		IssueDescriptionURL: iac.createIssueURL(issue.PublicID),
+		IssueDescriptionURL: issueURL,
 		IssueType:           snyk.InfrastructureIssue,
+		CodeActions: []snyk.CodeAction{{
+			Title:       codeActionTitle,
+			IsPreferred: false,
+			Command: snyk.Command{
+				Title:     codeActionTitle,
+				Command:   snyk.OpenBrowserCommand,
+				Arguments: []interface{}{issueURL.String()},
+			},
+		}},
 	}
 }
 

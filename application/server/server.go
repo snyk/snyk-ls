@@ -19,6 +19,7 @@ import (
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/codeaction"
 	"github.com/snyk/snyk-ls/domain/ide/codelens"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
@@ -199,6 +200,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 					Commands: []string{
 						snyk.NavigateToRangeCommand,
 						snyk.WorkspaceScanCommand,
+						snyk.OpenBrowserCommand,
 					},
 				},
 			},

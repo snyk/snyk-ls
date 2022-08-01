@@ -158,13 +158,11 @@ func TestUnmarshalOssErroneousJson(t *testing.T) {
 }
 
 func Test_toHover_asHTML(t *testing.T) {
-	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
-
 	testutil.UnitTest(t)
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 
 	var issue = sampleIssue()
-	h := scanner.getExtendedMessage(issue)
+	h := issue.getExtendedMessage(issue)
 
 	assert.Equal(
 		t,
@@ -174,13 +172,11 @@ func Test_toHover_asHTML(t *testing.T) {
 }
 
 func Test_toHover_asMarkdown(t *testing.T) {
-	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
-
 	testutil.UnitTest(t)
 	config.CurrentConfig().SetFormat(config.FormatMd)
 
 	var issue = sampleIssue()
-	h := scanner.getExtendedMessage(issue)
+	h := issue.getExtendedMessage(issue)
 
 	assert.Equal(
 		t,

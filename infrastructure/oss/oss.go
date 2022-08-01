@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net/url"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -296,84 +295,15 @@ func (oss *Scanner) toIssue(affectedFilePath string, issue ossIssue, issueRange 
 	return snyk.Issue{
 		ID:                  issue.Id,
 		Message:             message,
-		FormattedMessage:    oss.getExtendedMessage(issue),
+		FormattedMessage:    issue.getExtendedMessage(issue),
 		Range:               issueRange,
-		Severity:            oss.toIssueSeverity(issue.Severity),
+		Severity:            issue.toIssueSeverity(),
 		AffectedFilePath:    affectedFilePath,
 		Product:             snyk.ProductOpenSource,
-		IssueDescriptionURL: oss.createIssueURL(issue.Id),
+		IssueDescriptionURL: issue.createIssueURL(),
 		IssueType:           snyk.DependencyVulnerability,
+		CodeActions:         issue.GetCodeActions(),
 	}
-}
-
-//todo this needs to be pushed up to presentation
-func (oss *Scanner) getExtendedMessage(issue ossIssue) string {
-	title := issue.Title
-	description := issue.Description
-
-	if config.CurrentConfig().Format() == config.FormatHtml {
-		title = string(markdown.ToHTML([]byte(title), nil, nil))
-		description = string(markdown.ToHTML([]byte(description), nil, nil))
-	}
-	summary := fmt.Sprintf("### Vulnerability %s %s %s \n **Fixed in: %s | Exploit maturity: %s**",
-		oss.createCveLink(issue.Identifiers.CVE),
-		oss.createCweLink(issue.Identifiers.CWE),
-		oss.createIssueUrlMarkdown(issue.Id),
-		oss.createFixedIn(issue.FixedIn),
-		strings.ToUpper(issue.Severity),
-	)
-
-	return fmt.Sprintf("\n### %s: %s affecting %s package \n%s \n%s", issue.Id, title, issue.PackageName, summary, description)
-}
-
-func (oss *Scanner) toIssueSeverity(snykSeverity string) snyk.Severity {
-	sev, ok := issuesSeverity[snykSeverity]
-	if !ok {
-		return snyk.Low
-	}
-	return sev
-}
-
-func (oss *Scanner) createCveLink(cve []string) string {
-	var formattedCve string
-	for _, c := range cve {
-		formattedCve += fmt.Sprintf("| [%s](https://cve.mitre.org/cgi-bin/cvename.cgi?name=%s)", c, c)
-	}
-	return formattedCve
-}
-
-func (oss *Scanner) createIssueUrlMarkdown(id string) string {
-	return fmt.Sprintf("| [%s](%s)", id, oss.createIssueURL(id).String())
-}
-
-func (oss *Scanner) createIssueURL(id string) *url.URL {
-	parse, err := url.Parse("https://snyk.io/vuln/" + id)
-	if err != nil {
-		oss.errorReporter.CaptureError(errors.Wrap(err, "unable to create issue link for oss issue "+id))
-	}
-	return parse
-}
-
-func (oss *Scanner) createFixedIn(fixedIn []string) string {
-	var f string
-	if len(fixedIn) < 1 {
-		f += "Not Fixed"
-	} else {
-		f += "@" + fixedIn[0]
-		for _, version := range fixedIn[1:] {
-			f += fmt.Sprintf(", %s", version)
-		}
-	}
-	return f
-}
-
-func (oss *Scanner) createCweLink(cwe []string) string {
-	var formattedCwe string
-	for _, c := range cwe {
-		id := strings.Replace(c, "CWE-", "", -1)
-		formattedCwe += fmt.Sprintf("| [%s](https://cwe.mitre.org/data/definitions/%s.html)", c, id)
-	}
-	return formattedCwe
 }
 
 func (oss *Scanner) findRange(issue ossIssue, uri sglsp.DocumentURI, fileContent []byte) snyk.Range {
