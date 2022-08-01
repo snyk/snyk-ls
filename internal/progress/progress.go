@@ -41,7 +41,6 @@ func NewTracker(cancellable bool) *Tracker {
 }
 
 func (t *Tracker) BeginUnquantifiableLength(title, message string) {
-	// 0 is interpreted by Eclipse as unquantified
 	t.begin(title, message, true)
 }
 
