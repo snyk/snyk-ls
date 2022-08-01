@@ -19,7 +19,6 @@ import (
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/codeaction"
 	"github.com/snyk/snyk-ls/domain/ide/codelens"
-	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
@@ -77,25 +76,6 @@ func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 	(*handlers)["workspace/didChangeConfiguration"] = WorkspaceDidChangeConfiguration()
 	(*handlers)["window/workDoneProgress/cancel"] = WindowWorkDoneProgressCancelHandler()
 	(*handlers)["workspace/executeCommand"] = ExecuteCommandHandler(srv)
-}
-
-func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
-	return handler.New(func(ctx context.Context, params sglsp.ExecuteCommandParams) (interface{}, error) {
-		method := "ExecuteCommandHandler"
-		log.Info().Str("method", method).Interface("command", params).Msg("RECEIVING")
-		defer log.Info().Str("method", method).Interface("command", params).Msg("SENDING")
-		args := params.Arguments
-		switch params.Command {
-		case snyk.NavigateToRangeCommand:
-			if len(args) < 2 {
-				log.Warn().Str("method", method).Msg("received NavigateToRangeCommand without range")
-			}
-			navigateToLocation(srv, args)
-		case snyk.OpenBrowserCommand:
-			command.OpenBrowser(params.Arguments[0].(string))
-		}
-		return nil, nil
-	})
 }
 
 func navigateToLocation(srv *jrpc2.Server, args []interface{}) {
@@ -218,6 +198,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 				ExecuteCommandProvider: &sglsp.ExecuteCommandOptions{
 					Commands: []string{
 						snyk.NavigateToRangeCommand,
+						snyk.WorkspaceScanCommand,
 						snyk.OpenBrowserCommand,
 					},
 				},

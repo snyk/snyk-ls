@@ -2,6 +2,8 @@ package workspace
 
 import (
 	"context"
+	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +18,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -58,14 +61,17 @@ func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hove
 }
 
 func (f *Folder) Files() (filePaths []string, err error) {
+	t := progress.NewTracker(false)
 	workspace, err := filepath.Abs(f.path)
+	t.Begin(fmt.Sprintf("Snyk: Enumerating files in %s", f.name), "Evaluating ignores and counting files...")
 
 	if err != nil {
 		return filePaths, err
 	}
 	f.mutex.Lock()
+	var fileCount int
 	if f.ignorePatterns == nil {
-		_, err = f.loadIgnorePatterns()
+		fileCount, err = f.loadIgnorePatternsAndCountFiles()
 		if err != nil {
 			return filePaths, err
 		}
@@ -73,7 +79,14 @@ func (f *Folder) Files() (filePaths []string, err error) {
 
 	gitIgnore := ignore.CompileIgnoreLines(f.ignorePatterns...)
 	f.mutex.Unlock()
+	filesWalked := 0
+	log.Debug().Str("method", "folder.Files").Msgf("Filecount: %d", fileCount)
 	err = filepath.WalkDir(workspace, func(path string, dirEntry os.DirEntry, err error) error {
+		filesWalked++
+		percentage := math.Round(float64(filesWalked) / float64(fileCount) * 100)
+		t.ReportWithMessage(
+			int(percentage),
+			fmt.Sprintf("Loading file contents for scan... (%d of %d)", filesWalked, fileCount))
 		if err != nil {
 			log.Debug().
 				Str("method", "domain.ide.workspace.Folder.Files").
@@ -96,6 +109,7 @@ func (f *Folder) Files() (filePaths []string, err error) {
 		filePaths = append(filePaths, path)
 		return err
 	})
+	t.End("All relevant files collected")
 	if err != nil {
 		return filePaths, err
 	}
@@ -230,16 +244,17 @@ func (f *Folder) processHovers(issuesByFile map[string][]snyk.Issue) {
 	}
 }
 
-func (f *Folder) loadIgnorePatterns() (patterns []string, err error) {
+func (f *Folder) loadIgnorePatternsAndCountFiles() (fileCount int, err error) {
 	var ignores = ""
 	log.Debug().
-		Str("method", "loadIgnorePatterns").
+		Str("method", "loadIgnorePatternsAndCountFiles").
 		Str("workspace", f.path).
 		Msg("searching for ignore files")
 	err = filepath.WalkDir(f.path, func(path string, dirEntry os.DirEntry, err error) error {
+		fileCount++
 		if err != nil {
 			log.Debug().
-				Str("method", "loadIgnorePatterns - walker").
+				Str("method", "loadIgnorePatternsAndCountFiles - walker").
 				Str("path", path).
 				Err(err).
 				Msg("error traversing files")
@@ -252,7 +267,7 @@ func (f *Folder) loadIgnorePatterns() (patterns []string, err error) {
 		if !(strings.HasSuffix(path, ".gitignore") || strings.HasSuffix(path, ".dcignore")) {
 			return nil
 		}
-		log.Debug().Str("method", "loadIgnorePatterns").Str("file", path).Msg("found ignore file")
+		log.Debug().Str("method", "loadIgnorePatternsAndCountFiles").Str("file", path).Msg("found ignore file")
 		content, err := os.ReadFile(path)
 		if err != nil {
 			log.Err(err).Msg("Can't read" + path)
@@ -262,13 +277,13 @@ func (f *Folder) loadIgnorePatterns() (patterns []string, err error) {
 	})
 
 	if err != nil {
-		return nil, err
+		return fileCount, err
 	}
 
-	patterns = strings.Split(ignores, "\n")
+	patterns := strings.Split(ignores, "\n")
 	f.ignorePatterns = patterns
 	log.Debug().Interface("ignorePatterns", patterns).Msg("Loaded and set ignore patterns")
-	return patterns, nil
+	return fileCount, nil
 }
 
 func (f *Folder) Path() string         { return f.path }
@@ -292,4 +307,8 @@ func (f *Folder) CodeActions(filePath string, requestedRange snyk.Range) (codeAc
 		requestedRange,
 	)
 	return codeActions
+}
+
+func (f *Folder) ClearCompleteDiagnosticsCache() {
+	f.documentDiagnosticCache.ClearAll()
 }

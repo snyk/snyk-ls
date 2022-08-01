@@ -32,6 +32,7 @@ func TestBeginProgress(t *testing.T) {
 				Title:                "title",
 				Cancellable:          true,
 				Message:              "message",
+				Percentage:           1,
 			},
 		},
 		<-channel,

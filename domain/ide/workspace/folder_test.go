@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/adrg/xdg"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -33,12 +32,11 @@ func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	f := NewFolder(tempDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
 
-	actualPatterns, err := f.loadIgnorePatterns()
+	_, err := f.loadIgnorePatternsAndCountFiles()
 	if err != nil {
 		t.Fatal(t, err, "Couldn't load .gitignore from workspace "+tempDir)
 	}
 
-	assert.Equal(t, strings.Split(expectedPatterns, "\n"), actualPatterns)
 	assert.Equal(t, strings.Split(expectedPatterns, "\n"), f.ignorePatterns)
 }
 
@@ -50,12 +48,11 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	f := NewFolder(tempDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
 
-	actualPatterns, err := f.loadIgnorePatterns()
+	_, err = f.loadIgnorePatternsAndCountFiles()
 	if err != nil {
 		t.Fatal(t, err, "Couldn't load .gitignore from workspace")
 	}
 
-	assert.Equal(t, []string{""}, actualPatterns)
 	assert.Equal(t, []string{""}, f.ignorePatterns)
 }
 
@@ -96,7 +93,7 @@ func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
 	f.ScanFile(ctx, filePath)
 	f.ScanFile(ctx, filePath)
 
-	assert.Equal(t, 1, scannerRecorder.Calls)
+	assert.Equal(t, 1, scannerRecorder.Calls())
 }
 
 //todo: unignore this test
@@ -111,11 +108,11 @@ func Test_Scan_WhenCachedResultsButNoIssues_shouldNotReScan(t *testing.T) {
 	f.ScanFile(ctx, filePath)
 	f.ScanFile(ctx, filePath)
 
-	assert.Equal(t, 1, scannerRecorder.Calls)
+	assert.Equal(t, 1, scannerRecorder.Calls())
 }
 
 func writeTestGitIgnore(ignorePatterns string, t *testing.T) (tempDir string) {
-	tempDir, err := os.MkdirTemp(xdg.DataHome, "loadIgnorePatterns")
+	tempDir, err := os.MkdirTemp(xdg.DataHome, "loadIgnorePatternsAndCountFiles")
 	if err != nil {
 		t.Fatal(t, err, "Couldn't create temp dir")
 	}
@@ -144,7 +141,7 @@ func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string
 	ignoredDir := filepath.Join(tempDir, "bin")
 	err = os.Mkdir(ignoredDir, 0755)
 	if err != nil {
-		log.Fatal().Err(err).Msgf("Couldn't write ignoreDirectory %s", ignoredDir)
+		t.Fatal(t, err, "Couldn't write ignoreDirectory %s", ignoredDir)
 	}
 	ignoredFileInDir = filepath.Join(ignoredDir, "shouldNotBeWalked.java")
 	err = os.WriteFile(ignoredFileInDir, []byte("public bla"), 0600)

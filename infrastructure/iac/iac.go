@@ -75,7 +75,7 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string, _ []string)
 		return
 	}
 	p := progress.NewTracker(false)
-	p.Begin("Scanning for Snyk IaC issues", path)
+	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", path)
 	defer p.End("Snyk Iac Scan completed.")
 
 	var workspacePath string

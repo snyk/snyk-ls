@@ -2,16 +2,18 @@ package snyk
 
 import (
 	"context"
+	"sync"
 )
 
 type TestScanner struct {
-	Calls  int
+	mutex  sync.Mutex
+	calls  int
 	Issues []Issue
 }
 
 func NewTestScanner() *TestScanner {
 	return &TestScanner{
-		Calls:  0,
+		calls:  0,
 		Issues: []Issue{},
 	}
 }
@@ -33,6 +35,14 @@ func (s *TestScanner) Scan(
 	naughtyHack1 string,
 	naughtyHack2 []string,
 ) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	processResults(s.Issues)
-	s.Calls++
+	s.calls++
+}
+
+func (s *TestScanner) Calls() int {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	return s.calls
 }
