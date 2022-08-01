@@ -265,14 +265,26 @@ func Test_initialize_updatesSettings(t *testing.T) {
 
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc := setupServer(t)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
-	config.CurrentConfig().SetSnykIacEnabled(false)
-	config.CurrentConfig().SetSnykOssEnabled(false)
-	_, _ = loc.Client.Call(ctx, "initialize", nil)
 	didOpenParams, dir := didOpenTextParams(t)
-	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService()))
 
-	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
+	clientParams := lsp.InitializeParams{
+		RootURI: uri.PathToUri(dir),
+		InitializationOptions: lsp.Settings{
+			ActivateSnykCode:            "true",
+			ActivateSnykOpenSource:      "false",
+			ActivateSnykIac:             "false",
+			Organization:                "fancy org",
+			Token:                       "xxx",
+			ManageBinariesAutomatically: "false",
+			CliPath:                     "dummy",
+		},
+	}
+	_, err := loc.Client.Call(ctx, "initialize", clientParams)
+	if err != nil {
+		t.Fatal(t, err, "couldn't initialize")
+	}
+
+	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
 		t.Fatal(t, err)
 	}
