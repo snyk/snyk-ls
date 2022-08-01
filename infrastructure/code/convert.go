@@ -130,7 +130,7 @@ func (r *result) getFormattedMessage(rule rule) string {
 		builder.WriteString(" | ")
 	}
 	builder.WriteString(cwe)
-	builder.WriteString("\n\n\n\n")
+	builder.WriteString(separator)
 	builder.WriteString(r.Message.Text)
 	builder.WriteString(separator)
 	builder.WriteString("### Data Flow\n\n")
@@ -157,7 +157,7 @@ func issueSeverityToMarkdown(severity snyk.Severity) string {
 	case snyk.Low:
 		return "⬇️ Low Severity"
 	default:
-		return "⬇️ Low Severity"
+		return "❔️ Unknown Severity"
 	}
 }
 
