@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -133,6 +134,7 @@ func New() *Config {
 	c.snykCodeAnalysisTimeout = snykCodeAnalysisTimeoutFromEnv()
 	c.token = ""
 	c.clientSettingsFromEnv()
+	c.addPathDefaults()
 	c.deviceId = c.determineDeviceId()
 	return c
 }
@@ -405,4 +407,17 @@ func (c *Config) SetClientCapabilities(capabilities lsp.ClientCapabilities) {
 
 func (c *Config) Path() string {
 	return c.path
+}
+
+func (c *Config) addPathDefaults() {
+	if //goland:noinspection GoBoolExpressions
+	runtime.GOOS != "windows" {
+		c.updatePath("/usr/local/bin")
+		c.updatePath("/bin")
+		c.updatePath(xdg.Home + "/bin")
+	}
+	javaHome := os.Getenv("JAVA_HOME")
+	if javaHome != "" {
+		c.updatePath(javaHome + string(os.PathSeparator) + "bin")
+	}
 }

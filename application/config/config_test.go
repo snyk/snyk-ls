@@ -2,11 +2,16 @@ package config
 
 import (
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
+	"github.com/adrg/xdg"
 	"github.com/stretchr/testify/assert"
 )
+
+const pathSeparator = string(os.PathListSeparator)
+const windows = "windows"
 
 func TestSetToken(t *testing.T) {
 	SetCurrentConfig(New()) // can't use testutil here because of cyclical imports
@@ -46,7 +51,8 @@ func Test_updatePath(t *testing.T) {
 	t.Setenv("PATH", "a")
 	c := New()
 	c.updatePath("b")
-	assert.Equal(t, "a"+string(os.PathListSeparator)+"b", os.Getenv("PATH"))
+	assert.Contains(t, c.path, string(os.PathListSeparator)+"b")
+	assert.Contains(t, c.path, "a"+string(os.PathListSeparator))
 }
 
 func Test_loadFile(t *testing.T) {
@@ -119,7 +125,7 @@ func Test_updatePathWithDefaults(t *testing.T) {
 	t.Run("initialize path from environment", func(t *testing.T) {
 		pathFromEnv := os.Getenv("PATH")
 		c := New()
-		assert.Equal(t, pathFromEnv, c.Path())
+		assert.Contains(t, c.Path(), pathFromEnv)
 	})
 
 	t.Run("add to path from environment", func(t *testing.T) {
@@ -127,6 +133,48 @@ func Test_updatePathWithDefaults(t *testing.T) {
 		t.Setenv("PATH", pathFromEnv)
 		c := New()
 		c.updatePath("b")
-		assert.Equal(t, pathFromEnv+string(os.PathListSeparator)+"b", c.Path())
+		assert.Contains(t, c.path, pathSeparator+"b")
+		assert.Contains(t, c.path, pathFromEnv+pathSeparator)
+	})
+
+	t.Run("automatically add /usr/local/bin on linux and macOS", func(t *testing.T) {
+		if //goland:noinspection GoBoolExpressions
+		runtime.GOOS == windows {
+			t.Skipf("only added to the path on linux and macOS, this is windows")
+		}
+		c := New()
+		assert.Contains(t, c.Path(), pathSeparator+"/usr/local/bin")
+	})
+
+	t.Run("automatically add /bin on linux and macOS", func(t *testing.T) {
+		if //goland:noinspection GoBoolExpressions
+		runtime.GOOS == windows {
+			t.Skipf("only added to the path on linux and macOS, this is windows")
+		}
+		c := New()
+		assert.Contains(t, c.Path(), pathSeparator+"/bin")
+	})
+
+	t.Run("automatically add $HOME/bin on linux and macOS", func(t *testing.T) {
+		if //goland:noinspection GoBoolExpressions
+		runtime.GOOS == windows {
+			t.Skipf("only added to the path on linux and macOS, this is windows")
+		}
+		c := New()
+		assert.Contains(t, c.Path(), pathSeparator+xdg.Home+"/bin")
+	})
+
+	t.Run("automatically add $JAVA_HOME/bin if set", func(t *testing.T) {
+		javaHome := "JAVA_HOME_DUMMY"
+		t.Setenv("JAVA_HOME", javaHome)
+		c := New()
+		assert.Contains(t, c.Path(), pathSeparator+javaHome+string(os.PathSeparator)+"bin")
+	})
+
+	t.Run("dont add $JAVA_HOME/bin if not set", func(t *testing.T) {
+		javaHome := ""
+		t.Setenv("JAVA_HOME", javaHome)
+		c := New()
+		assert.Contains(t, c.Path(), pathSeparator+javaHome+string(os.PathSeparator)+"bin")
 	})
 }
