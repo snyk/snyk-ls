@@ -3,6 +3,7 @@ package snyk
 import "context"
 
 type ProductScanner interface {
+	// Scans a workspace folder or file for issues, given its path. 'folderPath' provides a path to a workspace folder, if a file needs to be scanned.
 	Scan(
 		//todo do we need context?
 		ctx context.Context,
