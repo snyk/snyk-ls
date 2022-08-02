@@ -179,7 +179,6 @@ func (f *Folder) scan(ctx context.Context, path string, codeFiles []string) {
 		return
 	}
 
-	//todo f.path & codeFiles need to go away, for that we need to unify the code interface & iac/oss
 	f.scanner.Scan(ctx, path, f.processResults, f.path, codeFiles)
 }
 

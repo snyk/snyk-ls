@@ -3,14 +3,15 @@ package snyk
 import "context"
 
 type ProductScanner interface {
+	// Scans a workspace folder or file for issues, given its path. 'folderPath' provides a path to a workspace folder, if a file needs to be scanned.
 	Scan(
 		//todo do we need context?
 		ctx context.Context,
 		path string,
 		//todo deliberately calling this garbage because they need to go away - these nonsensical params are here because
 		//code and cli based scans have a slightly different modus operandi. We need to unify that and clean this interface
-		legacyWorkspacePath string,
-		legacyFilesToScan []string,
+		folderPath string,
+		legacyFilesToScan []string, // all unignored files from the workspace // todo: remove
 	) (issues []Issue)
 
 	IsEnabled() bool

@@ -48,7 +48,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	ctx context.Context,
 	path string,
 	processResults ScanResultProcessor,
-	legacyWorkspacePath string,
+	folderPath string,
 	legacyFilesToScan []string,
 ) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
@@ -68,7 +68,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				defer sc.instrumentor.Finish(span)
 				log.Debug().Msgf("Scanning %s with %T: STARTED", path, s)
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
-				foundIssues := s.Scan(span.Context(), path, legacyWorkspacePath, legacyFilesToScan)
+				foundIssues := s.Scan(span.Context(), path, folderPath, legacyFilesToScan)
 				processResults(foundIssues)
 				log.Debug().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
 			}(scanner)
