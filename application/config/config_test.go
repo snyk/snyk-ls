@@ -113,3 +113,11 @@ func TestSnykCodeApi(t *testing.T) {
 		assert.Equal(t, customDeeproxyUrl, codeApiEndpoint)
 	})
 }
+
+func Test_updatePathWithDefaults(t *testing.T) {
+	t.Run("initialize path from environment", func(t *testing.T) {
+		pathFromEnv := os.Getenv("PATH")
+		c := New()
+		assert.Equal(t, c.Path(), pathFromEnv)
+	})
+}

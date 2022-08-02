@@ -94,6 +94,7 @@ type Config struct {
 	deviceId                    string
 	clientCapabilities          lsp.ClientCapabilities
 	m                           sync.Mutex
+	path                        string
 }
 
 func CurrentConfig() *Config {
@@ -132,18 +133,22 @@ func New() *Config {
 	c.snykCodeAnalysisTimeout = snykCodeAnalysisTimeoutFromEnv()
 	c.token = ""
 	c.clientSettingsFromEnv()
+	c.deviceId = c.determineDeviceId()
+	return c
+}
+
+func (c *Config) determineDeviceId() string {
 	id, machineErr := machineid.ProtectedID("Snyk-LS")
 	if machineErr != nil {
 		log.Err(machineErr).Str("method", "config.New").Msg("cannot retrieve machine id")
 		if c.token != "" {
-			c.deviceId = util.Hash([]byte(c.token))
+			return util.Hash([]byte(c.token))
 		} else {
-			c.deviceId = uuid.NewTime().String()
+			return uuid.NewTime().String()
 		}
 	} else {
-		c.deviceId = id
+		return id
 	}
-	return c
 }
 
 func (c *Config) Load() {
@@ -395,4 +400,8 @@ func (c *Config) ClientCapabilities() lsp.ClientCapabilities {
 
 func (c *Config) SetClientCapabilities(capabilities lsp.ClientCapabilities) {
 	c.clientCapabilities = capabilities
+}
+
+func (c *Config) Path() string {
+	return c.path
 }
