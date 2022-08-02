@@ -178,11 +178,11 @@ func (c *Config) loadFile(fileName string) {
 		} else {
 			// add to path, don't ignore additional paths
 			if k == "PATH" {
-				updatePath(v)
+				c.updatePath(v)
 			}
 		}
 	}
-	updatePath(".")
+	c.updatePath(".")
 	log.Debug().Str("fileName", fileName).Msg("loaded.")
 }
 
@@ -322,8 +322,9 @@ func snykCodeAnalysisTimeoutFromEnv() time.Duration {
 	return snykCodeTimeout
 }
 
-func updatePath(pathExtension string) {
+func (c *Config) updatePath(pathExtension string) {
 	err := os.Setenv("PATH", os.Getenv("PATH")+string(os.PathListSeparator)+pathExtension)
+	c.path += string(os.PathListSeparator) + pathExtension
 	if err != nil {
 		log.Warn().Str("method", "loadFile").Msg("Couldn't update path ")
 	}

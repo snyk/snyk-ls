@@ -44,7 +44,8 @@ func Test_SnykCodeAnalysisTimeoutReturnsDefaultIfNoEnvVariableFound(t *testing.T
 
 func Test_updatePath(t *testing.T) {
 	t.Setenv("PATH", "a")
-	updatePath("b")
+	c := New()
+	c.updatePath("b")
 	assert.Equal(t, "a"+string(os.PathListSeparator)+"b", os.Getenv("PATH"))
 }
 
@@ -118,6 +119,14 @@ func Test_updatePathWithDefaults(t *testing.T) {
 	t.Run("initialize path from environment", func(t *testing.T) {
 		pathFromEnv := os.Getenv("PATH")
 		c := New()
-		assert.Equal(t, c.Path(), pathFromEnv)
+		assert.Equal(t, pathFromEnv, c.Path())
+	})
+
+	t.Run("add to path from environment", func(t *testing.T) {
+		pathFromEnv := "a"
+		t.Setenv("PATH", pathFromEnv)
+		c := New()
+		c.updatePath("b")
+		assert.Equal(t, pathFromEnv+string(os.PathListSeparator)+"b", c.Path())
 	})
 }
