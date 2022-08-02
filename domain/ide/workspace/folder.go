@@ -2,15 +2,9 @@ package workspace
 
 import (
 	"context"
-	"fmt"
-	"math"
-	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/rs/zerolog/log"
-	ignore "github.com/sabhiram/go-gitignore"
 
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
@@ -18,9 +12,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type FolderStatus int
@@ -60,62 +52,6 @@ func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hove
 	return &folder
 }
 
-func (f *Folder) Files() (filePaths []string, err error) {
-	t := progress.NewTracker(false)
-	workspace, err := filepath.Abs(f.path)
-	t.Begin(fmt.Sprintf("Snyk: Enumerating files in %s", f.name), "Evaluating ignores and counting files...")
-
-	if err != nil {
-		return filePaths, err
-	}
-	f.mutex.Lock()
-	var fileCount int
-	if f.ignorePatterns == nil {
-		fileCount, err = f.loadIgnorePatternsAndCountFiles()
-		if err != nil {
-			return filePaths, err
-		}
-	}
-
-	gitIgnore := ignore.CompileIgnoreLines(f.ignorePatterns...)
-	f.mutex.Unlock()
-	filesWalked := 0
-	log.Debug().Str("method", "folder.Files").Msgf("Filecount: %d", fileCount)
-	err = filepath.WalkDir(workspace, func(path string, dirEntry os.DirEntry, err error) error {
-		filesWalked++
-		percentage := math.Round(float64(filesWalked) / float64(fileCount) * 100)
-		t.ReportWithMessage(
-			int(percentage),
-			fmt.Sprintf("Loading file contents for scan... (%d of %d)", filesWalked, fileCount))
-		if err != nil {
-			log.Debug().
-				Str("method", "domain.ide.workspace.Folder.Files").
-				Str("path", path).
-				Err(err).
-				Msg("error traversing files")
-			return nil
-		}
-		if dirEntry == nil || dirEntry.IsDir() {
-			if util.Ignored(gitIgnore, path) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		if util.Ignored(gitIgnore, path) {
-			return nil
-		}
-
-		filePaths = append(filePaths, path)
-		return err
-	})
-	t.End("All relevant files collected")
-	if err != nil {
-		return filePaths, err
-	}
-	return filePaths, nil
-}
-
 func (f *Folder) IsScanned() bool {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
@@ -135,22 +71,14 @@ func (f *Folder) SetStatus(status FolderStatus) {
 }
 
 func (f *Folder) ScanFolder(ctx context.Context) {
-	codeFiles, err := f.Files()
-	if err != nil {
-		log.Warn().
-			Err(err).
-			Str("method", "domain.ide.workspace.Folder.ScanFolder").
-			Str("workspacePath", f.path).
-			Msg("error getting workspace files")
-	}
-	f.scan(ctx, f.path, codeFiles)
+	f.scan(ctx, f.path)
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 	f.status = Scanned
 }
 
 func (f *Folder) ScanFile(ctx context.Context, path string) {
-	f.scan(ctx, path, []string{path})
+	f.scan(ctx, path)
 }
 
 func (f *Folder) GetProductAttribute(product snyk.Product, name string) interface{} {
@@ -171,7 +99,7 @@ func (f *Folder) ClearDiagnosticsCache(filePath string) {
 	f.ClearScannedStatus()
 }
 
-func (f *Folder) scan(ctx context.Context, path string, codeFiles []string) {
+func (f *Folder) scan(ctx context.Context, path string) {
 	issuesSlice := f.DocumentDiagnosticsFromCache(path)
 	if issuesSlice != nil {
 		log.Info().Str("method", "domain.ide.workspace.folder.scan").Msgf("Cached results found: Skipping scan for %s", path)
@@ -179,7 +107,6 @@ func (f *Folder) scan(ctx context.Context, path string, codeFiles []string) {
 		return
 	}
 
-	//todo f.path & codeFiles need to go away, for that we need to unify the code interface & iac/oss
 	f.scanner.Scan(ctx, path, f.processResults, f.path, codeFiles)
 }
 
@@ -242,48 +169,6 @@ func (f *Folder) processHovers(issuesByFile map[string][]snyk.Issue) {
 	for path, issues := range issuesByFile {
 		f.hoverService.Channel() <- converter.ToHoversDocument(path, issues)
 	}
-}
-
-func (f *Folder) loadIgnorePatternsAndCountFiles() (fileCount int, err error) {
-	var ignores = ""
-	log.Debug().
-		Str("method", "loadIgnorePatternsAndCountFiles").
-		Str("workspace", f.path).
-		Msg("searching for ignore files")
-	err = filepath.WalkDir(f.path, func(path string, dirEntry os.DirEntry, err error) error {
-		fileCount++
-		if err != nil {
-			log.Debug().
-				Str("method", "loadIgnorePatternsAndCountFiles - walker").
-				Str("path", path).
-				Err(err).
-				Msg("error traversing files")
-			return nil
-		}
-		if dirEntry == nil || dirEntry.IsDir() {
-			return nil
-		}
-
-		if !(strings.HasSuffix(path, ".gitignore") || strings.HasSuffix(path, ".dcignore")) {
-			return nil
-		}
-		log.Debug().Str("method", "loadIgnorePatternsAndCountFiles").Str("file", path).Msg("found ignore file")
-		content, err := os.ReadFile(path)
-		if err != nil {
-			log.Err(err).Msg("Can't read" + path)
-		}
-		ignores += string(content)
-		return err
-	})
-
-	if err != nil {
-		return fileCount, err
-	}
-
-	patterns := strings.Split(ignores, "\n")
-	f.ignorePatterns = patterns
-	log.Debug().Interface("ignorePatterns", patterns).Msg("Loaded and set ignore patterns")
-	return fileCount, nil
 }
 
 func (f *Folder) Path() string         { return f.path }

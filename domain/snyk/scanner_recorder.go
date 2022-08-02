@@ -33,7 +33,6 @@ func (s *TestScanner) Scan(
 	path string,
 	processResults ScanResultProcessor,
 	naughtyHack1 string,
-	naughtyHack2 []string,
 ) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()

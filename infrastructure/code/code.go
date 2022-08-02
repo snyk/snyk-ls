@@ -2,9 +2,15 @@ package code
 
 import (
 	"context"
+	"fmt"
+	"math"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
+	ignore "github.com/sabhiram/go-gitignore"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -13,6 +19,8 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type Scanner struct {
@@ -20,6 +28,7 @@ type Scanner struct {
 	SnykApiClient  snyk_api.SnykApiClient
 	errorReporter  error_reporting.ErrorReporter
 	analytics      ux2.Analytics
+	ignorePatterns []string
 }
 
 func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter error_reporting.ErrorReporter, analytics ux2.Analytics) *Scanner {
@@ -44,10 +53,10 @@ func (sc *Scanner) SupportedCommands() []snyk.CommandName {
 	return []snyk.CommandName{snyk.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, _ string, workspacePath string, files []string) []snyk.Issue {
+func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string, files []string) []snyk.Issue {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
-	return sc.UploadAndAnalyze(span.Context(), files, workspacePath)
+	return sc.UploadAndAnalyze(span.Context(), files, folderPath)
 }
 
 func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path string) (issues []snyk.Issue) {

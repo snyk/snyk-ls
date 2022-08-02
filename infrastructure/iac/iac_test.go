@@ -22,7 +22,7 @@ func Test_Scan_IsInstrumented(t *testing.T) {
 	instrumentor := performance.NewTestInstrumentor()
 	scanner := New(instrumentor, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
 
-	scanner.Scan(context.Background(), "fake.yml", "", nil)
+	scanner.Scan(context.Background(), "fake.yml", "")
 
 	spans := instrumentor.SpanRecorder.Spans()
 	assert.Len(t, spans, 1)
@@ -35,7 +35,7 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 	analytics := ux2.NewTestAnalytics()
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, cli.NewTestExecutor())
 
-	scanner.Scan(context.Background(), "fake.yml", "", nil)
+	scanner.Scan(context.Background(), "fake.yml", "")
 
 	assert.Len(t, analytics.GetAnalytics(), 1)
 	assert.Equal(t, ux2.AnalysisIsReadyProperties{
@@ -51,7 +51,7 @@ func Test_ErroredWorkspaceScan_TracksAnalytics(t *testing.T) {
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, executor)
 
 	executor.ExecuteResponse = "invalid JSON"
-	scanner.Scan(context.Background(), "fake.yml", "", nil)
+	scanner.Scan(context.Background(), "fake.yml", "")
 
 	assert.Len(t, analytics.GetAnalytics(), 1)
 	assert.Equal(t, ux2.AnalysisIsReadyProperties{

@@ -7,10 +7,7 @@ type ProductScanner interface {
 		//todo do we need context?
 		ctx context.Context,
 		path string,
-		//todo deliberately calling this garbage because they need to go away - these nonsensical params are here because
-		//code and cli based scans have a slightly different modus operandi. We need to unify that and clean this interface
-		legacyWorkspacePath string,
-		legacyFilesToScan []string,
+		folderPath string,
 	) (issues []Issue)
 
 	IsEnabled() bool
