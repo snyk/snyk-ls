@@ -134,6 +134,10 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	cliDiscovery := Discovery{}
 	cliFilePath := path.Join(cliDir, cliDiscovery.ExecutableName(false))
 	config.CurrentConfig().CliSettings().SetPath(cliDir)
+	defer func() {
+		config.CurrentConfig().CliSettings().SetPath("")
+	}()
+
 	err = os.Rename(fakeCliFile.Name(), cliFilePath) // rename temp file to CLI file
 	if err != nil {
 		t.Fatal(t, err, "Error renaming temp file")
