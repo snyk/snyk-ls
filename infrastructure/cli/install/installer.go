@@ -124,10 +124,10 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 func replaceOutdatedCli(cliDiscovery Discovery) error {
 	log.Info().Str("method", "replaceOutdatedCli").Msg("replacing outdated CLI with latest")
 
-	lsPath := config.CurrentConfig().LsPath()
+	cliPath := config.CurrentConfig().CliSettings().Path()
 
-	outdatedCliFile := filepath.Join(lsPath, cliDiscovery.ExecutableName(false))
-	latestCliFile := filepath.Join(lsPath, cliDiscovery.ExecutableName(true))
+	outdatedCliFile := filepath.Join(cliPath, cliDiscovery.ExecutableName(false))
+	latestCliFile := filepath.Join(cliPath, cliDiscovery.ExecutableName(true))
 
 	if runtime.GOOS == "windows" {
 		tildeExecutableName := outdatedCliFile + "~"

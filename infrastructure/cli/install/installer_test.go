@@ -3,6 +3,7 @@ package install
 import (
 	"context"
 	"encoding/hex"
+	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -120,25 +121,26 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	// prepare
 	ctx := context.Background()
 	i := NewInstaller(error_reporting.NewTestErrorReporter())
+	cliDir, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatal(t, err, "Failed to create temp dir")
+	}
+	defer func() {
+		_ = os.Remove(cliDir)
+	}()
 
-	lsPath := config.CurrentConfig().LsPath()
-
-	fakeCliFile := testutil.CreateTempFile(lsPath, t)
+	fakeCliFile := testutil.CreateTempFile(cliDir, t)
 	fakeCliFile.Close()
 	cliDiscovery := Discovery{}
-	cliFilePath := path.Join(lsPath, cliDiscovery.ExecutableName(false))
-	err := os.Rename(fakeCliFile.Name(), cliFilePath) // rename temp file to CLI file
+	cliFilePath := path.Join(cliDir, cliDiscovery.ExecutableName(false))
+	config.CurrentConfig().CliSettings().SetPath(cliDir)
+	err = os.Rename(fakeCliFile.Name(), cliFilePath) // rename temp file to CLI file
 	if err != nil {
 		t.Fatal(t, err, "Error renaming temp file")
 	}
 	defer func(f string) {
 		_ = os.Remove(f)
 	}(cliFilePath)
-
-	config.CurrentConfig().CliSettings().SetPath(cliFilePath)
-	defer func() {
-		config.CurrentConfig().CliSettings().SetPath("")
-	}()
 
 	r := NewCLIRelease()
 	release, err := r.GetLatestRelease(ctx)
