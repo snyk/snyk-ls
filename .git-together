@@ -1,0 +1,5 @@
+[git-together]
+	domain = snyk.io
+[git-together "authors"]
+	bd = "Bastian Doetsch; bastian.doetsch"
+	jl = "Jason Luong; jason.luong"
