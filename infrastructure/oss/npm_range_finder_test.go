@@ -49,3 +49,41 @@ func TestNpmRangeFinder_Find(t *testing.T) {
 	actualRange := npmRangeFinder.find(issue)
 	assert.Equal(t, expectedRange, actualRange)
 }
+
+func TestNpmRangeFinder_Find_Scoped_Packages(t *testing.T) {
+	config.CurrentConfig().SetFormat(config.FormatHtml)
+
+	var issue = ossIssue{
+		Id:             "testIssue",
+		Name:           "SNYK-TEST-ISSUE-1",
+		Title:          "THOU SHALL NOT PASS",
+		Severity:       "1",
+		LineNumber:     0,
+		Description:    "Getting into Moria is an issue!",
+		References:     nil,
+		Version:        "",
+		PackageManager: "npm",
+		From:           []string{"goof@1.0.1", "@angular/cli@1.0.0"},
+	}
+
+	var testPath, _ = filepath.Abs("testdata/package.json")
+	var testContent, _ = os.ReadFile(testPath)
+	npmRangeFinder := NpmRangeFinder{
+		uri:         uri.PathToUri(testPath),
+		fileContent: testContent,
+		myRange:     snyk.Range{},
+	}
+	expectedRange := snyk.Range{
+		Start: snyk.Position{
+			Line:      18,
+			Character: 4,
+		},
+		End: snyk.Position{
+			Line:      18,
+			Character: 27,
+		},
+	}
+
+	actualRange := npmRangeFinder.find(issue)
+	assert.Equal(t, expectedRange, actualRange)
+}
