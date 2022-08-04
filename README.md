@@ -89,7 +89,7 @@ synchronization.
 
 ### From Source
 
-- Install `go 1.19.0` or higher, set the `GOPATH` and `GOROOT`
+- Install `go 1.18` or higher, set the `GOPATH` and `GOROOT`
 - Enter the root directory of this repository
 - Execute `go get ./...` to download all dependencies
 - Execute `make build && make install` to produce a `snyk-ls` binary
