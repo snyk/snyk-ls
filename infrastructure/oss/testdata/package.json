@@ -15,7 +15,8 @@
     "test": "snyk test"
   },
   "dependencies": {
-    "lodash": "4.17.4"
+    "lodash": "4.17.4",
+    "@angular/cli": "1.0.0"
   },
   "license": "Apache-2.0"
 }

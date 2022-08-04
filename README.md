@@ -12,9 +12,10 @@ CLI as a data provider, for the latter it is connecting directly to the Snyk Cod
 
 Right now the language server supports the following actions:
 
-- Send diagnostics to client on opening a document.
-- Starting a project/folder scan on opening a project and sending diagnostics
-- Cache diagnostics until Saving.
+- Send diagnostics to client on opening a document if it's part of the current set of folders.
+- Starting a folder scan on startup and sending diagnostics.
+- Starting a workspace scan of all folders on command.
+- Cache diagnostics until saving or triggering a new workspace scan.
 - Invalidate caches on saving a document and retrieve saved document diagnostics anew.
 - Provides range calculation to correctly highlight Snyk Open Source issues in their file.
 - Provides formatted hovers with diagnostic details and follow-up links
@@ -31,18 +32,20 @@ Right now the language server supports the following actions:
 #### Requests
 
 - initialize
+- exit
+- textDocument/codeAction
+- textDocument/codeLens
 - textDocument/didOpen
-- textDocument/didChange
 - textDocument/didClose
 - textDocument/didSave
 - textDocument/hover
-- textDocument/willSave
-- textDocument/willSaveWaitUntil
 - shutdown
-- exit
 - workspace/didChangeWorkspaceFolders
 - workspace/didChangeConfiguration
+- workspace/executeCommand
 - window/workDoneProgress/create (from server -> client)
+- window/showMessage
+- window/showDocument
 
 #### Notifications
 
@@ -79,6 +82,10 @@ The release workflow stores the generated executables, so that they can be
 downloaded [here](https://github.com/snyk/snyk-ls/releases/tag/latest). Just select the release you want the build
 artefacts from and download the zip file attached to it. Currently, executables for Windows, macOS and Linux are
 generated.
+
+The currently published binary can be retrieved with [this](getLanguageServer.sh) bash script, please keep in mind that
+[the protocol version](.goreleaser.yaml) is part of the download link and can change to force plugin / language server
+synchronization.
 
 ### From Source
 

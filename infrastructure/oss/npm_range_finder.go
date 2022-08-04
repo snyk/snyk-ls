@@ -1,6 +1,7 @@
 package oss
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -51,7 +52,12 @@ func introducingPackageAndVersion(issue ossIssue) (string, string) {
 	var version string
 	if len(issue.From) > 1 {
 		split := strings.Split(issue.From[1], "@")
-		packageSplit := split[0]
+		splitArrayLength := len(split)
+		packageSplit := split[splitArrayLength-2]
+		if splitArrayLength > 2 {
+			// handle scoped packages
+			packageSplit = fmt.Sprintf("@%s", split[splitArrayLength-2])
+		}
 		switch issue.PackageManager {
 		case "maven":
 			index := strings.LastIndex(packageSplit, ":")
@@ -59,7 +65,7 @@ func introducingPackageAndVersion(issue ossIssue) (string, string) {
 		default:
 			packageName = packageSplit
 		}
-		version = split[1]
+		version = split[splitArrayLength-1]
 	} else {
 		packageName = issue.Name
 		version = issue.Version
