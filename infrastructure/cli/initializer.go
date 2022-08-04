@@ -91,10 +91,11 @@ func (i *Initializer) installCli() {
 	}
 
 	if cliPath != "" {
+		config.CurrentConfig().CliSettings().SetPath(cliPath)
 		if i.isOutdatedCli() { // could happen if we just find a CLI on the system via find
 			i.updateCli()
 		}
-		config.CurrentConfig().CliSettings().SetPath(cliPath)
+
 		notification.Send(lsp.SnykIsAvailableCli{CliPath: cliPath})
 		log.Info().Str("method", "installCli").Str("snyk", cliPath).Msg("Snyk CLI found.")
 	} else {
