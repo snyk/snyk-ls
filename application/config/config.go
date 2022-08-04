@@ -413,12 +413,17 @@ func (c *Config) Path() string {
 }
 
 func (c *Config) addDefaults() {
-	method := "addDefaults"
 	if //goland:noinspection GoBoolExpressions
 	runtime.GOOS != "windows" {
 		c.updatePath("/usr/local/bin")
 		c.updatePath("/bin")
 		c.updatePath(xdg.Home + "/bin")
 	}
-	c.determineJavaHome(method)
+	c.determineJavaHome()
+	c.determineMavenHome()
+}
+
+func (c *Config) determineMavenHome() {
+	path := c.findBinary(getMavenBinaryName())
+	c.updatePath(filepath.Dir(path))
 }
