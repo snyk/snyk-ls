@@ -7,42 +7,28 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/adrg/xdg"
 	"github.com/rs/zerolog/log"
 )
 
-var defaultDirs = []string{
-	xdg.Home,
-	"/usr/lib",
-	"/usr/java",
-	"/opt",
-	"/Library",
-	"C:\\Program Files",
-	"C:\\Program Files (x86)",
-}
-
 func (c *Config) determineJavaHome() {
-	method := "determineJavaHome"
 	javaHome := os.Getenv("JAVA_HOME")
 	if javaHome != "" {
 		c.updatePath(javaHome + string(os.PathSeparator) + "bin")
-	} else {
-		java := c.findBinary(getJavaBinaryName())
-		absJavaPath, err := filepath.Abs(java)
-		if err != nil {
-			log.Warn().Str("method", method).
-				Err(err).
-				Str("path", java).
-				Msg("couldn't get absolute filepath for found java exec")
-		}
-		if absJavaPath != "" {
-			c.updatePath(absJavaPath)
-			err = os.Setenv("JAVA_HOME", filepath.Dir(filepath.Dir(java)))
-			if err != nil {
-				log.Warn().Str("method", method).Msg("couldn't add java home to environment")
-			}
-		}
+		return
 	}
+	java := c.findBinary(getJavaBinaryName())
+	c.updatePath(java)
+	_ = os.Setenv("JAVA_HOME", filepath.Dir(filepath.Dir(java)))
+}
+
+func (c *Config) determineMavenHome() {
+	mavenHome := os.Getenv("MAVEN_HOME")
+	if mavenHome != "" {
+		c.updatePath(mavenHome + string(os.PathSeparator) + "bin")
+		return
+	}
+	path := c.findBinary(getMavenBinaryName())
+	c.updatePath(filepath.Dir(path))
 }
 
 func getJavaBinaryName() string {
@@ -71,9 +57,9 @@ func (c *Config) findBinary(binaryName string) string {
 	return c.FindBinaryInDirs(binaryName)
 }
 
-func (c *Config) FindBinaryInDirs(binaryName string) (foundJavaPath string) {
+func (c *Config) FindBinaryInDirs(binaryName string) (foundPath string) {
 	method := "FindBinaryInDirs"
-	for _, dir := range defaultDirs {
+	for _, dir := range c.defaultDirs {
 		_, err := os.Stat(dir)
 		if err != nil {
 			log.Info().Str("method", method).Msg("no java dir found in " + dir)
@@ -93,8 +79,8 @@ func (c *Config) FindBinaryInDirs(binaryName string) (foundJavaPath string) {
 		count := len(foundFilePaths)
 		if count > 0 {
 			// take newest, as the dirwalk is lexical
-			foundJavaPath = foundFilePaths[count-1]
+			foundPath = foundFilePaths[count-1]
 		}
 	}
-	return foundJavaPath
+	return foundPath
 }

@@ -322,7 +322,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal("couldn't unset environment")
 	}
-	c := config.New()
+	c := config.New([]string{})
 	c.SetToken(testutil.GetEnvironmentToken())
 	config.SetCurrentConfig(c)
 

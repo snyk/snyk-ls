@@ -18,7 +18,7 @@ func TestGetEnabledProducts_DefaultValues(t *testing.T) {
 	os.Unsetenv(ActivateSnykIacKey)
 	os.Unsetenv(ActivateSnykContainerKey)
 	os.Unsetenv(ActivateSnykAdvisorKey)
-	SetCurrentConfig(New())
+	SetCurrentConfig(New([]string{}))
 
 	currentConfig.clientSettingsFromEnv()
 
@@ -32,14 +32,14 @@ func TestGetEnabledProducts_DefaultValues(t *testing.T) {
 func TestConfig_IsErrorReportingEnabledFromEnv_DefaultValues(t *testing.T) {
 	t.Setenv(SendErrorReportsKey, "set it to anything to make sure it is reset")
 	os.Unsetenv(SendErrorReportsKey)
-	SetCurrentConfig(New())
+	SetCurrentConfig(New([]string{}))
 	CurrentConfig().clientSettingsFromEnv()
 
 	assert.Equal(t, true, CurrentConfig().IsErrorReportingEnabled())
 }
 func TestConfig_IsErrorReportingEnabledFromEnv(t *testing.T) {
 	t.Setenv(SendErrorReportsKey, "true")
-	SetCurrentConfig(New())
+	SetCurrentConfig(New([]string{}))
 	CurrentConfig().clientSettingsFromEnv()
 
 	assert.Equal(t, true, CurrentConfig().IsErrorReportingEnabled())
@@ -47,7 +47,7 @@ func TestConfig_IsErrorReportingEnabledFromEnv(t *testing.T) {
 
 func TestConfig_IsErrorReportingEnabledFromEnv_Error(t *testing.T) {
 	t.Setenv(SendErrorReportsKey, "hurz")
-	SetCurrentConfig(New())
+	SetCurrentConfig(New([]string{}))
 	CurrentConfig().clientSettingsFromEnv()
 
 	assert.Equal(t, true, CurrentConfig().IsErrorReportingEnabled())
@@ -55,7 +55,7 @@ func TestConfig_IsErrorReportingEnabledFromEnv_Error(t *testing.T) {
 
 func TestConfig_OrganizationFromEnv(t *testing.T) {
 	t.Setenv(Organization, "snyk-test-org")
-	SetCurrentConfig(New())
+	SetCurrentConfig(New([]string{}))
 	CurrentConfig().clientSettingsFromEnv()
 
 	assert.Equal(t, "snyk-test-org", CurrentConfig().GetOrganization())
@@ -63,7 +63,7 @@ func TestConfig_OrganizationFromEnv(t *testing.T) {
 
 func TestConfig_EnableTelemetryFromEnv(t *testing.T) {
 	t.Setenv(EnableTelemetry, "0")
-	SetCurrentConfig(New())
+	SetCurrentConfig(New([]string{}))
 	CurrentConfig().clientSettingsFromEnv()
 
 	assert.Equal(t, true, CurrentConfig().IsTelemetryEnabled())
@@ -71,7 +71,7 @@ func TestConfig_EnableTelemetryFromEnv(t *testing.T) {
 
 func TestConfig_DisableTelemetryFromEnv(t *testing.T) {
 	t.Setenv(EnableTelemetry, "1")
-	SetCurrentConfig(New())
+	SetCurrentConfig(New([]string{}))
 	CurrentConfig().clientSettingsFromEnv()
 
 	assert.Equal(t, false, CurrentConfig().IsTelemetryEnabled())
@@ -84,7 +84,7 @@ func TestInitializeDefaultProductEnablement(t *testing.T) {
 	t.Setenv(ActivateSnykAdvisorKey, "true")
 	t.Setenv(ActivateSnykContainerKey, "true")
 
-	SetCurrentConfig(New())
+	SetCurrentConfig(New([]string{}))
 
 	assert.Equal(t, false, CurrentConfig().IsSnykOssEnabled())
 	assert.Equal(t, true, CurrentConfig().IsSnykCodeEnabled())

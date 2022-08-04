@@ -13,14 +13,14 @@ import (
 func Test_updatePathWithDefaults(t *testing.T) {
 	t.Run("initialize path from environment", func(t *testing.T) {
 		pathFromEnv := os.Getenv("PATH")
-		c := New()
+		c := New([]string{})
 		assert.Contains(t, c.Path(), pathFromEnv)
 	})
 
 	t.Run("add to path from environment", func(t *testing.T) {
 		pathFromEnv := "a"
 		t.Setenv("PATH", pathFromEnv)
-		c := New()
+		c := New([]string{})
 		c.updatePath("b")
 		assert.Contains(t, c.path, pathSeparator+"b")
 		assert.Contains(t, c.path, pathFromEnv+pathSeparator)
@@ -31,7 +31,7 @@ func Test_updatePathWithDefaults(t *testing.T) {
 		runtime.GOOS == windows {
 			t.Skipf("only added to the path on linux and macOS, this is windows")
 		}
-		c := New()
+		c := New([]string{})
 		assert.Contains(t, c.Path(), pathSeparator+"/usr/local/bin")
 	})
 
@@ -40,7 +40,7 @@ func Test_updatePathWithDefaults(t *testing.T) {
 		runtime.GOOS == windows {
 			t.Skipf("only added to the path on linux and macOS, this is windows")
 		}
-		c := New()
+		c := New([]string{})
 		assert.Contains(t, c.Path(), pathSeparator+"/bin")
 	})
 
@@ -49,14 +49,14 @@ func Test_updatePathWithDefaults(t *testing.T) {
 		runtime.GOOS == windows {
 			t.Skipf("only added to the path on linux and macOS, this is windows")
 		}
-		c := New()
+		c := New([]string{})
 		assert.Contains(t, c.Path(), pathSeparator+xdg.Home+"/bin")
 	})
 
 	t.Run("automatically add $JAVA_HOME/bin if set", func(t *testing.T) {
 		javaHome := "JAVA_HOME_DUMMY"
 		t.Setenv("JAVA_HOME", javaHome)
-		c := New()
+		c := New([]string{})
 		assert.Contains(t, c.Path(), pathSeparator+javaHome+string(os.PathSeparator)+"bin")
 	})
 }
@@ -80,7 +80,7 @@ func Test_FindBinaries(t *testing.T) {
 		}
 		defer file.Close()
 
-		New()
+		New([]string{})
 
 		assert.Contains(t, os.Getenv("JAVA_HOME"), dir)
 	})
@@ -109,14 +109,10 @@ func Test_FindBinaries(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defaultJavaDirs := defaultDirs
-		defer func() {
-			defaultDirs = defaultJavaDirs
-		}()
 
-		defaultDirs = []string{filepath.Dir(javaHome)}
+		defaultDirs := []string{filepath.Dir(javaHome)}
 
-		java := (&Config{}).findBinary(getJavaBinaryName())
+		java := (&Config{defaultDirs: defaultDirs}).findBinary(getJavaBinaryName())
 
 		assert.Equal(t, file.Name(), java)
 	})
@@ -137,7 +133,7 @@ func Test_FindBinaries(t *testing.T) {
 		}
 		defer file.Close()
 
-		New()
+		New([]string{})
 
 		assert.Contains(t, os.Getenv("PATH"), binDir)
 	})

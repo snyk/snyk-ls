@@ -98,13 +98,14 @@ type Config struct {
 	clientCapabilities          lsp.ClientCapabilities
 	m                           sync.Mutex
 	path                        string
+	defaultDirs                 []string
 }
 
 func CurrentConfig() *Config {
 	mutex.Lock()
 	defer mutex.Unlock()
 	if currentConfig == nil {
-		currentConfig = New()
+		currentConfig = New([]string{})
 	}
 	return currentConfig
 }
@@ -120,8 +121,9 @@ func IsDevelopment() bool {
 	return parseBool
 }
 
-func New() *Config {
+func New(defaultDirs []string) *Config {
 	c := &Config{}
+	c.defaultDirs = defaultDirs
 	c.cliSettings = &CliSettings{}
 	c.configFile = ""
 	c.format = "md"
@@ -327,6 +329,9 @@ func snykCodeAnalysisTimeoutFromEnv() time.Duration {
 }
 
 func (c *Config) updatePath(pathExtension string) {
+	if pathExtension == "" {
+		return
+	}
 	err := os.Setenv("PATH", os.Getenv("PATH")+string(os.PathListSeparator)+pathExtension)
 	c.path += string(os.PathListSeparator) + pathExtension
 	log.Debug().Str("method", "updatePath").Msg("updated path with " + pathExtension)
@@ -421,9 +426,4 @@ func (c *Config) addDefaults() {
 	}
 	c.determineJavaHome()
 	c.determineMavenHome()
-}
-
-func (c *Config) determineMavenHome() {
-	path := c.findBinary(getMavenBinaryName())
-	c.updatePath(filepath.Dir(path))
 }

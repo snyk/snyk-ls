@@ -653,7 +653,7 @@ func TestSnykCodeBackendService_analysisRequestBody_FillsOrgParameter(t *testing
 	testutil.UnitTest(t)
 
 	// prepare
-	config.SetCurrentConfig(config.New())
+	config.SetCurrentConfig(config.New([]string{}))
 	org := "test-org"
 	config.CurrentConfig().SetOrganization(org)
 

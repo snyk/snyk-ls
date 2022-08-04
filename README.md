@@ -183,7 +183,7 @@ and adds the parent directory of its parent as JAVA_HOME. The following director
 - /usr/java
 - /opt
 - /Library
-- $HOME
+- $HOME/.sdkman
 - C:\Program Files
 - C:\Program Files (x86)
 

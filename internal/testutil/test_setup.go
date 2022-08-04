@@ -26,7 +26,7 @@ func SmokeTest(t *testing.T) {
 
 func UnitTest(t *testing.T) {
 	t.Helper()
-	c := config.New()
+	c := config.New([]string{})
 	c.SetManageBinariesAutomatically(false)
 	c.SetToken("00000000-0000-0000-0000-000000000001")
 	settings := &config.CliSettings{}
@@ -106,7 +106,7 @@ func prepareTestHelper(t *testing.T, envVar string) {
 		t.SkipNow()
 	}
 
-	c := config.New()
+	c := config.New([]string{})
 	c.SetToken(GetEnvironmentToken())
 	c.SetErrorReportingEnabled(false)
 	c.SetTelemetryEnabled(false)

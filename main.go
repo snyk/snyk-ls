@@ -5,8 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 
+	"github.com/adrg/xdg"
 	"github.com/rs/zerolog/log"
 
 	config2 "github.com/snyk/snyk-ls/application/config"
@@ -24,7 +26,18 @@ func main() {
 			di.ErrorReporter().FlushErrorReporting()
 		}
 	}()
-	output, err := parseFlags(os.Args)
+
+	// these directories are searched to find binaries (e.g. java, maven, etc)
+	defaultDirs := []string{
+		filepath.Join(xdg.Home, ".sdkman"),
+		"/usr/lib",
+		"/usr/java",
+		"/opt",
+		"/Library",
+		"C:\\Program Files",
+		"C:\\Program Files (x86)",
+	}
+	output, err := parseFlags(os.Args, defaultDirs)
 	if err != nil {
 		fmt.Println(err, output)
 		os.Exit(1)
@@ -34,7 +47,7 @@ func main() {
 	server.Start()
 }
 
-func parseFlags(args []string) (string, error) {
+func parseFlags(args []string, defaultDirs []string) (string, error) {
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	var buf bytes.Buffer
 	flags.SetOutput(&buf)
@@ -58,8 +71,8 @@ func parseFlags(args []string) (string, error) {
 	if err != nil {
 		return buf.String(), err
 	}
-	c := config2.New()
 
+	c := config2.New(defaultDirs)
 	c.SetConfigFile(*configFlag)
 	c.Load()
 
