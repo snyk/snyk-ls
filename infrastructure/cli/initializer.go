@@ -77,8 +77,15 @@ func (i *Initializer) installCli() {
 		}
 	}
 
-	// if we found a CLI or a path was set, let's check if the file is actually there - Installed() stats the file
-	if cliPath == "" || !config.CurrentConfig().CliSettings().Installed() {
+	// If CLI was not found, set default CLI path
+	if cliPath == "" {
+		// Set the CLI path in the CliSettings early, as the installer/downloader depends on it
+		cliPath = config.CurrentConfig().LsPath()
+		config.CurrentConfig().CliSettings().SetPath(cliPath)
+	}
+
+	// Check if the file is actually in the cliPath
+	if !config.CurrentConfig().CliSettings().Installed() {
 		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Snyk CLI needs to be installed."})
 
 		cliPath, err = i.installer.Install(context.Background())
