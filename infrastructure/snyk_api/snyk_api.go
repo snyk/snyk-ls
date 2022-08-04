@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 
@@ -127,7 +126,7 @@ func (s *SnykApiClientImpl) doCall(method string, path string, requestBody []byt
 			log.Err(err).Msg("Couldn't close response body in call to Snyk API")
 		}
 	}(response.Body)
-	responseBody, err = ioutil.ReadAll(response.Body)
+	responseBody, err = io.ReadAll(response.Body)
 	log.Trace().Str("response.Status", response.Status).Str("responseBody", string(responseBody)).Msg("RECEIVED FROM REMOTE")
 	if err != nil {
 		return nil, err

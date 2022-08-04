@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -159,7 +159,7 @@ func (oss *Scanner) unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.
 		targetFile := oss.determineTargetFile(scanResult.DisplayTargetFile)
 		targetFilePath := filepath.Join(uri.PathFromUri(documentURI), targetFile)
 		targetFileUri := uri.PathToUri(targetFilePath)
-		fileContent, err := ioutil.ReadFile(targetFilePath)
+		fileContent, err := os.ReadFile(targetFilePath)
 		if err != nil {
 			log.Err(err).Str("method", "unmarshallAndRetrieveAnalysis").
 				Msgf("Error while reading the file %v, err: %v", targetFile, err)

@@ -197,11 +197,23 @@ func Test_FindJava(t *testing.T) {
 		assert.Contains(t, os.Getenv("JAVA_HOME"), dir)
 	})
 
-	t.Run("windows: search for java in default places", func(t *testing.T) {
+	t.Run("windows: search for java in common paths", func(t *testing.T) {
 		if //goland:noinspection GoBoolExpressions
 		runtime.GOOS != windows {
 			return
 		}
+		t.Setenv("JAVA_HOME", "")
+		t.Setenv("PATH", "")
+		dir, err := os.MkdirTemp("C:\\Program Files (x86)\\Java", "snyk-ls-test")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		c := New()
+
+		binDir := filepath.Join(dir, "bin")
+		assert.Contains(t, c.Path(), binDir)
+		assert.Contains(t, os.Getenv("JAVA_HOME"), dir)
 	})
 
 	t.Run("linux/macOS: search for java in default places", func(t *testing.T) {
