@@ -117,7 +117,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 		d.errorReporter.CaptureError(err)
 		return fmt.Errorf("failed to %s Snyk CLI from %q: %s", kindStr, downloadURL, resp.Status)
 	}
-	executablePath := cliDiscovery.ExecutableName(isUpdate)
+	executableFileName := cliDiscovery.ExecutableName(isUpdate)
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
 		doneCh <- true
@@ -134,7 +134,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 		return err
 	}
 
-	cliTmpPath := filepath.Join(tmpDirPath, executablePath)
+	cliTmpPath := filepath.Join(tmpDirPath, executableFileName)
 	cliTmpFile, err := os.Create(cliTmpPath)
 	if err != nil {
 		return err
@@ -161,7 +161,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	}
 
 	_ = cliTmpFile.Close() // close file to allow moving it on Windows
-	err = d.moveToDestination(executablePath, cliTmpFile.Name())
+	err = d.moveToDestination(executableFileName, cliTmpFile.Name())
 
 	if isUpdate {
 		d.progressTracker.End("Snyk CLI has been updated.")
@@ -197,27 +197,27 @@ func (d *Downloader) createLockFile() error {
 	return nil
 }
 
-func (d *Downloader) moveToDestination(dest string, fullSrcPath string) (err error) {
+func (d *Downloader) moveToDestination(destinationFileName string, sourceFilePath string) (err error) {
 	cliPath := config.CurrentConfig().CliSettings().Path()
-	dstCliFile := filepath.Join(cliPath, dest)
-	log.Info().Str("method", "moveToDestination").Str("path", dstCliFile).Msg("copying Snyk CLI to user directory")
+	destinationFilePath := filepath.Join(cliPath, destinationFileName)
+	log.Info().Str("method", "moveToDestination").Str("path", destinationFilePath).Msg("copying Snyk CLI to user directory")
 
 	// for Windows, we have to remove original file first before move/rename
-	if _, err := os.Stat(dstCliFile); err == nil {
-		err = os.Remove(dstCliFile)
+	if _, err := os.Stat(destinationFilePath); err == nil {
+		err = os.Remove(destinationFilePath)
 		if err != nil {
 			return err
 		}
 	}
 
-	log.Info().Str("method", "moveToDestination").Str("tempFilePath", fullSrcPath).Msg("tempfile path")
-	err = os.Rename(fullSrcPath, dstCliFile)
+	log.Info().Str("method", "moveToDestination").Str("tempFilePath", sourceFilePath).Msg("tempfile path")
+	err = os.Rename(sourceFilePath, destinationFilePath)
 	if err != nil {
 		return err
 	}
 
-	log.Info().Str("method", "moveToDestination").Str("path", dstCliFile).Msg("setting executable bit for Snyk CLI")
-	err = os.Chmod(dstCliFile, 0755)
+	log.Info().Str("method", "moveToDestination").Str("path", destinationFilePath).Msg("setting executable bit for Snyk CLI")
+	err = os.Chmod(destinationFilePath, 0755)
 	if err != nil {
 		return err
 	}
