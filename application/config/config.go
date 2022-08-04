@@ -270,7 +270,19 @@ func (c *Config) ConfigureLogging(level string) {
 	logLevel, err := zerolog.ParseLevel(level)
 	if err != nil {
 		fmt.Println("Can't set log level from flag. Setting to default (=info)")
-		logLevel = zerolog.InfoLevel
+	}
+
+	// env var overrides flag
+	envLogLevel := os.Getenv("SNYK_LOG_LEVEL")
+	if envLogLevel != "" {
+		fmt.Println("Setting log level from environment variable (SNYK_LOG_LEVEL)", envLogLevel)
+		envLevel, err := zerolog.ParseLevel(envLogLevel)
+		if err != nil {
+			fmt.Println("Can't set log level from env. Setting to default (=info)")
+			// fallback to flag
+			envLevel = logLevel
+		}
+		logLevel = envLevel
 	}
 	zerolog.SetGlobalLevel(logLevel)
 	zerolog.TimeFieldFormat = time.RFC3339
