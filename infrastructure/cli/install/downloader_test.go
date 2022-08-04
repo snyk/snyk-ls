@@ -19,6 +19,7 @@ func TestDownloader_Download(t *testing.T) {
 	cancelProgressCh := make(chan lsp.ProgressToken, 1)
 	d := &Downloader{progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh)}
 	lockFileName := d.lockFileName()
+	config.CurrentConfig().CliSettings().SetPath(config.CurrentConfig().LsPath())
 	// remove any existing lockfile
 	_ = os.RemoveAll(lockFileName)
 
