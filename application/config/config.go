@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -31,6 +32,8 @@ const (
 	snykCodeTimeoutKey    = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
 	defaultSnykApiUrl     = "https://snyk.io/api"
 	defaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
+	pathSeparator         = string(os.PathListSeparator)
+	windows               = "windows"
 )
 
 var (
@@ -327,6 +330,7 @@ func snykCodeAnalysisTimeoutFromEnv() time.Duration {
 func (c *Config) updatePath(pathExtension string) {
 	err := os.Setenv("PATH", os.Getenv("PATH")+string(os.PathListSeparator)+pathExtension)
 	c.path += string(os.PathListSeparator) + pathExtension
+	log.Info().Str("method", "updatePath").Msg("updated path with " + pathExtension)
 	if err != nil {
 		log.Warn().Str("method", "loadFile").Msg("Couldn't update path ")
 	}
@@ -410,14 +414,22 @@ func (c *Config) Path() string {
 }
 
 func (c *Config) addPathDefaults() {
+	method := "addPathDefaults"
 	if //goland:noinspection GoBoolExpressions
 	runtime.GOOS != "windows" {
 		c.updatePath("/usr/local/bin")
 		c.updatePath("/bin")
 		c.updatePath(xdg.Home + "/bin")
 	}
-	javaHome := os.Getenv("JAVA_HOME")
-	if javaHome != "" {
-		c.updatePath(javaHome + string(os.PathSeparator) + "bin")
+	c.determineJavaHome(method)
+}
+
+func (c *Config) findJava() string {
+	javaBinary := "java"
+	if //goland:noinspection GoBoolExpressions
+	runtime.GOOS == windows {
+		javaBinary = "java.exe"
 	}
+	path, _ := exec.LookPath(javaBinary)
+	return path
 }

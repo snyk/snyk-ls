@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
@@ -9,9 +10,6 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/stretchr/testify/assert"
 )
-
-const pathSeparator = string(os.PathListSeparator)
-const windows = "windows"
 
 func TestSetToken(t *testing.T) {
 	SetCurrentConfig(New()) // can't use testutil here because of cyclical imports
@@ -170,11 +168,46 @@ func Test_updatePathWithDefaults(t *testing.T) {
 		c := New()
 		assert.Contains(t, c.Path(), pathSeparator+javaHome+string(os.PathSeparator)+"bin")
 	})
+}
 
-	t.Run("dont add $JAVA_HOME/bin if not set", func(t *testing.T) {
-		javaHome := ""
-		t.Setenv("JAVA_HOME", javaHome)
-		c := New()
-		assert.Contains(t, c.Path(), pathSeparator+javaHome+string(os.PathSeparator)+"bin")
+func Test_FindJava(t *testing.T) {
+	t.Run("search for java in path linux and macOS", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv("JAVA_HOME", "")
+		javaBinary := "java"
+		if //goland:noinspection GoBoolExpressions
+		runtime.GOOS == windows {
+			javaBinary = "java.exe"
+		}
+		binDir := filepath.Join(dir, "bin")
+		t.Setenv("PATH", binDir)
+		err := os.MkdirAll(binDir, 0700)
+		if err != nil {
+			t.Fatal(err)
+		}
+		file, err := os.Create(filepath.Join(binDir, javaBinary))
+		_ = file.Chmod(0700)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer file.Close()
+
+		New()
+
+		assert.Contains(t, os.Getenv("JAVA_HOME"), dir)
+	})
+
+	t.Run("windows: search for java in default places", func(t *testing.T) {
+		if //goland:noinspection GoBoolExpressions
+		runtime.GOOS != windows {
+			return
+		}
+	})
+
+	t.Run("linux/macOS: search for java in default places", func(t *testing.T) {
+		if //goland:noinspection GoBoolExpressions
+		runtime.GOOS == windows {
+			return
+		}
 	})
 }
