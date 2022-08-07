@@ -3,7 +3,6 @@ package install
 import (
 	"context"
 	"encoding/hex"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -121,7 +120,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	// prepare
 	ctx := context.Background()
 	i := NewInstaller(error_reporting.NewTestErrorReporter())
-	cliDir, err := ioutil.TempDir("", "")
+	cliDir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(t, err, "Failed to create temp dir")
 	}
