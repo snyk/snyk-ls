@@ -388,8 +388,8 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	assert.Eventually(
 		t,
 		checkForPublishedDiagnostics(workspace.Get(), uri.PathFromUri(didSaveParams.TextDocument.URI), -1),
-		2*time.Second,
-		10*time.Millisecond,
+		60*time.Second,
+		500*time.Millisecond,
 	)
 }
 
@@ -527,7 +527,7 @@ func checkForPublishedDiagnostics(w *workspace.Workspace, testPath string, expec
 				f := w.GetFolderContaining(testPath)
 				hasExpectedDiagnostics := f != nil && (expectedNumber == -1 && len(diagnosticsParams.Diagnostics) > 0) || (len(diagnosticsParams.Diagnostics) == expectedNumber)
 				if hasExpectedDiagnostics {
-					return hasExpectedDiagnostics
+					return true
 				}
 			}
 		}
