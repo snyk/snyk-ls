@@ -54,7 +54,7 @@ func (c SnykCli) Execute(cmd []string, workingDir string) (resp []byte, err erro
 
 func (c SnykCli) doExecute(cmd []string, workingDir string, firstAttempt bool) ([]byte, error) {
 	command := c.getCommand(cmd, workingDir)
-	output, err := command.CombinedOutput()
+	output, err := command.Output()
 	if err != nil {
 		ctx := context.Background()
 		shouldRetry := c.HandleErrors(ctx, string(output), err)
