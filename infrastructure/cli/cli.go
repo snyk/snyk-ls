@@ -41,7 +41,7 @@ func NewExecutor(authenticator snyk.AuthenticationProvider, errorReporter error_
 type Executor interface {
 	Execute(cmd []string, workingDir string) (resp []byte, err error)
 	ExpandParametersFromConfig(base []string) []string
-	HandleErrors(ctx context.Context, output string, err error) (fail bool)
+	HandleErrors(ctx context.Context, output string) (fail bool)
 }
 
 func (c SnykCli) Execute(cmd []string, workingDir string) (resp []byte, err error) {
@@ -57,7 +57,7 @@ func (c SnykCli) doExecute(cmd []string, workingDir string, firstAttempt bool) (
 	output, err := command.Output()
 	if err != nil {
 		ctx := context.Background()
-		shouldRetry := c.HandleErrors(ctx, string(output), err)
+		shouldRetry := c.HandleErrors(ctx, string(output))
 		if firstAttempt && shouldRetry {
 			output, err = c.doExecute(cmd, workingDir, false)
 		}
@@ -114,7 +114,7 @@ func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
 	return append(base, additionalParams...)
 }
 
-func (c SnykCli) HandleErrors(ctx context.Context, output string, err error) (fail bool) {
+func (c SnykCli) HandleErrors(ctx context.Context, output string) (fail bool) {
 	if strings.Contains(output, "`snyk` requires an authenticated account. Please run `snyk auth` and try again.") {
 		log.Info().Msg("Snyk failed to obtain authentication information. Trying to authenticate again...")
 		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Snyk failed to obtain authentication information, trying to authenticate again. This could open a browser window."})
@@ -149,6 +149,6 @@ func (t TestExecutor) ExpandParametersFromConfig(base []string) []string {
 	return nil
 }
 
-func (t TestExecutor) HandleErrors(ctx context.Context, output string, err error) (fail bool) {
+func (t TestExecutor) HandleErrors(ctx context.Context, output string) (fail bool) {
 	return false
 }
