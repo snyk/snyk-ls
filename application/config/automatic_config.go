@@ -50,11 +50,14 @@ func getMavenBinaryName() string {
 }
 
 func (c *Config) findBinary(binaryName string) string {
+	log.Debug().Str("method", "findBinary").Msgf("searching for %s", binaryName)
 	path, _ := exec.LookPath(binaryName)
 	if path != "" {
 		return path
 	}
-	return c.FindBinaryInDirs(binaryName)
+	foundPath := c.FindBinaryInDirs(binaryName)
+	log.Debug().Str("method", "findBinary").Msgf("found: %s", foundPath)
+	return foundPath
 }
 
 func (c *Config) FindBinaryInDirs(binaryName string) (foundPath string) {
