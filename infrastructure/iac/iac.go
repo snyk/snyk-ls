@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -167,7 +167,7 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI) []string {
 
 func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath string) []snyk.Issue {
 	targetFile := filepath.Join(workspacePath, scanResult.TargetFile)
-	rawFileContent, err := ioutil.ReadFile(targetFile)
+	rawFileContent, err := os.ReadFile(targetFile)
 	fileContentString := ""
 	if err != nil {
 		log.Err(err).Msgf("Could not read file content from %s", targetFile)
