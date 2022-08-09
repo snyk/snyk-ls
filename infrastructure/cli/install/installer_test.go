@@ -82,7 +82,7 @@ func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 
 	checksum, err := getChecksum(fakeCliFile.Name())
 	if err != nil {
-		t.Fatal(t, err, "Error calculating temp file checksum")
+		t.Fatal(err, "Error calculating temp file checksum")
 	}
 	checksumString := hex.EncodeToString(checksum)
 
@@ -139,7 +139,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 
 	err = os.Rename(fakeCliFile.Name(), cliFilePath) // rename temp file to CLI file
 	if err != nil {
-		t.Fatal(t, err, "Error renaming temp file")
+		t.Fatal(err, "Error renaming temp file")
 	}
 	defer func(f string) {
 		_ = os.Remove(f)
@@ -148,11 +148,11 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	r := NewCLIRelease()
 	release, err := r.GetLatestRelease(ctx)
 	if err != nil {
-		t.Fatal(t, err, "Error getting latest release info")
+		t.Fatal(err, "Error getting latest release info")
 	}
 	expectedChecksum, err := expectedChecksum(release, &cliDiscovery)
 	if err != nil {
-		t.Fatal(t, err, "Error calculating expected checksum")
+		t.Fatal(err, "Error calculating expected checksum")
 	}
 
 	// act

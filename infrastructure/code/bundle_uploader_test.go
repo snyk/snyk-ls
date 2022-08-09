@@ -95,7 +95,7 @@ func Test_IsSupportedLanguage(t *testing.T) {
 func setup(t *testing.T) string {
 	dir, err := os.MkdirTemp(xdg.DataHome, "createFileOfSize")
 	if err != nil {
-		t.Fatal(t, err, "Couldn't create test directory")
+		t.Fatal(err, "Couldn't create test directory")
 	}
 	return dir
 }
@@ -110,7 +110,7 @@ func createFileOfSize(filename string, contentSize int, dir string, t *testing.T
 	filePath := dir + string(os.PathSeparator) + filename
 	err := os.WriteFile(filePath, buf.Bytes(), 0660)
 	if err != nil {
-		t.Fatal(t, err, "Couldn't write test file")
+		t.Fatal(err, "Couldn't write test file")
 	}
 	return filePath, buf.Bytes()
 }

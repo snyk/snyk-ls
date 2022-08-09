@@ -120,7 +120,7 @@ func Test_dummy_shouldNotBeServed(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "dummy", nil)
 	if err == nil {
-		t.Fatal(t, err, "call succeeded")
+		t.Fatal(err, "call succeeded")
 	}
 }
 
@@ -129,11 +129,11 @@ func Test_initialize_shouldBeServed(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 }
 
@@ -142,11 +142,11 @@ func Test_initialize_containsServerInfo(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	assert.Equal(t, config.LsProtocolVersion, result.ServerInfo.Version)
 }
@@ -156,11 +156,11 @@ func Test_initialize_shouldSupportDocumentOpening(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.OpenClose, true)
 }
@@ -170,11 +170,11 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.Save, &sglsp.SaveOptions{IncludeText: true})
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.WillSave, true)
@@ -186,11 +186,11 @@ func Test_initialize_shouldSupportCodeLenses(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	assert.Equal(t, result.Capabilities.CodeLensProvider.ResolveProvider, false)
 }
@@ -214,7 +214,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	}
 	_, err := loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
-		t.Fatal(t, err, "couldn't initialize")
+		t.Fatal(err, "couldn't initialize")
 	}
 
 	// wait for publish
@@ -237,7 +237,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 
 	var lenses []sglsp.CodeLens
 	if err := rsp.UnmarshalResult(&lenses); err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	assert.NotNil(t, lenses)
 	assert.Len(t, lenses, 1)
@@ -253,11 +253,11 @@ func Test_initialize_updatesSettings(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	assert.Equal(t, "fancy org", config.CurrentConfig().GetOrganization())
 	assert.Equal(t, "xxx", config.CurrentConfig().Token())
@@ -281,12 +281,12 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	}
 	_, err := loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
-		t.Fatal(t, err, "couldn't initialize")
+		t.Fatal(err, "couldn't initialize")
 	}
 
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 
 	// wait for publish
@@ -332,7 +332,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 
 	assert.Eventually(t, func() bool {
@@ -351,7 +351,7 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 
 	didChangeParams := sglsp.DidChangeTextDocumentParams{
@@ -364,7 +364,7 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 
 	_, err = loc.Client.Call(ctx, "textDocument/didChange", didChangeParams)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 }
 
@@ -381,7 +381,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 
 	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 
 	// wait for publish
@@ -398,7 +398,7 @@ func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSaveWaitUntil", nil)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 }
 
@@ -407,7 +407,7 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSave", nil)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 }
 
@@ -425,7 +425,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 		},
 	})
 	if err != nil {
-		t.Fatal(t, err, "error calling server")
+		t.Fatal(err, "error calling server")
 	}
 
 	assert.Eventually(t, func() bool {
@@ -439,7 +439,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 		},
 	})
 	if err != nil {
-		t.Fatal(t, err, "error calling server")
+		t.Fatal(err, "error calling server")
 	}
 
 	assert.Nil(t, w.GetFolderContaining(uri.PathFromUri(f.Uri)))
@@ -476,7 +476,7 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 	var cloneTargetDir, err = setupCustomTestRepo(repo, commit, t)
 	defer os.RemoveAll(cloneTargetDir)
 	if err != nil {
-		t.Fatal(t, err, "Couldn't setup test repo")
+		t.Fatal(err, "Couldn't setup test repo")
 	}
 	folder := lsp.WorkspaceFolder{
 		Name: "Test Repo",
@@ -489,7 +489,7 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 
 	_, err = loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
-		t.Fatal(t, err, "Initialization failed")
+		t.Fatal(err, "Initialization failed")
 	}
 
 	var testPath string
@@ -542,7 +542,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589", t)
 	defer os.RemoveAll(cloneTargetDir)
 	if err != nil {
-		t.Fatal(t, err, "Couldn't setup test repo")
+		t.Fatal(err, "Couldn't setup test repo")
 	}
 	folder := lsp.WorkspaceFolder{
 		Name: "Test Repo",
@@ -554,7 +554,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 
 	_, err = loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
-		t.Fatal(t, err, "Initialization failed")
+		t.Fatal(err, "Initialization failed")
 	}
 
 	// wait till the whole workspace is scanned
@@ -576,13 +576,13 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	})
 
 	if err != nil {
-		t.Fatal(t, err, "Hover retrieval failed")
+		t.Fatal(err, "Hover retrieval failed")
 	}
 
 	hoverResult := hover.Result{}
 	err = hoverResp.UnmarshalResult(&hoverResult)
 	if err != nil {
-		t.Fatal(t, err, "Hover retrieval failed")
+		t.Fatal(err, "Hover retrieval failed")
 	}
 
 	assert.Equal(t, hoverResult.Contents.Value, di.HoverService().GetHover(uri.PathToUri(testPath), testPosition).Contents.Value)
@@ -598,7 +598,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589", t)
 	defer os.RemoveAll(cloneTargetDir)
 	if err != nil {
-		t.Fatal(t, err, "Couldn't setup test repo")
+		t.Fatal(err, "Couldn't setup test repo")
 	}
 
 	testPath := filepath.Join(cloneTargetDir, "app.js")
@@ -615,7 +615,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 func textDocumentDidOpen(loc *server.Local, testPath string, t *testing.T) sglsp.DidOpenTextDocumentParams {
 	testFileContent, err := os.ReadFile(testPath)
 	if err != nil {
-		t.Fatal(t, err, "Couldn't read file content of test file")
+		t.Fatal(err, "Couldn't read file content of test file")
 	}
 
 	didOpenParams := sglsp.DidOpenTextDocumentParams{
@@ -627,7 +627,7 @@ func textDocumentDidOpen(loc *server.Local, testPath string, t *testing.T) sglsp
 
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
-		t.Fatal(t, err, "Call failed")
+		t.Fatal(err, "Call failed")
 	}
 
 	return didOpenParams
@@ -637,7 +637,7 @@ func setupCustomTestRepo(url string, targetCommit string, t *testing.T) (string,
 	workDir := xdg.DataHome // tempdir doesn't work well as it gets too long on macOS
 	tempDir, err := os.MkdirTemp(workDir, "")
 	if err != nil {
-		t.Fatal(t, err, "couldn't create tempDir")
+		t.Fatal(err, "couldn't create tempDir")
 	}
 	repoDir := "1"
 	absoluteCloneRepoDir := filepath.Join(tempDir, repoDir)
@@ -653,7 +653,7 @@ func setupCustomTestRepo(url string, targetCommit string, t *testing.T) (string,
 
 	output, err := clone.CombinedOutput()
 	if err != nil {
-		t.Fatal(t, err, "clone didn't work")
+		t.Fatal(err, "clone didn't work")
 	}
 
 	log.Debug().Msg(string(output))

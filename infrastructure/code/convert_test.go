@@ -628,19 +628,19 @@ func setupConversionTests(t *testing.T) (string, []snyk.Issue, SarifResponse) {
 	testutil.UnitTest(t)
 	temp, err := os.MkdirTemp(xdg.DataHome, "conversionTests")
 	if err != nil {
-		t.Fatal(t, err, "couldn't create directory for conversion tests")
+		t.Fatal(err, "couldn't create directory for conversion tests")
 	}
 	path := filepath.Join(temp, "Dummy.java")
 	err = os.WriteFile(path, []byte(strings.Repeat("aa\n", 1000)), 0660)
 	if err != nil {
-		t.Fatal(t, err, "couldn't write test file")
+		t.Fatal(err, "couldn't write test file")
 	}
 	var analysisResponse SarifResponse
 	responseJson := getSarifResponseJson(path)
 	err = json.Unmarshal([]byte(responseJson), &analysisResponse)
 
 	if err != nil {
-		t.Fatal(t, err, "couldn't unmarshal sarif response")
+		t.Fatal(err, "couldn't unmarshal sarif response")
 	}
 
 	issues := analysisResponse.toIssues()

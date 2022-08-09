@@ -33,7 +33,7 @@ func TestWorkspaceDidChangeConfiguration(t *testing.T) {
 	}}
 	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
 	if err != nil {
-		t.Fatal(t, err, "error calling server")
+		t.Fatal(err, "error calling server")
 	}
 
 	c := config.CurrentConfig()

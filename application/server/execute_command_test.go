@@ -22,7 +22,7 @@ func Test_executeCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) 
 	params := lsp.ExecuteCommandParams{Command: snyk.WorkspaceScanCommand}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	assert.Eventually(t, func() bool {
 		return scanner.Calls() > 0
@@ -37,12 +37,12 @@ func Test_initializeHandler_shouldOfferWorkspaceScanCommand(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	var result lsp2.InitializeResult
 	err = rsp.UnmarshalResult(&result)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.WorkspaceScanCommand)
 }

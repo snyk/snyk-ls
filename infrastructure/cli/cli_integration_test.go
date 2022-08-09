@@ -27,7 +27,7 @@ func Test_HandleErrors_MissingTokenError(t *testing.T) { // todo: check if still
 	ctx := context.Background()
 	path, err := install.NewInstaller(di.ErrorReporter()).Find()
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	config.CurrentConfig().CliSettings().SetPath(path)
 	cli := di.SnykCli()
@@ -50,7 +50,7 @@ func Test_Execute_HandlesErrors(t *testing.T) {
 	config.CurrentConfig().SetToken("")
 	path, err := install.NewInstaller(di.ErrorReporter()).Find()
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	// remove config for cli, to ensure no token
 	cliConfig := xdg.Home + "/.config/configstore/snyk.json"

@@ -48,11 +48,11 @@ func TestCreateBundle(t *testing.T) {
 		err := os.WriteFile(file, []byte(data), 0600)
 
 		if err != nil {
-			t.Fatal(t, err)
+			t.Fatal(err)
 		}
 		_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
 		if err != nil {
-			t.Fatal(t, err)
+			t.Fatal(err)
 		}
 		assert.Len(t, missingFiles, 1, "bundle should have 1 missing files")
 		assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 1, "bundle should called createBundle once")
@@ -63,11 +63,11 @@ func TestCreateBundle(t *testing.T) {
 		data := strings.Repeat("a", maxFileSize+1)
 		err := os.WriteFile(file, []byte(data), 0600)
 		if err != nil {
-			t.Fatal(t, err)
+			t.Fatal(err)
 		}
 		_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
 		if err != nil {
-			t.Fatal(t, err)
+			t.Fatal(err)
 		}
 		assert.Len(t, missingFiles, 0, "bundle should not have missing files")
 		assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")
@@ -80,11 +80,11 @@ func TestCreateBundle(t *testing.T) {
 			fd.Close()
 		})
 		if err != nil {
-			t.Fatal(t, err)
+			t.Fatal(err)
 		}
 		_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
 		if err != nil {
-			t.Fatal(t, err)
+			t.Fatal(err)
 		}
 		assert.Len(t, missingFiles, 0, "bundle should not have missing files")
 		assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")
@@ -97,11 +97,11 @@ func TestCreateBundle(t *testing.T) {
 			fd.Close()
 		})
 		if err != nil {
-			t.Fatal(t, err)
+			t.Fatal(err)
 		}
 		_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
 		if err != nil {
-			t.Fatal(t, err)
+			t.Fatal(err)
 		}
 		assert.Len(t, missingFiles, 0, "bundle should not have missing files")
 		assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")

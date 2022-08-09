@@ -68,11 +68,11 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 
 	rsp, err := loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	var result lsp.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 
 	progressTracker := progress.NewTracker(true)
@@ -101,7 +101,7 @@ func TestCancelProgress(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 
 	expectedWorkdoneProgressCancelParams := lsp.WorkdoneProgressCancelParams{
@@ -109,7 +109,7 @@ func TestCancelProgress(t *testing.T) {
 	}
 	_, err = loc.Client.Call(ctx, "window/workDoneProgress/cancel", expectedWorkdoneProgressCancelParams)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 
 	assert.Eventually(t, func() bool {
@@ -124,7 +124,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	var expected = lsp.AuthenticationParams{Token: "test token"}
 
@@ -155,7 +155,7 @@ func Test_IsAvailableCliNotification(t *testing.T) {
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
-		t.Fatal(t, err)
+		t.Fatal(err)
 	}
 	var expected = lsp.SnykIsAvailableCli{CliPath: "path"}
 
