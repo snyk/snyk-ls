@@ -5,7 +5,7 @@ import (
 	"net/url"
 )
 
-//Issue models a problem, vulnerability, or situation within your code that requires your attention
+// Issue models a problem, vulnerability, or situation within your code that requires your attention
 type Reference struct {
 	Title string
 	Url   *url.URL
