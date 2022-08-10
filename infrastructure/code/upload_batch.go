@@ -23,7 +23,7 @@ func NewUploadBatch() UploadBatch {
 	}
 }
 
-//todo simplify the size computation
+// todo simplify the size computation
 // maybe consider an addFile / canFitFile interface with proper error handling
 func (b *UploadBatch) canFitFile(uri string, content []byte) bool {
 	docPayloadSize := b.getTotalDocPayloadSize(uri, content)

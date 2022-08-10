@@ -13,7 +13,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-//todo can we do without a singleton?
+// todo can we do without a singleton?
 var instance *Workspace
 var mutex = &sync.Mutex{}
 
@@ -31,7 +31,7 @@ func New(instrumentor performance.Instrumentor) *Workspace {
 	}
 }
 
-//todo can we move to di?
+// todo can we move to di?
 func Get() *Workspace {
 	mutex.Lock()
 	defer mutex.Unlock()

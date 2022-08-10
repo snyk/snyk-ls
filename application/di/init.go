@@ -77,7 +77,7 @@ func initInfrastructure() {
 	)
 }
 
-//TODO this is becoming a hot mess we need to unify integ. test strategies
+// TODO this is becoming a hot mess we need to unify integ. test strategies
 func TestInit(t *testing.T) {
 	initMutex.Lock()
 	defer initMutex.Unlock()

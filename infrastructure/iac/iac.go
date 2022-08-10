@@ -205,7 +205,7 @@ func (iac *Scanner) trackResult(success bool) {
 	})
 }
 
-//todo this needs to be pushed up to presentation
+// todo this needs to be pushed up to presentation
 func (iac *Scanner) getExtendedMessage(issue iacIssue) string {
 	title := issue.Title
 	description := issue.IacDescription.Issue
