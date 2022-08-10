@@ -170,7 +170,9 @@ func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath str
 	rawFileContent, err := os.ReadFile(targetFile)
 	fileContentString := ""
 	if err != nil {
-		log.Err(err).Msgf("Could not read file content from %s", targetFile)
+		errorMessage := "Could not read file content from " + targetFile
+		log.Err(err).Msg(errorMessage)
+		iac.errorReporter.CaptureError(errors.Wrap(err, errorMessage))
 	} else {
 		fileContentString = string(rawFileContent)
 	}
