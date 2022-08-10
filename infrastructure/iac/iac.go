@@ -69,7 +69,7 @@ func (iac *Scanner) SupportedCommands() []snyk.CommandName {
 	return []snyk.CommandName{}
 }
 
-func (iac *Scanner) Scan(ctx context.Context, path string, _ string, _ []string) (issues []snyk.Issue) {
+func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue) {
 	documentURI := uri.PathToUri(path) //todo get rid of lsp dep
 	if !iac.isSupported(documentURI) {
 		return

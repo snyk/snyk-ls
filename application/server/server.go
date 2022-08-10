@@ -171,7 +171,11 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 				w.AddFolder(f)
 			}
 		} else {
-			w.AddFolder(workspace.NewFolder(params.RootPath, params.ClientInfo.Name, di.Scanner(), di.HoverService()))
+			if params.RootURI != "" {
+				w.AddFolder(workspace.NewFolder(uri.PathFromUri(params.RootURI), params.ClientInfo.Name, di.Scanner(), di.HoverService()))
+			} else if params.RootPath != "" {
+				w.AddFolder(workspace.NewFolder(params.RootPath, params.ClientInfo.Name, di.Scanner(), di.HoverService()))
+			}
 		}
 		w.ScanWorkspace(ctx)
 		return lsp.InitializeResult{

@@ -69,7 +69,9 @@ func (w *Workspace) GetFolderContaining(path string) (folder *Folder) {
 }
 
 func (w *Workspace) ScanWorkspace(ctx context.Context) {
-	notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Workspace scan started."})
+	if len(w.folders) > 0 {
+		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Workspace scan started."})
+	}
 
 	for _, folder := range w.folders {
 		go folder.ScanFolder(ctx)

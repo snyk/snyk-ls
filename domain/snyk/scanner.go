@@ -15,10 +15,7 @@ type Scanner interface {
 		ctx context.Context,
 		path string,
 		processResults ScanResultProcessor,
-		//todo deliberately calling this garbage because they need to go away - these nonsensical params are here because
-		//code and cli based scans have a slightly different modus operandi. We need to unify that and clean this interface
-		legacyWorkspacePath string,
-		legacyFilesToScan []string,
+		folderPath string,
 	)
 }
 
@@ -48,8 +45,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	ctx context.Context,
 	path string,
 	processResults ScanResultProcessor,
-	legacyWorkspacePath string,
-	legacyFilesToScan []string,
+	folderPath string,
 ) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
 
@@ -68,7 +64,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				defer sc.instrumentor.Finish(span)
 				log.Debug().Msgf("Scanning %s with %T: STARTED", path, s)
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
-				foundIssues := s.Scan(span.Context(), path, legacyWorkspacePath, legacyFilesToScan)
+				foundIssues := s.Scan(span.Context(), path, folderPath)
 				processResults(foundIssues)
 				log.Debug().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
 			}(scanner)
@@ -76,5 +72,5 @@ func (sc *DelegatingConcurrentScanner) Scan(
 			log.Debug().Msgf("Skipping scan with %T because it is not enabled", scanner)
 		}
 	}
-	log.Debug().Msgf("All product line scanners started for %s", path)
+	log.Debug().Msgf("All product scanners started for %s", path)
 }

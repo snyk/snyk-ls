@@ -1,4 +1,5 @@
-package files
+// This package defines basic interfaces to a file system.
+package filesystem
 
 import (
 	"os"
@@ -7,14 +8,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-type FileUtil struct{}
+type Filesystem struct{}
 
-func New() *FileUtil {
-	return &FileUtil{}
+func New() *Filesystem {
+	return &Filesystem{}
 }
 
 // GetLineOfCode returns the line of code from file (1-based)
-func (f *FileUtil) GetLineOfCode(filePath string, line int) (string, error) {
+func (f *Filesystem) GetLineOfCode(filePath string, line int) (string, error) {
 	if line <= 0 {
 		return "", errors.Errorf("invalid line number %d", line)
 	}
@@ -28,7 +29,7 @@ func (f *FileUtil) GetLineOfCode(filePath string, line int) (string, error) {
 	return "", errors.Errorf("line number above number of lines")
 }
 
-func (f *FileUtil) readFile(filePath string) (lines []string, err error) {
+func (f *Filesystem) readFile(filePath string) (lines []string, err error) {
 	bytes, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err

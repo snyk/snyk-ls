@@ -2,9 +2,16 @@ package code
 
 import (
 	"context"
+	"fmt"
+	"math"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
+	ignore "github.com/sabhiram/go-gitignore"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -13,6 +20,8 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type Scanner struct {
@@ -20,6 +29,8 @@ type Scanner struct {
 	SnykApiClient  snyk_api.SnykApiClient
 	errorReporter  error_reporting.ErrorReporter
 	analytics      ux2.Analytics
+	ignorePatterns []string
+	mutex          sync.Mutex
 }
 
 func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter error_reporting.ErrorReporter, analytics ux2.Analytics) *Scanner {
@@ -44,10 +55,118 @@ func (sc *Scanner) SupportedCommands() []snyk.CommandName {
 	return []snyk.CommandName{snyk.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, _ string, workspacePath string, files []string) []snyk.Issue {
+func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk.Issue {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
-	return sc.UploadAndAnalyze(span.Context(), files, workspacePath)
+
+	files, err := sc.files(folderPath)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("method", "domain.ide.workspace.Folder.ScanFolder").
+			Str("workspaceFolderPath", folderPath).
+			Msg("error getting workspace files")
+	}
+
+	return sc.UploadAndAnalyze(span.Context(), files, folderPath)
+}
+
+func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
+	t := progress.NewTracker(false)
+	workspace, err := filepath.Abs(folderPath)
+	t.Begin(fmt.Sprintf("Snyk Code: Enumerating files in %s", folderPath), "Evaluating ignores and counting files...")
+
+	if err != nil {
+		return filePaths, err
+	}
+	sc.mutex.Lock()
+	var fileCount int
+	if sc.ignorePatterns == nil {
+		fileCount, err = sc.loadIgnorePatternsAndCountFiles(folderPath)
+		if err != nil {
+			return filePaths, err
+		}
+	}
+
+	gitIgnore := ignore.CompileIgnoreLines(sc.ignorePatterns...)
+	sc.mutex.Unlock()
+	filesWalked := 0
+	log.Debug().Str("method", "folder.Files").Msgf("Filecount: %d", fileCount)
+	err = filepath.WalkDir(workspace, func(path string, dirEntry os.DirEntry, err error) error {
+		filesWalked++
+		percentage := math.Round(float64(filesWalked) / float64(fileCount) * 100)
+		t.ReportWithMessage(
+			int(percentage),
+			fmt.Sprintf("Loading file contents for scan... (%d of %d)", filesWalked, fileCount))
+		if err != nil {
+			log.Debug().
+				Str("method", "domain.ide.workspace.Folder.Files").
+				Str("path", path).
+				Err(err).
+				Msg("error traversing files")
+			return nil
+		}
+		if dirEntry == nil || dirEntry.IsDir() {
+			if util.Ignored(gitIgnore, path) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if util.Ignored(gitIgnore, path) {
+			return nil
+		}
+
+		filePaths = append(filePaths, path)
+		return err
+	})
+	t.End("All relevant files collected")
+	if err != nil {
+		return filePaths, err
+	}
+	return filePaths, nil
+}
+
+func (sc *Scanner) loadIgnorePatternsAndCountFiles(folderPath string) (fileCount int, err error) {
+	var ignores = ""
+	log.Debug().
+		Str("method", "loadIgnorePatternsAndCountFiles").
+		Str("workspace", folderPath).
+		Msg("searching for ignore files")
+	err = filepath.WalkDir(folderPath, func(path string, dirEntry os.DirEntry, err error) error {
+		fileCount++
+		if err != nil {
+			log.Debug().
+				Str("method", "loadIgnorePatternsAndCountFiles - walker").
+				Str("path", path).
+				Err(err).
+				Msg("error traversing files")
+			return nil
+		}
+		if dirEntry == nil || dirEntry.IsDir() {
+			return nil
+		}
+
+		if !(strings.HasSuffix(path, ".gitignore") || strings.HasSuffix(path, ".dcignore")) {
+			return nil
+		}
+		log.Debug().Str("method", "loadIgnorePatternsAndCountFiles").Str("file", path).Msg("found ignore file")
+		content, err := os.ReadFile(path)
+		if err != nil {
+			log.Err(err).Msg("Can't read" + path)
+		}
+		ignores += string(content)
+		return err
+	})
+
+	if err != nil {
+		return fileCount, err
+	}
+
+	patterns := strings.Split(ignores, "\n")
+	sc.ignorePatterns = patterns
+	log.Debug().Interface("ignorePatterns", patterns).Msg("Loaded and set ignore patterns")
+	return fileCount, nil
 }
 
 func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path string) (issues []snyk.Issue) {

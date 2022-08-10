@@ -37,7 +37,7 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, executor)
-	scanner.Scan(context.Background(), path, "", nil)
+	scanner.Scan(context.Background(), path, "")
 
 	assert.Len(t, analytics.GetAnalytics(), 1)
 	assert.Equal(t, ux2.AnalysisIsReadyProperties{

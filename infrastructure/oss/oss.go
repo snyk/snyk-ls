@@ -100,7 +100,7 @@ func (oss *Scanner) Product() snyk.Product {
 	return snyk.ProductOpenSource
 }
 
-func (oss *Scanner) Scan(ctx context.Context, path string, _ string, _ []string) (issues []snyk.Issue) {
+func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue) {
 	documentURI := uri.PathToUri(path) //todo get rid of lsp dep
 	if !oss.isSupported(documentURI) {
 		log.Debug().Msgf("OSS Scan not supported for %s", path)
