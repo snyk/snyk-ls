@@ -54,7 +54,7 @@ func Test_UpdateSettings(t *testing.T) {
 	testutil.UnitTest(t)
 
 	t.Run("all settings", func(t *testing.T) {
-		config.SetCurrentConfig(config.New([]string{}))
+		config.SetCurrentConfig(config.New())
 
 		settings := lsp.Settings{
 			ActivateSnykOpenSource:      "false",
@@ -94,7 +94,7 @@ func Test_UpdateSettings(t *testing.T) {
 	})
 
 	t.Run("blank organisation is ignored", func(t *testing.T) {
-		config.SetCurrentConfig(config.New([]string{}))
+		config.SetCurrentConfig(config.New())
 
 		UpdateSettings(context.Background(), lsp.Settings{Organization: " "})
 
@@ -103,7 +103,7 @@ func Test_UpdateSettings(t *testing.T) {
 	})
 
 	t.Run("incomplete env vars", func(t *testing.T) {
-		config.SetCurrentConfig(config.New([]string{}))
+		config.SetCurrentConfig(config.New())
 
 		UpdateSettings(context.Background(), lsp.Settings{AdditionalEnv: "a="})
 
@@ -111,7 +111,7 @@ func Test_UpdateSettings(t *testing.T) {
 	})
 
 	t.Run("empty env vars", func(t *testing.T) {
-		config.SetCurrentConfig(config.New([]string{}))
+		config.SetCurrentConfig(config.New())
 
 		UpdateSettings(context.Background(), lsp.Settings{AdditionalEnv: " "})
 
@@ -119,7 +119,7 @@ func Test_UpdateSettings(t *testing.T) {
 	})
 
 	t.Run("broken env variables", func(t *testing.T) {
-		config.SetCurrentConfig(config.New([]string{}))
+		config.SetCurrentConfig(config.New())
 
 		UpdateSettings(context.Background(), lsp.Settings{AdditionalEnv: "a=; b"})
 

@@ -9,7 +9,7 @@ import (
 )
 
 func TestSetToken(t *testing.T) {
-	SetCurrentConfig(New([]string{})) // can't use testutil here because of cyclical imports
+	SetCurrentConfig(New()) // can't use testutil here because of cyclical imports
 	oldToken := CurrentConfig().Token()
 	CurrentConfig().SetToken("asdf")
 	assert.Equal(t, CurrentConfig().Token(), "asdf")
@@ -17,7 +17,7 @@ func TestSetToken(t *testing.T) {
 }
 
 func TestConfigDefaults(t *testing.T) {
-	c := New([]string{})
+	c := New()
 
 	assert.True(t, c.IsTelemetryEnabled(), "Telemetry should be enabled by default")
 	assert.True(t, c.IsErrorReportingEnabled(), "Error Reporting should be enabled by default")
@@ -44,7 +44,7 @@ func Test_SnykCodeAnalysisTimeoutReturnsDefaultIfNoEnvVariableFound(t *testing.T
 
 func Test_updatePath(t *testing.T) {
 	t.Setenv("PATH", "a")
-	c := New([]string{})
+	c := New()
 	c.updatePath("b")
 	assert.Contains(t, c.path, string(os.PathListSeparator)+"b")
 	assert.Contains(t, c.path, "a"+string(os.PathListSeparator))

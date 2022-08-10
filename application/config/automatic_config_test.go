@@ -13,14 +13,14 @@ import (
 func Test_updatePathWithDefaults(t *testing.T) {
 	t.Run("initialize path from environment", func(t *testing.T) {
 		pathFromEnv := os.Getenv("PATH")
-		c := New([]string{})
+		c := New()
 		assert.Contains(t, c.Path(), pathFromEnv)
 	})
 
 	t.Run("add to path from environment", func(t *testing.T) {
 		pathFromEnv := "a"
 		t.Setenv("PATH", pathFromEnv)
-		c := New([]string{})
+		c := New()
 		c.updatePath("b")
 		assert.Contains(t, c.path, pathSeparator+"b")
 		assert.Contains(t, c.path, pathFromEnv+pathSeparator)
@@ -31,7 +31,7 @@ func Test_updatePathWithDefaults(t *testing.T) {
 		runtime.GOOS == windows {
 			t.Skipf("only added to the path on linux and macOS, this is windows")
 		}
-		c := New([]string{})
+		c := New()
 		assert.Contains(t, c.Path(), pathSeparator+"/usr/local/bin")
 	})
 
@@ -40,7 +40,7 @@ func Test_updatePathWithDefaults(t *testing.T) {
 		runtime.GOOS == windows {
 			t.Skipf("only added to the path on linux and macOS, this is windows")
 		}
-		c := New([]string{})
+		c := New()
 		assert.Contains(t, c.Path(), pathSeparator+"/bin")
 	})
 
@@ -49,14 +49,14 @@ func Test_updatePathWithDefaults(t *testing.T) {
 		runtime.GOOS == windows {
 			t.Skipf("only added to the path on linux and macOS, this is windows")
 		}
-		c := New([]string{})
+		c := New()
 		assert.Contains(t, c.Path(), pathSeparator+xdg.Home+"/bin")
 	})
 
 	t.Run("automatically add $JAVA_HOME/bin if set", func(t *testing.T) {
 		javaHome := "JAVA_HOME_DUMMY"
 		t.Setenv("JAVA_HOME", javaHome)
-		c := New([]string{})
+		c := New()
 		assert.Contains(t, c.Path(), pathSeparator+javaHome+string(os.PathSeparator)+"bin")
 	})
 }
@@ -80,7 +80,8 @@ func Test_FindBinaries(t *testing.T) {
 		}
 		defer file.Close()
 
-		New([]string{})
+		c := New()
+		c.AddBinaryLocationsToPath([]string{dir})
 
 		assert.Contains(t, os.Getenv("JAVA_HOME"), dir)
 	})
@@ -133,7 +134,7 @@ func Test_FindBinaries(t *testing.T) {
 		}
 		defer file.Close()
 
-		New([]string{})
+		New()
 
 		assert.Contains(t, os.Getenv("PATH"), binDir)
 	})

@@ -11,7 +11,7 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog/log"
 
-	config2 "github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/application/server"
 )
@@ -27,27 +27,17 @@ func main() {
 		}
 	}()
 
-	// these directories are searched to find binaries (e.g. java, maven, etc)
-	defaultDirs := []string{
-		filepath.Join(xdg.Home, ".sdkman"),
-		"/usr/lib",
-		"/usr/java",
-		"/opt",
-		"/Library",
-		"C:\\Program Files",
-		"C:\\Program Files (x86)",
-	}
-	output, err := parseFlags(os.Args, defaultDirs)
+	output, err := parseFlags(os.Args)
 	if err != nil {
 		fmt.Println(err, output)
 		os.Exit(1)
 	}
-	log.Info().Msg(config2.Version)
+	log.Info().Msg(config.Version)
 	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
 	server.Start()
 }
 
-func parseFlags(args []string, defaultDirs []string) (string, error) {
+func parseFlags(args []string) (string, error) {
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	var buf bytes.Buffer
 	flags.SetOutput(&buf)
@@ -56,8 +46,8 @@ func parseFlags(args []string, defaultDirs []string) (string, error) {
 	logPathFlag := flags.String("f", "", "sets the log file for the language server")
 	formatFlag := flags.String(
 		"o",
-		config2.FormatMd,
-		"sets format of diagnostics. Accepted values \""+config2.FormatMd+"\" and \""+config2.FormatHtml+"\"")
+		config.FormatMd,
+		"sets format of diagnostics. Accepted values \""+config.FormatMd+"\" and \""+config.FormatHtml+"\"")
 	configFlag := flags.String(
 		"c",
 		"",
@@ -72,18 +62,29 @@ func parseFlags(args []string, defaultDirs []string) (string, error) {
 		return buf.String(), err
 	}
 
-	c := config2.New(defaultDirs)
+	c := config.New()
 	c.SetConfigFile(*configFlag)
 	c.Load()
+	// these directories are searched to find binaries (e.g. java, maven, etc)
+	c.AddBinaryLocationsToPath(
+		[]string{
+			filepath.Join(xdg.Home, ".sdkman"),
+			"/usr/lib",
+			"/usr/java",
+			"/opt",
+			"/Library",
+			"C:\\Program Files",
+			"C:\\Program Files (x86)",
+		})
 
 	c.SetLogPath(*logPathFlag)
 	c.ConfigureLogging(*logLevelFlag)
 
 	c.SetFormat(*formatFlag)
-	if os.Getenv(config2.SendErrorReportsKey) == "" {
+	if os.Getenv(config.SendErrorReportsKey) == "" {
 		c.SetErrorReportingEnabled(*reportErrorsFlag)
 	}
 
-	config2.SetCurrentConfig(c)
+	config.SetCurrentConfig(c)
 	return buf.String(), nil
 }

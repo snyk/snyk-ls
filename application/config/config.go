@@ -105,7 +105,7 @@ func CurrentConfig() *Config {
 	mutex.Lock()
 	defer mutex.Unlock()
 	if currentConfig == nil {
-		currentConfig = New([]string{})
+		currentConfig = New()
 	}
 	return currentConfig
 }
@@ -121,9 +121,8 @@ func IsDevelopment() bool {
 	return parseBool
 }
 
-func New(defaultDirs []string) *Config {
+func New() *Config {
 	c := &Config{}
-	c.defaultDirs = defaultDirs
 	c.cliSettings = &CliSettings{}
 	c.configFile = ""
 	c.format = "md"
@@ -138,9 +137,15 @@ func New(defaultDirs []string) *Config {
 	c.snykCodeAnalysisTimeout = snykCodeAnalysisTimeoutFromEnv()
 	c.token = ""
 	c.clientSettingsFromEnv()
-	c.addDefaults()
 	c.deviceId = c.determineDeviceId()
+	c.addDefaults()
 	return c
+}
+
+func (c *Config) AddBinaryLocationsToPath(searchDirectories []string) {
+	c.defaultDirs = searchDirectories
+	c.determineJavaHome()
+	c.determineMavenHome()
 }
 
 func (c *Config) determineDeviceId() string {
@@ -431,7 +436,7 @@ func (c *Config) Path() string {
 
 func (c *Config) addDefaults() {
 	if //goland:noinspection GoBoolExpressions
-	runtime.GOOS != "windows" {
+	runtime.GOOS != windows {
 		c.updatePath("/usr/local/bin")
 		c.updatePath("/bin")
 		c.updatePath(xdg.Home + "/bin")
