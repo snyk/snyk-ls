@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -166,8 +167,17 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI) []string {
 
 func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath string) []snyk.Issue {
 	targetFile := filepath.Join(workspacePath, scanResult.TargetFile)
-	log.Debug().Msgf("found %v IAC issues for file %s", len(scanResult.IacIssues), targetFile)
+	rawFileContent, err := os.ReadFile(targetFile)
+	fileContentString := ""
+	if err != nil {
+		errorMessage := "Could not read file content from " + targetFile
+		log.Err(err).Msg(errorMessage)
+		iac.errorReporter.CaptureError(errors.Wrap(err, errorMessage))
+	} else {
+		fileContentString = string(rawFileContent)
+	}
 
+	log.Debug().Msgf("found %v IAC issues for file %s", len(scanResult.IacIssues), targetFile)
 	var issues []snyk.Issue
 
 	for _, issue := range scanResult.IacIssues {
@@ -177,7 +187,7 @@ func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath str
 			issue.LineNumber = 0
 		}
 
-		issues = append(issues, iac.toIssue(targetFile, issue))
+		issues = append(issues, iac.toIssue(targetFile, issue, fileContentString))
 	}
 	return issues
 }
@@ -214,7 +224,9 @@ func (iac *Scanner) getExtendedMessage(issue iacIssue) string {
 
 }
 
-func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue) snyk.Issue {
+func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent string) snyk.Issue {
+	const defaultRangeStart = 0
+	const defaultRangeEnd = 80
 	title := issue.IacDescription.Issue
 	if config.CurrentConfig().Format() == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
@@ -222,11 +234,26 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue) snyk.Issue 
 	codeActionTitle := fmt.Sprintf("Open description of '%s' in browser (Snyk)", issue.Title)
 	issueURL := iac.createIssueURL(issue.PublicID)
 
+	// Try to gather the length of the line for the range
+	rangeStart := defaultRangeStart
+	rangeEnd := defaultRangeEnd
+	if fileContent != "" {
+		lines := strings.Split(strings.ReplaceAll(fileContent, "\r\n", "\n"), "\n")
+		if len(lines) > (issue.LineNumber) {
+			line := lines[issue.LineNumber]
+			lineLength := len(line)
+			trimmedLineLength := len(strings.TrimLeft(line, " "))
+			leadingSpacesCount := lineLength - trimmedLineLength
+			rangeStart = leadingSpacesCount
+			rangeEnd = lineLength
+		}
+	}
+
 	return snyk.Issue{
 		ID: issue.PublicID,
 		Range: snyk.Range{
-			Start: snyk.Position{Line: issue.LineNumber, Character: 0},
-			End:   snyk.Position{Line: issue.LineNumber, Character: 80},
+			Start: snyk.Position{Line: issue.LineNumber, Character: rangeStart},
+			End:   snyk.Position{Line: issue.LineNumber, Character: rangeEnd},
 		},
 		Message:             fmt.Sprintf("%s (Snyk)", title),
 		FormattedMessage:    iac.getExtendedMessage(issue),
