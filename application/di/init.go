@@ -1,9 +1,13 @@
 package di
 
 import (
+	"path/filepath"
 	"sync"
 	"testing"
 
+	"github.com/adrg/xdg"
+
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	errorreporting "github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -60,6 +64,17 @@ func initDomain() {
 }
 
 func initInfrastructure() {
+	config.CurrentConfig().AddBinaryLocationsToPath(
+		[]string{
+			filepath.Join(xdg.Home, ".sdkman"),
+			"/usr/lib",
+			"/usr/java",
+			"/opt",
+			"/Library",
+			"C:\\Program Files",
+			"C:\\Program Files (x86)",
+		})
+
 	errorReporter = sentry2.NewSentryErrorReporter()
 	instrumentor = sentry2.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient()

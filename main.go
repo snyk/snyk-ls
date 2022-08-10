@@ -5,10 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime/debug"
 
-	"github.com/adrg/xdg"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -66,16 +64,6 @@ func parseFlags(args []string) (string, error) {
 	c.SetConfigFile(*configFlag)
 	c.Load()
 	// these directories are searched to find binaries (e.g. java, maven, etc)
-	c.AddBinaryLocationsToPath(
-		[]string{
-			filepath.Join(xdg.Home, ".sdkman"),
-			"/usr/lib",
-			"/usr/java",
-			"/opt",
-			"/Library",
-			"C:\\Program Files",
-			"C:\\Program Files (x86)",
-		})
 
 	c.SetLogPath(*logPathFlag)
 	c.ConfigureLogging(*logLevelFlag)
