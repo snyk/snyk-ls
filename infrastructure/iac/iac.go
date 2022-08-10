@@ -120,7 +120,7 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 		switch errorType := err.(type) {
 		case *exec.ExitError:
 			if errorType.ExitCode() > 1 {
-				errorOutput := string(res)
+				errorOutput := string(res) + "\n\n\nSTDERR output:\n" + string(err.(*exec.ExitError).Stderr)
 				if strings.Contains(errorOutput, "Could not find any valid IaC files") ||
 					strings.Contains(errorOutput, "CustomError: Not a recognised option did you mean --file") {
 					return scanResults, nil

@@ -195,6 +195,7 @@ func (oss *Scanner) unmarshallOssJson(res []byte) (scanResults []ossScanResult, 
 	return scanResults, false, err
 }
 
+// Returns true if CLI run failed, false otherwise
 func (oss *Scanner) handleError(err error, res []byte, cmd []string) bool {
 	switch errorType := err.(type) {
 	case *exec.ExitError:
@@ -205,7 +206,8 @@ func (oss *Scanner) handleError(err error, res []byte, cmd []string) bool {
 		//  1: action_needed, vulnerabilities found
 		//  2: failure, try to re-run command
 		//  3: failure, no supported projects detected
-		errorOutput := string(res)
+		exitError := err.(*exec.ExitError)
+		errorOutput := string(res) + "\n\n\nSTDERR:\n" + string(exitError.Stderr)
 		err = errors.Wrap(err, fmt.Sprintf("Snyk CLI error executing %v. Output: %s", cmd, errorOutput))
 		switch errorType.ExitCode() {
 		case 1:
