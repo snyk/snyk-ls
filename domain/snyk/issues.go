@@ -12,7 +12,7 @@ type Reference struct {
 }
 
 type Issue struct {
-	//ID uniquely identifies the issue, it is intended to be human-readable
+	// ID uniquely identifies the issue, it is intended to be human-readable
 	ID        string
 	Severity  Severity
 	IssueType Type
@@ -25,7 +25,7 @@ type Issue struct {
 	// AffectedFilePath is the file path to the file where the issue was found
 	AffectedFilePath string
 	// Product is the Snyk product, e.g. Snyk Open Source
-	Product Product
+	Product Product // todo: can we avoid it, if it's part of a scanner interface already?
 	// References deliver additional information
 	References []Reference
 	// IssueDescriptionURL contains a Uri to display more information
@@ -34,6 +34,23 @@ type Issue struct {
 	CodeActions []CodeAction
 	// Commands that can be executed
 	Commands []Command
+}
+
+func NewIssue(id string, severity Severity, issueType Type, r Range, message string, formattedMessage string, affectedFilePath string, product Product, references []Reference, issueDescriptionUrl *url.URL, codeActions []CodeAction, commands []Command) Issue {
+	return Issue{
+		ID:                  id,
+		Severity:            severity,
+		IssueType:           issueType,
+		Range:               r,
+		Message:             message,
+		FormattedMessage:    formattedMessage,
+		AffectedFilePath:    affectedFilePath,
+		Product:             product,
+		References:          references,
+		IssueDescriptionURL: issueDescriptionUrl,
+		CodeActions:         codeActions,
+		Commands:            commands,
+	}
 }
 
 func (i Issue) String() string {

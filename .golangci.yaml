@@ -31,3 +31,5 @@ output:
 
 run:
   deadline: 10m
+  skip-dirs:
+    - "docs"

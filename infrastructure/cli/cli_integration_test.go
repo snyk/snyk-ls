@@ -2,7 +2,6 @@ package cli_test
 
 import (
 	"context"
-	"errors"
 	"os"
 	"testing"
 	"time"
@@ -31,9 +30,7 @@ func Test_HandleErrors_MissingTokenError(t *testing.T) { // todo: check if still
 	}
 	config.CurrentConfig().CliSettings().SetPath(path)
 	cli := di.SnykCli()
-	err = errors.New("exit status 2")
-
-	retry := cli.HandleErrors(ctx, "`snyk` requires an authenticated account. Please run `snyk auth` and try again.", err)
+	retry := cli.HandleErrors(ctx, "`snyk` requires an authenticated account. Please run `snyk auth` and try again.")
 
 	assert.True(t, retry)
 	assert.Eventually(t, func() bool {

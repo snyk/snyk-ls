@@ -2,12 +2,8 @@ package workspace
 
 import (
 	"context"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
-	"github.com/adrg/xdg"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -25,62 +21,6 @@ func TestAddBundleHashToWorkspaceFolder(t *testing.T) {
 	f.AddProductAttribute(snyk.ProductCode, key, value)
 
 	assert.Equal(t, value, f.GetProductAttribute(snyk.ProductCode, key))
-}
-
-func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {
-	expectedPatterns, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-	defer os.RemoveAll(tempDir)
-	f := NewFolder(tempDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
-
-	_, err := f.loadIgnorePatternsAndCountFiles()
-	if err != nil {
-		t.Fatal(err, "Couldn't load .gitignore from workspace "+tempDir)
-	}
-
-	assert.Equal(t, strings.Split(expectedPatterns, "\n"), f.ignorePatterns)
-}
-
-func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
-	tempDir, err := os.MkdirTemp(xdg.DataHome, "loadIgnoreTest")
-	if err != nil {
-		t.Fatal("can't create temp dir")
-	}
-	defer os.RemoveAll(tempDir)
-	f := NewFolder(tempDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
-
-	_, err = f.loadIgnorePatternsAndCountFiles()
-	if err != nil {
-		t.Fatal(err, "Couldn't load .gitignore from workspace")
-	}
-
-	assert.Equal(t, []string{""}, f.ignorePatterns)
-}
-
-func Test_GetWorkspaceFolderFiles(t *testing.T) {
-	_, tempDir, ignoredFilePath, notIgnoredFilePath, _ := setupIgnoreWorkspace(t)
-	defer os.RemoveAll(tempDir)
-	f := NewFolder(tempDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
-
-	files, err := f.Files()
-	if err != nil {
-		t.Fatal(err, "Error getting workspace folder files: "+tempDir)
-	}
-
-	assert.Len(t, files, 2)
-	assert.Contains(t, files, notIgnoredFilePath)
-	assert.NotContains(t, files, ignoredFilePath)
-}
-
-func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
-	_, tempDir, _, _, ignoredFileInDir := setupIgnoreWorkspace(t)
-	defer os.RemoveAll(tempDir)
-	f := NewFolder(tempDir, "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
-
-	walkedFiles, err := f.Files()
-	if err != nil {
-		t.Fatal(err, "Error while registering "+tempDir)
-	}
-	assert.NotContains(t, walkedFiles, ignoredFileInDir)
 }
 
 func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
@@ -109,46 +49,6 @@ func Test_Scan_WhenCachedResultsButNoIssues_shouldNotReScan(t *testing.T) {
 	f.ScanFile(ctx, filePath)
 
 	assert.Equal(t, 1, scannerRecorder.Calls())
-}
-
-func writeTestGitIgnore(ignorePatterns string, t *testing.T) (tempDir string) {
-	tempDir, err := os.MkdirTemp(xdg.DataHome, "loadIgnorePatternsAndCountFiles")
-	if err != nil {
-		t.Fatal(err, "Couldn't create temp dir")
-	}
-	filePath := filepath.Join(tempDir, ".gitignore")
-	err = os.WriteFile(filePath, []byte(ignorePatterns), 0600)
-	if err != nil {
-		t.Fatal(err, "Couldn't write .gitignore")
-	}
-	return tempDir
-}
-
-func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {
-	expectedPatterns = "*.xml\n**/*.txt\nbin"
-	tempDir = writeTestGitIgnore(expectedPatterns, t)
-
-	ignoredFilePath = filepath.Join(tempDir, "ignored.xml")
-	err := os.WriteFile(ignoredFilePath, []byte("test"), 0600)
-	if err != nil {
-		t.Fatal(err, "Couldn't write ignored file ignored.xml")
-	}
-	notIgnoredFilePath = filepath.Join(tempDir, "not-ignored.java")
-	err = os.WriteFile(notIgnoredFilePath, []byte("test"), 0600)
-	if err != nil {
-		t.Fatal(err, "Couldn't write ignored file not-ignored.java")
-	}
-	ignoredDir := filepath.Join(tempDir, "bin")
-	err = os.Mkdir(ignoredDir, 0755)
-	if err != nil {
-		t.Fatal(err, "Couldn't write ignoreDirectory %s", ignoredDir)
-	}
-	ignoredFileInDir = filepath.Join(ignoredDir, "shouldNotBeWalked.java")
-	err = os.WriteFile(ignoredFileInDir, []byte("public bla"), 0600)
-	if err != nil {
-		t.Fatal(err, "Couldn't write ignored file not-ignored.java")
-	}
-	return expectedPatterns, tempDir, ignoredFilePath, notIgnoredFilePath, ignoredFileInDir
 }
 
 func TestProcessResults_SendsDiagnosticsAndHovers(t *testing.T) {

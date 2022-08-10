@@ -53,7 +53,6 @@ var (
 
 	FakeCodeAction = snyk.CodeAction{
 		Title:       "FakeAction",
-		Issues:      []snyk.Issue{},
 		IsPreferred: false,
 		Edit:        snyk.WorkspaceEdit{},
 		Command:     FakeCommand,

@@ -201,7 +201,7 @@ func (c *Config) Authenticated() bool       { return c.token != "" }
 func (c *Config) CliSettings() *CliSettings { return c.cliSettings }
 func (c *Config) Format() string            { return c.format }
 func (c *Config) CLIDownloadLockFileName() string {
-	return filepath.Join(c.LsPath(), "snyk-cli-download.lock")
+	return filepath.Join(c.DefaultBinaryInstallPath(), "snyk-cli-download.lock")
 }
 func (c *Config) IsErrorReportingEnabled() bool          { return c.isErrorReportingEnabled.Get() }
 func (c *Config) IsSnykOssEnabled() bool                 { return c.isSnykOssEnabled.Get() }
@@ -383,7 +383,7 @@ func (c *Config) SetOrganization(organization string) {
 func (c *Config) UserDirFolder() string {
 	return "snyk-ls"
 }
-func (c *Config) LsPath() string {
+func (c *Config) DefaultBinaryInstallPath() string {
 	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
 	err := os.MkdirAll(lsPath, 0755)
 	if err != nil {

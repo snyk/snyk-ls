@@ -2,15 +2,20 @@ package snyk
 
 import "context"
 
+// type Filepath string
+// See if we can have an interface with a single property Target that can be either a folder or a file. If not, we use ScanTarget as an interface with Target being folder or file and WorkspaceFolder always being a folder to satisfy different product requirements, e.g. OSS & Code.
+// type ScanTarget interface {
+// 	Target Filepath, // see if folder / file
+// 	// WorkspaceFolder Filepath, // which is string
+// }
+
 type ProductScanner interface {
+	// Scans a workspace folder or file for issues, given its path. 'folderPath' provides a path to a workspace folder, if a file needs to be scanned.
 	Scan(
 		//todo do we need context?
 		ctx context.Context,
 		path string,
-		//todo deliberately calling this garbage because they need to go away - these nonsensical params are here because
-		//code and cli based scans have a slightly different modus operandi. We need to unify that and clean this interface
-		legacyWorkspacePath string,
-		legacyFilesToScan []string,
+		folderPath string,
 	) (issues []Issue)
 
 	IsEnabled() bool
