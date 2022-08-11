@@ -89,7 +89,7 @@ synchronization.
 
 ### From Source
 
-- Install `go 1.17.5` or higher, set the `GOPATH` and `GOROOT`
+- Install `go 1.18` or higher, set the `GOPATH` and `GOROOT`
 - Enter the root directory of this repository
 - Execute `go get ./...` to download all dependencies
 - Execute `make build && make install` to produce a `snyk-ls` binary
@@ -167,6 +167,27 @@ The PATH variable is treated differently than all other variables, as it is an a
 the files and in the environment. Also, the current working directory `.` is automatically added to the path, so a
 download of the Snyk CLI into the current working directory by an LSP client would yield a found Snyk CLI for the
 Language Server.
+
+In addition to configuring variables via config files, Snyk LS adds the following directories to the path on linux
+and macOS:
+
+- /bin
+- $HOME/bin
+- /usr/local/bin
+- $JAVA_HOME/bin
+
+If no JAVA_HOME is set, it automatically searches for a java executable first in path, then in the following directories
+and adds the parent directory of its parent as JAVA_HOME. The following directories are recursively searched:
+
+- /usr/lib
+- /usr/java
+- /opt
+- /Library
+- $HOME/.sdkman
+- C:\Program Files
+- C:\Program Files (x86)
+
+The same directories are searched for a maven executable and the parent directory is added to the path.
 
 #### Snyk CLI
 

@@ -49,7 +49,7 @@ func setupCodeFile(t *testing.T) string {
 	fileName := filepath.Join(dir, "testFile")
 	err := os.WriteFile(fileName, []byte("Line1\nLine2\nLine3\nLine4"), 0660)
 	if err != nil {
-		t.Fatal(t, err, "Couldn't create test file")
+		t.Fatal(err, "Couldn't create test file")
 	}
 	return fileName
 }

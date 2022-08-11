@@ -2,7 +2,6 @@ package oss
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -32,7 +31,7 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 	analytics := ux2.NewTestAnalytics()
 	workingDir, _ := os.Getwd()
 	executor := cli.NewTestExecutor()
-	fileContent, _ := ioutil.ReadFile(workingDir + "/testdata/oss-result.json")
+	fileContent, _ := os.ReadFile(workingDir + "/testdata/oss-result.json")
 	executor.ExecuteResponse = string(fileContent)
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
@@ -111,7 +110,7 @@ func TestUnmarshalOssJsonSingle(t *testing.T) {
 		t.Fatal(t, "couldn't get working dir")
 	}
 	var path = filepath.Join(dir, "testdata", "oss-result.json")
-	fileContent, err := ioutil.ReadFile(path)
+	fileContent, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(t, "couldn't read test result file")
 	}
@@ -129,7 +128,7 @@ func TestUnmarshalOssJsonArray(t *testing.T) {
 		t.Fatal(t, "couldn't get working dir")
 	}
 	var path = filepath.Join(dir, "testdata", "oss-result-array.json")
-	fileContent, err := ioutil.ReadFile(path)
+	fileContent, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(t, "couldn't read test result file")
 	}
@@ -147,7 +146,7 @@ func TestUnmarshalOssErroneousJson(t *testing.T) {
 		t.Fatal(t, "couldn't get working dir")
 	}
 	var path = filepath.Join(dir, "testdata", "pom.xml")
-	fileContent, err := ioutil.ReadFile(path)
+	fileContent, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(t, "couldn't read test result file")
 	}

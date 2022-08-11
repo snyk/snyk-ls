@@ -23,6 +23,7 @@ func (c *Config) clientSettingsFromEnv() {
 	c.errorReportsEnablementFromEnv()
 	c.orgFromEnv()
 	c.telemetryEnablementFromEnv()
+	c.path = os.Getenv("PATH")
 }
 
 func (c *Config) orgFromEnv() {

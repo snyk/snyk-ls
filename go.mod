@@ -1,11 +1,11 @@
 module github.com/snyk/snyk-ls
 
-go 1.18
+go 1.19
 
 require (
-	github.com/creachadair/jrpc2 v0.41.0
+	github.com/creachadair/jrpc2 v0.41.1
 	github.com/denisbrodbeck/machineid v1.0.1
-	github.com/gomarkdown/markdown v0.0.0-20220627144906-e9a81102ebeb
+	github.com/gomarkdown/markdown v0.0.0-20220731190611-dcdaee8e7a53
 	github.com/google/uuid v1.3.0
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.27.0
@@ -17,7 +17,7 @@ require (
 	github.com/subosito/gotenv v1.4.0
 	github.com/xtgo/uuid v0.0.0-20140804021211-a0b114877d4c
 	go.lsp.dev/uri v0.3.0
-	golang.org/x/net v0.0.0-20220722155237-a158d28d115b
+	golang.org/x/net v0.0.0-20220809184613-07c6da5e1ced
 )
 
 require (
@@ -32,7 +32,7 @@ require (
 	github.com/tklauser/go-sysconf v0.3.10 // indirect
 	github.com/tklauser/numcpus v0.5.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
-	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f // indirect
+	golang.org/x/sys v0.0.0-20220808155132-1c4a2a72c664 // indirect
 	golang.org/x/text v0.3.7 // indirect
 )
 

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"io/ioutil"
+	"io"
 
 	"golang.org/x/net/html/charset"
 )
@@ -12,7 +12,7 @@ import (
 func Hash(content []byte) string {
 	byteReader := bytes.NewReader(content)
 	reader, _ := charset.NewReaderLabel("UTF-8", byteReader)
-	utf8content, err := ioutil.ReadAll(reader)
+	utf8content, err := io.ReadAll(reader)
 	if err != nil {
 		utf8content = content
 	}

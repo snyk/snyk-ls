@@ -146,7 +146,7 @@ func ToHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
 			}
 		}
 
-		// sanitize the message, substitute <br> with `---`
+		// sanitize the message, substitute <br> with line break
 		message = re.ReplaceAllString(message, "\n\n")
 
 		hovers = append(hovers, hover.Hover[hover.Context]{

@@ -23,7 +23,7 @@ const (
 )
 
 // Folder contains files that can be scanned,
-//it orchestrates snyk scans and provides a caching layer to avoid unnecessary computing
+// it orchestrates snyk scans and provides a caching layer to avoid unnecessary computing
 type Folder struct {
 	path                    string
 	name                    string

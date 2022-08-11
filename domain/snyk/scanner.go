@@ -19,7 +19,7 @@ type Scanner interface {
 	)
 }
 
-//DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
+// DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
 type DelegatingConcurrentScanner struct {
 	scanners     []ProductScanner
 	initializer  initialize.Initializer

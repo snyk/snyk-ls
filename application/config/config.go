@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,6 +31,8 @@ const (
 	snykCodeTimeoutKey    = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
 	defaultSnykApiUrl     = "https://snyk.io/api"
 	defaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
+	pathListSeparator     = string(os.PathListSeparator)
+	windows               = "windows"
 )
 
 var (
@@ -94,6 +97,8 @@ type Config struct {
 	deviceId                    string
 	clientCapabilities          lsp.ClientCapabilities
 	m                           sync.Mutex
+	path                        string
+	defaultDirs                 []string
 }
 
 func CurrentConfig() *Config {
@@ -132,18 +137,29 @@ func New() *Config {
 	c.snykCodeAnalysisTimeout = snykCodeAnalysisTimeoutFromEnv()
 	c.token = ""
 	c.clientSettingsFromEnv()
+	c.deviceId = c.determineDeviceId()
+	c.addDefaults()
+	return c
+}
+
+func (c *Config) AddBinaryLocationsToPath(searchDirectories []string) {
+	c.defaultDirs = searchDirectories
+	c.determineJavaHome()
+	c.determineMavenHome()
+}
+
+func (c *Config) determineDeviceId() string {
 	id, machineErr := machineid.ProtectedID("Snyk-LS")
 	if machineErr != nil {
 		log.Err(machineErr).Str("method", "config.New").Msg("cannot retrieve machine id")
 		if c.token != "" {
-			c.deviceId = util.Hash([]byte(c.token))
+			return util.Hash([]byte(c.token))
 		} else {
-			c.deviceId = uuid.NewTime().String()
+			return uuid.NewTime().String()
 		}
 	} else {
-		c.deviceId = id
+		return id
 	}
-	return c
 }
 
 func (c *Config) Load() {
@@ -173,11 +189,11 @@ func (c *Config) loadFile(fileName string) {
 		} else {
 			// add to path, don't ignore additional paths
 			if k == "PATH" {
-				updatePath(v)
+				c.updatePath(v)
 			}
 		}
 	}
-	updatePath(".")
+	c.updatePath(".")
 	log.Debug().Str("fileName", fileName).Msg("loaded.")
 }
 
@@ -259,7 +275,19 @@ func (c *Config) ConfigureLogging(level string) {
 	logLevel, err := zerolog.ParseLevel(level)
 	if err != nil {
 		fmt.Println("Can't set log level from flag. Setting to default (=info)")
-		logLevel = zerolog.InfoLevel
+	}
+
+	// env var overrides flag
+	envLogLevel := os.Getenv("SNYK_LOG_LEVEL")
+	if envLogLevel != "" {
+		fmt.Println("Setting log level from environment variable (SNYK_LOG_LEVEL)", envLogLevel)
+		envLevel, err := zerolog.ParseLevel(envLogLevel)
+		if err != nil {
+			fmt.Println("Can't set log level from env. Setting to default (=info)")
+			// fallback to flag
+			envLevel = logLevel
+		}
+		logLevel = envLevel
 	}
 	zerolog.SetGlobalLevel(logLevel)
 	zerolog.TimeFieldFormat = time.RFC3339
@@ -317,8 +345,13 @@ func snykCodeAnalysisTimeoutFromEnv() time.Duration {
 	return snykCodeTimeout
 }
 
-func updatePath(pathExtension string) {
-	err := os.Setenv("PATH", os.Getenv("PATH")+string(os.PathListSeparator)+pathExtension)
+func (c *Config) updatePath(pathExtension string) {
+	if pathExtension == "" {
+		return
+	}
+	err := os.Setenv("PATH", os.Getenv("PATH")+pathListSeparator+pathExtension)
+	c.path += pathListSeparator + pathExtension
+	log.Debug().Str("method", "updatePath").Msg("updated path with " + pathExtension)
 	if err != nil {
 		log.Warn().Str("method", "loadFile").Msg("Couldn't update path ")
 	}
@@ -395,4 +428,19 @@ func (c *Config) ClientCapabilities() lsp.ClientCapabilities {
 
 func (c *Config) SetClientCapabilities(capabilities lsp.ClientCapabilities) {
 	c.clientCapabilities = capabilities
+}
+
+func (c *Config) Path() string {
+	return c.path
+}
+
+func (c *Config) addDefaults() {
+	if //goland:noinspection GoBoolExpressions
+	runtime.GOOS != windows {
+		c.updatePath("/usr/local/bin")
+		c.updatePath("/bin")
+		c.updatePath(xdg.Home + "/bin")
+	}
+	c.determineJavaHome()
+	c.determineMavenHome()
 }

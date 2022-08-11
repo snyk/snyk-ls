@@ -9,7 +9,7 @@ import (
 )
 
 func TestSetToken(t *testing.T) {
-	SetCurrentConfig(New()) // can't use testutil here because of cyclical imports
+	SetCurrentConfig(New())
 	oldToken := CurrentConfig().Token()
 	CurrentConfig().SetToken("asdf")
 	assert.Equal(t, CurrentConfig().Token(), "asdf")
@@ -44,8 +44,10 @@ func Test_SnykCodeAnalysisTimeoutReturnsDefaultIfNoEnvVariableFound(t *testing.T
 
 func Test_updatePath(t *testing.T) {
 	t.Setenv("PATH", "a")
-	updatePath("b")
-	assert.Equal(t, "a"+string(os.PathListSeparator)+"b", os.Getenv("PATH"))
+	c := New()
+	c.updatePath("b")
+	assert.Contains(t, c.path, string(os.PathListSeparator)+"b")
+	assert.Contains(t, c.path, "a"+string(os.PathListSeparator))
 }
 
 func Test_loadFile(t *testing.T) {

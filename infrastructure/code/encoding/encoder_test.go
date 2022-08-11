@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
-	"io/ioutil"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,7 +14,7 @@ func decodeBase64(enc []byte) ([]byte, error) {
 	r := bytes.NewReader(enc)
 	dec := base64.NewDecoder(base64.StdEncoding, r)
 
-	result, err := ioutil.ReadAll(dec)
+	result, err := io.ReadAll(dec)
 	return result, err
 }
 
@@ -25,7 +25,7 @@ func deflate(data []byte) ([]byte, error) {
 	}
 	defer gr.Close()
 
-	data, err = ioutil.ReadAll(gr)
+	data, err = io.ReadAll(gr)
 	if err != nil {
 		return nil, err
 	}

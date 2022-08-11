@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"io/ioutil"
 	"math"
 	"net/http"
 	"strconv"
@@ -171,7 +170,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 			log.Err(err).Msg("Couldn't close response body in call to Snyk Code")
 		}
 	}(response.Body)
-	responseBody, err := ioutil.ReadAll(response.Body)
+	responseBody, err := io.ReadAll(response.Body)
 	log.Trace().Str("response.Status", response.Status).Str("responseBody", string(responseBody)).Str("snyk-request-id", requestId).Msg("RECEIVED FROM REMOTE")
 	if err != nil {
 		log.Err(err).Str("method", method).Msgf("error reading response body")

@@ -36,7 +36,7 @@ func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
 	assert.Equal(t, 1, scannerRecorder.Calls())
 }
 
-//todo: unignore this test
+// todo: unignore this test
 func Test_Scan_WhenCachedResultsButNoIssues_shouldNotReScan(t *testing.T) {
 	t.Skip("this feature is not implemented yet")
 	filePath, folderPath := code.FakeDiagnosticPath(t)

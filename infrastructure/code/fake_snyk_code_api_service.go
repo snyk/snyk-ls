@@ -67,19 +67,19 @@ func FakeDiagnosticPath(t *testing.T) (filePath string, path string) {
 
 	temp, err := os.MkdirTemp(xdg.DataHome, "fakeDiagnosticTempDir")
 	if err != nil {
-		t.Fatal(t, err, "couldn't create tempdir")
+		t.Fatal(err, "couldn't create tempdir")
 	}
 	temp = filepath.Clean(temp)
 	temp, err = filepath.Abs(temp)
 	if err != nil {
-		t.Fatal(t, err, "couldn't get abs path of tempdir")
+		t.Fatal(err, "couldn't get abs path of tempdir")
 	}
 
 	filePath = filepath.Join(temp, "Dummy.java")
 	classWithQualityIssue := "public class AnnotatorTest {\n  public static void delay(long millis) {\n    try {\n      Thread.sleep(millis);\n    } catch (InterruptedException e) {\n      e.printStackTrace();\n    }\n  }\n};"
 	err = os.WriteFile(filePath, []byte(classWithQualityIssue), 0600)
 	if err != nil {
-		t.Fatal(t, err, "couldn't create temp file for fake diagnostic")
+		t.Fatal(err, "couldn't create temp file for fake diagnostic")
 	}
 	FakeIssue.AffectedFilePath = filePath
 	return filePath, temp

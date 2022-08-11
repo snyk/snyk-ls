@@ -94,7 +94,7 @@ func (c SnykCli) addConfigValuesToEnv(env []string) (updatedEnv []string) {
 	return
 }
 
-//todo no need to export that, we could have a simpler interface that looks more like an actual CLI
+// todo no need to export that, we could have a simpler interface that looks more like an actual CLI
 func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
 	var additionalParams []string
 	settings := config.CurrentConfig().CliSettings()
