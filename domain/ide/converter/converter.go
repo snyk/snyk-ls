@@ -2,6 +2,7 @@ package converter
 
 import (
 	"fmt"
+	"regexp"
 
 	sglsp "github.com/sourcegraph/go-lsp"
 
@@ -129,6 +130,7 @@ func ToHoversDocument(path string, i []snyk.Issue) hover.DocumentHovers {
 }
 
 func ToHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
+	re := regexp.MustCompile(`<br\s?/?>`)
 	for _, i := range issues {
 		message := ""
 		if len(i.FormattedMessage) > 0 {
@@ -143,6 +145,9 @@ func ToHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
 				message += fmt.Sprintf("[%s](%s)\n\n", reference.Title, reference.Url)
 			}
 		}
+
+		// sanitize the message, substitute <br> with line break
+		message = re.ReplaceAllString(message, "\n\n")
 
 		hovers = append(hovers, hover.Hover[hover.Context]{
 			Id:      i.ID,

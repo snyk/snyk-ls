@@ -22,8 +22,8 @@ func Test_updatePathWithDefaults(t *testing.T) {
 		t.Setenv("PATH", pathFromEnv)
 		c := New()
 		c.updatePath("b")
-		assert.Contains(t, c.path, pathSeparator+"b")
-		assert.Contains(t, c.path, pathFromEnv+pathSeparator)
+		assert.Contains(t, c.path, pathListSeparator+"b")
+		assert.Contains(t, c.path, pathFromEnv+pathListSeparator)
 	})
 
 	t.Run("automatically add /usr/local/bin on linux and macOS", func(t *testing.T) {
@@ -32,7 +32,7 @@ func Test_updatePathWithDefaults(t *testing.T) {
 			t.Skipf("only added to the path on linux and macOS, this is windows")
 		}
 		c := New()
-		assert.Contains(t, c.Path(), pathSeparator+"/usr/local/bin")
+		assert.Contains(t, c.Path(), pathListSeparator+"/usr/local/bin")
 	})
 
 	t.Run("automatically add /bin on linux and macOS", func(t *testing.T) {
@@ -41,7 +41,7 @@ func Test_updatePathWithDefaults(t *testing.T) {
 			t.Skipf("only added to the path on linux and macOS, this is windows")
 		}
 		c := New()
-		assert.Contains(t, c.Path(), pathSeparator+"/bin")
+		assert.Contains(t, c.Path(), pathListSeparator+"/bin")
 	})
 
 	t.Run("automatically add $HOME/bin on linux and macOS", func(t *testing.T) {
@@ -50,14 +50,14 @@ func Test_updatePathWithDefaults(t *testing.T) {
 			t.Skipf("only added to the path on linux and macOS, this is windows")
 		}
 		c := New()
-		assert.Contains(t, c.Path(), pathSeparator+xdg.Home+"/bin")
+		assert.Contains(t, c.Path(), pathListSeparator+xdg.Home+"/bin")
 	})
 
 	t.Run("automatically add $JAVA_HOME/bin if set", func(t *testing.T) {
 		javaHome := "JAVA_HOME_DUMMY"
 		t.Setenv("JAVA_HOME", javaHome)
 		c := New()
-		assert.Contains(t, c.Path(), pathSeparator+javaHome+string(os.PathSeparator)+"bin")
+		assert.Contains(t, c.Path(), pathListSeparator+javaHome+string(os.PathSeparator)+"bin")
 	})
 }
 

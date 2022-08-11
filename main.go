@@ -63,7 +63,6 @@ func parseFlags(args []string) (string, error) {
 	c := config.New()
 	c.SetConfigFile(*configFlag)
 	c.Load()
-	// these directories are searched to find binaries (e.g. java, maven, etc)
 
 	c.SetLogPath(*logPathFlag)
 	c.ConfigureLogging(*logLevelFlag)

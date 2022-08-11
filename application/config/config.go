@@ -31,7 +31,7 @@ const (
 	snykCodeTimeoutKey    = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
 	defaultSnykApiUrl     = "https://snyk.io/api"
 	defaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
-	pathSeparator         = string(os.PathListSeparator)
+	pathListSeparator     = string(os.PathListSeparator)
 	windows               = "windows"
 )
 
@@ -349,8 +349,8 @@ func (c *Config) updatePath(pathExtension string) {
 	if pathExtension == "" {
 		return
 	}
-	err := os.Setenv("PATH", os.Getenv("PATH")+string(os.PathListSeparator)+pathExtension)
-	c.path += string(os.PathListSeparator) + pathExtension
+	err := os.Setenv("PATH", os.Getenv("PATH")+pathListSeparator+pathExtension)
+	c.path += pathListSeparator + pathExtension
 	log.Debug().Str("method", "updatePath").Msg("updated path with " + pathExtension)
 	if err != nil {
 		log.Warn().Str("method", "loadFile").Msg("Couldn't update path ")
