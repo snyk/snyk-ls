@@ -53,7 +53,6 @@ Right now the language server supports the following actions:
 - $/progress
 - textDocument/publishDiagnostics
 
-
 ### Custom additions to Language Server Protocol
 
 - Authentication Notification
@@ -110,7 +109,9 @@ level is `info`
 ### Configuration
 
 #### LSP Initialization Options
-As part of the [Initialize message](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize)
+
+As part of
+the [Initialize message](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize)
 within `initializationOptions?: LSPAny;` we support the following settings:
 
 ```json
@@ -131,6 +132,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
   "token":  "secret-token" // The Snyk token, e.g.: snyk config get api
 }
 ```
+
 #### Environment variables
 
 Snyk LS and Snyk CLI support and need certain environment variables to function:
