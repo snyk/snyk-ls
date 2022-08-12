@@ -85,7 +85,7 @@ generated.
 
 The currently published binary can be retrieved with [this](getLanguageServer.sh) bash script, please keep in mind that
 [the protocol version](.goreleaser.yaml) is part of the download link and can change to force plugin / language server
-synchronization.
+synchronization. For further information please see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### From Source
 
