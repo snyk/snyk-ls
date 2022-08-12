@@ -197,9 +197,14 @@ func (c *Config) loadFile(fileName string) {
 	log.Debug().Str("fileName", fileName).Msg("loaded.")
 }
 
-func (c *Config) Authenticated() bool       { return c.token != "" }
-func (c *Config) CliSettings() *CliSettings { return c.cliSettings }
-func (c *Config) Format() string            { return c.format }
+func (c *Config) Authenticated() bool { return c.token != "" }
+func (c *Config) CliSettings() *CliSettings {
+	c.m.Lock()
+	defer c.m.Unlock()
+	return c.cliSettings
+}
+
+func (c *Config) Format() string { return c.format }
 func (c *Config) CLIDownloadLockFileName() string {
 	return filepath.Join(c.DefaultBinaryInstallPath(), "snyk-cli-download.lock")
 }
@@ -220,6 +225,8 @@ func (c *Config) Token() string {
 }
 
 func (c *Config) SetCliSettings(settings *CliSettings) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.cliSettings = settings
 }
 
