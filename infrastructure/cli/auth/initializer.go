@@ -47,5 +47,5 @@ func (i *Initializer) Init() {
 		os.Exit(1) // terminate server since unrecoverable from authentication error
 	}
 
-	i.authenticator.UpdateToken(token)
+	i.authenticator.UpdateToken(token, true)
 }

@@ -2,5 +2,5 @@ package snyk
 
 type AuthenticationService interface {
 	Provider() AuthenticationProvider
-	UpdateToken(newToken string)
+	UpdateToken(newToken string, sendNotification bool)
 }

@@ -41,12 +41,7 @@ func UpdateSettings(ctx context.Context, settings lsp.Settings) {
 }
 
 func updateToken(token string) {
-	oldToken := config.CurrentConfig().Token()
-	config.CurrentConfig().SetToken(token)
-
-	if oldToken != token {
-		go di.Analytics().Identify()
-	}
+	di.Authenticator().UpdateToken(token, false)
 }
 
 func updateApiEndpoints(ctx context.Context, settings lsp.Settings) {

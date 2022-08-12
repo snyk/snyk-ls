@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -52,6 +53,7 @@ func TestWorkspaceDidChangeConfiguration(t *testing.T) {
 
 func Test_UpdateSettings(t *testing.T) {
 	testutil.UnitTest(t)
+	di.TestInit(t)
 
 	t.Run("all settings", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())

@@ -21,10 +21,13 @@ func (a AuthenticationService) Provider() snyk.AuthenticationProvider {
 	return a.authenticator
 }
 
-func (a AuthenticationService) UpdateToken(newToken string) {
+func (a AuthenticationService) UpdateToken(newToken string, sendNotification bool) {
 	oldToken := config.CurrentConfig().Token()
 	config.CurrentConfig().SetToken(newToken)
-	notification.Send(lsp.AuthenticationParams{Token: newToken})
+
+	if sendNotification {
+		notification.Send(lsp.AuthenticationParams{Token: newToken})
+	}
 
 	if oldToken != newToken {
 		a.analytics.Identify()

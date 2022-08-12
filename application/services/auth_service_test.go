@@ -16,7 +16,7 @@ func Test_UpdateToken(t *testing.T) {
 	analytics := ux.NewTestAnalytics()
 	service := NewAuthenticationService(&auth.CliAuthenticationProvider{}, analytics)
 
-	service.UpdateToken("new-token")
+	service.UpdateToken("new-token", false)
 
 	assert.Equal(t, "new-token", config.CurrentConfig().Token())
 	assert.True(t, analytics.Identified)

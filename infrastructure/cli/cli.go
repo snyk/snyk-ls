@@ -128,7 +128,7 @@ func (c SnykCli) HandleErrors(ctx context.Context, output string) (fail bool) {
 			os.Exit(1) // terminate server since unrecoverable from authentication error
 		}
 
-		c.authenticator.UpdateToken(token)
+		c.authenticator.UpdateToken(token, true)
 		return true
 	}
 	return false
