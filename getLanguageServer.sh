@@ -4,7 +4,14 @@
 # and update the language server regularly, and this script allows this for system administrators and users.
 
 set -ex
-ARCH=darwin_arm64
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m | tr '[:upper:]' '[:lower:]')
+if [[ $ARCH == "x86_64" ]]; then
+  ARCH="amd64"
+fi
+if [[ $ARCH == "aarch64" ]]; then
+  ARCH="arm64"
+fi
 PROTOCOL_VERSION=$(grep "LS_PROTOCOL_VERSION" .goreleaser.yaml | tail -1 | cut -f2 -d "=" |xargs)
 VERSION=$(curl https://static.snyk.io/snyk-ls/$PROTOCOL_VERSION/metadata.json | jq .version | sed -e s/\"//g)
-wget -O /usr/local/bin/snyk-ls "https://static.snyk.io/snyk-ls/$PROTOCOL_VERSION/snyk-ls_${VERSION}_${ARCH}"
+wget -O /usr/local/bin/snyk-ls "https://static.snyk.io/snyk-ls/$PROTOCOL_VERSION/snyk-ls_${VERSION}_${OS}_${ARCH}"
