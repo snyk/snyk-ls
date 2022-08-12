@@ -8,7 +8,6 @@ import (
 	"github.com/adrg/xdg"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/application/services"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	errorreporting "github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -23,6 +22,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/oss"
 	"github.com/snyk/snyk-ls/infrastructure/segment"
 	sentry2 "github.com/snyk/snyk-ls/infrastructure/sentry"
+	"github.com/snyk/snyk-ls/infrastructure/services"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 )
 
