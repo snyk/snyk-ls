@@ -18,10 +18,13 @@ import (
 )
 
 const (
-	OrganizationEnvVar     = "SNYK_CFG_ORG"
-	ApiEnvVar              = "SNYK_API"
-	TokenEnvVar            = "SNYK_TOKEN"
-	DisableAnalyticsEnvVar = "SNYK_CFG_DISABLE_ANALYTICS"
+	OrganizationEnvVar                  = "SNYK_CFG_ORG"
+	ApiEnvVar                           = "SNYK_API"
+	TokenEnvVar                         = "SNYK_TOKEN"
+	DisableAnalyticsEnvVar              = "SNYK_CFG_DISABLE_ANALYTICS"
+	IntegrationEnvironmentEnvVarKey     = "SNYK_INTEGRATION_ENVIRONMENT"
+	IntegrationEnvironmentEnvVarValue   = "language-server"
+	IntegrationEnvironmentVersionEnvVar = "SNYK_INTEGRATION_ENVIRONMENT_VERSION"
 )
 
 type SnykCli struct {
@@ -70,29 +73,34 @@ func (c SnykCli) doExecute(cmd []string, workingDir string, firstAttempt bool) (
 func (c SnykCli) getCommand(cmd []string, workingDir string) *exec.Cmd {
 	command := exec.Command(cmd[0], cmd[1:]...)
 	command.Dir = workingDir
-	cliEnv := c.addConfigValuesToEnv(os.Environ())
+	cliEnv := getCliEnvironmentVariables()
 	command.Env = cliEnv
 	log.Debug().Str("method", "getCommand").Interface("command", command).Send()
 	return command
 }
 
-// AddConfigValuesToEnv adds the config values to the environment. Since we append, our values are overwriting existing env  variables.
-func (c SnykCli) addConfigValuesToEnv(env []string) (updatedEnv []string) {
-	updatedEnv = env
+// Returns an array of the current environment variables with additional variables used in the CLI run.
+// Since we append, our values are overwriting existing env variables (because exec.Cmd.Env chooses the last value
+// in case of key duplications).
+func getCliEnvironmentVariables() (updatedEnv []string) {
+	updatedEnv = os.Environ()
 
-	organization := config.CurrentConfig().GetOrganization()
+	currentConfig := config.CurrentConfig()
+	organization := currentConfig.GetOrganization()
 	if organization != "" {
 		updatedEnv = append(updatedEnv, OrganizationEnvVar+"="+organization)
 	}
 
-	config := config.CurrentConfig()
-	updatedEnv = append(updatedEnv, TokenEnvVar+"="+config.Token())
-	if config.SnykApi() != "" {
-		updatedEnv = append(updatedEnv, ApiEnvVar+"="+config.SnykApi())
+	updatedEnv = append(updatedEnv, TokenEnvVar+"="+currentConfig.Token())
+	if currentConfig.SnykApi() != "" {
+		updatedEnv = append(updatedEnv, ApiEnvVar+"="+currentConfig.SnykApi())
 	}
-	if !config.IsTelemetryEnabled() {
+	if !currentConfig.IsTelemetryEnabled() {
 		updatedEnv = append(updatedEnv, DisableAnalyticsEnvVar+"=1")
 	}
+
+	updatedEnv = append(updatedEnv, IntegrationEnvironmentEnvVarKey+"="+IntegrationEnvironmentEnvVarValue)
+	updatedEnv = append(updatedEnv, IntegrationEnvironmentVersionEnvVar+"="+config.Version)
 	return
 }
 
