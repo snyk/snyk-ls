@@ -75,7 +75,7 @@ func (c SnykCli) doExecute(cmd []string, workingDir string, firstAttempt bool) (
 func (c SnykCli) getCommand(cmd []string, workingDir string) *exec.Cmd {
 	command := exec.Command(cmd[0], cmd[1:]...)
 	command.Dir = workingDir
-	cliEnv := getCliEnvironmentVariables()
+	cliEnv := getCliEnvironmentVariables(os.Environ())
 	command.Env = cliEnv
 	log.Debug().Str("method", "getCommand").Interface("command", command).Send()
 	return command
@@ -84,8 +84,8 @@ func (c SnykCli) getCommand(cmd []string, workingDir string) *exec.Cmd {
 // Returns an array of the current environment variables with additional variables used in the CLI run.
 // Since we append, our values are overwriting existing env variables (because exec.Cmd.Env chooses the last value
 // in case of key duplications).
-func getCliEnvironmentVariables() (updatedEnv []string) {
-	updatedEnv = os.Environ()
+func getCliEnvironmentVariables(currentEnv []string) (updatedEnv []string) {
+	updatedEnv = currentEnv
 
 	currentConfig := config.CurrentConfig()
 	organization := currentConfig.GetOrganization()
