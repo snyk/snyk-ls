@@ -11,8 +11,9 @@ func NewTestAnalytics() *TestAnalytics {
 }
 
 type TestAnalytics struct {
-	analytics []interface{}
-	mutex     sync.Mutex
+	analytics  []interface{}
+	mutex      sync.Mutex
+	Identified bool
 }
 
 func (n *TestAnalytics) GetAnalytics() []interface{} {
@@ -54,4 +55,16 @@ func (n *TestAnalytics) PluginIsInstalled(properties PluginIsInstalledProperties
 	defer n.mutex.Unlock()
 	n.analytics = append(n.analytics, properties)
 	log.Info().Str("method", "PluginIsInstalled").Msgf("no op - args %v", properties)
+}
+
+func (n *TestAnalytics) Initialise() {
+	log.Info().Str("method", "Init").Msgf("no op")
+}
+func (n *TestAnalytics) Shutdown() error {
+	log.Info().Str("method", "Shutdown").Msgf("no op")
+	return nil
+}
+func (n *TestAnalytics) Identify() {
+	log.Info().Str("method", "Identify").Msgf("no op")
+	n.Identified = true
 }

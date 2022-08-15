@@ -29,7 +29,7 @@ func UpdateSettings(ctx context.Context, settings lsp.Settings) {
 	if settings == emptySettings {
 		return
 	}
-	config.CurrentConfig().SetToken(settings.Token)
+	updateToken(settings.Token)
 	updateProductEnablement(settings)
 	updateCliConfig(settings)
 	updateApiEndpoints(ctx, settings)
@@ -40,13 +40,17 @@ func UpdateSettings(ctx context.Context, settings lsp.Settings) {
 	manageBinariesAutomatically(settings)
 }
 
+func updateToken(token string) {
+	di.Authenticator().UpdateToken(token, false)
+}
+
 func updateApiEndpoints(ctx context.Context, settings lsp.Settings) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
 	endpointsUpdated := config.CurrentConfig().UpdateApiEndpoints(snykApiUrl)
 
 	if endpointsUpdated {
 		// Reset CLI token
-		err := di.Authenticator().ClearAuthentication(ctx)
+		err := di.Authenticator().Provider().ClearAuthentication(ctx)
 		if err != nil {
 			log.Err(err).Msg("couldn't reset token")
 		}
@@ -64,14 +68,19 @@ func updateTelemetry(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.SendErrorReports)
 	if err != nil {
 		log.Warn().Err(err).Msgf("couldn't read send error reports %s", settings.SendErrorReports)
+	} else {
+		config.CurrentConfig().SetErrorReportingEnabled(parseBool)
 	}
-	config.CurrentConfig().SetErrorReportingEnabled(parseBool)
 
 	parseBool, err = strconv.ParseBool(settings.EnableTelemetry)
 	if err != nil {
 		log.Warn().Err(err).Msgf("couldn't read enable telemetry %s", settings.SendErrorReports)
+	} else {
+		config.CurrentConfig().SetTelemetryEnabled(parseBool)
+		if parseBool {
+			go di.Analytics().Identify()
+		}
 	}
-	config.CurrentConfig().SetTelemetryEnabled(parseBool)
 }
 
 func manageBinariesAutomatically(settings lsp.Settings) {

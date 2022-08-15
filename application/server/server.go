@@ -231,6 +231,10 @@ func Shutdown() jrpc2.Handler {
 
 		disposeProgressListener()
 		notification.DisposeListener()
+		err := di.Analytics().Shutdown()
+		if err != nil {
+			log.Error().Str("method", "Shutdown").Msg("Failed to shutdown analytics.")
+		}
 		return nil, nil
 	})
 }

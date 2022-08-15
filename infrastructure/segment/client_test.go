@@ -1,21 +1,52 @@
 package segment
 
 import (
+	"sync"
 	"testing"
 
+	"github.com/segmentio/analytics-go"
 	segment "github.com/segmentio/analytics-go"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-func TestClient_GetUserInfo(t *testing.T) {
-	s, _, fakeApiClient := setupUnitTest(t)
-	userId := s.getOrUpdateUserInfo()
+func TestClient_IdentifyAuthenticatedUser(t *testing.T) {
+	s, fakeSegmentClient, fakeApiClient := setupUnitTest(t)
+
+	s.Identify()
+
 	assert.Equal(t, 1, len(fakeApiClient.GetAllCalls(snyk_api.ActiveUserOperation)))
-	assert.NotEmpty(t, userId)
+	assert.NotEmpty(t, s.authenticatedUserId)
+	assert.Equal(t, 1, len(fakeSegmentClient.trackedEvents))
+	assert.Equal(t, fakeSegmentClient.trackedEvents[0], analytics.Identify{
+		UserId:      s.authenticatedUserId,
+		AnonymousId: s.anonymousUserId,
+	})
+}
+
+func TestClient_IdentifyAnonymousUser(t *testing.T) {
+	s, _, fakeApiClient := setupUnitTest(t)
+	config.CurrentConfig().SetToken("")
+
+	s.Identify()
+
+	assert.Empty(t, s.authenticatedUserId)
+	assert.Equal(t, 0, len(fakeApiClient.GetAllCalls(snyk_api.ActiveUserOperation)))
+}
+
+func TestClient_IdentifyWithDisabledTelemetry(t *testing.T) {
+	s, fakeSegmentClient, _ := setupUnitTest(t)
+	config.CurrentConfig().SetTelemetryEnabled(false)
+
+	s.Identify()
+
+	assert.NotEmpty(t, s.authenticatedUserId)
+	assert.Equal(t, 0, len(fakeSegmentClient.trackedEvents))
 }
 
 func Test_AnalyticEvents(t *testing.T) {
@@ -104,7 +135,7 @@ func Test_AnalyticEvents(t *testing.T) {
 			},
 			output: segment.Track{
 				UserId: "user",
-				Event:  "Issue Hover Is Displayed",
+				Event:  "Plugin Is Installed",
 				Properties: segment.Properties{}.
 					Set("ide", "Visual Studio Code").
 					Set("itly", true),
@@ -122,22 +153,27 @@ func Test_AnalyticEvents(t *testing.T) {
 func setupUnitTest(t *testing.T) (*Client, *FakeSegmentClient, *snyk_api.FakeApiClient) {
 	testutil.UnitTest(t)
 	fakeApiClient := &snyk_api.FakeApiClient{}
-	s := NewSegmentClient(fakeApiClient, ux.VisualStudioCode).(*Client)
-	fakeSegmentClient := &FakeSegmentClient{}
+	s := NewSegmentClient(fakeApiClient, ux.VisualStudioCode, error_reporting.NewTestErrorReporter()).(*Client)
+	fakeSegmentClient := &FakeSegmentClient{mutex: &sync.Mutex{}}
 	s.segment = fakeSegmentClient
 	return s, fakeSegmentClient, fakeApiClient
 }
 
 type FakeSegmentClient struct {
-	trackedEvents []segment.Track
+	trackedEvents []segment.Message
+	mutex         *sync.Mutex
 }
 
 func (f *FakeSegmentClient) Close() error {
-	f.trackedEvents = []segment.Track{}
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+	f.trackedEvents = []segment.Message{}
 	return nil
 }
 
 func (f *FakeSegmentClient) Enqueue(message segment.Message) error {
-	f.trackedEvents = append(f.trackedEvents, message.(segment.Track))
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+	f.trackedEvents = append(f.trackedEvents, message)
 	return nil
 }

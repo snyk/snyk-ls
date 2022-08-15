@@ -11,8 +11,8 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
+	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
 )
@@ -25,16 +25,18 @@ const (
 )
 
 type SnykCli struct {
-	authenticator snyk.AuthenticationProvider
+	authenticator snyk.AuthenticationService
 	errorReporter error_reporting.ErrorReporter
+	analytics     ux.Analytics
 }
 
 var Mutex = &sync.Mutex{}
 
-func NewExecutor(authenticator snyk.AuthenticationProvider, errorReporter error_reporting.ErrorReporter) Executor {
+func NewExecutor(authenticator snyk.AuthenticationService, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics) Executor {
 	return &SnykCli{
 		authenticator,
 		errorReporter,
+		analytics,
 	}
 }
 
@@ -119,15 +121,14 @@ func (c SnykCli) HandleErrors(ctx context.Context, output string) (fail bool) {
 		log.Info().Msg("Snyk failed to obtain authentication information. Trying to authenticate again...")
 		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Snyk failed to obtain authentication information, trying to authenticate again. This could open a browser window."})
 
-		token, err := c.authenticator.Authenticate(ctx)
+		token, err := c.authenticator.Provider().Authenticate(ctx)
 		if token == "" || err != nil {
 			log.Error().Err(err).Msg("Failed to authenticate. Terminating server.")
 			c.errorReporter.CaptureError(err)
 			os.Exit(1) // terminate server since unrecoverable from authentication error
 		}
 
-		config.CurrentConfig().SetToken(token)
-		notification.Send(lsp.AuthenticationParams{Token: token})
+		c.authenticator.UpdateToken(token, true)
 		return true
 	}
 	return false

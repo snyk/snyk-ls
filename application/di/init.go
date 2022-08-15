@@ -22,6 +22,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/oss"
 	"github.com/snyk/snyk-ls/infrastructure/segment"
 	sentry2 "github.com/snyk/snyk-ls/infrastructure/sentry"
+	"github.com/snyk/snyk-ls/infrastructure/services"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 )
 
@@ -31,8 +32,8 @@ var snykCodeBundleUploader *code2.BundleUploader
 var snykCodeScanner *code2.Scanner
 var infrastructureAsCodeScanner *iac.Scanner
 var openSourceScanner *oss.Scanner
-var environmentInitializer initialize.Initializer
-var authenticator snyk.AuthenticationProvider
+var scanInitializer initialize.Initializer
+var authenticator snyk.AuthenticationService
 
 var instrumentor performance2.Instrumentor
 var errorReporter errorreporting.ErrorReporter
@@ -54,7 +55,7 @@ func Init() {
 func initDomain() {
 	hoverService = hover.NewDefaultService(analytics)
 	scanner = snyk.NewDelegatingScanner(
-		environmentInitializer,
+		scanInitializer,
 		instrumentor,
 		analytics,
 		snykCodeScanner,
@@ -78,17 +79,19 @@ func initInfrastructure() {
 	errorReporter = sentry2.NewSentryErrorReporter()
 	instrumentor = sentry2.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient()
-	analytics = segment.NewSegmentClient(snykApiClient, ux2.Eclipse) // todo: Don't hardcode Eclipse here
-	authenticator = auth2.NewCliAuthenticationProvider(errorReporter)
-	snykCli = cli2.NewExecutor(authenticator, errorReporter)
+	analytics = segment.NewSegmentClient(snykApiClient, ux2.Eclipse, errorReporter) // todo: Don't hardcode Eclipse here
+	analytics.Initialise()
+	authProvider := auth2.NewCliAuthenticationProvider(errorReporter)
+	authenticator = services.NewAuthenticationService(authProvider, analytics)
+	snykCli = cli2.NewExecutor(authenticator, errorReporter, analytics)
 	snykCodeClient = code2.NewHTTPRepository(instrumentor, errorReporter)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
 	snykCodeScanner = code2.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics)
-	environmentInitializer = initialize.NewDelegatingInitializer(
+	scanInitializer = initialize.NewDelegatingInitializer(
 		cli2.NewInitializer(errorReporter, install.NewInstaller(errorReporter)),
-		auth2.NewInitializer(authenticator, errorReporter),
+		auth2.NewInitializer(authenticator, errorReporter, analytics),
 	)
 }
 
@@ -98,22 +101,24 @@ func TestInit(t *testing.T) {
 	defer initMutex.Unlock()
 	t.Helper()
 	analytics = ux2.NewTestAnalytics()
+	analytics.Initialise()
 	instrumentor = performance2.NewTestInstrumentor()
 	errorReporter = errorreporting.NewTestErrorReporter()
-	authenticator = auth2.NewCliAuthenticationProvider(errorReporter)
-	environmentInitializer = initialize.NewDelegatingInitializer(
+	authProvider := auth2.NewCliAuthenticationProvider(errorReporter)
+	authenticator = services.NewAuthenticationService(authProvider, analytics)
+	scanInitializer = initialize.NewDelegatingInitializer(
 		cli2.NewInitializer(errorReporter, install.NewInstaller(errorReporter)),
-		auth2.NewInitializer(authenticator, errorReporter),
+		auth2.NewInitializer(authenticator, errorReporter, analytics),
 	)
 	fakeClient := &code2.FakeSnykCodeClient{}
 	snykCodeClient = fakeClient
-	snykCli = cli2.NewExecutor(authenticator, errorReporter)
+	snykCli = cli2.NewExecutor(authenticator, errorReporter, analytics)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	fakeApiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
 	snykCodeScanner = code2.New(snykCodeBundleUploader, fakeApiClient, errorReporter, analytics)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
-	scanner = snyk.NewDelegatingScanner(environmentInitializer, instrumentor, analytics, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
+	scanner = snyk.NewDelegatingScanner(scanInitializer, instrumentor, analytics, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
 	hoverService = hover.NewDefaultService(analytics)
 	t.Cleanup(func() {
 		fakeClient.Clear()
@@ -143,7 +148,7 @@ func SnykCli() cli2.Executor {
 	return snykCli
 }
 
-func Authenticator() snyk.AuthenticationProvider {
+func Authenticator() snyk.AuthenticationService {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return authenticator
@@ -164,7 +169,13 @@ func Scanner() snyk.Scanner {
 func Initializer() initialize.Initializer {
 	initMutex.Lock()
 	defer initMutex.Unlock()
-	return environmentInitializer
+	return scanInitializer
+}
+
+func Analytics() ux2.Analytics {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return analytics
 }
 
 func OpenSourceScanner() *oss.Scanner {

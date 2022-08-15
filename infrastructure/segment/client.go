@@ -5,33 +5,37 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
+	"github.com/segmentio/analytics-go"
 	segment "github.com/segmentio/analytics-go"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 )
 
 type Client struct {
-	userId        string
-	IDE           ux2.IDE
-	segment       segment.Client
-	snykApiClient snyk_api.SnykApiClient
+	authenticatedUserId string
+	anonymousUserId     string
+	IDE                 ux2.IDE
+	segment             segment.Client
+	snykApiClient       snyk_api.SnykApiClient
+	errorReporter       error_reporting.ErrorReporter
 }
 
-// NewSegmentClient TODO use deviceID, e.g. hash of SNYK TOKEN if user is empty
-// https://github.com/snyk/snyk-intellij-plugin/blob/d2f1ef7fd80acb84bfd8678efada324d12d6a246/src/main/kotlin/snyk/amplitude/api/AmplitudeExperimentApiClient.kt
-// https://github.com/MatthewKing/DeviceId
-func NewSegmentClient(snykApiClient snyk_api.SnykApiClient, IDE ux2.IDE) ux2.Analytics {
+func NewSegmentClient(snykApiClient snyk_api.SnykApiClient, IDE ux2.IDE, errorReporter error_reporting.ErrorReporter) ux2.Analytics {
 	client, err := segment.NewWithConfig(getSegmentPublicKey(), segment.Config{Logger: &segmentLogger{}})
 	if err != nil {
 		log.Error().Str("method", "NewSegmentClient").Err(err).Msg("Error creating segment client")
 	}
 	segmentClient := &Client{
-		IDE:           IDE,
-		segment:       client,
-		snykApiClient: snykApiClient,
+		IDE:             IDE,
+		segment:         client,
+		snykApiClient:   snykApiClient,
+		errorReporter:   errorReporter,
+		anonymousUserId: config.CurrentConfig().DeviceID(),
 	}
+
 	return segmentClient
 }
 
@@ -45,7 +49,11 @@ func getSegmentPublicKey() string {
 	}
 }
 
-func (s *Client) Close() error {
+func (s *Client) Initialise() {
+	go s.captureInstalledEvent()
+}
+
+func (s *Client) Shutdown() error {
 	return s.segment.Close()
 }
 
@@ -76,11 +84,11 @@ func (s *Client) PluginIsInstalled(properties ux2.PluginIsInstalledProperties) {
 
 func (s *Client) enqueueEvent(properties interface{}, event string) {
 	if config.CurrentConfig().IsTelemetryEnabled() {
-		userId := s.getOrUpdateUserInfo()
 		err := s.segment.Enqueue(segment.Track{
-			UserId:     userId,
-			Event:      event,
-			Properties: s.getSerialisedProperties(properties),
+			UserId:      s.authenticatedUserId,
+			Event:       event,
+			Properties:  s.getSerialisedProperties(properties),
+			AnonymousId: s.anonymousUserId,
 		})
 		if err != nil {
 			log.Warn().Err(err).Msg("Couldn't enqueue analytics")
@@ -88,22 +96,36 @@ func (s *Client) enqueueEvent(properties interface{}, event string) {
 	}
 }
 
-func (s *Client) getOrUpdateUserInfo() string {
-	userId := s.userId
-	if userId == "" {
-		user, err := s.snykApiClient.GetActiveUser()
-		if err != nil {
-			log.
-				Warn().
-				Err(errors.Wrap(err, "could not retrieve active user from API")).
-				Str("method", "infrastructure.segment.client").Msg("using deviceId instead of user id")
-			userId = config.CurrentConfig().DeviceID()
-		} else {
-			s.userId = user.Id
-			userId = user.Id
-		}
+func (s *Client) Identify() {
+	method := "infrastructure.segment.client"
+	log.Info().Str("method", method).Msg("Identifying a user.")
+	if !config.CurrentConfig().Authenticated() {
+		s.authenticatedUserId = ""
+		return
 	}
-	return userId
+
+	user, err := s.snykApiClient.GetActiveUser()
+	if err != nil {
+		log.
+			Warn().
+			Err(errors.Wrap(err, "could not retrieve active user from API")).
+			Str("method", method).Msg("using deviceId instead of user id")
+		return
+	}
+
+	s.authenticatedUserId = user.Id
+
+	if !config.CurrentConfig().IsTelemetryEnabled() {
+		return
+	}
+
+	err = s.segment.Enqueue(analytics.Identify{
+		AnonymousId: s.anonymousUserId,
+		UserId:      s.authenticatedUserId,
+	})
+	if err != nil {
+		log.Warn().Err(err).Str("method", method).Msg("Couldn't enqueue identify message.")
+	}
 }
 
 func (s *Client) getSerialisedProperties(props interface{}) segment.Properties {
