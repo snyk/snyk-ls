@@ -99,6 +99,8 @@ type Config struct {
 	m                           sync.Mutex
 	path                        string
 	defaultDirs                 []string
+	integrationName             string
+	integrationVersion          string
 }
 
 func CurrentConfig() *Config {
@@ -218,6 +220,8 @@ func (c *Config) LogPath() string                        { return c.logPath }
 func (c *Config) SnykApi() string                        { return c.snykApiUrl }
 func (c *Config) SnykCodeApi() string                    { return c.snykCodeApiUrl }
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
+func (c *Config) IntegrationName() string                { return c.integrationName }
+func (c *Config) IntegrationVersion() string             { return c.integrationVersion }
 func (c *Config) Token() string {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -450,4 +454,12 @@ func (c *Config) addDefaults() {
 	}
 	c.determineJavaHome()
 	c.determineMavenHome()
+}
+
+func (c *Config) SetIntegrationName(integrationName string) {
+	c.integrationName = integrationName
+}
+
+func (c *Config) SetIntegrationVersion(integrationVersion string) {
+	c.integrationVersion = integrationVersion
 }

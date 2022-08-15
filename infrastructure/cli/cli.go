@@ -22,9 +22,11 @@ const (
 	ApiEnvVar                           = "SNYK_API"
 	TokenEnvVar                         = "SNYK_TOKEN"
 	DisableAnalyticsEnvVar              = "SNYK_CFG_DISABLE_ANALYTICS"
+	IntegrationNameEnvVarKey            = "SNYK_INTEGRATION_NAME"
+	IntegrationVersionEnvVarKey         = "SNYK_INTEGRATION_VERSION"
 	IntegrationEnvironmentEnvVarKey     = "SNYK_INTEGRATION_ENVIRONMENT"
-	IntegrationEnvironmentEnvVarValue   = "language-server"
 	IntegrationEnvironmentVersionEnvVar = "SNYK_INTEGRATION_ENVIRONMENT_VERSION"
+	IntegrationEnvironmentEnvVarValue   = "language-server"
 )
 
 type SnykCli struct {
@@ -99,6 +101,8 @@ func getCliEnvironmentVariables() (updatedEnv []string) {
 		updatedEnv = append(updatedEnv, DisableAnalyticsEnvVar+"=1")
 	}
 
+	updatedEnv = append(updatedEnv, IntegrationNameEnvVarKey+"="+currentConfig.IntegrationName())
+	updatedEnv = append(updatedEnv, IntegrationVersionEnvVarKey+"="+currentConfig.IntegrationVersion())
 	updatedEnv = append(updatedEnv, IntegrationEnvironmentEnvVarKey+"="+IntegrationEnvironmentEnvVarValue)
 	updatedEnv = append(updatedEnv, IntegrationEnvironmentVersionEnvVar+"="+config.Version)
 	return

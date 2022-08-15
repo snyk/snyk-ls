@@ -142,6 +142,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
 		UpdateSettings(ctx, params.InitializationOptions)
 		config.CurrentConfig().SetClientCapabilities(params.Capabilities)
+		setClientInformation(params)
 		w := workspace.New(di.Instrumentor())
 		workspace.Set(w)
 
@@ -209,6 +210,25 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 			},
 		}, nil
 	})
+}
+
+func setClientInformation(initParams lsp.InitializeParams) {
+	var integrationName, integrationVersion string
+	if initParams.InitializationOptions.IntegrationName != "" {
+		integrationName = initParams.InitializationOptions.IntegrationName
+		integrationVersion = initParams.InitializationOptions.IntegrationVersion
+	} else if initParams.ClientInfo.Name != "" {
+		integrationName = initParams.ClientInfo.Name
+		integrationVersion = initParams.ClientInfo.Version
+	} else if integrationNameEnvVar := os.Getenv("SNYK_INTEGRATION_NAME"); integrationNameEnvVar != "" {
+		integrationName = integrationNameEnvVar
+		integrationVersion = os.Getenv("SNYK_INTEGRATION_VERSION")
+	} else {
+		return
+	}
+
+	config.CurrentConfig().SetIntegrationName(integrationName)
+	config.CurrentConfig().SetIntegrationVersion(integrationVersion)
 }
 
 func monitorClientProcess(pid int) time.Duration {
