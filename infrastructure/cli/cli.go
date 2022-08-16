@@ -75,16 +75,16 @@ func (c SnykCli) doExecute(cmd []string, workingDir string, firstAttempt bool) (
 func (c SnykCli) getCommand(cmd []string, workingDir string) *exec.Cmd {
 	command := exec.Command(cmd[0], cmd[1:]...)
 	command.Dir = workingDir
-	cliEnv := getCliEnvironmentVariables(os.Environ())
+	cliEnv := appendCliEnvironmentVariables(os.Environ())
 	command.Env = cliEnv
 	log.Debug().Str("method", "getCommand").Interface("command", command).Send()
 	return command
 }
 
-// Returns an array of the current environment variables with additional variables used in the CLI run.
+// Returns the input array with additional variables used in the CLI run in the form of "key=value".
 // Since we append, our values are overwriting existing env variables (because exec.Cmd.Env chooses the last value
 // in case of key duplications).
-func getCliEnvironmentVariables(currentEnv []string) (updatedEnv []string) {
+func appendCliEnvironmentVariables(currentEnv []string) (updatedEnv []string) {
 	updatedEnv = currentEnv
 
 	currentConfig := config.CurrentConfig()
@@ -101,10 +101,13 @@ func getCliEnvironmentVariables(currentEnv []string) (updatedEnv []string) {
 		updatedEnv = append(updatedEnv, DisableAnalyticsEnvVar+"=1")
 	}
 
-	updatedEnv = append(updatedEnv, IntegrationNameEnvVarKey+"="+currentConfig.IntegrationName())
-	updatedEnv = append(updatedEnv, IntegrationVersionEnvVarKey+"="+currentConfig.IntegrationVersion())
+	if currentConfig.IntegrationName() != "" {
+		updatedEnv = append(updatedEnv, IntegrationNameEnvVarKey+"="+currentConfig.IntegrationName())
+		updatedEnv = append(updatedEnv, IntegrationVersionEnvVarKey+"="+currentConfig.IntegrationVersion())
+	}
 	updatedEnv = append(updatedEnv, IntegrationEnvironmentEnvVarKey+"="+IntegrationEnvironmentEnvVarValue)
 	updatedEnv = append(updatedEnv, IntegrationEnvironmentVersionEnvVar+"="+config.Version)
+
 	return
 }
 
