@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/creachadair/jrpc2"

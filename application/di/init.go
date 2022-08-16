@@ -79,7 +79,7 @@ func initInfrastructure() {
 	errorReporter = sentry2.NewSentryErrorReporter()
 	instrumentor = sentry2.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient()
-	analytics = segment.NewSegmentClient(snykApiClient, ux2.Eclipse, errorReporter) // todo: Don't hardcode Eclipse here
+	analytics = segment.NewSegmentClient(snykApiClient, errorReporter)
 	analytics.Initialise()
 	authProvider := auth2.NewCliAuthenticationProvider(errorReporter)
 	authenticator = services.NewAuthenticationService(authProvider, analytics)

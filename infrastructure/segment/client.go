@@ -2,6 +2,7 @@ package segment
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -17,19 +18,17 @@ import (
 type Client struct {
 	authenticatedUserId string
 	anonymousUserId     string
-	IDE                 ux2.IDE
 	segment             segment.Client
 	snykApiClient       snyk_api.SnykApiClient
 	errorReporter       error_reporting.ErrorReporter
 }
 
-func NewSegmentClient(snykApiClient snyk_api.SnykApiClient, IDE ux2.IDE, errorReporter error_reporting.ErrorReporter) ux2.Analytics {
+func NewSegmentClient(snykApiClient snyk_api.SnykApiClient, errorReporter error_reporting.ErrorReporter) ux2.Analytics {
 	client, err := segment.NewWithConfig(getSegmentPublicKey(), segment.Config{Logger: &segmentLogger{}})
 	if err != nil {
 		log.Error().Str("method", "NewSegmentClient").Err(err).Msg("Error creating segment client")
 	}
 	segmentClient := &Client{
-		IDE:             IDE,
 		segment:         client,
 		snykApiClient:   snykApiClient,
 		errorReporter:   errorReporter,
@@ -139,15 +138,35 @@ func (s *Client) getSerialisedProperties(props interface{}) segment.Properties {
 		return nil
 	}
 
-	set := segment.NewProperties().
-		Set("itly", true).
-		Set("ide", s.IDE)
-
-	for element := range result {
-		set = set.Set(element, result[element])
+	properties := segment.NewProperties().Set("itly", true)
+	if ideProperty := getIdeProperty(); ideProperty != "" {
+		properties.Set("ide", ideProperty)
 	}
 
-	return set
+	for element := range result {
+		properties = properties.Set(element, result[element])
+	}
+
+	return properties
+}
+
+// Only return an IDE property if it's a recognized IDE in the tracking plan
+func getIdeProperty() string {
+	// Standardize the names
+	integrationName := strings.Replace(strings.ToLower(config.CurrentConfig().IntegrationName()), "_", " ", -1)
+
+	switch integrationName {
+	case strings.ToLower(string(ux2.Eclipse)):
+		return string(ux2.Eclipse)
+	case strings.ToLower(string(ux2.VisualStudioCode)):
+		return string(ux2.VisualStudioCode)
+	case strings.ToLower(string(ux2.VisualStudio)):
+		return string(ux2.VisualStudio)
+	case strings.ToLower(string(ux2.JetBrains)):
+		return string(ux2.JetBrains)
+	default:
+		return ""
+	}
 }
 
 type segmentLogger struct{}
