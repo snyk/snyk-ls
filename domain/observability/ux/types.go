@@ -1,8 +1,10 @@
 package ux
 
 type AnalysisIsReadyProperties struct {
-	AnalysisType AnalysisType `json:"analysisType"`
-	Result       Result       `json:"result"`
+	AnalysisType      AnalysisType `json:"analysisType"`
+	Result            Result       `json:"result"`
+	FileCount         int          `json:"fileCount,omitempty"`
+	DurationInSeconds float64      `json:"durationInSeconds,omitempty"`
 }
 
 type AnalysisIsTriggeredProperties struct {
