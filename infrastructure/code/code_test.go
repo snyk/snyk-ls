@@ -156,8 +156,9 @@ func TestUploadAndAnalyze(t *testing.T) {
 		path, firstDoc, _, _, _ := setupDocs()
 		docs := []string{uri.PathFromUri(firstDoc.URI)}
 		defer os.RemoveAll(path)
+		metrics := c.newMetrics(len(docs), time.Time{})
 
-		c.UploadAndAnalyze(context.Background(), docs, "")
+		c.UploadAndAnalyze(context.Background(), docs, "", metrics)
 
 		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
 		assert.Nil(t, params)
