@@ -151,19 +151,19 @@ func (s *Client) getSerialisedProperties(props interface{}) segment.Properties {
 }
 
 // Only return an IDE property if it's a recognized IDE in the tracking plan
-func getIdeProperty() string {
+func getIdeProperty() ux2.IDE {
 	// Standardize the names
 	integrationName := strings.Replace(strings.ToLower(config.CurrentConfig().IntegrationName()), "_", " ", -1)
 
 	switch integrationName {
 	case strings.ToLower(string(ux2.Eclipse)):
-		return string(ux2.Eclipse)
+		return ux2.Eclipse
 	case strings.ToLower(string(ux2.VisualStudioCode)):
-		return string(ux2.VisualStudioCode)
+		return ux2.VisualStudioCode
 	case strings.ToLower(string(ux2.VisualStudio)):
-		return string(ux2.VisualStudio)
+		return ux2.VisualStudio
 	case strings.ToLower(string(ux2.JetBrains)):
-		return string(ux2.JetBrains)
+		return ux2.JetBrains
 	default:
 		return ""
 	}

@@ -155,6 +155,7 @@ func setupUnitTest(t *testing.T) (*Client, *FakeSegmentClient, *snyk_api.FakeApi
 	fakeApiClient := &snyk_api.FakeApiClient{}
 	s := NewSegmentClient(fakeApiClient, error_reporting.NewTestErrorReporter()).(*Client)
 	fakeSegmentClient := &FakeSegmentClient{mutex: &sync.Mutex{}}
+	config.CurrentConfig().SetIntegrationName("Visual Studio Code")
 	s.segment = fakeSegmentClient
 	return s, fakeSegmentClient, fakeApiClient
 }
