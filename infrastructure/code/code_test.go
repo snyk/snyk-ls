@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/adrg/xdg"
 	"github.com/sourcegraph/go-lsp"
@@ -136,8 +137,9 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		path, firstDoc, _, content1, _ := setupDocs()
 		docs := []string{uri.PathFromUri(firstDoc.URI)}
 		defer os.RemoveAll(path)
+		metrics := c.newMetrics(len(docs), time.Time{})
 
-		c.UploadAndAnalyze(context.Background(), docs, "")
+		c.UploadAndAnalyze(context.Background(), docs, "", metrics)
 
 		// verify that create bundle has been called on backend service
 		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
@@ -153,8 +155,10 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
 		diagnosticUri, path := FakeDiagnosticPath(t)
 		defer os.RemoveAll(path)
+		files := []string{diagnosticUri}
+		metrics := c.newMetrics(len(files), time.Time{})
 
-		issues := c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, "")
+		issues := c.UploadAndAnalyze(context.Background(), files, "", metrics)
 
 		assert.NotNil(t, issues)
 		assert.Equal(t, 1, len(issues))
@@ -174,16 +178,18 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), analytics)
 		diagnosticUri, path := FakeDiagnosticPath(t)
 		defer os.RemoveAll(path)
+		files := []string{diagnosticUri}
+		metrics := c.newMetrics(len(files), time.Now())
 
 		// execute
-		c.UploadAndAnalyze(context.Background(), []string{diagnosticUri}, "")
+		c.UploadAndAnalyze(context.Background(), files, "", metrics)
 
 		assert.Len(t, analytics.GetAnalytics(), 1)
 		assert.Equal(t, ux2.AnalysisIsReadyProperties{
 			AnalysisType:      ux2.CodeSecurity,
 			Result:            ux2.Success,
-			FileCount:         c.metrics.lastScanFileCount,
-			DurationInSeconds: c.metrics.lastScanDurationInSeconds,
+			FileCount:         metrics.lastScanFileCount,
+			DurationInSeconds: metrics.lastScanDurationInSeconds,
 		}, analytics.GetAnalytics()[0])
 	})
 }

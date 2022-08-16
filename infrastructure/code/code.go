@@ -26,7 +26,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-type ScannerMetrics struct {
+type ScanMetrics struct {
 	lastScanStartTime         time.Time
 	lastScanDurationInSeconds float64
 	lastScanFileCount         int
@@ -39,7 +39,6 @@ type Scanner struct {
 	analytics      ux2.Analytics
 	ignorePatterns []string
 	mutex          sync.Mutex
-	metrics        ScannerMetrics
 }
 
 func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter error_reporting.ErrorReporter, analytics ux2.Analytics) *Scanner {
@@ -65,7 +64,7 @@ func (sc *Scanner) SupportedCommands() []snyk.CommandName {
 }
 
 func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk.Issue {
-	sc.metrics.lastScanStartTime = time.Now()
+	startTime := time.Now()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
@@ -78,8 +77,8 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk
 			Msg("error getting workspace files")
 	}
 
-	sc.metrics.lastScanFileCount = len(files)
-	return sc.UploadAndAnalyze(span.Context(), files, folderPath)
+	metrics := sc.newMetrics(len(files), startTime)
+	return sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics)
 }
 
 func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
@@ -180,7 +179,18 @@ func (sc *Scanner) loadIgnorePatternsAndCountFiles(folderPath string) (fileCount
 	return fileCount, nil
 }
 
-func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path string) (issues []snyk.Issue) {
+func (sc *Scanner) newMetrics(fileCount int, scanStartTime time.Time) *ScanMetrics {
+	if scanStartTime.IsZero() {
+		scanStartTime = time.Now()
+	}
+
+	return &ScanMetrics{
+		lastScanStartTime: scanStartTime,
+		lastScanFileCount: fileCount,
+	}
+}
+
+func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path string, scanMetrics *ScanMetrics) (issues []snyk.Issue) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.uploadAndAnalyze")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 	if len(files) == 0 {
@@ -197,7 +207,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path st
 
 	if err != nil {
 		msg := "error creating bundle..."
-		sc.handleCreationAndUploadError(err, msg)
+		sc.handleCreationAndUploadError(err, msg, scanMetrics)
 		return issues
 	}
 
@@ -205,7 +215,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path st
 	// TODO LSP error handling should be pushed UP to the LSP layer
 	if err != nil {
 		msg := "error uploading files..."
-		sc.handleCreationAndUploadError(err, msg)
+		sc.handleCreationAndUploadError(err, msg, scanMetrics)
 		return issues
 	}
 	if uploadedBundle.BundleHash == "" {
@@ -214,13 +224,13 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path st
 	}
 
 	issues = uploadedBundle.FetchDiagnosticsData(span.Context())
-	sc.trackResult(true)
+	sc.trackResult(true, scanMetrics)
 	return issues
 }
 
-func (sc *Scanner) handleCreationAndUploadError(err error, msg string) {
+func (sc *Scanner) handleCreationAndUploadError(err error, msg string, scanMetrics *ScanMetrics) {
 	sc.errorReporter.CaptureError(errors.Wrap(err, msg))
-	sc.trackResult(err == nil)
+	sc.trackResult(err == nil, scanMetrics)
 }
 
 func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath string, filePaths []string) (b Bundle, bundleFiles map[string]BundleFile, err error) {
@@ -283,7 +293,7 @@ type UploadStatus struct {
 	TotalFiles    int
 }
 
-func (sc *Scanner) trackResult(success bool) {
+func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics) {
 	var result ux2.Result
 	if success {
 		result = ux2.Success
@@ -291,12 +301,12 @@ func (sc *Scanner) trackResult(success bool) {
 		result = ux2.Error
 	}
 
-	duration := time.Since(sc.metrics.lastScanStartTime)
-	sc.metrics.lastScanDurationInSeconds = float.ToFixed(duration.Seconds(), 2)
+	duration := time.Since(scanMetrics.lastScanStartTime)
+	scanMetrics.lastScanDurationInSeconds = float.ToFixed(duration.Seconds(), 2)
 	sc.analytics.AnalysisIsReady(ux2.AnalysisIsReadyProperties{
 		AnalysisType:      ux2.CodeSecurity,
 		Result:            result,
-		FileCount:         sc.metrics.lastScanFileCount,
-		DurationInSeconds: sc.metrics.lastScanDurationInSeconds,
+		FileCount:         scanMetrics.lastScanFileCount,
+		DurationInSeconds: scanMetrics.lastScanDurationInSeconds,
 	})
 }
