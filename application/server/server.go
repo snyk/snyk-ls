@@ -218,7 +218,7 @@ func setClientInformation(initParams lsp.InitializeParams) {
 		integrationName = initParams.InitializationOptions.IntegrationName
 		integrationVersion = initParams.InitializationOptions.IntegrationVersion
 	} else if initParams.ClientInfo.Name != "" {
-		integrationName = initParams.ClientInfo.Name
+		integrationName = strings.ToUpper(strings.Replace(initParams.ClientInfo.Name, " ", "_", -1))
 		integrationVersion = initParams.ClientInfo.Version
 	} else if integrationNameEnvVar := os.Getenv("SNYK_INTEGRATION_NAME"); integrationNameEnvVar != "" {
 		integrationName = integrationNameEnvVar
