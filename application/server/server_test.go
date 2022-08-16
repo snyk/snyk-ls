@@ -270,12 +270,8 @@ func Test_initialize_integrationInInitializationOptions_readFromInitializationOp
 	const expectedIntegrationVersion = "0.0.1rc1"
 
 	// The info in initializationOptions takes priority over env-vars
-	originalIntegrationNameEnvVar := os.Getenv(cli.IntegrationNameEnvVarKey)
-	originalIntegrationVersionEnvVar := os.Getenv(cli.IntegrationVersionEnvVarKey)
-	testutil.SetEnvOrFail(t, cli.IntegrationNameEnvVarKey, "NOT_"+expectedIntegrationName)
-	testutil.SetEnvOrFail(t, cli.IntegrationVersionEnvVarKey, "NOT_"+expectedIntegrationVersion)
-	defer testutil.SetEnvOrFail(t, cli.IntegrationNameEnvVarKey, originalIntegrationNameEnvVar)
-	defer testutil.SetEnvOrFail(t, cli.IntegrationVersionEnvVarKey, originalIntegrationVersionEnvVar)
+	t.Setenv(cli.IntegrationNameEnvVarKey, "NOT_"+expectedIntegrationName)
+	t.Setenv(cli.IntegrationVersionEnvVarKey, "NOT_"+expectedIntegrationVersion)
 
 	loc := setupServer(t)
 	clientParams := lsp.InitializeParams{
@@ -283,8 +279,8 @@ func Test_initialize_integrationInInitializationOptions_readFromInitializationOp
 			IntegrationName:    expectedIntegrationName,
 			IntegrationVersion: expectedIntegrationVersion,
 		},
-		ClientInfo: sglsp.ClientInfo{
-			Name:    "NOT_" + expectedIntegrationName, // the info in initializationOptions takes priority over ClientInfo
+		ClientInfo: sglsp.ClientInfo{ // the info in initializationOptions takes priority over ClientInfo
+			Name:    "NOT_" + expectedIntegrationName,
 			Version: "NOT_" + expectedIntegrationVersion,
 		},
 	}
@@ -307,12 +303,8 @@ func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
 	const expectedIntegrationVersion = "0.0.1rc1"
 
 	// The data in clientInfo takes priority over env-vars
-	originalIntegrationNameEnvVar := os.Getenv(cli.IntegrationNameEnvVarKey)
-	originalIntegrationVersionEnvVar := os.Getenv(cli.IntegrationVersionEnvVarKey)
-	testutil.SetEnvOrFail(t, cli.IntegrationNameEnvVarKey, "NOT_"+expectedIntegrationName)
-	testutil.SetEnvOrFail(t, cli.IntegrationVersionEnvVarKey, "NOT_"+expectedIntegrationVersion)
-	defer testutil.SetEnvOrFail(t, cli.IntegrationNameEnvVarKey, originalIntegrationNameEnvVar)
-	defer testutil.SetEnvOrFail(t, cli.IntegrationVersionEnvVarKey, originalIntegrationVersionEnvVar)
+	t.Setenv(cli.IntegrationNameEnvVarKey, "NOT_"+expectedIntegrationName)
+	t.Setenv(cli.IntegrationVersionEnvVarKey, "NOT_"+expectedIntegrationVersion)
 
 	loc := setupServer(t)
 	clientParams := lsp.InitializeParams{
@@ -339,13 +331,8 @@ func Test_initialize_integrationOnlyInEnvVars_readFromEnvVars(t *testing.T) {
 	const expectedIntegrationName = "ECLIPSE"
 	const expectedIntegrationVersion = "0.0.1rc1"
 
-	originalIntegrationNameEnvVar := os.Getenv(cli.IntegrationNameEnvVarKey)
-	originalIntegrationVersionEnvVar := os.Getenv(cli.IntegrationVersionEnvVarKey)
-	testutil.SetEnvOrFail(t, cli.IntegrationNameEnvVarKey, expectedIntegrationName)
-	testutil.SetEnvOrFail(t, cli.IntegrationVersionEnvVarKey, expectedIntegrationVersion)
-	defer testutil.SetEnvOrFail(t, cli.IntegrationNameEnvVarKey, originalIntegrationNameEnvVar)
-	defer testutil.SetEnvOrFail(t, cli.IntegrationVersionEnvVarKey, originalIntegrationVersionEnvVar)
-
+	t.Setenv(cli.IntegrationNameEnvVarKey, expectedIntegrationName)
+	t.Setenv(cli.IntegrationVersionEnvVarKey, expectedIntegrationVersion)
 	loc := setupServer(t)
 
 	// Act
