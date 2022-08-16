@@ -159,7 +159,6 @@ func TestUploadAndAnalyze(t *testing.T) {
 
 		c.UploadAndAnalyze(context.Background(), docs, "")
 
-		// verify that create bundle has been called on backend service
 		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
 		assert.Nil(t, params)
 	})
