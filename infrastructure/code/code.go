@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -19,10 +20,17 @@ import (
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/float"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/util"
 )
+
+type ScannerMetrics struct {
+	lastScanStartTime         time.Time
+	lastScanDurationInSeconds float64
+	lastScanFileCount         int
+}
 
 type Scanner struct {
 	BundleUploader *BundleUploader
@@ -31,6 +39,7 @@ type Scanner struct {
 	analytics      ux2.Analytics
 	ignorePatterns []string
 	mutex          sync.Mutex
+	metrics        ScannerMetrics
 }
 
 func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter error_reporting.ErrorReporter, analytics ux2.Analytics) *Scanner {
@@ -56,6 +65,7 @@ func (sc *Scanner) SupportedCommands() []snyk.CommandName {
 }
 
 func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk.Issue {
+	sc.metrics.lastScanStartTime = time.Now()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
@@ -68,6 +78,7 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk
 			Msg("error getting workspace files")
 	}
 
+	sc.metrics.lastScanFileCount = len(files)
 	return sc.UploadAndAnalyze(span.Context(), files, folderPath)
 }
 
@@ -279,8 +290,13 @@ func (sc *Scanner) trackResult(success bool) {
 	} else {
 		result = ux2.Error
 	}
+
+	duration := time.Since(sc.metrics.lastScanStartTime)
+	sc.metrics.lastScanDurationInSeconds = float.ToFixed(duration.Seconds(), 2)
 	sc.analytics.AnalysisIsReady(ux2.AnalysisIsReadyProperties{
-		AnalysisType: ux2.CodeSecurity,
-		Result:       result,
+		AnalysisType:      ux2.CodeSecurity,
+		Result:            result,
+		FileCount:         sc.metrics.lastScanFileCount,
+		DurationInSeconds: sc.metrics.lastScanDurationInSeconds,
 	})
 }

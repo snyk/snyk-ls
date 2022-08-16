@@ -180,8 +180,10 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 
 		assert.Len(t, analytics.GetAnalytics(), 1)
 		assert.Equal(t, ux2.AnalysisIsReadyProperties{
-			AnalysisType: ux2.CodeSecurity,
-			Result:       ux2.Success,
+			AnalysisType:      ux2.CodeSecurity,
+			Result:            ux2.Success,
+			FileCount:         c.metrics.lastScanFileCount,
+			DurationInSeconds: c.metrics.lastScanDurationInSeconds,
 		}, analytics.GetAnalytics()[0])
 	})
 }
