@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -261,6 +262,102 @@ func Test_initialize_updatesSettings(t *testing.T) {
 	}
 	assert.Equal(t, "fancy org", config.CurrentConfig().GetOrganization())
 	assert.Equal(t, "xxx", config.CurrentConfig().Token())
+}
+
+func Test_initialize_integrationInInitializationOptions_readFromInitializationOptions(t *testing.T) {
+	// Arrange
+	const expectedIntegrationName = "ECLIPSE"
+	const expectedIntegrationVersion = "0.0.1rc1"
+
+	// The info in initializationOptions takes priority over env-vars
+	originalIntegrationNameEnvVar := os.Getenv(cli.IntegrationNameEnvVarKey)
+	originalIntegrationVersionEnvVar := os.Getenv(cli.IntegrationVersionEnvVarKey)
+	testutil.SetEnvOrFail(t, cli.IntegrationNameEnvVarKey, "NOT_"+expectedIntegrationName)
+	testutil.SetEnvOrFail(t, cli.IntegrationVersionEnvVarKey, "NOT_"+expectedIntegrationVersion)
+	defer testutil.SetEnvOrFail(t, cli.IntegrationNameEnvVarKey, originalIntegrationNameEnvVar)
+	defer testutil.SetEnvOrFail(t, cli.IntegrationVersionEnvVarKey, originalIntegrationVersionEnvVar)
+
+	loc := setupServer(t)
+	clientParams := lsp.InitializeParams{
+		InitializationOptions: lsp.Settings{
+			IntegrationName:    expectedIntegrationName,
+			IntegrationVersion: expectedIntegrationVersion,
+		},
+		ClientInfo: sglsp.ClientInfo{
+			Name:    "NOT_" + expectedIntegrationName, // the info in initializationOptions takes priority over ClientInfo
+			Version: "NOT_" + expectedIntegrationVersion,
+		},
+	}
+
+	// Act
+	_, err := loc.Client.Call(ctx, "initialize", clientParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	currentConfig := config.CurrentConfig()
+	assert.Equal(t, expectedIntegrationName, currentConfig.IntegrationName())
+	assert.Equal(t, expectedIntegrationVersion, currentConfig.IntegrationVersion())
+}
+
+func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
+	// Arrange
+	const expectedIntegrationName = "ECLIPSE"
+	const expectedIntegrationVersion = "0.0.1rc1"
+
+	// The data in clientInfo takes priority over env-vars
+	originalIntegrationNameEnvVar := os.Getenv(cli.IntegrationNameEnvVarKey)
+	originalIntegrationVersionEnvVar := os.Getenv(cli.IntegrationVersionEnvVarKey)
+	testutil.SetEnvOrFail(t, cli.IntegrationNameEnvVarKey, "NOT_"+expectedIntegrationName)
+	testutil.SetEnvOrFail(t, cli.IntegrationVersionEnvVarKey, "NOT_"+expectedIntegrationVersion)
+	defer testutil.SetEnvOrFail(t, cli.IntegrationNameEnvVarKey, originalIntegrationNameEnvVar)
+	defer testutil.SetEnvOrFail(t, cli.IntegrationVersionEnvVarKey, originalIntegrationVersionEnvVar)
+
+	loc := setupServer(t)
+	clientParams := lsp.InitializeParams{
+		ClientInfo: sglsp.ClientInfo{
+			Name:    expectedIntegrationName,
+			Version: expectedIntegrationVersion,
+		},
+	}
+
+	// Act
+	_, err := loc.Client.Call(ctx, "initialize", clientParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	currentConfig := config.CurrentConfig()
+	assert.Equal(t, expectedIntegrationName, currentConfig.IntegrationName())
+	assert.Equal(t, expectedIntegrationVersion, currentConfig.IntegrationVersion())
+}
+
+func Test_initialize_integrationOnlyInEnvVars_readFromEnvVars(t *testing.T) {
+	// Arrange
+	const expectedIntegrationName = "ECLIPSE"
+	const expectedIntegrationVersion = "0.0.1rc1"
+
+	originalIntegrationNameEnvVar := os.Getenv(cli.IntegrationNameEnvVarKey)
+	originalIntegrationVersionEnvVar := os.Getenv(cli.IntegrationVersionEnvVarKey)
+	testutil.SetEnvOrFail(t, cli.IntegrationNameEnvVarKey, expectedIntegrationName)
+	testutil.SetEnvOrFail(t, cli.IntegrationVersionEnvVarKey, expectedIntegrationVersion)
+	defer testutil.SetEnvOrFail(t, cli.IntegrationNameEnvVarKey, originalIntegrationNameEnvVar)
+	defer testutil.SetEnvOrFail(t, cli.IntegrationVersionEnvVarKey, originalIntegrationVersionEnvVar)
+
+	loc := setupServer(t)
+
+	// Act
+	_, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	currentConfig := config.CurrentConfig()
+	assert.Equal(t, expectedIntegrationName, currentConfig.IntegrationName())
+	assert.Equal(t, expectedIntegrationVersion, currentConfig.IntegrationVersion())
 }
 
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
