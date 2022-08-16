@@ -1,4 +1,4 @@
-package snyk_test
+package snyk
 
 import (
 	"context"
@@ -10,14 +10,13 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
-	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
-	enabledScanner := snyk.NewTestProductScanner(snyk.ProductCode, true)
-	disabledScanner := snyk.NewTestProductScanner(snyk.ProductOpenSource, false)
+	enabledScanner := NewTestProductScanner(ProductCode, true)
+	disabledScanner := NewTestProductScanner(ProductOpenSource, false)
 
-	scanner := snyk.NewDelegatingScanner(
+	scanner := NewDelegatingScanner(
 		initialize.NewDelegatingInitializer(),
 		performance.NewTestInstrumentor(),
 		ux.NewTestAnalytics(),
@@ -25,12 +24,12 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 		disabledScanner,
 	)
 
-	scanner.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
+	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
 
 	assert.Eventually(
 		t,
 		func() bool {
-			return 1 == enabledScanner.Scans && 0 == disabledScanner.Scans
+			return 1 == enabledScanner.Scans() && 0 == disabledScanner.Scans()
 		},
 		1*time.Second,
 		10*time.Millisecond,
@@ -38,11 +37,11 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 }
 
 func TestScan_whenProductScannerEnabled_SendsAnalysisTriggered(t *testing.T) {
-	enabledScanner := snyk.NewTestProductScanner(snyk.ProductCode, true)
-	disabledScanner := snyk.NewTestProductScanner(snyk.ProductOpenSource, false)
+	enabledScanner := NewTestProductScanner(ProductCode, true)
+	disabledScanner := NewTestProductScanner(ProductOpenSource, false)
 
 	analytics := ux.NewTestAnalytics()
-	scanner := snyk.NewDelegatingScanner(
+	scanner := NewDelegatingScanner(
 		initialize.NewDelegatingInitializer(),
 		performance.NewTestInstrumentor(),
 		analytics,
@@ -50,7 +49,7 @@ func TestScan_whenProductScannerEnabled_SendsAnalysisTriggered(t *testing.T) {
 		disabledScanner,
 	)
 
-	scanner.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
+	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
 
 	assert.Equal(t, ux.AnalysisIsTriggeredProperties{
 		AnalysisType:    []ux.AnalysisType{ux.CodeSecurity},
@@ -59,17 +58,17 @@ func TestScan_whenProductScannerEnabled_SendsAnalysisTriggered(t *testing.T) {
 }
 
 func TestScan_whenNoProductScannerEnabled_SendsNoAnalytics(t *testing.T) {
-	disabledScanner := snyk.NewTestProductScanner(snyk.ProductOpenSource, false)
+	disabledScanner := NewTestProductScanner(ProductOpenSource, false)
 
 	analytics := ux.NewTestAnalytics()
-	scanner := snyk.NewDelegatingScanner(
+	scanner := NewDelegatingScanner(
 		initialize.NewDelegatingInitializer(),
 		performance.NewTestInstrumentor(),
 		analytics,
 		disabledScanner,
 	)
 
-	scanner.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
+	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
 
 	assert.Len(t, analytics.GetAnalytics(), 0)
 }

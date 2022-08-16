@@ -1,6 +1,8 @@
 package snyk
 
-import "context"
+import (
+	"context"
+)
 
 // type Filepath string
 // See if we can have an interface with a single property Target that can be either a folder or a file. If not, we use ScanTarget as an interface with Target being folder or file and WorkspaceFolder always being a folder to satisfy different product requirements, e.g. OSS & Code.
@@ -29,30 +31,3 @@ const (
 	ProductOpenSource           Product = "Snyk Open Source"
 	ProductInfrastructureAsCode Product = "Snyk IaC"
 )
-
-func NewTestProductScanner(product Product, enabled bool) *TestProductScanner {
-	return &TestProductScanner{
-		product: product,
-		enabled: enabled,
-		Scans:   0,
-	}
-}
-
-type TestProductScanner struct {
-	product Product
-	enabled bool
-	Scans   int
-}
-
-func (t *TestProductScanner) Scan(_ context.Context, _ string, _ string) (issues []Issue) {
-	t.Scans++
-	return []Issue{}
-}
-
-func (t *TestProductScanner) IsEnabled() bool {
-	return t.enabled
-}
-
-func (t *TestProductScanner) Product() Product {
-	return t.product
-}
