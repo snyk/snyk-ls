@@ -100,7 +100,6 @@ func TestInit(t *testing.T) {
 	defer initMutex.Unlock()
 	t.Helper()
 	analytics = ux2.NewTestAnalytics()
-	analytics.Initialise()
 	instrumentor = performance2.NewTestInstrumentor()
 	errorReporter = errorreporting.NewTestErrorReporter()
 	authProvider := auth2.NewCliAuthenticationProvider(errorReporter)
