@@ -80,7 +80,6 @@ func initInfrastructure() {
 	instrumentor = sentry2.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient()
 	analytics = segment.NewSegmentClient(snykApiClient, errorReporter)
-	analytics.Initialise()
 	authProvider := auth2.NewCliAuthenticationProvider(errorReporter)
 	authenticator = services.NewAuthenticationService(authProvider, analytics)
 	snykCli = cli2.NewExecutor(authenticator, errorReporter, analytics)

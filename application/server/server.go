@@ -144,6 +144,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 		UpdateSettings(ctx, params.InitializationOptions)
 		config.CurrentConfig().SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
+		di.Analytics().Initialise()
 		w := workspace.New(di.Instrumentor())
 		workspace.Set(w)
 
