@@ -11,9 +11,10 @@ func NewTestAnalytics() *TestAnalytics {
 }
 
 type TestAnalytics struct {
-	analytics  []interface{}
-	mutex      sync.Mutex
-	Identified bool
+	analytics   []interface{}
+	mutex       sync.Mutex
+	Identified  bool
+	Initialized bool
 }
 
 func (n *TestAnalytics) GetAnalytics() []interface{} {
@@ -59,6 +60,7 @@ func (n *TestAnalytics) PluginIsInstalled(properties PluginIsInstalledProperties
 
 func (n *TestAnalytics) Initialise() {
 	log.Info().Str("method", "Init").Msgf("no op")
+	n.Initialized = true
 }
 func (n *TestAnalytics) Shutdown() error {
 	log.Info().Str("method", "Shutdown").Msgf("no op")

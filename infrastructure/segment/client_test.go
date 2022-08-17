@@ -153,8 +153,9 @@ func Test_AnalyticEvents(t *testing.T) {
 func setupUnitTest(t *testing.T) (*Client, *FakeSegmentClient, *snyk_api.FakeApiClient) {
 	testutil.UnitTest(t)
 	fakeApiClient := &snyk_api.FakeApiClient{}
-	s := NewSegmentClient(fakeApiClient, ux.VisualStudioCode, error_reporting.NewTestErrorReporter()).(*Client)
+	s := NewSegmentClient(fakeApiClient, error_reporting.NewTestErrorReporter()).(*Client)
 	fakeSegmentClient := &FakeSegmentClient{mutex: &sync.Mutex{}}
+	config.CurrentConfig().SetIntegrationName("Visual Studio Code")
 	s.segment = fakeSegmentClient
 	return s, fakeSegmentClient, fakeApiClient
 }

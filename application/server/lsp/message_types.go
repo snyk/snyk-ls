@@ -224,6 +224,8 @@ type Settings struct {
 	ManageBinariesAutomatically string `json:"manageBinariesAutomatically,omitempty"`
 	CliPath                     string `json:"cliPath,omitempty"`
 	Token                       string `json:"token,omitempty"`
+	IntegrationName             string `json:"integrationName,omitempty"`
+	IntegrationVersion          string `json:"integrationVersion,omitempty"`
 }
 
 type DidChangeConfigurationParams struct {

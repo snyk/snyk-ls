@@ -79,8 +79,7 @@ func initInfrastructure() {
 	errorReporter = sentry2.NewSentryErrorReporter()
 	instrumentor = sentry2.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient()
-	analytics = segment.NewSegmentClient(snykApiClient, ux2.Eclipse, errorReporter) // todo: Don't hardcode Eclipse here
-	analytics.Initialise()
+	analytics = segment.NewSegmentClient(snykApiClient, errorReporter)
 	authProvider := auth2.NewCliAuthenticationProvider(errorReporter)
 	authenticator = services.NewAuthenticationService(authProvider, analytics)
 	snykCli = cli2.NewExecutor(authenticator, errorReporter, analytics)
@@ -101,7 +100,6 @@ func TestInit(t *testing.T) {
 	defer initMutex.Unlock()
 	t.Helper()
 	analytics = ux2.NewTestAnalytics()
-	analytics.Initialise()
 	instrumentor = performance2.NewTestInstrumentor()
 	errorReporter = errorreporting.NewTestErrorReporter()
 	authProvider := auth2.NewCliAuthenticationProvider(errorReporter)

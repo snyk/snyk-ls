@@ -27,6 +27,8 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
+	"github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -261,6 +263,114 @@ func Test_initialize_updatesSettings(t *testing.T) {
 	}
 	assert.Equal(t, "fancy org", config.CurrentConfig().GetOrganization())
 	assert.Equal(t, "xxx", config.CurrentConfig().Token())
+}
+
+func Test_initialize_integrationInInitializationOptions_readFromInitializationOptions(t *testing.T) {
+	// Arrange
+	const expectedIntegrationName = "ECLIPSE"
+	const expectedIntegrationVersion = "0.0.1rc1"
+
+	// The info in initializationOptions takes priority over env-vars
+	t.Setenv(cli.IntegrationNameEnvVarKey, "NOT_"+expectedIntegrationName)
+	t.Setenv(cli.IntegrationVersionEnvVarKey, "NOT_"+expectedIntegrationVersion)
+
+	loc := setupServer(t)
+	clientParams := lsp.InitializeParams{
+		InitializationOptions: lsp.Settings{
+			IntegrationName:    expectedIntegrationName,
+			IntegrationVersion: expectedIntegrationVersion,
+		},
+		ClientInfo: sglsp.ClientInfo{ // the info in initializationOptions takes priority over ClientInfo
+			Name:    "NOT_" + expectedIntegrationName,
+			Version: "NOT_" + expectedIntegrationVersion,
+		},
+	}
+
+	// Act
+	_, err := loc.Client.Call(ctx, "initialize", clientParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	currentConfig := config.CurrentConfig()
+	assert.Equal(t, expectedIntegrationName, currentConfig.IntegrationName())
+	assert.Equal(t, expectedIntegrationVersion, currentConfig.IntegrationVersion())
+}
+
+func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
+	// Arrange
+	const expectedIntegrationName = "ECLIPSE"
+	const expectedIntegrationVersion = "0.0.1rc1"
+
+	// The data in clientInfo takes priority over env-vars
+	t.Setenv(cli.IntegrationNameEnvVarKey, "NOT_"+expectedIntegrationName)
+	t.Setenv(cli.IntegrationVersionEnvVarKey, "NOT_"+expectedIntegrationVersion)
+
+	loc := setupServer(t)
+	clientParams := lsp.InitializeParams{
+		ClientInfo: sglsp.ClientInfo{
+			Name:    expectedIntegrationName,
+			Version: expectedIntegrationVersion,
+		},
+	}
+
+	// Act
+	_, err := loc.Client.Call(ctx, "initialize", clientParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	currentConfig := config.CurrentConfig()
+	assert.Equal(t, expectedIntegrationName, currentConfig.IntegrationName())
+	assert.Equal(t, expectedIntegrationVersion, currentConfig.IntegrationVersion())
+}
+
+func Test_initialize_integrationOnlyInEnvVars_readFromEnvVars(t *testing.T) {
+	// Arrange
+	const expectedIntegrationName = "ECLIPSE"
+	const expectedIntegrationVersion = "0.0.1rc1"
+
+	t.Setenv(cli.IntegrationNameEnvVarKey, expectedIntegrationName)
+	t.Setenv(cli.IntegrationVersionEnvVarKey, expectedIntegrationVersion)
+	loc := setupServer(t)
+
+	// Act
+	_, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	currentConfig := config.CurrentConfig()
+	assert.Equal(t, expectedIntegrationName, currentConfig.IntegrationName())
+	assert.Equal(t, expectedIntegrationVersion, currentConfig.IntegrationVersion())
+}
+
+func Test_initialize_callsInitializeOnAnalytics(t *testing.T) {
+	// Analytics should be initialized only after the "initialize" message was received from the client.
+	// The "initialize" message contains the IDE data that's used in the "Plugin is installed" event.
+
+	// Arrange
+	loc := setupServer(t)
+	params := lsp.InitializeParams{
+		ClientInfo: sglsp.ClientInfo{
+			Name:    "ECLIPSE",
+			Version: "1.0.0",
+		},
+	}
+	analytics := di.Analytics().(*ux.TestAnalytics)
+	assert.False(t, analytics.Initialized)
+
+	// Act
+	_, err := loc.Client.Call(ctx, "initialize", params)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	assert.True(t, analytics.Initialized)
 }
 
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
