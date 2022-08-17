@@ -198,8 +198,8 @@ func (d *Downloader) createLockFile() error {
 }
 
 func (d *Downloader) moveToDestination(destinationFileName string, sourceFilePath string) (err error) {
-	cliPath := config.CurrentConfig().CliSettings().Path()
-	destinationFilePath := filepath.Join(cliPath, destinationFileName)
+	cliPath := filepath.Dir(config.CurrentConfig().CliSettings().Path())
+	destinationFilePath := filepath.Join(cliPath, destinationFileName) // snyk-win.exe.latest
 	log.Info().Str("method", "moveToDestination").Str("path", destinationFilePath).Msg("copying Snyk CLI to user directory")
 
 	// for Windows, we have to remove original file first before move/rename

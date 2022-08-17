@@ -2,6 +2,7 @@ package install
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,7 +20,8 @@ func TestDownloader_Download(t *testing.T) {
 	cancelProgressCh := make(chan lsp.ProgressToken, 1)
 	d := &Downloader{progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh)}
 	lockFileName := d.lockFileName()
-	config.CurrentConfig().CliSettings().SetPath(config.CurrentConfig().DefaultBinaryInstallPath())
+	cliPath := filepath.Join(config.CurrentConfig().DefaultBinaryInstallPath(), (&Discovery{}).ExecutableName(false))
+	config.CurrentConfig().CliSettings().SetPath(cliPath)
 	// remove any existing lockfile
 	_ = os.RemoveAll(lockFileName)
 

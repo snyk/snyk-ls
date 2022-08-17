@@ -132,7 +132,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	fakeCliFile.Close()
 	cliDiscovery := Discovery{}
 	cliFilePath := path.Join(cliDir, cliDiscovery.ExecutableName(false))
-	config.CurrentConfig().CliSettings().SetPath(cliDir)
+	config.CurrentConfig().CliSettings().SetPath(cliFilePath)
 	defer func() {
 		config.CurrentConfig().CliSettings().SetPath("")
 	}()
