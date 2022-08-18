@@ -2,13 +2,11 @@ package testutil
 
 import (
 	"os"
-	"path/filepath"
 	"runtime"
 	"testing"
 
 	"github.com/pact-foundation/pact-go/dsl"
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 
@@ -106,13 +104,11 @@ func prepareTestHelper(t *testing.T, envVar string) {
 		t.Logf("%s is not set", envVar)
 		t.SkipNow()
 	}
-	cliPath := filepath.Join(t.TempDir(), (&install.Discovery{}).ExecutableName(false))
 
 	c := config.New()
 	c.SetToken(GetEnvironmentToken())
 	c.SetErrorReportingEnabled(false)
 	c.SetTelemetryEnabled(false)
-	c.CliSettings().SetPath(cliPath)
 	config.SetCurrentConfig(c)
 
 	CLIDownloadLockFileCleanUp(t)
