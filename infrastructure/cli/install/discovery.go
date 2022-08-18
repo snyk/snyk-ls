@@ -63,3 +63,12 @@ func (d *Discovery) ChecksumInfo(r *Release) (string, error) {
 	}
 	return r.checksumInfo(), nil
 }
+
+func (d *Discovery) LookConfigPath() (string, error) {
+	cliPath := config.CurrentConfig().CliSettings().Path()
+	if _, err := os.Stat(cliPath); err == nil {
+		return cliPath, nil
+	}
+
+	return "", fmt.Errorf("unable to find CLI in %s", cliPath)
+}

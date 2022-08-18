@@ -39,6 +39,34 @@ func TestInstaller_Find(t *testing.T) {
 	assert.NotEmpty(t, execPath)
 }
 
+func Test_Find_CliPathInSettings_CliPathFound(t *testing.T) {
+	// Arrange
+	testutil.IntegTest(t)
+	file, err := os.CreateTemp(t.TempDir(), "snyk-win.exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Remove(file.Name())
+	})
+
+	cliPath := file.Name()
+	t.Setenv("PATH", "")
+	t.Setenv("SNYK_TOKEN", "")
+	t.Setenv("SNYK_CLI_PATH", "")
+	config.CurrentConfig().CliSettings().SetPath(cliPath)
+	installer := NewInstaller(error_reporting.NewTestErrorReporter())
+
+	// Act
+	foundPath, err := installer.Find()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	assert.Equal(t, cliPath, foundPath)
+}
+
 func TestInstaller_Find_emptyPath(t *testing.T) {
 	testutil.IntegTest(t)
 	t.Skipf("removes real binaries from user directory")
