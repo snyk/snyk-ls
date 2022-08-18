@@ -49,12 +49,15 @@ func (sc *DelegatingConcurrentScanner) Scan(
 ) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
 
-	sc.analytics.AnalysisIsTriggered(
-		ux2.AnalysisIsTriggeredProperties{
-			AnalysisType:    ux2.GetEnabledAnalysisTypes(),
-			TriggeredByUser: false,
-		},
-	)
+	analysisTypes := getEnabledAnalysisTypes(sc.scanners)
+	if len(analysisTypes) > 0 {
+		sc.analytics.AnalysisIsTriggered(
+			ux2.AnalysisIsTriggeredProperties{
+				AnalysisType:    analysisTypes,
+				TriggeredByUser: false,
+			},
+		)
+	}
 
 	sc.initializer.Init()
 	for _, scanner := range sc.scanners {
@@ -73,4 +76,22 @@ func (sc *DelegatingConcurrentScanner) Scan(
 		}
 	}
 	log.Debug().Msgf("All product scanners started for %s", path)
+}
+
+func getEnabledAnalysisTypes(productScanners []ProductScanner) (analysisTypes []ux2.AnalysisType) {
+	for _, ps := range productScanners {
+		if !ps.IsEnabled() {
+			continue
+		}
+		if ps.Product() == ProductInfrastructureAsCode {
+			analysisTypes = append(analysisTypes, ux2.InfrastructureAsCode)
+		}
+		if ps.Product() == ProductOpenSource {
+			analysisTypes = append(analysisTypes, ux2.OpenSource)
+		}
+		if ps.Product() == ProductCode {
+			analysisTypes = append(analysisTypes, ux2.CodeSecurity)
+		}
+	}
+	return analysisTypes
 }
