@@ -129,7 +129,7 @@ func setupTestScanner() (*FakeSnykCodeClient, *Scanner) {
 	return snykCodeMock, scanner
 }
 
-func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
+func TestUploadAndAnalyze(t *testing.T) {
 	t.Run("should create bundle when hash empty", func(t *testing.T) {
 		testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{}
@@ -147,6 +147,21 @@ func TestCodeBundleImpl_FetchDiagnosticsData(t *testing.T) {
 		assert.Equal(t, 1, len(params))
 		files := params[0].(map[string]string)
 		assert.Equal(t, files[uri.PathFromUri(firstDoc.URI)], util.Hash(content1))
+	})
+
+	t.Run("should ignore if SAST disabled", func(t *testing.T) {
+		testutil.UnitTest(t)
+		snykCodeMock := &FakeSnykCodeClient{}
+		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: false}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
+		path, firstDoc, _, _, _ := setupDocs()
+		docs := []string{uri.PathFromUri(firstDoc.URI)}
+		defer os.RemoveAll(path)
+		metrics := c.newMetrics(len(docs), time.Time{})
+
+		c.UploadAndAnalyze(context.Background(), docs, "", metrics)
+
+		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
+		assert.Nil(t, params)
 	})
 
 	t.Run("should retrieve from backend", func(t *testing.T) {

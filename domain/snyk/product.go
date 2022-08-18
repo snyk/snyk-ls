@@ -1,6 +1,8 @@
 package snyk
 
-import "context"
+import (
+	"context"
+)
 
 // type Filepath string
 // See if we can have an interface with a single property Target that can be either a folder or a file. If not, we use ScanTarget as an interface with Target being folder or file and WorkspaceFolder always being a folder to satisfy different product requirements, e.g. OSS & Code.
