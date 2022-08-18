@@ -35,7 +35,7 @@ func NewInstaller(errorReporter error_reporting.ErrorReporter) *Install {
 
 func (i *Install) Find() (string, error) {
 	d := &Discovery{}
-	execPath, err := d.LookConfigPath()
+	execPath, _ := d.LookConfigPath()
 	if execPath != "" {
 		return execPath, nil
 	}
@@ -43,7 +43,7 @@ func (i *Install) Find() (string, error) {
 	if execPath != "" {
 		return execPath, nil
 	}
-	execPath, err = d.LookPath()
+	execPath, err := d.LookPath()
 	if err != nil {
 		return "", err
 	}
