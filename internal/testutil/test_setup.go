@@ -1,7 +1,9 @@
 package testutil
 
 import (
+	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 
@@ -105,11 +107,13 @@ func prepareTestHelper(t *testing.T, envVar string) {
 		t.Logf("%s is not set", envVar)
 		t.SkipNow()
 	}
+	cliPath := filepath.Join(t.TempDir(), (&install.Discovery{}).ExecutableName(false))
 
 	c := config.New()
 	c.SetToken(GetEnvironmentToken())
 	c.SetErrorReportingEnabled(false)
 	c.SetTelemetryEnabled(false)
+	c.CliSettings().SetPath(cliPath)
 	config.SetCurrentConfig(c)
 
 	CLIDownloadLockFileCleanUp(t)
