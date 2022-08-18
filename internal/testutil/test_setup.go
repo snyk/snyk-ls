@@ -1,15 +1,14 @@
 package testutil
 
 import (
-	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
 	"github.com/pact-foundation/pact-go/dsl"
-
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 
