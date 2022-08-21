@@ -69,6 +69,7 @@ func (c *CliSettings) IsPathDefined() bool {
 	return c.cliPath != ""
 }
 
+// Path returns the full path to the CLI executable that is stored in the CLI configuration
 func (c *CliSettings) Path() string {
 	c.cliPathAccessMutex.Lock()
 	defer c.cliPathAccessMutex.Unlock()
