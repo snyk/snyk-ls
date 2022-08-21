@@ -54,7 +54,12 @@ func (c *CliSettings) Installed() bool {
 	c.cliPathAccessMutex.Lock()
 	defer c.cliPathAccessMutex.Unlock()
 	stat, err := os.Stat(c.cliPath)
-	return c.cliPath != "" && err == nil && !stat.IsDir()
+	isDirectory := stat != nil && stat.IsDir()
+	if isDirectory {
+		log.Warn().Msgf("CLI path (%s) refers to a directory and not a file", c.cliPath)
+	}
+
+	return c.cliPath != "" && err == nil && !isDirectory
 }
 
 func (c *CliSettings) IsPathDefined() bool {
