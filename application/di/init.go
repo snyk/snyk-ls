@@ -119,7 +119,6 @@ func TestInit(t *testing.T) {
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	scanner = snyk.NewDelegatingScanner(scanInitializer, instrumentor, analytics, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
 	hoverService = hover.NewDefaultService(analytics)
-	config.CurrentConfig().CliSettings().SetPath(filepath.Join(t.TempDir(), (&install.Discovery{}).ExecutableName(false)))
 	t.Cleanup(func() {
 		fakeClient.Clear()
 	})

@@ -20,6 +20,7 @@ import (
 	"github.com/subosito/gotenv"
 	"github.com/xtgo/uuid"
 
+	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -130,7 +131,9 @@ func IsDevelopment() bool {
 
 func New() *Config {
 	c := &Config{}
-	c.cliSettings = &CliSettings{}
+	c.cliSettings = &CliSettings{
+		cliPath: filepath.Join(c.DefaultBinaryInstallPath(), filename.ExecutableName),
+	}
 	c.configFile = ""
 	c.format = "md"
 	c.isErrorReportingEnabled.Set(true)
