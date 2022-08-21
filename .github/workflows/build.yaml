@@ -61,7 +61,7 @@ jobs:
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
         run: |
           export PATH=$PATH:~/pact/bin
-          make clean test
+          make clean test PARALLEL="-p=1"
 
       - name: Snyk
         env:
@@ -102,7 +102,7 @@ jobs:
           cd ~
           curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | bash
 
-      - name: Run integration tests with Pact
+      - name: Run integration tests with Pact in parallel
         if: matrix.os != 'windows-latest'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
@@ -110,16 +110,35 @@ jobs:
           INTEG_TESTS: 'true'
         run: |
           export PATH=$PATH:~/pact/bin
-          make clean test
+          make clean test PARALLEL="-p=3"
 
-      - name: Run integration tests without Pact
+      - name: Run integration tests with Pact sequentially
+        if: matrix.os != 'windows-latest'
+        env:
+          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          INTEG_TESTS: 'true'
+        run: |
+          export PATH=$PATH:~/pact/bin
+          make clean test PARALLEL="-p=1"
+
+      - name: Run integration tests without Pact in parallel
         if: matrix.os == 'windows-latest'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
           INTEG_TESTS: 'true'
         run: |
-          make clean test
+          make clean test PARALLEL="-p=3"
+
+      - name: Run integration tests without Pact sequentially
+        if: matrix.os == 'windows-latest'
+        env:
+          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          INTEG_TESTS: 'true'
+        run: |
+          make clean test PARALLEL="-p=1"
 
   race-test:
     name: race-test
