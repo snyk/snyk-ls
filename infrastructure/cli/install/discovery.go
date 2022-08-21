@@ -68,8 +68,10 @@ func (d *Discovery) ChecksumInfo(r *Release) (string, error) {
 
 func (d *Discovery) LookConfigPath() (string, error) {
 	cliPath := config.CurrentConfig().CliSettings().Path()
-	if _, err := os.Stat(cliPath); err == nil {
-		return cliPath, nil
+	if file, err := os.Stat(cliPath); err == nil {
+		if !file.IsDir() {
+			return cliPath, nil
+		}
 	}
 
 	return "", fmt.Errorf("unable to find CLI in %s", cliPath)
