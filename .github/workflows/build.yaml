@@ -47,7 +47,15 @@ jobs:
         run: |
           make tools lint
 
-      - name: Run tests
+      - name: Run tests in parallel
+        env:
+          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+        run: |
+          export PATH=$PATH:~/pact/bin
+          make clean test PARALLEL="-p=3"
+
+      - name: Run tests sequentially
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
