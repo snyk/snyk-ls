@@ -129,6 +129,7 @@ func IsDevelopment() bool {
 	return parseBool
 }
 
+// New creates a configuration object with default values
 func New() *Config {
 	c := &Config{}
 	c.cliSettings = &CliSettings{

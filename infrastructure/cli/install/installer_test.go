@@ -47,7 +47,12 @@ func Test_Find_CliPathInSettings_CliPathFound(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_ = os.Remove(file.Name())
+		if file.Close() == nil {
+			err = os.Remove(file.Name())
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
 	})
 
 	cliPath := file.Name()
@@ -104,9 +109,6 @@ func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 	temp := t.TempDir()
 	fakeCliFile := testutil.CreateTempFile(temp, t)
 	config.CurrentConfig().CliSettings().SetPath(fakeCliFile.Name())
-	defer func() {
-		config.CurrentConfig().CliSettings().SetPath("")
-	}()
 
 	checksum, err := getChecksum(fakeCliFile.Name())
 	if err != nil {
@@ -161,9 +163,6 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	cliDiscovery := Discovery{}
 	cliFilePath := path.Join(cliDir, cliDiscovery.ExecutableName(false))
 	config.CurrentConfig().CliSettings().SetPath(cliFilePath)
-	defer func() {
-		config.CurrentConfig().CliSettings().SetPath("")
-	}()
 
 	err = os.Rename(fakeCliFile.Name(), cliFilePath) // rename temp file to CLI file
 	if err != nil {

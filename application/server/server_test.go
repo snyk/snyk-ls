@@ -28,7 +28,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
-	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -412,9 +411,6 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	loc := setupServer(t)
 	testutil.IntegTest(t)
 	testutil.CreateDummyProgressListener(t)
-	currentConfig := config.CurrentConfig()
-	cliPath := filepath.Join(currentConfig.DefaultBinaryInstallPath(), (&install.Discovery{}).ExecutableName(false))
-	currentConfig.CliSettings().SetPath(cliPath)
 
 	installer := di.Installer()
 	for { // remove cli for testing
