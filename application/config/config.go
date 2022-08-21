@@ -391,9 +391,6 @@ func (c *Config) SetOrganization(organization string) {
 	c.organization = organization
 }
 
-func (c *Config) UserDirFolder() string {
-	return "snyk-ls"
-}
 func (c *Config) DefaultBinaryInstallPath() string {
 	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
 	err := os.MkdirAll(lsPath, 0755)
