@@ -35,7 +35,11 @@ func NewInstaller(errorReporter error_reporting.ErrorReporter) *Install {
 
 func (i *Install) Find() (string, error) {
 	d := &Discovery{}
-	execPath, _ := d.LookUserDir()
+	execPath, _ := d.LookConfigPath()
+	if execPath != "" {
+		return execPath, nil
+	}
+	execPath, _ = d.LookUserDir()
 	if execPath != "" {
 		return execPath, nil
 	}
@@ -125,12 +129,10 @@ func replaceOutdatedCli(cliDiscovery Discovery) error {
 	log.Info().Str("method", "replaceOutdatedCli").Msg("replacing outdated CLI with latest")
 
 	cliPath := config.CurrentConfig().CliSettings().Path()
-
-	outdatedCliFile := filepath.Join(cliPath, cliDiscovery.ExecutableName(false))
-	latestCliFile := filepath.Join(cliPath, cliDiscovery.ExecutableName(true))
+	latestCliFile := filepath.Join(filepath.Dir(cliPath), cliDiscovery.ExecutableName(true))
 
 	if runtime.GOOS == "windows" {
-		tildeExecutableName := outdatedCliFile + "~"
+		tildeExecutableName := cliPath + "~"
 
 		// Cleanup an old executable, if left after previous update.
 		// There should be no chance that this is still running due to 4-day update cycle. Any CLI run should be guaranteed to terminate within 4 days.
@@ -142,12 +144,12 @@ func replaceOutdatedCli(cliDiscovery Discovery) error {
 		}
 
 		// Windows allows to rename a running executable even with opened file handle. Another executable can take name of the old executable.
-		err := os.Rename(outdatedCliFile, tildeExecutableName)
+		err := os.Rename(cliPath, tildeExecutableName)
 		if err != nil {
 			log.Warn().Err(err).Str("method", "replaceOutdatedCli").Msg("couldn't rename current CLI on Windows")
 			return err
 		}
-		err = os.Rename(latestCliFile, outdatedCliFile)
+		err = os.Rename(latestCliFile, cliPath)
 		if err != nil {
 			log.Warn().Err(err).Str("method", "replaceOutdatedCli").Msg("couldn't move latest CLI on Windows")
 			return err
@@ -160,7 +162,7 @@ func replaceOutdatedCli(cliDiscovery Discovery) error {
 	}
 
 	// Unix systems keep executable in memory, fine to move.
-	err := os.Rename(latestCliFile, outdatedCliFile)
+	err := os.Rename(latestCliFile, cliPath)
 	if err != nil {
 		log.Warn().Err(err).Str("method", "replaceOutdatedCli").Msg("couldn't move latest CLI to replace current CLI")
 		return err

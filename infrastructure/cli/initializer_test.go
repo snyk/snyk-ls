@@ -34,9 +34,6 @@ func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
 	tempDir := t.TempDir()
 	tempFile := testutil.CreateTempFile(tempDir, t)
 	config.CurrentConfig().CliSettings().SetPath(tempFile.Name())
-	defer func() {
-		config.CurrentConfig().CliSettings().SetPath("")
-	}()
 
 	initializer.Init()
 

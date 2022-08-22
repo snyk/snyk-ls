@@ -25,11 +25,9 @@ import (
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
-	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -409,14 +407,13 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 }
 
 func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
+	// Arrange
 	loc := setupServer(t)
 	testutil.IntegTest(t)
-
 	testutil.CreateDummyProgressListener(t)
 
-	// remove cli for testing
-	installer := install.NewInstaller(error_reporting.NewTestErrorReporter())
-	for {
+	installer := di.Installer()
+	for { // remove cli for testing
 		find, err := installer.Find()
 		if err == nil {
 			err = os.Remove(find)
@@ -430,21 +427,19 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	}
 	err := os.Unsetenv("SNYK_CLI_PATH")
 	if err != nil {
-		t.Fatal("couldn't unset environment")
+		t.Fatal("couldn't unset environment variable SNYK_CLI_PATH")
 	}
-	c := config.New()
-	c.SetToken(testutil.GetEnvironmentToken())
-	config.SetCurrentConfig(c)
 
 	didOpenParams, dir := didOpenTextParams(t)
-
 	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService()))
 
+	// Act
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	// Assert
 	assert.Eventually(t, func() bool {
 		find, _ := installer.Find()
 		return find != ""

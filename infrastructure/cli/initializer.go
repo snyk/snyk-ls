@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -65,21 +66,23 @@ func (i *Initializer) Init() {
 func (i *Initializer) installCli() {
 	var err error
 	var cliPath string
-	if config.CurrentConfig().CliSettings().IsPathDefined() {
-		cliPath = config.CurrentConfig().CliSettings().Path()
+	currentConfig := config.CurrentConfig()
+	if currentConfig.CliSettings().IsPathDefined() {
+		cliPath = currentConfig.CliSettings().Path()
 	} else {
 		cliPath, err = i.installer.Find()
 		if err != nil {
 			log.Info().Str("method", "installCli").Msg("could not find Snyk CLI in user directories and PATH.")
-			cliPath = config.CurrentConfig().DefaultBinaryInstallPath()
+			cliFileName := (&install.Discovery{}).ExecutableName(false)
+			cliPath = filepath.Join(currentConfig.DefaultBinaryInstallPath(), cliFileName)
 		} else {
 			log.Info().Str("method", "installCli").Msgf("found CLI at %s", cliPath)
 		}
-		config.CurrentConfig().CliSettings().SetPath(cliPath)
+		currentConfig.CliSettings().SetPath(cliPath)
 	}
 
 	// Check if the file is actually in the cliPath
-	if !config.CurrentConfig().CliSettings().Installed() {
+	if !currentConfig.CliSettings().Installed() {
 		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Snyk CLI needs to be installed."})
 
 		cliPath, err = i.installer.Install(context.Background())

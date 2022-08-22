@@ -34,12 +34,11 @@ var infrastructureAsCodeScanner *iac.Scanner
 var openSourceScanner *oss.Scanner
 var scanInitializer initialize.Initializer
 var authenticator snyk.AuthenticationService
-
 var instrumentor performance2.Instrumentor
 var errorReporter errorreporting.ErrorReporter
+var installer install.Installer
 var analytics ux2.Analytics
 var snykCli cli2.Executor
-
 var hoverService hover.Service
 var scanner snyk.Scanner
 
@@ -77,6 +76,7 @@ func initInfrastructure() {
 		})
 
 	errorReporter = sentry2.NewSentryErrorReporter()
+	installer = install.NewInstaller(errorReporter)
 	instrumentor = sentry2.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient()
 	analytics = segment.NewSegmentClient(snykApiClient, errorReporter)
@@ -102,6 +102,7 @@ func TestInit(t *testing.T) {
 	analytics = ux2.NewTestAnalytics()
 	instrumentor = performance2.NewTestInstrumentor()
 	errorReporter = errorreporting.NewTestErrorReporter()
+	installer = install.NewInstaller(errorReporter)
 	authProvider := auth2.NewCliAuthenticationProvider(errorReporter)
 	authenticator = services.NewAuthenticationService(authProvider, analytics)
 	scanInitializer = initialize.NewDelegatingInitializer(
@@ -180,4 +181,10 @@ func OpenSourceScanner() *oss.Scanner {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return openSourceScanner
+}
+
+func Installer() install.Installer {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return installer
 }

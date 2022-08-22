@@ -39,6 +39,39 @@ func TestInstaller_Find(t *testing.T) {
 	assert.NotEmpty(t, execPath)
 }
 
+func Test_Find_CliPathInSettings_CliPathFound(t *testing.T) {
+	// Arrange
+	testutil.IntegTest(t)
+	file, err := os.CreateTemp(t.TempDir(), "snyk-win.exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if file.Close() == nil {
+			err = os.Remove(file.Name())
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	})
+
+	cliPath := file.Name()
+	t.Setenv("PATH", "")
+	t.Setenv("SNYK_TOKEN", "")
+	t.Setenv("SNYK_CLI_PATH", "")
+	config.CurrentConfig().CliSettings().SetPath(cliPath)
+	installer := NewInstaller(error_reporting.NewTestErrorReporter())
+
+	// Act
+	foundPath, err := installer.Find()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	assert.Equal(t, cliPath, foundPath)
+}
+
 func TestInstaller_Find_emptyPath(t *testing.T) {
 	testutil.IntegTest(t)
 	t.Skipf("removes real binaries from user directory")
@@ -76,9 +109,6 @@ func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 	temp := t.TempDir()
 	fakeCliFile := testutil.CreateTempFile(temp, t)
 	config.CurrentConfig().CliSettings().SetPath(fakeCliFile.Name())
-	defer func() {
-		config.CurrentConfig().CliSettings().SetPath("")
-	}()
 
 	checksum, err := getChecksum(fakeCliFile.Name())
 	if err != nil {
@@ -132,10 +162,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	fakeCliFile.Close()
 	cliDiscovery := Discovery{}
 	cliFilePath := path.Join(cliDir, cliDiscovery.ExecutableName(false))
-	config.CurrentConfig().CliSettings().SetPath(cliDir)
-	defer func() {
-		config.CurrentConfig().CliSettings().SetPath("")
-	}()
+	config.CurrentConfig().CliSettings().SetPath(cliFilePath)
 
 	err = os.Rename(fakeCliFile.Name(), cliFilePath) // rename temp file to CLI file
 	if err != nil {

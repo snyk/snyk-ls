@@ -45,7 +45,7 @@ func Test_Execute_HandlesErrors(t *testing.T) {
 	testutil.IntegTest(t)
 	testutil.NotOnWindows(t, "moving around CLI config, and file moves under Windows are not very resilient")
 	config.CurrentConfig().SetToken("")
-	path, err := install.NewInstaller(di.ErrorReporter()).Find()
+	path, err := di.Installer().Find()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -20,6 +20,7 @@ import (
 	"github.com/subosito/gotenv"
 	"github.com/xtgo/uuid"
 
+	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -54,7 +55,12 @@ func (c *CliSettings) Installed() bool {
 	c.cliPathAccessMutex.Lock()
 	defer c.cliPathAccessMutex.Unlock()
 	stat, err := os.Stat(c.cliPath)
-	return c.cliPath != "" && err == nil && !stat.IsDir()
+	isDirectory := stat != nil && stat.IsDir()
+	if isDirectory {
+		log.Warn().Msgf("CLI path (%s) refers to a directory and not a file", c.cliPath)
+	}
+
+	return c.cliPath != "" && err == nil && !isDirectory
 }
 
 func (c *CliSettings) IsPathDefined() bool {
@@ -63,6 +69,7 @@ func (c *CliSettings) IsPathDefined() bool {
 	return c.cliPath != ""
 }
 
+// Path returns the full path to the CLI executable that is stored in the CLI configuration
 func (c *CliSettings) Path() string {
 	c.cliPathAccessMutex.Lock()
 	defer c.cliPathAccessMutex.Unlock()
@@ -123,9 +130,12 @@ func IsDevelopment() bool {
 	return parseBool
 }
 
+// New creates a configuration object with default values
 func New() *Config {
 	c := &Config{}
-	c.cliSettings = &CliSettings{}
+	c.cliSettings = &CliSettings{
+		cliPath: filepath.Join(c.DefaultBinaryInstallPath(), filename.ExecutableName),
+	}
 	c.configFile = ""
 	c.format = "md"
 	c.isErrorReportingEnabled.Set(true)
@@ -391,9 +401,6 @@ func (c *Config) SetOrganization(organization string) {
 	c.organization = organization
 }
 
-func (c *Config) UserDirFolder() string {
-	return "snyk-ls"
-}
 func (c *Config) DefaultBinaryInstallPath() string {
 	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
 	err := os.MkdirAll(lsPath, 0755)

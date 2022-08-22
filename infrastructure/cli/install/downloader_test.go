@@ -19,7 +19,6 @@ func TestDownloader_Download(t *testing.T) {
 	cancelProgressCh := make(chan lsp.ProgressToken, 1)
 	d := &Downloader{progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh)}
 	lockFileName := d.lockFileName()
-	config.CurrentConfig().CliSettings().SetPath(config.CurrentConfig().DefaultBinaryInstallPath())
 	// remove any existing lockfile
 	_ = os.RemoveAll(lockFileName)
 
@@ -32,7 +31,7 @@ func TestDownloader_Download(t *testing.T) {
 	//make sure cleanup works
 	_, err = os.Stat(lockFileName)
 	if err == nil {
-		os.RemoveAll(lockFileName)
+		_ = os.RemoveAll(lockFileName)
 	}
 	assert.Error(t, err)
 }
