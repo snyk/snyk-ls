@@ -74,7 +74,7 @@ func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 	(*handlers)["shutdown"] = Shutdown()
 	(*handlers)["exit"] = Exit(srv)
 	(*handlers)["workspace/didChangeWorkspaceFolders"] = WorkspaceDidChangeWorkspaceFoldersHandler()
-	(*handlers)["workspace/didChangeConfiguration"] = WorkspaceDidChangeConfiguration()
+	(*handlers)["workspace/didChangeConfiguration"] = WorkspaceDidChangeConfiguration(srv)
 	(*handlers)["window/workDoneProgress/cancel"] = WindowWorkDoneProgressCancelHandler()
 	(*handlers)["workspace/executeCommand"] = ExecuteCommandHandler(srv)
 }

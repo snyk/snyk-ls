@@ -233,6 +233,24 @@ type DidChangeConfigurationParams struct {
 	Settings Settings `json:"settings"`
 }
 
+type ConfigurationItem struct {
+	/**
+	 * The scope to get the configuration section for.
+	 */
+	ScopeURI string `json:"scopeUri,omitempty"`
+	/**
+	 * The configuration section asked for.
+	 */
+	Section string `json:"section,omitempty"`
+}
+
+/**
+ * The parameters of a configuration request.
+ */
+type ConfigurationParams struct {
+	Items []ConfigurationItem `json:"items"`
+}
+
 type AuthenticationParams struct {
 	Token string `json:"token"`
 }

@@ -15,10 +15,27 @@ import (
 	"github.com/snyk/snyk-ls/application/server/lsp"
 )
 
-func WorkspaceDidChangeConfiguration() jrpc2.Handler {
+func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeConfigurationParams) (interface{}, error) {
 		log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("RECEIVED")
 		defer log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("DONE")
+
+		emptySettings := lsp.Settings{}
+		if params.Settings == emptySettings {
+			// Use pull model to fetch settings
+			params := lsp.ConfigurationParams{
+				Items: []lsp.ConfigurationItem{
+					{Section: "snyk"},
+				},
+			}
+			res, err := srv.Callback(ctx, "workspace/configuration", params)
+			if err != nil {
+				return nil, err
+			}
+
+			log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("settings", res).Msg("RECEIVED")
+			return nil, nil
+		}
 		UpdateSettings(ctx, params.Settings)
 		return nil, nil
 	})
