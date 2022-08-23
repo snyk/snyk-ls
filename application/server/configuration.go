@@ -22,12 +22,12 @@ func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 
 		emptySettings := lsp.Settings{}
 		if params.Settings == emptySettings {
-			// Use pull model to fetch settings
+			// VS Code uses pull model & sends empty settings when configuration is updated.
 			params := lsp.ConfigurationParams{
 				Items: []lsp.ConfigurationItem{
 					{Section: "snyk"},
 				},
-			}
+			} // todo: check for client capability
 			res, err := srv.Callback(ctx, "workspace/configuration", params)
 			if err != nil {
 				return nil, err
