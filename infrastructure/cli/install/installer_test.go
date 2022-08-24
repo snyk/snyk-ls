@@ -47,11 +47,9 @@ func Test_Find_CliPathInSettings_CliPathFound(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if file.Close() == nil {
-			err = os.Remove(file.Name())
-			if err != nil {
-				t.Fatal(err)
-			}
+		err = file.Close()
+		if err != nil {
+			t.Logf("Error when trying to close the file in \"%s\":\n%v", file.Name(), err)
 		}
 	})
 
