@@ -380,11 +380,12 @@ type RPCLogger struct{}
 
 func (R RPCLogger) LogRequest(ctx context.Context, req *jrpc2.Request) {
 	log.Debug().Msgf("Incoming JSON-RPC request. Method=%s. ID=%s. Is notification=%v.", req.Method(), req.ID(), req.IsNotification())
+	log.Trace().Str("params", req.ParamString()).Msgf("Incoming JSON-RPC request. Method=%s. ID=%s. Is notification=%v.", req.Method(), req.ID(), req.IsNotification())
 }
 
 func (R RPCLogger) LogResponse(ctx context.Context, rsp *jrpc2.Response) {
 	if rsp.Error() != nil {
-		log.Err(rsp.Error()).Msg("Outgoing JSON-RPC response error")
+		log.Err(rsp.Error()).Interface("rsp", *rsp).Msg("Outgoing JSON-RPC response error")
 	}
 	log.Debug().Msgf("Outgoing JSON-RPC response. ID=%s", rsp.ID())
 }

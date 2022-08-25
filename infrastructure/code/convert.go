@@ -3,6 +3,7 @@ package code
 import (
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -119,11 +120,27 @@ func (r *result) priorityScore() string {
 	return builder.String()
 }
 
-func (r *result) getFormattedMessage(rule rule) string {
+func (r *rule) titleWithLeadingPipeOrEmpty() string {
+	if r.ShortDescription.Text != "" {
+		return fmt.Sprintf(" | %s", r.ShortDescription.Text)
+	}
+	return ""
+}
+
+func (r *rule) detailsOrEmpty() string {
+	details := r.Help.Markdown
+	if details != "" {
+		return regexp.MustCompile(`##\sDetails`).ReplaceAllString(details, "### Details")
+	}
+	return ""
+}
+
+func (r *result) formattedMessage(rule rule) string {
 	const separator = "\n\n\n\n"
 	var builder strings.Builder
 	builder.Grow(500)
 	builder.WriteString(fmt.Sprintf("### %s", issueSeverityToMarkdown(issueSeverity(r.Level))))
+	builder.WriteString(rule.titleWithLeadingPipeOrEmpty())
 	builder.WriteString(r.priorityScore())
 	cwe := rule.cwe()
 	if cwe != "" {
@@ -132,6 +149,8 @@ func (r *result) getFormattedMessage(rule rule) string {
 	builder.WriteString(cwe)
 	builder.WriteString(separator)
 	builder.WriteString(r.Message.Text)
+	builder.WriteString(separator)
+	builder.WriteString(rule.detailsOrEmpty())
 	builder.WriteString(separator)
 	builder.WriteString("### Data Flow\n\n")
 	for _, elem := range r.getCodeFlow() {
@@ -161,10 +180,14 @@ func issueSeverityToMarkdown(severity snyk.Severity) string {
 	}
 }
 
-func (r *result) getMessage() string {
+func (r *result) getMessage(rule rule) string {
 	text := r.Message.Text
-	if len(text) > 100 {
-		text = text[:100] + "..."
+	if rule.ShortDescription.Text != "" {
+		text = fmt.Sprintf("%s: %s", rule.ShortDescription.Text, text)
+	}
+	const maxLength = 100
+	if len(text) > maxLength {
+		text = text[:maxLength] + "..."
 	}
 	return fmt.Sprintf("%s (Snyk)", text)
 }
@@ -228,9 +251,9 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 			}
 
 			rule := r.getRule(result.RuleID)
-			message := result.getMessage()
+			message := result.getMessage(rule)
 			dataflow := result.getCodeFlow()
-			formattedMessage := result.getFormattedMessage(rule)
+			formattedMessage := result.formattedMessage(rule)
 
 			d := snyk.Issue{
 				ID:                  result.RuleID,
