@@ -53,13 +53,17 @@ func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, string) {
 }
 
 func setupServer(t *testing.T) server.Local {
+	return setupCustomServer(t, nil)
+}
+
+func setupCustomServer(t *testing.T, callBackFn onCallbackFn) server.Local {
 	testutil.UnitTest(t)
 	di.TestInit(t)
 	cleanupChannels()
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
 	workspace.Set(workspace.New(performance.NewTestInstrumentor()))
-	loc := startServer()
+	loc := startServer(callBackFn)
 
 	t.Cleanup(func() {
 		err := loc.Close()
@@ -79,7 +83,9 @@ func cleanupChannels() {
 	di.HoverService().ClearAllHovers()
 }
 
-func startServer() server.Local {
+type onCallbackFn = func(ctx context.Context, request *jrpc2.Request) (interface{}, error)
+
+func startServer(callBackFn onCallbackFn) server.Local {
 	var srv *jrpc2.Server
 
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
@@ -90,6 +96,10 @@ func startServer() server.Local {
 				jsonRPCRecorder.Record(*request)
 			},
 			OnCallback: func(ctx context.Context, request *jrpc2.Request) (interface{}, error) {
+				if callBackFn != nil {
+					return callBackFn(ctx, request)
+				}
+
 				jsonRPCRecorder.Record(*request)
 				return *request, nil
 			},

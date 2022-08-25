@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/creachadair/jrpc2"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -14,24 +16,26 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-func TestWorkspaceDidChangeConfiguration(t *testing.T) {
+var sampleSettings = lsp.Settings{
+	ActivateSnykOpenSource: "false",
+	ActivateSnykCode:       "false",
+	ActivateSnykIac:        "false",
+	Insecure:               "true",
+	Endpoint:               "asd",
+	AdditionalParams:       "--all-projects -d",
+	AdditionalEnv:          "a=b;c=d",
+	Path:                   "addPath",
+	SendErrorReports:       "true",
+	Token:                  "token",
+}
+
+func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	testutil.UnitTest(t)
 	loc := setupServer(t)
 
 	t.Setenv("a", "")
 	t.Setenv("c", "")
-	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{
-		ActivateSnykOpenSource: "false",
-		ActivateSnykCode:       "false",
-		ActivateSnykIac:        "false",
-		Insecure:               "true",
-		Endpoint:               "asd",
-		AdditionalParams:       "--all-projects -d",
-		AdditionalEnv:          "a=b;c=d",
-		Path:                   "addPath",
-		SendErrorReports:       "true",
-		Token:                  "token",
-	}}
+	params := lsp.DidChangeConfigurationParams{Settings: sampleSettings}
 	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
 	if err != nil {
 		t.Fatal(err, "error calling server")
@@ -47,6 +51,49 @@ func TestWorkspaceDidChangeConfiguration(t *testing.T) {
 	assert.Equal(t, "b", os.Getenv("a"))
 	assert.Equal(t, "d", os.Getenv("c"))
 	assert.True(t, strings.Contains(os.Getenv("PATH"), "addPath"))
+	assert.True(t, config.CurrentConfig().IsErrorReportingEnabled())
+	assert.Equal(t, "token", config.CurrentConfig().Token())
+}
+
+func callBackMock(ctx context.Context, request *jrpc2.Request) (interface{}, error) {
+	jsonRPCRecorder.Record(*request)
+	if request.Method() == "workspace/configuration" {
+		return []lsp.Settings{sampleSettings}, nil
+	}
+	return nil, nil
+}
+
+func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
+	testutil.UnitTest(t)
+
+	loc := setupCustomServer(t, callBackMock)
+
+	_, err := loc.Client.Call(ctx, "initialize", lsp.InitializeParams{
+		Capabilities: sglsp.ClientCapabilities{
+			Workspace: sglsp.WorkspaceClientCapabilities{
+				Configuration: true,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{}}
+	ctx := context.Background()
+	_, err = loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
+	if err != nil {
+		t.Fatal(err, "error calling server")
+	}
+	assert.NoError(t, err)
+
+	c := config.CurrentConfig()
+	assert.Equal(t, false, c.IsSnykCodeEnabled())
+	assert.Equal(t, false, c.IsSnykOssEnabled())
+	assert.Equal(t, false, c.IsSnykIacEnabled())
+	assert.Equal(t, true, c.CliSettings().Insecure)
+	assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalParameters)
+	assert.Equal(t, "asd", c.SnykApi())
 	assert.True(t, config.CurrentConfig().IsErrorReportingEnabled())
 	assert.Equal(t, "token", config.CurrentConfig().Token())
 }
