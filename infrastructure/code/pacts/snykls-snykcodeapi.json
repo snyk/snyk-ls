@@ -316,8 +316,15 @@
                               ]
                             }
                           ],
+                          "help": {
+                            "markdown": "string",
+                            "text": "string"
+                          },
                           "precision": "string",
                           "repoDatasetSize": 1,
+                          "shortDescription": {
+                            "text": "string"
+                          },
                           "tags": [
                             "string"
                           ]
@@ -578,10 +585,19 @@
           "$.body.sarif.runs[*].tool.driver.rules[*].properties.exampleCommitFixes[*].lines[*].lineNumber": {
             "match": "type"
           },
+          "$.body.sarif.runs[*].tool.driver.rules[*].properties.help.markdown": {
+            "match": "type"
+          },
+          "$.body.sarif.runs[*].tool.driver.rules[*].properties.help.text": {
+            "match": "type"
+          },
           "$.body.sarif.runs[*].tool.driver.rules[*].properties.precision": {
             "match": "type"
           },
           "$.body.sarif.runs[*].tool.driver.rules[*].properties.repoDatasetSize": {
+            "match": "type"
+          },
+          "$.body.sarif.runs[*].tool.driver.rules[*].properties.shortDescription.text": {
             "match": "type"
           },
           "$.body.sarif.runs[*].tool.driver.rules[*].properties.tags": {
