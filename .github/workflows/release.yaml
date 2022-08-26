@@ -93,9 +93,9 @@ jobs:
           go install github.com/google/go-licenses@latest
           go-licenses save . --save_path="licenses"
           git add licenses
-          git
+          git commit -m "Updated licenses"
           git push
-          git clean && git reset --hard
+          git clean -f && git reset --hard
 
       - name: Create release tag
         run: |
