@@ -92,9 +92,9 @@ jobs:
         run: |
           go install github.com/google/go-licenses@latest
           rm -rf licenses
-          go-licenses save . --save_path="licenses"
+          go-licenses save . --save_path="licenses" --ignore "github.com/snyk/snyk-ls"
           git add licenses
-          git commit -m "Updated licenses"
+          git commit -m "Updated licenses" && git push || echo "No changes to commit"
           git push
           git clean -f && git reset --hard
 
