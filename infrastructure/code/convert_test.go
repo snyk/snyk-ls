@@ -577,7 +577,7 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	issue := issues[0]
 
 	assert.Equal(t, "java/DontUsePrintStackTrace", issue.ID)
-	assert.Equal(t, "Printing the stack trace of java.lang.InterruptedException. Production code should not use printStac... (Snyk)", issue.Message)
+	assert.Equal(t, "DontUsePrintStackTrace: Printing the stack trace of java.lang.InterruptedException. Production code ... (Snyk)", issue.Message)
 	assert.Equal(t, snyk.CodeSecurityVulnerability, issue.IssueType)
 	assert.Equal(t, snyk.Low, issue.Severity)
 	assert.Equal(t, path, issue.AffectedFilePath)
@@ -608,7 +608,7 @@ func Test_getFormattedMessage(t *testing.T) {
 	run := sarifResponse.Sarif.Runs[0]
 	result := run.Results[0]
 
-	msg := result.getFormattedMessage(run.getRule("1"))
+	msg := result.formattedMessage(run.getRule("1"))
 
 	assert.Contains(t, msg, "Example Commit Fixes")
 	assert.Contains(t, msg, "Data Flow")

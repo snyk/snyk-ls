@@ -100,7 +100,16 @@ type help struct {
 }
 
 type ruleProperties struct {
-	Tags                      []string           `json:"tags"`
+	Tags             []string `json:"tags"`
+	ShortDescription struct {
+		Text string `json:"text"`
+	} `json:"shortDescription"`
+
+	Help struct {
+		Markdown string `json:"markdown"`
+		Text     string `json:"text"`
+	} `json:"help"`
+
 	Categories                []string           `json:"categories"`
 	ExampleCommitFixes        []exampleCommitFix `json:"exampleCommitFixes"`
 	ExampleCommitDescriptions []string           `json:"exampleCommitDescriptions"`
