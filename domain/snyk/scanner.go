@@ -48,6 +48,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	folderPath string,
 ) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
+	sc.initializer.Init()
 
 	analysisTypes := getEnabledAnalysisTypes(sc.scanners)
 	if len(analysisTypes) > 0 {
@@ -59,7 +60,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 		)
 	}
 
-	sc.initializer.Init()
 	for _, scanner := range sc.scanners {
 		if scanner.IsEnabled() {
 			go func(s ProductScanner) {
