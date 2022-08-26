@@ -65,7 +65,6 @@ func callBackMock(ctx context.Context, request *jrpc2.Request) (interface{}, err
 
 func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	testutil.UnitTest(t)
-
 	loc := setupCustomServer(t, callBackMock)
 
 	_, err := loc.Client.Call(ctx, "initialize", lsp.InitializeParams{
@@ -76,7 +75,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal(err, "error calling server")
 	}
 
 	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{}}
@@ -96,6 +95,22 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	assert.Equal(t, "asd", c.SnykApi())
 	assert.True(t, config.CurrentConfig().IsErrorReportingEnabled())
 	assert.Equal(t, "token", config.CurrentConfig().Token())
+}
+
+func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
+	testutil.UnitTest(t)
+	loc := setupCustomServer(t, callBackMock)
+
+	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{}}
+	ctx := context.Background()
+	var updated = true
+	err := loc.Client.CallResult(ctx, "workspace/didChangeConfiguration", params, &updated)
+	if err != nil {
+		t.Fatal(err, "error calling server")
+	}
+
+	assert.NoError(t, err)
+	assert.False(t, updated)
 }
 
 func Test_UpdateSettings(t *testing.T) {
