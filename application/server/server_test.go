@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -37,8 +38,9 @@ import (
 const maxIntegTestDuration = 15 * time.Minute
 
 var (
-	ctx             = context.Background()
-	jsonRPCRecorder = testutil.JsonRPCRecorder{}
+	ctx               = context.Background()
+	jsonRPCRecorder   = testutil.JsonRPCRecorder{}
+	supportedCommands = []string{snyk.WorkspaceScanCommand, snyk.OpenBrowserCommand, snyk.NavigateToRangeCommand}
 )
 
 func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, string) {
@@ -379,6 +381,30 @@ func Test_initialize_callsInitializeOnAnalytics(t *testing.T) {
 
 	// Assert
 	assert.True(t, analytics.Initialized)
+}
+
+func Test_initialize_shouldOfferAllCommand(t *testing.T) {
+	loc := setupServer(t)
+
+	scanner := &snyk.TestScanner{}
+	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService()))
+
+	rsp, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result lsp.InitializeResult
+	err = rsp.UnmarshalResult(&result)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, command := range supportedCommands {
+		name := "Command \"" + command + "\" is supported"
+		t.Run(name, func(t *testing.T) {
+			assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, command)
+		})
+	}
 }
 
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
