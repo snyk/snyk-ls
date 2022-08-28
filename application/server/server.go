@@ -208,6 +208,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 						snyk.NavigateToRangeCommand,
 						snyk.WorkspaceScanCommand,
 						snyk.OpenBrowserCommand,
+						snyk.LoginCommand,
 					},
 				},
 			},

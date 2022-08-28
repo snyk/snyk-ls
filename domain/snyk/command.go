@@ -4,6 +4,7 @@ const (
 	NavigateToRangeCommand = "snyk.navigateToRange"
 	WorkspaceScanCommand   = "snyk.workspace.scan"
 	OpenBrowserCommand     = "snyk.openBrowser"
+	LoginCommand           = "snyk.login"
 )
 
 type Command struct {

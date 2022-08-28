@@ -40,7 +40,12 @@ const maxIntegTestDuration = 15 * time.Minute
 var (
 	ctx               = context.Background()
 	jsonRPCRecorder   = testutil.JsonRPCRecorder{}
-	supportedCommands = []string{snyk.WorkspaceScanCommand, snyk.OpenBrowserCommand, snyk.NavigateToRangeCommand}
+	supportedCommands = []string{
+		snyk.WorkspaceScanCommand,
+		snyk.OpenBrowserCommand,
+		snyk.NavigateToRangeCommand,
+		snyk.LoginCommand,
+	}
 )
 
 func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, string) {
