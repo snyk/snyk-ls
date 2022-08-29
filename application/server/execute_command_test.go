@@ -10,9 +10,10 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/cli/auth"
 )
 
-func Test_executeCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) {
+func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) {
 	loc := setupServer(t)
 
 	scanner := &snyk.TestScanner{}
@@ -26,4 +27,21 @@ func Test_executeCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) 
 	assert.Eventually(t, func() bool {
 		return scanner.Calls() > 0
 	}, 2*time.Second, time.Millisecond)
+}
+
+func Test_loginCommand_StartsAuthentication(t *testing.T) {
+	// Arrange
+	loc := setupServer(t)
+	authenticationMock := di.Authenticator().Provider().(*auth.AuthenticationProviderMock)
+	assert.False(t, authenticationMock.IsAuthenticated)
+	params := lsp.ExecuteCommandParams{Command: snyk.LoginCommand}
+
+	// Act
+	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	assert.True(t, authenticationMock.IsAuthenticated)
 }
