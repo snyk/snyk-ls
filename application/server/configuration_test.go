@@ -221,4 +221,25 @@ func Test_UpdateSettings(t *testing.T) {
 			assert.True(t, config.CurrentConfig().ManageBinariesAutomatically())
 		})
 	})
+
+	t.Run("Auto authenticate", func(t *testing.T) {
+		t.Run("true when not included", func(t *testing.T) {
+			UpdateSettings(context.Background(), lsp.InitializationOptions{})
+			assert.True(t, config.CurrentConfig().AutomaticAuthentication())
+		})
+
+		t.Run("Parses true value", func(t *testing.T) {
+			UpdateSettings(context.Background(), lsp.InitializationOptions{
+				AutomaticAuthentication: "true",
+			})
+			assert.True(t, config.CurrentConfig().AutomaticAuthentication())
+		})
+
+		t.Run("Parses false value", func(t *testing.T) {
+			UpdateSettings(context.Background(), lsp.InitializationOptions{
+				AutomaticAuthentication: "false",
+			})
+			assert.False(t, config.CurrentConfig().AutomaticAuthentication())
+		})
+	})
 }

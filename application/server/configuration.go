@@ -72,6 +72,18 @@ func UpdateSettings(ctx context.Context, settings lsp.InitializationOptions) {
 	updateTelemetry(settings)
 	updateOrganization(settings)
 	manageBinariesAutomatically(settings)
+	updateAutoAuthentication(settings)
+}
+
+func updateAutoAuthentication(settings lsp.InitializationOptions) {
+	// Unless the field is included and set to false, auto-auth should be true by default.
+	autoAuth, err := strconv.ParseBool(settings.AutomaticAuthentication)
+	if err == nil {
+		config.CurrentConfig().SetAutomaticAuthentication(autoAuth)
+	} else {
+		// When the field is omitted, set to true by default
+		config.CurrentConfig().SetAutomaticAuthentication(true)
+	}
 }
 
 func updateToken(token string) {

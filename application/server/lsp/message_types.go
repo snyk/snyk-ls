@@ -230,6 +230,7 @@ type InitializationOptions struct {
 	Token                       string `json:"token,omitempty"`
 	IntegrationName             string `json:"integrationName,omitempty"`
 	IntegrationVersion          string `json:"integrationVersion,omitempty"`
+	AutomaticAuthentication     string `json:"automaticAuthentication,omitempty"`
 }
 
 type DidChangeConfigurationParams struct {
