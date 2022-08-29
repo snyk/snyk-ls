@@ -34,7 +34,7 @@ func TestGetFor(t *testing.T) {
 	folder := workspace.NewFolder(dir, "dummy", di.Scanner(), di.HoverService())
 	workspace.Set(workspace.New(performance.NewTestInstrumentor()))
 	workspace.Get().AddFolder(folder)
-	folder.ScanFile(context.Background(), filePath)
+	go folder.ScanFile(context.Background(), filePath)
 
 	assert.Eventually(t, func() bool {
 		return folder.DocumentDiagnosticsFromCache(filePath) != nil

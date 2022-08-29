@@ -287,7 +287,7 @@ func TextDocumentDidOpenHandler() jrpc2.Handler {
 		log.Info().Str("method", method).Str("documentURI", filePath).Msg("RECEIVING")
 		folder := workspace.Get().GetFolderContaining(filePath)
 		if folder != nil {
-			folder.ScanFile(ctx, filePath)
+			go folder.ScanFile(ctx, filePath)
 		} else {
 			log.Warn().Str("method", method).Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
 		}
@@ -306,7 +306,7 @@ func TextDocumentDidSaveHandler() jrpc2.Handler {
 		if f != nil {
 			f.ClearDiagnosticsCache(filePath)
 			di.HoverService().DeleteHover(params.TextDocument.URI)
-			f.ScanFile(ctx, filePath)
+			go f.ScanFile(ctx, filePath)
 		} else {
 			log.Warn().Str("method", method).Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
 		}
