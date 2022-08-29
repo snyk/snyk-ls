@@ -86,7 +86,7 @@ endif
 build-debug:
 	@make clean
 	@echo "==> Building binary..."
-	@echo "    running go build for with debug flags"
+	@echo "    running go build with debug flags"
 	@go build -o $(BUILD_DIR)/$(PROJECT_NAME) \
 		-ldflags=$(LDFLAGS_DEV) \
 		-gcflags="all=-N -l"

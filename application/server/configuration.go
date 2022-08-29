@@ -15,12 +15,46 @@ import (
 	"github.com/snyk/snyk-ls/application/server/lsp"
 )
 
-func WorkspaceDidChangeConfiguration() jrpc2.Handler {
-	return handler.New(func(ctx context.Context, params lsp.DidChangeConfigurationParams) (interface{}, error) {
+func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
+	return handler.New(func(ctx context.Context, params lsp.DidChangeConfigurationParams) (bool, error) {
 		log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("RECEIVED")
 		defer log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("DONE")
-		UpdateSettings(ctx, params.Settings)
-		return nil, nil
+
+		emptySettings := lsp.Settings{}
+		if params.Settings != emptySettings {
+			// client used settings push
+			UpdateSettings(ctx, params.Settings)
+			return true, nil
+		}
+
+		// client expects settings pull. E.g. VS Code uses pull model & sends empty settings when configuration is updated.
+		if !config.CurrentConfig().ClientCapabilities().Workspace.Configuration {
+			log.Info().Msg("Pull model for workspace configuration not supported, ignoring workspace/didChangeConfiguration notification.")
+			return false, nil
+		}
+
+		configRequestParams := lsp.ConfigurationParams{
+			Items: []lsp.ConfigurationItem{
+				{Section: "snyk"},
+			},
+		}
+		res, err := srv.Callback(ctx, "workspace/configuration", configRequestParams)
+		if err != nil {
+			return false, err
+		}
+
+		var fetchedSettings []lsp.Settings
+		err = res.UnmarshalResult(&fetchedSettings)
+		if err != nil {
+			return false, err
+		}
+
+		if fetchedSettings[0] != emptySettings {
+			UpdateSettings(ctx, fetchedSettings[0])
+			return true, nil
+		}
+
+		return false, nil
 	})
 }
 
