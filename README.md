@@ -130,6 +130,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
   "manageBinariesAutomatically": "true", // Whether or not CLI/LS binaries will be downloaded & updated automatically
   "cliPath":  "/a/patch/snyk-cli" // The path where the CLI can be found, or where it should be downloaded to
   "token":  "secret-token" // The Snyk token, e.g.: snyk config get api
+  "automaticAuthentication": "true" // Whether or not LS will automatically authenticate on scan start (default: true)
 }
 ```
 
