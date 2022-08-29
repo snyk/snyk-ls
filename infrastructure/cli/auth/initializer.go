@@ -34,7 +34,9 @@ func (i *Initializer) Init() {
 	defer cli.Mutex.Unlock()
 
 	authenticated := config.CurrentConfig().Authenticated()
-	if authenticated {
+	autoAuthenticate := config.CurrentConfig().AutomaticAuthentication()
+	if !autoAuthenticate || authenticated {
+		log.Info().Msgf("Skipping authentication (authenticated = %v, auto authentication = %v)", authenticated, autoAuthenticate)
 		return
 	}
 
