@@ -146,26 +146,30 @@ type InitializeParams struct {
 }
 
 type ServerCapabilities struct {
-	TextDocumentSync                   *sglsp.TextDocumentSyncOptionsOrKind   `json:"textDocumentSync,omitempty"`
-	HoverProvider                      bool                                   `json:"hoverProvider,omitempty"`
-	CompletionProvider                 *sglsp.CompletionOptions               `json:"completionProvider,omitempty"`
-	SignatureHelpProvider              *sglsp.SignatureHelpOptions            `json:"signatureHelpProvider,omitempty"`
-	DefinitionProvider                 bool                                   `json:"definitionProvider,omitempty"`
-	TypeDefinitionProvider             bool                                   `json:"typeDefinitionProvider,omitempty"`
-	ReferencesProvider                 bool                                   `json:"referencesProvider,omitempty"`
-	DocumentHighlightProvider          bool                                   `json:"documentHighlightProvider,omitempty"`
-	DocumentSymbolProvider             bool                                   `json:"documentSymbolProvider,omitempty"`
-	WorkspaceSymbolProvider            bool                                   `json:"workspaceSymbolProvider,omitempty"`
-	ImplementationProvider             bool                                   `json:"implementationProvider,omitempty"`
-	CodeActionProvider                 bool                                   `json:"codeActionProvider,omitempty"`
-	CodeLensProvider                   *sglsp.CodeLensOptions                 `json:"codeLensProvider,omitempty"`
-	DocumentFormattingProvider         bool                                   `json:"documentFormattingProvider,omitempty"`
-	DocumentRangeFormattingProvider    bool                                   `json:"documentRangeFormattingProvider,omitempty"`
-	DocumentOnTypeFormattingProvider   *sglsp.DocumentOnTypeFormattingOptions `json:"documentOnTypeFormattingProvider,omitempty"`
-	RenameProvider                     bool                                   `json:"renameProvider,omitempty"`
-	ExecuteCommandProvider             *sglsp.ExecuteCommandOptions           `json:"executeCommandProvider,omitempty"`
-	SemanticHighlighting               *sglsp.SemanticHighlightingOptions     `json:"semanticHighlighting,omitempty"`
-	WorkspaceFoldersServerCapabilities *WorkspaceFoldersServerCapabilities    `json:"workspaceFoldersServerCapabilities,omitempty"`
+	TextDocumentSync                 *sglsp.TextDocumentSyncOptionsOrKind   `json:"textDocumentSync,omitempty"`
+	HoverProvider                    bool                                   `json:"hoverProvider,omitempty"`
+	CompletionProvider               *sglsp.CompletionOptions               `json:"completionProvider,omitempty"`
+	SignatureHelpProvider            *sglsp.SignatureHelpOptions            `json:"signatureHelpProvider,omitempty"`
+	DefinitionProvider               bool                                   `json:"definitionProvider,omitempty"`
+	TypeDefinitionProvider           bool                                   `json:"typeDefinitionProvider,omitempty"`
+	ReferencesProvider               bool                                   `json:"referencesProvider,omitempty"`
+	DocumentHighlightProvider        bool                                   `json:"documentHighlightProvider,omitempty"`
+	DocumentSymbolProvider           bool                                   `json:"documentSymbolProvider,omitempty"`
+	WorkspaceSymbolProvider          bool                                   `json:"workspaceSymbolProvider,omitempty"`
+	ImplementationProvider           bool                                   `json:"implementationProvider,omitempty"`
+	CodeActionProvider               bool                                   `json:"codeActionProvider,omitempty"`
+	CodeLensProvider                 *sglsp.CodeLensOptions                 `json:"codeLensProvider,omitempty"`
+	DocumentFormattingProvider       bool                                   `json:"documentFormattingProvider,omitempty"`
+	DocumentRangeFormattingProvider  bool                                   `json:"documentRangeFormattingProvider,omitempty"`
+	DocumentOnTypeFormattingProvider *sglsp.DocumentOnTypeFormattingOptions `json:"documentOnTypeFormattingProvider,omitempty"`
+	RenameProvider                   bool                                   `json:"renameProvider,omitempty"`
+	ExecuteCommandProvider           *sglsp.ExecuteCommandOptions           `json:"executeCommandProvider,omitempty"`
+	SemanticHighlighting             *sglsp.SemanticHighlightingOptions     `json:"semanticHighlighting,omitempty"`
+	Workspace                        *Workspace                             `json:"workspace,omitempty"`
+}
+
+type Workspace struct {
+	WorkspaceFolders *WorkspaceFoldersServerCapabilities `json:"workspaceFolders,omitempty"`
 }
 
 type WorkspaceFoldersServerCapabilities struct {
