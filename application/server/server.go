@@ -195,10 +195,11 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 						Save:              &sglsp.SaveOptions{IncludeText: true},
 					},
 				},
-				WorkspaceFoldersServerCapabilities: &lsp.WorkspaceFoldersServerCapabilities{
-					Supported:           true,
-					ChangeNotifications: "snyk-ls",
-				},
+				Workspace: &lsp.Workspace{
+					WorkspaceFolders: &lsp.WorkspaceFoldersServerCapabilities{
+						Supported:           true,
+						ChangeNotifications: "snyk-ls",
+					}},
 				HoverProvider:      true,
 				CodeActionProvider: true,
 				CodeLensProvider:   &sglsp.CodeLensOptions{ResolveProvider: false},
