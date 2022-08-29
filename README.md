@@ -114,7 +114,7 @@ As part of
 the [Initialize message](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize)
 within `initializationOptions?: LSPAny;` we support the following settings:
 
-```json
+```json5
 {
   "activateSnykOpenSource": "true", // Enables Snyk Open Source - defaults to true
   "activateSnykCode": "false", // Enables Snyk Code, if enabled for your organization - defaults to false
