@@ -58,8 +58,8 @@ func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 	})
 }
 
-func UpdateSettings(ctx context.Context, settings lsp.Settings) {
-	emptySettings := lsp.Settings{}
+func UpdateSettings(ctx context.Context, settings lsp.InitializationOptions) {
+	emptySettings := lsp.InitializationOptions{}
 	if settings == emptySettings {
 		return
 	}
@@ -78,7 +78,7 @@ func updateToken(token string) {
 	di.Authenticator().UpdateToken(token, false)
 }
 
-func updateApiEndpoints(ctx context.Context, settings lsp.Settings) {
+func updateApiEndpoints(ctx context.Context, settings lsp.InitializationOptions) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
 	endpointsUpdated := config.CurrentConfig().UpdateApiEndpoints(snykApiUrl)
 
@@ -91,14 +91,14 @@ func updateApiEndpoints(ctx context.Context, settings lsp.Settings) {
 	}
 }
 
-func updateOrganization(settings lsp.Settings) {
+func updateOrganization(settings lsp.InitializationOptions) {
 	org := strings.TrimSpace(settings.Organization)
 	if org != "" {
 		config.CurrentConfig().SetOrganization(org)
 	}
 }
 
-func updateTelemetry(settings lsp.Settings) {
+func updateTelemetry(settings lsp.InitializationOptions) {
 	parseBool, err := strconv.ParseBool(settings.SendErrorReports)
 	if err != nil {
 		log.Warn().Err(err).Msgf("couldn't read send error reports %s", settings.SendErrorReports)
@@ -117,7 +117,7 @@ func updateTelemetry(settings lsp.Settings) {
 	}
 }
 
-func manageBinariesAutomatically(settings lsp.Settings) {
+func manageBinariesAutomatically(settings lsp.InitializationOptions) {
 	parseBool, err := strconv.ParseBool(settings.ManageBinariesAutomatically)
 	if err != nil {
 		log.Warn().Err(err).Msgf("couldn't read manage binaries automatically %s", settings.ManageBinariesAutomatically)
@@ -127,7 +127,7 @@ func manageBinariesAutomatically(settings lsp.Settings) {
 }
 
 // TODO store in config, move parsing to CLI
-func updatePath(settings lsp.Settings) {
+func updatePath(settings lsp.InitializationOptions) {
 	err := os.Setenv("PATH", os.Getenv("PATH")+string(os.PathSeparator)+settings.Path)
 	if err != nil {
 		log.Err(err).Msgf("couldn't add path %s", settings.Path)
@@ -135,7 +135,7 @@ func updatePath(settings lsp.Settings) {
 }
 
 // TODO store in config, move parsing to CLI
-func updateEnvironment(settings lsp.Settings) {
+func updateEnvironment(settings lsp.InitializationOptions) {
 	envVars := strings.Split(settings.AdditionalEnv, ";")
 	for _, envVar := range envVars {
 		v := strings.Split(envVar, "=")
@@ -149,7 +149,7 @@ func updateEnvironment(settings lsp.Settings) {
 	}
 }
 
-func updateCliConfig(settings lsp.Settings) {
+func updateCliConfig(settings lsp.InitializationOptions) {
 	var err error
 	cliSettings := &config.CliSettings{}
 	cliSettings.Insecure, err = strconv.ParseBool(settings.Insecure)
@@ -162,7 +162,7 @@ func updateCliConfig(settings lsp.Settings) {
 	config.CurrentConfig().SetCliSettings(cliSettings)
 }
 
-func updateProductEnablement(settings lsp.Settings) {
+func updateProductEnablement(settings lsp.InitializationOptions) {
 	parseBool, err := strconv.ParseBool(settings.ActivateSnykCode)
 	if err != nil {
 		log.Warn().Err(err).Msg("couldn't parse code setting")

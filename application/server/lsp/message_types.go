@@ -138,7 +138,7 @@ type InitializeParams struct {
 	RootURI               sglsp.DocumentURI        `json:"rootUri,omitempty"`
 	ClientInfo            sglsp.ClientInfo         `json:"clientInfo,omitempty"`
 	Trace                 sglsp.Trace              `json:"trace,omitempty"`
-	InitializationOptions Settings                 `json:"initializationOptions,omitempty"`
+	InitializationOptions InitializationOptions    `json:"initializationOptions,omitempty"`
 	Capabilities          sglsp.ClientCapabilities `json:"capabilities"`
 
 	WorkDoneToken    string            `json:"workDoneToken,omitempty"`
@@ -213,7 +213,7 @@ type WorkspaceFoldersChangeEvent struct {
 	Removed []WorkspaceFolder `json:"Removed,omitempty"`
 }
 
-type Settings struct {
+type InitializationOptions struct {
 	ActivateSnykOpenSource      string `json:"activateSnykOpenSource,omitempty"`
 	ActivateSnykCode            string `json:"activateSnykCode,omitempty"`
 	ActivateSnykIac             string `json:"activateSnykIac,omitempty"`
@@ -234,7 +234,7 @@ type Settings struct {
 
 type DidChangeConfigurationParams struct {
 	// The actual changed settings
-	Settings Settings `json:"settings"`
+	Settings InitializationOptions `json:"settings"`
 }
 
 type ConfigurationItem struct {

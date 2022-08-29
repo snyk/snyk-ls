@@ -219,7 +219,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 
 	clientParams := lsp.InitializeParams{
 		RootURI: uri.PathToUri(dir),
-		InitializationOptions: lsp.Settings{
+		InitializationOptions: lsp.InitializationOptions{
 			ActivateSnykCode:            "true",
 			ActivateSnykOpenSource:      "false",
 			ActivateSnykIac:             "false",
@@ -265,7 +265,7 @@ func Test_initialize_updatesSettings(t *testing.T) {
 	loc := setupServer(t)
 
 	clientParams := lsp.InitializeParams{
-		InitializationOptions: lsp.Settings{Organization: "fancy org", Token: "xxx"},
+		InitializationOptions: lsp.InitializationOptions{Organization: "fancy org", Token: "xxx"},
 	}
 
 	rsp, err := loc.Client.Call(ctx, "initialize", clientParams)
@@ -291,7 +291,7 @@ func Test_initialize_integrationInInitializationOptions_readFromInitializationOp
 
 	loc := setupServer(t)
 	clientParams := lsp.InitializeParams{
-		InitializationOptions: lsp.Settings{
+		InitializationOptions: lsp.InitializationOptions{
 			IntegrationName:    expectedIntegrationName,
 			IntegrationVersion: expectedIntegrationVersion,
 		},
@@ -418,7 +418,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 
 	clientParams := lsp.InitializeParams{
 		RootURI: uri.PathToUri(dir),
-		InitializationOptions: lsp.Settings{
+		InitializationOptions: lsp.InitializationOptions{
 			ActivateSnykCode:            "true",
 			ActivateSnykOpenSource:      "false",
 			ActivateSnykIac:             "false",
