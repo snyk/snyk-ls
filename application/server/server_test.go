@@ -388,7 +388,7 @@ func Test_initialize_callsInitializeOnAnalytics(t *testing.T) {
 	assert.True(t, analytics.Initialized)
 }
 
-func Test_initialize_shouldOfferAllCommand(t *testing.T) {
+func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 	loc := setupServer(t)
 
 	scanner := &snyk.TestScanner{}
