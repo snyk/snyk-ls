@@ -32,8 +32,8 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	// Arrange
 	loc := setupServer(t)
-	authenticationMock := di.Authenticator().Provider().(*auth.AuthenticationProviderMock)
-	assert.False(t, authenticationMock.IsAuthenticated)
+	authenticationMock := di.Authenticator().Provider().(*auth.FakeAuthenticationProvider)
+	initialAuthenticatedStatus := authenticationMock.IsAuthenticated
 	params := lsp.ExecuteCommandParams{Command: snyk.LoginCommand}
 
 	// Act
@@ -43,5 +43,6 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	}
 
 	// Assert
+	assert.False(t, initialAuthenticatedStatus)
 	assert.True(t, authenticationMock.IsAuthenticated)
 }
