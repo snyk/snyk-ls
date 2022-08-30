@@ -58,7 +58,15 @@ func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 	})
 }
 
+func InitializeSettings(ctx context.Context, settings lsp.Settings) {
+	writeSettings(ctx, settings, true)
+}
+
 func UpdateSettings(ctx context.Context, settings lsp.Settings) {
+	writeSettings(ctx, settings, false)
+}
+
+func writeSettings(ctx context.Context, settings lsp.Settings, initialize bool) {
 	emptySettings := lsp.Settings{}
 	if settings == emptySettings {
 		return
@@ -66,7 +74,7 @@ func UpdateSettings(ctx context.Context, settings lsp.Settings) {
 	updateToken(settings.Token)
 	updateProductEnablement(settings)
 	updateCliConfig(settings)
-	updateApiEndpoints(ctx, settings)
+	updateApiEndpoints(ctx, settings, initialize)
 	updateEnvironment(settings)
 	updatePath(settings)
 	updateTelemetry(settings)
@@ -78,16 +86,12 @@ func updateToken(token string) {
 	di.Authenticator().UpdateToken(token, false)
 }
 
-func updateApiEndpoints(ctx context.Context, settings lsp.Settings) {
+func updateApiEndpoints(ctx context.Context, settings lsp.Settings, initialization bool) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
 	endpointsUpdated := config.CurrentConfig().UpdateApiEndpoints(snykApiUrl)
 
-	if endpointsUpdated {
-		// Reset CLI token
-		err := di.Authenticator().Provider().ClearAuthentication(ctx)
-		if err != nil {
-			log.Err(err).Msg("couldn't reset token")
-		}
+	if endpointsUpdated && !initialization {
+		di.Authenticator().Logout(ctx)
 	}
 }
 

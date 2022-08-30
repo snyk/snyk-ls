@@ -158,37 +158,3 @@ func (s *DefaultHoverService) createHoverListener() {
 func (s *DefaultHoverService) SetAnalytics(analytics ux2.Analytics) {
 	s.analytics = analytics
 }
-
-type TestHoverService struct {
-	hovers chan DocumentHovers
-}
-
-func NewTestHoverService() *TestHoverService {
-	return &TestHoverService{
-		hovers: make(chan DocumentHovers, 10000),
-	}
-}
-
-func (t TestHoverService) DeleteHover(documentUri sglsp.DocumentURI) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (t TestHoverService) Channel() chan DocumentHovers {
-	return t.hovers
-}
-
-func (t TestHoverService) ClearAllHovers() {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (t TestHoverService) GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) Result {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (t TestHoverService) SetAnalytics(analytics ux2.Analytics) {
-	//TODO implement me
-	panic("implement me")
-}

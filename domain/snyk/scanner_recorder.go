@@ -45,3 +45,7 @@ func (s *TestScanner) Calls() int {
 	defer s.mutex.Unlock()
 	return s.calls
 }
+
+func (s *TestScanner) AddTestIssue(issue Issue) {
+	s.Issues = append(s.Issues, issue)
+}

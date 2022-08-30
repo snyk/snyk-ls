@@ -28,7 +28,7 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 			}
 			navigateToLocation(srv, args)
 		case snyk.WorkspaceScanCommand:
-			workspace.Get().ClearCache(ctx)
+			workspace.Get().ClearIssues(ctx)
 			workspace.Get().ScanWorkspace(ctx)
 		case snyk.OpenBrowserCommand:
 			command.OpenBrowser(params.Arguments[0].(string))
@@ -38,6 +38,8 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 				log.Err(err).Msg("Error on snyk.login command")
 				notification.SendError(err)
 			}
+		case snyk.LogoutCommand:
+			di.Authenticator().Logout(ctx)
 		}
 		return nil, nil
 	})

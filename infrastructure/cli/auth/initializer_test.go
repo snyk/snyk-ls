@@ -23,7 +23,7 @@ func getAutoAuthenticationTest(autoAuthentication bool) func(t *testing.T) {
 		config.CurrentConfig().SetAutomaticAuthentication(autoAuthentication)
 		analytics := ux2.NewTestAnalytics()
 		provider := NewFakeCliAuthenticationProvider().(*FakeAuthenticationProvider)
-		authenticator := services.NewAuthenticationService(provider, analytics)
+		authenticator := services.NewAuthenticationService(provider, analytics, errorreporting.NewTestErrorReporter())
 		initializer := NewInitializer(authenticator, errorreporting.NewTestErrorReporter(), analytics)
 
 		// Act

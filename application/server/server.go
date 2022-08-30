@@ -142,12 +142,12 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
 		method := "InitializeHandler"
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
-		UpdateSettings(ctx, params.InitializationOptions)
+		InitializeSettings(ctx, params.InitializationOptions)
 		config.CurrentConfig().SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
 		updateAutoAuthentication(params.InitializationOptions)
 		di.Analytics().Initialise()
-		w := workspace.New(di.Instrumentor())
+		w := workspace.New(di.Instrumentor(), di.Scanner(), di.HoverService())
 		workspace.Set(w)
 
 		// async processing listener
@@ -211,6 +211,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 						snyk.WorkspaceScanCommand,
 						snyk.OpenBrowserCommand,
 						snyk.LoginCommand,
+						snyk.LogoutCommand,
 					},
 				},
 			},

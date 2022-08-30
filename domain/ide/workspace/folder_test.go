@@ -14,7 +14,7 @@ import (
 
 func TestAddBundleHashToWorkspaceFolder(t *testing.T) {
 	testutil.UnitTest(t)
-	f := NewFolder(".", "Test", snyk.NewTestScanner(), hover.NewTestHoverService())
+	f := NewFolder(".", "Test", snyk.NewTestScanner(), hover.NewFakeHoverService())
 	key := "bundleHash"
 	value := "testHash"
 
@@ -27,7 +27,7 @@ func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
 	filePath, folderPath := code.FakeDiagnosticPath(t)
 	scannerRecorder := snyk.NewTestScanner()
 	scannerRecorder.Issues = []snyk.Issue{{AffectedFilePath: filePath}}
-	f := NewFolder(folderPath, "Test", scannerRecorder, hover.NewTestHoverService())
+	f := NewFolder(folderPath, "Test", scannerRecorder, hover.NewFakeHoverService())
 	ctx := context.Background()
 
 	f.ScanFile(ctx, filePath)
@@ -42,7 +42,7 @@ func Test_Scan_WhenCachedResultsButNoIssues_shouldNotReScan(t *testing.T) {
 	filePath, folderPath := code.FakeDiagnosticPath(t)
 	scannerRecorder := snyk.NewTestScanner()
 	scannerRecorder.Issues = []snyk.Issue{}
-	f := NewFolder(folderPath, "Test", scannerRecorder, hover.NewTestHoverService())
+	f := NewFolder(folderPath, "Test", scannerRecorder, hover.NewFakeHoverService())
 	ctx := context.Background()
 
 	f.ScanFile(ctx, filePath)
@@ -54,7 +54,7 @@ func Test_Scan_WhenCachedResultsButNoIssues_shouldNotReScan(t *testing.T) {
 func TestProcessResults_SendsDiagnosticsAndHovers(t *testing.T) {
 	t.Skipf("test this once we have uniform abstractions for hover & diagnostics")
 	testutil.UnitTest(t)
-	hoverService := hover.NewTestHoverService()
+	hoverService := hover.NewFakeHoverService()
 	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hoverService)
 
 	issues := []snyk.Issue{
@@ -68,7 +68,7 @@ func TestProcessResults_SendsDiagnosticsAndHovers(t *testing.T) {
 
 func TestProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 	testutil.UnitTest(t)
-	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewTestHoverService())
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
 
 	f.processResults([]snyk.Issue{
 		{ID: "id1", AffectedFilePath: "path1"},
@@ -84,7 +84,7 @@ func TestProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 
 func TestProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 	testutil.UnitTest(t)
-	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewTestHoverService())
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
 
 	f.processResults([]snyk.Issue{
 		{ID: "id1", AffectedFilePath: "path1"},
@@ -98,7 +98,7 @@ func TestProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 
 func TestProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 	testutil.UnitTest(t)
-	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewTestHoverService())
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
 
 	f.processResults([]snyk.Issue{
 		{ID: "id1", AffectedFilePath: "path1"},
@@ -114,7 +114,7 @@ func TestProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 
 func TestProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 	testutil.UnitTest(t)
-	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewTestHoverService())
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
 
 	f.processResults([]snyk.Issue{
 		{ID: "id1", AffectedFilePath: "path1"},
@@ -129,7 +129,7 @@ func TestProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 
 func TestProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing.T) {
 	testutil.UnitTest(t)
-	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewTestHoverService())
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
 
 	f.processResults([]snyk.Issue{
 		{ID: "id1", AffectedFilePath: "path1"},
