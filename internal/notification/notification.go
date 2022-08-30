@@ -1,5 +1,11 @@
 package notification
 
+import (
+	"fmt"
+
+	sglsp "github.com/sourcegraph/go-lsp"
+)
+
 type Event string
 
 var channel = make(chan interface{}, 100)
@@ -7,6 +13,13 @@ var stopChannel = make(chan bool, 1000)
 
 func Send(msg interface{}) {
 	channel <- msg
+}
+
+func SendError(err error) {
+	Send(sglsp.ShowMessageParams{
+		Type:    sglsp.MTError,
+		Message: fmt.Sprintf("Snyk encountered an error: %v", err),
+	})
 }
 
 func Receive() (payload interface{}, stop bool) {

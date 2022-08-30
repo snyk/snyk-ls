@@ -12,6 +12,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/notification"
 )
 
 func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
@@ -35,7 +36,7 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 			_, err := di.Authenticator().Provider().Authenticate(context.Background())
 			if err != nil {
 				log.Err(err).Msg("Error on snyk.login command")
-				// TODO - an error be returned?
+				notification.SendError(err)
 			}
 		}
 		return nil, nil
