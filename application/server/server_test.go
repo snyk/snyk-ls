@@ -412,6 +412,42 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 	}
 }
 
+func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
+	t.Run("true when not included", func(t *testing.T) {
+		loc := setupServer(t)
+		initializationOptions := lsp.InitializationOptions{}
+		params := lsp.InitializeParams{InitializationOptions: initializationOptions}
+		_, err := loc.Client.Call(ctx, "initialize", params)
+
+		assert.Nil(t, err)
+		assert.True(t, config.CurrentConfig().AutomaticAuthentication())
+	})
+
+	t.Run("Parses true value", func(t *testing.T) {
+		loc := setupServer(t)
+		initializationOptions := lsp.InitializationOptions{
+			AutomaticAuthentication: "true",
+		}
+		params := lsp.InitializeParams{InitializationOptions: initializationOptions}
+		_, err := loc.Client.Call(ctx, "initialize", params)
+
+		assert.Nil(t, err)
+		assert.True(t, config.CurrentConfig().AutomaticAuthentication())
+	})
+
+	t.Run("Parses false value", func(t *testing.T) {
+		loc := setupServer(t)
+
+		initializationOptions := lsp.InitializationOptions{
+			AutomaticAuthentication: "false",
+		}
+		params := lsp.InitializeParams{InitializationOptions: initializationOptions}
+		_, err := loc.Client.Call(ctx, "initialize", params)
+		assert.Nil(t, err)
+		assert.False(t, config.CurrentConfig().AutomaticAuthentication())
+	})
+}
+
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc := setupServer(t)
 	didOpenParams, dir := didOpenTextParams(t)

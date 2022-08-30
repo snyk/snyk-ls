@@ -20,7 +20,7 @@ func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 		log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("RECEIVED")
 		defer log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("DONE")
 
-		emptySettings := lsp.Settings{}
+		emptySettings := lsp.InitializationOptions{}
 		if params.Settings != emptySettings {
 			// client used settings push
 			UpdateSettings(ctx, params.Settings)
@@ -43,7 +43,7 @@ func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 			return false, err
 		}
 
-		var fetchedSettings []lsp.Settings
+		var fetchedSettings []lsp.InitializationOptions
 		err = res.UnmarshalResult(&fetchedSettings)
 		if err != nil {
 			return false, err
@@ -72,18 +72,6 @@ func UpdateSettings(ctx context.Context, settings lsp.InitializationOptions) {
 	updateTelemetry(settings)
 	updateOrganization(settings)
 	manageBinariesAutomatically(settings)
-	updateAutoAuthentication(settings)
-}
-
-func updateAutoAuthentication(settings lsp.InitializationOptions) {
-	// Unless the field is included and set to false, auto-auth should be true by default.
-	autoAuth, err := strconv.ParseBool(settings.AutomaticAuthentication)
-	if err == nil {
-		config.CurrentConfig().SetAutomaticAuthentication(autoAuth)
-	} else {
-		// When the field is omitted, set to true by default
-		config.CurrentConfig().SetAutomaticAuthentication(true)
-	}
 }
 
 func updateToken(token string) {
