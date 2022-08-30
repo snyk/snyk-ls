@@ -14,14 +14,16 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"golang.design/x/clipboard"
 )
 
 type CliAuthenticationProvider struct {
+	authUrl       string
 	errorReporter error_reporting.ErrorReporter
 }
 
 func NewCliAuthenticationProvider(errorReporter error_reporting.ErrorReporter) snyk.AuthenticationProvider {
-	return &CliAuthenticationProvider{errorReporter}
+	return &CliAuthenticationProvider{"", errorReporter}
 }
 
 func (a *CliAuthenticationProvider) Authenticate(ctx context.Context) (string, error) {
@@ -60,6 +62,17 @@ func (a *CliAuthenticationProvider) ClearAuthentication(ctx context.Context) err
 	return err
 }
 
+func (a *CliAuthenticationProvider) AuthURL(ctx context.Context) error {
+	err := clipboard.Init()
+	if err != nil {
+		return err
+	}
+
+	clipboard.Write(clipboard.FmtText, []byte(a.authUrl))
+
+	return nil
+}
+
 // Auth represents the `snyk auth` command.
 func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 	cmd, err := a.authCmd(ctx)
@@ -72,8 +85,36 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 
 	err = a.runCLICmd(ctx, cmd)
 	str := out.String()
+
+	e := a.setAuthURL(str)
+	if e != nil {
+		return e
+	}
+
 	log.Info().Str("output", str).Msg("auth Snyk CLI")
 	return err
+}
+
+func (a *CliAuthenticationProvider) setAuthURL(str string) error {
+	url, err := a.getAuthURL(str)
+	if err != nil {
+		return err
+	}
+
+	a.authUrl = url
+
+	return nil
+}
+
+func (a *CliAuthenticationProvider) getAuthURL(str string) (string, error) {
+	index := strings.Index(str, "http")
+	url := str[index:]
+
+	if url == "" {
+		return "", errors.New("auth-provider: auth url is empty")
+	}
+
+	return url, nil
 }
 
 func (a *CliAuthenticationProvider) getToken(ctx context.Context) (string, error) {
