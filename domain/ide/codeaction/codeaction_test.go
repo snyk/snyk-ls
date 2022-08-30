@@ -3,7 +3,6 @@ package codeaction
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -24,11 +23,9 @@ func TestGetFor(t *testing.T) {
 	folder := workspace.NewFolder(dir, "dummy", di.Scanner(), di.HoverService())
 	workspace.Set(workspace.New(performance.NewTestInstrumentor()))
 	workspace.Get().AddFolder(folder)
-	go folder.ScanFile(context.Background(), filePath)
+	folder.ScanFile(context.Background(), filePath)
 
-	assert.Eventually(t, func() bool {
-		return folder.DocumentDiagnosticsFromCache(filePath) != nil
-	}, time.Second*2, time.Millisecond)
+	assert.NotNil(t, folder.DocumentDiagnosticsFromCache(filePath))
 
 	actions := GetFor(filePath, converter.ToRange(code.FakeIssue.Range))
 
