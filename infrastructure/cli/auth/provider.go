@@ -10,11 +10,12 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
+	"golang.design/x/clipboard"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
-	"golang.design/x/clipboard"
 )
 
 type CliAuthenticationProvider struct {
@@ -86,35 +87,8 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 	err = a.runCLICmd(ctx, cmd)
 	str := out.String()
 
-	e := a.setAuthURL(str)
-	if e != nil {
-		return e
-	}
-
 	log.Info().Str("output", str).Msg("auth Snyk CLI")
 	return err
-}
-
-func (a *CliAuthenticationProvider) setAuthURL(str string) error {
-	url, err := a.getAuthURL(str)
-	if err != nil {
-		return err
-	}
-
-	a.authUrl = url
-
-	return nil
-}
-
-func (a *CliAuthenticationProvider) getAuthURL(str string) (string, error) {
-	index := strings.Index(str, "http")
-	url := str[index:]
-
-	if url == "" {
-		return "", errors.New("auth-provider: auth url is empty")
-	}
-
-	return url, nil
 }
 
 func (a *CliAuthenticationProvider) getToken(ctx context.Context) (string, error) {
@@ -172,6 +146,8 @@ func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...str
 	if endpoint != "" {
 		cmd.Env = append(cmd.Env, cli.ApiEnvVar+"="+endpoint)
 	}
+	a.authUrl = endpoint
+
 	if !config.CurrentConfig().IsTelemetryEnabled() {
 		cmd.Env = append(cmd.Env, cli.DisableAnalyticsEnvVar+"=1")
 	}

@@ -55,6 +55,7 @@ func TestBuildCLICmd(t *testing.T) {
 
 		cmd := provider.buildCLICmd(ctx, "auth")
 
+		assert.Equal(t, provider.authUrl, "https://app.snyk.io/api/v1/auth")
 		assert.Contains(t, cmd.Env, "SNYK_API=https://app.snyk.io/api")
 	})
 
@@ -79,3 +80,21 @@ func TestBuildCLICmd(t *testing.T) {
 		assert.NotContains(t, cmd.Env, "SNYK_CFG_DISABLE_ANALYTICS=1")
 	})
 }
+
+// func TestSetAuthURL(t *testing.T) {
+// 	// var authMessage = `Now redirecting you to our auth page, go ahead and log in,
+// 	// and once the auth is complete, return to this prompt and you'll
+// 	// be ready to start using snyk.
+
+// 	// If you can't wait use this url:
+// 	// https://app.snyk.io/login?token=2508826b-0186-4d90-a9fc-f27d12b4a438&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false`
+
+// 	testutil.UnitTest(t)
+// 	ctx := context.Background()
+// 	provider := &CliAuthenticationProvider{}
+
+// 	authURL, err := provider.getAuthURL(ctx)
+
+// 	assert.NoError(t, err)
+// 	assert.Equal(t, "https://app.snyk.io/auth", authURL)
+// }
