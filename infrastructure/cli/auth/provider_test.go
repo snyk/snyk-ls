@@ -33,6 +33,25 @@ func TestConfig_configGetAPICmd(t *testing.T) {
 	assertCmd(t, []string{"config", "get", "api"}, configGetAPICmd)
 }
 
+func TestSetAuthURLCmd(t *testing.T) {
+	testutil.UnitTest(t)
+	provider := &CliAuthenticationProvider{}
+
+	var authString = `Now redirecting you to our auth page, go ahead and log in,
+	and once the auth is complete, return to this prompt and you'll
+	be ready to start using snyk.
+	
+	If you can't wait use this url:
+	https://app.snyk.io/login?token=2508826b-0186-4d90-a9fc-f27d12b4a438&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false`
+
+	expectedURL := "https://app.snyk.io/login?token=2508826b-0186-4d90-a9fc-f27d12b4a438&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
+
+	err := provider.setAuthURL(authString)
+
+	assert.NoError(t, err)
+	assert.Equal(t, provider.authUrl, expectedURL)
+}
+
 func TestBuildCLICmd(t *testing.T) {
 	t.Run("Insecure is respected", func(t *testing.T) {
 		testutil.UnitTest(t)
@@ -56,17 +75,6 @@ func TestBuildCLICmd(t *testing.T) {
 		cmd := provider.buildCLICmd(ctx, "auth")
 
 		assert.Contains(t, cmd.Env, "SNYK_API=https://app.snyk.io/api")
-	})
-
-	t.Run("Api endpoint is stored in authURL property", func(t *testing.T) {
-		testutil.UnitTest(t)
-		ctx := context.Background()
-		provider := &CliAuthenticationProvider{}
-		config.CurrentConfig().UpdateApiEndpoints("https://app.snyk.io/api")
-
-		provider.buildCLICmd(ctx, "auth")
-
-		assert.Equal(t, provider.authUrl, "https://app.snyk.io/api")
 	})
 
 	t.Run("Telemetry disabled setting is respected", func(t *testing.T) {
