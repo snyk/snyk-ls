@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -30,6 +31,11 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 			workspace.Get().ScanWorkspace(ctx)
 		case snyk.OpenBrowserCommand:
 			command.OpenBrowser(params.Arguments[0].(string))
+		case snyk.CopyAuthLinkCommand:
+			err := di.Authenticator().Provider().AuthURL(ctx)
+			if err != nil {
+				log.Err(err).Msg("Error on snyk.copyAuthLink command")
+			}
 		}
 		return nil, nil
 	})
