@@ -142,11 +142,10 @@ func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...str
 	cmd := exec.CommandContext(ctx, config.CurrentConfig().CliSettings().Path(), args...)
 	cmd.Env = os.Environ()
 
-	endpoint := config.CurrentConfig().SnykApi()
-	if endpoint != "" {
-		cmd.Env = append(cmd.Env, cli.ApiEnvVar+"="+endpoint)
+	a.authUrl = config.CurrentConfig().SnykApi()
+	if a.authUrl != "" {
+		cmd.Env = append(cmd.Env, cli.ApiEnvVar+"="+a.authUrl)
 	}
-	a.authUrl = endpoint
 
 	if !config.CurrentConfig().IsTelemetryEnabled() {
 		cmd.Env = append(cmd.Env, cli.DisableAnalyticsEnvVar+"=1")
