@@ -219,7 +219,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 
 	clientParams := lsp.InitializeParams{
 		RootURI: uri.PathToUri(dir),
-		InitializationOptions: lsp.InitializationOptions{
+		InitializationOptions: lsp.Settings{
 			ActivateSnykCode:            "true",
 			ActivateSnykOpenSource:      "false",
 			ActivateSnykIac:             "false",
@@ -265,7 +265,7 @@ func Test_initialize_updatesSettings(t *testing.T) {
 	loc := setupServer(t)
 
 	clientParams := lsp.InitializeParams{
-		InitializationOptions: lsp.InitializationOptions{Organization: "fancy org", Token: "xxx"},
+		InitializationOptions: lsp.Settings{Organization: "fancy org", Token: "xxx"},
 	}
 
 	rsp, err := loc.Client.Call(ctx, "initialize", clientParams)
@@ -291,7 +291,7 @@ func Test_initialize_integrationInInitializationOptions_readFromInitializationOp
 
 	loc := setupServer(t)
 	clientParams := lsp.InitializeParams{
-		InitializationOptions: lsp.InitializationOptions{
+		InitializationOptions: lsp.Settings{
 			IntegrationName:    expectedIntegrationName,
 			IntegrationVersion: expectedIntegrationVersion,
 		},
@@ -415,7 +415,7 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 	t.Run("true when not included", func(t *testing.T) {
 		loc := setupServer(t)
-		initializationOptions := lsp.InitializationOptions{}
+		initializationOptions := lsp.Settings{}
 		params := lsp.InitializeParams{InitializationOptions: initializationOptions}
 		_, err := loc.Client.Call(ctx, "initialize", params)
 
@@ -425,7 +425,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 
 	t.Run("Parses true value", func(t *testing.T) {
 		loc := setupServer(t)
-		initializationOptions := lsp.InitializationOptions{
+		initializationOptions := lsp.Settings{
 			AutomaticAuthentication: "true",
 		}
 		params := lsp.InitializeParams{InitializationOptions: initializationOptions}
@@ -438,7 +438,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 	t.Run("Parses false value", func(t *testing.T) {
 		loc := setupServer(t)
 
-		initializationOptions := lsp.InitializationOptions{
+		initializationOptions := lsp.Settings{
 			AutomaticAuthentication: "false",
 		}
 		params := lsp.InitializeParams{InitializationOptions: initializationOptions}
@@ -454,7 +454,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 
 	clientParams := lsp.InitializeParams{
 		RootURI: uri.PathToUri(dir),
-		InitializationOptions: lsp.InitializationOptions{
+		InitializationOptions: lsp.Settings{
 			ActivateSnykCode:            "true",
 			ActivateSnykOpenSource:      "false",
 			ActivateSnykIac:             "false",

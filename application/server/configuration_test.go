@@ -16,7 +16,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-var sampleSettings = lsp.InitializationOptions{
+var sampleSettings = lsp.Settings{
 	ActivateSnykOpenSource: "false",
 	ActivateSnykCode:       "false",
 	ActivateSnykIac:        "false",
@@ -58,7 +58,7 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 func callBackMock(ctx context.Context, request *jrpc2.Request) (interface{}, error) {
 	jsonRPCRecorder.Record(*request)
 	if request.Method() == "workspace/configuration" {
-		return []lsp.InitializationOptions{sampleSettings}, nil
+		return []lsp.Settings{sampleSettings}, nil
 	}
 	return nil, nil
 }
@@ -78,7 +78,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 		t.Fatal(err, "error calling server")
 	}
 
-	params := lsp.DidChangeConfigurationParams{Settings: lsp.InitializationOptions{}}
+	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{}}
 	ctx := context.Background()
 	_, err = loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
 	if err != nil {
@@ -101,7 +101,7 @@ func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
 	testutil.UnitTest(t)
 	loc := setupCustomServer(t, callBackMock)
 
-	params := lsp.DidChangeConfigurationParams{Settings: lsp.InitializationOptions{}}
+	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{}}
 	ctx := context.Background()
 	var updated = true
 	err := loc.Client.CallResult(ctx, "workspace/didChangeConfiguration", params, &updated)
@@ -120,7 +120,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("all settings", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		settings := lsp.InitializationOptions{
+		settings := lsp.Settings{
 			ActivateSnykOpenSource:      "false",
 			ActivateSnykCode:            "false",
 			ActivateSnykIac:             "false",
@@ -160,7 +160,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("blank organisation is ignored", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.InitializationOptions{Organization: " "})
+		UpdateSettings(context.Background(), lsp.Settings{Organization: " "})
 
 		c := config.CurrentConfig()
 		assert.Equal(t, "", c.GetOrganization())
@@ -169,7 +169,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("incomplete env vars", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.InitializationOptions{AdditionalEnv: "a="})
+		UpdateSettings(context.Background(), lsp.Settings{AdditionalEnv: "a="})
 
 		assert.Empty(t, os.Getenv("a"))
 	})
@@ -177,7 +177,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("empty env vars", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.InitializationOptions{AdditionalEnv: " "})
+		UpdateSettings(context.Background(), lsp.Settings{AdditionalEnv: " "})
 
 		assert.Empty(t, os.Getenv("a"))
 	})
@@ -185,7 +185,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("broken env variables", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.InitializationOptions{AdditionalEnv: "a=; b"})
+		UpdateSettings(context.Background(), lsp.Settings{AdditionalEnv: "a=; b"})
 
 		c := config.CurrentConfig()
 		assert.Equal(t, "", c.GetOrganization())
@@ -196,25 +196,25 @@ func Test_UpdateSettings(t *testing.T) {
 
 	t.Run("manage binaries automatically", func(t *testing.T) {
 		t.Run("true", func(t *testing.T) {
-			UpdateSettings(context.Background(), lsp.InitializationOptions{
+			UpdateSettings(context.Background(), lsp.Settings{
 				ManageBinariesAutomatically: "true",
 			})
 
 			assert.True(t, config.CurrentConfig().ManageBinariesAutomatically())
 		})
 		t.Run("false", func(t *testing.T) {
-			UpdateSettings(context.Background(), lsp.InitializationOptions{
+			UpdateSettings(context.Background(), lsp.Settings{
 				ManageBinariesAutomatically: "false",
 			})
 
 			assert.False(t, config.CurrentConfig().ManageBinariesAutomatically())
 		})
 		t.Run("invalid value does not update", func(t *testing.T) {
-			UpdateSettings(context.Background(), lsp.InitializationOptions{
+			UpdateSettings(context.Background(), lsp.Settings{
 				ManageBinariesAutomatically: "true",
 			})
 
-			UpdateSettings(context.Background(), lsp.InitializationOptions{
+			UpdateSettings(context.Background(), lsp.Settings{
 				ManageBinariesAutomatically: "dog",
 			})
 

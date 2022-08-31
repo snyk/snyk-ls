@@ -218,7 +218,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 	})
 }
 
-func updateAutoAuthentication(settings lsp.InitializationOptions) {
+func updateAutoAuthentication(settings lsp.Settings) {
 	// Unless the field is included and set to false, auto-auth should be true by default.
 	autoAuth, err := strconv.ParseBool(settings.AutomaticAuthentication)
 	if err == nil {

@@ -20,7 +20,7 @@ func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 		log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("RECEIVED")
 		defer log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("DONE")
 
-		emptySettings := lsp.InitializationOptions{}
+		emptySettings := lsp.Settings{}
 		if params.Settings != emptySettings {
 			// client used settings push
 			UpdateSettings(ctx, params.Settings)
@@ -43,7 +43,7 @@ func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 			return false, err
 		}
 
-		var fetchedSettings []lsp.InitializationOptions
+		var fetchedSettings []lsp.Settings
 		err = res.UnmarshalResult(&fetchedSettings)
 		if err != nil {
 			return false, err
@@ -58,8 +58,8 @@ func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 	})
 }
 
-func UpdateSettings(ctx context.Context, settings lsp.InitializationOptions) {
-	emptySettings := lsp.InitializationOptions{}
+func UpdateSettings(ctx context.Context, settings lsp.Settings) {
+	emptySettings := lsp.Settings{}
 	if settings == emptySettings {
 		return
 	}
@@ -78,7 +78,7 @@ func updateToken(token string) {
 	di.Authenticator().UpdateToken(token, false)
 }
 
-func updateApiEndpoints(ctx context.Context, settings lsp.InitializationOptions) {
+func updateApiEndpoints(ctx context.Context, settings lsp.Settings) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
 	endpointsUpdated := config.CurrentConfig().UpdateApiEndpoints(snykApiUrl)
 
@@ -91,14 +91,14 @@ func updateApiEndpoints(ctx context.Context, settings lsp.InitializationOptions)
 	}
 }
 
-func updateOrganization(settings lsp.InitializationOptions) {
+func updateOrganization(settings lsp.Settings) {
 	org := strings.TrimSpace(settings.Organization)
 	if org != "" {
 		config.CurrentConfig().SetOrganization(org)
 	}
 }
 
-func updateTelemetry(settings lsp.InitializationOptions) {
+func updateTelemetry(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.SendErrorReports)
 	if err != nil {
 		log.Warn().Err(err).Msgf("couldn't read send error reports %s", settings.SendErrorReports)
@@ -117,7 +117,7 @@ func updateTelemetry(settings lsp.InitializationOptions) {
 	}
 }
 
-func manageBinariesAutomatically(settings lsp.InitializationOptions) {
+func manageBinariesAutomatically(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ManageBinariesAutomatically)
 	if err != nil {
 		log.Warn().Err(err).Msgf("couldn't read manage binaries automatically %s", settings.ManageBinariesAutomatically)
@@ -127,7 +127,7 @@ func manageBinariesAutomatically(settings lsp.InitializationOptions) {
 }
 
 // TODO store in config, move parsing to CLI
-func updatePath(settings lsp.InitializationOptions) {
+func updatePath(settings lsp.Settings) {
 	err := os.Setenv("PATH", os.Getenv("PATH")+string(os.PathSeparator)+settings.Path)
 	if err != nil {
 		log.Err(err).Msgf("couldn't add path %s", settings.Path)
@@ -135,7 +135,7 @@ func updatePath(settings lsp.InitializationOptions) {
 }
 
 // TODO store in config, move parsing to CLI
-func updateEnvironment(settings lsp.InitializationOptions) {
+func updateEnvironment(settings lsp.Settings) {
 	envVars := strings.Split(settings.AdditionalEnv, ";")
 	for _, envVar := range envVars {
 		v := strings.Split(envVar, "=")
@@ -149,7 +149,7 @@ func updateEnvironment(settings lsp.InitializationOptions) {
 	}
 }
 
-func updateCliConfig(settings lsp.InitializationOptions) {
+func updateCliConfig(settings lsp.Settings) {
 	var err error
 	cliSettings := &config.CliSettings{}
 	cliSettings.Insecure, err = strconv.ParseBool(settings.Insecure)
@@ -162,7 +162,7 @@ func updateCliConfig(settings lsp.InitializationOptions) {
 	config.CurrentConfig().SetCliSettings(cliSettings)
 }
 
-func updateProductEnablement(settings lsp.InitializationOptions) {
+func updateProductEnablement(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ActivateSnykCode)
 	if err != nil {
 		log.Warn().Err(err).Msg("couldn't parse code setting")
