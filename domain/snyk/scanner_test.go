@@ -1,4 +1,4 @@
-package snyk_test
+package snyk
 
 import (
 	"context"
@@ -8,20 +8,18 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	testutil.UnitTest(t)
-	enabledScanner := snyk.NewTestProductScanner(snyk.ProductCode, true)
-	disabledScanner := snyk.NewTestProductScanner(snyk.ProductOpenSource, false)
+	enabledScanner := NewTestProductScanner(ProductCode, true)
+	disabledScanner := NewTestProductScanner(ProductOpenSource, false)
 
-	scanner := snyk.NewDelegatingScanner(
+	scanner := NewDelegatingScanner(
 		initialize.NewDelegatingInitializer(),
 		performance.NewTestInstrumentor(),
 		ux.NewTestAnalytics(),
@@ -29,7 +27,7 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 		disabledScanner,
 	)
 
-	scanner.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
+	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
 
 	assert.Eventually(
 		t,
@@ -43,11 +41,11 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 
 func TestScan_whenProductScannerEnabled_SendsAnalysisTriggered(t *testing.T) {
 	testutil.UnitTest(t)
-	enabledScanner := snyk.NewTestProductScanner(snyk.ProductCode, true)
-	disabledScanner := snyk.NewTestProductScanner(snyk.ProductOpenSource, false)
+	enabledScanner := NewTestProductScanner(ProductCode, true)
+	disabledScanner := NewTestProductScanner(ProductOpenSource, false)
 
 	analytics := ux.NewTestAnalytics()
-	scanner := snyk.NewDelegatingScanner(
+	scanner := NewDelegatingScanner(
 		initialize.NewDelegatingInitializer(),
 		performance.NewTestInstrumentor(),
 		analytics,
@@ -55,7 +53,7 @@ func TestScan_whenProductScannerEnabled_SendsAnalysisTriggered(t *testing.T) {
 		disabledScanner,
 	)
 
-	scanner.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
+	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
 
 	assert.Equal(t, ux.AnalysisIsTriggeredProperties{
 		AnalysisType:    []ux.AnalysisType{ux.CodeSecurity},
@@ -64,47 +62,37 @@ func TestScan_whenProductScannerEnabled_SendsAnalysisTriggered(t *testing.T) {
 }
 
 func TestScan_whenNoProductScannerEnabled_SendsNoAnalytics(t *testing.T) {
-	disabledScanner := snyk.NewTestProductScanner(snyk.ProductOpenSource, false)
+	disabledScanner := NewTestProductScanner(ProductOpenSource, false)
 
 	analytics := ux.NewTestAnalytics()
-	scanner := snyk.NewDelegatingScanner(
+	scanner := NewDelegatingScanner(
 		initialize.NewDelegatingInitializer(),
 		performance.NewTestInstrumentor(),
 		analytics,
 		disabledScanner,
 	)
 
-	scanner.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
+	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
 
 	assert.Len(t, analytics.GetAnalytics(), 0)
 }
 
-func Test_userNotAuthenticated_conditionalAutoAuthentication(t *testing.T) {
-	t.Run("Scan skipped if auto-auth is disabled", GetTestBody(0, false))
-	t.Run("Scan initiates authentication if auto-auth is enabled", GetTestBody(1, true))
-}
+func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
+	// Arrange
+	productScanner := NewTestProductScanner(ProductOpenSource, true)
+	scanner := NewDelegatingScanner(
+		initialize.NewDelegatingInitializer(),
+		performance.NewTestInstrumentor(),
+		ux.NewTestAnalytics(),
+		productScanner,
+	)
+	config.CurrentConfig().SetToken("")
+	isAuthenticated := config.CurrentConfig().Authenticated()
 
-func GetTestBody(expectedScansCount int, automaticAuthentication bool) func(t *testing.T) {
-	testBody := func(t *testing.T) {
-		// Arrange
-		testutil.UnitTest(t)
-		di.TestInit(t)
-		config.CurrentConfig().SetToken("")
-		config.CurrentConfig().SetAutomaticAuthentication(automaticAuthentication)
-		productScanner := snyk.NewTestProductScanner(snyk.ProductOpenSource, true)
-		scanner := snyk.NewDelegatingScanner(
-			di.Initializer(),
-			di.Instrumentor(),
-			di.Analytics(),
-			productScanner,
-		)
+	// Act
+	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
 
-		// Act
-		scanner.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
-
-		// Assert
-		assert.Equal(t, expectedScansCount, productScanner.Scans())
-	}
-
-	return testBody
+	// Assert
+	assert.False(t, isAuthenticated)
+	assert.Equal(t, 0, productScanner.scans)
 }
