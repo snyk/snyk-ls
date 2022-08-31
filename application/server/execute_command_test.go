@@ -7,6 +7,8 @@ import (
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
+	"golang.design/x/clipboard"
+
 	"github.com/snyk/snyk-ls/application/di"
 	lsp2 "github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
@@ -45,4 +47,19 @@ func Test_initializeHandler_shouldOfferWorkspaceScanCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.WorkspaceScanCommand)
+}
+
+func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
+	loc := setupServer(t)
+
+	params := lsp.ExecuteCommandParams{Command: snyk.CopyAuthLinkCommand}
+	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	url := string(clipboard.Read(clipboard.FmtText))
+	expectedURL := "https://app.snyk.io/login?token=2508826b-0186-4d90-a9fc-f27d12b4a438&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
+
+	assert.Equal(t, expectedURL, url)
 }

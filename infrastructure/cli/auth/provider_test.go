@@ -49,7 +49,7 @@ func TestSetAuthURLCmd(t *testing.T) {
 	err := provider.setAuthURL(authString)
 
 	assert.NoError(t, err)
-	assert.Equal(t, provider.authUrl, expectedURL)
+	assert.Equal(t, expectedURL, provider.authUrl)
 }
 
 func TestBuildCLICmd(t *testing.T) {
