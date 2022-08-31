@@ -146,7 +146,6 @@ func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...str
 	if a.authUrl != "" {
 		cmd.Env = append(cmd.Env, cli.ApiEnvVar+"="+a.authUrl)
 	}
-
 	if !config.CurrentConfig().IsTelemetryEnabled() {
 		cmd.Env = append(cmd.Env, cli.DisableAnalyticsEnvVar+"=1")
 	}
