@@ -59,7 +59,7 @@ func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
 	}
 
 	url := string(clipboard.Read(clipboard.FmtText))
-	expectedURL := "https://app.snyk.io/login?token=2508826b-0186-4d90-a9fc-f27d12b4a438&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
+	expectedURL := "https://app.snyk.io/login?token=someToken"
 
 	assert.Equal(t, expectedURL, url)
 }
