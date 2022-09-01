@@ -23,10 +23,6 @@ type CliAuthenticationProvider struct {
 	errorReporter error_reporting.ErrorReporter
 }
 
-func NewTestCliAuthenticationProvider(authURL string, errorReporter error_reporting.ErrorReporter) snyk.AuthenticationProvider {
-	return &CliAuthenticationProvider{authURL, errorReporter}
-}
-
 func NewCliAuthenticationProvider(errorReporter error_reporting.ErrorReporter) snyk.AuthenticationProvider {
 	return &CliAuthenticationProvider{"", errorReporter}
 }

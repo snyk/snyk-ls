@@ -71,6 +71,22 @@ func TestSetAuthURLCmd(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, expectedURL, provider.authUrl)
 	})
+
+	t.Run("errors when there is a problem extracting the auth url", func(t *testing.T) {
+		testutil.UnitTest(t)
+		provider := &CliAuthenticationProvider{}
+
+		var authString = `Now redirecting you to our auth page, go ahead and log in,
+		and once the auth is complete, return to this prompt and you'll
+		be ready to start using snyk.
+		
+		If you can't wait use this url:
+		https://invlidAuthURL.com`
+
+		err := provider.setAuthURL(authString)
+
+		assert.Error(t, err)
+	})
 }
 
 func TestBuildCLICmd(t *testing.T) {
