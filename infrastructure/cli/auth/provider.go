@@ -19,7 +19,7 @@ import (
 )
 
 type CliAuthenticationProvider struct {
-	authUrl       string
+	authURL       string
 	errorReporter error_reporting.ErrorReporter
 }
 
@@ -69,7 +69,7 @@ func (a *CliAuthenticationProvider) AuthURL(ctx context.Context) error {
 		return err
 	}
 
-	clipboard.Write(clipboard.FmtText, []byte(a.authUrl))
+	clipboard.Write(clipboard.FmtText, []byte(a.authURL))
 
 	return nil
 }
@@ -102,7 +102,7 @@ func (a *CliAuthenticationProvider) setAuthURL(str string) error {
 		return err
 	}
 
-	a.authUrl = url
+	a.authURL = url
 
 	return nil
 }

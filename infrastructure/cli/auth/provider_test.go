@@ -50,7 +50,7 @@ func TestSetAuthURLCmd(t *testing.T) {
 		err := provider.setAuthURL(authString)
 
 		assert.NoError(t, err)
-		assert.Equal(t, expectedURL, provider.authUrl)
+		assert.Equal(t, expectedURL, provider.authURL)
 	})
 
 	t.Run("works for a custom endpoint", func(t *testing.T) {
@@ -69,7 +69,7 @@ func TestSetAuthURLCmd(t *testing.T) {
 		err := provider.setAuthURL(authString)
 
 		assert.NoError(t, err)
-		assert.Equal(t, expectedURL, provider.authUrl)
+		assert.Equal(t, expectedURL, provider.authURL)
 	})
 
 	t.Run("errors when there is a problem extracting the auth url", func(t *testing.T) {

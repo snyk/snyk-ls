@@ -9,6 +9,7 @@ import (
 )
 
 type FakeAuthenticationProvider struct {
+	ExpectedAuthURL string
 	IsAuthenticated bool
 }
 
@@ -23,12 +24,13 @@ func (a *FakeAuthenticationProvider) ClearAuthentication(ctx context.Context) er
 }
 
 func (a *FakeAuthenticationProvider) AuthURL(ctx context.Context) error {
+	a.ExpectedAuthURL = "https://app.snyk.io/login?token=someToken"
 	err := clipboard.Init()
 	if err != nil {
 		return err
 	}
 
-	clipboard.Write(clipboard.FmtText, []byte("https://app.snyk.io/login?token=someToken"))
+	clipboard.Write(clipboard.FmtText, []byte(a.ExpectedAuthURL))
 
 	return nil
 }

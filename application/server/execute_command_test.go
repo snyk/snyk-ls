@@ -51,14 +51,14 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 
 func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
 	loc := setupServer(t)
-
+	authenticationMock := di.Authenticator().Provider().(*auth.FakeAuthenticationProvider)
 	params := lsp.ExecuteCommandParams{Command: snyk.CopyAuthLinkCommand}
+
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
 	}
+	actualURL := string(clipboard.Read(clipboard.FmtText))
 
-	url := string(clipboard.Read(clipboard.FmtText))
-
-	assert.Equal(t, "https://app.snyk.io/login?token=someToken", url)
+	assert.Equal(t, authenticationMock.ExpectedAuthURL, actualURL)
 }
