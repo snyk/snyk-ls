@@ -177,10 +177,6 @@ jobs:
         env:
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
         run: |
-          # this is required to be able to test the clipboard
-          export DISPLAY=:99
-          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
-
           make clean proxy-test
 
   test-release:
