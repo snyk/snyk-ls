@@ -34,22 +34,43 @@ func TestConfig_configGetAPICmd(t *testing.T) {
 }
 
 func TestSetAuthURLCmd(t *testing.T) {
-	testutil.UnitTest(t)
-	provider := &CliAuthenticationProvider{}
+	t.Run("works for the default endpoint", func(t *testing.T) {
+		testutil.UnitTest(t)
+		provider := &CliAuthenticationProvider{}
 
-	var authString = `Now redirecting you to our auth page, go ahead and log in,
-	and once the auth is complete, return to this prompt and you'll
-	be ready to start using snyk.
-	
-	If you can't wait use this url:
-	https://app.snyk.io/login?token=2508826b-0186-4d90-a9fc-f27d12b4a438&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false`
+		var authString = `Now redirecting you to our auth page, go ahead and log in,
+		and once the auth is complete, return to this prompt and you'll
+		be ready to start using snyk.
+		
+		If you can't wait use this url:
+		https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false`
 
-	expectedURL := "https://app.snyk.io/login?token=2508826b-0186-4d90-a9fc-f27d12b4a438&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
+		expectedURL := "https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
 
-	err := provider.setAuthURL(authString)
+		err := provider.setAuthURL(authString)
 
-	assert.NoError(t, err)
-	assert.Equal(t, expectedURL, provider.authUrl)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedURL, provider.authUrl)
+	})
+
+	t.Run("works for a custom endpoint", func(t *testing.T) {
+		testutil.UnitTest(t)
+		provider := &CliAuthenticationProvider{}
+
+		var authString = `Now redirecting you to our auth page, go ahead and log in,
+		and once the auth is complete, return to this prompt and you'll
+		be ready to start using snyk.
+		
+		If you can't wait use this url:
+		https://myOwnCompanyURL/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false`
+
+		expectedURL := "https://myOwnCompanyURL/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
+
+		err := provider.setAuthURL(authString)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expectedURL, provider.authUrl)
+	})
 }
 
 func TestBuildCLICmd(t *testing.T) {

@@ -87,14 +87,14 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 
 	var out strings.Builder
 	cmd.Stdout = &out
-
-	err = a.runCLICmd(ctx, cmd)
 	str := out.String()
 
-	e := a.setAuthURL(str)
-	if e != nil {
-		return e
+	err = a.setAuthURL(str)
+	if err != nil {
+		return err
 	}
+
+	err = a.runCLICmd(ctx, cmd)
 
 	log.Info().Str("output", str).Msg("auth Snyk CLI")
 	return err
@@ -112,8 +112,13 @@ func (a *CliAuthenticationProvider) setAuthURL(str string) error {
 }
 
 func (a *CliAuthenticationProvider) getAuthURL(str string) (string, error) {
-	index := strings.Index(str, "https://app.snyk.io")
-	url := str[index:]
+	url := ""
+	hasToken := strings.Contains(str, "/login?token=")
+	index := strings.Index(str, "https://")
+
+	if index > 0 && hasToken {
+		url = str[index:]
+	}
 
 	if url == "" {
 		return "", errors.New("auth-provider: auth url is empty")
