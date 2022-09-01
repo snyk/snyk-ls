@@ -60,6 +60,7 @@ func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 
 func InitializeSettings(ctx context.Context, settings lsp.Settings) {
 	writeSettings(ctx, settings, true)
+	updateAutoAuthentication(settings)
 }
 
 func UpdateSettings(ctx context.Context, settings lsp.Settings) {
@@ -80,6 +81,17 @@ func writeSettings(ctx context.Context, settings lsp.Settings, initialize bool) 
 	updateTelemetry(settings)
 	updateOrganization(settings)
 	manageBinariesAutomatically(settings)
+}
+
+func updateAutoAuthentication(settings lsp.Settings) {
+	// Unless the field is included and set to false, auto-auth should be true by default.
+	autoAuth, err := strconv.ParseBool(settings.AutomaticAuthentication)
+	if err == nil {
+		config.CurrentConfig().SetAutomaticAuthentication(autoAuth)
+	} else {
+		// When the field is omitted, set to true by default
+		config.CurrentConfig().SetAutomaticAuthentication(true)
+	}
 }
 
 func updateToken(token string) {

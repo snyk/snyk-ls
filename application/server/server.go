@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -145,7 +144,6 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 		InitializeSettings(ctx, params.InitializationOptions)
 		config.CurrentConfig().SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
-		updateAutoAuthentication(params.InitializationOptions)
 		di.Analytics().Initialise()
 		w := workspace.New(di.Instrumentor(), di.Scanner(), di.HoverService())
 		workspace.Set(w)
@@ -217,17 +215,6 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 			},
 		}, nil
 	})
-}
-
-func updateAutoAuthentication(settings lsp.Settings) {
-	// Unless the field is included and set to false, auto-auth should be true by default.
-	autoAuth, err := strconv.ParseBool(settings.AutomaticAuthentication)
-	if err == nil {
-		config.CurrentConfig().SetAutomaticAuthentication(autoAuth)
-	} else {
-		// When the field is omitted, set to true by default
-		config.CurrentConfig().SetAutomaticAuthentication(true)
-	}
 }
 
 func setClientInformation(initParams lsp.InitializeParams) {
