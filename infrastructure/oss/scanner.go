@@ -31,7 +31,7 @@ var (
 		"low":  snyk.Medium,
 	}
 
-	//todo do we really need this? shouldn't we simply ignore diagnostics in locks???
+	// todo do we really need this? shouldn't we simply ignore diagnostics in locks???
 	// see https://github.com/snyk/snyk/blob/master/src/lib/detect.ts#L10
 	lockFilesToManifestMap = map[string]string{
 		"Gemfile.lock":      "Gemfile",
@@ -101,7 +101,7 @@ func (oss *Scanner) Product() snyk.Product {
 }
 
 func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue) {
-	documentURI := uri.PathToUri(path) //todo get rid of lsp dep
+	documentURI := uri.PathToUri(path) // todo get rid of lsp dep
 	if !oss.isSupported(documentURI) {
 		log.Debug().Msgf("OSS Scan not supported for %s", path)
 		return issues
@@ -215,10 +215,7 @@ func (oss *Scanner) handleError(err error, res []byte, cmd []string) bool {
 		case 2:
 			log.Err(err).Str("method", "oss.Scan").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
 			// we want a user notification, but don't want to send it to sentry
-			notification.Send(sglsp.ShowMessageParams{
-				Type:    sglsp.MTError,
-				Message: fmt.Sprintf("Snyk encountered an error: %v", err),
-			})
+			notification.SendError(err)
 			return true
 		case 3:
 			log.Debug().Str("method", "oss.Scan").Msg("no supported projects/files detected.")

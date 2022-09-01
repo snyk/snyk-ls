@@ -1,10 +1,7 @@
 package sentry
 
 import (
-	"fmt"
 	"time"
-
-	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog/log"
@@ -28,10 +25,7 @@ func (s *gdprAwareSentryErrorReporter) FlushErrorReporting() {
 }
 
 func (s *gdprAwareSentryErrorReporter) CaptureError(err error) bool {
-	notification.Send(sglsp.ShowMessageParams{
-		Type:    sglsp.MTError,
-		Message: fmt.Sprintf("Snyk encountered an error: %v", err),
-	})
+	notification.SendError(err)
 	if config.CurrentConfig().IsErrorReportingEnabled() {
 		eventId := sentry.CaptureException(err)
 		log.Info().Err(err).Str("method", "CaptureError").Msgf("Sent error to Sentry (ID: %v)", eventId)

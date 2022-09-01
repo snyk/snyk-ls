@@ -103,7 +103,7 @@ func TestInit(t *testing.T) {
 	instrumentor = performance2.NewTestInstrumentor()
 	errorReporter = errorreporting.NewTestErrorReporter()
 	installer = install.NewInstaller(errorReporter)
-	authProvider := auth2.NewTestCliAuthenticationProvider("https://app.snyk.io/login?token=someToken", errorReporter)
+	authProvider := auth2.NewFakeCliAuthenticationProvider()
 	authenticator = services.NewAuthenticationService(authProvider, analytics)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cli2.NewInitializer(errorReporter, install.NewInstaller(errorReporter)),

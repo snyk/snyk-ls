@@ -213,6 +213,7 @@ type WorkspaceFoldersChangeEvent struct {
 	Removed []WorkspaceFolder `json:"Removed,omitempty"`
 }
 
+// Settings is the struct that is parsed from the InitializationParams.InitializationOptions field
 type Settings struct {
 	ActivateSnykOpenSource      string `json:"activateSnykOpenSource,omitempty"`
 	ActivateSnykCode            string `json:"activateSnykCode,omitempty"`
@@ -230,6 +231,7 @@ type Settings struct {
 	Token                       string `json:"token,omitempty"`
 	IntegrationName             string `json:"integrationName,omitempty"`
 	IntegrationVersion          string `json:"integrationVersion,omitempty"`
+	AutomaticAuthentication     string `json:"automaticAuthentication,omitempty"`
 }
 
 type DidChangeConfigurationParams struct {

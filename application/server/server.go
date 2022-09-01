@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -144,6 +145,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 		UpdateSettings(ctx, params.InitializationOptions)
 		config.CurrentConfig().SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
+		updateAutoAuthentication(params.InitializationOptions)
 		di.Analytics().Initialise()
 		w := workspace.New(di.Instrumentor())
 		workspace.Set(w)
@@ -208,12 +210,24 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 						snyk.NavigateToRangeCommand,
 						snyk.WorkspaceScanCommand,
 						snyk.OpenBrowserCommand,
+						snyk.LoginCommand,
 						snyk.CopyAuthLinkCommand,
 					},
 				},
 			},
 		}, nil
 	})
+}
+
+func updateAutoAuthentication(settings lsp.Settings) {
+	// Unless the field is included and set to false, auto-auth should be true by default.
+	autoAuth, err := strconv.ParseBool(settings.AutomaticAuthentication)
+	if err == nil {
+		config.CurrentConfig().SetAutomaticAuthentication(autoAuth)
+	} else {
+		// When the field is omitted, set to true by default
+		config.CurrentConfig().SetAutomaticAuthentication(true)
+	}
 }
 
 func setClientInformation(initParams lsp.InitializeParams) {
@@ -287,7 +301,7 @@ func TextDocumentDidOpenHandler() jrpc2.Handler {
 		log.Info().Str("method", method).Str("documentURI", filePath).Msg("RECEIVING")
 		folder := workspace.Get().GetFolderContaining(filePath)
 		if folder != nil {
-			folder.ScanFile(ctx, filePath)
+			go folder.ScanFile(ctx, filePath)
 		} else {
 			log.Warn().Str("method", method).Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
 		}
@@ -306,7 +320,7 @@ func TextDocumentDidSaveHandler() jrpc2.Handler {
 		if f != nil {
 			f.ClearDiagnosticsCache(filePath)
 			di.HoverService().DeleteHover(params.TextDocument.URI)
-			f.ScanFile(ctx, filePath)
+			go f.ScanFile(ctx, filePath)
 		} else {
 			log.Warn().Str("method", method).Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
 		}

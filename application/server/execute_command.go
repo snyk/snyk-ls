@@ -12,6 +12,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/notification"
 )
 
 func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
@@ -31,6 +32,12 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 			workspace.Get().ScanWorkspace(ctx)
 		case snyk.OpenBrowserCommand:
 			command.OpenBrowser(params.Arguments[0].(string))
+		case snyk.LoginCommand:
+			_, err := di.Authenticator().Provider().Authenticate(context.Background())
+			if err != nil {
+				log.Err(err).Msg("Error on snyk.login command")
+				notification.SendError(err)
+			}
 		case snyk.CopyAuthLinkCommand:
 			err := di.Authenticator().Provider().AuthURL(ctx)
 			if err != nil {
