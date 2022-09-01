@@ -2,9 +2,11 @@ package snyk
 
 import (
 	"context"
+	"sync"
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
@@ -49,6 +51,10 @@ func (sc *DelegatingConcurrentScanner) Scan(
 ) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
 	sc.initializer.Init()
+	if !config.CurrentConfig().Authenticated() {
+		log.Info().Msg("User is not authenticated, cancelling scan")
+		return
+	}
 
 	analysisTypes := getEnabledAnalysisTypes(sc.scanners)
 	if len(analysisTypes) > 0 {
@@ -60,9 +66,12 @@ func (sc *DelegatingConcurrentScanner) Scan(
 		)
 	}
 
+	waitGroup := &sync.WaitGroup{}
 	for _, scanner := range sc.scanners {
 		if scanner.IsEnabled() {
+			waitGroup.Add(1)
 			go func(s ProductScanner) {
+				defer waitGroup.Done()
 				span := sc.instrumentor.NewTransaction(context.WithValue(ctx, s.Product(), s), string(s.Product()), method)
 				defer sc.instrumentor.Finish(span)
 				log.Debug().Msgf("Scanning %s with %T: STARTED", path, s)
@@ -76,6 +85,8 @@ func (sc *DelegatingConcurrentScanner) Scan(
 		}
 	}
 	log.Debug().Msgf("All product scanners started for %s", path)
+	waitGroup.Wait()
+	log.Debug().Msgf("All product scanners finished for %s", path)
 }
 
 func getEnabledAnalysisTypes(productScanners []ProductScanner) (analysisTypes []ux2.AnalysisType) {

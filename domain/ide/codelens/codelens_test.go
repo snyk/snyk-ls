@@ -3,7 +3,6 @@ package codelens
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -36,9 +35,7 @@ func TestGetFor(t *testing.T) {
 	workspace.Get().AddFolder(folder)
 	folder.ScanFile(context.Background(), filePath)
 
-	assert.Eventually(t, func() bool {
-		return folder.DocumentDiagnosticsFromCache(filePath) != nil
-	}, time.Second*2, time.Millisecond)
+	assert.NotNil(t, folder.DocumentDiagnosticsFromCache(filePath))
 
 	lenses := GetFor(filePath)
 

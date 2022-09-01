@@ -33,8 +33,13 @@ func (i *Initializer) Init() {
 	cli.Mutex.Lock()
 	defer cli.Mutex.Unlock()
 
-	authenticated := config.CurrentConfig().Authenticated()
-	if authenticated {
+	currentConfig := config.CurrentConfig()
+	if currentConfig.Authenticated() {
+		log.Info().Msg("Skipping authentication - user is already authenticated")
+		return
+	}
+	if !currentConfig.AutomaticAuthentication() {
+		log.Info().Msg("Skipping authentication - automatic authentication is disabled")
 		return
 	}
 

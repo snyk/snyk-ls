@@ -108,6 +108,7 @@ type Config struct {
 	defaultDirs                 []string
 	integrationName             string
 	integrationVersion          string
+	automaticAuthentication     bool
 }
 
 func CurrentConfig() *Config {
@@ -136,6 +137,7 @@ func New() *Config {
 	c.cliSettings = &CliSettings{
 		cliPath: filepath.Join(c.DefaultBinaryInstallPath(), filename.ExecutableName),
 	}
+	c.automaticAuthentication = true
 	c.configFile = ""
 	c.format = "md"
 	c.isErrorReportingEnabled.Set(true)
@@ -450,6 +452,14 @@ func (c *Config) SetClientCapabilities(capabilities lsp.ClientCapabilities) {
 
 func (c *Config) Path() string {
 	return c.path
+}
+
+func (c *Config) AutomaticAuthentication() bool {
+	return c.automaticAuthentication
+}
+
+func (c *Config) SetAutomaticAuthentication(value bool) {
+	c.automaticAuthentication = value
 }
 
 func (c *Config) addDefaults() {

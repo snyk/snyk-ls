@@ -8,12 +8,12 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/di"
-	lsp2 "github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/cli/auth"
 )
 
-func Test_executeCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) {
+func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) {
 	loc := setupServer(t)
 
 	scanner := &snyk.TestScanner{}
@@ -29,20 +29,20 @@ func Test_executeCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) 
 	}, 2*time.Second, time.Millisecond)
 }
 
-func Test_initializeHandler_shouldOfferWorkspaceScanCommand(t *testing.T) {
+func Test_loginCommand_StartsAuthentication(t *testing.T) {
+	// Arrange
 	loc := setupServer(t)
+	authenticationMock := di.Authenticator().Provider().(*auth.FakeAuthenticationProvider)
+	initialAuthenticatedStatus := authenticationMock.IsAuthenticated
+	params := lsp.ExecuteCommandParams{Command: snyk.LoginCommand}
 
-	scanner := &snyk.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService()))
-
-	rsp, err := loc.Client.Call(ctx, "initialize", nil)
+	// Act
+	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var result lsp2.InitializeResult
-	err = rsp.UnmarshalResult(&result)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.WorkspaceScanCommand)
+
+	// Assert
+	assert.False(t, initialAuthenticatedStatus)
+	assert.True(t, authenticationMock.IsAuthenticated)
 }
