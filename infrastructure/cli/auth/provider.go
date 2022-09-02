@@ -10,8 +10,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
-	"golang.design/x/clipboard"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -19,7 +17,7 @@ import (
 )
 
 type CliAuthenticationProvider struct {
-	authURL       string
+	authCLIOutput string
 	errorReporter error_reporting.ErrorReporter
 }
 
@@ -63,15 +61,23 @@ func (a *CliAuthenticationProvider) ClearAuthentication(ctx context.Context) err
 	return err
 }
 
-func (a *CliAuthenticationProvider) AuthURL(ctx context.Context) error {
-	err := clipboard.Init()
-	if err != nil {
-		return err
+func (a *CliAuthenticationProvider) AuthURL(ctx context.Context) (string, error) {
+	if len(a.authCLIOutput) == 0 {
+		err := errors.New("AuthURL: auth url is empty")
+		log.Err(err).Str("method", "AuthURL").Msg("error getting auth url")
+		a.errorReporter.CaptureError(err)
+
+		return "", err
 	}
 
-	clipboard.Write(clipboard.FmtText, []byte(a.authURL))
+	url, err := a.getAuthURL(a.authCLIOutput)
 
-	return nil
+	if err != nil {
+		log.Err(err).Str("method", "AuthURL").Msg("error getting auth url")
+		a.errorReporter.CaptureError(err)
+	}
+
+	return url, err
 }
 
 // Auth represents the `snyk auth` command.
@@ -85,26 +91,12 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 	cmd.Stdout = &out
 	str := out.String()
 
-	err = a.setAuthURL(str)
-	if err != nil {
-		return err
-	}
+	a.authCLIOutput = str
 
 	err = a.runCLICmd(ctx, cmd)
 
 	log.Info().Str("output", str).Msg("auth Snyk CLI")
 	return err
-}
-
-func (a *CliAuthenticationProvider) setAuthURL(str string) error {
-	url, err := a.getAuthURL(str)
-	if err != nil {
-		return err
-	}
-
-	a.authURL = url
-
-	return nil
 }
 
 func (a *CliAuthenticationProvider) getAuthURL(str string) (string, error) {
@@ -117,7 +109,7 @@ func (a *CliAuthenticationProvider) getAuthURL(str string) (string, error) {
 	}
 
 	if url == "" {
-		return "", errors.New("auth-provider: auth url is empty")
+		return "", errors.New("getAuthURL: could not find valid auth url")
 	}
 
 	return url, nil

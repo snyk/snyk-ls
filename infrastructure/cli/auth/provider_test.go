@@ -41,16 +41,16 @@ func TestSetAuthURLCmd(t *testing.T) {
 		var authString = `Now redirecting you to our auth page, go ahead and log in,
 		and once the auth is complete, return to this prompt and you'll
 		be ready to start using snyk.
-		
+
 		If you can't wait use this url:
 		https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false`
 
 		expectedURL := "https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
 
-		err := provider.setAuthURL(authString)
+		url, err := provider.getAuthURL(authString)
 
 		assert.NoError(t, err)
-		assert.Equal(t, expectedURL, provider.authURL)
+		assert.Equal(t, expectedURL, url)
 	})
 
 	t.Run("works for a custom endpoint", func(t *testing.T) {
@@ -60,16 +60,16 @@ func TestSetAuthURLCmd(t *testing.T) {
 		var authString = `Now redirecting you to our auth page, go ahead and log in,
 		and once the auth is complete, return to this prompt and you'll
 		be ready to start using snyk.
-		
+
 		If you can't wait use this url:
 		https://myOwnCompanyURL/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false`
 
 		expectedURL := "https://myOwnCompanyURL/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
 
-		err := provider.setAuthURL(authString)
+		url, err := provider.getAuthURL(authString)
 
 		assert.NoError(t, err)
-		assert.Equal(t, expectedURL, provider.authURL)
+		assert.Equal(t, expectedURL, url)
 	})
 
 	t.Run("errors when there is a problem extracting the auth url", func(t *testing.T) {
@@ -79,11 +79,11 @@ func TestSetAuthURLCmd(t *testing.T) {
 		var authString = `Now redirecting you to our auth page, go ahead and log in,
 		and once the auth is complete, return to this prompt and you'll
 		be ready to start using snyk.
-		
+
 		If you can't wait use this url:
 		https://invlidAuthURL.com`
 
-		err := provider.setAuthURL(authString)
+		_, err := provider.getAuthURL(authString)
 
 		assert.Error(t, err)
 	})

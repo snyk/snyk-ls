@@ -7,6 +7,7 @@ import (
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
+	"golang.design/x/clipboard"
 
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
@@ -39,11 +40,21 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 				notification.SendError(err)
 			}
 		case snyk.CopyAuthLinkCommand:
-			err := di.Authenticator().Provider().AuthURL(ctx)
+			url, err := di.Authenticator().Provider().AuthURL(ctx)
 			if err != nil {
 				log.Err(err).Msg("Error on snyk.copyAuthLink command")
 				notification.SendError(err)
+				break
 			}
+
+			err = clipboard.Init()
+			if err != nil {
+				log.Err(err).Msg("Error on snyk.copyAuthLink command")
+				notification.SendError(err)
+				break
+			}
+
+			clipboard.Write(clipboard.FmtText, []byte(url))
 		}
 		return nil, nil
 	})

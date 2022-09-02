@@ -3,8 +3,6 @@ package auth
 import (
 	"context"
 
-	"golang.design/x/clipboard"
-
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
@@ -23,18 +21,10 @@ func (a *FakeAuthenticationProvider) ClearAuthentication(ctx context.Context) er
 	return nil
 }
 
-func (a *FakeAuthenticationProvider) AuthURL(ctx context.Context) error {
-	a.ExpectedAuthURL = "https://app.snyk.io/login?token=someToken"
-	err := clipboard.Init()
-	if err != nil {
-		return err
-	}
-
-	clipboard.Write(clipboard.FmtText, []byte(a.ExpectedAuthURL))
-
-	return nil
+func (a *FakeAuthenticationProvider) AuthURL(ctx context.Context) (string, error) {
+	return a.ExpectedAuthURL, nil
 }
 
 func NewFakeCliAuthenticationProvider() snyk.AuthenticationProvider {
-	return &FakeAuthenticationProvider{}
+	return &FakeAuthenticationProvider{"https://app.snyk.io/login?token=someToken", false}
 }
