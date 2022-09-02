@@ -21,8 +21,8 @@ func (a *FakeAuthenticationProvider) ClearAuthentication(ctx context.Context) er
 	return nil
 }
 
-func (a *FakeAuthenticationProvider) AuthURL(ctx context.Context) (string, error) {
-	return a.ExpectedAuthURL, nil
+func (a *FakeAuthenticationProvider) AuthURL(ctx context.Context) string {
+	return a.ExpectedAuthURL
 }
 
 func NewFakeCliAuthenticationProvider() snyk.AuthenticationProvider {

@@ -17,7 +17,7 @@ import (
 )
 
 type CliAuthenticationProvider struct {
-	authCLIOutput string
+	authURL       string
 	errorReporter error_reporting.ErrorReporter
 }
 
@@ -61,23 +61,8 @@ func (a *CliAuthenticationProvider) ClearAuthentication(ctx context.Context) err
 	return err
 }
 
-func (a *CliAuthenticationProvider) AuthURL(ctx context.Context) (string, error) {
-	if len(a.authCLIOutput) == 0 {
-		err := errors.New("AuthURL: auth url is empty")
-		log.Err(err).Str("method", "AuthURL").Msg("error getting auth url")
-		a.errorReporter.CaptureError(err)
-
-		return "", err
-	}
-
-	url, err := a.getAuthURL(a.authCLIOutput)
-
-	if err != nil {
-		log.Err(err).Str("method", "AuthURL").Msg("error getting auth url")
-		a.errorReporter.CaptureError(err)
-	}
-
-	return url, err
+func (a *CliAuthenticationProvider) AuthURL(ctx context.Context) string {
+	return a.authURL
 }
 
 // Auth represents the `snyk auth` command.
@@ -91,7 +76,11 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 	cmd.Stdout = &out
 	str := out.String()
 
-	a.authCLIOutput = str
+	err = a.getAuthURL(str)
+	if err != nil {
+		log.Err(err).Str("method", "authenticate").Msg("error getting auth url")
+		a.errorReporter.CaptureError(err)
+	}
 
 	err = a.runCLICmd(ctx, cmd)
 
@@ -99,7 +88,8 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 	return err
 }
 
-func (a *CliAuthenticationProvider) getAuthURL(str string) (string, error) {
+func (a *CliAuthenticationProvider) getAuthURL(str string) error {
+	a.authURL = ""
 	url := ""
 	hasToken := strings.Contains(str, "/login?token=")
 	index := strings.Index(str, "https://")
@@ -109,10 +99,12 @@ func (a *CliAuthenticationProvider) getAuthURL(str string) (string, error) {
 	}
 
 	if url == "" {
-		return "", errors.New("getAuthURL: could not find valid auth url")
+		return errors.New("getAuthURL: could not find valid auth url")
 	}
 
-	return url, nil
+	a.authURL = url
+
+	return nil
 }
 
 func (a *CliAuthenticationProvider) getToken(ctx context.Context) (string, error) {

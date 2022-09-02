@@ -47,10 +47,10 @@ func TestSetAuthURLCmd(t *testing.T) {
 
 		expectedURL := "https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
 
-		url, err := provider.getAuthURL(authString)
+		err := provider.getAuthURL(authString)
 
 		assert.NoError(t, err)
-		assert.Equal(t, expectedURL, url)
+		assert.Equal(t, expectedURL, provider.authURL)
 	})
 
 	t.Run("works for a custom endpoint", func(t *testing.T) {
@@ -66,10 +66,10 @@ func TestSetAuthURLCmd(t *testing.T) {
 
 		expectedURL := "https://myOwnCompanyURL/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
 
-		url, err := provider.getAuthURL(authString)
+		err := provider.getAuthURL(authString)
 
 		assert.NoError(t, err)
-		assert.Equal(t, expectedURL, url)
+		assert.Equal(t, expectedURL, provider.authURL)
 	})
 
 	t.Run("errors when there is a problem extracting the auth url", func(t *testing.T) {
@@ -83,7 +83,7 @@ func TestSetAuthURLCmd(t *testing.T) {
 		If you can't wait use this url:
 		https://invlidAuthURL.com`
 
-		_, err := provider.getAuthURL(authString)
+		err := provider.getAuthURL(authString)
 
 		assert.Error(t, err)
 	})
