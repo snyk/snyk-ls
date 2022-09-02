@@ -42,6 +42,13 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 		case snyk.CopyAuthLinkCommand:
 			url := di.Authenticator().Provider().AuthURL(ctx)
 
+			err := clipboard.Init()
+			if err != nil {
+				log.Err(err).Msg("Error on snyk.copyAuthLink command")
+				notification.SendError(err)
+				break
+			}
+
 			clipboard.Write(clipboard.FmtText, []byte(url))
 		}
 		return nil, nil
