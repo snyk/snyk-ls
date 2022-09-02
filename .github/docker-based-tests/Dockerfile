@@ -1,10 +1,6 @@
 FROM golang:latest
 RUN apt-get update
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y sudo git squid curl git traceroute net-tools iptables vim make maven
-
-# this is required to be able to test the clipboard
-RUN apt-get install -y libx11-dev xvfb
-RUN sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y sudo git squid curl git traceroute net-tools iptables vim make maven libx11-dev xvfb
 
 RUN apt-get auto-remove -y && apt-get clean -y && rm -rf /var/lib/apt/
 RUN update-alternatives --set iptables /usr/sbin/iptables-legacy
@@ -30,7 +26,6 @@ ENV https_proxy="http://localhost:3128"
 ENV no_proxy "localhost,127.0.0.1"
 ENV INTEG_TESTS=true
 ENV SMOKE_TESTS=true
-ENV DISPLAY=:99
 
 RUN env
 USER snyk
