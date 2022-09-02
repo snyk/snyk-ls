@@ -3,12 +3,15 @@ package workspace
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -143,4 +146,28 @@ func TestProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing.
 	assert.Equal(t, 1, f.documentDiagnosticCache.Length())
 	assert.NotNil(t, f.documentDiagnosticCache.Get("path1"))
 	assert.Len(t, f.documentDiagnosticCache.Get("path1"), 3)
+}
+
+func Test_ClearDiagnostics(t *testing.T) {
+	testutil.UnitTest(t)
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
+
+	f.processResults([]snyk.Issue{
+		{ID: "id1", AffectedFilePath: "path1"},
+		{ID: "id2", AffectedFilePath: "path2"},
+	})
+	clearDiagnosticNotifications := 0
+	notification.CreateListener(func(event interface{}) {
+		switch params := event.(type) {
+		case lsp.PublishDiagnosticsParams:
+			if len(params.Diagnostics) == 0 {
+				clearDiagnosticNotifications++
+			}
+		}
+	})
+
+	f.ClearDiagnostics()
+
+	assert.Equal(t, 0, f.documentDiagnosticCache.Length())
+	assert.Eventually(t, func() bool { return clearDiagnosticNotifications == 2 }, 1*time.Second, 10*time.Millisecond)
 }
