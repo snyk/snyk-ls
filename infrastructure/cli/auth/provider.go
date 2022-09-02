@@ -75,6 +75,7 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	out := &strings.Builder{}
 
 	reader, writer := io.Pipe()
 	cmd.Stdout = writer
@@ -82,30 +83,35 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 	go func() {
 		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
-			log.Info().Str("output", scanner.Text()).Msg("Snyk CLI output")
 			url := a.getAuthURL(scanner.Text())
+			out.Write(scanner.Bytes())
 
 			if url != "" {
 				a.authURL = url
 				break
 			}
 		}
+
+		str := out.String()
+		log.Info().Str("output", str).Msg("auth Snyk CLI")
 	}()
 
 	err = a.runCLICmd(ctx, cmd)
-	// str := out.String()
-
-	// log.Info().Str("output", str).Msg("auth Snyk CLI")
 	return err
 }
 
 func (a *CliAuthenticationProvider) getAuthURL(str string) string {
 	url := ""
+
 	hasToken := strings.Contains(str, "/login?token=")
 	index := strings.Index(str, "https://")
 
-	if index > 0 && hasToken {
+	if index != -1 && hasToken {
 		url = str[index:]
+
+		// trim the line ending
+		url = strings.TrimRight(url, "\r")
+		url = strings.TrimRight(url, "\n")
 	}
 
 	return url

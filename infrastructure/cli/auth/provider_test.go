@@ -38,54 +38,45 @@ func TestSetAuthURLCmd(t *testing.T) {
 		testutil.UnitTest(t)
 		provider := &CliAuthenticationProvider{}
 
-		var authString = `Now redirecting you to our auth page, go ahead and log in,
-		and once the auth is complete, return to this prompt and you'll
-		be ready to start using snyk.
+		var expectedURL = "https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
 
-		If you can't wait use this url:
-		https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false`
+		actualURL := provider.getAuthURL(expectedURL)
 
-		expectedURL := "https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
-
-		err := provider.getAuthURL(authString)
-
-		assert.NoError(t, err)
-		assert.Equal(t, expectedURL, provider.authURL)
+		assert.Equal(t, expectedURL, actualURL)
 	})
 
 	t.Run("works for a custom endpoint", func(t *testing.T) {
 		testutil.UnitTest(t)
 		provider := &CliAuthenticationProvider{}
 
-		var authString = `Now redirecting you to our auth page, go ahead and log in,
-		and once the auth is complete, return to this prompt and you'll
-		be ready to start using snyk.
+		var expectedURL = "https://myOwnCompanyURL/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
 
-		If you can't wait use this url:
-		https://myOwnCompanyURL/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false`
+		actualURL := provider.getAuthURL(expectedURL)
 
-		expectedURL := "https://myOwnCompanyURL/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
+		assert.Equal(t, expectedURL, actualURL)
+	})
 
-		err := provider.getAuthURL(authString)
+	t.Run("works when URL is in a substring", func(t *testing.T) {
+		testutil.UnitTest(t)
+		provider := &CliAuthenticationProvider{}
 
-		assert.NoError(t, err)
-		assert.Equal(t, expectedURL, provider.authURL)
+		var stringWithURL = "If auth does not automatically redirect you, copy this auth link: https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
+		var expectedURL = "https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
+
+		actualURL := provider.getAuthURL(stringWithURL)
+
+		assert.Equal(t, expectedURL, actualURL)
 	})
 
 	t.Run("errors when there is a problem extracting the auth url", func(t *testing.T) {
 		testutil.UnitTest(t)
 		provider := &CliAuthenticationProvider{}
 
-		var authString = `Now redirecting you to our auth page, go ahead and log in,
-		and once the auth is complete, return to this prompt and you'll
-		be ready to start using snyk.
+		var badURL = "https://invlidAuthURL.com"
 
-		If you can't wait use this url:
-		https://invlidAuthURL.com`
+		actualURL := provider.getAuthURL(badURL)
 
-		err := provider.getAuthURL(authString)
-
-		assert.Error(t, err)
+		assert.Equal(t, actualURL, "")
 	})
 }
 
