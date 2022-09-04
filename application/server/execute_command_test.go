@@ -34,12 +34,13 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	// Arrange
 	loc := setupServer(t)
+	_, err := loc.Client.Call(ctx, "initialize", nil)
 	authenticationMock := di.Authenticator().Provider().(*auth.FakeAuthenticationProvider)
 	initialAuthenticatedStatus := authenticationMock.IsAuthenticated
 	params := lsp.ExecuteCommandParams{Command: snyk.LoginCommand}
 
 	// Act
-	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	_, err = loc.Client.Call(ctx, "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,6 +48,8 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	// Assert
 	assert.False(t, initialAuthenticatedStatus)
 	assert.True(t, authenticationMock.IsAuthenticated)
+	assert.Eventually(t, func() bool { return len(jsonRPCRecorder.Notifications()) > 0 }, 5*time.Second, 50*time.Millisecond)
+	assert.Equal(t, len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated")), 1)
 }
 
 func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
