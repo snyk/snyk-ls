@@ -1,6 +1,10 @@
 package services
 
 import (
+	"context"
+
+	"github.com/rs/zerolog/log"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
@@ -19,6 +23,16 @@ func NewAuthenticationService(authenticator snyk.AuthenticationProvider, analyti
 
 func (a AuthenticationService) Provider() snyk.AuthenticationProvider {
 	return a.authenticator
+}
+
+func (a *AuthenticationService) Authenticate(ctx context.Context) (string, error) {
+	token, err := a.Provider().Authenticate(ctx)
+	if token == "" || err != nil {
+		log.Error().Err(err).Msg("Failed to authenticate")
+	}
+	a.UpdateToken(token, true)
+
+	return token, err
 }
 
 func (a AuthenticationService) UpdateToken(newToken string, sendNotification bool) {

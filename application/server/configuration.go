@@ -75,6 +75,7 @@ func UpdateSettings(ctx context.Context, settings lsp.Settings) {
 }
 
 func updateToken(token string) {
+	// Token was sent from the client, no need to send notification
 	di.Authenticator().UpdateToken(token, false)
 }
 
