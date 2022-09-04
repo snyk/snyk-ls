@@ -94,7 +94,9 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	scanResults, err := iac.doScan(ctx, documentURI, workspacePath)
 	p.Report(80)
 	if err != nil {
-		iac.errorReporter.CaptureError(err)
+		if err != context.Canceled {
+			iac.errorReporter.CaptureError(err)
+		}
 	}
 	if len(scanResults) > 0 {
 		for _, s := range scanResults {

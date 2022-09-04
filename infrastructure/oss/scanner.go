@@ -230,7 +230,9 @@ func (oss *Scanner) handleError(err error, res []byte, cmd []string) bool {
 			oss.errorReporter.CaptureError(err)
 		}
 	default:
-		oss.errorReporter.CaptureError(err)
+		if err != context.Canceled {
+			oss.errorReporter.CaptureError(err)
+		}
 		return true
 	}
 	return true
