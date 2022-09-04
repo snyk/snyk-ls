@@ -35,6 +35,9 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	// Arrange
 	loc := setupServer(t)
 	_, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	authenticationMock := di.Authenticator().Provider().(*auth.FakeAuthenticationProvider)
 	initialAuthenticatedStatus := authenticationMock.IsAuthenticated
 	params := lsp.ExecuteCommandParams{Command: snyk.LoginCommand}
