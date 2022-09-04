@@ -101,6 +101,11 @@ func (oss *Scanner) Product() snyk.Product {
 }
 
 func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue) {
+	if ctx.Err() == context.Canceled {
+		log.Debug().Msg("Canelling OSS scan - OSS scanner received cancellation request")
+		return make([]snyk.Issue, 0)
+	}
+
 	documentURI := uri.PathToUri(path) // todo get rid of lsp dep
 	if !oss.isSupported(documentURI) {
 		log.Debug().Msgf("OSS Scan not supported for %s", path)
