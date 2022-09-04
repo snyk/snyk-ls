@@ -34,11 +34,14 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 		case snyk.OpenBrowserCommand:
 			command.OpenBrowser(params.Arguments[0].(string))
 		case snyk.LoginCommand:
-			_, err := di.Authenticator().Provider().Authenticate(context.Background())
+			authenticator := di.Authenticator()
+			token, err := authenticator.Provider().Authenticate(context.Background())
 			if err != nil {
 				log.Err(err).Msg("Error on snyk.login command")
 				notification.SendError(err)
 			}
+			
+			authenticator.UpdateToken(token, true)
 		case snyk.CopyAuthLinkCommand:
 			url := di.Authenticator().Provider().AuthURL(ctx)
 
