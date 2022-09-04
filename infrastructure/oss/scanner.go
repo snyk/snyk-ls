@@ -102,7 +102,7 @@ func (oss *Scanner) Product() snyk.Product {
 
 func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue) {
 	if ctx.Err() != nil {
-		log.Debug().Msg("Canelling OSS scan - OSS scanner received cancellation request")
+		log.Debug().Msg("Cancelling OSS scan - OSS scanner received cancellation signal")
 		return make([]snyk.Issue, 0)
 	}
 
