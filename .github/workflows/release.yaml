@@ -63,6 +63,11 @@ jobs:
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
         run: |
           export PATH=$PATH:~/pact/bin
+
+          # this is required to be able to test the clipboard
+          export DISPLAY=:99
+          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+
           make clean test
 
       - name: Run integration and smoke tests
@@ -73,6 +78,11 @@ jobs:
           SMOKE_TESTS: 'true'
         run: |
           export PATH=$PATH:~/pact/bin
+
+          # this is required to be able to test the clipboard
+          export DISPLAY=:99
+          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+
           make clean test
 
       - name: Set up Git actions user
