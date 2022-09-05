@@ -7,6 +7,8 @@ import (
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
+	"golang.design/x/clipboard"
+
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -45,4 +47,18 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	// Assert
 	assert.False(t, initialAuthenticatedStatus)
 	assert.True(t, authenticationMock.IsAuthenticated)
+}
+
+func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
+	loc := setupServer(t)
+	authenticationMock := di.Authenticator().Provider().(*auth.FakeAuthenticationProvider)
+	params := lsp.ExecuteCommandParams{Command: snyk.CopyAuthLinkCommand}
+
+	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actualURL := string(clipboard.Read(clipboard.FmtText))
+
+	assert.Equal(t, authenticationMock.ExpectedAuthURL, actualURL)
 }
