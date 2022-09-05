@@ -163,7 +163,7 @@ func (t *TestExecutor) Execute(ctx context.Context, cmd []string, workingDir str
 	if err != nil { // When the operation is cancelled via the context, return empty results and don't set "wasExecuted"
 		return make([]byte, 0), err
 	}
-	
+
 	t.wasExecuted = true
 	return []byte(t.ExecuteResponse), err
 }
