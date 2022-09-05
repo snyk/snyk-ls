@@ -29,6 +29,7 @@ func (a *AuthenticationService) Authenticate(ctx context.Context) (string, error
 	token, err := a.Provider().Authenticate(ctx)
 	if token == "" || err != nil {
 		log.Error().Err(err).Msg("Failed to authenticate")
+		return "", err
 	}
 	a.UpdateToken(token, true)
 
