@@ -73,7 +73,7 @@ func (iac *Scanner) SupportedCommands() []snyk.CommandName {
 func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue) {
 	if ctx.Err() != nil {
 		log.Debug().Msg("Cancelling IAC scan - IAC scanner received cancellation signal")
-		return make([]snyk.Issue, 0)
+		return []snyk.Issue{}
 	}
 
 	documentURI := uri.PathToUri(path) // todo get rid of lsp dep
