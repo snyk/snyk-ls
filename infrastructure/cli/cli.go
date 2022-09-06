@@ -46,34 +46,34 @@ func NewExecutor(authenticator snyk.AuthenticationService, errorReporter error_r
 }
 
 type Executor interface {
-	Execute(cmd []string, workingDir string) (resp []byte, err error)
+	Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error)
 	ExpandParametersFromConfig(base []string) []string
 	HandleErrors(ctx context.Context, output string) (fail bool)
 }
 
-func (c SnykCli) Execute(cmd []string, workingDir string) (resp []byte, err error) {
+func (c SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error) {
 	method := "SnykCli.Execute"
 	log.Info().Str("method", method).Interface("cmd", cmd).Str("workingDir", workingDir).Msg("calling Snyk CLI")
-	output, err := c.doExecute(cmd, workingDir, true)
+	output, err := c.doExecute(ctx, cmd, workingDir, true)
 	log.Trace().Str("method", method).Str("response", string(output))
 	return output, err
 }
 
-func (c SnykCli) doExecute(cmd []string, workingDir string, firstAttempt bool) ([]byte, error) {
-	command := c.getCommand(cmd, workingDir)
+func (c SnykCli) doExecute(ctx context.Context, cmd []string, workingDir string, firstAttempt bool) ([]byte, error) {
+	command := c.getCommand(cmd, workingDir, ctx)
 	output, err := command.Output()
 	if err != nil {
 		ctx := context.Background()
 		shouldRetry := c.HandleErrors(ctx, string(output))
 		if firstAttempt && shouldRetry {
-			output, err = c.doExecute(cmd, workingDir, false)
+			output, err = c.doExecute(ctx, cmd, workingDir, false)
 		}
 	}
 	return output, err
 }
 
-func (c SnykCli) getCommand(cmd []string, workingDir string) *exec.Cmd {
-	command := exec.Command(cmd[0], cmd[1:]...)
+func (c SnykCli) getCommand(cmd []string, workingDir string, ctx context.Context) *exec.Cmd {
+	command := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
 	command.Dir = workingDir
 	cliEnv := appendCliEnvironmentVariables(os.Environ())
 	command.Env = cliEnv
@@ -151,20 +151,31 @@ func (c SnykCli) HandleErrors(ctx context.Context, output string) (fail bool) {
 
 type TestExecutor struct {
 	ExecuteResponse string
+	wasExecuted     bool
 }
 
 func NewTestExecutor() *TestExecutor {
 	return &TestExecutor{ExecuteResponse: "{}"}
 }
 
-func (t TestExecutor) Execute(cmd []string, workingDir string) (resp []byte, err error) {
+func (t *TestExecutor) Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error) {
+	err = ctx.Err()
+	if err != nil { // When the operation is cancelled via the context, return empty results and don't set "wasExecuted"
+		return make([]byte, 0), err
+	}
+
+	t.wasExecuted = true
 	return []byte(t.ExecuteResponse), err
 }
 
-func (t TestExecutor) ExpandParametersFromConfig(base []string) []string {
+func (t *TestExecutor) ExpandParametersFromConfig(base []string) []string {
 	return nil
 }
 
-func (t TestExecutor) HandleErrors(ctx context.Context, output string) (fail bool) {
+func (t *TestExecutor) HandleErrors(ctx context.Context, output string) (fail bool) {
 	return false
+}
+
+func (t *TestExecutor) WasExecuted() bool {
+	return t.wasExecuted
 }

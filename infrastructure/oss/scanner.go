@@ -101,6 +101,11 @@ func (oss *Scanner) Product() snyk.Product {
 }
 
 func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue) {
+	if ctx.Err() != nil {
+		log.Debug().Msg("Cancelling OSS scan - OSS scanner received cancellation signal")
+		return make([]snyk.Issue, 0)
+	}
+
 	documentURI := uri.PathToUri(path) // todo get rid of lsp dep
 	if !oss.isSupported(documentURI) {
 		log.Debug().Msgf("OSS Scan not supported for %s", path)
@@ -130,7 +135,7 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	}
 
 	cmd := oss.cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliSettings().Path(), "test", workDir, "--json"})
-	res, err := oss.cli.Execute(cmd, workDir)
+	res, err := oss.cli.Execute(ctx, cmd, workDir)
 	if err != nil {
 		if oss.handleError(err, res, cmd) {
 			return
@@ -225,7 +230,9 @@ func (oss *Scanner) handleError(err error, res []byte, cmd []string) bool {
 			oss.errorReporter.CaptureError(err)
 		}
 	default:
-		oss.errorReporter.CaptureError(err)
+		if err != context.Canceled {
+			oss.errorReporter.CaptureError(err)
+		}
 		return true
 	}
 	return true

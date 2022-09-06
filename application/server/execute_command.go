@@ -18,6 +18,10 @@ import (
 
 func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.ExecuteCommandParams) (interface{}, error) {
+		// The context provided by the JSON-RPC server is cancelled once a new message is being processed,
+		// so we don't want to propagate it to functions that start background operations
+		bgCtx := context.Background()
+
 		method := "ExecuteCommandHandler"
 		log.Info().Str("method", method).Interface("command", params).Msg("RECEIVING")
 		defer log.Info().Str("method", method).Interface("command", params).Msg("SENDING")
@@ -29,8 +33,8 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 			}
 			navigateToLocation(srv, args)
 		case snyk.WorkspaceScanCommand:
-			workspace.Get().ClearCache(ctx)
-			workspace.Get().ScanWorkspace(ctx)
+			workspace.Get().ClearCache(bgCtx)
+			workspace.Get().ScanWorkspace(bgCtx)
 		case snyk.OpenBrowserCommand:
 			command.OpenBrowser(params.Arguments[0].(string))
 		case snyk.LoginCommand:
@@ -41,7 +45,7 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 				notification.SendError(err)
 			}
 		case snyk.CopyAuthLinkCommand:
-			url := di.Authenticator().Provider().AuthURL(ctx)
+			url := di.Authenticator().Provider().AuthURL(bgCtx)
 
 			err := clipboard.Init()
 			if err != nil {
