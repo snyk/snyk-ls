@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"testing"
 
 	"github.com/adrg/xdg"
@@ -77,7 +78,7 @@ func TestGetCommand_AddsToEnvironmentAndSetsDir(t *testing.T) {
 	testutil.UnitTest(t)
 	config.CurrentConfig().SetOrganization("TestGetCommand_AddsToEnvironmentAndSetsDirOrg")
 
-	cmd := SnykCli{}.getCommand([]string{"executable", "arg"}, xdg.DataHome)
+	cmd := SnykCli{}.getCommand([]string{"executable", "arg"}, xdg.DataHome, context.Background())
 
 	assert.Equal(t, xdg.DataHome, cmd.Dir)
 	assert.Contains(t, cmd.Env, "SNYK_CFG_ORG=TestGetCommand_AddsToEnvironmentAndSetsDirOrg")

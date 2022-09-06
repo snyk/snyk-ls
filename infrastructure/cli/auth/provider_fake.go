@@ -7,6 +7,7 @@ import (
 )
 
 type FakeAuthenticationProvider struct {
+	ExpectedAuthURL string
 	IsAuthenticated bool
 }
 
@@ -20,6 +21,10 @@ func (a *FakeAuthenticationProvider) ClearAuthentication(ctx context.Context) er
 	return nil
 }
 
+func (a *FakeAuthenticationProvider) AuthURL(ctx context.Context) string {
+	return a.ExpectedAuthURL
+}
+
 func NewFakeCliAuthenticationProvider() snyk.AuthenticationProvider {
-	return &FakeAuthenticationProvider{}
+	return &FakeAuthenticationProvider{"https://app.snyk.io/login?token=someToken", false}
 }

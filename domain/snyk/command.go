@@ -5,6 +5,7 @@ const (
 	WorkspaceScanCommand   = "snyk.workspace.scan"
 	OpenBrowserCommand     = "snyk.openBrowser"
 	LoginCommand           = "snyk.login"
+	CopyAuthLinkCommand    = "snyk.copyAuthLink"
 	LogoutCommand          = "snyk.logout"
 )
 

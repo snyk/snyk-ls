@@ -33,6 +33,53 @@ func TestConfig_configGetAPICmd(t *testing.T) {
 	assertCmd(t, []string{"config", "get", "api"}, configGetAPICmd)
 }
 
+func TestSetAuthURLCmd(t *testing.T) {
+	t.Run("works for the default endpoint", func(t *testing.T) {
+		testutil.UnitTest(t)
+		provider := &CliAuthenticationProvider{}
+
+		var expectedURL = "https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
+
+		actualURL := provider.getAuthURL(expectedURL)
+
+		assert.Equal(t, expectedURL, actualURL)
+	})
+
+	t.Run("works for a custom endpoint", func(t *testing.T) {
+		testutil.UnitTest(t)
+		provider := &CliAuthenticationProvider{}
+
+		var expectedURL = "https://myOwnCompanyURL/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
+
+		actualURL := provider.getAuthURL(expectedURL)
+
+		assert.Equal(t, expectedURL, actualURL)
+	})
+
+	t.Run("works when URL is in a substring", func(t *testing.T) {
+		testutil.UnitTest(t)
+		provider := &CliAuthenticationProvider{}
+
+		var stringWithURL = "If auth does not automatically redirect you, copy this auth link: https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
+		var expectedURL = "https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
+
+		actualURL := provider.getAuthURL(stringWithURL)
+
+		assert.Equal(t, expectedURL, actualURL)
+	})
+
+	t.Run("errors when there is a problem extracting the auth url", func(t *testing.T) {
+		testutil.UnitTest(t)
+		provider := &CliAuthenticationProvider{}
+
+		var badURL = "https://invlidAuthURL.com"
+
+		actualURL := provider.getAuthURL(badURL)
+
+		assert.Equal(t, actualURL, "")
+	})
+}
+
 func TestBuildCLICmd(t *testing.T) {
 	t.Run("Insecure is respected", func(t *testing.T) {
 		testutil.UnitTest(t)

@@ -28,6 +28,17 @@ func (a AuthenticationService) Provider() snyk.AuthenticationProvider {
 	return a.authenticator
 }
 
+func (a *AuthenticationService) Authenticate(ctx context.Context) (string, error) {
+	token, err := a.Provider().Authenticate(ctx)
+	if token == "" || err != nil {
+		log.Error().Err(err).Msg("Failed to authenticate")
+		return "", err
+	}
+	a.UpdateToken(token, true)
+
+	return token, err
+}
+
 func (a AuthenticationService) UpdateToken(newToken string, sendNotification bool) {
 	oldToken := config.CurrentConfig().Token()
 	config.CurrentConfig().SetToken(newToken)

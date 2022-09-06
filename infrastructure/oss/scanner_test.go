@@ -85,6 +85,17 @@ func Test_introducingPackageAndVersionJava(t *testing.T) {
 	assert.Equal(t, "test", actualPackage)
 }
 
+func Test_ContextCanceled_Scan_DoesNotScan(t *testing.T) {
+	cliMock := cli.NewTestExecutor()
+	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cliMock)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	scanner.Scan(ctx, "", "")
+
+	assert.False(t, cliMock.WasExecuted())
+}
+
 func mavenTestIssue() ossIssue {
 	var issue = ossIssue{
 		Id:             "testIssue",

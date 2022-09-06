@@ -15,7 +15,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-//todo these tests are hard to understand can we simplify?
+// todo these tests are hard to understand can we simplify?
 
 //goland:noinspection GoErrorStringFormat
 func Test_HandleErrors_MissingTokenError(t *testing.T) { // todo: check if still working
@@ -60,7 +60,7 @@ func Test_Execute_HandlesErrors(t *testing.T) {
 	config.CurrentConfig().CliSettings().SetPath(path)
 	cli := di.SnykCli()
 
-	response, err := cli.Execute([]string{path, "test"}, ".")
+	response, err := cli.Execute(context.Background(), []string{path, "test"}, ".")
 
 	assert.Error(t, err, string(response))
 	assert.Equal(t, "exit status 3", err.Error()) // no supported target files found

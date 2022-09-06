@@ -73,5 +73,6 @@ func (i *TestInstrumentor) CreateSpan(txName string, operation string) Span {
 		TxName:    txName,
 		Started:   false,
 		Finished:  false,
+		ctx:       context.Background(),
 	}
 }

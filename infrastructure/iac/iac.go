@@ -71,7 +71,12 @@ func (iac *Scanner) SupportedCommands() []snyk.CommandName {
 }
 
 func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue) {
-	documentURI := uri.PathToUri(path) //todo get rid of lsp dep
+	if ctx.Err() != nil {
+		log.Debug().Msg("Cancelling IAC scan - IAC scanner received cancellation signal")
+		return []snyk.Issue{}
+	}
+
+	documentURI := uri.PathToUri(path) // todo get rid of lsp dep
 	if !iac.isSupported(documentURI) {
 		return
 	}
@@ -89,7 +94,9 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	scanResults, err := iac.doScan(ctx, documentURI, workspacePath)
 	p.Report(80)
 	if err != nil {
-		iac.errorReporter.CaptureError(err)
+		if err != context.Canceled {
+			iac.errorReporter.CaptureError(err)
+		}
 	}
 	if len(scanResults) > 0 {
 		for _, s := range scanResults {
@@ -114,7 +121,7 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 	defer iac.mutex.Unlock()
 
 	cmd := iac.cliCmd(documentURI)
-	res, err := iac.cli.Execute(cmd, workspacePath)
+	res, err := iac.cli.Execute(ctx, cmd, workspacePath)
 
 	if err != nil {
 		switch errorType := err.(type) {

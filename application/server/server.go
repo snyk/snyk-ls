@@ -180,7 +180,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 				w.AddFolder(workspace.NewFolder(params.RootPath, params.ClientInfo.Name, di.Scanner(), di.HoverService()))
 			}
 		}
-		w.ScanWorkspace(ctx)
+		w.ScanWorkspace(context.Background())
 		return lsp.InitializeResult{
 			ServerInfo: lsp.ServerInfo{
 				Name:    "snyk-ls",
@@ -209,6 +209,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 						snyk.WorkspaceScanCommand,
 						snyk.OpenBrowserCommand,
 						snyk.LoginCommand,
+						snyk.CopyAuthLinkCommand,
 						snyk.LogoutCommand,
 					},
 				},

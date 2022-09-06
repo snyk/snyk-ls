@@ -14,7 +14,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-//todo iac is undertested, at a very least we should make sure the CLI gets the right commands in
+// todo iac is undertested, at a very least we should make sure the CLI gets the right commands in
 // todo test issue parsing & conversion
 
 func Test_Scan_IsInstrumented(t *testing.T) {
@@ -86,6 +86,21 @@ func Test_toHover_asMD(t *testing.T) {
 		"\n### PublicID: Title\n\n**Issue:** Issue\n\n**Impact:** Impact\n\n**Resolve:** Resolve\n",
 		h,
 	)
+}
+
+func Test_Scan_CancelledContext_DoesNotScan(t *testing.T) {
+	// Arrange
+	testutil.UnitTest(t)
+	cliMock := cli.NewTestExecutor()
+	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cliMock)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// Act
+	scanner.Scan(ctx, "", "")
+
+	// Assert
+	assert.False(t, cliMock.WasExecuted())
 }
 
 func sampleIssue() iacIssue {

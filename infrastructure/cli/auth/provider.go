@@ -1,8 +1,10 @@
 package auth
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -17,11 +19,12 @@ import (
 )
 
 type CliAuthenticationProvider struct {
+	authURL       string
 	errorReporter error_reporting.ErrorReporter
 }
 
 func NewCliAuthenticationProvider(errorReporter error_reporting.ErrorReporter) snyk.AuthenticationProvider {
-	return &CliAuthenticationProvider{errorReporter}
+	return &CliAuthenticationProvider{"", errorReporter}
 }
 
 func (a *CliAuthenticationProvider) Authenticate(ctx context.Context) (string, error) {
@@ -60,20 +63,58 @@ func (a *CliAuthenticationProvider) ClearAuthentication(ctx context.Context) err
 	return err
 }
 
+func (a *CliAuthenticationProvider) AuthURL(ctx context.Context) string {
+	return a.authURL
+}
+
 // Auth represents the `snyk auth` command.
 func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
+	a.authURL = ""
+
 	cmd, err := a.authCmd(ctx)
 	if err != nil {
 		return err
 	}
+	out := &strings.Builder{}
 
-	var out strings.Builder
-	cmd.Stdout = &out
+	reader, writer := io.Pipe()
+	cmd.Stdout = writer
+
+	go func() {
+		scanner := bufio.NewScanner(reader)
+		for scanner.Scan() {
+			url := a.getAuthURL(scanner.Text())
+			out.Write(scanner.Bytes())
+
+			if url != "" {
+				a.authURL = url
+				break
+			}
+		}
+
+		str := out.String()
+		log.Info().Str("output", str).Msg("auth Snyk CLI")
+	}()
 
 	err = a.runCLICmd(ctx, cmd)
-	str := out.String()
-	log.Info().Str("output", str).Msg("auth Snyk CLI")
 	return err
+}
+
+func (a *CliAuthenticationProvider) getAuthURL(str string) string {
+	url := ""
+
+	hasToken := strings.Contains(str, "/login?token=")
+	index := strings.Index(str, "https://")
+
+	if index != -1 && hasToken {
+		url = str[index:]
+
+		// trim the line ending
+		url = strings.TrimRight(url, "\r")
+		url = strings.TrimRight(url, "\n")
+	}
+
+	return url
 }
 
 func (a *CliAuthenticationProvider) getToken(ctx context.Context) (string, error) {

@@ -32,6 +32,9 @@ require (
 	github.com/tklauser/go-sysconf v0.3.10 // indirect
 	github.com/tklauser/numcpus v0.5.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
+	golang.org/x/exp v0.0.0-20191030013958-a1ab85dbe136 // indirect
+	golang.org/x/image v0.0.0-20211028202545-6944b10bf410 // indirect
+	golang.org/x/mobile v0.0.0-20210716004757-34ab1303b554 // indirect
 	golang.org/x/sys v0.0.0-20220808155132-1c4a2a72c664 // indirect
 	golang.org/x/text v0.3.7 // indirect
 )
@@ -42,6 +45,7 @@ require (
 	github.com/getsentry/sentry-go v0.13.0
 	github.com/pact-foundation/pact-go v1.7.0
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	golang.design/x/clipboard v0.6.2
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
