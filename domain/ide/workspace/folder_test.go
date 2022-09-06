@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -66,7 +67,7 @@ func TestProcessResults_SendsDiagnosticsAndHovers(t *testing.T) {
 	}
 	f.processResults(issues)
 	// todo ideally there's a hover & diagnostic service that are symmetric and don't leak implementation details (e.g. channels)
-	//assert.hoverService.GetAll()
+	// assert.hoverService.GetAll()
 }
 
 func TestProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
@@ -156,12 +157,15 @@ func Test_ClearDiagnostics(t *testing.T) {
 		{ID: "id1", AffectedFilePath: "path1"},
 		{ID: "id2", AffectedFilePath: "path2"},
 	})
+	mtx := &sync.Mutex{}
 	clearDiagnosticNotifications := 0
 	notification.CreateListener(func(event interface{}) {
 		switch params := event.(type) {
 		case lsp.PublishDiagnosticsParams:
 			if len(params.Diagnostics) == 0 {
+				mtx.Lock()
 				clearDiagnosticNotifications++
+				mtx.Unlock()
 			}
 		}
 	})
@@ -169,5 +173,14 @@ func Test_ClearDiagnostics(t *testing.T) {
 	f.ClearDiagnostics()
 
 	assert.Equal(t, 0, f.documentDiagnosticCache.Length())
-	assert.Eventually(t, func() bool { return clearDiagnosticNotifications == 2 }, 1*time.Second, 10*time.Millisecond)
+	assert.Eventually(
+		t,
+		func() bool {
+			mtx.Lock()
+			defer mtx.Unlock()
+			return clearDiagnosticNotifications == 2
+		},
+		1*time.Second,
+		10*time.Millisecond,
+	)
 }
