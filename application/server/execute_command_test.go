@@ -52,7 +52,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	assert.False(t, initialAuthenticatedStatus)
 	assert.True(t, authenticationMock.IsAuthenticated)
 	assert.Eventually(t, func() bool { return len(jsonRPCRecorder.Notifications()) > 0 }, 5*time.Second, 50*time.Millisecond)
-	assert.Equal(t, len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated")), 1)
+	assert.Equal(t, 1, len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated")))
 }
 
 func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {

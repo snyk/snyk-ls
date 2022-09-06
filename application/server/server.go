@@ -150,7 +150,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 
 		// async processing listener
 		go createProgressListener(progress.Channel, srv)
-		go registerNotifier(srv)
+		registerNotifier(srv)
 		go func() {
 			if params.ProcessID == 0 {
 				// if started on its own, no need to exit or to monitor

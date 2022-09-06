@@ -56,7 +56,7 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 
 			clipboard.Write(clipboard.FmtText, []byte(url))
 		case snyk.LogoutCommand:
-			di.Authenticator().Logout(ctx)
+			di.Authenticator().Logout(bgCtx)
 		}
 		return nil, nil
 	})
