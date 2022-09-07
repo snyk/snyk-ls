@@ -6,9 +6,10 @@ import (
 
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -22,12 +23,16 @@ type Workspace struct {
 	mutex        sync.Mutex
 	folders      map[string]*Folder
 	instrumentor performance.Instrumentor
+	scanner      snyk.Scanner
+	hoverService hover.Service
 }
 
-func New(instrumentor performance.Instrumentor) *Workspace {
+func New(instrumentor performance.Instrumentor, scanner snyk.Scanner, hoverService hover.Service) *Workspace {
 	return &Workspace{
 		folders:      make(map[string]*Folder, 0),
 		instrumentor: instrumentor,
+		scanner:      scanner,
+		hoverService: hoverService,
 	}
 }
 
@@ -81,17 +86,20 @@ func (w *Workspace) ScanWorkspace(ctx context.Context) {
 func (w *Workspace) ProcessFolderChange(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) {
 	for _, folder := range params.Event.Removed {
 		w.DeleteFolder(uri.PathFromUri(folder.Uri))
+		// TODO: check if we need to clean up the reported diagnostics, if folder was removed?
 	}
 	for _, folder := range params.Event.Added {
-		f := NewFolder(uri.PathFromUri(folder.Uri), folder.Name, di.Scanner(), di.HoverService())
+		f := NewFolder(uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService)
 		w.AddFolder(f)
 	}
 	w.ScanWorkspace(ctx)
 }
 
-func (w *Workspace) ClearCache(ctx context.Context) {
+func (w *Workspace) ClearIssues(ctx context.Context) {
 	for _, folder := range w.folders {
 		folder.ClearScannedStatus()
-		folder.ClearCompleteDiagnosticsCache()
+		folder.ClearDiagnostics()
 	}
+
+	w.hoverService.ClearAllHovers()
 }

@@ -120,6 +120,8 @@ func (f *Folder) DocumentDiagnosticsFromCache(file string) []snyk.Issue {
 func (f *Folder) processResults(issues []snyk.Issue) {
 	var issuesByFile = map[string][]snyk.Issue{}
 	dedupMap := f.createDedupMap()
+
+	// TODO: perform issue diffing (current <-> newly reported)
 	for _, issue := range issues {
 		cachedIssues := f.documentDiagnosticCache.Get(issue.AffectedFilePath)
 		if cachedIssues == nil {
@@ -193,6 +195,20 @@ func (f *Folder) IssuesFor(filePath string, requestedRange snyk.Range) (matching
 	return matchingIssues
 }
 
-func (f *Folder) ClearCompleteDiagnosticsCache() {
+func (f *Folder) AllIssuesFor(filePath string) (matchingIssues []snyk.Issue) {
+	return f.DocumentDiagnosticsFromCache(filePath)
+}
+
+func (f *Folder) ClearDiagnostics() {
+	f.documentDiagnosticCache.Range(func(key interface{}, value interface{}) bool {
+		file := key.(string)
+		// we must republish empty diagnostics for all files that were reported with diagnostics
+		notification.Send(lsp.PublishDiagnosticsParams{
+			URI:         uri.PathToUri(file),
+			Diagnostics: []lsp.Diagnostic{},
+		})
+		return true
+	})
+
 	f.documentDiagnosticCache.ClearAll()
 }

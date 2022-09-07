@@ -31,7 +31,7 @@ func TestGetFor(t *testing.T) {
 	testutil.OnlyEnableCodeAndDisableBinaryManagement()
 	filePath, dir := code.FakeDiagnosticPath(t)
 	folder := workspace.NewFolder(dir, "dummy", di.Scanner(), di.HoverService())
-	workspace.Set(workspace.New(performance.NewTestInstrumentor()))
+	workspace.Set(workspace.New(performance.NewTestInstrumentor(), di.Scanner(), di.HoverService()))
 	workspace.Get().AddFolder(folder)
 	folder.ScanFile(context.Background(), filePath)
 

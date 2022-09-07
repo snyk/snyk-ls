@@ -6,6 +6,7 @@ const (
 	OpenBrowserCommand     = "snyk.openBrowser"
 	LoginCommand           = "snyk.login"
 	CopyAuthLinkCommand    = "snyk.copyAuthLink"
+	LogoutCommand          = "snyk.logout"
 )
 
 type Command struct {

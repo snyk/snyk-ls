@@ -67,5 +67,5 @@ func (r *JsonRPCRecorder) ClearCallbacks() {
 func (r *JsonRPCRecorder) ClearNotifications() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	r.callbacks = []jrpc2.Request{}
+	r.notifications = []jrpc2.Request{}
 }

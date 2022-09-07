@@ -69,7 +69,7 @@ func setupCustomServer(t *testing.T, callBackFn onCallbackFn) server.Local {
 	cleanupChannels()
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
-	workspace.Set(workspace.New(performance.NewTestInstrumentor()))
+	workspace.Set(workspace.New(performance.NewTestInstrumentor(), di.Scanner(), di.HoverService()))
 	loc := startServer(callBackFn)
 
 	t.Cleanup(func() {

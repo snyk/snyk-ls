@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -142,17 +141,16 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
 		method := "InitializeHandler"
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
-		UpdateSettings(ctx, params.InitializationOptions)
+		InitializeSettings(ctx, params.InitializationOptions)
 		config.CurrentConfig().SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
-		updateAutoAuthentication(params.InitializationOptions)
 		di.Analytics().Initialise()
-		w := workspace.New(di.Instrumentor())
+		w := workspace.New(di.Instrumentor(), di.Scanner(), di.HoverService())
 		workspace.Set(w)
 
 		// async processing listener
 		go createProgressListener(progress.Channel, srv)
-		go registerNotifier(srv)
+		registerNotifier(srv)
 		go func() {
 			if params.ProcessID == 0 {
 				// if started on its own, no need to exit or to monitor
@@ -212,22 +210,12 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 						snyk.OpenBrowserCommand,
 						snyk.LoginCommand,
 						snyk.CopyAuthLinkCommand,
+						snyk.LogoutCommand,
 					},
 				},
 			},
 		}, nil
 	})
-}
-
-func updateAutoAuthentication(settings lsp.Settings) {
-	// Unless the field is included and set to false, auto-auth should be true by default.
-	autoAuth, err := strconv.ParseBool(settings.AutomaticAuthentication)
-	if err == nil {
-		config.CurrentConfig().SetAutomaticAuthentication(autoAuth)
-	} else {
-		// When the field is omitted, set to true by default
-		config.CurrentConfig().SetAutomaticAuthentication(true)
-	}
 }
 
 func setClientInformation(initParams lsp.InitializeParams) {

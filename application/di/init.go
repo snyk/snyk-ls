@@ -81,7 +81,7 @@ func initInfrastructure() {
 	snykApiClient = snyk_api.NewSnykApiClient()
 	analytics = segment.NewSegmentClient(snykApiClient, errorReporter)
 	authProvider := auth2.NewCliAuthenticationProvider(errorReporter)
-	authenticator = services.NewAuthenticationService(authProvider, analytics)
+	authenticator = services.NewAuthenticationService(authProvider, analytics, errorReporter)
 	snykCli = cli2.NewExecutor(authenticator, errorReporter, analytics)
 	snykCodeClient = code2.NewHTTPRepository(instrumentor, errorReporter)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
@@ -104,7 +104,7 @@ func TestInit(t *testing.T) {
 	errorReporter = errorreporting.NewTestErrorReporter()
 	installer = install.NewInstaller(errorReporter)
 	authProvider := auth2.NewFakeCliAuthenticationProvider()
-	authenticator = services.NewAuthenticationService(authProvider, analytics)
+	authenticator = services.NewAuthenticationService(authProvider, analytics, errorReporter)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cli2.NewInitializer(errorReporter, install.NewInstaller(errorReporter)),
 		auth2.NewInitializer(authenticator, errorReporter, analytics),

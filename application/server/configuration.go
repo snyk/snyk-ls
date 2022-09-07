@@ -58,7 +58,16 @@ func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 	})
 }
 
+func InitializeSettings(ctx context.Context, settings lsp.Settings) {
+	writeSettings(ctx, settings, true)
+	updateAutoAuthentication(settings)
+}
+
 func UpdateSettings(ctx context.Context, settings lsp.Settings) {
+	writeSettings(ctx, settings, false)
+}
+
+func writeSettings(ctx context.Context, settings lsp.Settings, initialize bool) {
 	emptySettings := lsp.Settings{}
 	if settings == emptySettings {
 		return
@@ -66,7 +75,7 @@ func UpdateSettings(ctx context.Context, settings lsp.Settings) {
 	updateToken(settings.Token)
 	updateProductEnablement(settings)
 	updateCliConfig(settings)
-	updateApiEndpoints(ctx, settings)
+	updateApiEndpoints(ctx, settings, initialize)
 	updateEnvironment(settings)
 	updatePath(settings)
 	updateTelemetry(settings)
@@ -74,21 +83,28 @@ func UpdateSettings(ctx context.Context, settings lsp.Settings) {
 	manageBinariesAutomatically(settings)
 }
 
+func updateAutoAuthentication(settings lsp.Settings) {
+	// Unless the field is included and set to false, auto-auth should be true by default.
+	autoAuth, err := strconv.ParseBool(settings.AutomaticAuthentication)
+	if err == nil {
+		config.CurrentConfig().SetAutomaticAuthentication(autoAuth)
+	} else {
+		// When the field is omitted, set to true by default
+		config.CurrentConfig().SetAutomaticAuthentication(true)
+	}
+}
+
 func updateToken(token string) {
 	// Token was sent from the client, no need to send notification
 	di.Authenticator().UpdateToken(token, false)
 }
 
-func updateApiEndpoints(ctx context.Context, settings lsp.Settings) {
+func updateApiEndpoints(ctx context.Context, settings lsp.Settings, initialization bool) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
 	endpointsUpdated := config.CurrentConfig().UpdateApiEndpoints(snykApiUrl)
 
-	if endpointsUpdated {
-		// Reset CLI token
-		err := di.Authenticator().Provider().ClearAuthentication(ctx)
-		if err != nil {
-			log.Err(err).Msg("couldn't reset token")
-		}
+	if endpointsUpdated && !initialization {
+		di.Authenticator().Logout(ctx)
 	}
 }
 

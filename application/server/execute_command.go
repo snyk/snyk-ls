@@ -33,7 +33,7 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 			}
 			navigateToLocation(srv, args)
 		case snyk.WorkspaceScanCommand:
-			workspace.Get().ClearCache(bgCtx)
+			workspace.Get().ClearIssues(bgCtx)
 			workspace.Get().ScanWorkspace(bgCtx)
 		case snyk.OpenBrowserCommand:
 			command.OpenBrowser(params.Arguments[0].(string))
@@ -55,6 +55,8 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 			}
 
 			clipboard.Write(clipboard.FmtText, []byte(url))
+		case snyk.LogoutCommand:
+			di.Authenticator().Logout(bgCtx)
 		}
 		return nil, nil
 	})
