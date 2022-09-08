@@ -41,8 +41,10 @@ func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, files map[st
 	uploadedFiles := 0
 	t := progress.NewTracker(false)
 	t.Begin("Snyk Code analysis for "+bundle.rootPath, "Uploading batches...")
-	defer t.End("Upload done.")
 	for i, uploadBatch := range uploadBatches {
+		if err := ctx.Err(); err != nil {
+			return bundle, err
+		}
 		err := bundle.Upload(s.Context(), uploadBatch)
 		if err != nil {
 			return Bundle{}, err
@@ -51,6 +53,8 @@ func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, files map[st
 		percentage := float64(i) / float64(len(uploadBatches)) * 100
 		t.Report(int(math.RoundToEven(percentage)))
 	}
+
+	t.End("Upload done.")
 
 	return bundle, nil
 }
