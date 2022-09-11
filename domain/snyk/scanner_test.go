@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -95,4 +96,38 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 	// Assert
 	assert.False(t, isAuthenticated)
 	assert.Equal(t, 0, productScanner.scans)
+}
+
+type TestInitializer struct {
+	duration time.Duration
+}
+
+func (t *TestInitializer) Init() {
+	time.Sleep(t.duration)
+}
+
+func Test_Scan_TokenChanged_ScanCancelled(t *testing.T) {
+	// Arrange
+	// Using an initializer that takes 5 seconds to run, during which the token will change
+	fakeInitializer := &TestInitializer{duration: time.Second * 5}
+	productScanner := NewTestProductScanner(ProductOpenSource, true)
+	scanner := NewDelegatingScanner(
+		initialize.NewDelegatingInitializer(fakeInitializer),
+		performance.NewTestInstrumentor(),
+		ux.NewTestAnalytics(),
+		productScanner,
+	)
+	done := make(chan bool)
+
+	// Act
+	go func() {
+		scanner.Scan(context.Background(), "", NoopResultProcessor, "")
+		done <- true
+	}()
+	time.Sleep(time.Second) // Sleep here to let the initializer start running
+	config.CurrentConfig().SetToken(uuid.New().String())
+	<-done // Wait for the scan to be done
+
+	// Assert
+	assert.Zero(t, productScanner.scans)
 }

@@ -50,9 +50,27 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	folderPath string,
 ) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
+	done := make(chan bool)
+	_, tokenChangeChannel := config.CurrentConfig().TokenWithChangesChannel()
+	ctx, cancelFunc := context.WithCancel(ctx)
+	go func() {
+		select {
+		case <-tokenChangeChannel:
+			cancelFunc()
+			return
+		case <-done:
+			return
+		}
+	}()
 	sc.initializer.Init()
+
 	if !config.CurrentConfig().Authenticated() {
 		log.Info().Msg("User is not authenticated, cancelling scan")
+		return
+	}
+
+	if ctx.Err() != nil {
+		log.Info().Msg("Scan was cancelled")
 		return
 	}
 
