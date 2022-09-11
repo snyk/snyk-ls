@@ -99,17 +99,19 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 }
 
 type TestInitializer struct {
-	duration time.Duration
+	initCalled   chan bool
+	initFinished chan bool
 }
 
 func (t *TestInitializer) Init() {
-	time.Sleep(t.duration)
+	t.initCalled <- true
+	t.initFinished <- true
 }
 
-func Test_Scan_TokenChanged_ScanCancelled(t *testing.T) {
+func Test_ScanInitialization_TokenChanged_ScanCancelled(t *testing.T) {
 	// Arrange
-	// Using an initializer that takes 5 seconds to run, during which the token will change
-	fakeInitializer := &TestInitializer{duration: time.Second * 5}
+	// Using an initializer that blocks execution until it's channels are read
+	fakeInitializer := &TestInitializer{}
 	productScanner := NewTestProductScanner(ProductOpenSource, true)
 	scanner := NewDelegatingScanner(
 		initialize.NewDelegatingInitializer(fakeInitializer),
@@ -124,10 +126,14 @@ func Test_Scan_TokenChanged_ScanCancelled(t *testing.T) {
 		scanner.Scan(context.Background(), "", NoopResultProcessor, "")
 		done <- true
 	}()
-	time.Sleep(time.Second) // Sleep here to let the initializer start running
+	<-fakeInitializer.initCalled // Wait for Init() to be called on the initializer before changing the token
 	config.CurrentConfig().SetToken(uuid.New().String())
-	<-done // Wait for the scan to be done
 
 	// Assert
+	// Reading from this channel will finish the Init() call
+	<-fakeInitializer.initFinished
+	// Need to wait for the scan to be done before checking whether the product scanner was used
+	<-done
+	
 	assert.Zero(t, productScanner.scans)
 }
