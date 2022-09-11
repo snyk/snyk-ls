@@ -110,6 +110,7 @@ type Config struct {
 	integrationName             string
 	integrationVersion          string
 	automaticAuthentication     bool
+	tokenChangeChannels         []chan string
 }
 
 func CurrentConfig() *Config {
@@ -241,6 +242,16 @@ func (c *Config) Token() string {
 	return c.token
 }
 
+// TokenWithChangesChannel returns the current token with a channel that will be written into once the token has changed.
+// This allows aborting operations when the token is changed.
+func (c *Config) TokenWithChangesChannel() (string, <-chan string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	channel := make(chan string, 1)
+	c.tokenChangeChannels = append(c.tokenChangeChannels, channel)
+	return c.token, channel
+}
+
 func (c *Config) SetCliSettings(settings *CliSettings) {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -287,6 +298,21 @@ func (c *Config) SetSnykAdvisorEnabled(enabled bool) { c.isSnykAdvisorEnabled.Se
 func (c *Config) SetToken(token string) {
 	c.m.Lock()
 	defer c.m.Unlock()
+	if token == c.token { // No need to do anything if the token hasn't changed
+		return
+	}
+
+	// Notify that the token has changed
+	for _, channel := range c.tokenChangeChannels {
+		select {
+		case channel <- token:
+		default:
+			// Using select and a default case avoids deadlock when the channel is full
+			log.Warn().Msg("Cannot send cancellation token to channel - channel is full")
+		}
+	}
+	c.tokenChangeChannels = []chan string{}
+
 	c.token = token
 }
 func (c *Config) SetFormat(format string) { c.format = format }
