@@ -130,9 +130,13 @@ func CodeActionHandler() jrpc2.Handler {
 
 func WorkspaceDidChangeWorkspaceFoldersHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) (interface{}, error) {
+		// The context provided by the JSON-RPC server is cancelled once a new message is being processed,
+		// so we don't want to propagate it to functions that start background operations
+		bgCtx := context.Background()
+
 		log.Info().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Msg("RECEIVING")
 		defer log.Info().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Msg("SENDING")
-		workspace.Get().ProcessFolderChange(ctx, params)
+		workspace.Get().ProcessFolderChange(bgCtx, params)
 		return nil, nil
 	})
 }
@@ -299,6 +303,10 @@ func TextDocumentDidOpenHandler() jrpc2.Handler {
 
 func TextDocumentDidSaveHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidSaveTextDocumentParams) (interface{}, error) {
+		// The context provided by the JSON-RPC server is cancelled once a new message is being processed,
+		// so we don't want to propagate it to functions that start background operations
+		bgCtx := context.Background()
+
 		method := "TextDocumentDidSaveHandler"
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
 		filePath := uri.PathFromUri(params.TextDocument.URI)
@@ -308,7 +316,7 @@ func TextDocumentDidSaveHandler() jrpc2.Handler {
 		if f != nil {
 			f.ClearDiagnosticsCache(filePath)
 			di.HoverService().DeleteHover(params.TextDocument.URI)
-			go f.ScanFile(ctx, filePath)
+			go f.ScanFile(bgCtx, filePath)
 		} else {
 			log.Warn().Str("method", method).Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
 		}
