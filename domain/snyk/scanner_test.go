@@ -103,6 +103,12 @@ type TestInitializer struct {
 	initFinished chan bool
 }
 
+func NewTestInitializer() *TestInitializer {
+	return &TestInitializer{
+		initCalled:   make(chan bool),
+		initFinished: make(chan bool),
+	}
+}
 func (t *TestInitializer) Init() {
 	t.initCalled <- true
 	t.initFinished <- true
@@ -111,7 +117,8 @@ func (t *TestInitializer) Init() {
 func Test_ScanInitialization_TokenChanged_ScanCancelled(t *testing.T) {
 	// Arrange
 	// Using an initializer that blocks execution until it's channels are read
-	fakeInitializer := &TestInitializer{}
+	config.CurrentConfig().SetToken("")
+	fakeInitializer := NewTestInitializer()
 	productScanner := NewTestProductScanner(ProductOpenSource, true)
 	scanner := NewDelegatingScanner(
 		initialize.NewDelegatingInitializer(fakeInitializer),
@@ -134,6 +141,6 @@ func Test_ScanInitialization_TokenChanged_ScanCancelled(t *testing.T) {
 	<-fakeInitializer.initFinished
 	// Need to wait for the scan to be done before checking whether the product scanner was used
 	<-done
-	
+
 	assert.Zero(t, productScanner.scans)
 }

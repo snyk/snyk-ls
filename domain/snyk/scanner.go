@@ -51,14 +51,17 @@ func (sc *DelegatingConcurrentScanner) Scan(
 ) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
 	done := make(chan bool)
+	defer close(done)
+
 	_, tokenChangeChannel := config.CurrentConfig().TokenWithChangesChannel()
 	ctx, cancelFunc := context.WithCancel(ctx)
-	go func() {
+	go func() { // This goroutine will listen to token changes and cancel the scans using a context
 		select {
 		case <-tokenChangeChannel:
+			log.Info().Msg("Token was changed, cancelling scan")
 			cancelFunc()
 			return
-		case <-done:
+		case <-done: // The done channel prevents the goroutine from leaking after the scan is finished
 			return
 		}
 	}()
