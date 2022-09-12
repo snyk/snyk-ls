@@ -3,6 +3,8 @@ package snyk
 import (
 	"context"
 	"sync"
+
+	"github.com/rs/zerolog/log"
 )
 
 func NewTestProductScanner(product Product, enabled bool) *TestProductScanner {
@@ -21,7 +23,14 @@ type TestProductScanner struct {
 	mutex   sync.Mutex
 }
 
-func (t *TestProductScanner) Scan(_ context.Context, _ string, _ string) (issues []Issue) {
+func (t *TestProductScanner) Scan(ctx context.Context, _ string, _ string) (issues []Issue) {
+	if ctx.Err() != nil {
+		log.Debug().Msg("Received cancellation signal - cancelling scan")
+		return issues
+	}
+
+	log.Debug().Msg("Test product scanner running scan")
+	defer log.Debug().Msg("Test product scanner scan finished")
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	t.scans++
