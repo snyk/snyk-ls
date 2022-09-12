@@ -270,7 +270,7 @@ func Shutdown() jrpc2.Handler {
 }
 
 func Exit(srv *jrpc2.Server) jrpc2.Handler {
-	return handler.New(func(ctx context.Context) (interface{}, error) {
+	return handler.New(func(_ context.Context) (interface{}, error) {
 		log.Info().Str("method", "Exit").Msg("RECEIVING")
 		log.Info().Msg("Stopping server...")
 		(*srv).Stop()
@@ -287,13 +287,13 @@ func logError(err error, method string) {
 }
 
 func TextDocumentDidOpenHandler() jrpc2.Handler {
-	return handler.New(func(ctx context.Context, params sglsp.DidOpenTextDocumentParams) (interface{}, error) {
+	return handler.New(func(_ context.Context, params sglsp.DidOpenTextDocumentParams) (interface{}, error) {
 		method := "TextDocumentDidOpenHandler"
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 		log.Info().Str("method", method).Str("documentURI", filePath).Msg("RECEIVING")
 		folder := workspace.Get().GetFolderContaining(filePath)
 		if folder != nil {
-			go folder.ScanFile(ctx, filePath)
+			go folder.ScanFile(context.Background(), filePath)
 		} else {
 			log.Warn().Str("method", method).Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
 		}
@@ -302,7 +302,7 @@ func TextDocumentDidOpenHandler() jrpc2.Handler {
 }
 
 func TextDocumentDidSaveHandler() jrpc2.Handler {
-	return handler.New(func(ctx context.Context, params sglsp.DidSaveTextDocumentParams) (interface{}, error) {
+	return handler.New(func(_ context.Context, params sglsp.DidSaveTextDocumentParams) (interface{}, error) {
 		// The context provided by the JSON-RPC server is cancelled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
@@ -325,7 +325,7 @@ func TextDocumentDidSaveHandler() jrpc2.Handler {
 }
 
 func TextDocumentHover() jrpc2.Handler {
-	return handler.New(func(ctx context.Context, params hover.Params) (hover.Result, error) {
+	return handler.New(func(_ context.Context, params hover.Params) (hover.Result, error) {
 		log.Info().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
 
 		hoverResult := di.HoverService().GetHover(params.TextDocument.URI, params.Position)
@@ -334,7 +334,7 @@ func TextDocumentHover() jrpc2.Handler {
 }
 
 func WindowWorkDoneProgressCancelHandler() jrpc2.Handler {
-	return handler.New(func(ctx context.Context, params lsp.WorkdoneProgressCancelParams) (interface{}, error) {
+	return handler.New(func(_ context.Context, params lsp.WorkdoneProgressCancelParams) (interface{}, error) {
 		log.Info().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
 		CancelProgress(params.Token)
 		return nil, nil
@@ -342,7 +342,7 @@ func WindowWorkDoneProgressCancelHandler() jrpc2.Handler {
 }
 
 func NoOpHandler() jrpc2.Handler {
-	return handler.New(func(ctx context.Context, params sglsp.DidCloseTextDocumentParams) (interface{}, error) {
+	return handler.New(func(_ context.Context, params sglsp.DidCloseTextDocumentParams) (interface{}, error) {
 		log.Info().Str("method", "NoOpHandler").Interface("params", params).Msg("RECEIVING")
 		return nil, nil
 	})
@@ -390,12 +390,12 @@ func registerNotifier(srv *jrpc2.Server) {
 
 type RPCLogger struct{}
 
-func (R RPCLogger) LogRequest(ctx context.Context, req *jrpc2.Request) {
+func (R RPCLogger) LogRequest(_ context.Context, req *jrpc2.Request) {
 	log.Debug().Msgf("Incoming JSON-RPC request. Method=%s. ID=%s. Is notification=%v.", req.Method(), req.ID(), req.IsNotification())
 	log.Trace().Str("params", req.ParamString()).Msgf("Incoming JSON-RPC request. Method=%s. ID=%s. Is notification=%v.", req.Method(), req.ID(), req.IsNotification())
 }
 
-func (R RPCLogger) LogResponse(ctx context.Context, rsp *jrpc2.Response) {
+func (R RPCLogger) LogResponse(_ context.Context, rsp *jrpc2.Response) {
 	if rsp.Error() != nil {
 		log.Err(rsp.Error()).Interface("rsp", *rsp).Msg("Outgoing JSON-RPC response error")
 	}
