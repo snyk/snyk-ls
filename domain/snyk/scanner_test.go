@@ -133,8 +133,11 @@ func Test_ScanInitialization_TokenChanged_ScanCancelled(t *testing.T) {
 		scanner.Scan(context.Background(), "", NoopResultProcessor, "")
 		done <- true
 	}()
-	<-fakeInitializer.initCalled // Wait for Init() to be called on the initializer before changing the token
+	// The scanner should acquire the token cancellation channel at the earliest point before calling the initializers.
+	// The token needs to change and send a token-change signal during the initializers run for this test to pass
+	<-fakeInitializer.initCalled
 	config.CurrentConfig().SetToken(uuid.New().String())
+	time.Sleep(time.Second) // Wait for the scanner to pick up the token change signal and cancel scans
 
 	// Assert
 	// Reading from this channel will finish the Init() call
