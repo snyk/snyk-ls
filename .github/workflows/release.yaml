@@ -88,16 +88,6 @@ jobs:
       - name: Set up Git actions user
         uses: fregante/setup-git-user@v1
 
-      - name: Collect and save licenses
-        run: |
-          go install github.com/google/go-licenses@latest
-          rm -rf licenses
-          go-licenses save . --save_path="licenses" --ignore "github.com/snyk/snyk-ls"
-          git add licenses
-          git commit -m "Updated licenses" && git push || echo "No changes to commit"
-          git push
-          git clean -f && git reset --hard
-
       - name: Create release tag
         run: |
           git tag "v$(git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)"
