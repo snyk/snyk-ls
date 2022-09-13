@@ -73,10 +73,13 @@ var supportedFiles = map[string]bool{
 	"mix.lock":                true,
 }
 
+// a counter for scans, used for logging
+var scanCount = 1
+
 type RunningScan struct {
-	isRunning bool
-	done      chan struct{}
-	cancel    chan struct{}
+	isDone bool
+	done   chan struct{}
+	cancel chan struct{}
 }
 
 func newRunningScan() *RunningScan {
@@ -118,15 +121,13 @@ func (oss *Scanner) Product() snyk.Product {
 	return snyk.ProductOpenSource
 }
 
-var i = 0
-
 func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue) {
 	if ctx.Err() != nil {
 		log.Debug().Msg("Cancelling OSS scan - OSS scanner received cancellation signal")
 		return issues
 	}
-	ctx, cancelFunc := context.WithCancel(ctx)
-	defer cancelFunc()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	documentURI := uri.PathToUri(path) // todo get rid of lsp dep
 	if !oss.isSupported(documentURI) {
@@ -156,11 +157,12 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	}
 
 	oss.mutex.Lock()
+	i := scanCount
 	previousScan, wasFound := oss.runningScans[workDir]
-	if wasFound { // If there's already a scan for the current workdir, we want to cancel it and restart it
+	if wasFound && !previousScan.isDone { // If there's already a scan for the current workdir, we want to cancel it and restart it
 		previousScan.cancel <- struct{}{}
 		// Starting a new scan only after previous scan has exited in order to save resources
-		<-previousScan.done
+		<-previousScan.done // TODO - maybe add a timeout here
 	}
 	newScan := newRunningScan()
 	go func(i int) {
@@ -168,15 +170,16 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 		select {
 		case <-newScan.cancel:
 			log.Debug().Msgf("Cancelling scan %v", i)
-			cancelFunc()
+			cancel()
 			newScan.done <- struct{}{}
 			return
 		case <-newScan.done:
 			log.Debug().Msgf("Scan %v is done", i)
+			newScan.isDone = true
 			return
 		}
 	}(i)
-	i++
+	scanCount++
 	oss.runningScans[workDir] = newScan
 	oss.mutex.Unlock()
 
@@ -191,7 +194,8 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	issues = oss.unmarshallAndRetrieveAnalysis(ctx, res, uri.PathToUri(workDir))
 
 	oss.mutex.Lock()
-	newScan.done <- struct{}{}
+	log.Debug().Msgf("Scan %v is done", i)
+	newScan.done <- struct{}{} // TODO - maybe add a timeout here
 
 	// Because the creation of a new scan writes over the dictionary entry for workdir, the current value is being checked
 	if oss.runningScans[workDir] == newScan {
@@ -207,16 +211,21 @@ func (oss *Scanner) isSupported(documentURI sglsp.DocumentURI) bool {
 }
 
 func (oss *Scanner) unmarshallAndRetrieveAnalysis(ctx context.Context, res []byte, documentURI sglsp.DocumentURI) (issues []snyk.Issue) {
-	scanResults, done, err := oss.unmarshallOssJson(res)
-	if err != nil {
-		oss.errorReporter.CaptureError(err)
+	if ctx.Err() != nil {
+		return nil
 	}
 
-	if done {
-		return
+	scanResults, err := oss.unmarshallOssJson(res)
+	if err != nil {
+		oss.errorReporter.CaptureError(err)
+		return nil
 	}
 
 	for _, scanResult := range scanResults {
+		if ctx.Err() != nil {
+			return nil
+		}
+
 		targetFile := oss.determineTargetFile(scanResult.DisplayTargetFile)
 		targetFilePath := filepath.Join(uri.PathFromUri(documentURI), targetFile)
 		targetFileUri := uri.PathToUri(targetFilePath)
@@ -225,7 +234,7 @@ func (oss *Scanner) unmarshallAndRetrieveAnalysis(ctx context.Context, res []byt
 			log.Err(err).Str("method", "unmarshallAndRetrieveAnalysis").
 				Msgf("Error while reading the file %v, err: %v", targetFile, err)
 			oss.errorReporter.CaptureError(err)
-			return
+			return nil
 		}
 		issues = append(issues, oss.retrieveIssues(scanResult, targetFileUri, fileContent)...)
 	}
@@ -234,26 +243,24 @@ func (oss *Scanner) unmarshallAndRetrieveAnalysis(ctx context.Context, res []byt
 	return issues
 }
 
-func (oss *Scanner) unmarshallOssJson(res []byte) (scanResults []ossScanResult, done bool, err error) {
+func (oss *Scanner) unmarshallOssJson(res []byte) (scanResults []ossScanResult, err error) {
 	output := string(res)
 	if strings.HasPrefix(output, "[") {
 		err = json.Unmarshal(res, &scanResults)
 		if err != nil {
 			err = errors.Wrap(err, fmt.Sprintf("Couldn't unmarshal CLI response. Input: %s", output))
-			return nil, true, err
+			return nil, err
 		}
 	} else {
 		var scanResult ossScanResult
 		err = json.Unmarshal(res, &scanResult)
 		if err != nil {
-			if err != nil {
-				err = errors.Wrap(err, fmt.Sprintf("Couldn't unmarshal CLI response. Input: %s", output))
-				return nil, true, err
-			}
+			err = errors.Wrap(err, fmt.Sprintf("Couldn't unmarshal CLI response. Input: %s", output))
+			return nil, err
 		}
 		scanResults = append(scanResults, scanResult)
 	}
-	return scanResults, false, err
+	return scanResults, err
 }
 
 // Returns true if CLI run failed, false otherwise

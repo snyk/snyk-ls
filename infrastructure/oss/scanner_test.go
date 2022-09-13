@@ -127,9 +127,8 @@ func TestUnmarshalOssJsonSingle(t *testing.T) {
 	if err != nil {
 		t.Fatal(t, "couldn't read test result file")
 	}
-	scanResults, done, err := scanner.unmarshallOssJson(fileContent)
+	scanResults, err := scanner.unmarshallOssJson(fileContent)
 	assert.NoError(t, err)
-	assert.False(t, done)
 	assert.Len(t, scanResults, 1)
 }
 
@@ -145,9 +144,8 @@ func TestUnmarshalOssJsonArray(t *testing.T) {
 	if err != nil {
 		t.Fatal(t, "couldn't read test result file")
 	}
-	scanResults, done, err := scanner.unmarshallOssJson(fileContent)
+	scanResults, err := scanner.unmarshallOssJson(fileContent)
 	assert.NoError(t, err)
-	assert.False(t, done)
 	assert.Len(t, scanResults, 3)
 }
 
@@ -163,9 +161,8 @@ func TestUnmarshalOssErroneousJson(t *testing.T) {
 	if err != nil {
 		t.Fatal(t, "couldn't read test result file")
 	}
-	scanResults, done, err := scanner.unmarshallOssJson(fileContent)
+	scanResults, err := scanner.unmarshallOssJson(fileContent)
 	assert.Error(t, err)
-	assert.True(t, done)
 	assert.Nil(t, scanResults)
 }
 
