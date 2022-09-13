@@ -37,11 +37,12 @@ const (
 )
 
 var (
-	Version           = "SNAPSHOT"
-	LsProtocolVersion = "development"
-	Development       = "true"
-	currentConfig     *Config
-	mutex             = &sync.Mutex{}
+	Version            = "SNAPSHOT"
+	LsProtocolVersion  = "development"
+	Development        = "true"
+	currentConfig      *Config
+	mutex              = &sync.Mutex{}
+	LicenseInformation = "License information\n FILLED DURING BUILD"
 )
 
 type CliSettings struct {

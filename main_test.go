@@ -46,6 +46,13 @@ func Test_shouldShowUsageOnUnknownFlag(t *testing.T) {
 	assert.True(t, strings.Contains(output, "Usage of snyk-ls"))
 	assert.NotNil(t, err)
 }
+
+func Test_shouldDisplayLicenseInformationWithFlag(t *testing.T) {
+	args := []string{"snyk-ls", "-licenses"}
+	output, _ := parseFlags(args)
+	assert.True(t, strings.Contains(output, "License information"))
+}
+
 func Test_shouldSetLoadConfigFromFlag(t *testing.T) {
 	file, err := os.CreateTemp(".", "configFlagTest")
 	if err != nil {
