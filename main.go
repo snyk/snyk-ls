@@ -38,7 +38,7 @@ func main() {
 	for _, line := range lines {
 		fmt.Println(line)
 	}
-	fmt.Println("You can access the detailed license information under https://github.com/snyk/snyk-ls/licenses")
+	fmt.Println("You can access the detailed license information under https://github.com/snyk/snyk-ls/tree/main/licenses")
 	log.Info().Msg(config.Version)
 	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
 	server.Start()

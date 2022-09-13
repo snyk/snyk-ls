@@ -101,3 +101,5 @@ Therefore, a protocol change must always be accompanied by a client plugin chang
 plugin, it would have to be done
 [here](https://github.com/snyk/snyk-eclipse-plugin/blob/babad5b5b67de21d08a58aac5ac94fa1a292c024/plugin/src/main/java/io/snyk/languageserver/download/LsBinaries.java#L7)
 .
+
+If you updated any dependency, please run the Makefile target `make license-update` to update the license files.

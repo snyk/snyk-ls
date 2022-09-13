@@ -57,7 +57,7 @@ jobs:
           # this is required to be able to test the clipboard
           export DISPLAY=:99
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
-          
+
           make clean test
 
       - name: Snyk
@@ -163,7 +163,7 @@ jobs:
           # this is required to be able to test the clipboard
           export DISPLAY=:99
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
-          
+
           make clean race-test
 
 
@@ -179,6 +179,38 @@ jobs:
         run: |
           make clean proxy-test
 
+  update-licenses:
+    name: update licenses
+    needs: [ unit-tests ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare git
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v3
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ secrets.PAT_BASTI }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: './go.mod'
+
+      - name: update licenses
+        run: |
+          make tools license-update
+
+      - name: commit license changes
+        uses: EndBug/add-and-commit@v9
+        with:
+          default_author: github_actor
+          committer_name: Github Actions
+          committer_email: noreply@snyk.io
+          message: 'docs: updated licenses'
+          add: 'licenses'
+          push: true
   test-release:
     name: test-release
     needs: [ integration-tests, unit-tests, race-test, proxy-test ]

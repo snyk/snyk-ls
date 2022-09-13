@@ -20,6 +20,8 @@ TIMEOUT := "-timeout=15m"
 ## tools: Install required tooling.
 .PHONY: tools
 tools:
+	@echo "==> Installing go-licenses"
+	@go install github.com/google/go-licenses@latest
 ifeq (,$(wildcard ./.bin/golangci-lint*))
 	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b .bin/ v1.48.0
 else
@@ -102,6 +104,12 @@ run:
 install:
 	@echo "==> Installing binary..."
 	@go install -ldflags=$(LDFLAGS_DEV)
+
+.PHONY: license-update
+license-update:
+	@echo "==> Updating license information..."
+	@rm -rf licenses
+	@go-licenses save . --save_path="licenses" --ignore "github.com/snyk/snyk-ls"
 
 help: Makefile
 	@echo "Usage: make <command>"
