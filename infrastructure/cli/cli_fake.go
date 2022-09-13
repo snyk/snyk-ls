@@ -10,8 +10,7 @@ type TestExecutor struct {
 	ExecuteResponse string
 	wasExecuted     bool
 	ExecuteDuration time.Duration
-	runningScans    int
-	maxRunningScans int
+	finishedScans   int
 	counterLock     sync.Mutex
 }
 
@@ -19,28 +18,25 @@ func NewTestExecutor() *TestExecutor {
 	return &TestExecutor{ExecuteResponse: "{}"}
 }
 
-func (t *TestExecutor) GetRunningScans() int    { return t.runningScans }
-func (t *TestExecutor) GetMaxRunningScans() int { return t.maxRunningScans }
+func (t *TestExecutor) GetFinishedScans() int { return t.finishedScans }
 
 func (t *TestExecutor) Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error) {
 	err = ctx.Err()
-	if err != nil { // When the operation is cancelled via the context, return empty results and don't set "wasExecuted"
+	if err != nil { // Checking for ctx cancellation before faking CLI execution
 		return resp, err
 	}
 
-	t.counterLock.Lock()
-	t.runningScans++
-	if t.runningScans > t.maxRunningScans {
-		t.maxRunningScans = t.runningScans
+	select {
+	case <-time.After(t.ExecuteDuration):
+		// Indicate that the scan has finished and return the ExecuteResponse
+		t.wasExecuted = true
+		t.counterLock.Lock()
+		t.finishedScans++
+		t.counterLock.Unlock()
+		return []byte(t.ExecuteResponse), err
+	case <-ctx.Done():
+		return resp, ctx.Err()
 	}
-	t.counterLock.Unlock()
-
-	if t.ExecuteDuration > 0 {
-		time.Sleep(t.ExecuteDuration)
-	}
-
-	t.wasExecuted = true
-	return []byte(t.ExecuteResponse), err
 }
 
 func (t *TestExecutor) ExpandParametersFromConfig(base []string) []string {

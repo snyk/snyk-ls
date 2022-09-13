@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/gomarkdown/markdown"
 	"github.com/pkg/errors"
@@ -72,11 +73,26 @@ var supportedFiles = map[string]bool{
 	"mix.lock":                true,
 }
 
+type RunningScan struct {
+	isRunning bool
+	done      chan struct{}
+	cancel    chan struct{}
+}
+
+func newRunningScan() *RunningScan {
+	return &RunningScan{
+		cancel: make(chan struct{}),
+		done:   make(chan struct{}),
+	}
+}
+
 type Scanner struct {
 	instrumentor  performance.Instrumentor
 	errorReporter error_reporting.ErrorReporter
 	analytics     ux2.Analytics
 	cli           cli.Executor
+	mutex         *sync.Mutex
+	runningScans  map[string]*RunningScan
 }
 
 func New(instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux2.Analytics, cli cli.Executor) *Scanner {
@@ -85,6 +101,8 @@ func New(instrumentor performance.Instrumentor, errorReporter error_reporting.Er
 		errorReporter: errorReporter,
 		analytics:     analytics,
 		cli:           cli,
+		mutex:         &sync.Mutex{},
+		runningScans:  map[string]*RunningScan{},
 	}
 }
 
@@ -100,11 +118,15 @@ func (oss *Scanner) Product() snyk.Product {
 	return snyk.ProductOpenSource
 }
 
+var i = 0
+
 func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue) {
 	if ctx.Err() != nil {
 		log.Debug().Msg("Cancelling OSS scan - OSS scanner received cancellation signal")
-		return make([]snyk.Issue, 0)
+		return issues
 	}
+	ctx, cancelFunc := context.WithCancel(ctx)
+	defer cancelFunc()
 
 	documentURI := uri.PathToUri(path) // todo get rid of lsp dep
 	if !oss.isSupported(documentURI) {
@@ -117,7 +139,6 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	p := progress.NewTracker(false)
 	p.BeginUnquantifiableLength("Scanning for Snyk Open Source issues", path)
 	defer p.End("Snyk Open Source scan completed.")
-
 	log.Debug().Str("method", method).Msg("started.")
 	defer log.Debug().Str("method", method).Msg("done.")
 
@@ -133,6 +154,31 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	} else {
 		workDir = filepath.Dir(path)
 	}
+
+	oss.mutex.Lock()
+	previousScan, wasFound := oss.runningScans[workDir]
+	if wasFound { // If there's already a scan for the current workdir, we want to cancel it and restart it
+		previousScan.cancel <- struct{}{}
+		// Starting a new scan only after previous scan has exited in order to save resources
+		<-previousScan.done
+	}
+	newScan := newRunningScan()
+	go func(i int) {
+		log.Debug().Msgf("Starting goroutine for scan %v", i)
+		select {
+		case <-newScan.cancel:
+			log.Debug().Msgf("Cancelling scan %v", i)
+			cancelFunc()
+			newScan.done <- struct{}{}
+			return
+		case <-newScan.done:
+			log.Debug().Msgf("Scan %v is done", i)
+			return
+		}
+	}(i)
+	i++
+	oss.runningScans[workDir] = newScan
+	oss.mutex.Unlock()
 
 	cmd := oss.cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliSettings().Path(), "test", workDir, "--json"})
 	res, err := oss.cli.Execute(ctx, cmd, workDir)
