@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime/debug"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 
@@ -30,6 +31,14 @@ func main() {
 		fmt.Println(err, output)
 		os.Exit(1)
 	}
+	lines := strings.Split(config.LicenseInformation, " ")
+	fmt.Println("License information")
+	fmt.Println("Snyk Language Server is licensed under the Apache 2.0 license")
+	fmt.Println("The following dependencies and licenses are used in this project:")
+	for _, line := range lines {
+		fmt.Println(line)
+	}
+	fmt.Println("You can access the detailed license information under https://github.com/snyk/snyk-ls/licenses")
 	log.Info().Msg(config.Version)
 	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
 	server.Start()
@@ -55,9 +64,18 @@ func parseFlags(args []string) (string, error) {
 		false,
 		"enables error reporting")
 
+	licensesFlag := flags.Bool(
+		"licenses",
+		false,
+		"displays license information")
+
 	err := flags.Parse(args[1:])
 	if err != nil {
 		return buf.String(), err
+	}
+
+	if *licensesFlag {
+		buf.Write([]byte(config.LicenseInformation))
 	}
 
 	c := config.New()
