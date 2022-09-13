@@ -188,7 +188,17 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 		}
 	}
 
-	issues = oss.unmarshallAndRetrieveAnalysis(res, uri.PathToUri(workDir))
+	issues = oss.unmarshallAndRetrieveAnalysis(ctx, res, uri.PathToUri(workDir))
+
+	oss.mutex.Lock()
+	newScan.done <- struct{}{}
+
+	// Because the creation of a new scan writes over the dictionary entry for workdir, the current value is being checked
+	if oss.runningScans[workDir] == newScan {
+		delete(oss.runningScans, workDir)
+	}
+	oss.mutex.Unlock()
+
 	return issues
 }
 
@@ -196,7 +206,7 @@ func (oss *Scanner) isSupported(documentURI sglsp.DocumentURI) bool {
 	return uri.IsDirectory(documentURI) || supportedFiles[filepath.Base(uri.PathFromUri(documentURI))]
 }
 
-func (oss *Scanner) unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.DocumentURI) (issues []snyk.Issue) {
+func (oss *Scanner) unmarshallAndRetrieveAnalysis(ctx context.Context, res []byte, documentURI sglsp.DocumentURI) (issues []snyk.Issue) {
 	scanResults, done, err := oss.unmarshallOssJson(res)
 	if err != nil {
 		oss.errorReporter.CaptureError(err)
@@ -217,10 +227,10 @@ func (oss *Scanner) unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.
 			oss.errorReporter.CaptureError(err)
 			return
 		}
-		issues = oss.retrieveIssues(scanResult, targetFileUri, fileContent)
-
-		oss.trackResult(true)
+		issues = append(issues, oss.retrieveIssues(scanResult, targetFileUri, fileContent)...)
 	}
+
+	oss.trackResult(true)
 	return issues
 }
 
