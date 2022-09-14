@@ -23,6 +23,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/scans"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -76,35 +77,13 @@ var supportedFiles = map[string]bool{
 // a counter for scans, used for logging
 var scanCount = 1
 
-type RunningScan struct {
-	isDone bool
-	done   chan struct{}
-	cancel chan struct{}
-}
-
-func NewRunningScan() *RunningScan {
-	return &RunningScan{
-		cancel: make(chan struct{}),
-		done:   make(chan struct{}),
-	}
-}
-
-func (rs *RunningScan) GetDoneChannel() <-chan struct{}   { return rs.done }
-func (rs *RunningScan) GetCancelChannel() <-chan struct{} { return rs.cancel }
-func (rs *RunningScan) IsDone() bool                      { return rs.isDone }
-func (rs *RunningScan) CancelScan()                       { rs.cancel <- struct{}{} }
-func (rs *RunningScan) SetDone() {
-	rs.isDone = true
-	rs.done <- struct{}{}
-}
-
 type Scanner struct {
 	instrumentor  performance.Instrumentor
 	errorReporter error_reporting.ErrorReporter
 	analytics     ux2.Analytics
 	cli           cli.Executor
 	mutex         *sync.Mutex
-	runningScans  map[string]*RunningScan
+	runningScans  map[string]*scans.RunningScan
 }
 
 func New(instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux2.Analytics, cli cli.Executor) *Scanner {
@@ -114,7 +93,7 @@ func New(instrumentor performance.Instrumentor, errorReporter error_reporting.Er
 		analytics:     analytics,
 		cli:           cli,
 		mutex:         &sync.Mutex{},
-		runningScans:  map[string]*RunningScan{},
+		runningScans:  map[string]*scans.RunningScan{},
 	}
 }
 
@@ -168,10 +147,10 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	oss.mutex.Lock()
 	i := scanCount
 	previousScan, wasFound := oss.runningScans[workDir]
-	if wasFound && !previousScan.isDone { // If there's already a scan for the current workdir, we want to cancel it and restart it
+	if wasFound && !previousScan.IsDone() { // If there's already a scan for the current workdir, we want to cancel it and restart it
 		previousScan.CancelScan()
 	}
-	newScan := NewRunningScan()
+	newScan := scans.NewRunningScan()
 	go func(i int) {
 		log.Debug().Msgf("Starting goroutine for scan %v", i)
 		select {
