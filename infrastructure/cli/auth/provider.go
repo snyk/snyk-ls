@@ -75,6 +75,7 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 		return err
 	}
 
+	// FIXME copy auth link breaks authentication process [ROAD-1166]
 	//reader, writer := io.Pipe()
 	//
 	//wg := &sync.WaitGroup{}
