@@ -22,5 +22,8 @@ func (rs *RunningScan) IsDone() bool                      { return rs.isDone }
 func (rs *RunningScan) CancelScan()                       { rs.cancel <- struct{}{} }
 func (rs *RunningScan) SetDone() {
 	rs.isDone = true
-	rs.done <- struct{}{}
+	select {
+	case rs.done <- struct{}{}: // If possible, send a done message
+	default: // If there are no listeners, do nothing
+	}
 }
