@@ -1,8 +1,10 @@
 package auth
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -75,53 +77,41 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 		return err
 	}
 
-	// FIXME copy auth link breaks authentication process [ROAD-1166]
-	//reader, writer := io.Pipe()
-	//
-	//wg := &sync.WaitGroup{}
-	//wg.Add(1)
-	//go func() {
-	//	defer wg.Done()
-	//	out := &strings.Builder{}
-	//	scanner := bufio.NewScanner(reader)
-	//	for scanner.Scan() {
-	//		text := scanner.Text()
-	//		url := a.getAuthURL(text)
-	//		out.Write(scanner.Bytes())
-	//		log.Debug().Str("method", "authenticate").Msgf("current auth url line: %s", text)
-	//
-	//		if url != "" {
-	//			a.authURL = url
-	//			log.Debug().Str("method", "authenticate").Msgf("found URL: %s", url)
-	//			break
-	//		}
-	//	}
-	//
-	//	log.Info().Str("method", "authenticate").Str("output", out.String()).Msg("auth Snyk CLI")
-	//}()
-	//
-	//// by assigning the writer to stdout, we pipe the cmd output to the go routine that parses it
-	//cmd.Stdout = writer
+	reader, writer := io.Pipe()
+
+	go a.getAuthURL(reader)
+
+	// by assigning the writer to stdout, we pipe the cmd output to the go routine that parses it
+	cmd.Stdout = writer
 	err = a.runCLICmd(ctx, cmd)
-	//wg.Wait()
 	return err
 }
 
-func (a *CliAuthenticationProvider) getAuthURL(str string) string {
+func (a *CliAuthenticationProvider) getAuthURL(reader *io.PipeReader) {
 	url := ""
+	out := &strings.Builder{}
+	scanner := bufio.NewScanner(reader)
 
-	hasToken := strings.Contains(str, "/login?token=")
-	index := strings.Index(str, "https://")
+	for scanner.Scan() {
+		line := scanner.Text()
+		hasToken := strings.Contains(line, "/login?token=")
+		index := strings.Index(line, "https://")
 
-	if index != -1 && hasToken {
-		url = str[index:]
+		if index != -1 && hasToken {
+			url = line[index:]
 
-		// trim the line ending
-		url = strings.TrimRight(url, "\r")
-		url = strings.TrimRight(url, "\n")
+			// trim the line ending
+			url = strings.TrimRight(url, "\r")
+			url = strings.TrimRight(url, "\n")
+		}
+
+		out.Write(scanner.Bytes())
+
+		if url != "" {
+			a.authURL = url
+			log.Debug().Str("method", "getAuthURL").Msgf("Found & set auth URL %s", a.authURL)
+		}
 	}
-
-	return url
 }
 
 func (a *CliAuthenticationProvider) getToken(ctx context.Context) (string, error) {
