@@ -23,8 +23,11 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/scans"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
+
+var scanCount = 1
 
 var (
 	issueSeverities = map[string]snyk.Severity{
@@ -46,6 +49,7 @@ type Scanner struct {
 	analytics     ux2.Analytics
 	cli           cli.Executor
 	mutex         sync.Mutex
+	runningScans  map[sglsp.DocumentURI]*scans.RunningScan
 }
 
 func New(instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux2.Analytics, cli cli.Executor) *Scanner {
@@ -76,6 +80,8 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 		return []snyk.Issue{}
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+
 	documentURI := uri.PathToUri(path) // todo get rid of lsp dep
 	if !iac.isSupported(documentURI) {
 		return
@@ -89,6 +95,28 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	} else {
 		workspacePath = filepath.Dir(uri.PathFromUri(documentURI))
 	}
+	iac.mutex.Lock()
+	i := scanCount
+	previousScan, wasFound := iac.runningScans[documentURI]
+	if wasFound && !previousScan.IsDone() { // If there's already a scan for the current workdir, we want to cancel it and restart it
+		previousScan.CancelScan()
+	}
+	newScan := scans.NewRunningScan()
+	go func(i int) {
+		log.Debug().Msgf("Starting goroutine for scan %v", i)
+		select {
+		case <-newScan.GetCancelChannel():
+			log.Debug().Msgf("Cancelling scan %v", i)
+			cancel()
+			return
+		case <-newScan.GetDoneChannel():
+			log.Debug().Msgf("Scan %v is done", i)
+			return
+		}
+	}(i)
+	scanCount++
+	iac.runningScans[documentURI] = newScan
+	iac.mutex.Unlock()
 
 	scanResults, err := iac.doScan(ctx, documentURI, workspacePath)
 	p.Report(80)
@@ -96,18 +124,32 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 		noCancellation := ctx.Err() == nil
 		if noCancellation { // Only reports errors that are not intentional cancellations
 			iac.errorReporter.CaptureError(err)
-		} else {
-			p.End("Snyk Iac Scan cancelled.")
-			return []snyk.Issue{}
 		}
 	}
+
+	issues = iac.retrieveIssues(ctx, scanResults, issues, workspacePath, err)
+	iac.mutex.Lock()
+	log.Debug().Msgf("Scan %v is done", i)
+	newScan.SetDone()
+	if iac.runningScans[documentURI] == newScan {
+		delete(iac.runningScans, documentURI)
+	}
+	iac.mutex.Unlock()
+	p.End("Snyk Iac Scan completed.")
+	return issues
+}
+
+func (iac *Scanner) retrieveIssues(ctx context.Context, scanResults []iacScanResult, issues []snyk.Issue, workspacePath string, err error) []snyk.Issue {
 	if len(scanResults) > 0 {
 		for _, s := range scanResults {
+			if ctx.Err != nil {
+				return nil
+			}
+
 			issues = append(issues, iac.retrieveAnalysis(s, workspacePath)...)
 		}
 	}
 	iac.trackResult(err == nil)
-	p.End("Snyk Iac Scan completed.")
 	return issues
 }
 
@@ -121,8 +163,8 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 	s := iac.instrumentor.StartSpan(ctx, method)
 	defer iac.instrumentor.Finish(s)
 
-	iac.mutex.Lock()
-	defer iac.mutex.Unlock()
+	// iac.mutex.Lock()
+	// defer iac.mutex.Unlock()
 
 	cmd := iac.cliCmd(documentURI)
 	res, err := iac.cli.Execute(ctx, cmd, workspacePath)
