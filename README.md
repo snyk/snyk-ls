@@ -107,6 +107,8 @@ level is `info`
 
 `-f <FILE>` allows you to specify a log file instead of logging to the console
 
+`-licenses` displays the [licenses](https://github.com/snyk/snyk-ls/tree/main/licenses) used by Language Server
+
 ### Configuration
 
 #### LSP Initialization Options
