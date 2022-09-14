@@ -82,11 +82,20 @@ type RunningScan struct {
 	cancel chan struct{}
 }
 
-func newRunningScan() *RunningScan {
+func NewRunningScan() *RunningScan {
 	return &RunningScan{
 		cancel: make(chan struct{}),
 		done:   make(chan struct{}),
 	}
+}
+
+func (rs *RunningScan) GetDoneChannel() <-chan struct{}   { return rs.done }
+func (rs *RunningScan) GetCancelChannel() <-chan struct{} { return rs.cancel }
+func (rs *RunningScan) IsDone() bool                      { return rs.isDone }
+func (rs *RunningScan) CancelScan()                       { rs.cancel <- struct{}{} }
+func (rs *RunningScan) SetDone() {
+	rs.isDone = true
+	rs.done <- struct{}{}
 }
 
 type Scanner struct {
@@ -160,22 +169,18 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	i := scanCount
 	previousScan, wasFound := oss.runningScans[workDir]
 	if wasFound && !previousScan.isDone { // If there's already a scan for the current workdir, we want to cancel it and restart it
-		previousScan.cancel <- struct{}{}
-		// Starting a new scan only after previous scan has exited in order to save resources
-		<-previousScan.done // TODO - maybe add a timeout here
+		previousScan.CancelScan()
 	}
-	newScan := newRunningScan()
+	newScan := NewRunningScan()
 	go func(i int) {
 		log.Debug().Msgf("Starting goroutine for scan %v", i)
 		select {
-		case <-newScan.cancel:
+		case <-newScan.GetCancelChannel():
 			log.Debug().Msgf("Cancelling scan %v", i)
 			cancel()
-			newScan.done <- struct{}{}
 			return
-		case <-newScan.done:
+		case <-newScan.GetDoneChannel():
 			log.Debug().Msgf("Scan %v is done", i)
-			newScan.isDone = true
 			return
 		}
 	}(i)
@@ -195,7 +200,7 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 
 	oss.mutex.Lock()
 	log.Debug().Msgf("Scan %v is done", i)
-	newScan.done <- struct{}{} // TODO - maybe add a timeout here
+	newScan.SetDone()
 
 	// Because the creation of a new scan writes over the dictionary entry for workdir, the current value is being checked
 	if oss.runningScans[workDir] == newScan {
