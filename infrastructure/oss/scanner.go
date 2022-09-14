@@ -83,7 +83,7 @@ type Scanner struct {
 	analytics     ux2.Analytics
 	cli           cli.Executor
 	mutex         *sync.Mutex
-	runningScans  map[string]*scans.RunningScan
+	runningScans  map[string]*scans.ScanProgress
 }
 
 func New(instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux2.Analytics, cli cli.Executor) *Scanner {
@@ -93,7 +93,7 @@ func New(instrumentor performance.Instrumentor, errorReporter error_reporting.Er
 		analytics:     analytics,
 		cli:           cli,
 		mutex:         &sync.Mutex{},
-		runningScans:  map[string]*scans.RunningScan{},
+		runningScans:  map[string]*scans.ScanProgress{},
 	}
 }
 
@@ -150,7 +150,7 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	if wasFound && !previousScan.IsDone() { // If there's already a scan for the current workdir, we want to cancel it and restart it
 		previousScan.CancelScan()
 	}
-	newScan := scans.NewRunningScan()
+	newScan := scans.NewScanProgress()
 	go newScan.Listen(cancel, i)
 	scanCount++
 	oss.runningScans[workDir] = newScan

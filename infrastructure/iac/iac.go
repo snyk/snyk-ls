@@ -49,7 +49,7 @@ type Scanner struct {
 	analytics     ux2.Analytics
 	cli           cli.Executor
 	mutex         sync.Mutex
-	runningScans  map[sglsp.DocumentURI]*scans.RunningScan
+	runningScans  map[sglsp.DocumentURI]*scans.ScanProgress
 }
 
 func New(instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux2.Analytics, cli cli.Executor) *Scanner {
@@ -102,7 +102,7 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	if wasFound && !previousScan.IsDone() { // If there's already a scan for the current workdir, we want to cancel it and restart it
 		previousScan.CancelScan()
 	}
-	newScan := scans.NewRunningScan()
+	newScan := scans.NewScanProgress()
 	go newScan.Listen(cancel, i)
 	scanCount++
 	iac.runningScans[documentURI] = newScan
