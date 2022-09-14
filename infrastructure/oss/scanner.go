@@ -151,18 +151,7 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 		previousScan.CancelScan()
 	}
 	newScan := scans.NewRunningScan()
-	go func(i int) {
-		log.Debug().Msgf("Starting goroutine for scan %v", i)
-		select {
-		case <-newScan.GetCancelChannel():
-			log.Debug().Msgf("Cancelling scan %v", i)
-			cancel()
-			return
-		case <-newScan.GetDoneChannel():
-			log.Debug().Msgf("Scan %v is done", i)
-			return
-		}
-	}(i)
+	go newScan.Listen(cancel, i)
 	scanCount++
 	oss.runningScans[workDir] = newScan
 	oss.mutex.Unlock()
