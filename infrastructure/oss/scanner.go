@@ -181,11 +181,6 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	oss.mutex.Lock()
 	log.Debug().Msgf("Scan %v is done", i)
 	newScan.SetDone()
-
-	// Because the creation of a new scan writes over the dictionary entry for workdir, the current value is being checked
-	if oss.runningScans[workDir] == newScan {
-		delete(oss.runningScans, workDir)
-	}
 	oss.mutex.Unlock()
 
 	return issues

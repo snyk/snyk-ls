@@ -131,9 +131,6 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	iac.mutex.Lock()
 	log.Debug().Msgf("Scan %v is done", i)
 	newScan.SetDone()
-	if iac.runningScans[documentURI] == newScan {
-		delete(iac.runningScans, documentURI)
-	}
 	iac.mutex.Unlock()
 	p.End("Snyk Iac Scan completed.")
 	return issues
