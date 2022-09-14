@@ -1,10 +1,8 @@
 package auth
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -34,8 +32,9 @@ func (a *CliAuthenticationProvider) Authenticate(ctx context.Context) (string, e
 		a.errorReporter.CaptureError(err)
 	}
 	token, err := a.getToken(ctx)
+	log.Debug().Str("method", "Authenticate").Int("token length", len(token)).Msg("got token")
 	if err != nil {
-		log.Err(err).Str("method", "Authenticate").Msg("error getting token after authenticating")
+		log.Err(err).Str("method", "Authenticate").Msg("error getting token after azuthenticating")
 		a.errorReporter.CaptureError(err)
 	}
 
@@ -75,28 +74,36 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	out := &strings.Builder{}
 
-	reader, writer := io.Pipe()
-	cmd.Stdout = writer
-
-	go func() {
-		scanner := bufio.NewScanner(reader)
-		for scanner.Scan() {
-			url := a.getAuthURL(scanner.Text())
-			out.Write(scanner.Bytes())
-
-			if url != "" {
-				a.authURL = url
-				break
-			}
-		}
-
-		str := out.String()
-		log.Info().Str("output", str).Msg("auth Snyk CLI")
-	}()
-
+	// FIXME copy auth link breaks authentication process [ROAD-1166]
+	//reader, writer := io.Pipe()
+	//
+	//wg := &sync.WaitGroup{}
+	//wg.Add(1)
+	//go func() {
+	//	defer wg.Done()
+	//	out := &strings.Builder{}
+	//	scanner := bufio.NewScanner(reader)
+	//	for scanner.Scan() {
+	//		text := scanner.Text()
+	//		url := a.getAuthURL(text)
+	//		out.Write(scanner.Bytes())
+	//		log.Debug().Str("method", "authenticate").Msgf("current auth url line: %s", text)
+	//
+	//		if url != "" {
+	//			a.authURL = url
+	//			log.Debug().Str("method", "authenticate").Msgf("found URL: %s", url)
+	//			break
+	//		}
+	//	}
+	//
+	//	log.Info().Str("method", "authenticate").Str("output", out.String()).Msg("auth Snyk CLI")
+	//}()
+	//
+	//// by assigning the writer to stdout, we pipe the cmd output to the go routine that parses it
+	//cmd.Stdout = writer
 	err = a.runCLICmd(ctx, cmd)
+	//wg.Wait()
 	return err
 }
 
