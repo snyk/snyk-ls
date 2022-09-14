@@ -62,7 +62,8 @@ func (c SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (
 func (c SnykCli) doExecute(ctx context.Context, cmd []string, workingDir string, firstAttempt bool) ([]byte, error) {
 	command := c.getCommand(cmd, workingDir, ctx)
 	output, err := command.Output()
-	if err != nil {
+	noCancellation := ctx.Err() == nil
+	if err != nil && noCancellation {
 		ctx := context.Background()
 		shouldRetry := c.HandleErrors(ctx, string(output))
 		if firstAttempt && shouldRetry {
