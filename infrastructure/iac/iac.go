@@ -80,9 +80,8 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	if !iac.isSupported(documentURI) {
 		return
 	}
-	p := progress.NewTracker(false)
+	p := progress.NewTracker(false) // todo - get progress trackers via DI
 	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", path)
-	defer p.End("Snyk Iac Scan completed.")
 
 	var workspacePath string
 	if uri.IsDirectory(documentURI) {
@@ -94,8 +93,12 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	scanResults, err := iac.doScan(ctx, documentURI, workspacePath)
 	p.Report(80)
 	if err != nil {
-		if err != context.Canceled {
+		noCancellation := ctx.Err() == nil
+		if noCancellation { // Only reports errors that are not intentional cancellations
 			iac.errorReporter.CaptureError(err)
+		} else {
+			p.End("Snyk Iac Scan cancelled.")
+			return []snyk.Issue{}
 		}
 	}
 	if len(scanResults) > 0 {
@@ -104,6 +107,7 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 		}
 	}
 	iac.trackResult(err == nil)
+	p.End("Snyk Iac Scan completed.")
 	return issues
 }
 
@@ -122,6 +126,10 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 
 	cmd := iac.cliCmd(documentURI)
 	res, err := iac.cli.Execute(ctx, cmd, workspacePath)
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 
 	if err != nil {
 		switch errorType := err.(type) {
