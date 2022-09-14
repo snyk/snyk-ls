@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -75,12 +76,14 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	out := &strings.Builder{}
 
 	reader, writer := io.Pipe()
-	cmd.Stdout = writer
 
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+		out := &strings.Builder{}
 		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
 			url := a.getAuthURL(scanner.Text())
@@ -96,7 +99,10 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 		log.Info().Str("output", str).Msg("auth Snyk CLI")
 	}()
 
+	// by assigning the writer to stdout, we pipe the cmd output to the go routine that parses it
+	cmd.Stdout = writer
 	err = a.runCLICmd(ctx, cmd)
+	wg.Wait()
 	return err
 }
 
