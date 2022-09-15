@@ -77,9 +77,25 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 		return err
 	}
 
+	// by assigning the writer to stdout, we pipe the cmd output to the go routine that parses it
 	reader, writer := io.Pipe()
+	go func() {
+		out := &strings.Builder{}
+		scanner := bufio.NewScanner(reader)
+		for scanner.Scan() {
+			text := scanner.Text()
+			url := a.getAuthURL(text)
+			out.Write(scanner.Bytes())
+			log.Debug().Str("method", "authenticate").Msgf("current auth url line: %s", text)
 
-	go a.getAuthURL(reader)
+			if url != "" {
+				a.authURL = url
+				log.Debug().Str("method", "authenticate").Msgf("found URL: %s", url)
+			}
+		}
+
+		log.Info().Str("method", "authenticate").Str("output", out.String()).Msg("auth Snyk CLI")
+	}()
 
 	// by assigning the writer to stdout, we pipe the cmd output to the go routine that parses it
 	cmd.Stdout = writer
@@ -87,31 +103,21 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 	return err
 }
 
-func (a *CliAuthenticationProvider) getAuthURL(reader *io.PipeReader) {
+func (a *CliAuthenticationProvider) getAuthURL(str string) string {
 	url := ""
-	out := &strings.Builder{}
-	scanner := bufio.NewScanner(reader)
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		hasToken := strings.Contains(line, "/login?token=")
-		index := strings.Index(line, "https://")
+	hasToken := strings.Contains(str, "/login?token=")
+	index := strings.Index(str, "https://")
 
-		if index != -1 && hasToken {
-			url = line[index:]
+	if index != -1 && hasToken {
+		url = str[index:]
 
-			// trim the line ending
-			url = strings.TrimRight(url, "\r")
-			url = strings.TrimRight(url, "\n")
-		}
-
-		out.Write(scanner.Bytes())
-
-		if url != "" {
-			a.authURL = url
-			log.Debug().Str("method", "getAuthURL").Msgf("Found & set auth URL %s", a.authURL)
-		}
+		// trim the line ending
+		url = strings.TrimRight(url, "\r")
+		url = strings.TrimRight(url, "\n")
 	}
+
+	return url
 }
 
 func (a *CliAuthenticationProvider) getToken(ctx context.Context) (string, error) {
