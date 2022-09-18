@@ -159,8 +159,12 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	cmd := oss.cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliSettings().Path(), "test", workDir, "--json"})
 	res, err := oss.cli.Execute(ctx, cmd, workDir)
 	noCancellation := ctx.Err() == nil
-	if err != nil && noCancellation {
-		if oss.handleError(err, res, cmd) {
+	if err != nil {
+		if noCancellation {
+			if oss.handleError(err, res, cmd) {
+				return
+			}
+		} else { // If scan was cancelled, return empty results
 			return
 		}
 	}

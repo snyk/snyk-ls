@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 type TestExecutor struct {
@@ -28,6 +30,7 @@ func (t *TestExecutor) Execute(ctx context.Context, cmd []string, workingDir str
 
 	select {
 	case <-time.After(t.ExecuteDuration):
+		log.Debug().Msg("Dummy CLI Execution time finished")
 		// Indicate that the scan has finished and return the ExecuteResponse
 		t.wasExecuted = true
 		t.counterLock.Lock()
@@ -35,6 +38,7 @@ func (t *TestExecutor) Execute(ctx context.Context, cmd []string, workingDir str
 		t.counterLock.Unlock()
 		return []byte(t.ExecuteResponse), err
 	case <-ctx.Done():
+		log.Debug().Msg("Dummy CLI Execution cancelled")
 		return resp, ctx.Err()
 	}
 }

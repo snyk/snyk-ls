@@ -2,9 +2,12 @@ package scans
 
 import (
 	"context"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
+
+const timeout = 5 * time.Second
 
 // ScanProgress is a type that's used for tracking current running scans, listen to their progress events
 // and invoke cancellations or "done" signals. This allows throttling or cancelling previous scans instead of
@@ -26,29 +29,39 @@ func (rs *ScanProgress) GetDoneChannel() <-chan struct{}   { return rs.done }
 func (rs *ScanProgress) GetCancelChannel() <-chan struct{} { return rs.cancel }
 func (rs *ScanProgress) IsDone() bool                      { return rs.isDone }
 func (rs *ScanProgress) CancelScan() {
-	// Using select to send the signal without blocking when there are no listeners
+	log.Debug().Msg("Cancelling scan")
 	select {
+	case <-time.After(timeout):
+		log.Debug().Msg("No listeners for scan cancellation")
+		return
 	case rs.cancel <- struct{}{}:
-	default: // If no one listening, do nothing
-	}
-}
-func (rs *ScanProgress) SetDone() {
-	rs.isDone = true
-	select {
-	case rs.done <- struct{}{}: // If possible, send a done message
-	default: // If there are no listeners, do nothing
+		log.Debug().Msg("Cancel signal sent")
 	}
 }
 
-func (rs *ScanProgress) Listen(cancel context.CancelFunc, i int) {
-	log.Debug().Msgf("Starting goroutine for scan %v", i)
+func (rs *ScanProgress) SetDone() {
+	rs.isDone = true
 	select {
-	case <-rs.GetCancelChannel():
-		log.Debug().Msgf("Cancelling scan %v", i)
+	case <-time.After(timeout):
+		log.Debug().Msg("No listeners for Done message")
+	case rs.done <- struct{}{}:
+		log.Debug().Msg("Done signal sent")
+	}
+}
+
+// Listen waits for cancel or done signals until one of them is received.
+// If the cancel signal is received, the cancel function will be called
+func (rs *ScanProgress) Listen(cancel context.CancelFunc, scanNumber int) {
+	log.Debug().Msgf("Starting goroutine for scan %v", scanNumber)
+	cancelChannel := rs.GetCancelChannel()
+	doneChannel := rs.GetDoneChannel()
+	select {
+	case <-cancelChannel:
+		log.Debug().Msgf("Cancelling scan %v", scanNumber)
 		cancel()
 		return
-	case <-rs.GetDoneChannel():
-		log.Debug().Msgf("Scan %v is done", i)
+	case <-doneChannel:
+		log.Debug().Msgf("Scan %v is done", scanNumber)
 		return
 	}
 }
