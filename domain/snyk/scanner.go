@@ -53,6 +53,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	done := make(chan bool)
 	defer close(done)
 
+	sc.initializer.Init()
 	_, tokenChangeChannel := config.CurrentConfig().TokenWithChangesChannel()
 	ctx, cancelFunc := context.WithCancel(ctx)
 	go func() { // This goroutine will listen to token changes and cancel the scans using a context
@@ -65,7 +66,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 			return
 		}
 	}()
-	sc.initializer.Init()
 
 	if !config.CurrentConfig().Authenticated() {
 		log.Info().Msg("User is not authenticated, cancelling scan")

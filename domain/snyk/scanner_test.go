@@ -98,30 +98,13 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 	assert.Equal(t, 0, productScanner.scans)
 }
 
-type TestInitializer struct {
-	initCalled   chan bool
-	initFinished chan bool
-}
-
-func NewTestInitializer() *TestInitializer {
-	return &TestInitializer{
-		initCalled:   make(chan bool),
-		initFinished: make(chan bool),
-	}
-}
-func (t *TestInitializer) Init() {
-	t.initCalled <- true
-	t.initFinished <- true
-}
-
-func Test_ScanInitialization_TokenChanged_ScanCancelled(t *testing.T) {
+func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 	// Arrange
-	// Using an initializer that blocks execution until it's channels are read
 	config.CurrentConfig().SetToken("")
-	fakeInitializer := NewTestInitializer()
 	productScanner := NewTestProductScanner(ProductOpenSource, true)
+	productScanner.SetScanDuration(2 * time.Second)
 	scanner := NewDelegatingScanner(
-		initialize.NewDelegatingInitializer(fakeInitializer),
+		initialize.NewDelegatingInitializer(),
 		performance.NewTestInstrumentor(),
 		ux.NewTestAnalytics(),
 		productScanner,
@@ -133,15 +116,10 @@ func Test_ScanInitialization_TokenChanged_ScanCancelled(t *testing.T) {
 		scanner.Scan(context.Background(), "", NoopResultProcessor, "")
 		done <- true
 	}()
-	// The scanner should acquire the token cancellation channel at the earliest point before calling the initializers.
-	// The token needs to change and send a token-change signal during the initializers run for this test to pass
-	<-fakeInitializer.initCalled
+	time.Sleep(500 * time.Millisecond) // Wait for the product scanner to start running
 	config.CurrentConfig().SetToken(uuid.New().String())
-	time.Sleep(time.Second) // Wait for the scanner to pick up the token change signal and cancel scans
 
 	// Assert
-	// Reading from this channel will finish the Init() call
-	<-fakeInitializer.initFinished
 	// Need to wait for the scan to be done before checking whether the product scanner was used
 	<-done
 
