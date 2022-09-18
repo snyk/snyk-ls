@@ -51,28 +51,30 @@ func NewTestInstrumentor() *TestInstrumentor {
 }
 
 func (i *TestInstrumentor) StartSpan(ctx context.Context, operation string) Span {
-	span := i.CreateSpan("", operation)
+	span := &NoopSpan{
+		Operation: operation,
+		TxName:    "",
+		Started:   false,
+		Finished:  false,
+		ctx:       ctx,
+	}
 	span.StartSpan(ctx)
 	i.SpanRecorder.Record(span)
 	return span
 }
 
 func (i *TestInstrumentor) NewTransaction(ctx context.Context, txName string, operation string) Span {
-	s := i.CreateSpan(txName, operation)
+	s := &NoopSpan{
+		Operation: operation,
+		TxName:    txName,
+		Started:   false,
+		Finished:  false,
+		ctx:       ctx,
+	}
 	i.SpanRecorder.Record(s)
 	return s
 }
 
 func (i *TestInstrumentor) Finish(span Span) {
 	i.SpanRecorder.Finish(span)
-}
-
-func (i *TestInstrumentor) CreateSpan(txName string, operation string) Span {
-	return &NoopSpan{
-		Operation: operation,
-		TxName:    txName,
-		Started:   false,
-		Finished:  false,
-		ctx:       context.Background(),
-	}
 }

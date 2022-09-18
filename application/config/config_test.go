@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -28,6 +29,38 @@ func TestConfigDefaults(t *testing.T) {
 	assert.True(t, c.IsSnykIacEnabled(), "Snyk IaC should be enabled by default")
 	assert.Equal(t, "", c.LogPath(), "Logpath should be empty by default")
 	assert.Equal(t, "md", c.Format(), "Output format should be md by default")
+}
+
+func Test_TokenChanged_ChannelsInformed(t *testing.T) {
+	// Arrange
+	c := New()
+	_, tokenChangedChannel := c.TokenWithChangesChannel()
+
+	// Act
+	// There's a 1 in 5 undecillion (5 * 10^36) chance for a collision here so let's hold our fingers
+	c.SetToken(uuid.New().String())
+
+	// Assert
+	// This will either pass the test or fail by deadlock immediately if SetToken did not write to the change channels,
+	// therefore there's no need for assert.Eventually
+	<-tokenChangedChannel
+}
+
+func Test_TokenChangedToSameToken_ChannelsNotInformed(t *testing.T) {
+	// Arrange
+	c := New()
+	token, tokenChangedChannel := c.TokenWithChangesChannel()
+
+	// Act
+	c.SetToken(token)
+
+	// Assert
+	select {
+	case newToken := <-tokenChangedChannel:
+		assert.Fail(t, "Expected empty token changes channel, but received new token (%v)", newToken)
+	default:
+		// This case triggers when tokenChangedChannel is empty, test passes
+	}
 }
 
 func Test_SnykCodeAnalysisTimeoutReturnsTimeoutFromEnvironment(t *testing.T) {

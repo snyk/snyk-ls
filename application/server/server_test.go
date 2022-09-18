@@ -570,7 +570,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	assert.Eventually(
 		t,
 		checkForPublishedDiagnostics(workspace.Get(), uri.PathFromUri(didSaveParams.TextDocument.URI), -1),
-		60*time.Second,
+		30*time.Second,
 		500*time.Millisecond,
 	)
 }
