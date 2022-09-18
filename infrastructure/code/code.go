@@ -68,6 +68,7 @@ func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, repor
 		SnykApiClient:  apiClient,
 		errorReporter:  reporter,
 		analytics:      analytics,
+		runningScans:   map[string]*ScanStatus{},
 	}
 	return sc
 }

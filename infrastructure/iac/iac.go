@@ -59,6 +59,7 @@ func New(instrumentor performance.Instrumentor, errorReporter error_reporting.Er
 		analytics:     analytics,
 		cli:           cli,
 		mutex:         sync.Mutex{},
+		runningScans:  map[sglsp.DocumentURI]*scans.ScanProgress{},
 	}
 }
 
