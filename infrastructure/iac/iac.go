@@ -129,7 +129,7 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 func (iac *Scanner) retrieveIssues(ctx context.Context, scanResults []iacScanResult, issues []snyk.Issue, workspacePath string, err error) []snyk.Issue {
 	if len(scanResults) > 0 {
 		for _, s := range scanResults {
-			if ctx.Err != nil {
+			if ctx.Err() != nil {
 				return nil
 			}
 
