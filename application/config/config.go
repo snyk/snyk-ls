@@ -246,14 +246,14 @@ func (c *Config) Token() string {
 	return c.token
 }
 
-// TokenWithChangesChannel returns the current token with a channel that will be written into once the token has changed.
+// TokenChangesChannel returns a channel that will be written into once the token has changed.
 // This allows aborting operations when the token is changed.
-func (c *Config) TokenWithChangesChannel() (string, <-chan string) {
+func (c *Config) TokenChangesChannel() <-chan string {
 	c.m.Lock()
 	defer c.m.Unlock()
 	channel := make(chan string, 1)
 	c.tokenChangeChannels = append(c.tokenChangeChannels, channel)
-	return c.token, channel
+	return channel
 }
 
 func (c *Config) SetCliSettings(settings *CliSettings) {

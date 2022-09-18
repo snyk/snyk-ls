@@ -54,7 +54,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	defer close(done)
 
 	sc.initializer.Init()
-	_, tokenChangeChannel := config.CurrentConfig().TokenWithChangesChannel()
+	tokenChangeChannel := config.CurrentConfig().TokenChangesChannel()
 	ctx, cancelFunc := context.WithCancel(ctx)
 	defer cancelFunc()
 
