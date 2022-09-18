@@ -213,7 +213,11 @@ func (c *Config) loadFile(fileName string) {
 	log.Debug().Str("fileName", fileName).Msg("loaded.")
 }
 
-func (c *Config) Authenticated() bool { return c.token != "" }
+func (c *Config) Authenticated() bool {
+	c.m.Lock()
+	defer c.m.Unlock()
+	return c.token != ""
+}
 func (c *Config) CliSettings() *CliSettings {
 	c.m.Lock()
 	defer c.m.Unlock()
