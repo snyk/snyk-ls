@@ -83,7 +83,7 @@ func initInfrastructure() {
 	authProvider := auth2.NewCliAuthenticationProvider(errorReporter)
 	authenticator = services.NewAuthenticationService(authProvider, analytics, errorReporter)
 	snykCli = cli2.NewExecutor(authenticator, errorReporter, analytics)
-	snykCodeClient = code2.NewHTTPRepository(instrumentor, errorReporter)
+	snykCodeClient = code2.NewSnykCodeHTTPClient(instrumentor, errorReporter)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)

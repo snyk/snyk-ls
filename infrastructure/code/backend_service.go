@@ -61,7 +61,7 @@ type filtersResponse struct {
 	Extensions  []string `json:"extensions" pact:"min=1"`
 }
 
-func NewHTTPRepository(instrumentor performance2.Instrumentor, errorReporter error_reporting.ErrorReporter) *SnykCodeHTTPClient {
+func NewSnykCodeHTTPClient(instrumentor performance2.Instrumentor, errorReporter error_reporting.ErrorReporter) *SnykCodeHTTPClient {
 	return &SnykCodeHTTPClient{*httpclient.NewHTTPClient(), instrumentor, errorReporter}
 }
 
@@ -120,10 +120,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 	span := s.instrumentor.StartSpan(ctx, "code.doCall")
 	defer s.instrumentor.Finish(span)
 
-	requestId, err := performance2.GetTraceId(ctx)
-	if err != nil {
-		return nil, errors.New("Code request id was not provided. " + err.Error())
-	}
+	requestId := span.GetTraceId()
 
 	b := new(bytes.Buffer)
 
@@ -230,11 +227,8 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
 
-	requestId, err := performance2.GetTraceId(span.Context())
-	if err != nil {
-		log.Err(err).Str("method", method).Msg("Failed to obtain request id. " + err.Error())
-		return nil, AnalysisStatus{}, err
-	}
+	requestId := span.GetTraceId()
+
 	log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis for bundle")
 	defer log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis done")
 

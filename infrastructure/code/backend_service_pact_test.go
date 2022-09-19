@@ -245,7 +245,7 @@ func setupPact(t *testing.T) {
 	t.Setenv("DEEPROXY_API_URL", fmt.Sprintf("http://localhost:%d", pact.Server.Port))
 	config.CurrentConfig().UpdateApiEndpoints("http://localhost")
 
-	client = NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
+	client = NewSnykCodeHTTPClient(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 }
 
 func getPutPostHeaderMatcher() dsl.MapMatcher {

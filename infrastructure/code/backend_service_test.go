@@ -40,7 +40,7 @@ const (
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	testutil.SmokeTest(t)
 
-	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
+	s := NewSnykCodeHTTPClient(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	files := map[string]string{}
 	randomAddition := fmt.Sprintf("\n public void random() { System.out.println(\"%d\") }", time.Now().UnixMicro())
 	files[path1] = util.Hash([]byte(content + randomAddition))
@@ -52,7 +52,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	testutil.SmokeTest(t)
-	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
+	s := NewSnykCodeHTTPClient(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	var removedFiles []string
 	files := map[string]string{}
 	files[path1] = util.Hash([]byte(content))
@@ -82,7 +82,7 @@ func createTestExtendMap() map[string]BundleFile {
 func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 	testutil.SmokeTest(t)
 
-	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
+	s := NewSnykCodeHTTPClient(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []string
 	files := map[string]string{}
