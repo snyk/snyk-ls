@@ -191,6 +191,11 @@ func (sc *Scanner) newMetrics(fileCount int, scanStartTime time.Time) *ScanMetri
 }
 
 func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path string, scanMetrics *ScanMetrics) (issues []snyk.Issue) {
+	if ctx.Err() != nil {
+		log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
+		return issues
+	}
+
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.uploadAndAnalyze")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 	if len(files) == 0 {
@@ -206,24 +211,37 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path st
 	bundle, bundleFiles, err := sc.createBundle(span.Context(), requestId, path, files)
 
 	if err != nil {
-		msg := "error creating bundle..."
-		sc.handleCreationAndUploadError(err, msg, scanMetrics)
+		if ctx.Err() == nil { // Only report errors that are not intentional cancellations
+			msg := "error creating bundle..."
+			sc.handleCreationAndUploadError(err, msg, scanMetrics)
+		} else {
+			log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
+		}
 		return issues
 	}
 
 	uploadedBundle, err := sc.BundleUploader.Upload(span.Context(), bundle, bundleFiles)
 	// TODO LSP error handling should be pushed UP to the LSP layer
 	if err != nil {
-		msg := "error uploading files..."
-		sc.handleCreationAndUploadError(err, msg, scanMetrics)
+		if ctx.Err() != nil { // Only handle errors that are not intentional cancellations
+			msg := "error uploading files..."
+			sc.handleCreationAndUploadError(err, msg, scanMetrics)
+		} else {
+			log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
+		}
 		return issues
 	}
+
 	if uploadedBundle.BundleHash == "" {
 		log.Info().Msg("empty bundle, no Snyk Code analysis")
 		return issues
 	}
 
 	issues = uploadedBundle.FetchDiagnosticsData(span.Context())
+	if ctx.Err() != nil {
+		log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
+		return []snyk.Issue{}
+	}
 	sc.trackResult(true, scanMetrics)
 	return issues
 }
@@ -247,6 +265,9 @@ func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath 
 	fileHashes := make(map[string]string)
 	bundleFiles = make(map[string]BundleFile)
 	for _, filePath := range filePaths {
+		if ctx.Err() != nil {
+			return b, nil, err // The cancellation error should be handled by the calling function
+		}
 		if !sc.BundleUploader.isSupported(span.Context(), filePath) {
 			continue
 		}

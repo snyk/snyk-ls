@@ -75,8 +75,11 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
 		severity:     0,
 	}
 
+	start := time.Now()
 	for {
-		start := time.Now()
+		if ctx.Err() != nil { // Cancellation requested
+			return []snyk.Issue{}
+		}
 		issues, status, err := b.SnykCode.RunAnalysis(s.Context(), analysisOptions)
 
 		if err != nil {
