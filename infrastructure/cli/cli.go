@@ -89,6 +89,8 @@ func appendCliEnvironmentVariables(currentEnv []string) (updatedEnv []string) {
 	updatedEnv = currentEnv
 
 	currentConfig := config.CurrentConfig()
+	updatedEnv = append(updatedEnv, "PATH="+currentConfig.Path())
+
 	organization := currentConfig.GetOrganization()
 	if organization != "" {
 		updatedEnv = append(updatedEnv, OrganizationEnvVar+"="+organization)
@@ -108,7 +110,6 @@ func appendCliEnvironmentVariables(currentEnv []string) (updatedEnv []string) {
 	}
 	updatedEnv = append(updatedEnv, IntegrationEnvironmentEnvVarKey+"="+IntegrationEnvironmentEnvVarValue)
 	updatedEnv = append(updatedEnv, IntegrationEnvironmentVersionEnvVar+"="+config.Version)
-
 	return
 }
 
