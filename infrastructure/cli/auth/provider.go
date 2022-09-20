@@ -77,7 +77,6 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 		return err
 	}
 
-	// by assigning the writer to stdout, we pipe the cmd output to the go routine that parses it
 	reader, writer := io.Pipe()
 	go func() {
 		out := &strings.Builder{}
