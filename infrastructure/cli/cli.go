@@ -114,7 +114,7 @@ func appendCliEnvironmentVariables(currentEnv []string) (updatedEnv []string) {
 
 // todo no need to export that, we could have a simpler interface that looks more like an actual CLI
 func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
-	var additionalParams []string
+	var additionalParams = base
 	settings := config.CurrentConfig().CliSettings()
 	if settings.Insecure {
 		additionalParams = append(additionalParams, "--insecure")
@@ -122,14 +122,14 @@ func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
 
 	if len(settings.AdditionalParameters) > 0 {
 		for _, parameter := range settings.AdditionalParameters {
-			if base[1] == "iac" && parameter == "--all-projects" {
+			if base[1] == "iac" && parameter == "--all-projects" || parameter == "" {
 				continue
 			}
 			additionalParams = append(additionalParams, parameter)
 		}
 	}
 
-	return append(base, additionalParams...)
+	return additionalParams
 }
 
 func (c SnykCli) HandleErrors(ctx context.Context, output string) (fail bool) {

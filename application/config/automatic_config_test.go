@@ -83,7 +83,7 @@ func Test_FindBinaries(t *testing.T) {
 		c := New()
 		c.AddBinaryLocationsToPath([]string{dir})
 
-		assert.Contains(t, os.Getenv("JAVA_HOME"), dir)
+		assert.Contains(t, filepath.Clean(os.Getenv("JAVA_HOME")), filepath.Clean(dir))
 	})
 
 	t.Run("search for binary in default places", func(t *testing.T) {
