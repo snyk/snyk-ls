@@ -36,12 +36,12 @@ func (c *Config) determineJavaHome() {
 func (c *Config) normalizePath(foundPath string) (string, bool) {
 	path, err := filepath.EvalSymlinks(foundPath)
 	if err != nil {
-		log.Err(err).Msg("could not resolve symlink to java binary")
+		log.Err(err).Msg("could not resolve symlink to binary")
 		return "", true
 	}
 	path, err = filepath.Abs(path)
 	if err != nil {
-		log.Err(err).Msg("could not resolve absolute path of java binary")
+		log.Err(err).Msg("could not resolve absolute path of binary")
 		return "", true
 	}
 	return path, false
