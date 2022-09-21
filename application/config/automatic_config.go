@@ -21,14 +21,8 @@ func (c *Config) determineJavaHome() {
 	if foundPath == "" {
 		return
 	}
-	path, err := filepath.EvalSymlinks(foundPath)
-	if err != nil {
-		log.Err(err).Msg("could not resolve symlink to java binary")
-		return
-	}
-	path, err = filepath.Abs(path)
-	if err != nil {
-		log.Err(err).Msg("could not resolve absolute path of java binary")
+	path, done := c.normalizePath(foundPath)
+	if done {
 		return
 	}
 	log.Debug().Str("method", "determineJavaHome").Msgf("found java binary at %s", path)
@@ -39,20 +33,32 @@ func (c *Config) determineJavaHome() {
 	_ = os.Setenv("JAVA_HOME", javaHome)
 }
 
+func (c *Config) normalizePath(foundPath string) (string, bool) {
+	path, err := filepath.EvalSymlinks(foundPath)
+	if err != nil {
+		log.Err(err).Msg("could not resolve symlink to java binary")
+		return "", true
+	}
+	path, err = filepath.Abs(path)
+	if err != nil {
+		log.Err(err).Msg("could not resolve absolute path of java binary")
+		return "", true
+	}
+	return path, false
+}
+
 func (c *Config) determineMavenHome() {
 	mavenHome := os.Getenv("MAVEN_HOME")
 	if mavenHome != "" {
 		c.updatePath(mavenHome + string(os.PathSeparator) + "bin")
 		return
 	}
-	path, err := filepath.EvalSymlinks(c.findBinary(getMavenBinaryName()))
-	if err != nil {
-		log.Err(err).Msg("could not resolve symlink to maven binary")
+	foundPath := c.findBinary(getMavenBinaryName())
+	if foundPath == "" {
 		return
 	}
-	path, err = filepath.Abs(path)
-	if err != nil {
-		log.Err(err).Msg("could not resolve absolute path of maven binary")
+	path, done := c.normalizePath(foundPath)
+	if done {
 		return
 	}
 	c.updatePath(filepath.Dir(path))
