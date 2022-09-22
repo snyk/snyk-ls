@@ -79,6 +79,8 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 
 	reader, writer := io.Pipe()
 	go func() {
+		defer writer.Close()
+
 		out := &strings.Builder{}
 		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
