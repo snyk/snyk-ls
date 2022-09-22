@@ -34,7 +34,7 @@ type ScanMetrics struct {
 
 type ScanStatus struct {
 	// finished channel is closed once the scan has finished
-	finished chan struct{}
+	finished chan bool
 
 	// isRunning is true when the scan is either running or waiting to run, and changed to false when it's done
 	isRunning bool
@@ -45,7 +45,7 @@ type ScanStatus struct {
 
 func NewScanStatus() *ScanStatus {
 	return &ScanStatus{
-		finished:  make(chan struct{}),
+		finished:  make(chan bool),
 		isRunning: false,
 		isPending: false,
 	}

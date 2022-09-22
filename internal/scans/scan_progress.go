@@ -19,21 +19,21 @@ const timeout = 5 * time.Second
 // ScanProgress operations should be done in locked sections.
 type ScanProgress struct {
 	isDone bool
-	done   chan struct{}
-	cancel chan struct{}
+	done   chan bool
+	cancel chan bool
 	mutex  sync.Mutex
 }
 
 func NewScanProgress() *ScanProgress {
 	return &ScanProgress{
-		cancel: make(chan struct{}),
-		done:   make(chan struct{}),
+		cancel: make(chan bool),
+		done:   make(chan bool),
 	}
 }
 
-func (rs *ScanProgress) GetDoneChannel() <-chan struct{} { return rs.done }
+func (rs *ScanProgress) GetDoneChannel() <-chan bool { return rs.done }
 
-func (rs *ScanProgress) GetCancelChannel() <-chan struct{} { return rs.cancel }
+func (rs *ScanProgress) GetCancelChannel() <-chan bool { return rs.cancel }
 
 // IsDone is true if the scan finished whether by cancellation or by a SetDone call
 func (rs *ScanProgress) IsDone() bool {
@@ -51,7 +51,7 @@ func (rs *ScanProgress) CancelScan() {
 		// There should always be a goroutine that listens for this channel
 		log.Warn().Str("method", "CancelScan").Msg("No listeners for cancel message - timing out")
 		return
-	case rs.cancel <- struct{}{}:
+	case rs.cancel <- true:
 		log.Debug().Msg("Cancel signal sent")
 		rs.mutex.Lock()
 		defer rs.mutex.Unlock()
@@ -76,7 +76,7 @@ func (rs *ScanProgress) SetDone() {
 		// Seeing this message in a log is a sign that something is wrong.
 		// There should always be a goroutine that listens for this channel
 		log.Warn().Str("method", "SetDone").Msg("No listeners for Done message - timing out")
-	case rs.done <- struct{}{}:
+	case rs.done <- true:
 		log.Debug().Msg("Done signal sent")
 	}
 }
