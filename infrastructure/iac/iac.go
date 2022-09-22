@@ -78,7 +78,7 @@ func (iac *Scanner) SupportedCommands() []snyk.CommandName {
 func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue) {
 	if ctx.Err() != nil {
 		log.Info().Msg("Cancelling IAC scan - IAC scanner received cancellation signal")
-		return
+		return issues
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -86,10 +86,11 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 
 	documentURI := uri.PathToUri(path) // todo get rid of lsp dep
 	if !iac.isSupported(documentURI) {
-		return
+		return issues
 	}
 	p := progress.NewTracker(false) // todo - get progress trackers via DI
 	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", path)
+	defer p.End("Snyk Iac Scan completed.")
 
 	var workspacePath string
 	if uri.IsDirectory(documentURI) {
@@ -105,6 +106,12 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	}
 	newScan := scans.NewScanProgress()
 	go newScan.Listen(cancel, i)
+	defer func() {
+		iac.mutex.Lock()
+		log.Debug().Msgf("Scan %v is done", i)
+		newScan.SetDone() // Calling SetDone is safe even after cancellation
+		iac.mutex.Unlock()
+	}()
 	scanCount++
 	iac.runningScans[documentURI] = newScan
 	iac.mutex.Unlock()
@@ -116,16 +123,11 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 		if noCancellation { // Only reports errors that are not intentional cancellations
 			iac.errorReporter.CaptureError(err)
 		} else { // If the scan was cancelled, return empty results
-			return
+			return issues
 		}
 	}
 
 	issues = iac.retrieveIssues(ctx, scanResults, issues, workspacePath, err)
-	iac.mutex.Lock()
-	log.Debug().Msgf("Scan %v is done", i)
-	newScan.SetDone()
-	iac.mutex.Unlock()
-	p.End("Snyk Iac Scan completed.")
 	return issues
 }
 
@@ -153,8 +155,9 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 	s := iac.instrumentor.StartSpan(ctx, method)
 	defer iac.instrumentor.Finish(s)
 
-	// iac.mutex.Lock()
-	// defer iac.mutex.Unlock()
+	// IAC scans can not run in parallel due to shared processes memory
+	iac.mutex.Lock()
+	defer iac.mutex.Unlock()
 
 	cmd := iac.cliCmd(documentURI)
 	res, err := iac.cli.Execute(ctx, cmd, workspacePath)
