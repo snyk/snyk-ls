@@ -96,6 +96,7 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk
 	previousScanStatus, wasFound := sc.runningScans[folderPath]
 	if wasFound && previousScanStatus.isRunning {
 		if previousScanStatus.isPending {
+			sc.scanStatusMutex.Unlock()
 			return []snyk.Issue{}
 		}
 
