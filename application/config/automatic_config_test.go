@@ -65,11 +65,14 @@ func Test_FindBinaries(t *testing.T) {
 	javaBinary := getJavaBinaryName()
 	mavenBinary := getMavenBinaryName()
 	t.Run("search for java in path", func(t *testing.T) {
-		dir := t.TempDir()
+		dir, err := filepath.EvalSymlinks(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
 		t.Setenv("JAVA_HOME", "")
 		binDir := filepath.Join(dir, "bin")
 		t.Setenv("PATH", binDir)
-		err := os.MkdirAll(binDir, 0700)
+		err = os.MkdirAll(binDir, 0700)
 		if err != nil {
 			t.Fatal(err)
 		}
