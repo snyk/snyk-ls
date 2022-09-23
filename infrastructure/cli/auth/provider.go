@@ -1,8 +1,10 @@
 package auth
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -75,35 +77,30 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 		return err
 	}
 
-	// FIXME copy auth link breaks authentication process [ROAD-1166]
-	//reader, writer := io.Pipe()
-	//
-	//wg := &sync.WaitGroup{}
-	//wg.Add(1)
-	//go func() {
-	//	defer wg.Done()
-	//	out := &strings.Builder{}
-	//	scanner := bufio.NewScanner(reader)
-	//	for scanner.Scan() {
-	//		text := scanner.Text()
-	//		url := a.getAuthURL(text)
-	//		out.Write(scanner.Bytes())
-	//		log.Debug().Str("method", "authenticate").Msgf("current auth url line: %s", text)
-	//
-	//		if url != "" {
-	//			a.authURL = url
-	//			log.Debug().Str("method", "authenticate").Msgf("found URL: %s", url)
-	//			break
-	//		}
-	//	}
-	//
-	//	log.Info().Str("method", "authenticate").Str("output", out.String()).Msg("auth Snyk CLI")
-	//}()
-	//
-	//// by assigning the writer to stdout, we pipe the cmd output to the go routine that parses it
-	//cmd.Stdout = writer
+	reader, writer := io.Pipe()
+	go func() {
+		defer writer.Close()
+
+		out := &strings.Builder{}
+		scanner := bufio.NewScanner(reader)
+		for scanner.Scan() {
+			text := scanner.Text()
+			url := a.getAuthURL(text)
+			out.Write(scanner.Bytes())
+			log.Debug().Str("method", "authenticate").Msgf("current auth url line: %s", text)
+
+			if url != "" {
+				a.authURL = url
+				log.Debug().Str("method", "authenticate").Msgf("found URL: %s", url)
+			}
+		}
+
+		log.Info().Str("method", "authenticate").Str("output", out.String()).Msg("auth Snyk CLI")
+	}()
+
+	// by assigning the writer to stdout, we pipe the cmd output to the go routine that parses it
+	cmd.Stdout = writer
 	err = a.runCLICmd(ctx, cmd)
-	//wg.Wait()
 	return err
 }
 
