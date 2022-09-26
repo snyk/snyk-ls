@@ -2,6 +2,7 @@ package snyk
 
 import (
 	"context"
+	"runtime"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -11,6 +12,9 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 )
+
+// sem is a channel that will allow up to CPU cores - 1 concurrent operations.
+var sem = make(chan int, runtime.NumCPU()-1)
 
 type Scanner interface {
 	Scan(
@@ -90,6 +94,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	waitGroup := &sync.WaitGroup{}
 	for _, scanner := range sc.scanners {
 		if scanner.IsEnabled() {
+			sem <- 1
 			waitGroup.Add(1)
 			go func(s ProductScanner) {
 				defer waitGroup.Done()
@@ -100,6 +105,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				foundIssues := s.Scan(span.Context(), path, folderPath)
 				processResults(foundIssues)
 				log.Debug().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
+				<-sem
 			}(scanner)
 		} else {
 			log.Debug().Msgf("Skipping scan with %T because it is not enabled", scanner)
