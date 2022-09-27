@@ -25,7 +25,7 @@ type TestProductScanner struct {
 	scanDuration time.Duration
 }
 
-func (t *TestProductScanner) Scan(ctx context.Context, _ string, _ string) (issues []Issue) {
+func (t *TestProductScanner) Scan(ctx context.Context, _ string, _ string, _ chan int) (issues []Issue) {
 	log.Debug().Msg("Test product scanner running scan")
 	defer log.Debug().Msg("Test product scanner scan finished")
 

@@ -63,7 +63,11 @@ func (sc *Scanner) SupportedCommands() []snyk.CommandName {
 	return []snyk.CommandName{snyk.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk.Issue {
+func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string, concurrentScansSemaphore chan int) []snyk.Issue {
+	concurrentScansSemaphore <- 1
+	defer func() {
+		<-concurrentScansSemaphore
+	}()
 	startTime := time.Now()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)

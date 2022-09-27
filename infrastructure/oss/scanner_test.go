@@ -36,7 +36,7 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, executor)
-	scanner.Scan(context.Background(), path, "")
+	scanner.Scan(context.Background(), path, "", make(chan int))
 
 	assert.Len(t, analytics.GetAnalytics(), 1)
 	assert.Equal(t, ux2.AnalysisIsReadyProperties{
@@ -91,7 +91,7 @@ func Test_ContextCanceled_Scan_DoesNotScan(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	scanner.Scan(ctx, "", "")
+	scanner.Scan(ctx, "", "", make(chan int))
 
 	assert.False(t, cliMock.WasExecuted())
 }
@@ -112,6 +112,33 @@ func mavenTestIssue() ossIssue {
 
 	return issue
 }
+
+// create semaphore
+// we start a scan with oss
+// select semaphore <- 1
+// check if channel can be written
+
+// TODO: Test concurrent scans
+// func TestConcurrentScans(t *testing.T) {
+// 	concurrency := 1
+// 	semaphore := make(chan int, concurrency)
+// 	workingDir, _ := os.Getwd()
+// 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
+// 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
+
+// 	scanner.Scan(context.Background(), path, "", semaphore)
+
+// 	select {
+// 	case scan := <-semaphore:
+// 		t.Logf("semaphore received scan: %d", scan)
+// 	case semaphore <- concurrency:
+// 		t.Logf("semaphore sent scan: %d", concurrency)
+// 		// t.Fatalf("ran more than %d concurrent scans at a time", concurrency)
+// 	default:
+// 		t.Logf("ran %d concurrent scans at a time", concurrency)
+// 		// this select defaults when the channel is full, the test passes
+// 	}
+// }
 
 func TestUnmarshalOssJsonSingle(t *testing.T) {
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())

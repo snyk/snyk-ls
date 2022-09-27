@@ -100,7 +100,7 @@ func (oss *Scanner) Product() snyk.Product {
 	return snyk.ProductOpenSource
 }
 
-func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue) {
+func (oss *Scanner) Scan(ctx context.Context, path string, _ string, concurrentScansSemaphore chan int) (issues []snyk.Issue) {
 	if ctx.Err() != nil {
 		log.Debug().Msg("Cancelling OSS scan - OSS scanner received cancellation signal")
 		return make([]snyk.Issue, 0)
@@ -112,6 +112,12 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 		return issues
 	}
 	method := "oss.Scan"
+
+	concurrentScansSemaphore <- 1
+	defer func() {
+		<-concurrentScansSemaphore
+	}()
+
 	s := oss.instrumentor.StartSpan(ctx, method)
 	defer oss.instrumentor.Finish(s)
 	p := progress.NewTracker(false)

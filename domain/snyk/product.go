@@ -17,6 +17,7 @@ type ProductScanner interface {
 		ctx context.Context,
 		path string,
 		folderPath string,
+		concurrentScansSemaphore chan int,
 	) (issues []Issue)
 
 	IsEnabled() bool

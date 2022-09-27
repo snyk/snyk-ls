@@ -2,7 +2,6 @@ package snyk
 
 import (
 	"context"
-	"runtime"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -12,9 +11,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 )
-
-// sem is a channel that will allow up to CPU cores - 1 concurrent operations.
-var sem = make(chan int, runtime.NumCPU()-1)
 
 type Scanner interface {
 	Scan(
@@ -27,10 +23,11 @@ type Scanner interface {
 
 // DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
 type DelegatingConcurrentScanner struct {
-	scanners     []ProductScanner
-	initializer  initialize.Initializer
-	instrumentor performance.Instrumentor
-	analytics    ux2.Analytics
+	scanners           []ProductScanner
+	initializer        initialize.Initializer
+	instrumentor       performance.Instrumentor
+	analytics          ux2.Analytics
+	maxConcurrentScans chan int
 }
 
 func NewDelegatingScanner(
@@ -40,10 +37,11 @@ func NewDelegatingScanner(
 	scanners ...ProductScanner,
 ) Scanner {
 	return &DelegatingConcurrentScanner{
-		instrumentor: instrumentor,
-		analytics:    analytics,
-		initializer:  initializer,
-		scanners:     scanners,
+		instrumentor:       instrumentor,
+		analytics:          analytics,
+		initializer:        initializer,
+		scanners:           scanners,
+		maxConcurrentScans: make(chan int, len(scanners)),
 	}
 }
 
@@ -94,7 +92,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	waitGroup := &sync.WaitGroup{}
 	for _, scanner := range sc.scanners {
 		if scanner.IsEnabled() {
-			sem <- 1
 			waitGroup.Add(1)
 			go func(s ProductScanner) {
 				defer waitGroup.Done()
@@ -102,10 +99,9 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				defer sc.instrumentor.Finish(span)
 				log.Debug().Msgf("Scanning %s with %T: STARTED", path, s)
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
-				foundIssues := s.Scan(span.Context(), path, folderPath)
+				foundIssues := s.Scan(span.Context(), path, folderPath, sc.maxConcurrentScans)
 				processResults(foundIssues)
 				log.Debug().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
-				<-sem
 			}(scanner)
 		} else {
 			log.Debug().Msgf("Skipping scan with %T because it is not enabled", scanner)

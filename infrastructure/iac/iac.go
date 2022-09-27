@@ -70,7 +70,7 @@ func (iac *Scanner) SupportedCommands() []snyk.CommandName {
 	return []snyk.CommandName{}
 }
 
-func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue) {
+func (iac *Scanner) Scan(ctx context.Context, path string, _ string, _ chan int) (issues []snyk.Issue) {
 	if ctx.Err() != nil {
 		log.Info().Msg("Cancelling IAC scan - IAC scanner received cancellation signal")
 		return []snyk.Issue{}
