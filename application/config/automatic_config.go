@@ -13,12 +13,38 @@ import (
 func (c *Config) determineJavaHome() {
 	javaHome := os.Getenv("JAVA_HOME")
 	if javaHome != "" {
+		log.Debug().Str("method", "determineJavaHome").Msgf("found javaHome %s in env", javaHome)
 		c.updatePath(javaHome + string(os.PathSeparator) + "bin")
 		return
 	}
-	java := c.findBinary(getJavaBinaryName())
-	c.updatePath(java)
-	_ = os.Setenv("JAVA_HOME", filepath.Dir(filepath.Dir(java)))
+	foundPath := c.FindBinaryInDirs(getJavaBinaryName())
+	if foundPath == "" {
+		return
+	}
+	path, done := c.normalizePath(foundPath)
+	if done {
+		return
+	}
+	log.Debug().Str("method", "determineJavaHome").Msgf("found java binary at %s", path)
+	binDir := filepath.Dir(path)
+	javaHome = filepath.Dir(binDir)
+	c.updatePath(binDir)
+	log.Debug().Str("method", "determineJavaHome").Msgf("setting java home to %s", javaHome)
+	_ = os.Setenv("JAVA_HOME", javaHome)
+}
+
+func (c *Config) normalizePath(foundPath string) (string, bool) {
+	path, err := filepath.EvalSymlinks(foundPath)
+	if err != nil {
+		log.Err(err).Msg("could not resolve symlink to binary")
+		return "", true
+	}
+	path, err = filepath.Abs(path)
+	if err != nil {
+		log.Err(err).Msg("could not resolve absolute path of binary")
+		return "", true
+	}
+	return path, false
 }
 
 func (c *Config) determineMavenHome() {
@@ -27,7 +53,14 @@ func (c *Config) determineMavenHome() {
 		c.updatePath(mavenHome + string(os.PathSeparator) + "bin")
 		return
 	}
-	path := c.findBinary(getMavenBinaryName())
+	foundPath := c.findBinary(getMavenBinaryName())
+	if foundPath == "" {
+		return
+	}
+	path, done := c.normalizePath(foundPath)
+	if done {
+		return
+	}
 	c.updatePath(filepath.Dir(path))
 }
 
@@ -62,23 +95,20 @@ func (c *Config) findBinary(binaryName string) string {
 
 func (c *Config) FindBinaryInDirs(binaryName string) (foundPath string) {
 	method := "FindBinaryInDirs"
+	var foundFilePaths []string
 	for _, dir := range c.defaultDirs {
 		_, err := os.Stat(dir)
 		if err != nil {
 			log.Info().Str("method", method).Msg("no java dir found in " + dir)
 			continue
 		}
-		var foundFilePaths []string
-		err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 			if filepath.Base(path) == binaryName {
 				foundFilePaths = append(foundFilePaths, path)
 				log.Debug().Str("method", "FindBinaryInDirs").Msgf("found: %s", path)
 			}
 			return err
 		})
-		if err != nil {
-			return ""
-		}
 		count := len(foundFilePaths)
 		if count > 0 {
 			// take newest, as the dirwalk is lexical
