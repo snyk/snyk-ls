@@ -3,6 +3,7 @@ package snyk
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog/log"
 
@@ -102,6 +103,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				foundIssues := s.Scan(span.Context(), path, folderPath)
 				processResults(foundIssues)
 				log.Debug().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
+				ctx, _ = context.WithDeadline(ctx, time.Now()+time.Minute*5)
 			}(scanner)
 		} else {
 			log.Debug().Msgf("Skipping scan with %T because it is not enabled", scanner)
