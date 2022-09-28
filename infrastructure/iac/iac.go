@@ -127,17 +127,13 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 		}
 	}
 
-	issues = iac.retrieveIssues(ctx, scanResults, issues, workspacePath, err)
+	issues = iac.retrieveIssues(scanResults, issues, workspacePath, err)
 	return issues
 }
 
-func (iac *Scanner) retrieveIssues(ctx context.Context, scanResults []iacScanResult, issues []snyk.Issue, workspacePath string, err error) []snyk.Issue {
+func (iac *Scanner) retrieveIssues(scanResults []iacScanResult, issues []snyk.Issue, workspacePath string, err error) []snyk.Issue {
 	if len(scanResults) > 0 {
 		for _, s := range scanResults {
-			if ctx.Err() != nil {
-				return nil
-			}
-
 			issues = append(issues, iac.retrieveAnalysis(s, workspacePath)...)
 		}
 	}

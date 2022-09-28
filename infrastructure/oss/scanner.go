@@ -195,10 +195,6 @@ func (oss *Scanner) unmarshallAndRetrieveAnalysis(ctx context.Context, res []byt
 	}
 
 	for _, scanResult := range scanResults {
-		if ctx.Err() != nil {
-			return nil
-		}
-
 		targetFile := oss.determineTargetFile(scanResult.DisplayTargetFile)
 		targetFilePath := filepath.Join(uri.PathFromUri(documentURI), targetFile)
 		targetFileUri := uri.PathToUri(targetFilePath)
