@@ -4,8 +4,10 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -33,15 +35,24 @@ type SnykCli struct {
 	authenticator snyk.AuthenticationService
 	errorReporter error_reporting.ErrorReporter
 	analytics     ux.Analytics
+	semaphore     chan int
 }
+
+const cliTimeout = 15 * time.Minute
 
 var Mutex = &sync.Mutex{}
 
 func NewExecutor(authenticator snyk.AuthenticationService, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics) Executor {
+	concurrencyLimit := runtime.NumCPU()
+	if concurrencyLimit < 1 {
+		concurrencyLimit = 1
+	}
+
 	return &SnykCli{
 		authenticator,
 		errorReporter,
 		analytics,
+		make(chan int, concurrencyLimit),
 	}
 }
 
@@ -54,6 +65,21 @@ type Executor interface {
 func (c SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error) {
 	method := "SnykCli.Execute"
 	log.Info().Str("method", method).Interface("cmd", cmd).Str("workingDir", workingDir).Msg("calling Snyk CLI")
+
+	// set deadline to handle CLI hanging when obtaining semaphore
+	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(cliTimeout))
+	defer cancel()
+
+	// handle concurrency limit, and when context is cancelled
+	select {
+	case c.semaphore <- 1:
+		defer func() {
+			<-c.semaphore
+		}()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
 	output, err := c.doExecute(ctx, cmd, workingDir, true)
 	log.Trace().Str("method", method).Str("response", string(output))
 	return output, err
