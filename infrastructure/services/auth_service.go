@@ -60,6 +60,7 @@ func (a AuthenticationService) Logout(ctx context.Context) {
 		return
 	}
 
+	config.CurrentConfig().SetToken("")
 	notification.Send(lsp.AuthenticationParams{Token: ""})
 
 	workspace.Get().ClearIssues(ctx)
