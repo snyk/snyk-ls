@@ -36,23 +36,20 @@ type SnykCli struct {
 	errorReporter error_reporting.ErrorReporter
 	analytics     ux.Analytics
 	semaphore     chan int
+	cliTimeout    time.Duration
 }
-
-const cliTimeout = 15 * time.Minute
 
 var Mutex = &sync.Mutex{}
 
 func NewExecutor(authenticator snyk.AuthenticationService, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics) Executor {
-	concurrencyLimit := runtime.NumCPU()
-	if concurrencyLimit < 1 {
-		concurrencyLimit = 1
-	}
+	concurrencyLimit := 2
 
 	return &SnykCli{
 		authenticator,
 		errorReporter,
 		analytics,
 		make(chan int, concurrencyLimit),
+		90 * time.Minute, // TODO: add preference to make this configurable
 	}
 }
 
@@ -67,7 +64,7 @@ func (c SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (
 	log.Info().Str("method", method).Interface("cmd", cmd).Str("workingDir", workingDir).Msg("calling Snyk CLI")
 
 	// set deadline to handle CLI hanging when obtaining semaphore
-	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(cliTimeout))
+	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(c.cliTimeout))
 	defer cancel()
 
 	// handle concurrency limit, and when context is cancelled
