@@ -34,11 +34,11 @@ func TestCreateDependencyTree(t *testing.T) {
 	children := tree.Root.Children
 	assert.Len(t, children, 2, "Should have extracted 2 deps from pom.xml")
 
-	assert.Equal(t, 38, children[0].Line)
+	assert.Equal(t, 54, children[0].Line)
 	assert.Equal(t, 15, children[0].StartChar)
 	assert.Equal(t, 21, children[0].EndChar)
 
-	assert.Equal(t, 43, children[1].Line)
+	assert.Equal(t, 59, children[1].Line)
 	assert.Equal(t, 15, children[1].StartChar)
 	assert.Equal(t, 21, children[1].EndChar)
 }

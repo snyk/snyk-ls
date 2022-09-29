@@ -34,5 +34,5 @@ func Test_hash(t *testing.T) {
 func Test_hashLatin1File(t *testing.T) {
 	dir, _ := os.Getwd()
 	content, _ := os.ReadFile(filepath.Join(dir, "testdata", "pom.xml"))
-	assert.Equal(t, "404134d7a7d5e7b3b5ef88de5b5f5333b3b2247828ef846e48034b564c625dfc", Hash(content))
+	assert.Equal(t, "81749e832630cc2c5dfea7aa1b96dbd4129d03f4dc86756fa20f76a6823e21d2", Hash(content))
 }

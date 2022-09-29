@@ -55,11 +55,11 @@ func TestMavenRangeFinder_Find(t *testing.T) {
 
 	expectedRange := snyk.Range{
 		Start: snyk.Position{
-			Line:      38,
+			Line:      54,
 			Character: 15,
 		},
 		End: snyk.Position{
-			Line:      38,
+			Line:      54,
 			Character: 21,
 		},
 	}
