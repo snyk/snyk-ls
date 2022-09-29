@@ -3,6 +3,7 @@ package code
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -62,7 +63,6 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
 
 	p := progress.NewTracker(false)
 	p.Begin("Snyk Code analysis for "+b.rootPath, "Retrieving results...")
-	defer p.End("Analysis complete.")
 
 	method := "code.retrieveAnalysis"
 	s := b.instrumentor.StartSpan(ctx, method)
@@ -89,12 +89,14 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
 				Int("fileCount", len(b.UploadBatches)).
 				Msg("error retrieving diagnostics...")
 			b.errorReporter.CaptureError(err)
+			p.End(fmt.Sprintf("Analysis failed: %v", err))
 			return []snyk.Issue{}
 		}
 
 		if status.message == "COMPLETE" {
 			log.Trace().Str("method", "retrieveAnalysis").Str("requestId", b.requestId).
 				Msg("sending diagnostics...")
+			p.End("Analysis complete.")
 			return issues
 		}
 

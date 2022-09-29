@@ -4,7 +4,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -125,9 +127,8 @@ func TestUnmarshalOssJsonSingle(t *testing.T) {
 	if err != nil {
 		t.Fatal(t, "couldn't read test result file")
 	}
-	scanResults, done, err := scanner.unmarshallOssJson(fileContent)
+	scanResults, err := scanner.unmarshallOssJson(fileContent)
 	assert.NoError(t, err)
-	assert.False(t, done)
 	assert.Len(t, scanResults, 1)
 }
 
@@ -143,9 +144,8 @@ func TestUnmarshalOssJsonArray(t *testing.T) {
 	if err != nil {
 		t.Fatal(t, "couldn't read test result file")
 	}
-	scanResults, done, err := scanner.unmarshallOssJson(fileContent)
+	scanResults, err := scanner.unmarshallOssJson(fileContent)
 	assert.NoError(t, err)
-	assert.False(t, done)
 	assert.Len(t, scanResults, 3)
 }
 
@@ -161,9 +161,8 @@ func TestUnmarshalOssErroneousJson(t *testing.T) {
 	if err != nil {
 		t.Fatal(t, "couldn't read test result file")
 	}
-	scanResults, done, err := scanner.unmarshallOssJson(fileContent)
+	scanResults, err := scanner.unmarshallOssJson(fileContent)
 	assert.Error(t, err)
-	assert.True(t, done)
 	assert.Nil(t, scanResults)
 }
 
@@ -193,6 +192,34 @@ func Test_toHover_asMarkdown(t *testing.T) {
 		"\n### testIssue: THOU SHALL NOT PASS affecting  package \n### Vulnerability   | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \nGetting into Moria is an issue!",
 		h,
 	)
+}
+
+func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
+	// Arrange
+	concurrentScanRequests := 10
+	workingDir, _ := os.Getwd()
+	folderPath := workingDir
+	fakeCli := cli.NewTestExecutor()
+	fakeCli.ExecuteDuration = time.Second
+	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), fakeCli)
+	wg := sync.WaitGroup{}
+	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
+
+	// Act
+	for i := 0; i < concurrentScanRequests; i++ {
+		// Adding a short delay so the cancel listener will start before a new scan is sending the cancel signal
+		time.Sleep(100 * time.Millisecond)
+
+		wg.Add(1)
+		go func() {
+			scanner.Scan(context.Background(), path, folderPath)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	// Assert
+	assert.Equal(t, 1, fakeCli.GetFinishedScans())
 }
 
 func sampleIssue() ossIssue {

@@ -149,34 +149,3 @@ func (c SnykCli) HandleErrors(ctx context.Context, output string) (fail bool) {
 	}
 	return false
 }
-
-type TestExecutor struct {
-	ExecuteResponse string
-	wasExecuted     bool
-}
-
-func NewTestExecutor() *TestExecutor {
-	return &TestExecutor{ExecuteResponse: "{}"}
-}
-
-func (t *TestExecutor) Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error) {
-	err = ctx.Err()
-	if err != nil { // When the operation is cancelled via the context, return empty results and don't set "wasExecuted"
-		return make([]byte, 0), err
-	}
-
-	t.wasExecuted = true
-	return []byte(t.ExecuteResponse), err
-}
-
-func (t *TestExecutor) ExpandParametersFromConfig(base []string) []string {
-	return nil
-}
-
-func (t *TestExecutor) HandleErrors(ctx context.Context, output string) (fail bool) {
-	return false
-}
-
-func (t *TestExecutor) WasExecuted() bool {
-	return t.wasExecuted
-}

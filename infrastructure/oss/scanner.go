@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/gomarkdown/markdown"
 	"github.com/pkg/errors"
@@ -22,6 +23,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/scans"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -72,11 +74,16 @@ var supportedFiles = map[string]bool{
 	"mix.lock":                true,
 }
 
+// a counter for scans, used for logging
+var scanCount = 1
+
 type Scanner struct {
 	instrumentor  performance.Instrumentor
 	errorReporter error_reporting.ErrorReporter
 	analytics     ux2.Analytics
 	cli           cli.Executor
+	mutex         *sync.Mutex
+	runningScans  map[string]*scans.ScanProgress
 }
 
 func New(instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux2.Analytics, cli cli.Executor) *Scanner {
@@ -85,6 +92,8 @@ func New(instrumentor performance.Instrumentor, errorReporter error_reporting.Er
 		errorReporter: errorReporter,
 		analytics:     analytics,
 		cli:           cli,
+		mutex:         &sync.Mutex{},
+		runningScans:  map[string]*scans.ScanProgress{},
 	}
 }
 
@@ -103,8 +112,10 @@ func (oss *Scanner) Product() snyk.Product {
 func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue) {
 	if ctx.Err() != nil {
 		log.Debug().Msg("Cancelling OSS scan - OSS scanner received cancellation signal")
-		return make([]snyk.Issue, 0)
+		return issues
 	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	documentURI := uri.PathToUri(path) // todo get rid of lsp dep
 	if !oss.isSupported(documentURI) {
@@ -117,7 +128,6 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	p := progress.NewTracker(false)
 	p.BeginUnquantifiableLength("Scanning for Snyk Open Source issues", path)
 	defer p.End("Snyk Open Source scan completed.")
-
 	log.Debug().Str("method", method).Msg("started.")
 	defer log.Debug().Str("method", method).Msg("done.")
 
@@ -134,15 +144,38 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 		workDir = filepath.Dir(path)
 	}
 
+	oss.mutex.Lock()
+	i := scanCount
+	previousScan, wasFound := oss.runningScans[workDir]
+	if wasFound && !previousScan.IsDone() { // If there's already a scan for the current workdir, we want to cancel it and restart it
+		previousScan.CancelScan()
+	}
+	newScan := scans.NewScanProgress()
+	go newScan.Listen(cancel, i)
+	scanCount++
+	oss.runningScans[workDir] = newScan
+	oss.mutex.Unlock()
+
 	cmd := oss.cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliSettings().Path(), "test", workDir, "--json"})
 	res, err := oss.cli.Execute(ctx, cmd, workDir)
+	noCancellation := ctx.Err() == nil
 	if err != nil {
-		if oss.handleError(err, res, cmd) {
+		if noCancellation {
+			if oss.handleError(err, res, cmd) {
+				return
+			}
+		} else { // If scan was cancelled, return empty results
 			return
 		}
 	}
 
-	issues = oss.unmarshallAndRetrieveAnalysis(res, uri.PathToUri(workDir))
+	issues = oss.unmarshallAndRetrieveAnalysis(ctx, res, uri.PathToUri(workDir))
+
+	oss.mutex.Lock()
+	log.Debug().Msgf("Scan %v is done", i)
+	newScan.SetDone()
+	oss.mutex.Unlock()
+
 	return issues
 }
 
@@ -150,14 +183,15 @@ func (oss *Scanner) isSupported(documentURI sglsp.DocumentURI) bool {
 	return uri.IsDirectory(documentURI) || supportedFiles[filepath.Base(uri.PathFromUri(documentURI))]
 }
 
-func (oss *Scanner) unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.DocumentURI) (issues []snyk.Issue) {
-	scanResults, done, err := oss.unmarshallOssJson(res)
-	if err != nil {
-		oss.errorReporter.CaptureError(err)
+func (oss *Scanner) unmarshallAndRetrieveAnalysis(ctx context.Context, res []byte, documentURI sglsp.DocumentURI) (issues []snyk.Issue) {
+	if ctx.Err() != nil {
+		return nil
 	}
 
-	if done {
-		return
+	scanResults, err := oss.unmarshallOssJson(res)
+	if err != nil {
+		oss.errorReporter.CaptureError(err)
+		return nil
 	}
 
 	for _, scanResult := range scanResults {
@@ -169,35 +203,33 @@ func (oss *Scanner) unmarshallAndRetrieveAnalysis(res []byte, documentURI sglsp.
 			log.Err(err).Str("method", "unmarshallAndRetrieveAnalysis").
 				Msgf("Error while reading the file %v, err: %v", targetFile, err)
 			oss.errorReporter.CaptureError(err)
-			return
+			return nil
 		}
-		issues = oss.retrieveIssues(scanResult, targetFileUri, fileContent)
-
-		oss.trackResult(true)
+		issues = append(issues, oss.retrieveIssues(scanResult, targetFileUri, fileContent)...)
 	}
+
+	oss.trackResult(true)
 	return issues
 }
 
-func (oss *Scanner) unmarshallOssJson(res []byte) (scanResults []ossScanResult, done bool, err error) {
+func (oss *Scanner) unmarshallOssJson(res []byte) (scanResults []ossScanResult, err error) {
 	output := string(res)
 	if strings.HasPrefix(output, "[") {
 		err = json.Unmarshal(res, &scanResults)
 		if err != nil {
 			err = errors.Wrap(err, fmt.Sprintf("Couldn't unmarshal CLI response. Input: %s", output))
-			return nil, true, err
+			return nil, err
 		}
 	} else {
 		var scanResult ossScanResult
 		err = json.Unmarshal(res, &scanResult)
 		if err != nil {
-			if err != nil {
-				err = errors.Wrap(err, fmt.Sprintf("Couldn't unmarshal CLI response. Input: %s", output))
-				return nil, true, err
-			}
+			err = errors.Wrap(err, fmt.Sprintf("Couldn't unmarshal CLI response. Input: %s", output))
+			return nil, err
 		}
 		scanResults = append(scanResults, scanResult)
 	}
-	return scanResults, false, err
+	return scanResults, err
 }
 
 // Returns true if CLI run failed, false otherwise
