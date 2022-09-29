@@ -64,7 +64,7 @@ func NewExecutor(authenticator snyk.AuthenticationService, errorReporter error_r
 		errorReporter,
 		analytics,
 		make(chan int, concurrencyLimit),
-		90 * time.Minute, // TODO: add preference to make this configurable
+		90 * time.Minute, // TODO: add preference to make this configurable [ROAD-1184]
 	}
 }
 
