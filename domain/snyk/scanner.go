@@ -54,8 +54,10 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	defer close(done)
 
 	sc.initializer.Init()
-	_, tokenChangeChannel := config.CurrentConfig().TokenWithChangesChannel()
+	tokenChangeChannel := config.CurrentConfig().TokenChangesChannel()
 	ctx, cancelFunc := context.WithCancel(ctx)
+	defer cancelFunc()
+
 	go func() { // This goroutine will listen to token changes and cancel the scans using a context
 		select {
 		case <-tokenChangeChannel:

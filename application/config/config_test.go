@@ -34,7 +34,7 @@ func TestConfigDefaults(t *testing.T) {
 func Test_TokenChanged_ChannelsInformed(t *testing.T) {
 	// Arrange
 	c := New()
-	_, tokenChangedChannel := c.TokenWithChangesChannel()
+	tokenChangedChannel := c.TokenChangesChannel()
 
 	// Act
 	// There's a 1 in 5 undecillion (5 * 10^36) chance for a collision here so let's hold our fingers
@@ -49,7 +49,8 @@ func Test_TokenChanged_ChannelsInformed(t *testing.T) {
 func Test_TokenChangedToSameToken_ChannelsNotInformed(t *testing.T) {
 	// Arrange
 	c := New()
-	token, tokenChangedChannel := c.TokenWithChangesChannel()
+	tokenChangedChannel := c.TokenChangesChannel()
+	token := c.Token()
 
 	// Act
 	c.SetToken(token)

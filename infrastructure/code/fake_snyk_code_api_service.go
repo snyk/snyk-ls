@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog/log"
@@ -86,11 +87,14 @@ func FakeDiagnosticPath(t *testing.T) (filePath string, path string) {
 }
 
 type FakeSnykCodeClient struct {
-	Calls               map[string][][]interface{}
-	HasCreatedNewBundle bool
-	HasExtendedBundle   bool
-	TotalBundleCount    int
-	ExtendedBundleCount int
+	Calls                  map[string][][]interface{}
+	HasCreatedNewBundle    bool
+	HasExtendedBundle      bool
+	TotalBundleCount       int
+	ExtendedBundleCount    int
+	AnalysisDuration       time.Duration
+	currentConcurrentScans int
+	maxConcurrentScans     int
 }
 
 func (f *FakeSnykCodeClient) addCall(params []interface{}, op string) {
@@ -180,9 +184,17 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	options AnalysisOptions,
 ) ([]snyk.Issue, AnalysisStatus, error) {
 	FakeSnykCodeApiServiceMutex.Lock()
-	defer FakeSnykCodeApiServiceMutex.Unlock()
+	f.currentConcurrentScans++
+	if f.currentConcurrentScans > f.maxConcurrentScans {
+		f.maxConcurrentScans = f.currentConcurrentScans
+	}
+	FakeSnykCodeApiServiceMutex.Unlock()
+	<-time.After(f.AnalysisDuration)
+	FakeSnykCodeApiServiceMutex.Lock()
+	f.currentConcurrentScans--
 	params := []interface{}{options.bundleHash, options.limitToFiles, options.severity}
 	f.addCall(params, RunAnalysisOperation)
+	FakeSnykCodeApiServiceMutex.Unlock()
 
 	issues := []snyk.Issue{FakeIssue}
 

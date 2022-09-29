@@ -32,13 +32,34 @@ type ScanMetrics struct {
 	lastScanFileCount         int
 }
 
+type ScanStatus struct {
+	// finished channel is closed once the scan has finished
+	finished chan bool
+
+	// isRunning is true when the scan is either running or waiting to run, and changed to false when it's done
+	isRunning bool
+
+	// isPending is true when the scan is currently waiting for a previous scan to finish
+	isPending bool
+}
+
+func NewScanStatus() *ScanStatus {
+	return &ScanStatus{
+		finished:  make(chan bool),
+		isRunning: false,
+		isPending: false,
+	}
+}
+
 type Scanner struct {
-	BundleUploader *BundleUploader
-	SnykApiClient  snyk_api.SnykApiClient
-	errorReporter  error_reporting.ErrorReporter
-	analytics      ux2.Analytics
-	ignorePatterns []string
-	mutex          sync.Mutex
+	BundleUploader  *BundleUploader
+	SnykApiClient   snyk_api.SnykApiClient
+	errorReporter   error_reporting.ErrorReporter
+	analytics       ux2.Analytics
+	ignorePatterns  []string
+	mutex           sync.Mutex
+	scanStatusMutex sync.Mutex
+	runningScans    map[string]*ScanStatus
 }
 
 func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter error_reporting.ErrorReporter, analytics ux2.Analytics) *Scanner {
@@ -47,6 +68,7 @@ func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, repor
 		SnykApiClient:  apiClient,
 		errorReporter:  reporter,
 		analytics:      analytics,
+		runningScans:   map[string]*ScanStatus{},
 	}
 	return sc
 }
@@ -64,6 +86,42 @@ func (sc *Scanner) SupportedCommands() []snyk.CommandName {
 }
 
 func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk.Issue {
+	// When starting a scan for a folderPath that's already scanned, the new scan will wait for the previous scan
+	// to finish before starting.
+	// When there's already a scan waiting, the function returns immediately with empty results.
+	waitForPreviousScan := false
+	scanStatus := NewScanStatus()
+	scanStatus.isRunning = true
+	sc.scanStatusMutex.Lock()
+	previousScanStatus, wasFound := sc.runningScans[folderPath]
+	if wasFound && previousScanStatus.isRunning {
+		if previousScanStatus.isPending {
+			sc.scanStatusMutex.Unlock()
+			return []snyk.Issue{}
+		}
+
+		waitForPreviousScan = true
+		scanStatus.isPending = true
+	}
+
+	sc.runningScans[folderPath] = scanStatus
+	sc.scanStatusMutex.Unlock()
+	if waitForPreviousScan {
+		<-previousScanStatus.finished // Block here until previous scan is finished
+
+		// Setting isPending = false allows for future scans to wait for the current
+		// scan to finish, instead of returning immediately
+		sc.scanStatusMutex.Lock()
+		scanStatus.isPending = false
+		sc.scanStatusMutex.Unlock()
+	}
+	defer func() {
+		sc.scanStatusMutex.Lock()
+		scanStatus.isRunning = false
+		close(scanStatus.finished)
+		sc.scanStatusMutex.Unlock()
+	}()
+
 	startTime := time.Now()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
@@ -78,7 +136,8 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk
 	}
 
 	metrics := sc.newMetrics(len(files), startTime)
-	return sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics)
+	results := sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics)
+	return results
 }
 
 func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {

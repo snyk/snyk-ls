@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -265,9 +266,33 @@ func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 	assert.NotContains(t, walkedFiles, ignoredFileInDir)
 }
 
+func Test_CodeScanRunning_ScanCalled_ScansRunSequentially(t *testing.T) {
+	// Arrange
+	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+	t.Cleanup(func() {
+		os.RemoveAll(tempDir)
+	})
+	fakeClient, scanner := setupTestScanner()
+	fakeClient.AnalysisDuration = time.Second
+	wg := sync.WaitGroup{}
+
+	// Act
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			scanner.Scan(context.Background(), "", tempDir)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	// Assert
+	assert.Equal(t, 1, fakeClient.maxConcurrentScans)
+}
+
 func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {
 	expectedPatterns = "*.xml\n**/*.txt\nbin"
-	tempDir = writeTestGitIgnore(expectedPatterns, t)
+	tempDir = writeTestGitIgnore(expectedPatterns, t) // TODO - use t.TempDir
 
 	ignoredFilePath = filepath.Join(tempDir, "ignored.xml")
 	err := os.WriteFile(ignoredFilePath, []byte("test"), 0600)
