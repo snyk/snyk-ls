@@ -18,10 +18,12 @@ package workspace
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -64,6 +66,7 @@ func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hove
 	folder.productAttributes[snyk.ProductInfrastructureAsCode] = snyk.ProductAttributes{}
 	folder.productAttributes[snyk.ProductOpenSource] = snyk.ProductAttributes{}
 	folder.documentDiagnosticCache = concurrency.AtomicMap{}
+
 	return &folder
 }
 
@@ -115,9 +118,14 @@ func (f *Folder) ClearDiagnosticsCache(filePath string) {
 }
 
 func (f *Folder) scan(ctx context.Context, path string) {
+	const method = "domain.ide.workspace.folder.scan"
+	if !f.IsTrusted() {
+		log.Warn().Str("path", path).Str("method", method).Msg("skipping scan of untrusted path")
+		return
+	}
 	issuesSlice := f.DocumentDiagnosticsFromCache(path)
 	if issuesSlice != nil {
-		log.Info().Str("method", "domain.ide.workspace.folder.scan").Msgf("Cached results found: Skipping scan for %s", path)
+		log.Info().Str("method", method).Msgf("Cached results found: Skipping scan for %s", path)
 		f.processResults(issuesSlice)
 		return
 	}
@@ -227,4 +235,17 @@ func (f *Folder) ClearDiagnostics() {
 	})
 
 	f.documentDiagnosticCache.ClearAll()
+}
+
+func (f *Folder) IsTrusted() bool {
+	if !config.CurrentConfig().IsTrustedFolderFeatureEnabled() {
+		return true
+	}
+
+	for _, path := range config.CurrentConfig().TrustedFolders() {
+		if strings.HasPrefix(f.path, path) {
+			return true
+		}
+	}
+	return false
 }

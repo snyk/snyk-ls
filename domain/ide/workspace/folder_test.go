@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -71,7 +72,7 @@ func Test_Scan_WhenCachedResultsButNoIssues_shouldNotReScan(t *testing.T) {
 	assert.Equal(t, 1, scannerRecorder.Calls())
 }
 
-func TestProcessResults_SendsDiagnosticsAndHovers(t *testing.T) {
+func Test_ProcessResults_SendsDiagnosticsAndHovers(t *testing.T) {
 	t.Skipf("test this once we have uniform abstractions for hover & diagnostics")
 	testutil.UnitTest(t)
 	hoverService := hover.NewFakeHoverService()
@@ -86,7 +87,7 @@ func TestProcessResults_SendsDiagnosticsAndHovers(t *testing.T) {
 	// assert.hoverService.GetAll()
 }
 
-func TestProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
+func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 	testutil.UnitTest(t)
 	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
 
@@ -102,7 +103,7 @@ func TestProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 	assert.Len(t, f.documentDiagnosticCache.Get("path2"), 1)
 }
 
-func TestProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
+func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 	testutil.UnitTest(t)
 	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
 
@@ -116,7 +117,7 @@ func TestProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 	assert.Len(t, f.documentDiagnosticCache.Get("path1"), 2)
 }
 
-func TestProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
+func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 	testutil.UnitTest(t)
 	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
 
@@ -132,7 +133,7 @@ func TestProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 	assert.NotNil(t, f.documentDiagnosticCache.Get("path3"))
 }
 
-func TestProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
+func Test_ProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 	testutil.UnitTest(t)
 	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
 
@@ -147,7 +148,7 @@ func TestProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 	assert.Len(t, f.documentDiagnosticCache.Get("path1"), 3)
 }
 
-func TestProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing.T) {
+func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing.T) {
 	testutil.UnitTest(t)
 	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
 
@@ -199,4 +200,51 @@ func Test_ClearDiagnostics(t *testing.T) {
 		1*time.Second,
 		10*time.Millisecond,
 	)
+}
+
+func Test_IsTrusted_shouldReturnFalseByDefault(t *testing.T) {
+	testutil.UnitTest(t)
+	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
+	assert.False(t, f.IsTrusted())
+}
+
+func Test_IsTrusted_shouldReturnTrueForPathContainedInTrustedFolders(t *testing.T) {
+	testutil.UnitTest(t)
+	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
+	config.CurrentConfig().SetTrustedFolders([]string{"dummy"})
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
+	assert.True(t, f.IsTrusted())
+}
+
+func Test_IsTrusted_shouldReturnTrueForSubfolderOfTrustedFolders_Linux(t *testing.T) {
+	testutil.IntegTest(t)
+	testutil.NotOnWindows(t, "Unix/macOS file paths are incompatible with Windows")
+	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
+	config.CurrentConfig().SetTrustedFolders([]string{"/dummy"})
+	f := NewFolder("/dummy/dummyF", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
+	assert.True(t, f.IsTrusted())
+}
+
+func Test_IsTrusted_shouldReturnFalseForDifferentFolder(t *testing.T) {
+	testutil.UnitTest(t)
+	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
+	config.CurrentConfig().SetTrustedFolders([]string{"/dummy"})
+	f := NewFolder("/UntrustedPath", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
+	assert.False(t, f.IsTrusted())
+}
+
+func Test_IsTrusted_shouldReturnTrueForSubfolderOfTrustedFolders(t *testing.T) {
+	testutil.IntegTest(t)
+	testutil.OnlyOnWindows(t, "Windows specific test")
+	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
+	config.CurrentConfig().SetTrustedFolders([]string{"c:\\dummy"})
+	f := NewFolder("c:\\dummy\\dummyF", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
+	assert.True(t, f.IsTrusted())
+}
+
+func Test_IsTrusted_shouldReturnTrueIfTrustFeatureDisabled(t *testing.T) {
+	testutil.UnitTest(t) // disables trust feature
+	f := NewFolder("c:\\dummy\\dummyF", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
+	assert.True(t, f.IsTrusted())
 }

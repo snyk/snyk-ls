@@ -230,7 +230,6 @@ func Test_initialize_shouldSupportCodeLenses(t *testing.T) {
 
 func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	loc := setupServer(t)
-
 	didOpenParams, dir := didOpenTextParams(t)
 
 	clientParams := lsp.InitializeParams{
@@ -241,8 +240,9 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 			ActivateSnykIac:             "false",
 			Organization:                "fancy org",
 			Token:                       "xxx",
-			ManageBinariesAutomatically: "true",
-			CliPath:                     "",
+			ManageBinariesAutomatically: "false",
+			CliPath:                     "dummy",
+			EnableTrustedFoldersFeature: "false",
 		},
 	}
 	_, err := loc.Client.Call(ctx, "initialize", clientParams)
@@ -468,6 +468,49 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 	})
 }
 
+func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testing.T) {
+	loc := setupServer(t)
+	initializationOptions := lsp.Settings{
+		EnableTrustedFoldersFeature: "true",
+	}
+	params := lsp.InitializeParams{
+		InitializationOptions: initializationOptions,
+		WorkspaceFolders:      []lsp.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
+	_, err := loc.Client.Call(ctx, "initialize", params)
+
+	assert.Nil(t, err)
+	assert.Eventually(t, func() bool { return checkTrustMessageRequest() }, time.Second, time.Millisecond)
+}
+
+func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
+	loc := setupServer(t)
+	initializationOptions := lsp.Settings{
+		EnableTrustedFoldersFeature: "true",
+		Token:                       "token",
+	}
+	params := lsp.InitializeParams{
+		InitializationOptions: initializationOptions,
+		WorkspaceFolders:      []lsp.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
+	_, err := loc.Client.Call(ctx, "initialize", params)
+
+	assert.Nil(t, err)
+	assert.Eventually(t, func() bool { return checkTrustMessageRequest() }, time.Second, time.Millisecond)
+}
+
+func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
+	loc := setupServer(t)
+	initializationOptions := lsp.Settings{
+		EnableTrustedFoldersFeature: "true",
+	}
+	params := lsp.InitializeParams{
+		InitializationOptions: initializationOptions,
+		WorkspaceFolders:      []lsp.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
+	_, err := loc.Client.Call(ctx, "initialize", params)
+
+	assert.Nil(t, err)
+	assert.Eventually(t, func() bool { return checkTrustMessageRequest() }, time.Second, time.Millisecond)
+}
+
 func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc := setupServer(t)
 	didOpenParams, dir := didOpenTextParams(t)
@@ -480,8 +523,9 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 			ActivateSnykIac:             "false",
 			Organization:                "fancy org",
 			Token:                       "xxx",
-			ManageBinariesAutomatically: "true",
-			CliPath:                     "",
+			ManageBinariesAutomatically: "false",
+			CliPath:                     "dummy",
+			EnableTrustedFoldersFeature: "false",
 		},
 	}
 	_, err := loc.Client.Call(ctx, "initialize", clientParams)

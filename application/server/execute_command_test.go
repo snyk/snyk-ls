@@ -25,6 +25,7 @@ import (
 
 	"github.com/atotto/clipboard"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -44,6 +45,24 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 	}
 	assert.Eventually(t, func() bool {
 		return scanner.Calls() > 0
+	}, 2*time.Second, time.Millisecond)
+}
+
+func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
+	loc := setupServer(t)
+
+	scanner := &snyk.TestScanner{}
+	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService()))
+	// explicitly enable folder trust which is disabled by default in tests
+	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
+
+	params := lsp.ExecuteCommandParams{Command: snyk.WorkspaceScanCommand}
+	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Eventually(t, func() bool {
+		return scanner.Calls() == 0 && checkTrustMessageRequest()
 	}, 2*time.Second, time.Millisecond)
 }
 
@@ -83,4 +102,51 @@ func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
 	actualURL, _ := clipboard.ReadAll()
 
 	assert.Equal(t, authenticationMock.ExpectedAuthURL, actualURL)
+}
+
+func Test_TrustWorkspaceFolders(t *testing.T) {
+	t.Run("Doesn't mutate trusted folders, if trusted folders disabled", func(t *testing.T) {
+		loc := setupServer(t)
+		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder1", "dummy", nil, di.HoverService()))
+
+		params := lsp.ExecuteCommandParams{Command: snyk.TrustWorkspaceFoldersCommand}
+		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		assert.Len(t, config.CurrentConfig().TrustedFolders(), 0)
+	})
+
+	t.Run("Updates trusted workspace folders", func(t *testing.T) {
+		loc := setupServer(t)
+		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder1", "dummy", nil, di.HoverService()))
+		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder2", "dummy", nil, di.HoverService()))
+		config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
+
+		params := lsp.ExecuteCommandParams{Command: snyk.TrustWorkspaceFoldersCommand}
+		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		assert.Len(t, config.CurrentConfig().TrustedFolders(), 2)
+		assert.Contains(t, config.CurrentConfig().TrustedFolders(), "/path/to/folder1", "/path/to/folder2")
+	})
+
+	t.Run("Existing trusted workspace folders are not removed", func(t *testing.T) {
+		loc := setupServer(t)
+		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder1", "dummy", nil, di.HoverService()))
+		config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
+		config.CurrentConfig().SetTrustedFolders([]string{"/path/to/folder2"})
+
+		params := lsp.ExecuteCommandParams{Command: snyk.TrustWorkspaceFoldersCommand}
+		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		assert.Len(t, config.CurrentConfig().TrustedFolders(), 2)
+		assert.Contains(t, config.CurrentConfig().TrustedFolders(), "/path/to/folder1", "/path/to/folder2")
+	})
 }
