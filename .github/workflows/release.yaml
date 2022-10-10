@@ -80,6 +80,7 @@ jobs:
           # this is required to be able to test the clipboard
           export DISPLAY=:99
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+          sudo apt-get install -y xsel xclip wl-clipboard
 
           make clean test
 
@@ -95,6 +96,7 @@ jobs:
           # this is required to be able to test the clipboard
           export DISPLAY=:99
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+          sudo apt-get install -y xsel xclip wl-clipboard
 
           make clean test
 
