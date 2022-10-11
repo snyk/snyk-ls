@@ -41,6 +41,10 @@ func (a *FakeAuthenticationProvider) AuthURL(ctx context.Context) string {
 	return a.ExpectedAuthURL
 }
 
+func (a *FakeAuthenticationProvider) AuthenticateToken(_ string) error {
+	return nil
+}
+
 func NewFakeCliAuthenticationProvider() snyk.AuthenticationProvider {
 	return &FakeAuthenticationProvider{"https://app.snyk.io/login?token=someToken", false}
 }

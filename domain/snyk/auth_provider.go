@@ -25,6 +25,10 @@ type AuthenticationProvider interface {
 	Authenticate(ctx context.Context) (string, error)
 	ClearAuthentication(ctx context.Context) error
 	AuthURL(ctx context.Context) string
+
+	// AuthenticateToken tries to authenticate using the provided token.
+	// If the token is invalid, an AuthenticationFailedError will be returned
+	AuthenticateToken(token string) error
 }
 
 var ErrEmptyAPIToken = errors.New("auth-provider: api token is not set")

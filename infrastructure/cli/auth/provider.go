@@ -92,6 +92,20 @@ func (e *AuthenticationFailedError) Error() string {
 	return authFailMessage
 }
 
+func (a *CliAuthenticationProvider) AuthenticateToken(token string) error {
+	if token == "" {
+		return errors.New("token is an empty string")
+	}
+	args := []string{"auth", token}
+	cmd := a.buildCLICmd(context.Background(), args...)
+	outputBytes, err := cmd.Output()
+	if strings.Contains(string(outputBytes), "Authentication failed") {
+		err = &AuthenticationFailedError{}
+	}
+
+	return err
+}
+
 // Auth represents the `snyk auth` command.
 func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 	a.authURL = ""
