@@ -215,17 +215,6 @@ func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...str
 }
 
 func (a *CliAuthenticationProvider) runCLICmd(ctx context.Context, cmd *exec.Cmd) error {
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded || ctx.Err() == context.Canceled {
-			if cmd != nil && cmd.Process != nil && cmd.ProcessState != nil {
-				err := cmd.Process.Kill()
-				if err != nil {
-					log.Err(err).Msg("error from kill")
-				}
-			}
-		}
-	}()
 	// check for early cancellation
 	select {
 	case <-ctx.Done():
