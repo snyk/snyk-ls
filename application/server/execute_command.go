@@ -18,12 +18,14 @@ package server
 
 import (
 	"context"
+	"runtime"
 
-	"github.com/atotto/clipboard"
+	macosClipboard "github.com/atotto/clipboard"
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
+	"golang.design/x/clipboard"
 
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
@@ -61,8 +63,16 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 				notification.SendError(err)
 			}
 		case snyk.CopyAuthLinkCommand:
+			var err error
 			url := di.Authenticator().Provider().AuthURL(bgCtx)
-			err := clipboard.WriteAll(url)
+
+			// We require two clipboard packages due to compatibility issues with OS [ROAD-1185]
+			if runtime.GOOS == "darwin" {
+				err = macosClipboard.WriteAll(url)
+			} else {
+				err = clipboard.Init()
+				clipboard.Write(clipboard.FmtText, []byte(url))
+			}
 
 			if err != nil {
 				log.Err(err).Msg("Error on snyk.copyAuthLink command")
