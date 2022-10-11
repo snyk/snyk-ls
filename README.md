@@ -23,6 +23,7 @@ Right now the language server supports the following actions:
 - Progress reporting to the client for background jobs
 - Notifications to the client
 - Authentication when needed, using the Snyk CLI and opening a webpage if necessary
+- Copying the authentication URL to clipboard if there are problems opening a webpage
 - Automatic download of the Snyk CLI if none is found or configured to XDG_DATA_HOME
 - Selective activation of products according to settings transmitted
 
@@ -221,9 +222,13 @@ export DEEPROXY_API_URL
 
 #### Authentication to Snyk
 
-When Snyk Language Server starts, it checks if it can find a token in the environment variable `SNYK_TOKEN`. If this is
-not the case, it tries to retrieve and authenticate using the Snyk CLI. If the CLI is not authenticated either, it opens
-a browser window to authenticate. After successfull authentication in the web browser, the Snyk Language Server
+The Snyk LS authentication flow is as follows. When Snyk Language Server starts, it:
+- Checks if it can find a token in the environment variable `SNYK_TOKEN`
+- If this is not the set, it tries to retrieve and authenticate using the Snyk CLI
+- If the CLI is not authenticated either, it opens a browser window to authenticate
+- If there are problems opening the browser window, the auth URL can be copied to the clipboard (via implementation of `snyk.copyAuthLink`)
+
+After successfull authentication in the web browser, the Snyk Language Server
 automatically retrieves the Snyk authentication token from the CLI.
 
 ## Run Tests
