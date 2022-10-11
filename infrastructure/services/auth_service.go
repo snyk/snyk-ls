@@ -80,3 +80,11 @@ func (a AuthenticationService) Logout(ctx context.Context) {
 
 	workspace.Get().ClearIssues(ctx)
 }
+
+func (a AuthenticationService) IsAuthenticated() (bool, error) {
+	token := config.CurrentConfig().Token()
+	err := a.authenticator.AuthenticateToken(token)
+	isAuthenticated := err != nil
+
+	return isAuthenticated, err
+}
