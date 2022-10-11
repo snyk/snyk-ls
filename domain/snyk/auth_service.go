@@ -24,8 +24,8 @@ type AuthenticationService interface {
 
 	Provider() AuthenticationProvider
 
-	// UpdateToken stores the token in the configuration, and sends a notification to the client if
-	// sendNotification is true
+	// UpdateToken stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
+	// client if sendNotification is true
 	UpdateToken(newToken string, sendNotification bool)
 	Logout(ctx context.Context)
 }

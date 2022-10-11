@@ -208,7 +208,7 @@ func (a *CliAuthenticationProvider) runCLICmd(ctx context.Context, cmd *exec.Cmd
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	default:
+	default: // If no cancellation requested, do nothing
 	}
 
 	err := cmd.Run()
