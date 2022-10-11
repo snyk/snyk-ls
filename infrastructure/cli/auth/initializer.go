@@ -18,7 +18,6 @@ package auth
 
 import (
 	"context"
-	"os"
 
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -45,28 +44,43 @@ func NewInitializer(authenticator snyk.AuthenticationService, errorReporter erro
 	}
 }
 
-func (i *Initializer) Init() {
+func (i *Initializer) Init() error {
 	cli.Mutex.Lock()
 	defer cli.Mutex.Unlock()
 
+	authenticator := i.authenticator
 	currentConfig := config.CurrentConfig()
-	if currentConfig.Authenticated() {
+	isAuthenticated, err := authenticator.IsAuthenticated()
+	if currentConfig.Authenticated() && isAuthenticated {
 		log.Info().Msg("Skipping authentication - user is already authenticated")
-		return
+		return nil
 	}
 	if !currentConfig.AutomaticAuthentication() {
 		log.Info().Msg("Skipping authentication - automatic authentication is disabled")
-		return
+		return nil
 	}
 
 	notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Authenticating to Snyk. This could open a browser window."})
 
-	token, err := i.authenticator.Provider().Authenticate(context.Background())
+	token, err := authenticator.Provider().Authenticate(context.Background())
 	if token == "" || err != nil {
+		if err != nil {
+			err = &AuthenticationFailedError{}
+		}
 		log.Error().Err(err).Msg("Failed to authenticate. Terminating server.")
 		i.errorReporter.CaptureError(err)
-		os.Exit(1) // terminate server since unrecoverable from authentication error
+
+		return err
 	}
 
-	i.authenticator.UpdateToken(token, true)
+	authenticator.UpdateToken(token, true)
+	isAuthenticated, err = authenticator.IsAuthenticated()
+
+	if !isAuthenticated {
+		log.Err(err).Msg("Failed to authenticate token")
+		notification.SendError(err)
+		return err
+	}
+
+	return nil
 }

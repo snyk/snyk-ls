@@ -17,7 +17,7 @@
 package initialize
 
 type Initializer interface {
-	Init()
+	Init() error
 }
 
 type DelegatingInitializer struct {
@@ -28,8 +28,12 @@ func NewDelegatingInitializer(initializer ...Initializer) Initializer {
 	return &DelegatingInitializer{initializer: initializer}
 }
 
-func (i *DelegatingInitializer) Init() {
+func (i *DelegatingInitializer) Init() error {
 	for _, initializer := range i.initializer {
-		initializer.Init()
+		err := initializer.Init()
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
