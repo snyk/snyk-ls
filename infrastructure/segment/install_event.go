@@ -31,7 +31,7 @@ const (
 )
 
 func (s *Client) captureInstalledEvent() {
-	installFile := filepath.Join(config.CurrentConfig().DefaultBinaryInstallPath(), installFilename)
+	installFile := filepath.Join(config.CurrentConfig().CliSettings().DefaultBinaryInstallPath(), installFilename)
 	_, err := os.Stat(installFile)
 	if err == nil {
 		return

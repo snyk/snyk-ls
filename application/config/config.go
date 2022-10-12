@@ -96,6 +96,9 @@ func (c *CliSettings) Path() string {
 func (c *CliSettings) SetPath(path string) {
 	c.cliPathAccessMutex.Lock()
 	defer c.cliPathAccessMutex.Unlock()
+	if path == "" {
+		path = filepath.Join(c.DefaultBinaryInstallPath(), filename.ExecutableName)
+	}
 	c.cliPath = path
 }
 
@@ -152,9 +155,8 @@ func IsDevelopment() bool {
 // New creates a configuration object with default values
 func New() *Config {
 	c := &Config{}
-	c.cliSettings = &CliSettings{
-		cliPath: filepath.Join(c.DefaultBinaryInstallPath(), filename.ExecutableName),
-	}
+	c.cliSettings = &CliSettings{}
+	c.cliSettings.SetPath("")
 	c.automaticAuthentication = true
 	c.configFile = ""
 	c.format = "md"
@@ -242,7 +244,7 @@ func (c *Config) CliSettings() *CliSettings {
 
 func (c *Config) Format() string { return c.format }
 func (c *Config) CLIDownloadLockFileName() string {
-	return filepath.Join(c.DefaultBinaryInstallPath(), "snyk-cli-download.lock")
+	return filepath.Join(c.cliSettings.DefaultBinaryInstallPath(), "snyk-cli-download.lock")
 }
 func (c *Config) IsErrorReportingEnabled() bool          { return c.isErrorReportingEnabled.Get() }
 func (c *Config) IsSnykOssEnabled() bool                 { return c.isSnykOssEnabled.Get() }
@@ -450,7 +452,7 @@ func (c *Config) SetOrganization(organization string) {
 	c.organization = organization
 }
 
-func (c *Config) DefaultBinaryInstallPath() string {
+func (c *CliSettings) DefaultBinaryInstallPath() string {
 	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
 	err := os.MkdirAll(lsPath, 0755)
 	if err != nil {

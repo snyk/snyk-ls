@@ -28,7 +28,7 @@ import (
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 )
 
-var installEventFile = filepath.Join(config.CurrentConfig().DefaultBinaryInstallPath(), ".installed_event_sent")
+var installEventFile = filepath.Join(config.CurrentConfig().CliSettings().DefaultBinaryInstallPath(), ".installed_event_sent")
 
 func Test_NewInstallationCreatesStateFile(t *testing.T) {
 	s, _, _ := setupUnitTest(t)
