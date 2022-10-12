@@ -226,7 +226,7 @@ The Snyk LS authentication flow is as follows. When Snyk Language Server starts,
 - Checks if it can find a token in the environment variable `SNYK_TOKEN`
 - If this is not the set, it tries to retrieve and authenticate using the Snyk CLI
 - If the CLI is not authenticated either, it opens a browser window to authenticate
-- If there are problems opening the browser window, the auth URL can be copied to the clipboard (via implementation of `snyk.copyAuthLink`)
+- If there are problems opening the browser window, the auth URL can be copied to the clipboard (via implementation of `snyk.copyAuthLink`). _Note that there is a requirement to have `xsel` or `xclip` installed for Linux/Unix users for this feature._
 
 After successfull authentication in the web browser, the Snyk Language Server
 automatically retrieves the Snyk authentication token from the CLI.
