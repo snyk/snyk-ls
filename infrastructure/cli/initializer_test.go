@@ -26,6 +26,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
+	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -71,6 +72,35 @@ func TestInitializer_whenNoCli_Installs(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return installer.Installs() > 0
 	}, time.Second, time.Millisecond)
+}
+
+func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
+	testutil.IntegTest(t)
+
+	// arrange
+	config.CurrentConfig().SetManageBinariesAutomatically(true)
+
+	installer := install.NewInstaller(error_reporting.NewTestErrorReporter())
+	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
+
+	// act
+	go initializer.Init()
+
+	// assert
+	assert.Eventually(t, func() bool {
+		_, err := os.Stat(config.CurrentConfig().CLIDownloadLockFileName())
+		return err == nil
+	}, time.Second*10, time.Millisecond)
+
+	config.CurrentConfig().CliSettings().SetPath("") // reset CLI path during download for foolproofing
+
+	assert.Eventually(t, func() bool {
+		_, err := installer.Find()
+		return err != nil
+	}, time.Second*120, time.Millisecond)
+
+	expectedPath := filepath.Join(config.CurrentConfig().CliSettings().DefaultBinaryInstallPath(), filename.ExecutableName)
+	assert.Equal(t, expectedPath, config.CurrentConfig().CliSettings().Path())
 }
 
 func TestInitializer_whenBinaryUpdatesNotAllowed_DoesNotInstall(t *testing.T) {
