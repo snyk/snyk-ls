@@ -87,8 +87,16 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 	go initializer.Init()
 
 	// assert
+	lockFileName := config.CurrentConfig().CLIDownloadLockFileName()
+	defer func() { // defer clean up
+		_, err := os.Stat(lockFileName)
+		if err == nil {
+			_ = os.RemoveAll(lockFileName)
+		}
+	}()
+
 	assert.Eventually(t, func() bool {
-		_, err := os.Stat(config.CurrentConfig().CLIDownloadLockFileName())
+		_, err := os.Stat(lockFileName)
 		return err == nil
 	}, time.Second*10, time.Millisecond)
 
