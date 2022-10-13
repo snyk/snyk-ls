@@ -19,11 +19,11 @@ package server
 import (
 	"context"
 
+	"github.com/atotto/clipboard"
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
-	"golang.design/x/clipboard"
 
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
@@ -62,15 +62,13 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 			}
 		case snyk.CopyAuthLinkCommand:
 			url := di.Authenticator().Provider().AuthURL(bgCtx)
+			err := clipboard.WriteAll(url)
 
-			err := clipboard.Init()
 			if err != nil {
 				log.Err(err).Msg("Error on snyk.copyAuthLink command")
 				notification.SendError(err)
 				break
 			}
-
-			clipboard.Write(clipboard.FmtText, []byte(url))
 		case snyk.LogoutCommand:
 			di.Authenticator().Logout(bgCtx)
 		}

@@ -23,7 +23,7 @@ import (
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"golang.design/x/clipboard"
+	"github.com/atotto/clipboard"
 
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
@@ -80,7 +80,7 @@ func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	actualURL := string(clipboard.Read(clipboard.FmtText))
+	actualURL, _ := clipboard.ReadAll()
 
 	assert.Equal(t, authenticationMock.ExpectedAuthURL, actualURL)
 }

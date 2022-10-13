@@ -71,6 +71,7 @@ jobs:
           # this is required to be able to test the clipboard
           export DISPLAY=:99
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+          sudo apt-get install -y xsel xclip wl-clipboard
 
           make clean test
 
@@ -114,7 +115,23 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | bash
 
       - name: Run integration tests with Pact
-        if: matrix.os != 'windows-latest'
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          INTEG_TESTS: 'true'
+        run: |
+          export PATH=$PATH:~/pact/bin
+
+          # this is required to be able to test the clipboard
+          export DISPLAY=:99
+          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+          sudo apt-get install -y xsel xclip wl-clipboard
+
+          make clean test
+
+      - name: Run integration tests with Pact
+        if: matrix.os == 'macos-latest'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
@@ -177,6 +194,7 @@ jobs:
           # this is required to be able to test the clipboard
           export DISPLAY=:99
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+          sudo apt-get install -y xsel xclip wl-clipboard
 
           make clean race-test
 

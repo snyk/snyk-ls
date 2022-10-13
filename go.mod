@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/adrg/xdg v0.4.0
+	github.com/atotto/clipboard v0.1.4
 	github.com/creachadair/jrpc2 v0.41.2
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/getsentry/sentry-go v0.13.0
@@ -20,7 +21,6 @@ require (
 	github.com/subosito/gotenv v1.4.1
 	github.com/xtgo/uuid v0.0.0-20140804021211-a0b114877d4c
 	go.lsp.dev/uri v0.3.0
-	golang.design/x/clipboard v0.6.2
 	golang.org/x/net v0.0.0-20220920203100-d0c6ba3f52d9
 )
 
@@ -37,9 +37,6 @@ require (
 	github.com/tklauser/go-sysconf v0.3.10 // indirect
 	github.com/tklauser/numcpus v0.4.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
-	golang.org/x/exp v0.0.0-20191030013958-a1ab85dbe136 // indirect
-	golang.org/x/image v0.0.0-20211028202545-6944b10bf410 // indirect
-	golang.org/x/mobile v0.0.0-20210716004757-34ab1303b554 // indirect
 	golang.org/x/sync v0.0.0-20220907140024-f12130a52804 // indirect
 	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10 // indirect
 	golang.org/x/text v0.3.7 // indirect
