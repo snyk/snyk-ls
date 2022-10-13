@@ -222,7 +222,7 @@ export DEEPROXY_API_URL
 
 #### Authentication to Snyk
 
-The Snyk LS authentication flow is as follows. When Snyk Language Server starts, it:
+The Snyk LS authentication flow happens automatically, unless disabled in configuration, and is as follows. When Snyk Language Server starts, it:
 - Checks if it can find a token in the environment variable `SNYK_TOKEN`
 - If this is not the set, it tries to retrieve and authenticate using the Snyk CLI
 - If the CLI is not authenticated either, it opens a browser window to authenticate
