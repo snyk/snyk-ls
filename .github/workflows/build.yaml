@@ -115,7 +115,7 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | bash
 
       - name: Run integration tests with Pact
-        if: matrix.os = 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
@@ -131,7 +131,7 @@ jobs:
           make clean test
 
       - name: Run integration tests with Pact
-        if: matrix.os = 'macos-latest'
+        if: matrix.os == 'macos-latest'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
