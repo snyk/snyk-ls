@@ -97,14 +97,14 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		_, err := os.Stat(lockFileName)
-		return err == nil
+		return err != nil
 	}, time.Second*10, time.Millisecond)
 
 	config.CurrentConfig().CliSettings().SetPath("") // reset CLI path during download for foolproofing
 
 	assert.Eventually(t, func() bool {
 		_, err := installer.Find()
-		return err != nil
+		return err == nil
 	}, time.Second*120, time.Millisecond)
 
 	expectedPath := filepath.Join(config.CurrentConfig().CliSettings().DefaultBinaryInstallPath(), filename.ExecutableName)
