@@ -75,7 +75,7 @@ func TestInitializer_whenNoCli_Installs(t *testing.T) {
 }
 
 func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
-	testutil.IntegTest(t)
+	testutil.SmokeTest(t)
 
 	// arrange
 	config.CurrentConfig().SetManageBinariesAutomatically(true)
@@ -88,10 +88,16 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 
 	// assert
 	lockFileName := config.CurrentConfig().CLIDownloadLockFileName()
+	expectedCliPath := filepath.Join(config.CurrentConfig().CliSettings().DefaultBinaryInstallPath(), filename.ExecutableName)
+
 	defer func() { // defer clean up
 		_, err := os.Stat(lockFileName)
 		if err == nil {
 			_ = os.RemoveAll(lockFileName)
+		}
+		_, err = os.Stat(expectedCliPath)
+		if err == nil {
+			_ = os.RemoveAll(expectedCliPath)
 		}
 	}()
 
@@ -107,8 +113,7 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 		return err == nil
 	}, time.Second*120, time.Millisecond)
 
-	expectedPath := filepath.Join(config.CurrentConfig().CliSettings().DefaultBinaryInstallPath(), filename.ExecutableName)
-	assert.Equal(t, expectedPath, config.CurrentConfig().CliSettings().Path())
+	assert.Equal(t, expectedCliPath, config.CurrentConfig().CliSettings().Path())
 }
 
 func TestInitializer_whenBinaryUpdatesNotAllowed_DoesNotInstall(t *testing.T) {
