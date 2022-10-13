@@ -36,7 +36,7 @@ func Test_Scan(t *testing.T) {
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 	ctx := context.Background()
 	di.TestInit(t)
-	di.Initializer().Init()
+	_ = di.Initializer().Init()
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")

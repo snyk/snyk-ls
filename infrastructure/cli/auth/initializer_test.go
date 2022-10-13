@@ -43,9 +43,10 @@ func getAutoAuthenticationTest(autoAuthentication bool) func(t *testing.T) {
 		initializer := NewInitializer(authenticator, errorreporting.NewTestErrorReporter(), analytics)
 
 		// Act
-		initializer.Init()
+		err := initializer.Init()
 
 		// Assert
+		assert.Nil(t, err)
 		assert.Equal(t, autoAuthentication, provider.IsAuthenticated)
 	}
 }
