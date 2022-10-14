@@ -68,6 +68,12 @@ type CliSettings struct {
 	cliPathAccessMutex   sync.Mutex
 }
 
+func NewCliSettings() *CliSettings {
+	settings := &CliSettings{}
+	settings.SetPath("")
+	return settings
+}
+
 func (c *CliSettings) Installed() bool {
 	c.cliPathAccessMutex.Lock()
 	defer c.cliPathAccessMutex.Unlock()
@@ -100,6 +106,16 @@ func (c *CliSettings) SetPath(path string) {
 		path = filepath.Join(c.DefaultBinaryInstallPath(), filename.ExecutableName)
 	}
 	c.cliPath = path
+}
+
+func (c *CliSettings) DefaultBinaryInstallPath() string {
+	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
+	err := os.MkdirAll(lsPath, 0755)
+	if err != nil {
+		log.Err(err).Str("method", "lsPath").Msgf("couldn't create %s", lsPath)
+		return ""
+	}
+	return lsPath
 }
 
 type Config struct {
@@ -155,8 +171,7 @@ func IsDevelopment() bool {
 // New creates a configuration object with default values
 func New() *Config {
 	c := &Config{}
-	c.cliSettings = &CliSettings{}
-	c.cliSettings.SetPath("")
+	c.cliSettings = NewCliSettings()
 	c.automaticAuthentication = true
 	c.configFile = ""
 	c.format = "md"
@@ -450,16 +465,6 @@ func (c *Config) GetOrganization() string {
 
 func (c *Config) SetOrganization(organization string) {
 	c.organization = organization
-}
-
-func (c *CliSettings) DefaultBinaryInstallPath() string {
-	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
-	err := os.MkdirAll(lsPath, 0755)
-	if err != nil {
-		log.Err(err).Str("method", "lsPath").Msgf("couldn't create %s", lsPath)
-		return ""
-	}
-	return lsPath
 }
 
 func (c *Config) ManageBinariesAutomatically() bool {
