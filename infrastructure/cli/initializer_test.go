@@ -131,6 +131,7 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_DoesNotInstall(t *testing.T) {
 }
 
 func TestInitializer_whenOutdated_Updates(t *testing.T) {
+	testutil.UnitTest(t)
 	config.CurrentConfig().SetManageBinariesAutomatically(true)
 	createDummyCliBinaryWithCreatedDate(t, fiveDaysAgo)
 
