@@ -387,7 +387,7 @@ func (c *Config) ConfigureLogging(level string) {
 		log.Info().Msgf("Logging to file %s", c.logPath)
 		log.Logger = log.Output(file)
 	} else {
-		log.Info().Msgf("Logging to console")
+		log.Info().Msgf("Logging to console") // TODO: log using LSP's 'window/logMessage'
 	}
 }
 
