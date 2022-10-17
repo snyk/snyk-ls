@@ -57,39 +57,6 @@ func Test_ExpandParametersFromConfigNoAllProjectsForIac(t *testing.T) {
 	assert.Contains(t, cmd, "-d")
 }
 
-func TestAddConfigValuesToEnv(t *testing.T) {
-	t.Run("Adds values to env", func(t *testing.T) {
-		const expectedIntegrationName = "ECLIPSE"
-		const expectedIntegrationVersion = "0.0.1rc1"
-
-		testutil.UnitTest(t)
-		config.CurrentConfig().SetOrganization("testOrg")
-		config.CurrentConfig().UpdateApiEndpoints("https://app.snyk.io/api")
-		config.CurrentConfig().SetIntegrationName(expectedIntegrationName)
-		config.CurrentConfig().SetIntegrationVersion(expectedIntegrationVersion)
-
-		updatedEnv := AppendCliEnvironmentVariables([]string{})
-
-		assert.Contains(t, updatedEnv, "SNYK_CFG_ORG="+config.CurrentConfig().GetOrganization())
-		assert.Contains(t, updatedEnv, "SNYK_API=https://app.snyk.io/api")
-		assert.Contains(t, updatedEnv, "SNYK_TOKEN="+config.CurrentConfig().Token())
-		assert.Contains(t, updatedEnv, "SNYK_INTEGRATION_NAME="+expectedIntegrationName)
-		assert.Contains(t, updatedEnv, "SNYK_INTEGRATION_VERSION="+expectedIntegrationVersion)
-		assert.Contains(t, updatedEnv, "SNYK_INTEGRATION_ENVIRONMENT="+IntegrationEnvironmentEnvVarValue)
-		assert.Contains(t, updatedEnv, "SNYK_INTEGRATION_ENVIRONMENT_VERSION="+config.Version)
-		assert.NotContains(t, updatedEnv, "SNYK_CFG_DISABLE_ANALYTICS=1")
-	})
-
-	t.Run("Disables analytics, if telemetry disabled", func(t *testing.T) {
-		testutil.UnitTest(t)
-		config.CurrentConfig().SetTelemetryEnabled(false)
-
-		updatedEnv := AppendCliEnvironmentVariables([]string{})
-
-		assert.Contains(t, updatedEnv, "SNYK_CFG_DISABLE_ANALYTICS=1")
-	})
-}
-
 func TestGetCommand_AddsToEnvironmentAndSetsDir(t *testing.T) {
 	testutil.UnitTest(t)
 	config.CurrentConfig().SetOrganization("TestGetCommand_AddsToEnvironmentAndSetsDirOrg")

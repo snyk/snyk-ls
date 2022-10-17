@@ -186,7 +186,7 @@ func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...str
 		args = append(args, "--insecure")
 	}
 	cmd := exec.CommandContext(ctx, config.CurrentConfig().CliSettings().Path(), args...)
-	cmd.Env = cli.AppendCliEnvironmentVariables(os.Environ())
+	cmd.Env = cli.AppendCliEnvironmentVariables(os.Environ(), false)
 
 	log.Info().Str("command", cmd.String()).Interface("env", cmd.Env).Msg("running Snyk CLI command")
 	return cmd

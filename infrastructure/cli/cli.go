@@ -34,18 +34,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 )
 
-const (
-	OrganizationEnvVar                  = "SNYK_CFG_ORG"
-	ApiEnvVar                           = "SNYK_API"
-	TokenEnvVar                         = "SNYK_TOKEN"
-	DisableAnalyticsEnvVar              = "SNYK_CFG_DISABLE_ANALYTICS"
-	IntegrationNameEnvVarKey            = "SNYK_INTEGRATION_NAME"
-	IntegrationVersionEnvVarKey         = "SNYK_INTEGRATION_VERSION"
-	IntegrationEnvironmentEnvVarKey     = "SNYK_INTEGRATION_ENVIRONMENT"
-	IntegrationEnvironmentVersionEnvVar = "SNYK_INTEGRATION_ENVIRONMENT_VERSION"
-	IntegrationEnvironmentEnvVarValue   = "language-server"
-)
-
 type SnykCli struct {
 	authenticator snyk.AuthenticationService
 	errorReporter error_reporting.ErrorReporter
@@ -114,7 +102,7 @@ func (c SnykCli) doExecute(ctx context.Context, cmd []string, workingDir string,
 func (c SnykCli) getCommand(cmd []string, workingDir string, ctx context.Context) *exec.Cmd {
 	command := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
 	command.Dir = workingDir
-	cliEnv := AppendCliEnvironmentVariables(os.Environ())
+	cliEnv := AppendCliEnvironmentVariables(os.Environ(), true)
 	command.Env = cliEnv
 	log.Debug().Str("method", "getCommand").Interface("command", command).Send()
 	return command
