@@ -84,6 +84,13 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 	installer := install.NewInstaller(error_reporting.NewTestErrorReporter())
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
 
+	// ensure CLI is not installed on the system
+	existingCliPath, _ := installer.Find()
+	for existingCliPath != "" {
+		_ = os.RemoveAll(existingCliPath)
+		existingCliPath, _ = installer.Find()
+	}
+
 	// act
 	go initializer.Init()
 
