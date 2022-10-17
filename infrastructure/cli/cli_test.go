@@ -68,7 +68,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		config.CurrentConfig().SetIntegrationName(expectedIntegrationName)
 		config.CurrentConfig().SetIntegrationVersion(expectedIntegrationVersion)
 
-		updatedEnv := appendCliEnvironmentVariables([]string{})
+		updatedEnv := AppendCliEnvironmentVariables([]string{})
 
 		assert.Contains(t, updatedEnv, "SNYK_CFG_ORG="+config.CurrentConfig().GetOrganization())
 		assert.Contains(t, updatedEnv, "SNYK_API=https://app.snyk.io/api")
@@ -84,7 +84,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		testutil.UnitTest(t)
 		config.CurrentConfig().SetTelemetryEnabled(false)
 
-		updatedEnv := appendCliEnvironmentVariables([]string{})
+		updatedEnv := AppendCliEnvironmentVariables([]string{})
 
 		assert.Contains(t, updatedEnv, "SNYK_CFG_DISABLE_ANALYTICS=1")
 	})

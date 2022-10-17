@@ -186,15 +186,7 @@ func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...str
 		args = append(args, "--insecure")
 	}
 	cmd := exec.CommandContext(ctx, config.CurrentConfig().CliSettings().Path(), args...)
-	cmd.Env = os.Environ()
-
-	endpoint := config.CurrentConfig().SnykApi()
-	if endpoint != "" {
-		cmd.Env = append(cmd.Env, cli.ApiEnvVar+"="+endpoint)
-	}
-	if !config.CurrentConfig().IsTelemetryEnabled() {
-		cmd.Env = append(cmd.Env, cli.DisableAnalyticsEnvVar+"=1")
-	}
+	cmd.Env = cli.AppendCliEnvironmentVariables(os.Environ())
 
 	log.Info().Str("command", cmd.String()).Interface("env", cmd.Env).Msg("running Snyk CLI command")
 	return cmd
