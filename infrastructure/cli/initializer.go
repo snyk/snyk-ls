@@ -90,7 +90,7 @@ func (i *Initializer) installCli() {
 		if err != nil {
 			log.Info().Str("method", "installCli").Msg("could not find Snyk CLI in user directories and PATH.")
 			cliFileName := (&install.Discovery{}).ExecutableName(false)
-			cliPath = filepath.Join(currentConfig.DefaultBinaryInstallPath(), cliFileName)
+			cliPath = filepath.Join(currentConfig.CliSettings().DefaultBinaryInstallPath(), cliFileName)
 		} else {
 			log.Info().Str("method", "installCli").Msgf("found CLI at %s", cliPath)
 		}

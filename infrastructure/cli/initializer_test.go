@@ -26,6 +26,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
+	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -57,6 +58,7 @@ func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
 }
 
 func TestInitializer_whenNoCli_Installs(t *testing.T) {
+	testutil.UnitTest(t)
 	config.CurrentConfig().SetManageBinariesAutomatically(true)
 	settings := &config.CliSettings{}
 	testCliPath := filepath.Join(t.TempDir(), "dummy.cli")
@@ -73,7 +75,57 @@ func TestInitializer_whenNoCli_Installs(t *testing.T) {
 	}, time.Second, time.Millisecond)
 }
 
+func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
+	testutil.SmokeTest(t)
+
+	// arrange
+	config.CurrentConfig().SetManageBinariesAutomatically(true)
+
+	installer := install.NewInstaller(error_reporting.NewTestErrorReporter())
+	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
+
+	// ensure CLI is not installed on the system
+	existingCliPath, _ := installer.Find()
+	for existingCliPath != "" {
+		_ = os.RemoveAll(existingCliPath)
+		existingCliPath, _ = installer.Find()
+	}
+
+	// act
+	go initializer.Init()
+
+	// assert
+	lockFileName := config.CurrentConfig().CLIDownloadLockFileName()
+	expectedCliPath := filepath.Join(config.CurrentConfig().CliSettings().DefaultBinaryInstallPath(), filename.ExecutableName)
+
+	defer func() { // defer clean up
+		_, err := os.Stat(lockFileName)
+		if err == nil {
+			_ = os.RemoveAll(lockFileName)
+		}
+		_, err = os.Stat(expectedCliPath)
+		if err == nil {
+			_ = os.RemoveAll(expectedCliPath)
+		}
+	}()
+
+	assert.Eventually(t, func() bool {
+		_, err := os.Stat(lockFileName)
+		return err != nil
+	}, time.Second*10, time.Millisecond)
+
+	config.CurrentConfig().CliSettings().SetPath("") // reset CLI path during download for foolproofing
+
+	assert.Eventually(t, func() bool {
+		_, err := installer.Find()
+		return err == nil
+	}, time.Second*120, time.Millisecond)
+
+	assert.Equal(t, expectedCliPath, config.CurrentConfig().CliSettings().Path())
+}
+
 func TestInitializer_whenBinaryUpdatesNotAllowed_DoesNotInstall(t *testing.T) {
+	testutil.UnitTest(t)
 	config.CurrentConfig().SetManageBinariesAutomatically(false)
 
 	installer := install.NewTestInstaller()
@@ -88,6 +140,7 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_DoesNotInstall(t *testing.T) {
 }
 
 func TestInitializer_whenOutdated_Updates(t *testing.T) {
+	testutil.UnitTest(t)
 	config.CurrentConfig().SetManageBinariesAutomatically(true)
 	createDummyCliBinaryWithCreatedDate(t, fiveDaysAgo)
 
@@ -102,6 +155,7 @@ func TestInitializer_whenOutdated_Updates(t *testing.T) {
 }
 
 func TestInitializer_whenUpToDate_DoesNotUpdates(t *testing.T) {
+	testutil.UnitTest(t)
 	config.CurrentConfig().SetManageBinariesAutomatically(true)
 	threeDaysAgo := time.Now().Add(time.Hour * 24 * 3) // exactly 4 days is considered as not outdated.
 	createDummyCliBinaryWithCreatedDate(t, threeDaysAgo)

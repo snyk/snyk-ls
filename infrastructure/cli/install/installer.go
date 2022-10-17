@@ -230,19 +230,19 @@ func cleanupLockFile(lockFileName string) {
 type TestInstaller struct {
 	updates  int
 	installs int
-	mutex    sync.RWMutex
+	mutex    sync.Mutex
 }
 
 func (t *TestInstaller) Updates() int {
-	t.mutex.RLock()
-	defer t.mutex.RUnlock()
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 
 	return t.updates
 }
 
 func (t *TestInstaller) Installs() int {
-	t.mutex.RLock()
-	defer t.mutex.RUnlock()
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 
 	return t.installs
 }
@@ -269,6 +269,6 @@ func (t *TestInstaller) Update(ctx context.Context) (bool, error) {
 
 func NewTestInstaller() *TestInstaller {
 	return &TestInstaller{
-		mutex: sync.RWMutex{},
+		mutex: sync.Mutex{},
 	}
 }

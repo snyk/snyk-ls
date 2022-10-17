@@ -68,6 +68,12 @@ type CliSettings struct {
 	cliPathAccessMutex   sync.Mutex
 }
 
+func NewCliSettings() *CliSettings {
+	settings := &CliSettings{}
+	settings.SetPath("")
+	return settings
+}
+
 func (c *CliSettings) Installed() bool {
 	c.cliPathAccessMutex.Lock()
 	defer c.cliPathAccessMutex.Unlock()
@@ -96,7 +102,20 @@ func (c *CliSettings) Path() string {
 func (c *CliSettings) SetPath(path string) {
 	c.cliPathAccessMutex.Lock()
 	defer c.cliPathAccessMutex.Unlock()
+	if path == "" {
+		path = filepath.Join(c.DefaultBinaryInstallPath(), filename.ExecutableName)
+	}
 	c.cliPath = path
+}
+
+func (c *CliSettings) DefaultBinaryInstallPath() string {
+	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
+	err := os.MkdirAll(lsPath, 0755)
+	if err != nil {
+		log.Err(err).Str("method", "lsPath").Msgf("couldn't create %s", lsPath)
+		return ""
+	}
+	return lsPath
 }
 
 type Config struct {
@@ -152,9 +171,7 @@ func IsDevelopment() bool {
 // New creates a configuration object with default values
 func New() *Config {
 	c := &Config{}
-	c.cliSettings = &CliSettings{
-		cliPath: filepath.Join(c.DefaultBinaryInstallPath(), filename.ExecutableName),
-	}
+	c.cliSettings = NewCliSettings()
 	c.automaticAuthentication = true
 	c.configFile = ""
 	c.format = "md"
@@ -242,7 +259,7 @@ func (c *Config) CliSettings() *CliSettings {
 
 func (c *Config) Format() string { return c.format }
 func (c *Config) CLIDownloadLockFileName() string {
-	return filepath.Join(c.DefaultBinaryInstallPath(), "snyk-cli-download.lock")
+	return filepath.Join(c.cliSettings.DefaultBinaryInstallPath(), "snyk-cli-download.lock")
 }
 func (c *Config) IsErrorReportingEnabled() bool          { return c.isErrorReportingEnabled.Get() }
 func (c *Config) IsSnykOssEnabled() bool                 { return c.isSnykOssEnabled.Get() }
@@ -370,7 +387,7 @@ func (c *Config) ConfigureLogging(level string) {
 		log.Info().Msgf("Logging to file %s", c.logPath)
 		log.Logger = log.Output(file)
 	} else {
-		log.Info().Msgf("Logging to console")
+		log.Info().Msgf("Logging to console") // TODO: log using LSP's 'window/logMessage'
 	}
 }
 
@@ -448,16 +465,6 @@ func (c *Config) GetOrganization() string {
 
 func (c *Config) SetOrganization(organization string) {
 	c.organization = organization
-}
-
-func (c *Config) DefaultBinaryInstallPath() string {
-	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
-	err := os.MkdirAll(lsPath, 0755)
-	if err != nil {
-		log.Err(err).Str("method", "lsPath").Msgf("couldn't create %s", lsPath)
-		return ""
-	}
-	return lsPath
 }
 
 func (c *Config) ManageBinariesAutomatically() bool {
