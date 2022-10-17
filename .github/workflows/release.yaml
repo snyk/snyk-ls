@@ -20,6 +20,7 @@ on:
 # Grant an OIDC token which we can exchange for an AWS IAM role
 permissions:
   id-token: write
+  contents: write
 
 jobs:
   release:
