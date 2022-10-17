@@ -17,6 +17,10 @@ on:
     branches:
       - 'main'
 
+# Grant an OIDC token which we can exchange for an AWS IAM role
+permissions:
+  id-token: write
+
 jobs:
   release:
     name: goreleaser
@@ -29,6 +33,12 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 0 # does an unshallow checkout with tags & branches
+
+      - name: Login to AWS
+        run: |
+          ./.github/setup_aws_credentials.py \
+            --role-arn "arn:aws:iam::198361731867:role/Snyk-Assets-WriteOnly" \
+            --region "${{ secrets.AWS_REGION }}"
 
       # this step can be removed if setup-go will support reading go-version from go.mod
       - name: Determine Go version
@@ -102,11 +112,6 @@ jobs:
 
       - name: Set up Git actions user
         uses: fregante/setup-git-user@v1
-
-      - name: Login to AWS
-        run: |
-          ./.github/setup_aws_credentials.py \
-            --role-arn "arn:aws:iam::198361731867:role/Snyk-Assets-WriteOnly"
 
       - name: Create release tag
         run: |
