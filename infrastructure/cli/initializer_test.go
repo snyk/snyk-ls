@@ -58,6 +58,7 @@ func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
 }
 
 func TestInitializer_whenNoCli_Installs(t *testing.T) {
+	testutil.UnitTest(t)
 	config.CurrentConfig().SetManageBinariesAutomatically(true)
 	settings := &config.CliSettings{}
 	testCliPath := filepath.Join(t.TempDir(), "dummy.cli")
@@ -117,6 +118,7 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 }
 
 func TestInitializer_whenBinaryUpdatesNotAllowed_DoesNotInstall(t *testing.T) {
+	testutil.UnitTest(t)
 	config.CurrentConfig().SetManageBinariesAutomatically(false)
 
 	installer := install.NewTestInstaller()
@@ -146,6 +148,7 @@ func TestInitializer_whenOutdated_Updates(t *testing.T) {
 }
 
 func TestInitializer_whenUpToDate_DoesNotUpdates(t *testing.T) {
+	testutil.UnitTest(t)
 	config.CurrentConfig().SetManageBinariesAutomatically(true)
 	threeDaysAgo := time.Now().Add(time.Hour * 24 * 3) // exactly 4 days is considered as not outdated.
 	createDummyCliBinaryWithCreatedDate(t, threeDaysAgo)
