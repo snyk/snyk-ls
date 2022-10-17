@@ -20,6 +20,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
 	"strings"
 	"time"
 
@@ -137,6 +138,7 @@ func (i *Initializer) updateCli() {
 
 	if updated {
 		log.Info().Str("method", "updateCli").Msg("CLI updated.")
+		_ = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
 	} else {
 		log.Info().Str("method", "updateCli").Msg("CLI is latest.")
 	}
