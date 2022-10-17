@@ -99,8 +99,6 @@ func (i *Initializer) installCli() {
 
 	// Check if the file is actually in the cliPath
 	if !currentConfig.CliSettings().Installed() {
-		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Snyk CLI needs to be installed."})
-
 		cliPath, err = i.installer.Install(context.Background())
 		notification.Send(lsp.SnykIsAvailableCli{CliPath: cliPath})
 		if err != nil {
