@@ -34,18 +34,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 )
 
-const (
-	OrganizationEnvVar                  = "SNYK_CFG_ORG"
-	ApiEnvVar                           = "SNYK_API"
-	TokenEnvVar                         = "SNYK_TOKEN"
-	DisableAnalyticsEnvVar              = "SNYK_CFG_DISABLE_ANALYTICS"
-	IntegrationNameEnvVarKey            = "SNYK_INTEGRATION_NAME"
-	IntegrationVersionEnvVarKey         = "SNYK_INTEGRATION_VERSION"
-	IntegrationEnvironmentEnvVarKey     = "SNYK_INTEGRATION_ENVIRONMENT"
-	IntegrationEnvironmentVersionEnvVar = "SNYK_INTEGRATION_ENVIRONMENT_VERSION"
-	IntegrationEnvironmentEnvVarValue   = "language-server"
-)
-
 type SnykCli struct {
 	authenticator snyk.AuthenticationService
 	errorReporter error_reporting.ErrorReporter
@@ -114,40 +102,10 @@ func (c SnykCli) doExecute(ctx context.Context, cmd []string, workingDir string,
 func (c SnykCli) getCommand(cmd []string, workingDir string, ctx context.Context) *exec.Cmd {
 	command := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
 	command.Dir = workingDir
-	cliEnv := appendCliEnvironmentVariables(os.Environ())
+	cliEnv := AppendCliEnvironmentVariables(os.Environ(), true)
 	command.Env = cliEnv
 	log.Debug().Str("method", "getCommand").Interface("command", command).Send()
 	return command
-}
-
-// Returns the input array with additional variables used in the CLI run in the form of "key=value".
-// Since we append, our values are overwriting existing env variables (because exec.Cmd.Env chooses the last value
-// in case of key duplications).
-func appendCliEnvironmentVariables(currentEnv []string) (updatedEnv []string) {
-	updatedEnv = currentEnv
-
-	currentConfig := config.CurrentConfig()
-	organization := currentConfig.GetOrganization()
-	if organization != "" {
-		updatedEnv = append(updatedEnv, OrganizationEnvVar+"="+organization)
-	}
-
-	updatedEnv = append(updatedEnv, TokenEnvVar+"="+currentConfig.Token())
-	if currentConfig.SnykApi() != "" {
-		updatedEnv = append(updatedEnv, ApiEnvVar+"="+currentConfig.SnykApi())
-	}
-	if !currentConfig.IsTelemetryEnabled() {
-		updatedEnv = append(updatedEnv, DisableAnalyticsEnvVar+"=1")
-	}
-
-	if currentConfig.IntegrationName() != "" {
-		updatedEnv = append(updatedEnv, IntegrationNameEnvVarKey+"="+currentConfig.IntegrationName())
-		updatedEnv = append(updatedEnv, IntegrationVersionEnvVarKey+"="+currentConfig.IntegrationVersion())
-	}
-	updatedEnv = append(updatedEnv, IntegrationEnvironmentEnvVarKey+"="+IntegrationEnvironmentEnvVarValue)
-	updatedEnv = append(updatedEnv, IntegrationEnvironmentVersionEnvVar+"="+config.Version)
-
-	return
 }
 
 // todo no need to export that, we could have a simpler interface that looks more like an actual CLI
