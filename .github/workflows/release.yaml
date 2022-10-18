@@ -39,7 +39,8 @@ jobs:
         run: |
           ./.github/setup_aws_credentials.py \
             --role-arn "arn:aws:iam::198361731867:role/Snyk-Assets-WriteOnly" \
-            --region "${{ secrets.AWS_REGION }}"
+            --region "${{ secrets.AWS_REGION }}" \
+            --web-identity-token-file "$(pwd)/webidentity.json"
 
       # this step can be removed if setup-go will support reading go-version from go.mod
       - name: Determine Go version
@@ -126,4 +127,4 @@ jobs:
           AWS_REGION: ${{ secrets.AWS_REGION }}
           AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
         with:
-          args: release --rm-dist
+          args: release

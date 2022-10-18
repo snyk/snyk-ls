@@ -39,7 +39,7 @@ def main():
     })
 
     token = token_response.json()['value']
-    with open('webidentity.json', 'w') as f:
+    with open(web_identity_token_file, 'w') as f:
         f.write(token)
 
 
