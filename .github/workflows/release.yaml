@@ -115,9 +115,8 @@ jobs:
           .github/setup_aws_credentials.py \
             --role-arn "arn:aws:iam::198361731867:role/Snyk-Assets-WriteOnly" \
             --region "${{ secrets.AWS_REGION }}" \
-            --web-identity-token-file "$(pwd)/webidentity.json"
 
-          ls -l $AWS_WEB_IDENTITY_TOKEN_FILE
+          ls -l webidentity.json
 
       - name: Create release tag
         run: |
