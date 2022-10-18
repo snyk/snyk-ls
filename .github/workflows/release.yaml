@@ -35,14 +35,6 @@ jobs:
         with:
           fetch-depth: 0 # does an unshallow checkout with tags & branches
 
-      - name: Login to AWS
-        run: |
-          .github/setup_aws_credentials.py \
-            --role-arn "arn:aws:iam::198361731867:role/Snyk-Assets-WriteOnly" \
-            --region "${{ secrets.AWS_REGION }}" \
-            --web-identity-token-file $(pwd)/webidentity.json
-
-          ls -l $AWS_WEB_IDENTITY_TOKEN_FILE
 
       # this step can be removed if setup-go will support reading go-version from go.mod
       - name: Determine Go version
@@ -84,42 +76,52 @@ jobs:
       - name: Set up Snyk CLI # Tests need it
         uses: snyk/actions/setup@master
 
-      - name: Run tests
-        env:
-          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
-        run: |
-          export PATH=$PATH:~/pact/bin
+#      - name: Run tests
+#        env:
+#          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
+#          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+#        run: |
+#          export PATH=$PATH:~/pact/bin
+#
+#          # this is required to be able to test the clipboard
+#          export DISPLAY=:99
+#          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+#          sudo apt-get install -y xsel xclip wl-clipboard
+#
+#          make clean test
 
-          # this is required to be able to test the clipboard
-          export DISPLAY=:99
-          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
-          sudo apt-get install -y xsel xclip wl-clipboard
-
-          make clean test
-
-      - name: Run integration and smoke tests
-        env:
-          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
-          INTEG_TESTS: 'true'
-          SMOKE_TESTS: 'true'
-        run: |
-          export PATH=$PATH:~/pact/bin
-
-          # this is required to be able to test the clipboard
-          export DISPLAY=:99
-          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
-          sudo apt-get install -y xsel xclip wl-clipboard
-
-          make clean test
+#      - name: Run integration and smoke tests
+#        env:
+#          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
+#          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+#          INTEG_TESTS: 'true'
+#          SMOKE_TESTS: 'true'
+#        run: |
+#          export PATH=$PATH:~/pact/bin
+#
+#          # this is required to be able to test the clipboard
+#          export DISPLAY=:99
+#          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+#          sudo apt-get install -y xsel xclip wl-clipboard
+#
+#          make clean test
 
 
       - name: Set up Git actions user
         uses: fregante/setup-git-user@v1
 
+      - name: Login to AWS
+        run: |
+          .github/setup_aws_credentials.py \
+            --role-arn "arn:aws:iam::198361731867:role/Snyk-Assets-WriteOnly" \
+            --region "${{ secrets.AWS_REGION }}" \
+            --web-identity-token-file "$(pwd)/webidentity.json"
+
+          ls -l $AWS_WEB_IDENTITY_TOKEN_FILE
+
       - name: Create release tag
         run: |
+          ls -l $AWS_WEB_IDENTITY_TOKEN_FILE # todo remove
           git tag "v$(git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)"
           git push --tags
 
