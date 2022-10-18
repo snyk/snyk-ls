@@ -28,11 +28,11 @@ import (
 )
 
 func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
-	t.Run("Does not authenticate when auto-auth is disabled", getAutoAuthenticationTest(false))
-	t.Run("Authenticates when auto-auth is disabled", getAutoAuthenticationTest(true))
+	t.Run("Does not authenticate when auto-auth is disabled", getAutoAuthenticationTest(false, true))
+	t.Run("Authenticates when auto-auth is enabled", getAutoAuthenticationTest(true, false))
 }
 
-func getAutoAuthenticationTest(autoAuthentication bool) func(t *testing.T) {
+func getAutoAuthenticationTest(autoAuthentication bool, expectError bool) func(t *testing.T) {
 	return func(t *testing.T) {
 		// Arrange
 		config.CurrentConfig().SetToken("")
@@ -46,7 +46,7 @@ func getAutoAuthenticationTest(autoAuthentication bool) func(t *testing.T) {
 		err := initializer.Init()
 
 		// Assert
-		assert.Nil(t, err)
+		assert.Equal(t, expectError, err != nil)
 		assert.Equal(t, autoAuthentication, provider.IsAuthenticated)
 	}
 }
