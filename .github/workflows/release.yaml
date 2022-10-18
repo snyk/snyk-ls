@@ -35,6 +35,15 @@ jobs:
         with:
           fetch-depth: 0 # does an unshallow checkout with tags & branches
 
+      - name: Login to AWS
+        run: |
+          .github/setup_aws_credentials.py \
+            --role-arn "arn:aws:iam::198361731867:role/Snyk-Assets-WriteOnly" \
+            --region "${{ secrets.AWS_REGION }}" \
+            --web-identity-token-file $(pwd)/webidentity.json
+
+          ls -l $AWS_WEB_IDENTITY_TOKEN_FILE
+
       # this step can be removed if setup-go will support reading go-version from go.mod
       - name: Determine Go version
         run: |
@@ -105,12 +114,6 @@ jobs:
 
           make clean test
 
-      - name: Login to AWS
-        run: |
-          ./.github/setup_aws_credentials.py \
-            --role-arn "arn:aws:iam::198361731867:role/Snyk-Assets-WriteOnly" \
-            --region "${{ secrets.AWS_REGION }}" \
-            --web-identity-token-file $(pwd)/webidentity.json
 
       - name: Set up Git actions user
         uses: fregante/setup-git-user@v1
@@ -119,7 +122,6 @@ jobs:
         run: |
           git tag "v$(git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)"
           git push --tags
-          ls -l $AWS_WEB_IDENTITY_TOKEN_FILE # TODO remove, this is just debug
 
       - name: Release binaries with GoReleaser
         uses: goreleaser/goreleaser-action@v3

@@ -39,8 +39,9 @@ def main():
     })
 
     token = token_response.json()['value']
-    with open(web_identity_token_file, 'w') as f:
+    with open(web_identity_token_file, 'x') as f:
         f.write(token)
+        f.close()
 
 
 # https://docs.github.com/en/actions/learn-github-actions/environment-variables#passing-values-between-steps-and-jobs-in-a-workflow
