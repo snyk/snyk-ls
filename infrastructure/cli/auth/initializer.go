@@ -68,7 +68,9 @@ func (i *Initializer) Init() error {
 		if err == nil {
 			err = &AuthenticationFailedError{}
 		}
-		log.Error().Err(err).Msg("CLI Initializer failed to authenticate.")
+		const errorMessage = "CLI Initializer failed to authenticate."
+		err = errors.Wrap(err, errorMessage)
+		log.Error().Err(err).Msg(errorMessage)
 		i.errorReporter.CaptureError(err)
 
 		return err
