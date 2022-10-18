@@ -46,6 +46,8 @@ func NewInitializer(authenticator snyk.AuthenticationService, errorReporter erro
 }
 
 func (i *Initializer) Init() error {
+	const errorMessage = "CLI Initializer failed to authenticate."
+
 	cli.Mutex.Lock()
 	defer cli.Mutex.Unlock()
 
@@ -68,11 +70,10 @@ func (i *Initializer) Init() error {
 		if err == nil {
 			err = &AuthenticationFailedError{}
 		}
-		const errorMessage = "CLI Initializer failed to authenticate."
 		err = errors.Wrap(err, errorMessage)
 		log.Error().Err(err).Msg(errorMessage)
+		notification.SendError(err)
 		i.errorReporter.CaptureError(err)
-
 		return err
 	}
 
@@ -80,8 +81,10 @@ func (i *Initializer) Init() error {
 	isAuthenticated, err = authenticator.IsAuthenticated()
 
 	if !isAuthenticated {
-		log.Err(err).Msg("Failed to authenticate token")
+		err = errors.Wrap(err, errorMessage)
+		log.Err(err).Msg(errorMessage)
 		notification.SendError(err)
+		i.errorReporter.CaptureError(err)
 		return err
 	}
 
