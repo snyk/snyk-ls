@@ -19,6 +19,7 @@ package auth
 import (
 	"context"
 
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
@@ -64,7 +65,7 @@ func (i *Initializer) Init() error {
 
 	token, err := authenticator.Provider().Authenticate(context.Background())
 	if token == "" || err != nil {
-		if err != nil {
+		if err == nil {
 			err = &AuthenticationFailedError{}
 		}
 		log.Error().Err(err).Msg("CLI Initializer failed to authenticate.")
