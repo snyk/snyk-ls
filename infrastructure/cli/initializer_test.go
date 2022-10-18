@@ -92,7 +92,7 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 	}
 
 	// act
-	go initializer.Init()
+	go func() { _ = initializer.Init() }()
 
 	// assert
 	lockFileName := config.CurrentConfig().CLIDownloadLockFileName()
