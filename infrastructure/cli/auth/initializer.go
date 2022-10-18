@@ -59,8 +59,9 @@ func (i *Initializer) Init() error {
 		return nil
 	}
 	if !currentConfig.AutomaticAuthentication() {
+		notification.Send(sglsp.ShowMessageParams{Message: "Please authenticate your Snyk user in order to start scanning"})
 		log.Info().Msg("Skipping authentication - automatic authentication is disabled")
-		return nil
+		return errors.New(errorMessage)
 	}
 
 	notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Authenticating to Snyk. This could open a browser window."})
