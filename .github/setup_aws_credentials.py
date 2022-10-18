@@ -24,13 +24,13 @@ def main():
     github_env_file = os.environ['GITHUB_ENV']
 
     role_arn = args.role_arn
-    append_file(f'AWS_ROLE_ARN="{role_arn}"', github_env_file)
+    append_file(f'AWS_ROLE_ARN={role_arn}', github_env_file)
 
     web_identity_token_file = args.web_identity_token_file
-    append_file(f'AWS_WEB_IDENTITY_TOKEN_FILE="{web_identity_token_file}"', github_env_file)
+    append_file(f'AWS_WEB_IDENTITY_TOKEN_FILE={web_identity_token_file}', github_env_file)
 
     region = args.region
-    append_file(f'AWS_DEFAULT_REGION="{region}"', github_env_file)
+    append_file(f'AWS_DEFAULT_REGION={region}', github_env_file)
 
     token_url = os.environ['ACTIONS_ID_TOKEN_REQUEST_URL']
     token_request_token = os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']
@@ -39,8 +39,9 @@ def main():
     })
 
     token = token_response.json()['value']
-    with open(web_identity_token_file, 'w') as f:
+    with open(web_identity_token_file, 'x') as f:
         f.write(token)
+        f.close()
 
 
 # https://docs.github.com/en/actions/learn-github-actions/environment-variables#passing-values-between-steps-and-jobs-in-a-workflow
