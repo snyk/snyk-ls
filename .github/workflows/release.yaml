@@ -110,6 +110,7 @@ jobs:
           ./.github/setup_aws_credentials.py \
             --role-arn "arn:aws:iam::198361731867:role/Snyk-Assets-WriteOnly" \
             --region "${{ secrets.AWS_REGION }}" \
+            --web-identity-token-file "$(pwd)/webidentity.json" \
 
       - name: Set up Git actions user
         uses: fregante/setup-git-user@v1
