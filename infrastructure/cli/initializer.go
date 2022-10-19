@@ -45,7 +45,7 @@ func NewInitializer(errorReporter error_reporting.ErrorReporter, installer insta
 	}
 }
 
-func (i *Initializer) Init() {
+func (i *Initializer) Init() error {
 	Mutex.Lock()
 	defer Mutex.Unlock()
 
@@ -54,7 +54,7 @@ func (i *Initializer) Init() {
 		if !cliInstalled {
 			notification.Send(sglsp.ShowMessageParams{Type: sglsp.Warning, Message: "Automatic CLI downloads are disabled and no CLI path is configured. Enable automatic downloads or set a valid CLI path."})
 		}
-		return
+		return nil
 	}
 
 	if cliInstalled && i.isOutdatedCli() {
@@ -62,7 +62,7 @@ func (i *Initializer) Init() {
 	}
 
 	if cliInstalled {
-		return
+		return nil
 	}
 
 	for attempt := 0; !config.CurrentConfig().CliSettings().Installed(); attempt++ {
@@ -77,6 +77,7 @@ func (i *Initializer) Init() {
 			time.Sleep(2 * time.Second)
 		}
 	}
+	return nil
 }
 
 func (i *Initializer) installCli() {

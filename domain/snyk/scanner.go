@@ -69,7 +69,12 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	done := make(chan bool)
 	defer close(done)
 
-	sc.initializer.Init()
+	err := sc.initializer.Init()
+	if err != nil {
+		log.Error().Err(err).Msg("Scan initialization error, cancelling scan")
+		return
+	}
+
 	tokenChangeChannel := config.CurrentConfig().TokenChangesChannel()
 	ctx, cancelFunc := context.WithCancel(ctx)
 	defer cancelFunc()

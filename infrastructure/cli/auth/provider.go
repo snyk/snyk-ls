@@ -84,6 +84,28 @@ func (a *CliAuthenticationProvider) AuthURL(ctx context.Context) string {
 	return a.authURL
 }
 
+type AuthenticationFailedError struct{}
+
+func (e *AuthenticationFailedError) Error() string {
+	const authFailMessage = "Failed to authenticate with Snyk. Please make sure you have a valid token. " +
+		"You can reset the token to re-authenticate automatically."
+	return authFailMessage
+}
+
+func (a *CliAuthenticationProvider) AuthenticateToken(token string) error {
+	if token == "" {
+		return errors.New("token is an empty string")
+	}
+	args := []string{"auth", token}
+	cmd := a.buildCLICmd(context.Background(), args...)
+	outputBytes, err := cmd.Output()
+	if strings.Contains(string(outputBytes), "Authentication failed") {
+		err = &AuthenticationFailedError{}
+	}
+
+	return err
+}
+
 // Auth represents the `snyk auth` command.
 func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 	a.authURL = ""
@@ -193,22 +215,11 @@ func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...str
 }
 
 func (a *CliAuthenticationProvider) runCLICmd(ctx context.Context, cmd *exec.Cmd) error {
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded || ctx.Err() == context.Canceled {
-			if cmd != nil && cmd.Process != nil && cmd.ProcessState != nil {
-				err := cmd.Process.Kill()
-				if err != nil {
-					log.Err(err).Msg("error from kill")
-				}
-			}
-		}
-	}()
 	// check for early cancellation
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	default:
+	default: // If no cancellation requested, do nothing
 	}
 
 	err := cmd.Run()

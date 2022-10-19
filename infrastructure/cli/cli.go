@@ -135,9 +135,9 @@ func (c SnykCli) HandleErrors(ctx context.Context, output string) (fail bool) {
 
 		token, err := c.authenticator.Provider().Authenticate(ctx)
 		if token == "" || err != nil {
-			log.Error().Err(err).Msg("Failed to authenticate. Terminating server.")
+			log.Error().Err(err).Msg("Failed to authenticate.")
 			c.errorReporter.CaptureError(err)
-			os.Exit(1) // terminate server since unrecoverable from authentication error
+			return true
 		}
 
 		c.authenticator.UpdateToken(token, true)

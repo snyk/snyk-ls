@@ -40,7 +40,7 @@ func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 	if !config.CurrentConfig().Authenticated() {
 		config.CurrentConfig().SetToken("dummy") // we don't want to authenticate
 	}
-	initializer.Init()
+	_ = initializer.Init()
 	assert.NotEmpty(t, config.CurrentConfig().CliSettings().Path())
 }
 
@@ -52,7 +52,7 @@ func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
 	tempFile := testutil.CreateTempFile(tempDir, t)
 	config.CurrentConfig().CliSettings().SetPath(tempFile.Name())
 
-	initializer.Init()
+	_ = initializer.Init()
 
 	assert.Equal(t, tempFile.Name(), config.CurrentConfig().CliSettings().Path())
 }
@@ -68,7 +68,7 @@ func TestInitializer_whenNoCli_Installs(t *testing.T) {
 	installer := install.NewTestInstaller()
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
 
-	go initializer.Init()
+	go func() { _ = initializer.Init() }()
 
 	assert.Eventually(t, func() bool {
 		return installer.Installs() > 0
@@ -92,7 +92,7 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 	}
 
 	// act
-	go initializer.Init()
+	go func() { _ = initializer.Init() }()
 
 	// assert
 	lockFileName := config.CurrentConfig().CLIDownloadLockFileName()
@@ -131,7 +131,7 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_DoesNotInstall(t *testing.T) {
 	installer := install.NewTestInstaller()
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
 
-	go initializer.Init()
+	go func() { _ = initializer.Init() }()
 	time.Sleep(time.Second)
 
 	assert.Eventually(t, func() bool {
@@ -147,7 +147,7 @@ func TestInitializer_whenOutdated_Updates(t *testing.T) {
 	installer := install.NewTestInstaller()
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
 
-	initializer.Init()
+	_ = initializer.Init()
 
 	assert.Eventually(t, func() bool {
 		return installer.Updates() == 1 && installer.Installs() == 0
@@ -163,7 +163,7 @@ func TestInitializer_whenUpToDate_DoesNotUpdates(t *testing.T) {
 	installer := install.NewTestInstaller()
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
 
-	initializer.Init()
+	_ = initializer.Init()
 
 	assert.Eventually(t, func() bool {
 		return installer.Updates() == 0 && installer.Installs() == 0
@@ -178,7 +178,7 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_PreventsUpdate(t *testing.T) {
 	installer := install.NewTestInstaller()
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
 
-	initializer.Init()
+	_ = initializer.Init()
 
 	assert.Eventually(t, func() bool {
 		return installer.Updates() == 0
@@ -192,7 +192,7 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_PreventsInstall(t *testing.T) {
 	installer := install.NewTestInstaller()
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
 
-	initializer.Init()
+	_ = initializer.Init()
 
 	assert.Eventually(t, func() bool {
 		return installer.Installs() == 0
@@ -207,7 +207,7 @@ func TestInitializer_whenBinaryUpdatesAllowed_Updates(t *testing.T) {
 	installer := install.NewTestInstaller()
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
 
-	initializer.Init()
+	_ = initializer.Init()
 
 	assert.Eventually(t, func() bool {
 		return installer.Updates() == 1 && installer.Installs() == 0
