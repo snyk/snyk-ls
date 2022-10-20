@@ -100,14 +100,16 @@ func (i *Initializer) installCli() {
 
 	// Check if the file is actually in the cliPath
 	if !currentConfig.CliSettings().Installed() {
-		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Snyk CLI needs to be installed."})
-
+		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Snyk CLI will be downloaded to run security scans."})
 		cliPath, err = i.installer.Install(context.Background())
 		notification.Send(lsp.SnykIsAvailableCli{CliPath: cliPath})
 		if err != nil {
 			log.Err(err).Str("method", "installCli").Msg("could not download Snyk CLI binary")
 			i.handleInstallerError(err)
+			notification.Send(sglsp.ShowMessageParams{Type: sglsp.Warning, Message: "Failed to download Snyk CLI."})
 			cliPath, _ = i.installer.Find()
+		} else {
+			notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Snyk CLI has been downloaded."})
 		}
 	}
 

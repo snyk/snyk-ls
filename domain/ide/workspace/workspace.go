@@ -20,13 +20,10 @@ import (
 	"context"
 	"sync"
 
-	sglsp "github.com/sourcegraph/go-lsp"
-
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -90,10 +87,6 @@ func (w *Workspace) GetFolderContaining(path string) (folder *Folder) {
 }
 
 func (w *Workspace) ScanWorkspace(ctx context.Context) {
-	if len(w.folders) > 0 {
-		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Workspace scan started."})
-	}
-
 	for _, folder := range w.folders {
 		go folder.ScanFolder(ctx)
 	}
