@@ -51,3 +51,10 @@ jobs:
           SNYK_API: ${{secrets.SNYK_API_MT1 }}
         run: |
           make instance-test
+
+      - name: Run Instance Test MT 2
+        env:
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN_MT2 }}
+          SNYK_API: ${{secrets.SNYK_API_MT2 }}
+        run: |
+          make instance-test
