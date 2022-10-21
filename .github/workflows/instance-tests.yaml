@@ -22,6 +22,10 @@ on:
 
 jobs:
   instance-tests:
+    strategy:
+      matrix:
+        environment: [Standard, MT1, MT2]
+      environment: ${{matrix.environment}}
     name: instance tests
     runs-on: ubuntu-latest
     steps:
@@ -42,6 +46,5 @@ jobs:
           restore-keys: ${{ runner.os }}-go-
 
       - name: Run Instance Tests
-        environment: [Standard, MT1, MT2]
         run: |
           make instance-test
