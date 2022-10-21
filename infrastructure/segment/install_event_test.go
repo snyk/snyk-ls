@@ -50,7 +50,7 @@ func Test_NewInstallationSendsInstallEvent(t *testing.T) {
 	assert.Equal(t, segment.Track{
 		UserId:      "",
 		Event:       "Plugin Is Installed",
-		AnonymousId: s.anonymousUserId,
+		AnonymousId: config.CurrentConfig().DeviceID(),
 		Properties: segment.Properties{}.
 			Set("ide", ux2.IDE("Visual Studio Code")).
 			Set("itly", true),

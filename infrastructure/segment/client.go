@@ -33,7 +33,6 @@ import (
 
 type Client struct {
 	authenticatedUserId string
-	anonymousUserId     string
 	segment             segment.Client
 	snykApiClient       snyk_api.SnykApiClient
 	errorReporter       error_reporting.ErrorReporter
@@ -134,7 +133,7 @@ func (s *Client) Identify() {
 	}
 
 	err = s.segment.Enqueue(analytics.Identify{
-		AnonymousId: s.anonymousUserId,
+		AnonymousId: config.CurrentConfig().DeviceID(),
 		UserId:      s.authenticatedUserId,
 	})
 	if err != nil {
