@@ -25,8 +25,8 @@ jobs:
     strategy:
       matrix:
         environment: [Standard, MT1, MT2]
-      environment: ${{matrix.environment}}
     name: instance tests
+    environment: ${{matrix.environment}}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
