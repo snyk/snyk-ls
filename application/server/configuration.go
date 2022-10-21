@@ -77,6 +77,7 @@ func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 func InitializeSettings(ctx context.Context, settings lsp.Settings) {
 	writeSettings(ctx, settings, true)
 	updateAutoAuthentication(settings)
+	updateDeviceInformation(settings)
 }
 
 func UpdateSettings(ctx context.Context, settings lsp.Settings) {
@@ -107,6 +108,13 @@ func updateAutoAuthentication(settings lsp.Settings) {
 	} else {
 		// When the field is omitted, set to true by default
 		config.CurrentConfig().SetAutomaticAuthentication(true)
+	}
+}
+
+func updateDeviceInformation(settings lsp.Settings) {
+	deviceId := strings.TrimSpace(settings.DeviceId)
+	if deviceId != "" {
+		config.CurrentConfig().SetDeviceID(deviceId)
 	}
 }
 

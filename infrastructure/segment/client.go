@@ -45,10 +45,9 @@ func NewSegmentClient(snykApiClient snyk_api.SnykApiClient, errorReporter error_
 		log.Error().Str("method", "NewSegmentClient").Err(err).Msg("Error creating segment client")
 	}
 	segmentClient := &Client{
-		segment:         client,
-		snykApiClient:   snykApiClient,
-		errorReporter:   errorReporter,
-		anonymousUserId: config.CurrentConfig().DeviceID(),
+		segment:       client,
+		snykApiClient: snykApiClient,
+		errorReporter: errorReporter,
 	}
 
 	return segmentClient
@@ -103,7 +102,7 @@ func (s *Client) enqueueEvent(properties interface{}, event string) {
 			UserId:      s.authenticatedUserId,
 			Event:       event,
 			Properties:  s.getSerialisedProperties(properties),
-			AnonymousId: s.anonymousUserId,
+			AnonymousId: config.CurrentConfig().DeviceID(),
 		})
 		if err != nil {
 			log.Warn().Err(err).Msg("Couldn't enqueue analytics")
