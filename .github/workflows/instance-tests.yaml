@@ -16,6 +16,9 @@ name: instance-tests
 on:
   pull_request:
   workflow_dispatch:
+  push:
+    branches:
+      - 'main'
 
 jobs:
   instance-tests:
@@ -38,23 +41,7 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-go-
 
-      - name: Run Instance Test MT standard
-        env:
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN}}
-          SNYK_API: https://app.snyk.io/api
-        run: |
-          make instance-test
-
-      - name: Run Instance Test MT 1
-        env:
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN_MT1 }}
-          SNYK_API: ${{secrets.SNYK_API_MT1 }}
-        run: |
-          make instance-test
-
-      - name: Run Instance Test MT 2
-        env:
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN_MT2 }}
-          SNYK_API: ${{secrets.SNYK_API_MT2 }}
+      - name: Run Instance Tests
+        environment: [Standard, MT1, MT2]
         run: |
           make instance-test
