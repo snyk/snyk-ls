@@ -238,3 +238,28 @@ func Test_UpdateSettings(t *testing.T) {
 		})
 	})
 }
+
+func Test_InitializeSettings(t *testing.T) {
+	testutil.UnitTest(t)
+	di.TestInit(t)
+
+	t.Run("device ID is passed", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+		deviceId := "test-device-id"
+
+		InitializeSettings(context.Background(), lsp.Settings{DeviceId: deviceId})
+
+		c := config.CurrentConfig()
+		assert.Equal(t, deviceId, c.DeviceID())
+	})
+
+	t.Run("device ID is not passed", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+		curentDeviceId := config.CurrentConfig().DeviceID()
+
+		InitializeSettings(context.Background(), lsp.Settings{})
+
+		c := config.CurrentConfig()
+		assert.Equal(t, curentDeviceId, c.DeviceID())
+	})
+}
