@@ -46,5 +46,8 @@ jobs:
           restore-keys: ${{ runner.os }}-go-
 
       - name: Run Instance Tests
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_API: ${{ secrets.SNYK_API }}
         run: |
           make instance-test
