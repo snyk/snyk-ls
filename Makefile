@@ -83,6 +83,9 @@ proxy-test:
 	@docker build -t "snyk-ls:$(VERSION)" -f .github/docker-based-tests/Dockerfile .
 	@docker run --rm --cap-add=NET_ADMIN --name "snyk-ls" --env "SNYK_TOKEN=$(SNYK_TOKEN)" snyk-ls:$(VERSION) go test -failfast $(PARALLEL) $(NOCACHE) $(TIMEOUT) $(VERBOSE) ./...
 
+instance-test:
+	@echo "==> Running instance tests with proxy"
+	@export SMOKE_TESTS=1 && cd application/server && go test -run Test_SmokeWorkspaceScanOssAndCode && cd -
 
 ## build: Build binary for default local system's OS and architecture.
 .PHONY: build

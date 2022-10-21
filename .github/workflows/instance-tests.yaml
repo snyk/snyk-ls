@@ -1,0 +1,53 @@
+# Copyright 2022 Snyk Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: instance-tests
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  instance-tests:
+    name: instance tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: './go.mod'
+
+      - name: Cache Go modules
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
+
+      - name: Run Instance Test MT standard
+        env:
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN}}
+          SNYK_API: https://app.snyk.io/api
+        run: |
+          make instance-test
+
+      - name: Run Instance Test MT 1
+        env:
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN_MT1 }}
+          SNYK_API: ${{secrets.SNYK_API_MT1 }}
+        run: |
+          make instance-test
