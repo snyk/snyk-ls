@@ -496,6 +496,10 @@ func (c *Config) DeviceID() string {
 	return c.deviceId
 }
 
+func (c *Config) SetDeviceID(deviceId string) {
+	c.deviceId = deviceId
+}
+
 func (c *Config) ClientCapabilities() lsp.ClientCapabilities {
 	return c.clientCapabilities
 }

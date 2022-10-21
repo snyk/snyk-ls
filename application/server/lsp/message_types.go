@@ -248,6 +248,7 @@ type Settings struct {
 	IntegrationName             string `json:"integrationName,omitempty"`
 	IntegrationVersion          string `json:"integrationVersion,omitempty"`
 	AutomaticAuthentication     string `json:"automaticAuthentication,omitempty"`
+	DeviceId                    string `json:"deviceId,omitempty"`
 }
 
 type DidChangeConfigurationParams struct {

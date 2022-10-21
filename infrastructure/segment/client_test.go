@@ -41,7 +41,7 @@ func TestClient_IdentifyAuthenticatedUser(t *testing.T) {
 	assert.Equal(t, 1, len(fakeSegmentClient.trackedEvents))
 	assert.Equal(t, fakeSegmentClient.trackedEvents[0], analytics.Identify{
 		UserId:      s.authenticatedUserId,
-		AnonymousId: s.anonymousUserId,
+		AnonymousId: config.CurrentConfig().DeviceID(),
 	})
 }
 
