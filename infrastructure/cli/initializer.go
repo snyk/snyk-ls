@@ -62,6 +62,7 @@ func (i *Initializer) Init() error {
 	}
 
 	if cliInstalled {
+		notification.Send(lsp.SnykIsAvailableCli{CliPath: config.CurrentConfig().CliSettings().Path()})
 		return nil
 	}
 
