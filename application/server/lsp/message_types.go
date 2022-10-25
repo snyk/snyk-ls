@@ -161,6 +161,8 @@ type InitializeParams struct {
 	WorkspaceFolders []WorkspaceFolder `json:"workspaceFolders,omitempty"`
 }
 
+type InitializedParams struct{}
+
 type ServerCapabilities struct {
 	TextDocumentSync                 *sglsp.TextDocumentSyncOptionsOrKind   `json:"textDocumentSync,omitempty"`
 	HoverProvider                    bool                                   `json:"hoverProvider,omitempty"`

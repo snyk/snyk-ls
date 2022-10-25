@@ -78,6 +78,7 @@ func Start() {
 
 func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 	(*handlers)["initialize"] = InitializeHandler(srv)
+	(*handlers)["initialized"] = InitializedHandler(srv)
 	(*handlers)["textDocument/didOpen"] = TextDocumentDidOpenHandler()
 	(*handlers)["textDocument/didChange"] = NoOpHandler()
 	(*handlers)["textDocument/didClose"] = NoOpHandler()
@@ -200,7 +201,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 				w.AddFolder(workspace.NewFolder(params.RootPath, params.ClientInfo.Name, di.Scanner(), di.HoverService()))
 			}
 		}
-		w.ScanWorkspace(context.Background())
+
 		return lsp.InitializeResult{
 			ServerInfo: lsp.ServerInfo{
 				Name:    "snyk-ls",
@@ -235,6 +236,12 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 				},
 			},
 		}, nil
+	})
+}
+func InitializedHandler(srv *jrpc2.Server) handler.Func {
+	return handler.New(func(ctx context.Context, params lsp.InitializedParams) (interface{}, error) {
+		workspace.Get().ScanWorkspace(context.Background())
+		return nil, nil
 	})
 }
 
