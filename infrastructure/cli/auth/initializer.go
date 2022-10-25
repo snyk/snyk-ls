@@ -54,7 +54,7 @@ func (i *Initializer) Init() error {
 	authenticator := i.authenticator
 	currentConfig := config.CurrentConfig()
 	isAuthenticated, _ := authenticator.IsAuthenticated()
-	if currentConfig.Authenticated() && isAuthenticated {
+	if currentConfig.NonEmptyToken() && isAuthenticated {
 		log.Info().Msg("Skipping authentication - user is already authenticated")
 		return nil
 	}

@@ -112,7 +112,7 @@ func (s *Client) enqueueEvent(properties interface{}, event string) {
 func (s *Client) Identify() {
 	method := "infrastructure.segment.client"
 	log.Info().Str("method", method).Msg("Identifying a user.")
-	if !config.CurrentConfig().Authenticated() {
+	if !config.CurrentConfig().NonEmptyToken() {
 		s.authenticatedUserId = ""
 		return
 	}

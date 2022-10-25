@@ -104,7 +104,7 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 		productScanner,
 	)
 	config.CurrentConfig().SetToken("")
-	isAuthenticated := config.CurrentConfig().Authenticated()
+	isAuthenticated := config.CurrentConfig().NonEmptyToken()
 
 	// Act
 	scanner.Scan(context.Background(), "", NoopResultProcessor, "")

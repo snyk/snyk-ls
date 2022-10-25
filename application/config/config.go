@@ -246,7 +246,7 @@ func (c *Config) loadFile(fileName string) {
 	log.Debug().Str("fileName", fileName).Msg("loaded.")
 }
 
-func (c *Config) Authenticated() bool {
+func (c *Config) NonEmptyToken() bool {
 	c.m.Lock()
 	defer c.m.Unlock()
 	return c.token != ""
