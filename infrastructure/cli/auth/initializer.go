@@ -60,7 +60,8 @@ func (i *Initializer) Init() error {
 	}
 	if !currentConfig.AutomaticAuthentication() {
 		if currentConfig.Token() != "" { // Only send notification when the token is invalid
-			notification.SendError(&AuthenticationFailedError{})
+			err := &AuthenticationFailedError{manualAuthentication: true}
+			notification.SendError(err)
 		}
 		log.Info().Msg("Skipping scan - user is not authenticated and automatic authentication is disabled")
 		return errors.New(errorMessage)
