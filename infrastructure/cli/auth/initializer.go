@@ -64,6 +64,9 @@ func (i *Initializer) Init() error {
 			notification.SendError(err)
 		}
 		log.Info().Msg("Skipping scan - user is not authenticated and automatic authentication is disabled")
+
+		// If the user is not authenticated and auto-authentication is disabled, return an error to indicate the user
+		// could not be authenticated and the scan cannot start
 		return errors.New(errorMessage)
 	}
 
