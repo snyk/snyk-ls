@@ -249,6 +249,10 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err, "couldn't initialize")
 	}
+	_, err = loc.Client.Call(ctx, "initialized", nil)
+	if err != nil {
+		t.Fatal(err, "couldn't send initialized")
+	}
 
 	// wait for publish
 	assert.Eventually(
@@ -691,7 +695,7 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 
 	_, err = loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
-		t.Fatal(err, "Initialization failed")
+		t.Fatal(err, "Initialize failed")
 	}
 
 	var testPath string
@@ -756,7 +760,11 @@ func Test_IntegrationHoverResults(t *testing.T) {
 
 	_, err = loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
-		t.Fatal(err, "Initialization failed")
+		t.Fatal(err, "Initialize failed")
+	}
+	_, err = loc.Client.Call(ctx, "initialized", clientParams)
+	if err != nil {
+		t.Fatal(err, "Initialized failed")
 	}
 
 	// wait till the whole workspace is scanned
