@@ -697,6 +697,10 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 	if err != nil {
 		t.Fatal(err, "Initialize failed")
 	}
+	_, err = loc.Client.Call(ctx, "initialized", nil)
+	if err != nil {
+		t.Fatal(err, "Initialized failed")
+	}
 
 	var testPath string
 	if file1 != "" {
