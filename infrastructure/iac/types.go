@@ -23,6 +23,7 @@ import (
 type iacScanResult struct {
 	TargetFile string     `json:"targetFile"`
 	IacIssues  []iacIssue `json:"infrastructureAsCodeIssues"`
+	ErrorCode  int        `json:"code"`
 }
 
 type iacDescription struct {

@@ -31,6 +31,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
+	"golang.org/x/exp/slices"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -57,6 +58,14 @@ var extensions = map[string]bool{
 	".yml":  true,
 	".json": true,
 	".tf":   true,
+}
+
+// Ignoring IAC errors for .json files with broken syntax.
+// There are cases where there are no IAC files to scan, but
+// IAC finds a random malformed JSON file and return an error.
+var ignorableIacErrorCodes = []int{
+	1021, // InvalidJsonFileError
+	2105, // FailedToParseInput
 }
 
 type Scanner struct {
@@ -150,7 +159,10 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 func (iac *Scanner) retrieveIssues(scanResults []iacScanResult, issues []snyk.Issue, workspacePath string, err error) []snyk.Issue {
 	if len(scanResults) > 0 {
 		for _, s := range scanResults {
-			issues = append(issues, iac.retrieveAnalysis(s, workspacePath)...)
+			isIgnored := slices.Contains(ignorableIacErrorCodes, s.ErrorCode)
+			if !isIgnored {
+				issues = append(issues, iac.retrieveAnalysis(s, workspacePath)...)
+			}
 		}
 	}
 	iac.trackResult(err == nil)
