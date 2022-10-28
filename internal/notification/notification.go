@@ -27,6 +27,10 @@ type Event string
 var channel = make(chan interface{}, 100)
 var stopChannel = make(chan bool, 1000)
 
+func SendShowMessage(messageType sglsp.MessageType, message string) {
+	channel <- sglsp.ShowMessageParams{Type: messageType, Message: message}
+}
+
 func Send(msg interface{}) {
 	channel <- msg
 }
