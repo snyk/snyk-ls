@@ -59,7 +59,7 @@ func (i *Initializer) Init() error {
 		return nil
 	}
 	if !currentConfig.AutomaticAuthentication() {
-		if currentConfig.Token() != "" { // Only send notification when the token is invalid
+		if currentConfig.NonEmptyToken() { // Only send notification when the token is invalid
 			err := &AuthenticationFailedError{manualAuthentication: true}
 			notification.SendError(err)
 		}
