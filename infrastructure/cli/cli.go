@@ -131,7 +131,7 @@ func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
 func (c SnykCli) HandleErrors(ctx context.Context, output string) (fail bool) {
 	if strings.Contains(output, "`snyk` requires an authenticated account. Please run `snyk auth` and try again.") {
 		log.Info().Msg("Snyk failed to obtain authentication information. Trying to authenticate again...")
-		notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Snyk failed to obtain authentication information, trying to authenticate again. This could open a browser window."})
+		notification.SendShowMessage(sglsp.Info, "Snyk failed to obtain authentication information, trying to authenticate again. This could open a browser window.")
 
 		token, err := c.authenticator.Provider().Authenticate(ctx)
 		if token == "" || err != nil {

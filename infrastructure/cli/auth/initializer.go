@@ -70,7 +70,7 @@ func (i *Initializer) Init() error {
 		return errors.New(errorMessage)
 	}
 
-	notification.Send(sglsp.ShowMessageParams{Type: sglsp.Info, Message: "Authenticating to Snyk. This could open a browser window."})
+	notification.SendShowMessage(sglsp.Info, "Authenticating to Snyk. This could open a browser window.")
 
 	token, err := authenticator.Provider().Authenticate(context.Background())
 	if token == "" || err != nil {
