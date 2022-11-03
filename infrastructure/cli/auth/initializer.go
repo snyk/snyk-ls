@@ -54,13 +54,19 @@ func (i *Initializer) Init() error {
 	authenticator := i.authenticator
 	currentConfig := config.CurrentConfig()
 	isAuthenticated, _ := authenticator.IsAuthenticated()
-	if currentConfig.Authenticated() && isAuthenticated {
+	if currentConfig.NonEmptyToken() && isAuthenticated {
 		log.Info().Msg("Skipping authentication - user is already authenticated")
 		return nil
 	}
 	if !currentConfig.AutomaticAuthentication() {
-		notification.SendShowMessage(sglsp.Info, "Please authenticate your Snyk user in order to start scanning")
-		log.Info().Msg("Skipping authentication - automatic authentication is disabled")
+		if currentConfig.NonEmptyToken() { // Only send notification when the token is invalid
+			err := &AuthenticationFailedError{manualAuthentication: true}
+			notification.SendError(err)
+		}
+		log.Info().Msg("Skipping scan - user is not authenticated and automatic authentication is disabled")
+
+		// If the user is not authenticated and auto-authentication is disabled, return an error to indicate the user
+		// could not be authenticated and the scan cannot start
 		return errors.New(errorMessage)
 	}
 
@@ -71,9 +77,9 @@ func (i *Initializer) Init() error {
 		if err == nil {
 			err = &AuthenticationFailedError{}
 		}
+		notification.SendError(err)
 		err = errors.Wrap(err, errorMessage)
 		log.Error().Err(err).Msg(errorMessage)
-		notification.SendError(err)
 		i.errorReporter.CaptureError(err)
 		return err
 	}

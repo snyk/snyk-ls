@@ -84,12 +84,20 @@ func (a *CliAuthenticationProvider) AuthURL(ctx context.Context) string {
 	return a.authURL
 }
 
-type AuthenticationFailedError struct{}
+type AuthenticationFailedError struct {
+	manualAuthentication bool
+}
 
 func (e *AuthenticationFailedError) Error() string {
-	const authFailMessage = "Failed to authenticate with Snyk. Please make sure you have a valid token. " +
-		"You can reset the token to re-authenticate automatically."
-	return authFailMessage
+	const authFailMessage = "Failed to authenticate with Snyk. Please make sure you have a valid token. "
+	const autoAuthMessage = "You can reset the token to re-authenticate automatically."
+	message := authFailMessage
+
+	if !e.manualAuthentication {
+		message += autoAuthMessage
+	}
+
+	return message
 }
 
 func (a *CliAuthenticationProvider) AuthenticateToken(token string) error {

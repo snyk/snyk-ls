@@ -90,7 +90,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 		}
 	}()
 
-	if !config.CurrentConfig().Authenticated() {
+	if !config.CurrentConfig().NonEmptyToken() {
 		log.Info().Msg("User is not authenticated, cancelling scan")
 		return
 	}

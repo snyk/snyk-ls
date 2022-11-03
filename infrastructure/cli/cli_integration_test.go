@@ -50,7 +50,7 @@ func Test_HandleErrors_MissingTokenError(t *testing.T) { // todo: check if still
 
 	assert.True(t, retry)
 	assert.Eventually(t, func() bool {
-		return config.CurrentConfig().Authenticated()
+		return config.CurrentConfig().NonEmptyToken()
 	}, 5*time.Minute, 10*time.Millisecond, "Didn't install CLI after error, timed out after 5 minutes.")
 }
 

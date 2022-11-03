@@ -37,7 +37,7 @@ func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
 
 	config.CurrentConfig().CliSettings().SetPath("")
-	if !config.CurrentConfig().Authenticated() {
+	if !config.CurrentConfig().NonEmptyToken() {
 		config.CurrentConfig().SetToken("dummy") // we don't want to authenticate
 	}
 	_ = initializer.Init()
