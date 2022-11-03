@@ -23,7 +23,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"time"
 
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog/log"
@@ -68,7 +67,6 @@ func newWriter(size int64, progressTracker *progress.Tracker, onProgress func(do
 func onProgress(downloaded, total int64, progressTracker *progress.Tracker) {
 	percentage := float64(downloaded) / float64(total) * 100
 	progressTracker.Report(int(percentage))
-	time.Sleep(time.Millisecond * 2)
 }
 
 func (d *Downloader) lockFileName() string {
