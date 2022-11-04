@@ -20,6 +20,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -29,7 +30,7 @@ import (
 )
 
 func TestDownloader_Download(t *testing.T) {
-	testutil.IntegTest(t)
+	// testutil.IntegTest(t)
 	r := getTestAsset()
 	progressCh := make(chan lsp.ProgressParams, 100000)
 	cancelProgressCh := make(chan lsp.ProgressToken, 1)
@@ -42,6 +43,7 @@ func TestDownloader_Download(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, progressCh)
+	log.Info().Msgf("progress: %v", len(progressCh))
 	assert.True(t, len(progressCh) > 3) // has at least started, reported & finished progress
 
 	//make sure cleanup works

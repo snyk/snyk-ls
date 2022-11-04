@@ -83,6 +83,7 @@ func (t *Tracker) ReportWithMessage(percentage int, message string) {
 	if time.Now().Before(t.lastReport.Add(time.Second)) || percentage <= t.lastReportPercentage {
 		return
 	}
+	log.Info().Str("method", "ReportProgress").Int("percentage", percentage).Msg("reporting progress")
 	progress := lsp.ProgressParams{
 		Token: t.token,
 		Value: lsp.WorkDoneProgressReport{
