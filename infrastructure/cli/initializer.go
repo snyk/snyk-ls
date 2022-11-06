@@ -103,7 +103,6 @@ func (i *Initializer) installCli() {
 	if !currentConfig.CliSettings().Installed() {
 		notification.SendShowMessage(sglsp.Info, "Snyk CLI will be downloaded to run security scans.")
 		cliPath, err = i.installer.Install(context.Background())
-		notification.Send(lsp.SnykIsAvailableCli{CliPath: cliPath})
 		if err != nil {
 			log.Err(err).Str("method", "installCli").Msg("could not download Snyk CLI binary")
 			i.handleInstallerError(err)
