@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/adrg/xdg"
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -57,6 +58,7 @@ var analytics ux2.Analytics
 var snykCli cli2.Executor
 var hoverService hover.Service
 var scanner snyk.Scanner
+var logger zerolog.Logger
 
 var initMutex = &sync.Mutex{}
 
@@ -108,6 +110,8 @@ func initInfrastructure() {
 		cli2.NewInitializer(errorReporter, install.NewInstaller(errorReporter)),
 		auth2.NewInitializer(authenticator, errorReporter, analytics),
 	)
+	logger = logger.Hook(&sentry2.BreadcrumbLogger{})
+	logger.Info().Msg("Hello")
 }
 
 // TODO this is becoming a hot mess we need to unify integ. test strategies
@@ -203,4 +207,10 @@ func Installer() install.Installer {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return installer
+}
+
+func Logger() zerolog.Logger {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return logger
 }
