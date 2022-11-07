@@ -26,6 +26,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -117,6 +118,32 @@ func Test_Scan_CancelledContext_DoesNotScan(t *testing.T) {
 
 	// Assert
 	assert.False(t, cliMock.WasExecuted())
+}
+
+func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
+	testutil.UnitTest(t)
+
+	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
+
+	results := []iacScanResult{
+		{
+			ErrorCode: invalidJsonFileErrorCodeErrorCode,
+		},
+		{
+			ErrorCode: failedToParseInputErrorCode,
+		},
+		{
+			TargetFile: "fake.yml",
+			IacIssues: []iacIssue{
+				{
+					PublicID: "test",
+				},
+			},
+		},
+	}
+	issues := scanner.retrieveIssues(results, []snyk.Issue{}, "", nil)
+
+	assert.Len(t, issues, 1)
 }
 
 func sampleIssue() iacIssue {

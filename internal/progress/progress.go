@@ -29,12 +29,13 @@ var Channel = make(chan lsp.ProgressParams, 100)
 var CancelProgressChannel = make(chan lsp.ProgressToken, 100)
 
 type Tracker struct {
-	channel       chan lsp.ProgressParams
-	cancelChannel chan lsp.ProgressToken
-	token         lsp.ProgressToken
-	cancellable   bool
-	lastReport    time.Time
-	finished      bool
+	channel              chan lsp.ProgressParams
+	cancelChannel        chan lsp.ProgressToken
+	token                lsp.ProgressToken
+	cancellable          bool
+	lastReport           time.Time
+	lastReportPercentage int
+	finished             bool
 }
 
 func NewTestTracker(channel chan lsp.ProgressParams, cancelChannel chan lsp.ProgressToken) *Tracker {
@@ -42,8 +43,9 @@ func NewTestTracker(channel chan lsp.ProgressParams, cancelChannel chan lsp.Prog
 		channel:       channel,
 		cancelChannel: cancelChannel,
 		// deepcode ignore HardcodedPassword: false positive
-		token:       "token",
-		cancellable: true,
+		token:                "token",
+		cancellable:          true,
+		lastReportPercentage: -1,
 	}
 }
 
@@ -78,7 +80,7 @@ func (t *Tracker) Begin(title, message string) {
 }
 
 func (t *Tracker) ReportWithMessage(percentage int, message string) {
-	if time.Now().Before(t.lastReport.Add(time.Second)) {
+	if time.Now().Before(t.lastReport.Add(time.Second)) || percentage <= t.lastReportPercentage {
 		return
 	}
 	progress := lsp.ProgressParams{
@@ -91,6 +93,7 @@ func (t *Tracker) ReportWithMessage(percentage int, message string) {
 	}
 	t.send(progress)
 	t.lastReport = time.Now()
+	t.lastReportPercentage = percentage
 }
 
 func (t *Tracker) Report(percentage int) {
