@@ -241,8 +241,8 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 			ActivateSnykIac:             "false",
 			Organization:                "fancy org",
 			Token:                       "xxx",
-			ManageBinariesAutomatically: "false",
-			CliPath:                     "dummy",
+			ManageBinariesAutomatically: "true",
+			CliPath:                     "",
 		},
 	}
 	_, err := loc.Client.Call(ctx, "initialize", clientParams)
@@ -261,7 +261,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 			path := uri.PathFromUri(didOpenParams.TextDocument.URI)
 			return workspace.Get().GetFolderContaining(path).DocumentDiagnosticsFromCache(path) != nil
 		},
-		5*time.Second,
+		50*time.Second,
 		time.Millisecond,
 		"Couldn't get diagnostics from cache",
 	)
