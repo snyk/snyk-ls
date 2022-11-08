@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,6 +47,7 @@ func NewInitializer(errorReporter error_reporting.ErrorReporter, installer insta
 }
 
 func (i *Initializer) Init() error {
+	const errorMessage = "could not download CLI" // Returning an error notifies that the scan cannot continue
 	Mutex.Lock()
 	defer Mutex.Unlock()
 
@@ -53,6 +55,7 @@ func (i *Initializer) Init() error {
 	if !config.CurrentConfig().ManageBinariesAutomatically() {
 		if !cliInstalled {
 			notification.SendShowMessage(sglsp.Warning, "Automatic CLI downloads are disabled and no CLI path is configured. Enable automatic downloads or set a valid CLI path.")
+			return errors.New(errorMessage)
 		}
 		return nil
 	}
@@ -71,7 +74,8 @@ func (i *Initializer) Init() error {
 			config.CurrentConfig().SetSnykIacEnabled(false)
 			config.CurrentConfig().SetSnykOssEnabled(false)
 			log.Warn().Str("method", "cli.Init").Msg("Disabling Snyk OSS and Snyk Iac as no CLI found after 3 tries")
-			break
+
+			return errors.New(errorMessage)
 		}
 		i.installCli()
 		if !config.CurrentConfig().CliSettings().Installed() {
