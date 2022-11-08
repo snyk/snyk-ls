@@ -480,8 +480,8 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 			ActivateSnykIac:             "false",
 			Organization:                "fancy org",
 			Token:                       "xxx",
-			ManageBinariesAutomatically: "false",
-			CliPath:                     "dummy",
+			ManageBinariesAutomatically: "true",
+			CliPath:                     "",
 		},
 	}
 	_, err := loc.Client.Call(ctx, "initialize", clientParams)
