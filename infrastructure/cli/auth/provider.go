@@ -47,6 +47,8 @@ func (a *CliAuthenticationProvider) Authenticate(ctx context.Context) (string, e
 	err := a.authenticate(ctx)
 	if err != nil {
 		log.Err(err).Str("method", "Authenticate").Msg("error while authenticating")
+
+		// No need to report the error when it's due to the user not authenticating
 		const timedOutExitCode = 2
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() != timedOutExitCode {
 			a.errorReporter.CaptureError(err)
