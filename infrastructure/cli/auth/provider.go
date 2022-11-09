@@ -50,7 +50,8 @@ func (a *CliAuthenticationProvider) Authenticate(ctx context.Context) (string, e
 
 		// No need to report the error when it's due to the user not authenticating
 		const timedOutExitCode = 2
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() != timedOutExitCode {
+		exitErr, ok := err.(*exec.ExitError)
+		if !ok || exitErr.ExitCode() != timedOutExitCode {
 			a.errorReporter.CaptureError(err)
 		}
 	}
