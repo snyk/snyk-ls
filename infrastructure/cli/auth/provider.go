@@ -47,7 +47,10 @@ func (a *CliAuthenticationProvider) Authenticate(ctx context.Context) (string, e
 	err := a.authenticate(ctx)
 	if err != nil {
 		log.Err(err).Str("method", "Authenticate").Msg("error while authenticating")
-		a.errorReporter.CaptureError(err)
+		const timedOutExitCode = 2
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() != timedOutExitCode {
+			a.errorReporter.CaptureError(err)
+		}
 	}
 	token, err := a.getToken(ctx)
 	log.Debug().Str("method", "Authenticate").Int("token length", len(token)).Msg("got token")
