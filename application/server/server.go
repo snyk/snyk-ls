@@ -91,9 +91,19 @@ func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 	(*handlers)["shutdown"] = Shutdown()
 	(*handlers)["exit"] = Exit(srv)
 	(*handlers)["workspace/didChangeWorkspaceFolders"] = WorkspaceDidChangeWorkspaceFoldersHandler()
+	(*handlers)["workspace/willDeleteFiles"] = WorkspaceWillDeleteFilesHandler()
 	(*handlers)["workspace/didChangeConfiguration"] = WorkspaceDidChangeConfiguration(srv)
 	(*handlers)["window/workDoneProgress/cancel"] = WindowWorkDoneProgressCancelHandler()
 	(*handlers)["workspace/executeCommand"] = ExecuteCommandHandler(srv)
+}
+
+// WorkspaceWillDeleteFilesHandler handles the workspace/willDeleteFiles message that's raised by the client
+// when files are deleted
+func WorkspaceWillDeleteFilesHandler() jrpc2.Handler {
+	return handler.New(func(ctx context.Context, params lsp.DeleteFilesParams) (interface{}, error) {
+		log.Info().Msg("Handling file deletions")
+		return nil, nil
+	})
 }
 
 func navigateToLocation(srv *jrpc2.Server, args []interface{}) {
@@ -202,7 +212,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 			}
 		}
 
-		return lsp.InitializeResult{
+		result := lsp.InitializeResult{
 			ServerInfo: lsp.ServerInfo{
 				Name:    "snyk-ls",
 				Version: config.LsProtocolVersion,
@@ -220,7 +230,19 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 					WorkspaceFolders: &lsp.WorkspaceFoldersServerCapabilities{
 						Supported:           true,
 						ChangeNotifications: "snyk-ls",
-					}},
+					},
+					FileOperations: &lsp.FileOperationsServerCapabilities{
+						WillDelete: lsp.FileOperationRegistrationOptions{
+							Filters: []lsp.FileOperationFilter{
+								{
+									Pattern: lsp.FileOperationPattern{
+										Glob: "**",
+									},
+								},
+							},
+						},
+					},
+				},
 				HoverProvider:      true,
 				CodeActionProvider: true,
 				CodeLensProvider:   &sglsp.CodeLensOptions{ResolveProvider: false},
@@ -235,7 +257,8 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 					},
 				},
 			},
-		}, nil
+		}
+		return result, nil
 	})
 }
 func InitializedHandler(srv *jrpc2.Server) handler.Func {
