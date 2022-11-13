@@ -108,9 +108,15 @@ func (f *Folder) Contains(path string) bool {
 	return uri.FolderContains(f.path, path)
 }
 
-// todo: can we manage the cache internally without leaking it, e.g. by using as a key an MD5 hash rather than a path and defining a TTL?
-func (f *Folder) ClearDiagnosticsCache(filePath string) {
+// ClearDiagnosticsFromFile will clear all diagnostics of a file from memory, and send a notification to the client
+// with empty diagnostics results for the specific file
+func (f *Folder) ClearDiagnosticsFromFile(filePath string) {
+	// todo: can we manage the cache internally without leaking it, e.g. by using as a key an MD5 hash rather than a path and defining a TTL?
 	f.documentDiagnosticCache.Delete(filePath)
+	notification.Send(lsp.PublishDiagnosticsParams{
+		URI:         uri.PathToUri(filePath),
+		Diagnostics: []lsp.Diagnostic{},
+	})
 	f.ClearScannedStatus()
 }
 

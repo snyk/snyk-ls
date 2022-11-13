@@ -231,7 +231,7 @@ type DeleteFilesParams struct {
 }
 
 type FileDelete struct {
-	Uri string `json:"uri,omitempty"`
+	Uri sglsp.DocumentURI `json:"uri,omitempty"`
 }
 
 type WorkspaceFolder struct {

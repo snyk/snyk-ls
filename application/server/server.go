@@ -101,7 +101,15 @@ func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 // when files are deleted
 func WorkspaceWillDeleteFilesHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DeleteFilesParams) (interface{}, error) {
-		log.Info().Msg("Handling file deletions")
+		ws := workspace.Get()
+		for _, file := range params.Files {
+			path := uri.PathFromUri(file.Uri)
+
+			// Instead of branching whether it's a file or a folder, we'll attempt to remove both and the redundant case
+			// will be a no-op
+			ws.DeleteFolder(path)
+			ws.DeleteFile(path)
+		}
 		return nil, nil
 	})
 }
@@ -360,7 +368,7 @@ func TextDocumentDidSaveHandler() jrpc2.Handler {
 		// todo can we push cache management down?
 		f := workspace.Get().GetFolderContaining(filePath)
 		if f != nil {
-			f.ClearDiagnosticsCache(filePath)
+			f.ClearDiagnosticsFromFile(filePath)
 			di.HoverService().DeleteHover(params.TextDocument.URI)
 			go f.ScanFile(bgCtx, filePath)
 		} else {

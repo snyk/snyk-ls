@@ -68,6 +68,15 @@ func (w *Workspace) DeleteFolder(folder string) {
 	delete(w.folders, folder)
 }
 
+func (w *Workspace) DeleteFile(filePath string) {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	folder := w.GetFolderContaining(filePath)
+	if folder != nil {
+		folder.ClearDiagnosticsFromFile(filePath)
+	}
+}
+
 func (w *Workspace) AddFolder(f *Folder) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
