@@ -146,6 +146,7 @@ type Config struct {
 	integrationVersion          string
 	automaticAuthentication     bool
 	tokenChangeChannels         []chan string
+	severityFilter              map[string]bool
 }
 
 func CurrentConfig() *Config {
@@ -188,6 +189,7 @@ func New() *Config {
 	c.clientSettingsFromEnv()
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
+	c.defaultSeverityFilter()
 	return c
 }
 
@@ -273,6 +275,7 @@ func (c *Config) SnykCodeApi() string                    { return c.snykCodeApiU
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
 func (c *Config) IntegrationName() string                { return c.integrationName }
 func (c *Config) IntegrationVersion() string             { return c.integrationVersion }
+func (c *Config) SeverityFilter() map[string]bool        { return c.severityFilter }
 func (c *Config) Token() string {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -529,6 +532,13 @@ func (c *Config) addDefaults() {
 	}
 	c.determineJavaHome()
 	c.determineMavenHome()
+}
+
+func (c *Config) defaultSeverityFilter() {
+	c.severityFilter["critical"] = true
+	c.severityFilter["high"] = true
+	c.severityFilter["medium"] = true
+	c.severityFilter["low"] = true
 }
 
 func (c *Config) SetIntegrationName(integrationName string) {

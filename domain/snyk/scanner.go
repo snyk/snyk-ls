@@ -121,7 +121,32 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				log.Debug().Msgf("Scanning %s with %T: STARTED", path, s)
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
 				foundIssues := s.Scan(span.Context(), path, folderPath)
-				processResults(foundIssues)
+
+				var filteredIssues []Issue
+				for _, issue := range foundIssues {
+					if config.CurrentConfig().SeverityFilter()["critical"] {
+						if issue.Severity == 0 {
+							filteredIssues = append(filteredIssues, issue)
+						}
+					}
+					if config.CurrentConfig().SeverityFilter()["high"] {
+						if issue.Severity == 1 {
+							filteredIssues = append(filteredIssues, issue)
+						}
+					}
+					if config.CurrentConfig().SeverityFilter()["medium"] {
+						if issue.Severity == 2 {
+							filteredIssues = append(filteredIssues, issue)
+						}
+					}
+					if config.CurrentConfig().SeverityFilter()["low"] {
+						if issue.Severity == 3 {
+							filteredIssues = append(filteredIssues, issue)
+						}
+					}
+				}
+				processResults(filteredIssues)
+				// processResults(foundIssues)
 				log.Debug().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
 			}(scanner)
 		} else {
