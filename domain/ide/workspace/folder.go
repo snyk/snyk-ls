@@ -18,6 +18,7 @@ package workspace
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -118,6 +119,21 @@ func (f *Folder) ClearDiagnosticsFromFile(filePath string) {
 		Diagnostics: []lsp.Diagnostic{},
 	})
 	f.ClearScannedStatus()
+}
+
+func (f *Folder) ClearDiagnosticsFromPathRecursively(removedPath string) {
+	f.documentDiagnosticCache.Range(func(key interface{}, value interface{}) bool {
+		filePath := key.(string)
+		if strings.Contains(filePath, removedPath) {
+			f.documentDiagnosticCache.Delete(filePath)
+			notification.Send(lsp.PublishDiagnosticsParams{
+				URI:         uri.PathToUri(filePath),
+				Diagnostics: []lsp.Diagnostic{},
+			})
+		}
+
+		return true // Continue the iteration
+	})
 }
 
 func (f *Folder) scan(ctx context.Context, path string) {

@@ -62,10 +62,12 @@ func Set(w *Workspace) {
 	instance = w
 }
 
-func (w *Workspace) DeleteFolder(folder string) {
+func (w *Workspace) DeleteFolder(folderPath string) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
-	delete(w.folders, folder)
+	folder := w.GetFolderContaining(folderPath)
+	folder.ClearDiagnosticsFromPathRecursively(folderPath)
+	delete(w.folders, folderPath)
 }
 
 func (w *Workspace) DeleteFile(filePath string) {
