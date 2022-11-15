@@ -146,7 +146,10 @@ type Config struct {
 	integrationVersion          string
 	automaticAuthentication     bool
 	tokenChangeChannels         []chan string
-	severityFilter              map[string]bool
+	filterCriticalSeverity      concurrency.AtomicBool
+	filterHighSeverity          concurrency.AtomicBool
+	filterMediumSeverity        concurrency.AtomicBool
+	filterLowSeverity           concurrency.AtomicBool
 }
 
 func CurrentConfig() *Config {
@@ -189,7 +192,10 @@ func New() *Config {
 	c.clientSettingsFromEnv()
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
-	c.defaultSeverityFilter()
+	c.filterCriticalSeverity.Set(true)
+	c.filterHighSeverity.Set(true)
+	c.filterMediumSeverity.Set(true)
+	c.filterLowSeverity.Set(true)
 	return c
 }
 
@@ -275,7 +281,10 @@ func (c *Config) SnykCodeApi() string                    { return c.snykCodeApiU
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
 func (c *Config) IntegrationName() string                { return c.integrationName }
 func (c *Config) IntegrationVersion() string             { return c.integrationVersion }
-func (c *Config) SeverityFilter() map[string]bool        { return c.severityFilter }
+func (c *Config) FilterCriticalSeverity() bool           { return c.filterCriticalSeverity.Get() }
+func (c *Config) FilterHighSeverity() bool               { return c.filterHighSeverity.Get() }
+func (c *Config) FilterMediumSeverity() bool             { return c.filterMediumSeverity.Get() }
+func (c *Config) FilterLowSeverity() bool                { return c.filterLowSeverity.Get() }
 func (c *Config) Token() string {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -335,6 +344,12 @@ func (c *Config) SetSnykIacEnabled(enabled bool)        { c.isSnykIacEnabled.Set
 func (c *Config) SetSnykContainerEnabled(enabled bool) { c.isSnykContainerEnabled.Set(enabled) }
 
 func (c *Config) SetSnykAdvisorEnabled(enabled bool) { c.isSnykAdvisorEnabled.Set(enabled) }
+
+func (c *Config) SetFilterCriticalSeverity(enabled bool) { c.filterCriticalSeverity.Set(enabled) }
+func (c *Config) SetFilterHighSeverity(enabled bool)     { c.filterHighSeverity.Set(enabled) }
+func (c *Config) SetFilterMediumSeverity(enabled bool)   { c.filterHighSeverity.Set(enabled) }
+func (c *Config) SetFilterLowSeverity(enabled bool)      { c.filterLowSeverity.Set(enabled) }
+
 func (c *Config) SetToken(token string) {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -532,14 +547,6 @@ func (c *Config) addDefaults() {
 	}
 	c.determineJavaHome()
 	c.determineMavenHome()
-}
-
-func (c *Config) defaultSeverityFilter() {
-	c.severityFilter = make(map[string]bool)
-	c.severityFilter["critical"] = true
-	c.severityFilter["high"] = true
-	c.severityFilter["medium"] = true
-	c.severityFilter["low"] = true
 }
 
 func (c *Config) SetIntegrationName(integrationName string) {

@@ -124,16 +124,16 @@ func (sc *DelegatingConcurrentScanner) Scan(
 
 				var filteredIssues []Issue
 				for _, issue := range foundIssues {
-					if config.CurrentConfig().SeverityFilter()["critical"] && issue.Severity == 0 {
+					if config.CurrentConfig().FilterCriticalSeverity() && issue.Severity == 0 {
 						filteredIssues = append(filteredIssues, issue)
 					}
-					if config.CurrentConfig().SeverityFilter()["high"] && issue.Severity == 1 {
+					if config.CurrentConfig().FilterHighSeverity() && issue.Severity == 1 {
 						filteredIssues = append(filteredIssues, issue)
 					}
-					if config.CurrentConfig().SeverityFilter()["medium"] && issue.Severity == 2 {
+					if config.CurrentConfig().FilterMediumSeverity() && issue.Severity == 2 {
 						filteredIssues = append(filteredIssues, issue)
 					}
-					if config.CurrentConfig().SeverityFilter()["low"] && issue.Severity == 3 {
+					if config.CurrentConfig().FilterLowSeverity() && issue.Severity == 3 {
 						filteredIssues = append(filteredIssues, issue)
 					}
 				}
