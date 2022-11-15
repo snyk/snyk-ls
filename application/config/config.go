@@ -535,6 +535,7 @@ func (c *Config) addDefaults() {
 }
 
 func (c *Config) defaultSeverityFilter() {
+	c.severityFilter = make(map[string]bool)
 	c.severityFilter["critical"] = true
 	c.severityFilter["high"] = true
 	c.severityFilter["medium"] = true
