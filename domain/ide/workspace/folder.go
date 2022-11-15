@@ -22,6 +22,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -135,6 +136,7 @@ func (f *Folder) DocumentDiagnosticsFromCache(file string) []snyk.Issue {
 
 func (f *Folder) processResults(issues []snyk.Issue) {
 	var issuesByFile = map[string][]snyk.Issue{}
+	var filteredIssues []snyk.Issue
 	dedupMap := f.createDedupMap()
 
 	// TODO: perform issue diffing (current <-> newly reported)
@@ -143,11 +145,28 @@ func (f *Folder) processResults(issues []snyk.Issue) {
 		if cachedIssues == nil {
 			cachedIssues = []snyk.Issue{}
 		}
+
 		if !dedupMap[f.getUniqueIssueID(issue)] {
 			cachedIssues = append(cachedIssues.([]snyk.Issue), issue)
 		}
-		f.documentDiagnosticCache.Put(issue.AffectedFilePath, cachedIssues)
-		issuesByFile[issue.AffectedFilePath] = cachedIssues.([]snyk.Issue)
+
+		for _, cachedIssue := range cachedIssues.([]snyk.Issue) {
+			if config.CurrentConfig().FilterCriticalSeverity() && cachedIssue.Severity == 0 {
+				filteredIssues = append(filteredIssues, cachedIssue)
+			}
+			if config.CurrentConfig().FilterHighSeverity() && cachedIssue.Severity == 1 {
+				filteredIssues = append(filteredIssues, cachedIssue)
+			}
+			if config.CurrentConfig().FilterMediumSeverity() && cachedIssue.Severity == 2 {
+				filteredIssues = append(filteredIssues, cachedIssue)
+			}
+			if config.CurrentConfig().FilterLowSeverity() && cachedIssue.Severity == 3 {
+				filteredIssues = append(filteredIssues, cachedIssue)
+			}
+		}
+
+		f.documentDiagnosticCache.Put(issue.AffectedFilePath, filteredIssues)
+		issuesByFile[issue.AffectedFilePath] = filteredIssues
 	}
 
 	f.processDiagnostics(issuesByFile)
