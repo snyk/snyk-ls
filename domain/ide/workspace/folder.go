@@ -151,16 +151,16 @@ func (f *Folder) processResults(issues []snyk.Issue) {
 		}
 
 		for _, cachedIssue := range cachedIssues.([]snyk.Issue) {
-			if config.CurrentConfig().FilterCriticalSeverity() && cachedIssue.Severity == 0 {
+			if config.CurrentConfig().FilterSeverity()[config.Critical] && cachedIssue.Severity == snyk.Severity(config.Critical) {
 				filteredIssues = append(filteredIssues, cachedIssue)
 			}
-			if config.CurrentConfig().FilterHighSeverity() && cachedIssue.Severity == 1 {
+			if config.CurrentConfig().FilterSeverity()[config.High] && cachedIssue.Severity == snyk.Severity(config.High) {
 				filteredIssues = append(filteredIssues, cachedIssue)
 			}
-			if config.CurrentConfig().FilterMediumSeverity() && cachedIssue.Severity == 2 {
+			if config.CurrentConfig().FilterSeverity()[config.Medium] && cachedIssue.Severity == snyk.Severity(config.Medium) {
 				filteredIssues = append(filteredIssues, cachedIssue)
 			}
-			if config.CurrentConfig().FilterLowSeverity() && cachedIssue.Severity == 3 {
+			if config.CurrentConfig().FilterSeverity()[config.Low] && cachedIssue.Severity == snyk.Severity(config.Low) {
 				filteredIssues = append(filteredIssues, cachedIssue)
 			}
 		}
