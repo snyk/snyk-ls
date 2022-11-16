@@ -89,6 +89,7 @@ func writeSettings(ctx context.Context, settings lsp.Settings, initialize bool) 
 	if settings == emptySettings {
 		return
 	}
+	updateSeverityFilter(settings)
 	updateToken(settings.Token)
 	updateProductEnablement(settings)
 	updateCliConfig(settings)
@@ -221,5 +222,32 @@ func updateProductEnablement(settings lsp.Settings) {
 		log.Warn().Err(err).Msg("couldn't parse iac setting")
 	} else {
 		config.CurrentConfig().SetSnykIacEnabled(parseBool)
+	}
+}
+
+func updateSeverityFilter(settings lsp.Settings) {
+	parseBool, err := strconv.ParseBool(settings.FilterCriticalSeverity)
+	if err != nil {
+		log.Warn().Err(err).Msg("couldn't parse critical severity setting")
+	} else {
+		config.CurrentConfig().SetFilterCriticalSeverity(parseBool)
+	}
+	parseBool, err = strconv.ParseBool(settings.FilterHighSeverity)
+	if err != nil {
+		log.Warn().Err(err).Msg("couldn't parse high severity setting")
+	} else {
+		config.CurrentConfig().SetFilterHighSeverity(parseBool)
+	}
+	parseBool, err = strconv.ParseBool(settings.FilterMediumSeverity)
+	if err != nil {
+		log.Warn().Err(err).Msg("couldn't parse medium severity setting")
+	} else {
+		config.CurrentConfig().SetFilterMediumSeverity(parseBool)
+	}
+	parseBool, err = strconv.ParseBool(settings.FilterLowSeverity)
+	if err != nil {
+		log.Warn().Err(err).Msg("couldn't parse low severity setting")
+	} else {
+		config.CurrentConfig().SetFilterLowSeverity(parseBool)
 	}
 }

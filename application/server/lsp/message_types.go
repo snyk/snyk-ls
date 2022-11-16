@@ -251,6 +251,10 @@ type Settings struct {
 	IntegrationVersion          string `json:"integrationVersion,omitempty"`
 	AutomaticAuthentication     string `json:"automaticAuthentication,omitempty"`
 	DeviceId                    string `json:"deviceId,omitempty"`
+	FilterCriticalSeverity      string `json:"filterCriticalSeverity,omitempty"`
+	FilterHighSeverity          string `json:"filterHighSeverity,omitempty"`
+	FilterMediumSeverity        string `json:"filterMediumSeverity,omitempty"`
+	FilterLowSeverity           string `json:"filterLowSeverity,omitempty"`
 }
 
 type DidChangeConfigurationParams struct {
