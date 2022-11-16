@@ -32,10 +32,11 @@ import (
 	"github.com/denisbrodbeck/machineid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/sourcegraph/go-lsp"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/subosito/gotenv"
 	"github.com/xtgo/uuid"
 
+	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -148,7 +149,7 @@ type Config struct {
 	snykCodeApiUrl              string
 	token                       string
 	deviceId                    string
-	clientCapabilities          lsp.ClientCapabilities
+	clientCapabilities          sglsp.ClientCapabilities
 	m                           sync.Mutex
 	path                        string
 	defaultDirs                 []string
@@ -347,9 +348,13 @@ func (c *Config) SetSnykContainerEnabled(enabled bool) { c.isSnykContainerEnable
 func (c *Config) SetSnykAdvisorEnabled(enabled bool) { c.isSnykAdvisorEnabled.Set(enabled) }
 
 func (c *Config) SetFilterCriticalSeverity(enabled bool) { c.filterSeverity[Critical] = enabled }
-func (c *Config) SetFilterHighSeverity(enabled bool)     { c.filterSeverity[High] = enabled }
-func (c *Config) SetFilterMediumSeverity(enabled bool)   { c.filterSeverity[Medium] = enabled }
-func (c *Config) SetFilterLowSeverity(enabled bool)      { c.filterSeverity[Low] = enabled }
+
+func (c *Config) SetSeverityFilter(severityFilter lsp.SeverityFilter) {
+	c.filterSeverity[Critical] = severityFilter.Critical
+	c.filterSeverity[High] = severityFilter.High
+	c.filterSeverity[Medium] = severityFilter.Medium
+	c.filterSeverity[Low] = severityFilter.Low
+}
 
 func (c *Config) SetToken(token string) {
 	c.m.Lock()
@@ -519,11 +524,11 @@ func (c *Config) SetDeviceID(deviceId string) {
 	c.deviceId = deviceId
 }
 
-func (c *Config) ClientCapabilities() lsp.ClientCapabilities {
+func (c *Config) ClientCapabilities() sglsp.ClientCapabilities {
 	return c.clientCapabilities
 }
 
-func (c *Config) SetClientCapabilities(capabilities lsp.ClientCapabilities) {
+func (c *Config) SetClientCapabilities(capabilities sglsp.ClientCapabilities) {
 	c.clientCapabilities = capabilities
 }
 

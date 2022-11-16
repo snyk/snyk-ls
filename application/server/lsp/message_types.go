@@ -231,6 +231,13 @@ type WorkspaceFoldersChangeEvent struct {
 	Removed []WorkspaceFolder `json:"Removed,omitempty"`
 }
 
+type SeverityFilter struct {
+	Critical bool
+	High     bool
+	Medium   bool
+	Low      bool
+}
+
 // Settings is the struct that is parsed from the InitializationParams.InitializationOptions field
 type Settings struct {
 	ActivateSnykOpenSource      string `json:"activateSnykOpenSource,omitempty"`
@@ -252,9 +259,7 @@ type Settings struct {
 	AutomaticAuthentication     string `json:"automaticAuthentication,omitempty"`
 	DeviceId                    string `json:"deviceId,omitempty"`
 	FilterCriticalSeverity      string `json:"filterCriticalSeverity,omitempty"`
-	FilterHighSeverity          string `json:"filterHighSeverity,omitempty"`
-	FilterMediumSeverity        string `json:"filterMediumSeverity,omitempty"`
-	FilterLowSeverity           string `json:"filterLowSeverity,omitempty"`
+	FilterSeverity              string `json:"filterSeverity,omitempty"`
 }
 
 type DidChangeConfigurationParams struct {
