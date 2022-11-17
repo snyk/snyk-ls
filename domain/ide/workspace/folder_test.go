@@ -24,10 +24,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -198,5 +200,54 @@ func Test_ClearDiagnostics(t *testing.T) {
 		},
 		1*time.Second,
 		10*time.Millisecond,
+	)
+}
+
+func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *testing.T) {
+	testutil.UnitTest(t)
+
+	t.Run("Set severity settings", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+		config.CurrentConfig().SetSeverityFilter(lsp.SeverityFilter{
+			Critical: true,
+			High:     false,
+			Medium:   true,
+			Low:      false,
+		})
+	})
+
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
+
+	f.processResults([]snyk.Issue{
+		{ID: "id1", AffectedFilePath: "path1", Severity: snyk.Critical},
+		{ID: "id2", AffectedFilePath: "path1", Severity: snyk.High},
+		{ID: "id3", AffectedFilePath: "path1", Severity: snyk.Medium},
+		{ID: "id4", AffectedFilePath: "path1", Severity: snyk.Low},
+		{ID: "id5", AffectedFilePath: "path1", Severity: snyk.Critical},
+	})
+
+	mtx := &sync.Mutex{}
+	var diagnostics []lsp.Diagnostic
+	notification.CreateListener(func(event interface{}) {
+		switch params := event.(type) {
+		case lsp.PublishDiagnosticsParams:
+			mtx.Lock()
+			defer mtx.Unlock()
+			diagnostics = params.Diagnostics
+		}
+	})
+
+	assert.Eventually(
+		t,
+		func() bool {
+			mtx.Lock()
+			defer mtx.Unlock()
+
+			hasCorrectIssues := diagnostics[0].Code == "id1" && diagnostics[1].Code == "id3" && diagnostics[2].Code == "id5"
+			return hasCorrectIssues
+		},
+		1*time.Second,
+		10*time.Millisecond,
+		"Expected to receive only critical issues",
 	)
 }

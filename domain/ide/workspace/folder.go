@@ -135,38 +135,39 @@ func (f *Folder) DocumentDiagnosticsFromCache(file string) []snyk.Issue {
 }
 
 func (f *Folder) processResults(issues []snyk.Issue) {
-	// Update diagnostic cache
-	// TODO: perform issue diffing (current <-> newly reported)
 	issuesByFile := map[string][]snyk.Issue{}
-	cachedIssues := []snyk.Issue{}
 	dedupMap := f.createDedupMap()
+
+	// TODO: perform issue diffing (current <-> newly reported)
+	// Update diagnostic cache
+	var cachedIssues interface{}
 	for _, issue := range issues {
-		cachedIssues := f.documentDiagnosticCache.Get(issue.AffectedFilePath)
-		// if cachedIssues == nil {
-		// 	cachedIssues = []snyk.Issue{}
-		// }
+		cachedIssues = f.documentDiagnosticCache.Get(issue.AffectedFilePath)
+		if cachedIssues == nil {
+			cachedIssues = []snyk.Issue{}
+		}
 
 		if !dedupMap[f.getUniqueIssueID(issue)] {
 			cachedIssues = append(cachedIssues.([]snyk.Issue), issue)
 		}
 
 		f.documentDiagnosticCache.Put(issue.AffectedFilePath, cachedIssues)
-		// issuesByFile[issue.AffectedFilePath] = cachedIssues.([]snyk.Issue)
 	}
 
 	// update issues by file
 	filteredIssues := []snyk.Issue{}
-	for _, cachedIssue := range cachedIssues {
-		if config.CurrentConfig().FilterSeverity()[config.Critical] && cachedIssue.Severity == snyk.Severity(config.Critical) {
+	severityFilters := config.CurrentConfig().FilterSeverity()
+	for _, cachedIssue := range cachedIssues.([]snyk.Issue) {
+		if severityFilters.Critical && cachedIssue.Severity == snyk.Critical {
 			filteredIssues = append(filteredIssues, cachedIssue)
 		}
-		if config.CurrentConfig().FilterSeverity()[config.High] && cachedIssue.Severity == snyk.Severity(config.High) {
+		if severityFilters.High && cachedIssue.Severity == snyk.High {
 			filteredIssues = append(filteredIssues, cachedIssue)
 		}
-		if config.CurrentConfig().FilterSeverity()[config.Medium] && cachedIssue.Severity == snyk.Severity(config.Medium) {
+		if severityFilters.Medium && cachedIssue.Severity == snyk.Medium {
 			filteredIssues = append(filteredIssues, cachedIssue)
 		}
-		if config.CurrentConfig().FilterSeverity()[config.Low] && cachedIssue.Severity == snyk.Severity(config.Low) {
+		if severityFilters.Low && cachedIssue.Severity == snyk.Low {
 			filteredIssues = append(filteredIssues, cachedIssue)
 		}
 
