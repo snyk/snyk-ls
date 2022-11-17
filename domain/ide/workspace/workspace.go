@@ -66,6 +66,9 @@ func (w *Workspace) DeleteFolder(folderPath string) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	folder := w.GetFolderContaining(folderPath)
+	if folder == nil {
+		return
+	}
 	folder.ClearDiagnosticsFromPathRecursively(folderPath)
 	delete(w.folders, folderPath)
 }
