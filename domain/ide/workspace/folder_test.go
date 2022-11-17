@@ -192,6 +192,8 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 
 	mtx := &sync.Mutex{}
 	var diagnostics []lsp.Diagnostic
+
+	defer notification.DisposeListener()
 	notification.CreateListener(func(event interface{}) {
 		switch params := event.(type) {
 		case lsp.PublishDiagnosticsParams:
@@ -214,7 +216,6 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 		10*time.Millisecond,
 		"Expected to receive only critical issues",
 	)
-	notification.DisposeListener()
 }
 
 func Test_ClearDiagnostics(t *testing.T) {
@@ -227,6 +228,8 @@ func Test_ClearDiagnostics(t *testing.T) {
 	})
 	mtx := &sync.Mutex{}
 	clearDiagnosticNotifications := 0
+
+	defer notification.DisposeListener()
 	notification.CreateListener(func(event interface{}) {
 		switch params := event.(type) {
 		case lsp.PublishDiagnosticsParams:
