@@ -125,11 +125,7 @@ func (f *Folder) ClearDiagnosticsFromPathRecursively(removedPath string) {
 	f.documentDiagnosticCache.Range(func(key interface{}, value interface{}) bool {
 		filePath := key.(string)
 		if strings.Contains(filePath, removedPath) {
-			f.documentDiagnosticCache.Delete(filePath)
-			notification.Send(lsp.PublishDiagnosticsParams{
-				URI:         uri.PathToUri(filePath),
-				Diagnostics: []lsp.Diagnostic{},
-			})
+			f.ClearDiagnosticsFromFile(filePath)
 		}
 
 		return true // Continue the iteration
