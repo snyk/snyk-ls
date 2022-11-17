@@ -18,7 +18,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"strconv"
 	"strings"
@@ -227,11 +226,5 @@ func updateProductEnablement(settings lsp.Settings) {
 }
 
 func updateSeverityFilter(settings lsp.Settings) {
-	var severityFilter lsp.SeverityFilter
-	err := json.Unmarshal([]byte(settings.FilterSeverity), &severityFilter)
-	if err != nil {
-		log.Warn().Err(err).Msg("couldn't parse severity filter")
-	} else {
-		config.CurrentConfig().SetSeverityFilter(severityFilter)
-	}
+	config.CurrentConfig().SetSeverityFilter(settings.FilterSeverity)
 }
