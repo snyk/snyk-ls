@@ -151,6 +151,7 @@ func Test_UpdateSettings(t *testing.T) {
 			ManageBinariesAutomatically: "false",
 			CliPath:                     "C:\\Users\\CliPath\\snyk-ls.exe",
 			Token:                       "a fancy token",
+			FilterSeverity:              lsp.SeverityFilter{Low: true, Medium: true, High: true, Critical: true},
 		}
 
 		UpdateSettings(context.Background(), settings)
@@ -171,6 +172,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.False(t, c.ManageBinariesAutomatically())
 		assert.Equal(t, "C:\\Users\\CliPath\\snyk-ls.exe", c.CliSettings().Path())
 		assert.Equal(t, "a fancy token", c.Token())
+		assert.Equal(t, lsp.SeverityFilter{Low: true, Medium: true, High: true, Critical: true}, c.FilterSeverity())
 	})
 
 	t.Run("blank organisation is ignored", func(t *testing.T) {

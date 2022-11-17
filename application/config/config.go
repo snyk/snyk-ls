@@ -69,16 +69,6 @@ type CliSettings struct {
 	cliPathAccessMutex   sync.Mutex
 }
 
-// Severity of issue, duplicated from issues.go as it cannot be imported due to circular dependency
-type Severity int8
-
-const (
-	Critical Severity = iota
-	High
-	Medium
-	Low
-)
-
 func NewCliSettings() *CliSettings {
 	settings := &CliSettings{}
 	settings.SetPath("")
@@ -157,7 +147,7 @@ type Config struct {
 	integrationVersion          string
 	automaticAuthentication     bool
 	tokenChangeChannels         []chan string
-	filterSeverity              map[Severity]bool
+	filterSeverity              lsp.SeverityFilter
 }
 
 func CurrentConfig() *Config {
@@ -286,7 +276,7 @@ func (c *Config) SnykCodeApi() string                    { return c.snykCodeApiU
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
 func (c *Config) IntegrationName() string                { return c.integrationName }
 func (c *Config) IntegrationVersion() string             { return c.integrationVersion }
-func (c *Config) FilterSeverity() map[Severity]bool      { return c.filterSeverity }
+func (c *Config) FilterSeverity() lsp.SeverityFilter     { return c.filterSeverity }
 func (c *Config) Token() string {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -347,13 +337,8 @@ func (c *Config) SetSnykContainerEnabled(enabled bool) { c.isSnykContainerEnable
 
 func (c *Config) SetSnykAdvisorEnabled(enabled bool) { c.isSnykAdvisorEnabled.Set(enabled) }
 
-func (c *Config) SetFilterCriticalSeverity(enabled bool) { c.filterSeverity[Critical] = enabled }
-
 func (c *Config) SetSeverityFilter(severityFilter lsp.SeverityFilter) {
-	c.filterSeverity[Critical] = severityFilter.Critical
-	c.filterSeverity[High] = severityFilter.High
-	c.filterSeverity[Medium] = severityFilter.Medium
-	c.filterSeverity[Low] = severityFilter.Low
+	c.filterSeverity = severityFilter
 }
 
 func (c *Config) SetToken(token string) {
@@ -556,7 +541,7 @@ func (c *Config) addDefaults() {
 }
 
 func (c *Config) setDefaultSeverityFilter() {
-	c.filterSeverity = map[Severity]bool{
+	c.filterSeverity = lsp.SeverityFilter{
 		Critical: true,
 		High:     true,
 		Medium:   true,

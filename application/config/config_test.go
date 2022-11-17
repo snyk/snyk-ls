@@ -23,6 +23,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/application/server/lsp"
 )
 
 func TestSetToken(t *testing.T) {
@@ -38,10 +40,6 @@ func TestConfigDefaults(t *testing.T) {
 
 	assert.True(t, c.IsTelemetryEnabled(), "Telemetry should be enabled by default")
 	assert.True(t, c.IsErrorReportingEnabled(), "Error Reporting should be enabled by default")
-	assert.True(t, c.FilterSeverity()[Critical], "Error Critical severity should be enabled by default")
-	assert.True(t, c.FilterSeverity()[High], "Error High severity should be enabled by default")
-	assert.True(t, c.FilterSeverity()[Medium], "Error Medium severity should be enabled by default")
-	assert.True(t, c.FilterSeverity()[Low], "Error Low severity should be enabled by default")
 	assert.False(t, c.IsSnykAdvisorEnabled(), "Advisor should be disabled by default")
 	assert.False(t, c.IsSnykCodeEnabled(), "Snyk Code should be disabled by default")
 	assert.False(t, c.IsSnykContainerEnabled(), "Snyk Container should be enabled by default")
@@ -49,6 +47,7 @@ func TestConfigDefaults(t *testing.T) {
 	assert.True(t, c.IsSnykIacEnabled(), "Snyk IaC should be enabled by default")
 	assert.Equal(t, "", c.LogPath(), "Logpath should be empty by default")
 	assert.Equal(t, "md", c.Format(), "Output format should be md by default")
+	assert.Equal(t, lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true}, c.FilterSeverity(), "All severities should be enabled by default")
 }
 
 func Test_TokenChanged_ChannelsInformed(t *testing.T) {
