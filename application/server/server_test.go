@@ -482,6 +482,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "true",
 			CliPath:                     "",
+			FilterSeverity:              lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true},
 		},
 	}
 	_, err := loc.Client.Call(ctx, "initialize", clientParams)
