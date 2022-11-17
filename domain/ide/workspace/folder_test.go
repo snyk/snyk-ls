@@ -167,42 +167,6 @@ func TestProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing.
 	assert.Len(t, f.documentDiagnosticCache.Get("path1"), 3)
 }
 
-func Test_ClearDiagnostics(t *testing.T) {
-	testutil.UnitTest(t)
-	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
-
-	f.processResults([]snyk.Issue{
-		{ID: "id1", AffectedFilePath: "path1"},
-		{ID: "id2", AffectedFilePath: "path2"},
-	})
-	mtx := &sync.Mutex{}
-	clearDiagnosticNotifications := 0
-	notification.CreateListener(func(event interface{}) {
-		switch params := event.(type) {
-		case lsp.PublishDiagnosticsParams:
-			if len(params.Diagnostics) == 0 {
-				mtx.Lock()
-				clearDiagnosticNotifications++
-				mtx.Unlock()
-			}
-		}
-	})
-
-	f.ClearDiagnostics()
-
-	assert.Equal(t, 0, f.documentDiagnosticCache.Length())
-	assert.Eventually(
-		t,
-		func() bool {
-			mtx.Lock()
-			defer mtx.Unlock()
-			return clearDiagnosticNotifications == 2
-		},
-		1*time.Second,
-		10*time.Millisecond,
-	)
-}
-
 func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *testing.T) {
 	testutil.UnitTest(t)
 
@@ -250,4 +214,42 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 		10*time.Millisecond,
 		"Expected to receive only critical issues",
 	)
+	notification.DisposeListener()
+}
+
+func Test_ClearDiagnostics(t *testing.T) {
+	testutil.UnitTest(t)
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
+
+	f.processResults([]snyk.Issue{
+		{ID: "id1", AffectedFilePath: "path1"},
+		{ID: "id2", AffectedFilePath: "path2"},
+	})
+	mtx := &sync.Mutex{}
+	clearDiagnosticNotifications := 0
+	notification.CreateListener(func(event interface{}) {
+		switch params := event.(type) {
+		case lsp.PublishDiagnosticsParams:
+			if len(params.Diagnostics) == 0 {
+				mtx.Lock()
+				clearDiagnosticNotifications++
+				mtx.Unlock()
+			}
+		}
+	})
+
+	f.ClearDiagnostics()
+
+	assert.Equal(t, 0, f.documentDiagnosticCache.Length())
+	assert.Eventually(
+		t,
+		func() bool {
+			mtx.Lock()
+			defer mtx.Unlock()
+			return clearDiagnosticNotifications == 2
+		},
+		1*time.Second,
+		10*time.Millisecond,
+	)
+	notification.DisposeListener()
 }
