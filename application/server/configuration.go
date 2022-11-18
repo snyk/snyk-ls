@@ -89,7 +89,7 @@ func writeSettings(ctx context.Context, settings lsp.Settings, initialize bool) 
 	if settings == emptySettings {
 		return
 	}
-	updateSeverityFilter(settings)
+	updateSeverityFilter(settings.FilterSeverity)
 	updateToken(settings.Token)
 	updateProductEnablement(settings)
 	updateCliConfig(settings)
@@ -225,12 +225,12 @@ func updateProductEnablement(settings lsp.Settings) {
 	}
 }
 
-func updateSeverityFilter(settings lsp.Settings) {
+func updateSeverityFilter(s lsp.SeverityFilter) {
 	severityFilter := lsp.SeverityFilter{
-		Critical: settings.FilterSeverity.Critical || true,
-		High:     settings.FilterSeverity.High || true,
-		Medium:   settings.FilterSeverity.Medium || true,
-		Low:      settings.FilterSeverity.Low || true,
+		Critical: s.Critical || true,
+		High:     s.High || true,
+		Medium:   s.Medium || true,
+		Low:      s.Low || true,
 	}
 	config.CurrentConfig().SetSeverityFilter(severityFilter)
 }
