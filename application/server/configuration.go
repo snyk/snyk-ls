@@ -226,5 +226,11 @@ func updateProductEnablement(settings lsp.Settings) {
 }
 
 func updateSeverityFilter(settings lsp.Settings) {
-	config.CurrentConfig().SetSeverityFilter(settings.FilterSeverity)
+	severityFilter := lsp.SeverityFilter{
+		Critical: settings.FilterSeverity.Critical || true,
+		High:     settings.FilterSeverity.High || true,
+		Medium:   settings.FilterSeverity.Medium || true,
+		Low:      settings.FilterSeverity.Low || true,
+	}
+	config.CurrentConfig().SetSeverityFilter(severityFilter)
 }
