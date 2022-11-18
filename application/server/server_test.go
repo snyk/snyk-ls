@@ -733,13 +733,10 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 // If expectedNumber == -1 assume check for expectedNumber > 0
 func checkForPublishedDiagnostics(w *workspace.Workspace, testPath string, expectedNumber int) func() bool {
 	return func() bool {
-		checkSuccessful := false
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
-
 		if len(notifications) < 1 {
-			return checkSuccessful
+			return false
 		}
-
 		for _, n := range notifications {
 			diagnosticsParams := lsp.PublishDiagnosticsParams{}
 			_ = n.UnmarshalParams(&diagnosticsParams)
@@ -747,12 +744,11 @@ func checkForPublishedDiagnostics(w *workspace.Workspace, testPath string, expec
 				f := w.GetFolderContaining(testPath)
 				hasExpectedDiagnostics := f != nil && (expectedNumber == -1 && len(diagnosticsParams.Diagnostics) > 0) || (len(diagnosticsParams.Diagnostics) == expectedNumber)
 				if hasExpectedDiagnostics {
-					checkSuccessful = true
+					return true
 				}
 			}
 		}
-
-		return checkSuccessful
+		return false
 	}
 }
 
