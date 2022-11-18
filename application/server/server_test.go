@@ -733,10 +733,13 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 // If expectedNumber == -1 assume check for expectedNumber > 0
 func checkForPublishedDiagnostics(w *workspace.Workspace, testPath string, expectedNumber int) func() bool {
 	return func() bool {
+		checkSuccessful := false
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
+
 		if len(notifications) < 1 {
-			return false
+			return checkSuccessful
 		}
+
 		for _, n := range notifications {
 			diagnosticsParams := lsp.PublishDiagnosticsParams{}
 			_ = n.UnmarshalParams(&diagnosticsParams)
@@ -744,11 +747,12 @@ func checkForPublishedDiagnostics(w *workspace.Workspace, testPath string, expec
 				f := w.GetFolderContaining(testPath)
 				hasExpectedDiagnostics := f != nil && (expectedNumber == -1 && len(diagnosticsParams.Diagnostics) > 0) || (len(diagnosticsParams.Diagnostics) == expectedNumber)
 				if hasExpectedDiagnostics {
-					return true
+					checkSuccessful = true
 				}
 			}
 		}
-		return false
+
+		return checkSuccessful
 	}
 }
 
@@ -814,7 +818,6 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	testutil.SmokeTest(t)
 	di.Init()
 	config.CurrentConfig().SetSnykCodeEnabled(true)
-	config.CurrentConfig().SetSeverityFilter(lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true})
 	_, _ = loc.Client.Call(ctx, "initialize", nil)
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589", t)
