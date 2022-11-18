@@ -161,17 +161,23 @@ func (f *Folder) processResults(issues []snyk.Issue) {
 	if cachedIssues == nil {
 		cachedIssues = []snyk.Issue{}
 	}
+
+	log.Debug().Str("method", "processResults").Msgf("Filtering issues by severity: %v", severityFilters)
 	for _, cachedIssue := range cachedIssues.([]snyk.Issue) {
 		if severityFilters.Critical && cachedIssue.Severity == snyk.Critical {
+			log.Trace().Str("method", "processResults").Msgf("Including critical severity issue: %v", cachedIssue)
 			filteredIssues = append(filteredIssues, cachedIssue)
 		}
 		if severityFilters.High && cachedIssue.Severity == snyk.High {
+			log.Trace().Str("method", "processResults").Msgf("Including high severity issue: %v", cachedIssue)
 			filteredIssues = append(filteredIssues, cachedIssue)
 		}
 		if severityFilters.Medium && cachedIssue.Severity == snyk.Medium {
+			log.Trace().Str("method", "processResults").Msgf("Including medium severity issue: %v", cachedIssue)
 			filteredIssues = append(filteredIssues, cachedIssue)
 		}
 		if severityFilters.Low && cachedIssue.Severity == snyk.Low {
+			log.Trace().Str("method", "processResults").Msgf("Including low severity issue: %v", cachedIssue)
 			filteredIssues = append(filteredIssues, cachedIssue)
 		}
 
