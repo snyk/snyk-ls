@@ -694,8 +694,9 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 	clientParams := lsp.InitializeParams{
 		WorkspaceFolders: []lsp.WorkspaceFolder{folder},
 		InitializationOptions: lsp.Settings{
-			Endpoint: os.Getenv("SNYK_API"),
-			Token:    os.Getenv("SNYK_TOKEN"),
+			Endpoint:       os.Getenv("SNYK_API"),
+			Token:          os.Getenv("SNYK_TOKEN"),
+			FilterSeverity: lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true},
 		},
 	}
 
