@@ -243,6 +243,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "true",
 			CliPath:                     "",
+			FilterSeverity:              lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true},
 		},
 	}
 	_, err := loc.Client.Call(ctx, "initialize", clientParams)
@@ -285,7 +286,11 @@ func Test_initialize_updatesSettings(t *testing.T) {
 	loc := setupServer(t)
 
 	clientParams := lsp.InitializeParams{
-		InitializationOptions: lsp.Settings{Organization: "fancy org", Token: "xxx"},
+		InitializationOptions: lsp.Settings{
+			Organization:   "fancy org",
+			Token:          "xxx",
+			FilterSeverity: lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true},
+		},
 	}
 
 	rsp, err := loc.Client.Call(ctx, "initialize", clientParams)

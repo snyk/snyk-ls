@@ -227,6 +227,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 			assert.False(t, config.CurrentConfig().ManageBinariesAutomatically())
 		})
+
 		t.Run("invalid value does not update", func(t *testing.T) {
 			UpdateSettings(context.Background(), lsp.Settings{
 				ManageBinariesAutomatically: "true",
@@ -237,6 +238,17 @@ func Test_UpdateSettings(t *testing.T) {
 			})
 
 			assert.True(t, config.CurrentConfig().ManageBinariesAutomatically())
+		})
+	})
+
+	t.Run("severity filter", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+		t.Run("filtering gets passed", func(t *testing.T) {
+			mixedSeverityFilter := lsp.SeverityFilter{Low: true, Medium: false, High: true, Critical: false}
+			UpdateSettings(context.Background(), lsp.Settings{FilterSeverity: mixedSeverityFilter})
+
+			c := config.CurrentConfig()
+			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
 		})
 	})
 }
