@@ -73,6 +73,17 @@ func Test_Scan_WhenCachedResultsButNoIssues_shouldNotReScan(t *testing.T) {
 	assert.Equal(t, 1, scannerRecorder.Calls())
 }
 
+func Test_Scan_WhenNoIssues_shouldNotProcessResults(t *testing.T) {
+	hoverRecorder := hover.NewFakeHoverService()
+	testutil.UnitTest(t)
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hoverRecorder)
+
+	issues := []snyk.Issue{}
+	f.processResults(issues)
+
+	assert.Equal(t, 0, hoverRecorder.Calls())
+}
+
 func TestProcessResults_SendsDiagnosticsAndHovers(t *testing.T) {
 	t.Skipf("test this once we have uniform abstractions for hover & diagnostics")
 	testutil.UnitTest(t)
