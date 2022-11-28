@@ -138,10 +138,10 @@ func ToDiagnostics(issues []snyk.Issue) (diagnostics []lsp.Diagnostic) {
 	return diagnostics
 }
 
-func ToHoversDocument(path string, i []snyk.Issue) hover.DocumentHovers {
+func ToHoversDocument(path string, issues []snyk.Issue) hover.DocumentHovers {
 	return hover.DocumentHovers{
 		Uri:   uri.PathToUri(path),
-		Hover: ToHovers(i),
+		Hover: ToHovers(issues),
 	}
 }
 
