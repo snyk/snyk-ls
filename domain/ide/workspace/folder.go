@@ -20,13 +20,13 @@ import (
 	"context"
 	"sync"
 
+	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -45,7 +45,7 @@ type Folder struct {
 	name                    string
 	status                  FolderStatus
 	productAttributes       map[snyk.Product]snyk.ProductAttributes
-	documentDiagnosticCache concurrency.AtomicMap
+	documentDiagnosticCache *xsync.MapOf[string, []snyk.Issue]
 	scanner                 snyk.Scanner
 	hoverService            hover.Service
 	mutex                   sync.Mutex
@@ -63,7 +63,7 @@ func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hove
 	folder.productAttributes[snyk.ProductCode] = snyk.ProductAttributes{}
 	folder.productAttributes[snyk.ProductInfrastructureAsCode] = snyk.ProductAttributes{}
 	folder.productAttributes[snyk.ProductOpenSource] = snyk.ProductAttributes{}
-	folder.documentDiagnosticCache = concurrency.AtomicMap{}
+	folder.documentDiagnosticCache = xsync.NewMapOf[[]snyk.Issue]()
 	return &folder
 }
 
@@ -126,11 +126,11 @@ func (f *Folder) scan(ctx context.Context, path string) {
 }
 
 func (f *Folder) DocumentDiagnosticsFromCache(file string) []snyk.Issue {
-	issues := f.documentDiagnosticCache.Get(file)
+	issues, _ := f.documentDiagnosticCache.Load(file)
 	if issues == nil {
 		return nil
 	}
-	return issues.([]snyk.Issue)
+	return issues
 }
 
 func (f *Folder) processResults(issues []snyk.Issue) {
@@ -139,15 +139,15 @@ func (f *Folder) processResults(issues []snyk.Issue) {
 
 	// TODO: perform issue diffing (current <-> newly reported)
 	for _, issue := range issues {
-		cachedIssues := f.documentDiagnosticCache.Get(issue.AffectedFilePath)
+		cachedIssues, _ := f.documentDiagnosticCache.Load(issue.AffectedFilePath)
 		if cachedIssues == nil {
 			cachedIssues = []snyk.Issue{}
 		}
 		if !dedupMap[f.getUniqueIssueID(issue)] {
-			cachedIssues = append(cachedIssues.([]snyk.Issue), issue)
+			cachedIssues = append(cachedIssues, issue)
 		}
-		f.documentDiagnosticCache.Put(issue.AffectedFilePath, cachedIssues)
-		issuesByFile[issue.AffectedFilePath] = cachedIssues.([]snyk.Issue)
+		f.documentDiagnosticCache.Store(issue.AffectedFilePath, cachedIssues)
+		issuesByFile[issue.AffectedFilePath] = cachedIssues
 	}
 
 	f.processDiagnostics(issuesByFile)
@@ -156,8 +156,8 @@ func (f *Folder) processResults(issues []snyk.Issue) {
 
 func (f *Folder) createDedupMap() (dedupMap map[string]bool) {
 	dedupMap = make(map[string]bool)
-	f.documentDiagnosticCache.Range(func(key interface{}, value interface{}) bool {
-		issues := value.([]snyk.Issue)
+	f.documentDiagnosticCache.Range(func(key string, value []snyk.Issue) bool {
+		issues := value
 		for _, issue := range issues {
 			uniqueID := f.getUniqueIssueID(issue)
 			dedupMap[uniqueID] = true
@@ -216,15 +216,13 @@ func (f *Folder) AllIssuesFor(filePath string) (matchingIssues []snyk.Issue) {
 }
 
 func (f *Folder) ClearDiagnostics() {
-	f.documentDiagnosticCache.Range(func(key interface{}, value interface{}) bool {
-		file := key.(string)
+	f.documentDiagnosticCache.Range(func(key string, _ []snyk.Issue) bool {
 		// we must republish empty diagnostics for all files that were reported with diagnostics
 		notification.Send(lsp.PublishDiagnosticsParams{
-			URI:         uri.PathToUri(file),
+			URI:         uri.PathToUri(key),
 			Diagnostics: []lsp.Diagnostic{},
 		})
+		f.documentDiagnosticCache.Delete(key)
 		return true
 	})
-
-	f.documentDiagnosticCache.ClearAll()
 }
