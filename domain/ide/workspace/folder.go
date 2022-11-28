@@ -136,6 +136,7 @@ func (f *Folder) DocumentDiagnosticsFromCache(file string) []snyk.Issue {
 
 func (f *Folder) processResults(issues []snyk.Issue) {
 	if len(issues) == 0 {
+		f.documentDiagnosticCache.ClearAll()
 		return
 	}
 

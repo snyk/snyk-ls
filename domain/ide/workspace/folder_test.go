@@ -78,10 +78,22 @@ func Test_Scan_WhenNoIssues_shouldNotProcessResults(t *testing.T) {
 	testutil.UnitTest(t)
 	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hoverRecorder)
 
-	issues := []snyk.Issue{}
-	f.processResults(issues)
+	f.processResults([]snyk.Issue{})
 
 	assert.Equal(t, 0, hoverRecorder.Calls())
+}
+
+func Test_Scan_WhenNoIssues_shouldEmptyCache(t *testing.T) {
+	testutil.UnitTest(t)
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
+
+	f.processResults([]snyk.Issue{
+		{ID: "id1", AffectedFilePath: "path1"},
+		{ID: "id2", AffectedFilePath: "path1"},
+	})
+	f.processResults([]snyk.Issue{})
+
+	assert.Equal(t, 0, f.documentDiagnosticCache.Length())
 }
 
 func TestProcessResults_SendsDiagnosticsAndHovers(t *testing.T) {
