@@ -18,13 +18,13 @@ package code
 
 import (
 	"fmt"
-	"github.com/snyk/snyk-ls/application/config"
 	"net/url"
 	"regexp"
 	"strings"
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
