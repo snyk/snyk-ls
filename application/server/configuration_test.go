@@ -249,6 +249,68 @@ func Test_UpdateSettings(t *testing.T) {
 			assert.True(t, config.CurrentConfig().ManageBinariesAutomatically())
 		})
 	})
+
+	t.Run("activateSnykCodeSecurity is passed", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+
+		UpdateSettings(context.Background(), lsp.Settings{ActivateSnykCodeSecurity: "true"})
+
+		c := config.CurrentConfig()
+		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
+	})
+	t.Run("activateSnykCodeSecurity is not passed", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+
+		UpdateSettings(context.Background(), lsp.Settings{})
+
+		c := config.CurrentConfig()
+		assert.Equal(t, false, c.IsSnykCodeSecurityEnabled())
+
+		config.SetCurrentConfig(config.New())
+		c = config.CurrentConfig()
+		c.SetActivateSnykCodeSecurity(true)
+
+		UpdateSettings(context.Background(), lsp.Settings{})
+
+		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
+	})
+	t.Run("activateSnykCodeQuality is passed", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+
+		UpdateSettings(context.Background(), lsp.Settings{ActivateSnykCodeQuality: "true"})
+
+		c := config.CurrentConfig()
+		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
+	})
+	t.Run("activateSnykCodeQuality is not passed", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+
+		UpdateSettings(context.Background(), lsp.Settings{})
+
+		c := config.CurrentConfig()
+		assert.Equal(t, false, c.IsSnykCodeQualityEnabled())
+
+		config.SetCurrentConfig(config.New())
+		c = config.CurrentConfig()
+		c.SetActivateSnykCodeQuality(true)
+
+		UpdateSettings(context.Background(), lsp.Settings{})
+
+		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
+	})
+	t.Run("activateSnykCode sets SnykCodeQuality and SnykCodeSecurity", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+
+		UpdateSettings(context.Background(), lsp.Settings{
+			ActivateSnykCode: "true",
+		})
+
+		c := config.CurrentConfig()
+		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
+		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
+		assert.Equal(t, true, c.IsSnykCodeEnabled())
+	})
+
 }
 
 func Test_InitializeSettings(t *testing.T) {
@@ -273,5 +335,54 @@ func Test_InitializeSettings(t *testing.T) {
 
 		c := config.CurrentConfig()
 		assert.Equal(t, curentDeviceId, c.DeviceID())
+	})
+
+	t.Run("activateSnykCodeSecurity is passed", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+
+		InitializeSettings(context.Background(), lsp.Settings{ActivateSnykCodeSecurity: "true"})
+
+		c := config.CurrentConfig()
+		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
+	})
+	t.Run("activateSnykCodeSecurity is not passed", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+
+		InitializeSettings(context.Background(), lsp.Settings{})
+
+		c := config.CurrentConfig()
+		assert.Equal(t, false, c.IsSnykCodeSecurityEnabled())
+
+		config.SetCurrentConfig(config.New())
+		c = config.CurrentConfig()
+		c.SetActivateSnykCodeSecurity(true)
+
+		InitializeSettings(context.Background(), lsp.Settings{})
+
+		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
+	})
+	t.Run("activateSnykCodeQuality is passed", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+
+		InitializeSettings(context.Background(), lsp.Settings{ActivateSnykCodeQuality: "true"})
+
+		c := config.CurrentConfig()
+		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
+	})
+	t.Run("activateSnykCodeQuality is not passed", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+
+		InitializeSettings(context.Background(), lsp.Settings{})
+
+		c := config.CurrentConfig()
+		assert.Equal(t, false, c.IsSnykCodeQualityEnabled())
+
+		config.SetCurrentConfig(config.New())
+		c = config.CurrentConfig()
+		c.SetActivateSnykCodeQuality(true)
+
+		InitializeSettings(context.Background(), lsp.Settings{})
+
+		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
 	})
 }

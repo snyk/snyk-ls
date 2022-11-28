@@ -21,12 +21,12 @@ import (
 	"net/url"
 )
 
-// Issue models a problem, vulnerability, or situation within your code that requires your attention
 type Reference struct {
 	Title string
 	Url   *url.URL
 }
 
+// Issue models a problem, vulnerability, or situation within your code that requires your attention
 type Issue struct {
 	// ID uniquely identifies the issue, it is intended to be human-readable
 	ID        string

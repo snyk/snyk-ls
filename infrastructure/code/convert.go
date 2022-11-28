@@ -18,6 +18,7 @@ package code
 
 import (
 	"fmt"
+	"github.com/snyk/snyk-ls/application/config"
 	"net/url"
 	"regexp"
 	"strings"
@@ -277,7 +278,7 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 				Severity:            issueSeverity(result.Level),
 				Message:             message,
 				FormattedMessage:    formattedMessage,
-				IssueType:           snyk.CodeSecurityVulnerability,
+				IssueType:           snyk.CodeSecurityVulnerability, // FIXME: This is incorrect, we need to differentiate (see https://snyksec.atlassian.net/browse/ROAD-1161)
 				AffectedFilePath:    path,
 				Product:             snyk.ProductCode,
 				IssueDescriptionURL: ruleLink,
@@ -285,8 +286,17 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 				Commands:            getCommands(dataflow),
 			}
 
-			issues = append(issues, d)
+			if s.reportDiagnostic(d) {
+				issues = append(issues, d)
+			}
 		}
 	}
 	return issues
+}
+
+func (s *SarifResponse) reportDiagnostic(d snyk.Issue) bool {
+	c := config.CurrentConfig()
+	return c.IsSnykCodeEnabled() ||
+		c.IsSnykCodeSecurityEnabled() && d.IssueType == snyk.CodeSecurityVulnerability ||
+		c.IsSnykCodeQualityEnabled() && d.IssueType == snyk.CodeQualityIssue
 }

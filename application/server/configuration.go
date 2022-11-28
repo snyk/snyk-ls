@@ -100,6 +100,8 @@ func writeSettings(ctx context.Context, settings lsp.Settings, initialize bool) 
 	updateOrganization(settings)
 	manageBinariesAutomatically(settings)
 	updateTrustedFolders(settings)
+	updateSnykCodeSecurity(settings)
+	updateSnykCodeQuality(settings)
 }
 
 func updateTrustedFolders(settings lsp.Settings) {
@@ -182,6 +184,24 @@ func manageBinariesAutomatically(settings lsp.Settings) {
 	}
 }
 
+func updateSnykCodeSecurity(settings lsp.Settings) {
+	parseBool, err := strconv.ParseBool(settings.ActivateSnykCodeSecurity)
+	if err != nil {
+		log.Warn().Err(err).Msgf("couldn't read IsSnykCodeSecurityEnabled %s", settings.ActivateSnykCodeSecurity)
+	} else {
+		config.CurrentConfig().SetActivateSnykCodeSecurity(parseBool)
+	}
+}
+
+func updateSnykCodeQuality(settings lsp.Settings) {
+	parseBool, err := strconv.ParseBool(settings.ActivateSnykCodeQuality)
+	if err != nil {
+		log.Warn().Err(err).Msgf("couldn't read IsSnykCodeQualityEnabled %s", settings.ActivateSnykCodeQuality)
+	} else {
+		config.CurrentConfig().SetActivateSnykCodeQuality(parseBool)
+	}
+}
+
 // TODO store in config, move parsing to CLI
 func updatePath(settings lsp.Settings) {
 	err := os.Setenv("PATH", os.Getenv("PATH")+string(os.PathSeparator)+settings.Path)
@@ -224,6 +244,8 @@ func updateProductEnablement(settings lsp.Settings) {
 		log.Warn().Err(err).Msg("couldn't parse code setting")
 	} else {
 		config.CurrentConfig().SetSnykCodeEnabled(parseBool)
+		config.CurrentConfig().SetActivateSnykCodeQuality(parseBool)
+		config.CurrentConfig().SetActivateSnykCodeSecurity(parseBool)
 	}
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykOpenSource)
 	if err != nil {

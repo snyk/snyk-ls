@@ -119,35 +119,37 @@ func (c *CliSettings) DefaultBinaryInstallPath() string {
 }
 
 type Config struct {
-	configLoaded                 concurrency.AtomicBool
-	cliSettings                  *CliSettings
-	configFile                   string
-	format                       string
-	isErrorReportingEnabled      concurrency.AtomicBool
-	isSnykCodeEnabled            concurrency.AtomicBool
-	isSnykOssEnabled             concurrency.AtomicBool
-	isSnykIacEnabled             concurrency.AtomicBool
-	isSnykContainerEnabled       concurrency.AtomicBool
-	isSnykAdvisorEnabled         concurrency.AtomicBool
-	isTelemetryEnabled           concurrency.AtomicBool
-	manageBinariesAutomatically  concurrency.AtomicBool
-	logPath                      string
-	organization                 string
-	snykCodeAnalysisTimeout      time.Duration
-	snykApiUrl                   string
-	snykCodeApiUrl               string
-	token                        string
-	deviceId                     string
-	clientCapabilities           lsp.ClientCapabilities
-	m                            sync.Mutex
-	path                         string
-	defaultDirs                  []string
-	integrationName              string
-	integrationVersion           string
-	automaticAuthentication      bool
-	tokenChangeChannels          []chan string
+	configLoaded                concurrency.AtomicBool
+	cliSettings                 *CliSettings
+	configFile                  string
+	format                      string
+	isErrorReportingEnabled     concurrency.AtomicBool
+	isSnykCodeEnabled           concurrency.AtomicBool
+	isSnykOssEnabled            concurrency.AtomicBool
+	isSnykIacEnabled            concurrency.AtomicBool
+	isSnykContainerEnabled      concurrency.AtomicBool
+	isSnykAdvisorEnabled        concurrency.AtomicBool
+	isTelemetryEnabled          concurrency.AtomicBool
+	manageBinariesAutomatically concurrency.AtomicBool
+	logPath                     string
+	organization                string
+	snykCodeAnalysisTimeout     time.Duration
+	snykApiUrl                  string
+	snykCodeApiUrl              string
+	token                       string
+	deviceId                    string
+	clientCapabilities          lsp.ClientCapabilities
+	m                           sync.Mutex
+	path                        string
+	defaultDirs                 []string
+	integrationName             string
+	integrationVersion          string
+	automaticAuthentication     bool
+	tokenChangeChannels         []chan string
 	trustedFolders               []string
 	trustedFoldersFeatureEnabled bool
+	activateSnykCodeSecurity    bool
+	activateSnykCodeQuality     bool
 }
 
 func CurrentConfig() *Config {
@@ -562,4 +564,20 @@ func (c *Config) SetTrustedFolders(folderPaths []string) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.trustedFolders = folderPaths
+}
+
+func (c *Config) IsSnykCodeSecurityEnabled() bool {
+	return c.activateSnykCodeSecurity
+}
+
+func (c *Config) SetActivateSnykCodeSecurity(activate bool) {
+	c.activateSnykCodeSecurity = activate
+}
+
+func (c *Config) IsSnykCodeQualityEnabled() bool {
+	return c.activateSnykCodeQuality
+}
+
+func (c *Config) SetActivateSnykCodeQuality(activate bool) {
+	c.activateSnykCodeQuality = activate
 }
