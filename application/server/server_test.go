@@ -814,6 +814,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	testutil.SmokeTest(t)
 	di.Init()
 	config.CurrentConfig().SetSnykCodeEnabled(true)
+	config.CurrentConfig().SetSeverityFilter(lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true})
 	_, _ = loc.Client.Call(ctx, "initialize", nil)
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589", t)
