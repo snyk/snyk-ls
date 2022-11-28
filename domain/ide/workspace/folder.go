@@ -157,10 +157,6 @@ func (f *Folder) processResults(issues []snyk.Issue) {
 	// update issues by file
 	filteredIssues := []snyk.Issue{}
 	severityFilters := config.CurrentConfig().FilterSeverity()
-	// prevent panic: interface conversion: interface {} is nil, not []snyk.Issue
-	if cachedIssues == nil {
-		cachedIssues = []snyk.Issue{}
-	}
 
 	log.Debug().Str("method", "processResults").Msgf("Filtering issues by severity: %v", severityFilters)
 	for _, cachedIssue := range cachedIssues.([]snyk.Issue) {
