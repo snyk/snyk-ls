@@ -202,8 +202,46 @@ func Test_ClearDiagnostics(t *testing.T) {
 	)
 }
 
+func Test_ClearDiagnosticsByProduct(t *testing.T) {
+	// Arrange
+	testutil.UnitTest(t)
+	f := GetMockFolder()
+	const filePath = "path1"
+	mockCodeIssue := GetMockIssue("id1", filePath)
+	mockCodeIssue.Product = snyk.ProductCode
+	mockIacIssue := GetMockIssue("id2", filePath)
+	mockIacIssue.Product = snyk.ProductInfrastructureAsCode
+	f.processResults([]snyk.Issue{
+		mockIacIssue,
+		mockCodeIssue,
+	})
+	const expectedIssuesCountAfterRemoval = 1
+
+	// Act
+	f.ClearDiagnosticsByProduct(snyk.ProductCode)
+
+	// Assert
+	issues := f.AllIssuesFor(filePath)
+	t.Run("Does not return diagnostics of that type", func(t *testing.T) {
+		for _, issue := range issues {
+			assert.NotEqual(t, snyk.ProductCode, issue.Product)
+		}
+	})
+
+	t.Run("Return diagnostics of other types", func(t *testing.T) {
+		assert.Len(t, issues, expectedIssuesCountAfterRemoval)
+	})
+}
+
 func GetMockFolder() *Folder {
 	return NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
+}
+
+func GetMockIssue(id, path string) snyk.Issue {
+	return snyk.Issue{
+		ID:               id,
+		AffectedFilePath: path,
+	}
 }
 
 func GetValueFromMap(m *xsync.MapOf[string, []snyk.Issue], key string) []snyk.Issue {

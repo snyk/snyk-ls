@@ -150,8 +150,12 @@ func (f *Folder) processResults(issues []snyk.Issue) {
 		issuesByFile[issue.AffectedFilePath] = cachedIssues
 	}
 
-	f.processDiagnostics(issuesByFile)
-	f.processHovers(issuesByFile)
+	f.publishDiagnostics(issuesByFile)
+}
+
+func (f *Folder) publishDiagnostics(issuesByFile map[string][]snyk.Issue) {
+	f.sendDiagnostics(issuesByFile)
+	f.sendHovers(issuesByFile)
 }
 
 func (f *Folder) createDedupMap() (dedupMap map[string]bool) {
@@ -172,20 +176,28 @@ func (f *Folder) getUniqueIssueID(issue snyk.Issue) string {
 	return uniqueID
 }
 
-func (f *Folder) processDiagnostics(issuesByFile map[string][]snyk.Issue) {
+func (f *Folder) sendDiagnostics(issuesByFile map[string][]snyk.Issue) {
 	for path, issues := range issuesByFile {
-		log.Debug().Str("method", "processDiagnostics").Str("affectedFilePath", path).Int("issueCount", len(issues)).Send()
-		notification.Send(lsp.PublishDiagnosticsParams{
-			URI:         uri.PathToUri(path),
-			Diagnostics: converter.ToDiagnostics(issues),
-		})
+		f.sendDiagnosticsForFile(path, issues)
 	}
 }
 
-func (f *Folder) processHovers(issuesByFile map[string][]snyk.Issue) {
+func (f *Folder) sendDiagnosticsForFile(path string, issues []snyk.Issue) {
+	log.Debug().Str("method", "sendDiagnosticsForFile").Str("affectedFilePath", path).Int("issueCount", len(issues)).Send()
+	notification.Send(lsp.PublishDiagnosticsParams{
+		URI:         uri.PathToUri(path),
+		Diagnostics: converter.ToDiagnostics(issues),
+	})
+}
+
+func (f *Folder) sendHovers(issuesByFile map[string][]snyk.Issue) {
 	for path, issues := range issuesByFile {
-		f.hoverService.Channel() <- converter.ToHoversDocument(path, issues)
+		f.sendHoversForFile(path, issues)
 	}
+}
+
+func (f *Folder) sendHoversForFile(path string, issues []snyk.Issue) {
+	f.hoverService.Channel() <- converter.ToHoversDocument(path, issues)
 }
 
 func (f *Folder) Path() string         { return f.path }
@@ -224,5 +236,24 @@ func (f *Folder) ClearDiagnostics() {
 		})
 		f.documentDiagnosticCache.Delete(key)
 		return true
+	})
+}
+
+func (f *Folder) ClearDiagnosticsByProduct(removedProduct snyk.Product) {
+	f.documentDiagnosticCache.Range(func(filePath string, previousIssues []snyk.Issue) bool {
+		var newIssues []snyk.Issue
+		for _, issue := range previousIssues {
+			if issue.Product != removedProduct {
+				newIssues = append(newIssues, issue)
+			}
+		}
+
+		if len(previousIssues) != len(newIssues) { // Only send diagnostics update when issues were removed
+			f.documentDiagnosticCache.Store(filePath, newIssues)
+			f.sendDiagnosticsForFile(filePath, newIssues)
+			f.sendHoversForFile(filePath, newIssues)
+		}
+
+		return true // Always continue iteration
 	})
 }
