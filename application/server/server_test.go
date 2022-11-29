@@ -751,10 +751,7 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 
 	var cloneTargetDir, err = setupCustomTestRepo(repo, commit, t)
 	defer func(path string) {
-		err := os.RemoveAll(path)
-		if err != nil {
-
-		}
+		_ = os.RemoveAll(path)
 	}(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
