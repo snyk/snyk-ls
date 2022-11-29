@@ -130,7 +130,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
 ```json5
 {
   "activateSnykOpenSource": "true", // Enables Snyk Open Source - defaults to true
-  "activateSnykCode": "false", // Enables Snyk Code, if enabled for your organization - defaults to false
+  "activateSnykCode": "false", // Enables Snyk Code, if enabled for your organization - defaults to false, deprecated in favor of specific Snyk Code analysis types
   "activateSnykIac":  "true", // Enables Infrastructure as Code - defaults to true
   "insecure": "false", // Allows custom CAs (Certification Authorities)
   "endpoint":  "https://example.com", // Snyk API Endpoint required for non-default multi-tenant and single-tenant setups
@@ -146,8 +146,14 @@ within `initializationOptions?: LSPAny;` we support the following settings:
   "automaticAuthentication": "true", // Whether or not LS will automatically authenticate on scan start (default: true)
   "enableTrustedFoldersFeature": "true", // Whether or not LS will prompt to trust a folder (default: true)
   "trustedFolders": ["/a/trusted/path", "/another/trusted/path"], // An array of folder that should be trusted
+  "activateSnykCodeSecurity": "false", // Enables Snyk Code Security reporting
+  "activateSnykCodeQuality": "false", // Enable Snyk Code Quality issue reporting (Beta, only in IDEs and LS)
 }
 ```
+
+`activateSnykCode` automatically toggles the value of `activateSnykCodeSecurity` and `activateSnykCodeQuality`. Therefore,
+to enable only one of the two analysis types, `activateSnykCode` must be removed from Initialization Options for the specific
+analysis type option to have an effect.
 
 #### Workspace Trust
 
