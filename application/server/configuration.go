@@ -189,7 +189,7 @@ func updateSnykCodeSecurity(settings lsp.Settings) {
 	if err != nil {
 		log.Warn().Err(err).Msgf("couldn't read IsSnykCodeSecurityEnabled %s", settings.ActivateSnykCodeSecurity)
 	} else {
-		config.CurrentConfig().SetActivateSnykCodeSecurity(parseBool)
+		config.CurrentConfig().EnableSnykCodeSecurity(parseBool)
 	}
 }
 
@@ -198,7 +198,7 @@ func updateSnykCodeQuality(settings lsp.Settings) {
 	if err != nil {
 		log.Warn().Err(err).Msgf("couldn't read IsSnykCodeQualityEnabled %s", settings.ActivateSnykCodeQuality)
 	} else {
-		config.CurrentConfig().SetActivateSnykCodeQuality(parseBool)
+		config.CurrentConfig().EnableSnykCodeQuality(parseBool)
 	}
 }
 
@@ -244,8 +244,8 @@ func updateProductEnablement(settings lsp.Settings) {
 		log.Warn().Err(err).Msg("couldn't parse code setting")
 	} else {
 		config.CurrentConfig().SetSnykCodeEnabled(parseBool)
-		config.CurrentConfig().SetActivateSnykCodeQuality(parseBool)
-		config.CurrentConfig().SetActivateSnykCodeSecurity(parseBool)
+		config.CurrentConfig().EnableSnykCodeQuality(parseBool)
+		config.CurrentConfig().EnableSnykCodeSecurity(parseBool)
 	}
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykOpenSource)
 	if err != nil {

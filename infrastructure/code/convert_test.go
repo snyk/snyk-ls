@@ -643,8 +643,8 @@ func TestGetCodeFlowCommands(t *testing.T) {
 func setupConversionTests(t *testing.T, activateSnykCodeSecurity bool, activateSnykCodeQuality bool) (string, []snyk.Issue, SarifResponse) {
 	testutil.UnitTest(t)
 	c := config.CurrentConfig()
-	c.SetActivateSnykCodeSecurity(activateSnykCodeSecurity)
-	c.SetActivateSnykCodeQuality(activateSnykCodeQuality)
+	c.EnableSnykCodeSecurity(activateSnykCodeSecurity)
+	c.EnableSnykCodeQuality(activateSnykCodeQuality)
 	temp, err := os.MkdirTemp(xdg.DataHome, "conversionTests")
 	if err != nil {
 		t.Fatal(err, "couldn't create directory for conversion tests")
@@ -746,7 +746,7 @@ func Test_SarifResponse_reportDiagnostic(t *testing.T) {
 	t.Run("should report diagnostic when enabled Snyk Code Quality issue", func(t *testing.T) {
 		s := SarifResponse{}
 		c := config.New()
-		c.SetActivateSnykCodeQuality(true)
+		c.EnableSnykCodeQuality(true)
 		config.SetCurrentConfig(c)
 		assert.True(t, s.reportDiagnostic(snyk.Issue{IssueType: snyk.CodeQualityIssue}))
 	})
@@ -754,7 +754,7 @@ func Test_SarifResponse_reportDiagnostic(t *testing.T) {
 	t.Run("should not report diagnostic when enabled Snyk Code Quality issue", func(t *testing.T) {
 		s := SarifResponse{}
 		c := config.New()
-		c.SetActivateSnykCodeQuality(false)
+		c.EnableSnykCodeQuality(false)
 		config.SetCurrentConfig(c)
 		assert.False(t, s.reportDiagnostic(snyk.Issue{IssueType: snyk.CodeQualityIssue}))
 	})
@@ -762,7 +762,7 @@ func Test_SarifResponse_reportDiagnostic(t *testing.T) {
 	t.Run("should report diagnostic when enabled Snyk Code Security issue", func(t *testing.T) {
 		s := SarifResponse{}
 		c := config.New()
-		c.SetActivateSnykCodeSecurity(true)
+		c.EnableSnykCodeSecurity(true)
 		config.SetCurrentConfig(c)
 		assert.True(t, s.reportDiagnostic(snyk.Issue{IssueType: snyk.CodeSecurityVulnerability}))
 	})
@@ -770,7 +770,7 @@ func Test_SarifResponse_reportDiagnostic(t *testing.T) {
 	t.Run("should not report diagnostic when enabled Snyk Code Security issue", func(t *testing.T) {
 		s := SarifResponse{}
 		c := config.New()
-		c.SetActivateSnykCodeQuality(false)
+		c.EnableSnykCodeQuality(false)
 		config.SetCurrentConfig(c)
 		assert.False(t, s.reportDiagnostic(snyk.Issue{IssueType: snyk.CodeSecurityVulnerability}))
 	})

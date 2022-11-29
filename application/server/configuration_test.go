@@ -268,7 +268,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 		config.SetCurrentConfig(config.New())
 		c = config.CurrentConfig()
-		c.SetActivateSnykCodeSecurity(true)
+		c.EnableSnykCodeSecurity(true)
 
 		UpdateSettings(context.Background(), lsp.Settings{})
 
@@ -292,7 +292,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 		config.SetCurrentConfig(config.New())
 		c = config.CurrentConfig()
-		c.SetActivateSnykCodeQuality(true)
+		c.EnableSnykCodeQuality(true)
 
 		UpdateSettings(context.Background(), lsp.Settings{})
 
@@ -355,7 +355,7 @@ func Test_InitializeSettings(t *testing.T) {
 
 		config.SetCurrentConfig(config.New())
 		c = config.CurrentConfig()
-		c.SetActivateSnykCodeSecurity(true)
+		c.EnableSnykCodeSecurity(true)
 
 		InitializeSettings(context.Background(), lsp.Settings{})
 
@@ -379,7 +379,7 @@ func Test_InitializeSettings(t *testing.T) {
 
 		config.SetCurrentConfig(config.New())
 		c = config.CurrentConfig()
-		c.SetActivateSnykCodeQuality(true)
+		c.EnableSnykCodeQuality(true)
 
 		InitializeSettings(context.Background(), lsp.Settings{})
 

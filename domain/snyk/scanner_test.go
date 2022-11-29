@@ -58,6 +58,7 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 
 func TestScan_whenProductScannerEnabled_SendsAnalysisTriggered(t *testing.T) {
 	testutil.UnitTest(t)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
 	enabledScanner := NewTestProductScanner(ProductCode, true)
 	disabledScanner := NewTestProductScanner(ProductOpenSource, false)
 
@@ -72,10 +73,11 @@ func TestScan_whenProductScannerEnabled_SendsAnalysisTriggered(t *testing.T) {
 
 	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
 
-	assert.Equal(t, ux.AnalysisIsTriggeredProperties{
-		AnalysisType:    []ux.AnalysisType{ux.CodeSecurity},
-		TriggeredByUser: false,
-	}, analytics.GetAnalytics()[0])
+	assert.Contains(t, analytics.GetAnalytics(),
+		ux.AnalysisIsTriggeredProperties{
+			AnalysisType:    []ux.AnalysisType{ux.CodeQuality, ux.CodeSecurity},
+			TriggeredByUser: false,
+		})
 }
 
 func TestScan_whenNoProductScannerEnabled_SendsNoAnalytics(t *testing.T) {

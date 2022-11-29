@@ -30,6 +30,7 @@ import (
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
@@ -95,7 +96,7 @@ func TestCreateBundle(t *testing.T) {
 		snykCodeMock, dir, c, file := setupCreateBundleTest(t, "java")
 		fd, err := os.Create(file)
 		t.Cleanup(func() {
-			fd.Close()
+			_ = fd.Close()
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -112,7 +113,7 @@ func TestCreateBundle(t *testing.T) {
 		snykCodeMock, dir, c, file := setupCreateBundleTest(t, "unsupported")
 		fd, err := os.Create(file)
 		t.Cleanup(func() {
-			fd.Close()
+			_ = fd.Close()
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -153,7 +154,9 @@ func TestUploadAndAnalyze(t *testing.T) {
 		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
 		path, firstDoc, _, content1, _ := setupDocs()
 		docs := []string{uri.PathFromUri(firstDoc.URI)}
-		defer os.RemoveAll(path)
+		defer func(path string) {
+			_ = os.RemoveAll(path)
+		}(path)
 		metrics := c.newMetrics(len(docs), time.Time{})
 
 		c.UploadAndAnalyze(context.Background(), docs, "", metrics)
@@ -172,7 +175,9 @@ func TestUploadAndAnalyze(t *testing.T) {
 		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: false}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
 		path, firstDoc, _, _, _ := setupDocs()
 		docs := []string{uri.PathFromUri(firstDoc.URI)}
-		defer os.RemoveAll(path)
+		defer func(path string) {
+			_ = os.RemoveAll(path)
+		}(path)
 		metrics := c.newMetrics(len(docs), time.Time{})
 
 		c.UploadAndAnalyze(context.Background(), docs, "", metrics)
@@ -186,7 +191,9 @@ func TestUploadAndAnalyze(t *testing.T) {
 		snykCodeMock := &FakeSnykCodeClient{}
 		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
 		diagnosticUri, path := FakeDiagnosticPath(t)
-		defer os.RemoveAll(path)
+		defer func(path string) {
+			_ = os.RemoveAll(path)
+		}(path)
 		files := []string{diagnosticUri}
 		metrics := c.newMetrics(len(files), time.Time{})
 
@@ -209,7 +216,9 @@ func TestUploadAndAnalyze(t *testing.T) {
 		analytics := ux2.NewTestAnalytics()
 		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), analytics)
 		diagnosticUri, path := FakeDiagnosticPath(t)
-		defer os.RemoveAll(path)
+		defer func(path string) {
+			_ = os.RemoveAll(path)
+		}(path)
 		files := []string{diagnosticUri}
 		metrics := c.newMetrics(len(files), time.Now())
 
@@ -228,7 +237,9 @@ func TestUploadAndAnalyze(t *testing.T) {
 
 func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {
 	expectedPatterns, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		_ = os.RemoveAll(path)
+	}(tempDir)
 	_, sc := setupTestScanner()
 
 	_, err := sc.loadIgnorePatternsAndCountFiles(tempDir)
@@ -244,7 +255,9 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 	if err != nil {
 		t.Fatal("can't create temp dir")
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		_ = os.RemoveAll(path)
+	}(tempDir)
 	_, sc := setupTestScanner()
 
 	_, err = sc.loadIgnorePatternsAndCountFiles(tempDir)
@@ -257,7 +270,9 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 
 func Test_GetWorkspaceFolderFiles(t *testing.T) {
 	_, tempDir, ignoredFilePath, notIgnoredFilePath, _ := setupIgnoreWorkspace(t)
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		_ = os.RemoveAll(path)
+	}(tempDir)
 	_, sc := setupTestScanner()
 
 	files, err := sc.files(tempDir)
@@ -272,7 +287,9 @@ func Test_GetWorkspaceFolderFiles(t *testing.T) {
 
 func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 	_, tempDir, _, _, ignoredFileInDir := setupIgnoreWorkspace(t)
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		_ = os.RemoveAll(path)
+	}(tempDir)
 	_, sc := setupTestScanner()
 
 	walkedFiles, err := sc.files(tempDir)
@@ -286,7 +303,7 @@ func Test_CodeScanRunning_ScanCalled_ScansRunSequentially(t *testing.T) {
 	// Arrange
 	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
 	t.Cleanup(func() {
-		os.RemoveAll(tempDir)
+		_ = os.RemoveAll(tempDir)
 	})
 	fakeClient, scanner := setupTestScanner()
 	fakeClient.AnalysisDuration = time.Second
@@ -344,4 +361,34 @@ func writeTestGitIgnore(ignorePatterns string, t *testing.T) (tempDir string) {
 		t.Fatal(t, err, "Couldn't write .gitignore")
 	}
 	return tempDir
+}
+
+func Test_IsEnabled(t *testing.T) {
+	scanner := &Scanner{}
+	t.Run("should return true if Snyk Code is generally enabled", func(t *testing.T) {
+		config.CurrentConfig().SetSnykCodeEnabled(true)
+		enabled := scanner.IsEnabled()
+		assert.True(t, enabled)
+	})
+	t.Run("should return true if Snyk Code Quality is enabled", func(t *testing.T) {
+		config.CurrentConfig().SetSnykCodeEnabled(false)
+		config.CurrentConfig().EnableSnykCodeQuality(true)
+		config.CurrentConfig().EnableSnykCodeSecurity(false)
+		enabled := scanner.IsEnabled()
+		assert.True(t, enabled)
+	})
+	t.Run("should return true if Snyk Code Security is enabled", func(t *testing.T) {
+		config.CurrentConfig().SetSnykCodeEnabled(false)
+		config.CurrentConfig().EnableSnykCodeQuality(false)
+		config.CurrentConfig().EnableSnykCodeSecurity(true)
+		enabled := scanner.IsEnabled()
+		assert.True(t, enabled)
+	})
+	t.Run("should return false if Snyk Code is disabled and Snyk Code Quality and Security are not enabled", func(t *testing.T) {
+		config.CurrentConfig().SetSnykCodeEnabled(false)
+		config.CurrentConfig().EnableSnykCodeQuality(false)
+		config.CurrentConfig().EnableSnykCodeSecurity(false)
+		enabled := scanner.IsEnabled()
+		assert.False(t, enabled)
+	})
 }
