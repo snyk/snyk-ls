@@ -103,6 +103,9 @@ func Test_initializeHandler_shouldCallHandleUntrustedFolders(t *testing.T) {
 	_, err := loc.Client.Call(context.Background(), "initialize", lsp.InitializeParams{
 		RootURI: uri.PathToUri("/untrusted/dummy"),
 	})
+	if err != nil {
+		t.Fatal(err, "couldn't send initialized")
+	}
 
 	_, err = loc.Client.Call(ctx, "initialized", nil)
 	if err != nil {
