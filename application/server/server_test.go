@@ -477,6 +477,9 @@ func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testi
 		InitializationOptions: initializationOptions,
 		WorkspaceFolders:      []lsp.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
 	_, err := loc.Client.Call(ctx, "initialize", params)
+	if err != nil {
+		t.Fatal(err, "couldn't send initialized")
+	}
 
 	_, err = loc.Client.Call(ctx, "initialized", nil)
 	if err != nil {
@@ -497,6 +500,9 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 		InitializationOptions: initializationOptions,
 		WorkspaceFolders:      []lsp.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
 	_, err := loc.Client.Call(ctx, "initialize", params)
+	if err != nil {
+		t.Fatal(err, "couldn't send initialized")
+	}
 
 	_, err = loc.Client.Call(ctx, "initialized", nil)
 	if err != nil {
@@ -516,7 +522,9 @@ func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 		InitializationOptions: initializationOptions,
 		WorkspaceFolders:      []lsp.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
 	_, err := loc.Client.Call(ctx, "initialize", params)
-
+	if err != nil {
+		t.Fatal(err, "couldn't send initialized")
+	}
 	_, err = loc.Client.Call(ctx, "initialized", nil)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
