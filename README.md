@@ -148,6 +148,9 @@ within `initializationOptions?: LSPAny;` we support the following settings:
   "trustedFolders": ["/a/trusted/path", "/another/trusted/path"], // An array of folder that should be trusted
   "activateSnykCodeSecurity": "false", // Enables Snyk Code Security reporting
   "activateSnykCodeQuality": "false", // Enable Snyk Code Quality issue reporting (Beta, only in IDEs and LS)
+  "deviceId": "a UUID", // A unique ID from the running the LS, used for telemetry
+  "integrationName": "ECLIPSE", // The name of the IDE or editor the LS is running in
+  "integrationVersion": "1.0.0", // The version of the IDE or editor the LS is running in
 }
 ```
 
