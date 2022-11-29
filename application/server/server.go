@@ -186,13 +186,6 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 
 		addWorkspaceFolders(params, w)
 
-		newContext := context.Background()
-		w.ScanWorkspace(newContext)
-
-		if config.CurrentConfig().AutomaticAuthentication() || config.CurrentConfig().NonEmptyToken() {
-			go handleUntrustedFolders(newContext, srv)
-		}
-
 		return lsp.InitializeResult{
 			ServerInfo: lsp.ServerInfo{
 				Name:    "snyk-ls",
@@ -233,6 +226,9 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 func InitializedHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializedParams) (interface{}, error) {
 		workspace.Get().ScanWorkspace(context.Background())
+		if config.CurrentConfig().AutomaticAuthentication() || config.CurrentConfig().NonEmptyToken() {
+			go handleUntrustedFolders(context.Background(), srv)
+		}
 		return nil, nil
 	})
 }

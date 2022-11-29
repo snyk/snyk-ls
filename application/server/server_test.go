@@ -240,8 +240,8 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 			ActivateSnykIac:             "false",
 			Organization:                "fancy org",
 			Token:                       "xxx",
-			ManageBinariesAutomatically: "false",
-			CliPath:                     "dummy",
+			ManageBinariesAutomatically: "true",
+			CliPath:                     "",
 			EnableTrustedFoldersFeature: "false",
 		},
 	}
@@ -478,6 +478,11 @@ func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testi
 		WorkspaceFolders:      []lsp.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
 	_, err := loc.Client.Call(ctx, "initialize", params)
 
+	_, err = loc.Client.Call(ctx, "initialized", nil)
+	if err != nil {
+		t.Fatal(err, "couldn't send initialized")
+	}
+
 	assert.Nil(t, err)
 	assert.Eventually(t, func() bool { return checkTrustMessageRequest() }, time.Second, time.Millisecond)
 }
@@ -493,6 +498,11 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 		WorkspaceFolders:      []lsp.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
 	_, err := loc.Client.Call(ctx, "initialize", params)
 
+	_, err = loc.Client.Call(ctx, "initialized", nil)
+	if err != nil {
+		t.Fatal(err, "couldn't send initialized")
+	}
+
 	assert.Nil(t, err)
 	assert.Eventually(t, func() bool { return checkTrustMessageRequest() }, time.Second, time.Millisecond)
 }
@@ -506,6 +516,11 @@ func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 		InitializationOptions: initializationOptions,
 		WorkspaceFolders:      []lsp.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
 	_, err := loc.Client.Call(ctx, "initialize", params)
+
+	_, err = loc.Client.Call(ctx, "initialized", nil)
+	if err != nil {
+		t.Fatal(err, "couldn't send initialized")
+	}
 
 	assert.Nil(t, err)
 	assert.Eventually(t, func() bool { return checkTrustMessageRequest() }, time.Second, time.Millisecond)
@@ -524,13 +539,18 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 			Organization:                "fancy org",
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "false",
-			CliPath:                     "dummy",
+			CliPath:                     "",
 			EnableTrustedFoldersFeature: "false",
 		},
 	}
 	_, err := loc.Client.Call(ctx, "initialize", clientParams)
 	if err != nil {
 		t.Fatal(err, "couldn't initialize")
+	}
+
+	_, err = loc.Client.Call(ctx, "initialized", nil)
+	if err != nil {
+		t.Fatal(err, "couldn't send initialized")
 	}
 
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
@@ -732,8 +752,9 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 	clientParams := lsp.InitializeParams{
 		WorkspaceFolders: []lsp.WorkspaceFolder{folder},
 		InitializationOptions: lsp.Settings{
-			Endpoint: os.Getenv("SNYK_API"),
-			Token:    os.Getenv("SNYK_TOKEN"),
+			Endpoint:                    os.Getenv("SNYK_API"),
+			Token:                       os.Getenv("SNYK_TOKEN"),
+			EnableTrustedFoldersFeature: "false",
 		},
 	}
 
