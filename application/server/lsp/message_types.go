@@ -233,28 +233,28 @@ type WorkspaceFoldersChangeEvent struct {
 
 // Settings is the struct that is parsed from the InitializationParams.InitializationOptions field
 type Settings struct {
-	ActivateSnykOpenSource      string `json:"activateSnykOpenSource,omitempty"`
-	ActivateSnykCode            string `json:"activateSnykCode,omitempty"`
-	ActivateSnykIac             string `json:"activateSnykIac,omitempty"`
-	Insecure                    string `json:"insecure,omitempty"`
-	Endpoint                    string `json:"endpoint,omitempty"`
-	AdditionalParams            string `json:"additionalParams,omitempty"`
-	AdditionalEnv               string `json:"additionalEnv,omitempty"`
-	Path                        string `json:"path,omitempty"`
-	SendErrorReports            string `json:"sendErrorReports,omitempty"`
-	Organization                string `json:"organization,omitempty"`
-	EnableTelemetry             string `json:"enableTelemetry,omitempty"`
-	ManageBinariesAutomatically string `json:"manageBinariesAutomatically,omitempty"`
-	CliPath                     string `json:"cliPath,omitempty"`
-	Token                       string `json:"token,omitempty"`
-	IntegrationName             string `json:"integrationName,omitempty"`
-	IntegrationVersion          string `json:"integrationVersion,omitempty"`
-	AutomaticAuthentication     string `json:"automaticAuthentication,omitempty"`
-	DeviceId                    string `json:"deviceId,omitempty"`
+	ActivateSnykOpenSource      string   `json:"activateSnykOpenSource,omitempty"`
+	ActivateSnykCode            string   `json:"activateSnykCode,omitempty"`
+	ActivateSnykIac             string   `json:"activateSnykIac,omitempty"`
+	Insecure                    string   `json:"insecure,omitempty"`
+	Endpoint                    string   `json:"endpoint,omitempty"`
+	AdditionalParams            string   `json:"additionalParams,omitempty"`
+	AdditionalEnv               string   `json:"additionalEnv,omitempty"`
+	Path                        string   `json:"path,omitempty"`
+	SendErrorReports            string   `json:"sendErrorReports,omitempty"`
+	Organization                string   `json:"organization,omitempty"`
+	EnableTelemetry             string   `json:"enableTelemetry,omitempty"`
+	ManageBinariesAutomatically string   `json:"manageBinariesAutomatically,omitempty"`
+	CliPath                     string   `json:"cliPath,omitempty"`
+	Token                       string   `json:"token,omitempty"`
+	IntegrationName             string   `json:"integrationName,omitempty"`
+	IntegrationVersion          string   `json:"integrationVersion,omitempty"`
+	AutomaticAuthentication     string   `json:"automaticAuthentication,omitempty"`
+	DeviceId                    string   `json:"deviceId,omitempty"`
 	EnableTrustedFoldersFeature string   `json:"enableTrustedFoldersFeature,omitempty"`
 	TrustedFolders              []string `json:"trustedFolders,omitempty"`
-	ActivateSnykCodeSecurity    string `json:"activateSnykCodeSecurity,omitempty"`
-	ActivateSnykCodeQuality     string `json:"activateSnykCodeQuality,omitempty"`
+	ActivateSnykCodeSecurity    string   `json:"activateSnykCodeSecurity,omitempty"`
+	ActivateSnykCodeQuality     string   `json:"activateSnykCodeQuality,omitempty"`
 }
 
 type DidChangeConfigurationParams struct {
