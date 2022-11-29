@@ -60,13 +60,6 @@ func (n *TestAnalytics) IssueHoverIsDisplayed(properties IssueHoverIsDisplayedPr
 	log.Info().Str("method", "IssueHoverIsDisplayed").Msgf("no op - args %v", properties)
 }
 
-func (n *TestAnalytics) PluginIsUninstalled(properties PluginIsUninstalledProperties) {
-	n.mutex.Lock()
-	defer n.mutex.Unlock()
-	n.analytics = append(n.analytics, properties)
-	log.Info().Str("method", "PluginIsUninstalled").Msgf("no op - args %v", properties)
-}
-
 func (n *TestAnalytics) PluginIsInstalled(properties PluginIsInstalledProperties) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
