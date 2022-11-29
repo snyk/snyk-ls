@@ -30,13 +30,13 @@ import (
 	performance2 "github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/amplitude"
 	cli2 "github.com/snyk/snyk-ls/infrastructure/cli"
 	auth2 "github.com/snyk/snyk-ls/infrastructure/cli/auth"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	code2 "github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/iac"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
-	"github.com/snyk/snyk-ls/infrastructure/segment"
 	sentry2 "github.com/snyk/snyk-ls/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/infrastructure/services"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
@@ -95,7 +95,7 @@ func initInfrastructure() {
 	installer = install.NewInstaller(errorReporter)
 	instrumentor = sentry2.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient()
-	analytics = segment.NewSegmentClient(snykApiClient, errorReporter)
+	analytics = amplitude.NewAmplitudeClient(snykApiClient, errorReporter)
 	authProvider := auth2.NewCliAuthenticationProvider(errorReporter)
 	authenticator = services.NewAuthenticationService(authProvider, analytics, errorReporter)
 	snykCli = cli2.NewExecutor(authenticator, errorReporter, analytics)

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package segment
+package amplitude
 
 import (
 	"sync"
@@ -132,19 +132,6 @@ func Test_AnalyticEvents(t *testing.T) {
 			},
 		},
 		{
-			name: "Plugin Is Uninstalled",
-			track: func() {
-				s.PluginIsUninstalled(ux.PluginIsUninstalledProperties{})
-			},
-			output: segment.Track{
-				UserId: "user",
-				Event:  "Issue Hover Is Displayed",
-				Properties: segment.Properties{}.
-					Set("ide", "Visual Studio Code").
-					Set("itly", true),
-			},
-		},
-		{
 			name: "Plugin Is Installed",
 			track: func() {
 				s.PluginIsInstalled(ux.PluginIsInstalledProperties{})
@@ -169,28 +156,9 @@ func Test_AnalyticEvents(t *testing.T) {
 func setupUnitTest(t *testing.T) (*Client, *FakeSegmentClient, *snyk_api.FakeApiClient) {
 	testutil.UnitTest(t)
 	fakeApiClient := &snyk_api.FakeApiClient{}
-	s := NewSegmentClient(fakeApiClient, error_reporting.NewTestErrorReporter()).(*Client)
+	s := NewAmplitudeClient(fakeApiClient, error_reporting.NewTestErrorReporter()).(*Client)
 	fakeSegmentClient := &FakeSegmentClient{mutex: &sync.Mutex{}}
 	config.CurrentConfig().SetIntegrationName("Visual Studio Code")
-	s.segment = fakeSegmentClient
+	s.destination.client = fakeSegmentClient
 	return s, fakeSegmentClient, fakeApiClient
-}
-
-type FakeSegmentClient struct {
-	trackedEvents []segment.Message
-	mutex         *sync.Mutex
-}
-
-func (f *FakeSegmentClient) Close() error {
-	f.mutex.Lock()
-	defer f.mutex.Unlock()
-	f.trackedEvents = []segment.Message{}
-	return nil
-}
-
-func (f *FakeSegmentClient) Enqueue(message segment.Message) error {
-	f.mutex.Lock()
-	defer f.mutex.Unlock()
-	f.trackedEvents = append(f.trackedEvents, message)
-	return nil
 }

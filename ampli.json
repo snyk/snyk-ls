@@ -1,0 +1,11 @@
+{
+  "Zone": "us",
+  "OrgId": "114775",
+  "WorkspaceId": "6d7c255e-5bf5-46fc-be87-58b75c7e0ad5",
+  "SourceId": "bbc9b299-5765-406c-8d38-8665fd20738a",
+  "Runtime": "go:go-ampli",
+  "Branch": "feat/ls-go-sdk",
+  "Version": "230.0.0",
+  "VersionId": "e611b470-c811-4e42-b132-c8073036b3fb",
+  "Path": "./ampli"
+}
