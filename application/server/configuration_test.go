@@ -71,7 +71,7 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	assert.Equal(t, "token", config.CurrentConfig().Token())
 }
 
-func callBackMock(ctx context.Context, request *jrpc2.Request) (interface{}, error) {
+func callBackMock(_ context.Context, request *jrpc2.Request) (interface{}, error) {
 	jsonRPCRecorder.Record(*request)
 	if request.Method() == "workspace/configuration" {
 		return []lsp.Settings{sampleSettings}, nil
@@ -152,6 +152,7 @@ func Test_UpdateSettings(t *testing.T) {
 			CliPath:                     "C:\\Users\\CliPath\\snyk-ls.exe",
 			Token:                       "a fancy token",
 			FilterSeverity:              lsp.SeverityFilter{Low: true, Medium: true, High: true, Critical: true},
+			TrustedFolders:              []string{"trustedPath1", "trustedPath2"},
 		}
 
 		UpdateSettings(context.Background(), settings)
@@ -173,6 +174,8 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, "C:\\Users\\CliPath\\snyk-ls.exe", c.CliSettings().Path())
 		assert.Equal(t, "a fancy token", c.Token())
 		assert.Equal(t, lsp.SeverityFilter{Low: true, Medium: true, High: true, Critical: true}, c.FilterSeverity())
+		assert.Contains(t, c.TrustedFolders(), "trustedPath1")
+		assert.Contains(t, c.TrustedFolders(), "trustedPath2")
 	})
 
 	t.Run("blank organisation is ignored", func(t *testing.T) {
@@ -210,6 +213,15 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Empty(t, os.Getenv("a"))
 		assert.Empty(t, os.Getenv("b"))
 		assert.Empty(t, os.Getenv(";"))
+	})
+	t.Run("trusted folders", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+
+		UpdateSettings(context.Background(), lsp.Settings{TrustedFolders: []string{"/a/b", "/b/c"}})
+
+		c := config.CurrentConfig()
+		assert.Contains(t, c.TrustedFolders(), "/a/b")
+		assert.Contains(t, c.TrustedFolders(), "/b/c")
 	})
 
 	t.Run("manage binaries automatically", func(t *testing.T) {

@@ -48,6 +48,7 @@ func TestConfigDefaults(t *testing.T) {
 	assert.Equal(t, "", c.LogPath(), "Logpath should be empty by default")
 	assert.Equal(t, "md", c.Format(), "Output format should be md by default")
 	assert.Equal(t, lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true}, c.FilterSeverity(), "All severities should be enabled by default")
+	assert.Empty(t, c.trustedFolders)
 }
 
 func Test_TokenChanged_ChannelsInformed(t *testing.T) {

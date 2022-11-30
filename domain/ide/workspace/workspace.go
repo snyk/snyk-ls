@@ -20,10 +20,14 @@ import (
 	"context"
 	"sync"
 
+	"github.com/rs/zerolog/log"
+
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -33,11 +37,13 @@ var mutex = &sync.Mutex{}
 
 // Workspace represents the highest entity in an IDE that contains code. A workspace may contain multiple folders
 type Workspace struct {
-	mutex        sync.Mutex
-	folders      map[string]*Folder
-	instrumentor performance.Instrumentor
-	scanner      snyk.Scanner
-	hoverService hover.Service
+	mutex               sync.Mutex
+	folders             map[string]*Folder
+	instrumentor        performance.Instrumentor
+	scanner             snyk.Scanner
+	hoverService        hover.Service
+	trustMutex          sync.Mutex
+	trustRequestOngoing bool // for debouncing
 }
 
 func New(instrumentor performance.Instrumentor, scanner snyk.Scanner, hoverService hover.Service) *Workspace {
@@ -62,7 +68,7 @@ func Set(w *Workspace) {
 	instance = w
 }
 
-func (w *Workspace) DeleteFolder(folder string) {
+func (w *Workspace) RemoveFolder(folder string) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	delete(w.folders, folder)
@@ -87,14 +93,16 @@ func (w *Workspace) GetFolderContaining(path string) (folder *Folder) {
 }
 
 func (w *Workspace) ScanWorkspace(ctx context.Context) {
-	for _, folder := range w.folders {
+	trusted, _ := w.GetFolderTrust()
+
+	for _, folder := range trusted {
 		go folder.ScanFolder(ctx)
 	}
 }
 
-func (w *Workspace) ProcessFolderChange(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) {
+func (w *Workspace) AddAndRemoveFoldersAndTriggerScan(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) {
 	for _, folder := range params.Event.Removed {
-		w.DeleteFolder(uri.PathFromUri(folder.Uri))
+		w.RemoveFolder(uri.PathFromUri(folder.Uri))
 		// TODO: check if we need to clean up the reported diagnostics, if folder was removed?
 	}
 	for _, folder := range params.Event.Added {
@@ -104,11 +112,36 @@ func (w *Workspace) ProcessFolderChange(ctx context.Context, params lsp.DidChang
 	w.ScanWorkspace(ctx)
 }
 
-func (w *Workspace) ClearIssues(ctx context.Context) {
+func (w *Workspace) ClearIssues(_ context.Context) {
 	for _, folder := range w.folders {
 		folder.ClearScannedStatus()
 		folder.ClearDiagnostics()
 	}
 
 	w.hoverService.ClearAllHovers()
+}
+
+func (w *Workspace) TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted []*Folder) {
+	currentConfig := config.CurrentConfig()
+	trustedFolderPaths := currentConfig.TrustedFolders()
+	for _, f := range foldersToBeTrusted {
+		// we need to append and set the trusted path to the config before the scan, as the scan is checking for trust
+		trustedFolderPaths = append(trustedFolderPaths, f.Path())
+		currentConfig.SetTrustedFolders(trustedFolderPaths)
+		go f.ScanFolder(ctx)
+	}
+	notification.Send(lsp.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
+}
+
+func (w *Workspace) GetFolderTrust() (trusted []*Folder, untrusted []*Folder) {
+	for _, folder := range w.folders {
+		if folder.IsTrusted() {
+			trusted = append(trusted, folder)
+			log.Info().Str("folder", folder.Path()).Msg("Trusted folder")
+		} else {
+			untrusted = append(untrusted, folder)
+			log.Info().Str("folder", folder.Path()).Msg("Untrusted folder")
+		}
+	}
+	return trusted, untrusted
 }

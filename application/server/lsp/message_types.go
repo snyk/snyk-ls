@@ -259,6 +259,8 @@ type Settings struct {
 	AutomaticAuthentication     string         `json:"automaticAuthentication,omitempty"`
 	DeviceId                    string         `json:"deviceId,omitempty"`
 	FilterSeverity              SeverityFilter `json:"filterSeverity,omitempty"`
+	EnableTrustedFoldersFeature string         `json:"enableTrustedFoldersFeature,omitempty"`
+	TrustedFolders              []string       `json:"trustedFolders,omitempty"`
 }
 
 type DidChangeConfigurationParams struct {
@@ -614,4 +616,25 @@ type ShowDocumentParams struct {
 	 * file.
 	 */
 	Selection sglsp.Range `json:"selection"`
+}
+
+type MessageActionItem struct {
+	Title string `json:"title"`
+}
+
+type ShowMessageRequestParams struct {
+	Type    MessageType         `json:"type"`
+	Message string              `json:"message"`
+	Actions []MessageActionItem `json:"actions"`
+}
+
+type MessageType int
+
+const Error MessageType = 1
+const Warning MessageType = 2
+const Info MessageType = 3
+const Log MessageType = 4
+
+type SnykTrustedFoldersParams struct {
+	TrustedFolders []string `json:"trustedFolders"`
 }
