@@ -24,6 +24,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -113,7 +114,7 @@ func (w *Workspace) ClearIssues(ctx context.Context) {
 	w.hoverService.ClearAllHovers()
 }
 
-func (w *Workspace) ClearIssuesByProduct(product snyk.Product) {
+func (w *Workspace) ClearIssuesByProduct(product product.Product) {
 	for _, folder := range w.folders {
 		folder.ClearDiagnosticsByProduct(product)
 	}

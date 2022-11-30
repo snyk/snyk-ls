@@ -28,13 +28,14 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	testutil.UnitTest(t)
-	enabledScanner := NewTestProductScanner(ProductCode, true)
-	disabledScanner := NewTestProductScanner(ProductOpenSource, false)
+	enabledScanner := NewTestProductScanner(product.ProductCode, true)
+	disabledScanner := NewTestProductScanner(product.ProductOpenSource, false)
 
 	scanner := NewDelegatingScanner(
 		initialize.NewDelegatingInitializer(),
@@ -58,8 +59,8 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 
 func TestScan_whenProductScannerEnabled_SendsAnalysisTriggered(t *testing.T) {
 	testutil.UnitTest(t)
-	enabledScanner := NewTestProductScanner(ProductCode, true)
-	disabledScanner := NewTestProductScanner(ProductOpenSource, false)
+	enabledScanner := NewTestProductScanner(product.ProductCode, true)
+	disabledScanner := NewTestProductScanner(product.ProductOpenSource, false)
 
 	analytics := ux.NewTestAnalytics()
 	scanner := NewDelegatingScanner(
@@ -79,7 +80,7 @@ func TestScan_whenProductScannerEnabled_SendsAnalysisTriggered(t *testing.T) {
 }
 
 func TestScan_whenNoProductScannerEnabled_SendsNoAnalytics(t *testing.T) {
-	disabledScanner := NewTestProductScanner(ProductOpenSource, false)
+	disabledScanner := NewTestProductScanner(product.ProductOpenSource, false)
 
 	analytics := ux.NewTestAnalytics()
 	scanner := NewDelegatingScanner(
@@ -96,7 +97,7 @@ func TestScan_whenNoProductScannerEnabled_SendsNoAnalytics(t *testing.T) {
 
 func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 	// Arrange
-	productScanner := NewTestProductScanner(ProductOpenSource, true)
+	productScanner := NewTestProductScanner(product.ProductOpenSource, true)
 	scanner := NewDelegatingScanner(
 		initialize.NewDelegatingInitializer(),
 		performance.NewTestInstrumentor(),
@@ -117,7 +118,7 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 	// Arrange
 	config.CurrentConfig().SetToken("")
-	productScanner := NewTestProductScanner(ProductOpenSource, true)
+	productScanner := NewTestProductScanner(product.ProductOpenSource, true)
 	productScanner.SetScanDuration(2 * time.Second)
 	scanner := NewDelegatingScanner(
 		initialize.NewDelegatingInitializer(),

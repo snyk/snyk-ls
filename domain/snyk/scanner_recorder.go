@@ -19,6 +19,8 @@ package snyk
 import (
 	"context"
 	"sync"
+
+	"github.com/snyk/snyk-ls/internal/product"
 )
 
 type TestScanner struct {
@@ -38,9 +40,9 @@ func (s *TestScanner) IsEnabled() bool {
 	return true
 }
 
-const TestProduct Product = "Test Product"
+const TestProduct product.Product = "Test Product"
 
-func (s *TestScanner) Product() Product {
+func (s *TestScanner) Product() product.Product {
 	return TestProduct
 }
 

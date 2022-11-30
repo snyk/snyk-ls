@@ -28,6 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -44,7 +45,7 @@ type Folder struct {
 	path                    string
 	name                    string
 	status                  FolderStatus
-	productAttributes       map[snyk.Product]snyk.ProductAttributes
+	productAttributes       map[product.Product]product.ProductAttributes
 	documentDiagnosticCache *xsync.MapOf[string, []snyk.Issue]
 	scanner                 snyk.Scanner
 	hoverService            hover.Service
@@ -53,16 +54,12 @@ type Folder struct {
 
 func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hover.Service) *Folder {
 	folder := Folder{
-		scanner:           scanner,
-		path:              path,
-		name:              name,
-		status:            Unscanned,
-		productAttributes: make(map[snyk.Product]snyk.ProductAttributes),
-		hoverService:      hoverService,
+		scanner:      scanner,
+		path:         path,
+		name:         name,
+		status:       Unscanned,
+		hoverService: hoverService,
 	}
-	folder.productAttributes[snyk.ProductCode] = snyk.ProductAttributes{}
-	folder.productAttributes[snyk.ProductInfrastructureAsCode] = snyk.ProductAttributes{}
-	folder.productAttributes[snyk.ProductOpenSource] = snyk.ProductAttributes{}
 	folder.documentDiagnosticCache = xsync.NewMapOf[[]snyk.Issue]()
 	return &folder
 }
@@ -94,14 +91,6 @@ func (f *Folder) ScanFolder(ctx context.Context) {
 
 func (f *Folder) ScanFile(ctx context.Context, path string) {
 	f.scan(ctx, path)
-}
-
-func (f *Folder) GetProductAttribute(product snyk.Product, name string) interface{} {
-	return f.productAttributes[product][name]
-}
-
-func (f *Folder) AddProductAttribute(product snyk.Product, name string, value interface{}) {
-	f.productAttributes[product][name] = value
 }
 
 func (f *Folder) Contains(path string) bool {
@@ -239,7 +228,7 @@ func (f *Folder) ClearDiagnostics() {
 	})
 }
 
-func (f *Folder) ClearDiagnosticsByProduct(removedProduct snyk.Product) {
+func (f *Folder) ClearDiagnosticsByProduct(removedProduct product.Product) {
 	f.documentDiagnosticCache.Range(func(filePath string, previousIssues []snyk.Issue) bool {
 		var newIssues []snyk.Issue
 		for _, issue := range previousIssues {

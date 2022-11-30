@@ -25,6 +25,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/product"
 )
 
 func createRuleLink() (u *url.URL) {
@@ -279,7 +280,7 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 				FormattedMessage:    formattedMessage,
 				IssueType:           snyk.CodeSecurityVulnerability,
 				AffectedFilePath:    path,
-				Product:             snyk.ProductCode,
+				Product:             product.ProductCode,
 				IssueDescriptionURL: ruleLink,
 				References:          rule.getReferences(),
 				Commands:            getCommands(dataflow),

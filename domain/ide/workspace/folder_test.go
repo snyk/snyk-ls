@@ -30,19 +30,9 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
-
-func TestAddBundleHashToWorkspaceFolder(t *testing.T) {
-	testutil.UnitTest(t)
-	f := NewFolder(".", "Test", snyk.NewTestScanner(), hover.NewFakeHoverService())
-	key := "bundleHash"
-	value := "testHash"
-
-	f.AddProductAttribute(snyk.ProductCode, key, value)
-
-	assert.Equal(t, value, f.GetProductAttribute(snyk.ProductCode, key))
-}
 
 func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
 	filePath, folderPath := code.FakeDiagnosticPath(t)
@@ -208,9 +198,9 @@ func Test_ClearDiagnosticsByProduct(t *testing.T) {
 	f := GetMockFolder()
 	const filePath = "path1"
 	mockCodeIssue := GetMockIssue("id1", filePath)
-	mockCodeIssue.Product = snyk.ProductCode
+	mockCodeIssue.Product = product.ProductCode
 	mockIacIssue := GetMockIssue("id2", filePath)
-	mockIacIssue.Product = snyk.ProductInfrastructureAsCode
+	mockIacIssue.Product = product.ProductInfrastructureAsCode
 	f.processResults([]snyk.Issue{
 		mockIacIssue,
 		mockCodeIssue,
@@ -218,13 +208,13 @@ func Test_ClearDiagnosticsByProduct(t *testing.T) {
 	const expectedIssuesCountAfterRemoval = 1
 
 	// Act
-	f.ClearDiagnosticsByProduct(snyk.ProductCode)
+	f.ClearDiagnosticsByProduct(product.ProductCode)
 
 	// Assert
 	issues := f.AllIssuesFor(filePath)
 	t.Run("Does not return diagnostics of that type", func(t *testing.T) {
 		for _, issue := range issues {
-			assert.NotEqual(t, snyk.ProductCode, issue.Product)
+			assert.NotEqual(t, product.ProductCode, issue.Product)
 		}
 	})
 

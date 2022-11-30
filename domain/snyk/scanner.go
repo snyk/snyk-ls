@@ -26,6 +26,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/internal/product"
 )
 
 type Scanner interface {
@@ -138,13 +139,13 @@ func getEnabledAnalysisTypes(productScanners []ProductScanner) (analysisTypes []
 		if !ps.IsEnabled() {
 			continue
 		}
-		if ps.Product() == ProductInfrastructureAsCode {
+		if ps.Product() == product.ProductInfrastructureAsCode {
 			analysisTypes = append(analysisTypes, ux2.InfrastructureAsCode)
 		}
-		if ps.Product() == ProductOpenSource {
+		if ps.Product() == product.ProductOpenSource {
 			analysisTypes = append(analysisTypes, ux2.OpenSource)
 		}
-		if ps.Product() == ProductCode {
+		if ps.Product() == product.ProductCode {
 			analysisTypes = append(analysisTypes, ux2.CodeSecurity)
 		}
 	}
