@@ -112,3 +112,9 @@ func (w *Workspace) ClearIssues(ctx context.Context) {
 
 	w.hoverService.ClearAllHovers()
 }
+
+func (w *Workspace) ClearIssuesByProduct(product snyk.Product) {
+	for _, folder := range w.folders {
+		folder.ClearDiagnosticsByProduct(product)
+	}
+}
