@@ -205,21 +205,22 @@ func updateCliConfig(settings lsp.Settings) {
 
 func updateProductEnablement(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ActivateSnykCode)
+	currentConfig := config.CurrentConfig()
 	if err != nil {
 		log.Warn().Err(err).Msg("couldn't parse code setting")
 	} else {
-		config.CurrentConfig().SetSnykCodeEnabled(parseBool)
+		currentConfig.SetSnykCodeEnabled(parseBool)
 	}
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykOpenSource)
 	if err != nil {
 		log.Warn().Err(err).Msg("couldn't parse open source setting")
 	} else {
-		config.CurrentConfig().SetSnykOssEnabled(parseBool)
+		currentConfig.SetSnykOssEnabled(parseBool)
 	}
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykIac)
 	if err != nil {
 		log.Warn().Err(err).Msg("couldn't parse iac setting")
 	} else {
-		config.CurrentConfig().SetSnykIacEnabled(parseBool)
+		currentConfig.SetSnykIacEnabled(parseBool)
 	}
 }
