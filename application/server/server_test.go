@@ -733,6 +733,10 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 // If expectedNumber == -1 assume check for expectedNumber > 0
 func checkForPublishedDiagnostics(w *workspace.Workspace, testPath string, expectedNumber int) func() bool {
 	return func() bool {
+		defer cleanupChannels()
+		defer jsonRPCRecorder.ClearCallbacks()
+		defer jsonRPCRecorder.ClearNotifications()
+
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
 		if len(notifications) < 1 {
 			return false
