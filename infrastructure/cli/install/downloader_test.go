@@ -42,7 +42,7 @@ func TestDownloader_Download(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, progressCh)
-	assert.True(t, len(progressCh) > 3) // has at least started, reported & finished progress
+	assert.True(t, len(progressCh) >= 3) // has at least started, reported & finished progress
 
 	//make sure cleanup works
 	_, err = os.Stat(lockFileName)

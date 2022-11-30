@@ -17,12 +17,13 @@
 package snyk
 
 const (
-	NavigateToRangeCommand = "snyk.navigateToRange"
-	WorkspaceScanCommand   = "snyk.workspace.scan"
-	OpenBrowserCommand     = "snyk.openBrowser"
-	LoginCommand           = "snyk.login"
-	CopyAuthLinkCommand    = "snyk.copyAuthLink"
-	LogoutCommand          = "snyk.logout"
+	NavigateToRangeCommand       = "snyk.navigateToRange"
+	WorkspaceScanCommand         = "snyk.workspace.scan"
+	OpenBrowserCommand           = "snyk.openBrowser"
+	LoginCommand                 = "snyk.login"
+	CopyAuthLinkCommand          = "snyk.copyAuthLink"
+	LogoutCommand                = "snyk.logout"
+	TrustWorkspaceFoldersCommand = "snyk.trustWorkspaceFolders"
 )
 
 type Command struct {

@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -38,7 +39,7 @@ func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 		defer log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("DONE")
 
 		emptySettings := lsp.Settings{}
-		if params.Settings != emptySettings {
+		if !reflect.DeepEqual(params.Settings, emptySettings) {
 			// client used settings push
 			UpdateSettings(params.Settings)
 			return true, nil
@@ -66,7 +67,7 @@ func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 			return false, err
 		}
 
-		if fetchedSettings[0] != emptySettings {
+		if !reflect.DeepEqual(fetchedSettings[0], emptySettings) {
 			UpdateSettings(fetchedSettings[0])
 			return true, nil
 		}
@@ -99,7 +100,7 @@ func UpdateSettings(settings lsp.Settings) {
 
 func writeSettings(settings lsp.Settings, initialize bool) {
 	emptySettings := lsp.Settings{}
-	if settings == emptySettings {
+	if reflect.DeepEqual(settings, emptySettings) {
 		return
 	}
 	updateToken(settings.Token)
@@ -111,6 +112,20 @@ func writeSettings(settings lsp.Settings, initialize bool) {
 	updateTelemetry(settings)
 	updateOrganization(settings)
 	manageBinariesAutomatically(settings)
+	updateTrustedFolders(settings)
+}
+
+func updateTrustedFolders(settings lsp.Settings) {
+	trustedFoldersFeatureEnabled, err := strconv.ParseBool(settings.EnableTrustedFoldersFeature)
+	if err == nil {
+		config.CurrentConfig().SetTrustedFolderFeatureEnabled(trustedFoldersFeatureEnabled)
+	} else {
+		config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
+	}
+
+	if settings.TrustedFolders != nil {
+		config.CurrentConfig().SetTrustedFolders(settings.TrustedFolders)
+	}
 }
 
 func updateAutoAuthentication(settings lsp.Settings) {

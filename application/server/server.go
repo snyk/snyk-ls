@@ -90,7 +90,7 @@ func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 	(*handlers)["textDocument/willSaveWaitUntil"] = NoOpHandler()
 	(*handlers)["shutdown"] = Shutdown()
 	(*handlers)["exit"] = Exit(srv)
-	(*handlers)["workspace/didChangeWorkspaceFolders"] = WorkspaceDidChangeWorkspaceFoldersHandler()
+	(*handlers)["workspace/didChangeWorkspaceFolders"] = WorkspaceDidChangeWorkspaceFoldersHandler(srv)
 	(*handlers)["workspace/didChangeConfiguration"] = WorkspaceDidChangeConfiguration(srv)
 	(*handlers)["window/workDoneProgress/cancel"] = WindowWorkDoneProgressCancelHandler()
 	(*handlers)["workspace/executeCommand"] = ExecuteCommandHandler(srv)
@@ -145,7 +145,7 @@ func CodeActionHandler() jrpc2.Handler {
 	})
 }
 
-func WorkspaceDidChangeWorkspaceFoldersHandler() jrpc2.Handler {
+func WorkspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) (interface{}, error) {
 		// The context provided by the JSON-RPC server is cancelled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
@@ -153,7 +153,8 @@ func WorkspaceDidChangeWorkspaceFoldersHandler() jrpc2.Handler {
 
 		log.Info().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Msg("RECEIVING")
 		defer log.Info().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Msg("SENDING")
-		workspace.Get().ProcessFolderChange(bgCtx, params)
+		workspace.Get().AddAndRemoveFoldersAndTriggerScan(bgCtx, params)
+		handleUntrustedFolders(bgCtx, srv)
 		return nil, nil
 	})
 }
@@ -183,24 +184,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 			os.Exit(0)
 		}()
 
-		if len(params.WorkspaceFolders) > 0 {
-			for _, workspaceFolder := range params.WorkspaceFolders {
-				log.Info().Str("method", method).Msgf("Adding workspaceFolder %v", workspaceFolder)
-				f := workspace.NewFolder(
-					uri.PathFromUri(workspaceFolder.Uri),
-					workspaceFolder.Name,
-					di.Scanner(),
-					di.HoverService(),
-				)
-				w.AddFolder(f)
-			}
-		} else {
-			if params.RootURI != "" {
-				w.AddFolder(workspace.NewFolder(uri.PathFromUri(params.RootURI), params.ClientInfo.Name, di.Scanner(), di.HoverService()))
-			} else if params.RootPath != "" {
-				w.AddFolder(workspace.NewFolder(params.RootPath, params.ClientInfo.Name, di.Scanner(), di.HoverService()))
-			}
-		}
+		addWorkspaceFolders(params, w)
 
 		return lsp.InitializeResult{
 			ServerInfo: lsp.ServerInfo{
@@ -232,6 +216,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 						snyk.LoginCommand,
 						snyk.CopyAuthLinkCommand,
 						snyk.LogoutCommand,
+						snyk.TrustWorkspaceFoldersCommand,
 					},
 				},
 			},
@@ -241,8 +226,35 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 func InitializedHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializedParams) (interface{}, error) {
 		workspace.Get().ScanWorkspace(context.Background())
+		if config.CurrentConfig().AutomaticAuthentication() || config.CurrentConfig().NonEmptyToken() {
+			go handleUntrustedFolders(context.Background(), srv)
+		}
 		return nil, nil
 	})
+}
+
+func addWorkspaceFolders(params lsp.InitializeParams, w *workspace.Workspace) {
+	const method = "addWorkspaceFolders"
+	if len(params.WorkspaceFolders) > 0 {
+		for _, workspaceFolder := range params.WorkspaceFolders {
+			log.Info().Str("method", method).Msgf("Adding workspaceFolder %v", workspaceFolder)
+			f := workspace.NewFolder(
+				uri.PathFromUri(workspaceFolder.Uri),
+				workspaceFolder.Name,
+				di.Scanner(),
+				di.HoverService(),
+			)
+			w.AddFolder(f)
+		}
+	} else {
+		if params.RootURI != "" {
+			f := workspace.NewFolder(uri.PathFromUri(params.RootURI), params.ClientInfo.Name, di.Scanner(), di.HoverService())
+			w.AddFolder(f)
+		} else if params.RootPath != "" {
+			f := workspace.NewFolder(params.RootPath, params.ClientInfo.Name, di.Scanner(), di.HoverService())
+			w.AddFolder(f)
+		}
+	}
 }
 
 func setClientInformation(initParams lsp.InitializeParams) {
@@ -400,6 +412,12 @@ func registerNotifier(srv *jrpc2.Server) {
 				Interface("source", source).
 				Interface("diagnosticCount", len(params.Diagnostics)).
 				Msg("publishing diagnostics")
+		case lsp.SnykTrustedFoldersParams:
+			notifier(srv, "$/snyk.addTrustedFolders", params)
+			log.Info().
+				Str("method", "registerNotifier").
+				Interface("trustedPaths", params.TrustedFolders).
+				Msg("sending trusted Folders to client")
 		default:
 			log.Warn().
 				Str("method", "registerNotifier").

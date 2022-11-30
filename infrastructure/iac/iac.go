@@ -151,7 +151,10 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 func (iac *Scanner) retrieveIssues(scanResults []iacScanResult, issues []snyk.Issue, workspacePath string, err error) []snyk.Issue {
 	if len(scanResults) > 0 {
 		for _, s := range scanResults {
-			issues = append(issues, iac.retrieveAnalysis(s, workspacePath)...)
+			isIgnored := ignorableIacErrorCodes[s.ErrorCode]
+			if !isIgnored {
+				issues = append(issues, iac.retrieveAnalysis(s, workspacePath)...)
+			}
 		}
 	}
 	iac.trackResult(err == nil)
@@ -183,11 +186,19 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 		switch errorType := err.(type) {
 		case *exec.ExitError:
 			if errorType.ExitCode() > 1 {
-				errorOutput := string(res) + "\n\n\nSTDERR output:\n" + string(err.(*exec.ExitError).Stderr)
-				if strings.Contains(errorOutput, "Could not find any valid IaC files") ||
-					strings.Contains(errorOutput, "CustomError: Not a recognised option did you mean --file") {
+				results, unmarshalErr := iac.unmarshal(res)
+				// if results are all ignorable error codes, return empty scan results, otherwise return the error
+				if unmarshalErr == nil && len(results) > 0 {
+					for _, result := range results {
+						if !ignorableIacErrorCodes[result.ErrorCode] {
+							goto ERR
+						}
+					}
 					return scanResults, nil
 				}
+
+			ERR:
+				errorOutput := string(res) + "\n\n\nSTDERR output:\n" + string(err.(*exec.ExitError).Stderr)
 				log.Err(err).Str("method", method).Str("output", errorOutput).Msg("Error while calling Snyk CLI")
 				err = errors.Wrap(err, fmt.Sprintf("Snyk CLI error executing %v. Output: %s", cmd, errorOutput))
 				return nil, err
@@ -198,22 +209,29 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 		}
 	}
 
+	return iac.unmarshal(res)
+}
+
+func (iac *Scanner) unmarshal(res []byte) (scanResults []iacScanResult, err error) {
+	method := "iac.unmarshal"
 	output := string(res)
+
 	if strings.HasPrefix(output, "[") {
 		if err = json.Unmarshal(res, &scanResults); err != nil {
-			err = errors.Wrap(err, fmt.Sprintf("Cannot unmarshall %s", output))
-			log.Err(err).Str("method", method).Msg("Cannot unmarshall")
+			err = errors.Wrap(err, fmt.Sprintf("Cannot unmarshal %s", output))
+			log.Err(err).Str("method", method).Msg("Cannot unmarshal")
 			return nil, err
 		}
 	} else {
 		var scanResult iacScanResult
 		if err = json.Unmarshal(res, &scanResult); err != nil {
-			err = errors.Wrap(err, fmt.Sprintf("Cannot unmarshall %s", output))
-			log.Err(err).Str("method", method).Msg("Cannot unmarshall")
+			err = errors.Wrap(err, fmt.Sprintf("Cannot unmarshal %s", output))
+			log.Err(err).Str("method", method).Msg("Cannot unmarshal")
 			return nil, err
 		}
 		scanResults = append(scanResults, scanResult)
 	}
+
 	return scanResults, nil
 }
 

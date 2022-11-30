@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,6 +54,7 @@ func (i *Initializer) Init() error {
 	if !config.CurrentConfig().ManageBinariesAutomatically() {
 		if !cliInstalled {
 			notification.SendShowMessage(sglsp.Warning, "Automatic CLI downloads are disabled and no CLI path is configured. Enable automatic downloads or set a valid CLI path.")
+			return errors.New("automatic management of binaries is disabled, and CLI is not found")
 		}
 		return nil
 	}
@@ -71,7 +73,8 @@ func (i *Initializer) Init() error {
 			config.CurrentConfig().SetSnykIacEnabled(false)
 			config.CurrentConfig().SetSnykOssEnabled(false)
 			log.Warn().Str("method", "cli.Init").Msg("Disabling Snyk OSS and Snyk Iac as no CLI found after 3 tries")
-			break
+
+			return errors.New("could not find or download CLI")
 		}
 		i.installCli()
 		if !config.CurrentConfig().CliSettings().Installed() {
@@ -103,7 +106,6 @@ func (i *Initializer) installCli() {
 	if !currentConfig.CliSettings().Installed() {
 		notification.SendShowMessage(sglsp.Info, "Snyk CLI will be downloaded to run security scans.")
 		cliPath, err = i.installer.Install(context.Background())
-		notification.Send(lsp.SnykIsAvailableCli{CliPath: cliPath})
 		if err != nil {
 			log.Err(err).Str("method", "installCli").Msg("could not download Snyk CLI binary")
 			i.handleInstallerError(err)

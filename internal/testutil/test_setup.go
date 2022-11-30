@@ -45,6 +45,7 @@ func UnitTest(t *testing.T) {
 	c := config.New()
 	c.SetManageBinariesAutomatically(false)
 	c.SetToken("00000000-0000-0000-0000-000000000001")
+	c.SetTrustedFolderFeatureEnabled(false)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t)
 }
@@ -123,6 +124,7 @@ func prepareTestHelper(t *testing.T, envVar string) {
 	c.SetToken(GetEnvironmentToken())
 	c.SetErrorReportingEnabled(false)
 	c.SetTelemetryEnabled(false)
+	c.SetTrustedFolderFeatureEnabled(false)
 	config.SetCurrentConfig(c)
 
 	CLIDownloadLockFileCleanUp(t)
