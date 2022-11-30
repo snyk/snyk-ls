@@ -36,6 +36,7 @@ import (
 	"github.com/subosito/gotenv"
 	"github.com/xtgo/uuid"
 
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -537,4 +538,18 @@ func (c *Config) SetIntegrationName(integrationName string) {
 
 func (c *Config) SetIntegrationVersion(integrationVersion string) {
 	c.integrationVersion = integrationVersion
+}
+
+func (c *Config) GetSupportedProducts() (supported map[snyk.Product]bool) {
+	if c.IsSnykOssEnabled() {
+		supported[snyk.ProductOpenSource] = true
+	}
+	if c.IsSnykCodeEnabled() {
+		supported[snyk.ProductCode] = true
+	}
+	if c.IsSnykIacEnabled() {
+		supported[snyk.ProductInfrastructureAsCode] = true
+	}
+
+	return supported
 }
