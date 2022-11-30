@@ -153,7 +153,7 @@ func Test_UpdateSettings(t *testing.T) {
 			Token:                       "a fancy token",
 		}
 
-		UpdateSettings(context.Background(), settings)
+		UpdateSettings(settings)
 
 		c := config.CurrentConfig()
 		assert.Equal(t, false, c.IsSnykCodeEnabled())
@@ -176,7 +176,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("blank organisation is ignored", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.Settings{Organization: " "})
+		UpdateSettings(lsp.Settings{Organization: " "})
 
 		c := config.CurrentConfig()
 		assert.Equal(t, "", c.GetOrganization())
@@ -185,7 +185,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("incomplete env vars", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.Settings{AdditionalEnv: "a="})
+		UpdateSettings(lsp.Settings{AdditionalEnv: "a="})
 
 		assert.Empty(t, os.Getenv("a"))
 	})
@@ -193,7 +193,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("empty env vars", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.Settings{AdditionalEnv: " "})
+		UpdateSettings(lsp.Settings{AdditionalEnv: " "})
 
 		assert.Empty(t, os.Getenv("a"))
 	})
@@ -201,7 +201,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("broken env variables", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.Settings{AdditionalEnv: "a=; b"})
+		UpdateSettings(lsp.Settings{AdditionalEnv: "a=; b"})
 
 		c := config.CurrentConfig()
 		assert.Equal(t, "", c.GetOrganization())
@@ -212,25 +212,25 @@ func Test_UpdateSettings(t *testing.T) {
 
 	t.Run("manage binaries automatically", func(t *testing.T) {
 		t.Run("true", func(t *testing.T) {
-			UpdateSettings(context.Background(), lsp.Settings{
+			UpdateSettings(lsp.Settings{
 				ManageBinariesAutomatically: "true",
 			})
 
 			assert.True(t, config.CurrentConfig().ManageBinariesAutomatically())
 		})
 		t.Run("false", func(t *testing.T) {
-			UpdateSettings(context.Background(), lsp.Settings{
+			UpdateSettings(lsp.Settings{
 				ManageBinariesAutomatically: "false",
 			})
 
 			assert.False(t, config.CurrentConfig().ManageBinariesAutomatically())
 		})
 		t.Run("invalid value does not update", func(t *testing.T) {
-			UpdateSettings(context.Background(), lsp.Settings{
+			UpdateSettings(lsp.Settings{
 				ManageBinariesAutomatically: "true",
 			})
 
-			UpdateSettings(context.Background(), lsp.Settings{
+			UpdateSettings(lsp.Settings{
 				ManageBinariesAutomatically: "dog",
 			})
 
@@ -247,7 +247,7 @@ func Test_InitializeSettings(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 		deviceId := "test-device-id"
 
-		InitializeSettings(context.Background(), lsp.Settings{DeviceId: deviceId})
+		InitializeSettings(lsp.Settings{DeviceId: deviceId})
 
 		c := config.CurrentConfig()
 		assert.Equal(t, deviceId, c.DeviceID())
@@ -257,7 +257,7 @@ func Test_InitializeSettings(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 		curentDeviceId := config.CurrentConfig().DeviceID()
 
-		InitializeSettings(context.Background(), lsp.Settings{})
+		InitializeSettings(lsp.Settings{})
 
 		c := config.CurrentConfig()
 		assert.Equal(t, curentDeviceId, c.DeviceID())
