@@ -565,7 +565,8 @@ func (c *Config) SetTrustedFolders(folderPaths []string) {
 	c.trustedFolders = folderPaths
 }
 
-func (c *Config) GetSupportedProducts() (supported map[product.Product]bool) {
+func (c *Config) GetSupportedProducts() map[product.Product]bool {
+	supported := make(map[product.Product]bool)
 	if c.IsSnykOssEnabled() {
 		supported[product.ProductOpenSource] = true
 	}

@@ -237,7 +237,7 @@ func (f *Folder) ClearDiagnostics() {
 
 func (f *Folder) ClearDiagnosticsByProduct(removedProduct product.Product) {
 	f.documentDiagnosticCache.Range(func(filePath string, previousIssues []snyk.Issue) bool {
-		var newIssues []snyk.Issue
+		newIssues := []snyk.Issue{}
 		for _, issue := range previousIssues {
 			if issue.Product != removedProduct {
 				newIssues = append(newIssues, issue)
