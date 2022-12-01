@@ -36,6 +36,8 @@ import (
 )
 
 func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
+	testutil.UnitTest(t)
+
 	filePath, folderPath := code.FakeDiagnosticPath(t)
 	scannerRecorder := snyk.NewTestScanner()
 	scannerRecorder.Issues = []snyk.Issue{{AffectedFilePath: filePath}}
