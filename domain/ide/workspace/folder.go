@@ -47,7 +47,6 @@ type Folder struct {
 	path                    string
 	name                    string
 	status                  FolderStatus
-	productAttributes       map[product.Product]product.ProductAttributes
 	documentDiagnosticCache *xsync.MapOf[string, []snyk.Issue]
 	scanner                 snyk.Scanner
 	hoverService            hover.Service
