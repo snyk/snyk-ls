@@ -215,7 +215,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("trusted folders", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.Settings{TrustedFolders: []string{"/a/b", "/b/c"}})
+		UpdateSettings(lsp.Settings{TrustedFolders: []string{"/a/b", "/b/c"}})
 
 		c := config.CurrentConfig()
 		assert.Contains(t, c.TrustedFolders(), "/a/b")
