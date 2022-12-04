@@ -28,6 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -144,4 +145,10 @@ func (w *Workspace) GetFolderTrust() (trusted []*Folder, untrusted []*Folder) {
 		}
 	}
 	return trusted, untrusted
+}
+
+func (w *Workspace) ClearIssuesByProduct(product product.Product) {
+	for _, folder := range w.folders {
+		folder.ClearDiagnosticsByProduct(product)
+	}
 }

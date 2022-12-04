@@ -38,6 +38,7 @@ import (
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/concurrency"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -562,4 +563,19 @@ func (c *Config) SetTrustedFolders(folderPaths []string) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.trustedFolders = folderPaths
+}
+
+func (c *Config) GetSupportedProducts() map[product.Product]bool {
+	supported := make(map[product.Product]bool)
+	if c.IsSnykOssEnabled() {
+		supported[product.ProductOpenSource] = true
+	}
+	if c.IsSnykCodeEnabled() {
+		supported[product.ProductCode] = true
+	}
+	if c.IsSnykIacEnabled() {
+		supported[product.ProductInfrastructureAsCode] = true
+	}
+
+	return supported
 }

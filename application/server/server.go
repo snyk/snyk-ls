@@ -163,7 +163,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
 		method := "InitializeHandler"
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
-		InitializeSettings(ctx, params.InitializationOptions)
+		InitializeSettings(params.InitializationOptions)
 		config.CurrentConfig().SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
 		di.Analytics().Initialise()

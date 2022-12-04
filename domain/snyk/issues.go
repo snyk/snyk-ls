@@ -19,6 +19,8 @@ package snyk
 import (
 	"fmt"
 	"net/url"
+
+	"github.com/snyk/snyk-ls/internal/product"
 )
 
 // Issue models a problem, vulnerability, or situation within your code that requires your attention
@@ -41,7 +43,7 @@ type Issue struct {
 	// AffectedFilePath is the file path to the file where the issue was found
 	AffectedFilePath string
 	// Product is the Snyk product, e.g. Snyk Open Source
-	Product Product // todo: can we avoid it, if it's part of a scanner interface already?
+	Product product.Product // todo: can we avoid it, if it's part of a scanner interface already?
 	// References deliver additional information
 	References []Reference
 	// IssueDescriptionURL contains a Uri to display more information
@@ -52,7 +54,7 @@ type Issue struct {
 	Commands []Command
 }
 
-func NewIssue(id string, severity Severity, issueType Type, r Range, message string, formattedMessage string, affectedFilePath string, product Product, references []Reference, issueDescriptionUrl *url.URL, codeActions []CodeAction, commands []Command) Issue {
+func NewIssue(id string, severity Severity, issueType Type, r Range, message string, formattedMessage string, affectedFilePath string, product product.Product, references []Reference, issueDescriptionUrl *url.URL, codeActions []CodeAction, commands []Command) Issue {
 	return Issue{
 		ID:                  id,
 		Severity:            severity,
