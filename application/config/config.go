@@ -32,10 +32,11 @@ import (
 	"github.com/denisbrodbeck/machineid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/sourcegraph/go-lsp"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/subosito/gotenv"
 	"github.com/xtgo/uuid"
 
+	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -139,7 +140,7 @@ type Config struct {
 	snykCodeApiUrl               string
 	token                        string
 	deviceId                     string
-	clientCapabilities           lsp.ClientCapabilities
+	clientCapabilities           sglsp.ClientCapabilities
 	m                            sync.Mutex
 	path                         string
 	defaultDirs                  []string
@@ -147,6 +148,7 @@ type Config struct {
 	integrationVersion           string
 	automaticAuthentication      bool
 	tokenChangeChannels          []chan string
+	filterSeverity               lsp.SeverityFilter
 	trustedFolders               []string
 	trustedFoldersFeatureEnabled bool
 }
@@ -192,6 +194,7 @@ func New() *Config {
 	c.clientSettingsFromEnv()
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
+	c.setDefaultSeverityFilter()
 	return c
 }
 
@@ -287,6 +290,7 @@ func (c *Config) SnykCodeApi() string                    { return c.snykCodeApiU
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
 func (c *Config) IntegrationName() string                { return c.integrationName }
 func (c *Config) IntegrationVersion() string             { return c.integrationVersion }
+func (c *Config) FilterSeverity() lsp.SeverityFilter     { return c.filterSeverity }
 func (c *Config) Token() string {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -346,6 +350,17 @@ func (c *Config) SetSnykIacEnabled(enabled bool)        { c.isSnykIacEnabled.Set
 func (c *Config) SetSnykContainerEnabled(enabled bool) { c.isSnykContainerEnabled.Set(enabled) }
 
 func (c *Config) SetSnykAdvisorEnabled(enabled bool) { c.isSnykAdvisorEnabled.Set(enabled) }
+
+func (c *Config) SetSeverityFilter(severityFilter lsp.SeverityFilter) {
+	emptySeverityFilter := lsp.SeverityFilter{}
+	if severityFilter == emptySeverityFilter {
+		return
+	}
+
+	log.Debug().Str("method", "SetSeverityFilter").Msgf("Setting severity filter: %v", severityFilter)
+	c.filterSeverity = severityFilter
+}
+
 func (c *Config) SetToken(token string) {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -514,11 +529,11 @@ func (c *Config) SetDeviceID(deviceId string) {
 	c.deviceId = deviceId
 }
 
-func (c *Config) ClientCapabilities() lsp.ClientCapabilities {
+func (c *Config) ClientCapabilities() sglsp.ClientCapabilities {
 	return c.clientCapabilities
 }
 
-func (c *Config) SetClientCapabilities(capabilities lsp.ClientCapabilities) {
+func (c *Config) SetClientCapabilities(capabilities sglsp.ClientCapabilities) {
 	c.clientCapabilities = capabilities
 }
 
@@ -543,6 +558,15 @@ func (c *Config) addDefaults() {
 	}
 	c.determineJavaHome()
 	c.determineMavenHome()
+}
+
+func (c *Config) setDefaultSeverityFilter() {
+	c.filterSeverity = lsp.SeverityFilter{
+		Critical: true,
+		High:     true,
+		Medium:   true,
+		Low:      true,
+	}
 }
 
 func (c *Config) SetIntegrationName(integrationName string) {

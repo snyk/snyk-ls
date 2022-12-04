@@ -24,6 +24,7 @@ import (
 	"github.com/pact-foundation/pact-go/dsl"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 
@@ -125,6 +126,7 @@ func prepareTestHelper(t *testing.T, envVar string) {
 	c.SetErrorReportingEnabled(false)
 	c.SetTelemetryEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
+	c.SetSeverityFilter(lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true})
 	config.SetCurrentConfig(c)
 
 	CLIDownloadLockFileCleanUp(t)

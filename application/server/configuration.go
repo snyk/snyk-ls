@@ -103,6 +103,7 @@ func writeSettings(settings lsp.Settings, initialize bool) {
 	if reflect.DeepEqual(settings, emptySettings) {
 		return
 	}
+	updateSeverityFilter(settings.FilterSeverity)
 	updateToken(settings.Token)
 	updateProductEnablement(settings)
 	updateCliConfig(settings)
@@ -251,4 +252,9 @@ func updateProductEnablement(settings lsp.Settings) {
 	} else {
 		currentConfig.SetSnykIacEnabled(parseBool)
 	}
+}
+
+func updateSeverityFilter(s lsp.SeverityFilter) {
+	log.Debug().Str("method", "updateSeverityFilter").Msgf("Updating severity filter: %v", s)
+	config.CurrentConfig().SetSeverityFilter(s)
 }
