@@ -188,6 +188,7 @@ type ServerCapabilities struct {
 
 type Workspace struct {
 	WorkspaceFolders *WorkspaceFoldersServerCapabilities `json:"workspaceFolders,omitempty"`
+	FileOperations   *FileOperationsServerCapabilities   `json:"fileOperations,omitempty"`
 }
 
 type WorkspaceFoldersServerCapabilities struct {
@@ -206,6 +207,31 @@ type WorkspaceFoldersServerCapabilities struct {
 	 * using the `client/unregisterCapability` request.
 	 */
 	ChangeNotifications string `json:"changeNotifications,omitempty"`
+}
+
+type FileOperationsServerCapabilities struct {
+	WillDeleteBool bool                             `json:"willDeleteBool,omitempty"`
+	WillDelete     FileOperationRegistrationOptions `json:"willDelete,omitempty"`
+}
+
+type FileOperationPattern struct {
+	Glob string `json:"glob,omitempty"`
+}
+
+type FileOperationFilter struct {
+	Pattern FileOperationPattern `json:"pattern,omitempty"`
+}
+
+type FileOperationRegistrationOptions struct {
+	Filters []FileOperationFilter `json:"filters,omitempty"`
+}
+
+type DeleteFilesParams struct {
+	Files []FileDelete `json:"files,omitempty"`
+}
+
+type FileDelete struct {
+	Uri sglsp.DocumentURI `json:"uri,omitempty"`
 }
 
 type WorkspaceFolder struct {

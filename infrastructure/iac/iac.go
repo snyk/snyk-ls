@@ -185,7 +185,8 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 	if err != nil {
 		switch errorType := err.(type) {
 		case *exec.ExitError:
-			if errorType.ExitCode() > 1 {
+			const iacIssuesExitCode = 1
+			if errorType.ExitCode() > iacIssuesExitCode { // Exit code > 1 == CLI has errors
 				results, unmarshalErr := iac.unmarshal(res)
 				// if results are all ignorable error codes, return empty scan results, otherwise return the error
 				if unmarshalErr == nil && len(results) > 0 {
@@ -194,7 +195,7 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 							goto ERR
 						}
 					}
-					return scanResults, nil
+					return scanResults, nil // scanResults is empty
 				}
 
 			ERR:
