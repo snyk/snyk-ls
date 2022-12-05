@@ -351,14 +351,16 @@ func (c *Config) SetSnykContainerEnabled(enabled bool) { c.isSnykContainerEnable
 
 func (c *Config) SetSnykAdvisorEnabled(enabled bool) { c.isSnykAdvisorEnabled.Set(enabled) }
 
-func (c *Config) SetSeverityFilter(severityFilter lsp.SeverityFilter) {
+func (c *Config) SetSeverityFilter(severityFilter lsp.SeverityFilter) bool {
 	emptySeverityFilter := lsp.SeverityFilter{}
 	if severityFilter == emptySeverityFilter {
-		return
+		return false
 	}
 
+	filterModified := c.filterSeverity != severityFilter
 	log.Debug().Str("method", "SetSeverityFilter").Msgf("Setting severity filter: %v", severityFilter)
 	c.filterSeverity = severityFilter
+	return filterModified
 }
 
 func (c *Config) SetToken(token string) {

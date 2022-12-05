@@ -256,5 +256,16 @@ func updateProductEnablement(settings lsp.Settings) {
 
 func updateSeverityFilter(s lsp.SeverityFilter) {
 	log.Debug().Str("method", "updateSeverityFilter").Msgf("Updating severity filter: %v", s)
-	config.CurrentConfig().SetSeverityFilter(s)
+	modified := config.CurrentConfig().SetSeverityFilter(s)
+
+	if modified {
+		ws := workspace.Get()
+		if ws == nil {
+			return
+		}
+
+		for _, folder := range ws.Folders() {
+			folder.FilterCachedDiagnostics()
+		}
+	}
 }

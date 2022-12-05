@@ -107,6 +107,15 @@ func (w *Workspace) GetFolderContaining(path string) (folder *Folder) {
 	return nil
 }
 
+func (w *Workspace) Folders() (folder []*Folder) {
+	folders := make([]*Folder, 0)
+	for _, folder := range w.folders {
+		folders = append(folders, folder)
+	}
+
+	return folders
+}
+
 func (w *Workspace) ScanWorkspace(ctx context.Context) {
 	trusted, _ := w.GetFolderTrust()
 
