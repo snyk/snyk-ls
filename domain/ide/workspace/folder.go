@@ -129,20 +129,51 @@ func (f *Folder) DocumentDiagnosticsFromCache(file string) []snyk.Issue {
 }
 
 func (f *Folder) processResults(issues []snyk.Issue) {
+	logger := log.With().Str("method", "processResults").Logger()
+
 	var issuesByFile = map[string][]snyk.Issue{}
 	dedupMap := f.createDedupMap()
 
 	// TODO: perform issue diffing (current <-> newly reported)
+	// Update diagnostic cache
+	cachedIssues := []snyk.Issue{}
 	for _, issue := range issues {
-		cachedIssues, _ := f.documentDiagnosticCache.Load(issue.AffectedFilePath)
+		cachedIssues, _ = f.documentDiagnosticCache.Load(issue.AffectedFilePath)
 		if cachedIssues == nil {
 			cachedIssues = []snyk.Issue{}
 		}
+
 		if !dedupMap[f.getUniqueIssueID(issue)] {
 			cachedIssues = append(cachedIssues, issue)
 		}
+
 		f.documentDiagnosticCache.Store(issue.AffectedFilePath, cachedIssues)
-		issuesByFile[issue.AffectedFilePath] = cachedIssues
+	}
+
+	// update issues by file
+	filteredIssues := []snyk.Issue{}
+	severityFilters := config.CurrentConfig().FilterSeverity()
+
+	logger.Debug().Msgf("Filtering issues by severity: %v", severityFilters)
+	for _, cachedIssue := range cachedIssues {
+		if severityFilters.Critical && cachedIssue.Severity == snyk.Critical {
+			logger.Trace().Msgf("Including critical severity issue: %v", cachedIssue)
+			filteredIssues = append(filteredIssues, cachedIssue)
+		}
+		if severityFilters.High && cachedIssue.Severity == snyk.High {
+			logger.Trace().Msgf("Including high severity issue: %v", cachedIssue)
+			filteredIssues = append(filteredIssues, cachedIssue)
+		}
+		if severityFilters.Medium && cachedIssue.Severity == snyk.Medium {
+			logger.Trace().Msgf("Including medium severity issue: %v", cachedIssue)
+			filteredIssues = append(filteredIssues, cachedIssue)
+		}
+		if severityFilters.Low && cachedIssue.Severity == snyk.Low {
+			logger.Trace().Msgf("Including low severity issue: %v", cachedIssue)
+			filteredIssues = append(filteredIssues, cachedIssue)
+		}
+
+		issuesByFile[cachedIssue.AffectedFilePath] = filteredIssues
 	}
 
 	f.publishDiagnostics(issuesByFile)

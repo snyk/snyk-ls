@@ -242,6 +242,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "true",
 			CliPath:                     "",
+			FilterSeverity:              lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true},
 			EnableTrustedFoldersFeature: "false",
 		},
 	}
@@ -285,7 +286,11 @@ func Test_initialize_updatesSettings(t *testing.T) {
 	loc := setupServer(t)
 
 	clientParams := lsp.InitializeParams{
-		InitializationOptions: lsp.Settings{Organization: "fancy org", Token: "xxx"},
+		InitializationOptions: lsp.Settings{
+			Organization:   "fancy org",
+			Token:          "xxx",
+			FilterSeverity: lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true},
+		},
 	}
 
 	rsp, err := loc.Client.Call(ctx, "initialize", clientParams)
@@ -548,6 +553,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "false",
 			CliPath:                     "",
+			FilterSeverity:              lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true},
 			EnableTrustedFoldersFeature: "false",
 		},
 	}
@@ -745,6 +751,7 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 	config.CurrentConfig().SetSnykOssEnabled(true)
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
+	cleanupChannels()
 	di.Init()
 
 	var cloneTargetDir, err = setupCustomTestRepo(repo, commit, t)
@@ -763,6 +770,7 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 			Endpoint:                    os.Getenv("SNYK_API"),
 			Token:                       os.Getenv("SNYK_TOKEN"),
 			EnableTrustedFoldersFeature: "false",
+			FilterSeverity:              lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true},
 		},
 	}
 
@@ -878,8 +886,11 @@ func Test_IntegrationHoverResults(t *testing.T) {
 func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	loc := setupServer(t)
 	testutil.SmokeTest(t)
-	di.Init()
 	config.CurrentConfig().SetSnykCodeEnabled(true)
+	jsonRPCRecorder.ClearCallbacks()
+	jsonRPCRecorder.ClearNotifications()
+	cleanupChannels()
+	di.Init()
 	_, _ = loc.Client.Call(ctx, "initialize", nil)
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589", t)

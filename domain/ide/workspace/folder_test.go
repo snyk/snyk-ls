@@ -30,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -65,7 +66,17 @@ func Test_Scan_WhenCachedResultsButNoIssues_shouldNotReScan(t *testing.T) {
 	assert.Equal(t, 1, scannerRecorder.Calls())
 }
 
-func Test_ProcessResults_SendsDiagnosticsAndHovers(t *testing.T) {
+func Test_Scan_WhenNoIssues_shouldNotProcessResults(t *testing.T) {
+	hoverRecorder := hover.NewFakeHoverService()
+	testutil.UnitTest(t)
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hoverRecorder)
+
+	f.processResults([]snyk.Issue{})
+
+	assert.Equal(t, 0, hoverRecorder.Calls())
+}
+
+func TestProcessResults_SendsDiagnosticsAndHovers(t *testing.T) {
 	t.Skipf("test this once we have uniform abstractions for hover & diagnostics")
 	testutil.UnitTest(t)
 	hoverService := hover.NewFakeHoverService()
@@ -159,6 +170,57 @@ func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing
 	assert.Len(t, GetValueFromMap(f.documentDiagnosticCache, "path1"), 3)
 }
 
+func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *testing.T) {
+	testutil.UnitTest(t)
+
+	t.Run("Set severity settings", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+		config.CurrentConfig().SetSeverityFilter(lsp.SeverityFilter{
+			Critical: true,
+			High:     false,
+			Medium:   true,
+			Low:      false,
+		})
+	})
+
+	f := GetMockFolder()
+
+	f.processResults([]snyk.Issue{
+		{ID: "id1", AffectedFilePath: "path1", Severity: snyk.Critical},
+		{ID: "id2", AffectedFilePath: "path1", Severity: snyk.High},
+		{ID: "id3", AffectedFilePath: "path1", Severity: snyk.Medium},
+		{ID: "id4", AffectedFilePath: "path1", Severity: snyk.Low},
+		{ID: "id5", AffectedFilePath: "path1", Severity: snyk.Critical},
+	})
+
+	mtx := &sync.Mutex{}
+	var diagnostics []lsp.Diagnostic
+
+	defer notification.DisposeListener()
+	notification.CreateListener(func(event interface{}) {
+		switch params := event.(type) {
+		case lsp.PublishDiagnosticsParams:
+			mtx.Lock()
+			defer mtx.Unlock()
+			diagnostics = params.Diagnostics
+		}
+	})
+
+	assert.Eventually(
+		t,
+		func() bool {
+			mtx.Lock()
+			defer mtx.Unlock()
+
+			hasCorrectIssues := diagnostics[0].Code == "id1" && diagnostics[1].Code == "id3" && diagnostics[2].Code == "id5"
+			return hasCorrectIssues
+		},
+		1*time.Second,
+		10*time.Millisecond,
+		"Expected to receive only critical issues",
+	)
+}
+
 func Test_ClearDiagnostics(t *testing.T) {
 	testutil.UnitTest(t)
 	f := GetMockFolder()
@@ -169,6 +231,8 @@ func Test_ClearDiagnostics(t *testing.T) {
 	})
 	mtx := &sync.Mutex{}
 	clearDiagnosticNotifications := 0
+
+	defer notification.DisposeListener()
 	notification.CreateListener(func(event interface{}) {
 		switch params := event.(type) {
 		case lsp.PublishDiagnosticsParams:
@@ -193,6 +257,7 @@ func Test_ClearDiagnostics(t *testing.T) {
 		1*time.Second,
 		10*time.Millisecond,
 	)
+	notification.DisposeListener()
 }
 
 func Test_IsTrusted_shouldReturnFalseByDefault(t *testing.T) {

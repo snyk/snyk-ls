@@ -151,6 +151,7 @@ func Test_UpdateSettings(t *testing.T) {
 			ManageBinariesAutomatically: "false",
 			CliPath:                     "C:\\Users\\CliPath\\snyk-ls.exe",
 			Token:                       "a fancy token",
+			FilterSeverity:              lsp.SeverityFilter{Low: true, Medium: true, High: true, Critical: true},
 			TrustedFolders:              []string{"trustedPath1", "trustedPath2"},
 		}
 
@@ -172,6 +173,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.False(t, c.ManageBinariesAutomatically())
 		assert.Equal(t, "C:\\Users\\CliPath\\snyk-ls.exe", c.CliSettings().Path())
 		assert.Equal(t, "a fancy token", c.Token())
+		assert.Equal(t, lsp.SeverityFilter{Low: true, Medium: true, High: true, Critical: true}, c.FilterSeverity())
 		assert.Contains(t, c.TrustedFolders(), "trustedPath1")
 		assert.Contains(t, c.TrustedFolders(), "trustedPath2")
 	})
@@ -237,6 +239,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 			assert.False(t, config.CurrentConfig().ManageBinariesAutomatically())
 		})
+
 		t.Run("invalid value does not update", func(t *testing.T) {
 			UpdateSettings(lsp.Settings{
 				ManageBinariesAutomatically: "true",
@@ -247,6 +250,17 @@ func Test_UpdateSettings(t *testing.T) {
 			})
 
 			assert.True(t, config.CurrentConfig().ManageBinariesAutomatically())
+		})
+	})
+
+	t.Run("severity filter", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+		t.Run("filtering gets passed", func(t *testing.T) {
+			mixedSeverityFilter := lsp.SeverityFilter{Low: true, Medium: false, High: true, Critical: false}
+			UpdateSettings(lsp.Settings{FilterSeverity: mixedSeverityFilter})
+
+			c := config.CurrentConfig()
+			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
 		})
 	})
 }
