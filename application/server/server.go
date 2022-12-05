@@ -107,7 +107,7 @@ func WorkspaceWillDeleteFilesHandler() jrpc2.Handler {
 
 			// Instead of branching whether it's a file or a folder, we'll attempt to remove both and the redundant case
 			// will be a no-op
-			ws.DeleteFolder(path)
+			ws.RemoveFolder(path)
 			ws.DeleteFile(path)
 		}
 		return nil, nil

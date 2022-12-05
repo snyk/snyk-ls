@@ -111,10 +111,9 @@ func (f *Folder) ClearDiagnosticsFromFile(filePath string) {
 }
 
 func (f *Folder) ClearDiagnosticsFromPathRecursively(removedPath string) {
-	f.documentDiagnosticCache.Range(func(key interface{}, value interface{}) bool {
-		filePath := key.(string)
-		if strings.Contains(filePath, removedPath) {
-			f.ClearDiagnosticsFromFile(filePath)
+	f.documentDiagnosticCache.Range(func(key string, value []snyk.Issue) bool {
+		if strings.Contains(key, removedPath) {
+			f.ClearDiagnosticsFromFile(key)
 		}
 
 		return true // Continue the iteration
