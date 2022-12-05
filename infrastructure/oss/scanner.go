@@ -38,6 +38,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/scans"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -121,8 +122,8 @@ func (oss *Scanner) IsEnabled() bool {
 	return config.CurrentConfig().IsSnykOssEnabled()
 }
 
-func (oss *Scanner) Product() snyk.Product {
-	return snyk.ProductOpenSource
+func (oss *Scanner) Product() product.Product {
+	return product.ProductOpenSource
 }
 
 func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue) {
@@ -353,7 +354,7 @@ func (oss *Scanner) toIssue(affectedFilePath string, issue ossIssue, issueRange 
 		Range:               issueRange,
 		Severity:            issue.toIssueSeverity(),
 		AffectedFilePath:    affectedFilePath,
-		Product:             snyk.ProductOpenSource,
+		Product:             product.ProductOpenSource,
 		IssueDescriptionURL: issue.createIssueURL(),
 		IssueType:           snyk.DependencyVulnerability,
 		CodeActions:         issue.GetCodeActions(),

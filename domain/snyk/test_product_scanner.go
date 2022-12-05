@@ -22,9 +22,11 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+
+	"github.com/snyk/snyk-ls/internal/product"
 )
 
-func NewTestProductScanner(product Product, enabled bool) *TestProductScanner {
+func NewTestProductScanner(product product.Product, enabled bool) *TestProductScanner {
 	return &TestProductScanner{
 		product: product,
 		enabled: enabled,
@@ -34,7 +36,7 @@ func NewTestProductScanner(product Product, enabled bool) *TestProductScanner {
 }
 
 type TestProductScanner struct {
-	product      Product
+	product      product.Product
 	enabled      bool
 	scans        int
 	mutex        sync.Mutex
@@ -77,7 +79,7 @@ func (t *TestProductScanner) IsEnabled() bool {
 	return t.enabled
 }
 
-func (t *TestProductScanner) Product() Product {
+func (t *TestProductScanner) Product() product.Product {
 	return t.product
 }
 

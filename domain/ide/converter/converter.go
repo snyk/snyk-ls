@@ -120,7 +120,13 @@ func ToPosition(p snyk.Position) sglsp.Position {
 	}
 }
 
-func ToDiagnostics(issues []snyk.Issue) (diagnostics []lsp.Diagnostic) {
+func ToDiagnostics(issues []snyk.Issue) []lsp.Diagnostic {
+	// In JSON, `nil` serializes to `null`, while an empty slice serializes to `[]`.
+	// Sending null instead of an empty array leads to stored diagnostics not being cleared.
+	// Do not prefer nil over an empty slice in this case. The next line ensures that even if issues is empty,
+	// the return value of this function will not be null.
+	diagnostics := []lsp.Diagnostic{}
+
 	for _, issue := range issues {
 		s := ""
 		if issue.IssueDescriptionURL != nil {
@@ -138,10 +144,10 @@ func ToDiagnostics(issues []snyk.Issue) (diagnostics []lsp.Diagnostic) {
 	return diagnostics
 }
 
-func ToHoversDocument(path string, i []snyk.Issue) hover.DocumentHovers {
+func ToHoversDocument(path string, issues []snyk.Issue) hover.DocumentHovers {
 	return hover.DocumentHovers{
 		Uri:   uri.PathToUri(path),
-		Hover: ToHovers(i),
+		Hover: ToHovers(issues),
 	}
 }
 

@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/domain/ide/workspace"
 )
 
 func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
@@ -37,9 +39,9 @@ func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 		defer log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("DONE")
 
 		emptySettings := lsp.Settings{}
-		if params.Settings != emptySettings {
+		if !reflect.DeepEqual(params.Settings, emptySettings) {
 			// client used settings push
-			UpdateSettings(ctx, params.Settings)
+			UpdateSettings(params.Settings)
 			return true, nil
 		}
 
@@ -65,8 +67,8 @@ func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 			return false, err
 		}
 
-		if fetchedSettings[0] != emptySettings {
-			UpdateSettings(ctx, fetchedSettings[0])
+		if !reflect.DeepEqual(fetchedSettings[0], emptySettings) {
+			UpdateSettings(fetchedSettings[0])
 			return true, nil
 		}
 
@@ -74,30 +76,56 @@ func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 	})
 }
 
-func InitializeSettings(ctx context.Context, settings lsp.Settings) {
-	writeSettings(ctx, settings, true)
+func InitializeSettings(settings lsp.Settings) {
+	writeSettings(settings, true)
 	updateAutoAuthentication(settings)
 	updateDeviceInformation(settings)
 }
 
-func UpdateSettings(ctx context.Context, settings lsp.Settings) {
-	writeSettings(ctx, settings, false)
+func UpdateSettings(settings lsp.Settings) {
+	currentConfig := config.CurrentConfig()
+	previouslySupportedProducts := currentConfig.GetSupportedProducts()
+	ws := workspace.Get()
+
+	writeSettings(settings, false)
+
+	// If a product was removed, clear all issues for this product
+	newSupportedProducts := currentConfig.GetSupportedProducts()
+	for product, wasSupported := range previouslySupportedProducts {
+		if wasSupported && !newSupportedProducts[product] {
+			ws.ClearIssuesByProduct(product)
+		}
+	}
 }
 
-func writeSettings(ctx context.Context, settings lsp.Settings, initialize bool) {
+func writeSettings(settings lsp.Settings, initialize bool) {
 	emptySettings := lsp.Settings{}
-	if settings == emptySettings {
+	if reflect.DeepEqual(settings, emptySettings) {
 		return
 	}
 	updateToken(settings.Token)
 	updateProductEnablement(settings)
 	updateCliConfig(settings)
-	updateApiEndpoints(ctx, settings, initialize)
+	updateApiEndpoints(settings, initialize)
 	updateEnvironment(settings)
 	updatePath(settings)
 	updateTelemetry(settings)
 	updateOrganization(settings)
 	manageBinariesAutomatically(settings)
+	updateTrustedFolders(settings)
+}
+
+func updateTrustedFolders(settings lsp.Settings) {
+	trustedFoldersFeatureEnabled, err := strconv.ParseBool(settings.EnableTrustedFoldersFeature)
+	if err == nil {
+		config.CurrentConfig().SetTrustedFolderFeatureEnabled(trustedFoldersFeatureEnabled)
+	} else {
+		config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
+	}
+
+	if settings.TrustedFolders != nil {
+		config.CurrentConfig().SetTrustedFolders(settings.TrustedFolders)
+	}
 }
 
 func updateAutoAuthentication(settings lsp.Settings) {
@@ -123,12 +151,12 @@ func updateToken(token string) {
 	di.Authenticator().UpdateToken(token, false)
 }
 
-func updateApiEndpoints(ctx context.Context, settings lsp.Settings, initialization bool) {
+func updateApiEndpoints(settings lsp.Settings, initialization bool) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
 	endpointsUpdated := config.CurrentConfig().UpdateApiEndpoints(snykApiUrl)
 
 	if endpointsUpdated && !initialization {
-		di.Authenticator().Logout(ctx)
+		di.Authenticator().Logout(context.Background())
 	}
 }
 
@@ -205,21 +233,22 @@ func updateCliConfig(settings lsp.Settings) {
 
 func updateProductEnablement(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ActivateSnykCode)
+	currentConfig := config.CurrentConfig()
 	if err != nil {
 		log.Warn().Err(err).Msg("couldn't parse code setting")
 	} else {
-		config.CurrentConfig().SetSnykCodeEnabled(parseBool)
+		currentConfig.SetSnykCodeEnabled(parseBool)
 	}
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykOpenSource)
 	if err != nil {
 		log.Warn().Err(err).Msg("couldn't parse open source setting")
 	} else {
-		config.CurrentConfig().SetSnykOssEnabled(parseBool)
+		currentConfig.SetSnykOssEnabled(parseBool)
 	}
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykIac)
 	if err != nil {
 		log.Warn().Err(err).Msg("couldn't parse iac setting")
 	} else {
-		config.CurrentConfig().SetSnykIacEnabled(parseBool)
+		currentConfig.SetSnykIacEnabled(parseBool)
 	}
 }

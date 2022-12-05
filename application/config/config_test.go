@@ -45,6 +45,7 @@ func TestConfigDefaults(t *testing.T) {
 	assert.True(t, c.IsSnykIacEnabled(), "Snyk IaC should be enabled by default")
 	assert.Equal(t, "", c.LogPath(), "Logpath should be empty by default")
 	assert.Equal(t, "md", c.Format(), "Output format should be md by default")
+	assert.Empty(t, c.trustedFolders)
 }
 
 func Test_TokenChanged_ChannelsInformed(t *testing.T) {

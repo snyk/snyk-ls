@@ -38,6 +38,7 @@ import (
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/scans"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -83,8 +84,8 @@ func (iac *Scanner) IsEnabled() bool {
 	return config.CurrentConfig().IsSnykIacEnabled()
 }
 
-func (iac *Scanner) Product() snyk.Product {
-	return snyk.ProductInfrastructureAsCode
+func (iac *Scanner) Product() product.Product {
+	return product.ProductInfrastructureAsCode
 }
 
 func (iac *Scanner) SupportedCommands() []snyk.CommandName {
@@ -340,7 +341,7 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		FormattedMessage:    iac.getExtendedMessage(issue),
 		Severity:            iac.toIssueSeverity(issue.Severity),
 		AffectedFilePath:    affectedFilePath,
-		Product:             snyk.ProductInfrastructureAsCode,
+		Product:             product.ProductInfrastructureAsCode,
 		IssueDescriptionURL: issueURL,
 		IssueType:           snyk.InfrastructureIssue,
 		CodeActions: []snyk.CodeAction{{

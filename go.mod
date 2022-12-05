@@ -12,6 +12,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/pact-foundation/pact-go v1.7.0
 	github.com/pkg/errors v0.9.1
+	github.com/puzpuzpuz/xsync v1.5.2
 	github.com/rs/zerolog v1.28.0
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/segmentio/analytics-go v3.1.0+incompatible

@@ -38,6 +38,7 @@ import (
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/concurrency"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -119,33 +120,35 @@ func (c *CliSettings) DefaultBinaryInstallPath() string {
 }
 
 type Config struct {
-	configLoaded                concurrency.AtomicBool
-	cliSettings                 *CliSettings
-	configFile                  string
-	format                      string
-	isErrorReportingEnabled     concurrency.AtomicBool
-	isSnykCodeEnabled           concurrency.AtomicBool
-	isSnykOssEnabled            concurrency.AtomicBool
-	isSnykIacEnabled            concurrency.AtomicBool
-	isSnykContainerEnabled      concurrency.AtomicBool
-	isSnykAdvisorEnabled        concurrency.AtomicBool
-	isTelemetryEnabled          concurrency.AtomicBool
-	manageBinariesAutomatically concurrency.AtomicBool
-	logPath                     string
-	organization                string
-	snykCodeAnalysisTimeout     time.Duration
-	snykApiUrl                  string
-	snykCodeApiUrl              string
-	token                       string
-	deviceId                    string
-	clientCapabilities          lsp.ClientCapabilities
-	m                           sync.Mutex
-	path                        string
-	defaultDirs                 []string
-	integrationName             string
-	integrationVersion          string
-	automaticAuthentication     bool
-	tokenChangeChannels         []chan string
+	configLoaded                 concurrency.AtomicBool
+	cliSettings                  *CliSettings
+	configFile                   string
+	format                       string
+	isErrorReportingEnabled      concurrency.AtomicBool
+	isSnykCodeEnabled            concurrency.AtomicBool
+	isSnykOssEnabled             concurrency.AtomicBool
+	isSnykIacEnabled             concurrency.AtomicBool
+	isSnykContainerEnabled       concurrency.AtomicBool
+	isSnykAdvisorEnabled         concurrency.AtomicBool
+	isTelemetryEnabled           concurrency.AtomicBool
+	manageBinariesAutomatically  concurrency.AtomicBool
+	logPath                      string
+	organization                 string
+	snykCodeAnalysisTimeout      time.Duration
+	snykApiUrl                   string
+	snykCodeApiUrl               string
+	token                        string
+	deviceId                     string
+	clientCapabilities           lsp.ClientCapabilities
+	m                            sync.Mutex
+	path                         string
+	defaultDirs                  []string
+	integrationName              string
+	integrationVersion           string
+	automaticAuthentication      bool
+	tokenChangeChannels          []chan string
+	trustedFolders               []string
+	trustedFoldersFeatureEnabled bool
 }
 
 func CurrentConfig() *Config {
@@ -185,6 +188,7 @@ func New() *Config {
 	c.snykCodeApiUrl = defaultDeeproxyApiUrl
 	c.snykCodeAnalysisTimeout = snykCodeAnalysisTimeoutFromEnv()
 	c.token = ""
+	c.trustedFoldersFeatureEnabled = true
 	c.clientSettingsFromEnv()
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
@@ -209,6 +213,16 @@ func (c *Config) determineDeviceId() string {
 	} else {
 		return id
 	}
+}
+
+func (c *Config) IsTrustedFolderFeatureEnabled() bool {
+	return c.trustedFoldersFeatureEnabled
+}
+
+func (c *Config) SetTrustedFolderFeatureEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.trustedFoldersFeatureEnabled = enabled
 }
 
 func (c *Config) Load() {
@@ -537,4 +551,31 @@ func (c *Config) SetIntegrationName(integrationName string) {
 
 func (c *Config) SetIntegrationVersion(integrationVersion string) {
 	c.integrationVersion = integrationVersion
+}
+
+func (c *Config) TrustedFolders() []string {
+	c.m.Lock()
+	defer c.m.Unlock()
+	return c.trustedFolders
+}
+
+func (c *Config) SetTrustedFolders(folderPaths []string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.trustedFolders = folderPaths
+}
+
+func (c *Config) GetSupportedProducts() map[product.Product]bool {
+	supported := make(map[product.Product]bool)
+	if c.IsSnykOssEnabled() {
+		supported[product.ProductOpenSource] = true
+	}
+	if c.IsSnykCodeEnabled() {
+		supported[product.ProductCode] = true
+	}
+	if c.IsSnykIacEnabled() {
+		supported[product.ProductInfrastructureAsCode] = true
+	}
+
+	return supported
 }
