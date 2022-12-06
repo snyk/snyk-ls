@@ -108,7 +108,7 @@ func (w *Workspace) GetFolderContaining(path string) (folder *Folder) {
 }
 
 func (w *Workspace) Folders() (folder []*Folder) {
-	folders := make([]*Folder, len(w.folders))
+	folders := make([]*Folder, 0, len(w.folders))
 	for _, folder := range w.folders {
 		folders = append(folders, folder)
 	}
