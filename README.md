@@ -146,6 +146,12 @@ within `initializationOptions?: LSPAny;` we support the following settings:
   "automaticAuthentication": "true", // Whether or not LS will automatically authenticate on scan start (default: true)
   "enableTrustedFoldersFeature": "true", // Whether or not LS will prompt to trust a folder (default: true)
   "trustedFolders": ["/a/trusted/path", "/another/trusted/path"], // An array of folder that should be trusted
+  "filterSeverity": { // Filters to be applied for the determined issues
+    "critical": true,
+    "high": true,
+    "medium": true,
+    "low": true,
+  }
 }
 ```
 
