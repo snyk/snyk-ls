@@ -194,7 +194,7 @@ func New() *Config {
 	c.clientSettingsFromEnv()
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
-	c.setDefaultSeverityFilter()
+	c.filterSeverity = lsp.DefaultSeverityFilter()
 	return c
 }
 
@@ -351,14 +351,16 @@ func (c *Config) SetSnykContainerEnabled(enabled bool) { c.isSnykContainerEnable
 
 func (c *Config) SetSnykAdvisorEnabled(enabled bool) { c.isSnykAdvisorEnabled.Set(enabled) }
 
-func (c *Config) SetSeverityFilter(severityFilter lsp.SeverityFilter) {
+func (c *Config) SetSeverityFilter(severityFilter lsp.SeverityFilter) bool {
 	emptySeverityFilter := lsp.SeverityFilter{}
 	if severityFilter == emptySeverityFilter {
-		return
+		return false
 	}
 
+	filterModified := c.filterSeverity != severityFilter
 	log.Debug().Str("method", "SetSeverityFilter").Msgf("Setting severity filter: %v", severityFilter)
 	c.filterSeverity = severityFilter
+	return filterModified
 }
 
 func (c *Config) SetToken(token string) {
@@ -558,15 +560,6 @@ func (c *Config) addDefaults() {
 	}
 	c.determineJavaHome()
 	c.determineMavenHome()
-}
-
-func (c *Config) setDefaultSeverityFilter() {
-	c.filterSeverity = lsp.SeverityFilter{
-		Critical: true,
-		High:     true,
-		Medium:   true,
-		Low:      true,
-	}
 }
 
 func (c *Config) SetIntegrationName(integrationName string) {
