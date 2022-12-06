@@ -194,7 +194,7 @@ func New() *Config {
 	c.clientSettingsFromEnv()
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
-	c.setDefaultSeverityFilter()
+	c.filterSeverity = lsp.DefaultSeverityFilter()
 	return c
 }
 
@@ -560,15 +560,6 @@ func (c *Config) addDefaults() {
 	}
 	c.determineJavaHome()
 	c.determineMavenHome()
-}
-
-func (c *Config) setDefaultSeverityFilter() {
-	c.filterSeverity = lsp.SeverityFilter{
-		Critical: true,
-		High:     true,
-		Medium:   true,
-		Low:      true,
-	}
 }
 
 func (c *Config) SetIntegrationName(integrationName string) {

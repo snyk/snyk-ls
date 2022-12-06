@@ -242,7 +242,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "true",
 			CliPath:                     "",
-			FilterSeverity:              lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true},
+			FilterSeverity:              lsp.DefaultSeverityFilter(),
 			EnableTrustedFoldersFeature: "false",
 		},
 	}
@@ -289,7 +289,7 @@ func Test_initialize_updatesSettings(t *testing.T) {
 		InitializationOptions: lsp.Settings{
 			Organization:   "fancy org",
 			Token:          "xxx",
-			FilterSeverity: lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true},
+			FilterSeverity: lsp.DefaultSeverityFilter(),
 		},
 	}
 
@@ -553,7 +553,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "false",
 			CliPath:                     "",
-			FilterSeverity:              lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true},
+			FilterSeverity:              lsp.DefaultSeverityFilter(),
 			EnableTrustedFoldersFeature: "false",
 		},
 	}
@@ -770,7 +770,7 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 			Endpoint:                    os.Getenv("SNYK_API"),
 			Token:                       os.Getenv("SNYK_TOKEN"),
 			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true},
+			FilterSeverity:              lsp.DefaultSeverityFilter(),
 		},
 	}
 

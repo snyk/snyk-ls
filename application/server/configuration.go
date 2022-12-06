@@ -85,11 +85,15 @@ func InitializeSettings(settings lsp.Settings) {
 func UpdateSettings(settings lsp.Settings) {
 	currentConfig := config.CurrentConfig()
 	previouslySupportedProducts := currentConfig.GetSupportedProducts()
-	ws := workspace.Get()
 
 	writeSettings(settings, false)
 
 	// If a product was removed, clear all issues for this product
+	ws := workspace.Get()
+	if ws == nil {
+		return
+	}
+
 	newSupportedProducts := currentConfig.GetSupportedProducts()
 	for product, wasSupported := range previouslySupportedProducts {
 		if wasSupported && !newSupportedProducts[product] {
@@ -265,7 +269,7 @@ func updateSeverityFilter(s lsp.SeverityFilter) {
 		}
 
 		for _, folder := range ws.Folders() {
-			folder.FilterCachedDiagnostics()
+			folder.FilterAndPublishCachedDiagnostics()
 		}
 	}
 }

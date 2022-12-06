@@ -163,18 +163,23 @@ func (f *Folder) processResults(issues []snyk.Issue) {
 	}
 
 	// Filter and publish cached diagnostics
-	f.FilterCachedDiagnostics()
+	f.FilterAndPublishCachedDiagnostics()
 }
 
-func (f *Folder) FilterCachedDiagnostics() {
+func (f *Folder) FilterAndPublishCachedDiagnostics() {
+	issuesByFile := f.filterCachedDiagnostics()
+	f.publishDiagnostics(issuesByFile)
+}
+
+func (f *Folder) filterCachedDiagnostics() (fileIssues map[string][]snyk.Issue) {
+	logger := log.With().Str("method", "processResults").Logger()
+
+	var issuesByFile = map[string][]snyk.Issue{}
 	if f.documentDiagnosticCache.Size() == 0 {
-		// Cache is empty -> scan didn't run, thus nothing to filter
-		return
+		return issuesByFile
 	}
 
-	logger := log.With().Str("method", "processResults").Logger()
 	logger.Debug().Msgf("Filtering issues by severity: %v", config.CurrentConfig().FilterSeverity())
-	var issuesByFile = map[string][]snyk.Issue{}
 
 	f.documentDiagnosticCache.Range(func(filePath string, issues []snyk.Issue) bool {
 		filteredIssues := []snyk.Issue{}
@@ -190,7 +195,7 @@ func (f *Folder) FilterCachedDiagnostics() {
 		return true
 	})
 
-	f.publishDiagnostics(issuesByFile)
+	return issuesByFile
 }
 
 func isVisibleSeverity(issue snyk.Issue) bool {
