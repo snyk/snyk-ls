@@ -64,10 +64,10 @@ var (
 )
 
 type CliSettings struct {
-	Insecure             bool
-	AdditionalParameters []string
-	cliPath              string
-	cliPathAccessMutex   sync.Mutex
+	Insecure                bool
+	AdditionalOssParameters []string
+	cliPath                 string
+	cliPathAccessMutex      sync.Mutex
 }
 
 func NewCliSettings() *CliSettings {
