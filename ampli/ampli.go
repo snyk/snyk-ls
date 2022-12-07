@@ -6,7 +6,7 @@
 // To update run 'ampli pull language-server'
 //
 // Required dependencies: github.com/amplitude/analytics-go/amplitude@v0.0.5
-// Tracking Plan Version: 230
+// Tracking Plan Version: 231
 // Build: 1.0.0
 // Runtime: go-ampli
 //
@@ -47,15 +47,15 @@ var Instance = Ampli{}
 type Environment string
 
 const (
-	EnvironmentDevelopment Environment = `development`
-
 	EnvironmentProduction Environment = `production`
+
+	EnvironmentDevelopment Environment = `development`
 )
 
 var APIKey = map[Environment]string{
-	EnvironmentDevelopment: `0685e531d804b43d914d4857cbaeab49`,
-
 	EnvironmentProduction: `af27ef9ddacb424e34b42983161c1017`,
+
+	EnvironmentDevelopment: `0685e531d804b43d914d4857cbaeab49`,
 }
 
 // LoadClientOptions is Client options setting to initialize Ampli client.
@@ -158,12 +158,14 @@ func (e identifyEvent) identify() {
 type IdentifyBuilder interface {
 	Build() IdentifyEvent
 	AccountType(accountType IdentifyAccountType) IdentifyBuilder
+	CreatedAt(createdAt float64) IdentifyBuilder
 	Email(email string) IdentifyBuilder
 	HasFirstIntegration(hasFirstIntegration bool) IdentifyBuilder
 	HasFirstProject(hasFirstProject bool) IdentifyBuilder
 	HasPersonalEmail(hasPersonalEmail bool) IdentifyBuilder
 	IsAppUiBetaEnabled(isAppUiBetaEnabled bool) IdentifyBuilder
 	IsNonUser(isNonUser bool) IdentifyBuilder
+	IsSnyk(isSnyk bool) IdentifyBuilder
 	IsSnykAdmin(isSnykAdmin bool) IdentifyBuilder
 	LearnPreferredEcosystems(learnPreferredEcosystems []string) IdentifyBuilder
 	ProductUpdatesConsent(productUpdatesConsent bool) IdentifyBuilder
@@ -183,6 +185,12 @@ type identifyBuilder struct {
 
 func (b *identifyBuilder) AccountType(accountType IdentifyAccountType) IdentifyBuilder {
 	b.properties[`accountType`] = accountType
+
+	return b
+}
+
+func (b *identifyBuilder) CreatedAt(createdAt float64) IdentifyBuilder {
+	b.properties[`createdAt`] = createdAt
 
 	return b
 }
@@ -976,8 +984,8 @@ func (a *Ampli) Load(options LoadOptions) {
 		clientConfig.Plan = &amplitude.Plan{
 			Branch:    `feat/ls-go-sdk`,
 			Source:    `language-server`,
-			Version:   `230`,
-			VersionID: `e611b470-c811-4e42-b132-c8073036b3fb`,
+			Version:   `231`,
+			VersionID: `64b021b7-fd37-4cbf-9909-0ed6e8c1f3ca`,
 		}
 	}
 

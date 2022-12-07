@@ -5,7 +5,7 @@
   "SourceId": "bbc9b299-5765-406c-8d38-8665fd20738a",
   "Runtime": "go:go-ampli",
   "Branch": "feat/ls-go-sdk",
-  "Version": "230.0.0",
-  "VersionId": "e611b470-c811-4e42-b132-c8073036b3fb",
+  "Version": "231.0.0",
+  "VersionId": "64b021b7-fd37-4cbf-9909-0ed6e8c1f3ca",
   "Path": "./ampli"
 }
