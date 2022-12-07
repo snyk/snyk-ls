@@ -26,6 +26,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/product"
 )
 
 func createRuleLink() (u *url.URL) {
@@ -280,7 +281,7 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 				FormattedMessage:    formattedMessage,
 				IssueType:           snyk.CodeSecurityVulnerability, // FIXME: This is incorrect, we need to differentiate (see https://snyksec.atlassian.net/browse/ROAD-1161)
 				AffectedFilePath:    path,
-				Product:             snyk.ProductCode,
+				Product:             product.ProductCode,
 				IssueDescriptionURL: ruleLink,
 				References:          rule.getReferences(),
 				Commands:            getCommands(dataflow),

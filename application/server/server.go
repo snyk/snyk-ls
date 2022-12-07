@@ -91,9 +91,27 @@ func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 	(*handlers)["shutdown"] = Shutdown()
 	(*handlers)["exit"] = Exit(srv)
 	(*handlers)["workspace/didChangeWorkspaceFolders"] = WorkspaceDidChangeWorkspaceFoldersHandler(srv)
+	(*handlers)["workspace/willDeleteFiles"] = WorkspaceWillDeleteFilesHandler()
 	(*handlers)["workspace/didChangeConfiguration"] = WorkspaceDidChangeConfiguration(srv)
 	(*handlers)["window/workDoneProgress/cancel"] = WindowWorkDoneProgressCancelHandler()
 	(*handlers)["workspace/executeCommand"] = ExecuteCommandHandler(srv)
+}
+
+// WorkspaceWillDeleteFilesHandler handles the workspace/willDeleteFiles message that's raised by the client
+// when files are deleted
+func WorkspaceWillDeleteFilesHandler() jrpc2.Handler {
+	return handler.New(func(ctx context.Context, params lsp.DeleteFilesParams) (interface{}, error) {
+		ws := workspace.Get()
+		for _, file := range params.Files {
+			path := uri.PathFromUri(file.Uri)
+
+			// Instead of branching whether it's a file or a folder, we'll attempt to remove both and the redundant case
+			// will be a no-op
+			ws.RemoveFolder(path)
+			ws.DeleteFile(path)
+		}
+		return nil, nil
+	})
 }
 
 func navigateToLocation(srv *jrpc2.Server, args []interface{}) {
@@ -163,7 +181,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
 		method := "InitializeHandler"
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
-		InitializeSettings(ctx, params.InitializationOptions)
+		InitializeSettings(params.InitializationOptions)
 		config.CurrentConfig().SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
 		di.Analytics().Initialise()
@@ -186,7 +204,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 
 		addWorkspaceFolders(params, w)
 
-		return lsp.InitializeResult{
+		result := lsp.InitializeResult{
 			ServerInfo: lsp.ServerInfo{
 				Name:    "snyk-ls",
 				Version: config.LsProtocolVersion,
@@ -204,7 +222,19 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 					WorkspaceFolders: &lsp.WorkspaceFoldersServerCapabilities{
 						Supported:           true,
 						ChangeNotifications: "snyk-ls",
-					}},
+					},
+					FileOperations: &lsp.FileOperationsServerCapabilities{
+						WillDelete: lsp.FileOperationRegistrationOptions{
+							Filters: []lsp.FileOperationFilter{
+								{
+									Pattern: lsp.FileOperationPattern{
+										Glob: "**",
+									},
+								},
+							},
+						},
+					},
+				},
 				HoverProvider:      true,
 				CodeActionProvider: true,
 				CodeLensProvider:   &sglsp.CodeLensOptions{ResolveProvider: false},
@@ -220,7 +250,8 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 					},
 				},
 			},
-		}, nil
+		}
+		return result, nil
 	})
 }
 func InitializedHandler(srv *jrpc2.Server) handler.Func {
@@ -349,7 +380,7 @@ func TextDocumentDidSaveHandler() jrpc2.Handler {
 		// todo can we push cache management down?
 		f := workspace.Get().GetFolderContaining(filePath)
 		if f != nil {
-			f.ClearDiagnosticsCache(filePath)
+			f.ClearDiagnosticsFromFile(filePath)
 			di.HoverService().DeleteHover(params.TextDocument.URI)
 			go f.ScanFile(bgCtx, filePath)
 		} else {

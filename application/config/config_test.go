@@ -23,6 +23,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/application/server/lsp"
 )
 
 func TestSetToken(t *testing.T) {
@@ -45,6 +47,7 @@ func TestConfigDefaults(t *testing.T) {
 	assert.True(t, c.IsSnykIacEnabled(), "Snyk IaC should be enabled by default")
 	assert.Equal(t, "", c.LogPath(), "Logpath should be empty by default")
 	assert.Equal(t, "md", c.Format(), "Output format should be md by default")
+	assert.Equal(t, lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true}, c.FilterSeverity(), "All severities should be enabled by default")
 	assert.Empty(t, c.trustedFolders)
 }
 

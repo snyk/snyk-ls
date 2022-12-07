@@ -151,10 +151,11 @@ func Test_UpdateSettings(t *testing.T) {
 			ManageBinariesAutomatically: "false",
 			CliPath:                     "C:\\Users\\CliPath\\snyk-ls.exe",
 			Token:                       "a fancy token",
+			FilterSeverity:              lsp.SeverityFilter{Low: true, Medium: true, High: true, Critical: true},
 			TrustedFolders:              []string{"trustedPath1", "trustedPath2"},
 		}
 
-		UpdateSettings(context.Background(), settings)
+		UpdateSettings(settings)
 
 		c := config.CurrentConfig()
 		assert.Equal(t, false, c.IsSnykCodeEnabled())
@@ -172,6 +173,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.False(t, c.ManageBinariesAutomatically())
 		assert.Equal(t, "C:\\Users\\CliPath\\snyk-ls.exe", c.CliSettings().Path())
 		assert.Equal(t, "a fancy token", c.Token())
+		assert.Equal(t, lsp.SeverityFilter{Low: true, Medium: true, High: true, Critical: true}, c.FilterSeverity())
 		assert.Contains(t, c.TrustedFolders(), "trustedPath1")
 		assert.Contains(t, c.TrustedFolders(), "trustedPath2")
 	})
@@ -179,7 +181,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("blank organisation is ignored", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.Settings{Organization: " "})
+		UpdateSettings(lsp.Settings{Organization: " "})
 
 		c := config.CurrentConfig()
 		assert.Equal(t, "", c.GetOrganization())
@@ -188,7 +190,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("incomplete env vars", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.Settings{AdditionalEnv: "a="})
+		UpdateSettings(lsp.Settings{AdditionalEnv: "a="})
 
 		assert.Empty(t, os.Getenv("a"))
 	})
@@ -196,7 +198,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("empty env vars", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.Settings{AdditionalEnv: " "})
+		UpdateSettings(lsp.Settings{AdditionalEnv: " "})
 
 		assert.Empty(t, os.Getenv("a"))
 	})
@@ -204,7 +206,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("broken env variables", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.Settings{AdditionalEnv: "a=; b"})
+		UpdateSettings(lsp.Settings{AdditionalEnv: "a=; b"})
 
 		c := config.CurrentConfig()
 		assert.Equal(t, "", c.GetOrganization())
@@ -215,7 +217,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("trusted folders", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.Settings{TrustedFolders: []string{"/a/b", "/b/c"}})
+		UpdateSettings(lsp.Settings{TrustedFolders: []string{"/a/b", "/b/c"}})
 
 		c := config.CurrentConfig()
 		assert.Contains(t, c.TrustedFolders(), "/a/b")
@@ -224,25 +226,26 @@ func Test_UpdateSettings(t *testing.T) {
 
 	t.Run("manage binaries automatically", func(t *testing.T) {
 		t.Run("true", func(t *testing.T) {
-			UpdateSettings(context.Background(), lsp.Settings{
+			UpdateSettings(lsp.Settings{
 				ManageBinariesAutomatically: "true",
 			})
 
 			assert.True(t, config.CurrentConfig().ManageBinariesAutomatically())
 		})
 		t.Run("false", func(t *testing.T) {
-			UpdateSettings(context.Background(), lsp.Settings{
+			UpdateSettings(lsp.Settings{
 				ManageBinariesAutomatically: "false",
 			})
 
 			assert.False(t, config.CurrentConfig().ManageBinariesAutomatically())
 		})
+
 		t.Run("invalid value does not update", func(t *testing.T) {
-			UpdateSettings(context.Background(), lsp.Settings{
+			UpdateSettings(lsp.Settings{
 				ManageBinariesAutomatically: "true",
 			})
 
-			UpdateSettings(context.Background(), lsp.Settings{
+			UpdateSettings(lsp.Settings{
 				ManageBinariesAutomatically: "dog",
 			})
 
@@ -253,7 +256,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("activateSnykCodeSecurity is passed", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.Settings{ActivateSnykCodeSecurity: "true"})
+		UpdateSettings(lsp.Settings{ActivateSnykCodeSecurity: "true"})
 
 		c := config.CurrentConfig()
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
@@ -261,7 +264,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("activateSnykCodeSecurity is not passed", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.Settings{})
+		UpdateSettings(lsp.Settings{})
 
 		c := config.CurrentConfig()
 		assert.Equal(t, false, c.IsSnykCodeSecurityEnabled())
@@ -270,14 +273,14 @@ func Test_UpdateSettings(t *testing.T) {
 		c = config.CurrentConfig()
 		c.EnableSnykCodeSecurity(true)
 
-		UpdateSettings(context.Background(), lsp.Settings{})
+		UpdateSettings(lsp.Settings{})
 
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 	})
 	t.Run("activateSnykCodeQuality is passed", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.Settings{ActivateSnykCodeQuality: "true"})
+		UpdateSettings(lsp.Settings{ActivateSnykCodeQuality: "true"})
 
 		c := config.CurrentConfig()
 		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
@@ -285,7 +288,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("activateSnykCodeQuality is not passed", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.Settings{})
+		UpdateSettings(lsp.Settings{})
 
 		c := config.CurrentConfig()
 		assert.Equal(t, false, c.IsSnykCodeQualityEnabled())
@@ -294,14 +297,14 @@ func Test_UpdateSettings(t *testing.T) {
 		c = config.CurrentConfig()
 		c.EnableSnykCodeQuality(true)
 
-		UpdateSettings(context.Background(), lsp.Settings{})
+		UpdateSettings(lsp.Settings{})
 
 		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
 	})
 	t.Run("activateSnykCode sets SnykCodeQuality and SnykCodeSecurity", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		UpdateSettings(context.Background(), lsp.Settings{
+		UpdateSettings(lsp.Settings{
 			ActivateSnykCode: "true",
 		})
 
@@ -311,6 +314,17 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, true, c.IsSnykCodeEnabled())
 	})
 
+
+	t.Run("severity filter", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+		t.Run("filtering gets passed", func(t *testing.T) {
+			mixedSeverityFilter := lsp.SeverityFilter{Low: true, Medium: false, High: true, Critical: false}
+			UpdateSettings(lsp.Settings{FilterSeverity: mixedSeverityFilter})
+
+			c := config.CurrentConfig()
+			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
+		})
+	})
 }
 
 func Test_InitializeSettings(t *testing.T) {
@@ -321,7 +335,7 @@ func Test_InitializeSettings(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 		deviceId := "test-device-id"
 
-		InitializeSettings(context.Background(), lsp.Settings{DeviceId: deviceId})
+		InitializeSettings(lsp.Settings{DeviceId: deviceId})
 
 		c := config.CurrentConfig()
 		assert.Equal(t, deviceId, c.DeviceID())
@@ -331,7 +345,7 @@ func Test_InitializeSettings(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 		curentDeviceId := config.CurrentConfig().DeviceID()
 
-		InitializeSettings(context.Background(), lsp.Settings{})
+		InitializeSettings(lsp.Settings{})
 
 		c := config.CurrentConfig()
 		assert.Equal(t, curentDeviceId, c.DeviceID())

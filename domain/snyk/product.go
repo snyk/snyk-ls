@@ -18,6 +18,8 @@ package snyk
 
 import (
 	"context"
+
+	"github.com/snyk/snyk-ls/internal/product"
 )
 
 // type Filepath string
@@ -36,13 +38,5 @@ type ProductScanner interface {
 	) (issues []Issue)
 
 	IsEnabled() bool
-	Product() Product
+	Product() product.Product
 }
-type Product string
-type ProductAttributes map[string]interface{}
-
-const (
-	ProductCode                 Product = "Snyk Code"
-	ProductOpenSource           Product = "Snyk Open Source"
-	ProductInfrastructureAsCode Product = "Snyk IaC"
-)

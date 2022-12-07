@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/puzpuzpuz/xsync"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -29,22 +30,15 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-func TestAddBundleHashToWorkspaceFolder(t *testing.T) {
-	testutil.UnitTest(t)
-	f := NewFolder(".", "Test", snyk.NewTestScanner(), hover.NewFakeHoverService())
-	key := "bundleHash"
-	value := "testHash"
-
-	f.AddProductAttribute(snyk.ProductCode, key, value)
-
-	assert.Equal(t, value, f.GetProductAttribute(snyk.ProductCode, key))
-}
-
 func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
+	testutil.UnitTest(t)
+
 	filePath, folderPath := code.FakeDiagnosticPath(t)
 	scannerRecorder := snyk.NewTestScanner()
 	scannerRecorder.Issues = []snyk.Issue{{AffectedFilePath: filePath}}
@@ -72,7 +66,17 @@ func Test_Scan_WhenCachedResultsButNoIssues_shouldNotReScan(t *testing.T) {
 	assert.Equal(t, 1, scannerRecorder.Calls())
 }
 
-func Test_ProcessResults_SendsDiagnosticsAndHovers(t *testing.T) {
+func Test_Scan_WhenNoIssues_shouldNotProcessResults(t *testing.T) {
+	hoverRecorder := hover.NewFakeHoverService()
+	testutil.UnitTest(t)
+	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hoverRecorder)
+
+	f.processResults([]snyk.Issue{})
+
+	assert.Equal(t, 0, hoverRecorder.Calls())
+}
+
+func TestProcessResults_SendsDiagnosticsAndHovers(t *testing.T) {
 	t.Skipf("test this once we have uniform abstractions for hover & diagnostics")
 	testutil.UnitTest(t)
 	hoverService := hover.NewFakeHoverService()
@@ -96,11 +100,11 @@ func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 		{ID: "id2", AffectedFilePath: "path2"},
 	})
 
-	assert.Equal(t, 2, f.documentDiagnosticCache.Length())
-	assert.NotNil(t, f.documentDiagnosticCache.Get("path1"))
-	assert.NotNil(t, f.documentDiagnosticCache.Get("path2"))
-	assert.Len(t, f.documentDiagnosticCache.Get("path1"), 1)
-	assert.Len(t, f.documentDiagnosticCache.Get("path2"), 1)
+	assert.Equal(t, 2, f.documentDiagnosticCache.Size())
+	assert.NotNil(t, GetValueFromMap(f.documentDiagnosticCache, "path1"))
+	assert.NotNil(t, GetValueFromMap(f.documentDiagnosticCache, "path2"))
+	assert.Len(t, GetValueFromMap(f.documentDiagnosticCache, "path1"), 1)
+	assert.Len(t, GetValueFromMap(f.documentDiagnosticCache, "path2"), 1)
 }
 
 func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
@@ -112,14 +116,14 @@ func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 		{ID: "id2", AffectedFilePath: "path1"},
 	})
 
-	assert.Equal(t, 1, f.documentDiagnosticCache.Length())
-	assert.NotNil(t, f.documentDiagnosticCache.Get("path1"))
-	assert.Len(t, f.documentDiagnosticCache.Get("path1"), 2)
+	assert.Equal(t, 1, f.documentDiagnosticCache.Size())
+	assert.NotNil(t, GetValueFromMap(f.documentDiagnosticCache, "path1"))
+	assert.Len(t, GetValueFromMap(f.documentDiagnosticCache, "path1"), 2)
 }
 
 func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 	testutil.UnitTest(t)
-	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
+	f := GetMockFolder()
 
 	f.processResults([]snyk.Issue{
 		{ID: "id1", AffectedFilePath: "path1"},
@@ -127,15 +131,15 @@ func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 	})
 	f.processResults([]snyk.Issue{{ID: "id3", AffectedFilePath: "path3"}})
 
-	assert.Equal(t, 3, f.documentDiagnosticCache.Length())
-	assert.NotNil(t, f.documentDiagnosticCache.Get("path1"))
-	assert.NotNil(t, f.documentDiagnosticCache.Get("path2"))
-	assert.NotNil(t, f.documentDiagnosticCache.Get("path3"))
+	assert.Equal(t, 3, f.documentDiagnosticCache.Size())
+	assert.NotNil(t, GetValueFromMap(f.documentDiagnosticCache, "path1"))
+	assert.NotNil(t, GetValueFromMap(f.documentDiagnosticCache, "path2"))
+	assert.NotNil(t, GetValueFromMap(f.documentDiagnosticCache, "path3"))
 }
 
 func Test_ProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 	testutil.UnitTest(t)
-	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
+	f := GetMockFolder()
 
 	f.processResults([]snyk.Issue{
 		{ID: "id1", AffectedFilePath: "path1"},
@@ -143,14 +147,14 @@ func Test_ProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 	})
 	f.processResults([]snyk.Issue{{ID: "id3", AffectedFilePath: "path1"}})
 
-	assert.Equal(t, 1, f.documentDiagnosticCache.Length())
-	assert.NotNil(t, f.documentDiagnosticCache.Get("path1"))
-	assert.Len(t, f.documentDiagnosticCache.Get("path1"), 3)
+	assert.Equal(t, 1, f.documentDiagnosticCache.Size())
+	assert.NotNil(t, GetValueFromMap(f.documentDiagnosticCache, "path1"))
+	assert.Len(t, GetValueFromMap(f.documentDiagnosticCache, "path1"), 3)
 }
 
 func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing.T) {
 	testutil.UnitTest(t)
-	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
+	f := GetMockFolder()
 
 	f.processResults([]snyk.Issue{
 		{ID: "id1", AffectedFilePath: "path1"},
@@ -161,14 +165,65 @@ func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing
 		{ID: "id3", AffectedFilePath: "path1"},
 	})
 
-	assert.Equal(t, 1, f.documentDiagnosticCache.Length())
-	assert.NotNil(t, f.documentDiagnosticCache.Get("path1"))
-	assert.Len(t, f.documentDiagnosticCache.Get("path1"), 3)
+	assert.Equal(t, 1, f.documentDiagnosticCache.Size())
+	assert.NotNil(t, GetValueFromMap(f.documentDiagnosticCache, "path1"))
+	assert.Len(t, GetValueFromMap(f.documentDiagnosticCache, "path1"), 3)
+}
+
+func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *testing.T) {
+	testutil.UnitTest(t)
+
+	t.Run("Set severity settings", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+		config.CurrentConfig().SetSeverityFilter(lsp.SeverityFilter{
+			Critical: true,
+			High:     false,
+			Medium:   true,
+			Low:      false,
+		})
+	})
+
+	f := GetMockFolder()
+
+	f.processResults([]snyk.Issue{
+		{ID: "id1", AffectedFilePath: "path1", Severity: snyk.Critical},
+		{ID: "id2", AffectedFilePath: "path1", Severity: snyk.High},
+		{ID: "id3", AffectedFilePath: "path1", Severity: snyk.Medium},
+		{ID: "id4", AffectedFilePath: "path1", Severity: snyk.Low},
+		{ID: "id5", AffectedFilePath: "path1", Severity: snyk.Critical},
+	})
+
+	mtx := &sync.Mutex{}
+	var diagnostics []lsp.Diagnostic
+
+	defer notification.DisposeListener()
+	notification.CreateListener(func(event interface{}) {
+		switch params := event.(type) {
+		case lsp.PublishDiagnosticsParams:
+			mtx.Lock()
+			defer mtx.Unlock()
+			diagnostics = params.Diagnostics
+		}
+	})
+
+	assert.Eventually(
+		t,
+		func() bool {
+			mtx.Lock()
+			defer mtx.Unlock()
+
+			hasCorrectIssues := diagnostics[0].Code == "id1" && diagnostics[1].Code == "id3" && diagnostics[2].Code == "id5"
+			return hasCorrectIssues
+		},
+		1*time.Second,
+		10*time.Millisecond,
+		"Expected to receive only critical issues",
+	)
 }
 
 func Test_ClearDiagnostics(t *testing.T) {
 	testutil.UnitTest(t)
-	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
+	f := GetMockFolder()
 
 	f.processResults([]snyk.Issue{
 		{ID: "id1", AffectedFilePath: "path1"},
@@ -176,6 +231,8 @@ func Test_ClearDiagnostics(t *testing.T) {
 	})
 	mtx := &sync.Mutex{}
 	clearDiagnosticNotifications := 0
+
+	defer notification.DisposeListener()
 	notification.CreateListener(func(event interface{}) {
 		switch params := event.(type) {
 		case lsp.PublishDiagnosticsParams:
@@ -189,7 +246,7 @@ func Test_ClearDiagnostics(t *testing.T) {
 
 	f.ClearDiagnostics()
 
-	assert.Equal(t, 0, f.documentDiagnosticCache.Length())
+	assert.Equal(t, 0, f.documentDiagnosticCache.Size())
 	assert.Eventually(
 		t,
 		func() bool {
@@ -200,6 +257,7 @@ func Test_ClearDiagnostics(t *testing.T) {
 		1*time.Second,
 		10*time.Millisecond,
 	)
+	notification.DisposeListener()
 }
 
 func Test_IsTrusted_shouldReturnFalseByDefault(t *testing.T) {
@@ -247,4 +305,51 @@ func Test_IsTrusted_shouldReturnTrueIfTrustFeatureDisabled(t *testing.T) {
 	testutil.UnitTest(t) // disables trust feature
 	f := NewFolder("c:\\dummy\\dummyF", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
 	assert.True(t, f.IsTrusted())
+}
+
+func Test_ClearDiagnosticsByProduct(t *testing.T) {
+	// Arrange
+	testutil.UnitTest(t)
+	f := GetMockFolder()
+	const filePath = "path1"
+	mockCodeIssue := GetMockIssue("id1", filePath)
+	mockCodeIssue.Product = product.ProductCode
+	mockIacIssue := GetMockIssue("id2", filePath)
+	mockIacIssue.Product = product.ProductInfrastructureAsCode
+	f.processResults([]snyk.Issue{
+		mockIacIssue,
+		mockCodeIssue,
+	})
+	const expectedIssuesCountAfterRemoval = 1
+
+	// Act
+	f.ClearDiagnosticsByProduct(product.ProductCode)
+
+	// Assert
+	issues := f.AllIssuesFor(filePath)
+	t.Run("Does not return diagnostics of that type", func(t *testing.T) {
+		for _, issue := range issues {
+			assert.NotEqual(t, product.ProductCode, issue.Product)
+		}
+	})
+
+	t.Run("Return diagnostics of other types", func(t *testing.T) {
+		assert.Len(t, issues, expectedIssuesCountAfterRemoval)
+	})
+}
+
+func GetMockFolder() *Folder {
+	return NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
+}
+
+func GetMockIssue(id, path string) snyk.Issue {
+	return snyk.Issue{
+		ID:               id,
+		AffectedFilePath: path,
+	}
+}
+
+func GetValueFromMap(m *xsync.MapOf[string, []snyk.Issue], key string) []snyk.Issue {
+	value, _ := m.Load(key)
+	return value
 }

@@ -28,6 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -68,10 +69,24 @@ func Set(w *Workspace) {
 	instance = w
 }
 
-func (w *Workspace) RemoveFolder(folder string) {
+func (w *Workspace) RemoveFolder(folderPath string) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
-	delete(w.folders, folder)
+	folder := w.GetFolderContaining(folderPath)
+	if folder == nil {
+		return
+	}
+	folder.ClearDiagnosticsFromPathRecursively(folderPath)
+	delete(w.folders, folderPath)
+}
+
+func (w *Workspace) DeleteFile(filePath string) {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	folder := w.GetFolderContaining(filePath)
+	if folder != nil {
+		folder.ClearDiagnosticsFromFile(filePath)
+	}
 }
 
 func (w *Workspace) AddFolder(f *Folder) {
@@ -144,4 +159,10 @@ func (w *Workspace) GetFolderTrust() (trusted []*Folder, untrusted []*Folder) {
 		}
 	}
 	return trusted, untrusted
+}
+
+func (w *Workspace) ClearIssuesByProduct(product product.Product) {
+	for _, folder := range w.folders {
+		folder.ClearDiagnosticsByProduct(product)
+	}
 }

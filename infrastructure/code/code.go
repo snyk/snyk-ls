@@ -38,6 +38,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/float"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -96,8 +97,8 @@ func (sc *Scanner) IsEnabled() bool {
 		currentConfig().IsSnykCodeSecurityEnabled()
 }
 
-func (sc *Scanner) Product() snyk.Product {
-	return snyk.ProductCode
+func (sc *Scanner) Product() product.Product {
+	return product.ProductCode
 }
 
 func (sc *Scanner) SupportedCommands() []snyk.CommandName {
