@@ -134,7 +134,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
   "activateSnykIac":  "true", // Enables Infrastructure as Code - defaults to true
   "insecure": "false", // Allows custom CAs (Certification Authorities)
   "endpoint":  "https://example.com", // Snyk API Endpoint required for non-default multi-tenant and single-tenant setups
-  "additionalParams": "--all-projects", // Any extra params for the Snyk CLI, separated by spaces
+  "additionalParams": "--all-projects", // Any extra params for Open Source scans using the Snyk CLI, separated by spaces
   "additionalEnv":  "MAVEN_OPTS=-Djava.awt.headless=true;FOO=BAR", // Additional environment variables, separated by semicolons
   "path": "/usr/local/bin", // Adds to the system path used by the CLI
   "sendErrorReports":  "true", // Whether or not to report errors to Snyk - defaults to true
