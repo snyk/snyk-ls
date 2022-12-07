@@ -31,30 +31,12 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	testutil.UnitTest(t)
 	config.CurrentConfig().SetOrganization("test-org")
 	settings := config.CliSettings{
-		Insecure:             true,
-		AdditionalParameters: []string{"--all-projects", "-d"},
+		Insecure: true,
 	}
 	config.CurrentConfig().SetCliSettings(&settings)
 	var cmd = []string{"a", "b"}
 	cmd = SnykCli{}.ExpandParametersFromConfig(cmd)
 	assert.Contains(t, cmd, "--insecure")
-	assert.Contains(t, cmd, "--all-projects")
-	assert.Contains(t, cmd, "-d")
-}
-
-func Test_ExpandParametersFromConfigNoAllProjectsForIac(t *testing.T) {
-	testutil.UnitTest(t)
-	config.CurrentConfig().SetOrganization("test-org")
-	settings := config.CliSettings{
-		Insecure:             true,
-		AdditionalParameters: []string{"--all-projects", "-d"},
-	}
-	config.CurrentConfig().SetCliSettings(&settings)
-	var cmd = []string{"a", "iac"}
-	cmd = SnykCli{}.ExpandParametersFromConfig(cmd)
-	assert.Contains(t, cmd, "--insecure")
-	assert.NotContains(t, cmd, "--all-projects")
-	assert.Contains(t, cmd, "-d")
 }
 
 func TestGetCommand_AddsToEnvironmentAndSetsDir(t *testing.T) {

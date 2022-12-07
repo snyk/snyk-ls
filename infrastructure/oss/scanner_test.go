@@ -252,3 +252,16 @@ func sampleIssue() ossIssue {
 		From:           []string{"goof@1.0.1", "lodash@4.17.4"},
 	}
 }
+
+func Test_prepareScanCommand_ExpandsAdditionalParameters(t *testing.T) {
+	testutil.UnitTest(t)
+	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
+
+	settings := config.CliSettings{
+		AdditionalOssParameters: []string{"--all-projects", "-d"},
+	}
+	config.CurrentConfig().SetCliSettings(&settings)
+	cmd := scanner.prepareScanCommand("a")
+	assert.Contains(t, cmd, "--all-projects")
+	assert.Contains(t, cmd, "-d")
+}

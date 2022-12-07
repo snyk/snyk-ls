@@ -110,22 +110,13 @@ func (c SnykCli) getCommand(cmd []string, workingDir string, ctx context.Context
 
 // todo no need to export that, we could have a simpler interface that looks more like an actual CLI
 func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
-	var additionalParams = base
+	var expandedParams = base
 	settings := config.CurrentConfig().CliSettings()
 	if settings.Insecure {
-		additionalParams = append(additionalParams, "--insecure")
+		expandedParams = append(expandedParams, "--insecure")
 	}
 
-	if len(settings.AdditionalParameters) > 0 {
-		for _, parameter := range settings.AdditionalParameters {
-			if base[1] == "iac" && parameter == "--all-projects" || parameter == "" {
-				continue
-			}
-			additionalParams = append(additionalParams, parameter)
-		}
-	}
-
-	return additionalParams
+	return expandedParams
 }
 
 func (c SnykCli) HandleErrors(ctx context.Context, output string) (fail bool) {

@@ -230,7 +230,7 @@ func updateCliConfig(settings lsp.Settings) {
 	if err != nil {
 		log.Warn().Err(err).Msg("couldn't parse insecure setting")
 	}
-	cliSettings.AdditionalParameters = strings.Split(settings.AdditionalParams, " ")
+	cliSettings.AdditionalOssParameters = strings.Split(settings.AdditionalParams, " ")
 	cliSettings.SetPath(settings.CliPath)
 
 	config.CurrentConfig().SetCliSettings(cliSettings)
