@@ -47,7 +47,7 @@ func TestConfigDefaults(t *testing.T) {
 	assert.True(t, c.IsSnykIacEnabled(), "Snyk IaC should be enabled by default")
 	assert.Equal(t, "", c.LogPath(), "Logpath should be empty by default")
 	assert.Equal(t, "md", c.Format(), "Output format should be md by default")
-	assert.Equal(t, lsp.SeverityFilter{Critical: true, High: true, Medium: true, Low: true}, c.FilterSeverity(), "All severities should be enabled by default")
+	assert.Equal(t, lsp.DefaultSeverityFilter(), c.FilterSeverity(), "All severities should be enabled by default")
 	assert.Empty(t, c.trustedFolders)
 }
 
@@ -167,5 +167,24 @@ func TestSnykCodeApi(t *testing.T) {
 		t.Setenv("DEEPROXY_API_URL", customDeeproxyUrl)
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint("")
 		assert.Equal(t, customDeeproxyUrl, codeApiEndpoint)
+	})
+}
+
+func Test_SetSeverityFilter(t *testing.T) {
+	t.Run("Saves filter", func(t *testing.T) {
+		c := New()
+		c.SetSeverityFilter(lsp.NewSeverityFilter(true, true, false, false))
+		assert.Equal(t, lsp.NewSeverityFilter(true, true, false, false), c.FilterSeverity())
+	})
+
+	t.Run("Returns correctly", func(t *testing.T) {
+		c := New()
+		lowExcludedFilter := lsp.NewSeverityFilter(true, true, false, false)
+
+		modified := c.SetSeverityFilter(lowExcludedFilter)
+		assert.True(t, modified)
+
+		modified = c.SetSeverityFilter(lowExcludedFilter)
+		assert.False(t, modified)
 	})
 }

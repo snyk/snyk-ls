@@ -62,7 +62,7 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	assert.Equal(t, false, c.IsSnykOssEnabled())
 	assert.Equal(t, false, c.IsSnykIacEnabled())
 	assert.Equal(t, true, c.CliSettings().Insecure)
-	assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalParameters)
+	assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalOssParameters)
 	assert.Equal(t, params.Settings.Endpoint, c.SnykApi())
 	assert.Equal(t, "b", os.Getenv("a"))
 	assert.Equal(t, "d", os.Getenv("c"))
@@ -107,7 +107,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	assert.Equal(t, false, c.IsSnykOssEnabled())
 	assert.Equal(t, false, c.IsSnykIacEnabled())
 	assert.Equal(t, true, c.CliSettings().Insecure)
-	assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalParameters)
+	assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalOssParameters)
 	assert.Equal(t, "asd", c.SnykApi())
 	assert.True(t, config.CurrentConfig().IsErrorReportingEnabled())
 	assert.Equal(t, "token", config.CurrentConfig().Token())
@@ -151,7 +151,7 @@ func Test_UpdateSettings(t *testing.T) {
 			ManageBinariesAutomatically: "false",
 			CliPath:                     "C:\\Users\\CliPath\\snyk-ls.exe",
 			Token:                       "a fancy token",
-			FilterSeverity:              lsp.SeverityFilter{Low: true, Medium: true, High: true, Critical: true},
+			FilterSeverity:              lsp.DefaultSeverityFilter(),
 			TrustedFolders:              []string{"trustedPath1", "trustedPath2"},
 		}
 
@@ -162,7 +162,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, false, c.IsSnykOssEnabled())
 		assert.Equal(t, false, c.IsSnykIacEnabled())
 		assert.Equal(t, true, c.CliSettings().Insecure)
-		assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalParameters)
+		assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalOssParameters)
 		assert.Equal(t, "https://snyk.io/api", c.SnykApi())
 		assert.Equal(t, "b", os.Getenv("a"))
 		assert.Equal(t, "d", os.Getenv("c"))
@@ -173,7 +173,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.False(t, c.ManageBinariesAutomatically())
 		assert.Equal(t, "C:\\Users\\CliPath\\snyk-ls.exe", c.CliSettings().Path())
 		assert.Equal(t, "a fancy token", c.Token())
-		assert.Equal(t, lsp.SeverityFilter{Low: true, Medium: true, High: true, Critical: true}, c.FilterSeverity())
+		assert.Equal(t, lsp.DefaultSeverityFilter(), c.FilterSeverity())
 		assert.Contains(t, c.TrustedFolders(), "trustedPath1")
 		assert.Contains(t, c.TrustedFolders(), "trustedPath2")
 	})
@@ -317,7 +317,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("severity filter", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 		t.Run("filtering gets passed", func(t *testing.T) {
-			mixedSeverityFilter := lsp.SeverityFilter{Low: true, Medium: false, High: true, Critical: false}
+			mixedSeverityFilter := lsp.NewSeverityFilter(true, false, true, false)
 			UpdateSettings(lsp.Settings{FilterSeverity: mixedSeverityFilter})
 
 			c := config.CurrentConfig()

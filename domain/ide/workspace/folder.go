@@ -145,16 +145,12 @@ func (f *Folder) DocumentDiagnosticsFromCache(file string) []snyk.Issue {
 }
 
 func (f *Folder) processResults(issues []snyk.Issue) {
-	logger := log.With().Str("method", "processResults").Logger()
-
-	var issuesByFile = map[string][]snyk.Issue{}
 	dedupMap := f.createDedupMap()
 
 	// TODO: perform issue diffing (current <-> newly reported)
 	// Update diagnostic cache
-	cachedIssues := []snyk.Issue{}
 	for _, issue := range issues {
-		cachedIssues, _ = f.documentDiagnosticCache.Load(issue.AffectedFilePath)
+		cachedIssues, _ := f.documentDiagnosticCache.Load(issue.AffectedFilePath)
 		if cachedIssues == nil {
 			cachedIssues = []snyk.Issue{}
 		}
@@ -166,33 +162,54 @@ func (f *Folder) processResults(issues []snyk.Issue) {
 		f.documentDiagnosticCache.Store(issue.AffectedFilePath, cachedIssues)
 	}
 
-	// update issues by file
-	filteredIssues := []snyk.Issue{}
-	severityFilters := config.CurrentConfig().FilterSeverity()
+	// Filter and publish cached diagnostics
+	f.FilterAndPublishCachedDiagnostics()
+}
 
-	logger.Debug().Msgf("Filtering issues by severity: %v", severityFilters)
-	for _, cachedIssue := range cachedIssues {
-		if severityFilters.Critical && cachedIssue.Severity == snyk.Critical {
-			logger.Trace().Msgf("Including critical severity issue: %v", cachedIssue)
-			filteredIssues = append(filteredIssues, cachedIssue)
-		}
-		if severityFilters.High && cachedIssue.Severity == snyk.High {
-			logger.Trace().Msgf("Including high severity issue: %v", cachedIssue)
-			filteredIssues = append(filteredIssues, cachedIssue)
-		}
-		if severityFilters.Medium && cachedIssue.Severity == snyk.Medium {
-			logger.Trace().Msgf("Including medium severity issue: %v", cachedIssue)
-			filteredIssues = append(filteredIssues, cachedIssue)
-		}
-		if severityFilters.Low && cachedIssue.Severity == snyk.Low {
-			logger.Trace().Msgf("Including low severity issue: %v", cachedIssue)
-			filteredIssues = append(filteredIssues, cachedIssue)
-		}
+func (f *Folder) FilterAndPublishCachedDiagnostics() {
+	issuesByFile := f.filterCachedDiagnostics()
+	f.publishDiagnostics(issuesByFile)
+}
 
-		issuesByFile[cachedIssue.AffectedFilePath] = filteredIssues
+func (f *Folder) filterCachedDiagnostics() (fileIssues map[string][]snyk.Issue) {
+	logger := log.With().Str("method", "processResults").Logger()
+
+	var issuesByFile = map[string][]snyk.Issue{}
+	if f.documentDiagnosticCache.Size() == 0 {
+		return issuesByFile
 	}
 
-	f.publishDiagnostics(issuesByFile)
+	logger.Debug().Msgf("Filtering issues by severity: %v", config.CurrentConfig().FilterSeverity())
+
+	f.documentDiagnosticCache.Range(func(filePath string, issues []snyk.Issue) bool {
+		filteredIssues := []snyk.Issue{}
+
+		for _, issue := range issues {
+			if isVisibleSeverity(issue) {
+				logger.Trace().Msgf("Including visible severity issue: %v", issue)
+				filteredIssues = append(filteredIssues, issue)
+			}
+		}
+
+		issuesByFile[filePath] = filteredIssues
+		return true
+	})
+
+	return issuesByFile
+}
+
+func isVisibleSeverity(issue snyk.Issue) bool {
+	switch issue.Severity {
+	case snyk.Critical:
+		return config.CurrentConfig().FilterSeverity().Critical
+	case snyk.High:
+		return config.CurrentConfig().FilterSeverity().High
+	case snyk.Medium:
+		return config.CurrentConfig().FilterSeverity().Medium
+	case snyk.Low:
+		return config.CurrentConfig().FilterSeverity().Low
+	}
+	return false
 }
 
 func (f *Folder) publishDiagnostics(issuesByFile map[string][]snyk.Issue) {

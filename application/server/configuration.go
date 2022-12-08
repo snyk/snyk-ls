@@ -85,11 +85,15 @@ func InitializeSettings(settings lsp.Settings) {
 func UpdateSettings(settings lsp.Settings) {
 	currentConfig := config.CurrentConfig()
 	previouslySupportedProducts := currentConfig.GetSupportedProducts()
-	ws := workspace.Get()
 
 	writeSettings(settings, false)
 
 	// If a product was removed, clear all issues for this product
+	ws := workspace.Get()
+	if ws == nil {
+		return
+	}
+
 	newSupportedProducts := currentConfig.GetSupportedProducts()
 	for product, wasSupported := range previouslySupportedProducts {
 		if wasSupported && !newSupportedProducts[product] {
@@ -246,7 +250,7 @@ func updateCliConfig(settings lsp.Settings) {
 	if err != nil {
 		log.Warn().Err(err).Msg("couldn't parse insecure setting")
 	}
-	cliSettings.AdditionalParameters = strings.Split(settings.AdditionalParams, " ")
+	cliSettings.AdditionalOssParameters = strings.Split(settings.AdditionalParams, " ")
 	cliSettings.SetPath(settings.CliPath)
 
 	config.CurrentConfig().SetCliSettings(cliSettings)
@@ -278,5 +282,16 @@ func updateProductEnablement(settings lsp.Settings) {
 
 func updateSeverityFilter(s lsp.SeverityFilter) {
 	log.Debug().Str("method", "updateSeverityFilter").Msgf("Updating severity filter: %v", s)
-	config.CurrentConfig().SetSeverityFilter(s)
+	modified := config.CurrentConfig().SetSeverityFilter(s)
+
+	if modified {
+		ws := workspace.Get()
+		if ws == nil {
+			return
+		}
+
+		for _, folder := range ws.Folders() {
+			folder.FilterAndPublishCachedDiagnostics()
+		}
+	}
 }

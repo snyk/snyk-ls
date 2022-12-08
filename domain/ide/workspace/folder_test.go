@@ -173,15 +173,9 @@ func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing
 func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *testing.T) {
 	testutil.UnitTest(t)
 
-	t.Run("Set severity settings", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
-		config.CurrentConfig().SetSeverityFilter(lsp.SeverityFilter{
-			Critical: true,
-			High:     false,
-			Medium:   true,
-			Low:      false,
-		})
-	})
+	config.SetCurrentConfig(config.New())
+	severityFilter := lsp.NewSeverityFilter(true, false, true, false)
+	config.CurrentConfig().SetSeverityFilter(severityFilter)
 
 	f := GetMockFolder()
 
@@ -305,6 +299,34 @@ func Test_IsTrusted_shouldReturnTrueIfTrustFeatureDisabled(t *testing.T) {
 	testutil.UnitTest(t) // disables trust feature
 	f := NewFolder("c:\\dummy\\dummyF", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
 	assert.True(t, f.IsTrusted())
+}
+
+func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
+	testutil.UnitTest(t)
+
+	// arrange
+	filePath, folderPath := code.FakeDiagnosticPath(t)
+	scannerRecorder := snyk.NewTestScanner()
+	scannerRecorder.Issues = []snyk.Issue{
+		{AffectedFilePath: filePath, Severity: snyk.Critical},
+		{AffectedFilePath: filePath, Severity: snyk.High},
+		{AffectedFilePath: filePath, Severity: snyk.Medium},
+		{AffectedFilePath: filePath, Severity: snyk.Low},
+	}
+
+	f := NewFolder(folderPath, "Test", scannerRecorder, hover.NewFakeHoverService())
+	ctx := context.Background()
+
+	config.CurrentConfig().SetSeverityFilter(lsp.NewSeverityFilter(true, true, false, false))
+
+	// act
+	f.ScanFile(ctx, filePath)
+	filteredDiagnostics := f.filterCachedDiagnostics()
+
+	// assert
+	assert.Len(t, filteredDiagnostics[filePath], 2)
+	assert.Contains(t, filteredDiagnostics[filePath], snyk.Issue{AffectedFilePath: filePath, Severity: snyk.Critical})
+	assert.Contains(t, filteredDiagnostics[filePath], snyk.Issue{AffectedFilePath: filePath, Severity: snyk.High})
 }
 
 func Test_ClearDiagnosticsByProduct(t *testing.T) {

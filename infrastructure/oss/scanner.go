@@ -173,7 +173,7 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	oss.runningScans[workDir] = newScan
 	oss.mutex.Unlock()
 
-	cmd := oss.cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliSettings().Path(), "test", workDir, "--json"})
+	cmd := oss.prepareScanCommand(workDir)
 	res, err := oss.cli.Execute(ctx, cmd, workDir)
 	noCancellation := ctx.Err() == nil
 	if err != nil {
@@ -194,6 +194,18 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	oss.mutex.Unlock()
 
 	return issues
+}
+
+func (oss *Scanner) prepareScanCommand(workDir string) []string {
+	cmd := oss.cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliSettings().Path(), "test", workDir, "--json"})
+	additionalParams := config.CurrentConfig().CliSettings().AdditionalOssParameters
+	for _, parameter := range additionalParams {
+		if parameter == "" {
+			continue
+		}
+		cmd = append(cmd, parameter)
+	}
+	return cmd
 }
 
 func (oss *Scanner) isSupported(documentURI sglsp.DocumentURI) bool {
