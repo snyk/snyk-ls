@@ -314,7 +314,6 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, true, c.IsSnykCodeEnabled())
 	})
 
-
 	t.Run("severity filter", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 		t.Run("filtering gets passed", func(t *testing.T) {
@@ -354,7 +353,7 @@ func Test_InitializeSettings(t *testing.T) {
 	t.Run("activateSnykCodeSecurity is passed", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		InitializeSettings(context.Background(), lsp.Settings{ActivateSnykCodeSecurity: "true"})
+		InitializeSettings(lsp.Settings{ActivateSnykCodeSecurity: "true"})
 
 		c := config.CurrentConfig()
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
@@ -362,7 +361,7 @@ func Test_InitializeSettings(t *testing.T) {
 	t.Run("activateSnykCodeSecurity is not passed", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		InitializeSettings(context.Background(), lsp.Settings{})
+		InitializeSettings(lsp.Settings{})
 
 		c := config.CurrentConfig()
 		assert.Equal(t, false, c.IsSnykCodeSecurityEnabled())
@@ -371,14 +370,14 @@ func Test_InitializeSettings(t *testing.T) {
 		c = config.CurrentConfig()
 		c.EnableSnykCodeSecurity(true)
 
-		InitializeSettings(context.Background(), lsp.Settings{})
+		InitializeSettings(lsp.Settings{})
 
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 	})
 	t.Run("activateSnykCodeQuality is passed", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		InitializeSettings(context.Background(), lsp.Settings{ActivateSnykCodeQuality: "true"})
+		InitializeSettings(lsp.Settings{ActivateSnykCodeQuality: "true"})
 
 		c := config.CurrentConfig()
 		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
@@ -386,7 +385,7 @@ func Test_InitializeSettings(t *testing.T) {
 	t.Run("activateSnykCodeQuality is not passed", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
-		InitializeSettings(context.Background(), lsp.Settings{})
+		InitializeSettings(lsp.Settings{})
 
 		c := config.CurrentConfig()
 		assert.Equal(t, false, c.IsSnykCodeQualityEnabled())
@@ -395,7 +394,7 @@ func Test_InitializeSettings(t *testing.T) {
 		c = config.CurrentConfig()
 		c.EnableSnykCodeQuality(true)
 
-		InitializeSettings(context.Background(), lsp.Settings{})
+		InitializeSettings(lsp.Settings{})
 
 		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
 	})
