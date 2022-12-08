@@ -146,7 +146,12 @@ func getEnabledAnalysisTypes(productScanners []ProductScanner) (analysisTypes []
 			analysisTypes = append(analysisTypes, ux2.OpenSource)
 		}
 		if ps.Product() == product.ProductCode {
-			analysisTypes = append(analysisTypes, ux2.CodeSecurity)
+			if config.CurrentConfig().IsSnykCodeQualityEnabled() || config.CurrentConfig().IsSnykCodeEnabled() {
+				analysisTypes = append(analysisTypes, ux2.CodeQuality)
+			}
+			if config.CurrentConfig().IsSnykCodeSecurityEnabled() || config.CurrentConfig().IsSnykCodeEnabled() {
+				analysisTypes = append(analysisTypes, ux2.CodeSecurity)
+			}
 		}
 	}
 	return analysisTypes

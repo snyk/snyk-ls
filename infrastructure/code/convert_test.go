@@ -587,7 +587,7 @@ func getSarifResponseJson(filePath string) string {
 }
 
 func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
-	path, issues, _ := setupConversionTests(t)
+	path, issues, _ := setupConversionTests(t, true, true)
 	issueDescriptionURL, _ := url.Parse(codeDescriptionURL)
 	references := referencesForSampleSarifResponse()
 
@@ -621,7 +621,7 @@ func referencesForSampleSarifResponse() []snyk.Reference {
 
 func Test_getFormattedMessage(t *testing.T) {
 	testutil.UnitTest(t)
-	_, _, sarifResponse := setupConversionTests(t)
+	_, _, sarifResponse := setupConversionTests(t, true, true)
 	run := sarifResponse.Sarif.Runs[0]
 	result := run.Results[0]
 
@@ -633,7 +633,7 @@ func Test_getFormattedMessage(t *testing.T) {
 
 func TestGetCodeFlowCommands(t *testing.T) {
 	testutil.UnitTest(t)
-	_, _, sarifResponse := setupConversionTests(t)
+	_, _, sarifResponse := setupConversionTests(t, true, true)
 
 	result := sarifResponse.Sarif.Runs[0].Results[0]
 	flow := result.getCodeFlow()
@@ -641,8 +641,11 @@ func TestGetCodeFlowCommands(t *testing.T) {
 	assert.Equal(t, snyk.NavigateToRangeCommand, flow[0].toCommand().Command)
 }
 
-func setupConversionTests(t *testing.T) (string, []snyk.Issue, SarifResponse) {
+func setupConversionTests(t *testing.T, activateSnykCodeSecurity bool, activateSnykCodeQuality bool) (string, []snyk.Issue, SarifResponse) {
 	testutil.UnitTest(t)
+	c := config.CurrentConfig()
+	c.EnableSnykCodeSecurity(activateSnykCodeSecurity)
+	c.EnableSnykCodeQuality(activateSnykCodeQuality)
 	temp, err := os.MkdirTemp(xdg.DataHome, "conversionTests")
 	if err != nil {
 		t.Fatal(err, "couldn't create directory for conversion tests")
@@ -661,8 +664,10 @@ func setupConversionTests(t *testing.T) (string, []snyk.Issue, SarifResponse) {
 	}
 
 	issues := analysisResponse.toIssues()
-	assert.NotNil(t, issues)
-	assert.Equal(t, 2, len(issues))
+	if activateSnykCodeSecurity {
+		assert.NotNil(t, issues)
+		assert.Equal(t, 2, len(issues))
+	}
 	return path, issues, analysisResponse
 }
 
@@ -735,5 +740,51 @@ func Test_rule_cwe(t *testing.T) {
 			Cwe: []string{},
 		}}
 		assert.NotContains(t, cut.cwe(), "CWE:")
+	})
+}
+
+func Test_SarifResponse_reportDiagnostic(t *testing.T) {
+	t.Run("should report diagnostic when enabled Snyk Code Quality issue", func(t *testing.T) {
+		s := SarifResponse{}
+		c := config.New()
+		c.EnableSnykCodeQuality(true)
+		config.SetCurrentConfig(c)
+		assert.True(t, s.reportDiagnostic(snyk.Issue{IssueType: snyk.CodeQualityIssue}))
+	})
+
+	t.Run("should not report diagnostic when enabled Snyk Code Quality issue", func(t *testing.T) {
+		s := SarifResponse{}
+		c := config.New()
+		c.EnableSnykCodeQuality(false)
+		config.SetCurrentConfig(c)
+		assert.False(t, s.reportDiagnostic(snyk.Issue{IssueType: snyk.CodeQualityIssue}))
+	})
+
+	t.Run("should report diagnostic when enabled Snyk Code Security issue", func(t *testing.T) {
+		s := SarifResponse{}
+		c := config.New()
+		c.EnableSnykCodeSecurity(true)
+		config.SetCurrentConfig(c)
+		assert.True(t, s.reportDiagnostic(snyk.Issue{IssueType: snyk.CodeSecurityVulnerability}))
+	})
+
+	t.Run("should not report diagnostic when enabled Snyk Code Security issue", func(t *testing.T) {
+		s := SarifResponse{}
+		c := config.New()
+		c.EnableSnykCodeQuality(false)
+		config.SetCurrentConfig(c)
+		assert.False(t, s.reportDiagnostic(snyk.Issue{IssueType: snyk.CodeSecurityVulnerability}))
+	})
+}
+
+func Test_SarifResponse_filter_disabled_issues(t *testing.T) {
+	t.Run("should filter out disabled issues - all enabled", func(t *testing.T) {
+		_, issues, _ := setupConversionTests(t, true, true)
+		assert.Equal(t, 2, len(issues))
+	})
+
+	t.Run("should filter out disabled issues - code security disabled", func(t *testing.T) {
+		_, issues, _ := setupConversionTests(t, false, true)
+		assert.Equal(t, 0, len(issues))
 	})
 }

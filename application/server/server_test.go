@@ -70,7 +70,7 @@ func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, string) {
 		TextDocument: sglsp.TextDocumentItem{URI: uri.PathToUri(filePath)},
 	}
 	t.Cleanup(func() {
-		os.RemoveAll(dirPath)
+		_ = os.RemoveAll(dirPath)
 	})
 	return didOpenParams, dirPath
 }
@@ -656,7 +656,9 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(diagnosticUri)},
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		_ = os.RemoveAll(path)
+	}(tempDir)
 	workspace.Get().AddFolder(workspace.NewFolder(tempDir, "Test", di.Scanner(), di.HoverService()))
 
 	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
@@ -755,7 +757,9 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 	di.Init()
 
 	var cloneTargetDir, err = setupCustomTestRepo(repo, commit, t)
-	defer os.RemoveAll(cloneTargetDir)
+	defer func(path string) {
+		_ = os.RemoveAll(path)
+	}(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -831,7 +835,9 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	testutil.IntegTest(t)
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589", t)
-	defer os.RemoveAll(cloneTargetDir)
+	defer func(path string) {
+		_ = os.RemoveAll(path)
+	}(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -894,7 +900,9 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	_, _ = loc.Client.Call(ctx, "initialize", nil)
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589", t)
-	defer os.RemoveAll(cloneTargetDir)
+	defer func(path string) {
+		_ = os.RemoveAll(path)
+	}(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}

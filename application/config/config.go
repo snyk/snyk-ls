@@ -151,6 +151,8 @@ type Config struct {
 	filterSeverity               lsp.SeverityFilter
 	trustedFolders               []string
 	trustedFoldersFeatureEnabled bool
+	activateSnykCodeSecurity     bool
+	activateSnykCodeQuality      bool
 }
 
 func CurrentConfig() *Config {
@@ -243,7 +245,9 @@ func (c *Config) loadFile(fileName string) {
 		log.Info().Str("method", "loadFile").Msg("Couldn't load " + fileName)
 		return
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		_ = file.Close()
+	}(file)
 	env := gotenv.Parse(file)
 	for k, v := range env {
 		_, exists := os.LookupEnv(k)
@@ -344,8 +348,13 @@ func (c *Config) setSnykCodeApi(snykCodeApiUrl string) {
 
 func (c *Config) SetErrorReportingEnabled(enabled bool) { c.isErrorReportingEnabled.Set(enabled) }
 func (c *Config) SetSnykOssEnabled(enabled bool)        { c.isSnykOssEnabled.Set(enabled) }
-func (c *Config) SetSnykCodeEnabled(enabled bool)       { c.isSnykCodeEnabled.Set(enabled) }
-func (c *Config) SetSnykIacEnabled(enabled bool)        { c.isSnykIacEnabled.Set(enabled) }
+func (c *Config) SetSnykCodeEnabled(enabled bool) {
+	c.isSnykCodeEnabled.Set(enabled)
+	// the general setting overrules the specific one and should be slowly discontinued
+	c.EnableSnykCodeQuality(enabled)
+	c.EnableSnykCodeSecurity(enabled)
+}
+func (c *Config) SetSnykIacEnabled(enabled bool) { c.isSnykIacEnabled.Set(enabled) }
 
 func (c *Config) SetSnykContainerEnabled(enabled bool) { c.isSnykContainerEnabled.Set(enabled) }
 
@@ -595,4 +604,20 @@ func (c *Config) GetSupportedProducts() map[product.Product]bool {
 	}
 
 	return supported
+}
+
+func (c *Config) IsSnykCodeSecurityEnabled() bool {
+	return c.activateSnykCodeSecurity
+}
+
+func (c *Config) EnableSnykCodeSecurity(activate bool) {
+	c.activateSnykCodeSecurity = activate
+}
+
+func (c *Config) IsSnykCodeQualityEnabled() bool {
+	return c.activateSnykCodeQuality
+}
+
+func (c *Config) EnableSnykCodeQuality(activate bool) {
+	c.activateSnykCodeQuality = activate
 }

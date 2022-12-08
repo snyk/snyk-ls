@@ -287,6 +287,8 @@ type Settings struct {
 	FilterSeverity              SeverityFilter `json:"filterSeverity,omitempty"`
 	EnableTrustedFoldersFeature string         `json:"enableTrustedFoldersFeature,omitempty"`
 	TrustedFolders              []string       `json:"trustedFolders,omitempty"`
+	ActivateSnykCodeSecurity    string         `json:"activateSnykCodeSecurity,omitempty"`
+	ActivateSnykCodeQuality     string         `json:"activateSnykCodeQuality,omitempty"`
 }
 
 type DidChangeConfigurationParams struct {

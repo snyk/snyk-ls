@@ -91,7 +91,10 @@ func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, repor
 }
 
 func (sc *Scanner) IsEnabled() bool {
-	return config.CurrentConfig().IsSnykCodeEnabled()
+	currentConfig := config.CurrentConfig
+	return currentConfig().IsSnykCodeEnabled() ||
+		currentConfig().IsSnykCodeQualityEnabled() ||
+		currentConfig().IsSnykCodeSecurityEnabled()
 }
 
 func (sc *Scanner) Product() product.Product {

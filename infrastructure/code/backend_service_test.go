@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -97,6 +98,7 @@ func createTestExtendMap() map[string]BundleFile {
 
 func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 	testutil.SmokeTest(t)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
 
 	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 	shardKey := util.Hash([]byte("/"))

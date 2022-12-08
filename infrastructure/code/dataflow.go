@@ -34,7 +34,7 @@ type dataflowElement struct {
 	content   string
 }
 
-func (d dataflowElement) String() string {
+func (d *dataflowElement) String() string {
 	return fmt.Sprintf("pos=%d, filePath=%s, flowRange %s, content=%s", d.position, d.filePath, d.flowRange.String(), d.content)
 }
 
