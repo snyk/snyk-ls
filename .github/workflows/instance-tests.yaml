@@ -24,7 +24,7 @@ jobs:
   instance-tests:
     strategy:
       matrix:
-        environment: [Standard, MT1, MT2]
+        environment: [Standard, MT1, MT2, MT3]
     name: instance tests
     environment: ${{matrix.environment}}
     runs-on: ubuntu-latest
