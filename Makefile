@@ -129,6 +129,14 @@ license-update:
 	@rm -rf licenses
 	@go-licenses save . --save_path="licenses" --ignore "github.com/snyk/snyk-ls"
 
+# Verifies event tracking implementation in source code
+verify-analytics:
+ifeq ($(AMPLITUDE_KEY),)
+	@npx ampli status -u --skip-update-on-default-branch
+else
+	@npx ampli status -u --skip-update-on-default-branch -t $(AMPLITUDE_KEY)
+endif
+
 help: Makefile
 	@echo "Usage: make <command>"
 	@echo ""

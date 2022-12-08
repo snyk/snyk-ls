@@ -21,7 +21,7 @@ func NewSegmentPlugin() *SegmentPlugin {
 
 // Setup is called on plugin installation
 func (plugin *SegmentPlugin) Setup(config amplitude.Config) {
-	client, err := segment.NewWithConfig(getSegmentPublicKey(), segment.Config{Logger: &segmentLogger{}})
+	client, err := segment.NewWithConfig(config.APIKey, segment.Config{Logger: &segmentLogger{}})
 	if err != nil {
 		log.Error().Str("method", "NewSegmentClient").Err(err).Msg("Error creating Segment client")
 	}

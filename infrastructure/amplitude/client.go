@@ -42,7 +42,7 @@ type Client struct {
 type captureEvent func(userId string, eventOptions ...ampli.EventOptions)
 
 func NewAmplitudeClient(snykApiClient snyk_api.SnykApiClient, errorReporter error_reporting.ErrorReporter) ux2.Analytics {
-	ampliConfig := amplitude.NewConfig("")
+	ampliConfig := amplitude.NewConfig(getSegmentPublicKey())
 
 	ampli.Instance.Load(ampli.LoadOptions{
 		Client: ampli.LoadClientOptions{
