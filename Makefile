@@ -50,6 +50,7 @@ endif
 	else \
 		echo "==> Pact CLI is already installed";\
 	fi
+	echo "Please make sure to install NPM locally to be able to run analytics verification Ampli."
 
 ## clean: Delete the build directory
 .PHONY: clean
