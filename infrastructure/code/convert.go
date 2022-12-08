@@ -51,6 +51,23 @@ func (r *rule) getReferences() (references []snyk.Reference) {
 	return references
 }
 
+func (r *rule) getCodeIssueType() snyk.Type {
+	const defaultReturnValue = snyk.CodeSecurityVulnerability
+
+	if len(r.Categories) != 1 {
+		return defaultReturnValue
+	}
+
+	switch strings.ToLower(r.Categories[0]) {
+	case "defect":
+		return snyk.CodeQualityIssue
+	case "security":
+		return snyk.CodeSecurityVulnerability
+	default:
+		return defaultReturnValue
+	}
+}
+
 func (r *rule) cwe() string {
 	count := len(r.Properties.Cwe)
 	if count == 0 {
@@ -279,7 +296,7 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 				Severity:            issueSeverity(result.Level),
 				Message:             message,
 				FormattedMessage:    formattedMessage,
-				IssueType:           snyk.CodeSecurityVulnerability, // FIXME: This is incorrect, we need to differentiate (see https://snyksec.atlassian.net/browse/ROAD-1161)
+				IssueType:           rule.getCodeIssueType(),
 				AffectedFilePath:    path,
 				Product:             product.ProductCode,
 				IssueDescriptionURL: ruleLink,
