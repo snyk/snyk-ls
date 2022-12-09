@@ -176,7 +176,7 @@ func getIdeProperty() ux2.IDE {
 	case string(ux2.JetBrains):
 		return ux2.JetBrains
 	default:
-		return "" // todo: will this pass Amplitude runtime validation?
+		return "Other" // ensure we pass Amplitude validation, when IDE is not in the tracking plan
 	}
 }
 
