@@ -158,7 +158,7 @@ func setupUnitTest(t *testing.T) (*Client, *FakeSegmentClient, *snyk_api.FakeApi
 	fakeApiClient := &snyk_api.FakeApiClient{}
 	s := NewAmplitudeClient(fakeApiClient, error_reporting.NewTestErrorReporter()).(*Client)
 	fakeSegmentClient := &FakeSegmentClient{mutex: &sync.Mutex{}}
-	config.CurrentConfig().SetIntegrationName("Visual Studio Code")
+	config.CurrentConfig().SetIntegrationName("VS Code")
 	s.destination.client = fakeSegmentClient
 	return s, fakeSegmentClient, fakeApiClient
 }
