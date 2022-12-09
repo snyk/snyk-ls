@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ func NewFakeHoverService() *FakeHoverService {
 	}
 }
 
-func (t *FakeHoverService) DeleteHover(documentUri sglsp.DocumentURI) {
+func (t *FakeHoverService) DeleteHover(_ sglsp.DocumentURI) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -50,12 +50,12 @@ func (t *FakeHoverService) ClearAllHovers() {
 	}
 }
 
-func (t *FakeHoverService) GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) Result {
+func (t *FakeHoverService) GetHover(_ sglsp.DocumentURI, pos sglsp.Position) Result {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (t *FakeHoverService) SetAnalytics(analytics ux2.Analytics) {
+func (t *FakeHoverService) SetAnalytics(_ ux2.Analytics) {
 	//TODO implement me
 	panic("implement me")
 }

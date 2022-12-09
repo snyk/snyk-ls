@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ func addUserId() {
 	}
 }
 
-func beforeSend(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
+func beforeSend(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
 	if config.CurrentConfig().IsErrorReportingEnabled() {
 		return event
 	}

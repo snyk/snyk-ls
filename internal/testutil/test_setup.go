@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,6 @@ import (
 	"os"
 	"runtime"
 	"testing"
-
-	"github.com/pact-foundation/pact-go/dsl"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/progress"
@@ -55,7 +53,7 @@ func CLIDownloadLockFileCleanUp(t *testing.T) {
 	// remove lock file before test and after test
 	lockFileName := config.CurrentConfig().CLIDownloadLockFileName()
 	file, _ := os.Open(lockFileName)
-	file.Close()
+	_ = file.Close()
 	_ = os.Remove(lockFileName)
 	t.Cleanup(func() {
 		_ = os.Remove(lockFileName)
@@ -76,20 +74,6 @@ func OnlyOnWindows(t *testing.T, reason string) {
 	runtime.GOOS != "windows" {
 		t.Skipf("Only on windows, because %s", reason)
 	}
-}
-
-func Pact(t *testing.T, pactDir string, provider string) *dsl.Pact {
-	t.Helper()
-	NotOnWindows(t, "we don't have a pact cli")
-	pact := &dsl.Pact{
-		Consumer: "SnykLS",
-		Provider: provider,
-		PactDir:  pactDir,
-	}
-	t.Cleanup(func() {
-		pact.Teardown()
-	})
-	return pact
 }
 
 func CreateDummyProgressListener(t *testing.T) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,13 +30,13 @@ var target = NewSentryErrorReporter()
 
 func TestErrorReporting_CaptureError(t *testing.T) {
 	testutil.UnitTest(t)
-	error := errors.New("test error")
+	e := errors.New("test error")
 
 	config.CurrentConfig().SetErrorReportingEnabled(false)
-	captured := target.CaptureError(error)
+	captured := target.CaptureError(e)
 	assert.False(t, captured)
 
 	config.CurrentConfig().SetErrorReportingEnabled(true)
-	captured = target.CaptureError(error)
+	captured = target.CaptureError(e)
 	assert.True(t, captured)
 }

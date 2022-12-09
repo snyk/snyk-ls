@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -107,7 +107,7 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 	if err != nil {
 		t.Fatal("couldn't create lockfile")
 	}
-	file.Close()
+	_ = file.Close()
 
 	i := NewInstaller(error_reporting.NewTestErrorReporter())
 	_, err = i.installRelease(r)
@@ -173,7 +173,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	}()
 
 	fakeCliFile := testutil.CreateTempFile(cliDir, t)
-	fakeCliFile.Close()
+	_ = fakeCliFile.Close()
 	cliDiscovery := Discovery{}
 	cliFilePath := path.Join(cliDir, cliDiscovery.ExecutableName(false))
 	config.CurrentConfig().CliSettings().SetPath(cliFilePath)
