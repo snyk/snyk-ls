@@ -24,8 +24,8 @@ import (
 	segment "github.com/segmentio/analytics-go"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/ampli"
 	"github.com/snyk/snyk-ls/application/config"
-	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 )
 
 var installEventFile = filepath.Join(config.CurrentConfig().CliSettings().DefaultBinaryInstallPath(), ".installed_event_sent")
@@ -52,7 +52,7 @@ func Test_NewInstallationSendsInstallEvent(t *testing.T) {
 		Event:       "Plugin Is Installed",
 		AnonymousId: config.CurrentConfig().DeviceID(),
 		Properties: segment.Properties{}.
-			Set("ide", ux2.IDE("Visual Studio Code")).
+			Set("ide", ampli.PluginIsInstalledIde("Visual Studio Code")).
 			Set("itly", true),
 	}, fakeSegmentClient.trackedEvents[0])
 }
