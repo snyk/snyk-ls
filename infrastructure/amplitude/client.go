@@ -167,13 +167,13 @@ func getIdeProperty() ux2.IDE {
 	integrationName := strings.Replace(strings.ToLower(config.CurrentConfig().IntegrationName()), "_", " ", -1)
 
 	switch integrationName {
-	case strings.ToLower(string(ux2.Eclipse)):
+	case string(ux2.Eclipse):
 		return ux2.Eclipse
-	case strings.ToLower(string(ux2.VisualStudioCode)):
+	case string("vs code"):
 		return ux2.VisualStudioCode
-	case strings.ToLower(string(ux2.VisualStudio)):
+	case string(ux2.VisualStudio):
 		return ux2.VisualStudio
-	case strings.ToLower(string(ux2.JetBrains)):
+	case string(ux2.JetBrains):
 		return ux2.JetBrains
 	default:
 		return "" // todo: will this pass Amplitude runtime validation?
