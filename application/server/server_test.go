@@ -334,8 +334,8 @@ func Test_initialize_integrationInInitializationOptions_readFromInitializationOp
 
 	// Assert
 	currentConfig := config.CurrentConfig()
-	assert.Equal(t, expectedIntegrationName, currentConfig.IntegrationName())
-	assert.Equal(t, expectedIntegrationVersion, currentConfig.IntegrationVersion())
+	assert.Equal(t, expectedIntegrationName, currentConfig.Environment().IntegrationName)
+	assert.Equal(t, expectedIntegrationVersion, currentConfig.Environment().IntegrationVersion)
 }
 
 func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
@@ -363,8 +363,8 @@ func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
 
 	// Assert
 	currentConfig := config.CurrentConfig()
-	assert.Equal(t, expectedIntegrationName, currentConfig.IntegrationName())
-	assert.Equal(t, expectedIntegrationVersion, currentConfig.IntegrationVersion())
+	assert.Equal(t, expectedIntegrationName, currentConfig.Environment().IntegrationName)
+	assert.Equal(t, expectedIntegrationVersion, currentConfig.Environment().IntegrationVersion)
 }
 
 func Test_initialize_integrationOnlyInEnvVars_readFromEnvVars(t *testing.T) {
@@ -384,8 +384,8 @@ func Test_initialize_integrationOnlyInEnvVars_readFromEnvVars(t *testing.T) {
 
 	// Assert
 	currentConfig := config.CurrentConfig()
-	assert.Equal(t, expectedIntegrationName, currentConfig.IntegrationName())
-	assert.Equal(t, expectedIntegrationVersion, currentConfig.IntegrationVersion())
+	assert.Equal(t, expectedIntegrationName, currentConfig.Environment().IntegrationName)
+	assert.Equal(t, expectedIntegrationVersion, currentConfig.Environment().IntegrationVersion)
 }
 
 func Test_initialize_callsInitializeOnAnalytics(t *testing.T) {

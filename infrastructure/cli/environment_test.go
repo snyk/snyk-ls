@@ -33,8 +33,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		testutil.UnitTest(t)
 		config.CurrentConfig().SetOrganization("testOrg")
 		config.CurrentConfig().UpdateApiEndpoints("https://app.snyk.io/api")
-		config.CurrentConfig().SetIntegrationName(expectedIntegrationName)
-		config.CurrentConfig().SetIntegrationVersion(expectedIntegrationVersion)
+		config.CurrentConfig().SetEnvironment(config.NewEnvironmentConfig(expectedIntegrationName, expectedIntegrationVersion))
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 

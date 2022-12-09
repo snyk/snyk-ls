@@ -120,6 +120,18 @@ func (c *CliSettings) DefaultBinaryInstallPath() string {
 	return lsPath
 }
 
+type EnvironmentConfig struct {
+	IntegrationName    string
+	IntegrationVersion string
+}
+
+func NewEnvironmentConfig(integrationName string, integrationVersion string) *EnvironmentConfig {
+	return &EnvironmentConfig{
+		IntegrationName:    integrationName,
+		IntegrationVersion: integrationVersion,
+	}
+}
+
 type Config struct {
 	configLoaded                 concurrency.AtomicBool
 	cliSettings                  *CliSettings
@@ -144,8 +156,7 @@ type Config struct {
 	m                            sync.Mutex
 	path                         string
 	defaultDirs                  []string
-	integrationName              string
-	integrationVersion           string
+	environment                  *EnvironmentConfig
 	automaticAuthentication      bool
 	tokenChangeChannels          []chan string
 	filterSeverity               lsp.SeverityFilter
@@ -288,8 +299,7 @@ func (c *Config) LogPath() string                        { return c.logPath }
 func (c *Config) SnykApi() string                        { return c.snykApiUrl }
 func (c *Config) SnykCodeApi() string                    { return c.snykCodeApiUrl }
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
-func (c *Config) IntegrationName() string                { return c.integrationName }
-func (c *Config) IntegrationVersion() string             { return c.integrationVersion }
+func (c *Config) Environment() *EnvironmentConfig        { return c.environment }
 func (c *Config) FilterSeverity() lsp.SeverityFilter     { return c.filterSeverity }
 func (c *Config) Token() string {
 	c.m.Lock()
@@ -562,12 +572,8 @@ func (c *Config) addDefaults() {
 	c.determineMavenHome()
 }
 
-func (c *Config) SetIntegrationName(integrationName string) {
-	c.integrationName = integrationName
-}
-
-func (c *Config) SetIntegrationVersion(integrationVersion string) {
-	c.integrationVersion = integrationVersion
+func (c *Config) SetEnvironment(environment *EnvironmentConfig) {
+	c.environment = environment
 }
 
 func (c *Config) TrustedFolders() []string {

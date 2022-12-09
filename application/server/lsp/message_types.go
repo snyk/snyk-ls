@@ -264,29 +264,37 @@ type SeverityFilter struct {
 	Low      bool `json:"low,omitempty"`
 }
 
+type PluginEnvironment struct {
+	OsPlatform     string `json:"osPlatform,omitempty"`
+	OsArch         string `json:"osArch,omitempty"`
+	RuntimeName    string `json:"runtimeName,omitempty"`
+	RuntimeVersion string `json:"runtimeVersion,omitempty"`
+}
+
 // Settings is the struct that is parsed from the InitializationParams.InitializationOptions field
 type Settings struct {
-	ActivateSnykOpenSource      string         `json:"activateSnykOpenSource,omitempty"`
-	ActivateSnykCode            string         `json:"activateSnykCode,omitempty"`
-	ActivateSnykIac             string         `json:"activateSnykIac,omitempty"`
-	Insecure                    string         `json:"insecure,omitempty"`
-	Endpoint                    string         `json:"endpoint,omitempty"`
-	AdditionalParams            string         `json:"additionalParams,omitempty"`
-	AdditionalEnv               string         `json:"additionalEnv,omitempty"`
-	Path                        string         `json:"path,omitempty"`
-	SendErrorReports            string         `json:"sendErrorReports,omitempty"`
-	Organization                string         `json:"organization,omitempty"`
-	EnableTelemetry             string         `json:"enableTelemetry,omitempty"`
-	ManageBinariesAutomatically string         `json:"manageBinariesAutomatically,omitempty"`
-	CliPath                     string         `json:"cliPath,omitempty"`
-	Token                       string         `json:"token,omitempty"`
-	IntegrationName             string         `json:"integrationName,omitempty"`
-	IntegrationVersion          string         `json:"integrationVersion,omitempty"`
-	AutomaticAuthentication     string         `json:"automaticAuthentication,omitempty"`
-	DeviceId                    string         `json:"deviceId,omitempty"`
-	FilterSeverity              SeverityFilter `json:"filterSeverity,omitempty"`
-	EnableTrustedFoldersFeature string         `json:"enableTrustedFoldersFeature,omitempty"`
-	TrustedFolders              []string       `json:"trustedFolders,omitempty"`
+	ActivateSnykOpenSource      string            `json:"activateSnykOpenSource,omitempty"`
+	ActivateSnykCode            string            `json:"activateSnykCode,omitempty"`
+	ActivateSnykIac             string            `json:"activateSnykIac,omitempty"`
+	Insecure                    string            `json:"insecure,omitempty"`
+	Endpoint                    string            `json:"endpoint,omitempty"`
+	AdditionalParams            string            `json:"additionalParams,omitempty"`
+	AdditionalEnv               string            `json:"additionalEnv,omitempty"`
+	Path                        string            `json:"path,omitempty"`
+	SendErrorReports            string            `json:"sendErrorReports,omitempty"`
+	Organization                string            `json:"organization,omitempty"`
+	EnableTelemetry             string            `json:"enableTelemetry,omitempty"`
+	ManageBinariesAutomatically string            `json:"manageBinariesAutomatically,omitempty"`
+	CliPath                     string            `json:"cliPath,omitempty"`
+	Token                       string            `json:"token,omitempty"`
+	IntegrationName             string            `json:"integrationName,omitempty"`
+	IntegrationVersion          string            `json:"integrationVersion,omitempty"`
+	AutomaticAuthentication     string            `json:"automaticAuthentication,omitempty"`
+	DeviceId                    string            `json:"deviceId,omitempty"`
+	FilterSeverity              SeverityFilter    `json:"filterSeverity,omitempty"`
+	EnableTrustedFoldersFeature string            `json:"enableTrustedFoldersFeature,omitempty"`
+	TrustedFolders              []string          `json:"trustedFolders,omitempty"`
+	Environment                 PluginEnvironment `json:"environment,omitempty"`
 }
 
 type DidChangeConfigurationParams struct {

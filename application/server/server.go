@@ -303,8 +303,7 @@ func setClientInformation(initParams lsp.InitializeParams) {
 		return
 	}
 
-	config.CurrentConfig().SetIntegrationName(integrationName)
-	config.CurrentConfig().SetIntegrationVersion(integrationVersion)
+	config.CurrentConfig().SetEnvironment(config.NewEnvironmentConfig(integrationName, integrationVersion))
 }
 
 func monitorClientProcess(pid int) time.Duration {

@@ -164,7 +164,7 @@ func (c *Client) Identify() {
 // Only return an IDE property if it's a recognized IDE in the tracking plan
 func getIdeProperty() ux2.IDE {
 	// Standardize the names
-	integrationName := strings.Replace(strings.ToLower(config.CurrentConfig().IntegrationName()), "_", " ", -1)
+	integrationName := strings.Replace(strings.ToLower(config.CurrentConfig().Environment().IntegrationName), "_", " ", -1)
 
 	switch integrationName {
 	case string(ux2.Eclipse):

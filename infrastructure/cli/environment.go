@@ -53,9 +53,9 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) (updat
 		updatedEnv = append(updatedEnv, DisableAnalyticsEnvVar+"=1")
 	}
 
-	if currentConfig.IntegrationName() != "" {
-		updatedEnv = append(updatedEnv, IntegrationNameEnvVarKey+"="+currentConfig.IntegrationName())
-		updatedEnv = append(updatedEnv, IntegrationVersionEnvVarKey+"="+currentConfig.IntegrationVersion())
+	if currentConfig.Environment().IntegrationName != "" {
+		updatedEnv = append(updatedEnv, IntegrationNameEnvVarKey+"="+currentConfig.Environment().IntegrationName)
+		updatedEnv = append(updatedEnv, IntegrationVersionEnvVarKey+"="+currentConfig.Environment().IntegrationVersion)
 	}
 	updatedEnv = append(updatedEnv, IntegrationEnvironmentEnvVarKey+"="+IntegrationEnvironmentEnvVarValue)
 	updatedEnv = append(updatedEnv, IntegrationEnvironmentVersionEnvVar+"="+config.Version)
