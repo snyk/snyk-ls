@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/amplitude/analytics-go/amplitude"
+	"github.com/amplitude/analytics-go/amplitude/plugins/destination"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
@@ -42,7 +43,7 @@ type Client struct {
 type captureEvent func(userId string, eventOptions ...ampli.EventOptions)
 
 func NewAmplitudeClient(snykApiClient snyk_api.SnykApiClient, errorReporter error_reporting.ErrorReporter) ux2.Analytics {
-	ampliConfig := amplitude.NewConfig(getSegmentPublicKey())
+	ampliConfig := amplitude.NewConfig("")
 
 	ampli.Instance.Load(ampli.LoadOptions{
 		Client: ampli.LoadClientOptions{
@@ -51,6 +52,7 @@ func NewAmplitudeClient(snykApiClient snyk_api.SnykApiClient, errorReporter erro
 	})
 
 	segmentPlugin := NewSegmentPlugin()
+	ampli.Instance.Client.Remove(destination.NewAmplitudePlugin().Name()) // remove Amplitude as events destination, as we use Segment for it
 	ampli.Instance.Client.Add(segmentPlugin)
 
 	client := &Client{
