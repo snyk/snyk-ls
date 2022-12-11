@@ -336,7 +336,6 @@ func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 	const filePath = "path1"
 	mockCodeIssue := GetMockIssue("id1", filePath)
 	removedIssueType := product.FilterableIssueTypeOpenSource
-	//mockCodeIssue.Product = removedIssueType
 	mockCodeIssue.FilterableIssueType = removedIssueType
 	mockIacIssue := GetMockIssue("id2", filePath)
 	mockIacIssue.FilterableIssueType = product.FilterableIssueTypeInfrastructureAsCode
