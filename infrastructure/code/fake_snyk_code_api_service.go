@@ -19,7 +19,6 @@ package code
 import (
 	"context"
 	"fmt"
-	"github.com/snyk/snyk-ls/internal/product"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -31,6 +30,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 

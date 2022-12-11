@@ -595,7 +595,7 @@ func (c *Config) GetDisplayableIssueTypes() map[product.FilterableIssueType]bool
 	supported := make(map[product.FilterableIssueType]bool)
 	supported[product.FilterableIssueTypeOpenSource] = c.IsSnykOssEnabled()
 
-	// Handle backwards compatability.
+	// Handle backwards compatibility.
 	// Older configurations had a single value for both snyk code issue types (security & quality)
 	// New configurations have 1 for each, and should ignore the general IsSnykCodeEnabled value.
 	supported[product.FilterableIssueTypeCodeSecurity] = c.IsSnykCodeEnabled() || c.IsSnykCodeSecurityEnabled()
