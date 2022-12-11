@@ -593,9 +593,7 @@ func (c *Config) SetTrustedFolders(folderPaths []string) {
 
 func (c *Config) GetDisplayableIssueTypes() map[product.FilterableIssueType]bool {
 	supported := make(map[product.FilterableIssueType]bool)
-	if c.IsSnykOssEnabled() {
-		supported[product.FilterableIssueTypeOpenSource] = true
-	}
+	supported[product.FilterableIssueTypeOpenSource] = c.IsSnykOssEnabled()
 
 	// Handle backwards compatability.
 	// Older configurations had a single value for both snyk code issue types (security & quality)
@@ -603,9 +601,7 @@ func (c *Config) GetDisplayableIssueTypes() map[product.FilterableIssueType]bool
 	supported[product.FilterableIssueTypeCodeSecurity] = c.IsSnykCodeEnabled() || c.IsSnykCodeSecurityEnabled()
 	supported[product.FilterableIssueTypeCodeQuality] = c.IsSnykCodeEnabled() || c.IsSnykCodeQualityEnabled()
 
-	if c.IsSnykIacEnabled() {
-		supported[product.FilterableIssueTypeInfrastructureAsCode] = true
-	}
+	supported[product.FilterableIssueTypeInfrastructureAsCode] = c.IsSnykIacEnabled()
 
 	return supported
 }
