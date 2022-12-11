@@ -606,6 +606,25 @@ func (c *Config) GetSupportedProducts() map[product.Product]bool {
 	return supported
 }
 
+func (c *Config) GetDisplayableIssueTypes() map[product.FilterableIssueType]bool {
+	supported := make(map[product.FilterableIssueType]bool)
+	if c.IsSnykOssEnabled() {
+		supported[product.OpenSource] = true
+	}
+
+	// Handle backwards compatability.
+	// Older configurations had a single value for both snyk code issue types (security & quality)
+	// New configurations have 1 for each, and should ignore the general IsSnykCodeEnabled value.
+	supported[product.CodeSecurity] = c.IsSnykCodeEnabled() || c.IsSnykCodeSecurityEnabled()
+	supported[product.CodeQuality] = c.IsSnykCodeEnabled() || c.IsSnykCodeQualityEnabled()
+
+	if c.IsSnykIacEnabled() {
+		supported[product.InfrastructureAsCode] = true
+	}
+
+	return supported
+}
+
 func (c *Config) IsSnykCodeSecurityEnabled() bool {
 	return c.activateSnykCodeSecurity
 }
