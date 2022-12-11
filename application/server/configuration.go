@@ -84,7 +84,7 @@ func InitializeSettings(settings lsp.Settings) {
 
 func UpdateSettings(settings lsp.Settings) {
 	currentConfig := config.CurrentConfig()
-	previouslySupportedProducts := currentConfig.GetSupportedProducts()
+	previouslySupportedProducts := currentConfig.GetDisplayableIssueTypes()
 
 	writeSettings(settings, false)
 
@@ -94,10 +94,10 @@ func UpdateSettings(settings lsp.Settings) {
 		return
 	}
 
-	newSupportedProducts := currentConfig.GetSupportedProducts()
-	for product, wasSupported := range previouslySupportedProducts {
-		if wasSupported && !newSupportedProducts[product] {
-			ws.ClearIssuesByProduct(product)
+	newSupportedProducts := currentConfig.GetDisplayableIssueTypes()
+	for removedIssueType, wasSupported := range previouslySupportedProducts {
+		if wasSupported && !newSupportedProducts[removedIssueType] {
+			ws.ClearIssuesByType(removedIssueType)
 		}
 	}
 }

@@ -298,11 +298,11 @@ func (f *Folder) ClearDiagnostics() {
 	})
 }
 
-func (f *Folder) ClearDiagnosticsByProduct(removedProduct product.Product) {
+func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssueType) {
 	f.documentDiagnosticCache.Range(func(filePath string, previousIssues []snyk.Issue) bool {
 		newIssues := []snyk.Issue{}
 		for _, issue := range previousIssues {
-			if issue.Product != removedProduct {
+			if issue.FilterableIssueType != removedType {
 				newIssues = append(newIssues, issue)
 			}
 		}
@@ -313,7 +313,7 @@ func (f *Folder) ClearDiagnosticsByProduct(removedProduct product.Product) {
 			f.sendHoversForFile(filePath, newIssues)
 		}
 
-		return true // Always continue iteration
+		return true
 	})
 }
 

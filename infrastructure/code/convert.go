@@ -51,20 +51,20 @@ func (r *rule) getReferences() (references []snyk.Reference) {
 	return references
 }
 
-func (r *rule) getCodeIssueType() snyk.Type {
-	const defaultReturnValue = snyk.CodeSecurityVulnerability
+func (r *rule) getCodeIssueType() (snyk.Type, product.FilterableIssueType) {
+	const defaultType, defaultFilterableIssueType = snyk.CodeSecurityVulnerability, product.FilterableIssueTypeCodeSecurity
 
 	if len(r.Categories) != 1 {
-		return defaultReturnValue
+		return defaultType, defaultFilterableIssueType
 	}
 
 	switch strings.ToLower(r.Categories[0]) {
 	case "defect":
-		return snyk.CodeQualityIssue
+		return snyk.CodeQualityIssue, product.FilterableIssueTypeCodeQuality
 	case "security":
-		return snyk.CodeSecurityVulnerability
+		return snyk.CodeSecurityVulnerability, product.FilterableIssueTypeCodeSecurity
 	default:
-		return defaultReturnValue
+		return defaultType, defaultFilterableIssueType
 	}
 }
 
@@ -290,15 +290,17 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 			dataflow := result.getCodeFlow()
 			formattedMessage := result.formattedMessage(rule)
 
+			issueType, filterableIssueType := rule.getCodeIssueType()
 			d := snyk.Issue{
 				ID:                  result.RuleID,
 				Range:               myRange,
 				Severity:            issueSeverity(result.Level),
 				Message:             message,
 				FormattedMessage:    formattedMessage,
-				IssueType:           rule.getCodeIssueType(),
+				IssueType:           issueType,
 				AffectedFilePath:    path,
 				Product:             product.ProductCode,
+				FilterableIssueType: filterableIssueType,
 				IssueDescriptionURL: ruleLink,
 				References:          rule.getReferences(),
 				Commands:            getCommands(dataflow),

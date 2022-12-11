@@ -329,15 +329,17 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 	assert.Contains(t, filteredDiagnostics[filePath], snyk.Issue{AffectedFilePath: filePath, Severity: snyk.High})
 }
 
-func Test_ClearDiagnosticsByProduct(t *testing.T) {
+func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 	// Arrange
 	testutil.UnitTest(t)
 	f := GetMockFolder()
 	const filePath = "path1"
 	mockCodeIssue := GetMockIssue("id1", filePath)
-	mockCodeIssue.Product = product.ProductCode
+	removedIssueType := product.FilterableIssueTypeOpenSource
+	//mockCodeIssue.Product = removedIssueType
+	mockCodeIssue.FilterableIssueType = removedIssueType
 	mockIacIssue := GetMockIssue("id2", filePath)
-	mockIacIssue.Product = product.ProductInfrastructureAsCode
+	mockIacIssue.FilterableIssueType = product.FilterableIssueTypeInfrastructureAsCode
 	f.processResults([]snyk.Issue{
 		mockIacIssue,
 		mockCodeIssue,
@@ -345,13 +347,13 @@ func Test_ClearDiagnosticsByProduct(t *testing.T) {
 	const expectedIssuesCountAfterRemoval = 1
 
 	// Act
-	f.ClearDiagnosticsByProduct(product.ProductCode)
+	f.ClearDiagnosticsByIssueType(removedIssueType)
 
 	// Assert
 	issues := f.AllIssuesFor(filePath)
 	t.Run("Does not return diagnostics of that type", func(t *testing.T) {
 		for _, issue := range issues {
-			assert.NotEqual(t, product.ProductCode, issue.Product)
+			assert.NotEqual(t, removedIssueType, issue.Product)
 		}
 	})
 

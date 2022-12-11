@@ -11,8 +11,8 @@ const (
 )
 
 const (
-	OpenSource           FilterableIssueType = "Open Source"
-	CodeQuality          FilterableIssueType = "Code Quality"
-	CodeSecurity         FilterableIssueType = "Code Security"
-	InfrastructureAsCode FilterableIssueType = "Infrastructure As Code"
+	FilterableIssueTypeOpenSource           FilterableIssueType = "Open Source"
+	FilterableIssueTypeCodeQuality          FilterableIssueType = "Code Quality"
+	FilterableIssueTypeCodeSecurity         FilterableIssueType = "Code Security"
+	FilterableIssueTypeInfrastructureAsCode FilterableIssueType = "Infrastructure As Code"
 )
