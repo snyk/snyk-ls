@@ -19,6 +19,7 @@ package code
 import (
 	"context"
 	"fmt"
+	"github.com/snyk/snyk-ls/internal/product"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -60,12 +61,14 @@ var (
 	}
 
 	FakeIssue = snyk.Issue{
-		ID:          "SNYK-123",
-		Range:       fakeRange,
-		Severity:    snyk.High,
-		Message:     "This is a dummy error (severity error)",
-		Commands:    []snyk.Command{FakeCommand},
-		CodeActions: []snyk.CodeAction{FakeCodeAction},
+		ID:                  "SNYK-123",
+		Range:               fakeRange,
+		Severity:            snyk.High,
+		Product:             product.ProductCode,
+		FilterableIssueType: product.FilterableIssueTypeCodeSecurity,
+		Message:             "This is a dummy error (severity error)",
+		Commands:            []snyk.Command{FakeCommand},
+		CodeActions:         []snyk.CodeAction{FakeCodeAction},
 	}
 
 	FakeCodeAction = snyk.CodeAction{
