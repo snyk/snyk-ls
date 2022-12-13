@@ -32,9 +32,7 @@ import (
 func Test_Bundler_Upload(t *testing.T) {
 	temporaryDir := setup(t)
 	t.Cleanup(func() {
-		defer func(path string) {
-			_ = os.RemoveAll(path)
-		}(temporaryDir)
+		_ = os.RemoveAll(temporaryDir)
 	})
 
 	t.Run("adds files to bundle", func(t *testing.T) {
