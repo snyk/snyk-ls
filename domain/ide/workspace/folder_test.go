@@ -180,11 +180,11 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 	f := GetMockFolder()
 
 	f.processResults([]snyk.Issue{
-		{ID: "id1", AffectedFilePath: "path1", Severity: snyk.Critical},
-		{ID: "id2", AffectedFilePath: "path1", Severity: snyk.High},
-		{ID: "id3", AffectedFilePath: "path1", Severity: snyk.Medium},
-		{ID: "id4", AffectedFilePath: "path1", Severity: snyk.Low},
-		{ID: "id5", AffectedFilePath: "path1", Severity: snyk.Critical},
+		{ID: "id1", AffectedFilePath: "path1", Severity: snyk.Critical, FilterableIssueType: product.FilterableIssueTypeOpenSource},
+		{ID: "id2", AffectedFilePath: "path1", Severity: snyk.High, FilterableIssueType: product.FilterableIssueTypeOpenSource},
+		{ID: "id3", AffectedFilePath: "path1", Severity: snyk.Medium, FilterableIssueType: product.FilterableIssueTypeOpenSource},
+		{ID: "id4", AffectedFilePath: "path1", Severity: snyk.Low, FilterableIssueType: product.FilterableIssueTypeOpenSource},
+		{ID: "id5", AffectedFilePath: "path1", Severity: snyk.Critical, FilterableIssueType: product.FilterableIssueTypeOpenSource},
 	})
 
 	mtx := &sync.Mutex{}
