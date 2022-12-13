@@ -138,7 +138,7 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	if err != nil {
 		noCancellation := ctx.Err() == nil
 		if noCancellation { // Only reports errors that are not intentional cancellations
-			iac.errorReporter.CaptureError(err)
+			iac.errorReporter.CaptureErrorAndReportAsIssue(path, err)
 		} else { // If the scan was cancelled, return empty results
 			return issues
 		}
@@ -254,7 +254,7 @@ func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath str
 	if err != nil {
 		errorMessage := "Could not read file content from " + targetFile
 		log.Err(err).Msg(errorMessage)
-		iac.errorReporter.CaptureError(errors.Wrap(err, errorMessage))
+		iac.errorReporter.CaptureErrorAndReportAsIssue(workspacePath, errors.Wrap(err, errorMessage))
 	} else {
 		fileContentString = string(rawFileContent)
 	}

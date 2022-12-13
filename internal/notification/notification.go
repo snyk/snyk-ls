@@ -19,6 +19,9 @@ package notification
 import (
 	"fmt"
 
+	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/internal/uri"
+
 	sglsp "github.com/sourcegraph/go-lsp"
 )
 
@@ -39,6 +42,18 @@ func SendError(err error) {
 	Send(sglsp.ShowMessageParams{
 		Type:    sglsp.MTError,
 		Message: fmt.Sprintf("Snyk encountered an error: %v", err),
+	})
+}
+
+func SendErrorDiagnostic(path string, err error) {
+	Send(lsp.PublishDiagnosticsParams{
+		URI: uri.PathToUri(path),
+		Diagnostics: []lsp.Diagnostic{{
+			Range:    sglsp.Range{},
+			Severity: sglsp.Warning,
+			Code:     "Snyk Error",
+			Message:  err.Error(),
+		}},
 	})
 }
 

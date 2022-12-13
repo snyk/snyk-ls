@@ -292,7 +292,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path st
 	if err != nil {
 		if ctx.Err() == nil { // Only report errors that are not intentional cancellations
 			msg := "error creating bundle..."
-			sc.handleCreationAndUploadError(err, msg, scanMetrics)
+			sc.handleCreationAndUploadError(path, err, msg, scanMetrics)
 		} else {
 			log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
 		}
@@ -304,7 +304,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path st
 	if err != nil {
 		if ctx.Err() != nil { // Only handle errors that are not intentional cancellations
 			msg := "error uploading files..."
-			sc.handleCreationAndUploadError(err, msg, scanMetrics)
+			sc.handleCreationAndUploadError(path, err, msg, scanMetrics)
 		} else {
 			log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
 		}
@@ -325,8 +325,8 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path st
 	return issues
 }
 
-func (sc *Scanner) handleCreationAndUploadError(err error, msg string, scanMetrics *ScanMetrics) {
-	sc.errorReporter.CaptureError(errors.Wrap(err, msg))
+func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg string, scanMetrics *ScanMetrics) {
+	sc.errorReporter.CaptureErrorAndReportAsIssue(path, errors.Wrap(err, msg))
 	sc.trackResult(err == nil, scanMetrics)
 }
 

@@ -22,6 +22,11 @@ import (
 
 type testErrorReporter struct{}
 
+func (s *testErrorReporter) CaptureErrorAndReportAsIssue(path string, err error) bool {
+	log.Log().Err(err).Msg("An error has been captured by the testing error reporter")
+	return true
+}
+
 func NewTestErrorReporter() ErrorReporter {
 	return &testErrorReporter{}
 }
