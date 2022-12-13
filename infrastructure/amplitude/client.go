@@ -24,8 +24,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
-	// segment "github.com/segmentio/analytics-go"
-
 	"github.com/snyk/snyk-ls/ampli"
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
