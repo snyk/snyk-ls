@@ -82,6 +82,12 @@ jobs:
         with:
           node-version: '16'
 
+      - name: Verify analytics
+        env:
+          AMPLITUDE_KEY: ${{ secrets.AMPLITUDE_KEY }}
+        run: |
+          make verify-analytics
+
       - name: Run tests
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
@@ -111,12 +117,6 @@ jobs:
           sudo apt-get install -y xsel xclip wl-clipboard
 
           make clean test
-
-      - name: Verify analytics
-        env:
-          AMPLITUDE_KEY: ${{ secrets.AMPLITUDE_KEY }}
-        run: |
-          make verify-analytics
 
       - name: Set up Git actions user
         uses: fregante/setup-git-user@v1
