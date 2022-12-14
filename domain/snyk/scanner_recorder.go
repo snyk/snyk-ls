@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,10 +47,10 @@ func (s *TestScanner) Product() product.Product {
 }
 
 func (s *TestScanner) Scan(
-	ctx context.Context,
-	path string,
+	_ context.Context,
+	_ string,
 	processResults ScanResultProcessor,
-	naughtyHack1 string,
+	_ string,
 ) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()

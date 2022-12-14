@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ const (
 	installFilename = ".installed_event_sent"
 )
 
-func (a *Client) captureInstalledEvent() {
+func (c *Client) captureInstalledEvent() {
 	installFile := filepath.Join(config.CurrentConfig().CliSettings().DefaultBinaryInstallPath(), installFilename)
 	_, err := os.Stat(installFile)
 	if err == nil {
@@ -41,18 +41,20 @@ func (a *Client) captureInstalledEvent() {
 
 	if !os.IsNotExist(err) {
 		log.Error().Err(err).Str("method", method).Msg("Failed to verify if installation analytics have been captured.")
-		a.errorReporter.CaptureError(err)
+		c.errorReporter.CaptureError(err)
 		return
 	}
 
 	f, err := os.Create(installFile)
 	if err != nil {
 		log.Error().Err(err).Str("method", method).Msg("Failed to save installation analytics state.")
-		a.errorReporter.CaptureError(err)
+		c.errorReporter.CaptureError(err)
 		return
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		_ = f.Close()
+	}(f)
 
-	a.PluginIsInstalled(ux.PluginIsInstalledProperties{})
+	c.PluginIsInstalled(ux.PluginIsInstalledProperties{})
 	log.Info().Str("method", method).Msg("Installation event captured.")
 }

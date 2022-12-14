@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ func (a *CliAuthenticationProvider) ClearAuthentication(ctx context.Context) err
 	return err
 }
 
-func (a *CliAuthenticationProvider) AuthURL(ctx context.Context) string {
+func (a *CliAuthenticationProvider) AuthURL(_ context.Context) string {
 	return a.authURL
 }
 
@@ -125,7 +125,7 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 
 	reader, writer := io.Pipe()
 	go func() {
-		defer writer.Close()
+		defer func(writer *io.PipeWriter) { _ = writer.Close() }(writer)
 
 		out := &strings.Builder{}
 		scanner := bufio.NewScanner(reader)

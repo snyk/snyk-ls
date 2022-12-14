@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,9 +65,7 @@ func getChecksum(filename string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func(r *os.File) {
-		_ = r.Close()
-	}(r)
+	defer func(r *os.File) { _ = r.Close() }(r)
 
 	log.Info().Msgf("copying %q to calculate checksum", filename)
 	_, err = io.Copy(h, r)

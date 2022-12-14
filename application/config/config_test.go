@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -107,8 +107,8 @@ func Test_updatePath(t *testing.T) {
 func Test_loadFile(t *testing.T) {
 	t.Setenv("A", "")
 	t.Setenv("C", "")
-	os.Unsetenv("A")
-	os.Unsetenv("C")
+	_ = os.Unsetenv("A")
+	_ = os.Unsetenv("C")
 	envData := []byte("A=B\nC=D")
 	file, err := os.CreateTemp(".", "config_test_loadFile")
 	if err != nil {

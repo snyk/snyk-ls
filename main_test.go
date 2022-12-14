@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -113,7 +113,7 @@ func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
 	config.CurrentConfig().SetLogPath(logFile)
 	defer func(name string) {
 		file, _ := os.Open(logFile)
-		file.Close()
+		_ = file.Close()
 		err := os.RemoveAll(logPath)
 		if err != nil {
 			t.Logf("clean up didn't work")
