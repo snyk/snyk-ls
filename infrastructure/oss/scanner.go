@@ -367,7 +367,6 @@ func (oss *Scanner) toIssue(affectedFilePath string, issue ossIssue, issueRange 
 		Severity:            issue.toIssueSeverity(),
 		AffectedFilePath:    affectedFilePath,
 		Product:             product.ProductOpenSource,
-		FilterableIssueType: product.FilterableIssueTypeInfrastructureAsCode,
 		IssueDescriptionURL: issue.createIssueURL(),
 		IssueType:           snyk.DependencyVulnerability,
 		CodeActions:         issue.GetCodeActions(),

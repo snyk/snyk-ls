@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -44,9 +46,7 @@ type Issue struct {
 	AffectedFilePath string
 	// Product is the Snyk product, e.g. Snyk Open Source
 	Product product.Product // todo: can we avoid it, if it's part of a scanner interface already?
-	// FilterableIssueType is the type of issue out of the user-facing categories for issue types.
-	FilterableIssueType product.FilterableIssueType
-	// References delivers additional information
+	// References deliver additional information
 	References []Reference
 	// IssueDescriptionURL contains a Uri to display more information
 	IssueDescriptionURL *url.URL
@@ -54,6 +54,29 @@ type Issue struct {
 	CodeActions []CodeAction
 	// Commands that can be executed
 	Commands []Command
+}
+
+func (i Issue) GetFilterableIssueType() product.FilterableIssueType {
+	switch i.Product {
+	case product.ProductOpenSource:
+		return product.FilterableIssueTypeOpenSource
+	case product.ProductInfrastructureAsCode:
+		return product.FilterableIssueTypeInfrastructureAsCode
+	case product.ProductCode:
+		switch i.IssueType {
+		case CodeQualityIssue:
+			return product.FilterableIssueTypeCodeQuality
+		case CodeSecurityVulnerability:
+			return product.FilterableIssueTypeCodeSecurity
+		default:
+			const msg = "Failed to resolve code issue type. Product is Code, but issue type unspecified. Defaulting to Security issue type"
+			//goland:noinspection GoRedundantConversion
+			log.Warn().Int8("IssueType", int8(i.IssueType)).Msg(msg)
+			return product.FilterableIssueTypeCodeSecurity
+		}
+	}
+
+	return ""
 }
 
 func (i Issue) String() string {

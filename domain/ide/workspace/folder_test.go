@@ -41,7 +41,7 @@ func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
 
 	filePath, folderPath := code.FakeDiagnosticPath(t)
 	scannerRecorder := snyk.NewTestScanner()
-	scannerRecorder.Issues = []snyk.Issue{{AffectedFilePath: filePath}}
+	scannerRecorder.Issues = []snyk.Issue{NewMockIssue("1", filePath)}
 	f := NewFolder(folderPath, "Test", scannerRecorder, hover.NewFakeHoverService())
 	ctx := context.Background()
 
@@ -83,8 +83,8 @@ func TestProcessResults_SendsDiagnosticsAndHovers(t *testing.T) {
 	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hoverService)
 
 	issues := []snyk.Issue{
-		{ID: "id1", AffectedFilePath: "path1"},
-		{ID: "id2", AffectedFilePath: "path2"},
+		NewMockIssue("id1", "path1"),
+		NewMockIssue("id2", "path2"),
 	}
 	f.processResults(issues)
 	// todo ideally there's a hover & diagnostic service that are symmetric and don't leak implementation details (e.g. channels)
@@ -96,8 +96,8 @@ func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
 
 	f.processResults([]snyk.Issue{
-		{ID: "id1", AffectedFilePath: "path1"},
-		{ID: "id2", AffectedFilePath: "path2"},
+		NewMockIssue("id1", "path1"),
+		NewMockIssue("id2", "path2"),
 	})
 
 	assert.Equal(t, 2, f.documentDiagnosticCache.Size())
@@ -112,8 +112,8 @@ func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
 
 	f.processResults([]snyk.Issue{
-		{ID: "id1", AffectedFilePath: "path1"},
-		{ID: "id2", AffectedFilePath: "path1"},
+		NewMockIssue("id1", "path1"),
+		NewMockIssue("id2", "path1"),
 	})
 
 	assert.Equal(t, 1, f.documentDiagnosticCache.Size())
@@ -123,13 +123,13 @@ func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 
 func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 	testutil.UnitTest(t)
-	f := GetMockFolder()
+	f := NewMockFolder()
 
 	f.processResults([]snyk.Issue{
-		{ID: "id1", AffectedFilePath: "path1"},
-		{ID: "id2", AffectedFilePath: "path2"},
+		NewMockIssue("id1", "path1"),
+		NewMockIssue("id2", "path2"),
 	})
-	f.processResults([]snyk.Issue{{ID: "id3", AffectedFilePath: "path3"}})
+	f.processResults([]snyk.Issue{NewMockIssue("id3", "path3")})
 
 	assert.Equal(t, 3, f.documentDiagnosticCache.Size())
 	assert.NotNil(t, GetValueFromMap(f.documentDiagnosticCache, "path1"))
@@ -139,13 +139,13 @@ func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 
 func Test_ProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 	testutil.UnitTest(t)
-	f := GetMockFolder()
+	f := NewMockFolder()
 
 	f.processResults([]snyk.Issue{
-		{ID: "id1", AffectedFilePath: "path1"},
-		{ID: "id2", AffectedFilePath: "path1"},
+		NewMockIssue("id1", "path1"),
+		NewMockIssue("id2", "path1"),
 	})
-	f.processResults([]snyk.Issue{{ID: "id3", AffectedFilePath: "path1"}})
+	f.processResults([]snyk.Issue{NewMockIssue("id3", "path1")})
 
 	assert.Equal(t, 1, f.documentDiagnosticCache.Size())
 	assert.NotNil(t, GetValueFromMap(f.documentDiagnosticCache, "path1"))
@@ -154,15 +154,15 @@ func Test_ProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 
 func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing.T) {
 	testutil.UnitTest(t)
-	f := GetMockFolder()
+	f := NewMockFolder()
 
 	f.processResults([]snyk.Issue{
-		{ID: "id1", AffectedFilePath: "path1"},
-		{ID: "id2", AffectedFilePath: "path1"},
+		NewMockIssue("id1", "path1"),
+		NewMockIssue("id2", "path1"),
 	})
 	f.processResults([]snyk.Issue{
-		{ID: "id1", AffectedFilePath: "path1"},
-		{ID: "id3", AffectedFilePath: "path1"},
+		NewMockIssue("id1", "path1"),
+		NewMockIssue("id3", "path1"),
 	})
 
 	assert.Equal(t, 1, f.documentDiagnosticCache.Size())
@@ -177,14 +177,14 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 	severityFilter := lsp.NewSeverityFilter(true, false, true, false)
 	config.CurrentConfig().SetSeverityFilter(severityFilter)
 
-	f := GetMockFolder()
+	f := NewMockFolder()
 
 	f.processResults([]snyk.Issue{
-		{ID: "id1", AffectedFilePath: "path1", Severity: snyk.Critical, FilterableIssueType: product.FilterableIssueTypeOpenSource},
-		{ID: "id2", AffectedFilePath: "path1", Severity: snyk.High, FilterableIssueType: product.FilterableIssueTypeOpenSource},
-		{ID: "id3", AffectedFilePath: "path1", Severity: snyk.Medium, FilterableIssueType: product.FilterableIssueTypeOpenSource},
-		{ID: "id4", AffectedFilePath: "path1", Severity: snyk.Low, FilterableIssueType: product.FilterableIssueTypeOpenSource},
-		{ID: "id5", AffectedFilePath: "path1", Severity: snyk.Critical, FilterableIssueType: product.FilterableIssueTypeOpenSource},
+		NewMockIssueWithSeverity("id1", "path1", snyk.Critical),
+		NewMockIssueWithSeverity("id2", "path1", snyk.High),
+		NewMockIssueWithSeverity("id3", "path1", snyk.Medium),
+		NewMockIssueWithSeverity("id4", "path1", snyk.Low),
+		NewMockIssueWithSeverity("id5", "path1", snyk.Critical),
 	})
 
 	mtx := &sync.Mutex{}
@@ -217,11 +217,11 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 
 func Test_ClearDiagnostics(t *testing.T) {
 	testutil.UnitTest(t)
-	f := GetMockFolder()
+	f := NewMockFolder()
 
 	f.processResults([]snyk.Issue{
-		{ID: "id1", AffectedFilePath: "path1"},
-		{ID: "id2", AffectedFilePath: "path2"},
+		NewMockIssue("id1", "path1"),
+		NewMockIssue("id2", "path2"),
 	})
 	mtx := &sync.Mutex{}
 	clearDiagnosticNotifications := 0
@@ -306,12 +306,16 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 
 	// arrange
 	filePath, folderPath := code.FakeDiagnosticPath(t)
+	criticalIssue := snyk.Issue{AffectedFilePath: filePath, Severity: snyk.Critical, Product: product.ProductOpenSource}
+	highIssue := snyk.Issue{AffectedFilePath: filePath, Severity: snyk.High, Product: product.ProductOpenSource}
+	mediumIssue := snyk.Issue{AffectedFilePath: filePath, Severity: snyk.Medium, Product: product.ProductOpenSource}
+	lowIssue := snyk.Issue{AffectedFilePath: filePath, Severity: snyk.Low, Product: product.ProductOpenSource}
 	scannerRecorder := snyk.NewTestScanner()
 	scannerRecorder.Issues = []snyk.Issue{
-		{AffectedFilePath: filePath, Severity: snyk.Critical},
-		{AffectedFilePath: filePath, Severity: snyk.High},
-		{AffectedFilePath: filePath, Severity: snyk.Medium},
-		{AffectedFilePath: filePath, Severity: snyk.Low},
+		criticalIssue,
+		highIssue,
+		mediumIssue,
+		lowIssue,
 	}
 
 	f := NewFolder(folderPath, "Test", scannerRecorder, hover.NewFakeHoverService())
@@ -325,20 +329,20 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 
 	// assert
 	assert.Len(t, filteredDiagnostics[filePath], 2)
-	assert.Contains(t, filteredDiagnostics[filePath], snyk.Issue{AffectedFilePath: filePath, Severity: snyk.Critical})
-	assert.Contains(t, filteredDiagnostics[filePath], snyk.Issue{AffectedFilePath: filePath, Severity: snyk.High})
+	assert.Contains(t, filteredDiagnostics[filePath], criticalIssue)
+	assert.Contains(t, filteredDiagnostics[filePath], highIssue)
 }
 
 func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 	// Arrange
 	testutil.UnitTest(t)
-	f := GetMockFolder()
+	f := NewMockFolder()
 	const filePath = "path1"
-	mockCodeIssue := GetMockIssue("id1", filePath)
+	mockCodeIssue := NewMockIssue("id1", filePath)
 	removedIssueType := product.FilterableIssueTypeOpenSource
-	mockCodeIssue.FilterableIssueType = removedIssueType
-	mockIacIssue := GetMockIssue("id2", filePath)
-	mockIacIssue.FilterableIssueType = product.FilterableIssueTypeInfrastructureAsCode
+	mockCodeIssue.Product = product.ProductOpenSource
+	mockIacIssue := NewMockIssue("id2", filePath)
+	mockIacIssue.Product = product.ProductInfrastructureAsCode
 	f.processResults([]snyk.Issue{
 		mockIacIssue,
 		mockCodeIssue,
@@ -361,15 +365,23 @@ func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 	})
 }
 
-func GetMockFolder() *Folder {
+func NewMockFolder() *Folder {
 	return NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
 }
 
-func GetMockIssue(id, path string) snyk.Issue {
+func NewMockIssue(id, path string) snyk.Issue {
 	return snyk.Issue{
 		ID:               id,
 		AffectedFilePath: path,
+		Product:          product.ProductOpenSource,
 	}
+}
+
+func NewMockIssueWithSeverity(id, path string, severity snyk.Severity) snyk.Issue {
+	issue := NewMockIssue(id, path)
+	issue.Severity = severity
+
+	return issue
 }
 
 func GetValueFromMap(m *xsync.MapOf[string, []snyk.Issue], key string) []snyk.Issue {

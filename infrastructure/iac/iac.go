@@ -342,7 +342,6 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		Severity:            iac.toIssueSeverity(issue.Severity),
 		AffectedFilePath:    affectedFilePath,
 		Product:             product.ProductInfrastructureAsCode,
-		FilterableIssueType: product.FilterableIssueTypeInfrastructureAsCode,
 		IssueDescriptionURL: issueURL,
 		IssueType:           snyk.InfrastructureIssue,
 		CodeActions: []snyk.CodeAction{{

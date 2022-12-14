@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adrg/xdg"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
@@ -41,9 +40,15 @@ func Test_shouldSetLogLevelViaFlag(t *testing.T) {
 
 func Test_shouldSetLogFileViaFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-f", "a.txt"}
-	defer func() {
-		_ = os.Remove("a.txt")
-	}()
+	t.Cleanup(func() {
+		config.CurrentConfig().DisableLoggingToFile()
+
+		err := os.Remove("a.txt")
+		if err != nil {
+			t.Logf("Error when trying to cleanup logfile: %e", err)
+		}
+	})
+
 	_, _ = parseFlags(args)
 	assert.Equal(t, config.CurrentConfig().LogPath(), "a.txt")
 }
@@ -105,21 +110,12 @@ func Test_shouldSetReportErrorsViaFlag(t *testing.T) {
 
 func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
 	testutil.UnitTest(t)
-	logPath, err := os.MkdirTemp(xdg.DataHome, "testlogconfig")
-	if err != nil {
-		t.Fatal(err)
-	}
+	logPath := t.TempDir()
 	logFile := filepath.Join(logPath, "a.txt")
 	config.CurrentConfig().SetLogPath(logFile)
-	defer func(name string) {
-		file, _ := os.Open(logFile)
-		file.Close()
-		err := os.RemoveAll(logPath)
-		if err != nil {
-			t.Logf("clean up didn't work")
-		}
-		config.CurrentConfig().SetLogPath("")
-	}(logPath)
+	t.Cleanup(func() {
+		config.CurrentConfig().DisableLoggingToFile()
+	})
 
 	config.CurrentConfig().ConfigureLogging("debug")
 	log.Error().Msg("test")

@@ -198,7 +198,7 @@ func filterIssues(issues []snyk.Issue, supportedIssueTypes map[product.Filterabl
 
 	for _, issue := range issues {
 		// Logging here might hurt performance, should benchmark if filtering is slow
-		if isVisibleSeverity(issue) && supportedIssueTypes[issue.FilterableIssueType] {
+		if isVisibleSeverity(issue) && supportedIssueTypes[issue.GetFilterableIssueType()] {
 			logger.Trace().Msgf("Including visible severity issue: %v", issue)
 			filteredIssues = append(filteredIssues, issue)
 		} else {
@@ -312,7 +312,7 @@ func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssue
 	f.documentDiagnosticCache.Range(func(filePath string, previousIssues []snyk.Issue) bool {
 		newIssues := []snyk.Issue{}
 		for _, issue := range previousIssues {
-			if issue.FilterableIssueType != removedType {
+			if issue.GetFilterableIssueType() != removedType {
 				newIssues = append(newIssues, issue)
 			}
 		}
