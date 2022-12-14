@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,17 +27,17 @@ type FakeAuthenticationProvider struct {
 	IsAuthenticated bool
 }
 
-func (a *FakeAuthenticationProvider) Authenticate(ctx context.Context) (string, error) {
+func (a *FakeAuthenticationProvider) Authenticate(_ context.Context) (string, error) {
 	a.IsAuthenticated = true
 	return "e448dc1a-26c6-11ed-a261-0242ac120002", nil
 }
 
-func (a *FakeAuthenticationProvider) ClearAuthentication(ctx context.Context) error {
+func (a *FakeAuthenticationProvider) ClearAuthentication(_ context.Context) error {
 	a.IsAuthenticated = false
 	return nil
 }
 
-func (a *FakeAuthenticationProvider) AuthURL(ctx context.Context) string {
+func (a *FakeAuthenticationProvider) AuthURL(_ context.Context) string {
 	return a.ExpectedAuthURL
 }
 

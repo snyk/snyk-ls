@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,23 +52,6 @@ type Issue struct {
 	CodeActions []CodeAction
 	// Commands that can be executed
 	Commands []Command
-}
-
-func NewIssue(id string, severity Severity, issueType Type, r Range, message string, formattedMessage string, affectedFilePath string, product product.Product, references []Reference, issueDescriptionUrl *url.URL, codeActions []CodeAction, commands []Command) Issue {
-	return Issue{
-		ID:                  id,
-		Severity:            severity,
-		IssueType:           issueType,
-		Range:               r,
-		Message:             message,
-		FormattedMessage:    formattedMessage,
-		AffectedFilePath:    affectedFilePath,
-		Product:             product,
-		References:          references,
-		IssueDescriptionURL: issueDescriptionUrl,
-		CodeActions:         codeActions,
-		Commands:            commands,
-	}
 }
 
 func (i Issue) String() string {

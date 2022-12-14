@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,7 +97,7 @@ func Test_FindBinaries(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer file.Close()
+		defer func(file *os.File) { _ = file.Close() }(file)
 
 		c := New()
 		c.AddBinaryLocationsToPath([]string{dir})
@@ -114,7 +114,7 @@ func Test_FindBinaries(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer func() { os.RemoveAll(javaHome) }()
+		defer func() { _ = os.RemoveAll(javaHome) }()
 		binDir := filepath.Join(javaHome, "bin")
 		err = os.Mkdir(binDir, 0770)
 		if err != nil {
@@ -124,7 +124,7 @@ func Test_FindBinaries(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer file.Close()
+		defer func(file *os.File) { _ = file.Close() }(file)
 		err = file.Chmod(0770)
 		if err != nil {
 			t.Fatal(err)
@@ -151,7 +151,7 @@ func Test_FindBinaries(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer file.Close()
+		defer func(file *os.File) { _ = file.Close() }(file)
 
 		New()
 

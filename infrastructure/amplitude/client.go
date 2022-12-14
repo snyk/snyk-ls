@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,7 +111,7 @@ func (c *Client) IssueHoverIsDisplayed(properties ux2.IssueHoverIsDisplayedPrope
 	c.enqueueEvent(captureFn)
 }
 
-func (c *Client) PluginIsInstalled(properties ux2.PluginIsInstalledProperties) {
+func (c *Client) PluginIsInstalled(_ ux2.PluginIsInstalledProperties) {
 	log.Info().Str("method", "PluginIsInstalled").Msg("analytics enqueued")
 	ide := ampli.PluginIsInstalledIde(getIdeProperty())
 	event := ampli.PluginIsInstalled.Builder().Ide(ide).Build()
