@@ -28,9 +28,7 @@ func Test_ignored_ignoredGlob(t *testing.T) {
 	ignoredPath := "test.xml"
 
 	err := os.WriteFile(ignoredPath, []byte("test"), 0600)
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(ignoredPath)
+	defer func(path string) { _ = os.RemoveAll(path) }(ignoredPath)
 	if err != nil {
 		t.Fatal(err, "Couldn't create file "+ignoredPath)
 	}
@@ -42,9 +40,7 @@ func Test_ignored_ignoredGlob(t *testing.T) {
 func Test_ignored_notIgnored(t *testing.T) {
 	notIgnoredPath := "not-ignored.txt"
 	err := os.WriteFile(notIgnoredPath, []byte("test"), 0600)
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(notIgnoredPath)
+	defer func(path string) { _ = os.RemoveAll(path) }(notIgnoredPath)
 	if err != nil {
 		t.Fatal(err, "Couldn't create file "+notIgnoredPath)
 	}
@@ -57,16 +53,12 @@ func Test_ignored_doubleAsterisk(t *testing.T) {
 	ignoredDoubleAsteriskPath := "test-ignore/ignored.txt"
 	testIgnoreDir := "test-ignore"
 	err := os.Mkdir(testIgnoreDir, 0755)
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(testIgnoreDir)
+	defer func(path string) { _ = os.RemoveAll(path) }(testIgnoreDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't create testIgnoreDir"+testIgnoreDir)
 	}
 	err = os.WriteFile(ignoredDoubleAsteriskPath, []byte("test"), 0600)
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(ignoredDoubleAsteriskPath)
+	defer func(path string) { _ = os.RemoveAll(path) }(ignoredDoubleAsteriskPath)
 	if err != nil {
 		t.Fatal(err, "Couldn't create file "+ignoredDoubleAsteriskPath)
 	}

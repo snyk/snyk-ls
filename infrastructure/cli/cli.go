@@ -73,9 +73,7 @@ func (c SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (
 	// handle concurrency limit, and when context is cancelled
 	select {
 	case c.semaphore <- 1:
-		defer func() {
-			<-c.semaphore
-		}()
+		defer func() { <-c.semaphore }()
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}

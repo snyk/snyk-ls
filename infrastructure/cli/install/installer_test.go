@@ -39,9 +39,7 @@ func TestInstaller_Find(t *testing.T) {
 	cliDir := t.TempDir()
 	cliFilePath := filepath.Join(cliDir, d.ExecutableName(false))
 	f, _ := os.Create(cliFilePath)
-	defer func(f *os.File) {
-		_ = f.Close()
-	}(f)
+	defer func(f *os.File) { _ = f.Close() }(f)
 	_, _ = f.WriteString("dummy-cli-file")
 	_ = f.Chmod(0777)
 
@@ -168,9 +166,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	if err != nil {
 		t.Fatal(t, err, "Failed to create temp dir")
 	}
-	defer func() {
-		_ = os.Remove(cliDir)
-	}()
+	defer func() { _ = os.Remove(cliDir) }()
 
 	fakeCliFile := testutil.CreateTempFile(cliDir, t)
 	_ = fakeCliFile.Close()
@@ -182,9 +178,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	if err != nil {
 		t.Fatal(err, "Error renaming temp file")
 	}
-	defer func(f string) {
-		_ = os.Remove(f)
-	}(cliFilePath)
+	defer func(f string) { _ = os.Remove(f) }(cliFilePath)
 
 	r := NewCLIRelease()
 	release, err := r.GetLatestRelease(ctx)

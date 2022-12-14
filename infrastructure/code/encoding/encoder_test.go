@@ -39,9 +39,7 @@ func deflate(data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func(gr *gzip.Reader) {
-		_ = gr.Close()
-	}(gr)
+	defer func(gr *gzip.Reader) { _ = gr.Close() }(gr)
 
 	data, err = io.ReadAll(gr)
 	if err != nil {

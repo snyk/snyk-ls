@@ -65,9 +65,7 @@ func getChecksum(filename string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func(r *os.File) {
-		_ = r.Close()
-	}(r)
+	defer func(r *os.File) { _ = r.Close() }(r)
 
 	log.Info().Msgf("copying %q to calculate checksum", filename)
 	_, err = io.Copy(h, r)

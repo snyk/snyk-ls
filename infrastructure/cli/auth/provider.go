@@ -125,9 +125,7 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 
 	reader, writer := io.Pipe()
 	go func() {
-		defer func(writer *io.PipeWriter) {
-			_ = writer.Close()
-		}(writer)
+		defer func(writer *io.PipeWriter) { _ = writer.Close() }(writer)
 
 		out := &strings.Builder{}
 		scanner := bufio.NewScanner(reader)

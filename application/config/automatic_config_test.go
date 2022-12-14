@@ -97,9 +97,7 @@ func Test_FindBinaries(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer func(file *os.File) {
-			_ = file.Close()
-		}(file)
+		defer func(file *os.File) { _ = file.Close() }(file)
 
 		c := New()
 		c.AddBinaryLocationsToPath([]string{dir})
@@ -126,9 +124,7 @@ func Test_FindBinaries(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer func(file *os.File) {
-			_ = file.Close()
-		}(file)
+		defer func(file *os.File) { _ = file.Close() }(file)
 		err = file.Chmod(0770)
 		if err != nil {
 			t.Fatal(err)
@@ -155,9 +151,7 @@ func Test_FindBinaries(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer func(file *os.File) {
-			_ = file.Close()
-		}(file)
+		defer func(file *os.File) { _ = file.Close() }(file)
 
 		New()
 

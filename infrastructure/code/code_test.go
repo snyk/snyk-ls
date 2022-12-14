@@ -154,9 +154,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
 		path, firstDoc, _, content1, _ := setupDocs()
 		docs := []string{uri.PathFromUri(firstDoc.URI)}
-		defer func(path string) {
-			_ = os.RemoveAll(path)
-		}(path)
+		defer func(path string) { _ = os.RemoveAll(path) }(path)
 		metrics := c.newMetrics(len(docs), time.Time{})
 
 		c.UploadAndAnalyze(context.Background(), docs, "", metrics)
@@ -175,9 +173,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: false}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
 		path, firstDoc, _, _, _ := setupDocs()
 		docs := []string{uri.PathFromUri(firstDoc.URI)}
-		defer func(path string) {
-			_ = os.RemoveAll(path)
-		}(path)
+		defer func(path string) { _ = os.RemoveAll(path) }(path)
 		metrics := c.newMetrics(len(docs), time.Time{})
 
 		c.UploadAndAnalyze(context.Background(), docs, "", metrics)
@@ -191,9 +187,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 		snykCodeMock := &FakeSnykCodeClient{}
 		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
 		diagnosticUri, path := FakeDiagnosticPath(t)
-		defer func(path string) {
-			_ = os.RemoveAll(path)
-		}(path)
+		defer func(path string) { _ = os.RemoveAll(path) }(path)
 		files := []string{diagnosticUri}
 		metrics := c.newMetrics(len(files), time.Time{})
 
@@ -216,9 +210,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 		analytics := ux2.NewTestAnalytics()
 		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), analytics)
 		diagnosticUri, path := FakeDiagnosticPath(t)
-		defer func(path string) {
-			_ = os.RemoveAll(path)
-		}(path)
+		defer func(path string) { _ = os.RemoveAll(path) }(path)
 		files := []string{diagnosticUri}
 		metrics := c.newMetrics(len(files), time.Now())
 
@@ -237,9 +229,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 
 func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {
 	expectedPatterns, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(tempDir)
+	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
 	_, sc := setupTestScanner()
 
 	_, err := sc.loadIgnorePatternsAndCountFiles(tempDir)
@@ -255,9 +245,7 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 	if err != nil {
 		t.Fatal("can't create temp dir")
 	}
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(tempDir)
+	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
 	_, sc := setupTestScanner()
 
 	_, err = sc.loadIgnorePatternsAndCountFiles(tempDir)
@@ -270,9 +258,7 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 
 func Test_GetWorkspaceFolderFiles(t *testing.T) {
 	_, tempDir, ignoredFilePath, notIgnoredFilePath, _ := setupIgnoreWorkspace(t)
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(tempDir)
+	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
 	_, sc := setupTestScanner()
 
 	files, err := sc.files(tempDir)
@@ -287,9 +273,7 @@ func Test_GetWorkspaceFolderFiles(t *testing.T) {
 
 func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 	_, tempDir, _, _, ignoredFileInDir := setupIgnoreWorkspace(t)
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(tempDir)
+	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
 	_, sc := setupTestScanner()
 
 	walkedFiles, err := sc.files(tempDir)

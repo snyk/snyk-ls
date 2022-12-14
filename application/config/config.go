@@ -245,9 +245,7 @@ func (c *Config) loadFile(fileName string) {
 		log.Info().Str("method", "loadFile").Msg("Couldn't load " + fileName)
 		return
 	}
-	defer func(file *os.File) {
-		_ = file.Close()
-	}(file)
+	defer func(file *os.File) { _ = file.Close() }(file)
 	env := gotenv.Parse(file)
 	for k, v := range env {
 		_, exists := os.LookupEnv(k)

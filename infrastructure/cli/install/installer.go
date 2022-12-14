@@ -82,9 +82,7 @@ func (i *Install) installRelease(release *Release) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer func(name string) {
-		cleanupLockFile(name)
-	}(lockFileName)
+	defer func(name string) { cleanupLockFile(name) }(lockFileName)
 
 	err = d.Download(release, false)
 	if err != nil {
@@ -110,9 +108,7 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer func(name string) {
-		cleanupLockFile(name)
-	}(lockFileName)
+	defer func(name string) { cleanupLockFile(name) }(lockFileName)
 
 	cliDiscovery := Discovery{}
 	latestChecksum, err := expectedChecksum(r, &cliDiscovery)
