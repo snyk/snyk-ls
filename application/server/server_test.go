@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -656,9 +656,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(diagnosticUri)},
 	}
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(tempDir)
+	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
 	workspace.Get().AddFolder(workspace.NewFolder(tempDir, "Test", di.Scanner(), di.HoverService()))
 
 	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
@@ -757,9 +755,7 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 	di.Init()
 
 	var cloneTargetDir, err = setupCustomTestRepo(repo, commit, t)
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(cloneTargetDir)
+	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -835,9 +831,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	testutil.IntegTest(t)
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589", t)
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(cloneTargetDir)
+	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -900,9 +894,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	_, _ = loc.Client.Call(ctx, "initialize", nil)
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589", t)
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(cloneTargetDir)
+	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}

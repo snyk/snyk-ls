@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,9 +82,7 @@ func (i *Install) installRelease(release *Release) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer func(name string) {
-		cleanupLockFile(name)
-	}(lockFileName)
+	defer func(name string) { cleanupLockFile(name) }(lockFileName)
 
 	err = d.Download(release, false)
 	if err != nil {
@@ -110,9 +108,7 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer func(name string) {
-		cleanupLockFile(name)
-	}(lockFileName)
+	defer func(name string) { cleanupLockFile(name) }(lockFileName)
 
 	cliDiscovery := Discovery{}
 	latestChecksum, err := expectedChecksum(r, &cliDiscovery)
@@ -147,7 +143,8 @@ func replaceOutdatedCli(cliDiscovery Discovery) error {
 	cliPath := config.CurrentConfig().CliSettings().Path()
 	latestCliFile := filepath.Join(filepath.Dir(cliPath), cliDiscovery.ExecutableName(true))
 
-	if runtime.GOOS == "windows" {
+	if //goland:noinspection GoBoolExpressions
+	runtime.GOOS == "windows" {
 		tildeExecutableName := cliPath + "~"
 
 		// Cleanup an old executable, if left after previous update.
@@ -220,7 +217,7 @@ func createLockFile(d *Downloader) (lockfileName string, err error) {
 
 func cleanupLockFile(lockFileName string) {
 	file, _ := os.Open(lockFileName)
-	file.Close()
+	_ = file.Close()
 	err := os.Remove(lockFileName)
 	if err != nil {
 		log.Error().Str("method", "Download").Str("lockfile", lockFileName).Msg("couldn't clean up lockfile")
@@ -251,7 +248,7 @@ func (t *TestInstaller) Find() (string, error) {
 	return "", nil
 }
 
-func (t *TestInstaller) Install(ctx context.Context) (string, error) {
+func (t *TestInstaller) Install(_ context.Context) (string, error) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
@@ -259,7 +256,7 @@ func (t *TestInstaller) Install(ctx context.Context) (string, error) {
 	return "", nil
 }
 
-func (t *TestInstaller) Update(ctx context.Context) (bool, error) {
+func (t *TestInstaller) Update(_ context.Context) (bool, error) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 

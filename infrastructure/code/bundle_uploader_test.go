@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ import (
 func Test_Bundler_Upload(t *testing.T) {
 	temporaryDir := setup(t)
 	t.Cleanup(func() {
-		defer os.RemoveAll(temporaryDir)
+		_ = os.RemoveAll(temporaryDir)
 	})
 
 	t.Run("adds files to bundle", func(t *testing.T) {

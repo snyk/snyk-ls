@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -246,9 +246,7 @@ func (c *Config) loadFile(fileName string) {
 		log.Info().Str("method", "loadFile").Msg("Couldn't load " + fileName)
 		return
 	}
-	defer func(file *os.File) {
-		_ = file.Close()
-	}(file)
+	defer func(file *os.File) { _ = file.Close() }(file)
 	env := gotenv.Parse(file)
 	for k, v := range env {
 		_, exists := os.LookupEnv(k)

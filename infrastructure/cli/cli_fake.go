@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ func NewTestExecutor() *TestExecutor {
 
 func (t *TestExecutor) GetFinishedScans() int { return t.finishedScans }
 
-func (t *TestExecutor) Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error) {
+func (t *TestExecutor) Execute(ctx context.Context, _ []string, _ string) (resp []byte, err error) {
 	err = ctx.Err()
 	if err != nil { // Checking for ctx cancellation before faking CLI execution
 		return resp, err
@@ -59,11 +59,11 @@ func (t *TestExecutor) Execute(ctx context.Context, cmd []string, workingDir str
 	}
 }
 
-func (t *TestExecutor) ExpandParametersFromConfig(base []string) []string {
+func (t *TestExecutor) ExpandParametersFromConfig(_ []string) []string {
 	return nil
 }
 
-func (t *TestExecutor) HandleErrors(ctx context.Context, output string) (fail bool) {
+func (t *TestExecutor) HandleErrors(_ context.Context, _ string) (fail bool) {
 	return false
 }
 

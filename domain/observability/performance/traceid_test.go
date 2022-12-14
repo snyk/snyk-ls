@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,10 +28,10 @@ func TestGetContextWithTraceId(t *testing.T) {
 	t.Run("sets trace_id", func(t *testing.T) {
 		// prepare
 		ctx := context.Background()
-		uuid := uuid.New().String()
+		u := uuid.New().String()
 
 		// act
-		newCtx := GetContextWithTraceId(ctx, uuid)
+		newCtx := GetContextWithTraceId(ctx, u)
 
 		// assert
 		traceId, err := GetTraceId(newCtx)
@@ -39,6 +39,6 @@ func TestGetContextWithTraceId(t *testing.T) {
 			assert.Fail(t, "Couldn't obtain trace_id")
 		}
 
-		assert.Equal(t, traceId, uuid)
+		assert.Equal(t, traceId, u)
 	})
 }

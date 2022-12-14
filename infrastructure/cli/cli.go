@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,9 +73,7 @@ func (c SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (
 	// handle concurrency limit, and when context is cancelled
 	select {
 	case c.semaphore <- 1:
-		defer func() {
-			<-c.semaphore
-		}()
+		defer func() { <-c.semaphore }()
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}

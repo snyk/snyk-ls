@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Snyk Ltd.
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,11 +29,11 @@ func TestGetEnabledProducts_DefaultValues(t *testing.T) {
 	t.Setenv(ActivateSnykIacKey, "set it to anything to make sure it is reset")
 	t.Setenv(ActivateSnykContainerKey, "set it to anything to make sure it is reset")
 	t.Setenv(ActivateSnykAdvisorKey, "set it to anything to make sure it is reset")
-	os.Unsetenv(ActivateSnykOssKey)
-	os.Unsetenv(ActivateSnykCodeKey)
-	os.Unsetenv(ActivateSnykIacKey)
-	os.Unsetenv(ActivateSnykContainerKey)
-	os.Unsetenv(ActivateSnykAdvisorKey)
+	_ = os.Unsetenv(ActivateSnykOssKey)
+	_ = os.Unsetenv(ActivateSnykCodeKey)
+	_ = os.Unsetenv(ActivateSnykIacKey)
+	_ = os.Unsetenv(ActivateSnykContainerKey)
+	_ = os.Unsetenv(ActivateSnykAdvisorKey)
 	SetCurrentConfig(New())
 
 	currentConfig.clientSettingsFromEnv()
@@ -47,7 +47,7 @@ func TestGetEnabledProducts_DefaultValues(t *testing.T) {
 
 func TestConfig_IsErrorReportingEnabledFromEnv_DefaultValues(t *testing.T) {
 	t.Setenv(SendErrorReportsKey, "set it to anything to make sure it is reset")
-	os.Unsetenv(SendErrorReportsKey)
+	_ = os.Unsetenv(SendErrorReportsKey)
 	SetCurrentConfig(New())
 	CurrentConfig().clientSettingsFromEnv()
 
