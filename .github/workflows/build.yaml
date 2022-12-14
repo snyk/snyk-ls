@@ -61,6 +61,12 @@ jobs:
         run: |
           make tools lint
 
+#      - name: Verify analytics
+#        env:
+#          AMPLITUDE_KEY: ${{ secrets.AMPLITUDE_KEY }}
+#        run: |
+#          make verify-analytics
+
       - name: Run tests
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
