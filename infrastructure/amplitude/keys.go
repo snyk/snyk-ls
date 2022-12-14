@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package segment
+package amplitude
 
 const (
 	productionPublicKey  = "siBHQPKb4KmNaWv2PBJz1hP8YzYEPqLr"

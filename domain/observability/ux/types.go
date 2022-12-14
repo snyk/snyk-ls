@@ -34,9 +34,6 @@ type IssueHoverIsDisplayedProperties struct {
 	Severity  Severity  `json:"severity"`
 }
 
-type PluginIsUninstalledProperties struct {
-}
-
 type PluginIsInstalledProperties struct {
 }
 
