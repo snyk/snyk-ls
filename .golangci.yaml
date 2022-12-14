@@ -39,6 +39,8 @@ linters:
 linters-settings:
   goimports:
     local-prefixes: github.com/snyk/snyk-ls
+  exhaustive:
+    default-signifies-exhaustive: true
 
 output:
   format: tab

@@ -74,9 +74,9 @@ func (i Issue) GetFilterableIssueType() product.FilterableIssueType {
 			log.Warn().Int8("IssueType", int8(i.IssueType)).Msg(msg)
 			return product.FilterableIssueTypeCodeSecurity
 		}
+	default:
+		return ""
 	}
-
-	return ""
 }
 
 func (i Issue) String() string {
