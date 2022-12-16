@@ -49,10 +49,11 @@ func SendErrorDiagnostic(path string, err error) {
 	Send(lsp.PublishDiagnosticsParams{
 		URI: uri.PathToUri(path),
 		Diagnostics: []lsp.Diagnostic{{
-			Range:    sglsp.Range{},
-			Severity: lsp.DiagnosticsSeverityWarning,
-			Code:     "Snyk Error",
-			Message:  err.Error(),
+			Range:           sglsp.Range{},
+			Severity:        lsp.DiagnosticsSeverityWarning,
+			Code:            "Snyk Error",
+			CodeDescription: lsp.CodeDescription{Href: "https://snyk.io/user-hub"},
+			Message:         err.Error(),
 		}},
 	})
 }

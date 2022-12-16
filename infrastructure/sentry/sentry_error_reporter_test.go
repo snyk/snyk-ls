@@ -60,6 +60,7 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 		assert.Equal(t, text, diagnosticsParams.Diagnostics[0].Message)
 		assert.Equal(t, lsp.DiagnosticsSeverityWarning, diagnosticsParams.Diagnostics[0].Severity)
 		assert.Equal(t, diagnosticsParams.URI, uri.PathToUri(path))
+		assert.Equal(t, diagnosticsParams.Diagnostics[0].CodeDescription.Href, lsp.Uri("https://snyk.io/user-hub"))
 	})
 
 	e := errors.New(text)
