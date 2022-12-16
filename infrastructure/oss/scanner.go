@@ -178,7 +178,7 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	noCancellation := ctx.Err() == nil
 	if err != nil {
 		if noCancellation {
-			if oss.handleError(err, res, cmd) {
+			if oss.handleError(path, err, res, cmd) {
 				return
 			}
 		} else { // If scan was cancelled, return empty results
@@ -218,20 +218,21 @@ func (oss *Scanner) unmarshallAndRetrieveAnalysis(ctx context.Context, res []byt
 	}
 
 	scanResults, err := oss.unmarshallOssJson(res)
+	path := uri.PathFromUri(documentURI)
 	if err != nil {
-		oss.errorReporter.CaptureError(err)
+		oss.errorReporter.CaptureErrorAndReportAsIssue(path, err)
 		return nil
 	}
 
 	for _, scanResult := range scanResults {
 		targetFile := oss.determineTargetFile(scanResult.DisplayTargetFile)
-		targetFilePath := filepath.Join(uri.PathFromUri(documentURI), targetFile)
+		targetFilePath := filepath.Join(path, targetFile)
 		targetFileUri := uri.PathToUri(targetFilePath)
 		fileContent, err := os.ReadFile(targetFilePath)
 		if err != nil {
 			log.Err(err).Str("method", "unmarshallAndRetrieveAnalysis").
 				Msgf("Error while reading the file %v, err: %v", targetFile, err)
-			oss.errorReporter.CaptureError(err)
+			oss.errorReporter.CaptureErrorAndReportAsIssue(path, err)
 			return nil
 		}
 		issues = append(issues, oss.retrieveIssues(scanResult, targetFileUri, fileContent)...)
@@ -262,7 +263,7 @@ func (oss *Scanner) unmarshallOssJson(res []byte) (scanResults []ossScanResult, 
 }
 
 // Returns true if CLI run failed, false otherwise
-func (oss *Scanner) handleError(err error, res []byte, cmd []string) bool {
+func (oss *Scanner) handleError(path string, err error, res []byte, cmd []string) bool {
 	switch errorType := err.(type) {
 	case *exec.ExitError:
 		// Exit codes
@@ -281,18 +282,18 @@ func (oss *Scanner) handleError(err error, res []byte, cmd []string) bool {
 		case 2:
 			log.Err(err).Str("method", "oss.Scan").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
 			// we want a user notification, but don't want to send it to sentry
-			notification.SendError(err)
+			notification.SendErrorDiagnostic(path, err)
 			return true
 		case 3:
 			log.Debug().Str("method", "oss.Scan").Msg("no supported projects/files detected.")
 			return true
 		default:
 			log.Err(err).Str("method", "oss.Scan").Msg("Error while calling Snyk CLI")
-			oss.errorReporter.CaptureError(err)
+			oss.errorReporter.CaptureErrorAndReportAsIssue(path, err)
 		}
 	default:
 		if err != context.Canceled {
-			oss.errorReporter.CaptureError(err)
+			oss.errorReporter.CaptureErrorAndReportAsIssue(path, err)
 		}
 		return true
 	}

@@ -50,6 +50,15 @@ type PublishDiagnosticsParams struct {
 	Diagnostics []Diagnostic      `json:"diagnostics"`
 }
 
+type DiagnosticSeverity int
+
+const (
+	DiagnosticsSeverityError       DiagnosticSeverity = 1
+	DiagnosticsSeverityWarning     DiagnosticSeverity = 2
+	DiagnosticsSeverityInformation DiagnosticSeverity = 3
+	DiagnosticsSeverityHint        DiagnosticSeverity = 4
+)
+
 type Diagnostic struct {
 	/**
 	 * The range at which the message applies.
@@ -60,7 +69,7 @@ type Diagnostic struct {
 	 * The diagnostic's severity. Can be omitted. If omitted it is up to the
 	 * client to interpret diagnostics as error, warning, info or hint.
 	 */
-	Severity sglsp.DiagnosticSeverity `json:"severity,omitempty"`
+	Severity DiagnosticSeverity `json:"severity,omitempty"`
 
 	/**
 	 * The diagnostic's code. Can be omitted. Can be string or int, thus we need

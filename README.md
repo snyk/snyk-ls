@@ -26,6 +26,7 @@ Right now the language server supports the following actions:
 - Copying the authentication URL to clipboard if there are problems opening a webpage
 - Automatic download of the Snyk CLI if none is found or configured to XDG_DATA_HOME
 - Selective activation of products according to settings transmitted
+- Scanning errors are reported as diagnostics to the Language Server Client
 
 ### Implemented operations
 

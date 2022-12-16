@@ -104,7 +104,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
 				Str("requestId", b.requestId).
 				Int("fileCount", len(b.UploadBatches)).
 				Msg("error retrieving diagnostics...")
-			b.errorReporter.CaptureError(err)
+			b.errorReporter.CaptureErrorAndReportAsIssue(b.rootPath, err)
 			p.End(fmt.Sprintf("Analysis failed: %v", err))
 			return []snyk.Issue{}
 		}
@@ -119,7 +119,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
 		if time.Since(start) > config.CurrentConfig().SnykCodeAnalysisTimeout() {
 			err := errors.New("analysis call timed out")
 			log.Error().Err(err).Str("method", "retrieveAnalysis").Msg("timeout...")
-			b.errorReporter.CaptureError(err)
+			b.errorReporter.CaptureErrorAndReportAsIssue(b.rootPath, err)
 			p.End("Snyk Code Analysis timed out")
 			return []snyk.Issue{}
 		}
