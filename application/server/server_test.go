@@ -606,18 +606,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
 
 	installer := di.Installer()
-	for { // remove cli for testing
-		find, err := installer.Find()
-		if err == nil {
-			err = os.Remove(find)
-			log.Debug().Msgf("Test: removing cli at %s", find)
-			if err != nil {
-				t.Fatal("couldn't remove cli for test")
-			}
-		} else {
-			break
-		}
-	}
+
 	err := os.Unsetenv("SNYK_CLI_PATH")
 	if err != nil {
 		t.Fatal("couldn't unset environment variable SNYK_CLI_PATH")
@@ -625,7 +614,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 
 	didOpenParams, dir := didOpenTextParams(t)
 	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService()))
-
+	config.CurrentConfig().CliSettings().SetPath(t.TempDir() + "not-existing-cli")
 	// Act
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
@@ -634,8 +623,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 
 	// Assert
 	assert.Eventually(t, func() bool {
-		find, _ := installer.Find()
-		return find != ""
+		return installer.(*install.FakeInstaller).Installs() > 0
 	}, maxIntegTestDuration, 10*time.Millisecond)
 }
 
