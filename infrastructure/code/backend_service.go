@@ -176,7 +176,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 	response, err := s.client.Do(req)
 	if err != nil {
 		log.Err(err).Str("method", method).Msgf("got http error")
-		s.errorReporter.CaptureError(err)
+		s.errorReporter.CaptureErrorAndReportAsIssue(path, err)
 		return nil, err
 	}
 
@@ -190,7 +190,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 	log.Trace().Str("response.Status", response.Status).Str("responseBody", string(responseBody)).Str("snyk-request-id", requestId).Msg("RECEIVED FROM REMOTE")
 	if err != nil {
 		log.Err(err).Str("method", method).Msgf("error reading response body")
-		s.errorReporter.CaptureError(err)
+		s.errorReporter.CaptureErrorAndReportAsIssue(path, err)
 		return nil, err
 	}
 

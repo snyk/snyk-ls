@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 
@@ -46,6 +47,8 @@ func UnitTest(t *testing.T) {
 	c.SetTrustedFolderFeatureEnabled(false)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t)
+	notification.DisposeListener()
+	t.Cleanup(func() { notification.DisposeListener() })
 }
 
 func CLIDownloadLockFileCleanUp(t *testing.T) {

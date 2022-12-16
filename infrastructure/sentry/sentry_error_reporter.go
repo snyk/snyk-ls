@@ -30,6 +30,11 @@ import (
 // A Sentry implementation of our error reporter that respects user preferences regarding tracking
 type gdprAwareSentryErrorReporter struct{}
 
+func (s *gdprAwareSentryErrorReporter) CaptureErrorAndReportAsIssue(path string, err error) bool {
+	notification.SendErrorDiagnostic(path, err)
+	return s.sendToSentry(err)
+}
+
 func NewSentryErrorReporter() error_reporting.ErrorReporter {
 	initializeSentry()
 	return &gdprAwareSentryErrorReporter{}
@@ -42,6 +47,10 @@ func (s *gdprAwareSentryErrorReporter) FlushErrorReporting() {
 
 func (s *gdprAwareSentryErrorReporter) CaptureError(err error) bool {
 	notification.SendError(err)
+	return s.sendToSentry(err)
+}
+
+func (s *gdprAwareSentryErrorReporter) sendToSentry(err error) (reportedToSentry bool) {
 	if config.CurrentConfig().IsErrorReportingEnabled() {
 		eventId := sentry.CaptureException(err)
 		log.Info().Err(err).Str("method", "CaptureError").Msgf("Sent error to Sentry (ID: %v)", eventId)

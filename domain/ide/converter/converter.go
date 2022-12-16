@@ -92,18 +92,19 @@ func ToTextEdit(edit snyk.TextEdit) sglsp.TextEdit {
 	}
 }
 
-func ToSeverity(severity snyk.Severity) sglsp.DiagnosticSeverity {
+func ToSeverity(severity snyk.Severity) lsp.DiagnosticSeverity {
 	switch severity {
 	case snyk.Critical:
-		return sglsp.Error
+		return lsp.DiagnosticsSeverityError
 	case snyk.High:
-		return sglsp.Error
+		return lsp.DiagnosticsSeverityError
 	case snyk.Medium:
-		return sglsp.Warning
+		return lsp.DiagnosticsSeverityWarning
 	case snyk.Low:
-		return sglsp.Information
+		return lsp.DiagnosticsSeverityInformation
+	default:
+		return lsp.DiagnosticsSeverityHint
 	}
-	return sglsp.Info
 }
 
 func ToRange(r snyk.Range) sglsp.Range {
