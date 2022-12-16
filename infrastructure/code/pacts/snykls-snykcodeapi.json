@@ -285,6 +285,9 @@
                     "name": "string",
                     "rules": [
                       {
+                        "categories": [
+                          "string"
+                        ],
                         "defaultConfiguration": {
                           "level": "string"
                         },
@@ -517,6 +520,15 @@
             "min": 1
           },
           "$.body.sarif.runs[*].tool.driver.rules[*].*": {
+            "match": "type"
+          },
+          "$.body.sarif.runs[*].tool.driver.rules[*].categories": {
+            "min": 1
+          },
+          "$.body.sarif.runs[*].tool.driver.rules[*].categories[*].*": {
+            "match": "type"
+          },
+          "$.body.sarif.runs[*].tool.driver.rules[*].categories[*]": {
             "match": "type"
           },
           "$.body.sarif.runs[*].tool.driver.rules[*].defaultConfiguration.level": {

@@ -45,6 +45,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -226,6 +227,23 @@ func Test_initialize_shouldSupportCodeLenses(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, result.Capabilities.CodeLensProvider.ResolveProvider, false)
+}
+
+func Test_initialized_shouldInitializeAndTriggerCliDownload(t *testing.T) {
+	loc := setupServer(t)
+
+	settings := lsp.Settings{ManageBinariesAutomatically: "true", CliPath: filepath.Join(t.TempDir(), "notexistent")}
+
+	_, err := loc.Client.Call(ctx, "initialize", lsp.InitializeParams{InitializationOptions: settings})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = loc.Client.Call(ctx, "initialized", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, 1, di.Installer().(*install.FakeInstaller).Installs())
 }
 
 func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
@@ -588,18 +606,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
 
 	installer := di.Installer()
-	for { // remove cli for testing
-		find, err := installer.Find()
-		if err == nil {
-			err = os.Remove(find)
-			log.Debug().Msgf("Test: removing cli at %s", find)
-			if err != nil {
-				t.Fatal("couldn't remove cli for test")
-			}
-		} else {
-			break
-		}
-	}
+
 	err := os.Unsetenv("SNYK_CLI_PATH")
 	if err != nil {
 		t.Fatal("couldn't unset environment variable SNYK_CLI_PATH")
@@ -607,7 +614,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 
 	didOpenParams, dir := didOpenTextParams(t)
 	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService()))
-
+	config.CurrentConfig().CliSettings().SetPath(t.TempDir() + "not-existing-cli")
 	// Act
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
@@ -616,8 +623,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 
 	// Assert
 	assert.Eventually(t, func() bool {
-		find, _ := installer.Find()
-		return find != ""
+		return installer.(*install.FakeInstaller).Installs() > 0
 	}, maxIntegTestDuration, 10*time.Millisecond)
 }
 

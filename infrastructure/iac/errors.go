@@ -22,6 +22,7 @@ const (
 	failedToParseInputErrorCode        = 2105
 	notRecognizedOptionErrorCode       = 422
 	couldNotFindValidIacFilesErrorCode = 1010
+	failedToParseTerraform             = 1040
 )
 
 var ignorableIacErrorCodes = map[int]bool{
@@ -38,4 +39,6 @@ var ignorableIacErrorCodes = map[int]bool{
 
 	// No reason to report when there aren't any valid IaC files
 	couldNotFindValidIacFilesErrorCode: true,
+
+	failedToParseTerraform: true,
 }

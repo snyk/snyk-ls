@@ -33,7 +33,7 @@ import (
 
 func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 	testutil.IntegTest(t)
-	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), install.NewTestInstaller())
+	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), install.NewFakeInstaller())
 	testutil.CreateDummyProgressListener(t)
 
 	config.CurrentConfig().CliSettings().SetPath("")
@@ -46,7 +46,7 @@ func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 
 func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
 	testutil.UnitTest(t)
-	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), install.NewTestInstaller())
+	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), install.NewFakeInstaller())
 
 	tempDir := t.TempDir()
 	tempFile := testutil.CreateTempFile(tempDir, t)
@@ -65,7 +65,7 @@ func TestInitializer_whenNoCli_Installs(t *testing.T) {
 	settings.SetPath(testCliPath)
 	config.CurrentConfig().SetCliSettings(settings)
 
-	installer := install.NewTestInstaller()
+	installer := install.NewFakeInstaller()
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
 
 	go func() { _ = initializer.Init() }()
@@ -128,7 +128,7 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_DoesNotInstall(t *testing.T) {
 	testutil.UnitTest(t)
 	config.CurrentConfig().SetManageBinariesAutomatically(false)
 
-	installer := install.NewTestInstaller()
+	installer := install.NewFakeInstaller()
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
 
 	go func() { _ = initializer.Init() }()
@@ -144,7 +144,7 @@ func TestInitializer_whenOutdated_Updates(t *testing.T) {
 	config.CurrentConfig().SetManageBinariesAutomatically(true)
 	createDummyCliBinaryWithCreatedDate(t, fiveDaysAgo)
 
-	installer := install.NewTestInstaller()
+	installer := install.NewFakeInstaller()
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
 
 	_ = initializer.Init()
@@ -160,7 +160,7 @@ func TestInitializer_whenUpToDate_DoesNotUpdates(t *testing.T) {
 	threeDaysAgo := time.Now().Add(time.Hour * 24 * 3) // exactly 4 days is considered as not outdated.
 	createDummyCliBinaryWithCreatedDate(t, threeDaysAgo)
 
-	installer := install.NewTestInstaller()
+	installer := install.NewFakeInstaller()
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
 
 	_ = initializer.Init()
@@ -175,7 +175,7 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_PreventsUpdate(t *testing.T) {
 	config.CurrentConfig().SetManageBinariesAutomatically(false)
 	createDummyCliBinaryWithCreatedDate(t, fiveDaysAgo)
 
-	installer := install.NewTestInstaller()
+	installer := install.NewFakeInstaller()
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
 
 	_ = initializer.Init()
@@ -189,7 +189,7 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_PreventsInstall(t *testing.T) {
 	testutil.UnitTest(t)
 	config.CurrentConfig().SetManageBinariesAutomatically(false)
 
-	installer := install.NewTestInstaller()
+	installer := install.NewFakeInstaller()
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
 
 	_ = initializer.Init()
@@ -204,7 +204,7 @@ func TestInitializer_whenBinaryUpdatesAllowed_Updates(t *testing.T) {
 	config.CurrentConfig().SetManageBinariesAutomatically(true)
 	createDummyCliBinaryWithCreatedDate(t, fiveDaysAgo)
 
-	installer := install.NewTestInstaller()
+	installer := install.NewFakeInstaller()
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
 
 	_ = initializer.Init()

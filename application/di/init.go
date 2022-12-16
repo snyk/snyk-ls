@@ -49,7 +49,7 @@ var snykCodeScanner *code2.Scanner
 var infrastructureAsCodeScanner *iac.Scanner
 var openSourceScanner *oss.Scanner
 var scanInitializer initialize.Initializer
-var authenticator snyk.AuthenticationService
+var authenticationService snyk.AuthenticationService
 var instrumentor performance2.Instrumentor
 var errorReporter errorreporting.ErrorReporter
 var installer install.Installer
@@ -57,6 +57,7 @@ var analytics ux2.Analytics
 var snykCli cli2.Executor
 var hoverService hover.Service
 var scanner snyk.Scanner
+var cliInitializer *cli2.Initializer
 
 var initMutex = &sync.Mutex{}
 
@@ -97,16 +98,18 @@ func initInfrastructure() {
 	snykApiClient = snyk_api.NewSnykApiClient()
 	analytics = amplitude.NewAmplitudeClient(snykApiClient, errorReporter)
 	authProvider := auth2.NewCliAuthenticationProvider(errorReporter)
-	authenticator = services.NewAuthenticationService(authProvider, analytics, errorReporter)
-	snykCli = cli2.NewExecutor(authenticator, errorReporter, analytics)
+	authenticationService = services.NewAuthenticationService(authProvider, analytics, errorReporter)
+	snykCli = cli2.NewExecutor(authenticationService, errorReporter, analytics)
 	snykCodeClient = code2.NewHTTPRepository(instrumentor, errorReporter)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
 	snykCodeScanner = code2.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics)
+	cliInitializer = cli2.NewInitializer(errorReporter, installer)
+	authInitializer := auth2.NewInitializer(authenticationService, errorReporter, analytics)
 	scanInitializer = initialize.NewDelegatingInitializer(
-		cli2.NewInitializer(errorReporter, install.NewInstaller(errorReporter)),
-		auth2.NewInitializer(authenticator, errorReporter, analytics),
+		cliInitializer,
+		authInitializer,
 	)
 }
 
@@ -118,16 +121,18 @@ func TestInit(t *testing.T) {
 	analytics = ux2.NewTestAnalytics()
 	instrumentor = performance2.NewTestInstrumentor()
 	errorReporter = errorreporting.NewTestErrorReporter()
-	installer = install.NewInstaller(errorReporter)
+	installer = install.NewFakeInstaller()
 	authProvider := auth2.NewFakeCliAuthenticationProvider()
-	authenticator = services.NewAuthenticationService(authProvider, analytics, errorReporter)
+	authenticationService = services.NewAuthenticationService(authProvider, analytics, errorReporter)
+	cliInitializer = cli2.NewInitializer(errorReporter, installer)
+	authInitializer := auth2.NewInitializer(authenticationService, errorReporter, analytics)
 	scanInitializer = initialize.NewDelegatingInitializer(
-		cli2.NewInitializer(errorReporter, install.NewInstaller(errorReporter)),
-		auth2.NewInitializer(authenticator, errorReporter, analytics),
+		cliInitializer,
+		authInitializer,
 	)
 	fakeClient := &code2.FakeSnykCodeClient{}
 	snykCodeClient = fakeClient
-	snykCli = cli2.NewExecutor(authenticator, errorReporter, analytics)
+	snykCli = cli2.NewExecutor(authenticationService, errorReporter, analytics)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	fakeApiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
 	snykCodeScanner = code2.New(snykCodeBundleUploader, fakeApiClient, errorReporter, analytics)
@@ -166,7 +171,7 @@ func SnykCli() cli2.Executor {
 func Authenticator() snyk.AuthenticationService {
 	initMutex.Lock()
 	defer initMutex.Unlock()
-	return authenticator
+	return authenticationService
 }
 
 func HoverService() hover.Service {
@@ -203,4 +208,10 @@ func Installer() install.Installer {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return installer
+}
+
+func CliInitializer() *cli2.Initializer {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return cliInitializer
 }
