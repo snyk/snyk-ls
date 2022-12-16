@@ -256,6 +256,10 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 }
 func InitializedHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializedParams) (interface{}, error) {
+		err := di.CliInitializer().Init()
+		if err != nil {
+			di.ErrorReporter().CaptureError(err)
+		}
 		workspace.Get().ScanWorkspace(context.Background())
 		if config.CurrentConfig().AutomaticAuthentication() || config.CurrentConfig().NonEmptyToken() {
 			go handleUntrustedFolders(context.Background(), srv)

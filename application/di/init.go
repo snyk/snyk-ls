@@ -57,6 +57,7 @@ var analytics ux2.Analytics
 var snykCli cli2.Executor
 var hoverService hover.Service
 var scanner snyk.Scanner
+var cliInitializer *cli2.Initializer
 
 var initMutex = &sync.Mutex{}
 
@@ -104,9 +105,11 @@ func initInfrastructure() {
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
 	snykCodeScanner = code2.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics)
+	cliInitializer = cli2.NewInitializer(errorReporter, installer)
+	authInitializer := auth2.NewInitializer(authenticator, errorReporter, analytics)
 	scanInitializer = initialize.NewDelegatingInitializer(
-		cli2.NewInitializer(errorReporter, install.NewInstaller(errorReporter)),
-		auth2.NewInitializer(authenticator, errorReporter, analytics),
+		cliInitializer,
+		authInitializer,
 	)
 }
 
@@ -203,4 +206,10 @@ func Installer() install.Installer {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return installer
+}
+
+func CliInitializer() *cli2.Initializer {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return cliInitializer
 }
