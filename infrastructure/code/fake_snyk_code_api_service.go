@@ -30,6 +30,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -63,6 +64,8 @@ var (
 		ID:          "SNYK-123",
 		Range:       fakeRange,
 		Severity:    snyk.High,
+		Product:     product.ProductCode,
+		IssueType:   snyk.CodeQualityIssue,
 		Message:     "This is a dummy error (severity error)",
 		Commands:    []snyk.Command{FakeCommand},
 		CodeActions: []snyk.CodeAction{FakeCodeAction},

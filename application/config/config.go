@@ -134,6 +134,7 @@ type Config struct {
 	isTelemetryEnabled           concurrency.AtomicBool
 	manageBinariesAutomatically  concurrency.AtomicBool
 	logPath                      string
+	logFile                      *os.File
 	organization                 string
 	snykCodeAnalysisTimeout      time.Duration
 	snykApiUrl                   string
@@ -400,6 +401,7 @@ func (c *Config) ConfigureLogging(level string) {
 	logLevel, err := zerolog.ParseLevel(level)
 	if err != nil {
 		fmt.Println("Can't set log level from flag. Setting to default (=info)")
+		logLevel = zerolog.InfoLevel
 	}
 
 	// env var overrides flag
@@ -418,14 +420,25 @@ func (c *Config) ConfigureLogging(level string) {
 	zerolog.TimeFieldFormat = time.RFC3339
 
 	if c.logPath != "" {
-		file, err := os.OpenFile(c.logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+		c.logFile, err = os.OpenFile(c.logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 		if err != nil {
 			log.Err(err).Msg("couldn't open logfile")
 		}
 		log.Info().Msgf("Logging to file %s", c.logPath)
-		log.Logger = log.Output(file)
+		log.Logger = log.Output(c.logFile)
 	} else {
 		log.Info().Msgf("Logging to console") // TODO: log using LSP's 'window/logMessage'
+		log.Logger = zerolog.New(os.Stderr)
+	}
+}
+
+// DisableLoggingToFile closes the open log file and sets the global logger back to it's default
+func (c *Config) DisableLoggingToFile() {
+	log.Info().Msgf("Disabling file logging to %v", c.logPath)
+	c.logPath = ""
+	log.Logger = zerolog.New(os.Stderr).With().Timestamp().Logger()
+	if c.logFile != nil {
+		_ = c.logFile.Close()
 	}
 }
 
@@ -589,17 +602,17 @@ func (c *Config) SetTrustedFolders(folderPaths []string) {
 	c.trustedFolders = folderPaths
 }
 
-func (c *Config) GetSupportedProducts() map[product.Product]bool {
-	supported := make(map[product.Product]bool)
-	if c.IsSnykOssEnabled() {
-		supported[product.ProductOpenSource] = true
-	}
-	if c.IsSnykCodeEnabled() {
-		supported[product.ProductCode] = true
-	}
-	if c.IsSnykIacEnabled() {
-		supported[product.ProductInfrastructureAsCode] = true
-	}
+func (c *Config) GetDisplayableIssueTypes() map[product.FilterableIssueType]bool {
+	supported := make(map[product.FilterableIssueType]bool)
+	supported[product.FilterableIssueTypeOpenSource] = c.IsSnykOssEnabled()
+
+	// Handle backwards compatibility.
+	// Older configurations had a single value for both snyk code issue types (security & quality)
+	// New configurations have 1 for each, and should ignore the general IsSnykCodeEnabled value.
+	supported[product.FilterableIssueTypeCodeSecurity] = c.IsSnykCodeEnabled() || c.IsSnykCodeSecurityEnabled()
+	supported[product.FilterableIssueTypeCodeQuality] = c.IsSnykCodeEnabled() || c.IsSnykCodeQualityEnabled()
+
+	supported[product.FilterableIssueTypeInfrastructureAsCode] = c.IsSnykIacEnabled()
 
 	return supported
 }

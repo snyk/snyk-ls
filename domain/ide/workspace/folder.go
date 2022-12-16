@@ -181,21 +181,31 @@ func (f *Folder) filterCachedDiagnostics() (fileIssues map[string][]snyk.Issue) 
 
 	logger.Debug().Msgf("Filtering issues by severity: %v", config.CurrentConfig().FilterSeverity())
 
+	supportedIssueTypes := config.CurrentConfig().GetDisplayableIssueTypes()
 	f.documentDiagnosticCache.Range(func(filePath string, issues []snyk.Issue) bool {
-		filteredIssues := []snyk.Issue{}
-
-		for _, issue := range issues {
-			if isVisibleSeverity(issue) {
-				logger.Trace().Msgf("Including visible severity issue: %v", issue)
-				filteredIssues = append(filteredIssues, issue)
-			}
-		}
-
+		// Consider doing the loop body in parallel for performance (and use a thread-safe map)
+		filteredIssues := filterIssues(issues, supportedIssueTypes)
 		issuesByFile[filePath] = filteredIssues
 		return true
 	})
 
 	return issuesByFile
+}
+
+func filterIssues(issues []snyk.Issue, supportedIssueTypes map[product.FilterableIssueType]bool) []snyk.Issue {
+	logger := log.With().Str("method", "filterIssues").Logger()
+	filteredIssues := []snyk.Issue{}
+
+	for _, issue := range issues {
+		// Logging here might hurt performance, should benchmark if filtering is slow
+		if isVisibleSeverity(issue) && supportedIssueTypes[issue.GetFilterableIssueType()] {
+			logger.Trace().Msgf("Including visible severity issue: %v", issue)
+			filteredIssues = append(filteredIssues, issue)
+		} else {
+			logger.Trace().Msgf("Filtering out issue %v", issue)
+		}
+	}
+	return filteredIssues
 }
 
 func isVisibleSeverity(issue snyk.Issue) bool {
@@ -298,11 +308,11 @@ func (f *Folder) ClearDiagnostics() {
 	})
 }
 
-func (f *Folder) ClearDiagnosticsByProduct(removedProduct product.Product) {
+func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssueType) {
 	f.documentDiagnosticCache.Range(func(filePath string, previousIssues []snyk.Issue) bool {
 		newIssues := []snyk.Issue{}
 		for _, issue := range previousIssues {
-			if issue.Product != removedProduct {
+			if issue.GetFilterableIssueType() != removedType {
 				newIssues = append(newIssues, issue)
 			}
 		}
@@ -313,7 +323,7 @@ func (f *Folder) ClearDiagnosticsByProduct(removedProduct product.Product) {
 			f.sendHoversForFile(filePath, newIssues)
 		}
 
-		return true // Always continue iteration
+		return true
 	})
 }
 

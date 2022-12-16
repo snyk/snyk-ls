@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -52,6 +54,29 @@ type Issue struct {
 	CodeActions []CodeAction
 	// Commands that can be executed
 	Commands []Command
+}
+
+func (i Issue) GetFilterableIssueType() product.FilterableIssueType {
+	switch i.Product {
+	case product.ProductOpenSource:
+		return product.FilterableIssueTypeOpenSource
+	case product.ProductInfrastructureAsCode:
+		return product.FilterableIssueTypeInfrastructureAsCode
+	case product.ProductCode:
+		switch i.IssueType {
+		case CodeQualityIssue:
+			return product.FilterableIssueTypeCodeQuality
+		case CodeSecurityVulnerability:
+			return product.FilterableIssueTypeCodeSecurity
+		default:
+			const msg = "Failed to resolve code issue type. Product is Code, but issue type unspecified. Defaulting to Security issue type"
+			//goland:noinspection GoRedundantConversion
+			log.Warn().Int8("IssueType", int8(i.IssueType)).Msg(msg)
+			return product.FilterableIssueTypeCodeSecurity
+		}
+	default:
+		return ""
+	}
 }
 
 func (i Issue) String() string {
