@@ -50,7 +50,7 @@ func SendErrorDiagnostic(path string, err error) {
 		URI: uri.PathToUri(path),
 		Diagnostics: []lsp.Diagnostic{{
 			Range:    sglsp.Range{},
-			Severity: sglsp.Warning,
+			Severity: lsp.DiagnosticsSeverityWarning,
 			Code:     "Snyk Error",
 			Message:  err.Error(),
 		}},

@@ -70,5 +70,4 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 	config.CurrentConfig().SetErrorReportingEnabled(true)
 	captured = target.CaptureErrorAndReportAsIssue(path, e)
 	assert.True(t, captured)
-
 }
