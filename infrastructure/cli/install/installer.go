@@ -224,39 +224,44 @@ func cleanupLockFile(lockFileName string) {
 	}
 }
 
-type TestInstaller struct {
+type FakeInstaller struct {
 	updates  int
 	installs int
 	mutex    sync.Mutex
 }
 
-func (t *TestInstaller) Updates() int {
+func (t *FakeInstaller) Updates() int {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
 	return t.updates
 }
 
-func (t *TestInstaller) Installs() int {
+func (t *FakeInstaller) Installs() int {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
 	return t.installs
 }
 
-func (t *TestInstaller) Find() (string, error) {
+func (t *FakeInstaller) Find() (string, error) {
 	return "", nil
 }
 
-func (t *TestInstaller) Install(_ context.Context) (string, error) {
+func (t *FakeInstaller) Install(_ context.Context) (string, error) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
+
+	err := os.WriteFile(config.CurrentConfig().CliSettings().Path(), []byte("fake"), 0755)
+	if err != nil {
+		return "", err
+	}
 
 	t.installs++
 	return "", nil
 }
 
-func (t *TestInstaller) Update(_ context.Context) (bool, error) {
+func (t *FakeInstaller) Update(_ context.Context) (bool, error) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
@@ -264,8 +269,8 @@ func (t *TestInstaller) Update(_ context.Context) (bool, error) {
 	return true, nil
 }
 
-func NewTestInstaller() *TestInstaller {
-	return &TestInstaller{
+func NewFakeInstaller() *FakeInstaller {
+	return &FakeInstaller{
 		mutex: sync.Mutex{},
 	}
 }
