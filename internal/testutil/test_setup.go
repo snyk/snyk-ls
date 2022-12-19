@@ -21,6 +21,8 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
@@ -42,13 +44,30 @@ func SmokeTest(t *testing.T) {
 func UnitTest(t *testing.T) {
 	t.Helper()
 	c := config.New()
-	c.SetManageBinariesAutomatically(false)
+	//c.SetManageBinariesAutomatically(false)
 	c.SetToken("00000000-0000-0000-0000-000000000001")
 	c.SetTrustedFolderFeatureEnabled(false)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t)
 	notification.DisposeListener()
-	t.Cleanup(func() { notification.DisposeListener() })
+	t.Cleanup(func() {
+		notification.DisposeListener()
+		cleanupFakeCliFile(c)
+	})
+}
+
+func cleanupFakeCliFile(c *config.Config) {
+	stat, err := os.Stat(c.CliSettings().Path())
+	if err != nil {
+		return
+	}
+	if stat.Size() < 1000 {
+		// this is a fake CLI, removing it
+		err = os.Remove(c.CliSettings().Path())
+		if err == nil {
+			log.Warn().Err(err).Msg("Failed to remove fake CLI")
+		}
+	}
 }
 
 func CLIDownloadLockFileCleanUp(t *testing.T) {
@@ -113,13 +132,15 @@ func prepareTestHelper(t *testing.T, envVar string) {
 	c.SetTelemetryEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
 	config.SetCurrentConfig(c)
-
 	CLIDownloadLockFileCleanUp(t)
+	t.Cleanup(func() {
+		notification.DisposeListener()
+		cleanupFakeCliFile(c)
+	})
 }
 
-func OnlyEnableCodeAndDisableBinaryManagement() {
+func OnlyEnableCode() {
 	config.CurrentConfig().SetSnykIacEnabled(false)
 	config.CurrentConfig().SetSnykOssEnabled(false)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
-	config.CurrentConfig().SetManageBinariesAutomatically(false)
 }

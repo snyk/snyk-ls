@@ -80,11 +80,13 @@ func (c *CliSettings) Installed() bool {
 	c.cliPathAccessMutex.Lock()
 	defer c.cliPathAccessMutex.Unlock()
 	stat, err := os.Stat(c.cliPath)
+	if err == nil {
+		log.Debug().Str("method", "config.cliSettings.Installed").Msgf("CLI path: %s, Size: %d, Perm: %s", c.cliPath, stat.Size(), stat.Mode().Perm())
+	}
 	isDirectory := stat != nil && stat.IsDir()
 	if isDirectory {
 		log.Warn().Msgf("CLI path (%s) refers to a directory and not a file", c.cliPath)
 	}
-
 	return c.cliPath != "" && err == nil && !isDirectory
 }
 

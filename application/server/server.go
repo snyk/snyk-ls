@@ -256,12 +256,16 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 }
 func InitializedHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializedParams) (interface{}, error) {
+		log.Debug().Str("method", "InitializedHandler").Msgf("initializing CLI now")
 		err := di.CliInitializer().Init()
 		if err != nil {
 			di.ErrorReporter().CaptureError(err)
 		}
+		log.Debug().Str("method", "InitializedHandler").Msgf("triggering workspace scan after successful initialization")
 		workspace.Get().ScanWorkspace(context.Background())
+
 		if config.CurrentConfig().AutomaticAuthentication() || config.CurrentConfig().NonEmptyToken() {
+			log.Debug().Str("method", "InitializedHandler").Msgf("trying to get trusted status for untrusted folders")
 			go handleUntrustedFolders(context.Background(), srv)
 		}
 		return nil, nil

@@ -251,8 +251,9 @@ func (t *FakeInstaller) Find() (string, error) {
 func (t *FakeInstaller) Install(_ context.Context) (string, error) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-
-	err := os.WriteFile(config.CurrentConfig().CliSettings().Path(), []byte("fake"), 0755)
+	path := config.CurrentConfig().CliSettings().Path()
+	log.Debug().Msgf("Installing fake 4-byte CLI to %s", path)
+	err := os.WriteFile(path, []byte("fake"), 0755)
 	if err != nil {
 		return "", err
 	}
