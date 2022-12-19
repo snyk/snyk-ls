@@ -569,7 +569,6 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 			ActivateSnykIac:             "false",
 			Organization:                "fancy org",
 			Token:                       "xxx",
-			ManageBinariesAutomatically: "false",
 			CliPath:                     "",
 			FilterSeverity:              lsp.DefaultSeverityFilter(),
 			EnableTrustedFoldersFeature: "false",

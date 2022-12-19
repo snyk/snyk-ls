@@ -41,10 +41,11 @@ func Test_GetCodeLensFromCommand(t *testing.T) {
 	assert.Equal(t, command.Arguments, codeLens.Command.Arguments)
 }
 
-func TestGetFor(t *testing.T) {
+func Test_GetCodeLensForPath(t *testing.T) {
 	testutil.IntegTest(t)
 	di.TestInit(t)
-	testutil.OnlyEnableCodeAndDisableBinaryManagement()
+	testutil.OnlyEnableCode()
+
 	filePath, dir := code.FakeDiagnosticPath(t)
 	folder := workspace.NewFolder(dir, "dummy", di.Scanner(), di.HoverService())
 	workspace.Set(workspace.New(performance.NewTestInstrumentor(), di.Scanner(), di.HoverService()))

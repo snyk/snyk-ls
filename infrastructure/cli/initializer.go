@@ -51,6 +51,7 @@ func (i *Initializer) Init() error {
 	defer Mutex.Unlock()
 
 	cliInstalled := config.CurrentConfig().CliSettings().Installed()
+	log.Debug().Str("method", "cli.Init").Str("cliPath", config.CurrentConfig().CliSettings().Path()).Msgf("CLI installed: %v", cliInstalled)
 	if !config.CurrentConfig().ManageBinariesAutomatically() {
 		if !cliInstalled {
 			notification.SendShowMessage(sglsp.Warning, "Automatic CLI downloads are disabled and no CLI path is configured. Enable automatic downloads or set a valid CLI path.")
@@ -60,6 +61,7 @@ func (i *Initializer) Init() error {
 	}
 
 	if cliInstalled && i.isOutdatedCli() {
+
 		go i.updateCli()
 	}
 
@@ -78,6 +80,7 @@ func (i *Initializer) Init() error {
 		}
 		i.installCli()
 		if !config.CurrentConfig().CliSettings().Installed() {
+			log.Debug().Str("method", "cli.Init").Msg("CLI not found, retrying in 2s")
 			time.Sleep(2 * time.Second)
 		}
 	}
@@ -90,6 +93,7 @@ func (i *Initializer) installCli() {
 	currentConfig := config.CurrentConfig()
 	if currentConfig.CliSettings().IsPathDefined() {
 		cliPath = currentConfig.CliSettings().Path()
+		log.Info().Str("method", "installCli").Str("cliPath", cliPath).Msg("Using configured CLI path")
 	} else {
 		cliPath, err = i.installer.Find()
 		if err != nil {
@@ -97,7 +101,7 @@ func (i *Initializer) installCli() {
 			cliFileName := (&install.Discovery{}).ExecutableName(false)
 			cliPath = filepath.Join(currentConfig.CliSettings().DefaultBinaryInstallPath(), cliFileName)
 		} else {
-			log.Info().Str("method", "installCli").Msgf("found CLI at %s", cliPath)
+			log.Info().Str("method", "installCli").Str("cliPath", cliPath).Msgf("found CLI at %s", cliPath)
 		}
 		currentConfig.CliSettings().SetPath(cliPath)
 	}

@@ -33,7 +33,7 @@ import (
 func TestGetFor(t *testing.T) {
 	testutil.IntegTest(t)
 	di.TestInit(t)
-	testutil.OnlyEnableCodeAndDisableBinaryManagement()
+	testutil.OnlyEnableCode()
 
 	filePath, dir := code.FakeDiagnosticPath(t)
 	folder := workspace.NewFolder(dir, "dummy", di.Scanner(), di.HoverService())
