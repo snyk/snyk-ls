@@ -44,7 +44,6 @@ func SmokeTest(t *testing.T) {
 func UnitTest(t *testing.T) {
 	t.Helper()
 	c := config.New()
-	//c.SetManageBinariesAutomatically(false)
 	c.SetToken("00000000-0000-0000-0000-000000000001")
 	c.SetTrustedFolderFeatureEnabled(false)
 	config.SetCurrentConfig(c)
