@@ -156,6 +156,10 @@ type Config struct {
 	trustedFoldersFeatureEnabled bool
 	activateSnykCodeSecurity     bool
 	activateSnykCodeQuality      bool
+	osPlatform                   string
+	osArch                       string
+	runtimeName                  string
+	runtimeVersion               string
 }
 
 func CurrentConfig() *Config {
@@ -633,4 +637,36 @@ func (c *Config) IsSnykCodeQualityEnabled() bool {
 
 func (c *Config) EnableSnykCodeQuality(activate bool) {
 	c.activateSnykCodeQuality = activate
+}
+
+func (c *Config) OsPlatform() string {
+	return c.osPlatform
+}
+
+func (c *Config) SetOsPlatform(osPlatform string) {
+	c.osPlatform = osPlatform
+}
+
+func (c *Config) OsArch() string {
+	return c.osArch
+}
+
+func (c *Config) SetOsArch(osArch string) {
+	c.osArch = osArch
+}
+
+func (c *Config) RuntimeName() string {
+	return c.runtimeName
+}
+
+func (c *Config) SetRuntimeName(runtimeName string) {
+	c.runtimeName = runtimeName
+}
+
+func (c *Config) RuntimeVersion() string {
+	return c.runtimeVersion
+}
+
+func (c *Config) SetRuntimeVersion(runtimeVersion string) {
+	c.runtimeVersion = runtimeVersion
 }
