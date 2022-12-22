@@ -71,11 +71,22 @@ func (c *Client) Shutdown() error {
 }
 
 func (c *Client) AnalysisIsReady(properties ux2.AnalysisIsReadyProperties) {
-	log.Info().Str("method", "AnalysisIsReady").Msg("analytics enqueued")
+	log.Debug().Str("method", "AnalysisIsReady").Msg("analytics enqueued")
 	analysisType := ampli.AnalysisIsReadyAnalysisType(properties.AnalysisType)
 	ide := ampli.AnalysisIsReadyIde(getIdeProperty())
 	result := ampli.AnalysisIsReadyResult(properties.Result)
-	event := ampli.AnalysisIsReady.Builder().AnalysisType(analysisType).Ide(ide).Result(result).DurationInSeconds(properties.DurationInSeconds).FileCount(properties.FileCount).Build()
+	conf := config.CurrentConfig()
+	event := ampli.AnalysisIsReady.Builder().
+		AnalysisType(analysisType).
+		Ide(ide).
+		Result(result).
+		DurationInSeconds(properties.DurationInSeconds).
+		FileCount(properties.FileCount).
+		OsPlatform(conf.OsPlatform()).
+		OsArch(conf.OsArch()).
+		RuntimeName(conf.RuntimeName()).
+		RuntimeVersion(conf.RuntimeVersion()).
+		Build()
 
 	captureFn := func(authenticatedUserId string, eventOptions ...ampli.EventOptions) {
 		ampli.Instance.AnalysisIsReady(authenticatedUserId, event, eventOptions...)
@@ -84,13 +95,23 @@ func (c *Client) AnalysisIsReady(properties ux2.AnalysisIsReadyProperties) {
 }
 
 func (c *Client) AnalysisIsTriggered(properties ux2.AnalysisIsTriggeredProperties) {
-	log.Info().Str("method", "AnalysisIsTriggered").Msg("analytics enqueued")
+	log.Debug().Str("method", "AnalysisIsTriggered").Msg("analytics enqueued")
 	analysisTypes := make([]string, 0, len(properties.AnalysisType))
 	for _, analysisType := range properties.AnalysisType {
 		analysisTypes = append(analysisTypes, string(analysisType))
 	}
+	conf := config.CurrentConfig()
 	ide := ampli.AnalysisIsTriggeredIde(getIdeProperty())
-	event := ampli.AnalysisIsTriggered.Builder().AnalysisType(analysisTypes).Ide(ide).TriggeredByUser(properties.TriggeredByUser).Build()
+	event := ampli.AnalysisIsTriggered.
+		Builder().
+		AnalysisType(analysisTypes).
+		Ide(ide).
+		TriggeredByUser(properties.TriggeredByUser).
+		OsPlatform(conf.OsPlatform()).
+		OsArch(conf.OsArch()).
+		RuntimeName(conf.RuntimeName()).
+		RuntimeVersion(conf.RuntimeVersion()).
+		Build()
 
 	captureFn := func(authenticatedUserId string, eventOptions ...ampli.EventOptions) {
 		ampli.Instance.AnalysisIsTriggered(authenticatedUserId, event, eventOptions...)
@@ -99,11 +120,21 @@ func (c *Client) AnalysisIsTriggered(properties ux2.AnalysisIsTriggeredPropertie
 }
 
 func (c *Client) IssueHoverIsDisplayed(properties ux2.IssueHoverIsDisplayedProperties) {
-	log.Info().Str("method", "IssueHoverIsDisplayed").Msg("analytics enqueued")
+	log.Debug().Str("method", "IssueHoverIsDisplayed").Msg("analytics enqueued")
 	ide := ampli.IssueHoverIsDisplayedIde(getIdeProperty())
 	issueType := ampli.IssueHoverIsDisplayedIssueType(properties.IssueType)
 	severity := ampli.IssueHoverIsDisplayedSeverity(properties.Severity)
-	event := ampli.IssueHoverIsDisplayed.Builder().Ide(ide).IssueId(properties.IssueId).IssueType(issueType).Severity(severity).Build()
+	conf := config.CurrentConfig()
+	event := ampli.IssueHoverIsDisplayed.Builder().
+		Ide(ide).
+		IssueId(properties.IssueId).
+		IssueType(issueType).
+		Severity(severity).
+		OsPlatform(conf.OsPlatform()).
+		OsArch(conf.OsArch()).
+		RuntimeName(conf.RuntimeName()).
+		RuntimeVersion(conf.RuntimeVersion()).
+		Build()
 
 	captureFn := func(authenticatedUserId string, eventOptions ...ampli.EventOptions) {
 		ampli.Instance.IssueHoverIsDisplayed(authenticatedUserId, event, eventOptions...)
@@ -112,9 +143,17 @@ func (c *Client) IssueHoverIsDisplayed(properties ux2.IssueHoverIsDisplayedPrope
 }
 
 func (c *Client) PluginIsInstalled(_ ux2.PluginIsInstalledProperties) {
-	log.Info().Str("method", "PluginIsInstalled").Msg("analytics enqueued")
+	log.Debug().Str("method", "PluginIsInstalled").Msg("analytics enqueued")
+	conf := config.CurrentConfig()
+
 	ide := ampli.PluginIsInstalledIde(getIdeProperty())
-	event := ampli.PluginIsInstalled.Builder().Ide(ide).Build()
+	event := ampli.PluginIsInstalled.Builder().
+		Ide(ide).
+		OsPlatform(conf.OsPlatform()).
+		OsArch(conf.OsArch()).
+		RuntimeName(conf.RuntimeName()).
+		RuntimeVersion(conf.RuntimeVersion()).
+		Build()
 
 	captureFn := func(_ string, eventOptions ...ampli.EventOptions) {
 		ampli.Instance.PluginIsInstalled("", event, eventOptions...)
@@ -134,7 +173,7 @@ func (c *Client) enqueueEvent(eventFn captureEvent) {
 
 func (c *Client) Identify() {
 	method := "infrastructure.segment.client"
-	log.Info().Str("method", method).Msg("Identifying a user.")
+	log.Debug().Str("method", method).Msg("Identifying a user.")
 	if !config.CurrentConfig().NonEmptyToken() {
 		c.authenticatedUserId = ""
 		return

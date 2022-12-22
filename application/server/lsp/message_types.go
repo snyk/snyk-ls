@@ -298,6 +298,10 @@ type Settings struct {
 	TrustedFolders              []string       `json:"trustedFolders,omitempty"`
 	ActivateSnykCodeSecurity    string         `json:"activateSnykCodeSecurity,omitempty"`
 	ActivateSnykCodeQuality     string         `json:"activateSnykCodeQuality,omitempty"`
+	OsPlatform                  string         `json:"osPlatform,omitempty"`
+	OsArch                      string         `json:"osArch,omitempty"`
+	RuntimeVersion              string         `json:"runtimeVersion,omitempty"`
+	RuntimeName                 string         `json:"runtimeName,omitempty"`
 }
 
 type DidChangeConfigurationParams struct {

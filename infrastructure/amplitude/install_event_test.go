@@ -42,6 +42,12 @@ func Test_NewInstallationCreatesStateFile(t *testing.T) {
 
 func Test_NewInstallationSendsInstallEvent(t *testing.T) {
 	s, fakeSegmentClient, _ := setupUnitTest(t)
+	conf := config.CurrentConfig()
+	conf.SetRuntimeVersion("1.2.3")
+	conf.SetOsArch("amd64")
+	conf.SetOsPlatform("linux")
+	conf.SetRuntimeName("java")
+
 	cleanupInstallEventFile(t)
 
 	s.captureInstalledEvent()
@@ -50,9 +56,13 @@ func Test_NewInstallationSendsInstallEvent(t *testing.T) {
 	assert.Equal(t, segment.Track{
 		UserId:      "",
 		Event:       "Plugin Is Installed",
-		AnonymousId: config.CurrentConfig().DeviceID(),
+		AnonymousId: conf.DeviceID(),
 		Properties: segment.Properties{}.
 			Set("ide", ampli.PluginIsInstalledIde("Visual Studio Code")).
+			Set("osArch", conf.OsArch()).
+			Set("osPlatform", conf.OsPlatform()).
+			Set("runtimeName", conf.RuntimeName()).
+			Set("runtimeVersion", conf.RuntimeVersion()).
 			Set("itly", true),
 	}, fakeSegmentClient.trackedEvents[0])
 }

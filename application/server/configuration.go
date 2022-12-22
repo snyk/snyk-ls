@@ -120,6 +120,15 @@ func writeSettings(settings lsp.Settings, initialize bool) {
 	updateTrustedFolders(settings)
 	updateSnykCodeSecurity(settings)
 	updateSnykCodeQuality(settings)
+	updateRuntimeInfo(settings)
+}
+
+func updateRuntimeInfo(settings lsp.Settings) {
+	c := config.CurrentConfig()
+	c.SetOsArch(settings.OsArch)
+	c.SetOsPlatform(settings.OsPlatform)
+	c.SetRuntimeVersion(settings.RuntimeVersion)
+	c.SetRuntimeName(settings.RuntimeName)
 }
 
 func updateTrustedFolders(settings lsp.Settings) {

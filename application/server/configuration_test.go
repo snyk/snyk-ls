@@ -153,6 +153,10 @@ func Test_UpdateSettings(t *testing.T) {
 			Token:                       "a fancy token",
 			FilterSeverity:              lsp.DefaultSeverityFilter(),
 			TrustedFolders:              []string{"trustedPath1", "trustedPath2"},
+			OsPlatform:                  "windows",
+			OsArch:                      "amd64",
+			RuntimeName:                 "java",
+			RuntimeVersion:              "1.8.0_275",
 		}
 
 		UpdateSettings(settings)
@@ -176,6 +180,10 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, lsp.DefaultSeverityFilter(), c.FilterSeverity())
 		assert.Contains(t, c.TrustedFolders(), "trustedPath1")
 		assert.Contains(t, c.TrustedFolders(), "trustedPath2")
+		assert.Equal(t, settings.OsPlatform, c.OsPlatform())
+		assert.Equal(t, settings.OsArch, c.OsArch())
+		assert.Equal(t, settings.RuntimeName, c.RuntimeName())
+		assert.Equal(t, settings.RuntimeVersion, c.RuntimeVersion())
 	})
 
 	t.Run("blank organisation is ignored", func(t *testing.T) {

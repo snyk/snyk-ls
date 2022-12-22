@@ -67,6 +67,12 @@ func TestClient_IdentifyWithDisabledTelemetry(t *testing.T) {
 
 func Test_AnalyticEvents(t *testing.T) {
 	s, fakeSegmentClient, _ := setupUnitTest(t)
+	conf := config.CurrentConfig()
+	conf.SetRuntimeVersion("1.2.3")
+	conf.SetOsArch("amd64")
+	conf.SetOsPlatform("linux")
+	conf.SetRuntimeName("java")
+
 	tests := []struct {
 		name   string
 		track  func()
@@ -148,7 +154,14 @@ func Test_AnalyticEvents(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			test.track()
-			assert.ObjectsAreEqual(test.output, fakeSegmentClient.trackedEvents[0])
+			actual := fakeSegmentClient.trackedEvents[0].(segment.Track)
+
+			assert.ObjectsAreEqual(test.output, actual)
+
+			assert.Equal(t, conf.OsPlatform(), actual.Properties["osPlatform"])
+			assert.Equal(t, conf.OsArch(), actual.Properties["osArch"])
+			assert.Equal(t, conf.RuntimeName(), actual.Properties["runtimeName"])
+			assert.Equal(t, conf.RuntimeVersion(), actual.Properties["runtimeVersion"])
 		})
 	}
 }
