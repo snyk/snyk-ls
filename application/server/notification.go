@@ -26,15 +26,15 @@ import (
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 
-func notifier(srv *jrpc2.Server, method string, params interface{}) {
+func notifier(srv *jrpc2.Server, method string, params any) {
 	log.Debug().Str("method", "notifier").Msgf("Notifying")
 	err := srv.Notify(context.Background(), method, params)
 	logError(err, "notifier")
 }
 
 type Server interface {
-	Notify(ctx context.Context, method string, params interface{}) error
-	Callback(ctx context.Context, method string, params interface{}) (*jrpc2.Response, error)
+	Notify(ctx context.Context, method string, params any) error
+	Callback(ctx context.Context, method string, params any) (*jrpc2.Response, error)
 }
 
 var progressStopChan = make(chan bool, 1000)

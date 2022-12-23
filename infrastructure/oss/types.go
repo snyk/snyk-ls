@@ -476,27 +476,27 @@ type ignoreSettings struct {
 
 type remediation struct {
 	Unresolved []struct {
-		CVSSv3           string        `json:"CVSSv3,omitempty"`
-		AlternativeIds   []interface{} `json:"alternativeIds,omitempty"`
-		CreationTime     time.Time     `json:"creationTime"`
-		Credit           []string      `json:"credit,omitempty"`
-		CvssScore        float64       `json:"cvssScore,omitempty"`
-		Description      string        `json:"description"`
-		DisclosureTime   time.Time     `json:"disclosureTime,omitempty"`
-		Exploit          string        `json:"exploit,omitempty"`
-		Functions        []interface{} `json:"functions,omitempty"`
-		FixedIn          []string      `json:"fixedIn,omitempty"`
-		Id               string        `json:"id"`
-		Identifiers      identifiers   `json:"identifiers,omitempty"`
-		Language         string        `json:"language"`
-		Malicious        bool          `json:"malicious,omitempty"`
-		ModificationTime time.Time     `json:"modificationTime,omitempty"`
-		ModuleName       string        `json:"moduleName,omitempty"`
-		PackageManager   string        `json:"packageManager"`
-		PackageName      string        `json:"packageName"`
-		Patches          []interface{} `json:"patches,omitempty"`
-		Proprietary      bool          `json:"proprietary,omitempty"`
-		PublicationTime  time.Time     `json:"publicationTime"`
+		CVSSv3           string      `json:"CVSSv3,omitempty"`
+		AlternativeIds   []any       `json:"alternativeIds,omitempty"`
+		CreationTime     time.Time   `json:"creationTime"`
+		Credit           []string    `json:"credit,omitempty"`
+		CvssScore        float64     `json:"cvssScore,omitempty"`
+		Description      string      `json:"description"`
+		DisclosureTime   time.Time   `json:"disclosureTime,omitempty"`
+		Exploit          string      `json:"exploit,omitempty"`
+		Functions        []any       `json:"functions,omitempty"`
+		FixedIn          []string    `json:"fixedIn,omitempty"`
+		Id               string      `json:"id"`
+		Identifiers      identifiers `json:"identifiers,omitempty"`
+		Language         string      `json:"language"`
+		Malicious        bool        `json:"malicious,omitempty"`
+		ModificationTime time.Time   `json:"modificationTime,omitempty"`
+		ModuleName       string      `json:"moduleName,omitempty"`
+		PackageManager   string      `json:"packageManager"`
+		PackageName      string      `json:"packageName"`
+		Patches          []any       `json:"patches,omitempty"`
+		Proprietary      bool        `json:"proprietary,omitempty"`
+		PublicationTime  time.Time   `json:"publicationTime"`
 		References       []struct {
 			Title string `json:"title"`
 			Url   string `json:"url"`
@@ -505,9 +505,9 @@ type remediation struct {
 		SocialTrendAlert bool   `json:"socialTrendAlert,omitempty"`
 		Title            string `json:"title"`
 		Insights         struct {
-			TriageAdvice interface{} `json:"triageAdvice"`
+			TriageAdvice any `json:"triageAdvice"`
 		} `json:"insights,omitempty"`
-		FunctionsNew []interface{} `json:"functions_new,omitempty"`
+		FunctionsNew []any `json:"functions_new,omitempty"`
 		Semver       struct {
 			Vulnerable []string `json:"vulnerable"`
 		} `json:"semver"`
@@ -515,17 +515,17 @@ type remediation struct {
 			GroupId    string `json:"groupId"`
 			ArtifactId string `json:"artifactId"`
 		} `json:"mavenModuleName,omitempty"`
-		From                 []string      `json:"from"`
-		UpgradePath          []interface{} `json:"upgradePath"`
-		IsUpgradable         bool          `json:"isUpgradable"`
-		IsPatchable          bool          `json:"isPatchable"`
-		IsPinnable           bool          `json:"isPinnable"`
-		IsRuntime            bool          `json:"isRuntime"`
-		Name                 string        `json:"name"`
-		Version              string        `json:"version"`
-		SeverityWithCritical string        `json:"severityWithCritical"`
-		License              string        `json:"license,omitempty"`
-		Type                 string        `json:"type,omitempty"`
+		From                 []string `json:"from"`
+		UpgradePath          []any    `json:"upgradePath"`
+		IsUpgradable         bool     `json:"isUpgradable"`
+		IsPatchable          bool     `json:"isPatchable"`
+		IsPinnable           bool     `json:"isPinnable"`
+		IsRuntime            bool     `json:"isRuntime"`
+		Name                 string   `json:"name"`
+		Version              string   `json:"version"`
+		SeverityWithCritical string   `json:"severityWithCritical"`
+		License              string   `json:"license,omitempty"`
+		Type                 string   `json:"type,omitempty"`
 	} `json:"unresolved"`
 	Upgrade struct {
 	} `json:"upgrade"`
@@ -556,7 +556,7 @@ type ossScanResult struct {
 	Path              string         `json:"path"`
 	Remediation       remediation    `json:"remediation,omitempty"`
 	Filtered          struct {
-		Ignore []interface{} `json:"ignore"`
-		Patch  []interface{} `json:"patch"`
+		Ignore []any `json:"ignore"`
+		Patch  []any `json:"patch"`
 	} `json:"filtered,omitempty"`
 }

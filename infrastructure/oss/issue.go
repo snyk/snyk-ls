@@ -38,7 +38,7 @@ func (i *ossIssue) GetCodeActions() (actions []snyk.CodeAction) {
 			Command: snyk.Command{
 				Title:     title,
 				Command:   snyk.OpenBrowserCommand,
-				Arguments: []interface{}{i.createIssueURL().String()},
+				Arguments: []any{i.createIssueURL().String()},
 			},
 		},
 	}

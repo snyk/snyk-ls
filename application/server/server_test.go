@@ -107,7 +107,7 @@ func cleanupChannels() {
 	di.HoverService().ClearAllHovers()
 }
 
-type onCallbackFn = func(ctx context.Context, request *jrpc2.Request) (interface{}, error)
+type onCallbackFn = func(ctx context.Context, request *jrpc2.Request) (any, error)
 
 func startServer(callBackFn onCallbackFn) server.Local {
 	var srv *jrpc2.Server
@@ -119,7 +119,7 @@ func startServer(callBackFn onCallbackFn) server.Local {
 			OnNotify: func(request *jrpc2.Request) {
 				jsonRPCRecorder.Record(*request)
 			},
-			OnCallback: func(ctx context.Context, request *jrpc2.Request) (interface{}, error) {
+			OnCallback: func(ctx context.Context, request *jrpc2.Request) (any, error) {
 				if callBackFn != nil {
 					return callBackFn(ctx, request)
 				}

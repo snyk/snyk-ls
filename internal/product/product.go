@@ -17,7 +17,7 @@
 package product
 
 type Product string
-type ProductAttributes map[string]interface{}
+type ProductAttributes map[string]any
 type FilterableIssueType string
 
 const (

@@ -57,7 +57,7 @@ var (
 	FakeCommand = snyk.Command{
 		Title:     "Code Flow blah blah fake",
 		Command:   snyk.NavigateToRangeCommand,
-		Arguments: []interface{}{"path", fakeRange},
+		Arguments: []any{"path", fakeRange},
 	}
 
 	FakeIssue = snyk.Issue{
@@ -106,7 +106,7 @@ func FakeDiagnosticPath(t *testing.T) (filePath string, path string) {
 }
 
 type FakeSnykCodeClient struct {
-	Calls                  map[string][][]interface{}
+	Calls                  map[string][][]any
 	HasCreatedNewBundle    bool
 	HasExtendedBundle      bool
 	TotalBundleCount       int
@@ -116,19 +116,19 @@ type FakeSnykCodeClient struct {
 	maxConcurrentScans     int
 }
 
-func (f *FakeSnykCodeClient) addCall(params []interface{}, op string) {
+func (f *FakeSnykCodeClient) addCall(params []any, op string) {
 	if f.Calls == nil {
-		f.Calls = make(map[string][][]interface{})
+		f.Calls = make(map[string][][]any)
 	}
 	calls := f.Calls[op]
-	var opParams []interface{}
+	var opParams []any
 	for p := range params {
 		opParams = append(opParams, params[p])
 	}
 	f.Calls[op] = append(calls, opParams)
 }
 
-func (f *FakeSnykCodeClient) GetCallParams(callNo int, op string) []interface{} {
+func (f *FakeSnykCodeClient) GetCallParams(callNo int, op string) []any {
 	FakeSnykCodeApiServiceMutex.Lock()
 	defer FakeSnykCodeApiServiceMutex.Unlock()
 	calls := f.Calls[op]
@@ -151,7 +151,7 @@ func (f *FakeSnykCodeClient) Clear() {
 	f.HasExtendedBundle = false
 }
 
-func (f *FakeSnykCodeClient) GetAllCalls(op string) [][]interface{} {
+func (f *FakeSnykCodeClient) GetAllCalls(op string) [][]any {
 	FakeSnykCodeApiServiceMutex.Lock()
 	defer FakeSnykCodeApiServiceMutex.Unlock()
 	calls := f.Calls[op]
@@ -164,7 +164,7 @@ func (f *FakeSnykCodeClient) GetAllCalls(op string) [][]interface{} {
 func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (configFiles []string, extensions []string, err error) {
 	FakeSnykCodeApiServiceMutex.Lock()
 	defer FakeSnykCodeApiServiceMutex.Unlock()
-	params := []interface{}{configFiles, extensions, err}
+	params := []any{configFiles, extensions, err}
 	f.addCall(params, GetFiltersOperation)
 	return make([]string, 0), FakeFilters, nil
 }
@@ -174,7 +174,7 @@ func (f *FakeSnykCodeClient) CreateBundle(_ context.Context, files map[string]st
 	defer FakeSnykCodeApiServiceMutex.Unlock()
 	f.TotalBundleCount++
 	f.HasCreatedNewBundle = true
-	params := []interface{}{files}
+	params := []any{files}
 	f.addCall(params, CreateBundleOperation)
 	for filePath := range files {
 		missingFiles = append(missingFiles, filePath)
@@ -193,7 +193,7 @@ func (f *FakeSnykCodeClient) ExtendBundle(
 	f.HasExtendedBundle = true
 	f.TotalBundleCount++
 	f.ExtendedBundleCount++
-	params := []interface{}{bundleHash, files, removedFiles}
+	params := []any{bundleHash, files, removedFiles}
 	f.addCall(params, ExtendBundleWithSourceOperation)
 	return util.Hash([]byte(fmt.Sprint(rand.Int()))), nil, nil
 }
@@ -211,7 +211,7 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	<-time.After(f.AnalysisDuration)
 	FakeSnykCodeApiServiceMutex.Lock()
 	f.currentConcurrentScans--
-	params := []interface{}{options.bundleHash, options.limitToFiles, options.severity}
+	params := []any{options.bundleHash, options.limitToFiles, options.severity}
 	f.addCall(params, RunAnalysisOperation)
 	FakeSnykCodeApiServiceMutex.Unlock()
 

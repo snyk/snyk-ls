@@ -219,10 +219,10 @@ func getIdeProperty() ux2.IDE {
 
 type segmentLogger struct{}
 
-func (s *segmentLogger) Logf(format string, args ...interface{}) {
+func (s *segmentLogger) Logf(format string, args ...any) {
 	log.Debug().Msgf(format, args...)
 }
 
-func (s *segmentLogger) Errorf(format string, args ...interface{}) {
+func (s *segmentLogger) Errorf(format string, args ...any) {
 	log.Error().Msgf(format, args...)
 }
