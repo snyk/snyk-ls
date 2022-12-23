@@ -85,6 +85,32 @@ Right now the language server supports the following actions:
   }
   ```
 
+### Commands
+- NavigateToRangeCommand
+  - command: "snyk.navigateToRange"
+  - args: path, Range
+- WorkspaceScanCommand         
+  - command: "snyk.workspace.scan"
+  - args: empty
+- WorkspaceFolderScanCommand   
+  - command: "snyk.workspaceFolder.scan"
+  - args: path
+- OpenBrowserCommand           
+  - command: "snyk.openBrowser"
+  - args: URL
+- LoginCommand                 
+  - command: "snyk.login"
+  - args: empty
+- CopyAuthLinkCommand          
+  - command: "snyk.copyAuthLink"
+  - args: empty
+- LogoutCommand                
+  - command: "snyk.logout"
+  - args: empty
+- TrustWorkspaceFoldersCommand 
+  - command: "snyk.trustWorkspaceFolders"
+  - args: empty
+
 ## Installation
 
 ### Download
