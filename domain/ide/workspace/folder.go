@@ -194,7 +194,7 @@ func (f *Folder) filterCachedDiagnostics() (fileIssues map[string][]snyk.Issue) 
 
 func filterIssues(issues []snyk.Issue, supportedIssueTypes map[product.FilterableIssueType]bool) []snyk.Issue {
 	logger := log.With().Str("method", "filterIssues").Logger()
-	filteredIssues := []snyk.Issue{}
+	filteredIssues := make([]snyk.Issue, len(issues))
 
 	for _, issue := range issues {
 		// Logging here might hurt performance, should benchmark if filtering is slow
