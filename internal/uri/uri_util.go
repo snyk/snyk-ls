@@ -34,7 +34,9 @@ const eclipseWorkspaceFolderScheme = "file:"
 var rangeFragmentRegexp = regexp.MustCompile(`^(.+)://((.*)@)?(.+?)(:(\d*))?/?((.*)\?)?((.*)#)L?(\d+)(?:,(\d+))?(-L?(\d+)(?:,(\d+))?)?`)
 
 func FolderContains(folderPath string, path string) bool {
-	return strings.HasPrefix(path, folderPath)
+	log.Debug().Str("folderPath", folderPath).Str("path", path).Msg("FolderContains")
+	normalizedFolderPath := strings.TrimSuffix(folderPath, "/")
+	return strings.HasPrefix(path, normalizedFolderPath)
 }
 
 // todo can we create a path domain type?

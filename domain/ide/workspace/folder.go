@@ -56,7 +56,7 @@ type Folder struct {
 func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hover.Service) *Folder {
 	folder := Folder{
 		scanner:      scanner,
-		path:         path,
+		path:         strings.TrimSuffix(path, "/"),
 		name:         name,
 		status:       Unscanned,
 		hoverService: hoverService,

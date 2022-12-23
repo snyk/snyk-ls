@@ -63,8 +63,15 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 				log.Warn().Str("method", method).Msg("received WorkspaceFolderScanCommand without path")
 				return nil, nil
 			}
-			path := args[0]
-			f := w.GetFolderContaining(path.(string))
+			path := args[0].(string)
+			f := w.GetFolderContaining(path)
+			if f == nil {
+				log.Warn().Str("method", method).Msg("received WorkspaceFolderScanCommand with path not in workspace")
+				log.Warn().Interface("folders", w.Folders())
+				return nil, nil
+			}
+			f.ClearScannedStatus()
+			f.ClearDiagnosticsFromPathRecursively(path)
 			f.ScanFolder(bgCtx)
 			handleUntrustedFolders(bgCtx, srv)
 		case snyk.OpenBrowserCommand:
