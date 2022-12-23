@@ -60,4 +60,4 @@ dist: build
 env:
   - GO111MODULE=on
   - CGO_ENABLED=0
-  - LS_PROTOCOL_VERSION=4
+  - LS_PROTOCOL_VERSION=6
