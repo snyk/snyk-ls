@@ -242,6 +242,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 					Commands: []string{
 						snyk.NavigateToRangeCommand,
 						snyk.WorkspaceScanCommand,
+						snyk.WorkspaceFolderScanCommand,
 						snyk.OpenBrowserCommand,
 						snyk.LoginCommand,
 						snyk.CopyAuthLinkCommand,
