@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package common_issue_model
+package commonissuemodel
 
 import "time"
 

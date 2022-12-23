@@ -18,6 +18,8 @@ package lsp
 
 import (
 	sglsp "github.com/sourcegraph/go-lsp"
+
+	"github.com/snyk/snyk-ls/domain/snyk/commonissuemodel"
 )
 
 const (
@@ -678,4 +680,10 @@ const Log MessageType = 4
 
 type SnykTrustedFoldersParams struct {
 	TrustedFolders []string `json:"trustedFolders"`
+}
+
+type SnykScanParam struct {
+	Status  string                       `json:"status"`
+	Kind    string                       `json:"kind"`
+	Results []commonissuemodel.CodeIssue `json:"results,omitempty"`
 }
