@@ -675,3 +675,7 @@ func (c *Config) RuntimeVersion() string {
 func (c *Config) SetRuntimeVersion(runtimeVersion string) {
 	c.runtimeVersion = runtimeVersion
 }
+
+func (c *Config) IsAutoScanEnabled() bool {
+	return c.automaticScanning
+}
