@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/observability/ux"
 )
 
 func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
@@ -86,6 +87,7 @@ func InitializeSettings(settings lsp.Settings) {
 func UpdateSettings(settings lsp.Settings) {
 	currentConfig := config.CurrentConfig()
 	previouslySupportedProducts := currentConfig.GetDisplayableIssueTypes()
+	previousAutoScan := currentConfig.IsAutoScanEnabled()
 
 	writeSettings(settings, false)
 
@@ -100,6 +102,10 @@ func UpdateSettings(settings lsp.Settings) {
 		if wasSupported && !newSupportedProducts[removedIssueType] {
 			ws.ClearIssuesByType(removedIssueType)
 		}
+	}
+
+	if currentConfig.IsAutoScanEnabled() != previousAutoScan {
+		di.Analytics().ScanModeIsSelected(ux.ScanModeIsSelectedProperties{ScanningMode: settings.ScanningMode})
 	}
 }
 

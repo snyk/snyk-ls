@@ -4,8 +4,11 @@
   "WorkspaceId": "6d7c255e-5bf5-46fc-be87-58b75c7e0ad5",
   "SourceId": "bbc9b299-5765-406c-8d38-8665fd20738a",
   "Runtime": "go:go-ampli",
-  "Branch": "main",
-  "Version": "244.0.0",
-  "VersionId": "0b412a3b-aa8b-42dd-beea-940fd88e7a3b",
-  "Path": "./ampli"
+  "Branch": "add-scan-mode-is-selected-to-ls",
+  "Version": "247.0.0",
+  "VersionId": "db6c924a-324c-4cc5-b1c1-cdad543adfc2",
+  "Path": "./ampli",
+  "Platform": "Go",
+  "Language": "Go",
+  "SDK": "analytics-go"
 }

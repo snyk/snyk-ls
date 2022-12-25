@@ -6,13 +6,13 @@
 // To update run 'ampli pull language-server'
 //
 // Required dependencies: github.com/amplitude/analytics-go/amplitude@v0.0.5
-// Tracking Plan Version: 244
+// Tracking Plan Version: 247
 // Build: 1.0.0
 // Runtime: go-ampli
 //
-// View Tracking Plan: https://data.amplitude.com/snyk/Snyk/events/main/latest
+// View Tracking Plan: https://data.amplitude.com/snyk/Snyk/events/add-scan-mode-is-selected-to-ls/latest
 //
-// Full Setup Instructions: https://data.amplitude.com/snyk/Snyk/implementation/main/latest/getting-started/language-server
+// Full Setup Instructions: https://data.amplitude.com/snyk/Snyk/implementation/add-scan-mode-is-selected-to-ls/latest/getting-started/language-server
 //
 
 package ampli
@@ -1314,6 +1314,203 @@ func (b *pluginIsInstalledBuilder) Build() PluginIsInstalledEvent {
 	}
 }
 
+type ScanModeIsSelectedEventSource string
+
+type ScanModeIsSelectedIde string
+
+type ScanModeIsSelectedScanMode string
+
+var ScanModeIsSelected = struct {
+	EventSource struct {
+		Advisor ScanModeIsSelectedEventSource
+
+		App ScanModeIsSelectedEventSource
+
+		Learn ScanModeIsSelectedEventSource
+
+		Ide ScanModeIsSelectedEventSource
+
+		Website ScanModeIsSelectedEventSource
+
+		CodeSnippets ScanModeIsSelectedEventSource
+	}
+	Ide struct {
+		VisualStudioCode ScanModeIsSelectedIde
+
+		VisualStudio ScanModeIsSelectedIde
+
+		Eclipse ScanModeIsSelectedIde
+
+		JetBrains ScanModeIsSelectedIde
+
+		Other ScanModeIsSelectedIde
+	}
+	ScanMode struct {
+		Paused ScanModeIsSelectedScanMode
+
+		Auto ScanModeIsSelectedScanMode
+
+		Manual ScanModeIsSelectedScanMode
+
+		Throttled ScanModeIsSelectedScanMode
+	}
+	Builder func() interface {
+		Ide(ide ScanModeIsSelectedIde) interface {
+			ScanMode(scanMode ScanModeIsSelectedScanMode) ScanModeIsSelectedBuilder
+		}
+	}
+}{
+	EventSource: struct {
+		Advisor ScanModeIsSelectedEventSource
+
+		App ScanModeIsSelectedEventSource
+
+		Learn ScanModeIsSelectedEventSource
+
+		Ide ScanModeIsSelectedEventSource
+
+		Website ScanModeIsSelectedEventSource
+
+		CodeSnippets ScanModeIsSelectedEventSource
+	}{
+		Advisor: `Advisor`,
+
+		App: `App`,
+
+		Learn: `Learn`,
+
+		Ide: `IDE`,
+
+		Website: `Website`,
+
+		CodeSnippets: `CodeSnippets`,
+	},
+	Ide: struct {
+		VisualStudioCode ScanModeIsSelectedIde
+
+		VisualStudio ScanModeIsSelectedIde
+
+		Eclipse ScanModeIsSelectedIde
+
+		JetBrains ScanModeIsSelectedIde
+
+		Other ScanModeIsSelectedIde
+	}{
+		VisualStudioCode: `Visual Studio Code`,
+
+		VisualStudio: `Visual Studio`,
+
+		Eclipse: `Eclipse`,
+
+		JetBrains: `JetBrains`,
+
+		Other: `Other`,
+	},
+	ScanMode: struct {
+		Paused ScanModeIsSelectedScanMode
+
+		Auto ScanModeIsSelectedScanMode
+
+		Manual ScanModeIsSelectedScanMode
+
+		Throttled ScanModeIsSelectedScanMode
+	}{
+		Paused: `paused`,
+
+		Auto: `auto`,
+
+		Manual: `manual`,
+
+		Throttled: `throttled`,
+	},
+	Builder: func() interface {
+		Ide(ide ScanModeIsSelectedIde) interface {
+			ScanMode(scanMode ScanModeIsSelectedScanMode) ScanModeIsSelectedBuilder
+		}
+	} {
+		return &scanModeIsSelectedBuilder{
+			properties: map[string]interface{}{
+				`itly`: true,
+			},
+		}
+	},
+}
+
+type ScanModeIsSelectedEvent interface {
+	Event
+	scanModeIsSelected()
+}
+
+type scanModeIsSelectedEvent struct {
+	baseEvent
+}
+
+func (e scanModeIsSelectedEvent) scanModeIsSelected() {
+}
+
+type ScanModeIsSelectedBuilder interface {
+	Build() ScanModeIsSelectedEvent
+	EventSource(eventSource ScanModeIsSelectedEventSource) ScanModeIsSelectedBuilder
+	OsArch(osArch string) ScanModeIsSelectedBuilder
+	OsPlatform(osPlatform string) ScanModeIsSelectedBuilder
+	RuntimeName(runtimeName string) ScanModeIsSelectedBuilder
+	RuntimeVersion(runtimeVersion string) ScanModeIsSelectedBuilder
+}
+
+type scanModeIsSelectedBuilder struct {
+	properties map[string]interface{}
+}
+
+func (b *scanModeIsSelectedBuilder) Ide(ide ScanModeIsSelectedIde) interface {
+	ScanMode(scanMode ScanModeIsSelectedScanMode) ScanModeIsSelectedBuilder
+} {
+	b.properties[`ide`] = ide
+
+	return b
+}
+
+func (b *scanModeIsSelectedBuilder) ScanMode(scanMode ScanModeIsSelectedScanMode) ScanModeIsSelectedBuilder {
+	b.properties[`scanMode`] = scanMode
+
+	return b
+}
+
+func (b *scanModeIsSelectedBuilder) EventSource(eventSource ScanModeIsSelectedEventSource) ScanModeIsSelectedBuilder {
+	b.properties[`eventSource`] = eventSource
+
+	return b
+}
+
+func (b *scanModeIsSelectedBuilder) OsArch(osArch string) ScanModeIsSelectedBuilder {
+	b.properties[`osArch`] = osArch
+
+	return b
+}
+
+func (b *scanModeIsSelectedBuilder) OsPlatform(osPlatform string) ScanModeIsSelectedBuilder {
+	b.properties[`osPlatform`] = osPlatform
+
+	return b
+}
+
+func (b *scanModeIsSelectedBuilder) RuntimeName(runtimeName string) ScanModeIsSelectedBuilder {
+	b.properties[`runtimeName`] = runtimeName
+
+	return b
+}
+
+func (b *scanModeIsSelectedBuilder) RuntimeVersion(runtimeVersion string) ScanModeIsSelectedBuilder {
+	b.properties[`runtimeVersion`] = runtimeVersion
+
+	return b
+}
+
+func (b *scanModeIsSelectedBuilder) Build() ScanModeIsSelectedEvent {
+	return &scanModeIsSelectedEvent{
+		newBaseEvent(`Scan Mode Is Selected`, b.properties),
+	}
+}
+
 type Ampli struct {
 	Disabled bool
 	Client   amplitude.Client
@@ -1349,10 +1546,10 @@ func (a *Ampli) Load(options LoadOptions) {
 
 	if clientConfig.Plan == nil {
 		clientConfig.Plan = &amplitude.Plan{
-			Branch:    `main`,
+			Branch:    `add-scan-mode-is-selected-to-ls`,
 			Source:    `language-server`,
-			Version:   `244`,
-			VersionID: `0b412a3b-aa8b-42dd-beea-940fd88e7a3b`,
+			Version:   `247`,
+			VersionID: `db6c924a-324c-4cc5-b1c1-cdad543adfc2`,
 		}
 	}
 
@@ -1476,5 +1673,9 @@ func (a *Ampli) IssueHoverIsDisplayed(userID string, event IssueHoverIsDisplayed
 }
 
 func (a *Ampli) PluginIsInstalled(userID string, event PluginIsInstalledEvent, eventOptions ...EventOptions) {
+	a.Track(userID, event, eventOptions...)
+}
+
+func (a *Ampli) ScanModeIsSelected(userID string, event ScanModeIsSelectedEvent, eventOptions ...EventOptions) {
 	a.Track(userID, event, eventOptions...)
 }
