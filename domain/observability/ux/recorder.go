@@ -22,6 +22,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var _ Analytics = &TestAnalytics{} // Explicit interface implementation
+
 func NewTestAnalytics() *TestAnalytics {
 	return &TestAnalytics{}
 }
@@ -78,4 +80,8 @@ func (n *TestAnalytics) Shutdown() error {
 func (n *TestAnalytics) Identify() {
 	log.Info().Str("method", "Identify").Msgf("no op")
 	n.Identified = true
+}
+
+func (n *TestAnalytics) ScanModeIsSelected(properties ScanModeIsSelectedProperties) {
+	log.Info().Str("method", "ScanModeIsSelected").Msgf("no op")
 }
