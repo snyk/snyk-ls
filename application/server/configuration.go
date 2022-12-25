@@ -80,6 +80,7 @@ func InitializeSettings(settings lsp.Settings) {
 	writeSettings(settings, true)
 	updateAutoAuthentication(settings)
 	updateDeviceInformation(settings)
+	updateAutoScan(settings)
 }
 
 func UpdateSettings(settings lsp.Settings) {
@@ -160,6 +161,13 @@ func updateDeviceInformation(settings lsp.Settings) {
 	if deviceId != "" {
 		config.CurrentConfig().SetDeviceID(deviceId)
 	}
+}
+
+func updateAutoScan(settings lsp.Settings) {
+	// Auto scan true by default unless the AutoScan value in the settings is not missing & false
+	autoScanDeserializedValue, err := strconv.ParseBool(settings.AutoScan)
+	autoScan := autoScanDeserializedValue || err != nil
+	config.CurrentConfig().SetAutomaticScanning(autoScan)
 }
 
 func updateToken(token string) {

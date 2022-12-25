@@ -160,6 +160,7 @@ type Config struct {
 	osArch                       string
 	runtimeName                  string
 	runtimeVersion               string
+	automaticScanning            bool
 }
 
 func CurrentConfig() *Config {
@@ -575,6 +576,10 @@ func (c *Config) AutomaticAuthentication() bool {
 
 func (c *Config) SetAutomaticAuthentication(value bool) {
 	c.automaticAuthentication = value
+}
+
+func (c *Config) SetAutomaticScanning(value bool) {
+	c.automaticScanning = value
 }
 
 func (c *Config) addDefaults() {
