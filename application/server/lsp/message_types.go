@@ -302,7 +302,7 @@ type Settings struct {
 	OsArch                      string         `json:"osArch,omitempty"`
 	RuntimeVersion              string         `json:"runtimeVersion,omitempty"`
 	RuntimeName                 string         `json:"runtimeName,omitempty"`
-	AutoScan                    string         `json:"autoScan,omitempty"`
+	ScanningMode                string         `json:"scanningMode,omitempty"`
 }
 
 type DidChangeConfigurationParams struct {

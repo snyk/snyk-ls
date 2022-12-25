@@ -165,8 +165,11 @@ func updateDeviceInformation(settings lsp.Settings) {
 
 func updateAutoScan(settings lsp.Settings) {
 	// Auto scan true by default unless the AutoScan value in the settings is not missing & false
-	autoScanDeserializedValue, err := strconv.ParseBool(settings.AutoScan)
-	autoScan := autoScanDeserializedValue || err != nil
+	autoScan := true
+	if settings.ScanningMode == "manual" {
+		autoScan = false
+	}
+
 	config.CurrentConfig().SetAutomaticScanning(autoScan)
 }
 
