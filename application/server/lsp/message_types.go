@@ -686,16 +686,28 @@ type ScanStatus string
 
 const (
 	Initial    ScanStatus = "Initial"
-	InProgress ScanStatus = "In Progress"
+	InProgress ScanStatus = "InProgress"
 	Success    ScanStatus = "Success"
 )
 
 // SnykScanParams is the type for the $/snyk/scan message
 type SnykScanParams struct {
-	// Status can be either Initial, In-Progress or Success
+	// Status can be either Initial, InProgress or Success
 	Status ScanStatus `json:"status"`
 	// Kind is the product line of the scan (Snyk Code, Snyk Open Source, etc...)
 	Kind string `json:"kind"`
 	// Results contain the scan results in the common issues model
 	Results []issues.CodeIssue `json:"results,omitempty"`
+}
+
+func InitialSnykScanParams(kind string) SnykScanParams {
+	return NewSnykScanParams(Initial, kind, nil)
+}
+
+func NewSnykScanParams(status ScanStatus, kind string, results []issues.CodeIssue) SnykScanParams {
+	return SnykScanParams{
+		Status:  status,
+		Kind:    kind,
+		Results: results,
+	}
 }
