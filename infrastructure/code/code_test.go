@@ -31,10 +31,12 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
+	lsp2 "github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -286,9 +288,6 @@ func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 func Test_CodeScanRunning_ScanCalled_ScansRunSequentially(t *testing.T) {
 	// Arrange
 	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-	t.Cleanup(func() {
-		_ = os.RemoveAll(tempDir)
-	})
 	fakeClient, scanner := setupTestScanner()
 	fakeClient.AnalysisDuration = time.Second
 	wg := sync.WaitGroup{}
@@ -305,6 +304,26 @@ func Test_CodeScanRunning_ScanCalled_ScansRunSequentially(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, 1, fakeClient.maxConcurrentScans)
+}
+
+func Test_CodeScanStarted_SnykScanMessageSent(t *testing.T) {
+	// Arrange
+	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+	fakeClient, scanner := setupTestScanner()
+	fakeClient.AnalysisDuration = time.Second
+	messageReceived := false
+	notification.CreateListener(func(params any) {
+		_, ok := params.(lsp2.SnykScanParams)
+		if ok {
+			messageReceived = true
+		}
+	})
+
+	// Act
+	scanner.Scan(context.Background(), "", tempDir)
+
+	// Assert
+	assert.True(t, messageReceived)
 }
 
 func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {
@@ -331,6 +350,11 @@ func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string
 	if err != nil {
 		t.Fatal(t, err, "Couldn't write ignored file not-ignored.java")
 	}
+
+	t.Cleanup(func() {
+		_ = os.RemoveAll(tempDir)
+	})
+
 	return expectedPatterns, tempDir, ignoredFilePath, notIgnoredFilePath, ignoredFileInDir
 }
 

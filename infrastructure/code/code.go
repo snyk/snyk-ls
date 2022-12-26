@@ -32,6 +32,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -142,6 +143,8 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk
 		sc.scanStatusMutex.Unlock()
 	}()
 
+	// Start the scan
+	notification.Send(lsp.InitialSnykScanParams("Snyk Code"))
 	startTime := time.Now()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
