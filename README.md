@@ -90,7 +90,7 @@ Right now the language server supports the following actions:
   - payload:
   ```json5
   {
-    "status": "Initial", // possible values: "Initial", "In Progress", "Success", "Done"
+    "status": "Initial", // possible values: "Initial", "In Progress", "Success"
     "kind": "Snyk Code", // possible values: "Snyk Code", "Snyk Open Source", "Snyk Infrastructure as Code"
     "results" : {
       // common issue model structure

@@ -684,7 +684,7 @@ type SnykTrustedFoldersParams struct {
 
 // SnykScanParam is the type for the $/snyk/scan message
 type SnykScanParam struct {
-	// Status can be either Initial, In-Progress, Success or Done
+	// Status can be either Initial, In-Progress or Success
 	Status string `json:"status"`
 	// Kind is the product line of the scan (Snyk Code, Snyk Open Source, etc...)
 	Kind string `json:"kind"`
