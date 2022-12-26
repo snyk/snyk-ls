@@ -19,7 +19,7 @@ package lsp
 import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/domain/snyk/commonissuemodel"
+	"github.com/snyk/snyk-ls/domain/snyk/issues"
 )
 
 const (
@@ -683,7 +683,7 @@ type SnykTrustedFoldersParams struct {
 }
 
 type SnykScanParam struct {
-	Status  string                       `json:"status"`
-	Kind    string                       `json:"kind"`
-	Results []commonissuemodel.CodeIssue `json:"results,omitempty"`
+	Status  string             `json:"status"`
+	Kind    string             `json:"kind"`
+	Results []issues.CodeIssue `json:"results,omitempty"`
 }
