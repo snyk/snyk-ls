@@ -309,12 +309,32 @@ func Test_CodeScanRunning_ScanCalled_ScansRunSequentially(t *testing.T) {
 func Test_CodeScanStarted_SnykScanMessageSent(t *testing.T) {
 	// Arrange
 	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-	fakeClient, scanner := setupTestScanner()
-	fakeClient.AnalysisDuration = time.Second
+	_, scanner := setupTestScanner()
 	messageReceived := false
 	notification.CreateListener(func(params any) {
-		_, ok := params.(lsp2.SnykScanParams)
-		if ok {
+		msg, ok := params.(lsp2.SnykScanParams)
+		if ok && msg.Status == lsp2.Initial {
+			messageReceived = true
+		}
+	})
+
+	// Act
+	scanner.Scan(context.Background(), "", tempDir)
+
+	// Assert
+	assert.True(t, messageReceived)
+}
+
+func Test_AnalyzingMessageReturned_InProgressMessageSentToClient(t *testing.T) {
+	// Arrange
+	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+	fakeClient, scanner := setupTestScanner()
+	fakeClient.AnalysisDuration = time.Second
+	fakeClient.AnalyzingMessageCount = 1
+	messageReceived := false
+	notification.CreateListener(func(params any) {
+		msg, ok := params.(lsp2.SnykScanParams)
+		if ok && msg.Status == lsp2.InProgress {
 			messageReceived = true
 		}
 	})

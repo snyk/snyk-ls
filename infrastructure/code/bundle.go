@@ -25,9 +25,11 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -72,8 +74,10 @@ func (b *Bundle) FetchDiagnosticsData(
 }
 
 func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
+	logger := log.With().Str("method", "retrieveAnalysis").Logger()
+
 	if b.BundleHash == "" {
-		log.Warn().Str("method", "retrieveAnalysis").Str("rootPath", b.rootPath).Msg("bundle hash is empty")
+		logger.Warn().Str("rootPath", b.rootPath).Msg("bundle hash is empty")
 		return []snyk.Issue{}
 	}
 
@@ -99,8 +103,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
 		issues, status, err := b.SnykCode.RunAnalysis(s.Context(), analysisOptions)
 
 		if err != nil {
-			log.Error().Err(err).
-				Str("method", "retrieveAnalysis").
+			logger.Error().Err(err).
 				Str("requestId", b.requestId).
 				Int("fileCount", len(b.UploadBatches)).
 				Msg("error retrieving diagnostics...")
@@ -110,15 +113,18 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
 		}
 
 		if status.message == "COMPLETE" {
-			log.Trace().Str("method", "retrieveAnalysis").Str("requestId", b.requestId).
+			logger.Trace().Str("requestId", b.requestId).
 				Msg("sending diagnostics...")
 			p.End("Analysis complete.")
 			return issues
+		} else if status.message == "ANALYZING" {
+			logger.Trace().Msg("\"Analyzing\" message received, sending In-Progress message to client")
+			notification.Send(lsp.SnykScanInProgressMessage("Snyk Code"))
 		}
 
 		if time.Since(start) > config.CurrentConfig().SnykCodeAnalysisTimeout() {
 			err := errors.New("analysis call timed out")
-			log.Error().Err(err).Str("method", "retrieveAnalysis").Msg("timeout...")
+			log.Error().Err(err).Msg("timeout...")
 			b.errorReporter.CaptureErrorAndReportAsIssue(b.rootPath, err)
 			p.End("Snyk Code Analysis timed out")
 			return []snyk.Issue{}

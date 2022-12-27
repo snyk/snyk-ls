@@ -700,8 +700,12 @@ type SnykScanParams struct {
 	Results []issues.CodeIssue `json:"results,omitempty"`
 }
 
-func InitialSnykScanParams(kind string) SnykScanParams {
+func SnykScanInitialMessage(kind string) SnykScanParams {
 	return NewSnykScanParams(Initial, kind, nil)
+}
+
+func SnykScanInProgressMessage(kind string) SnykScanParams {
+	return NewSnykScanParams(InProgress, kind, nil)
 }
 
 func NewSnykScanParams(status ScanStatus, kind string, results []issues.CodeIssue) SnykScanParams {

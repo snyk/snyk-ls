@@ -112,6 +112,7 @@ type FakeSnykCodeClient struct {
 	TotalBundleCount       int
 	ExtendedBundleCount    int
 	AnalysisDuration       time.Duration
+	AnalyzingMessageCount  int
 	currentConcurrentScans int
 	maxConcurrentScans     int
 }
@@ -198,10 +199,20 @@ func (f *FakeSnykCodeClient) ExtendBundle(
 	return util.Hash([]byte(fmt.Sprint(rand.Int()))), nil, nil
 }
 
+var successfulResult = AnalysisStatus{
+	message:    "COMPLETE",
+	percentage: 100,
+}
+var analyzingResult = AnalysisStatus{
+	message:    "ANALYZING",
+	percentage: 2,
+}
+
 func (f *FakeSnykCodeClient) RunAnalysis(
 	_ context.Context,
 	options AnalysisOptions,
 ) ([]snyk.Issue, AnalysisStatus, error) {
+
 	FakeSnykCodeApiServiceMutex.Lock()
 	f.currentConcurrentScans++
 	if f.currentConcurrentScans > f.maxConcurrentScans {
@@ -216,7 +227,13 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	FakeSnykCodeApiServiceMutex.Unlock()
 
 	issues := []snyk.Issue{FakeIssue}
+	if f.AnalyzingMessageCount > 0 {
+		FakeSnykCodeApiServiceMutex.Lock()
+		f.AnalyzingMessageCount--
+		FakeSnykCodeApiServiceMutex.Unlock()
+		return issues, analyzingResult, nil
+	}
 
 	log.Trace().Str("method", "RunAnalysis").Interface("fakeDiagnostic", FakeIssue).Msg("fake backend call received & answered")
-	return issues, AnalysisStatus{message: "COMPLETE", percentage: 100}, nil
+	return issues, successfulResult, nil
 }
