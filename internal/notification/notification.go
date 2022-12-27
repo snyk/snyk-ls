@@ -25,8 +25,6 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 )
 
-type Event string
-
 var channel = make(chan interface{}, 100)
 var stopChannel = make(chan bool, 1000)
 
