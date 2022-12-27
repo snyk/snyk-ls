@@ -287,6 +287,7 @@ func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 
 func Test_CodeScanRunning_ScanCalled_ScansRunSequentially(t *testing.T) {
 	// Arrange
+	testutil.UnitTest(t)
 	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
 	fakeClient, scanner := setupTestScanner()
 	fakeClient.AnalysisDuration = time.Second
@@ -308,6 +309,7 @@ func Test_CodeScanRunning_ScanCalled_ScansRunSequentially(t *testing.T) {
 
 func Test_CodeScanStarted_SnykScanMessageSent(t *testing.T) {
 	// Arrange
+	testutil.UnitTest(t)
 	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
 	_, scanner := setupTestScanner()
 	messageReceived := false
@@ -327,9 +329,9 @@ func Test_CodeScanStarted_SnykScanMessageSent(t *testing.T) {
 
 func Test_AnalyzingMessageReturned_InProgressMessageSentToClient(t *testing.T) {
 	// Arrange
+	testutil.UnitTest(t)
 	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
 	fakeClient, scanner := setupTestScanner()
-	fakeClient.AnalysisDuration = time.Second
 	fakeClient.AnalyzingMessageCount = 1
 	messageReceived := false
 	notification.CreateListener(func(params any) {
@@ -348,7 +350,7 @@ func Test_AnalyzingMessageReturned_InProgressMessageSentToClient(t *testing.T) {
 
 func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {
 	expectedPatterns = "*.xml\n**/*.txt\nbin"
-	tempDir = writeTestGitIgnore(expectedPatterns, t) // TODO - use t.TempDir
+	tempDir = writeTestGitIgnore(expectedPatterns, t)
 
 	ignoredFilePath = filepath.Join(tempDir, "ignored.xml")
 	err := os.WriteFile(ignoredFilePath, []byte("test"), 0600)
@@ -371,20 +373,13 @@ func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string
 		t.Fatal(t, err, "Couldn't write ignored file not-ignored.java")
 	}
 
-	t.Cleanup(func() {
-		_ = os.RemoveAll(tempDir)
-	})
-
 	return expectedPatterns, tempDir, ignoredFilePath, notIgnoredFilePath, ignoredFileInDir
 }
 
 func writeTestGitIgnore(ignorePatterns string, t *testing.T) (tempDir string) {
-	tempDir, err := os.MkdirTemp(xdg.DataHome, "loadIgnorePatternsAndCountFiles")
-	if err != nil {
-		t.Fatal(t, err, "Couldn't create temp dir")
-	}
+	tempDir = t.TempDir()
 	filePath := filepath.Join(tempDir, ".gitignore")
-	err = os.WriteFile(filePath, []byte(ignorePatterns), 0600)
+	err := os.WriteFile(filePath, []byte(ignorePatterns), 0600)
 	if err != nil {
 		t.Fatal(t, err, "Couldn't write .gitignore")
 	}
