@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -34,9 +35,13 @@ const eclipseWorkspaceFolderScheme = "file:"
 var rangeFragmentRegexp = regexp.MustCompile(`^(.+)://((.*)@)?(.+?)(:(\d*))?/?((.*)\?)?((.*)#)L?(\d+)(?:,(\d+))?(-L?(\d+)(?:,(\d+))?)?`)
 
 func FolderContains(folderPath string, path string) bool {
+	filePathSeparator := string(filepath.Separator)
+	if !strings.HasSuffix(folderPath, filePathSeparator) {
+		folderPath += filePathSeparator
+	}
 	log.Debug().Str("folderPath", folderPath).Str("path", path).Msg("FolderContains")
-	normalizedFolderPath := strings.TrimSuffix(folderPath, "/")
-	return strings.HasPrefix(path, normalizedFolderPath)
+	return strings.HasPrefix(path, folderPath) ||
+		strings.HasPrefix(path+filePathSeparator, folderPath)
 }
 
 // todo can we create a path domain type?
@@ -56,7 +61,11 @@ func PathToUri(path string) sglsp.DocumentURI {
 
 func IsDirectory(documentURI sglsp.DocumentURI) bool {
 	workspaceUri := PathFromUri(documentURI)
-	stat, err := os.Stat(workspaceUri)
+	return isDirectory(workspaceUri)
+}
+
+func isDirectory(path string) bool {
+	stat, err := os.Stat(path)
 	if err != nil {
 		log.Err(err).Err(err).Msg("Error while checking file")
 		return false

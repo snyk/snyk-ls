@@ -36,10 +36,18 @@ func TestPathFromUri(t *testing.T) {
 
 func TestFolderContains(t *testing.T) {
 	assert.True(t, FolderContains("C:/folder/", "C:/folder/file"))
+	assert.True(t, FolderContains("C:/folder", "C:/folder/file"))
 	assert.True(t, FolderContains("C:/folder/", "C:/folder/subfolder/file"))
+	assert.True(t, FolderContains("C:/folder", "C:/folder/subfolder/file"))
 	assert.False(t, FolderContains("C:/folder/", "C:/otherFolder/file"))
+	assert.False(t, FolderContains("C:/folder", "C:/otherFolder/file"))
 	assert.False(t, FolderContains("C:/folder/", "D:/folder/file"))
+	assert.False(t, FolderContains("C:/folder", "D:/folder/file"))
 	assert.False(t, FolderContains("C:/folder/", "C:/folder2"))
+	assert.False(t, FolderContains("C:/folder", "C:/folder2"))
+	assert.True(t, FolderContains("C:/folder/", "C:/folder"))
+	assert.True(t, FolderContains("C:/folder", "C:/folder/"))
+	assert.True(t, FolderContains("C:/folder/", "C:/folder/"))
 }
 
 func TestUri_AddRangeToUri(t *testing.T) {
