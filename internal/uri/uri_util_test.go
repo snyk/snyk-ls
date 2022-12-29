@@ -19,6 +19,7 @@ package uri
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -35,19 +36,47 @@ func TestPathFromUri(t *testing.T) {
 }
 
 func TestFolderContains(t *testing.T) {
-	assert.True(t, FolderContains("C:/folder/", "C:/folder/file"))
-	assert.True(t, FolderContains("C:/folder", "C:/folder/file"))
-	assert.True(t, FolderContains("C:/folder/", "C:/folder/subfolder/file"))
-	assert.True(t, FolderContains("C:/folder", "C:/folder/subfolder/file"))
-	assert.False(t, FolderContains("C:/folder/", "C:/otherFolder/file"))
-	assert.False(t, FolderContains("C:/folder", "C:/otherFolder/file"))
-	assert.False(t, FolderContains("C:/folder/", "D:/folder/file"))
-	assert.False(t, FolderContains("C:/folder", "D:/folder/file"))
-	assert.False(t, FolderContains("C:/folder/", "C:/folder2"))
-	assert.False(t, FolderContains("C:/folder", "C:/folder2"))
-	assert.True(t, FolderContains("C:/folder/", "C:/folder"))
-	assert.True(t, FolderContains("C:/folder", "C:/folder/"))
-	assert.True(t, FolderContains("C:/folder/", "C:/folder/"))
+	t.Run("Windows paths", func(t *testing.T) {
+		// we cannot use the testutil function here, as it would cause a cyclical import
+		if //goland:noinspection GoBoolExpressions
+		runtime.GOOS != "windows" {
+			t.Skipf("Windows Paths")
+			return
+		}
+		assert.True(t, FolderContains("C:\\folder\\", "C:\\folder\\file"))
+		assert.True(t, FolderContains("C:\\folder", "C:\\folder\\file"))
+		assert.True(t, FolderContains("C:\\folder\\", "C:\\folder\\subfolder\\file"))
+		assert.True(t, FolderContains("C:\\folder", "C:\\folder\\subfolder\\file"))
+		assert.False(t, FolderContains("C:\\folder\\", "C:\\otherFolder\\file"))
+		assert.False(t, FolderContains("C:\\folder", "C:\\otherFolder\\file"))
+		assert.False(t, FolderContains("C:\\folder\\", "D:\\folder\\file"))
+		assert.False(t, FolderContains("C:\\folder", "D:\\folder\\file"))
+		assert.False(t, FolderContains("C:\\folder\\", "C:\\folder2"))
+		assert.False(t, FolderContains("C:\\folder", "C:\\folder2"))
+		assert.True(t, FolderContains("C:\\folder\\", "C:\\folder"))
+		assert.True(t, FolderContains("C:\\folder", "C:\\folder\\"))
+		assert.True(t, FolderContains("C:\\folder\\", "C:\\folder\\"))
+	})
+
+	t.Run("POSIX paths", func(t *testing.T) {
+		// we cannot use the testutil function here, as it would cause a cyclical import
+		if //goland:noinspection GoBoolExpressions
+		runtime.GOOS == "windows" {
+			t.Skipf("POSIX Paths")
+		}
+		assert.True(t, FolderContains("/folder/", "/folder/file"))
+		assert.True(t, FolderContains("/folder", "/folder/file"))
+		assert.True(t, FolderContains("/folder/", "/folder/subfolder/file"))
+		assert.True(t, FolderContains("/folder", "/folder/subfolder/file"))
+		assert.False(t, FolderContains("/folder/", "/otherFolder/file"))
+		assert.False(t, FolderContains("/folder", "/otherFolder/file"))
+		assert.False(t, FolderContains("/folder/", "/folder2"))
+		assert.False(t, FolderContains("/folder", "/folder2"))
+		assert.True(t, FolderContains("/folder/", "/folder"))
+		assert.True(t, FolderContains("/folder", "/folder/"))
+		assert.True(t, FolderContains("/folder/", "/folder/"))
+	})
+
 }
 
 func TestUri_AddRangeToUri(t *testing.T) {
