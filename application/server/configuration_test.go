@@ -157,6 +157,7 @@ func Test_UpdateSettings(t *testing.T) {
 			OsArch:                      "amd64",
 			RuntimeName:                 "java",
 			RuntimeVersion:              "1.8.0_275",
+			ScanningMode:                "manual",
 		}
 
 		UpdateSettings(settings)
@@ -183,6 +184,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, settings.OsArch, c.OsArch())
 		assert.Equal(t, settings.RuntimeName, c.RuntimeName())
 		assert.Equal(t, settings.RuntimeVersion, c.RuntimeVersion())
+		assert.False(t, c.IsAutoScanEnabled())
 	})
 
 	t.Run("blank organisation is ignored", func(t *testing.T) {
