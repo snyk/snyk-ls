@@ -661,7 +661,6 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(diagnosticUri)},
 	}
-	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
 	workspace.Get().AddFolder(workspace.NewFolder(tempDir, "Test", di.Scanner(), di.HoverService()))
 
 	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
