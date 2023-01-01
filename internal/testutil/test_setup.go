@@ -63,7 +63,7 @@ func cleanupFakeCliFile(c *config.Config) {
 	if stat.Size() < 1000 {
 		// this is a fake CLI, removing it
 		err = os.Remove(c.CliSettings().Path())
-		if err == nil {
+		if err != nil {
 			log.Warn().Err(err).Msg("Failed to remove fake CLI")
 		}
 	}
