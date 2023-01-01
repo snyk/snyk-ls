@@ -66,13 +66,11 @@ var (
 )
 
 func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, string) {
-	filePath, dirPath := code.FakeDiagnosticPath(t)
+	filePath, dirPath := code.TempWorkdirWithVulnerabilities(t)
 	didOpenParams := sglsp.DidOpenTextDocumentParams{
 		TextDocument: sglsp.TextDocumentItem{URI: uri.PathToUri(filePath)},
 	}
-	t.Cleanup(func() {
-		_ = os.RemoveAll(dirPath)
-	})
+
 	return didOpenParams, dirPath
 }
 
@@ -657,7 +655,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	loc := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	_, _ = loc.Client.Call(ctx, "initialize", nil)
-	diagnosticUri, tempDir := code.FakeDiagnosticPath(t)
+	diagnosticUri, tempDir := code.TempWorkdirWithVulnerabilities(t)
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(diagnosticUri)},
 	}

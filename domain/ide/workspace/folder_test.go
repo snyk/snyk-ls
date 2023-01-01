@@ -39,7 +39,7 @@ import (
 func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
 	testutil.UnitTest(t)
 
-	filePath, folderPath := code.FakeDiagnosticPath(t)
+	filePath, folderPath := code.TempWorkdirWithVulnerabilities(t)
 	scannerRecorder := snyk.NewTestScanner()
 	scannerRecorder.Issues = []snyk.Issue{NewMockIssue("1", filePath)}
 	f := NewFolder(folderPath, "Test", scannerRecorder, hover.NewFakeHoverService())
@@ -54,7 +54,7 @@ func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
 // todo: unignore this test
 func Test_Scan_WhenCachedResultsButNoIssues_shouldNotReScan(t *testing.T) {
 	t.Skip("this feature is not implemented yet")
-	filePath, folderPath := code.FakeDiagnosticPath(t)
+	filePath, folderPath := code.TempWorkdirWithVulnerabilities(t)
 	scannerRecorder := snyk.NewTestScanner()
 	scannerRecorder.Issues = []snyk.Issue{}
 	f := NewFolder(folderPath, "Test", scannerRecorder, hover.NewFakeHoverService())
@@ -305,7 +305,7 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 	testutil.UnitTest(t)
 
 	// arrange
-	filePath, folderPath := code.FakeDiagnosticPath(t)
+	filePath, folderPath := code.TempWorkdirWithVulnerabilities(t)
 	criticalIssue := snyk.Issue{AffectedFilePath: filePath, Severity: snyk.Critical, Product: product.ProductOpenSource}
 	highIssue := snyk.Issue{AffectedFilePath: filePath, Severity: snyk.High, Product: product.ProductOpenSource}
 	mediumIssue := snyk.Issue{AffectedFilePath: filePath, Severity: snyk.Medium, Product: product.ProductOpenSource}
