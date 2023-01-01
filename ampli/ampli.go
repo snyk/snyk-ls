@@ -10,9 +10,9 @@
 // Build: 1.0.0
 // Runtime: go-ampli
 //
-// View Tracking Plan: https://data.amplitude.com/snyk/Snyk/events/add-scan-mode-is-selected-to-ls/latest
+// View Tracking Plan: https://data.amplitude.com/snyk/Snyk/events/main/latest
 //
-// Full Setup Instructions: https://data.amplitude.com/snyk/Snyk/implementation/add-scan-mode-is-selected-to-ls/latest/getting-started/language-server
+// Full Setup Instructions: https://data.amplitude.com/snyk/Snyk/implementation/main/latest/getting-started/language-server
 //
 
 package ampli
@@ -1546,10 +1546,10 @@ func (a *Ampli) Load(options LoadOptions) {
 
 	if clientConfig.Plan == nil {
 		clientConfig.Plan = &amplitude.Plan{
-			Branch:    `add-scan-mode-is-selected-to-ls`,
+			Branch:    `main`,
 			Source:    `language-server`,
 			Version:   `247`,
-			VersionID: `db6c924a-324c-4cc5-b1c1-cdad543adfc2`,
+			VersionID: `9ff98e1b-481c-4d72-a7d8-37de6e04cd11`,
 		}
 	}
 
