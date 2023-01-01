@@ -29,6 +29,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -333,6 +334,18 @@ func Test_UpdateSettings(t *testing.T) {
 			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
 		})
 	})
+}
+
+func Test_ScanningModeChanged_AnalyticsNotified(t *testing.T) {
+	testutil.UnitTest(t)
+	di.TestInit(t)
+	config.SetCurrentConfig(config.New())
+	analytics := di.Analytics().(*ux.TestAnalytics)
+	callCount := analytics.ScanModeIsSelectedCount
+
+	UpdateSettings(lsp.Settings{ScanningMode: "manual"})
+
+	assert.Equal(t, callCount+1, analytics.ScanModeIsSelectedCount)
 }
 
 func Test_InitializeSettings(t *testing.T) {

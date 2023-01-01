@@ -29,10 +29,11 @@ func NewTestAnalytics() *TestAnalytics {
 }
 
 type TestAnalytics struct {
-	analytics   []interface{}
-	mutex       sync.Mutex
-	Identified  bool
-	Initialized bool
+	analytics               []interface{}
+	mutex                   sync.Mutex
+	Identified              bool
+	Initialized             bool
+	ScanModeIsSelectedCount int
 }
 
 func (n *TestAnalytics) GetAnalytics() []interface{} {
@@ -84,4 +85,7 @@ func (n *TestAnalytics) Identify() {
 
 func (n *TestAnalytics) ScanModeIsSelected(properties ScanModeIsSelectedProperties) {
 	log.Info().Str("method", "ScanModeIsSelected").Msgf("no op")
+	n.mutex.Lock()
+	defer n.mutex.Unlock()
+	n.ScanModeIsSelectedCount++
 }

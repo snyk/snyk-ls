@@ -205,6 +205,7 @@ func New() *Config {
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = lsp.DefaultSeverityFilter()
+	c.automaticScanning = true
 	return c
 }
 

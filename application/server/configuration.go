@@ -93,14 +93,12 @@ func UpdateSettings(settings lsp.Settings) {
 
 	// If a product was removed, clear all issues for this product
 	ws := workspace.Get()
-	if ws == nil {
-		return
-	}
-
-	newSupportedProducts := currentConfig.GetDisplayableIssueTypes()
-	for removedIssueType, wasSupported := range previouslySupportedProducts {
-		if wasSupported && !newSupportedProducts[removedIssueType] {
-			ws.ClearIssuesByType(removedIssueType)
+	if ws != nil {
+		newSupportedProducts := currentConfig.GetDisplayableIssueTypes()
+		for removedIssueType, wasSupported := range previouslySupportedProducts {
+			if wasSupported && !newSupportedProducts[removedIssueType] {
+				ws.ClearIssuesByType(removedIssueType)
+			}
 		}
 	}
 
@@ -128,6 +126,7 @@ func writeSettings(settings lsp.Settings, initialize bool) {
 	updateSnykCodeSecurity(settings)
 	updateSnykCodeQuality(settings)
 	updateRuntimeInfo(settings)
+	updateAutoScan(settings)
 }
 
 func updateRuntimeInfo(settings lsp.Settings) {
