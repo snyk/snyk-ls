@@ -36,12 +36,14 @@ var rangeFragmentRegexp = regexp.MustCompile(`^(.+)://((.*)@)?(.+?)(:(\d*))?/?((
 
 func FolderContains(folderPath string, path string) bool {
 	filePathSeparator := string(filepath.Separator)
-	if !strings.HasSuffix(folderPath, filePathSeparator) {
-		folderPath += filePathSeparator
+	cleanPath := filepath.Clean(path)
+	cleanFolderPath := filepath.Clean(folderPath)
+	if !strings.HasSuffix(cleanFolderPath, filePathSeparator) {
+		cleanFolderPath += filePathSeparator
 	}
-	log.Debug().Str("folderPath", folderPath).Str("path", path).Msg("FolderContains")
-	return strings.HasPrefix(path, folderPath) ||
-		strings.HasPrefix(path+filePathSeparator, folderPath)
+	log.Debug().Str("folderPath", cleanFolderPath).Str("path", cleanPath).Msg("FolderContains")
+	return strings.HasPrefix(cleanPath, cleanFolderPath) ||
+		strings.HasPrefix(cleanPath+filePathSeparator, cleanFolderPath)
 }
 
 // todo can we create a path domain type?
