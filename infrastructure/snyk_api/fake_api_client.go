@@ -24,7 +24,7 @@ const (
 )
 
 type FakeApiClient struct {
-	Calls       map[string][][]interface{}
+	Calls       map[string][][]any
 	CodeEnabled bool
 }
 
@@ -32,21 +32,21 @@ var (
 	mutex = &sync.Mutex{}
 )
 
-func (f *FakeApiClient) addCall(params []interface{}, op string) {
+func (f *FakeApiClient) addCall(params []any, op string) {
 	mutex.Lock()
 	defer mutex.Unlock()
 	if f.Calls == nil {
-		f.Calls = make(map[string][][]interface{})
+		f.Calls = make(map[string][][]any)
 	}
 	calls := f.Calls[op]
-	var opParams []interface{}
+	var opParams []any
 	for p := range params {
 		opParams = append(opParams, params[p])
 	}
 	f.Calls[op] = append(calls, opParams)
 }
 
-func (f *FakeApiClient) GetCallParams(callNo int, op string) []interface{} {
+func (f *FakeApiClient) GetCallParams(callNo int, op string) []any {
 	mutex.Lock()
 	defer mutex.Unlock()
 	calls := f.Calls[op]
@@ -61,10 +61,10 @@ func (f *FakeApiClient) GetCallParams(callNo int, op string) []interface{} {
 }
 
 func (f *FakeApiClient) Clear() {
-	f.Calls = map[string][][]interface{}{}
+	f.Calls = map[string][][]any{}
 }
 
-func (f *FakeApiClient) GetAllCalls(op string) [][]interface{} {
+func (f *FakeApiClient) GetAllCalls(op string) [][]any {
 	mutex.Lock()
 	defer mutex.Unlock()
 	calls := f.Calls[op]
@@ -75,11 +75,11 @@ func (f *FakeApiClient) GetAllCalls(op string) [][]interface{} {
 }
 
 func (f *FakeApiClient) SastEnabled() (sastEnabled bool, localCodeEngineEnabled bool, reportFalsePositivesEnabled bool, err error) {
-	f.addCall([]interface{}{}, SastEnabledOperation)
+	f.addCall([]any{}, SastEnabledOperation)
 	return f.CodeEnabled, false, false, nil
 }
 
 func (f *FakeApiClient) GetActiveUser() (user ActiveUser, err error) {
-	f.addCall([]interface{}{}, ActiveUserOperation)
+	f.addCall([]any{}, ActiveUserOperation)
 	return ActiveUser{Id: "FakeUser"}, nil
 }

@@ -36,7 +36,7 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 	testutil.UnitTest(t)
 	e := errors.New("test error")
 
-	notification.CreateListener(func(params interface{}) {
+	notification.CreateListener(func(params any) {
 		showMessageParams := params.(sglsp.ShowMessageParams)
 		assert.Equal(t, "Snyk encountered an error: test error", showMessageParams.Message)
 	})
@@ -55,7 +55,7 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 
 	path := "testPath"
 	text := "test error"
-	notification.CreateListener(func(params interface{}) {
+	notification.CreateListener(func(params any) {
 		diagnosticsParams := params.(lsp.PublishDiagnosticsParams)
 		assert.Equal(t, text, diagnosticsParams.Diagnostics[0].Message)
 		assert.Equal(t, lsp.DiagnosticsSeverityWarning, diagnosticsParams.Diagnostics[0].Severity)

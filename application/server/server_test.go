@@ -105,7 +105,7 @@ func cleanupChannels() {
 	di.HoverService().ClearAllHovers()
 }
 
-type onCallbackFn = func(ctx context.Context, request *jrpc2.Request) (interface{}, error)
+type onCallbackFn = func(ctx context.Context, request *jrpc2.Request) (any, error)
 
 func startServer(callBackFn onCallbackFn) server.Local {
 	var srv *jrpc2.Server
@@ -117,7 +117,7 @@ func startServer(callBackFn onCallbackFn) server.Local {
 			OnNotify: func(request *jrpc2.Request) {
 				jsonRPCRecorder.Record(*request)
 			},
-			OnCallback: func(ctx context.Context, request *jrpc2.Request) (interface{}, error) {
+			OnCallback: func(ctx context.Context, request *jrpc2.Request) (any, error) {
 				if callBackFn != nil {
 					return callBackFn(ctx, request)
 				}
@@ -195,6 +195,28 @@ func Test_initialize_shouldSupportDocumentOpening(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.OpenClose, true)
+}
+
+func Test_initialize_shouldSupportAllCommands(t *testing.T) {
+	loc := setupServer(t)
+
+	rsp, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result lsp.InitializeResult
+	if err := rsp.UnmarshalResult(&result); err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.NavigateToRangeCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.WorkspaceScanCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.WorkspaceFolderScanCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.OpenBrowserCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.LoginCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.CopyAuthLinkCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.LogoutCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.TrustWorkspaceFoldersCommand)
 }
 
 func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {

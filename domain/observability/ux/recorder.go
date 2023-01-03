@@ -29,14 +29,14 @@ func NewTestAnalytics() *TestAnalytics {
 }
 
 type TestAnalytics struct {
-	analytics               []interface{}
+	analytics               []any
 	mutex                   sync.Mutex
 	Identified              bool
 	Initialized             bool
 	ScanModeIsSelectedCount int
 }
 
-func (n *TestAnalytics) GetAnalytics() []interface{} {
+func (n *TestAnalytics) GetAnalytics() []any {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	return n.analytics

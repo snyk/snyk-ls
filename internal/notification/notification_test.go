@@ -36,7 +36,7 @@ func TestSendReceive(t *testing.T) {
 
 func TestCreateListener(t *testing.T) {
 	called := concurrency.AtomicBool{}
-	CreateListener(func(event interface{}) {
+	CreateListener(func(event any) {
 		called.Set(true)
 	})
 	defer DisposeListener()

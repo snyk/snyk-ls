@@ -191,7 +191,7 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 	var diagnostics []lsp.Diagnostic
 
 	defer notification.DisposeListener()
-	notification.CreateListener(func(event interface{}) {
+	notification.CreateListener(func(event any) {
 		switch params := event.(type) {
 		case lsp.PublishDiagnosticsParams:
 			mtx.Lock()
@@ -227,7 +227,7 @@ func Test_ClearDiagnostics(t *testing.T) {
 	clearDiagnosticNotifications := 0
 
 	defer notification.DisposeListener()
-	notification.CreateListener(func(event interface{}) {
+	notification.CreateListener(func(event any) {
 		switch params := event.(type) {
 		case lsp.PublishDiagnosticsParams:
 			if len(params.Diagnostics) == 0 {

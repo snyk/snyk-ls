@@ -59,7 +59,7 @@ func Test_handleUntrustedFolders_shouldNotTriggerTrustRequestWhenAlreadyRequesti
 }
 
 func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmation(t *testing.T) {
-	loc := setupCustomServer(t, func(_ context.Context, _ *jrpc2.Request) (interface{}, error) {
+	loc := setupCustomServer(t, func(_ context.Context, _ *jrpc2.Request) (any, error) {
 		return lsp.MessageActionItem{
 			Title: doTrust,
 		}, nil
@@ -80,7 +80,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 }
 
 func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativeConfirmation(t *testing.T) {
-	loc := setupCustomServer(t, func(_ context.Context, _ *jrpc2.Request) (interface{}, error) {
+	loc := setupCustomServer(t, func(_ context.Context, _ *jrpc2.Request) (any, error) {
 		return lsp.MessageActionItem{
 			Title: dontTrust,
 		}, nil
