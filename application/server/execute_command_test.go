@@ -17,6 +17,7 @@
 package server
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -46,6 +47,54 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 	assert.Eventually(t, func() bool {
 		return scanner.Calls() > 0
 	}, 2*time.Second, time.Millisecond)
+}
+
+func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceipt(t *testing.T) {
+	loc := setupServer(t)
+
+	scanner := &snyk.TestScanner{}
+	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService()))
+
+	params := lsp.ExecuteCommandParams{Command: snyk.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
+	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Eventually(t, func() bool {
+		return scanner.Calls() > 0
+	}, 2*time.Second, time.Millisecond)
+}
+
+func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostics(t *testing.T) {
+	loc := setupServer(t)
+
+	scannerForFolder := snyk.NewTestScanner()
+	scannerForDontClear := snyk.NewTestScanner()
+	folder := workspace.NewFolder("dummy", "dummy", scannerForFolder, di.HoverService())
+	dontClear := workspace.NewFolder("dontclear", "dontclear", scannerForDontClear, di.HoverService())
+
+	dontClearIssuePath := "dontclear/file.txt"
+	scannerForDontClear.AddTestIssue(snyk.Issue{AffectedFilePath: dontClearIssuePath})
+	scannerForFolder.AddTestIssue(snyk.Issue{AffectedFilePath: "dummy/file.txt"})
+
+	workspace.Get().AddFolder(folder)
+	workspace.Get().AddFolder(dontClear)
+
+	// prepare pre-existent diagnostics for folder
+	folder.ScanFolder(context.Background())
+	dontClear.ScanFolder(context.Background())
+
+	params := lsp.ExecuteCommandParams{Command: snyk.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
+	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Eventually(t, func() bool {
+		// must be two scans for dummy as initialization + scan after issuing command
+		return scannerForFolder.Calls() == 2 && scannerForDontClear.Calls() == 1
+	}, 2*time.Second, time.Millisecond)
+
+	assert.Equal(t, 1, len(dontClear.AllIssuesFor(dontClearIssuePath)))
 }
 
 func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {

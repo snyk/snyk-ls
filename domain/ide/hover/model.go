@@ -20,7 +20,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 )
 
-type Context interface{}
+type Context any
 
 type Hover[T Context] struct {
 	Id      string

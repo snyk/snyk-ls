@@ -19,6 +19,7 @@ package snyk
 const (
 	NavigateToRangeCommand       = "snyk.navigateToRange"
 	WorkspaceScanCommand         = "snyk.workspace.scan"
+	WorkspaceFolderScanCommand   = "snyk.workspaceFolder.scan"
 	OpenBrowserCommand           = "snyk.openBrowser"
 	LoginCommand                 = "snyk.login"
 	CopyAuthLinkCommand          = "snyk.copyAuthLink"
@@ -39,7 +40,7 @@ type Command struct {
 	 * Arguments that the command handler should be
 	 * invoked with.
 	 */
-	Arguments []interface{}
+	Arguments []any
 }
 
 type CommandName string

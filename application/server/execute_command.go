@@ -35,7 +35,7 @@ import (
 )
 
 func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
-	return handler.New(func(ctx context.Context, params sglsp.ExecuteCommandParams) (interface{}, error) {
+	return handler.New(func(ctx context.Context, params sglsp.ExecuteCommandParams) (any, error) {
 		// The context provided by the JSON-RPC server is cancelled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
@@ -50,10 +50,29 @@ func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 				log.Warn().Str("method", method).Msg("received NavigateToRangeCommand without range")
 			}
 			navigateToLocation(srv, args)
+
 		case snyk.WorkspaceScanCommand:
 			w := workspace.Get()
 			w.ClearIssues(bgCtx)
 			w.ScanWorkspace(bgCtx)
+			handleUntrustedFolders(bgCtx, srv)
+
+		case snyk.WorkspaceFolderScanCommand:
+			w := workspace.Get()
+			if len(args) != 1 {
+				log.Warn().Str("method", method).Msg("received WorkspaceFolderScanCommand without path")
+				return nil, nil
+			}
+			path := args[0].(string)
+			f := w.GetFolderContaining(path)
+			if f == nil {
+				log.Warn().Str("method", method).Msg("received WorkspaceFolderScanCommand with path not in workspace")
+				log.Warn().Interface("folders", w.Folders())
+				return nil, nil
+			}
+			f.ClearScannedStatus()
+			f.ClearDiagnosticsFromPathRecursively(path)
+			f.ScanFolder(bgCtx)
 			handleUntrustedFolders(bgCtx, srv)
 		case snyk.OpenBrowserCommand:
 			command.OpenBrowser(params.Arguments[0].(string))
