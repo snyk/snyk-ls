@@ -56,7 +56,7 @@ type Folder struct {
 func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hover.Service) *Folder {
 	folder := Folder{
 		scanner:      scanner,
-		path:         path,
+		path:         strings.TrimSuffix(path, "/"),
 		name:         name,
 		status:       Unscanned,
 		hoverService: hoverService,
@@ -194,7 +194,7 @@ func (f *Folder) filterCachedDiagnostics() (fileIssues map[string][]snyk.Issue) 
 
 func filterIssues(issues []snyk.Issue, supportedIssueTypes map[product.FilterableIssueType]bool) []snyk.Issue {
 	logger := log.With().Str("method", "filterIssues").Logger()
-	filteredIssues := []snyk.Issue{}
+	filteredIssues := make([]snyk.Issue, 0)
 
 	for _, issue := range issues {
 		// Logging here might hurt performance, should benchmark if filtering is slow

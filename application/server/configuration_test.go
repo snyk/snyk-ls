@@ -71,7 +71,7 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	assert.Equal(t, "token", config.CurrentConfig().Token())
 }
 
-func callBackMock(_ context.Context, request *jrpc2.Request) (interface{}, error) {
+func callBackMock(_ context.Context, request *jrpc2.Request) (any, error) {
 	jsonRPCRecorder.Record(*request)
 	if request.Method() == "workspace/configuration" {
 		return []lsp.Settings{sampleSettings}, nil

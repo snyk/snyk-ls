@@ -25,14 +25,14 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 )
 
-var channel = make(chan interface{}, 100)
+var channel = make(chan any, 100)
 var stopChannel = make(chan bool, 1000)
 
 func SendShowMessage(messageType sglsp.MessageType, message string) {
 	channel <- sglsp.ShowMessageParams{Type: messageType, Message: message}
 }
 
-func Send(msg interface{}) {
+func Send(msg any) {
 	channel <- msg
 }
 
@@ -56,7 +56,7 @@ func SendErrorDiagnostic(path string, err error) {
 	})
 }
 
-func Receive() (payload interface{}, stop bool) {
+func Receive() (payload any, stop bool) {
 	select {
 	case payload = <-channel:
 		return payload, false
@@ -65,7 +65,7 @@ func Receive() (payload interface{}, stop bool) {
 	}
 }
 
-func CreateListener(callback func(params interface{})) {
+func CreateListener(callback func(params any)) {
 	// cleanup stopchannel before starting
 	for {
 		select {

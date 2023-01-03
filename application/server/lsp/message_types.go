@@ -117,7 +117,7 @@ type Diagnostic struct {
 	*
 	* @since 3.16.0
 	 */
-	Data interface{} `json:"data,omitempty"`
+	Data any `json:"data,omitempty"`
 }
 
 type DiagnosticTag int
@@ -347,7 +347,7 @@ type ProgressParams struct {
 	/**
 	 * The progress data.
 	 */
-	Value interface{} `json:"value,omitempty"`
+	Value any `json:"value,omitempty"`
 }
 
 type WorkDoneProgressKind struct {
@@ -621,7 +621,7 @@ type CodeAction struct {
 	 *
 	 * @since 3.16.0
 	 */
-	Data interface{} `json:"data,omitempty"`
+	Data any `json:"data,omitempty"`
 }
 
 type CodeActionTriggerKind float64

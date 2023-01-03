@@ -100,7 +100,7 @@ func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 // WorkspaceWillDeleteFilesHandler handles the workspace/willDeleteFiles message that's raised by the client
 // when files are deleted
 func WorkspaceWillDeleteFilesHandler() jrpc2.Handler {
-	return handler.New(func(ctx context.Context, params lsp.DeleteFilesParams) (interface{}, error) {
+	return handler.New(func(ctx context.Context, params lsp.DeleteFilesParams) (any, error) {
 		ws := workspace.Get()
 		for _, file := range params.Files {
 			path := uri.PathFromUri(file.Uri)
@@ -114,7 +114,7 @@ func WorkspaceWillDeleteFilesHandler() jrpc2.Handler {
 	})
 }
 
-func navigateToLocation(srv *jrpc2.Server, args []interface{}) {
+func navigateToLocation(srv *jrpc2.Server, args []any) {
 	method := "navigateToLocation"
 	// convert to correct type
 	var myRange snyk.Range
@@ -164,7 +164,7 @@ func CodeActionHandler() jrpc2.Handler {
 }
 
 func WorkspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler {
-	return handler.New(func(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) (interface{}, error) {
+	return handler.New(func(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) (any, error) {
 		// The context provided by the JSON-RPC server is cancelled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
@@ -178,7 +178,7 @@ func WorkspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler 
 }
 
 func InitializeHandler(srv *jrpc2.Server) handler.Func {
-	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (interface{}, error) {
+	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (any, error) {
 		method := "InitializeHandler"
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
 		InitializeSettings(params.InitializationOptions)
@@ -242,6 +242,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 					Commands: []string{
 						snyk.NavigateToRangeCommand,
 						snyk.WorkspaceScanCommand,
+						snyk.WorkspaceFolderScanCommand,
 						snyk.OpenBrowserCommand,
 						snyk.LoginCommand,
 						snyk.CopyAuthLinkCommand,
@@ -255,7 +256,7 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 	})
 }
 func InitializedHandler(srv *jrpc2.Server) handler.Func {
-	return handler.New(func(ctx context.Context, params lsp.InitializedParams) (interface{}, error) {
+	return handler.New(func(ctx context.Context, params lsp.InitializedParams) (any, error) {
 		log.Debug().Str("method", "InitializedHandler").Msgf("initializing CLI now")
 		err := di.CliInitializer().Init()
 		if err != nil {
@@ -328,7 +329,7 @@ func monitorClientProcess(pid int) time.Duration {
 }
 
 func Shutdown() jrpc2.Handler {
-	return handler.New(func(ctx context.Context) (interface{}, error) {
+	return handler.New(func(ctx context.Context) (any, error) {
 		log.Info().Str("method", "Shutdown").Msg("RECEIVING")
 		defer log.Info().Str("method", "Shutdown").Msg("SENDING")
 		di.ErrorReporter().FlushErrorReporting()
@@ -344,7 +345,7 @@ func Shutdown() jrpc2.Handler {
 }
 
 func Exit(srv *jrpc2.Server) jrpc2.Handler {
-	return handler.New(func(_ context.Context) (interface{}, error) {
+	return handler.New(func(_ context.Context) (any, error) {
 		log.Info().Str("method", "Exit").Msg("RECEIVING")
 		log.Info().Msg("Stopping server...")
 		(*srv).Stop()
@@ -361,7 +362,7 @@ func logError(err error, method string) {
 }
 
 func TextDocumentDidOpenHandler() jrpc2.Handler {
-	return handler.New(func(_ context.Context, params sglsp.DidOpenTextDocumentParams) (interface{}, error) {
+	return handler.New(func(_ context.Context, params sglsp.DidOpenTextDocumentParams) (any, error) {
 		method := "TextDocumentDidOpenHandler"
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 		log.Info().Str("method", method).Str("documentURI", filePath).Msg("RECEIVING")
@@ -376,7 +377,7 @@ func TextDocumentDidOpenHandler() jrpc2.Handler {
 }
 
 func TextDocumentDidSaveHandler() jrpc2.Handler {
-	return handler.New(func(_ context.Context, params sglsp.DidSaveTextDocumentParams) (interface{}, error) {
+	return handler.New(func(_ context.Context, params sglsp.DidSaveTextDocumentParams) (any, error) {
 		// The context provided by the JSON-RPC server is cancelled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
@@ -408,7 +409,7 @@ func TextDocumentHover() jrpc2.Handler {
 }
 
 func WindowWorkDoneProgressCancelHandler() jrpc2.Handler {
-	return handler.New(func(_ context.Context, params lsp.WorkdoneProgressCancelParams) (interface{}, error) {
+	return handler.New(func(_ context.Context, params lsp.WorkdoneProgressCancelParams) (any, error) {
 		log.Info().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
 		CancelProgress(params.Token)
 		return nil, nil
@@ -416,14 +417,14 @@ func WindowWorkDoneProgressCancelHandler() jrpc2.Handler {
 }
 
 func NoOpHandler() jrpc2.Handler {
-	return handler.New(func(_ context.Context, params sglsp.DidCloseTextDocumentParams) (interface{}, error) {
+	return handler.New(func(_ context.Context, params sglsp.DidCloseTextDocumentParams) (any, error) {
 		log.Info().Str("method", "NoOpHandler").Interface("params", params).Msg("RECEIVING")
 		return nil, nil
 	})
 }
 
 func registerNotifier(srv *jrpc2.Server) {
-	callbackFunction := func(params interface{}) {
+	callbackFunction := func(params any) {
 		switch params := params.(type) {
 		case lsp.AuthenticationParams:
 			notifier(srv, "$/snyk.hasAuthenticated", params)
