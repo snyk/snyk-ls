@@ -48,6 +48,11 @@ jobs:
           cd ~
           curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | bash
 
+      - name: Setup Node # Pre-req for analytics verification
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
       - name: Cache Go modules
         uses: actions/cache@v3
         with:
