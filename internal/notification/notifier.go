@@ -12,15 +12,15 @@ type scanNotifier struct {
 	productName string
 }
 
+func NewNotifier(productName string) ScanNotifier {
+	return &scanNotifier{productName: productName}
+}
+
 func (n *scanNotifier) SendError() {
 	Send(lsp.SnykScanParams{
 		Status:  lsp.ErrorStatus,
 		Product: n.productName,
 	})
-}
-
-func NewNotifier(productName string) ScanNotifier {
-	return &scanNotifier{productName: productName}
 }
 
 func (n *scanNotifier) SendSuccess() {

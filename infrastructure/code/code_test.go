@@ -139,12 +139,7 @@ func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient,
 
 func setupTestScanner() (*FakeSnykCodeClient, *Scanner) {
 	snykCodeMock := &FakeSnykCodeClient{}
-	scanner := New(
-		NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
-		&snyk_api.FakeApiClient{CodeEnabled: true},
-		error_reporting.NewTestErrorReporter(),
-		ux2.NewTestAnalytics(),
-	)
+	scanner := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), notification.NewNotifier("code"))
 
 	return snykCodeMock, scanner
 }
@@ -153,7 +148,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 	t.Run("should create bundle when hash empty", func(t *testing.T) {
 		testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{}
-		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
+		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), notification.NewNotifier("code"))
 		path, firstDoc, _, content1, _ := setupDocs()
 		docs := []string{uri.PathFromUri(firstDoc.URI)}
 		defer func(path string) { _ = os.RemoveAll(path) }(path)
@@ -172,7 +167,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 	t.Run("should ignore if SAST disabled", func(t *testing.T) {
 		testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{}
-		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: false}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
+		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: false}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), notification.NewNotifier("code"))
 		path, firstDoc, _, _, _ := setupDocs()
 		docs := []string{uri.PathFromUri(firstDoc.URI)}
 		defer func(path string) { _ = os.RemoveAll(path) }(path)
@@ -187,7 +182,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 	t.Run("should retrieve from backend", func(t *testing.T) {
 		testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{}
-		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics())
+		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), notification.NewNotifier("code"))
 		diagnosticUri, path := FakeDiagnosticPath(t)
 		defer func(path string) { _ = os.RemoveAll(path) }(path)
 		files := []string{diagnosticUri}
@@ -210,7 +205,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 		testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{}
 		analytics := ux2.NewTestAnalytics()
-		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), analytics)
+		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), analytics, notification.NewNotifier("code"))
 		diagnosticUri, path := FakeDiagnosticPath(t)
 		defer func(path string) { _ = os.RemoveAll(path) }(path)
 		files := []string{diagnosticUri}
