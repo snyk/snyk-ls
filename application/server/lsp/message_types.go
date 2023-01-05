@@ -18,8 +18,6 @@ package lsp
 
 import (
 	sglsp "github.com/sourcegraph/go-lsp"
-
-	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 const (
@@ -695,24 +693,8 @@ const (
 type SnykScanParams struct {
 	// Status can be either Initial, InProgress or Success
 	Status ScanStatus `json:"status"`
-	// Kind is the product line of the scan (Snyk Code, Snyk Open Source, etc...)
-	Kind string `json:"kind"`
+	// Product under scan (Snyk Code, Snyk Open Source, etc...)
+	Product string `json:"product"`
 	// Results contain the scan results in the common issues model
-	Results []snyk.Issue `json:"results"`
-}
-
-func SnykScanInitialMessage(kind string) SnykScanParams {
-	return NewSnykScanParams(Initial, kind, nil)
-}
-
-func SnykScanInProgressMessage(kind string) SnykScanParams {
-	return NewSnykScanParams(InProgress, kind, nil)
-}
-
-func NewSnykScanParams(status ScanStatus, kind string, results []snyk.Issue) SnykScanParams {
-	return SnykScanParams{
-		Status:  status,
-		Kind:    kind,
-		Results: results,
-	}
+	//Results []snyk.Issue `json:"results"`
 }

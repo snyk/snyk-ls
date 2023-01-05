@@ -78,9 +78,10 @@ type Scanner struct {
 	mutex           sync.Mutex
 	scanStatusMutex sync.Mutex
 	runningScans    map[string]*ScanStatus
+	notifier        *notification.ScanNotifier
 }
 
-func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter error_reporting.ErrorReporter, analytics ux2.Analytics) *Scanner {
+func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter error_reporting.ErrorReporter, analytics ux2.Analytics, notifier notification.ScanNotifier) *Scanner {
 	sc := &Scanner{
 		BundleUploader: bundleUploader,
 		SnykApiClient:  apiClient,
@@ -144,7 +145,11 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk
 	}()
 
 	// Start the scan
-	notification.Send(lsp.SnykScanInitialMessage("code"))
+	notification.Send(lsp.SnykScanParams{
+		Status:  lsp.Initial,
+		Product: "code",
+		//Results: results,
+	})
 	startTime := time.Now()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
