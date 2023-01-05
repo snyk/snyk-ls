@@ -119,7 +119,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
 			return issues
 		} else if status.message == "ANALYZING" {
 			logger.Trace().Msg("\"Analyzing\" message received, sending In-Progress message to client")
-			notification.Send(lsp.SnykScanInProgressMessage("Snyk Code"))
+			notification.Send(lsp.SnykScanInProgressMessage("code"))
 		}
 
 		if time.Since(start) > config.CurrentConfig().SnykCodeAnalysisTimeout() {
