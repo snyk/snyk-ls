@@ -19,7 +19,7 @@ package lsp
 import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/domain/snyk/issues"
+	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 const (
@@ -685,9 +685,10 @@ type SnykTrustedFoldersParams struct {
 type ScanStatus string
 
 const (
-	Initial    ScanStatus = "Initial"
-	InProgress ScanStatus = "InProgress"
-	Success    ScanStatus = "Success"
+	Initial     ScanStatus = "initial"
+	InProgress  ScanStatus = "inProgress"
+	Success     ScanStatus = "success"
+	ErrorStatus ScanStatus = "error"
 )
 
 // SnykScanParams is the type for the $/snyk/scan message
@@ -697,7 +698,7 @@ type SnykScanParams struct {
 	// Kind is the product line of the scan (Snyk Code, Snyk Open Source, etc...)
 	Kind string `json:"kind"`
 	// Results contain the scan results in the common issues model
-	Results []issues.CodeIssue `json:"results,omitempty"`
+	Results []snyk.Issue `json:"results"`
 }
 
 func SnykScanInitialMessage(kind string) SnykScanParams {
@@ -708,7 +709,7 @@ func SnykScanInProgressMessage(kind string) SnykScanParams {
 	return NewSnykScanParams(InProgress, kind, nil)
 }
 
-func NewSnykScanParams(status ScanStatus, kind string, results []issues.CodeIssue) SnykScanParams {
+func NewSnykScanParams(status ScanStatus, kind string, results []snyk.Issue) SnykScanParams {
 	return SnykScanParams{
 		Status:  status,
 		Kind:    kind,
