@@ -9,11 +9,15 @@ type ScanNotifier interface {
 }
 
 type scanNotifier struct {
+	notifier    Notifier
 	productName string
 }
 
-func NewNotifier(productName string) ScanNotifier {
-	return &scanNotifier{productName: productName}
+func NewNotifier(notifier Notifier, productName string) ScanNotifier {
+	return &scanNotifier{
+		notifier:    notifier,
+		productName: productName,
+	}
 }
 
 func (n *scanNotifier) SendError(folderPath string) {

@@ -1,40 +1,47 @@
 package notification
 
-import "github.com/snyk/snyk-ls/application/server/lsp"
+import sglsp "github.com/sourcegraph/go-lsp"
 
-type ScanNotifier interface {
-	SendInProgress(folderPath string)
-	SendSuccess(folderPath string) //TODO - add parameter with results
-	SendError(folderPath string)
+// Notifier should be passed as a dependency to the types that call "notification.x" functions.
+// This allows using mocks
+type Notifier interface {
+	SendShowMessage(messageType sglsp.MessageType, message string)
+	Send(msg any)
+	SendError(err error)
+	SendErrorDiagnostic(path string, err error)
+	Receive() (payload any, stop bool)
+	CreateListener(callback func(params any))
+	DisposeListener()
 }
 
-type scanNotifier struct {
-	productName string
+var _ Notifier = &notifierImpl{}
+
+type notifierImpl struct{}
+
+func (n *notifierImpl) SendShowMessage(messageType sglsp.MessageType, message string) {
+	SendShowMessage(messageType, message)
 }
 
-func NewNotifier(productName string) ScanNotifier {
-	return &scanNotifier{productName: productName}
+func (n *notifierImpl) Send(msg any) {
+	Send(msg)
 }
 
-func (n *scanNotifier) SendError(folderPath string) {
-	Send(lsp.SnykScanParams{
-		Status:  lsp.ErrorStatus,
-		Product: n.productName,
-	})
+func (n *notifierImpl) SendError(err error) {
+	SendError(err)
 }
 
-func (n *scanNotifier) SendSuccess(folderPath string) {
-	Send(lsp.SnykScanParams{
-		Status:  lsp.Success,
-		Product: n.productName,
-		//Results: results,
-	})
+func (n *notifierImpl) SendErrorDiagnostic(path string, err error) {
+	SendErrorDiagnostic(path, err)
 }
 
-func (n *scanNotifier) SendInProgress(folderPath string) {
-	Send(lsp.SnykScanParams{
-		Status:  lsp.InProgress,
-		Product: n.productName,
-		//Results: results,
-	})
+func (n *notifierImpl) Receive() (payload any, stop bool) {
+	return Receive()
+}
+
+func (n *notifierImpl) CreateListener(callback func(params any)) {
+	CreateListener(callback)
+}
+
+func (n *notifierImpl) DisposeListener() {
+	DisposeListener()
 }
