@@ -29,6 +29,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -133,7 +134,7 @@ func Test_UpdateSettings(t *testing.T) {
 	testutil.UnitTest(t)
 	di.TestInit(t)
 
-	t.Run("all settings", func(t *testing.T) {
+	t.Run("All settings are updated", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
 
 		settings := lsp.Settings{
@@ -157,6 +158,7 @@ func Test_UpdateSettings(t *testing.T) {
 			OsArch:                      "amd64",
 			RuntimeName:                 "java",
 			RuntimeVersion:              "1.8.0_275",
+			ScanningMode:                "manual",
 		}
 
 		UpdateSettings(settings)
@@ -178,12 +180,12 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, "C:\\Users\\CliPath\\snyk-ls.exe", c.CliSettings().Path())
 		assert.Equal(t, "a fancy token", c.Token())
 		assert.Equal(t, lsp.DefaultSeverityFilter(), c.FilterSeverity())
-		assert.Contains(t, c.TrustedFolders(), "trustedPath1")
-		assert.Contains(t, c.TrustedFolders(), "trustedPath2")
+		assert.Subset(t, []string{"trustedPath1", "trustedPath2"}, c.TrustedFolders())
 		assert.Equal(t, settings.OsPlatform, c.OsPlatform())
 		assert.Equal(t, settings.OsArch, c.OsArch())
 		assert.Equal(t, settings.RuntimeName, c.RuntimeName())
 		assert.Equal(t, settings.RuntimeVersion, c.RuntimeVersion())
+		assert.False(t, c.IsAutoScanEnabled())
 	})
 
 	t.Run("blank organisation is ignored", func(t *testing.T) {
@@ -332,6 +334,18 @@ func Test_UpdateSettings(t *testing.T) {
 			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
 		})
 	})
+}
+
+func Test_ScanningModeChanged_AnalyticsNotified(t *testing.T) {
+	testutil.UnitTest(t)
+	di.TestInit(t)
+	config.SetCurrentConfig(config.New())
+	analytics := di.Analytics().(*ux.TestAnalytics)
+	callCount := analytics.ScanModeIsSelectedCount
+
+	UpdateSettings(lsp.Settings{ScanningMode: "manual"})
+
+	assert.Equal(t, callCount+1, analytics.ScanModeIsSelectedCount)
 }
 
 func Test_InitializeSettings(t *testing.T) {

@@ -168,10 +168,11 @@ func WorkspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler 
 		// The context provided by the JSON-RPC server is cancelled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
+		logger := log.With().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Logger()
 
-		log.Info().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Msg("RECEIVING")
-		defer log.Info().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Msg("SENDING")
-		workspace.Get().AddAndRemoveFoldersAndTriggerScan(bgCtx, params)
+		logger.Info().Msg("RECEIVING")
+		defer logger.Info().Msg("SENDING")
+		workspace.Get().ChangeWorkspaceFolders(bgCtx, params)
 		handleUntrustedFolders(bgCtx, srv)
 		return nil, nil
 	})
@@ -257,16 +258,23 @@ func InitializeHandler(srv *jrpc2.Server) handler.Func {
 }
 func InitializedHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializedParams) (any, error) {
-		log.Debug().Str("method", "InitializedHandler").Msgf("initializing CLI now")
+		logger := log.With().Str("method", "InitializedHandler").Logger()
+
+		logger.Debug().Msg("initializing CLI now")
 		err := di.CliInitializer().Init()
 		if err != nil {
 			di.ErrorReporter().CaptureError(err)
 		}
-		log.Debug().Str("method", "InitializedHandler").Msgf("triggering workspace scan after successful initialization")
-		workspace.Get().ScanWorkspace(context.Background())
+		autoScanEnabled := config.CurrentConfig().IsAutoScanEnabled()
+		if autoScanEnabled {
+			logger.Debug().Msg("triggering workspace scan after successful initialization")
+			workspace.Get().ScanWorkspace(context.Background())
+		} else {
+			logger.Debug().Msg("No automatic workspace scan on initialization - auto-scan is disabled")
+		}
 
 		if config.CurrentConfig().AutomaticAuthentication() || config.CurrentConfig().NonEmptyToken() {
-			log.Debug().Str("method", "InitializedHandler").Msgf("trying to get trusted status for untrusted folders")
+			logger.Debug().Msg("trying to get trusted status for untrusted folders")
 			go handleUntrustedFolders(context.Background(), srv)
 		}
 		return nil, nil
@@ -363,14 +371,20 @@ func logError(err error, method string) {
 
 func TextDocumentDidOpenHandler() jrpc2.Handler {
 	return handler.New(func(_ context.Context, params sglsp.DidOpenTextDocumentParams) (any, error) {
-		method := "TextDocumentDidOpenHandler"
 		filePath := uri.PathFromUri(params.TextDocument.URI)
-		log.Info().Str("method", method).Str("documentURI", filePath).Msg("RECEIVING")
+		logger := log.With().Str("method", "TextDocumentDidOpenHandler").Str("documentURI", filePath).Logger()
+
+		logger.Info().Msg("Receiving")
 		folder := workspace.Get().GetFolderContaining(filePath)
-		if folder != nil {
+		autoScanEnabled := config.CurrentConfig().IsAutoScanEnabled()
+		if folder != nil && autoScanEnabled {
 			go folder.ScanFile(context.Background(), filePath)
 		} else {
-			log.Warn().Str("method", method).Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
+			if autoScanEnabled {
+				logger.Warn().Msg("Not scanning, file not part of workspace")
+			} else {
+				logger.Warn().Msg("Not scanning, auto-scan is disabled")
+			}
 		}
 		return nil, nil
 	})
@@ -381,19 +395,24 @@ func TextDocumentDidSaveHandler() jrpc2.Handler {
 		// The context provided by the JSON-RPC server is cancelled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
+		logger := log.With().Str("method", "TextDocumentDidSaveHandler").Logger()
 
-		method := "TextDocumentDidSaveHandler"
-		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
+		logger.Info().Interface("params", params).Msg("Receiving")
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 
 		// todo can we push cache management down?
 		f := workspace.Get().GetFolderContaining(filePath)
-		if f != nil {
+		autoScanEnabled := config.CurrentConfig().IsAutoScanEnabled()
+		if f != nil && autoScanEnabled {
 			f.ClearDiagnosticsFromFile(filePath)
 			di.HoverService().DeleteHover(params.TextDocument.URI)
 			go f.ScanFile(bgCtx, filePath)
 		} else {
-			log.Warn().Str("method", method).Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
+			if autoScanEnabled {
+				logger.Warn().Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
+			} else {
+				logger.Warn().Msg("Not scanning, auto-scan is disabled")
+			}
 		}
 		return nil, nil
 	})

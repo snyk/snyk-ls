@@ -5,7 +5,10 @@
   "SourceId": "bbc9b299-5765-406c-8d38-8665fd20738a",
   "Runtime": "go:go-ampli",
   "Branch": "main",
-  "Version": "244.0.0",
-  "VersionId": "0b412a3b-aa8b-42dd-beea-940fd88e7a3b",
-  "Path": "./ampli"
+  "Version": "247.0.0",
+  "VersionId": "9ff98e1b-481c-4d72-a7d8-37de6e04cd11",
+  "Path": "./ampli",
+  "Platform": "Go",
+  "Language": "Go",
+  "SDK": "analytics-go"
 }

@@ -161,6 +161,25 @@ func (c *Client) PluginIsInstalled(_ ux2.PluginIsInstalledProperties) {
 	c.enqueueEvent(captureFn)
 }
 
+func (c *Client) ScanModeIsSelected(properties ux2.ScanModeIsSelectedProperties) {
+	conf := config.CurrentConfig()
+	ide := ampli.ScanModeIsSelectedIde(getIdeProperty())
+
+	event := ampli.ScanModeIsSelected.Builder().
+		Ide(ide).
+		ScanMode(ampli.ScanModeIsSelectedScanMode(properties.ScanningMode)).
+		OsPlatform(conf.OsPlatform()).
+		OsArch(conf.OsArch()).
+		RuntimeName(conf.RuntimeName()).
+		RuntimeVersion(conf.RuntimeVersion()).
+		Build()
+
+	captureFn := func(authenticatedUserId string, eventOptions ...ampli.EventOptions) {
+		ampli.Instance.ScanModeIsSelected(authenticatedUserId, event, eventOptions...)
+	}
+	c.enqueueEvent(captureFn)
+}
+
 func (c *Client) enqueueEvent(eventFn captureEvent) {
 	if config.CurrentConfig().IsTelemetryEnabled() {
 		eventFn(

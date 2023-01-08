@@ -21,6 +21,8 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
@@ -60,7 +62,10 @@ func cleanupFakeCliFile(c *config.Config) {
 	}
 	if stat.Size() < 1000 {
 		// this is a fake CLI, removing it
-		_ = os.Remove(c.CliSettings().Path())
+		err = os.Remove(c.CliSettings().Path())
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to remove fake CLI")
+		}
 	}
 }
 

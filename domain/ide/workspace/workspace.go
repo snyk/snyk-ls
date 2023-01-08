@@ -124,16 +124,20 @@ func (w *Workspace) ScanWorkspace(ctx context.Context) {
 	}
 }
 
-func (w *Workspace) AddAndRemoveFoldersAndTriggerScan(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) {
+// ChangeWorkspaceFolders clears the "Removed" folders, adds the "New" folders,
+// and starts an automatic scan if auto-scans are enabled.
+func (w *Workspace) ChangeWorkspaceFolders(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) {
 	for _, folder := range params.Event.Removed {
 		w.RemoveFolder(uri.PathFromUri(folder.Uri))
-		// TODO: check if we need to clean up the reported diagnostics, if folder was removed?
 	}
 	for _, folder := range params.Event.Added {
 		f := NewFolder(uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService)
 		w.AddFolder(f)
 	}
-	w.ScanWorkspace(ctx)
+
+	if config.CurrentConfig().IsAutoScanEnabled() {
+		w.ScanWorkspace(ctx)
+	}
 }
 
 func (w *Workspace) ClearIssues(_ context.Context) {

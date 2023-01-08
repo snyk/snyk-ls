@@ -24,4 +24,5 @@ type Analytics interface {
 	AnalysisIsTriggered(properties AnalysisIsTriggeredProperties)
 	IssueHoverIsDisplayed(properties IssueHoverIsDisplayedProperties)
 	PluginIsInstalled(properties PluginIsInstalledProperties)
+	ScanModeIsSelected(properties ScanModeIsSelectedProperties)
 }

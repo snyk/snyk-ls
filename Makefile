@@ -132,9 +132,9 @@ license-update:
 # Verifies event tracking implementation in source code
 verify-analytics:
 ifeq ($(AMPLITUDE_KEY),)
-	@npx ampli status -u --skip-update-on-default-branch
+	@npx --yes @amplitude/ampli status -u --skip-update-on-default-branch
 else
-	@npx ampli status -u --skip-update-on-default-branch -t $(AMPLITUDE_KEY)
+	@npx --yes @amplitude/ampli status -u --skip-update-on-default-branch -t $(AMPLITUDE_KEY)
 endif
 
 help: Makefile

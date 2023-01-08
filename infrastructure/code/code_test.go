@@ -183,7 +183,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 		testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{}
 		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), notification.NewNotifier("code"))
-		diagnosticUri, path := FakeDiagnosticPath(t)
+		diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 		defer func(path string) { _ = os.RemoveAll(path) }(path)
 		files := []string{diagnosticUri}
 		metrics := c.newMetrics(len(files), time.Time{})
@@ -206,7 +206,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 		snykCodeMock := &FakeSnykCodeClient{}
 		analytics := ux2.NewTestAnalytics()
 		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), analytics, notification.NewNotifier("code"))
-		diagnosticUri, path := FakeDiagnosticPath(t)
+		diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 		defer func(path string) { _ = os.RemoveAll(path) }(path)
 		files := []string{diagnosticUri}
 		metrics := c.newMetrics(len(files), time.Now())

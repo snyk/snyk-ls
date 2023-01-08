@@ -37,6 +37,10 @@ type IssueHoverIsDisplayedProperties struct {
 type PluginIsInstalledProperties struct {
 }
 
+type ScanModeIsSelectedProperties struct {
+	ScanningMode string `json:"scanningMode"`
+}
+
 type Result string
 type AnalysisType string
 type IDE string

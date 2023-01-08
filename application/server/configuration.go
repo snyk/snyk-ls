@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/observability/ux"
 )
 
 func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
@@ -80,25 +81,29 @@ func InitializeSettings(settings lsp.Settings) {
 	writeSettings(settings, true)
 	updateAutoAuthentication(settings)
 	updateDeviceInformation(settings)
+	updateAutoScan(settings)
 }
 
 func UpdateSettings(settings lsp.Settings) {
 	currentConfig := config.CurrentConfig()
 	previouslySupportedProducts := currentConfig.GetDisplayableIssueTypes()
+	previousAutoScan := currentConfig.IsAutoScanEnabled()
 
 	writeSettings(settings, false)
 
 	// If a product was removed, clear all issues for this product
 	ws := workspace.Get()
-	if ws == nil {
-		return
+	if ws != nil {
+		newSupportedProducts := currentConfig.GetDisplayableIssueTypes()
+		for removedIssueType, wasSupported := range previouslySupportedProducts {
+			if wasSupported && !newSupportedProducts[removedIssueType] {
+				ws.ClearIssuesByType(removedIssueType)
+			}
+		}
 	}
 
-	newSupportedProducts := currentConfig.GetDisplayableIssueTypes()
-	for removedIssueType, wasSupported := range previouslySupportedProducts {
-		if wasSupported && !newSupportedProducts[removedIssueType] {
-			ws.ClearIssuesByType(removedIssueType)
-		}
+	if currentConfig.IsAutoScanEnabled() != previousAutoScan {
+		di.Analytics().ScanModeIsSelected(ux.ScanModeIsSelectedProperties{ScanningMode: settings.ScanningMode})
 	}
 }
 
@@ -121,6 +126,7 @@ func writeSettings(settings lsp.Settings, initialize bool) {
 	updateSnykCodeSecurity(settings)
 	updateSnykCodeQuality(settings)
 	updateRuntimeInfo(settings)
+	updateAutoScan(settings)
 }
 
 func updateRuntimeInfo(settings lsp.Settings) {
@@ -160,6 +166,16 @@ func updateDeviceInformation(settings lsp.Settings) {
 	if deviceId != "" {
 		config.CurrentConfig().SetDeviceID(deviceId)
 	}
+}
+
+func updateAutoScan(settings lsp.Settings) {
+	// Auto scan true by default unless the AutoScan value in the settings is not missing & false
+	autoScan := true
+	if settings.ScanningMode == "manual" {
+		autoScan = false
+	}
+
+	config.CurrentConfig().SetAutomaticScanning(autoScan)
 }
 
 func updateToken(token string) {
