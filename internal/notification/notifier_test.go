@@ -23,7 +23,7 @@ func Test_SendInProgressMessage_InProgressMessageSent(t *testing.T) {
 		}
 	})
 
-	notifier.SendInProgress()
+	notifier.SendInProgress("/test/folderPath")
 
 	assert.Eventually(t, func() bool { return messageReceived }, 3*time.Second, 50*time.Millisecond)
 }
@@ -40,7 +40,7 @@ func Test_SendSuccessMessage_SuccessMessageSent(t *testing.T) {
 		}
 	})
 
-	notifier.SendSuccess()
+	notifier.SendSuccess("/test/folderPath")
 
 	assert.Eventually(t, func() bool { return messageReceived }, 3*time.Second, 50*time.Millisecond)
 }
@@ -57,7 +57,7 @@ func Test_SendErrorMessage_ErrorMessageReceived(t *testing.T) {
 		}
 	})
 
-	notifier.SendError()
+	notifier.SendError("/test/folderPath")
 
 	assert.Eventually(t, func() bool { return messageReceived }, 3*time.Second, 50*time.Millisecond)
 }
