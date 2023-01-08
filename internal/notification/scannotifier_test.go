@@ -61,3 +61,7 @@ func Test_SendErrorMessage_ErrorMessageReceived(t *testing.T) {
 
 	assert.Eventually(t, func() bool { return messageReceived }, 3*time.Second, 50*time.Millisecond)
 }
+
+func Test_AllMessages(t *testing.T) {
+
+}
