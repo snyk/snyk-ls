@@ -160,6 +160,7 @@ type Config struct {
 	osArch                       string
 	runtimeName                  string
 	runtimeVersion               string
+	automaticScanning            bool
 }
 
 func CurrentConfig() *Config {
@@ -204,6 +205,7 @@ func New() *Config {
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = lsp.DefaultSeverityFilter()
+	c.automaticScanning = true
 	return c
 }
 
@@ -577,6 +579,10 @@ func (c *Config) SetAutomaticAuthentication(value bool) {
 	c.automaticAuthentication = value
 }
 
+func (c *Config) SetAutomaticScanning(value bool) {
+	c.automaticScanning = value
+}
+
 func (c *Config) addDefaults() {
 	if //goland:noinspection GoBoolExpressions
 	runtime.GOOS != windows {
@@ -669,4 +675,8 @@ func (c *Config) RuntimeVersion() string {
 
 func (c *Config) SetRuntimeVersion(runtimeVersion string) {
 	c.runtimeVersion = runtimeVersion
+}
+
+func (c *Config) IsAutoScanEnabled() bool {
+	return c.automaticScanning
 }

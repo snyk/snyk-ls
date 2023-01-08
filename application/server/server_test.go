@@ -66,13 +66,11 @@ var (
 )
 
 func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, string) {
-	filePath, dirPath := code.FakeDiagnosticPath(t)
+	filePath, dirPath := code.TempWorkdirWithVulnerabilities(t)
 	didOpenParams := sglsp.DidOpenTextDocumentParams{
 		TextDocument: sglsp.TextDocumentItem{URI: uri.PathToUri(filePath)},
 	}
-	t.Cleanup(func() {
-		_ = os.RemoveAll(dirPath)
-	})
+
 	return didOpenParams, dirPath
 }
 
@@ -614,7 +612,7 @@ func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	// wait for publish
 	assert.Eventually(
 		t,
-		checkForPublishedDiagnostics(workspace.Get(), uri.PathFromUri(didOpenParams.TextDocument.URI), -1),
+		checkForPublishedDiagnostics(uri.PathFromUri(didOpenParams.TextDocument.URI), -1),
 		2*time.Second,
 		10*time.Millisecond,
 	)
@@ -678,26 +676,55 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
-	_, _ = loc.Client.Call(ctx, "initialize", nil)
-	diagnosticUri, tempDir := code.FakeDiagnosticPath(t)
-	didSaveParams := sglsp.DidSaveTextDocumentParams{
-		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(diagnosticUri)},
+	_, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
-	workspace.Get().AddFolder(workspace.NewFolder(tempDir, "Test", di.Scanner(), di.HoverService()))
+
+	filePath, fileDir := code.TempWorkdirWithVulnerabilities(t)
+	fileUri := sendFileSavedMessage(t, filePath, fileDir, loc)
+
+	// wait for publish
+	assert.Eventually(
+		t,
+		checkForPublishedDiagnostics(uri.PathFromUri(fileUri), -1),
+		5*time.Second,
+		50*time.Millisecond,
+	)
+}
+
+func Test_textDocumentDidSave_manualScanningMode_doesNotScan(t *testing.T) {
+	loc := setupServer(t)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
+	_, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.CurrentConfig().SetAutomaticScanning(false)
+
+	filePath, fileDir := code.TempWorkdirWithVulnerabilities(t)
+	fileUri := sendFileSavedMessage(t, filePath, fileDir, loc)
+
+	assert.Never(
+		t,
+		checkForPublishedDiagnostics(uri.PathFromUri(fileUri), -1),
+		5*time.Second,
+		50*time.Millisecond,
+	)
+}
+
+func sendFileSavedMessage(t *testing.T, filePath, fileDir string, loc server.Local) sglsp.DocumentURI {
+	didSaveParams := sglsp.DidSaveTextDocumentParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filePath)},
+	}
+	workspace.Get().AddFolder(workspace.NewFolder(fileDir, "Test", di.Scanner(), di.HoverService()))
 
 	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// wait for publish
-	assert.Eventually(
-		t,
-		checkForPublishedDiagnostics(workspace.Get(), uri.PathFromUri(didSaveParams.TextDocument.URI), -1),
-		30*time.Second,
-		500*time.Millisecond,
-	)
+	return didSaveParams.TextDocument.URI
 }
 
 func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
@@ -815,7 +842,7 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 		testPath = filepath.Join(cloneTargetDir, file1)
 		textDocumentDidOpen(&loc, testPath, t)
 		// serve diagnostics from file scan
-		assert.Eventually(t, checkForPublishedDiagnostics(workspace.Get(), testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
+		assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
 	}
 
 	// wait till the whole workspace is scanned
@@ -827,13 +854,14 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 	testPath = filepath.Join(cloneTargetDir, file2)
 	textDocumentDidOpen(&loc, testPath, t)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(workspace.Get(), testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
 }
 
 // Check if published diagnostics for given testPath match the expectedNumber.
 // If expectedNumber == -1 assume check for expectedNumber > 0
-func checkForPublishedDiagnostics(w *workspace.Workspace, testPath string, expectedNumber int) func() bool {
+func checkForPublishedDiagnostics(testPath string, expectedNumber int) func() bool {
 	return func() bool {
+		w := workspace.Get()
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
 		if len(notifications) < 1 {
 			return false
@@ -934,7 +962,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 
 	_ = textDocumentDidOpen(&loc, testPath, t)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(w, testPath, 6), maxIntegTestDuration, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(testPath, 6), maxIntegTestDuration, 10*time.Millisecond)
 }
 
 func textDocumentDidOpen(loc *server.Local, testPath string, t *testing.T) sglsp.DidOpenTextDocumentParams {

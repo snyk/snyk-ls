@@ -82,8 +82,10 @@ func Test_AddAndRemoveFoldersAndTriggerScan(t *testing.T) {
 	toBeRemovedFolder := NewFolder(toBeRemovedAbsolutePathAfterConversions, toBeRemoved, scanner, nil)
 	w.AddFolder(toBeRemovedFolder)
 
-	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
-	config.CurrentConfig().SetTrustedFolders([]string{trustedPathAfterConversions})
+	currentConfig := config.CurrentConfig()
+	currentConfig.SetTrustedFolderFeatureEnabled(true)
+	currentConfig.SetTrustedFolders([]string{trustedPathAfterConversions})
+	currentConfig.SetAutomaticScanning(true)
 
 	params := lsp.DidChangeWorkspaceFoldersParams{Event: lsp.WorkspaceFoldersChangeEvent{
 		Added: []lsp.WorkspaceFolder{
@@ -95,7 +97,7 @@ func Test_AddAndRemoveFoldersAndTriggerScan(t *testing.T) {
 		},
 	}}
 
-	w.AddAndRemoveFoldersAndTriggerScan(context.Background(), params)
+	w.ChangeWorkspaceFolders(context.Background(), params)
 
 	assert.Nil(t, w.GetFolderContaining(toBeRemoved))
 

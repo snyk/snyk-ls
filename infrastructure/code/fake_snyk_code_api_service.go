@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adrg/xdg"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -81,16 +80,13 @@ var (
 	FakeFilters = []string{".cjs", ".ejs", ".es", ".es6", ".htm", ".html", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".vue", ".java", ".erb", ".haml", ".rb", ".rhtml", ".slim", ".kt", ".swift", ".cls", ".config", ".pom", ".wxs", ".xml", ".xsd", ".aspx", ".cs", ".py", ".go", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".php", ".phtml"}
 )
 
-func FakeDiagnosticPath(t *testing.T) (filePath string, path string) {
+func TempWorkdirWithVulnerabilities(t *testing.T) (filePath string, path string) {
 	FakeSnykCodeApiServiceMutex.Lock()
 	defer FakeSnykCodeApiServiceMutex.Unlock()
 
-	temp, err := os.MkdirTemp(xdg.DataHome, "fakeDiagnosticTempDir")
-	if err != nil {
-		t.Fatal(err, "couldn't create tempdir")
-	}
+	temp := t.TempDir()
 	temp = filepath.Clean(temp)
-	temp, err = filepath.Abs(temp)
+	temp, err := filepath.Abs(temp)
 	if err != nil {
 		t.Fatal(err, "couldn't get abs path of tempdir")
 	}
