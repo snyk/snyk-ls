@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -109,6 +110,7 @@ type FakeSnykCodeClient struct {
 	ExtendedBundleCount    int
 	AnalysisDuration       time.Duration
 	AnalyzingMessageCount  int
+	FailOnCreateBundle     bool
 	currentConcurrentScans int
 	maxConcurrentScans     int
 }
@@ -167,6 +169,10 @@ func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (configFiles []string
 }
 
 func (f *FakeSnykCodeClient) CreateBundle(_ context.Context, files map[string]string) (bundleHash string, missingFiles []string, err error) {
+	if f.FailOnCreateBundle {
+		return "", nil, errors.New("Mock Code client failed intentionally on CreateBundle")
+	}
+
 	FakeSnykCodeApiServiceMutex.Lock()
 	defer FakeSnykCodeApiServiceMutex.Unlock()
 	f.TotalBundleCount++
@@ -230,6 +236,9 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 		return issues, analyzingResult, nil
 	}
 
-	log.Trace().Str("method", "RunAnalysis").Interface("fakeDiagnostic", FakeIssue).Msg("fake backend call received & answered")
+	log.Trace().Str("method", "RunAnalysis").Interface(
+		"fakeDiagnostic",
+		FakeIssue,
+	).Msg("fake backend call received & answered")
 	return issues, successfulResult, nil
 }

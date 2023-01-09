@@ -429,5 +429,9 @@ func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics, folderPat
 			DurationInSeconds: scanMetrics.lastScanDurationInSeconds,
 		},
 	)
-	sc.scanNotifier.SendSuccess(folderPath)
+	if success {
+		sc.scanNotifier.SendSuccess(folderPath)
+	} else {
+		sc.scanNotifier.SendError(folderPath)
+	}
 }
