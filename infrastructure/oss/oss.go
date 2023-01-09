@@ -100,6 +100,7 @@ type Scanner struct {
 	mutex                 *sync.Mutex
 	runningScans          map[string]*scans.ScanProgress
 	scheduledScanDuration time.Duration
+	scheduledScan         *time.Timer
 	scanCount             int
 }
 
@@ -415,7 +416,12 @@ func (oss *Scanner) trackResult(success bool) {
 
 // Schedules new scan after 24h once existing OSS results might be stale
 func (oss *Scanner) scheduleNewScan(path string) {
-	time.AfterFunc(oss.scheduledScanDuration, func() {
+	if oss.scheduledScan != nil {
+		// Cancel previously scheduled scan
+		oss.scheduledScan.Stop()
+	}
+
+	oss.scheduledScan = time.AfterFunc(oss.scheduledScanDuration, func() {
 		if !oss.IsEnabled() {
 			return
 		}

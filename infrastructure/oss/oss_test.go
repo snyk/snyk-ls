@@ -274,7 +274,7 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 	fakeCli := cli.NewTestExecutorWithResponse(path.Join(workingDir, "testdata/oss-result.json"))
 	fakeCli.ExecuteDuration = time.Millisecond
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), fakeCli)
-	scanner.scheduledScanDuration = 1 * time.Second
+	scanner.scheduledScanDuration = 50 * time.Millisecond
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
 	// Act
@@ -283,7 +283,7 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 	// Assert
 	assert.Eventually(t, func() bool {
 		return fakeCli.GetFinishedScans() == 2
-	}, 5*time.Second, 100*time.Millisecond)
+	}, 3*time.Second, 50*time.Millisecond)
 }
 
 func Test_scheduleNewScan_CapturesAnalytics(t *testing.T) {
@@ -292,7 +292,7 @@ func Test_scheduleNewScan_CapturesAnalytics(t *testing.T) {
 	fakeCli := cli.NewTestExecutor()
 	analytics := ux2.NewTestAnalytics()
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, fakeCli)
-	scanner.scheduledScanDuration = 1 * time.Second
+	scanner.scheduledScanDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
 
@@ -302,7 +302,7 @@ func Test_scheduleNewScan_CapturesAnalytics(t *testing.T) {
 	// Assert
 	assert.Eventually(t, func() bool {
 		return fakeCli.GetFinishedScans() == 1
-	}, 5*time.Second, 100*time.Millisecond)
+	}, 3*time.Second, 50*time.Millisecond)
 
 	assert.Equal(t, ux2.AnalysisIsTriggeredProperties{
 		AnalysisType:    []ux2.AnalysisType{ux2.OpenSource},
@@ -319,7 +319,7 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 	fakeCli.ExecuteDuration = time.Millisecond
 	analytics := ux2.NewTestAnalytics()
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, fakeCli)
-	scanner.scheduledScanDuration = 1 * time.Second
+	scanner.scheduledScanDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
 
@@ -330,4 +330,26 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 	time.Sleep(scanner.scheduledScanDuration + fakeCli.ExecuteDuration + 10*time.Millisecond)
 	assert.Equal(t, 0, fakeCli.GetFinishedScans())
 	assert.Len(t, analytics.GetAnalytics(), 0)
+}
+
+func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
+	testutil.UnitTest(t)
+
+	// Arrange
+	fakeCli := cli.NewTestExecutor()
+	fakeCli.ExecuteDuration = time.Millisecond
+	analytics := ux2.NewTestAnalytics()
+	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, fakeCli)
+	scanner.scheduledScanDuration = 50 * time.Millisecond
+	workingDir, _ := os.Getwd()
+	path, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
+
+	// Act
+	scanner.scheduleNewScan(path)
+	time.Sleep(fakeCli.ExecuteDuration + 5*time.Millisecond) // prevent from the first scan cancellation
+	scanner.scheduleNewScan(path)
+
+	// Assert
+	time.Sleep(3*(scanner.scheduledScanDuration+fakeCli.ExecuteDuration) + 5*time.Millisecond)
+	assert.Equal(t, 1, fakeCli.GetFinishedScans())
 }
