@@ -477,6 +477,13 @@ func registerNotifier(srv *jrpc2.Server) {
 				Str("method", "registerNotifier").
 				Interface("trustedPaths", params.TrustedFolders).
 				Msg("sending trusted Folders to client")
+		case lsp.SnykScanParams:
+			notifier(srv, "$/snyk.scan", params)
+			log.Info().
+				Str("method", "registerNotifier").
+				Interface("product", params.Product).
+				Interface("status", params.Status).
+				Msg("sending scan data to client")
 		default:
 			log.Warn().
 				Str("method", "registerNotifier").
