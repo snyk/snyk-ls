@@ -19,6 +19,7 @@ package oss
 import (
 	"context"
 	"os"
+	"path"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -50,7 +51,7 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	executor := cli.NewTestExecutor()
 	fileContent, _ := os.ReadFile(workingDir + "/testdata/oss-result.json")
-	executor.ExecuteResponse = string(fileContent)
+	executor.ExecuteResponse = fileContent
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, executor)
@@ -264,4 +265,69 @@ func Test_prepareScanCommand_ExpandsAdditionalParameters(t *testing.T) {
 	cmd := scanner.prepareScanCommand("a")
 	assert.Contains(t, cmd, "--all-projects")
 	assert.Contains(t, cmd, "-d")
+}
+
+func Test_Scan_SchedulesNewScan(t *testing.T) {
+	testutil.UnitTest(t)
+	// Arrange
+	workingDir, _ := os.Getwd()
+	fakeCli := cli.NewTestExecutorWithResponse(path.Join(workingDir, "testdata/oss-result.json"))
+	fakeCli.ExecuteDuration = time.Millisecond
+	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), fakeCli)
+	scanner.scheduledScanDuration = 1 * time.Second
+	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
+
+	// Act
+	scanner.Scan(context.Background(), path, "")
+
+	// Assert
+	assert.Eventually(t, func() bool {
+		return fakeCli.GetFinishedScans() == 2
+	}, 5*time.Second, 100*time.Millisecond)
+}
+
+func Test_scheduleNewScan_CapturesAnalytics(t *testing.T) {
+	testutil.UnitTest(t)
+	// Arrange
+	fakeCli := cli.NewTestExecutor()
+	analytics := ux2.NewTestAnalytics()
+	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, fakeCli)
+	scanner.scheduledScanDuration = 1 * time.Second
+	workingDir, _ := os.Getwd()
+	path, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
+
+	// Act
+	scanner.scheduleNewScan(path)
+
+	// Assert
+	assert.Eventually(t, func() bool {
+		return fakeCli.GetFinishedScans() == 1
+	}, 5*time.Second, 100*time.Millisecond)
+
+	assert.Equal(t, ux2.AnalysisIsTriggeredProperties{
+		AnalysisType:    []ux2.AnalysisType{ux2.OpenSource},
+		TriggeredByUser: false,
+	}, analytics.GetAnalytics()[0])
+}
+
+func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
+	testutil.UnitTest(t)
+
+	// Arrange
+	config.CurrentConfig().SetSnykOssEnabled(false)
+	fakeCli := cli.NewTestExecutor()
+	fakeCli.ExecuteDuration = time.Millisecond
+	analytics := ux2.NewTestAnalytics()
+	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, fakeCli)
+	scanner.scheduledScanDuration = 1 * time.Second
+	workingDir, _ := os.Getwd()
+	path, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
+
+	// Act
+	scanner.scheduleNewScan(path)
+
+	// Assert
+	time.Sleep(scanner.scheduledScanDuration + fakeCli.ExecuteDuration + 10*time.Millisecond)
+	assert.Equal(t, 0, fakeCli.GetFinishedScans())
+	assert.Len(t, analytics.GetAnalytics(), 0)
 }

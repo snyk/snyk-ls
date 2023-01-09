@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"os"
 	"sync"
 	"time"
 
@@ -25,7 +26,7 @@ import (
 )
 
 type TestExecutor struct {
-	ExecuteResponse string
+	ExecuteResponse []byte
 	wasExecuted     bool
 	ExecuteDuration time.Duration
 	finishedScans   int
@@ -33,7 +34,15 @@ type TestExecutor struct {
 }
 
 func NewTestExecutor() *TestExecutor {
-	return &TestExecutor{ExecuteResponse: "{}"}
+	return &TestExecutor{ExecuteResponse: []byte("{}")}
+}
+
+func NewTestExecutorWithResponse(executeResponsePath string) *TestExecutor {
+	fileContent, err := os.ReadFile(executeResponsePath)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to read test response file.")
+	}
+	return &TestExecutor{ExecuteResponse: fileContent}
 }
 
 func (t *TestExecutor) GetFinishedScans() int { return t.finishedScans }
@@ -52,7 +61,7 @@ func (t *TestExecutor) Execute(ctx context.Context, _ []string, _ string) (resp 
 		t.counterLock.Lock()
 		t.finishedScans++
 		t.counterLock.Unlock()
-		return []byte(t.ExecuteResponse), err
+		return t.ExecuteResponse, err
 	case <-ctx.Done():
 		log.Debug().Msg("Dummy CLI Execution cancelled")
 		return resp, ctx.Err()
