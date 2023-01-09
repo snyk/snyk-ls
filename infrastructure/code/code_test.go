@@ -31,7 +31,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	lsp2 "github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
@@ -144,12 +143,12 @@ func TestCreateBundle(t *testing.T) {
 func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient, string, *Scanner, string) {
 	testutil.UnitTest(t)
 	dir := t.TempDir()
-	snykCodeMock, c := setupTestScanner()
+	snykCodeMock, c := setupTestScannerWithNotifications()
 	file := filepath.Join(dir, "file."+extension)
 	return snykCodeMock, dir, c, file
 }
 
-func setupTestScanner() (*FakeSnykCodeClient, *Scanner) {
+func setupTestScannerWithNotifications() (*FakeSnykCodeClient, *Scanner) {
 	snykCodeMock := &FakeSnykCodeClient{}
 	scanner := New(
 		NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
@@ -160,6 +159,20 @@ func setupTestScanner() (*FakeSnykCodeClient, *Scanner) {
 	)
 
 	return snykCodeMock, scanner
+}
+
+func setupTestScanner() (*FakeSnykCodeClient, *notification.MockScanNotifier, *Scanner) {
+	snykCodeMock := &FakeSnykCodeClient{}
+	mockScanNotifier := notification.NewMockScanNotifier()
+	scanner := New(
+		NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
+		&snyk_api.FakeApiClient{CodeEnabled: true},
+		error_reporting.NewTestErrorReporter(),
+		ux2.NewTestAnalytics(),
+		mockScanNotifier,
+	)
+
+	return snykCodeMock, mockScanNotifier, scanner
 }
 
 func TestUploadAndAnalyze(t *testing.T) {
@@ -279,7 +292,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {
 	expectedPatterns, tempDir, _, _, _ := setupIgnoreWorkspace(t)
 	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
-	_, sc := setupTestScanner()
+	_, sc := setupTestScannerWithNotifications()
 
 	_, err := sc.loadIgnorePatternsAndCountFiles(tempDir)
 	if err != nil {
@@ -295,7 +308,7 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 		t.Fatal("can't create temp dir")
 	}
 	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
-	_, sc := setupTestScanner()
+	_, sc := setupTestScannerWithNotifications()
 
 	_, err = sc.loadIgnorePatternsAndCountFiles(tempDir)
 	if err != nil {
@@ -308,7 +321,7 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 func Test_GetWorkspaceFolderFiles(t *testing.T) {
 	_, tempDir, ignoredFilePath, notIgnoredFilePath, _ := setupIgnoreWorkspace(t)
 	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
-	_, sc := setupTestScanner()
+	_, sc := setupTestScannerWithNotifications()
 
 	files, err := sc.files(tempDir)
 	if err != nil {
@@ -323,7 +336,7 @@ func Test_GetWorkspaceFolderFiles(t *testing.T) {
 func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 	_, tempDir, _, _, ignoredFileInDir := setupIgnoreWorkspace(t)
 	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
-	_, sc := setupTestScanner()
+	_, sc := setupTestScannerWithNotifications()
 
 	walkedFiles, err := sc.files(tempDir)
 	if err != nil {
@@ -336,7 +349,7 @@ func Test_CodeScanRunning_ScanCalled_ScansRunSequentially(t *testing.T) {
 	// Arrange
 	testutil.UnitTest(t)
 	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-	fakeClient, scanner := setupTestScanner()
+	fakeClient, scanner := setupTestScannerWithNotifications()
 	fakeClient.AnalysisDuration = time.Second
 	wg := sync.WaitGroup{}
 
@@ -358,45 +371,29 @@ func Test_CodeScanStarted_SnykScanMessageSent(t *testing.T) {
 	// Arrange
 	testutil.UnitTest(t)
 	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-	_, scanner := setupTestScanner()
-	messageReceived := false
-	notification.CreateListener(
-		func(params any) {
-			msg, ok := params.(lsp2.SnykScanParams)
-			if ok && msg.Status == lsp2.Initial {
-				messageReceived = true
-			}
-		},
-	)
+	_, mockScanNotifier, scanner := setupTestScanner()
 
 	// Act
 	scanner.Scan(context.Background(), "", tempDir)
 
 	// Assert
-	assert.True(t, messageReceived)
+	assert.NotEmpty(t, mockScanNotifier.GetInProgressCalls())
 }
 
 func Test_AnalyzingMessageReturned_InProgressMessageSentToClient(t *testing.T) {
 	// Arrange
 	testutil.UnitTest(t)
 	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-	fakeClient, scanner := setupTestScanner()
+	fakeClient, mockScanNotifier, scanner := setupTestScanner()
 	fakeClient.AnalyzingMessageCount = 1
-	messageReceived := false
-	notification.CreateListener(
-		func(params any) {
-			msg, ok := params.(lsp2.SnykScanParams)
-			if ok && msg.Status == lsp2.InProgress {
-				messageReceived = true
-			}
-		},
-	)
+	// We expect 1 initial message, +1 for every "analyzing" response
+	expectedInProgressMessages := fakeClient.AnalyzingMessageCount + 1
 
 	// Act
 	scanner.Scan(context.Background(), "", tempDir)
 
 	// Assert
-	assert.True(t, messageReceived)
+	assert.Len(t, mockScanNotifier.GetInProgressCalls(), expectedInProgressMessages)
 }
 
 func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {
