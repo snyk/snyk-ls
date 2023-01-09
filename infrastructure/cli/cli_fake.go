@@ -30,7 +30,7 @@ type TestExecutor struct {
 	wasExecuted     bool
 	ExecuteDuration time.Duration
 	finishedScans   int
-	counterLock     sync.Mutex
+	counterLock     sync.RWMutex
 }
 
 func NewTestExecutor() *TestExecutor {
@@ -45,7 +45,12 @@ func NewTestExecutorWithResponse(executeResponsePath string) *TestExecutor {
 	return &TestExecutor{ExecuteResponse: fileContent}
 }
 
-func (t *TestExecutor) GetFinishedScans() int { return t.finishedScans }
+func (t *TestExecutor) GetFinishedScans() int {
+	t.counterLock.RLock()
+	scanCount := t.finishedScans
+	t.counterLock.RUnlock()
+	return scanCount
+}
 
 func (t *TestExecutor) Execute(ctx context.Context, _ []string, _ string) (resp []byte, err error) {
 	err = ctx.Err()
