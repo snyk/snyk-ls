@@ -8,6 +8,8 @@ type MockScanNotifier struct {
 	errorCalls      []string
 }
 
+func NewMockScanNotifier() *MockScanNotifier { return &MockScanNotifier{} }
+
 func (m *MockScanNotifier) SendInProgress(folderPath string) {
 	m.inProgressCalls = append(m.inProgressCalls, folderPath)
 }
