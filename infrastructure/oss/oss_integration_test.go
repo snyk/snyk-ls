@@ -37,6 +37,7 @@ func Test_Scan(t *testing.T) {
 	ctx := context.Background()
 	di.TestInit(t)
 	_ = di.Initializer().Init()
+	testutil.CreateDummyProgressListener(t)
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
