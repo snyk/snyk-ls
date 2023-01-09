@@ -330,13 +330,13 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path st
 		log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
 		return []snyk.Issue{}
 	}
-	sc.trackResult(true, scanMetrics)
+	sc.trackResult(true, scanMetrics, path)
 	return issues
 }
 
 func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg string, scanMetrics *ScanMetrics) {
 	sc.errorReporter.CaptureErrorAndReportAsIssue(path, errors.Wrap(err, msg))
-	sc.trackResult(err == nil, scanMetrics)
+	sc.trackResult(err == nil, scanMetrics, path)
 }
 
 func (sc *Scanner) createBundle(
@@ -411,7 +411,7 @@ type UploadStatus struct {
 	TotalFiles    int
 }
 
-func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics) {
+func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics, folderPath string) {
 	var result ux2.Result
 	if success {
 		result = ux2.Success
@@ -429,4 +429,5 @@ func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics) {
 			DurationInSeconds: scanMetrics.lastScanDurationInSeconds,
 		},
 	)
+	sc.scanNotifier.SendSuccess(folderPath)
 }

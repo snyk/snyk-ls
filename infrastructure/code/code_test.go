@@ -396,6 +396,19 @@ func Test_AnalyzingMessageReturned_InProgressMessageSentToClient(t *testing.T) {
 	assert.Len(t, mockScanNotifier.GetInProgressCalls(), expectedInProgressMessages)
 }
 
+func Test_ScanSucceeded_SuccessMessageSent(t *testing.T) {
+	// Arrange
+	testutil.UnitTest(t)
+	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+	_, mockScanNotifier, scanner := setupTestScanner()
+
+	// Act
+	scanner.Scan(context.Background(), "", tempDir)
+
+	// Assert
+	assert.Len(t, mockScanNotifier.GetSuccessCalls(), 1)
+}
+
 func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {
 	expectedPatterns = "*.xml\n**/*.txt\nbin"
 	tempDir = writeTestGitIgnore(expectedPatterns, t)
