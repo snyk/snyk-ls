@@ -21,14 +21,14 @@ func NewNotifier(notifier Notifier, productName string) ScanNotifier {
 }
 
 func (n *scanNotifier) SendError(folderPath string) {
-	Send(lsp.SnykScanParams{
+	n.notifier.Send(lsp.SnykScanParams{
 		Status:  lsp.ErrorStatus,
 		Product: n.productName,
 	})
 }
 
 func (n *scanNotifier) SendSuccess(folderPath string) {
-	Send(lsp.SnykScanParams{
+	n.notifier.Send(lsp.SnykScanParams{
 		Status:  lsp.Success,
 		Product: n.productName,
 		//Results: results,
@@ -36,7 +36,7 @@ func (n *scanNotifier) SendSuccess(folderPath string) {
 }
 
 func (n *scanNotifier) SendInProgress(folderPath string) {
-	Send(lsp.SnykScanParams{
+	n.notifier.Send(lsp.SnykScanParams{
 		Status:  lsp.InProgress,
 		Product: n.productName,
 		//Results: results,

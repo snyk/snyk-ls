@@ -2,7 +2,6 @@ package notification_test
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -12,56 +11,61 @@ import (
 )
 
 func Test_SendInProgressMessage_InProgressMessageSent(t *testing.T) {
+	// Arrange
 	testutil.UnitTest(t)
 	expectedProductName := "foo"
-	notifier := notification.NewNotifier(expectedProductName)
-	messageReceived := false
-	notification.CreateListener(func(params any) {
-		msg, ok := params.(lsp2.SnykScanParams)
-		if ok && msg.Status == lsp2.InProgress && msg.Product == expectedProductName {
-			messageReceived = true
+	mockNotifier := NewMockNotifier()
+	scanNotifier := notification.NewNotifier(mockNotifier, expectedProductName)
+
+	// Act
+	scanNotifier.SendInProgress("/test/folderPath")
+
+	// Assert
+	for _, msg := range mockNotifier.sentMessages {
+		scanMessage, ok := msg.(lsp2.SnykScanParams)
+		if ok && scanMessage.Status == lsp2.InProgress && scanMessage.Product == expectedProductName {
+			return
 		}
-	})
-
-	notifier.SendInProgress("/test/folderPath")
-
-	assert.Eventually(t, func() bool { return messageReceived }, 3*time.Second, 50*time.Millisecond)
+	}
+	assert.Fail(t, "Scan message was not sent")
 }
 
 func Test_SendSuccessMessage_SuccessMessageSent(t *testing.T) {
+	// Arrange
 	testutil.UnitTest(t)
 	expectedProductName := "foo"
-	notifier := notification.NewNotifier(expectedProductName)
-	messageReceived := false
-	notification.CreateListener(func(params any) {
-		msg, ok := params.(lsp2.SnykScanParams)
-		if ok && msg.Status == lsp2.Success && msg.Product == expectedProductName {
-			messageReceived = true
+	mockNotifier := NewMockNotifier()
+	scanNotifier := notification.NewNotifier(mockNotifier, expectedProductName)
+
+	// Act
+	scanNotifier.SendSuccess("/test/folderPath")
+
+	// Assert
+	for _, msg := range mockNotifier.sentMessages {
+		scanMessage, ok := msg.(lsp2.SnykScanParams)
+		if ok && scanMessage.Status == lsp2.Success && scanMessage.Product == expectedProductName {
+			return
 		}
-	})
-
-	notifier.SendSuccess("/test/folderPath")
-
-	assert.Eventually(t, func() bool { return messageReceived }, 3*time.Second, 50*time.Millisecond)
+	}
+	assert.Fail(t, "Scan message was not sent")
 }
 
 func Test_SendErrorMessage_ErrorMessageReceived(t *testing.T) {
+	// Arrange
 	testutil.UnitTest(t)
 	expectedProductName := "foo"
-	notifier := notification.NewNotifier(expectedProductName)
-	messageReceived := false
-	notification.CreateListener(func(params any) {
-		msg, ok := params.(lsp2.SnykScanParams)
-		if ok && msg.Status == lsp2.ErrorStatus && msg.Product == expectedProductName {
-			messageReceived = true
+	mockNotifier := NewMockNotifier()
+	scanNotifier := notification.NewNotifier(mockNotifier, expectedProductName)
+
+	// Act
+	scanNotifier.SendError("/test/folderPath")
+
+	// Assert
+	for _, msg := range mockNotifier.sentMessages {
+		scanMessage, ok := msg.(lsp2.SnykScanParams)
+		if ok && scanMessage.Status == lsp2.ErrorStatus && scanMessage.Product == expectedProductName {
+			return
 		}
-	})
-
-	notifier.SendError("/test/folderPath")
-
-	assert.Eventually(t, func() bool { return messageReceived }, 3*time.Second, 50*time.Millisecond)
-}
-
-func Test_AllMessages(t *testing.T) {
-
+	}
+	assert.Fail(t, "Scan message was not sent")
 }
