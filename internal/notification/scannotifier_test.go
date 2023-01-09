@@ -14,14 +14,14 @@ func Test_SendInProgressMessage_InProgressMessageSent(t *testing.T) {
 	// Arrange
 	testutil.UnitTest(t)
 	expectedProductName := "foo"
-	mockNotifier := NewMockNotifier()
+	mockNotifier := notification.NewMockNotifier()
 	scanNotifier := notification.NewScanNotifier(mockNotifier, expectedProductName)
 
 	// Act
 	scanNotifier.SendInProgress("/test/folderPath")
 
 	// Assert
-	for _, msg := range mockNotifier.sentMessages {
+	for _, msg := range mockNotifier.GetSentMessages() {
 		scanMessage, ok := msg.(lsp2.SnykScanParams)
 		if ok && scanMessage.Status == lsp2.InProgress && scanMessage.Product == expectedProductName {
 			return
@@ -34,14 +34,14 @@ func Test_SendSuccessMessage_SuccessMessageSent(t *testing.T) {
 	// Arrange
 	testutil.UnitTest(t)
 	expectedProductName := "foo"
-	mockNotifier := NewMockNotifier()
+	mockNotifier := notification.NewMockNotifier()
 	scanNotifier := notification.NewScanNotifier(mockNotifier, expectedProductName)
 
 	// Act
 	scanNotifier.SendSuccess("/test/folderPath")
 
 	// Assert
-	for _, msg := range mockNotifier.sentMessages {
+	for _, msg := range mockNotifier.GetSentMessages() {
 		scanMessage, ok := msg.(lsp2.SnykScanParams)
 		if ok && scanMessage.Status == lsp2.Success && scanMessage.Product == expectedProductName {
 			return
@@ -54,14 +54,14 @@ func Test_SendErrorMessage_ErrorMessageReceived(t *testing.T) {
 	// Arrange
 	testutil.UnitTest(t)
 	expectedProductName := "foo"
-	mockNotifier := NewMockNotifier()
+	mockNotifier := notification.NewMockNotifier()
 	scanNotifier := notification.NewScanNotifier(mockNotifier, expectedProductName)
 
 	// Act
 	scanNotifier.SendError("/test/folderPath")
 
 	// Assert
-	for _, msg := range mockNotifier.sentMessages {
+	for _, msg := range mockNotifier.GetSentMessages() {
 		scanMessage, ok := msg.(lsp2.SnykScanParams)
 		if ok && scanMessage.Status == lsp2.ErrorStatus && scanMessage.Product == expectedProductName {
 			return

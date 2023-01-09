@@ -1,4 +1,4 @@
-package notification_test
+package notification
 
 import (
 	"fmt"
@@ -6,11 +6,10 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/server/lsp"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-var _ notification.Notifier = &MockNotifier{}
+var _ Notifier = &MockNotifier{}
 
 type MockNotifier struct {
 	sendShowMessageCounter     int
@@ -58,10 +57,12 @@ func (m *MockNotifier) SendErrorDiagnostic(path string, err error) {
 	m.sentMessages = append(m.sentMessages, msg)
 }
 
-func (m *MockNotifier) SendShowMessageCounter() int { return m.sendShowMessageCounter }
+func (m *MockNotifier) GetSendShowMessageCounter() int { return m.sendShowMessageCounter }
 
-func (m *MockNotifier) SendCounter() int { return m.sendCounter }
+func (m *MockNotifier) GetSendCounter() int { return m.sendCounter }
 
-func (m *MockNotifier) SendErrorCounter() int { return m.sendErrorCounter }
+func (m *MockNotifier) GetSendErrorCounter() int { return m.sendErrorCounter }
 
-func (m *MockNotifier) SendErrorDiagnosticCounter() int { return m.sendErrorDiagnosticCounter }
+func (m *MockNotifier) GetSendErrorDiagnosticCounter() int { return m.sendErrorDiagnosticCounter }
+
+func (m *MockNotifier) GetSentMessages() []any { return m.sentMessages }
