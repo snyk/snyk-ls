@@ -25,7 +25,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -43,6 +42,7 @@ type Bundle struct {
 	requestId     string
 	missingFiles  []string
 	rootPath      string
+	scanNotifier  notification.ScanNotifier
 }
 
 func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {
@@ -59,7 +59,10 @@ func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) err
 	var err error
 	if uploadBatch.hasContent() {
 		b.BundleHash, b.missingFiles, err = b.SnykCode.ExtendBundle(ctx, b.BundleHash, uploadBatch.documents, removeFiles)
-		log.Debug().Str("requestId", b.requestId).Interface("missingFiles", b.missingFiles).Msg("extended bundle on backend")
+		log.Debug().Str("requestId", b.requestId).Interface(
+			"missingFiles",
+			b.missingFiles,
+		).Msg("extended bundle on backend")
 	}
 
 	return err
@@ -119,11 +122,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
 			return issues
 		} else if status.message == "ANALYZING" {
 			logger.Trace().Msg("\"Analyzing\" message received, sending In-Progress message to client")
-			notification.Send(lsp.SnykScanParams{
-				Status:  lsp.InProgress,
-				Product: "code",
-				//Results: results,
-			})
+			b.scanNotifier.SendInProgress(b.rootPath)
 		}
 
 		if time.Since(start) > config.CurrentConfig().SnykCodeAnalysisTimeout() {
