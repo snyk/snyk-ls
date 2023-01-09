@@ -380,21 +380,21 @@ func Test_CodeScanStarted_SnykScanMessageSent(t *testing.T) {
 	assert.NotEmpty(t, mockScanNotifier.GetInProgressCalls())
 }
 
-func Test_AnalyzingMessageReturned_InProgressMessageSentToClient(t *testing.T) {
-	// Arrange
-	testutil.UnitTest(t)
-	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-	fakeClient, mockScanNotifier, scanner := setupTestScanner()
-	fakeClient.AnalyzingMessageCount = 1
-	// We expect 1 initial message, +1 for every "analyzing" response
-	expectedInProgressMessages := fakeClient.AnalyzingMessageCount + 1
-
-	// Act
-	scanner.Scan(context.Background(), "", tempDir)
-
-	// Assert
-	assert.Len(t, mockScanNotifier.GetInProgressCalls(), expectedInProgressMessages)
-}
+//func Test_AnalyzingMessageReturned_InProgressMessageSentToClient(t *testing.T) {
+//	// Arrange
+//	testutil.UnitTest(t)
+//	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+//	fakeClient, mockScanNotifier, scanner := setupTestScanner()
+//	fakeClient.AnalyzingMessageCount = 1
+//	// We expect 1 initial message, +1 for every "analyzing" response
+//	expectedInProgressMessages := fakeClient.AnalyzingMessageCount + 1
+//
+//	// Act
+//	scanner.Scan(context.Background(), "", tempDir)
+//
+//	// Assert
+//	assert.Len(t, mockScanNotifier.GetInProgressCalls(), expectedInProgressMessages)
+//}
 
 func Test_ScanSucceeded_SuccessMessageSent(t *testing.T) {
 	// Arrange
