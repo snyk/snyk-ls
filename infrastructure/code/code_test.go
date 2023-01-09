@@ -63,70 +63,82 @@ func setupDocs() (string, lsp.TextDocumentItem, lsp.TextDocumentItem, []byte, []
 }
 
 func TestCreateBundle(t *testing.T) {
-	t.Run("when < maxFileSize creates bundle", func(t *testing.T) {
-		snykCodeMock, dir, c, file := setupCreateBundleTest(t, "java")
-		data := strings.Repeat("a", maxFileSize-10)
-		err := os.WriteFile(file, []byte(data), 0600)
+	t.Run(
+		"when < maxFileSize creates bundle", func(t *testing.T) {
+			snykCodeMock, dir, c, file := setupCreateBundleTest(t, "java")
+			data := strings.Repeat("a", maxFileSize-10)
+			err := os.WriteFile(file, []byte(data), 0600)
 
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
-		if err != nil {
-			t.Fatal(err)
-		}
-		assert.Len(t, missingFiles, 1, "bundle should have 1 missing files")
-		assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 1, "bundle should called createBundle once")
-	})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
+			if err != nil {
+				t.Fatal(err)
+			}
+			assert.Len(t, missingFiles, 1, "bundle should have 1 missing files")
+			assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 1, "bundle should called createBundle once")
+		},
+	)
 
-	t.Run("when too big ignores file", func(t *testing.T) {
-		snykCodeMock, dir, c, file := setupCreateBundleTest(t, "java")
-		data := strings.Repeat("a", maxFileSize+1)
-		err := os.WriteFile(file, []byte(data), 0600)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
-		if err != nil {
-			t.Fatal(err)
-		}
-		assert.Len(t, missingFiles, 0, "bundle should not have missing files")
-		assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")
-	})
+	t.Run(
+		"when too big ignores file", func(t *testing.T) {
+			snykCodeMock, dir, c, file := setupCreateBundleTest(t, "java")
+			data := strings.Repeat("a", maxFileSize+1)
+			err := os.WriteFile(file, []byte(data), 0600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
+			if err != nil {
+				t.Fatal(err)
+			}
+			assert.Len(t, missingFiles, 0, "bundle should not have missing files")
+			assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")
+		},
+	)
 
-	t.Run("when empty file ignores file", func(t *testing.T) {
-		snykCodeMock, dir, c, file := setupCreateBundleTest(t, "java")
-		fd, err := os.Create(file)
-		t.Cleanup(func() {
-			_ = fd.Close()
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
-		if err != nil {
-			t.Fatal(err)
-		}
-		assert.Len(t, missingFiles, 0, "bundle should not have missing files")
-		assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")
-	})
+	t.Run(
+		"when empty file ignores file", func(t *testing.T) {
+			snykCodeMock, dir, c, file := setupCreateBundleTest(t, "java")
+			fd, err := os.Create(file)
+			t.Cleanup(
+				func() {
+					_ = fd.Close()
+				},
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
+			if err != nil {
+				t.Fatal(err)
+			}
+			assert.Len(t, missingFiles, 0, "bundle should not have missing files")
+			assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")
+		},
+	)
 
-	t.Run("when unsupported ignores file", func(t *testing.T) {
-		snykCodeMock, dir, c, file := setupCreateBundleTest(t, "unsupported")
-		fd, err := os.Create(file)
-		t.Cleanup(func() {
-			_ = fd.Close()
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
-		if err != nil {
-			t.Fatal(err)
-		}
-		assert.Len(t, missingFiles, 0, "bundle should not have missing files")
-		assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")
-	})
+	t.Run(
+		"when unsupported ignores file", func(t *testing.T) {
+			snykCodeMock, dir, c, file := setupCreateBundleTest(t, "unsupported")
+			fd, err := os.Create(file)
+			t.Cleanup(
+				func() {
+					_ = fd.Close()
+				},
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
+			if err != nil {
+				t.Fatal(err)
+			}
+			assert.Len(t, missingFiles, 0, "bundle should not have missing files")
+			assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")
+		},
+	)
 }
 
 func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient, string, *Scanner, string) {
@@ -139,89 +151,129 @@ func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient,
 
 func setupTestScanner() (*FakeSnykCodeClient, *Scanner) {
 	snykCodeMock := &FakeSnykCodeClient{}
-	scanner := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), notification.NewNotifier("code"))
+	scanner := New(
+		NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
+		&snyk_api.FakeApiClient{CodeEnabled: true},
+		error_reporting.NewTestErrorReporter(),
+		ux2.NewTestAnalytics(),
+		notification.NewScanNotifier(notification.NewNotifier(), "code"),
+	)
 
 	return snykCodeMock, scanner
 }
 
 func TestUploadAndAnalyze(t *testing.T) {
-	t.Run("should create bundle when hash empty", func(t *testing.T) {
-		testutil.UnitTest(t)
-		snykCodeMock := &FakeSnykCodeClient{}
-		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), notification.NewNotifier("code"))
-		path, firstDoc, _, content1, _ := setupDocs()
-		docs := []string{uri.PathFromUri(firstDoc.URI)}
-		defer func(path string) { _ = os.RemoveAll(path) }(path)
-		metrics := c.newMetrics(len(docs), time.Time{})
+	t.Run(
+		"should create bundle when hash empty", func(t *testing.T) {
+			testutil.UnitTest(t)
+			snykCodeMock := &FakeSnykCodeClient{}
+			c := New(
+				NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
+				&snyk_api.FakeApiClient{CodeEnabled: true},
+				error_reporting.NewTestErrorReporter(),
+				ux2.NewTestAnalytics(),
+				notification.NewScanNotifier(notification.NewNotifier(), "code"),
+			)
+			path, firstDoc, _, content1, _ := setupDocs()
+			docs := []string{uri.PathFromUri(firstDoc.URI)}
+			defer func(path string) { _ = os.RemoveAll(path) }(path)
+			metrics := c.newMetrics(len(docs), time.Time{})
 
-		c.UploadAndAnalyze(context.Background(), docs, "", metrics)
+			c.UploadAndAnalyze(context.Background(), docs, "", metrics)
 
-		// verify that create bundle has been called on backend service
-		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
-		assert.NotNil(t, params)
-		assert.Equal(t, 1, len(params))
-		files := params[0].(map[string]string)
-		assert.Equal(t, files[uri.PathFromUri(firstDoc.URI)], util.Hash(content1))
-	})
+			// verify that create bundle has been called on backend service
+			params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
+			assert.NotNil(t, params)
+			assert.Equal(t, 1, len(params))
+			files := params[0].(map[string]string)
+			assert.Equal(t, files[uri.PathFromUri(firstDoc.URI)], util.Hash(content1))
+		},
+	)
 
-	t.Run("should ignore if SAST disabled", func(t *testing.T) {
-		testutil.UnitTest(t)
-		snykCodeMock := &FakeSnykCodeClient{}
-		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: false}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), notification.NewNotifier("code"))
-		path, firstDoc, _, _, _ := setupDocs()
-		docs := []string{uri.PathFromUri(firstDoc.URI)}
-		defer func(path string) { _ = os.RemoveAll(path) }(path)
-		metrics := c.newMetrics(len(docs), time.Time{})
+	t.Run(
+		"should ignore if SAST disabled", func(t *testing.T) {
+			testutil.UnitTest(t)
+			snykCodeMock := &FakeSnykCodeClient{}
+			c := New(
+				NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
+				&snyk_api.FakeApiClient{CodeEnabled: false},
+				error_reporting.NewTestErrorReporter(),
+				ux2.NewTestAnalytics(),
+				notification.NewScanNotifier(notification.NewNotifier(), "code"),
+			)
+			path, firstDoc, _, _, _ := setupDocs()
+			docs := []string{uri.PathFromUri(firstDoc.URI)}
+			defer func(path string) { _ = os.RemoveAll(path) }(path)
+			metrics := c.newMetrics(len(docs), time.Time{})
 
-		c.UploadAndAnalyze(context.Background(), docs, "", metrics)
+			c.UploadAndAnalyze(context.Background(), docs, "", metrics)
 
-		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
-		assert.Nil(t, params)
-	})
+			params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
+			assert.Nil(t, params)
+		},
+	)
 
-	t.Run("should retrieve from backend", func(t *testing.T) {
-		testutil.UnitTest(t)
-		snykCodeMock := &FakeSnykCodeClient{}
-		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), notification.NewNotifier("code"))
-		diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
-		defer func(path string) { _ = os.RemoveAll(path) }(path)
-		files := []string{diagnosticUri}
-		metrics := c.newMetrics(len(files), time.Time{})
+	t.Run(
+		"should retrieve from backend", func(t *testing.T) {
+			testutil.UnitTest(t)
+			snykCodeMock := &FakeSnykCodeClient{}
+			c := New(
+				NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
+				&snyk_api.FakeApiClient{CodeEnabled: true},
+				error_reporting.NewTestErrorReporter(),
+				ux2.NewTestAnalytics(),
+				notification.NewScanNotifier(notification.NewNotifier(), "code"),
+			)
+			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
+			defer func(path string) { _ = os.RemoveAll(path) }(path)
+			files := []string{diagnosticUri}
+			metrics := c.newMetrics(len(files), time.Time{})
 
-		issues := c.UploadAndAnalyze(context.Background(), files, "", metrics)
+			issues := c.UploadAndAnalyze(context.Background(), files, "", metrics)
 
-		assert.NotNil(t, issues)
-		assert.Equal(t, 1, len(issues))
-		assert.True(t, reflect.DeepEqual(FakeIssue, issues[0]))
+			assert.NotNil(t, issues)
+			assert.Equal(t, 1, len(issues))
+			assert.True(t, reflect.DeepEqual(FakeIssue, issues[0]))
 
-		// verify that extend bundle has been called on backend service with additional file
-		params := snykCodeMock.GetCallParams(0, RunAnalysisOperation)
-		assert.NotNil(t, params)
-		assert.Equal(t, 3, len(params))
-		assert.Equal(t, 0, params[2])
-	})
+			// verify that extend bundle has been called on backend service with additional file
+			params := snykCodeMock.GetCallParams(0, RunAnalysisOperation)
+			assert.NotNil(t, params)
+			assert.Equal(t, 3, len(params))
+			assert.Equal(t, 0, params[2])
+		},
+	)
 
-	t.Run("should track analytics", func(t *testing.T) {
-		testutil.UnitTest(t)
-		snykCodeMock := &FakeSnykCodeClient{}
-		analytics := ux2.NewTestAnalytics()
-		c := New(NewBundler(snykCodeMock, performance.NewTestInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, error_reporting.NewTestErrorReporter(), analytics, notification.NewNotifier("code"))
-		diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
-		defer func(path string) { _ = os.RemoveAll(path) }(path)
-		files := []string{diagnosticUri}
-		metrics := c.newMetrics(len(files), time.Now())
+	t.Run(
+		"should track analytics", func(t *testing.T) {
+			testutil.UnitTest(t)
+			snykCodeMock := &FakeSnykCodeClient{}
+			analytics := ux2.NewTestAnalytics()
+			c := New(
+				NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
+				&snyk_api.FakeApiClient{CodeEnabled: true},
+				error_reporting.NewTestErrorReporter(),
+				analytics,
+				notification.NewScanNotifier(notification.NewNotifier(), "code"),
+			)
+			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
+			defer func(path string) { _ = os.RemoveAll(path) }(path)
+			files := []string{diagnosticUri}
+			metrics := c.newMetrics(len(files), time.Now())
 
-		// execute
-		c.UploadAndAnalyze(context.Background(), files, "", metrics)
+			// execute
+			c.UploadAndAnalyze(context.Background(), files, "", metrics)
 
-		assert.Len(t, analytics.GetAnalytics(), 1)
-		assert.Equal(t, ux2.AnalysisIsReadyProperties{
-			AnalysisType:      ux2.CodeSecurity,
-			Result:            ux2.Success,
-			FileCount:         metrics.lastScanFileCount,
-			DurationInSeconds: metrics.lastScanDurationInSeconds,
-		}, analytics.GetAnalytics()[0])
-	})
+			assert.Len(t, analytics.GetAnalytics(), 1)
+			assert.Equal(
+				t, ux2.AnalysisIsReadyProperties{
+					AnalysisType:      ux2.CodeSecurity,
+					Result:            ux2.Success,
+					FileCount:         metrics.lastScanFileCount,
+					DurationInSeconds: metrics.lastScanDurationInSeconds,
+				}, analytics.GetAnalytics()[0],
+			)
+		},
+	)
 }
 
 func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {
@@ -308,12 +360,14 @@ func Test_CodeScanStarted_SnykScanMessageSent(t *testing.T) {
 	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
 	_, scanner := setupTestScanner()
 	messageReceived := false
-	notification.CreateListener(func(params any) {
-		msg, ok := params.(lsp2.SnykScanParams)
-		if ok && msg.Status == lsp2.Initial {
-			messageReceived = true
-		}
-	})
+	notification.CreateListener(
+		func(params any) {
+			msg, ok := params.(lsp2.SnykScanParams)
+			if ok && msg.Status == lsp2.Initial {
+				messageReceived = true
+			}
+		},
+	)
 
 	// Act
 	scanner.Scan(context.Background(), "", tempDir)
@@ -329,12 +383,14 @@ func Test_AnalyzingMessageReturned_InProgressMessageSentToClient(t *testing.T) {
 	fakeClient, scanner := setupTestScanner()
 	fakeClient.AnalyzingMessageCount = 1
 	messageReceived := false
-	notification.CreateListener(func(params any) {
-		msg, ok := params.(lsp2.SnykScanParams)
-		if ok && msg.Status == lsp2.InProgress {
-			messageReceived = true
-		}
-	})
+	notification.CreateListener(
+		func(params any) {
+			msg, ok := params.(lsp2.SnykScanParams)
+			if ok && msg.Status == lsp2.InProgress {
+				messageReceived = true
+			}
+		},
+	)
 
 	// Act
 	scanner.Scan(context.Background(), "", tempDir)
@@ -383,30 +439,39 @@ func writeTestGitIgnore(ignorePatterns string, t *testing.T) (tempDir string) {
 
 func Test_IsEnabled(t *testing.T) {
 	scanner := &Scanner{}
-	t.Run("should return true if Snyk Code is generally enabled", func(t *testing.T) {
-		config.CurrentConfig().SetSnykCodeEnabled(true)
-		enabled := scanner.IsEnabled()
-		assert.True(t, enabled)
-	})
-	t.Run("should return true if Snyk Code Quality is enabled", func(t *testing.T) {
-		config.CurrentConfig().SetSnykCodeEnabled(false)
-		config.CurrentConfig().EnableSnykCodeQuality(true)
-		config.CurrentConfig().EnableSnykCodeSecurity(false)
-		enabled := scanner.IsEnabled()
-		assert.True(t, enabled)
-	})
-	t.Run("should return true if Snyk Code Security is enabled", func(t *testing.T) {
-		config.CurrentConfig().SetSnykCodeEnabled(false)
-		config.CurrentConfig().EnableSnykCodeQuality(false)
-		config.CurrentConfig().EnableSnykCodeSecurity(true)
-		enabled := scanner.IsEnabled()
-		assert.True(t, enabled)
-	})
-	t.Run("should return false if Snyk Code is disabled and Snyk Code Quality and Security are not enabled", func(t *testing.T) {
-		config.CurrentConfig().SetSnykCodeEnabled(false)
-		config.CurrentConfig().EnableSnykCodeQuality(false)
-		config.CurrentConfig().EnableSnykCodeSecurity(false)
-		enabled := scanner.IsEnabled()
-		assert.False(t, enabled)
-	})
+	t.Run(
+		"should return true if Snyk Code is generally enabled", func(t *testing.T) {
+			config.CurrentConfig().SetSnykCodeEnabled(true)
+			enabled := scanner.IsEnabled()
+			assert.True(t, enabled)
+		},
+	)
+	t.Run(
+		"should return true if Snyk Code Quality is enabled", func(t *testing.T) {
+			config.CurrentConfig().SetSnykCodeEnabled(false)
+			config.CurrentConfig().EnableSnykCodeQuality(true)
+			config.CurrentConfig().EnableSnykCodeSecurity(false)
+			enabled := scanner.IsEnabled()
+			assert.True(t, enabled)
+		},
+	)
+	t.Run(
+		"should return true if Snyk Code Security is enabled", func(t *testing.T) {
+			config.CurrentConfig().SetSnykCodeEnabled(false)
+			config.CurrentConfig().EnableSnykCodeQuality(false)
+			config.CurrentConfig().EnableSnykCodeSecurity(true)
+			enabled := scanner.IsEnabled()
+			assert.True(t, enabled)
+		},
+	)
+	t.Run(
+		"should return false if Snyk Code is disabled and Snyk Code Quality and Security are not enabled",
+		func(t *testing.T) {
+			config.CurrentConfig().SetSnykCodeEnabled(false)
+			config.CurrentConfig().EnableSnykCodeQuality(false)
+			config.CurrentConfig().EnableSnykCodeSecurity(false)
+			enabled := scanner.IsEnabled()
+			assert.False(t, enabled)
+		},
+	)
 }

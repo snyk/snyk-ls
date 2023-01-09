@@ -15,7 +15,7 @@ func Test_SendInProgressMessage_InProgressMessageSent(t *testing.T) {
 	testutil.UnitTest(t)
 	expectedProductName := "foo"
 	mockNotifier := NewMockNotifier()
-	scanNotifier := notification.NewNotifier(mockNotifier, expectedProductName)
+	scanNotifier := notification.NewScanNotifier(mockNotifier, expectedProductName)
 
 	// Act
 	scanNotifier.SendInProgress("/test/folderPath")
@@ -35,7 +35,7 @@ func Test_SendSuccessMessage_SuccessMessageSent(t *testing.T) {
 	testutil.UnitTest(t)
 	expectedProductName := "foo"
 	mockNotifier := NewMockNotifier()
-	scanNotifier := notification.NewNotifier(mockNotifier, expectedProductName)
+	scanNotifier := notification.NewScanNotifier(mockNotifier, expectedProductName)
 
 	// Act
 	scanNotifier.SendSuccess("/test/folderPath")
@@ -55,7 +55,7 @@ func Test_SendErrorMessage_ErrorMessageReceived(t *testing.T) {
 	testutil.UnitTest(t)
 	expectedProductName := "foo"
 	mockNotifier := NewMockNotifier()
-	scanNotifier := notification.NewNotifier(mockNotifier, expectedProductName)
+	scanNotifier := notification.NewScanNotifier(mockNotifier, expectedProductName)
 
 	// Act
 	scanNotifier.SendError("/test/folderPath")

@@ -13,7 +13,7 @@ type scanNotifier struct {
 	productName string
 }
 
-func NewNotifier(notifier Notifier, productName string) ScanNotifier {
+func NewScanNotifier(notifier Notifier, productName string) ScanNotifier {
 	return &scanNotifier{
 		notifier:    notifier,
 		productName: productName,

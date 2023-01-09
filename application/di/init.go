@@ -105,7 +105,8 @@ func initInfrastructure() {
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
-	snykCodeScanner = code2.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, notification.NewNotifier("code"))
+	codeScanNotifier := notification.NewScanNotifier(notification.NewNotifier(), "code")
+	snykCodeScanner = code2.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, codeScanNotifier)
 	cliInitializer = cli2.NewInitializer(errorReporter, installer)
 	authInitializer := auth2.NewInitializer(authenticationService, errorReporter, analytics)
 	scanInitializer = initialize.NewDelegatingInitializer(
@@ -136,7 +137,8 @@ func TestInit(t *testing.T) {
 	snykCli = cli2.NewExecutor(authenticationService, errorReporter, analytics)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	fakeApiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
-	snykCodeScanner = code2.New(snykCodeBundleUploader, fakeApiClient, errorReporter, analytics, notification.NewNotifier("code"))
+	codeScanNotifier := notification.NewScanNotifier(notification.NewNotifier(), "code")
+	snykCodeScanner = code2.New(snykCodeBundleUploader, fakeApiClient, errorReporter, analytics, codeScanNotifier)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	scanner = snyk.NewDelegatingScanner(scanInitializer, instrumentor, analytics, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)

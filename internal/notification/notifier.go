@@ -14,6 +14,8 @@ type Notifier interface {
 
 var _ Notifier = &notifierImpl{}
 
+func NewNotifier() Notifier { return &notifierImpl{} }
+
 type notifierImpl struct{}
 
 func (n *notifierImpl) SendShowMessage(messageType sglsp.MessageType, message string) {
