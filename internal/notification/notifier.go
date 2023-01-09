@@ -10,9 +10,6 @@ type Notifier interface {
 	Send(msg any)
 	SendError(err error)
 	SendErrorDiagnostic(path string, err error)
-	Receive() (payload any, stop bool)
-	CreateListener(callback func(params any))
-	DisposeListener()
 }
 
 var _ Notifier = &notifierImpl{}
@@ -33,16 +30,4 @@ func (n *notifierImpl) SendError(err error) {
 
 func (n *notifierImpl) SendErrorDiagnostic(path string, err error) {
 	SendErrorDiagnostic(path, err)
-}
-
-func (n *notifierImpl) Receive() (payload any, stop bool) {
-	return Receive()
-}
-
-func (n *notifierImpl) CreateListener(callback func(params any)) {
-	CreateListener(callback)
-}
-
-func (n *notifierImpl) DisposeListener() {
-	DisposeListener()
 }
