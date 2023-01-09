@@ -10,15 +10,18 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
+const productName = "foo"
+const folderPath = "/test/folderPath"
+
 func Test_SendInProgressMessage_InProgressMessageSent(t *testing.T) {
 	// Arrange
 	testutil.UnitTest(t)
-	expectedProductName := "foo"
+	expectedProductName := productName
 	mockNotifier := notification.NewMockNotifier()
 	scanNotifier := notification.NewScanNotifier(mockNotifier, expectedProductName)
 
 	// Act
-	scanNotifier.SendInProgress("/test/folderPath")
+	scanNotifier.SendInProgress(folderPath)
 
 	// Assert
 	for _, msg := range mockNotifier.GetSentMessages() {
@@ -33,12 +36,12 @@ func Test_SendInProgressMessage_InProgressMessageSent(t *testing.T) {
 func Test_SendSuccessMessage_SuccessMessageSent(t *testing.T) {
 	// Arrange
 	testutil.UnitTest(t)
-	expectedProductName := "foo"
+	expectedProductName := productName
 	mockNotifier := notification.NewMockNotifier()
 	scanNotifier := notification.NewScanNotifier(mockNotifier, expectedProductName)
 
 	// Act
-	scanNotifier.SendSuccess("/test/folderPath")
+	scanNotifier.SendSuccess(folderPath)
 
 	// Assert
 	for _, msg := range mockNotifier.GetSentMessages() {
@@ -53,12 +56,12 @@ func Test_SendSuccessMessage_SuccessMessageSent(t *testing.T) {
 func Test_SendErrorMessage_ErrorMessageReceived(t *testing.T) {
 	// Arrange
 	testutil.UnitTest(t)
-	expectedProductName := "foo"
+	expectedProductName := productName
 	mockNotifier := notification.NewMockNotifier()
 	scanNotifier := notification.NewScanNotifier(mockNotifier, expectedProductName)
 
 	// Act
-	scanNotifier.SendError("/test/folderPath")
+	scanNotifier.SendError(folderPath)
 
 	// Assert
 	for _, msg := range mockNotifier.GetSentMessages() {
