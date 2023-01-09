@@ -684,7 +684,6 @@ type SnykTrustedFoldersParams struct {
 type ScanStatus string
 
 const (
-	Initial     ScanStatus = "initial"
 	InProgress  ScanStatus = "inProgress"
 	Success     ScanStatus = "success"
 	ErrorStatus ScanStatus = "error"
