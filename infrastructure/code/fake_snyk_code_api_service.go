@@ -204,10 +204,6 @@ var successfulResult = AnalysisStatus{
 	message:    "COMPLETE",
 	percentage: 100,
 }
-var analyzingResult = AnalysisStatus{
-	message:    "ANALYZING",
-	percentage: 2,
-}
 
 func (f *FakeSnykCodeClient) RunAnalysis(
 	_ context.Context,
