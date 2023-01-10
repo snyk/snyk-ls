@@ -1,6 +1,10 @@
 package notification
 
-import "github.com/snyk/snyk-ls/application/server/lsp"
+import (
+	"errors"
+
+	"github.com/snyk/snyk-ls/application/server/lsp"
+)
 
 type ScanNotifier interface {
 	SendInProgress(folderPath string)
@@ -13,32 +17,44 @@ type scanNotifier struct {
 	productName string
 }
 
-func NewScanNotifier(notifier Notifier, productName string) ScanNotifier {
+func NewScanNotifier(notifier Notifier, productName string) (ScanNotifier, error) {
+	if notifier == nil {
+		return nil, errors.New("notifier cannot be null")
+	}
+	if productName == "" {
+		return nil, errors.New("product name cannot be empty")
+	}
 	return &scanNotifier{
 		notifier:    notifier,
 		productName: productName,
-	}
+	}, nil
 }
 
 func (n *scanNotifier) SendError(folderPath string) {
-	n.notifier.Send(lsp.SnykScanParams{
-		Status:  lsp.ErrorStatus,
-		Product: n.productName,
-	})
+	n.notifier.Send(
+		lsp.SnykScanParams{
+			Status:  lsp.ErrorStatus,
+			Product: n.productName,
+		},
+	)
 }
 
 func (n *scanNotifier) SendSuccess(folderPath string) {
-	n.notifier.Send(lsp.SnykScanParams{
-		Status:  lsp.Success,
-		Product: n.productName,
-		//Results: results,
-	})
+	n.notifier.Send(
+		lsp.SnykScanParams{
+			Status:  lsp.Success,
+			Product: n.productName,
+			//Results: results,
+		},
+	)
 }
 
 func (n *scanNotifier) SendInProgress(folderPath string) {
-	n.notifier.Send(lsp.SnykScanParams{
-		Status:  lsp.InProgress,
-		Product: n.productName,
-		//Results: results,
-	})
+	n.notifier.Send(
+		lsp.SnykScanParams{
+			Status:  lsp.InProgress,
+			Product: n.productName,
+			//Results: results,
+		},
+	)
 }

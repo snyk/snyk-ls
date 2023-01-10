@@ -91,7 +91,8 @@ func initInfrastructure() {
 			"/Library",
 			"C:\\Program Files",
 			"C:\\Program Files (x86)",
-		})
+		},
+	)
 
 	errorReporter = sentry2.NewSentryErrorReporter()
 	installer = install.NewInstaller(errorReporter)
@@ -105,7 +106,7 @@ func initInfrastructure() {
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
-	codeScanNotifier := notification.NewScanNotifier(notification.NewNotifier(), "code")
+	codeScanNotifier, _ := notification.NewScanNotifier(notification.NewNotifier(), "code")
 	snykCodeScanner = code2.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, codeScanNotifier)
 	cliInitializer = cli2.NewInitializer(errorReporter, installer)
 	authInitializer := auth2.NewInitializer(authenticationService, errorReporter, analytics)
@@ -137,15 +138,24 @@ func TestInit(t *testing.T) {
 	snykCli = cli2.NewExecutor(authenticationService, errorReporter, analytics)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	fakeApiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
-	codeScanNotifier := notification.NewScanNotifier(notification.NewNotifier(), "code")
+	codeScanNotifier, _ := notification.NewScanNotifier(notification.NewNotifier(), "code")
 	snykCodeScanner = code2.New(snykCodeBundleUploader, fakeApiClient, errorReporter, analytics, codeScanNotifier)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
-	scanner = snyk.NewDelegatingScanner(scanInitializer, instrumentor, analytics, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
+	scanner = snyk.NewDelegatingScanner(
+		scanInitializer,
+		instrumentor,
+		analytics,
+		snykCodeScanner,
+		infrastructureAsCodeScanner,
+		openSourceScanner,
+	)
 	hoverService = hover.NewDefaultService(analytics)
-	t.Cleanup(func() {
-		fakeClient.Clear()
-	})
+	t.Cleanup(
+		func() {
+			fakeClient.Clear()
+		},
+	)
 }
 
 /*

@@ -18,7 +18,7 @@ func Test_SendInProgressMessage_InProgressMessageSent(t *testing.T) {
 	testutil.UnitTest(t)
 	expectedProductName := productName
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier := notification.NewScanNotifier(mockNotifier, expectedProductName)
+	scanNotifier, _ := notification.NewScanNotifier(mockNotifier, expectedProductName)
 
 	// Act
 	scanNotifier.SendInProgress(folderPath)
@@ -38,7 +38,7 @@ func Test_SendSuccessMessage_SuccessMessageSent(t *testing.T) {
 	testutil.UnitTest(t)
 	expectedProductName := productName
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier := notification.NewScanNotifier(mockNotifier, expectedProductName)
+	scanNotifier, _ := notification.NewScanNotifier(mockNotifier, expectedProductName)
 
 	// Act
 	scanNotifier.SendSuccess(folderPath)
@@ -58,7 +58,7 @@ func Test_SendErrorMessage_ErrorMessageReceived(t *testing.T) {
 	testutil.UnitTest(t)
 	expectedProductName := productName
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier := notification.NewScanNotifier(mockNotifier, expectedProductName)
+	scanNotifier, _ := notification.NewScanNotifier(mockNotifier, expectedProductName)
 
 	// Act
 	scanNotifier.SendError(folderPath)
@@ -71,4 +71,18 @@ func Test_SendErrorMessage_ErrorMessageReceived(t *testing.T) {
 		}
 	}
 	assert.Fail(t, "Scan message was not sent")
+}
+
+func Test_NewScanNotifier_EmptyProductName_Errors(t *testing.T) {
+	t.Parallel()
+	scanNotifier, err := notification.NewScanNotifier(notification.NewMockNotifier(), "")
+	assert.Error(t, err)
+	assert.Nil(t, scanNotifier)
+}
+
+func Test_NewScanNotifier_NilNotifier_Errors(t *testing.T) {
+	t.Parallel()
+	scanNotifier, err := notification.NewScanNotifier(nil, "code")
+	assert.Error(t, err)
+	assert.Nil(t, scanNotifier)
 }
