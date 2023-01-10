@@ -24,6 +24,7 @@ import (
 	"github.com/adrg/xdg"
 
 	"github.com/snyk/snyk-ls/application/config"
+	appNotification "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	errorreporting "github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -106,7 +107,7 @@ func initInfrastructure() {
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
-	codeScanNotifier, _ := notification.NewScanNotifier(notification.NewNotifier(), "code")
+	codeScanNotifier, _ := appNotification.NewScanNotifier(notification.NewNotifier(), "code")
 	snykCodeScanner = code2.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, codeScanNotifier)
 	cliInitializer = cli2.NewInitializer(errorReporter, installer)
 	authInitializer := auth2.NewInitializer(authenticationService, errorReporter, analytics)
@@ -138,7 +139,7 @@ func TestInit(t *testing.T) {
 	snykCli = cli2.NewExecutor(authenticationService, errorReporter, analytics)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	fakeApiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
-	codeScanNotifier, _ := notification.NewScanNotifier(notification.NewNotifier(), "code")
+	codeScanNotifier, _ := appNotification.NewScanNotifier(notification.NewNotifier(), "code")
 	snykCodeScanner = code2.New(snykCodeBundleUploader, fakeApiClient, errorReporter, analytics, codeScanNotifier)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)

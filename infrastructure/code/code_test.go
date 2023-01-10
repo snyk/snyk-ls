@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
+	appNotification "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
@@ -150,7 +151,7 @@ func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient,
 
 func setupTestScannerWithNotifications() (*FakeSnykCodeClient, *Scanner) {
 	snykCodeMock := &FakeSnykCodeClient{}
-	scanNotifier, _ := notification.NewScanNotifier(notification.NewNotifier(), "code")
+	scanNotifier, _ := appNotification.NewScanNotifier(notification.NewNotifier(), "code")
 	scanner := New(
 		NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
@@ -162,9 +163,9 @@ func setupTestScannerWithNotifications() (*FakeSnykCodeClient, *Scanner) {
 	return snykCodeMock, scanner
 }
 
-func setupTestScanner() (*FakeSnykCodeClient, *notification.MockScanNotifier, *Scanner) {
+func setupTestScanner() (*FakeSnykCodeClient, *appNotification.MockScanNotifier, *Scanner) {
 	snykCodeMock := &FakeSnykCodeClient{}
-	mockScanNotifier := notification.NewMockScanNotifier()
+	mockScanNotifier := appNotification.NewMockScanNotifier()
 	scanner := New(
 		NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
@@ -181,7 +182,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 		"should create bundle when hash empty", func(t *testing.T) {
 			testutil.UnitTest(t)
 			snykCodeMock := &FakeSnykCodeClient{}
-			scanNotifier, _ := notification.NewScanNotifier(notification.NewNotifier(), "code")
+			scanNotifier, _ := appNotification.NewScanNotifier(notification.NewNotifier(), "code")
 			c := New(
 				NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
@@ -209,7 +210,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 		"should ignore if SAST disabled", func(t *testing.T) {
 			testutil.UnitTest(t)
 			snykCodeMock := &FakeSnykCodeClient{}
-			scanNotifier, _ := notification.NewScanNotifier(notification.NewNotifier(), "code")
+			scanNotifier, _ := appNotification.NewScanNotifier(notification.NewNotifier(), "code")
 			c := New(
 				NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: false},
@@ -233,7 +234,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 		"should retrieve from backend", func(t *testing.T) {
 			testutil.UnitTest(t)
 			snykCodeMock := &FakeSnykCodeClient{}
-			scanNotifier, _ := notification.NewScanNotifier(notification.NewNotifier(), "code")
+			scanNotifier, _ := appNotification.NewScanNotifier(notification.NewNotifier(), "code")
 			c := New(
 				NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
@@ -264,7 +265,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 		"should track analytics", func(t *testing.T) {
 			testutil.UnitTest(t)
 			snykCodeMock := &FakeSnykCodeClient{}
-			scanNotifier, _ := notification.NewScanNotifier(notification.NewNotifier(), "code")
+			scanNotifier, _ := appNotification.NewScanNotifier(notification.NewNotifier(), "code")
 			analytics := ux2.NewTestAnalytics()
 			c := New(
 				NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
