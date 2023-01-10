@@ -24,14 +24,14 @@ func (m *MockScanNotifier) SendError(folderPath string) {
 	m.errorCalls = append(m.errorCalls, folderPath)
 }
 
-func (m *MockScanNotifier) GetInProgressCalls() []string {
+func (m *MockScanNotifier) InProgressCalls() []string {
 	return m.inProgressCalls
 }
 
-func (m *MockScanNotifier) GetSuccessCalls() []string {
+func (m *MockScanNotifier) SuccessCalls() []string {
 	return m.successCalls
 }
 
-func (m *MockScanNotifier) GetErrorCalls() []string {
+func (m *MockScanNotifier) ErrorCalls() []string {
 	return m.errorCalls
 }

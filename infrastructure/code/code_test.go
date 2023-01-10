@@ -383,7 +383,7 @@ func Test_CodeScanStarted_SnykScanMessageSent(t *testing.T) {
 	scanner.Scan(context.Background(), "", tempDir)
 
 	// Assert
-	assert.NotEmpty(t, mockScanNotifier.GetInProgressCalls())
+	assert.NotEmpty(t, mockScanNotifier.InProgressCalls())
 }
 
 func Test_ScanSucceeded_SuccessMessageSent(t *testing.T) {
@@ -396,7 +396,7 @@ func Test_ScanSucceeded_SuccessMessageSent(t *testing.T) {
 	scanner.Scan(context.Background(), "", tempDir)
 
 	// Assert
-	assert.Len(t, mockScanNotifier.GetSuccessCalls(), 1)
+	assert.Len(t, mockScanNotifier.SuccessCalls(), 1)
 }
 
 func Test_ScanFailed_ErrorMessageSent(t *testing.T) {
@@ -410,7 +410,7 @@ func Test_ScanFailed_ErrorMessageSent(t *testing.T) {
 	scanner.Scan(context.Background(), "", tempDir)
 
 	// Assert
-	assert.Len(t, mockScanNotifier.GetErrorCalls(), 1)
+	assert.Len(t, mockScanNotifier.ErrorCalls(), 1)
 }
 
 func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {
