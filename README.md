@@ -90,8 +90,8 @@ Right now the language server supports the following actions:
   - payload:
   ```json5
   {
-    "status": "InProgress", // possible values: "Error", "In Progress", "Success"
-    "kind": "code", // possible values: "code", "oss", "iac"
+    "status": "inProgress", // possible values: "error", "inProgress", "success"
+    "product": "code", // possible values: "code", "oss", "iac"
     "results" : [
       // TBD
     ]
