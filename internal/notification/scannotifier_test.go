@@ -24,7 +24,7 @@ func Test_SendInProgressMessage_InProgressMessageSent(t *testing.T) {
 	scanNotifier.SendInProgress(folderPath)
 
 	// Assert
-	for _, msg := range mockNotifier.GetSentMessages() {
+	for _, msg := range mockNotifier.SentMessages() {
 		scanMessage, ok := msg.(lsp2.SnykScanParams)
 		if ok && scanMessage.Status == lsp2.InProgress && scanMessage.Product == expectedProductName {
 			return
@@ -44,7 +44,7 @@ func Test_SendSuccessMessage_SuccessMessageSent(t *testing.T) {
 	scanNotifier.SendSuccess(folderPath)
 
 	// Assert
-	for _, msg := range mockNotifier.GetSentMessages() {
+	for _, msg := range mockNotifier.SentMessages() {
 		scanMessage, ok := msg.(lsp2.SnykScanParams)
 		if ok && scanMessage.Status == lsp2.Success && scanMessage.Product == expectedProductName {
 			return
@@ -64,7 +64,7 @@ func Test_SendErrorMessage_ErrorMessageReceived(t *testing.T) {
 	scanNotifier.SendError(folderPath)
 
 	// Assert
-	for _, msg := range mockNotifier.GetSentMessages() {
+	for _, msg := range mockNotifier.SentMessages() {
 		scanMessage, ok := msg.(lsp2.SnykScanParams)
 		if ok && scanMessage.Status == lsp2.ErrorStatus && scanMessage.Product == expectedProductName {
 			return

@@ -23,10 +23,12 @@ func NewMockNotifier() *MockNotifier { return &MockNotifier{} }
 
 func (m *MockNotifier) SendShowMessage(messageType sglsp.MessageType, message string) {
 	m.sendShowMessageCounter++
-	m.sentMessages = append(m.sentMessages, sglsp.ShowMessageParams{
-		Type:    messageType,
-		Message: message,
-	})
+	m.sentMessages = append(
+		m.sentMessages, sglsp.ShowMessageParams{
+			Type:    messageType,
+			Message: message,
+		},
+	)
 }
 
 func (m *MockNotifier) Send(msg any) {
@@ -36,10 +38,12 @@ func (m *MockNotifier) Send(msg any) {
 
 func (m *MockNotifier) SendError(err error) {
 	m.sendErrorCounter++
-	m.sentMessages = append(m.sentMessages, sglsp.ShowMessageParams{
-		Type:    sglsp.MTError,
-		Message: fmt.Sprintf("Snyk encountered an error: %v", err),
-	})
+	m.sentMessages = append(
+		m.sentMessages, sglsp.ShowMessageParams{
+			Type:    sglsp.MTError,
+			Message: fmt.Sprintf("Snyk encountered an error: %v", err),
+		},
+	)
 }
 
 func (m *MockNotifier) SendErrorDiagnostic(path string, err error) {
@@ -57,12 +61,12 @@ func (m *MockNotifier) SendErrorDiagnostic(path string, err error) {
 	m.sentMessages = append(m.sentMessages, msg)
 }
 
-func (m *MockNotifier) GetSendShowMessageCounter() int { return m.sendShowMessageCounter }
+func (m *MockNotifier) SendShowMessageCount() int { return m.sendShowMessageCounter }
 
-func (m *MockNotifier) GetSendCounter() int { return m.sendCounter }
+func (m *MockNotifier) SendCount() int { return m.sendCounter }
 
-func (m *MockNotifier) GetSendErrorCounter() int { return m.sendErrorCounter }
+func (m *MockNotifier) SendErrorCount() int { return m.sendErrorCounter }
 
-func (m *MockNotifier) GetSendErrorDiagnosticCounter() int { return m.sendErrorDiagnosticCounter }
+func (m *MockNotifier) SendErrorDiagnosticCount() int { return m.sendErrorDiagnosticCounter }
 
-func (m *MockNotifier) GetSentMessages() []any { return m.sentMessages }
+func (m *MockNotifier) SentMessages() []any { return m.sentMessages }
