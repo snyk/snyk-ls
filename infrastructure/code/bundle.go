@@ -28,7 +28,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -42,7 +41,7 @@ type Bundle struct {
 	requestId     string
 	missingFiles  []string
 	rootPath      string
-	scanNotifier  notification.ScanNotifier
+	scanNotifier  snyk.ScanNotifier
 }
 
 func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {

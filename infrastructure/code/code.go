@@ -77,10 +77,10 @@ type Scanner struct {
 	mutex           sync.Mutex
 	scanStatusMutex sync.Mutex
 	runningScans    map[string]*ScanStatus
-	scanNotifier    notification.ScanNotifier
+	scanNotifier    snyk.ScanNotifier
 }
 
-func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter error_reporting.ErrorReporter, analytics ux2.Analytics, notifier notification.ScanNotifier) *Scanner {
+func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter error_reporting.ErrorReporter, analytics ux2.Analytics, notifier snyk.ScanNotifier) *Scanner {
 	sc := &Scanner{
 		BundleUploader: bundleUploader,
 		SnykApiClient:  apiClient,

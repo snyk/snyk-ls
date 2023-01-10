@@ -4,20 +4,16 @@ import (
 	"errors"
 
 	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/domain/ide/notification"
+	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
-type ScanNotifier interface {
-	SendInProgress(folderPath string)
-	SendSuccess(folderPath string) //TODO - add parameter with results
-	SendError(folderPath string)
-}
-
 type scanNotifier struct {
-	notifier    Notifier
+	notifier    notification.Notifier
 	productName string
 }
 
-func NewScanNotifier(notifier Notifier, productName string) (ScanNotifier, error) {
+func NewScanNotifier(notifier notification.Notifier, productName string) (snyk.ScanNotifier, error) {
 	if notifier == nil {
 		return nil, errors.New("notifier cannot be null")
 	}

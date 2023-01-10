@@ -1,20 +1,14 @@
 package notification
 
-import sglsp "github.com/sourcegraph/go-lsp"
+import (
+	sglsp "github.com/sourcegraph/go-lsp"
 
-// Notifier should be passed as a dependency to the types that call "notification.x" functions.
-// This allows using mocks and enables us to gradually refactor out the direct calls to
-// the "notification" package functions.
-type Notifier interface {
-	SendShowMessage(messageType sglsp.MessageType, message string)
-	Send(msg any)
-	SendError(err error)
-	SendErrorDiagnostic(path string, err error)
-}
+	"github.com/snyk/snyk-ls/domain/ide/notification"
+)
 
-var _ Notifier = &notifierImpl{}
+var _ notification.Notifier = &notifierImpl{}
 
-func NewNotifier() Notifier { return &notifierImpl{} }
+func NewNotifier() notification.Notifier { return &notifierImpl{} }
 
 type notifierImpl struct{}
 

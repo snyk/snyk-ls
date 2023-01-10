@@ -1,6 +1,8 @@
 package notification
 
-var _ ScanNotifier = &MockScanNotifier{}
+import "github.com/snyk/snyk-ls/domain/snyk"
+
+var _ snyk.ScanNotifier = &MockScanNotifier{}
 
 type MockScanNotifier struct {
 	inProgressCalls []string
