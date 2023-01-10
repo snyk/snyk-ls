@@ -109,7 +109,6 @@ type FakeSnykCodeClient struct {
 	TotalBundleCount       int
 	ExtendedBundleCount    int
 	AnalysisDuration       time.Duration
-	AnalyzingMessageCount  int
 	FailOnCreateBundle     bool
 	currentConcurrentScans int
 	maxConcurrentScans     int
@@ -229,12 +228,6 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	FakeSnykCodeApiServiceMutex.Unlock()
 
 	issues := []snyk.Issue{FakeIssue}
-	if f.AnalyzingMessageCount > 0 {
-		FakeSnykCodeApiServiceMutex.Lock()
-		f.AnalyzingMessageCount--
-		FakeSnykCodeApiServiceMutex.Unlock()
-		return issues, analyzingResult, nil
-	}
 
 	log.Trace().Str("method", "RunAnalysis").Interface(
 		"fakeDiagnostic",
