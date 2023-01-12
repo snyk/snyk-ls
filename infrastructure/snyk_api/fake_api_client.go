@@ -79,7 +79,7 @@ func (f *FakeApiClient) SastEnabled() (sastEnabled bool, localCodeEngineEnabled 
 	return f.CodeEnabled, false, false, nil
 }
 
-func (f *FakeApiClient) GetActiveUser() (user ActiveUser, err error) {
+func (f *FakeApiClient) GetActiveUser() (user ActiveUser, err *SnykApiError) {
 	f.addCall([]any{}, ActiveUserOperation)
 	return ActiveUser{Id: "FakeUser"}, nil
 }

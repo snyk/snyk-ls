@@ -31,13 +31,14 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/auth"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func Test_UpdateToken(t *testing.T) {
 	testutil.UnitTest(t)
 	analytics := ux.NewTestAnalytics()
-	service := NewAuthenticationService(&auth.CliAuthenticationProvider{}, analytics, error_reporting.NewTestErrorReporter())
+	service := NewAuthenticationService(&snyk_api.FakeApiClient{}, &auth.CliAuthenticationProvider{}, analytics, error_reporting.NewTestErrorReporter())
 
 	service.UpdateToken("new-token", false)
 
@@ -52,7 +53,7 @@ func Test_Logout(t *testing.T) {
 	// set up workspace
 	analytics := ux.NewTestAnalytics()
 	authProvider := auth.FakeAuthenticationProvider{}
-	service := NewAuthenticationService(&authProvider, analytics, error_reporting.NewTestErrorReporter())
+	service := NewAuthenticationService(&snyk_api.FakeApiClient{}, &authProvider, analytics, error_reporting.NewTestErrorReporter())
 	hoverService := hover.NewFakeHoverService()
 	scanner := snyk.NewTestScanner()
 	w := workspace.New(performance.NewTestInstrumentor(), scanner, hoverService)
