@@ -58,7 +58,7 @@ type ActiveUser struct {
 }
 
 type SnykApiClient interface {
-	SastEnabled() (sastEnabled bool, localCodeEngineEnabled bool, reportFalsePositivesEnabled bool, err error)
+	SastEnabled() (sastEnabled bool, localCodeEngineEnabled bool, reportFalsePositivesEnabled bool, err *SnykApiError)
 	GetActiveUser() (user ActiveUser, err *SnykApiError)
 }
 
@@ -86,7 +86,7 @@ func NewSnykApiClient() SnykApiClient {
 	return &s
 }
 
-func (s *SnykApiClientImpl) SastEnabled() (sastEnabled bool, localCodeEngineEnabled bool, reportFalsePositivesEnabled bool, err error) {
+func (s *SnykApiClientImpl) SastEnabled() (sastEnabled bool, localCodeEngineEnabled bool, reportFalsePositivesEnabled bool, err *SnykApiError) {
 	log.Debug().Str("method", "SastEnabled").Msg("API: Getting SastEnabled")
 	path := "/cli-config/settings/sast"
 	organization := config.CurrentConfig().GetOrganization()
@@ -95,16 +95,16 @@ func (s *SnykApiClientImpl) SastEnabled() (sastEnabled bool, localCodeEngineEnab
 	}
 	responseBody, err := s.doCall("GET", path, nil)
 	if err != nil {
-		err = fmt.Errorf("%v: %v", err, responseBody)
-		log.Err(err).Str("method", "SastEnabled").Msg("error when calling sastEnabled endpoint")
+		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
+		log.Err(fmtErr).Str("method", "SastEnabled").Msg("error when calling sastEnabled endpoint")
 		return false, false, false, err
 	}
 
 	var response sastResponse
-	err = json.Unmarshal(responseBody, &response)
-	if err != nil {
-		err = fmt.Errorf("%v: %v", err, responseBody)
-		log.Err(err).Str("method", "SastEnabled").Msg("couldn't unmarshal sastResponse")
+	unmarshalErr := json.Unmarshal(responseBody, &response)
+	if unmarshalErr != nil {
+		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
+		log.Err(fmtErr).Str("method", "SastEnabled").Msg("couldn't unmarshal sastResponse")
 		return false, false, false, err
 	}
 	log.Debug().Str("method", "SastEnabled").Msg("API: Done")
