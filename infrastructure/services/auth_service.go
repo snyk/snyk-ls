@@ -87,8 +87,14 @@ func (a AuthenticationService) Logout(ctx context.Context) {
 func (a AuthenticationService) IsAuthenticated() (bool, error) {
 	_, err := a.apiClient.GetActiveUser()
 	isAuthenticated := err == nil
-	if err.StatusCode() == 401 {
-		return false, errors.New("Authentication failed. Please update your token.")
+
+	if !isAuthenticated {
+		switch err.StatusCode() {
+		case 401:
+			return false, errors.New("Authentication failed. Please update your token.")
+		default:
+			return false, errors.New(err.Error())
+		}
 	}
 
 	return isAuthenticated, err
