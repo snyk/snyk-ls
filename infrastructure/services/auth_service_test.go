@@ -97,7 +97,7 @@ func Test_IsAuthenticated(t *testing.T) {
 		isAuthenticated, err := service.IsAuthenticated()
 
 		assert.False(t, isAuthenticated)
-		assert.Equal(t, err.Error(), "Error checking authentication.")
+		assert.Equal(t, err.Error(), snykApiError.Error())
 	})
 }
 

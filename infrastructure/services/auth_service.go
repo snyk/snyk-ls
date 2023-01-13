@@ -93,7 +93,7 @@ func (a AuthenticationService) IsAuthenticated() (bool, error) {
 		case 401:
 			return false, errors.New("Authentication failed. Please update your token.")
 		default:
-			return false, errors.New("Error checking authentication.")
+			return false, getActiveUserErr
 		}
 	}
 
