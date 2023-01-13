@@ -26,6 +26,7 @@ const (
 type FakeApiClient struct {
 	Calls       map[string][][]any
 	CodeEnabled bool
+	ApiError    *SnykApiError
 }
 
 var (
@@ -74,12 +75,17 @@ func (f *FakeApiClient) GetAllCalls(op string) [][]any {
 	return calls
 }
 
-func (f *FakeApiClient) SastEnabled() (sastEnabled bool, localCodeEngineEnabled bool, reportFalsePositivesEnabled bool, err error) {
+func (f *FakeApiClient) SastEnabled() (sastEnabled bool, localCodeEngineEnabled bool, reportFalsePositivesEnabled bool, err *SnykApiError) {
 	f.addCall([]any{}, SastEnabledOperation)
 	return f.CodeEnabled, false, false, nil
 }
 
-func (f *FakeApiClient) GetActiveUser() (user ActiveUser, err error) {
+func (f *FakeApiClient) GetActiveUser() (user ActiveUser, err *SnykApiError) {
 	f.addCall([]any{}, ActiveUserOperation)
+
+	if f.ApiError != nil {
+		return ActiveUser{}, f.ApiError
+	}
+
 	return ActiveUser{Id: "FakeUser"}, nil
 }

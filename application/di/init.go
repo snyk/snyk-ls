@@ -98,7 +98,7 @@ func initInfrastructure() {
 	snykApiClient = snyk_api.NewSnykApiClient()
 	analytics = amplitude.NewAmplitudeClient(snykApiClient, errorReporter)
 	authProvider := auth2.NewCliAuthenticationProvider(errorReporter)
-	authenticationService = services.NewAuthenticationService(authProvider, analytics, errorReporter)
+	authenticationService = services.NewAuthenticationService(snykApiClient, authProvider, analytics, errorReporter)
 	snykCli = cli2.NewExecutor(authenticationService, errorReporter, analytics)
 	snykCodeClient = code2.NewHTTPRepository(instrumentor, errorReporter)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
@@ -123,7 +123,8 @@ func TestInit(t *testing.T) {
 	errorReporter = errorreporting.NewTestErrorReporter()
 	installer = install.NewFakeInstaller()
 	authProvider := auth2.NewFakeCliAuthenticationProvider()
-	authenticationService = services.NewAuthenticationService(authProvider, analytics, errorReporter)
+	fakeApiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
+	authenticationService = services.NewAuthenticationService(fakeApiClient, authProvider, analytics, errorReporter)
 	cliInitializer = cli2.NewInitializer(errorReporter, installer)
 	authInitializer := auth2.NewInitializer(authenticationService, errorReporter, analytics)
 	scanInitializer = initialize.NewDelegatingInitializer(
@@ -134,7 +135,6 @@ func TestInit(t *testing.T) {
 	snykCodeClient = fakeClient
 	snykCli = cli2.NewExecutor(authenticationService, errorReporter, analytics)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
-	fakeApiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
 	snykCodeScanner = code2.New(snykCodeBundleUploader, fakeApiClient, errorReporter, analytics)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)

@@ -18,6 +18,7 @@ package services
 
 import (
 	"context"
+	"errors"
 
 	"github.com/rs/zerolog/log"
 
@@ -27,17 +28,19 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
 )
 
 type AuthenticationService struct {
+	apiClient     snyk_api.SnykApiClient
 	authenticator snyk.AuthenticationProvider
 	analytics     ux.Analytics
 	errorReporter error_reporting.ErrorReporter
 }
 
-func NewAuthenticationService(authenticator snyk.AuthenticationProvider, analytics ux.Analytics, errorReporter error_reporting.ErrorReporter) *AuthenticationService {
-	return &AuthenticationService{authenticator, analytics, errorReporter}
+func NewAuthenticationService(apiProvider snyk_api.SnykApiClient, authenticator snyk.AuthenticationProvider, analytics ux.Analytics, errorReporter error_reporting.ErrorReporter) *AuthenticationService {
+	return &AuthenticationService{apiProvider, authenticator, analytics, errorReporter}
 }
 
 func (a AuthenticationService) Provider() snyk.AuthenticationProvider {
@@ -82,9 +85,17 @@ func (a AuthenticationService) Logout(ctx context.Context) {
 }
 
 func (a AuthenticationService) IsAuthenticated() (bool, error) {
-	token := config.CurrentConfig().Token()
-	err := a.authenticator.AuthenticateToken(token)
-	isAuthenticated := err == nil
+	_, getActiveUserErr := a.apiClient.GetActiveUser()
+	isAuthenticated := getActiveUserErr == nil
 
-	return isAuthenticated, err
+	if !isAuthenticated {
+		switch getActiveUserErr.StatusCode() {
+		case 401:
+			return false, errors.New("Authentication failed. Please update your token.")
+		default:
+			return false, getActiveUserErr
+		}
+	}
+
+	return isAuthenticated, nil
 }

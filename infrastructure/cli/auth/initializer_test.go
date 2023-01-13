@@ -25,6 +25,7 @@ import (
 	errorreporting "github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/infrastructure/services"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 )
 
 func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
@@ -39,7 +40,7 @@ func getAutoAuthenticationTest(autoAuthentication bool, expectError bool) func(t
 		config.CurrentConfig().SetAutomaticAuthentication(autoAuthentication)
 		analytics := ux2.NewTestAnalytics()
 		provider := NewFakeCliAuthenticationProvider().(*FakeAuthenticationProvider)
-		authenticator := services.NewAuthenticationService(provider, analytics, errorreporting.NewTestErrorReporter())
+		authenticator := services.NewAuthenticationService(&snyk_api.FakeApiClient{}, provider, analytics, errorreporting.NewTestErrorReporter())
 		initializer := NewInitializer(authenticator, errorreporting.NewTestErrorReporter(), analytics)
 
 		// Act
