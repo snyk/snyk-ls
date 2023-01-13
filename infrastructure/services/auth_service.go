@@ -85,17 +85,17 @@ func (a AuthenticationService) Logout(ctx context.Context) {
 }
 
 func (a AuthenticationService) IsAuthenticated() (bool, error) {
-	_, err := a.apiClient.GetActiveUser()
-	isAuthenticated := err == nil
+	_, getActiveUserErr := a.apiClient.GetActiveUser()
+	isAuthenticated := getActiveUserErr == nil
 
 	if !isAuthenticated {
-		switch err.StatusCode() {
+		switch getActiveUserErr.StatusCode() {
 		case 401:
 			return false, errors.New("Authentication failed. Please update your token.")
 		default:
-			return false, errors.New(err.Error())
+			return false, errors.New("Error checking authentication.")
 		}
 	}
 
-	return isAuthenticated, err
+	return isAuthenticated, nil
 }

@@ -46,6 +46,61 @@ func Test_UpdateToken(t *testing.T) {
 	assert.True(t, analytics.Identified)
 }
 
+func Test_IsAuthenticated(t *testing.T) {
+	t.Run("User is authenticated", func(t *testing.T) {
+		testutil.UnitTest(t)
+		analytics := ux.NewTestAnalytics()
+
+		service := NewAuthenticationService(
+			&snyk_api.FakeApiClient{},
+			&auth.CliAuthenticationProvider{},
+			analytics,
+			error_reporting.NewTestErrorReporter(),
+		)
+
+		isAuthenticated, err := service.IsAuthenticated()
+
+		assert.True(t, isAuthenticated)
+		assert.NoError(t, err)
+	})
+
+	t.Run("User is not authenticated", func(t *testing.T) {
+		testutil.UnitTest(t)
+		analytics := ux.NewTestAnalytics()
+		snykApiError := snyk_api.NewSnykApiError("error", 401)
+
+		service := NewAuthenticationService(
+			&snyk_api.FakeApiClient{ApiError: snykApiError},
+			&auth.FakeAuthenticationProvider{},
+			analytics,
+			error_reporting.NewTestErrorReporter(),
+		)
+
+		isAuthenticated, err := service.IsAuthenticated()
+
+		assert.False(t, isAuthenticated)
+		assert.Equal(t, err.Error(), "Authentication failed. Please update your token.")
+	})
+
+	t.Run("Other authentication error", func(t *testing.T) {
+		testutil.UnitTest(t)
+		analytics := ux.NewTestAnalytics()
+		snykApiError := snyk_api.NewSnykApiError("error", 503)
+
+		service := NewAuthenticationService(
+			&snyk_api.FakeApiClient{ApiError: snykApiError},
+			&auth.FakeAuthenticationProvider{},
+			analytics,
+			error_reporting.NewTestErrorReporter(),
+		)
+
+		isAuthenticated, err := service.IsAuthenticated()
+
+		assert.False(t, isAuthenticated)
+		assert.Equal(t, err.Error(), "Error checking authentication.")
+	})
+}
+
 func Test_Logout(t *testing.T) {
 	testutil.IntegTest(t)
 
