@@ -48,7 +48,6 @@ import (
 func Start() {
 	log.Debug().Msg("Starting server...")
 	var srv *jrpc2.Server
-	di.Init()
 
 	handlers := handler.Map{}
 	srv = jrpc2.NewServer(handlers, &jrpc2.ServerOptions{
@@ -498,8 +497,14 @@ func registerNotifier(srv *jrpc2.Server) {
 type RPCLogger struct{}
 
 func (R RPCLogger) LogRequest(_ context.Context, req *jrpc2.Request) {
-	log.Debug().Msgf("Incoming JSON-RPC request. Method=%s. ID=%s. Is notification=%v.", req.Method(), req.ID(), req.IsNotification())
-	log.Trace().Str("params", req.ParamString()).Msgf("Incoming JSON-RPC request. Method=%s. ID=%s. Is notification=%v.", req.Method(), req.ID(), req.IsNotification())
+	log.Debug().Msgf("Incoming JSON-RPC request. Method=%s. ID=%s. Is notification=%v.",
+		req.Method(),
+		req.ID(),
+		req.IsNotification())
+	log.Trace().Str("params", req.ParamString()).Msgf("Incoming JSON-RPC request. Method=%s. ID=%s. Is notification=%v.",
+		req.Method(),
+		req.ID(),
+		req.IsNotification())
 }
 
 func (R RPCLogger) LogResponse(_ context.Context, rsp *jrpc2.Response) {
