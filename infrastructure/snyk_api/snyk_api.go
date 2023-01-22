@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -59,8 +58,25 @@ type ActiveUser struct {
 }
 
 type SnykApiClient interface {
-	SastEnabled() (sastEnabled bool, localCodeEngineEnabled bool, reportFalsePositivesEnabled bool, err error)
-	GetActiveUser() (user ActiveUser, err error)
+	SastEnabled() (sastEnabled bool, localCodeEngineEnabled bool, reportFalsePositivesEnabled bool, err *SnykApiError)
+	GetActiveUser() (user ActiveUser, err *SnykApiError)
+}
+
+type SnykApiError struct {
+	msg        string
+	statusCode int
+}
+
+func NewSnykApiError(msg string, statusCode int) *SnykApiError {
+	return &SnykApiError{msg, statusCode}
+}
+
+func (e *SnykApiError) Error() string {
+	return e.msg
+}
+
+func (e *SnykApiError) StatusCode() int {
+	return e.statusCode
 }
 
 func NewSnykApiClient() SnykApiClient {
@@ -70,7 +86,7 @@ func NewSnykApiClient() SnykApiClient {
 	return &s
 }
 
-func (s *SnykApiClientImpl) SastEnabled() (sastEnabled bool, localCodeEngineEnabled bool, reportFalsePositivesEnabled bool, err error) {
+func (s *SnykApiClientImpl) SastEnabled() (sastEnabled bool, localCodeEngineEnabled bool, reportFalsePositivesEnabled bool, err *SnykApiError) {
 	log.Debug().Str("method", "SastEnabled").Msg("API: Getting SastEnabled")
 	path := "/cli-config/settings/sast"
 	organization := config.CurrentConfig().GetOrganization()
@@ -79,49 +95,49 @@ func (s *SnykApiClientImpl) SastEnabled() (sastEnabled bool, localCodeEngineEnab
 	}
 	responseBody, err := s.doCall("GET", path, nil)
 	if err != nil {
-		err = fmt.Errorf("%v: %v", err, responseBody)
-		log.Err(err).Str("method", "SastEnabled").Msg("error when calling sastEnabled endpoint")
+		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
+		log.Err(fmtErr).Str("method", "SastEnabled").Msg("error when calling sastEnabled endpoint")
 		return false, false, false, err
 	}
 
 	var response sastResponse
-	err = json.Unmarshal(responseBody, &response)
-	if err != nil {
-		err = fmt.Errorf("%v: %v", err, responseBody)
-		log.Err(err).Str("method", "SastEnabled").Msg("couldn't unmarshal sastResponse")
+	unmarshalErr := json.Unmarshal(responseBody, &response)
+	if unmarshalErr != nil {
+		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
+		log.Err(fmtErr).Str("method", "SastEnabled").Msg("couldn't unmarshal sastResponse")
 		return false, false, false, err
 	}
 	log.Debug().Str("method", "SastEnabled").Msg("API: Done")
 	return response.SastEnabled, response.LocalCodeEngine.Enabled, response.ReportFalsePositivesEnabled, nil
 }
 
-func (s *SnykApiClientImpl) GetActiveUser() (activeUser ActiveUser, err error) {
+func (s *SnykApiClientImpl) GetActiveUser() (activeUser ActiveUser, err *SnykApiError) {
 	log.Debug().Str("method", "GetActiveUser").Msg("API: Getting ActiveUser")
 	path := "/user/me"
 	responseBody, err := s.doCall("GET", path, nil)
 	if err != nil {
-		err = fmt.Errorf("%v: %v", err, responseBody)
-		log.Err(err).Str("method", "GetActiveUser").Msg("error when calling SnykApi.GetActiveUser endpoint")
+		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
+		log.Err(fmtErr).Str("method", "GetActiveUser").Msg("error when calling SnykApi.GetActiveUser endpoint")
 		return ActiveUser{}, err
 	}
 
 	var response activeUserResponse
-	err = json.Unmarshal(responseBody, &response)
+	unmarshalErr := json.Unmarshal(responseBody, &response)
 	if err != nil {
-		err = fmt.Errorf("%v: %v", err, responseBody)
-		log.Err(err).Str("method", "GetActiveUser").Msg("couldn't unmarshal GetActiveUser")
-		return ActiveUser{}, err
+		fmtErr := fmt.Errorf("%v: %v", unmarshalErr, responseBody)
+		log.Err(fmtErr).Str("method", "GetActiveUser").Msg("couldn't unmarshal GetActiveUser")
+		return ActiveUser{}, NewSnykApiError(fmtErr.Error(), 0)
 	}
 	log.Debug().Str("method", "GetActiveUser").Msgf("Retrieved user %v", response)
 	return ActiveUser(response), nil
 }
 
-func (s *SnykApiClientImpl) doCall(method string, path string, requestBody []byte) (responseBody []byte, err error) {
+func (s *SnykApiClientImpl) doCall(method string, path string, requestBody []byte) (responseBody []byte, err *SnykApiError) {
 	host := config.CurrentConfig().SnykApi()
 	b := bytes.NewBuffer(requestBody)
-	req, err := http.NewRequest(method, host+path, b)
-	if err != nil {
-		return nil, err
+	req, requestErr := http.NewRequest(method, host+path, b)
+	if requestErr != nil {
+		return nil, NewSnykApiError(requestErr.Error(), 0)
 	}
 	req.Header.Set("Authorization", "token "+config.CurrentConfig().Token())
 	req.Header.Set("Content-Type", "application/json")
@@ -130,9 +146,9 @@ func (s *SnykApiClientImpl) doCall(method string, path string, requestBody []byt
 	req.Header.Set("x-snyk-ide", "snyk-ls-"+clientID)
 
 	log.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
-	response, err := s.client.Do(req)
-	if err != nil {
-		return nil, err
+	response, requestErr := s.client.Do(req)
+	if requestErr != nil {
+		return nil, NewSnykApiError(requestErr.Error(), response.StatusCode) // todo: check if status code is returned here
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -140,10 +156,10 @@ func (s *SnykApiClientImpl) doCall(method string, path string, requestBody []byt
 			log.Err(err).Msg("Couldn't close response body in call to Snyk API")
 		}
 	}(response.Body)
-	responseBody, err = io.ReadAll(response.Body)
+	responseBody, readErr := io.ReadAll(response.Body)
 	log.Trace().Str("response.Status", response.Status).Str("responseBody", string(responseBody)).Msg("RECEIVED FROM REMOTE")
-	if err != nil {
-		return nil, err
+	if readErr != nil {
+		return nil, NewSnykApiError(err.Error(), 0)
 	}
 
 	err = checkResponseCode(response)
@@ -154,10 +170,10 @@ func (s *SnykApiClientImpl) doCall(method string, path string, requestBody []byt
 	return responseBody, err
 }
 
-func checkResponseCode(r *http.Response) error {
+func checkResponseCode(r *http.Response) *SnykApiError {
 	if r.StatusCode >= 200 && r.StatusCode <= 299 {
 		return nil
 	}
 
-	return errors.New("Unexpected response code: " + r.Status)
+	return NewSnykApiError("Unexpected response code: "+r.Status, r.StatusCode)
 }

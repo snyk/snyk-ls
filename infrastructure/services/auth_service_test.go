@@ -31,18 +31,74 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/auth"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func Test_UpdateToken(t *testing.T) {
 	testutil.UnitTest(t)
 	analytics := ux.NewTestAnalytics()
-	service := NewAuthenticationService(&auth.CliAuthenticationProvider{}, analytics, error_reporting.NewTestErrorReporter())
+	service := NewAuthenticationService(&snyk_api.FakeApiClient{}, &auth.CliAuthenticationProvider{}, analytics, error_reporting.NewTestErrorReporter())
 
 	service.UpdateToken("new-token", false)
 
 	assert.Equal(t, "new-token", config.CurrentConfig().Token())
 	assert.True(t, analytics.Identified)
+}
+
+func Test_IsAuthenticated(t *testing.T) {
+	t.Run("User is authenticated", func(t *testing.T) {
+		testutil.UnitTest(t)
+		analytics := ux.NewTestAnalytics()
+
+		service := NewAuthenticationService(
+			&snyk_api.FakeApiClient{},
+			&auth.CliAuthenticationProvider{},
+			analytics,
+			error_reporting.NewTestErrorReporter(),
+		)
+
+		isAuthenticated, err := service.IsAuthenticated()
+
+		assert.True(t, isAuthenticated)
+		assert.NoError(t, err)
+	})
+
+	t.Run("User is not authenticated", func(t *testing.T) {
+		testutil.UnitTest(t)
+		analytics := ux.NewTestAnalytics()
+		snykApiError := snyk_api.NewSnykApiError("error", 401)
+
+		service := NewAuthenticationService(
+			&snyk_api.FakeApiClient{ApiError: snykApiError},
+			&auth.FakeAuthenticationProvider{},
+			analytics,
+			error_reporting.NewTestErrorReporter(),
+		)
+
+		isAuthenticated, err := service.IsAuthenticated()
+
+		assert.False(t, isAuthenticated)
+		assert.Equal(t, err.Error(), "Authentication failed. Please update your token.")
+	})
+
+	t.Run("Other authentication error", func(t *testing.T) {
+		testutil.UnitTest(t)
+		analytics := ux.NewTestAnalytics()
+		snykApiError := snyk_api.NewSnykApiError("error", 503)
+
+		service := NewAuthenticationService(
+			&snyk_api.FakeApiClient{ApiError: snykApiError},
+			&auth.FakeAuthenticationProvider{},
+			analytics,
+			error_reporting.NewTestErrorReporter(),
+		)
+
+		isAuthenticated, err := service.IsAuthenticated()
+
+		assert.False(t, isAuthenticated)
+		assert.Equal(t, err.Error(), snykApiError.Error())
+	})
 }
 
 func Test_Logout(t *testing.T) {
@@ -52,7 +108,7 @@ func Test_Logout(t *testing.T) {
 	// set up workspace
 	analytics := ux.NewTestAnalytics()
 	authProvider := auth.FakeAuthenticationProvider{}
-	service := NewAuthenticationService(&authProvider, analytics, error_reporting.NewTestErrorReporter())
+	service := NewAuthenticationService(&snyk_api.FakeApiClient{}, &authProvider, analytics, error_reporting.NewTestErrorReporter())
 	hoverService := hover.NewFakeHoverService()
 	scanner := snyk.NewTestScanner()
 	w := workspace.New(performance.NewTestInstrumentor(), scanner, hoverService)

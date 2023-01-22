@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gomarkdown/markdown"
 	"github.com/pkg/errors"
@@ -91,26 +92,28 @@ var supportedFiles = map[string]bool{
 	"mix.lock":                true,
 }
 
-// a counter for scans, used for logging
-var scanCount = 1
-
 type Scanner struct {
-	instrumentor  performance.Instrumentor
-	errorReporter error_reporting.ErrorReporter
-	analytics     ux2.Analytics
-	cli           cli.Executor
-	mutex         *sync.Mutex
-	runningScans  map[string]*scans.ScanProgress
+	instrumentor          performance.Instrumentor
+	errorReporter         error_reporting.ErrorReporter
+	analytics             ux2.Analytics
+	cli                   cli.Executor
+	mutex                 *sync.Mutex
+	runningScans          map[string]*scans.ScanProgress
+	scheduledScanDuration time.Duration
+	scheduledScan         *time.Timer
+	scanCount             int
 }
 
 func New(instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux2.Analytics, cli cli.Executor) *Scanner {
 	return &Scanner{
-		instrumentor:  instrumentor,
-		errorReporter: errorReporter,
-		analytics:     analytics,
-		cli:           cli,
-		mutex:         &sync.Mutex{},
-		runningScans:  map[string]*scans.ScanProgress{},
+		instrumentor:          instrumentor,
+		errorReporter:         errorReporter,
+		analytics:             analytics,
+		cli:                   cli,
+		mutex:                 &sync.Mutex{},
+		runningScans:          map[string]*scans.ScanProgress{},
+		scheduledScanDuration: 24 * time.Hour,
+		scanCount:             1,
 	}
 }
 
@@ -162,14 +165,14 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	}
 
 	oss.mutex.Lock()
-	i := scanCount
+	i := oss.scanCount
 	previousScan, wasFound := oss.runningScans[workDir]
 	if wasFound && !previousScan.IsDone() { // If there's already a scan for the current workdir, we want to cancel it and restart it
 		previousScan.CancelScan()
 	}
 	newScan := scans.NewScanProgress()
 	go newScan.Listen(cancel, i)
-	scanCount++
+	oss.scanCount++
 	oss.runningScans[workDir] = newScan
 	oss.mutex.Unlock()
 
@@ -187,11 +190,16 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	}
 
 	issues = oss.unmarshallAndRetrieveAnalysis(ctx, res, uri.PathToUri(workDir))
+	oss.trackResult(true)
 
 	oss.mutex.Lock()
 	log.Debug().Msgf("Scan %v is done", i)
 	newScan.SetDone()
 	oss.mutex.Unlock()
+
+	if issues != nil {
+		oss.scheduleNewScan(path)
+	}
 
 	return issues
 }
@@ -238,7 +246,6 @@ func (oss *Scanner) unmarshallAndRetrieveAnalysis(ctx context.Context, res []byt
 		issues = append(issues, oss.retrieveIssues(scanResult, targetFileUri, fileContent)...)
 	}
 
-	oss.trackResult(true)
 	return issues
 }
 
@@ -404,5 +411,31 @@ func (oss *Scanner) trackResult(success bool) {
 	oss.analytics.AnalysisIsReady(ux2.AnalysisIsReadyProperties{
 		AnalysisType: ux2.OpenSource,
 		Result:       result,
+	})
+}
+
+// Schedules new scan after 24h once existing OSS results might be stale
+func (oss *Scanner) scheduleNewScan(path string) {
+	if oss.scheduledScan != nil {
+		// Cancel previously scheduled scan
+		oss.scheduledScan.Stop()
+	}
+
+	oss.scheduledScan = time.AfterFunc(oss.scheduledScanDuration, func() {
+		if !oss.IsEnabled() {
+			return
+		}
+
+		oss.analytics.AnalysisIsTriggered(
+			ux2.AnalysisIsTriggeredProperties{
+				AnalysisType:    []ux2.AnalysisType{ux2.OpenSource},
+				TriggeredByUser: false,
+			},
+		)
+
+		span := oss.instrumentor.NewTransaction(context.WithValue(context.Background(), oss.Product(), oss), string(oss.Product()), "oss.scheduleNewScanIn")
+		defer oss.instrumentor.Finish(span)
+
+		oss.Scan(span.Context(), path, "")
 	})
 }

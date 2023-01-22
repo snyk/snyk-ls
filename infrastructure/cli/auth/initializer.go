@@ -53,11 +53,14 @@ func (i *Initializer) Init() error {
 
 	authenticator := i.authenticator
 	currentConfig := config.CurrentConfig()
-	isAuthenticated, _ := authenticator.IsAuthenticated()
-	if currentConfig.NonEmptyToken() && isAuthenticated {
-		log.Info().Msg("Skipping authentication - user is already authenticated")
-		return nil
+	if currentConfig.NonEmptyToken() {
+		isValidToken, _ := authenticator.IsAuthenticated()
+		if isValidToken {
+			log.Info().Msg("Skipping authentication - user is already authenticated")
+			return nil
+		}
 	}
+
 	if !currentConfig.AutomaticAuthentication() {
 		if currentConfig.NonEmptyToken() { // Only send notification when the token is invalid
 			err := &AuthenticationFailedError{manualAuthentication: true}
@@ -85,7 +88,7 @@ func (i *Initializer) Init() error {
 	}
 
 	authenticator.UpdateToken(token, true)
-	isAuthenticated, err = authenticator.IsAuthenticated()
+	isAuthenticated, err := authenticator.IsAuthenticated()
 
 	if !isAuthenticated {
 		err = errors.Wrap(err, errorMessage)
