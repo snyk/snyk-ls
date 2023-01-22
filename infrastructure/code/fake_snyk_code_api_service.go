@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -108,6 +109,7 @@ type FakeSnykCodeClient struct {
 	TotalBundleCount       int
 	ExtendedBundleCount    int
 	AnalysisDuration       time.Duration
+	FailOnCreateBundle     bool
 	currentConcurrentScans int
 	maxConcurrentScans     int
 }
@@ -166,6 +168,10 @@ func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (configFiles []string
 }
 
 func (f *FakeSnykCodeClient) CreateBundle(_ context.Context, files map[string]string) (bundleHash string, missingFiles []string, err error) {
+	if f.FailOnCreateBundle {
+		return "", nil, errors.New("Mock Code client failed intentionally on CreateBundle")
+	}
+
 	FakeSnykCodeApiServiceMutex.Lock()
 	defer FakeSnykCodeApiServiceMutex.Unlock()
 	f.TotalBundleCount++
@@ -194,10 +200,16 @@ func (f *FakeSnykCodeClient) ExtendBundle(
 	return util.Hash([]byte(fmt.Sprint(rand.Int()))), nil, nil
 }
 
+var successfulResult = AnalysisStatus{
+	message:    "COMPLETE",
+	percentage: 100,
+}
+
 func (f *FakeSnykCodeClient) RunAnalysis(
 	_ context.Context,
 	options AnalysisOptions,
 ) ([]snyk.Issue, AnalysisStatus, error) {
+
 	FakeSnykCodeApiServiceMutex.Lock()
 	f.currentConcurrentScans++
 	if f.currentConcurrentScans > f.maxConcurrentScans {
@@ -213,6 +225,9 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 
 	issues := []snyk.Issue{FakeIssue}
 
-	log.Trace().Str("method", "RunAnalysis").Interface("fakeDiagnostic", FakeIssue).Msg("fake backend call received & answered")
-	return issues, AnalysisStatus{message: "COMPLETE", percentage: 100}, nil
+	log.Trace().Str("method", "RunAnalysis").Interface(
+		"fakeDiagnostic",
+		FakeIssue,
+	).Msg("fake backend call received & answered")
+	return issues, successfulResult, nil
 }

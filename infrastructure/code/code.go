@@ -77,15 +77,17 @@ type Scanner struct {
 	mutex           sync.Mutex
 	scanStatusMutex sync.Mutex
 	runningScans    map[string]*ScanStatus
+	scanNotifier    snyk.ScanNotifier
 }
 
-func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter error_reporting.ErrorReporter, analytics ux2.Analytics) *Scanner {
+func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter error_reporting.ErrorReporter, analytics ux2.Analytics, notifier snyk.ScanNotifier) *Scanner {
 	sc := &Scanner{
 		BundleUploader: bundleUploader,
 		SnykApiClient:  apiClient,
 		errorReporter:  reporter,
 		analytics:      analytics,
 		runningScans:   map[string]*ScanStatus{},
+		scanNotifier:   notifier,
 	}
 	return sc
 }
@@ -142,6 +144,8 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk
 		sc.scanStatusMutex.Unlock()
 	}()
 
+	// Start the scan
+	sc.scanNotifier.SendInProgress(folderPath)
 	startTime := time.Now()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
@@ -181,34 +185,37 @@ func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
 	sc.mutex.Unlock()
 	filesWalked := 0
 	log.Debug().Str("method", "folder.Files").Msgf("Filecount: %d", fileCount)
-	err = filepath.WalkDir(workspace, func(path string, dirEntry os.DirEntry, err error) error {
-		filesWalked++
-		percentage := math.Round(float64(filesWalked) / float64(fileCount) * 100)
-		t.ReportWithMessage(
-			int(percentage),
-			fmt.Sprintf("Loading file contents for scan... (%d of %d)", filesWalked, fileCount))
-		if err != nil {
-			log.Debug().
-				Str("method", "domain.ide.workspace.Folder.Files").
-				Str("path", path).
-				Err(err).
-				Msg("error traversing files")
-			return nil
-		}
-		if dirEntry == nil || dirEntry.IsDir() {
-			if util.Ignored(gitIgnore, path) {
-				return filepath.SkipDir
+	err = filepath.WalkDir(
+		workspace, func(path string, dirEntry os.DirEntry, err error) error {
+			filesWalked++
+			percentage := math.Round(float64(filesWalked) / float64(fileCount) * 100)
+			t.ReportWithMessage(
+				int(percentage),
+				fmt.Sprintf("Loading file contents for scan... (%d of %d)", filesWalked, fileCount),
+			)
+			if err != nil {
+				log.Debug().
+					Str("method", "domain.ide.workspace.Folder.Files").
+					Str("path", path).
+					Err(err).
+					Msg("error traversing files")
+				return nil
 			}
-			return nil
-		}
+			if dirEntry == nil || dirEntry.IsDir() {
+				if util.Ignored(gitIgnore, path) {
+					return filepath.SkipDir
+				}
+				return nil
+			}
 
-		if util.Ignored(gitIgnore, path) {
-			return nil
-		}
+			if util.Ignored(gitIgnore, path) {
+				return nil
+			}
 
-		filePaths = append(filePaths, path)
-		return err
-	})
+			filePaths = append(filePaths, path)
+			return err
+		},
+	)
 	t.End("All relevant files collected")
 	if err != nil {
 		return filePaths, err
@@ -222,31 +229,33 @@ func (sc *Scanner) loadIgnorePatternsAndCountFiles(folderPath string) (fileCount
 		Str("method", "loadIgnorePatternsAndCountFiles").
 		Str("workspace", folderPath).
 		Msg("searching for ignore files")
-	err = filepath.WalkDir(folderPath, func(path string, dirEntry os.DirEntry, err error) error {
-		fileCount++
-		if err != nil {
-			log.Debug().
-				Str("method", "loadIgnorePatternsAndCountFiles - walker").
-				Str("path", path).
-				Err(err).
-				Msg("error traversing files")
-			return nil
-		}
-		if dirEntry == nil || dirEntry.IsDir() {
-			return nil
-		}
+	err = filepath.WalkDir(
+		folderPath, func(path string, dirEntry os.DirEntry, err error) error {
+			fileCount++
+			if err != nil {
+				log.Debug().
+					Str("method", "loadIgnorePatternsAndCountFiles - walker").
+					Str("path", path).
+					Err(err).
+					Msg("error traversing files")
+				return nil
+			}
+			if dirEntry == nil || dirEntry.IsDir() {
+				return nil
+			}
 
-		if !(strings.HasSuffix(path, ".gitignore") || strings.HasSuffix(path, ".dcignore")) {
-			return nil
-		}
-		log.Debug().Str("method", "loadIgnorePatternsAndCountFiles").Str("file", path).Msg("found ignore file")
-		content, err := os.ReadFile(path)
-		if err != nil {
-			log.Err(err).Msg("Can't read" + path)
-		}
-		ignores += string(content)
-		return err
-	})
+			if !(strings.HasSuffix(path, ".gitignore") || strings.HasSuffix(path, ".dcignore")) {
+				return nil
+			}
+			log.Debug().Str("method", "loadIgnorePatternsAndCountFiles").Str("file", path).Msg("found ignore file")
+			content, err := os.ReadFile(path)
+			if err != nil {
+				log.Err(err).Msg("Can't read" + path)
+			}
+			ignores += string(content)
+			return err
+		},
+	)
 
 	if err != nil {
 		return fileCount, err
@@ -321,16 +330,21 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path st
 		log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
 		return []snyk.Issue{}
 	}
-	sc.trackResult(true, scanMetrics)
+	sc.trackResult(true, scanMetrics, path)
 	return issues
 }
 
 func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg string, scanMetrics *ScanMetrics) {
 	sc.errorReporter.CaptureErrorAndReportAsIssue(path, errors.Wrap(err, msg))
-	sc.trackResult(err == nil, scanMetrics)
+	sc.trackResult(err == nil, scanMetrics, path)
 }
 
-func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath string, filePaths []string) (b Bundle, bundleFiles map[string]BundleFile, err error) {
+func (sc *Scanner) createBundle(
+	ctx context.Context,
+	requestId string,
+	rootPath string,
+	filePaths []string,
+) (b Bundle, bundleFiles map[string]BundleFile, err error) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.createBundle")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 	b = Bundle{
@@ -339,6 +353,7 @@ func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath 
 		requestId:     requestId,
 		rootPath:      rootPath,
 		errorReporter: sc.errorReporter,
+		scanNotifier:  sc.scanNotifier,
 	}
 
 	fileHashes := make(map[string]string)
@@ -381,7 +396,10 @@ func (sc *Scanner) isSastEnabled() bool {
 		return false
 	} else {
 		if localCodeEngineEnabled {
-			notification.SendShowMessage(sglsp.Warning, "Snyk Code is configured to use a Local Code Engine instance. This setup is not yet supported.")
+			notification.SendShowMessage(
+				sglsp.Warning,
+				"Snyk Code is configured to use a Local Code Engine instance. This setup is not yet supported.",
+			)
 			return false
 		}
 		return true
@@ -393,7 +411,7 @@ type UploadStatus struct {
 	TotalFiles    int
 }
 
-func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics) {
+func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics, folderPath string) {
 	var result ux2.Result
 	if success {
 		result = ux2.Success
@@ -403,10 +421,17 @@ func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics) {
 
 	duration := time.Since(scanMetrics.lastScanStartTime)
 	scanMetrics.lastScanDurationInSeconds = float.ToFixed(duration.Seconds(), 2)
-	sc.analytics.AnalysisIsReady(ux2.AnalysisIsReadyProperties{
-		AnalysisType:      ux2.CodeSecurity,
-		Result:            result,
-		FileCount:         scanMetrics.lastScanFileCount,
-		DurationInSeconds: scanMetrics.lastScanDurationInSeconds,
-	})
+	sc.analytics.AnalysisIsReady(
+		ux2.AnalysisIsReadyProperties{
+			AnalysisType:      ux2.CodeSecurity,
+			Result:            result,
+			FileCount:         scanMetrics.lastScanFileCount,
+			DurationInSeconds: scanMetrics.lastScanDurationInSeconds,
+		},
+	)
+	if success {
+		sc.scanNotifier.SendSuccess(folderPath)
+	} else {
+		sc.scanNotifier.SendError(folderPath)
+	}
 }

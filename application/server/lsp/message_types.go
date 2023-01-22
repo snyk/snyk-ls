@@ -680,3 +680,21 @@ const Log MessageType = 4
 type SnykTrustedFoldersParams struct {
 	TrustedFolders []string `json:"trustedFolders"`
 }
+
+type ScanStatus string
+
+const (
+	InProgress  ScanStatus = "inProgress"
+	Success     ScanStatus = "success"
+	ErrorStatus ScanStatus = "error"
+)
+
+// SnykScanParams is the type for the $/snyk/scan message
+type SnykScanParams struct {
+	// Status can be either Initial, InProgress or Success
+	Status ScanStatus `json:"status"`
+	// Product under scan (Snyk Code, Snyk Open Source, etc...)
+	Product string `json:"product"`
+	// Results contain the scan results in the common issues model
+	//Results []snyk.Issue `json:"results"`
+}

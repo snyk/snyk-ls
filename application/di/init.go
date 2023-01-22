@@ -24,6 +24,7 @@ import (
 	"github.com/adrg/xdg"
 
 	"github.com/snyk/snyk-ls/application/config"
+	appNotification "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	errorreporting "github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -40,6 +41,7 @@ import (
 	sentry2 "github.com/snyk/snyk-ls/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/infrastructure/services"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/notification"
 )
 
 var snykApiClient snyk_api.SnykApiClient
@@ -90,7 +92,8 @@ func initInfrastructure() {
 			"/Library",
 			"C:\\Program Files",
 			"C:\\Program Files (x86)",
-		})
+		},
+	)
 
 	errorReporter = sentry2.NewSentryErrorReporter()
 	installer = install.NewInstaller(errorReporter)
@@ -104,7 +107,8 @@ func initInfrastructure() {
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
-	snykCodeScanner = code2.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics)
+	codeScanNotifier, _ := appNotification.NewScanNotifier(notification.NewNotifier(), "code")
+	snykCodeScanner = code2.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, codeScanNotifier)
 	cliInitializer = cli2.NewInitializer(errorReporter, installer)
 	authInitializer := auth2.NewInitializer(authenticationService, errorReporter, analytics)
 	scanInitializer = initialize.NewDelegatingInitializer(
@@ -135,14 +139,24 @@ func TestInit(t *testing.T) {
 	snykCodeClient = fakeClient
 	snykCli = cli2.NewExecutor(authenticationService, errorReporter, analytics)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
-	snykCodeScanner = code2.New(snykCodeBundleUploader, fakeApiClient, errorReporter, analytics)
+	codeScanNotifier, _ := appNotification.NewScanNotifier(notification.NewNotifier(), "code")
+	snykCodeScanner = code2.New(snykCodeBundleUploader, fakeApiClient, errorReporter, analytics, codeScanNotifier)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
-	scanner = snyk.NewDelegatingScanner(scanInitializer, instrumentor, analytics, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
+	scanner = snyk.NewDelegatingScanner(
+		scanInitializer,
+		instrumentor,
+		analytics,
+		snykCodeScanner,
+		infrastructureAsCodeScanner,
+		openSourceScanner,
+	)
 	hoverService = hover.NewDefaultService(analytics)
-	t.Cleanup(func() {
-		fakeClient.Clear()
-	})
+	t.Cleanup(
+		func() {
+			fakeClient.Clear()
+		},
+	)
 }
 
 /*

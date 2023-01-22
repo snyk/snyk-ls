@@ -281,10 +281,12 @@ func (iac *Scanner) trackResult(success bool) {
 	} else {
 		result = ux2.Error
 	}
-	iac.analytics.AnalysisIsReady(ux2.AnalysisIsReadyProperties{
-		AnalysisType: ux2.InfrastructureAsCode,
-		Result:       result,
-	})
+	iac.analytics.AnalysisIsReady(
+		ux2.AnalysisIsReadyProperties{
+			AnalysisType: ux2.InfrastructureAsCode,
+			Result:       result,
+		},
+	)
 }
 
 // todo this needs to be pushed up to presentation
@@ -301,8 +303,10 @@ func (iac *Scanner) getExtendedMessage(issue iacIssue) string {
 		resolve = string(markdown.ToHTML([]byte(resolve), nil, nil))
 	}
 
-	return fmt.Sprintf("\n### %s: %s\n\n**Issue:** %s\n\n**Impact:** %s\n\n**Resolve:** %s\n",
-		issue.PublicID, title, description, impact, resolve)
+	return fmt.Sprintf(
+		"\n### %s: %s\n\n**Issue:** %s\n\n**Impact:** %s\n\n**Resolve:** %s\n",
+		issue.PublicID, title, description, impact, resolve,
+	)
 
 }
 

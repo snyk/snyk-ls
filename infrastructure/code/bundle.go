@@ -41,6 +41,7 @@ type Bundle struct {
 	requestId     string
 	missingFiles  []string
 	rootPath      string
+	scanNotifier  snyk.ScanNotifier
 }
 
 func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {
@@ -57,7 +58,10 @@ func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) err
 	var err error
 	if uploadBatch.hasContent() {
 		b.BundleHash, b.missingFiles, err = b.SnykCode.ExtendBundle(ctx, b.BundleHash, uploadBatch.documents, removeFiles)
-		log.Debug().Str("requestId", b.requestId).Interface("missingFiles", b.missingFiles).Msg("extended bundle on backend")
+		log.Debug().Str("requestId", b.requestId).Interface(
+			"missingFiles",
+			b.missingFiles,
+		).Msg("extended bundle on backend")
 	}
 
 	return err
@@ -72,8 +76,10 @@ func (b *Bundle) FetchDiagnosticsData(
 }
 
 func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
+	logger := log.With().Str("method", "retrieveAnalysis").Logger()
+
 	if b.BundleHash == "" {
-		log.Warn().Str("method", "retrieveAnalysis").Str("rootPath", b.rootPath).Msg("bundle hash is empty")
+		logger.Warn().Str("rootPath", b.rootPath).Msg("bundle hash is empty")
 		return []snyk.Issue{}
 	}
 
@@ -99,8 +105,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
 		issues, status, err := b.SnykCode.RunAnalysis(s.Context(), analysisOptions)
 
 		if err != nil {
-			log.Error().Err(err).
-				Str("method", "retrieveAnalysis").
+			logger.Error().Err(err).
 				Str("requestId", b.requestId).
 				Int("fileCount", len(b.UploadBatches)).
 				Msg("error retrieving diagnostics...")
@@ -110,15 +115,17 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
 		}
 
 		if status.message == "COMPLETE" {
-			log.Trace().Str("method", "retrieveAnalysis").Str("requestId", b.requestId).
+			logger.Trace().Str("requestId", b.requestId).
 				Msg("sending diagnostics...")
 			p.End("Analysis complete.")
 			return issues
+		} else if status.message == "ANALYZING" {
+			logger.Trace().Msg("\"Analyzing\" message received, sending In-Progress message to client")
 		}
 
 		if time.Since(start) > config.CurrentConfig().SnykCodeAnalysisTimeout() {
 			err := errors.New("analysis call timed out")
-			log.Error().Err(err).Str("method", "retrieveAnalysis").Msg("timeout...")
+			log.Error().Err(err).Msg("timeout...")
 			b.errorReporter.CaptureErrorAndReportAsIssue(b.rootPath, err)
 			p.End("Snyk Code Analysis timed out")
 			return []snyk.Issue{}

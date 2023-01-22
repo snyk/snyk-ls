@@ -61,7 +61,7 @@ Right now the language server supports the following actions:
 - Authentication Notification
   - method: `$/snyk.hasAuthenticated`
   - payload:
-  ```json
+  ```json5
   {
     "token": "the snyk token"
   }
@@ -70,7 +70,7 @@ Right now the language server supports the following actions:
 - Cli Path Notification
   - method: `$/snyk.isAvailableCli`
   - payload:
-  ```json
+  ```json5
   {
     "cliPath": "/a/path/to/cli-executable"
   }
@@ -79,9 +79,22 @@ Right now the language server supports the following actions:
 - Trust Notification
   - method: `$/snyk.addTrustedFolders`
   - payload:
-  ```json
+  ```json5
   {
     "trustedFolders": ["/a/path/to/trust"]
+  }
+  ```
+
+- Scan Notification
+  - method: `$/snyk.scan`
+  - payload:
+  ```json5
+  {
+    "status": "inProgress", // possible values: "error", "inProgress", "success"
+    "product": "code", // possible values: "code", "oss", "iac"
+    "results" : [
+      // TBD
+    ]
   }
   ```
 
