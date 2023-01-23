@@ -132,7 +132,10 @@ func (s *SnykApiClientImpl) GetActiveUser() (activeUser ActiveUser, err *SnykApi
 	return ActiveUser(response), nil
 }
 
-func (s *SnykApiClientImpl) doCall(method string, path string, requestBody []byte) (responseBody []byte, err *SnykApiError) {
+func (s *SnykApiClientImpl) doCall(method string,
+	path string,
+	requestBody []byte,
+) (responseBody []byte, err *SnykApiError) {
 	host := config.CurrentConfig().SnykApi()
 	b := bytes.NewBuffer(requestBody)
 	req, requestErr := http.NewRequest(method, host+path, b)
@@ -148,7 +151,7 @@ func (s *SnykApiClientImpl) doCall(method string, path string, requestBody []byt
 	log.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
 	response, requestErr := s.client.Do(req)
 	if requestErr != nil {
-		return nil, NewSnykApiError(requestErr.Error(), response.StatusCode) // todo: check if status code is returned here
+		return nil, NewSnykApiError(requestErr.Error(), 0)
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -157,7 +160,8 @@ func (s *SnykApiClientImpl) doCall(method string, path string, requestBody []byt
 		}
 	}(response.Body)
 	responseBody, readErr := io.ReadAll(response.Body)
-	log.Trace().Str("response.Status", response.Status).Str("responseBody", string(responseBody)).Msg("RECEIVED FROM REMOTE")
+	log.Trace().Str("response.Status", response.Status).Str("responseBody",
+		string(responseBody)).Msg("RECEIVED FROM REMOTE")
 	if readErr != nil {
 		return nil, NewSnykApiError(err.Error(), 0)
 	}
