@@ -148,7 +148,7 @@ func (s *SnykApiClientImpl) doCall(method string, path string, requestBody []byt
 	log.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
 	response, requestErr := s.client.Do(req)
 	if requestErr != nil {
-		return nil, NewSnykApiError(requestErr.Error(), response.StatusCode) // todo: check if status code is returned here
+		return nil, NewSnykApiError(requestErr.Error(), 0) // todo: check if status code is returned here
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
