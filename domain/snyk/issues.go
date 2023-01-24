@@ -53,7 +53,8 @@ type Issue struct {
 	// CodeActions can contain workspace edits or commands to be executed
 	CodeActions []CodeAction
 	// Commands that can be executed
-	Commands []Command
+	Commands       []Command
+	AdditionalData any
 }
 
 func (i Issue) GetFilterableIssueType() product.FilterableIssueType {

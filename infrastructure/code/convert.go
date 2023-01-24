@@ -303,6 +303,7 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 				IssueDescriptionURL: ruleLink,
 				References:          rule.getReferences(),
 				Commands:            getCommands(dataflow),
+				AdditionalData:      nil,
 			}
 
 			if s.reportDiagnostic(d) {
