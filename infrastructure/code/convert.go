@@ -224,7 +224,7 @@ func (r *result) getMessage(rule rule) string {
 	if len(text) > maxLength {
 		text = text[:maxLength] + "..."
 	}
-	return fmt.Sprintf("%s (Snyk)", text)
+	return text
 }
 
 func (r *rule) getFixDescriptionsForRule(commitFixIndex int) string {
@@ -274,14 +274,19 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 			// convert the documentURI to a path according to our conversion
 			path := loc.PhysicalLocation.ArtifactLocation.URI
 
+			startLine := loc.PhysicalLocation.Region.StartLine - 1
+			endLine := loc.PhysicalLocation.Region.EndLine - 1
+			startCol := loc.PhysicalLocation.Region.StartColumn - 1
+			endCol := loc.PhysicalLocation.Region.EndColumn
+
 			myRange := snyk.Range{
 				Start: snyk.Position{
-					Line:      loc.PhysicalLocation.Region.StartLine - 1,
-					Character: loc.PhysicalLocation.Region.StartColumn - 1,
+					Line:      startLine,
+					Character: startCol,
 				},
 				End: snyk.Position{
-					Line:      loc.PhysicalLocation.Region.EndLine - 1,
-					Character: loc.PhysicalLocation.Region.EndColumn,
+					Line:      endLine,
+					Character: endCol,
 				},
 			}
 
@@ -290,7 +295,42 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 			dataflow := result.getCodeFlow()
 			formattedMessage := result.formattedMessage(rule)
 
+			exampleCommits := rule.getExampleCommits()
+			exampleFixes := make([]snyk.ExampleCommitFix, 0, len(exampleCommits))
+			for _, commit := range exampleCommits {
+				commitURL := commit.fix.CommitURL
+				commitFixLines := make([]snyk.CommitChangeLine, 0, len(commit.fix.Lines))
+				for _, line := range commit.fix.Lines {
+					commitFixLines = append(commitFixLines, snyk.CommitChangeLine{
+						Line:       line.Line,
+						LineNumber: line.LineNumber,
+						LineChange: line.LineChange})
+				}
+
+				exampleFixes = append(exampleFixes, snyk.ExampleCommitFix{
+					CommitURL: commitURL,
+					Lines:     commitFixLines,
+				})
+			}
+
 			issueType := rule.getCodeIssueType()
+			isSecurityType := true
+			if issueType == snyk.CodeSecurityVulnerability {
+				isSecurityType = false
+			}
+
+			additionalData := snyk.CodeIssueData{
+				Rule:               rule.Name,
+				RepoDatasetSize:    rule.Properties.RepoDatasetSize,
+				ExampleCommitFixes: exampleFixes,
+				CWE:                rule.Properties.Cwe,
+				Text:               rule.Help.Markdown,
+				Markers:            []snyk.Marker{}, // TODO: Clarify how to pull markers from the new API with Code Team
+				Cols:               [2]int{startCol, endCol},
+				Rows:               [2]int{startLine, endLine},
+				IsSecurityType:     isSecurityType,
+			}
+
 			d := snyk.Issue{
 				ID:                  result.RuleID,
 				Range:               myRange,
@@ -303,7 +343,7 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 				IssueDescriptionURL: ruleLink,
 				References:          rule.getReferences(),
 				Commands:            getCommands(dataflow),
-				AdditionalData:      nil,
+				AdditionalData:      additionalData,
 			}
 
 			if s.reportDiagnostic(d) {
