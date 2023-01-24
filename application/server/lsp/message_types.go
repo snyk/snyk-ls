@@ -695,6 +695,8 @@ type SnykScanParams struct {
 	Status ScanStatus `json:"status"`
 	// Product under scan (Snyk Code, Snyk Open Source, etc...)
 	Product string `json:"product"`
+	// FolderPath is the root-folder of the current scan
+	FolderPath string `json:"folderPath"`
 	// Results contain the scan results in the common issues model
 	//Results []snyk.Issue `json:"results"`
 }

@@ -55,7 +55,10 @@ func Test_SendMessage(t *testing.T) {
 
 			for _, msg := range mockNotifier.SentMessages() {
 				scanMessage, ok := msg.(lsp2.SnykScanParams)
-				if ok && scanMessage.Status == test.expectedStatus && scanMessage.Product == expectedProduct {
+				if ok &&
+					scanMessage.Status == test.expectedStatus &&
+					scanMessage.Product == expectedProduct &&
+					scanMessage.FolderPath == folderPath {
 					return
 				}
 			}

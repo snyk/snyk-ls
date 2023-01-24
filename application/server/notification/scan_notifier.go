@@ -29,8 +29,9 @@ func NewScanNotifier(notifier notification.Notifier, productName string) (snyk.S
 func (n *scanNotifier) SendError(folderPath string) {
 	n.notifier.Send(
 		lsp.SnykScanParams{
-			Status:  lsp.ErrorStatus,
-			Product: n.productName,
+			Status:     lsp.ErrorStatus,
+			Product:    n.productName,
+			FolderPath: folderPath,
 		},
 	)
 }
@@ -38,8 +39,9 @@ func (n *scanNotifier) SendError(folderPath string) {
 func (n *scanNotifier) SendSuccess(folderPath string) {
 	n.notifier.Send(
 		lsp.SnykScanParams{
-			Status:  lsp.Success,
-			Product: n.productName,
+			Status:     lsp.Success,
+			Product:    n.productName,
+			FolderPath: folderPath,
 			//Results: results,
 		},
 	)
@@ -48,8 +50,9 @@ func (n *scanNotifier) SendSuccess(folderPath string) {
 func (n *scanNotifier) SendInProgress(folderPath string) {
 	n.notifier.Send(
 		lsp.SnykScanParams{
-			Status:  lsp.InProgress,
-			Product: n.productName,
+			Status:     lsp.InProgress,
+			Product:    n.productName,
+			FolderPath: folderPath,
 			//Results: results,
 		},
 	)
