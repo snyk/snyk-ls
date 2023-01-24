@@ -34,7 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 )
 
-func ExecuteCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
+func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.ExecuteCommandParams) (any, error) {
 		// The context provided by the JSON-RPC server is cancelled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations

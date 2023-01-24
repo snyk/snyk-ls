@@ -34,7 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 )
 
-func WorkspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
+func workspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeConfigurationParams) (bool, error) {
 		log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("RECEIVED")
 		defer log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("DONE")
