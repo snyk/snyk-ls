@@ -370,6 +370,7 @@ func (f *Folder) sendScanResults(issuesByFile map[string][]snyk.Issue) {
 				Id:       issue.ID,
 				Title:    "Title",
 				Severity: issue.Severity.String(),
+				FilePath: issue.AffectedFilePath,
 				AdditionalData: lsp.CodeIssueData{
 					Message:            issue.Message,
 					LeadURL:            "",
