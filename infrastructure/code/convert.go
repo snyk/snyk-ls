@@ -315,7 +315,7 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 
 			issueType := rule.getCodeIssueType()
 			isSecurityType := true
-			if issueType == snyk.CodeSecurityVulnerability {
+			if issueType != snyk.CodeSecurityVulnerability {
 				isSecurityType = false
 			}
 
