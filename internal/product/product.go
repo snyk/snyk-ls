@@ -32,3 +32,16 @@ const (
 	FilterableIssueTypeCodeSecurity         FilterableIssueType = "Code Security"
 	FilterableIssueTypeInfrastructureAsCode FilterableIssueType = "Infrastructure As Code"
 )
+
+func ToProductCodename(product Product) string {
+	switch product {
+	case ProductOpenSource:
+		return "oss"
+	case ProductCode:
+		return "code"
+	case ProductInfrastructureAsCode:
+		return "iac"
+	default:
+		return "unknown"
+	}
+}
