@@ -343,8 +343,8 @@ func (f *Folder) IsTrusted() bool {
 }
 
 func (f *Folder) sendScanResults(issuesByFile map[string][]snyk.Issue) {
+	var codeIssues []lsp.ScanIssue
 	for _, issues := range issuesByFile {
-		codeIssues := make([]lsp.ScanIssue, 0, len(issues))
 		for _, issue := range issues {
 			additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 			if !ok {
@@ -387,13 +387,12 @@ func (f *Folder) sendScanResults(issuesByFile map[string][]snyk.Issue) {
 				},
 			})
 		}
-
-		// TODO Make this generic
-		notification.Send(lsp.SnykScanParams{
-			Status:     lsp.Success,
-			Product:    "code",
-			FolderPath: f.Path(),
-			Results:    codeIssues,
-		})
 	}
+	// TODO Make this generic
+	notification.Send(lsp.SnykScanParams{
+		Status:     lsp.Success,
+		Product:    "code",
+		FolderPath: f.Path(),
+		Results:    codeIssues,
+	})
 }
