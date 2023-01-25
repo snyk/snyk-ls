@@ -225,6 +225,7 @@ func isVisibleSeverity(issue snyk.Issue) bool {
 func (f *Folder) publishDiagnostics(issuesByFile map[string][]snyk.Issue) {
 	f.sendDiagnostics(issuesByFile)
 	f.sendHovers(issuesByFile)
+	f.sendScanResults(issuesByFile)
 }
 
 func (f *Folder) createDedupMap() (dedupMap map[string]bool) {
@@ -252,7 +253,8 @@ func (f *Folder) sendDiagnostics(issuesByFile map[string][]snyk.Issue) {
 }
 
 func (f *Folder) sendDiagnosticsForFile(path string, issues []snyk.Issue) {
-	log.Debug().Str("method", "sendDiagnosticsForFile").Str("affectedFilePath", path).Int("issueCount", len(issues)).Send()
+	log.Debug().Str("method", "sendDiagnosticsForFile").Str("affectedFilePath", path).Int("issueCount",
+		len(issues)).Send()
 	notification.Send(lsp.PublishDiagnosticsParams{
 		URI:         uri.PathToUri(path),
 		Diagnostics: converter.ToDiagnostics(issues),
@@ -338,4 +340,60 @@ func (f *Folder) IsTrusted() bool {
 		}
 	}
 	return false
+}
+
+func (f *Folder) sendScanResults(issuesByFile map[string][]snyk.Issue) {
+	for _, issues := range issuesByFile {
+		codeIssues := make([]lsp.ScanIssue, 0, len(issues))
+		for _, issue := range issues {
+			additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+			if !ok {
+				continue // skip non-code issues
+			}
+
+			exampleCommitFixes := make([]lsp.ExampleCommitFix, 0, len(additionalData.ExampleCommitFixes))
+			for i := range additionalData.ExampleCommitFixes {
+				lines := make([]lsp.CommitChangeLine, 0, len(additionalData.ExampleCommitFixes[i].Lines))
+				for j := range additionalData.ExampleCommitFixes[i].Lines {
+					lines[j] = lsp.CommitChangeLine{
+						Line:       additionalData.ExampleCommitFixes[i].Lines[j].Line,
+						LineNumber: additionalData.ExampleCommitFixes[i].Lines[j].LineNumber,
+						LineChange: additionalData.ExampleCommitFixes[i].Lines[j].LineChange,
+					}
+				}
+				exampleCommitFixes[i] = lsp.ExampleCommitFix{
+					CommitURL: additionalData.ExampleCommitFixes[i].CommitURL,
+					Lines:     lines,
+				}
+			}
+			codeIssues = append(codeIssues, lsp.ScanIssue{
+				Id:       issue.ID,
+				Title:    "Title",
+				Severity: issue.Severity.String(),
+				AdditionalData: lsp.CodeIssueData{
+					Message:            issue.Message,
+					LeadURL:            "",
+					Rule:               additionalData.Rule,
+					RepoDatasetSize:    additionalData.RepoDatasetSize,
+					ExampleCommitFixes: exampleCommitFixes,
+					CWE:                additionalData.CWE,
+					IsSecurityType:     additionalData.IsSecurityType,
+					Text:               additionalData.Text,
+
+					// TODO - fill these with real data
+					Markers: nil,
+					Cols:    lsp.Point{},
+					Rows:    lsp.Point{},
+				},
+			})
+		}
+
+		// TODO Make this generic
+		notification.Send(lsp.SnykScanParams{
+			Status:     lsp.Success,
+			Product:    "code",
+			FolderPath: f.Path(),
+			Results:    nil,
+		})
+	}
 }
