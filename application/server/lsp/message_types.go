@@ -698,14 +698,14 @@ type SnykScanParams struct {
 	// FolderPath is the root-folder of the current scan
 	FolderPath string `json:"folderPath"`
 	// Results contain the scan results in the common issues model
-	//Results []snyk.Issue `json:"results"`
+	Results []ScanIssue `json:"results"`
 }
 
-type ScanIssue[T any] struct {
+type ScanIssue struct { // TODO - convert this to a generic type
 	Id             string `json:"id"`
 	Title          string `json:"title"`
 	Severity       string `json:"severity"`
-	AdditionalData T
+	AdditionalData any
 }
 
 type CodeIssueData struct {
