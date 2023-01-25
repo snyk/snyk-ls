@@ -149,7 +149,6 @@ type rule struct {
 	DefaultConfiguration defaultConfiguration `json:"defaultConfiguration"`
 	Help                 help                 `json:"help"`
 	Properties           ruleProperties       `json:"properties"`
-	Categories           []string             `json:"categories"`
 }
 
 type driver struct {

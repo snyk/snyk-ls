@@ -279,6 +279,8 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 	if err != nil {
 		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
 		return nil, failed, err
+	} else {
+		log.Debug().Str("responseBody", string(responseBody)).Msg("Received response")
 	}
 
 	log.Debug().Str("method", method).Str("requestId", requestId).Float64("progress",
