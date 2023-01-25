@@ -705,6 +705,7 @@ type ScanIssue struct { // TODO - convert this to a generic type
 	Id             string `json:"id"`
 	Title          string `json:"title"`
 	Severity       string `json:"severity"`
+	FilePath       string `json:"filePath"`
 	AdditionalData any
 }
 
