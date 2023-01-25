@@ -128,7 +128,9 @@ func (f *Folder) scan(ctx context.Context, path string) {
 	}
 	issuesSlice := f.DocumentDiagnosticsFromCache(path)
 	if issuesSlice != nil {
-		log.Info().Str("method", method).Msgf("Cached results found: Skipping scan for %s", path)
+		log.Info().Str("method", method).
+			Int("issueSliceLength", len(issuesSlice)).
+			Msgf("Cached results found: Skipping scan for %s", path)
 		f.processResults(issuesSlice)
 		return
 	}
