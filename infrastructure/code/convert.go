@@ -54,11 +54,12 @@ func (r *rule) getReferences() (references []snyk.Reference) {
 func (r *rule) getCodeIssueType() snyk.Type {
 	const defaultType = snyk.CodeSecurityVulnerability
 
-	if len(r.Categories) != 1 {
+	categories := r.Properties.Categories
+	if len(categories) != 1 {
 		return defaultType
 	}
 
-	switch strings.ToLower(r.Categories[0]) {
+	switch strings.ToLower(categories[0]) {
 	case "defect":
 		return snyk.CodeQualityIssue
 	case "security":
