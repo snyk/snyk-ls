@@ -12,16 +12,18 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
+type sendMessageTestCase struct {
+	name           string
+	act            func(scanNotifier snyk.ScanNotifier)
+	expectedStatus lsp2.ScanStatus
+}
+
 func Test_SendMessage(t *testing.T) {
 	testutil.UnitTest(t)
 
-	folderPath := "/test/folderPath"
+	const folderPath = "/test/folderPath"
 
-	tests := []struct {
-		name           string
-		act            func(scanNotifier snyk.ScanNotifier)
-		expectedStatus lsp2.ScanStatus
-	}{
+	tests := []sendMessageTestCase{
 		{
 			name: "SendInProgressMessage",
 			act: func(scanNotifier snyk.ScanNotifier) {
@@ -51,14 +53,12 @@ func Test_SendMessage(t *testing.T) {
 			mockNotifier := notification.NewMockNotifier()
 			scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, expectedProduct)
 
+			// Act - run the test
 			test.act(scanNotifier)
 
+			// Assert - search through all the messages for the expected message
 			for _, msg := range mockNotifier.SentMessages() {
-				scanMessage, ok := msg.(lsp2.SnykScanParams)
-				if ok &&
-					scanMessage.Status == test.expectedStatus &&
-					scanMessage.Product == expectedProduct &&
-					scanMessage.FolderPath == folderPath {
+				if containsMatchingMessage(t, msg, test, expectedProduct, folderPath) {
 					return
 				}
 			}
@@ -79,4 +79,21 @@ func Test_NewScanNotifier_NilNotifier_Errors(t *testing.T) {
 	scanNotifier, err := notification2.NewScanNotifier(nil, "code")
 	assert.Error(t, err)
 	assert.Nil(t, scanNotifier)
+}
+
+func containsMatchingMessage(t *testing.T,
+	msg any,
+	testCase sendMessageTestCase,
+	expectedProduct string,
+	folderPath string,
+) bool {
+	t.Helper()
+	scanMessage, ok := msg.(lsp2.SnykScanParams)
+	if ok &&
+		scanMessage.Status == testCase.expectedStatus &&
+		scanMessage.Product == expectedProduct &&
+		scanMessage.FolderPath == folderPath {
+		return true
+	}
+	return false
 }
