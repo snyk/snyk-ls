@@ -697,8 +697,8 @@ type SnykScanParams struct {
 	Product string `json:"product"`
 	// FolderPath is the root-folder of the current scan
 	FolderPath string `json:"folderPath"`
-	// Results contain the scan results in the common issues model
-	Results []ScanIssue `json:"results"`
+	// Issues contain the scan results in the common issues model
+	Issues []ScanIssue `json:"issues"`
 }
 
 type ScanIssue struct { // TODO - convert this to a generic type

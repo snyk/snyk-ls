@@ -393,6 +393,6 @@ func (f *Folder) sendScanResults(issuesByFile map[string][]snyk.Issue) {
 		Status:     lsp.Success,
 		Product:    "code",
 		FolderPath: f.Path(),
-		Results:    codeIssues,
+		Issues:     codeIssues,
 	})
 }

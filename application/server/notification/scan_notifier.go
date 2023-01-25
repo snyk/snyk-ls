@@ -42,7 +42,7 @@ func (n *scanNotifier) SendSuccess(folderPath string) {
 			Status:     lsp.Success,
 			Product:    n.productName,
 			FolderPath: folderPath,
-			//Results: results,
+			//Issues: results,
 		},
 	)
 }
@@ -53,7 +53,7 @@ func (n *scanNotifier) SendInProgress(folderPath string) {
 			Status:     lsp.InProgress,
 			Product:    n.productName,
 			FolderPath: folderPath,
-			//Results: results,
+			//Issues: results,
 		},
 	)
 }
