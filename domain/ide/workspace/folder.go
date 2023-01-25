@@ -373,18 +373,18 @@ func (f *Folder) sendScanResults(issuesByFile map[string][]snyk.Issue) {
 				FilePath: issue.AffectedFilePath,
 				AdditionalData: lsp.CodeIssueData{
 					Message:            issue.Message,
-					LeadURL:            "",
 					Rule:               additionalData.Rule,
 					RepoDatasetSize:    additionalData.RepoDatasetSize,
 					ExampleCommitFixes: exampleCommitFixes,
 					CWE:                additionalData.CWE,
 					IsSecurityType:     additionalData.IsSecurityType,
 					Text:               additionalData.Text,
+					Cols:               additionalData.Cols,
+					Rows:               additionalData.Rows,
 
 					// TODO - fill these with real data
 					Markers: nil,
-					Cols:    lsp.Point{0, 10},
-					Rows:    lsp.Point{0, 0},
+					LeadURL: "",
 				},
 			})
 		}
