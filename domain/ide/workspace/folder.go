@@ -383,8 +383,8 @@ func (f *Folder) sendScanResults(issuesByFile map[string][]snyk.Issue) {
 
 					// TODO - fill these with real data
 					Markers: nil,
-					Cols:    lsp.Point{},
-					Rows:    lsp.Point{},
+					Cols:    lsp.Point{0, 10},
+					Rows:    lsp.Point{0, 0},
 				},
 			})
 		}
