@@ -29,7 +29,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	performance2 "github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -301,11 +300,6 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 
 	issues := response.toIssues()
 	return issues, status, err
-}
-
-type SnykCodeIssue struct {
-	Issue         snyk.Issue
-	CodeIssueData lsp.CodeIssueData
 }
 
 func (s *SnykCodeHTTPClient) analysisRequestBody(options *AnalysisOptions) ([]byte, error) {
