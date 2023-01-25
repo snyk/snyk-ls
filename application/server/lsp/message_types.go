@@ -706,7 +706,7 @@ type ScanIssue struct { // TODO - convert this to a generic type
 	Title          string `json:"title"`
 	Severity       string `json:"severity"`
 	FilePath       string `json:"filePath"`
-	AdditionalData any
+	AdditionalData any    `json:"additionalData"`
 }
 
 type CodeIssueData struct {
