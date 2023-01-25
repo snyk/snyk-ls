@@ -80,7 +80,12 @@ type Scanner struct {
 	scanNotifier    snyk.ScanNotifier
 }
 
-func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter error_reporting.ErrorReporter, analytics ux2.Analytics, notifier snyk.ScanNotifier) *Scanner {
+func New(bundleUploader *BundleUploader,
+	apiClient snyk_api.SnykApiClient,
+	reporter error_reporting.ErrorReporter,
+	analytics ux2.Analytics,
+	notifier snyk.ScanNotifier,
+) *Scanner {
 	sc := &Scanner{
 		BundleUploader: bundleUploader,
 		SnykApiClient:  apiClient,
@@ -278,7 +283,11 @@ func (sc *Scanner) newMetrics(fileCount int, scanStartTime time.Time) *ScanMetri
 	}
 }
 
-func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path string, scanMetrics *ScanMetrics) (issues []snyk.Issue) {
+func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
+	files []string,
+	path string,
+	scanMetrics *ScanMetrics,
+) (issues []snyk.Issue) {
 	if ctx.Err() != nil {
 		log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
 		return issues
@@ -430,7 +439,7 @@ func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics, folderPat
 		},
 	)
 	if success {
-		sc.scanNotifier.SendSuccess(folderPath)
+		//sc.scanNotifier.SendSuccess(folderPath)
 	} else {
 		sc.scanNotifier.SendError(folderPath)
 	}
