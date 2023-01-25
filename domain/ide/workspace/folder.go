@@ -355,16 +355,16 @@ func (f *Folder) sendScanResults(issuesByFile map[string][]snyk.Issue) {
 			for i := range additionalData.ExampleCommitFixes {
 				lines := make([]lsp.CommitChangeLine, 0, len(additionalData.ExampleCommitFixes[i].Lines))
 				for j := range additionalData.ExampleCommitFixes[i].Lines {
-					lines[j] = lsp.CommitChangeLine{
+					lines = append(lines, lsp.CommitChangeLine{
 						Line:       additionalData.ExampleCommitFixes[i].Lines[j].Line,
 						LineNumber: additionalData.ExampleCommitFixes[i].Lines[j].LineNumber,
 						LineChange: additionalData.ExampleCommitFixes[i].Lines[j].LineChange,
-					}
+					})
 				}
-				exampleCommitFixes[i] = lsp.ExampleCommitFix{
+				exampleCommitFixes = append(exampleCommitFixes, lsp.ExampleCommitFix{
 					CommitURL: additionalData.ExampleCommitFixes[i].CommitURL,
 					Lines:     lines,
-				}
+				})
 			}
 			codeIssues = append(codeIssues, lsp.ScanIssue{
 				Id:       issue.ID,
@@ -393,7 +393,7 @@ func (f *Folder) sendScanResults(issuesByFile map[string][]snyk.Issue) {
 			Status:     lsp.Success,
 			Product:    "code",
 			FolderPath: f.Path(),
-			Results:    nil,
+			Results:    codeIssues,
 		})
 	}
 }
