@@ -134,6 +134,21 @@ const (
 	Low
 )
 
+func (s Severity) String() string {
+	switch s {
+	case Critical:
+		return "critical"
+	case High:
+		return "high"
+	case Medium:
+		return "medium"
+	case Low:
+		return "low"
+	default:
+		return "unknown"
+	}
+}
+
 const (
 	PackageHealth Type = iota
 	CodeQualityIssue
