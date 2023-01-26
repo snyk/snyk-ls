@@ -58,8 +58,6 @@ type Issue struct {
 }
 
 type CodeIssueData struct {
-	// Message            string             `json:"message"` // is defined in the base Issue struct
-	// LeadURL            string             `json:"leadURL,omitempty"` //TODO: is it provided?
 	Rule               string             `json:"rule"`
 	RepoDatasetSize    int                `json:"repoDatasetSize"`
 	ExampleCommitFixes []ExampleCommitFix `json:"exampleCommitFixes"`
