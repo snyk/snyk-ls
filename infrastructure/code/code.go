@@ -124,7 +124,7 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk
 	if wasFound && previousScanStatus.isRunning {
 		if previousScanStatus.isPending {
 			sc.scanStatusMutex.Unlock()
-			return []snyk.Issue{}
+			return nil // Returning an empty slice implies that no vulnerabilities were found
 		}
 
 		waitForPreviousScan = true
