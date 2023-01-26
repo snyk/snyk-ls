@@ -127,6 +127,12 @@ func (f *Folder) scan(ctx context.Context, path string) {
 		return
 	}
 	issuesSlice := f.DocumentDiagnosticsFromCache(path)
+	notification.Send(lsp.SnykScanParams{
+		Status:     lsp.InProgress,
+		Product:    "code",
+		FolderPath: f.Path(),
+		Issues:     nil,
+	})
 	if issuesSlice != nil {
 		log.Info().Str("method", method).
 			Int("issueSliceLength", len(issuesSlice)).

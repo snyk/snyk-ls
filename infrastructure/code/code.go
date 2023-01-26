@@ -150,7 +150,7 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk
 	}()
 
 	// Start the scan
-	sc.scanNotifier.SendInProgress(folderPath)
+	//sc.scanNotifier.SendInProgress(folderPath)
 	startTime := time.Now()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
