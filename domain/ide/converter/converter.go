@@ -174,7 +174,7 @@ func ToHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
 
 		hovers = append(hovers, hover.Hover[hover.Context]{
 			Id:      i.ID,
-			Range:   ToRange(i.Range),
+			Range:   i.Range,
 			Message: message,
 			Context: i,
 		})
