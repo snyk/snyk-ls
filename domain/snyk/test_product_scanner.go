@@ -43,7 +43,7 @@ type TestProductScanner struct {
 	scanDuration time.Duration
 }
 
-func (t *TestProductScanner) Scan(ctx context.Context, _ string, _ string) (issues []Issue) {
+func (t *TestProductScanner) Scan(ctx context.Context, _ string, _ string) (issues []Issue, err error) {
 	log.Debug().Msg("Test product scanner running scan")
 	defer log.Debug().Msg("Test product scanner scan finished")
 
@@ -52,13 +52,13 @@ func (t *TestProductScanner) Scan(ctx context.Context, _ string, _ string) (issu
 	// This can happen if scanDuration is 0 and ctx.Done()
 	if ctx.Err() != nil {
 		log.Debug().Msg("Received cancellation signal - cancelling scan")
-		return issues
+		return issues, nil
 	}
 
 	select {
 	case <-ctx.Done():
 		log.Debug().Msg("Received cancellation signal - cancelling scan")
-		return issues
+		return issues, nil
 	case <-time.After(t.scanDuration):
 	}
 
@@ -66,7 +66,7 @@ func (t *TestProductScanner) Scan(ctx context.Context, _ string, _ string) (issu
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	t.scans++
-	return []Issue{}
+	return []Issue{}, nil
 }
 
 func (t *TestProductScanner) Scans() int {

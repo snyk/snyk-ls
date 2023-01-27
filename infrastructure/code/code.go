@@ -110,7 +110,7 @@ func (sc *Scanner) SupportedCommands() []snyk.CommandName {
 	return []snyk.CommandName{snyk.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk.Issue {
+func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) (issues []snyk.Issue, err error) {
 	// When starting a scan for a folderPath that's already scanned, the new scan will wait for the previous scan
 	// to finish before starting.
 	// When there's already a scan waiting, the function returns immediately with empty results.
@@ -122,7 +122,7 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk
 	if wasFound && previousScanStatus.isRunning {
 		if previousScanStatus.isPending {
 			sc.scanStatusMutex.Unlock()
-			return nil // Returning an empty slice implies that no vulnerabilities were found
+			return []snyk.Issue{}, nil // Returning an empty slice implies that no vulnerabilities were found
 		}
 
 		waitForPreviousScan = true
@@ -164,7 +164,7 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk
 
 	metrics := sc.newMetrics(len(files), startTime)
 	results := sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics)
-	return results
+	return results, nil
 }
 
 func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {

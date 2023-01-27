@@ -55,7 +55,7 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, executor)
-	scanner.Scan(context.Background(), path, "")
+	_, _ = scanner.Scan(context.Background(), path, "")
 
 	assert.Len(t, analytics.GetAnalytics(), 1)
 	assert.Equal(t, ux2.AnalysisIsReadyProperties{
@@ -110,7 +110,7 @@ func Test_ContextCanceled_Scan_DoesNotScan(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	scanner.Scan(ctx, "", "")
+	_, _ = scanner.Scan(ctx, "", "")
 
 	assert.False(t, cliMock.WasExecuted())
 }
@@ -229,7 +229,7 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 
 		wg.Add(1)
 		go func() {
-			scanner.Scan(context.Background(), path, folderPath)
+			_, _ = scanner.Scan(context.Background(), path, folderPath)
 			wg.Done()
 		}()
 	}
@@ -278,7 +278,7 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
 	// Act
-	scanner.Scan(context.Background(), path, "")
+	_, _ = scanner.Scan(context.Background(), path, "")
 
 	// Assert
 	assert.Eventually(t, func() bool {

@@ -54,7 +54,7 @@ func (s *TestScanner) Scan(
 ) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	processResults(product.ProductOpenSource, s.Issues)
+	processResults(product.ProductOpenSource, s.Issues, nil)
 	s.calls++
 }
 

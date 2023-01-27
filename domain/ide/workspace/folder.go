@@ -135,7 +135,7 @@ func (f *Folder) scan(ctx context.Context, path string) {
 		log.Info().Str("method", method).
 			Int("issueSliceLength", len(issuesSlice)).
 			Msgf("Cached results found: Skipping scan for %s", path)
-		f.processResults("unknown", issuesSlice) // todo: see if we can avoid this call or avoid passing unknown
+		f.processResults("", issuesSlice, nil) // todo: see if we can avoid this call or avoid passing unknown
 		return
 	}
 
@@ -152,7 +152,13 @@ func (f *Folder) DocumentDiagnosticsFromCache(file string) []snyk.Issue {
 }
 
 // TODO: 2: differentiate between success and error
-func (f *Folder) processResults(product product.Product, issues []snyk.Issue) {
+func (f *Folder) processResults(product product.Product, issues []snyk.Issue, err error) {
+	if err != nil {
+		f.scanNotifier.SendError(product, f.path)
+		// TODO: perhaps move error capture and reporting call here
+		// TODO: do we want to process results below, or return here?
+	}
+
 	dedupMap := f.createDedupMap()
 
 	// TODO: perform issue diffing (current <-> newly reported)

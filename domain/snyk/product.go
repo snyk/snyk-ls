@@ -35,7 +35,7 @@ type ProductScanner interface {
 		ctx context.Context,
 		path string,
 		folderPath string,
-	) (issues []Issue)
+	) (issues []Issue, err error)
 
 	IsEnabled() bool
 	Product() product.Product

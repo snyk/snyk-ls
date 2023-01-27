@@ -119,11 +119,11 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				defer waitGroup.Done()
 				span := sc.instrumentor.NewTransaction(context.WithValue(ctx, s.Product(), s), string(s.Product()), method)
 				defer sc.instrumentor.Finish(span)
-				log.Debug().Msgf("Scanning %s with %T: STARTED", path, s)
+				log.Info().Msgf("Scanning %s with %T: STARTED", path, s)
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
-				foundIssues := s.Scan(span.Context(), path, folderPath)
-				processResults(s.Product(), foundIssues)
-				log.Debug().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
+				foundIssues, err := s.Scan(span.Context(), path, folderPath)
+				processResults(s.Product(), foundIssues, err)
+				log.Info().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
 			}(scanner)
 		} else {
 			log.Debug().Msgf("Skipping scan with %T because it is not enabled", scanner)
