@@ -131,7 +131,6 @@ func (f *Folder) scan(ctx context.Context, path string) {
 		return
 	}
 	issuesSlice := f.DocumentDiagnosticsFromCache(path)
-	f.scanNotifier.SendInProgress(f.Path())
 	if issuesSlice != nil {
 		log.Info().Str("method", method).
 			Int("issueSliceLength", len(issuesSlice)).
@@ -140,6 +139,7 @@ func (f *Folder) scan(ctx context.Context, path string) {
 		return
 	}
 
+	f.scanNotifier.SendInProgress(f.Path())
 	f.scanner.Scan(ctx, path, f.processResults, f.path)
 }
 
