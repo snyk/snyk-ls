@@ -53,15 +53,17 @@ type Folder struct {
 	scanner                 snyk.Scanner
 	hoverService            hover.Service
 	mutex                   sync.Mutex
+	scanNotifier            snyk.ScanNotifier
 }
 
-func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hover.Service) *Folder {
+func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hover.Service, notifier snyk.ScanNotifier) *Folder {
 	folder := Folder{
 		scanner:      scanner,
 		path:         strings.TrimSuffix(path, "/"),
 		name:         name,
 		status:       Unscanned,
 		hoverService: hoverService,
+		scanNotifier: notifier,
 	}
 	folder.documentDiagnosticCache = xsync.NewMapOf[[]snyk.Issue]()
 	return &folder
@@ -129,12 +131,7 @@ func (f *Folder) scan(ctx context.Context, path string) {
 		return
 	}
 	issuesSlice := f.DocumentDiagnosticsFromCache(path)
-	notification.Send(lsp.SnykScanParams{
-		Status:     lsp.InProgress,
-		Product:    "code",
-		FolderPath: f.Path(),
-		Issues:     nil,
-	})
+	f.scanNotifier.SendInProgress(f.Path())
 	if issuesSlice != nil {
 		log.Info().Str("method", method).
 			Int("issueSliceLength", len(issuesSlice)).
@@ -354,63 +351,14 @@ func (f *Folder) IsTrusted() bool {
 }
 
 func (f *Folder) sendScanResults(processedProduct product.Product, issuesByFile map[string][]snyk.Issue) {
-	if processedProduct != product.ProductCode && processedProduct != "unknown" {
-		return
-	}
-
-	var codeIssues []lsp.ScanIssue
+	var productIssues []snyk.Issue
 	for _, issues := range issuesByFile {
 		for _, issue := range issues {
-			additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
-			if !ok {
-				continue // skip non-code issues
+			if issue.Product == processedProduct {
+				productIssues = append(productIssues, issue)
 			}
-
-			exampleCommitFixes := make([]lsp.ExampleCommitFix, 0, len(additionalData.ExampleCommitFixes))
-			for i := range additionalData.ExampleCommitFixes {
-				lines := make([]lsp.CommitChangeLine, 0, len(additionalData.ExampleCommitFixes[i].Lines))
-				for j := range additionalData.ExampleCommitFixes[i].Lines {
-					lines = append(lines, lsp.CommitChangeLine{
-						Line:       additionalData.ExampleCommitFixes[i].Lines[j].Line,
-						LineNumber: additionalData.ExampleCommitFixes[i].Lines[j].LineNumber,
-						LineChange: additionalData.ExampleCommitFixes[i].Lines[j].LineChange,
-					})
-				}
-				exampleCommitFixes = append(exampleCommitFixes, lsp.ExampleCommitFix{
-					CommitURL: additionalData.ExampleCommitFixes[i].CommitURL,
-					Lines:     lines,
-				})
-			}
-			codeIssues = append(codeIssues, lsp.ScanIssue{
-				Id:       issue.ID,
-				Title:    "Title",
-				Severity: issue.Severity.String(),
-				FilePath: issue.AffectedFilePath,
-				AdditionalData: lsp.CodeIssueData{
-					Message:            issue.Message,
-					Rule:               additionalData.Rule,
-					RepoDatasetSize:    additionalData.RepoDatasetSize,
-					ExampleCommitFixes: exampleCommitFixes,
-					CWE:                additionalData.CWE,
-					IsSecurityType:     additionalData.IsSecurityType,
-					Text:               additionalData.Text,
-					Cols:               additionalData.Cols,
-					Rows:               additionalData.Rows,
-
-					// TODO - fill these with real data
-					Markers: nil,
-					LeadURL: "",
-				},
-			})
 		}
 	}
 
-	// TODO Make this generic
-	log.Warn().Msgf("LS: Sending %w folder results", f.Path())
-	notification.Send(lsp.SnykScanParams{
-		Status:     lsp.Success,
-		Product:    product.ToProductCodename(processedProduct),
-		FolderPath: f.Path(),
-		Issues:     codeIssues,
-	})
+	f.scanNotifier.SendSuccess(processedProduct, f.Path(), productIssues)
 }

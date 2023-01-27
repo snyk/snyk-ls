@@ -43,16 +43,18 @@ type Workspace struct {
 	instrumentor        performance.Instrumentor
 	scanner             snyk.Scanner
 	hoverService        hover.Service
+	scanNotifier        snyk.ScanNotifier
 	trustMutex          sync.Mutex
 	trustRequestOngoing bool // for debouncing
 }
 
-func New(instrumentor performance.Instrumentor, scanner snyk.Scanner, hoverService hover.Service) *Workspace {
+func New(instrumentor performance.Instrumentor, scanner snyk.Scanner, hoverService hover.Service, scanNotifier snyk.ScanNotifier) *Workspace {
 	return &Workspace{
 		folders:      make(map[string]*Folder, 0),
 		instrumentor: instrumentor,
 		scanner:      scanner,
 		hoverService: hoverService,
+		scanNotifier: scanNotifier,
 	}
 }
 
@@ -131,7 +133,7 @@ func (w *Workspace) ChangeWorkspaceFolders(ctx context.Context, params lsp.DidCh
 		w.RemoveFolder(uri.PathFromUri(folder.Uri))
 	}
 	for _, folder := range params.Event.Added {
-		f := NewFolder(uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService)
+		f := NewFolder(uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService, w.scanNotifier)
 		w.AddFolder(f)
 	}
 

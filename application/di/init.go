@@ -60,6 +60,7 @@ var snykCli cli2.Executor
 var hoverService hover.Service
 var scanner snyk.Scanner
 var cliInitializer *cli2.Initializer
+var scanNotifier snyk.ScanNotifier
 
 var initMutex = &sync.Mutex{}
 
@@ -107,8 +108,8 @@ func initInfrastructure() {
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
-	codeScanNotifier, _ := appNotification.NewScanNotifier(notification.NewNotifier(), "code")
-	snykCodeScanner = code2.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, codeScanNotifier)
+	scanNotifier, _ = appNotification.NewScanNotifier(notification.NewNotifier())
+	snykCodeScanner = code2.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics)
 	cliInitializer = cli2.NewInitializer(errorReporter, installer)
 	authInitializer := auth2.NewInitializer(authenticationService, errorReporter, analytics)
 	scanInitializer = initialize.NewDelegatingInitializer(
@@ -139,8 +140,8 @@ func TestInit(t *testing.T) {
 	snykCodeClient = fakeClient
 	snykCli = cli2.NewExecutor(authenticationService, errorReporter, analytics)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
-	codeScanNotifier, _ := appNotification.NewScanNotifier(notification.NewNotifier(), "code")
-	snykCodeScanner = code2.New(snykCodeBundleUploader, fakeApiClient, errorReporter, analytics, codeScanNotifier)
+	scanNotifier, _ = appNotification.NewScanNotifier(notification.NewNotifier())
+	snykCodeScanner = code2.New(snykCodeBundleUploader, fakeApiClient, errorReporter, analytics)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	scanner = snyk.NewDelegatingScanner(
@@ -192,6 +193,12 @@ func HoverService() hover.Service {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return hoverService
+}
+
+func ScanNotifier() snyk.ScanNotifier {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return scanNotifier
 }
 
 func Scanner() snyk.Scanner {

@@ -36,11 +36,11 @@ func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
 	const trustedDummy = "trustedDummy"
 	const untrustedDummy = "untrustedDummy"
 	scanner := &snyk.TestScanner{}
-	w := New(performance.NewTestInstrumentor(), scanner, nil)
+	w := New(performance.NewTestInstrumentor(), scanner, nil, nil)
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 	config.CurrentConfig().SetTrustedFolders([]string{trustedDummy})
-	w.AddFolder(NewFolder(trustedDummy, trustedDummy, scanner, nil))
-	w.AddFolder(NewFolder(untrustedDummy, untrustedDummy, scanner, nil))
+	w.AddFolder(NewFolder(trustedDummy, trustedDummy, scanner, nil, nil))
+	w.AddFolder(NewFolder(untrustedDummy, untrustedDummy, scanner, nil, nil))
 
 	trusted, untrusted := w.GetFolderTrust()
 
@@ -53,11 +53,11 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 	const trustedDummy = "trustedDummy"
 	const untrustedDummy = "untrustedDummy"
 	scanner := &snyk.TestScanner{}
-	w := New(performance.NewTestInstrumentor(), scanner, nil)
+	w := New(performance.NewTestInstrumentor(), scanner, nil, nil)
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
-	trustedFolder := NewFolder(trustedDummy, trustedDummy, scanner, nil)
+	trustedFolder := NewFolder(trustedDummy, trustedDummy, scanner, nil, nil)
 	w.AddFolder(trustedFolder)
-	untrustedFolder := NewFolder(untrustedDummy, untrustedDummy, scanner, nil)
+	untrustedFolder := NewFolder(untrustedDummy, untrustedDummy, scanner, nil, nil)
 	w.AddFolder(untrustedFolder)
 
 	w.TrustFoldersAndScan(context.Background(), []*Folder{trustedFolder})
@@ -78,8 +78,8 @@ func Test_AddAndRemoveFoldersAndTriggerScan(t *testing.T) {
 	toBeRemovedAbsolutePathAfterConversions := uri.PathFromUri(uri.PathToUri(toBeRemoved))
 
 	scanner := &snyk.TestScanner{}
-	w := New(performance.NewTestInstrumentor(), scanner, nil)
-	toBeRemovedFolder := NewFolder(toBeRemovedAbsolutePathAfterConversions, toBeRemoved, scanner, nil)
+	w := New(performance.NewTestInstrumentor(), scanner, nil, nil)
+	toBeRemovedFolder := NewFolder(toBeRemovedAbsolutePathAfterConversions, toBeRemoved, scanner, nil, nil)
 	w.AddFolder(toBeRemovedFolder)
 
 	currentConfig := config.CurrentConfig()
@@ -108,12 +108,12 @@ func Test_AddAndRemoveFoldersAndTriggerScan(t *testing.T) {
 }
 
 func Test_Get(t *testing.T) {
-	New(nil, nil, nil)
+	New(nil, nil, nil, nil)
 	assert.Equal(t, instance, Get())
 }
 
 func Test_Set(t *testing.T) {
-	w := New(nil, nil, nil)
+	w := New(nil, nil, nil, nil)
 	Set(w)
 	assert.Equal(t, w, instance)
 }

@@ -37,7 +37,7 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 	loc := setupServer(t)
 
 	scanner := &snyk.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService()))
+	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier()))
 
 	params := lsp.ExecuteCommandParams{Command: snyk.WorkspaceScanCommand}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -53,7 +53,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceip
 	loc := setupServer(t)
 
 	scanner := &snyk.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService()))
+	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier()))
 
 	params := lsp.ExecuteCommandParams{Command: snyk.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -70,8 +70,8 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 
 	scannerForFolder := snyk.NewTestScanner()
 	scannerForDontClear := snyk.NewTestScanner()
-	folder := workspace.NewFolder("dummy", "dummy", scannerForFolder, di.HoverService())
-	dontClear := workspace.NewFolder("dontclear", "dontclear", scannerForDontClear, di.HoverService())
+	folder := workspace.NewFolder("dummy", "dummy", scannerForFolder, di.HoverService(), di.ScanNotifier())
+	dontClear := workspace.NewFolder("dontclear", "dontclear", scannerForDontClear, di.HoverService(), di.ScanNotifier())
 
 	dontClearIssuePath := "dontclear/file.txt"
 	scannerForDontClear.AddTestIssue(snyk.Issue{AffectedFilePath: dontClearIssuePath})
@@ -101,7 +101,7 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 	loc := setupServer(t)
 
 	scanner := &snyk.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService()))
+	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier()))
 	// explicitly enable folder trust which is disabled by default in tests
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 
@@ -156,7 +156,7 @@ func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
 func Test_TrustWorkspaceFolders(t *testing.T) {
 	t.Run("Doesn't mutate trusted folders, if trusted folders disabled", func(t *testing.T) {
 		loc := setupServer(t)
-		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder1", "dummy", nil, di.HoverService()))
+		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier()))
 
 		params := lsp.ExecuteCommandParams{Command: snyk.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -169,8 +169,8 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 	t.Run("Updates trusted workspace folders", func(t *testing.T) {
 		loc := setupServer(t)
-		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder1", "dummy", nil, di.HoverService()))
-		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder2", "dummy", nil, di.HoverService()))
+		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier()))
+		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder2", "dummy", nil, di.HoverService(), di.ScanNotifier()))
 		config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 
 		params := lsp.ExecuteCommandParams{Command: snyk.TrustWorkspaceFoldersCommand}
@@ -185,7 +185,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 	t.Run("Existing trusted workspace folders are not removed", func(t *testing.T) {
 		loc := setupServer(t)
-		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder1", "dummy", nil, di.HoverService()))
+		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier()))
 		config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 		config.CurrentConfig().SetTrustedFolders([]string{"/path/to/folder2"})
 

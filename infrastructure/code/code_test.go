@@ -31,12 +31,10 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	appNotification "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -151,30 +149,26 @@ func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient,
 
 func setupTestScannerWithNotifications() (*FakeSnykCodeClient, *Scanner) {
 	snykCodeMock := &FakeSnykCodeClient{}
-	scanNotifier, _ := appNotification.NewScanNotifier(notification.NewNotifier(), "code")
 	scanner := New(
 		NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
-		scanNotifier,
 	)
 
 	return snykCodeMock, scanner
 }
 
-func setupTestScanner() (*FakeSnykCodeClient, *appNotification.MockScanNotifier, *Scanner) {
+func setupTestScanner() (*FakeSnykCodeClient, *Scanner) {
 	snykCodeMock := &FakeSnykCodeClient{}
-	mockScanNotifier := appNotification.NewMockScanNotifier()
 	scanner := New(
 		NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
-		mockScanNotifier,
 	)
 
-	return snykCodeMock, mockScanNotifier, scanner
+	return snykCodeMock, scanner
 }
 
 func TestUploadAndAnalyze(t *testing.T) {
@@ -182,13 +176,11 @@ func TestUploadAndAnalyze(t *testing.T) {
 		"should create bundle when hash empty", func(t *testing.T) {
 			testutil.UnitTest(t)
 			snykCodeMock := &FakeSnykCodeClient{}
-			scanNotifier, _ := appNotification.NewScanNotifier(notification.NewNotifier(), "code")
 			c := New(
 				NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				error_reporting.NewTestErrorReporter(),
 				ux2.NewTestAnalytics(),
-				scanNotifier,
 			)
 			path, firstDoc, _, content1, _ := setupDocs()
 			docs := []string{uri.PathFromUri(firstDoc.URI)}
@@ -210,13 +202,11 @@ func TestUploadAndAnalyze(t *testing.T) {
 		"should ignore if SAST disabled", func(t *testing.T) {
 			testutil.UnitTest(t)
 			snykCodeMock := &FakeSnykCodeClient{}
-			scanNotifier, _ := appNotification.NewScanNotifier(notification.NewNotifier(), "code")
 			c := New(
 				NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: false},
 				error_reporting.NewTestErrorReporter(),
 				ux2.NewTestAnalytics(),
-				scanNotifier,
 			)
 			path, firstDoc, _, _, _ := setupDocs()
 			docs := []string{uri.PathFromUri(firstDoc.URI)}
@@ -234,13 +224,11 @@ func TestUploadAndAnalyze(t *testing.T) {
 		"should retrieve from backend", func(t *testing.T) {
 			testutil.UnitTest(t)
 			snykCodeMock := &FakeSnykCodeClient{}
-			scanNotifier, _ := appNotification.NewScanNotifier(notification.NewNotifier(), "code")
 			c := New(
 				NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				error_reporting.NewTestErrorReporter(),
 				ux2.NewTestAnalytics(),
-				scanNotifier,
 			)
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
@@ -265,14 +253,12 @@ func TestUploadAndAnalyze(t *testing.T) {
 		"should track analytics", func(t *testing.T) {
 			testutil.UnitTest(t)
 			snykCodeMock := &FakeSnykCodeClient{}
-			scanNotifier, _ := appNotification.NewScanNotifier(notification.NewNotifier(), "code")
 			analytics := ux2.NewTestAnalytics()
 			c := New(
 				NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				error_reporting.NewTestErrorReporter(),
 				analytics,
-				scanNotifier,
 			)
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
@@ -373,45 +359,46 @@ func Test_CodeScanRunning_ScanCalled_ScansRunSequentially(t *testing.T) {
 	assert.Equal(t, 1, fakeClient.maxConcurrentScans)
 }
 
-func Test_CodeScanStarted_SnykScanMessageSent(t *testing.T) {
-	// Arrange
-	testutil.UnitTest(t)
-	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-	_, mockScanNotifier, scanner := setupTestScanner()
+// TODO: move to folder_test.go
+// func Test_CodeScanStarted_SnykScanMessageSent(t *testing.T) {
+// 	// Arrange
+// 	testutil.UnitTest(t)
+// 	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+// 	_, mockScanNotifier, scanner := setupTestScanner()
 
-	// Act
-	scanner.Scan(context.Background(), "", tempDir)
+// 	// Act
+// 	scanner.Scan(context.Background(), "", tempDir)
 
-	// Assert
-	assert.NotEmpty(t, mockScanNotifier.InProgressCalls())
-}
+// 	// Assert
+// 	assert.NotEmpty(t, mockScanNotifier.InProgressCalls())
+// }
 
-func Test_ScanSucceeded_SuccessMessageSent(t *testing.T) {
-	// Arrange
-	testutil.UnitTest(t)
-	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-	_, mockScanNotifier, scanner := setupTestScanner()
+// func Test_ScanSucceeded_SuccessMessageSent(t *testing.T) {
+// 	// Arrange
+// 	testutil.UnitTest(t)
+// 	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+// 	_, mockScanNotifier, scanner := setupTestScanner()
 
-	// Act
-	scanner.Scan(context.Background(), "", tempDir)
+// 	// Act
+// 	scanner.Scan(context.Background(), "", tempDir)
 
-	// Assert
-	assert.Len(t, mockScanNotifier.SuccessCalls(), 1)
-}
+// 	// Assert
+// 	assert.Len(t, mockScanNotifier.SuccessCalls(), 1)
+// }
 
-func Test_ScanFailed_ErrorMessageSent(t *testing.T) {
-	// Arrange
-	testutil.UnitTest(t)
-	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-	mockClient, mockScanNotifier, scanner := setupTestScanner()
-	mockClient.FailOnCreateBundle = true
+// func Test_ScanFailed_ErrorMessageSent(t *testing.T) {
+// 	// Arrange
+// 	testutil.UnitTest(t)
+// 	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+// 	mockClient, mockScanNotifier, scanner := setupTestScanner()
+// 	mockClient.FailOnCreateBundle = true
 
-	// Act
-	scanner.Scan(context.Background(), "", tempDir)
+// 	// Act
+// 	scanner.Scan(context.Background(), "", tempDir)
 
-	// Assert
-	assert.Len(t, mockScanNotifier.ErrorCalls(), 1)
-}
+// 	// Assert
+// 	assert.Len(t, mockScanNotifier.ErrorCalls(), 1)
+// }
 
 func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {
 	expectedPatterns = "*.xml\n**/*.txt\nbin"

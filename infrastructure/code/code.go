@@ -84,7 +84,6 @@ func New(bundleUploader *BundleUploader,
 	apiClient snyk_api.SnykApiClient,
 	reporter error_reporting.ErrorReporter,
 	analytics ux2.Analytics,
-	notifier snyk.ScanNotifier,
 ) *Scanner {
 	sc := &Scanner{
 		BundleUploader: bundleUploader,
@@ -92,7 +91,6 @@ func New(bundleUploader *BundleUploader,
 		errorReporter:  reporter,
 		analytics:      analytics,
 		runningScans:   map[string]*ScanStatus{},
-		scanNotifier:   notifier,
 	}
 	return sc
 }
@@ -441,6 +439,7 @@ func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics, folderPat
 	if success {
 		//sc.scanNotifier.SendSuccess(folderPath)
 	} else {
-		sc.scanNotifier.SendError(folderPath)
+		//TODO: move to the right place
+		// sc.scanNotifier.SendError(folderPath)
 	}
 }

@@ -84,7 +84,7 @@ func setupCustomServer(t *testing.T, callBackFn onCallbackFn) server.Local {
 	cleanupChannels()
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
-	workspace.Set(workspace.New(performance.NewTestInstrumentor(), di.Scanner(), di.HoverService()))
+	workspace.Set(workspace.New(performance.NewTestInstrumentor(), di.Scanner(), di.HoverService(), di.ScanNotifier()))
 	loc := startServer(callBackFn)
 
 	t.Cleanup(func() {
@@ -455,7 +455,7 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 	loc := setupServer(t)
 
 	scanner := &snyk.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService()))
+	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier()))
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -632,7 +632,7 @@ func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
 	}
 
 	didOpenParams, dir := didOpenTextParams(t)
-	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService()))
+	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService(), di.ScanNotifier()))
 	config.CurrentConfig().CliSettings().SetPath(t.TempDir() + "not-existing-cli")
 	// Act
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
@@ -652,7 +652,7 @@ func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
 	// register our dummy document
 	didOpenParams, dir := didOpenTextParams(t)
 
-	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService()))
+	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService(), di.ScanNotifier()))
 
 	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 	if err != nil {
@@ -717,7 +717,7 @@ func sendFileSavedMessage(t *testing.T, filePath, fileDir string, loc server.Loc
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filePath)},
 	}
-	workspace.Get().AddFolder(workspace.NewFolder(fileDir, "Test", di.Scanner(), di.HoverService()))
+	workspace.Get().AddFolder(workspace.NewFolder(fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier()))
 
 	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
 	if err != nil {
@@ -957,7 +957,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	testPath := filepath.Join(cloneTargetDir, "app.js")
 
 	w := workspace.Get()
-	f := workspace.NewFolder(cloneTargetDir, "Test", di.Scanner(), di.HoverService())
+	f := workspace.NewFolder(cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier())
 	w.AddFolder(f)
 
 	_ = textDocumentDidOpen(&loc, testPath, t)

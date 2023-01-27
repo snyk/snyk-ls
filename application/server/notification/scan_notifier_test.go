@@ -9,6 +9,7 @@ import (
 	notification2 "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -34,14 +35,14 @@ func Test_SendMessage(t *testing.T) {
 		{
 			name: "SendSuccessMessage",
 			act: func(scanNotifier snyk.ScanNotifier) {
-				scanNotifier.SendSuccess(folderPath)
+				scanNotifier.SendSuccess(product.ProductCode, folderPath, []snyk.Issue{})
 			},
 			expectedStatus: lsp2.Success,
 		},
 		{
 			name: "SendErrorMessage",
 			act: func(scanNotifier snyk.ScanNotifier) {
-				scanNotifier.SendError(folderPath)
+				scanNotifier.SendError(product.ProductCode, folderPath)
 			},
 			expectedStatus: lsp2.ErrorStatus,
 		},
@@ -49,9 +50,9 @@ func Test_SendMessage(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			expectedProduct := "foo"
+			expectedProduct := "code"
 			mockNotifier := notification.NewMockNotifier()
-			scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, expectedProduct)
+			scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
 
 			// Act - run the test
 			test.act(scanNotifier)
@@ -69,14 +70,14 @@ func Test_SendMessage(t *testing.T) {
 
 func Test_NewScanNotifier_EmptyProductName_Errors(t *testing.T) {
 	t.Parallel()
-	scanNotifier, err := notification2.NewScanNotifier(notification.NewMockNotifier(), "")
+	scanNotifier, err := notification2.NewScanNotifier(notification.NewMockNotifier())
 	assert.Error(t, err)
 	assert.Nil(t, scanNotifier)
 }
 
 func Test_NewScanNotifier_NilNotifier_Errors(t *testing.T) {
 	t.Parallel()
-	scanNotifier, err := notification2.NewScanNotifier(nil, "code")
+	scanNotifier, err := notification2.NewScanNotifier(nil)
 	assert.Error(t, err)
 	assert.Nil(t, scanNotifier)
 }
