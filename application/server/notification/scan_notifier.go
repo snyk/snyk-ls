@@ -37,8 +37,28 @@ func (n *scanNotifier) SendError(pr product.Product, folderPath string) {
 	)
 }
 
-func (n *scanNotifier) SendSuccess(pr product.Product, folderPath string, issues []snyk.Issue) {
-	if !enabledProducts[pr] {
+// Sends scan success message for all enabled products
+func (n *scanNotifier) SendSuccess(folderPath string, issues []snyk.Issue) {
+	productIssues := make(map[product.Product][]snyk.Issue)
+
+	for _, issue := range issues {
+		product := issue.Product
+		enabled, ok := enabledProducts[product]
+		if !enabled || !ok {
+			continue // skip disabled products
+		}
+
+		productIssues[product] = append(productIssues[product], issue)
+	}
+
+	for pr, issues := range productIssues {
+		n.sendSuccess(pr, folderPath, issues)
+	}
+}
+
+func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues []snyk.Issue) {
+	enabled, ok := enabledProducts[pr]
+	if !enabled || !ok {
 		return
 	}
 
@@ -110,7 +130,7 @@ func (n *scanNotifier) SendInProgress(folderPath string) {
 				Status:     lsp.InProgress,
 				Product:    product.ToProductCodename(pr),
 				FolderPath: folderPath,
-				//Issues: results,
+				Issues:     nil,
 			},
 		)
 	}

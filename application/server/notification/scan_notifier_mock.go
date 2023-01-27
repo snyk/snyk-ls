@@ -19,7 +19,7 @@ func (m *MockScanNotifier) SendInProgress(folderPath string) {
 	m.inProgressCalls = append(m.inProgressCalls, folderPath)
 }
 
-func (m *MockScanNotifier) SendSuccess(product product.Product, folderPath string, issues []snyk.Issue) {
+func (m *MockScanNotifier) SendSuccess(folderPath string, issues []snyk.Issue) {
 	m.successCalls = append(m.successCalls, folderPath)
 }
 

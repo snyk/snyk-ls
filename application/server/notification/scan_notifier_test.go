@@ -35,7 +35,7 @@ func Test_SendMessage(t *testing.T) {
 		{
 			name: "SendSuccessMessage",
 			act: func(scanNotifier snyk.ScanNotifier) {
-				scanNotifier.SendSuccess(product.ProductCode, folderPath, []snyk.Issue{})
+				scanNotifier.SendSuccess(folderPath, []snyk.Issue{})
 			},
 			expectedStatus: lsp2.Success,
 		},

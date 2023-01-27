@@ -316,7 +316,7 @@ func updateSeverityFilter(s lsp.SeverityFilter) {
 		}
 
 		for _, folder := range ws.Folders() {
-			folder.FilterAndPublishCachedDiagnostics("unknown") //TODO: check if we can eliminate unknown
+			folder.FilterAndPublishCachedDiagnostics("")
 		}
 	}
 }

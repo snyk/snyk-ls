@@ -358,12 +358,8 @@ func (f *Folder) IsTrusted() bool {
 func (f *Folder) sendScanResults(processedProduct product.Product, issuesByFile map[string][]snyk.Issue) {
 	var productIssues []snyk.Issue
 	for _, issues := range issuesByFile {
-		for _, issue := range issues {
-			if issue.Product == processedProduct {
-				productIssues = append(productIssues, issue)
-			}
-		}
+		productIssues = append(productIssues, issues...)
 	}
 
-	f.scanNotifier.SendSuccess(processedProduct, f.Path(), productIssues)
+	f.scanNotifier.SendSuccess(f.Path(), productIssues)
 }
