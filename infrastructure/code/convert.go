@@ -17,9 +17,11 @@
 package code
 
 import (
+	"crypto/md5"
 	"fmt"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -332,8 +334,10 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 				IsSecurityType:     isSecurityType,
 			}
 
+			id := md5.Sum([]byte(result.RuleID + path + strconv.Itoa(startLine) + strconv.Itoa(endLine) + strconv.Itoa(startCol) + strconv.Itoa(endCol)))
+
 			d := snyk.Issue{
-				ID:                  result.RuleID,
+				ID:                  string(id[:]),
 				Range:               myRange,
 				Severity:            issueSeverity(result.Level),
 				Message:             message,

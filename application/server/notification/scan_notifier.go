@@ -45,7 +45,7 @@ func (n *scanNotifier) SendSuccess(pr product.Product, folderPath string, issues
 	var scanIssues []lsp.ScanIssue
 
 	for _, issue := range issues {
-		additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData) // todo: update with OSS integration
+		additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData) // Will change when OSS communication is added
 		if !ok {
 			continue // skip non-code issues
 		}
