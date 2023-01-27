@@ -71,7 +71,7 @@ func Test_Scan_WhenNoIssues_shouldNotProcessResults(t *testing.T) {
 	testutil.UnitTest(t)
 	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hoverRecorder)
 
-	f.processResults([]snyk.Issue{})
+	f.processResults("unknown", []snyk.Issue{})
 
 	assert.Equal(t, 0, hoverRecorder.Calls())
 }
@@ -86,7 +86,7 @@ func TestProcessResults_SendsDiagnosticsAndHovers(t *testing.T) {
 		NewMockIssue("id1", "path1"),
 		NewMockIssue("id2", "path2"),
 	}
-	f.processResults(issues)
+	f.processResults(product.ProductOpenSource, issues)
 	// todo ideally there's a hover & diagnostic service that are symmetric and don't leak implementation details (e.g. channels)
 	// assert.hoverService.GetAll()
 }
@@ -95,7 +95,7 @@ func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 	testutil.UnitTest(t)
 	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
 
-	f.processResults([]snyk.Issue{
+	f.processResults(product.ProductOpenSource, []snyk.Issue{
 		NewMockIssue("id1", "path1"),
 		NewMockIssue("id2", "path2"),
 	})
@@ -111,7 +111,7 @@ func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 	testutil.UnitTest(t)
 	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService())
 
-	f.processResults([]snyk.Issue{
+	f.processResults(product.ProductOpenSource, []snyk.Issue{
 		NewMockIssue("id1", "path1"),
 		NewMockIssue("id2", "path1"),
 	})
@@ -125,11 +125,11 @@ func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 	testutil.UnitTest(t)
 	f := NewMockFolder()
 
-	f.processResults([]snyk.Issue{
+	f.processResults(product.ProductOpenSource, []snyk.Issue{
 		NewMockIssue("id1", "path1"),
 		NewMockIssue("id2", "path2"),
 	})
-	f.processResults([]snyk.Issue{NewMockIssue("id3", "path3")})
+	f.processResults(product.ProductOpenSource, []snyk.Issue{NewMockIssue("id3", "path3")})
 
 	assert.Equal(t, 3, f.documentDiagnosticCache.Size())
 	assert.NotNil(t, GetValueFromMap(f.documentDiagnosticCache, "path1"))
@@ -141,11 +141,11 @@ func Test_ProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 	testutil.UnitTest(t)
 	f := NewMockFolder()
 
-	f.processResults([]snyk.Issue{
+	f.processResults(product.ProductOpenSource, []snyk.Issue{
 		NewMockIssue("id1", "path1"),
 		NewMockIssue("id2", "path1"),
 	})
-	f.processResults([]snyk.Issue{NewMockIssue("id3", "path1")})
+	f.processResults(product.ProductOpenSource, []snyk.Issue{NewMockIssue("id3", "path1")})
 
 	assert.Equal(t, 1, f.documentDiagnosticCache.Size())
 	assert.NotNil(t, GetValueFromMap(f.documentDiagnosticCache, "path1"))
@@ -156,11 +156,11 @@ func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing
 	testutil.UnitTest(t)
 	f := NewMockFolder()
 
-	f.processResults([]snyk.Issue{
+	f.processResults(product.ProductOpenSource, []snyk.Issue{
 		NewMockIssue("id1", "path1"),
 		NewMockIssue("id2", "path1"),
 	})
-	f.processResults([]snyk.Issue{
+	f.processResults(product.ProductOpenSource, []snyk.Issue{
 		NewMockIssue("id1", "path1"),
 		NewMockIssue("id3", "path1"),
 	})
@@ -179,7 +179,7 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 
 	f := NewMockFolder()
 
-	f.processResults([]snyk.Issue{
+	f.processResults(product.ProductOpenSource, []snyk.Issue{
 		NewMockIssueWithSeverity("id1", "path1", snyk.Critical),
 		NewMockIssueWithSeverity("id2", "path1", snyk.High),
 		NewMockIssueWithSeverity("id3", "path1", snyk.Medium),
@@ -219,7 +219,7 @@ func Test_ClearDiagnostics(t *testing.T) {
 	testutil.UnitTest(t)
 	f := NewMockFolder()
 
-	f.processResults([]snyk.Issue{
+	f.processResults(product.ProductOpenSource, []snyk.Issue{
 		NewMockIssue("id1", "path1"),
 		NewMockIssue("id2", "path2"),
 	})
@@ -343,7 +343,7 @@ func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 	mockCodeIssue.Product = product.ProductOpenSource
 	mockIacIssue := NewMockIssue("id2", filePath)
 	mockIacIssue.Product = product.ProductInfrastructureAsCode
-	f.processResults([]snyk.Issue{
+	f.processResults(product.ProductOpenSource, []snyk.Issue{
 		mockIacIssue,
 		mockCodeIssue,
 	})

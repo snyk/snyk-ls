@@ -41,6 +41,8 @@ const (
 	Scanned   FolderStatus = iota
 )
 
+// TODO: 3: Extract reporting logic to a separate service
+
 // Folder contains files that can be scanned,
 // it orchestrates snyk scans and provides a caching layer to avoid unnecessary computing
 type Folder struct {
@@ -137,7 +139,7 @@ func (f *Folder) scan(ctx context.Context, path string) {
 		log.Info().Str("method", method).
 			Int("issueSliceLength", len(issuesSlice)).
 			Msgf("Cached results found: Skipping scan for %s", path)
-		f.processResults(issuesSlice)
+		f.processResults("unknown", issuesSlice) // todo: see if we can avoid this call or avoid passing unknown
 		return
 	}
 
@@ -152,7 +154,8 @@ func (f *Folder) DocumentDiagnosticsFromCache(file string) []snyk.Issue {
 	return issues
 }
 
-func (f *Folder) processResults(issues []snyk.Issue) {
+// TODO: 2: differentiate between success and error
+func (f *Folder) processResults(product product.Product, issues []snyk.Issue) {
 	dedupMap := f.createDedupMap()
 
 	// TODO: perform issue diffing (current <-> newly reported)
@@ -171,12 +174,12 @@ func (f *Folder) processResults(issues []snyk.Issue) {
 	}
 
 	// Filter and publish cached diagnostics
-	f.FilterAndPublishCachedDiagnostics()
+	f.FilterAndPublishCachedDiagnostics(product)
 }
 
-func (f *Folder) FilterAndPublishCachedDiagnostics() {
+func (f *Folder) FilterAndPublishCachedDiagnostics(product product.Product) {
 	issuesByFile := f.filterCachedDiagnostics()
-	f.publishDiagnostics(issuesByFile)
+	f.publishDiagnostics(product, issuesByFile)
 }
 
 func (f *Folder) filterCachedDiagnostics() (fileIssues map[string][]snyk.Issue) {
@@ -230,10 +233,10 @@ func isVisibleSeverity(issue snyk.Issue) bool {
 	return false
 }
 
-func (f *Folder) publishDiagnostics(issuesByFile map[string][]snyk.Issue) {
+func (f *Folder) publishDiagnostics(product product.Product, issuesByFile map[string][]snyk.Issue) {
 	f.sendDiagnostics(issuesByFile)
-	f.sendHovers(issuesByFile)
-	f.sendScanResults(issuesByFile)
+	f.sendScanResults(product, issuesByFile)
+	f.sendHovers(issuesByFile) // TODO: this locks up the thread, need to investigate
 }
 
 func (f *Folder) createDedupMap() (dedupMap map[string]bool) {
@@ -350,7 +353,11 @@ func (f *Folder) IsTrusted() bool {
 	return false
 }
 
-func (f *Folder) sendScanResults(issuesByFile map[string][]snyk.Issue) {
+func (f *Folder) sendScanResults(processedProduct product.Product, issuesByFile map[string][]snyk.Issue) {
+	if processedProduct != product.ProductCode && processedProduct != "unknown" {
+		return
+	}
+
 	var codeIssues []lsp.ScanIssue
 	for _, issues := range issuesByFile {
 		for _, issue := range issues {
@@ -397,10 +404,12 @@ func (f *Folder) sendScanResults(issuesByFile map[string][]snyk.Issue) {
 			})
 		}
 	}
+
 	// TODO Make this generic
+	log.Warn().Msgf("LS: Sending %w folder results", f.Path())
 	notification.Send(lsp.SnykScanParams{
 		Status:     lsp.Success,
-		Product:    "code",
+		Product:    product.ToProductCodename(processedProduct),
 		FolderPath: f.Path(),
 		Issues:     codeIssues,
 	})

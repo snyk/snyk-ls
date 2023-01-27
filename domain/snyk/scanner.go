@@ -122,7 +122,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				log.Debug().Msgf("Scanning %s with %T: STARTED", path, s)
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
 				foundIssues := s.Scan(span.Context(), path, folderPath)
-				processResults(foundIssues)
+				processResults(s.Product(), foundIssues)
 				log.Debug().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
 			}(scanner)
 		} else {

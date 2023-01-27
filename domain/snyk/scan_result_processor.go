@@ -16,6 +16,8 @@
 
 package snyk
 
-type ScanResultProcessor = func(issues []Issue)
+import "github.com/snyk/snyk-ls/internal/product"
 
-func NoopResultProcessor(_ []Issue) {}
+type ScanResultProcessor = func(product product.Product, issues []Issue)
+
+func NoopResultProcessor(_ product.Product, _ []Issue) {}
