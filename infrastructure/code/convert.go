@@ -18,6 +18,7 @@ package code
 
 import (
 	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -337,7 +338,7 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 			id := md5.Sum([]byte(result.RuleID + path + strconv.Itoa(startLine) + strconv.Itoa(endLine) + strconv.Itoa(startCol) + strconv.Itoa(endCol)))
 
 			d := snyk.Issue{
-				ID:                  string(id[:]),
+				ID:                  hex.EncodeToString(id[:]),
 				Range:               myRange,
 				Severity:            issueSeverity(result.Level),
 				Message:             message,
