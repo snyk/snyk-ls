@@ -594,7 +594,9 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	issue := issues[0]
 
 	assert.Equal(t, "java/DontUsePrintStackTrace", issue.ID)
-	assert.Equal(t, "DontUsePrintStackTrace: Printing the stack trace of java.lang.InterruptedException. Production code ... (Snyk)", issue.Message)
+	assert.Equal(t,
+		"DontUsePrintStackTrace: Printing the stack trace of java.lang.InterruptedException. Production code ... (Snyk)",
+		issue.Message)
 	assert.Equal(t, snyk.CodeSecurityVulnerability, issue.IssueType)
 	assert.Equal(t, snyk.Low, issue.Severity)
 	assert.Equal(t, path, issue.AffectedFilePath)
@@ -641,7 +643,10 @@ func TestGetCodeFlowCommands(t *testing.T) {
 	assert.Equal(t, snyk.NavigateToRangeCommand, flow[0].toCommand().Command)
 }
 
-func setupConversionTests(t *testing.T, activateSnykCodeSecurity bool, activateSnykCodeQuality bool) (string, []snyk.Issue, SarifResponse) {
+func setupConversionTests(t *testing.T,
+	activateSnykCodeSecurity bool,
+	activateSnykCodeQuality bool,
+) (string, []snyk.Issue, SarifResponse) {
 	testutil.UnitTest(t)
 	c := config.CurrentConfig()
 	c.EnableSnykCodeSecurity(activateSnykCodeSecurity)
@@ -664,10 +669,7 @@ func setupConversionTests(t *testing.T, activateSnykCodeSecurity bool, activateS
 	}
 
 	issues := analysisResponse.toIssues()
-	if activateSnykCodeSecurity {
-		assert.NotNil(t, issues)
-		assert.Equal(t, 2, len(issues))
-	}
+
 	return path, issues, analysisResponse
 }
 
@@ -782,9 +784,12 @@ func Test_SarifResponse_filter_disabled_issues(t *testing.T) {
 		_, issues, _ := setupConversionTests(t, true, true)
 		assert.Equal(t, 2, len(issues))
 	})
-
+	t.Run("should filter out disabled issues - code quality disabled", func(t *testing.T) {
+		_, issues, _ := setupConversionTests(t, true, false)
+		assert.Equal(t, 0, len(issues))
+	})
 	t.Run("should filter out disabled issues - code security disabled", func(t *testing.T) {
 		_, issues, _ := setupConversionTests(t, false, true)
-		assert.Equal(t, 0, len(issues))
+		assert.Equal(t, 2, len(issues))
 	})
 }
