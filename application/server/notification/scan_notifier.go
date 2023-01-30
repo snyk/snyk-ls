@@ -41,6 +41,11 @@ func (n *scanNotifier) SendError(pr product.Product, folderPath string) {
 func (n *scanNotifier) SendSuccess(folderPath string, issues []snyk.Issue) {
 	productIssues := make(map[product.Product][]snyk.Issue)
 
+	// if no issues found, we still should send success message for all enabled products
+	for pr := range enabledProducts {
+		productIssues[pr] = make([]snyk.Issue, 0)
+	}
+
 	for _, issue := range issues {
 		product := issue.Product
 		enabled, ok := enabledProducts[product]
