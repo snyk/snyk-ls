@@ -19,6 +19,7 @@ package hover
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
@@ -47,26 +48,7 @@ func setupFakeHover() sglsp.DocumentURI {
 
 func Test_registerHovers(t *testing.T) {
 	target := NewDefaultService(ux2.NewTestAnalytics()).(*DefaultHoverService)
-	documentUri := uri.PathToUri("fake-file.json")
-	hover := DocumentHovers{
-		Uri: documentUri,
-		Hover: []Hover[Context]{
-			{
-				Id: "test-id",
-				Range: sglsp.Range{
-					Start: sglsp.Position{
-						Line:      10,
-						Character: 14,
-					},
-					End: sglsp.Position{
-						Line:      56,
-						Character: 87,
-					},
-				},
-				Message: "Very important hover",
-			},
-		},
-	}
+	hover, documentUri := fakeDocumentHover()
 
 	target.registerHovers(hover)
 	// assert de-duplication
@@ -205,4 +187,38 @@ func Test_TracksAnalytics(t *testing.T) {
 		IssueType: ux2.ContainerVulnerability,
 		Severity:  ux2.Medium,
 	}, analytics.GetAnalytics()[0])
+}
+
+func Test_SendingHovers_AfterClearAll_DoesNotBlock(t *testing.T) {
+	service := NewDefaultService(ux2.NewTestAnalytics()).(*DefaultHoverService)
+	service.ClearAllHovers()
+	hover, _ := fakeDocumentHover()
+
+	service.Channel() <- hover
+	assert.Eventually(t, func() bool { return len(service.hovers) == 1 }, 1*time.Second, 10*time.Millisecond)
+
+}
+
+func fakeDocumentHover() (DocumentHovers, sglsp.DocumentURI) {
+	documentUri := uri.PathToUri("fake-file.json")
+	hover := DocumentHovers{
+		Uri: documentUri,
+		Hover: []Hover[Context]{
+			{
+				Id: "test-id",
+				Range: sglsp.Range{
+					Start: sglsp.Position{
+						Line:      10,
+						Character: 14,
+					},
+					End: sglsp.Position{
+						Line:      56,
+						Character: 87,
+					},
+				},
+				Message: "Very important hover",
+			},
+		},
+	}
+	return hover, documentUri
 }
