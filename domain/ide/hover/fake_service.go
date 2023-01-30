@@ -20,6 +20,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 type FakeHoverService struct {
@@ -50,7 +51,7 @@ func (t *FakeHoverService) ClearAllHovers() {
 	}
 }
 
-func (t *FakeHoverService) GetHover(_ sglsp.DocumentURI, pos sglsp.Position) Result {
+func (t *FakeHoverService) GetHover(_ sglsp.DocumentURI, pos snyk.Position) Result {
 	//TODO implement me
 	panic("implement me")
 }

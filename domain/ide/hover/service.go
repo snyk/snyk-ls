@@ -34,7 +34,7 @@ type Service interface {
 	DeleteHover(documentUri sglsp.DocumentURI)
 	Channel() chan DocumentHovers
 	ClearAllHovers()
-	GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) Result
+	GetHover(fileUri sglsp.DocumentURI, pos snyk.Position) Result
 	SetAnalytics(analytics ux2.Analytics)
 }
 
@@ -57,11 +57,12 @@ func NewDefaultService(analytics ux2.Analytics) Service {
 	return s
 }
 
-func (s *DefaultHoverService) isHoverForPosition(hover Hover[Context], pos sglsp.Position) bool {
-	return hover.Range.Start.Line < pos.Line && hover.Range.End.Line > pos.Line ||
-		(hover.Range.Start.Line == pos.Line &&
-			hover.Range.Start.Character <= pos.Character &&
-			hover.Range.End.Character >= pos.Character)
+func (s *DefaultHoverService) isHoverForPosition(hover Hover[Context], pos snyk.Position) bool {
+	hoverRange := hover.Range
+	posRange := snyk.Range{Start: pos, End: pos}
+	overlaps := hoverRange.Overlaps(posRange)
+	log.Debug().Str("method", "isHoverForPosition").Msgf("hover: %v, pos: %v, overlaps: %v", hoverRange, pos, overlaps)
+	return overlaps
 }
 
 func (s *DefaultHoverService) registerHovers(result DocumentHovers) {
@@ -73,6 +74,11 @@ func (s *DefaultHoverService) registerHovers(result DocumentHovers) {
 		hoverIndex := uri.PathFromUri(key) + fmt.Sprintf("%v%v", newHover.Range, newHover.Id)
 
 		if !s.hoverIndexes[hoverIndex] {
+			log.Debug().
+				Str("method", "registerHovers").
+				Str("hoverIndex", hoverIndex).
+				Msg("registering hover")
+
 			s.hovers[key] = append(s.hovers[key], newHover)
 			s.hoverIndexes[hoverIndex] = true
 		}
@@ -87,6 +93,12 @@ func (s *DefaultHoverService) DeleteHover(documentUri sglsp.DocumentURI) {
 	for key := range s.hoverIndexes {
 		document := uri.PathFromUri(documentUri)
 		if strings.Contains(key, document) {
+			log.Debug().
+				Str("method", "DeleteHover").
+				Str("key", key).
+				Str("document", document).
+				Msg("deleting hover")
+
 			delete(s.hoverIndexes, key)
 		}
 	}
@@ -103,7 +115,7 @@ func (s *DefaultHoverService) ClearAllHovers() {
 	s.hoverIndexes = map[string]bool{}
 }
 
-func (s *DefaultHoverService) GetHover(fileUri sglsp.DocumentURI, pos sglsp.Position) Result {
+func (s *DefaultHoverService) GetHover(fileUri sglsp.DocumentURI, pos snyk.Position) Result {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 

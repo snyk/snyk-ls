@@ -422,7 +422,7 @@ func textDocumentHover() jrpc2.Handler {
 	return handler.New(func(_ context.Context, params hover.Params) (hover.Result, error) {
 		log.Info().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
 
-		hoverResult := di.HoverService().GetHover(params.TextDocument.URI, params.Position)
+		hoverResult := di.HoverService().GetHover(params.TextDocument.URI, converter.FromPosition(params.Position))
 		return hoverResult, nil
 	})
 }

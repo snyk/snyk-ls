@@ -39,6 +39,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
@@ -935,7 +936,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 		t.Fatal(err, "Hover retrieval failed")
 	}
 
-	assert.Equal(t, hoverResult.Contents.Value, di.HoverService().GetHover(uri.PathToUri(testPath), testPosition).Contents.Value)
+	assert.Equal(t, hoverResult.Contents.Value, di.HoverService().GetHover(uri.PathToUri(testPath), converter.FromPosition(testPosition)).Contents.Value)
 	assert.Equal(t, hoverResult.Contents.Kind, "markdown")
 }
 func Test_SmokeSnykCodeFileScan(t *testing.T) {

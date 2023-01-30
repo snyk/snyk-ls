@@ -32,9 +32,9 @@ import (
 func setupFakeHover() sglsp.DocumentURI {
 	target := NewDefaultService(ux2.NewTestAnalytics()).(*DefaultHoverService)
 	fakeHover := []Hover[Context]{
-		{Range: sglsp.Range{
-			Start: sglsp.Position{Line: 3, Character: 56},
-			End:   sglsp.Position{Line: 5, Character: 80},
+		{Range: snyk.Range{
+			Start: snyk.Position{Line: 3, Character: 56},
+			End:   snyk.Position{Line: 5, Character: 80},
 		},
 		},
 	}
@@ -81,65 +81,65 @@ func Test_GetHoverMultiline(t *testing.T) {
 
 	tests := []struct {
 		hoverDetails []Hover[Context]
-		query        sglsp.Position
+		query        snyk.Position
 		expected     Result
 	}{
 		// multiline range
 		{
-			hoverDetails: []Hover[Context]{{Range: sglsp.Range{
-				Start: sglsp.Position{Line: 3, Character: 56},
-				End:   sglsp.Position{Line: 5, Character: 80},
+			hoverDetails: []Hover[Context]{{Range: snyk.Range{
+				Start: snyk.Position{Line: 3, Character: 56},
+				End:   snyk.Position{Line: 5, Character: 80},
 			},
 				Message: "## Vulnerabilities found"}},
-			query: sglsp.Position{Line: 4, Character: 66},
+			query: snyk.Position{Line: 4, Character: 66},
 			expected: Result{Contents: MarkupContent{
 				Kind: "markdown", Value: "## Vulnerabilities found"},
 			},
 		},
 		// exact line but within character range
 		{
-			hoverDetails: []Hover[Context]{{Range: sglsp.Range{
-				Start: sglsp.Position{Line: 4, Character: 56},
-				End:   sglsp.Position{Line: 4, Character: 80},
+			hoverDetails: []Hover[Context]{{Range: snyk.Range{
+				Start: snyk.Position{Line: 4, Character: 56},
+				End:   snyk.Position{Line: 4, Character: 80},
 			},
 				Message: "## Vulnerabilities found"}},
-			query: sglsp.Position{Line: 4, Character: 66},
+			query: snyk.Position{Line: 4, Character: 66},
 			expected: Result{Contents: MarkupContent{
 				Kind: "markdown", Value: "## Vulnerabilities found"},
 			},
 		},
 		// exact line and exact character
 		{
-			hoverDetails: []Hover[Context]{{Range: sglsp.Range{
-				Start: sglsp.Position{Line: 4, Character: 56},
-				End:   sglsp.Position{Line: 4, Character: 56},
+			hoverDetails: []Hover[Context]{{Range: snyk.Range{
+				Start: snyk.Position{Line: 4, Character: 56},
+				End:   snyk.Position{Line: 4, Character: 56},
 			},
 				Message: "## Vulnerabilities found"}},
-			query: sglsp.Position{Line: 4, Character: 56},
+			query: snyk.Position{Line: 4, Character: 56},
 			expected: Result{Contents: MarkupContent{
 				Kind: "markdown", Value: "## Vulnerabilities found"},
 			},
 		},
 		// hover left of the character position on exact line
 		{
-			hoverDetails: []Hover[Context]{{Range: sglsp.Range{
-				Start: sglsp.Position{Line: 4, Character: 56},
-				End:   sglsp.Position{Line: 4, Character: 86},
+			hoverDetails: []Hover[Context]{{Range: snyk.Range{
+				Start: snyk.Position{Line: 4, Character: 56},
+				End:   snyk.Position{Line: 4, Character: 86},
 			},
 				Message: "## Vulnerabilities found"}},
-			query: sglsp.Position{Line: 4, Character: 45},
+			query: snyk.Position{Line: 4, Character: 45},
 			expected: Result{Contents: MarkupContent{
 				Kind: "markdown", Value: ""},
 			},
 		},
 		// hover right of the character position on exact line
 		{
-			hoverDetails: []Hover[Context]{{Range: sglsp.Range{
-				Start: sglsp.Position{Line: 4, Character: 56},
-				End:   sglsp.Position{Line: 4, Character: 86},
+			hoverDetails: []Hover[Context]{{Range: snyk.Range{
+				Start: snyk.Position{Line: 4, Character: 56},
+				End:   snyk.Position{Line: 4, Character: 86},
 			},
 				Message: "## Vulnerabilities found"}},
-			query: sglsp.Position{Line: 4, Character: 105},
+			query: snyk.Position{Line: 4, Character: 105},
 			expected: Result{Contents: MarkupContent{
 				Kind: "markdown", Value: ""},
 			},
@@ -173,14 +173,14 @@ func Test_TracksAnalytics(t *testing.T) {
 				IssueType:        snyk.ContainerVulnerability,
 				AffectedFilePath: path,
 			},
-			Range: sglsp.Range{
-				Start: sglsp.Position{Line: 3, Character: 56},
-				End:   sglsp.Position{Line: 5, Character: 80},
+			Range: snyk.Range{
+				Start: snyk.Position{Line: 3, Character: 56},
+				End:   snyk.Position{Line: 5, Character: 80},
 			},
 			Message: "## Vulnerabilities found"},
 	}
 
-	target.GetHover(documentURI, sglsp.Position{Line: 4, Character: 66})
+	target.GetHover(documentURI, snyk.Position{Line: 4, Character: 66})
 	assert.Len(t, analytics.GetAnalytics(), 1)
 	assert.Equal(t, ux2.IssueHoverIsDisplayedProperties{
 		IssueId:   "issue",
@@ -206,12 +206,12 @@ func fakeDocumentHover() (DocumentHovers, sglsp.DocumentURI) {
 		Hover: []Hover[Context]{
 			{
 				Id: "test-id",
-				Range: sglsp.Range{
-					Start: sglsp.Position{
+				Range: snyk.Range{
+					Start: snyk.Position{
 						Line:      10,
 						Character: 14,
 					},
-					End: sglsp.Position{
+					End: snyk.Position{
 						Line:      56,
 						Character: 87,
 					},

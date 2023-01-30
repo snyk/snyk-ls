@@ -18,15 +18,17 @@ package hover
 
 import (
 	sglsp "github.com/sourcegraph/go-lsp"
+
+	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 type Context any
 
 type Hover[T Context] struct {
 	Id      string
-	Range   sglsp.Range
+	Range   snyk.Range
 	Message string
-	Context T
+	Context T // this normally contains snyk.Issue
 }
 
 type DocumentHovers struct {
