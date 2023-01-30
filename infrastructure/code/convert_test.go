@@ -593,11 +593,10 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 
 	issue := issues[0]
 
-	assert.Equal(t, "java/DontUsePrintStackTrace", issue.ID)
 	assert.Equal(t,
-		"DontUsePrintStackTrace: Printing the stack trace of java.lang.InterruptedException. Production code ... (Snyk)",
+		"DontUsePrintStackTrace: Printing the stack trace of java.lang.InterruptedException. Production code ...",
 		issue.Message)
-	assert.Equal(t, snyk.CodeSecurityVulnerability, issue.IssueType)
+	assert.Equal(t, snyk.CodeQualityIssue, issue.IssueType)
 	assert.Equal(t, snyk.Low, issue.Severity)
 	assert.Equal(t, path, issue.AffectedFilePath)
 	assert.Equal(t, product.ProductCode, issue.Product)
@@ -792,4 +791,9 @@ func Test_SarifResponse_filter_disabled_issues(t *testing.T) {
 		_, issues, _ := setupConversionTests(t, false, true)
 		assert.Equal(t, 2, len(issues))
 	})
+}
+
+func Test_getIssueId(t *testing.T) {
+	id := getIssueId("java/DontUsePrintStackTrace", "file/path.java", 15, 17, 15, 35)
+	assert.Equal(t, "d55c8ddce64fadfc758f4b9b4fd92087", id)
 }

@@ -336,10 +336,10 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 				IsSecurityType:     isSecurityType,
 			}
 
-			id := md5.Sum([]byte(result.RuleID + path + strconv.Itoa(startLine) + strconv.Itoa(endLine) + strconv.Itoa(startCol) + strconv.Itoa(endCol)))
+			id := getIssueId(result.RuleID, path, startLine, endLine, startCol, endCol)
 
 			d := snyk.Issue{
-				ID:                  hex.EncodeToString(id[:]),
+				ID:                  id,
 				Range:               myRange,
 				Severity:            issueSeverity(result.Level),
 				Message:             message,
@@ -359,6 +359,11 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 		}
 	}
 	return issues
+}
+
+func getIssueId(ruleId string, path string, startLine int, endLine int, startCol int, endCol int) string {
+	id := md5.Sum([]byte(ruleId + path + strconv.Itoa(startLine) + strconv.Itoa(endLine) + strconv.Itoa(startCol) + strconv.Itoa(endCol)))
+	return hex.EncodeToString(id[:])
 }
 
 func (s *SarifResponse) reportDiagnostic(d snyk.Issue) bool {
