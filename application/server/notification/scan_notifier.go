@@ -91,7 +91,7 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 			Severity: issue.Severity.String(),
 			FilePath: issue.AffectedFilePath,
 			AdditionalData: lsp.CodeIssueData{
-				Message:            issue.Message,
+				Message:            additionalData.Message,
 				Rule:               additionalData.Rule,
 				RepoDatasetSize:    additionalData.RepoDatasetSize,
 				ExampleCommitFixes: exampleCommitFixes,

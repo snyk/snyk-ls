@@ -324,6 +324,7 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 			}
 
 			additionalData := snyk.CodeIssueData{
+				Message:            result.Message.Text,
 				Rule:               rule.Name,
 				RepoDatasetSize:    rule.Properties.RepoDatasetSize,
 				ExampleCommitFixes: exampleFixes,

@@ -58,6 +58,7 @@ type Issue struct {
 }
 
 type CodeIssueData struct {
+	Message            string             `json:"message"`
 	Rule               string             `json:"rule"`
 	RepoDatasetSize    int                `json:"repoDatasetSize"`
 	ExampleCommitFixes []ExampleCommitFix `json:"exampleCommitFixes"`
