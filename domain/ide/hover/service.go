@@ -148,15 +148,13 @@ func (s *DefaultHoverService) trackHoverDetails(hover Hover[Context]) {
 func (s *DefaultHoverService) createHoverListener() {
 	// cleanup before start
 	for {
-		select {
-		case result := <-s.hoverChan:
-			log.Trace().
-				Str("method", "createHoverListener").
-				Str("uri", string(result.Uri)).
-				Msg("reading hover from chan.")
+		result := <-s.hoverChan
+		log.Trace().
+			Str("method", "createHoverListener").
+			Str("uri", string(result.Uri)).
+			Msg("reading hover from chan.")
 
-			s.registerHovers(result)
-		}
+		s.registerHovers(result)
 	}
 }
 

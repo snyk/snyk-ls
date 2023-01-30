@@ -142,21 +142,9 @@ func TestCreateBundle(t *testing.T) {
 func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient, string, *Scanner, string) {
 	testutil.UnitTest(t)
 	dir := t.TempDir()
-	snykCodeMock, c := setupTestScannerWithNotifications()
+	snykCodeMock, c := setupTestScanner()
 	file := filepath.Join(dir, "file."+extension)
 	return snykCodeMock, dir, c, file
-}
-
-func setupTestScannerWithNotifications() (*FakeSnykCodeClient, *Scanner) {
-	snykCodeMock := &FakeSnykCodeClient{}
-	scanner := New(
-		NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
-		&snyk_api.FakeApiClient{CodeEnabled: true},
-		error_reporting.NewTestErrorReporter(),
-		ux2.NewTestAnalytics(),
-	)
-
-	return snykCodeMock, scanner
 }
 
 func setupTestScanner() (*FakeSnykCodeClient, *Scanner) {
@@ -284,7 +272,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {
 	expectedPatterns, tempDir, _, _, _ := setupIgnoreWorkspace(t)
 	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
-	_, sc := setupTestScannerWithNotifications()
+	_, sc := setupTestScanner()
 
 	_, err := sc.loadIgnorePatternsAndCountFiles(tempDir)
 	if err != nil {
@@ -300,7 +288,7 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 		t.Fatal("can't create temp dir")
 	}
 	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
-	_, sc := setupTestScannerWithNotifications()
+	_, sc := setupTestScanner()
 
 	_, err = sc.loadIgnorePatternsAndCountFiles(tempDir)
 	if err != nil {
@@ -313,7 +301,7 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 func Test_GetWorkspaceFolderFiles(t *testing.T) {
 	_, tempDir, ignoredFilePath, notIgnoredFilePath, _ := setupIgnoreWorkspace(t)
 	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
-	_, sc := setupTestScannerWithNotifications()
+	_, sc := setupTestScanner()
 
 	files, err := sc.files(tempDir)
 	if err != nil {
@@ -328,7 +316,7 @@ func Test_GetWorkspaceFolderFiles(t *testing.T) {
 func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 	_, tempDir, _, _, ignoredFileInDir := setupIgnoreWorkspace(t)
 	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
-	_, sc := setupTestScannerWithNotifications()
+	_, sc := setupTestScanner()
 
 	walkedFiles, err := sc.files(tempDir)
 	if err != nil {
@@ -341,7 +329,7 @@ func Test_CodeScanRunning_ScanCalled_ScansRunSequentially(t *testing.T) {
 	// Arrange
 	testutil.UnitTest(t)
 	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-	fakeClient, scanner := setupTestScannerWithNotifications()
+	fakeClient, scanner := setupTestScanner()
 	fakeClient.AnalysisDuration = time.Second
 	wg := sync.WaitGroup{}
 
@@ -349,7 +337,7 @@ func Test_CodeScanRunning_ScanCalled_ScansRunSequentially(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
 		go func() {
-			scanner.Scan(context.Background(), "", tempDir)
+			_, _ = scanner.Scan(context.Background(), "", tempDir)
 			wg.Done()
 		}()
 	}

@@ -148,7 +148,6 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) (issue
 	}()
 
 	// Start the scan
-	//sc.scanNotifier.SendInProgress(folderPath)
 	startTime := time.Now()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
@@ -436,10 +435,4 @@ func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics, folderPat
 			DurationInSeconds: scanMetrics.lastScanDurationInSeconds,
 		},
 	)
-	if success {
-		//sc.scanNotifier.SendSuccess(folderPath)
-	} else {
-		//TODO: move to the right place
-		// sc.scanNotifier.SendError(folderPath)
-	}
 }
