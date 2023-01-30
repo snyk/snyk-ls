@@ -347,47 +347,6 @@ func Test_CodeScanRunning_ScanCalled_ScansRunSequentially(t *testing.T) {
 	assert.Equal(t, 1, fakeClient.maxConcurrentScans)
 }
 
-// TODO: move to folder_test.go
-// func Test_CodeScanStarted_SnykScanMessageSent(t *testing.T) {
-// 	// Arrange
-// 	testutil.UnitTest(t)
-// 	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-// 	_, mockScanNotifier, scanner := setupTestScanner()
-
-// 	// Act
-// 	scanner.Scan(context.Background(), "", tempDir)
-
-// 	// Assert
-// 	assert.NotEmpty(t, mockScanNotifier.InProgressCalls())
-// }
-
-// func Test_ScanSucceeded_SuccessMessageSent(t *testing.T) {
-// 	// Arrange
-// 	testutil.UnitTest(t)
-// 	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-// 	_, mockScanNotifier, scanner := setupTestScanner()
-
-// 	// Act
-// 	scanner.Scan(context.Background(), "", tempDir)
-
-// 	// Assert
-// 	assert.Len(t, mockScanNotifier.SuccessCalls(), 1)
-// }
-
-// func Test_ScanFailed_ErrorMessageSent(t *testing.T) {
-// 	// Arrange
-// 	testutil.UnitTest(t)
-// 	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-// 	mockClient, mockScanNotifier, scanner := setupTestScanner()
-// 	mockClient.FailOnCreateBundle = true
-
-// 	// Act
-// 	scanner.Scan(context.Background(), "", tempDir)
-
-// 	// Assert
-// 	assert.Len(t, mockScanNotifier.ErrorCalls(), 1)
-// }
-
 func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {
 	expectedPatterns = "*.xml\n**/*.txt\nbin"
 	tempDir = writeTestGitIgnore(expectedPatterns, t)

@@ -18,6 +18,7 @@ package workspace
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -366,8 +367,65 @@ func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 	})
 }
 
+func Test_scan_ShouldSendInProgress(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	testutil.UnitTest(t)
+
+	f, scanNotifier := NewMockFolderWithScanNotifier()
+	const filePath = "path1"
+
+	// Act
+	f.scan(context.Background(), filePath)
+
+	// Assert
+	assert.NotEmpty(t, scanNotifier.InProgressCalls())
+}
+
+func Test_processResults_ShouldSendSuccess(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	testutil.UnitTest(t)
+
+	f, scanNotifier := NewMockFolderWithScanNotifier()
+	const filePath = "path1"
+	mockCodeIssue := NewMockIssue("id1", filePath)
+
+	// Act
+	f.processResults(product.ProductOpenSource, []snyk.Issue{
+		mockCodeIssue,
+	}, nil)
+
+	// Assert
+	assert.Len(t, scanNotifier.SuccessCalls(), 1)
+}
+
+func Test_processResults_ShouldSendError(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	testutil.UnitTest(t)
+
+	f, scanNotifier := NewMockFolderWithScanNotifier()
+	const filePath = "path1"
+	mockCodeIssue := NewMockIssue("id1", filePath)
+
+	// Act
+	f.processResults(product.ProductOpenSource, []snyk.Issue{
+		mockCodeIssue,
+	}, errors.New("test error"))
+
+	// Assert
+	assert.Empty(t, scanNotifier.SuccessCalls())
+	assert.Len(t, scanNotifier.ErrorCalls(), 1)
+}
+
 func NewMockFolder() *Folder {
 	return NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService(), appNotification.NewMockScanNotifier())
+}
+
+func NewMockFolderWithScanNotifier() (*Folder, *appNotification.MockScanNotifier) {
+	scanNotifier := appNotification.NewMockScanNotifier()
+	return NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService(), scanNotifier), scanNotifier
 }
 
 func NewMockIssue(id, path string) snyk.Issue {

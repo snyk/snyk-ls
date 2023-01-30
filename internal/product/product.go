@@ -42,6 +42,6 @@ func ToProductCodename(product Product) string {
 	case ProductInfrastructureAsCode:
 		return "iac"
 	default:
-		return "unknown"
+		return ""
 	}
 }

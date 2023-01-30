@@ -154,8 +154,9 @@ func (f *Folder) DocumentDiagnosticsFromCache(file string) []snyk.Issue {
 func (f *Folder) processResults(product product.Product, issues []snyk.Issue, err error) {
 	if err != nil {
 		f.scanNotifier.SendError(product, f.path)
-		// TODO: perhaps move error capture and reporting call here
-		// TODO: do we want to process results below, or return here?
+		log.Err(err).Str("method", "processResults").
+			Msgf("%s returned an error: %s", product, err.Error())
+		return
 	}
 
 	dedupMap := f.createDedupMap()
