@@ -92,10 +92,10 @@ func (iac *Scanner) SupportedCommands() []snyk.CommandName {
 	return []snyk.CommandName{}
 }
 
-func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue) {
+func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue, err error) {
 	if ctx.Err() != nil {
 		log.Info().Msg("Cancelling IAC scan - IAC scanner received cancellation signal")
-		return issues
+		return issues, nil
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -103,7 +103,7 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 
 	documentURI := uri.PathToUri(path) // todo get rid of lsp dep
 	if !iac.isSupported(documentURI) {
-		return issues
+		return issues, nil
 	}
 	p := progress.NewTracker(false) // todo - get progress trackers via DI
 	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", path)
@@ -140,12 +140,12 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 		if noCancellation { // Only reports errors that are not intentional cancellations
 			iac.errorReporter.CaptureErrorAndReportAsIssue(path, err)
 		} else { // If the scan was cancelled, return empty results
-			return issues
+			return issues, nil
 		}
 	}
 
 	issues = iac.retrieveIssues(scanResults, issues, workspacePath, err)
-	return issues
+	return issues, nil
 }
 
 func (iac *Scanner) retrieveIssues(scanResults []iacScanResult, issues []snyk.Issue, workspacePath string, err error) []snyk.Issue {

@@ -42,7 +42,6 @@ type DefaultHoverService struct {
 	hovers       map[sglsp.DocumentURI][]Hover[Context]
 	hoverIndexes map[string]bool
 	hoverChan    chan DocumentHovers
-	stopChannel  chan bool
 	mutex        *sync.Mutex
 	analytics    ux2.Analytics
 }
@@ -52,7 +51,6 @@ func NewDefaultService(analytics ux2.Analytics) Service {
 	s.hovers = map[sglsp.DocumentURI][]Hover[Context]{}
 	s.hoverIndexes = map[string]bool{}
 	s.hoverChan = make(chan DocumentHovers, 100)
-	s.stopChannel = make(chan bool, 100)
 	s.mutex = &sync.Mutex{}
 	s.analytics = analytics
 	go s.createHoverListener()
@@ -113,7 +111,6 @@ func (s *DefaultHoverService) Channel() chan DocumentHovers {
 func (s *DefaultHoverService) ClearAllHovers() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.stopChannel <- true
 	s.hovers = map[sglsp.DocumentURI][]Hover[Context]{}
 	s.hoverIndexes = map[string]bool{}
 }
@@ -149,37 +146,14 @@ func (s *DefaultHoverService) trackHoverDetails(hover Hover[Context]) {
 }
 
 func (s *DefaultHoverService) createHoverListener() {
-	// cleanup before start
 	for {
-		select {
-		case <-s.stopChannel:
-			continue
-		default:
-		}
-		break
-	}
-	for {
-		select {
-		case result := <-s.hoverChan:
-			log.Trace().
-				Str("method", "createHoverListener").
-				Str("uri", string(result.Uri)).
-				Msg("reading hover from chan.")
+		result := <-s.hoverChan
+		log.Trace().
+			Str("method", "createHoverListener").
+			Str("uri", string(result.Uri)).
+			Msg("reading hover from chan.")
 
-			s.registerHovers(result)
-			continue
-		case <-s.stopChannel:
-		}
-		break
-	}
-	// cleanup on shutdown
-	for {
-		select {
-		case <-s.hoverChan:
-			continue
-		default:
-		}
-		break
+		s.registerHovers(result)
 	}
 }
 

@@ -80,14 +80,17 @@ type Scanner struct {
 	scanNotifier    snyk.ScanNotifier
 }
 
-func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter error_reporting.ErrorReporter, analytics ux2.Analytics, notifier snyk.ScanNotifier) *Scanner {
+func New(bundleUploader *BundleUploader,
+	apiClient snyk_api.SnykApiClient,
+	reporter error_reporting.ErrorReporter,
+	analytics ux2.Analytics,
+) *Scanner {
 	sc := &Scanner{
 		BundleUploader: bundleUploader,
 		SnykApiClient:  apiClient,
 		errorReporter:  reporter,
 		analytics:      analytics,
 		runningScans:   map[string]*ScanStatus{},
-		scanNotifier:   notifier,
 	}
 	return sc
 }
@@ -107,7 +110,7 @@ func (sc *Scanner) SupportedCommands() []snyk.CommandName {
 	return []snyk.CommandName{snyk.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk.Issue {
+func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) (issues []snyk.Issue, err error) {
 	// When starting a scan for a folderPath that's already scanned, the new scan will wait for the previous scan
 	// to finish before starting.
 	// When there's already a scan waiting, the function returns immediately with empty results.
@@ -119,7 +122,7 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk
 	if wasFound && previousScanStatus.isRunning {
 		if previousScanStatus.isPending {
 			sc.scanStatusMutex.Unlock()
-			return []snyk.Issue{}
+			return []snyk.Issue{}, nil // Returning an empty slice implies that no vulnerabilities were found
 		}
 
 		waitForPreviousScan = true
@@ -145,7 +148,6 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk
 	}()
 
 	// Start the scan
-	sc.scanNotifier.SendInProgress(folderPath)
 	startTime := time.Now()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
@@ -161,7 +163,7 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) []snyk
 
 	metrics := sc.newMetrics(len(files), startTime)
 	results := sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics)
-	return results
+	return results, nil
 }
 
 func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
@@ -278,7 +280,11 @@ func (sc *Scanner) newMetrics(fileCount int, scanStartTime time.Time) *ScanMetri
 	}
 }
 
-func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files []string, path string, scanMetrics *ScanMetrics) (issues []snyk.Issue) {
+func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
+	files []string,
+	path string,
+	scanMetrics *ScanMetrics,
+) (issues []snyk.Issue) {
 	if ctx.Err() != nil {
 		log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
 		return issues
@@ -429,9 +435,4 @@ func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics, folderPat
 			DurationInSeconds: scanMetrics.lastScanDurationInSeconds,
 		},
 	)
-	if success {
-		sc.scanNotifier.SendSuccess(folderPath)
-	} else {
-		sc.scanNotifier.SendError(folderPath)
-	}
 }

@@ -695,6 +695,58 @@ type SnykScanParams struct {
 	Status ScanStatus `json:"status"`
 	// Product under scan (Snyk Code, Snyk Open Source, etc...)
 	Product string `json:"product"`
-	// Results contain the scan results in the common issues model
-	//Results []snyk.Issue `json:"results"`
+	// FolderPath is the root-folder of the current scan
+	FolderPath string `json:"folderPath"`
+	// Issues contain the scan results in the common issues model
+	Issues []ScanIssue `json:"issues"`
+}
+
+type ScanIssue struct { // TODO - convert this to a generic type
+	Id             string `json:"id"`
+	Title          string `json:"title"`
+	Severity       string `json:"severity"`
+	FilePath       string `json:"filePath"`
+	AdditionalData any    `json:"additionalData,omitempty"`
+}
+
+type CodeIssueData struct {
+	Message            string             `json:"message"`
+	LeadURL            string             `json:"leadURL,omitempty"`
+	Rule               string             `json:"rule"`
+	RepoDatasetSize    int                `json:"repoDatasetSize"`
+	ExampleCommitFixes []ExampleCommitFix `json:"exampleCommitFixes"`
+	CWE                []string           `json:"cwe"`
+	Text               string             `json:"text"`
+	Markers            []Marker           `json:"markers,omitempty"`
+	Cols               Point              `json:"cols"`
+	Rows               Point              `json:"rows"`
+	IsSecurityType     bool               `json:"isSecurityType"`
+}
+
+type Point = [2]int
+
+type ExampleCommitFix struct {
+	CommitURL string             `json:"commitURL"`
+	Lines     []CommitChangeLine `json:"lines"`
+}
+
+type CommitChangeLine struct {
+	Line       string `json:"line"`
+	LineNumber int    `json:"lineNumber"`
+	LineChange string `json:"lineChange"`
+}
+
+type Marker struct {
+	Msg Point            `json:"msg"`
+	Pos []MarkerPosition `json:"pos"`
+}
+
+type MarkerPosition struct {
+	Position
+	File string `json:"file"`
+}
+
+type Position struct {
+	Cols Point `json:"cols"`
+	Rows Point `json:"rows"`
 }

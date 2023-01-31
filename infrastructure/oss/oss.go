@@ -129,10 +129,10 @@ func (oss *Scanner) Product() product.Product {
 	return product.ProductOpenSource
 }
 
-func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue) {
+func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue, err error) {
 	if ctx.Err() != nil {
 		log.Debug().Msg("Cancelling OSS scan - OSS scanner received cancellation signal")
-		return issues
+		return issues, nil
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -140,7 +140,7 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	documentURI := uri.PathToUri(path) // todo get rid of lsp dep
 	if !oss.isSupported(documentURI) {
 		log.Debug().Msgf("OSS Scan not supported for %s", path)
-		return issues
+		return issues, nil
 	}
 	method := "oss.Scan"
 	s := oss.instrumentor.StartSpan(ctx, method)
@@ -151,7 +151,7 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	log.Debug().Str("method", method).Msg("started.")
 	defer log.Debug().Str("method", method).Msg("done.")
 
-	path, err := filepath.Abs(uri.PathFromUri(documentURI))
+	path, err = filepath.Abs(uri.PathFromUri(documentURI))
 	if err != nil {
 		log.Err(err).Str("method", method).
 			Msg("Error while extracting file absolutePath")
@@ -182,10 +182,10 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	if err != nil {
 		if noCancellation {
 			if oss.handleError(path, err, res, cmd) {
-				return
+				return nil, err
 			}
 		} else { // If scan was cancelled, return empty results
-			return
+			return []snyk.Issue{}, nil
 		}
 	}
 
@@ -201,7 +201,7 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 		oss.scheduleNewScan(path)
 	}
 
-	return issues
+	return issues, nil
 }
 
 func (oss *Scanner) prepareScanCommand(workDir string) []string {
@@ -436,6 +436,6 @@ func (oss *Scanner) scheduleNewScan(path string) {
 		span := oss.instrumentor.NewTransaction(context.WithValue(context.Background(), oss.Product(), oss), string(oss.Product()), "oss.scheduleNewScanIn")
 		defer oss.instrumentor.Finish(span)
 
-		oss.Scan(span.Context(), path, "")
+		_, _ = oss.Scan(span.Context(), path, "")
 	})
 }

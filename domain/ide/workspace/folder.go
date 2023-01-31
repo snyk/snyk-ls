@@ -41,6 +41,8 @@ const (
 	Scanned   FolderStatus = iota
 )
 
+// TODO: 3: Extract reporting logic to a separate service
+
 // Folder contains files that can be scanned,
 // it orchestrates snyk scans and provides a caching layer to avoid unnecessary computing
 type Folder struct {
@@ -51,15 +53,17 @@ type Folder struct {
 	scanner                 snyk.Scanner
 	hoverService            hover.Service
 	mutex                   sync.Mutex
+	scanNotifier            snyk.ScanNotifier
 }
 
-func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hover.Service) *Folder {
+func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hover.Service, notifier snyk.ScanNotifier) *Folder {
 	folder := Folder{
 		scanner:      scanner,
 		path:         strings.TrimSuffix(path, "/"),
 		name:         name,
 		status:       Unscanned,
 		hoverService: hoverService,
+		scanNotifier: notifier,
 	}
 	folder.documentDiagnosticCache = xsync.NewMapOf[[]snyk.Issue]()
 	return &folder
@@ -128,11 +132,14 @@ func (f *Folder) scan(ctx context.Context, path string) {
 	}
 	issuesSlice := f.DocumentDiagnosticsFromCache(path)
 	if issuesSlice != nil {
-		log.Info().Str("method", method).Msgf("Cached results found: Skipping scan for %s", path)
-		f.processResults(issuesSlice)
+		log.Info().Str("method", method).
+			Int("issueSliceLength", len(issuesSlice)).
+			Msgf("Cached results found: Skipping scan for %s", path)
+		f.processResults("", issuesSlice, nil)
 		return
 	}
 
+	f.scanNotifier.SendInProgress(f.Path())
 	f.scanner.Scan(ctx, path, f.processResults, f.path)
 }
 
@@ -144,7 +151,14 @@ func (f *Folder) DocumentDiagnosticsFromCache(file string) []snyk.Issue {
 	return issues
 }
 
-func (f *Folder) processResults(issues []snyk.Issue) {
+func (f *Folder) processResults(product product.Product, issues []snyk.Issue, err error) {
+	if err != nil {
+		f.scanNotifier.SendError(product, f.path)
+		log.Err(err).Str("method", "processResults").
+			Msgf("%s returned an error: %s", product, err.Error())
+		return
+	}
+
 	dedupMap := f.createDedupMap()
 
 	// TODO: perform issue diffing (current <-> newly reported)
@@ -163,12 +177,12 @@ func (f *Folder) processResults(issues []snyk.Issue) {
 	}
 
 	// Filter and publish cached diagnostics
-	f.FilterAndPublishCachedDiagnostics()
+	f.FilterAndPublishCachedDiagnostics(product)
 }
 
-func (f *Folder) FilterAndPublishCachedDiagnostics() {
+func (f *Folder) FilterAndPublishCachedDiagnostics(product product.Product) {
 	issuesByFile := f.filterCachedDiagnostics()
-	f.publishDiagnostics(issuesByFile)
+	f.publishDiagnostics(product, issuesByFile)
 }
 
 func (f *Folder) filterCachedDiagnostics() (fileIssues map[string][]snyk.Issue) {
@@ -222,9 +236,10 @@ func isVisibleSeverity(issue snyk.Issue) bool {
 	return false
 }
 
-func (f *Folder) publishDiagnostics(issuesByFile map[string][]snyk.Issue) {
+func (f *Folder) publishDiagnostics(product product.Product, issuesByFile map[string][]snyk.Issue) {
 	f.sendDiagnostics(issuesByFile)
-	f.sendHovers(issuesByFile)
+	f.sendScanResults(product, issuesByFile)
+	f.sendHovers(issuesByFile) // TODO: this locks up the thread, need to investigate
 }
 
 func (f *Folder) createDedupMap() (dedupMap map[string]bool) {
@@ -252,7 +267,8 @@ func (f *Folder) sendDiagnostics(issuesByFile map[string][]snyk.Issue) {
 }
 
 func (f *Folder) sendDiagnosticsForFile(path string, issues []snyk.Issue) {
-	log.Debug().Str("method", "sendDiagnosticsForFile").Str("affectedFilePath", path).Int("issueCount", len(issues)).Send()
+	log.Debug().Str("method", "sendDiagnosticsForFile").Str("affectedFilePath", path).Int("issueCount",
+		len(issues)).Send()
 	notification.Send(lsp.PublishDiagnosticsParams{
 		URI:         uri.PathToUri(path),
 		Diagnostics: converter.ToDiagnostics(issues),
@@ -338,4 +354,13 @@ func (f *Folder) IsTrusted() bool {
 		}
 	}
 	return false
+}
+
+func (f *Folder) sendScanResults(processedProduct product.Product, issuesByFile map[string][]snyk.Issue) {
+	var productIssues []snyk.Issue
+	for _, issues := range issuesByFile {
+		productIssues = append(productIssues, issues...)
+	}
+
+	f.scanNotifier.SendSuccess(f.Path(), productIssues)
 }

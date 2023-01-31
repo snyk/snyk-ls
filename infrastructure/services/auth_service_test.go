@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
+	appNotification "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
@@ -32,6 +33,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/auth"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -111,9 +113,10 @@ func Test_Logout(t *testing.T) {
 	service := NewAuthenticationService(&snyk_api.FakeApiClient{}, &authProvider, analytics, error_reporting.NewTestErrorReporter())
 	hoverService := hover.NewFakeHoverService()
 	scanner := snyk.NewTestScanner()
-	w := workspace.New(performance.NewTestInstrumentor(), scanner, hoverService)
+	scanNotifier, _ := appNotification.NewScanNotifier(notification.NewNotifier())
+	w := workspace.New(performance.NewTestInstrumentor(), scanner, hoverService, scanNotifier)
 	workspace.Set(w)
-	f := workspace.NewFolder("", "", scanner, hoverService)
+	f := workspace.NewFolder("", "", scanner, hoverService, scanNotifier)
 	w.AddFolder(f)
 
 	// fake existing diagnostic & hover

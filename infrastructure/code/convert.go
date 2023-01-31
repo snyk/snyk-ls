@@ -17,9 +17,12 @@
 package code
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -54,11 +57,12 @@ func (r *rule) getReferences() (references []snyk.Reference) {
 func (r *rule) getCodeIssueType() snyk.Type {
 	const defaultType = snyk.CodeSecurityVulnerability
 
-	if len(r.Categories) != 1 {
+	categories := r.Properties.Categories
+	if len(categories) != 1 {
 		return defaultType
 	}
 
-	switch strings.ToLower(r.Categories[0]) {
+	switch strings.ToLower(categories[0]) {
 	case "defect":
 		return snyk.CodeQualityIssue
 	case "security":
@@ -224,7 +228,7 @@ func (r *result) getMessage(rule rule) string {
 	if len(text) > maxLength {
 		text = text[:maxLength] + "..."
 	}
-	return fmt.Sprintf("%s (Snyk)", text)
+	return text
 }
 
 func (r *rule) getFixDescriptionsForRule(commitFixIndex int) string {
@@ -274,14 +278,19 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 			// convert the documentURI to a path according to our conversion
 			path := loc.PhysicalLocation.ArtifactLocation.URI
 
+			startLine := loc.PhysicalLocation.Region.StartLine - 1
+			endLine := loc.PhysicalLocation.Region.EndLine - 1
+			startCol := loc.PhysicalLocation.Region.StartColumn - 1
+			endCol := loc.PhysicalLocation.Region.EndColumn
+
 			myRange := snyk.Range{
 				Start: snyk.Position{
-					Line:      loc.PhysicalLocation.Region.StartLine - 1,
-					Character: loc.PhysicalLocation.Region.StartColumn - 1,
+					Line:      startLine,
+					Character: startCol,
 				},
 				End: snyk.Position{
-					Line:      loc.PhysicalLocation.Region.EndLine - 1,
-					Character: loc.PhysicalLocation.Region.EndColumn,
+					Line:      endLine,
+					Character: endCol,
 				},
 			}
 
@@ -290,9 +299,47 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 			dataflow := result.getCodeFlow()
 			formattedMessage := result.formattedMessage(rule)
 
+			exampleCommits := rule.getExampleCommits()
+			exampleFixes := make([]snyk.ExampleCommitFix, 0, len(exampleCommits))
+			for _, commit := range exampleCommits {
+				commitURL := commit.fix.CommitURL
+				commitFixLines := make([]snyk.CommitChangeLine, 0, len(commit.fix.Lines))
+				for _, line := range commit.fix.Lines {
+					commitFixLines = append(commitFixLines, snyk.CommitChangeLine{
+						Line:       line.Line,
+						LineNumber: line.LineNumber,
+						LineChange: line.LineChange})
+				}
+
+				exampleFixes = append(exampleFixes, snyk.ExampleCommitFix{
+					CommitURL: commitURL,
+					Lines:     commitFixLines,
+				})
+			}
+
 			issueType := rule.getCodeIssueType()
+			isSecurityType := true
+			if issueType == snyk.CodeQualityIssue {
+				isSecurityType = false
+			}
+
+			additionalData := snyk.CodeIssueData{
+				Message:            result.Message.Text,
+				Rule:               rule.Name,
+				RepoDatasetSize:    rule.Properties.RepoDatasetSize,
+				ExampleCommitFixes: exampleFixes,
+				CWE:                rule.Properties.Cwe,
+				Text:               rule.Help.Markdown,
+				Markers:            []snyk.Marker{}, // TODO: Clarify how to pull markers from the new API with Code Team
+				Cols:               [2]int{startCol, endCol},
+				Rows:               [2]int{startLine, endLine},
+				IsSecurityType:     isSecurityType,
+			}
+
+			id := getIssueId(result.RuleID, path, startLine, endLine, startCol, endCol)
+
 			d := snyk.Issue{
-				ID:                  result.RuleID,
+				ID:                  id,
 				Range:               myRange,
 				Severity:            issueSeverity(result.Level),
 				Message:             message,
@@ -303,6 +350,7 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 				IssueDescriptionURL: ruleLink,
 				References:          rule.getReferences(),
 				Commands:            getCommands(dataflow),
+				AdditionalData:      additionalData,
 			}
 
 			if s.reportDiagnostic(d) {
@@ -311,6 +359,12 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 		}
 	}
 	return issues
+}
+
+func getIssueId(ruleId string, path string, startLine int, endLine int, startCol int, endCol int) string {
+	// deepcode ignore InsecureHash: The hash isn't used for security purposes.
+	id := md5.Sum([]byte(ruleId + path + strconv.Itoa(startLine) + strconv.Itoa(endLine) + strconv.Itoa(startCol) + strconv.Itoa(endCol)))
+	return hex.EncodeToString(id[:])
 }
 
 func (s *SarifResponse) reportDiagnostic(d snyk.Issue) bool {

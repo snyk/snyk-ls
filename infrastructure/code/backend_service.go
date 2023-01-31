@@ -77,7 +77,9 @@ type filtersResponse struct {
 	Extensions  []string `json:"extensions" pact:"min=1"`
 }
 
-func NewHTTPRepository(instrumentor performance2.Instrumentor, errorReporter error_reporting.ErrorReporter) *SnykCodeHTTPClient {
+func NewHTTPRepository(instrumentor performance2.Instrumentor,
+	errorReporter error_reporting.ErrorReporter,
+) *SnykCodeHTTPClient {
 	return &SnykCodeHTTPClient{*httpclient.NewHTTPClient(), instrumentor, errorReporter}
 }
 
@@ -132,7 +134,11 @@ func (s *SnykCodeHTTPClient) CreateBundle(
 	return bundle.BundleHash, bundle.MissingFiles, nil
 }
 
-func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path string, requestBody []byte) ([]byte, error) {
+func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
+	method string,
+	path string,
+	requestBody []byte,
+) ([]byte, error) {
 	span := s.instrumentor.StartSpan(ctx, "code.doCall")
 	defer s.instrumentor.Finish(span)
 
@@ -187,7 +193,8 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 		}
 	}(response.Body)
 	responseBody, err := io.ReadAll(response.Body)
-	log.Trace().Str("response.Status", response.Status).Str("responseBody", string(responseBody)).Str("snyk-request-id", requestId).Msg("RECEIVED FROM REMOTE")
+	log.Trace().Str("response.Status", response.Status).Str("responseBody", string(responseBody)).Str("snyk-request-id",
+		requestId).Msg("RECEIVED FROM REMOTE")
 	if err != nil {
 		log.Err(err).Str("method", method).Msgf("error reading response body")
 		s.errorReporter.CaptureErrorAndReportAsIssue(path, err)
@@ -272,9 +279,12 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 	if err != nil {
 		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
 		return nil, failed, err
+	} else {
+		log.Debug().Str("responseBody", string(responseBody)).Msg("Received response")
 	}
 
-	log.Debug().Str("method", method).Str("requestId", requestId).Float64("progress", response.Progress).Msgf("Status: %s", response.Status)
+	log.Debug().Str("method", method).Str("requestId", requestId).Float64("progress",
+		response.Progress).Msgf("Status: %s", response.Status)
 
 	if response.Status == failed.message {
 		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("analysis failed")

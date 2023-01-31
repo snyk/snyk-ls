@@ -42,7 +42,7 @@ func Test_Scan(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
-	issues := di.OpenSourceScanner().Scan(ctx, path, "")
+	issues, _ := di.OpenSourceScanner().Scan(ctx, path, "")
 
 	assert.NotEqual(t, 0, len(issues))
 	assert.True(t, strings.Contains(issues[0].Message, "<p>"))

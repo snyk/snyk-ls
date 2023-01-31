@@ -185,7 +185,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 		config.CurrentConfig().SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
 		di.Analytics().Initialise()
-		w := workspace.New(di.Instrumentor(), di.Scanner(), di.HoverService())
+		w := workspace.New(di.Instrumentor(), di.Scanner(), di.HoverService(), di.ScanNotifier())
 		workspace.Set(w)
 
 		// async processing listener
@@ -290,15 +290,16 @@ func addWorkspaceFolders(params lsp.InitializeParams, w *workspace.Workspace) {
 				workspaceFolder.Name,
 				di.Scanner(),
 				di.HoverService(),
+				di.ScanNotifier(),
 			)
 			w.AddFolder(f)
 		}
 	} else {
 		if params.RootURI != "" {
-			f := workspace.NewFolder(uri.PathFromUri(params.RootURI), params.ClientInfo.Name, di.Scanner(), di.HoverService())
+			f := workspace.NewFolder(uri.PathFromUri(params.RootURI), params.ClientInfo.Name, di.Scanner(), di.HoverService(), di.ScanNotifier())
 			w.AddFolder(f)
 		} else if params.RootPath != "" {
-			f := workspace.NewFolder(params.RootPath, params.ClientInfo.Name, di.Scanner(), di.HoverService())
+			f := workspace.NewFolder(params.RootPath, params.ClientInfo.Name, di.Scanner(), di.HoverService(), di.ScanNotifier())
 			w.AddFolder(f)
 		}
 	}

@@ -9,19 +9,22 @@ import (
 	notification2 "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
+
+type sendMessageTestCase struct {
+	name           string
+	act            func(scanNotifier snyk.ScanNotifier)
+	expectedStatus lsp2.ScanStatus
+}
 
 func Test_SendMessage(t *testing.T) {
 	testutil.UnitTest(t)
 
-	folderPath := "/test/folderPath"
+	const folderPath = "/test/folderPath"
 
-	tests := []struct {
-		name           string
-		act            func(scanNotifier snyk.ScanNotifier)
-		expectedStatus lsp2.ScanStatus
-	}{
+	tests := []sendMessageTestCase{
 		{
 			name: "SendInProgressMessage",
 			act: func(scanNotifier snyk.ScanNotifier) {
@@ -32,14 +35,14 @@ func Test_SendMessage(t *testing.T) {
 		{
 			name: "SendSuccessMessage",
 			act: func(scanNotifier snyk.ScanNotifier) {
-				scanNotifier.SendSuccess(folderPath)
+				scanNotifier.SendSuccess(folderPath, []snyk.Issue{})
 			},
 			expectedStatus: lsp2.Success,
 		},
 		{
 			name: "SendErrorMessage",
 			act: func(scanNotifier snyk.ScanNotifier) {
-				scanNotifier.SendError(folderPath)
+				scanNotifier.SendError(product.ProductCode, folderPath)
 			},
 			expectedStatus: lsp2.ErrorStatus,
 		},
@@ -47,15 +50,16 @@ func Test_SendMessage(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			expectedProduct := "foo"
+			expectedProduct := "code"
 			mockNotifier := notification.NewMockNotifier()
-			scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, expectedProduct)
+			scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
 
+			// Act - run the test
 			test.act(scanNotifier)
 
+			// Assert - search through all the messages for the expected message
 			for _, msg := range mockNotifier.SentMessages() {
-				scanMessage, ok := msg.(lsp2.SnykScanParams)
-				if ok && scanMessage.Status == test.expectedStatus && scanMessage.Product == expectedProduct {
+				if containsMatchingMessage(t, msg, test, expectedProduct, folderPath) {
 					return
 				}
 			}
@@ -64,16 +68,40 @@ func Test_SendMessage(t *testing.T) {
 	}
 }
 
-func Test_NewScanNotifier_EmptyProductName_Errors(t *testing.T) {
+func Test_NewScanNotifier_NilNotifier_Errors(t *testing.T) {
 	t.Parallel()
-	scanNotifier, err := notification2.NewScanNotifier(notification.NewMockNotifier(), "")
+	scanNotifier, err := notification2.NewScanNotifier(nil)
 	assert.Error(t, err)
 	assert.Nil(t, scanNotifier)
 }
 
-func Test_NewScanNotifier_NilNotifier_Errors(t *testing.T) {
-	t.Parallel()
-	scanNotifier, err := notification2.NewScanNotifier(nil, "code")
-	assert.Error(t, err)
-	assert.Nil(t, scanNotifier)
+func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
+	testutil.UnitTest(t)
+
+	// Arrange
+	mockNotifier := notification.NewMockNotifier()
+	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
+
+	// Act
+	scanNotifier.SendInProgress("/test/folderPath")
+
+	// Assert
+	assert.Equal(t, 1, len(mockNotifier.SentMessages()))
+}
+
+func containsMatchingMessage(t *testing.T,
+	msg any,
+	testCase sendMessageTestCase,
+	expectedProduct string,
+	folderPath string,
+) bool {
+	t.Helper()
+	scanMessage, ok := msg.(lsp2.SnykScanParams)
+	if ok &&
+		scanMessage.Status == testCase.expectedStatus &&
+		scanMessage.Product == expectedProduct &&
+		scanMessage.FolderPath == folderPath {
+		return true
+	}
+	return false
 }

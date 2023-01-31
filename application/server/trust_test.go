@@ -37,7 +37,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScan(t *testing.
 	w := workspace.Get()
 	scanner := &snyk.TestScanner{}
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
-	w.AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService()))
+	w.AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier()))
 	handleUntrustedFolders(context.Background(), loc.Server)
 
 	assert.True(t, checkTrustMessageRequest())
@@ -49,7 +49,7 @@ func Test_handleUntrustedFolders_shouldNotTriggerTrustRequestWhenAlreadyRequesti
 	w := workspace.Get()
 	scanner := &snyk.TestScanner{}
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
-	w.AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService()))
+	w.AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier()))
 	w.StartRequestTrustCommunication()
 
 	handleUntrustedFolders(context.Background(), loc.Server)
@@ -69,7 +69,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 	w := workspace.Get()
 	scanner := &snyk.TestScanner{}
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
-	w.AddFolder(workspace.NewFolder("/trusted/dummy", "dummy", scanner, di.HoverService()))
+	w.AddFolder(workspace.NewFolder("/trusted/dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier()))
 
 	handleUntrustedFolders(context.Background(), loc.Server)
 
@@ -88,7 +88,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 	registerNotifier(loc.Server)
 	w := workspace.Get()
 	scanner := &snyk.TestScanner{}
-	w.AddFolder(workspace.NewFolder("/trusted/dummy", "dummy", scanner, di.HoverService()))
+	w.AddFolder(workspace.NewFolder("/trusted/dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier()))
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 
 	handleUntrustedFolders(context.Background(), loc.Server)
