@@ -25,6 +25,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -55,7 +56,7 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 	scanner := &snyk.TestScanner{}
 	w := New(performance.NewTestInstrumentor(), scanner, nil, nil)
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
-	trustedFolder := NewFolder(trustedDummy, trustedDummy, scanner, nil, nil)
+	trustedFolder := NewFolder(trustedDummy, trustedDummy, scanner, nil, notification.NewMockScanNotifier())
 	w.AddFolder(trustedFolder)
 	untrustedFolder := NewFolder(untrustedDummy, untrustedDummy, scanner, nil, nil)
 	w.AddFolder(untrustedFolder)
