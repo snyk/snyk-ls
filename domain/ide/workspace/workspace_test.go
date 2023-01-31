@@ -37,11 +37,12 @@ func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
 	const trustedDummy = "trustedDummy"
 	const untrustedDummy = "untrustedDummy"
 	scanner := &snyk.TestScanner{}
+	scanNotifier := notification.NewMockScanNotifier()
 	w := New(performance.NewTestInstrumentor(), scanner, nil, nil)
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 	config.CurrentConfig().SetTrustedFolders([]string{trustedDummy})
-	w.AddFolder(NewFolder(trustedDummy, trustedDummy, scanner, nil, nil))
-	w.AddFolder(NewFolder(untrustedDummy, untrustedDummy, scanner, nil, nil))
+	w.AddFolder(NewFolder(trustedDummy, trustedDummy, scanner, nil, scanNotifier))
+	w.AddFolder(NewFolder(untrustedDummy, untrustedDummy, scanner, nil, scanNotifier))
 
 	trusted, untrusted := w.GetFolderTrust()
 
@@ -54,11 +55,12 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 	const trustedDummy = "trustedDummy"
 	const untrustedDummy = "untrustedDummy"
 	scanner := &snyk.TestScanner{}
+	scanNotifier := notification.NewMockScanNotifier()
 	w := New(performance.NewTestInstrumentor(), scanner, nil, nil)
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
-	trustedFolder := NewFolder(trustedDummy, trustedDummy, scanner, nil, notification.NewMockScanNotifier())
+	trustedFolder := NewFolder(trustedDummy, trustedDummy, scanner, nil, scanNotifier)
 	w.AddFolder(trustedFolder)
-	untrustedFolder := NewFolder(untrustedDummy, untrustedDummy, scanner, nil, nil)
+	untrustedFolder := NewFolder(untrustedDummy, untrustedDummy, scanner, nil, scanNotifier)
 	w.AddFolder(untrustedFolder)
 
 	w.TrustFoldersAndScan(context.Background(), []*Folder{trustedFolder})
@@ -79,8 +81,9 @@ func Test_AddAndRemoveFoldersAndTriggerScan(t *testing.T) {
 	toBeRemovedAbsolutePathAfterConversions := uri.PathFromUri(uri.PathToUri(toBeRemoved))
 
 	scanner := &snyk.TestScanner{}
-	w := New(performance.NewTestInstrumentor(), scanner, nil, nil)
-	toBeRemovedFolder := NewFolder(toBeRemovedAbsolutePathAfterConversions, toBeRemoved, scanner, nil, nil)
+	scanNotifier := notification.NewMockScanNotifier()
+	w := New(performance.NewTestInstrumentor(), scanner, nil, scanNotifier)
+	toBeRemovedFolder := NewFolder(toBeRemovedAbsolutePathAfterConversions, toBeRemoved, scanner, nil, scanNotifier)
 	w.AddFolder(toBeRemovedFolder)
 
 	currentConfig := config.CurrentConfig()
