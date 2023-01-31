@@ -362,7 +362,8 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 }
 
 func getIssueId(ruleId string, path string, startLine int, endLine int, startCol int, endCol int) string {
-	id := md5.Sum([]byte(ruleId + path + strconv.Itoa(startLine) + strconv.Itoa(endLine) + strconv.Itoa(startCol) + strconv.Itoa(endCol)))
+	// deepcode ignore InsecureHash: The hash isn't used for security purposes.
+ id := md5.Sum([]byte(ruleId + path + strconv.Itoa(startLine) + strconv.Itoa(endLine) + strconv.Itoa(startCol) + strconv.Itoa(endCol)))
 	return hex.EncodeToString(id[:])
 }
 
