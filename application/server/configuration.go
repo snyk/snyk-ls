@@ -86,7 +86,7 @@ func InitializeSettings(settings lsp.Settings) {
 
 func UpdateSettings(settings lsp.Settings) {
 	currentConfig := config.CurrentConfig()
-	previouslySupportedProducts := currentConfig.GetDisplayableIssueTypes()
+	previouslyEnabledProducts := currentConfig.GetDisplayableIssueTypes()
 	previousAutoScan := currentConfig.IsAutoScanEnabled()
 
 	writeSettings(settings, false)
@@ -95,7 +95,7 @@ func UpdateSettings(settings lsp.Settings) {
 	ws := workspace.Get()
 	if ws != nil {
 		newSupportedProducts := currentConfig.GetDisplayableIssueTypes()
-		for removedIssueType, wasSupported := range previouslySupportedProducts {
+		for removedIssueType, wasSupported := range previouslyEnabledProducts {
 			if wasSupported && !newSupportedProducts[removedIssueType] {
 				ws.ClearIssuesByType(removedIssueType)
 			}

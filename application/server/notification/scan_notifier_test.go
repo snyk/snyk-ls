@@ -75,6 +75,20 @@ func Test_NewScanNotifier_NilNotifier_Errors(t *testing.T) {
 	assert.Nil(t, scanNotifier)
 }
 
+func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
+	testutil.UnitTest(t)
+
+	// Arrange
+	mockNotifier := notification.NewMockNotifier()
+	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
+
+	// Act
+	scanNotifier.SendInProgress("/test/folderPath")
+
+	// Assert
+	assert.Equal(t, 1, len(mockNotifier.SentMessages()))
+}
+
 func containsMatchingMessage(t *testing.T,
 	msg any,
 	testCase sendMessageTestCase,

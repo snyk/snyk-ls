@@ -125,7 +125,6 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 
 // Notifies all snyk/scan enabled product messages
 func (n *scanNotifier) SendInProgress(folderPath string) {
-	// todo: check if config.product is enabled
 	for pr, enabled := range enabledProducts {
 		if !enabled {
 			continue
