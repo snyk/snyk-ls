@@ -195,7 +195,12 @@ func Test_SendingHovers_AfterClearAll_DoesNotBlock(t *testing.T) {
 	hover, _ := fakeDocumentHover()
 
 	service.Channel() <- hover
-	assert.Eventually(t, func() bool { return len(service.hovers) == 1 }, 1*time.Second, 10*time.Millisecond)
+	assert.Eventually(t, func() bool {
+		return service.GetHover(hover.Uri, snyk.Position{
+			Line:      10,
+			Character: 14,
+		}).Contents.Value != ""
+	}, 1*time.Second, 10*time.Millisecond)
 
 }
 

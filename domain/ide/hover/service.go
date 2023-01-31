@@ -146,7 +146,6 @@ func (s *DefaultHoverService) trackHoverDetails(hover Hover[Context]) {
 }
 
 func (s *DefaultHoverService) createHoverListener() {
-	// cleanup before start
 	for {
 		result := <-s.hoverChan
 		log.Trace().
