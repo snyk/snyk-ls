@@ -697,6 +697,7 @@ func markersForSampleSarifResponse(path string) []snyk.Marker {
 
 	return references
 }
+
 func Test_getFormattedMessage(t *testing.T) {
 	testutil.UnitTest(t)
 	_, _, sarifResponse := setupConversionTests(t, true, true)
