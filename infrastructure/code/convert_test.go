@@ -604,6 +604,7 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	assert.Equal(t, references, issue.References)
 	assert.Contains(t, issue.FormattedMessage, "Example Commit Fixes")
 	assert.NotEmpty(t, issue.Commands, "should have getCommands filled from codeflow")
+	assert.Equal(t, markersForSampleSarifResponse(path), issue.AdditionalData.(snyk.CodeIssueData).Markers)
 }
 
 func referencesForSampleSarifResponse() []snyk.Reference {
@@ -620,6 +621,32 @@ func referencesForSampleSarifResponse() []snyk.Reference {
 	return references
 }
 
+func markersForSampleSarifResponse(path string) []snyk.Marker {
+	references := []snyk.Marker{
+		{
+			Msg: [2]int{28, 58},
+			Pos: []snyk.MarkerPosition{
+				{
+					Rows: [2]int{4, 4},
+					Cols: [2]int{13, 33},
+					File: path,
+				},
+			},
+		},
+		{
+			Msg: [2]int{91, 106},
+			Pos: []snyk.MarkerPosition{
+				{
+					Rows: [2]int{5, 5},
+					Cols: [2]int{8, 23},
+					File: path,
+				},
+			},
+		},
+	}
+
+	return references
+}
 func Test_getFormattedMessage(t *testing.T) {
 	testutil.UnitTest(t)
 	_, _, sarifResponse := setupConversionTests(t, true, true)

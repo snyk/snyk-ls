@@ -323,6 +323,8 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 				isSecurityType = false
 			}
 
+			markers := result.getMarkers()
+
 			additionalData := snyk.CodeIssueData{
 				Message:            result.Message.Text,
 				Rule:               rule.Name,
@@ -330,7 +332,7 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 				ExampleCommitFixes: exampleFixes,
 				CWE:                rule.Properties.Cwe,
 				Text:               rule.Help.Markdown,
-				Markers:            []snyk.Marker{}, // TODO: Clarify how to pull markers from the new API with Code Team
+				Markers:            markers,
 				Cols:               [2]int{startCol, endCol},
 				Rows:               [2]int{startLine, endLine},
 				IsSecurityType:     isSecurityType,
@@ -365,6 +367,54 @@ func getIssueId(ruleId string, path string, startLine int, endLine int, startCol
 	// deepcode ignore InsecureHash: The hash isn't used for security purposes.
 	id := md5.Sum([]byte(ruleId + path + strconv.Itoa(startLine) + strconv.Itoa(endLine) + strconv.Itoa(startCol) + strconv.Itoa(endCol)))
 	return hex.EncodeToString(id[:])
+}
+
+func (r *result) getMarkers() []snyk.Marker {
+	markers := make([]snyk.Marker, 0)
+
+	markdownStr := r.Message.Markdown
+	for i, arg := range r.Message.Arguments {
+		// Compute markers
+		indecesRegex := regexp.MustCompile(`(\d)`)
+		indices := indecesRegex.FindAllString(arg, -1) // extract the indices from the brackets
+
+		positions := make([]snyk.MarkerPosition, 0)
+		for _, i := range indices {
+			// get the location of the index
+			index, _ := strconv.Atoi(i)
+			loc := r.CodeFlows[0].ThreadFlows[0].Locations[index]
+
+			startLine := loc.Location.PhysicalLocation.Region.StartLine - 1 // todo: move to an extract func
+			endLine := loc.Location.PhysicalLocation.Region.EndLine - 1
+			startCol := loc.Location.PhysicalLocation.Region.StartColumn - 1
+			endCol := loc.Location.PhysicalLocation.Region.EndColumn
+
+			positions = append(positions, snyk.MarkerPosition{
+				Rows: [2]int{startLine, endLine},
+				Cols: [2]int{startCol, endCol},
+				File: loc.Location.PhysicalLocation.ArtifactLocation.URI,
+			})
+		}
+
+		// Extract the text between the brackets
+		strRegex := regexp.MustCompile(`\[(.*?)\]`)
+		substituteStr := strRegex.FindStringSubmatch(arg)[1] // extract the text between the brackets
+
+		// compute index to insert markers
+		indexTemplate := fmt.Sprintf("{%d}", i)
+		msgStartIndex := strings.LastIndex(markdownStr, indexTemplate)
+		msgEndIndex := msgStartIndex + len(substituteStr)
+
+		markdownStr = strings.Replace(markdownStr, indexTemplate, substituteStr, 1)
+
+		// write marker
+		markers = append(markers, snyk.Marker{
+			Msg: [2]int{msgStartIndex, msgEndIndex},
+			Pos: positions,
+		})
+	}
+
+	return markers
 }
 
 func (s *SarifResponse) reportDiagnostic(d snyk.Issue) bool {
