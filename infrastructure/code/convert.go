@@ -374,17 +374,21 @@ func (r *result) getMarkers() []snyk.Marker {
 
 	markdownStr := r.Message.Markdown
 	for i, arg := range r.Message.Arguments {
-		// Compute markers
-		indecesRegex := regexp.MustCompile(`(\d)`)
-		indices := indecesRegex.FindAllString(arg, -1) // extract the indices from the brackets
+		indecesRegex := regexp.MustCompile(`\((\d)\)`)
+		indices := indecesRegex.FindAllStringSubmatch(arg, -1) // extract the location indices from the brackets
 
 		positions := make([]snyk.MarkerPosition, 0)
-		for _, i := range indices {
+		for _, match := range indices {
 			// get the location of the index
-			index, _ := strconv.Atoi(i)
+			index, _ := strconv.Atoi(match[1])
+
+			if len(r.CodeFlows) == 0 || len(r.CodeFlows[0].ThreadFlows) == 0 || len(r.CodeFlows[0].ThreadFlows[0].Locations) <= index {
+				continue
+			}
+
 			loc := r.CodeFlows[0].ThreadFlows[0].Locations[index]
 
-			startLine := loc.Location.PhysicalLocation.Region.StartLine // todo: move to an extract func
+			startLine := loc.Location.PhysicalLocation.Region.StartLine
 			endLine := loc.Location.PhysicalLocation.Region.EndLine
 			startCol := loc.Location.PhysicalLocation.Region.StartColumn
 			endCol := loc.Location.PhysicalLocation.Region.EndColumn
@@ -396,7 +400,7 @@ func (r *result) getMarkers() []snyk.Marker {
 			})
 		}
 
-		// Extract the text between the brackets
+		// extract the text between the brackets
 		strRegex := regexp.MustCompile(`\[(.*?)\]`)
 		substituteStr := strRegex.FindStringSubmatch(arg)[1] // extract the text between the brackets
 
