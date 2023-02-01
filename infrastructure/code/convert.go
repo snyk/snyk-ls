@@ -407,7 +407,7 @@ func (r *result) getMarkers() []snyk.Marker {
 		// compute index to insert markers
 		indexTemplate := fmt.Sprintf("{%d}", i)
 		msgStartIndex := strings.LastIndex(markdownStr, indexTemplate)
-		msgEndIndex := msgStartIndex + len(substituteStr)
+		msgEndIndex := msgStartIndex + len(substituteStr) - 1
 
 		markdownStr = strings.Replace(markdownStr, indexTemplate, substituteStr, 1)
 

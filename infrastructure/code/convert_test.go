@@ -659,7 +659,7 @@ func referencesForSampleSarifResponse() []snyk.Reference {
 func markersForSampleSarifResponse(path string) []snyk.Marker {
 	references := []snyk.Marker{
 		{
-			Msg: [2]int{28, 58},
+			Msg: [2]int{28, 57},
 			Pos: []snyk.MarkerPosition{
 				{
 					Rows: [2]int{5, 5},
@@ -669,7 +669,7 @@ func markersForSampleSarifResponse(path string) []snyk.Marker {
 			},
 		},
 		{
-			Msg: [2]int{91, 106},
+			Msg: [2]int{91, 105},
 			Pos: []snyk.MarkerPosition{
 				{
 					Rows: [2]int{6, 6},
@@ -684,7 +684,7 @@ func markersForSampleSarifResponse(path string) []snyk.Marker {
 			},
 		},
 		{
-			Msg: [2]int{108, 131},
+			Msg: [2]int{108, 130},
 			Pos: []snyk.MarkerPosition{
 				{
 					Rows: [2]int{20, 20},
