@@ -372,20 +372,30 @@ func getIssueId(ruleId string, path string, startLine int, endLine int, startCol
 func (r *result) getMarkers() []snyk.Marker {
 	markers := make([]snyk.Marker, 0)
 
+	// Example markdown string:
+	// "Printing the stack trace of {0}. Production code should not use {1}. {3}"
 	markdownStr := r.Message.Markdown
+
+	// Example message arguments array:
+	// "arguments": [
+	// 	"[java.lang.InterruptedException](0)",
+	// 	"[printStackTrace](1)(2)",
+	// 	"[This is a test argument](3)"
+	// ]
 	for i, arg := range r.Message.Arguments {
 		indecesRegex := regexp.MustCompile(`\((\d)\)`)
-		indices := indecesRegex.FindAllStringSubmatch(arg, -1) // extract the location indices from the brackets
+		// extract the location indices from the brackets (e.g. indices "1", "2" in the second array element from the above example)
+		indices := indecesRegex.FindAllStringSubmatch(arg, -1)
 
 		positions := make([]snyk.MarkerPosition, 0)
 		for _, match := range indices {
-			// get the location of the index
 			index, _ := strconv.Atoi(match[1])
 
 			if len(r.CodeFlows) == 0 || len(r.CodeFlows[0].ThreadFlows) == 0 || len(r.CodeFlows[0].ThreadFlows[0].Locations) <= index {
 				continue
 			}
 
+			// Every CodeFlow location maps to the index within the message argument
 			loc := r.CodeFlows[0].ThreadFlows[0].Locations[index]
 
 			startLine := loc.Location.PhysicalLocation.Region.StartLine
@@ -402,7 +412,8 @@ func (r *result) getMarkers() []snyk.Marker {
 
 		// extract the text between the brackets
 		strRegex := regexp.MustCompile(`\[(.*?)\]`)
-		substituteStr := strRegex.FindStringSubmatch(arg)[1] // extract the text between the brackets
+		// extract the text between the brackets (e.g. "printStackTrace" in the second array element from the above example)
+		substituteStr := strRegex.FindStringSubmatch(arg)[1]
 
 		// compute index to insert markers
 		indexTemplate := fmt.Sprintf("{%d}", i)
@@ -411,7 +422,7 @@ func (r *result) getMarkers() []snyk.Marker {
 
 		markdownStr = strings.Replace(markdownStr, indexTemplate, substituteStr, 1)
 
-		// write marker
+		// write the marker
 		markers = append(markers, snyk.Marker{
 			Msg: [2]int{msgStartIndex, msgEndIndex},
 			Pos: positions,
