@@ -278,9 +278,9 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 			// convert the documentURI to a path according to our conversion
 			path := loc.PhysicalLocation.ArtifactLocation.URI
 
-			startLine := loc.PhysicalLocation.Region.StartLine - 1
-			endLine := loc.PhysicalLocation.Region.EndLine - 1
-			startCol := loc.PhysicalLocation.Region.StartColumn - 1
+			startLine := loc.PhysicalLocation.Region.StartLine
+			endLine := loc.PhysicalLocation.Region.EndLine
+			startCol := loc.PhysicalLocation.Region.StartColumn
 			endCol := loc.PhysicalLocation.Region.EndColumn
 
 			myRange := snyk.Range{
@@ -384,9 +384,9 @@ func (r *result) getMarkers() []snyk.Marker {
 			index, _ := strconv.Atoi(i)
 			loc := r.CodeFlows[0].ThreadFlows[0].Locations[index]
 
-			startLine := loc.Location.PhysicalLocation.Region.StartLine - 1 // todo: move to an extract func
-			endLine := loc.Location.PhysicalLocation.Region.EndLine - 1
-			startCol := loc.Location.PhysicalLocation.Region.StartColumn - 1
+			startLine := loc.Location.PhysicalLocation.Region.StartLine // todo: move to an extract func
+			endLine := loc.Location.PhysicalLocation.Region.EndLine
+			startCol := loc.Location.PhysicalLocation.Region.StartColumn
 			endCol := loc.Location.PhysicalLocation.Region.EndColumn
 
 			positions = append(positions, snyk.MarkerPosition{
