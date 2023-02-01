@@ -90,6 +90,26 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 				Lines:     lines,
 			})
 		}
+
+		markers := make([]lsp.Marker, 0, len(additionalData.Markers))
+		for _, marker := range additionalData.Markers {
+			positions := make([]lsp.MarkerPosition, 0)
+			for _, pos := range marker.Pos {
+				positions = append(positions, lsp.MarkerPosition{
+					Position: lsp.Position{
+						Rows: pos.Rows,
+						Cols: pos.Cols,
+					},
+					File: pos.File,
+				})
+			}
+
+			markers = append(markers, lsp.Marker{
+				Msg: marker.Msg,
+				Pos: positions,
+			})
+		}
+
 		scanIssues = append(scanIssues, lsp.ScanIssue{
 			Id:       issue.ID,
 			Title:    "Title",
@@ -106,8 +126,7 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 				Cols:               additionalData.Cols,
 				Rows:               additionalData.Rows,
 
-				// TODO - fill these with real data
-				Markers: nil,
+				Markers: markers,
 				LeadURL: "",
 			},
 		})

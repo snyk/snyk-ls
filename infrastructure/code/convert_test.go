@@ -404,11 +404,12 @@ func getSarifResponseJson(filePath string) string {
             "level": "note",
             "message": {
               "text": "Printing the stack trace of java.lang.InterruptedException. Production code should not use printStackTrace.",
-              "markdown": "Printing the stack trace of {0}. Production code should not use {1}.",
-              "arguments": [
-                "[java.lang.InterruptedException](0)",
-                "[printStackTrace](1)"
-              ]
+							"markdown": "Printing the stack trace of {0}. Production code should not use {1}. {2}",
+							"arguments": [
+								"[java.lang.InterruptedException](0)",
+								"[printStackTrace](1)(2)",
+								"[This is a test argument](3)"
+							]
             },
             "locations": [
               {
@@ -468,7 +469,41 @@ func getSarifResponseJson(filePath string) string {
                             }
                           }
                         }
-                      }
+                      },
+											{
+												"location": {
+                          "id": 2,
+                          "physicalLocation": {
+                            "artifactLocation": {
+																"uri": "%s",
+                              "uriBaseId": "dummy"
+                            },
+                            "region": {
+                              "startLine": 10,
+                              "endLine": 10,
+                              "startColumn": 10,
+                              "endColumn": 10
+                            }
+                          }
+                        }
+											},
+											{
+												"location": {
+                          "id": 3,
+                          "physicalLocation": {
+                            "artifactLocation": {
+																"uri": "%s",
+                              "uriBaseId": "dummy"
+                            },
+                            "region": {
+                              "startLine": 20,
+                              "endLine": 20,
+                              "startColumn": 20,
+                              "endColumn": 20
+                            }
+                          }
+                        }
+											}
                     ]
                   }
                 ]
@@ -583,7 +618,7 @@ func getSarifResponseJson(filePath string) string {
     ]
   }
 }
-`, filePath, filePath, filePath, filePath, filePath)
+`, filePath, filePath, filePath, filePath, filePath, filePath, filePath)
 }
 
 func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
@@ -604,6 +639,7 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	assert.Equal(t, references, issue.References)
 	assert.Contains(t, issue.FormattedMessage, "Example Commit Fixes")
 	assert.NotEmpty(t, issue.Commands, "should have getCommands filled from codeflow")
+	assert.Equal(t, markersForSampleSarifResponse(path), issue.AdditionalData.(snyk.CodeIssueData).Markers)
 }
 
 func referencesForSampleSarifResponse() []snyk.Reference {
@@ -617,6 +653,48 @@ func referencesForSampleSarifResponse() []snyk.Reference {
 		{Title: "more tests, exceptions", Url: exampleCommitFix2},
 		{Title: "log errors to the log file", Url: exampleCommitFix3},
 	}
+	return references
+}
+
+func markersForSampleSarifResponse(path string) []snyk.Marker {
+	references := []snyk.Marker{
+		{
+			Msg: [2]int{28, 57},
+			Pos: []snyk.MarkerPosition{
+				{
+					Rows: [2]int{5, 5},
+					Cols: [2]int{14, 33},
+					File: path,
+				},
+			},
+		},
+		{
+			Msg: [2]int{91, 105},
+			Pos: []snyk.MarkerPosition{
+				{
+					Rows: [2]int{6, 6},
+					Cols: [2]int{9, 23},
+					File: path,
+				},
+				{
+					Rows: [2]int{10, 10},
+					Cols: [2]int{10, 10},
+					File: path,
+				},
+			},
+		},
+		{
+			Msg: [2]int{108, 130},
+			Pos: []snyk.MarkerPosition{
+				{
+					Rows: [2]int{20, 20},
+					Cols: [2]int{20, 20},
+					File: path,
+				},
+			},
+		},
+	}
+
 	return references
 }
 
