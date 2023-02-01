@@ -627,8 +627,8 @@ func markersForSampleSarifResponse(path string) []snyk.Marker {
 			Msg: [2]int{28, 58},
 			Pos: []snyk.MarkerPosition{
 				{
-					Rows: [2]int{4, 4},
-					Cols: [2]int{13, 33},
+					Rows: [2]int{5, 5},
+					Cols: [2]int{14, 33},
 					File: path,
 				},
 			},
@@ -637,8 +637,8 @@ func markersForSampleSarifResponse(path string) []snyk.Marker {
 			Msg: [2]int{91, 106},
 			Pos: []snyk.MarkerPosition{
 				{
-					Rows: [2]int{5, 5},
-					Cols: [2]int{8, 23},
+					Rows: [2]int{6, 6},
+					Cols: [2]int{9, 23},
 					File: path,
 				},
 			},
