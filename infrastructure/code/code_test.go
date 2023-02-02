@@ -175,7 +175,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
 			metrics := c.newMetrics(len(docs), time.Time{})
 
-			c.UploadAndAnalyze(context.Background(), docs, "", metrics)
+			_, _ = c.UploadAndAnalyze(context.Background(), docs, "", metrics)
 
 			// verify that create bundle has been called on backend service
 			params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
@@ -201,7 +201,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
 			metrics := c.newMetrics(len(docs), time.Time{})
 
-			c.UploadAndAnalyze(context.Background(), docs, "", metrics)
+			_, _ = c.UploadAndAnalyze(context.Background(), docs, "", metrics)
 
 			params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
 			assert.Nil(t, params)
@@ -223,7 +223,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			files := []string{diagnosticUri}
 			metrics := c.newMetrics(len(files), time.Time{})
 
-			issues := c.UploadAndAnalyze(context.Background(), files, "", metrics)
+			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics)
 
 			assert.NotNil(t, issues)
 			assert.Equal(t, 1, len(issues))
@@ -254,7 +254,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			metrics := c.newMetrics(len(files), time.Now())
 
 			// execute
-			c.UploadAndAnalyze(context.Background(), files, "", metrics)
+			_, _ = c.UploadAndAnalyze(context.Background(), files, "", metrics)
 
 			assert.Len(t, analytics.GetAnalytics(), 1)
 			assert.Equal(
