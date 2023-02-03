@@ -639,7 +639,7 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	assert.Equal(t, references, issue.References)
 	assert.Contains(t, issue.FormattedMessage, "Example Commit Fixes")
 	assert.NotEmpty(t, issue.Commands, "should have getCommands filled from codeflow")
-	assert.Equal(t, markersForSampleSarifResponse(path), issue.AdditionalData.(snyk.CodeIssueData).Markers)
+	assert.Equal(t, markersForSampleSarifResponse(path), issue.AdditionalData.(IssueData).Markers)
 }
 
 func referencesForSampleSarifResponse() []snyk.Reference {
@@ -656,11 +656,11 @@ func referencesForSampleSarifResponse() []snyk.Reference {
 	return references
 }
 
-func markersForSampleSarifResponse(path string) []snyk.Marker {
-	references := []snyk.Marker{
+func markersForSampleSarifResponse(path string) []Marker {
+	references := []Marker{
 		{
 			Msg: [2]int{28, 57},
-			Pos: []snyk.MarkerPosition{
+			Pos: []MarkerPosition{
 				{
 					Rows: [2]int{5, 5},
 					Cols: [2]int{14, 33},
@@ -670,7 +670,7 @@ func markersForSampleSarifResponse(path string) []snyk.Marker {
 		},
 		{
 			Msg: [2]int{91, 105},
-			Pos: []snyk.MarkerPosition{
+			Pos: []MarkerPosition{
 				{
 					Rows: [2]int{6, 6},
 					Cols: [2]int{9, 23},
@@ -685,7 +685,7 @@ func markersForSampleSarifResponse(path string) []snyk.Marker {
 		},
 		{
 			Msg: [2]int{108, 130},
-			Pos: []snyk.MarkerPosition{
+			Pos: []MarkerPosition{
 				{
 					Rows: [2]int{20, 20},
 					Cols: [2]int{20, 20},

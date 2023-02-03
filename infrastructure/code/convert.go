@@ -300,18 +300,18 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 			formattedMessage := result.formattedMessage(rule)
 
 			exampleCommits := rule.getExampleCommits()
-			exampleFixes := make([]snyk.ExampleCommitFix, 0, len(exampleCommits))
+			exampleFixes := make([]ExampleCommitFix, 0, len(exampleCommits))
 			for _, commit := range exampleCommits {
 				commitURL := commit.fix.CommitURL
-				commitFixLines := make([]snyk.CommitChangeLine, 0, len(commit.fix.Lines))
+				commitFixLines := make([]CommitChangeLine, 0, len(commit.fix.Lines))
 				for _, line := range commit.fix.Lines {
-					commitFixLines = append(commitFixLines, snyk.CommitChangeLine{
+					commitFixLines = append(commitFixLines, CommitChangeLine{
 						Line:       line.Line,
 						LineNumber: line.LineNumber,
 						LineChange: line.LineChange})
 				}
 
-				exampleFixes = append(exampleFixes, snyk.ExampleCommitFix{
+				exampleFixes = append(exampleFixes, ExampleCommitFix{
 					CommitURL: commitURL,
 					Lines:     commitFixLines,
 				})
@@ -325,9 +325,10 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 
 			markers := result.getMarkers()
 
-			additionalData := snyk.CodeIssueData{
+			additionalData := IssueData{
 				Message:            result.Message.Text,
 				Rule:               rule.Name,
+				RuleId:             rule.ID,
 				RepoDatasetSize:    rule.Properties.RepoDatasetSize,
 				ExampleCommitFixes: exampleFixes,
 				CWE:                rule.Properties.Cwe,
@@ -369,8 +370,8 @@ func getIssueId(ruleId string, path string, startLine int, endLine int, startCol
 	return hex.EncodeToString(id[:])
 }
 
-func (r *result) getMarkers() []snyk.Marker {
-	markers := make([]snyk.Marker, 0)
+func (r *result) getMarkers() []Marker {
+	markers := make([]Marker, 0)
 
 	// Example markdown string:
 	// "Printing the stack trace of {0}. Production code should not use {1}. {3}"
@@ -387,7 +388,7 @@ func (r *result) getMarkers() []snyk.Marker {
 		// extract the location indices from the brackets (e.g. indices "1", "2" in the second array element from the above example)
 		indices := indecesRegex.FindAllStringSubmatch(arg, -1)
 
-		positions := make([]snyk.MarkerPosition, 0)
+		positions := make([]MarkerPosition, 0)
 		for _, match := range indices {
 			index, _ := strconv.Atoi(match[1])
 
@@ -403,7 +404,7 @@ func (r *result) getMarkers() []snyk.Marker {
 			startCol := loc.Location.PhysicalLocation.Region.StartColumn
 			endCol := loc.Location.PhysicalLocation.Region.EndColumn
 
-			positions = append(positions, snyk.MarkerPosition{
+			positions = append(positions, MarkerPosition{
 				Rows: [2]int{startLine, endLine},
 				Cols: [2]int{startCol, endCol},
 				File: loc.Location.PhysicalLocation.ArtifactLocation.URI,
@@ -423,7 +424,7 @@ func (r *result) getMarkers() []snyk.Marker {
 		markdownStr = strings.Replace(markdownStr, indexTemplate, substituteStr, 1)
 
 		// write the marker
-		markers = append(markers, snyk.Marker{
+		markers = append(markers, Marker{
 			Msg: [2]int{msgStartIndex, msgEndIndex},
 			Pos: positions,
 		})

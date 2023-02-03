@@ -53,45 +53,9 @@ type Issue struct {
 	// CodeActions can contain workspace edits or commands to be executed
 	CodeActions []CodeAction
 	// Commands that can be executed
-	Commands       []Command
+	Commands []Command
+	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
 	AdditionalData any
-}
-
-type CodeIssueData struct {
-	Message            string             `json:"message"`
-	Rule               string             `json:"rule"`
-	RepoDatasetSize    int                `json:"repoDatasetSize"`
-	ExampleCommitFixes []ExampleCommitFix `json:"exampleCommitFixes"`
-	CWE                []string           `json:"cwe"`
-	Text               string             `json:"text"`
-	Markers            []Marker           `json:"markers,omitempty"`
-	Cols               CodePoint          `json:"cols"`
-	Rows               CodePoint          `json:"rows"`
-	IsSecurityType     bool               `json:"isSecurityType"`
-}
-
-type ExampleCommitFix struct {
-	CommitURL string             `json:"commitURL"`
-	Lines     []CommitChangeLine `json:"lines"`
-}
-
-type CommitChangeLine struct {
-	Line       string `json:"line"`
-	LineNumber int    `json:"lineNumber"`
-	LineChange string `json:"lineChange"`
-}
-
-type CodePoint = [2]int
-
-type Marker struct {
-	Msg CodePoint        `json:"msg"`
-	Pos []MarkerPosition `json:"pos"`
-}
-
-type MarkerPosition struct {
-	Cols CodePoint `json:"cols"`
-	Rows CodePoint `json:"rows"`
-	File string    `json:"file"`
 }
 
 func (i Issue) GetFilterableIssueType() product.FilterableIssueType {
