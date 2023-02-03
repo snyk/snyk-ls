@@ -69,18 +69,18 @@ func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) err
 
 func (b *Bundle) FetchDiagnosticsData(
 	ctx context.Context,
-) []snyk.Issue {
+) ([]snyk.Issue, error) {
 	defer log.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
 	log.Debug().Str("method", "FetchDiagnosticsData").Msg("started.")
 	return b.retrieveAnalysis(ctx)
 }
 
-func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
+func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 	logger := log.With().Str("method", "retrieveAnalysis").Logger()
 
 	if b.BundleHash == "" {
 		logger.Warn().Str("rootPath", b.rootPath).Msg("bundle hash is empty")
-		return []snyk.Issue{}
+		return []snyk.Issue{}, nil
 	}
 
 	p := progress.NewTracker(false)
@@ -100,7 +100,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
 	start := time.Now()
 	for {
 		if ctx.Err() != nil { // Cancellation requested
-			return []snyk.Issue{}
+			return []snyk.Issue{}, nil
 		}
 		issues, status, err := b.SnykCode.RunAnalysis(s.Context(), analysisOptions)
 
@@ -111,14 +111,14 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
 				Msg("error retrieving diagnostics...")
 			b.errorReporter.CaptureErrorAndReportAsIssue(b.rootPath, err)
 			p.End(fmt.Sprintf("Analysis failed: %v", err))
-			return []snyk.Issue{}
+			return []snyk.Issue{}, err
 		}
 
 		if status.message == "COMPLETE" {
 			logger.Trace().Str("requestId", b.requestId).
 				Msg("sending diagnostics...")
 			p.End("Analysis complete.")
-			return issues
+			return issues, nil
 		} else if status.message == "ANALYZING" {
 			logger.Trace().Msg("\"Analyzing\" message received, sending In-Progress message to client")
 		}
@@ -128,7 +128,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) []snyk.Issue {
 			log.Error().Err(err).Msg("timeout...")
 			b.errorReporter.CaptureErrorAndReportAsIssue(b.rootPath, err)
 			p.End("Snyk Code Analysis timed out")
-			return []snyk.Issue{}
+			return []snyk.Issue{}, err
 		}
 		time.Sleep(1 * time.Second)
 		p.Report(status.percentage)
