@@ -6,6 +6,7 @@ import (
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -70,7 +71,7 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 	var scanIssues []lsp.ScanIssue
 
 	for _, issue := range issues {
-		additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData) // Will change when OSS communication is added
+		additionalData, ok := issue.AdditionalData.(code.IssueData) // Will change when OSS communication is added
 		if !ok {
 			continue // skip non-code issues
 		}
