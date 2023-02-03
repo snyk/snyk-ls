@@ -25,6 +25,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
@@ -132,7 +133,7 @@ func registerNotifier(srv *jrpc2.Server) {
 				Interface("product", params.Product).
 				Interface("status", params.Status).
 				Msg("sending scan data to client")
-		case notification.ShowMessageRequest:
+		case snyk.ShowMessageRequest:
 			// convert our internal message request to LSP message request
 			requestParams := lsp.ShowMessageRequestParams{
 				Type:    lsp.MessageType(params.Type),
@@ -167,7 +168,7 @@ func registerNotifier(srv *jrpc2.Server) {
 					return
 				}
 
-				selectedCommand := params.Actions[notification.MessageAction(actionItem.Title)]
+				selectedCommand := params.Actions[snyk.MessageAction(actionItem.Title)]
 				err = di.CommandService().ExecuteCommand(context.Background(), selectedCommand)
 				if err != nil {
 					log.Error().

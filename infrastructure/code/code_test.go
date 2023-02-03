@@ -472,13 +472,13 @@ func TestIsSastEnabled(t *testing.T) {
 		notification.DisposeListener()
 		config.CurrentConfig().SetSnykCodeEnabled(true)
 		apiClient.CodeEnabled = false
-		actionMap := make(map[notification.MessageAction]snyk.CommandInterface)
+		actionMap := make(map[snyk.MessageAction]snyk.CommandInterface)
 
 		actionMap[enableSnykCodeMessageActionItemTitle] = command.NewOpenBrowserCommand(codeEnablementURL)
 		actionMap[closeMessageActionItemTitle] = nil
-		expectedShowMessageRequest := notification.ShowMessageRequest{
+		expectedShowMessageRequest := snyk.ShowMessageRequest{
 			Message: codeDisabledInOrganisationMessageText,
-			Type:    notification.Warning,
+			Type:    snyk.Warning,
 			Actions: actionMap,
 		}
 

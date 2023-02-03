@@ -398,8 +398,8 @@ const codeDisabledInOrganisationMessageText = "It looks like your organization h
 	"This will open your organization settings in your browser."
 
 const codeEnablementURL = "https://snyk.io"
-const enableSnykCodeMessageActionItemTitle notification.MessageAction = "Enable Snyk Code"
-const closeMessageActionItemTitle notification.MessageAction = "Close"
+const enableSnykCodeMessageActionItemTitle snyk.MessageAction = "Enable Snyk Code"
+const closeMessageActionItemTitle snyk.MessageAction = "Close"
 
 func (sc *Scanner) isSastEnabled() bool {
 	if !sc.IsEnabled() {
@@ -413,13 +413,13 @@ func (sc *Scanner) isSastEnabled() bool {
 	}
 	if !sastEnabled {
 		// this is processed in the listener registered to translate into the right client protocol
-		actionCommandMap := make(map[notification.MessageAction]snyk.CommandInterface)
+		actionCommandMap := make(map[snyk.MessageAction]snyk.CommandInterface)
 		actionCommandMap[enableSnykCodeMessageActionItemTitle] = command.NewOpenBrowserCommand(codeEnablementURL)
 		actionCommandMap[closeMessageActionItemTitle] = nil
 
-		notification.Send(notification.ShowMessageRequest{
+		notification.Send(snyk.ShowMessageRequest{
 			Message: codeDisabledInOrganisationMessageText,
-			Type:    notification.Warning,
+			Type:    snyk.Warning,
 			Actions: actionCommandMap,
 		})
 		return false

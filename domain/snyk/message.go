@@ -14,22 +14,20 @@
  * limitations under the License.
  */
 
-package notification
-
-import "github.com/snyk/snyk-ls/domain/snyk"
+package snyk
 
 type MessageAction string
 
-type Type int
+type MessageType int
 
 const (
-	Error   Type = 1
-	Warning Type = 2
-	Info    Type = 3
+	Error   MessageType = 1
+	Warning MessageType = 2
+	Info    MessageType = 3
 )
 
 type ShowMessageRequest struct {
-	Message string                                  `json:"message"`
-	Type    Type                                    `json:"type"`
-	Actions map[MessageAction]snyk.CommandInterface `json:"actions"`
+	Message string                             `json:"message"`
+	Type    MessageType                        `json:"type"`
+	Actions map[MessageAction]CommandInterface `json:"actions"`
 }

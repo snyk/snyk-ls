@@ -209,10 +209,10 @@ func TestShowMessageRequest(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		actionCommandMap := make(map[notification.MessageAction]snyk.CommandInterface)
+		actionCommandMap := make(map[snyk.MessageAction]snyk.CommandInterface)
 		actionCommandMap["test title"] = command.NewOpenBrowserCommand("https://snyk.io")
 
-		expected := notification.ShowMessageRequest{Message: "message", Type: notification.Info, Actions: actionCommandMap}
+		expected := snyk.ShowMessageRequest{Message: "message", Type: snyk.Info, Actions: actionCommandMap}
 
 		notification.Send(expected)
 
@@ -246,9 +246,9 @@ func TestShowMessageRequest(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		actionCommandMap := make(map[notification.MessageAction]snyk.CommandInterface)
-		actionCommandMap[notification.MessageAction(selectedAction)] = command.NewOpenBrowserCommand("https://snyk.io")
-		request := notification.ShowMessageRequest{Message: "message", Type: notification.Info, Actions: actionCommandMap}
+		actionCommandMap := make(map[snyk.MessageAction]snyk.CommandInterface)
+		actionCommandMap[snyk.MessageAction(selectedAction)] = command.NewOpenBrowserCommand("https://snyk.io")
+		request := snyk.ShowMessageRequest{Message: "message", Type: snyk.Info, Actions: actionCommandMap}
 
 		notification.Send(request)
 
