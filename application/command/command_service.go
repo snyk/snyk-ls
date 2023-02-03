@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited
+ * © 2023 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,22 @@
  * limitations under the License.
  */
 
-package notification
+package command
 
-import "github.com/snyk/snyk-ls/domain/snyk"
+import (
+	"context"
 
-type MessageAction string
-
-type Type int
-
-const (
-	Error   Type = 1
-	Warning Type = 2
-	Info    Type = 3
+	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
-type ShowMessageRequest struct {
-	Message string                                  `json:"message"`
-	Type    Type                                    `json:"type"`
-	Actions map[MessageAction]snyk.CommandInterface `json:"actions"`
+type CommandServiceImpl struct {
+}
+
+func NewCommandService() snyk.CommandService {
+	return &CommandServiceImpl{}
+}
+
+// ExecuteCommand implements CommandService
+func (service *CommandServiceImpl) ExecuteCommand(ctx context.Context, command snyk.CommandInterface) error {
+	return command.Execute(ctx)
 }

@@ -61,6 +61,7 @@ var hoverService hover.Service
 var scanner snyk.Scanner
 var cliInitializer *cli2.Initializer
 var scanNotifier snyk.ScanNotifier
+var commandService snyk.CommandService
 
 var initMutex = &sync.Mutex{}
 
@@ -153,6 +154,7 @@ func TestInit(t *testing.T) {
 		openSourceScanner,
 	)
 	hoverService = hover.NewDefaultService(analytics)
+	commandService = snyk.NewCommandServiceMock()
 	t.Cleanup(
 		func() {
 			fakeClient.Clear()
@@ -235,4 +237,10 @@ func CliInitializer() *cli2.Initializer {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return cliInitializer
+}
+
+func CommandService() snyk.CommandService {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return commandService
 }

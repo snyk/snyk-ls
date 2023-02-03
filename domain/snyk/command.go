@@ -16,6 +16,8 @@
 
 package snyk
 
+import "context"
+
 const (
 	NavigateToRangeCommand       = "snyk.navigateToRange"
 	WorkspaceScanCommand         = "snyk.workspace.scan"
@@ -27,6 +29,11 @@ const (
 	TrustWorkspaceFoldersCommand = "snyk.trustWorkspaceFolders"
 )
 
+type CommandInterface interface {
+	Command() Command
+	Execute(ctx context.Context) error
+}
+
 type Command struct {
 	/**
 	 * Title of the command, like `save`.
@@ -35,7 +42,7 @@ type Command struct {
 	/**
 	 * The identifier of the actual command handler.
 	 */
-	Command string
+	CommandId string
 	/**
 	 * Arguments that the command handler should be
 	 * invoked with.
@@ -44,3 +51,23 @@ type Command struct {
 }
 
 type CommandName string
+
+type CommandService interface {
+	ExecuteCommand(ctx context.Context, command CommandInterface) error
+}
+
+type CommandServiceMock struct {
+	executedCommands []CommandInterface
+}
+
+func NewCommandServiceMock() *CommandServiceMock {
+	return &CommandServiceMock{}
+}
+
+func (service *CommandServiceMock) ExecuteCommand(ctx context.Context, command CommandInterface) error {
+	service.executedCommands = append(service.executedCommands, command)
+	return nil
+}
+func (service *CommandServiceMock) ExecutedCommands() []CommandInterface {
+	return service.executedCommands
+}

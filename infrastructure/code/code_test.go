@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
@@ -471,15 +472,10 @@ func TestIsSastEnabled(t *testing.T) {
 		notification.DisposeListener()
 		config.CurrentConfig().SetSnykCodeEnabled(true)
 		apiClient.CodeEnabled = false
-		actionMap := make(map[notification.MessageAction]snyk.Command)
+		actionMap := make(map[notification.MessageAction]snyk.CommandInterface)
 
-		actionMap[enableSnykCodeMessageActionItemTitle] =
-			snyk.Command{
-				Title:     snyk.OpenBrowserCommand,
-				Command:   snyk.OpenBrowserCommand,
-				Arguments: []any{codeEnablementURL},
-			}
-		actionMap[closeMessageActionItemTitle] = snyk.Command{}
+		actionMap[enableSnykCodeMessageActionItemTitle] = command.NewOpenBrowserCommand(codeEnablementURL)
+		actionMap[closeMessageActionItemTitle] = nil
 		expectedShowMessageRequest := notification.ShowMessageRequest{
 			Message: codeDisabledInOrganisationMessageText,
 			Type:    notification.Warning,

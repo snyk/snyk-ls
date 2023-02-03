@@ -23,6 +23,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
@@ -89,9 +90,6 @@ func CancelProgress(token lsp.ProgressToken) {
 	progress.CancelProgressChannel <- token
 }
 
-// code scanner -> notification "hey, ask the user blah" -> notification listener -> registered with register Notifier -> notifier -> server.Notify -> client
-// code scanner -> notification "hey, ask the user blah" -> notification listener -> registered with register Notifier -> callback sender -> server.Callback -> client
-
 func registerNotifier(srv *jrpc2.Server) {
 	callbackFunction := func(params any) {
 		switch params := params.(type) {
@@ -142,7 +140,7 @@ func registerNotifier(srv *jrpc2.Server) {
 			}
 			for _, action := range params.Actions {
 				requestParams.Actions = append(requestParams.Actions, lsp.MessageActionItem{
-					Title: action.Title,
+					Title: action.Command().Title,
 				})
 			}
 			log.Info().
@@ -168,10 +166,16 @@ func registerNotifier(srv *jrpc2.Server) {
 						Msg("error while unmarshalling message request response")
 					return
 				}
-				// we have request
-				// we have an answer
-				// the right action happens command types -> interfaces / mocks
-				//doSth(requestParams, actionItem)
+
+				selectedCommand := params.Actions[notification.MessageAction(actionItem.Title)]
+				err = di.CommandService().ExecuteCommand(context.Background(), selectedCommand)
+				if err != nil {
+					log.Error().
+						Err(err).
+						Str("method", "registerNotifier").
+						Msg("failed to execute command")
+					return
+				}
 			}
 
 		default:

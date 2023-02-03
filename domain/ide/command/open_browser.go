@@ -17,12 +17,38 @@
 package command
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"runtime"
 
 	"github.com/rs/zerolog/log"
+
+	"github.com/snyk/snyk-ls/domain/snyk"
 )
+
+type OpenBrowserCommand struct {
+	command snyk.Command
+}
+
+func NewOpenBrowserCommand(url string) *OpenBrowserCommand {
+	return &OpenBrowserCommand{
+		command: snyk.Command{
+			Title:     snyk.OpenBrowserCommand,
+			CommandId: snyk.OpenBrowserCommand,
+			Arguments: []any{url},
+		},
+	}
+}
+
+func (cmd *OpenBrowserCommand) Command() snyk.Command {
+	return cmd.command
+}
+
+func (cmd *OpenBrowserCommand) Execute(ctx context.Context) error {
+	OpenBrowser(cmd.command.Arguments[0].(string))
+	return nil
+}
 
 func OpenBrowser(url string) {
 	var err error

@@ -717,7 +717,7 @@ func TestGetCodeFlowCommands(t *testing.T) {
 	result := sarifResponse.Sarif.Runs[0].Results[0]
 	flow := result.getCodeFlow()
 	assert.NotEmpty(t, flow)
-	assert.Equal(t, snyk.NavigateToRangeCommand, flow[0].toCommand().Command)
+	assert.Equal(t, snyk.NavigateToRangeCommand, flow[0].toCommand().CommandId)
 }
 
 func setupConversionTests(t *testing.T,

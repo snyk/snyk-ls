@@ -44,7 +44,7 @@ func getCodeLensFromCommand(issue snyk.Issue, command snyk.Command) sglsp.CodeLe
 		Range: converter.ToRange(issue.Range),
 		Command: sglsp.Command{
 			Title:     command.Title,
-			Command:   command.Command,
+			Command:   command.CommandId,
 			Arguments: command.Arguments,
 		},
 	}

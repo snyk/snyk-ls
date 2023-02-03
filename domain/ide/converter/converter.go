@@ -65,7 +65,7 @@ func ToCodeAction(issue snyk.Issue, action snyk.CodeAction) lsp.CodeAction {
 func ToCommand(command snyk.Command) sglsp.Command {
 	return sglsp.Command{
 		Title:     command.Title,
-		Command:   command.Command,
+		Command:   command.CommandId,
 		Arguments: command.Arguments,
 	}
 }

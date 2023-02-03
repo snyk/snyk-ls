@@ -56,7 +56,7 @@ var (
 	}
 	FakeCommand = snyk.Command{
 		Title:     "Code Flow blah blah fake",
-		Command:   snyk.NavigateToRangeCommand,
+		CommandId: snyk.NavigateToRangeCommand,
 		Arguments: []any{"path", fakeRange},
 	}
 

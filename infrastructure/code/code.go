@@ -32,6 +32,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -412,14 +413,9 @@ func (sc *Scanner) isSastEnabled() bool {
 	}
 	if !sastEnabled {
 		// this is processed in the listener registered to translate into the right client protocol
-		actionCommandMap := make(map[notification.MessageAction]snyk.Command)
-		actionCommandMap[enableSnykCodeMessageActionItemTitle] =
-			snyk.Command{
-				Title:     snyk.OpenBrowserCommand,
-				Command:   snyk.OpenBrowserCommand,
-				Arguments: []any{codeEnablementURL},
-			}
-		actionCommandMap[closeMessageActionItemTitle] = snyk.Command{} // be user friendly
+		actionCommandMap := make(map[notification.MessageAction]snyk.CommandInterface)
+		actionCommandMap[enableSnykCodeMessageActionItemTitle] = command.NewOpenBrowserCommand(codeEnablementURL)
+		actionCommandMap[closeMessageActionItemTitle] = nil
 
 		notification.Send(notification.ShowMessageRequest{
 			Message: codeDisabledInOrganisationMessageText,

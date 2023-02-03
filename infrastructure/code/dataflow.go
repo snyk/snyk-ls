@@ -74,7 +74,7 @@ func (d *dataflowElement) toCommand() snyk.Command {
 			filepath.Base(d.filePath),
 			d.flowRange.Start.Line+1,
 		),
-		Command:   snyk.NavigateToRangeCommand,
+		CommandId: snyk.NavigateToRangeCommand,
 		Arguments: []any{d.filePath, d.flowRange},
 	}
 	return command
