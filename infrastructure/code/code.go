@@ -147,6 +147,10 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) (issue
 		sc.scanStatusMutex.Unlock()
 	}()
 
+	if !sc.isSastEnabled() {
+		return issues, err
+	}
+
 	// Start the scan
 	startTime := time.Now()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
@@ -296,10 +300,6 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 		return issues, nil
 	}
 
-	if !sc.isSastEnabled() {
-		return issues, nil
-	}
-
 	requestId := span.GetTraceId() // use span trace id as code-request-id
 
 	bundle, bundleFiles, err := sc.createBundle(span.Context(), requestId, path, files)
@@ -392,7 +392,18 @@ func (sc *Scanner) createBundle(
 	return b, bundleFiles, err
 }
 
+const codeDisabledInOrganisationMessageText = "It looks like your organization has disabled Snyk Code. " +
+	"You can easily enable it by clicking on 'Enable Snyk Code'. " +
+	"This will open your organization settings in your browser."
+
+const codeEnablementURL = "https://snyk.io"
+const enableSnykCodeMessageActionItemTitle notification.MessageAction = "Enable Snyk Code"
+const closeMessageActionItemTitle notification.MessageAction = "Close"
+
 func (sc *Scanner) isSastEnabled() bool {
+	if !sc.IsEnabled() {
+		return false
+	}
 	sastEnabled, localCodeEngineEnabled, _, err := sc.SnykApiClient.SastEnabled()
 	if err != nil {
 		log.Error().Err(err).Str("method", "isSastEnabled").Msg("couldn't get sast enablement")
@@ -400,7 +411,21 @@ func (sc *Scanner) isSastEnabled() bool {
 		return false
 	}
 	if !sastEnabled {
-		notification.SendShowMessage(sglsp.Warning, "Snyk Code is disabled by your organisation's configuration.")
+		// this is processed in the listener registered to translate into the right client protocol
+		actionCommandMap := make(map[notification.MessageAction]snyk.Command)
+		actionCommandMap[enableSnykCodeMessageActionItemTitle] =
+			snyk.Command{
+				Title:     snyk.OpenBrowserCommand,
+				Command:   snyk.OpenBrowserCommand,
+				Arguments: []any{codeEnablementURL},
+			}
+		actionCommandMap[closeMessageActionItemTitle] = snyk.Command{} // be user friendly
+
+		notification.Send(notification.ShowMessageRequest{
+			Message: codeDisabledInOrganisationMessageText,
+			Type:    notification.Warning,
+			Actions: actionCommandMap,
+		})
 		return false
 	} else {
 		if localCodeEngineEnabled {

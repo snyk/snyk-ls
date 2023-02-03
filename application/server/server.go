@@ -442,59 +442,6 @@ func noOpHandler() jrpc2.Handler {
 	})
 }
 
-func registerNotifier(srv *jrpc2.Server) {
-	callbackFunction := func(params any) {
-		switch params := params.(type) {
-		case lsp.AuthenticationParams:
-			notifier(srv, "$/snyk.hasAuthenticated", params)
-			log.Info().Str("method", "registerNotifier").
-				Msg("sending token")
-		case lsp.SnykIsAvailableCli:
-			notifier(srv, "$/snyk.isAvailableCli", params)
-			log.Info().Str("method", "registerNotifier").
-				Msg("sending cli path")
-		case sglsp.ShowMessageParams:
-			notifier(srv, "window/showMessage", params)
-			log.Info().
-				Str("method", "registerNotifier").
-				Interface("message", params).
-				Msg("showing message")
-		case lsp.PublishDiagnosticsParams:
-			notifier(srv, "textDocument/publishDiagnostics", params)
-			source := "LSP"
-			if len(params.Diagnostics) > 0 {
-				source = params.Diagnostics[0].Source
-			}
-			log.Info().
-				Str("method", "registerNotifier").
-				Interface("documentURI", params.URI).
-				Interface("source", source).
-				Interface("diagnosticCount", len(params.Diagnostics)).
-				Msg("publishing diagnostics")
-		case lsp.SnykTrustedFoldersParams:
-			notifier(srv, "$/snyk.addTrustedFolders", params)
-			log.Info().
-				Str("method", "registerNotifier").
-				Interface("trustedPaths", params.TrustedFolders).
-				Msg("sending trusted Folders to client")
-		case lsp.SnykScanParams:
-			notifier(srv, "$/snyk.scan", params)
-			log.Info().
-				Str("method", "registerNotifier").
-				Interface("product", params.Product).
-				Interface("status", params.Status).
-				Msg("sending scan data to client")
-		default:
-			log.Warn().
-				Str("method", "registerNotifier").
-				Interface("params", params).
-				Msg("received unconfigured notification object")
-		}
-	}
-	notification.CreateListener(callbackFunction)
-	log.Info().Str("method", "registerNotifier").Msg("registered notifier")
-}
-
 type RPCLogger struct{}
 
 func (R RPCLogger) LogRequest(_ context.Context, req *jrpc2.Request) {

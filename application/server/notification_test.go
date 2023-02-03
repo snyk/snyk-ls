@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
@@ -191,6 +192,44 @@ func Test_IsAvailableCliNotification(t *testing.T) {
 				}
 			}
 			return false
+		},
+		2*time.Second,
+		10*time.Millisecond,
+	)
+}
+
+func TestShowMessageRequest(t *testing.T) {
+	loc := setupServer(t)
+
+	_, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	actionCommandMap := make(map[notification.MessageAction]snyk.Command)
+	actionCommandMap["test title"] =
+		snyk.Command{
+			Title:     "title",
+			Command:   "command",
+			Arguments: []any{"test argument"},
+		}
+
+	expected := notification.ShowMessageRequest{Message: "message", Type: notification.Info, Actions: actionCommandMap}
+
+	notification.Send(expected)
+
+	assert.Eventually(
+		t,
+		func() bool {
+			callbacks := jsonRPCRecorder.FindCallbacksByMethod("window/showMessageRequest")
+			if len(callbacks) < 1 {
+				return false
+			}
+			var actual lsp.ShowMessageRequestParams
+			_ = callbacks[0].UnmarshalParams(&actual)
+			return expected.Actions["test title"].Title == actual.Actions[0].Title &&
+				expected.Message == actual.Message &&
+				int(expected.Type) == int(actual.Type)
 		},
 		2*time.Second,
 		10*time.Millisecond,
