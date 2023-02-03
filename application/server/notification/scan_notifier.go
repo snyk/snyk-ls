@@ -118,6 +118,7 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 			AdditionalData: lsp.CodeIssueData{
 				Message:            additionalData.Message,
 				Rule:               additionalData.Rule,
+				RuleId:             additionalData.RuleId,
 				RepoDatasetSize:    additionalData.RepoDatasetSize,
 				ExampleCommitFixes: exampleCommitFixes,
 				CWE:                additionalData.CWE,
