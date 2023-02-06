@@ -29,7 +29,7 @@ func getCodeEnablementUrl() string {
 		return "default api url"
 	}
 
-	apiUrl.Path = strings.Replace(apiUrl.Path, "api", "", 1)
+	apiUrl.Path = "/"
 
 	// if multi tenant, add `app.` subdomain
 	if !isSingleTenant(apiUrl) {

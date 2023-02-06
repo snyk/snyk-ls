@@ -36,4 +36,8 @@ func Test_getCodeEnablementUrl_CustomEndpoint(t *testing.T) {
 		config.CurrentConfig().UpdateApiEndpoints("https://app.custom.snyk.io/api")
 		assert.Equal(t, "https://app.custom.snyk.io/manage/snyk-code?from=VS_CODE", getCodeEnablementUrl())
 	})
+	t.Run("Arbitrary path in url", func(t *testing.T) {
+		config.CurrentConfig().UpdateApiEndpoints("https://dev.snyk.io/api/v1")
+		assert.Equal(t, "https://app.dev.snyk.io/manage/snyk-code?from=VS_CODE", getCodeEnablementUrl())
+	})
 }
