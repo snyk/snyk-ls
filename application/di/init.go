@@ -23,6 +23,7 @@ import (
 
 	"github.com/adrg/xdg"
 
+	"github.com/snyk/snyk-ls/application/command"
 	"github.com/snyk/snyk-ls/application/config"
 	appNotification "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -70,6 +71,7 @@ func Init() {
 	defer initMutex.Unlock()
 	initInfrastructure()
 	initDomain()
+	initApplication()
 }
 
 func initDomain() {
@@ -117,6 +119,10 @@ func initInfrastructure() {
 		cliInitializer,
 		authInitializer,
 	)
+}
+
+func initApplication() {
+	commandService = command.NewCommandService()
 }
 
 // TODO this is becoming a hot mess we need to unify integ. test strategies

@@ -139,9 +139,9 @@ func registerNotifier(srv *jrpc2.Server) {
 				Type:    lsp.MessageType(params.Type),
 				Message: params.Message,
 			}
-			for _, action := range params.Actions {
+			for action := range params.Actions {
 				requestParams.Actions = append(requestParams.Actions, lsp.MessageActionItem{
-					Title: action.Command().Title,
+					Title: string(action),
 				})
 			}
 			log.Info().
@@ -169,6 +169,11 @@ func registerNotifier(srv *jrpc2.Server) {
 				}
 
 				selectedCommand := params.Actions[snyk.MessageAction(actionItem.Title)]
+				if selectedCommand == nil {
+					log.Info().Str("method", "registerNotifier").Msg("Void command selected")
+					return
+				}
+
 				err = di.CommandService().ExecuteCommand(context.Background(), selectedCommand)
 				if err != nil {
 					log.Error().
