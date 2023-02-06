@@ -38,7 +38,7 @@ func (m *OrderedMap[K, V]) Add(key K, value V) {
 	})
 }
 
-func (m *OrderedMap[K, V]) Value(key K) (value V, ok bool) { // todo: rename to get
+func (m *OrderedMap[K, V]) Get(key K) (value V, ok bool) {
 	for _, entry := range m.m {
 		if entry.key == key {
 			return entry.value, true

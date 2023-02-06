@@ -168,7 +168,7 @@ func registerNotifier(srv *jrpc2.Server) {
 					return
 				}
 
-				selectedCommand, ok := params.Actions.Value(snyk.MessageAction(actionItem.Title))
+				selectedCommand, ok := params.Actions.Get(snyk.MessageAction(actionItem.Title))
 				if !ok {
 					log.Info().Str("method", "registerNotifier").Msg("Action map key not found")
 					return

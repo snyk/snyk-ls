@@ -227,7 +227,7 @@ func TestShowMessageRequest(t *testing.T) {
 				}
 				var actual lsp.ShowMessageRequestParams
 				_ = callbacks[0].UnmarshalParams(&actual)
-				_, ok := expected.Actions.Value(snyk.MessageAction(expectedTitle))
+				_, ok := expected.Actions.Get(snyk.MessageAction(expectedTitle))
 				return ok &&
 					expected.Message == actual.Message &&
 					int(expected.Type) == int(actual.Type)

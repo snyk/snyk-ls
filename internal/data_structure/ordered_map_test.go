@@ -37,6 +37,6 @@ func Test_NonExistingKey(t *testing.T) {
 
 	m.Add("a", "a")
 
-	_, ok := m.Value("b")
+	_, ok := m.Get("b")
 	assert.False(t, ok)
 }
