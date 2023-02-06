@@ -37,6 +37,7 @@ import (
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/float"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -412,9 +413,9 @@ func (sc *Scanner) isSastEnabled() bool {
 	}
 	if !sastEnabled {
 		// this is processed in the listener registered to translate into the right client protocol
-		actionCommandMap := make(map[snyk.MessageAction]snyk.CommandInterface)
-		actionCommandMap[enableSnykCodeMessageActionItemTitle] = command.NewOpenBrowserCommand(getCodeEnablementUrl())
-		actionCommandMap[closeMessageActionItemTitle] = nil
+		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
+		actionCommandMap.Add(enableSnykCodeMessageActionItemTitle, command.NewOpenBrowserCommand(getCodeEnablementUrl()))
+		actionCommandMap.Add(closeMessageActionItemTitle, nil)
 
 		notification.Send(snyk.ShowMessageRequest{
 			Message: codeDisabledInOrganisationMessageText,

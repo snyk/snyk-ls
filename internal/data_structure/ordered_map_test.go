@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited
+ * © 2023 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,29 @@
  * limitations under the License.
  */
 
-package snyk
+package data_structure
 
-import "github.com/snyk/snyk-ls/internal/data_structure"
+import (
+	"testing"
 
-type MessageAction string
-
-type MessageType int
-
-const (
-	Error   MessageType = 1
-	Warning MessageType = 2
-	Info    MessageType = 3
+	"github.com/stretchr/testify/assert"
 )
 
-type ShowMessageRequest struct {
-	Message string                                                      `json:"message"`
-	Type    MessageType                                                 `json:"type"`
-	Actions *data_structure.OrderedMap[MessageAction, CommandInterface] `json:"actions"`
+func Test_InsertionOrder(t *testing.T) {
+	m := NewOrderedMap[string, string]()
+
+	m.Add("a", "a")
+	m.Add("b", "b")
+	m.Add("c", "c")
+
+	assert.Equal(t, []string{"a", "b", "c"}, m.Keys())
+}
+
+func Test_NonExistingKey(t *testing.T) {
+	m := NewOrderedMap[string, string]()
+
+	m.Add("a", "a")
+
+	_, ok := m.Value("b")
+	assert.False(t, ok)
 }

@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/concurrency"
+	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
@@ -209,8 +210,9 @@ func TestShowMessageRequest(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		actionCommandMap := make(map[snyk.MessageAction]snyk.CommandInterface)
-		actionCommandMap["test title"] = command.NewOpenBrowserCommand("https://snyk.io")
+		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
+		expectedTitle := "test title"
+		actionCommandMap.Add(snyk.MessageAction(expectedTitle), command.NewOpenBrowserCommand("https://snyk.io"))
 
 		expected := snyk.ShowMessageRequest{Message: "message", Type: snyk.Info, Actions: actionCommandMap}
 
@@ -225,7 +227,8 @@ func TestShowMessageRequest(t *testing.T) {
 				}
 				var actual lsp.ShowMessageRequestParams
 				_ = callbacks[0].UnmarshalParams(&actual)
-				return expected.Actions["test title"].Command().Title == actual.Actions[0].Title &&
+				_, ok := expected.Actions.Value(snyk.MessageAction(expectedTitle))
+				return ok &&
 					expected.Message == actual.Message &&
 					int(expected.Type) == int(actual.Type)
 			},
@@ -246,8 +249,9 @@ func TestShowMessageRequest(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		actionCommandMap := make(map[snyk.MessageAction]snyk.CommandInterface)
-		actionCommandMap[snyk.MessageAction(selectedAction)] = command.NewOpenBrowserCommand("https://snyk.io")
+		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
+		actionCommandMap.Add(snyk.MessageAction(selectedAction), command.NewOpenBrowserCommand("https://snyk.io"))
+
 		request := snyk.ShowMessageRequest{Message: "message", Type: snyk.Info, Actions: actionCommandMap}
 
 		notification.Send(request)

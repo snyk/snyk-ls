@@ -139,7 +139,7 @@ func registerNotifier(srv *jrpc2.Server) {
 				Type:    lsp.MessageType(params.Type),
 				Message: params.Message,
 			}
-			for action := range params.Actions {
+			for _, action := range params.Actions.Keys() {
 				requestParams.Actions = append(requestParams.Actions, lsp.MessageActionItem{
 					Title: string(action),
 				})
@@ -168,7 +168,11 @@ func registerNotifier(srv *jrpc2.Server) {
 					return
 				}
 
-				selectedCommand := params.Actions[snyk.MessageAction(actionItem.Title)]
+				selectedCommand, ok := params.Actions.Value(snyk.MessageAction(actionItem.Title))
+				if !ok {
+					log.Info().Str("method", "registerNotifier").Msg("Action map key not found")
+					return
+				}
 				if selectedCommand == nil {
 					log.Info().Str("method", "registerNotifier").Msg("Void command selected")
 					return

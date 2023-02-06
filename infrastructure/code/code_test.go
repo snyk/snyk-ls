@@ -37,6 +37,7 @@ import (
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -472,10 +473,10 @@ func TestIsSastEnabled(t *testing.T) {
 		notification.DisposeListener()
 		config.CurrentConfig().SetSnykCodeEnabled(true)
 		apiClient.CodeEnabled = false
-		actionMap := make(map[snyk.MessageAction]snyk.CommandInterface)
+		actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
 
-		actionMap[enableSnykCodeMessageActionItemTitle] = command.NewOpenBrowserCommand("https://snyk.io/code")
-		actionMap[closeMessageActionItemTitle] = nil
+		actionMap.Add(enableSnykCodeMessageActionItemTitle, command.NewOpenBrowserCommand("https://snyk.io/code"))
+		actionMap.Add(closeMessageActionItemTitle, nil)
 		expectedShowMessageRequest := snyk.ShowMessageRequest{
 			Message: codeDisabledInOrganisationMessageText,
 			Type:    snyk.Warning,
