@@ -197,6 +197,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
     "medium": true,
     "low": true,
   },
+  "scanningMode": "auto" // Specifies the mode for scans: "auto" for background scans or "manual" for scans on command
 }
 ```
 
