@@ -331,7 +331,6 @@ func Test_CodeScanRunning_ScanCalled_ScansRunSequentially(t *testing.T) {
 
 func Test_Scan_ShouldntRunIfSastDisabled(t *testing.T) {
 	testutil.UnitTest(t)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
 	snykCodeMock := &FakeSnykCodeClient{}
 	c := New(
 		NewBundler(snykCodeMock, performance.NewTestInstrumentor()),

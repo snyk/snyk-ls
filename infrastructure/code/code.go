@@ -402,9 +402,6 @@ const enableSnykCodeMessageActionItemTitle snyk.MessageAction = "Enable Snyk Cod
 const closeMessageActionItemTitle snyk.MessageAction = "Close"
 
 func (sc *Scanner) isSastEnabled() bool {
-	if !sc.IsEnabled() {
-		return false
-	}
 	sastEnabled, localCodeEngineEnabled, _, err := sc.SnykApiClient.SastEnabled()
 	if err != nil {
 		log.Error().Err(err).Str("method", "isSastEnabled").Msg("couldn't get sast enablement")
