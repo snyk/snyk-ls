@@ -16,7 +16,10 @@
 
 package snyk
 
-import "context"
+import (
+	"context"
+	"sync"
+)
 
 const (
 	NavigateToRangeCommand       = "snyk.navigateToRange"
@@ -57,6 +60,7 @@ type CommandService interface {
 }
 
 type CommandServiceMock struct {
+	m                sync.Mutex
 	executedCommands []CommandInterface
 }
 
@@ -65,9 +69,14 @@ func NewCommandServiceMock() *CommandServiceMock {
 }
 
 func (service *CommandServiceMock) ExecuteCommand(ctx context.Context, command CommandInterface) error {
+	service.m.Lock()
 	service.executedCommands = append(service.executedCommands, command)
+	service.m.Unlock()
 	return nil
 }
 func (service *CommandServiceMock) ExecutedCommands() []CommandInterface {
-	return service.executedCommands
+	service.m.Lock()
+	cmds := service.executedCommands
+	service.m.Unlock()
+	return cmds
 }
