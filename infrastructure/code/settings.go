@@ -36,7 +36,8 @@ func getCodeEnablementUrl() string {
 		apiUrl.Host = "app." + apiUrl.Host
 	}
 
-	return apiUrl.String() + "manage/snyk-code?from=VS_CODE"
+	integrationName := config.CurrentConfig().IntegrationName()
+	return apiUrl.String() + "manage/snyk-code?from=" + integrationName
 }
 
 func isSingleTenant(url *url.URL) bool {
