@@ -318,7 +318,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	}
 	assert.NotNil(t, lenses)
 	assert.Len(t, lenses, 1)
-	assert.Equal(t, lenses[0].Command.Command, code.FakeCommand.Command)
+	assert.Equal(t, lenses[0].Command.Command, code.FakeCommand.CommandId)
 }
 
 func Test_initialize_updatesSettings(t *testing.T) {

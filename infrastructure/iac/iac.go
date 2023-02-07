@@ -353,7 +353,7 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 			IsPreferred: false,
 			Command: snyk.Command{
 				Title:     codeActionTitle,
-				Command:   snyk.OpenBrowserCommand,
+				CommandId: snyk.OpenBrowserCommand,
 				Arguments: []any{issueURL.String()},
 			},
 		}},

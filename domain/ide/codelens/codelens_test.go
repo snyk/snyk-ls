@@ -36,7 +36,7 @@ func Test_GetCodeLensFromCommand(t *testing.T) {
 	command := code.FakeCommand
 	codeLens := getCodeLensFromCommand(issue, command)
 	assert.Equal(t, converter.ToRange(issue.Range), codeLens.Range)
-	assert.Equal(t, command.Command, codeLens.Command.Command)
+	assert.Equal(t, command.CommandId, codeLens.Command.Command)
 	assert.Equal(t, command.Title, codeLens.Command.Title)
 	assert.Equal(t, command.Arguments, codeLens.Command.Arguments)
 }
@@ -58,5 +58,5 @@ func Test_GetCodeLensForPath(t *testing.T) {
 
 	assert.NotNil(t, lenses)
 	assert.Equal(t, 1, len(lenses))
-	assert.Equal(t, code.FakeCommand.Command, lenses[0].Command.Command)
+	assert.Equal(t, code.FakeCommand.CommandId, lenses[0].Command.Command)
 }

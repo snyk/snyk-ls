@@ -47,5 +47,5 @@ func TestGetFor(t *testing.T) {
 
 	assert.NotNil(t, actions)
 	assert.Equal(t, 1, len(actions))
-	assert.Equal(t, code.FakeCommand.Command, actions[0].Command.Command)
+	assert.Equal(t, code.FakeCommand.CommandId, actions[0].Command.Command)
 }

@@ -32,10 +32,12 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/float"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -146,6 +148,10 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) (issue
 		close(scanStatus.finished)
 		sc.scanStatusMutex.Unlock()
 	}()
+
+	if !sc.isSastEnabled() {
+		return issues, err
+	}
 
 	// Start the scan
 	startTime := time.Now()
@@ -296,10 +302,6 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 		return issues, nil
 	}
 
-	if !sc.isSastEnabled() {
-		return issues, nil
-	}
-
 	requestId := span.GetTraceId() // use span trace id as code-request-id
 
 	bundle, bundleFiles, err := sc.createBundle(span.Context(), requestId, path, files)
@@ -392,6 +394,13 @@ func (sc *Scanner) createBundle(
 	return b, bundleFiles, err
 }
 
+const codeDisabledInOrganisationMessageText = "It looks like your organization has disabled Snyk Code. " +
+	"You can easily enable it by clicking on 'Enable Snyk Code'. " +
+	"This will open your organization settings in your browser."
+
+const enableSnykCodeMessageActionItemTitle snyk.MessageAction = "Enable Snyk Code"
+const closeMessageActionItemTitle snyk.MessageAction = "Close"
+
 func (sc *Scanner) isSastEnabled() bool {
 	sastEnabled, localCodeEngineEnabled, _, err := sc.SnykApiClient.SastEnabled()
 	if err != nil {
@@ -400,7 +409,16 @@ func (sc *Scanner) isSastEnabled() bool {
 		return false
 	}
 	if !sastEnabled {
-		notification.SendShowMessage(sglsp.Warning, "Snyk Code is disabled by your organisation's configuration.")
+		// this is processed in the listener registered to translate into the right client protocol
+		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
+		actionCommandMap.Add(enableSnykCodeMessageActionItemTitle, command.NewOpenBrowserCommand(getCodeEnablementUrl()))
+		actionCommandMap.Add(closeMessageActionItemTitle, nil)
+
+		notification.Send(snyk.ShowMessageRequest{
+			Message: codeDisabledInOrganisationMessageText,
+			Type:    snyk.Warning,
+			Actions: actionCommandMap,
+		})
 		return false
 	} else {
 		if localCodeEngineEnabled {

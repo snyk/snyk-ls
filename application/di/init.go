@@ -23,6 +23,7 @@ import (
 
 	"github.com/adrg/xdg"
 
+	"github.com/snyk/snyk-ls/application/command"
 	"github.com/snyk/snyk-ls/application/config"
 	appNotification "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -61,6 +62,7 @@ var hoverService hover.Service
 var scanner snyk.Scanner
 var cliInitializer *cli2.Initializer
 var scanNotifier snyk.ScanNotifier
+var commandService snyk.CommandService
 
 var initMutex = &sync.Mutex{}
 
@@ -69,6 +71,7 @@ func Init() {
 	defer initMutex.Unlock()
 	initInfrastructure()
 	initDomain()
+	initApplication()
 }
 
 func initDomain() {
@@ -118,6 +121,10 @@ func initInfrastructure() {
 	)
 }
 
+func initApplication() {
+	commandService = command.NewCommandService()
+}
+
 // TODO this is becoming a hot mess we need to unify integ. test strategies
 func TestInit(t *testing.T) {
 	initMutex.Lock()
@@ -153,6 +160,7 @@ func TestInit(t *testing.T) {
 		openSourceScanner,
 	)
 	hoverService = hover.NewDefaultService(analytics)
+	commandService = snyk.NewCommandServiceMock()
 	t.Cleanup(
 		func() {
 			fakeClient.Clear()
@@ -235,4 +243,10 @@ func CliInitializer() *cli2.Initializer {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return cliInitializer
+}
+
+func CommandService() snyk.CommandService {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return commandService
 }

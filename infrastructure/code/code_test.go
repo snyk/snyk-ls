@@ -31,10 +31,14 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/data_structure"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -187,28 +191,6 @@ func TestUploadAndAnalyze(t *testing.T) {
 	)
 
 	t.Run(
-		"should ignore if SAST disabled", func(t *testing.T) {
-			testutil.UnitTest(t)
-			snykCodeMock := &FakeSnykCodeClient{}
-			c := New(
-				NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
-				&snyk_api.FakeApiClient{CodeEnabled: false},
-				error_reporting.NewTestErrorReporter(),
-				ux2.NewTestAnalytics(),
-			)
-			path, firstDoc, _, _, _ := setupDocs()
-			docs := []string{uri.PathFromUri(firstDoc.URI)}
-			defer func(path string) { _ = os.RemoveAll(path) }(path)
-			metrics := c.newMetrics(len(docs), time.Time{})
-
-			_, _ = c.UploadAndAnalyze(context.Background(), docs, "", metrics)
-
-			params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
-			assert.Nil(t, params)
-		},
-	)
-
-	t.Run(
 		"should retrieve from backend", func(t *testing.T) {
 			testutil.UnitTest(t)
 			snykCodeMock := &FakeSnykCodeClient{}
@@ -347,6 +329,23 @@ func Test_CodeScanRunning_ScanCalled_ScansRunSequentially(t *testing.T) {
 	assert.Equal(t, 1, fakeClient.maxConcurrentScans)
 }
 
+func Test_Scan_ShouldntRunIfSastDisabled(t *testing.T) {
+	testutil.UnitTest(t)
+	snykCodeMock := &FakeSnykCodeClient{}
+	c := New(
+		NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
+		&snyk_api.FakeApiClient{CodeEnabled: false},
+		error_reporting.NewTestErrorReporter(),
+		ux2.NewTestAnalytics(),
+	)
+	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+
+	_, _ = c.Scan(context.Background(), "", tempDir)
+
+	params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
+	assert.Nil(t, params)
+}
+
 func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {
 	expectedPatterns = "*.xml\n**/*.txt\nbin"
 	tempDir = writeTestGitIgnore(expectedPatterns, t)
@@ -422,4 +421,72 @@ func Test_IsEnabled(t *testing.T) {
 			assert.False(t, enabled)
 		},
 	)
+}
+func TestIsSastEnabled(t *testing.T) {
+	apiClient := &snyk_api.FakeApiClient{
+		CodeEnabled: false,
+		ApiError:    nil,
+	}
+	scanner := &Scanner{
+		SnykApiClient: apiClient,
+	}
+	t.Run("should return false if Snyk Code is disabled", func(t *testing.T) {
+		config.CurrentConfig().SetSnykCodeEnabled(false)
+		enabled := scanner.isSastEnabled()
+		assert.False(t, enabled)
+	})
+
+	t.Run("should call the API to check enablement if Snyk Code is enabled", func(t *testing.T) {
+		config.CurrentConfig().SetSnykCodeEnabled(true)
+		scanner.isSastEnabled()
+		assert.Equal(t, 1, len(apiClient.Calls))
+	})
+
+	t.Run("should return true if Snyk Code is enabled and the API returns true", func(t *testing.T) {
+		config.CurrentConfig().SetSnykCodeEnabled(true)
+		apiClient.CodeEnabled = true
+		enabled := scanner.isSastEnabled()
+		assert.True(t, enabled)
+	})
+
+	t.Run("should return false if Snyk Code is enabled and the API returns false", func(t *testing.T) {
+		config.CurrentConfig().SetSnykCodeEnabled(true)
+		apiClient.CodeEnabled = false
+		enabled := scanner.isSastEnabled()
+		assert.False(t, enabled)
+	})
+
+	t.Run("should return false if Snyk Code is enabled and the API returns an error", func(t *testing.T) {
+		config.CurrentConfig().SetSnykCodeEnabled(true)
+		apiClient.CodeEnabled = false
+		apiClient.ApiError = &snyk_api.SnykApiError{}
+		enabled := scanner.isSastEnabled()
+		assert.False(t, enabled)
+	})
+
+	t.Run("should send a ShowMessageRequest notification if Snyk Code is enabled and the API returns false", func(t *testing.T) {
+		notification.DisposeListener()
+		config.CurrentConfig().SetSnykCodeEnabled(true)
+		apiClient.CodeEnabled = false
+		actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
+
+		actionMap.Add(enableSnykCodeMessageActionItemTitle, command.NewOpenBrowserCommand(getCodeEnablementUrl()))
+		actionMap.Add(closeMessageActionItemTitle, nil)
+		expectedShowMessageRequest := snyk.ShowMessageRequest{
+			Message: codeDisabledInOrganisationMessageText,
+			Type:    snyk.Warning,
+			Actions: actionMap,
+		}
+
+		channel := make(chan any)
+
+		notification.CreateListener(func(params any) {
+			channel <- params
+		})
+		defer notification.DisposeListener()
+
+		scanner.isSastEnabled()
+
+		assert.Equal(t, expectedShowMessageRequest, <-channel)
+	})
 }

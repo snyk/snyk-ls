@@ -26,8 +26,12 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/domain/ide/command"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/concurrency"
+	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
@@ -195,4 +199,73 @@ func Test_IsAvailableCliNotification(t *testing.T) {
 		2*time.Second,
 		10*time.Millisecond,
 	)
+}
+
+func TestShowMessageRequest(t *testing.T) {
+	t.Run("should send request to client", func(t *testing.T) {
+		loc := setupServer(t)
+
+		_, err := loc.Client.Call(ctx, "initialize", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
+		expectedTitle := "test title"
+		actionCommandMap.Add(snyk.MessageAction(expectedTitle), command.NewOpenBrowserCommand("https://snyk.io"))
+
+		expected := snyk.ShowMessageRequest{Message: "message", Type: snyk.Info, Actions: actionCommandMap}
+
+		notification.Send(expected)
+
+		assert.Eventually(
+			t,
+			func() bool {
+				callbacks := jsonRPCRecorder.FindCallbacksByMethod("window/showMessageRequest")
+				if len(callbacks) < 1 {
+					return false
+				}
+				var actual lsp.ShowMessageRequestParams
+				_ = callbacks[0].UnmarshalParams(&actual)
+				_, ok := expected.Actions.Get(snyk.MessageAction(expectedTitle))
+				return ok &&
+					expected.Message == actual.Message &&
+					int(expected.Type) == int(actual.Type)
+			},
+			2*time.Second,
+			10*time.Millisecond,
+		)
+	})
+
+	t.Run("should execute a command when action item is selected", func(t *testing.T) {
+		selectedAction := "Open browser"
+		loc := setupCustomServer(t, func(_ context.Context, _ *jrpc2.Request) (any, error) {
+			return lsp.MessageActionItem{
+				Title: selectedAction,
+			}, nil
+		})
+		_, err := loc.Client.Call(ctx, "initialize", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
+		actionCommandMap.Add(snyk.MessageAction(selectedAction), command.NewOpenBrowserCommand("https://snyk.io"))
+
+		request := snyk.ShowMessageRequest{Message: "message", Type: snyk.Info, Actions: actionCommandMap}
+
+		notification.Send(request)
+
+		assert.Eventually(
+			t,
+			func() bool {
+				// verify that passed command is eventually executed
+				commandService := di.CommandService()
+				commandServiceMock := commandService.(*snyk.CommandServiceMock)
+				return commandServiceMock.ExecutedCommands()[0].Command().CommandId == snyk.OpenBrowserCommand
+			},
+			2*time.Second,
+			10*time.Millisecond,
+		)
+	})
 }
