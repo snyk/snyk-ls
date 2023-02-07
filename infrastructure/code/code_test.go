@@ -470,7 +470,7 @@ func TestIsSastEnabled(t *testing.T) {
 		apiClient.CodeEnabled = false
 		actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
 
-		actionMap.Add(enableSnykCodeMessageActionItemTitle, command.NewOpenBrowserCommand("https://snyk.io/code"))
+		actionMap.Add(enableSnykCodeMessageActionItemTitle, command.NewOpenBrowserCommand(getCodeEnablementUrl()))
 		actionMap.Add(closeMessageActionItemTitle, nil)
 		expectedShowMessageRequest := snyk.ShowMessageRequest{
 			Message: codeDisabledInOrganisationMessageText,
