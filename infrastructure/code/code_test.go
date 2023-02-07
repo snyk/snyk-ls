@@ -191,28 +191,6 @@ func TestUploadAndAnalyze(t *testing.T) {
 	)
 
 	t.Run(
-		"should ignore if SAST disabled", func(t *testing.T) {
-			testutil.UnitTest(t)
-			snykCodeMock := &FakeSnykCodeClient{}
-			c := New(
-				NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
-				&snyk_api.FakeApiClient{CodeEnabled: false},
-				error_reporting.NewTestErrorReporter(),
-				ux2.NewTestAnalytics(),
-			)
-			path, firstDoc, _, _, _ := setupDocs()
-			docs := []string{uri.PathFromUri(firstDoc.URI)}
-			defer func(path string) { _ = os.RemoveAll(path) }(path)
-			metrics := c.newMetrics(len(docs), time.Time{})
-
-			_, _ = c.UploadAndAnalyze(context.Background(), docs, "", metrics)
-
-			params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
-			assert.Nil(t, params)
-		},
-	)
-
-	t.Run(
 		"should retrieve from backend", func(t *testing.T) {
 			testutil.UnitTest(t)
 			snykCodeMock := &FakeSnykCodeClient{}
@@ -349,6 +327,24 @@ func Test_CodeScanRunning_ScanCalled_ScansRunSequentially(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, 1, fakeClient.maxConcurrentScans)
+}
+
+func Test_Scan_ShouldntRunIfSastDisabled(t *testing.T) {
+	testutil.UnitTest(t)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
+	snykCodeMock := &FakeSnykCodeClient{}
+	c := New(
+		NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
+		&snyk_api.FakeApiClient{CodeEnabled: false},
+		error_reporting.NewTestErrorReporter(),
+		ux2.NewTestAnalytics(),
+	)
+	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+
+	_, _ = c.Scan(context.Background(), "", tempDir)
+
+	params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
+	assert.Nil(t, params)
 }
 
 func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {
