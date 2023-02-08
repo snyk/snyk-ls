@@ -662,8 +662,8 @@ func markersForSampleSarifResponse(path string) []Marker {
 			Msg: [2]int{28, 57},
 			Pos: []MarkerPosition{
 				{
-					Rows: [2]int{5, 5},
-					Cols: [2]int{14, 33},
+					Rows: [2]int{4, 4},
+					Cols: [2]int{13, 33},
 					File: path,
 				},
 			},
@@ -672,13 +672,13 @@ func markersForSampleSarifResponse(path string) []Marker {
 			Msg: [2]int{91, 105},
 			Pos: []MarkerPosition{
 				{
-					Rows: [2]int{6, 6},
-					Cols: [2]int{9, 23},
+					Rows: [2]int{5, 5},
+					Cols: [2]int{8, 23},
 					File: path,
 				},
 				{
-					Rows: [2]int{10, 10},
-					Cols: [2]int{10, 10},
+					Rows: [2]int{9, 9},
+					Cols: [2]int{9, 10},
 					File: path,
 				},
 			},
@@ -687,8 +687,8 @@ func markersForSampleSarifResponse(path string) []Marker {
 			Msg: [2]int{108, 130},
 			Pos: []MarkerPosition{
 				{
-					Rows: [2]int{20, 20},
-					Cols: [2]int{20, 20},
+					Rows: [2]int{19, 19},
+					Cols: [2]int{19, 20},
 					File: path,
 				},
 			},
