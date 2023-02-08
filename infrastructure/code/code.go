@@ -150,7 +150,7 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) (issue
 	}()
 
 	if !sc.isSastEnabled() {
-		return issues, err
+		return issues, errors.New("SAST is not enabled")
 	}
 
 	// Start the scan
