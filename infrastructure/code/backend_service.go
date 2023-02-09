@@ -319,8 +319,8 @@ func (s *SnykCodeHTTPClient) analysisRequestBody(options *AnalysisOptions) ([]by
 		},
 		Legacy: false,
 		AnalysisContext: AnalysisContext{
-			Initiatior: "IDE",
-			Flow:       "language-server",
+			Initiator: "IDE",
+			Flow:      "language-server",
 			Org: AnalysisContextOrg{
 				Name:        orgName,
 				DisplayName: unknown,

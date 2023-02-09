@@ -773,8 +773,8 @@ func TestSnykCodeBackendService_analysisRequestBody_FillsOrgParameter(t *testing
 		},
 		Legacy: false,
 		AnalysisContext: AnalysisContext{
-			Initiatior: "IDE",
-			Flow:       "language-server",
+			Initiator: "IDE",
+			Flow:      "language-server",
 			Org: AnalysisContextOrg{
 				Name:        org,
 				DisplayName: "unknown",
