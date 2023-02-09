@@ -41,6 +41,7 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 		initialize.NewDelegatingInitializer(),
 		performance.NewTestInstrumentor(),
 		ux.NewTestAnalytics(),
+		NewMockScanNotifier(),
 		enabledScanner,
 		disabledScanner,
 	)
@@ -68,6 +69,7 @@ func TestScan_whenProductScannerEnabled_SendsAnalysisTriggered(t *testing.T) {
 		initialize.NewDelegatingInitializer(),
 		performance.NewTestInstrumentor(),
 		analytics,
+		NewMockScanNotifier(),
 		enabledScanner,
 		disabledScanner,
 	)
@@ -89,6 +91,7 @@ func TestScan_whenNoProductScannerEnabled_SendsNoAnalytics(t *testing.T) {
 		initialize.NewDelegatingInitializer(),
 		performance.NewTestInstrumentor(),
 		analytics,
+		NewMockScanNotifier(),
 		disabledScanner,
 	)
 
@@ -104,6 +107,7 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 		initialize.NewDelegatingInitializer(),
 		performance.NewTestInstrumentor(),
 		ux.NewTestAnalytics(),
+		NewMockScanNotifier(),
 		productScanner,
 	)
 	config.CurrentConfig().SetToken("")
@@ -126,6 +130,7 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 		initialize.NewDelegatingInitializer(),
 		performance.NewTestInstrumentor(),
 		ux.NewTestAnalytics(),
+		NewMockScanNotifier(),
 		productScanner,
 	)
 	done := make(chan bool)
@@ -143,4 +148,23 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 	<-done
 
 	assert.Zero(t, productScanner.scans)
+}
+
+func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
+	testutil.UnitTest(t)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
+	enabledScanner := NewTestProductScanner(product.ProductCode, true)
+	analytics := ux.NewTestAnalytics()
+	scanNotifier := NewMockScanNotifier()
+	scanner := NewDelegatingScanner(
+		initialize.NewDelegatingInitializer(),
+		performance.NewTestInstrumentor(),
+		analytics,
+		scanNotifier,
+		enabledScanner,
+	)
+
+	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
+
+	assert.NotEmpty(t, scanNotifier.InProgressCalls())
 }

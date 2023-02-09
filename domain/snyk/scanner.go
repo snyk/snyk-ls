@@ -44,18 +44,21 @@ type DelegatingConcurrentScanner struct {
 	initializer  initialize.Initializer
 	instrumentor performance.Instrumentor
 	analytics    ux2.Analytics
+	scanNotifier ScanNotifier
 }
 
 func NewDelegatingScanner(
 	initializer initialize.Initializer,
 	instrumentor performance.Instrumentor,
 	analytics ux2.Analytics,
+	scanNotifier ScanNotifier,
 	scanners ...ProductScanner,
 ) Scanner {
 	return &DelegatingConcurrentScanner{
 		instrumentor: instrumentor,
 		analytics:    analytics,
 		initializer:  initializer,
+		scanNotifier: scanNotifier,
 		scanners:     scanners,
 	}
 }
@@ -109,6 +112,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				TriggeredByUser: false,
 			},
 		)
+		sc.scanNotifier.SendInProgress(folderPath)
 	}
 
 	waitGroup := &sync.WaitGroup{}

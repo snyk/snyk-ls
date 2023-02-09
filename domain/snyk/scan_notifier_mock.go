@@ -1,11 +1,10 @@
-package notification
+package snyk
 
 import (
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
-var _ snyk.ScanNotifier = &MockScanNotifier{}
+var _ ScanNotifier = &MockScanNotifier{}
 
 type MockScanNotifier struct {
 	inProgressCalls []string
@@ -19,7 +18,7 @@ func (m *MockScanNotifier) SendInProgress(folderPath string) {
 	m.inProgressCalls = append(m.inProgressCalls, folderPath)
 }
 
-func (m *MockScanNotifier) SendSuccess(folderPath string, issues []snyk.Issue) {
+func (m *MockScanNotifier) SendSuccess(folderPath string, issues []Issue) {
 	m.successCalls = append(m.successCalls, folderPath)
 }
 

@@ -134,59 +134,11 @@ func registerNotifier(srv *jrpc2.Server) {
 				Interface("status", params.Status).
 				Msg("sending scan data to client")
 		case snyk.ShowMessageRequest:
-			// convert our internal message request to LSP message request
-			requestParams := lsp.ShowMessageRequestParams{
-				Type:    lsp.MessageType(params.Type),
-				Message: params.Message,
-			}
-			for _, action := range params.Actions.Keys() {
-				requestParams.Actions = append(requestParams.Actions, lsp.MessageActionItem{
-					Title: string(action),
-				})
-			}
+			// Function blocks on callback, so we need to run it in a separate goroutine
+			go handleShowMessageRequest(srv, params)
 			log.Info().
 				Str("method", "registerNotifier").
-				Interface("message", requestParams).
-				Msg("showing message request")
-
-			callback, err := srv.Callback(context.Background(), "window/showMessageRequest", requestParams)
-			if err != nil {
-				log.Error().
-					Err(err).
-					Str("method", "registerNotifier").
-					Msg("error while sending message request")
-				return
-			}
-			if callback != nil {
-				var actionItem lsp.MessageActionItem
-				err = callback.UnmarshalResult(&actionItem)
-				if err != nil {
-					log.Error().
-						Err(err).
-						Str("method", "registerNotifier").
-						Msg("error while unmarshalling message request response")
-					return
-				}
-
-				selectedCommand, ok := params.Actions.Get(snyk.MessageAction(actionItem.Title))
-				if !ok {
-					log.Info().Str("method", "registerNotifier").Msg("Action map key not found")
-					return
-				}
-				if selectedCommand == nil {
-					log.Info().Str("method", "registerNotifier").Msg("Void command selected")
-					return
-				}
-
-				err = di.CommandService().ExecuteCommand(context.Background(), selectedCommand)
-				if err != nil {
-					log.Error().
-						Err(err).
-						Str("method", "registerNotifier").
-						Msg("failed to execute command")
-					return
-				}
-			}
+				Msg("sending show message request to client")
 
 		default:
 			log.Warn().
@@ -197,4 +149,60 @@ func registerNotifier(srv *jrpc2.Server) {
 	}
 	notification.CreateListener(callbackFunction)
 	log.Info().Str("method", "registerNotifier").Msg("registered notifier")
+}
+
+func handleShowMessageRequest(srv *jrpc2.Server, params snyk.ShowMessageRequest) {
+	// convert our internal message request to LSP message request
+	requestParams := lsp.ShowMessageRequestParams{
+		Type:    lsp.MessageType(params.Type),
+		Message: params.Message,
+	}
+	for _, action := range params.Actions.Keys() {
+		requestParams.Actions = append(requestParams.Actions, lsp.MessageActionItem{
+			Title: string(action),
+		})
+	}
+	log.Info().
+		Str("method", "registerNotifier").
+		Interface("message", requestParams).
+		Msg("showing message request")
+
+	callback, err := srv.Callback(context.Background(), "window/showMessageRequest", requestParams)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("method", "registerNotifier").
+			Msg("error while sending message request")
+		return
+	}
+	if callback != nil {
+		var actionItem lsp.MessageActionItem
+		err = callback.UnmarshalResult(&actionItem)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("method", "registerNotifier").
+				Msg("error while unmarshalling message request response")
+			return
+		}
+
+		selectedCommand, ok := params.Actions.Get(snyk.MessageAction(actionItem.Title))
+		if !ok {
+			log.Info().Str("method", "registerNotifier").Msg("Action map key not found")
+			return
+		}
+		if selectedCommand == nil {
+			log.Info().Str("method", "registerNotifier").Msg("Void command selected")
+			return
+		}
+
+		err = di.CommandService().ExecuteCommand(context.Background(), selectedCommand)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("method", "registerNotifier").
+				Msg("failed to execute command")
+			return
+		}
+	}
 }
