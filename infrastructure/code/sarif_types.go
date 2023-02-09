@@ -191,9 +191,9 @@ type AnalysisContextOrg struct {
 }
 
 type AnalysisContext struct {
-	Initiatior string             `json:"initiatior"`
-	Flow       string             `json:"flow,omitempty"`
-	Org        AnalysisContextOrg `json:"org,omitempty"`
+	Initiator string             `json:"initiator"`
+	Flow      string             `json:"flow,omitempty"`
+	Org       AnalysisContextOrg `json:"org,omitempty"`
 }
 
 type AnalysisRequest struct {
