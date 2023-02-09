@@ -24,7 +24,7 @@ jobs:
   instance-tests:
     strategy:
       matrix:
-        environment: [Standard, MT1, MT3] # MT3 is not available at the moment, don't block the CI. Should be: [Standard, MT1, MT2, MT3]
+        environment: [Standard, MT1, MT2, MT3]
     name: instance tests
     environment: ${{matrix.environment}}
     runs-on: ubuntu-latest
