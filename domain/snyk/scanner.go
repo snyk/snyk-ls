@@ -112,9 +112,8 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				TriggeredByUser: false,
 			},
 		)
+		sc.scanNotifier.SendInProgress(folderPath)
 	}
-
-	sc.scanNotifier.SendInProgress(folderPath)
 
 	waitGroup := &sync.WaitGroup{}
 	for _, scanner := range sc.scanners {

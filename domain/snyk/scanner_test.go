@@ -149,3 +149,22 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 
 	assert.Zero(t, productScanner.scans)
 }
+
+func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
+	testutil.UnitTest(t)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
+	enabledScanner := NewTestProductScanner(product.ProductCode, true)
+	analytics := ux.NewTestAnalytics()
+	scanNotifier := NewMockScanNotifier()
+	scanner := NewDelegatingScanner(
+		initialize.NewDelegatingInitializer(),
+		performance.NewTestInstrumentor(),
+		analytics,
+		scanNotifier,
+		enabledScanner,
+	)
+
+	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
+
+	assert.NotEmpty(t, scanNotifier.InProgressCalls())
+}

@@ -366,21 +366,6 @@ func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 	})
 }
 
-func Test_scan_ShouldSendInProgress(t *testing.T) {
-	// Arrange
-	t.Parallel()
-	testutil.UnitTest(t)
-
-	f, scanNotifier := NewMockFolderWithScanNotifier()
-	const filePath = "path1"
-
-	// Act
-	f.scan(context.Background(), filePath)
-
-	// Assert
-	assert.NotEmpty(t, scanNotifier.InProgressCalls())
-}
-
 func Test_processResults_ShouldSendSuccess(t *testing.T) {
 	// Arrange
 	t.Parallel()
