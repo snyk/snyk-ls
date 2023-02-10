@@ -38,7 +38,6 @@ Right now the language server supports the following actions:
 - exit
 - textDocument/codeAction
 - textDocument/codeLens
-- textDocument/didOpen
 - textDocument/didClose
 - textDocument/didSave
 - textDocument/hover
@@ -102,25 +101,25 @@ Right now the language server supports the following actions:
 - NavigateToRangeCommand
   - command: "snyk.navigateToRange"
   - args: path, Range
-- WorkspaceScanCommand         
+- WorkspaceScanCommand
   - command: "snyk.workspace.scan"
   - args: empty
-- WorkspaceFolderScanCommand   
+- WorkspaceFolderScanCommand
   - command: "snyk.workspaceFolder.scan"
   - args: path
-- OpenBrowserCommand           
+- OpenBrowserCommand
   - command: "snyk.openBrowser"
   - args: URL
-- LoginCommand                 
+- LoginCommand
   - command: "snyk.login"
   - args: empty
-- CopyAuthLinkCommand          
+- CopyAuthLinkCommand
   - command: "snyk.copyAuthLink"
   - args: empty
-- LogoutCommand                
+- LogoutCommand
   - command: "snyk.logout"
   - args: empty
-- TrustWorkspaceFoldersCommand 
+- TrustWorkspaceFoldersCommand
   - command: "snyk.trustWorkspaceFolders"
   - args: empty
 

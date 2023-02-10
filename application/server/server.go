@@ -78,7 +78,6 @@ func Start() {
 func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 	(*handlers)["initialize"] = initializeHandler(srv)
 	(*handlers)["initialized"] = initializedHandler(srv)
-	(*handlers)["textDocument/didOpen"] = textDocumentDidOpenHandler()
 	(*handlers)["textDocument/didChange"] = noOpHandler()
 	(*handlers)["textDocument/didClose"] = noOpHandler()
 	(*handlers)["textDocument/didSave"] = textDocumentDidSaveHandler()
@@ -212,7 +211,6 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 			Capabilities: lsp.ServerCapabilities{
 				TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{
 					Options: &sglsp.TextDocumentSyncOptions{
-						OpenClose:         true,
 						WillSave:          true,
 						WillSaveWaitUntil: true,
 						Save:              &sglsp.SaveOptions{IncludeText: true},
@@ -367,27 +365,6 @@ func logError(err error, method string) {
 		log.Err(err).Str("method", method)
 		di.ErrorReporter().CaptureError(err)
 	}
-}
-
-func textDocumentDidOpenHandler() jrpc2.Handler {
-	return handler.New(func(_ context.Context, params sglsp.DidOpenTextDocumentParams) (any, error) {
-		filePath := uri.PathFromUri(params.TextDocument.URI)
-		logger := log.With().Str("method", "TextDocumentDidOpenHandler").Str("documentURI", filePath).Logger()
-
-		logger.Info().Msg("Receiving")
-		folder := workspace.Get().GetFolderContaining(filePath)
-		autoScanEnabled := config.CurrentConfig().IsAutoScanEnabled()
-		if folder != nil && autoScanEnabled {
-			go folder.ScanFile(context.Background(), filePath)
-		} else {
-			if autoScanEnabled {
-				logger.Warn().Msg("Not scanning, file not part of workspace")
-			} else {
-				logger.Warn().Msg("Not scanning, auto-scan is disabled")
-			}
-		}
-		return nil, nil
-	})
 }
 
 func textDocumentDidSaveHandler() jrpc2.Handler {

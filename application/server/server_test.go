@@ -184,20 +184,6 @@ func Test_initialize_containsServerInfo(t *testing.T) {
 	assert.Equal(t, config.LsProtocolVersion, result.ServerInfo.Version)
 }
 
-func Test_initialize_shouldSupportDocumentOpening(t *testing.T) {
-	loc := setupServer(t)
-
-	rsp, err := loc.Client.Call(ctx, "initialize", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var result lsp.InitializeResult
-	if err := rsp.UnmarshalResult(&result); err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.OpenClose, true)
-}
-
 func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 	loc := setupServer(t)
 
@@ -578,102 +564,6 @@ func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 	assert.Eventually(t, func() bool { return checkTrustMessageRequest() }, time.Second, time.Millisecond)
 }
 
-func Test_textDocumentDidOpenHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
-	loc := setupServer(t)
-	didOpenParams, dir := didOpenTextParams(t)
-
-	clientParams := lsp.InitializeParams{
-		RootURI: uri.PathToUri(dir),
-		InitializationOptions: lsp.Settings{
-			ActivateSnykCode:            "true",
-			ActivateSnykOpenSource:      "false",
-			ActivateSnykIac:             "false",
-			Organization:                "fancy org",
-			Token:                       "xxx",
-			CliPath:                     "",
-			FilterSeverity:              lsp.DefaultSeverityFilter(),
-			EnableTrustedFoldersFeature: "false",
-		},
-	}
-	_, err := loc.Client.Call(ctx, "initialize", clientParams)
-	if err != nil {
-		t.Fatal(err, "couldn't initialize")
-	}
-
-	_, err = loc.Client.Call(ctx, "initialized", nil)
-	if err != nil {
-		t.Fatal(err, "couldn't send initialized")
-	}
-
-	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// wait for publish
-	assert.Eventually(
-		t,
-		checkForPublishedDiagnostics(uri.PathFromUri(didOpenParams.TextDocument.URI), -1),
-		2*time.Second,
-		10*time.Millisecond,
-	)
-}
-
-func Test_textDocumentDidOpenHandler_shouldDownloadCLI(t *testing.T) {
-	// Arrange
-	loc := setupServer(t)
-	testutil.IntegTest(t)
-	testutil.CreateDummyProgressListener(t)
-
-	installer := di.Installer()
-
-	err := os.Unsetenv("SNYK_CLI_PATH")
-	if err != nil {
-		t.Fatal("couldn't unset environment variable SNYK_CLI_PATH")
-	}
-
-	didOpenParams, dir := didOpenTextParams(t)
-	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService(), di.ScanNotifier()))
-	config.CurrentConfig().CliSettings().SetPath(t.TempDir() + "not-existing-cli")
-	// Act
-	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Assert
-	assert.Eventually(t, func() bool {
-		return installer.(*install.FakeInstaller).Installs() > 0
-	}, maxIntegTestDuration, 10*time.Millisecond)
-}
-
-func Test_textDocumentDidChangeHandler_shouldAcceptUri(t *testing.T) {
-	loc := setupServer(t)
-
-	// register our dummy document
-	didOpenParams, dir := didOpenTextParams(t)
-
-	workspace.Get().AddFolder(workspace.NewFolder(dir, "test", di.Scanner(), di.HoverService(), di.ScanNotifier()))
-
-	_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	didChangeParams := sglsp.DidChangeTextDocumentParams{
-		TextDocument: sglsp.VersionedTextDocumentIdentifier{
-			TextDocumentIdentifier: sglsp.TextDocumentIdentifier{URI: didOpenParams.TextDocument.URI},
-			Version:                0,
-		},
-		ContentChanges: nil,
-	}
-
-	_, err = loc.Client.Call(ctx, "textDocument/didChange", didChangeParams)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
@@ -841,7 +731,7 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 	var testPath string
 	if file1 != "" {
 		testPath = filepath.Join(cloneTargetDir, file1)
-		textDocumentDidOpen(&loc, testPath, t)
+		textDocumentDidSave(&loc, testPath, t)
 		// serve diagnostics from file scan
 		assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
 	}
@@ -853,7 +743,7 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 	}, maxIntegTestDuration, 2*time.Millisecond)
 
 	testPath = filepath.Join(cloneTargetDir, file2)
-	textDocumentDidOpen(&loc, testPath, t)
+	textDocumentDidSave(&loc, testPath, t)
 
 	assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
 }
@@ -961,30 +851,24 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	f := workspace.NewFolder(cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier())
 	w.AddFolder(f)
 
-	_ = textDocumentDidOpen(&loc, testPath, t)
+	_ = textDocumentDidSave(&loc, testPath, t)
 
 	assert.Eventually(t, checkForPublishedDiagnostics(testPath, 6), maxIntegTestDuration, 10*time.Millisecond)
 }
 
-func textDocumentDidOpen(loc *server.Local, testPath string, t *testing.T) sglsp.DidOpenTextDocumentParams {
-	testFileContent, err := os.ReadFile(testPath)
-	if err != nil {
-		t.Fatal(err, "Couldn't read file content of test file")
-	}
-
-	didOpenParams := sglsp.DidOpenTextDocumentParams{
-		TextDocument: sglsp.TextDocumentItem{
-			URI:  uri.PathToUri(testPath),
-			Text: string(testFileContent),
+func textDocumentDidSave(loc *server.Local, testPath string, t *testing.T) sglsp.DidSaveTextDocumentParams {
+	didSaveParams := sglsp.DidSaveTextDocumentParams{
+		TextDocument: sglsp.TextDocumentIdentifier{
+			URI: uri.PathToUri(testPath),
 		},
 	}
 
-	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
+	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
 	if err != nil {
 		t.Fatal(err, "Call failed")
 	}
 
-	return didOpenParams
+	return didSaveParams
 }
 
 func setupCustomTestRepo(url string, targetCommit string, t *testing.T) (string, error) {
