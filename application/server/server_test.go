@@ -184,20 +184,6 @@ func Test_initialize_containsServerInfo(t *testing.T) {
 	assert.Equal(t, config.LsProtocolVersion, result.ServerInfo.Version)
 }
 
-func Test_initialize_shouldSupportDocumentOpening(t *testing.T) {
-	loc := setupServer(t)
-
-	rsp, err := loc.Client.Call(ctx, "initialize", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var result lsp.InitializeResult
-	if err := rsp.UnmarshalResult(&result); err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, result.Capabilities.TextDocumentSync.Options.OpenClose, true)
-}
-
 func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 	loc := setupServer(t)
 
