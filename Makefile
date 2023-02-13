@@ -48,9 +48,9 @@ else
 endif
 	@if [ ! -d ./.bin/pact ]; then\
 		echo "--- 🛠 Installing Pact CLI dependencies";\
-		./install.sh;\
-		mkdir ./.bin/pact;\
-		mv ./pact/* ./.bin/pact;\
+		mkdir -p ./.bin;\
+		cd ./.bin;\
+		../install.sh;\
 	else \
 		echo "==> Pact CLI is already installed";\
 	fi
