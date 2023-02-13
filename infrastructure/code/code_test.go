@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -307,43 +308,100 @@ func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 	assert.NotContains(t, walkedFiles, ignoredFileInDir)
 }
 
-func Test_CodeScanRunning_ScanCalled_ScansRunSequentially(t *testing.T) {
-	// Arrange
-	testutil.UnitTest(t)
-	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-	fakeClient, scanner := setupTestScanner()
-	fakeClient.AnalysisDuration = time.Second
-	wg := sync.WaitGroup{}
+func Test_Scan(t *testing.T) {
+	t.Run("Should update changed files", func(t *testing.T) {
+		testutil.UnitTest(t)
+		// Arrange
+		snykCodeMock := &FakeSnykCodeClient{}
+		scanner := New(
+			NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
+			&snyk_api.FakeApiClient{CodeEnabled: false},
+			error_reporting.NewTestErrorReporter(),
+			ux2.NewTestAnalytics(),
+		)
+		wg := sync.WaitGroup{}
 
-	// Act
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func() {
-			_, _ = scanner.Scan(context.Background(), "", tempDir)
-			wg.Done()
-		}()
-	}
-	wg.Wait()
+		// Act
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func(i int) {
+				_, _ = scanner.Scan(context.Background(), "file"+strconv.Itoa(i)+".go", "")
+				wg.Done()
+			}(i)
+		}
+		wg.Wait()
 
-	// Assert
-	assert.Equal(t, 1, fakeClient.maxConcurrentScans)
-}
+		// Assert
+		expectedChangedFiles := []string{
+			"file0.go",
+			"file1.go",
+			"file2.go",
+			"file3.go",
+			"file4.go",
+		}
 
-func Test_Scan_ShouldntRunIfSastDisabled(t *testing.T) {
-	testutil.UnitTest(t)
-	snykCodeMock := &FakeSnykCodeClient{}
-	c := New(
-		NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
-		&snyk_api.FakeApiClient{CodeEnabled: false},
-		error_reporting.NewTestErrorReporter(),
-		ux2.NewTestAnalytics(),
-	)
-	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+		scanner.changedFiles.Range(func(file any, _ any) bool {
+			assert.Contains(t, expectedChangedFiles, file)
+			return true
+		})
+	})
 
-	_, _ = c.Scan(context.Background(), "", tempDir)
+	t.Run("Should not mark folders as changed files", func(t *testing.T) {
+		testutil.UnitTest(t)
+		// Arrange
+		snykCodeMock := &FakeSnykCodeClient{}
+		scanner := New(
+			NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
+			&snyk_api.FakeApiClient{CodeEnabled: true},
+			error_reporting.NewTestErrorReporter(),
+			ux2.NewTestAnalytics(),
+		)
 
-	params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
-	assert.Nil(t, params)
+		// Act
+		_, _ = scanner.Scan(context.Background(), t.TempDir(), "")
+
+		// Assert
+		assert.Equal(t, scanner.changedFiles.Length(), 0)
+	})
+
+	t.Run("CodeScanRunning_ScanCalled_ScansRunSequentially", func(t *testing.T) {
+		// Arrange
+		testutil.UnitTest(t)
+		_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+		fakeClient, scanner := setupTestScanner()
+		fakeClient.AnalysisDuration = time.Second
+		wg := sync.WaitGroup{}
+
+		// Act
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func() {
+				_, _ = scanner.Scan(context.Background(), "", tempDir)
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+
+		// Assert
+		assert.Equal(t, 1, fakeClient.maxConcurrentScans)
+	})
+
+	t.Run("Shouldn't run if Sast is disabled", func(t *testing.T) {
+		testutil.UnitTest(t)
+		snykCodeMock := &FakeSnykCodeClient{}
+		c := New(
+			NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
+			&snyk_api.FakeApiClient{CodeEnabled: false},
+			error_reporting.NewTestErrorReporter(),
+			ux2.NewTestAnalytics(),
+		)
+		_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+
+		_, _ = c.Scan(context.Background(), "", tempDir)
+
+		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
+		assert.Nil(t, params)
+	})
 }
 
 func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {

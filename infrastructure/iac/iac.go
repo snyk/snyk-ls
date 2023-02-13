@@ -110,7 +110,7 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	defer p.End("Snyk Iac Scan completed.")
 
 	var workspacePath string
-	if uri.IsDirectory(documentURI) {
+	if uri.IsUriDirectory(documentURI) {
 		workspacePath = uri.PathFromUri(documentURI)
 	} else {
 		workspacePath = filepath.Dir(uri.PathFromUri(documentURI))
@@ -163,7 +163,7 @@ func (iac *Scanner) retrieveIssues(scanResults []iacScanResult, issues []snyk.Is
 
 func (iac *Scanner) isSupported(documentURI sglsp.DocumentURI) bool {
 	ext := filepath.Ext(uri.PathFromUri(documentURI))
-	return uri.IsDirectory(documentURI) || extensions[ext]
+	return uri.IsUriDirectory(documentURI) || extensions[ext]
 }
 
 func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, workspacePath string) (scanResults []iacScanResult, err error) {

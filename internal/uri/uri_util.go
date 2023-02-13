@@ -61,12 +61,12 @@ func PathToUri(path string) sglsp.DocumentURI {
 	return sglsp.DocumentURI(uri.File(path))
 }
 
-func IsDirectory(documentURI sglsp.DocumentURI) bool {
+func IsUriDirectory(documentURI sglsp.DocumentURI) bool {
 	workspaceUri := PathFromUri(documentURI)
-	return isDirectory(workspaceUri)
+	return IsDirectory(workspaceUri)
 }
 
-func isDirectory(path string) bool {
+func IsDirectory(path string) bool {
 	stat, err := os.Stat(path)
 	if err != nil {
 		log.Err(err).Err(err).Msg("Error while checking file")

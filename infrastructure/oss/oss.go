@@ -158,7 +158,7 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	}
 
 	var workDir string
-	if uri.IsDirectory(documentURI) {
+	if uri.IsUriDirectory(documentURI) {
 		workDir = path
 	} else {
 		workDir = filepath.Dir(path)
@@ -217,7 +217,7 @@ func (oss *Scanner) prepareScanCommand(workDir string) []string {
 }
 
 func (oss *Scanner) isSupported(documentURI sglsp.DocumentURI) bool {
-	return uri.IsDirectory(documentURI) || supportedFiles[filepath.Base(uri.PathFromUri(documentURI))]
+	return uri.IsUriDirectory(documentURI) || supportedFiles[filepath.Base(uri.PathFromUri(documentURI))]
 }
 
 func (oss *Scanner) unmarshallAndRetrieveAnalysis(ctx context.Context, res []byte, documentURI sglsp.DocumentURI) (issues []snyk.Issue) {
