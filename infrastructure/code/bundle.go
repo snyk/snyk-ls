@@ -169,7 +169,7 @@ func (b *Bundle) enhanceWithAutofixSuggestionEdits(ctx context.Context, issue sn
 	method := "code.enhanceWithAutofixSuggestionEdits"
 	s := b.instrumentor.StartSpan(ctx, method)
 	defer b.instrumentor.Finish(s)
-	const autofixTimeout = 30 * time.Second
+	const autofixTimeout = 10 * time.Second
 
 	autofixOptions := AutofixOptions{
 		bundleHash: b.BundleHash,

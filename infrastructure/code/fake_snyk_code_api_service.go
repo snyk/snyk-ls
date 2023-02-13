@@ -40,6 +40,10 @@ const (
 	RunAnalysisOperation            = "runAnalysis"
 	RunAutofixOperation             = "runAutofix"
 	GetFiltersOperation             = "getFilters"
+
+	// Helper constants to synchronize fake results and tests
+	FakeAutofixFileUri           = "/some/path/uri"
+	FakeAutofixSuggestionNewText = "FAKE_AUTOFIX_NEW_TEXT"
 )
 
 var (
@@ -114,6 +118,9 @@ type FakeSnykCodeClient struct {
 	AutofixDuration              time.Duration
 	currentConcurrentAutofixRuns int
 	maxConcurrentAutofixRuns     int
+
+	// Test constants
+
 }
 
 func (f *FakeSnykCodeClient) addCall(params []any, op string) {
@@ -251,7 +258,40 @@ func (f *FakeSnykCodeClient) RunAutofix(
 	f.addCall(params, RunAutofixOperation)
 	FakeSnykCodeApiServiceMutex.Unlock()
 
-	suggestions := []snyk.AutofixSuggestion{}
+	suggestions := []snyk.AutofixSuggestion{
+		// First suggestion
+		{
+			FixCodeAction: snyk.CodeAction{
+				Edit: snyk.WorkspaceEdit{
+					Changes: map[string][]snyk.TextEdit{
+						FakeAutofixFileUri: {snyk.TextEdit{
+							Range: snyk.Range{
+								Start: snyk.Position{Line: 0, Character: 0},
+								End:   snyk.Position{Line: 10000, Character: 0},
+							},
+							NewText: FakeAutofixSuggestionNewText,
+						}},
+					},
+				},
+			},
+		},
+		// Second suggestion -- currently dropped
+		{
+			FixCodeAction: snyk.CodeAction{
+				Edit: snyk.WorkspaceEdit{
+					Changes: map[string][]snyk.TextEdit{
+						FakeAutofixFileUri: {snyk.TextEdit{
+							Range: snyk.Range{
+								Start: snyk.Position{Line: 0, Character: 0},
+								End:   snyk.Position{Line: 10000, Character: 0},
+							},
+							NewText: "FAKE_AUTOFIX_UNUSED",
+						}},
+					},
+				},
+			},
+		},
+	}
 
 	log.Trace().Str("method", "RunAutofix").Interface("fakeAutofix", "someAutofixSuggestion").Msg("fake backend call received & answered")
 	return suggestions, AutofixStatus{message: "COMPLETE"}, nil
