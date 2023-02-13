@@ -71,7 +71,7 @@ lint: tools
 
 ## test: Run all tests.
 .PHONY: test
-test: tools
+test:
 	@echo "==> Running unit tests..."
 	@mkdir -p $(BUILD_DIR)
 	@go test $(PARALLEL) $(NOCACHE) $(TIMEOUT) $(VERBOSE) -failfast -cover -coverprofile=$(BUILD_DIR)/coverage.out ./...

@@ -326,10 +326,10 @@ automatically retrieves the Snyk authentication token from the CLI.
 go test ./...
 ```
 
-If you have any issues with running pact, please use this command:
-
+If you have any issues with running pact, please extend your PATH env. 
+For example:
 ```
-make test
+PATH=$PATH:$PWD/.bin/pact/bin make test
 ```
 
 The output should look like this (it is running against the Snyk Code API and using the real CLI):
