@@ -20,6 +20,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
@@ -52,15 +53,19 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 
 func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 	testutil.UnitTest(t)
-
 	path := "testPath"
 	text := "test error"
+	channel := make(chan lsp.PublishDiagnosticsParams, 1)
+	defer close(channel)
+
 	notification.CreateListener(func(params any) {
-		diagnosticsParams := params.(lsp.PublishDiagnosticsParams)
-		assert.Equal(t, text, diagnosticsParams.Diagnostics[0].Message)
-		assert.Equal(t, lsp.DiagnosticsSeverityWarning, diagnosticsParams.Diagnostics[0].Severity)
-		assert.Equal(t, diagnosticsParams.URI, uri.PathToUri(path))
-		assert.Equal(t, diagnosticsParams.Diagnostics[0].CodeDescription.Href, lsp.Uri("https://snyk.io/user-hub"))
+		switch params.(type) {
+		case lsp.PublishDiagnosticsParams:
+			channel <- params.(lsp.PublishDiagnosticsParams)
+		default:
+			log.Debug().Msgf("Unexpected notification: %v", params)
+			return
+		}
 	})
 
 	e := errors.New(text)
@@ -71,4 +76,10 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 	config.CurrentConfig().SetErrorReportingEnabled(true)
 	captured = target.CaptureErrorAndReportAsIssue(path, e)
 	assert.True(t, captured)
+
+	diagnosticsParams := <-channel
+	assert.Equal(t, text, diagnosticsParams.Diagnostics[0].Message)
+	assert.Equal(t, lsp.DiagnosticsSeverityWarning, diagnosticsParams.Diagnostics[0].Severity)
+	assert.Equal(t, diagnosticsParams.URI, uri.PathToUri(path))
+	assert.Equal(t, diagnosticsParams.Diagnostics[0].CodeDescription.Href, lsp.Uri("https://snyk.io/user-hub"))
 }
