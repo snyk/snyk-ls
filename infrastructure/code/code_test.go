@@ -253,11 +253,6 @@ func TestUploadAndAnalyze(t *testing.T) {
 
 func Test_IgnoresWithNegationInSnykCode(t *testing.T) {
 	t.Parallel()
-	/*
-		/path/with/temp/repobase
-		/path/with/temp/repobase/.gitignore
-		/path/with/temp/repobase/file1.java
-	*/
 	dir := t.TempDir()
 	repobase := filepath.Join(dir, "temp", "repobase")
 	err := os.MkdirAll(repobase, 0755)
@@ -286,11 +281,6 @@ func Test_IgnoresWithNegationInSnykCode(t *testing.T) {
 
 func Test_IgnoresInSnykCode(t *testing.T) {
 	t.Parallel()
-	/*
-		/path/with/temp/repobase
-		/path/with/temp/repobase/.gitignore
-		/path/with/temp/repobase/file1.java
-	*/
 	dir := t.TempDir()
 	repobase := filepath.Join(dir, "temp", "repobase")
 	err := os.MkdirAll(repobase, 0755)
@@ -536,29 +526,30 @@ func TestIsSastEnabled(t *testing.T) {
 		assert.False(t, enabled)
 	})
 
-	t.Run("should send a ShowMessageRequest notification if Snyk Code is enabled and the API returns false", func(t *testing.T) {
-		notification.DisposeListener()
-		config.CurrentConfig().SetSnykCodeEnabled(true)
-		apiClient.CodeEnabled = false
-		actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
+	t.Run("should send a ShowMessageRequest notification if Snyk Code is enabled and the API returns false",
+		func(t *testing.T) {
+			notification.DisposeListener()
+			config.CurrentConfig().SetSnykCodeEnabled(true)
+			apiClient.CodeEnabled = false
+			actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
 
-		actionMap.Add(enableSnykCodeMessageActionItemTitle, command.NewOpenBrowserCommand(getCodeEnablementUrl()))
-		actionMap.Add(closeMessageActionItemTitle, nil)
-		expectedShowMessageRequest := snyk.ShowMessageRequest{
-			Message: codeDisabledInOrganisationMessageText,
-			Type:    snyk.Warning,
-			Actions: actionMap,
-		}
+			actionMap.Add(enableSnykCodeMessageActionItemTitle, command.NewOpenBrowserCommand(getCodeEnablementUrl()))
+			actionMap.Add(closeMessageActionItemTitle, nil)
+			expectedShowMessageRequest := snyk.ShowMessageRequest{
+				Message: codeDisabledInOrganisationMessageText,
+				Type:    snyk.Warning,
+				Actions: actionMap,
+			}
 
-		channel := make(chan any)
+			channel := make(chan any)
 
-		notification.CreateListener(func(params any) {
-			channel <- params
+			notification.CreateListener(func(params any) {
+				channel <- params
+			})
+			defer notification.DisposeListener()
+
+			scanner.isSastEnabled()
+
+			assert.Equal(t, expectedShowMessageRequest, <-channel)
 		})
-		defer notification.DisposeListener()
-
-		scanner.isSastEnabled()
-
-		assert.Equal(t, expectedShowMessageRequest, <-channel)
-	})
 }
