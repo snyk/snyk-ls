@@ -195,6 +195,11 @@ func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
 	log.Debug().Str("method", "folder.Files").Msgf("Filecount: %d", fileCount)
 	err = filepath.WalkDir(
 		workspace, func(path string, dirEntry os.DirEntry, err error) error {
+			relativePath, err := filepath.Rel(folderPath, path)
+			if err != nil {
+				log.Err(err).Msg("error getting relative path from " + path)
+				return nil
+			}
 			filesWalked++
 			percentage := math.Round(float64(filesWalked) / float64(fileCount) * 100)
 			t.ReportWithMessage(
@@ -204,19 +209,19 @@ func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
 			if err != nil {
 				log.Debug().
 					Str("method", "domain.ide.workspace.Folder.Files").
-					Str("path", path).
+					Str("relativePath", relativePath).
 					Err(err).
 					Msg("error traversing files")
 				return nil
 			}
 			if dirEntry == nil || dirEntry.IsDir() {
-				if util.Ignored(gitIgnore, path) {
+				if util.Ignored(gitIgnore, relativePath) {
 					return filepath.SkipDir
 				}
 				return nil
 			}
 
-			if util.Ignored(gitIgnore, path) {
+			if util.Ignored(gitIgnore, relativePath) {
 				return nil
 			}
 
@@ -261,11 +266,17 @@ func (sc *Scanner) loadIgnorePatternsAndCountFiles(folderPath string) (fileCount
 				log.Err(err).Msg("Can't read" + path)
 			}
 			lines := strings.Split(string(content), "\n")
+			relativePath, err := filepath.Rel(folderPath, path)
+			relativePath = filepath.ToSlash(relativePath)
+			if err != nil {
+				log.Err(err).Msg("Can't find relative path from " + folderPath + " to " + path)
+				return err
+			}
 			for _, line := range lines {
 				if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
 					continue
 				}
-				glob := parseIgnoreRuleToGlobs(line, filepath.Dir(path))
+				glob := parseIgnoreRuleToGlobs(line, filepath.Dir(relativePath))
 				ignores = append(ignores, glob)
 			}
 			return err
@@ -332,7 +343,7 @@ func parseIgnoreRuleToGlobs(rule string, baseDir string) (glob string) {
 			glob = prefix + filepath.Join(baseDir, all, rule)
 		}
 	}
-	return glob
+	return filepath.ToSlash(glob)
 }
 
 func (sc *Scanner) newMetrics(fileCount int, scanStartTime time.Time) *ScanMetrics {
