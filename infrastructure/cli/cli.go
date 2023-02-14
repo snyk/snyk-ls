@@ -64,7 +64,7 @@ type Executor interface {
 
 func (c SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error) {
 	method := "SnykCli.Execute"
-	log.Info().Str("method", method).Interface("cmd", cmd).Str("workingDir", workingDir).Msg("calling Snyk CLI")
+	log.Debug().Str("method", method).Interface("cmd", cmd).Str("workingDir", workingDir).Msg("calling Snyk CLI")
 
 	// set deadline to handle CLI hanging when obtaining semaphore
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(c.cliTimeout))
