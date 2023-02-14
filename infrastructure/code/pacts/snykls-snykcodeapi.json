@@ -16,6 +16,7 @@
           "Content-Encoding": "gzip",
           "Content-Type": "application/octet-stream",
           "Session-Token": "fc763eba-0905-41c5-a27f-3934ab26786c",
+          "snyk-org-name": "test-org",
           "snyk-request-id": "fc763eba-0905-41c5-a27f-3934ab26786c"
         },
         "body": "AA==",
@@ -70,6 +71,7 @@
           "Content-Encoding": "gzip",
           "Content-Type": "application/octet-stream",
           "Session-Token": "fc763eba-0905-41c5-a27f-3934ab26786c",
+          "snyk-org-name": "test-org",
           "snyk-request-id": "fc763eba-0905-41c5-a27f-3934ab26786c"
         },
         "body": "AA==",
@@ -107,6 +109,7 @@
           "Content-Encoding": "gzip",
           "Content-Type": "application/octet-stream",
           "Session-Token": "fc763eba-0905-41c5-a27f-3934ab26786c",
+          "snyk-org-name": "test-org",
           "snyk-request-id": "fc763eba-0905-41c5-a27f-3934ab26786c"
         },
         "body": "AA==",
@@ -165,6 +168,7 @@
           "Content-Encoding": "gzip",
           "Content-Type": "application/octet-stream",
           "Session-Token": "fc763eba-0905-41c5-a27f-3934ab26786c",
+          "snyk-org-name": "test-org",
           "snyk-request-id": "fc763eba-0905-41c5-a27f-3934ab26786c"
         },
         "body": "AA==",

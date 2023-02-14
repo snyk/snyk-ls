@@ -31,6 +31,11 @@ NOCACHE := "-count=1"
 VERBOSE := "-v"
 TIMEOUT := "-timeout=15m"
 
+
+# NOTE: Until this PR is merged https://github.com/pact-foundation/pact-ruby-standalone/pull/89 we need to duplicate the install script
+# curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | bash;\
+# TODO: clean up this script once the PR is merged
+
 ## tools: Install required tooling.
 .PHONY: tools
 tools:
@@ -43,13 +48,13 @@ else
 endif
 	@if [ ! -d ./.bin/pact ]; then\
 		echo "--- 🛠 Installing Pact CLI dependencies";\
-		curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | bash;\
-		mkdir ./.bin/pact;\
-		mv ./pact/* ./.bin/pact;\
-		export PATH=$PATH:$PWD/.bin/pact;\
+		mkdir -p ./.bin;\
+		cd ./.bin;\
+		../install.sh;\
 	else \
 		echo "==> Pact CLI is already installed";\
 	fi
+	export PATH=$PATH:$PWD/.bin/pact/bin;\
 	echo "Please make sure to install NPM locally to be able to run analytics verification Ampli."
 
 ## clean: Delete the build directory
