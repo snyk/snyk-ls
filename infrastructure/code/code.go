@@ -122,6 +122,13 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 
 	sc.UpdateChangedFiles(path)
 
+	// When starting a scan for a folderPath that's already scanned, the new scan will wait for the previous scan
+	// to finish before starting.
+	// When there's already a scan waiting, the function returns immediately with empty results.
+	// Returning an empty slice implies that no vulnerabilities were found
+	// Block here until previous scan is finished
+	// Setting isPending = false allows for future scans to wait for the current
+	// scan to finish, instead of returning immediately
 	waiting, deferFn := sc.isScanWaiting(folderPath)
 	if waiting {
 		return []snyk.Issue{}, nil
@@ -156,13 +163,6 @@ func (sc *Scanner) UpdateChangedFiles(changedPath string) {
 	}
 }
 
-// When starting a scan for a folderPath that's already scanned, the new scan will wait for the previous scan
-// to finish before starting.
-// When there's already a scan waiting, the function returns immediately with empty results.
-// Returning an empty slice implies that no vulnerabilities were found
-// Block here until previous scan is finished
-// Setting isPending = false allows for future scans to wait for the current
-// scan to finish, instead of returning immediately
 func (sc *Scanner) isScanWaiting(folderPath string) (waiting bool, deferFn func()) {
 	waitForPreviousScan := false
 	scanStatus := NewScanStatus()
