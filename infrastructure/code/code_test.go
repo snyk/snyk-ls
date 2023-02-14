@@ -312,7 +312,7 @@ func Test_Scan(t *testing.T) {
 	t.Run("Should update changed files", func(t *testing.T) {
 		testutil.UnitTest(t)
 		// Arrange
-		snykCodeMock := &FakeSnykCodeClient{FailOnCreateBundle: true} // fail on create bundle to avoid clearing changed files
+		snykCodeMock := &FakeSnykCodeClient{} // fail on create bundle to avoid clearing changed files
 		scanner := New(
 			NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
 			&snyk_api.FakeApiClient{CodeEnabled: true},
@@ -340,14 +340,11 @@ func Test_Scan(t *testing.T) {
 			"file4.go",
 		}
 
-		actualChangedFiles := make([]string, 0, scanner.changedFiles.Length())
-		scanner.changedFiles.Range(func(key any, _ any) bool {
-			actualChangedFiles = append(actualChangedFiles, key.(string))
-			return true
-		})
-
+		params := snykCodeMock.GetCallParams(0, RunAnalysisOperation)
+		assert.NotNil(t, params)
+		assert.Equal(t, 5, len(params[1].([]string)))
 		for _, file := range expectedChangedFiles {
-			assert.Contains(t, actualChangedFiles, file)
+			assert.Contains(t, params[1], file)
 		}
 	})
 
