@@ -37,9 +37,16 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 	testutil.UnitTest(t)
 	e := errors.New("test error")
 
+	channel := make(chan sglsp.ShowMessageParams, 1)
+
 	notification.CreateListener(func(params any) {
-		showMessageParams := params.(sglsp.ShowMessageParams)
-		assert.Equal(t, "Snyk encountered an error: test error", showMessageParams.Message)
+		switch p := params.(type) {
+		case sglsp.ShowMessageParams:
+			channel <- p
+		default:
+			log.Debug().Msgf("Unexpected notification: %v", params)
+			return
+		}
 	})
 
 	config.CurrentConfig().SetErrorReportingEnabled(false)
@@ -49,6 +56,9 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 	config.CurrentConfig().SetErrorReportingEnabled(true)
 	captured = target.CaptureError(e)
 	assert.True(t, captured)
+
+	showMessageParams := <-channel
+	assert.Equal(t, "Snyk encountered an error: test error", showMessageParams.Message)
 }
 
 func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
