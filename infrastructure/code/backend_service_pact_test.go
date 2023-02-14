@@ -260,6 +260,7 @@ func setupPact(t *testing.T) {
 
 	t.Setenv("DEEPROXY_API_URL", fmt.Sprintf("http://localhost:%d", pact.Server.Port))
 	config.CurrentConfig().UpdateApiEndpoints("http://localhost")
+	config.CurrentConfig().SetOrganization("test-org")
 
 	client = NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
 }
@@ -269,6 +270,7 @@ func getPutPostHeaderMatcher() dsl.MapMatcher {
 		"Content-Type":     dsl.String("application/octet-stream"),
 		"Content-Encoding": dsl.String("gzip"),
 		"Session-Token":    dsl.Regex("fc763eba-0905-41c5-a27f-3934ab26786c", uuidMatcher),
+		"snyk-org-name":    dsl.String("test-org"),
 		"snyk-request-id":  getSnykRequestIdMatcher(),
 	}
 }

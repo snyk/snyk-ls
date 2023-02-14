@@ -168,6 +168,9 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 	}
 
 	req.Header.Set("Session-Token", config.CurrentConfig().Token())
+
+	// Setting a chosen org name for the request
+	req.Header.Set("snyk-org-name", config.CurrentConfig().GetOrganization())
 	req.Header.Set("snyk-request-id", requestId)
 	// https://www.keycdn.com/blog/http-cache-headers
 	req.Header.Set("Cache-Control", "private, max-age=0, no-cache")
