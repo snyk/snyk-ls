@@ -144,7 +144,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 
 	metrics := sc.newMetrics(len(folderFiles), startTime)
 	results, err := sc.UploadAndAnalyze(span.Context(), folderFiles, folderPath, metrics)
-	if err != nil {
+	if err == nil {
 		sc.changedFiles.ClearAll()
 	}
 	return results, err

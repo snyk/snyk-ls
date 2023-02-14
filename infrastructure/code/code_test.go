@@ -312,10 +312,10 @@ func Test_Scan(t *testing.T) {
 	t.Run("Should update changed files", func(t *testing.T) {
 		testutil.UnitTest(t)
 		// Arrange
-		snykCodeMock := &FakeSnykCodeClient{}
+		snykCodeMock := &FakeSnykCodeClient{FailOnCreateBundle: true} // fail on create bundle to avoid clearing changed files
 		scanner := New(
 			NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
-			&snyk_api.FakeApiClient{CodeEnabled: false},
+			&snyk_api.FakeApiClient{CodeEnabled: true},
 			error_reporting.NewTestErrorReporter(),
 			ux2.NewTestAnalytics(),
 		)
@@ -340,10 +340,41 @@ func Test_Scan(t *testing.T) {
 			"file4.go",
 		}
 
-		scanner.changedFiles.Range(func(file any, _ any) bool {
-			assert.Contains(t, expectedChangedFiles, file)
+		actualChangedFiles := make([]string, 0, scanner.changedFiles.Length())
+		scanner.changedFiles.Range(func(key any, _ any) bool {
+			actualChangedFiles = append(actualChangedFiles, key.(string))
 			return true
 		})
+
+		for _, file := range expectedChangedFiles {
+			assert.Contains(t, actualChangedFiles, file)
+		}
+	})
+
+	t.Run("Should reset changed files after successful scan", func(t *testing.T) {
+		testutil.UnitTest(t)
+		// Arrange
+		snykCodeMock := &FakeSnykCodeClient{}
+		scanner := New(
+			NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
+			&snyk_api.FakeApiClient{CodeEnabled: true},
+			error_reporting.NewTestErrorReporter(),
+			ux2.NewTestAnalytics(),
+		)
+		wg := sync.WaitGroup{}
+
+		// Act
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func(i int) {
+				_, _ = scanner.Scan(context.Background(), "file"+strconv.Itoa(i)+".go", "")
+				wg.Done()
+			}(i)
+		}
+		wg.Wait()
+
+		// Assert
+		assert.Equal(t, 0, scanner.changedFiles.Length())
 	})
 
 	t.Run("Should not mark folders as changed files", func(t *testing.T) {
