@@ -312,7 +312,7 @@ func Test_Scan(t *testing.T) {
 	t.Run("Should update changed files", func(t *testing.T) {
 		testutil.UnitTest(t)
 		// Arrange
-		snykCodeMock := &FakeSnykCodeClient{} // fail on create bundle to avoid clearing changed files
+		snykCodeMock := &FakeSnykCodeClient{}
 		scanner := New(
 			NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
 			&snyk_api.FakeApiClient{CodeEnabled: true},
@@ -320,12 +320,13 @@ func Test_Scan(t *testing.T) {
 			ux2.NewTestAnalytics(),
 		)
 		wg := sync.WaitGroup{}
+		_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
 
 		// Act
 		for i := 0; i < 5; i++ {
 			wg.Add(1)
 			go func(i int) {
-				_, _ = scanner.Scan(context.Background(), "file"+strconv.Itoa(i)+".go", "")
+				_, _ = scanner.Scan(context.Background(), "file"+strconv.Itoa(i)+".go", tempDir)
 				wg.Done()
 			}(i)
 		}
@@ -359,12 +360,13 @@ func Test_Scan(t *testing.T) {
 			ux2.NewTestAnalytics(),
 		)
 		wg := sync.WaitGroup{}
+		tempDir := t.TempDir()
 
 		// Act
 		for i := 0; i < 5; i++ {
 			wg.Add(1)
 			go func(i int) {
-				_, _ = scanner.Scan(context.Background(), "file"+strconv.Itoa(i)+".go", "")
+				_, _ = scanner.Scan(context.Background(), "file"+strconv.Itoa(i)+".go", tempDir)
 				wg.Done()
 			}(i)
 		}
