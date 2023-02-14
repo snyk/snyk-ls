@@ -195,6 +195,14 @@ func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
 	log.Debug().Str("method", "folder.Files").Msgf("Filecount: %d", fileCount)
 	err = filepath.WalkDir(
 		workspace, func(path string, dirEntry os.DirEntry, err error) error {
+			if err != nil {
+				log.Debug().
+					Str("method", "domain.ide.workspace.Folder.Files").
+					Str("path", path).
+					Err(err).
+					Msg("error traversing files")
+				return nil
+			}
 			relativePath, err := filepath.Rel(folderPath, path)
 			if err != nil {
 				log.Err(err).Msg("error getting relative path from " + path)
@@ -206,14 +214,6 @@ func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
 				int(percentage),
 				fmt.Sprintf("Loading file contents for scan... (%d of %d)", filesWalked, fileCount),
 			)
-			if err != nil {
-				log.Debug().
-					Str("method", "domain.ide.workspace.Folder.Files").
-					Str("relativePath", relativePath).
-					Err(err).
-					Msg("error traversing files")
-				return nil
-			}
 			if dirEntry == nil || dirEntry.IsDir() {
 				if util.Ignored(gitIgnore, relativePath) {
 					return filepath.SkipDir
