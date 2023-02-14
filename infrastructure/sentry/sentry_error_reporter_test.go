@@ -37,7 +37,7 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 	testutil.UnitTest(t)
 	e := errors.New("test error")
 
-	channel := make(chan sglsp.ShowMessageParams, 1)
+	channel := make(chan sglsp.ShowMessageParams)
 
 	notification.CreateListener(func(params any) {
 		switch p := params.(type) {
@@ -65,7 +65,7 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 	testutil.UnitTest(t)
 	path := "testPath"
 	text := "test error"
-	channel := make(chan lsp.PublishDiagnosticsParams, 1)
+	channel := make(chan lsp.PublishDiagnosticsParams)
 
 	notification.CreateListener(func(params any) {
 		switch p := params.(type) {
