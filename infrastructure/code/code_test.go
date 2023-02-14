@@ -251,17 +251,69 @@ func TestUploadAndAnalyze(t *testing.T) {
 	)
 }
 
-func Test_LoadIgnorePatternsWithIgnoreFilePresent(t *testing.T) {
-	expectedPatterns, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
-	_, sc := setupTestScanner()
-
-	_, err := sc.loadIgnorePatternsAndCountFiles(tempDir)
+func Test_IgnoresWithNegationInSnykCode(t *testing.T) {
+	t.Parallel()
+	/*
+		/path/with/temp/repobase
+		/path/with/temp/repobase/.gitignore
+		/path/with/temp/repobase/file1.java
+	*/
+	dir := t.TempDir()
+	repobase := filepath.Join(dir, "temp", "repobase")
+	err := os.MkdirAll(repobase, 0755)
 	if err != nil {
-		t.Fatal(t, err, "Couldn't load .gitignore from workspace "+tempDir)
+		t.Fatal(err)
 	}
 
-	assert.Equal(t, strings.Split(expectedPatterns, "\n"), sc.ignorePatterns)
+	err = os.WriteFile(filepath.Join(repobase, ".gitignore"), []byte("!temp"), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(filepath.Join(repobase, "file1.java"), []byte("any data we would like"), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	codeClientMock, scanner := setupTestScanner()
+
+	_, _ = scanner.Scan(context.Background(), "", repobase)
+
+	calls := codeClientMock.GetAllCalls("extendBundleWithSource")
+	assert.Len(t, calls, 1)
+	assert.Contains(t, scanner.ignorePatterns, "!"+filepath.Join(repobase, "**/temp"))
+}
+
+func Test_IgnoresInSnykCode(t *testing.T) {
+	t.Parallel()
+	/*
+		/path/with/temp/repobase
+		/path/with/temp/repobase/.gitignore
+		/path/with/temp/repobase/file1.java
+	*/
+	dir := t.TempDir()
+	repobase := filepath.Join(dir, "temp", "repobase")
+	err := os.MkdirAll(repobase, 0755)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(filepath.Join(repobase, ".gitignore"), []byte("temp"), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(filepath.Join(repobase, "file1.java"), []byte("any data we would like"), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	codeClientMock, scanner := setupTestScanner()
+
+	_, _ = scanner.Scan(context.Background(), "", repobase)
+
+	calls := codeClientMock.GetAllCalls("extendBundleWithSource")
+	assert.Len(t, calls, 1)
 }
 
 func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
@@ -277,7 +329,7 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 		t.Fatal(t, err, "Couldn't load .gitignore from workspace")
 	}
 
-	assert.Equal(t, []string{""}, sc.ignorePatterns)
+	assert.Equal(t, getDefaultIgnorePatterns(), sc.ignorePatterns)
 }
 
 func Test_GetWorkspaceFolderFiles(t *testing.T) {
@@ -346,6 +398,22 @@ func Test_Scan_ShouldntRunIfSastDisabled(t *testing.T) {
 	assert.Nil(t, params)
 }
 
+func Test_LoadIgnorePatternsAndCountFiles_RelativePathIgnores(t *testing.T) {
+	testutil.UnitTest(t)
+	tempDir := writeTestGitIgnore("", t)
+	subDir := filepath.Join(tempDir, "evilfolder")
+	_ = os.Mkdir(subDir, 0755)
+	writeGitIgnoreIntoDir("*", t, subDir)
+	expectedSubDirPattern := filepath.Join(subDir, "**/*")
+
+	sc := Scanner{}
+	_, err := sc.loadIgnorePatternsAndCountFiles(tempDir)
+
+	assert.NoError(t, err)
+	assert.Contains(t, sc.ignorePatterns, expectedSubDirPattern)
+	assert.Len(t, sc.ignorePatterns, len(getDefaultIgnorePatterns())+1)
+}
+
 func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {
 	expectedPatterns = "*.xml\n**/*.txt\nbin"
 	tempDir = writeTestGitIgnore(expectedPatterns, t)
@@ -376,12 +444,16 @@ func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string
 
 func writeTestGitIgnore(ignorePatterns string, t *testing.T) (tempDir string) {
 	tempDir = t.TempDir()
+	writeGitIgnoreIntoDir(ignorePatterns, t, tempDir)
+	return tempDir
+}
+
+func writeGitIgnoreIntoDir(ignorePatterns string, t *testing.T, tempDir string) {
 	filePath := filepath.Join(tempDir, ".gitignore")
 	err := os.WriteFile(filePath, []byte(ignorePatterns), 0600)
 	if err != nil {
 		t.Fatal(t, err, "Couldn't write .gitignore")
 	}
-	return tempDir
 }
 
 func Test_IsEnabled(t *testing.T) {

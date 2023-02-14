@@ -232,7 +232,7 @@ func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
 }
 
 func (sc *Scanner) loadIgnorePatternsAndCountFiles(folderPath string) (fileCount int, err error) {
-	var ignores = ""
+	ignores := getDefaultIgnorePatterns()
 	log.Debug().
 		Str("method", "loadIgnorePatternsAndCountFiles").
 		Str("workspace", folderPath).
@@ -260,7 +260,14 @@ func (sc *Scanner) loadIgnorePatternsAndCountFiles(folderPath string) (fileCount
 			if err != nil {
 				log.Err(err).Msg("Can't read" + path)
 			}
-			ignores += string(content)
+			lines := strings.Split(string(content), "\n")
+			for _, line := range lines {
+				if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
+					continue
+				}
+				glob := parseIgnoreRuleToGlobs(line, filepath.Dir(path))
+				ignores = append(ignores, glob)
+			}
 			return err
 		},
 	)
@@ -269,10 +276,63 @@ func (sc *Scanner) loadIgnorePatternsAndCountFiles(folderPath string) (fileCount
 		return fileCount, err
 	}
 
-	patterns := strings.Split(ignores, "\n")
+	patterns := ignores
 	sc.ignorePatterns = patterns
 	log.Debug().Interface("ignorePatterns", patterns).Msg("Loaded and set ignore patterns")
 	return fileCount, nil
+}
+
+func getDefaultIgnorePatterns() []string {
+	var ignores = []string{"**/.git/**", "**/.svn/**", "**/.hg/**", "**/.bzr/**", "**/.DS_Store/**"}
+	return ignores
+}
+
+func parseIgnoreRuleToGlobs(rule string, baseDir string) (glob string) {
+	// Shamelessly stolen from code-client: https://github.com/snyk/code-client/blob/7a9e5cdbed4e8a6a0f2597fcd64b67800279e585/src/files.ts#L67
+
+	// Mappings from .gitignore format to glob format:
+	// `/foo/` => `/foo/**` (meaning: Ignore root (not sub) foo dir and its paths underneath.)
+	// `/foo`	=> `/foo/**`, `/foo` (meaning: Ignore root (not sub) file and dir and its paths underneath.)
+	// `foo/` => `**/foo/**` (meaning: Ignore (root/sub) foo dirs and their paths underneath.)
+	// `foo` => `**/foo/**`, `foo` (meaning: Ignore (root/sub) foo files and dirs and their paths underneath.)
+	prefix := ""
+	const negation = "!"
+	const slash = "/"
+	const all = "**"
+
+	if strings.HasPrefix(rule, negation) {
+		rule = rule[1:]
+		prefix = negation
+	}
+	startingSlash := strings.HasPrefix(rule, slash)
+	startingGlobstar := strings.HasPrefix(rule, all)
+	endingSlash := strings.HasSuffix(rule, slash)
+	endingGlobstar := strings.HasSuffix(rule, all)
+	if startingSlash || startingGlobstar {
+		// case `/foo/`, `/foo` => `{baseDir}/foo/**`
+		// case `**/foo/`, `**/foo` => `{baseDir}/**/foo/**`
+		if !endingGlobstar {
+			glob = prefix + filepath.Join(baseDir, rule, all)
+		}
+		// case `/foo` => `{baseDir}/foo`
+		// case `**/foo` => `{baseDir}/**/foo`
+		// case `/foo/**` => `{baseDir}/foo/**`
+		// case `**/foo/**` => `{baseDir}/**/foo/**`
+		if !endingSlash {
+			glob = prefix + filepath.Join(baseDir, rule)
+		}
+	} else {
+		// case `foo/`, `foo` => `{baseDir}/**/foo/**`
+		if !endingGlobstar {
+			glob = prefix + filepath.Join(baseDir, all, rule, all)
+		}
+		// case `foo` => `{baseDir}/**/foo`
+		// case `foo/**` => `{baseDir}/**/foo/**`
+		if !endingSlash {
+			glob = prefix + filepath.Join(baseDir, all, rule)
+		}
+	}
+	return glob
 }
 
 func (sc *Scanner) newMetrics(fileCount int, scanStartTime time.Time) *ScanMetrics {
