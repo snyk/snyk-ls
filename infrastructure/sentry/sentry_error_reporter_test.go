@@ -56,7 +56,6 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 	path := "testPath"
 	text := "test error"
 	channel := make(chan lsp.PublishDiagnosticsParams, 1)
-	defer close(channel)
 
 	notification.CreateListener(func(params any) {
 		switch p := params.(type) {
