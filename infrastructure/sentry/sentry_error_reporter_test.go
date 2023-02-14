@@ -59,9 +59,9 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 	defer close(channel)
 
 	notification.CreateListener(func(params any) {
-		switch params.(type) {
+		switch p := params.(type) {
 		case lsp.PublishDiagnosticsParams:
-			channel <- params.(lsp.PublishDiagnosticsParams)
+			channel <- p
 		default:
 			log.Debug().Msgf("Unexpected notification: %v", params)
 			return
