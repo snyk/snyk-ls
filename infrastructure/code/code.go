@@ -129,11 +129,17 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	// Block here until previous scan is finished
 	// Setting isPending = false allows for future scans to wait for the current
 	// scan to finish, instead of returning immediately
-	waiting, deferFn := sc.isScanWaiting(folderPath)
+	scanStatus := NewScanStatus()
+	waiting := sc.isScanWaiting(scanStatus, folderPath)
 	if waiting {
-		return []snyk.Issue{}, nil
+		return []snyk.Issue{}, nil // Returning an empty slice implies that no vulnerabilities were found
 	}
-	defer deferFn()
+	defer func() {
+		sc.scanStatusMutex.Lock()
+		scanStatus.isRunning = false
+		close(scanStatus.finished)
+		sc.scanStatusMutex.Unlock()
+	}()
 
 	// Start the scan
 	startTime := time.Now()
@@ -163,16 +169,15 @@ func (sc *Scanner) UpdateChangedFiles(changedPath string) {
 	}
 }
 
-func (sc *Scanner) isScanWaiting(folderPath string) (waiting bool, deferFn func()) {
+func (sc *Scanner) isScanWaiting(scanStatus *ScanStatus, folderPath string) (waiting bool) {
 	waitForPreviousScan := false
-	scanStatus := NewScanStatus()
 	scanStatus.isRunning = true
 	sc.scanStatusMutex.Lock()
 	previousScanStatus, wasFound := sc.runningScans[folderPath]
 	if wasFound && previousScanStatus.isRunning {
 		if previousScanStatus.isPending {
 			sc.scanStatusMutex.Unlock()
-			return true, nil
+			return true
 		}
 
 		waitForPreviousScan = true
@@ -182,18 +187,13 @@ func (sc *Scanner) isScanWaiting(folderPath string) (waiting bool, deferFn func(
 	sc.runningScans[folderPath] = scanStatus
 	sc.scanStatusMutex.Unlock()
 	if waitForPreviousScan {
-		<-previousScanStatus.finished
+		<-previousScanStatus.finished // Block here until previous scan is finished
 
 		sc.scanStatusMutex.Lock()
 		scanStatus.isPending = false
 		sc.scanStatusMutex.Unlock()
 	}
-	return false, func() {
-		sc.scanStatusMutex.Lock()
-		scanStatus.isRunning = false
-		close(scanStatus.finished)
-		sc.scanStatusMutex.Unlock()
-	}
+	return false
 }
 
 func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
