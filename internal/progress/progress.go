@@ -184,9 +184,8 @@ type ProgressCancelledHandler interface {
 	Handle(lsp.ProgressToken)
 }
 type progressCancelled struct {
-	m           sync.Mutex
-	handlers    *xsync.MapOf[string, ProgressCancelledHandler]
-	handlersOld map[string]ProgressCancelledHandler
+	m        sync.Mutex
+	handlers *xsync.MapOf[string, ProgressCancelledHandler]
 }
 
 // Subscribe adds an event handler for this event
