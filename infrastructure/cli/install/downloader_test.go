@@ -42,6 +42,7 @@ func TestDownloader_Download(t *testing.T) {
 	r := getTestAsset()
 
 	ph := mockProgressHandler{}
+	ph.On("Handle", mock.Anything).Return()
 	progressTracker := progress.NewTestTracker()
 	progress.ProgressReported.Subscribe(&ph)
 	d := &Downloader{progressTracker: progressTracker}
