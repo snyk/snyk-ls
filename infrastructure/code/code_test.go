@@ -312,13 +312,7 @@ func Test_Scan(t *testing.T) {
 	t.Run("Should update changed files", func(t *testing.T) {
 		testutil.UnitTest(t)
 		// Arrange
-		snykCodeMock := &FakeSnykCodeClient{}
-		scanner := New(
-			NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
-			&snyk_api.FakeApiClient{CodeEnabled: true},
-			error_reporting.NewTestErrorReporter(),
-			ux2.NewTestAnalytics(),
-		)
+		snykCodeMock, scanner := setupTestScanner()
 		wg := sync.WaitGroup{}
 		_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
 
@@ -352,13 +346,7 @@ func Test_Scan(t *testing.T) {
 	t.Run("Should reset changed files after successful scan", func(t *testing.T) {
 		testutil.UnitTest(t)
 		// Arrange
-		snykCodeMock := &FakeSnykCodeClient{}
-		scanner := New(
-			NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
-			&snyk_api.FakeApiClient{CodeEnabled: true},
-			error_reporting.NewTestErrorReporter(),
-			ux2.NewTestAnalytics(),
-		)
+		_, scanner := setupTestScanner()
 		wg := sync.WaitGroup{}
 		tempDir := t.TempDir()
 
@@ -379,19 +367,17 @@ func Test_Scan(t *testing.T) {
 	t.Run("Should not mark folders as changed files", func(t *testing.T) {
 		testutil.UnitTest(t)
 		// Arrange
-		snykCodeMock := &FakeSnykCodeClient{}
-		scanner := New(
-			NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
-			&snyk_api.FakeApiClient{CodeEnabled: true},
-			error_reporting.NewTestErrorReporter(),
-			ux2.NewTestAnalytics(),
-		)
+		snykCodeMock, scanner := setupTestScanner()
+
+		_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
 
 		// Act
-		_, _ = scanner.Scan(context.Background(), t.TempDir(), "")
+		_, _ = scanner.Scan(context.Background(), tempDir, tempDir)
 
 		// Assert
-		assert.Equal(t, scanner.changedFiles.Length(), 0)
+		params := snykCodeMock.GetCallParams(0, RunAnalysisOperation)
+		assert.NotNil(t, params)
+		assert.Equal(t, 0, len(params[1].([]string)))
 	})
 
 	t.Run("CodeScanRunning_ScanCalled_ScansRunSequentially", func(t *testing.T) {
