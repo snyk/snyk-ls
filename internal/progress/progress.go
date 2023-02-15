@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/server/lsp"
@@ -148,6 +149,17 @@ type progressReported struct {
 // Subscribe adds an event handler for this event
 func (pr *progressReported) Subscribe(handler ProgressHandler) {
 	pr.handlers = append(pr.handlers, handler)
+}
+
+func (pr *progressReported) Unsubscribe(handler ProgressHandler) error {
+	for i, h := range pr.handlers {
+		if h == handler {
+			pr.handlers = append(pr.handlers[:i], pr.handlers[i+1:]...)
+			return nil
+		}
+	}
+
+	return errors.New("handler not found")
 }
 
 // Trigger sends out an event with the payload

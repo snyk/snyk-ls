@@ -120,16 +120,13 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 		return err
 	}
 
-	go func(body io.ReadCloser) {
-		notifier := &progress.CancelNotifier{Token: d.progressTracker.GetToken(), CallBack: func(handlerId string) {
-			_ = body.Close()
-			log.Info().Str("method", "Download").Msgf("Cancellation received. Aborting %s.", kindStr)
-			progress.ProgressCancelled.Unsubscribe(handlerId)
-		}}
-
-		handlerId := progress.ProgressCancelled.Subscribe(notifier)
-		notifier.HandlerId = handlerId
-	}(resp.Body)
+	notifier := &progress.CancelNotifier{Token: d.progressTracker.GetToken(), CallBack: func(handlerId string) {
+		_ = resp.Body.Close()
+		log.Info().Str("method", "Download").Msgf("Cancellation received. Aborting %s.", kindStr)
+	}}
+	handlerId := progress.ProgressCancelled.Subscribe(notifier)
+	notifier.HandlerId = handlerId
+	defer func() { progress.ProgressCancelled.Unsubscribe(handlerId) }()
 
 	if resp.StatusCode != http.StatusOK {
 		d.errorReporter.CaptureError(err)

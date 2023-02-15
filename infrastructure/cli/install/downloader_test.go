@@ -70,11 +70,12 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	r := getTestAsset()
 
 	// simulate cancellation when some progress received
-	ph := mockProgressHandler{}
+	ph := &mockProgressHandler{}
 	ph.On("Handle", mock.Anything).Run(func(args mock.Arguments) {
 		progress.ProgressCancelled.Raise(tracker.GetToken()) // Send cancel signal when progress received
 	})
-	progress.ProgressReported.Subscribe(&ph)
+	progress.ProgressReported.Subscribe(ph)
+	defer func() { _ = progress.ProgressReported.Unsubscribe(ph) }()
 
 	err := d.Download(r, false)
 
