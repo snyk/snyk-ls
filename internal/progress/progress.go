@@ -17,6 +17,7 @@
 package progress
 
 import (
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -143,12 +144,15 @@ type ProgressHandler interface {
 }
 
 type progressReported struct {
-	handlers []ProgressHandler
+	handlers      []ProgressHandler
+	handlersMutex sync.Mutex
 }
 
 // Subscribe adds an event handler for this event
 func (pr *progressReported) Subscribe(handler ProgressHandler) {
+	pr.handlersMutex.Lock()
 	pr.handlers = append(pr.handlers, handler)
+	pr.handlersMutex.Unlock()
 }
 
 func (pr *progressReported) Unsubscribe(handler ProgressHandler) error {
@@ -164,9 +168,11 @@ func (pr *progressReported) Unsubscribe(handler ProgressHandler) error {
 
 // Trigger sends out an event with the payload
 func (pr *progressReported) Raise(payload lsp.ProgressParams) {
+	pr.handlersMutex.Lock()
 	for _, handler := range pr.handlers {
 		handler.Handle(payload)
 	}
+	pr.handlersMutex.Unlock()
 }
 
 var ProgressCancelled progressCancelled
