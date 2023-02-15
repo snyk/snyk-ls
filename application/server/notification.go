@@ -45,16 +45,12 @@ type ProgressNotifier struct {
 	server Server
 }
 
-func registerProgressHandler(srv Server) {
-	progress.ProgressReported.Subscribe(ProgressNotifier{
-		server: srv,
-	})
-}
-
 func (n ProgressNotifier) Handle(p lsp.ProgressParams) {
 	if p.Value == nil {
 		log.Debug().Str("method", "createProgressListener").Msg("sending create progress msg ")
-		_, err := n.server.Callback(context.Background(), "window/workDoneProgress/create", p) // response is void, see https://microsoft.github.io/language-server-protocol/specification#window_workDoneProgress_create
+		_, err := n.server.Callback(context.Background(),
+			"window/workDoneProgress/create",
+			p) // response is void, see https://microsoft.github.io/language-server-protocol/specification#window_workDoneProgress_create
 
 		if err != nil {
 			log.Error().
@@ -69,6 +65,13 @@ func (n ProgressNotifier) Handle(p lsp.ProgressParams) {
 		log.Debug().Str("method", "createProgressListener").Interface("progress", p).Msg("sending create progress report")
 		_ = n.server.Notify(context.Background(), "$/progress", p)
 	}
+}
+
+func registerProgressHandler(srv Server) {
+	log.Debug().Msg("registering progress handler")
+	progress.ProgressReported.Subscribe(ProgressNotifier{
+		server: srv,
+	})
 }
 
 func registerNotifier(srv *jrpc2.Server) {
