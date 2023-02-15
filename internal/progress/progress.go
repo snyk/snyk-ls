@@ -137,17 +137,21 @@ func (t *Tracker) send(progress lsp.ProgressParams) {
 
 var ProgressReported progressReported
 
+type ProgressHandler interface {
+	Handle(lsp.ProgressParams)
+}
+
 type progressReported struct {
-	handlers []interface{ Handle(lsp.ProgressParams) } // todo: extract to a named interface
+	handlers []ProgressHandler
 }
 
 // Subscribe adds an event handler for this event
-func (pr *progressReported) Subscribe(handler interface{ Handle(lsp.ProgressParams) }) {
+func (pr *progressReported) Subscribe(handler ProgressHandler) {
 	pr.handlers = append(pr.handlers, handler)
 }
 
 // Trigger sends out an event with the payload
-func (pr progressReported) Raise(payload lsp.ProgressParams) {
+func (pr *progressReported) Raise(payload lsp.ProgressParams) {
 	for _, handler := range pr.handlers {
 		handler.Handle(payload)
 	}
@@ -155,14 +159,17 @@ func (pr progressReported) Raise(payload lsp.ProgressParams) {
 
 var ProgressCancelled progressCancelled
 
+type ProgressCancelledHandler interface {
+	Handle(lsp.ProgressToken)
+}
 type progressCancelled struct {
-	handlers map[string]interface{ Handle(lsp.ProgressToken) }
+	handlers map[string]ProgressCancelledHandler
 }
 
 // Subscribe adds an event handler for this event
-func (pr *progressCancelled) Subscribe(handler interface{ Handle(lsp.ProgressToken) }) (handlerId string) {
+func (pr *progressCancelled) Subscribe(handler ProgressCancelledHandler) (handlerId string) {
 	if pr.handlers == nil {
-		pr.handlers = make(map[string]interface{ Handle(lsp.ProgressToken) })
+		pr.handlers = make(map[string]ProgressCancelledHandler)
 	}
 
 	handlerId = uuid.New().String()
@@ -176,7 +183,7 @@ func (pr *progressCancelled) Unsubscribe(handlerId string) {
 }
 
 // Trigger sends out an event with the payload
-func (pr progressCancelled) Raise(payload lsp.ProgressToken) {
+func (pr *progressCancelled) Raise(payload lsp.ProgressToken) {
 	for _, handler := range pr.handlers {
 		handler.Handle(payload)
 	}
@@ -188,7 +195,7 @@ type CancelNotifier struct {
 	HandlerId string
 }
 
-func (c CancelNotifier) Handle(token lsp.ProgressToken) {
+func (c *CancelNotifier) Handle(token lsp.ProgressToken) {
 	if token == c.Token {
 		c.CallBack(c.HandlerId)
 	}
