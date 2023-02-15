@@ -83,34 +83,28 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 		},
 	}
 
-	rsp, err := loc.Client.Call(ctx, "initialize", clientParams)
+	rsp, err := loc.Client.Call(ctx, "initialize", clientParams) // Blocks until initialized is finished
 	if err != nil {
 		t.Fatal(err)
 	}
 	var result lsp.InitializeResult
-	if err := rsp.UnmarshalResult(&result); err != nil {
+	if err = rsp.UnmarshalResult(&result); err != nil {
 		t.Fatal(err)
 	}
 
 	progressTracker := progress.NewTracker(true)
 	progressTracker.Begin("title", "message")
+
 	// should receive progress notification
-	assert.Eventually(
-		t,
-		func() bool {
-			callbacks := jsonRPCRecorder.FindCallbacksByMethod("window/workDoneProgress/create")
-			for _, c := range callbacks {
-				actualProgress := lsp.ProgressParams{}
-				_ = c.UnmarshalParams(&actualProgress)
-				if progressTracker.GetToken() == actualProgress.Token {
-					return true
-				}
-			}
-			return false
-		},
-		5*time.Second,
-		10*time.Millisecond,
-	)
+	callbacks := jsonRPCRecorder.FindCallbacksByMethod("window/workDoneProgress/create")
+	for _, c := range callbacks {
+		actualProgress := lsp.ProgressParams{}
+		_ = c.UnmarshalParams(&actualProgress)
+		if progressTracker.GetToken() == actualProgress.Token {
+			return // Pass the test
+		}
+	}
+	assert.Fail(t, "No progress notification received")
 }
 
 func TestCancelProgress(t *testing.T) {

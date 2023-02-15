@@ -22,6 +22,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/server/lsp"
@@ -156,12 +157,14 @@ func (pr *progressReported) Subscribe(handler ProgressHandler) {
 }
 
 func (pr *progressReported) Unsubscribe(handler ProgressHandler) error {
+	pr.handlersMutex.Lock()
 	for i, h := range pr.handlers {
 		if h == handler {
 			pr.handlers = append(pr.handlers[:i], pr.handlers[i+1:]...)
 			return nil
 		}
 	}
+	pr.handlersMutex.Unlock()
 
 	return errors.New("handler not found")
 }
@@ -181,30 +184,35 @@ type ProgressCancelledHandler interface {
 	Handle(lsp.ProgressToken)
 }
 type progressCancelled struct {
-	handlers map[string]ProgressCancelledHandler
+	m           sync.Mutex
+	handlers    *xsync.MapOf[string, ProgressCancelledHandler]
+	handlersOld map[string]ProgressCancelledHandler
 }
 
 // Subscribe adds an event handler for this event
 func (pr *progressCancelled) Subscribe(handler ProgressCancelledHandler) (handlerId string) {
+	pr.m.Lock()
 	if pr.handlers == nil {
-		pr.handlers = make(map[string]ProgressCancelledHandler)
+		pr.handlers = xsync.NewMapOf[ProgressCancelledHandler]()
 	}
+	pr.m.Unlock()
 
 	handlerId = uuid.New().String()
-	pr.handlers[handlerId] = handler
+	pr.handlers.Store(handlerId, handler)
 	return handlerId
 }
 
 // Subscribe adds an event handler for this event
 func (pr *progressCancelled) Unsubscribe(handlerId string) {
-	delete(pr.handlers, handlerId)
+	pr.handlers.Delete(handlerId)
 }
 
 // Trigger sends out an event with the payload
 func (pr *progressCancelled) Raise(payload lsp.ProgressToken) {
-	for _, handler := range pr.handlers {
+	pr.handlers.Range(func(handlerId string, handler ProgressCancelledHandler) bool {
 		handler.Handle(payload)
-	}
+		return true
+	})
 }
 
 type CancelNotifier struct {
