@@ -40,7 +40,10 @@ type ServerImplMock struct{}
 
 var notified = concurrency.AtomicBool{}
 
-func (b *ServerImplMock) Callback(_ context.Context, _ string, _ any) (*jrpc2.Response, error) { // todo: check if better way exists, mocking? go mock / testify
+func (b *ServerImplMock) Callback(_ context.Context,
+	_ string,
+	_ any,
+) (*jrpc2.Response, error) { // todo: check if better way exists, mocking? go mock / testify
 	notified.Set(true)
 	return nil, nil
 }
@@ -123,7 +126,7 @@ func TestCancelProgress(t *testing.T) {
 	}
 
 	notified := false
-	notifier := progress.CancelNotifier{Token: expectedWorkdoneProgressCancelParams.Token, CallBack: func(_ string) {
+	notifier := &progress.CancelNotifier{Token: expectedWorkdoneProgressCancelParams.Token, CallBack: func(_ string) {
 		notified = true
 	}}
 	progress.ProgressCancelled.Subscribe(notifier)

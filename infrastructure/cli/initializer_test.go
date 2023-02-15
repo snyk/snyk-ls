@@ -34,7 +34,6 @@ import (
 func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 	testutil.IntegTest(t)
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), install.NewFakeInstaller())
-	testutil.CreateDummyProgressListener(t)
 
 	config.CurrentConfig().CliSettings().SetPath("")
 	if !config.CurrentConfig().NonEmptyToken() {
@@ -96,7 +95,8 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 
 	// assert
 	lockFileName := config.CurrentConfig().CLIDownloadLockFileName()
-	expectedCliPath := filepath.Join(config.CurrentConfig().CliSettings().DefaultBinaryInstallPath(), filename.ExecutableName)
+	expectedCliPath := filepath.Join(config.CurrentConfig().CliSettings().DefaultBinaryInstallPath(),
+		filename.ExecutableName)
 
 	defer func() { // defer clean up
 		_, err := os.Stat(lockFileName)

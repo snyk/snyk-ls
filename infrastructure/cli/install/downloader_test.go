@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/server/lsp"
@@ -28,21 +29,30 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
+type mockProgressHandler struct {
+	mock.Mock
+}
+
+func (p *mockProgressHandler) Handle(params lsp.ProgressParams) {
+	p.Called(params)
+}
+
 func TestDownloader_Download(t *testing.T) {
 	testutil.IntegTest(t)
 	r := getTestAsset()
-	progressCh := make(chan lsp.ProgressParams, 100000)
-	cancelProgressCh := make(chan lsp.ProgressToken, 1)
-	d := &Downloader{progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh)}
+
+	ph := mockProgressHandler{}
+	progressTracker := progress.NewTestTracker()
+	progress.ProgressReported.Subscribe(&ph)
+	d := &Downloader{progressTracker: progressTracker}
 	lockFileName := d.lockFileName()
-	// remove any existing lockfile
-	_ = os.RemoveAll(lockFileName)
+	_ = os.RemoveAll(lockFileName) // remove any existing lockfile
 
 	err := d.Download(r, false)
 
 	assert.NoError(t, err)
-	assert.NotEmpty(t, progressCh)
-	assert.True(t, len(progressCh) >= 3) // has at least started, reported & finished progress
+	assert.NotEmpty(t, ph.Mock.Calls)
+	assert.True(t, len(ph.Mock.Calls) >= 3) // has at least started, reported & finished progress
 
 	//make sure cleanup works
 	_, err = os.Stat(lockFileName)
@@ -54,17 +64,16 @@ func TestDownloader_Download(t *testing.T) {
 
 func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	testutil.UnitTest(t)
-	progressCh := make(chan lsp.ProgressParams, 100000)
-	cancelProgressCh := make(chan lsp.ProgressToken, 1)
-	d := &Downloader{progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh)}
-
+	tracker := progress.NewTestTracker()
+	d := &Downloader{progressTracker: tracker}
 	r := getTestAsset()
 
 	// simulate cancellation when some progress received
-	go func() {
-		prog := <-progressCh
-		cancelProgressCh <- prog.Token
-	}()
+	ph := mockProgressHandler{}
+	ph.On("Handle", mock.Anything).Run(func(args mock.Arguments) {
+		progress.ProgressCancelled.Raise(tracker.GetToken()) // Send cancel signal when progress received
+	})
+	progress.ProgressReported.Subscribe(&ph)
 
 	err := d.Download(r, false)
 

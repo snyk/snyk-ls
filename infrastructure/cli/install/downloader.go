@@ -60,7 +60,10 @@ func (wc *writeCounter) Write(p []byte) (n int, e error) {
 	return
 }
 
-func newWriter(size int64, progressTracker *progress.Tracker, onProgress func(downloaded, total int64, progressTracker *progress.Tracker)) io.Writer {
+func newWriter(size int64,
+	progressTracker *progress.Tracker,
+	onProgress func(downloaded, total int64, progressTracker *progress.Tracker),
+) io.Writer {
 	return &writeCounter{total: size, progressTracker: progressTracker, onProgress: onProgress}
 }
 
@@ -118,7 +121,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	}
 
 	go func(body io.ReadCloser) {
-		notifier := progress.CancelNotifier{Token: d.progressTracker.GetToken(), CallBack: func(handlerId string) {
+		notifier := &progress.CancelNotifier{Token: d.progressTracker.GetToken(), CallBack: func(handlerId string) {
 			_ = body.Close()
 			log.Info().Str("method", "Download").Msgf("Cancellation received. Aborting %s.", kindStr)
 			progress.ProgressCancelled.Unsubscribe(handlerId)
@@ -215,7 +218,8 @@ func (d *Downloader) createLockFile() error {
 func (d *Downloader) moveToDestination(destinationFileName string, sourceFilePath string) (err error) {
 	cliDirectory := filepath.Dir(config.CurrentConfig().CliSettings().Path())
 	destinationFilePath := filepath.Join(cliDirectory, destinationFileName) // snyk-win.exe.latest
-	log.Info().Str("method", "moveToDestination").Str("path", destinationFilePath).Msg("copying Snyk CLI to user directory")
+	log.Info().Str("method", "moveToDestination").Str("path",
+		destinationFilePath).Msg("copying Snyk CLI to user directory")
 
 	// for Windows, we have to remove original file first before move/rename
 	if _, err := os.Stat(destinationFilePath); err == nil {
@@ -231,7 +235,8 @@ func (d *Downloader) moveToDestination(destinationFileName string, sourceFilePat
 		return err
 	}
 
-	log.Info().Str("method", "moveToDestination").Str("path", destinationFilePath).Msg("setting executable bit for Snyk CLI")
+	log.Info().Str("method", "moveToDestination").Str("path",
+		destinationFilePath).Msg("setting executable bit for Snyk CLI")
 	err = os.Chmod(destinationFilePath, 0755)
 	if err != nil {
 		return err
