@@ -104,8 +104,6 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 		d.progressTracker.Begin("Downloading Snyk CLI...", "We download Snyk CLI to run security scans.")
 	}
 
-	doneCh := make(chan bool)
-
 	var resp *http.Response
 
 	// Determine the binary size
@@ -120,11 +118,14 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	}
 
 	go func(body io.ReadCloser) {
-		d.progressTracker.CancelOrDone(func() {
+		notifier := progress.CancelNotifier{Token: d.progressTracker.GetToken(), CallBack: func(handlerId string) {
 			_ = body.Close()
-
 			log.Info().Str("method", "Download").Msgf("Cancellation received. Aborting %s.", kindStr)
-		}, doneCh)
+			progress.ProgressCancelled.Unsubscribe(handlerId)
+		}}
+
+		handlerId := progress.ProgressCancelled.Subscribe(notifier)
+		notifier.HandlerId = handlerId
 	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
@@ -134,7 +135,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	executableFileName := cliDiscovery.ExecutableName(isUpdate)
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
-		doneCh <- true
+		// todo: unsubscribe the notifier
 		log.Info().Str("method", "Download").Msgf("finished Snyk CLI %s", kindStr)
 	}(resp.Body)
 

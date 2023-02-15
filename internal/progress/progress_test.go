@@ -24,9 +24,22 @@ import (
 	"github.com/snyk/snyk-ls/application/server/lsp"
 )
 
+type ProgressMockHandler struct {
+	progress []lsp.ProgressParams
+}
+
+func NewProgessMockHandler() *ProgressMockHandler {
+	return &ProgressMockHandler{
+		progress: []lsp.ProgressParams{},
+	}
+}
+
+func (ph *ProgressMockHandler) Handle(params lsp.ProgressParams) {
+	ph.progress = append(ph.progress, params)
+}
+
 func TestBeginProgress(t *testing.T) {
-	channel := make(chan lsp.ProgressParams, 2)
-	progress := NewTestTracker(channel, nil)
+	handler, progress := newTracker()
 
 	progress.Begin("title", "message")
 
@@ -36,7 +49,7 @@ func TestBeginProgress(t *testing.T) {
 			Token: progress.token,
 			Value: nil,
 		},
-		<-channel,
+		handler.progress[0],
 	)
 
 	assert.Equal(
@@ -51,11 +64,13 @@ func TestBeginProgress(t *testing.T) {
 				Percentage:           1,
 			},
 		},
-		<-channel,
+		handler.progress[1],
 	)
 }
 
 func TestReportProgress(t *testing.T) {
+	handler, progress := newTracker()
+
 	output := lsp.ProgressParams{
 		Token: "token",
 		Value: lsp.WorkDoneProgressReport{
@@ -63,16 +78,15 @@ func TestReportProgress(t *testing.T) {
 			Percentage:           10,
 		},
 	}
-	channel := make(chan lsp.ProgressParams, 2)
-	progress := NewTestTracker(channel, nil)
 
 	workProgressReport := output.Value.(lsp.WorkDoneProgressReport)
 	progress.Report(workProgressReport.Percentage)
 
-	assert.Equal(t, output, <-channel)
+	assert.Equal(t, output, handler.progress[0])
 }
 
 func TestEndProgress(t *testing.T) {
+	handler, progress := newTracker()
 	output := lsp.ProgressParams{
 		Token: "token",
 		Value: lsp.WorkDoneProgressEnd{
@@ -80,17 +94,15 @@ func TestEndProgress(t *testing.T) {
 			Message:              "end message",
 		},
 	}
-
-	channel := make(chan lsp.ProgressParams, 2)
-	progress := NewTestTracker(channel, nil)
 
 	workProgressEnd := output.Value.(lsp.WorkDoneProgressEnd)
 	progress.End(workProgressEnd.Message)
 
-	assert.Equal(t, output, <-channel)
+	assert.Equal(t, output, handler.progress[0])
 }
 
 func TestEndProgressTwice(t *testing.T) {
+	_, progress := newTracker()
 	output := lsp.ProgressParams{
 		Token: "token",
 		Value: lsp.WorkDoneProgressEnd{
@@ -98,9 +110,6 @@ func TestEndProgressTwice(t *testing.T) {
 			Message:              "end message",
 		},
 	}
-
-	channel := make(chan lsp.ProgressParams, 2)
-	progress := NewTestTracker(channel, nil)
 
 	workProgressEnd := output.Value.(lsp.WorkDoneProgressEnd)
 	progress.End(workProgressEnd.Message)
@@ -108,4 +117,11 @@ func TestEndProgressTwice(t *testing.T) {
 	assert.Panics(t, func() {
 		progress.End(workProgressEnd.Message)
 	})
+}
+
+func newTracker() (*ProgressMockHandler, *Tracker) {
+	handler := NewProgessMockHandler()
+	ProgressReported.Subscribe(handler)
+	progress := NewTestTracker()
+	return handler, progress
 }

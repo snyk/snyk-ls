@@ -50,7 +50,8 @@ func (b *ServerImplMock) Notify(_ context.Context, _ string, _ any) error {
 }
 
 func TestCreateProgressListener(t *testing.T) {
-	progressChannel := make(chan lsp.ProgressParams, 1)
+	server := &ServerImplMock{}
+	registerProgressHandler(server)
 	progressNotification := lsp.ProgressParams{
 		Token: "token",
 		Value: lsp.WorkDoneProgressBegin{
@@ -61,18 +62,11 @@ func TestCreateProgressListener(t *testing.T) {
 			Percentage:           0,
 		},
 	}
-	progressChannel <- progressNotification
+	progress.ProgressReported.Raise(progressNotification)
 
-	server := ServerImplMock{}
-
-	go createProgressListener(progressChannel, &server)
 	defer func() { notified.Set(false) }()
 
-	assert.Eventually(t, func() bool {
-		return notified.Get()
-	}, 2*time.Second, 10*time.Millisecond)
-
-	disposeProgressListener()
+	assert.True(t, notified.Get())
 }
 
 func TestServerInitializeShouldStartProgressListener(t *testing.T) {
@@ -127,16 +121,18 @@ func TestCancelProgress(t *testing.T) {
 	expectedWorkdoneProgressCancelParams := lsp.WorkdoneProgressCancelParams{
 		Token: "token",
 	}
+
+	notified := false
+	notifier := progress.CancelNotifier{Token: expectedWorkdoneProgressCancelParams.Token, CallBack: func(_ string) {
+		notified = true
+	}}
+	progress.ProgressCancelled.Subscribe(notifier)
 	_, err = loc.Client.Call(ctx, "window/workDoneProgress/cancel", expectedWorkdoneProgressCancelParams)
-	if err != nil {
-		t.Fatal(err)
-	}
 
+	assert.NoError(t, err)
 	assert.Eventually(t, func() bool {
-		actualToken := <-progress.CancelProgressChannel
-		return expectedWorkdoneProgressCancelParams.Token == actualToken
+		return notified
 	}, time.Second*5, time.Millisecond)
-
 }
 
 func Test_NotifierShouldSendNotificationToClient(t *testing.T) {

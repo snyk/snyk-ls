@@ -25,12 +25,7 @@ import (
 	"github.com/snyk/snyk-ls/application/server/lsp"
 )
 
-var Channel = make(chan lsp.ProgressParams, 100)
-var CancelProgressChannel = make(chan lsp.ProgressToken, 100)
-
 type Tracker struct {
-	channel              chan lsp.ProgressParams
-	cancelChannel        chan lsp.ProgressToken
 	token                lsp.ProgressToken
 	cancellable          bool
 	lastReport           time.Time
@@ -38,10 +33,8 @@ type Tracker struct {
 	finished             bool
 }
 
-func NewTestTracker(channel chan lsp.ProgressParams, cancelChannel chan lsp.ProgressToken) *Tracker {
+func NewTestTracker() *Tracker {
 	return &Tracker{
-		channel:       channel,
-		cancelChannel: cancelChannel,
 		// deepcode ignore HardcodedPassword: false positive
 		token:                "token",
 		cancellable:          true,
@@ -51,10 +44,8 @@ func NewTestTracker(channel chan lsp.ProgressParams, cancelChannel chan lsp.Prog
 
 func NewTracker(cancellable bool) *Tracker {
 	return &Tracker{
-		channel:       Channel,
-		cancelChannel: CancelProgressChannel,
-		cancellable:   cancellable,
-		finished:      false,
+		cancellable: cancellable,
+		finished:    false,
 	}
 }
 
@@ -115,19 +106,6 @@ func (t *Tracker) End(message string) {
 
 	t.send(progress)
 }
-func (t *Tracker) CancelOrDone(onCancel func(), doneCh chan bool) {
-	for {
-		select {
-		case token := <-t.cancelChannel:
-			if token == t.token {
-				onCancel()
-			}
-		case <-doneCh:
-			return
-		}
-	}
-}
-
 func (t *Tracker) GetToken() lsp.ProgressToken {
 	return t.token
 }
@@ -154,5 +132,64 @@ func (t *Tracker) send(progress lsp.ProgressParams) {
 	if progress.Token == "" {
 		log.Error().Str("method", "EndProgress").Msg("progress token must be set")
 	}
-	t.channel <- progress
+	ProgressReported.Raise(progress)
+}
+
+var ProgressReported progressReported
+
+type progressReported struct {
+	handlers []interface{ Handle(lsp.ProgressParams) } // todo: extract to a named interface
+}
+
+// Subscribe adds an event handler for this event
+func (pr *progressReported) Subscribe(handler interface{ Handle(lsp.ProgressParams) }) {
+	pr.handlers = append(pr.handlers, handler)
+}
+
+// Trigger sends out an event with the payload
+func (pr progressReported) Raise(payload lsp.ProgressParams) {
+	for _, handler := range pr.handlers {
+		handler.Handle(payload)
+	}
+}
+
+var ProgressCancelled progressCancelled
+
+type progressCancelled struct {
+	handlers map[string]interface{ Handle(lsp.ProgressToken) }
+}
+
+// Subscribe adds an event handler for this event
+func (pr *progressCancelled) Subscribe(handler interface{ Handle(lsp.ProgressToken) }) (handlerId string) {
+	if pr.handlers == nil {
+		pr.handlers = make(map[string]interface{ Handle(lsp.ProgressToken) })
+	}
+
+	handlerId = uuid.New().String()
+	pr.handlers[handlerId] = handler
+	return handlerId
+}
+
+// Subscribe adds an event handler for this event
+func (pr *progressCancelled) Unsubscribe(handlerId string) {
+	delete(pr.handlers, handlerId)
+}
+
+// Trigger sends out an event with the payload
+func (pr progressCancelled) Raise(payload lsp.ProgressToken) {
+	for _, handler := range pr.handlers {
+		handler.Handle(payload)
+	}
+}
+
+type CancelNotifier struct {
+	Token     lsp.ProgressToken
+	CallBack  func(handlerId string)
+	HandlerId string
+}
+
+func (c CancelNotifier) Handle(token lsp.ProgressToken) {
+	if token == c.Token {
+		c.CallBack(c.HandlerId)
+	}
 }

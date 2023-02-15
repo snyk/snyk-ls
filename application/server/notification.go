@@ -41,54 +41,34 @@ type Server interface {
 	Callback(ctx context.Context, method string, params any) (*jrpc2.Response, error)
 }
 
-var progressStopChan = make(chan bool, 1000)
-
-func createProgressListener(progressChannel chan lsp.ProgressParams, server Server) {
-	// cleanup stopchannel before starting
-	for {
-		select {
-		case <-progressStopChan:
-			continue
-		default:
-			break
-		}
-		break
-	}
-	log.Debug().Str("method", "createProgressListener").Msg("started listener")
-	defer log.Debug().Str("method", "createProgressListener").Msg("stopped listener")
-	for {
-		select {
-		case p := <-progressChannel:
-			if p.Value == nil {
-				log.Debug().Str("method", "createProgressListener").Msg("sending create progress msg ")
-				_, err := server.Callback(context.Background(), "window/workDoneProgress/create", p) // response is void, see https://microsoft.github.io/language-server-protocol/specification#window_workDoneProgress_create
-
-				if err != nil {
-					log.Error().
-						Err(err).
-						Str("method", "window/workDoneProgress/create").
-						Msg("error while sending workDoneProgress request")
-
-					// In case an error occurs a server must not send any progress notification using the token provided in the request.
-					CancelProgress(p.Token)
-				}
-			} else {
-				log.Debug().Str("method", "createProgressListener").Interface("progress", p).Msg("sending create progress report")
-				_ = server.Notify(context.Background(), "$/progress", p)
-			}
-		case <-progressStopChan:
-			log.Debug().Str("method", "createProgressListener").Msg("received stop message")
-			return
-		}
-	}
+type ProgressNotifier struct {
+	server Server
 }
 
-func disposeProgressListener() {
-	progressStopChan <- true
+func registerProgressHandler(srv Server) {
+	progress.ProgressReported.Subscribe(ProgressNotifier{
+		server: srv,
+	})
 }
 
-func CancelProgress(token lsp.ProgressToken) {
-	progress.CancelProgressChannel <- token
+func (n ProgressNotifier) Handle(p lsp.ProgressParams) {
+	if p.Value == nil {
+		log.Debug().Str("method", "createProgressListener").Msg("sending create progress msg ")
+		_, err := n.server.Callback(context.Background(), "window/workDoneProgress/create", p) // response is void, see https://microsoft.github.io/language-server-protocol/specification#window_workDoneProgress_create
+
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("method", "window/workDoneProgress/create").
+				Msg("error while sending workDoneProgress request")
+
+			// In case an error occurs a server must not send any progress notification using the token provided in the request.
+			progress.ProgressCancelled.Raise(p.Token)
+		}
+	} else {
+		log.Debug().Str("method", "createProgressListener").Interface("progress", p).Msg("sending create progress report")
+		_ = n.server.Notify(context.Background(), "$/progress", p)
+	}
 }
 
 func registerNotifier(srv *jrpc2.Server) {

@@ -188,7 +188,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 		workspace.Set(w)
 
 		// async processing listener
-		go createProgressListener(progress.Channel, srv)
+		go registerProgressHandler(srv)
 		registerNotifier(srv)
 		go func() {
 			if params.ProcessID == 0 {
@@ -340,7 +340,6 @@ func shutdown() jrpc2.Handler {
 		defer log.Info().Str("method", "Shutdown").Msg("SENDING")
 		di.ErrorReporter().FlushErrorReporting()
 
-		disposeProgressListener()
 		notification.DisposeListener()
 		err := di.Analytics().Shutdown()
 		if err != nil {
@@ -407,7 +406,7 @@ func textDocumentHover() jrpc2.Handler {
 func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 	return handler.New(func(_ context.Context, params lsp.WorkdoneProgressCancelParams) (any, error) {
 		log.Info().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
-		CancelProgress(params.Token)
+		progress.ProgressCancelled.Raise(params.Token)
 		return nil, nil
 	})
 }

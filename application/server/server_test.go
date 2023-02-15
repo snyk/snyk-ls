@@ -102,7 +102,6 @@ func setupCustomServer(t *testing.T, callBackFn onCallbackFn) server.Local {
 
 func cleanupChannels() {
 	notification.DisposeListener()
-	disposeProgressListener()
 	di.HoverService().ClearAllHovers()
 }
 
@@ -639,7 +638,6 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) {
 	loc := setupServer(t)
 	testutil.IntegTest(t)
-	testutil.CreateDummyProgressListener(t)
 	file := testutil.CreateTempFile(t.TempDir(), t)
 	w := workspace.Get()
 

@@ -25,7 +25,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/progress"
 )
 
 const (
@@ -95,27 +94,6 @@ func OnlyOnWindows(t *testing.T, reason string) {
 	runtime.GOOS != "windows" {
 		t.Skipf("Only on windows, because %s", reason)
 	}
-}
-
-func CreateDummyProgressListener(t *testing.T) {
-	t.Helper()
-	var dummyProgressStopChannel = make(chan bool, 1)
-
-	t.Cleanup(func() {
-		dummyProgressStopChannel <- true
-	})
-
-	go func() {
-		for {
-			select {
-			case <-progress.Channel:
-				continue
-			case <-dummyProgressStopChannel:
-				return
-			}
-		}
-	}()
-
 }
 
 func prepareTestHelper(t *testing.T, envVar string) {
