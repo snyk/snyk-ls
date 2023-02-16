@@ -122,7 +122,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	}
 
 	sc.changedFilesMutex.Lock()
-	didUpdateChangedFiles := sc.UpdateChangedFiles(path)
+	sc.UpdateChangedFiles(path)
 	sc.changedFilesMutex.Unlock()
 
 	// When starting a scan for a folderPath that's already scanned, the new scan will wait for the previous scan
@@ -145,11 +145,6 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	}()
 
 	sc.changedFilesMutex.Lock()
-	if didUpdateChangedFiles && !sc.changedFiles.Contains(path) {
-		log.Debug().Msg("file " + path + " is not in changed files, skipping scan")
-		sc.changedFilesMutex.Unlock()
-		return []snyk.Issue{}, nil
-	}
 	changedFiles := make([]string, 0, sc.changedFiles.Length())
 	sc.changedFiles.Range(func(key, value interface{}) bool {
 		changedFiles = append(changedFiles, key.(string))
