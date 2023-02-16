@@ -25,8 +25,8 @@ import (
 	"github.com/snyk/snyk-ls/application/server/lsp"
 )
 
-var Channel = make(chan lsp.ProgressParams, 10000)
-var CancelProgressChannel = make(chan lsp.ProgressToken, 10000)
+var Channel = make(chan lsp.ProgressParams, 100)
+var CancelProgressChannel = make(chan lsp.ProgressToken, 100)
 
 type Tracker struct {
 	channel              chan lsp.ProgressParams
@@ -155,4 +155,13 @@ func (t *Tracker) send(progress lsp.ProgressParams) {
 		log.Error().Str("method", "EndProgress").Msg("progress token must be set")
 	}
 	t.channel <- progress
+}
+
+func CleanupChannels() {
+	for len(Channel) > 0 {
+		<-Channel
+	}
+	for len(CancelProgressChannel) > 0 {
+		<-CancelProgressChannel
+	}
 }

@@ -52,6 +52,7 @@ func UnitTest(t *testing.T) {
 	t.Cleanup(func() {
 		notification.DisposeListener()
 		cleanupFakeCliFile(c)
+		progress.CleanupChannels()
 	})
 }
 
