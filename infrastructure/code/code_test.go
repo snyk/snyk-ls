@@ -337,11 +337,16 @@ func Test_Scan(t *testing.T) {
 			"file4.go",
 		}
 
-		params := snykCodeMock.GetCallParams(0, RunAnalysisOperation)
-		assert.NotNil(t, params)
-		assert.Equal(t, 5, len(params[1].([]string)))
+		allCalls := snykCodeMock.GetAllCalls(RunAnalysisOperation)
+		communicatedChangedFiles := make([]string, 0)
+		for _, call := range allCalls {
+			params := call[1].([]string)
+			communicatedChangedFiles = append(communicatedChangedFiles, params...)
+		}
+
+		assert.Equal(t, 5, len(communicatedChangedFiles))
 		for _, file := range expectedChangedFiles {
-			assert.Contains(t, params[1], file)
+			assert.Contains(t, communicatedChangedFiles, file)
 		}
 	})
 
