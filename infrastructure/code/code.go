@@ -82,7 +82,7 @@ type Scanner struct {
 	scanStatusMutex   sync.Mutex
 	runningScans      map[string]*ScanStatus
 	scanNotifier      snyk.ScanNotifier
-	changedPaths      map[string]bool // tracks files that were changed since the last scan // todo: should it be an atomic map?
+	changedPaths      map[string]bool // tracks files that were changed since the last scan
 }
 
 func New(bundleUploader *BundleUploader,
@@ -128,10 +128,6 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	// When starting a scan for a folderPath that's already scanned, the new scan will wait for the previous scan
 	// to finish before starting.
 	// When there's already a scan waiting, the function returns immediately with empty results.
-	// Returning an empty slice implies that no vulnerabilities were found
-	// Block here until previous scan is finished
-	// Setting isPending = false allows for future scans to wait for the current
-	// scan to finish, instead of returning immediately
 	scanStatus := NewScanStatus()
 	isAlreadyWaiting := sc.waitForScanToFinish(scanStatus, folderPath)
 	if isAlreadyWaiting {
@@ -144,6 +140,8 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 		sc.scanStatusMutex.Unlock()
 	}()
 
+	// Proceed to scan only if there're any changed paths. This ensures the following race condition coverage:
+	// It could be that one of throttled scans updated the changedPaths set, but the initial scan has picked up it's updated and proceeded with a scan in the meantime.
 	sc.changedFilesMutex.Lock()
 	if len(sc.changedPaths) <= 0 {
 		sc.changedFilesMutex.Unlock()
@@ -151,14 +149,14 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	}
 
 	changedFiles := make([]string, 0, len(sc.changedPaths))
-
 	for changedPath := range sc.changedPaths {
 		if !uri.IsDirectory(changedPath) {
 			changedFiles = append(changedFiles, changedPath)
-			delete(sc.changedPaths, changedPath)
 		}
+		delete(sc.changedPaths, changedPath)
 	}
 	sc.changedFilesMutex.Unlock()
+
 	startTime := time.Now()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
@@ -199,6 +197,8 @@ func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath string
 	if waitForPreviousScan {
 		<-previousScanStatus.finished // Block here until previous scan is finished
 
+		// Setting isPending = false allows for future scans to wait for the current
+		// scan to finish, instead of returning immediately
 		sc.scanStatusMutex.Lock()
 		scanStatus.isPending = false
 		sc.scanStatusMutex.Unlock()
