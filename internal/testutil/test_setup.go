@@ -25,6 +25,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/progress"
 )
 
 const (
@@ -51,6 +52,7 @@ func UnitTest(t *testing.T) {
 	t.Cleanup(func() {
 		notification.DisposeListener()
 		cleanupFakeCliFile(c)
+		progress.CleanupHandlers()
 	})
 }
 
@@ -113,6 +115,7 @@ func prepareTestHelper(t *testing.T, envVar string) {
 	t.Cleanup(func() {
 		notification.DisposeListener()
 		cleanupFakeCliFile(c)
+		progress.CleanupHandlers()
 	})
 }
 
