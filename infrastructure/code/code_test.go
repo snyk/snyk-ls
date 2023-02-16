@@ -40,6 +40,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -321,6 +322,7 @@ func Test_Scan(t *testing.T) {
 			wg.Add(1)
 			go func(i int) {
 				_, _ = scanner.Scan(context.Background(), "file"+strconv.Itoa(i)+".go", tempDir)
+				progress.CleanupChannels()
 				wg.Done()
 			}(i)
 		}
