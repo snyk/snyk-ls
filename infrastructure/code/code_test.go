@@ -368,7 +368,7 @@ func Test_Scan(t *testing.T) {
 		wg.Wait()
 
 		// Assert
-		assert.Equal(t, 0, scanner.changedFiles.Length())
+		assert.Equal(t, 0, scanner.changedPaths.Length())
 	})
 
 	t.Run("Should not mark folders as changed files", func(t *testing.T) {

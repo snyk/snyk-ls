@@ -83,7 +83,7 @@ type Scanner struct {
 	scanStatusMutex   sync.Mutex
 	runningScans      map[string]*ScanStatus
 	scanNotifier      snyk.ScanNotifier
-	changedFiles      concurrency.AtomicMap // tracks files that were changed since the last scan
+	changedPaths      concurrency.AtomicMap // tracks files that were changed since the last scan // todo: should it be an atomic map?
 }
 
 func New(bundleUploader *BundleUploader,
@@ -121,8 +121,8 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 		return issues, errors.New("SAST is not enabled")
 	}
 
-	sc.changedFilesMutex.Lock()
-	sc.UpdateChangedFiles(path)
+	sc.changedFilesMutex.Lock() // todo: see if we can reuse another mutex
+	sc.changedPaths.Put(path, true)
 	sc.changedFilesMutex.Unlock()
 
 	// When starting a scan for a folderPath that's already scanned, the new scan will wait for the previous scan
@@ -145,12 +145,20 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	}()
 
 	sc.changedFilesMutex.Lock()
-	changedFiles := make([]string, 0, sc.changedFiles.Length())
-	sc.changedFiles.Range(func(key, value interface{}) bool {
-		changedFiles = append(changedFiles, key.(string))
+	if sc.changedPaths.Length() <= 0 {
+		sc.changedFilesMutex.Unlock()
+		return []snyk.Issue{}, nil
+	}
+
+	changedFiles := make([]string, 0, sc.changedPaths.Length())
+
+	sc.changedPaths.Range(func(key, value interface{}) bool {
+		if !uri.IsDirectory(key.(string)) { // todo: move to create bundle maybe
+			changedFiles = append(changedFiles, key.(string))
+		}
 		return true
 	})
-	sc.changedFiles.ClearAll()
+	sc.changedPaths.ClearAll()
 	sc.changedFilesMutex.Unlock()
 	startTime := time.Now()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
@@ -174,7 +182,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 
 func (sc *Scanner) UpdateChangedFiles(changedPath string) bool {
 	if !uri.IsDirectory(changedPath) {
-		sc.changedFiles.Put(changedPath, true)
+		sc.changedPaths.Put(changedPath, true)
 		return true
 	}
 	return false
