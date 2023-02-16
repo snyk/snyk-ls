@@ -41,7 +41,7 @@ func FolderContains(folderPath string, path string) bool {
 	if !strings.HasSuffix(cleanFolderPath, filePathSeparator) {
 		cleanFolderPath += filePathSeparator
 	}
-	log.Debug().Str("folderPath", cleanFolderPath).Str("path", cleanPath).Msg("FolderContains")
+	log.Trace().Str("folderPath", cleanFolderPath).Str("path", cleanPath).Msg("FolderContains")
 	return strings.HasPrefix(cleanPath, cleanFolderPath) ||
 		strings.HasPrefix(cleanPath+filePathSeparator, cleanFolderPath)
 }

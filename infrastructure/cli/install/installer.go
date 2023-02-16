@@ -203,7 +203,7 @@ func expectedChecksum(r *Release, cliDiscovery *Discovery) (HashSum, error) {
 func createLockFile(d *Downloader) (lockfileName string, err error) {
 	lockFileName := config.CurrentConfig().CLIDownloadLockFileName()
 	fileInfo, err := os.Stat(lockFileName)
-	if err == nil && (time.Since(fileInfo.ModTime()) < 1*time.Hour) {
+	if err == nil && (time.Since(fileInfo.ModTime()) < 10*time.Minute) {
 		msg := fmt.Sprintf("installer lockfile from %v found", fileInfo.ModTime())
 		log.Error().Str("method", "Download").Str("lockfile", lockFileName).Msg(msg)
 		return "", errors.New(msg)

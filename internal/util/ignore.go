@@ -22,10 +22,11 @@ import (
 )
 
 func Ignored(gitIgnore *ignore.GitIgnore, path string) bool {
-	ignored := false
-	ignored = gitIgnore.MatchesPath(path)
+	ignored, pattern := gitIgnore.MatchesPathHow(path)
 	if ignored {
-		log.Trace().Str("method", "ignored").Str("path", path).Msg("matched")
+		log.Trace().Str("method", "ignored").
+			Interface("Pattern", pattern).
+			Str("path", path).Msg("matched")
 		return true
 	}
 	log.Trace().Str("method", "ignored").Str("path", path).Msg("not matched")
