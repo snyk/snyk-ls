@@ -25,8 +25,8 @@ import (
 	"github.com/snyk/snyk-ls/application/server/lsp"
 )
 
-var Channel = make(chan lsp.ProgressParams, 100)
-var CancelProgressChannel = make(chan lsp.ProgressToken, 100)
+var Channel = make(chan lsp.ProgressParams, 10000)
+var CancelProgressChannel = make(chan lsp.ProgressToken, 10000)
 
 type Tracker struct {
 	channel              chan lsp.ProgressParams
