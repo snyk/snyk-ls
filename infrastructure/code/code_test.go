@@ -357,6 +357,7 @@ func Test_Scan(t *testing.T) {
 			wg.Add(1)
 			go func(i int) {
 				_, _ = scanner.Scan(context.Background(), "file"+strconv.Itoa(i)+".go", tempDir)
+				progress.CleanupChannels()
 				wg.Done()
 			}(i)
 		}
@@ -395,6 +396,7 @@ func Test_Scan(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				_, _ = scanner.Scan(context.Background(), "", tempDir)
+				progress.CleanupChannels()
 				wg.Done()
 			}()
 		}
