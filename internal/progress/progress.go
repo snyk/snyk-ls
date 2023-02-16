@@ -208,6 +208,10 @@ func (pr *progressCancelled) Unsubscribe(handlerId string) {
 
 // Trigger sends out an event with the payload
 func (pr *progressCancelled) Raise(payload lsp.ProgressToken) {
+	if pr.handlers == nil {
+		return // no handlers
+	}
+
 	pr.handlers.Range(func(handlerId string, handler ProgressCancelledHandler) bool {
 		handler.Handle(payload)
 		return true
