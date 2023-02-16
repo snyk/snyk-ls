@@ -49,6 +49,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -89,6 +90,7 @@ func setupCustomServer(t *testing.T, callBackFn onCallbackFn) server.Local {
 	loc := startServer(callBackFn)
 
 	t.Cleanup(func() {
+		//_, _ = loc.Client.Call(ctx, "shutdown", nil) <- todo: uncomment this
 		err := loc.Close()
 		if err != nil {
 			log.Error().Err(err).Msg("Error when closing down server")
@@ -96,6 +98,7 @@ func setupCustomServer(t *testing.T, callBackFn onCallbackFn) server.Local {
 		cleanupChannels()
 		jsonRPCRecorder.ClearCallbacks()
 		jsonRPCRecorder.ClearNotifications()
+		progress.CleanupHandlers()
 	})
 	return loc
 }
@@ -824,7 +827,9 @@ func Test_IntegrationHoverResults(t *testing.T) {
 		t.Fatal(err, "Hover retrieval failed")
 	}
 
-	assert.Equal(t, hoverResult.Contents.Value, di.HoverService().GetHover(uri.PathToUri(testPath), converter.FromPosition(testPosition)).Contents.Value)
+	assert.Equal(t,
+		hoverResult.Contents.Value,
+		di.HoverService().GetHover(uri.PathToUri(testPath), converter.FromPosition(testPosition)).Contents.Value)
 	assert.Equal(t, hoverResult.Contents.Kind, "markdown")
 }
 func Test_SmokeSnykCodeFileScan(t *testing.T) {

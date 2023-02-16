@@ -149,6 +149,22 @@ type progressReported struct {
 	handlersMutex sync.Mutex
 }
 
+func CleanupHandlers() {
+	ProgressReported.handlersMutex.Lock()
+	ProgressCancelled.m.Lock()
+	ProgressReported.handlers = nil
+	ProgressCancelled.handlers = nil
+	ProgressReported.handlersMutex.Unlock()
+	ProgressCancelled.m.Unlock()
+}
+
+//
+//func (pr *progressReported) IsEmpty() bool {
+//	pr.handlersMutex.Lock()
+//	defer pr.handlersMutex.Unlock()
+//	return len(pr.handlers) == 0
+//}
+
 // Subscribe adds an event handler for this event
 func (pr *progressReported) Subscribe(handler ProgressHandler) {
 	pr.handlersMutex.Lock()
@@ -158,13 +174,13 @@ func (pr *progressReported) Subscribe(handler ProgressHandler) {
 
 func (pr *progressReported) Unsubscribe(handler ProgressHandler) error {
 	pr.handlersMutex.Lock()
+	defer pr.handlersMutex.Unlock()
 	for i, h := range pr.handlers {
 		if h == handler {
 			pr.handlers = append(pr.handlers[:i], pr.handlers[i+1:]...)
 			return nil
 		}
 	}
-	pr.handlersMutex.Unlock()
 
 	return errors.New("handler not found")
 }

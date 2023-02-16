@@ -75,7 +75,7 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 		progress.ProgressCancelled.Raise(tracker.GetToken()) // Send cancel signal when progress received
 	})
 	progress.ProgressReported.Subscribe(ph)
-	defer func() { _ = progress.ProgressReported.Unsubscribe(ph) }()
+	t.Cleanup(func() { _ = progress.ProgressReported.Unsubscribe(ph) })
 
 	err := d.Download(r, false)
 
