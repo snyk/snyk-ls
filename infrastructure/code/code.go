@@ -96,6 +96,7 @@ func New(bundleUploader *BundleUploader,
 		errorReporter:  reporter,
 		analytics:      analytics,
 		runningScans:   map[string]*ScanStatus{},
+		changedPaths:   map[string]bool{},
 	}
 	return sc
 }
