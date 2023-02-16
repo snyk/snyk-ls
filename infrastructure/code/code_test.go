@@ -75,7 +75,7 @@ func TestCreateBundle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
+			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file}, []string{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -92,7 +92,7 @@ func TestCreateBundle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
+			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file}, []string{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -113,7 +113,7 @@ func TestCreateBundle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
+			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file}, []string{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -134,7 +134,7 @@ func TestCreateBundle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
+			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file}, []string{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -180,7 +180,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
 			metrics := c.newMetrics(len(docs), time.Time{})
 
-			_, _ = c.UploadAndAnalyze(context.Background(), docs, "", metrics)
+			_, _ = c.UploadAndAnalyze(context.Background(), docs, "", metrics, []string{})
 
 			// verify that create bundle has been called on backend service
 			params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
@@ -206,7 +206,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			files := []string{diagnosticUri}
 			metrics := c.newMetrics(len(files), time.Time{})
 
-			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics)
+			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics, []string{})
 
 			assert.NotNil(t, issues)
 			assert.Equal(t, 1, len(issues))
@@ -237,7 +237,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			metrics := c.newMetrics(len(files), time.Now())
 
 			// execute
-			_, _ = c.UploadAndAnalyze(context.Background(), files, "", metrics)
+			_, _ = c.UploadAndAnalyze(context.Background(), files, "", metrics, []string{})
 
 			assert.Len(t, analytics.GetAnalytics(), 1)
 			assert.Equal(
@@ -320,7 +320,9 @@ func Test_Scan(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			wg.Add(1)
 			go func(i int) {
+				t.Log("Running scan for file" + strconv.Itoa(i) + ".go")
 				_, _ = scanner.Scan(context.Background(), "file"+strconv.Itoa(i)+".go", tempDir)
+				t.Log("Finished scan for file" + strconv.Itoa(i) + ".go")
 				wg.Done()
 			}(i)
 		}
@@ -335,11 +337,16 @@ func Test_Scan(t *testing.T) {
 			"file4.go",
 		}
 
-		params := snykCodeMock.GetCallParams(0, RunAnalysisOperation)
-		assert.NotNil(t, params)
-		assert.Equal(t, 5, len(params[1].([]string)))
+		allCalls := snykCodeMock.GetAllCalls(RunAnalysisOperation)
+		communicatedChangedFiles := make([]string, 0)
+		for _, call := range allCalls {
+			params := call[1].([]string)
+			communicatedChangedFiles = append(communicatedChangedFiles, params...)
+		}
+
+		assert.Equal(t, 5, len(communicatedChangedFiles))
 		for _, file := range expectedChangedFiles {
-			assert.Contains(t, params[1], file)
+			assert.Contains(t, communicatedChangedFiles, file)
 		}
 	})
 
@@ -538,29 +545,30 @@ func TestIsSastEnabled(t *testing.T) {
 		assert.False(t, enabled)
 	})
 
-	t.Run("should send a ShowMessageRequest notification if Snyk Code is enabled and the API returns false", func(t *testing.T) {
-		notification.DisposeListener()
-		config.CurrentConfig().SetSnykCodeEnabled(true)
-		apiClient.CodeEnabled = false
-		actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
+	t.Run("should send a ShowMessageRequest notification if Snyk Code is enabled and the API returns false",
+		func(t *testing.T) {
+			notification.DisposeListener()
+			config.CurrentConfig().SetSnykCodeEnabled(true)
+			apiClient.CodeEnabled = false
+			actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
 
-		actionMap.Add(enableSnykCodeMessageActionItemTitle, command.NewOpenBrowserCommand(getCodeEnablementUrl()))
-		actionMap.Add(closeMessageActionItemTitle, nil)
-		expectedShowMessageRequest := snyk.ShowMessageRequest{
-			Message: codeDisabledInOrganisationMessageText,
-			Type:    snyk.Warning,
-			Actions: actionMap,
-		}
+			actionMap.Add(enableSnykCodeMessageActionItemTitle, command.NewOpenBrowserCommand(getCodeEnablementUrl()))
+			actionMap.Add(closeMessageActionItemTitle, nil)
+			expectedShowMessageRequest := snyk.ShowMessageRequest{
+				Message: codeDisabledInOrganisationMessageText,
+				Type:    snyk.Warning,
+				Actions: actionMap,
+			}
 
-		channel := make(chan any)
+			channel := make(chan any)
 
-		notification.CreateListener(func(params any) {
-			channel <- params
+			notification.CreateListener(func(params any) {
+				channel <- params
+			})
+			defer notification.DisposeListener()
+
+			scanner.isSastEnabled()
+
+			assert.Equal(t, expectedShowMessageRequest, <-channel)
 		})
-		defer notification.DisposeListener()
-
-		scanner.isSastEnabled()
-
-		assert.Equal(t, expectedShowMessageRequest, <-channel)
-	})
 }
