@@ -37,7 +37,6 @@ import (
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
-	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/float"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -83,7 +82,7 @@ type Scanner struct {
 	scanStatusMutex   sync.Mutex
 	runningScans      map[string]*ScanStatus
 	scanNotifier      snyk.ScanNotifier
-	changedPaths      concurrency.AtomicMap // tracks files that were changed since the last scan // todo: should it be an atomic map?
+	changedPaths      map[string]bool // tracks files that were changed since the last scan // todo: should it be an atomic map?
 }
 
 func New(bundleUploader *BundleUploader,
@@ -122,7 +121,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	}
 
 	sc.changedFilesMutex.Lock() // todo: see if we can reuse another mutex
-	sc.changedPaths.Put(path, true)
+	sc.changedPaths[path] = true
 	sc.changedFilesMutex.Unlock()
 
 	// When starting a scan for a folderPath that's already scanned, the new scan will wait for the previous scan
@@ -145,20 +144,19 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	}()
 
 	sc.changedFilesMutex.Lock()
-	if sc.changedPaths.Length() <= 0 {
+	if len(sc.changedPaths) <= 0 {
 		sc.changedFilesMutex.Unlock()
 		return []snyk.Issue{}, nil
 	}
 
-	changedFiles := make([]string, 0, sc.changedPaths.Length())
+	changedFiles := make([]string, 0, len(sc.changedPaths))
 
-	sc.changedPaths.Range(func(key, value interface{}) bool {
-		if !uri.IsDirectory(key.(string)) { // todo: move to create bundle maybe
-			changedFiles = append(changedFiles, key.(string))
+	for changedPath := range sc.changedPaths {
+		if !uri.IsDirectory(changedPath) {
+			changedFiles = append(changedFiles, changedPath)
+			delete(sc.changedPaths, changedPath)
 		}
-		return true
-	})
-	sc.changedPaths.ClearAll()
+	}
 	sc.changedFilesMutex.Unlock()
 	startTime := time.Now()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
@@ -178,14 +176,6 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	results, err := sc.UploadAndAnalyze(span.Context(), folderFiles, folderPath, metrics, changedFiles)
 
 	return results, err
-}
-
-func (sc *Scanner) UpdateChangedFiles(changedPath string) bool {
-	if !uri.IsDirectory(changedPath) {
-		sc.changedPaths.Put(changedPath, true)
-		return true
-	}
-	return false
 }
 
 func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath string) (waiting bool) {
