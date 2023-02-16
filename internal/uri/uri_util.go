@@ -69,7 +69,6 @@ func IsUriDirectory(documentURI sglsp.DocumentURI) bool {
 func IsDirectory(path string) bool {
 	stat, err := os.Stat(path)
 	if err != nil {
-		log.Err(err).Err(err).Msg("Error while checking file")
 		return false
 	}
 	return stat.IsDir()
