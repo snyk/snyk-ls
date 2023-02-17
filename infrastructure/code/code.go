@@ -82,7 +82,7 @@ type Scanner struct {
 	scanStatusMutex   sync.Mutex
 	runningScans      map[string]*ScanStatus
 	scanNotifier      snyk.ScanNotifier
-	changedPaths      map[string]bool // tracks files that were changed since the last scan
+	changedPaths      map[string]map[string]bool // tracks files that were changed since the last scan per workspace folder
 }
 
 func New(bundleUploader *BundleUploader,
@@ -96,7 +96,7 @@ func New(bundleUploader *BundleUploader,
 		errorReporter:  reporter,
 		analytics:      analytics,
 		runningScans:   map[string]*ScanStatus{},
-		changedPaths:   map[string]bool{},
+		changedPaths:   map[string]map[string]bool{},
 	}
 	return sc
 }
@@ -122,7 +122,10 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	}
 
 	sc.changedFilesMutex.Lock()
-	sc.changedPaths[path] = true
+	if sc.changedPaths[folderPath] == nil {
+		sc.changedPaths[folderPath] = map[string]bool{}
+	}
+	sc.changedPaths[folderPath][path] = true
 	sc.changedFilesMutex.Unlock()
 
 	// When starting a scan for a folderPath that's already scanned, the new scan will wait for the previous scan
@@ -143,17 +146,17 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	// Proceed to scan only if there're any changed paths. This ensures the following race condition coverage:
 	// It could be that one of throttled scans updated the changedPaths set, but the initial scan has picked up it's updated and proceeded with a scan in the meantime.
 	sc.changedFilesMutex.Lock()
-	if len(sc.changedPaths) <= 0 {
+	if len(sc.changedPaths[folderPath]) <= 0 {
 		sc.changedFilesMutex.Unlock()
 		return []snyk.Issue{}, nil
 	}
 
-	changedFiles := make([]string, 0, len(sc.changedPaths))
-	for changedPath := range sc.changedPaths {
+	changedFiles := make([]string, 0, len(sc.changedPaths[folderPath]))
+	for changedPath := range sc.changedPaths[folderPath] {
 		if !uri.IsDirectory(changedPath) {
 			changedFiles = append(changedFiles, changedPath)
 		}
-		delete(sc.changedPaths, changedPath)
+		delete(sc.changedPaths[folderPath], changedPath)
 	}
 	sc.changedFilesMutex.Unlock()
 
