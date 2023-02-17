@@ -121,7 +121,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 		return issues, errors.New("SAST is not enabled")
 	}
 
-	sc.changedFilesMutex.Lock() // todo: see if we can reuse another mutex
+	sc.changedFilesMutex.Lock()
 	sc.changedPaths[path] = true
 	sc.changedFilesMutex.Unlock()
 

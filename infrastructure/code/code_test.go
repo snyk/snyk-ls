@@ -429,7 +429,7 @@ func Test_Scan(t *testing.T) {
 		assert.Equal(t, 0, len(params[1].([]string)))
 	})
 
-	t.Run("CodeScanRunning_ScanCalled_ScansRunSequentially", func(t *testing.T) {
+	t.Run("Scans run sequentially for the same folder", func(t *testing.T) {
 		// Arrange
 		testutil.UnitTest(t)
 		_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
@@ -449,6 +449,36 @@ func Test_Scan(t *testing.T) {
 
 		// Assert
 		assert.Equal(t, 1, fakeClient.maxConcurrentScans)
+	})
+
+	t.Run("Scans run in parallel for different folders", func(t *testing.T) {
+		// Arrange
+		testutil.UnitTest(t)
+		_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+		_, tempDir2, _, _, _ := setupIgnoreWorkspace(t)
+		fakeClient, scanner := setupTestScanner()
+		fakeClient.AnalysisDuration = time.Second
+		wg := sync.WaitGroup{}
+
+		// Act
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func() {
+				_, _ = scanner.Scan(context.Background(), "", tempDir)
+				wg.Done()
+			}()
+		}
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func() {
+				_, _ = scanner.Scan(context.Background(), "", tempDir2)
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+
+		// Assert
+		assert.Equal(t, 2, fakeClient.maxConcurrentScans)
 	})
 
 	t.Run("Shouldn't run if Sast is disabled", func(t *testing.T) {
