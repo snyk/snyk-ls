@@ -74,5 +74,7 @@ func (m *AtomicMap) Delete(key any) {
 }
 
 func (m *AtomicMap) Range(f func(key any, value any) bool) {
+	m.mut.Lock()
 	m.m.Range(f)
+	m.mut.Unlock()
 }

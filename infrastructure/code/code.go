@@ -42,6 +42,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -71,15 +72,17 @@ func NewScanStatus() *ScanStatus {
 }
 
 type Scanner struct {
-	BundleUploader  *BundleUploader
-	SnykApiClient   snyk_api.SnykApiClient
-	errorReporter   error_reporting.ErrorReporter
-	analytics       ux2.Analytics
-	ignorePatterns  []string
-	mutex           sync.Mutex
-	scanStatusMutex sync.Mutex
-	runningScans    map[string]*ScanStatus
-	scanNotifier    snyk.ScanNotifier
+	BundleUploader    *BundleUploader
+	SnykApiClient     snyk_api.SnykApiClient
+	errorReporter     error_reporting.ErrorReporter
+	analytics         ux2.Analytics
+	ignorePatterns    []string
+	changedFilesMutex sync.Mutex
+	mutex             sync.Mutex
+	scanStatusMutex   sync.Mutex
+	runningScans      map[string]*ScanStatus
+	scanNotifier      snyk.ScanNotifier
+	changedPaths      map[string]map[string]bool // tracks files that were changed since the last scan per workspace folder
 }
 
 func New(bundleUploader *BundleUploader,
@@ -93,6 +96,7 @@ func New(bundleUploader *BundleUploader,
 		errorReporter:  reporter,
 		analytics:      analytics,
 		runningScans:   map[string]*ScanStatus{},
+		changedPaths:   map[string]map[string]bool{},
 	}
 	return sc
 }
@@ -112,19 +116,79 @@ func (sc *Scanner) SupportedCommands() []snyk.CommandName {
 	return []snyk.CommandName{snyk.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) (issues []snyk.Issue, err error) {
+func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (issues []snyk.Issue, err error) {
+	if !sc.isSastEnabled() {
+		return issues, errors.New("SAST is not enabled")
+	}
+
+	sc.changedFilesMutex.Lock()
+	if sc.changedPaths[folderPath] == nil {
+		sc.changedPaths[folderPath] = map[string]bool{}
+	}
+	sc.changedPaths[folderPath][path] = true
+	sc.changedFilesMutex.Unlock()
+
 	// When starting a scan for a folderPath that's already scanned, the new scan will wait for the previous scan
 	// to finish before starting.
 	// When there's already a scan waiting, the function returns immediately with empty results.
-	waitForPreviousScan := false
 	scanStatus := NewScanStatus()
+	isAlreadyWaiting := sc.waitForScanToFinish(scanStatus, folderPath)
+	if isAlreadyWaiting {
+		return []snyk.Issue{}, nil // Returning an empty slice implies that no vulnerabilities were found
+	}
+	defer func() {
+		sc.scanStatusMutex.Lock()
+		scanStatus.isRunning = false
+		close(scanStatus.finished)
+		sc.scanStatusMutex.Unlock()
+	}()
+
+	// Proceed to scan only if there're any changed paths. This ensures the following race condition coverage:
+	// It could be that one of throttled scans updated the changedPaths set, but the initial scan has picked up it's updated and proceeded with a scan in the meantime.
+	sc.changedFilesMutex.Lock()
+	if len(sc.changedPaths[folderPath]) <= 0 {
+		sc.changedFilesMutex.Unlock()
+		return []snyk.Issue{}, nil
+	}
+
+	changedFiles := make([]string, 0, len(sc.changedPaths[folderPath]))
+	for changedPath := range sc.changedPaths[folderPath] {
+		if !uri.IsDirectory(changedPath) {
+			changedFiles = append(changedFiles, changedPath)
+		}
+		delete(sc.changedPaths[folderPath], changedPath)
+	}
+	sc.changedFilesMutex.Unlock()
+
+	startTime := time.Now()
+	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
+	defer sc.BundleUploader.instrumentor.Finish(span)
+
+	// Start the scan
+	folderFiles, err := sc.files(folderPath)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("method", "domain.ide.workspace.Folder.ScanFolder").
+			Str("workspaceFolderPath", folderPath).
+			Msg("error getting workspace files")
+	}
+
+	metrics := sc.newMetrics(len(folderFiles), startTime)
+	results, err := sc.UploadAndAnalyze(span.Context(), folderFiles, folderPath, metrics, changedFiles)
+
+	return results, err
+}
+
+func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath string) (waiting bool) {
+	waitForPreviousScan := false
 	scanStatus.isRunning = true
 	sc.scanStatusMutex.Lock()
 	previousScanStatus, wasFound := sc.runningScans[folderPath]
 	if wasFound && previousScanStatus.isRunning {
 		if previousScanStatus.isPending {
 			sc.scanStatusMutex.Unlock()
-			return []snyk.Issue{}, nil // Returning an empty slice implies that no vulnerabilities were found
+			return true
 		}
 
 		waitForPreviousScan = true
@@ -142,34 +206,7 @@ func (sc *Scanner) Scan(ctx context.Context, _ string, folderPath string) (issue
 		scanStatus.isPending = false
 		sc.scanStatusMutex.Unlock()
 	}
-	defer func() {
-		sc.scanStatusMutex.Lock()
-		scanStatus.isRunning = false
-		close(scanStatus.finished)
-		sc.scanStatusMutex.Unlock()
-	}()
-
-	if !sc.isSastEnabled() {
-		return issues, errors.New("SAST is not enabled")
-	}
-
-	// Start the scan
-	startTime := time.Now()
-	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
-	defer sc.BundleUploader.instrumentor.Finish(span)
-
-	files, err := sc.files(folderPath)
-	if err != nil {
-		log.Warn().
-			Err(err).
-			Str("method", "domain.ide.workspace.Folder.ScanFolder").
-			Str("workspaceFolderPath", folderPath).
-			Msg("error getting workspace files")
-	}
-
-	metrics := sc.newMetrics(len(files), startTime)
-	results, err := sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics)
-	return results, err
+	return false
 }
 
 func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
@@ -361,6 +398,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 	files []string,
 	path string,
 	scanMetrics *ScanMetrics,
+	changedFiles []string,
 ) (issues []snyk.Issue, err error) {
 	if ctx.Err() != nil {
 		log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
@@ -375,7 +413,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 
 	requestId := span.GetTraceId() // use span trace id as code-request-id
 
-	bundle, bundleFiles, err := sc.createBundle(span.Context(), requestId, path, files)
+	bundle, bundleFiles, err := sc.createBundle(span.Context(), requestId, path, files, changedFiles)
 
 	if err != nil {
 		if ctx.Err() == nil { // Only report errors that are not intentional cancellations
@@ -425,9 +463,11 @@ func (sc *Scanner) createBundle(
 	requestId string,
 	rootPath string,
 	filePaths []string,
+	changedFiles []string,
 ) (b Bundle, bundleFiles map[string]BundleFile, err error) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.createBundle")
 	defer sc.BundleUploader.instrumentor.Finish(span)
+
 	b = Bundle{
 		SnykCode:      sc.BundleUploader.SnykCode,
 		instrumentor:  sc.BundleUploader.instrumentor,
@@ -435,6 +475,7 @@ func (sc *Scanner) createBundle(
 		rootPath:      rootPath,
 		errorReporter: sc.errorReporter,
 		scanNotifier:  sc.scanNotifier,
+		limitToFiles:  changedFiles,
 	}
 
 	fileHashes := make(map[string]string)

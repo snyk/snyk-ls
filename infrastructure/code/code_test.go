@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -74,7 +75,7 @@ func TestCreateBundle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
+			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file}, []string{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -91,7 +92,7 @@ func TestCreateBundle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
+			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file}, []string{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -112,7 +113,7 @@ func TestCreateBundle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
+			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file}, []string{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -133,7 +134,7 @@ func TestCreateBundle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file})
+			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file}, []string{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -179,7 +180,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
 			metrics := c.newMetrics(len(docs), time.Time{})
 
-			_, _ = c.UploadAndAnalyze(context.Background(), docs, "", metrics)
+			_, _ = c.UploadAndAnalyze(context.Background(), docs, "", metrics, []string{})
 
 			// verify that create bundle has been called on backend service
 			params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
@@ -205,7 +206,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			files := []string{diagnosticUri}
 			metrics := c.newMetrics(len(files), time.Time{})
 
-			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics)
+			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics, []string{})
 
 			assert.NotNil(t, issues)
 			assert.Equal(t, 1, len(issues))
@@ -236,7 +237,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			metrics := c.newMetrics(len(files), time.Now())
 
 			// execute
-			_, _ = c.UploadAndAnalyze(context.Background(), files, "", metrics)
+			_, _ = c.UploadAndAnalyze(context.Background(), files, "", metrics, []string{})
 
 			assert.Len(t, analytics.GetAnalytics(), 1)
 			assert.Equal(
@@ -349,43 +350,153 @@ func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 	assert.NotContains(t, walkedFiles, ignoredFileInDir)
 }
 
-func Test_CodeScanRunning_ScanCalled_ScansRunSequentially(t *testing.T) {
-	// Arrange
-	testutil.UnitTest(t)
-	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-	fakeClient, scanner := setupTestScanner()
-	fakeClient.AnalysisDuration = time.Second
-	wg := sync.WaitGroup{}
+func Test_Scan(t *testing.T) {
+	t.Run("Should update changed files", func(t *testing.T) {
+		testutil.UnitTest(t)
+		// Arrange
+		snykCodeMock, scanner := setupTestScanner()
+		wg := sync.WaitGroup{}
+		_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
 
-	// Act
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func() {
-			_, _ = scanner.Scan(context.Background(), "", tempDir)
-			wg.Done()
-		}()
-	}
-	wg.Wait()
+		// Act
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func(i int) {
+				t.Log("Running scan for file" + strconv.Itoa(i) + ".go")
+				_, _ = scanner.Scan(context.Background(), "file"+strconv.Itoa(i)+".go", tempDir)
+				t.Log("Finished scan for file" + strconv.Itoa(i) + ".go")
+				wg.Done()
+			}(i)
+		}
+		wg.Wait()
 
-	// Assert
-	assert.Equal(t, 1, fakeClient.maxConcurrentScans)
-}
+		// Assert
+		expectedChangedFiles := []string{
+			"file0.go",
+			"file1.go",
+			"file2.go",
+			"file3.go",
+			"file4.go",
+		}
 
-func Test_Scan_ShouldntRunIfSastDisabled(t *testing.T) {
-	testutil.UnitTest(t)
-	snykCodeMock := &FakeSnykCodeClient{}
-	c := New(
-		NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
-		&snyk_api.FakeApiClient{CodeEnabled: false},
-		error_reporting.NewTestErrorReporter(),
-		ux2.NewTestAnalytics(),
-	)
-	_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+		allCalls := snykCodeMock.GetAllCalls(RunAnalysisOperation)
+		communicatedChangedFiles := make([]string, 0)
+		for _, call := range allCalls {
+			params := call[1].([]string)
+			communicatedChangedFiles = append(communicatedChangedFiles, params...)
+		}
 
-	_, _ = c.Scan(context.Background(), "", tempDir)
+		assert.Equal(t, 5, len(communicatedChangedFiles))
+		for _, file := range expectedChangedFiles {
+			assert.Contains(t, communicatedChangedFiles, file)
+		}
+	})
 
-	params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
-	assert.Nil(t, params)
+	t.Run("Should reset changed files after successful scan", func(t *testing.T) {
+		testutil.UnitTest(t)
+		// Arrange
+		_, scanner := setupTestScanner()
+		wg := sync.WaitGroup{}
+		tempDir := t.TempDir()
+
+		// Act
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func(i int) {
+				_, _ = scanner.Scan(context.Background(), "file"+strconv.Itoa(i)+".go", tempDir)
+				wg.Done()
+			}(i)
+		}
+		wg.Wait()
+
+		// Assert
+		assert.Equal(t, 0, len(scanner.changedPaths[tempDir]))
+	})
+
+	t.Run("Should not mark folders as changed files", func(t *testing.T) {
+		testutil.UnitTest(t)
+		// Arrange
+		snykCodeMock, scanner := setupTestScanner()
+
+		_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+
+		// Act
+		_, _ = scanner.Scan(context.Background(), tempDir, tempDir)
+
+		// Assert
+		params := snykCodeMock.GetCallParams(0, RunAnalysisOperation)
+		assert.NotNil(t, params)
+		assert.Equal(t, 0, len(params[1].([]string)))
+	})
+
+	t.Run("Scans run sequentially for the same folder", func(t *testing.T) {
+		// Arrange
+		testutil.UnitTest(t)
+		_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+		fakeClient, scanner := setupTestScanner()
+		fakeClient.AnalysisDuration = time.Second
+		wg := sync.WaitGroup{}
+
+		// Act
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func() {
+				_, _ = scanner.Scan(context.Background(), "", tempDir)
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+
+		// Assert
+		assert.Equal(t, 1, fakeClient.maxConcurrentScans)
+	})
+
+	t.Run("Scans run in parallel for different folders", func(t *testing.T) {
+		// Arrange
+		testutil.UnitTest(t)
+		_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+		_, tempDir2, _, _, _ := setupIgnoreWorkspace(t)
+		fakeClient, scanner := setupTestScanner()
+		fakeClient.AnalysisDuration = time.Second
+		wg := sync.WaitGroup{}
+
+		// Act
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func() {
+				_, _ = scanner.Scan(context.Background(), "", tempDir)
+				wg.Done()
+			}()
+		}
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func() {
+				_, _ = scanner.Scan(context.Background(), "", tempDir2)
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+
+		// Assert
+		assert.Equal(t, 2, fakeClient.maxConcurrentScans)
+	})
+
+	t.Run("Shouldn't run if Sast is disabled", func(t *testing.T) {
+		testutil.UnitTest(t)
+		snykCodeMock := &FakeSnykCodeClient{}
+		c := New(
+			NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
+			&snyk_api.FakeApiClient{CodeEnabled: false},
+			error_reporting.NewTestErrorReporter(),
+			ux2.NewTestAnalytics(),
+		)
+		_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+
+		_, _ = c.Scan(context.Background(), "", tempDir)
+
+		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
+		assert.Nil(t, params)
+	})
 }
 
 func Test_LoadIgnorePatternsAndCountFiles_RelativePathIgnores(t *testing.T) {

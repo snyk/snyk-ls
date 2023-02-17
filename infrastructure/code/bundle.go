@@ -40,6 +40,7 @@ type Bundle struct {
 	errorReporter error_reporting.ErrorReporter
 	requestId     string
 	missingFiles  []string
+	limitToFiles  []string
 	rootPath      string
 	scanNotifier  snyk.ScanNotifier
 }
@@ -93,7 +94,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 	analysisOptions := AnalysisOptions{
 		bundleHash:   b.BundleHash,
 		shardKey:     b.getShardKey(b.rootPath, config.CurrentConfig().Token()),
-		limitToFiles: []string{},
+		limitToFiles: b.limitToFiles,
 		severity:     0,
 	}
 

@@ -192,7 +192,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) { // nolint:gocognit // this i
 			analysisOptions := AnalysisOptions{
 				bundleHash:   bundleHash,
 				shardKey:     "shardKey",
-				limitToFiles: []string{},
+				limitToFiles: []string{"path/to/file1.go"},
 				severity:     0,
 			}
 
