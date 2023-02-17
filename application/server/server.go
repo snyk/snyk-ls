@@ -75,12 +75,16 @@ func Start() {
 	log.Info().Msg("Exiting...")
 }
 
+const textDocumentDidOpenOperation = "textDocument/didOpen"
+const textDocumentDidSaveOperation = "textDocument/didSave"
+
 func initHandlers(srv *jrpc2.Server, handlers *handler.Map) {
 	(*handlers)["initialize"] = initializeHandler(srv)
 	(*handlers)["initialized"] = initializedHandler(srv)
 	(*handlers)["textDocument/didChange"] = noOpHandler()
 	(*handlers)["textDocument/didClose"] = noOpHandler()
-	(*handlers)["textDocument/didSave"] = textDocumentDidSaveHandler()
+	(*handlers)[textDocumentDidOpenOperation] = textDocumentDidOpenHandler()
+	(*handlers)[textDocumentDidSaveOperation] = textDocumentDidSaveHandler()
 	(*handlers)["textDocument/hover"] = textDocumentHover()
 	(*handlers)["textDocument/codeAction"] = codeActionHandler()
 	(*handlers)["textDocument/codeLens"] = codeLensHandler()
@@ -211,6 +215,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 			Capabilities: lsp.ServerCapabilities{
 				TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{
 					Options: &sglsp.TextDocumentSyncOptions{
+						OpenClose:         true,
 						WillSave:          true,
 						WillSaveWaitUntil: true,
 						Save:              &sglsp.SaveOptions{IncludeText: true},
@@ -365,6 +370,26 @@ func logError(err error, method string) {
 		log.Err(err).Str("method", method)
 		di.ErrorReporter().CaptureError(err)
 	}
+}
+
+func textDocumentDidOpenHandler() jrpc2.Handler {
+	return handler.New(func(_ context.Context, params sglsp.DidOpenTextDocumentParams) (any, error) {
+		filePath := uri.PathFromUri(params.TextDocument.URI)
+		logger := log.With().Str("method", "TextDocumentDidOpenHandler").Str("documentURI", filePath).Logger()
+
+		logger.Info().Msg("Receiving")
+		folder := workspace.Get().GetFolderContaining(filePath)
+		issues := folder.DocumentDiagnosticsFromCache(filePath)
+		if len(issues) > 0 {
+			logger.Info().Msg("Sending cached issues")
+			diagnosticParams := lsp.PublishDiagnosticsParams{
+				URI:         params.TextDocument.URI,
+				Diagnostics: converter.ToDiagnostics(issues),
+			}
+			notification.Send(diagnosticParams)
+		}
+		return nil, nil
+	})
 }
 
 func textDocumentDidSaveHandler() jrpc2.Handler {
