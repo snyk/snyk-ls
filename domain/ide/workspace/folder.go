@@ -197,7 +197,7 @@ func (f *Folder) filterCachedDiagnostics() (fileIssues map[string][]snyk.Issue) 
 	supportedIssueTypes := config.CurrentConfig().GetDisplayableIssueTypes()
 	f.documentDiagnosticCache.Range(func(filePath string, issues []snyk.Issue) bool {
 		// Consider doing the loop body in parallel for performance (and use a thread-safe map)
-		filteredIssues := filterIssues(issues, supportedIssueTypes)
+		filteredIssues := FilterIssues(issues, supportedIssueTypes)
 		issuesByFile[filePath] = filteredIssues
 		return true
 	})
@@ -205,8 +205,8 @@ func (f *Folder) filterCachedDiagnostics() (fileIssues map[string][]snyk.Issue) 
 	return issuesByFile
 }
 
-func filterIssues(issues []snyk.Issue, supportedIssueTypes map[product.FilterableIssueType]bool) []snyk.Issue {
-	logger := log.With().Str("method", "filterIssues").Logger()
+func FilterIssues(issues []snyk.Issue, supportedIssueTypes map[product.FilterableIssueType]bool) []snyk.Issue {
+	logger := log.With().Str("method", "FilterIssues").Logger()
 	filteredIssues := make([]snyk.Issue, 0)
 
 	for _, issue := range issues {
