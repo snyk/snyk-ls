@@ -240,11 +240,6 @@ func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
 					Msg("error traversing files")
 				return nil
 			}
-			relativePath, err := filepath.Rel(folderPath, path)
-			if err != nil {
-				log.Err(err).Msg("error getting relative path from " + path)
-				return nil
-			}
 			filesWalked++
 			percentage := math.Round(float64(filesWalked) / float64(fileCount) * 100)
 			t.ReportWithMessage(
@@ -252,13 +247,13 @@ func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
 				fmt.Sprintf("Loading file contents for scan... (%d of %d)", filesWalked, fileCount),
 			)
 			if dirEntry == nil || dirEntry.IsDir() {
-				if util.Ignored(gitIgnore, relativePath) {
+				if util.Ignored(gitIgnore, path) {
 					return filepath.SkipDir
 				}
 				return nil
 			}
 
-			if util.Ignored(gitIgnore, relativePath) {
+			if util.Ignored(gitIgnore, path) {
 				return nil
 			}
 
@@ -303,18 +298,13 @@ func (sc *Scanner) loadIgnorePatternsAndCountFiles(folderPath string) (fileCount
 				log.Err(err).Msg("Can't read" + path)
 			}
 			lines := strings.Split(string(content), "\n")
-			relativePath, err := filepath.Rel(folderPath, path)
-			relativePath = filepath.ToSlash(relativePath)
-			if err != nil {
-				log.Err(err).Msg("Can't find relative path from " + folderPath + " to " + path)
-				return err
-			}
+
 			for _, line := range lines {
 				if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
 					continue
 				}
-				glob := parseIgnoreRuleToGlobs(line, filepath.Dir(relativePath))
-				ignores = append(ignores, glob)
+				globs := parseIgnoreRuleToGlobs(line, filepath.Dir(path))
+				ignores = append(ignores, globs...)
 			}
 			return err
 		},
@@ -335,7 +325,7 @@ func getDefaultIgnorePatterns() []string {
 	return ignores
 }
 
-func parseIgnoreRuleToGlobs(rule string, baseDir string) (glob string) {
+func parseIgnoreRuleToGlobs(rule string, baseDir string) (globs []string) {
 	// Shamelessly stolen from code-client: https://github.com/snyk/code-client/blob/7a9e5cdbed4e8a6a0f2597fcd64b67800279e585/src/files.ts#L67
 
 	// Mappings from .gitignore format to glob format:
@@ -347,6 +337,7 @@ func parseIgnoreRuleToGlobs(rule string, baseDir string) (glob string) {
 	const negation = "!"
 	const slash = "/"
 	const all = "**"
+	baseDir = filepath.ToSlash(baseDir)
 
 	if strings.HasPrefix(rule, negation) {
 		rule = rule[1:]
@@ -356,31 +347,32 @@ func parseIgnoreRuleToGlobs(rule string, baseDir string) (glob string) {
 	startingGlobstar := strings.HasPrefix(rule, all)
 	endingSlash := strings.HasSuffix(rule, slash)
 	endingGlobstar := strings.HasSuffix(rule, all)
+
 	if startingSlash || startingGlobstar {
 		// case `/foo/`, `/foo` => `{baseDir}/foo/**`
 		// case `**/foo/`, `**/foo` => `{baseDir}/**/foo/**`
 		if !endingGlobstar {
-			glob = prefix + filepath.Join(baseDir, rule, all)
+			globs = append(globs, filepath.ToSlash(prefix+filepath.Join(baseDir, rule, all)))
 		}
 		// case `/foo` => `{baseDir}/foo`
 		// case `**/foo` => `{baseDir}/**/foo`
 		// case `/foo/**` => `{baseDir}/foo/**`
 		// case `**/foo/**` => `{baseDir}/**/foo/**`
 		if !endingSlash {
-			glob = prefix + filepath.Join(baseDir, rule)
+			globs = append(globs, filepath.ToSlash(prefix+filepath.Join(baseDir, rule)))
 		}
 	} else {
 		// case `foo/`, `foo` => `{baseDir}/**/foo/**`
 		if !endingGlobstar {
-			glob = prefix + filepath.Join(baseDir, all, rule, all)
+			globs = append(globs, filepath.ToSlash(prefix+filepath.Join(baseDir, all, rule, all)))
 		}
 		// case `foo` => `{baseDir}/**/foo`
 		// case `foo/**` => `{baseDir}/**/foo/**`
 		if !endingSlash {
-			glob = prefix + filepath.Join(baseDir, all, rule)
+			globs = append(globs, filepath.ToSlash(prefix+filepath.Join(baseDir, all, rule)))
 		}
 	}
-	return filepath.ToSlash(glob)
+	return globs
 }
 
 func (sc *Scanner) newMetrics(fileCount int, scanStartTime time.Time) *ScanMetrics {
@@ -449,13 +441,13 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 		log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
 		return []snyk.Issue{}, nil
 	}
-	sc.trackResult(err == nil, scanMetrics, path)
+	sc.trackResult(err == nil, scanMetrics)
 	return issues, err
 }
 
 func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg string, scanMetrics *ScanMetrics) {
 	sc.errorReporter.CaptureErrorAndReportAsIssue(path, errors.Wrap(err, msg))
-	sc.trackResult(err == nil, scanMetrics, path)
+	sc.trackResult(err == nil, scanMetrics)
 }
 
 func (sc *Scanner) createBundle(
@@ -549,7 +541,7 @@ type UploadStatus struct {
 	TotalFiles    int
 }
 
-func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics, folderPath string) {
+func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics) {
 	var result ux2.Result
 	if success {
 		result = ux2.Success

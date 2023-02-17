@@ -277,7 +277,7 @@ func Test_IgnoresWithNegationInSnykCode(t *testing.T) {
 
 	calls := codeClientMock.GetAllCalls("extendBundleWithSource")
 	assert.Len(t, calls, 1)
-	assert.Contains(t, scanner.ignorePatterns, "!**/temp")
+	assert.Contains(t, scanner.ignorePatterns, "!"+filepath.ToSlash(repobase+"/**/temp"))
 }
 
 func Test_IgnoresInSnykCode(t *testing.T) {
@@ -505,16 +505,14 @@ func Test_LoadIgnorePatternsAndCountFiles_RelativePathIgnores(t *testing.T) {
 	subDir := filepath.Join(tempDir, "evilfolder")
 	_ = os.Mkdir(subDir, 0755)
 	writeGitIgnoreIntoDir("*", t, subDir)
-	expectedSubDirPattern, err := filepath.Rel(tempDir, filepath.Join(subDir, "**/*"))
-	assert.NoError(t, err)
-	expectedSubDirPattern = filepath.ToSlash(expectedSubDirPattern)
+	expectedSubDirPattern := filepath.ToSlash(filepath.Join(subDir, "**/*"))
 
 	sc := Scanner{}
-	_, err = sc.loadIgnorePatternsAndCountFiles(tempDir)
+	_, err := sc.loadIgnorePatternsAndCountFiles(tempDir)
 
 	assert.NoError(t, err)
 	assert.Contains(t, sc.ignorePatterns, expectedSubDirPattern)
-	assert.Len(t, sc.ignorePatterns, len(getDefaultIgnorePatterns())+1)
+	assert.Len(t, sc.ignorePatterns, len(getDefaultIgnorePatterns())+2)
 }
 
 func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {
