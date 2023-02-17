@@ -48,7 +48,7 @@ builds:
       - goarch: arm64
         goos: windows
     ldflags:
-      - -s -w -X github.com/snyk/snyk-ls/application/config.Version={{.Version}} -X github.com/snyk/snyk-ls/application/config.LsProtocolVersion={{.Env.LS_PROTOCOL_VERSION}} -X 'github.com/snyk/snyk-ls/application/config.Development=false'
+      - -s -w -X github.com/snyk/snyk-ls/application/config.Version={{.Version}} -X github.com/snyk/snyk-ls/application/config.LsProtocolVersion={{.Env.LS_PROTOCOL_VERSION}} -X 'github.com/snyk/snyk-ls/application/config.Development=false' -X 'github.com/snyk/snyk-ls/application/config.LicenseInformation={{.Env.LICENSES}}'
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 checksum:
