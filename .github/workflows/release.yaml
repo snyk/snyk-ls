@@ -121,13 +121,27 @@ jobs:
           git tag "v$(git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)"
           git push --tags
 
+      - name: create-license-report
+        run: |
+          go install github.com/google/go-licenses@latest
+          LICENSES=$(go-licenses report . --ignore github.com/snyk/snyk-ls)
+          echo 'LICENSES<<EOF' >> $GITHUB_OUTPUT
+          echo $LICENSES >> $GITHUB_OUTPUT
+          echo 'EOF' >> $GITHUB_OUTPUT
+          echo $LICENSES
+
       - name: Release binaries with GoReleaser
         uses: goreleaser/goreleaser-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
-          LICENSES: {{ go-licenses report . --ignore github.com/snyk/snyk-ls }}
+          LICENSES: ${{ steps.create-license-report.outputs.LICENSES }}
         with:
           version: 1.12.3
           args: release --rm-dist
+
+      - name: Output compiled licenses
+        run: |
+          chmod +x build/snyk-ls_linux_amd64_v1/snyk-ls
+          build/snyk-ls_linux_amd64_v1/snyk-ls -licenses

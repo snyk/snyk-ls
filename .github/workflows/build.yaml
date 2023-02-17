@@ -251,7 +251,6 @@ jobs:
           push: true
   test-release:
     name: test-release
-    needs: [ integration-tests, unit-tests, race-test, proxy-test ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -265,7 +264,23 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
+      - name: create-license-report
+        run: |
+          go install github.com/google/go-licenses@latest
+          LICENSES=$(go-licenses report . --ignore github.com/snyk/snyk-ls)
+          echo 'LICENSES<<EOF' >> $GITHUB_OUTPUT
+          echo $LICENSES >> $GITHUB_OUTPUT
+          echo 'EOF' >> $GITHUB_OUTPUT
+          echo $LICENSES
+
       - name: Do test release with goreleaser
         uses: goreleaser/goreleaser-action@v3
+        env:
+          LICENSES: ${{ steps.create-report.outputs.LICENSES }}
         with:
           args: build --rm-dist --single-target --snapshot
+
+      - name: Output compiled licenses
+        run: |
+          chmod +x build/snyk-ls_linux_amd64_v1/snyk-ls
+          build/snyk-ls_linux_amd64_v1/snyk-ls -licenses
