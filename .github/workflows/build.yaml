@@ -264,7 +264,8 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: create-license-report
+      - name: Create License Report
+        id: create_license_report
         run: |
           go install github.com/google/go-licenses@latest
           LICENSES=$(go-licenses report . --ignore github.com/snyk/snyk-ls)
@@ -276,7 +277,7 @@ jobs:
       - name: Do test release with goreleaser
         uses: goreleaser/goreleaser-action@v3
         env:
-          LICENSES: ${{ steps.create-report.outputs.LICENSES }}
+          LICENSES: ${{ steps.create_license_report.outputs.LICENSES }}
         with:
           args: build --rm-dist --single-target --snapshot
 

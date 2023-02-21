@@ -116,12 +116,13 @@ jobs:
             --role-arn "arn:aws:iam::198361731867:role/Snyk-Assets-WriteOnly" \
             --region "${{ secrets.AWS_REGION }}" \
 
-      - name: Create release tag
+      - name: Create Release Tag
         run: |
           git tag "v$(git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)"
           git push --tags
 
-      - name: create-license-report
+      - name: Create License Report
+        id: create_license_report
         run: |
           go install github.com/google/go-licenses@latest
           LICENSES=$(go-licenses report . --ignore github.com/snyk/snyk-ls)
@@ -136,7 +137,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
-          LICENSES: ${{ steps.create-license-report.outputs.LICENSES }}
+          LICENSES: ${{ steps.create_license_report.outputs.LICENSES }}
         with:
           version: 1.12.3
           args: release --rm-dist
