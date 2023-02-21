@@ -584,6 +584,73 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	)
 }
 
+func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
+	loc := setupServer(t)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
+	_, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	filePath, fileDir := code.TempWorkdirWithVulnerabilities(t)
+
+	didOpenParams := sglsp.DidOpenTextDocumentParams{TextDocument: sglsp.TextDocumentItem{
+		URI: uri.PathToUri(filePath),
+	}}
+
+	folder := workspace.NewFolder(fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier())
+	workspace.Get().AddFolder(folder)
+
+	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.False(t, folder.IsScanned())
+}
+
+func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
+	loc := setupServer(t)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
+	_, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	filePath, fileDir := code.TempWorkdirWithVulnerabilities(t)
+	fileUri := sendFileSavedMessage(t, filePath, fileDir, loc)
+
+	assert.Eventually(
+		t,
+		checkForPublishedDiagnostics(uri.PathFromUri(fileUri), 1),
+		time.Second,
+		time.Millisecond,
+	)
+
+	jsonRPCRecorder.ClearNotifications()
+
+	didOpenParams := sglsp.DidOpenTextDocumentParams{
+		TextDocument: sglsp.TextDocumentItem{
+			URI:     fileUri,
+			Version: 1,
+			Text:    "",
+		}}
+
+	_, err = loc.Client.Call(ctx, textDocumentDidOpenOperation, didOpenParams)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Eventually(
+		t,
+		checkForPublishedDiagnostics(uri.PathFromUri(fileUri), 1),
+		5*time.Second,
+		time.Millisecond,
+	)
+}
+
 func Test_textDocumentDidSave_manualScanningMode_doesNotScan(t *testing.T) {
 	loc := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
@@ -610,7 +677,7 @@ func sendFileSavedMessage(t *testing.T, filePath, fileDir string, loc server.Loc
 	}
 	workspace.Get().AddFolder(workspace.NewFolder(fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier()))
 
-	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
+	_, err := loc.Client.Call(ctx, textDocumentDidSaveOperation, didSaveParams)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -22,9 +22,8 @@ DEV_GOARCH := $(shell go env GOARCH)
 DEV_GOOS := $(shell go env GOOS)
 GOPATH := $(shell go env GOPATH)
 VERSION := $(shell git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)
-LICENSES := $(shell go-licenses report . --ignore github.com/snyk/snyk-ls)
 COMMIT := $(shell git show -s --format=%h)
-LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true' -X 'github.com/snyk/snyk-ls/application/config.LicenseInformation=$(LICENSES)' -X 'github.com/snyk/snyk-ls/application/config.Version=v$(VERSION)-SNAPSHOT-$(COMMIT)'"
+LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true' -X 'github.com/snyk/snyk-ls/application/config.Version=v$(VERSION)-SNAPSHOT-$(COMMIT)'"
 
 PARALLEL := "-p=1"
 NOCACHE := "-count=1"
