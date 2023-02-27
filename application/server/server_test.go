@@ -132,7 +132,7 @@ func startServer(callBackFn onCallbackFn) server.Local {
 		},
 	}
 
-	handlers := &handler.Map{}
+	handlers := handler.Map{}
 	loc := server.NewLocal(handlers, opts)
 	srv = loc.Server
 	initHandlers(srv, handlers)
@@ -893,7 +893,9 @@ func Test_IntegrationHoverResults(t *testing.T) {
 		t.Fatal(err, "Hover retrieval failed")
 	}
 
-	assert.Equal(t, hoverResult.Contents.Value, di.HoverService().GetHover(uri.PathToUri(testPath), converter.FromPosition(testPosition)).Contents.Value)
+	assert.Equal(t,
+		hoverResult.Contents.Value,
+		di.HoverService().GetHover(uri.PathToUri(testPath), converter.FromPosition(testPosition)).Contents.Value)
 	assert.Equal(t, hoverResult.Contents.Kind, "markdown")
 }
 func Test_SmokeSnykCodeFileScan(t *testing.T) {

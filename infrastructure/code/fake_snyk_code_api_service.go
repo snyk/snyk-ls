@@ -72,10 +72,8 @@ var (
 	}
 
 	FakeCodeAction = snyk.CodeAction{
-		Title:       "FakeAction",
-		IsPreferred: false,
-		Edit:        snyk.WorkspaceEdit{},
-		Command:     FakeCommand,
+		Title:   "FakeAction",
+		Command: &FakeCommand,
 	}
 
 	FakeFilters = []string{".cjs", ".ejs", ".es", ".es6", ".htm", ".html", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".vue", ".java", ".erb", ".haml", ".rb", ".rhtml", ".slim", ".kt", ".swift", ".cls", ".config", ".pom", ".wxs", ".xml", ".xsd", ".aspx", ".cs", ".py", ".go", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".php", ".phtml"}
@@ -167,7 +165,9 @@ func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (configFiles []string
 	return make([]string, 0), FakeFilters, nil
 }
 
-func (f *FakeSnykCodeClient) CreateBundle(_ context.Context, files map[string]string) (bundleHash string, missingFiles []string, err error) {
+func (f *FakeSnykCodeClient) CreateBundle(_ context.Context,
+	files map[string]string,
+) (bundleHash string, missingFiles []string, err error) {
 	if f.FailOnCreateBundle {
 		return "", nil, errors.New("Mock Code client failed intentionally on CreateBundle")
 	}

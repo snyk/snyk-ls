@@ -17,6 +17,7 @@
 package lsp
 
 import (
+	"github.com/google/uuid"
 	sglsp "github.com/sourcegraph/go-lsp"
 )
 
@@ -184,7 +185,7 @@ type ServerCapabilities struct {
 	DocumentSymbolProvider           bool                                   `json:"documentSymbolProvider,omitempty"`
 	WorkspaceSymbolProvider          bool                                   `json:"workspaceSymbolProvider,omitempty"`
 	ImplementationProvider           bool                                   `json:"implementationProvider,omitempty"`
-	CodeActionProvider               bool                                   `json:"codeActionProvider,omitempty"`
+	CodeActionProvider               *CodeActionOptions                     `json:"codeActionProvider,omitempty"`
 	CodeLensProvider                 *sglsp.CodeLensOptions                 `json:"codeLensProvider,omitempty"`
 	DocumentFormattingProvider       bool                                   `json:"documentFormattingProvider,omitempty"`
 	DocumentRangeFormattingProvider  bool                                   `json:"documentRangeFormattingProvider,omitempty"`
@@ -550,7 +551,14 @@ type CodeActionParams struct {
  * A CodeAction represents a change that can be performed in code, e.g. to fix a problem or
  * to refactor code.
  *
- * A CodeAction must set either `edit` and/or a `command`. If both are supplied, the `edit` is applied first, then the `command` is executed.
+ * A CodeAction can be of these forms:
+ * 1. Has Edit but No Command - A simple edit that will be applied when the action is invoked
+ * 2. Has Command but No Edit - A command that will be executed when the action is invoked
+ * 3. Has both Edit and Command - A command that will be executed after the edit will be applied
+ * 4. Has neither Edit nor Command - A deferred code action that would be resolved after codeAction/resolve is received.
+ *
+ * A deferred code action would have both Edit & Command omitted, and when invoked by the user, the server would send
+ * a new CodeAction with the Edit and/or Command fields populated.
  */
 type CodeAction struct {
 	/**
@@ -576,7 +584,7 @@ type CodeAction struct {
 	 *
 	 * @since 3.15.0
 	 */
-	IsPreferred bool `json:"isPreferred,omitempty"`
+	IsPreferred *bool `json:"isPreferred,omitempty"`
 	/**
 	 * Marks that the code action cannot currently be applied.
 	 *
@@ -605,23 +613,25 @@ type CodeAction struct {
 	/**
 	 * The workspace edit this code action performs.
 	 */
-	Edit sglsp.WorkspaceEdit `json:"edit,omitempty"`
+	Edit *sglsp.WorkspaceEdit `json:"edit,omitempty"`
 
 	/**
 	 * A command this code action executes. If a code action
-	 * provides a edit and a command, first the edit is
+	 * provides an edit and a command, first the edit is
 	 * executed and then the command.
 	 */
-	Command sglsp.Command `json:"command,omitempty"`
+	Command *sglsp.Command `json:"command,omitempty"`
 
 	/**
 	 * A data entry field that is preserved on a code action between
 	 * a `textDocument/codeAction` and a `codeAction/resolve` request.
 	 *
-	 * @since 3.16.0
+	 * Holds a UUID that is used to identify the code action in the resolve request.
 	 */
-	Data any `json:"data,omitempty"`
+	Data *CodeActionData `json:"data,omitempty"`
 }
+
+type CodeActionData uuid.UUID
 
 type CodeActionTriggerKind float64
 
@@ -750,4 +760,8 @@ type MarkerPosition struct {
 type Position struct {
 	Cols Point `json:"cols"`
 	Rows Point `json:"rows"`
+}
+
+type CodeActionOptions struct {
+	ResolveProvider bool `json:"resolveProvider,omitempty"`
 }

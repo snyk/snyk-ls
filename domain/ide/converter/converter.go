@@ -52,6 +52,11 @@ func ToCodeActions(issues []snyk.Issue) (actions []lsp.CodeAction) {
 }
 
 func ToCodeAction(issue snyk.Issue, action snyk.CodeAction) lsp.CodeAction {
+	var id *lsp.CodeActionData = nil
+	if action.Uuid != nil {
+		i := lsp.CodeActionData(*action.Uuid)
+		id = &i
+	}
 	return lsp.CodeAction{
 		Title:       action.Title,
 		Kind:        lsp.QuickFix,
@@ -59,23 +64,32 @@ func ToCodeAction(issue snyk.Issue, action snyk.CodeAction) lsp.CodeAction {
 		IsPreferred: action.IsPreferred,
 		Edit:        ToWorkspaceEdit(action.Edit),
 		Command:     ToCommand(action.Command),
+		Data:        id,
 	}
 }
 
-func ToCommand(command snyk.Command) sglsp.Command {
-	return sglsp.Command{
+func ToCommand(command *snyk.Command) *sglsp.Command {
+	if command == nil {
+		return nil
+	}
+
+	return &sglsp.Command{
 		Title:     command.Title,
 		Command:   command.CommandId,
 		Arguments: command.Arguments,
 	}
 }
 
-func ToWorkspaceEdit(edit snyk.WorkspaceEdit) sglsp.WorkspaceEdit {
+func ToWorkspaceEdit(edit *snyk.WorkspaceEdit) *sglsp.WorkspaceEdit {
+	if edit == nil {
+		return nil
+	}
 	lspMap := map[string][]sglsp.TextEdit{}
 	for k, v := range edit.Changes {
 		lspMap[string(uri.PathToUri(k))] = ToTextEdits(v)
 	}
-	return sglsp.WorkspaceEdit{Changes: lspMap}
+
+	return &sglsp.WorkspaceEdit{Changes: lspMap}
 }
 
 func ToTextEdits(edits []snyk.TextEdit) (lspEdits []sglsp.TextEdit) {

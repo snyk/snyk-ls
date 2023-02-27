@@ -312,7 +312,7 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 	if err != nil {
 		t.Fatal("can't create temp dir")
 	}
-	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
+	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
 	_, sc := setupTestScanner()
 
 	_, err = sc.loadIgnorePatternsAndCountFiles(tempDir)
