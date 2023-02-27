@@ -52,7 +52,7 @@ type Issue struct {
 	IssueDescriptionURL *url.URL
 	// CodeActions can contain workspace edits or commands to be executed
 	CodeActions []CodeAction
-	// Commands that can be executed
+	// Commands that can be executed via a codelens
 	Commands []Command
 	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
 	AdditionalData any

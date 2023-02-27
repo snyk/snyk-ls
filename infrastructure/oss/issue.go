@@ -30,18 +30,14 @@ import (
 
 func (i *ossIssue) GetCodeActions() (actions []snyk.CodeAction) {
 	title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", i.Title, i.PackageName)
-	return []snyk.CodeAction{
-		{
-			Title:       title,
-			IsPreferred: true,
-			Edit:        snyk.WorkspaceEdit{},
-			Command: snyk.Command{
-				Title:     title,
-				CommandId: snyk.OpenBrowserCommand,
-				Arguments: []any{i.createIssueURL().String()},
-			},
-		},
+	command := &snyk.Command{
+		Title:     title,
+		CommandId: snyk.OpenBrowserCommand,
+		Arguments: []any{i.createIssueURL().String()},
 	}
+
+	action, _ := snyk.NewCodeAction(title, nil, command)
+	return []snyk.CodeAction{action}
 }
 
 func (i *ossIssue) getExtendedMessage(issue ossIssue) string {
@@ -60,7 +56,12 @@ func (i *ossIssue) getExtendedMessage(issue ossIssue) string {
 		strings.ToUpper(issue.Severity),
 	)
 
-	return fmt.Sprintf("\n### %s: %s affecting %s package \n%s \n%s", issue.Id, title, issue.PackageName, summary, description)
+	return fmt.Sprintf("\n### %s: %s affecting %s package \n%s \n%s",
+		issue.Id,
+		title,
+		issue.PackageName,
+		summary,
+		description)
 }
 
 func (i *ossIssue) createCveLink() string {

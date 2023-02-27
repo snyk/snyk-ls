@@ -48,7 +48,11 @@ type Workspace struct {
 	trustRequestOngoing bool // for debouncing
 }
 
-func New(instrumentor performance.Instrumentor, scanner snyk.Scanner, hoverService hover.Service, scanNotifier snyk.ScanNotifier) *Workspace {
+func New(instrumentor performance.Instrumentor,
+	scanner snyk.Scanner,
+	hoverService hover.Service,
+	scanNotifier snyk.ScanNotifier,
+) *Workspace {
 	return &Workspace{
 		folders:      make(map[string]*Folder, 0),
 		instrumentor: instrumentor,
@@ -98,6 +102,15 @@ func (w *Workspace) AddFolder(f *Folder) {
 		w.folders = map[string]*Folder{}
 	}
 	w.folders[f.Path()] = f
+}
+
+func (w *Workspace) IssuesFor(path string, r snyk.Range) []snyk.Issue {
+	folder := w.GetFolderContaining(path)
+	if folder == nil {
+		return nil
+	}
+
+	return folder.IssuesFor(path, r)
 }
 
 func (w *Workspace) GetFolderContaining(path string) (folder *Folder) {

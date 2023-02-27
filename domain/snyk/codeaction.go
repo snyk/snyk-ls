@@ -16,27 +16,83 @@
 
 package snyk
 
+import (
+	"errors"
+
+	"github.com/google/uuid"
+)
+
+// CodeAction represents a code action that can be executed by the client using an in-document menu.
+// This type should be created by the NewCodeAction or NewDeferredCodeAction functions.
+//
+// There are 3 types of code actions:
+// - No Edit + No Command - Deferred code action, which means that either DeferredEdit or DeferredCommand must be set.
+// - Only edit/Only command - Resolved immediately to run the edit/command.
+// - Both edit and command - Resolved immediately to run edit first and then command.
 type CodeAction struct {
-	/**
-	 * A short, human-readable, title for this code action.
-	 */
+	// Title is a short, human-readable, title for this code action.
 	Title string
 
-	/**
-	 * Marks this as a preferred action. Preferred actions are used by the `auto fix` command and can be targeted
-	 * by keybindings.
-	 *
-	 * A quick fix should be marked preferred if it properly addresses the underlying error.
-	 * A refactoring should be marked preferred if it is the most reasonable choice of actions to take.
-	 *
-	 * @since 3.15.0
-	 */
-	IsPreferred bool
+	IsPreferred *bool
 
-	/**
-	 * The workspace edit this code action performs.
-	 */
-	Edit WorkspaceEdit
+	// Edit is an optional WorkspaceEdit literal that can be executed by the client.
+	Edit *WorkspaceEdit
 
-	Command Command
+	// DeferredEdit is a function that returns a WorkspaceEdit.
+	// Used for heavy calculations that shouldn't be done ahead of time.
+	// A CodeAction cannot have both Edit and DeferredEdit.
+	DeferredEdit *func() *WorkspaceEdit
+
+	// Command that will be executed after the Edit (if present).
+	Command *Command
+
+	// DeferredCommand is a function that returns a Command.
+	// Used for heavy calculations that shouldn't be done ahead of time.
+	// A CodeAction cannot have both Command and DeferredCommand.
+	DeferredCommand *func() *Command
+
+	// UUID is a unique identifier for this code action. This is used for deferred resolution of a command or edit.
+	Uuid *uuid.UUID
+}
+
+func NewCodeAction(title string, edit *WorkspaceEdit, command *Command) (CodeAction, error) {
+	if edit == nil && command == nil {
+		return CodeAction{}, errors.New("a non-deferred action must have either an edit or a command")
+	}
+
+	action := CodeAction{
+		Title:   title,
+		Edit:    edit,
+		Command: command,
+	}
+	return action, nil
+}
+
+func NewDeferredCodeAction(title string,
+	deferredEdit *func() *WorkspaceEdit,
+	deferredCommand *func() *Command,
+) (CodeAction, error) {
+	if deferredEdit == nil && deferredCommand == nil {
+		return CodeAction{}, errors.New("deferredEdit and deferredCommand cannot both be nil")
+	}
+	id := uuid.New()
+
+	action := CodeAction{
+		Title:           title,
+		DeferredEdit:    deferredEdit,
+		DeferredCommand: deferredCommand,
+		Uuid:            &id,
+	}
+	return action, nil
+}
+
+func NewPreferredCodeAction(title string, edit *WorkspaceEdit, command *Command) (CodeAction, error) {
+	action, err := NewCodeAction(title, edit, command)
+	if err != nil {
+		return CodeAction{}, err
+	}
+
+	action.IsPreferred = new(bool)
+	*action.IsPreferred = true
+	return action, nil
 }

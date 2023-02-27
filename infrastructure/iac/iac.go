@@ -69,7 +69,11 @@ type Scanner struct {
 	runningScans  map[sglsp.DocumentURI]*scans.ScanProgress
 }
 
-func New(instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux2.Analytics, cli cli.Executor) *Scanner {
+func New(instrumentor performance.Instrumentor,
+	errorReporter error_reporting.ErrorReporter,
+	analytics ux2.Analytics,
+	cli cli.Executor,
+) *Scanner {
 	return &Scanner{
 		instrumentor:  instrumentor,
 		errorReporter: errorReporter,
@@ -148,7 +152,11 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	return issues, nil
 }
 
-func (iac *Scanner) retrieveIssues(scanResults []iacScanResult, issues []snyk.Issue, workspacePath string, err error) []snyk.Issue {
+func (iac *Scanner) retrieveIssues(scanResults []iacScanResult,
+	issues []snyk.Issue,
+	workspacePath string,
+	err error,
+) []snyk.Issue {
 	if len(scanResults) > 0 {
 		for _, s := range scanResults {
 			isIgnored := ignorableIacErrorCodes[s.ErrorCode]
@@ -166,7 +174,10 @@ func (iac *Scanner) isSupported(documentURI sglsp.DocumentURI) bool {
 	return uri.IsUriDirectory(documentURI) || extensions[ext]
 }
 
-func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, workspacePath string) (scanResults []iacScanResult, err error) {
+func (iac *Scanner) doScan(ctx context.Context,
+	documentURI sglsp.DocumentURI,
+	workspacePath string,
+) (scanResults []iacScanResult, err error) {
 	method := "iac.doScan"
 	s := iac.instrumentor.StartSpan(ctx, method)
 	defer iac.instrumentor.Finish(s)
@@ -318,7 +329,6 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 	}
 	codeActionTitle := fmt.Sprintf("Open description of '%s' in browser (Snyk)", issue.Title)
-	issueURL := iac.createIssueURL(issue.PublicID)
 
 	// Try to gather the length of the line for the range
 	rangeStart := defaultRangeStart
@@ -335,6 +345,13 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		}
 	}
 
+	issueURL := iac.createIssueURL(issue.PublicID)
+	command := newIacCommand(codeActionTitle, issueURL)
+	action, err := snyk.NewCodeAction(codeActionTitle, nil, command)
+	if err != nil {
+		log.Err(err).Msg("Cannot create code action")
+	}
+
 	return snyk.Issue{
 		ID: issue.PublicID,
 		Range: snyk.Range{
@@ -348,16 +365,17 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		Product:             product.ProductInfrastructureAsCode,
 		IssueDescriptionURL: issueURL,
 		IssueType:           snyk.InfrastructureIssue,
-		CodeActions: []snyk.CodeAction{{
-			Title:       codeActionTitle,
-			IsPreferred: false,
-			Command: snyk.Command{
-				Title:     codeActionTitle,
-				CommandId: snyk.OpenBrowserCommand,
-				Arguments: []any{issueURL.String()},
-			},
-		}},
+		CodeActions:         []snyk.CodeAction{action},
 	}
+}
+
+func newIacCommand(codeActionTitle string, issueURL *url.URL) *snyk.Command {
+	command := &snyk.Command{
+		Title:     codeActionTitle,
+		CommandId: snyk.OpenBrowserCommand,
+		Arguments: []any{issueURL.String()},
+	}
+	return command
 }
 
 func (iac *Scanner) createIssueURL(id string) *url.URL {

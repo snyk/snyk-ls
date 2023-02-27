@@ -23,11 +23,13 @@ import (
 
 	"github.com/adrg/xdg"
 
+	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/command"
 	"github.com/snyk/snyk-ls/application/config"
 	appNotification "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
+	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	errorreporting "github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	performance2 "github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
@@ -63,6 +65,7 @@ var scanner snyk.Scanner
 var cliInitializer *cli2.Initializer
 var scanNotifier snyk.ScanNotifier
 var commandService snyk.CommandService
+var codeActionService codeaction.CodeActionsService
 
 var initMutex = &sync.Mutex{}
 
@@ -123,7 +126,10 @@ func initInfrastructure() {
 }
 
 func initApplication() {
+	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier) // don't use getters or it'll deadlock
+	workspace.Set(w)
 	commandService = command.NewCommandService()
+	codeActionService = codeaction.NewService(w)
 }
 
 // TODO this is becoming a hot mess we need to unify integ. test strategies
@@ -163,6 +169,8 @@ func TestInit(t *testing.T) {
 	)
 	hoverService = hover.NewDefaultService(analytics)
 	commandService = snyk.NewCommandServiceMock()
+	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier) // don't use getters or it'll deadlock
+	workspace.Set(w)
 	t.Cleanup(
 		func() {
 			fakeClient.Clear()
@@ -251,4 +259,10 @@ func CommandService() snyk.CommandService {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return commandService
+}
+
+func CodeActionService() codeaction.CodeActionsService {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return codeActionService
 }

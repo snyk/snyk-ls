@@ -30,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func createRuleLink() (u *url.URL) {
@@ -278,10 +279,11 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 			// convert the documentURI to a path according to our conversion
 			path := loc.PhysicalLocation.ArtifactLocation.URI
 
-			startLine := loc.PhysicalLocation.Region.StartLine - 1
-			endLine := loc.PhysicalLocation.Region.EndLine - 1
-			startCol := loc.PhysicalLocation.Region.StartColumn - 1
-			endCol := loc.PhysicalLocation.Region.EndColumn
+			position := loc.PhysicalLocation.Region
+			startLine := position.StartLine - 1
+			endLine := util.Max(position.EndLine-1, startLine)
+			startCol := position.StartColumn - 1
+			endCol := util.Max(position.EndColumn-1, 0)
 
 			myRange := snyk.Range{
 				Start: snyk.Position{
