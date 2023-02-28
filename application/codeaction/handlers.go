@@ -14,7 +14,7 @@ type TextDocumentCodeActionHandler func(context.Context, lsp.CodeActionParams) (
 type CodeActionResolveHandler func(context.Context, lsp.CodeAction) (*lsp.CodeAction, error)
 
 // ResolveCodeActionHandler returns a jrpc2.Handler that can be used to handle the "codeAction/resolve" LSP method
-func ResolveCodeActionHandler(service CodeActionsService) CodeActionResolveHandler {
+func ResolveCodeActionHandler(service *CodeActionsService) CodeActionResolveHandler {
 	logger := log.Logger.With().Str("method", "ResolveCodeActionHandler").Logger()
 
 	return func(ctx context.Context, params lsp.CodeAction) (*lsp.CodeAction, error) {
@@ -32,7 +32,7 @@ func ResolveCodeActionHandler(service CodeActionsService) CodeActionResolveHandl
 }
 
 // GetCodeActionHandler returns a jrpc2.Handler that can be used to handle the "textDocument/codeAction" LSP method
-func GetCodeActionHandler(service CodeActionsService) TextDocumentCodeActionHandler {
+func GetCodeActionHandler(service *CodeActionsService) TextDocumentCodeActionHandler {
 	const debounceDuration = 50 * time.Millisecond
 
 	// We share a mutex between all the handler calls to prevent concurrent runs.

@@ -10,6 +10,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/application/watcher"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -49,7 +50,7 @@ func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
 			},
 		},
 	}
-	service, codeActionsParam := setupWithSingleIssue(expectedIssue)
+	service, codeActionsParam, _ := setupWithSingleIssue(expectedIssue)
 
 	// Act
 	actions := service.GetCodeActions(codeActionsParam)
@@ -57,6 +58,27 @@ func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
 	// Assert
 	assert.Len(t, actions, 1)
 	assert.Equal(t, expectedIssue.CodeActions[0].Command.CommandId, actions[0].Command.Command)
+}
+
+func Test_GetCodeActions_FileIsDirty_ReturnsEmptyResults(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	fakeIssue := snyk.Issue{
+		CodeActions: []snyk.CodeAction{
+			{
+				Title:   "Fix this",
+				Command: &code.FakeCommand,
+			},
+		},
+	}
+	service, codeActionsParam, w := setupWithSingleIssue(fakeIssue)
+	w.FileChanged(codeActionsParam.TextDocument.URI) // File is dirty until it is saved
+
+	// Act
+	actions := service.GetCodeActions(codeActionsParam)
+
+	// Assert
+	assert.Empty(t, actions)
 }
 
 func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
@@ -112,7 +134,7 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 			},
 		},
 	}
-	service, codeActionsParam := setupWithSingleIssue(expectedIssue)
+	service, codeActionsParam, _ := setupWithSingleIssue(expectedIssue)
 
 	// Act
 	actions := service.GetCodeActions(codeActionsParam)
@@ -148,21 +170,22 @@ func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
 	assert.Error(t, err, "Expected error when resolving a code action with a key that doesn't exist")
 }
 
-func setupService() codeaction.CodeActionsService {
+func setupService() *codeaction.CodeActionsService {
 	providerMock := new(mockIssuesProvider)
 	providerMock.On("IssuesFor", mock.Anything, mock.Anything).Return([]snyk.Issue{})
-	service := codeaction.NewService(providerMock)
+	service := codeaction.NewService(providerMock, watcher.NewFileWatcher())
 	return service
 }
 
-func setupWithSingleIssue(issue snyk.Issue) (codeaction.CodeActionsService, lsp.CodeActionParams) {
+func setupWithSingleIssue(issue snyk.Issue) (*codeaction.CodeActionsService, lsp.CodeActionParams, *watcher.FileWatcher) {
 	r := exampleRange
 	uriPath := documentUriExample
 	path := uri.PathFromUri(uriPath)
 	providerMock := new(mockIssuesProvider)
 	issues := []snyk.Issue{issue}
 	providerMock.On("IssuesFor", path, converter.FromRange(r)).Return(issues)
-	service := codeaction.NewService(providerMock)
+	fileWatcher := watcher.NewFileWatcher()
+	service := codeaction.NewService(providerMock, fileWatcher)
 
 	codeActionsParam := lsp.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
@@ -171,5 +194,5 @@ func setupWithSingleIssue(issue snyk.Issue) (codeaction.CodeActionsService, lsp.
 		Range:   r,
 		Context: lsp.CodeActionContext{},
 	}
-	return service, codeActionsParam
+	return service, codeActionsParam, fileWatcher
 }
