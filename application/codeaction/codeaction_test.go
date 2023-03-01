@@ -89,9 +89,6 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 	var issues []snyk.Issue
 	providerMock := new(mockIssuesProvider)
 	providerMock.On("IssuesFor", mock.Anything, mock.Anything).Return(issues)
-	//service := codeaction.CodeActionsService{
-	//	IssuesProvider: providerMock,
-	//}
 	service := codeaction.NewService(providerMock, watcher.NewFileWatcher())
 	codeActionsParam := lsp.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
@@ -164,7 +161,6 @@ func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
 
 	// Act
 	var err error
-	//var resolvedAction lsp.CodeAction
 	_, err = service.ResolveCodeAction(ca)
 
 	// Assert
