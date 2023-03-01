@@ -385,6 +385,11 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 
 		logger.Info().Msg("Receiving")
 		folder := workspace.Get().GetFolderContaining(filePath)
+		if folder == nil {
+			logger.Warn().Msg("No folder found for file " + filePath)
+			return nil, nil
+		}
+
 		issues := folder.DocumentDiagnosticsFromCache(filePath)
 		filteredIssues := workspace.FilterIssues(issues, config.CurrentConfig().GetDisplayableIssueTypes())
 
