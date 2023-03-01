@@ -81,7 +81,7 @@ const textDocumentDidSaveOperation = "textDocument/didSave"
 func initHandlers(srv *jrpc2.Server, handlers handler.Map) {
 	handlers["initialize"] = initializeHandler(srv)
 	handlers["initialized"] = initializedHandler(srv)
-	handlers["textDocument/didChange"] = noOpHandler()
+	handlers["textDocument/didChange"] = textDocumentDidChangeHandler()
 	handlers["textDocument/didClose"] = noOpHandler()
 	handlers[textDocumentDidOpenOperation] = textDocumentDidOpenHandler()
 	handlers[textDocumentDidSaveOperation] = textDocumentDidSaveHandler()
@@ -98,6 +98,13 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map) {
 	handlers["workspace/didChangeConfiguration"] = workspaceDidChangeConfiguration(srv)
 	handlers["window/workDoneProgress/cancel"] = windowWorkDoneProgressCancelHandler()
 	handlers["workspace/executeCommand"] = executeCommandHandler(srv)
+}
+
+func textDocumentDidChangeHandler() jrpc2.Handler {
+	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (any, error) {
+		di.FileWatcher().SetFileAsChanged(params.TextDocument.URI)
+		return nil, nil
+	})
 }
 
 // WorkspaceWillDeleteFilesHandler handles the workspace/willDeleteFiles message that's raised by the client
@@ -206,6 +213,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 				TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{
 					Options: &sglsp.TextDocumentSyncOptions{
 						OpenClose:         true,
+						Change:            sglsp.TDSKIncremental,
 						WillSave:          true,
 						WillSaveWaitUntil: true,
 						Save:              &sglsp.SaveOptions{IncludeText: true},
@@ -405,6 +413,7 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		logger := log.With().Str("method", "TextDocumentDidSaveHandler").Logger()
 
 		logger.Info().Interface("params", params).Msg("Receiving")
+		di.FileWatcher().SetFileAsSaved(params.TextDocument.URI)
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 
 		// todo can we push cache management down?

@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
@@ -21,6 +22,10 @@ type issuesProvider interface {
 	IssuesFor(path string, r snyk.Range) []snyk.Issue
 }
 
+type dirtyFilesWatcher interface {
+	IsDirty(path sglsp.DocumentURI) bool
+}
+
 // CodeActionsService is an application-layer service for handling code actions.
 type CodeActionsService struct {
 	IssuesProvider issuesProvider
@@ -29,6 +34,7 @@ type CodeActionsService struct {
 	// This is used to resolve the code actions later on in ResolveCodeAction.
 	actionsCache map[uuid.UUID]cachedAction
 	logger       zerolog.Logger
+	fileWatcher  dirtyFilesWatcher
 }
 
 type cachedAction struct {
@@ -36,16 +42,21 @@ type cachedAction struct {
 	action snyk.CodeAction
 }
 
-func NewService(provider issuesProvider) CodeActionsService {
-	return CodeActionsService{
+func NewService(provider issuesProvider, fileWatcher dirtyFilesWatcher) *CodeActionsService {
+	return &CodeActionsService{
 		IssuesProvider: provider,
 		actionsCache:   make(map[uuid.UUID]cachedAction),
 		logger:         log.With().Str("service", "CodeActionsService").Logger(),
+		fileWatcher:    fileWatcher,
 	}
 }
 
 func (c *CodeActionsService) GetCodeActions(params lsp.CodeActionParams) []lsp.CodeAction {
 	c.logger.Info().Msg("Received code action request")
+	if c.fileWatcher.IsDirty(params.TextDocument.URI) {
+		c.logger.Info().Msg("File is dirty, skipping code actions")
+		return nil
+	}
 	path := uri.PathFromUri(params.TextDocument.URI)
 	r := converter.FromRange(params.Range)
 	issues := c.IssuesProvider.IssuesFor(path, r)
