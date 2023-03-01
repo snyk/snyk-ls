@@ -471,10 +471,7 @@ func createAutofixWorkspaceEdit(filePath string, fixedSourceCode string) (edit s
 func (s *AutofixResponse) toAutofixSuggestions(filePath string) (fixSuggestions []snyk.AutofixSuggestion) {
 	for _, fix := range s.AutofixSuggestions {
 		d := snyk.AutofixSuggestion{
-			FixCodeAction: snyk.CodeAction{
-				Title: AutofixCodeActionTitle,
-				Edit:  createAutofixWorkspaceEdit(filePath, fix),
-			},
+			AutofixEdit: createAutofixWorkspaceEdit(filePath, fix),
 		}
 		fixSuggestions = append(fixSuggestions, d)
 	}

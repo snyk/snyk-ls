@@ -121,10 +121,11 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 				Msg("sending diagnostics...")
 			p.End("Analysis complete.")
 
-			// TODO(alex.gronskiy): this should be correctly changed after the codeactions/resolves are
-			// finished. Currently, this will slow down propotionally to the amount of issues.
-			for i, issue := range issues {
-				issues[i] = b.enhanceWithAutofixSuggestionEdits(ctx, issue)
+			if config.CurrentConfig().IsSnykAutofixEnabled() {
+				// TODO(alex.gronskiy): logging
+				for i := range issues {
+					issues[i].CodeActions = append(issues[i].CodeActions, *b.createDeferredAutofixCodeAction(ctx, issues[i]))
+				}
 			}
 
 			return issues, nil
@@ -158,60 +159,67 @@ func (b *Bundle) getShardKey(rootPath string, authToken string) string {
 	return ""
 }
 
-// addAutofixSuggesitons possibly enhances the snyk code issue from the passed array
-// with autofix suggestions
-func (b *Bundle) enhanceWithAutofixSuggestionEdits(ctx context.Context, issue snyk.Issue) snyk.Issue {
-	if !config.CurrentConfig().IsSnykAutofixEnabled() {
-		// TODO(alex.gronskiy): logging
-		return issue
-	}
+// returns the deferred code action CodeAction which calls autofix.
+func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk.Issue) *snyk.CodeAction {
 
-	method := "code.enhanceWithAutofixSuggestionEdits"
-	s := b.instrumentor.StartSpan(ctx, method)
-	defer b.instrumentor.Finish(s)
+	// WIPP: check that all the captures are safe to go.
+	autofixEditCallback := func() *snyk.WorkspaceEdit {
+		method := "code.enhanceWithAutofixSuggestionEdits"
+		s := b.instrumentor.StartSpan(ctx, method)
+		defer b.instrumentor.Finish(s)
 
-	autofixOptions := AutofixOptions{
-		bundleHash: b.BundleHash,
-		shardKey:   b.getShardKey(b.rootPath, config.CurrentConfig().Token()),
-		filePath:   issue.AffectedFilePath,
-		issue:      issue,
-	}
+		autofixOptions := AutofixOptions{
+			bundleHash: b.BundleHash,
+			shardKey:   b.getShardKey(b.rootPath, config.CurrentConfig().Token()),
+			filePath:   issue.AffectedFilePath,
+			issue:      issue,
+		}
 
-	// Helper timers and stop channel for polling
-	pollingTicker := time.NewTicker(1 * time.Second)
-	defer pollingTicker.Stop()
-	timeoutTimer := time.NewTimer(10 * time.Second)
-	defer timeoutTimer.Stop()
-	done := make(chan struct{})
-
-	// Polling function just calls the endpoint and registers result, signalling `done` to the
-	// channel.
-	pollFunc := func() {
-		fixSuggestions, fixStatus, err := b.SnykCode.RunAutofix(s.Context(), autofixOptions)
-		if err != nil {
-			log.Error().
-				Err(err).Str("method", method).Str("requestId", b.requestId).
-				Str("stage", "requesting autofix").Msg("error requesting autofix")
-			close(done)
-		} else if fixStatus.message == completeStatus {
-			if len(fixSuggestions) > 0 {
-				// TODO(alex.gronskiy): currently, only the first ([0]) fix suggstion goes into the fix
-				issue.CodeActions = append(issue.CodeActions, fixSuggestions[0].FixCodeAction)
+		// Polling function just calls the endpoint and registers result, signalling `done` to the
+		// channel.
+		pollFunc := func() (edit *snyk.WorkspaceEdit, complete bool) {
+			log.Info().Msg("polling")
+			fixSuggestions, fixStatus, err := b.SnykCode.RunAutofix(s.Context(), autofixOptions)
+			edit = nil
+			complete = false
+			if err != nil {
+				log.Error().
+					Err(err).Str("method", method).Str("requestId", b.requestId).
+					Str("stage", "requesting autofix").Msg("error requesting autofix")
+				complete = true
+			} else if fixStatus.message == completeStatus {
+				if len(fixSuggestions) > 0 {
+					// TODO(alex.gronskiy): currently, only the first ([0]) fix suggstion goes into the fix
+					edit = &fixSuggestions[0].AutofixEdit
+				}
+				complete = true
 			}
-			close(done)
+			return edit, complete
+		}
+
+		// Actual polling loop.
+		pollingTicker := time.NewTicker(1 * time.Second)
+		defer pollingTicker.Stop()
+		timeoutTimer := time.NewTimer(10 * time.Second)
+		defer timeoutTimer.Stop()
+		for {
+			select {
+			case <-timeoutTimer.C:
+				log.Error().Str("method", "RunAutofix").Str("requestId", b.requestId).Msg("timeout requesting autofix")
+				return nil
+			case <-pollingTicker.C:
+				edit, complete := pollFunc()
+				if complete {
+					return edit
+				}
+			}
 		}
 	}
 
-	// Actuall polling loop.
-	for {
-		select {
-		case <-done:
-			return issue
-		case <-timeoutTimer.C:
-			log.Error().Str("method", "RunAutofix").Str("requestId", b.requestId).Msg("timeout requesting autofix")
-			close(done)
-		case <-pollingTicker.C:
-			pollFunc()
-		}
+	action, err := snyk.NewDeferredCodeAction("Attempt to AutoFix the issue (Snyk)", &autofixEditCallback, nil)
+	if err != nil {
+		log.Error().Msg("failed to create deferred autofix code action")
+		return nil
 	}
+	return &action
 }

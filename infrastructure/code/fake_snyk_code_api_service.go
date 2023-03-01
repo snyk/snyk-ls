@@ -261,33 +261,29 @@ func (f *FakeSnykCodeClient) RunAutofix(
 	suggestions := []snyk.AutofixSuggestion{
 		// First suggestion
 		{
-			FixCodeAction: snyk.CodeAction{
-				Edit: snyk.WorkspaceEdit{
-					Changes: map[string][]snyk.TextEdit{
-						FakeAutofixFileUri: {snyk.TextEdit{
-							Range: snyk.Range{
-								Start: snyk.Position{Line: 0, Character: 0},
-								End:   snyk.Position{Line: 10000, Character: 0},
-							},
-							NewText: FakeAutofixSuggestionNewText,
-						}},
-					},
+			AutofixEdit: snyk.WorkspaceEdit{
+				Changes: map[string][]snyk.TextEdit{
+					FakeAutofixFileUri: {snyk.TextEdit{
+						Range: snyk.Range{
+							Start: snyk.Position{Line: 0, Character: 0},
+							End:   snyk.Position{Line: 10000, Character: 0},
+						},
+						NewText: FakeAutofixSuggestionNewText,
+					}},
 				},
 			},
 		},
 		// Second suggestion -- currently dropped
 		{
-			FixCodeAction: snyk.CodeAction{
-				Edit: snyk.WorkspaceEdit{
-					Changes: map[string][]snyk.TextEdit{
-						FakeAutofixFileUri: {snyk.TextEdit{
-							Range: snyk.Range{
-								Start: snyk.Position{Line: 0, Character: 0},
-								End:   snyk.Position{Line: 10000, Character: 0},
-							},
-							NewText: "FAKE_AUTOFIX_UNUSED",
-						}},
-					},
+			AutofixEdit: snyk.WorkspaceEdit{
+				Changes: map[string][]snyk.TextEdit{
+					FakeAutofixFileUri: {snyk.TextEdit{
+						Range: snyk.Range{
+							Start: snyk.Position{Line: 0, Character: 0},
+							End:   snyk.Position{Line: 10000, Character: 0},
+						},
+						NewText: "FAKE_AUTOFIX_UNUSED",
+					}},
 				},
 			},
 		},

@@ -21,7 +21,7 @@ type AutofixSuggestion struct {
 	// CodeAction can contain workspace edits or commands to be executed.
 	// TODO(alex.gronskiy): currently we return full file fixed code and edits contain thus "full
 	// file replace".
-	// This is a known point of improvement which is easy to hard to implement but will be
-	// done on re-iteration.
-	FixCodeAction CodeAction
+	// This is a known point of improvement which is easy to implement but will be
+	// done later on re-iteration.
+	AutofixEdit WorkspaceEdit
 }
