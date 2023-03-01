@@ -72,7 +72,7 @@ func Test_GetCodeActions_FileIsDirty_ReturnsEmptyResults(t *testing.T) {
 		},
 	}
 	service, codeActionsParam, w := setupWithSingleIssue(fakeIssue)
-	w.FileChanged(codeActionsParam.TextDocument.URI) // File is dirty until it is saved
+	w.SetFileAsChanged(codeActionsParam.TextDocument.URI) // File is dirty until it is saved
 
 	// Act
 	actions := service.GetCodeActions(codeActionsParam)

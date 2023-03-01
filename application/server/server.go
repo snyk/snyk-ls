@@ -102,7 +102,7 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map) {
 
 func textDocumentDidChangeHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (any, error) {
-		di.FileWatcher().FileChanged(params.TextDocument.URI)
+		di.FileWatcher().SetFileAsChanged(params.TextDocument.URI)
 		return nil, nil
 	})
 }
@@ -413,7 +413,7 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		logger := log.With().Str("method", "TextDocumentDidSaveHandler").Logger()
 
 		logger.Info().Interface("params", params).Msg("Receiving")
-		di.FileWatcher().FileSaved(params.TextDocument.URI)
+		di.FileWatcher().SetFileAsSaved(params.TextDocument.URI)
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 
 		// todo can we push cache management down?

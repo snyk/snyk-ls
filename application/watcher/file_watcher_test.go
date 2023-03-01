@@ -27,10 +27,10 @@ func Test_WhenFileSaved_FileIsNotDirty(t *testing.T) {
 	t.Parallel()
 	w := watcher.NewFileWatcher()
 	uri := uri2.PathToUri("path/to/file")
-	w.FileChanged(uri)
+	w.SetFileAsChanged(uri)
 
 	// Act
-	w.FileSaved(uri)
+	w.SetFileAsSaved(uri)
 
 	// Assert
 	assert.False(t, w.IsDirty(uri))
@@ -43,7 +43,7 @@ func Test_WhenFileChanged_FileIsDirty(t *testing.T) {
 	uri := uri2.PathToUri("path/to/file")
 
 	// Act
-	w.FileChanged(uri)
+	w.SetFileAsChanged(uri)
 
 	// Assert
 	assert.True(t, w.IsDirty(uri))
