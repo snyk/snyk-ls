@@ -213,6 +213,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 				TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{
 					Options: &sglsp.TextDocumentSyncOptions{
 						OpenClose:         true,
+						Change:            sglsp.TDSKIncremental,
 						WillSave:          true,
 						WillSaveWaitUntil: true,
 						Save:              &sglsp.SaveOptions{IncludeText: true},
