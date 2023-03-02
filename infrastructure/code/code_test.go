@@ -718,7 +718,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			metrics := c.newMetrics(len(files), time.Now())
 
 			// execute
-			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics)
+			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics, []string{})
 
 			assert.Len(t, analytics.GetAnalytics(), 1)
 			// Default is to have 1 fake action from analysis + 0 from autofix
@@ -749,11 +749,11 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			metrics := c.newMetrics(len(files), time.Now())
 
 			// execute
-			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics)
+			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics, []string{})
 
 			assert.Len(t, analytics.GetAnalytics(), 1)
 			assert.Len(t, issues[0].CodeActions, 2)
-			val, ok := issues[0].CodeActions[1].Edit.Changes[FakeAutofixFileUri]
+			val, ok := (*issues[0].CodeActions[1].DeferredEdit)().Changes[FakeAutofixFileUri]
 			assert.True(t, ok)
 			// If this fails, likely the format of autofix edits has changed to
 			// "hunk-like" ones rather than replacing the whole file
