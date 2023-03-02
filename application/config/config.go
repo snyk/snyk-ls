@@ -211,8 +211,8 @@ func New() *Config {
 
 func (c *Config) AddBinaryLocationsToPath(searchDirectories []string) {
 	c.defaultDirs = searchDirectories
-	c.determineJavaHome()
-	c.determineMavenHome()
+	go c.determineJavaHome()
+	go c.determineMavenHome()
 }
 
 func (c *Config) determineDeviceId() string {

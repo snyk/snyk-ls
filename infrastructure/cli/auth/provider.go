@@ -137,7 +137,7 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 
 			if url != "" {
 				a.authURL = url
-				log.Debug().Str("method", "authenticate").Msgf("found URL: %s", url)
+				log.Info().Str("method", "authenticate").Msgf("found URL: %s", url)
 			}
 		}
 
@@ -218,7 +218,8 @@ func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...str
 	cmd := exec.CommandContext(ctx, config.CurrentConfig().CliSettings().Path(), args...)
 	cmd.Env = cli.AppendCliEnvironmentVariables(os.Environ(), false)
 
-	log.Info().Str("command", cmd.String()).Interface("env", cmd.Env).Msg("running Snyk CLI command")
+	log.Info().Str("command", cmd.String()).Msg("running Snyk CLI command")
+	log.Debug().Str("command", cmd.String()).Interface("env", cmd.Env).Msg("env for Snyk CLI command")
 	return cmd
 }
 

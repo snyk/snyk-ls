@@ -20,7 +20,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/adrg/xdg"
 	"github.com/stretchr/testify/assert"
@@ -102,7 +104,9 @@ func Test_FindBinaries(t *testing.T) {
 		c := New()
 		c.AddBinaryLocationsToPath([]string{dir})
 
-		assert.Contains(t, os.Getenv("JAVA_HOME"), dir)
+		assert.Eventually(t, func() bool {
+			return strings.Contains(os.Getenv("JAVA_HOME"), dir)
+		}, time.Second, time.Millisecond)
 	})
 
 	t.Run("search for binary in default places", func(t *testing.T) {
@@ -155,6 +159,8 @@ func Test_FindBinaries(t *testing.T) {
 
 		New()
 
-		assert.Contains(t, os.Getenv("PATH"), binDir)
+		assert.Eventually(t, func() bool {
+			return strings.Contains(os.Getenv("PATH"), dir)
+		}, time.Second, time.Millisecond)
 	})
 }

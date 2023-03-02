@@ -273,7 +273,7 @@ func updateCliConfig(settings lsp.Settings) {
 	cliSettings := &config.CliSettings{}
 	cliSettings.Insecure, err = strconv.ParseBool(settings.Insecure)
 	if err != nil {
-		log.Warn().Err(err).Msg("couldn't parse insecure setting")
+		log.Debug().Err(err).Msg("couldn't parse insecure setting")
 	}
 	cliSettings.AdditionalOssParameters = strings.Split(settings.AdditionalParams, " ")
 	cliSettings.SetPath(settings.CliPath)
@@ -285,7 +285,7 @@ func updateProductEnablement(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ActivateSnykCode)
 	currentConfig := config.CurrentConfig()
 	if err != nil {
-		log.Warn().Err(err).Msg("couldn't parse code setting")
+		log.Debug().Err(err).Msg("couldn't parse code setting")
 	} else {
 		currentConfig.SetSnykCodeEnabled(parseBool)
 		currentConfig.EnableSnykCodeQuality(parseBool)
@@ -293,13 +293,13 @@ func updateProductEnablement(settings lsp.Settings) {
 	}
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykOpenSource)
 	if err != nil {
-		log.Warn().Err(err).Msg("couldn't parse open source setting")
+		log.Debug().Err(err).Msg("couldn't parse open source setting")
 	} else {
 		currentConfig.SetSnykOssEnabled(parseBool)
 	}
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykIac)
 	if err != nil {
-		log.Warn().Err(err).Msg("couldn't parse iac setting")
+		log.Debug().Err(err).Msg("couldn't parse iac setting")
 	} else {
 		currentConfig.SetSnykIacEnabled(parseBool)
 	}

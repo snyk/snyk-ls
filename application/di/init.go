@@ -18,6 +18,7 @@ package di
 
 import (
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 
@@ -92,18 +93,24 @@ func initDomain() {
 	)
 }
 
+//goland:noinspection GoBoolExpressions
 func initInfrastructure() {
-	config.CurrentConfig().AddBinaryLocationsToPath(
-		[]string{
+	var locations []string
+	if runtime.GOOS == "windows" {
+		locations = []string{
+			"C:\\Program Files",
+			"C:\\Program Files (x86)",
+		}
+	} else {
+		locations = []string{
 			filepath.Join(xdg.Home, ".sdkman"),
 			"/usr/lib",
 			"/usr/java",
 			"/opt",
 			"/Library",
-			"C:\\Program Files",
-			"C:\\Program Files (x86)",
-		},
-	)
+		}
+	}
+	config.CurrentConfig().AddBinaryLocationsToPath(locations)
 
 	errorReporter = sentry2.NewSentryErrorReporter()
 	installer = install.NewInstaller(errorReporter)
