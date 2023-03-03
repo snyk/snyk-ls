@@ -40,3 +40,17 @@ type iacIssue struct {
 	Documentation  lsp.Uri        `json:"documentation"`
 	IacDescription iacDescription `json:"iacDescription"`
 }
+
+type IssueData struct {
+	Id            string   `json:"id"`
+	Title         string   `json:"title"`
+	Severity      string   `json:"severity"`
+	PublicId      string   `json:"publicId"`
+	Documentation string   `json:"documentation"`
+	LineNumber    int      `json:"lineNumber"`
+	Issue         string   `json:"issue"`
+	Impact        string   `json:"impact"`
+	Resolve       string   `json:"resolve:omitempty"`
+	References    []string `json:"references:omitempty"`
+	Path          []string `json:"path:omitempty"`
+}
