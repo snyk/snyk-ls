@@ -39,6 +39,8 @@ type iacIssue struct {
 	LineNumber     int            `json:"lineNumber"`
 	Documentation  lsp.Uri        `json:"documentation"`
 	IacDescription iacDescription `json:"iacDescription"`
+	Path           []string       `json:"path"`
+	References     []string       `json:"references"`
 }
 
 type IssueData struct {

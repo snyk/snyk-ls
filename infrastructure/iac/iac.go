@@ -366,6 +366,20 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		IssueDescriptionURL: issueURL,
 		IssueType:           snyk.InfrastructureIssue,
 		CodeActions:         []snyk.CodeAction{action},
+		AdditionalData:      iac.toAdditionalData(issue),
+	}
+}
+
+func (iac *Scanner) toAdditionalData(issue iacIssue) IssueData {
+	return IssueData{
+		PublicId:      issue.PublicID,
+		Documentation: iac.createIssueURL(issue.PublicID).String(),
+		LineNumber:    issue.LineNumber,
+		Issue:         issue.IacDescription.Issue,
+		Impact:        issue.IacDescription.Impact,
+		Resolve:       issue.IacDescription.Resolve,
+		Path:          issue.Path,
+		References:    issue.References,
 	}
 }
 
