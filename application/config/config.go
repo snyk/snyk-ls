@@ -492,6 +492,8 @@ func snykCodeAnalysisTimeoutFromEnv() time.Duration {
 }
 
 func (c *Config) updatePath(pathExtension string) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	if pathExtension == "" {
 		return
 	}
