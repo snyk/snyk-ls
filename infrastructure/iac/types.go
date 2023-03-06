@@ -42,15 +42,15 @@ type iacIssue struct {
 }
 
 type IssueData struct {
-	Id            string   `json:"id"`
-	Title         string   `json:"title"`
-	Severity      string   `json:"severity"`
-	PublicId      string   `json:"publicId"`
-	Documentation string   `json:"documentation"`
-	LineNumber    int      `json:"lineNumber"`
-	Issue         string   `json:"issue"`
-	Impact        string   `json:"impact"`
-	Resolve       string   `json:"resolve:omitempty"`
-	References    []string `json:"references:omitempty"`
-	Path          []string `json:"path:omitempty"`
+	PublicId string `json:"publicId"`
+	// DocumentationURL: Snyk security rule URL (e.g. https://snyk.io/security-rules/SNYK-CC-K8S-13)
+	DocumentationURL string `json:"documentation"`
+	LineNumber       int    `json:"lineNumber"`
+	// IssueDescription: a short description of the issue (e.g. "The pod is sharing host's IPC namespace")
+	IssueDescription string `json:"issue"`
+	Impact           string `json:"impact"`
+	// Remediation: a short description of how to fix the issue (e.g. "Remove `hostIPC` attribute, or set value to `false`")
+	Remediation string `json:"resolve:omitempty"`
+	// References: List of reference URLs
+	References []string `json:"references:omitempty"`
 }
