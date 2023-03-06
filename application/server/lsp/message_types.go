@@ -735,13 +735,14 @@ type CodeIssueData struct {
 }
 
 type IaCIssueData struct {
-	PublicId         string   `json:"publicId"`
-	DocumentationURL string   `json:"documentation"`
-	LineNumber       int      `json:"lineNumber"`
-	IssueDescription string   `json:"issue"`
-	Impact           string   `json:"impact"`
-	Remediation      string   `json:"resolve:omitempty"`
-	References       []string `json:"references:omitempty"`
+	PublicId      string   `json:"publicId"`
+	Documentation string   `json:"documentation"`
+	LineNumber    int      `json:"lineNumber"`
+	Issue         string   `json:"issue"`
+	Impact        string   `json:"impact"`
+	Resolve       string   `json:"resolve:omitempty"`
+	Path          []string `json:"path"`
+	References    []string `json:"references:omitempty"`
 }
 
 type Point = [2]int

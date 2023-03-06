@@ -42,15 +42,20 @@ type iacIssue struct {
 }
 
 type IssueData struct {
+	// PublicID: unique identifier for the issue; it is the same as the ScanIssue.ID
 	PublicId string `json:"publicId"`
-	// DocumentationURL: Snyk security rule URL (e.g. https://snyk.io/security-rules/SNYK-CC-K8S-13)
-	DocumentationURL string `json:"documentation"`
-	LineNumber       int    `json:"lineNumber"`
-	// IssueDescription: a short description of the issue (e.g. "The pod is sharing host's IPC namespace")
-	IssueDescription string `json:"issue"`
-	Impact           string `json:"impact"`
-	// Remediation: a short description of how to fix the issue (e.g. "Remove `hostIPC` attribute, or set value to `false`")
-	Remediation string `json:"resolve:omitempty"`
+	// Documentation is a URL which is constructed from the PublicID (e.g. https://snyk.io/security-rules/SNYK-CC-K8S-13)
+	Documentation string `json:"documentation"`
+	// LineNumber: line number of the issue in the file
+	LineNumber int `json:"lineNumber"`
+	// Issue: will contain the issue description
+	Issue string `json:"issue"`
+	// Impact: will contain the impact description
+	Impact string `json:"impact"`
+	// Resolve: will contain the resolution description (not to be confused with Remediation)
+	Resolve string `json:"resolve"`
+	// Path: path to the issue in the file
+	Path []string `json:"path"`
 	// References: List of reference URLs
 	References []string `json:"references:omitempty"`
 }
