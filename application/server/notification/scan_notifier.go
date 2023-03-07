@@ -100,11 +100,12 @@ func (n *scanNotifier) appendIacIssues(scanIssues []lsp.ScanIssue, folderPath st
 			Title:    "Title",
 			Severity: issue.Severity.String(),
 			FilePath: issue.AffectedFilePath,
-			AdditionalData: lsp.IaCIssueData{
+			AdditionalData: lsp.IacIssueData{
 				PublicId:      additionalData.PublicId,
 				Documentation: additionalData.Documentation,
 				LineNumber:    additionalData.LineNumber,
 				Issue:         additionalData.Issue,
+				Impact:        additionalData.Impact,
 				Resolve:       additionalData.Resolve,
 				Path:          additionalData.Path,
 				References:    additionalData.References,

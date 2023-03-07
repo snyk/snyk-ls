@@ -734,7 +734,7 @@ type CodeIssueData struct {
 	IsSecurityType     bool               `json:"isSecurityType"`
 }
 
-type IaCIssueData struct {
+type IacIssueData struct {
 	PublicId      string   `json:"publicId"`
 	Documentation string   `json:"documentation"`
 	LineNumber    int      `json:"lineNumber"`
