@@ -12,7 +12,8 @@ import (
 )
 
 var enabledProducts = map[product.Product]bool{
-	product.ProductCode: true,
+	product.ProductCode:                 true,
+	product.ProductInfrastructureAsCode: true,
 }
 
 type scanNotifier struct {
@@ -62,6 +63,7 @@ func (n *scanNotifier) SendSuccess(folderPath string, issues []snyk.Issue) {
 		n.sendSuccess(pr, folderPath, issues)
 	}
 }
+
 func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues []snyk.Issue) {
 	enabled, ok := enabledProducts[pr]
 	if !enabled || !ok {
