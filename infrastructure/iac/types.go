@@ -40,3 +40,22 @@ type iacIssue struct {
 	Documentation  lsp.Uri        `json:"documentation"`
 	IacDescription iacDescription `json:"iacDescription"`
 }
+
+type IssueData struct {
+	// PublicID: unique identifier for the issue; it is the same as the ScanIssue.ID
+	PublicId string `json:"publicId"`
+	// Documentation is a URL which is constructed from the PublicID (e.g. https://snyk.io/security-rules/SNYK-CC-K8S-13)
+	Documentation string `json:"documentation"`
+	// LineNumber: line number of the issue in the file
+	LineNumber int `json:"lineNumber"`
+	// Issue: will contain the issue description
+	Issue string `json:"issue"`
+	// Impact: will contain the impact description
+	Impact string `json:"impact"`
+	// Resolve: will contain the resolution description (not to be confused with Remediation)
+	Resolve string `json:"resolve"`
+	// Path: path to the issue in the file
+	Path []string `json:"path"`
+	// References: List of reference URLs
+	References []string `json:"references:omitempty"`
+}
