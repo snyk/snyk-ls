@@ -22,7 +22,7 @@ type SnykAnalysisFailedError struct {
 
 func (e SnykAnalysisFailedError) Error() string { return e.Msg }
 
-type IssueData struct {
+type CodeIssueData struct {
 	Message            string             `json:"message"`
 	Rule               string             `json:"rule"`
 	RuleId             string             `json:"ruleId"`

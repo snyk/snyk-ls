@@ -43,7 +43,7 @@ type iacIssue struct {
 	References     []string       `json:"references"`
 }
 
-type IssueData struct {
+type IacIssueData struct {
 	// PublicID: unique identifier for the issue; it is the same as the ScanIssue.ID
 	PublicId string `json:"publicId"`
 	// Documentation is a URL which is constructed from the PublicID (e.g. https://snyk.io/security-rules/SNYK-CC-K8S-13)

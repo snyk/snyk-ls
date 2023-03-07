@@ -90,7 +90,7 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 
 func (n *scanNotifier) appendIacIssues(scanIssues []lsp.ScanIssue, folderPath string, issues []snyk.Issue) []lsp.ScanIssue {
 	for _, issue := range issues {
-		additionalData, ok := issue.AdditionalData.(iac.IssueData)
+		additionalData, ok := issue.AdditionalData.(iac.IacIssueData)
 		if !ok {
 			continue // skip non-code issues
 		}
@@ -116,7 +116,7 @@ func (n *scanNotifier) appendIacIssues(scanIssues []lsp.ScanIssue, folderPath st
 
 func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, folderPath string, issues []snyk.Issue) []lsp.ScanIssue {
 	for _, issue := range issues {
-		additionalData, ok := issue.AdditionalData.(code.IssueData)
+		additionalData, ok := issue.AdditionalData.(code.CodeIssueData)
 		if !ok {
 			continue // skip non-code issues
 		}
