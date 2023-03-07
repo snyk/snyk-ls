@@ -7,6 +7,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/infrastructure/iac"
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -61,7 +62,6 @@ func (n *scanNotifier) SendSuccess(folderPath string, issues []snyk.Issue) {
 		n.sendSuccess(pr, folderPath, issues)
 	}
 }
-
 func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues []snyk.Issue) {
 	enabled, ok := enabledProducts[pr]
 	if !enabled || !ok {
@@ -69,9 +69,52 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 	}
 
 	var scanIssues []lsp.ScanIssue
+	// check product type
+	if pr == product.ProductInfrastructureAsCode {
+		scanIssues = n.appendIacIssues(scanIssues, folderPath, issues)
+	} else if pr == product.ProductCode {
+		scanIssues = n.appendCodeIssues(scanIssues, folderPath, issues)
+	}
 
+	n.notifier.Send(
+		lsp.SnykScanParams{
+			Status:     lsp.Success,
+			Product:    product.ToProductCodename(pr),
+			FolderPath: folderPath,
+			Issues:     scanIssues,
+		},
+	)
+}
+
+func (n *scanNotifier) appendIacIssues(scanIssues []lsp.ScanIssue, folderPath string, issues []snyk.Issue) []lsp.ScanIssue {
 	for _, issue := range issues {
-		additionalData, ok := issue.AdditionalData.(code.IssueData) // Will change when OSS communication is added
+		additionalData, ok := issue.AdditionalData.(iac.IssueData)
+		if !ok {
+			continue // skip non-code issues
+		}
+
+		scanIssues = append(scanIssues, lsp.ScanIssue{
+			Id:       issue.ID,
+			Title:    "Title",
+			Severity: issue.Severity.String(),
+			FilePath: issue.AffectedFilePath,
+			AdditionalData: lsp.IaCIssueData{
+				PublicId:      additionalData.PublicId,
+				Documentation: additionalData.Documentation,
+				LineNumber:    additionalData.LineNumber,
+				Issue:         additionalData.Issue,
+				Resolve:       additionalData.Resolve,
+				Path:          additionalData.Path,
+				References:    additionalData.References,
+			},
+		})
+	}
+	return scanIssues
+}
+
+func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, folderPath string, issues []snyk.Issue) []lsp.ScanIssue {
+	for _, issue := range issues {
+		additionalData, ok := issue.AdditionalData.(code.IssueData)
 		if !ok {
 			continue // skip non-code issues
 		}
@@ -134,14 +177,7 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 		})
 	}
 
-	n.notifier.Send(
-		lsp.SnykScanParams{
-			Status:     lsp.Success,
-			Product:    product.ToProductCodename(pr),
-			FolderPath: folderPath,
-			Issues:     scanIssues,
-		},
-	)
+	return scanIssues
 }
 
 // Notifies all snyk/scan enabled product messages
