@@ -97,7 +97,7 @@ func (n *scanNotifier) appendIacIssues(scanIssues []lsp.ScanIssue, folderPath st
 
 		scanIssues = append(scanIssues, lsp.ScanIssue{
 			Id:       issue.ID,
-			Title:    "Title",
+			Title:    issue.Message,
 			Severity: issue.Severity.String(),
 			FilePath: issue.AffectedFilePath,
 			AdditionalData: lsp.IacIssueData{
@@ -159,7 +159,7 @@ func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, folderPath s
 
 		scanIssues = append(scanIssues, lsp.ScanIssue{
 			Id:       issue.ID,
-			Title:    "Title",
+			Title:    issue.Message,
 			Severity: issue.Severity.String(),
 			FilePath: issue.AffectedFilePath,
 			AdditionalData: lsp.CodeIssueData{
