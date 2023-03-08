@@ -82,7 +82,7 @@ func Test_SendSuccess_SendsForIacProduct(t *testing.T) {
 	expectedMessage := []lsp2.ScanIssue{
 		{
 			Id:       "iacID",
-			Title:    "Title",
+			Title:    "iacMessage",
 			Severity: "critical",
 			FilePath: "iacAffectedFilePath",
 			AdditionalData: lsp2.IacIssueData{
@@ -155,7 +155,7 @@ func Test_SendSuccess_SendsForCodeProduct(t *testing.T) {
 	expectedMessage := []lsp2.ScanIssue{
 		{
 			Id:       "codeID",
-			Title:    "Title",
+			Title:    "codeMessage",
 			Severity: "low",
 			FilePath: "codeAffectedFilePath",
 			AdditionalData: lsp2.CodeIssueData{
