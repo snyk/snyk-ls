@@ -153,6 +153,7 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 	issue := scanner.toIssue("test.yml", sampleIssue, "")
 
 	expectedAdditionalData := IssueData{
+		Title:    sampleIssue.Title,
 		PublicId: sampleIssue.PublicID,
 		// Documentation is a URL which is constructed from the PublicID
 		Documentation: "https://snyk.io/security-rules/PublicID",
