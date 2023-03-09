@@ -1,6 +1,7 @@
 package notification_test
 
 import (
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,6 +9,8 @@ import (
 	lsp2 "github.com/snyk/snyk-ls/application/server/lsp"
 	notification2 "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/infrastructure/iac"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -68,6 +71,143 @@ func Test_SendMessage(t *testing.T) {
 	}
 }
 
+func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
+	testutil.UnitTest(t)
+
+	mockNotifier := notification.NewMockNotifier()
+	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
+
+	const folderPath = "/test/iac/folderPath"
+
+	// expected message uses lsp2.ScanIssue && lsp2.CodeIssueData
+	expectedCodeIssue := []lsp2.ScanIssue{
+		{
+			Id:       "codeID",
+			Title:    "codeMessage",
+			Severity: "low",
+			FilePath: "codeAffectedFilePath",
+			AdditionalData: lsp2.CodeIssueData{
+				Message:            "codeMessage",
+				Rule:               "codeRule",
+				RuleId:             "codeRuleID",
+				RepoDatasetSize:    2,
+				ExampleCommitFixes: []lsp2.ExampleCommitFix{},
+				CWE:                []string{},
+				IsSecurityType:     false,
+				Text:               "codeText",
+				Cols:               lsp2.Point{1, 1},
+				Rows:               lsp2.Point{1, 1},
+				Markers:            []lsp2.Marker{},
+			},
+		},
+	}
+
+	expectedIacIssue := []lsp2.ScanIssue{
+		{
+			Id:       "iacID",
+			Title:    "iacTitle",
+			Severity: "critical",
+			FilePath: "iacAffectedFilePath",
+			AdditionalData: lsp2.IacIssueData{
+				PublicId:      "iacID",
+				Documentation: "iacDocumentation",
+				LineNumber:    1,
+				Issue:         "iacIssue",
+				Impact:        "iacImpact",
+				Path:          []string{"iacPath"},
+			},
+		},
+	}
+
+	scanIssues := []snyk.Issue{
+		{ // IaC issue
+			ID:        "iacID",
+			Severity:  snyk.Critical,
+			IssueType: 1,
+			Range: snyk.Range{
+				Start: snyk.Position{
+					Line:      1,
+					Character: 1,
+				},
+				End: snyk.Position{
+					Line:      1,
+					Character: 2,
+				},
+			},
+			Message:             "iacMessage",
+			FormattedMessage:    "iacFormattedMessage",
+			AffectedFilePath:    "iacAffectedFilePath",
+			Product:             product.ProductInfrastructureAsCode,
+			References:          []snyk.Reference{},
+			IssueDescriptionURL: &url.URL{},
+			CodeActions:         []snyk.CodeAction{},
+			Commands:            []snyk.Command{},
+			AdditionalData: iac.IssueData{
+				Title:         "iacTitle",
+				PublicId:      "iacID",
+				Documentation: "iacDocumentation",
+				LineNumber:    1,
+				Issue:         "iacIssue",
+				Impact:        "iacImpact",
+				Path:          []string{"iacPath"},
+			},
+		},
+		{ // Code issue
+			ID:        "codeID",
+			Severity:  snyk.Low,
+			IssueType: 1,
+			Range: snyk.Range{
+				Start: snyk.Position{
+					Line:      1,
+					Character: 1,
+				},
+				End: snyk.Position{
+					Line:      1,
+					Character: 2,
+				},
+			},
+			Message:             "codeMessage",
+			FormattedMessage:    "codeFormattedMessage",
+			AffectedFilePath:    "codeAffectedFilePath",
+			Product:             product.ProductCode,
+			References:          []snyk.Reference{},
+			IssueDescriptionURL: &url.URL{},
+			CodeActions:         []snyk.CodeAction{},
+			Commands:            []snyk.Command{},
+			AdditionalData: code.IssueData{
+				Message:            "codeMessage",
+				Rule:               "codeRule",
+				RuleId:             "codeRuleID",
+				RepoDatasetSize:    2,
+				ExampleCommitFixes: []code.ExampleCommitFix{},
+				CWE:                []string{},
+				IsSecurityType:     false,
+				Text:               "codeText",
+				Cols:               code.CodePoint{1, 1},
+				Rows:               code.CodePoint{1, 1},
+				Markers:            []code.Marker{},
+			},
+		},
+	}
+
+	// Act - run the test
+	scanNotifier.SendSuccess(folderPath, scanIssues)
+
+	// Assert - check the messages matches the expected message for each product
+	for _, msg := range mockNotifier.SentMessages() {
+		if msg.(lsp2.SnykScanParams).Product == "code" {
+			actualCodeIssue := msg.(lsp2.SnykScanParams).Issues
+			assert.Equal(t, expectedCodeIssue, actualCodeIssue)
+			return
+		}
+		if msg.(lsp2.SnykScanParams).Product == "iac" {
+			actualIacIssue := msg.(lsp2.SnykScanParams).Issues
+			assert.Equal(t, expectedIacIssue, actualIacIssue)
+			return
+		}
+	}
+}
+
 func Test_NewScanNotifier_NilNotifier_Errors(t *testing.T) {
 	t.Parallel()
 	scanNotifier, err := notification2.NewScanNotifier(nil)
@@ -86,7 +226,7 @@ func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 	scanNotifier.SendInProgress("/test/folderPath")
 
 	// Assert
-	assert.Equal(t, 1, len(mockNotifier.SentMessages()))
+	assert.Equal(t, 2, len(mockNotifier.SentMessages()))
 }
 
 func containsMatchingMessage(t *testing.T,

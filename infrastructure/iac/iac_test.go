@@ -146,6 +146,29 @@ func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 	assert.Len(t, issues, 1)
 }
 
+func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
+	t.Parallel()
+	sampleIssue := sampleIssue()
+	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
+	issue := scanner.toIssue("test.yml", sampleIssue, "")
+
+	expectedAdditionalData := IssueData{
+		Title:    sampleIssue.Title,
+		PublicId: sampleIssue.PublicID,
+		// Documentation is a URL which is constructed from the PublicID
+		Documentation: "https://snyk.io/security-rules/PublicID",
+		LineNumber:    sampleIssue.LineNumber,
+		Issue:         sampleIssue.IacDescription.Issue,
+		Impact:        sampleIssue.IacDescription.Impact,
+		Resolve:       sampleIssue.IacDescription.Resolve,
+		Path:          sampleIssue.Path,
+		References:    sampleIssue.References,
+	}
+
+	assert.NotNil(t, issue.AdditionalData)
+	assert.Equal(t, expectedAdditionalData, issue.AdditionalData)
+}
+
 func sampleIssue() iacIssue {
 	return iacIssue{
 		PublicID:      "PublicID",
