@@ -71,7 +71,7 @@ func Test_SendMessage(t *testing.T) {
 	}
 }
 
-func Test_SendSuccess_SendsForIacProduct(t *testing.T) {
+func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 	testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
@@ -79,10 +79,33 @@ func Test_SendSuccess_SendsForIacProduct(t *testing.T) {
 
 	const folderPath = "/test/iac/folderPath"
 
-	expectedMessage := []lsp2.ScanIssue{
+	// expected message uses lsp2.ScanIssue && lsp2.CodeIssueData
+	expectedCodeIssue := []lsp2.ScanIssue{
+		{
+			Id:       "codeID",
+			Title:    "codeMessage",
+			Severity: "low",
+			FilePath: "codeAffectedFilePath",
+			AdditionalData: lsp2.CodeIssueData{
+				Message:            "codeMessage",
+				Rule:               "codeRule",
+				RuleId:             "codeRuleID",
+				RepoDatasetSize:    2,
+				ExampleCommitFixes: []lsp2.ExampleCommitFix{},
+				CWE:                []string{},
+				IsSecurityType:     false,
+				Text:               "codeText",
+				Cols:               lsp2.Point{1, 1},
+				Rows:               lsp2.Point{1, 1},
+				Markers:            []lsp2.Marker{},
+			},
+		},
+	}
+
+	expectedIacIssue := []lsp2.ScanIssue{
 		{
 			Id:       "iacID",
-			Title:    "iacMessage",
+			Title:    "iacTitle",
 			Severity: "critical",
 			FilePath: "iacAffectedFilePath",
 			AdditionalData: lsp2.IacIssueData{
@@ -96,8 +119,8 @@ func Test_SendSuccess_SendsForIacProduct(t *testing.T) {
 		},
 	}
 
-	iacScanIssues := []snyk.Issue{
-		{
+	scanIssues := []snyk.Issue{
+		{ // IaC issue
 			ID:        "iacID",
 			Severity:  snyk.Critical,
 			IssueType: 1,
@@ -120,6 +143,7 @@ func Test_SendSuccess_SendsForIacProduct(t *testing.T) {
 			CodeActions:         []snyk.CodeAction{},
 			Commands:            []snyk.Command{},
 			AdditionalData: iac.IssueData{
+				Title:         "iacTitle",
 				PublicId:      "iacID",
 				Documentation: "iacDocumentation",
 				LineNumber:    1,
@@ -128,55 +152,7 @@ func Test_SendSuccess_SendsForIacProduct(t *testing.T) {
 				Path:          []string{"iacPath"},
 			},
 		},
-	}
-
-	// Act - run the test
-	scanNotifier.SendSuccess(folderPath, iacScanIssues)
-
-	// Assert - check the Snyk IaC message matches the expected message
-	for _, msg := range mockNotifier.SentMessages() {
-		if msg.(lsp2.SnykScanParams).Product == "iac" {
-			actualCodeIssue := msg.(lsp2.SnykScanParams).Issues
-			assert.Equal(t, expectedMessage, actualCodeIssue)
-			return
-		}
-	}
-}
-
-func Test_SendSuccess_SendsForCodeProduct(t *testing.T) {
-	testutil.UnitTest(t)
-
-	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
-
-	const folderPath = "/test/code/folderPath"
-
-	// expected message uses lsp2.ScanIssue && lsp2.CodeIssueData
-	expectedMessage := []lsp2.ScanIssue{
-		{
-			Id:       "codeID",
-			Title:    "codeMessage",
-			Severity: "low",
-			FilePath: "codeAffectedFilePath",
-			AdditionalData: lsp2.CodeIssueData{
-				Message:            "codeMessage",
-				Rule:               "codeRule",
-				RuleId:             "codeRuleID",
-				RepoDatasetSize:    2,
-				ExampleCommitFixes: []lsp2.ExampleCommitFix{},
-				CWE:                []string{},
-				IsSecurityType:     false,
-				Text:               "codeText",
-				Cols:               lsp2.Point{1, 1},
-				Rows:               lsp2.Point{1, 1},
-				Markers:            []lsp2.Marker{},
-			},
-		},
-	}
-
-	// SendSuccess expects []snyk.Issue && code.CodeIssueData
-	codeScanIssues := []snyk.Issue{
-		{
+		{ // Code issue
 			ID:        "codeID",
 			Severity:  snyk.Low,
 			IssueType: 1,
@@ -215,13 +191,18 @@ func Test_SendSuccess_SendsForCodeProduct(t *testing.T) {
 	}
 
 	// Act - run the test
-	scanNotifier.SendSuccess(folderPath, codeScanIssues)
+	scanNotifier.SendSuccess(folderPath, scanIssues)
 
-	// Assert - check the Snyk Code message matches the expected message
+	// Assert - check the Snyk IaC message matches the expected message
 	for _, msg := range mockNotifier.SentMessages() {
 		if msg.(lsp2.SnykScanParams).Product == "code" {
 			actualCodeIssue := msg.(lsp2.SnykScanParams).Issues
-			assert.Equal(t, expectedMessage, actualCodeIssue)
+			assert.Equal(t, expectedCodeIssue, actualCodeIssue)
+			return
+		}
+		if msg.(lsp2.SnykScanParams).Product == "iac" {
+			actualIacIssue := msg.(lsp2.SnykScanParams).Issues
+			assert.Equal(t, expectedIacIssue, actualIacIssue)
 			return
 		}
 	}
