@@ -92,7 +92,7 @@ func (n *scanNotifier) appendIacIssues(scanIssues []lsp.ScanIssue, folderPath st
 	for _, issue := range issues {
 		additionalData, ok := issue.AdditionalData.(iac.IssueData)
 		if !ok {
-			continue // skip non-code issues
+			continue // skip non-iac issues
 		}
 
 		scanIssues = append(scanIssues, lsp.ScanIssue{

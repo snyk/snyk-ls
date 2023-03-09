@@ -193,7 +193,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 	// Act - run the test
 	scanNotifier.SendSuccess(folderPath, scanIssues)
 
-	// Assert - check the Snyk IaC message matches the expected message
+	// Assert - check the messages matches the expected message for each product
 	for _, msg := range mockNotifier.SentMessages() {
 		if msg.(lsp2.SnykScanParams).Product == "code" {
 			actualCodeIssue := msg.(lsp2.SnykScanParams).Issues
