@@ -119,7 +119,7 @@ func Test_SendSuccess_SendsForIacProduct(t *testing.T) {
 			IssueDescriptionURL: &url.URL{},
 			CodeActions:         []snyk.CodeAction{},
 			Commands:            []snyk.Command{},
-			AdditionalData: iac.IacIssueData{
+			AdditionalData: iac.IssueData{
 				PublicId:      "iacID",
 				Documentation: "iacDocumentation",
 				LineNumber:    1,
@@ -198,7 +198,7 @@ func Test_SendSuccess_SendsForCodeProduct(t *testing.T) {
 			IssueDescriptionURL: &url.URL{},
 			CodeActions:         []snyk.CodeAction{},
 			Commands:            []snyk.Command{},
-			AdditionalData: code.CodeIssueData{
+			AdditionalData: code.IssueData{
 				Message:            "codeMessage",
 				Rule:               "codeRule",
 				RuleId:             "codeRuleID",

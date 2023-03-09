@@ -639,7 +639,7 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	assert.Equal(t, references, issue.References)
 	assert.Contains(t, issue.FormattedMessage, "Example Commit Fixes")
 	assert.NotEmpty(t, issue.Commands, "should have getCommands filled from codeflow")
-	assert.Equal(t, markersForSampleSarifResponse(path), issue.AdditionalData.(CodeIssueData).Markers)
+	assert.Equal(t, markersForSampleSarifResponse(path), issue.AdditionalData.(IssueData).Markers)
 }
 
 func referencesForSampleSarifResponse() []snyk.Reference {

@@ -327,7 +327,7 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 
 			markers := result.getMarkers()
 
-			additionalData := CodeIssueData{
+			additionalData := IssueData{
 				Message:            result.Message.Text,
 				Rule:               rule.Name,
 				RuleId:             rule.ID,

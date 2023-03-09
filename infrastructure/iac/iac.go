@@ -370,8 +370,9 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 	}
 }
 
-func (iac *Scanner) toAdditionalData(issue iacIssue) IacIssueData {
-	return IacIssueData{
+func (iac *Scanner) toAdditionalData(issue iacIssue) IssueData {
+	return IssueData{
+		Title:         issue.Title,
 		PublicId:      issue.PublicID,
 		Documentation: iac.createIssueURL(issue.PublicID).String(),
 		LineNumber:    issue.LineNumber,
