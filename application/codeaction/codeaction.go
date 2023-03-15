@@ -90,9 +90,13 @@ func (c *CodeActionsService) GetCodeActions(params lsp.CodeActionParams) []lsp.C
 func (c *CodeActionsService) ResolveCodeAction(action lsp.CodeAction) (lsp.CodeAction, error) {
 	c.logger.Info().Msg("Received code action resolve request")
 	t := time.Now()
-	cached, found := c.actionsCache[uuid.UUID(*action.Data)]
+	if action.Data == nil {
+		return lsp.CodeAction{}, missingKeyError{}
+	}
+	key := uuid.UUID(*action.Data)
+	cached, found := c.actionsCache[key]
 	if !found {
-		return lsp.CodeAction{}, errors.New(fmt.Sprint("could not find cached action for uuid ", *action.Data))
+		return lsp.CodeAction{}, errors.New(fmt.Sprint("could not find cached action for uuid ", key))
 	}
 	edit := (*cached.action.DeferredEdit)()
 	resolvedAction := cached.action
@@ -103,4 +107,14 @@ func (c *CodeActionsService) ResolveCodeAction(action lsp.CodeAction) (lsp.CodeA
 
 	c.logger.Info().Msg(fmt.Sprint("Resolved code action in ", elapsedSeconds, " seconds:\n", codeAction))
 	return codeAction, nil
+}
+
+type missingKeyError struct{}
+
+func (e missingKeyError) Error() string {
+	return "code action lookup key is missing - this is not a deferred code action"
+}
+func IsMissingKeyError(err error) bool {
+	_, ok := err.(missingKeyError)
+	return ok
 }
