@@ -23,6 +23,10 @@ func ResolveCodeActionHandler(service *CodeActionsService) CodeActionResolveHand
 
 		action, err := service.ResolveCodeAction(params)
 		if err != nil {
+			if IsMissingKeyError(err) { // If the key is missing, it means that the code action is not a deferred code action
+				logger.Debug().Msg("Skipping code action - missing key")
+				return nil, nil
+			}
 			logger.Error().Err(err).Msg("Failed to resolve code action")
 			return nil, err
 		}

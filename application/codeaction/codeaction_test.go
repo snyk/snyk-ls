@@ -167,6 +167,21 @@ func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
 	assert.Error(t, err, "Expected error when resolving a code action with a key that doesn't exist")
 }
 
+func Test_ResolveCodeAction_KeyIsNull_ReturnsError(t *testing.T) {
+	service := setupService()
+
+	ca := lsp.CodeAction{
+		Title:   "Made up CA",
+		Edit:    nil,
+		Command: nil,
+		Data:    nil,
+	}
+
+	_, err := service.ResolveCodeAction(ca)
+	assert.Error(t, err, "Expected error when resolving a code action with a null key")
+	assert.True(t, codeaction.IsMissingKeyError(err))
+}
+
 func setupService() *codeaction.CodeActionsService {
 	providerMock := new(mockIssuesProvider)
 	providerMock.On("IssuesFor", mock.Anything, mock.Anything).Return([]snyk.Issue{})
