@@ -176,7 +176,7 @@ func Test_getIssueId(t *testing.T) {
 	affectedFilePath := "path/to/file/test.yml"
 	id := getIssueKey(affectedFilePath, sampleIssue())
 
-	assert.Equal(t, "ffd3ba6c07869bdfa5e5653ee45580a3", id)
+	assert.Equal(t, "4bd522a2fc6ce20c3258f9c194e0fca0", id)
 }
 
 func sampleIssue() iacIssue {

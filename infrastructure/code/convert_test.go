@@ -873,5 +873,5 @@ func Test_SarifResponse_filter_disabled_issues(t *testing.T) {
 
 func Test_getIssueId(t *testing.T) {
 	id := getIssueKey("java/DontUsePrintStackTrace", "file/path.java", 15, 17, 15, 35)
-	assert.Equal(t, "d55c8ddce64fadfc758f4b9b4fd92087", id)
+	assert.Equal(t, "8423559307c17d15f5617ae2e29dbf02", id)
 }

@@ -18,7 +18,7 @@ package iac
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -416,7 +416,6 @@ func (iac *Scanner) toIssueSeverity(snykSeverity string) snyk.Severity {
 }
 
 func getIssueKey(affectedFilePath string, issue iacIssue) string {
-	// deepcode ignore InsecureHash: The hash isn't used for security purposes.
-	id := md5.Sum([]byte(affectedFilePath + strconv.Itoa(issue.LineNumber) + issue.PublicID))
-	return hex.EncodeToString(id[:])
+	id := sha256.Sum256([]byte(affectedFilePath + strconv.Itoa(issue.LineNumber) + issue.PublicID))
+	return hex.EncodeToString(id[:16])
 }

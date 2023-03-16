@@ -17,7 +17,7 @@
 package code
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"net/url"
@@ -368,9 +368,8 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 }
 
 func getIssueKey(ruleId string, path string, startLine int, endLine int, startCol int, endCol int) string {
-	// deepcode ignore InsecureHash: The hash isn't used for security purposes.
-	id := md5.Sum([]byte(ruleId + path + strconv.Itoa(startLine) + strconv.Itoa(endLine) + strconv.Itoa(startCol) + strconv.Itoa(endCol)))
-	return hex.EncodeToString(id[:])
+	id := sha256.Sum256([]byte(ruleId + path + strconv.Itoa(startLine) + strconv.Itoa(endLine) + strconv.Itoa(startCol) + strconv.Itoa(endCol)))
+	return hex.EncodeToString(id[:16])
 }
 
 func (r *result) getMarkers() []Marker {
