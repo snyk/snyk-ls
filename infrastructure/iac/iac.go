@@ -146,14 +146,13 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 		noCancellation := ctx.Err() == nil
 		if noCancellation { // Only reports errors that are not intentional cancellations
 			iac.errorReporter.CaptureErrorAndReportAsIssue(path, err)
-			return issues, err
 		} else { // If the scan was cancelled, return empty results
 			return issues, nil
 		}
 	}
 
 	issues = iac.retrieveIssues(scanResults, issues, workspacePath, err)
-	return issues, nil
+	return issues, err
 }
 
 func (iac *Scanner) retrieveIssues(scanResults []iacScanResult,
