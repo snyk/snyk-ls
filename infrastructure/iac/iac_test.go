@@ -153,7 +153,7 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 	issue := scanner.toIssue("test.yml", sampleIssue, "")
 
 	expectedAdditionalData := IssueData{
-		Key:      "a9e79cb92a1dfd34ad2abfb74c14310d",
+		Key:      "6a4df51fc4d53f1cfbdb4b46c165859b",
 		Title:    sampleIssue.Title,
 		PublicId: sampleIssue.PublicID,
 		// Documentation is a URL which is constructed from the PublicID
