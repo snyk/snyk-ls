@@ -153,6 +153,7 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 	issue := scanner.toIssue("test.yml", sampleIssue, "")
 
 	expectedAdditionalData := IssueData{
+		Key:      "a9e79cb92a1dfd34ad2abfb74c14310d",
 		Title:    sampleIssue.Title,
 		PublicId: sampleIssue.PublicID,
 		// Documentation is a URL which is constructed from the PublicID
@@ -167,6 +168,15 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 
 	assert.NotNil(t, issue.AdditionalData)
 	assert.Equal(t, expectedAdditionalData, issue.AdditionalData)
+}
+
+func Test_getIssueId(t *testing.T) {
+	t.Parallel()
+
+	affectedFilePath := "path/to/file/test.yml"
+	id := getIssueKey(affectedFilePath, sampleIssue())
+
+	assert.Equal(t, "ffd3ba6c07869bdfa5e5653ee45580a3", id)
 }
 
 func sampleIssue() iacIssue {

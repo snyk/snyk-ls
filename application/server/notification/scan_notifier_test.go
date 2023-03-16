@@ -80,9 +80,26 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 	const folderPath = "/test/iac/folderPath"
 
 	// expected message uses lsp2.ScanIssue && lsp2.CodeIssueData
+	expectedIacIssue := []lsp2.ScanIssue{
+		{
+			Id:       "098f6bcd4621d373cade4e832627b4f6",
+			Title:    "iacTitle",
+			Severity: "critical",
+			FilePath: "iacAffectedFilePath",
+			AdditionalData: lsp2.IacIssueData{
+				PublicId:      "iacID",
+				Documentation: "iacDocumentation",
+				LineNumber:    1,
+				Issue:         "iacIssue",
+				Impact:        "iacImpact",
+				Path:          []string{"iacPath"},
+			},
+		},
+	}
+
 	expectedCodeIssue := []lsp2.ScanIssue{
 		{
-			Id:       "codeID",
+			Id:       "5a105e8b9d40e1329780d62ea2265d8a",
 			Title:    "codeMessage",
 			Severity: "low",
 			FilePath: "codeAffectedFilePath",
@@ -98,23 +115,6 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 				Cols:               lsp2.Point{1, 1},
 				Rows:               lsp2.Point{1, 1},
 				Markers:            []lsp2.Marker{},
-			},
-		},
-	}
-
-	expectedIacIssue := []lsp2.ScanIssue{
-		{
-			Id:       "iacID",
-			Title:    "iacTitle",
-			Severity: "critical",
-			FilePath: "iacAffectedFilePath",
-			AdditionalData: lsp2.IacIssueData{
-				PublicId:      "iacID",
-				Documentation: "iacDocumentation",
-				LineNumber:    1,
-				Issue:         "iacIssue",
-				Impact:        "iacImpact",
-				Path:          []string{"iacPath"},
 			},
 		},
 	}
@@ -143,6 +143,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 			CodeActions:         []snyk.CodeAction{},
 			Commands:            []snyk.Command{},
 			AdditionalData: iac.IssueData{
+				Key:           "098f6bcd4621d373cade4e832627b4f6",
 				Title:         "iacTitle",
 				PublicId:      "iacID",
 				Documentation: "iacDocumentation",
@@ -175,6 +176,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 			CodeActions:         []snyk.CodeAction{},
 			Commands:            []snyk.Command{},
 			AdditionalData: code.IssueData{
+				Key:                "5a105e8b9d40e1329780d62ea2265d8a",
 				Message:            "codeMessage",
 				Rule:               "codeRule",
 				RuleId:             "codeRuleID",
