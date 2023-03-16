@@ -68,8 +68,9 @@ func Test_ErroredWorkspaceScan_TracksAnalytics(t *testing.T) {
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, executor)
 
 	executor.ExecuteResponse = []byte("invalid JSON")
-	_, _ = scanner.Scan(context.Background(), "fake.yml", "")
+	_, err := scanner.Scan(context.Background(), "fake.yml", "")
 
+	assert.Error(t, err)
 	assert.Len(t, analytics.GetAnalytics(), 1)
 	assert.Equal(t, ux2.AnalysisIsReadyProperties{
 		AnalysisType: ux2.InfrastructureAsCode,
