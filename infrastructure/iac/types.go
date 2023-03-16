@@ -44,6 +44,8 @@ type iacIssue struct {
 }
 
 type IssueData struct {
+	// Unique key identifying an issue in the whole result set
+	Key string `json:"key"`
 	// Title: title of the issue
 	Title string `json:"title"`
 	// PublicID: unique identifier for the issue; it is the same as the ScanIssue.ID

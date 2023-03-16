@@ -17,7 +17,7 @@
 package code
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"net/url"
@@ -327,7 +327,10 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 
 			markers := result.getMarkers()
 
+			key := getIssueKey(result.RuleID, path, startLine, endLine, startCol, endCol)
+
 			additionalData := IssueData{
+				Key:                key,
 				Message:            result.Message.Text,
 				Rule:               rule.Name,
 				RuleId:             rule.ID,
@@ -341,10 +344,8 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 				IsSecurityType:     isSecurityType,
 			}
 
-			id := getIssueId(result.RuleID, path, startLine, endLine, startCol, endCol)
-
 			d := snyk.Issue{
-				ID:                  id,
+				ID:                  result.RuleID,
 				Range:               myRange,
 				Severity:            issueSeverity(result.Level),
 				Message:             message,
@@ -366,10 +367,9 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 	return issues
 }
 
-func getIssueId(ruleId string, path string, startLine int, endLine int, startCol int, endCol int) string {
-	// deepcode ignore InsecureHash: The hash isn't used for security purposes.
-	id := md5.Sum([]byte(ruleId + path + strconv.Itoa(startLine) + strconv.Itoa(endLine) + strconv.Itoa(startCol) + strconv.Itoa(endCol)))
-	return hex.EncodeToString(id[:])
+func getIssueKey(ruleId string, path string, startLine int, endLine int, startCol int, endCol int) string {
+	id := sha256.Sum256([]byte(ruleId + path + strconv.Itoa(startLine) + strconv.Itoa(endLine) + strconv.Itoa(startCol) + strconv.Itoa(endCol)))
+	return hex.EncodeToString(id[:16])
 }
 
 func (r *result) getMarkers() []Marker {

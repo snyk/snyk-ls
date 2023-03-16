@@ -18,12 +18,15 @@ package iac
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -366,12 +369,15 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		IssueDescriptionURL: issueURL,
 		IssueType:           snyk.InfrastructureIssue,
 		CodeActions:         []snyk.CodeAction{action},
-		AdditionalData:      iac.toAdditionalData(issue),
+		AdditionalData:      iac.toAdditionalData(affectedFilePath, issue),
 	}
 }
 
-func (iac *Scanner) toAdditionalData(issue iacIssue) IssueData {
+func (iac *Scanner) toAdditionalData(affectedFilePath string, issue iacIssue) IssueData {
+	key := getIssueKey(affectedFilePath, issue)
+
 	return IssueData{
+		Key:           key,
 		Title:         issue.Title,
 		PublicId:      issue.PublicID,
 		Documentation: iac.createIssueURL(issue.PublicID).String(),
@@ -407,4 +413,9 @@ func (iac *Scanner) toIssueSeverity(snykSeverity string) snyk.Severity {
 		return snyk.Medium
 	}
 	return severity
+}
+
+func getIssueKey(affectedFilePath string, issue iacIssue) string {
+	id := sha256.Sum256([]byte(affectedFilePath + strconv.Itoa(issue.LineNumber) + issue.PublicID))
+	return hex.EncodeToString(id[:16])
 }

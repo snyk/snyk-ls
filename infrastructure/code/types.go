@@ -23,6 +23,8 @@ type SnykAnalysisFailedError struct {
 func (e SnykAnalysisFailedError) Error() string { return e.Msg }
 
 type IssueData struct {
+	// Unique key identifying an issue in the whole result set
+	Key                string             `json:"key"`
 	Message            string             `json:"message"`
 	Rule               string             `json:"rule"`
 	RuleId             string             `json:"ruleId"`
