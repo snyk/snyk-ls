@@ -143,7 +143,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 		sc.scanStatusMutex.Unlock()
 	}()
 
-	// Proceed to scan only if there're any changed paths. This ensures the following race condition coverage:
+	// Proceed to scan only if there are any changed paths. This ensures the following race condition coverage:
 	// It could be that one of throttled scans updated the changedPaths set, but the initial scan has picked up it's updated and proceeded with a scan in the meantime.
 	sc.changedFilesMutex.Lock()
 	if len(sc.changedPaths[folderPath]) <= 0 {
