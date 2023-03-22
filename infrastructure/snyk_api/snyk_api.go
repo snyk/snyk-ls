@@ -28,11 +28,10 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/httpclient"
 )
 
 type SnykApiClientImpl struct {
-	client *http.Client
+	httpClientFunc func() *http.Client
 }
 
 type localCodeEngine struct {
@@ -79,9 +78,9 @@ func (e *SnykApiError) StatusCode() int {
 	return e.statusCode
 }
 
-func NewSnykApiClient() SnykApiClient {
+func NewSnykApiClient(client func() *http.Client) SnykApiClient {
 	s := SnykApiClientImpl{
-		client: httpclient.NewHTTPClient(),
+		httpClientFunc: client,
 	}
 	return &s
 }
@@ -149,7 +148,7 @@ func (s *SnykApiClientImpl) doCall(method string,
 	req.Header.Set("x-snyk-ide", "snyk-ls-"+clientID)
 
 	log.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
-	response, requestErr := s.client.Do(req)
+	response, requestErr := s.httpClientFunc().Do(req)
 	if requestErr != nil {
 		return nil, NewSnykApiError(requestErr.Error(), 0)
 	}

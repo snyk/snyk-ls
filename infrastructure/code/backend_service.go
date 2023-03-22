@@ -33,7 +33,6 @@ import (
 	performance2 "github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code/encoding"
-	"github.com/snyk/snyk-ls/internal/httpclient"
 )
 
 const completeStatus = "COMPLETE"
@@ -57,7 +56,7 @@ func issueSeverity(snykSeverity string) snyk.Severity {
 }
 
 type SnykCodeHTTPClient struct {
-	client        http.Client
+	client        func() *http.Client
 	instrumentor  performance2.Instrumentor
 	errorReporter error_reporting.ErrorReporter
 }
@@ -77,10 +76,12 @@ type filtersResponse struct {
 	Extensions  []string `json:"extensions" pact:"min=1"`
 }
 
-func NewHTTPRepository(instrumentor performance2.Instrumentor,
+func NewHTTPRepository(
+	instrumentor performance2.Instrumentor,
 	errorReporter error_reporting.ErrorReporter,
+	client func() *http.Client,
 ) *SnykCodeHTTPClient {
-	return &SnykCodeHTTPClient{*httpclient.NewHTTPClient(), instrumentor, errorReporter}
+	return &SnykCodeHTTPClient{client, instrumentor, errorReporter}
 }
 
 func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (configFiles []string, extensions []string, err error) {
@@ -182,7 +183,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 	}
 
 	log.Trace().Str("requestBody", string(requestBody)).Str("snyk-request-id", requestId).Msg("SEND TO REMOTE")
-	response, err := s.client.Do(req)
+	response, err := s.client().Do(req)
 	if err != nil {
 		log.Err(err).Str("method", method).Msgf("got http error")
 		s.errorReporter.CaptureErrorAndReportAsIssue(path, err)

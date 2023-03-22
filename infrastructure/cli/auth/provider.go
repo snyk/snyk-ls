@@ -43,6 +43,10 @@ func NewCliAuthenticationProvider(errorReporter error_reporting.ErrorReporter) s
 	return &CliAuthenticationProvider{"", errorReporter}
 }
 
+func (a *CliAuthenticationProvider) SetAuthURL(url string) {
+	a.authURL = url
+}
+
 func (a *CliAuthenticationProvider) Authenticate(ctx context.Context) (string, error) {
 	err := a.authenticate(ctx)
 	if err != nil {
@@ -82,36 +86,6 @@ func (a *CliAuthenticationProvider) ClearAuthentication(ctx context.Context) err
 
 func (a *CliAuthenticationProvider) AuthURL(_ context.Context) string {
 	return a.authURL
-}
-
-type AuthenticationFailedError struct {
-	manualAuthentication bool
-}
-
-func (e *AuthenticationFailedError) Error() string {
-	const authFailMessage = "Failed to authenticate with Snyk. Please make sure you have a valid token. "
-	const autoAuthMessage = "You can reset the token to re-authenticate automatically."
-	message := authFailMessage
-
-	if !e.manualAuthentication {
-		message += autoAuthMessage
-	}
-
-	return message
-}
-
-func (a *CliAuthenticationProvider) AuthenticateToken(token string) error {
-	if token == "" {
-		return errors.New("token is an empty string")
-	}
-	args := []string{"auth", token}
-	cmd := a.buildCLICmd(context.Background(), args...)
-	outputBytes, err := cmd.Output()
-	if strings.Contains(string(outputBytes), "Authentication failed") {
-		err = &AuthenticationFailedError{}
-	}
-
-	return err
 }
 
 // Auth represents the `snyk auth` command.

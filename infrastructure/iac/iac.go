@@ -373,10 +373,10 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 	}
 }
 
-func (iac *Scanner) toAdditionalData(affectedFilePath string, issue iacIssue) IssueData {
+func (iac *Scanner) toAdditionalData(affectedFilePath string, issue iacIssue) snyk.IaCIssueData {
 	key := getIssueKey(affectedFilePath, issue)
 
-	return IssueData{
+	return snyk.IaCIssueData{
 		Key:           key,
 		Title:         issue.Title,
 		PublicId:      issue.PublicID,

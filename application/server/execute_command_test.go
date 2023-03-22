@@ -122,7 +122,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	authenticationMock := di.Authenticator().Provider().(*auth.FakeAuthenticationProvider)
+	authenticationMock := di.AuthenticationService().Provider().(*auth.FakeAuthenticationProvider)
 	initialAuthenticatedStatus := authenticationMock.IsAuthenticated
 	params := lsp.ExecuteCommandParams{Command: snyk.LoginCommand}
 
@@ -141,7 +141,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 
 func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
 	loc := setupServer(t)
-	authenticationMock := di.Authenticator().Provider().(*auth.FakeAuthenticationProvider)
+	authenticationMock := di.AuthenticationService().Provider().(*auth.FakeAuthenticationProvider)
 	params := lsp.ExecuteCommandParams{Command: snyk.CopyAuthLinkCommand}
 
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)

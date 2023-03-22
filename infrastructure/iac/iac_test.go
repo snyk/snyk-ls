@@ -152,7 +152,7 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
 	issue := scanner.toIssue("test.yml", sampleIssue, "")
 
-	expectedAdditionalData := IssueData{
+	expectedAdditionalData := snyk.IaCIssueData{
 		Key:      "6a4df51fc4d53f1cfbdb4b46c165859b",
 		Title:    sampleIssue.Title,
 		PublicId: sampleIssue.PublicID,

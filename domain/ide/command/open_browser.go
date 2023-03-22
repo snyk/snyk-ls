@@ -18,11 +18,8 @@ package command
 
 import (
 	"context"
-	"fmt"
-	"os/exec"
-	"runtime"
 
-	"github.com/rs/zerolog/log"
+	"github.com/snyk/go-application-framework/pkg/auth"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
@@ -45,24 +42,7 @@ func (cmd *OpenBrowserCommand) Command() snyk.Command {
 	return cmd.command
 }
 
-func (cmd *OpenBrowserCommand) Execute(ctx context.Context) error {
-	OpenBrowser(cmd.command.Arguments[0].(string))
+func (cmd *OpenBrowserCommand) Execute(_ context.Context) error {
+	auth.OpenBrowser(cmd.command.Arguments[0].(string))
 	return nil
-}
-
-func OpenBrowser(url string) {
-	var err error
-	switch runtime.GOOS {
-	case "linux":
-		err = exec.Command("xdg-open", url).Start()
-	case "windows":
-		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-	case "darwin":
-		err = exec.Command("open", url).Start()
-	default:
-		err = fmt.Errorf("unsupported platform")
-	}
-	if err != nil {
-		log.Err(err).Str("method", "domain.ide.command.command.OpenBrowser").Msg("couldn't open browser window")
-	}
 }

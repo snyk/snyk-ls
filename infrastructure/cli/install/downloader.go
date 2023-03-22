@@ -29,17 +29,21 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/httpclient"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 
 type Downloader struct {
 	progressTracker *progress.Tracker
 	errorReporter   error_reporting.ErrorReporter
+	httpClient      func() *http.Client
 }
 
-func NewDownloader(errorReporter error_reporting.ErrorReporter) *Downloader {
-	return &Downloader{progressTracker: progress.NewTracker(true), errorReporter: errorReporter}
+func NewDownloader(errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client) *Downloader {
+	return &Downloader{
+		progressTracker: progress.NewTracker(true),
+		errorReporter:   errorReporter,
+		httpClient:      httpClientFunc,
+	}
 }
 
 // writeCounter counts the number of bytes written to it.
@@ -94,8 +98,6 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 		return fmt.Errorf("no builds found for current OS")
 	}
 
-	client := httpclient.NewHTTPClient()
-
 	log.Info().Str("download_url", downloadURL).Msgf("Snyk CLI %s in progress...", kindStr)
 
 	if isUpdate {
@@ -109,12 +111,12 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	var resp *http.Response
 
 	// Determine the binary size
-	length, err := getContentLength(client, downloadURL)
+	length, err := getContentLength(d.httpClient(), downloadURL)
 	if err != nil {
 		return err
 	}
 
-	resp, err = client.Get(downloadURL)
+	resp, err = d.httpClient().Get(downloadURL)
 	if err != nil {
 		return err
 	}

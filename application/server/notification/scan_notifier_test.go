@@ -9,8 +9,6 @@ import (
 	lsp2 "github.com/snyk/snyk-ls/application/server/lsp"
 	notification2 "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/code"
-	"github.com/snyk/snyk-ls/infrastructure/iac"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -142,7 +140,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 			IssueDescriptionURL: &url.URL{},
 			CodeActions:         []snyk.CodeAction{},
 			Commands:            []snyk.Command{},
-			AdditionalData: iac.IssueData{
+			AdditionalData: snyk.IaCIssueData{
 				Key:           "098f6bcd4621d373cade4e832627b4f6",
 				Title:         "iacTitle",
 				PublicId:      "iacID",
@@ -175,19 +173,19 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 			IssueDescriptionURL: &url.URL{},
 			CodeActions:         []snyk.CodeAction{},
 			Commands:            []snyk.Command{},
-			AdditionalData: code.IssueData{
+			AdditionalData: snyk.CodeIssueData{
 				Key:                "5a105e8b9d40e1329780d62ea2265d8a",
 				Message:            "codeMessage",
 				Rule:               "codeRule",
 				RuleId:             "codeRuleID",
 				RepoDatasetSize:    2,
-				ExampleCommitFixes: []code.ExampleCommitFix{},
+				ExampleCommitFixes: []snyk.ExampleCommitFix{},
 				CWE:                []string{},
 				IsSecurityType:     false,
 				Text:               "codeText",
-				Cols:               code.CodePoint{1, 1},
-				Rows:               code.CodePoint{1, 1},
-				Markers:            []code.Marker{},
+				Cols:               snyk.CodePoint{1, 1},
+				Rows:               snyk.CodePoint{1, 1},
+				Markers:            []snyk.Marker{},
 			},
 		},
 	}

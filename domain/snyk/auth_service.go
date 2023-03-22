@@ -32,4 +32,7 @@ type AuthenticationService interface {
 
 	// IsAuthenticated returns true if the token is verified
 	IsAuthenticated() (bool, error)
+
+	// SetProvider sets the authentication provider
+	SetProvider(provider AuthenticationProvider)
 }

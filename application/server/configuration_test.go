@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/creachadair/jrpc2"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
@@ -38,7 +39,7 @@ var sampleSettings = lsp.Settings{
 	ActivateSnykCode:       "false",
 	ActivateSnykIac:        "false",
 	Insecure:               "true",
-	Endpoint:               "asd",
+	Endpoint:               "https://api.fake.snyk.io",
 	AdditionalParams:       "--all-projects -d",
 	AdditionalEnv:          "a=b;c=d",
 	Path:                   "addPath",
@@ -48,6 +49,7 @@ var sampleSettings = lsp.Settings{
 
 func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	testutil.UnitTest(t)
+	di.TestInit(t)
 	loc := setupServer(t)
 
 	t.Setenv("a", "")
@@ -59,12 +61,15 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	}
 
 	c := config.CurrentConfig()
+	conf := di.Engine().GetConfiguration()
 	assert.Equal(t, false, c.IsSnykCodeEnabled())
 	assert.Equal(t, false, c.IsSnykOssEnabled())
 	assert.Equal(t, false, c.IsSnykIacEnabled())
-	assert.Equal(t, true, c.CliSettings().Insecure)
+	assert.True(t, c.CliSettings().Insecure)
+	assert.True(t, conf.GetBool(configuration.INSECURE_HTTPS))
 	assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalOssParameters)
 	assert.Equal(t, params.Settings.Endpoint, c.SnykApi())
+	assert.Equal(t, params.Settings.Endpoint, conf.GetString(configuration.API_URL))
 	assert.Equal(t, "b", os.Getenv("a"))
 	assert.Equal(t, "d", os.Getenv("c"))
 	assert.True(t, strings.Contains(os.Getenv("PATH"), "addPath"))
@@ -104,12 +109,15 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	assert.NoError(t, err)
 
 	c := config.CurrentConfig()
+	conf := di.Engine().GetConfiguration()
 	assert.Equal(t, false, c.IsSnykCodeEnabled())
 	assert.Equal(t, false, c.IsSnykOssEnabled())
 	assert.Equal(t, false, c.IsSnykIacEnabled())
-	assert.Equal(t, true, c.CliSettings().Insecure)
+	assert.True(t, c.CliSettings().Insecure)
+	assert.True(t, conf.GetBool(configuration.INSECURE_HTTPS))
 	assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalOssParameters)
-	assert.Equal(t, "asd", c.SnykApi())
+	assert.Equal(t, sampleSettings.Endpoint, c.SnykApi())
+	assert.Equal(t, c.SnykApi(), conf.GetString(configuration.API_URL))
 	assert.True(t, config.CurrentConfig().IsErrorReportingEnabled())
 	assert.Equal(t, "token", config.CurrentConfig().Token())
 }
@@ -420,4 +428,17 @@ func Test_InitializeSettings(t *testing.T) {
 
 		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
 	})
+
+	t.Run("authenticationMethod is passed", func(t *testing.T) {
+		c := config.New()
+		config.SetCurrentConfig(c)
+		di.TestInit(t)
+
+		assert.Equal(t, lsp.TokenAuthentication, c.GetAuthenticationMethod())
+
+		InitializeSettings(lsp.Settings{AuthenticationMethod: lsp.OAuthAuthentication})
+
+		assert.Equal(t, lsp.OAuthAuthentication, c.GetAuthenticationMethod())
+	})
+
 }

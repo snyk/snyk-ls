@@ -17,6 +17,7 @@
 package cli
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -81,7 +82,8 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 	// arrange
 	config.CurrentConfig().SetManageBinariesAutomatically(true)
 
-	installer := install.NewInstaller(error_reporting.NewTestErrorReporter())
+	clientFunc := func() *http.Client { return http.DefaultClient }
+	installer := install.NewInstaller(error_reporting.NewTestErrorReporter(), clientFunc)
 	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer)
 
 	// ensure CLI is not installed on the system

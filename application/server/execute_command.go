@@ -75,7 +75,11 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 			f.ScanFolder(bgCtx)
 			handleUntrustedFolders(bgCtx, srv)
 		case snyk.OpenBrowserCommand:
-			command.OpenBrowser(params.Arguments[0].(string))
+			err := command.NewOpenBrowserCommand(params.Arguments[0].(string)).Execute(context.Background())
+			if err != nil {
+				log.Err(err).Msg("Error on snyk.openBrowser command")
+				notification.SendError(err)
+			}
 		case snyk.TrustWorkspaceFoldersCommand:
 			err := TrustWorkspaceFolders()
 			if err != nil {
@@ -83,14 +87,14 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 				notification.SendError(err)
 			}
 		case snyk.LoginCommand:
-			authenticator := di.Authenticator()
+			authenticator := di.AuthenticationService()
 			_, err := authenticator.Authenticate(context.Background())
 			if err != nil {
 				log.Err(err).Msg("Error on snyk.login command")
 				notification.SendError(err)
 			}
 		case snyk.CopyAuthLinkCommand:
-			url := di.Authenticator().Provider().AuthURL(bgCtx)
+			url := di.AuthenticationService().Provider().AuthURL(bgCtx)
 			err := clipboard.WriteAll(url)
 
 			if err != nil {
@@ -99,7 +103,7 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 				break
 			}
 		case snyk.LogoutCommand:
-			di.Authenticator().Logout(bgCtx)
+			di.AuthenticationService().Logout(bgCtx)
 		}
 		return nil, nil
 	})

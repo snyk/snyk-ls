@@ -49,6 +49,7 @@ func TestConfigDefaults(t *testing.T) {
 	assert.Equal(t, "md", c.Format(), "Output format should be md by default")
 	assert.Equal(t, lsp.DefaultSeverityFilter(), c.FilterSeverity(), "All severities should be enabled by default")
 	assert.Empty(t, c.trustedFolders)
+	assert.Equal(t, lsp.TokenAuthentication, c.authenticationMethod)
 }
 
 func Test_TokenChanged_ChannelsInformed(t *testing.T) {
@@ -134,23 +135,27 @@ func Test_loadFile(t *testing.T) {
 
 func TestSnykCodeApi(t *testing.T) {
 	t.Run("endpoint not provided", func(t *testing.T) {
+		t.Parallel()
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint("")
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided without 'app' prefix", func(t *testing.T) {
+		t.Parallel()
 		endpoint := "https://snyk.io/api/v1"
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'app' prefix with v1 suffix", func(t *testing.T) {
+		t.Parallel()
 		endpoint := "https://app.snyk.io/api/v1"
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'app' prefix without v1 suffix", func(t *testing.T) {
+		t.Parallel()
 		endpoint := "https://app.snyk.io/api"
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
@@ -167,6 +172,14 @@ func TestSnykCodeApi(t *testing.T) {
 		t.Setenv("DEEPROXY_API_URL", customDeeproxyUrl)
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint("")
 		assert.Equal(t, customDeeproxyUrl, codeApiEndpoint)
+	})
+
+	t.Run(govDomain+" substring endpoint enables oauth authentication", func(t *testing.T) {
+		t.Parallel()
+		endpoint := "https://app.fedramp," + govDomain + "/api/v1"
+		config := New()
+		config.UpdateApiEndpoints(endpoint)
+		assert.Equal(t, lsp.OAuthAuthentication, config.GetAuthenticationMethod())
 	})
 }
 

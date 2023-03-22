@@ -6,8 +6,6 @@ import (
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/code"
-	"github.com/snyk/snyk-ls/infrastructure/iac"
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -90,7 +88,7 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 
 func (n *scanNotifier) appendIacIssues(scanIssues []lsp.ScanIssue, folderPath string, issues []snyk.Issue) []lsp.ScanIssue {
 	for _, issue := range issues {
-		additionalData, ok := issue.AdditionalData.(iac.IssueData)
+		additionalData, ok := issue.AdditionalData.(snyk.IaCIssueData)
 		if !ok {
 			continue // skip non-iac issues
 		}
@@ -117,7 +115,7 @@ func (n *scanNotifier) appendIacIssues(scanIssues []lsp.ScanIssue, folderPath st
 
 func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, folderPath string, issues []snyk.Issue) []lsp.ScanIssue {
 	for _, issue := range issues {
-		additionalData, ok := issue.AdditionalData.(code.IssueData)
+		additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 		if !ok {
 			continue // skip non-code issues
 		}

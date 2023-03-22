@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -41,11 +42,13 @@ type Installer interface {
 
 type Install struct {
 	errorReporter error_reporting.ErrorReporter
+	httpClient    func() *http.Client
 }
 
-func NewInstaller(errorReporter error_reporting.ErrorReporter) *Install {
+func NewInstaller(errorReporter error_reporting.ErrorReporter, client func() *http.Client) *Install {
 	return &Install{
 		errorReporter: errorReporter,
+		httpClient:    client,
 	}
 }
 
@@ -67,7 +70,7 @@ func (i *Install) Find() (string, error) {
 }
 
 func (i *Install) Install(ctx context.Context) (string, error) {
-	r := NewCLIRelease()
+	r := NewCLIRelease(i.httpClient)
 	latestRelease, err := r.GetLatestRelease(ctx)
 	if err != nil {
 		return "", err
@@ -77,7 +80,7 @@ func (i *Install) Install(ctx context.Context) (string, error) {
 }
 
 func (i *Install) installRelease(release *Release) (string, error) {
-	d := NewDownloader(i.errorReporter)
+	d := NewDownloader(i.errorReporter, i.httpClient)
 	lockFileName, err := createLockFile(d)
 	if err != nil {
 		return "", err
@@ -93,7 +96,7 @@ func (i *Install) installRelease(release *Release) (string, error) {
 }
 
 func (i *Install) Update(ctx context.Context) (bool, error) {
-	r := NewCLIRelease()
+	r := NewCLIRelease(i.httpClient)
 	latestRelease, err := r.GetLatestRelease(ctx)
 	if err != nil {
 		return false, err
@@ -103,7 +106,7 @@ func (i *Install) Update(ctx context.Context) (bool, error) {
 }
 
 func (i *Install) updateFromRelease(r *Release) (bool, error) {
-	d := NewDownloader(i.errorReporter)
+	d := NewDownloader(i.errorReporter, i.httpClient)
 	lockFileName, err := createLockFile(d)
 	if err != nil {
 		return false, err

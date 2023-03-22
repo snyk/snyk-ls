@@ -63,7 +63,7 @@ func (i *Initializer) Init() error {
 
 	if !currentConfig.AutomaticAuthentication() {
 		if currentConfig.NonEmptyToken() { // Only send notification when the token is invalid
-			err := &AuthenticationFailedError{manualAuthentication: true}
+			err := &snyk.AuthenticationFailedError{ManualAuthentication: true}
 			notification.SendError(err)
 		}
 		log.Info().Msg("Skipping scan - user is not authenticated and automatic authentication is disabled")
@@ -78,7 +78,7 @@ func (i *Initializer) Init() error {
 	token, err := authenticator.Provider().Authenticate(context.Background())
 	if token == "" || err != nil {
 		if err == nil {
-			err = &AuthenticationFailedError{}
+			err = &snyk.AuthenticationFailedError{}
 		}
 		notification.SendError(err)
 		err = errors.Wrap(err, errorMessage)

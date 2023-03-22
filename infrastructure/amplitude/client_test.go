@@ -27,16 +27,14 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
-	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestClient_IdentifyAuthenticatedUser(t *testing.T) {
-	s, fakeSegmentClient, fakeApiClient := setupUnitTest(t)
+	s, fakeSegmentClient := setupUnitTest(t)
 
 	s.Identify()
 
-	assert.Equal(t, 1, len(fakeApiClient.GetAllCalls(snyk_api.ActiveUserOperation)))
 	assert.NotEmpty(t, s.authenticatedUserId)
 	assert.Equal(t, 1, len(fakeSegmentClient.trackedEvents))
 	assert.Equal(t, fakeSegmentClient.trackedEvents[0], analytics.Identify{
@@ -46,17 +44,16 @@ func TestClient_IdentifyAuthenticatedUser(t *testing.T) {
 }
 
 func TestClient_IdentifyAnonymousUser(t *testing.T) {
-	s, _, fakeApiClient := setupUnitTest(t)
+	s, _ := setupUnitTest(t)
 	config.CurrentConfig().SetToken("")
 
 	s.Identify()
 
 	assert.Empty(t, s.authenticatedUserId)
-	assert.Equal(t, 0, len(fakeApiClient.GetAllCalls(snyk_api.ActiveUserOperation)))
 }
 
 func TestClient_IdentifyWithDisabledTelemetry(t *testing.T) {
-	s, fakeSegmentClient, _ := setupUnitTest(t)
+	s, fakeSegmentClient := setupUnitTest(t)
 	config.CurrentConfig().SetTelemetryEnabled(false)
 
 	s.Identify()
@@ -66,7 +63,7 @@ func TestClient_IdentifyWithDisabledTelemetry(t *testing.T) {
 }
 
 func Test_AnalyticEvents(t *testing.T) {
-	s, fakeSegmentClient, _ := setupUnitTest(t)
+	s, fakeSegmentClient := setupUnitTest(t)
 	conf := config.CurrentConfig()
 	conf.SetRuntimeVersion("1.2.3")
 	conf.SetOsArch("amd64")
@@ -166,12 +163,12 @@ func Test_AnalyticEvents(t *testing.T) {
 	}
 }
 
-func setupUnitTest(t *testing.T) (*Client, *FakeSegmentClient, *snyk_api.FakeApiClient) {
+func setupUnitTest(t *testing.T) (*Client, *FakeSegmentClient) {
 	testutil.UnitTest(t)
-	fakeApiClient := &snyk_api.FakeApiClient{}
-	s := NewAmplitudeClient(fakeApiClient, error_reporting.NewTestErrorReporter()).(*Client)
+	authFunc := func() (string, error) { return "fakeUser", nil }
+	s := NewAmplitudeClient(authFunc, error_reporting.NewTestErrorReporter()).(*Client)
 	fakeSegmentClient := &FakeSegmentClient{mutex: &sync.Mutex{}}
 	config.CurrentConfig().SetIntegrationName("VS Code")
 	s.destination.client = fakeSegmentClient
-	return s, fakeSegmentClient, fakeApiClient
+	return s, fakeSegmentClient
 }

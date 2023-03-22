@@ -19,6 +19,7 @@ package code
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -54,10 +55,12 @@ const (
 }`
 )
 
+func clientFunc() *http.Client { return http.DefaultClient }
+
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	testutil.SmokeTest(t)
 
-	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
+	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), clientFunc)
 	files := map[string]string{}
 	randomAddition := fmt.Sprintf("\n public void random() { System.out.println(\"%d\") }", time.Now().UnixMicro())
 	files[path1] = util.Hash([]byte(content + randomAddition))
@@ -69,7 +72,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	testutil.SmokeTest(t)
-	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
+	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), clientFunc)
 	var removedFiles []string
 	files := map[string]string{}
 	files[path1] = util.Hash([]byte(content))
@@ -100,7 +103,7 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 	testutil.SmokeTest(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 
-	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
+	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), clientFunc)
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []string
 	files := map[string]string{}
