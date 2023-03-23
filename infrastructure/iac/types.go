@@ -39,7 +39,7 @@ type iacIssue struct {
 	LineNumber     int            `json:"lineNumber"`
 	Documentation  lsp.Uri        `json:"documentation"`
 	IacDescription iacDescription `json:"iacDescription"`
-	Path           []string       `json:"path"`
+	Path           []any          `json:"path"`
 	References     []string       `json:"references"`
 }
 
@@ -61,7 +61,7 @@ type IssueData struct {
 	// Resolve: will contain the resolution description (not to be confused with Remediation)
 	Resolve string `json:"resolve"`
 	// Path: path to the issue in the file
-	Path []string `json:"path"`
+	Path []any `json:"path"`
 	// References: List of reference URLs
 	References []string `json:"references,omitempty"`
 }

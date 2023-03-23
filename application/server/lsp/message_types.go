@@ -774,6 +774,6 @@ type IacIssueData struct {
 	Issue         string   `json:"issue"`
 	Impact        string   `json:"impact"`
 	Resolve       string   `json:"resolve,omitempty"`
-	Path          []string `json:"path"`
+	Path          []any    `json:"path"`
 	References    []string `json:"references,omitempty"`
 }

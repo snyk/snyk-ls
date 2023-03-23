@@ -92,7 +92,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 				LineNumber:    1,
 				Issue:         "iacIssue",
 				Impact:        "iacImpact",
-				Path:          []string{"iacPath"},
+				Path:          []any{"iacPath"},
 			},
 		},
 	}
@@ -150,7 +150,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 				LineNumber:    1,
 				Issue:         "iacIssue",
 				Impact:        "iacImpact",
-				Path:          []string{"iacPath"},
+				Path:          []any{"iacPath"},
 			},
 		},
 		{ // Code issue
