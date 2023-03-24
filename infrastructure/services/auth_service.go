@@ -53,14 +53,15 @@ func (a *AuthenticationService) Authenticate(ctx context.Context) (string, error
 		log.Error().Err(err).Msg("Failed to authenticate")
 		return "", err
 	}
-	a.UpdateToken(token, true)
+	a.UpdateCredentials(token, true)
 
 	return token, err
 }
 
-func (a *AuthenticationService) UpdateToken(newToken string, sendNotification bool) {
-	oldToken := config.CurrentConfig().Token()
-	config.CurrentConfig().SetToken(newToken)
+func (a *AuthenticationService) UpdateCredentials(newToken string, sendNotification bool) {
+	c := config.CurrentConfig()
+	oldToken := c.Token()
+	c.SetToken(newToken)
 
 	if sendNotification {
 		notification.Send(lsp.AuthenticationParams{Token: newToken})

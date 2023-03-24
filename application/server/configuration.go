@@ -206,7 +206,7 @@ func updateAutoScan(settings lsp.Settings) {
 
 func updateToken(token string) {
 	// Token was sent from the client, no need to send notification
-	di.AuthenticationService().UpdateToken(token, false)
+	di.AuthenticationService().UpdateCredentials(token, false)
 }
 
 func updateApiEndpoints(settings lsp.Settings, initialization bool) {
