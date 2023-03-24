@@ -36,7 +36,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	auth2 "github.com/snyk/snyk-ls/infrastructure/cli/auth"
 	"github.com/snyk/snyk-ls/infrastructure/oauth"
-	"github.com/snyk/snyk-ls/internal/httpclient"
 )
 
 func workspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
@@ -142,7 +141,7 @@ func updateAuthenticationMethod(settings lsp.Settings) {
 		engine := di.Engine()
 		conf := engine.GetConfiguration()
 		conf.Set(configuration.OAUTH_AUTH_ENABLED, true)
-		httpClient := httpclient.NewHTTPClientCustomAuthHeader(false, di.Engine().GetNetworkAccess())
+		httpClient := di.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
 		openBrowserFunc := func(url string) {
 			di.AuthenticationService().Provider().SetAuthURL(url)
 			auth.OpenBrowser(url)
