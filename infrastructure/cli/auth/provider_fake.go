@@ -25,6 +25,7 @@ import (
 type FakeAuthenticationProvider struct {
 	ExpectedAuthURL string
 	IsAuthenticated bool
+	authURL         string
 }
 
 func (a *FakeAuthenticationProvider) Authenticate(_ context.Context) (string, error) {
@@ -41,10 +42,10 @@ func (a *FakeAuthenticationProvider) AuthURL(_ context.Context) string {
 	return a.ExpectedAuthURL
 }
 
-func (a *FakeAuthenticationProvider) AuthenticateToken(_ string) error {
-	return nil
+func (a *FakeAuthenticationProvider) SetAuthURL(url string) {
+	a.authURL = url
 }
 
 func NewFakeCliAuthenticationProvider() snyk.AuthenticationProvider {
-	return &FakeAuthenticationProvider{"https://app.snyk.io/login?token=someToken", false}
+	return &FakeAuthenticationProvider{ExpectedAuthURL: "https://app.snyk.io/login?token=someToken"}
 }

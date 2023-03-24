@@ -41,7 +41,7 @@ tools:
 	@echo "==> Installing go-licenses"
 	@go install github.com/google/go-licenses@latest
 ifeq (,$(wildcard ./.bin/golangci-lint*))
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b .bin/ v1.50.1
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b .bin/ v1.52.1
 else
 	@echo "==> golangci-lint is already installed"
 endif

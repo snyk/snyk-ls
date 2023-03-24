@@ -18,6 +18,7 @@ package cli_test
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -40,7 +41,7 @@ func Test_HandleErrors_MissingTokenError(t *testing.T) { // todo: check if still
 	testutil.IntegTest(t)
 	config.CurrentConfig().SetToken("")
 	ctx := context.Background()
-	path, err := install.NewInstaller(di.ErrorReporter()).Find()
+	path, err := install.NewInstaller(di.ErrorReporter(), func() *http.Client { return http.DefaultClient }).Find()
 	if err != nil {
 		t.Fatal(err)
 	}

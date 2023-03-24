@@ -353,3 +353,22 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 	time.Sleep(3*(scanner.scheduledScanDuration+fakeCli.ExecuteDuration) + 5*time.Millisecond)
 	assert.Equal(t, 1, fakeCli.GetFinishedScans())
 }
+
+func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
+	testutil.UnitTest(t)
+
+	// Arrange
+	workingDir, _ := os.Getwd()
+	fakeCli := cli.NewTestExecutorWithResponse(path.Join(workingDir, "testdata/oss-result-without-targetFile.json"))
+	fakeCli.ExecuteDuration = time.Millisecond
+	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), fakeCli)
+	scanner.scheduledScanDuration = 50 * time.Millisecond
+	filePath, _ := filepath.Abs(workingDir + "/testdata/package.json")
+
+	// Act
+	analysis, err := scanner.Scan(context.Background(), filePath, "")
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Len(t, analysis, 87)
+}

@@ -238,10 +238,8 @@ func (oss *Scanner) unmarshallAndRetrieveAnalysis(ctx context.Context, res []byt
 		targetFileUri := uri.PathToUri(targetFilePath)
 		fileContent, err := os.ReadFile(targetFilePath)
 		if err != nil {
-			log.Err(err).Str("method", "unmarshallAndRetrieveAnalysis").
-				Msgf("Error while reading the file %v, err: %v", targetFile, err)
-			oss.errorReporter.CaptureErrorAndReportAsIssue(path, err)
-			return nil
+			// don't fail the scan if we can't read the file. No annotations with ranges, though.
+			fileContent = []byte{}
 		}
 		issues = append(issues, oss.retrieveIssues(scanResult, targetFileUri, fileContent)...)
 	}
@@ -334,6 +332,7 @@ func (oss *Scanner) retrieveIssues(
 		if duplicateCheckMap[key] {
 			continue
 		}
+
 		issueRange := oss.findRange(issue, documentUri, fileContent)
 		issues = append(issues, oss.toIssue(uri.PathFromUri(documentUri), issue, issueRange))
 		duplicateCheckMap[key] = true
@@ -384,6 +383,11 @@ func (oss *Scanner) toIssue(affectedFilePath string, issue ossIssue, issueRange 
 func (oss *Scanner) findRange(issue ossIssue, uri sglsp.DocumentURI, fileContent []byte) snyk.Range {
 	var foundRange snyk.Range
 	var finder RangeFinder
+
+	if len(fileContent) == 0 {
+		return snyk.Range{Start: snyk.Position{}, End: snyk.Position{}}
+	}
+
 	switch issue.PackageManager {
 	case "npm":
 		finder = &NpmRangeFinder{uri: uri, fileContent: fileContent}

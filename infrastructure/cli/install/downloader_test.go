@@ -17,6 +17,7 @@
 package install
 
 import (
+	"net/http"
 	"os"
 	"testing"
 
@@ -33,7 +34,10 @@ func TestDownloader_Download(t *testing.T) {
 	r := getTestAsset()
 	progressCh := make(chan lsp.ProgressParams, 100000)
 	cancelProgressCh := make(chan lsp.ProgressToken, 1)
-	d := &Downloader{progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh)}
+	d := &Downloader{
+		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh),
+		httpClient:      func() *http.Client { return http.DefaultClient },
+	}
 	lockFileName := d.lockFileName()
 	// remove any existing lockfile
 	_ = os.RemoveAll(lockFileName)
@@ -56,7 +60,10 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	testutil.UnitTest(t)
 	progressCh := make(chan lsp.ProgressParams, 100000)
 	cancelProgressCh := make(chan lsp.ProgressToken, 1)
-	d := &Downloader{progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh)}
+	d := &Downloader{
+		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh),
+		httpClient:      func() *http.Client { return http.DefaultClient },
+	}
 
 	r := getTestAsset()
 

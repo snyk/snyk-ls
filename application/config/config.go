@@ -52,6 +52,7 @@ const (
 	defaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
 	pathListSeparator     = string(os.PathListSeparator)
 	windows               = "windows"
+	govDomain             = "snykgov.io"
 )
 
 var (
@@ -161,6 +162,7 @@ type Config struct {
 	runtimeName                  string
 	runtimeVersion               string
 	automaticScanning            bool
+	authenticationMethod         lsp.AuthenticationMethod
 }
 
 func CurrentConfig() *Config {
@@ -201,11 +203,12 @@ func New() *Config {
 	c.snykCodeAnalysisTimeout = snykCodeAnalysisTimeoutFromEnv()
 	c.token = ""
 	c.trustedFoldersFeatureEnabled = true
+	c.automaticScanning = true
+	c.authenticationMethod = lsp.TokenAuthentication
 	c.clientSettingsFromEnv()
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = lsp.DefaultSeverityFilter()
-	c.automaticScanning = true
 	return c
 }
 
@@ -329,6 +332,10 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 		snykApiUrl = defaultSnykApiUrl
 	}
 
+	if strings.Contains(snykApiUrl, govDomain) {
+		c.authenticationMethod = "oauth"
+	}
+
 	if snykApiUrl != c.snykApiUrl {
 		c.snykApiUrl = snykApiUrl
 
@@ -341,7 +348,6 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 		c.setSnykCodeApi(snykCodeApiUrl)
 		return true
 	}
-
 	return false
 }
 
@@ -679,4 +685,12 @@ func (c *Config) SetRuntimeVersion(runtimeVersion string) {
 
 func (c *Config) IsAutoScanEnabled() bool {
 	return c.automaticScanning
+}
+
+func (c *Config) SetAuthenticationMethod(method lsp.AuthenticationMethod) {
+	c.authenticationMethod = method
+}
+
+func (c *Config) GetAuthenticationMethod() lsp.AuthenticationMethod {
+	return c.authenticationMethod
 }

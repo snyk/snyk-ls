@@ -26,12 +26,17 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/rs/zerolog/log"
+	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
+	auth2 "github.com/snyk/snyk-ls/infrastructure/cli/auth"
+	"github.com/snyk/snyk-ls/infrastructure/oauth"
+	"github.com/snyk/snyk-ls/internal/httpclient"
 )
 
 func workspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
@@ -127,6 +132,28 @@ func writeSettings(settings lsp.Settings, initialize bool) {
 	updateSnykCodeQuality(settings)
 	updateRuntimeInfo(settings)
 	updateAutoScan(settings)
+	updateAuthenticationMethod(settings)
+}
+
+func updateAuthenticationMethod(settings lsp.Settings) {
+	c := config.CurrentConfig()
+	c.SetAuthenticationMethod(settings.AuthenticationMethod)
+	if config.CurrentConfig().GetAuthenticationMethod() == lsp.OAuthAuthentication {
+		engine := di.Engine()
+		conf := engine.GetConfiguration()
+		conf.Set(configuration.OAUTH_AUTH_ENABLED, true)
+		httpClient := httpclient.NewHTTPClientCustomAuthHeader(false, di.Engine().GetNetworkAccess())
+		openBrowserFunc := func(url string) {
+			di.AuthenticationService().Provider().SetAuthURL(url)
+			auth.OpenBrowser(url)
+		}
+		authenticator := auth.NewOAuth2AuthenticatorWithCustomFuncs(conf, httpClient, openBrowserFunc, auth.ShutdownServer)
+		oAuthProvider := oauth.NewOAuthProvider(conf, authenticator)
+		di.AuthenticationService().SetProvider(oAuthProvider)
+	} else {
+		cliAuthenticationProvider := auth2.NewCliAuthenticationProvider(di.ErrorReporter())
+		di.AuthenticationService().SetProvider(cliAuthenticationProvider)
+	}
 }
 
 func updateRuntimeInfo(settings lsp.Settings) {
@@ -180,15 +207,17 @@ func updateAutoScan(settings lsp.Settings) {
 
 func updateToken(token string) {
 	// Token was sent from the client, no need to send notification
-	di.Authenticator().UpdateToken(token, false)
+	di.AuthenticationService().UpdateToken(token, false)
 }
 
 func updateApiEndpoints(settings lsp.Settings, initialization bool) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
 	endpointsUpdated := config.CurrentConfig().UpdateApiEndpoints(snykApiUrl)
-
+	// TODO: Maybe, in the future, we want to update the API URL in the engine first, then retrieve to profit from URL canonization.
+	conf := di.Engine().GetConfiguration()
+	conf.Set(configuration.API_URL, snykApiUrl)
 	if endpointsUpdated && !initialization {
-		di.Authenticator().Logout(context.Background())
+		di.AuthenticationService().Logout(context.Background())
 	}
 }
 
@@ -202,14 +231,14 @@ func updateOrganization(settings lsp.Settings) {
 func updateTelemetry(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.SendErrorReports)
 	if err != nil {
-		log.Warn().Err(err).Msgf("couldn't read send error reports %s", settings.SendErrorReports)
+		log.Debug().Err(err).Msgf("couldn't read send error reports %s", settings.SendErrorReports)
 	} else {
 		config.CurrentConfig().SetErrorReportingEnabled(parseBool)
 	}
 
 	parseBool, err = strconv.ParseBool(settings.EnableTelemetry)
 	if err != nil {
-		log.Warn().Err(err).Msgf("couldn't read enable telemetry %s", settings.SendErrorReports)
+		log.Debug().Err(err).Msgf("couldn't read enable telemetry %s", settings.SendErrorReports)
 	} else {
 		config.CurrentConfig().SetTelemetryEnabled(parseBool)
 		if parseBool {
@@ -221,7 +250,7 @@ func updateTelemetry(settings lsp.Settings) {
 func manageBinariesAutomatically(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ManageBinariesAutomatically)
 	if err != nil {
-		log.Warn().Err(err).Msgf("couldn't read manage binaries automatically %s", settings.ManageBinariesAutomatically)
+		log.Debug().Err(err).Msgf("couldn't read manage binaries automatically %s", settings.ManageBinariesAutomatically)
 	} else {
 		config.CurrentConfig().SetManageBinariesAutomatically(parseBool)
 	}
@@ -230,7 +259,7 @@ func manageBinariesAutomatically(settings lsp.Settings) {
 func updateSnykCodeSecurity(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ActivateSnykCodeSecurity)
 	if err != nil {
-		log.Warn().Err(err).Msgf("couldn't read IsSnykCodeSecurityEnabled %s", settings.ActivateSnykCodeSecurity)
+		log.Debug().Err(err).Msgf("couldn't read IsSnykCodeSecurityEnabled %s", settings.ActivateSnykCodeSecurity)
 	} else {
 		config.CurrentConfig().EnableSnykCodeSecurity(parseBool)
 	}
@@ -239,7 +268,7 @@ func updateSnykCodeSecurity(settings lsp.Settings) {
 func updateSnykCodeQuality(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ActivateSnykCodeQuality)
 	if err != nil {
-		log.Warn().Err(err).Msgf("couldn't read IsSnykCodeQualityEnabled %s", settings.ActivateSnykCodeQuality)
+		log.Debug().Err(err).Msgf("couldn't read IsSnykCodeQualityEnabled %s", settings.ActivateSnykCodeQuality)
 	} else {
 		config.CurrentConfig().EnableSnykCodeQuality(parseBool)
 	}
@@ -273,11 +302,12 @@ func updateCliConfig(settings lsp.Settings) {
 	cliSettings := &config.CliSettings{}
 	cliSettings.Insecure, err = strconv.ParseBool(settings.Insecure)
 	if err != nil {
-		log.Warn().Err(err).Msg("couldn't parse insecure setting")
+		log.Debug().Err(err).Msg("couldn't parse insecure setting")
 	}
 	cliSettings.AdditionalOssParameters = strings.Split(settings.AdditionalParams, " ")
 	cliSettings.SetPath(settings.CliPath)
-
+	conf := di.Engine().GetConfiguration()
+	conf.Set(configuration.INSECURE_HTTPS, cliSettings.Insecure)
 	config.CurrentConfig().SetCliSettings(cliSettings)
 }
 
@@ -285,7 +315,7 @@ func updateProductEnablement(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ActivateSnykCode)
 	currentConfig := config.CurrentConfig()
 	if err != nil {
-		log.Warn().Err(err).Msg("couldn't parse code setting")
+		log.Debug().Err(err).Msg("couldn't parse code setting")
 	} else {
 		currentConfig.SetSnykCodeEnabled(parseBool)
 		currentConfig.EnableSnykCodeQuality(parseBool)
@@ -293,13 +323,13 @@ func updateProductEnablement(settings lsp.Settings) {
 	}
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykOpenSource)
 	if err != nil {
-		log.Warn().Err(err).Msg("couldn't parse open source setting")
+		log.Debug().Err(err).Msg("couldn't parse open source setting")
 	} else {
 		currentConfig.SetSnykOssEnabled(parseBool)
 	}
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykIac)
 	if err != nil {
-		log.Warn().Err(err).Msg("couldn't parse iac setting")
+		log.Debug().Err(err).Msg("couldn't parse iac setting")
 	} else {
 		currentConfig.SetSnykIacEnabled(parseBool)
 	}

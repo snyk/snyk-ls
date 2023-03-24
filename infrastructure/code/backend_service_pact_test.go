@@ -19,6 +19,7 @@ package code
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/pact-foundation/pact-go/dsl"
@@ -262,7 +263,7 @@ func setupPact(t *testing.T) {
 	config.CurrentConfig().UpdateApiEndpoints("http://localhost")
 	config.CurrentConfig().SetOrganization("test-org")
 
-	client = NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter())
+	client = NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), func() *http.Client { return http.DefaultClient })
 }
 
 func getPutPostHeaderMatcher() dsl.MapMatcher {

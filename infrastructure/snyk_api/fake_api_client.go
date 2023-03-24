@@ -41,9 +41,8 @@ func (f *FakeApiClient) addCall(params []any, op string) {
 	}
 	calls := f.Calls[op]
 	var opParams []any
-	for p := range params {
-		opParams = append(opParams, params[p])
-	}
+	opParams = append(opParams, params...)
+
 	f.Calls[op] = append(calls, opParams)
 }
 

@@ -21,26 +21,24 @@ import (
 
 	"github.com/amplitude/analytics-go/amplitude"
 	"github.com/amplitude/analytics-go/amplitude/plugins/destination"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/ampli"
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
-	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 )
 
 type Client struct {
 	authenticatedUserId string
 	destination         *SegmentPlugin
-	snykApiClient       snyk_api.SnykApiClient
 	errorReporter       error_reporting.ErrorReporter
+	authFunc            func() (string, error)
 }
 
 type captureEvent func(userId string, eventOptions ...ampli.EventOptions)
 
-func NewAmplitudeClient(snykApiClient snyk_api.SnykApiClient, errorReporter error_reporting.ErrorReporter) ux2.Analytics {
+func NewAmplitudeClient(authFunc func() (string, error), errorReporter error_reporting.ErrorReporter) ux2.Analytics {
 	ampliConfig := amplitude.NewConfig("")
 
 	ampli.Instance.Load(ampli.LoadOptions{
@@ -55,8 +53,8 @@ func NewAmplitudeClient(snykApiClient snyk_api.SnykApiClient, errorReporter erro
 
 	client := &Client{
 		destination:   segmentPlugin,
-		snykApiClient: snykApiClient,
 		errorReporter: errorReporter,
+		authFunc:      authFunc,
 	}
 
 	return client
@@ -198,22 +196,18 @@ func (c *Client) Identify() {
 		return
 	}
 
-	user, err := c.snykApiClient.GetActiveUser()
+	userId, err := c.authFunc()
 	if err != nil {
-		log.
-			Warn().
-			Err(errors.Wrap(err, "could not retrieve active user from API")).
-			Str("method", method).Msg("using deviceId instead of user id")
+		log.Debug().Str("method", method).Err(err).Msg("Failed to identify user.")
 		return
 	}
-
-	c.authenticatedUserId = user.Id
+	c.authenticatedUserId = userId
 
 	if !config.CurrentConfig().IsTelemetryEnabled() {
 		return
 	}
 
-	identifyEvent := ampli.Identify.Builder().UserId(user.Id).Build()
+	identifyEvent := ampli.Identify.Builder().UserId(userId).Build()
 	ampli.Instance.Identify(c.authenticatedUserId, identifyEvent, ampli.EventOptions{})
 }
 

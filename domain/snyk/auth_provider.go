@@ -21,14 +21,33 @@ import (
 	"errors"
 )
 
-type AuthenticationProvider interface {
-	Authenticate(ctx context.Context) (string, error)
-	ClearAuthentication(ctx context.Context) error
-	AuthURL(ctx context.Context) string
+type AuthenticationFailedError struct {
+	ManualAuthentication bool
+}
 
-	// AuthenticateToken tries to authenticate using the provided token.
-	// If the token is invalid, an AuthenticationFailedError will be returned
-	AuthenticateToken(token string) error
+func (e *AuthenticationFailedError) Error() string {
+	const authFailMessage = "Failed to authenticate with Snyk. Please make sure you have a valid token. "
+	const autoAuthMessage = "You can reset the token to re-authenticate automatically."
+	message := authFailMessage
+
+	if !e.ManualAuthentication {
+		message += autoAuthMessage
+	}
+
+	return message
+}
+
+type AuthenticationProvider interface {
+	// Authenticate triggers the authentication. This may involve manual steps, like logging in using a browser
+	Authenticate(ctx context.Context) (string, error)
+
+	// ClearAuthentication removes all authentication information from the configuration
+	ClearAuthentication(ctx context.Context) error
+
+	// AuthURL returns the latest provided AuthenticationURL. This can be empty.
+	AuthURL(ctx context.Context) string
+	// SetAuthURL sets the latest provided Authentication URL. This is a temporary URL.
+	SetAuthURL(url string)
 }
 
 var ErrEmptyAPIToken = errors.New("auth-provider: api token is not set")

@@ -43,7 +43,7 @@ func NewAuthenticationService(apiProvider snyk_api.SnykApiClient, authenticator 
 	return &AuthenticationService{apiProvider, authenticator, analytics, errorReporter}
 }
 
-func (a AuthenticationService) Provider() snyk.AuthenticationProvider {
+func (a *AuthenticationService) Provider() snyk.AuthenticationProvider {
 	return a.authenticator
 }
 
@@ -58,7 +58,7 @@ func (a *AuthenticationService) Authenticate(ctx context.Context) (string, error
 	return token, err
 }
 
-func (a AuthenticationService) UpdateToken(newToken string, sendNotification bool) {
+func (a *AuthenticationService) UpdateToken(newToken string, sendNotification bool) {
 	oldToken := config.CurrentConfig().Token()
 	config.CurrentConfig().SetToken(newToken)
 
@@ -71,7 +71,7 @@ func (a AuthenticationService) UpdateToken(newToken string, sendNotification boo
 	}
 }
 
-func (a AuthenticationService) Logout(ctx context.Context) {
+func (a *AuthenticationService) Logout(ctx context.Context) {
 	err := a.Provider().ClearAuthentication(ctx)
 	if err != nil {
 		log.Error().Err(err).Str("method", "Logout").Msg("Failed to log out.")
@@ -84,12 +84,13 @@ func (a AuthenticationService) Logout(ctx context.Context) {
 	workspace.Get().ClearIssues(ctx)
 }
 
-func (a AuthenticationService) IsAuthenticated() (bool, error) {
+func (a *AuthenticationService) IsAuthenticated() (bool, error) {
 	_, getActiveUserErr := a.apiClient.GetActiveUser()
 	isAuthenticated := getActiveUserErr == nil
 
 	if !isAuthenticated {
 		switch getActiveUserErr.StatusCode() {
+		//goland:noinspection GoErrorStringFormat
 		case 401:
 			return false, errors.New("Authentication failed. Please update your token.")
 		default:
@@ -98,4 +99,8 @@ func (a AuthenticationService) IsAuthenticated() (bool, error) {
 	}
 
 	return isAuthenticated, nil
+}
+
+func (a *AuthenticationService) SetProvider(provider snyk.AuthenticationProvider) {
+	a.authenticator = provider
 }

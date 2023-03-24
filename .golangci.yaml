@@ -15,7 +15,6 @@
 linters:
   disable-all: true
   enable:
-    - deadcode
     - errcheck
     - gofmt
     - goimports
@@ -23,10 +22,8 @@ linters:
     - ineffassign
     - misspell
     - staticcheck
-    - structcheck
     - unconvert
     - unused
-    - varcheck
     - govet
     - gocyclo
     - dupl
@@ -46,6 +43,13 @@ output:
   format: tab
 
 run:
-  deadline: 10m
+  deadline: 2m
   skip-dirs:
     - "docs"
+    - "licenses"
+    - "pact"
+    - "ampli"
+    - ".bin"
+    - ".github"
+    - ".vscode"
+    - "build"

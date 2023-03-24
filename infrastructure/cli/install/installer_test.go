@@ -19,6 +19,7 @@ package install
 import (
 	"context"
 	"encoding/hex"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -45,7 +46,7 @@ func TestInstaller_Find(t *testing.T) {
 
 	t.Setenv("PATH", cliDir)
 
-	i := NewInstaller(error_reporting.NewTestErrorReporter())
+	i := NewInstaller(error_reporting.NewTestErrorReporter(), nil)
 
 	execPath, err := i.Find()
 
@@ -72,7 +73,7 @@ func Test_Find_CliPathInSettings_CliPathFound(t *testing.T) {
 	t.Setenv("SNYK_TOKEN", "")
 	t.Setenv("SNYK_CLI_PATH", "")
 	config.CurrentConfig().CliSettings().SetPath(cliPath)
-	installer := NewInstaller(error_reporting.NewTestErrorReporter())
+	installer := NewInstaller(error_reporting.NewTestErrorReporter(), nil)
 
 	// Act
 	foundPath, err := installer.Find()
@@ -89,7 +90,7 @@ func TestInstaller_Find_emptyPath(t *testing.T) {
 	t.Skipf("removes real binaries from user directory")
 
 	t.Setenv("PATH", "")
-	i := NewInstaller(error_reporting.NewTestErrorReporter())
+	i := NewInstaller(error_reporting.NewTestErrorReporter(), nil)
 
 	execPath, err := i.Find()
 
@@ -107,7 +108,7 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 	}
 	_ = file.Close()
 
-	i := NewInstaller(error_reporting.NewTestErrorReporter())
+	i := NewInstaller(error_reporting.NewTestErrorReporter(), nil)
 	_, err = i.installRelease(r)
 
 	assert.Error(t, err)
@@ -116,7 +117,7 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 	testutil.UnitTest(t)
 	// prepare
-	i := NewInstaller(error_reporting.NewTestErrorReporter())
+	i := NewInstaller(error_reporting.NewTestErrorReporter(), nil)
 
 	temp := t.TempDir()
 	fakeCliFile := testutil.CreateTempFile(temp, t)
@@ -161,7 +162,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 
 	// prepare
 	ctx := context.Background()
-	i := NewInstaller(error_reporting.NewTestErrorReporter())
+	i := NewInstaller(error_reporting.NewTestErrorReporter(), func() *http.Client { return http.DefaultClient })
 	cliDir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(t, err, "Failed to create temp dir")
@@ -180,7 +181,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	}
 	defer func(f string) { _ = os.Remove(f) }(cliFilePath)
 
-	r := NewCLIRelease()
+	r := NewCLIRelease(i.httpClient)
 	release, err := r.GetLatestRelease(ctx)
 	if err != nil {
 		t.Fatal(err, "Error getting latest release info")

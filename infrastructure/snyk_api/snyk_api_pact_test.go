@@ -18,6 +18,7 @@ package snyk_api
 
 import (
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/pact-foundation/pact-go/dsl"
@@ -176,5 +177,5 @@ func setupPact() {
 	pact.Setup(true)
 
 	config.CurrentConfig().UpdateApiEndpoints(fmt.Sprintf("http://localhost:%d", pact.Server.Port))
-	client = NewSnykApiClient()
+	client = NewSnykApiClient(func() *http.Client { return http.DefaultClient })
 }

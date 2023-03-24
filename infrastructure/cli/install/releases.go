@@ -24,8 +24,6 @@ import (
 	"net/http"
 
 	"github.com/rs/zerolog/log"
-
-	"github.com/snyk/snyk-ls/internal/httpclient"
 )
 
 const defaultBaseURL = "https://static.snyk.io"
@@ -53,22 +51,22 @@ type ReleaseAsset struct {
 }
 
 type CLIRelease struct {
-	baseURL string
+	baseURL    string
+	httpClient func() *http.Client
 }
 
-func NewCLIRelease() *CLIRelease {
+func NewCLIRelease(httpClient func() *http.Client) *CLIRelease {
 	return &CLIRelease{
-		baseURL: defaultBaseURL,
+		baseURL:    defaultBaseURL,
+		httpClient: httpClient,
 	}
 }
 
 func (r *CLIRelease) GetLatestRelease(ctx context.Context) (*Release, error) {
-	client := httpclient.NewHTTPClient()
-
 	releaseURL := fmt.Sprintf("%s/cli/latest/release.json", r.baseURL)
 	log.Ctx(ctx).Trace().Str("url", releaseURL).Msg("requesting version for Snyk CLI")
 
-	resp, err := client.Get(releaseURL)
+	resp, err := r.httpClient().Get(releaseURL)
 	if err != nil {
 		return nil, err
 	}

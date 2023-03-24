@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rs/zerolog/log"
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -41,7 +40,6 @@ func (n *NpmRangeFinder) find(issue ossIssue) snyk.Range {
 
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
-		log.Trace().Interface("issueId", issue.Id).Str("line", line).Msg("scanning line for " + searchPackage)
 		elems := strings.Split(line, ":")
 		if len(elems) > 1 {
 			jsonKey := strings.Trim(strings.Trim(elems[0], " "), "\"")
@@ -50,7 +48,6 @@ func (n *NpmRangeFinder) find(issue ossIssue) snyk.Range {
 				start.Character = strings.Index(line, searchPackage) - 1
 				end.Line = i
 				end.Character = len(strings.ReplaceAll(line, ",", ""))
-				log.Trace().Str("issueId", issue.Id).Interface("start", start).Interface("end", end).Msg("found range for " + searchPackage)
 				break
 			}
 		}
@@ -86,6 +83,5 @@ func introducingPackageAndVersion(issue ossIssue) (string, string) {
 		packageName = issue.Name
 		version = issue.Version
 	}
-	log.Trace().Str("issueId", issue.Id).Str("IntroducingPackage", packageName).Str("IntroducingVersion", version).Msg("Introducing package and version")
 	return packageName, version
 }

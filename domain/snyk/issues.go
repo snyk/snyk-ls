@@ -58,6 +58,69 @@ type Issue struct {
 	AdditionalData any
 }
 
+type CodeIssueData struct {
+	// Unique key identifying an issue in the whole result set
+	Key                string             `json:"key"`
+	Message            string             `json:"message"`
+	Rule               string             `json:"rule"`
+	RuleId             string             `json:"ruleId"`
+	RepoDatasetSize    int                `json:"repoDatasetSize"`
+	ExampleCommitFixes []ExampleCommitFix `json:"exampleCommitFixes"`
+	CWE                []string           `json:"cwe"`
+	Text               string             `json:"text"`
+	Markers            []Marker           `json:"markers,omitempty"`
+	Cols               CodePoint          `json:"cols"`
+	Rows               CodePoint          `json:"rows"`
+	IsSecurityType     bool               `json:"isSecurityType"`
+}
+
+type ExampleCommitFix struct {
+	CommitURL string             `json:"commitURL"`
+	Lines     []CommitChangeLine `json:"lines"`
+}
+
+type CommitChangeLine struct {
+	Line       string `json:"line"`
+	LineNumber int    `json:"lineNumber"`
+	LineChange string `json:"lineChange"`
+}
+
+type CodePoint = [2]int
+
+type Marker struct {
+	Msg CodePoint        `json:"msg"`
+	Pos []MarkerPosition `json:"pos"`
+}
+
+type MarkerPosition struct {
+	Cols CodePoint `json:"cols"`
+	Rows CodePoint `json:"rows"`
+	File string    `json:"file"`
+}
+
+type IaCIssueData struct {
+	// Unique key identifying an issue in the whole result set
+	Key string `json:"key"`
+	// Title: title of the issue
+	Title string `json:"title"`
+	// PublicID: unique identifier for the issue; it is the same as the ScanIssue.ID
+	PublicId string `json:"publicId"`
+	// Documentation is a URL which is constructed from the PublicID (e.g. https://snyk.io/security-rules/SNYK-CC-K8S-13)
+	Documentation string `json:"documentation"`
+	// LineNumber: line number of the issue in the file
+	LineNumber int `json:"lineNumber"`
+	// Issue: will contain the issue description
+	Issue string `json:"issue"`
+	// Impact: will contain the impact description
+	Impact string `json:"impact"`
+	// Resolve: will contain the resolution description (not to be confused with Remediation)
+	Resolve string `json:"resolve"`
+	// Path: path to the issue in the file
+	Path []string `json:"path"`
+	// References: List of reference URLs
+	References []string `json:"references,omitempty"`
+}
+
 func (i Issue) GetFilterableIssueType() product.FilterableIssueType {
 	switch i.Product {
 	case product.ProductOpenSource:

@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -182,6 +183,52 @@ func Test_initialize_containsServerInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, config.LsProtocolVersion, result.ServerInfo.Version)
+}
+
+func Test_initialize_shouldDefaultToTokenAuthentication(t *testing.T) {
+	loc := setupServer(t)
+
+	_, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, lsp.TokenAuthentication, config.CurrentConfig().GetAuthenticationMethod())
+	assert.Equal(t, "*auth.FakeAuthenticationProvider", reflect.TypeOf(di.AuthenticationService().Provider()).String())
+}
+
+func Test_initialize_shouldInitToOauthAuthenticationWhenConfigured(t *testing.T) {
+	loc := setupServer(t)
+	di.Init() // force non test init
+
+	settings := lsp.Settings{AuthenticationMethod: lsp.OAuthAuthentication}
+
+	_, err := loc.Client.Call(ctx, "initialize", lsp.InitializeParams{InitializationOptions: settings})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, lsp.OAuthAuthentication, config.CurrentConfig().GetAuthenticationMethod())
+	assert.Equal(t, "*oauth.oAuthProvider", reflect.TypeOf(di.AuthenticationService().Provider()).String())
+}
+
+func Test_initialize_shouldInitToTokenAuthenticationWhenConfigured(t *testing.T) {
+	loc := setupServer(t)
+
+	settings := lsp.Settings{AuthenticationMethod: lsp.OAuthAuthentication}
+
+	_, err := loc.Client.Call(ctx, "initialize", lsp.InitializeParams{InitializationOptions: settings})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, "*oauth.oAuthProvider", reflect.TypeOf(di.AuthenticationService().Provider()).String())
+
+	_, err = loc.Client.Call(ctx, "workspace/didChangeConfiguration", lsp.DidChangeConfigurationParams{Settings: lsp.Settings{AuthenticationMethod: lsp.TokenAuthentication}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, lsp.TokenAuthentication, config.CurrentConfig().GetAuthenticationMethod())
+	assert.Equal(t, "*auth.CliAuthenticationProvider", reflect.TypeOf(di.AuthenticationService().Provider()).String())
 }
 
 func Test_initialize_shouldSupportAllCommands(t *testing.T) {

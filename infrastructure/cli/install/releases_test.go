@@ -18,6 +18,7 @@ package install
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,7 +29,7 @@ import (
 func TestGetLatestRelease_downloadURLShouldBeNotEmpty(t *testing.T) {
 	testutil.IntegTest(t)
 
-	r := NewCLIRelease()
+	r := NewCLIRelease(func() *http.Client { return http.DefaultClient })
 	ctx := context.Background()
 
 	release, err := r.GetLatestRelease(ctx)
