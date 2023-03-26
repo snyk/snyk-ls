@@ -151,10 +151,10 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 		return []snyk.Issue{}, nil
 	}
 
-	changedFiles := make([]string, 0, len(sc.changedPaths[folderPath]))
+	changedFiles := make(map[string]bool)
 	for changedPath := range sc.changedPaths[folderPath] {
 		if !uri.IsDirectory(changedPath) {
-			changedFiles = append(changedFiles, changedPath)
+			changedFiles[changedPath] = true
 		}
 		delete(sc.changedPaths[folderPath], changedPath)
 	}
@@ -229,7 +229,7 @@ func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
 	gitIgnore := ignore.CompileIgnoreLines(sc.ignorePatterns...)
 	sc.mutex.Unlock()
 	filesWalked := 0
-	log.Debug().Str("method", "folder.Files").Msgf("Filecount: %d", fileCount)
+	log.Debug().Str("method", "folder.Files").Msgf("File count: %d", fileCount)
 	err = filepath.WalkDir(
 		workspace, func(path string, dirEntry os.DirEntry, err error) error {
 			if err != nil {
@@ -390,7 +390,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 	files []string,
 	path string,
 	scanMetrics *ScanMetrics,
-	changedFiles []string,
+	changedFiles map[string]bool,
 ) (issues []snyk.Issue, err error) {
 	if ctx.Err() != nil {
 		log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
@@ -405,7 +405,8 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 
 	requestId := span.GetTraceId() // use span trace id as code-request-id
 
-	bundle, bundleFiles, err := sc.createBundle(span.Context(), requestId, path, files, changedFiles)
+	bundle, err := sc.createBundle(span.Context(), requestId, path, files, changedFiles)
+	bundleFiles := bundle.Files
 
 	if err != nil {
 		if ctx.Err() == nil { // Only report errors that are not intentional cancellations
@@ -450,31 +451,21 @@ func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg stri
 	sc.trackResult(err == nil, scanMetrics)
 }
 
-func (sc *Scanner) createBundle(
-	ctx context.Context,
+func (sc *Scanner) createBundle(ctx context.Context,
 	requestId string,
 	rootPath string,
 	filePaths []string,
-	changedFiles []string,
-) (b Bundle, bundleFiles map[string]BundleFile, err error) {
+	changedFiles map[string]bool,
+) (b Bundle, err error) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.createBundle")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
-	b = Bundle{
-		SnykCode:      sc.BundleUploader.SnykCode,
-		instrumentor:  sc.BundleUploader.instrumentor,
-		requestId:     requestId,
-		rootPath:      rootPath,
-		errorReporter: sc.errorReporter,
-		scanNotifier:  sc.scanNotifier,
-		limitToFiles:  changedFiles,
-	}
-
+	var limitToFiles []string
 	fileHashes := make(map[string]string)
-	bundleFiles = make(map[string]BundleFile)
+	bundleFiles := make(map[string]BundleFile)
 	for _, filePath := range filePaths {
 		if ctx.Err() != nil {
-			return b, nil, err // The cancellation error should be handled by the calling function
+			return b, err // The cancellation error should be handled by the calling function
 		}
 		if !sc.BundleUploader.isSupported(span.Context(), filePath) {
 			continue
@@ -488,14 +479,39 @@ func (sc *Scanner) createBundle(
 		if !(len(fileContent) > 0 && len(fileContent) <= maxFileSize) {
 			continue
 		}
-		file := getFileFrom(filePath, fileContent)
-		bundleFiles[filePath] = file
-		fileHashes[filePath] = file.Hash
+		bundleFile := getFileFrom(filePath, fileContent)
+		bundleFiles[filePath] = bundleFile
+		fileHashes[filePath] = bundleFile.Hash
+		relativePath, err := filepath.Rel(rootPath, filePath)
+		if err != nil {
+			relativePath = filePath
+			if rootPath != "" {
+				errMsg := fmt.Sprint("could not get relative path for file: ", filePath, " and root path: ", rootPath)
+				sc.errorReporter.CaptureErrorAndReportAsIssue(rootPath, errors.Wrap(err, errMsg))
+			}
+		}
+
+		relativePath = filepath.ToSlash(relativePath)
+
+		if changedFiles[filePath] {
+			limitToFiles = append(limitToFiles, relativePath)
+		}
+	}
+
+	b = Bundle{
+		SnykCode:      sc.BundleUploader.SnykCode,
+		Files:         bundleFiles,
+		instrumentor:  sc.BundleUploader.instrumentor,
+		requestId:     requestId,
+		rootPath:      rootPath,
+		errorReporter: sc.errorReporter,
+		scanNotifier:  sc.scanNotifier,
+		limitToFiles:  limitToFiles,
 	}
 	if len(fileHashes) > 0 {
 		b.BundleHash, b.missingFiles, err = sc.BundleUploader.SnykCode.CreateBundle(span.Context(), fileHashes)
 	}
-	return b, bundleFiles, err
+	return b, err
 }
 
 const codeDisabledInOrganisationMessageText = "It looks like your organization has disabled Snyk Code. " +

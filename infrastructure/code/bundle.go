@@ -36,6 +36,7 @@ type Bundle struct {
 	SnykCode      SnykCodeClient
 	BundleHash    string
 	UploadBatches []*UploadBatch
+	Files         map[string]BundleFile
 	instrumentor  performance.Instrumentor
 	errorReporter error_reporting.ErrorReporter
 	requestId     string
