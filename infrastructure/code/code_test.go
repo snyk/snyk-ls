@@ -163,6 +163,31 @@ func TestCreateBundle(t *testing.T) {
 			assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")
 		},
 	)
+
+	t.Run("includes config files", func(t *testing.T) {
+		configFile := ".test"
+		snykCodeMock := &FakeSnykCodeClient{
+			ConfigFiles: []string{configFile},
+		}
+		scanner := New(
+			NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
+			&snyk_api.FakeApiClient{CodeEnabled: true},
+			error_reporting.NewTestErrorReporter(),
+			ux2.NewTestAnalytics(),
+		)
+		tempDir := t.TempDir()
+		file := filepath.Join(tempDir, configFile)
+		err := os.WriteFile(file, []byte("some content so the file won't be skipped"), 0600)
+		assert.Nil(t, err)
+
+		bundle, err := scanner.createBundle(context.Background(),
+			"testRequestId",
+			tempDir,
+			[]string{file},
+			map[string]bool{})
+		assert.Nil(t, err)
+		assert.Contains(t, bundle.Files, file)
+	})
 }
 
 func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient, string, *Scanner, string) {
