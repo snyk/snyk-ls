@@ -104,7 +104,11 @@ type Scanner struct {
 	scanCount             int
 }
 
-func New(instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux2.Analytics, cli cli.Executor) *Scanner {
+func New(instrumentor performance.Instrumentor,
+	errorReporter error_reporting.ErrorReporter,
+	analytics ux2.Analytics,
+	cli cli.Executor,
+) *Scanner {
 	return &Scanner{
 		instrumentor:          instrumentor,
 		errorReporter:         errorReporter,
@@ -198,7 +202,7 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	oss.mutex.Unlock()
 
 	if issues != nil {
-		oss.scheduleNewScan(path)
+		oss.scheduleNewScan(context.Background(), path)
 	}
 
 	return issues, nil
@@ -220,7 +224,10 @@ func (oss *Scanner) isSupported(documentURI sglsp.DocumentURI) bool {
 	return uri.IsUriDirectory(documentURI) || supportedFiles[filepath.Base(uri.PathFromUri(documentURI))]
 }
 
-func (oss *Scanner) unmarshallAndRetrieveAnalysis(ctx context.Context, res []byte, documentURI sglsp.DocumentURI) (issues []snyk.Issue) {
+func (oss *Scanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
+	res []byte,
+	documentURI sglsp.DocumentURI,
+) (issues []snyk.Issue) {
 	if ctx.Err() != nil {
 		return nil
 	}
@@ -418,28 +425,49 @@ func (oss *Scanner) trackResult(success bool) {
 	})
 }
 
-// Schedules new scan after 24h once existing OSS results might be stale
-func (oss *Scanner) scheduleNewScan(path string) {
+// scheduleNewScan Schedules new scan after scheduledScanDuration once existing OSS results might be stale.
+// The timer is reset if a new scan is scheduled before the previous one is executed.
+// Cancelling the context will stop the timer and abort the scheduled scan.
+func (oss *Scanner) scheduleNewScan(ctx context.Context, path string) {
+	logger := log.With().Str("method", "oss.scheduleNewScan").Logger()
 	if oss.scheduledScan != nil {
 		// Cancel previously scheduled scan
 		oss.scheduledScan.Stop()
 	}
 
-	oss.scheduledScan = time.AfterFunc(oss.scheduledScanDuration, func() {
-		if !oss.IsEnabled() {
+	timer := time.NewTimer(oss.scheduledScanDuration)
+	oss.scheduledScan = timer
+	go func() {
+		select {
+		case <-oss.scheduledScan.C:
+			if !oss.IsEnabled() {
+				logger.Info().Msg("OSS scan is disabled, skipping scheduled scan")
+				return
+			}
+
+			if ctx.Err() != nil {
+				logger.Info().Msg("Scheduled scan cancelled")
+				return
+			}
+
+			oss.analytics.AnalysisIsTriggered(
+				ux2.AnalysisIsTriggeredProperties{
+					AnalysisType:    []ux2.AnalysisType{ux2.OpenSource},
+					TriggeredByUser: false,
+				},
+			)
+
+			span := oss.instrumentor.NewTransaction(context.WithValue(ctx, oss.Product(), oss),
+				string(oss.Product()),
+				"oss.scheduleNewScanIn")
+			defer oss.instrumentor.Finish(span)
+
+			logger.Info().Msg("Starting scheduled scan")
+			_, _ = oss.Scan(span.Context(), path, "")
+		case <-ctx.Done():
+			logger.Info().Msg("Scheduled scan cancelled")
+			timer.Stop()
 			return
 		}
-
-		oss.analytics.AnalysisIsTriggered(
-			ux2.AnalysisIsTriggeredProperties{
-				AnalysisType:    []ux2.AnalysisType{ux2.OpenSource},
-				TriggeredByUser: false,
-			},
-		)
-
-		span := oss.instrumentor.NewTransaction(context.WithValue(context.Background(), oss.Product(), oss), string(oss.Product()), "oss.scheduleNewScanIn")
-		defer oss.instrumentor.Finish(span)
-
-		_, _ = oss.Scan(span.Context(), path, "")
-	})
+	}()
 }
