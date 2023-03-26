@@ -22,25 +22,27 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/domain/observability/performance"
-	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type BundleUploader struct {
-	SnykCode            SnykCodeClient
-	supportedExtensions concurrency.AtomicMap
-	instrumentor        performance.Instrumentor
+	SnykCode             SnykCodeClient
+	supportedExtensions  *xsync.MapOf[string, bool]
+	supportedConfigFiles *xsync.MapOf[string, bool]
+	instrumentor         performance.Instrumentor
 }
 
 func NewBundler(SnykCode SnykCodeClient, instrumentor performance.Instrumentor) *BundleUploader {
 	return &BundleUploader{
-		SnykCode:            SnykCode,
-		instrumentor:        instrumentor,
-		supportedExtensions: concurrency.AtomicMap{},
+		SnykCode:             SnykCode,
+		instrumentor:         instrumentor,
+		supportedExtensions:  xsync.NewMapOf[bool](),
+		supportedConfigFiles: xsync.NewMapOf[bool](),
 	}
 }
 
@@ -101,7 +103,8 @@ func (b *BundleUploader) groupInBatches(
 			log.Trace().Str("path", documentURI).Int("size", len(fileContent)).Msgf("added to bundle #%v", len(batches))
 			uploadBatch.documents[documentURI] = file
 		} else {
-			log.Trace().Str("path", documentURI).Int("size", len(fileContent)).Msgf("created new bundle - %v bundles in this upload so far", len(batches))
+			log.Trace().Str("path", documentURI).Int("size",
+				len(fileContent)).Msgf("created new bundle - %v bundles in this upload so far", len(batches))
 			newUploadBatch := NewUploadBatch()
 			newUploadBatch.documents[documentURI] = file
 			batches = append(batches, &newUploadBatch)
@@ -114,23 +117,27 @@ func (b *BundleUploader) groupInBatches(
 }
 
 func (b *BundleUploader) isSupported(ctx context.Context, file string) bool {
-	if b.supportedExtensions.Length() == 0 {
-		// query
-		_, exts, err := b.SnykCode.GetFilters(ctx)
+	if b.supportedExtensions.Size() == 0 {
+		configFiles, extensions, err := b.SnykCode.GetFilters(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("could not get filters")
 			return false
 		}
 
-		// cache
-		for _, ext := range exts {
-			b.supportedExtensions.Put(ext, true)
+		for _, ext := range extensions {
+			b.supportedExtensions.Store(ext, true)
+		}
+		for _, configFile := range configFiles {
+			b.supportedConfigFiles.Store(configFile, true)
 		}
 	}
 
-	supported := b.supportedExtensions.Get(filepath.Ext(file))
+	fileExtension := filepath.Ext(file)
+	fileName := filepath.Base(file) // Config files are compared to the file name, not just the extensions
+	_, isSupportedExtension := b.supportedExtensions.Load(fileExtension)
+	_, isSupportedConfigFile := b.supportedConfigFiles.Load(fileName)
 
-	return supported != nil && supported.(bool)
+	return isSupportedExtension || isSupportedConfigFile
 }
 
 func loadContent(filePath string) ([]byte, error) {

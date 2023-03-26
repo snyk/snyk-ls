@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/adrg/xdg"
@@ -42,7 +43,9 @@ func Test_Bundler_Upload(t *testing.T) {
 		bundleFileMap := map[string]BundleFile{}
 		bundleFileMap[documentURI] = bundleFile
 
-		_, err := bundleUploader.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: []string{documentURI}}, bundleFileMap)
+		_, err := bundleUploader.Upload(context.Background(),
+			Bundle{SnykCode: snykCodeService, missingFiles: []string{documentURI}},
+			bundleFileMap)
 
 		assert.Equal(t, 1, snykCodeService.TotalBundleCount)
 		assert.NoError(t, err)
@@ -70,7 +73,9 @@ func Test_Bundler_Upload(t *testing.T) {
 		bundleFileMap[path] = bundleFile
 		missingFiles = append(missingFiles, path)
 
-		_, err := bundler.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: missingFiles}, bundleFileMap)
+		_, err := bundler.Upload(context.Background(),
+			Bundle{SnykCode: snykCodeService, missingFiles: missingFiles},
+			bundleFileMap)
 
 		assert.True(t, snykCodeService.HasExtendedBundle)
 		assert.Equal(t, 2, snykCodeService.TotalBundleCount)
@@ -96,6 +101,41 @@ func Test_IsSupportedLanguage(t *testing.T) {
 
 	t.Run("should return false for unsupported languages", func(t *testing.T) {
 		path := "C:\\some\\path\\Test.rs"
+		supported := bundler.isSupported(context.Background(), path)
+		assert.False(t, supported)
+	})
+
+	t.Run("should cache supported extensions", func(t *testing.T) {
+		path := "C:\\some\\path\\Test.rs"
+		bundler.isSupported(context.Background(), path)
+		bundler.isSupported(context.Background(), path)
+		assert.Len(t, snykCodeMock.Calls, 1)
+	})
+}
+
+func Test_IsSupported_ConfigFile(t *testing.T) {
+	expectedSupportedConfigFiles := []string{
+		".supportedConfigFile",
+		".snyk",
+		".dcignore",
+	}
+	snykCodeMock := &FakeSnykCodeClient{
+		ConfigFiles: expectedSupportedConfigFiles,
+	}
+	bundler := NewBundler(snykCodeMock, performance.NewTestInstrumentor())
+	dir, _ := os.Getwd()
+
+	t.Run("should return true for supported config files", func(t *testing.T) {
+		for _, file := range expectedSupportedConfigFiles {
+			path := filepath.Join(dir, file)
+			supported := bundler.isSupported(context.Background(), path)
+			assert.True(t, supported)
+		}
+	})
+	t.Run("should return false for unsupported config files", func(t *testing.T) {
+		path := "C:\\some\\path\\.unsupported"
+		configFile := filepath.Ext(path)
+		assert.NotContains(t, expectedSupportedConfigFiles, configFile)
 		supported := bundler.isSupported(context.Background(), path)
 		assert.False(t, supported)
 	})

@@ -113,6 +113,7 @@ type FakeSnykCodeClient struct {
 	ExtendedBundleCount          int
 	AnalysisDuration             time.Duration
 	FailOnCreateBundle           bool
+	ConfigFiles                  []string
 	currentConcurrentScans       int
 	maxConcurrentScans           int
 	AutofixDuration              time.Duration
@@ -168,7 +169,7 @@ func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (configFiles []string
 	defer FakeSnykCodeApiServiceMutex.Unlock()
 	params := []any{configFiles, extensions, err}
 	f.addCall(params, GetFiltersOperation)
-	return make([]string, 0), FakeFilters, nil
+	return f.ConfigFiles, FakeFilters, nil
 }
 
 func (f *FakeSnykCodeClient) CreateBundle(_ context.Context,
