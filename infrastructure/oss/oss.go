@@ -101,6 +101,7 @@ type Scanner struct {
 	runningScans          map[string]*scans.ScanProgress
 	scheduledScanDuration time.Duration
 	scheduledScan         *time.Timer
+	scheduledScanMtx      *sync.Mutex
 	scanCount             int
 }
 
@@ -430,6 +431,7 @@ func (oss *Scanner) trackResult(success bool) {
 // Cancelling the context will stop the timer and abort the scheduled scan.
 func (oss *Scanner) scheduleNewScan(ctx context.Context, path string) {
 	logger := log.With().Str("method", "oss.scheduleNewScan").Logger()
+	oss.scheduledScanMtx.Lock()
 	if oss.scheduledScan != nil {
 		// Cancel previously scheduled scan
 		oss.scheduledScan.Stop()
@@ -437,9 +439,10 @@ func (oss *Scanner) scheduleNewScan(ctx context.Context, path string) {
 
 	timer := time.NewTimer(oss.scheduledScanDuration)
 	oss.scheduledScan = timer
+	oss.scheduledScanMtx.Unlock()
 	go func() {
 		select {
-		case <-oss.scheduledScan.C:
+		case <-timer.C:
 			if !oss.IsEnabled() {
 				logger.Info().Msg("OSS scan is disabled, skipping scheduled scan")
 				return
