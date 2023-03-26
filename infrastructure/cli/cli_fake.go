@@ -29,6 +29,7 @@ type TestExecutor struct {
 	ExecuteResponse []byte
 	wasExecuted     bool
 	ExecuteDuration time.Duration
+	startedScans    int
 	finishedScans   int
 	counterLock     sync.RWMutex
 }
@@ -45,11 +46,16 @@ func NewTestExecutorWithResponse(executeResponsePath string) *TestExecutor {
 	return &TestExecutor{ExecuteResponse: fileContent}
 }
 
+func (t *TestExecutor) GetStartedScans() int {
+	t.counterLock.RLock()
+	defer t.counterLock.RUnlock()
+	return t.startedScans
+}
+
 func (t *TestExecutor) GetFinishedScans() int {
 	t.counterLock.RLock()
-	scanCount := t.finishedScans
-	t.counterLock.RUnlock()
-	return scanCount
+	defer t.counterLock.RUnlock()
+	return t.finishedScans
 }
 
 func (t *TestExecutor) Execute(ctx context.Context, _ []string, _ string) (resp []byte, err error) {
@@ -57,6 +63,11 @@ func (t *TestExecutor) Execute(ctx context.Context, _ []string, _ string) (resp 
 	if err != nil { // Checking for ctx cancellation before faking CLI execution
 		return resp, err
 	}
+
+	// Increment the number of started scans after checking for ctx cancellation to simulate a running CLI
+	t.counterLock.Lock()
+	t.startedScans++
+	t.counterLock.Unlock()
 
 	select {
 	case <-time.After(t.ExecuteDuration):

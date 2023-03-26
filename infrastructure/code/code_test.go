@@ -75,11 +75,16 @@ func TestCreateBundle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file}, []string{})
+			bundle, err := c.createBundle(context.Background(),
+				"testRequestId",
+				dir,
+				[]string{file},
+				map[string]bool{})
 			if err != nil {
 				t.Fatal(err)
 			}
-			assert.Len(t, missingFiles, 1, "bundle should have 1 missing files")
+			bundleFiles := bundle.Files
+			assert.Len(t, bundleFiles, 1, "bundle should have 1 bundle files")
 			assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 1, "bundle should called createBundle once")
 		},
 	)
@@ -92,11 +97,16 @@ func TestCreateBundle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file}, []string{})
+			bundle, err := c.createBundle(context.Background(),
+				"testRequestId",
+				dir,
+				[]string{file},
+				map[string]bool{})
 			if err != nil {
 				t.Fatal(err)
 			}
-			assert.Len(t, missingFiles, 0, "bundle should not have missing files")
+			bundleFiles := bundle.Files
+			assert.Len(t, bundleFiles, 0, "bundle should not have bundle files")
 			assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")
 		},
 	)
@@ -113,11 +123,17 @@ func TestCreateBundle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file}, []string{})
+			bundle, err := c.createBundle(context.Background(),
+				"testRequestId",
+				dir,
+				[]string{file},
+				map[string]bool{})
 			if err != nil {
 				t.Fatal(err)
 			}
-			assert.Len(t, missingFiles, 0, "bundle should not have missing files")
+
+			bundleFiles := bundle.Files
+			assert.Len(t, bundleFiles, 0, "bundle should not have bundle files")
 			assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")
 		},
 	)
@@ -134,11 +150,16 @@ func TestCreateBundle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, missingFiles, err := c.createBundle(context.Background(), "testRequestId", dir, []string{file}, []string{})
+			bundle, err := c.createBundle(context.Background(),
+				"testRequestId",
+				dir,
+				[]string{file},
+				map[string]bool{})
+			bundleFiles := bundle.Files
 			if err != nil {
 				t.Fatal(err)
 			}
-			assert.Len(t, missingFiles, 0, "bundle should not have missing files")
+			assert.Len(t, bundleFiles, 0, "bundle should not have bundle files")
 			assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")
 		},
 	)
@@ -180,7 +201,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
 			metrics := c.newMetrics(len(docs), time.Time{})
 
-			_, _ = c.UploadAndAnalyze(context.Background(), docs, "", metrics, []string{})
+			_, _ = c.UploadAndAnalyze(context.Background(), docs, "", metrics, map[string]bool{})
 
 			// verify that create bundle has been called on backend service
 			params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
@@ -206,7 +227,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			files := []string{diagnosticUri}
 			metrics := c.newMetrics(len(files), time.Time{})
 
-			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics, []string{})
+			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics, map[string]bool{})
 
 			assert.NotNil(t, issues)
 			assert.Equal(t, 1, len(issues))
@@ -237,7 +258,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			metrics := c.newMetrics(len(files), time.Now())
 
 			// execute
-			_, _ = c.UploadAndAnalyze(context.Background(), files, "", metrics, []string{})
+			_, _ = c.UploadAndAnalyze(context.Background(), files, "", metrics, map[string]bool{})
 
 			assert.Len(t, analytics.GetAnalytics(), 1)
 			assert.Equal(
@@ -356,29 +377,37 @@ func Test_Scan(t *testing.T) {
 		// Arrange
 		snykCodeMock, scanner := setupTestScanner()
 		wg := sync.WaitGroup{}
-		_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+		changedFilesRelPaths := []string{ // File paths relative to the repo base
+			"file0.go",
+			"file1.go",
+			"file2.go",
+			"someDir/nested.go",
+		}
+		fileCount := len(changedFilesRelPaths)
+		tempDir := t.TempDir()
+		var changedFilesAbsPaths []string
+		for _, file := range changedFilesRelPaths {
+			fullPath := filepath.Join(tempDir, file)
+			err := os.MkdirAll(filepath.Dir(fullPath), 0755)
+			assert.Nil(t, err)
+			err = os.WriteFile(fullPath, []byte("func main() {}"), 0644)
+			assert.Nil(t, err)
+			changedFilesAbsPaths = append(changedFilesAbsPaths, fullPath)
+		}
 
 		// Act
-		for i := 0; i < 5; i++ {
+		for _, fileName := range changedFilesAbsPaths {
 			wg.Add(1)
-			go func(i int) {
-				t.Log("Running scan for file" + strconv.Itoa(i) + ".go")
-				_, _ = scanner.Scan(context.Background(), "file"+strconv.Itoa(i)+".go", tempDir)
-				t.Log("Finished scan for file" + strconv.Itoa(i) + ".go")
+			go func(fileName string) {
+				t.Log("Running scan for file " + fileName)
+				_, _ = scanner.Scan(context.Background(), fileName, tempDir)
+				t.Log("Finished scan for file " + fileName)
 				wg.Done()
-			}(i)
+			}(fileName)
 		}
 		wg.Wait()
 
 		// Assert
-		expectedChangedFiles := []string{
-			"file0.go",
-			"file1.go",
-			"file2.go",
-			"file3.go",
-			"file4.go",
-		}
-
 		allCalls := snykCodeMock.GetAllCalls(RunAnalysisOperation)
 		communicatedChangedFiles := make([]string, 0)
 		for _, call := range allCalls {
@@ -386,8 +415,8 @@ func Test_Scan(t *testing.T) {
 			communicatedChangedFiles = append(communicatedChangedFiles, params...)
 		}
 
-		assert.Equal(t, 5, len(communicatedChangedFiles))
-		for _, file := range expectedChangedFiles {
+		assert.Equal(t, fileCount, len(communicatedChangedFiles))
+		for _, file := range changedFilesRelPaths {
 			assert.Contains(t, communicatedChangedFiles, file)
 		}
 	})
