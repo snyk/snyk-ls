@@ -28,7 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adrg/xdg"
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/server"
@@ -814,10 +813,10 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 	di.Init()
 
 	var cloneTargetDir, err = setupCustomTestRepo(repo, commit, t)
-	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
+
 	folder := lsp.WorkspaceFolder{
 		Name: "Test Repo",
 		Uri:  uri.PathToUri(cloneTargetDir),
@@ -842,6 +841,13 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 		t.Fatal(err, "Initialized failed")
 	}
 
+	// wait till the whole workspace is scanned
+	assert.Eventually(t, func() bool {
+		f := workspace.Get().GetFolderContaining(cloneTargetDir)
+		return f != nil && f.IsScanned()
+	}, maxIntegTestDuration, 2*time.Millisecond)
+
+	jsonRPCRecorder.ClearNotifications()
 	var testPath string
 	if file1 != "" {
 		testPath = filepath.Join(cloneTargetDir, file1)
@@ -850,12 +856,7 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 		assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
 	}
 
-	// wait till the whole workspace is scanned
-	assert.Eventually(t, func() bool {
-		f := workspace.Get().GetFolderContaining(cloneTargetDir)
-		return f != nil && f.IsScanned()
-	}, maxIntegTestDuration, 2*time.Millisecond)
-
+	jsonRPCRecorder.ClearNotifications()
 	testPath = filepath.Join(cloneTargetDir, file2)
 	textDocumentDidSave(&loc, testPath, t)
 
@@ -988,11 +989,7 @@ func textDocumentDidSave(loc *server.Local, testPath string, t *testing.T) sglsp
 }
 
 func setupCustomTestRepo(url string, targetCommit string, t *testing.T) (string, error) {
-	workDir := xdg.DataHome // tempdir doesn't work well as it gets too long on macOS
-	tempDir, err := os.MkdirTemp(workDir, "")
-	if err != nil {
-		t.Fatal(err, "couldn't create tempDir")
-	}
+	tempDir := t.TempDir()
 	repoDir := "1"
 	absoluteCloneRepoDir := filepath.Join(tempDir, repoDir)
 	cmd := []string{"clone", url, repoDir}

@@ -214,7 +214,7 @@ func updateApiEndpoints(settings lsp.Settings, initialization bool) {
 	endpointsUpdated := config.CurrentConfig().UpdateApiEndpoints(snykApiUrl)
 	// TODO: Maybe, in the future, we want to update the API URL in the engine first, then retrieve to profit from URL canonization.
 	conf := di.Engine().GetConfiguration()
-	conf.Set(configuration.API_URL, snykApiUrl)
+	conf.Set(configuration.API_URL, config.CurrentConfig().SnykApi())
 	if endpointsUpdated && !initialization {
 		di.AuthenticationService().Logout(context.Background())
 	}

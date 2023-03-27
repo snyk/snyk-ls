@@ -174,8 +174,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-
-	req.Header.Set("Session-Token", config.CurrentConfig().Token())
+	req.Header.Set("Session-Token", config.CurrentConfig().Token()) // FIXME: this should be set by GAF, is in the works
 
 	// Setting a chosen org name for the request
 	req.Header.Set("snyk-org-name", config.CurrentConfig().GetOrganization())
