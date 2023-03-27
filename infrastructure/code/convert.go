@@ -34,10 +34,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-const (
-	AutofixCodeActionTitle = "Run LSP Autofix (I'm feeling lucky!)"
-)
-
 func createRuleLink() (u *url.URL) {
 	u, err := url.Parse(codeDescriptionURL)
 	if err != nil {
@@ -285,6 +281,8 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 			path := loc.PhysicalLocation.ArtifactLocation.URI
 
 			position := loc.PhysicalLocation.Region
+			// NOTE: sarif uses 1-based location numbering, see
+			// https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Ref493492556
 			startLine := position.StartLine - 1
 			endLine := util.Max(position.EndLine-1, startLine)
 			startCol := position.StartColumn - 1
@@ -468,9 +466,9 @@ func createAutofixWorkspaceEdit(filePath string, fixedSourceCode string) (edit s
 }
 
 // toAutofixSuggestionsIssues converts the HTTP json-first payload to the domain type
-func (s *AutofixResponse) toAutofixSuggestions(filePath string) (fixSuggestions []snyk.AutofixSuggestion) {
+func (s *AutofixResponse) toAutofixSuggestions(filePath string) (fixSuggestions []AutofixSuggestion) {
 	for _, fix := range s.AutofixSuggestions {
-		d := snyk.AutofixSuggestion{
+		d := AutofixSuggestion{
 			AutofixEdit: createAutofixWorkspaceEdit(filePath, fix),
 		}
 		fixSuggestions = append(fixSuggestions, d)

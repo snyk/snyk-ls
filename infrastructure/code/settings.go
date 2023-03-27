@@ -34,8 +34,8 @@ const (
 )
 
 var (
-	codeSettingsSingletone      *codeSettings
-	codeSettingsSingletoneMutex = &sync.Mutex{}
+	codeSettingsSingleton      *codeSettings
+	codeSettingsSingletonMutex = &sync.Mutex{}
 )
 
 type codeSettings struct {
@@ -51,17 +51,17 @@ func newCodeSettings() *codeSettings {
 
 // Gets the codeSettings singletone, lazily constructing it on the fly at the first call
 func getCodeSettings() *codeSettings {
-	if codeSettingsSingletone == nil {
+	if codeSettingsSingleton == nil {
 		resetCodeSettings()
 	}
-	return codeSettingsSingletone
+	return codeSettingsSingleton
 }
 
 // Separated out from `getCodeSettings()` for using in tests with `t.Cleanup(resetCodeSettings)`
 func resetCodeSettings() {
-	codeSettingsSingletoneMutex.Lock()
-	defer codeSettingsSingletoneMutex.Unlock()
-	codeSettingsSingletone = newCodeSettings()
+	codeSettingsSingletonMutex.Lock()
+	defer codeSettingsSingletonMutex.Unlock()
+	codeSettingsSingleton = newCodeSettings()
 }
 
 // Attempts to read the `autofixEnabledEnvVarKey` env variable or sets the

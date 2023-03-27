@@ -63,7 +63,7 @@ type SnykCodeClient interface {
 	RunAutofix(
 		ctx context.Context,
 		options AutofixOptions,
-	) ([]snyk.AutofixSuggestion,
+	) ([]AutofixSuggestion,
 		AutofixStatus,
 		error,
 	)

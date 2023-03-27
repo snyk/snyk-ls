@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -77,6 +78,22 @@ func (b *Bundle) FetchDiagnosticsData(
 	return b.retrieveAnalysis(ctx)
 }
 
+func getIssueLangAndRuleId(issue snyk.Issue) (string, string, bool) {
+	logger := log.With().Str("method", "isAutofixAllowed").Logger()
+	issueData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+	if !ok {
+		logger.Trace().Str("file", issue.AffectedFilePath).Int("line", issue.Range.Start.Line).Msg("Can't access issue data")
+		return "", "", false
+	}
+	ruleIdSplit := strings.Split(issueData.RuleId, "/")
+	if len(ruleIdSplit) != 2 {
+		logger.Trace().Str("file", issue.AffectedFilePath).Int("line", issue.Range.Start.Line).Msg("Issue data does not contain RuleID")
+		return "", "", false
+	}
+
+	return ruleIdSplit[0], ruleIdSplit[1], true
+}
+
 func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 	logger := log.With().Str("method", "retrieveAnalysis").Logger()
 
@@ -122,10 +139,11 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 			p.End("Analysis complete.")
 
 			if getCodeSettings().isAutofixEnabled.Get() {
-				// TODO(alex.gronskiy): logging
 				for i := range issues {
 					issues[i].CodeActions = append(issues[i].CodeActions, *b.createDeferredAutofixCodeAction(ctx, issues[i]))
 				}
+			} else {
+				log.Trace().Msg("Autofix is disabled, not adding code actions")
 			}
 
 			return issues, nil
@@ -162,7 +180,6 @@ func (b *Bundle) getShardKey(rootPath string, authToken string) string {
 // returns the deferred code action CodeAction which calls autofix.
 func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk.Issue) *snyk.CodeAction {
 
-	// WIPP: check that all the captures are safe to go.
 	autofixEditCallback := func() *snyk.WorkspaceEdit {
 		method := "code.enhanceWithAutofixSuggestionEdits"
 		s := b.instrumentor.StartSpan(ctx, method)
@@ -200,7 +217,7 @@ func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk
 		// Actual polling loop.
 		pollingTicker := time.NewTicker(1 * time.Second)
 		defer pollingTicker.Stop()
-		timeoutTimer := time.NewTimer(10 * time.Second)
+		timeoutTimer := time.NewTimer(30 * time.Second)
 		defer timeoutTimer.Stop()
 		for {
 			select {

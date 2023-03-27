@@ -16,6 +16,10 @@
 
 package code
 
+import (
+	"github.com/snyk/snyk-ls/domain/snyk"
+)
+
 type SnykAnalysisFailedError struct {
 	Msg string
 }
@@ -37,25 +41,14 @@ type AutofixRequestKey struct {
 	Shard    string `json:"shard"`
 	FilePath string `json:"filePath"`
 	RuleId   string `json:"ruleId"`
-	LineNum  int    `json:"lineNum"` // 1-based
-}
-
-type AutofixContextOrg struct {
-	Name        string          `json:"name"`
-	DisplayName string          `json:"displayName"`
-	PublicId    string          `json:"publicId"`
-	Flags       map[string]bool `json:"flags"`
-}
-
-type AutofixContext struct {
-	Initiatior string            `json:"initiatior"`
-	Flow       string            `json:"flow,omitempty"`
-	Org        AutofixContextOrg `json:"org,omitempty"`
+	// 1-based to comply with Sarif and Code API, see
+	// https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Ref493492556
+	LineNum int `json:"lineNum"`
 }
 
 type AutofixRequest struct {
-	Key            AutofixRequestKey `json:"key"`
-	AutofixContext AutofixContext    `json:"autofixContext"`
+	Key            AutofixRequestKey  `json:"key"`
+	AutofixContext codeRequestContext `json:"autofixContext"`
 }
 
 // Should implement `error` interface
@@ -64,3 +57,13 @@ type SnykAutofixFailedError struct {
 }
 
 func (e SnykAutofixFailedError) Error() string { return e.Msg }
+
+// AutofixSuggestion models a fix returned by autofix service
+type AutofixSuggestion struct {
+	// CodeAction can contain workspace edits or commands to be executed.
+	// TODO(alex.gronskiy): currently we return full file fixed code and edits contain thus "full
+	// file replace".
+	// This is a known point of improvement which is easy to implement but will be
+	// done later on re-iteration.
+	AutofixEdit snyk.WorkspaceEdit
+}

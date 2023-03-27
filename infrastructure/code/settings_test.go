@@ -44,7 +44,7 @@ func Test_getCodeEnablementUrl_CustomEndpoint(t *testing.T) {
 	})
 }
 
-func Test_getCodeSettingsSingletone(t *testing.T) {
+func Test_getCodeSettingsSingleton(t *testing.T) {
 	testutil.UnitTest(t)
 	t.Cleanup(resetCodeSettings)
 

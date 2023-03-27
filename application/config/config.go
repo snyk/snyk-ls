@@ -461,8 +461,6 @@ func (c *Config) SetConfigFile(configFile string) { c.configFile = configFile }
 func getCodeApiUrlFromCustomEndpoint(endpoint string) (string, error) {
 	// Code API endpoint can be set via env variable for debugging using local API instance
 	deeproxyEnvVarUrl := strings.Trim(os.Getenv(deeproxyApiUrlKey), "/")
-	// WIPP
-	log.Logger.Info().Str("deeproxyEnvVarUrl", os.Getenv(deeproxyApiUrlKey))
 	if deeproxyEnvVarUrl != "" {
 		return deeproxyEnvVarUrl, nil
 	}
@@ -482,14 +480,6 @@ func getCodeApiUrlFromCustomEndpoint(endpoint string) (string, error) {
 	endpointUrl.Path = ""
 
 	return endpointUrl.String(), nil
-}
-
-func snykCodeApiUrlFromEnvOrDefault() string {
-	env := os.Getenv(deeproxyApiUrlKey)
-	if env == "" {
-		return defaultDeeproxyApiUrl
-	}
-	return env
 }
 
 func snykCodeAnalysisTimeoutFromEnv() time.Duration {

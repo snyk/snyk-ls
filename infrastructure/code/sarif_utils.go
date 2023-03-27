@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 
-package snyk
+package code
 
-// AutofixSuggestion models a fix returned by autofix service
-type AutofixSuggestion struct {
-	// CodeAction can contain workspace edits or commands to be executed.
-	// TODO(alex.gronskiy): currently we return full file fixed code and edits contain thus "full
-	// file replace".
-	// This is a known point of improvement which is easy to implement but will be
-	// done later on re-iteration.
-	AutofixEdit WorkspaceEdit
+func newCodeRequestContext(orgName string) codeRequestContext {
+	unknown := "unknown"
+	return codeRequestContext{
+		Initiator: "IDE",
+		Flow:      "language-server",
+		Org: codeRequestContextOrg{
+			Name:        orgName,
+			DisplayName: unknown,
+			PublicId:    unknown,
+		},
+	}
 }

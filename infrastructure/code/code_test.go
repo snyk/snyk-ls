@@ -694,13 +694,19 @@ func TestIsSastEnabled(t *testing.T) {
 		})
 }
 
-func TestUploadAnalyzeWithAutofix(t *testing.T) {
+func autofixSetupAndCleanup(t *testing.T) {
 	t.Cleanup(resetCodeSettings)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
+	getCodeSettings().isAutofixEnabled.Set(false)
+}
+
+func TestUploadAnalyzeWithAutofix(t *testing.T) {
+	autofixSetupAndCleanup(t)
 	t.Run(
-		"should not run autofix after analysis when not enabled", func(t *testing.T) {
+		"should not add autofix after analysis when not enabled", func(t *testing.T) {
 			testutil.UnitTest(t)
 			config.CurrentConfig().SetSnykCodeEnabled(true)
-			getCodeSettings().isAutofixEnabled.Set(false)
+
 			snykCodeMock := &FakeSnykCodeClient{}
 			analytics := ux2.NewTestAnalytics()
 			c := New(
@@ -719,7 +725,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			metrics := c.newMetrics(len(files), time.Now())
 
 			// execute
-			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics, []string{})
+			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics, map[string]bool{})
 
 			assert.Len(t, analytics.GetAnalytics(), 1)
 			// Default is to have 1 fake action from analysis + 0 from autofix
@@ -730,9 +736,9 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 	t.Run(
 		"should run autofix after analysis when is enabled", func(t *testing.T) {
 			testutil.UnitTest(t)
-			t.Cleanup(resetCodeSettings)
 			config.CurrentConfig().SetSnykCodeEnabled(true)
 			getCodeSettings().isAutofixEnabled.Set(true)
+
 			snykCodeMock := &FakeSnykCodeClient{}
 			analytics := ux2.NewTestAnalytics()
 			c := New(
@@ -751,7 +757,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			metrics := c.newMetrics(len(files), time.Now())
 
 			// execute
-			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics, []string{})
+			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics, map[string]bool{})
 
 			assert.Len(t, analytics.GetAnalytics(), 1)
 			assert.Len(t, issues[0].CodeActions, 2)

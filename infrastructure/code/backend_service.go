@@ -38,8 +38,11 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code/encoding"
 )
 
-const completeStatus = "COMPLETE"
-const codeDescriptionURL = "https://docs.snyk.io/products/snyk-code/security-rules-used-by-snyk-code"
+const (
+	completeStatus     = "COMPLETE"
+	codeDescriptionURL = "https://docs.snyk.io/products/snyk-code/security-rules-used-by-snyk-code"
+	unknownOrgname     = "unknown"
+)
 
 var (
 	issueSeverities = map[string]snyk.Severity{
@@ -313,8 +316,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 }
 
 func (s *SnykCodeHTTPClient) analysisRequestBody(options *AnalysisOptions) ([]byte, error) {
-	unknown := "unknown"
-	orgName := unknown
+	orgName := unknownOrgname
 	if config.CurrentConfig().GetOrganization() != "" {
 		orgName = config.CurrentConfig().GetOrganization()
 	}
@@ -336,16 +338,8 @@ func (s *SnykCodeHTTPClient) analysisRequestBody(options *AnalysisOptions) ([]by
 			Hash:         options.bundleHash,
 			LimitToFiles: encodedLimitToFiles,
 		},
-		Legacy: false,
-		AnalysisContext: AnalysisContext{
-			Initiator: "IDE",
-			Flow:      "language-server",
-			Org: AnalysisContextOrg{
-				Name:        orgName,
-				DisplayName: unknown,
-				PublicId:    unknown,
-			},
-		},
+		Legacy:          false,
+		AnalysisContext: newCodeRequestContext(orgName),
 	}
 	if len(options.shardKey) > 0 {
 		request.Key.Shard = options.shardKey
@@ -373,7 +367,7 @@ type AutofixStatus struct {
 func (s *SnykCodeHTTPClient) RunAutofix(
 	ctx context.Context,
 	options AutofixOptions,
-) ([]snyk.AutofixSuggestion,
+) ([]AutofixSuggestion,
 	AutofixStatus,
 	error,
 ) {
@@ -386,8 +380,8 @@ func (s *SnykCodeHTTPClient) RunAutofix(
 		log.Err(err).Str("method", method).Msg("Failed to obtain request id. " + err.Error())
 		return nil, AutofixStatus{}, err
 	}
-	log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis for bundle")
-	defer log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis done")
+	log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving autofix for bundle")
+	defer log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving autofix done")
 
 	requestBody, err := s.autofixRequestBody(&options)
 	if err != nil {
@@ -398,7 +392,7 @@ func (s *SnykCodeHTTPClient) RunAutofix(
 	responseBody, err := s.doCall(span.Context(), "POST", "/autofix/suggestions", requestBody)
 	failed := AutofixStatus{message: "FAILED"}
 	if err != nil {
-		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response from analysis")
+		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response from autofix")
 		return nil, failed, err
 	}
 
@@ -412,7 +406,7 @@ func (s *SnykCodeHTTPClient) RunAutofix(
 	log.Debug().Str("method", method).Str("requestId", requestId).Msgf("Status: %s", response.Status)
 
 	if response.Status == failed.message {
-		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("analysis failed")
+		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("autofix failed")
 		return nil, failed, SnykAutofixFailedError{Msg: string(responseBody)}
 	}
 
@@ -430,20 +424,13 @@ func (s *SnykCodeHTTPClient) RunAutofix(
 }
 
 func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte, error) {
-	orgName := "unknown"
+	orgName := unknownOrgname
 	if config.CurrentConfig().GetOrganization() != "" {
 		orgName = config.CurrentConfig().GetOrganization()
 	}
 
-	issueData, ok := options.issue.AdditionalData.(snyk.CodeIssueData)
+	_, ruleID, ok := getIssueLangAndRuleId(options.issue)
 	if !ok {
-		return nil, SnykAutofixFailedError{Msg: "Issue does not contain IssueData"}
-	}
-	// TODO(alex.gronskiy): see RFC. The `issue.AdditionalData.RuleID` has a form of `<lang>/<ruleID>` so we need to
-	// decide how to use the language here. Currently, we only send `<ruleID>` part, ignoring the
-	// language.
-	ruleIdSplit := strings.Split(issueData.RuleId, "/")
-	if len(ruleIdSplit) != 2 {
 		return nil, SnykAutofixFailedError{Msg: "Issue's ruleID does not follow <lang>/<ruleKey> format"}
 	}
 
@@ -452,18 +439,10 @@ func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte
 			Type:     "file",
 			Hash:     options.bundleHash,
 			FilePath: options.filePath,
-			RuleId:   ruleIdSplit[1],
+			RuleId:   ruleID,
 			LineNum:  options.issue.Range.Start.Line + 1,
 		},
-		AutofixContext: AutofixContext{
-			Initiatior: "IDE",
-			Flow:       "language-server",
-			Org: AutofixContextOrg{
-				Name:        orgName,
-				DisplayName: "unknown",
-				PublicId:    "unknown",
-			},
-		},
+		AutofixContext: newCodeRequestContext(orgName),
 	}
 	if len(options.shardKey) > 0 {
 		request.Key.Shard = options.shardKey

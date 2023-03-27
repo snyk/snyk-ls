@@ -183,17 +183,17 @@ type AnalysisRequestKey struct {
 	Shard        string   `json:"shard"`
 }
 
-type AnalysisContextOrg struct {
+type codeRequestContextOrg struct {
 	Name        string          `json:"name"`
 	DisplayName string          `json:"displayName"`
 	PublicId    string          `json:"publicId"`
 	Flags       map[string]bool `json:"flags"`
 }
 
-type AnalysisContext struct {
-	Initiator string             `json:"initiator"`
-	Flow      string             `json:"flow,omitempty"`
-	Org       AnalysisContextOrg `json:"org,omitempty"`
+type codeRequestContext struct {
+	Initiator string                `json:"initiator"`
+	Flow      string                `json:"flow,omitempty"`
+	Org       codeRequestContextOrg `json:"org,omitempty"`
 }
 
 type AnalysisRequest struct {
@@ -201,5 +201,5 @@ type AnalysisRequest struct {
 	Severity        int                `json:"severity,omitempty"`
 	Prioritized     bool               `json:"prioritized,omitempty"`
 	Legacy          bool               `json:"legacy"`
-	AnalysisContext AnalysisContext    `json:"analysisContext"`
+	AnalysisContext codeRequestContext `json:"analysisContext"`
 }

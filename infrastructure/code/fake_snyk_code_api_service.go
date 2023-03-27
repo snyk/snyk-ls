@@ -118,9 +118,6 @@ type FakeSnykCodeClient struct {
 	AutofixDuration              time.Duration
 	currentConcurrentAutofixRuns int
 	maxConcurrentAutofixRuns     int
-
-	// Test constants
-
 }
 
 func (f *FakeSnykCodeClient) addCall(params []any, op string) {
@@ -244,7 +241,7 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 func (f *FakeSnykCodeClient) RunAutofix(
 	_ context.Context,
 	options AutofixOptions,
-) ([]snyk.AutofixSuggestion, AutofixStatus, error) {
+) ([]AutofixSuggestion, AutofixStatus, error) {
 	FakeSnykCodeApiServiceMutex.Lock()
 	f.currentConcurrentAutofixRuns++
 	if f.currentConcurrentAutofixRuns > f.maxConcurrentAutofixRuns {
@@ -258,7 +255,7 @@ func (f *FakeSnykCodeClient) RunAutofix(
 	f.addCall(params, RunAutofixOperation)
 	FakeSnykCodeApiServiceMutex.Unlock()
 
-	suggestions := []snyk.AutofixSuggestion{
+	suggestions := []AutofixSuggestion{
 		// First suggestion
 		{
 			AutofixEdit: snyk.WorkspaceEdit{
