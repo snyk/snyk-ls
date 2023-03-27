@@ -90,6 +90,7 @@ func createTempFileInDir(name string, size int, temporaryDir string, t *testing.
 }
 
 func Test_IsSupportedLanguage(t *testing.T) {
+	const unsupportedFile = "C:\\some\\path\\Test.rs"
 	snykCodeMock := &FakeSnykCodeClient{}
 	bundler := NewBundler(snykCodeMock, performance.NewTestInstrumentor())
 
@@ -100,13 +101,13 @@ func Test_IsSupportedLanguage(t *testing.T) {
 	})
 
 	t.Run("should return false for unsupported languages", func(t *testing.T) {
-		path := "C:\\some\\path\\Test.rs"
+		path := unsupportedFile
 		supported := bundler.isSupported(context.Background(), path)
 		assert.False(t, supported)
 	})
 
 	t.Run("should cache supported extensions", func(t *testing.T) {
-		path := "C:\\some\\path\\Test.rs"
+		path := unsupportedFile
 		bundler.isSupported(context.Background(), path)
 		bundler.isSupported(context.Background(), path)
 		assert.Len(t, snykCodeMock.Calls, 1)
