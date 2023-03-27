@@ -57,3 +57,10 @@ type AutofixRequest struct {
 	Key            AutofixRequestKey `json:"key"`
 	AutofixContext AutofixContext    `json:"autofixContext"`
 }
+
+// Should implement `error` interface
+type SnykAutofixFailedError struct {
+	Msg string
+}
+
+func (e SnykAutofixFailedError) Error() string { return e.Msg }

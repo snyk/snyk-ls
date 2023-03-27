@@ -709,7 +709,11 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 				analytics,
 			)
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
-			defer func(path string) { _ = os.RemoveAll(path) }(path)
+			t.Cleanup(
+				func() {
+					_ = os.RemoveAll(path)
+				},
+			)
 			files := []string{diagnosticUri}
 			metrics := c.newMetrics(len(files), time.Now())
 
@@ -736,7 +740,11 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 				analytics,
 			)
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
-			defer func(path string) { _ = os.RemoveAll(path) }(path)
+			t.Cleanup(
+				func() {
+					_ = os.RemoveAll(path)
+				},
+			)
 			files := []string{diagnosticUri}
 			metrics := c.newMetrics(len(files), time.Now())
 
@@ -750,7 +758,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			// If this fails, likely the format of autofix edits has changed to
 			// "hunk-like" ones rather than replacing the whole file
 			assert.Len(t, val, 1)
-			// Checks that it arrived from fake autofix
+			// Checks that it arrived from fake autofix indeed.
 			assert.Equal(t, val[0].NewText, FakeAutofixSuggestionNewText)
 		},
 	)

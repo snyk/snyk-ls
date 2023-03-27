@@ -116,7 +116,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 			return []snyk.Issue{}, err
 		}
 
-		if status.message == "COMPLETE" {
+		if status.message == completeStatus {
 			logger.Trace().Str("requestId", b.requestId).
 				Msg("sending diagnostics...")
 			p.End("Analysis complete.")
@@ -130,17 +130,17 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 			return issues, nil
 		} else if status.message == "ANALYZING" {
 			logger.Trace().Msg("\"Analyzing\" message received, sending In-Progress message to client")
-
-			if time.Since(start) > config.CurrentConfig().SnykCodeAnalysisTimeout() {
-				err := errors.New("analysis call timed out")
-				log.Error().Err(err).Msg("timeout...")
-				b.errorReporter.CaptureErrorAndReportAsIssue(b.rootPath, err)
-				p.End("Snyk Code Analysis timed out")
-				return []snyk.Issue{}, err
-			}
-			time.Sleep(1 * time.Second)
-			p.Report(status.percentage)
 		}
+
+		if time.Since(start) > config.CurrentConfig().SnykCodeAnalysisTimeout() {
+			err := errors.New("analysis call timed out")
+			log.Error().Err(err).Msg("timeout...")
+			b.errorReporter.CaptureErrorAndReportAsIssue(b.rootPath, err)
+			p.End("Snyk Code Analysis timed out")
+			return []snyk.Issue{}, err
+		}
+		time.Sleep(1 * time.Second)
+		p.Report(status.percentage)
 	}
 }
 
@@ -169,7 +169,6 @@ func (b *Bundle) enhanceWithAutofixSuggestionEdits(ctx context.Context, issue sn
 	method := "code.enhanceWithAutofixSuggestionEdits"
 	s := b.instrumentor.StartSpan(ctx, method)
 	defer b.instrumentor.Finish(s)
-	const autofixTimeout = 10 * time.Second
 
 	autofixOptions := AutofixOptions{
 		bundleHash: b.BundleHash,
@@ -178,36 +177,41 @@ func (b *Bundle) enhanceWithAutofixSuggestionEdits(ctx context.Context, issue sn
 		issue:      issue,
 	}
 
-	// Start polling the autofix command
-	autofixStart := time.Now()
-	for {
-		if time.Since(autofixStart) > autofixTimeout {
-			err := errors.New("autofix call timed out")
-			log.Error().Err(err).Str("method", "RunAutofix").Msg("timeout...")
-			break
-		}
+	// Helper timers and stop channel for polling
+	pollingTicker := time.NewTicker(1 * time.Second)
+	defer pollingTicker.Stop()
+	timeoutTimer := time.NewTimer(10 * time.Second)
+	defer timeoutTimer.Stop()
+	done := make(chan struct{})
 
+	// Polling function just calls the endpoint and registers result, signalling `done` to the
+	// channel.
+	pollFunc := func() {
 		fixSuggestions, fixStatus, err := b.SnykCode.RunAutofix(s.Context(), autofixOptions)
 		if err != nil {
 			log.Error().
-				Err(err).
-				Str("method", method).
-				Str("requestId", b.requestId).
-				Str("stage", "requesting autofix").
-				Msg("error requesting autofix")
-			break
+				Err(err).Str("method", method).Str("requestId", b.requestId).
+				Str("stage", "requesting autofix").Msg("error requesting autofix")
+			close(done)
+		} else if fixStatus.message == completeStatus {
+			if len(fixSuggestions) > 0 {
+				// TODO(alex.gronskiy): currently, only the first ([0]) fix suggstion goes into the fix
+				issue.CodeActions = append(issue.CodeActions, fixSuggestions[0].FixCodeAction)
+			}
+			close(done)
 		}
-
-		if fixStatus.message != "COMPLETE" {
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		// Actual suggestions obtained
-		if len(fixSuggestions) > 0 {
-			// TODO(alex.gronskiy): currently, only the first ([0]) fix suggstion goes into the fix
-			issue.CodeActions = append(issue.CodeActions, fixSuggestions[0].FixCodeAction)
-		}
-		break
 	}
-	return issue
+
+	// Actuall polling loop.
+	for {
+		select {
+		case <-done:
+			return issue
+		case <-timeoutTimer.C:
+			log.Error().Str("method", "RunAutofix").Str("requestId", b.requestId).Msg("timeout requesting autofix")
+			close(done)
+		case <-pollingTicker.C:
+			pollFunc()
+		}
+	}
 }

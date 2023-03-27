@@ -167,7 +167,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 
 	host := config.CurrentConfig().SnykCodeApi()
 
-	req, err := http.NewRequest(method, host+path, b) // WIPP TODO log here and check
+	req, err := http.NewRequest(method, host+path, b)
 	if err != nil {
 		return nil, err
 	}
@@ -413,27 +413,38 @@ func (s *SnykCodeHTTPClient) RunAutofix(
 
 	if response.Status == failed.message {
 		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("analysis failed")
-		return nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)} // WIPP make snyk autofixfailed
+		return nil, failed, SnykAutofixFailedError{Msg: string(responseBody)}
 	}
 
 	if response.Status == "" {
 		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
-		return nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)} // WIPP make snyk autofixfailed
+		return nil, failed, SnykAutofixFailedError{Msg: string(responseBody)}
 	}
 	status := AutofixStatus{message: response.Status}
 	if response.Status != completeStatus {
 		return nil, status, nil
 	}
 
-	suggestions := response.toAutofixSuggestions(string(options.filePath))
+	suggestions := response.toAutofixSuggestions(options.filePath)
 	return suggestions, AutofixStatus{message: response.Status}, nil
 }
 
 func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte, error) {
-	unknown := "unknown"
-	orgName := unknown
+	orgName := "unknown"
 	if config.CurrentConfig().GetOrganization() != "" {
 		orgName = config.CurrentConfig().GetOrganization()
+	}
+
+	issueData, ok := options.issue.AdditionalData.(IssueData)
+	if !ok {
+		return nil, SnykAutofixFailedError{Msg: "Issue does not contain IssueData"}
+	}
+	// TODO(alex.gronskiy): see RFC. The `issue.AdditionalData.RuleID` has a form of `<lang>/<ruleID>` so we need to
+	// decide how to use the language here. Currently, we only send `<ruleID>` part, ignoring the
+	// language.
+	ruleIdSplit := strings.Split(issueData.RuleId, "/")
+	if len(ruleIdSplit) != 2 {
+		return nil, SnykAutofixFailedError{Msg: "Issue's ruleID does not follow <lang>/<ruleKey> format"}
 	}
 
 	request := AutofixRequest{
@@ -441,19 +452,16 @@ func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte
 			Type:     "file",
 			Hash:     options.bundleHash,
 			FilePath: options.filePath,
-			// TODO(alex.gronskiy): see RFC. The `issue.ID` has a form of `<lang>/<ruleID>` so we need to
-			// decide how to use the language here. Currently, we only send `<ruleID>` part, ignoring the
-			// language.
-			RuleId:  strings.Split(options.issue.ID, "/")[1],
-			LineNum: options.issue.Range.Start.Line + 1, // WIPP check and document
+			RuleId:   ruleIdSplit[1],
+			LineNum:  options.issue.Range.Start.Line + 1,
 		},
 		AutofixContext: AutofixContext{
 			Initiatior: "IDE",
 			Flow:       "language-server",
 			Org: AutofixContextOrg{
 				Name:        orgName,
-				DisplayName: unknown,
-				PublicId:    unknown,
+				DisplayName: "unknown",
+				PublicId:    "unknown",
 			},
 		},
 	}
