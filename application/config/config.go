@@ -44,17 +44,15 @@ import (
 )
 
 const (
-	deeproxyApiUrlKey       = "DEEPROXY_API_URL"
-	FormatHtml              = "html"
-	FormatMd                = "md"
-	snykCodeTimeoutKey      = "SNYK_CODE_TIMEOUT"    // timeout as duration (number + unit), e.g. 10m
-	autofixEnabledEnvVarKey = "SNYK_AUTOFIX_ENABLED" // "true" or "false", see `defaultAutofixEnabled`
-	defaultAutofixEnabled   = false
-	defaultSnykApiUrl       = "https://snyk.io/api"
-	defaultDeeproxyApiUrl   = "https://deeproxy.snyk.io"
-	pathListSeparator       = string(os.PathListSeparator)
-	windows                 = "windows"
-	govDomain               = "snykgov.io"
+	deeproxyApiUrlKey     = "DEEPROXY_API_URL"
+	FormatHtml            = "html"
+	FormatMd              = "md"
+	snykCodeTimeoutKey    = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
+	defaultSnykApiUrl     = "https://snyk.io/api"
+	defaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
+	pathListSeparator     = string(os.PathListSeparator)
+	windows               = "windows"
+	govDomain             = "snykgov.io"
 )
 
 var (
@@ -165,7 +163,6 @@ type Config struct {
 	runtimeVersion               string
 	automaticScanning            bool
 	authenticationMethod         lsp.AuthenticationMethod
-	isSnykAutofixEnabled         concurrency.AtomicBool
 }
 
 func CurrentConfig() *Config {
@@ -212,7 +209,6 @@ func New() *Config {
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = lsp.DefaultSeverityFilter()
-	c.isSnykAutofixEnabled.Set(getAutofixEnabledFromEnvOrDefault())
 	return c
 }
 
@@ -302,7 +298,6 @@ func (c *Config) IsSnykCodeEnabled() bool                { return c.isSnykCodeEn
 func (c *Config) IsSnykIacEnabled() bool                 { return c.isSnykIacEnabled.Get() }
 func (c *Config) IsSnykContainerEnabled() bool           { return c.isSnykContainerEnabled.Get() }
 func (c *Config) IsSnykAdvisorEnabled() bool             { return c.isSnykAdvisorEnabled.Get() }
-func (c *Config) IsSnykAutofixEnabled() bool             { return c.isSnykAutofixEnabled.Get() }
 func (c *Config) LogPath() string                        { return c.logPath }
 func (c *Config) SnykApi() string                        { return c.snykApiUrl }
 func (c *Config) SnykCodeApi() string                    { return c.snykCodeApiUrl }
@@ -377,8 +372,6 @@ func (c *Config) SetSnykIacEnabled(enabled bool) { c.isSnykIacEnabled.Set(enable
 func (c *Config) SetSnykContainerEnabled(enabled bool) { c.isSnykContainerEnabled.Set(enabled) }
 
 func (c *Config) SetSnykAdvisorEnabled(enabled bool) { c.isSnykAdvisorEnabled.Set(enabled) }
-
-func (c *Config) SetSnykAutofixEnabled(enabled bool) { c.isSnykAutofixEnabled.Set(enabled) }
 
 func (c *Config) SetSeverityFilter(severityFilter lsp.SeverityFilter) bool {
 	emptySeverityFilter := lsp.SeverityFilter{}
@@ -497,20 +490,6 @@ func snykCodeApiUrlFromEnvOrDefault() string {
 		return defaultDeeproxyApiUrl
 	}
 	return env
-}
-
-func getAutofixEnabledFromEnvOrDefault() bool {
-	env := os.Getenv(autofixEnabledEnvVarKey)
-	if env == "" {
-		return defaultAutofixEnabled
-	}
-
-	parseBool, err := strconv.ParseBool(env)
-	if err != nil {
-		return defaultAutofixEnabled
-	}
-
-	return parseBool
 }
 
 func snykCodeAnalysisTimeoutFromEnv() time.Duration {

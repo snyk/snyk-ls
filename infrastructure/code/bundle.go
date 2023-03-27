@@ -121,7 +121,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 				Msg("sending diagnostics...")
 			p.End("Analysis complete.")
 
-			if config.CurrentConfig().IsSnykAutofixEnabled() {
+			if getCodeSettings().isAutofixEnabled.Get() {
 				// TODO(alex.gronskiy): logging
 				for i := range issues {
 					issues[i].CodeActions = append(issues[i].CodeActions, *b.createDeferredAutofixCodeAction(ctx, issues[i]))

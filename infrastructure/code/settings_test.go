@@ -16,6 +16,7 @@
 package code
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,6 +27,7 @@ import (
 
 func Test_getCodeEnablementUrl_CustomEndpoint(t *testing.T) {
 	testutil.UnitTest(t)
+	t.Cleanup(resetCodeSettings)
 	config.CurrentConfig().SetIntegrationName("VS_CODE")
 
 	t.Run("Custom endpoint configuration", func(t *testing.T) {
@@ -39,5 +41,28 @@ func Test_getCodeEnablementUrl_CustomEndpoint(t *testing.T) {
 	t.Run("Arbitrary path in url", func(t *testing.T) {
 		config.CurrentConfig().UpdateApiEndpoints("https://dev.snyk.io/api/v1")
 		assert.Equal(t, "https://app.dev.snyk.io/manage/snyk-code?from=VS_CODE", getCodeEnablementUrl())
+	})
+}
+
+func Test_getCodeSettingsSingletone(t *testing.T) {
+	testutil.UnitTest(t)
+	t.Cleanup(resetCodeSettings)
+
+	t.Run("Concurrent access to the settings", func(t *testing.T) {
+		wg := sync.WaitGroup{}
+
+		// Request settings, increasing the possibility of a clash
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for j := 0; j < 10; j++ {
+					getCodeSettings().isAutofixEnabled.Set(true)
+				}
+			}()
+		}
+		wg.Wait()
+
+		assert.Equal(t, getCodeSettings().isAutofixEnabled.Get(), true)
 	})
 }

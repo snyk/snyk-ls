@@ -695,11 +695,12 @@ func TestIsSastEnabled(t *testing.T) {
 }
 
 func TestUploadAnalyzeWithAutofix(t *testing.T) {
+	t.Cleanup(resetCodeSettings)
 	t.Run(
 		"should not run autofix after analysis when not enabled", func(t *testing.T) {
 			testutil.UnitTest(t)
 			config.CurrentConfig().SetSnykCodeEnabled(true)
-			config.CurrentConfig().SetSnykAutofixEnabled(false)
+			getCodeSettings().isAutofixEnabled.Set(false)
 			snykCodeMock := &FakeSnykCodeClient{}
 			analytics := ux2.NewTestAnalytics()
 			c := New(
@@ -729,8 +730,9 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 	t.Run(
 		"should run autofix after analysis when is enabled", func(t *testing.T) {
 			testutil.UnitTest(t)
+			t.Cleanup(resetCodeSettings)
 			config.CurrentConfig().SetSnykCodeEnabled(true)
-			config.CurrentConfig().SetSnykAutofixEnabled(true)
+			getCodeSettings().isAutofixEnabled.Set(true)
 			snykCodeMock := &FakeSnykCodeClient{}
 			analytics := ux2.NewTestAnalytics()
 			c := New(
