@@ -121,44 +121,10 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 				Msg("sending diagnostics...")
 			p.End("Analysis complete.")
 
-			// WIPP aufully hacky (DON'T LET IN PR): this runs autofix on ALL the issues.
+			// TODO(alex.gronskiy): this should be correctly changed after the codeactions/resolves are
+			// finished. Currently, this will slow down propotionally to the amount of issues.
 			for i, issue := range issues {
-				autofixOptions := AutofixOptions{
-					bundleHash: b.BundleHash,
-					shardKey:   b.getShardKey(b.rootPath, config.CurrentConfig().Token()),
-					filePath:   issue.AffectedFilePath,
-					issue:      issue,
-				}
-
-				autofixStart := time.Now()
-				for {
-					if time.Since(autofixStart) > 30*time.Second {
-						err := errors.New("autofix call timed out")
-						log.Error().Err(err).Str("method", "RunAutofix").Msg("timeout...")
-						break
-					}
-
-					fixSuggestions, fixStatus, err := b.SnykCode.RunAutofix(s.Context(), autofixOptions)
-					if err != nil {
-						log.Error().
-							Err(err).
-							Str("method", "retrieveAnalysis/runAutofix").
-							Str("requestId", b.requestId).
-							Str("stage", "requesting autofix").
-							Msg("error requesting autofix")
-						break
-					}
-
-					if fixStatus.message != "COMPLETE" {
-						time.Sleep(1 * time.Second)
-						continue
-					}
-					// Actual suggestions obtained
-					if len(fixSuggestions) > 0 {
-						issues[i].CodeActions = append(issues[i].CodeActions, fixSuggestions[0].FixCodeAction)
-					}
-					break
-				}
+				issues[i] = b.enhanceWithAutofixSuggestionEdits(ctx, issue)
 			}
 
 			return issues, nil
@@ -190,4 +156,58 @@ func (b *Bundle) getShardKey(rootPath string, authToken string) string {
 	}
 
 	return ""
+}
+
+// addAutofixSuggesitons possibly enhances the snyk code issue from the passed array
+// with autofix suggestions
+func (b *Bundle) enhanceWithAutofixSuggestionEdits(ctx context.Context, issue snyk.Issue) snyk.Issue {
+	if !config.CurrentConfig().IsSnykAutofixEnabled() {
+		// TODO(alex.gronskiy): logging
+		return issue
+	}
+
+	method := "code.enhanceWithAutofixSuggestionEdits"
+	s := b.instrumentor.StartSpan(ctx, method)
+	defer b.instrumentor.Finish(s)
+	const autofixTimeout = 30 * time.Second
+
+	autofixOptions := AutofixOptions{
+		bundleHash: b.BundleHash,
+		shardKey:   b.getShardKey(b.rootPath, config.CurrentConfig().Token()),
+		filePath:   issue.AffectedFilePath,
+		issue:      issue,
+	}
+
+	// Start polling the autofix command
+	autofixStart := time.Now()
+	for {
+		if time.Since(autofixStart) > autofixTimeout {
+			err := errors.New("autofix call timed out")
+			log.Error().Err(err).Str("method", "RunAutofix").Msg("timeout...")
+			break
+		}
+
+		fixSuggestions, fixStatus, err := b.SnykCode.RunAutofix(s.Context(), autofixOptions)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("method", method).
+				Str("requestId", b.requestId).
+				Str("stage", "requesting autofix").
+				Msg("error requesting autofix")
+			break
+		}
+
+		if fixStatus.message != "COMPLETE" {
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		// Actual suggestions obtained
+		if len(fixSuggestions) > 0 {
+			// TODO(alex.gronskiy): currently, only the first ([0]) fix suggstion goes into the fix
+			issue.CodeActions = append(issue.CodeActions, fixSuggestions[0].FixCodeAction)
+		}
+		break
+	}
+	return issue
 }

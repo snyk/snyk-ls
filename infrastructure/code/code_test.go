@@ -693,3 +693,36 @@ func TestIsSastEnabled(t *testing.T) {
 			assert.Equal(t, expectedShowMessageRequest, <-channel)
 		})
 }
+
+func TestUploadAnalyzeWithAutofix(t *testing.T) {
+	t.Run(
+		"should track analytics", func(t *testing.T) {
+			testutil.UnitTest(t)
+			snykCodeMock := &FakeSnykCodeClient{}
+			analytics := ux2.NewTestAnalytics()
+			c := New(
+				NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
+				&snyk_api.FakeApiClient{CodeEnabled: true},
+				error_reporting.NewTestErrorReporter(),
+				analytics,
+			)
+			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
+			defer func(path string) { _ = os.RemoveAll(path) }(path)
+			files := []string{diagnosticUri}
+			metrics := c.newMetrics(len(files), time.Now())
+
+			// execute
+			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics)
+
+			assert.Len(t, analytics.GetAnalytics(), 1)
+			assert.Equal(
+				t, ux2.AnalysisIsReadyProperties{
+					AnalysisType:      ux2.CodeSecurity,
+					Result:            ux2.Success,
+					FileCount:         metrics.lastScanFileCount,
+					DurationInSeconds: metrics.lastScanDurationInSeconds,
+				}, analytics.GetAnalytics()[0],
+			)
+		},
+	)
+}

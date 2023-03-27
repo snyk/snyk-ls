@@ -163,6 +163,7 @@ type Config struct {
 	runtimeVersion               string
 	automaticScanning            bool
 	authenticationMethod         lsp.AuthenticationMethod
+	isSnykAutofixEnabled         concurrency.AtomicBool
 }
 
 func CurrentConfig() *Config {
@@ -213,6 +214,7 @@ func New() *Config {
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = lsp.DefaultSeverityFilter()
+	c.isSnykAutofixEnabled.Set(false)
 	return c
 }
 
@@ -298,15 +300,13 @@ func (c *Config) CLIDownloadLockFileName() string {
 }
 func (c *Config) IsErrorReportingEnabled() bool { return c.isErrorReportingEnabled.Get() }
 func (c *Config) IsSnykOssEnabled() bool        { return c.isSnykOssEnabled.Get() }
-func (c *Config) IsSnykCodeEnabled() bool {
-	// return c.isSnykCodeEnabled.Get()
-	return true // WIPP
-}
-func (c *Config) IsSnykIacEnabled() bool       { return c.isSnykIacEnabled.Get() }
-func (c *Config) IsSnykContainerEnabled() bool { return c.isSnykContainerEnabled.Get() }
-func (c *Config) IsSnykAdvisorEnabled() bool   { return c.isSnykAdvisorEnabled.Get() }
-func (c *Config) LogPath() string              { return c.logPath }
-func (c *Config) SnykApi() string              { return c.snykApiUrl }
+func (c *Config) IsSnykCodeEnabled() bool       { return c.isSnykCodeEnabled.Get() }
+func (c *Config) IsSnykIacEnabled() bool        { return c.isSnykIacEnabled.Get() }
+func (c *Config) IsSnykContainerEnabled() bool  { return c.isSnykContainerEnabled.Get() }
+func (c *Config) IsSnykAdvisorEnabled() bool    { return c.isSnykAdvisorEnabled.Get() }
+func (c *Config) IsSnykAutofixEnabled() bool    { return c.isSnykAutofixEnabled.Get() }
+func (c *Config) LogPath() string               { return c.logPath }
+func (c *Config) SnykApi() string               { return c.snykApiUrl }
 func (c *Config) SnykCodeApi() string {
 	return c.snykCodeApiUrl
 	// WIPP hardcoded local
@@ -319,8 +319,7 @@ func (c *Config) FilterSeverity() lsp.SeverityFilter     { return c.filterSeveri
 func (c *Config) Token() string {
 	c.m.Lock()
 	defer c.m.Unlock()
-	// WIPP hardcoded``
-	return wippGetEnvSnykToken()
+	return c.token
 }
 
 // TokenChangesChannel returns a channel that will be written into once the token has changed.
@@ -384,6 +383,8 @@ func (c *Config) SetSnykIacEnabled(enabled bool) { c.isSnykIacEnabled.Set(enable
 func (c *Config) SetSnykContainerEnabled(enabled bool) { c.isSnykContainerEnabled.Set(enabled) }
 
 func (c *Config) SetSnykAdvisorEnabled(enabled bool) { c.isSnykAdvisorEnabled.Set(enabled) }
+
+func (c *Config) SetSnykAutofixEnabled(enabled bool) { c.isSnykAutofixEnabled.Set(enabled) }
 
 func (c *Config) SetSeverityFilter(severityFilter lsp.SeverityFilter) bool {
 	emptySeverityFilter := lsp.SeverityFilter{}
@@ -650,7 +651,7 @@ func (c *Config) GetDisplayableIssueTypes() map[product.FilterableIssueType]bool
 }
 
 func (c *Config) IsSnykCodeSecurityEnabled() bool {
-	return true // WIPP
+	return c.activateSnykCodeSecurity
 }
 
 func (c *Config) EnableSnykCodeSecurity(activate bool) {
@@ -658,7 +659,7 @@ func (c *Config) EnableSnykCodeSecurity(activate bool) {
 }
 
 func (c *Config) IsSnykCodeQualityEnabled() bool {
-	return true // WIPP
+	return c.activateSnykCodeQuality
 }
 
 func (c *Config) EnableSnykCodeQuality(activate bool) {

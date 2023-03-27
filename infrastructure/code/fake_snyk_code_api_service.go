@@ -111,6 +111,7 @@ type FakeSnykCodeClient struct {
 	FailOnCreateBundle           bool
 	currentConcurrentScans       int
 	maxConcurrentScans           int
+	AutofixDuration              time.Duration
 	currentConcurrentAutofixRuns int
 	maxConcurrentAutofixRuns     int
 }
