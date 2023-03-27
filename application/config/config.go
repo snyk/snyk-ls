@@ -33,6 +33,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/snyk/go-application-framework/pkg/app"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/subosito/gotenv"
@@ -354,6 +355,7 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 		}
 
 		c.setSnykCodeApi(snykCodeApiUrl)
+		c.Engine().GetConfiguration().Set(configuration.API_URL, c.SnykApi())
 		return true
 	}
 	return false
