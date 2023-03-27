@@ -455,7 +455,7 @@ func createAutofixWorkspaceEdit(filePath string, fixedSourceCode string) (edit s
 				Line:      0,
 				Character: 0},
 			End: snyk.Position{
-				Line:      math.MaxUint32,
+				Line:      math.MaxInt32,
 				Character: 0},
 		},
 		NewText: fixedSourceCode,
