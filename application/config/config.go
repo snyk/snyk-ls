@@ -44,15 +44,17 @@ import (
 )
 
 const (
-	deeproxyApiUrlKey     = "DEEPROXY_API_URL"
-	FormatHtml            = "html"
-	FormatMd              = "md"
-	snykCodeTimeoutKey    = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
-	defaultSnykApiUrl     = "https://snyk.io/api"
-	defaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
-	pathListSeparator     = string(os.PathListSeparator)
-	windows               = "windows"
-	govDomain             = "snykgov.io"
+	deeproxyApiUrlKey       = "DEEPROXY_API_URL"
+	FormatHtml              = "html"
+	FormatMd                = "md"
+	snykCodeTimeoutKey      = "SNYK_CODE_TIMEOUT"    // timeout as duration (number + unit), e.g. 10m
+	autofixEnabledEnvVarKey = "SNYK_AUTOFIX_ENABLED" // "true" or "false", see `defaultAutofixEnabled`
+	defaultAutofixEnabled   = false
+	defaultSnykApiUrl       = "https://snyk.io/api"
+	defaultDeeproxyApiUrl   = "https://deeproxy.snyk.io"
+	pathListSeparator       = string(os.PathListSeparator)
+	windows                 = "windows"
+	govDomain               = "snykgov.io"
 )
 
 var (
@@ -210,7 +212,7 @@ func New() *Config {
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = lsp.DefaultSeverityFilter()
-	c.isSnykAutofixEnabled.Set(false)
+	c.isSnykAutofixEnabled.Set(getAutofixEnabledFromEnvOrDefault())
 	return c
 }
 
@@ -466,6 +468,8 @@ func (c *Config) SetConfigFile(configFile string) { c.configFile = configFile }
 func getCodeApiUrlFromCustomEndpoint(endpoint string) (string, error) {
 	// Code API endpoint can be set via env variable for debugging using local API instance
 	deeproxyEnvVarUrl := strings.Trim(os.Getenv(deeproxyApiUrlKey), "/")
+	// WIPP
+	log.Logger.Info().Str("deeproxyEnvVarUrl", os.Getenv(deeproxyApiUrlKey))
 	if deeproxyEnvVarUrl != "" {
 		return deeproxyEnvVarUrl, nil
 	}
@@ -485,6 +489,28 @@ func getCodeApiUrlFromCustomEndpoint(endpoint string) (string, error) {
 	endpointUrl.Path = ""
 
 	return endpointUrl.String(), nil
+}
+
+func snykCodeApiUrlFromEnvOrDefault() string {
+	env := os.Getenv(deeproxyApiUrlKey)
+	if env == "" {
+		return defaultDeeproxyApiUrl
+	}
+	return env
+}
+
+func getAutofixEnabledFromEnvOrDefault() bool {
+	env := os.Getenv(autofixEnabledEnvVarKey)
+	if env == "" {
+		return defaultAutofixEnabled
+	}
+
+	parseBool, err := strconv.ParseBool(env)
+	if err != nil {
+		return defaultAutofixEnabled
+	}
+
+	return parseBool
 }
 
 func snykCodeAnalysisTimeoutFromEnv() time.Duration {

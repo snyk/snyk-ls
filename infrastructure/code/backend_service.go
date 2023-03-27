@@ -435,7 +435,7 @@ func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte
 		orgName = config.CurrentConfig().GetOrganization()
 	}
 
-	issueData, ok := options.issue.AdditionalData.(IssueData)
+	issueData, ok := options.issue.AdditionalData.(snyk.CodeIssueData)
 	if !ok {
 		return nil, SnykAutofixFailedError{Msg: "Issue does not contain IssueData"}
 	}
