@@ -154,6 +154,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 	b := new(bytes.Buffer)
 
 	mustBeEncoded := method == http.MethodPost || method == http.MethodPut
+
 	if mustBeEncoded {
 		enc := encoding.NewEncoder(b)
 		_, err := enc.Write(requestBody)
@@ -166,7 +167,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 
 	host := config.CurrentConfig().SnykCodeApi()
 
-	req, err := http.NewRequest(method, host+path, b)
+	req, err := http.NewRequest(method, host+path, b) // WIPP TODO log here and check
 	if err != nil {
 		return nil, err
 	}
@@ -363,4 +364,103 @@ func (s *SnykCodeHTTPClient) checkResponseCode(r *http.Response) error {
 	}
 
 	return errors.New("Unexpected response code: " + r.Status)
+}
+
+type AutofixStatus struct {
+	message string
+}
+
+func (s *SnykCodeHTTPClient) RunAutofix(
+	ctx context.Context,
+	options AutofixOptions,
+) ([]snyk.AutofixSuggestion,
+	AutofixStatus,
+	error,
+) {
+	method := "code.RunAutofix"
+	span := s.instrumentor.StartSpan(ctx, method)
+	defer s.instrumentor.Finish(span)
+
+	requestId, err := performance2.GetTraceId(span.Context())
+	if err != nil {
+		log.Err(err).Str("method", method).Msg("Failed to obtain request id. " + err.Error())
+		return nil, AutofixStatus{}, err
+	}
+	log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis for bundle")
+	defer log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis done")
+
+	requestBody, err := s.autofixRequestBody(&options)
+	if err != nil {
+		log.Err(err).Str("method", method).Str("requestBody", string(requestBody)).Msg("error creating request body")
+		return nil, AutofixStatus{}, err
+	}
+
+	responseBody, err := s.doCall(span.Context(), "POST", "/autofix/suggestions", requestBody)
+	failed := AutofixStatus{message: "FAILED"}
+	if err != nil {
+		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response from analysis")
+		return nil, failed, err
+	}
+
+	var response AutofixResponse
+	err = json.Unmarshal(responseBody, &response)
+	if err != nil {
+		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
+		return nil, failed, err
+	}
+
+	log.Debug().Str("method", method).Str("requestId", requestId).Msgf("Status: %s", response.Status)
+
+	if response.Status == failed.message {
+		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("analysis failed")
+		return nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)} // WIPP make snyk autofixfailed
+	}
+
+	if response.Status == "" {
+		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
+		return nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)} // WIPP make snyk autofixfailed
+	}
+	status := AutofixStatus{message: response.Status}
+	if response.Status != completeStatus {
+		return nil, status, nil
+	}
+
+	suggestions := response.toAutofixSuggestions(string(options.filePath))
+	return suggestions, AutofixStatus{message: response.Status}, nil
+}
+
+func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte, error) {
+	unknown := "unknown"
+	orgName := unknown
+	if config.CurrentConfig().GetOrganization() != "" {
+		orgName = config.CurrentConfig().GetOrganization()
+	}
+
+	request := AutofixRequest{
+		Key: AutofixRequestKey{
+			Type:     "file",
+			Hash:     options.bundleHash,
+			FilePath: options.filePath,
+			// TODO(alex.gronskiy): see RFC. The `issue.ID` has a form of `<lang>/<ruleID>` so we need to
+			// decide how to use the language here. Currently, we only send `<ruleID>` part, ignoring the
+			// language.
+			RuleId:  strings.Split(options.issue.ID, "/")[1],
+			LineNum: options.issue.Range.Start.Line + 1, // WIPP check and document
+		},
+		AutofixContext: AutofixContext{
+			Initiatior: "IDE",
+			Flow:       "language-server",
+			Org: AutofixContextOrg{
+				Name:        orgName,
+				DisplayName: unknown,
+				PublicId:    unknown,
+			},
+		},
+	}
+	if len(options.shardKey) > 0 {
+		request.Key.Shard = options.shardKey
+	}
+
+	requestBody, err := json.Marshal(request)
+	return requestBody, err
 }

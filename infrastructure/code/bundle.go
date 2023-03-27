@@ -120,20 +120,61 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 			logger.Trace().Str("requestId", b.requestId).
 				Msg("sending diagnostics...")
 			p.End("Analysis complete.")
+
+			// WIPP aufully hacky (DON'T LET IN PR): this runs autofix on ALL the issues.
+			for i, issue := range issues {
+				autofixOptions := AutofixOptions{
+					bundleHash: b.BundleHash,
+					shardKey:   b.getShardKey(b.rootPath, config.CurrentConfig().Token()),
+					filePath:   issue.AffectedFilePath,
+					issue:      issue,
+				}
+
+				autofixStart := time.Now()
+				for {
+					if time.Since(autofixStart) > 30*time.Second {
+						err := errors.New("autofix call timed out")
+						log.Error().Err(err).Str("method", "RunAutofix").Msg("timeout...")
+						break
+					}
+
+					fixSuggestions, fixStatus, err := b.SnykCode.RunAutofix(s.Context(), autofixOptions)
+					if err != nil {
+						log.Error().
+							Err(err).
+							Str("method", "retrieveAnalysis/runAutofix").
+							Str("requestId", b.requestId).
+							Str("stage", "requesting autofix").
+							Msg("error requesting autofix")
+						break
+					}
+
+					if fixStatus.message != "COMPLETE" {
+						time.Sleep(1 * time.Second)
+						continue
+					}
+					// Actual suggestions obtained
+					if len(fixSuggestions) > 0 {
+						issues[i].CodeActions = append(issues[i].CodeActions, fixSuggestions[0].FixCodeAction)
+					}
+					break
+				}
+			}
+
 			return issues, nil
 		} else if status.message == "ANALYZING" {
 			logger.Trace().Msg("\"Analyzing\" message received, sending In-Progress message to client")
-		}
 
-		if time.Since(start) > config.CurrentConfig().SnykCodeAnalysisTimeout() {
-			err := errors.New("analysis call timed out")
-			log.Error().Err(err).Msg("timeout...")
-			b.errorReporter.CaptureErrorAndReportAsIssue(b.rootPath, err)
-			p.End("Snyk Code Analysis timed out")
-			return []snyk.Issue{}, err
+			if time.Since(start) > config.CurrentConfig().SnykCodeAnalysisTimeout() {
+				err := errors.New("analysis call timed out")
+				log.Error().Err(err).Msg("timeout...")
+				b.errorReporter.CaptureErrorAndReportAsIssue(b.rootPath, err)
+				p.End("Snyk Code Analysis timed out")
+				return []snyk.Issue{}, err
+			}
+			time.Sleep(1 * time.Second)
+			p.Report(status.percentage)
 		}
-		time.Sleep(1 * time.Second)
-		p.Report(status.percentage)
 	}
 }
 

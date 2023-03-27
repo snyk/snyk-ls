@@ -185,6 +185,10 @@ func IsDevelopment() bool {
 	return parseBool
 }
 
+func wippGetEnvSnykToken() string {
+	return os.Getenv("SNYK_TOKEN")
+}
+
 // New creates a configuration object with default values
 func New() *Config {
 	c := &Config{}
@@ -292,15 +296,22 @@ func (c *Config) Format() string { return c.format }
 func (c *Config) CLIDownloadLockFileName() string {
 	return filepath.Join(c.cliSettings.DefaultBinaryInstallPath(), "snyk-cli-download.lock")
 }
-func (c *Config) IsErrorReportingEnabled() bool          { return c.isErrorReportingEnabled.Get() }
-func (c *Config) IsSnykOssEnabled() bool                 { return c.isSnykOssEnabled.Get() }
-func (c *Config) IsSnykCodeEnabled() bool                { return c.isSnykCodeEnabled.Get() }
-func (c *Config) IsSnykIacEnabled() bool                 { return c.isSnykIacEnabled.Get() }
-func (c *Config) IsSnykContainerEnabled() bool           { return c.isSnykContainerEnabled.Get() }
-func (c *Config) IsSnykAdvisorEnabled() bool             { return c.isSnykAdvisorEnabled.Get() }
-func (c *Config) LogPath() string                        { return c.logPath }
-func (c *Config) SnykApi() string                        { return c.snykApiUrl }
-func (c *Config) SnykCodeApi() string                    { return c.snykCodeApiUrl }
+func (c *Config) IsErrorReportingEnabled() bool { return c.isErrorReportingEnabled.Get() }
+func (c *Config) IsSnykOssEnabled() bool        { return c.isSnykOssEnabled.Get() }
+func (c *Config) IsSnykCodeEnabled() bool {
+	// return c.isSnykCodeEnabled.Get()
+	return true // WIPP
+}
+func (c *Config) IsSnykIacEnabled() bool       { return c.isSnykIacEnabled.Get() }
+func (c *Config) IsSnykContainerEnabled() bool { return c.isSnykContainerEnabled.Get() }
+func (c *Config) IsSnykAdvisorEnabled() bool   { return c.isSnykAdvisorEnabled.Get() }
+func (c *Config) LogPath() string              { return c.logPath }
+func (c *Config) SnykApi() string              { return c.snykApiUrl }
+func (c *Config) SnykCodeApi() string {
+	return c.snykCodeApiUrl
+	// WIPP hardcoded local
+	// return "http://localhost:11981"
+}                                                        // WIPP TODO hardocode
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
 func (c *Config) IntegrationName() string                { return c.integrationName }
 func (c *Config) IntegrationVersion() string             { return c.integrationVersion }
@@ -308,7 +319,8 @@ func (c *Config) FilterSeverity() lsp.SeverityFilter     { return c.filterSeveri
 func (c *Config) Token() string {
 	c.m.Lock()
 	defer c.m.Unlock()
-	return c.token
+	// WIPP hardcoded``
+	return wippGetEnvSnykToken()
 }
 
 // TokenChangesChannel returns a channel that will be written into once the token has changed.
@@ -431,6 +443,8 @@ func (c *Config) ConfigureLogging(level string) {
 		logLevel = envLevel
 	}
 	zerolog.SetGlobalLevel(logLevel)
+	// WIPP
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	zerolog.TimeFieldFormat = time.RFC3339
 
 	if c.logPath != "" {
@@ -636,7 +650,7 @@ func (c *Config) GetDisplayableIssueTypes() map[product.FilterableIssueType]bool
 }
 
 func (c *Config) IsSnykCodeSecurityEnabled() bool {
-	return c.activateSnykCodeSecurity
+	return true // WIPP
 }
 
 func (c *Config) EnableSnykCodeSecurity(activate bool) {
@@ -644,7 +658,7 @@ func (c *Config) EnableSnykCodeSecurity(activate bool) {
 }
 
 func (c *Config) IsSnykCodeQualityEnabled() bool {
-	return c.activateSnykCodeQuality
+	return true // WIPP
 }
 
 func (c *Config) EnableSnykCodeQuality(activate bool) {

@@ -21,3 +21,39 @@ type SnykAnalysisFailedError struct {
 }
 
 func (e SnykAnalysisFailedError) Error() string { return e.Msg }
+
+// AutofixResponse is the json-based structure to which we can translate the results of the HTTP
+// request to Autofix upstream.
+type AutofixResponse struct {
+	Status             string                      `json:"status"`
+	AutofixSuggestions []autofixResponseSuggestion `json:"fixes"`
+}
+
+type autofixResponseSuggestion = string
+
+type AutofixRequestKey struct {
+	Type     string `json:"type"`
+	Hash     string `json:"hash"`
+	Shard    string `json:"shard"`
+	FilePath string `json:"filePath"`
+	RuleId   string `json:"ruleId"`
+	LineNum  int    `json:"lineNum"` // 1-based
+}
+
+type AutofixContextOrg struct {
+	Name        string          `json:"name"`
+	DisplayName string          `json:"displayName"`
+	PublicId    string          `json:"publicId"`
+	Flags       map[string]bool `json:"flags"`
+}
+
+type AutofixContext struct {
+	Initiatior string            `json:"initiatior"`
+	Flow       string            `json:"flow,omitempty"`
+	Org        AutofixContextOrg `json:"org,omitempty"`
+}
+
+type AutofixRequest struct {
+	Key            AutofixRequestKey `json:"key"`
+	AutofixContext AutofixContext    `json:"autofixContext"`
+}

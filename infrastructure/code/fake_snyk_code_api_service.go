@@ -38,6 +38,7 @@ const (
 	CreateBundleOperation           = "createBundle"
 	ExtendBundleWithSourceOperation = "extendBundleWithSource"
 	RunAnalysisOperation            = "runAnalysis"
+	RunAutofixOperation             = "runAutofix"
 	GetFiltersOperation             = "getFilters"
 )
 
@@ -101,15 +102,17 @@ func TempWorkdirWithVulnerabilities(t *testing.T) (filePath string, path string)
 }
 
 type FakeSnykCodeClient struct {
-	Calls                  map[string][][]any
-	HasCreatedNewBundle    bool
-	HasExtendedBundle      bool
-	TotalBundleCount       int
-	ExtendedBundleCount    int
-	AnalysisDuration       time.Duration
-	FailOnCreateBundle     bool
-	currentConcurrentScans int
-	maxConcurrentScans     int
+	Calls                        map[string][][]any
+	HasCreatedNewBundle          bool
+	HasExtendedBundle            bool
+	TotalBundleCount             int
+	ExtendedBundleCount          int
+	AnalysisDuration             time.Duration
+	FailOnCreateBundle           bool
+	currentConcurrentScans       int
+	maxConcurrentScans           int
+	currentConcurrentAutofixRuns int
+	maxConcurrentAutofixRuns     int
 }
 
 func (f *FakeSnykCodeClient) addCall(params []any, op string) {
@@ -228,4 +231,27 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 		FakeIssue,
 	).Msg("fake backend call received & answered")
 	return issues, successfulResult, nil
+}
+
+func (f *FakeSnykCodeClient) RunAutofix(
+	_ context.Context,
+	options AutofixOptions,
+) ([]snyk.AutofixSuggestion, AutofixStatus, error) {
+	FakeSnykCodeApiServiceMutex.Lock()
+	f.currentConcurrentAutofixRuns++
+	if f.currentConcurrentAutofixRuns > f.maxConcurrentAutofixRuns {
+		f.maxConcurrentAutofixRuns = f.currentConcurrentAutofixRuns
+	}
+	FakeSnykCodeApiServiceMutex.Unlock()
+	<-time.After(f.AnalysisDuration)
+	FakeSnykCodeApiServiceMutex.Lock()
+	f.currentConcurrentAutofixRuns--
+	params := []any{options.bundleHash, options.filePath, options.issue.ID, options.issue.Range.Start.Line}
+	f.addCall(params, RunAutofixOperation)
+	FakeSnykCodeApiServiceMutex.Unlock()
+
+	suggestions := []snyk.AutofixSuggestion{}
+
+	log.Trace().Str("method", "RunAutofix").Interface("fakeAutofix", "someAutofixSuggestion").Msg("fake backend call received & answered")
+	return suggestions, AutofixStatus{message: "COMPLETE"}, nil
 }

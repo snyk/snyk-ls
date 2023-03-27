@@ -25,6 +25,7 @@ const (
 	NavigateToRangeCommand       = "snyk.navigateToRange"
 	WorkspaceScanCommand         = "snyk.workspace.scan"
 	WorkspaceFolderScanCommand   = "snyk.workspaceFolder.scan"
+	AutofixRunCommand            = "snyk.autofix.run"
 	OpenBrowserCommand           = "snyk.openBrowser"
 	LoginCommand                 = "snyk.login"
 	CopyAuthLinkCommand          = "snyk.copyAuthLink"

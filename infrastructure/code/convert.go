@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -31,6 +32,10 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/util"
+)
+
+const (
+	AutofixCodeActionTitle = "Run LSP Autofix (I'm feeling lucky!)"
 )
 
 func createRuleLink() (u *url.URL) {
@@ -440,4 +445,39 @@ func (s *SarifResponse) reportDiagnostic(d snyk.Issue) bool {
 	return c.IsSnykCodeEnabled() ||
 		c.IsSnykCodeSecurityEnabled() && d.IssueType == snyk.CodeSecurityVulnerability ||
 		c.IsSnykCodeQualityEnabled() && d.IssueType == snyk.CodeQualityIssue
+}
+
+// createAutofixWorkspaceEdit turns the returned fix into an edit.
+func createAutofixWorkspaceEdit(filePath string, fixedSourceCode string) (edit snyk.WorkspaceEdit) {
+	singleTextEdit := snyk.TextEdit{
+		Range: snyk.Range{
+			// TODO(alex.gronskiy): should be changed to an actual hunk-like edit instead of
+			// this "replace-the-whole-file" strategy
+			Start: snyk.Position{
+				Line:      0,
+				Character: 0},
+			End: snyk.Position{
+				Line:      math.MaxUint32,
+				Character: 0},
+		},
+		NewText: fixedSourceCode,
+	}
+	edit.Changes = make(map[string][]snyk.TextEdit)
+	edit.Changes[filePath] = []snyk.TextEdit{singleTextEdit}
+	return edit
+}
+
+// toAutofixSuggestionsIssues converts the HTTP json-first payload to the domain type
+func (s *AutofixResponse) toAutofixSuggestions(filePath string) (fixSuggestions []snyk.AutofixSuggestion) {
+	for _, fix := range s.AutofixSuggestions {
+		d := snyk.AutofixSuggestion{
+			FixCodeAction: snyk.CodeAction{
+				Title: AutofixCodeActionTitle,
+				Edit:  createAutofixWorkspaceEdit(filePath, fix),
+			},
+		}
+		fixSuggestions = append(fixSuggestions, d)
+	}
+
+	return fixSuggestions
 }
