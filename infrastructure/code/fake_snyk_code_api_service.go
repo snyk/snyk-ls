@@ -38,7 +38,12 @@ const (
 	CreateBundleOperation           = "createBundle"
 	ExtendBundleWithSourceOperation = "extendBundleWithSource"
 	RunAnalysisOperation            = "runAnalysis"
+	RunAutofixOperation             = "runAutofix"
 	GetFiltersOperation             = "getFilters"
+
+	// Helper constants to synchronize fake results and tests
+	FakeAutofixFileUri           = "/some/path/uri"
+	FakeAutofixSuggestionNewText = "FAKE_AUTOFIX_NEW_TEXT"
 )
 
 var (
@@ -101,15 +106,18 @@ func TempWorkdirWithVulnerabilities(t *testing.T) (filePath string, path string)
 }
 
 type FakeSnykCodeClient struct {
-	Calls                  map[string][][]any
-	HasCreatedNewBundle    bool
-	HasExtendedBundle      bool
-	TotalBundleCount       int
-	ExtendedBundleCount    int
-	AnalysisDuration       time.Duration
-	FailOnCreateBundle     bool
-	currentConcurrentScans int
-	maxConcurrentScans     int
+	Calls                        map[string][][]any
+	HasCreatedNewBundle          bool
+	HasExtendedBundle            bool
+	TotalBundleCount             int
+	ExtendedBundleCount          int
+	AnalysisDuration             time.Duration
+	FailOnCreateBundle           bool
+	currentConcurrentScans       int
+	maxConcurrentScans           int
+	AutofixDuration              time.Duration
+	currentConcurrentAutofixRuns int
+	maxConcurrentAutofixRuns     int
 }
 
 func (f *FakeSnykCodeClient) addCall(params []any, op string) {
@@ -228,4 +236,56 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 		FakeIssue,
 	).Msg("fake backend call received & answered")
 	return issues, successfulResult, nil
+}
+
+func (f *FakeSnykCodeClient) RunAutofix(
+	_ context.Context,
+	options AutofixOptions,
+) ([]AutofixSuggestion, AutofixStatus, error) {
+	FakeSnykCodeApiServiceMutex.Lock()
+	f.currentConcurrentAutofixRuns++
+	if f.currentConcurrentAutofixRuns > f.maxConcurrentAutofixRuns {
+		f.maxConcurrentAutofixRuns = f.currentConcurrentAutofixRuns
+	}
+	FakeSnykCodeApiServiceMutex.Unlock()
+	<-time.After(f.AnalysisDuration)
+	FakeSnykCodeApiServiceMutex.Lock()
+	f.currentConcurrentAutofixRuns--
+	params := []any{options.bundleHash, options.filePath, options.issue.ID, options.issue.Range.Start.Line}
+	f.addCall(params, RunAutofixOperation)
+	FakeSnykCodeApiServiceMutex.Unlock()
+
+	suggestions := []AutofixSuggestion{
+		// First suggestion
+		{
+			AutofixEdit: snyk.WorkspaceEdit{
+				Changes: map[string][]snyk.TextEdit{
+					FakeAutofixFileUri: {snyk.TextEdit{
+						Range: snyk.Range{
+							Start: snyk.Position{Line: 0, Character: 0},
+							End:   snyk.Position{Line: 10000, Character: 0},
+						},
+						NewText: FakeAutofixSuggestionNewText,
+					}},
+				},
+			},
+		},
+		// Second suggestion -- currently dropped
+		{
+			AutofixEdit: snyk.WorkspaceEdit{
+				Changes: map[string][]snyk.TextEdit{
+					FakeAutofixFileUri: {snyk.TextEdit{
+						Range: snyk.Range{
+							Start: snyk.Position{Line: 0, Character: 0},
+							End:   snyk.Position{Line: 10000, Character: 0},
+						},
+						NewText: "FAKE_AUTOFIX_UNUSED",
+					}},
+				},
+			},
+		},
+	}
+
+	log.Trace().Str("method", "RunAutofix").Interface("fakeAutofix", "someAutofixSuggestion").Msg("fake backend call received & answered")
+	return suggestions, AutofixStatus{message: "COMPLETE"}, nil
 }

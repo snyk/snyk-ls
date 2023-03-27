@@ -799,16 +799,8 @@ func TestSnykCodeBackendService_analysisRequestBodyIsCorrect(t *testing.T) {
 			LimitToFiles: analysisOpts.limitToFiles,
 			Shard:        analysisOpts.shardKey,
 		},
-		Legacy: false,
-		AnalysisContext: AnalysisContext{
-			Initiator: "IDE",
-			Flow:      "language-server",
-			Org: AnalysisContextOrg{
-				Name:        org,
-				DisplayName: "unknown",
-				PublicId:    "unknown",
-			},
-		},
+		Legacy:          false,
+		AnalysisContext: newCodeRequestContext(org),
 	}
 
 	// act

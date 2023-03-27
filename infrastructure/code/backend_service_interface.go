@@ -29,6 +29,13 @@ type AnalysisOptions struct {
 	severity     int
 }
 
+type AutofixOptions struct {
+	bundleHash string
+	shardKey   string
+	filePath   string
+	issue      snyk.Issue
+}
+
 type SnykCodeClient interface {
 	GetFilters(ctx context.Context) (configFiles []string, extensions []string, err error)
 
@@ -50,6 +57,14 @@ type SnykCodeClient interface {
 	) (
 		[]snyk.Issue,
 		AnalysisStatus,
+		error,
+	)
+
+	RunAutofix(
+		ctx context.Context,
+		options AutofixOptions,
+	) ([]AutofixSuggestion,
+		AutofixStatus,
 		error,
 	)
 }

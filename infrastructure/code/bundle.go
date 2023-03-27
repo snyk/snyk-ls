@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -77,6 +78,22 @@ func (b *Bundle) FetchDiagnosticsData(
 	return b.retrieveAnalysis(ctx)
 }
 
+func getIssueLangAndRuleId(issue snyk.Issue) (string, string, bool) {
+	logger := log.With().Str("method", "isAutofixAllowed").Logger()
+	issueData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+	if !ok {
+		logger.Trace().Str("file", issue.AffectedFilePath).Int("line", issue.Range.Start.Line).Msg("Can't access issue data")
+		return "", "", false
+	}
+	ruleIdSplit := strings.Split(issueData.RuleId, "/")
+	if len(ruleIdSplit) != 2 {
+		logger.Trace().Str("file", issue.AffectedFilePath).Int("line", issue.Range.Start.Line).Msg("Issue data does not contain RuleID")
+		return "", "", false
+	}
+
+	return ruleIdSplit[0], ruleIdSplit[1], true
+}
+
 func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 	logger := log.With().Str("method", "retrieveAnalysis").Logger()
 
@@ -116,10 +133,19 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 			return []snyk.Issue{}, err
 		}
 
-		if status.message == "COMPLETE" {
+		if status.message == completeStatus {
 			logger.Trace().Str("requestId", b.requestId).
 				Msg("sending diagnostics...")
 			p.End("Analysis complete.")
+
+			if getCodeSettings().isAutofixEnabled.Get() {
+				for i := range issues {
+					issues[i].CodeActions = append(issues[i].CodeActions, *b.createDeferredAutofixCodeAction(ctx, issues[i]))
+				}
+			} else {
+				log.Trace().Msg("Autofix is disabled, not adding code actions")
+			}
+
 			return issues, nil
 		} else if status.message == "ANALYZING" {
 			logger.Trace().Msg("\"Analyzing\" message received, sending In-Progress message to client")
@@ -149,4 +175,68 @@ func (b *Bundle) getShardKey(rootPath string, authToken string) string {
 	}
 
 	return ""
+}
+
+// returns the deferred code action CodeAction which calls autofix.
+func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk.Issue) *snyk.CodeAction {
+
+	autofixEditCallback := func() *snyk.WorkspaceEdit {
+		method := "code.enhanceWithAutofixSuggestionEdits"
+		s := b.instrumentor.StartSpan(ctx, method)
+		defer b.instrumentor.Finish(s)
+
+		autofixOptions := AutofixOptions{
+			bundleHash: b.BundleHash,
+			shardKey:   b.getShardKey(b.rootPath, config.CurrentConfig().Token()),
+			filePath:   issue.AffectedFilePath,
+			issue:      issue,
+		}
+
+		// Polling function just calls the endpoint and registers result, signalling `done` to the
+		// channel.
+		pollFunc := func() (edit *snyk.WorkspaceEdit, complete bool) {
+			log.Info().Msg("polling")
+			fixSuggestions, fixStatus, err := b.SnykCode.RunAutofix(s.Context(), autofixOptions)
+			edit = nil
+			complete = false
+			if err != nil {
+				log.Error().
+					Err(err).Str("method", method).Str("requestId", b.requestId).
+					Str("stage", "requesting autofix").Msg("error requesting autofix")
+				complete = true
+			} else if fixStatus.message == completeStatus {
+				if len(fixSuggestions) > 0 {
+					// TODO(alex.gronskiy): currently, only the first ([0]) fix suggstion goes into the fix
+					edit = &fixSuggestions[0].AutofixEdit
+				}
+				complete = true
+			}
+			return edit, complete
+		}
+
+		// Actual polling loop.
+		pollingTicker := time.NewTicker(1 * time.Second)
+		defer pollingTicker.Stop()
+		timeoutTimer := time.NewTimer(30 * time.Second)
+		defer timeoutTimer.Stop()
+		for {
+			select {
+			case <-timeoutTimer.C:
+				log.Error().Str("method", "RunAutofix").Str("requestId", b.requestId).Msg("timeout requesting autofix")
+				return nil
+			case <-pollingTicker.C:
+				edit, complete := pollFunc()
+				if complete {
+					return edit
+				}
+			}
+		}
+	}
+
+	action, err := snyk.NewDeferredCodeAction("Attempt to AutoFix the issue (Snyk)", &autofixEditCallback, nil)
+	if err != nil {
+		log.Error().Msg("failed to create deferred autofix code action")
+		return nil
+	}
+	return &action
 }

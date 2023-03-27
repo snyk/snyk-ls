@@ -38,8 +38,11 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code/encoding"
 )
 
-const completeStatus = "COMPLETE"
-const codeDescriptionURL = "https://docs.snyk.io/products/snyk-code/security-rules-used-by-snyk-code"
+const (
+	completeStatus     = "COMPLETE"
+	codeDescriptionURL = "https://docs.snyk.io/products/snyk-code/security-rules-used-by-snyk-code"
+	unknownOrgname     = "unknown"
+)
 
 var (
 	issueSeverities = map[string]snyk.Severity{
@@ -154,6 +157,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 	b := new(bytes.Buffer)
 
 	mustBeEncoded := method == http.MethodPost || method == http.MethodPut
+
 	if mustBeEncoded {
 		enc := encoding.NewEncoder(b)
 		_, err := enc.Write(requestBody)
@@ -312,8 +316,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 }
 
 func (s *SnykCodeHTTPClient) analysisRequestBody(options *AnalysisOptions) ([]byte, error) {
-	unknown := "unknown"
-	orgName := unknown
+	orgName := unknownOrgname
 	if config.CurrentConfig().GetOrganization() != "" {
 		orgName = config.CurrentConfig().GetOrganization()
 	}
@@ -335,16 +338,8 @@ func (s *SnykCodeHTTPClient) analysisRequestBody(options *AnalysisOptions) ([]by
 			Hash:         options.bundleHash,
 			LimitToFiles: encodedLimitToFiles,
 		},
-		Legacy: false,
-		AnalysisContext: AnalysisContext{
-			Initiator: "IDE",
-			Flow:      "language-server",
-			Org: AnalysisContextOrg{
-				Name:        orgName,
-				DisplayName: unknown,
-				PublicId:    unknown,
-			},
-		},
+		Legacy:          false,
+		AnalysisContext: newCodeRequestContext(orgName),
 	}
 	if len(options.shardKey) > 0 {
 		request.Key.Shard = options.shardKey
@@ -363,4 +358,96 @@ func (s *SnykCodeHTTPClient) checkResponseCode(r *http.Response) error {
 	}
 
 	return errors.New("Unexpected response code: " + r.Status)
+}
+
+type AutofixStatus struct {
+	message string
+}
+
+func (s *SnykCodeHTTPClient) RunAutofix(
+	ctx context.Context,
+	options AutofixOptions,
+) ([]AutofixSuggestion,
+	AutofixStatus,
+	error,
+) {
+	method := "code.RunAutofix"
+	span := s.instrumentor.StartSpan(ctx, method)
+	defer s.instrumentor.Finish(span)
+
+	requestId, err := performance2.GetTraceId(span.Context())
+	if err != nil {
+		log.Err(err).Str("method", method).Msg("Failed to obtain request id. " + err.Error())
+		return nil, AutofixStatus{}, err
+	}
+	log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving autofix for bundle")
+	defer log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving autofix done")
+
+	requestBody, err := s.autofixRequestBody(&options)
+	if err != nil {
+		log.Err(err).Str("method", method).Str("requestBody", string(requestBody)).Msg("error creating request body")
+		return nil, AutofixStatus{}, err
+	}
+
+	responseBody, err := s.doCall(span.Context(), "POST", "/autofix/suggestions", requestBody)
+	failed := AutofixStatus{message: "FAILED"}
+	if err != nil {
+		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response from autofix")
+		return nil, failed, err
+	}
+
+	var response AutofixResponse
+	err = json.Unmarshal(responseBody, &response)
+	if err != nil {
+		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
+		return nil, failed, err
+	}
+
+	log.Debug().Str("method", method).Str("requestId", requestId).Msgf("Status: %s", response.Status)
+
+	if response.Status == failed.message {
+		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("autofix failed")
+		return nil, failed, SnykAutofixFailedError{Msg: string(responseBody)}
+	}
+
+	if response.Status == "" {
+		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
+		return nil, failed, SnykAutofixFailedError{Msg: string(responseBody)}
+	}
+	status := AutofixStatus{message: response.Status}
+	if response.Status != completeStatus {
+		return nil, status, nil
+	}
+
+	suggestions := response.toAutofixSuggestions(options.filePath)
+	return suggestions, AutofixStatus{message: response.Status}, nil
+}
+
+func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte, error) {
+	orgName := unknownOrgname
+	if config.CurrentConfig().GetOrganization() != "" {
+		orgName = config.CurrentConfig().GetOrganization()
+	}
+
+	_, ruleID, ok := getIssueLangAndRuleId(options.issue)
+	if !ok {
+		return nil, SnykAutofixFailedError{Msg: "Issue's ruleID does not follow <lang>/<ruleKey> format"}
+	}
+
+	request := AutofixRequest{
+		Key: AutofixRequestKey{
+			Type:     "file",
+			Hash:     options.bundleHash,
+			FilePath: options.filePath,
+			RuleId:   ruleID,
+			LineNum:  options.issue.Range.Start.Line + 1,
+		},
+		AutofixContext: newCodeRequestContext(orgName),
+	}
+	if len(options.shardKey) > 0 {
+		request.Key.Shard = options.shardKey
+	}
+
+	requestBody, err := json.Marshal(request)
+	return requestBody, err
 }

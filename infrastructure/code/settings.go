@@ -17,10 +17,67 @@ package code
 
 import (
 	"net/url"
+	"os"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/concurrency"
 )
+
+const (
+	// String "true" or "false", see `defaultAutofixEnabled`
+	autofixEnabledEnvVarKey = "SNYK_AUTOFIX_ENABLED"
+	// By default this is disabled
+	defaultAutofixEnabled = false
+)
+
+var (
+	codeSettingsSingleton      *codeSettings
+	codeSettingsSingletonMutex = &sync.Mutex{}
+)
+
+type codeSettings struct {
+	isAutofixEnabled concurrency.AtomicBool
+}
+
+// Create new code settings
+func newCodeSettings() *codeSettings {
+	s := &codeSettings{}
+	s.isAutofixEnabled.Set(getAutofixEnabledFromEnvOrDefault())
+	return s
+}
+
+// Gets the codeSettings singletone, lazily constructing it on the fly at the first call
+func getCodeSettings() *codeSettings {
+	if codeSettingsSingleton == nil {
+		resetCodeSettings()
+	}
+	return codeSettingsSingleton
+}
+
+// Separated out from `getCodeSettings()` for using in tests with `t.Cleanup(resetCodeSettings)`
+func resetCodeSettings() {
+	codeSettingsSingletonMutex.Lock()
+	defer codeSettingsSingletonMutex.Unlock()
+	codeSettingsSingleton = newCodeSettings()
+}
+
+// Attempts to read the `autofixEnabledEnvVarKey` env variable or sets the
+// bool to default
+func getAutofixEnabledFromEnvOrDefault() bool {
+	env := os.Getenv(autofixEnabledEnvVarKey)
+	if env == "" {
+		return defaultAutofixEnabled
+	}
+
+	parseBool, err := strconv.ParseBool(env)
+	if err != nil {
+		return defaultAutofixEnabled
+	}
+	return parseBool
+}
 
 func getCodeEnablementUrl() string {
 	api := config.CurrentConfig().SnykApi()

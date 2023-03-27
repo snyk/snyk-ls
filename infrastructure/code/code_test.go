@@ -693,3 +693,81 @@ func TestIsSastEnabled(t *testing.T) {
 			assert.Equal(t, expectedShowMessageRequest, <-channel)
 		})
 }
+
+func autofixSetupAndCleanup(t *testing.T) {
+	t.Cleanup(resetCodeSettings)
+	config.CurrentConfig().SetSnykCodeEnabled(true)
+	getCodeSettings().isAutofixEnabled.Set(false)
+}
+
+func TestUploadAnalyzeWithAutofix(t *testing.T) {
+	autofixSetupAndCleanup(t)
+	t.Run(
+		"should not add autofix after analysis when not enabled", func(t *testing.T) {
+			testutil.UnitTest(t)
+			config.CurrentConfig().SetSnykCodeEnabled(true)
+
+			snykCodeMock := &FakeSnykCodeClient{}
+			analytics := ux2.NewTestAnalytics()
+			c := New(
+				NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
+				&snyk_api.FakeApiClient{CodeEnabled: true},
+				error_reporting.NewTestErrorReporter(),
+				analytics,
+			)
+			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
+			t.Cleanup(
+				func() {
+					_ = os.RemoveAll(path)
+				},
+			)
+			files := []string{diagnosticUri}
+			metrics := c.newMetrics(len(files), time.Now())
+
+			// execute
+			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics, map[string]bool{})
+
+			assert.Len(t, analytics.GetAnalytics(), 1)
+			// Default is to have 1 fake action from analysis + 0 from autofix
+			assert.Len(t, issues[0].CodeActions, 1)
+		},
+	)
+
+	t.Run(
+		"should run autofix after analysis when is enabled", func(t *testing.T) {
+			testutil.UnitTest(t)
+			config.CurrentConfig().SetSnykCodeEnabled(true)
+			getCodeSettings().isAutofixEnabled.Set(true)
+
+			snykCodeMock := &FakeSnykCodeClient{}
+			analytics := ux2.NewTestAnalytics()
+			c := New(
+				NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
+				&snyk_api.FakeApiClient{CodeEnabled: true},
+				error_reporting.NewTestErrorReporter(),
+				analytics,
+			)
+			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
+			t.Cleanup(
+				func() {
+					_ = os.RemoveAll(path)
+				},
+			)
+			files := []string{diagnosticUri}
+			metrics := c.newMetrics(len(files), time.Now())
+
+			// execute
+			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics, map[string]bool{})
+
+			assert.Len(t, analytics.GetAnalytics(), 1)
+			assert.Len(t, issues[0].CodeActions, 2)
+			val, ok := (*issues[0].CodeActions[1].DeferredEdit)().Changes[FakeAutofixFileUri]
+			assert.True(t, ok)
+			// If this fails, likely the format of autofix edits has changed to
+			// "hunk-like" ones rather than replacing the whole file
+			assert.Len(t, val, 1)
+			// Checks that it arrived from fake autofix indeed.
+			assert.Equal(t, val[0].NewText, FakeAutofixSuggestionNewText)
+		},
+	)
+}
