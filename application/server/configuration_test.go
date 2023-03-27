@@ -61,7 +61,7 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	}
 
 	c := config.CurrentConfig()
-	conf := di.Engine().GetConfiguration()
+	conf := config.CurrentConfig().Engine().GetConfiguration()
 	assert.Equal(t, false, c.IsSnykCodeEnabled())
 	assert.Equal(t, false, c.IsSnykOssEnabled())
 	assert.Equal(t, false, c.IsSnykIacEnabled())
@@ -109,7 +109,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	assert.NoError(t, err)
 
 	c := config.CurrentConfig()
-	conf := di.Engine().GetConfiguration()
+	conf := config.CurrentConfig().Engine().GetConfiguration()
 	assert.Equal(t, false, c.IsSnykCodeEnabled())
 	assert.Equal(t, false, c.IsSnykOssEnabled())
 	assert.Equal(t, false, c.IsSnykIacEnabled())

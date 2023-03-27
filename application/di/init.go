@@ -23,8 +23,6 @@ import (
 	"testing"
 
 	"github.com/adrg/xdg"
-	"github.com/rs/zerolog/log"
-	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
@@ -116,7 +114,6 @@ func initInfrastructure() {
 			})
 	}
 
-	initializeWorkflowEngine()
 	errorReporter = sentry2.NewSentryErrorReporter()
 	installer = install.NewInstaller(errorReporter, engine.GetNetworkAccess().GetUnauthorizedHttpClient)
 	instrumentor = sentry2.NewInstrumentor()
@@ -156,7 +153,6 @@ func TestInit(t *testing.T) {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	t.Helper()
-	initializeWorkflowEngine()
 	analytics = ux2.NewTestAnalytics()
 	instrumentor = performance2.NewTestInstrumentor()
 	errorReporter = errorreporting.NewTestErrorReporter()
@@ -200,24 +196,10 @@ func TestInit(t *testing.T) {
 	)
 }
 
-func initializeWorkflowEngine() {
-	engine = app.CreateAppEngine()
-	err := engine.Init()
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to initialize workflow engine")
-	}
-}
-
 /*
 TODO Accessors: This should go away, since all dependencies should be satisfied at startup-time, if needed for testing
 they can be returned by the test helper for unit/integration tests
 */
-
-func Engine() workflow.Engine {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return engine
-}
 
 func Instrumentor() performance2.Instrumentor {
 	initMutex.Lock()

@@ -138,10 +138,10 @@ func updateAuthenticationMethod(settings lsp.Settings) {
 	c := config.CurrentConfig()
 	c.SetAuthenticationMethod(settings.AuthenticationMethod)
 	if config.CurrentConfig().GetAuthenticationMethod() == lsp.OAuthAuthentication {
-		engine := di.Engine()
+		engine := c.Engine()
 		conf := engine.GetConfiguration()
 		conf.Set(configuration.OAUTH_AUTH_ENABLED, true)
-		httpClient := di.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
+		httpClient := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
 		openBrowserFunc := func(url string) {
 			di.AuthenticationService().Provider().SetAuthURL(url)
 			auth.OpenBrowser(url)
@@ -211,10 +211,11 @@ func updateToken(token string) {
 
 func updateApiEndpoints(settings lsp.Settings, initialization bool) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
-	endpointsUpdated := config.CurrentConfig().UpdateApiEndpoints(snykApiUrl)
+	currentConfig := config.CurrentConfig()
+	endpointsUpdated := currentConfig.UpdateApiEndpoints(snykApiUrl)
 	// TODO: Maybe, in the future, we want to update the API URL in the engine first, then retrieve to profit from URL canonization.
-	conf := di.Engine().GetConfiguration()
-	conf.Set(configuration.API_URL, config.CurrentConfig().SnykApi())
+	conf := currentConfig.Engine().GetConfiguration()
+	conf.Set(configuration.API_URL, currentConfig.SnykApi())
 	if endpointsUpdated && !initialization {
 		di.AuthenticationService().Logout(context.Background())
 	}
@@ -305,9 +306,10 @@ func updateCliConfig(settings lsp.Settings) {
 	}
 	cliSettings.AdditionalOssParameters = strings.Split(settings.AdditionalParams, " ")
 	cliSettings.SetPath(settings.CliPath)
-	conf := di.Engine().GetConfiguration()
+	currentConfig := config.CurrentConfig()
+	conf := currentConfig.Engine().GetConfiguration()
 	conf.Set(configuration.INSECURE_HTTPS, cliSettings.Insecure)
-	config.CurrentConfig().SetCliSettings(cliSettings)
+	currentConfig.SetCliSettings(cliSettings)
 }
 
 func updateProductEnablement(settings lsp.Settings) {
