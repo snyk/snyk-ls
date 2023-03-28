@@ -665,6 +665,9 @@
           "Content-Type": "application/json"
         },
         "body": {
+          "autofixExtensions": [
+            "string"
+          ],
           "configFiles": [
             "string"
           ],
@@ -673,6 +676,15 @@
           ]
         },
         "matchingRules": {
+          "$.body.autofixExtensions": {
+            "min": 1
+          },
+          "$.body.autofixExtensions[*].*": {
+            "match": "type"
+          },
+          "$.body.autofixExtensions[*]": {
+            "match": "type"
+          },
           "$.body.configFiles": {
             "min": 1
           },

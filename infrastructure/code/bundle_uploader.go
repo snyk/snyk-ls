@@ -118,7 +118,8 @@ func (b *BundleUploader) groupInBatches(
 
 func (b *BundleUploader) isSupported(ctx context.Context, file string) bool {
 	if b.supportedExtensions.Size() == 0 && b.supportedConfigFiles.Size() == 0 {
-		configFiles, extensions, err := b.SnykCode.GetFilters(ctx)
+		// autofixExtensions is not needed here
+		configFiles, extensions, _, err := b.SnykCode.GetFilters(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("could not get filters")
 			return false

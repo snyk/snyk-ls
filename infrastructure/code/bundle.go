@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -79,7 +80,7 @@ func (b *Bundle) FetchDiagnosticsData(
 }
 
 func getIssueLangAndRuleId(issue snyk.Issue) (string, string, bool) {
-	logger := log.With().Str("method", "isAutofixAllowed").Logger()
+	logger := log.With().Str("method", "getIssueLangAndRuleId").Logger()
 	issueData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 	if !ok {
 		logger.Trace().Str("file", issue.AffectedFilePath).Int("line", issue.Range.Start.Line).Msg("Can't access issue data")
@@ -92,6 +93,27 @@ func getIssueLangAndRuleId(issue snyk.Issue) (string, string, bool) {
 	}
 
 	return ruleIdSplit[0], ruleIdSplit[1], true
+}
+
+// isAutofixSupportedForExtension shall call `GetFilters` if necessary and cache the results
+// in the `codeSettings` singleton.
+func (b *Bundle) isAutofixSupportedForExtension(ctx context.Context, file string) bool {
+	if getCodeSettings().autofixExtensions == nil {
+		// query
+		_, _, autofixExts, err := b.SnykCode.GetFilters(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("could not get filters")
+			return false
+		}
+
+		// It's not a mistake to have `..IfNotSet` here, because between the `GetFilters` and here
+		// things might have changed on the settings singleton. But we don't want to overlock it.
+		getCodeSettings().setAutofixExtensionsIfNotSet(autofixExts)
+	}
+
+	supported := getCodeSettings().autofixExtensions.Get(filepath.Ext(file))
+
+	return supported != nil && supported.(bool)
 }
 
 func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
@@ -140,6 +162,11 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 
 			if getCodeSettings().isAutofixEnabled.Get() {
 				for i := range issues {
+					// We only allow the issues whose file extensions are supported by the
+					// backend.
+					if !b.isAutofixSupportedForExtension(ctx, issues[i].AffectedFilePath) {
+						continue
+					}
 					issues[i].CodeActions = append(issues[i].CodeActions, *b.createDeferredAutofixCodeAction(ctx, issues[i]))
 				}
 			} else {

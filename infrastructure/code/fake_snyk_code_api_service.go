@@ -40,9 +40,8 @@ const (
 	RunAnalysisOperation            = "runAnalysis"
 	RunAutofixOperation             = "runAutofix"
 	GetFiltersOperation             = "getFilters"
-
+	FakeFileExtension               = ".java"
 	// Helper constants to synchronize fake results and tests
-	FakeAutofixFileUri           = "/some/path/uri"
 	FakeAutofixSuggestionNewText = "FAKE_AUTOFIX_NEW_TEXT"
 )
 
@@ -81,7 +80,8 @@ var (
 		Command: &FakeCommand,
 	}
 
-	FakeFilters = []string{".cjs", ".ejs", ".es", ".es6", ".htm", ".html", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".vue", ".java", ".erb", ".haml", ".rb", ".rhtml", ".slim", ".kt", ".swift", ".cls", ".config", ".pom", ".wxs", ".xml", ".xsd", ".aspx", ".cs", ".py", ".go", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".php", ".phtml"}
+	FakeFilters        = []string{".cjs", ".ejs", ".es", ".es6", ".htm", ".html", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".vue", ".java", ".erb", ".haml", ".rb", ".rhtml", ".slim", ".kt", ".swift", ".cls", ".config", ".pom", ".wxs", ".xml", ".xsd", ".aspx", ".cs", ".py", ".go", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".php", ".phtml"}
+	FakeAutofixFilters = []string{FakeFileExtension} // Main test scenario -- allowlist the fake file for autofix
 )
 
 func TempWorkdirWithVulnerabilities(t *testing.T) (filePath string, path string) {
@@ -95,7 +95,7 @@ func TempWorkdirWithVulnerabilities(t *testing.T) (filePath string, path string)
 		t.Fatal(err, "couldn't get abs path of tempdir")
 	}
 
-	filePath = filepath.Join(temp, "Dummy.java")
+	filePath = filepath.Join(temp, "Dummy"+FakeFileExtension)
 	classWithQualityIssue := "public class AnnotatorTest {\n  public static void delay(long millis) {\n    try {\n      Thread.sleep(millis);\n    } catch (InterruptedException e) {\n      e.printStackTrace();\n    }\n  }\n};"
 	err = os.WriteFile(filePath, []byte(classWithQualityIssue), 0600)
 	if err != nil {
@@ -164,12 +164,17 @@ func (f *FakeSnykCodeClient) GetAllCalls(op string) [][]any {
 	return calls
 }
 
-func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (configFiles []string, extensions []string, err error) {
+func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (
+	configFiles []string,
+	extensions []string,
+	autofixExtensions []string,
+	err error,
+) {
 	FakeSnykCodeApiServiceMutex.Lock()
 	defer FakeSnykCodeApiServiceMutex.Unlock()
-	params := []any{configFiles, extensions, err}
+	params := []any{configFiles, extensions, autofixExtensions, err}
 	f.addCall(params, GetFiltersOperation)
-	return f.ConfigFiles, FakeFilters, nil
+	return f.ConfigFiles, FakeFilters, FakeAutofixFilters, nil
 }
 
 func (f *FakeSnykCodeClient) CreateBundle(_ context.Context,
@@ -262,7 +267,7 @@ func (f *FakeSnykCodeClient) RunAutofix(
 		{
 			AutofixEdit: snyk.WorkspaceEdit{
 				Changes: map[string][]snyk.TextEdit{
-					FakeAutofixFileUri: {snyk.TextEdit{
+					options.filePath: {snyk.TextEdit{
 						Range: snyk.Range{
 							Start: snyk.Position{Line: 0, Character: 0},
 							End:   snyk.Position{Line: 10000, Character: 0},
@@ -276,7 +281,7 @@ func (f *FakeSnykCodeClient) RunAutofix(
 		{
 			AutofixEdit: snyk.WorkspaceEdit{
 				Changes: map[string][]snyk.TextEdit{
-					FakeAutofixFileUri: {snyk.TextEdit{
+					options.filePath: {snyk.TextEdit{
 						Range: snyk.Range{
 							Start: snyk.Position{Line: 0, Character: 0},
 							End:   snyk.Position{Line: 10000, Character: 0},

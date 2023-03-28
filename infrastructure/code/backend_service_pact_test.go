@@ -236,7 +236,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) { // nolint:gocognit // this i
 		})
 
 		test := func() error {
-			if _, _, err := client.GetFilters(context.Background()); err != nil {
+			if _, _, _, err := client.GetFilters(context.Background()); err != nil {
 				return err
 			}
 
