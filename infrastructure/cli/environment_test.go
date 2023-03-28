@@ -19,9 +19,11 @@ package cli
 import (
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -46,6 +48,27 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		assert.Contains(t, updatedEnv, "SNYK_INTEGRATION_ENVIRONMENT="+IntegrationEnvironmentEnvVarValue)
 		assert.Contains(t, updatedEnv, "SNYK_INTEGRATION_ENVIRONMENT_VERSION="+config.Version)
 		assert.NotContains(t, updatedEnv, "SNYK_CFG_DISABLE_ANALYTICS=1")
+	})
+	t.Run("Adds Snyk Token to env", func(t *testing.T) {
+		testutil.UnitTest(t)
+		c := config.CurrentConfig()
+		c.SetAuthenticationMethod(lsp.TokenAuthentication)
+		c.SetToken("testToken")
+
+		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
+
+		assert.Contains(t, updatedEnv, "SNYK_TOKEN="+config.CurrentConfig().Token())
+	})
+
+	t.Run("Adds OAuth Token to env", func(t *testing.T) {
+		testutil.UnitTest(t)
+		c := config.CurrentConfig()
+		c.SetAuthenticationMethod(lsp.OAuthAuthentication)
+		c.SetToken("testToken")
+
+		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
+
+		assert.Contains(t, updatedEnv, auth.CONFIG_KEY_OAUTH_TOKEN+"="+config.CurrentConfig().Token())
 	})
 
 	t.Run("Disables analytics, if telemetry disabled", func(t *testing.T) {

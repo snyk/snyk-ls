@@ -22,17 +22,32 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/server/lsp"
 )
 
 func TestSetToken(t *testing.T) {
-	SetCurrentConfig(New())
-	oldToken := CurrentConfig().Token()
-	CurrentConfig().SetToken("asdf")
-	assert.Equal(t, CurrentConfig().Token(), "asdf")
-	CurrentConfig().SetToken(oldToken)
+	t.Run("Legacy Token authentication", func(t *testing.T) {
+		config := New()
+		SetCurrentConfig(config)
+		oldToken := CurrentConfig().Token()
+		CurrentConfig().SetToken("asdf")
+		assert.Equal(t, CurrentConfig().Token(), "asdf")
+		CurrentConfig().SetToken(oldToken)
+		assert.NotEqual(t, CurrentConfig().Engine().GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN), oldToken)
+	})
+	t.Run("OAuth Token authentication", func(t *testing.T) {
+		config := New()
+		SetCurrentConfig(config)
+		config.authenticationMethod = lsp.OAuthAuthentication
+		oldToken := CurrentConfig().Token()
+		CurrentConfig().SetToken("asdf")
+		assert.Equal(t, CurrentConfig().Token(), "asdf")
+		CurrentConfig().SetToken(oldToken)
+		assert.Equal(t, CurrentConfig().Engine().GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN), oldToken)
+	})
 }
 
 func TestConfigDefaults(t *testing.T) {
