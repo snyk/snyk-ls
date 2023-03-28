@@ -22,7 +22,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -268,111 +267,11 @@ func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
 	return filePaths, nil
 }
 
-func (sc *Scanner) loadIgnorePatternsAndCountFiles(folderPath string) (fileCount int, err error) {
-	ignores := getDefaultIgnorePatterns()
-	log.Debug().
-		Str("method", "loadIgnorePatternsAndCountFiles").
-		Str("workspace", folderPath).
-		Msg("searching for ignore files")
-	err = filepath.WalkDir(
-		folderPath, func(path string, dirEntry os.DirEntry, err error) error {
-			fileCount++
-			if err != nil {
-				log.Debug().
-					Str("method", "loadIgnorePatternsAndCountFiles - walker").
-					Str("path", path).
-					Err(err).
-					Msg("error traversing files")
-				return nil
-			}
-			if dirEntry == nil || dirEntry.IsDir() {
-				return nil
-			}
-
-			if !(strings.HasSuffix(path, ".gitignore") || strings.HasSuffix(path, ".dcignore")) {
-				return nil
-			}
-			log.Debug().Str("method", "loadIgnorePatternsAndCountFiles").Str("file", path).Msg("found ignore file")
-			content, err := os.ReadFile(path)
-			if err != nil {
-				log.Err(err).Msg("Can't read" + path)
-			}
-			lines := strings.Split(string(content), "\n")
-
-			for _, line := range lines {
-				if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
-					continue
-				}
-				globs := parseIgnoreRuleToGlobs(line, filepath.Dir(path))
-				ignores = append(ignores, globs...)
-			}
-			return err
-		},
-	)
-
-	if err != nil {
-		return fileCount, err
-	}
-
-	patterns := ignores
-	sc.ignorePatterns = patterns
-	log.Debug().Interface("ignorePatterns", patterns).Msg("Loaded and set ignore patterns")
-	return fileCount, nil
-}
-
-func getDefaultIgnorePatterns() []string {
-	var ignores = []string{"**/.git/**", "**/.svn/**", "**/.hg/**", "**/.bzr/**", "**/.DS_Store/**"}
-	return ignores
-}
-
-func parseIgnoreRuleToGlobs(rule string, baseDir string) (globs []string) {
-	// Shamelessly stolen from code-client: https://github.com/snyk/code-client/blob/7a9e5cdbed4e8a6a0f2597fcd64b67800279e585/src/files.ts#L67
-
-	// Mappings from .gitignore format to glob format:
-	// `/foo/` => `/foo/**` (meaning: Ignore root (not sub) foo dir and its paths underneath.)
-	// `/foo`	=> `/foo/**`, `/foo` (meaning: Ignore root (not sub) file and dir and its paths underneath.)
-	// `foo/` => `**/foo/**` (meaning: Ignore (root/sub) foo dirs and their paths underneath.)
-	// `foo` => `**/foo/**`, `foo` (meaning: Ignore (root/sub) foo files and dirs and their paths underneath.)
-	prefix := ""
-	const negation = "!"
-	const slash = "/"
-	const all = "**"
-	baseDir = filepath.ToSlash(baseDir)
-
-	if strings.HasPrefix(rule, negation) {
-		rule = rule[1:]
-		prefix = negation
-	}
-	startingSlash := strings.HasPrefix(rule, slash)
-	startingGlobstar := strings.HasPrefix(rule, all)
-	endingSlash := strings.HasSuffix(rule, slash)
-	endingGlobstar := strings.HasSuffix(rule, all)
-
-	if startingSlash || startingGlobstar {
-		// case `/foo/`, `/foo` => `{baseDir}/foo/**`
-		// case `**/foo/`, `**/foo` => `{baseDir}/**/foo/**`
-		if !endingGlobstar {
-			globs = append(globs, filepath.ToSlash(prefix+filepath.Join(baseDir, rule, all)))
-		}
-		// case `/foo` => `{baseDir}/foo`
-		// case `**/foo` => `{baseDir}/**/foo`
-		// case `/foo/**` => `{baseDir}/foo/**`
-		// case `**/foo/**` => `{baseDir}/**/foo/**`
-		if !endingSlash {
-			globs = append(globs, filepath.ToSlash(prefix+filepath.Join(baseDir, rule)))
-		}
-	} else {
-		// case `foo/`, `foo` => `{baseDir}/**/foo/**`
-		if !endingGlobstar {
-			globs = append(globs, filepath.ToSlash(prefix+filepath.Join(baseDir, all, rule, all)))
-		}
-		// case `foo` => `{baseDir}/**/foo`
-		// case `foo/**` => `{baseDir}/**/foo/**`
-		if !endingSlash {
-			globs = append(globs, filepath.ToSlash(prefix+filepath.Join(baseDir, all, rule)))
-		}
-	}
-	return globs
+type DotSnykRules struct {
+	Exclude struct {
+		Code   []string `yaml:"code"`
+		Global []string `yaml:"global"`
+	} `yaml:"exclude"`
 }
 
 func (sc *Scanner) newMetrics(fileCount int, scanStartTime time.Time) *ScanMetrics {
@@ -406,8 +305,6 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 	requestId := span.GetTraceId() // use span trace id as code-request-id
 
 	bundle, err := sc.createBundle(span.Context(), requestId, path, files, changedFiles)
-	bundleFiles := bundle.Files
-
 	if err != nil {
 		if ctx.Err() == nil { // Only report errors that are not intentional cancellations
 			msg := "error creating bundle..."
@@ -419,7 +316,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 		}
 	}
 
-	uploadedBundle, err := sc.BundleUploader.Upload(span.Context(), bundle, bundleFiles)
+	uploadedBundle, err := sc.BundleUploader.Upload(span.Context(), bundle, bundle.Files)
 	// TODO LSP error handling should be pushed UP to the LSP layer
 	if err != nil {
 		if ctx.Err() != nil { // Only handle errors that are not intentional cancellations

@@ -369,6 +369,35 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 	assert.Equal(t, getDefaultIgnorePatterns(), sc.ignorePatterns)
 }
 
+func Test_LoadIgnorePatterns_DotSnykFileIsParsed(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	testData := `
+exclude:
+  code:
+    - path/to/code/ignore1
+    - path/to/code/ignore2
+  global:
+    - path/to/global/ignore1
+    - path/to/global/ignore2
+`
+	expectedIgnoreRules := parseIgnoreRuleToGlobs("path/to/code/ignore1", tmpDir)
+	expectedIgnoreRules = append(expectedIgnoreRules, parseIgnoreRuleToGlobs("path/to/code/ignore2", tmpDir)...)
+	expectedIgnoreRules = append(expectedIgnoreRules, parseIgnoreRuleToGlobs("path/to/global/ignore1", tmpDir)...)
+	expectedIgnoreRules = append(expectedIgnoreRules, parseIgnoreRuleToGlobs("path/to/global/ignore2", tmpDir)...)
+
+	err := os.WriteFile(filepath.Join(tmpDir, ".snyk"), []byte(testData), 0644)
+	assert.Nil(t, err)
+	_, sc := setupTestScanner()
+
+	_, err = sc.loadIgnorePatternsAndCountFiles(tmpDir)
+	assert.Nil(t, err)
+
+	for _, rule := range expectedIgnoreRules {
+		assert.Contains(t, sc.ignorePatterns, rule)
+	}
+}
+
 func Test_GetWorkspaceFolderFiles(t *testing.T) {
 	_, tempDir, ignoredFilePath, notIgnoredFilePath, _ := setupIgnoreWorkspace(t)
 	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
