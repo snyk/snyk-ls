@@ -28,9 +28,7 @@ func ToRelativeUnixPath(baseDir string, absoluteFilePath string) (string, error)
 }
 
 func ToAbsolutePath(baseDir string, relativePath string) string {
-	absolutePath := filepath.Join(baseDir, relativePath)
-
-	return absolutePath
+	return filepath.Join(baseDir, relativePath)
 }
 
 func EncodePath(relativePath string) string {
@@ -44,6 +42,6 @@ func EncodePath(relativePath string) string {
 	return encodedPath
 }
 
-func DecodePath(encodedRelativePath string) string {
-	return ""
+func DecodePath(encodedRelativePath string) (string, error) {
+	return url.PathUnescape(encodedRelativePath)
 }

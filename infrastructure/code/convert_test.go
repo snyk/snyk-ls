@@ -25,7 +25,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adrg/xdg"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -728,23 +727,21 @@ func setupConversionTests(t *testing.T,
 	c := config.CurrentConfig()
 	c.EnableSnykCodeSecurity(activateSnykCodeSecurity)
 	c.EnableSnykCodeQuality(activateSnykCodeQuality)
-	temp, err := os.MkdirTemp(xdg.DataHome, "conversionTests")
-	if err != nil {
-		t.Fatal(err, "couldn't create directory for conversion tests")
-	}
-	path := filepath.Join(temp, "Dummy.java")
-	err = os.WriteFile(path, []byte(strings.Repeat("aa\n", 1000)), 0660)
+	temp := t.TempDir()
+	path := filepath.Join(temp, "File With Spaces.java")
+	err := os.WriteFile(path, []byte(strings.Repeat("aa\n", 1000)), 0660)
 	if err != nil {
 		t.Fatal(err, "couldn't write test file")
 	}
 
 	relPath, err := ToRelativeUnixPath(temp, path)
+	encodedPath := EncodePath(relPath)
 	if err != nil {
 		t.Fatal(err, "couldn't get relative path")
 	}
 
 	var analysisResponse SarifResponse
-	responseJson := getSarifResponseJson(relPath)
+	responseJson := getSarifResponseJson(encodedPath)
 	err = json.Unmarshal([]byte(responseJson), &analysisResponse)
 
 	if err != nil {

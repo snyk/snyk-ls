@@ -276,8 +276,16 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue) {
 	r := runs[0]
 	for _, result := range r.Results {
 		for _, loc := range result.Locations {
-			// convert the documentURI to a relativePath according to our conversion
-			relativePath := ToAbsolutePath(baseDir, loc.PhysicalLocation.ArtifactLocation.URI)
+			// convert the documentURI to an absolute path according to our conversion
+			absPath, err := DecodePath(ToAbsolutePath(baseDir, loc.PhysicalLocation.ArtifactLocation.URI))
+			if err != nil {
+				log.Error().
+					Err(err).
+					Msg("failed to convert URI to absolute path: base directory: " +
+						baseDir +
+						", URI: " +
+						loc.PhysicalLocation.ArtifactLocation.URI)
+			}
 
 			position := loc.PhysicalLocation.Region
 			// NOTE: sarif uses 1-based location numbering, see
@@ -329,7 +337,7 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue) {
 
 			markers := result.getMarkers(baseDir)
 
-			key := getIssueKey(result.RuleID, relativePath, startLine, endLine, startCol, endCol)
+			key := getIssueKey(result.RuleID, absPath, startLine, endLine, startCol, endCol)
 
 			additionalData := snyk.CodeIssueData{
 				Key:                key,
@@ -353,7 +361,7 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue) {
 				Message:             message,
 				FormattedMessage:    formattedMessage,
 				IssueType:           issueType,
-				AffectedFilePath:    relativePath,
+				AffectedFilePath:    absPath,
 				Product:             product.ProductCode,
 				IssueDescriptionURL: ruleLink,
 				References:          rule.getReferences(),
@@ -406,10 +414,19 @@ func (r *result) getMarkers(baseDir string) []snyk.Marker {
 			startCol := loc.Location.PhysicalLocation.Region.StartColumn - 1
 			endCol := loc.Location.PhysicalLocation.Region.EndColumn
 
+			filePath, err := DecodePath(ToAbsolutePath(baseDir, loc.Location.PhysicalLocation.ArtifactLocation.URI))
+			if err != nil {
+				log.Error().
+					Err(err).
+					Msg("failed to convert URI to absolute path: base directory: " +
+						baseDir +
+						", URI: " +
+						loc.Location.PhysicalLocation.ArtifactLocation.URI)
+			}
 			positions = append(positions, snyk.MarkerPosition{
 				Rows: [2]int{startLine, endLine},
 				Cols: [2]int{startCol, endCol},
-				File: ToAbsolutePath(baseDir, loc.Location.PhysicalLocation.ArtifactLocation.URI),
+				File: filePath,
 			})
 		}
 
