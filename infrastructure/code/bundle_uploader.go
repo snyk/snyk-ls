@@ -128,6 +128,11 @@ func (b *BundleUploader) isSupported(ctx context.Context, file string) bool {
 			b.supportedExtensions.Store(ext, true)
 		}
 		for _, configFile := range configFiles {
+			// .gitignore and .dcignore should not be uploaded
+			// (https://github.com/snyk/code-client/blob/d6f6a2ce4c14cb4b05aa03fb9f03533d8cf6ca4a/src/files.ts#L138)
+			if configFile == ".gitignore" || configFile == ".dcignore" {
+				continue
+			}
 			b.supportedConfigFiles.Store(configFile, true)
 		}
 	}
