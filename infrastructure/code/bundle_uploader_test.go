@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/adrg/xdg"
@@ -42,7 +43,9 @@ func Test_Bundler_Upload(t *testing.T) {
 		bundleFileMap := map[string]BundleFile{}
 		bundleFileMap[documentURI] = bundleFile
 
-		_, err := bundleUploader.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: []string{documentURI}}, bundleFileMap)
+		_, err := bundleUploader.Upload(context.Background(),
+			Bundle{SnykCode: snykCodeService, missingFiles: []string{documentURI}},
+			bundleFileMap)
 
 		assert.Equal(t, 1, snykCodeService.TotalBundleCount)
 		assert.NoError(t, err)
@@ -70,7 +73,9 @@ func Test_Bundler_Upload(t *testing.T) {
 		bundleFileMap[path] = bundleFile
 		missingFiles = append(missingFiles, path)
 
-		_, err := bundler.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: missingFiles}, bundleFileMap)
+		_, err := bundler.Upload(context.Background(),
+			Bundle{SnykCode: snykCodeService, missingFiles: missingFiles},
+			bundleFileMap)
 
 		assert.True(t, snykCodeService.HasExtendedBundle)
 		assert.Equal(t, 2, snykCodeService.TotalBundleCount)
@@ -85,6 +90,7 @@ func createTempFileInDir(name string, size int, temporaryDir string, t *testing.
 }
 
 func Test_IsSupportedLanguage(t *testing.T) {
+	const unsupportedFile = "C:\\some\\path\\Test.rs"
 	snykCodeMock := &FakeSnykCodeClient{}
 	bundler := NewBundler(snykCodeMock, performance.NewTestInstrumentor())
 
@@ -95,7 +101,52 @@ func Test_IsSupportedLanguage(t *testing.T) {
 	})
 
 	t.Run("should return false for unsupported languages", func(t *testing.T) {
-		path := "C:\\some\\path\\Test.rs"
+		path := unsupportedFile
+		supported := bundler.isSupported(context.Background(), path)
+		assert.False(t, supported)
+	})
+
+	t.Run("should cache supported extensions", func(t *testing.T) {
+		path := unsupportedFile
+		bundler.isSupported(context.Background(), path)
+		bundler.isSupported(context.Background(), path)
+		assert.Len(t, snykCodeMock.Calls, 1)
+	})
+}
+
+func Test_IsSupported_ConfigFile(t *testing.T) {
+	configFilesFromFiltersEndpoint := []string{
+		".supportedConfigFile",
+		".snyk",
+		".dcignore",
+		".gitignore",
+	}
+	expectedConfigFiles := []string{ // .dcignore and .gitignore should be excluded
+		".supportedConfigFile",
+		".snyk",
+	}
+	snykCodeMock := &FakeSnykCodeClient{
+		ConfigFiles: configFilesFromFiltersEndpoint,
+	}
+	bundler := NewBundler(snykCodeMock, performance.NewTestInstrumentor())
+	dir, _ := os.Getwd()
+
+	t.Run("should return true for supported config files", func(t *testing.T) {
+		for _, file := range expectedConfigFiles {
+			path := filepath.Join(dir, file)
+			supported := bundler.isSupported(context.Background(), path)
+			assert.True(t, supported)
+		}
+	})
+	t.Run("should exclude .gitignore and .dcignore", func(t *testing.T) {
+		for _, file := range []string{".gitignore", ".dcignore"} {
+			path := filepath.Join(dir, file)
+			supported := bundler.isSupported(context.Background(), path)
+			assert.False(t, supported)
+		}
+	})
+	t.Run("should return false for unsupported config files", func(t *testing.T) {
+		path := "C:\\some\\path\\.unsupported"
 		supported := bundler.isSupported(context.Background(), path)
 		assert.False(t, supported)
 	})
