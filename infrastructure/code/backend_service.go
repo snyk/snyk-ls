@@ -113,16 +113,16 @@ func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (configFiles []stri
 
 func (s *SnykCodeHTTPClient) CreateBundle(
 	ctx context.Context,
-	files map[string]string,
+	filesToFilehashes map[string]string,
 ) (string, []string, error) {
 
 	method := "code.CreateBundle"
-	log.Debug().Str("method", method).Msg("API: Creating bundle for " + strconv.Itoa(len(files)) + " files")
+	log.Debug().Str("method", method).Msg("API: Creating bundle for " + strconv.Itoa(len(filesToFilehashes)) + " files")
 
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
 
-	requestBody, err := json.Marshal(files)
+	requestBody, err := json.Marshal(filesToFilehashes)
 	if err != nil {
 		return "", nil, err
 	}
@@ -258,6 +258,7 @@ type AnalysisStatus struct {
 func (s *SnykCodeHTTPClient) RunAnalysis(
 	ctx context.Context,
 	options AnalysisOptions,
+	baseDir string,
 ) ([]snyk.Issue, AnalysisStatus, error) {
 	method := "code.RunAnalysis"
 	span := s.instrumentor.StartSpan(ctx, method)
@@ -310,7 +311,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		return nil, status, nil
 	}
 
-	issues := response.toIssues()
+	issues := response.toIssues(baseDir)
 	return issues, status, err
 }
 

@@ -737,15 +737,21 @@ func setupConversionTests(t *testing.T,
 	if err != nil {
 		t.Fatal(err, "couldn't write test file")
 	}
+
+	relPath, err := ToRelativeUnixPath(temp, path)
+	if err != nil {
+		t.Fatal(err, "couldn't get relative path")
+	}
+
 	var analysisResponse SarifResponse
-	responseJson := getSarifResponseJson(path)
+	responseJson := getSarifResponseJson(relPath)
 	err = json.Unmarshal([]byte(responseJson), &analysisResponse)
 
 	if err != nil {
 		t.Fatal(err, "couldn't unmarshal sarif response")
 	}
 
-	issues := analysisResponse.toIssues()
+	issues := analysisResponse.toIssues(temp)
 
 	return path, issues, analysisResponse
 }
@@ -839,40 +845,6 @@ func Test_rule_cwe(t *testing.T) {
 			Cwe: []string{},
 		}}
 		assert.NotContains(t, cut.cwe(), "CWE:")
-	})
-}
-
-func Test_SarifResponse_reportDiagnostic(t *testing.T) {
-	t.Run("should report diagnostic when enabled Snyk Code Quality issue", func(t *testing.T) {
-		s := SarifResponse{}
-		c := config.New()
-		c.EnableSnykCodeQuality(true)
-		config.SetCurrentConfig(c)
-		assert.True(t, s.reportDiagnostic(snyk.Issue{IssueType: snyk.CodeQualityIssue}))
-	})
-
-	t.Run("should not report diagnostic when enabled Snyk Code Quality issue", func(t *testing.T) {
-		s := SarifResponse{}
-		c := config.New()
-		c.EnableSnykCodeQuality(false)
-		config.SetCurrentConfig(c)
-		assert.False(t, s.reportDiagnostic(snyk.Issue{IssueType: snyk.CodeQualityIssue}))
-	})
-
-	t.Run("should report diagnostic when enabled Snyk Code Security issue", func(t *testing.T) {
-		s := SarifResponse{}
-		c := config.New()
-		c.EnableSnykCodeSecurity(true)
-		config.SetCurrentConfig(c)
-		assert.True(t, s.reportDiagnostic(snyk.Issue{IssueType: snyk.CodeSecurityVulnerability}))
-	})
-
-	t.Run("should not report diagnostic when enabled Snyk Code Security issue", func(t *testing.T) {
-		s := SarifResponse{}
-		c := config.New()
-		c.EnableSnykCodeQuality(false)
-		config.SetCurrentConfig(c)
-		assert.False(t, s.reportDiagnostic(snyk.Issue{IssueType: snyk.CodeSecurityVulnerability}))
 	})
 }
 

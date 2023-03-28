@@ -215,6 +215,7 @@ var successfulResult = AnalysisStatus{
 func (f *FakeSnykCodeClient) RunAnalysis(
 	_ context.Context,
 	options AnalysisOptions,
+	baseDir string,
 ) ([]snyk.Issue, AnalysisStatus, error) {
 
 	FakeSnykCodeApiServiceMutex.Lock()

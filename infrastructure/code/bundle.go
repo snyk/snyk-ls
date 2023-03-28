@@ -121,7 +121,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 		if ctx.Err() != nil { // Cancellation requested
 			return []snyk.Issue{}, nil
 		}
-		issues, status, err := b.SnykCode.RunAnalysis(s.Context(), analysisOptions)
+		issues, status, err := b.SnykCode.RunAnalysis(s.Context(), analysisOptions, b.rootPath)
 
 		if err != nil {
 			logger.Error().Err(err).

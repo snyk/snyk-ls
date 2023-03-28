@@ -28,7 +28,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -267,7 +266,7 @@ func (r *run) getRule(id string) rule {
 	return rule{}
 }
 
-func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
+func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue) {
 	runs := s.Sarif.Runs
 	if len(runs) == 0 {
 		return issues
@@ -277,8 +276,8 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 	r := runs[0]
 	for _, result := range r.Results {
 		for _, loc := range result.Locations {
-			// convert the documentURI to a path according to our conversion
-			path := loc.PhysicalLocation.ArtifactLocation.URI
+			// convert the documentURI to a relativePath according to our conversion
+			relativePath := ToAbsolutePath(baseDir, loc.PhysicalLocation.ArtifactLocation.URI)
 
 			position := loc.PhysicalLocation.Region
 			// NOTE: sarif uses 1-based location numbering, see
@@ -328,9 +327,9 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 				isSecurityType = false
 			}
 
-			markers := result.getMarkers()
+			markers := result.getMarkers(baseDir)
 
-			key := getIssueKey(result.RuleID, path, startLine, endLine, startCol, endCol)
+			key := getIssueKey(result.RuleID, relativePath, startLine, endLine, startCol, endCol)
 
 			additionalData := snyk.CodeIssueData{
 				Key:                key,
@@ -354,7 +353,7 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 				Message:             message,
 				FormattedMessage:    formattedMessage,
 				IssueType:           issueType,
-				AffectedFilePath:    path,
+				AffectedFilePath:    relativePath,
 				Product:             product.ProductCode,
 				IssueDescriptionURL: ruleLink,
 				References:          rule.getReferences(),
@@ -362,9 +361,7 @@ func (s *SarifResponse) toIssues() (issues []snyk.Issue) {
 				AdditionalData:      additionalData,
 			}
 
-			if s.reportDiagnostic(d) {
-				issues = append(issues, d)
-			}
+			issues = append(issues, d)
 		}
 	}
 	return issues
@@ -375,7 +372,7 @@ func getIssueKey(ruleId string, path string, startLine int, endLine int, startCo
 	return hex.EncodeToString(id[:16])
 }
 
-func (r *result) getMarkers() []snyk.Marker {
+func (r *result) getMarkers(baseDir string) []snyk.Marker {
 	markers := make([]snyk.Marker, 0)
 
 	// Example markdown string:
@@ -412,7 +409,7 @@ func (r *result) getMarkers() []snyk.Marker {
 			positions = append(positions, snyk.MarkerPosition{
 				Rows: [2]int{startLine, endLine},
 				Cols: [2]int{startCol, endCol},
-				File: loc.Location.PhysicalLocation.ArtifactLocation.URI,
+				File: ToAbsolutePath(baseDir, loc.Location.PhysicalLocation.ArtifactLocation.URI),
 			})
 		}
 
@@ -436,13 +433,6 @@ func (r *result) getMarkers() []snyk.Marker {
 	}
 
 	return markers
-}
-
-func (s *SarifResponse) reportDiagnostic(d snyk.Issue) bool {
-	c := config.CurrentConfig()
-	return c.IsSnykCodeEnabled() ||
-		c.IsSnykCodeSecurityEnabled() && d.IssueType == snyk.CodeSecurityVulnerability ||
-		c.IsSnykCodeQualityEnabled() && d.IssueType == snyk.CodeQualityIssue
 }
 
 // createAutofixWorkspaceEdit turns the returned fix into an edit.
