@@ -197,7 +197,6 @@ func Test_initialize_shouldDefaultToTokenAuthentication(t *testing.T) {
 
 func Test_initialize_shouldInitToOauthAuthenticationWhenConfigured(t *testing.T) {
 	loc := setupServer(t)
-	di.Init() // force non test init
 
 	settings := lsp.Settings{AuthenticationMethod: lsp.OAuthAuthentication}
 

@@ -140,7 +140,7 @@ func updateAuthenticationMethod(settings lsp.Settings) {
 	if config.CurrentConfig().GetAuthenticationMethod() == lsp.OAuthAuthentication {
 		engine := c.Engine()
 		conf := engine.GetConfiguration()
-		conf.Set(configuration.OAUTH_AUTH_ENABLED, true)
+		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 		httpClient := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
 		openBrowserFunc := func(url string) {
 			di.AuthenticationService().Provider().SetAuthURL(url)
