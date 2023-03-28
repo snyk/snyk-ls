@@ -16,7 +16,12 @@
 
 package cli
 
-import "github.com/snyk/snyk-ls/application/config"
+import (
+	"github.com/snyk/go-application-framework/pkg/auth"
+
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/application/server/lsp"
+)
 
 const (
 	OrganizationEnvVar                  = "SNYK_CFG_ORG"
@@ -44,7 +49,12 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) (updat
 	}
 
 	if appendToken {
-		updatedEnv = append(updatedEnv, TokenEnvVar+"="+currentConfig.Token())
+		// there can only be one - highlander principle
+		if currentConfig.GetAuthenticationMethod() == lsp.OAuthAuthentication {
+			updatedEnv = append(updatedEnv, auth.CONFIG_KEY_OAUTH_TOKEN+"="+currentConfig.Token())
+		} else {
+			updatedEnv = append(updatedEnv, TokenEnvVar+"="+currentConfig.Token())
+		}
 	}
 	if currentConfig.SnykApi() != "" {
 		updatedEnv = append(updatedEnv, ApiEnvVar+"="+currentConfig.SnykApi())

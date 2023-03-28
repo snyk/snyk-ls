@@ -62,10 +62,11 @@ Right now the language server supports the following actions:
   - payload:
   ```json5
   {
-    "token": "the snyk token"
+    "token": "the snyk token" // this can be an oauth2.Token string or a legacy token
   }
   ```
-
+  - See https://pkg.go.dev/golang.org/x/oauth2@v0.6.0#Token for more details regarding oauth tokens.
+  
 - Cli Path Notification
   - method: `$/snyk.isAvailableCli`
   - payload:
@@ -181,7 +182,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
   "enableTelemetry":  "true", // Whether user analytics can be tracked
   "manageBinariesAutomatically": "true", // Whether CLI/LS binaries will be downloaded & updated automatically
   "cliPath":  "/a/patch/snyk-cli", // The path where the CLI can be found, or where it should be downloaded to
-  "token":  "secret-token", // The Snyk token, e.g.: snyk config get api
+  "token":  "secret-token", // The Snyk token, e.g.: snyk config get api or a token from oauth flow
   "automaticAuthentication": "true", // Whether LS will automatically authenticate on scan start (default: true)
   "enableTrustedFoldersFeature": "true", // Whether LS will prompt to trust a folder (default: true)
   "trustedFolders": ["/a/trusted/path", "/another/trusted/path"], // An array of folder that should be trusted
@@ -197,6 +198,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
     "low": true,
   },
   "scanningMode": "auto" // Specifies the mode for scans: "auto" for background scans or "manual" for scans on command
+  "authenticationMethod": "token" // Specifies the authentication method to use: "token" for Snyk API token or "oauth" for Snyk OAuth flow. Default is token.
 }
 ```
 

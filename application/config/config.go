@@ -33,6 +33,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/snyk/go-application-framework/pkg/app"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -414,6 +415,10 @@ func (c *Config) SetToken(token string) {
 	c.tokenChangeChannels = []chan string{}
 
 	c.token = token
+	// update go application framework if using oauth
+	if c.authenticationMethod == lsp.OAuthAuthentication {
+		c.engine.GetConfiguration().Set(auth.CONFIG_KEY_OAUTH_TOKEN, token)
+	}
 }
 func (c *Config) SetFormat(format string) { c.format = format }
 
