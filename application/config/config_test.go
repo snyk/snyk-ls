@@ -29,24 +29,26 @@ import (
 )
 
 func TestSetToken(t *testing.T) {
+	token := uuid.New().String()
+
 	t.Run("Legacy Token authentication", func(t *testing.T) {
 		config := New()
 		SetCurrentConfig(config)
-		oldToken := CurrentConfig().Token()
-		CurrentConfig().SetToken("asdf")
-		assert.Equal(t, CurrentConfig().Token(), "asdf")
-		CurrentConfig().SetToken(oldToken)
-		assert.NotEqual(t, CurrentConfig().Engine().GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN), oldToken)
+		oldToken := config.Token()
+		config.SetToken(token)
+		assert.Equal(t, config.Token(), token)
+		assert.NotEqual(t, config.Engine().GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN), token)
+		config.SetToken(oldToken)
 	})
 	t.Run("OAuth Token authentication", func(t *testing.T) {
 		config := New()
 		SetCurrentConfig(config)
 		config.authenticationMethod = lsp.OAuthAuthentication
-		oldToken := CurrentConfig().Token()
-		CurrentConfig().SetToken("asdf")
-		assert.Equal(t, CurrentConfig().Token(), "asdf")
-		CurrentConfig().SetToken(oldToken)
-		assert.Equal(t, CurrentConfig().Engine().GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN), oldToken)
+		oldToken := config.Token()
+		config.SetToken(token)
+		assert.Equal(t, config.Token(), token)
+		assert.Equal(t, config.Engine().GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN), token)
+		config.SetToken(oldToken)
 	})
 }
 
