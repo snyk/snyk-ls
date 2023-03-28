@@ -484,6 +484,7 @@ func (sc *Scanner) createBundle(ctx context.Context,
 		if err != nil {
 			sc.errorReporter.CaptureErrorAndReportAsIssue(rootPath, err)
 		}
+		relativePath = EncodePath(relativePath)
 
 		bundleFile := getFileFrom(absoluteFilePath, fileContent)
 		bundleFiles[relativePath] = bundleFile

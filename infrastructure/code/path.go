@@ -2,7 +2,10 @@ package code
 
 import (
 	"fmt"
+	"net/url"
+	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/pkg/errors"
 )
@@ -31,7 +34,14 @@ func ToAbsolutePath(baseDir string, relativePath string) string {
 }
 
 func EncodePath(relativePath string) string {
-	return ""
+	segments := strings.Split(filepath.ToSlash(relativePath), "/")
+	encodedPath := ""
+	for _, segment := range segments {
+		encodedSegment := url.PathEscape(segment)
+		encodedPath = path.Join(encodedPath, encodedSegment)
+	}
+
+	return encodedPath
 }
 
 func DecodePath(encodedRelativePath string) string {
