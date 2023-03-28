@@ -87,7 +87,7 @@ func (i *Initializer) Init() error {
 		return err
 	}
 
-	authenticator.UpdateToken(token, true)
+	authenticator.UpdateCredentials(token, true)
 	isAuthenticated, err := authenticator.IsAuthenticated()
 
 	if !isAuthenticated {

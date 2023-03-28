@@ -129,7 +129,7 @@ func (c SnykCli) HandleErrors(ctx context.Context, output string) (fail bool) {
 			return true
 		}
 
-		c.authenticator.UpdateToken(token, true)
+		c.authenticator.UpdateCredentials(token, true)
 		return true
 	}
 	return false

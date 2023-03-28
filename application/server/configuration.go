@@ -36,7 +36,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	auth2 "github.com/snyk/snyk-ls/infrastructure/cli/auth"
 	"github.com/snyk/snyk-ls/infrastructure/oauth"
-	"github.com/snyk/snyk-ls/internal/httpclient"
 )
 
 func workspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
@@ -139,10 +138,10 @@ func updateAuthenticationMethod(settings lsp.Settings) {
 	c := config.CurrentConfig()
 	c.SetAuthenticationMethod(settings.AuthenticationMethod)
 	if config.CurrentConfig().GetAuthenticationMethod() == lsp.OAuthAuthentication {
-		engine := di.Engine()
+		engine := c.Engine()
 		conf := engine.GetConfiguration()
-		conf.Set(configuration.OAUTH_AUTH_ENABLED, true)
-		httpClient := httpclient.NewHTTPClientCustomAuthHeader(false, di.Engine().GetNetworkAccess())
+		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+		httpClient := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
 		openBrowserFunc := func(url string) {
 			di.AuthenticationService().Provider().SetAuthURL(url)
 			auth.OpenBrowser(url)
@@ -207,15 +206,13 @@ func updateAutoScan(settings lsp.Settings) {
 
 func updateToken(token string) {
 	// Token was sent from the client, no need to send notification
-	di.AuthenticationService().UpdateToken(token, false)
+	di.AuthenticationService().UpdateCredentials(token, false)
 }
 
 func updateApiEndpoints(settings lsp.Settings, initialization bool) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
-	endpointsUpdated := config.CurrentConfig().UpdateApiEndpoints(snykApiUrl)
-	// TODO: Maybe, in the future, we want to update the API URL in the engine first, then retrieve to profit from URL canonization.
-	conf := di.Engine().GetConfiguration()
-	conf.Set(configuration.API_URL, snykApiUrl)
+	currentConfig := config.CurrentConfig()
+	endpointsUpdated := currentConfig.UpdateApiEndpoints(snykApiUrl)
 	if endpointsUpdated && !initialization {
 		di.AuthenticationService().Logout(context.Background())
 	}
@@ -306,9 +303,10 @@ func updateCliConfig(settings lsp.Settings) {
 	}
 	cliSettings.AdditionalOssParameters = strings.Split(settings.AdditionalParams, " ")
 	cliSettings.SetPath(settings.CliPath)
-	conf := di.Engine().GetConfiguration()
+	currentConfig := config.CurrentConfig()
+	conf := currentConfig.Engine().GetConfiguration()
 	conf.Set(configuration.INSECURE_HTTPS, cliSettings.Insecure)
-	config.CurrentConfig().SetCliSettings(cliSettings)
+	currentConfig.SetCliSettings(cliSettings)
 }
 
 func updateProductEnablement(settings lsp.Settings) {

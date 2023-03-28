@@ -55,7 +55,9 @@ const (
 }`
 )
 
-func clientFunc() *http.Client { return http.DefaultClient }
+func clientFunc() *http.Client {
+	return config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient()
+}
 
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	testutil.SmokeTest(t)

@@ -23,9 +23,6 @@ import (
 	"testing"
 
 	"github.com/adrg/xdg"
-	"github.com/rs/zerolog/log"
-	"github.com/snyk/go-application-framework/pkg/app"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/command"
@@ -71,7 +68,6 @@ var cliInitializer *cli2.Initializer
 var scanNotifier snyk.ScanNotifier
 var commandService snyk.CommandService
 var codeActionService *codeaction.CodeActionsService
-var engine workflow.Engine
 var fileWatcher *watcher.FileWatcher
 var initMutex = &sync.Mutex{}
 
@@ -116,11 +112,10 @@ func initInfrastructure() {
 			})
 	}
 
-	initializeWorkflowEngine()
 	errorReporter = sentry2.NewSentryErrorReporter()
-	installer = install.NewInstaller(errorReporter, engine.GetNetworkAccess().GetUnauthorizedHttpClient)
+	installer = install.NewInstaller(errorReporter, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
 	instrumentor = sentry2.NewInstrumentor()
-	snykApiClient = snyk_api.NewSnykApiClient(engine.GetNetworkAccess().GetHttpClient)
+	snykApiClient = snyk_api.NewSnykApiClient(c.Engine().GetNetworkAccess().GetHttpClient)
 	authFunc := func() (string, error) {
 		user, err := snykApiClient.GetActiveUser()
 		return user.Id, err
@@ -129,7 +124,7 @@ func initInfrastructure() {
 	authProvider := auth2.NewCliAuthenticationProvider(errorReporter)
 	authenticationService = services.NewAuthenticationService(snykApiClient, authProvider, analytics, errorReporter)
 	snykCli = cli2.NewExecutor(authenticationService, errorReporter, analytics)
-	snykCodeClient = code2.NewHTTPRepository(instrumentor, errorReporter, engine.GetNetworkAccess().GetHttpClient)
+	snykCodeClient = code2.NewHTTPRepository(instrumentor, errorReporter, c.Engine().GetNetworkAccess().GetHttpClient)
 	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
@@ -156,7 +151,6 @@ func TestInit(t *testing.T) {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	t.Helper()
-	initializeWorkflowEngine()
 	analytics = ux2.NewTestAnalytics()
 	instrumentor = performance2.NewTestInstrumentor()
 	errorReporter = errorreporting.NewTestErrorReporter()
@@ -200,24 +194,10 @@ func TestInit(t *testing.T) {
 	)
 }
 
-func initializeWorkflowEngine() {
-	engine = app.CreateAppEngine()
-	err := engine.Init()
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to initialize workflow engine")
-	}
-}
-
 /*
 TODO Accessors: This should go away, since all dependencies should be satisfied at startup-time, if needed for testing
 they can be returned by the test helper for unit/integration tests
 */
-
-func Engine() workflow.Engine {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return engine
-}
 
 func Instrumentor() performance2.Instrumentor {
 	initMutex.Lock()

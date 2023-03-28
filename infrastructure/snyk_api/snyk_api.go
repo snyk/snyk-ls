@@ -141,7 +141,6 @@ func (s *SnykApiClientImpl) doCall(method string,
 	if requestErr != nil {
 		return nil, NewSnykApiError(requestErr.Error(), 0)
 	}
-	req.Header.Set("Authorization", "token "+config.CurrentConfig().Token())
 	req.Header.Set("Content-Type", "application/json")
 	clientID := base64.URLEncoding.EncodeToString([]byte(config.Version))
 	req.Header.Set("User-Agent", "snyk-ls/"+base64.URLEncoding.EncodeToString([]byte(config.Version)))

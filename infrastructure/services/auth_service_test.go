@@ -18,11 +18,15 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/application/server/lsp"
 	appNotification "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -37,15 +41,38 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-func Test_UpdateToken(t *testing.T) {
-	testutil.UnitTest(t)
-	analytics := ux.NewTestAnalytics()
-	service := NewAuthenticationService(&snyk_api.FakeApiClient{}, &auth.CliAuthenticationProvider{}, analytics, error_reporting.NewTestErrorReporter())
+func Test_UpdateCredentials(t *testing.T) {
+	t.Run("CLI Authentication", func(t *testing.T) {
+		testutil.UnitTest(t)
+		analytics := ux.NewTestAnalytics()
+		service := NewAuthenticationService(&snyk_api.FakeApiClient{}, nil, analytics, error_reporting.NewTestErrorReporter())
 
-	service.UpdateToken("new-token", false)
+		service.UpdateCredentials("new-token", false)
 
-	assert.Equal(t, "new-token", config.CurrentConfig().Token())
-	assert.True(t, analytics.Identified)
+		assert.Equal(t, "new-token", config.CurrentConfig().Token())
+		assert.True(t, analytics.Identified)
+	})
+
+	t.Run("OAuth Authentication Authentication", func(t *testing.T) {
+		testutil.UnitTest(t)
+		config.CurrentConfig().SetAuthenticationMethod(lsp.OAuthAuthentication)
+		analytics := ux.NewTestAnalytics()
+		service := NewAuthenticationService(&snyk_api.FakeApiClient{}, nil, analytics, error_reporting.NewTestErrorReporter())
+		oauthCred := oauth2.Token{
+			AccessToken:  "a",
+			TokenType:    "b",
+			RefreshToken: "c",
+			Expiry:       time.Time{},
+		}
+		tokenBytes, err := json.Marshal(oauthCred)
+		assert.NoError(t, err)
+		token := string(tokenBytes)
+
+		service.UpdateCredentials(token, false)
+
+		assert.Equal(t, token, config.CurrentConfig().Token())
+		assert.True(t, analytics.Identified)
+	})
 }
 
 func Test_IsAuthenticated(t *testing.T) {

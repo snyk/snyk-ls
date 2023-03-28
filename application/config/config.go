@@ -32,6 +32,9 @@ import (
 	"github.com/denisbrodbeck/machineid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/snyk/go-application-framework/pkg/app"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/subosito/gotenv"
 	"github.com/xtgo/uuid"
@@ -163,6 +166,7 @@ type Config struct {
 	runtimeVersion               string
 	automaticScanning            bool
 	authenticationMethod         lsp.AuthenticationMethod
+	engine                       workflow.Engine
 }
 
 func CurrentConfig() *Config {
@@ -209,6 +213,11 @@ func New() *Config {
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = lsp.DefaultSeverityFilter()
+	c.engine = app.CreateAppEngine()
+	err := c.engine.Init()
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to initialize workflow engine")
+	}
 	return c
 }
 
@@ -346,6 +355,7 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 		}
 
 		c.setSnykCodeApi(snykCodeApiUrl)
+		c.Engine().GetConfiguration().Set(configuration.API_URL, c.SnykApi())
 		return true
 	}
 	return false
@@ -693,4 +703,8 @@ func (c *Config) SetAuthenticationMethod(method lsp.AuthenticationMethod) {
 
 func (c *Config) GetAuthenticationMethod() lsp.AuthenticationMethod {
 	return c.authenticationMethod
+}
+
+func (c *Config) Engine() workflow.Engine {
+	return c.engine
 }
