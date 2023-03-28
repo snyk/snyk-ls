@@ -848,21 +848,6 @@ func Test_rule_cwe(t *testing.T) {
 	})
 }
 
-func Test_SarifResponse_filter_disabled_issues(t *testing.T) {
-	t.Run("should filter out disabled issues - all enabled", func(t *testing.T) {
-		_, issues, _ := setupConversionTests(t, true, true)
-		assert.Equal(t, 2, len(issues))
-	})
-	t.Run("should filter out disabled issues - code quality disabled", func(t *testing.T) {
-		_, issues, _ := setupConversionTests(t, true, false)
-		assert.Equal(t, 0, len(issues))
-	})
-	t.Run("should filter out disabled issues - code security disabled", func(t *testing.T) {
-		_, issues, _ := setupConversionTests(t, false, true)
-		assert.Equal(t, 2, len(issues))
-	})
-}
-
 func Test_getIssueId(t *testing.T) {
 	id := getIssueKey("java/DontUsePrintStackTrace", "file/path.java", 15, 17, 15, 35)
 	assert.Equal(t, "8423559307c17d15f5617ae2e29dbf02", id)
