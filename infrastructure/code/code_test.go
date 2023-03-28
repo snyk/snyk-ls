@@ -186,7 +186,8 @@ func TestCreateBundle(t *testing.T) {
 			[]string{file},
 			map[string]bool{})
 		assert.Nil(t, err)
-		assert.Contains(t, bundle.Files, file)
+		relativePath, _ := ToRelativeUnixPath(tempDir, file)
+		assert.Contains(t, bundle.Files, relativePath)
 	})
 }
 
