@@ -23,6 +23,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/server/lsp"
@@ -38,6 +39,7 @@ func TestSetToken(t *testing.T) {
 		config.SetToken(token)
 		assert.Equal(t, config.Token(), token)
 		assert.NotEqual(t, config.Engine().GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN), token)
+		assert.Equal(t, config.Engine().GetConfiguration().Get(configuration.AUTHENTICATION_TOKEN), token)
 		config.SetToken(oldToken)
 	})
 	t.Run("OAuth Token authentication", func(t *testing.T) {

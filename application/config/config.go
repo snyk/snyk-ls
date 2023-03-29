@@ -418,6 +418,8 @@ func (c *Config) SetToken(token string) {
 	// update go application framework if using oauth
 	if c.authenticationMethod == lsp.OAuthAuthentication {
 		c.engine.GetConfiguration().Set(auth.CONFIG_KEY_OAUTH_TOKEN, token)
+	} else {
+		c.engine.GetConfiguration().Set(configuration.AUTHENTICATION_TOKEN, token)
 	}
 }
 func (c *Config) SetFormat(format string) { c.format = format }
