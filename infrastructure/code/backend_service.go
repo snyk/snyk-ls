@@ -311,7 +311,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		return nil, status, nil
 	}
 
-	issues := response.toIssues(baseDir)
+	issues, err := response.toIssues(baseDir)
 	return issues, status, err
 }
 

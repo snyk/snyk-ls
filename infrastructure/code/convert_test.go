@@ -748,7 +748,8 @@ func setupConversionTests(t *testing.T,
 		t.Fatal(err, "couldn't unmarshal sarif response")
 	}
 
-	issues := analysisResponse.toIssues(temp)
+	issues, err := analysisResponse.toIssues(temp)
+	assert.Nil(t, err)
 
 	return path, issues, analysisResponse
 }

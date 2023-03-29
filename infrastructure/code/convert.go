@@ -19,6 +19,7 @@ package code
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"net/url"
@@ -266,17 +267,18 @@ func (r *run) getRule(id string) rule {
 	return rule{}
 }
 
-func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue) {
+func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error) {
 	runs := s.Sarif.Runs
 	if len(runs) == 0 {
-		return issues
+		return issues, nil
 	}
 	ruleLink := createRuleLink()
 
 	r := runs[0]
+	var errs error
 	for _, result := range r.Results {
 		for _, loc := range result.Locations {
-			// convert the documentURI to an absolute path according to our conversion
+			// Response contains encoded relative paths that should be decoded and converted to absolute.
 			absPath, err := DecodePath(ToAbsolutePath(baseDir, loc.PhysicalLocation.ArtifactLocation.URI))
 			if err != nil {
 				log.Error().
@@ -285,6 +287,7 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue) {
 						baseDir +
 						", URI: " +
 						loc.PhysicalLocation.ArtifactLocation.URI)
+				errs = errors.Join(errs, err)
 			}
 
 			position := loc.PhysicalLocation.Region
@@ -335,7 +338,8 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue) {
 				isSecurityType = false
 			}
 
-			markers := result.getMarkers(baseDir)
+			markers, err := result.getMarkers(baseDir)
+			errs = errors.Join(errs, err)
 
 			key := getIssueKey(result.RuleID, absPath, startLine, endLine, startCol, endCol)
 
@@ -372,7 +376,7 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue) {
 			issues = append(issues, d)
 		}
 	}
-	return issues
+	return issues, errs
 }
 
 func getIssueKey(ruleId string, path string, startLine int, endLine int, startCol int, endCol int) string {
@@ -380,7 +384,7 @@ func getIssueKey(ruleId string, path string, startLine int, endLine int, startCo
 	return hex.EncodeToString(id[:16])
 }
 
-func (r *result) getMarkers(baseDir string) []snyk.Marker {
+func (r *result) getMarkers(baseDir string) ([]snyk.Marker, error) {
 	markers := make([]snyk.Marker, 0)
 
 	// Example markdown string:
@@ -422,6 +426,7 @@ func (r *result) getMarkers(baseDir string) []snyk.Marker {
 						baseDir +
 						", URI: " +
 						loc.Location.PhysicalLocation.ArtifactLocation.URI)
+				return []snyk.Marker{}, err
 			}
 			positions = append(positions, snyk.MarkerPosition{
 				Rows: [2]int{startLine, endLine},
@@ -449,7 +454,7 @@ func (r *result) getMarkers(baseDir string) []snyk.Marker {
 		})
 	}
 
-	return markers
+	return markers, nil
 }
 
 // createAutofixWorkspaceEdit turns the returned fix into an edit.

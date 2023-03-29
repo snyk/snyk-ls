@@ -10,9 +10,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Send for analysis: absolutePath -> relativePath -> encodeUri
-// Produce snyk.Issue results: decodeUri -> relativePath -> absolutePath
-
 func ToRelativeUnixPath(baseDir string, absoluteFilePath string) (string, error) {
 	relativePath, err := filepath.Rel(baseDir, absoluteFilePath)
 	if err != nil {
