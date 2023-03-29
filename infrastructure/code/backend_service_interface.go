@@ -54,6 +54,7 @@ type SnykCodeClient interface {
 	RunAnalysis(
 		ctx context.Context,
 		options AnalysisOptions,
+		baseDir string,
 	) (
 		[]snyk.Issue,
 		AnalysisStatus,

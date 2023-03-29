@@ -20,7 +20,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,8 +45,9 @@ import (
 )
 
 // can we replace them with more succinct higher level integration tests?[keeping them for sanity for the time being]
-func setupDocs() (string, lsp.TextDocumentItem, lsp.TextDocumentItem, []byte, []byte) {
-	path, _ := os.MkdirTemp(xdg.DataHome, "firstDocTemp")
+func setupDocs(t *testing.T) (string, lsp.TextDocumentItem, lsp.TextDocumentItem, []byte, []byte) {
+	t.Helper()
+	path := t.TempDir()
 
 	content1 := []byte("test1")
 	_ = os.WriteFile(path+string(os.PathSeparator)+"test1.java", content1, 0660)
@@ -186,7 +186,42 @@ func TestCreateBundle(t *testing.T) {
 			[]string{file},
 			map[string]bool{})
 		assert.Nil(t, err)
-		assert.Contains(t, bundle.Files, file)
+		relativePath, _ := ToRelativeUnixPath(tempDir, file)
+		assert.Contains(t, bundle.Files, relativePath)
+	})
+	t.Run("url-encodes files", func(t *testing.T) {
+		// Arrange
+		filesRelPaths := []string{
+			"path/to/file1.java",
+			"path/with spaces/file2.java",
+		}
+		expectedPaths := []string{
+			"path/to/file1.java",
+			"path/with%20spaces/file2.java",
+		}
+
+		_, scanner := setupTestScanner()
+		tempDir := t.TempDir()
+		var filesFullPaths []string
+		for _, fileRelPath := range filesRelPaths {
+			file := filepath.Join(tempDir, fileRelPath)
+			filesFullPaths = append(filesFullPaths, file)
+			_ = os.MkdirAll(filepath.Dir(file), 0700)
+			err := os.WriteFile(file, []byte("some content so the file won't be skipped"), 0600)
+			assert.Nil(t, err)
+		}
+
+		bundle, err := scanner.createBundle(context.Background(),
+			"testRequestId",
+			tempDir,
+			filesFullPaths,
+			map[string]bool{})
+
+		// Assert
+		assert.Nil(t, err)
+		for _, expectedPath := range expectedPaths {
+			assert.Contains(t, bundle.Files, expectedPath)
+		}
 	})
 }
 
@@ -221,19 +256,21 @@ func TestUploadAndAnalyze(t *testing.T) {
 				error_reporting.NewTestErrorReporter(),
 				ux2.NewTestAnalytics(),
 			)
-			path, firstDoc, _, content1, _ := setupDocs()
-			docs := []string{uri.PathFromUri(firstDoc.URI)}
-			defer func(path string) { _ = os.RemoveAll(path) }(path)
+			baseDir, firstDoc, _, content1, _ := setupDocs(t)
+			fullPath := uri.PathFromUri(firstDoc.URI)
+			docs := []string{fullPath}
 			metrics := c.newMetrics(len(docs), time.Time{})
 
-			_, _ = c.UploadAndAnalyze(context.Background(), docs, "", metrics, map[string]bool{})
+			_, _ = c.UploadAndAnalyze(context.Background(), docs, baseDir, metrics, map[string]bool{})
 
 			// verify that create bundle has been called on backend service
 			params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
 			assert.NotNil(t, params)
 			assert.Equal(t, 1, len(params))
 			files := params[0].(map[string]string)
-			assert.Equal(t, files[uri.PathFromUri(firstDoc.URI)], util.Hash(content1))
+			relPath, err := ToRelativeUnixPath(baseDir, fullPath)
+			assert.Nil(t, err)
+			assert.Equal(t, files[relPath], util.Hash(content1))
 		},
 	)
 
@@ -256,7 +293,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 
 			assert.NotNil(t, issues)
 			assert.Equal(t, 1, len(issues))
-			assert.True(t, reflect.DeepEqual(FakeIssue, issues[0]))
+			assert.Equal(t, FakeIssue, issues[0])
 
 			// verify that extend bundle has been called on backend service with additional file
 			params := snykCodeMock.GetCallParams(0, RunAnalysisOperation)

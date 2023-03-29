@@ -463,37 +463,34 @@ func (sc *Scanner) createBundle(ctx context.Context,
 	var limitToFiles []string
 	fileHashes := make(map[string]string)
 	bundleFiles := make(map[string]BundleFile)
-	for _, filePath := range filePaths {
+	for _, absoluteFilePath := range filePaths {
 		if ctx.Err() != nil {
 			return b, err // The cancellation error should be handled by the calling function
 		}
-		if !sc.BundleUploader.isSupported(span.Context(), filePath) {
+		if !sc.BundleUploader.isSupported(span.Context(), absoluteFilePath) {
 			continue
 		}
-		fileContent, err := loadContent(filePath)
+		fileContent, err := loadContent(absoluteFilePath)
 		if err != nil {
-			log.Error().Err(err).Str("filePath", filePath).Msg("could not load content of file")
+			log.Error().Err(err).Str("filePath", absoluteFilePath).Msg("could not load content of file")
 			continue
 		}
 
 		if !(len(fileContent) > 0 && len(fileContent) <= maxFileSize) {
 			continue
 		}
-		bundleFile := getFileFrom(filePath, fileContent)
-		bundleFiles[filePath] = bundleFile
-		fileHashes[filePath] = bundleFile.Hash
-		relativePath, err := filepath.Rel(rootPath, filePath)
+
+		relativePath, err := ToRelativeUnixPath(rootPath, absoluteFilePath)
 		if err != nil {
-			relativePath = filePath
-			if rootPath != "" {
-				errMsg := fmt.Sprint("could not get relative path for file: ", filePath, " and root path: ", rootPath)
-				sc.errorReporter.CaptureErrorAndReportAsIssue(rootPath, errors.Wrap(err, errMsg))
-			}
+			sc.errorReporter.CaptureErrorAndReportAsIssue(rootPath, err)
 		}
+		relativePath = EncodePath(relativePath)
 
-		relativePath = filepath.ToSlash(relativePath)
+		bundleFile := getFileFrom(absoluteFilePath, fileContent)
+		bundleFiles[relativePath] = bundleFile
+		fileHashes[relativePath] = bundleFile.Hash
 
-		if changedFiles[filePath] {
+		if changedFiles[absoluteFilePath] {
 			limitToFiles = append(limitToFiles, relativePath)
 		}
 	}

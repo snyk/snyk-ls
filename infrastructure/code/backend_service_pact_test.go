@@ -197,7 +197,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) { // nolint:gocognit // this i
 				severity:     0,
 			}
 
-			issues, _, err := client.RunAnalysis(context.Background(), analysisOptions)
+			issues, _, err := client.RunAnalysis(context.Background(), analysisOptions, "")
 
 			if err != nil {
 				return err

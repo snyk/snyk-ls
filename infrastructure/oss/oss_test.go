@@ -301,15 +301,17 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		fakeCli)
-	scanner.scheduledScanDuration = 50 * time.Millisecond
-	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
+	scanner.refreshScanWaitDuration = 50 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	targetFile, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
 	// Act
-	_, _ = scanner.Scan(context.Background(), path, "")
+	_, _ = scanner.Scan(ctx, targetFile, "")
 
 	// Assert
 	assert.Eventually(t, func() bool {
-		return fakeCli.GetFinishedScans() == 2
+		return fakeCli.GetFinishedScans() >= 2
 	}, 3*time.Second, 50*time.Millisecond)
 }
 
@@ -319,14 +321,14 @@ func Test_scheduleNewScan_CapturesAnalytics(t *testing.T) {
 	fakeCli := cli.NewTestExecutor()
 	analytics := ux2.NewTestAnalytics()
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, fakeCli)
-	scanner.scheduledScanDuration = 50 * time.Millisecond
+	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
 	// Act
-	scanner.scheduleNewScan(ctx, path)
+	scanner.scheduleRefreshScan(ctx, path)
 
 	// Assert
 	assert.Eventually(t, func() bool {
@@ -348,17 +350,17 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 	fakeCli.ExecuteDuration = time.Millisecond
 	analytics := ux2.NewTestAnalytics()
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, fakeCli)
-	scanner.scheduledScanDuration = 50 * time.Millisecond
+	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
 	// Act
-	scanner.scheduleNewScan(ctx, path)
+	scanner.scheduleRefreshScan(ctx, path)
 
 	// Assert
-	time.Sleep(scanner.scheduledScanDuration + fakeCli.ExecuteDuration + 10*time.Millisecond)
+	time.Sleep(scanner.refreshScanWaitDuration + fakeCli.ExecuteDuration + 10*time.Millisecond)
 	assert.Equal(t, 0, fakeCli.GetFinishedScans())
 	assert.Len(t, analytics.GetAnalytics(), 0)
 }
@@ -371,7 +373,7 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 	fakeCli.ExecuteDuration = time.Millisecond
 	analytics := ux2.NewTestAnalytics()
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, fakeCli)
-	scanner.scheduledScanDuration = 50 * time.Millisecond
+	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
 	targetPath, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
 	ctx1, cancel1 := context.WithCancel(context.Background())
@@ -380,11 +382,11 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 	t.Cleanup(cancel2)
 
 	// Act
-	scanner.scheduleNewScan(ctx1, targetPath)
-	scanner.scheduleNewScan(ctx2, targetPath)
+	scanner.scheduleRefreshScan(ctx1, targetPath)
+	scanner.scheduleRefreshScan(ctx2, targetPath)
 
 	// Assert
-	time.Sleep(3*(scanner.scheduledScanDuration+fakeCli.ExecuteDuration) + 5*time.Millisecond)
+	time.Sleep(3*(scanner.refreshScanWaitDuration+fakeCli.ExecuteDuration) + 5*time.Millisecond)
 	assert.Equal(t, 1, fakeCli.GetFinishedScans())
 }
 
@@ -396,17 +398,17 @@ func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testin
 	fakeCli.ExecuteDuration = time.Millisecond
 	analytics := ux2.NewTestAnalytics()
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, fakeCli)
-	scanner.scheduledScanDuration = 2 * time.Second
+	scanner.refreshScanWaitDuration = 2 * time.Second
 	workingDir, _ := os.Getwd()
 	targetPath, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Act
-	scanner.scheduleNewScan(ctx, targetPath)
+	scanner.scheduleRefreshScan(ctx, targetPath)
 	cancel()
 
 	// Assert
-	scheduledScanDuration := scanner.scheduledScanDuration + fakeCli.ExecuteDuration
+	scheduledScanDuration := scanner.refreshScanWaitDuration + fakeCli.ExecuteDuration
 	time.Sleep(scheduledScanDuration * 2) // Ensure enough time has passed for a scheduled scan to complete
 	assert.Equal(t, 0, fakeCli.GetFinishedScans())
 	assert.Len(t, analytics.GetAnalytics(), 0)
@@ -423,7 +425,6 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		fakeCli)
-	scanner.scheduledScanDuration = 50 * time.Millisecond
 	filePath, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
 	// Act

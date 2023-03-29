@@ -93,16 +93,16 @@ var supportedFiles = map[string]bool{
 }
 
 type Scanner struct {
-	instrumentor          performance.Instrumentor
-	errorReporter         error_reporting.ErrorReporter
-	analytics             ux2.Analytics
-	cli                   cli.Executor
-	mutex                 *sync.Mutex
-	runningScans          map[string]*scans.ScanProgress
-	scheduledScanDuration time.Duration
-	scheduledScan         *time.Timer
-	scheduledScanMtx      *sync.Mutex
-	scanCount             int
+	instrumentor            performance.Instrumentor
+	errorReporter           error_reporting.ErrorReporter
+	analytics               ux2.Analytics
+	cli                     cli.Executor
+	mutex                   *sync.Mutex
+	runningScans            map[string]*scans.ScanProgress
+	refreshScanWaitDuration time.Duration
+	scheduledScan           *time.Timer
+	scheduledScanMtx        *sync.Mutex
+	scanCount               int
 }
 
 func New(instrumentor performance.Instrumentor,
@@ -111,15 +111,15 @@ func New(instrumentor performance.Instrumentor,
 	cli cli.Executor,
 ) *Scanner {
 	return &Scanner{
-		instrumentor:          instrumentor,
-		errorReporter:         errorReporter,
-		analytics:             analytics,
-		cli:                   cli,
-		mutex:                 &sync.Mutex{},
-		scheduledScanMtx:      &sync.Mutex{},
-		runningScans:          map[string]*scans.ScanProgress{},
-		scheduledScanDuration: 24 * time.Hour,
-		scanCount:             1,
+		instrumentor:            instrumentor,
+		errorReporter:           errorReporter,
+		analytics:               analytics,
+		cli:                     cli,
+		mutex:                   &sync.Mutex{},
+		scheduledScanMtx:        &sync.Mutex{},
+		runningScans:            map[string]*scans.ScanProgress{},
+		refreshScanWaitDuration: 24 * time.Hour,
+		scanCount:               1,
 	}
 }
 
@@ -200,7 +200,7 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	oss.mutex.Unlock()
 
 	if issues != nil {
-		oss.scheduleNewScan(context.Background(), path)
+		oss.scheduleRefreshScan(context.Background(), path)
 	}
 
 	return issues, nil
@@ -423,18 +423,18 @@ func (oss *Scanner) trackResult(success bool) {
 	})
 }
 
-// scheduleNewScan Schedules new scan after scheduledScanDuration once existing OSS results might be stale.
+// scheduleRefreshScan Schedules new scan after refreshScanWaitDuration once existing OSS results might be stale.
 // The timer is reset if a new scan is scheduled before the previous one is executed.
 // Cancelling the context will stop the timer and abort the scheduled scan.
-func (oss *Scanner) scheduleNewScan(ctx context.Context, path string) {
-	logger := log.With().Str("method", "oss.scheduleNewScan").Logger()
+func (oss *Scanner) scheduleRefreshScan(ctx context.Context, path string) {
+	logger := log.With().Str("method", "oss.scheduleRefreshScan").Logger()
 	oss.scheduledScanMtx.Lock()
 	if oss.scheduledScan != nil {
 		// Cancel previously scheduled scan
 		oss.scheduledScan.Stop()
 	}
 
-	timer := time.NewTimer(oss.scheduledScanDuration)
+	timer := time.NewTimer(oss.refreshScanWaitDuration)
 	oss.scheduledScan = timer
 	oss.scheduledScanMtx.Unlock()
 	go func() {

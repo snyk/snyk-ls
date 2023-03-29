@@ -124,7 +124,7 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 			limitToFiles: limitToFiles,
 			severity:     0,
 		}
-		issues, callStatus, err := s.RunAnalysis(context.Background(), analysisOptions)
+		issues, callStatus, err := s.RunAnalysis(context.Background(), analysisOptions, "")
 		if err != nil {
 			return false
 		}
