@@ -227,9 +227,19 @@ func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
 
 	gitIgnore := ignore.CompileIgnoreLines(sc.ignorePatterns...)
 	sc.mutex.Unlock()
-	filesWalked := 0
+
 	log.Debug().Str("method", "folder.Files").Msgf("File count: %d", fileCount)
-	err = filepath.WalkDir(
+	filePaths, err = sc.collectFiles(filePaths, workspace, fileCount, gitIgnore, t)
+	t.End("All relevant files collected")
+	if err != nil {
+		return filePaths, err
+	}
+	return filePaths, nil
+}
+
+func (sc *Scanner) collectFiles(filePaths []string, workspace string, fileCount int, gitIgnore *ignore.GitIgnore, t *progress.Tracker) ([]string, error) {
+	filesWalked := 0
+	err := filepath.WalkDir(
 		workspace, func(path string, dirEntry os.DirEntry, err error) error {
 			if err != nil {
 				log.Debug().
@@ -260,11 +270,7 @@ func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
 			return err
 		},
 	)
-	t.End("All relevant files collected")
-	if err != nil {
-		return filePaths, err
-	}
-	return filePaths, nil
+	return filePaths, err
 }
 
 type DotSnykRules struct {

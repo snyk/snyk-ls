@@ -413,6 +413,17 @@ func Test_GetWorkspaceFolderFiles(t *testing.T) {
 	assert.NotContains(t, files, ignoredFilePath)
 }
 
+func Benchmark_GetWorkspaceFolderFiles(b *testing.B) {
+	_, sc := setupTestScanner()
+
+	for i := 0; i < b.N; i++ {
+		_, err := sc.files("/Users/michel/Git/nodejs-goof")
+		if err != nil {
+			b.Fatal(b, err, "Error getting workspace folder files: /Users/michel/Git/nodejs-goof")
+		}
+	}
+}
+
 func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 	_, tempDir, _, _, ignoredFileInDir := setupIgnoreWorkspace(t)
 	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
