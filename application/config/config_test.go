@@ -27,7 +27,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/server/lsp"
-	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestSetToken(t *testing.T) {
