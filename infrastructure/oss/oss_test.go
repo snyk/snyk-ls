@@ -402,10 +402,10 @@ func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testin
 	workingDir, _ := os.Getwd()
 	targetPath, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	// Act
 	scanner.scheduleRefreshScan(ctx, targetPath)
+	cancel()
 
 	// Assert
 	scheduledScanDuration := scanner.refreshScanWaitDuration + fakeCli.ExecuteDuration
