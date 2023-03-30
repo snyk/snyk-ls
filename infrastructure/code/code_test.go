@@ -680,7 +680,6 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		"should not add autofix after analysis when not enabled", func(t *testing.T) {
 			testutil.UnitTest(t)
 			autofixSetupAndCleanup(t)
-			config.CurrentConfig().SetSnykCodeEnabled(true)
 
 			snykCodeMock := &FakeSnykCodeClient{}
 			analytics := ux2.NewTestAnalytics()
@@ -713,7 +712,6 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		func(t *testing.T) {
 			testutil.UnitTest(t)
 			autofixSetupAndCleanup(t)
-			config.CurrentConfig().SetSnykCodeEnabled(true)
 			getCodeSettings().isAutofixEnabled.Set(true)
 			getCodeSettings().setAutofixExtensionsIfNotSet([]string{".somenonexistent"})
 
@@ -747,7 +745,6 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		"should run autofix after analysis when is enabled", func(t *testing.T) {
 			testutil.UnitTest(t)
 			autofixSetupAndCleanup(t)
-			config.CurrentConfig().SetSnykCodeEnabled(true)
 			getCodeSettings().isAutofixEnabled.Set(true)
 
 			snykCodeMock := &FakeSnykCodeClient{}
@@ -772,7 +769,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 
 			assert.Len(t, analytics.GetAnalytics(), 1)
 			assert.Len(t, issues[0].CodeActions, 2)
-			val, ok := (*issues[0].CodeActions[1].DeferredEdit)().Changes[issues[0].AffectedFilePath]
+			val, ok := (*issues[0].CodeActions[1].DeferredEdit)().Changes[EncodePath(issues[0].AffectedFilePath)]
 			assert.True(t, ok)
 			// If this fails, likely the format of autofix edits has changed to
 			// "hunk-like" ones rather than replacing the whole file

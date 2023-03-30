@@ -221,11 +221,12 @@ func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk
 				Msg("error converting to relative file path")
 			return nil
 		}
+		encodedRelativePath := EncodePath(relativePath)
 
 		autofixOptions := AutofixOptions{
 			bundleHash: b.BundleHash,
 			shardKey:   b.getShardKey(b.rootPath, config.CurrentConfig().Token()),
-			filePath:   relativePath,
+			filePath:   encodedRelativePath,
 			issue:      issue,
 		}
 
