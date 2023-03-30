@@ -25,6 +25,7 @@ require (
 	go.lsp.dev/uri v0.3.0
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 	golang.org/x/net v0.8.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -39,7 +40,6 @@ require (
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/snyk/go-httpauth v0.0.0-20230321155459-4222b8d1eabd // indirect
 	golang.org/x/crypto v0.7.0 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
 require (
@@ -80,5 +80,4 @@ require (
 	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.6.0 // indirect
 	golang.org/x/text v0.8.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
