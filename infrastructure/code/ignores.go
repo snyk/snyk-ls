@@ -10,9 +10,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func (sc *Scanner) loadIgnorePatternsAndCountFiles(folderPath string) (fileCount int, err error) {
+func (sc *Scanner) loadIgnorePatternsAndCountFiles(folderPath string) (ignores []string, fileCount int, err error) {
 	ignoreFiles := []string{".gitignore", ".dcignore", ".snyk"}
-	ignores := getDefaultIgnorePatterns()
+	ignores = getDefaultIgnorePatterns()
 	log.Debug().
 		Str("method", "loadIgnorePatternsAndCountFiles").
 		Str("workspace", folderPath).
@@ -61,12 +61,11 @@ func (sc *Scanner) loadIgnorePatternsAndCountFiles(folderPath string) (fileCount
 	)
 
 	if err != nil {
-		return fileCount, err
+		return ignores, fileCount, err
 	}
 
-	sc.ignorePatterns = ignores
 	log.Debug().Interface("ignorePatterns", ignores).Msg("Loaded and set ignore patterns")
-	return fileCount, nil
+	return ignores, fileCount, nil
 }
 
 func parseDotSnykFile(content []byte, baseDir string) ([]string, error) {

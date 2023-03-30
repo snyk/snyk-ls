@@ -219,10 +219,12 @@ func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
 	sc.mutex.Lock()
 	var fileCount int
 	if sc.ignorePatterns == nil {
-		fileCount, err = sc.loadIgnorePatternsAndCountFiles(folderPath)
+		var ignores []string
+		ignores, fileCount, err = sc.loadIgnorePatternsAndCountFiles(folderPath)
 		if err != nil {
 			return filePaths, err
 		}
+		sc.ignorePatterns = ignores
 	}
 
 	gitIgnore := ignore.CompileIgnoreLines(sc.ignorePatterns...)

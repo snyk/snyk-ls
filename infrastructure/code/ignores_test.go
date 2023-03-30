@@ -32,11 +32,11 @@ exclude:
 	assert.Nil(t, err)
 	_, sc := setupTestScanner()
 
-	_, err = sc.loadIgnorePatternsAndCountFiles(tmpDir)
+	ignorePatterns, _, err := sc.loadIgnorePatternsAndCountFiles(tmpDir)
 	assert.Nil(t, err)
 
 	for _, rule := range expectedIgnoreRules {
-		assert.Contains(t, sc.ignorePatterns, rule)
+		assert.Contains(t, ignorePatterns, rule)
 	}
 }
 
@@ -97,12 +97,12 @@ func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
 	tempDir := t.TempDir()
 	_, sc := setupTestScanner()
 
-	_, err := sc.loadIgnorePatternsAndCountFiles(tempDir)
+	ignorePatterns, _, err := sc.loadIgnorePatternsAndCountFiles(tempDir)
 	if err != nil {
 		t.Fatal(t, err, "Couldn't load .gitignore from workspace")
 	}
 
-	assert.Equal(t, getDefaultIgnorePatterns(), sc.ignorePatterns)
+	assert.Equal(t, getDefaultIgnorePatterns(), ignorePatterns)
 }
 
 func Test_LoadIgnorePatternsAndCountFiles_RelativePathIgnores(t *testing.T) {
@@ -114,9 +114,9 @@ func Test_LoadIgnorePatternsAndCountFiles_RelativePathIgnores(t *testing.T) {
 	expectedSubDirPattern := filepath.ToSlash(filepath.Join(subDir, "**/*"))
 
 	sc := Scanner{}
-	_, err := sc.loadIgnorePatternsAndCountFiles(tempDir)
+	ignorePatterns, _, err := sc.loadIgnorePatternsAndCountFiles(tempDir)
 
 	assert.NoError(t, err)
-	assert.Contains(t, sc.ignorePatterns, expectedSubDirPattern)
-	assert.Len(t, sc.ignorePatterns, len(getDefaultIgnorePatterns())+2)
+	assert.Contains(t, ignorePatterns, expectedSubDirPattern)
+	assert.Len(t, ignorePatterns, len(getDefaultIgnorePatterns())+2)
 }
