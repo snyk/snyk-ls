@@ -500,7 +500,7 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 	}
 
 	for _, command := range supportedCommands {
-		name := "Command \"" + command + "\" is supported"
+		name := "CommandData \"" + command + "\" is supported"
 		t.Run(name, func(t *testing.T) {
 			assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, command)
 		})
@@ -780,6 +780,29 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	}
 
 	assert.Nil(t, w.GetFolderContaining(uri.PathFromUri(f.Uri)))
+}
+
+func Test_CodeActionResolve_ShouldExecuteCommands(t *testing.T) {
+	loc := setupServer(t)
+	testutil.IntegTest(t)
+	_, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.CurrentConfig().SetAutomaticScanning(false)
+
+	_, err = loc.Client.Call(ctx, "codeAction/resolve", lsp.CodeAction{
+		Title: "My super duper test action",
+		Command: &sglsp.Command{
+			Title:     snyk.OpenBrowserCommand,
+			Command:   snyk.OpenBrowserCommand,
+			Arguments: []any{"https://snyk.io"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 }
 
 func Test_SmokeWorkspaceScanOssAndCode(t *testing.T) {

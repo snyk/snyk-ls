@@ -29,8 +29,8 @@ type TestCommand struct {
 	executed bool
 }
 
-func (command *TestCommand) Command() snyk.Command {
-	return snyk.Command{}
+func (command *TestCommand) Command() snyk.CommandData {
+	return snyk.CommandData{}
 }
 func (command *TestCommand) Execute(ctx context.Context) error {
 	command.executed = true

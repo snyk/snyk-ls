@@ -38,6 +38,8 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/oauth"
 )
 
+const govDomain = "snykgov.io"
+
 func workspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeConfigurationParams) (bool, error) {
 		log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("RECEIVED")
@@ -208,13 +210,19 @@ func updateToken(token string) {
 	// Token was sent from the client, no need to send notification
 	di.AuthenticationService().UpdateCredentials(token, false)
 }
-
 func updateApiEndpoints(settings lsp.Settings, initialization bool) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
 	currentConfig := config.CurrentConfig()
 	endpointsUpdated := currentConfig.UpdateApiEndpoints(snykApiUrl)
+
 	if endpointsUpdated && !initialization {
 		di.AuthenticationService().Logout(context.Background())
+	}
+
+	// overwrite authentication method if gov domain
+	if strings.Contains(snykApiUrl, govDomain) {
+		settings.AuthenticationMethod = lsp.OAuthAuthentication
+		updateAuthenticationMethod(settings)
 	}
 }
 

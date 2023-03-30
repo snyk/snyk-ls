@@ -139,7 +139,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 			References:          []snyk.Reference{},
 			IssueDescriptionURL: &url.URL{},
 			CodeActions:         []snyk.CodeAction{},
-			Commands:            []snyk.Command{},
+			Commands:            []snyk.CommandData{},
 			AdditionalData: snyk.IaCIssueData{
 				Key:           "098f6bcd4621d373cade4e832627b4f6",
 				Title:         "iacTitle",
@@ -172,7 +172,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 			References:          []snyk.Reference{},
 			IssueDescriptionURL: &url.URL{},
 			CodeActions:         []snyk.CodeAction{},
-			Commands:            []snyk.Command{},
+			Commands:            []snyk.CommandData{},
 			AdditionalData: snyk.CodeIssueData{
 				Key:                "5a105e8b9d40e1329780d62ea2265d8a",
 				Message:            "codeMessage",

@@ -645,7 +645,7 @@ func TestIsSastEnabled(t *testing.T) {
 			notification.DisposeListener()
 			config.CurrentConfig().SetSnykCodeEnabled(true)
 			apiClient.CodeEnabled = false
-			actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
+			actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
 
 			actionMap.Add(enableSnykCodeMessageActionItemTitle, command.NewOpenBrowserCommand(getCodeEnablementUrl()))
 			actionMap.Add(closeMessageActionItemTitle, nil)

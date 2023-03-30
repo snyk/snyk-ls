@@ -415,7 +415,7 @@ func (sc *Scanner) isSastEnabled() bool {
 	}
 	if !sastEnabled {
 		// this is processed in the listener registered to translate into the right client protocol
-		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
+		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
 		actionCommandMap.Add(enableSnykCodeMessageActionItemTitle, command.NewOpenBrowserCommand(getCodeEnablementUrl()))
 		actionCommandMap.Add(closeMessageActionItemTitle, nil)
 

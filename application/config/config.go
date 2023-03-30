@@ -56,7 +56,6 @@ const (
 	defaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
 	pathListSeparator     = string(os.PathListSeparator)
 	windows               = "windows"
-	govDomain             = "snykgov.io"
 )
 
 var (
@@ -340,10 +339,6 @@ func (c *Config) SetCliSettings(settings *CliSettings) {
 func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 	if snykApiUrl == "" {
 		snykApiUrl = defaultSnykApiUrl
-	}
-
-	if strings.Contains(snykApiUrl, govDomain) {
-		c.authenticationMethod = "oauth"
 	}
 
 	if snykApiUrl != c.snykApiUrl {

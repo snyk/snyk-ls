@@ -22,14 +22,14 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
-type CommandServiceImpl struct {
+type ServiceImpl struct {
 }
 
 func NewCommandService() snyk.CommandService {
-	return &CommandServiceImpl{}
+	return &ServiceImpl{}
 }
 
 // ExecuteCommand implements CommandService
-func (service *CommandServiceImpl) ExecuteCommand(ctx context.Context, command snyk.CommandInterface) error {
+func (service *ServiceImpl) ExecuteCommand(ctx context.Context, command snyk.Command) error {
 	return command.Execute(ctx)
 }

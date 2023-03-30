@@ -68,7 +68,7 @@ func ToCodeAction(issue snyk.Issue, action snyk.CodeAction) lsp.CodeAction {
 	}
 }
 
-func ToCommand(command *snyk.Command) *sglsp.Command {
+func ToCommand(command *snyk.CommandData) *sglsp.Command {
 	if command == nil {
 		return nil
 	}

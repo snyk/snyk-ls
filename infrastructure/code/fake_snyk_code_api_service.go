@@ -58,7 +58,7 @@ var (
 			Character: 7,
 		},
 	}
-	FakeCommand = snyk.Command{
+	FakeCommand = snyk.CommandData{
 		Title:     "Code Flow blah blah fake",
 		CommandId: snyk.NavigateToRangeCommand,
 		Arguments: []any{"path", fakeRange},
@@ -71,7 +71,7 @@ var (
 		Product:     product.ProductCode,
 		IssueType:   snyk.CodeQualityIssue,
 		Message:     "This is a dummy error (severity error)",
-		Commands:    []snyk.Command{FakeCommand},
+		Commands:    []snyk.CommandData{FakeCommand},
 		CodeActions: []snyk.CodeAction{FakeCodeAction},
 	}
 

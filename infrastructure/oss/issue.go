@@ -30,7 +30,7 @@ import (
 
 func (i *ossIssue) GetCodeActions() (actions []snyk.CodeAction) {
 	title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", i.Title, i.PackageName)
-	command := &snyk.Command{
+	command := &snyk.CommandData{
 		Title:     title,
 		CommandId: snyk.OpenBrowserCommand,
 		Arguments: []any{i.createIssueURL().String()},

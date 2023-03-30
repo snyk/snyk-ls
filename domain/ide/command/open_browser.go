@@ -25,12 +25,12 @@ import (
 )
 
 type OpenBrowserCommand struct {
-	command snyk.Command
+	command snyk.CommandData
 }
 
 func NewOpenBrowserCommand(url string) *OpenBrowserCommand {
 	return &OpenBrowserCommand{
-		command: snyk.Command{
+		command: snyk.CommandData{
 			Title:     snyk.OpenBrowserCommand,
 			CommandId: snyk.OpenBrowserCommand,
 			Arguments: []any{url},
@@ -38,7 +38,7 @@ func NewOpenBrowserCommand(url string) *OpenBrowserCommand {
 	}
 }
 
-func (cmd *OpenBrowserCommand) Command() snyk.Command {
+func (cmd *OpenBrowserCommand) Command() snyk.CommandData {
 	return cmd.command
 }
 
