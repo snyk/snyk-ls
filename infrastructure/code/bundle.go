@@ -185,10 +185,20 @@ func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk
 		s := b.instrumentor.StartSpan(ctx, method)
 		defer b.instrumentor.Finish(s)
 
+		relativePath, err := ToRelativeUnixPath(b.rootPath, issue.AffectedFilePath)
+		if err != nil {
+			log.Error().
+				Err(err).Str("method", method).
+				Str("rootPath", b.rootPath).
+				Str("AffectedFilePath", issue.AffectedFilePath).
+				Msg("error converting to relative file path")
+			return nil
+		}
+
 		autofixOptions := AutofixOptions{
 			bundleHash: b.BundleHash,
 			shardKey:   b.getShardKey(b.rootPath, config.CurrentConfig().Token()),
-			filePath:   issue.AffectedFilePath,
+			filePath:   relativePath,
 			issue:      issue,
 		}
 
