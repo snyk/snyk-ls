@@ -669,16 +669,17 @@ func TestIsSastEnabled(t *testing.T) {
 }
 
 func autofixSetupAndCleanup(t *testing.T) {
+	resetCodeSettings()
 	t.Cleanup(resetCodeSettings)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	getCodeSettings().isAutofixEnabled.Set(false)
 }
 
 func TestUploadAnalyzeWithAutofix(t *testing.T) {
-	autofixSetupAndCleanup(t)
 	t.Run(
 		"should not add autofix after analysis when not enabled", func(t *testing.T) {
 			testutil.UnitTest(t)
+			autofixSetupAndCleanup(t)
 			config.CurrentConfig().SetSnykCodeEnabled(true)
 
 			snykCodeMock := &FakeSnykCodeClient{}
@@ -711,6 +712,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		"should not run autofix after analysis when is enabled but have disallowed extension",
 		func(t *testing.T) {
 			testutil.UnitTest(t)
+			autofixSetupAndCleanup(t)
 			config.CurrentConfig().SetSnykCodeEnabled(true)
 			getCodeSettings().isAutofixEnabled.Set(true)
 			getCodeSettings().setAutofixExtensionsIfNotSet([]string{".somenonexistent"})
@@ -744,6 +746,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 	t.Run(
 		"should run autofix after analysis when is enabled", func(t *testing.T) {
 			testutil.UnitTest(t)
+			autofixSetupAndCleanup(t)
 			config.CurrentConfig().SetSnykCodeEnabled(true)
 			getCodeSettings().isAutofixEnabled.Set(true)
 
