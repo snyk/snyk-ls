@@ -64,7 +64,6 @@ func Test_IgnoresWithNegationInSnykCode(t *testing.T) {
 
 	calls := codeClientMock.GetAllCalls("extendBundleWithSource")
 	assert.Len(t, calls, 1)
-	assert.Contains(t, scanner.ignorePatterns, "!"+filepath.ToSlash(repobase+"/**/temp"))
 }
 
 func Test_IgnoresInSnykCode(t *testing.T) {

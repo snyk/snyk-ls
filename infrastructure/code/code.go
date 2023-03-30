@@ -75,7 +75,6 @@ type Scanner struct {
 	SnykApiClient     snyk_api.SnykApiClient
 	errorReporter     error_reporting.ErrorReporter
 	analytics         ux2.Analytics
-	ignorePatterns    []string
 	changedFilesMutex sync.Mutex
 	mutex             sync.Mutex
 	scanStatusMutex   sync.Mutex
@@ -218,16 +217,13 @@ func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
 	}
 	sc.mutex.Lock()
 	var fileCount int
-	if sc.ignorePatterns == nil {
-		var ignores []string
-		ignores, fileCount, err = sc.loadIgnorePatternsAndCountFiles(folderPath)
-		if err != nil {
-			return filePaths, err
-		}
-		sc.ignorePatterns = ignores
+	var ignorePatterns []string
+	ignorePatterns, fileCount, err = sc.loadIgnorePatternsAndCountFiles(folderPath)
+	if err != nil {
+		return filePaths, err
 	}
 
-	gitIgnore := ignore.CompileIgnoreLines(sc.ignorePatterns...)
+	gitIgnore := ignore.CompileIgnoreLines(ignorePatterns...)
 	sc.mutex.Unlock()
 	filesWalked := 0
 	log.Debug().Str("method", "folder.Files").Msgf("File count: %d", fileCount)
