@@ -421,6 +421,7 @@ func Benchmark_GetWorkspaceFolderFiles(b *testing.B) {
 		if err != nil {
 			b.Fatal(b, err, "Error getting workspace folder files: /Users/michel/Git/nodejs-goof")
 		}
+		sc.ignorePatterns = nil
 	}
 }
 
