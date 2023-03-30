@@ -56,7 +56,7 @@ func (sc *Scanner) loadIgnorePatternsAndCountFiles(folderPath string) (fileCount
 				ignores = append(ignores, parseIgnoreFile(content, baseDir)...)
 			}
 
-			return err
+			return nil
 		},
 	)
 
