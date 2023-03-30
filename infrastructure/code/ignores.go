@@ -70,6 +70,13 @@ func (sc *Scanner) loadIgnorePatternsAndCountFiles(folderPath string) (fileCount
 }
 
 func parseDotSnykFile(content []byte, baseDir string) ([]string, error) {
+	type DotSnykRules struct {
+		Exclude struct {
+			Code   []string `yaml:"code"`
+			Global []string `yaml:"global"`
+		} `yaml:"exclude"`
+	}
+
 	var rules DotSnykRules
 	err := yaml.Unmarshal(content, &rules)
 	if err != nil {

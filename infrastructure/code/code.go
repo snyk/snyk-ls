@@ -267,13 +267,6 @@ func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
 	return filePaths, nil
 }
 
-type DotSnykRules struct {
-	Exclude struct {
-		Code   []string `yaml:"code"`
-		Global []string `yaml:"global"`
-	} `yaml:"exclude"`
-}
-
 func (sc *Scanner) newMetrics(fileCount int, scanStartTime time.Time) *ScanMetrics {
 	if scanStartTime.IsZero() {
 		scanStartTime = time.Now()
