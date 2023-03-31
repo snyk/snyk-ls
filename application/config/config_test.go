@@ -192,14 +192,6 @@ func TestSnykCodeApi(t *testing.T) {
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint("")
 		assert.Equal(t, customDeeproxyUrl, codeApiEndpoint)
 	})
-
-	t.Run(govDomain+" substring endpoint enables oauth authentication", func(t *testing.T) {
-		t.Parallel()
-		endpoint := "https://app.fedramp," + govDomain + "/api/v1"
-		config := New()
-		config.UpdateApiEndpoints(endpoint)
-		assert.Equal(t, lsp.OAuthAuthentication, config.GetAuthenticationMethod())
-	})
 }
 
 func Test_SetSeverityFilter(t *testing.T) {

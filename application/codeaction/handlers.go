@@ -11,10 +11,10 @@ import (
 )
 
 type TextDocumentCodeActionHandler func(context.Context, lsp.CodeActionParams) ([]lsp.CodeAction, error)
-type CodeActionResolveHandler func(context.Context, lsp.CodeAction) (*lsp.CodeAction, error)
+type ResolveHandler func(context.Context, lsp.CodeAction) (*lsp.CodeAction, error)
 
 // ResolveCodeActionHandler returns a jrpc2.Handler that can be used to handle the "codeAction/resolve" LSP method
-func ResolveCodeActionHandler(service *CodeActionsService) CodeActionResolveHandler {
+func ResolveCodeActionHandler(service *CodeActionsService) ResolveHandler {
 	logger := log.Logger.With().Str("method", "ResolveCodeActionHandler").Logger()
 
 	return func(ctx context.Context, params lsp.CodeAction) (*lsp.CodeAction, error) {

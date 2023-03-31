@@ -42,7 +42,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -79,13 +78,20 @@ func setupServer(t *testing.T) server.Local {
 	return setupCustomServer(t, nil)
 }
 
+func setupServerWithCustomDI(t *testing.T, useMocks bool) server.Local {
+	s := setupCustomServer(t, nil)
+	if !useMocks {
+		di.Init()
+	}
+	return s
+}
+
 func setupCustomServer(t *testing.T, callBackFn onCallbackFn) server.Local {
 	testutil.UnitTest(t)
 	di.TestInit(t)
 	cleanupChannels()
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
-	workspace.Set(workspace.New(performance.NewTestInstrumentor(), di.Scanner(), di.HoverService(), di.ScanNotifier()))
 	loc := startServer(callBackFn)
 
 	t.Cleanup(func() {

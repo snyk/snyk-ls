@@ -18,10 +18,12 @@ package server
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/atotto/clipboard"
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
@@ -43,20 +45,26 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 		method := "ExecuteCommandHandler"
 		log.Info().Str("method", method).Interface("command", params).Msg("RECEIVING")
 		defer log.Info().Str("method", method).Interface("command", params).Msg("SENDING")
+		commandData := snyk.CommandData{CommandId: params.Command, Arguments: params.Arguments, Title: params.Command}
+		cmd, err := command.CreateFromCommandData(commandData, srv)
+		// TODO enable after migrating all commands
+		//if err != nil {
+		//	log.Error().Err(err).Str("method", method).Msg("failed to create command")
+		//	return nil, err
+		//}
+		if err == nil {
+			err = di.CommandService().ExecuteCommand(bgCtx, cmd)
+			if err == nil {
+				return nil, nil //return nil, err
+			}
+			logError(errors.Wrap(err, fmt.Sprintf("Error executing command %v", commandData)), method)
+			return nil, err
+		}
+
+		// fallback path starts here
+		err = nil // we need to reset the error to enable fallback to be successful
 		args := params.Arguments
 		switch params.Command {
-		case snyk.NavigateToRangeCommand:
-			if len(args) < 2 {
-				log.Warn().Str("method", method).Msg("received NavigateToRangeCommand without range")
-			}
-			navigateToLocation(srv, args)
-
-		case snyk.WorkspaceScanCommand:
-			w := workspace.Get()
-			w.ClearIssues(bgCtx)
-			w.ScanWorkspace(bgCtx)
-			handleUntrustedFolders(bgCtx, srv)
-
 		case snyk.WorkspaceFolderScanCommand:
 			w := workspace.Get()
 			if len(args) != 1 {
@@ -73,13 +81,7 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 			f.ClearScannedStatus()
 			f.ClearDiagnosticsFromPathRecursively(path)
 			f.ScanFolder(bgCtx)
-			handleUntrustedFolders(bgCtx, srv)
-		case snyk.OpenBrowserCommand:
-			err := command.NewOpenBrowserCommand(params.Arguments[0].(string)).Execute(context.Background())
-			if err != nil {
-				log.Err(err).Msg("Error on snyk.openBrowser command")
-				notification.SendError(err)
-			}
+			command.HandleUntrustedFolders(bgCtx, srv)
 		case snyk.TrustWorkspaceFoldersCommand:
 			err := TrustWorkspaceFolders()
 			if err != nil {

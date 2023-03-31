@@ -25,10 +25,10 @@ import (
 	"github.com/adrg/xdg"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
-	"github.com/snyk/snyk-ls/application/command"
 	"github.com/snyk/snyk-ls/application/config"
 	appNotification "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/application/watcher"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"

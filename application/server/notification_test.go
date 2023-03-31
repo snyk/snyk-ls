@@ -212,7 +212,12 @@ func TestShowMessageRequest(t *testing.T) {
 
 		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
 		expectedTitle := "test title"
-		actionCommandMap.Add(snyk.MessageAction(expectedTitle), command.NewOpenBrowserCommand("https://snyk.io"))
+		data, err := command.CreateFromCommandData(snyk.CommandData{CommandId: snyk.OpenBrowserCommand, Arguments: []any{"https://snyk.io"}}, nil)
+		assert.NoError(t, err)
+		actionCommandMap.Add(
+			snyk.MessageAction(expectedTitle),
+			data,
+		)
 
 		expected := snyk.ShowMessageRequest{Message: "message", Type: snyk.Info, Actions: actionCommandMap}
 
@@ -250,7 +255,10 @@ func TestShowMessageRequest(t *testing.T) {
 		}
 
 		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
-		actionCommandMap.Add(snyk.MessageAction(selectedAction), command.NewOpenBrowserCommand("https://snyk.io"))
+		data, err := command.CreateFromCommandData(snyk.CommandData{CommandId: snyk.OpenBrowserCommand, Arguments: []any{"https://snyk.io"}}, nil)
+		assert.NoError(t, err)
+
+		actionCommandMap.Add(snyk.MessageAction(selectedAction), data)
 
 		request := snyk.ShowMessageRequest{Message: "message", Type: snyk.Info, Actions: actionCommandMap}
 

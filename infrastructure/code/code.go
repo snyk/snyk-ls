@@ -416,7 +416,17 @@ func (sc *Scanner) isSastEnabled() bool {
 	if !sastEnabled {
 		// this is processed in the listener registered to translate into the right client protocol
 		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
-		actionCommandMap.Add(enableSnykCodeMessageActionItemTitle, command.NewOpenBrowserCommand(getCodeEnablementUrl()))
+		commandData := snyk.CommandData{
+			Title:     snyk.OpenBrowserCommand,
+			CommandId: snyk.OpenBrowserCommand,
+			Arguments: []any{getCodeEnablementUrl()},
+		}
+		cmd, err := command.CreateFromCommandData(commandData, nil)
+		if err != nil {
+			log.Error().Err(err).Str("method", "isSastEnabled").Msg("couldn't create open browser command")
+		} else {
+			actionCommandMap.Add(enableSnykCodeMessageActionItemTitle, cmd)
+		}
 		actionCommandMap.Add(closeMessageActionItemTitle, nil)
 
 		notification.Send(snyk.ShowMessageRequest{
