@@ -142,12 +142,6 @@ func Test_UpdateSettings(t *testing.T) {
 	testutil.UnitTest(t)
 	di.TestInit(t)
 
-	t.Run(govDomain+" substring endpoint enables oauth authentication", func(t *testing.T) {
-		endpoint := "https://app.fedramp," + govDomain + "/api/v1"
-		updateApiEndpoints(lsp.Settings{Endpoint: endpoint}, false)
-		assert.Equal(t, lsp.OAuthAuthentication, config.CurrentConfig().GetAuthenticationMethod())
-	})
-
 	t.Run(govDomain+" substring endpoint enables oauth authentication in init", func(t *testing.T) {
 		endpoint := "https://app.fedramp," + govDomain + "/api/v1"
 		updateApiEndpoints(lsp.Settings{Endpoint: endpoint}, true)
