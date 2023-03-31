@@ -7,7 +7,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 type TextDocumentCodeActionHandler func(context.Context, lsp.CodeActionParams) ([]lsp.CodeAction, error)

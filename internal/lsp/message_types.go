@@ -267,13 +267,6 @@ type WorkspaceFoldersChangeEvent struct {
 	Removed []WorkspaceFolder `json:"Removed,omitempty"`
 }
 
-type SeverityFilter struct {
-	Critical bool `json:"critical,omitempty"`
-	High     bool `json:"high,omitempty"`
-	Medium   bool `json:"medium,omitempty"`
-	Low      bool `json:"low,omitempty"`
-}
-
 // Settings is the struct that is parsed from the InitializationParams.InitializationOptions field
 type Settings struct {
 	ActivateSnykOpenSource      string               `json:"activateSnykOpenSource,omitempty"`

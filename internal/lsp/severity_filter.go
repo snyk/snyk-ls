@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,6 @@
  */
 
 package lsp
-
-// TODO: this belongs to Snyk domain but has to live here until there's no dependency on lsp from the domain layer.
 
 func NewSeverityFilter(critical bool, high bool, medium bool, low bool) SeverityFilter {
 	return SeverityFilter{
@@ -34,4 +32,11 @@ func DefaultSeverityFilter() SeverityFilter {
 		Medium:   true,
 		Low:      true,
 	}
+}
+
+type SeverityFilter struct {
+	Critical bool `json:"critical,omitempty"`
+	High     bool `json:"high,omitempty"`
+	Medium   bool `json:"medium,omitempty"`
+	Low      bool `json:"low,omitempty"`
 }

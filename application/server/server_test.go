@@ -38,7 +38,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
@@ -47,6 +46,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -808,7 +808,8 @@ func Test_CodeActionResolve_ShouldExecuteCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	// TODO assert stuff
+	//assert.True(t, di.CommandService().(snyk.CommandServiceMock).ExecutedCommands()>0)
 }
 
 func Test_SmokeWorkspaceScanOssAndCode(t *testing.T) {
