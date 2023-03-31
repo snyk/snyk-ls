@@ -118,17 +118,17 @@ func (b *BundleUploader) groupInBatches(
 
 func (b *BundleUploader) isSupported(ctx context.Context, file string) bool {
 	if b.supportedExtensions.Size() == 0 && b.supportedConfigFiles.Size() == 0 {
-		// autofixExtensions is not needed here
-		configFiles, extensions, _, err := b.SnykCode.GetFilters(ctx)
+
+		filters, err := b.SnykCode.GetFilters(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("could not get filters")
 			return false
 		}
 
-		for _, ext := range extensions {
+		for _, ext := range filters.Extensions {
 			b.supportedExtensions.Store(ext, true)
 		}
-		for _, configFile := range configFiles {
+		for _, configFile := range filters.ConfigFiles {
 			// .gitignore and .dcignore should not be uploaded
 			// (https://github.com/snyk/code-client/blob/d6f6a2ce4c14cb4b05aa03fb9f03533d8cf6ca4a/src/files.ts#L138)
 			if configFile == ".gitignore" || configFile == ".dcignore" {

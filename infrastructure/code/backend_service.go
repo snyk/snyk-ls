@@ -92,9 +92,7 @@ func NewHTTPRepository(
 }
 
 func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (
-	configFiles []string,
-	extensions []string,
-	autofixExtensions []string,
+	filters filtersResponse,
 	err error,
 ) {
 	method := "code.GetFilters"
@@ -105,16 +103,15 @@ func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (
 
 	responseBody, err := s.doCall(span.Context(), "GET", "/filters", nil)
 	if err != nil {
-		return nil, nil, nil, err
+		return filtersResponse{ConfigFiles: nil, Extensions: nil, AutofixExtensions: nil}, err
 	}
 
-	var filters filtersResponse
 	err = json.Unmarshal(responseBody, &filters)
 	if err != nil {
-		return nil, nil, nil, err
+		return filtersResponse{ConfigFiles: nil, Extensions: nil, AutofixExtensions: nil}, err
 	}
 	log.Debug().Str("method", method).Msg("API: Finished getting filters")
-	return filters.ConfigFiles, filters.Extensions, filters.AutofixExtensions, nil
+	return filters, nil
 }
 
 func (s *SnykCodeHTTPClient) CreateBundle(

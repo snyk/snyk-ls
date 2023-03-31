@@ -38,9 +38,7 @@ type AutofixOptions struct {
 
 type SnykCodeClient interface {
 	GetFilters(ctx context.Context) (
-		configFiles []string,
-		extensions []string,
-		autofixExtensions []string,
+		filters filtersResponse,
 		err error)
 
 	CreateBundle(

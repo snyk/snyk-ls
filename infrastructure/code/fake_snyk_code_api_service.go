@@ -165,16 +165,20 @@ func (f *FakeSnykCodeClient) GetAllCalls(op string) [][]any {
 }
 
 func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (
-	configFiles []string,
-	extensions []string,
-	autofixExtensions []string,
+	filters filtersResponse,
 	err error,
 ) {
 	FakeSnykCodeApiServiceMutex.Lock()
 	defer FakeSnykCodeApiServiceMutex.Unlock()
-	params := []any{configFiles, extensions, autofixExtensions, err}
+	params := []any{filters.ConfigFiles,
+		filters.Extensions,
+		filters.AutofixExtensions,
+		err}
 	f.addCall(params, GetFiltersOperation)
-	return f.ConfigFiles, FakeFilters, FakeAutofixFilters, nil
+	return filtersResponse{ConfigFiles: f.ConfigFiles,
+		Extensions:        FakeFilters,
+		AutofixExtensions: FakeAutofixFilters,
+	}, nil
 }
 
 func (f *FakeSnykCodeClient) CreateBundle(_ context.Context,

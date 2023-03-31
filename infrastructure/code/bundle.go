@@ -99,8 +99,9 @@ func getIssueLangAndRuleId(issue snyk.Issue) (string, string, bool) {
 // in the `codeSettings` singleton.
 func (b *Bundle) isAutofixSupportedForExtension(ctx context.Context, file string) bool {
 	if getCodeSettings().autofixExtensions == nil {
-		// query
-		_, _, autofixExts, err := b.SnykCode.GetFilters(ctx)
+		// TODO: together with the endpoint redesign, this should use not the same `/filters` endpoint
+		// as the analysis one. Autofix should have a separate one.
+		filters, err := b.SnykCode.GetFilters(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("could not get filters")
 			return false
@@ -108,7 +109,7 @@ func (b *Bundle) isAutofixSupportedForExtension(ctx context.Context, file string
 
 		// It's not a mistake to have `..IfNotSet` here, because between the `GetFilters` and here
 		// things might have changed on the settings singleton. But we don't want to overlock it.
-		getCodeSettings().setAutofixExtensionsIfNotSet(autofixExts)
+		getCodeSettings().setAutofixExtensionsIfNotSet(filters.AutofixExtensions)
 	}
 
 	supported := getCodeSettings().autofixExtensions.Get(filepath.Ext(file))
