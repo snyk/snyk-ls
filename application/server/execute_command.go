@@ -62,7 +62,6 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 		}
 
 		// fallback path starts here
-		err = nil // we need to reset the error to enable fallback to be successful
 		args := params.Arguments
 		switch params.Command {
 		case snyk.WorkspaceFolderScanCommand:
