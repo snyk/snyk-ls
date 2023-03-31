@@ -88,7 +88,7 @@ func NewSnykApiClient(client func() *http.Client) SnykApiClient {
 func (s *SnykApiClientImpl) SastEnabled() (sastEnabled bool, localCodeEngineEnabled bool, reportFalsePositivesEnabled bool, err *SnykApiError) {
 	log.Debug().Str("method", "SastEnabled").Msg("API: Getting SastEnabled")
 	path := "/cli-config/settings/sast"
-	organization := config.CurrentConfig().GetOrganization()
+	organization := config.CurrentConfig().Organization()
 	if organization != "" {
 		path += "?org=" + url.QueryEscape(organization)
 	}

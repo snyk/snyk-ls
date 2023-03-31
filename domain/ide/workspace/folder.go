@@ -194,7 +194,7 @@ func (f *Folder) filterCachedDiagnostics() (fileIssues map[string][]snyk.Issue) 
 
 	logger.Debug().Msgf("Filtering issues by severity: %v", config.CurrentConfig().FilterSeverity())
 
-	supportedIssueTypes := config.CurrentConfig().GetDisplayableIssueTypes()
+	supportedIssueTypes := config.CurrentConfig().DisplayableIssueTypes()
 	f.documentDiagnosticCache.Range(func(filePath string, issues []snyk.Issue) bool {
 		// Consider doing the loop body in parallel for performance (and use a thread-safe map)
 		filteredIssues := FilterIssues(issues, supportedIssueTypes)

@@ -55,7 +55,7 @@ func (s *span) StartSpan(ctx context.Context) {
 		options = append(options, sentry.TransactionName(s.txName))
 	}
 	s.span = sentry.StartSpan(ctx, s.operation, options...)
-	s.span.SetTag("organization", config.CurrentConfig().GetOrganization())
+	s.span.SetTag("organization", config.CurrentConfig().Organization())
 	s.ctx = performance.GetContextWithTraceId(s.span.Context(), s.span.TraceID.String())
 
 	log.Trace().

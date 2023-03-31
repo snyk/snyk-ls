@@ -536,7 +536,7 @@ func (c *Config) configFiles() []string {
 	return append(files, stdFiles...)
 }
 
-func (c *Config) GetOrganization() string {
+func (c *Config) Organization() string {
 	return c.organization
 }
 
@@ -632,7 +632,7 @@ func (c *Config) SetTrustedFolders(folderPaths []string) {
 	c.trustedFolders = folderPaths
 }
 
-func (c *Config) GetDisplayableIssueTypes() map[product.FilterableIssueType]bool {
+func (c *Config) DisplayableIssueTypes() map[product.FilterableIssueType]bool {
 	enabled := make(map[product.FilterableIssueType]bool)
 	enabled[product.FilterableIssueTypeOpenSource] = c.IsSnykOssEnabled()
 
@@ -703,7 +703,7 @@ func (c *Config) SetAuthenticationMethod(method lsp.AuthenticationMethod) {
 	c.authenticationMethod = method
 }
 
-func (c *Config) GetAuthenticationMethod() lsp.AuthenticationMethod {
+func (c *Config) AuthenticationMethod() lsp.AuthenticationMethod {
 	return c.authenticationMethod
 }
 

@@ -177,7 +177,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 	req.Header.Set("Session-Token", config.CurrentConfig().Token()) // FIXME: this should be set by GAF, is in the works
 
 	// Setting a chosen org name for the request
-	req.Header.Set("snyk-org-name", config.CurrentConfig().GetOrganization())
+	req.Header.Set("snyk-org-name", config.CurrentConfig().Organization())
 	req.Header.Set("snyk-request-id", requestId)
 	// https://www.keycdn.com/blog/http-cache-headers
 	req.Header.Set("Cache-Control", "private, max-age=0, no-cache")
@@ -317,8 +317,8 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 
 func (s *SnykCodeHTTPClient) analysisRequestBody(options *AnalysisOptions) ([]byte, error) {
 	orgName := unknownOrgname
-	if config.CurrentConfig().GetOrganization() != "" {
-		orgName = config.CurrentConfig().GetOrganization()
+	if config.CurrentConfig().Organization() != "" {
+		orgName = config.CurrentConfig().Organization()
 	}
 
 	request := AnalysisRequest{
@@ -414,8 +414,8 @@ func (s *SnykCodeHTTPClient) RunAutofix(
 
 func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte, error) {
 	orgName := unknownOrgname
-	if config.CurrentConfig().GetOrganization() != "" {
-		orgName = config.CurrentConfig().GetOrganization()
+	if config.CurrentConfig().Organization() != "" {
+		orgName = config.CurrentConfig().Organization()
 	}
 
 	_, ruleID, ok := getIssueLangAndRuleId(options.issue)

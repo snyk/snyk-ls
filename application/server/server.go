@@ -360,7 +360,7 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 		}
 
 		issues := folder.DocumentDiagnosticsFromCache(filePath)
-		filteredIssues := workspace.FilterIssues(issues, config.CurrentConfig().GetDisplayableIssueTypes())
+		filteredIssues := workspace.FilterIssues(issues, config.CurrentConfig().DisplayableIssueTypes())
 
 		if len(filteredIssues) > 0 {
 			logger.Info().Msg("Sending cached issues")

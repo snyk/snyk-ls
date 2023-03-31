@@ -145,7 +145,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run(govDomain+" substring endpoint enables oauth authentication in init", func(t *testing.T) {
 		endpoint := "https://app.fedramp," + govDomain + "/api/v1"
 		updateApiEndpoints(lsp.Settings{Endpoint: endpoint}, true)
-		assert.Equal(t, lsp.OAuthAuthentication, config.CurrentConfig().GetAuthenticationMethod())
+		assert.Equal(t, lsp.OAuthAuthentication, config.CurrentConfig().AuthenticationMethod())
 	})
 
 	t.Run("All settings are updated", func(t *testing.T) {
@@ -188,7 +188,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, "d", os.Getenv("c"))
 		assert.True(t, strings.Contains(os.Getenv("PATH"), "addPath"))
 		assert.True(t, c.IsErrorReportingEnabled())
-		assert.Equal(t, "org", c.GetOrganization())
+		assert.Equal(t, "org", c.Organization())
 		assert.False(t, c.IsTelemetryEnabled())
 		assert.False(t, c.ManageBinariesAutomatically())
 		assert.Equal(t, "C:\\Users\\CliPath\\snyk-ls.exe", c.CliSettings().Path())
@@ -208,7 +208,7 @@ func Test_UpdateSettings(t *testing.T) {
 		UpdateSettings(lsp.Settings{Organization: " "})
 
 		c := config.CurrentConfig()
-		assert.Equal(t, "", c.GetOrganization())
+		assert.Equal(t, "", c.Organization())
 	})
 
 	t.Run("incomplete env vars", func(t *testing.T) {
@@ -233,7 +233,7 @@ func Test_UpdateSettings(t *testing.T) {
 		UpdateSettings(lsp.Settings{AdditionalEnv: "a=; b"})
 
 		c := config.CurrentConfig()
-		assert.Equal(t, "", c.GetOrganization())
+		assert.Equal(t, "", c.Organization())
 		assert.Empty(t, os.Getenv("a"))
 		assert.Empty(t, os.Getenv("b"))
 		assert.Empty(t, os.Getenv(";"))
@@ -440,11 +440,11 @@ func Test_InitializeSettings(t *testing.T) {
 		config.SetCurrentConfig(c)
 		di.TestInit(t)
 
-		assert.Equal(t, lsp.TokenAuthentication, c.GetAuthenticationMethod())
+		assert.Equal(t, lsp.TokenAuthentication, c.AuthenticationMethod())
 
 		InitializeSettings(lsp.Settings{AuthenticationMethod: lsp.OAuthAuthentication})
 
-		assert.Equal(t, lsp.OAuthAuthentication, c.GetAuthenticationMethod())
+		assert.Equal(t, lsp.OAuthAuthentication, c.AuthenticationMethod())
 	})
 
 }

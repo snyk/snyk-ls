@@ -92,7 +92,7 @@ func InitializeSettings(settings lsp.Settings) {
 
 func UpdateSettings(settings lsp.Settings) {
 	currentConfig := config.CurrentConfig()
-	previouslyEnabledProducts := currentConfig.GetDisplayableIssueTypes()
+	previouslyEnabledProducts := currentConfig.DisplayableIssueTypes()
 	previousAutoScan := currentConfig.IsAutoScanEnabled()
 
 	writeSettings(settings, false)
@@ -100,7 +100,7 @@ func UpdateSettings(settings lsp.Settings) {
 	// If a product was removed, clear all issues for this product
 	ws := workspace.Get()
 	if ws != nil {
-		newSupportedProducts := currentConfig.GetDisplayableIssueTypes()
+		newSupportedProducts := currentConfig.DisplayableIssueTypes()
 		for removedIssueType, wasSupported := range previouslyEnabledProducts {
 			if wasSupported && !newSupportedProducts[removedIssueType] {
 				ws.ClearIssuesByType(removedIssueType)
@@ -139,7 +139,7 @@ func writeSettings(settings lsp.Settings, initialize bool) {
 func updateAuthenticationMethod(settings lsp.Settings) {
 	c := config.CurrentConfig()
 	c.SetAuthenticationMethod(settings.AuthenticationMethod)
-	if config.CurrentConfig().GetAuthenticationMethod() == lsp.OAuthAuthentication {
+	if config.CurrentConfig().AuthenticationMethod() == lsp.OAuthAuthentication {
 		engine := c.Engine()
 		conf := engine.GetConfiguration()
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)

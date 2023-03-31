@@ -197,7 +197,7 @@ func Test_initialize_shouldDefaultToTokenAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, lsp.TokenAuthentication, config.CurrentConfig().GetAuthenticationMethod())
+	assert.Equal(t, lsp.TokenAuthentication, config.CurrentConfig().AuthenticationMethod())
 	assert.Equal(t, "*auth.FakeAuthenticationProvider", reflect.TypeOf(di.AuthenticationService().Provider()).String())
 }
 
@@ -210,7 +210,7 @@ func Test_initialize_shouldInitToOauthAuthenticationWhenConfigured(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, lsp.OAuthAuthentication, config.CurrentConfig().GetAuthenticationMethod())
+	assert.Equal(t, lsp.OAuthAuthentication, config.CurrentConfig().AuthenticationMethod())
 	assert.Equal(t, "*oauth.oAuthProvider", reflect.TypeOf(di.AuthenticationService().Provider()).String())
 }
 
@@ -231,7 +231,7 @@ func Test_initialize_shouldInitToTokenAuthenticationWhenConfigured(t *testing.T)
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, lsp.TokenAuthentication, config.CurrentConfig().GetAuthenticationMethod())
+	assert.Equal(t, lsp.TokenAuthentication, config.CurrentConfig().AuthenticationMethod())
 	assert.Equal(t, "*auth.CliAuthenticationProvider", reflect.TypeOf(di.AuthenticationService().Provider()).String())
 }
 
@@ -377,7 +377,7 @@ func Test_initialize_updatesSettings(t *testing.T) {
 	if err := rsp.UnmarshalResult(&result); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, "fancy org", config.CurrentConfig().GetOrganization())
+	assert.Equal(t, "fancy org", config.CurrentConfig().Organization())
 	assert.Equal(t, "xxx", config.CurrentConfig().Token())
 }
 
