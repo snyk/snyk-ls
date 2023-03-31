@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -79,7 +80,7 @@ func (b *Bundle) FetchDiagnosticsData(
 }
 
 func getIssueLangAndRuleId(issue snyk.Issue) (string, string, bool) {
-	logger := log.With().Str("method", "isAutofixAllowed").Logger()
+	logger := log.With().Str("method", "getIssueLangAndRuleId").Logger()
 	issueData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 	if !ok {
 		logger.Trace().Str("file", issue.AffectedFilePath).Int("line", issue.Range.Start.Line).Msg("Can't access issue data")
@@ -92,6 +93,28 @@ func getIssueLangAndRuleId(issue snyk.Issue) (string, string, bool) {
 	}
 
 	return ruleIdSplit[0], ruleIdSplit[1], true
+}
+
+// isAutofixSupportedForExtension shall call `GetFilters` if necessary and cache the results
+// in the `codeSettings` singleton.
+func (b *Bundle) isAutofixSupportedForExtension(ctx context.Context, file string) bool {
+	if getCodeSettings().autofixExtensions == nil {
+		// TODO: together with the endpoint redesign, this should use not the same `/filters` endpoint
+		// as the analysis one. Autofix should have a separate one.
+		filters, err := b.SnykCode.GetFilters(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("could not get filters")
+			return false
+		}
+
+		// It's not a mistake to have `..IfNotSet` here, because between the `GetFilters` and here
+		// things might have changed on the settings singleton. But we don't want to overlock it.
+		getCodeSettings().setAutofixExtensionsIfNotSet(filters.AutofixExtensions)
+	}
+
+	supported := getCodeSettings().autofixExtensions.Get(filepath.Ext(file))
+
+	return supported != nil && supported.(bool)
 }
 
 func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
@@ -140,6 +163,11 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 
 			if getCodeSettings().isAutofixEnabled.Get() {
 				for i := range issues {
+					// We only allow the issues whose file extensions are supported by the
+					// backend.
+					if !b.isAutofixSupportedForExtension(ctx, issues[i].AffectedFilePath) {
+						continue
+					}
 					issues[i].CodeActions = append(issues[i].CodeActions, *b.createDeferredAutofixCodeAction(ctx, issues[i]))
 				}
 			} else {
@@ -194,11 +222,12 @@ func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk
 				Msg("error converting to relative file path")
 			return nil
 		}
+		encodedRelativePath := EncodePath(relativePath)
 
 		autofixOptions := AutofixOptions{
 			bundleHash: b.BundleHash,
 			shardKey:   b.getShardKey(b.rootPath, config.CurrentConfig().Token()),
-			filePath:   relativePath,
+			filePath:   encodedRelativePath,
 			issue:      issue,
 		}
 
