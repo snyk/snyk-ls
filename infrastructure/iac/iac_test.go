@@ -141,8 +141,9 @@ func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 			},
 		},
 	}
-	issues := scanner.retrieveIssues(results, []snyk.Issue{}, "", nil)
+	issues, err := scanner.retrieveIssues(results, []snyk.Issue{}, "", nil)
 
+	assert.NoError(t, err)
 	assert.Len(t, issues, 1)
 }
 
@@ -150,7 +151,7 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 	t.Parallel()
 	sampleIssue := sampleIssue()
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
-	issue := scanner.toIssue("test.yml", sampleIssue, "")
+	issue, err := scanner.toIssue("test.yml", sampleIssue, "")
 
 	expectedAdditionalData := snyk.IaCIssueData{
 		Key:      "6a4df51fc4d53f1cfbdb4b46c165859b",
@@ -162,10 +163,10 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 		Issue:         sampleIssue.IacDescription.Issue,
 		Impact:        sampleIssue.IacDescription.Impact,
 		Resolve:       sampleIssue.IacDescription.Resolve,
-		Path:          sampleIssue.Path,
 		References:    sampleIssue.References,
 	}
 
+	assert.NoError(t, err)
 	assert.NotNil(t, issue.AdditionalData)
 	assert.Equal(t, expectedAdditionalData, issue.AdditionalData)
 }
@@ -177,6 +178,28 @@ func Test_getIssueId(t *testing.T) {
 	id := getIssueKey(affectedFilePath, sampleIssue())
 
 	assert.Equal(t, "4bd522a2fc6ce20c3258f9c194e0fca0", id)
+}
+
+func Test_parseIacIssuePath_SuccessfullyParses(t *testing.T) {
+	testutil.UnitTest(t)
+	rawPath := []any{"ingress", 0, "cidr_blocks", 0}
+	expectedPath := []string{"ingress", "0", "cidr_blocks", "0"}
+
+	gotPath, gotErr := parseIacIssuePath(rawPath)
+
+	assert.NoError(t, gotErr)
+	assert.Equal(t, expectedPath, gotPath)
+}
+
+func Test_parseIacIssuePath_InvalidPathToken(t *testing.T) {
+	testutil.UnitTest(t)
+	rawPath := []any{"ingress", 0, "cidr_blocks", true}
+	expectedErrorMessage := "unexpected type bool for IaC issue path token: true"
+
+	gotPath, gotErr := parseIacIssuePath(rawPath)
+
+	assert.Nil(t, gotPath)
+	assert.EqualError(t, gotErr, expectedErrorMessage)
 }
 
 func sampleIssue() iacIssue {
