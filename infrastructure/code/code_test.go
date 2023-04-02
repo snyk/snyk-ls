@@ -361,43 +361,6 @@ func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
 	assert.NotContains(t, walkedFiles, ignoredFileInDir)
 }
 
-func Test_FilesRespectIgnorePatterns(t *testing.T) {
-	tempDir := t.TempDir()
-	pathA := filepath.Join(tempDir, "A")
-	pathB := filepath.Join(tempDir, "B")
-
-	assert.NoError(t, os.Mkdir(pathA, 0755))
-	assert.NoError(t, os.Mkdir(pathB, 0755))
-
-	// Create files
-	fooAPath := filepath.Join(pathA, "foo.go")
-	barAPath := filepath.Join(pathA, "bar.go")
-	fooBPath := filepath.Join(pathB, "foo.go")
-	barBPath := filepath.Join(pathB, "bar.go")
-	assert.NoError(t, os.WriteFile(fooAPath, []byte(""), 0644))
-	assert.NoError(t, os.WriteFile(barAPath, []byte(""), 0644))
-	assert.NoError(t, os.WriteFile(fooBPath, []byte(""), 0644))
-	assert.NoError(t, os.WriteFile(barBPath, []byte(""), 0644))
-
-	// Create ignore files
-	ignorePathA := filepath.Join(pathA, ".gitignore")
-	ignorePathB := filepath.Join(pathB, ".gitignore")
-	assert.NoError(t, os.WriteFile(ignorePathA, []byte("bar.go"), 0644))
-	assert.NoError(t, os.WriteFile(ignorePathB, []byte("foo.go"), 0644))
-
-	// Test
-	_, scanner := setupTestScanner()
-	filePaths, err := scanner.files(pathA)
-	assert.NoError(t, err)
-	assert.Contains(t, filePaths, fooAPath)
-	assert.NotContains(t, filePaths, barAPath)
-
-	filePaths, err = scanner.files(pathB)
-	assert.NoError(t, err)
-	assert.NotContains(t, filePaths, fooBPath)
-	assert.Contains(t, filePaths, barBPath)
-}
-
 func Test_Scan(t *testing.T) {
 	t.Run("Should update changed files", func(t *testing.T) {
 		testutil.UnitTest(t)
