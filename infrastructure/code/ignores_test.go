@@ -29,11 +29,11 @@ exclude:
 	expectedIgnoreRules = append(expectedIgnoreRules, parseIgnoreRuleToGlobs("path/to/global/ignore2", tmpDir)...)
 
 	err := os.WriteFile(filepath.Join(tmpDir, ".snyk"), []byte(testData), 0644)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	_, sc := setupTestScanner()
 
 	ignorePatterns, _, err := sc.loadIgnorePatternsAndCountFiles(tmpDir)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	for _, rule := range expectedIgnoreRules {
 		assert.Contains(t, ignorePatterns, rule)
@@ -42,25 +42,19 @@ exclude:
 
 func Test_IgnoresWithNegationInSnykCode(t *testing.T) {
 	dir := t.TempDir()
-	repobase := filepath.Join(dir, "temp", "repobase")
-	err := os.MkdirAll(repobase, 0755)
-	if err != nil {
-		t.Fatal(err)
-	}
+	repoBase := filepath.Join(dir, "temp", "repoBase")
+	err := os.MkdirAll(repoBase, 0755)
+	assert.NoError(t, err)
 
-	err = os.WriteFile(filepath.Join(repobase, ".gitignore"), []byte("!temp"), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
+	err = os.WriteFile(filepath.Join(repoBase, ".gitignore"), []byte("!temp"), 0644)
+	assert.NoError(t, err)
 
-	err = os.WriteFile(filepath.Join(repobase, "file1.java"), []byte("any data we would like"), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
+	err = os.WriteFile(filepath.Join(repoBase, "file1.java"), []byte("any data we would like"), 0644)
+	assert.NoError(t, err)
 
 	codeClientMock, scanner := setupTestScanner()
 
-	_, _ = scanner.Scan(context.Background(), "", repobase)
+	_, _ = scanner.Scan(context.Background(), "", repoBase)
 
 	calls := codeClientMock.GetAllCalls("extendBundleWithSource")
 	assert.Len(t, calls, 1)
@@ -70,19 +64,13 @@ func Test_IgnoresInSnykCode(t *testing.T) {
 	dir := t.TempDir()
 	repoBase := filepath.Join(dir, "temp", "repoBase")
 	err := os.MkdirAll(repoBase, 0755)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	err = os.WriteFile(filepath.Join(repoBase, ".gitignore"), []byte("temp"), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	err = os.WriteFile(filepath.Join(repoBase, "file1.java"), []byte("any data we would like"), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	codeClientMock, scanner := setupTestScanner()
 
