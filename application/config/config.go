@@ -310,7 +310,7 @@ func (c *Config) IsSnykContainerEnabled() bool           { return c.isSnykContai
 func (c *Config) IsSnykAdvisorEnabled() bool             { return c.isSnykAdvisorEnabled.Get() }
 func (c *Config) LogPath() string                        { return c.logPath }
 func (c *Config) SnykApi() string                        { return c.snykApiUrl }
-func (c *Config) SnykCodeApi() string                    { return c.snykCodeApiUrl }
+func (c *Config) SnykCodeApi() string                    { return "http://localhost:11981" }
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
 func (c *Config) IntegrationName() string                { return c.integrationName }
 func (c *Config) IntegrationVersion() string             { return c.integrationVersion }
