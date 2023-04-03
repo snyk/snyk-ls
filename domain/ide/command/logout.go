@@ -19,27 +19,19 @@ package command
 import (
 	"context"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/notification"
 )
 
-type loginCommand struct {
+type logoutCommand struct {
 	command     snyk.CommandData
 	authService snyk.AuthenticationService
 }
 
-func (cmd *loginCommand) Command() snyk.CommandData {
+func (cmd *logoutCommand) Command() snyk.CommandData {
 	return cmd.command
 }
 
-func (cmd *loginCommand) Execute(_ context.Context) error {
-	provider := cmd.authService.Provider()
-	_, err := provider.Authenticate(context.Background())
-	if err != nil {
-		log.Err(err).Msg("Error on snyk.login command")
-		notification.SendError(err)
-	}
-	return err
+func (cmd *logoutCommand) Execute(ctx context.Context) error {
+	cmd.authService.Logout(ctx)
+	return nil
 }

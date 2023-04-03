@@ -23,7 +23,11 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
-func CreateFromCommandData(commandData snyk.CommandData, srv server.Server) (snyk.Command, error) {
+func CreateFromCommandData(
+	commandData snyk.CommandData,
+	srv server.Server,
+	authService snyk.AuthenticationService,
+) (snyk.Command, error) {
 	switch commandData.CommandId {
 	case snyk.NavigateToRangeCommand:
 		return &navigateToRangeCommand{command: commandData, srv: srv}, nil
@@ -34,9 +38,11 @@ func CreateFromCommandData(commandData snyk.CommandData, srv server.Server) (sny
 	case snyk.OpenBrowserCommand:
 		return &openBrowserCommand{command: commandData}, nil
 	case snyk.LoginCommand:
-		return &loginCommand{command: commandData}, nil
+		return &loginCommand{command: commandData, authService: authService}, nil
 	case snyk.CopyAuthLinkCommand:
+		return &copyAuthLinkCommand{command: commandData, authService: authService}, nil
 	case snyk.LogoutCommand:
+		return &logoutCommand{command: commandData, authService: authService}, nil
 	case snyk.TrustWorkspaceFoldersCommand:
 		return &trustWorkspaceFoldersCommand{command: commandData}, nil
 	}

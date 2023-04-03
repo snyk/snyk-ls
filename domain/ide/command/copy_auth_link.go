@@ -19,26 +19,28 @@ package command
 import (
 	"context"
 
+	"github.com/atotto/clipboard"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
 )
 
-type loginCommand struct {
+type copyAuthLinkCommand struct {
 	command     snyk.CommandData
 	authService snyk.AuthenticationService
 }
 
-func (cmd *loginCommand) Command() snyk.CommandData {
+func (cmd *copyAuthLinkCommand) Command() snyk.CommandData {
 	return cmd.command
 }
 
-func (cmd *loginCommand) Execute(_ context.Context) error {
-	provider := cmd.authService.Provider()
-	_, err := provider.Authenticate(context.Background())
+func (cmd *copyAuthLinkCommand) Execute(ctx context.Context) error {
+	url := cmd.authService.Provider().AuthURL(ctx)
+	err := clipboard.WriteAll(url)
+
 	if err != nil {
-		log.Err(err).Msg("Error on snyk.login command")
+		log.Err(err).Msg("Error on snyk.copyAuthLink command")
 		notification.SendError(err)
 	}
 	return err

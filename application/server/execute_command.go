@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/atotto/clipboard"
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/pkg/errors"
@@ -30,7 +29,6 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/notification"
 )
 
 func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
@@ -43,35 +41,18 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 		log.Info().Str("method", method).Interface("command", params).Msg("RECEIVING")
 		defer log.Info().Str("method", method).Interface("command", params).Msg("SENDING")
 		commandData := snyk.CommandData{CommandId: params.Command, Arguments: params.Arguments, Title: params.Command}
-		cmd, err := command.CreateFromCommandData(commandData, srv)
-		// TODO enable after migrating all commands
-		//if err != nil {
-		//	log.Error().Err(err).Str("method", method).Msg("failed to create command")
-		//	return nil, err
-		//}
-		if err == nil {
-			err = di.CommandService().ExecuteCommand(bgCtx, cmd)
-			if err == nil {
-				return nil, nil //return nil, err
-			}
-			logError(errors.Wrap(err, fmt.Sprintf("Error executing command %v", commandData)), method)
+		cmd, err := command.CreateFromCommandData(commandData, srv, di.AuthenticationService())
+
+		if err != nil {
+			log.Error().Err(err).Str("method", method).Msg("failed to create command")
 			return nil, err
 		}
 
-		// fallback path starts here
-		switch params.Command {
-		case snyk.CopyAuthLinkCommand:
-			url := di.AuthenticationService().Provider().AuthURL(bgCtx)
-			err := clipboard.WriteAll(url)
-
-			if err != nil {
-				log.Err(err).Msg("Error on snyk.copyAuthLink command")
-				notification.SendError(err)
-				break
-			}
-		case snyk.LogoutCommand:
-			di.AuthenticationService().Logout(bgCtx)
+		err = di.CommandService().ExecuteCommand(bgCtx, cmd)
+		if err == nil {
+			return nil, nil //return nil, err
 		}
-		return nil, nil
+		logError(errors.Wrap(err, fmt.Sprintf("Error executing command %v", commandData)), method)
+		return nil, err
 	})
 }

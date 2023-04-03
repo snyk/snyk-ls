@@ -647,7 +647,15 @@ func TestIsSastEnabled(t *testing.T) {
 			apiClient.CodeEnabled = false
 			actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
 
-			data, err := command.CreateFromCommandData(snyk.CommandData{Title: snyk.OpenBrowserCommand, CommandId: snyk.OpenBrowserCommand, Arguments: []any{getCodeEnablementUrl()}}, nil)
+			data, err := command.CreateFromCommandData(
+				snyk.CommandData{
+					Title:     snyk.OpenBrowserCommand,
+					CommandId: snyk.OpenBrowserCommand,
+					Arguments: []any{getCodeEnablementUrl()},
+				},
+				nil,
+				nil,
+			)
 			assert.NoError(t, err)
 
 			actionMap.Add(enableSnykCodeMessageActionItemTitle, data)
