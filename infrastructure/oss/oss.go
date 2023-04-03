@@ -286,6 +286,7 @@ func (oss *Scanner) handleError(path string, err error, res []byte, cmd []string
 		exitError := err.(*exec.ExitError)
 		errorOutput := string(res) + "\n\n\nSTDERR:\n" + string(exitError.Stderr)
 		err = errors.Wrap(err, fmt.Sprintf("Snyk CLI error executing %v. Output: %s", cmd, errorOutput))
+		log.Debug().Err(err).Str("method", "oss.handleError").Msg(errorOutput)
 		switch errorType.ExitCode() {
 		case 1:
 			return false
