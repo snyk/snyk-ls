@@ -22,14 +22,24 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
-type ServiceImpl struct {
+var instance snyk.CommandService
+
+type serviceImpl struct {
 }
 
-func NewCommandService() snyk.CommandService {
-	return &ServiceImpl{}
+// SetServiceInstance is used for testing to inject a mock
+func SetServiceInstance(newInstance snyk.CommandService) {
+	instance = newInstance
 }
 
-// ExecuteCommand implements CommandService
-func (service *ServiceImpl) ExecuteCommand(ctx context.Context, command snyk.Command) error {
+func ServiceInstance() snyk.CommandService {
+	if instance == nil {
+		instance = &serviceImpl{}
+	}
+	return instance
+}
+
+// ExecuteCommand implements ServiceInstance
+func (service *serviceImpl) ExecuteCommand(ctx context.Context, command snyk.Command) error {
 	return command.Execute(ctx)
 }

@@ -36,6 +36,7 @@ import (
 
 func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) {
 	loc := setupServerWithCustomDI(t, false)
+
 	scanner := &snyk.TestScanner{}
 	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier()))
 
@@ -51,6 +52,7 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 
 func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceipt(t *testing.T) {
 	loc := setupServerWithCustomDI(t, false)
+
 	scanner := &snyk.TestScanner{}
 	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier()))
 
@@ -117,7 +119,9 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	// Arrange
 	loc := setupServer(t)
-	di.SetCommandService(command.NewCommandService()) // use real command service
+
+	// reset to use real service
+	command.SetServiceInstance(nil)
 
 	config.CurrentConfig().SetAutomaticAuthentication(false)
 	_, err := loc.Client.Call(ctx, "initialize", nil)
@@ -143,7 +147,10 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 
 func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
 	loc := setupServer(t)
-	di.SetCommandService(command.NewCommandService()) // use real command service
+
+	// reset to use real service
+	command.SetServiceInstance(nil)
+
 	authenticationMock := di.AuthenticationService().Provider().(*auth.FakeAuthenticationProvider)
 	params := lsp.ExecuteCommandParams{Command: snyk.CopyAuthLinkCommand}
 
@@ -172,6 +179,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 	t.Run("Updates trusted workspace folders", func(t *testing.T) {
 		loc := setupServerWithCustomDI(t, false)
+
 		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier()))
 		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder2", "dummy", nil, di.HoverService(), di.ScanNotifier()))
 		config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
@@ -188,6 +196,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 	t.Run("Existing trusted workspace folders are not removed", func(t *testing.T) {
 		loc := setupServerWithCustomDI(t, false)
+
 		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier()))
 		config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 		config.CurrentConfig().SetTrustedFolders([]string{"/path/to/folder2"})

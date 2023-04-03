@@ -26,7 +26,6 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/concurrency"
@@ -268,7 +267,7 @@ func TestShowMessageRequest(t *testing.T) {
 			t,
 			func() bool {
 				// verify that passed command is eventually executed
-				commandService := di.CommandService()
+				commandService := command.ServiceInstance()
 				commandServiceMock := commandService.(*snyk.CommandServiceMock)
 				return commandServiceMock.ExecutedCommands()[0].Command().CommandId == snyk.OpenBrowserCommand
 			},

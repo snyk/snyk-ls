@@ -66,7 +66,6 @@ var hoverService hover.Service
 var scanner snyk.Scanner
 var cliInitializer *cli2.Initializer
 var scanNotifier snyk.ScanNotifier
-var commandService snyk.CommandService
 var codeActionService *codeaction.CodeActionsService
 var fileWatcher *watcher.FileWatcher
 var initMutex = &sync.Mutex{}
@@ -143,8 +142,8 @@ func initApplication() {
 	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier) // don't use getters or it'll deadlock
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
-	commandService = command.NewCommandService()
 	codeActionService = codeaction.NewService(w, fileWatcher)
+	command.SetServiceInstance(nil)
 }
 
 // TODO this is becoming a hot mess we need to unify integ. test strategies
@@ -184,7 +183,7 @@ func TestInit(t *testing.T) {
 		openSourceScanner,
 	)
 	hoverService = hover.NewDefaultService(analytics)
-	commandService = snyk.NewCommandServiceMock()
+	command.SetServiceInstance(snyk.NewCommandServiceMock())
 	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier) // don't use getters or it'll deadlock
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
@@ -273,12 +272,6 @@ func CliInitializer() *cli2.Initializer {
 	return cliInitializer
 }
 
-func CommandService() snyk.CommandService {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return commandService
-}
-
 func CodeActionService() *codeaction.CodeActionsService {
 	initMutex.Lock()
 	defer initMutex.Unlock()
@@ -289,10 +282,4 @@ func FileWatcher() *watcher.FileWatcher {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return fileWatcher
-}
-
-func SetCommandService(service snyk.CommandService) {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	commandService = service
 }

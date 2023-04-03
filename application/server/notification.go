@@ -22,7 +22,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
@@ -191,7 +191,7 @@ func handleShowMessageRequest(srv server.Server, params snyk.ShowMessageRequest)
 			return
 		}
 
-		err = di.CommandService().ExecuteCommand(context.Background(), selectedCommand)
+		err = command.ServiceInstance().ExecuteCommand(context.Background(), selectedCommand)
 		if err != nil {
 			log.Error().
 				Err(err).

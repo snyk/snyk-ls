@@ -7,6 +7,8 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/snyk/snyk-ls/domain/ide/server"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
@@ -14,14 +16,14 @@ type TextDocumentCodeActionHandler func(context.Context, lsp.CodeActionParams) (
 type ResolveHandler func(context.Context, lsp.CodeAction) (*lsp.CodeAction, error)
 
 // ResolveCodeActionHandler returns a jrpc2.Handler that can be used to handle the "codeAction/resolve" LSP method
-func ResolveCodeActionHandler(service *CodeActionsService) ResolveHandler {
+func ResolveCodeActionHandler(service *CodeActionsService, server server.Server, authenticationService snyk.AuthenticationService) ResolveHandler {
 	logger := log.Logger.With().Str("method", "ResolveCodeActionHandler").Logger()
 
 	return func(ctx context.Context, params lsp.CodeAction) (*lsp.CodeAction, error) {
 		logger := logger.With().Interface("request", params).Logger()
 		logger.Info().Msg("RECEIVING")
 
-		action, err := service.ResolveCodeAction(params)
+		action, err := service.ResolveCodeAction(params, server, authenticationService)
 		if err != nil {
 			if IsMissingKeyError(err) { // If the key is missing, it means that the code action is not a deferred code action
 				logger.Debug().Msg("Skipping code action - missing key")

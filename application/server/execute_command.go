@@ -48,7 +48,7 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 			return nil, err
 		}
 
-		err = di.CommandService().ExecuteCommand(bgCtx, cmd)
+		err = command.ServiceInstance().ExecuteCommand(bgCtx, cmd)
 		if err == nil {
 			return nil, nil //return nil, err
 		}

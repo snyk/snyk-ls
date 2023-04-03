@@ -36,6 +36,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
@@ -89,7 +90,7 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map) {
 	handlers["textDocument/codeLens"] = codeLensHandler()
 	handlers["textDocument/willSave"] = noOpHandler()
 	handlers["textDocument/willSaveWaitUntil"] = noOpHandler()
-	handlers["codeAction/resolve"] = codeActionResolveHandler()
+	handlers["codeAction/resolve"] = codeActionResolveHandler(srv, di.AuthenticationService())
 	handlers["shutdown"] = shutdown()
 	handlers["exit"] = exit(srv)
 	handlers["workspace/didChangeWorkspaceFolders"] = workspaceDidChangeWorkspaceFoldersHandler(srv)
@@ -420,8 +421,8 @@ func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 	})
 }
 
-func codeActionResolveHandler() handler.Func {
-	return handler.New(codeaction.ResolveCodeActionHandler(di.CodeActionService()))
+func codeActionResolveHandler(server server.Server, authenticationService snyk.AuthenticationService) handler.Func {
+	return handler.New(codeaction.ResolveCodeActionHandler(di.CodeActionService(), server, authenticationService))
 }
 
 func textDocumentCodeActionHandler() handler.Func {
