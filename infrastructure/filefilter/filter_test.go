@@ -1,13 +1,12 @@
-package code
+package filefilter_test
 
 import (
-	"context"
-	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/infrastructure/filefilter"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -25,8 +24,7 @@ type ignoreFilesTestCase struct {
 	expectedExcludes []string
 }
 
-func Test_SnykCodeScan_CallsExtendBundle(t *testing.T) {
-
+func Test_FindNonIgnoredFiles(t *testing.T) {
 	cases := []ignoreFilesTestCase{
 		{
 			name:              "Does not ignore files when no ignored file is present",
@@ -66,11 +64,18 @@ exclude:
 			},
 		},
 		{
+			name:             "Respects default ignore rules",
+			repoPath:         t.TempDir(),
+			ignoreFilePath:   ".gitignore",
+			expectedFiles:    []string{"file1.java"},
+			expectedExcludes: []string{".git/file", ".svn/file", ".hg/file", ".bzr/file", ".DS_Store/file"},
+		},
+		{
 			name:              "Respects negation rules",
 			repoPath:          t.TempDir(),
 			ignoreFilePath:    ".gitignore",
-			ignoreFileContent: ("*.java\n") + ("!file1.java\n"),
-			expectedFiles:     []string{"file1.java"},
+			ignoreFileContent: ("*.java\n") + ("!file1.java\n") + ("!path/to/file3.java\n"),
+			expectedFiles:     []string{"file1.java", "path/to/file3.java"},
 			expectedExcludes:  []string{"file2.java"},
 		},
 	}
@@ -79,15 +84,17 @@ exclude:
 		t.Run(testCase.name, func(t *testing.T) {
 			setupIgnoreFilesTest(t, testCase)
 
-			codeClientMock, scanner := setupTestScanner()
-			_, _ = scanner.Scan(context.Background(), testCase.repoPath, testCase.repoPath)
+			var files []string
+			for f := range filefilter.FindNonIgnoredFiles(testCase.repoPath) {
+				files = append(files, f)
+			}
 
-			assertBundleExtendedCorrectly(t, codeClientMock, testCase.expectedFiles, testCase.expectedExcludes)
+			assertFilesFiltered(t, testCase, files)
 		})
 	}
 }
 
-func Test_SnykCodeScan_SeveralWorkDirs_IgnoreRulesAreRespectedPerWorkDir(t *testing.T) {
+func Test_FindNonIgnoredFiles_MultipleWorkDirs(t *testing.T) {
 	// Arrange - set 2 repos with different ignore rules. Each repo will have foo.go and bar.go files.
 	// In repo A, foo.go will be ignored, and in repo B, bar.go will be ignored.
 	tempDir := t.TempDir()
@@ -108,14 +115,18 @@ func Test_SnykCodeScan_SeveralWorkDirs_IgnoreRulesAreRespectedPerWorkDir(t *test
 		setupIgnoreFilesTest(t, testCase)
 	}
 
-	codeClientMock, scanner := setupTestScanner()
-
-	// Scanning both repos with the same scanner catches errors that happen when the ignore rules are cached incorrectly
-	// between different work dirs.
 	for _, testCase := range testCases {
-		_, _ = scanner.Scan(context.Background(), testCase.repoPath, testCase.repoPath)
-		assertBundleExtendedCorrectly(t, codeClientMock, testCase.expectedFiles, testCase.expectedExcludes)
+		files := collectFilteredFiles(testCase.repoPath)
+		assertFilesFiltered(t, testCase, files)
 	}
+}
+
+func collectFilteredFiles(repoPath string) []string {
+	var files []string
+	for f := range filefilter.FindNonIgnoredFiles(repoPath) {
+		files = append(files, f)
+	}
+	return files
 }
 
 func setupIgnoreFilesTest(t *testing.T, testCase ignoreFilesTestCase) {
@@ -130,47 +141,12 @@ func setupIgnoreFilesTest(t *testing.T, testCase ignoreFilesTestCase) {
 	}
 }
 
-func assertBundleExtendedCorrectly(t *testing.T,
-	codeClientMock *FakeSnykCodeClient,
-	expectedFiles []string,
-	expectedExcludes []string,
-) {
+func assertFilesFiltered(t *testing.T, testCase ignoreFilesTestCase, files []string) {
 	t.Helper()
-	if len(expectedFiles) > 0 { // Extend bundle shouldn't be called when no files are expected to be uploaded
-		assert.True(t, codeClientMock.HasExtendedBundle)
+	for _, expectedFile := range testCase.expectedFiles {
+		assert.Contains(t, files, filepath.Join(testCase.repoPath, expectedFile))
 	}
-	for _, expectedFile := range expectedFiles {
-		assert.Contains(t, codeClientMock.ExtendBundleFiles, expectedFile)
+	for _, expectedExclude := range testCase.expectedExcludes {
+		assert.NotContains(t, files, filepath.Join(testCase.repoPath, expectedExclude))
 	}
-	for _, expectedExclude := range expectedExcludes {
-		assert.NotContains(t, codeClientMock.ExtendBundleFiles, expectedExclude)
-	}
-}
-
-func Test_LoadIgnorePatternsWithoutIgnoreFilePresent(t *testing.T) {
-	tempDir := t.TempDir()
-	_, sc := setupTestScanner()
-
-	ignorePatterns, _, err := sc.loadIgnorePatternsAndCountFiles(tempDir)
-	if err != nil {
-		t.Fatal(t, err, "Couldn't load .gitignore from workspace")
-	}
-
-	assert.Equal(t, getDefaultIgnorePatterns(), ignorePatterns)
-}
-
-func Test_LoadIgnorePatternsAndCountFiles_RelativePathIgnores(t *testing.T) {
-	testutil.UnitTest(t)
-	tempDir := writeTestGitIgnore("", t)
-	subDir := filepath.Join(tempDir, "evilfolder")
-	_ = os.Mkdir(subDir, 0755)
-	writeGitIgnoreIntoDir("*", t, subDir)
-	expectedSubDirPattern := filepath.ToSlash(filepath.Join(subDir, "**/*"))
-
-	sc := Scanner{}
-	ignorePatterns, _, err := sc.loadIgnorePatternsAndCountFiles(tempDir)
-
-	assert.NoError(t, err)
-	assert.Contains(t, ignorePatterns, expectedSubDirPattern)
-	assert.Len(t, ignorePatterns, len(getDefaultIgnorePatterns())+2)
 }
