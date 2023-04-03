@@ -18,7 +18,10 @@ package testutil
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func CreateTempFile(tempDir string, t *testing.T) *os.File {
@@ -32,4 +35,16 @@ func CreateTempFile(tempDir string, t *testing.T) *os.File {
 		_ = os.Remove(file.Name())
 	})
 	return file
+}
+
+// CreateFileOrFail creates a file in filePath with the specified content, and fails the test if there's error.
+// If the path to the file doesn't exist, CreateFileOrFail will create it.
+// The file does not get cleaned up, and it is the caller's responsibility to remove it.
+func CreateFileOrFail(t *testing.T, filePath string, content []byte) {
+	t.Helper()
+	baseDir := filepath.Dir(filePath)
+	err := os.MkdirAll(baseDir, 0755)
+	assert.NoError(t, err)
+	err = os.WriteFile(filePath, content, 0644)
+	assert.NoError(t, err)
 }

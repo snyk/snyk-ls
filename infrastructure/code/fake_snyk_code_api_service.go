@@ -109,6 +109,7 @@ type FakeSnykCodeClient struct {
 	Calls                        map[string][][]any
 	HasCreatedNewBundle          bool
 	HasExtendedBundle            bool
+	ExtendBundleFiles            map[string]BundleFile
 	TotalBundleCount             int
 	ExtendedBundleCount          int
 	AnalysisDuration             time.Duration
@@ -150,7 +151,6 @@ func (f *FakeSnykCodeClient) Clear() {
 	defer FakeSnykCodeApiServiceMutex.Unlock()
 	f.ExtendedBundleCount = 0
 	f.TotalBundleCount = 0
-	f.HasExtendedBundle = false
 	f.HasExtendedBundle = false
 }
 
@@ -211,6 +211,7 @@ func (f *FakeSnykCodeClient) ExtendBundle(
 	f.HasExtendedBundle = true
 	f.TotalBundleCount++
 	f.ExtendedBundleCount++
+	f.ExtendBundleFiles = files
 	params := []any{bundleHash, files, removedFiles}
 	f.addCall(params, ExtendBundleWithSourceOperation)
 	return util.Hash([]byte(fmt.Sprint(rand.Int()))), nil, nil
@@ -297,6 +298,7 @@ func (f *FakeSnykCodeClient) RunAutofix(
 		},
 	}
 
-	log.Trace().Str("method", "RunAutofix").Interface("fakeAutofix", "someAutofixSuggestion").Msg("fake backend call received & answered")
+	log.Trace().Str("method", "RunAutofix").Interface("fakeAutofix",
+		"someAutofixSuggestion").Msg("fake backend call received & answered")
 	return suggestions, AutofixStatus{message: "COMPLETE"}, nil
 }
