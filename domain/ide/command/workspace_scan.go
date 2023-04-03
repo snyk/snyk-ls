@@ -17,25 +17,26 @@
 package command
 
 import (
-	"fmt"
+	"context"
 
 	"github.com/snyk/snyk-ls/domain/ide/server"
+	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
-func CreateFromCommandData(commandData snyk.CommandData, srv server.Server) (snyk.Command, error) {
-	switch commandData.CommandId {
-	case snyk.NavigateToRangeCommand:
-		return &navigateToRangeCommand{command: commandData, srv: srv}, nil
-	case snyk.WorkspaceScanCommand:
-		return &workspaceScanCommand{command: commandData, srv: srv}, nil
-	case snyk.WorkspaceFolderScanCommand:
-	case snyk.OpenBrowserCommand:
-		return &openBrowserCommand{command: commandData}, nil
-	case snyk.LoginCommand:
-	case snyk.CopyAuthLinkCommand:
-	case snyk.LogoutCommand:
-	case snyk.TrustWorkspaceFoldersCommand:
-	}
-	return nil, fmt.Errorf("unknown command %v", commandData)
+type workspaceScanCommand struct {
+	command snyk.CommandData
+	srv     server.Server
+}
+
+func (cmd *workspaceScanCommand) Command() snyk.CommandData {
+	return cmd.command
+}
+
+func (cmd *workspaceScanCommand) Execute(ctx context.Context) error {
+	w := workspace.Get()
+	w.ClearIssues(ctx)
+	w.ScanWorkspace(ctx)
+	HandleUntrustedFolders(ctx, cmd.srv)
+	return nil
 }

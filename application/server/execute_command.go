@@ -62,25 +62,8 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 		}
 
 		// fallback path starts here
-		args := params.Arguments
 		switch params.Command {
-		case snyk.WorkspaceFolderScanCommand:
-			w := workspace.Get()
-			if len(args) != 1 {
-				log.Warn().Str("method", method).Msg("received WorkspaceFolderScanCommand without path")
-				return nil, nil
-			}
-			path := args[0].(string)
-			f := w.GetFolderContaining(path)
-			if f == nil {
-				log.Warn().Str("method", method).Msg("received WorkspaceFolderScanCommand with path not in workspace")
-				log.Warn().Interface("folders", w.Folders())
-				return nil, nil
-			}
-			f.ClearScannedStatus()
-			f.ClearDiagnosticsFromPathRecursively(path)
-			f.ScanFolder(bgCtx)
-			command.HandleUntrustedFolders(bgCtx, srv)
+
 		case snyk.TrustWorkspaceFoldersCommand:
 			err := TrustWorkspaceFolders()
 			if err != nil {
