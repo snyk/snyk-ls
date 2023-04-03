@@ -18,7 +18,6 @@ package cli
 
 import (
 	"context"
-	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -93,17 +92,6 @@ func (c SnykCli) doExecute(ctx context.Context, cmd []string, workingDir string,
 		shouldRetry := c.HandleErrors(ctx, string(output))
 		if firstAttempt && shouldRetry {
 			output, err = c.doExecute(ctx, cmd, workingDir, false)
-		}
-	} else {
-		// ignore explicitly the errors as the following lines are only for debug output
-		pipe, stderrReadErr := command.StderrPipe()
-		if stderrReadErr != nil {
-			stderr, stderrReadErr := io.ReadAll(pipe)
-			if stderrReadErr != nil {
-				log.Debug().Str("method", "SnykCli.doExecute").Str("cli output stderr", string(stderr)).Send()
-			} else {
-				log.Debug().Err(stderrReadErr).Str("method", "SnykCli.doExecute").Msg("couldn't retrieve stderr")
-			}
 		}
 	}
 	return output, err
