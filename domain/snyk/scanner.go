@@ -120,10 +120,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	}
 
 	// refresh auth by issuing a request to the API
-	_, err = sc.snykApiClient.GetActiveUser()
-	if err != nil {
-		log.Debug().Err(err).Msg("Retrieving active user failed, re-auth may be required")
-	}
+	_, _ = sc.snykApiClient.GetActiveUser()
 
 	waitGroup := &sync.WaitGroup{}
 	for _, scanner := range sc.scanners {

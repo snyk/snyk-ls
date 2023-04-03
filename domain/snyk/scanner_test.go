@@ -28,6 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -42,6 +43,7 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 		performance.NewTestInstrumentor(),
 		ux.NewTestAnalytics(),
 		NewMockScanNotifier(),
+		&snyk_api.FakeApiClient{CodeEnabled: false},
 		enabledScanner,
 		disabledScanner,
 	)
@@ -70,6 +72,7 @@ func TestScan_whenProductScannerEnabled_SendsAnalysisTriggered(t *testing.T) {
 		performance.NewTestInstrumentor(),
 		analytics,
 		NewMockScanNotifier(),
+		&snyk_api.FakeApiClient{CodeEnabled: false},
 		enabledScanner,
 		disabledScanner,
 	)
@@ -92,6 +95,7 @@ func TestScan_whenNoProductScannerEnabled_SendsNoAnalytics(t *testing.T) {
 		performance.NewTestInstrumentor(),
 		analytics,
 		NewMockScanNotifier(),
+		&snyk_api.FakeApiClient{CodeEnabled: false},
 		disabledScanner,
 	)
 
@@ -108,6 +112,7 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 		performance.NewTestInstrumentor(),
 		ux.NewTestAnalytics(),
 		NewMockScanNotifier(),
+		&snyk_api.FakeApiClient{CodeEnabled: false},
 		productScanner,
 	)
 	config.CurrentConfig().SetToken("")
@@ -131,6 +136,7 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 		performance.NewTestInstrumentor(),
 		ux.NewTestAnalytics(),
 		NewMockScanNotifier(),
+		&snyk_api.FakeApiClient{CodeEnabled: false},
 		productScanner,
 	)
 	done := make(chan bool)
@@ -161,6 +167,7 @@ func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
 		performance.NewTestInstrumentor(),
 		analytics,
 		scanNotifier,
+		&snyk_api.FakeApiClient{CodeEnabled: false},
 		enabledScanner,
 	)
 
