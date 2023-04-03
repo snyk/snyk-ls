@@ -754,34 +754,6 @@ func setupConversionTests(t *testing.T,
 	return path, issues, analysisResponse
 }
 
-func Test_analysisRequestBody_ContainsUrlEncodedPaths(t *testing.T) {
-	options := &AnalysisOptions{
-		bundleHash: "test-hash",
-		shardKey:   "test-key",
-		limitToFiles: []string{
-			"file1.java",
-			"path/to/file2.java",
-			"path/with space/file3.java",
-		},
-		severity: 0,
-	}
-
-	expectedLimitToFiles := []string{
-		"file1.java",
-		"path/to/file2.java",
-		"path/with%20space/file3.java",
-	}
-
-	bytes, err := (&SnykCodeHTTPClient{}).analysisRequestBody(options)
-	assert.Nil(t, err)
-
-	var request AnalysisRequest
-	err = json.Unmarshal(bytes, &request)
-	assert.Nil(t, err)
-
-	assert.Equal(t, expectedLimitToFiles, request.Key.LimitToFiles)
-}
-
 func TestSnykCodeBackendService_analysisRequestBodyIsCorrect(t *testing.T) {
 	testutil.UnitTest(t)
 

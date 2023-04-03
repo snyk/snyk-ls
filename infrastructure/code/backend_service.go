@@ -24,10 +24,7 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"net/url"
-	"path"
 	"strconv"
-	"strings"
 
 	"github.com/rs/zerolog/log"
 
@@ -323,23 +320,12 @@ func (s *SnykCodeHTTPClient) analysisRequestBody(options *AnalysisOptions) ([]by
 	if config.CurrentConfig().GetOrganization() != "" {
 		orgName = config.CurrentConfig().GetOrganization()
 	}
-	var encodedLimitToFiles []string
-	for _, file := range options.limitToFiles {
-		segments := strings.Split(file, "/")
-		encodedPath := ""
-		for _, segment := range segments {
-			encodedSegment := url.PathEscape(segment)
-			encodedPath = path.Join(encodedPath, encodedSegment)
-		}
-
-		encodedLimitToFiles = append(encodedLimitToFiles, encodedPath)
-	}
 
 	request := AnalysisRequest{
 		Key: AnalysisRequestKey{
 			Type:         "file",
 			Hash:         options.bundleHash,
-			LimitToFiles: encodedLimitToFiles,
+			LimitToFiles: options.limitToFiles,
 		},
 		Legacy:          false,
 		AnalysisContext: newCodeRequestContext(orgName),
