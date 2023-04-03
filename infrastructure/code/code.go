@@ -70,7 +70,6 @@ type Scanner struct {
 	errorReporter     error_reporting.ErrorReporter
 	analytics         ux2.Analytics
 	changedFilesMutex sync.Mutex
-	mutex             sync.Mutex
 	scanStatusMutex   sync.Mutex
 	runningScans      map[string]*ScanStatus
 	scanNotifier      snyk.ScanNotifier
