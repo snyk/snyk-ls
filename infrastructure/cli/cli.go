@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -93,6 +94,17 @@ func (c SnykCli) doExecute(ctx context.Context, cmd []string, workingDir string,
 		if firstAttempt && shouldRetry {
 			output, err = c.doExecute(ctx, cmd, workingDir, false)
 		}
+	} else {
+		// ignore explicitly the errors as the following lines are only for debug output
+		pipe, stderrReadErr := command.StderrPipe()
+		if stderrReadErr != nil {
+			stderr, stderrReadErr := io.ReadAll(pipe)
+			if stderrReadErr != nil {
+				log.Debug().Str("method", "SnykCli.doExecute").Str("cli output stderr", string(stderr)).Send()
+			} else {
+				log.Debug().Err(stderrReadErr).Str("method", "SnykCli.doExecute").Msg("couldn't retrieve stderr")
+			}
+		}
 	}
 	return output, err
 }
@@ -102,7 +114,9 @@ func (c SnykCli) getCommand(cmd []string, workingDir string, ctx context.Context
 	command.Dir = workingDir
 	cliEnv := AppendCliEnvironmentVariables(os.Environ(), true)
 	command.Env = cliEnv
-	log.Debug().Str("method", "getCommand").Interface("command", command).Send()
+	log.Trace().Str("method", "getCommand").Interface("command.Args", command.Args).Send()
+	log.Trace().Str("method", "getCommand").Interface("command.Env", command.Env).Send()
+	log.Trace().Str("method", "getCommand").Interface("command.Dir", command.Dir).Send()
 	return command
 }
 

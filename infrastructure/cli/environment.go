@@ -17,7 +17,10 @@
 package cli
 
 import (
+	"strings"
+
 	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/server/lsp"
@@ -52,6 +55,7 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) (updat
 		// there can only be one - highlander principle
 		if currentConfig.GetAuthenticationMethod() == lsp.OAuthAuthentication {
 			updatedEnv = append(updatedEnv, auth.CONFIG_KEY_OAUTH_TOKEN+"="+currentConfig.Token())
+			updatedEnv = append(updatedEnv, strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED+"=1"))
 		} else {
 			updatedEnv = append(updatedEnv, TokenEnvVar+"="+currentConfig.Token())
 		}
@@ -69,6 +73,5 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) (updat
 	}
 	updatedEnv = append(updatedEnv, IntegrationEnvironmentEnvVarKey+"="+IntegrationEnvironmentEnvVarValue)
 	updatedEnv = append(updatedEnv, IntegrationEnvironmentVersionEnvVar+"="+config.Version)
-
 	return
 }

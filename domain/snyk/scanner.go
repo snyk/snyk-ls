@@ -26,6 +26,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -40,11 +41,12 @@ type Scanner interface {
 
 // DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
 type DelegatingConcurrentScanner struct {
-	scanners     []ProductScanner
-	initializer  initialize.Initializer
-	instrumentor performance.Instrumentor
-	analytics    ux2.Analytics
-	scanNotifier ScanNotifier
+	scanners      []ProductScanner
+	initializer   initialize.Initializer
+	instrumentor  performance.Instrumentor
+	analytics     ux2.Analytics
+	scanNotifier  ScanNotifier
+	snykApiClient snyk_api.SnykApiClient
 }
 
 func NewDelegatingScanner(
@@ -52,14 +54,16 @@ func NewDelegatingScanner(
 	instrumentor performance.Instrumentor,
 	analytics ux2.Analytics,
 	scanNotifier ScanNotifier,
+	snykApiClient snyk_api.SnykApiClient,
 	scanners ...ProductScanner,
 ) Scanner {
 	return &DelegatingConcurrentScanner{
-		instrumentor: instrumentor,
-		analytics:    analytics,
-		initializer:  initializer,
-		scanNotifier: scanNotifier,
-		scanners:     scanners,
+		instrumentor:  instrumentor,
+		analytics:     analytics,
+		initializer:   initializer,
+		scanNotifier:  scanNotifier,
+		snykApiClient: snykApiClient,
+		scanners:      scanners,
 	}
 }
 
@@ -113,6 +117,12 @@ func (sc *DelegatingConcurrentScanner) Scan(
 			},
 		)
 		sc.scanNotifier.SendInProgress(folderPath)
+	}
+
+	// refresh auth by issuing a request to the API
+	_, err = sc.snykApiClient.GetActiveUser()
+	if err != nil {
+		log.Debug().Err(err).Msg("Retrieving active user failed, re-auth may be required")
 	}
 
 	waitGroup := &sync.WaitGroup{}
