@@ -68,10 +68,10 @@ func (f *repoIgnoresFilter) findNonIgnoredFiles() <-chan string {
 				return nil
 			} else {
 				folderPath := filepath.Dir(path)
+				checker := f.ignoreCheckerPerFolder[folderPath]
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					checker := f.ignoreCheckerPerFolder[folderPath]
 					if !checker.MatchesPath(path) {
 						resultsCh <- path
 					}
