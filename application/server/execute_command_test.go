@@ -28,6 +28,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/auth"
@@ -116,6 +117,7 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	// Arrange
 	loc := setupServer(t)
+	di.SetCommandService(command.NewCommandService()) // use real command service
 
 	config.CurrentConfig().SetAutomaticAuthentication(false)
 	_, err := loc.Client.Call(ctx, "initialize", nil)
@@ -141,6 +143,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 
 func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
 	loc := setupServer(t)
+	di.SetCommandService(command.NewCommandService()) // use real command service
 	authenticationMock := di.AuthenticationService().Provider().(*auth.FakeAuthenticationProvider)
 	params := lsp.ExecuteCommandParams{Command: snyk.CopyAuthLinkCommand}
 

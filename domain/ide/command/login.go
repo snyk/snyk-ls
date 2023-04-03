@@ -35,8 +35,7 @@ func (cmd *loginCommand) Command() snyk.CommandData {
 }
 
 func (cmd *loginCommand) Execute(ctx context.Context) error {
-	provider := cmd.authService.Provider()
-	_, err := provider.Authenticate(ctx)
+	_, err := cmd.authService.Authenticate(ctx)
 	if err != nil {
 		log.Err(err).Msg("Error on snyk.login command")
 		notification.SendError(err)
