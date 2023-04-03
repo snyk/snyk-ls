@@ -47,7 +47,7 @@ type codeSettings struct {
 // Create new code settings
 func newCodeSettings() *codeSettings {
 	s := &codeSettings{}
-	s.isAutofixEnabled.Set(getAutofixEnabledFromEnvOrDefault())
+	s.isAutofixEnabled.Set(true)
 	s.autofixExtensions = nil
 	return s
 }
@@ -56,6 +56,7 @@ func newCodeSettings() *codeSettings {
 func getCodeSettings() *codeSettings {
 	if codeSettingsSingleton == nil {
 		resetCodeSettings()
+		codeSettingsSingleton.setAutofixExtensionsIfNotSet([]string{".es", ".mjs", ".ejs", ".jsx", ".ts", ".es6", ".cjs", ".js", ".vue", ".tsx", ".htm", ".html"})
 	}
 	return codeSettingsSingleton
 }
