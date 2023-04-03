@@ -30,12 +30,15 @@ func CreateFromCommandData(commandData snyk.CommandData, srv server.Server) (sny
 	case snyk.WorkspaceScanCommand:
 		return &workspaceScanCommand{command: commandData, srv: srv}, nil
 	case snyk.WorkspaceFolderScanCommand:
+		return &workspaceFolderScanCommand{command: commandData, srv: srv}, nil
 	case snyk.OpenBrowserCommand:
 		return &openBrowserCommand{command: commandData}, nil
 	case snyk.LoginCommand:
+		return &loginCommand{command: commandData}, nil
 	case snyk.CopyAuthLinkCommand:
 	case snyk.LogoutCommand:
 	case snyk.TrustWorkspaceFoldersCommand:
+		return &trustWorkspaceFoldersCommand{command: commandData}, nil
 	}
 	return nil, fmt.Errorf("unknown command %v", commandData)
 }
