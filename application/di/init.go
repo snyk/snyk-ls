@@ -184,7 +184,7 @@ func TestInit(t *testing.T) {
 		openSourceScanner,
 	)
 	hoverService = hover.NewDefaultService(analytics)
-	commandService = snyk.NewCommandServiceMock()
+	commandService = command.NewCommandService()
 	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier) // don't use getters or it'll deadlock
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
@@ -289,4 +289,10 @@ func FileWatcher() *watcher.FileWatcher {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return fileWatcher
+}
+
+func SetCommandService(service snyk.CommandService) {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	commandService = service
 }
