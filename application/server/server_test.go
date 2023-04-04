@@ -38,6 +38,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
@@ -505,10 +506,10 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, command := range supportedCommands {
-		name := "CommandData \"" + command + "\" is supported"
+	for _, c := range supportedCommands {
+		name := "CommandData \"" + c + "\" is supported"
 		t.Run(name, func(t *testing.T) {
-			assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, command)
+			assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, c)
 		})
 	}
 }
@@ -797,19 +798,22 @@ func Test_CodeActionResolve_ShouldExecuteCommands(t *testing.T) {
 	}
 	config.CurrentConfig().SetAutomaticScanning(false)
 
+	expected := snyk.OpenBrowserCommand
+	serviceMock := snyk.NewCommandServiceMock()
+	command.SetServiceInstance(serviceMock)
+
 	_, err = loc.Client.Call(ctx, "codeAction/resolve", lsp.CodeAction{
 		Title: "My super duper test action",
 		Command: &sglsp.Command{
-			Title:     snyk.OpenBrowserCommand,
-			Command:   snyk.OpenBrowserCommand,
+			Title:     expected,
+			Command:   expected,
 			Arguments: []any{"https://snyk.io"},
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// TODO assert stuff
-	//assert.True(t, di.CommandService().(snyk.CommandServiceMock).ExecutedCommands()>0)
+	assert.Equal(t, expected, serviceMock.ExecutedCommands()[0].Command().CommandId)
 }
 
 func Test_SmokeWorkspaceScanOssAndCode(t *testing.T) {
