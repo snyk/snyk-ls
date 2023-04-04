@@ -108,8 +108,8 @@ func Test_IsSupportedLanguage(t *testing.T) {
 
 	t.Run("should cache supported extensions", func(t *testing.T) {
 		path := unsupportedFile
-		bundler.isSupported(context.Background(), path)
-		bundler.isSupported(context.Background(), path)
+		_, _ = bundler.isSupported(context.Background(), path)
+		_, _ = bundler.isSupported(context.Background(), path)
 		assert.Len(t, snykCodeMock.Calls, 1)
 	})
 }
@@ -153,8 +153,8 @@ func Test_IsSupported_ConfigFile(t *testing.T) {
 
 	t.Run("should cache supported extensions", func(t *testing.T) {
 		path := "C:\\some\\path\\Test.rs"
-		bundler.isSupported(context.Background(), path)
-		bundler.isSupported(context.Background(), path)
+		_, _ = bundler.isSupported(context.Background(), path)
+		_, _ = bundler.isSupported(context.Background(), path)
 		assert.Len(t, snykCodeMock.Calls, 1)
 	})
 }
