@@ -232,6 +232,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 			return issues, nil
 		}
 	}
+	scanMetrics.lastScanFileCount = len(bundle.Files)
 
 	uploadedBundle, err := sc.BundleUploader.Upload(span.Context(), bundle, bundle.Files)
 	// TODO LSP error handling should be pushed UP to the LSP layer
