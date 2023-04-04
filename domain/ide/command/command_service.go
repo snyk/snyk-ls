@@ -29,11 +29,19 @@ var instance snyk.CommandService
 type serviceImpl struct {
 }
 
-// SetServiceInstance is used for testing to inject a mock
-func SetServiceInstance(newInstance snyk.CommandService) {
-	instance = newInstance
+// ResetServiceInstance resets the service instance to nil. This causes the next call to
+// ServiceInstance to create a new instance.
+func ResetServiceInstance() {
+	SetServiceInstance(nil)
 }
 
+// SetServiceInstance sets the singleton instance of the command service.
+func SetServiceInstance(service snyk.CommandService) {
+	instance = service
+}
+
+// ServiceInstance returns the singleton instance of the command service. If not already created,
+// it will create a new instance.
 func ServiceInstance() snyk.CommandService {
 	if instance == nil {
 		instance = &serviceImpl{}
