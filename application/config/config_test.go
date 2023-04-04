@@ -26,7 +26,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 func TestSetToken(t *testing.T) {
@@ -191,14 +191,6 @@ func TestSnykCodeApi(t *testing.T) {
 		t.Setenv("DEEPROXY_API_URL", customDeeproxyUrl)
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint("")
 		assert.Equal(t, customDeeproxyUrl, codeApiEndpoint)
-	})
-
-	t.Run(govDomain+" substring endpoint enables oauth authentication", func(t *testing.T) {
-		t.Parallel()
-		endpoint := "https://app.fedramp," + govDomain + "/api/v1"
-		config := New()
-		config.UpdateApiEndpoints(endpoint)
-		assert.Equal(t, lsp.OAuthAuthentication, config.GetAuthenticationMethod())
 	})
 }
 

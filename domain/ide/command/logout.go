@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited All rights reserved.
+ * © 2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,28 +18,23 @@ package command
 
 import (
 	"context"
-	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
-type TestCommand struct {
-	executed bool
+type logoutCommand struct {
+	command     snyk.CommandData
+	authService snyk.AuthenticationService
 }
 
-func (command *TestCommand) Command() snyk.Command {
-	return snyk.Command{}
+func (cmd *logoutCommand) Command() snyk.CommandData {
+	return cmd.command
 }
-func (command *TestCommand) Execute(ctx context.Context) error {
-	command.executed = true
+
+func (cmd *logoutCommand) Execute(ctx context.Context) error {
+	log.Debug().Str("method", "logoutCommand.Execute").Msgf("logging out")
+	cmd.authService.Logout(ctx)
 	return nil
-}
-
-func Test_ExecuteCommand(t *testing.T) {
-	service := NewCommandService()
-	cmd := &TestCommand{}
-	_ = service.ExecuteCommand(context.Background(), cmd)
-	assert.True(t, cmd.executed)
 }

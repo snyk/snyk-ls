@@ -25,10 +25,10 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -194,7 +194,7 @@ func (f *Folder) filterCachedDiagnostics() (fileIssues map[string][]snyk.Issue) 
 
 	logger.Debug().Msgf("Filtering issues by severity: %v", config.CurrentConfig().FilterSeverity())
 
-	supportedIssueTypes := config.CurrentConfig().GetDisplayableIssueTypes()
+	supportedIssueTypes := config.CurrentConfig().DisplayableIssueTypes()
 	f.documentDiagnosticCache.Range(func(filePath string, issues []snyk.Issue) bool {
 		// Consider doing the loop body in parallel for performance (and use a thread-safe map)
 		filteredIssues := FilterIssues(issues, supportedIssueTypes)

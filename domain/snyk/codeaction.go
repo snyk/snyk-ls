@@ -26,7 +26,7 @@ import (
 // This type should be created by the NewCodeAction or NewDeferredCodeAction functions.
 //
 // There are 3 types of code actions:
-// - No Edit + No Command - Deferred code action, which means that either DeferredEdit or DeferredCommand must be set.
+// - No Edit + No CommandData - Deferred code action, which means that either DeferredEdit or DeferredCommand must be set.
 // - Only edit/Only command - Resolved immediately to run the edit/command.
 // - Both edit and command - Resolved immediately to run edit first and then command.
 type CodeAction struct {
@@ -44,18 +44,18 @@ type CodeAction struct {
 	DeferredEdit *func() *WorkspaceEdit
 
 	// Command that will be executed after the Edit (if present).
-	Command *Command
+	Command *CommandData
 
 	// DeferredCommand is a function that returns a Command.
 	// Used for heavy calculations that shouldn't be done ahead of time.
 	// A CodeAction cannot have both Command and DeferredCommand.
-	DeferredCommand *func() *Command
+	DeferredCommand *func() *CommandData
 
 	// UUID is a unique identifier for this code action. This is used for deferred resolution of a command or edit.
 	Uuid *uuid.UUID
 }
 
-func NewCodeAction(title string, edit *WorkspaceEdit, command *Command) (CodeAction, error) {
+func NewCodeAction(title string, edit *WorkspaceEdit, command *CommandData) (CodeAction, error) {
 	if edit == nil && command == nil {
 		return CodeAction{}, errors.New("a non-deferred action must have either an edit or a command")
 	}
@@ -70,7 +70,7 @@ func NewCodeAction(title string, edit *WorkspaceEdit, command *Command) (CodeAct
 
 func NewDeferredCodeAction(title string,
 	deferredEdit *func() *WorkspaceEdit,
-	deferredCommand *func() *Command,
+	deferredCommand *func() *CommandData,
 ) (CodeAction, error) {
 	if deferredEdit == nil && deferredCommand == nil {
 		return CodeAction{}, errors.New("deferredEdit and deferredCommand cannot both be nil")
@@ -86,7 +86,7 @@ func NewDeferredCodeAction(title string,
 	return action, nil
 }
 
-func NewPreferredCodeAction(title string, edit *WorkspaceEdit, command *Command) (CodeAction, error) {
+func NewPreferredCodeAction(title string, edit *WorkspaceEdit, command *CommandData) (CodeAction, error) {
 	action, err := NewCodeAction(title, edit, command)
 	if err != nil {
 		return CodeAction{}, err

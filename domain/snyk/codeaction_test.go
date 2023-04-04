@@ -21,7 +21,7 @@ var mockEdit = &snyk.WorkspaceEdit{
 	},
 }
 
-var mockCommand = &snyk.Command{
+var mockCommand = &snyk.CommandData{
 	Title: "command",
 }
 
@@ -29,7 +29,7 @@ var mockDeferredEdit = func() *snyk.WorkspaceEdit {
 	return mockEdit
 }
 
-var mockDeferredCommand = func() *snyk.Command {
+var mockDeferredCommand = func() *snyk.CommandData {
 	return mockCommand
 }
 
@@ -61,7 +61,7 @@ func Test_NewDeferredCodeAction(t *testing.T) {
 		err,
 		action,
 		(*snyk.WorkspaceEdit)(nil),
-		(*snyk.Command)(nil),
+		(*snyk.CommandData)(nil),
 		&mockDeferredEdit,
 		&mockDeferredCommand)
 	assert.NotNil(t, action.Uuid, "UUID should be initialized")
@@ -79,9 +79,9 @@ func assertActionsInitializedCorrectly(t *testing.T,
 	err error,
 	action snyk.CodeAction,
 	expectedEdit *snyk.WorkspaceEdit,
-	expectedCommand *snyk.Command,
+	expectedCommand *snyk.CommandData,
 	mockDeferredEdit *func() *snyk.WorkspaceEdit,
-	mockDeferredCommand *func() *snyk.Command,
+	mockDeferredCommand *func() *snyk.CommandData,
 ) {
 	t.Helper()
 	assert.NoError(t, err)

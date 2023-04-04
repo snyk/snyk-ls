@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,9 +26,10 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -38,7 +39,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScan(t *testing.
 	scanner := &snyk.TestScanner{}
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 	w.AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier()))
-	handleUntrustedFolders(context.Background(), loc.Server)
+	command.HandleUntrustedFolders(context.Background(), loc.Server)
 
 	assert.True(t, checkTrustMessageRequest())
 	assert.Equal(t, scanner.Calls(), 0)
@@ -52,7 +53,7 @@ func Test_handleUntrustedFolders_shouldNotTriggerTrustRequestWhenAlreadyRequesti
 	w.AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier()))
 	w.StartRequestTrustCommunication()
 
-	handleUntrustedFolders(context.Background(), loc.Server)
+	command.HandleUntrustedFolders(context.Background(), loc.Server)
 
 	assert.Len(t, jsonRPCRecorder.FindCallbacksByMethod("window/showMessageRequest"), 0)
 	assert.Equal(t, scanner.Calls(), 0)
@@ -61,7 +62,7 @@ func Test_handleUntrustedFolders_shouldNotTriggerTrustRequestWhenAlreadyRequesti
 func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmation(t *testing.T) {
 	loc := setupCustomServer(t, func(_ context.Context, _ *jrpc2.Request) (any, error) {
 		return lsp.MessageActionItem{
-			Title: doTrust,
+			Title: command.DoTrust,
 		}, nil
 	})
 	registerNotifier(loc.Server)
@@ -71,7 +72,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 	w.AddFolder(workspace.NewFolder("/trusted/dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier()))
 
-	handleUntrustedFolders(context.Background(), loc.Server)
+	command.HandleUntrustedFolders(context.Background(), loc.Server)
 
 	assert.Eventually(t, func() bool {
 		addTrustedSent := len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.addTrustedFolders")) == 1
@@ -82,7 +83,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativeConfirmation(t *testing.T) {
 	loc := setupCustomServer(t, func(_ context.Context, _ *jrpc2.Request) (any, error) {
 		return lsp.MessageActionItem{
-			Title: dontTrust,
+			Title: command.DontTrust,
 		}, nil
 	})
 	registerNotifier(loc.Server)
@@ -91,7 +92,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 	w.AddFolder(workspace.NewFolder("/trusted/dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier()))
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 
-	handleUntrustedFolders(context.Background(), loc.Server)
+	command.HandleUntrustedFolders(context.Background(), loc.Server)
 
 	assert.Equal(t, scanner.Calls(), 0)
 }
@@ -141,5 +142,5 @@ func checkTrustMessageRequest() bool {
 	var params lsp.ShowMessageRequestParams
 	_ = callbacks[0].UnmarshalParams(&params)
 	_, untrusted := workspace.Get().GetFolderTrust()
-	return params.Type == lsp.Warning && params.Message == getTrustMessage(untrusted)
+	return params.Type == lsp.Warning && params.Message == command.GetTrustMessage(untrusted)
 }

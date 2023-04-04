@@ -1,6 +1,7 @@
 package codeaction
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -10,9 +11,11 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
+	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -87,17 +90,25 @@ func (c *CodeActionsService) GetCodeActions(params lsp.CodeActionParams) []lsp.C
 	return actions
 }
 
-func (c *CodeActionsService) ResolveCodeAction(action lsp.CodeAction) (lsp.CodeAction, error) {
+func (c *CodeActionsService) ResolveCodeAction(action lsp.CodeAction, server server.Server, authService snyk.AuthenticationService) (lsp.CodeAction, error) {
 	c.logger.Info().Msg("Received code action resolve request")
 	t := time.Now()
+
+	if action.Command != nil {
+		codeAction, err := c.handleCommand(action, server, authService)
+		return codeAction, err
+	}
+
 	if action.Data == nil {
 		return lsp.CodeAction{}, missingKeyError{}
 	}
+
 	key := uuid.UUID(*action.Data)
 	cached, found := c.actionsCache[key]
 	if !found {
 		return lsp.CodeAction{}, errors.New(fmt.Sprint("could not find cached action for uuid ", key))
 	}
+
 	edit := (*cached.action.DeferredEdit)()
 	resolvedAction := cached.action
 	resolvedAction.Edit = edit
@@ -107,6 +118,24 @@ func (c *CodeActionsService) ResolveCodeAction(action lsp.CodeAction) (lsp.CodeA
 
 	c.logger.Info().Msg(fmt.Sprint("Resolved code action in ", elapsedSeconds, " seconds:\n", codeAction))
 	return codeAction, nil
+}
+
+func (c *CodeActionsService) handleCommand(action lsp.CodeAction, server server.Server, authService snyk.AuthenticationService) (lsp.CodeAction, error) {
+	log.Info().Str("method", "codeaction.handleCommand").Msgf("handling command %s", action.Command.Command)
+	cmd := snyk.CommandData{
+		Title:     action.Command.Title,
+		CommandId: action.Command.Command,
+		Arguments: action.Command.Arguments,
+	}
+	executableCmd, err := command.CreateFromCommandData(cmd, server, authService)
+	if err != nil {
+		return lsp.CodeAction{}, err
+	}
+	err = command.Service().ExecuteCommand(context.Background(), executableCmd)
+	if err != nil {
+		return lsp.CodeAction{}, err
+	}
+	return lsp.CodeAction{}, nil
 }
 
 type missingKeyError struct{}

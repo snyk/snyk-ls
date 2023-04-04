@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -40,7 +40,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
-		assert.Contains(t, updatedEnv, "SNYK_CFG_ORG="+config.CurrentConfig().GetOrganization())
+		assert.Contains(t, updatedEnv, "SNYK_CFG_ORG="+config.CurrentConfig().Organization())
 		assert.Contains(t, updatedEnv, "SNYK_API=https://app.snyk.io/api")
 		assert.Contains(t, updatedEnv, "SNYK_TOKEN="+config.CurrentConfig().Token())
 		assert.Contains(t, updatedEnv, "SNYK_INTEGRATION_NAME="+expectedIntegrationName)

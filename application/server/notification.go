@@ -19,31 +19,26 @@ package server
 import (
 	"context"
 
-	"github.com/creachadair/jrpc2"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/domain/ide/command"
+	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 
-func notifier(srv *jrpc2.Server, method string, params any) {
+func notifier(srv server.Server, method string, params any) {
 	log.Debug().Str("method", "notifier").Msgf("Notifying")
 	err := srv.Notify(context.Background(), method, params)
 	logError(err, "notifier")
 }
 
-type Server interface {
-	Notify(ctx context.Context, method string, params any) error
-	Callback(ctx context.Context, method string, params any) (*jrpc2.Response, error)
-}
-
 var progressStopChan = make(chan bool, 1000)
 
-func createProgressListener(progressChannel chan lsp.ProgressParams, server Server) {
+func createProgressListener(progressChannel chan lsp.ProgressParams, server server.Server) {
 	// cleanup stopchannel before starting
 	for {
 		select {
@@ -91,7 +86,7 @@ func CancelProgress(token lsp.ProgressToken) {
 	progress.CancelProgressChannel <- token
 }
 
-func registerNotifier(srv *jrpc2.Server) {
+func registerNotifier(srv server.Server) {
 	callbackFunction := func(params any) {
 		switch params := params.(type) {
 		case lsp.AuthenticationParams:
@@ -151,7 +146,7 @@ func registerNotifier(srv *jrpc2.Server) {
 	log.Info().Str("method", "registerNotifier").Msg("registered notifier")
 }
 
-func handleShowMessageRequest(srv *jrpc2.Server, params snyk.ShowMessageRequest) {
+func handleShowMessageRequest(srv server.Server, params snyk.ShowMessageRequest) {
 	// convert our internal message request to LSP message request
 	requestParams := lsp.ShowMessageRequestParams{
 		Type:    lsp.MessageType(params.Type),
@@ -196,7 +191,7 @@ func handleShowMessageRequest(srv *jrpc2.Server, params snyk.ShowMessageRequest)
 			return
 		}
 
-		err = di.CommandService().ExecuteCommand(context.Background(), selectedCommand)
+		err = command.Service().ExecuteCommand(context.Background(), selectedCommand)
 		if err != nil {
 			log.Error().
 				Err(err).

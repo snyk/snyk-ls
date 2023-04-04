@@ -22,9 +22,9 @@ import (
 
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -68,7 +68,7 @@ func ToCodeAction(issue snyk.Issue, action snyk.CodeAction) lsp.CodeAction {
 	}
 }
 
-func ToCommand(command *snyk.Command) *sglsp.Command {
+func ToCommand(command *snyk.CommandData) *sglsp.Command {
 	if command == nil {
 		return nil
 	}

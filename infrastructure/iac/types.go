@@ -17,7 +17,7 @@
 package iac
 
 import (
-	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 type iacScanResult struct {

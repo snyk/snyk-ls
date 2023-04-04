@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,24 @@
  * limitations under the License.
  */
 
-package server
+package command
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/creachadair/jrpc2"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
-	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
-const doTrust = "Trust folders and continue"
-const dontTrust = "Don't trust folders"
+const DoTrust = "Trust folders and continue"
+const DontTrust = "Don't trust folders"
 
-func handleUntrustedFolders(ctx context.Context, srv *jrpc2.Server) {
+func HandleUntrustedFolders(ctx context.Context, srv server.Server) {
 	w := workspace.Get()
 	// debounce requests from overzealous clients (Eclipse, I'm looking at you)
 	if w.IsTrustRequestOngoing() {
@@ -43,22 +43,22 @@ func handleUntrustedFolders(ctx context.Context, srv *jrpc2.Server) {
 	_, untrusted := w.GetFolderTrust()
 	if len(untrusted) > 0 {
 
-		decision, err := showTrustDialog(srv, untrusted, doTrust, dontTrust)
+		decision, err := showTrustDialog(srv, untrusted, DoTrust, DontTrust)
 		if err != nil {
 			return
 		}
 
-		if decision.Title == doTrust {
+		if decision.Title == DoTrust {
 			w.TrustFoldersAndScan(ctx, untrusted)
 		}
 	}
 }
 
-func showTrustDialog(srv *jrpc2.Server, untrusted []*workspace.Folder, dontTrust string, doTrust string) (lsp.MessageActionItem, error) {
+func showTrustDialog(srv server.Server, untrusted []*workspace.Folder, dontTrust string, doTrust string) (lsp.MessageActionItem, error) {
 	method := "showTrustDialog"
 	result, err := srv.Callback(context.Background(), "window/showMessageRequest", lsp.ShowMessageRequestParams{
 		Type:    lsp.Warning,
-		Message: getTrustMessage(untrusted),
+		Message: GetTrustMessage(untrusted),
 		Actions: []lsp.MessageActionItem{{Title: dontTrust}, {Title: doTrust}},
 	})
 	if err != nil {
@@ -77,7 +77,7 @@ func showTrustDialog(srv *jrpc2.Server, untrusted []*workspace.Folder, dontTrust
 	return trust, err
 }
 
-func getTrustMessage(untrusted []*workspace.Folder) string {
+func GetTrustMessage(untrusted []*workspace.Folder) string {
 	var untrustedFolderString string
 	for _, folder := range untrusted {
 		untrustedFolderString += folder.Path() + "\n"

@@ -31,12 +31,14 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	auth2 "github.com/snyk/snyk-ls/infrastructure/cli/auth"
 	"github.com/snyk/snyk-ls/infrastructure/oauth"
+	"github.com/snyk/snyk-ls/internal/lsp"
 )
+
+const govDomain = "snykgov.io"
 
 func workspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeConfigurationParams) (bool, error) {
@@ -90,7 +92,7 @@ func InitializeSettings(settings lsp.Settings) {
 
 func UpdateSettings(settings lsp.Settings) {
 	currentConfig := config.CurrentConfig()
-	previouslyEnabledProducts := currentConfig.GetDisplayableIssueTypes()
+	previouslyEnabledProducts := currentConfig.DisplayableIssueTypes()
 	previousAutoScan := currentConfig.IsAutoScanEnabled()
 
 	writeSettings(settings, false)
@@ -98,7 +100,7 @@ func UpdateSettings(settings lsp.Settings) {
 	// If a product was removed, clear all issues for this product
 	ws := workspace.Get()
 	if ws != nil {
-		newSupportedProducts := currentConfig.GetDisplayableIssueTypes()
+		newSupportedProducts := currentConfig.DisplayableIssueTypes()
 		for removedIssueType, wasSupported := range previouslyEnabledProducts {
 			if wasSupported && !newSupportedProducts[removedIssueType] {
 				ws.ClearIssuesByType(removedIssueType)
@@ -137,7 +139,7 @@ func writeSettings(settings lsp.Settings, initialize bool) {
 func updateAuthenticationMethod(settings lsp.Settings) {
 	c := config.CurrentConfig()
 	c.SetAuthenticationMethod(settings.AuthenticationMethod)
-	if config.CurrentConfig().GetAuthenticationMethod() == lsp.OAuthAuthentication {
+	if config.CurrentConfig().AuthenticationMethod() == lsp.OAuthAuthentication {
 		engine := c.Engine()
 		conf := engine.GetConfiguration()
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
@@ -208,13 +210,19 @@ func updateToken(token string) {
 	// Token was sent from the client, no need to send notification
 	di.AuthenticationService().UpdateCredentials(token, false)
 }
-
 func updateApiEndpoints(settings lsp.Settings, initialization bool) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
 	currentConfig := config.CurrentConfig()
 	endpointsUpdated := currentConfig.UpdateApiEndpoints(snykApiUrl)
+
 	if endpointsUpdated && !initialization {
 		di.AuthenticationService().Logout(context.Background())
+	}
+
+	// overwrite authentication method if gov domain
+	if strings.Contains(snykApiUrl, govDomain) {
+		settings.AuthenticationMethod = lsp.OAuthAuthentication
+		updateAuthenticationMethod(settings)
 	}
 }
 

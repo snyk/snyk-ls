@@ -32,12 +32,12 @@ const (
 	TrustWorkspaceFoldersCommand = "snyk.trustWorkspaceFolders"
 )
 
-type CommandInterface interface {
-	Command() Command
+type Command interface {
+	Command() CommandData
 	Execute(ctx context.Context) error
 }
 
-type Command struct {
+type CommandData struct {
 	/**
 	 * Title of the command, like `save`.
 	 */
@@ -56,25 +56,25 @@ type Command struct {
 type CommandName string
 
 type CommandService interface {
-	ExecuteCommand(ctx context.Context, command CommandInterface) error
+	ExecuteCommand(ctx context.Context, command Command) error
 }
 
 type CommandServiceMock struct {
 	m                sync.Mutex
-	executedCommands []CommandInterface
+	executedCommands []Command
 }
 
 func NewCommandServiceMock() *CommandServiceMock {
 	return &CommandServiceMock{}
 }
 
-func (service *CommandServiceMock) ExecuteCommand(ctx context.Context, command CommandInterface) error {
+func (service *CommandServiceMock) ExecuteCommand(ctx context.Context, command Command) error {
 	service.m.Lock()
 	service.executedCommands = append(service.executedCommands, command)
 	service.m.Unlock()
 	return nil
 }
-func (service *CommandServiceMock) ExecutedCommands() []CommandInterface {
+func (service *CommandServiceMock) ExecutedCommands() []Command {
 	service.m.Lock()
 	cmds := service.executedCommands
 	service.m.Unlock()

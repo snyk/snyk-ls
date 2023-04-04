@@ -18,7 +18,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"strings"
 	"time"
@@ -26,7 +25,6 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/shirou/gopsutil/process"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -34,12 +32,14 @@ import (
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/codelens"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -90,7 +90,7 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map) {
 	handlers["textDocument/codeLens"] = codeLensHandler()
 	handlers["textDocument/willSave"] = noOpHandler()
 	handlers["textDocument/willSaveWaitUntil"] = noOpHandler()
-	handlers["codeAction/resolve"] = codeActionResolveHandler()
+	handlers["codeAction/resolve"] = codeActionResolveHandler(srv, di.AuthenticationService())
 	handlers["shutdown"] = shutdown()
 	handlers["exit"] = exit(srv)
 	handlers["workspace/didChangeWorkspaceFolders"] = workspaceDidChangeWorkspaceFoldersHandler(srv)
@@ -124,36 +124,6 @@ func workspaceWillDeleteFilesHandler() jrpc2.Handler {
 	})
 }
 
-func navigateToLocation(srv *jrpc2.Server, args []any) {
-	method := "navigateToLocation"
-	// convert to correct type
-	var myRange snyk.Range
-	marshal, err := json.Marshal(args[1])
-	if err != nil {
-		log.Err(errors.Wrap(err, "couldn't marshal range to json")).Str("method", method).Send()
-	}
-	err = json.Unmarshal(marshal, &myRange)
-	if err != nil {
-		log.Err(errors.Wrap(err, "couldn't unmarshal range from json")).Str("method", method).Send()
-	}
-
-	params := lsp.ShowDocumentParams{
-		Uri:       uri.PathToUri(args[0].(string)),
-		External:  false,
-		TakeFocus: true,
-		Selection: converter.ToRange(myRange),
-	}
-	log.Info().
-		Str("method", "navigateToLocation").
-		Interface("params", params).
-		Msg("showing Document")
-	rsp, err := srv.Callback(context.Background(), "window/showDocument", params)
-	log.Debug().Str("method", method).Interface("callback", rsp).Send()
-	if err != nil {
-		logError(err, "navigateToLocation")
-	}
-}
-
 func codeLensHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.CodeLensParams) ([]sglsp.CodeLens, error) {
 		log.Info().Str("method", "CodeLensHandler").Msg("RECEIVING")
@@ -174,7 +144,7 @@ func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler 
 		logger.Info().Msg("RECEIVING")
 		defer logger.Info().Msg("SENDING")
 		workspace.Get().ChangeWorkspaceFolders(bgCtx, params)
-		handleUntrustedFolders(bgCtx, srv)
+		command.HandleUntrustedFolders(bgCtx, srv)
 		return nil, nil
 	})
 }
@@ -275,7 +245,7 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 
 		if config.CurrentConfig().AutomaticAuthentication() || config.CurrentConfig().NonEmptyToken() {
 			logger.Debug().Msg("trying to get trusted status for untrusted folders")
-			go handleUntrustedFolders(context.Background(), srv)
+			go command.HandleUntrustedFolders(context.Background(), srv)
 		}
 		return nil, nil
 	})
@@ -391,7 +361,7 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 		}
 
 		issues := folder.DocumentDiagnosticsFromCache(filePath)
-		filteredIssues := workspace.FilterIssues(issues, config.CurrentConfig().GetDisplayableIssueTypes())
+		filteredIssues := workspace.FilterIssues(issues, config.CurrentConfig().DisplayableIssueTypes())
 
 		if len(filteredIssues) > 0 {
 			logger.Info().Msg("Sending cached issues")
@@ -451,8 +421,8 @@ func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 	})
 }
 
-func codeActionResolveHandler() handler.Func {
-	return handler.New(codeaction.ResolveCodeActionHandler(di.CodeActionService()))
+func codeActionResolveHandler(server server.Server, authenticationService snyk.AuthenticationService) handler.Func {
+	return handler.New(codeaction.ResolveCodeActionHandler(di.CodeActionService(), server, authenticationService))
 }
 
 func textDocumentCodeActionHandler() handler.Func {

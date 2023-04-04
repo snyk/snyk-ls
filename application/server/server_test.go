@@ -38,16 +38,16 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -79,13 +79,20 @@ func setupServer(t *testing.T) server.Local {
 	return setupCustomServer(t, nil)
 }
 
+func setupServerWithCustomDI(t *testing.T, useMocks bool) server.Local {
+	s := setupCustomServer(t, nil)
+	if !useMocks {
+		di.Init()
+	}
+	return s
+}
+
 func setupCustomServer(t *testing.T, callBackFn onCallbackFn) server.Local {
 	testutil.UnitTest(t)
 	di.TestInit(t)
 	cleanupChannels()
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
-	workspace.Set(workspace.New(performance.NewTestInstrumentor(), di.Scanner(), di.HoverService(), di.ScanNotifier()))
 	loc := startServer(callBackFn)
 
 	t.Cleanup(func() {
@@ -191,7 +198,7 @@ func Test_initialize_shouldDefaultToTokenAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, lsp.TokenAuthentication, config.CurrentConfig().GetAuthenticationMethod())
+	assert.Equal(t, lsp.TokenAuthentication, config.CurrentConfig().AuthenticationMethod())
 	assert.Equal(t, "*auth.FakeAuthenticationProvider", reflect.TypeOf(di.AuthenticationService().Provider()).String())
 }
 
@@ -204,7 +211,7 @@ func Test_initialize_shouldInitToOauthAuthenticationWhenConfigured(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, lsp.OAuthAuthentication, config.CurrentConfig().GetAuthenticationMethod())
+	assert.Equal(t, lsp.OAuthAuthentication, config.CurrentConfig().AuthenticationMethod())
 	assert.Equal(t, "*oauth.oAuthProvider", reflect.TypeOf(di.AuthenticationService().Provider()).String())
 }
 
@@ -225,7 +232,7 @@ func Test_initialize_shouldInitToTokenAuthenticationWhenConfigured(t *testing.T)
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, lsp.TokenAuthentication, config.CurrentConfig().GetAuthenticationMethod())
+	assert.Equal(t, lsp.TokenAuthentication, config.CurrentConfig().AuthenticationMethod())
 	assert.Equal(t, "*auth.CliAuthenticationProvider", reflect.TypeOf(di.AuthenticationService().Provider()).String())
 }
 
@@ -371,7 +378,7 @@ func Test_initialize_updatesSettings(t *testing.T) {
 	if err := rsp.UnmarshalResult(&result); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, "fancy org", config.CurrentConfig().GetOrganization())
+	assert.Equal(t, "fancy org", config.CurrentConfig().Organization())
 	assert.Equal(t, "xxx", config.CurrentConfig().Token())
 }
 
@@ -499,10 +506,10 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, command := range supportedCommands {
-		name := "Command \"" + command + "\" is supported"
+	for _, c := range supportedCommands {
+		name := "CommandData \"" + c + "\" is supported"
 		t.Run(name, func(t *testing.T) {
-			assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, command)
+			assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, c)
 		})
 	}
 }
@@ -780,6 +787,33 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	}
 
 	assert.Nil(t, w.GetFolderContaining(uri.PathFromUri(f.Uri)))
+}
+
+func Test_CodeActionResolve_ShouldExecuteCommands(t *testing.T) {
+	loc := setupServer(t)
+	testutil.IntegTest(t)
+	_, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.CurrentConfig().SetAutomaticScanning(false)
+
+	expected := snyk.OpenBrowserCommand
+	serviceMock := snyk.NewCommandServiceMock()
+	command.SetService(serviceMock)
+
+	_, err = loc.Client.Call(ctx, "codeAction/resolve", lsp.CodeAction{
+		Title: "My super duper test action",
+		Command: &sglsp.Command{
+			Title:     expected,
+			Command:   expected,
+			Arguments: []any{"https://snyk.io"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, expected, serviceMock.ExecutedCommands()[0].Command().CommandId)
 }
 
 func Test_SmokeWorkspaceScanOssAndCode(t *testing.T) {

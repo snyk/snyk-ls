@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited
+ * © 2023 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,32 @@
  * limitations under the License.
  */
 
-package snyk
+package command
 
-import "github.com/snyk/snyk-ls/internal/data_structure"
+import (
+	"context"
+	"testing"
 
-type MessageAction string
+	"github.com/stretchr/testify/assert"
 
-type MessageType int
-
-const (
-	Error   MessageType = 1
-	Warning MessageType = 2
-	Info    MessageType = 3
+	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
-type ShowMessageRequest struct {
-	Message string                                             `json:"message"`
-	Type    MessageType                                        `json:"type"`
-	Actions *data_structure.OrderedMap[MessageAction, Command] `json:"actions"`
+type TestCommand struct {
+	executed bool
+}
+
+func (command *TestCommand) Command() snyk.CommandData {
+	return snyk.CommandData{}
+}
+func (command *TestCommand) Execute(_ context.Context) error {
+	command.executed = true
+	return nil
+}
+
+func Test_ExecuteCommand(t *testing.T) {
+	service := Service()
+	cmd := &TestCommand{}
+	_ = service.ExecuteCommand(context.Background(), cmd)
+	assert.True(t, cmd.executed)
 }

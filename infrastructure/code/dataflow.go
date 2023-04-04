@@ -66,8 +66,8 @@ func (d *dataflowElement) toMarkDown() (markdown string) {
 	return markdown
 }
 
-func (d *dataflowElement) toCommand() snyk.Command {
-	command := snyk.Command{
+func (d *dataflowElement) toCommand() snyk.CommandData {
+	command := snyk.CommandData{
 		Title: fmt.Sprintf(
 			"Snyk Data Flow (%d) %s:%d",
 			d.position,

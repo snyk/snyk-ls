@@ -9,11 +9,12 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
-	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/application/watcher"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -137,7 +138,7 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 	// Act
 	actions := service.GetCodeActions(codeActionsParam)
 	actionFromRequest := actions[0]
-	resolvedAction, _ := service.ResolveCodeAction(actionFromRequest)
+	resolvedAction, _ := service.ResolveCodeAction(actionFromRequest, nil, nil)
 
 	// Assert
 	assert.NotNil(t, resolvedAction)
@@ -161,10 +162,62 @@ func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
 
 	// Act
 	var err error
-	_, err = service.ResolveCodeAction(ca)
+	_, err = service.ResolveCodeAction(ca, nil, nil)
 
 	// Assert
 	assert.Error(t, err, "Expected error when resolving a code action with a key that doesn't exist")
+}
+
+func Test_ResolveCodeAction_UnknownCommandIsReported(t *testing.T) {
+	// Arrange
+	service := setupService()
+
+	id := lsp.CodeActionData(uuid.New())
+	c := &sglsp.Command{
+		Title:     "test",
+		Command:   "test",
+		Arguments: []any{"test"},
+	}
+	ca := lsp.CodeAction{
+		Title:   "Made up CA",
+		Edit:    nil,
+		Command: c,
+		Data:    &id,
+	}
+
+	// Act
+	var err error
+	_, err = service.ResolveCodeAction(ca, nil, nil)
+
+	// Assert
+	assert.Error(t, err, "Command factory should have been called with fake command and returned not found err")
+	assert.Contains(t, err.Error(), "unknown command")
+}
+
+func Test_ResolveCodeAction_CommandIsExecuted(t *testing.T) {
+	// Arrange
+	service := setupService()
+
+	id := lsp.CodeActionData(uuid.New())
+	command.SetService(snyk.NewCommandServiceMock())
+
+	c := &sglsp.Command{
+		Title:   snyk.LoginCommand,
+		Command: snyk.LoginCommand,
+	}
+	ca := lsp.CodeAction{
+		Title:   "Made up CA",
+		Edit:    nil,
+		Command: c,
+		Data:    &id,
+	}
+
+	_, err := service.ResolveCodeAction(ca, nil, nil)
+	assert.NoError(t, err, "command should be called without error")
+
+	serviceMock := command.Service().(*snyk.CommandServiceMock)
+	assert.Len(t, serviceMock.ExecutedCommands(), 1)
+	assert.Equal(t, serviceMock.ExecutedCommands()[0].Command().CommandId, c.Command)
 }
 
 func Test_ResolveCodeAction_KeyIsNull_ReturnsError(t *testing.T) {
@@ -177,7 +230,7 @@ func Test_ResolveCodeAction_KeyIsNull_ReturnsError(t *testing.T) {
 		Data:    nil,
 	}
 
-	_, err := service.ResolveCodeAction(ca)
+	_, err := service.ResolveCodeAction(ca, nil, nil)
 	assert.Error(t, err, "Expected error when resolving a code action with a null key")
 	assert.True(t, codeaction.IsMissingKeyError(err))
 }

@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited All rights reserved.
+ * © 2022-2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,29 @@
  * limitations under the License.
  */
 
-package command
+package lsp
 
-import (
-	"context"
-
-	"github.com/snyk/snyk-ls/domain/snyk"
-)
-
-type CommandServiceImpl struct {
+func NewSeverityFilter(critical bool, high bool, medium bool, low bool) SeverityFilter {
+	return SeverityFilter{
+		Critical: critical,
+		High:     high,
+		Medium:   medium,
+		Low:      low,
+	}
 }
 
-func NewCommandService() snyk.CommandService {
-	return &CommandServiceImpl{}
+func DefaultSeverityFilter() SeverityFilter {
+	return SeverityFilter{
+		Critical: true,
+		High:     true,
+		Medium:   true,
+		Low:      true,
+	}
 }
 
-// ExecuteCommand implements CommandService
-func (service *CommandServiceImpl) ExecuteCommand(ctx context.Context, command snyk.CommandInterface) error {
-	return command.Execute(ctx)
+type SeverityFilter struct {
+	Critical bool `json:"critical,omitempty"`
+	High     bool `json:"high,omitempty"`
+	Medium   bool `json:"medium,omitempty"`
+	Low      bool `json:"low,omitempty"`
 }

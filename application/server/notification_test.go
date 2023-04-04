@@ -26,12 +26,11 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/data_structure"
+	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
@@ -210,9 +209,14 @@ func TestShowMessageRequest(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
+		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
 		expectedTitle := "test title"
-		actionCommandMap.Add(snyk.MessageAction(expectedTitle), command.NewOpenBrowserCommand("https://snyk.io"))
+		data, err := command.CreateFromCommandData(snyk.CommandData{CommandId: snyk.OpenBrowserCommand, Arguments: []any{"https://snyk.io"}}, nil, nil)
+		assert.NoError(t, err)
+		actionCommandMap.Add(
+			snyk.MessageAction(expectedTitle),
+			data,
+		)
 
 		expected := snyk.ShowMessageRequest{Message: "message", Type: snyk.Info, Actions: actionCommandMap}
 
@@ -248,9 +252,12 @@ func TestShowMessageRequest(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		command.SetService(snyk.NewCommandServiceMock())
+		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
+		data, err := command.CreateFromCommandData(snyk.CommandData{CommandId: snyk.OpenBrowserCommand, Arguments: []any{"https://snyk.io"}}, nil, nil)
+		assert.NoError(t, err)
 
-		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
-		actionCommandMap.Add(snyk.MessageAction(selectedAction), command.NewOpenBrowserCommand("https://snyk.io"))
+		actionCommandMap.Add(snyk.MessageAction(selectedAction), data)
 
 		request := snyk.ShowMessageRequest{Message: "message", Type: snyk.Info, Actions: actionCommandMap}
 
@@ -260,7 +267,7 @@ func TestShowMessageRequest(t *testing.T) {
 			t,
 			func() bool {
 				// verify that passed command is eventually executed
-				commandService := di.CommandService()
+				commandService := command.Service()
 				commandServiceMock := commandService.(*snyk.CommandServiceMock)
 				return commandServiceMock.ExecutedCommands()[0].Command().CommandId == snyk.OpenBrowserCommand
 			},
