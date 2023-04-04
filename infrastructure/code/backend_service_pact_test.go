@@ -232,7 +232,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) { // nolint:gocognit // this i
 			Headers: dsl.MapMatcher{
 				"Content-Type": dsl.String("application/json"),
 			},
-			Body: dsl.Match(filtersResponse{}),
+			Body: dsl.Match(FiltersResponse{}),
 		})
 
 		test := func() error {

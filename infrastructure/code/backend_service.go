@@ -74,7 +74,7 @@ type extendBundleRequest struct {
 	RemovedFiles []string              `json:"removedFiles,omitempty"`
 }
 
-type filtersResponse struct {
+type FiltersResponse struct {
 	ConfigFiles       []string `json:"configFiles" pact:"min=1"`
 	Extensions        []string `json:"extensions" pact:"min=1"`
 	AutofixExtensions []string `json:"autofixExtensions" pact:"min=1"`
@@ -89,7 +89,7 @@ func NewHTTPRepository(
 }
 
 func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (
-	filters filtersResponse,
+	filters FiltersResponse,
 	err error,
 ) {
 	method := "code.GetFilters"
@@ -100,12 +100,12 @@ func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (
 
 	responseBody, err := s.doCall(span.Context(), "GET", "/filters", nil)
 	if err != nil {
-		return filtersResponse{ConfigFiles: nil, Extensions: nil, AutofixExtensions: nil}, err
+		return FiltersResponse{ConfigFiles: nil, Extensions: nil, AutofixExtensions: nil}, err
 	}
 
 	err = json.Unmarshal(responseBody, &filters)
 	if err != nil {
-		return filtersResponse{ConfigFiles: nil, Extensions: nil, AutofixExtensions: nil}, err
+		return FiltersResponse{ConfigFiles: nil, Extensions: nil, AutofixExtensions: nil}, err
 	}
 	log.Debug().Str("method", method).Msg("API: Finished getting filters")
 	return filters, nil

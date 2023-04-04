@@ -38,7 +38,7 @@ type AutofixOptions struct {
 
 type SnykCodeClient interface {
 	GetFilters(ctx context.Context) (
-		filters filtersResponse,
+		filters FiltersResponse,
 		err error)
 
 	CreateBundle(
