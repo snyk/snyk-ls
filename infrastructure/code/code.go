@@ -408,8 +408,9 @@ const closeMessageActionItemTitle snyk.MessageAction = "Close"
 
 func (sc *Scanner) isSastEnabled() bool {
 	sastEnabled, localCodeEngineEnabled, _, err := sc.SnykApiClient.SastEnabled()
+	method := "isSastEnabled"
 	if err != nil {
-		log.Error().Err(err).Str("method", "isSastEnabled").Msg("couldn't get sast enablement")
+		log.Error().Err(err).Str("method", method).Msg("couldn't get sast enablement")
 		sc.errorReporter.CaptureError(err)
 		return false
 	}
@@ -423,7 +424,9 @@ func (sc *Scanner) isSastEnabled() bool {
 		}
 		cmd, err := command.CreateFromCommandData(commandData, nil, nil)
 		if err != nil {
-			sc.errorReporter.CaptureError(errors.Wrap(err, "couldn't create open browser command"))
+			message := "couldn't create open browser command"
+			log.Err(err).Str("method", method).Msg(message)
+			sc.errorReporter.CaptureError(errors.Wrap(err, message))
 		} else {
 			actionCommandMap.Add(enableSnykCodeMessageActionItemTitle, cmd)
 		}
