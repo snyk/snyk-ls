@@ -102,7 +102,9 @@ func (c SnykCli) getCommand(cmd []string, workingDir string, ctx context.Context
 	command.Dir = workingDir
 	cliEnv := AppendCliEnvironmentVariables(os.Environ(), true)
 	command.Env = cliEnv
-	log.Debug().Str("method", "getCommand").Interface("command", command).Send()
+	log.Trace().Str("method", "getCommand").Interface("command.Args", command.Args).Send()
+	log.Trace().Str("method", "getCommand").Interface("command.Env", command.Env).Send()
+	log.Trace().Str("method", "getCommand").Interface("command.Dir", command.Dir).Send()
 	return command
 }
 

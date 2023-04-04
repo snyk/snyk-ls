@@ -151,7 +151,11 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 		}
 	}
 
-	issues = iac.retrieveIssues(scanResults, issues, workspacePath, err)
+	issues, err = iac.retrieveIssues(scanResults, issues, workspacePath, err)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to retrieve IaC issues")
+	}
+
 	return issues, nil
 }
 
@@ -159,17 +163,22 @@ func (iac *Scanner) retrieveIssues(scanResults []iacScanResult,
 	issues []snyk.Issue,
 	workspacePath string,
 	err error,
-) []snyk.Issue {
+) ([]snyk.Issue, error) {
 	if len(scanResults) > 0 {
 		for _, s := range scanResults {
 			isIgnored := ignorableIacErrorCodes[s.ErrorCode]
 			if !isIgnored {
-				issues = append(issues, iac.retrieveAnalysis(s, workspacePath)...)
+				analysisIssues, err := iac.retrieveAnalysis(s, workspacePath)
+				if err != nil {
+					return nil, errors.Wrap(err, "retrieve analysis")
+				}
+
+				issues = append(issues, analysisIssues...)
 			}
 		}
 	}
 	iac.trackResult(err == nil)
-	return issues
+	return issues, nil
 }
 
 func (iac *Scanner) isSupported(documentURI sglsp.DocumentURI) bool {
@@ -261,7 +270,7 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI) []string {
 	return cmd
 }
 
-func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath string) []snyk.Issue {
+func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath string) ([]snyk.Issue, error) {
 	targetFile := filepath.Join(workspacePath, scanResult.TargetFile)
 	rawFileContent, err := os.ReadFile(targetFile)
 	fileContentString := ""
@@ -283,9 +292,14 @@ func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath str
 			issue.LineNumber = 0
 		}
 
-		issues = append(issues, iac.toIssue(targetFile, issue, fileContentString))
+		iacIssue, err := iac.toIssue(targetFile, issue, fileContentString)
+		if err != nil {
+			return nil, errors.Wrap(err, "unable to convert IaC issue to Snyk issue")
+		}
+
+		issues = append(issues, iacIssue)
 	}
-	return issues
+	return issues, nil
 }
 
 func (iac *Scanner) trackResult(success bool) {
@@ -324,7 +338,7 @@ func (iac *Scanner) getExtendedMessage(issue iacIssue) string {
 
 }
 
-func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent string) snyk.Issue {
+func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent string) (snyk.Issue, error) {
 	const defaultRangeStart = 0
 	const defaultRangeEnd = 80
 	title := issue.IacDescription.Issue
@@ -355,6 +369,11 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		log.Err(err).Msg("Cannot create code action")
 	}
 
+	additionalData, err := iac.toAdditionalData(affectedFilePath, issue)
+	if err != nil {
+		return snyk.Issue{}, errors.Wrap(err, "unable to create IaC issue additional data")
+	}
+
 	return snyk.Issue{
 		ID: issue.PublicID,
 		Range: snyk.Range{
@@ -369,12 +388,17 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		IssueDescriptionURL: issueURL,
 		IssueType:           snyk.InfrastructureIssue,
 		CodeActions:         []snyk.CodeAction{action},
-		AdditionalData:      iac.toAdditionalData(affectedFilePath, issue),
-	}
+		AdditionalData:      additionalData,
+	}, nil
 }
 
-func (iac *Scanner) toAdditionalData(affectedFilePath string, issue iacIssue) snyk.IaCIssueData {
+func (iac *Scanner) toAdditionalData(affectedFilePath string, issue iacIssue) (snyk.IaCIssueData, error) {
 	key := getIssueKey(affectedFilePath, issue)
+
+	iacIssuePath, err := parseIacIssuePath(issue.Path)
+	if err != nil {
+		return snyk.IaCIssueData{}, errors.Wrap(err, "unable to parse IaC issue path")
+	}
 
 	return snyk.IaCIssueData{
 		Key:           key,
@@ -385,9 +409,24 @@ func (iac *Scanner) toAdditionalData(affectedFilePath string, issue iacIssue) sn
 		Issue:         issue.IacDescription.Issue,
 		Impact:        issue.IacDescription.Impact,
 		Resolve:       issue.IacDescription.Resolve,
-		Path:          issue.Path,
+		Path:          iacIssuePath,
 		References:    issue.References,
+	}, nil
+}
+
+func parseIacIssuePath(path []any) ([]string, error) {
+	var pathTokens []string
+	for _, p := range path {
+		switch val := p.(type) {
+		case int:
+			pathTokens = append(pathTokens, strconv.Itoa(val))
+		case string:
+			pathTokens = append(pathTokens, val)
+		default:
+			return nil, errors.Errorf("unexpected type %T for IaC issue path token: %v", val, val)
+		}
 	}
+	return pathTokens, nil
 }
 
 func newIacCommand(codeActionTitle string, issueURL *url.URL) *snyk.Command {

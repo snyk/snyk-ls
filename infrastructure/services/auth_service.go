@@ -19,6 +19,7 @@ package services
 import (
 	"context"
 	"errors"
+	"reflect"
 
 	"github.com/rs/zerolog/log"
 
@@ -50,7 +51,7 @@ func (a *AuthenticationService) Provider() snyk.AuthenticationProvider {
 func (a *AuthenticationService) Authenticate(ctx context.Context) (string, error) {
 	token, err := a.Provider().Authenticate(ctx)
 	if token == "" || err != nil {
-		log.Error().Err(err).Msg("Failed to authenticate")
+		log.Error().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.Provider()))
 		return "", err
 	}
 	a.UpdateCredentials(token, true)
