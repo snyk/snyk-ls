@@ -355,7 +355,11 @@ func (sc *Scanner) createBundle(ctx context.Context,
 		if ctx.Err() != nil {
 			return b, err // The cancellation error should be handled by the calling function
 		}
-		if !sc.BundleUploader.isSupported(span.Context(), absoluteFilePath) {
+		supported, err := sc.BundleUploader.isSupported(span.Context(), absoluteFilePath)
+		if err != nil {
+			return b, err
+		}
+		if !supported {
 			continue
 		}
 		fileContent, err := loadContent(absoluteFilePath)
