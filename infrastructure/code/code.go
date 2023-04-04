@@ -423,7 +423,7 @@ func (sc *Scanner) isSastEnabled() bool {
 		}
 		cmd, err := command.CreateFromCommandData(commandData, nil, nil)
 		if err != nil {
-			log.Error().Err(err).Str("method", "isSastEnabled").Msg("couldn't create open browser command")
+			sc.errorReporter.CaptureError(errors.Wrap(err, "couldn't create open browser command"))
 		} else {
 			actionCommandMap.Add(enableSnykCodeMessageActionItemTitle, cmd)
 		}

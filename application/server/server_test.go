@@ -800,7 +800,7 @@ func Test_CodeActionResolve_ShouldExecuteCommands(t *testing.T) {
 
 	expected := snyk.OpenBrowserCommand
 	serviceMock := snyk.NewCommandServiceMock()
-	command.SetServiceInstance(serviceMock)
+	command.SetService(serviceMock)
 
 	_, err = loc.Client.Call(ctx, "codeAction/resolve", lsp.CodeAction{
 		Title: "My super duper test action",

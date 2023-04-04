@@ -131,7 +131,7 @@ func (c *CodeActionsService) handleCommand(action lsp.CodeAction, server server.
 	if err != nil {
 		return lsp.CodeAction{}, err
 	}
-	err = command.ServiceInstance().ExecuteCommand(context.Background(), executableCmd)
+	err = command.Service().ExecuteCommand(context.Background(), executableCmd)
 	if err != nil {
 		return lsp.CodeAction{}, err
 	}

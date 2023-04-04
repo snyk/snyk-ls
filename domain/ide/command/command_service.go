@@ -29,27 +29,27 @@ var instance snyk.CommandService
 type serviceImpl struct {
 }
 
-// ResetServiceInstance resets the service instance to nil. This causes the next call to
-// ServiceInstance to create a new instance.
-func ResetServiceInstance() {
-	SetServiceInstance(nil)
+// ResetService resets the service instance to nil. This causes the next call to
+// Service to create a new instance.
+func ResetService() {
+	SetService(nil)
 }
 
-// SetServiceInstance sets the singleton instance of the command service.
-func SetServiceInstance(service snyk.CommandService) {
+// SetService sets the singleton instance of the command service.
+func SetService(service snyk.CommandService) {
 	instance = service
 }
 
-// ServiceInstance returns the singleton instance of the command service. If not already created,
+// Service returns the singleton instance of the command service. If not already created,
 // it will create a new instance.
-func ServiceInstance() snyk.CommandService {
+func Service() snyk.CommandService {
 	if instance == nil {
 		instance = &serviceImpl{}
 	}
 	return instance
 }
 
-// ExecuteCommand implements ServiceInstance
+// ExecuteCommand implements Service
 func (service *serviceImpl) ExecuteCommand(ctx context.Context, command snyk.Command) error {
 	log.Debug().Str(
 		"method",

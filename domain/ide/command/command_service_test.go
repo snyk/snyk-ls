@@ -38,7 +38,7 @@ func (command *TestCommand) Execute(_ context.Context) error {
 }
 
 func Test_ExecuteCommand(t *testing.T) {
-	service := ServiceInstance()
+	service := Service()
 	cmd := &TestCommand{}
 	_ = service.ExecuteCommand(context.Background(), cmd)
 	assert.True(t, cmd.executed)

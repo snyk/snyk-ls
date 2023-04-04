@@ -267,7 +267,7 @@ func TestShowMessageRequest(t *testing.T) {
 			t,
 			func() bool {
 				// verify that passed command is eventually executed
-				commandService := command.ServiceInstance()
+				commandService := command.Service()
 				commandServiceMock := commandService.(*snyk.CommandServiceMock)
 				return commandServiceMock.ExecutedCommands()[0].Command().CommandId == snyk.OpenBrowserCommand
 			},

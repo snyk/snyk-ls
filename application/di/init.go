@@ -143,7 +143,7 @@ func initApplication() {
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(w, fileWatcher)
-	command.ResetServiceInstance()
+	command.ResetService()
 }
 
 // TODO this is becoming a hot mess we need to unify integ. test strategies
@@ -183,7 +183,7 @@ func TestInit(t *testing.T) {
 		openSourceScanner,
 	)
 	hoverService = hover.NewDefaultService(analytics)
-	command.ResetServiceInstance()
+	command.ResetService()
 	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier) // don't use getters or it'll deadlock
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()

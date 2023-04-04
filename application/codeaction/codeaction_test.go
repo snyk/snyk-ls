@@ -199,7 +199,7 @@ func Test_ResolveCodeAction_CommandIsExecuted(t *testing.T) {
 	service := setupService()
 
 	id := lsp.CodeActionData(uuid.New())
-	command.SetServiceInstance(snyk.NewCommandServiceMock())
+	command.SetService(snyk.NewCommandServiceMock())
 
 	c := &sglsp.Command{
 		Title:   snyk.LoginCommand,
@@ -215,7 +215,7 @@ func Test_ResolveCodeAction_CommandIsExecuted(t *testing.T) {
 	_, err := service.ResolveCodeAction(ca, nil, nil)
 	assert.NoError(t, err, "command should be called without error")
 
-	serviceMock := command.ServiceInstance().(*snyk.CommandServiceMock)
+	serviceMock := command.Service().(*snyk.CommandServiceMock)
 	assert.Len(t, serviceMock.ExecutedCommands(), 1)
 	assert.Equal(t, serviceMock.ExecutedCommands()[0].Command().CommandId, c.Command)
 }

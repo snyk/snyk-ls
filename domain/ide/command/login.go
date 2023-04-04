@@ -42,7 +42,7 @@ func (cmd *loginCommand) Execute(ctx context.Context) error {
 		log.Err(err).Msg("Error on snyk.login command")
 		notification.SendError(err)
 	}
-	if token != "" {
+	if err == nil && token != "" {
 		log.Debug().Str("method", "loginCommand.Execute").
 			Str("hashed token", util.Hash([]byte(token))[0:16]).
 			Msgf("authentication successful, received token")
