@@ -45,6 +45,8 @@ func CreateFromCommandData(
 		return &logoutCommand{command: commandData, authService: authService}, nil
 	case snyk.TrustWorkspaceFoldersCommand:
 		return &trustWorkspaceFoldersCommand{command: commandData}, nil
+	case snyk.OAuthRefreshCommand:
+		return &oauthRefreshCommand{command: commandData, authService: authService}, nil
 	}
 	return nil, fmt.Errorf("unknown command %v", commandData)
 }
