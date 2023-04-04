@@ -36,10 +36,10 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 		// The context provided by the JSON-RPC server is cancelled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
-
 		method := "ExecuteCommandHandler"
 		log.Info().Str("method", method).Interface("command", params).Msg("RECEIVING")
 		defer log.Info().Str("method", method).Interface("command", params).Msg("SENDING")
+
 		commandData := snyk.CommandData{CommandId: params.Command, Arguments: params.Arguments, Title: params.Command}
 		cmd, err := command.CreateFromCommandData(commandData, srv, di.AuthenticationService())
 

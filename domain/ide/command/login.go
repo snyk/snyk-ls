@@ -23,6 +23,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type loginCommand struct {
@@ -35,10 +36,16 @@ func (cmd *loginCommand) Command() snyk.CommandData {
 }
 
 func (cmd *loginCommand) Execute(ctx context.Context) error {
-	_, err := cmd.authService.Authenticate(ctx)
+	log.Debug().Str("method", "loginCommand.Execute").Msgf("logging in")
+	token, err := cmd.authService.Authenticate(ctx)
 	if err != nil {
 		log.Err(err).Msg("Error on snyk.login command")
 		notification.SendError(err)
+	}
+	if token != "" {
+		log.Debug().Str("method", "loginCommand.Execute").
+			Str("hashed token", util.Hash([]byte(token))[0:16]).
+			Msgf("authentication successful, received token")
 	}
 	return err
 }

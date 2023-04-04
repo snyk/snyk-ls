@@ -19,6 +19,8 @@ package command
 import (
 	"context"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -42,6 +44,7 @@ func (cmd *trustWorkspaceFoldersCommand) Execute(_ context.Context) error {
 	trustedFolderPaths := config.CurrentConfig().TrustedFolders()
 	_, untrusted := workspace.Get().GetFolderTrust()
 	for _, folder := range untrusted {
+		log.Debug().Str("method", "trustWorkspaceFoldersCommand").Msgf("adding trusted folder %s", folder.Path())
 		trustedFolderPaths = append(trustedFolderPaths, folder.Path())
 	}
 

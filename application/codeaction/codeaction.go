@@ -121,6 +121,7 @@ func (c *CodeActionsService) ResolveCodeAction(action lsp.CodeAction, server ser
 }
 
 func (c *CodeActionsService) handleCommand(action lsp.CodeAction, server server.Server, authService snyk.AuthenticationService) (lsp.CodeAction, error) {
+	log.Info().Str("method", "codeaction.handleCommand").Msgf("handling command %s", action.Command.Command)
 	cmd := snyk.CommandData{
 		Title:     action.Command.Title,
 		CommandId: action.Command.Command,

@@ -19,6 +19,7 @@ package command
 import (
 	"context"
 
+	"github.com/rs/zerolog/log"
 	"github.com/snyk/go-application-framework/pkg/auth"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -33,6 +34,8 @@ func (cmd *openBrowserCommand) Command() snyk.CommandData {
 }
 
 func (cmd *openBrowserCommand) Execute(_ context.Context) error {
-	auth.OpenBrowser(cmd.command.Arguments[0].(string))
+	url := cmd.command.Arguments[0].(string)
+	log.Debug().Str("method", "openBrowserCommand.Execute").Msgf("opening browser url %s", url)
+	auth.OpenBrowser(url)
 	return nil
 }

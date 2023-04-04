@@ -19,6 +19,8 @@ package command
 import (
 	"context"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
@@ -41,5 +43,9 @@ func ServiceInstance() snyk.CommandService {
 
 // ExecuteCommand implements ServiceInstance
 func (service *serviceImpl) ExecuteCommand(ctx context.Context, command snyk.Command) error {
+	log.Debug().Str(
+		"method",
+		"command.serviceImpl.ExecuteCommand",
+	).Msgf("executing command %s", command.Command().CommandId)
 	return command.Execute(ctx)
 }
