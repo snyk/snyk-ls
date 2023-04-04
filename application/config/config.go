@@ -52,8 +52,8 @@ const (
 	FormatHtml            = "html"
 	FormatMd              = "md"
 	snykCodeTimeoutKey    = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
-	defaultSnykApiUrl     = "https://snyk.io/api"
-	defaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
+	DefaultSnykApiUrl     = "https://snyk.io/api"
+	DefaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
 	pathListSeparator     = string(os.PathListSeparator)
 	windows               = "windows"
 )
@@ -202,8 +202,8 @@ func New() *Config {
 	c.isSnykIacEnabled.Set(true)
 	c.manageBinariesAutomatically.Set(true)
 	c.logPath = ""
-	c.snykApiUrl = defaultSnykApiUrl
-	c.snykCodeApiUrl = defaultDeeproxyApiUrl
+	c.snykApiUrl = DefaultSnykApiUrl
+	c.snykCodeApiUrl = DefaultDeeproxyApiUrl
 	c.snykCodeAnalysisTimeout = snykCodeAnalysisTimeoutFromEnv()
 	c.token = ""
 	c.trustedFoldersFeatureEnabled = true
@@ -338,7 +338,7 @@ func (c *Config) SetCliSettings(settings *CliSettings) {
 
 func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 	if snykApiUrl == "" {
-		snykApiUrl = defaultSnykApiUrl
+		snykApiUrl = DefaultSnykApiUrl
 	}
 
 	if snykApiUrl != c.snykApiUrl {
@@ -350,16 +350,16 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 			log.Error().Err(err).Msg("Couldn't obtain Snyk Code API url from CLI endpoint.")
 		}
 
-		c.setSnykCodeApi(snykCodeApiUrl)
+		c.SetSnykCodeApi(snykCodeApiUrl)
 		c.Engine().GetConfiguration().Set(configuration.API_URL, c.SnykApi())
 		return true
 	}
 	return false
 }
 
-func (c *Config) setSnykCodeApi(snykCodeApiUrl string) {
+func (c *Config) SetSnykCodeApi(snykCodeApiUrl string) {
 	if snykCodeApiUrl == "" {
-		c.snykCodeApiUrl = defaultDeeproxyApiUrl
+		c.snykCodeApiUrl = DefaultDeeproxyApiUrl
 		return
 	}
 	c.snykCodeApiUrl = snykCodeApiUrl
@@ -478,7 +478,7 @@ func getCodeApiUrlFromCustomEndpoint(endpoint string) (string, error) {
 	}
 
 	if endpoint == "" {
-		return defaultDeeproxyApiUrl, nil
+		return DefaultDeeproxyApiUrl, nil
 	}
 
 	// Use Snyk API endpoint to determine deeproxy API URL
