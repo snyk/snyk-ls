@@ -252,7 +252,7 @@ func TestShowMessageRequest(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-
+		command.SetService(snyk.NewCommandServiceMock())
 		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
 		data, err := command.CreateFromCommandData(snyk.CommandData{CommandId: snyk.OpenBrowserCommand, Arguments: []any{"https://snyk.io"}}, nil, nil)
 		assert.NoError(t, err)
