@@ -19,7 +19,7 @@ package oss
 import (
 	"time"
 
-	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 type identifiers struct {

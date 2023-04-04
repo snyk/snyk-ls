@@ -39,7 +39,7 @@ func GetFor(filePath string) (lenses []sglsp.CodeLens) {
 	return lenses
 }
 
-func getCodeLensFromCommand(issue snyk.Issue, command snyk.Command) sglsp.CodeLens {
+func getCodeLensFromCommand(issue snyk.Issue, command snyk.CommandData) sglsp.CodeLens {
 	return sglsp.CodeLens{
 		Range: converter.ToRange(issue.Range),
 		Command: sglsp.Command{

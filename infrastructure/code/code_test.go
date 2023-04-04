@@ -625,9 +625,20 @@ func TestIsSastEnabled(t *testing.T) {
 			notification.DisposeListener()
 			config.CurrentConfig().SetSnykCodeEnabled(true)
 			apiClient.CodeEnabled = false
-			actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
+			actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
 
-			actionMap.Add(enableSnykCodeMessageActionItemTitle, command.NewOpenBrowserCommand(getCodeEnablementUrl()))
+			data, err := command.CreateFromCommandData(
+				snyk.CommandData{
+					Title:     snyk.OpenBrowserCommand,
+					CommandId: snyk.OpenBrowserCommand,
+					Arguments: []any{getCodeEnablementUrl()},
+				},
+				nil,
+				nil,
+			)
+			assert.NoError(t, err)
+
+			actionMap.Add(enableSnykCodeMessageActionItemTitle, data)
 			actionMap.Add(closeMessageActionItemTitle, nil)
 			expectedShowMessageRequest := snyk.ShowMessageRequest{
 				Message: codeDisabledInOrganisationMessageText,

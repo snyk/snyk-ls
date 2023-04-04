@@ -42,7 +42,7 @@ func createRuleLink() (u *url.URL) {
 	return u
 }
 
-func getCommands(dataflow []dataflowElement) (commands []snyk.Command) {
+func getCommands(dataflow []dataflowElement) (commands []snyk.CommandData) {
 	for _, element := range dataflow {
 		commands = append(commands, element.toCommand())
 	}

@@ -23,6 +23,7 @@ const (
 	notRecognizedOptionErrorCode       = 422
 	couldNotFindValidIacFilesErrorCode = 1010
 	failedToParseTerraform             = 1040
+	invalidYamlFileError               = 1022
 )
 
 var ignorableIacErrorCodes = map[int]bool{
@@ -32,6 +33,7 @@ var ignorableIacErrorCodes = map[int]bool{
 	// There are cases where there are no IAC files to scan, but
 	// IAC finds a random malformed JSON file and return an error.
 	invalidJsonFileErrorCodeErrorCode: true,
+	invalidYamlFileError:              true,
 
 	failedToParseInputErrorCode: true,
 

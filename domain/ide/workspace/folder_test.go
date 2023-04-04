@@ -27,11 +27,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/code"
-
+	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -39,25 +37,10 @@ import (
 
 func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
 	testutil.UnitTest(t)
-
-	filePath, folderPath := code.TempWorkdirWithVulnerabilities(t)
+	folderPath, filePath := "testFolderDir", "testPath"
 	scannerRecorder := snyk.NewTestScanner()
+
 	scannerRecorder.Issues = []snyk.Issue{NewMockIssue("1", filePath)}
-	f := NewFolder(folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), snyk.NewMockScanNotifier())
-	ctx := context.Background()
-
-	f.ScanFile(ctx, filePath)
-	f.ScanFile(ctx, filePath)
-
-	assert.Equal(t, 1, scannerRecorder.Calls())
-}
-
-// todo: unignore this test
-func Test_Scan_WhenCachedResultsButNoIssues_shouldNotReScan(t *testing.T) {
-	t.Skip("this feature is not implemented yet")
-	filePath, folderPath := code.TempWorkdirWithVulnerabilities(t)
-	scannerRecorder := snyk.NewTestScanner()
-	scannerRecorder.Issues = []snyk.Issue{}
 	f := NewFolder(folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), snyk.NewMockScanNotifier())
 	ctx := context.Background()
 
@@ -306,7 +289,7 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 	testutil.UnitTest(t)
 
 	// arrange
-	filePath, folderPath := code.TempWorkdirWithVulnerabilities(t)
+	filePath, folderPath := "test/path", "test"
 	criticalIssue := snyk.Issue{AffectedFilePath: filePath, Severity: snyk.Critical, Product: product.ProductOpenSource}
 	highIssue := snyk.Issue{AffectedFilePath: filePath, Severity: snyk.High, Product: product.ProductOpenSource}
 	mediumIssue := snyk.Issue{AffectedFilePath: filePath, Severity: snyk.Medium, Product: product.ProductOpenSource}

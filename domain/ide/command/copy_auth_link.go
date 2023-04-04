@@ -19,23 +19,32 @@ package command
 import (
 	"context"
 
+	"github.com/atotto/clipboard"
 	"github.com/rs/zerolog/log"
-	"github.com/snyk/go-application-framework/pkg/auth"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/notification"
 )
 
-type openBrowserCommand struct {
-	command snyk.CommandData
+type copyAuthLinkCommand struct {
+	command     snyk.CommandData
+	authService snyk.AuthenticationService
 }
 
-func (cmd *openBrowserCommand) Command() snyk.CommandData {
+func (cmd *copyAuthLinkCommand) Command() snyk.CommandData {
 	return cmd.command
 }
 
-func (cmd *openBrowserCommand) Execute(_ context.Context) error {
-	url := cmd.command.Arguments[0].(string)
-	log.Debug().Str("method", "openBrowserCommand.Execute").Msgf("opening browser url %s", url)
-	auth.OpenBrowser(url)
-	return nil
+func (cmd *copyAuthLinkCommand) Execute(ctx context.Context) error {
+	url := cmd.authService.Provider().AuthURL(ctx)
+	log.Debug().Str("method", "copyAuthLinkCommand.Execute").
+		Str("url", url).
+		Msgf("copying auth link to clipboard")
+	err := clipboard.WriteAll(url)
+
+	if err != nil {
+		log.Err(err).Msg("Error on snyk.copyAuthLink command")
+		notification.SendError(err)
+	}
+	return err
 }

@@ -74,7 +74,7 @@ func TestConfig_OrganizationFromEnv(t *testing.T) {
 	SetCurrentConfig(New())
 	CurrentConfig().clientSettingsFromEnv()
 
-	assert.Equal(t, "snyk-test-org", CurrentConfig().GetOrganization())
+	assert.Equal(t, "snyk-test-org", CurrentConfig().Organization())
 }
 
 func TestConfig_EnableTelemetryFromEnv(t *testing.T) {

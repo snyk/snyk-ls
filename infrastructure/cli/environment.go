@@ -23,7 +23,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/application/server/lsp"
+	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 const (
@@ -46,14 +46,14 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) (updat
 	updatedEnv = currentEnv
 
 	currentConfig := config.CurrentConfig()
-	organization := currentConfig.GetOrganization()
+	organization := currentConfig.Organization()
 	if organization != "" {
 		updatedEnv = append(updatedEnv, OrganizationEnvVar+"="+organization)
 	}
 
 	if appendToken {
 		// there can only be one - highlander principle
-		if currentConfig.GetAuthenticationMethod() == lsp.OAuthAuthentication {
+		if currentConfig.AuthenticationMethod() == lsp.OAuthAuthentication {
 			updatedEnv = append(updatedEnv, auth.CONFIG_KEY_OAUTH_TOKEN+"="+currentConfig.Token())
 			updatedEnv = append(updatedEnv, strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED+"=1"))
 		} else {

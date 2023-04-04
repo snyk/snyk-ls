@@ -48,7 +48,7 @@ func getSarifResponseJson(filePath string) string {
     {
       "files": 1,
       "isSupported": false,
-      "lang": "DIGITAL Command Language"
+      "lang": "DIGITAL CommandData Language"
     },
     {
       "files": 1,
@@ -604,7 +604,7 @@ func getSarifResponseJson(filePath string) string {
             {
               "files": 1,
               "isSupported": false,
-              "lang": "DIGITAL Command Language"
+              "lang": "DIGITAL CommandData Language"
             },
             {
               "files": 1,

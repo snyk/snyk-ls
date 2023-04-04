@@ -1,3 +1,11 @@
+package server
+
+import (
+	"context"
+
+	"github.com/creachadair/jrpc2"
+)
+
 /*
  * © 2023 Snyk Limited
  *
@@ -14,22 +22,7 @@
  * limitations under the License.
  */
 
-package snyk
-
-import "github.com/snyk/snyk-ls/internal/data_structure"
-
-type MessageAction string
-
-type MessageType int
-
-const (
-	Error   MessageType = 1
-	Warning MessageType = 2
-	Info    MessageType = 3
-)
-
-type ShowMessageRequest struct {
-	Message string                                             `json:"message"`
-	Type    MessageType                                        `json:"type"`
-	Actions *data_structure.OrderedMap[MessageAction, Command] `json:"actions"`
+type Server interface {
+	Notify(ctx context.Context, method string, params any) error
+	Callback(ctx context.Context, method string, params any) (*jrpc2.Response, error)
 }

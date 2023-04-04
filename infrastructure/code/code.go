@@ -348,15 +348,28 @@ const closeMessageActionItemTitle snyk.MessageAction = "Close"
 
 func (sc *Scanner) isSastEnabled() bool {
 	sastEnabled, localCodeEngineEnabled, _, err := sc.SnykApiClient.SastEnabled()
+	method := "isSastEnabled"
 	if err != nil {
-		log.Error().Err(err).Str("method", "isSastEnabled").Msg("couldn't get sast enablement")
+		log.Error().Err(err).Str("method", method).Msg("couldn't get sast enablement")
 		sc.errorReporter.CaptureError(err)
 		return false
 	}
 	if !sastEnabled {
 		// this is processed in the listener registered to translate into the right client protocol
-		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandInterface]()
-		actionCommandMap.Add(enableSnykCodeMessageActionItemTitle, command.NewOpenBrowserCommand(getCodeEnablementUrl()))
+		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
+		commandData := snyk.CommandData{
+			Title:     snyk.OpenBrowserCommand,
+			CommandId: snyk.OpenBrowserCommand,
+			Arguments: []any{getCodeEnablementUrl()},
+		}
+		cmd, err := command.CreateFromCommandData(commandData, nil, nil)
+		if err != nil {
+			message := "couldn't create open browser command"
+			log.Err(err).Str("method", method).Msg(message)
+			sc.errorReporter.CaptureError(errors.Wrap(err, message))
+		} else {
+			actionCommandMap.Add(enableSnykCodeMessageActionItemTitle, cmd)
+		}
 		actionCommandMap.Add(closeMessageActionItemTitle, nil)
 
 		notification.Send(snyk.ShowMessageRequest{

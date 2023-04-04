@@ -40,9 +40,9 @@ import (
 	"github.com/subosito/gotenv"
 	"github.com/xtgo/uuid"
 
-	"github.com/snyk/snyk-ls/application/server/lsp"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/concurrency"
+	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -56,7 +56,6 @@ const (
 	defaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
 	pathListSeparator     = string(os.PathListSeparator)
 	windows               = "windows"
-	govDomain             = "snykgov.io"
 )
 
 var (
@@ -342,10 +341,6 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 		snykApiUrl = defaultSnykApiUrl
 	}
 
-	if strings.Contains(snykApiUrl, govDomain) {
-		c.authenticationMethod = "oauth"
-	}
-
 	if snykApiUrl != c.snykApiUrl {
 		c.snykApiUrl = snykApiUrl
 
@@ -541,7 +536,7 @@ func (c *Config) configFiles() []string {
 	return append(files, stdFiles...)
 }
 
-func (c *Config) GetOrganization() string {
+func (c *Config) Organization() string {
 	return c.organization
 }
 
@@ -637,7 +632,7 @@ func (c *Config) SetTrustedFolders(folderPaths []string) {
 	c.trustedFolders = folderPaths
 }
 
-func (c *Config) GetDisplayableIssueTypes() map[product.FilterableIssueType]bool {
+func (c *Config) DisplayableIssueTypes() map[product.FilterableIssueType]bool {
 	enabled := make(map[product.FilterableIssueType]bool)
 	enabled[product.FilterableIssueTypeOpenSource] = c.IsSnykOssEnabled()
 
@@ -708,7 +703,7 @@ func (c *Config) SetAuthenticationMethod(method lsp.AuthenticationMethod) {
 	c.authenticationMethod = method
 }
 
-func (c *Config) GetAuthenticationMethod() lsp.AuthenticationMethod {
+func (c *Config) AuthenticationMethod() lsp.AuthenticationMethod {
 	return c.authenticationMethod
 }
 

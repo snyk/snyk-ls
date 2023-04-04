@@ -429,8 +429,8 @@ func parseIacIssuePath(path []any) ([]string, error) {
 	return pathTokens, nil
 }
 
-func newIacCommand(codeActionTitle string, issueURL *url.URL) *snyk.Command {
-	command := &snyk.Command{
+func newIacCommand(codeActionTitle string, issueURL *url.URL) *snyk.CommandData {
+	command := &snyk.CommandData{
 		Title:     codeActionTitle,
 		CommandId: snyk.OpenBrowserCommand,
 		Arguments: []any{issueURL.String()},
