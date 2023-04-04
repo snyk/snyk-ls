@@ -361,5 +361,9 @@ func (f *Folder) sendScanResults(processedProduct product.Product, issuesByFile 
 		productIssues = append(productIssues, issues...)
 	}
 
-	f.scanNotifier.SendSuccess(f.Path(), productIssues)
+	if processedProduct != "" {
+		f.scanNotifier.SendSuccess(processedProduct, f.Path(), productIssues)
+	} else {
+		f.scanNotifier.SendSuccessForAllProducts(f.Path(), productIssues)
+	}
 }

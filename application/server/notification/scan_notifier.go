@@ -38,14 +38,19 @@ func (n *scanNotifier) SendError(pr product.Product, folderPath string) {
 	)
 }
 
-// Sends scan success message for all enabled products
-func (n *scanNotifier) SendSuccess(folderPath string, issues []snyk.Issue) {
-	productIssues := make(map[product.Product][]snyk.Issue)
-
-	// if no issues found, we still should send success message for all enabled products
-	for pr := range enabledProducts {
-		productIssues[pr] = make([]snyk.Issue, 0)
+// Reports success for all enabled products
+func (n *scanNotifier) SendSuccessForAllProducts(folderPath string, issues []snyk.Issue) {
+	for product, enabled := range enabledProducts {
+		if enabled {
+			n.sendSuccess(product, folderPath, issues)
+		}
 	}
+}
+
+// Sends scan success message for a single enabled product
+func (n *scanNotifier) SendSuccess(reportedProduct product.Product, folderPath string, issues []snyk.Issue) {
+	// If no issues found, we still should send success message the reported product
+	productIssues := make([]snyk.Issue, 0)
 
 	for _, issue := range issues {
 		product := issue.Product
@@ -54,12 +59,10 @@ func (n *scanNotifier) SendSuccess(folderPath string, issues []snyk.Issue) {
 			continue // skip disabled products
 		}
 
-		productIssues[product] = append(productIssues[product], issue)
+		productIssues = append(productIssues, issue)
 	}
 
-	for pr, issues := range productIssues {
-		n.sendSuccess(pr, folderPath, issues)
-	}
+	n.sendSuccess(reportedProduct, folderPath, productIssues)
 }
 
 func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues []snyk.Issue) {
