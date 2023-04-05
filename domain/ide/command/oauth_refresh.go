@@ -30,6 +30,9 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
+// oauthRefreshCommand is a command that refreshes the oauth token
+// This is needed because the token is only valid for a certain period of time
+// For doing this we call the whoami workflow that will refresh the token automatically
 type oauthRefreshCommand struct {
 	command     snyk.CommandData
 	authService snyk.AuthenticationService
@@ -49,9 +52,9 @@ func (cmd *oauthRefreshCommand) Execute(_ context.Context) error {
 	oldToken := c.Token()
 
 	log.Debug().Str("method", "oauthRefreshCommand.Execute").Msgf("calling whoami workflow")
-	conf := c.Engine().GetConfiguration()
+	conf := c.Engine().GetConfiguration().Clone()
 	conf.Set("experimental", true)
-	_, err := c.Engine().Invoke(localworkflows.WORKFLOWID_WHOAMI)
+	_, err := c.Engine().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, conf)
 	if err != nil {
 		return errors.Wrap(err, "failed to invoke whoami workflow")
 	}
