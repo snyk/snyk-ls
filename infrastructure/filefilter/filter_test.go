@@ -39,8 +39,8 @@ func Test_FindNonIgnoredFiles(t *testing.T) {
 			repoPath:          t.TempDir(),
 			ignoreFilePath:    ".gitignore",
 			ignoreFileContent: "*.java\n",
-			expectedFiles:     []string{},
-			expectedExcludes:  []string{"file1.java", "file2.java"},
+			expectedFiles:     []string{"file1.js", "path/to/file2.js"},
+			expectedExcludes:  []string{"file1.java", "file2.java", "path/to/file3.java"},
 		},
 		{
 			name:           "Respects .snyk ignore rules",
