@@ -30,6 +30,7 @@ const (
 	CopyAuthLinkCommand          = "snyk.copyAuthLink"
 	LogoutCommand                = "snyk.logout"
 	TrustWorkspaceFoldersCommand = "snyk.trustWorkspaceFolders"
+	OAuthRefreshCommand          = "snyk.oauthRefreshCommand"
 )
 
 type Command interface {
@@ -68,7 +69,7 @@ func NewCommandServiceMock() *CommandServiceMock {
 	return &CommandServiceMock{}
 }
 
-func (service *CommandServiceMock) ExecuteCommand(ctx context.Context, command Command) error {
+func (service *CommandServiceMock) ExecuteCommand(_ context.Context, command Command) error {
 	service.m.Lock()
 	service.executedCommands = append(service.executedCommands, command)
 	service.m.Unlock()

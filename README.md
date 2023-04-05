@@ -99,31 +99,33 @@ Right now the language server supports the following actions:
   ```
 
 ### Commands
-- NavigateToRangeCommand
+- NavigateToRangeCommand navigates the client to the given range
   - command: "snyk.navigateToRange"
   - args: path, Range
-- WorkspaceScanCommand
+- WorkspaceScanCommand triggers a scan of all workspace folders
   - command: "snyk.workspace.scan"
   - args: empty
-- WorkspaceFolderScanCommand
+- WorkspaceFolderScanCommand triggers a scan of the given workspace folder
   - command: "snyk.workspaceFolder.scan"
   - args: path
-- OpenBrowserCommand
+- OpenBrowserCommand opens the given URL in the default browser
   - command: "snyk.openBrowser"
   - args: URL
-- LoginCommand
+- LoginCommand triggers the login process
   - command: "snyk.login"
   - args: empty
-- CopyAuthLinkCommand
+- CopyAuthLinkCommand copies the authentication URL to the clipboard
   - command: "snyk.copyAuthLink"
   - args: empty
-- LogoutCommand
+- LogoutCommand triggers the logout process
   - command: "snyk.logout"
   - args: empty
-- TrustWorkspaceFoldersCommand
+- TrustWorkspaceFoldersCommand checks for trusted workspace folders and asks for trust if necessary
   - command: "snyk.trustWorkspaceFolders"
   - args: empty
-
+- OAuthRefreshCommand triggers a Snyk API call to refresh the oauth token
+  - command: "snyk.oauthRefreshCommand"
+  - args: empty
 ## Installation
 
 ### Download

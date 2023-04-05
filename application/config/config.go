@@ -35,6 +35,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/subosito/gotenv"
@@ -213,12 +214,20 @@ func New() *Config {
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = lsp.DefaultSeverityFilter()
-	c.engine = app.CreateAppEngine()
+	initWorkFlowEngine(c)
 	err := c.engine.Init()
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to initialize workflow engine")
 	}
 	return c
+}
+
+func initWorkFlowEngine(c *Config) {
+	c.engine = app.CreateAppEngine()
+	err := localworkflows.InitWhoAmIWorkflow(c.engine)
+	if err != nil {
+		log.Err(err).Msg("Failed to initialize WhoAmI workflow")
+	}
 }
 
 func (c *Config) AddBinaryLocationsToPath(searchDirectories []string) {
@@ -709,4 +718,8 @@ func (c *Config) AuthenticationMethod() lsp.AuthenticationMethod {
 
 func (c *Config) Engine() workflow.Engine {
 	return c.engine
+}
+
+func (c *Config) SetEngine(engine workflow.Engine) {
+	c.engine = engine
 }
