@@ -45,6 +45,7 @@ var sampleSettings = lsp.Settings{
 	Path:                   "addPath",
 	SendErrorReports:       "true",
 	Token:                  "token",
+	SnykCodeApi:            "https://deeproxy.fake.snyk.io",
 }
 
 func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
@@ -75,6 +76,7 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	assert.True(t, strings.Contains(os.Getenv("PATH"), "addPath"))
 	assert.True(t, config.CurrentConfig().IsErrorReportingEnabled())
 	assert.Equal(t, "token", config.CurrentConfig().Token())
+	assert.Equal(t, sampleSettings.SnykCodeApi, config.CurrentConfig().SnykCodeApi())
 }
 
 func callBackMock(_ context.Context, request *jrpc2.Request) (any, error) {
@@ -120,6 +122,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	assert.Equal(t, c.SnykApi(), conf.GetString(configuration.API_URL))
 	assert.True(t, config.CurrentConfig().IsErrorReportingEnabled())
 	assert.Equal(t, "token", config.CurrentConfig().Token())
+	assert.Equal(t, sampleSettings.SnykCodeApi, config.CurrentConfig().SnykCodeApi())
 }
 
 func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
@@ -173,6 +176,8 @@ func Test_UpdateSettings(t *testing.T) {
 			RuntimeName:                 "java",
 			RuntimeVersion:              "1.8.0_275",
 			ScanningMode:                "manual",
+			AuthenticationMethod:        lsp.OAuthAuthentication,
+			SnykCodeApi:                 sampleSettings.SnykCodeApi,
 		}
 
 		UpdateSettings(settings)
@@ -200,6 +205,17 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, settings.RuntimeName, c.RuntimeName())
 		assert.Equal(t, settings.RuntimeVersion, c.RuntimeVersion())
 		assert.False(t, c.IsAutoScanEnabled())
+		assert.Equal(t, lsp.OAuthAuthentication, c.AuthenticationMethod())
+		assert.Equal(t, sampleSettings.SnykCodeApi, c.SnykCodeApi())
+	})
+
+	t.Run("empty snyk code api is ignored and default is used", func(t *testing.T) {
+		config.SetCurrentConfig(config.New())
+
+		UpdateSettings(lsp.Settings{})
+
+		c := config.CurrentConfig()
+		assert.Equal(t, config.DefaultDeeproxyApiUrl, c.SnykCodeApi())
 	})
 
 	t.Run("blank organisation is ignored", func(t *testing.T) {

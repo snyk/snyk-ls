@@ -165,7 +165,7 @@ func (f *FakeSnykCodeClient) GetAllCalls(op string) [][]any {
 }
 
 func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (
-	filters filtersResponse,
+	filters FiltersResponse,
 	err error,
 ) {
 	FakeSnykCodeApiServiceMutex.Lock()
@@ -175,7 +175,7 @@ func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (
 		filters.AutofixExtensions,
 		err}
 	f.addCall(params, GetFiltersOperation)
-	return filtersResponse{ConfigFiles: f.ConfigFiles,
+	return FiltersResponse{ConfigFiles: f.ConfigFiles,
 		Extensions:        FakeFilters,
 		AutofixExtensions: FakeAutofixFilters,
 	}, nil
@@ -225,7 +225,7 @@ var successfulResult = AnalysisStatus{
 func (f *FakeSnykCodeClient) RunAnalysis(
 	_ context.Context,
 	options AnalysisOptions,
-	baseDir string,
+	_ string,
 ) ([]snyk.Issue, AnalysisStatus, error) {
 
 	FakeSnykCodeApiServiceMutex.Lock()

@@ -298,6 +298,7 @@ type Settings struct {
 	RuntimeName                 string               `json:"runtimeName,omitempty"`
 	ScanningMode                string               `json:"scanningMode,omitempty"`
 	AuthenticationMethod        AuthenticationMethod `json:"authenticationMethod,omitempty"`
+	SnykCodeApi                 string               `json:"snykCodeApi,omitempty"`
 }
 
 type AuthenticationMethod string
