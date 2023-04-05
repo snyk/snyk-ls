@@ -12,11 +12,10 @@ import (
 )
 
 func FindNonIgnoredFiles(rootFolder string) <-chan string {
-	return newRepoIgnoresFilter(rootFolder).
-		findNonIgnoredFiles()
+	return newFileFilter(rootFolder).findNonIgnoredFiles()
 }
 
-type repoIgnoresFilter struct {
+type fileFilter struct {
 	// The path to the root of the repository
 	repoRoot               string
 	ignoreFiles            []string
@@ -24,8 +23,8 @@ type repoIgnoresFilter struct {
 	ignoreCheckerPerFolder map[string]ignore.IgnoreParser
 }
 
-func newRepoIgnoresFilter(rootFolder string) *repoIgnoresFilter {
-	return &repoIgnoresFilter{
+func newFileFilter(rootFolder string) *fileFilter {
+	return &fileFilter{
 		repoRoot:               rootFolder,
 		ignoreFiles:            []string{".gitignore", ".dcignore", ".snyk"},
 		globsPerFolder:         make(map[string][]string),
@@ -33,7 +32,7 @@ func newRepoIgnoresFilter(rootFolder string) *repoIgnoresFilter {
 	}
 }
 
-func (f *repoIgnoresFilter) findNonIgnoredFiles() <-chan string {
+func (f *fileFilter) findNonIgnoredFiles() <-chan string {
 	resultsCh := make(chan string)
 	var wg sync.WaitGroup
 	go func() {
@@ -91,7 +90,7 @@ func (f *repoIgnoresFilter) findNonIgnoredFiles() <-chan string {
 	return resultsCh
 }
 
-func (f *repoIgnoresFilter) collectGlobs(path string) []string {
+func (f *fileFilter) collectGlobs(path string) []string {
 	var globs []string
 	if path != f.repoRoot {
 		globs = append(globs, f.globsPerFolder[filepath.Dir(path)]...)
