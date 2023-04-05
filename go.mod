@@ -8,6 +8,7 @@ require (
 	github.com/creachadair/jrpc2 v1.0.0
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/getsentry/sentry-go v0.19.0
+	github.com/golang/mock v1.6.0
 	github.com/gomarkdown/markdown v0.0.0-20230322041520-c84983bdbf2a
 	github.com/google/uuid v1.3.0
 	github.com/pact-foundation/pact-go v1.7.0
@@ -17,7 +18,7 @@ require (
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/segmentio/analytics-go v3.1.0+incompatible
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/snyk/go-application-framework v0.0.0-20230404140303-619207af7ffe
+	github.com/snyk/go-application-framework v0.0.0-20230404151513-a84c81d317c6
 	github.com/sourcegraph/go-lsp v0.0.0-20200429204803-219e11d77f5d
 	github.com/stretchr/testify v1.8.1
 	github.com/subosito/gotenv v1.4.2
@@ -30,7 +31,6 @@ require (
 
 require (
 	github.com/alexbrainman/sspi v0.0.0-20210105120005-909beea2cc74 // indirect
-	github.com/golang/mock v1.6.0 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
