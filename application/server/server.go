@@ -219,6 +219,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 						snyk.CopyAuthLinkCommand,
 						snyk.LogoutCommand,
 						snyk.TrustWorkspaceFoldersCommand,
+						snyk.OAuthRefreshCommand,
 					},
 				},
 			},

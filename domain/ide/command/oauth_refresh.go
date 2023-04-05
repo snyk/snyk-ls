@@ -42,8 +42,12 @@ func (cmd *oauthRefreshCommand) Command() snyk.CommandData {
 
 func (cmd *oauthRefreshCommand) Execute(_ context.Context) error {
 	c := config.CurrentConfig()
-	oldToken := c.Token()
+	if c.AuthenticationMethod() != lsp.OAuthAuthentication {
+		log.Debug().Str("method", "oauthRefreshCommand.Execute").Msg("authentication method is token, no refresh needed")
+		return nil
+	}
 
+	oldToken := c.Token()
 	conf := c.Engine().GetConfiguration()
 	conf.Set("experimental", true)
 
