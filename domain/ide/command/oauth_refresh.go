@@ -22,7 +22,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/snyk/go-application-framework/pkg/auth"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -48,20 +47,17 @@ func (cmd *oauthRefreshCommand) Execute(_ context.Context) error {
 	}
 
 	oldToken := c.Token()
-	conf := c.Engine().GetConfiguration()
-	conf.Set("experimental", true)
 
 	log.Debug().Str("method", "oauthRefreshCommand.Execute").Msgf("calling whoami workflow")
+	conf := c.Engine().GetConfiguration()
+	conf.Set("experimental", true)
 	_, err := c.Engine().Invoke(localworkflows.WORKFLOWID_WHOAMI)
 	if err != nil {
 		return errors.Wrap(err, "failed to invoke whoami workflow")
 	}
-	var token string
-	if c.AuthenticationMethod() == lsp.OAuthAuthentication {
-		token = conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN)
-	} else {
-		token = conf.GetString(configuration.AUTHENTICATION_TOKEN)
-	}
+
+	// retrieve refreshed token and update credentials
+	token := conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN)
 
 	if oldToken != token {
 		log.Debug().Str("method", "oauthRefreshCommand.Execute").

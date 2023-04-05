@@ -55,6 +55,7 @@ func Test_oauthRefreshCommand_Execute_SameTokenNoUpdate(t *testing.T) {
 	}
 
 	c := config.CurrentConfig()
+	c.SetAuthenticationMethod(lsp.OAuthAuthentication)
 	ctrl := gomock.NewController(t)
 	mockEngine := mocks.NewMockEngine(ctrl)
 	mockEngine.EXPECT().GetConfiguration().Return(c.Engine().GetConfiguration()).AnyTimes()
