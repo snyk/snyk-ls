@@ -36,6 +36,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/float"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -156,9 +157,12 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
 	// Start the scan
-	filesCh := filefilter.FindNonIgnoredFiles(folderPath)
+	t := progress.NewTracker(false)
+	t.Begin("Snyk Code: Enumerating files in "+folderPath, "Evaluating ignores and counting files...")
+	files := filefilter.FindNonIgnoredFiles(folderPath)
+	t.End("Collected files")
 	metrics := sc.newMetrics(startTime)
-	results, err := sc.UploadAndAnalyze(span.Context(), filesCh, folderPath, metrics, changedFiles)
+	results, err := sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
 
 	return results, err
 }
