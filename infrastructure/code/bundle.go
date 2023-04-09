@@ -97,14 +97,14 @@ func getIssueLangAndRuleId(issue snyk.Issue) (string, string, bool) {
 
 // isAutofixSupportedForExtension shall call `GetFilters` if necessary and cache the results
 // in the `codeSettings` singleton.
-func (b *Bundle) isAutofixSupportedForExtension(ctx context.Context, file string) bool {
+func (b *Bundle) isAutofixSupportedForExtension(ctx context.Context, file string) (bool, error) {
 	if getCodeSettings().autofixExtensions == nil {
 		// TODO: together with the endpoint redesign, this should use not the same `/filters` endpoint
 		// as the analysis one. Autofix should have a separate one.
 		filters, err := b.SnykCode.GetFilters(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("could not get filters")
-			return false
+			return false, err
 		}
 
 		// It's not a mistake to have `..IfNotSet` here, because between the `GetFilters` and here
@@ -114,7 +114,7 @@ func (b *Bundle) isAutofixSupportedForExtension(ctx context.Context, file string
 
 	supported := getCodeSettings().autofixExtensions.Get(filepath.Ext(file))
 
-	return supported != nil && supported.(bool)
+	return supported != nil && supported.(bool), nil
 }
 
 func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
@@ -165,7 +165,12 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 				for i := range issues {
 					// We only allow the issues whose file extensions are supported by the
 					// backend.
-					if !b.isAutofixSupportedForExtension(ctx, issues[i].AffectedFilePath) {
+					supported, err := b.isAutofixSupportedForExtension(ctx, issues[i].AffectedFilePath)
+					if err != nil {
+						return []snyk.Issue{}, err
+					}
+
+					if !supported {
 						continue
 					}
 					issues[i].CodeActions = append(issues[i].CodeActions, *b.createDeferredAutofixCodeAction(ctx, issues[i]))

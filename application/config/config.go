@@ -35,6 +35,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/subosito/gotenv"
@@ -52,8 +53,8 @@ const (
 	FormatHtml            = "html"
 	FormatMd              = "md"
 	snykCodeTimeoutKey    = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
-	defaultSnykApiUrl     = "https://snyk.io/api"
-	defaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
+	DefaultSnykApiUrl     = "https://snyk.io/api"
+	DefaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
 	pathListSeparator     = string(os.PathListSeparator)
 	windows               = "windows"
 )
@@ -202,8 +203,8 @@ func New() *Config {
 	c.isSnykIacEnabled.Set(true)
 	c.manageBinariesAutomatically.Set(true)
 	c.logPath = ""
-	c.snykApiUrl = defaultSnykApiUrl
-	c.snykCodeApiUrl = defaultDeeproxyApiUrl
+	c.snykApiUrl = DefaultSnykApiUrl
+	c.snykCodeApiUrl = DefaultDeeproxyApiUrl
 	c.snykCodeAnalysisTimeout = snykCodeAnalysisTimeoutFromEnv()
 	c.token = ""
 	c.trustedFoldersFeatureEnabled = true
@@ -213,12 +214,20 @@ func New() *Config {
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = lsp.DefaultSeverityFilter()
-	c.engine = app.CreateAppEngine()
+	initWorkFlowEngine(c)
 	err := c.engine.Init()
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to initialize workflow engine")
 	}
 	return c
+}
+
+func initWorkFlowEngine(c *Config) {
+	c.engine = app.CreateAppEngine()
+	err := localworkflows.InitWhoAmIWorkflow(c.engine)
+	if err != nil {
+		log.Err(err).Msg("Failed to initialize WhoAmI workflow")
+	}
 }
 
 func (c *Config) AddBinaryLocationsToPath(searchDirectories []string) {
@@ -338,7 +347,7 @@ func (c *Config) SetCliSettings(settings *CliSettings) {
 
 func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 	if snykApiUrl == "" {
-		snykApiUrl = defaultSnykApiUrl
+		snykApiUrl = DefaultSnykApiUrl
 	}
 
 	if snykApiUrl != c.snykApiUrl {
@@ -350,16 +359,16 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 			log.Error().Err(err).Msg("Couldn't obtain Snyk Code API url from CLI endpoint.")
 		}
 
-		c.setSnykCodeApi(snykCodeApiUrl)
+		c.SetSnykCodeApi(snykCodeApiUrl)
 		c.Engine().GetConfiguration().Set(configuration.API_URL, c.SnykApi())
 		return true
 	}
 	return false
 }
 
-func (c *Config) setSnykCodeApi(snykCodeApiUrl string) {
+func (c *Config) SetSnykCodeApi(snykCodeApiUrl string) {
 	if snykCodeApiUrl == "" {
-		c.snykCodeApiUrl = defaultDeeproxyApiUrl
+		c.snykCodeApiUrl = DefaultDeeproxyApiUrl
 		return
 	}
 	c.snykCodeApiUrl = snykCodeApiUrl
@@ -478,7 +487,7 @@ func getCodeApiUrlFromCustomEndpoint(endpoint string) (string, error) {
 	}
 
 	if endpoint == "" {
-		return defaultDeeproxyApiUrl, nil
+		return DefaultDeeproxyApiUrl, nil
 	}
 
 	// Use Snyk API endpoint to determine deeproxy API URL
@@ -709,4 +718,8 @@ func (c *Config) AuthenticationMethod() lsp.AuthenticationMethod {
 
 func (c *Config) Engine() workflow.Engine {
 	return c.engine
+}
+
+func (c *Config) SetEngine(engine workflow.Engine) {
+	c.engine = engine
 }

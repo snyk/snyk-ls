@@ -212,8 +212,8 @@ func updateToken(token string) {
 }
 func updateApiEndpoints(settings lsp.Settings, initialization bool) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
-	currentConfig := config.CurrentConfig()
-	endpointsUpdated := currentConfig.UpdateApiEndpoints(snykApiUrl)
+	c := config.CurrentConfig()
+	endpointsUpdated := c.UpdateApiEndpoints(snykApiUrl)
 
 	if endpointsUpdated && !initialization {
 		di.AuthenticationService().Logout(context.Background())
@@ -223,6 +223,11 @@ func updateApiEndpoints(settings lsp.Settings, initialization bool) {
 	if strings.Contains(snykApiUrl, govDomain) {
 		settings.AuthenticationMethod = lsp.OAuthAuthentication
 		updateAuthenticationMethod(settings)
+	}
+
+	// a custom set snyk code api (e.g. for testing) always overwrites automatic config
+	if settings.SnykCodeApi != "" {
+		c.SetSnykCodeApi(settings.SnykCodeApi)
 	}
 }
 
