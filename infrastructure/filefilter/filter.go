@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	ignore "github.com/sabhiram/go-gitignore"
 	"gopkg.in/yaml.v3"
@@ -21,6 +22,7 @@ type fileFilter struct {
 	ignoreFiles            []string
 	globsPerFolder         map[string][]string
 	ignoreCheckerPerFolder map[string]ignore.IgnoreParser
+	logger                 zerolog.Logger
 }
 
 func newFileFilter(rootFolder string) *fileFilter {
@@ -29,6 +31,7 @@ func newFileFilter(rootFolder string) *fileFilter {
 		ignoreFiles:            []string{".gitignore", ".dcignore", ".snyk"},
 		globsPerFolder:         make(map[string][]string),
 		ignoreCheckerPerFolder: make(map[string]ignore.IgnoreParser),
+		logger:                 log.With().Str("component", "fileFilter").Str("repoRoot", rootFolder).Logger(),
 	}
 }
 
@@ -41,7 +44,11 @@ func (f *fileFilter) findNonIgnoredFiles() <-chan string {
 		// The ignore files are immediately parsed, and the iterations of the files come after the ignore rules have been loaded
 		err := filepath.WalkDir(f.repoRoot, func(path string, dirEntry os.DirEntry, err error) error {
 			if err != nil {
-				return filepath.SkipAll
+				// err is not nil only when d is a directory that coult not be read,
+				// so a message is logged and the directory is skipped.
+				f.logger.Err(err).Msg("Error during file traversal of directory \"" + path + "\"\n" +
+					"Skipping Directory")
+				return filepath.SkipDir
 			}
 			if dirEntry == nil {
 				return nil
@@ -83,7 +90,7 @@ func (f *fileFilter) findNonIgnoredFiles() <-chan string {
 		wg.Wait()
 
 		if err != nil {
-			log.Err(err).Msg("Error during filepath.WalkDir")
+			f.logger.Err(err).Msg("Error during filepath.WalkDir")
 		}
 	}()
 
@@ -107,13 +114,13 @@ func (f *fileFilter) collectGlobs(path string) []string {
 			var content []byte
 			content, err = os.ReadFile(ignoreFilePath)
 			if err != nil {
-				log.Err(err).Msg("Can't parse ignore file" + ignoreFilePath)
+				f.logger.Err(err).Msg("Can't parse ignore file" + ignoreFilePath)
 			}
 			if filepath.Base(ignoreFilePath) == ".snyk" { // .snyk files are yaml files and should be parsed differently
 				parsedRules, err := parseDotSnykFile(content, f.repoRoot)
 				globs = append(globs, parsedRules...)
 				if err != nil {
-					log.Err(err).Msg("Can't parse .snyk file")
+					f.logger.Err(err).Msg("Can't parse .snyk file")
 				}
 			} else { // .gitignore, .dcignore, etc. are just a list of ignore rules
 				parsedRules := parseIgnoreFile(content, f.repoRoot)
