@@ -159,7 +159,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 
 	// Start the scan
 	t := progress.NewTracker(false)
-	t.Begin("Snyk Code: Enumerating files in "+folderPath, "Evaluating ignores and counting files...")
+	t.Begin("Snyk Code: Collecting files in \""+folderPath+"\"", "Evaluating ignores and counting files...")
 	files := filefilter.FindNonIgnoredFiles(folderPath)
 	t.End("Collected files")
 	metrics := sc.newMetrics(startTime)
