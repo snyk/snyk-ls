@@ -19,7 +19,6 @@ package code
 import (
 	"context"
 	"math"
-	"os"
 	"path/filepath"
 
 	"github.com/puzpuzpuz/xsync"
@@ -144,11 +143,6 @@ func (b *BundleUploader) isSupported(ctx context.Context, file string) bool {
 	_, isSupportedConfigFile := b.supportedConfigFiles.Load(fileName)
 
 	return isSupportedExtension || isSupportedConfigFile
-}
-
-func loadContent(filePath string) ([]byte, error) {
-	fileContent, err := os.ReadFile(filePath)
-	return fileContent, err
 }
 
 func getFileFrom(filePath string, content []byte) BundleFile {

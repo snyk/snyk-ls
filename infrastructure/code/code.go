@@ -18,6 +18,7 @@ package code
 
 import (
 	"context"
+	"os"
 	"sync"
 	"time"
 
@@ -299,7 +300,7 @@ func (sc *Scanner) createBundle(ctx context.Context,
 		if !sc.BundleUploader.isSupported(span.Context(), absoluteFilePath) {
 			continue
 		}
-		fileContent, err := loadContent(absoluteFilePath)
+		fileContent, err := os.ReadFile(absoluteFilePath)
 		if err != nil {
 			log.Error().Err(err).Str("filePath", absoluteFilePath).Msg("could not load content of file")
 			continue
