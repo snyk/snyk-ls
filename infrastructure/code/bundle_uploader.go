@@ -115,7 +115,7 @@ func (b *BundleUploader) groupInBatches(
 	return batches
 }
 
-func (b *BundleUploader) isSupported(ctx context.Context, file string) bool {
+func (b *BundleUploader) IsSupported(ctx context.Context, file string) bool {
 	if b.supportedExtensions.Size() == 0 && b.supportedConfigFiles.Size() == 0 {
 
 		filters, err := b.SnykCode.GetFilters(ctx)
