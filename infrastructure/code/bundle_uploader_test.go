@@ -96,20 +96,20 @@ func Test_IsSupportedLanguage(t *testing.T) {
 
 	t.Run("should return true for supported languages", func(t *testing.T) {
 		path := "C:\\some\\path\\Test.java"
-		supported := bundler.IsSupported(context.Background(), path)
+		supported, _ := bundler.isSupported(context.Background(), path)
 		assert.True(t, supported)
 	})
 
 	t.Run("should return false for unsupported languages", func(t *testing.T) {
 		path := unsupportedFile
-		supported := bundler.IsSupported(context.Background(), path)
+		supported, _ := bundler.isSupported(context.Background(), path)
 		assert.False(t, supported)
 	})
 
 	t.Run("should cache supported extensions", func(t *testing.T) {
 		path := unsupportedFile
-		bundler.IsSupported(context.Background(), path)
-		bundler.IsSupported(context.Background(), path)
+		bundler.isSupported(context.Background(), path)
+		bundler.isSupported(context.Background(), path)
 		assert.Len(t, snykCodeMock.Calls, 1)
 	})
 }
@@ -134,27 +134,27 @@ func Test_IsSupported_ConfigFile(t *testing.T) {
 	t.Run("should return true for supported config files", func(t *testing.T) {
 		for _, file := range expectedConfigFiles {
 			path := filepath.Join(dir, file)
-			supported := bundler.IsSupported(context.Background(), path)
+			supported, _ := bundler.isSupported(context.Background(), path)
 			assert.True(t, supported)
 		}
 	})
 	t.Run("should exclude .gitignore and .dcignore", func(t *testing.T) {
 		for _, file := range []string{".gitignore", ".dcignore"} {
 			path := filepath.Join(dir, file)
-			supported := bundler.IsSupported(context.Background(), path)
+			supported, _ := bundler.isSupported(context.Background(), path)
 			assert.False(t, supported)
 		}
 	})
 	t.Run("should return false for unsupported config files", func(t *testing.T) {
 		path := "C:\\some\\path\\.unsupported"
-		supported := bundler.IsSupported(context.Background(), path)
+		supported, _ := bundler.isSupported(context.Background(), path)
 		assert.False(t, supported)
 	})
 
 	t.Run("should cache supported extensions", func(t *testing.T) {
 		path := "C:\\some\\path\\Test.rs"
-		bundler.IsSupported(context.Background(), path)
-		bundler.IsSupported(context.Background(), path)
+		bundler.isSupported(context.Background(), path)
+		bundler.isSupported(context.Background(), path)
 		assert.Len(t, snykCodeMock.Calls, 1)
 	})
 }

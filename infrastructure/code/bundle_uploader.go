@@ -115,13 +115,13 @@ func (b *BundleUploader) groupInBatches(
 	return batches
 }
 
-func (b *BundleUploader) IsSupported(ctx context.Context, file string) bool {
+func (b *BundleUploader) isSupported(ctx context.Context, file string) (bool, error) {
 	if b.supportedExtensions.Size() == 0 && b.supportedConfigFiles.Size() == 0 {
 
 		filters, err := b.SnykCode.GetFilters(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("could not get filters")
-			return false
+			return false, err
 		}
 
 		for _, ext := range filters.Extensions {
@@ -142,7 +142,7 @@ func (b *BundleUploader) IsSupported(ctx context.Context, file string) bool {
 	_, isSupportedExtension := b.supportedExtensions.Load(fileExtension)
 	_, isSupportedConfigFile := b.supportedConfigFiles.Load(fileName)
 
-	return isSupportedExtension || isSupportedConfigFile
+	return isSupportedExtension || isSupportedConfigFile, nil
 }
 
 func getFileFrom(filePath string, content []byte) BundleFile {
