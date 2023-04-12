@@ -18,16 +18,12 @@ package code
 
 import (
 	"context"
-	"fmt"
-	"math"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
-	ignore "github.com/sabhiram/go-gitignore"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -35,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/filefilter"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/float"
@@ -42,7 +39,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type ScanMetrics struct {
@@ -76,7 +72,6 @@ type Scanner struct {
 	errorReporter     error_reporting.ErrorReporter
 	analytics         ux2.Analytics
 	changedFilesMutex sync.Mutex
-	mutex             sync.Mutex
 	scanStatusMutex   sync.Mutex
 	runningScans      map[string]*ScanStatus
 	scanNotifier      snyk.ScanNotifier
@@ -163,17 +158,12 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
 	// Start the scan
-	folderFiles, err := sc.files(folderPath)
-	if err != nil {
-		log.Warn().
-			Err(err).
-			Str("method", "domain.ide.workspace.Folder.ScanFolder").
-			Str("workspaceFolderPath", folderPath).
-			Msg("error getting workspace files")
-	}
-
-	metrics := sc.newMetrics(len(folderFiles), startTime)
-	results, err := sc.UploadAndAnalyze(span.Context(), folderFiles, folderPath, metrics, changedFiles)
+	t := progress.NewTracker(false)
+	t.Begin("Snyk Code: Collecting files in \""+folderPath+"\"", "Evaluating ignores and counting files...")
+	files := filefilter.FindNonIgnoredFiles(folderPath)
+	t.End("Collected files")
+	metrics := sc.newMetrics(startTime)
+	results, err := sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
 
 	return results, err
 }
@@ -207,77 +197,18 @@ func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath string
 	return false
 }
 
-func (sc *Scanner) files(folderPath string) (filePaths []string, err error) {
-	t := progress.NewTracker(false)
-	workspace, err := filepath.Abs(folderPath)
-	t.Begin(fmt.Sprintf("Snyk Code: Enumerating files in %s", folderPath), "Evaluating ignores and counting files...")
-
-	if err != nil {
-		return filePaths, err
-	}
-	sc.mutex.Lock()
-	var fileCount int
-	var ignorePatterns []string
-	ignorePatterns, fileCount, err = sc.loadIgnorePatternsAndCountFiles(folderPath)
-	if err != nil {
-		return filePaths, err
-	}
-
-	gitIgnore := ignore.CompileIgnoreLines(ignorePatterns...)
-	sc.mutex.Unlock()
-	filesWalked := 0
-	log.Debug().Str("method", "folder.Files").Msgf("File count: %d", fileCount)
-	err = filepath.WalkDir(
-		workspace, func(path string, dirEntry os.DirEntry, err error) error {
-			if err != nil {
-				log.Debug().
-					Str("method", "domain.ide.workspace.Folder.Files").
-					Str("path", path).
-					Err(err).
-					Msg("error traversing files")
-				return nil
-			}
-			filesWalked++
-			percentage := math.Round(float64(filesWalked) / float64(fileCount) * 100)
-			t.ReportWithMessage(
-				int(percentage),
-				fmt.Sprintf("Loading file contents for scan... (%d of %d)", filesWalked, fileCount),
-			)
-			if dirEntry == nil || dirEntry.IsDir() {
-				if util.Ignored(gitIgnore, path) {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-
-			if util.Ignored(gitIgnore, path) {
-				return nil
-			}
-
-			filePaths = append(filePaths, path)
-			return err
-		},
-	)
-	t.End("All relevant files collected")
-	if err != nil {
-		return filePaths, err
-	}
-	return filePaths, nil
-}
-
-func (sc *Scanner) newMetrics(fileCount int, scanStartTime time.Time) *ScanMetrics {
+func (sc *Scanner) newMetrics(scanStartTime time.Time) *ScanMetrics {
 	if scanStartTime.IsZero() {
 		scanStartTime = time.Now()
 	}
 
 	return &ScanMetrics{
 		lastScanStartTime: scanStartTime,
-		lastScanFileCount: fileCount,
 	}
 }
 
 func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
-	files []string,
+	files <-chan string,
 	path string,
 	scanMetrics *ScanMetrics,
 	changedFiles map[string]bool,
@@ -289,14 +220,14 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.uploadAndAnalyze")
 	defer sc.BundleUploader.instrumentor.Finish(span)
-	if len(files) == 0 {
-		return issues, nil
-	}
 
 	requestId := span.GetTraceId() // use span trace id as code-request-id
 
 	bundle, err := sc.createBundle(span.Context(), requestId, path, files, changedFiles)
 	if err != nil {
+		if isNoFilesError(err) {
+			return issues, nil
+		}
 		if ctx.Err() == nil { // Only report errors that are not intentional cancellations
 			msg := "error creating bundle..."
 			sc.handleCreationAndUploadError(path, err, msg, scanMetrics)
@@ -306,6 +237,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 			return issues, nil
 		}
 	}
+	scanMetrics.lastScanFileCount = len(bundle.Files)
 
 	uploadedBundle, err := sc.BundleUploader.Upload(span.Context(), bundle, bundle.Files)
 	// TODO LSP error handling should be pushed UP to the LSP layer
@@ -339,10 +271,18 @@ func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg stri
 	sc.trackResult(err == nil, scanMetrics)
 }
 
+type noFilesError struct{}
+
+func (e noFilesError) Error() string { return "no files to scan" }
+func isNoFilesError(err error) bool {
+	_, ok := err.(noFilesError)
+	return ok
+}
+
 func (sc *Scanner) createBundle(ctx context.Context,
 	requestId string,
 	rootPath string,
-	filePaths []string,
+	filePaths <-chan string,
 	changedFiles map[string]bool,
 ) (b Bundle, err error) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.createBundle")
@@ -351,7 +291,9 @@ func (sc *Scanner) createBundle(ctx context.Context,
 	var limitToFiles []string
 	fileHashes := make(map[string]string)
 	bundleFiles := make(map[string]BundleFile)
-	for _, absoluteFilePath := range filePaths {
+	noFiles := true
+	for absoluteFilePath := range filePaths {
+		noFiles = false
 		if ctx.Err() != nil {
 			return b, err // The cancellation error should be handled by the calling function
 		}
@@ -362,7 +304,7 @@ func (sc *Scanner) createBundle(ctx context.Context,
 		if !supported {
 			continue
 		}
-		fileContent, err := loadContent(absoluteFilePath)
+		fileContent, err := os.ReadFile(absoluteFilePath)
 		if err != nil {
 			log.Error().Err(err).Str("filePath", absoluteFilePath).Msg("could not load content of file")
 			continue
@@ -387,6 +329,9 @@ func (sc *Scanner) createBundle(ctx context.Context,
 		}
 	}
 
+	if noFiles {
+		return b, noFilesError{}
+	}
 	b = Bundle{
 		SnykCode:      sc.BundleUploader.SnykCode,
 		Files:         bundleFiles,

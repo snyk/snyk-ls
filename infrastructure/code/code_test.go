@@ -77,7 +77,7 @@ func TestCreateBundle(t *testing.T) {
 			bundle, err := c.createBundle(context.Background(),
 				"testRequestId",
 				dir,
-				[]string{file},
+				sliceToChannel([]string{file}),
 				map[string]bool{})
 			if err != nil {
 				t.Fatal(err)
@@ -99,7 +99,7 @@ func TestCreateBundle(t *testing.T) {
 			bundle, err := c.createBundle(context.Background(),
 				"testRequestId",
 				dir,
-				[]string{file},
+				sliceToChannel([]string{file}),
 				map[string]bool{})
 			if err != nil {
 				t.Fatal(err)
@@ -125,7 +125,7 @@ func TestCreateBundle(t *testing.T) {
 			bundle, err := c.createBundle(context.Background(),
 				"testRequestId",
 				dir,
-				[]string{file},
+				sliceToChannel([]string{file}),
 				map[string]bool{})
 			if err != nil {
 				t.Fatal(err)
@@ -152,7 +152,7 @@ func TestCreateBundle(t *testing.T) {
 			bundle, err := c.createBundle(context.Background(),
 				"testRequestId",
 				dir,
-				[]string{file},
+				sliceToChannel([]string{file}),
 				map[string]bool{})
 			bundleFiles := bundle.Files
 			if err != nil {
@@ -182,7 +182,7 @@ func TestCreateBundle(t *testing.T) {
 		bundle, err := scanner.createBundle(context.Background(),
 			"testRequestId",
 			tempDir,
-			[]string{file},
+			sliceToChannel([]string{file}),
 			map[string]bool{})
 		assert.Nil(t, err)
 		relativePath, _ := ToRelativeUnixPath(tempDir, file)
@@ -213,7 +213,7 @@ func TestCreateBundle(t *testing.T) {
 		bundle, err := scanner.createBundle(context.Background(),
 			"testRequestId",
 			tempDir,
-			filesFullPaths,
+			sliceToChannel(filesFullPaths),
 			map[string]bool{})
 
 		// Assert
@@ -222,6 +222,18 @@ func TestCreateBundle(t *testing.T) {
 			assert.Contains(t, bundle.Files, expectedPath)
 		}
 	})
+}
+
+func sliceToChannel(slice []string) <-chan string {
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		for _, s := range slice {
+			ch <- s
+		}
+	}()
+
+	return ch
 }
 
 func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient, string, *Scanner, string) {
@@ -257,8 +269,8 @@ func TestUploadAndAnalyze(t *testing.T) {
 			)
 			baseDir, firstDoc, _, content1, _ := setupDocs(t)
 			fullPath := uri.PathFromUri(firstDoc.URI)
-			docs := []string{fullPath}
-			metrics := c.newMetrics(len(docs), time.Time{})
+			docs := sliceToChannel([]string{fullPath})
+			metrics := c.newMetrics(time.Time{})
 
 			_, _ = c.UploadAndAnalyze(context.Background(), docs, baseDir, metrics, map[string]bool{})
 
@@ -286,9 +298,9 @@ func TestUploadAndAnalyze(t *testing.T) {
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
 			files := []string{diagnosticUri}
-			metrics := c.newMetrics(len(files), time.Time{})
+			metrics := c.newMetrics(time.Time{})
 
-			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics, map[string]bool{})
+			issues, _ := c.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
 
 			assert.NotNil(t, issues)
 			assert.Equal(t, 1, len(issues))
@@ -316,10 +328,10 @@ func TestUploadAndAnalyze(t *testing.T) {
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
 			files := []string{diagnosticUri}
-			metrics := c.newMetrics(len(files), time.Now())
+			metrics := c.newMetrics(time.Now())
 
 			// execute
-			_, _ = c.UploadAndAnalyze(context.Background(), files, "", metrics, map[string]bool{})
+			_, _ = c.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
 
 			assert.Len(t, analytics.GetAnalytics(), 1)
 			assert.Equal(
@@ -332,33 +344,6 @@ func TestUploadAndAnalyze(t *testing.T) {
 			)
 		},
 	)
-}
-
-func Test_GetWorkspaceFolderFiles(t *testing.T) {
-	_, tempDir, ignoredFilePath, notIgnoredFilePath, _ := setupIgnoreWorkspace(t)
-	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
-	_, sc := setupTestScanner()
-
-	files, err := sc.files(tempDir)
-	if err != nil {
-		t.Fatal(t, err, "Error getting workspace folder files: "+tempDir)
-	}
-
-	assert.Len(t, files, 2)
-	assert.Contains(t, files, notIgnoredFilePath)
-	assert.NotContains(t, files, ignoredFilePath)
-}
-
-func Test_GetWorkspaceFiles_SkipIgnoredDirs(t *testing.T) {
-	_, tempDir, _, _, ignoredFileInDir := setupIgnoreWorkspace(t)
-	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
-	_, sc := setupTestScanner()
-
-	walkedFiles, err := sc.files(tempDir)
-	if err != nil {
-		t.Fatal(t, err, "Error while registering "+tempDir)
-	}
-	assert.NotContains(t, walkedFiles, ignoredFileInDir)
 }
 
 func Test_Scan(t *testing.T) {
@@ -437,7 +422,7 @@ func Test_Scan(t *testing.T) {
 		// Arrange
 		snykCodeMock, scanner := setupTestScanner()
 
-		_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+		tempDir, _, _ := setupIgnoreWorkspace(t)
 
 		// Act
 		_, _ = scanner.Scan(context.Background(), tempDir, tempDir)
@@ -451,7 +436,7 @@ func Test_Scan(t *testing.T) {
 	t.Run("Scans run sequentially for the same folder", func(t *testing.T) {
 		// Arrange
 		testutil.UnitTest(t)
-		_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+		tempDir, _, _ := setupIgnoreWorkspace(t)
 		fakeClient, scanner := setupTestScanner()
 		fakeClient.AnalysisDuration = time.Second
 		wg := sync.WaitGroup{}
@@ -473,8 +458,8 @@ func Test_Scan(t *testing.T) {
 	t.Run("Scans run in parallel for different folders", func(t *testing.T) {
 		// Arrange
 		testutil.UnitTest(t)
-		_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
-		_, tempDir2, _, _, _ := setupIgnoreWorkspace(t)
+		tempDir, _, _ := setupIgnoreWorkspace(t)
+		tempDir2, _, _ := setupIgnoreWorkspace(t)
 		fakeClient, scanner := setupTestScanner()
 		fakeClient.AnalysisDuration = time.Second
 		wg := sync.WaitGroup{}
@@ -509,7 +494,7 @@ func Test_Scan(t *testing.T) {
 			error_reporting.NewTestErrorReporter(),
 			ux2.NewTestAnalytics(),
 		)
-		_, tempDir, _, _, _ := setupIgnoreWorkspace(t)
+		tempDir, _, _ := setupIgnoreWorkspace(t)
 
 		_, _ = c.Scan(context.Background(), "", tempDir)
 
@@ -518,8 +503,8 @@ func Test_Scan(t *testing.T) {
 	})
 }
 
-func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string, ignoredFilePath string, notIgnoredFilePath string, ignoredFileInDir string) {
-	expectedPatterns = "*.xml\n**/*.txt\nbin"
+func setupIgnoreWorkspace(t *testing.T) (tempDir string, ignoredFilePath string, notIgnoredFilePath string) {
+	expectedPatterns := "*.xml\n**/*.txt\nbin"
 	tempDir = writeTestGitIgnore(expectedPatterns, t)
 
 	ignoredFilePath = filepath.Join(tempDir, "ignored.xml")
@@ -537,13 +522,8 @@ func setupIgnoreWorkspace(t *testing.T) (expectedPatterns string, tempDir string
 	if err != nil {
 		t.Fatal(t, err, "Couldn't write ignoreDirectory %s", ignoredDir)
 	}
-	ignoredFileInDir = filepath.Join(ignoredDir, "shouldNotBeWalked.java")
-	err = os.WriteFile(ignoredFileInDir, []byte("public bla"), 0600)
-	if err != nil {
-		t.Fatal(t, err, "Couldn't write ignored file not-ignored.java")
-	}
 
-	return expectedPatterns, tempDir, ignoredFilePath, notIgnoredFilePath, ignoredFileInDir
+	return tempDir, ignoredFilePath, notIgnoredFilePath
 }
 
 func writeTestGitIgnore(ignorePatterns string, t *testing.T) (tempDir string) {
@@ -707,10 +687,10 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 				},
 			)
 			files := []string{diagnosticUri}
-			metrics := c.newMetrics(len(files), time.Now())
+			metrics := c.newMetrics(time.Now())
 
 			// execute
-			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics, map[string]bool{})
+			issues, _ := c.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
 
 			assert.Len(t, analytics.GetAnalytics(), 1)
 			// Default is to have 1 fake action from analysis + 0 from autofix
@@ -741,10 +721,10 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 				},
 			)
 			files := []string{diagnosticUri}
-			metrics := c.newMetrics(len(files), time.Now())
+			metrics := c.newMetrics(time.Now())
 
 			// execute
-			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics, map[string]bool{})
+			issues, _ := c.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
 
 			assert.Len(t, analytics.GetAnalytics(), 1)
 			// Default is to have 1 fake action from analysis + 0 from autofix
@@ -773,10 +753,10 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 				},
 			)
 			files := []string{diagnosticUri}
-			metrics := c.newMetrics(len(files), time.Now())
+			metrics := c.newMetrics(time.Now())
 
 			// execute
-			issues, _ := c.UploadAndAnalyze(context.Background(), files, "", metrics, map[string]bool{})
+			issues, _ := c.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
 
 			assert.Len(t, analytics.GetAnalytics(), 1)
 			assert.Len(t, issues[0].CodeActions, 2)
