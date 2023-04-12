@@ -46,7 +46,7 @@ func NewInitializer(authenticator snyk.AuthenticationService, errorReporter erro
 }
 
 func (i *Initializer) Init() error {
-	const errorMessage = "CLI Initializer failed to authenticate."
+	const errorMessage = "Auth Initializer failed to authenticate."
 
 	cli.Mutex.Lock()
 	defer cli.Mutex.Unlock()
