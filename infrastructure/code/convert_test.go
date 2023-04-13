@@ -822,3 +822,49 @@ func Test_getIssueId(t *testing.T) {
 	id := getIssueKey("java/DontUsePrintStackTrace", "file/path.java", 15, 17, 15, 35)
 	assert.Equal(t, "8423559307c17d15f5617ae2e29dbf02", id)
 }
+
+func Test_getCodeIssueType(t *testing.T) {
+	t.Run("Security issue - single category", func(t *testing.T) {
+		rule := rule{
+			Properties: ruleProperties{
+				Categories: []string{"Security"},
+			},
+		}
+
+		rule.getCodeIssueType()
+		assert.Equal(t, snyk.CodeSecurityVulnerability, rule.getCodeIssueType())
+	})
+
+	t.Run("Security issue - multiple categories", func(t *testing.T) {
+		rule := rule{
+			Properties: ruleProperties{
+				Categories: []string{"Security", "Defect"},
+			},
+		}
+
+		rule.getCodeIssueType()
+		assert.Equal(t, snyk.CodeSecurityVulnerability, rule.getCodeIssueType())
+	})
+
+	t.Run("Quality - single category", func(t *testing.T) {
+		rule := rule{
+			Properties: ruleProperties{
+				Categories: []string{"Defect"},
+			},
+		}
+
+		rule.getCodeIssueType()
+		assert.Equal(t, snyk.CodeQualityIssue, rule.getCodeIssueType())
+	})
+
+	t.Run("Quality - multiple categories", func(t *testing.T) {
+		rule := rule{
+			Properties: ruleProperties{
+				Categories: []string{"Defect", "Info"},
+			},
+		}
+
+		rule.getCodeIssueType()
+		assert.Equal(t, snyk.CodeQualityIssue, rule.getCodeIssueType())
+	})
+}
