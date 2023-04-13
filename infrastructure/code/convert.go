@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog/log"
+	"golang.org/x/exp/slices"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -57,21 +58,15 @@ func (r *rule) getReferences() (references []snyk.Reference) {
 }
 
 func (r *rule) getCodeIssueType() snyk.Type {
-	const defaultType = snyk.CodeSecurityVulnerability
+	isSecurity := slices.ContainsFunc(r.Properties.Categories, func(category string) bool {
+		return strings.ToLower(category) == "security"
+	})
 
-	categories := r.Properties.Categories
-	if len(categories) != 1 {
-		return defaultType
-	}
-
-	switch strings.ToLower(categories[0]) {
-	case "defect":
-		return snyk.CodeQualityIssue
-	case "security":
+	if isSecurity {
 		return snyk.CodeSecurityVulnerability
-	default:
-		return defaultType
 	}
+
+	return snyk.CodeQualityIssue
 }
 
 func (r *rule) cwe() string {
