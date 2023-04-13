@@ -224,6 +224,7 @@ func New() *Config {
 
 func initWorkFlowEngine(c *Config) {
 	c.engine = app.CreateAppEngine()
+	c.engine.GetConfiguration().Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 	err := localworkflows.InitWhoAmIWorkflow(c.engine)
 	if err != nil {
 		log.Err(err).Msg("Failed to initialize WhoAmI workflow")

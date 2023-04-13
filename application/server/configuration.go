@@ -122,6 +122,9 @@ func writeSettings(settings lsp.Settings, initialize bool) {
 	updateToken(settings.Token)
 	updateProductEnablement(settings)
 	updateCliConfig(settings)
+	updateAuthenticationMethod(settings)
+	// updateApiEndpoints overwrites the authentication method in certain cases (oauth2)
+	// this is why it needs to be called after updateAuthenticationMethod
 	updateApiEndpoints(settings, initialize)
 	updateEnvironment(settings)
 	updatePath(settings)
@@ -133,16 +136,17 @@ func writeSettings(settings lsp.Settings, initialize bool) {
 	updateSnykCodeQuality(settings)
 	updateRuntimeInfo(settings)
 	updateAutoScan(settings)
-	updateAuthenticationMethod(settings)
 }
 
 func updateAuthenticationMethod(settings lsp.Settings) {
+	if settings.AuthenticationMethod == "" {
+		return
+	}
 	c := config.CurrentConfig()
 	c.SetAuthenticationMethod(settings.AuthenticationMethod)
 	if config.CurrentConfig().AuthenticationMethod() == lsp.OAuthAuthentication {
 		engine := c.Engine()
 		conf := engine.GetConfiguration()
-		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 		httpClient := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
 		openBrowserFunc := func(url string) {
 			di.AuthenticationService().Provider().SetAuthURL(url)
