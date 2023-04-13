@@ -24,6 +24,7 @@ require (
 	github.com/subosito/gotenv v1.4.2
 	github.com/xtgo/uuid v0.0.0-20140804021211-a0b114877d4c
 	go.lsp.dev/uri v0.3.0
+	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 	golang.org/x/net v0.8.0
 	gopkg.in/yaml.v3 v3.0.1
 )
