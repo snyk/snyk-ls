@@ -32,39 +32,39 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	errorreporting "github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	performance2 "github.com/snyk/snyk-ls/domain/observability/performance"
-	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
+	er "github.com/snyk/snyk-ls/domain/observability/error_reporting"
+	"github.com/snyk/snyk-ls/domain/observability/performance"
+	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/amplitude"
-	cli2 "github.com/snyk/snyk-ls/infrastructure/cli"
-	auth2 "github.com/snyk/snyk-ls/infrastructure/cli/auth"
+	"github.com/snyk/snyk-ls/infrastructure/cli"
+	cliauth "github.com/snyk/snyk-ls/infrastructure/cli/auth"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
-	code2 "github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/iac"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
-	sentry2 "github.com/snyk/snyk-ls/infrastructure/sentry"
+	"github.com/snyk/snyk-ls/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/infrastructure/services"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
 )
 
 var snykApiClient snyk_api.SnykApiClient
-var snykCodeClient code2.SnykCodeClient
-var snykCodeBundleUploader *code2.BundleUploader
-var snykCodeScanner *code2.Scanner
+var snykCodeClient code.SnykCodeClient
+var snykCodeBundleUploader *code.BundleUploader
+var snykCodeScanner *code.Scanner
 var infrastructureAsCodeScanner *iac.Scanner
 var openSourceScanner *oss.Scanner
 var scanInitializer initialize.Initializer
 var authenticationService snyk.AuthenticationService
-var instrumentor performance2.Instrumentor
-var errorReporter errorreporting.ErrorReporter
+var instrumentor performance.Instrumentor
+var errorReporter er.ErrorReporter
 var installer install.Installer
-var analytics ux2.Analytics
-var snykCli cli2.Executor
+var analytics ux.Analytics
+var snykCli cli.Executor
 var hoverService hover.Service
 var scanner snyk.Scanner
-var cliInitializer *cli2.Initializer
+var cliInitializer *cli.Initializer
 var scanNotifier snyk.ScanNotifier
 var codeActionService *codeaction.CodeActionsService
 var fileWatcher *watcher.FileWatcher
@@ -112,26 +112,26 @@ func initInfrastructure() {
 			})
 	}
 
-	errorReporter = sentry2.NewSentryErrorReporter()
+	errorReporter = sentry.NewSentryErrorReporter()
 	installer = install.NewInstaller(errorReporter, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
-	instrumentor = sentry2.NewInstrumentor()
+	instrumentor = sentry.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient(c.Engine().GetNetworkAccess().GetHttpClient)
 	authFunc := func() (string, error) {
 		user, err := snykApiClient.GetActiveUser()
 		return user.Id, err
 	}
 	analytics = amplitude.NewAmplitudeClient(authFunc, errorReporter)
-	authProvider := auth2.NewCliAuthenticationProvider(errorReporter)
+	authProvider := cliauth.NewCliAuthenticationProvider(errorReporter)
 	authenticationService = services.NewAuthenticationService(snykApiClient, authProvider, analytics, errorReporter)
-	snykCli = cli2.NewExecutor(authenticationService, errorReporter, analytics)
-	snykCodeClient = code2.NewHTTPRepository(instrumentor, errorReporter, c.Engine().GetNetworkAccess().GetHttpClient)
-	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
+	snykCli = cli.NewExecutor(authenticationService, errorReporter, analytics)
+	snykCodeClient = code.NewHTTPRepository(instrumentor, errorReporter, c.Engine().GetNetworkAccess().GetHttpClient)
+	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
 	scanNotifier, _ = appNotification.NewScanNotifier(notification.NewNotifier())
-	snykCodeScanner = code2.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics)
-	cliInitializer = cli2.NewInitializer(errorReporter, installer)
-	authInitializer := auth2.NewInitializer(authenticationService, errorReporter, analytics)
+	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics)
+	cliInitializer = cli.NewInitializer(errorReporter, installer)
+	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,
 		authInitializer,
@@ -151,25 +151,27 @@ func TestInit(t *testing.T) {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	t.Helper()
-	analytics = ux2.NewTestAnalytics()
-	instrumentor = performance2.NewTestInstrumentor()
-	errorReporter = errorreporting.NewTestErrorReporter()
+	// we don't want to open browsers when testing
+	snyk.DefaultOpenBrowserFunc = func(url string) {}
+	analytics = ux.NewTestAnalytics()
+	instrumentor = performance.NewTestInstrumentor()
+	errorReporter = er.NewTestErrorReporter()
 	installer = install.NewFakeInstaller()
-	authProvider := auth2.NewFakeCliAuthenticationProvider()
+	authProvider := cliauth.NewFakeCliAuthenticationProvider()
 	snykApiClient = &snyk_api.FakeApiClient{CodeEnabled: true}
 	authenticationService = services.NewAuthenticationService(snykApiClient, authProvider, analytics, errorReporter)
-	cliInitializer = cli2.NewInitializer(errorReporter, installer)
-	authInitializer := auth2.NewInitializer(authenticationService, errorReporter, analytics)
+	cliInitializer = cli.NewInitializer(errorReporter, installer)
+	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,
 		authInitializer,
 	)
-	fakeClient := &code2.FakeSnykCodeClient{}
+	fakeClient := &code.FakeSnykCodeClient{}
 	snykCodeClient = fakeClient
-	snykCli = cli2.NewExecutor(authenticationService, errorReporter, analytics)
-	snykCodeBundleUploader = code2.NewBundler(snykCodeClient, instrumentor)
+	snykCli = cli.NewExecutor(authenticationService, errorReporter, analytics)
+	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 	scanNotifier, _ = appNotification.NewScanNotifier(notification.NewNotifier())
-	snykCodeScanner = code2.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics)
+	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	scanner = snyk.NewDelegatingScanner(
@@ -200,19 +202,19 @@ TODO Accessors: This should go away, since all dependencies should be satisfied 
 they can be returned by the test helper for unit/integration tests
 */
 
-func Instrumentor() performance2.Instrumentor {
+func Instrumentor() performance.Instrumentor {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return instrumentor
 }
 
-func ErrorReporter() errorreporting.ErrorReporter {
+func ErrorReporter() er.ErrorReporter {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return errorReporter
 }
 
-func SnykCli() cli2.Executor {
+func SnykCli() cli.Executor {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return snykCli
@@ -248,7 +250,7 @@ func Initializer() initialize.Initializer {
 	return scanInitializer
 }
 
-func Analytics() ux2.Analytics {
+func Analytics() ux.Analytics {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return analytics
@@ -266,7 +268,7 @@ func Installer() install.Installer {
 	return installer
 }
 
-func CliInitializer() *cli2.Initializer {
+func CliInitializer() *cli.Initializer {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return cliInitializer

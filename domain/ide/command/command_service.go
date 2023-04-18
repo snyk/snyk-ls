@@ -50,7 +50,7 @@ func Service() snyk.CommandService {
 }
 
 // ExecuteCommand implements Service
-func (service *serviceImpl) ExecuteCommand(ctx context.Context, command snyk.Command) error {
+func (service *serviceImpl) ExecuteCommand(ctx context.Context, command snyk.Command) (any, error) {
 	log.Debug().Str(
 		"method",
 		"command.serviceImpl.ExecuteCommand",

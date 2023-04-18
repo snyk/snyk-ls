@@ -220,6 +220,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 						snyk.LogoutCommand,
 						snyk.TrustWorkspaceFoldersCommand,
 						snyk.OAuthRefreshCommand,
+						snyk.OpenLearnLesson,
 					},
 				},
 			},

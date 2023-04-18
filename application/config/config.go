@@ -168,6 +168,7 @@ type Config struct {
 	automaticScanning            bool
 	authenticationMethod         lsp.AuthenticationMethod
 	engine                       workflow.Engine
+	enableSnykLearnCodeActions   bool
 }
 
 func CurrentConfig() *Config {
@@ -219,6 +220,7 @@ func New() *Config {
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to initialize workflow engine")
 	}
+	c.enableSnykLearnCodeActions = false
 	return c
 }
 
@@ -723,4 +725,12 @@ func (c *Config) Engine() workflow.Engine {
 
 func (c *Config) SetEngine(engine workflow.Engine) {
 	c.engine = engine
+}
+
+func (c *Config) IsSnykLearnCodeActionsEnabled() bool {
+	return c.enableSnykLearnCodeActions
+}
+
+func (c *Config) SetSnykLearnCodeActionsEnabled(enabled bool) {
+	c.enableSnykLearnCodeActions = enabled
 }

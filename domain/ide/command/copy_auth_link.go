@@ -35,7 +35,7 @@ func (cmd *copyAuthLinkCommand) Command() snyk.CommandData {
 	return cmd.command
 }
 
-func (cmd *copyAuthLinkCommand) Execute(ctx context.Context) error {
+func (cmd *copyAuthLinkCommand) Execute(ctx context.Context) (any, error) {
 	url := cmd.authService.Provider().AuthURL(ctx)
 	log.Debug().Str("method", "copyAuthLinkCommand.Execute").
 		Str("url", url).
@@ -46,5 +46,5 @@ func (cmd *copyAuthLinkCommand) Execute(ctx context.Context) error {
 		log.Err(err).Msg("Error on snyk.copyAuthLink command")
 		notification.SendError(err)
 	}
-	return err
+	return url, err
 }

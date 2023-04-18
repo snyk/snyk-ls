@@ -299,6 +299,7 @@ type Settings struct {
 	ScanningMode                string               `json:"scanningMode,omitempty"`
 	AuthenticationMethod        AuthenticationMethod `json:"authenticationMethod,omitempty"`
 	SnykCodeApi                 string               `json:"snykCodeApi,omitempty"`
+	EnableSnykLearnCodeActions  string               `json:"enableSnykLearnCodeActions,omitempty"`
 }
 
 type AuthenticationMethod string

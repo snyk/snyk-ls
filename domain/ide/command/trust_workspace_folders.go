@@ -36,9 +36,9 @@ func (cmd *trustWorkspaceFoldersCommand) Command() snyk.CommandData {
 	return cmd.command
 }
 
-func (cmd *trustWorkspaceFoldersCommand) Execute(_ context.Context) error {
+func (cmd *trustWorkspaceFoldersCommand) Execute(ctx context.Context) (any, error) {
 	if !config.CurrentConfig().IsTrustedFolderFeatureEnabled() {
-		return nil
+		return nil, nil
 	}
 
 	trustedFolderPaths := config.CurrentConfig().TrustedFolders()
@@ -50,5 +50,5 @@ func (cmd *trustWorkspaceFoldersCommand) Execute(_ context.Context) error {
 
 	config.CurrentConfig().SetTrustedFolders(trustedFolderPaths)
 	notification.Send(lsp.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
-	return nil
+	return nil, nil
 }

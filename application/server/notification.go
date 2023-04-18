@@ -191,7 +191,7 @@ func handleShowMessageRequest(srv server.Server, params snyk.ShowMessageRequest)
 			return
 		}
 
-		err = command.Service().ExecuteCommand(context.Background(), selectedCommand)
+		_, err := command.Service().ExecuteCommand(context.Background(), selectedCommand)
 		if err != nil {
 			log.Error().
 				Err(err).

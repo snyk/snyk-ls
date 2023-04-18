@@ -33,9 +33,9 @@ func (cmd *openBrowserCommand) Command() snyk.CommandData {
 	return cmd.command
 }
 
-func (cmd *openBrowserCommand) Execute(_ context.Context) error {
+func (cmd *openBrowserCommand) Execute(ctx context.Context) (any, error) {
 	url := cmd.command.Arguments[0].(string)
 	log.Debug().Str("method", "openBrowserCommand.Execute").Msgf("opening browser url %s", url)
 	auth.OpenBrowser(url)
-	return nil
+	return nil, nil
 }

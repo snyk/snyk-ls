@@ -1,0 +1,147 @@
+{
+  "consumer": {
+    "name": "SnykLS"
+  },
+  "provider": {
+    "name": "SnykLearn"
+  },
+  "interactions": [
+    {
+      "description": "/lessons endpoint",
+      "providerState": "nocache",
+      "request": {
+        "method": "GET",
+        "path": "/v1/learn/lessons",
+        "headers": {
+          "Accept-Encoding": "gzip",
+          "Host": "localhost:60697",
+          "User-Agent": "Go-http-client/1.1",
+          "Version": "HTTP/1.1"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": [
+          {
+            "author": "string",
+            "cves": [
+              "string"
+            ],
+            "cwes": [
+              "string"
+            ],
+            "datePublished": "string",
+            "description": "string",
+            "ecosystem": "string",
+            "img": "string",
+            "lessonId": "string",
+            "published": true,
+            "rules": [
+              "string"
+            ],
+            "seoKeywords": [
+              "string"
+            ],
+            "seoTitle": "string",
+            "slug": "string",
+            "source": "string",
+            "subtitle": "string",
+            "title": "string",
+            "url": "string"
+          }
+        ],
+        "matchingRules": {
+          "$.body": {
+            "min": 1
+          },
+          "$.body[*].*": {
+            "match": "type"
+          },
+          "$.body[*].author": {
+            "match": "type"
+          },
+          "$.body[*].cves": {
+            "min": 1
+          },
+          "$.body[*].cves[*].*": {
+            "match": "type"
+          },
+          "$.body[*].cves[*]": {
+            "match": "type"
+          },
+          "$.body[*].cwes": {
+            "min": 1
+          },
+          "$.body[*].cwes[*].*": {
+            "match": "type"
+          },
+          "$.body[*].cwes[*]": {
+            "match": "type"
+          },
+          "$.body[*].datePublished": {
+            "match": "type"
+          },
+          "$.body[*].description": {
+            "match": "type"
+          },
+          "$.body[*].ecosystem": {
+            "match": "type"
+          },
+          "$.body[*].img": {
+            "match": "type"
+          },
+          "$.body[*].lessonId": {
+            "match": "type"
+          },
+          "$.body[*].published": {
+            "match": "type"
+          },
+          "$.body[*].rules": {
+            "min": 1
+          },
+          "$.body[*].rules[*].*": {
+            "match": "type"
+          },
+          "$.body[*].rules[*]": {
+            "match": "type"
+          },
+          "$.body[*].seoKeywords": {
+            "min": 1
+          },
+          "$.body[*].seoKeywords[*].*": {
+            "match": "type"
+          },
+          "$.body[*].seoKeywords[*]": {
+            "match": "type"
+          },
+          "$.body[*].seoTitle": {
+            "match": "type"
+          },
+          "$.body[*].slug": {
+            "match": "type"
+          },
+          "$.body[*].source": {
+            "match": "type"
+          },
+          "$.body[*].subtitle": {
+            "match": "type"
+          },
+          "$.body[*].title": {
+            "match": "type"
+          },
+          "$.body[*].url": {
+            "match": "type"
+          }
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "pactSpecification": {
+      "version": "2.0.0"
+    }
+  }
+}

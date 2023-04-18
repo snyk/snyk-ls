@@ -36,14 +36,14 @@ func (cmd *workspaceFolderScanCommand) Command() snyk.CommandData {
 	return cmd.command
 }
 
-func (cmd *workspaceFolderScanCommand) Execute(ctx context.Context) error {
+func (cmd *workspaceFolderScanCommand) Execute(ctx context.Context) (any, error) {
 	method := "workspaceFolderScanCommand.Execute"
 	args := cmd.Command().Arguments
 	w := workspace.Get()
 	if len(args) != 1 {
 		err := errors.New("received WorkspaceFolderScanCommand without path")
 		log.Warn().Str("method", method).Err(err).Send()
-		return err
+		return nil, err
 	}
 	path := args[0].(string)
 	f := w.GetFolderContaining(path)
@@ -51,11 +51,11 @@ func (cmd *workspaceFolderScanCommand) Execute(ctx context.Context) error {
 		err := errors.New("received WorkspaceFolderScanCommand with path not in workspace")
 		log.Warn().Str("method", method).Err(err).Send()
 		log.Warn().Interface("folders", w.Folders())
-		return err
+		return nil, err
 	}
 	f.ClearScannedStatus()
 	f.ClearDiagnosticsFromPathRecursively(path)
 	f.ScanFolder(ctx)
 	HandleUntrustedFolders(ctx, cmd.srv)
-	return nil
+	return nil, nil
 }

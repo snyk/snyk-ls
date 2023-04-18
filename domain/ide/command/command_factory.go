@@ -21,13 +21,16 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 )
 
 func CreateFromCommandData(
 	commandData snyk.CommandData,
 	srv server.Server,
 	authService snyk.AuthenticationService,
+	learnService learn.Service,
 ) (snyk.Command, error) {
+
 	switch commandData.CommandId {
 	case snyk.NavigateToRangeCommand:
 		return &navigateToRangeCommand{command: commandData, srv: srv}, nil
@@ -47,6 +50,9 @@ func CreateFromCommandData(
 		return &trustWorkspaceFoldersCommand{command: commandData}, nil
 	case snyk.OAuthRefreshCommand:
 		return &oauthRefreshCommand{command: commandData, authService: authService}, nil
+	case snyk.OpenLearnLesson:
+		return &openLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	}
+
 	return nil, fmt.Errorf("unknown command %v", commandData)
 }

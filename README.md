@@ -126,6 +126,23 @@ Right now the language server supports the following actions:
 - OAuthRefreshCommand triggers a Snyk API call to refresh the oauth token
   - command: "snyk.oauthRefreshCommand"
   - args: empty
+- OpenLearnLesson opens the given lesson on the Snyk Learn website
+  - command: "snyk.openLearnLesson"
+  - args: 
+    - rule string
+    - ecosystem string
+    - cwes string (comma separated)
+    - cves (comma separated)
+    - issueType string
+    ```
+    PackageHealth Type = "0"
+    CodeQualityIssue = "1"
+    CodeSecurityVulnerability = "2"
+    LicenceIssue = "3"
+    DependencyVulnerability = "4"
+    InfrastructureIssue = "5"
+    ContainerVulnerability = "6"
+    ```
 ## Installation
 
 ### Download
@@ -201,7 +218,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
   },
   "scanningMode": "auto", // Specifies the mode for scans: "auto" for background scans or "manual" for scans on command
   "authenticationMethod": "token", // Specifies the authentication method to use: "token" for Snyk API token or "oauth" for Snyk OAuth flow. Default is token.
-  "snykCodeApi": "https://deeproxy.snyk.io" // Specifies the Snyk Code API endpoint to use. Default is https://deeproxy.snyk.io
+  "snykCodeApi": "https://deeproxy.snyk.io", // Specifies the Snyk Code API endpoint to use. Default is https://deeproxy.snyk.io
 }
 ```
 
