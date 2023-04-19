@@ -66,21 +66,28 @@ func (f *fileFilter) findNonIgnoredFiles() <-chan string {
 			return nil
 		})
 
+		sem := make(chan any, 20)
 		var wg sync.WaitGroup
 		for folderPath, globs := range f.globsPerFolder { // Loop over folders
+			sem <- struct{}{}
 			filesInFolder := len(filesPerFolder[folderPath])
+			var folderLocalWg sync.WaitGroup
 			wg.Add(filesInFolder)
+			folderLocalWg.Add(filesInFolder)
 			go func(folderPath string, globs []string) {
 				checker := ignore.CompileIgnoreLines(globs...)
 				for _, filePath := range filesPerFolder[folderPath] { // Loop over every file
 					go func(filePath string) {
 						defer wg.Done()
+						defer folderLocalWg.Done()
 						if !checker.MatchesPath(filePath) {
 							resultsCh <- filePath
 						}
 					}(filePath)
 				}
 			}(folderPath, globs)
+			folderLocalWg.Wait()
+			<-sem
 		}
 		wg.Wait()
 
