@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -30,36 +29,29 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 )
 
-func Test_openLearnLesson_Execute(t *testing.T) {
+func Test_getLearnLesson_Execute(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	// overwrite openbrowser func
-	openBrowserCalledChan := make(chan string)
-	openBrowserHandlerFunc := func(url string) {
-		go func() { openBrowserCalledChan <- url }()
-	}
 
 	eco := "javascript"
 	rule := "javascript%2Fsqlinjection"
 	cwes := "CWE-89,CWE-ZZ"
 	cves := "CVE-2020-1234"
 	data := snyk.CommandData{
-		Title:     snyk.OpenLearnLesson,
-		CommandId: snyk.OpenLearnLesson,
+		Title:     snyk.GetLearnLesson,
+		CommandId: snyk.GetLearnLesson,
 		Arguments: []any{rule, eco, cwes, cves, fmt.Sprintf("%d", snyk.DependencyVulnerability)},
 	}
 	mockService := mock_learn.NewMockService(ctrl)
-	cut := openLearnLesson{learnService: mockService, command: data, openBrowserHandleFunc: openBrowserHandlerFunc}
+	cut := getLearnLesson{learnService: mockService, command: data}
 	expectedLessonURL := "https://lessonURL"
+	expectedLesson := learn.Lesson{Url: expectedLessonURL}
 	mockService.EXPECT().
 		GetLesson(eco, rule, []string{"CWE-89", "CWE-ZZ"}, []string{"CVE-2020-1234"}, snyk.DependencyVulnerability).
-		Return(learn.Lesson{Url: expectedLessonURL}, nil)
+		Return(expectedLesson, nil)
 
-	_, err := cut.Execute(context.Background())
+	lesson, err := cut.Execute(context.Background())
 
 	assert.NoError(t, err)
-	assert.Eventuallyf(t, func() bool {
-		return expectedLessonURL == <-openBrowserCalledChan
-	}, 5*time.Second, time.Millisecond, "open browser was not called")
+	assert.Equal(t, expectedLesson, lesson)
 }

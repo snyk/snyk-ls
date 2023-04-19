@@ -34,6 +34,7 @@ const (
 	TrustWorkspaceFoldersCommand = "snyk.trustWorkspaceFolders"
 	OAuthRefreshCommand          = "snyk.oauthRefreshCommand"
 	OpenLearnLesson              = "snyk.openLearnLesson"
+	GetLearnLesson               = "snyk.getLearnLesson"
 )
 
 var (

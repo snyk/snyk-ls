@@ -50,6 +50,8 @@ func CreateFromCommandData(
 		return &trustWorkspaceFoldersCommand{command: commandData}, nil
 	case snyk.OAuthRefreshCommand:
 		return &oauthRefreshCommand{command: commandData, authService: authService}, nil
+	case snyk.GetLearnLesson:
+		return &getLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case snyk.OpenLearnLesson:
 		return &openLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	}

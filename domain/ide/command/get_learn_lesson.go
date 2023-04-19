@@ -18,6 +18,8 @@ package command
 
 import (
 	"context"
+	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -26,29 +28,39 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 )
 
-type openLearnLesson struct {
-	command               snyk.CommandData
-	srv                   server.Server
-	learnService          learn.Service
-	openBrowserHandleFunc func(url string)
+type getLearnLesson struct {
+	command      snyk.CommandData
+	srv          server.Server
+	learnService learn.Service
 }
 
-func (cmd *openLearnLesson) Command() snyk.CommandData {
+func (cmd *getLearnLesson) Command() snyk.CommandData {
 	return cmd.command
 }
 
-func (cmd *openLearnLesson) Execute(_ context.Context) (any, error) {
+func (cmd *getLearnLesson) Execute(_ context.Context) (any, error) {
 	args := cmd.command.Arguments
 	if len(args) < 4 {
 		return nil, errors.New("command is missing arguments. expected: rule, ecosystem, cwes, cves, issueType")
 	}
 
 	lesson, err := learnLesson(args, cmd.learnService)
+	return lesson, err
+}
 
-	if cmd.openBrowserHandleFunc != nil {
-		cmd.openBrowserHandleFunc(lesson.Url)
-	} else {
-		snyk.DefaultOpenBrowserFunc(lesson.Url)
+func learnLesson(args []any, learnService learn.Service) (learn.Lesson, error) {
+	rule := args[0].(string)
+	ecosystem := args[1].(string)
+	cwes := strings.Split(args[2].(string), ",")
+	cves := strings.Split(args[3].(string), ",")
+	issueType, err := strconv.Atoi(args[4].(string))
+	if err != nil {
+		return learn.Lesson{}, errors.Wrap(err, "failed to parse issueType")
+	}
+
+	lesson, err := learnService.GetLesson(ecosystem, rule, cwes, cves, snyk.Type(issueType))
+	if err != nil {
+		return learn.Lesson{}, errors.Wrap(err, "failed to get lesson")
 	}
 	return lesson, err
 }
