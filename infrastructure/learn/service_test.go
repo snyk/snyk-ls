@@ -47,48 +47,6 @@ func getRealOSSLookupParams() *LessonLookupParams {
 	return params
 }
 
-func Test_requestLessons_SmokeTest(t *testing.T) {
-	testutil.SmokeTest(t)
-	c := config.New()
-	//curl https://api.snyk.io/v1/learn/lessons/lookup-for-cta\?ecosystem\=npm\&rule\=SNYK-JS-ASYNC-2441827\&cwe\=CWEs-1321
-	params := getRealOSSLookupParams()
-	cut := New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient).(*serviceImpl)
-	cut.lessonsByRuleCache.RemoveAll()
-
-	lessons, err := cut.RequestLessons(params)
-	assert.NoError(t, err)
-	assert.Greater(t, len(lessons), 0)
-}
-
-func Test_GetLesson_OSS(t *testing.T) {
-	t.Run("vulnerability - lesson returned", func(t *testing.T) {
-		testutil.SmokeTest(t)
-		c := config.New()
-		c.UpdateApiEndpoints("https://snyk.io/api")
-		cut := New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
-		params := getRealOSSLookupParams()
-
-		lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, snyk.DependencyVulnerability)
-
-		assert.NoError(t, err)
-		assert.NotEmpty(t, lesson)
-		assert.True(t, strings.HasSuffix(lesson.Url, "?loc=ide"), "should have ?loc=ide suffix")
-	})
-
-	t.Run("license - no lessons returned", func(t *testing.T) {
-		testutil.SmokeTest(t)
-		c := config.New()
-		c.UpdateApiEndpoints("https://snyk.io/api")
-		cut := New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
-		params := getRealOSSLookupParams()
-
-		lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, snyk.LicenceIssue)
-
-		assert.NoError(t, err)
-		assert.Empty(t, lesson)
-	})
-}
-
 func getRealCodeLookupParams() LessonLookupParams {
 	params := LessonLookupParams{
 		Rule:      "javascript/sqlinjection",
@@ -98,12 +56,31 @@ func getRealCodeLookupParams() LessonLookupParams {
 	return params
 }
 
-func Test_GetLesson_Code(t *testing.T) {
-	t.Run("security - lesson returned", func(t *testing.T) {
+func Test_GetLesson(t *testing.T) {
+	testutil.SmokeTest(t)
+	c := config.New()
+	c.UpdateApiEndpoints("https://snyk.io/api")
+	cut := New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
+	t.Run("OSS vulnerability - lesson returned", func(t *testing.T) {
+		params := getRealOSSLookupParams()
+
+		lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, snyk.DependencyVulnerability)
+
+		assert.NoError(t, err)
+		assert.NotEmpty(t, lesson)
+		assert.True(t, strings.HasSuffix(lesson.Url, "?loc=ide"), "should have ?loc=ide suffix")
+	})
+
+	t.Run("OSS license - no lessons returned", func(t *testing.T) {
 		testutil.SmokeTest(t)
-		c := config.New()
-		c.UpdateApiEndpoints("https://snyk.io/api")
-		cut := New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
+		params := getRealOSSLookupParams()
+
+		lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, snyk.LicenceIssue)
+
+		assert.NoError(t, err)
+		assert.Empty(t, lesson)
+	})
+	t.Run("Code security - lesson returned", func(t *testing.T) {
 		params := getRealCodeLookupParams()
 
 		lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, snyk.CodeSecurityVulnerability)
@@ -113,11 +90,7 @@ func Test_GetLesson_Code(t *testing.T) {
 		assert.Contains(t, lesson.Cwes, params.CWEs[0])
 		assert.Equal(t, lesson.Ecosystem, params.Ecosystem)
 	})
-	t.Run("quality - no lessons returned", func(t *testing.T) {
-		testutil.SmokeTest(t)
-		c := config.New()
-		c.UpdateApiEndpoints("https://snyk.io/api")
-		cut := New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
+	t.Run("Code quality - no lessons returned", func(t *testing.T) {
 		params := getRealCodeLookupParams()
 
 		lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, snyk.CodeQualityIssue)

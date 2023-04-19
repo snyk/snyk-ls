@@ -47,6 +47,7 @@ type Bundle struct {
 	limitToFiles  []string
 	rootPath      string
 	scanNotifier  snyk.ScanNotifier
+	learnService  learn.Service
 }
 
 func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {
@@ -306,11 +307,8 @@ func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk
 }
 
 func (b *Bundle) createOpenSnykLearnCodeAction(issue snyk.Issue) (ca *snyk.CodeAction) {
-	c := config.CurrentConfig()
-	learnService := learn.New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
-
 	title := fmt.Sprintf("Learn more about %s (Snyk)", issue.ID)
-	lesson, err := learnService.GetLesson(issue.Ecosystem, issue.ID, issue.CWEs, issue.CVEs, issue.IssueType)
+	lesson, err := b.learnService.GetLesson(issue.Ecosystem, issue.ID, issue.CWEs, issue.CVEs, issue.IssueType)
 	if err != nil {
 		log.Err(err).Msg("failed to get lesson")
 		b.errorReporter.CaptureError(err)

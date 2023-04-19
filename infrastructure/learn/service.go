@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/erni27/imcache"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -36,7 +35,6 @@ import (
 
 type Service interface {
 	LearnEndpoint(conf *config.Config) (learnEndpoint string, err error)
-	RequestLessons(params *LessonLookupParams) (lessons []Lesson, err error)
 	GetLesson(ecosystem string, rule string, cwes []string, cves []string, issueType snyk.Type) (lesson Lesson, err error)
 	GetAllLessons() (lessons []Lesson, err error)
 }
@@ -360,84 +358,4 @@ func (s *serviceImpl) LearnEndpoint(conf *config.Config) (learnEndpoint string, 
 	learnEndpoint = scheme + endpoint.Host + "/v1/learn"
 	logger.Debug().Str("LearnEndpoint", learnEndpoint).Msg("learn endpoint")
 	return learnEndpoint, err
-}
-
-func (s *serviceImpl) RequestLessons(params *LessonLookupParams) (lessons []Lesson, err error) {
-	logger := s.logger.With().Str("method", "RequestLessons").
-		Str("Rule", params.Rule).
-		Logger()
-
-	if cacheResult, ok := s.lessonsByRuleCache.Get(params.Rule); ok {
-		logger.Debug().Msgf("%d lessons found in cache", len(cacheResult))
-		return cacheResult, nil
-
-	} else {
-		logger.Debug().Msg("no lessons found in cache or cache disabled")
-		u, err := s.queryURL(params)
-		if err != nil {
-			return lessons, err
-		}
-
-		resp, err := s.httpClient().Get(u.String())
-		if err != nil {
-			return nil, err
-		}
-		if resp.StatusCode > 399 {
-			return nil, errors.Errorf("failed to fetch lessons: %s", resp.Status)
-		}
-		defer func(Body io.ReadCloser) { _ = Body.Close() }(resp.Body)
-
-		lessons, err = s.unmarshalResponse(resp)
-		if err != nil {
-			return lessons, err
-		}
-
-		logger.Debug().Msgf("lessons (%d) found, adding to cache", len(lessons))
-
-		s.lessonsByRuleCache.Set(params.Rule, lessons, imcache.WithDefaultExpiration())
-		if len(lessons) > 0 {
-			ecoKey := ecosystemAliases[params.Ecosystem]
-			cachedLessons, _ := s.lessonsByEcosystemCache.Get(ecoKey)
-			cachedLessons = append(cachedLessons, lessons...)
-			s.lessonsByEcosystemCache.Set(ecoKey, cachedLessons, imcache.WithDefaultExpiration())
-		}
-	}
-
-	return lessons, nil
-}
-
-func (s *serviceImpl) unmarshalResponse(resp *http.Response) (lessons []Lesson, err error) {
-	var res struct {
-		Lessons []Lesson `json:"lessons"`
-	}
-	if err = json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		return lessons, err
-	}
-
-	lessons = res.Lessons
-	return lessons, err
-}
-
-func (s *serviceImpl) queryURL(params *LessonLookupParams) (u *url.URL, err error) {
-	snykLearnEndpoint, err := s.LearnEndpoint(s.conf)
-	if err != nil {
-		return nil, err
-	}
-
-	u, err = url.Parse(snykLearnEndpoint + "/lessons/lookup-for-cta")
-	if err != nil {
-		return nil, err
-	}
-	q := u.Query()
-	q.Set("source", "ide")
-	q.Set("rule", params.Rule)
-	q.Set("ecosystem", params.Ecosystem)
-	if len(params.CWEs) > 0 {
-		q.Set("cwe", params.CWEs[0])
-	}
-	if len(params.CVEs) > 0 {
-		q.Set("cve", params.CVEs[0])
-	}
-	u.RawQuery = q.Encode()
-	return u, err
 }

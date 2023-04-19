@@ -142,6 +142,8 @@ func startServer(callBackFn onCallbackFn) server.Local {
 	handlers := handler.Map{}
 	loc := server.NewLocal(handlers, opts)
 	srv = loc.Server
+
+	// the learn service isnt needed as the smoke tests use it directly
 	initHandlers(srv, handlers)
 
 	return loc

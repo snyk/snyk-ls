@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/adrg/xdg"
+	"github.com/golang/mock/gomock"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
@@ -42,6 +43,8 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/iac"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
 	"github.com/snyk/snyk-ls/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/infrastructure/services"
@@ -57,6 +60,7 @@ var infrastructureAsCodeScanner *iac.Scanner
 var openSourceScanner *oss.Scanner
 var scanInitializer initialize.Initializer
 var authenticationService snyk.AuthenticationService
+var learnService learn.Service
 var instrumentor performance.Instrumentor
 var errorReporter er.ErrorReporter
 var installer install.Installer
@@ -129,7 +133,8 @@ func initInfrastructure() {
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
 	scanNotifier, _ = appNotification.NewScanNotifier(notification.NewNotifier())
-	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics)
+	learnService = learn.New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
+	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, learnService)
 	cliInitializer = cli.NewInitializer(errorReporter, installer)
 	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics)
 	scanInitializer = initialize.NewDelegatingInitializer(
@@ -171,7 +176,7 @@ func TestInit(t *testing.T) {
 	snykCli = cli.NewExecutor(authenticationService, errorReporter, analytics)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 	scanNotifier, _ = appNotification.NewScanNotifier(notification.NewNotifier())
-	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics)
+	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, mock_learn.NewMockService(gomock.NewController(t)))
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	scanner = snyk.NewDelegatingScanner(
@@ -284,4 +289,10 @@ func FileWatcher() *watcher.FileWatcher {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return fileWatcher
+}
+
+func LearnService() learn.Service {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return learnService
 }

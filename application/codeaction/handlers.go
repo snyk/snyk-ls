@@ -7,7 +7,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
@@ -18,10 +17,13 @@ type TextDocumentCodeActionHandler func(context.Context, lsp.CodeActionParams) (
 type ResolveHandler func(context.Context, lsp.CodeAction) (*lsp.CodeAction, error)
 
 // ResolveCodeActionHandler returns a jrpc2.Handler that can be used to handle the "codeAction/resolve" LSP method
-func ResolveCodeActionHandler(service *CodeActionsService, server server.Server, authenticationService snyk.AuthenticationService) ResolveHandler {
+func ResolveCodeActionHandler(
+	service *CodeActionsService,
+	server server.Server,
+	authenticationService snyk.AuthenticationService,
+	learnService learn.Service,
+) ResolveHandler {
 	logger := log.Logger.With().Str("method", "ResolveCodeActionHandler").Logger()
-	c := config.CurrentConfig()
-	learnService := learn.New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
 	return func(ctx context.Context, params lsp.CodeAction) (*lsp.CodeAction, error) {
 		logger := logger.With().Interface("request", params).Logger()
 		logger.Info().Msg("RECEIVING")
