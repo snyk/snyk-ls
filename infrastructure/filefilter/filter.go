@@ -1,8 +1,10 @@
 package filefilter
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -18,33 +20,37 @@ func FindNonIgnoredFiles(rootFolder string) <-chan string {
 
 type fileFilter struct {
 	// The path to the root of the repository
-	repoRoot               string
-	ignoreFiles            []string
-	globsPerFolder         map[string][]string
-	ignoreCheckerPerFolder map[string]ignore.IgnoreParser
-	logger                 zerolog.Logger
+	repoRoot       string
+	ignoreFiles    []string
+	globsPerFolder map[string][]string
+	logger         zerolog.Logger
 }
 
 func newFileFilter(rootFolder string) *fileFilter {
 	return &fileFilter{
-		repoRoot:               rootFolder,
-		ignoreFiles:            []string{".gitignore", ".dcignore", ".snyk"},
-		globsPerFolder:         make(map[string][]string),
-		ignoreCheckerPerFolder: make(map[string]ignore.IgnoreParser),
-		logger:                 log.With().Str("component", "fileFilter").Str("repoRoot", rootFolder).Logger(),
+		repoRoot:       rootFolder,
+		ignoreFiles:    []string{".gitignore", ".dcignore", ".snyk"},
+		globsPerFolder: make(map[string][]string),
+		logger:         log.With().Str("component", "fileFilter").Str("repoRoot", rootFolder).Logger(),
 	}
 }
 
 func (f *fileFilter) findNonIgnoredFiles() <-chan string {
 	resultsCh := make(chan string)
-	var wg sync.WaitGroup
+	filesPerFolder := make(map[string][]string)
+	var memStatsBefore, memStatsAfter runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&memStatsBefore)
+	fmt.Println("Memory before: ", memStatsBefore.Alloc)
 	go func() {
-		defer close(resultsCh)
+		defer func() {
+			close(resultsCh)
+		}()
 		// When walking a directory, the iteration is the directory itself (`path` parameter is the directory path).
 		// The ignore files are immediately parsed, and the iterations of the files come after the ignore rules have been loaded
 		err := filepath.WalkDir(f.repoRoot, func(path string, dirEntry os.DirEntry, err error) error {
 			if err != nil {
-				// err is not nil only when d is a directory that coult not be read,
+				// err is not nil only when d is a directory that could not be read,
 				// so a message is logged and the directory is skipped.
 				f.logger.Err(err).Msg("Error during file traversal of directory \"" + path + "\"\n" +
 					"Skipping Directory")
@@ -55,38 +61,35 @@ func (f *fileFilter) findNonIgnoredFiles() <-chan string {
 			}
 
 			if dirEntry.IsDir() {
-				// The following optimization has been removed because it doesn't take into account negation rules:
-				// For example:
-				// .ignoreme
-				// !.ignoreme/keepme.txt
-				//
-				// This implementation would skip the entire folder and not return keepme.txt:
-				//
-				// ```
-				//parentFolderPath := filepath.Dir(path)
-				//if path != rootFolder && ignoreCheckerPerFolder[parentFolderPath].MatchesPath(path) {
-				//	return filepath.SkipDir
-				//}
-				// ```
 				globs := f.collectGlobs(path)
 				f.globsPerFolder[path] = globs
-				f.ignoreCheckerPerFolder[path] = ignore.CompileIgnoreLines(globs...)
 				return nil
 			} else {
 				folderPath := filepath.Dir(path)
-				checker := f.ignoreCheckerPerFolder[folderPath]
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					if !checker.MatchesPath(path) {
-						resultsCh <- path
-					}
-				}()
+				filesPerFolder[folderPath] = append(filesPerFolder[folderPath], path)
 			}
 
 			return nil
 		})
 
+		var wg sync.WaitGroup
+		for folderPath, globs := range f.globsPerFolder { // Loop over folders
+			filesInFolder := len(filesPerFolder[folderPath])
+			wg.Add(filesInFolder)
+			go func(folderPath string, globs []string) {
+				checker := ignore.CompileIgnoreLines(globs...)
+				for _, filePath := range filesPerFolder[folderPath] { // Loop over every file
+					go func(filePath string) {
+						defer wg.Done()
+						if !checker.MatchesPath(filePath) {
+							resultsCh <- filePath
+						}
+					}(filePath)
+				}
+			}(folderPath, globs)
+		}
+		runtime.ReadMemStats(&memStatsAfter)
+		fmt.Println("Memory after: ", memStatsAfter.Alloc)
 		wg.Wait()
 
 		if err != nil {
