@@ -1,8 +1,10 @@
 package filefilter
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -18,75 +20,52 @@ func FindNonIgnoredFiles(rootFolder string) <-chan string {
 
 type fileFilter struct {
 	// The path to the root of the repository
-	repoRoot               string
-	ignoreFiles            []string
-	globsPerFolder         map[string][]string
-	ignoreCheckerPerFolder map[string]ignore.IgnoreParser
-	logger                 zerolog.Logger
+	repoRoot       string
+	ignoreFiles    []string
+	globsPerFolder map[string][]string
+	logger         zerolog.Logger
 }
 
 func newFileFilter(rootFolder string) *fileFilter {
 	return &fileFilter{
-		repoRoot:               rootFolder,
-		ignoreFiles:            []string{".gitignore", ".dcignore", ".snyk"},
-		globsPerFolder:         make(map[string][]string),
-		ignoreCheckerPerFolder: make(map[string]ignore.IgnoreParser),
-		logger:                 log.With().Str("component", "fileFilter").Str("repoRoot", rootFolder).Logger(),
+		repoRoot:       rootFolder,
+		ignoreFiles:    []string{".gitignore", ".dcignore", ".snyk"},
+		globsPerFolder: make(map[string][]string),
+		logger:         log.With().Str("component", "fileFilter").Str("repoRoot", rootFolder).Logger(),
 	}
 }
 
 func (f *fileFilter) findNonIgnoredFiles() <-chan string {
 	resultsCh := make(chan string)
-	var wg sync.WaitGroup
+	filesPerFolder := make(map[string][]string)
 	go func() {
 		defer close(resultsCh)
-		// When walking a directory, the iteration is the directory itself (`path` parameter is the directory path).
-		// The ignore files are immediately parsed, and the iterations of the files come after the ignore rules have been loaded
-		err := filepath.WalkDir(f.repoRoot, func(path string, dirEntry os.DirEntry, err error) error {
-			if err != nil {
-				// err is not nil only when d is a directory that coult not be read,
-				// so a message is logged and the directory is skipped.
-				f.logger.Err(err).Msg("Error during file traversal of directory \"" + path + "\"\n" +
-					"Skipping Directory")
-				return filepath.SkipDir
-			}
-			if dirEntry == nil {
-				return nil
-			}
 
-			if dirEntry.IsDir() {
-				// The following optimization has been removed because it doesn't take into account negation rules:
-				// For example:
-				// .ignoreme
-				// !.ignoreme/keepme.txt
-				//
-				// This implementation would skip the entire folder and not return keepme.txt:
-				//
-				// ```
-				//parentFolderPath := filepath.Dir(path)
-				//if path != rootFolder && ignoreCheckerPerFolder[parentFolderPath].MatchesPath(path) {
-				//	return filepath.SkipDir
-				//}
-				// ```
-				globs := f.collectGlobs(path)
-				f.globsPerFolder[path] = globs
-				f.ignoreCheckerPerFolder[path] = ignore.CompileIgnoreLines(globs...)
-				return nil
-			} else {
-				folderPath := filepath.Dir(path)
-				checker := f.ignoreCheckerPerFolder[folderPath]
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					if !checker.MatchesPath(path) {
-						resultsCh <- path
-					}
-				}()
-			}
+		err := filepath.WalkDir(f.repoRoot, f.filepathWalker(filesPerFolder))
 
-			return nil
-		})
+		if err != nil {
+			f.logger.Err(err).Msg("Error during filepath.WalkDir")
+		}
 
+		var wg sync.WaitGroup
+
+		// When a folder is scanned, a memory-heavy IgnoreParser object is created.
+		// The number of concurrent folders being scanned is limited to prevent high memory peaks.
+		// NumCPU is used as a reasonable default (instead of hardcoding a magic number),
+		// even though the files inside the folders are also scanned concurrently.
+		concurrentFolders := runtime.NumCPU()
+		semaphore := make(chan struct{}, concurrentFolders)
+
+		for folderPath, globs := range f.globsPerFolder {
+			wg.Add(1)
+			filesInFolder := filesPerFolder[folderPath]
+			go func(globs []string) {
+				defer wg.Done()
+				semaphore <- struct{}{} // Acquire semaphore
+				processFolder(filesInFolder, globs, resultsCh)
+				<-semaphore // Release semaphore
+			}(globs)
+		}
 		wg.Wait()
 
 		if err != nil {
@@ -95,6 +74,46 @@ func (f *fileFilter) findNonIgnoredFiles() <-chan string {
 	}()
 
 	return resultsCh
+}
+
+// processFolder processes a folder and sends the non-ignored files to the results channel.
+// The function blocks until all files are processed.
+func processFolder(files, globs []string, results chan<- string) {
+	checker := ignore.CompileIgnoreLines(globs...)
+	var wg sync.WaitGroup
+	for _, file := range files {
+		wg.Add(1)
+		go func(file string) {
+			defer wg.Done()
+			if !checker.MatchesPath(file) {
+				results <- file
+			}
+		}(file)
+	}
+	wg.Wait()
+}
+
+func (f *fileFilter) filepathWalker(filesPerFolder map[string][]string) fs.WalkDirFunc {
+	return func(path string, dirEntry os.DirEntry, err error) error {
+		if err != nil {
+			f.logger.Err(err).Msg("Error during file traversal of directory \"" + path + "\"\n" +
+				"Skipping Directory")
+			return filepath.SkipDir
+		}
+		if dirEntry == nil {
+			return nil
+		}
+
+		if dirEntry.IsDir() {
+			globs := f.collectGlobs(path)
+			f.globsPerFolder[path] = globs
+		} else {
+			folderPath := filepath.Dir(path)
+			filesPerFolder[folderPath] = append(filesPerFolder[folderPath], path)
+		}
+
+		return nil
+	}
 }
 
 func (f *fileFilter) collectGlobs(path string) []string {
