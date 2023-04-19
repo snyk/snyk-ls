@@ -1,8 +1,11 @@
 package filefilter
 
 import (
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -37,57 +40,33 @@ func (f *fileFilter) findNonIgnoredFiles() <-chan string {
 	resultsCh := make(chan string)
 	filesPerFolder := make(map[string][]string)
 	go func() {
-		defer func() {
-			close(resultsCh)
-		}()
-		// When walking a directory, the iteration is the directory itself (`path` parameter is the directory path).
-		// The ignore files are immediately parsed, and the iterations of the files come after the ignore rules have been loaded
-		err := filepath.WalkDir(f.repoRoot, func(path string, dirEntry os.DirEntry, err error) error {
-			if err != nil {
-				// err is not nil only when d is a directory that could not be read,
-				// so a message is logged and the directory is skipped.
-				f.logger.Err(err).Msg("Error during file traversal of directory \"" + path + "\"\n" +
-					"Skipping Directory")
-				return filepath.SkipDir
-			}
-			if dirEntry == nil {
-				return nil
-			}
+		defer close(resultsCh)
 
-			if dirEntry.IsDir() {
-				globs := f.collectGlobs(path)
-				f.globsPerFolder[path] = globs
-				return nil
-			} else {
-				folderPath := filepath.Dir(path)
-				filesPerFolder[folderPath] = append(filesPerFolder[folderPath], path)
-			}
+		err := filepath.WalkDir(f.repoRoot, f.filepathWalker(filesPerFolder))
 
-			return nil
-		})
+		if err != nil {
+			f.logger.Err(err).Msg("Error during filepath.WalkDir")
+		}
 
-		sem := make(chan any, 20)
 		var wg sync.WaitGroup
-		for folderPath, globs := range f.globsPerFolder { // Loop over folders
-			sem <- struct{}{}
-			filesInFolder := len(filesPerFolder[folderPath])
-			var folderLocalWg sync.WaitGroup
-			wg.Add(filesInFolder)
-			folderLocalWg.Add(filesInFolder)
-			go func(folderPath string, globs []string) {
-				checker := ignore.CompileIgnoreLines(globs...)
-				for _, filePath := range filesPerFolder[folderPath] { // Loop over every file
-					go func(filePath string) {
-						defer wg.Done()
-						defer folderLocalWg.Done()
-						if !checker.MatchesPath(filePath) {
-							resultsCh <- filePath
-						}
-					}(filePath)
-				}
-			}(folderPath, globs)
-			folderLocalWg.Wait()
-			<-sem
+
+		// When a folder is scanned, a memory-heavy IgnoreParser object is created.
+		// The number of concurrent folders being scanned is limited to prevent high memory peaks.
+		// NumCPU is used as a reasonable default (instead of hardcoding a magic number),
+		// even though the files inside the folders are also scanned concurrently.
+		concurrentFolders := runtime.NumCPU()
+		semaphore := make(chan struct{}, concurrentFolders)
+		fmt.Println("concurrentFolders: ", concurrentFolders)
+
+		for folderPath, globs := range f.globsPerFolder {
+			wg.Add(1)
+			filesInFolder := filesPerFolder[folderPath]
+			go func(globs []string) {
+				defer wg.Done()
+				semaphore <- struct{}{} // Acquire semaphore
+				processFolder(filesInFolder, globs, resultsCh)
+				<-semaphore // Release semaphore
+			}(globs)
 		}
 		wg.Wait()
 
@@ -97,6 +76,46 @@ func (f *fileFilter) findNonIgnoredFiles() <-chan string {
 	}()
 
 	return resultsCh
+}
+
+// processFolder processes a folder and sends the non-ignored files to the results channel.
+// The function blocks until all files are processed.
+func processFolder(files, globs []string, results chan<- string) {
+	checker := ignore.CompileIgnoreLines(globs...)
+	var wg sync.WaitGroup
+	for _, file := range files {
+		wg.Add(1)
+		go func(file string) {
+			defer wg.Done()
+			if !checker.MatchesPath(file) {
+				results <- file
+			}
+		}(file)
+	}
+	wg.Wait()
+}
+
+func (f *fileFilter) filepathWalker(filesPerFolder map[string][]string) fs.WalkDirFunc {
+	return func(path string, dirEntry os.DirEntry, err error) error {
+		if err != nil {
+			f.logger.Err(err).Msg("Error during file traversal of directory \"" + path + "\"\n" +
+				"Skipping Directory")
+			return filepath.SkipDir
+		}
+		if dirEntry == nil {
+			return nil
+		}
+
+		if dirEntry.IsDir() {
+			globs := f.collectGlobs(path)
+			f.globsPerFolder[path] = globs
+		} else {
+			folderPath := filepath.Dir(path)
+			filesPerFolder[folderPath] = append(filesPerFolder[folderPath], path)
+		}
+
+		return nil
+	}
 }
 
 func (f *fileFilter) collectGlobs(path string) []string {
