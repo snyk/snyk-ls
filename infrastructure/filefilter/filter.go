@@ -1,7 +1,6 @@
 package filefilter
 
 import (
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -56,7 +55,6 @@ func (f *fileFilter) findNonIgnoredFiles() <-chan string {
 		// even though the files inside the folders are also scanned concurrently.
 		concurrentFolders := runtime.NumCPU()
 		semaphore := make(chan struct{}, concurrentFolders)
-		fmt.Println("concurrentFolders: ", concurrentFolders)
 
 		for folderPath, globs := range f.globsPerFolder {
 			wg.Add(1)
