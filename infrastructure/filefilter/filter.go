@@ -1,10 +1,8 @@
 package filefilter
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 
@@ -38,10 +36,6 @@ func newFileFilter(rootFolder string) *fileFilter {
 func (f *fileFilter) findNonIgnoredFiles() <-chan string {
 	resultsCh := make(chan string)
 	filesPerFolder := make(map[string][]string)
-	var memStatsBefore, memStatsAfter runtime.MemStats
-	runtime.GC()
-	runtime.ReadMemStats(&memStatsBefore)
-	fmt.Println("Memory before: ", memStatsBefore.Alloc)
 	go func() {
 		defer func() {
 			close(resultsCh)
@@ -88,8 +82,6 @@ func (f *fileFilter) findNonIgnoredFiles() <-chan string {
 				}
 			}(folderPath, globs)
 		}
-		runtime.ReadMemStats(&memStatsAfter)
-		fmt.Println("Memory after: ", memStatsAfter.Alloc)
 		wg.Wait()
 
 		if err != nil {
