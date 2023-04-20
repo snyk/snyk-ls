@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -106,7 +107,7 @@ func (c *exampleCommit) toReference() (reference snyk.Reference) {
 	return snyk.Reference{Title: c.description, Url: commitURL}
 }
 
-func (r *result) getCodeFlow() (dataflow []dataflowElement) {
+func (r *result) getCodeFlow(baseDir string) (dataflow []dataflowElement) {
 	flows := r.CodeFlows
 	dedupMap := map[string]bool{}
 	for _, cFlow := range flows {
@@ -132,7 +133,7 @@ func (r *result) getCodeFlow() (dataflow []dataflowElement) {
 				if !dedupMap[key] {
 					d := dataflowElement{
 						position:  len(dataflow),
-						filePath:  path,
+						filePath:  filepath.Join(baseDir, path),
 						flowRange: myRange,
 					}
 					log.Debug().Str("method", method).Str("dataflowElement", d.String()).Send()
@@ -171,7 +172,7 @@ func (r *rule) detailsOrEmpty() string {
 	return ""
 }
 
-func (r *result) formattedMessage(rule rule) string {
+func (r *result) formattedMessage(rule rule, baseDir string) string {
 	const separator = "\n\n\n\n"
 	var builder strings.Builder
 	builder.Grow(500)
@@ -189,7 +190,7 @@ func (r *result) formattedMessage(rule rule) string {
 	builder.WriteString(rule.detailsOrEmpty())
 	builder.WriteString(separator)
 	builder.WriteString("### Data Flow\n\n")
-	for _, elem := range r.getCodeFlow() {
+	for _, elem := range r.getCodeFlow(baseDir) {
 		builder.WriteString(elem.toMarkDown())
 	}
 	builder.WriteString(separator)
@@ -306,8 +307,8 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 
 			rule := r.getRule(result.RuleID)
 			message := result.getMessage(rule)
-			dataflow := result.getCodeFlow()
-			formattedMessage := result.formattedMessage(rule)
+			dataflow := result.getCodeFlow(baseDir)
+			formattedMessage := result.formattedMessage(rule, baseDir)
 
 			exampleCommits := rule.getExampleCommits()
 			exampleFixes := make([]snyk.ExampleCommitFix, 0, len(exampleCommits))
