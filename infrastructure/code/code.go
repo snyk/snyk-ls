@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
@@ -76,7 +77,7 @@ type Scanner struct {
 	runningScans      map[string]*ScanStatus
 	scanNotifier      snyk.ScanNotifier
 	changedPaths      map[string]map[string]bool // tracks files that were changed since the last scan per workspace folder
-	fileFilters       map[string]*filefilter.FileFilter
+	fileFilters       *xsync.MapOf[string, *filefilter.FileFilter]
 }
 
 func New(bundleUploader *BundleUploader,
@@ -91,7 +92,7 @@ func New(bundleUploader *BundleUploader,
 		analytics:      analytics,
 		runningScans:   map[string]*ScanStatus{},
 		changedPaths:   map[string]map[string]bool{},
-		fileFilters:    map[string]*filefilter.FileFilter{},
+		fileFilters:    xsync.NewMapOf[*filefilter.FileFilter](),
 	}
 	return sc
 }
@@ -162,10 +163,10 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	// Start the scan
 	t := progress.NewTracker(false)
 	t.Begin("Snyk Code: Collecting files in \""+folderPath+"\"", "Evaluating ignores and counting files...")
-	fileFilter := sc.fileFilters[folderPath]
+	fileFilter, _ := sc.fileFilters.Load(folderPath)
 	if fileFilter == nil {
 		fileFilter = filefilter.NewFileFilter(folderPath)
-		sc.fileFilters[folderPath] = fileFilter
+		sc.fileFilters.Store(folderPath, fileFilter)
 	}
 	files := fileFilter.FindNonIgnoredFiles()
 	t.End("Collected files")
