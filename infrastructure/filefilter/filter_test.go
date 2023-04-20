@@ -71,6 +71,7 @@ func Test_FindNonIgnoredFiles_MultipleWorkDirs(t *testing.T) {
 }
 
 func Test_FindNonIgnoredFile_FilesChanged_ReturnsCorrectResults(t *testing.T) {
+	// Arrange - set up repo
 	repoFolder := t.TempDir()
 	type fileChangesTestCase struct {
 		ignoreFilesTestCase
@@ -93,14 +94,8 @@ func Test_FindNonIgnoredFile_FilesChanged_ReturnsCorrectResults(t *testing.T) {
 	originalFilteredFiles := util.ChannelToSlice(fileFilter.FindNonIgnoredFiles()) // Calling it a first time
 
 	// Act - Changing folder content
-	for _, file := range testCase.expectedAddedFiles {
-		fileAbsPath := filepath.Join(repoFolder, file)
-		testutil.CreateFileOrFail(t, fileAbsPath, []byte("some content to avoid skipping"))
-	}
-	for _, file := range testCase.expectedAddedExcludes {
-		fileAbsPath := filepath.Join(repoFolder, file)
-		testutil.CreateFileOrFail(t, fileAbsPath, []byte("some content to avoid skipping"))
-	}
+	filesToCreate := append(testCase.expectedAddedFiles, testCase.expectedAddedExcludes...)
+	createFiles(t, repoFolder, filesToCreate)
 	newFilteredFiles := util.ChannelToSlice(fileFilter.FindNonIgnoredFiles())
 
 	// Assert - Make sure the added files have been filtered correctly
@@ -111,6 +106,7 @@ func Test_FindNonIgnoredFile_FilesChanged_ReturnsCorrectResults(t *testing.T) {
 }
 
 func testCases(t *testing.T) []ignoreFilesTestCase {
+	t.Helper()
 	cases := []ignoreFilesTestCase{
 		{
 			name:              "Does not ignore files when no ignored file is present",
@@ -176,8 +172,13 @@ func setupIgnoreFilesTest(t *testing.T, testCase ignoreFilesTestCase) {
 
 	ignoreFileAbsPath := filepath.Join(testCase.repoPath, testCase.ignoreFilePath)
 	testutil.CreateFileOrFail(t, ignoreFileAbsPath, []byte(testCase.ignoreFileContent))
+	createFiles(t, testCase.repoPath, allFiles)
+}
+
+func createFiles(t *testing.T, repoPath string, allFiles []string) {
+	t.Helper()
 	for _, fileRelPath := range allFiles {
-		absPath := filepath.Join(testCase.repoPath, fileRelPath)
+		absPath := filepath.Join(repoPath, fileRelPath)
 		testutil.CreateFileOrFail(t, absPath, []byte("some content to avoid skipping"))
 	}
 }
