@@ -19,14 +19,14 @@ package command
 import (
 	"context"
 
-	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 type workspaceScanCommand struct {
 	command snyk.CommandData
-	srv     server.Server
+	srv     lsp.Server
 }
 
 func (cmd *workspaceScanCommand) Command() snyk.CommandData {

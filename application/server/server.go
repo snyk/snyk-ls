@@ -36,7 +36,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
-	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
@@ -46,7 +45,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-func Start() {
+func Start(c *config.Config) {
 	log.Debug().Msg("Starting server...")
 	var srv *jrpc2.Server
 
@@ -54,14 +53,18 @@ func Start() {
 	srv = jrpc2.NewServer(handlers, &jrpc2.ServerOptions{
 		Logger: func(text string) {
 			if len(text) > 300 {
-				log.Debug().Msgf("JSON RPC Log: %s... [TRUNCATED]", text[:300])
+				// if this were debug and sent to the client via rpc logger, the server json rpc log would cause an endless loop...
+				log.Trace().Msgf("JSON RPC Log: %s... [TRUNCATED]", text[:300])
 			} else {
-				log.Debug().Msgf("JSON RPC Log: %s", text)
+				log.Trace().Msgf("JSON RPC Log: %s", text)
 			}
 		},
 		RPCLog:    RPCLogger{},
 		AllowPush: true,
 	})
+
+	c.ConfigureLogging(srv)
+
 	initHandlers(srv, handlers)
 
 	log.Info().Msg("Starting up...")
@@ -424,7 +427,7 @@ func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 	})
 }
 
-func codeActionResolveHandler(server server.Server, authenticationService snyk.AuthenticationService, learnService learn.Service) handler.Func {
+func codeActionResolveHandler(server lsp.Server, authenticationService snyk.AuthenticationService, learnService learn.Service) handler.Func {
 	return handler.New(codeaction.ResolveCodeActionHandler(di.CodeActionService(), server, authenticationService, learnService))
 }
 

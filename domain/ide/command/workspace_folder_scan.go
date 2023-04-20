@@ -22,14 +22,14 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
-	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 type workspaceFolderScanCommand struct {
 	command snyk.CommandData
-	srv     server.Server
+	srv     lsp.Server
 }
 
 func (cmd *workspaceFolderScanCommand) Command() snyk.CommandData {

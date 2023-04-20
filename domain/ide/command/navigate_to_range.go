@@ -24,7 +24,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/domain/ide/converter"
-	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -32,7 +31,7 @@ import (
 
 type navigateToRangeCommand struct {
 	command snyk.CommandData
-	srv     server.Server
+	srv     lsp.Server
 }
 
 func (cmd *navigateToRangeCommand) Command() snyk.CommandData {

@@ -41,8 +41,9 @@ func main() {
 			di.ErrorReporter().FlushErrorReporting()
 		}
 	}()
-
-	output, err := parseFlags(os.Args)
+	c := config.New()
+	config.SetCurrentConfig(c)
+	output, err := parseFlags(os.Args, c)
 	if err != nil {
 		fmt.Println(err, output)
 		os.Exit(1)
@@ -60,10 +61,10 @@ func main() {
 	log.Info().Msg(config.Version)
 	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
 	di.Init()
-	server.Start()
+	server.Start(c)
 }
 
-func parseFlags(args []string) (string, error) {
+func parseFlags(args []string, c *config.Config) (string, error) {
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	var buf bytes.Buffer
 	flags.SetOutput(&buf)
@@ -97,13 +98,10 @@ func parseFlags(args []string) (string, error) {
 		buf.Write([]byte(config.LicenseInformation))
 	}
 
-	c := config.New()
 	c.SetConfigFile(*configFlag)
 	c.Load()
-
+	c.SetLogLevel(*logLevelFlag)
 	c.SetLogPath(*logPathFlag)
-	c.ConfigureLogging(*logLevelFlag)
-
 	c.SetFormat(*formatFlag)
 	if os.Getenv(config.SendErrorReportsKey) == "" {
 		c.SetErrorReportingEnabled(*reportErrorsFlag)

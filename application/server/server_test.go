@@ -118,8 +118,6 @@ type onCallbackFn = func(ctx context.Context, request *jrpc2.Request) (any, erro
 func startServer(callBackFn onCallbackFn) server.Local {
 	var srv *jrpc2.Server
 
-	zerolog.SetGlobalLevel(zerolog.DebugLevel)
-
 	opts := &server.LocalOptions{
 		Client: &jrpc2.ClientOptions{
 			OnNotify: func(request *jrpc2.Request) {
@@ -142,6 +140,10 @@ func startServer(callBackFn onCallbackFn) server.Local {
 	handlers := handler.Map{}
 	loc := server.NewLocal(handlers, opts)
 	srv = loc.Server
+
+	c := config.CurrentConfig()
+	c.SetLogLevel(zerolog.LevelDebugValue)
+	c.ConfigureLogging(srv)
 
 	// the learn service isnt needed as the smoke tests use it directly
 	initHandlers(srv, handlers)

@@ -19,14 +19,14 @@ package command
 import (
 	"fmt"
 
-	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 func CreateFromCommandData(
 	commandData snyk.CommandData,
-	srv server.Server,
+	srv lsp.Server,
 	authService snyk.AuthenticationService,
 	learnService learn.Service,
 ) (snyk.Command, error) {

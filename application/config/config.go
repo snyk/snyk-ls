@@ -18,6 +18,7 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -435,8 +436,11 @@ func (c *Config) SetLogPath(logPath string) {
 	c.logPath = logPath
 }
 
-func (c *Config) ConfigureLogging(level string) {
-	logLevel, err := zerolog.ParseLevel(level)
+func (c *Config) ConfigureLogging(server lsp.Server) {
+	var logLevel zerolog.Level
+	var err error
+
+	logLevel, err = zerolog.ParseLevel(c.LogLevel())
 	if err != nil {
 		fmt.Println("Can't set log level from flag. Setting to default (=info)")
 		logLevel = zerolog.InfoLevel
@@ -454,20 +458,26 @@ func (c *Config) ConfigureLogging(level string) {
 		}
 		logLevel = envLevel
 	}
-	zerolog.SetGlobalLevel(logLevel)
+
+	c.SetLogLevel(logLevel.String())
 	zerolog.TimeFieldFormat = time.RFC3339
+
+	clientWriter := zerolog.New(lsp.New(server))
+	writers := []io.Writer{clientWriter}
 
 	if c.logPath != "" {
 		c.logFile, err = os.OpenFile(c.logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 		if err != nil {
 			log.Err(err).Msg("couldn't open logfile")
+		} else {
+			log.Info().Msgf("adding file logger to file %s", c.logPath)
+			logFileLogger := zerolog.NewConsoleWriter()
+			logFileLogger.Out = c.logFile
+			writers = append(writers, c.logFile)
 		}
-		log.Info().Msgf("Logging to file %s", c.logPath)
-		log.Logger = log.Output(c.logFile)
-	} else {
-		log.Info().Msgf("Logging to console") // TODO: log using LSP's 'window/logMessage'
-		log.Logger = zerolog.New(os.Stderr)
 	}
+	writer := io.MultiWriter(writers...)
+	log.Logger = zerolog.New(writer).With().Timestamp().Logger()
 }
 
 // DisableLoggingToFile closes the open log file and sets the global logger back to it's default
@@ -733,4 +743,15 @@ func (c *Config) IsSnykLearnCodeActionsEnabled() bool {
 
 func (c *Config) SetSnykLearnCodeActionsEnabled(enabled bool) {
 	c.enableSnykLearnCodeActions = enabled
+}
+
+func (c *Config) SetLogLevel(level string) {
+	parseLevel, err := zerolog.ParseLevel(level)
+	if err == nil {
+		zerolog.SetGlobalLevel(parseLevel)
+	}
+}
+
+func (c *Config) LogLevel() string {
+	return zerolog.GlobalLevel().String()
 }

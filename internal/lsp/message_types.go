@@ -688,6 +688,18 @@ const Warning MessageType = 2
 const Info MessageType = 3
 const Log MessageType = 4
 
+type LogMessageParams struct {
+	/**
+	 * The message type. See {@link MessageType}
+	 */
+	Type MessageType `json:"type"`
+
+	/**
+	 * The actual message
+	 */
+	Message string `json:"message"`
+}
+
 type SnykTrustedFoldersParams struct {
 	TrustedFolders []string `json:"trustedFolders"`
 }

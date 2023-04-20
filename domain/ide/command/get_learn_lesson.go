@@ -23,14 +23,14 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 type getLearnLesson struct {
 	command      snyk.CommandData
-	srv          server.Server
+	srv          lsp.Server
 	learnService learn.Service
 }
 

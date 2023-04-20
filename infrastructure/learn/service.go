@@ -114,7 +114,7 @@ type serviceImpl struct {
 
 func New(conf *config.Config, httpClientFunc func() *http.Client) Service {
 	s := &serviceImpl{
-		logger:     log.With().Caller().Str("service", "learn").Logger(),
+		logger:     log.With().Str("service", "learn").Logger(),
 		conf:       conf,
 		httpClient: httpClientFunc,
 		lessonsByRuleCache: imcache.New[string, []Lesson](

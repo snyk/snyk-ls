@@ -7,7 +7,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
@@ -19,7 +18,7 @@ type ResolveHandler func(context.Context, lsp.CodeAction) (*lsp.CodeAction, erro
 // ResolveCodeActionHandler returns a jrpc2.Handler that can be used to handle the "codeAction/resolve" LSP method
 func ResolveCodeActionHandler(
 	service *CodeActionsService,
-	server server.Server,
+	server lsp.Server,
 	authenticationService snyk.AuthenticationService,
 	learnService learn.Service,
 ) ResolveHandler {

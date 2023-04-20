@@ -13,7 +13,6 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
-	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
@@ -93,7 +92,7 @@ func (c *CodeActionsService) GetCodeActions(params lsp.CodeActionParams) []lsp.C
 
 func (c *CodeActionsService) ResolveCodeAction(
 	action lsp.CodeAction,
-	server server.Server,
+	server lsp.Server,
 	authService snyk.AuthenticationService,
 	learnService learn.Service,
 ) (lsp.CodeAction, error) {
@@ -128,7 +127,7 @@ func (c *CodeActionsService) ResolveCodeAction(
 
 func (c *CodeActionsService) handleCommand(
 	action lsp.CodeAction,
-	server server.Server,
+	server lsp.Server,
 	authService snyk.AuthenticationService,
 	learnService learn.Service,
 ) (lsp.CodeAction, error) {
