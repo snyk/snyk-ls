@@ -699,11 +699,11 @@ func markersForSampleSarifResponse(path string) []snyk.Marker {
 
 func Test_getFormattedMessage(t *testing.T) {
 	testutil.UnitTest(t)
-	_, _, sarifResponse := setupConversionTests(t, true, true)
+	p, _, sarifResponse := setupConversionTests(t, true, true)
 	run := sarifResponse.Sarif.Runs[0]
 	result := run.Results[0]
 
-	msg := result.formattedMessage(run.getRule("1"))
+	msg := result.formattedMessage(run.getRule("1"), filepath.Dir(p))
 
 	assert.Contains(t, msg, "Example Commit Fixes")
 	assert.Contains(t, msg, "Data Flow")
@@ -711,10 +711,10 @@ func Test_getFormattedMessage(t *testing.T) {
 
 func TestGetCodeFlowCommands(t *testing.T) {
 	testutil.UnitTest(t)
-	_, _, sarifResponse := setupConversionTests(t, true, true)
+	p, _, sarifResponse := setupConversionTests(t, true, true)
 
 	result := sarifResponse.Sarif.Runs[0].Results[0]
-	flow := result.getCodeFlow()
+	flow := result.getCodeFlow(filepath.Dir(p))
 	assert.NotEmpty(t, flow)
 	assert.Equal(t, snyk.NavigateToRangeCommand, flow[0].toCommand().CommandId)
 }
@@ -722,13 +722,13 @@ func TestGetCodeFlowCommands(t *testing.T) {
 func setupConversionTests(t *testing.T,
 	activateSnykCodeSecurity bool,
 	activateSnykCodeQuality bool,
-) (string, []snyk.Issue, SarifResponse) {
+) (path string, issues []snyk.Issue, response SarifResponse) {
 	testutil.UnitTest(t)
 	c := config.CurrentConfig()
 	c.EnableSnykCodeSecurity(activateSnykCodeSecurity)
 	c.EnableSnykCodeQuality(activateSnykCodeQuality)
 	temp := t.TempDir()
-	path := filepath.Join(temp, "File With Spaces.java")
+	path = filepath.Join(temp, "File With Spaces.java")
 	err := os.WriteFile(path, []byte(strings.Repeat("aa\n", 1000)), 0660)
 	if err != nil {
 		t.Fatal(err, "couldn't write test file")
@@ -748,7 +748,7 @@ func setupConversionTests(t *testing.T,
 		t.Fatal(err, "couldn't unmarshal sarif response")
 	}
 
-	issues, err := analysisResponse.toIssues(temp)
+	issues, err = analysisResponse.toIssues(temp)
 	assert.Nil(t, err)
 
 	return path, issues, analysisResponse
