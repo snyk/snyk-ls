@@ -152,6 +152,29 @@ Right now the language server supports the following actions:
     - cwes string (comma separated)
     - cves (comma separated)
     - issueType string
+  - result: lesson json
+  ```json5
+  {
+  "lessonId": "123",
+  "datePublished": "2022-01-01",
+  "author": "John Doe",
+  "title": "Introduction to Golang",
+  "subtitle": "A beginner's guide to Golang",
+  "seoKeywords": ["Golang", "Programming", "Beginner"],
+  "seoTitle": "Learn Golang",
+  "cves": ["CVE-2022-1234", "CVE-2022-5678"],
+  "cwes": ["CWE-123", "CWE-456"],
+  "description": "This lesson provides an introduction to Golang for beginners",
+  "ecosystem": "Programming",
+  "rules": ["Rule 1", "Rule 2", "Rule 3"],
+  "slug": "golang-intro",
+  "published": true,
+  "url": "https://example.com/golang-intro",
+  "source": "Example.com",
+  "img": "https://example.com/images/golang-intro.png"
+  }
+  ```
+  
 
 ## Installation
 

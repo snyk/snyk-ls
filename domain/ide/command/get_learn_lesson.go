@@ -40,7 +40,7 @@ func (cmd *getLearnLesson) Command() snyk.CommandData {
 
 func (cmd *getLearnLesson) Execute(_ context.Context) (any, error) {
 	args := cmd.command.Arguments
-	if len(args) < 4 {
+	if len(args) < 5 {
 		return nil, errors.New("command is missing arguments. expected: rule, ecosystem, cwes, cves, issueType")
 	}
 
