@@ -53,9 +53,6 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 		}
 
 		result, err := command.Service().ExecuteCommand(bgCtx, cmd)
-		if err == nil {
-			return nil, nil
-		}
 		logError(errors.Wrap(err, fmt.Sprintf("Error executing command %v", commandData)), method)
 		return result, err
 	})
