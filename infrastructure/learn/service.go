@@ -271,35 +271,42 @@ func (s *serviceImpl) filterLessons(lessons []Lesson, params *LessonLookupParams
 }
 
 func (s *serviceImpl) filterForCWEs(lessons []Lesson, cwes []string) (filteredLessons []Lesson) {
-	if len(cwes) == 0 {
-		return lessons
-	}
-	for _, lesson := range lessons {
-		if len(lesson.Cwes) > 0 {
-			for _, paramCWE := range cwes {
-				for _, lessonCWE := range lesson.Cwes {
-					if paramCWE == lessonCWE {
-						filteredLessons = append(filteredLessons, lesson)
-					}
-				}
+	comparator := func(lesson Lesson, b string) bool {
+		for _, lessonCWE := range lesson.Cwes {
+			// only one needs to match
+			if lessonCWE == b {
+				return true
 			}
 		}
+		return false
 	}
-	return filteredLessons
+	return s.filterLessonWithComparatorFunc(lessons, cwes, comparator)
 }
 
 func (s *serviceImpl) filterForCVEs(lessons []Lesson, cves []string) (filteredLessons []Lesson) {
-	if len(cves) == 0 {
+	comparator := func(lesson Lesson, b string) bool {
+		for _, lessonCVE := range lesson.Cves {
+			// only one needs to match
+			if lessonCVE == b {
+				return true
+			}
+		}
+		return false
+	}
+	return s.filterLessonWithComparatorFunc(lessons, cves, comparator)
+}
+
+func (s *serviceImpl) filterLessonWithComparatorFunc(lessons []Lesson, toCompare []string, lessonComparator func(
+	lesson Lesson,
+	b string,
+) bool) (filteredLessons []Lesson) {
+	if len(toCompare) == 0 {
 		return lessons
 	}
 	for _, lesson := range lessons {
-		if len(lesson.Cves) > 0 {
-			for _, paramCVEs := range cves {
-				for _, lessonCWEs := range lesson.Cwes {
-					if paramCVEs == lessonCWEs {
-						filteredLessons = append(filteredLessons, lesson)
-					}
-				}
+		for _, v := range toCompare {
+			if lessonComparator(lesson, v) {
+				filteredLessons = append(filteredLessons, lesson)
 			}
 		}
 	}
