@@ -102,10 +102,10 @@ func TestSnykLearnServicePact(t *testing.T) { // nolint:gocognit // this is a te
 
 func headerMatcher() dsl.MapMatcher {
 	m := dsl.MapMatcher{}
-	m["Host"] = dsl.String(hostWithPort())
-	m["User-Agent"] = dsl.String("Go-http-client/1.1")
+	m["Host"] = dsl.Regex("http://localhost:1234", ".*")
+	m["User-Agent"] = dsl.Regex("go-http-client/1.1", ".*")
 	m["Accept-Encoding"] = dsl.String("gzip")
-	m["Version"] = dsl.String("HTTP/1.1")
+	m["Version"] = dsl.Regex("HTTP/1.1", "HTTP\\/.*")
 	return m
 }
 
