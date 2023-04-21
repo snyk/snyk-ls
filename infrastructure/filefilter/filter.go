@@ -12,13 +12,14 @@ import (
 
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	ignore "github.com/sabhiram/go-gitignore"
 	"gopkg.in/yaml.v3"
+
+	"github.com/snyk/snyk-ls/application/config"
 )
 
-func FindNonIgnoredFiles(rootFolder string) <-chan string {
-	return NewFileFilter(rootFolder).FindNonIgnoredFiles()
+func FindNonIgnoredFiles(rootFolder string, c *config.Config) <-chan string {
+	return NewFileFilter(rootFolder, c).FindNonIgnoredFiles()
 }
 
 type FileFilter struct {
@@ -58,12 +59,12 @@ func hashFolder(globs, files []string) (uint64, error) {
 	return hash, nil
 }
 
-func NewFileFilter(rootFolder string) *FileFilter {
+func NewFileFilter(rootFolder string, c *config.Config) *FileFilter {
 	return &FileFilter{
 		repoRoot:       rootFolder,
 		ignoreFiles:    []string{".gitignore", ".dcignore", ".snyk"},
 		globsPerFolder: make(map[string][]string),
-		logger:         log.With().Str("component", "FileFilter").Str("repoRoot", rootFolder).Logger(),
+		logger:         c.Logger().With().Str("component", "FileFilter").Str("repoRoot", rootFolder).Logger(),
 		cache:          xsync.NewMapOf[cachedResults](),
 	}
 }

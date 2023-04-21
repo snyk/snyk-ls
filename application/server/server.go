@@ -65,7 +65,7 @@ func Start(c *config.Config) {
 
 	c.ConfigureLogging(srv)
 	di.Init()
-	initHandlers(srv, handlers)
+	initHandlers(c, srv, handlers)
 
 	log.Info().Msg("Starting up...")
 	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
@@ -82,7 +82,7 @@ func Start(c *config.Config) {
 const textDocumentDidOpenOperation = "textDocument/didOpen"
 const textDocumentDidSaveOperation = "textDocument/didSave"
 
-func initHandlers(srv *jrpc2.Server, handlers handler.Map) {
+func initHandlers(c *config.Config, srv *jrpc2.Server, handlers handler.Map) {
 	handlers["initialize"] = initializeHandler(srv)
 	handlers["initialized"] = initializedHandler(srv)
 	handlers["textDocument/didChange"] = textDocumentDidChangeHandler()
@@ -90,11 +90,11 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map) {
 	handlers[textDocumentDidOpenOperation] = textDocumentDidOpenHandler()
 	handlers[textDocumentDidSaveOperation] = textDocumentDidSaveHandler()
 	handlers["textDocument/hover"] = textDocumentHover()
-	handlers["textDocument/codeAction"] = textDocumentCodeActionHandler()
+	handlers["textDocument/codeAction"] = textDocumentCodeActionHandler(c)
 	handlers["textDocument/codeLens"] = codeLensHandler()
 	handlers["textDocument/willSave"] = noOpHandler()
 	handlers["textDocument/willSaveWaitUntil"] = noOpHandler()
-	handlers["codeAction/resolve"] = codeActionResolveHandler(srv, di.AuthenticationService(), di.LearnService())
+	handlers["codeAction/resolve"] = codeActionResolveHandler(c, srv, di.AuthenticationService(), di.LearnService())
 	handlers["shutdown"] = shutdown()
 	handlers["exit"] = exit(srv)
 	handlers["workspace/didChangeWorkspaceFolders"] = workspaceDidChangeWorkspaceFoldersHandler(srv)
@@ -428,12 +428,12 @@ func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 	})
 }
 
-func codeActionResolveHandler(server lsp.Server, authenticationService snyk.AuthenticationService, learnService learn.Service) handler.Func {
-	return handler.New(codeaction.ResolveCodeActionHandler(di.CodeActionService(), server, authenticationService, learnService))
+func codeActionResolveHandler(c *config.Config, server lsp.Server, authenticationService snyk.AuthenticationService, learnService learn.Service) handler.Func {
+	return handler.New(codeaction.ResolveCodeActionHandler(di.CodeActionService(), server, authenticationService, learnService, c))
 }
 
-func textDocumentCodeActionHandler() handler.Func {
-	return handler.New(codeaction.GetCodeActionHandler(di.CodeActionService()))
+func textDocumentCodeActionHandler(c *config.Config) handler.Func {
+	return handler.New(codeaction.GetCodeActionHandler(c, di.CodeActionService()))
 }
 
 func noOpHandler() jrpc2.Handler {

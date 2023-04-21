@@ -5,8 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog/log"
-
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
@@ -21,8 +20,9 @@ func ResolveCodeActionHandler(
 	server lsp.Server,
 	authenticationService snyk.AuthenticationService,
 	learnService learn.Service,
+	c *config.Config,
 ) ResolveHandler {
-	logger := log.Logger.With().Str("method", "ResolveCodeActionHandler").Logger()
+	logger := c.Logger().With().Str("method", "ResolveCodeActionHandler").Logger()
 	return func(ctx context.Context, params lsp.CodeAction) (*lsp.CodeAction, error) {
 		logger := logger.With().Interface("request", params).Logger()
 		logger.Info().Msg("RECEIVING")
@@ -42,14 +42,14 @@ func ResolveCodeActionHandler(
 }
 
 // GetCodeActionHandler returns a jrpc2.Handler that can be used to handle the "textDocument/codeAction" LSP method
-func GetCodeActionHandler(service *CodeActionsService) TextDocumentCodeActionHandler {
+func GetCodeActionHandler(c *config.Config, service *CodeActionsService) TextDocumentCodeActionHandler {
 	const debounceDuration = 50 * time.Millisecond
 
 	// We share a mutex between all the handler calls to prevent concurrent runs.
 	var mu = &sync.Mutex{}
 	// This "field" is shared between the handlers to allow for cancellation of previous handler
 	_, cancel := context.WithCancel(context.Background())
-	logger := log.Logger.With().Str("method", "CodeActionHandler").Logger()
+	logger := c.Logger().With().Str("method", "CodeActionHandler").Logger()
 
 	return func(paramCtx context.Context, params lsp.CodeActionParams) ([]lsp.CodeAction, error) {
 		// We want to avoid concurrent runs of this handler to prevent race condition.

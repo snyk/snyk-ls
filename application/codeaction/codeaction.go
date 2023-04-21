@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -45,11 +46,11 @@ type cachedAction struct {
 	action snyk.CodeAction
 }
 
-func NewService(provider issuesProvider, fileWatcher dirtyFilesWatcher) *CodeActionsService {
+func NewService(c *config.Config, provider issuesProvider, fileWatcher dirtyFilesWatcher) *CodeActionsService {
 	return &CodeActionsService{
 		IssuesProvider: provider,
 		actionsCache:   make(map[uuid.UUID]cachedAction),
-		logger:         log.With().Str("service", "CodeActionsService").Logger(),
+		logger:         c.Logger().With().Str("service", "CodeActionsService").Logger(),
 		fileWatcher:    fileWatcher,
 	}
 }

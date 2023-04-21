@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/filefilter"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -32,7 +33,7 @@ func Test_FindNonIgnoredFiles(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			setupIgnoreFilesTest(t, testCase)
 
-			filter := filefilter.NewFileFilter(testCase.repoPath)
+			filter := filefilter.NewFileFilter(testCase.repoPath, config.CurrentConfig())
 			var files []string
 			for f := range filter.FindNonIgnoredFiles() {
 				files = append(files, f)
@@ -65,8 +66,8 @@ func Test_FindNonIgnoredFiles_MultipleWorkDirs(t *testing.T) {
 	}
 
 	for _, testCase := range cases {
-		files := util.ChannelToSlice(filefilter.FindNonIgnoredFiles(testCase.repoPath)) // Act
-		assertFilesFiltered(t, testCase, files)                                         // Assert
+		files := util.ChannelToSlice(filefilter.FindNonIgnoredFiles(testCase.repoPath, config.CurrentConfig())) // Act
+		assertFilesFiltered(t, testCase, files)                                                                 // Assert
 	}
 }
 
@@ -90,7 +91,7 @@ func Test_FindNonIgnoredFile_FilesChanged_ReturnsCorrectResults(t *testing.T) {
 		expectedAddedExcludes: []string{"foo2.go", "bar2.go"},
 	}
 	setupIgnoreFilesTest(t, testCase.ignoreFilesTestCase)
-	fileFilter := filefilter.NewFileFilter(repoFolder)
+	fileFilter := filefilter.NewFileFilter(repoFolder, config.CurrentConfig())
 	originalFilteredFiles := util.ChannelToSlice(fileFilter.FindNonIgnoredFiles()) // Calling it a first time
 
 	// Act - Changing folder content

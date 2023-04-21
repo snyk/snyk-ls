@@ -26,7 +26,6 @@ import (
 
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -114,7 +113,7 @@ type serviceImpl struct {
 
 func New(conf *config.Config, httpClientFunc func() *http.Client) Service {
 	s := &serviceImpl{
-		logger:     log.With().Str("service", "learn").Logger(),
+		logger:     conf.Logger().With().Str("service", "learn").Logger(),
 		conf:       conf,
 		httpClient: httpClientFunc,
 		lessonsByRuleCache: imcache.New[string, []Lesson](

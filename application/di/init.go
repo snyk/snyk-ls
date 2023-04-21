@@ -147,7 +147,7 @@ func initApplication() {
 	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier) // don't use getters or it'll deadlock
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(w, fileWatcher)
+	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher)
 	command.ResetService()
 }
 
@@ -194,7 +194,7 @@ func TestInit(t *testing.T) {
 	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier) // don't use getters or it'll deadlock
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(w, fileWatcher)
+	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher)
 	t.Cleanup(
 		func() {
 			fakeClient.Clear()
