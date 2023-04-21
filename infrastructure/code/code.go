@@ -384,7 +384,7 @@ func (sc *Scanner) isSastEnabled() bool {
 			CommandId: snyk.OpenBrowserCommand,
 			Arguments: []any{getCodeEnablementUrl()},
 		}
-		cmd, err := command.CreateFromCommandData(commandData, nil, nil, nil)
+		cmd, err := command.CreateFromCommandData(commandData, nil, nil, sc.learnService)
 		if err != nil {
 			message := "couldn't create open browser command"
 			log.Err(err).Str("method", method).Msg(message)
