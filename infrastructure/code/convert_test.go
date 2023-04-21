@@ -621,7 +621,7 @@ func getSarifResponseJson(filePath string) string {
 }
 
 func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
-	path, issues, _ := setupConversionTests(t, true, true)
+	path, issues, resp := setupConversionTests(t, true, true)
 	issueDescriptionURL, _ := url.Parse(codeDescriptionURL)
 	references := referencesForSampleSarifResponse()
 
@@ -639,6 +639,7 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	assert.Contains(t, issue.FormattedMessage, "Example Commit Fixes")
 	assert.NotEmpty(t, issue.Commands, "should have getCommands filled from codeflow")
 	assert.Equal(t, markersForSampleSarifResponse(path), issue.AdditionalData.(snyk.CodeIssueData).Markers)
+	assert.Equal(t, resp.Sarif.Runs[0].Tool.Driver.Rules[0].Properties.Cwe, issue.CWEs)
 }
 
 func referencesForSampleSarifResponse() []snyk.Reference {

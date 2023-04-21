@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -100,6 +101,18 @@ func Test_introducingPackageAndVersion(t *testing.T) {
 	actualPackage, actualVersion := introducingPackageAndVersion(issue)
 	assert.Equal(t, "4.17.4", actualVersion)
 	assert.Equal(t, "lodash", actualPackage)
+}
+
+func Test_toIssue_LearnParameterConversion(t *testing.T) {
+	ossIssue := sampleIssue()
+	scanner := Scanner{}
+
+	issue := scanner.toIssue("testPath", ossIssue, snyk.Range{})
+
+	assert.Equal(t, ossIssue.Id, issue.ID)
+	assert.Equal(t, ossIssue.Identifiers.CWE, issue.CWEs)
+	assert.Equal(t, ossIssue.Identifiers.CVE, issue.CVEs)
+	assert.Equal(t, ossIssue.PackageManager, issue.Ecosystem)
 }
 
 func Test_introducingPackageAndVersionJava(t *testing.T) {
@@ -272,6 +285,7 @@ func sampleIssue() ossIssue {
 		Version:        "",
 		PackageManager: "npm",
 		From:           []string{"goof@1.0.1", "lodash@4.17.4"},
+		Identifiers:    identifiers{CWE: []string{"CWE-123"}},
 	}
 }
 
