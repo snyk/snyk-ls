@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -100,6 +101,18 @@ func Test_introducingPackageAndVersion(t *testing.T) {
 	actualPackage, actualVersion := introducingPackageAndVersion(issue)
 	assert.Equal(t, "4.17.4", actualVersion)
 	assert.Equal(t, "lodash", actualPackage)
+}
+
+func Test_toIssue_LearnParameterConversion(t *testing.T) {
+	ossIssue := sampleIssue()
+	scanner := Scanner{}
+
+	issue := scanner.toIssue("testPath", ossIssue, snyk.Range{})
+
+	assert.Equal(t, ossIssue.Id, issue.ID)
+	assert.Equal(t, ossIssue.Identifiers.CWE, issue.CWEs)
+	assert.Equal(t, ossIssue.Identifiers.CVE, issue.CVEs)
+	assert.Equal(t, ossIssue.PackageManager, issue.Ecosystem)
 }
 
 func Test_introducingPackageAndVersionJava(t *testing.T) {
@@ -210,7 +223,7 @@ func Test_toHover_asHTML(t *testing.T) {
 
 	assert.Equal(
 		t,
-		"\n### testIssue: <p>THOU SHALL NOT PASS</p>\n affecting  package \n### Vulnerability   | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \n<p>Getting into Moria is an issue!</p>\n",
+		"\n### testIssue: <p>THOU SHALL NOT PASS</p>\n affecting  package \n### Vulnerability  | [CWE-123](https://cwe.mitre.org/data/definitions/123.html) | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \n<p>Getting into Moria is an issue!</p>\n",
 		h,
 	)
 }
@@ -224,7 +237,7 @@ func Test_toHover_asMarkdown(t *testing.T) {
 
 	assert.Equal(
 		t,
-		"\n### testIssue: THOU SHALL NOT PASS affecting  package \n### Vulnerability   | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \nGetting into Moria is an issue!",
+		"\n### testIssue: THOU SHALL NOT PASS affecting  package \n### Vulnerability  | [CWE-123](https://cwe.mitre.org/data/definitions/123.html) | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \nGetting into Moria is an issue!",
 		h,
 	)
 }
@@ -272,6 +285,7 @@ func sampleIssue() ossIssue {
 		Version:        "",
 		PackageManager: "npm",
 		From:           []string{"goof@1.0.1", "lodash@4.17.4"},
+		Identifiers:    identifiers{CWE: []string{"CWE-123"}},
 	}
 }
 

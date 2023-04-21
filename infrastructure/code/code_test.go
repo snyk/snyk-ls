@@ -173,6 +173,7 @@ func TestCreateBundle(t *testing.T) {
 			&snyk_api.FakeApiClient{CodeEnabled: true},
 			error_reporting.NewTestErrorReporter(),
 			ux2.NewTestAnalytics(),
+			nil,
 		)
 		tempDir := t.TempDir()
 		file := filepath.Join(tempDir, configFile)
@@ -251,6 +252,7 @@ func setupTestScanner() (*FakeSnykCodeClient, *Scanner) {
 		&snyk_api.FakeApiClient{CodeEnabled: true},
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
+		nil,
 	)
 
 	return snykCodeMock, scanner
@@ -266,6 +268,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				error_reporting.NewTestErrorReporter(),
 				ux2.NewTestAnalytics(),
+				nil,
 			)
 			baseDir, firstDoc, _, content1, _ := setupDocs(t)
 			fullPath := uri.PathFromUri(firstDoc.URI)
@@ -294,6 +297,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				error_reporting.NewTestErrorReporter(),
 				ux2.NewTestAnalytics(),
+				nil,
 			)
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
@@ -324,6 +328,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				error_reporting.NewTestErrorReporter(),
 				analytics,
+				nil,
 			)
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
@@ -493,6 +498,7 @@ func Test_Scan(t *testing.T) {
 			&snyk_api.FakeApiClient{CodeEnabled: false},
 			error_reporting.NewTestErrorReporter(),
 			ux2.NewTestAnalytics(),
+			nil,
 		)
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
@@ -635,6 +641,7 @@ func TestIsSastEnabled(t *testing.T) {
 				},
 				nil,
 				nil,
+				nil,
 			)
 			assert.NoError(t, err)
 
@@ -679,6 +686,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				error_reporting.NewTestErrorReporter(),
 				analytics,
+				nil,
 			)
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			t.Cleanup(
@@ -713,6 +721,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				error_reporting.NewTestErrorReporter(),
 				analytics,
+				nil,
 			)
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			t.Cleanup(
@@ -745,6 +754,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				error_reporting.NewTestErrorReporter(),
 				analytics,
+				nil,
 			)
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			t.Cleanup(

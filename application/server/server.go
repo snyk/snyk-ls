@@ -36,16 +36,16 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
-	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-func Start() {
+func Start(c *config.Config) {
 	log.Debug().Msg("Starting server...")
 	var srv *jrpc2.Server
 
@@ -53,14 +53,18 @@ func Start() {
 	srv = jrpc2.NewServer(handlers, &jrpc2.ServerOptions{
 		Logger: func(text string) {
 			if len(text) > 300 {
-				log.Debug().Msgf("JSON RPC Log: %s... [TRUNCATED]", text[:300])
+				// if this were debug and sent to the client via rpc logger, the server json rpc log would cause an endless loop...
+				log.Trace().Msgf("JSON RPC Log: %s... [TRUNCATED]", text[:300])
 			} else {
-				log.Debug().Msgf("JSON RPC Log: %s", text)
+				log.Trace().Msgf("JSON RPC Log: %s", text)
 			}
 		},
 		RPCLog:    RPCLogger{},
 		AllowPush: true,
 	})
+
+	c.ConfigureLogging(srv)
+	di.Init()
 	initHandlers(srv, handlers)
 
 	log.Info().Msg("Starting up...")
@@ -90,7 +94,7 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map) {
 	handlers["textDocument/codeLens"] = codeLensHandler()
 	handlers["textDocument/willSave"] = noOpHandler()
 	handlers["textDocument/willSaveWaitUntil"] = noOpHandler()
-	handlers["codeAction/resolve"] = codeActionResolveHandler(srv, di.AuthenticationService())
+	handlers["codeAction/resolve"] = codeActionResolveHandler(srv, di.AuthenticationService(), di.LearnService())
 	handlers["shutdown"] = shutdown()
 	handlers["exit"] = exit(srv)
 	handlers["workspace/didChangeWorkspaceFolders"] = workspaceDidChangeWorkspaceFoldersHandler(srv)
@@ -220,6 +224,8 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 						snyk.LogoutCommand,
 						snyk.TrustWorkspaceFoldersCommand,
 						snyk.OAuthRefreshCommand,
+						snyk.OpenLearnLesson,
+						snyk.GetLearnLesson,
 					},
 				},
 			},
@@ -422,8 +428,8 @@ func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 	})
 }
 
-func codeActionResolveHandler(server server.Server, authenticationService snyk.AuthenticationService) handler.Func {
-	return handler.New(codeaction.ResolveCodeActionHandler(di.CodeActionService(), server, authenticationService))
+func codeActionResolveHandler(server lsp.Server, authenticationService snyk.AuthenticationService, learnService learn.Service) handler.Func {
+	return handler.New(codeaction.ResolveCodeActionHandler(di.CodeActionService(), server, authenticationService, learnService))
 }
 
 func textDocumentCodeActionHandler() handler.Func {

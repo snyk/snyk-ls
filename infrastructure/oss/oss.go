@@ -38,6 +38,7 @@ import (
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
@@ -103,6 +104,7 @@ type Scanner struct {
 	scheduledScan           *time.Timer
 	scheduledScanMtx        *sync.Mutex
 	scanCount               int
+	learnService            learn.Service
 }
 
 func New(instrumentor performance.Instrumentor,
@@ -110,6 +112,7 @@ func New(instrumentor performance.Instrumentor,
 	analytics ux2.Analytics,
 	cli cli.Executor,
 ) *Scanner {
+	c := config.CurrentConfig()
 	return &Scanner{
 		instrumentor:            instrumentor,
 		errorReporter:           errorReporter,
@@ -120,6 +123,7 @@ func New(instrumentor performance.Instrumentor,
 		runningScans:            map[string]*scans.ScanProgress{},
 		refreshScanWaitDuration: 24 * time.Hour,
 		scanCount:               1,
+		learnService:            learn.New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient),
 	}
 }
 
@@ -382,7 +386,10 @@ func (oss *Scanner) toIssue(affectedFilePath string, issue ossIssue, issueRange 
 		Product:             product.ProductOpenSource,
 		IssueDescriptionURL: issue.createIssueURL(),
 		IssueType:           snyk.DependencyVulnerability,
-		CodeActions:         issue.GetCodeActions(),
+		CodeActions:         issue.GetCodeActions(oss.learnService, oss.errorReporter),
+		Ecosystem:           issue.PackageManager,
+		CWEs:                issue.Identifiers.CWE,
+		CVEs:                issue.Identifiers.CVE,
 	}
 }
 

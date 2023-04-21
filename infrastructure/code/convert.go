@@ -367,6 +367,7 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 				References:          rule.getReferences(),
 				Commands:            getCommands(dataflow),
 				AdditionalData:      additionalData,
+				CWEs:                rule.Properties.Cwe,
 			}
 
 			issues = append(issues, d)

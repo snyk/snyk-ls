@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -35,17 +36,18 @@ import (
 )
 
 var sampleSettings = lsp.Settings{
-	ActivateSnykOpenSource: "false",
-	ActivateSnykCode:       "false",
-	ActivateSnykIac:        "false",
-	Insecure:               "true",
-	Endpoint:               "https://api.fake.snyk.io",
-	AdditionalParams:       "--all-projects -d",
-	AdditionalEnv:          "a=b;c=d",
-	Path:                   "addPath",
-	SendErrorReports:       "true",
-	Token:                  "token",
-	SnykCodeApi:            "https://deeproxy.fake.snyk.io",
+	ActivateSnykOpenSource:     "false",
+	ActivateSnykCode:           "false",
+	ActivateSnykIac:            "false",
+	Insecure:                   "true",
+	Endpoint:                   "https://api.fake.snyk.io",
+	AdditionalParams:           "--all-projects -d",
+	AdditionalEnv:              "a=b;c=d",
+	Path:                       "addPath",
+	SendErrorReports:           "true",
+	Token:                      "token",
+	SnykCodeApi:                "https://deeproxy.fake.snyk.io",
+	EnableSnykLearnCodeActions: "true",
 }
 
 func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
@@ -77,6 +79,7 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	assert.True(t, config.CurrentConfig().IsErrorReportingEnabled())
 	assert.Equal(t, "token", config.CurrentConfig().Token())
 	assert.Equal(t, sampleSettings.SnykCodeApi, config.CurrentConfig().SnykCodeApi())
+	assert.Equal(t, sampleSettings.EnableSnykLearnCodeActions, strconv.FormatBool(c.IsSnykLearnCodeActionsEnabled()))
 }
 
 func callBackMock(_ context.Context, request *jrpc2.Request) (any, error) {
@@ -123,6 +126,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	assert.True(t, config.CurrentConfig().IsErrorReportingEnabled())
 	assert.Equal(t, "token", config.CurrentConfig().Token())
 	assert.Equal(t, sampleSettings.SnykCodeApi, config.CurrentConfig().SnykCodeApi())
+	assert.Equal(t, sampleSettings.EnableSnykLearnCodeActions, strconv.FormatBool(c.IsSnykLearnCodeActionsEnabled()))
 }
 
 func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {

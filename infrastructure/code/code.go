@@ -33,6 +33,7 @@ import (
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/filefilter"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/float"
@@ -77,6 +78,7 @@ type Scanner struct {
 	runningScans      map[string]*ScanStatus
 	scanNotifier      snyk.ScanNotifier
 	changedPaths      map[string]map[string]bool // tracks files that were changed since the last scan per workspace folder
+	learnService      learn.Service
 	fileFilters       *xsync.MapOf[string, *filefilter.FileFilter]
 }
 
@@ -84,6 +86,7 @@ func New(bundleUploader *BundleUploader,
 	apiClient snyk_api.SnykApiClient,
 	reporter error_reporting.ErrorReporter,
 	analytics ux2.Analytics,
+	learnService learn.Service,
 ) *Scanner {
 	sc := &Scanner{
 		BundleUploader: bundleUploader,
@@ -93,6 +96,7 @@ func New(bundleUploader *BundleUploader,
 		runningScans:   map[string]*ScanStatus{},
 		changedPaths:   map[string]map[string]bool{},
 		fileFilters:    xsync.NewMapOf[*filefilter.FileFilter](),
+		learnService:   learnService,
 	}
 	return sc
 }
@@ -349,6 +353,7 @@ func (sc *Scanner) createBundle(ctx context.Context,
 		errorReporter: sc.errorReporter,
 		scanNotifier:  sc.scanNotifier,
 		limitToFiles:  limitToFiles,
+		learnService:  sc.learnService,
 	}
 	if len(fileHashes) > 0 {
 		b.BundleHash, b.missingFiles, err = sc.BundleUploader.SnykCode.CreateBundle(span.Context(), fileHashes)
@@ -379,7 +384,7 @@ func (sc *Scanner) isSastEnabled() bool {
 			CommandId: snyk.OpenBrowserCommand,
 			Arguments: []any{getCodeEnablementUrl()},
 		}
-		cmd, err := command.CreateFromCommandData(commandData, nil, nil)
+		cmd, err := command.CreateFromCommandData(commandData, nil, nil, sc.learnService)
 		if err != nil {
 			message := "couldn't create open browser command"
 			log.Err(err).Str("method", method).Msg(message)

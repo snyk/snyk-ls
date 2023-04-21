@@ -32,14 +32,14 @@ type TestCommand struct {
 func (command *TestCommand) Command() snyk.CommandData {
 	return snyk.CommandData{}
 }
-func (command *TestCommand) Execute(_ context.Context) error {
+func (command *TestCommand) Execute(ctx context.Context) (any, error) {
 	command.executed = true
-	return nil
+	return nil, nil
 }
 
 func Test_ExecuteCommand(t *testing.T) {
 	service := Service()
 	cmd := &TestCommand{}
-	_ = service.ExecuteCommand(context.Background(), cmd)
+	_, _ = service.ExecuteCommand(context.Background(), cmd)
 	assert.True(t, cmd.executed)
 }

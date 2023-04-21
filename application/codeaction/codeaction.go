@@ -13,8 +13,8 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
-	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -90,12 +90,17 @@ func (c *CodeActionsService) GetCodeActions(params lsp.CodeActionParams) []lsp.C
 	return actions
 }
 
-func (c *CodeActionsService) ResolveCodeAction(action lsp.CodeAction, server server.Server, authService snyk.AuthenticationService) (lsp.CodeAction, error) {
+func (c *CodeActionsService) ResolveCodeAction(
+	action lsp.CodeAction,
+	server lsp.Server,
+	authService snyk.AuthenticationService,
+	learnService learn.Service,
+) (lsp.CodeAction, error) {
 	c.logger.Info().Msg("Received code action resolve request")
 	t := time.Now()
 
 	if action.Command != nil {
-		codeAction, err := c.handleCommand(action, server, authService)
+		codeAction, err := c.handleCommand(action, server, authService, learnService)
 		return codeAction, err
 	}
 
@@ -120,18 +125,23 @@ func (c *CodeActionsService) ResolveCodeAction(action lsp.CodeAction, server ser
 	return codeAction, nil
 }
 
-func (c *CodeActionsService) handleCommand(action lsp.CodeAction, server server.Server, authService snyk.AuthenticationService) (lsp.CodeAction, error) {
+func (c *CodeActionsService) handleCommand(
+	action lsp.CodeAction,
+	server lsp.Server,
+	authService snyk.AuthenticationService,
+	learnService learn.Service,
+) (lsp.CodeAction, error) {
 	log.Info().Str("method", "codeaction.handleCommand").Msgf("handling command %s", action.Command.Command)
 	cmd := snyk.CommandData{
 		Title:     action.Command.Title,
 		CommandId: action.Command.Command,
 		Arguments: action.Command.Arguments,
 	}
-	executableCmd, err := command.CreateFromCommandData(cmd, server, authService)
+	executableCmd, err := command.CreateFromCommandData(cmd, server, authService, learnService)
 	if err != nil {
 		return lsp.CodeAction{}, err
 	}
-	err = command.Service().ExecuteCommand(context.Background(), executableCmd)
+	_, err = command.Service().ExecuteCommand(context.Background(), executableCmd)
 	if err != nil {
 		return lsp.CodeAction{}, err
 	}

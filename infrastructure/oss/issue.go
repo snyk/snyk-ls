@@ -22,13 +22,16 @@ import (
 	"strings"
 
 	"github.com/gomarkdown/markdown"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 )
 
-func (i *ossIssue) GetCodeActions() (actions []snyk.CodeAction) {
+func (i *ossIssue) GetCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter) (actions []snyk.CodeAction) {
 	title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", i.Title, i.PackageName)
 	command := &snyk.CommandData{
 		Title:     title,
@@ -37,7 +40,39 @@ func (i *ossIssue) GetCodeActions() (actions []snyk.CodeAction) {
 	}
 
 	action, _ := snyk.NewCodeAction(title, nil, command)
-	return []snyk.CodeAction{action}
+	actions = append(actions, action)
+
+	codeAction := i.addSnykLearnAction(learnService, ep)
+	if codeAction != nil {
+		actions = append(actions, *codeAction)
+	}
+	return actions
+}
+
+func (i *ossIssue) addSnykLearnAction(learnService learn.Service, ep error_reporting.ErrorReporter) (action *snyk.CodeAction) {
+	if config.CurrentConfig().IsSnykLearnCodeActionsEnabled() {
+		lesson, err := learnService.GetLesson(i.PackageManager, i.Id, i.Identifiers.CWE, i.Identifiers.CVE, snyk.DependencyVulnerability)
+		if err != nil {
+			msg := "failed to get lesson"
+			log.Err(err).Msg(msg)
+			ep.CaptureError(errors.WithMessage(err, msg))
+			return nil
+		}
+
+		if lesson.Url != "" {
+			title := fmt.Sprintf("Learn more about %s (Snyk)", i.Title)
+			action = &snyk.CodeAction{
+				Title: title,
+				Command: &snyk.CommandData{
+					Title:     title,
+					CommandId: snyk.OpenBrowserCommand,
+					Arguments: []any{lesson.Url},
+				},
+			}
+			log.Debug().Str("method", "oss.issue.addSnykLearnAction").Msgf("Learn action: %v", action)
+		}
+	}
+	return action
 }
 
 func (i *ossIssue) getExtendedMessage(issue ossIssue) string {

@@ -19,6 +19,8 @@ package snyk
 import (
 	"context"
 	"sync"
+
+	"github.com/snyk/go-application-framework/pkg/auth"
 )
 
 const (
@@ -31,11 +33,17 @@ const (
 	LogoutCommand                = "snyk.logout"
 	TrustWorkspaceFoldersCommand = "snyk.trustWorkspaceFolders"
 	OAuthRefreshCommand          = "snyk.oauthRefreshCommand"
+	OpenLearnLesson              = "snyk.openLearnLesson"
+	GetLearnLesson               = "snyk.getLearnLesson"
+)
+
+var (
+	DefaultOpenBrowserFunc = func(url string) { auth.OpenBrowser(url) }
 )
 
 type Command interface {
 	Command() CommandData
-	Execute(ctx context.Context) error
+	Execute(ctx context.Context) (any, error)
 }
 
 type CommandData struct {
@@ -57,7 +65,7 @@ type CommandData struct {
 type CommandName string
 
 type CommandService interface {
-	ExecuteCommand(ctx context.Context, command Command) error
+	ExecuteCommand(ctx context.Context, command Command) (any, error)
 }
 
 type CommandServiceMock struct {
@@ -69,11 +77,11 @@ func NewCommandServiceMock() *CommandServiceMock {
 	return &CommandServiceMock{}
 }
 
-func (service *CommandServiceMock) ExecuteCommand(_ context.Context, command Command) error {
+func (service *CommandServiceMock) ExecuteCommand(_ context.Context, command Command) (any, error) {
 	service.m.Lock()
 	service.executedCommands = append(service.executedCommands, command)
 	service.m.Unlock()
-	return nil
+	return nil, nil
 }
 func (service *CommandServiceMock) ExecutedCommands() []Command {
 	service.m.Lock()

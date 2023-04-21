@@ -23,7 +23,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
-	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
@@ -31,7 +30,7 @@ import (
 const DoTrust = "Trust folders and continue"
 const DontTrust = "Don't trust folders"
 
-func HandleUntrustedFolders(ctx context.Context, srv server.Server) {
+func HandleUntrustedFolders(ctx context.Context, srv lsp.Server) {
 	w := workspace.Get()
 	// debounce requests from overzealous clients (Eclipse, I'm looking at you)
 	if w.IsTrustRequestOngoing() {
@@ -54,7 +53,7 @@ func HandleUntrustedFolders(ctx context.Context, srv server.Server) {
 	}
 }
 
-func showTrustDialog(srv server.Server, untrusted []*workspace.Folder, dontTrust string, doTrust string) (lsp.MessageActionItem, error) {
+func showTrustDialog(srv lsp.Server, untrusted []*workspace.Folder, dontTrust string, doTrust string) (lsp.MessageActionItem, error) {
 	method := "showTrustDialog"
 	result, err := srv.Callback(context.Background(), "window/showMessageRequest", lsp.ShowMessageRequestParams{
 		Type:    lsp.Warning,
