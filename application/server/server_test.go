@@ -89,11 +89,11 @@ func setupServerWithCustomDI(t *testing.T, useMocks bool) server.Local {
 
 func setupCustomServer(t *testing.T, callBackFn onCallbackFn) server.Local {
 	testutil.UnitTest(t)
-	di.TestInit(t)
 	cleanupChannels()
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
 	loc := startServer(callBackFn)
+	di.TestInit(t)
 
 	t.Cleanup(func() {
 		err := loc.Close()

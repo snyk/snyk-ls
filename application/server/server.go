@@ -64,7 +64,7 @@ func Start(c *config.Config) {
 	})
 
 	c.ConfigureLogging(srv)
-
+	di.Init()
 	initHandlers(srv, handlers)
 
 	log.Info().Msg("Starting up...")

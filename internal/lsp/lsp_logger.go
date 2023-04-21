@@ -19,7 +19,6 @@ package lsp
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/rs/zerolog"
@@ -27,15 +26,15 @@ import (
 )
 
 type lspWriter struct {
-	writeChan chan string
+	writeChan chan LogMessageParams
 	readyChan chan bool
 	server    Server
 }
 
-func New(server Server) io.Writer {
+func New(server Server) zerolog.LevelWriter {
 	log.Info().Msg("Starting LSP logger")
 	readyChan := make(chan bool)
-	writeChan := make(chan string, 1000000)
+	writeChan := make(chan LogMessageParams, 1000000)
 	w := &lspWriter{
 		writeChan: writeChan,
 		readyChan: readyChan,
@@ -49,37 +48,36 @@ func New(server Server) io.Writer {
 }
 
 func (w *lspWriter) Write(p []byte) (n int, err error) {
-	if w.server != nil {
-		w.writeChan <- string(p)
-	} else {
-		_, _ = os.Stderr.Write(p)
+	return os.Stderr.Write(p)
+}
+
+func (w *lspWriter) WriteLevel(level zerolog.Level, p []byte) (n int, err error) {
+	levelEnabled := level > zerolog.TraceLevel && level < zerolog.NoLevel
+	if w.server != nil && levelEnabled {
+		w.writeChan <- LogMessageParams{
+			Type:    mapLogLevel(level),
+			Message: string(p),
+		}
+		return len(p), nil
 	}
-	return len(p), nil
+	return os.Stderr.Write(p)
 }
 
 func (w *lspWriter) startServerSenderRoutine() {
 	go func() {
 		w.readyChan <- true
-		message := LogMessageParams{}
 		var err error
-		for s := range w.writeChan {
-			// only send up to debug to the server, trace only to the console
-			mt, enabled := mapLogLevel(zerolog.GlobalLevel())
-			message.Message = s
-			message.Type = mt
-			if w.server != nil && enabled {
-				err = w.server.Notify(context.Background(), "window/logMessage", message)
-				if err != nil {
-					_, _ = os.Stderr.Write([]byte(s))
-				}
+		for msg := range w.writeChan {
+			err = w.server.Notify(context.Background(), "window/logMessage", msg)
+			if err != nil {
+				_, _ = os.Stderr.Write([]byte(msg.Message))
 			}
 		}
 		fmt.Println("LSP logger stopped")
 	}()
 }
 
-func mapLogLevel(level zerolog.Level) (mt MessageType, enabled bool) {
-	enabled = true
+func mapLogLevel(level zerolog.Level) (mt MessageType) {
 	switch level {
 	case zerolog.PanicLevel:
 		fallthrough
@@ -93,13 +91,8 @@ func mapLogLevel(level zerolog.Level) (mt MessageType, enabled bool) {
 		mt = Info
 	case zerolog.DebugLevel:
 		mt = Log
-	case zerolog.NoLevel:
-		fallthrough
-	case zerolog.TraceLevel:
-		fallthrough
-	case zerolog.Disabled:
-		enabled = false
+	default:
+		mt = 0
 	}
-
-	return mt, enabled
+	return mt
 }

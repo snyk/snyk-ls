@@ -60,7 +60,6 @@ func main() {
 	}
 	log.Info().Msg(config.Version)
 	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
-	di.Init()
 	server.Start(c)
 }
 

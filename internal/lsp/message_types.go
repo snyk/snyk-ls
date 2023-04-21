@@ -700,6 +700,19 @@ type LogMessageParams struct {
 	Message string `json:"message"`
 }
 
+type LogTraceParams struct {
+	/**
+	 * The message to be logged.
+	 */
+	Message string `json:"message"`
+
+	/**
+	 * Additional information that can be computed if the `trace` configuration
+	 * is set to `'verbose'`
+	 */
+	Verbose string `json:"verbose"`
+}
+
 type SnykTrustedFoldersParams struct {
 	TrustedFolders []string `json:"trustedFolders"`
 }

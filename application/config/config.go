@@ -462,7 +462,7 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 	c.SetLogLevel(logLevel.String())
 	zerolog.TimeFieldFormat = time.RFC3339
 
-	clientWriter := zerolog.New(lsp.New(server))
+	clientWriter := lsp.New(server)
 	writers := []io.Writer{clientWriter}
 
 	if c.logPath != "" {
@@ -476,7 +476,8 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 			writers = append(writers, c.logFile)
 		}
 	}
-	writer := io.MultiWriter(writers...)
+
+	writer := zerolog.MultiLevelWriter(writers...)
 	log.Logger = zerolog.New(writer).With().Timestamp().Logger()
 }
 
