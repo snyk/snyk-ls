@@ -36,7 +36,7 @@ func (cmd *trustWorkspaceFoldersCommand) Command() snyk.CommandData {
 	return cmd.command
 }
 
-func (cmd *trustWorkspaceFoldersCommand) Execute(ctx context.Context) (any, error) {
+func (cmd *trustWorkspaceFoldersCommand) Execute(_ context.Context) (any, error) {
 	if !config.CurrentConfig().IsTrustedFolderFeatureEnabled() {
 		return nil, nil
 	}
