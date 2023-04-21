@@ -471,8 +471,6 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 			log.Err(err).Msg("couldn't open logfile")
 		} else {
 			log.Info().Msgf("adding file logger to file %s", c.logPath)
-			logFileLogger := zerolog.NewConsoleWriter()
-			logFileLogger.Out = c.logFile
 			writers = append(writers, c.logFile)
 		}
 	}
