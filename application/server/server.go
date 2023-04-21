@@ -429,7 +429,7 @@ func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 }
 
 func codeActionResolveHandler(c *config.Config, server lsp.Server, authenticationService snyk.AuthenticationService, learnService learn.Service) handler.Func {
-	return handler.New(codeaction.ResolveCodeActionHandler(di.CodeActionService(), server, authenticationService, learnService, c))
+	return handler.New(codeaction.ResolveCodeActionHandler(c, di.CodeActionService(), server, authenticationService, learnService))
 }
 
 func textDocumentCodeActionHandler(c *config.Config) handler.Func {

@@ -16,11 +16,11 @@ type ResolveHandler func(context.Context, lsp.CodeAction) (*lsp.CodeAction, erro
 
 // ResolveCodeActionHandler returns a jrpc2.Handler that can be used to handle the "codeAction/resolve" LSP method
 func ResolveCodeActionHandler(
+	c *config.Config,
 	service *CodeActionsService,
 	server lsp.Server,
 	authenticationService snyk.AuthenticationService,
 	learnService learn.Service,
-	c *config.Config,
 ) ResolveHandler {
 	logger := c.Logger().With().Str("method", "ResolveCodeActionHandler").Logger()
 	return func(ctx context.Context, params lsp.CodeAction) (*lsp.CodeAction, error) {
