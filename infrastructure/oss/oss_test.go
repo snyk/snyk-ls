@@ -237,7 +237,7 @@ func Test_toHover_asMarkdown(t *testing.T) {
 
 	assert.Equal(
 		t,
-		"\n### testIssue: THOU SHALL NOT PASS affecting  package \n### Vulnerability   | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \nGetting into Moria is an issue!",
+		"\n### testIssue: THOU SHALL NOT PASS affecting  package \n### Vulnerability  | [CWE-123](https://cwe.mitre.org/data/definitions/123.html) | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \nGetting into Moria is an issue!",
 		h,
 	)
 }
