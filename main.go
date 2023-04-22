@@ -24,6 +24,7 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -32,6 +33,7 @@ import (
 )
 
 func main() {
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Println("🚨 Panicking 🚨")
@@ -68,6 +70,7 @@ func parseFlags(args []string, c *config.Config) (string, error) {
 	var buf bytes.Buffer
 	flags.SetOutput(&buf)
 
+	versionFlag := flags.Bool("v", false, "prints the version")
 	logLevelFlag := flags.String("l", "info", "sets the log-level to <trace|debug|info|warn|error|fatal>")
 	logPathFlag := flags.String("f", "", "sets the log file for the language server")
 	formatFlag := flags.String(
@@ -91,6 +94,10 @@ func parseFlags(args []string, c *config.Config) (string, error) {
 	err := flags.Parse(args[1:])
 	if err != nil {
 		return buf.String(), err
+	}
+
+	if *versionFlag {
+		return buf.String(), fmt.Errorf(config.Version)
 	}
 
 	if *licensesFlag {
