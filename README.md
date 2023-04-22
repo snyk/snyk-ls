@@ -21,12 +21,15 @@ Right now the language server supports the following actions:
 - Provides range calculation to correctly highlight Snyk Open Source issues in their file.
 - Provides formatted hovers with diagnostic details and follow-up links
 - Progress reporting to the client for background jobs
-- Notifications to the client
-- Authentication when needed, using the Snyk CLI and opening a webpage if necessary
+- Notifications & Log messages to the client
+- Authentication when needed, using OAuth2 or Token authentication and opening a webpage if necessary
 - Copying the authentication URL to clipboard if there are problems opening a webpage
 - Automatic download of the Snyk CLI if none is found or configured to XDG_DATA_HOME
 - Selective activation of products according to settings transmitted
 - Scanning errors are reported as diagnostics to the Language Server Client
+- Code Lenses to navigate the Snyk Code dataflow from within the editor
+- Code Actions for in-editor commands, like opening a browser, doing a quickfix or opening a Snyk Learn lesson 
+  for the found diagnostic
 
 ### Implemented operations
 
@@ -46,14 +49,15 @@ Right now the language server supports the following actions:
 - workspace/didChangeConfiguration
 - workspace/executeCommand
 - window/workDoneProgress/create (from server -> client)
-- window/showMessage
+- window/showMessageRequest
 - window/showDocument
 
 #### Notifications
 
-- window/showMessage
 - $/progress
 - textDocument/publishDiagnostics
+- window/logMessage
+- window/showMessage
 
 ### Custom additions to Language Server Protocol
 
@@ -100,41 +104,41 @@ Right now the language server supports the following actions:
 
 ### Commands
 
-- NavigateToRangeCommand navigates the client to the given range
-  - command: "snyk.navigateToRange"
-  - args: path, Range
-- WorkspaceScanCommand triggers a scan of all workspace folders
-  - command: "snyk.workspace.scan"
+- `NavigateToRangeCommand` navigates the client to the given range
+  - command: `snyk.navigateToRange`
+  - args: `path`, `Range`
+- `WorkspaceScanCommand` triggers a scan of all workspace folders
+  - command: `snyk.workspace.scan`
   - args: empty
-- WorkspaceFolderScanCommand triggers a scan of the given workspace folder
-  - command: "snyk.workspaceFolder.scan"
-  - args: path
-- OpenBrowserCommand opens the given URL in the default browser
-  - command: "snyk.openBrowser"
-  - args: URL
-- LoginCommand triggers the login process
-  - command: "snyk.login"
+- `WorkspaceFolderScanCommand` triggers a scan of the given workspace folder
+  - command: `snyk.workspaceFolder.scan`
+  - args: `path`
+- `OpenBrowserCommand` opens the given URL in the default browser
+  - command: `snyk.openBrowser`
+  - args: `URL`
+- `LoginCommand` triggers the login process
+  - command: `snyk.login`
   - args: empty
-- CopyAuthLinkCommand copies the authentication URL to the clipboard
-  - command: "snyk.copyAuthLink"
+- `CopyAuthLinkCommand` copies the authentication URL to the clipboard
+  - command: `snyk.copyAuthLink`
   - args: empty
-- LogoutCommand triggers the logout process
-  - command: "snyk.logout"
+- `LogoutCommand` triggers the logout process
+  - command: `snyk.logout`
   - args: empty
-- TrustWorkspaceFoldersCommand checks for trusted workspace folders and asks for trust if necessary
-  - command: "snyk.trustWorkspaceFolders"
+- `TrustWorkspaceFoldersCommand` checks for trusted workspace folders and asks for trust if necessary
+  - command: `snyk.trustWorkspaceFolders`
   - args: empty
-- OAuthRefreshCommand triggers a Snyk API call to refresh the oauth token
-  - command: "snyk.oauthRefreshCommand"
+- `OAuthRefreshCommand` triggers a Snyk API call to refresh the oauth token
+  - command: `snyk.oauthRefreshCommand`
   - args: empty
-- OpenLearnLesson opens the given lesson on the Snyk Learn website
-  - command: "snyk.openLearnLesson"
+- `OpenLearnLesson` opens the given lesson on the Snyk Learn website
+  - command: `snyk.openLearnLesson`
   - args:
-    - rule string
-    - ecosystem string
-    - cwes string (comma separated)
-    - cves (comma separated)
-    - issueType string
+    - `rule string`
+    - `ecosystem string`
+    - `cwes string` (comma separated), e.g. `CWE-79,CWE-89`
+    - `cves string` (comma separated), e.g. `CVE-2018-11776,CVE-2018-11784`
+    - `issueType string`
     ```
     PackageHealth Type = "0"
     CodeQualityIssue = "1"
@@ -144,14 +148,23 @@ Right now the language server supports the following actions:
     InfrastructureIssue = "5"
     ContainerVulnerability = "6"
     ```
-- GetLearnSession returns the given lesson on the Snyk Learn website
-  - command: "snyk.getLearnLesson"
+- `GetLearnSession` returns the given lesson on the Snyk Learn website
+  - command: `snyk.getLearnLesson`
   - args:
-    - rule string
-    - ecosystem string
-    - cwes string (comma separated)
-    - cves (comma separated)
-    - issueType string
+    - `rule string`
+    - `ecosystem string`
+    - `cwes string` (comma separated), e.g. `CWE-79,CWE-89`
+    - `cves string` (comma separated), e.g. `CVE-2018-11776,CVE-2018-11784`
+    - `issueType string`
+    ```
+    PackageHealth Type = "0"
+    CodeQualityIssue = "1"
+    CodeSecurityVulnerability = "2"
+    LicenceIssue = "3"
+    DependencyVulnerability = "4"
+    InfrastructureIssue = "5"
+    ContainerVulnerability = "6"
+    ```
   - result: lesson json
   ```json5
   {
@@ -174,7 +187,6 @@ Right now the language server supports the following actions:
   "img": "https://example.com/images/golang-intro.png"
   }
   ```
-  
 
 ## Installation
 
@@ -202,14 +214,17 @@ synchronization. For further information please see [CONTRIBUTING.md](CONTRIBUTI
 
 `-c <FILE>` allows to specify a config file to load before all others
 
+`-f <FILE>` allows you to specify a log file instead of logging to the console
+
 `-l <LOGLEVEL>` <allows to specify the log level (`trace`, `debug`, `info`, `warn`, `error`, `fatal`). The default log
-level is `info`
+level is `info`. This can be overruled by setting the env variable `SNYK_DEBUG_LEVEL`,
+e.g. `export SNYK_DEBUG_LEVEL=debug`
+
+`-licenses` displays the [licenses](https://github.com/snyk/snyk-ls/tree/main/licenses) used by Language Server
 
 `-o <FORMAT>` allows to specify the output format (`md` or `html`) for issues
 
-`-f <FILE>` allows you to specify a log file instead of logging to the console
-
-`-licenses` displays the [licenses](https://github.com/snyk/snyk-ls/tree/main/licenses) used by Language Server
+`-v ` prints the version of the Language Server
 
 ### Configuration
 
@@ -400,15 +415,16 @@ export DEEPROXY_API_URL
 The Snyk LS authentication flow happens automatically, unless disabled in configuration, and is as follows. When Snyk
 Language Server starts, it:
 
-- Checks if it can find a token in the environment variable `SNYK_TOKEN`
-- If this is not the set, it tries to retrieve and authenticate using the Snyk CLI
+- If the endpoint is a snykgov.io endpoint, or the authenticationMethod is set to `oauth`, it authenticates via OAuth2.
+  This opens a browser window.
+- If the authentication method is not `oauth`, it tries to retrieve a token using the Snyk CLI token authentication.
 - If the CLI is not authenticated either, it opens a browser window to authenticate
 - If there are problems opening the browser window, the auth URL can be copied to the clipboard (via implementation
   of `snyk.copyAuthLink`). _Note that there is a requirement to have `xsel` or `xclip` installed for Linux/Unix users
   for this feature._
 
 After successfull authentication in the web browser, the Snyk Language Server
-automatically retrieves the Snyk authentication token from the CLI.
+automatically retrieves the Snyk authentication credentials and uses them for further requests.
 
 ## Run Tests
 
