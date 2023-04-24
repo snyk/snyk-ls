@@ -19,24 +19,24 @@ package command
 import (
 	"context"
 
-	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 type workspaceScanCommand struct {
 	command snyk.CommandData
-	srv     server.Server
+	srv     lsp.Server
 }
 
 func (cmd *workspaceScanCommand) Command() snyk.CommandData {
 	return cmd.command
 }
 
-func (cmd *workspaceScanCommand) Execute(ctx context.Context) error {
+func (cmd *workspaceScanCommand) Execute(ctx context.Context) (any, error) {
 	w := workspace.Get()
 	w.ClearIssues(ctx)
 	w.ScanWorkspace(ctx)
 	HandleUntrustedFolders(ctx, cmd.srv)
-	return nil
+	return nil, nil
 }

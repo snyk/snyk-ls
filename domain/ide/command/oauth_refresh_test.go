@@ -59,7 +59,7 @@ func Test_oauthRefreshCommand_Execute_SameTokenNoUpdate(t *testing.T) {
 	c := config.CurrentConfig()
 	c.SetAuthenticationMethod(lsp.OAuthAuthentication)
 	_ = setUpEngineMock(t, c)
-	err := cmd.Execute(context.Background())
+	_, err := cmd.Execute(context.Background())
 
 	assert.NoErrorf(t, err, "cmd.Execute() error = %v", err)
 }
@@ -94,7 +94,7 @@ func Test_oauthRefreshCommand_Execute_DifferentTokenUpdate(t *testing.T) {
 		}
 	})
 
-	err := cmd.Execute(context.Background())
+	_, err := cmd.Execute(context.Background())
 
 	assert.NoErrorf(t, err, "cmd.Execute() error = %v", err)
 	assert.Equal(t, c.Token(), engineConfig.GetString(auth2.CONFIG_KEY_OAUTH_TOKEN))

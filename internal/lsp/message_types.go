@@ -299,6 +299,7 @@ type Settings struct {
 	ScanningMode                string               `json:"scanningMode,omitempty"`
 	AuthenticationMethod        AuthenticationMethod `json:"authenticationMethod,omitempty"`
 	SnykCodeApi                 string               `json:"snykCodeApi,omitempty"`
+	EnableSnykLearnCodeActions  string               `json:"enableSnykLearnCodeActions,omitempty"`
 }
 
 type AuthenticationMethod string
@@ -686,6 +687,31 @@ const Error MessageType = 1
 const Warning MessageType = 2
 const Info MessageType = 3
 const Log MessageType = 4
+
+type LogMessageParams struct {
+	/**
+	 * The message type. See {@link MessageType}
+	 */
+	Type MessageType `json:"type"`
+
+	/**
+	 * The actual message
+	 */
+	Message string `json:"message"`
+}
+
+type LogTraceParams struct {
+	/**
+	 * The message to be logged.
+	 */
+	Message string `json:"message"`
+
+	/**
+	 * Additional information that can be computed if the `trace` configuration
+	 * is set to `'verbose'`
+	 */
+	Verbose string `json:"verbose"`
+}
 
 type SnykTrustedFoldersParams struct {
 	TrustedFolders []string `json:"trustedFolders"`

@@ -24,7 +24,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/domain/ide/converter"
-	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -32,14 +31,14 @@ import (
 
 type navigateToRangeCommand struct {
 	command snyk.CommandData
-	srv     server.Server
+	srv     lsp.Server
 }
 
 func (cmd *navigateToRangeCommand) Command() snyk.CommandData {
 	return cmd.command
 }
 
-func (cmd *navigateToRangeCommand) Execute(_ context.Context) error {
+func (cmd *navigateToRangeCommand) Execute(ctx context.Context) (any, error) {
 	method := "navigateToRangeCommand.Execute"
 	if len(cmd.command.Arguments) < 2 {
 		log.Warn().Str("method", method).Msg("received NavigateToRangeCommand without range")
@@ -49,11 +48,11 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) error {
 	args := cmd.command.Arguments
 	marshal, err := json.Marshal(args[1])
 	if err != nil {
-		return errors.Wrap(err, "couldn't marshal range to json")
+		return nil, errors.Wrap(err, "couldn't marshal range to json")
 	}
 	err = json.Unmarshal(marshal, &myRange)
 	if err != nil {
-		return errors.Wrap(err, "couldn't unmarshal range from json")
+		return nil, errors.Wrap(err, "couldn't unmarshal range from json")
 	}
 
 	params := lsp.ShowDocumentParams{
@@ -69,5 +68,5 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) error {
 		Msg("showing Document")
 	rsp, err := cmd.srv.Callback(context.Background(), "window/showDocument", params)
 	log.Debug().Str("method", method).Interface("callback", rsp).Send()
-	return err
+	return nil, err
 }

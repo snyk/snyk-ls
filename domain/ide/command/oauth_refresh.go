@@ -42,11 +42,11 @@ func (cmd *oauthRefreshCommand) Command() snyk.CommandData {
 	return cmd.command
 }
 
-func (cmd *oauthRefreshCommand) Execute(_ context.Context) error {
+func (cmd *oauthRefreshCommand) Execute(ctx context.Context) (any, error) {
 	c := config.CurrentConfig()
 	if c.AuthenticationMethod() != lsp.OAuthAuthentication {
 		log.Debug().Str("method", "oauthRefreshCommand.Execute").Msg("authentication method is token, no refresh needed")
-		return nil
+		return nil, nil
 	}
 
 	oldToken := c.Token()
@@ -56,7 +56,7 @@ func (cmd *oauthRefreshCommand) Execute(_ context.Context) error {
 	conf.Set("experimental", true)
 	_, err := c.Engine().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, conf)
 	if err != nil {
-		return errors.Wrap(err, "failed to invoke whoami workflow")
+		return nil, errors.Wrap(err, "failed to invoke whoami workflow")
 	}
 
 	// retrieve refreshed token and update credentials
@@ -74,5 +74,5 @@ func (cmd *oauthRefreshCommand) Execute(_ context.Context) error {
 			Msgf("updated credentials")
 
 	}
-	return nil
+	return nil, nil
 }

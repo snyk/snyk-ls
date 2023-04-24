@@ -34,7 +34,7 @@ import (
 
 func Test_shouldSetLogLevelViaFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-l", "debug"}
-	_, _ = parseFlags(args)
+	_, _ = parseFlags(args, config.New())
 	assert.Equal(t, zerolog.DebugLevel, zerolog.GlobalLevel())
 }
 
@@ -49,20 +49,20 @@ func Test_shouldSetLogFileViaFlag(t *testing.T) {
 		}
 	})
 
-	_, _ = parseFlags(args)
+	_, _ = parseFlags(args, config.New())
 	assert.Equal(t, config.CurrentConfig().LogPath(), "a.txt")
 }
 
 func Test_shouldSetOutputFormatViaFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-o", config.FormatHtml}
-	_, _ = parseFlags(args)
+	_, _ = parseFlags(args, config.New())
 	assert.Equal(t, config.FormatHtml, config.CurrentConfig().Format())
 }
 
 func Test_shouldShowUsageOnUnknownFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-unknown", config.FormatHtml}
 
-	output, err := parseFlags(args)
+	output, err := parseFlags(args, config.New())
 
 	assert.True(t, strings.Contains(output, "Usage of snyk-ls"))
 	assert.NotNil(t, err)
@@ -70,7 +70,7 @@ func Test_shouldShowUsageOnUnknownFlag(t *testing.T) {
 
 func Test_shouldDisplayLicenseInformationWithFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-licenses"}
-	output, _ := parseFlags(args)
+	output, _ := parseFlags(args, config.New())
 	assert.True(t, strings.Contains(output, "License information"))
 }
 
@@ -92,19 +92,19 @@ func Test_shouldSetLoadConfigFromFlag(t *testing.T) {
 
 	t.Setenv("Bb", "")
 
-	_, _ = parseFlags(args)
+	_, _ = parseFlags(args, config.New())
 	assert.Equal(t, "Bb", os.Getenv("AA"))
 }
 
 func Test_shouldSetReportErrorsViaFlag(t *testing.T) {
 	testutil.UnitTest(t)
 	args := []string{"snyk-ls"}
-	_, _ = parseFlags(args)
+	_, _ = parseFlags(args, config.New())
 
 	assert.False(t, config.CurrentConfig().IsErrorReportingEnabled())
 
 	args = []string{"snyk-ls", "-reportErrors"}
-	_, _ = parseFlags(args)
+	_, _ = parseFlags(args, config.New())
 	assert.True(t, config.CurrentConfig().IsErrorReportingEnabled())
 }
 
@@ -117,7 +117,7 @@ func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
 		config.CurrentConfig().DisableLoggingToFile()
 	})
 
-	config.CurrentConfig().ConfigureLogging("debug")
+	config.CurrentConfig().ConfigureLogging(nil)
 	log.Error().Msg("test")
 
 	assert.Eventuallyf(t, func() bool {

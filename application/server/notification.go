@@ -23,14 +23,13 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/domain/ide/command"
-	"github.com/snyk/snyk-ls/domain/ide/server"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 
-func notifier(srv server.Server, method string, params any) {
+func notifier(srv lsp.Server, method string, params any) {
 	log.Debug().Str("method", "notifier").Msgf("Notifying")
 	err := srv.Notify(context.Background(), method, params)
 	logError(err, "notifier")
@@ -38,7 +37,7 @@ func notifier(srv server.Server, method string, params any) {
 
 var progressStopChan = make(chan bool, 1000)
 
-func createProgressListener(progressChannel chan lsp.ProgressParams, server server.Server) {
+func createProgressListener(progressChannel chan lsp.ProgressParams, server lsp.Server) {
 	// cleanup stopchannel before starting
 	for {
 		select {
@@ -86,7 +85,7 @@ func CancelProgress(token lsp.ProgressToken) {
 	progress.CancelProgressChannel <- token
 }
 
-func registerNotifier(srv server.Server) {
+func registerNotifier(srv lsp.Server) {
 	callbackFunction := func(params any) {
 		switch params := params.(type) {
 		case lsp.AuthenticationParams:
@@ -146,7 +145,7 @@ func registerNotifier(srv server.Server) {
 	log.Info().Str("method", "registerNotifier").Msg("registered notifier")
 }
 
-func handleShowMessageRequest(srv server.Server, params snyk.ShowMessageRequest) {
+func handleShowMessageRequest(srv lsp.Server, params snyk.ShowMessageRequest) {
 	// convert our internal message request to LSP message request
 	requestParams := lsp.ShowMessageRequestParams{
 		Type:    lsp.MessageType(params.Type),
@@ -191,7 +190,7 @@ func handleShowMessageRequest(srv server.Server, params snyk.ShowMessageRequest)
 			return
 		}
 
-		err = command.Service().ExecuteCommand(context.Background(), selectedCommand)
+		_, err := command.Service().ExecuteCommand(context.Background(), selectedCommand)
 		if err != nil {
 			log.Error().
 				Err(err).

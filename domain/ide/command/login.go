@@ -35,7 +35,7 @@ func (cmd *loginCommand) Command() snyk.CommandData {
 	return cmd.command
 }
 
-func (cmd *loginCommand) Execute(ctx context.Context) error {
+func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 	log.Debug().Str("method", "loginCommand.Execute").Msgf("logging in")
 	token, err := cmd.authService.Authenticate(ctx)
 	if err != nil {
@@ -47,5 +47,5 @@ func (cmd *loginCommand) Execute(ctx context.Context) error {
 			Str("hashed token", util.Hash([]byte(token))[0:16]).
 			Msgf("authentication successful, received token")
 	}
-	return err
+	return nil, err
 }

@@ -33,6 +33,7 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	auth2 "github.com/snyk/snyk-ls/infrastructure/cli/auth"
 	"github.com/snyk/snyk-ls/infrastructure/oauth"
 	"github.com/snyk/snyk-ls/internal/lsp"
@@ -139,6 +140,7 @@ func writeSettings(settings lsp.Settings, initialize bool) {
 	updateSnykCodeQuality(settings)
 	updateRuntimeInfo(settings)
 	updateAutoScan(settings)
+	updateSnykLearnCodeActions(settings)
 }
 
 func updateAuthenticationMethod(settings lsp.Settings) {
@@ -153,7 +155,7 @@ func updateAuthenticationMethod(settings lsp.Settings) {
 		httpClient := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
 		openBrowserFunc := func(url string) {
 			di.AuthenticationService().Provider().SetAuthURL(url)
-			auth.OpenBrowser(url)
+			snyk.DefaultOpenBrowserFunc(url)
 		}
 		authenticator := auth.NewOAuth2AuthenticatorWithCustomFuncs(conf, httpClient, openBrowserFunc, auth.ShutdownServer)
 		oAuthProvider := oauth.NewOAuthProvider(conf, authenticator)
@@ -211,6 +213,15 @@ func updateAutoScan(settings lsp.Settings) {
 	}
 
 	config.CurrentConfig().SetAutomaticScanning(autoScan)
+}
+
+func updateSnykLearnCodeActions(settings lsp.Settings) {
+	enable := false
+	if settings.EnableSnykLearnCodeActions == "true" {
+		enable = true
+	}
+
+	config.CurrentConfig().SetSnykLearnCodeActionsEnabled(enable)
 }
 
 func updateToken(token string) {

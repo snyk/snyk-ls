@@ -7,6 +7,7 @@ require (
 	github.com/atotto/clipboard v0.1.4
 	github.com/creachadair/jrpc2 v1.0.0
 	github.com/denisbrodbeck/machineid v1.0.1
+	github.com/erni27/imcache v0.9.0
 	github.com/getsentry/sentry-go v0.20.0
 	github.com/golang/mock v1.6.0
 	github.com/gomarkdown/markdown v0.0.0-20230322041520-c84983bdbf2a
@@ -18,7 +19,7 @@ require (
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/segmentio/analytics-go v3.1.0+incompatible
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/snyk/go-application-framework v0.0.0-20230413064938-3b535f440a48
+	github.com/snyk/go-application-framework v0.0.0-20230424061336-2c406400541a
 	github.com/sourcegraph/go-lsp v0.0.0-20200429204803-219e11d77f5d
 	github.com/stretchr/testify v1.8.2
 	github.com/subosito/gotenv v1.4.2

@@ -66,7 +66,7 @@ Right now the language server supports the following actions:
   }
   ```
   - See https://pkg.go.dev/golang.org/x/oauth2@v0.6.0#Token for more details regarding oauth tokens.
-  
+
 - Cli Path Notification
   - method: `$/snyk.isAvailableCli`
   - payload:
@@ -99,6 +99,7 @@ Right now the language server supports the following actions:
   ```
 
 ### Commands
+
 - NavigateToRangeCommand navigates the client to the given range
   - command: "snyk.navigateToRange"
   - args: path, Range
@@ -126,6 +127,55 @@ Right now the language server supports the following actions:
 - OAuthRefreshCommand triggers a Snyk API call to refresh the oauth token
   - command: "snyk.oauthRefreshCommand"
   - args: empty
+- OpenLearnLesson opens the given lesson on the Snyk Learn website
+  - command: "snyk.openLearnLesson"
+  - args:
+    - rule string
+    - ecosystem string
+    - cwes string (comma separated)
+    - cves (comma separated)
+    - issueType string
+    ```
+    PackageHealth Type = "0"
+    CodeQualityIssue = "1"
+    CodeSecurityVulnerability = "2"
+    LicenceIssue = "3"
+    DependencyVulnerability = "4"
+    InfrastructureIssue = "5"
+    ContainerVulnerability = "6"
+    ```
+- GetLearnSession returns the given lesson on the Snyk Learn website
+  - command: "snyk.getLearnLesson"
+  - args:
+    - rule string
+    - ecosystem string
+    - cwes string (comma separated)
+    - cves (comma separated)
+    - issueType string
+  - result: lesson json
+  ```json5
+  {
+  "lessonId": "123",
+  "datePublished": "2022-01-01",
+  "author": "John Doe",
+  "title": "Introduction to Golang",
+  "subtitle": "A beginner's guide to Golang",
+  "seoKeywords": ["Golang", "Programming", "Beginner"],
+  "seoTitle": "Learn Golang",
+  "cves": ["CVE-2022-1234", "CVE-2022-5678"],
+  "cwes": ["CWE-123", "CWE-456"],
+  "description": "This lesson provides an introduction to Golang for beginners",
+  "ecosystem": "Programming",
+  "rules": ["Rule 1", "Rule 2", "Rule 3"],
+  "slug": "golang-intro",
+  "published": true,
+  "url": "https://example.com/golang-intro",
+  "source": "Example.com",
+  "img": "https://example.com/images/golang-intro.png"
+  }
+  ```
+  
+
 ## Installation
 
 ### Download
@@ -171,42 +221,73 @@ within `initializationOptions?: LSPAny;` we support the following settings:
 
 ```json5
 {
-  "activateSnykOpenSource": "true", // Enables Snyk Open Source - defaults to true
-  "activateSnykCode": "false", // Enables Snyk Code, if enabled for your organization - defaults to false, deprecated in favor of specific Snyk Code analysis types
-  "activateSnykIac":  "true", // Enables Infrastructure as Code - defaults to true
-  "insecure": "false", // Allows custom CAs (Certification Authorities)
-  "endpoint":  "https://example.com", // Snyk API Endpoint required for non-default multi-tenant and single-tenant setups
-  "additionalParams": "--all-projects", // Any extra params for Open Source scans using the Snyk CLI, separated by spaces
-  "additionalEnv":  "MAVEN_OPTS=-Djava.awt.headless=true;FOO=BAR", // Additional environment variables, separated by semicolons
-  "path": "/usr/local/bin", // Adds to the system path used by the CLI
-  "sendErrorReports":  "true", // Whether to report errors to Snyk - defaults to true
-  "organization": "a string", // The name of your organization, e.g. the output of: curl -H "Authorization: token $(snyk config get api)"  https://snyk.io/api/cli-config/settings/sast | jq .org
-  "enableTelemetry":  "true", // Whether user analytics can be tracked
-  "manageBinariesAutomatically": "true", // Whether CLI/LS binaries will be downloaded & updated automatically
-  "cliPath":  "/a/patch/snyk-cli", // The path where the CLI can be found, or where it should be downloaded to
-  "token":  "secret-token", // The Snyk token, e.g.: snyk config get api or a token from oauth flow
-  "automaticAuthentication": "true", // Whether LS will automatically authenticate on scan start (default: true)
-  "enableTrustedFoldersFeature": "true", // Whether LS will prompt to trust a folder (default: true)
-  "trustedFolders": ["/a/trusted/path", "/another/trusted/path"], // An array of folder that should be trusted
-  "activateSnykCodeSecurity": "false", // Enables Snyk Code Security reporting
-  "activateSnykCodeQuality": "false", // Enable Snyk Code Quality issue reporting (Beta, only in IDEs and LS)
-  "deviceId": "a UUID", // A unique ID from the running the LS, used for telemetry
-  "integrationName": "ECLIPSE", // The name of the IDE or editor the LS is running in
-  "integrationVersion": "1.0.0", // The version of the IDE or editor the LS is running in
-  "filterSeverity": { // Filters to be applied for the determined issues
+  "activateSnykOpenSource": "true",
+  // Enables Snyk Open Source - defaults to true
+  "activateSnykCode": "false",
+  // Enables Snyk Code, if enabled for your organization - defaults to false, deprecated in favor of specific Snyk Code analysis types
+  "activateSnykIac": "true",
+  // Enables Infrastructure as Code - defaults to true
+  "insecure": "false",
+  // Allows custom CAs (Certification Authorities)
+  "endpoint": "https://example.com",
+  // Snyk API Endpoint required for non-default multi-tenant and single-tenant setups
+  "additionalParams": "--all-projects",
+  // Any extra params for Open Source scans using the Snyk CLI, separated by spaces
+  "additionalEnv": "MAVEN_OPTS=-Djava.awt.headless=true;FOO=BAR",
+  // Additional environment variables, separated by semicolons
+  "path": "/usr/local/bin",
+  // Adds to the system path used by the CLI
+  "sendErrorReports": "true",
+  // Whether to report errors to Snyk - defaults to true
+  "organization": "a string",
+  // The name of your organization, e.g. the output of: curl -H "Authorization: token $(snyk config get api)"  https://snyk.io/api/cli-config/settings/sast | jq .org
+  "enableTelemetry": "true",
+  // Whether user analytics can be tracked
+  "manageBinariesAutomatically": "true",
+  // Whether CLI/LS binaries will be downloaded & updated automatically
+  "cliPath": "/a/patch/snyk-cli",
+  // The path where the CLI can be found, or where it should be downloaded to
+  "token": "secret-token",
+  // The Snyk token, e.g.: snyk config get api or a token from oauth flow
+  "automaticAuthentication": "true",
+  // Whether LS will automatically authenticate on scan start (default: true)
+  "enableTrustedFoldersFeature": "true",
+  // Whether LS will prompt to trust a folder (default: true)
+  "trustedFolders": [
+    "/a/trusted/path",
+    "/another/trusted/path"
+  ],
+  // An array of folder that should be trusted
+  "activateSnykCodeSecurity": "false",
+  // Enables Snyk Code Security reporting
+  "activateSnykCodeQuality": "false",
+  // Enable Snyk Code Quality issue reporting (Beta, only in IDEs and LS)
+  "deviceId": "a UUID",
+  // A unique ID from the running the LS, used for telemetry
+  "integrationName": "ECLIPSE",
+  // The name of the IDE or editor the LS is running in
+  "integrationVersion": "1.0.0",
+  // The version of the IDE or editor the LS is running in
+  "filterSeverity": {
+    // Filters to be applied for the determined issues
     "critical": true,
     "high": true,
     "medium": true,
     "low": true,
   },
-  "scanningMode": "auto", // Specifies the mode for scans: "auto" for background scans or "manual" for scans on command
-  "authenticationMethod": "token", // Specifies the authentication method to use: "token" for Snyk API token or "oauth" for Snyk OAuth flow. Default is token.
-  "snykCodeApi": "https://deeproxy.snyk.io" // Specifies the Snyk Code API endpoint to use. Default is https://deeproxy.snyk.io
+  "scanningMode": "auto",
+  // Specifies the mode for scans: "auto" for background scans or "manual" for scans on command
+  "authenticationMethod": "token",
+  // Specifies the authentication method to use: "token" for Snyk API token or "oauth" for Snyk OAuth flow. Default is token.
+  "snykCodeApi": "https://deeproxy.snyk.io",
+  // Specifies the Snyk Code API endpoint to use. Default is https://deeproxy.snyk.io
 }
 ```
 
-`activateSnykCode` automatically toggles the value of `activateSnykCodeSecurity` and `activateSnykCodeQuality`. Therefore,
-to enable only one of the two analysis types, `activateSnykCode` must be removed from Initialization Options for the specific
+`activateSnykCode` automatically toggles the value of `activateSnykCodeSecurity` and `activateSnykCodeQuality`.
+Therefore,
+to enable only one of the two analysis types, `activateSnykCode` must be removed from Initialization Options for the
+specific
 analysis type option to have an effect.
 
 #### Workspace Trust
@@ -316,11 +397,15 @@ export DEEPROXY_API_URL
 
 #### Authentication to Snyk
 
-The Snyk LS authentication flow happens automatically, unless disabled in configuration, and is as follows. When Snyk Language Server starts, it:
+The Snyk LS authentication flow happens automatically, unless disabled in configuration, and is as follows. When Snyk
+Language Server starts, it:
+
 - Checks if it can find a token in the environment variable `SNYK_TOKEN`
 - If this is not the set, it tries to retrieve and authenticate using the Snyk CLI
 - If the CLI is not authenticated either, it opens a browser window to authenticate
-- If there are problems opening the browser window, the auth URL can be copied to the clipboard (via implementation of `snyk.copyAuthLink`). _Note that there is a requirement to have `xsel` or `xclip` installed for Linux/Unix users for this feature._
+- If there are problems opening the browser window, the auth URL can be copied to the clipboard (via implementation
+  of `snyk.copyAuthLink`). _Note that there is a requirement to have `xsel` or `xclip` installed for Linux/Unix users
+  for this feature._
 
 After successfull authentication in the web browser, the Snyk Language Server
 automatically retrieves the Snyk authentication token from the CLI.
@@ -331,8 +416,9 @@ automatically retrieves the Snyk authentication token from the CLI.
 go test ./...
 ```
 
-If you have any issues with running pact, please extend your PATH env. 
+If you have any issues with running pact, please extend your PATH env.
 For example:
+
 ```
 PATH=$PATH:$PWD/.bin/pact/bin make test
 ```

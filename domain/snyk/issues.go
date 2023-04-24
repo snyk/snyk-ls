@@ -54,6 +54,12 @@ type Issue struct {
 	CodeActions []CodeAction
 	// Commands that can be executed via a codelens
 	Commands []CommandData
+	// The Ecosystem of the issue, e.g. npm, maven, nuget, etc.
+	Ecosystem string
+	// A slice of the CWEs of the issue, e.g. CWEs-79
+	CWEs []string
+	// A slice of the CVEs of the issue
+	CVEs []string
 	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
 	AdditionalData any
 }

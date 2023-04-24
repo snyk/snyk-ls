@@ -30,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -46,6 +47,7 @@ type Bundle struct {
 	limitToFiles  []string
 	rootPath      string
 	scanNotifier  snyk.ScanNotifier
+	learnService  learn.Service
 }
 
 func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {
@@ -161,22 +163,9 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 				Msg("sending diagnostics...")
 			p.End("Analysis complete.")
 
-			if getCodeSettings().isAutofixEnabled.Get() {
-				for i := range issues {
-					// We only allow the issues whose file extensions are supported by the
-					// backend.
-					supported, err := b.isAutofixSupportedForExtension(ctx, issues[i].AffectedFilePath)
-					if err != nil {
-						return []snyk.Issue{}, err
-					}
-
-					if !supported {
-						continue
-					}
-					issues[i].CodeActions = append(issues[i].CodeActions, *b.createDeferredAutofixCodeAction(ctx, issues[i]))
-				}
-			} else {
-				log.Trace().Msg("Autofix is disabled, not adding code actions")
+			i, err2 := b.addCodeActions(ctx, issues)
+			if err2 != nil {
+				return i, err2
 			}
 
 			return issues, nil
@@ -194,6 +183,38 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 		time.Sleep(1 * time.Second)
 		p.Report(status.percentage)
 	}
+}
+
+func (b *Bundle) addCodeActions(ctx context.Context, issues []snyk.Issue) ([]snyk.Issue, error) {
+	autoFixEnabled := getCodeSettings().isAutofixEnabled.Get()
+	learnEnabled := config.CurrentConfig().IsSnykLearnCodeActionsEnabled()
+	if autoFixEnabled || learnEnabled {
+		for i := range issues {
+			if autoFixEnabled {
+				// We only allow the issues whose file extensions are supported by the
+				// backend.
+				supported, err := b.isAutofixSupportedForExtension(ctx, issues[i].AffectedFilePath)
+				if err != nil {
+					return []snyk.Issue{}, err
+				}
+
+				if !supported {
+					continue
+				}
+				issues[i].CodeActions = append(issues[i].CodeActions, *b.createDeferredAutofixCodeAction(ctx, issues[i]))
+			}
+
+			if learnEnabled {
+				action := b.createOpenSnykLearnCodeAction(issues[i])
+				if action != nil {
+					issues[i].CodeActions = append(issues[i].CodeActions, *action)
+				}
+			}
+		}
+	} else {
+		log.Trace().Msg("Autofix | Snyk Learn code actions are disabled, not adding code actions")
+	}
+	return nil, nil
 }
 
 func (b *Bundle) getShardKey(rootPath string, authToken string) string {
@@ -283,4 +304,26 @@ func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk
 		return nil
 	}
 	return &action
+}
+
+func (b *Bundle) createOpenSnykLearnCodeAction(issue snyk.Issue) (ca *snyk.CodeAction) {
+	title := fmt.Sprintf("Learn more about %s (Snyk)", issue.ID)
+	lesson, err := b.learnService.GetLesson(issue.Ecosystem, issue.ID, issue.CWEs, issue.CVEs, issue.IssueType)
+	if err != nil {
+		log.Err(err).Msg("failed to get lesson")
+		b.errorReporter.CaptureError(err)
+		return nil
+	}
+
+	if lesson.Url != "" {
+		ca = &snyk.CodeAction{
+			Title: title,
+			Command: &snyk.CommandData{
+				Title:     title,
+				CommandId: snyk.OpenBrowserCommand,
+				Arguments: []any{lesson.Url},
+			},
+		}
+	}
+	return ca
 }
