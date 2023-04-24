@@ -93,24 +93,10 @@ func (f *FileFilter) FindNonIgnoredFiles() <-chan string {
 			f.logger.Err(err).Msg("Error during filepath.WalkDir")
 		}
 
-		var wg sync.WaitGroup
-
-		// When a folder is scanned, a memory-heavy IgnoreParser object is created.
-		// The number of concurrent folders being scanned is limited to prevent high memory peaks.
-		concurrentFolders := parallelism
-		folderSemaphore := make(chan struct{}, concurrentFolders)
-
 		for folderPath, globs := range f.globsPerFolder {
-			wg.Add(1)
 			filesInFolder := filesPerFolder[folderPath]
-			go func(globs []string, folderPath string) {
-				defer wg.Done()
-				folderSemaphore <- struct{}{} // Acquire folderSemaphore
-				f.processFolder(folderPath, filesInFolder, globs, resultsCh)
-				<-folderSemaphore // Release folderSemaphore
-			}(globs, folderPath)
+			f.processFolder(folderPath, filesInFolder, globs, resultsCh)
 		}
-		wg.Wait()
 
 		if err != nil {
 			f.logger.Err(err).Msg("Error during filepath.WalkDir")
