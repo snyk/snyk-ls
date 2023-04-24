@@ -116,13 +116,11 @@ func (f *FileFilter) processFolder(folderPath string, files, globs []string, res
 		hashFailed = true
 	} else {
 		cacheEntry, found := f.cache.Load(folderPath)
-		if found {
-			if hash == cacheEntry.Hash {
-				for _, file := range cacheEntry.Results {
-					results <- file
-				}
-				return
+		if found && hash == cacheEntry.Hash { // Cache hit - returning cached results
+			for _, file := range cacheEntry.Results {
+				results <- file
 			}
+			return
 		}
 	}
 
