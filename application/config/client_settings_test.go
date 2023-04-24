@@ -20,8 +20,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"github.com/xtgo/uuid"
 )
 
 func TestGetEnabledProducts_DefaultValues(t *testing.T) {
@@ -71,7 +71,8 @@ func TestConfig_IsErrorReportingEnabledFromEnv_Error(t *testing.T) {
 }
 
 func TestConfig_OrganizationFromEnv(t *testing.T) {
-	expectedOrgId := uuid.NewRandom().String()
+	orgUuid, _ := uuid.NewRandom()
+	expectedOrgId := orgUuid.String()
 	t.Setenv(Organization, expectedOrgId)
 	SetCurrentConfig(New())
 	CurrentConfig().clientSettingsFromEnv()

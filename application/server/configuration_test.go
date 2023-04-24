@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/creachadair/jrpc2"
+	"github.com/google/uuid"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
@@ -149,6 +150,9 @@ func Test_UpdateSettings(t *testing.T) {
 	testutil.UnitTest(t)
 	di.TestInit(t)
 
+	orgUuid, _ := uuid.NewRandom()
+	expectedOrgId := orgUuid.String()
+
 	t.Run(govDomain+" substring endpoint enables oauth authentication in init", func(t *testing.T) {
 		endpoint := "https://app.fedramp," + govDomain + "/api/v1"
 		updateApiEndpoints(lsp.Settings{Endpoint: endpoint}, true)
@@ -168,7 +172,7 @@ func Test_UpdateSettings(t *testing.T) {
 			AdditionalEnv:               "a=b;c=d",
 			Path:                        "addPath",
 			SendErrorReports:            "true",
-			Organization:                "org",
+			Organization:                expectedOrgId,
 			EnableTelemetry:             "false",
 			ManageBinariesAutomatically: "false",
 			CliPath:                     "C:\\Users\\CliPath\\snyk-ls.exe",
@@ -197,7 +201,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, "d", os.Getenv("c"))
 		assert.True(t, strings.Contains(os.Getenv("PATH"), "addPath"))
 		assert.True(t, c.IsErrorReportingEnabled())
-		assert.Equal(t, "org", c.Organization())
+		assert.Equal(t, expectedOrgId, c.Organization())
 		assert.False(t, c.IsTelemetryEnabled())
 		assert.False(t, c.ManageBinariesAutomatically())
 		assert.Equal(t, "C:\\Users\\CliPath\\snyk-ls.exe", c.CliSettings().Path())
@@ -228,7 +232,7 @@ func Test_UpdateSettings(t *testing.T) {
 		UpdateSettings(lsp.Settings{Organization: " "})
 
 		c := config.CurrentConfig()
-		assert.Equal(t, "", c.Organization())
+		assert.Equal(t, expectedOrgId, c.Organization())
 	})
 
 	t.Run("incomplete env vars", func(t *testing.T) {
@@ -253,7 +257,7 @@ func Test_UpdateSettings(t *testing.T) {
 		UpdateSettings(lsp.Settings{AdditionalEnv: "a=; b"})
 
 		c := config.CurrentConfig()
-		assert.Equal(t, "", c.Organization())
+		assert.Equal(t, expectedOrgId, c.Organization())
 		assert.Empty(t, os.Getenv("a"))
 		assert.Empty(t, os.Getenv("b"))
 		assert.Empty(t, os.Getenv(";"))
