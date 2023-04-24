@@ -120,13 +120,16 @@ func writeSettings(settings lsp.Settings, initialize bool) {
 		return
 	}
 	updateSeverityFilter(settings.FilterSeverity)
-	updateToken(settings.Token)
 	updateProductEnablement(settings)
 	updateCliConfig(settings)
 	updateAuthenticationMethod(settings)
 	// updateApiEndpoints overwrites the authentication method in certain cases (oauth2)
 	// this is why it needs to be called after updateAuthenticationMethod
 	updateApiEndpoints(settings, initialize)
+
+	// setting the token requires to know the authentication method
+	updateToken(settings.Token)
+
 	updateEnvironment(settings)
 	updatePath(settings)
 	updateTelemetry(settings)
