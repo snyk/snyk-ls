@@ -154,7 +154,7 @@ func TestSnykApiPact(t *testing.T) {
 		interaction := pact.AddInteraction().
 			WithRequest(dsl.Request{
 				Method: "GET",
-				Path:   dsl.String("/v1/user/me"),
+				Path:   dsl.String("/user/me"),
 				Headers: dsl.MapMatcher{
 					"Content-Type":  dsl.String("application/json"),
 					"Authorization": dsl.Regex("token fc763eba-0905-41c5-a27f-3934ab26786c", `^token [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`),
