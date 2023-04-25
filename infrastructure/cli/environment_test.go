@@ -17,9 +17,11 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -33,21 +35,48 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		const expectedIntegrationVersion = "0.0.1rc1"
 
 		testutil.UnitTest(t)
-		config.CurrentConfig().SetOrganization("testOrg")
-		config.CurrentConfig().UpdateApiEndpoints("https://app.snyk.io/api")
-		config.CurrentConfig().SetIntegrationName(expectedIntegrationName)
-		config.CurrentConfig().SetIntegrationVersion(expectedIntegrationVersion)
+		c := config.CurrentConfig()
+		c.SetOrganization("testOrg")
+		c.UpdateApiEndpoints("https://app.snyk.io/api")
+		c.SetIntegrationName(expectedIntegrationName)
+		c.SetIntegrationVersion(expectedIntegrationVersion)
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
-		assert.Contains(t, updatedEnv, "SNYK_CFG_ORG="+config.CurrentConfig().Organization())
-		assert.Contains(t, updatedEnv, "SNYK_API=https://app.snyk.io/api")
-		assert.Contains(t, updatedEnv, "SNYK_TOKEN="+config.CurrentConfig().Token())
-		assert.Contains(t, updatedEnv, "SNYK_INTEGRATION_NAME="+expectedIntegrationName)
-		assert.Contains(t, updatedEnv, "SNYK_INTEGRATION_VERSION="+expectedIntegrationVersion)
-		assert.Contains(t, updatedEnv, "SNYK_INTEGRATION_ENVIRONMENT="+IntegrationEnvironmentEnvVarValue)
-		assert.Contains(t, updatedEnv, "SNYK_INTEGRATION_ENVIRONMENT_VERSION="+config.Version)
+		assert.Contains(t, updatedEnv, ApiEnvVar+"=https://app.snyk.io/api")
+		assert.Contains(t, updatedEnv, TokenEnvVar+"="+c.Token())
+		assert.Contains(t, updatedEnv, IntegrationNameEnvVarKey+"="+expectedIntegrationName)
+		assert.Contains(t, updatedEnv, IntegrationVersionEnvVarKey+"="+expectedIntegrationVersion)
+		assert.Contains(t, updatedEnv, IntegrationEnvironmentEnvVarKey+"="+IntegrationEnvironmentEnvVarValue)
+		assert.Contains(t, updatedEnv, IntegrationEnvironmentVersionEnvVar+"="+config.Version)
 		assert.NotContains(t, updatedEnv, "SNYK_CFG_DISABLE_ANALYTICS=1")
+	})
+	t.Run("Removes existing snyk token env variables", func(t *testing.T) {
+		testutil.UnitTest(t)
+		c := config.CurrentConfig()
+		c.SetAuthenticationMethod(lsp.OAuthAuthentication)
+		c.SetToken("testToken")
+		tokenVar := TokenEnvVar + "={asdf}"
+		inputEnv := []string{tokenVar}
+
+		updatedEnv := AppendCliEnvironmentVariables(inputEnv, true)
+
+		assert.Contains(t, updatedEnv, auth.CONFIG_KEY_OAUTH_TOKEN+"="+config.CurrentConfig().Token())
+		assert.Contains(t, updatedEnv, strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED+"=1"))
+		assert.NotContains(t, updatedEnv, tokenVar)
+	})
+	t.Run("Removes existing oauth env variables", func(t *testing.T) {
+		testutil.UnitTest(t)
+		c := config.CurrentConfig()
+		c.SetAuthenticationMethod(lsp.TokenAuthentication)
+		c.SetToken("testToken")
+		oauthVar := auth.CONFIG_KEY_OAUTH_TOKEN + "={asdf}"
+		inputEnv := []string{oauthVar}
+
+		updatedEnv := AppendCliEnvironmentVariables(inputEnv, true)
+
+		assert.Contains(t, updatedEnv, "SNYK_TOKEN="+config.CurrentConfig().Token())
+		assert.NotContains(t, updatedEnv, oauthVar)
 	})
 	t.Run("Adds Snyk Token to env", func(t *testing.T) {
 		testutil.UnitTest(t)

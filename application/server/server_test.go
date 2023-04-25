@@ -31,6 +31,7 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/server"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -367,9 +368,12 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 func Test_initialize_updatesSettings(t *testing.T) {
 	loc := setupServer(t)
 
+	orgUuid, _ := uuid.NewRandom()
+	expectedOrgId := orgUuid.String()
+
 	clientParams := lsp.InitializeParams{
 		InitializationOptions: lsp.Settings{
-			Organization:   "fancy org",
+			Organization:   expectedOrgId,
 			Token:          "xxx",
 			FilterSeverity: lsp.DefaultSeverityFilter(),
 		},
@@ -383,7 +387,7 @@ func Test_initialize_updatesSettings(t *testing.T) {
 	if err := rsp.UnmarshalResult(&result); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, "fancy org", config.CurrentConfig().Organization())
+	assert.Equal(t, expectedOrgId, config.CurrentConfig().Organization())
 	assert.Equal(t, "xxx", config.CurrentConfig().Token())
 }
 

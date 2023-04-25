@@ -27,12 +27,14 @@ import (
 	"strconv"
 
 	"github.com/rs/zerolog/log"
+	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	performance2 "github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code/encoding"
+	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 const (
@@ -174,10 +176,24 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Session-Token", config.CurrentConfig().Token()) // FIXME: this should be set by GAF, is in the works
+	token := config.CurrentConfig().Token()
+	if config.CurrentConfig().AuthenticationMethod() == lsp.TokenAuthentication {
+		req.Header.Set("Session-Token", token) // FIXME: this should be set by GAF, is in the works
+	} else {
+		var oauthToken oauth2.Token
+		err = json.Unmarshal([]byte(token), &oauthToken)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Session-Token", "bearer "+oauthToken.AccessToken) // FIXME: this should be set by GAF, is in the works
+	}
 
 	// Setting a chosen org name for the request
-	req.Header.Set("snyk-org-name", config.CurrentConfig().Organization())
+	org := config.CurrentConfig().Organization()
+	if org != "" {
+		req.Header.Set("snyk-org-name", org)
+	}
+
 	req.Header.Set("snyk-request-id", requestId)
 	// https://www.keycdn.com/blog/http-cache-headers
 	req.Header.Set("Cache-Control", "private, max-age=0, no-cache")

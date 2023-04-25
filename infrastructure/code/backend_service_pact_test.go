@@ -37,6 +37,7 @@ const (
 	pactDir      = "./pacts"
 	pactProvider = "SnykCodeApi"
 
+	orgUUID     = "00000000-0000-0000-0000-000000000023"
 	uuidMatcher = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 )
 
@@ -261,7 +262,7 @@ func setupPact(t *testing.T) {
 
 	t.Setenv("DEEPROXY_API_URL", fmt.Sprintf("http://localhost:%d", pact.Server.Port))
 	config.CurrentConfig().UpdateApiEndpoints("http://localhost")
-	config.CurrentConfig().SetOrganization("test-org")
+	config.CurrentConfig().SetOrganization(orgUUID)
 
 	client = NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), func() *http.Client { return http.DefaultClient })
 }
@@ -271,7 +272,7 @@ func getPutPostHeaderMatcher() dsl.MapMatcher {
 		"Content-Type":     dsl.String("application/octet-stream"),
 		"Content-Encoding": dsl.String("gzip"),
 		"Session-Token":    dsl.Regex("fc763eba-0905-41c5-a27f-3934ab26786c", uuidMatcher),
-		"snyk-org-name":    dsl.String("test-org"),
+		"snyk-org-name":    dsl.Regex(orgUUID, uuidMatcher),
 		"snyk-request-id":  getSnykRequestIdMatcher(),
 	}
 }

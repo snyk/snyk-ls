@@ -27,7 +27,6 @@ import (
 )
 
 const (
-	OrganizationEnvVar                  = "SNYK_CFG_ORG"
 	ApiEnvVar                           = "SNYK_API"
 	TokenEnvVar                         = "SNYK_TOKEN"
 	DisableAnalyticsEnvVar              = "SNYK_CFG_DISABLE_ANALYTICS"
@@ -38,17 +37,28 @@ const (
 	IntegrationEnvironmentEnvVarValue   = "language-server"
 )
 
-// Returns the input array with additional variables used in the CLI run in the form of "key=value".
+// AppendCliEnvironmentVariables Returns the input array with additional variables used in the CLI run in the form of "key=value".
 // Since we append, our values are overwriting existing env variables (because exec.Cmd.Env chooses the last value
 // in case of key duplications).
 // appendToken indicates whether we should append the token or not. No token should be appended in cases such as authentication.
 func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) (updatedEnv []string) {
-	updatedEnv = currentEnv
-
 	currentConfig := config.CurrentConfig()
-	organization := currentConfig.Organization()
-	if organization != "" {
-		updatedEnv = append(updatedEnv, OrganizationEnvVar+"="+organization)
+
+	// remove any existing env vars that we are going to set
+	valuesToRemove := map[string]bool{
+		ApiEnvVar:                                true,
+		TokenEnvVar:                              true,
+		DisableAnalyticsEnvVar:                   true,
+		auth.CONFIG_KEY_OAUTH_TOKEN:              true,
+		configuration.FF_OAUTH_AUTH_FLOW_ENABLED: true,
+	}
+
+	for _, s := range currentEnv {
+		split := strings.Split(s, "=")
+		if valuesToRemove[split[0]] {
+			continue
+		}
+		updatedEnv = append(updatedEnv, s)
 	}
 
 	if appendToken {

@@ -20,6 +20,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -70,11 +71,13 @@ func TestConfig_IsErrorReportingEnabledFromEnv_Error(t *testing.T) {
 }
 
 func TestConfig_OrganizationFromEnv(t *testing.T) {
-	t.Setenv(Organization, "snyk-test-org")
+	orgUuid, _ := uuid.NewRandom()
+	expectedOrgId := orgUuid.String()
+	t.Setenv(Organization, expectedOrgId)
 	SetCurrentConfig(New())
 	CurrentConfig().clientSettingsFromEnv()
 
-	assert.Equal(t, "snyk-test-org", CurrentConfig().Organization())
+	assert.Equal(t, expectedOrgId, CurrentConfig().Organization())
 }
 
 func TestConfig_EnableTelemetryFromEnv(t *testing.T) {

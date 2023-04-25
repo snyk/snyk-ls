@@ -32,6 +32,7 @@ const (
 	consumer     = "SnykLS"
 	pactDir      = "./pacts"
 	pactProvider = "SnykApi"
+	orgUUID      = "00000000-0000-0000-0000-000000000023"
 )
 
 // Common test data
@@ -58,7 +59,25 @@ func TestSnykApiPact(t *testing.T) {
 			ReportFalsePositivesEnabled: false,
 		}
 
-		interaction := pact.AddInteraction().WithRequest(dsl.Request{
+		// when no org is set, the Go Application framework calls the API to obtain the default org
+		interactionOrg := pact.AddInteraction().WithRequest(dsl.Request{
+			Method: "GET",
+			Path:   dsl.String("/rest/self"),
+			Query:  dsl.MapMatcher{"version": dsl.String("2022-09-15~experimental")},
+			Headers: dsl.MapMatcher{
+				"Authorization": dsl.Regex("token fc763eba-0905-41c5-a27f-3934ab26786c", `^token [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`),
+			},
+		}).WillRespondWith(dsl.Response{
+			Status: 200,
+			Headers: dsl.MapMatcher{
+				"Content-Type": dsl.String("application/json"),
+			},
+			// don't return an org, so we can see that the sastEnabled call is done without org parameter
+			Body: dsl.String(""),
+		})
+		interactionOrg.Description = "happy path without org as query parameter, org call"
+
+		interactionConfigSettings := pact.AddInteraction().WithRequest(dsl.Request{
 			Method: "GET",
 			Path:   dsl.String("/cli-config/settings/sast"),
 			Headers: dsl.MapMatcher{
@@ -72,7 +91,7 @@ func TestSnykApiPact(t *testing.T) {
 			},
 			Body: dsl.Match(expectedResponse),
 		})
-		interaction.Description = "happy path without org as query parameter"
+		interactionConfigSettings.Description = "happy path without org as query parameter"
 
 		test := func() error {
 			_, _, _, err := client.SastEnabled()
@@ -88,7 +107,7 @@ func TestSnykApiPact(t *testing.T) {
 	})
 
 	t.Run("Get SAST enablement with org", func(t *testing.T) {
-		organization := "test-org with characters (e.g. %) to be encoded!"
+		organization := orgUUID
 		config.CurrentConfig().SetOrganization(organization)
 
 		expectedResponse := sastResponse{
@@ -135,7 +154,7 @@ func TestSnykApiPact(t *testing.T) {
 		interaction := pact.AddInteraction().
 			WithRequest(dsl.Request{
 				Method: "GET",
-				Path:   dsl.String("/user/me"),
+				Path:   dsl.String("/v1/user/me"),
 				Headers: dsl.MapMatcher{
 					"Content-Type":  dsl.String("application/json"),
 					"Authorization": dsl.Regex("token fc763eba-0905-41c5-a27f-3934ab26786c", `^token [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`),

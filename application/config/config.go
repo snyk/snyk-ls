@@ -143,7 +143,6 @@ type Config struct {
 	manageBinariesAutomatically  concurrency.AtomicBool
 	logPath                      string
 	logFile                      *os.File
-	organization                 string
 	snykCodeAnalysisTimeout      time.Duration
 	snykApiUrl                   string
 	snykCodeApiUrl               string
@@ -213,7 +212,6 @@ func New() *Config {
 	c.trustedFoldersFeatureEnabled = true
 	c.automaticScanning = true
 	c.authenticationMethod = lsp.TokenAuthentication
-	c.clientSettingsFromEnv()
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = lsp.DefaultSeverityFilter()
@@ -223,6 +221,8 @@ func New() *Config {
 		log.Warn().Err(err).Msg("Failed to initialize workflow engine")
 	}
 	c.enableSnykLearnCodeActions = false
+
+	c.clientSettingsFromEnv()
 	return c
 }
 
@@ -560,11 +560,11 @@ func (c *Config) configFiles() []string {
 }
 
 func (c *Config) Organization() string {
-	return c.organization
+	return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
 }
 
 func (c *Config) SetOrganization(organization string) {
-	c.organization = organization
+	c.engine.GetConfiguration().Set(configuration.ORGANIZATION, organization)
 }
 
 func (c *Config) ManageBinariesAutomatically() bool {
