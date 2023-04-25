@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited All rights reserved.
+ * © 2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,28 +18,21 @@ package command
 
 import (
 	"context"
-	"testing"
-
-	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 )
 
-type TestCommand struct {
-	executed bool
+type cliConfigSettingsSastEnabled struct {
+	command   snyk.CommandData
+	apiClient snyk_api.SnykApiClient
 }
 
-func (command *TestCommand) Command() snyk.CommandData {
-	return snyk.CommandData{}
-}
-func (command *TestCommand) Execute(_ context.Context) (any, error) {
-	command.executed = true
-	return nil, nil
+func (cmd *cliConfigSettingsSastEnabled) Command() snyk.CommandData {
+	return cmd.command
 }
 
-func Test_ExecuteCommand(t *testing.T) {
-	service := Service()
-	cmd := &TestCommand{}
-	_, _ = service.ExecuteCommand(context.Background(), cmd)
-	assert.True(t, cmd.executed)
+func (cmd *cliConfigSettingsSastEnabled) Execute(_ context.Context) (any, error) {
+	enabled, _, _, err := cmd.apiClient.SastEnabled()
+	return enabled, err
 }

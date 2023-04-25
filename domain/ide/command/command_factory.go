@@ -19,8 +19,10 @@ package command
 import (
 	"fmt"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
@@ -54,6 +56,9 @@ func CreateFromCommandData(
 		return &getLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case snyk.OpenLearnLesson:
 		return &openLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
+	case snyk.CliConfigSettingsSastEnabled:
+		apiClient := snyk_api.NewSnykApiClient(config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient)
+		return &cliConfigSettingsSastEnabled{command: commandData, apiClient: apiClient}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

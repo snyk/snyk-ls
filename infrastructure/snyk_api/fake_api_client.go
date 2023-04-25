@@ -76,6 +76,9 @@ func (f *FakeApiClient) GetAllCalls(op string) [][]any {
 
 func (f *FakeApiClient) SastEnabled() (sastEnabled bool, localCodeEngineEnabled bool, reportFalsePositivesEnabled bool, err *SnykApiError) {
 	f.addCall([]any{}, SastEnabledOperation)
+	if f.ApiError != nil {
+		return false, false, false, f.ApiError
+	}
 	return f.CodeEnabled, false, false, nil
 }
 
