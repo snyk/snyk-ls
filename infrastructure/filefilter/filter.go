@@ -15,8 +15,21 @@ import (
 	ignore "github.com/sabhiram/go-gitignore"
 	"gopkg.in/yaml.v3"
 
+	"github.com/snyk/snyk-ls/internal/util"
+
 	"github.com/snyk/snyk-ls/application/config"
 )
+
+const defaultParallelism = 4
+
+// parallelism is the number of concurrent goroutines that can be used to check if a file is ignored.
+// It is set to the defaultParallelism, unless there are fewer CPU cores.
+// For safety, it is set to be at least 1.
+var parallelism = util.Max(1, util.Min(defaultParallelism, runtime.NumCPU()))
+
+// semaphore is used to limit the number of concurrent CPU-heavy ignore checks.
+// It is global because there can be several file filters running concurrently on the same machine.
+var semaphore = make(chan struct{}, parallelism)
 
 func FindNonIgnoredFiles(rootFolder string, c *config.Config) <-chan string {
 	return NewFileFilter(rootFolder, c).FindNonIgnoredFiles()
@@ -81,26 +94,10 @@ func (f *FileFilter) FindNonIgnoredFiles() <-chan string {
 			f.logger.Err(err).Msg("Error during filepath.WalkDir")
 		}
 
-		var wg sync.WaitGroup
-
-		// When a folder is scanned, a memory-heavy IgnoreParser object is created.
-		// The number of concurrent folders being scanned is limited to prevent high memory peaks.
-		// NumCPU is used as a reasonable default (instead of hardcoding a magic number),
-		// even though the files inside the folders are also scanned concurrently.
-		concurrentFolders := runtime.NumCPU()
-		semaphore := make(chan struct{}, concurrentFolders)
-
 		for folderPath, globs := range f.globsPerFolder {
-			wg.Add(1)
 			filesInFolder := filesPerFolder[folderPath]
-			go func(globs []string, folderPath string) {
-				defer wg.Done()
-				semaphore <- struct{}{} // Acquire semaphore
-				f.processFolder(folderPath, filesInFolder, globs, resultsCh)
-				<-semaphore // Release semaphore
-			}(globs, folderPath)
+			f.processFolder(folderPath, filesInFolder, globs, resultsCh)
 		}
-		wg.Wait()
 
 		if err != nil {
 			f.logger.Err(err).Msg("Error during filepath.WalkDir")
@@ -120,13 +117,11 @@ func (f *FileFilter) processFolder(folderPath string, files, globs []string, res
 		hashFailed = true
 	} else {
 		cacheEntry, found := f.cache.Load(folderPath)
-		if found {
-			if hash == cacheEntry.Hash {
-				for _, file := range cacheEntry.Results {
-					results <- file
-				}
-				return
+		if found && hash == cacheEntry.Hash { // Cache hit - returning cached results
+			for _, file := range cacheEntry.Results {
+				results <- file
 			}
+			return
 		}
 	}
 
@@ -137,7 +132,11 @@ func (f *FileFilter) processFolder(folderPath string, files, globs []string, res
 	for _, file := range files {
 		wg.Add(1)
 		go func(file string) {
-			defer wg.Done()
+			defer func() {
+				wg.Done()
+				<-semaphore // Release semaphore
+			}()
+			semaphore <- struct{}{} // Acquire semaphore
 			if !checker.MatchesPath(file) {
 				resultsLock.Lock()
 				resultsToCache = append(resultsToCache, file)

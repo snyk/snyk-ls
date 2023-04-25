@@ -17,10 +17,11 @@ func BenchmarkFindNonIgnoredFiles(b *testing.B) {
 	b.Log("Cloning remoteRepo...")
 	repo := cloneRepo(b, remoteRepo, remoteRepoHash)
 	b.Log("Repo cloned")
+	filter := filefilter.NewFileFilter(repo, config.New())
 	b.ResetTimer() // reset timer to not include the clone time
 	for i := 0; i < b.N; i++ {
 		b.Log("Finding non ignored files in ", repo)
-		filesCh := filefilter.FindNonIgnoredFiles(repo, config.CurrentConfig())
+		filesCh := filter.FindNonIgnoredFiles()
 		for range filesCh { // drain the channel
 		}
 		b.Log("Finished benchmark iteration ", i)
