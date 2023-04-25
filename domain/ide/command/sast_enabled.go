@@ -23,16 +23,16 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 )
 
-type cliConfigSettingsSastEnabled struct {
+type sastEnabled struct {
 	command   snyk.CommandData
 	apiClient snyk_api.SnykApiClient
 }
 
-func (cmd *cliConfigSettingsSastEnabled) Command() snyk.CommandData {
+func (cmd *sastEnabled) Command() snyk.CommandData {
 	return cmd.command
 }
 
-func (cmd *cliConfigSettingsSastEnabled) Execute(_ context.Context) (any, error) {
+func (cmd *sastEnabled) Execute(_ context.Context) (any, error) {
 	enabled, localCodeEngineEnabled, _, err := cmd.apiClient.SastEnabled()
 	return enabled && !localCodeEngineEnabled, err
 }

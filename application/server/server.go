@@ -226,7 +226,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 						snyk.OAuthRefreshCommand,
 						snyk.OpenLearnLesson,
 						snyk.GetLearnLesson,
-						snyk.CliConfigSettingsSastEnabled,
+						snyk.SettingsSastEnabled,
 					},
 				},
 			},

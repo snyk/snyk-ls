@@ -56,9 +56,9 @@ func CreateFromCommandData(
 		return &getLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case snyk.OpenLearnLesson:
 		return &openLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
-	case snyk.CliConfigSettingsSastEnabled:
+	case snyk.SettingsSastEnabled:
 		apiClient := snyk_api.NewSnykApiClient(config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient)
-		return &cliConfigSettingsSastEnabled{command: commandData, apiClient: apiClient}, nil
+		return &sastEnabled{command: commandData, apiClient: apiClient}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

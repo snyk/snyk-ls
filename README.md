@@ -187,8 +187,8 @@ Right now the language server supports the following actions:
   "img": "https://example.com/images/golang-intro.png"
   }
   ```
-- `CliConfigSettingsSastEnabled` triggers the api call to check if Snyk Code is enabled
-  - command: `snyk.cliConfigSettings.sastEnabled`
+- `SettingsSastEnabled` triggers the api call to check if Snyk Code is enabled
+  - command: `snyk.settingsSastEnabled`
   - args: empty
   - returns `true` if enabled, `false` if not, or an error and false if an error occurred
 

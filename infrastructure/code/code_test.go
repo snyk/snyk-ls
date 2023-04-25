@@ -547,7 +547,7 @@ func writeGitIgnoreIntoDir(ignorePatterns string, t *testing.T, tempDir string) 
 }
 
 func Test_IsEnabled(t *testing.T) {
-	scanner := &Scanner{}
+	scanner := &Scanner{errorReporter: error_reporting.NewTestErrorReporter()}
 	t.Run(
 		"should return true if Snyk Code is generally enabled", func(t *testing.T) {
 			config.CurrentConfig().SetSnykCodeEnabled(true)
@@ -591,14 +591,17 @@ func TestIsSastEnabled(t *testing.T) {
 	}
 	scanner := &Scanner{
 		SnykApiClient: apiClient,
+		errorReporter: error_reporting.NewTestErrorReporter(),
 	}
 	t.Run("should return false if Snyk Code is disabled", func(t *testing.T) {
+		apiClient.ApiError = nil
 		config.CurrentConfig().SetSnykCodeEnabled(false)
 		enabled := scanner.isSastEnabled()
 		assert.False(t, enabled)
 	})
 
 	t.Run("should call the API to check enablement if Snyk Code is enabled", func(t *testing.T) {
+		apiClient.ApiError = nil
 		config.CurrentConfig().SetSnykCodeEnabled(true)
 		scanner.isSastEnabled()
 		assert.Equal(t, 1, len(apiClient.Calls))
@@ -606,6 +609,7 @@ func TestIsSastEnabled(t *testing.T) {
 
 	t.Run("should return true if Snyk Code is enabled and the API returns true", func(t *testing.T) {
 		config.CurrentConfig().SetSnykCodeEnabled(true)
+		apiClient.ApiError = nil
 		apiClient.CodeEnabled = true
 		enabled := scanner.isSastEnabled()
 		assert.True(t, enabled)
@@ -613,6 +617,7 @@ func TestIsSastEnabled(t *testing.T) {
 
 	t.Run("should return false if Snyk Code is enabled and the API returns false", func(t *testing.T) {
 		config.CurrentConfig().SetSnykCodeEnabled(true)
+		apiClient.ApiError = nil
 		apiClient.CodeEnabled = false
 		enabled := scanner.isSastEnabled()
 		assert.False(t, enabled)
@@ -631,6 +636,7 @@ func TestIsSastEnabled(t *testing.T) {
 			notification.DisposeListener()
 			config.CurrentConfig().SetSnykCodeEnabled(true)
 			apiClient.CodeEnabled = false
+			apiClient.ApiError = nil
 			actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
 
 			data, err := command.CreateFromCommandData(
