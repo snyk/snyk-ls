@@ -33,6 +33,6 @@ func (cmd *cliConfigSettingsSastEnabled) Command() snyk.CommandData {
 }
 
 func (cmd *cliConfigSettingsSastEnabled) Execute(_ context.Context) (any, error) {
-	enabled, _, _, err := cmd.apiClient.SastEnabled()
-	return enabled, err
+	enabled, localCodeEngineEnabled, _, err := cmd.apiClient.SastEnabled()
+	return enabled && !localCodeEngineEnabled, err
 }

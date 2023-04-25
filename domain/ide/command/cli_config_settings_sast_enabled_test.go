@@ -27,7 +27,8 @@ import (
 
 func Test_ApiClient_isCalledAndResultReturned(t *testing.T) {
 	fakeApiClient := &snyk_api.FakeApiClient{
-		CodeEnabled: true,
+		CodeEnabled:            true,
+		LocalCodeEngineEnabled: false,
 	}
 
 	configSettingsSastEnabled := cliConfigSettingsSastEnabled{apiClient: fakeApiClient}
@@ -35,6 +36,19 @@ func Test_ApiClient_isCalledAndResultReturned(t *testing.T) {
 	result, _ := configSettingsSastEnabled.Execute(context.Background())
 
 	assert.True(t, result.(bool))
+}
+
+func Test_ApiClient_ReturnsFalseIfLocalCodeEngineIsEnabled(t *testing.T) {
+	fakeApiClient := &snyk_api.FakeApiClient{
+		CodeEnabled:            true,
+		LocalCodeEngineEnabled: true,
+	}
+
+	configSettingsSastEnabled := cliConfigSettingsSastEnabled{apiClient: fakeApiClient}
+
+	result, _ := configSettingsSastEnabled.Execute(context.Background())
+
+	assert.False(t, result.(bool))
 }
 
 func Test_ApiClient_isCalledAndErrorReturned(t *testing.T) {
