@@ -165,7 +165,7 @@
       "description": "Get active user",
       "request": {
         "method": "GET",
-        "path": "/v1/user/me",
+        "path": "/user/me",
         "headers": {
           "Authorization": "token fc763eba-0905-41c5-a27f-3934ab26786c",
           "Content-Type": "application/json"
