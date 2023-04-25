@@ -31,6 +31,9 @@ import (
 
 func TestDownloader_Download(t *testing.T) {
 	testutil.IntegTest(t)
+	settings := &config.CliSettings{}
+	settings.SetPath(t.TempDir())
+	config.CurrentConfig().SetCliSettings(settings)
 	r := getTestAsset()
 	progressCh := make(chan lsp.ProgressParams, 100000)
 	cancelProgressCh := make(chan lsp.ProgressToken, 1)
@@ -88,20 +91,20 @@ func getTestAsset() *Release {
 	r := &Release{
 		Assets: &ReleaseAssets{
 			MacOS: &ReleaseAsset{
-				URL:          "https://static.snyk.io/cli/v1.912.0/snyk-macos",
-				ChecksumInfo: "c5761b9704bfe8d793001cd183cd84d39c12ca5cad674758aa3b747ec73d8df8  snyk-macos",
+				URL:          "https://static.snyk.io/cli/v1.1141.0/snyk-macos",
+				ChecksumInfo: "f1ab84a2ad80d99c6293dda5bc7a80f0511222b29150960ff74c556966000c48  snyk-macos",
 			},
 			Linux: &ReleaseAsset{
-				URL:          "https://static.snyk.io/cli/v1.912.0/snyk-linux",
-				ChecksumInfo: "956027e8f417df8203da7e614045a7255de0da418ae3ce4664b8eb6fba7b392b  snyk-linux",
+				URL:          "https://static.snyk.io/cli/v1.1141.0/snyk-linux",
+				ChecksumInfo: "d516eb4623acc86225efc4d6b29e1627ce541909cbbe89175f8b0e8285d3b359  snyk-linux",
 			},
 			LinuxARM64: &ReleaseAsset{
-				URL:          "https://static.snyk.io/cli/v1.912.0/snyk-linux-arm64",
-				ChecksumInfo: "2b0a8eff7a25bf169dd3397a8e4870867b21a512ca2da47c4f83b04e40098245  snyk-linux-arm64",
+				URL:          "https://static.snyk.io/cli/v1.1141.0/snyk-linux-arm64",
+				ChecksumInfo: "6d146cd8891c79234b6be3970ef6e6168fa250dd9f1257dbba6543d25f1ae797  snyk-linux-arm64",
 			},
 			Windows: &ReleaseAsset{
-				URL:          "https://static.snyk.io/cli/v1.912.0/snyk-win.exe",
-				ChecksumInfo: "c3efd52d44521c424cfbac7934ec90eff57ea181f8d3c002b7a007748f8599b7  snyk-win.exe",
+				URL:          "https://static.snyk.io/cli/v1.1141.0/snyk-win.exe",
+				ChecksumInfo: "68f7dc7565f7b4efd9516b5436c8cbf9217138194141636c39264ff6e4407bf9  snyk-win.exe",
 			},
 		},
 	}
