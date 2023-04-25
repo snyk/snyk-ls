@@ -7,6 +7,30 @@
   },
   "interactions": [
     {
+      "description": "happy path without org as query parameter, org call",
+      "request": {
+        "method": "GET",
+        "path": "/rest/self",
+        "query": "version=2022-09-15%7Eexperimental",
+        "headers": {
+          "Authorization": "token fc763eba-0905-41c5-a27f-3934ab26786c"
+        },
+        "matchingRules": {
+          "$.headers.Authorization": {
+            "match": "regex",
+            "regex": "^token [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": ""
+      }
+    },
+    {
       "description": "happy path without org as query parameter",
       "request": {
         "method": "GET",
@@ -76,7 +100,7 @@
       "request": {
         "method": "GET",
         "path": "/cli-config/settings/sast",
-        "query": "org=test-org+with+characters+%28e.g.+%25%29+to+be+encoded%21",
+        "query": "org=00000000-0000-0000-0000-000000000023",
         "headers": {
           "Authorization": "token fc763eba-0905-41c5-a27f-3934ab26786c",
           "Content-Type": "application/json"
@@ -141,7 +165,7 @@
       "description": "Get active user",
       "request": {
         "method": "GET",
-        "path": "/user/me",
+        "path": "/v1/user/me",
         "headers": {
           "Authorization": "token fc763eba-0905-41c5-a27f-3934ab26786c",
           "Content-Type": "application/json"

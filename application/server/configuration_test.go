@@ -227,11 +227,12 @@ func Test_UpdateSettings(t *testing.T) {
 	})
 
 	t.Run("blank organisation is ignored", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		c := config.New()
+		config.SetCurrentConfig(c)
+		c.SetOrganization(expectedOrgId)
 
 		UpdateSettings(lsp.Settings{Organization: " "})
 
-		c := config.CurrentConfig()
 		assert.Equal(t, expectedOrgId, c.Organization())
 	})
 
@@ -245,10 +246,11 @@ func Test_UpdateSettings(t *testing.T) {
 
 	t.Run("empty env vars", func(t *testing.T) {
 		config.SetCurrentConfig(config.New())
+		varCount := len(os.Environ())
 
 		UpdateSettings(lsp.Settings{AdditionalEnv: " "})
 
-		assert.Empty(t, os.Getenv("a"))
+		assert.Equal(t, varCount, len(os.Environ()))
 	})
 
 	t.Run("broken env variables", func(t *testing.T) {
@@ -256,8 +258,6 @@ func Test_UpdateSettings(t *testing.T) {
 
 		UpdateSettings(lsp.Settings{AdditionalEnv: "a=; b"})
 
-		c := config.CurrentConfig()
-		assert.Equal(t, expectedOrgId, c.Organization())
 		assert.Empty(t, os.Getenv("a"))
 		assert.Empty(t, os.Getenv("b"))
 		assert.Empty(t, os.Getenv(";"))
