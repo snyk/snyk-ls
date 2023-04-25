@@ -19,15 +19,33 @@
 # Currently, these might be NeoVIM, Sublime Text or Atom, but any editor that hasn't got a downloader built by us needs to download
 # and update the language server regularly, and this script allows this for system administrators and users.
 
-set -ex
+set -e
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m | tr '[:upper:]' '[:lower:]')
 if [[ $ARCH == "x86_64" ]]; then
   ARCH="amd64"
-fi
-if [[ $ARCH == "aarch64" ]]; then
+elif [[ $ARCH == "aarch64" ]]; then
   ARCH="arm64"
+else
+  ARCH="386"
 fi
+
 PROTOCOL_VERSION=$(grep "LS_PROTOCOL_VERSION" .goreleaser.yaml | tail -1 | cut -f2 -d "=" |xargs)
-VERSION=$(curl https://static.snyk.io/snyk-ls/$PROTOCOL_VERSION/metadata.json | jq .version | sed -e s/\"//g)
-wget -O /usr/local/bin/snyk-ls "https://static.snyk.io/snyk-ls/$PROTOCOL_VERSION/snyk-ls_${VERSION}_${OS}_${ARCH}"
+VERSION=$(curl -sSL https://static.snyk.io/snyk-ls/$PROTOCOL_VERSION/metadata.json | jq .version | sed -e s/\"//g)
+DESTINATION="/usr/local/bin/snyk-ls"
+DOWNLOAD_URL="https://static.snyk.io/snyk-ls/$PROTOCOL_VERSION/snyk-ls_${VERSION}_${OS}_${ARCH}"
+
+echo
+echo "OS: $OS"
+echo "Architecture: $ARCH"
+echo "Protocol Version: $PROTOCOL_VERSION"
+echo "Language Server version: $VERSION"
+echo "Destination Path: $DESTINATION"
+echo
+echo "Downloading from $DOWNLOAD_URL"
+echo
+curl -L --progress-bar $DOWNLOAD_URL > $DESTINATION
+chmod +x $DESTINATION
+echo
+echo "✨🎉 Snyk Language Server $VERSION installed to $DESTINATION."
+

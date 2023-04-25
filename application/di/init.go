@@ -131,9 +131,9 @@ func initInfrastructure() {
 	snykCodeClient = code.NewHTTPRepository(instrumentor, errorReporter, c.Engine().GetNetworkAccess().GetHttpClient)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
-	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
+	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli, learnService)
 	scanNotifier, _ = appNotification.NewScanNotifier(notification.NewNotifier())
-	learnService = learn.New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
+	learnService = learn.New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient, errorReporter)
 	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, learnService)
 	cliInitializer = cli.NewInitializer(errorReporter, installer)
 	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics)
@@ -147,7 +147,7 @@ func initApplication() {
 	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier) // don't use getters or it'll deadlock
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(w, fileWatcher)
+	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher)
 	command.ResetService()
 }
 
@@ -177,7 +177,7 @@ func TestInit(t *testing.T) {
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 	scanNotifier, _ = appNotification.NewScanNotifier(notification.NewNotifier())
 	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, mock_learn.NewMockService(gomock.NewController(t)))
-	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
+	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli, learnService)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	scanner = snyk.NewDelegatingScanner(
 		scanInitializer,
@@ -194,7 +194,7 @@ func TestInit(t *testing.T) {
 	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier) // don't use getters or it'll deadlock
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(w, fileWatcher)
+	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher)
 	t.Cleanup(
 		func() {
 			fakeClient.Clear()

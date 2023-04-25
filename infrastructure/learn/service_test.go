@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
+	errorreporting "github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -30,7 +31,7 @@ import (
 func Test_GetLearnEndpoint(t *testing.T) {
 	c := config.New()
 	c.UpdateApiEndpoints("https://snyk.io/api")
-	cut := New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
+	cut := New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient, errorreporting.NewTestErrorReporter())
 
 	endpoint, err := cut.LearnEndpoint(c)
 
@@ -60,7 +61,7 @@ func Test_GetLesson(t *testing.T) {
 	testutil.SmokeTest(t)
 	c := config.New()
 	c.UpdateApiEndpoints("https://snyk.io/api")
-	cut := New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
+	cut := New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient, errorreporting.NewTestErrorReporter())
 	t.Run("OSS vulnerability - lesson returned", func(t *testing.T) {
 		params := getRealOSSLookupParams()
 

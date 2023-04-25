@@ -169,6 +169,7 @@ type Config struct {
 	authenticationMethod         lsp.AuthenticationMethod
 	engine                       workflow.Engine
 	enableSnykLearnCodeActions   bool
+	logger                       zerolog.Logger
 }
 
 func CurrentConfig() *Config {
@@ -477,6 +478,7 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 
 	writer := zerolog.MultiLevelWriter(writers...)
 	log.Logger = zerolog.New(writer).With().Timestamp().Logger()
+	c.logger = log.Logger
 }
 
 // DisableLoggingToFile closes the open log file and sets the global logger back to it's default
@@ -753,4 +755,8 @@ func (c *Config) SetLogLevel(level string) {
 
 func (c *Config) LogLevel() string {
 	return zerolog.GlobalLevel().String()
+}
+
+func (c *Config) Logger() zerolog.Logger {
+	return c.logger
 }

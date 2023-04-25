@@ -111,8 +111,8 @@ func New(instrumentor performance.Instrumentor,
 	errorReporter error_reporting.ErrorReporter,
 	analytics ux2.Analytics,
 	cli cli.Executor,
+	learnService learn.Service,
 ) *Scanner {
-	c := config.CurrentConfig()
 	return &Scanner{
 		instrumentor:            instrumentor,
 		errorReporter:           errorReporter,
@@ -123,7 +123,7 @@ func New(instrumentor performance.Instrumentor,
 		runningScans:            map[string]*scans.ScanProgress{},
 		refreshScanWaitDuration: 24 * time.Hour,
 		scanCount:               1,
-		learnService:            learn.New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient),
+		learnService:            learnService,
 	}
 }
 

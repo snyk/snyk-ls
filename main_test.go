@@ -74,6 +74,14 @@ func Test_shouldDisplayLicenseInformationWithFlag(t *testing.T) {
 	assert.True(t, strings.Contains(output, "License information"))
 }
 
+func Test_shouldReturnErrorWithVersionStringOnFlag(t *testing.T) {
+	args := []string{"snyk-ls", "-v"}
+	output, err := parseFlags(args, config.New())
+	assert.Error(t, err)
+	assert.Empty(t, output)
+	assert.Equal(t, config.Version, err.Error())
+}
+
 func Test_shouldSetLoadConfigFromFlag(t *testing.T) {
 	file, err := os.CreateTemp(".", "configFlagTest")
 	if err != nil {

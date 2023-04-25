@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/watcher"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
@@ -90,7 +91,7 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 	var issues []snyk.Issue
 	providerMock := new(mockIssuesProvider)
 	providerMock.On("IssuesFor", mock.Anything, mock.Anything).Return(issues)
-	service := codeaction.NewService(providerMock, watcher.NewFileWatcher())
+	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher())
 	codeActionsParam := lsp.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
 			URI: documentUriExample,
@@ -238,7 +239,7 @@ func Test_ResolveCodeAction_KeyIsNull_ReturnsError(t *testing.T) {
 func setupService() *codeaction.CodeActionsService {
 	providerMock := new(mockIssuesProvider)
 	providerMock.On("IssuesFor", mock.Anything, mock.Anything).Return([]snyk.Issue{})
-	service := codeaction.NewService(providerMock, watcher.NewFileWatcher())
+	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher())
 	return service
 }
 
@@ -250,7 +251,7 @@ func setupWithSingleIssue(issue snyk.Issue) (*codeaction.CodeActionsService, lsp
 	issues := []snyk.Issue{issue}
 	providerMock.On("IssuesFor", path, converter.FromRange(r)).Return(issues)
 	fileWatcher := watcher.NewFileWatcher()
-	service := codeaction.NewService(providerMock, fileWatcher)
+	service := codeaction.NewService(config.CurrentConfig(), providerMock, fileWatcher)
 
 	codeActionsParam := lsp.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
