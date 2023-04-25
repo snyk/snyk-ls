@@ -760,7 +760,7 @@ func TestSnykCodeBackendService_analysisRequestBodyIsCorrect(t *testing.T) {
 
 	// prepare
 	config.SetCurrentConfig(config.New())
-	org := "test-org"
+	org := "00000000-0000-0000-0000-000000000023"
 	config.CurrentConfig().SetOrganization(org)
 
 	analysisOpts := &AnalysisOptions{

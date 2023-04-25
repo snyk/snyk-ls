@@ -108,12 +108,20 @@ func (c SnykCli) getCommand(cmd []string, workingDir string, ctx context.Context
 	return command
 }
 
+// ExpandParametersFromConfig adds configuration parameters to the base command
 // todo no need to export that, we could have a simpler interface that looks more like an actual CLI
 func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
 	var expandedParams = base
-	settings := config.CurrentConfig().CliSettings()
+	conf := config.CurrentConfig()
+
+	settings := conf.CliSettings()
 	if settings.Insecure {
 		expandedParams = append(expandedParams, "--insecure")
+	}
+
+	org := conf.Organization()
+	if org != "" {
+		expandedParams = append(expandedParams, "--org="+org)
 	}
 
 	return expandedParams

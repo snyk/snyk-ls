@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/adrg/xdg"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -29,22 +30,29 @@ import (
 
 func Test_ExpandParametersFromConfig(t *testing.T) {
 	testutil.UnitTest(t)
-	config.CurrentConfig().SetOrganization("test-org")
+	testOrg, err := uuid.NewUUID()
+	assert.NoError(t, err)
+	config.CurrentConfig().SetOrganization(testOrg.String())
 	settings := config.CliSettings{
 		Insecure: true,
 	}
 	config.CurrentConfig().SetCliSettings(&settings)
 	var cmd = []string{"a", "b"}
+
 	cmd = SnykCli{}.ExpandParametersFromConfig(cmd)
+
+	assert.Contains(t, cmd, "a")
+	assert.Contains(t, cmd, "b")
 	assert.Contains(t, cmd, "--insecure")
+	assert.Contains(t, cmd, "--org="+testOrg.String())
 }
 
 func TestGetCommand_AddsToEnvironmentAndSetsDir(t *testing.T) {
 	testutil.UnitTest(t)
-	config.CurrentConfig().SetOrganization("TestGetCommand_AddsToEnvironmentAndSetsDirOrg")
+	config.CurrentConfig().SetTelemetryEnabled(false)
 
 	cmd := SnykCli{}.getCommand([]string{"executable", "arg"}, xdg.DataHome, context.Background())
 
 	assert.Equal(t, xdg.DataHome, cmd.Dir)
-	assert.Contains(t, cmd.Env, "SNYK_CFG_ORG=TestGetCommand_AddsToEnvironmentAndSetsDirOrg")
+	assert.Contains(t, cmd.Env, DisableAnalyticsEnvVar+"=1")
 }

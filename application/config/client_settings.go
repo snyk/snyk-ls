@@ -45,7 +45,7 @@ func (c *Config) clientSettingsFromEnv() {
 func (c *Config) orgFromEnv() {
 	org := os.Getenv(Organization)
 	if org != "" {
-		c.organization = org
+		c.SetOrganization(org)
 	}
 }
 

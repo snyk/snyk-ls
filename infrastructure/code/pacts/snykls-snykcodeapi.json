@@ -16,12 +16,16 @@
           "Content-Encoding": "gzip",
           "Content-Type": "application/octet-stream",
           "Session-Token": "fc763eba-0905-41c5-a27f-3934ab26786c",
-          "snyk-org-name": "test-org",
+          "snyk-org-name": "00000000-0000-0000-0000-000000000023",
           "snyk-request-id": "fc763eba-0905-41c5-a27f-3934ab26786c"
         },
         "body": "AA==",
         "matchingRules": {
           "$.headers.Session-Token": {
+            "match": "regex",
+            "regex": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+          },
+          "$.headers.snyk-org-name": {
             "match": "regex",
             "regex": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
           },
@@ -71,12 +75,16 @@
           "Content-Encoding": "gzip",
           "Content-Type": "application/octet-stream",
           "Session-Token": "fc763eba-0905-41c5-a27f-3934ab26786c",
-          "snyk-org-name": "test-org",
+          "snyk-org-name": "00000000-0000-0000-0000-000000000023",
           "snyk-request-id": "fc763eba-0905-41c5-a27f-3934ab26786c"
         },
         "body": "AA==",
         "matchingRules": {
           "$.headers.Session-Token": {
+            "match": "regex",
+            "regex": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+          },
+          "$.headers.snyk-org-name": {
             "match": "regex",
             "regex": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
           },
@@ -109,7 +117,7 @@
           "Content-Encoding": "gzip",
           "Content-Type": "application/octet-stream",
           "Session-Token": "fc763eba-0905-41c5-a27f-3934ab26786c",
-          "snyk-org-name": "test-org",
+          "snyk-org-name": "00000000-0000-0000-0000-000000000023",
           "snyk-request-id": "fc763eba-0905-41c5-a27f-3934ab26786c"
         },
         "body": "AA==",
@@ -119,6 +127,10 @@
             "regex": "\\/bundle\\/[A-Fa-f0-9]{64}"
           },
           "$.headers.Session-Token": {
+            "match": "regex",
+            "regex": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+          },
+          "$.headers.snyk-org-name": {
             "match": "regex",
             "regex": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
           },
@@ -168,12 +180,16 @@
           "Content-Encoding": "gzip",
           "Content-Type": "application/octet-stream",
           "Session-Token": "fc763eba-0905-41c5-a27f-3934ab26786c",
-          "snyk-org-name": "test-org",
+          "snyk-org-name": "00000000-0000-0000-0000-000000000023",
           "snyk-request-id": "fc763eba-0905-41c5-a27f-3934ab26786c"
         },
         "body": "AA==",
         "matchingRules": {
           "$.headers.Session-Token": {
+            "match": "regex",
+            "regex": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+          },
+          "$.headers.snyk-org-name": {
             "match": "regex",
             "regex": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
           },
