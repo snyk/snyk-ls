@@ -112,7 +112,7 @@ func (s *SnykApiClientImpl) SastEnabled() (sastEnabled bool, localCodeEngineEnab
 
 func (s *SnykApiClientImpl) GetActiveUser() (activeUser ActiveUser, err *SnykApiError) {
 	log.Debug().Str("method", "GetActiveUser").Msg("API: Getting ActiveUser")
-	path := "/v1/user/me"
+	path := "/user/me"
 	responseBody, err := s.doCall("GET", path, nil)
 	if err != nil {
 		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
