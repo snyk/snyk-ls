@@ -131,9 +131,9 @@ func initInfrastructure() {
 	snykCodeClient = code.NewHTTPRepository(instrumentor, errorReporter, c.Engine().GetNetworkAccess().GetHttpClient)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
-	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
+	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli, learnService)
 	scanNotifier, _ = appNotification.NewScanNotifier(notification.NewNotifier())
-	learnService = learn.New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
+	learnService = learn.New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient, errorReporter)
 	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, learnService)
 	cliInitializer = cli.NewInitializer(errorReporter, installer)
 	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics)
@@ -177,7 +177,7 @@ func TestInit(t *testing.T) {
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 	scanNotifier, _ = appNotification.NewScanNotifier(notification.NewNotifier())
 	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, mock_learn.NewMockService(gomock.NewController(t)))
-	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli)
+	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli, learnService)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	scanner = snyk.NewDelegatingScanner(
 		scanInitializer,

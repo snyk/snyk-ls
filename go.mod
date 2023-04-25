@@ -13,6 +13,7 @@ require (
 	github.com/gomarkdown/markdown v0.0.0-20230322041520-c84983bdbf2a
 	github.com/google/uuid v1.3.0
 	github.com/pact-foundation/pact-go v1.7.0
+	github.com/pingcap/errors v0.11.4
 	github.com/pkg/errors v0.9.1
 	github.com/puzpuzpuz/xsync v1.5.2
 	github.com/rs/zerolog v1.29.0

@@ -25,10 +25,12 @@ import (
 	"time"
 
 	"github.com/erni27/imcache"
+	"github.com/pingcap/errors"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
@@ -109,12 +111,14 @@ type serviceImpl struct {
 	lessonsByEcosystemCache *imcache.Cache[string, []Lesson]
 	conf                    *config.Config
 	httpClient              func() *http.Client
+	er                      error_reporting.ErrorReporter
 }
 
-func New(conf *config.Config, httpClientFunc func() *http.Client) Service {
+func New(c *config.Config, httpClientFunc func() *http.Client, er error_reporting.ErrorReporter) Service {
 	s := &serviceImpl{
-		logger:     conf.Logger().With().Str("service", "learn").Logger(),
-		conf:       conf,
+		logger:     c.Logger().With().Str("service", "learn").Logger(),
+		conf:       c,
+		er:         er,
 		httpClient: httpClientFunc,
 		lessonsByRuleCache: imcache.New[string, []Lesson](
 			imcache.WithDefaultExpirationOption[string, []Lesson](cacheExpiry),
@@ -127,7 +131,7 @@ func New(conf *config.Config, httpClientFunc func() *http.Client) Service {
 	// initialize cache
 	_, err := s.GetAllLessons()
 	if err != nil {
-		s.logger.Err(err).Msg("failed to initialize lessons cache")
+		s.er.CaptureError(errors.WithMessage(err, "Error initializing lessons cache"))
 	}
 
 	// start goroutine that keeps the cache filled
@@ -141,7 +145,7 @@ func (s *serviceImpl) maintainCache() func() {
 			if s.lessonsByEcosystemCache.Len() == 0 {
 				_, err := s.GetAllLessons()
 				if err != nil {
-					s.logger.Err(err).Msg("failed to update lessons cache")
+					s.er.CaptureError(errors.WithMessage(err, "Error updating lessons cache"))
 					return
 				}
 				time.Sleep(cacheExpiry - 30*time.Second)

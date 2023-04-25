@@ -26,11 +26,9 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
 )
 
 func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
@@ -39,13 +37,12 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
 		method := "ExecuteCommandHandler"
-		c := config.CurrentConfig()
-		learnService := learn.New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
+
 		log.Info().Str("method", method).Interface("command", params).Msg("RECEIVING")
 		defer log.Info().Str("method", method).Interface("command", params).Msg("SENDING")
 
 		commandData := snyk.CommandData{CommandId: params.Command, Arguments: params.Arguments, Title: params.Command}
-		cmd, err := command.CreateFromCommandData(commandData, srv, di.AuthenticationService(), learnService)
+		cmd, err := command.CreateFromCommandData(commandData, srv, di.AuthenticationService(), di.LearnService())
 
 		if err != nil {
 			log.Error().Err(err).Str("method", method).Msg("failed to create command")
