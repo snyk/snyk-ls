@@ -118,6 +118,7 @@ func initInfrastructure() {
 
 	errorReporter = sentry.NewSentryErrorReporter()
 	installer = install.NewInstaller(errorReporter, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
+	learnService = learn.New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient, errorReporter)
 	instrumentor = sentry.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient(c.Engine().GetNetworkAccess().GetHttpClient)
 	authFunc := func() (string, error) {
@@ -133,7 +134,6 @@ func initInfrastructure() {
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli, learnService)
 	scanNotifier, _ = appNotification.NewScanNotifier(notification.NewNotifier())
-	learnService = learn.New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient, errorReporter)
 	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, learnService)
 	cliInitializer = cli.NewInitializer(errorReporter, installer)
 	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics)
