@@ -175,9 +175,7 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 	mtx := &sync.Mutex{}
 	var diagnostics []lsp.Diagnostic
 
-	notifier := notification.NewNotifier()
-
-	notifier.CreateListener(func(event any) {
+	f.notifier.CreateListener(func(event any) {
 		switch params := event.(type) {
 		case lsp.PublishDiagnosticsParams:
 			mtx.Lock()
