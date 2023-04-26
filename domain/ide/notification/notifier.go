@@ -1,6 +1,8 @@
 package notification
 
-import "github.com/sourcegraph/go-lsp"
+import (
+	"github.com/sourcegraph/go-lsp"
+)
 
 // Notifier should be passed as a dependency to the types that call "notification.x" functions.
 // This allows using mocks and enables us to gradually refactor out the direct calls to
@@ -10,4 +12,7 @@ type Notifier interface {
 	Send(msg any)
 	SendError(err error)
 	SendErrorDiagnostic(path string, err error)
+	Receive() (payload any, stop bool)
+	CreateListener(callback func(params any))
+	DisposeListener()
 }

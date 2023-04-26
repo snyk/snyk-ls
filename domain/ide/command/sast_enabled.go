@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,25 @@
  * limitations under the License.
  */
 
-package workspace
+package command
 
 import (
-	"testing"
+	"context"
 
-	"github.com/stretchr/testify/assert"
-
-	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 )
 
-func TestWorkspace_TrustRequests(t *testing.T) {
-	testutil.UnitTest(t)
-	w := New(nil, nil, nil, nil, nil)
-	w.StartRequestTrustCommunication()
-	w.IsTrustRequestOngoing()
-	assert.True(t, w.IsTrustRequestOngoing())
-	w.EndRequestTrustCommunication()
-	assert.False(t, w.IsTrustRequestOngoing())
+type sastEnabled struct {
+	command   snyk.CommandData
+	apiClient snyk_api.SnykApiClient
+}
+
+func (cmd *sastEnabled) Command() snyk.CommandData {
+	return cmd.command
+}
+
+func (cmd *sastEnabled) Execute(_ context.Context) (any, error) {
+	sastResponse, err := cmd.apiClient.SastEnabled()
+	return sastResponse, err
 }

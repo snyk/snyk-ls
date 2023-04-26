@@ -31,15 +31,12 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-var target = NewSentryErrorReporter()
-
 func TestErrorReporting_CaptureError(t *testing.T) {
 	testutil.UnitTest(t)
 	e := errors.New("test error")
-
 	channel := make(chan sglsp.ShowMessageParams)
-
-	notification.CreateListener(func(params any) {
+	notifier := notification.NewNotifier()
+	notifier.CreateListener(func(params any) {
 		switch p := params.(type) {
 		case sglsp.ShowMessageParams:
 			channel <- p
@@ -48,6 +45,7 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 			return
 		}
 	})
+	var target = NewSentryErrorReporter(notifier)
 
 	config.CurrentConfig().SetErrorReportingEnabled(false)
 	captured := target.CaptureError(e)
@@ -66,8 +64,8 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 	path := "testPath"
 	text := "test error"
 	channel := make(chan lsp.PublishDiagnosticsParams)
-
-	notification.CreateListener(func(params any) {
+	notifier := notification.NewNotifier()
+	notifier.CreateListener(func(params any) {
 		switch p := params.(type) {
 		case lsp.PublishDiagnosticsParams:
 			channel <- p
@@ -76,6 +74,7 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 			return
 		}
 	})
+	var target = NewSentryErrorReporter(notifier)
 
 	e := errors.New(text)
 	config.CurrentConfig().SetErrorReportingEnabled(false)

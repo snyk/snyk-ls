@@ -27,26 +27,49 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
+	"github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/cli/install"
+	"github.com/snyk/snyk-ls/infrastructure/oss"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
+// This is an integration test that downloads and installs the CLI if necessary
+// it uses real CLI output for verification of functionality
 func Test_Scan(t *testing.T) {
 	testutil.IntegTest(t)
-	config.CurrentConfig().SetFormat(config.FormatHtml)
-	ctx := context.Background()
-	di.TestInit(t)
-	_ = di.Initializer().Init()
 	testutil.CreateDummyProgressListener(t)
+	c := config.CurrentConfig()
+	c.SetFormat(config.FormatHtml)
+	ctx := context.Background()
+	di.Init()
+
+	// ensure CLI is downloaded if not already existent
+	if !c.CliSettings().Installed() {
+		exec := (&install.Discovery{}).ExecutableName(false)
+		destination := filepath.Join(t.TempDir(), exec)
+		c.CliSettings().SetPath(destination)
+		c.SetManageBinariesAutomatically(true)
+		_ = di.Initializer().Init()
+	}
+
+	instrumentor := performance.NewTestInstrumentor()
+	er := error_reporting.NewTestErrorReporter()
+	analytics := ux.NewTestAnalytics()
+	cliExecutor := cli.NewExecutor(di.AuthenticationService(), er, analytics, notification.NewNotifier())
+	scanner := oss.New(instrumentor, er, analytics, cliExecutor, di.LearnService(), notification.NewNotifier())
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
-	issues, _ := di.OpenSourceScanner().Scan(ctx, path, "")
+	issues, _ := scanner.Scan(ctx, path, "")
 
 	assert.NotEqual(t, 0, len(issues))
 	assert.True(t, strings.Contains(issues[0].Message, "<p>"))
-	recorder := &di.Instrumentor().(*performance.TestInstrumentor).SpanRecorder
+	recorder := instrumentor.SpanRecorder
 	spans := (*recorder).Spans()
 	assert.Equal(t, "oss.Scan", spans[0].GetOperation())
 }

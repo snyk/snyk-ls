@@ -32,7 +32,7 @@ type TestCommand struct {
 func (command *TestCommand) Command() snyk.CommandData {
 	return snyk.CommandData{}
 }
-func (command *TestCommand) Execute(ctx context.Context) (any, error) {
+func (command *TestCommand) Execute(_ context.Context) (any, error) {
 	command.executed = true
 	return nil, nil
 }

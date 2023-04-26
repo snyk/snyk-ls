@@ -45,7 +45,7 @@ func Test_UpdateCredentials(t *testing.T) {
 	t.Run("CLI Authentication", func(t *testing.T) {
 		testutil.UnitTest(t)
 		analytics := ux.NewTestAnalytics()
-		service := NewAuthenticationService(&snyk_api.FakeApiClient{}, nil, analytics, error_reporting.NewTestErrorReporter())
+		service := NewAuthenticationService(&snyk_api.FakeApiClient{}, nil, analytics, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
 
 		service.UpdateCredentials("new-token", false)
 
@@ -57,7 +57,7 @@ func Test_UpdateCredentials(t *testing.T) {
 		testutil.UnitTest(t)
 		config.CurrentConfig().SetAuthenticationMethod(lsp.OAuthAuthentication)
 		analytics := ux.NewTestAnalytics()
-		service := NewAuthenticationService(&snyk_api.FakeApiClient{}, nil, analytics, error_reporting.NewTestErrorReporter())
+		service := NewAuthenticationService(&snyk_api.FakeApiClient{}, nil, analytics, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
 		oauthCred := oauth2.Token{
 			AccessToken:  "a",
 			TokenType:    "b",
@@ -85,6 +85,7 @@ func Test_IsAuthenticated(t *testing.T) {
 			&auth.CliAuthenticationProvider{},
 			analytics,
 			error_reporting.NewTestErrorReporter(),
+			notification.NewNotifier(),
 		)
 
 		isAuthenticated, err := service.IsAuthenticated()
@@ -103,6 +104,7 @@ func Test_IsAuthenticated(t *testing.T) {
 			&auth.FakeAuthenticationProvider{},
 			analytics,
 			error_reporting.NewTestErrorReporter(),
+			notification.NewNotifier(),
 		)
 
 		isAuthenticated, err := service.IsAuthenticated()
@@ -121,6 +123,7 @@ func Test_IsAuthenticated(t *testing.T) {
 			&auth.FakeAuthenticationProvider{},
 			analytics,
 			error_reporting.NewTestErrorReporter(),
+			notification.NewNotifier(),
 		)
 
 		isAuthenticated, err := service.IsAuthenticated()
@@ -135,15 +138,16 @@ func Test_Logout(t *testing.T) {
 
 	// arrange
 	// set up workspace
+	notifier := notification.NewNotifier()
 	analytics := ux.NewTestAnalytics()
 	authProvider := auth.FakeAuthenticationProvider{}
-	service := NewAuthenticationService(&snyk_api.FakeApiClient{}, &authProvider, analytics, error_reporting.NewTestErrorReporter())
+	service := NewAuthenticationService(&snyk_api.FakeApiClient{}, &authProvider, analytics, error_reporting.NewTestErrorReporter(), notifier)
 	hoverService := hover.NewFakeHoverService()
 	scanner := snyk.NewTestScanner()
-	scanNotifier, _ := appNotification.NewScanNotifier(notification.NewNotifier())
-	w := workspace.New(performance.NewTestInstrumentor(), scanner, hoverService, scanNotifier)
+	scanNotifier, _ := appNotification.NewScanNotifier(notifier)
+	w := workspace.New(performance.NewTestInstrumentor(), scanner, hoverService, scanNotifier, notifier)
 	workspace.Set(w)
-	f := workspace.NewFolder("", "", scanner, hoverService, scanNotifier)
+	f := workspace.NewFolder("", "", scanner, hoverService, scanNotifier, notifier)
 	w.AddFolder(f)
 
 	// fake existing diagnostic & hover

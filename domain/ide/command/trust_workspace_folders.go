@@ -22,14 +22,15 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
+	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
-	"github.com/snyk/snyk-ls/internal/notification"
 )
 
 type trustWorkspaceFoldersCommand struct {
-	command snyk.CommandData
+	command  snyk.CommandData
+	notifier noti.Notifier
 }
 
 func (cmd *trustWorkspaceFoldersCommand) Command() snyk.CommandData {
@@ -49,6 +50,6 @@ func (cmd *trustWorkspaceFoldersCommand) Execute(_ context.Context) (any, error)
 	}
 
 	config.CurrentConfig().SetTrustedFolders(trustedFolderPaths)
-	notification.Send(lsp.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
+	cmd.notifier.Send(lsp.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
 	return nil, nil
 }

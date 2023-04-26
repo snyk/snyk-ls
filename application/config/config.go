@@ -560,10 +560,14 @@ func (c *Config) configFiles() []string {
 }
 
 func (c *Config) Organization() string {
+	c.m.Lock()
+	defer c.m.Unlock()
 	return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
 }
 
 func (c *Config) SetOrganization(organization string) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.engine.GetConfiguration().Set(configuration.ORGANIZATION, organization)
 }
 

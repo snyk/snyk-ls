@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -37,11 +38,12 @@ func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
 	const untrustedDummy = "untrustedDummy"
 	scanner := &snyk.TestScanner{}
 	scanNotifier := snyk.NewMockScanNotifier()
-	w := New(performance.NewTestInstrumentor(), scanner, nil, nil)
+	notifier := notification.NewNotifier()
+	w := New(performance.NewTestInstrumentor(), scanner, nil, nil, notifier)
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 	config.CurrentConfig().SetTrustedFolders([]string{trustedDummy})
-	w.AddFolder(NewFolder(trustedDummy, trustedDummy, scanner, nil, scanNotifier))
-	w.AddFolder(NewFolder(untrustedDummy, untrustedDummy, scanner, nil, scanNotifier))
+	w.AddFolder(NewFolder(trustedDummy, trustedDummy, scanner, nil, scanNotifier, notifier))
+	w.AddFolder(NewFolder(untrustedDummy, untrustedDummy, scanner, nil, scanNotifier, notifier))
 
 	trusted, untrusted := w.GetFolderTrust()
 
@@ -55,11 +57,12 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 	const untrustedDummy = "untrustedDummy"
 	scanner := &snyk.TestScanner{}
 	scanNotifier := snyk.NewMockScanNotifier()
-	w := New(performance.NewTestInstrumentor(), scanner, nil, nil)
+	notifier := notification.NewNotifier()
+	w := New(performance.NewTestInstrumentor(), scanner, nil, nil, notifier)
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
-	trustedFolder := NewFolder(trustedDummy, trustedDummy, scanner, nil, scanNotifier)
+	trustedFolder := NewFolder(trustedDummy, trustedDummy, scanner, nil, scanNotifier, notifier)
 	w.AddFolder(trustedFolder)
-	untrustedFolder := NewFolder(untrustedDummy, untrustedDummy, scanner, nil, scanNotifier)
+	untrustedFolder := NewFolder(untrustedDummy, untrustedDummy, scanner, nil, scanNotifier, notifier)
 	w.AddFolder(untrustedFolder)
 
 	w.TrustFoldersAndScan(context.Background(), []*Folder{trustedFolder})
@@ -81,8 +84,8 @@ func Test_AddAndRemoveFoldersAndTriggerScan(t *testing.T) {
 
 	scanner := &snyk.TestScanner{}
 	scanNotifier := snyk.NewMockScanNotifier()
-	w := New(performance.NewTestInstrumentor(), scanner, nil, scanNotifier)
-	toBeRemovedFolder := NewFolder(toBeRemovedAbsolutePathAfterConversions, toBeRemoved, scanner, nil, scanNotifier)
+	w := New(performance.NewTestInstrumentor(), scanner, nil, scanNotifier, notification.NewNotifier())
+	toBeRemovedFolder := NewFolder(toBeRemovedAbsolutePathAfterConversions, toBeRemoved, scanner, nil, scanNotifier, notification.NewNotifier())
 	w.AddFolder(toBeRemovedFolder)
 
 	currentConfig := config.CurrentConfig()
@@ -111,12 +114,12 @@ func Test_AddAndRemoveFoldersAndTriggerScan(t *testing.T) {
 }
 
 func Test_Get(t *testing.T) {
-	New(nil, nil, nil, nil)
+	New(nil, nil, nil, nil, nil)
 	assert.Equal(t, instance, Get())
 }
 
 func Test_Set(t *testing.T) {
-	w := New(nil, nil, nil, nil)
+	w := New(nil, nil, nil, nil, nil)
 	Set(w)
 	assert.Equal(t, w, instance)
 }

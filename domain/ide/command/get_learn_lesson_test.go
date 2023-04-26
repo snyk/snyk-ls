@@ -18,7 +18,6 @@ package command
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -40,7 +39,7 @@ func Test_getLearnLesson_Execute(t *testing.T) {
 	data := snyk.CommandData{
 		Title:     snyk.GetLearnLesson,
 		CommandId: snyk.GetLearnLesson,
-		Arguments: []any{rule, eco, cwes, cves, fmt.Sprintf("%d", snyk.DependencyVulnerability)},
+		Arguments: []any{rule, eco, cwes, cves, snyk.DependencyVulnerability},
 	}
 	mockService := mock_learn.NewMockService(ctrl)
 	cut := getLearnLesson{learnService: mockService, command: data}

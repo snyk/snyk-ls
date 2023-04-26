@@ -28,21 +28,23 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
+	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/internal/lsp"
-	"github.com/snyk/snyk-ls/internal/notification"
 )
 
 type Initializer struct {
 	errorReporter error_reporting.ErrorReporter
 	installer     install.Installer
+	notifier      noti.Notifier
 }
 
-func NewInitializer(errorReporter error_reporting.ErrorReporter, installer install.Installer) *Initializer {
+func NewInitializer(errorReporter error_reporting.ErrorReporter, installer install.Installer, notifier noti.Notifier) *Initializer {
 	return &Initializer{
 		errorReporter: errorReporter,
 		installer:     installer,
+		notifier:      notifier,
 	}
 }
 
@@ -54,7 +56,7 @@ func (i *Initializer) Init() error {
 	log.Debug().Str("method", "cli.Init").Str("cliPath", config.CurrentConfig().CliSettings().Path()).Msgf("CLI installed: %v", cliInstalled)
 	if !config.CurrentConfig().ManageBinariesAutomatically() {
 		if !cliInstalled {
-			notification.SendShowMessage(sglsp.Warning, "Automatic CLI downloads are disabled and no CLI path is configured. Enable automatic downloads or set a valid CLI path.")
+			i.notifier.SendShowMessage(sglsp.Warning, "Automatic CLI downloads are disabled and no CLI path is configured. Enable automatic downloads or set a valid CLI path.")
 			return errors.New("automatic management of binaries is disabled, and CLI is not found")
 		}
 		return nil
@@ -66,7 +68,7 @@ func (i *Initializer) Init() error {
 	}
 
 	if cliInstalled {
-		notification.Send(lsp.SnykIsAvailableCli{CliPath: config.CurrentConfig().CliSettings().Path()})
+		i.notifier.Send(lsp.SnykIsAvailableCli{CliPath: config.CurrentConfig().CliSettings().Path()})
 		return nil
 	}
 
@@ -108,23 +110,23 @@ func (i *Initializer) installCli() {
 
 	// Check if the file is actually in the cliPath
 	if !currentConfig.CliSettings().Installed() {
-		notification.SendShowMessage(sglsp.Info, "Snyk CLI will be downloaded to run security scans.")
+		i.notifier.SendShowMessage(sglsp.Info, "Snyk CLI will be downloaded to run security scans.")
 		cliPath, err = i.installer.Install(context.Background())
 		if err != nil {
 			log.Err(err).Str("method", "installCli").Msg("could not download Snyk CLI binary")
 			i.handleInstallerError(err)
-			notification.SendShowMessage(sglsp.Warning, "Failed to download Snyk CLI.")
+			i.notifier.SendShowMessage(sglsp.Warning, "Failed to download Snyk CLI.")
 			cliPath, _ = i.installer.Find()
 		} else {
-			notification.SendShowMessage(sglsp.Info, "Snyk CLI has been downloaded.")
+			i.notifier.SendShowMessage(sglsp.Info, "Snyk CLI has been downloaded.")
 		}
 	}
 
 	if cliPath != "" {
-		notification.Send(lsp.SnykIsAvailableCli{CliPath: cliPath})
+		i.notifier.Send(lsp.SnykIsAvailableCli{CliPath: cliPath})
 		log.Info().Str("method", "installCli").Str("snyk", cliPath).Msg("Snyk CLI found.")
 	} else {
-		notification.SendShowMessage(sglsp.Warning, "Could not find, nor install Snyk CLI")
+		i.notifier.SendShowMessage(sglsp.Warning, "Could not find, nor install Snyk CLI")
 	}
 }
 

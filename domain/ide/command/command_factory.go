@@ -19,8 +19,11 @@ package command
 import (
 	"fmt"
 
+	"github.com/snyk/snyk-ls/application/config"
+	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
@@ -29,6 +32,7 @@ func CreateFromCommandData(
 	srv lsp.Server,
 	authService snyk.AuthenticationService,
 	learnService learn.Service,
+	notifier noti.Notifier,
 ) (snyk.Command, error) {
 
 	switch commandData.CommandId {
@@ -41,19 +45,22 @@ func CreateFromCommandData(
 	case snyk.OpenBrowserCommand:
 		return &openBrowserCommand{command: commandData}, nil
 	case snyk.LoginCommand:
-		return &loginCommand{command: commandData, authService: authService}, nil
+		return &loginCommand{command: commandData, authService: authService, notifier: notifier}, nil
 	case snyk.CopyAuthLinkCommand:
-		return &copyAuthLinkCommand{command: commandData, authService: authService}, nil
+		return &copyAuthLinkCommand{command: commandData, authService: authService, notifier: notifier}, nil
 	case snyk.LogoutCommand:
 		return &logoutCommand{command: commandData, authService: authService}, nil
 	case snyk.TrustWorkspaceFoldersCommand:
-		return &trustWorkspaceFoldersCommand{command: commandData}, nil
+		return &trustWorkspaceFoldersCommand{command: commandData, notifier: notifier}, nil
 	case snyk.OAuthRefreshCommand:
 		return &oauthRefreshCommand{command: commandData, authService: authService}, nil
 	case snyk.GetLearnLesson:
 		return &getLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case snyk.OpenLearnLesson:
 		return &openLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
+	case snyk.GetSettingsSastEnabled:
+		apiClient := snyk_api.NewSnykApiClient(config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient)
+		return &sastEnabled{command: commandData, apiClient: apiClient}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

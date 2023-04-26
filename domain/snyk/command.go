@@ -35,6 +35,7 @@ const (
 	OAuthRefreshCommand          = "snyk.oauthRefreshCommand"
 	OpenLearnLesson              = "snyk.openLearnLesson"
 	GetLearnLesson               = "snyk.getLearnLesson"
+	GetSettingsSastEnabled       = "snyk.getSettingsSastEnabled"
 )
 
 var (

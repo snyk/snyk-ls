@@ -20,6 +20,21 @@ type MockNotifier struct {
 	sentMessages               []any
 }
 
+func (m *MockNotifier) Receive() (payload any, stop bool) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockNotifier) CreateListener(_ func(params any)) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockNotifier) DisposeListener() {
+	//TODO implement me
+	panic("implement me")
+}
+
 func NewMockNotifier() *MockNotifier { return &MockNotifier{} }
 
 func (m *MockNotifier) SendShowMessage(messageType sglsp.MessageType, message string) {

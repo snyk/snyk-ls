@@ -138,15 +138,15 @@ Right now the language server supports the following actions:
     - `ecosystem string`
     - `cwes string` (comma separated), e.g. `CWE-79,CWE-89`
     - `cves string` (comma separated), e.g. `CVE-2018-11776,CVE-2018-11784`
-    - `issueType string`
+    - `issueType int`
     ```
-    PackageHealth Type = "0"
-    CodeQualityIssue = "1"
-    CodeSecurityVulnerability = "2"
-    LicenceIssue = "3"
-    DependencyVulnerability = "4"
-    InfrastructureIssue = "5"
-    ContainerVulnerability = "6"
+    PackageHealth Type = 0
+    CodeQualityIssue = 1
+    CodeSecurityVulnerability = 2
+    LicenceIssue = 3
+    DependencyVulnerability = 4
+    InfrastructureIssue = 5
+    ContainerVulnerability = 6
     ```
 - `GetLearnSession` returns the given lesson on the Snyk Learn website
   - command: `snyk.getLearnLesson`
@@ -155,15 +155,15 @@ Right now the language server supports the following actions:
     - `ecosystem string`
     - `cwes string` (comma separated), e.g. `CWE-79,CWE-89`
     - `cves string` (comma separated), e.g. `CVE-2018-11776,CVE-2018-11784`
-    - `issueType string`
+    - `issueType int`
     ```
-    PackageHealth Type = "0"
-    CodeQualityIssue = "1"
-    CodeSecurityVulnerability = "2"
-    LicenceIssue = "3"
-    DependencyVulnerability = "4"
-    InfrastructureIssue = "5"
-    ContainerVulnerability = "6"
+    PackageHealth Type = 0
+    CodeQualityIssue = 1
+    CodeSecurityVulnerability = 2
+    LicenceIssue = 3
+    DependencyVulnerability = 4
+    InfrastructureIssue = 5
+    ContainerVulnerability = 6
     ```
   - result: lesson json
   ```json5
@@ -187,6 +187,10 @@ Right now the language server supports the following actions:
   "img": "https://example.com/images/golang-intro.png"
   }
   ```
+- `SettingsSastEnabled` triggers the api call to check if Snyk Code is enabled
+  - command: `snyk.settingsSastEnabled`
+  - args: empty
+  - returns `true` if enabled, `false` if not, or an error and false if an error occurred
 
 ## Installation
 

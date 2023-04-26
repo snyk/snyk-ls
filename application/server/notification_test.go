@@ -26,12 +26,12 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/lsp"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 
@@ -147,7 +147,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	}
 	var expected = lsp.AuthenticationParams{Token: "test token"}
 
-	notification.Send(expected)
+	di.Notifier().Send(expected)
 	assert.Eventually(
 		t,
 		func() bool {
@@ -178,7 +178,7 @@ func Test_IsAvailableCliNotification(t *testing.T) {
 	}
 	var expected = lsp.SnykIsAvailableCli{CliPath: "path"}
 
-	notification.Send(expected)
+	di.Notifier().Send(expected)
 	assert.Eventually(
 		t,
 		func() bool {
@@ -214,7 +214,7 @@ func TestShowMessageRequest(t *testing.T) {
 		data, err := command.CreateFromCommandData(snyk.CommandData{
 			CommandId: snyk.OpenBrowserCommand,
 			Arguments: []any{"https://snyk.io"},
-		}, nil, nil, nil)
+		}, loc.Server, di.AuthenticationService(), di.LearnService(), di.Notifier())
 		assert.NoError(t, err)
 		actionCommandMap.Add(
 			snyk.MessageAction(expectedTitle),
@@ -223,7 +223,7 @@ func TestShowMessageRequest(t *testing.T) {
 
 		expected := snyk.ShowMessageRequest{Message: "message", Type: snyk.Info, Actions: actionCommandMap}
 
-		notification.Send(expected)
+		di.Notifier().Send(expected)
 
 		assert.Eventually(
 			t,
@@ -259,9 +259,10 @@ func TestShowMessageRequest(t *testing.T) {
 		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
 		data, err := command.CreateFromCommandData(
 			snyk.CommandData{CommandId: snyk.OpenBrowserCommand, Arguments: []any{"https://snyk.io"}},
-			nil,
-			nil,
-			nil,
+			loc.Server,
+			di.AuthenticationService(),
+			di.LearnService(),
+			di.Notifier(),
 		)
 		assert.NoError(t, err)
 
@@ -269,7 +270,7 @@ func TestShowMessageRequest(t *testing.T) {
 
 		request := snyk.ShowMessageRequest{Message: "message", Type: snyk.Info, Actions: actionCommandMap}
 
-		notification.Send(request)
+		di.Notifier().Send(request)
 
 		assert.Eventually(
 			t,

@@ -25,19 +25,16 @@ import (
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
-	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/command"
+	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/filefilter"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
-	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/float"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -80,6 +77,7 @@ type Scanner struct {
 	changedPaths      map[string]map[string]bool // tracks files that were changed since the last scan per workspace folder
 	learnService      learn.Service
 	fileFilters       *xsync.MapOf[string, *filefilter.FileFilter]
+	notifier          notification.Notifier
 }
 
 func New(bundleUploader *BundleUploader,
@@ -87,6 +85,7 @@ func New(bundleUploader *BundleUploader,
 	reporter error_reporting.ErrorReporter,
 	analytics ux2.Analytics,
 	learnService learn.Service,
+	notifier notification.Notifier,
 ) *Scanner {
 	sc := &Scanner{
 		BundleUploader: bundleUploader,
@@ -97,6 +96,7 @@ func New(bundleUploader *BundleUploader,
 		changedPaths:   map[string]map[string]bool{},
 		fileFilters:    xsync.NewMapOf[*filefilter.FileFilter](),
 		learnService:   learnService,
+		notifier:       notifier,
 	}
 	return sc
 }
@@ -359,57 +359,6 @@ func (sc *Scanner) createBundle(ctx context.Context,
 		b.BundleHash, b.missingFiles, err = sc.BundleUploader.SnykCode.CreateBundle(span.Context(), fileHashes)
 	}
 	return b, err
-}
-
-const codeDisabledInOrganisationMessageText = "It looks like your organization has disabled Snyk Code. " +
-	"You can easily enable it by clicking on 'Enable Snyk Code'. " +
-	"This will open your organization settings in your browser."
-
-const enableSnykCodeMessageActionItemTitle snyk.MessageAction = "Enable Snyk Code"
-const closeMessageActionItemTitle snyk.MessageAction = "Close"
-
-func (sc *Scanner) isSastEnabled() bool {
-	sastEnabled, localCodeEngineEnabled, _, err := sc.SnykApiClient.SastEnabled()
-	method := "isSastEnabled"
-	if err != nil {
-		log.Error().Err(err).Str("method", method).Msg("couldn't get sast enablement")
-		sc.errorReporter.CaptureError(err)
-		return false
-	}
-	if !sastEnabled {
-		// this is processed in the listener registered to translate into the right client protocol
-		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
-		commandData := snyk.CommandData{
-			Title:     snyk.OpenBrowserCommand,
-			CommandId: snyk.OpenBrowserCommand,
-			Arguments: []any{getCodeEnablementUrl()},
-		}
-		cmd, err := command.CreateFromCommandData(commandData, nil, nil, sc.learnService)
-		if err != nil {
-			message := "couldn't create open browser command"
-			log.Err(err).Str("method", method).Msg(message)
-			sc.errorReporter.CaptureError(errors.Wrap(err, message))
-		} else {
-			actionCommandMap.Add(enableSnykCodeMessageActionItemTitle, cmd)
-		}
-		actionCommandMap.Add(closeMessageActionItemTitle, nil)
-
-		notification.Send(snyk.ShowMessageRequest{
-			Message: codeDisabledInOrganisationMessageText,
-			Type:    snyk.Warning,
-			Actions: actionCommandMap,
-		})
-		return false
-	} else {
-		if localCodeEngineEnabled {
-			notification.SendShowMessage(
-				sglsp.Warning,
-				"Snyk Code is configured to use a Local Code Engine instance. This setup is not yet supported.",
-			)
-			return false
-		}
-		return true
-	}
 }
 
 type UploadStatus struct {

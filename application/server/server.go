@@ -40,7 +40,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -226,6 +225,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 						snyk.OAuthRefreshCommand,
 						snyk.OpenLearnLesson,
 						snyk.GetLearnLesson,
+						snyk.GetSettingsSastEnabled,
 					},
 				},
 			},
@@ -269,6 +269,7 @@ func addWorkspaceFolders(params lsp.InitializeParams, w *workspace.Workspace) {
 				di.Scanner(),
 				di.HoverService(),
 				di.ScanNotifier(),
+				di.Notifier(),
 			)
 			w.AddFolder(f)
 		}
@@ -278,14 +279,16 @@ func addWorkspaceFolders(params lsp.InitializeParams, w *workspace.Workspace) {
 				params.ClientInfo.Name,
 				di.Scanner(),
 				di.HoverService(),
-				di.ScanNotifier())
+				di.ScanNotifier(),
+				di.Notifier())
 			w.AddFolder(f)
 		} else if params.RootPath != "" {
 			f := workspace.NewFolder(params.RootPath,
 				params.ClientInfo.Name,
 				di.Scanner(),
 				di.HoverService(),
-				di.ScanNotifier())
+				di.ScanNotifier(),
+				di.Notifier())
 			w.AddFolder(f)
 		}
 	}
@@ -329,7 +332,7 @@ func shutdown() jrpc2.Handler {
 		di.ErrorReporter().FlushErrorReporting()
 
 		disposeProgressListener()
-		notification.DisposeListener()
+		di.Notifier().DisposeListener()
 		err := di.Analytics().Shutdown()
 		if err != nil {
 			log.Error().Str("method", "Shutdown").Msg("Failed to shutdown analytics.")
@@ -376,7 +379,7 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 				URI:         params.TextDocument.URI,
 				Diagnostics: converter.ToDiagnostics(filteredIssues),
 			}
-			notification.Send(diagnosticParams)
+			di.Notifier().Send(diagnosticParams)
 		}
 		return nil, nil
 	})

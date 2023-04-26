@@ -24,7 +24,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 
@@ -50,9 +49,7 @@ func UnitTest(t *testing.T) {
 	c.SetTrustedFolderFeatureEnabled(false)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t)
-	notification.DisposeListener()
 	t.Cleanup(func() {
-		notification.DisposeListener()
 		cleanupFakeCliFile(c)
 		progress.CleanupChannels()
 	})
@@ -136,7 +133,6 @@ func prepareTestHelper(t *testing.T, envVar string) {
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t)
 	t.Cleanup(func() {
-		notification.DisposeListener()
 		cleanupFakeCliFile(c)
 	})
 }

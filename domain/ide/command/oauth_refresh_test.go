@@ -53,6 +53,7 @@ func Test_oauthRefreshCommand_Execute_SameTokenNoUpdate(t *testing.T) {
 			&auth.FakeAuthenticationProvider{IsAuthenticated: true},
 			ux.NewTestAnalytics(),
 			error_reporting.NewTestErrorReporter(),
+			notification.NewNotifier(),
 		),
 	}
 
@@ -68,6 +69,7 @@ func Test_oauthRefreshCommand_Execute_DifferentTokenUpdate(t *testing.T) {
 	testutil.UnitTest(t)
 	fakeApiClient := snyk_api.FakeApiClient{}
 	analytics := ux.NewTestAnalytics()
+	notifier := notification.NewNotifier()
 	cmd := &oauthRefreshCommand{
 		command: snyk.CommandData{
 			CommandId: snyk.OAuthRefreshCommand,
@@ -77,6 +79,7 @@ func Test_oauthRefreshCommand_Execute_DifferentTokenUpdate(t *testing.T) {
 			&auth.FakeAuthenticationProvider{IsAuthenticated: true},
 			analytics,
 			error_reporting.NewTestErrorReporter(),
+			notifier,
 		),
 	}
 
@@ -86,9 +89,9 @@ func Test_oauthRefreshCommand_Execute_DifferentTokenUpdate(t *testing.T) {
 	engineConfig.Set(auth2.CONFIG_KEY_OAUTH_TOKEN, "something different")
 	assert.NotEqual(t, c.Token(), engineConfig.GetString(auth2.CONFIG_KEY_OAUTH_TOKEN), "token should be different")
 
-	notification.DisposeListener()
+	notifier.DisposeListener()
 	receivedChan := make(chan bool)
-	notification.CreateListener(func(params any) {
+	notifier.CreateListener(func(params any) {
 		if reflect.TypeOf(params) == reflect.TypeOf(lsp.AuthenticationParams{}) {
 			receivedChan <- true
 		}
