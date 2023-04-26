@@ -18,7 +18,9 @@ package code
 
 import (
 	"testing"
+	"time"
 
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -97,6 +99,30 @@ func TestIsSastEnabled(t *testing.T) {
 		enabled := scanner.isSastEnabled()
 
 		assert.False(t, enabled)
+	})
+
+	t.Run("should send a warning notification if Snyk Code Local Engine is enabled", func(t *testing.T) {
+		notification.DisposeListener()
+		config.CurrentConfig().SetSnykCodeEnabled(true)
+		apiClient.CodeEnabled = true
+		apiClient.LocalCodeEngineEnabled = true
+		apiClient.ApiError = nil
+		channel := make(chan any)
+		notification.CreateListener(func(params any) {
+			channel <- params
+		})
+		defer notification.DisposeListener()
+		expectedNotification := sglsp.ShowMessageParams{Type: sglsp.Warning, Message: localCodeEngineWarning}
+
+		scanner.isSastEnabled()
+
+		assert.Eventuallyf(
+			t,
+			func() bool { return expectedNotification == <-channel },
+			5*time.Second,
+			time.Millisecond,
+			"expected warning notification",
+		)
 	})
 
 	t.Run("should send a ShowMessageRequest notification if Snyk Code is enabled and the API returns false",
