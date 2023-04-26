@@ -130,6 +130,7 @@ func TestIsSastEnabled(t *testing.T) {
 			notification.DisposeListener()
 			config.CurrentConfig().SetSnykCodeEnabled(true)
 			apiClient.CodeEnabled = false
+			apiClient.LocalCodeEngineEnabled = false
 			apiClient.ApiError = nil
 			actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
 
