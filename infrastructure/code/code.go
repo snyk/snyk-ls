@@ -369,14 +369,14 @@ const enableSnykCodeMessageActionItemTitle snyk.MessageAction = "Enable Snyk Cod
 const closeMessageActionItemTitle snyk.MessageAction = "Close"
 
 func (sc *Scanner) isSastEnabled() bool {
-	sastEnabled, localCodeEngineEnabled, _, err := sc.SnykApiClient.SastEnabled()
+	sastResponse, err := sc.SnykApiClient.SastEnabled()
 	method := "isSastEnabled"
 	if err != nil {
 		log.Error().Err(err).Str("method", method).Msg("couldn't get sast enablement")
 		sc.errorReporter.CaptureError(err)
 		return false
 	}
-	if !sastEnabled {
+	if !sastResponse.SastEnabled {
 		// this is processed in the listener registered to translate into the right client protocol
 		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
 		commandData := snyk.CommandData{
@@ -401,7 +401,7 @@ func (sc *Scanner) isSastEnabled() bool {
 		})
 		return false
 	} else {
-		if localCodeEngineEnabled {
+		if sastResponse.LocalCodeEngine.Enabled {
 			notification.SendShowMessage(
 				sglsp.Warning,
 				"Snyk Code is configured to use a Local Code Engine instance. This setup is not yet supported.",

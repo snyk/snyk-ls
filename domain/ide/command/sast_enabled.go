@@ -33,6 +33,6 @@ func (cmd *sastEnabled) Command() snyk.CommandData {
 }
 
 func (cmd *sastEnabled) Execute(_ context.Context) (any, error) {
-	enabled, localCodeEngineEnabled, _, err := cmd.apiClient.SastEnabled()
-	return enabled && !localCodeEngineEnabled, err
+	sastResponse, err := cmd.apiClient.SastEnabled()
+	return sastResponse, err
 }

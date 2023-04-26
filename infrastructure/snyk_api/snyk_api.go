@@ -40,7 +40,7 @@ type localCodeEngine struct {
 	Enabled          bool   `json:"enabled"`
 }
 
-type sastResponse struct {
+type SastResponse struct {
 	SastEnabled                 bool            `json:"sastEnabled"`
 	LocalCodeEngine             localCodeEngine `json:"localCodeEngine"`
 	Org                         string          `json:"org"`
@@ -57,7 +57,7 @@ type ActiveUser struct {
 }
 
 type SnykApiClient interface {
-	SastEnabled() (sastEnabled bool, localCodeEngineEnabled bool, reportFalsePositivesEnabled bool, err *SnykApiError)
+	SastEnabled() (sastResponse SastResponse, err *SnykApiError)
 	GetActiveUser() (user ActiveUser, err *SnykApiError)
 }
 
@@ -85,7 +85,7 @@ func NewSnykApiClient(client func() *http.Client) SnykApiClient {
 	return &s
 }
 
-func (s *SnykApiClientImpl) SastEnabled() (sastEnabled bool, localCodeEngineEnabled bool, reportFalsePositivesEnabled bool, err *SnykApiError) {
+func (s *SnykApiClientImpl) SastEnabled() (response SastResponse, err *SnykApiError) {
 	log.Debug().Str("method", "SastEnabled").Msg("API: Getting SastEnabled")
 	path := "/cli-config/settings/sast"
 	organization := config.CurrentConfig().Organization()
@@ -96,18 +96,17 @@ func (s *SnykApiClientImpl) SastEnabled() (sastEnabled bool, localCodeEngineEnab
 	if err != nil {
 		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
 		log.Err(fmtErr).Str("method", "SastEnabled").Msg("error when calling sastEnabled endpoint")
-		return false, false, false, err
+		return SastResponse{}, err
 	}
 
-	var response sastResponse
 	unmarshalErr := json.Unmarshal(responseBody, &response)
 	if unmarshalErr != nil {
 		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
-		log.Err(fmtErr).Str("method", "SastEnabled").Msg("couldn't unmarshal sastResponse")
-		return false, false, false, err
+		log.Err(fmtErr).Str("method", "SastEnabled").Msg("couldn't unmarshal SastResponse")
+		return SastResponse{}, err
 	}
 	log.Debug().Str("method", "SastEnabled").Msg("API: Done")
-	return response.SastEnabled, response.LocalCodeEngine.Enabled, response.ReportFalsePositivesEnabled, nil
+	return response, nil
 }
 
 func (s *SnykApiClientImpl) GetActiveUser() (activeUser ActiveUser, err *SnykApiError) {

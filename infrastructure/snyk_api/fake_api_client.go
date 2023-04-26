@@ -75,12 +75,17 @@ func (f *FakeApiClient) GetAllCalls(op string) [][]any {
 	return calls
 }
 
-func (f *FakeApiClient) SastEnabled() (sastEnabled bool, localCodeEngineEnabled bool, reportFalsePositivesEnabled bool, err *SnykApiError) {
+func (f *FakeApiClient) SastEnabled() (sastResponse SastResponse, err *SnykApiError) {
 	f.addCall([]any{}, SastEnabledOperation)
 	if f.ApiError != nil {
-		return false, false, false, f.ApiError
+		return sastResponse, f.ApiError
 	}
-	return f.CodeEnabled, f.LocalCodeEngineEnabled, false, nil
+	return SastResponse{
+		SastEnabled: f.CodeEnabled,
+		LocalCodeEngine: localCodeEngine{
+			Enabled: f.LocalCodeEngineEnabled,
+		},
+	}, nil
 }
 
 func (f *FakeApiClient) GetActiveUser() (user ActiveUser, err *SnykApiError) {

@@ -53,7 +53,7 @@ func TestSnykApiPact(t *testing.T) {
 	}()
 
 	t.Run("Get SAST enablement", func(t *testing.T) {
-		expectedResponse := sastResponse{
+		expectedResponse := SastResponse{
 			SastEnabled:                 true,
 			LocalCodeEngine:             localCodeEngine{Enabled: false},
 			ReportFalsePositivesEnabled: false,
@@ -94,7 +94,7 @@ func TestSnykApiPact(t *testing.T) {
 		interactionConfigSettings.Description = "happy path without org as query parameter"
 
 		test := func() error {
-			_, _, _, err := client.SastEnabled()
+			_, err := client.SastEnabled()
 			if err != nil {
 				return err
 			}
@@ -110,7 +110,7 @@ func TestSnykApiPact(t *testing.T) {
 		organization := orgUUID
 		config.CurrentConfig().SetOrganization(organization)
 
-		expectedResponse := sastResponse{
+		expectedResponse := SastResponse{
 			SastEnabled:                 true,
 			LocalCodeEngine:             localCodeEngine{Enabled: false},
 			ReportFalsePositivesEnabled: false,
@@ -138,7 +138,7 @@ func TestSnykApiPact(t *testing.T) {
 		interaction.Description = "happy path with org as query param"
 
 		test := func() error {
-			_, _, _, err := client.SastEnabled()
+			_, err := client.SastEnabled()
 			if err != nil {
 				return err
 			}

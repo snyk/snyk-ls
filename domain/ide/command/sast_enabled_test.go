@@ -35,10 +35,10 @@ func Test_ApiClient_isCalledAndResultReturned(t *testing.T) {
 
 	result, _ := sastEnabled.Execute(context.Background())
 
-	assert.True(t, result.(bool))
+	assert.True(t, result.(snyk_api.SastResponse).SastEnabled)
 }
 
-func Test_ApiClient_ReturnsFalseIfLocalCodeEngineIsEnabled(t *testing.T) {
+func Test_ApiClient_ReturnsTrueIfLocalCodeEngineIsEnabled(t *testing.T) {
 	fakeApiClient := &snyk_api.FakeApiClient{
 		CodeEnabled:            true,
 		LocalCodeEngineEnabled: true,
@@ -48,7 +48,8 @@ func Test_ApiClient_ReturnsFalseIfLocalCodeEngineIsEnabled(t *testing.T) {
 
 	result, _ := sastEnabled.Execute(context.Background())
 
-	assert.False(t, result.(bool))
+	assert.True(t, result.(snyk_api.SastResponse).LocalCodeEngine.Enabled)
+	assert.True(t, result.(snyk_api.SastResponse).SastEnabled)
 }
 
 func Test_ApiClient_isCalledAndErrorReturned(t *testing.T) {
@@ -64,5 +65,5 @@ func Test_ApiClient_isCalledAndErrorReturned(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Equal(t, apiError, err)
-	assert.False(t, result.(bool))
+	assert.False(t, result.(snyk_api.SastResponse).SastEnabled)
 }
