@@ -54,7 +54,7 @@ func learnLesson(args []any, learnService learn.Service) (learn.Lesson, error) {
 	cves := strings.Split(args[3].(string), ",")
 	issueType := args[4].(snyk.Type)
 
-	lesson, err := learnService.GetLesson(ecosystem, rule, cwes, cves, snyk.Type(issueType))
+	lesson, err := learnService.GetLesson(ecosystem, rule, cwes, cves, issueType)
 	if err != nil {
 		return learn.Lesson{}, errors.Wrap(err, "failed to get lesson")
 	}
