@@ -19,6 +19,7 @@ package install
 import (
 	"net/http"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,9 +32,6 @@ import (
 
 func TestDownloader_Download(t *testing.T) {
 	testutil.IntegTest(t)
-	settings := &config.CliSettings{}
-	settings.SetPath(t.TempDir())
-	config.CurrentConfig().SetCliSettings(settings)
 	r := getTestAsset()
 	progressCh := make(chan lsp.ProgressParams, 100000)
 	cancelProgressCh := make(chan lsp.ProgressToken, 1)
@@ -41,6 +39,9 @@ func TestDownloader_Download(t *testing.T) {
 		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh),
 		httpClient:      func() *http.Client { return http.DefaultClient },
 	}
+	exec := (&Discovery{}).ExecutableName(false)
+	destination := filepath.Join(t.TempDir(), exec)
+	config.CurrentConfig().CliSettings().SetPath(destination)
 	lockFileName := d.lockFileName()
 	// remove any existing lockfile
 	_ = os.RemoveAll(lockFileName)
