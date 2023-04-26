@@ -23,21 +23,23 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/notification"
 )
 
 // A Sentry implementation of our error reporter that respects user preferences regarding tracking
-type gdprAwareSentryErrorReporter struct{}
+type gdprAwareSentryErrorReporter struct {
+	notifier notification.Notifier
+}
 
 func (s *gdprAwareSentryErrorReporter) CaptureErrorAndReportAsIssue(path string, err error) bool {
-	notification.SendErrorDiagnostic(path, err)
+	s.notifier.SendErrorDiagnostic(path, err)
 	return s.sendToSentry(err)
 }
 
-func NewSentryErrorReporter() error_reporting.ErrorReporter {
+func NewSentryErrorReporter(notifier notification.Notifier) error_reporting.ErrorReporter {
 	initializeSentry()
-	return &gdprAwareSentryErrorReporter{}
+	return &gdprAwareSentryErrorReporter{notifier: notifier}
 }
 
 func (s *gdprAwareSentryErrorReporter) FlushErrorReporting() {
@@ -46,7 +48,7 @@ func (s *gdprAwareSentryErrorReporter) FlushErrorReporting() {
 }
 
 func (s *gdprAwareSentryErrorReporter) CaptureError(err error) bool {
-	notification.SendError(err)
+	s.notifier.SendError(err)
 	return s.sendToSentry(err)
 }
 

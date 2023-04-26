@@ -24,24 +24,31 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
+	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
-	"github.com/snyk/snyk-ls/internal/notification"
 )
 
 type Initializer struct {
 	authenticator snyk.AuthenticationService
 	errorReporter error_reporting.ErrorReporter
 	analytics     ux.Analytics
+	notifier      noti.Notifier
 }
 
-func NewInitializer(authenticator snyk.AuthenticationService, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics) *Initializer {
+func NewInitializer(
+	authenticator snyk.AuthenticationService,
+	errorReporter error_reporting.ErrorReporter,
+	analytics ux.Analytics,
+	notifier noti.Notifier,
+) *Initializer {
 	return &Initializer{
 		authenticator,
 		errorReporter,
 		analytics,
+		notifier,
 	}
 }
 
@@ -64,7 +71,7 @@ func (i *Initializer) Init() error {
 	if !currentConfig.AutomaticAuthentication() {
 		if currentConfig.NonEmptyToken() { // Only send notification when the token is invalid
 			err := &snyk.AuthenticationFailedError{ManualAuthentication: true}
-			notification.SendError(err)
+			i.notifier.SendError(err)
 		}
 		log.Info().Msg("Skipping scan - user is not authenticated and automatic authentication is disabled")
 
@@ -73,14 +80,14 @@ func (i *Initializer) Init() error {
 		return errors.New(errorMessage)
 	}
 
-	notification.SendShowMessage(sglsp.Info, "Authenticating to Snyk. This could open a browser window.")
+	i.notifier.SendShowMessage(sglsp.Info, "Authenticating to Snyk. This could open a browser window.")
 
 	token, err := authenticator.Provider().Authenticate(context.Background())
 	if token == "" || err != nil {
 		if err == nil {
 			err = &snyk.AuthenticationFailedError{}
 		}
-		notification.SendError(err)
+		i.notifier.SendError(err)
 		err = errors.Wrap(err, errorMessage)
 		log.Error().Err(err).Msg(errorMessage)
 		i.errorReporter.CaptureError(err)
@@ -93,7 +100,7 @@ func (i *Initializer) Init() error {
 	if !isAuthenticated {
 		err = errors.Wrap(err, errorMessage)
 		log.Err(err).Msg(errorMessage)
-		notification.SendError(err)
+		i.notifier.SendError(err)
 		i.errorReporter.CaptureError(err)
 		return err
 	}

@@ -49,7 +49,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/lsp"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -109,7 +108,6 @@ func setupCustomServer(t *testing.T, callBackFn onCallbackFn) server.Local {
 }
 
 func cleanupChannels() {
-	notification.DisposeListener()
 	disposeProgressListener()
 	di.HoverService().ClearAllHovers()
 }
@@ -507,7 +505,7 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 	loc := setupServer(t)
 
 	scanner := &snyk.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier()))
+	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -663,7 +661,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 		URI: uri.PathToUri(filePath),
 	}}
 
-	folder := workspace.NewFolder(fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier())
+	folder := workspace.NewFolder(fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier())
 	workspace.Get().AddFolder(folder)
 
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
@@ -740,7 +738,7 @@ func sendFileSavedMessage(t *testing.T, filePath, fileDir string, loc server.Loc
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filePath)},
 	}
-	workspace.Get().AddFolder(workspace.NewFolder(fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier()))
+	workspace.Get().AddFolder(workspace.NewFolder(fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier()))
 
 	_, err := loc.Client.Call(ctx, textDocumentDidSaveOperation, didSaveParams)
 	if err != nil {
@@ -1011,7 +1009,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	testPath := filepath.Join(cloneTargetDir, "app.js")
 
 	w := workspace.Get()
-	f := workspace.NewFolder(cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier())
+	f := workspace.NewFolder(cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier())
 	w.AddFolder(f)
 
 	_ = textDocumentDidSave(&loc, testPath, t)

@@ -29,18 +29,20 @@ import (
 var params = lsp.AuthenticationParams{Token: "test event"}
 
 func TestSendReceive(t *testing.T) {
-	Send(params)
-	output, _ := Receive()
+	n := NewNotifier()
+	n.Send(params)
+	output, _ := n.Receive()
 	assert.Equal(t, params, output)
 }
 
 func TestCreateListener(t *testing.T) {
 	called := concurrency.AtomicBool{}
-	CreateListener(func(event any) {
+	n := NewNotifier()
+	n.CreateListener(func(event any) {
 		called.Set(true)
 	})
-	defer DisposeListener()
-	Send(params)
+	defer n.DisposeListener()
+	n.Send(params)
 	assert.Eventually(t, func() bool {
 		return called.Get()
 	}, 2*time.Second, time.Second)

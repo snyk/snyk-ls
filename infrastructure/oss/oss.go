@@ -33,13 +33,13 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
+	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/scans"
@@ -105,6 +105,7 @@ type Scanner struct {
 	scheduledScanMtx        *sync.Mutex
 	scanCount               int
 	learnService            learn.Service
+	notifier                noti.Notifier
 }
 
 func New(instrumentor performance.Instrumentor,
@@ -112,6 +113,7 @@ func New(instrumentor performance.Instrumentor,
 	analytics ux2.Analytics,
 	cli cli.Executor,
 	learnService learn.Service,
+	notifier noti.Notifier,
 ) *Scanner {
 	return &Scanner{
 		instrumentor:            instrumentor,
@@ -124,6 +126,7 @@ func New(instrumentor performance.Instrumentor,
 		refreshScanWaitDuration: 24 * time.Hour,
 		scanCount:               1,
 		learnService:            learnService,
+		notifier:                notifier,
 	}
 }
 
@@ -296,7 +299,7 @@ func (oss *Scanner) handleError(path string, err error, res []byte, cmd []string
 		case 2:
 			log.Err(err).Str("method", "oss.Scan").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
 			// we want a user notification, but don't want to send it to sentry
-			notification.SendErrorDiagnostic(path, err)
+			oss.notifier.SendErrorDiagnostic(path, err)
 			return true
 		case 3:
 			log.Debug().Str("method", "oss.Scan").Msg("no supported projects/files detected.")

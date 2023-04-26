@@ -27,6 +27,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -76,6 +77,7 @@ type Scanner struct {
 	changedPaths      map[string]map[string]bool // tracks files that were changed since the last scan per workspace folder
 	learnService      learn.Service
 	fileFilters       *xsync.MapOf[string, *filefilter.FileFilter]
+	notifier          notification.Notifier
 }
 
 func New(bundleUploader *BundleUploader,
@@ -83,6 +85,7 @@ func New(bundleUploader *BundleUploader,
 	reporter error_reporting.ErrorReporter,
 	analytics ux2.Analytics,
 	learnService learn.Service,
+	notifier notification.Notifier,
 ) *Scanner {
 	sc := &Scanner{
 		BundleUploader: bundleUploader,
@@ -93,6 +96,7 @@ func New(bundleUploader *BundleUploader,
 		changedPaths:   map[string]map[string]bool{},
 		fileFilters:    xsync.NewMapOf[*filefilter.FileFilter](),
 		learnService:   learnService,
+		notifier:       notifier,
 	}
 	return sc
 }

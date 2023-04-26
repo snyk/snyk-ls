@@ -24,7 +24,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/data_structure"
-	"github.com/snyk/snyk-ls/internal/notification"
 )
 
 const codeDisabledInOrganisationMessageText = "It looks like your organization has disabled Snyk Code. " +
@@ -51,7 +50,7 @@ func (sc *Scanner) isSastEnabled() bool {
 			CommandId: snyk.OpenBrowserCommand,
 			Arguments: []any{getCodeEnablementUrl()},
 		}
-		cmd, err := command.CreateFromCommandData(commandData, nil, nil, sc.learnService)
+		cmd, err := command.CreateFromCommandData(commandData, nil, nil, sc.learnService, sc.notifier)
 		if err != nil {
 			message := "couldn't create open browser command"
 			log.Err(err).Str("method", method).Msg(message)
@@ -61,7 +60,7 @@ func (sc *Scanner) isSastEnabled() bool {
 		}
 		actionCommandMap.Add(closeMessageActionItemTitle, nil)
 
-		notification.Send(snyk.ShowMessageRequest{
+		sc.notifier.Send(snyk.ShowMessageRequest{
 			Message: codeDisabledInOrganisationMessageText,
 			Type:    snyk.Warning,
 			Actions: actionCommandMap,
@@ -69,7 +68,7 @@ func (sc *Scanner) isSastEnabled() bool {
 		return false
 	} else {
 		if sastResponse.LocalCodeEngine.Enabled {
-			notification.SendShowMessage(
+			sc.notifier.SendShowMessage(
 				sglsp.Warning,
 				localCodeEngineWarning,
 			)

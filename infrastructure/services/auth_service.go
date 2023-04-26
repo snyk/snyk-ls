@@ -24,13 +24,13 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
+	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/lsp"
-	"github.com/snyk/snyk-ls/internal/notification"
 )
 
 type AuthenticationService struct {
@@ -38,10 +38,17 @@ type AuthenticationService struct {
 	authenticator snyk.AuthenticationProvider
 	analytics     ux.Analytics
 	errorReporter error_reporting.ErrorReporter
+	notifier      noti.Notifier
 }
 
-func NewAuthenticationService(apiProvider snyk_api.SnykApiClient, authenticator snyk.AuthenticationProvider, analytics ux.Analytics, errorReporter error_reporting.ErrorReporter) *AuthenticationService {
-	return &AuthenticationService{apiProvider, authenticator, analytics, errorReporter}
+func NewAuthenticationService(
+	apiProvider snyk_api.SnykApiClient,
+	authenticator snyk.AuthenticationProvider,
+	analytics ux.Analytics,
+	errorReporter error_reporting.ErrorReporter,
+	notifier noti.Notifier,
+) *AuthenticationService {
+	return &AuthenticationService{apiProvider, authenticator, analytics, errorReporter, notifier}
 }
 
 func (a *AuthenticationService) Provider() snyk.AuthenticationProvider {
@@ -65,7 +72,7 @@ func (a *AuthenticationService) UpdateCredentials(newToken string, sendNotificat
 	c.SetToken(newToken)
 
 	if sendNotification {
-		notification.Send(lsp.AuthenticationParams{Token: newToken})
+		a.notifier.Send(lsp.AuthenticationParams{Token: newToken})
 	}
 
 	if oldToken != newToken {
@@ -81,7 +88,7 @@ func (a *AuthenticationService) Logout(ctx context.Context) {
 		return
 	}
 
-	notification.Send(lsp.AuthenticationParams{Token: ""})
+	a.notifier.Send(lsp.AuthenticationParams{Token: ""})
 
 	workspace.Get().ClearIssues(ctx)
 }

@@ -27,9 +27,9 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -54,16 +54,18 @@ type Folder struct {
 	hoverService            hover.Service
 	mutex                   sync.Mutex
 	scanNotifier            snyk.ScanNotifier
+	notifier                noti.Notifier
 }
 
-func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hover.Service, notifier snyk.ScanNotifier) *Folder {
+func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hover.Service, scanNotifier snyk.ScanNotifier, notifier noti.Notifier) *Folder {
 	folder := Folder{
 		scanner:      scanner,
 		path:         strings.TrimSuffix(path, "/"),
 		name:         name,
 		status:       Unscanned,
 		hoverService: hoverService,
-		scanNotifier: notifier,
+		scanNotifier: scanNotifier,
+		notifier:     notifier,
 	}
 	folder.documentDiagnosticCache = xsync.NewMapOf[[]snyk.Issue]()
 	return &folder
@@ -107,7 +109,7 @@ func (f *Folder) Contains(path string) bool {
 func (f *Folder) ClearDiagnosticsFromFile(filePath string) {
 	// todo: can we manage the cache internally without leaking it, e.g. by using as a key an MD5 hash rather than a path and defining a TTL?
 	f.documentDiagnosticCache.Delete(filePath)
-	notification.Send(lsp.PublishDiagnosticsParams{
+	f.notifier.Send(lsp.PublishDiagnosticsParams{
 		URI:         uri.PathToUri(filePath),
 		Diagnostics: []lsp.Diagnostic{},
 	})
@@ -268,7 +270,7 @@ func (f *Folder) sendDiagnostics(issuesByFile map[string][]snyk.Issue) {
 func (f *Folder) sendDiagnosticsForFile(path string, issues []snyk.Issue) {
 	log.Debug().Str("method", "sendDiagnosticsForFile").Str("affectedFilePath", path).Int("issueCount",
 		len(issues)).Send()
-	notification.Send(lsp.PublishDiagnosticsParams{
+	f.notifier.Send(lsp.PublishDiagnosticsParams{
 		URI:         uri.PathToUri(path),
 		Diagnostics: converter.ToDiagnostics(issues),
 	})
@@ -314,7 +316,7 @@ func (f *Folder) AllIssuesFor(filePath string) (matchingIssues []snyk.Issue) {
 func (f *Folder) ClearDiagnostics() {
 	f.documentDiagnosticCache.Range(func(key string, _ []snyk.Issue) bool {
 		// we must republish empty diagnostics for all files that were reported with diagnostics
-		notification.Send(lsp.PublishDiagnosticsParams{
+		f.notifier.Send(lsp.PublishDiagnosticsParams{
 			URI:         uri.PathToUri(key),
 			Diagnostics: []lsp.Diagnostic{},
 		})

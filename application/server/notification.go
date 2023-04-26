@@ -22,10 +22,10 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 
@@ -141,7 +141,7 @@ func registerNotifier(srv lsp.Server) {
 				Msg("received unconfigured notification object")
 		}
 	}
-	notification.CreateListener(callbackFunction)
+	di.Notifier().CreateListener(callbackFunction)
 	log.Info().Str("method", "registerNotifier").Msg("registered notifier")
 }
 

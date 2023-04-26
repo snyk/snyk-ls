@@ -33,6 +33,7 @@ import (
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -44,7 +45,8 @@ func Test_determineTargetFile(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
-		nil)
+		nil,
+		notification.NewNotifier())
 	assert.Equal(t, "package.json", scanner.determineTargetFile("package-lock.json"))
 	assert.Equal(t, "pom.xml", scanner.determineTargetFile("pom.xml"))
 	assert.Equal(t, "asdf", scanner.determineTargetFile("asdf"))
@@ -57,10 +59,17 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 	executor := cli.NewTestExecutor()
 	fileContent, _ := os.ReadFile(workingDir + "/testdata/oss-result.json")
 	executor.ExecuteResponse = fileContent
-	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
+	p, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
-	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, executor, nil)
-	_, _ = scanner.Scan(context.Background(), path, "")
+	scanner := New(
+		performance.NewTestInstrumentor(),
+		error_reporting.NewTestErrorReporter(),
+		analytics,
+		executor,
+		nil,
+		notification.NewNotifier(),
+	)
+	_, _ = scanner.Scan(context.Background(), p, "")
 
 	assert.Len(t, analytics.GetAnalytics(), 1)
 	assert.Equal(t, ux2.AnalysisIsReadyProperties{
@@ -70,11 +79,14 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 }
 
 func Test_FindRange(t *testing.T) {
-	scanner := New(performance.NewTestInstrumentor(),
+	scanner := New(
+		performance.NewTestInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
-		nil)
+		nil,
+		notification.NewNotifier(),
+	)
 	issue := mavenTestIssue()
 	const content = "0\n1\n2\n  implementation 'a:test:4.17.4'"
 
@@ -131,7 +143,9 @@ func Test_ContextCanceled_Scan_DoesNotScan(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cliMock,
-		nil)
+		nil,
+		notification.NewNotifier(),
+	)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -163,14 +177,15 @@ func TestUnmarshalOssJsonSingle(t *testing.T) {
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
 		nil,
+		notification.NewNotifier(),
 	)
 
 	dir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(t, "couldn't get working dir")
 	}
-	var path = filepath.Join(dir, "testdata", "oss-result.json")
-	fileContent, err := os.ReadFile(path)
+	p := filepath.Join(dir, "testdata", "oss-result.json")
+	fileContent, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatal(t, "couldn't read test result file")
 	}
@@ -184,14 +199,16 @@ func TestUnmarshalOssJsonArray(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
-		nil)
+		nil,
+		notification.NewNotifier(),
+	)
 
 	dir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(t, "couldn't get working dir")
 	}
-	var path = filepath.Join(dir, "testdata", "oss-result-array.json")
-	fileContent, err := os.ReadFile(path)
+	var p = filepath.Join(dir, "testdata", "oss-result-array.json")
+	fileContent, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatal(t, "couldn't read test result file")
 	}
@@ -205,14 +222,16 @@ func TestUnmarshalOssErroneousJson(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
-		nil)
+		nil,
+		notification.NewNotifier(),
+	)
 
 	dir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(t, "couldn't get working dir")
 	}
-	var path = filepath.Join(dir, "testdata", "pom.xml")
-	fileContent, err := os.ReadFile(path)
+	var p = filepath.Join(dir, "testdata", "pom.xml")
+	fileContent, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatal(t, "couldn't read test result file")
 	}
@@ -260,9 +279,11 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		fakeCli,
-		nil)
+		nil,
+		notification.NewNotifier(),
+	)
 	wg := sync.WaitGroup{}
-	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
+	p, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
 	// Act
 	for i := 0; i < concurrentScanRequests; i++ {
@@ -271,7 +292,7 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 
 		wg.Add(1)
 		go func() {
-			_, _ = scanner.Scan(context.Background(), path, folderPath)
+			_, _ = scanner.Scan(context.Background(), p, folderPath)
 			wg.Done()
 		}()
 	}
@@ -303,7 +324,9 @@ func Test_prepareScanCommand_ExpandsAdditionalParameters(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
-		nil)
+		nil,
+		notification.NewNotifier(),
+	)
 
 	settings := config.CliSettings{
 		AdditionalOssParameters: []string{"--all-projects", "-d"},
@@ -324,7 +347,9 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		fakeCli,
-		nil)
+		nil,
+		notification.NewNotifier(),
+	)
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -344,15 +369,22 @@ func Test_scheduleNewScan_CapturesAnalytics(t *testing.T) {
 	// Arrange
 	fakeCli := cli.NewTestExecutor()
 	analytics := ux2.NewTestAnalytics()
-	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, fakeCli, nil)
+	scanner := New(
+		performance.NewTestInstrumentor(),
+		error_reporting.NewTestErrorReporter(),
+		analytics,
+		fakeCli,
+		nil,
+		notification.NewNotifier(),
+	)
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
-	path, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
+	p, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
 	// Act
-	scanner.scheduleRefreshScan(ctx, path)
+	scanner.scheduleRefreshScan(ctx, p)
 
 	// Assert
 	assert.Eventually(t, func() bool {
@@ -373,15 +405,22 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 	fakeCli := cli.NewTestExecutor()
 	fakeCli.ExecuteDuration = time.Millisecond
 	analytics := ux2.NewTestAnalytics()
-	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, fakeCli, nil)
+	scanner := New(
+		performance.NewTestInstrumentor(),
+		error_reporting.NewTestErrorReporter(),
+		analytics,
+		fakeCli,
+		nil,
+		notification.NewNotifier(),
+	)
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
-	path, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
+	p, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
 	// Act
-	scanner.scheduleRefreshScan(ctx, path)
+	scanner.scheduleRefreshScan(ctx, p)
 
 	// Assert
 	time.Sleep(scanner.refreshScanWaitDuration + fakeCli.ExecuteDuration + 10*time.Millisecond)
@@ -396,7 +435,14 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 	fakeCli := cli.NewTestExecutor()
 	fakeCli.ExecuteDuration = time.Millisecond
 	analytics := ux2.NewTestAnalytics()
-	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, fakeCli, nil)
+	scanner := New(
+		performance.NewTestInstrumentor(),
+		error_reporting.NewTestErrorReporter(),
+		analytics,
+		fakeCli,
+		nil,
+		notification.NewNotifier(),
+	)
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
 	targetPath, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
@@ -421,7 +467,14 @@ func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testin
 	fakeCli := cli.NewTestExecutor()
 	fakeCli.ExecuteDuration = time.Millisecond
 	analytics := ux2.NewTestAnalytics()
-	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, fakeCli, nil)
+	scanner := New(
+		performance.NewTestInstrumentor(),
+		error_reporting.NewTestErrorReporter(),
+		analytics,
+		fakeCli,
+		nil,
+		notification.NewNotifier(),
+	)
 	scanner.refreshScanWaitDuration = 2 * time.Second
 	workingDir, _ := os.Getwd()
 	targetPath, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
@@ -445,11 +498,14 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	fakeCli := cli.NewTestExecutorWithResponse(path.Join(workingDir, "testdata/oss-result-without-targetFile.json"))
 	fakeCli.ExecuteDuration = time.Millisecond
-	scanner := New(performance.NewTestInstrumentor(),
+	scanner := New(
+		performance.NewTestInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		fakeCli,
-		nil)
+		nil,
+		notification.NewNotifier(),
+	)
 	filePath, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
 	// Act

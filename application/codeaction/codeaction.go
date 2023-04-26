@@ -14,6 +14,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
+	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
@@ -39,6 +40,7 @@ type CodeActionsService struct {
 	actionsCache map[uuid.UUID]cachedAction
 	logger       zerolog.Logger
 	fileWatcher  dirtyFilesWatcher
+	notifier     noti.Notifier
 }
 
 type cachedAction struct {
@@ -46,12 +48,13 @@ type cachedAction struct {
 	action snyk.CodeAction
 }
 
-func NewService(c *config.Config, provider issuesProvider, fileWatcher dirtyFilesWatcher) *CodeActionsService {
+func NewService(c *config.Config, provider issuesProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier) *CodeActionsService {
 	return &CodeActionsService{
 		IssuesProvider: provider,
 		actionsCache:   make(map[uuid.UUID]cachedAction),
 		logger:         c.Logger().With().Str("service", "CodeActionsService").Logger(),
 		fileWatcher:    fileWatcher,
+		notifier:       notifier,
 	}
 }
 
@@ -138,7 +141,7 @@ func (c *CodeActionsService) handleCommand(
 		CommandId: action.Command.Command,
 		Arguments: action.Command.Arguments,
 	}
-	executableCmd, err := command.CreateFromCommandData(cmd, server, authService, learnService)
+	executableCmd, err := command.CreateFromCommandData(cmd, server, authService, learnService, c.notifier)
 	if err != nil {
 		return lsp.CodeAction{}, err
 	}

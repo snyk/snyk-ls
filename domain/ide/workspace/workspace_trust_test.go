@@ -26,7 +26,7 @@ import (
 
 func TestWorkspace_TrustRequests(t *testing.T) {
 	testutil.UnitTest(t)
-	w := New(nil, nil, nil, nil)
+	w := New(nil, nil, nil, nil, nil)
 	w.StartRequestTrustCommunication()
 	w.IsTrustRequestOngoing()
 	assert.True(t, w.IsTrustRequestOngoing())

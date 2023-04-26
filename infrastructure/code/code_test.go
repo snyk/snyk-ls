@@ -34,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -170,6 +171,7 @@ func TestCreateBundle(t *testing.T) {
 			error_reporting.NewTestErrorReporter(),
 			ux2.NewTestAnalytics(),
 			nil,
+			notification.NewNotifier(),
 		)
 		tempDir := t.TempDir()
 		file := filepath.Join(tempDir, configFile)
@@ -249,6 +251,7 @@ func setupTestScanner() (*FakeSnykCodeClient, *Scanner) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		nil,
+		notification.NewNotifier(),
 	)
 
 	return snykCodeMock, scanner
@@ -265,6 +268,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 				error_reporting.NewTestErrorReporter(),
 				ux2.NewTestAnalytics(),
 				nil,
+				notification.NewNotifier(),
 			)
 			baseDir, firstDoc, _, content1, _ := setupDocs(t)
 			fullPath := uri.PathFromUri(firstDoc.URI)
@@ -294,6 +298,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 				error_reporting.NewTestErrorReporter(),
 				ux2.NewTestAnalytics(),
 				nil,
+				notification.NewNotifier(),
 			)
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
@@ -325,6 +330,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 				error_reporting.NewTestErrorReporter(),
 				analytics,
 				nil,
+				notification.NewNotifier(),
 			)
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
@@ -495,6 +501,7 @@ func Test_Scan(t *testing.T) {
 			error_reporting.NewTestErrorReporter(),
 			ux2.NewTestAnalytics(),
 			nil,
+			notification.NewNotifier(),
 		)
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
@@ -602,6 +609,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 				error_reporting.NewTestErrorReporter(),
 				analytics,
 				nil,
+				notification.NewNotifier(),
 			)
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			t.Cleanup(
@@ -637,6 +645,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 				error_reporting.NewTestErrorReporter(),
 				analytics,
 				nil,
+				notification.NewNotifier(),
 			)
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			t.Cleanup(
@@ -670,6 +679,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 				error_reporting.NewTestErrorReporter(),
 				analytics,
 				nil,
+				notification.NewNotifier(),
 			)
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			t.Cleanup(

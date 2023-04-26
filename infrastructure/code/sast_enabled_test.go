@@ -37,13 +37,17 @@ func TestIsSastEnabled(t *testing.T) {
 		CodeEnabled: false,
 		ApiError:    nil,
 	}
+
 	scanner := &Scanner{
 		SnykApiClient: apiClient,
 		errorReporter: error_reporting.NewTestErrorReporter(),
+		notifier:      notification.NewNotifier(),
 	}
 
 	t.Run("should return false if Snyk Code is disabled", func(t *testing.T) {
 		apiClient.ApiError = nil
+		apiClient.CodeEnabled = false
+		apiClient.LocalCodeEngineEnabled = false
 		config.CurrentConfig().SetSnykCodeEnabled(false)
 
 		enabled := scanner.isSastEnabled()
@@ -64,6 +68,7 @@ func TestIsSastEnabled(t *testing.T) {
 		config.CurrentConfig().SetSnykCodeEnabled(true)
 		apiClient.ApiError = nil
 		apiClient.CodeEnabled = true
+		apiClient.LocalCodeEngineEnabled = false
 
 		enabled := scanner.isSastEnabled()
 
@@ -74,6 +79,7 @@ func TestIsSastEnabled(t *testing.T) {
 		config.CurrentConfig().SetSnykCodeEnabled(true)
 		apiClient.ApiError = nil
 		apiClient.CodeEnabled = false
+		apiClient.LocalCodeEngineEnabled = false
 
 		enabled := scanner.isSastEnabled()
 
@@ -82,8 +88,9 @@ func TestIsSastEnabled(t *testing.T) {
 
 	t.Run("should return false if Snyk Code is enabled and the API returns an error", func(t *testing.T) {
 		config.CurrentConfig().SetSnykCodeEnabled(true)
-		apiClient.CodeEnabled = false
 		apiClient.ApiError = &snyk_api.SnykApiError{}
+		apiClient.CodeEnabled = false
+		apiClient.LocalCodeEngineEnabled = false
 
 		enabled := scanner.isSastEnabled()
 
@@ -92,9 +99,9 @@ func TestIsSastEnabled(t *testing.T) {
 
 	t.Run("should return false if Snyk Code is enabled and LocalCodeEngine is enabled", func(t *testing.T) {
 		config.CurrentConfig().SetSnykCodeEnabled(true)
+		apiClient.ApiError = nil
 		apiClient.CodeEnabled = true
 		apiClient.LocalCodeEngineEnabled = true
-		apiClient.ApiError = nil
 
 		enabled := scanner.isSastEnabled()
 
@@ -102,16 +109,22 @@ func TestIsSastEnabled(t *testing.T) {
 	})
 
 	t.Run("should send a warning notification if Snyk Code Local Engine is enabled", func(t *testing.T) {
-		notification.DisposeListener()
-		config.CurrentConfig().SetSnykCodeEnabled(true)
 		apiClient.CodeEnabled = true
 		apiClient.LocalCodeEngineEnabled = true
 		apiClient.ApiError = nil
+		notifier := notification.NewNotifier()
+		// overwrite scanner, as we want our separate notifier
+		scanner := &Scanner{
+			SnykApiClient: apiClient,
+			errorReporter: error_reporting.NewTestErrorReporter(),
+			notifier:      notifier,
+		}
+		config.CurrentConfig().SetSnykCodeEnabled(true)
 		channel := make(chan any)
-		notification.CreateListener(func(params any) {
+		notifier.CreateListener(func(params any) {
 			channel <- params
 		})
-		defer notification.DisposeListener()
+		defer notifier.DisposeListener()
 		expectedNotification := sglsp.ShowMessageParams{Type: sglsp.Warning, Message: localCodeEngineWarning}
 
 		scanner.isSastEnabled()
@@ -127,11 +140,17 @@ func TestIsSastEnabled(t *testing.T) {
 
 	t.Run("should send a ShowMessageRequest notification if Snyk Code is enabled and the API returns false",
 		func(t *testing.T) {
-			notification.DisposeListener()
-			config.CurrentConfig().SetSnykCodeEnabled(true)
 			apiClient.CodeEnabled = false
 			apiClient.LocalCodeEngineEnabled = false
 			apiClient.ApiError = nil
+			config.CurrentConfig().SetSnykCodeEnabled(true)
+			notifier := notification.NewNotifier()
+			// overwrite scanner, as we want our separate notifier
+			scanner := &Scanner{
+				SnykApiClient: apiClient,
+				errorReporter: error_reporting.NewTestErrorReporter(),
+				notifier:      notifier,
+			}
 			actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
 
 			data, err := command.CreateFromCommandData(
@@ -143,6 +162,7 @@ func TestIsSastEnabled(t *testing.T) {
 				nil,
 				nil,
 				nil,
+				notifier,
 			)
 			assert.NoError(t, err)
 
@@ -156,10 +176,10 @@ func TestIsSastEnabled(t *testing.T) {
 
 			channel := make(chan any)
 
-			notification.CreateListener(func(params any) {
+			notifier.CreateListener(func(params any) {
 				channel <- params
 			})
-			defer notification.DisposeListener()
+			defer notifier.DisposeListener()
 
 			scanner.isSastEnabled()
 

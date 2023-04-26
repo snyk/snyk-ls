@@ -24,10 +24,10 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -46,12 +46,14 @@ type Workspace struct {
 	scanNotifier        snyk.ScanNotifier
 	trustMutex          sync.Mutex
 	trustRequestOngoing bool // for debouncing
+	notifier            noti.Notifier
 }
 
 func New(instrumentor performance.Instrumentor,
 	scanner snyk.Scanner,
 	hoverService hover.Service,
 	scanNotifier snyk.ScanNotifier,
+	notifier noti.Notifier,
 ) *Workspace {
 	return &Workspace{
 		folders:      make(map[string]*Folder, 0),
@@ -59,6 +61,7 @@ func New(instrumentor performance.Instrumentor,
 		scanner:      scanner,
 		hoverService: hoverService,
 		scanNotifier: scanNotifier,
+		notifier:     notifier,
 	}
 }
 
@@ -146,7 +149,7 @@ func (w *Workspace) ChangeWorkspaceFolders(ctx context.Context, params lsp.DidCh
 		w.RemoveFolder(uri.PathFromUri(folder.Uri))
 	}
 	for _, folder := range params.Event.Added {
-		f := NewFolder(uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService, w.scanNotifier)
+		f := NewFolder(uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier)
 		w.AddFolder(f)
 	}
 
@@ -173,7 +176,7 @@ func (w *Workspace) TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted 
 		currentConfig.SetTrustedFolders(trustedFolderPaths)
 		go f.ScanFolder(ctx)
 	}
-	notification.Send(lsp.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
+	w.notifier.Send(lsp.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
 }
 
 func (w *Workspace) GetFolderTrust() (trusted []*Folder, untrusted []*Folder) {

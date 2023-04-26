@@ -47,8 +47,8 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	testutil.OnlyEnableCode()
 
 	filePath, dir := code.TempWorkdirWithVulnerabilities(t)
-	folder := workspace.NewFolder(dir, "dummy", di.Scanner(), di.HoverService(), di.ScanNotifier())
-	workspace.Set(workspace.New(performance.NewTestInstrumentor(), di.Scanner(), di.HoverService(), di.ScanNotifier()))
+	folder := workspace.NewFolder(dir, "dummy", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier())
+	workspace.Set(workspace.New(performance.NewTestInstrumentor(), di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier()))
 	workspace.Get().AddFolder(folder)
 	folder.ScanFile(context.Background(), filePath)
 

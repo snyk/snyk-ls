@@ -28,10 +28,10 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
+	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/notification"
 )
 
 type SnykCli struct {
@@ -40,11 +40,17 @@ type SnykCli struct {
 	analytics     ux.Analytics
 	semaphore     chan int
 	cliTimeout    time.Duration
+	notifier      noti.Notifier
 }
 
 var Mutex = &sync.Mutex{}
 
-func NewExecutor(authenticator snyk.AuthenticationService, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics) Executor {
+func NewExecutor(
+	authenticator snyk.AuthenticationService,
+	errorReporter error_reporting.ErrorReporter,
+	analytics ux.Analytics,
+	notifier noti.Notifier,
+) Executor {
 	concurrencyLimit := 2
 
 	return &SnykCli{
@@ -53,6 +59,7 @@ func NewExecutor(authenticator snyk.AuthenticationService, errorReporter error_r
 		analytics,
 		make(chan int, concurrencyLimit),
 		90 * time.Minute, // TODO: add preference to make this configurable [ROAD-1184]
+		notifier,
 	}
 }
 
@@ -130,7 +137,7 @@ func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
 func (c SnykCli) HandleErrors(ctx context.Context, output string) (fail bool) {
 	if strings.Contains(output, "`snyk` requires an authenticated account. Please run `snyk auth` and try again.") {
 		log.Info().Msg("Snyk failed to obtain authentication information. Trying to authenticate again...")
-		notification.SendShowMessage(sglsp.Info, "Snyk failed to obtain authentication information, trying to authenticate again. This could open a browser window.")
+		c.notifier.SendShowMessage(sglsp.Info, "Snyk failed to obtain authentication information, trying to authenticate again. This could open a browser window.")
 
 		token, err := c.authenticator.Provider().Authenticate(ctx)
 		if token == "" || err != nil {

@@ -32,6 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
+	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	er "github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
@@ -49,7 +50,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/infrastructure/services"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
-	"github.com/snyk/snyk-ls/internal/notification"
+	domainNotify "github.com/snyk/snyk-ls/internal/notification"
 )
 
 var snykApiClient snyk_api.SnykApiClient
@@ -73,6 +74,7 @@ var scanNotifier snyk.ScanNotifier
 var codeActionService *codeaction.CodeActionsService
 var fileWatcher *watcher.FileWatcher
 var initMutex = &sync.Mutex{}
+var notifier notification.Notifier
 
 func Init() {
 	initMutex.Lock()
@@ -115,8 +117,8 @@ func initInfrastructure() {
 				"/Library",
 			})
 	}
-
-	errorReporter = sentry.NewSentryErrorReporter()
+	notifier = domainNotify.NewNotifier()
+	errorReporter = sentry.NewSentryErrorReporter(notifier)
 	installer = install.NewInstaller(errorReporter, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
 	learnService = learn.New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient, errorReporter)
 	instrumentor = sentry.NewInstrumentor()
@@ -127,16 +129,16 @@ func initInfrastructure() {
 	}
 	analytics = amplitude.NewAmplitudeClient(authFunc, errorReporter)
 	authProvider := cliauth.NewCliAuthenticationProvider(errorReporter)
-	authenticationService = services.NewAuthenticationService(snykApiClient, authProvider, analytics, errorReporter)
-	snykCli = cli.NewExecutor(authenticationService, errorReporter, analytics)
+	authenticationService = services.NewAuthenticationService(snykApiClient, authProvider, analytics, errorReporter, notifier)
+	snykCli = cli.NewExecutor(authenticationService, errorReporter, analytics, notifier)
 	snykCodeClient = code.NewHTTPRepository(instrumentor, errorReporter, c.Engine().GetNetworkAccess().GetHttpClient)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
-	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli, learnService)
-	scanNotifier, _ = appNotification.NewScanNotifier(notification.NewNotifier())
-	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, learnService)
-	cliInitializer = cli.NewInitializer(errorReporter, installer)
-	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics)
+	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli, learnService, notifier)
+	scanNotifier, _ = appNotification.NewScanNotifier(notifier)
+	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, learnService, notifier)
+	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier)
+	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,
 		authInitializer,
@@ -144,10 +146,10 @@ func initInfrastructure() {
 }
 
 func initApplication() {
-	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier) // don't use getters or it'll deadlock
+	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier, notifier) // don't use getters or it'll deadlock
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher)
+	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher, notifier)
 	command.ResetService()
 }
 
@@ -158,26 +160,27 @@ func TestInit(t *testing.T) {
 	t.Helper()
 	// we don't want to open browsers when testing
 	snyk.DefaultOpenBrowserFunc = func(url string) {}
+	notifier = domainNotify.NewNotifier()
 	analytics = ux.NewTestAnalytics()
 	instrumentor = performance.NewTestInstrumentor()
 	errorReporter = er.NewTestErrorReporter()
 	installer = install.NewFakeInstaller()
 	authProvider := cliauth.NewFakeCliAuthenticationProvider()
 	snykApiClient = &snyk_api.FakeApiClient{CodeEnabled: true}
-	authenticationService = services.NewAuthenticationService(snykApiClient, authProvider, analytics, errorReporter)
-	cliInitializer = cli.NewInitializer(errorReporter, installer)
-	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics)
+	authenticationService = services.NewAuthenticationService(snykApiClient, authProvider, analytics, errorReporter, notifier)
+	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier)
+	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,
 		authInitializer,
 	)
 	fakeClient := &code.FakeSnykCodeClient{}
 	snykCodeClient = fakeClient
-	snykCli = cli.NewExecutor(authenticationService, errorReporter, analytics)
+	snykCli = cli.NewExecutor(authenticationService, errorReporter, analytics, notifier)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
-	scanNotifier, _ = appNotification.NewScanNotifier(notification.NewNotifier())
-	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, mock_learn.NewMockService(gomock.NewController(t)))
-	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli, learnService)
+	scanNotifier, _ = appNotification.NewScanNotifier(notifier)
+	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, mock_learn.NewMockService(gomock.NewController(t)), notifier)
+	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli, learnService, notifier)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	scanner = snyk.NewDelegatingScanner(
 		scanInitializer,
@@ -191,10 +194,11 @@ func TestInit(t *testing.T) {
 	)
 	hoverService = hover.NewDefaultService(analytics)
 	command.SetService(&snyk.CommandServiceMock{})
-	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier) // don't use getters or it'll deadlock
+	// don't use getters or it'll deadlock
+	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier, notifier)
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher)
+	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher, notifier)
 	t.Cleanup(
 		func() {
 			fakeClient.Clear()
@@ -207,10 +211,10 @@ TODO Accessors: This should go away, since all dependencies should be satisfied 
 they can be returned by the test helper for unit/integration tests
 */
 
-func Instrumentor() performance.Instrumentor {
+func Notifier() notification.Notifier {
 	initMutex.Lock()
 	defer initMutex.Unlock()
-	return instrumentor
+	return notifier
 }
 
 func ErrorReporter() er.ErrorReporter {
@@ -259,12 +263,6 @@ func Analytics() ux.Analytics {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return analytics
-}
-
-func OpenSourceScanner() *oss.Scanner {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return openSourceScanner
 }
 
 func Installer() install.Installer {
