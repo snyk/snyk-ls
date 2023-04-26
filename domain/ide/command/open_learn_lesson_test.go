@@ -18,7 +18,6 @@ package command
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -47,7 +46,7 @@ func Test_openLearnLesson_Execute(t *testing.T) {
 	data := snyk.CommandData{
 		Title:     snyk.OpenLearnLesson,
 		CommandId: snyk.OpenLearnLesson,
-		Arguments: []any{rule, eco, cwes, cves, fmt.Sprintf("%d", snyk.DependencyVulnerability)},
+		Arguments: []any{rule, eco, cwes, cves, snyk.DependencyVulnerability},
 	}
 	mockService := mock_learn.NewMockService(ctrl)
 	cut := openLearnLesson{learnService: mockService, command: data, openBrowserHandleFunc: openBrowserHandlerFunc}

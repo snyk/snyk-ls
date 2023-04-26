@@ -18,7 +18,6 @@ package command
 
 import (
 	"context"
-	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -53,10 +52,7 @@ func learnLesson(args []any, learnService learn.Service) (learn.Lesson, error) {
 	ecosystem := args[1].(string)
 	cwes := strings.Split(args[2].(string), ",")
 	cves := strings.Split(args[3].(string), ",")
-	issueType, err := strconv.Atoi(args[4].(string))
-	if err != nil {
-		return learn.Lesson{}, errors.Wrap(err, "failed to parse issueType")
-	}
+	issueType := args[4].(snyk.Type)
 
 	lesson, err := learnService.GetLesson(ecosystem, rule, cwes, cves, snyk.Type(issueType))
 	if err != nil {
