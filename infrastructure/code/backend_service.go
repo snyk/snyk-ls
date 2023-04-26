@@ -27,7 +27,6 @@ import (
 	"strconv"
 
 	"github.com/rs/zerolog/log"
-	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -170,26 +169,35 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 		b = bytes.NewBuffer(requestBody)
 	}
 
-	host := config.CurrentConfig().SnykCodeApi()
+	c := config.CurrentConfig()
+	host := c.SnykCodeApi()
 
 	req, err := http.NewRequest(method, host+path, b)
 	if err != nil {
 		return nil, err
 	}
-	token := config.CurrentConfig().Token()
-	if config.CurrentConfig().AuthenticationMethod() == lsp.TokenAuthentication {
-		req.Header.Set("Session-Token", token) // FIXME: this should be set by GAF, is in the works
-	} else {
-		var oauthToken oauth2.Token
-		err = json.Unmarshal([]byte(token), &oauthToken)
-		if err != nil {
+	token := c.Token()
+	if c.AuthenticationMethod() == lsp.TokenAuthentication {
+		if len(token) > 0 {
+			req.Header.Set("Session-Token", token) // FIXME: this should be set by GAF, is in the works
+		} else {
+			err = errors.New("no token found, auth header not added")
+			s.errorReporter.CaptureError(err)
 			return nil, err
 		}
-		req.Header.Set("Session-Token", "bearer "+oauthToken.AccessToken) // FIXME: this should be set by GAF, is in the works
+	} else {
+		oauthToken := c.TokenAsOAuthToken()
+		if len(oauthToken.AccessToken) > 0 {
+			req.Header.Set("Session-Token", "bearer "+oauthToken.AccessToken) // FIXME: this should be set by GAF, is in the works
+		} else {
+			err = errors.New("token could not be converted to OAuth token, auth header not added")
+			s.errorReporter.CaptureError(err)
+			return nil, err
+		}
 	}
 
 	// Setting a chosen org name for the request
-	org := config.CurrentConfig().Organization()
+	org := c.Organization()
 	if org != "" {
 		req.Header.Set("snyk-org-name", org)
 	}

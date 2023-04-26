@@ -46,11 +46,12 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) (updat
 
 	// remove any existing env vars that we are going to set
 	valuesToRemove := map[string]bool{
-		ApiEnvVar:                                true,
-		TokenEnvVar:                              true,
-		DisableAnalyticsEnvVar:                   true,
-		auth.CONFIG_KEY_OAUTH_TOKEN:              true,
-		configuration.FF_OAUTH_AUTH_FLOW_ENABLED: true,
+		ApiEnvVar:   true,
+		TokenEnvVar: true,
+		configuration.AUTHENTICATION_BEARER_TOKEN: true,
+		DisableAnalyticsEnvVar:                    true,
+		auth.CONFIG_KEY_OAUTH_TOKEN:               true,
+		configuration.FF_OAUTH_AUTH_FLOW_ENABLED:  true,
 	}
 
 	for _, s := range currentEnv {
@@ -64,8 +65,11 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) (updat
 	if appendToken {
 		// there can only be one - highlander principle
 		if currentConfig.AuthenticationMethod() == lsp.OAuthAuthentication {
-			updatedEnv = append(updatedEnv, auth.CONFIG_KEY_OAUTH_TOKEN+"="+currentConfig.Token())
-			updatedEnv = append(updatedEnv, strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED+"=1"))
+			oAuthToken := currentConfig.TokenAsOAuthToken()
+			if len(oAuthToken.AccessToken) > 0 {
+				updatedEnv = append(updatedEnv, configuration.AUTHENTICATION_BEARER_TOKEN+"="+oAuthToken.AccessToken)
+				updatedEnv = append(updatedEnv, strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED+"=1"))
+			}
 		} else {
 			updatedEnv = append(updatedEnv, TokenEnvVar+"="+currentConfig.Token())
 		}

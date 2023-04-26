@@ -55,13 +55,13 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
 		c.SetAuthenticationMethod(lsp.OAuthAuthentication)
-		c.SetToken("testToken")
+		c.SetToken("{\"access_token\": \"testToken\"}")
 		tokenVar := TokenEnvVar + "={asdf}"
 		inputEnv := []string{tokenVar}
 
 		updatedEnv := AppendCliEnvironmentVariables(inputEnv, true)
 
-		assert.Contains(t, updatedEnv, auth.CONFIG_KEY_OAUTH_TOKEN+"="+config.CurrentConfig().Token())
+		assert.Contains(t, updatedEnv, configuration.AUTHENTICATION_BEARER_TOKEN+"="+c.TokenAsOAuthToken().AccessToken)
 		assert.Contains(t, updatedEnv, strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED+"=1"))
 		assert.NotContains(t, updatedEnv, tokenVar)
 	})
@@ -75,7 +75,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 
 		updatedEnv := AppendCliEnvironmentVariables(inputEnv, true)
 
-		assert.Contains(t, updatedEnv, "SNYK_TOKEN="+config.CurrentConfig().Token())
+		assert.Contains(t, updatedEnv, "SNYK_TOKEN="+c.Token())
 		assert.NotContains(t, updatedEnv, oauthVar)
 	})
 	t.Run("Adds Snyk Token to env", func(t *testing.T) {
@@ -86,18 +86,18 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
-		assert.Contains(t, updatedEnv, "SNYK_TOKEN="+config.CurrentConfig().Token())
+		assert.Contains(t, updatedEnv, "SNYK_TOKEN="+c.Token())
 	})
 
 	t.Run("Adds OAuth Token to env", func(t *testing.T) {
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
 		c.SetAuthenticationMethod(lsp.OAuthAuthentication)
-		c.SetToken("testToken")
+		c.SetToken("{\"access_token\": \"testToken\"}")
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
-		assert.Contains(t, updatedEnv, auth.CONFIG_KEY_OAUTH_TOKEN+"="+config.CurrentConfig().Token())
+		assert.Contains(t, updatedEnv, configuration.AUTHENTICATION_BEARER_TOKEN+"="+c.TokenAsOAuthToken().AccessToken)
 	})
 
 	t.Run("Disables analytics, if telemetry disabled", func(t *testing.T) {
