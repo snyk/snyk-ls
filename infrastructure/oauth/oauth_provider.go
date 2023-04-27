@@ -57,3 +57,7 @@ func (p *oAuthProvider) ClearAuthentication(_ context.Context) error {
 func (p *oAuthProvider) AuthURL(_ context.Context) string {
 	return p.authURL
 }
+
+func (p *oAuthProvider) Authenticator() auth.Authenticator {
+	return p.authenticator
+}

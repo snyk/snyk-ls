@@ -69,15 +69,17 @@ func (a *AuthenticationService) Authenticate(ctx context.Context) (string, error
 func (a *AuthenticationService) UpdateCredentials(newToken string, sendNotification bool) {
 	c := config.CurrentConfig()
 	oldToken := c.Token()
+	if oldToken == newToken {
+		return
+	}
+
 	c.SetToken(newToken)
 
 	if sendNotification {
 		a.notifier.Send(lsp.AuthenticationParams{Token: newToken})
 	}
 
-	if oldToken != newToken {
-		a.analytics.Identify()
-	}
+	a.analytics.Identify()
 }
 
 func (a *AuthenticationService) Logout(ctx context.Context) {
