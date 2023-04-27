@@ -17,8 +17,6 @@ package code
 
 import (
 	"net/url"
-	"os"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -27,10 +25,8 @@ import (
 )
 
 const (
-	// String "true" or "false", see `defaultAutofixEnabled`
-	autofixEnabledEnvVarKey = "SNYK_AUTOFIX_ENABLED"
-	// By default this is disabled
-	defaultAutofixEnabled = false
+	// Autofix is enabled by default
+	defaultAutofixEnabled = true
 )
 
 var (
@@ -47,7 +43,7 @@ type codeSettings struct {
 // Create new code settings
 func newCodeSettings() *codeSettings {
 	s := &codeSettings{}
-	s.isAutofixEnabled.Set(getAutofixEnabledFromEnvOrDefault())
+	s.isAutofixEnabled.Set(defaultAutofixEnabled)
 	s.autofixExtensions = nil
 	return s
 }
@@ -65,21 +61,6 @@ func resetCodeSettings() {
 	codeSettingsSingletonMutex.Lock()
 	defer codeSettingsSingletonMutex.Unlock()
 	codeSettingsSingleton = newCodeSettings()
-}
-
-// Attempts to read the `autofixEnabledEnvVarKey` env variable or sets the
-// bool to default
-func getAutofixEnabledFromEnvOrDefault() bool {
-	env := os.Getenv(autofixEnabledEnvVarKey)
-	if env == "" {
-		return defaultAutofixEnabled
-	}
-
-	parseBool, err := strconv.ParseBool(env)
-	if err != nil {
-		return defaultAutofixEnabled
-	}
-	return parseBool
 }
 
 // Does nothing if the extensions are already set
