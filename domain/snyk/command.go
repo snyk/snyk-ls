@@ -36,7 +36,6 @@ const (
 	OpenLearnLesson              = "snyk.openLearnLesson"
 	GetLearnLesson               = "snyk.getLearnLesson"
 	GetSettingsSastEnabled       = "snyk.getSettingsSastEnabled"
-	GetActiveUser                = "snyk.getActiveUser"
 )
 
 var (

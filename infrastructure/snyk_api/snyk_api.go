@@ -53,21 +53,12 @@ type activeUserResponse struct {
 }
 
 type ActiveUser struct {
-	Id       string `json:"id"`
-	UserName string `json:"username,omitempty"`
-	Orgs     []struct {
-		Name  string `json:"name,omitempty"`
-		Id    string `json:"id,omitempty"`
-		Group struct {
-			Name string `json:"name,omitempty"`
-			Id   string `json:"id,omitempty"`
-		} `json:"group,omitempty"`
-	} `json:"orgs,omitempty"`
+	Id string
 }
 
 type SnykApiClient interface {
-	SastEnabled() (SastResponse, error)
-	GetActiveUser() (ActiveUser, error)
+	SastEnabled() (sastResponse SastResponse, err *SnykApiError)
+	GetActiveUser() (user ActiveUser, err *SnykApiError)
 }
 
 type SnykApiError struct {
@@ -94,7 +85,7 @@ func NewSnykApiClient(client func() *http.Client) SnykApiClient {
 	return &s
 }
 
-func (s *SnykApiClientImpl) SastEnabled() (SastResponse, error) {
+func (s *SnykApiClientImpl) SastEnabled() (response SastResponse, err *SnykApiError) {
 	log.Debug().Str("method", "SastEnabled").Msg("API: Getting SastEnabled")
 	path := "/cli-config/settings/sast"
 	organization := config.CurrentConfig().Organization()
@@ -108,7 +99,6 @@ func (s *SnykApiClientImpl) SastEnabled() (SastResponse, error) {
 		return SastResponse{}, err
 	}
 
-	var response SastResponse
 	unmarshalErr := json.Unmarshal(responseBody, &response)
 	if unmarshalErr != nil {
 		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
@@ -119,14 +109,14 @@ func (s *SnykApiClientImpl) SastEnabled() (SastResponse, error) {
 	return response, nil
 }
 
-func (s *SnykApiClientImpl) GetActiveUser() (ActiveUser, error) {
+func (s *SnykApiClientImpl) GetActiveUser() (activeUser ActiveUser, err *SnykApiError) {
 	log.Debug().Str("method", "GetActiveUser").Msg("API: Getting ActiveUser")
 	path := "/user/me"
 	responseBody, err := s.doCall("GET", path, nil)
 	if err != nil {
 		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
 		log.Err(fmtErr).Str("method", "GetActiveUser").Msg("error when calling SnykApi.GetActiveUser endpoint")
-		return ActiveUser{}, NewSnykApiError(err.Error(), err.StatusCode())
+		return ActiveUser{}, err
 	}
 
 	var response activeUserResponse
@@ -137,13 +127,13 @@ func (s *SnykApiClientImpl) GetActiveUser() (ActiveUser, error) {
 		return ActiveUser{}, NewSnykApiError(fmtErr.Error(), 0)
 	}
 	log.Debug().Str("method", "GetActiveUser").Msgf("Retrieved user %v", response)
-	return ActiveUser{Id: response.Id}, nil
+	return ActiveUser(response), nil
 }
 
 func (s *SnykApiClientImpl) doCall(method string,
 	path string,
 	requestBody []byte,
-) ([]byte, *SnykApiError) {
+) (responseBody []byte, err *SnykApiError) {
 	host := config.CurrentConfig().SnykApi()
 	b := bytes.NewBuffer(requestBody)
 	req, requestErr := http.NewRequest(method, host+path, b)
@@ -156,9 +146,9 @@ func (s *SnykApiClientImpl) doCall(method string,
 	req.Header.Set("x-snyk-ide", "snyk-ls-"+clientID)
 
 	log.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
-	response, err := s.httpClientFunc().Do(req)
-	if err != nil {
-		return nil, NewSnykApiError(err.Error(), 0)
+	response, requestErr := s.httpClientFunc().Do(req)
+	if requestErr != nil {
+		return nil, NewSnykApiError(requestErr.Error(), 0)
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -166,23 +156,23 @@ func (s *SnykApiClientImpl) doCall(method string,
 			log.Err(err).Msg("Couldn't close response body in call to Snyk API")
 		}
 	}(response.Body)
-
-	apiError := checkResponseCode(response)
-	if err != nil {
-		return nil, apiError
-	}
-
 	responseBody, readErr := io.ReadAll(response.Body)
 	log.Trace().Str("response.Status", response.Status).Str("responseBody",
 		string(responseBody)).Msg("RECEIVED FROM REMOTE")
 	if readErr != nil {
 		return nil, NewSnykApiError(err.Error(), 0)
 	}
-	return responseBody, nil
+
+	err = checkResponseCode(response)
+	if err != nil {
+		return nil, err
+	}
+
+	return responseBody, err
 }
 
 func checkResponseCode(r *http.Response) *SnykApiError {
-	if r.StatusCode >= 200 && r.StatusCode <= 399 {
+	if r.StatusCode >= 200 && r.StatusCode <= 299 {
 		return nil
 	}
 

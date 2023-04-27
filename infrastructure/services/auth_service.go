@@ -98,7 +98,7 @@ func (a *AuthenticationService) IsAuthenticated() (bool, error) {
 	isAuthenticated := getActiveUserErr == nil
 
 	if !isAuthenticated {
-		switch getActiveUserErr.(*snyk_api.SnykApiError).StatusCode() {
+		switch getActiveUserErr.StatusCode() {
 		//goland:noinspection GoErrorStringFormat
 		case 401:
 			return false, errors.New("Authentication failed. Please update your token.")
