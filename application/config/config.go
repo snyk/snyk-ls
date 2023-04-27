@@ -438,6 +438,8 @@ func (c *Config) SetLogPath(logPath string) {
 }
 
 func (c *Config) ConfigureLogging(server lsp.Server) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	var logLevel zerolog.Level
 	var err error
 
