@@ -17,11 +17,8 @@
 package cli
 
 import (
-	"strings"
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/auth"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -61,8 +58,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 
 		updatedEnv := AppendCliEnvironmentVariables(inputEnv, true)
 
-		assert.Contains(t, updatedEnv, configuration.AUTHENTICATION_BEARER_TOKEN+"="+c.TokenAsOAuthToken().AccessToken)
-		assert.Contains(t, updatedEnv, strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED+"=1"))
+		assert.Contains(t, updatedEnv, SnykOauthTokenEnvVar+"="+c.TokenAsOAuthToken().AccessToken)
 		assert.NotContains(t, updatedEnv, tokenVar)
 	})
 	t.Run("Removes existing oauth env variables", func(t *testing.T) {
@@ -70,7 +66,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		c := config.CurrentConfig()
 		c.SetAuthenticationMethod(lsp.TokenAuthentication)
 		c.SetToken("testToken")
-		oauthVar := auth.CONFIG_KEY_OAUTH_TOKEN + "={asdf}"
+		oauthVar := SnykOauthTokenEnvVar + "={asdf}"
 		inputEnv := []string{oauthVar}
 
 		updatedEnv := AppendCliEnvironmentVariables(inputEnv, true)
@@ -97,7 +93,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
-		assert.Contains(t, updatedEnv, configuration.AUTHENTICATION_BEARER_TOKEN+"="+c.TokenAsOAuthToken().AccessToken)
+		assert.Contains(t, updatedEnv, SnykOauthTokenEnvVar+"="+c.TokenAsOAuthToken().AccessToken)
 	})
 
 	t.Run("Disables analytics, if telemetry disabled", func(t *testing.T) {

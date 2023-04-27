@@ -35,6 +35,7 @@ const (
 	IntegrationEnvironmentEnvVarKey     = "SNYK_INTEGRATION_ENVIRONMENT"
 	IntegrationEnvironmentVersionEnvVar = "SNYK_INTEGRATION_ENVIRONMENT_VERSION"
 	IntegrationEnvironmentEnvVarValue   = "language-server"
+	SnykOauthTokenEnvVar                = "SNYK_OAUTH_TOKEN"
 )
 
 // AppendCliEnvironmentVariables Returns the input array with additional variables used in the CLI run in the form of "key=value".
@@ -46,12 +47,12 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) (updat
 
 	// remove any existing env vars that we are going to set
 	valuesToRemove := map[string]bool{
-		ApiEnvVar:   true,
-		TokenEnvVar: true,
-		configuration.AUTHENTICATION_BEARER_TOKEN: true,
-		DisableAnalyticsEnvVar:                    true,
-		auth.CONFIG_KEY_OAUTH_TOKEN:               true,
-		configuration.FF_OAUTH_AUTH_FLOW_ENABLED:  true,
+		ApiEnvVar:                                true,
+		TokenEnvVar:                              true,
+		SnykOauthTokenEnvVar:                     true,
+		DisableAnalyticsEnvVar:                   true,
+		auth.CONFIG_KEY_OAUTH_TOKEN:              true,
+		configuration.FF_OAUTH_AUTH_FLOW_ENABLED: true,
 	}
 
 	for _, s := range currentEnv {
@@ -67,8 +68,7 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) (updat
 		if currentConfig.AuthenticationMethod() == lsp.OAuthAuthentication {
 			oAuthToken := currentConfig.TokenAsOAuthToken()
 			if len(oAuthToken.AccessToken) > 0 {
-				updatedEnv = append(updatedEnv, configuration.AUTHENTICATION_BEARER_TOKEN+"="+oAuthToken.AccessToken)
-				updatedEnv = append(updatedEnv, strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED+"=1"))
+				updatedEnv = append(updatedEnv, SnykOauthTokenEnvVar+"="+oAuthToken.AccessToken)
 			}
 		} else {
 			updatedEnv = append(updatedEnv, TokenEnvVar+"="+currentConfig.Token())
