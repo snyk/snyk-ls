@@ -31,7 +31,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/cli/auth"
 )
 
 func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) {
@@ -128,7 +127,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*auth.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
 	initialAuthenticatedStatus := fakeAuthenticationProvider.IsAuthenticated
 	params := lsp.ExecuteCommandParams{Command: snyk.LoginCommand}
 
@@ -151,7 +150,7 @@ func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
 	// reset to use real service
 	command.ResetService()
 
-	authenticationMock := di.AuthenticationService().Provider().(*auth.FakeAuthenticationProvider)
+	authenticationMock := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
 	params := lsp.ExecuteCommandParams{Command: snyk.CopyAuthLinkCommand}
 
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)

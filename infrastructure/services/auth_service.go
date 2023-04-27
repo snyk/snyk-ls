@@ -18,7 +18,6 @@ package services
 
 import (
 	"context"
-	"errors"
 	"reflect"
 
 	"github.com/rs/zerolog/log"
@@ -29,34 +28,44 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
-type AuthenticationService struct {
-	apiClient     snyk_api.SnykApiClient
-	authenticator snyk.AuthenticationProvider
-	analytics     ux.Analytics
-	errorReporter error_reporting.ErrorReporter
-	notifier      noti.Notifier
+type ActiveUser struct {
+	Id       string `json:"id"`
+	UserName string `json:"username,omitempty"`
+	Orgs     []struct {
+		Name  string `json:"name,omitempty"`
+		Id    string `json:"id,omitempty"`
+		Group struct {
+			Name string `json:"name,omitempty"`
+			Id   string `json:"id,omitempty"`
+		} `json:"group,omitempty"`
+	} `json:"orgs,omitempty"`
+}
+
+type authenticationService struct {
+	authenticationProvider snyk.AuthenticationProvider
+	analytics              ux.Analytics
+	errorReporter          error_reporting.ErrorReporter
+	notifier               noti.Notifier
 }
 
 func NewAuthenticationService(
-	apiProvider snyk_api.SnykApiClient,
-	authenticator snyk.AuthenticationProvider,
+	authenticationProvider snyk.AuthenticationProvider,
 	analytics ux.Analytics,
 	errorReporter error_reporting.ErrorReporter,
 	notifier noti.Notifier,
-) *AuthenticationService {
-	return &AuthenticationService{apiProvider, authenticator, analytics, errorReporter, notifier}
+) snyk.AuthenticationService {
+	return &authenticationService{authenticationProvider, analytics, errorReporter, notifier}
 }
 
-func (a *AuthenticationService) Provider() snyk.AuthenticationProvider {
-	return a.authenticator
+func (a *authenticationService) Provider() snyk.AuthenticationProvider {
+	return a.authenticationProvider
 }
 
-func (a *AuthenticationService) Authenticate(ctx context.Context) (string, error) {
-	token, err := a.Provider().Authenticate(ctx)
+func (a *authenticationService) Authenticate(ctx context.Context) (string, error) {
+	token, err := a.authenticationProvider.Authenticate(ctx)
 	if token == "" || err != nil {
 		log.Error().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.Provider()))
 		return "", err
@@ -66,7 +75,7 @@ func (a *AuthenticationService) Authenticate(ctx context.Context) (string, error
 	return token, err
 }
 
-func (a *AuthenticationService) UpdateCredentials(newToken string, sendNotification bool) {
+func (a *authenticationService) UpdateCredentials(newToken string, sendNotification bool) {
 	c := config.CurrentConfig()
 	oldToken := c.Token()
 	if oldToken == newToken {
@@ -82,36 +91,40 @@ func (a *AuthenticationService) UpdateCredentials(newToken string, sendNotificat
 	a.analytics.Identify()
 }
 
-func (a *AuthenticationService) Logout(ctx context.Context) {
-	err := a.Provider().ClearAuthentication(ctx)
+func (a *authenticationService) Logout(ctx context.Context) {
+	err := a.authenticationProvider.ClearAuthentication(ctx)
 	if err != nil {
 		log.Error().Err(err).Str("method", "Logout").Msg("Failed to log out.")
 		a.errorReporter.CaptureError(err)
 		return
 	}
 
+	config.CurrentConfig().SetToken("")
+
 	a.notifier.Send(lsp.AuthenticationParams{Token: ""})
 
 	workspace.Get().ClearIssues(ctx)
 }
 
-func (a *AuthenticationService) IsAuthenticated() (bool, error) {
-	_, getActiveUserErr := a.apiClient.GetActiveUser()
+// IsAuthenticated returns true if the token is verified
+// If the token is set, but not valid IsAuthenticated returns false and the reported error
+func (a *authenticationService) IsAuthenticated() (bool, error) {
+	if !config.CurrentConfig().NonEmptyToken() {
+		return false, nil
+	}
+
+	authenticationFunction := a.authenticationProvider.GetCheckAuthenticationFunction()
+	user, getActiveUserErr := authenticationFunction()
 	isAuthenticated := getActiveUserErr == nil
 
 	if !isAuthenticated {
-		switch getActiveUserErr.(*snyk_api.SnykApiError).StatusCode() {
-		//goland:noinspection GoErrorStringFormat
-		case 401:
-			return false, errors.New("Authentication failed. Please update your token.")
-		default:
-			return false, getActiveUserErr
-		}
+		return false, getActiveUserErr
 	}
 
+	log.Debug().Msg("IsAuthenticated: " + user)
 	return isAuthenticated, nil
 }
 
-func (a *AuthenticationService) SetProvider(provider snyk.AuthenticationProvider) {
-	a.authenticator = provider
+func (a *authenticationService) SetProvider(provider snyk.AuthenticationProvider) {
+	a.authenticationProvider = provider
 }

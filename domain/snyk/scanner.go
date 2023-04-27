@@ -47,6 +47,7 @@ type DelegatingConcurrentScanner struct {
 	analytics     ux2.Analytics
 	scanNotifier  ScanNotifier
 	snykApiClient snyk_api.SnykApiClient
+	authFunction  func() (string, error)
 }
 
 func NewDelegatingScanner(
@@ -55,6 +56,7 @@ func NewDelegatingScanner(
 	analytics ux2.Analytics,
 	scanNotifier ScanNotifier,
 	snykApiClient snyk_api.SnykApiClient,
+	authFunction func() (string, error),
 	scanners ...ProductScanner,
 ) Scanner {
 	return &DelegatingConcurrentScanner{
@@ -64,6 +66,7 @@ func NewDelegatingScanner(
 		scanNotifier:  scanNotifier,
 		snykApiClient: snykApiClient,
 		scanners:      scanners,
+		authFunction:  authFunction,
 	}
 }
 
@@ -74,8 +77,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	folderPath string,
 ) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
-	done := make(chan bool)
-	defer close(done)
+	c := config.CurrentConfig()
 
 	err := sc.initializer.Init()
 	if err != nil {
@@ -83,7 +85,10 @@ func (sc *DelegatingConcurrentScanner) Scan(
 		return
 	}
 
-	tokenChangeChannel := config.CurrentConfig().TokenChangesChannel()
+	tokenChangeChannel := c.TokenChangesChannel()
+	done := make(chan bool)
+	defer close(done)
+
 	ctx, cancelFunc := context.WithCancel(ctx)
 	defer cancelFunc()
 
@@ -98,10 +103,17 @@ func (sc *DelegatingConcurrentScanner) Scan(
 		}
 	}()
 
-	if !config.CurrentConfig().NonEmptyToken() {
-		log.Info().Msg("User is not authenticated, cancelling scan")
+	// refresh & check auth by issuing a request to the API
+	userId, err := sc.authFunction()
+	if err != nil {
+		if !c.NonEmptyToken() {
+			log.Info().Msg("User token is not valid. Cancelling scan")
+		} else {
+			log.Info().Msg("User is not authenticated, cancelling scan")
+		}
 		return
 	}
+	log.Info().Msgf("User authenticated / Credentials refreshed, UserID: %s", userId)
 
 	if ctx.Err() != nil {
 		log.Info().Msg("Scan was cancelled")
@@ -118,9 +130,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 		)
 		sc.scanNotifier.SendInProgress(folderPath)
 	}
-
-	// refresh auth by issuing a request to the API
-	_, _ = sc.snykApiClient.GetActiveUser()
 
 	waitGroup := &sync.WaitGroup{}
 	for _, scanner := range sc.scanners {

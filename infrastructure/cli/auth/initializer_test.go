@@ -24,8 +24,8 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	errorreporting "github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/services"
-	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
 )
 
@@ -40,16 +40,22 @@ func getAutoAuthenticationTest(autoAuthentication bool, expectError bool) func(t
 		config.CurrentConfig().SetToken("")
 		config.CurrentConfig().SetAutomaticAuthentication(autoAuthentication)
 		analytics := ux2.NewTestAnalytics()
-		provider := NewFakeCliAuthenticationProvider().(*FakeAuthenticationProvider)
+
+		provider := snyk.NewFakeCliAuthenticationProvider().(*snyk.FakeAuthenticationProvider)
 		notifier := notification.NewNotifier()
-		authenticator := services.NewAuthenticationService(&snyk_api.FakeApiClient{}, provider, analytics, errorreporting.NewTestErrorReporter(), notifier)
+		authenticator := services.NewAuthenticationService(provider, analytics, errorreporting.NewTestErrorReporter(), notifier)
 		initializer := NewInitializer(authenticator, errorreporting.NewTestErrorReporter(), analytics, notifier)
 
 		// Act
 		err := initializer.Init()
 
 		// Assert
-		assert.Equal(t, expectError, err != nil)
+		//assert.Equal(t, expectError, err != nil)
+		if expectError {
+			assert.Error(t, err)
+		} else {
+			assert.NoError(t, err)
+		}
 		assert.Equal(t, autoAuthentication, provider.IsAuthenticated)
 	}
 }

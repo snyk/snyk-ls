@@ -31,9 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/cli/auth"
 	"github.com/snyk/snyk-ls/infrastructure/services"
-	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -41,14 +39,12 @@ import (
 
 func Test_oauthRefreshCommand_Execute_SameTokenNoUpdate(t *testing.T) {
 	testutil.UnitTest(t)
-	fakeApiClient := snyk_api.FakeApiClient{}
 	cmd := &oauthRefreshCommand{
 		command: snyk.CommandData{
 			CommandId: snyk.OAuthRefreshCommand,
 		},
 		authService: services.NewAuthenticationService(
-			&fakeApiClient,
-			&auth.FakeAuthenticationProvider{IsAuthenticated: true},
+			&snyk.FakeAuthenticationProvider{IsAuthenticated: true},
 			ux.NewTestAnalytics(),
 			error_reporting.NewTestErrorReporter(),
 			notification.NewNotifier(),
@@ -68,7 +64,6 @@ func Test_oauthRefreshCommand_Execute_SameTokenNoUpdate(t *testing.T) {
 
 func Test_oauthRefreshCommand_Execute_DifferentTokenUpdate(t *testing.T) {
 	testutil.UnitTest(t)
-	fakeApiClient := snyk_api.FakeApiClient{}
 	analytics := ux.NewTestAnalytics()
 	notifier := notification.NewNotifier()
 	cmd := &oauthRefreshCommand{
@@ -76,8 +71,7 @@ func Test_oauthRefreshCommand_Execute_DifferentTokenUpdate(t *testing.T) {
 			CommandId: snyk.OAuthRefreshCommand,
 		},
 		authService: services.NewAuthenticationService(
-			&fakeApiClient,
-			&auth.FakeAuthenticationProvider{IsAuthenticated: true},
+			&snyk.FakeAuthenticationProvider{IsAuthenticated: true},
 			analytics,
 			error_reporting.NewTestErrorReporter(),
 			notifier,

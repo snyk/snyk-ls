@@ -18,24 +18,27 @@ package auth
 
 import (
 	"context"
+	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/internal/data_structure"
 )
 
 type Initializer struct {
-	authenticator snyk.AuthenticationService
-	errorReporter error_reporting.ErrorReporter
-	analytics     ux.Analytics
-	notifier      noti.Notifier
+	authenticationService snyk.AuthenticationService
+	errorReporter         error_reporting.ErrorReporter
+	analytics             ux.Analytics
+	notifier              noti.Notifier
+	mutex                 sync.Mutex
 }
 
 func NewInitializer(
@@ -45,20 +48,19 @@ func NewInitializer(
 	notifier noti.Notifier,
 ) *Initializer {
 	return &Initializer{
-		authenticator,
-		errorReporter,
-		analytics,
-		notifier,
+		authenticationService: authenticator,
+		errorReporter:         errorReporter,
+		analytics:             analytics,
+		notifier:              notifier,
 	}
 }
 
 func (i *Initializer) Init() error {
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
+
 	const errorMessage = "Auth Initializer failed to authenticate."
-
-	cli.Mutex.Lock()
-	defer cli.Mutex.Unlock()
-
-	authenticator := i.authenticator
+	authenticator := i.authenticationService
 	currentConfig := config.CurrentConfig()
 	if currentConfig.NonEmptyToken() {
 		isValidToken, _ := authenticator.IsAuthenticated()
@@ -66,35 +68,21 @@ func (i *Initializer) Init() error {
 			log.Info().Msg("Skipping authentication - user is already authenticated")
 			return nil
 		}
+
+		i.handleInvalidCredentials()
+		return nil
 	}
 
-	if !currentConfig.AutomaticAuthentication() {
-		if currentConfig.NonEmptyToken() { // Only send notification when the token is invalid
-			err := &snyk.AuthenticationFailedError{ManualAuthentication: true}
-			i.notifier.SendError(err)
-		}
-		log.Info().Msg("Skipping scan - user is not authenticated and automatic authentication is disabled")
-
-		// If the user is not authenticated and auto-authentication is disabled, return an error to indicate the user
-		// could not be authenticated and the scan cannot start
-		return errors.New(errorMessage)
-	}
-
-	i.notifier.SendShowMessage(sglsp.Info, "Authenticating to Snyk. This could open a browser window.")
-
-	token, err := authenticator.Provider().Authenticate(context.Background())
-	if token == "" || err != nil {
-		if err == nil {
-			err = &snyk.AuthenticationFailedError{}
-		}
-		i.notifier.SendError(err)
-		err = errors.Wrap(err, errorMessage)
-		log.Error().Err(err).Msg(errorMessage)
-		i.errorReporter.CaptureError(err)
+	err := i.handleNotAuthenticatedAndManualAuthActive(currentConfig.AutomaticAuthentication())
+	if err != nil {
 		return err
 	}
 
-	authenticator.UpdateCredentials(token, true)
+	err = i.authenticate(authenticator, errorMessage)
+	if err != nil {
+		return err
+	}
+
 	isAuthenticated, err := authenticator.IsAuthenticated()
 
 	if !isAuthenticated {
@@ -106,4 +94,56 @@ func (i *Initializer) Init() error {
 	}
 
 	return nil
+}
+
+func (i *Initializer) authenticate(authenticator snyk.AuthenticationService, errorMessage string) error {
+	i.notifier.SendShowMessage(sglsp.Info, "Authenticating to Snyk. This could open a browser window.")
+
+	token, err := authenticator.Provider().Authenticate(context.Background())
+	if token == "" || err != nil {
+		if err == nil {
+			err = &snyk.AuthenticationFailedError{}
+		}
+		i.notifier.SendError(err)
+		err = errors.Wrap(err, errorMessage)
+		log.Err(err).Msg(errorMessage)
+		i.errorReporter.CaptureError(err)
+		return err
+	}
+
+	authenticator.UpdateCredentials(token, true)
+	return nil
+}
+
+func (i *Initializer) handleNotAuthenticatedAndManualAuthActive(automaticAuthentication bool) error {
+	if !automaticAuthentication {
+		err := &snyk.AuthenticationFailedError{ManualAuthentication: true}
+		i.notifier.SendError(err)
+		msg := "Skipping scan - user is not authenticated and automatic authentication is disabled"
+		log.Info().Msg(msg)
+
+		// If the user is not authenticated and auto-authentication is disabled, return an error to indicate the user
+		// could not be authenticated and the scan cannot start
+		return errors.New(msg)
+	}
+	return nil
+}
+
+func (i *Initializer) handleInvalidCredentials() {
+	msg := "Authentication is invalid. Please re-authenticate."
+	log.Warn().Msg(msg)
+	actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
+
+	// the error can only occur, if the command is not known to the factory. This _is_ known.
+	cmd, _ := command.CreateFromCommandData(
+		snyk.CommandData{CommandId: snyk.LoginCommand}, nil, i.authenticationService, nil, i.notifier,
+	)
+
+	actionCommandMap.Add("Re-Authenticate", cmd)
+
+	i.notifier.Send(snyk.ShowMessageRequest{
+		Message: msg,
+		Type:    snyk.Warning,
+		Actions: actionCommandMap,
+	})
 }

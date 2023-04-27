@@ -18,14 +18,9 @@ package command
 
 import (
 	"context"
-	"encoding/json"
 
-	"github.com/pkg/errors"
-	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
-
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/infrastructure/services"
 )
 
 // oauthRefreshCommand is a command that refreshes the oauth token
@@ -40,35 +35,5 @@ func (cmd *getActiveUser) Command() snyk.CommandData {
 }
 
 func (cmd *getActiveUser) Execute(_ context.Context) (any, error) {
-	c := config.CurrentConfig()
-	conf := c.Engine().GetConfiguration().Clone()
-	conf.Set("experimental", true)
-	conf.Set("json", true)
-	result, err := c.Engine().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, conf)
-
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to invoke whoami workflow")
-	}
-	if len(result) == 0 {
-		return nil, errors.New("no user data found")
-	}
-
-	payload := result[0].GetPayload()
-
-	if payload == nil {
-		return nil, errors.New("no payload found")
-	}
-
-	payloadBytes, ok := payload.([]byte)
-	if !ok {
-		return nil, errors.New("payload is not a byte array")
-	}
-
-	var user snyk_api.ActiveUser
-	err = json.Unmarshal(payloadBytes, &user)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to unmarshal user data")
-	}
-
-	return user, nil
+	return services.GetActiveUser()
 }

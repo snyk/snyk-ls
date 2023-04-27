@@ -18,6 +18,7 @@ package snyk
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -33,6 +34,9 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
+func dummyAuthenticationCheck() (string, error)         { return "1234", nil }
+func dummyNegativeAuthenticationCheck() (string, error) { return "", errors.New("fake auth error") }
+
 func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	testutil.UnitTest(t)
 	enabledScanner := NewTestProductScanner(product.ProductCode, true)
@@ -44,6 +48,7 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 		ux.NewTestAnalytics(),
 		NewMockScanNotifier(),
 		&snyk_api.FakeApiClient{CodeEnabled: false},
+		dummyAuthenticationCheck,
 		enabledScanner,
 		disabledScanner,
 	)
@@ -73,6 +78,7 @@ func TestScan_whenProductScannerEnabled_SendsAnalysisTriggered(t *testing.T) {
 		analytics,
 		NewMockScanNotifier(),
 		&snyk_api.FakeApiClient{CodeEnabled: false},
+		dummyAuthenticationCheck,
 		enabledScanner,
 		disabledScanner,
 	)
@@ -96,6 +102,7 @@ func TestScan_whenNoProductScannerEnabled_SendsNoAnalytics(t *testing.T) {
 		analytics,
 		NewMockScanNotifier(),
 		&snyk_api.FakeApiClient{CodeEnabled: false},
+		dummyAuthenticationCheck,
 		disabledScanner,
 	)
 
@@ -113,6 +120,7 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 		ux.NewTestAnalytics(),
 		NewMockScanNotifier(),
 		&snyk_api.FakeApiClient{CodeEnabled: false},
+		dummyNegativeAuthenticationCheck,
 		productScanner,
 	)
 	config.CurrentConfig().SetToken("")
@@ -137,6 +145,7 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 		ux.NewTestAnalytics(),
 		NewMockScanNotifier(),
 		&snyk_api.FakeApiClient{CodeEnabled: false},
+		dummyAuthenticationCheck,
 		productScanner,
 	)
 	done := make(chan bool)
@@ -168,6 +177,7 @@ func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
 		analytics,
 		scanNotifier,
 		&snyk_api.FakeApiClient{CodeEnabled: false},
+		dummyAuthenticationCheck,
 		enabledScanner,
 	)
 

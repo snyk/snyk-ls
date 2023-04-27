@@ -48,26 +48,8 @@ type SastResponse struct {
 	ReportFalsePositivesEnabled bool            `json:"reportFalsePositivesEnabled"`
 }
 
-type activeUserResponse struct {
-	Id string `json:"id"`
-}
-
-type ActiveUser struct {
-	Id       string `json:"id"`
-	UserName string `json:"username,omitempty"`
-	Orgs     []struct {
-		Name  string `json:"name,omitempty"`
-		Id    string `json:"id,omitempty"`
-		Group struct {
-			Name string `json:"name,omitempty"`
-			Id   string `json:"id,omitempty"`
-		} `json:"group,omitempty"`
-	} `json:"orgs,omitempty"`
-}
-
 type SnykApiClient interface {
 	SastEnabled() (SastResponse, error)
-	GetActiveUser() (ActiveUser, error)
 }
 
 type SnykApiError struct {
@@ -117,27 +99,6 @@ func (s *SnykApiClientImpl) SastEnabled() (SastResponse, error) {
 	}
 	log.Debug().Str("method", "SastEnabled").Msg("API: Done")
 	return response, nil
-}
-
-func (s *SnykApiClientImpl) GetActiveUser() (ActiveUser, error) {
-	log.Debug().Str("method", "GetActiveUser").Msg("API: Getting ActiveUser")
-	path := "/user/me"
-	responseBody, err := s.doCall("GET", path, nil)
-	if err != nil {
-		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
-		log.Err(fmtErr).Str("method", "GetActiveUser").Msg("error when calling SnykApi.GetActiveUser endpoint")
-		return ActiveUser{}, NewSnykApiError(err.Error(), err.StatusCode())
-	}
-
-	var response activeUserResponse
-	unmarshalErr := json.Unmarshal(responseBody, &response)
-	if err != nil {
-		fmtErr := fmt.Errorf("%v: %v", unmarshalErr, responseBody)
-		log.Err(fmtErr).Str("method", "GetActiveUser").Msg("couldn't unmarshal GetActiveUser")
-		return ActiveUser{}, NewSnykApiError(fmtErr.Error(), 0)
-	}
-	log.Debug().Str("method", "GetActiveUser").Msgf("Retrieved user %v", response)
-	return ActiveUser{Id: response.Id}, nil
 }
 
 func (s *SnykApiClientImpl) doCall(method string,

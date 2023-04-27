@@ -29,7 +29,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/infrastructure/services"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -97,8 +97,8 @@ func Test_getActiveUser_Execute_Error_Result(t *testing.T) {
 	assert.Empty(t, actualUser)
 }
 
-func whoamiWorkflowResponse(t *testing.T) (snyk_api.ActiveUser, []workflow.Data) {
-	expectedUser := snyk_api.ActiveUser{
+func whoamiWorkflowResponse(t *testing.T) (*services.ActiveUser, []workflow.Data) {
+	expectedUser := services.ActiveUser{
 		Id:       "id",
 		UserName: "username",
 	}
@@ -111,5 +111,5 @@ func whoamiWorkflowResponse(t *testing.T) (snyk_api.ActiveUser, []workflow.Data)
 			"application/json",
 			expectedUserJSON),
 	}
-	return expectedUser, expectedUserData
+	return &expectedUser, expectedUserData
 }
