@@ -24,9 +24,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	auth2 "github.com/snyk/go-application-framework/pkg/auth"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -59,7 +57,10 @@ func Test_oauthRefreshCommand_Execute_SameTokenNoUpdate(t *testing.T) {
 
 	c := config.CurrentConfig()
 	c.SetAuthenticationMethod(lsp.OAuthAuthentication)
-	_ = setUpEngineMock(t, c)
+	mockEngine, engineConfig := setUpEngineMock(t, c)
+	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any())
+
 	_, err := cmd.Execute(context.Background())
 
 	assert.NoErrorf(t, err, "cmd.Execute() error = %v", err)
@@ -85,7 +86,10 @@ func Test_oauthRefreshCommand_Execute_DifferentTokenUpdate(t *testing.T) {
 
 	c := config.CurrentConfig()
 	c.SetAuthenticationMethod(lsp.OAuthAuthentication)
-	engineConfig := setUpEngineMock(t, c)
+	mockEngine, engineConfig := setUpEngineMock(t, c)
+	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any())
+
 	engineConfig.Set(auth2.CONFIG_KEY_OAUTH_TOKEN, "something different")
 	assert.NotEqual(t, c.Token(), engineConfig.GetString(auth2.CONFIG_KEY_OAUTH_TOKEN), "token should be different")
 
@@ -105,14 +109,4 @@ func Test_oauthRefreshCommand_Execute_DifferentTokenUpdate(t *testing.T) {
 	assert.Eventuallyf(t, func() bool {
 		return <-receivedChan
 	}, time.Second, time.Millisecond, "should receive notification")
-}
-
-func setUpEngineMock(t *testing.T, c *config.Config) configuration.Configuration {
-	ctrl := gomock.NewController(t)
-	mockEngine := mocks.NewMockEngine(ctrl)
-	engineConfig := c.Engine().GetConfiguration()
-	c.SetEngine(mockEngine)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any())
-	return engineConfig
 }
