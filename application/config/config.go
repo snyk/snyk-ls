@@ -172,6 +172,7 @@ type Config struct {
 	engine                       workflow.Engine
 	enableSnykLearnCodeActions   bool
 	logger                       zerolog.Logger
+	storage                      StorageWithCallbacks
 }
 
 func CurrentConfig() *Config {
@@ -230,7 +231,10 @@ func New() *Config {
 
 func initWorkFlowEngine(c *Config) {
 	c.engine = app.CreateAppEngine()
-	c.engine.GetConfiguration().Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	conf := c.engine.GetConfiguration()
+	c.storage = NewStorage()
+	conf.SetStorage(c.storage)
+	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 	err := localworkflows.InitWhoAmIWorkflow(c.engine)
 	if err != nil {
 		log.Err(err).Msg("Failed to initialize WhoAmI workflow")
@@ -776,4 +780,8 @@ func (c *Config) TokenAsOAuthToken() oauth2.Token {
 		log.Err(err).Msg("failed to unmarshal oauth token")
 	}
 	return oauthToken
+}
+
+func (c *Config) Storage() StorageWithCallbacks {
+	return c.storage
 }

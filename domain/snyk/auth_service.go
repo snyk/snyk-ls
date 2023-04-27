@@ -24,7 +24,7 @@ type AuthenticationService interface {
 
 	Provider() AuthenticationProvider
 
-	// UpdateToken stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
+	// UpdateCredentials stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
 	// client if sendNotification is true
 	UpdateCredentials(newToken string, sendNotification bool)
 

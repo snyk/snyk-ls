@@ -18,6 +18,9 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"reflect"
 	"strconv"
@@ -28,6 +31,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
@@ -150,20 +154,61 @@ func updateAuthenticationMethod(settings lsp.Settings) {
 	c := config.CurrentConfig()
 	c.SetAuthenticationMethod(settings.AuthenticationMethod)
 	if config.CurrentConfig().AuthenticationMethod() == lsp.OAuthAuthentication {
-		engine := c.Engine()
-		conf := engine.GetConfiguration()
-		httpClient := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
-		openBrowserFunc := func(url string) {
-			di.AuthenticationService().Provider().SetAuthURL(url)
-			snyk.DefaultOpenBrowserFunc(url)
-		}
-		authenticator := auth.NewOAuth2AuthenticatorWithCustomFuncs(conf, httpClient, openBrowserFunc, auth.ShutdownServer)
-		oAuthProvider := oauth.NewOAuthProvider(conf, authenticator)
-		di.AuthenticationService().SetProvider(oAuthProvider)
+		configureOAuth(c, auth.RefreshToken)
 	} else {
 		cliAuthenticationProvider := auth2.NewCliAuthenticationProvider(di.ErrorReporter())
 		di.AuthenticationService().SetProvider(cliAuthenticationProvider)
 	}
+}
+
+func credentialsUpdateCallback(_ string, value any) {
+	newToken, ok := value.(string)
+	if !ok {
+		msg := fmt.Sprintf("Failed to cast token value of type %T to string", value)
+		log.Error().Str("method", "storage callback token").
+			Msgf(msg)
+		di.ErrorReporter().CaptureError(errors.New(msg))
+		return
+	}
+	bytes, err := json.Marshal(newToken)
+	if err != nil {
+		log.Error().Str("method", "storage callback token").
+			Msgf("Failed to marshal token value")
+		di.ErrorReporter().CaptureError(err)
+		return
+	}
+	di.AuthenticationService().UpdateCredentials(string(bytes), true)
+}
+
+func configureOAuth(
+	c *config.Config,
+	customTokenRefresherFunc func(
+		ctx context.Context,
+		oauthConfig *oauth2.Config,
+		token *oauth2.Token,
+	) (*oauth2.Token, error),
+) {
+	engine := c.Engine()
+	conf := engine.GetConfiguration()
+	httpClient := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
+	authenticationService := di.AuthenticationService()
+
+	openBrowserFunc := func(url string) {
+		authenticationService.Provider().SetAuthURL(url)
+		snyk.DefaultOpenBrowserFunc(url)
+	}
+
+	authenticator := auth.NewOAuth2AuthenticatorWithOpts(
+		conf,
+		auth.WithHttpClient(httpClient),
+		auth.WithOpenBrowserFunc(openBrowserFunc),
+		auth.WithTokenRefresherFunc(customTokenRefresherFunc),
+	)
+
+	c.Storage().RegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN, credentialsUpdateCallback)
+
+	oAuthProvider := oauth.NewOAuthProvider(conf, authenticator)
+	authenticationService.SetProvider(oAuthProvider)
 }
 
 func updateRuntimeInfo(settings lsp.Settings) {
@@ -228,6 +273,7 @@ func updateToken(token string) {
 	// Token was sent from the client, no need to send notification
 	di.AuthenticationService().UpdateCredentials(token, false)
 }
+
 func updateApiEndpoints(settings lsp.Settings, initialization bool) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
 	c := config.CurrentConfig()
