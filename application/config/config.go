@@ -17,6 +17,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
@@ -41,6 +42,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/subosito/gotenv"
 	"github.com/xtgo/uuid"
+	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/concurrency"
@@ -763,4 +765,13 @@ func (c *Config) LogLevel() string {
 
 func (c *Config) Logger() zerolog.Logger {
 	return c.logger
+}
+
+func (c *Config) TokenAsOAuthToken() oauth2.Token {
+	var oauthToken oauth2.Token
+	err := json.Unmarshal([]byte(currentConfig.Token()), &oauthToken)
+	if err != nil {
+		log.Err(err).Msg("failed to unmarshal oauth token")
+	}
+	return oauthToken
 }
