@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -186,8 +187,13 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 }
 
 func (b *Bundle) addCodeActions(ctx context.Context, issues []snyk.Issue) ([]snyk.Issue, error) {
+	method := "addCodeActions"
+
 	autoFixEnabled := getCodeSettings().isAutofixEnabled.Get()
 	learnEnabled := config.CurrentConfig().IsSnykLearnCodeActionsEnabled()
+	log.Debug().Str("method", method).Msg("Autofix is enabled: " + strconv.FormatBool(autoFixEnabled))
+	log.Debug().Str("method", method).Msg("Snyk Learn is enabled: " + strconv.FormatBool(learnEnabled))
+
 	if autoFixEnabled || learnEnabled {
 		for i := range issues {
 			if autoFixEnabled {
@@ -198,10 +204,11 @@ func (b *Bundle) addCodeActions(ctx context.Context, issues []snyk.Issue) ([]sny
 					return []snyk.Issue{}, err
 				}
 
-				if !supported {
-					continue
+				if supported {
+					issues[i].CodeActions = append(issues[i].CodeActions, *b.createDeferredAutofixCodeAction(ctx, issues[i]))
+				} else {
+					log.Debug().Str("method", "addCodeActions").Msg("Autofix is not supported for " + issues[i].AffectedFilePath + " file extension.")
 				}
-				issues[i].CodeActions = append(issues[i].CodeActions, *b.createDeferredAutofixCodeAction(ctx, issues[i]))
 			}
 
 			if learnEnabled {
