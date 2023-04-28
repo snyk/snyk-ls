@@ -22,6 +22,7 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
@@ -49,7 +50,7 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 		}
 
 		result, err := command.Service().ExecuteCommand(bgCtx, cmd)
-		logError(err, fmt.Sprintf("Error executing command %v", commandData))
+		logError(errors.Wrap(err, fmt.Sprintf("Error executing command %v", commandData)), method)
 		return result, err
 	})
 }

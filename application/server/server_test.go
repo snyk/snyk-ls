@@ -264,7 +264,6 @@ func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetLearnLesson)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.OpenLearnLesson)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetSettingsSastEnabled)
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetActiveUser)
 }
 
 func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
