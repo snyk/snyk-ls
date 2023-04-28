@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,12 +43,16 @@ func Test_UpdateCredentials(t *testing.T) {
 	t.Run("CLI Authentication", func(t *testing.T) {
 		testutil.UnitTest(t)
 		analytics := ux.NewTestAnalytics()
-		service := NewAuthenticationService(nil, analytics, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		service := NewAuthenticationService(
+			nil,
+			analytics,
+			error_reporting.NewTestErrorReporter(),
+			notification.NewNotifier(),
+		)
 
 		service.UpdateCredentials("new-token", false)
 
 		assert.Equal(t, "new-token", config.CurrentConfig().Token())
-		assert.True(t, analytics.Identified)
 	})
 
 	t.Run("OAuth Authentication Authentication", func(t *testing.T) {
@@ -57,7 +61,7 @@ func Test_UpdateCredentials(t *testing.T) {
 		analytics := ux.NewTestAnalytics()
 		service := NewAuthenticationService(nil, analytics, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
 		oauthCred := oauth2.Token{
-			AccessToken:  "a",
+			AccessToken:  t.Name(),
 			TokenType:    "b",
 			RefreshToken: "c",
 			Expiry:       time.Time{},
@@ -69,7 +73,6 @@ func Test_UpdateCredentials(t *testing.T) {
 		service.UpdateCredentials(token, false)
 
 		assert.Equal(t, token, config.CurrentConfig().Token())
-		assert.True(t, analytics.Identified)
 	})
 }
 

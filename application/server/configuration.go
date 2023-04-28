@@ -18,7 +18,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -126,9 +125,10 @@ func writeSettings(settings lsp.Settings, initialize bool) {
 	updateSeverityFilter(settings.FilterSeverity)
 	updateProductEnablement(settings)
 	updateCliConfig(settings)
-	updateAuthenticationMethod(settings)
+
 	// updateApiEndpoints overwrites the authentication method in certain cases (oauth2)
 	// this is why it needs to be called after updateAuthenticationMethod
+	updateAuthenticationMethod(settings)
 	updateApiEndpoints(settings, initialize)
 
 	// setting the token requires to know the authentication method
@@ -170,14 +170,7 @@ func credentialsUpdateCallback(_ string, value any) {
 		di.ErrorReporter().CaptureError(errors.New(msg))
 		return
 	}
-	bytes, err := json.Marshal(newToken)
-	if err != nil {
-		log.Error().Str("method", "storage callback token").
-			Msgf("Failed to marshal token value")
-		di.ErrorReporter().CaptureError(err)
-		return
-	}
-	di.AuthenticationService().UpdateCredentials(string(bytes), true)
+	go di.AuthenticationService().UpdateCredentials(newToken, true)
 }
 
 func configureOAuth(
@@ -190,23 +183,27 @@ func configureOAuth(
 ) {
 	engine := c.Engine()
 	conf := engine.GetConfiguration()
-	httpClient := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
+
 	authenticationService := di.AuthenticationService()
 
 	openBrowserFunc := func(url string) {
 		authenticationService.Provider().SetAuthURL(url)
 		snyk.DefaultOpenBrowserFunc(url)
 	}
-
-	authenticator := auth.NewOAuth2AuthenticatorWithOpts(
-		conf,
-		auth.WithHttpClient(httpClient),
-		auth.WithOpenBrowserFunc(openBrowserFunc),
-		auth.WithTokenRefresherFunc(customTokenRefresherFunc),
+	// enable oauth flow by default, overwrite default function set
+	conf.AddDefaultValue(
+		configuration.FF_OAUTH_AUTH_FLOW_ENABLED,
+		configuration.StandardDefaultValueFunction(true),
 	)
+	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 
 	c.Storage().RegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN, credentialsUpdateCallback)
 
+	authenticator := auth.NewOAuth2AuthenticatorWithOpts(
+		conf,
+		auth.WithOpenBrowserFunc(openBrowserFunc),
+		auth.WithTokenRefresherFunc(customTokenRefresherFunc),
+	)
 	oAuthProvider := oauth.NewOAuthProvider(conf, authenticator)
 	authenticationService.SetProvider(oAuthProvider)
 }
@@ -305,14 +302,14 @@ func updateOrganization(settings lsp.Settings) {
 func updateTelemetry(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.SendErrorReports)
 	if err != nil {
-		log.Debug().Err(err).Msgf("couldn't read send error reports %s", settings.SendErrorReports)
+		log.Debug().Msgf("couldn't read send error reports %s", settings.SendErrorReports)
 	} else {
 		config.CurrentConfig().SetErrorReportingEnabled(parseBool)
 	}
 
 	parseBool, err = strconv.ParseBool(settings.EnableTelemetry)
 	if err != nil {
-		log.Debug().Err(err).Msgf("couldn't read enable telemetry %s", settings.SendErrorReports)
+		log.Debug().Msgf("couldn't read enable telemetry %s", settings.SendErrorReports)
 	} else {
 		config.CurrentConfig().SetTelemetryEnabled(parseBool)
 		if parseBool {
@@ -324,7 +321,7 @@ func updateTelemetry(settings lsp.Settings) {
 func manageBinariesAutomatically(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ManageBinariesAutomatically)
 	if err != nil {
-		log.Debug().Err(err).Msgf("couldn't read manage binaries automatically %s", settings.ManageBinariesAutomatically)
+		log.Debug().Msgf("couldn't read manage binaries automatically %s", settings.ManageBinariesAutomatically)
 	} else {
 		config.CurrentConfig().SetManageBinariesAutomatically(parseBool)
 	}
@@ -333,7 +330,7 @@ func manageBinariesAutomatically(settings lsp.Settings) {
 func updateSnykCodeSecurity(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ActivateSnykCodeSecurity)
 	if err != nil {
-		log.Debug().Err(err).Msgf("couldn't read IsSnykCodeSecurityEnabled %s", settings.ActivateSnykCodeSecurity)
+		log.Debug().Msgf("couldn't read IsSnykCodeSecurityEnabled %s", settings.ActivateSnykCodeSecurity)
 	} else {
 		config.CurrentConfig().EnableSnykCodeSecurity(parseBool)
 	}
@@ -342,7 +339,7 @@ func updateSnykCodeSecurity(settings lsp.Settings) {
 func updateSnykCodeQuality(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ActivateSnykCodeQuality)
 	if err != nil {
-		log.Debug().Err(err).Msgf("couldn't read IsSnykCodeQualityEnabled %s", settings.ActivateSnykCodeQuality)
+		log.Debug().Msgf("couldn't read IsSnykCodeQualityEnabled %s", settings.ActivateSnykCodeQuality)
 	} else {
 		config.CurrentConfig().EnableSnykCodeQuality(parseBool)
 	}
@@ -376,7 +373,7 @@ func updateCliConfig(settings lsp.Settings) {
 	cliSettings := &config.CliSettings{}
 	cliSettings.Insecure, err = strconv.ParseBool(settings.Insecure)
 	if err != nil {
-		log.Debug().Err(err).Msg("couldn't parse insecure setting")
+		log.Debug().Msg("couldn't parse insecure setting")
 	}
 	cliSettings.AdditionalOssParameters = strings.Split(settings.AdditionalParams, " ")
 	cliSettings.SetPath(settings.CliPath)
@@ -390,7 +387,7 @@ func updateProductEnablement(settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ActivateSnykCode)
 	currentConfig := config.CurrentConfig()
 	if err != nil {
-		log.Debug().Err(err).Msg("couldn't parse code setting")
+		log.Debug().Msg("couldn't parse code setting")
 	} else {
 		currentConfig.SetSnykCodeEnabled(parseBool)
 		currentConfig.EnableSnykCodeQuality(parseBool)
@@ -398,13 +395,13 @@ func updateProductEnablement(settings lsp.Settings) {
 	}
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykOpenSource)
 	if err != nil {
-		log.Debug().Err(err).Msg("couldn't parse open source setting")
+		log.Debug().Msg("couldn't parse open source setting")
 	} else {
 		currentConfig.SetSnykOssEnabled(parseBool)
 	}
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykIac)
 	if err != nil {
-		log.Debug().Err(err).Msg("couldn't parse iac setting")
+		log.Debug().Msg("couldn't parse iac setting")
 	} else {
 		currentConfig.SetSnykIacEnabled(parseBool)
 	}

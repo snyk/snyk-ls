@@ -186,9 +186,9 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 			return nil, err
 		}
 	} else {
-		oauthToken := c.TokenAsOAuthToken()
-		if len(oauthToken.AccessToken) > 0 {
-			req.Header.Set("Session-Token", "bearer "+oauthToken.AccessToken) // FIXME: this should be set by GAF, is in the works
+		oauthToken, err := c.TokenAsOAuthToken()
+		if err == nil && len(oauthToken.AccessToken) > 0 {
+			req.Header.Set("Session-Token", "Bearer "+oauthToken.AccessToken) // FIXME: this should be set by GAF, is in the works
 		} else {
 			err = errors.New("token could not be converted to OAuth token, auth header not added")
 			s.errorReporter.CaptureError(err)

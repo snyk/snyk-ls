@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,6 @@ func NewInitializer(
 func (i *Initializer) Init() error {
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
-
 	const errorMessage = "Auth Initializer failed to authenticate."
 	authenticator := i.authenticationService
 	currentConfig := config.CurrentConfig()
@@ -80,26 +79,18 @@ func (i *Initializer) Init() error {
 
 	err = i.authenticate(authenticator, errorMessage)
 	if err != nil {
-		return err
-	}
-
-	isAuthenticated, err := authenticator.IsAuthenticated()
-
-	if !isAuthenticated {
-		err = errors.Wrap(err, errorMessage)
-		log.Err(err).Msg(errorMessage)
+		log.Err(err).Str("method", "auth.initializer.init").Msg("failed to authenticate")
 		i.notifier.SendError(err)
 		i.errorReporter.CaptureError(err)
 		return err
 	}
-
 	return nil
 }
 
-func (i *Initializer) authenticate(authenticator snyk.AuthenticationService, errorMessage string) error {
+func (i *Initializer) authenticate(authenticationService snyk.AuthenticationService, errorMessage string) error {
 	i.notifier.SendShowMessage(sglsp.Info, "Authenticating to Snyk. This could open a browser window.")
 
-	token, err := authenticator.Provider().Authenticate(context.Background())
+	token, err := authenticationService.Authenticate(context.Background())
 	if token == "" || err != nil {
 		if err == nil {
 			err = &snyk.AuthenticationFailedError{}
@@ -110,8 +101,6 @@ func (i *Initializer) authenticate(authenticator snyk.AuthenticationService, err
 		i.errorReporter.CaptureError(err)
 		return err
 	}
-
-	authenticator.UpdateCredentials(token, true)
 	return nil
 }
 

@@ -20,9 +20,11 @@ import (
 	"encoding/json"
 
 	"github.com/pkg/errors"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 func FakePositiveAuthenticationCheck() (string, error) {
@@ -31,12 +33,20 @@ func FakePositiveAuthenticationCheck() (string, error) {
 
 func AuthenticationCheck() (string, error) {
 	user, err := GetActiveUser()
+	if err != nil {
+		return "", errors.Wrap(err, "failed to get active user")
+	}
 	return user.Id, err
 }
 
 func GetActiveUser() (*ActiveUser, error) {
 	c := config.CurrentConfig()
 	conf := c.Engine().GetConfiguration().Clone()
+	if c.AuthenticationMethod() == lsp.OAuthAuthentication {
+		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, 1)
+	} else {
+		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, 0)
+	}
 	conf.Set("experimental", true)
 	conf.Set("json", true)
 	result, err := c.Engine().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, conf)

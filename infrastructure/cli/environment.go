@@ -66,8 +66,8 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) (updat
 	if appendToken {
 		// there can only be one - highlander principle
 		if currentConfig.AuthenticationMethod() == lsp.OAuthAuthentication {
-			oAuthToken := currentConfig.TokenAsOAuthToken()
-			if len(oAuthToken.AccessToken) > 0 {
+			oAuthToken, err := currentConfig.TokenAsOAuthToken()
+			if err == nil && len(oAuthToken.AccessToken) > 0 {
 				updatedEnv = append(updatedEnv, SnykOauthTokenEnvVar+"="+oAuthToken.AccessToken)
 			}
 		} else {

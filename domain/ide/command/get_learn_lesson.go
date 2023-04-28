@@ -52,7 +52,7 @@ func learnLesson(args []any, learnService learn.Service) (learn.Lesson, error) {
 	ecosystem := args[1].(string)
 	cwes := strings.Split(args[2].(string), ",")
 	cves := strings.Split(args[3].(string), ",")
-	issueType := args[4].(snyk.Type)
+	issueType := snyk.Type(args[4].(float64))
 
 	lesson, err := learnService.GetLesson(ecosystem, rule, cwes, cves, issueType)
 	if err != nil {

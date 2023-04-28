@@ -33,7 +33,9 @@ type gdprAwareSentryErrorReporter struct {
 }
 
 func (s *gdprAwareSentryErrorReporter) CaptureErrorAndReportAsIssue(path string, err error) bool {
-	s.notifier.SendErrorDiagnostic(path, err)
+	if s.notifier != nil {
+		s.notifier.SendErrorDiagnostic(path, err)
+	}
 	return s.sendToSentry(err)
 }
 

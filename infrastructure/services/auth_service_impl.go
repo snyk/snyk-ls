@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,7 +71,7 @@ func (a *authenticationService) Authenticate(ctx context.Context) (string, error
 		return "", err
 	}
 	a.UpdateCredentials(token, true)
-
+	a.analytics.Identify()
 	return token, err
 }
 
@@ -87,8 +87,6 @@ func (a *authenticationService) UpdateCredentials(newToken string, sendNotificat
 	if sendNotification {
 		a.notifier.Send(lsp.AuthenticationParams{Token: newToken})
 	}
-
-	a.analytics.Identify()
 }
 
 func (a *authenticationService) Logout(ctx context.Context) {
@@ -99,9 +97,7 @@ func (a *authenticationService) Logout(ctx context.Context) {
 		return
 	}
 
-	config.CurrentConfig().SetToken("")
-
-	a.notifier.Send(lsp.AuthenticationParams{Token: ""})
+	a.UpdateCredentials("", true)
 
 	workspace.Get().ClearIssues(ctx)
 }
@@ -109,20 +105,21 @@ func (a *authenticationService) Logout(ctx context.Context) {
 // IsAuthenticated returns true if the token is verified
 // If the token is set, but not valid IsAuthenticated returns false and the reported error
 func (a *authenticationService) IsAuthenticated() (bool, error) {
-	if !config.CurrentConfig().NonEmptyToken() {
+	c := config.CurrentConfig()
+	if !c.NonEmptyToken() {
+		c.Logger().Info().Str("method", "IsAuthenticated").Msg("No token set")
 		return false, nil
 	}
 
-	authenticationFunction := a.authenticationProvider.GetCheckAuthenticationFunction()
-	user, getActiveUserErr := authenticationFunction()
-	isAuthenticated := getActiveUserErr == nil
+	user, getActiveUserErr := a.authenticationProvider.GetCheckAuthenticationFunction()()
 
-	if !isAuthenticated {
+	if getActiveUserErr != nil {
+		log.Err(getActiveUserErr).Str("method", "IsAuthenticated").Msg("Failed to get active user")
 		return false, getActiveUserErr
 	}
 
 	log.Debug().Msg("IsAuthenticated: " + user)
-	return isAuthenticated, nil
+	return true, nil
 }
 
 func (a *authenticationService) SetProvider(provider snyk.AuthenticationProvider) {

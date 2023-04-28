@@ -18,14 +18,17 @@ package command
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	auth2 "github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -84,7 +87,7 @@ func Test_oauthRefreshCommand_Execute_DifferentTokenUpdate(t *testing.T) {
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any())
 
-	engineConfig.Set(auth2.CONFIG_KEY_OAUTH_TOKEN, "something different")
+	setOAuthToken(t, engineConfig)
 	assert.NotEqual(t, c.Token(), engineConfig.GetString(auth2.CONFIG_KEY_OAUTH_TOKEN), "token should be different")
 
 	notifier.DisposeListener()
@@ -99,8 +102,18 @@ func Test_oauthRefreshCommand_Execute_DifferentTokenUpdate(t *testing.T) {
 
 	assert.NoErrorf(t, err, "cmd.Execute() error = %v", err)
 	assert.Equal(t, c.Token(), engineConfig.GetString(auth2.CONFIG_KEY_OAUTH_TOKEN))
-	assert.True(t, analytics.Identified)
 	assert.Eventuallyf(t, func() bool {
 		return <-receivedChan
 	}, time.Second, time.Millisecond, "should receive notification")
+}
+
+func setOAuthToken(t *testing.T, engineConfig configuration.Configuration) {
+	token := oauth2.Token{
+		AccessToken: "AccessToken" + t.Name(),
+		Expiry:      time.Now().Add(time.Hour),
+	}
+	bytes, err := json.Marshal(token)
+	assert.NoError(t, err)
+	oauthTokenString := string(bytes)
+	engineConfig.Set(auth2.CONFIG_KEY_OAUTH_TOKEN, oauthTokenString)
 }

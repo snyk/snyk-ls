@@ -45,7 +45,6 @@ import (
 )
 
 func Start(c *config.Config) {
-	log.Debug().Msg("Starting server...")
 	var srv *jrpc2.Server
 
 	handlers := handler.Map{}
@@ -238,13 +237,20 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializedParams) (any, error) {
 		logger := log.With().Str("method", "initializedHandler").Logger()
 
-		logger.Debug().Msg("initializing CLI now")
-		err := di.CliInitializer().Init()
+		// CLI & Authentication initialization
+		err := di.Scanner().Init()
 		if err != nil {
-			di.ErrorReporter().CaptureError(err)
+			log.Error().Err(err).Msg("Scan initialization error, cancelling scan")
+			return nil, err
 		}
+
+		authenticated, err := di.AuthenticationService().IsAuthenticated()
+		if err != nil {
+			logger.Error().Err(err).Msg("Not authenticated, or error checking authentication status")
+		}
+
 		autoScanEnabled := config.CurrentConfig().IsAutoScanEnabled()
-		if autoScanEnabled {
+		if autoScanEnabled && authenticated {
 			logger.Debug().Msg("triggering workspace scan after successful initialization")
 			workspace.Get().ScanWorkspace(context.Background())
 		} else {

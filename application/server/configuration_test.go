@@ -542,10 +542,9 @@ func Test_InitializeSettings(t *testing.T) {
 	})
 
 	t.Run("authenticationMethod is passed", func(t *testing.T) {
-		c := config.New()
-		config.SetCurrentConfig(c)
+		testutil.UnitTest(t)
 		di.TestInit(t)
-
+		c := config.CurrentConfig()
 		assert.Equal(t, lsp.TokenAuthentication, c.AuthenticationMethod())
 
 		InitializeSettings(lsp.Settings{AuthenticationMethod: lsp.OAuthAuthentication})

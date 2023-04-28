@@ -37,6 +37,7 @@ type Scanner interface {
 		processResults ScanResultProcessor,
 		folderPath string,
 	)
+	Init() error
 }
 
 // DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
@@ -70,6 +71,15 @@ func NewDelegatingScanner(
 	}
 }
 
+func (sc *DelegatingConcurrentScanner) Init() error {
+	err := sc.initializer.Init()
+	if err != nil {
+		log.Error().Err(err).Msg("Scanner initialization error")
+		return err
+	}
+	return nil
+}
+
 func (sc *DelegatingConcurrentScanner) Scan(
 	ctx context.Context,
 	path string,
@@ -78,12 +88,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 ) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
 	c := config.CurrentConfig()
-
-	err := sc.initializer.Init()
-	if err != nil {
-		log.Error().Err(err).Msg("Scan initialization error, cancelling scan")
-		return
-	}
 
 	tokenChangeChannel := c.TokenChangesChannel()
 	done := make(chan bool)
@@ -102,18 +106,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 			return
 		}
 	}()
-
-	// refresh & check auth by issuing a request to the API
-	userId, err := sc.authFunction()
-	if err != nil {
-		if !c.NonEmptyToken() {
-			log.Info().Msg("User token is not valid. Cancelling scan")
-		} else {
-			log.Info().Msg("User is not authenticated, cancelling scan")
-		}
-		return
-	}
-	log.Info().Msgf("User authenticated / Credentials refreshed, UserID: %s", userId)
 
 	if ctx.Err() != nil {
 		log.Info().Msg("Scan was cancelled")

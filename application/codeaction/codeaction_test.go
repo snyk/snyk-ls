@@ -17,6 +17,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -151,6 +152,7 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 }
 
 func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
+	testutil.UnitTest(t)
 	// Arrange
 	service := setupService()
 
