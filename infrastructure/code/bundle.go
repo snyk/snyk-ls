@@ -204,7 +204,7 @@ func (b *Bundle) addCodeActions(ctx context.Context, issues []snyk.Issue) ([]sny
 					return []snyk.Issue{}, err
 				}
 
-				if !supported {
+				if supported {
 					issues[i].CodeActions = append(issues[i].CodeActions, *b.createDeferredAutofixCodeAction(ctx, issues[i]))
 				} else {
 					log.Debug().Str("method", "addCodeActions").Msg("Autofix is not supported for " + issues[i].AffectedFilePath + " file extension.")
