@@ -16,8 +16,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/snyk/snyk-ls/internal/util"
-
-	"github.com/snyk/snyk-ls/application/config"
 )
 
 const defaultParallelism = 4
@@ -31,8 +29,8 @@ var parallelism = util.Max(1, util.Min(defaultParallelism, runtime.NumCPU()))
 // It is global because there can be several file filters running concurrently on the same machine.
 var semaphore = make(chan struct{}, parallelism)
 
-func FindNonIgnoredFiles(rootFolder string, c *config.Config) <-chan string {
-	return NewFileFilter(rootFolder, c).FindNonIgnoredFiles()
+func FindNonIgnoredFiles(rootFolder string, logger zerolog.Logger) <-chan string {
+	return NewFileFilter(rootFolder, logger).FindNonIgnoredFiles()
 }
 
 type FileFilter struct {
@@ -72,12 +70,12 @@ func hashFolder(globs, files []string) (uint64, error) {
 	return hash, nil
 }
 
-func NewFileFilter(rootFolder string, c *config.Config) *FileFilter {
+func NewFileFilter(rootFolder string, logger zerolog.Logger) *FileFilter {
 	return &FileFilter{
 		repoRoot:       rootFolder,
 		ignoreFiles:    []string{".gitignore", ".dcignore", ".snyk"},
 		globsPerFolder: make(map[string][]string),
-		logger:         c.Logger().With().Str("component", "FileFilter").Str("repoRoot", rootFolder).Logger(),
+		logger:         logger.With().Str("component", "FileFilter").Str("repoRoot", rootFolder).Logger(),
 		cache:          xsync.NewMapOf[cachedResults](),
 	}
 }
