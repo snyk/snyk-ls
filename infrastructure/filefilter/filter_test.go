@@ -37,8 +37,15 @@ func Test_FindNonIgnoredFiles(t *testing.T) {
 			for f := range filter.FindNonIgnoredFiles() {
 				files = append(files, f)
 			}
-
 			assertFilesFiltered(t, testCase, files)
+
+			t.Run("2nd call should return the same files", func(t *testing.T) {
+				var files2 []string
+				for f := range filter.FindNonIgnoredFiles() {
+					files2 = append(files2, f)
+				}
+				assert.ElementsMatch(t, files, files2)
+			})
 		})
 	}
 }
@@ -115,6 +122,13 @@ func testCases(t *testing.T) []ignoreFilesTestCase {
 				".gitignore": "temp\n",
 			},
 			expectedFiles:    []string{"file1.java", "file2.java"},
+			expectedExcludes: []string{},
+		},
+		{
+			name:             "Does not panic when folder is empty",
+			repoPath:         t.TempDir(),
+			ignoreFiles:      map[string]string{},
+			expectedFiles:    []string{},
 			expectedExcludes: []string{},
 		},
 		{
