@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 
@@ -43,17 +44,22 @@ type FileFilter struct {
 }
 
 type cachedResults struct {
-	Hash    uint64
-	Results []string
+	Hash                 uint64
+	Results              []string
+	FilteredChildFolders []string
 }
 
-func hashFolder(globs, files []string) (uint64, error) {
+func hashFolder(globs, files, folders []string) (uint64, error) {
+	sort.Strings(files)
+	sort.Strings(folders)
 	data := struct {
-		Files []string
-		Globs []string
+		Files   []string
+		Globs   []string
+		Folders []string
 	}{
-		Files: files,
-		Globs: globs,
+		Files:   files,
+		Globs:   globs,
+		Folders: folders,
 	}
 	dataBytes, err := json.Marshal(data)
 	if err != nil {
@@ -80,23 +86,111 @@ func NewFileFilter(rootFolder string, logger zerolog.Logger) *FileFilter {
 	}
 }
 
+func (f *FileFilter) processFolderRecursively(folderPath string, results chan<- string) error {
+	var files []string
+	var globs []string
+	var childFolders []string
+	// First, collect globs from folder
+	err := filepath.WalkDir(folderPath, func(path string, dirEntry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if dirEntry.IsDir() {
+			if path != folderPath {
+				// Only collect the paths of the child folders in order to process them later
+				childFolders = append(childFolders, path)
+				return filepath.SkipDir
+			}
+			globs = f.collectGlobs(path)
+			f.globsPerFolder[path] = globs
+			return nil
+		}
+
+		// If it's a file, collect its path
+		files = append(files, path)
+
+		return nil
+	})
+
+	hashFailed := false
+	hash, err := hashFolder(globs, files, childFolders) // todo - add child folders?
+	if err != nil {
+		f.logger.Err(err).Msg("Error during hash calculation")
+		hashFailed = true
+	} else {
+		cacheEntry, found := f.cache.Load(folderPath)
+		if found && hash == cacheEntry.Hash { // Cache hit - returning cached results
+			for _, file := range cacheEntry.Results {
+				results <- file
+			}
+			for _, childFolder := range cacheEntry.FilteredChildFolders {
+				err = f.processFolderRecursively(childFolder, results)
+				if err != nil {
+					return err
+				}
+			}
+
+			return nil
+		}
+	}
+
+	ignoreParser := ignore.CompileIgnoreLines(globs...) // This is memory heavy
+	var resultsLock sync.Mutex
+	var resultsToCache []string
+	var wg sync.WaitGroup
+	for _, file := range files {
+		wg.Add(1)
+		go func(file string) {
+			defer func() {
+				wg.Done()
+				<-semaphore // Release semaphore
+			}()
+			semaphore <- struct{}{} // Acquire semaphore
+			if !ignoreParser.MatchesPath(file) {
+				resultsLock.Lock()
+				resultsToCache = append(resultsToCache, file)
+				resultsLock.Unlock()
+				results <- file
+			}
+		}(file)
+	}
+
+	filteredChildFolders := make([]string, 0, len(childFolders))
+	for _, childFolder := range childFolders {
+		semaphore <- struct{}{} // Acquire semaphore
+		if !ignoreParser.MatchesPath(childFolder) {
+			filteredChildFolders = append(filteredChildFolders, childFolder)
+		}
+		<-semaphore // Release semaphore
+	}
+
+	wg.Wait() // Wait before releasing memory for the ignoreParser
+
+	ignoreParser = nil // Release memory
+	for _, child := range filteredChildFolders {
+		err := f.processFolderRecursively(child, results)
+		if err != nil {
+			return err
+		}
+	}
+
+	if !hashFailed {
+		f.cache.Store(folderPath, cachedResults{
+			Hash:                 hash,
+			Results:              resultsToCache,
+			FilteredChildFolders: filteredChildFolders,
+		})
+	}
+
+	return err
+}
+
 func (f *FileFilter) FindNonIgnoredFiles() <-chan string {
 	resultsCh := make(chan string)
-	filesPerFolder := make(map[string][]string)
+	//filesPerFolder := make(map[string][]string)
 	go func() {
 		defer close(resultsCh)
-
-		err := filepath.WalkDir(f.repoRoot, f.filepathWalker(filesPerFolder))
-
-		if err != nil {
-			f.logger.Err(err).Msg("Error during filepath.WalkDir")
-		}
-
-		for folderPath, globs := range f.globsPerFolder {
-			filesInFolder := filesPerFolder[folderPath]
-			f.processFolder(folderPath, filesInFolder, globs, resultsCh)
-		}
-
+		err := f.processFolderRecursively(f.repoRoot, resultsCh)
 		if err != nil {
 			f.logger.Err(err).Msg("Error during filepath.WalkDir")
 		}
@@ -107,9 +201,33 @@ func (f *FileFilter) FindNonIgnoredFiles() <-chan string {
 
 // processFolder processes a folder and sends the non-ignored files to the results channel.
 // The function blocks until all files are processed.
-func (f *FileFilter) processFolder(folderPath string, files, globs []string, results chan<- string) {
+func (f *FileFilter) processFolder(folderPath string, globs []string, results chan<- string) {
+	// get the files in the folder
+	files := []string{}
+	err := filepath.WalkDir(folderPath, func(path string, dirEntry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		// WalkDir first calls the function for the folder itself, then for its files, than for the child folders.
+		// We only want to process the files, so we skip the child folders.
+		if dirEntry.IsDir() {
+			if path != folderPath {
+				return filepath.SkipAll
+			}
+
+			return nil // If it's folderPath, the following iterations will contain the files
+		}
+
+		files = append(files, path)
+
+		return nil
+	})
+
+	// sort the files array lexically
+	sort.Strings(files)
+
 	hashFailed := false
-	hash, err := hashFolder(globs, files)
+	hash, err := hashFolder(globs, files, nil)
 	if err != nil {
 		f.logger.Err(err).Msg("Error during hash calculation")
 		hashFailed = true
@@ -153,7 +271,7 @@ func (f *FileFilter) processFolder(folderPath string, files, globs []string, res
 	}
 }
 
-func (f *FileFilter) filepathWalker(filesPerFolder map[string][]string) fs.WalkDirFunc {
+func (f *FileFilter) filepathWalker() fs.WalkDirFunc {
 	return func(path string, dirEntry os.DirEntry, err error) error {
 		if err != nil {
 			f.logger.Err(err).Msg("Error during file traversal of directory \"" + path + "\"\n" +
@@ -167,9 +285,9 @@ func (f *FileFilter) filepathWalker(filesPerFolder map[string][]string) fs.WalkD
 		if dirEntry.IsDir() {
 			globs := f.collectGlobs(path)
 			f.globsPerFolder[path] = globs
-		} else {
-			folderPath := filepath.Dir(path)
-			filesPerFolder[folderPath] = append(filesPerFolder[folderPath], path)
+		} else { // Do nothing
+			//folderPath := filepath.Dir(path)
+			//filesPerFolder[folderPath] = append(filesPerFolder[folderPath], path)
 		}
 
 		return nil
