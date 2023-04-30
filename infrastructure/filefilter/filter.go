@@ -178,9 +178,11 @@ func (f *FileFilter) filepathWalker(filesPerFolder map[string][]string) fs.WalkD
 
 func (f *FileFilter) collectGlobs(path string) []string {
 	var globs []string
+	folderPath := path
 	if path != f.repoRoot {
 		globs = append(globs, f.globsPerFolder[filepath.Dir(path)]...)
 	} else {
+		folderPath = f.repoRoot
 		defaultGlobs := []string{"**/.git/**", "**/.svn/**", "**/.hg/**", "**/.bzr/**", "**/.DS_Store/**"}
 		globs = append(globs, defaultGlobs...)
 	}
@@ -196,13 +198,13 @@ func (f *FileFilter) collectGlobs(path string) []string {
 				f.logger.Err(err).Msg("Can't parse ignore file" + ignoreFilePath)
 			}
 			if filepath.Base(ignoreFilePath) == ".snyk" { // .snyk files are yaml files and should be parsed differently
-				parsedRules, err := parseDotSnykFile(content, f.repoRoot)
+				parsedRules, err := parseDotSnykFile(content, folderPath)
 				globs = append(globs, parsedRules...)
 				if err != nil {
 					f.logger.Err(err).Msg("Can't parse .snyk file")
 				}
 			} else { // .gitignore, .dcignore, etc. are just a list of ignore rules
-				parsedRules := parseIgnoreFile(content, f.repoRoot)
+				parsedRules := parseIgnoreFile(content, folderPath)
 				globs = append(globs, parsedRules...)
 			}
 		}
