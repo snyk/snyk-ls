@@ -181,6 +181,15 @@ exclude:
 			expectedExcludes: []string{"file2.java"},
 		},
 		{
+			name:     "Respects negation rules for files inside folders",
+			repoPath: t.TempDir(),
+			ignoreFiles: map[string]string{
+				".gitignore": ("/path/*\n") + ("!/path/file2.java\n"),
+			},
+			expectedFiles:    []string{"file1.java", "path/file2.java"},
+			expectedExcludes: []string{"path/file3.java", "path/to/file5.java"},
+		},
+		{
 			name:     "Nested ignore rules",
 			repoPath: t.TempDir(),
 			ignoreFiles: map[string]string{
