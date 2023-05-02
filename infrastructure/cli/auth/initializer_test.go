@@ -40,7 +40,7 @@ func getAutoAuthenticationTest(autoAuthentication bool, expectError bool) func(t
 		config.CurrentConfig().SetAutomaticAuthentication(autoAuthentication)
 		analytics := ux2.NewTestAnalytics()
 
-		provider := snyk.NewFakeCliAuthenticationProvider().(*snyk.FakeAuthenticationProvider)
+		provider := snyk.NewFakeCliAuthenticationProvider()
 		notifier := notification.NewNotifier()
 		authenticator := snyk.NewAuthenticationService(provider, analytics, errorreporting.NewTestErrorReporter(), notifier)
 		initializer := NewInitializer(authenticator, errorreporting.NewTestErrorReporter(), analytics, notifier)

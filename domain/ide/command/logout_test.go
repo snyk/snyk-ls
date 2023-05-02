@@ -16,9 +16,65 @@
 
 package command
 
-import "testing"
+import (
+	"context"
+	"testing"
 
-func TestLogoutCommand_Execute(t *testing.T) {
-	// TODO add test to check that issues are cleared from folder when logout command is called
+	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
+	"github.com/snyk/snyk-ls/domain/observability/performance"
+	"github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/testutil"
+)
+
+func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
+	testutil.UnitTest(t)
+	notifier := notification.NewNotifier()
+	provider := snyk.NewFakeCliAuthenticationProvider()
+	hoverService := hover.NewFakeHoverService()
+	provider.IsAuthenticated = true
+	scanNotifier := snyk.NewMockScanNotifier()
+	authenticationService := snyk.NewAuthenticationService(
+		provider,
+		ux.NewTestAnalytics(),
+		error_reporting.NewTestErrorReporter(),
+		notifier,
+	)
+	cmd := logoutCommand{
+		command:     snyk.CommandData{CommandId: snyk.LogoutCommand},
+		authService: authenticationService,
+	}
+
+	scanner := snyk.NewTestScanner()
+	scanner.Issues = []snyk.Issue{{ID: "issue-1"}}
+
+	w := workspace.New(performance.NewTestInstrumentor(), scanner, hoverService, scanNotifier, notifier)
+	folder := workspace.NewFolder(
+		t.TempDir(),
+		t.Name(),
+		scanner,
+		hoverService,
+		scanNotifier,
+		notifier,
+	)
+	workspace.Set(w)
+	w.AddFolder(folder)
+
+	ctx := context.Background()
+
+	folder.ScanFolder(ctx)
+
+	_, err := cmd.Execute(ctx)
+
+	assert.NoError(t, err)
+	authenticated, err := authenticationService.IsAuthenticated()
+	assert.NoError(t, err)
+	assert.False(t, authenticated)
+	assert.Empty(t, folder.AllIssuesFor(t.TempDir()))
+	assert.Empty(t, len(hoverService.Channel()))
 }
