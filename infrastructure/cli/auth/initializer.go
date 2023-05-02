@@ -59,10 +59,9 @@ func (i *Initializer) Init() error {
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
 	const errorMessage = "Auth Initializer failed to authenticate."
-	authenticator := i.authenticationService
 	currentConfig := config.CurrentConfig()
 	if currentConfig.NonEmptyToken() {
-		isValidToken, _ := authenticator.IsAuthenticated()
+		isValidToken, _ := i.authenticationService.IsAuthenticated()
 		if isValidToken {
 			log.Info().Msg("Skipping authentication - user is already authenticated")
 			return nil
@@ -77,7 +76,7 @@ func (i *Initializer) Init() error {
 		return err
 	}
 
-	err = i.authenticate(authenticator, errorMessage)
+	err = i.authenticate(i.authenticationService, errorMessage)
 	if err != nil {
 		log.Err(err).Str("method", "auth.initializer.init").Msg("failed to authenticate")
 		i.notifier.SendError(err)

@@ -315,8 +315,11 @@ func Test_initialized_shouldInitializeAndTriggerCliDownload(t *testing.T) {
 }
 
 func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
+	testutil.IntegTest(t) // this needs an authenticated user
 	loc := setupServer(t)
 	didOpenParams, dir := didOpenTextParams(t)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
+	fakeAuthenticationProvider.IsAuthenticated = true
 
 	clientParams := lsp.InitializeParams{
 		RootURI: uri.PathToUri(dir),
@@ -590,6 +593,10 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 		EnableTrustedFoldersFeature: "true",
 		Token:                       "token",
 	}
+
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
+	fakeAuthenticationProvider.IsAuthenticated = true
+
 	params := lsp.InitializeParams{
 		InitializationOptions: initializationOptions,
 		WorkspaceFolders:      []lsp.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}

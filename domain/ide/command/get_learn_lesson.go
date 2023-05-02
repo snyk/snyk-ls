@@ -52,6 +52,7 @@ func learnLesson(args []any, learnService learn.Service) (learn.Lesson, error) {
 	ecosystem := args[1].(string)
 	cwes := strings.Split(args[2].(string), ",")
 	cves := strings.Split(args[3].(string), ",")
+	// json numbers are mapped to float64 (https://pkg.go.dev/encoding/json#Unmarshal)
 	issueType := snyk.Type(args[4].(float64))
 
 	lesson, err := learnService.GetLesson(ecosystem, rule, cwes, cves, issueType)
