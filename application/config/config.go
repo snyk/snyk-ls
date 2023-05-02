@@ -172,6 +172,7 @@ type Config struct {
 	enableSnykLearnCodeActions   bool
 	logger                       *zerolog.Logger
 	storage                      StorageWithCallbacks
+	mutex                        sync.Mutex
 }
 
 func CurrentConfig() *Config {
@@ -304,7 +305,7 @@ func (c *Config) loadFile(fileName string) {
 }
 
 func (c *Config) NonEmptyToken() bool {
-	return c.token != ""
+	return c.Token() != ""
 }
 func (c *Config) CliSettings() *CliSettings {
 	return c.cliSettings
@@ -328,6 +329,8 @@ func (c *Config) IntegrationName() string                { return c.integrationN
 func (c *Config) IntegrationVersion() string             { return c.integrationVersion }
 func (c *Config) FilterSeverity() lsp.SeverityFilter     { return c.filterSeverity }
 func (c *Config) Token() string {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	return c.token
 }
 
@@ -399,9 +402,12 @@ func (c *Config) SetSeverityFilter(severityFilter lsp.SeverityFilter) bool {
 }
 
 func (c *Config) SetToken(token string) {
+	c.mutex.Lock()
+
 	oldToken := c.token
 	// always update the token and auth method in the engine
 	c.token = token
+	c.mutex.Unlock()
 
 	_, err := c.TokenAsOAuthToken()
 	isOauthToken := err == nil
