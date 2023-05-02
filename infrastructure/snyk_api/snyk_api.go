@@ -53,12 +53,21 @@ type activeUserResponse struct {
 }
 
 type ActiveUser struct {
-	Id string
+	Id       string `json:"id"`
+	UserName string `json:"username,omitempty"`
+	Orgs     []struct {
+		Name  string `json:"name,omitempty"`
+		Id    string `json:"id,omitempty"`
+		Group struct {
+			Name string `json:"name,omitempty"`
+			Id   string `json:"id,omitempty"`
+		} `json:"group,omitempty"`
+	} `json:"orgs,omitempty"`
 }
 
 type SnykApiClient interface {
-	SastEnabled() (sastResponse SastResponse, err *SnykApiError)
-	GetActiveUser() (user ActiveUser, err *SnykApiError)
+	SastEnabled() (SastResponse, error)
+	GetActiveUser() (ActiveUser, error)
 }
 
 type SnykApiError struct {
@@ -85,7 +94,7 @@ func NewSnykApiClient(client func() *http.Client) SnykApiClient {
 	return &s
 }
 
-func (s *SnykApiClientImpl) SastEnabled() (response SastResponse, err *SnykApiError) {
+func (s *SnykApiClientImpl) SastEnabled() (SastResponse, error) {
 	log.Debug().Str("method", "SastEnabled").Msg("API: Getting SastEnabled")
 	path := "/cli-config/settings/sast"
 	organization := config.CurrentConfig().Organization()
@@ -99,6 +108,7 @@ func (s *SnykApiClientImpl) SastEnabled() (response SastResponse, err *SnykApiEr
 		return SastResponse{}, err
 	}
 
+	var response SastResponse
 	unmarshalErr := json.Unmarshal(responseBody, &response)
 	if unmarshalErr != nil {
 		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
@@ -109,14 +119,14 @@ func (s *SnykApiClientImpl) SastEnabled() (response SastResponse, err *SnykApiEr
 	return response, nil
 }
 
-func (s *SnykApiClientImpl) GetActiveUser() (activeUser ActiveUser, err *SnykApiError) {
+func (s *SnykApiClientImpl) GetActiveUser() (ActiveUser, error) {
 	log.Debug().Str("method", "GetActiveUser").Msg("API: Getting ActiveUser")
 	path := "/user/me"
 	responseBody, err := s.doCall("GET", path, nil)
 	if err != nil {
 		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
 		log.Err(fmtErr).Str("method", "GetActiveUser").Msg("error when calling SnykApi.GetActiveUser endpoint")
-		return ActiveUser{}, err
+		return ActiveUser{}, NewSnykApiError(err.Error(), err.StatusCode())
 	}
 
 	var response activeUserResponse
@@ -127,13 +137,13 @@ func (s *SnykApiClientImpl) GetActiveUser() (activeUser ActiveUser, err *SnykApi
 		return ActiveUser{}, NewSnykApiError(fmtErr.Error(), 0)
 	}
 	log.Debug().Str("method", "GetActiveUser").Msgf("Retrieved user %v", response)
-	return ActiveUser(response), nil
+	return ActiveUser{Id: response.Id}, nil
 }
 
 func (s *SnykApiClientImpl) doCall(method string,
 	path string,
 	requestBody []byte,
-) (responseBody []byte, err *SnykApiError) {
+) ([]byte, *SnykApiError) {
 	host := config.CurrentConfig().SnykApi()
 	b := bytes.NewBuffer(requestBody)
 	req, requestErr := http.NewRequest(method, host+path, b)
@@ -146,9 +156,9 @@ func (s *SnykApiClientImpl) doCall(method string,
 	req.Header.Set("x-snyk-ide", "snyk-ls-"+clientID)
 
 	log.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
-	response, requestErr := s.httpClientFunc().Do(req)
-	if requestErr != nil {
-		return nil, NewSnykApiError(requestErr.Error(), 0)
+	response, err := s.httpClientFunc().Do(req)
+	if err != nil {
+		return nil, NewSnykApiError(err.Error(), 0)
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -156,23 +166,23 @@ func (s *SnykApiClientImpl) doCall(method string,
 			log.Err(err).Msg("Couldn't close response body in call to Snyk API")
 		}
 	}(response.Body)
+
+	apiError := checkResponseCode(response)
+	if err != nil {
+		return nil, apiError
+	}
+
 	responseBody, readErr := io.ReadAll(response.Body)
 	log.Trace().Str("response.Status", response.Status).Str("responseBody",
 		string(responseBody)).Msg("RECEIVED FROM REMOTE")
 	if readErr != nil {
 		return nil, NewSnykApiError(err.Error(), 0)
 	}
-
-	err = checkResponseCode(response)
-	if err != nil {
-		return nil, err
-	}
-
-	return responseBody, err
+	return responseBody, nil
 }
 
 func checkResponseCode(r *http.Response) *SnykApiError {
-	if r.StatusCode >= 200 && r.StatusCode <= 299 {
+	if r.StatusCode >= 200 && r.StatusCode <= 399 {
 		return nil
 	}
 

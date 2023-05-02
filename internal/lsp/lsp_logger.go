@@ -22,7 +22,6 @@ import (
 	"os"
 
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 type lspWriter struct {
@@ -32,7 +31,6 @@ type lspWriter struct {
 }
 
 func New(server Server) zerolog.LevelWriter {
-	log.Info().Msg("Starting LSP logger")
 	readyChan := make(chan bool)
 	writeChan := make(chan LogMessageParams, 1000000)
 	w := &lspWriter{
@@ -43,7 +41,7 @@ func New(server Server) zerolog.LevelWriter {
 	w.startServerSenderRoutine()
 	// let the routine startup first
 	<-w.readyChan
-	log.Info().Msg("LSP logger started")
+	fmt.Printf("LSP logger (%p) started\n", w)
 	return w
 }
 
@@ -73,7 +71,7 @@ func (w *lspWriter) startServerSenderRoutine() {
 				_, _ = os.Stderr.Write([]byte(msg.Message))
 			}
 		}
-		fmt.Println("LSP logger stopped")
+		fmt.Printf("LSP logger (%p) stopped", w)
 	}()
 }
 
