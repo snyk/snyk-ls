@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package services
+package snyk_test
 
 import (
 	"context"
@@ -43,7 +43,7 @@ func Test_UpdateCredentials(t *testing.T) {
 	t.Run("CLI Authentication", func(t *testing.T) {
 		testutil.UnitTest(t)
 		analytics := ux.NewTestAnalytics()
-		service := NewAuthenticationService(
+		service := snyk.NewAuthenticationService(
 			nil,
 			analytics,
 			error_reporting.NewTestErrorReporter(),
@@ -59,7 +59,7 @@ func Test_UpdateCredentials(t *testing.T) {
 		testutil.UnitTest(t)
 		config.CurrentConfig().SetAuthenticationMethod(lsp.OAuthAuthentication)
 		analytics := ux.NewTestAnalytics()
-		service := NewAuthenticationService(nil, analytics, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		service := snyk.NewAuthenticationService(nil, analytics, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
 		oauthCred := oauth2.Token{
 			AccessToken:  t.Name(),
 			TokenType:    "b",
@@ -81,7 +81,7 @@ func Test_IsAuthenticated(t *testing.T) {
 		testutil.UnitTest(t)
 		analytics := ux.NewTestAnalytics()
 
-		service := NewAuthenticationService(
+		service := snyk.NewAuthenticationService(
 			&snyk.FakeAuthenticationProvider{IsAuthenticated: true},
 			analytics,
 			error_reporting.NewTestErrorReporter(),
@@ -97,7 +97,7 @@ func Test_IsAuthenticated(t *testing.T) {
 	t.Run("User is not authenticated", func(t *testing.T) {
 		testutil.UnitTest(t)
 		analytics := ux.NewTestAnalytics()
-		service := NewAuthenticationService(
+		service := snyk.NewAuthenticationService(
 			&snyk.FakeAuthenticationProvider{IsAuthenticated: false},
 			analytics,
 			error_reporting.NewTestErrorReporter(),
@@ -119,7 +119,7 @@ func Test_Logout(t *testing.T) {
 	notifier := notification.NewNotifier()
 	analytics := ux.NewTestAnalytics()
 	authProvider := snyk.FakeAuthenticationProvider{}
-	service := NewAuthenticationService(&authProvider, analytics, error_reporting.NewTestErrorReporter(), notifier)
+	service := snyk.NewAuthenticationService(&authProvider, analytics, error_reporting.NewTestErrorReporter(), notifier)
 	hoverService := hover.NewFakeHoverService()
 	scanner := snyk.NewTestScanner()
 	scanNotifier, _ := appNotification.NewScanNotifier(notifier)
@@ -137,7 +137,7 @@ func Test_Logout(t *testing.T) {
 	testIssue := snyk.Issue{FormattedMessage: "<br><br/><br />"}
 	hovers := converter.ToHovers([]snyk.Issue{testIssue})
 
-	_, _ = service.(*authenticationService).authenticationProvider.Authenticate(context.Background())
+	_, _ = service.Provider().Authenticate(context.Background())
 
 	hoverService.Channel() <- hover.DocumentHovers{
 		Uri:   "path/to/file.test",

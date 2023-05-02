@@ -25,7 +25,6 @@ import (
 	errorreporting "github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/services"
 	"github.com/snyk/snyk-ls/internal/notification"
 )
 
@@ -43,7 +42,7 @@ func getAutoAuthenticationTest(autoAuthentication bool, expectError bool) func(t
 
 		provider := snyk.NewFakeCliAuthenticationProvider().(*snyk.FakeAuthenticationProvider)
 		notifier := notification.NewNotifier()
-		authenticator := services.NewAuthenticationService(provider, analytics, errorreporting.NewTestErrorReporter(), notifier)
+		authenticator := snyk.NewAuthenticationService(provider, analytics, errorreporting.NewTestErrorReporter(), notifier)
 		initializer := NewInitializer(authenticator, errorreporting.NewTestErrorReporter(), analytics, notifier)
 
 		// Act

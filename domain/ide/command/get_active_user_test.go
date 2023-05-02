@@ -29,7 +29,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/services"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -38,7 +37,7 @@ func Test_getActiveUser_Execute_User_found(t *testing.T) {
 	testutil.UnitTest(t)
 	cmd := &getActiveUser{
 		command: snyk.CommandData{
-			CommandId: snyk.GetActiveUser,
+			CommandId: snyk.GetActiveUserCommand,
 		},
 	}
 
@@ -60,7 +59,7 @@ func Test_getActiveUser_Execute_Result_Empty(t *testing.T) {
 	testutil.UnitTest(t)
 	cmd := &getActiveUser{
 		command: snyk.CommandData{
-			CommandId: snyk.GetActiveUser,
+			CommandId: snyk.GetActiveUserCommand,
 		},
 	}
 
@@ -80,7 +79,7 @@ func Test_getActiveUser_Execute_Error_Result(t *testing.T) {
 	testutil.UnitTest(t)
 	cmd := &getActiveUser{
 		command: snyk.CommandData{
-			CommandId: snyk.GetActiveUser,
+			CommandId: snyk.GetActiveUserCommand,
 		},
 	}
 
@@ -97,8 +96,8 @@ func Test_getActiveUser_Execute_Error_Result(t *testing.T) {
 	assert.Empty(t, actualUser)
 }
 
-func whoamiWorkflowResponse(t *testing.T) (*services.ActiveUser, []workflow.Data) {
-	expectedUser := services.ActiveUser{
+func whoamiWorkflowResponse(t *testing.T) (*snyk.ActiveUser, []workflow.Data) {
+	expectedUser := snyk.ActiveUser{
 		Id:       "id",
 		UserName: "username",
 	}

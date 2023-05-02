@@ -34,7 +34,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/services"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -46,7 +45,7 @@ func Test_oauthRefreshCommand_Execute_SameTokenNoUpdate(t *testing.T) {
 		command: snyk.CommandData{
 			CommandId: snyk.OAuthRefreshCommand,
 		},
-		authService: services.NewAuthenticationService(
+		authService: snyk.NewAuthenticationService(
 			&snyk.FakeAuthenticationProvider{IsAuthenticated: true},
 			ux.NewTestAnalytics(),
 			error_reporting.NewTestErrorReporter(),
@@ -73,7 +72,7 @@ func Test_oauthRefreshCommand_Execute_DifferentTokenUpdate(t *testing.T) {
 		command: snyk.CommandData{
 			CommandId: snyk.OAuthRefreshCommand,
 		},
-		authService: services.NewAuthenticationService(
+		authService: snyk.NewAuthenticationService(
 			&snyk.FakeAuthenticationProvider{IsAuthenticated: true},
 			analytics,
 			error_reporting.NewTestErrorReporter(),

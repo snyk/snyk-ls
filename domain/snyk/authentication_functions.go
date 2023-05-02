@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package services
+package snyk
 
 import (
 	"encoding/json"
@@ -26,10 +26,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
-
-func FakePositiveAuthenticationCheck() (string, error) {
-	return "Fake Successful Authenticated User", nil
-}
 
 func AuthenticationCheck() (string, error) {
 	user, err := GetActiveUser()

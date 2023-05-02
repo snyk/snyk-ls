@@ -61,7 +61,7 @@ func CreateFromCommandData(
 	case snyk.GetSettingsSastEnabled:
 		apiClient := snyk_api.NewSnykApiClient(config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient)
 		return &sastEnabled{command: commandData, apiClient: apiClient}, nil
-	case snyk.GetActiveUser:
+	case snyk.GetActiveUserCommand:
 		return &getActiveUser{command: commandData}, nil
 	}
 

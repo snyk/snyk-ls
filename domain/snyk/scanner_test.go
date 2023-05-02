@@ -18,7 +18,6 @@ package snyk
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -27,31 +26,20 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
+	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
-
-func dummyAuthenticationCheck() (string, error)         { return "1234", nil }
-func dummyNegativeAuthenticationCheck() (string, error) { return "", errors.New("fake auth error") }
 
 func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	testutil.UnitTest(t)
 	enabledScanner := NewTestProductScanner(product.ProductCode, true)
 	disabledScanner := NewTestProductScanner(product.ProductOpenSource, false)
-
-	scanner := NewDelegatingScanner(
-		initialize.NewDelegatingInitializer(),
-		performance.NewTestInstrumentor(),
-		ux.NewTestAnalytics(),
-		NewMockScanNotifier(),
-		&snyk_api.FakeApiClient{CodeEnabled: false},
-		dummyAuthenticationCheck,
-		enabledScanner,
-		disabledScanner,
-	)
+	scanner, _, _ := setupScanner(enabledScanner, disabledScanner)
 
 	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
 
@@ -65,23 +53,36 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	)
 }
 
+func setupScanner(testProductScanners ...ProductScanner) (
+	scanner Scanner,
+	analytics *ux.TestAnalytics,
+	scanNotifier ScanNotifier,
+) {
+	analytics = ux.NewTestAnalytics()
+	scanNotifier = NewMockScanNotifier()
+	notifier := notification.NewNotifier()
+	apiClient := &snyk_api.FakeApiClient{CodeEnabled: false}
+	er := error_reporting.NewTestErrorReporter()
+	authenticationProvider := NewFakeCliAuthenticationProvider()
+	authenticationService := NewAuthenticationService(authenticationProvider, analytics, er, notifier)
+	scanner = NewDelegatingScanner(
+		initialize.NewDelegatingInitializer(),
+		performance.NewTestInstrumentor(),
+		analytics,
+		scanNotifier,
+		apiClient,
+		authenticationService,
+		testProductScanners...,
+	)
+	return scanner, analytics, scanNotifier
+}
+
 func TestScan_whenProductScannerEnabled_SendsAnalysisTriggered(t *testing.T) {
 	testutil.UnitTest(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	enabledScanner := NewTestProductScanner(product.ProductCode, true)
 	disabledScanner := NewTestProductScanner(product.ProductOpenSource, false)
-
-	analytics := ux.NewTestAnalytics()
-	scanner := NewDelegatingScanner(
-		initialize.NewDelegatingInitializer(),
-		performance.NewTestInstrumentor(),
-		analytics,
-		NewMockScanNotifier(),
-		&snyk_api.FakeApiClient{CodeEnabled: false},
-		dummyAuthenticationCheck,
-		enabledScanner,
-		disabledScanner,
-	)
+	scanner, analytics, _ := setupScanner(enabledScanner, disabledScanner)
 
 	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
 
@@ -94,17 +95,7 @@ func TestScan_whenProductScannerEnabled_SendsAnalysisTriggered(t *testing.T) {
 
 func TestScan_whenNoProductScannerEnabled_SendsNoAnalytics(t *testing.T) {
 	disabledScanner := NewTestProductScanner(product.ProductOpenSource, false)
-
-	analytics := ux.NewTestAnalytics()
-	scanner := NewDelegatingScanner(
-		initialize.NewDelegatingInitializer(),
-		performance.NewTestInstrumentor(),
-		analytics,
-		NewMockScanNotifier(),
-		&snyk_api.FakeApiClient{CodeEnabled: false},
-		dummyAuthenticationCheck,
-		disabledScanner,
-	)
+	scanner, analytics, _ := setupScanner(disabledScanner)
 
 	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
 
@@ -114,15 +105,7 @@ func TestScan_whenNoProductScannerEnabled_SendsNoAnalytics(t *testing.T) {
 func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 	// Arrange
 	productScanner := NewTestProductScanner(product.ProductOpenSource, true)
-	scanner := NewDelegatingScanner(
-		initialize.NewDelegatingInitializer(),
-		performance.NewTestInstrumentor(),
-		ux.NewTestAnalytics(),
-		NewMockScanNotifier(),
-		&snyk_api.FakeApiClient{CodeEnabled: false},
-		dummyNegativeAuthenticationCheck,
-		productScanner,
-	)
+	scanner, _, _ := setupScanner(productScanner)
 	config.CurrentConfig().SetToken("")
 	emptyToken := !config.CurrentConfig().NonEmptyToken()
 
@@ -139,15 +122,7 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 	config.CurrentConfig().SetToken("")
 	productScanner := NewTestProductScanner(product.ProductOpenSource, true)
 	productScanner.SetScanDuration(2 * time.Second)
-	scanner := NewDelegatingScanner(
-		initialize.NewDelegatingInitializer(),
-		performance.NewTestInstrumentor(),
-		ux.NewTestAnalytics(),
-		NewMockScanNotifier(),
-		&snyk_api.FakeApiClient{CodeEnabled: false},
-		dummyAuthenticationCheck,
-		productScanner,
-	)
+	scanner, _, _ := setupScanner(productScanner)
 	done := make(chan bool)
 
 	// Act
@@ -169,19 +144,10 @@ func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
 	testutil.UnitTest(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	enabledScanner := NewTestProductScanner(product.ProductCode, true)
-	analytics := ux.NewTestAnalytics()
-	scanNotifier := NewMockScanNotifier()
-	scanner := NewDelegatingScanner(
-		initialize.NewDelegatingInitializer(),
-		performance.NewTestInstrumentor(),
-		analytics,
-		scanNotifier,
-		&snyk_api.FakeApiClient{CodeEnabled: false},
-		dummyAuthenticationCheck,
-		enabledScanner,
-	)
+	scanner, _, scanNotifier := setupScanner(enabledScanner)
+	mockScanNotifier := scanNotifier.(*MockScanNotifier)
 
 	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
 
-	assert.NotEmpty(t, scanNotifier.InProgressCalls())
+	assert.NotEmpty(t, mockScanNotifier.InProgressCalls())
 }

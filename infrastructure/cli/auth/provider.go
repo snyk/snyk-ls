@@ -32,7 +32,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
-	"github.com/snyk/snyk-ls/infrastructure/services"
 )
 
 type CliAuthenticationProvider struct {
@@ -41,7 +40,7 @@ type CliAuthenticationProvider struct {
 }
 
 func (a *CliAuthenticationProvider) GetCheckAuthenticationFunction() snyk.AuthenticationFunction {
-	return services.AuthenticationCheck
+	return snyk.AuthenticationCheck
 }
 
 func NewCliAuthenticationProvider(errorReporter error_reporting.ErrorReporter) snyk.AuthenticationProvider {

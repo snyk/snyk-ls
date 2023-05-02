@@ -48,7 +48,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
 	"github.com/snyk/snyk-ls/infrastructure/sentry"
-	"github.com/snyk/snyk-ls/infrastructure/services"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	domainNotify "github.com/snyk/snyk-ls/internal/notification"
 )
@@ -124,9 +123,9 @@ func initInfrastructure() {
 	learnService = learn.New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient, errorReporter)
 	instrumentor = sentry.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient(c.Engine().GetNetworkAccess().GetHttpClient)
-	analytics = amplitude.NewAmplitudeClient(services.AuthenticationCheck, errorReporter)
+	analytics = amplitude.NewAmplitudeClient(snyk.AuthenticationCheck, errorReporter)
 	authProvider := cliauth.NewCliAuthenticationProvider(errorReporter)
-	authenticationService = services.NewAuthenticationService(authProvider, analytics, errorReporter, notifier)
+	authenticationService = snyk.NewAuthenticationService(authProvider, analytics, errorReporter, notifier)
 	snykCli = cli.NewExecutor(authenticationService, errorReporter, analytics, notifier)
 	snykCodeClient = code.NewHTTPRepository(instrumentor, errorReporter, c.Engine().GetNetworkAccess().GetHttpClient)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
@@ -164,7 +163,7 @@ func TestInit(t *testing.T) {
 	installer = install.NewFakeInstaller()
 	authProvider := snyk.NewFakeCliAuthenticationProvider()
 	snykApiClient = &snyk_api.FakeApiClient{CodeEnabled: true}
-	authenticationService = services.NewAuthenticationService(authProvider, analytics, errorReporter, notifier)
+	authenticationService = snyk.NewAuthenticationService(authProvider, analytics, errorReporter, notifier)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier)
 	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(

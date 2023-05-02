@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package converters
+package hover
 
 import (
 	"github.com/snyk/snyk-ls/domain/observability/ux"

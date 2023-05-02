@@ -20,7 +20,6 @@ import (
 	"context"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/services"
 )
 
 // oauthRefreshCommand is a command that refreshes the oauth token
@@ -35,5 +34,5 @@ func (cmd *getActiveUser) Command() snyk.CommandData {
 }
 
 func (cmd *getActiveUser) Execute(_ context.Context) (any, error) {
-	return services.GetActiveUser()
+	return snyk.GetActiveUser()
 }

@@ -278,6 +278,7 @@ func updateApiEndpoints(settings lsp.Settings, initialization bool) {
 
 	if endpointsUpdated && !initialization {
 		di.AuthenticationService().Logout(context.Background())
+		workspace.Get().ClearIssues(context.Background())
 	}
 
 	// overwrite authentication method if gov domain

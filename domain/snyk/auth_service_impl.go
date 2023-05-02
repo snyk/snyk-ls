@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package services
+package snyk
 
 import (
 	"context"
@@ -24,10 +24,8 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
@@ -45,22 +43,22 @@ type ActiveUser struct {
 }
 
 type authenticationService struct {
-	authenticationProvider snyk.AuthenticationProvider
+	authenticationProvider AuthenticationProvider
 	analytics              ux.Analytics
 	errorReporter          error_reporting.ErrorReporter
 	notifier               noti.Notifier
 }
 
 func NewAuthenticationService(
-	authenticationProvider snyk.AuthenticationProvider,
+	authenticationProvider AuthenticationProvider,
 	analytics ux.Analytics,
 	errorReporter error_reporting.ErrorReporter,
 	notifier noti.Notifier,
-) snyk.AuthenticationService {
+) AuthenticationService {
 	return &authenticationService{authenticationProvider, analytics, errorReporter, notifier}
 }
 
-func (a *authenticationService) Provider() snyk.AuthenticationProvider {
+func (a *authenticationService) Provider() AuthenticationProvider {
 	return a.authenticationProvider
 }
 
@@ -98,8 +96,6 @@ func (a *authenticationService) Logout(ctx context.Context) {
 	}
 
 	a.UpdateCredentials("", true)
-
-	workspace.Get().ClearIssues(ctx)
 }
 
 // IsAuthenticated returns true if the token is verified
@@ -122,6 +118,6 @@ func (a *authenticationService) IsAuthenticated() (bool, error) {
 	return true, nil
 }
 
-func (a *authenticationService) SetProvider(provider snyk.AuthenticationProvider) {
+func (a *authenticationService) SetProvider(provider AuthenticationProvider) {
 	a.authenticationProvider = provider
 }

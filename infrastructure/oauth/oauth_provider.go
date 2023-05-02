@@ -24,7 +24,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/services"
 )
 
 type oAuthProvider struct {
@@ -34,7 +33,7 @@ type oAuthProvider struct {
 }
 
 func (p *oAuthProvider) GetCheckAuthenticationFunction() snyk.AuthenticationFunction {
-	return services.AuthenticationCheck
+	return snyk.AuthenticationCheck
 }
 
 func NewOAuthProvider(config configuration.Configuration, authenticator auth.Authenticator) snyk.AuthenticationProvider {

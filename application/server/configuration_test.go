@@ -37,6 +37,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
+
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/testutil"

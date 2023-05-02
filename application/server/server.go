@@ -225,7 +225,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 						snyk.OpenLearnLesson,
 						snyk.GetLearnLesson,
 						snyk.GetSettingsSastEnabled,
-						snyk.GetActiveUser,
+						snyk.GetActiveUserCommand,
 					},
 				},
 			},
