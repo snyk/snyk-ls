@@ -47,7 +47,7 @@ func (cmd *getLearnLesson) Execute(_ context.Context) (any, error) {
 	return lesson, err
 }
 
-func learnLesson(args []any, learnService learn.Service) (learn.Lesson, error) {
+func learnLesson(args []any, learnService learn.Service) (*learn.Lesson, error) {
 	rule := args[0].(string)
 	ecosystem := args[1].(string)
 	cwes := strings.Split(args[2].(string), ",")
@@ -57,7 +57,7 @@ func learnLesson(args []any, learnService learn.Service) (learn.Lesson, error) {
 
 	lesson, err := learnService.GetLesson(ecosystem, rule, cwes, cves, issueType)
 	if err != nil {
-		return learn.Lesson{}, errors.Wrap(err, "failed to get lesson")
+		return nil, errors.Wrap(err, "failed to get lesson")
 	}
 	return lesson, err
 }
