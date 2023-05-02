@@ -48,7 +48,7 @@ type DelegatingConcurrentScanner struct {
 	analytics     ux2.Analytics
 	scanNotifier  ScanNotifier
 	snykApiClient snyk_api.SnykApiClient
-	authFunction  func() (string, error)
+	authService   AuthenticationService
 }
 
 func NewDelegatingScanner(
@@ -57,7 +57,7 @@ func NewDelegatingScanner(
 	analytics ux2.Analytics,
 	scanNotifier ScanNotifier,
 	snykApiClient snyk_api.SnykApiClient,
-	authFunction func() (string, error),
+	authService AuthenticationService,
 	scanners ...ProductScanner,
 ) Scanner {
 	return &DelegatingConcurrentScanner{
@@ -67,7 +67,7 @@ func NewDelegatingScanner(
 		scanNotifier:  scanNotifier,
 		snykApiClient: snykApiClient,
 		scanners:      scanners,
-		authFunction:  authFunction,
+		authService:   authService,
 	}
 }
 
@@ -88,6 +88,15 @@ func (sc *DelegatingConcurrentScanner) Scan(
 ) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
 	c := config.CurrentConfig()
+
+	authenticated, err := sc.authService.IsAuthenticated()
+	if err != nil {
+		log.Error().Err(err).Msg("Error checking authentication status")
+	}
+
+	if !authenticated {
+		return
+	}
 
 	tokenChangeChannel := c.TokenChangesChannel()
 	done := make(chan bool)

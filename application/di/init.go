@@ -92,7 +92,7 @@ func initDomain() {
 		analytics,
 		scanNotifier,
 		snykApiClient,
-		services.AuthenticationCheck,
+		authenticationService,
 		snykCodeScanner,
 		infrastructureAsCodeScanner,
 		openSourceScanner,
@@ -185,7 +185,7 @@ func TestInit(t *testing.T) {
 		analytics,
 		scanNotifier,
 		snykApiClient,
-		services.FakePositiveAuthenticationCheck,
+		authenticationService,
 		snykCodeScanner,
 		infrastructureAsCodeScanner,
 		openSourceScanner,
@@ -219,12 +219,6 @@ func ErrorReporter() er.ErrorReporter {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return errorReporter
-}
-
-func SnykCli() cli.Executor {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return snykCli
 }
 
 func AuthenticationService() snyk.AuthenticationService {
@@ -267,12 +261,6 @@ func Installer() install.Installer {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return installer
-}
-
-func CliInitializer() *cli.Initializer {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return cliInitializer
 }
 
 func CodeActionService() *codeaction.CodeActionsService {

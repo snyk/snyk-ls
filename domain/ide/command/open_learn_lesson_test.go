@@ -47,7 +47,7 @@ func Test_openLearnLesson_Execute(t *testing.T) {
 	data := snyk.CommandData{
 		Title:     snyk.OpenLearnLesson,
 		CommandId: snyk.OpenLearnLesson,
-		Arguments: []any{rule, eco, cwes, cves, snyk.DependencyVulnerability},
+		Arguments: []any{rule, eco, cwes, cves, float64(snyk.DependencyVulnerability)},
 	}
 	mockService := mock_learn.NewMockService(ctrl)
 	cut := openLearnLesson{learnService: mockService, command: data, openBrowserHandleFunc: openBrowserHandlerFunc}
