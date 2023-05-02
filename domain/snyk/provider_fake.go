@@ -53,6 +53,6 @@ func (a *FakeAuthenticationProvider) SetAuthURL(url string) {
 	a.authURL = url
 }
 
-func NewFakeCliAuthenticationProvider() AuthenticationProvider {
+func NewFakeCliAuthenticationProvider() *FakeAuthenticationProvider {
 	return &FakeAuthenticationProvider{ExpectedAuthURL: "https://app.snyk.io/login?token=someToken"}
 }

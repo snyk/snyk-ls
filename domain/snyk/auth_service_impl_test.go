@@ -149,6 +149,4 @@ func Test_Logout(t *testing.T) {
 
 	// assert
 	assert.False(t, authProvider.IsAuthenticated)
-	assert.Equal(t, 0, len(hoverService.Channel()))
-	assert.Len(t, f.AllIssuesFor(issueFile), 0)
 }

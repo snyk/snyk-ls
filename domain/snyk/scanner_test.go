@@ -64,6 +64,7 @@ func setupScanner(testProductScanners ...ProductScanner) (
 	apiClient := &snyk_api.FakeApiClient{CodeEnabled: false}
 	er := error_reporting.NewTestErrorReporter()
 	authenticationProvider := NewFakeCliAuthenticationProvider()
+	authenticationProvider.IsAuthenticated = true
 	authenticationService := NewAuthenticationService(authenticationProvider, analytics, er, notifier)
 	scanner = NewDelegatingScanner(
 		initialize.NewDelegatingInitializer(),

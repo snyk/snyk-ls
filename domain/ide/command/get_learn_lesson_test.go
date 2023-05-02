@@ -45,7 +45,7 @@ func Test_getLearnLesson_Execute(t *testing.T) {
 	mockService := mock_learn.NewMockService(ctrl)
 	cut := getLearnLesson{learnService: mockService, command: data}
 	expectedLessonURL := "https://lessonURL"
-	expectedLesson := learn.Lesson{Url: expectedLessonURL}
+	expectedLesson := &learn.Lesson{Url: expectedLessonURL}
 	mockService.EXPECT().
 		GetLesson(eco, rule, []string{"CWE-89", "CWE-ZZ"}, []string{"CVE-2020-1234"}, snyk.DependencyVulnerability).
 		Return(expectedLesson, nil)
