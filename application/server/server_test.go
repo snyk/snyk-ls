@@ -948,6 +948,9 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	loc := setupServer(t)
 	testutil.IntegTest(t)
 
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
+	fakeAuthenticationProvider.IsAuthenticated = true
+
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589", t)
 	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 	if err != nil {
