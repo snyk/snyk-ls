@@ -52,7 +52,7 @@ func Start(c *config.Config) {
 	handlers := handler.Map{}
 	srv = jrpc2.NewServer(handlers, &jrpc2.ServerOptions{
 		Logger: func(text string) {
-			if zerolog.GlobalLevel() == zerolog.DebugLevel {
+			if zerolog.GlobalLevel() == zerolog.TraceLevel {
 				if len(text) > 300 {
 					// this may not be sent to the logger, as it would produce a loop, therefore we write to stderr
 					_, _ = os.Stderr.WriteString(fmt.Sprintf("JSON RPC Log: %s... [TRUNCATED]", text[:300]))
