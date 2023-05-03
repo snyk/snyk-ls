@@ -50,7 +50,7 @@ func New(server Server) zerolog.LevelWriter {
 }
 
 func (w *lspWriter) Write(p []byte) (n int, err error) {
-	return os.Stderr.Write(p)
+	return w.WriteLevel(zerolog.InfoLevel, p)
 }
 
 func (w *lspWriter) WriteLevel(level zerolog.Level, p []byte) (n int, err error) {
