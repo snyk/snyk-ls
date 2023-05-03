@@ -3,10 +3,10 @@ package filefilter
 import (
 	"encoding/json"
 	"hash/fnv"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 
@@ -16,8 +16,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/snyk/snyk-ls/internal/util"
-
-	"github.com/snyk/snyk-ls/application/config"
 )
 
 const defaultParallelism = 4
@@ -31,8 +29,8 @@ var parallelism = util.Max(1, util.Min(defaultParallelism, runtime.NumCPU()))
 // It is global because there can be several file filters running concurrently on the same machine.
 var semaphore = make(chan struct{}, parallelism)
 
-func FindNonIgnoredFiles(rootFolder string, c *config.Config) <-chan string {
-	return NewFileFilter(rootFolder, c).FindNonIgnoredFiles()
+func FindNonIgnoredFiles(rootFolder string, logger zerolog.Logger) <-chan string {
+	return NewFileFilter(rootFolder, logger).FindNonIgnoredFiles()
 }
 
 type FileFilter struct {
@@ -45,17 +43,24 @@ type FileFilter struct {
 }
 
 type cachedResults struct {
-	Hash    uint64
-	Results []string
+	Hash                 uint64
+	FilteredFiles        []string
+	FilteredChildFolders []string
 }
 
-func hashFolder(globs, files []string) (uint64, error) {
-	data := struct {
-		Files []string
-		Globs []string
-	}{
-		Files: files,
-		Globs: globs,
+type folderContent struct {
+	Files   []string
+	Globs   []string
+	Folders []string
+}
+
+func hashFolder(globs, files, folders []string) (uint64, error) {
+	sort.Strings(files)
+	sort.Strings(folders)
+	data := folderContent{
+		Files:   files,
+		Globs:   globs,
+		Folders: folders,
 	}
 	dataBytes, err := json.Marshal(data)
 	if err != nil {
@@ -72,33 +77,23 @@ func hashFolder(globs, files []string) (uint64, error) {
 	return hash, nil
 }
 
-func NewFileFilter(rootFolder string, c *config.Config) *FileFilter {
+func NewFileFilter(rootFolder string, logger zerolog.Logger) *FileFilter {
 	return &FileFilter{
 		repoRoot:       rootFolder,
 		ignoreFiles:    []string{".gitignore", ".dcignore", ".snyk"},
 		globsPerFolder: make(map[string][]string),
-		logger:         c.Logger().With().Str("component", "FileFilter").Str("repoRoot", rootFolder).Logger(),
+		logger:         logger.With().Str("component", "FileFilter").Str("repoRoot", rootFolder).Logger(),
 		cache:          xsync.NewMapOf[cachedResults](),
 	}
 }
 
+// FindNonIgnoredFiles returns a channel of non-ignored files in the repository.
+// The channel is closed when all files have been processed.
 func (f *FileFilter) FindNonIgnoredFiles() <-chan string {
 	resultsCh := make(chan string)
-	filesPerFolder := make(map[string][]string)
 	go func() {
 		defer close(resultsCh)
-
-		err := filepath.WalkDir(f.repoRoot, f.filepathWalker(filesPerFolder))
-
-		if err != nil {
-			f.logger.Err(err).Msg("Error during filepath.WalkDir")
-		}
-
-		for folderPath, globs := range f.globsPerFolder {
-			filesInFolder := filesPerFolder[folderPath]
-			f.processFolder(folderPath, filesInFolder, globs, resultsCh)
-		}
-
+		err := f.processFolders(f.repoRoot, resultsCh)
 		if err != nil {
 			f.logger.Err(err).Msg("Error during filepath.WalkDir")
 		}
@@ -107,28 +102,69 @@ func (f *FileFilter) FindNonIgnoredFiles() <-chan string {
 	return resultsCh
 }
 
-// processFolder processes a folder and sends the non-ignored files to the results channel.
-// The function blocks until all files are processed.
-func (f *FileFilter) processFolder(folderPath string, files, globs []string, results chan<- string) {
+// processFolders walks through the folder structure recursively and filters files and folders based on the ignore files.
+// It attempts to return cached results if the folder structure hasn't changed.
+func (f *FileFilter) processFolders(folderPath string, results chan<- string) error {
+	c, err := f.collectFolderFiles(folderPath)
+	if err != nil {
+		return err
+	}
+	files := c.Files
+	globs := c.Globs
+	childFolders := c.Folders
+
+	// Attempt to retrieve cached results.
 	hashFailed := false
-	hash, err := hashFolder(globs, files)
+	hash, err := hashFolder(globs, files, childFolders)
 	if err != nil {
 		f.logger.Err(err).Msg("Error during hash calculation")
 		hashFailed = true
 	} else {
 		cacheEntry, found := f.cache.Load(folderPath)
 		if found && hash == cacheEntry.Hash { // Cache hit - returning cached results
-			for _, file := range cacheEntry.Results {
+			for _, file := range cacheEntry.FilteredFiles {
 				results <- file
 			}
-			return
+			for _, childFolder := range cacheEntry.FilteredChildFolders {
+				err = f.processFolders(childFolder, results)
+				if err != nil {
+					return err
+				}
+			}
+
+			return nil
 		}
 	}
 
-	checker := ignore.CompileIgnoreLines(globs...) // This is memory heavy
-	var resultsLock sync.Mutex
-	var resultsToCache []string
+	// If results were not cached, filter files and folders, and store the results in the cache.
+	filteredFiles, filteredChildFolders := f.filterFilesInFolder(globs, files, childFolders, results)
+	for _, child := range filteredChildFolders {
+		// Only process child folders that are not ignored
+		err = f.processFolders(child, results)
+		if err != nil {
+			return err
+		}
+	}
+
+	if !hashFailed { // Only cache results when hash calculation was successful
+		f.cache.Store(folderPath, cachedResults{
+			Hash:                 hash,
+			FilteredFiles:        filteredFiles,
+			FilteredChildFolders: filteredChildFolders,
+		})
+	}
+
+	return err
+}
+
+func (f *FileFilter) filterFilesInFolder(globs []string,
+	files []string,
+	childFolders []string,
+	results chan<- string,
+) (filteredFiles []string, filteredChildFolders []string) {
+	ignoreParser := ignore.CompileIgnoreLines(globs...) // This is memory heavy
 	var wg sync.WaitGroup
+	var resultsLock sync.Mutex
 	for _, file := range files {
 		wg.Add(1)
 		go func(file string) {
@@ -137,52 +173,76 @@ func (f *FileFilter) processFolder(folderPath string, files, globs []string, res
 				<-semaphore // Release semaphore
 			}()
 			semaphore <- struct{}{} // Acquire semaphore
-			if !checker.MatchesPath(file) {
+			if !ignoreParser.MatchesPath(file) {
 				resultsLock.Lock()
-				resultsToCache = append(resultsToCache, file)
+				filteredFiles = append(filteredFiles, file)
 				resultsLock.Unlock()
 				results <- file
 			}
 		}(file)
 	}
-	wg.Wait()
 
-	if !hashFailed {
-		f.cache.Store(folderPath, cachedResults{
-			Hash:    hash,
-			Results: resultsToCache,
-		})
+	for _, childFolder := range childFolders {
+		semaphore <- struct{}{} // Acquire semaphore
+		if !ignoreParser.MatchesPath(childFolder) {
+			filteredChildFolders = append(filteredChildFolders, childFolder)
+		}
+		<-semaphore // Release semaphore
 	}
+
+	wg.Wait()
+	ignoreParser = nil // Does this have any effect?
+	return filteredFiles, filteredChildFolders
 }
 
-func (f *FileFilter) filepathWalker(filesPerFolder map[string][]string) fs.WalkDirFunc {
-	return func(path string, dirEntry os.DirEntry, err error) error {
-		if err != nil {
-			f.logger.Err(err).Msg("Error during file traversal of directory \"" + path + "\"\n" +
-				"Skipping Directory")
-			return filepath.SkipDir
-		}
-		if dirEntry == nil {
-			return nil
-		}
+// collectFolderFiles collects the top-level files and child folders of a folder, along with the ignore rules (globs).
+func (f *FileFilter) collectFolderFiles(folderPath string) (folderContent, error) {
+	var files []string
+	var globs []string
+	var childFolders []string
 
+	// The first iteration of this callback is going to be called for the root folder,
+	// followed by all the files and folders in it.
+	// Only the top level files and folders are of interest, so we skip the rest.
+	err := filepath.WalkDir(folderPath, func(path string, dirEntry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
 		if dirEntry.IsDir() {
-			globs := f.collectGlobs(path)
+			if path != folderPath {
+				// We don't need to recursively go through the child folders yet, because they might be ignored.
+				// Returning SkipDir will skip the entire subtree of the current folder.
+				childFolders = append(childFolders, path)
+				return filepath.SkipDir
+			}
+
+			// If it's the root folder, collect the globs
+			globs = f.collectGlobs(path)
 			f.globsPerFolder[path] = globs
-		} else {
-			folderPath := filepath.Dir(path)
-			filesPerFolder[folderPath] = append(filesPerFolder[folderPath], path)
+			return nil
+		} else { // If it's a file, collect its path
+			files = append(files, path)
 		}
 
 		return nil
+	})
+
+	content := folderContent{
+		Files:   files,
+		Globs:   globs,
+		Folders: childFolders,
 	}
+
+	return content, err
 }
 
 func (f *FileFilter) collectGlobs(path string) []string {
 	var globs []string
+	folderPath := path
 	if path != f.repoRoot {
 		globs = append(globs, f.globsPerFolder[filepath.Dir(path)]...)
 	} else {
+		folderPath = f.repoRoot
 		defaultGlobs := []string{"**/.git/**", "**/.svn/**", "**/.hg/**", "**/.bzr/**", "**/.DS_Store/**"}
 		globs = append(globs, defaultGlobs...)
 	}
@@ -198,13 +258,13 @@ func (f *FileFilter) collectGlobs(path string) []string {
 				f.logger.Err(err).Msg("Can't parse ignore file" + ignoreFilePath)
 			}
 			if filepath.Base(ignoreFilePath) == ".snyk" { // .snyk files are yaml files and should be parsed differently
-				parsedRules, err := parseDotSnykFile(content, f.repoRoot)
+				parsedRules, err := parseDotSnykFile(content, folderPath)
 				globs = append(globs, parsedRules...)
 				if err != nil {
 					f.logger.Err(err).Msg("Can't parse .snyk file")
 				}
 			} else { // .gitignore, .dcignore, etc. are just a list of ignore rules
-				parsedRules := parseIgnoreFile(content, f.repoRoot)
+				parsedRules := parseIgnoreFile(content, folderPath)
 				globs = append(globs, parsedRules...)
 			}
 		}

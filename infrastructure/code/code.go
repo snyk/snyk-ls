@@ -169,7 +169,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	t.Begin("Snyk Code: Collecting files in \""+folderPath+"\"", "Evaluating ignores and counting files...")
 	fileFilter, _ := sc.fileFilters.Load(folderPath)
 	if fileFilter == nil {
-		fileFilter = filefilter.NewFileFilter(folderPath, config.CurrentConfig())
+		fileFilter = filefilter.NewFileFilter(folderPath, config.CurrentConfig().Logger())
 		sc.fileFilters.Store(folderPath, fileFilter)
 	}
 	files := fileFilter.FindNonIgnoredFiles()
