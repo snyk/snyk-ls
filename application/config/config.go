@@ -447,6 +447,8 @@ func (c *Config) SetLogPath(logPath string) {
 }
 
 func (c *Config) ConfigureLogging(server lsp.Server) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	var logLevel zerolog.Level
 	var err error
 
