@@ -46,6 +46,7 @@ type SastResponse struct {
 	Org                         string          `json:"org"`
 	SupportedLanguages          []string        `json:"supportedLanguages"`
 	ReportFalsePositivesEnabled bool            `json:"reportFalsePositivesEnabled"`
+	AutofixEnabled              bool            `json:"autofixEnabled"`
 }
 
 type activeUserResponse struct {
@@ -57,7 +58,7 @@ type ActiveUser struct {
 }
 
 type SnykApiClient interface {
-	SastEnabled() (sastResponse SastResponse, err *SnykApiError)
+	SastSettings() (sastResponse SastResponse, err *SnykApiError)
 	GetActiveUser() (user ActiveUser, err *SnykApiError)
 }
 
@@ -85,8 +86,9 @@ func NewSnykApiClient(client func() *http.Client) SnykApiClient {
 	return &s
 }
 
-func (s *SnykApiClientImpl) SastEnabled() (response SastResponse, err *SnykApiError) {
-	log.Debug().Str("method", "SastEnabled").Msg("API: Getting SastEnabled")
+func (s *SnykApiClientImpl) SastSettings() (response SastResponse, err *SnykApiError) {
+	method := "SastSettings"
+	log.Debug().Str("method", method).Msg("API: Getting SastEnabled")
 	path := "/cli-config/settings/sast"
 	organization := config.CurrentConfig().Organization()
 	if organization != "" {
@@ -95,17 +97,17 @@ func (s *SnykApiClientImpl) SastEnabled() (response SastResponse, err *SnykApiEr
 	responseBody, err := s.doCall("GET", path, nil)
 	if err != nil {
 		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
-		log.Err(fmtErr).Str("method", "SastEnabled").Msg("error when calling sastEnabled endpoint")
+		log.Err(fmtErr).Str("method", method).Msg("error when calling sastEnabled endpoint")
 		return SastResponse{}, err
 	}
 
 	unmarshalErr := json.Unmarshal(responseBody, &response)
 	if unmarshalErr != nil {
 		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
-		log.Err(fmtErr).Str("method", "SastEnabled").Msg("couldn't unmarshal SastResponse")
+		log.Err(fmtErr).Str("method", method).Msg("couldn't unmarshal SastResponse")
 		return SastResponse{}, err
 	}
-	log.Debug().Str("method", "SastEnabled").Msg("API: Done")
+	log.Debug().Str("method", method).Msg("API: Done")
 	return response, nil
 }
 
