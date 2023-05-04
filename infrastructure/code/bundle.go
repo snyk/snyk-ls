@@ -200,14 +200,12 @@ func (b *Bundle) addCodeActions(ctx context.Context, issues []snyk.Issue) ([]sny
 				// We only allow the issues whose file extensions are supported by the
 				// backend.
 				supported, err := b.isAutofixSupportedForExtension(ctx, issues[i].AffectedFilePath)
-				if err != nil {
-					return []snyk.Issue{}, err
-				}
-
-				if supported {
-					issues[i].CodeActions = append(issues[i].CodeActions, *b.createDeferredAutofixCodeAction(ctx, issues[i]))
-				} else {
-					log.Debug().Str("method", "addCodeActions").Msg("Autofix is not supported for " + issues[i].AffectedFilePath + " file extension.")
+				if err == nil {
+					if supported {
+						issues[i].CodeActions = append(issues[i].CodeActions, *b.createDeferredAutofixCodeAction(ctx, issues[i]))
+					} else {
+						log.Debug().Str("method", "addCodeActions").Msg("Autofix is not supported for " + issues[i].AffectedFilePath + " file extension.")
+					}
 				}
 			}
 
