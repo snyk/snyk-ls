@@ -190,11 +190,6 @@ func configureOAuth(
 		authenticationService.Provider().SetAuthURL(url)
 		snyk.DefaultOpenBrowserFunc(url)
 	}
-	// enable oauth flow by default, overwrite default function set
-	conf.AddDefaultValue(
-		configuration.FF_OAUTH_AUTH_FLOW_ENABLED,
-		configuration.StandardDefaultValueFunction(true),
-	)
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 
 	c.Storage().RegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN, credentialsUpdateCallback)
