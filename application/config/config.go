@@ -222,7 +222,7 @@ func New() *Config {
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to initialize workflow engine")
 	}
-	c.enableSnykLearnCodeActions = false
+	c.enableSnykLearnCodeActions = true
 
 	c.clientSettingsFromEnv()
 	return c
