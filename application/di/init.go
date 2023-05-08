@@ -20,10 +20,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
-	"testing"
 
 	"github.com/adrg/xdg"
-	"github.com/golang/mock/gomock"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
@@ -45,7 +43,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/iac"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
-	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
 	"github.com/snyk/snyk-ls/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/infrastructure/services"
@@ -151,59 +148,6 @@ func initApplication() {
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher, notifier)
 	command.ResetService()
-}
-
-// TODO this is becoming a hot mess we need to unify integ. test strategies
-func TestInit(t *testing.T) {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	t.Helper()
-	// we don't want to open browsers when testing
-	snyk.DefaultOpenBrowserFunc = func(url string) {}
-	notifier = domainNotify.NewNotifier()
-	analytics = ux.NewTestAnalytics()
-	instrumentor = performance.NewTestInstrumentor()
-	errorReporter = er.NewTestErrorReporter()
-	installer = install.NewFakeInstaller()
-	authProvider := cliauth.NewFakeCliAuthenticationProvider()
-	snykApiClient = &snyk_api.FakeApiClient{CodeEnabled: true}
-	authenticationService = services.NewAuthenticationService(snykApiClient, authProvider, analytics, errorReporter, notifier)
-	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier)
-	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics, notifier)
-	scanInitializer = initialize.NewDelegatingInitializer(
-		cliInitializer,
-		authInitializer,
-	)
-	fakeClient := &code.FakeSnykCodeClient{}
-	snykCodeClient = fakeClient
-	snykCli = cli.NewExecutor(authenticationService, errorReporter, analytics, notifier)
-	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
-	scanNotifier, _ = appNotification.NewScanNotifier(notifier)
-	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, mock_learn.NewMockService(gomock.NewController(t)), notifier)
-	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli, learnService, notifier)
-	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
-	scanner = snyk.NewDelegatingScanner(
-		scanInitializer,
-		instrumentor,
-		analytics,
-		scanNotifier,
-		snykApiClient,
-		snykCodeScanner,
-		infrastructureAsCodeScanner,
-		openSourceScanner,
-	)
-	hoverService = hover.NewDefaultService(analytics)
-	command.SetService(&snyk.CommandServiceMock{})
-	// don't use getters or it'll deadlock
-	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier, notifier)
-	workspace.Set(w)
-	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher, notifier)
-	t.Cleanup(
-		func() {
-			fakeClient.Clear()
-		},
-	)
 }
 
 /*

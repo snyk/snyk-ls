@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -33,6 +34,8 @@ import (
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -45,7 +48,7 @@ func Test_determineTargetFile(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
-		nil,
+		getLearnMock(t),
 		notification.NewNotifier())
 	assert.Equal(t, "package.json", scanner.determineTargetFile("package-lock.json"))
 	assert.Equal(t, "pom.xml", scanner.determineTargetFile("pom.xml"))
@@ -66,7 +69,7 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		analytics,
 		executor,
-		nil,
+		getLearnMock(t),
 		notification.NewNotifier(),
 	)
 	_, _ = scanner.Scan(context.Background(), p, "")
@@ -84,7 +87,7 @@ func Test_FindRange(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
-		nil,
+		getLearnMock(t),
 		notification.NewNotifier(),
 	)
 	issue := mavenTestIssue()
@@ -119,7 +122,9 @@ func Test_introducingPackageAndVersion(t *testing.T) {
 
 func Test_toIssue_LearnParameterConversion(t *testing.T) {
 	ossIssue := sampleIssue()
-	scanner := Scanner{}
+	scanner := Scanner{
+		learnService: getLearnMock(t),
+	}
 
 	issue := scanner.toIssue("testPath", ossIssue, snyk.Range{})
 
@@ -143,7 +148,7 @@ func Test_ContextCanceled_Scan_DoesNotScan(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cliMock,
-		nil,
+		getLearnMock(t),
 		notification.NewNotifier(),
 	)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -176,7 +181,7 @@ func TestUnmarshalOssJsonSingle(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
-		nil,
+		getLearnMock(t),
 		notification.NewNotifier(),
 	)
 
@@ -199,7 +204,7 @@ func TestUnmarshalOssJsonArray(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
-		nil,
+		getLearnMock(t),
 		notification.NewNotifier(),
 	)
 
@@ -222,7 +227,7 @@ func TestUnmarshalOssErroneousJson(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
-		nil,
+		getLearnMock(t),
 		notification.NewNotifier(),
 	)
 
@@ -279,7 +284,7 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		fakeCli,
-		nil,
+		getLearnMock(t),
 		notification.NewNotifier(),
 	)
 	wg := sync.WaitGroup{}
@@ -324,7 +329,7 @@ func Test_prepareScanCommand_ExpandsAdditionalParameters(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
-		nil,
+		getLearnMock(t),
 		notification.NewNotifier(),
 	)
 
@@ -347,7 +352,7 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		fakeCli,
-		nil,
+		getLearnMock(t),
 		notification.NewNotifier(),
 	)
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
@@ -374,7 +379,7 @@ func Test_scheduleNewScan_CapturesAnalytics(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		analytics,
 		fakeCli,
-		nil,
+		getLearnMock(t),
 		notification.NewNotifier(),
 	)
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
@@ -410,7 +415,7 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		analytics,
 		fakeCli,
-		nil,
+		getLearnMock(t),
 		notification.NewNotifier(),
 	)
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
@@ -440,7 +445,7 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		analytics,
 		fakeCli,
-		nil,
+		getLearnMock(t),
 		notification.NewNotifier(),
 	)
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
@@ -472,7 +477,7 @@ func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testin
 		error_reporting.NewTestErrorReporter(),
 		analytics,
 		fakeCli,
-		nil,
+		getLearnMock(t),
 		notification.NewNotifier(),
 	)
 	scanner.refreshScanWaitDuration = 2 * time.Second
@@ -503,7 +508,7 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		fakeCli,
-		nil,
+		getLearnMock(t),
 		notification.NewNotifier(),
 	)
 	filePath, _ := filepath.Abs(workingDir + "/testdata/package.json")
@@ -514,4 +519,13 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 	// Assert
 	assert.NoError(t, err)
 	assert.Len(t, analysis, 87)
+}
+
+func getLearnMock(t *testing.T) learn.Service {
+	learnMock := mock_learn.NewMockService(gomock.NewController(t))
+	learnMock.
+		EXPECT().
+		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(learn.Lesson{}, nil).AnyTimes()
+	return learnMock
 }
