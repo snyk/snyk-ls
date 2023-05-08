@@ -94,7 +94,7 @@ func TestSnykApiPact(t *testing.T) {
 		interactionConfigSettings.Description = "happy path without org as query parameter"
 
 		test := func() error {
-			_, err := client.SastEnabled()
+			_, err := client.SastSettings()
 			if err != nil {
 				return err
 			}
@@ -138,7 +138,7 @@ func TestSnykApiPact(t *testing.T) {
 		interaction.Description = "happy path with org as query param"
 
 		test := func() error {
-			_, err := client.SastEnabled()
+			_, err := client.SastSettings()
 			if err != nil {
 				return err
 			}

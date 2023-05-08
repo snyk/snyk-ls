@@ -25,8 +25,8 @@ import (
 )
 
 const (
-	// Autofix is enabled by default
-	defaultAutofixEnabled = true
+	// Autofix is disabled by default
+	defaultAutofixEnabled = false
 )
 
 var (
@@ -61,6 +61,13 @@ func resetCodeSettings() {
 	codeSettingsSingletonMutex.Lock()
 	defer codeSettingsSingletonMutex.Unlock()
 	codeSettingsSingleton = newCodeSettings()
+}
+
+func (cs *codeSettings) SetAutofixEnabled(enabled bool) {
+	codeSettingsSingletonMutex.Lock()
+	defer codeSettingsSingletonMutex.Unlock()
+
+	cs.isAutofixEnabled.Set(enabled)
 }
 
 // Does nothing if the extensions are already set
