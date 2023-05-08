@@ -164,10 +164,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 				Msg("sending diagnostics...")
 			p.End("Analysis complete.")
 
-			i, err2 := b.addCodeActions(ctx, issues)
-			if err2 != nil {
-				return i, err2
-			}
+			b.addCodeActions(ctx, issues)
 
 			return issues, nil
 		} else if status.message == "ANALYZING" {
@@ -186,7 +183,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 	}
 }
 
-func (b *Bundle) addCodeActions(ctx context.Context, issues []snyk.Issue) ([]snyk.Issue, error) {
+func (b *Bundle) addCodeActions(ctx context.Context, issues []snyk.Issue) {
 	method := "addCodeActions"
 
 	autoFixEnabled := getCodeSettings().isAutofixEnabled.Get()
@@ -194,34 +191,35 @@ func (b *Bundle) addCodeActions(ctx context.Context, issues []snyk.Issue) ([]sny
 	log.Debug().Str("method", method).Msg("Autofix is enabled: " + strconv.FormatBool(autoFixEnabled))
 	log.Debug().Str("method", method).Msg("Snyk Learn is enabled: " + strconv.FormatBool(learnEnabled))
 
-	if autoFixEnabled || learnEnabled {
-		for i := range issues {
-			if autoFixEnabled {
-				// We only allow the issues whose file extensions are supported by the
-				// backend.
-				supported, err := b.isAutofixSupportedForExtension(ctx, issues[i].AffectedFilePath)
-				if err != nil {
-					return []snyk.Issue{}, err
-				}
+	if !autoFixEnabled && !learnEnabled {
+		log.Trace().Msg("Autofix | Snyk Learn code actions are disabled, not adding code actions")
+		return
+	}
 
+	for i := range issues {
+		if autoFixEnabled {
+			// We only allow the issues whose file extensions are supported by the
+			// backend.
+			supported, err := b.isAutofixSupportedForExtension(ctx, issues[i].AffectedFilePath)
+			if err != nil {
+				log.Error().Err(err).Str("method", method).Msg("Failed to check if autofix is supported for extension.")
+				b.errorReporter.CaptureError(err)
+			} else {
 				if supported {
 					issues[i].CodeActions = append(issues[i].CodeActions, *b.createDeferredAutofixCodeAction(ctx, issues[i]))
 				} else {
-					log.Debug().Str("method", "addCodeActions").Msg("Autofix is not supported for " + issues[i].AffectedFilePath + " file extension.")
-				}
-			}
-
-			if learnEnabled {
-				action := b.createOpenSnykLearnCodeAction(issues[i])
-				if action != nil {
-					issues[i].CodeActions = append(issues[i].CodeActions, *action)
+					log.Debug().Str("method", method).Msg("Autofix is not supported for " + issues[i].AffectedFilePath + " file extension.")
 				}
 			}
 		}
-	} else {
-		log.Trace().Msg("Autofix | Snyk Learn code actions are disabled, not adding code actions")
+
+		if learnEnabled {
+			action := b.createOpenSnykLearnCodeAction(issues[i])
+			if action != nil {
+				issues[i].CodeActions = append(issues[i].CodeActions, *action)
+			}
+		}
 	}
-	return nil, nil
 }
 
 func (b *Bundle) getShardKey(rootPath string, authToken string) string {
@@ -305,7 +303,7 @@ func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk
 		}
 	}
 
-	action, err := snyk.NewDeferredCodeAction("Attempt to AutoFix the issue (Snyk)", &autofixEditCallback, nil)
+	action, err := snyk.NewDeferredCodeAction("Attempt to fix suggestion "+issue.ID+" (Snyk)", &autofixEditCallback, nil)
 	if err != nil {
 		log.Error().Msg("failed to create deferred autofix code action")
 		return nil

@@ -57,6 +57,7 @@ func TestSnykApiPact(t *testing.T) {
 			SastEnabled:                 true,
 			LocalCodeEngine:             localCodeEngine{Enabled: false},
 			ReportFalsePositivesEnabled: false,
+			AutofixEnabled:              false,
 		}
 
 		// when no org is set, the Go Application framework calls the API to obtain the default org
@@ -94,7 +95,7 @@ func TestSnykApiPact(t *testing.T) {
 		interactionConfigSettings.Description = "happy path without org as query parameter"
 
 		test := func() error {
-			_, err := client.SastEnabled()
+			_, err := client.SastSettings()
 			if err != nil {
 				return err
 			}
@@ -114,6 +115,7 @@ func TestSnykApiPact(t *testing.T) {
 			SastEnabled:                 true,
 			LocalCodeEngine:             localCodeEngine{Enabled: false},
 			ReportFalsePositivesEnabled: false,
+			AutofixEnabled:              false,
 		}
 
 		matcher := dsl.MapMatcher{}
@@ -138,7 +140,7 @@ func TestSnykApiPact(t *testing.T) {
 		interaction.Description = "happy path with org as query param"
 
 		test := func() error {
-			_, err := client.SastEnabled()
+			_, err := client.SastSettings()
 			if err != nil {
 				return err
 			}

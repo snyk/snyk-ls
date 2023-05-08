@@ -172,7 +172,7 @@ type Config struct {
 	enableSnykLearnCodeActions   bool
 	logger                       *zerolog.Logger
 	storage                      StorageWithCallbacks
-	mutex                        sync.Mutex
+	m                   				 sync.Mutex
 }
 
 func CurrentConfig() *Config {
@@ -223,7 +223,7 @@ func New() *Config {
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to initialize workflow engine")
 	}
-	c.enableSnykLearnCodeActions = false
+	c.enableSnykLearnCodeActions = true
 
 	c.clientSettingsFromEnv()
 	return c
@@ -311,17 +311,25 @@ func (c *Config) CliSettings() *CliSettings {
 	return c.cliSettings
 }
 
-func (c *Config) Format() string { return c.format }
+func (c *Config) Format() string {
+	c.m.Lock()
+	defer c.m.Unlock()
+	return c.format
+}
 func (c *Config) CLIDownloadLockFileName() string {
 	return filepath.Join(c.cliSettings.DefaultBinaryInstallPath(), "snyk-cli-download.lock")
 }
-func (c *Config) IsErrorReportingEnabled() bool          { return c.isErrorReportingEnabled.Get() }
-func (c *Config) IsSnykOssEnabled() bool                 { return c.isSnykOssEnabled.Get() }
-func (c *Config) IsSnykCodeEnabled() bool                { return c.isSnykCodeEnabled.Get() }
-func (c *Config) IsSnykIacEnabled() bool                 { return c.isSnykIacEnabled.Get() }
-func (c *Config) IsSnykContainerEnabled() bool           { return c.isSnykContainerEnabled.Get() }
-func (c *Config) IsSnykAdvisorEnabled() bool             { return c.isSnykAdvisorEnabled.Get() }
-func (c *Config) LogPath() string                        { return c.logPath }
+func (c *Config) IsErrorReportingEnabled() bool { return c.isErrorReportingEnabled.Get() }
+func (c *Config) IsSnykOssEnabled() bool        { return c.isSnykOssEnabled.Get() }
+func (c *Config) IsSnykCodeEnabled() bool       { return c.isSnykCodeEnabled.Get() }
+func (c *Config) IsSnykIacEnabled() bool        { return c.isSnykIacEnabled.Get() }
+func (c *Config) IsSnykContainerEnabled() bool  { return c.isSnykContainerEnabled.Get() }
+func (c *Config) IsSnykAdvisorEnabled() bool    { return c.isSnykAdvisorEnabled.Get() }
+func (c *Config) LogPath() string {
+	c.m.Lock()
+	defer c.m.Unlock()
+	return c.logPath
+}
 func (c *Config) SnykApi() string                        { return c.snykApiUrl }
 func (c *Config) SnykCodeApi() string                    { return c.snykCodeApiUrl }
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
@@ -329,14 +337,16 @@ func (c *Config) IntegrationName() string                { return c.integrationN
 func (c *Config) IntegrationVersion() string             { return c.integrationVersion }
 func (c *Config) FilterSeverity() lsp.SeverityFilter     { return c.filterSeverity }
 func (c *Config) Token() string {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	c.m.Lock()
+	defer c.m.Unlock()
 	return c.token
 }
 
 // TokenChangesChannel returns a channel that will be written into once the token has changed.
 // This allows aborting operations when the token is changed.
 func (c *Config) TokenChangesChannel() <-chan string {
+	c.m.Lock()
+	defer c.m.Unlock()
 	channel := make(chan string, 1)
 	c.tokenChangeChannels = append(c.tokenChangeChannels, channel)
 	return channel
@@ -402,12 +412,12 @@ func (c *Config) SetSeverityFilter(severityFilter lsp.SeverityFilter) bool {
 }
 
 func (c *Config) SetToken(token string) {
-	c.mutex.Lock()
+	c.m.Lock()
 
 	oldToken := c.token
 	// always update the token and auth method in the engine
 	c.token = token
-	c.mutex.Unlock()
+	c.m.Unlock()
 
 	_, err := c.TokenAsOAuthToken()
 	isOauthToken := err == nil
@@ -429,6 +439,7 @@ func (c *Config) SetToken(token string) {
 	}
 
 	// Notify that the token has changed
+	c.m.Lock()
 	for _, channel := range c.tokenChangeChannels {
 		select {
 		case channel <- token:
@@ -438,17 +449,22 @@ func (c *Config) SetToken(token string) {
 		}
 	}
 	c.tokenChangeChannels = []chan string{}
+	c.m.Unlock()
 }
 
-func (c *Config) SetFormat(format string) { c.format = format }
+func (c *Config) SetFormat(format string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.format = format
+}
 
 func (c *Config) SetLogPath(logPath string) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.logPath = logPath
 }
 
 func (c *Config) ConfigureLogging(server lsp.Server) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
 	var logLevel zerolog.Level
 	var err error
 
@@ -477,8 +493,8 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 	levelWriter := lsp.New(server)
 	writers := []io.Writer{levelWriter}
 
-	if c.logPath != "" {
-		c.logFile, err = os.OpenFile(c.logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+	if c.LogPath() != "" {
+		c.logFile, err = os.OpenFile(c.LogPath(), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 		if err != nil {
 			log.Err(err).Msg("couldn't open logfile")
 		} else {
@@ -493,7 +509,8 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 		w.NoColor = true
 		w.TimeFormat = time.RFC3339
 	})
-
+	c.m.Lock()
+	defer c.m.Unlock()
 	log.Logger = zerolog.New(writer).With().Timestamp().Logger()
 	c.engine.SetLogger(&log.Logger)
 	c.logger = &log.Logger
@@ -761,6 +778,8 @@ func (c *Config) SetSnykLearnCodeActionsEnabled(enabled bool) {
 }
 
 func (c *Config) SetLogLevel(level string) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	parseLevel, err := zerolog.ParseLevel(level)
 	if err == nil {
 		zerolog.SetGlobalLevel(parseLevel)
@@ -768,10 +787,14 @@ func (c *Config) SetLogLevel(level string) {
 }
 
 func (c *Config) LogLevel() string {
+	c.m.Lock()
+	defer c.m.Unlock()
 	return zerolog.GlobalLevel().String()
 }
 
 func (c *Config) Logger() *zerolog.Logger {
+	c.m.Lock()
+	defer c.m.Unlock()
 	return c.logger
 }
 

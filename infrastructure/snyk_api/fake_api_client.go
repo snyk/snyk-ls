@@ -26,6 +26,7 @@ type FakeApiClient struct {
 	Calls                  map[string][][]any
 	CodeEnabled            bool
 	LocalCodeEngineEnabled bool
+	AutofixEnabled         bool
 	ApiError               *SnykApiError
 }
 
@@ -74,7 +75,7 @@ func (f *FakeApiClient) GetAllCalls(op string) [][]any {
 	return calls
 }
 
-func (f *FakeApiClient) SastEnabled() (SastResponse, error) {
+func (f *FakeApiClient) SastSettings() (SastResponse, error) {
 	f.addCall([]any{}, SastEnabledOperation)
 	if f.ApiError != nil {
 		return SastResponse{}, f.ApiError
@@ -84,5 +85,6 @@ func (f *FakeApiClient) SastEnabled() (SastResponse, error) {
 		LocalCodeEngine: localCodeEngine{
 			Enabled: f.LocalCodeEngineEnabled,
 		},
+		AutofixEnabled: f.AutofixEnabled,
 	}, nil
 }
