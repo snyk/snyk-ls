@@ -179,7 +179,14 @@ func TestInit(t *testing.T) {
 	snykCli = cli.NewExecutor(authenticationService, errorReporter, analytics, notifier)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 	scanNotifier, _ = appNotification.NewScanNotifier(notifier)
-	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, mock_learn.NewMockService(gomock.NewController(t)), notifier)
+	// mock Learn Service
+	learnMock := mock_learn.NewMockService(gomock.NewController(t))
+	learnMock.
+		EXPECT().
+		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(learn.Lesson{}, nil).AnyTimes()
+	learnService = learnMock
+	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, learnService, notifier)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli, learnService, notifier)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	scanner = snyk.NewDelegatingScanner(
