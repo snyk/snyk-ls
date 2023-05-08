@@ -46,5 +46,5 @@ func (cmd *getActiveUser) Execute(ctx context.Context) (any, error) {
 		cmd.authService.Logout(ctx)
 	}
 
-	return user, nil
+	return user, err
 }
