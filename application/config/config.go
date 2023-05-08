@@ -172,7 +172,7 @@ type Config struct {
 	enableSnykLearnCodeActions   bool
 	logger                       *zerolog.Logger
 	storage                      StorageWithCallbacks
-	m                   				 sync.Mutex
+	m                            sync.Mutex
 }
 
 func CurrentConfig() *Config {

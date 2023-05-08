@@ -30,7 +30,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/data_structure"
 )
 
 type Initializer struct {
@@ -114,23 +113,4 @@ func (i *Initializer) handleNotAuthenticatedAndManualAuthActive() error {
 	// If the user is not authenticated and auto-authentication is disabled, return an error to indicate the user
 	// could not be authenticated and the scan cannot start
 	return errors.New(msg)
-}
-
-func (i *Initializer) handleInvalidCredentials() {
-	msg := "Authentication is invalid. Please re-authenticate."
-	log.Warn().Msg(msg)
-	actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
-
-	// the error can only occur, if the command is not known to the factory. This _is_ known.
-	cmd, _ := command.CreateFromCommandData(
-		snyk.CommandData{CommandId: snyk.LoginCommand}, nil, i.authenticationService, nil, i.notifier,
-	)
-
-	actionCommandMap.Add("Re-Authenticate", cmd)
-
-	i.notifier.Send(snyk.ShowMessageRequest{
-		Message: msg,
-		Type:    snyk.Warning,
-		Actions: actionCommandMap,
-	})
 }
