@@ -302,7 +302,7 @@ func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk
 		}
 	}
 
-	action, err := snyk.NewDeferredCodeAction("Attempt to AutoFix the issue (Snyk)", &autofixEditCallback, nil)
+	action, err := snyk.NewDeferredCodeAction("Attempt to fix suggestion "+issue.ID+" (Snyk)", &autofixEditCallback, nil)
 	if err != nil {
 		log.Error().Msg("failed to create deferred autofix code action")
 		return nil
