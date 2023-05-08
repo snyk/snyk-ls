@@ -52,6 +52,7 @@
           "Content-Type": "application/json"
         },
         "body": {
+          "autofixEnabled": true,
           "localCodeEngine": {
             "allowCloudUpload": true,
             "enabled": true,
@@ -65,6 +66,9 @@
           ]
         },
         "matchingRules": {
+          "$.body.autofixEnabled": {
+            "match": "type"
+          },
           "$.body.localCodeEngine.allowCloudUpload": {
             "match": "type"
           },
@@ -118,6 +122,7 @@
           "Content-Type": "application/json"
         },
         "body": {
+          "autofixEnabled": true,
           "localCodeEngine": {
             "allowCloudUpload": true,
             "enabled": true,
@@ -131,6 +136,9 @@
           ]
         },
         "matchingRules": {
+          "$.body.autofixEnabled": {
+            "match": "type"
+          },
           "$.body.localCodeEngine.allowCloudUpload": {
             "match": "type"
           },

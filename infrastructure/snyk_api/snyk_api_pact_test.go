@@ -57,6 +57,7 @@ func TestSnykApiPact(t *testing.T) {
 			SastEnabled:                 true,
 			LocalCodeEngine:             localCodeEngine{Enabled: false},
 			ReportFalsePositivesEnabled: false,
+			AutofixEnabled:              false,
 		}
 
 		// when no org is set, the Go Application framework calls the API to obtain the default org
@@ -114,6 +115,7 @@ func TestSnykApiPact(t *testing.T) {
 			SastEnabled:                 true,
 			LocalCodeEngine:             localCodeEngine{Enabled: false},
 			ReportFalsePositivesEnabled: false,
+			AutofixEnabled:              false,
 		}
 
 		matcher := dsl.MapMatcher{}
