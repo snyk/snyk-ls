@@ -33,6 +33,6 @@ func (cmd *sastEnabled) Command() snyk.CommandData {
 }
 
 func (cmd *sastEnabled) Execute(_ context.Context) (any, error) {
-	sastResponse, err := cmd.apiClient.SastEnabled()
+	sastResponse, err := cmd.apiClient.SastSettings()
 	return sastResponse, err
 }

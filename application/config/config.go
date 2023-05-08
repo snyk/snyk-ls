@@ -17,6 +17,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
@@ -41,6 +42,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/subosito/gotenv"
 	"github.com/xtgo/uuid"
+	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/concurrency"
@@ -220,7 +222,7 @@ func New() *Config {
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to initialize workflow engine")
 	}
-	c.enableSnykLearnCodeActions = false
+	c.enableSnykLearnCodeActions = true
 
 	c.clientSettingsFromEnv()
 	return c
@@ -311,17 +313,25 @@ func (c *Config) CliSettings() *CliSettings {
 	return c.cliSettings
 }
 
-func (c *Config) Format() string { return c.format }
+func (c *Config) Format() string {
+	c.m.Lock()
+	defer c.m.Unlock()
+	return c.format
+}
 func (c *Config) CLIDownloadLockFileName() string {
 	return filepath.Join(c.cliSettings.DefaultBinaryInstallPath(), "snyk-cli-download.lock")
 }
-func (c *Config) IsErrorReportingEnabled() bool          { return c.isErrorReportingEnabled.Get() }
-func (c *Config) IsSnykOssEnabled() bool                 { return c.isSnykOssEnabled.Get() }
-func (c *Config) IsSnykCodeEnabled() bool                { return c.isSnykCodeEnabled.Get() }
-func (c *Config) IsSnykIacEnabled() bool                 { return c.isSnykIacEnabled.Get() }
-func (c *Config) IsSnykContainerEnabled() bool           { return c.isSnykContainerEnabled.Get() }
-func (c *Config) IsSnykAdvisorEnabled() bool             { return c.isSnykAdvisorEnabled.Get() }
-func (c *Config) LogPath() string                        { return c.logPath }
+func (c *Config) IsErrorReportingEnabled() bool { return c.isErrorReportingEnabled.Get() }
+func (c *Config) IsSnykOssEnabled() bool        { return c.isSnykOssEnabled.Get() }
+func (c *Config) IsSnykCodeEnabled() bool       { return c.isSnykCodeEnabled.Get() }
+func (c *Config) IsSnykIacEnabled() bool        { return c.isSnykIacEnabled.Get() }
+func (c *Config) IsSnykContainerEnabled() bool  { return c.isSnykContainerEnabled.Get() }
+func (c *Config) IsSnykAdvisorEnabled() bool    { return c.isSnykAdvisorEnabled.Get() }
+func (c *Config) LogPath() string {
+	c.m.Lock()
+	defer c.m.Unlock()
+	return c.logPath
+}
 func (c *Config) SnykApi() string                        { return c.snykApiUrl }
 func (c *Config) SnykCodeApi() string                    { return c.snykCodeApiUrl }
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
@@ -431,9 +441,15 @@ func (c *Config) SetToken(token string) {
 		c.engine.GetConfiguration().Set(configuration.AUTHENTICATION_TOKEN, token)
 	}
 }
-func (c *Config) SetFormat(format string) { c.format = format }
+func (c *Config) SetFormat(format string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.format = format
+}
 
 func (c *Config) SetLogPath(logPath string) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.logPath = logPath
 }
 
@@ -468,8 +484,8 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 	clientWriter := lsp.New(server)
 	writers := []io.Writer{clientWriter}
 
-	if c.logPath != "" {
-		c.logFile, err = os.OpenFile(c.logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+	if c.LogPath() != "" {
+		c.logFile, err = os.OpenFile(c.LogPath(), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 		if err != nil {
 			log.Err(err).Msg("couldn't open logfile")
 		} else {
@@ -479,6 +495,8 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 	}
 
 	writer := zerolog.MultiLevelWriter(writers...)
+	c.m.Lock()
+	defer c.m.Unlock()
 	log.Logger = zerolog.New(writer).With().Timestamp().Logger()
 	c.logger = log.Logger
 }
@@ -753,6 +771,8 @@ func (c *Config) SetSnykLearnCodeActionsEnabled(enabled bool) {
 }
 
 func (c *Config) SetLogLevel(level string) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	parseLevel, err := zerolog.ParseLevel(level)
 	if err == nil {
 		zerolog.SetGlobalLevel(parseLevel)
@@ -760,9 +780,22 @@ func (c *Config) SetLogLevel(level string) {
 }
 
 func (c *Config) LogLevel() string {
+	c.m.Lock()
+	defer c.m.Unlock()
 	return zerolog.GlobalLevel().String()
 }
 
 func (c *Config) Logger() zerolog.Logger {
+	c.m.Lock()
+	defer c.m.Unlock()
 	return c.logger
+}
+
+func (c *Config) TokenAsOAuthToken() oauth2.Token {
+	var oauthToken oauth2.Token
+	err := json.Unmarshal([]byte(currentConfig.Token()), &oauthToken)
+	if err != nil {
+		log.Err(err).Msg("failed to unmarshal oauth token")
+	}
+	return oauthToken
 }

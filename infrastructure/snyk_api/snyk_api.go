@@ -46,6 +46,7 @@ type SastResponse struct {
 	Org                         string          `json:"org"`
 	SupportedLanguages          []string        `json:"supportedLanguages"`
 	ReportFalsePositivesEnabled bool            `json:"reportFalsePositivesEnabled"`
+	AutofixEnabled              bool            `json:"autofixEnabled"`
 }
 
 type activeUserResponse struct {
@@ -66,8 +67,8 @@ type ActiveUser struct {
 }
 
 type SnykApiClient interface {
-	SastEnabled() (SastResponse, error)
-	GetActiveUser() (ActiveUser, error)
+	SastSettings() (sastResponse SastResponse, err error)
+	GetActiveUser() (user ActiveUser, err error)
 }
 
 type SnykApiError struct {
@@ -94,8 +95,9 @@ func NewSnykApiClient(client func() *http.Client) SnykApiClient {
 	return &s
 }
 
-func (s *SnykApiClientImpl) SastEnabled() (SastResponse, error) {
-	log.Debug().Str("method", "SastEnabled").Msg("API: Getting SastEnabled")
+func (s *SnykApiClientImpl) SastSettings() (SastResponse, error) {
+	method := "SastSettings"
+	log.Debug().Str("method", method).Msg("API: Getting SastEnabled")
 	path := "/cli-config/settings/sast"
 	organization := config.CurrentConfig().Organization()
 	if organization != "" {
@@ -104,7 +106,7 @@ func (s *SnykApiClientImpl) SastEnabled() (SastResponse, error) {
 	responseBody, err := s.doCall("GET", path, nil)
 	if err != nil {
 		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
-		log.Err(fmtErr).Str("method", "SastEnabled").Msg("error when calling sastEnabled endpoint")
+		log.Err(fmtErr).Str("method", method).Msg("error when calling sastEnabled endpoint")
 		return SastResponse{}, err
 	}
 
@@ -112,10 +114,10 @@ func (s *SnykApiClientImpl) SastEnabled() (SastResponse, error) {
 	unmarshalErr := json.Unmarshal(responseBody, &response)
 	if unmarshalErr != nil {
 		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
-		log.Err(fmtErr).Str("method", "SastEnabled").Msg("couldn't unmarshal SastResponse")
+		log.Err(fmtErr).Str("method", method).Msg("couldn't unmarshal SastResponse")
 		return SastResponse{}, err
 	}
-	log.Debug().Str("method", "SastEnabled").Msg("API: Done")
+	log.Debug().Str("method", method).Msg("API: Done")
 	return response, nil
 }
 

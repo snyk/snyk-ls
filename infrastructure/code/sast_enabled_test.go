@@ -17,6 +17,7 @@
 package code
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -185,4 +186,17 @@ func TestIsSastEnabled(t *testing.T) {
 
 			assert.Equal(t, expectedShowMessageRequest, <-channel)
 		})
+
+	for _, autofixEnabled := range []bool{true, false} {
+		autofixEnabledStr := strconv.FormatBool(autofixEnabled)
+
+		t.Run("should return "+autofixEnabledStr+" if Snyk Code is enabled and the API returns "+autofixEnabledStr, func(t *testing.T) {
+			apiClient.CodeEnabled = true
+			apiClient.AutofixEnabled = autofixEnabled
+
+			scanner.isSastEnabled()
+
+			assert.Equal(t, autofixEnabled, getCodeSettings().isAutofixEnabled.Get())
+		})
+	}
 }
