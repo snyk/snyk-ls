@@ -70,13 +70,15 @@ func (i *Initializer) Init() error {
 
 		return nil
 	}
-
-	err := i.handleNotAuthenticatedAndManualAuthActive(currentConfig.AutomaticAuthentication())
-	if err != nil {
-		return err
+	if !currentConfig.AutomaticAuthentication() {
+		err := i.handleNotAuthenticatedAndManualAuthActive()
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 
-	err = i.authenticate(i.authenticationService, errorMessage)
+	err := i.authenticate(i.authenticationService, errorMessage)
 	if err != nil {
 		log.Err(err).Str("method", "auth.initializer.init").Msg("failed to authenticate")
 		i.notifier.SendError(err)
@@ -103,18 +105,15 @@ func (i *Initializer) authenticate(authenticationService snyk.AuthenticationServ
 	return nil
 }
 
-func (i *Initializer) handleNotAuthenticatedAndManualAuthActive(automaticAuthentication bool) error {
-	if !automaticAuthentication {
-		err := &snyk.AuthenticationFailedError{ManualAuthentication: true}
-		i.notifier.SendError(err)
-		msg := "Skipping scan - user is not authenticated and automatic authentication is disabled"
-		log.Info().Msg(msg)
+func (i *Initializer) handleNotAuthenticatedAndManualAuthActive() error {
+	err := &snyk.AuthenticationFailedError{ManualAuthentication: true}
+	i.notifier.SendError(err)
+	msg := "Skipping scan - user is not authenticated and automatic authentication is disabled"
+	log.Info().Msg(msg)
 
-		// If the user is not authenticated and auto-authentication is disabled, return an error to indicate the user
-		// could not be authenticated and the scan cannot start
-		return errors.New(msg)
-	}
-	return nil
+	// If the user is not authenticated and auto-authentication is disabled, return an error to indicate the user
+	// could not be authenticated and the scan cannot start
+	return errors.New(msg)
 }
 
 func (i *Initializer) handleInvalidCredentials() {

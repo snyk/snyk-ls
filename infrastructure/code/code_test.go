@@ -252,7 +252,7 @@ func setupTestScanner(t *testing.T) (*FakeSnykCodeClient, *Scanner) {
 	learnMock.
 		EXPECT().
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(learn.Lesson{}, nil).AnyTimes()
+		Return(&learn.Lesson{}, nil).AnyTimes()
 	scanner := New(
 		NewBundler(snykCodeMock, performance.NewTestInstrumentor()),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
@@ -270,7 +270,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 	learnMock.
 		EXPECT().
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(learn.Lesson{}, nil).AnyTimes()
+		Return(&learn.Lesson{}, nil).AnyTimes()
 	t.Run(
 		"should create bundle when hash empty", func(t *testing.T) {
 			testutil.UnitTest(t)
@@ -618,7 +618,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 	learnMock.
 		EXPECT().
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(learn.Lesson{}, nil).AnyTimes()
+		Return(&learn.Lesson{}, nil).AnyTimes()
 
 	t.Run(
 		"should not add autofix after analysis when not enabled", func(t *testing.T) {
