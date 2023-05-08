@@ -52,6 +52,7 @@ func (p *oAuthProvider) SetAuthURL(url string) {
 }
 
 func (p *oAuthProvider) ClearAuthentication(_ context.Context) error {
+	log.Debug().Msg("clearing authentication")
 	p.config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
 	p.config.Set(configuration.AUTHENTICATION_TOKEN, "")
 	p.config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "")

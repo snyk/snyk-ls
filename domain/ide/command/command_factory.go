@@ -62,7 +62,7 @@ func CreateFromCommandData(
 		apiClient := snyk_api.NewSnykApiClient(config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient)
 		return &sastEnabled{command: commandData, apiClient: apiClient}, nil
 	case snyk.GetActiveUserCommand:
-		return &getActiveUser{command: commandData}, nil
+		return &getActiveUser{command: commandData, authService: authService, notifier: notifier}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)
