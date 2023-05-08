@@ -202,7 +202,8 @@ func (b *Bundle) addCodeActions(ctx context.Context, issues []snyk.Issue) {
 			// backend.
 			supported, err := b.isAutofixSupportedForExtension(ctx, issues[i].AffectedFilePath)
 			if err != nil {
-				log.Error().Str("method", method).Msg("Failed to check if autofix is supported for extension.")
+				log.Error().Err(err).Str("method", method).Msg("Failed to check if autofix is supported for extension.")
+				b.errorReporter.CaptureError(err)
 			} else {
 				if supported {
 					issues[i].CodeActions = append(issues[i].CodeActions, *b.createDeferredAutofixCodeAction(ctx, issues[i]))
