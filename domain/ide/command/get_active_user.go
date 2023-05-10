@@ -18,9 +18,6 @@ package command
 
 import (
 	"context"
-	"strings"
-
-	"github.com/sourcegraph/go-lsp"
 
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -41,10 +38,5 @@ func (cmd *getActiveUser) Command() snyk.CommandData {
 
 func (cmd *getActiveUser) Execute(ctx context.Context) (any, error) {
 	user, err := snyk.GetActiveUser()
-	if err != nil && strings.Contains(err.Error(), "400 Bad Request") {
-		cmd.notifier.SendShowMessage(lsp.MTWarning, "Logging out automatically, available credentials are invalid. Please re-authenticate.")
-		cmd.authService.Logout(ctx)
-	}
-
 	return user, err
 }
