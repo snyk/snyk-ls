@@ -120,7 +120,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	loc := setupServer(t)
 
 	// reset to use real service
-	command.ResetService()
+	command.SetService(command.NewService(nil, nil))
 
 	config.CurrentConfig().SetAutomaticAuthentication(false)
 	_, err := loc.Client.Call(ctx, "initialize", nil)
@@ -147,7 +147,7 @@ func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
 	loc := setupServer(t)
 
 	// reset to use real service
-	command.ResetService()
+	command.SetService(command.NewService(nil, nil))
 
 	authenticationMock := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
 	params := lsp.ExecuteCommandParams{Command: snyk.CopyAuthLinkCommand}
