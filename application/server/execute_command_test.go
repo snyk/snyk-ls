@@ -161,19 +161,6 @@ func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
 	assert.Equal(t, authenticationMock.ExpectedAuthURL, actualURL)
 }
 
-func Test_executeCommand_shouldExecuteOAuthRefreshCommand(t *testing.T) {
-	loc := setupServer(t)
-	params := lsp.ExecuteCommandParams{Command: snyk.OAuthRefreshCommand}
-
-	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	service := command.Service().(*snyk.CommandServiceMock)
-	assert.Equal(t, snyk.OAuthRefreshCommand, service.ExecutedCommands()[0].Command().CommandId)
-}
-
 func Test_TrustWorkspaceFolders(t *testing.T) {
 	t.Run("Doesn't mutate trusted folders, if trusted folders disabled", func(t *testing.T) {
 		loc := setupServerWithCustomDI(t, false)

@@ -128,9 +128,6 @@ Right now the language server supports the following actions:
 - `TrustWorkspaceFoldersCommand` checks for trusted workspace folders and asks for trust if necessary
   - command: `snyk.trustWorkspaceFolders`
   - args: empty
-- `OAuthRefreshCommand` triggers a Snyk API call to refresh the oauth token
-  - command: `snyk.oauthRefreshCommand`
-  - args: empty
 - `OpenLearnLesson` opens the given lesson on the Snyk Learn website
   - command: `snyk.openLearnLesson`
   - args:
