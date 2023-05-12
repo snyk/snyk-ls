@@ -57,7 +57,7 @@ func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, files map[st
 
 	uploadedFiles := 0
 	t := progress.NewTracker(false)
-	t.Begin("Snyk Code analysis for "+bundle.rootPath, "Uploading batches...")
+	t.BeginWithMessage("Snyk Code analysis for "+bundle.rootPath, "Uploading batches...")
 	defer t.EndWithMessage("Upload done.")
 	for i, uploadBatch := range uploadBatches {
 		if err := ctx.Err(); err != nil {
@@ -81,7 +81,7 @@ func (b *BundleUploader) groupInBatches(
 	files map[string]BundleFile,
 ) []*UploadBatch {
 	t := progress.NewTracker(false)
-	t.Begin("Snyk Code analysis for "+bundle.rootPath, "Creating batches...")
+	t.BeginWithMessage("Snyk Code analysis for "+bundle.rootPath, "Creating batches...")
 	defer t.EndWithMessage("Batches created.")
 
 	method := "code.groupInBatches"

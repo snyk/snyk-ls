@@ -131,7 +131,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 	}
 
 	p := progress.NewTracker(false)
-	p.Begin("Snyk Code analysis for "+b.rootPath, "Retrieving results...")
+	p.BeginWithMessage("Snyk Code analysis for "+b.rootPath, "Retrieving results...")
 
 	method := "code.retrieveAnalysis"
 	s := b.instrumentor.StartSpan(ctx, method)
@@ -246,8 +246,8 @@ func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk
 		defer b.instrumentor.Finish(s)
 
 		progress := progress.NewTracker(true)
-		fixMsg := "Attempting to fix " + issue.ID + " (Snyk AI)"
-		progress.Begin("Fixing issue", fixMsg)
+		fixMsg := "Attempting to fix " + issue.ID + " (Snyk)"
+		progress.BeginWithMessage(fixMsg, "")
 		b.notifier.SendShowMessage(sglsp.Info, fixMsg)
 
 		relativePath, err := ToRelativeUnixPath(b.rootPath, issue.AffectedFilePath)
@@ -310,10 +310,10 @@ func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk
 					continue
 				}
 				if edit != nil {
-					b.notifier.SendShowMessage(sglsp.Info, "Congratulations! You’ve just fixed this "+issue.ID+" issue.")
+					b.notifier.SendShowMessage(sglsp.Info, "Congratulations! 🎉 You’ve just fixed this "+issue.ID+" issue.")
 					progress.End()
 				} else {
-					b.notifier.SendShowMessage(sglsp.MTError, "Oh snap! The fix did not remediate the issue and was not applied.")
+					b.notifier.SendShowMessage(sglsp.MTError, "Oh snap! 😔 The fix did not remediate the issue and was not applied.")
 					progress.End()
 				}
 
@@ -322,7 +322,7 @@ func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk
 		}
 	}
 
-	action, err := snyk.NewDeferredCodeAction("Fix this issue: "+issue.ID+" (Snyk)", &autofixEditCallback, nil)
+	action, err := snyk.NewDeferredCodeAction("⚡ Fix this issue: "+issue.ID+" (Snyk)", &autofixEditCallback, nil)
 	if err != nil {
 		log.Error().Msg("failed to create deferred autofix code action")
 		b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please contact Snyk support.")

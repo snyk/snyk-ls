@@ -75,8 +75,11 @@ func (t *Tracker) begin(title string, message string, unquantifiableLength bool)
 	t.lastReport = time.Now()
 }
 
-// Starts the progress, reporting to the client UI.
-func (t *Tracker) Begin(title, message string) {
+func (t *Tracker) Begin(title string) {
+	t.begin(title, "", false)
+}
+
+func (t *Tracker) BeginWithMessage(title, message string) {
 	t.begin(title, message, false)
 }
 

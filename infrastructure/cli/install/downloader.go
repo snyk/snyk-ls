@@ -101,9 +101,9 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	log.Info().Str("download_url", downloadURL).Msgf("Snyk CLI %s in progress...", kindStr)
 
 	if isUpdate {
-		d.progressTracker.Begin("Updating Snyk CLI...", "")
+		d.progressTracker.BeginWithMessage("Updating Snyk CLI...", "")
 	} else {
-		d.progressTracker.Begin("Downloading Snyk CLI...", "We download Snyk CLI to run security scans.")
+		d.progressTracker.BeginWithMessage("Downloading Snyk CLI...", "We download Snyk CLI to run security scans.")
 	}
 
 	doneCh := make(chan bool)

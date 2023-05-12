@@ -28,7 +28,7 @@ func TestBeginProgress(t *testing.T) {
 	channel := make(chan lsp.ProgressParams, 2)
 	progress := NewTestTracker(channel, nil)
 
-	progress.Begin("title", "message")
+	progress.BeginWithMessage("title", "message")
 
 	assert.Equal(
 		t,

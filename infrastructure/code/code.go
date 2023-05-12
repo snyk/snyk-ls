@@ -165,7 +165,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 
 	// Start the scan
 	t := progress.NewTracker(false)
-	t.Begin("Snyk Code: Collecting files in \""+folderPath+"\"", "Evaluating ignores and counting files...")
+	t.BeginWithMessage("Snyk Code: Collecting files in \""+folderPath+"\"", "Evaluating ignores and counting files...")
 	fileFilter, _ := sc.fileFilters.Load(folderPath)
 	if fileFilter == nil {
 		fileFilter = filefilter.NewFileFilter(folderPath, config.CurrentConfig().Logger())
