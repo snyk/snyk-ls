@@ -75,6 +75,7 @@ func (t *Tracker) begin(title string, message string, unquantifiableLength bool)
 	t.lastReport = time.Now()
 }
 
+// Starts the progress, reporting to the client UI.
 func (t *Tracker) Begin(title, message string) {
 	t.begin(title, message, false)
 }
@@ -100,7 +101,11 @@ func (t *Tracker) Report(percentage int) {
 	t.ReportWithMessage(percentage, "")
 }
 
-func (t *Tracker) End(message string) {
+func (t *Tracker) End() {
+	t.EndWithMessage("")
+}
+
+func (t *Tracker) EndWithMessage(message string) {
 	if t.finished {
 		panic("Called end progress twice. This breaks LSP in Eclipse fix me now and avoid headaches later")
 	}

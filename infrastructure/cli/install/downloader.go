@@ -180,9 +180,9 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	err = d.moveToDestination(executableFileName, cliTmpFile.Name())
 
 	if isUpdate {
-		d.progressTracker.End("Snyk CLI has been updated.")
+		d.progressTracker.EndWithMessage("Snyk CLI has been updated.")
 	} else {
-		d.progressTracker.End("Snyk CLI has been downloaded.")
+		d.progressTracker.EndWithMessage("Snyk CLI has been downloaded.")
 	}
 
 	return err

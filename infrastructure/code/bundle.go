@@ -26,8 +26,10 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -47,8 +49,8 @@ type Bundle struct {
 	missingFiles  []string
 	limitToFiles  []string
 	rootPath      string
-	scanNotifier  snyk.ScanNotifier
 	learnService  learn.Service
+	notifier      notification.Notifier
 }
 
 func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {
@@ -155,14 +157,14 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 				Int("fileCount", len(b.UploadBatches)).
 				Msg("error retrieving diagnostics...")
 			b.errorReporter.CaptureErrorAndReportAsIssue(b.rootPath, err)
-			p.End(fmt.Sprintf("Analysis failed: %v", err))
+			p.EndWithMessage(fmt.Sprintf("Analysis failed: %v", err))
 			return []snyk.Issue{}, err
 		}
 
 		if status.message == completeStatus {
 			logger.Trace().Str("requestId", b.requestId).
 				Msg("sending diagnostics...")
-			p.End("Analysis complete.")
+			p.EndWithMessage("Analysis complete.")
 
 			b.addCodeActions(ctx, issues)
 
@@ -175,7 +177,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 			err := errors.New("analysis call timed out")
 			log.Error().Err(err).Msg("timeout...")
 			b.errorReporter.CaptureErrorAndReportAsIssue(b.rootPath, err)
-			p.End("Snyk Code Analysis timed out")
+			p.EndWithMessage("Snyk Code Analysis timed out")
 			return []snyk.Issue{}, err
 		}
 		time.Sleep(1 * time.Second)
@@ -188,8 +190,8 @@ func (b *Bundle) addCodeActions(ctx context.Context, issues []snyk.Issue) {
 
 	autoFixEnabled := getCodeSettings().isAutofixEnabled.Get()
 	learnEnabled := config.CurrentConfig().IsSnykLearnCodeActionsEnabled()
-	log.Debug().Str("method", method).Msg("Autofix is enabled: " + strconv.FormatBool(autoFixEnabled))
-	log.Debug().Str("method", method).Msg("Snyk Learn is enabled: " + strconv.FormatBool(learnEnabled))
+	log.Info().Str("method", method).Msg("Autofix is enabled: " + strconv.FormatBool(autoFixEnabled))
+	log.Info().Str("method", method).Msg("Snyk Learn is enabled: " + strconv.FormatBool(learnEnabled))
 
 	if !autoFixEnabled && !learnEnabled {
 		log.Trace().Msg("Autofix | Snyk Learn code actions are disabled, not adding code actions")
@@ -208,7 +210,7 @@ func (b *Bundle) addCodeActions(ctx context.Context, issues []snyk.Issue) {
 				if supported {
 					issues[i].CodeActions = append(issues[i].CodeActions, *b.createDeferredAutofixCodeAction(ctx, issues[i]))
 				} else {
-					log.Debug().Str("method", method).Msg("Autofix is not supported for " + issues[i].AffectedFilePath + " file extension.")
+					log.Info().Str("method", method).Msg("Autofix is not supported for " + issues[i].AffectedFilePath + " file extension.")
 				}
 			}
 		}
@@ -238,11 +240,15 @@ func (b *Bundle) getShardKey(rootPath string, authToken string) string {
 
 // returns the deferred code action CodeAction which calls autofix.
 func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk.Issue) *snyk.CodeAction {
-
 	autofixEditCallback := func() *snyk.WorkspaceEdit {
 		method := "code.enhanceWithAutofixSuggestionEdits"
 		s := b.instrumentor.StartSpan(ctx, method)
 		defer b.instrumentor.Finish(s)
+
+		progress := progress.NewTracker(true)
+		fixMsg := "Attempting to fix " + issue.ID + " (Snyk AI)"
+		progress.Begin("Fixing issue", fixMsg)
+		b.notifier.SendShowMessage(sglsp.Info, fixMsg)
 
 		relativePath, err := ToRelativeUnixPath(b.rootPath, issue.AffectedFilePath)
 		if err != nil {
@@ -251,6 +257,7 @@ func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk
 				Str("rootPath", b.rootPath).
 				Str("AffectedFilePath", issue.AffectedFilePath).
 				Msg("error converting to relative file path")
+			b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please contact Snyk support.")
 			return nil
 		}
 		encodedRelativePath := EncodePath(relativePath)
@@ -278,6 +285,8 @@ func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk
 				if len(fixSuggestions) > 0 {
 					// TODO(alex.gronskiy): currently, only the first ([0]) fix suggstion goes into the fix
 					edit = &fixSuggestions[0].AutofixEdit
+				} else {
+					log.Info().Str("method", method).Str("requestId", b.requestId).Msg("No good fix could be computed.")
 				}
 				complete = true
 			}
@@ -285,7 +294,7 @@ func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk
 		}
 
 		// Actual polling loop.
-		pollingTicker := time.NewTicker(1 * time.Second)
+		pollingTicker := time.NewTicker(7 * time.Second)
 		defer pollingTicker.Stop()
 		timeoutTimer := time.NewTimer(30 * time.Second)
 		defer timeoutTimer.Stop()
@@ -293,19 +302,30 @@ func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk
 			select {
 			case <-timeoutTimer.C:
 				log.Error().Str("method", "RunAutofix").Str("requestId", b.requestId).Msg("timeout requesting autofix")
+				b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please try again. Request ID: "+b.requestId)
 				return nil
 			case <-pollingTicker.C:
 				edit, complete := pollFunc()
-				if complete {
-					return edit
+				if !complete {
+					continue
 				}
+				if edit != nil {
+					b.notifier.SendShowMessage(sglsp.Info, "Congratulations! You’ve just fixed this "+issue.ID+" issue.")
+					progress.End()
+				} else {
+					b.notifier.SendShowMessage(sglsp.MTError, "Oh snap! The fix did not remediate the issue and was not applied.")
+					progress.End()
+				}
+
+				return edit
 			}
 		}
 	}
 
-	action, err := snyk.NewDeferredCodeAction("Attempt to fix suggestion "+issue.ID+" (Snyk)", &autofixEditCallback, nil)
+	action, err := snyk.NewDeferredCodeAction("Fix this issue: "+issue.ID+" (Snyk)", &autofixEditCallback, nil)
 	if err != nil {
 		log.Error().Msg("failed to create deferred autofix code action")
+		b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please contact Snyk support.")
 		return nil
 	}
 	return &action
