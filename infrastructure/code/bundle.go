@@ -294,7 +294,7 @@ func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk
 		}
 
 		// Actual polling loop.
-		pollingTicker := time.NewTicker(7 * time.Second)
+		pollingTicker := time.NewTicker(1 * time.Second)
 		defer pollingTicker.Stop()
 		timeoutTimer := time.NewTimer(30 * time.Second)
 		defer timeoutTimer.Stop()
