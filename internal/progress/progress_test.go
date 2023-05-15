@@ -28,7 +28,7 @@ func TestBeginProgress(t *testing.T) {
 	channel := make(chan lsp.ProgressParams, 2)
 	progress := NewTestTracker(channel, nil)
 
-	progress.Begin("title", "message")
+	progress.BeginWithMessage("title", "message")
 
 	assert.Equal(
 		t,
@@ -85,7 +85,7 @@ func TestEndProgress(t *testing.T) {
 	progress := NewTestTracker(channel, nil)
 
 	workProgressEnd := output.Value.(lsp.WorkDoneProgressEnd)
-	progress.End(workProgressEnd.Message)
+	progress.EndWithMessage(workProgressEnd.Message)
 
 	assert.Equal(t, output, <-channel)
 }
@@ -103,9 +103,9 @@ func TestEndProgressTwice(t *testing.T) {
 	progress := NewTestTracker(channel, nil)
 
 	workProgressEnd := output.Value.(lsp.WorkDoneProgressEnd)
-	progress.End(workProgressEnd.Message)
+	progress.EndWithMessage(workProgressEnd.Message)
 
 	assert.Panics(t, func() {
-		progress.End(workProgressEnd.Message)
+		progress.EndWithMessage(workProgressEnd.Message)
 	})
 }

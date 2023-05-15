@@ -73,7 +73,6 @@ type Scanner struct {
 	changedFilesMutex sync.Mutex
 	scanStatusMutex   sync.Mutex
 	runningScans      map[string]*ScanStatus
-	scanNotifier      snyk.ScanNotifier
 	changedPaths      map[string]map[string]bool // tracks files that were changed since the last scan per workspace folder
 	learnService      learn.Service
 	fileFilters       *xsync.MapOf[string, *filefilter.FileFilter]
@@ -166,14 +165,14 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 
 	// Start the scan
 	t := progress.NewTracker(false)
-	t.Begin("Snyk Code: Collecting files in \""+folderPath+"\"", "Evaluating ignores and counting files...")
+	t.BeginWithMessage("Snyk Code: Collecting files in \""+folderPath+"\"", "Evaluating ignores and counting files...")
 	fileFilter, _ := sc.fileFilters.Load(folderPath)
 	if fileFilter == nil {
 		fileFilter = filefilter.NewFileFilter(folderPath, config.CurrentConfig().Logger())
 		sc.fileFilters.Store(folderPath, fileFilter)
 	}
 	files := fileFilter.FindNonIgnoredFiles()
-	t.End("Collected files")
+	t.EndWithMessage("Collected files")
 	metrics := sc.newMetrics(startTime)
 	results, err := sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
 
@@ -234,6 +233,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
 	requestId := span.GetTraceId() // use span trace id as code-request-id
+	log.Info().Str("requestId", requestId).Msg("Starting Code analysis.")
 
 	bundle, err := sc.createBundle(span.Context(), requestId, path, files, changedFiles)
 	if err != nil {
@@ -351,9 +351,9 @@ func (sc *Scanner) createBundle(ctx context.Context,
 		requestId:     requestId,
 		rootPath:      rootPath,
 		errorReporter: sc.errorReporter,
-		scanNotifier:  sc.scanNotifier,
 		limitToFiles:  limitToFiles,
 		learnService:  sc.learnService,
+		notifier:      sc.notifier,
 	}
 	if len(fileHashes) > 0 {
 		b.BundleHash, b.missingFiles, err = sc.BundleUploader.SnykCode.CreateBundle(span.Context(), fileHashes)

@@ -20,10 +20,25 @@ import (
 	"context"
 	"testing"
 
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/domain/observability/performance"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/util"
 )
+
+var bundleWithFiles = &UploadBatch{
+	hash:      "bundleWithFilesHash",
+	documents: map[string]BundleFile{"file": {}},
+}
+var bundleWithMultipleFiles = &UploadBatch{
+	hash: "bundleWithMultipleFilesHash",
+	documents: map[string]BundleFile{
+		"file":    {},
+		"another": {},
+	},
+}
 
 func Test_getShardKey(t *testing.T) {
 	b := Bundle{BundleHash: ""}
@@ -106,14 +121,44 @@ func Test_BundleGroup_AddBundle(t *testing.T) {
 	})
 }
 
-var bundleWithFiles = &UploadBatch{
-	hash:      "bundleWithFilesHash",
-	documents: map[string]BundleFile{"file": {}},
-}
-var bundleWithMultipleFiles = &UploadBatch{
-	hash: "bundleWithMultipleFilesHash",
-	documents: map[string]BundleFile{
-		"file":    {},
-		"another": {},
-	},
+func Test_AutofixMessages(t *testing.T) {
+	fakeSnykCode := FakeSnykCodeClient{}
+	mockNotifier := notification.NewMockNotifier()
+	bundle := Bundle{
+		SnykCode:     &fakeSnykCode,
+		notifier:     mockNotifier,
+		instrumentor: performance.NewTestInstrumentor(),
+	}
+
+	t.Run("Shows attempt message when fix requested", func(t *testing.T) {
+		fn := bundle.autofixFunc(context.Background(), FakeIssue)
+		fn()
+
+		assert.Contains(t, mockNotifier.SentMessages(), sglsp.ShowMessageParams{
+			Type:    sglsp.Info,
+			Message: "Attempting to fix SNYK-123 (Snyk)",
+		})
+	})
+
+	t.Run("Shows success message when fix provided", func(t *testing.T) {
+		fn := bundle.autofixFunc(context.Background(), FakeIssue)
+		fn()
+
+		assert.Contains(t, mockNotifier.SentMessages(), sglsp.ShowMessageParams{
+			Type:    sglsp.Info,
+			Message: "Congratulations! 🎉 You’ve just fixed this SNYK-123 issue.",
+		})
+	})
+
+	t.Run("Shows error message when no fix available", func(t *testing.T) {
+		fakeSnykCode.NoFixSuggestions = true
+
+		fn := bundle.autofixFunc(context.Background(), FakeIssue)
+		fn()
+
+		assert.Contains(t, mockNotifier.SentMessages(), sglsp.ShowMessageParams{
+			Type:    sglsp.MTError,
+			Message: "Oh snap! 😔 The fix did not remediate the issue and was not applied.",
+		})
+	})
 }
