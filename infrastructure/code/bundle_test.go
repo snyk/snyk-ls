@@ -19,12 +19,15 @@ package code
 import (
 	"context"
 	"testing"
+	"time"
 
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/domain/observability/performance"
+	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -121,16 +124,26 @@ func Test_BundleGroup_AddBundle(t *testing.T) {
 	})
 }
 
-func Test_AutofixMessages(t *testing.T) {
-	fakeSnykCode := FakeSnykCodeClient{}
-	mockNotifier := notification.NewMockNotifier()
-	bundle := Bundle{
-		SnykCode:     &fakeSnykCode,
-		notifier:     mockNotifier,
-		instrumentor: performance.NewTestInstrumentor(),
+func Test_AutofixProgress(t *testing.T) {
+	setupFn := func(hasFixSuggestions bool) (Bundle, *notification.MockNotifier, chan lsp.ProgressParams) {
+
+		fakeSnykCode := FakeSnykCodeClient{
+			NoFixSuggestions: !hasFixSuggestions,
+		}
+		mockNotifier := notification.NewMockNotifier()
+		progressChan := make(chan lsp.ProgressParams, 4)
+		progressTracker := progress.NewTestTracker(progressChan, nil)
+
+		return Bundle{
+			SnykCode:     &fakeSnykCode,
+			notifier:     mockNotifier,
+			instrumentor: performance.NewTestInstrumentor(),
+			progress:     progressTracker,
+		}, mockNotifier, progressChan
 	}
 
 	t.Run("Shows attempt message when fix requested", func(t *testing.T) {
+		bundle, mockNotifier, _ := setupFn(true)
 		fn := bundle.autofixFunc(context.Background(), FakeIssue)
 		fn()
 
@@ -141,6 +154,7 @@ func Test_AutofixMessages(t *testing.T) {
 	})
 
 	t.Run("Shows success message when fix provided", func(t *testing.T) {
+		bundle, mockNotifier, _ := setupFn(true)
 		fn := bundle.autofixFunc(context.Background(), FakeIssue)
 		fn()
 
@@ -151,7 +165,7 @@ func Test_AutofixMessages(t *testing.T) {
 	})
 
 	t.Run("Shows error message when no fix available", func(t *testing.T) {
-		fakeSnykCode.NoFixSuggestions = true
+		bundle, mockNotifier, _ := setupFn(false)
 
 		fn := bundle.autofixFunc(context.Background(), FakeIssue)
 		fn()
@@ -160,5 +174,51 @@ func Test_AutofixMessages(t *testing.T) {
 			Type:    sglsp.MTError,
 			Message: "Oh snap! 😔 The fix did not remediate the issue and was not applied.",
 		})
+	})
+
+	t.Run("Begins progress when fix requested", func(t *testing.T) {
+		bundle, _, progressChan := setupFn(true)
+
+		fn := bundle.autofixFunc(context.Background(), FakeIssue)
+		fn()
+
+		// Use eventually to avoid deadlocking on the progress channel
+		assert.Eventually(t, func() bool {
+			<-progressChan // first message is irrelevant
+			beginProgressMsg := <-progressChan
+			return beginProgressMsg.Value.(lsp.WorkDoneProgressBegin).Title == "Attempting to fix SNYK-123 (Snyk)"
+		}, time.Second, time.Millisecond)
+	})
+
+	t.Run("Ends progress when fix is provided", func(t *testing.T) {
+		bundle, _, progressChan := setupFn(true)
+
+		fn := bundle.autofixFunc(context.Background(), FakeIssue)
+		fn()
+
+		// Use eventually to avoid deadlocking on the progress channel
+		assert.Eventually(t, func() bool {
+			// first two messages are begin and report progress
+			<-progressChan
+			<-progressChan
+			endProgressMsg := <-progressChan
+			return endProgressMsg.Value.(lsp.WorkDoneProgressEnd).Kind == "end"
+		}, time.Second, time.Millisecond)
+	})
+
+	t.Run("Ends progress when no fix provided", func(t *testing.T) {
+		bundle, _, progressChan := setupFn(false)
+
+		fn := bundle.autofixFunc(context.Background(), FakeIssue)
+		fn()
+
+		// Use eventually to avoid deadlocking on the progress channel
+		assert.Eventually(t, func() bool {
+			// first two messages are begin and report progress
+			<-progressChan
+			<-progressChan
+			endProgressMsg := <-progressChan
+			return endProgressMsg.Value.(lsp.WorkDoneProgressEnd).Kind == "end"
+		}, time.Second, time.Millisecond)
 	})
 }

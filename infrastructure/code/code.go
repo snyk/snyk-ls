@@ -354,6 +354,7 @@ func (sc *Scanner) createBundle(ctx context.Context,
 		limitToFiles:  limitToFiles,
 		learnService:  sc.learnService,
 		notifier:      sc.notifier,
+		progress:      progress.NewTracker(true),
 	}
 	if len(fileHashes) > 0 {
 		b.BundleHash, b.missingFiles, err = sc.BundleUploader.SnykCode.CreateBundle(span.Context(), fileHashes)
