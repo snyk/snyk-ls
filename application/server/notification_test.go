@@ -95,7 +95,7 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 	}
 
 	progressTracker := progress.NewTracker(true)
-	progressTracker.Begin("title", "message")
+	progressTracker.BeginWithMessage("title", "message")
 	// should receive progress notification
 	assert.Eventually(
 		t,

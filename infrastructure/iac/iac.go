@@ -114,7 +114,7 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	}
 	p := progress.NewTracker(false) // todo - get progress trackers via DI
 	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", path)
-	defer p.End("Snyk Iac Scan completed.")
+	defer p.EndWithMessage("Snyk Iac Scan completed.")
 
 	var workspacePath string
 	if uri.IsUriDirectory(documentURI) {

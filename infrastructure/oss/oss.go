@@ -156,7 +156,7 @@ func (oss *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	defer oss.instrumentor.Finish(s)
 	p := progress.NewTracker(false)
 	p.BeginUnquantifiableLength("Scanning for Snyk Open Source issues", path)
-	defer p.End("Snyk Open Source scan completed.")
+	defer p.EndWithMessage("Snyk Open Source scan completed.")
 	log.Debug().Str("method", method).Msg("started.")
 	defer log.Debug().Str("method", method).Msg("done.")
 
