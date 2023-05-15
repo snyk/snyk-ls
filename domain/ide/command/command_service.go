@@ -41,12 +41,6 @@ func NewService(authService snyk.AuthenticationService, notifier noti.Notifier) 
 	}
 }
 
-// ResetService resets the service instance to nil. This causes the next call to
-// Service to create a new instance.
-func ResetService() {
-	SetService(nil)
-}
-
 // SetService sets the singleton instance of the command service.
 func SetService(service snyk.CommandService) {
 	instance = service
