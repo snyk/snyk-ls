@@ -238,9 +238,8 @@ func (b *Bundle) getShardKey(rootPath string, authToken string) string {
 	return ""
 }
 
-// returns the deferred code action CodeAction which calls autofix.
-func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk.Issue) *snyk.CodeAction {
-	autofixEditCallback := func() *snyk.WorkspaceEdit {
+func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk.WorkspaceEdit {
+	editFn := func() *snyk.WorkspaceEdit {
 		method := "code.enhanceWithAutofixSuggestionEdits"
 		s := b.instrumentor.StartSpan(ctx, method)
 		defer b.instrumentor.Finish(s)
@@ -321,6 +320,13 @@ func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk
 			}
 		}
 	}
+
+	return editFn
+}
+
+// returns the deferred code action CodeAction which calls autofix.
+func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk.Issue) *snyk.CodeAction {
+	autofixEditCallback := b.autofixFunc(ctx, issue)
 
 	action, err := snyk.NewDeferredCodeAction("⚡ Fix this issue: "+issue.ID+" (Snyk)", &autofixEditCallback, nil)
 	if err != nil {
