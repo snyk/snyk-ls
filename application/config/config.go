@@ -424,13 +424,11 @@ func (c *Config) SetToken(token string) {
 	conf := c.engine.GetConfiguration()
 	if !isOauthToken && conf.GetString(configuration.AUTHENTICATION_TOKEN) != token {
 		log.Info().Msg("Token is not an OAuth token, setting token authentication in GAF")
-		c.authenticationMethod = lsp.TokenAuthentication
 		conf.Set(configuration.AUTHENTICATION_TOKEN, token)
 	}
 
 	if isOauthToken && conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN) != token {
 		log.Info().Err(err).Msg("setting oauth authentication in GAF")
-		c.authenticationMethod = lsp.OAuthAuthentication
 		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, token)
 	}
 
