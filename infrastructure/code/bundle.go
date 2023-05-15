@@ -51,7 +51,6 @@ type Bundle struct {
 	rootPath      string
 	learnService  learn.Service
 	notifier      notification.Notifier
-	progress      *progress.Tracker
 }
 
 func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {
@@ -245,8 +244,9 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 		s := b.instrumentor.StartSpan(ctx, method)
 		defer b.instrumentor.Finish(s)
 
+		progress := progress.NewTracker(true)
 		fixMsg := "Attempting to fix " + issue.ID + " (Snyk)"
-		b.progress.BeginWithMessage(fixMsg, "")
+		progress.BeginWithMessage(fixMsg, "")
 		b.notifier.SendShowMessage(sglsp.Info, fixMsg)
 
 		relativePath, err := ToRelativeUnixPath(b.rootPath, issue.AffectedFilePath)
@@ -310,10 +310,10 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 				}
 				if edit != nil {
 					b.notifier.SendShowMessage(sglsp.Info, "Congratulations! 🎉 You’ve just fixed this "+issue.ID+" issue.")
-					b.progress.End()
+					progress.End()
 				} else {
 					b.notifier.SendShowMessage(sglsp.MTError, "Oh snap! 😔 The fix did not remediate the issue and was not applied.")
-					b.progress.End()
+					progress.End()
 				}
 
 				return edit
