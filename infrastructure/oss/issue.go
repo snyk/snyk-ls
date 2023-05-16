@@ -59,7 +59,7 @@ func (i *ossIssue) addSnykLearnAction(learnService learn.Service, ep error_repor
 			return nil
 		}
 
-		if lesson != nil && lesson.Url != "" {
+		if lesson.Url != "" {
 			title := fmt.Sprintf("Learn more about %s (Snyk)", i.Title)
 			action = &snyk.CodeAction{
 				Title: title,

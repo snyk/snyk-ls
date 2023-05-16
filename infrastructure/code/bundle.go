@@ -346,7 +346,7 @@ func (b *Bundle) createOpenSnykLearnCodeAction(issue snyk.Issue) (ca *snyk.CodeA
 		return nil
 	}
 
-	if lesson != nil && lesson.Url != "" {
+	if lesson.Url != "" {
 		ca = &snyk.CodeAction{
 			Title: title,
 			Command: &snyk.CommandData{

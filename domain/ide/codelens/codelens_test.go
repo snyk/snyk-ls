@@ -26,7 +26,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -44,10 +43,8 @@ func Test_GetCodeLensFromCommand(t *testing.T) {
 
 func Test_GetCodeLensForPath(t *testing.T) {
 	testutil.IntegTest(t)
-	di.TestInit(t) // IntegTest doesn't automatically inits DI
+	di.TestInit(t)
 	testutil.OnlyEnableCode()
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
-	fakeAuthenticationProvider.IsAuthenticated = true
 
 	filePath, dir := code.TempWorkdirWithVulnerabilities(t)
 	folder := workspace.NewFolder(dir, "dummy", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier())

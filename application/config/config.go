@@ -151,6 +151,7 @@ type Config struct {
 	token                        string
 	deviceId                     string
 	clientCapabilities           sglsp.ClientCapabilities
+	m                            sync.Mutex
 	path                         string
 	defaultDirs                  []string
 	integrationName              string
@@ -170,9 +171,7 @@ type Config struct {
 	authenticationMethod         lsp.AuthenticationMethod
 	engine                       workflow.Engine
 	enableSnykLearnCodeActions   bool
-	logger                       *zerolog.Logger
-	storage                      StorageWithCallbacks
-	m                            sync.Mutex
+	logger                       zerolog.Logger
 }
 
 func CurrentConfig() *Config {
@@ -231,10 +230,7 @@ func New() *Config {
 
 func initWorkFlowEngine(c *Config) {
 	c.engine = app.CreateAppEngine()
-	conf := c.engine.GetConfiguration()
-	c.storage = NewStorage()
-	conf.SetStorage(c.storage)
-	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	c.engine.GetConfiguration().Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 	err := localworkflows.InitWhoAmIWorkflow(c.engine)
 	if err != nil {
 		log.Err(err).Msg("Failed to initialize WhoAmI workflow")
@@ -266,6 +262,8 @@ func (c *Config) IsTrustedFolderFeatureEnabled() bool {
 }
 
 func (c *Config) SetTrustedFolderFeatureEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.trustedFoldersFeatureEnabled = enabled
 }
 
@@ -305,9 +303,13 @@ func (c *Config) loadFile(fileName string) {
 }
 
 func (c *Config) NonEmptyToken() bool {
-	return c.Token() != ""
+	c.m.Lock()
+	defer c.m.Unlock()
+	return c.token != ""
 }
 func (c *Config) CliSettings() *CliSettings {
+	c.m.Lock()
+	defer c.m.Unlock()
 	return c.cliSettings
 }
 
@@ -353,6 +355,8 @@ func (c *Config) TokenChangesChannel() <-chan string {
 }
 
 func (c *Config) SetCliSettings(settings *CliSettings) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.cliSettings = settings
 }
 
@@ -413,32 +417,12 @@ func (c *Config) SetSeverityFilter(severityFilter lsp.SeverityFilter) bool {
 
 func (c *Config) SetToken(token string) {
 	c.m.Lock()
-
-	oldToken := c.token
-	// always update the token and auth method in the engine
-	c.token = token
-	c.m.Unlock()
-
-	_, err := c.TokenAsOAuthToken()
-	isOauthToken := err == nil
-	conf := c.engine.GetConfiguration()
-	if !isOauthToken && conf.GetString(configuration.AUTHENTICATION_TOKEN) != token {
-		log.Info().Msg("Token is not an OAuth token, setting token authentication in GAF")
-		conf.Set(configuration.AUTHENTICATION_TOKEN, token)
-	}
-
-	if isOauthToken && conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN) != token {
-		log.Info().Err(err).Msg("setting oauth authentication in GAF")
-		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, token)
-	}
-
-	// return if the token hasn't changed
-	if oldToken == token {
+	defer c.m.Unlock()
+	if token == c.token { // No need to do anything if the token hasn't changed
 		return
 	}
 
 	// Notify that the token has changed
-	c.m.Lock()
 	for _, channel := range c.tokenChangeChannels {
 		select {
 		case channel <- token:
@@ -448,9 +432,15 @@ func (c *Config) SetToken(token string) {
 		}
 	}
 	c.tokenChangeChannels = []chan string{}
-	c.m.Unlock()
-}
 
+	c.token = token
+	// update go application framework if using oauth
+	if c.authenticationMethod == lsp.OAuthAuthentication {
+		c.engine.GetConfiguration().Set(auth.CONFIG_KEY_OAUTH_TOKEN, token)
+	} else {
+		c.engine.GetConfiguration().Set(configuration.AUTHENTICATION_TOKEN, token)
+	}
+}
 func (c *Config) SetFormat(format string) {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -489,8 +479,8 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 	c.SetLogLevel(logLevel.String())
 	zerolog.TimeFieldFormat = time.RFC3339
 
-	levelWriter := lsp.New(server)
-	writers := []io.Writer{levelWriter}
+	clientWriter := lsp.New(server)
+	writers := []io.Writer{clientWriter}
 
 	if c.LogPath() != "" {
 		c.logFile, err = os.OpenFile(c.LogPath(), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
@@ -502,17 +492,11 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 		}
 	}
 
-	multiLevelWriter := zerolog.MultiLevelWriter(writers...)
-	writer := zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
-		w.Out = multiLevelWriter
-		w.NoColor = true
-		w.TimeFormat = time.RFC3339
-	})
+	writer := zerolog.MultiLevelWriter(writers...)
 	c.m.Lock()
 	defer c.m.Unlock()
 	log.Logger = zerolog.New(writer).With().Timestamp().Logger()
-	c.engine.SetLogger(&log.Logger)
-	c.logger = &log.Logger
+	c.logger = log.Logger
 }
 
 // DisableLoggingToFile closes the open log file and sets the global logger back to it's default
@@ -594,10 +578,14 @@ func (c *Config) configFiles() []string {
 }
 
 func (c *Config) Organization() string {
+	c.m.Lock()
+	defer c.m.Unlock()
 	return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
 }
 
 func (c *Config) SetOrganization(organization string) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.engine.GetConfiguration().Set(configuration.ORGANIZATION, organization)
 }
 
@@ -678,10 +666,14 @@ func (c *Config) SetIntegrationVersion(integrationVersion string) {
 }
 
 func (c *Config) TrustedFolders() []string {
+	c.m.Lock()
+	defer c.m.Unlock()
 	return c.trustedFolders
 }
 
 func (c *Config) SetTrustedFolders(folderPaths []string) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.trustedFolders = folderPaths
 }
 
@@ -791,22 +783,17 @@ func (c *Config) LogLevel() string {
 	return zerolog.GlobalLevel().String()
 }
 
-func (c *Config) Logger() *zerolog.Logger {
+func (c *Config) Logger() zerolog.Logger {
 	c.m.Lock()
 	defer c.m.Unlock()
 	return c.logger
 }
 
-func (c *Config) TokenAsOAuthToken() (oauth2.Token, error) {
+func (c *Config) TokenAsOAuthToken() oauth2.Token {
 	var oauthToken oauth2.Token
-	err := json.Unmarshal([]byte(c.Token()), &oauthToken)
+	err := json.Unmarshal([]byte(currentConfig.Token()), &oauthToken)
 	if err != nil {
-		log.Debug().Err(err).Msg("failed to unmarshal oauth token")
-		return oauthToken, err
+		log.Err(err).Msg("failed to unmarshal oauth token")
 	}
-	return oauthToken, nil
-}
-
-func (c *Config) Storage() StorageWithCallbacks {
-	return c.storage
+	return oauthToken
 }

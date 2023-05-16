@@ -80,8 +80,7 @@ func TestSnykLearnServicePact(t *testing.T) { // nolint:gocognit // this is a te
 			})
 
 		test := func() (err error) {
-			testutil.UnitTest(t)
-			c := config.CurrentConfig()
+			c := config.New()
 			c.UpdateApiEndpoints(fmt.Sprintf("http://%s", hostWithPort()))
 			httpClientFunc := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient
 

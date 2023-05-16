@@ -28,22 +28,21 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/application/server"
-	"github.com/snyk/snyk-ls/infrastructure/sentry"
 )
 
 func main() {
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Println("🚨 Panicking 🚨")
 			fmt.Println(err)
 			debug.PrintStack()
-			er := sentry.NewSentryErrorReporter(nil)
-			er.CaptureError(fmt.Errorf("%v", err))
-			er.FlushErrorReporting()
+			di.ErrorReporter().CaptureError(fmt.Errorf("%v", err))
+			di.ErrorReporter().FlushErrorReporting()
 		}
 	}()
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	c := config.New()
 	config.SetCurrentConfig(c)
 	output, err := parseFlags(os.Args, c)

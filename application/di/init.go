@@ -45,6 +45,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
 	"github.com/snyk/snyk-ls/infrastructure/sentry"
+	"github.com/snyk/snyk-ls/infrastructure/services"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	domainNotify "github.com/snyk/snyk-ls/internal/notification"
 )
@@ -88,7 +89,6 @@ func initDomain() {
 		analytics,
 		scanNotifier,
 		snykApiClient,
-		authenticationService,
 		snykCodeScanner,
 		infrastructureAsCodeScanner,
 		openSourceScanner,
@@ -120,9 +120,13 @@ func initInfrastructure() {
 	learnService = learn.New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient, errorReporter)
 	instrumentor = sentry.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient(c.Engine().GetNetworkAccess().GetHttpClient)
-	analytics = amplitude.NewAmplitudeClient(snyk.AuthenticationCheck, errorReporter)
+	authFunc := func() (string, error) {
+		user, err := snykApiClient.GetActiveUser()
+		return user.Id, err
+	}
+	analytics = amplitude.NewAmplitudeClient(authFunc, errorReporter)
 	authProvider := cliauth.NewCliAuthenticationProvider(errorReporter)
-	authenticationService = snyk.NewAuthenticationService(authProvider, analytics, errorReporter, notifier)
+	authenticationService = services.NewAuthenticationService(snykApiClient, authProvider, analytics, errorReporter, notifier)
 	snykCli = cli.NewExecutor(authenticationService, errorReporter, analytics, notifier)
 	snykCodeClient = code.NewHTTPRepository(instrumentor, errorReporter, c.Engine().GetNetworkAccess().GetHttpClient)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
@@ -143,7 +147,7 @@ func initApplication() {
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher, notifier)
-	command.SetService(command.NewService(authenticationService, notifier))
+	command.ResetService()
 }
 
 /*
@@ -161,6 +165,12 @@ func ErrorReporter() er.ErrorReporter {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return errorReporter
+}
+
+func SnykCli() cli.Executor {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return snykCli
 }
 
 func AuthenticationService() snyk.AuthenticationService {
@@ -203,6 +213,12 @@ func Installer() install.Installer {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return installer
+}
+
+func CliInitializer() *cli.Initializer {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return cliInitializer
 }
 
 func CodeActionService() *codeaction.CodeActionsService {

@@ -1,5 +1,5 @@
 /*
- * © 2022-2023 Snyk Limited
+ * © 2022 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,8 +37,6 @@ func (e *AuthenticationFailedError) Error() string {
 	return message
 }
 
-type AuthenticationFunction func() (string, error)
-
 type AuthenticationProvider interface {
 	// Authenticate triggers the authentication. This may involve manual steps, like logging in using a browser
 	Authenticate(ctx context.Context) (string, error)
@@ -50,8 +48,6 @@ type AuthenticationProvider interface {
 	AuthURL(ctx context.Context) string
 	// SetAuthURL sets the latest provided Authentication URL. This is a temporary URL.
 	SetAuthURL(url string)
-
-	GetCheckAuthenticationFunction() AuthenticationFunction
 }
 
 var ErrEmptyAPIToken = errors.New("auth-provider: api token is not set")

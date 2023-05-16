@@ -16,11 +16,11 @@ require (
 	github.com/pingcap/errors v0.11.4
 	github.com/pkg/errors v0.9.1
 	github.com/puzpuzpuz/xsync v1.5.2
-	github.com/rs/zerolog v1.29.1
+	github.com/rs/zerolog v1.29.0
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/segmentio/analytics-go v3.1.0+incompatible
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/snyk/go-application-framework v0.0.0-20230504094423-9452a0ac9448
+	github.com/snyk/go-application-framework v0.0.0-20230424061336-2c406400541a
 	github.com/sourcegraph/go-lsp v0.0.0-20200429204803-219e11d77f5d
 	github.com/stretchr/testify v1.8.2
 	github.com/subosito/gotenv v1.4.2
@@ -83,5 +83,3 @@ require (
 	golang.org/x/sys v0.7.0 // indirect
 	golang.org/x/text v0.8.0 // indirect
 )
-
-//replace github.com/snyk/go-application-framework => ../go-application-framework

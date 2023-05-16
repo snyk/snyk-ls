@@ -58,9 +58,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 
 		updatedEnv := AppendCliEnvironmentVariables(inputEnv, true)
 
-		token, err := c.TokenAsOAuthToken()
-		assert.NoError(t, err)
-		assert.Contains(t, updatedEnv, SnykOauthTokenEnvVar+"="+token.AccessToken)
+		assert.Contains(t, updatedEnv, SnykOauthTokenEnvVar+"="+c.TokenAsOAuthToken().AccessToken)
 		assert.NotContains(t, updatedEnv, tokenVar)
 	})
 	t.Run("Removes existing oauth env variables", func(t *testing.T) {
@@ -95,9 +93,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
-		token, err := c.TokenAsOAuthToken()
-		assert.NoError(t, err)
-		assert.Contains(t, updatedEnv, SnykOauthTokenEnvVar+"="+token.AccessToken)
+		assert.Contains(t, updatedEnv, SnykOauthTokenEnvVar+"="+c.TokenAsOAuthToken().AccessToken)
 	})
 
 	t.Run("Disables analytics, if telemetry disabled", func(t *testing.T) {

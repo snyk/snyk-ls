@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/cli/auth"
 )
 
 func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) {
@@ -120,15 +121,15 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	loc := setupServer(t)
 
 	// reset to use real service
-	command.SetService(command.NewService(nil, nil))
+	command.ResetService()
 
 	config.CurrentConfig().SetAutomaticAuthentication(false)
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
-	fakeAuthenticationProvider.IsAuthenticated = false
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*auth.FakeAuthenticationProvider)
+	initialAuthenticatedStatus := fakeAuthenticationProvider.IsAuthenticated
 	params := lsp.ExecuteCommandParams{Command: snyk.LoginCommand}
 
 	// Act
@@ -138,6 +139,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	}
 
 	// Assert
+	assert.False(t, initialAuthenticatedStatus)
 	assert.True(t, fakeAuthenticationProvider.IsAuthenticated)
 	assert.Eventually(t, func() bool { return len(jsonRPCRecorder.Notifications()) > 0 }, 5*time.Second, 50*time.Millisecond)
 	assert.Equal(t, 1, len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated")))
@@ -147,9 +149,9 @@ func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
 	loc := setupServer(t)
 
 	// reset to use real service
-	command.SetService(command.NewService(nil, nil))
+	command.ResetService()
 
-	authenticationMock := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
+	authenticationMock := di.AuthenticationService().Provider().(*auth.FakeAuthenticationProvider)
 	params := lsp.ExecuteCommandParams{Command: snyk.CopyAuthLinkCommand}
 
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -159,6 +161,19 @@ func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
 	actualURL, _ := clipboard.ReadAll()
 
 	assert.Equal(t, authenticationMock.ExpectedAuthURL, actualURL)
+}
+
+func Test_executeCommand_shouldExecuteOAuthRefreshCommand(t *testing.T) {
+	loc := setupServer(t)
+	params := lsp.ExecuteCommandParams{Command: snyk.OAuthRefreshCommand}
+
+	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	service := command.Service().(*snyk.CommandServiceMock)
+	assert.Equal(t, snyk.OAuthRefreshCommand, service.ExecutedCommands()[0].Command().CommandId)
 }
 
 func Test_TrustWorkspaceFolders(t *testing.T) {

@@ -32,10 +32,10 @@ const (
 	CopyAuthLinkCommand          = "snyk.copyAuthLink"
 	LogoutCommand                = "snyk.logout"
 	TrustWorkspaceFoldersCommand = "snyk.trustWorkspaceFolders"
+	OAuthRefreshCommand          = "snyk.oauthRefreshCommand"
 	OpenLearnLesson              = "snyk.openLearnLesson"
 	GetLearnLesson               = "snyk.getLearnLesson"
 	GetSettingsSastEnabled       = "snyk.getSettingsSastEnabled"
-	GetActiveUserCommand         = "snyk.getActiveUser"
 )
 
 var (

@@ -36,7 +36,7 @@ import (
 
 type Service interface {
 	LearnEndpoint(conf *config.Config) (learnEndpoint string, err error)
-	GetLesson(ecosystem string, rule string, cwes []string, cves []string, issueType snyk.Type) (lesson *Lesson, err error)
+	GetLesson(ecosystem string, rule string, cwes []string, cves []string, issueType snyk.Type) (lesson Lesson, err error)
 	GetAllLessons() (lessons []Lesson, err error)
 }
 
@@ -214,7 +214,7 @@ func (s *serviceImpl) updateCaches(lessons []Lesson) {
 	}
 }
 
-func (s *serviceImpl) GetLesson(ecosystem string, rule string, cwes []string, cves []string, issueType snyk.Type) (lesson *Lesson, err error) {
+func (s *serviceImpl) GetLesson(ecosystem string, rule string, cwes []string, cves []string, issueType snyk.Type) (lesson Lesson, err error) {
 	logger := s.logger.With().Str("method", "GetLesson").Logger()
 
 	params := s.lessonsLookupParams(ecosystem, rule, cwes, cves, issueType)
@@ -242,7 +242,7 @@ func (s *serviceImpl) GetLesson(ecosystem string, rule string, cwes []string, cv
 	lessons = s.filterLessons(lessons, params)
 
 	if len(lessons) == 1 {
-		lesson = &lessons[0]
+		lesson = lessons[0]
 		lesson.Url += "?loc=ide"
 		logger.Debug().Msgf("found lesson %v", lesson)
 	}

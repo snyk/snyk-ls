@@ -52,6 +52,8 @@ func CreateFromCommandData(
 		return &logoutCommand{command: commandData, authService: authService}, nil
 	case snyk.TrustWorkspaceFoldersCommand:
 		return &trustWorkspaceFoldersCommand{command: commandData, notifier: notifier}, nil
+	case snyk.OAuthRefreshCommand:
+		return &oauthRefreshCommand{command: commandData, authService: authService}, nil
 	case snyk.GetLearnLesson:
 		return &getLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case snyk.OpenLearnLesson:
@@ -59,8 +61,6 @@ func CreateFromCommandData(
 	case snyk.GetSettingsSastEnabled:
 		apiClient := snyk_api.NewSnykApiClient(config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient)
 		return &sastEnabled{command: commandData, apiClient: apiClient}, nil
-	case snyk.GetActiveUserCommand:
-		return &getActiveUser{command: commandData, authService: authService, notifier: notifier}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

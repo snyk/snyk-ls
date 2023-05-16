@@ -20,6 +20,7 @@ import "sync"
 
 const (
 	SastEnabledOperation = "sastEnabled"
+	ActiveUserOperation  = "activeUser"
 )
 
 type FakeApiClient struct {
@@ -75,10 +76,10 @@ func (f *FakeApiClient) GetAllCalls(op string) [][]any {
 	return calls
 }
 
-func (f *FakeApiClient) SastSettings() (SastResponse, error) {
+func (f *FakeApiClient) SastSettings() (sastResponse SastResponse, err *SnykApiError) {
 	f.addCall([]any{}, SastEnabledOperation)
 	if f.ApiError != nil {
-		return SastResponse{}, f.ApiError
+		return sastResponse, f.ApiError
 	}
 	return SastResponse{
 		SastEnabled: f.CodeEnabled,
@@ -87,4 +88,14 @@ func (f *FakeApiClient) SastSettings() (SastResponse, error) {
 		},
 		AutofixEnabled: f.AutofixEnabled,
 	}, nil
+}
+
+func (f *FakeApiClient) GetActiveUser() (user ActiveUser, err *SnykApiError) {
+	f.addCall([]any{}, ActiveUserOperation)
+
+	if f.ApiError != nil {
+		return ActiveUser{}, f.ApiError
+	}
+
+	return ActiveUser{Id: "FakeUser"}, nil
 }

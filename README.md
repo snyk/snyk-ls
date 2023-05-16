@@ -28,7 +28,7 @@ Right now the language server supports the following actions:
 - Selective activation of products according to settings transmitted
 - Scanning errors are reported as diagnostics to the Language Server Client
 - Code Lenses to navigate the Snyk Code dataflow from within the editor
-- Code Actions for in-editor commands, like opening a browser, doing a quickfix or opening a Snyk Learn lesson
+- Code Actions for in-editor commands, like opening a browser, doing a quickfix or opening a Snyk Learn lesson 
   for the found diagnostic
 
 ### Implemented operations
@@ -128,6 +128,9 @@ Right now the language server supports the following actions:
 - `TrustWorkspaceFoldersCommand` checks for trusted workspace folders and asks for trust if necessary
   - command: `snyk.trustWorkspaceFolders`
   - args: empty
+- `OAuthRefreshCommand` triggers a Snyk API call to refresh the oauth token
+  - command: `snyk.oauthRefreshCommand`
+  - args: empty
 - `OpenLearnLesson` opens the given lesson on the Snyk Learn website
   - command: `snyk.openLearnLesson`
   - args:
@@ -188,26 +191,6 @@ Right now the language server supports the following actions:
   - command: `snyk.settingsSastEnabled`
   - args: empty
   - returns `true` if enabled, `false` if not, or an error and false if an error occurred
-- `GetActiveUser` triggers the api call to get the active logged in user or an error if not logged in
-  - command: `snyk.getActiveUser`
-  - args: empty
-  - returns the active user and its orgs and groups or an error if not logged in. 
-  ```json5
-  {
-    "id": "123",
-    "username": "johndoe",
-    "orgs": [
-     {
-       "name": "org1",
-       "id": "org1_id",
-       "group": {
-          "name": "group1",
-          "id": "group1_id"
-       }
-     }
-    ],
-  }
-  ```
 
 ## Installation
 

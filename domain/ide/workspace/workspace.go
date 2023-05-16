@@ -34,6 +34,7 @@ import (
 
 // todo can we do without a singleton?
 var instance *Workspace
+var mutex = &sync.Mutex{}
 
 // Workspace represents the highest entity in an IDE that contains code. A workspace may contain multiple folders
 type Workspace struct {
@@ -66,10 +67,14 @@ func New(instrumentor performance.Instrumentor,
 
 // todo can we move to di?
 func Get() *Workspace {
+	mutex.Lock()
+	defer mutex.Unlock()
 	return instance
 }
 
 func Set(w *Workspace) {
+	mutex.Lock()
+	defer mutex.Unlock()
 	instance = w
 }
 

@@ -25,6 +25,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/domain/observability/ux/converters"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -138,7 +139,7 @@ func (s *DefaultHoverService) trackHoverDetails(hover Hover[Context]) {
 	switch hover.Context.(type) {
 	case snyk.Issue:
 		issue := hover.Context.(snyk.Issue)
-		s.analytics.IssueHoverIsDisplayed(NewIssueHoverIsDisplayedProperties(issue))
+		s.analytics.IssueHoverIsDisplayed(converters.NewIssueHoverIsDisplayedProperties(issue))
 	default:
 		log.Warn().Msgf("unknown context for hover %v", hover)
 	}

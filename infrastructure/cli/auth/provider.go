@@ -39,10 +39,6 @@ type CliAuthenticationProvider struct {
 	errorReporter error_reporting.ErrorReporter
 }
 
-func (a *CliAuthenticationProvider) GetCheckAuthenticationFunction() snyk.AuthenticationFunction {
-	return snyk.AuthenticationCheck
-}
-
 func NewCliAuthenticationProvider(errorReporter error_reporting.ErrorReporter) snyk.AuthenticationProvider {
 	return &CliAuthenticationProvider{"", errorReporter}
 }

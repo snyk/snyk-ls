@@ -526,6 +526,6 @@ func getLearnMock(t *testing.T) learn.Service {
 	learnMock.
 		EXPECT().
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(&learn.Lesson{}, nil).AnyTimes()
+		Return(learn.Lesson{}, nil).AnyTimes()
 	return learnMock
 }

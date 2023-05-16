@@ -203,7 +203,7 @@ func Test_initialize_shouldDefaultToTokenAuthentication(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, lsp.TokenAuthentication, config.CurrentConfig().AuthenticationMethod())
-	assert.Equal(t, "*snyk.FakeAuthenticationProvider", reflect.TypeOf(di.AuthenticationService().Provider()).String())
+	assert.Equal(t, "*auth.FakeAuthenticationProvider", reflect.TypeOf(di.AuthenticationService().Provider()).String())
 }
 
 func Test_initialize_shouldInitToOauthAuthenticationWhenConfigured(t *testing.T) {
@@ -260,10 +260,10 @@ func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.CopyAuthLinkCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.LogoutCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.TrustWorkspaceFoldersCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.OAuthRefreshCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetLearnLesson)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.OpenLearnLesson)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetSettingsSastEnabled)
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetActiveUserCommand)
 }
 
 func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
@@ -314,11 +314,8 @@ func Test_initialized_shouldInitializeAndTriggerCliDownload(t *testing.T) {
 }
 
 func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
-	testutil.IntegTest(t) // this needs an authenticated user
 	loc := setupServer(t)
 	didOpenParams, dir := didOpenTextParams(t)
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
-	fakeAuthenticationProvider.IsAuthenticated = true
 
 	clientParams := lsp.InitializeParams{
 		RootURI: uri.PathToUri(dir),
@@ -592,10 +589,6 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 		EnableTrustedFoldersFeature: "true",
 		Token:                       "token",
 	}
-
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
-	fakeAuthenticationProvider.IsAuthenticated = true
-
 	params := lsp.InitializeParams{
 		InitializationOptions: initializationOptions,
 		WorkspaceFolders:      []lsp.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
@@ -637,9 +630,6 @@ func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
-	fakeAuthenticationProvider.IsAuthenticated = true
-
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -686,8 +676,6 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 	loc := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
-	fakeAuthenticationProvider.IsAuthenticated = true
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -946,9 +934,6 @@ func checkForPublishedDiagnostics(testPath string, expectedNumber int) func() bo
 func Test_IntegrationHoverResults(t *testing.T) {
 	loc := setupServer(t)
 	testutil.IntegTest(t)
-
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
-	fakeAuthenticationProvider.IsAuthenticated = true
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589", t)
 	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)

@@ -18,27 +18,21 @@ package command
 
 import (
 	"context"
-	"strings"
 
 	"github.com/rs/zerolog/log"
-	"github.com/sourcegraph/go-lsp"
 
-	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 var instance snyk.CommandService
 
 type serviceImpl struct {
-	authService snyk.AuthenticationService
-	notifier    noti.Notifier
 }
 
-func NewService(authService snyk.AuthenticationService, notifier noti.Notifier) snyk.CommandService {
-	return &serviceImpl{
-		authService: authService,
-		notifier:    notifier,
-	}
+// ResetService resets the service instance to nil. This causes the next call to
+// Service to create a new instance.
+func ResetService() {
+	SetService(nil)
 }
 
 // SetService sets the singleton instance of the command service.
@@ -49,6 +43,9 @@ func SetService(service snyk.CommandService) {
 // Service returns the singleton instance of the command service. If not already created,
 // it will create a new instance.
 func Service() snyk.CommandService {
+	if instance == nil {
+		instance = &serviceImpl{}
+	}
 	return instance
 }
 
@@ -58,13 +55,5 @@ func (service *serviceImpl) ExecuteCommand(ctx context.Context, command snyk.Com
 		"method",
 		"command.serviceImpl.ExecuteCommand",
 	).Msgf("executing command %s", command.Command().CommandId)
-
-	result, err := command.Execute(ctx)
-	if err != nil && strings.Contains(err.Error(), "400 Bad Request") {
-		service.notifier.SendShowMessage(lsp.MTWarning, "Logging out automatically, available credentials are invalid. Please re-authenticate.")
-		service.authService.Logout(ctx)
-		return nil, nil
-	}
-
-	return result, err
+	return command.Execute(ctx)
 }
