@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,25 @@
  * limitations under the License.
  */
 
-package auth
+package snyk
 
 import (
 	"context"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/pkg/errors"
 )
 
 type FakeAuthenticationProvider struct {
 	ExpectedAuthURL string
 	IsAuthenticated bool
 	authURL         string
+}
+
+func (a *FakeAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
+	if a.IsAuthenticated {
+		return func() (string, error) { return "fake auth successful", nil }
+	}
+	return func() (string, error) { return "", errors.New("Authentication failed. Please update your token.") }
 }
 
 func (a *FakeAuthenticationProvider) Authenticate(_ context.Context) (string, error) {
@@ -46,6 +53,6 @@ func (a *FakeAuthenticationProvider) SetAuthURL(url string) {
 	a.authURL = url
 }
 
-func NewFakeCliAuthenticationProvider() snyk.AuthenticationProvider {
+func NewFakeCliAuthenticationProvider() *FakeAuthenticationProvider {
 	return &FakeAuthenticationProvider{ExpectedAuthURL: "https://app.snyk.io/login?token=someToken"}
 }

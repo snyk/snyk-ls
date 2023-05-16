@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited All rights reserved.
+ * © 2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,28 +18,25 @@ package command
 
 import (
 	"context"
-	"testing"
 
-	"github.com/stretchr/testify/assert"
-
+	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
-type TestCommand struct {
-	executed bool
+// oauthRefreshCommand is a command that refreshes the oauth token
+// This is needed because the token is only valid for a certain period of time
+// For doing this we call the whoami workflow that will refresh the token automatically
+type getActiveUser struct {
+	command     snyk.CommandData
+	authService snyk.AuthenticationService
+	notifier    noti.Notifier
 }
 
-func (command *TestCommand) Command() snyk.CommandData {
-	return snyk.CommandData{}
-}
-func (command *TestCommand) Execute(_ context.Context) (any, error) {
-	command.executed = true
-	return nil, nil
+func (cmd *getActiveUser) Command() snyk.CommandData {
+	return cmd.command
 }
 
-func Test_ExecuteCommand(t *testing.T) {
-	service := NewService(nil, nil)
-	cmd := &TestCommand{}
-	_, _ = service.ExecuteCommand(context.Background(), cmd)
-	assert.True(t, cmd.executed)
+func (cmd *getActiveUser) Execute(ctx context.Context) (any, error) {
+	user, err := snyk.GetActiveUser()
+	return user, err
 }

@@ -191,8 +191,13 @@ func (c *Client) enqueueEvent(eventFn captureEvent) {
 func (c *Client) Identify() {
 	method := "infrastructure.segment.client"
 	log.Debug().Str("method", method).Msg("Identifying a user.")
+
 	if !config.CurrentConfig().NonEmptyToken() {
 		c.authenticatedUserId = ""
+		return
+	}
+
+	if c.authenticatedUserId != "" {
 		return
 	}
 
@@ -206,7 +211,6 @@ func (c *Client) Identify() {
 	if !config.CurrentConfig().IsTelemetryEnabled() {
 		return
 	}
-
 	identifyEvent := ampli.Identify.Builder().UserId(userId).Build()
 	ampli.Instance.Identify(c.authenticatedUserId, identifyEvent, ampli.EventOptions{})
 }

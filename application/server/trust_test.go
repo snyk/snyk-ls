@@ -100,6 +100,8 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 func Test_initializeHandler_shouldCallHandleUntrustedFolders(t *testing.T) {
 	loc := setupServer(t)
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
+	fakeAuthenticationProvider.IsAuthenticated = true
 
 	_, err := loc.Client.Call(context.Background(), "initialize", lsp.InitializeParams{
 		RootURI: uri.PathToUri("/untrusted/dummy"),

@@ -37,6 +37,7 @@ type Scanner interface {
 		processResults ScanResultProcessor,
 		folderPath string,
 	)
+	Init() error
 }
 
 // DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
@@ -47,6 +48,7 @@ type DelegatingConcurrentScanner struct {
 	analytics     ux2.Analytics
 	scanNotifier  ScanNotifier
 	snykApiClient snyk_api.SnykApiClient
+	authService   AuthenticationService
 }
 
 func NewDelegatingScanner(
@@ -55,6 +57,7 @@ func NewDelegatingScanner(
 	analytics ux2.Analytics,
 	scanNotifier ScanNotifier,
 	snykApiClient snyk_api.SnykApiClient,
+	authService AuthenticationService,
 	scanners ...ProductScanner,
 ) Scanner {
 	return &DelegatingConcurrentScanner{
@@ -64,7 +67,17 @@ func NewDelegatingScanner(
 		scanNotifier:  scanNotifier,
 		snykApiClient: snykApiClient,
 		scanners:      scanners,
+		authService:   authService,
 	}
+}
+
+func (sc *DelegatingConcurrentScanner) Init() error {
+	err := sc.initializer.Init()
+	if err != nil {
+		log.Error().Err(err).Msg("Scanner initialization error")
+		return err
+	}
+	return nil
 }
 
 func (sc *DelegatingConcurrentScanner) Scan(
@@ -74,16 +87,21 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	folderPath string,
 ) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
-	done := make(chan bool)
-	defer close(done)
+	c := config.CurrentConfig()
 
-	err := sc.initializer.Init()
+	authenticated, err := sc.authService.IsAuthenticated()
 	if err != nil {
-		log.Error().Err(err).Msg("Scan initialization error, cancelling scan")
+		log.Error().Err(err).Msg("Error checking authentication status")
+	}
+
+	if !authenticated {
 		return
 	}
 
-	tokenChangeChannel := config.CurrentConfig().TokenChangesChannel()
+	tokenChangeChannel := c.TokenChangesChannel()
+	done := make(chan bool)
+	defer close(done)
+
 	ctx, cancelFunc := context.WithCancel(ctx)
 	defer cancelFunc()
 
@@ -97,11 +115,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 			return
 		}
 	}()
-
-	if !config.CurrentConfig().NonEmptyToken() {
-		log.Info().Msg("User is not authenticated, cancelling scan")
-		return
-	}
 
 	if ctx.Err() != nil {
 		log.Info().Msg("Scan was cancelled")
@@ -118,9 +131,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 		)
 		sc.scanNotifier.SendInProgress(folderPath)
 	}
-
-	// refresh auth by issuing a request to the API
-	_, _ = sc.snykApiClient.GetActiveUser()
 
 	waitGroup := &sync.WaitGroup{}
 	for _, scanner := range sc.scanners {

@@ -20,12 +20,10 @@ import (
 	"context"
 	"os"
 	"os/exec"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
-	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
@@ -35,18 +33,18 @@ import (
 )
 
 type SnykCli struct {
-	authenticator snyk.AuthenticationService
-	errorReporter error_reporting.ErrorReporter
-	analytics     ux.Analytics
-	semaphore     chan int
-	cliTimeout    time.Duration
-	notifier      noti.Notifier
+	authenticationService snyk.AuthenticationService
+	errorReporter         error_reporting.ErrorReporter
+	analytics             ux.Analytics
+	semaphore             chan int
+	cliTimeout            time.Duration
+	notifier              noti.Notifier
 }
 
 var Mutex = &sync.Mutex{}
 
 func NewExecutor(
-	authenticator snyk.AuthenticationService,
+	authenticationService snyk.AuthenticationService,
 	errorReporter error_reporting.ErrorReporter,
 	analytics ux.Analytics,
 	notifier noti.Notifier,
@@ -54,7 +52,7 @@ func NewExecutor(
 	concurrencyLimit := 2
 
 	return &SnykCli{
-		authenticator,
+		authenticationService,
 		errorReporter,
 		analytics,
 		make(chan int, concurrencyLimit),
@@ -66,7 +64,6 @@ func NewExecutor(
 type Executor interface {
 	Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error)
 	ExpandParametersFromConfig(base []string) []string
-	HandleErrors(ctx context.Context, output string) (fail bool)
 }
 
 func (c SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error) {
@@ -85,22 +82,14 @@ func (c SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (
 		return nil, ctx.Err()
 	}
 
-	output, err := c.doExecute(ctx, cmd, workingDir, true)
+	output, err := c.doExecute(ctx, cmd, workingDir)
 	log.Trace().Str("method", method).Str("response", string(output))
 	return output, err
 }
 
-func (c SnykCli) doExecute(ctx context.Context, cmd []string, workingDir string, firstAttempt bool) ([]byte, error) {
+func (c SnykCli) doExecute(ctx context.Context, cmd []string, workingDir string) ([]byte, error) {
 	command := c.getCommand(cmd, workingDir, ctx)
 	output, err := command.Output()
-	noCancellation := ctx.Err() == nil
-	if err != nil && noCancellation {
-		ctx := context.Background()
-		shouldRetry := c.HandleErrors(ctx, string(output))
-		if firstAttempt && shouldRetry {
-			output, err = c.doExecute(ctx, cmd, workingDir, false)
-		}
-	}
 	return output, err
 }
 
@@ -132,22 +121,4 @@ func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
 	}
 
 	return expandedParams
-}
-
-func (c SnykCli) HandleErrors(ctx context.Context, output string) (fail bool) {
-	if strings.Contains(output, "`snyk` requires an authenticated account. Please run `snyk auth` and try again.") {
-		log.Info().Msg("Snyk failed to obtain authentication information. Trying to authenticate again...")
-		c.notifier.SendShowMessage(sglsp.Info, "Snyk failed to obtain authentication information, trying to authenticate again. This could open a browser window.")
-
-		token, err := c.authenticator.Provider().Authenticate(ctx)
-		if token == "" || err != nil {
-			log.Error().Err(err).Msg("Failed to authenticate.")
-			c.errorReporter.CaptureError(err)
-			return true
-		}
-
-		c.authenticator.UpdateCredentials(token, true)
-		return true
-	}
-	return false
 }

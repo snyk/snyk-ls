@@ -36,11 +36,11 @@ func IntegTest(t *testing.T) {
 	prepareTestHelper(t, integTestEnvVar)
 }
 
-func SmokeTest(t *testing.T) {
-	prepareTestHelper(t, smokeTestEnvVar)
+func SmokeTest(t *testing.T) *config.Config {
+	return prepareTestHelper(t, smokeTestEnvVar)
 }
 
-func UnitTest(t *testing.T) {
+func UnitTest(t *testing.T) *config.Config {
 	t.Helper()
 	c := config.New()
 	// we don't want server logging in test runs
@@ -53,6 +53,7 @@ func UnitTest(t *testing.T) {
 		cleanupFakeCliFile(c)
 		progress.CleanupChannels()
 	})
+	return c
 }
 
 func cleanupFakeCliFile(c *config.Config) {
@@ -118,7 +119,7 @@ func CreateDummyProgressListener(t *testing.T) {
 
 }
 
-func prepareTestHelper(t *testing.T, envVar string) {
+func prepareTestHelper(t *testing.T, envVar string) *config.Config {
 	t.Helper()
 	if os.Getenv(envVar) == "" {
 		t.Logf("%s is not set", envVar)
@@ -126,6 +127,7 @@ func prepareTestHelper(t *testing.T, envVar string) {
 	}
 
 	c := config.New()
+	c.ConfigureLogging(nil)
 	c.SetToken(GetEnvironmentToken())
 	c.SetErrorReportingEnabled(false)
 	c.SetTelemetryEnabled(false)
@@ -135,6 +137,7 @@ func prepareTestHelper(t *testing.T, envVar string) {
 	t.Cleanup(func() {
 		cleanupFakeCliFile(c)
 	})
+	return c
 }
 
 func OnlyEnableCode() {

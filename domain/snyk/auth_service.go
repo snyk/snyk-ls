@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ type AuthenticationService interface {
 
 	Provider() AuthenticationProvider
 
-	// UpdateToken stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
+	// UpdateCredentials stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
 	// client if sendNotification is true
 	UpdateCredentials(newToken string, sendNotification bool)
 

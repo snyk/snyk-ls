@@ -17,6 +17,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 	"time"
@@ -25,32 +26,33 @@ import (
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 func TestSetToken(t *testing.T) {
-	token := uuid.New().String()
-
 	t.Run("Legacy Token authentication", func(t *testing.T) {
+		token := uuid.New().String()
 		config := New()
 		SetCurrentConfig(config)
-		oldToken := config.Token()
 		config.SetToken(token)
 		assert.Equal(t, config.Token(), token)
 		assert.NotEqual(t, config.Engine().GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN), token)
 		assert.Equal(t, config.Engine().GetConfiguration().Get(configuration.AUTHENTICATION_TOKEN), token)
-		config.SetToken(oldToken)
 	})
 	t.Run("OAuth Token authentication", func(t *testing.T) {
 		config := New()
 		SetCurrentConfig(config)
 		config.authenticationMethod = lsp.OAuthAuthentication
-		oldToken := config.Token()
-		config.SetToken(token)
-		assert.Equal(t, config.Token(), token)
-		assert.Equal(t, config.Engine().GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN), token)
-		config.SetToken(oldToken)
+		marshal, err := json.Marshal(oauth2.Token{AccessToken: t.Name()})
+		assert.NoError(t, err)
+		oauthString := string(marshal)
+
+		config.SetToken(oauthString)
+
+		assert.Equal(t, oauthString, config.Token())
+		assert.Equal(t, oauthString, config.Engine().GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN))
 	})
 }
 
@@ -83,7 +85,11 @@ func Test_TokenChanged_ChannelsInformed(t *testing.T) {
 	// Assert
 	// This will either pass the test or fail by deadlock immediately if SetToken did not write to the change channels,
 	// therefore there's no need for assert.Eventually
-	<-tokenChangedChannel
+	assert.Eventuallyf(t, func() bool {
+		<-tokenChangedChannel
+		return true
+	}, 5*time.Second, time.Millisecond, "Expected token changes channel to be informed, but it was not")
+
 }
 
 func Test_TokenChangedToSameToken_ChannelsNotInformed(t *testing.T) {

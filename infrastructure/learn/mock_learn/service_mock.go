@@ -5,12 +5,13 @@
 package mock_learn
 
 import (
-	reflect "reflect"
+	"reflect"
 
-	gomock "github.com/golang/mock/gomock"
-	config "github.com/snyk/snyk-ls/application/config"
-	snyk "github.com/snyk/snyk-ls/domain/snyk"
-	learn "github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/golang/mock/gomock"
+
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 )
 
 // MockService is a mock of Service interface.
@@ -52,10 +53,10 @@ func (mr *MockServiceMockRecorder) GetAllLessons() *gomock.Call {
 }
 
 // GetLesson mocks base method.
-func (m *MockService) GetLesson(arg0, arg1 string, arg2, arg3 []string, arg4 snyk.Type) (learn.Lesson, error) {
+func (m *MockService) GetLesson(arg0, arg1 string, arg2, arg3 []string, arg4 snyk.Type) (*learn.Lesson, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetLesson", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].(learn.Lesson)
+	ret0, _ := ret[0].(*learn.Lesson)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -79,19 +80,4 @@ func (m *MockService) LearnEndpoint(arg0 *config.Config) (string, error) {
 func (mr *MockServiceMockRecorder) LearnEndpoint(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LearnEndpoint", reflect.TypeOf((*MockService)(nil).LearnEndpoint), arg0)
-}
-
-// RequestLessons mocks base method.
-func (m *MockService) RequestLessons(arg0 *learn.LessonLookupParams) ([]learn.Lesson, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RequestLessons", arg0)
-	ret0, _ := ret[0].([]learn.Lesson)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// RequestLessons indicates an expected call of RequestLessons.
-func (mr *MockServiceMockRecorder) RequestLessons(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RequestLessons", reflect.TypeOf((*MockService)(nil).RequestLessons), arg0)
 }

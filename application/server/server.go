@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/shirou/gopsutil/process"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -45,17 +47,18 @@ import (
 )
 
 func Start(c *config.Config) {
-	log.Debug().Msg("Starting server...")
 	var srv *jrpc2.Server
 
 	handlers := handler.Map{}
 	srv = jrpc2.NewServer(handlers, &jrpc2.ServerOptions{
 		Logger: func(text string) {
-			if len(text) > 300 {
-				// if this were debug and sent to the client via rpc logger, the server json rpc log would cause an endless loop...
-				log.Trace().Msgf("JSON RPC Log: %s... [TRUNCATED]", text[:300])
-			} else {
-				log.Trace().Msgf("JSON RPC Log: %s", text)
+			if zerolog.GlobalLevel() == zerolog.TraceLevel {
+				if len(text) > 300 {
+					// this may not be sent to the logger, as it would produce a loop, therefore we write to stderr
+					_, _ = os.Stderr.WriteString(fmt.Sprintf("JSON RPC Log: %s... [TRUNCATED]", text[:300]))
+				} else {
+					_, _ = os.Stderr.WriteString(fmt.Sprintf("JSON RPC Log: %s", text))
+				}
 			}
 		},
 		RPCLog:    RPCLogger{},
@@ -222,10 +225,10 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 						snyk.CopyAuthLinkCommand,
 						snyk.LogoutCommand,
 						snyk.TrustWorkspaceFoldersCommand,
-						snyk.OAuthRefreshCommand,
 						snyk.OpenLearnLesson,
 						snyk.GetLearnLesson,
 						snyk.GetSettingsSastEnabled,
+						snyk.GetActiveUserCommand,
 					},
 				},
 			},
@@ -237,13 +240,20 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializedParams) (any, error) {
 		logger := log.With().Str("method", "initializedHandler").Logger()
 
-		logger.Debug().Msg("initializing CLI now")
-		err := di.CliInitializer().Init()
+		// CLI & Authentication initialization
+		err := di.Scanner().Init()
 		if err != nil {
-			di.ErrorReporter().CaptureError(err)
+			log.Error().Err(err).Msg("Scan initialization error, cancelling scan")
+			return nil, err
 		}
+
+		authenticated, err := di.AuthenticationService().IsAuthenticated()
+		if err != nil {
+			logger.Error().Err(err).Msg("Not authenticated, or error checking authentication status")
+		}
+
 		autoScanEnabled := config.CurrentConfig().IsAutoScanEnabled()
-		if autoScanEnabled {
+		if autoScanEnabled && authenticated {
 			logger.Debug().Msg("triggering workspace scan after successful initialization")
 			workspace.Get().ScanWorkspace(context.Background())
 		} else {

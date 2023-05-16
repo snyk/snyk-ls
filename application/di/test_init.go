@@ -41,7 +41,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
-	"github.com/snyk/snyk-ls/infrastructure/services"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	domainNotify "github.com/snyk/snyk-ls/internal/notification"
 )
@@ -58,9 +57,9 @@ func TestInit(t *testing.T) {
 	instrumentor = performance.NewTestInstrumentor()
 	errorReporter = er.NewTestErrorReporter()
 	installer = install.NewFakeInstaller()
-	authProvider := cliauth.NewFakeCliAuthenticationProvider()
+	authProvider := snyk.NewFakeCliAuthenticationProvider()
 	snykApiClient = &snyk_api.FakeApiClient{CodeEnabled: true}
-	authenticationService = services.NewAuthenticationService(snykApiClient, authProvider, analytics, errorReporter, notifier)
+	authenticationService = snyk.NewAuthenticationService(authProvider, analytics, errorReporter, notifier)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier)
 	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
@@ -77,7 +76,7 @@ func TestInit(t *testing.T) {
 	learnMock.
 		EXPECT().
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(learn.Lesson{}, nil).AnyTimes()
+		Return(&learn.Lesson{}, nil).AnyTimes()
 	learnService = learnMock
 	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, learnService, notifier)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli, learnService, notifier)
@@ -88,6 +87,7 @@ func TestInit(t *testing.T) {
 		analytics,
 		scanNotifier,
 		snykApiClient,
+		authenticationService,
 		snykCodeScanner,
 		infrastructureAsCodeScanner,
 		openSourceScanner,

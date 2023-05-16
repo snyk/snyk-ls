@@ -22,7 +22,6 @@ import (
 	"os"
 
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 type lspWriter struct {
@@ -32,7 +31,9 @@ type lspWriter struct {
 }
 
 func New(server Server) zerolog.LevelWriter {
-	log.Info().Msg("Starting LSP logger")
+	if server != nil {
+		_, _ = os.Stderr.WriteString("LSP logger: starting with non-nil server \n")
+	}
 	readyChan := make(chan bool)
 	writeChan := make(chan LogMessageParams, 1000000)
 	w := &lspWriter{
@@ -40,15 +41,16 @@ func New(server Server) zerolog.LevelWriter {
 		readyChan: readyChan,
 		server:    server,
 	}
-	w.startServerSenderRoutine()
+	go w.startServerSenderRoutine()
 	// let the routine startup first
+	_, _ = os.Stderr.WriteString("LSP logger: waiting for ready signal... \n")
 	<-w.readyChan
-	log.Info().Msg("LSP logger started")
+	_, _ = os.Stderr.WriteString("LSP logger: started\n")
 	return w
 }
 
 func (w *lspWriter) Write(p []byte) (n int, err error) {
-	return os.Stderr.Write(p)
+	return w.WriteLevel(zerolog.InfoLevel, p)
 }
 
 func (w *lspWriter) WriteLevel(level zerolog.Level, p []byte) (n int, err error) {
@@ -64,17 +66,15 @@ func (w *lspWriter) WriteLevel(level zerolog.Level, p []byte) (n int, err error)
 }
 
 func (w *lspWriter) startServerSenderRoutine() {
-	go func() {
-		w.readyChan <- true
-		var err error
-		for msg := range w.writeChan {
-			err = w.server.Notify(context.Background(), "window/logMessage", msg)
-			if err != nil {
-				_, _ = os.Stderr.Write([]byte(msg.Message))
-			}
+	w.readyChan <- true
+	var err error
+	for msg := range w.writeChan {
+		err = w.server.Notify(context.Background(), "window/logMessage", msg)
+		if err != nil {
+			_, _ = os.Stderr.Write([]byte(msg.Message))
 		}
-		fmt.Println("LSP logger stopped")
-	}()
+	}
+	fmt.Printf("LSP logger (%p) stopped", w)
 }
 
 func mapLogLevel(level zerolog.Level) (mt MessageType) {

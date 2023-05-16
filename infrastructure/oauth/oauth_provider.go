@@ -32,6 +32,10 @@ type oAuthProvider struct {
 	authURL       string
 }
 
+func (p *oAuthProvider) GetCheckAuthenticationFunction() snyk.AuthenticationFunction {
+	return snyk.AuthenticationCheck
+}
+
 func NewOAuthProvider(config configuration.Configuration, authenticator auth.Authenticator) snyk.AuthenticationProvider {
 	log.Debug().Msg("creating new OAuth provider")
 	return &oAuthProvider{authenticator: authenticator, config: config}
@@ -48,6 +52,7 @@ func (p *oAuthProvider) SetAuthURL(url string) {
 }
 
 func (p *oAuthProvider) ClearAuthentication(_ context.Context) error {
+	log.Debug().Msg("clearing authentication")
 	p.config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
 	p.config.Set(configuration.AUTHENTICATION_TOKEN, "")
 	p.config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "")
@@ -56,4 +61,8 @@ func (p *oAuthProvider) ClearAuthentication(_ context.Context) error {
 
 func (p *oAuthProvider) AuthURL(_ context.Context) string {
 	return p.authURL
+}
+
+func (p *oAuthProvider) Authenticator() auth.Authenticator {
+	return p.authenticator
 }

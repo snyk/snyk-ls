@@ -29,7 +29,7 @@ var parallelism = util.Max(1, util.Min(defaultParallelism, runtime.NumCPU()))
 // It is global because there can be several file filters running concurrently on the same machine.
 var semaphore = make(chan struct{}, parallelism)
 
-func FindNonIgnoredFiles(rootFolder string, logger zerolog.Logger) <-chan string {
+func FindNonIgnoredFiles(rootFolder string, logger *zerolog.Logger) <-chan string {
 	return NewFileFilter(rootFolder, logger).FindNonIgnoredFiles()
 }
 
@@ -77,7 +77,7 @@ func hashFolder(globs, files, folders []string) (uint64, error) {
 	return hash, nil
 }
 
-func NewFileFilter(rootFolder string, logger zerolog.Logger) *FileFilter {
+func NewFileFilter(rootFolder string, logger *zerolog.Logger) *FileFilter {
 	return &FileFilter{
 		repoRoot:       rootFolder,
 		ignoreFiles:    []string{".gitignore", ".dcignore", ".snyk"},

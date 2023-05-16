@@ -29,6 +29,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 )
 
+//goland:noinspection GoRedundantConversion because a json unmarshal would produce a float64, not an int8
 func Test_openLearnLesson_Execute(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -46,14 +47,15 @@ func Test_openLearnLesson_Execute(t *testing.T) {
 	data := snyk.CommandData{
 		Title:     snyk.OpenLearnLesson,
 		CommandId: snyk.OpenLearnLesson,
-		Arguments: []any{rule, eco, cwes, cves, snyk.DependencyVulnerability},
+		Arguments: []any{rule, eco, cwes, cves, float64(snyk.DependencyVulnerability)},
 	}
 	mockService := mock_learn.NewMockService(ctrl)
 	cut := openLearnLesson{learnService: mockService, command: data, openBrowserHandleFunc: openBrowserHandlerFunc}
 	expectedLessonURL := "https://lessonURL"
+	expectedLesson := &learn.Lesson{Url: expectedLessonURL}
 	mockService.EXPECT().
 		GetLesson(eco, rule, []string{"CWE-89", "CWE-ZZ"}, []string{"CVE-2020-1234"}, snyk.DependencyVulnerability).
-		Return(learn.Lesson{Url: expectedLessonURL}, nil)
+		Return(expectedLesson, nil)
 
 	_, err := cut.Execute(context.Background())
 

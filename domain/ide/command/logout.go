@@ -21,6 +21,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
@@ -36,5 +37,6 @@ func (cmd *logoutCommand) Command() snyk.CommandData {
 func (cmd *logoutCommand) Execute(ctx context.Context) (any, error) {
 	log.Debug().Str("method", "logoutCommand.Execute").Msgf("logging out")
 	cmd.authService.Logout(ctx)
+	workspace.Get().ClearIssues(ctx)
 	return nil, nil
 }
