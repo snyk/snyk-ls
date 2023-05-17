@@ -230,8 +230,8 @@ func New() *Config {
 }
 
 func initWorkFlowEngine(c *Config) {
-	c.engine = app.CreateAppEngine()
-	conf := c.engine.GetConfiguration()
+	conf := configuration.NewInMemory()
+	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf))
 	c.storage = NewStorage()
 	conf.SetStorage(c.storage)
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
