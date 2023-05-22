@@ -12,6 +12,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
@@ -21,19 +22,13 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-// IssuesProvider is an interface that allows to retrieve issues for a given path and range.
-// This is used instead of any concrete dependency to allow for easier testing and more flexibility in implementation.
-type issuesProvider interface {
-	IssuesFor(path string, r snyk.Range) []snyk.Issue
-}
-
 type dirtyFilesWatcher interface {
 	IsDirty(path sglsp.DocumentURI) bool
 }
 
 // CodeActionsService is an application-layer service for handling code actions.
 type CodeActionsService struct {
-	IssuesProvider issuesProvider
+	IssuesProvider ide.IssueProvider
 
 	// actionsCache holds all the issues that were returns by the GetCodeActions method.
 	// This is used to resolve the code actions later on in ResolveCodeAction.
@@ -48,7 +43,7 @@ type cachedAction struct {
 	action snyk.CodeAction
 }
 
-func NewService(c *config.Config, provider issuesProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier) *CodeActionsService {
+func NewService(c *config.Config, provider ide.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier) *CodeActionsService {
 	return &CodeActionsService{
 		IssuesProvider: provider,
 		actionsCache:   make(map[uuid.UUID]cachedAction),
@@ -141,7 +136,7 @@ func (c *CodeActionsService) handleCommand(
 		CommandId: action.Command.Command,
 		Arguments: action.Command.Arguments,
 	}
-	executableCmd, err := command.CreateFromCommandData(cmd, server, authService, learnService, c.notifier)
+	executableCmd, err := command.CreateFromCommandData(cmd, server, authService, learnService, c.notifier, c.IssuesProvider)
 	if err != nil {
 		return lsp.CodeAction{}, err
 	}

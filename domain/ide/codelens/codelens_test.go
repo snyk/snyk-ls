@@ -60,6 +60,7 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	lenses := GetFor(filePath)
 
 	assert.NotNil(t, lenses)
-	assert.Equal(t, 1, len(lenses))
+	assert.Equal(t, 2, len(lenses))
 	assert.Equal(t, code.FakeCommand.CommandId, lenses[0].Command.Command)
+	assert.Equal(t, code.FakeFixCommand.CommandId, lenses[1].Command.Command)
 }

@@ -27,6 +27,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
+	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
@@ -41,7 +42,7 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 		defer log.Info().Str("method", method).Interface("command", params).Msg("SENDING")
 
 		commandData := snyk.CommandData{CommandId: params.Command, Arguments: params.Arguments, Title: params.Command}
-		cmd, err := command.CreateFromCommandData(commandData, srv, di.AuthenticationService(), di.LearnService(), di.Notifier())
+		cmd, err := command.CreateFromCommandData(commandData, srv, di.AuthenticationService(), di.LearnService(), di.Notifier(), workspace.Get())
 
 		if err != nil {
 			log.Error().Err(err).Str("method", method).Msg("failed to create command")

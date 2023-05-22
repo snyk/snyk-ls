@@ -136,8 +136,27 @@ func codeLensHandler() jrpc2.Handler {
 		defer log.Info().Str("method", "CodeLensHandler").Msg("SENDING")
 
 		lenses := codelens.GetFor(uri.PathFromUri(params.TextDocument.URI))
-		return lenses, nil
+
+		// Do not return Snyk Code Fix codelens when a doc is dirty
+		isDirtyFile := di.FileWatcher().IsDirty(params.TextDocument.URI)
+		if !isDirtyFile {
+			return lenses, nil
+		}
+
+		return filterCodeFixCodelenses(lenses), nil
 	})
+}
+
+func filterCodeFixCodelenses(lenses []sglsp.CodeLens) []sglsp.CodeLens {
+	var filteredLenses []sglsp.CodeLens
+	for _, lense := range lenses {
+		if lense.Command.Command == snyk.CodeFixCommand {
+			continue
+		}
+
+		filteredLenses = append(filteredLenses, lense)
+	}
+	return filteredLenses
 }
 
 func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler {
@@ -229,6 +248,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 						snyk.GetLearnLesson,
 						snyk.GetSettingsSastEnabled,
 						snyk.GetActiveUserCommand,
+						snyk.CodeFixCommand,
 					},
 				},
 			},

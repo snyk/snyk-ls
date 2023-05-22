@@ -67,6 +67,7 @@ type Issue struct {
 type CodeIssueData struct {
 	// Unique key identifying an issue in the whole result set
 	Key                string             `json:"key"`
+	Title              string             `json:"title"`
 	Message            string             `json:"message"`
 	Rule               string             `json:"rule"`
 	RuleId             string             `json:"ruleId"`

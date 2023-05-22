@@ -681,6 +681,44 @@ type ShowMessageRequestParams struct {
 	Actions []MessageActionItem `json:"actions"`
 }
 
+type ApplyWorkspaceEditParams struct {
+	/**
+	 * An optional label of the workspace edit. This label is
+	 * presented in the user interface for example on an undo
+	 * stack to undo the workspace edit.
+	 */
+
+	Label string `json:"label,omitempty"`
+	/**
+	 * The edits to apply.
+	 */
+	Edit *sglsp.WorkspaceEdit `json:"edit"`
+}
+
+type CodeLensRefresh struct{}
+
+type ApplyWorkspaceEditResult struct {
+	/**
+	 * Indicates whether the edit was applied or not.
+	 */
+	Applied bool `json:"applied"`
+
+	/**
+	* An optional textual description for why the edit was not applied.
+	* This may be used by the server for diagnostic logging or to provide
+	* a suitable error for a request that triggered the edit.
+	 */
+	FailureReason string `json:"failureReason,omitempty"`
+
+	/**
+	* Depending on the client's failure handling strategy `failedChange`
+	* might contain the index of the change that failed. This property is
+	* only available if the client signals a `failureHandling` strategy
+	* in its client capabilities.
+	 */
+	FailedChange uint `json:"failedChange,omitempty"`
+}
+
 type MessageType int
 
 const Error MessageType = 1

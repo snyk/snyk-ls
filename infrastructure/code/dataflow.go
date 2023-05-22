@@ -65,17 +65,3 @@ func (d *dataflowElement) toMarkDown() (markdown string) {
 	)
 	return markdown
 }
-
-func (d *dataflowElement) toCommand() snyk.CommandData {
-	command := snyk.CommandData{
-		Title: fmt.Sprintf(
-			"Snyk Data Flow (%d) %s:%d",
-			d.position,
-			filepath.Base(d.filePath),
-			d.flowRange.Start.Line+1,
-		),
-		CommandId: snyk.NavigateToRangeCommand,
-		Arguments: []any{d.filePath, d.flowRange},
-	}
-	return command
-}
