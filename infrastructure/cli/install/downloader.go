@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog/log"
@@ -110,13 +109,8 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 
 	var resp *http.Response
 
-	// Determine the binary size
-	length, err := getContentLength(d.httpClient(), downloadURL)
-	if err != nil {
-		return err
-	}
-
 	resp, err = d.httpClient().Get(downloadURL)
+	log.Debug().Any("response-headers", resp.Header).Msg("headers")
 	if err != nil {
 		return err
 	}
@@ -141,7 +135,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	}(resp.Body)
 
 	// pipe stream
-	cliReader := io.TeeReader(resp.Body, newWriter(int64(length), d.progressTracker, onProgress))
+	cliReader := io.TeeReader(resp.Body, newWriter(resp.ContentLength, d.progressTracker, onProgress))
 
 	_ = os.MkdirAll(xdg.DataHome, 0755)
 	tmpDirPath, err := os.MkdirTemp(xdg.DataHome, "downloads")
@@ -186,19 +180,6 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	}
 
 	return err
-}
-
-func getContentLength(client *http.Client, downloadURL string) (int, error) {
-	resp, err := client.Head(downloadURL)
-	if err != nil {
-		return 0, err
-	}
-	contentLength := resp.Header.Get("content-length")
-	length, err := strconv.Atoi(contentLength)
-	if err != nil {
-		return 0, err
-	}
-	return length, nil
 }
 
 func (d *Downloader) createLockFile() error {
