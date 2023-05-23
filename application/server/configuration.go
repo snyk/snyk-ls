@@ -253,9 +253,9 @@ func updateAutoScan(settings lsp.Settings) {
 }
 
 func updateSnykLearnCodeActions(settings lsp.Settings) {
-	enable := false
-	if settings.EnableSnykLearnCodeActions == "true" {
-		enable = true
+	enable := true
+	if settings.EnableSnykLearnCodeActions == "false" {
+		enable = false
 	}
 
 	config.CurrentConfig().SetSnykLearnCodeActionsEnabled(enable)
