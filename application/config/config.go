@@ -476,14 +476,10 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 	// env var overrides flag
 	envLogLevel := os.Getenv("SNYK_LOG_LEVEL")
 	if envLogLevel != "" {
-		fmt.Println("Setting log level from environment variable (SNYK_LOG_LEVEL)", envLogLevel)
 		envLevel, err := zerolog.ParseLevel(envLogLevel)
-		if err != nil {
-			fmt.Println("Can't set log level from env. Setting to default (=info)")
-			// fallback to flag
-			envLevel = logLevel
+		if err == nil {
+			logLevel = envLevel
 		}
-		logLevel = envLevel
 	}
 
 	c.SetLogLevel(logLevel.String())
@@ -586,6 +582,9 @@ func (c *Config) configFiles() []string {
 		files = append(files, configFile)
 	}
 	home := os.Getenv("HOME")
+	if home == "" {
+		home = xdg.Home
+	}
 	stdFiles := []string{
 		".snyk.env",
 		home + "/.snyk.env",
