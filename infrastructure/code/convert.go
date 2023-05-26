@@ -474,6 +474,7 @@ func createAutofixWorkspaceEdit(absoluteFilePath string, fixedSourceCode string)
 func (s *AutofixResponse) toAutofixSuggestions(baseDir string, filePath string) (fixSuggestions []AutofixSuggestion) {
 	for _, suggestion := range s.AutofixSuggestions {
 		d := AutofixSuggestion{
+			FixId:       suggestion.Id,
 			AutofixEdit: createAutofixWorkspaceEdit(ToAbsolutePath(baseDir, filePath), suggestion.Value),
 		}
 		fixSuggestions = append(fixSuggestions, d)

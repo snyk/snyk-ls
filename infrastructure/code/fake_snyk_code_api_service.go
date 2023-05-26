@@ -273,6 +273,7 @@ func (f *FakeSnykCodeClient) RunAutofix(
 	suggestions := []AutofixSuggestion{
 		// First suggestion
 		{
+			FixId: "123e4567-e89b-12d3-a456-426614174000/1",
 			AutofixEdit: snyk.WorkspaceEdit{
 				Changes: map[string][]snyk.TextEdit{
 					options.filePath: {snyk.TextEdit{
@@ -287,6 +288,7 @@ func (f *FakeSnykCodeClient) RunAutofix(
 		},
 		// Second suggestion -- currently dropped
 		{
+			FixId: "123e4567-e89b-12d3-a456-426614174000/2",
 			AutofixEdit: snyk.WorkspaceEdit{
 				Changes: map[string][]snyk.TextEdit{
 					options.filePath: {snyk.TextEdit{
@@ -304,4 +306,8 @@ func (f *FakeSnykCodeClient) RunAutofix(
 	log.Trace().Str("method", "RunAutofix").Interface("fakeAutofix",
 		"someAutofixSuggestion").Msg("fake backend call received & answered")
 	return suggestions, AutofixStatus{message: "COMPLETE"}, nil
+}
+
+func (f *FakeSnykCodeClient) SubmitAutofixFeedback(ctx context.Context, fixId string, positive bool) error {
+	return nil
 }
