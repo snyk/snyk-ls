@@ -476,9 +476,18 @@ func createAutofixWorkspaceEdit(filePath string, fixedSourceCode string) (edit s
 
 // toAutofixSuggestionsIssues converts the HTTP json-first payload to the domain type
 func (s *AutofixResponse) toAutofixSuggestions(filePath string) (fixSuggestions []AutofixSuggestion) {
-	for _, fix := range s.AutofixSuggestions {
+	for _, suggestion := range s.AutofixSuggestions {
+		var newText string
+		// Deprecated autofix response used to pass a string. It passes value object with a fix id to map it to the backend for fix feedback purposes now.
+		switch fix := suggestion.(type) {
+		case string:
+			newText = fix
+		default:
+			newText = fix.(autofixResponseSingleFix).Value
+		}
+
 		d := AutofixSuggestion{
-			AutofixEdit: createAutofixWorkspaceEdit(filePath, fix),
+			AutofixEdit: createAutofixWorkspaceEdit(filePath, newText),
 		}
 		fixSuggestions = append(fixSuggestions, d)
 	}
