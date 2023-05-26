@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
@@ -152,25 +151,14 @@ func TestIsSastEnabled(t *testing.T) {
 				errorReporter: error_reporting.NewTestErrorReporter(),
 				notifier:      notifier,
 			}
-			actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
+			actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
 
-			data, err := command.CreateFromCommandData(
-				snyk.CommandData{
-					Title:     snyk.OpenBrowserCommand,
-					CommandId: snyk.OpenBrowserCommand,
-					Arguments: []any{getCodeEnablementUrl()},
-				},
-				nil,
-				nil,
-				nil,
-				notifier,
-				nil,
-				nil,
-			)
-			assert.NoError(t, err)
-
-			actionMap.Add(enableSnykCodeMessageActionItemTitle, data)
-			actionMap.Add(closeMessageActionItemTitle, nil)
+			actionMap.Add(enableSnykCodeMessageActionItemTitle, snyk.CommandData{
+				Title:     snyk.OpenBrowserCommand,
+				CommandId: snyk.OpenBrowserCommand,
+				Arguments: []any{getCodeEnablementUrl()},
+			})
+			actionMap.Add(closeMessageActionItemTitle, snyk.CommandData{})
 			expectedShowMessageRequest := snyk.ShowMessageRequest{
 				Message: codeDisabledInOrganisationMessageText,
 				Type:    snyk.Warning,

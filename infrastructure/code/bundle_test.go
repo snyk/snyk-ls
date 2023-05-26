@@ -23,7 +23,6 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/data_structure"
@@ -152,7 +151,7 @@ func Test_AutofixMessages(t *testing.T) {
 		assert.Equal(t, "Congratulations! 🎉 You’ve just fixed this SNYK-123 issue. Was this fix helpful?", successMsgRequest.Message)
 
 		// Compare button action commands
-		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
+		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
 		commandData1 := snyk.CommandData{
 			Title:     snyk.CodeSubmitFixFeedback,
 			CommandId: snyk.CodeSubmitFixFeedback,
@@ -163,19 +162,17 @@ func Test_AutofixMessages(t *testing.T) {
 			CommandId: snyk.CodeSubmitFixFeedback,
 			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", false},
 		}
-		cmd1, _ := command.CreateFromCommandData(commandData1, nil, nil, nil, nil, nil, nil)
-		cmd2, _ := command.CreateFromCommandData(commandData2, nil, nil, nil, nil, nil, nil)
 		positiveFeedback := snyk.MessageAction("👍")
 		negativeFeedback := snyk.MessageAction("👎")
-		actionCommandMap.Add(positiveFeedback, cmd1)
-		actionCommandMap.Add(negativeFeedback, cmd2)
+		actionCommandMap.Add(positiveFeedback, commandData1)
+		actionCommandMap.Add(negativeFeedback, commandData2)
 
 		assert.Equal(t, actionCommandMap.Keys(), successMsgRequest.Actions.Keys())
 
 		buttonAction1, _ := successMsgRequest.Actions.Get(positiveFeedback)
 		buttonAction2, _ := successMsgRequest.Actions.Get(negativeFeedback)
-		assert.Equal(t, cmd1.Command(), buttonAction1.Command())
-		assert.Equal(t, cmd2.Command(), buttonAction2.Command())
+		assert.Equal(t, commandData1, buttonAction1)
+		assert.Equal(t, commandData2, buttonAction2)
 	})
 
 	t.Run("Shows error message when no fix available", func(t *testing.T) {

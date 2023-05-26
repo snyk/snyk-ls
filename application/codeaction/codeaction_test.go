@@ -223,7 +223,7 @@ func Test_ResolveCodeAction_CommandIsExecuted(t *testing.T) {
 
 	serviceMock := command.Service().(*snyk.CommandServiceMock)
 	assert.Len(t, serviceMock.ExecutedCommands(), 1)
-	assert.Equal(t, serviceMock.ExecutedCommands()[0].Command().CommandId, c.Command)
+	assert.Equal(t, serviceMock.ExecutedCommands()[0].CommandId, c.Command)
 }
 
 func Test_ResolveCodeAction_KeyIsNull_ReturnsError(t *testing.T) {

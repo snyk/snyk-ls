@@ -17,11 +17,9 @@
 package code
 
 import (
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 )
@@ -45,21 +43,15 @@ func (sc *Scanner) isSastEnabled() bool {
 
 	if !sastResponse.SastEnabled {
 		// this is processed in the listener registered to translate into the right client protocol
-		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
+		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
 		commandData := snyk.CommandData{
 			Title:     snyk.OpenBrowserCommand,
 			CommandId: snyk.OpenBrowserCommand,
 			Arguments: []any{getCodeEnablementUrl()},
 		}
-		cmd, err := command.CreateFromCommandData(commandData, nil, nil, sc.learnService, sc.notifier, nil, nil)
-		if err != nil {
-			message := "couldn't create open browser command"
-			log.Err(err).Str("method", method).Msg(message)
-			sc.errorReporter.CaptureError(errors.Wrap(err, message))
-		} else {
-			actionCommandMap.Add(enableSnykCodeMessageActionItemTitle, cmd)
-		}
-		actionCommandMap.Add(closeMessageActionItemTitle, nil)
+
+		actionCommandMap.Add(enableSnykCodeMessageActionItemTitle, commandData)
+		actionCommandMap.Add(closeMessageActionItemTitle, snyk.CommandData{})
 
 		sc.notifier.Send(snyk.ShowMessageRequest{
 			Message: codeDisabledInOrganisationMessageText,
