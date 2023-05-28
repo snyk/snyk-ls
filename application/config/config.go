@@ -18,7 +18,6 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -89,7 +88,10 @@ func (c *CliSettings) Installed() bool {
 	defer c.cliPathAccessMutex.Unlock()
 	stat, err := os.Stat(c.cliPath)
 	if err == nil {
-		log.Debug().Str("method", "config.cliSettings.Installed").Msgf("CLI path: %s, Size: %d, Perm: %s", c.cliPath, stat.Size(), stat.Mode().Perm())
+		log.Debug().Str("method", "config.cliSettings.Installed").Msgf("CLI path: %s, Size: %d, Perm: %s",
+			c.cliPath,
+			stat.Size(),
+			stat.Mode().Perm())
 	}
 	isDirectory := stat != nil && stat.IsDir()
 	if isDirectory {
@@ -469,7 +471,7 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 
 	logLevel, err = zerolog.ParseLevel(c.LogLevel())
 	if err != nil {
-		fmt.Println("Can't set log level from flag. Setting to default (=info)")
+		_, _ = os.Stderr.WriteString("Can't set log level from flag. Setting to default (=info)")
 		logLevel = zerolog.InfoLevel
 	}
 

@@ -43,6 +43,7 @@ func main() {
 			er.FlushErrorReporting()
 		}
 	}()
+
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	c := config.New()
 	config.SetCurrentConfig(c)
@@ -53,14 +54,14 @@ func main() {
 	}
 	if output != "" {
 		lines := strings.Split(output, " ")
-		fmt.Println("License information")
-		fmt.Println("Snyk Language Server is licensed under the Apache 2.0 license")
-		fmt.Println("The following dependencies and licenses are used in this project:")
-		for _, line := range lines {
-			fmt.Println(line)
-		}
-		fmt.Println("You can access the detailed license information under https://github.com/snyk/snyk-ls/tree/main/licenses")
+		msg := "License information\n"
+		msg += "Snyk Language Server is licensed under the Apache 2.0 license\n"
+		msg += "The following dependencies and licenses are used in this project:\n"
+		msg += strings.Join(lines, "\n") + "\n"
+		msg += "You can access the detailed license information under https://github.com/snyk/snyk-ls/tree/main/licenses\n"
+		_, _ = os.Stderr.WriteString(msg)
 	}
+
 	log.Info().Msg(config.Version)
 	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
 	server.Start(c)
