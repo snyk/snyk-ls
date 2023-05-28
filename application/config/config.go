@@ -18,6 +18,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -471,19 +472,21 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 
 	logLevel, err = zerolog.ParseLevel(c.LogLevel())
 	if err != nil {
-		_, _ = os.Stderr.WriteString("Can't set log level from flag. Setting to default (=info)")
+		fmt.Fprintln(os.Stderr, "Can't set log level from flag. Setting to default (=info)")
 		logLevel = zerolog.InfoLevel
 	}
 
 	// env var overrides flag
 	envLogLevel := os.Getenv("SNYK_LOG_LEVEL")
 	if envLogLevel != "" {
+		msg := fmt.Sprint("Setting log level from environment variable (SNYK_LOG_LEVEL) \"", envLogLevel, "\"")
+		fmt.Fprintln(os.Stderr, msg)
 		envLevel, err := zerolog.ParseLevel(envLogLevel)
 		if err == nil {
+			fmt.Fprintln(os.Stderr, "Can't set log level from flag. Setting to default (=info)")
 			logLevel = envLevel
 		}
 	}
-
 	c.SetLogLevel(logLevel.String())
 	zerolog.TimeFieldFormat = time.RFC3339
 
@@ -493,9 +496,9 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 	if c.LogPath() != "" {
 		c.logFile, err = os.OpenFile(c.LogPath(), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 		if err != nil {
-			log.Err(err).Msg("couldn't open logfile")
+			fmt.Fprintln(os.Stderr, "couldn't open logfile")
 		} else {
-			log.Info().Msgf("adding file logger to file %s", c.logPath)
+			fmt.Fprintln(os.Stderr, fmt.Sprint("adding file logger to file ", c.logPath))
 			writers = append(writers, c.logFile)
 		}
 	}
