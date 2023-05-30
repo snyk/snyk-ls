@@ -858,3 +858,48 @@ func Test_getCodeIssueType(t *testing.T) {
 		assert.Equal(t, snyk.CodeQualityIssue, rule.getCodeIssueType())
 	})
 }
+
+// Tests deprecated payload convert
+func Test_DeprecatedAutofixResponse_toAutofixSuggestion(t *testing.T) {
+	response := AutofixResponse{
+		Status: "COMPLETE",
+	}
+	fixes := []string{"test1", "test2"}
+	for _, fix := range fixes {
+		response.AutofixSuggestions = append(response.AutofixSuggestions, fix)
+	}
+	filePath := "path/to/file.js"
+	edits := response.toAutofixSuggestions(filePath)
+	editValues := make([]string, 0)
+	for _, edit := range edits {
+		change := edit.AutofixEdit.Changes[filePath][0]
+		editValues = append(editValues, change.NewText)
+	}
+
+	assert.Contains(t, editValues, "test1", "test2")
+}
+
+func Test_AutofixResponse_toAutofixSuggestion(t *testing.T) {
+	response := AutofixResponse{
+		Status: "COMPLETE",
+	}
+	fixes := []autofixResponseSingleFix{{
+		Id:    "123e4567-e89b-12d3-a456-426614174000/1",
+		Value: "test1",
+	}, {
+		Id:    "123e4567-e89b-12d3-a456-426614174000/2",
+		Value: "test2",
+	}}
+	for _, fix := range fixes {
+		response.AutofixSuggestions = append(response.AutofixSuggestions, fix)
+	}
+	filePath := "path/to/file.js"
+	edits := response.toAutofixSuggestions(filePath)
+	editValues := make([]string, 0)
+	for _, edit := range edits {
+		change := edit.AutofixEdit.Changes[filePath][0]
+		editValues = append(editValues, change.NewText)
+	}
+
+	assert.Contains(t, editValues, "test1", "test2")
+}
