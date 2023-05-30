@@ -326,7 +326,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			assert.Equal(t, FakeIssue.ID, issues[0].ID)
 			assert.Equal(t, FakeIssue.Range, issues[0].Range)
 			assert.Equal(t, FakeIssue.Message, issues[0].Message)
-			assert.Equal(t, len(FakeIssue.Commands), len(issues[0].Commands))
+			assert.Equal(t, len(FakeIssue.CodelensCommands), len(issues[0].CodelensCommands))
 			assert.GreaterOrEqual(t, len(issues[0].CodeActions), len(FakeIssue.CodeActions)) // Some codeactions are added by the scanner (e.g. Autofix, Snyk Learn)
 
 			// verify that extend bundle has been called on backend service with additional file

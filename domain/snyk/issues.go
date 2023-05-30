@@ -52,8 +52,8 @@ type Issue struct {
 	IssueDescriptionURL *url.URL
 	// CodeActions can contain workspace edits or commands to be executed
 	CodeActions []CodeAction
-	// Commands that can be executed via a codelens
-	Commands []CommandData
+	// CodelensCommands that can be executed via a codelens
+	CodelensCommands []CommandData
 	// The Ecosystem of the issue, e.g. npm, maven, nuget, etc.
 	Ecosystem string
 	// A slice of the CWEs of the issue, e.g. CWEs-79

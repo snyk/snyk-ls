@@ -143,11 +143,11 @@ func codeLensHandler() jrpc2.Handler {
 			return lenses, nil
 		}
 
-		return filterCodeFixCodelenses(lenses), nil
+		return filterCodeFixCodelens(lenses), nil
 	})
 }
 
-func filterCodeFixCodelenses(lenses []sglsp.CodeLens) []sglsp.CodeLens {
+func filterCodeFixCodelens(lenses []sglsp.CodeLens) []sglsp.CodeLens {
 	var filteredLenses []sglsp.CodeLens
 	for _, lense := range lenses {
 		if lense.Command.Command == snyk.CodeFixCommand {

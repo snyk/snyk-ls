@@ -32,7 +32,7 @@ func GetFor(filePath string) (lenses []sglsp.CodeLens) {
 
 	issues := f.DocumentDiagnosticsFromCache(filePath)
 	for _, issue := range issues {
-		for _, command := range issue.Commands {
+		for _, command := range issue.CodelensCommands {
 			lenses = append(lenses, getCodeLensFromCommand(issue, command))
 		}
 	}

@@ -76,7 +76,7 @@ func (cmd *fixCodeIssue) Execute(ctx context.Context) (any, error) {
 			})
 
 			// reset codelenses
-			issues[i].Commands = nil
+			issues[i].CodelensCommands = nil
 
 			// Give client some time to apply edit, then refresh code lenses to hide stale codelens for the fixed issue
 			time.Sleep(1 * time.Second)

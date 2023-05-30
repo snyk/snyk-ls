@@ -213,7 +213,7 @@ func (b *Bundle) addIssueActions(ctx context.Context, issues []snyk.Issue) {
 					issues[i].CodeActions = append(issues[i].CodeActions, codeAction)
 
 					codeActionId := *codeAction.Uuid
-					issues[i].Commands = append(issues[i].Commands, snyk.CommandData{
+					issues[i].CodelensCommands = append(issues[i].CodelensCommands, snyk.CommandData{
 						Title:     "⚡ Fix this issue: " + issueTitle(issues[i]),
 						CommandId: snyk.CodeFixCommand,
 						Arguments: []any{

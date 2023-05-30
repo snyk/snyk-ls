@@ -100,7 +100,7 @@ func setupSampleIssues(issueRange snyk.Range, codeAction snyk.CodeAction, cmdDat
 		IssueType:   snyk.CodeSecurityVulnerability,
 		Message:     "This is a dummy error (severity error)",
 		CodeActions: []snyk.CodeAction{codeAction},
-		Commands: []snyk.CommandData{
+		CodelensCommands: []snyk.CommandData{
 			cmdData,
 		},
 	}}
@@ -148,7 +148,7 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 	// assert
 	assert.NoError(t, err)
 	assert.Nil(t, res)
-	assert.Nil(t, issues[0].Commands) // verify commands are reset
+	assert.Nil(t, issues[0].CodelensCommands) // verify commands are reset
 
 	// Verify workspace edit is sent to the client
 	workspaceEdit := converter.ToWorkspaceEdit(mockEdit)
@@ -184,7 +184,7 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 	// assert
 	assert.NoError(t, err)
 	assert.Nil(t, res)
-	assert.NotNil(t, issues[0].Commands) // verify commands isn't reset
+	assert.NotNil(t, issues[0].CodelensCommands) // verify commands isn't reset
 
 	var sentMessages []any
 	// Verify no workspace edit is sent to the client
