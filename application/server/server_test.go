@@ -366,6 +366,66 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.NotNil(t, lenses)
+	assert.Len(t, lenses, 2)
+	assert.Equal(t, lenses[0].Command.Command, code.FakeCommand.CommandId)
+}
+
+func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeFixLenses(t *testing.T) {
+	testutil.IntegTest(t) // this needs an authenticated user
+	loc := setupServer(t)
+	didOpenParams, dir := didOpenTextParams(t)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
+	fakeAuthenticationProvider.IsAuthenticated = true
+
+	clientParams := lsp.InitializeParams{
+		RootURI: uri.PathToUri(dir),
+		InitializationOptions: lsp.Settings{
+			ActivateSnykCode:            "true",
+			ActivateSnykOpenSource:      "false",
+			ActivateSnykIac:             "false",
+			Organization:                "fancy org",
+			Token:                       "xxx",
+			ManageBinariesAutomatically: "true",
+			CliPath:                     "",
+			FilterSeverity:              lsp.DefaultSeverityFilter(),
+			EnableTrustedFoldersFeature: "false",
+		},
+	}
+	_, err := loc.Client.Call(ctx, "initialize", clientParams)
+	if err != nil {
+		t.Fatal(err, "couldn't initialize")
+	}
+	_, err = loc.Client.Call(ctx, "initialized", nil)
+	if err != nil {
+		t.Fatal(err, "couldn't send initialized")
+	}
+
+	// wait for publish
+	assert.Eventually(
+		t,
+		func() bool {
+			path := uri.PathFromUri(didOpenParams.TextDocument.URI)
+			return workspace.Get().GetFolderContaining(path).DocumentDiagnosticsFromCache(path) != nil
+		},
+		50*time.Second,
+		time.Millisecond,
+		"Couldn't get diagnostics from cache",
+	)
+
+	// fake edit the file under test
+	di.FileWatcher().SetFileAsChanged(didOpenParams.TextDocument.URI)
+
+	rsp, _ := loc.Client.Call(ctx, "textDocument/codeLens", sglsp.CodeLensParams{
+		TextDocument: sglsp.TextDocumentIdentifier{
+			URI: didOpenParams.TextDocument.URI,
+		},
+	})
+
+	var lenses []sglsp.CodeLens
+	if err := rsp.UnmarshalResult(&lenses); err != nil {
+		t.Fatal(err)
+	}
+	assert.NotNil(t, lenses)
 	assert.Len(t, lenses, 1)
 	assert.Equal(t, lenses[0].Command.Command, code.FakeCommand.CommandId)
 }

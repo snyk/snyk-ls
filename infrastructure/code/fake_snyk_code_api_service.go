@@ -63,16 +63,21 @@ var (
 		CommandId: snyk.NavigateToRangeCommand,
 		Arguments: []any{"path", fakeRange},
 	}
+	FakeFixCommand = snyk.CommandData{
+		Title:     "Code Flow blah blah fake",
+		CommandId: snyk.CodeFixCommand,
+		Arguments: []any{"id", "path", fakeRange},
+	}
 
 	FakeIssue = snyk.Issue{
-		ID:          "SNYK-123",
-		Range:       fakeRange,
-		Severity:    snyk.High,
-		Product:     product.ProductCode,
-		IssueType:   snyk.CodeQualityIssue,
-		Message:     "This is a dummy error (severity error)",
-		Commands:    []snyk.CommandData{FakeCommand},
-		CodeActions: []snyk.CodeAction{FakeCodeAction},
+		ID:               "SNYK-123",
+		Range:            fakeRange,
+		Severity:         snyk.High,
+		Product:          product.ProductCode,
+		IssueType:        snyk.CodeQualityIssue,
+		Message:          "This is a dummy error (severity error)",
+		CodelensCommands: []snyk.CommandData{FakeCommand, FakeFixCommand},
+		CodeActions:      []snyk.CodeAction{FakeCodeAction},
 	}
 
 	FakeCodeAction = snyk.CodeAction{

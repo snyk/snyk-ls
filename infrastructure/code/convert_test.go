@@ -637,7 +637,6 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	assert.Equal(t, issueDescriptionURL, issue.IssueDescriptionURL)
 	assert.Equal(t, references, issue.References)
 	assert.Contains(t, issue.FormattedMessage, "Example Commit Fixes")
-	assert.NotEmpty(t, issue.Commands, "should have getCommands filled from codeflow")
 	assert.Equal(t, markersForSampleSarifResponse(path), issue.AdditionalData.(snyk.CodeIssueData).Markers)
 	assert.Equal(t, resp.Sarif.Runs[0].Tool.Driver.Rules[0].Properties.Cwe, issue.CWEs)
 }
@@ -708,16 +707,6 @@ func Test_getFormattedMessage(t *testing.T) {
 
 	assert.Contains(t, msg, "Example Commit Fixes")
 	assert.Contains(t, msg, "Data Flow")
-}
-
-func TestGetCodeFlowCommands(t *testing.T) {
-	testutil.UnitTest(t)
-	p, _, sarifResponse := setupConversionTests(t, true, true)
-
-	result := sarifResponse.Sarif.Runs[0].Results[0]
-	flow := result.getCodeFlow(filepath.Dir(p))
-	assert.NotEmpty(t, flow)
-	assert.Equal(t, snyk.NavigateToRangeCommand, flow[0].toCommand().CommandId)
 }
 
 func setupConversionTests(t *testing.T,

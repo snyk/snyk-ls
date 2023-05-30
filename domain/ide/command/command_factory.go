@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
@@ -33,6 +34,7 @@ func CreateFromCommandData(
 	authService snyk.AuthenticationService,
 	learnService learn.Service,
 	notifier noti.Notifier,
+	issueProvider ide.IssueProvider,
 ) (snyk.Command, error) {
 
 	switch commandData.CommandId {
@@ -61,6 +63,8 @@ func CreateFromCommandData(
 		return &sastEnabled{command: commandData, apiClient: apiClient}, nil
 	case snyk.GetActiveUserCommand:
 		return &getActiveUser{command: commandData, authService: authService, notifier: notifier}, nil
+	case snyk.CodeFixCommand:
+		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

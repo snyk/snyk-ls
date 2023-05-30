@@ -44,13 +44,6 @@ func createRuleLink() (u *url.URL) {
 	return u
 }
 
-func getCommands(dataflow []dataflowElement) (commands []snyk.CommandData) {
-	for _, element := range dataflow {
-		commands = append(commands, element.toCommand())
-	}
-	return commands
-}
-
 func (r *rule) getReferences() (references []snyk.Reference) {
 	for _, commit := range r.getExampleCommits() {
 		references = append(references, commit.toReference())
@@ -307,7 +300,6 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 
 			rule := r.getRule(result.RuleID)
 			message := result.getMessage(rule)
-			dataflow := result.getCodeFlow(baseDir)
 			formattedMessage := result.formattedMessage(rule, baseDir)
 
 			exampleCommits := rule.getExampleCommits()
@@ -338,9 +330,14 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 			errs = errors.Join(errs, err)
 
 			key := getIssueKey(result.RuleID, absPath, startLine, endLine, startCol, endCol)
+			title := rule.ShortDescription.Text
+			if title == "" {
+				title = rule.ID
+			}
 
 			additionalData := snyk.CodeIssueData{
 				Key:                key,
+				Title:              title,
 				Message:            result.Message.Text,
 				Rule:               rule.Name,
 				RuleId:             rule.ID,
@@ -365,7 +362,6 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 				Product:             product.ProductCode,
 				IssueDescriptionURL: ruleLink,
 				References:          rule.getReferences(),
-				Commands:            getCommands(dataflow),
 				AdditionalData:      additionalData,
 				CWEs:                rule.Properties.Cwe,
 			}
