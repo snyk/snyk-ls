@@ -17,12 +17,13 @@
 package code
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -452,6 +453,13 @@ func (r *result) getMarkers(baseDir string) ([]snyk.Marker, error) {
 
 // createAutofixWorkspaceEdit turns the returned fix into an edit.
 func createAutofixWorkspaceEdit(absoluteFilePath string, fixedSourceCode string) (edit snyk.WorkspaceEdit) {
+	content, err := os.ReadFile(absoluteFilePath)
+	if err != nil {
+		log.Err(err).Msg("Can't read the fixed file " + absoluteFilePath)
+		// todo: error
+	}
+	endLine := bytes.Count(content, []byte{'\n'})
+
 	singleTextEdit := snyk.TextEdit{
 		Range: snyk.Range{
 			// TODO(alex.gronskiy): should be changed to an actual hunk-like edit instead of
@@ -460,7 +468,7 @@ func createAutofixWorkspaceEdit(absoluteFilePath string, fixedSourceCode string)
 				Line:      0,
 				Character: 0},
 			End: snyk.Position{
-				Line:      math.MaxInt32,
+				Line:      endLine + 1,
 				Character: 0},
 		},
 		NewText: fixedSourceCode,
