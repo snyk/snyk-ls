@@ -380,6 +380,7 @@ type AutofixStatus struct {
 func (s *SnykCodeHTTPClient) RunAutofix(
 	ctx context.Context,
 	options AutofixOptions,
+	baseDir string,
 ) ([]AutofixSuggestion,
 	AutofixStatus,
 	error,
@@ -432,7 +433,7 @@ func (s *SnykCodeHTTPClient) RunAutofix(
 		return nil, status, nil
 	}
 
-	suggestions := response.toAutofixSuggestions(options.filePath)
+	suggestions := response.toAutofixSuggestions(baseDir, options.filePath)
 	return suggestions, AutofixStatus{message: response.Status}, nil
 }
 

@@ -869,7 +869,7 @@ func Test_DeprecatedAutofixResponse_toAutofixSuggestion(t *testing.T) {
 		response.AutofixSuggestions = append(response.AutofixSuggestions, fix)
 	}
 	filePath := "path/to/file.js"
-	edits := response.toAutofixSuggestions(filePath)
+	edits := response.toAutofixSuggestions("", filePath)
 	editValues := make([]string, 0)
 	for _, edit := range edits {
 		change := edit.AutofixEdit.Changes[filePath][0]
@@ -894,7 +894,7 @@ func Test_AutofixResponse_toAutofixSuggestion(t *testing.T) {
 		response.AutofixSuggestions = append(response.AutofixSuggestions, fix)
 	}
 	filePath := "path/to/file.js"
-	edits := response.toAutofixSuggestions(filePath)
+	edits := response.toAutofixSuggestions("", filePath)
 	editValues := make([]string, 0)
 	for _, edit := range edits {
 		change := edit.AutofixEdit.Changes[filePath][0]
