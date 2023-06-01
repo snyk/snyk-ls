@@ -166,7 +166,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 				Msg("sending diagnostics...")
 			p.EndWithMessage("Analysis complete.")
 
-			b.addCodeActions(ctx, issues)
+			b.addIssueActions(ctx, issues)
 
 			return issues, nil
 		} else if status.message == "ANALYZING" {
@@ -185,7 +185,8 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 	}
 }
 
-func (b *Bundle) addCodeActions(ctx context.Context, issues []snyk.Issue) {
+// Adds code actions and code lenses for issues found
+func (b *Bundle) addIssueActions(ctx context.Context, issues []snyk.Issue) {
 	method := "addCodeActions"
 
 	autoFixEnabled := getCodeSettings().isAutofixEnabled.Get()
@@ -208,7 +209,19 @@ func (b *Bundle) addCodeActions(ctx context.Context, issues []snyk.Issue) {
 				b.errorReporter.CaptureError(err)
 			} else {
 				if supported {
-					issues[i].CodeActions = append(issues[i].CodeActions, *b.createDeferredAutofixCodeAction(ctx, issues[i]))
+					codeAction := *b.createDeferredAutofixCodeAction(ctx, issues[i])
+					issues[i].CodeActions = append(issues[i].CodeActions, codeAction)
+
+					codeActionId := *codeAction.Uuid
+					issues[i].CodelensCommands = append(issues[i].CodelensCommands, snyk.CommandData{
+						Title:     "⚡ Fix this issue: " + issueTitle(issues[i]),
+						CommandId: snyk.CodeFixCommand,
+						Arguments: []any{
+							codeActionId,
+							issues[i].AffectedFilePath,
+							issues[i].Range,
+						},
+					})
 				} else {
 					log.Info().Str("method", method).Msg("Autofix is not supported for " + issues[i].AffectedFilePath + " file extension.")
 				}
@@ -245,7 +258,7 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 		defer b.instrumentor.Finish(s)
 
 		progress := progress.NewTracker(true)
-		fixMsg := "Attempting to fix " + issue.ID + " (Snyk)"
+		fixMsg := "Attempting to fix " + issueTitle(issue) + " (Snyk)"
 		progress.BeginWithMessage(fixMsg, "")
 		b.notifier.SendShowMessage(sglsp.Info, fixMsg)
 
@@ -309,7 +322,7 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 					continue
 				}
 				if edit != nil {
-					b.notifier.SendShowMessage(sglsp.Info, "Congratulations! 🎉 You’ve just fixed this "+issue.ID+" issue.")
+					b.notifier.SendShowMessage(sglsp.Info, "Congratulations! 🎉 You’ve just fixed this "+issueTitle(issue)+" issue.")
 					progress.End()
 				} else {
 					b.notifier.SendShowMessage(sglsp.MTError, "Oh snap! 😔 The fix did not remediate the issue and was not applied.")
@@ -328,7 +341,7 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk.Issue) *snyk.CodeAction {
 	autofixEditCallback := b.autofixFunc(ctx, issue)
 
-	action, err := snyk.NewDeferredCodeAction("⚡ Fix this issue: "+issue.ID+" (Snyk)", &autofixEditCallback, nil)
+	action, err := snyk.NewDeferredCodeAction("⚡ Fix this issue: "+issueTitle(issue)+" (Snyk)", &autofixEditCallback, nil)
 	if err != nil {
 		log.Error().Msg("failed to create deferred autofix code action")
 		b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please contact Snyk support.")
@@ -338,7 +351,7 @@ func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk
 }
 
 func (b *Bundle) createOpenSnykLearnCodeAction(issue snyk.Issue) (ca *snyk.CodeAction) {
-	title := fmt.Sprintf("Learn more about %s (Snyk)", issue.ID)
+	title := fmt.Sprintf("Learn more about %s (Snyk)", issueTitle(issue))
 	lesson, err := b.learnService.GetLesson(issue.Ecosystem, issue.ID, issue.CWEs, issue.CVEs, issue.IssueType)
 	if err != nil {
 		log.Err(err).Msg("failed to get lesson")
@@ -357,4 +370,12 @@ func (b *Bundle) createOpenSnykLearnCodeAction(issue snyk.Issue) (ca *snyk.CodeA
 		}
 	}
 	return ca
+}
+
+func issueTitle(issue snyk.Issue) string {
+	if issue.AdditionalData != nil && issue.AdditionalData.(snyk.CodeIssueData).Title != "" {
+		return issue.AdditionalData.(snyk.CodeIssueData).Title
+	}
+
+	return issue.ID
 }

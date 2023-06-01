@@ -133,7 +133,16 @@ func registerNotifier(srv lsp.Server) {
 			log.Info().
 				Str("method", "registerNotifier").
 				Msg("sending show message request to client")
-
+		case lsp.ApplyWorkspaceEditParams:
+			handleApplyWorkspaceEdit(srv, params)
+			log.Info().
+				Str("method", "registerNotifier").
+				Msg("sending apply workspace edit request to client")
+		case lsp.CodeLensRefresh:
+			handleCodelensRefresh(srv)
+			log.Info().
+				Str("method", "registerNotifier").
+				Msg("sending codelens refresh request to client")
 		default:
 			log.Warn().
 				Str("method", "registerNotifier").
@@ -143,6 +152,43 @@ func registerNotifier(srv lsp.Server) {
 	}
 	di.Notifier().CreateListener(callbackFunction)
 	log.Info().Str("method", "registerNotifier").Msg("registered notifier")
+}
+
+func handleCodelensRefresh(srv lsp.Server) {
+	_, err := srv.Callback(context.Background(), "workspace/codeLens/refresh", nil)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("method", "handleCodelensRefresh").
+			Msg("error while sending workspace/codeLens/refresh request")
+		return
+	}
+}
+
+func handleApplyWorkspaceEdit(srv lsp.Server, params lsp.ApplyWorkspaceEditParams) {
+	callback, err := srv.Callback(context.Background(), "workspace/applyEdit", params)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("method", "handleApplyWorkspaceEdit").
+			Msg("error while sending workspace/applyEdit request")
+		return
+	}
+	if callback == nil {
+		return
+	}
+
+	var editResult lsp.ApplyWorkspaceEditResult
+	err = callback.UnmarshalResult(&editResult)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("method", "handleApplyWorkspaceEdit").
+			Msg("error while unmarshalling workspace/applyEdit result response")
+		return
+	}
+
+	log.Info().Msgf("Workspace edit applied %t. %s", editResult.Applied, editResult.FailureReason)
 }
 
 func handleShowMessageRequest(srv lsp.Server, params snyk.ShowMessageRequest) {

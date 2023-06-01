@@ -164,6 +164,7 @@ func TestIsSastEnabled(t *testing.T) {
 				nil,
 				nil,
 				notifier,
+				nil,
 			)
 			assert.NoError(t, err)
 

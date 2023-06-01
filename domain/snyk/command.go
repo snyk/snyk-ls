@@ -36,6 +36,9 @@ const (
 	GetLearnLesson               = "snyk.getLearnLesson"
 	GetSettingsSastEnabled       = "snyk.getSettingsSastEnabled"
 	GetActiveUserCommand         = "snyk.getActiveUser"
+
+	// Snyk Code specific commands
+	CodeFixCommand = "snyk.code.fix"
 )
 
 var (
