@@ -59,7 +59,7 @@ func (cmd *fixCodeIssue) Execute(ctx context.Context) (any, error) {
 	issues := cmd.issueProvider.IssuesFor(issuePath, issueRange)
 	for i := range issues {
 		for _, action := range issues[i].CodeActions {
-			if *action.Uuid != codeActionId {
+			if action.Uuid == nil || *action.Uuid != codeActionId {
 				continue
 			}
 
