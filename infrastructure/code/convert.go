@@ -17,12 +17,13 @@
 package code
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -451,7 +452,14 @@ func (r *result) getMarkers(baseDir string) ([]snyk.Marker, error) {
 }
 
 // createAutofixWorkspaceEdit turns the returned fix into an edit.
-func createAutofixWorkspaceEdit(filePath string, fixedSourceCode string) (edit snyk.WorkspaceEdit) {
+func createAutofixWorkspaceEdit(absoluteFilePath string, fixedSourceCode string) (edit snyk.WorkspaceEdit) {
+	content, err := os.ReadFile(absoluteFilePath)
+	if err != nil {
+		log.Err(err).Msg("Can't read the fixed file " + absoluteFilePath)
+		// todo: error
+	}
+	endLine := bytes.Count(content, []byte{'\n'})
+
 	singleTextEdit := snyk.TextEdit{
 		Range: snyk.Range{
 			// TODO(alex.gronskiy): should be changed to an actual hunk-like edit instead of
@@ -460,18 +468,18 @@ func createAutofixWorkspaceEdit(filePath string, fixedSourceCode string) (edit s
 				Line:      0,
 				Character: 0},
 			End: snyk.Position{
-				Line:      math.MaxInt32,
+				Line:      endLine + 1,
 				Character: 0},
 		},
 		NewText: fixedSourceCode,
 	}
 	edit.Changes = make(map[string][]snyk.TextEdit)
-	edit.Changes[filePath] = []snyk.TextEdit{singleTextEdit}
+	edit.Changes[absoluteFilePath] = []snyk.TextEdit{singleTextEdit}
 	return edit
 }
 
 // toAutofixSuggestionsIssues converts the HTTP json-first payload to the domain type
-func (s *AutofixResponse) toAutofixSuggestions(filePath string) (fixSuggestions []AutofixSuggestion) {
+func (s *AutofixResponse) toAutofixSuggestions(baseDir string, filePath string) (fixSuggestions []AutofixSuggestion) {
 	for _, suggestion := range s.AutofixSuggestions {
 		var newText string
 		// Deprecated autofix response used to pass a string. It passes value object with a fix id to map it to the backend for fix feedback purposes now.
@@ -483,7 +491,7 @@ func (s *AutofixResponse) toAutofixSuggestions(filePath string) (fixSuggestions 
 		}
 
 		d := AutofixSuggestion{
-			AutofixEdit: createAutofixWorkspaceEdit(filePath, newText),
+			AutofixEdit: createAutofixWorkspaceEdit(ToAbsolutePath(baseDir, filePath), newText),
 		}
 		fixSuggestions = append(fixSuggestions, d)
 	}
