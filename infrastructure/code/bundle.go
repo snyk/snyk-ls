@@ -308,7 +308,7 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 		// Actual polling loop.
 		pollingTicker := time.NewTicker(1 * time.Second)
 		defer pollingTicker.Stop()
-		timeoutTimer := time.NewTimer(30 * time.Second)
+		timeoutTimer := time.NewTimer(2 * time.Minute)
 		defer timeoutTimer.Stop()
 		for {
 			select {
