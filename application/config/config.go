@@ -89,7 +89,10 @@ func (c *CliSettings) Installed() bool {
 	defer c.cliPathAccessMutex.Unlock()
 	stat, err := os.Stat(c.cliPath)
 	if err == nil {
-		log.Debug().Str("method", "config.cliSettings.Installed").Msgf("CLI path: %s, Size: %d, Perm: %s", c.cliPath, stat.Size(), stat.Mode().Perm())
+		log.Debug().Str("method", "config.cliSettings.Installed").Msgf("CLI path: %s, Size: %d, Perm: %s",
+			c.cliPath,
+			stat.Size(),
+			stat.Mode().Perm())
 	}
 	isDirectory := stat != nil && stat.IsDir()
 	if isDirectory {
@@ -469,23 +472,21 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 
 	logLevel, err = zerolog.ParseLevel(c.LogLevel())
 	if err != nil {
-		fmt.Println("Can't set log level from flag. Setting to default (=info)")
+		_, _ = fmt.Fprintln(os.Stderr, "Can't set log level from flag. Setting to default (=info)")
 		logLevel = zerolog.InfoLevel
 	}
 
 	// env var overrides flag
 	envLogLevel := os.Getenv("SNYK_LOG_LEVEL")
 	if envLogLevel != "" {
-		fmt.Println("Setting log level from environment variable (SNYK_LOG_LEVEL)", envLogLevel)
+		msg := fmt.Sprint("Setting log level from environment variable (SNYK_LOG_LEVEL) \"", envLogLevel, "\"")
+		_, _ = fmt.Fprintln(os.Stderr, msg)
 		envLevel, err := zerolog.ParseLevel(envLogLevel)
-		if err != nil {
-			fmt.Println("Can't set log level from env. Setting to default (=info)")
-			// fallback to flag
-			envLevel = logLevel
+		if err == nil {
+			_, _ = fmt.Fprintln(os.Stderr, "Can't set log level from flag. Setting to default (=info)")
+			logLevel = envLevel
 		}
-		logLevel = envLevel
 	}
-
 	c.SetLogLevel(logLevel.String())
 	zerolog.TimeFieldFormat = time.RFC3339
 
@@ -495,9 +496,9 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 	if c.LogPath() != "" {
 		c.logFile, err = os.OpenFile(c.LogPath(), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 		if err != nil {
-			log.Err(err).Msg("couldn't open logfile")
+			_, _ = fmt.Fprintln(os.Stderr, "couldn't open logfile")
 		} else {
-			log.Info().Msgf("adding file logger to file %s", c.logPath)
+			_, _ = fmt.Fprintln(os.Stderr, fmt.Sprint("adding file logger to file ", c.logPath))
 			writers = append(writers, c.logFile)
 		}
 	}
@@ -586,6 +587,9 @@ func (c *Config) configFiles() []string {
 		files = append(files, configFile)
 	}
 	home := os.Getenv("HOME")
+	if home == "" {
+		home = xdg.Home
+	}
 	stdFiles := []string{
 		".snyk.env",
 		home + "/.snyk.env",
