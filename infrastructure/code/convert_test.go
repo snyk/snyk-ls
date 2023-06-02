@@ -872,10 +872,10 @@ func Test_AutofixResponse_toAutofixSuggestion(t *testing.T) {
 	}}
 	response.AutofixSuggestions = append(response.AutofixSuggestions, fixes...)
 	filePath := "path/to/file.js"
-	edits := response.toAutofixSuggestions(filePath)
+	edits := response.toAutofixSuggestions("/users/git", filePath)
 	editValues := make([]string, 0)
 	for _, edit := range edits {
-		change := edit.AutofixEdit.Changes[filePath][0]
+		change := edit.AutofixEdit.Changes[ToAbsolutePath("/users/git", filePath)][0]
 		editValues = append(editValues, change.NewText)
 	}
 

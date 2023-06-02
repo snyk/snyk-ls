@@ -451,7 +451,7 @@ func (r *result) getMarkers(baseDir string) ([]snyk.Marker, error) {
 }
 
 // createAutofixWorkspaceEdit turns the returned fix into an edit.
-func createAutofixWorkspaceEdit(filePath string, fixedSourceCode string) (edit snyk.WorkspaceEdit) {
+func createAutofixWorkspaceEdit(absoluteFilePath string, fixedSourceCode string) (edit snyk.WorkspaceEdit) {
 	singleTextEdit := snyk.TextEdit{
 		Range: snyk.Range{
 			// TODO(alex.gronskiy): should be changed to an actual hunk-like edit instead of
@@ -466,15 +466,15 @@ func createAutofixWorkspaceEdit(filePath string, fixedSourceCode string) (edit s
 		NewText: fixedSourceCode,
 	}
 	edit.Changes = make(map[string][]snyk.TextEdit)
-	edit.Changes[filePath] = []snyk.TextEdit{singleTextEdit}
+	edit.Changes[absoluteFilePath] = []snyk.TextEdit{singleTextEdit}
 	return edit
 }
 
 // toAutofixSuggestionsIssues converts the HTTP json-first payload to the domain type
-func (s *AutofixResponse) toAutofixSuggestions(filePath string) (fixSuggestions []AutofixSuggestion) {
+func (s *AutofixResponse) toAutofixSuggestions(baseDir string, filePath string) (fixSuggestions []AutofixSuggestion) {
 	for _, suggestion := range s.AutofixSuggestions {
 		d := AutofixSuggestion{
-			AutofixEdit: createAutofixWorkspaceEdit(filePath, suggestion.Value),
+			AutofixEdit: createAutofixWorkspaceEdit(ToAbsolutePath(baseDir, filePath), suggestion.Value),
 		}
 		fixSuggestions = append(fixSuggestions, d)
 	}
