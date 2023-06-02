@@ -34,15 +34,15 @@ import (
 	"github.com/denisbrodbeck/machineid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/subosito/gotenv"
+	"github.com/xtgo/uuid"
+	"golang.org/x/oauth2"
+
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	sglsp "github.com/sourcegraph/go-lsp"
-	"github.com/subosito/gotenv"
-	"github.com/xtgo/uuid"
-	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/concurrency"
@@ -153,7 +153,7 @@ type Config struct {
 	snykCodeApiUrl               string
 	token                        string
 	deviceId                     string
-	clientCapabilities           sglsp.ClientCapabilities
+	clientCapabilities           lsp.ClientCapabilities
 	path                         string
 	defaultDirs                  []string
 	integrationName              string
@@ -638,11 +638,11 @@ func (c *Config) SetDeviceID(deviceId string) {
 	c.deviceId = deviceId
 }
 
-func (c *Config) ClientCapabilities() sglsp.ClientCapabilities {
+func (c *Config) ClientCapabilities() lsp.ClientCapabilities {
 	return c.clientCapabilities
 }
 
-func (c *Config) SetClientCapabilities(capabilities sglsp.ClientCapabilities) {
+func (c *Config) SetClientCapabilities(capabilities lsp.ClientCapabilities) {
 	c.clientCapabilities = capabilities
 }
 

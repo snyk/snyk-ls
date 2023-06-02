@@ -49,6 +49,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -109,6 +110,7 @@ func setupCustomServer(t *testing.T, callBackFn onCallbackFn) server.Local {
 
 func cleanupChannels() {
 	disposeProgressListener()
+	progress.CleanupChannels()
 	di.HoverService().ClearAllHovers()
 }
 

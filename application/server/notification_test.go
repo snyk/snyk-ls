@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/creachadair/jrpc2"
-	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/di"
@@ -78,8 +77,8 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 	loc := setupServer(t)
 
 	clientParams := lsp.InitializeParams{
-		Capabilities: sglsp.ClientCapabilities{
-			Window: sglsp.WindowClientCapabilities{
+		Capabilities: lsp.ClientCapabilities{
+			Window: lsp.WindowClientCapabilities{
 				WorkDoneProgress: true,
 			},
 		},

@@ -28,6 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -46,6 +47,10 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	testutil.IntegTest(t)
 	di.TestInit(t) // IntegTest doesn't automatically inits DI
 	testutil.OnlyEnableCode()
+
+	// this is using the real progress channel, so we need to listen to it
+	dummyProgressListeners(t)
+
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
@@ -63,4 +68,18 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	assert.Equal(t, 2, len(lenses))
 	assert.Equal(t, code.FakeCommand.CommandId, lenses[0].Command.Command)
 	assert.Equal(t, code.FakeFixCommand.CommandId, lenses[1].Command.Command)
+}
+
+func dummyProgressListeners(t *testing.T) {
+	t.Cleanup(func() { progress.CleanupChannels() })
+	go func() {
+		for {
+			<-progress.Channel
+		}
+	}()
+	go func() {
+		for {
+			<-progress.CancelProgressChannel
+		}
+	}()
 }

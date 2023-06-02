@@ -28,11 +28,11 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/google/uuid"
-	"github.com/snyk/go-application-framework/pkg/auth"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
+
+	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
@@ -179,8 +179,8 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	loc := setupCustomServer(t, callBackMock)
 
 	_, err := loc.Client.Call(ctx, "initialize", lsp.InitializeParams{
-		Capabilities: sglsp.ClientCapabilities{
-			Workspace: sglsp.WorkspaceClientCapabilities{
+		Capabilities: lsp.ClientCapabilities{
+			Workspace: lsp.WorkspaceClientCapabilities{
 				Configuration: true,
 			},
 		},
