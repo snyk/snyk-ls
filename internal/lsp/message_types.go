@@ -161,11 +161,11 @@ type InitializeParams struct {
 	RootPath string `json:"rootPath,omitempty"`
 
 	// The rootUri of the workspace. Is null if no folder is open. If both `rootPath` and `rootUri` are set `rootUri` wins.
-	RootURI               sglsp.DocumentURI        `json:"rootUri,omitempty"`
-	ClientInfo            sglsp.ClientInfo         `json:"clientInfo,omitempty"`
-	Trace                 sglsp.Trace              `json:"trace,omitempty"`
-	InitializationOptions Settings                 `json:"initializationOptions,omitempty"`
-	Capabilities          sglsp.ClientCapabilities `json:"capabilities"`
+	RootURI               sglsp.DocumentURI  `json:"rootUri,omitempty"`
+	ClientInfo            sglsp.ClientInfo   `json:"clientInfo,omitempty"`
+	Trace                 sglsp.Trace        `json:"trace,omitempty"`
+	InitializationOptions Settings           `json:"initializationOptions,omitempty"`
+	Capabilities          ClientCapabilities `json:"capabilities"`
 
 	WorkDoneToken    string            `json:"workDoneToken,omitempty"`
 	WorkspaceFolders []WorkspaceFolder `json:"workspaceFolders,omitempty"`
@@ -194,6 +194,174 @@ type ServerCapabilities struct {
 	ExecuteCommandProvider           *sglsp.ExecuteCommandOptions           `json:"executeCommandProvider,omitempty"`
 	SemanticHighlighting             *sglsp.SemanticHighlightingOptions     `json:"semanticHighlighting,omitempty"`
 	Workspace                        *Workspace                             `json:"workspace,omitempty"`
+}
+
+type ClientCapabilities struct {
+	Workspace    WorkspaceClientCapabilities    `json:"workspace,omitempty"`
+	TextDocument TextDocumentClientCapabilities `json:"textDocument,omitempty"`
+	Window       WindowClientCapabilities       `json:"window,omitempty"`
+	Experimental interface{}                    `json:"experimental,omitempty"`
+}
+
+type CodeLensWorkspaceClientCapabilities struct {
+	/**
+	 * Whether the client implementation supports a refresh request sent from the
+	 * server to the client.
+	 *
+	 * Note that this event is global and will force the client to refresh all
+	 * code lenses currently shown. It should be used with absolute care and is
+	 * useful for situation where a server for example detect a project wide
+	 * change that requires such a calculation.
+	 */
+	RefreshSupport bool `json:"refreshSupport,omitempty"`
+}
+
+type WorkspaceClientCapabilities struct {
+	WorkspaceEdit struct {
+		DocumentChanges    bool     `json:"documentChanges,omitempty"`
+		ResourceOperations []string `json:"resourceOperations,omitempty"`
+	} `json:"workspaceEdit,omitempty"`
+
+	ApplyEdit bool `json:"applyEdit,omitempty"`
+
+	Symbol struct {
+		SymbolKind struct {
+			ValueSet []int `json:"valueSet,omitempty"`
+		} `json:"symbolKind,omitempty"`
+	} `json:"symbol,omitempty"`
+
+	DidChangeWatchedFiles *struct {
+		DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
+	} `json:"didChangeWatchedFiles,omitempty"`
+
+	ExecuteCommand *struct {
+		DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
+	} `json:"executeCommand,omitempty"`
+
+	WorkspaceFolders bool `json:"workspaceFolders,omitempty"`
+
+	Configuration bool `json:"configuration,omitempty"`
+
+	CodeLens CodeLensWorkspaceClientCapabilities `json:"codeLens,omitempty"`
+}
+
+type TextDocumentClientCapabilities struct {
+	Declaration *struct {
+		LinkSupport bool `json:"linkSupport,omitempty"`
+	} `json:"declaration,omitempty"`
+
+	Definition *struct {
+		LinkSupport bool `json:"linkSupport,omitempty"`
+	} `json:"definition,omitempty"`
+
+	Implementation *struct {
+		LinkSupport bool `json:"linkSupport,omitempty"`
+
+		DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
+	} `json:"implementation,omitempty"`
+
+	TypeDefinition *struct {
+		LinkSupport bool `json:"linkSupport,omitempty"`
+	} `json:"typeDefinition,omitempty"`
+
+	Synchronization *struct {
+		WillSave          bool `json:"willSave,omitempty"`
+		DidSave           bool `json:"didSave,omitempty"`
+		WillSaveWaitUntil bool `json:"willSaveWaitUntil,omitempty"`
+	} `json:"synchronization,omitempty"`
+
+	DocumentSymbol struct {
+		SymbolKind struct {
+			ValueSet []int `json:"valueSet,omitempty"`
+		} `json:"symbolKind,omitempty"`
+
+		HierarchicalDocumentSymbolSupport bool `json:"hierarchicalDocumentSymbolSupport,omitempty"`
+	} `json:"documentSymbol,omitempty"`
+
+	Formatting *struct {
+		DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
+	} `json:"formatting,omitempty"`
+
+	RangeFormatting *struct {
+		DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
+	} `json:"rangeFormatting,omitempty"`
+
+	Rename *struct {
+		DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
+
+		PrepareSupport bool `json:"prepareSupport,omitempty"`
+	} `json:"rename,omitempty"`
+
+	SemanticHighlightingCapabilities *struct {
+		SemanticHighlighting bool `json:"semanticHighlighting,omitempty"`
+	} `json:"semanticHighlightingCapabilities,omitempty"`
+
+	CodeAction struct {
+		DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
+
+		IsPreferredSupport bool `json:"isPreferredSupport,omitempty"`
+
+		CodeActionLiteralSupport struct {
+			CodeActionKind struct {
+				ValueSet []CodeActionKind `json:"valueSet,omitempty"`
+			} `json:"codeActionKind,omitempty"`
+		} `json:"codeActionLiteralSupport,omitempty"`
+	} `json:"codeAction,omitempty"`
+
+	Completion struct {
+		CompletionItem struct {
+			DocumentationFormat []DocumentationFormat `json:"documentationFormat,omitempty"`
+			SnippetSupport      bool                  `json:"snippetSupport,omitempty"`
+		} `json:"completionItem,omitempty"`
+
+		CompletionItemKind struct {
+			ValueSet []CompletionItemKind `json:"valueSet,omitempty"`
+		} `json:"completionItemKind,omitempty"`
+
+		ContextSupport bool `json:"contextSupport,omitempty"`
+	} `json:"completion,omitempty"`
+
+	SignatureHelp *struct {
+		SignatureInformation struct {
+			ParameterInformation struct {
+				LabelOffsetSupport bool `json:"labelOffsetSupport,omitempty"`
+			} `json:"parameterInformation,omitempty"`
+		} `json:"signatureInformation,omitempty"`
+	} `json:"signatureHelp,omitempty"`
+
+	DocumentLink *struct {
+		DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
+
+		TooltipSupport bool `json:"tooltipSupport,omitempty"`
+	} `json:"documentLink,omitempty"`
+
+	Hover *struct {
+		ContentFormat []string `json:"contentFormat,omitempty"`
+	} `json:"hover,omitempty"`
+
+	FoldingRange *struct {
+		DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
+
+		RangeLimit interface{} `json:"rangeLimit,omitempty"`
+
+		LineFoldingOnly bool `json:"lineFoldingOnly,omitempty"`
+	} `json:"foldingRange,omitempty"`
+
+	CallHierarchy *struct {
+		DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
+	} `json:"callHierarchy,omitempty"`
+
+	ColorProvider *struct {
+		DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
+	} `json:"colorProvider,omitempty"`
+}
+
+type DocumentationFormat string
+
+type CompletionItemKind int
+
+type WindowClientCapabilities struct {
+	WorkDoneProgress bool `json:"workDoneProgress,omitempty"`
 }
 
 type Workspace struct {

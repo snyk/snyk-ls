@@ -22,6 +22,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -108,6 +109,7 @@ func registerNotifier(srv lsp.Server) {
 			if len(params.Diagnostics) > 0 {
 				source = params.Diagnostics[0].Source
 			}
+			handleCodelensRefresh(srv)
 			log.Info().
 				Str("method", "registerNotifier").
 				Interface("documentURI", params.URI).
@@ -155,23 +157,30 @@ func registerNotifier(srv lsp.Server) {
 }
 
 func handleCodelensRefresh(srv lsp.Server) {
+	method := "handleCodeLensRefresh"
+	if !config.CurrentConfig().ClientCapabilities().Workspace.CodeLens.RefreshSupport {
+		log.Debug().Str("method", method).Msg("codelens/refresh not supported by client, not sending request")
+		return
+	}
+	log.Info().Str("method", method).Msg("sending codelens refresh request to client")
+
 	_, err := srv.Callback(context.Background(), "workspace/codeLens/refresh", nil)
 	if err != nil {
-		log.Error().
-			Err(err).
-			Str("method", "handleCodelensRefresh").
+		log.Err(err).Str("method", method).
 			Msg("error while sending workspace/codeLens/refresh request")
 		return
 	}
 }
 
 func handleApplyWorkspaceEdit(srv lsp.Server, params lsp.ApplyWorkspaceEditParams) {
+	method := "handleApplyWorkspaceEdit"
+	if !config.CurrentConfig().ClientCapabilities().Workspace.ApplyEdit {
+		log.Debug().Str("method", method).Msg("workspace/applyEdit not supported by client, not sending request")
+		return
+	}
 	callback, err := srv.Callback(context.Background(), "workspace/applyEdit", params)
 	if err != nil {
-		log.Error().
-			Err(err).
-			Str("method", "handleApplyWorkspaceEdit").
-			Msg("error while sending workspace/applyEdit request")
+		log.Err(err).Str("method", method).Msg("error while sending workspace/applyEdit request")
 		return
 	}
 	if callback == nil {
@@ -181,14 +190,12 @@ func handleApplyWorkspaceEdit(srv lsp.Server, params lsp.ApplyWorkspaceEditParam
 	var editResult lsp.ApplyWorkspaceEditResult
 	err = callback.UnmarshalResult(&editResult)
 	if err != nil {
-		log.Error().
-			Err(err).
-			Str("method", "handleApplyWorkspaceEdit").
-			Msg("error while unmarshalling workspace/applyEdit result response")
+		log.Err(err).Str("method", method).Msg("error while unmarshalling workspace/applyEdit result response")
 		return
 	}
 
-	log.Info().Msgf("Workspace edit applied %t. %s", editResult.Applied, editResult.FailureReason)
+	log.Info().Str("method", method).
+		Msgf("Workspace edit applied %t. %s", editResult.Applied, editResult.FailureReason)
 }
 
 func handleShowMessageRequest(srv lsp.Server, params snyk.ShowMessageRequest) {
