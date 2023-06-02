@@ -17,6 +17,7 @@
 package di
 
 import (
+	"fmt"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -114,6 +115,9 @@ func initInfrastructure() {
 				"/Library",
 			})
 	}
+
+	initDefaultNetworkAccessHeaders(c)
+
 	notifier = domainNotify.NewNotifier()
 	errorReporter = sentry.NewSentryErrorReporter(notifier)
 	installer = install.NewInstaller(errorReporter, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
@@ -136,6 +140,14 @@ func initInfrastructure() {
 		cliInitializer,
 		authInitializer,
 	)
+}
+
+func initDefaultNetworkAccessHeaders(c *config.Config) {
+	const SNYK_LS_VERSION = "0.0.0"  // TODO: figure out where to get this from
+	const PLATFORM_VERSION = "0.0.0" // TODO: figure out where to get this from
+	const PLATFORM_NAME = "vscode"   // TODO: figure out where to get this from
+	networkAccess := c.Engine().GetNetworkAccess()
+	networkAccess.AddHeaderField("User-Agent", fmt.Sprintf("snyk-ls/%s (%s;%s) %s %s (%s;%s)", SNYK_LS_VERSION, runtime.GOOS, runtime.GOARCH, c.IntegrationName(), c.IntegrationVersion(), PLATFORM_NAME, PLATFORM_VERSION))
 }
 
 func initApplication() {
