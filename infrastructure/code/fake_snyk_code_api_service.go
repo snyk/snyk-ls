@@ -256,6 +256,7 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 func (f *FakeSnykCodeClient) RunAutofix(
 	_ context.Context,
 	options AutofixOptions,
+	baseDir string,
 ) ([]AutofixSuggestion, AutofixStatus, error) {
 	<-time.After(f.AnalysisDuration)
 	FakeSnykCodeApiServiceMutex.Lock()

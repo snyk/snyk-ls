@@ -285,7 +285,7 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 		// channel.
 		pollFunc := func() (edit *snyk.WorkspaceEdit, complete bool) {
 			log.Info().Msg("polling")
-			fixSuggestions, fixStatus, err := b.SnykCode.RunAutofix(s.Context(), autofixOptions)
+			fixSuggestions, fixStatus, err := b.SnykCode.RunAutofix(s.Context(), autofixOptions, b.rootPath)
 			edit = nil
 			complete = false
 			if err != nil {
