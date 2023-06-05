@@ -249,6 +249,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 						snyk.GetSettingsSastEnabled,
 						snyk.GetActiveUserCommand,
 						snyk.CodeFixCommand,
+						snyk.CodeSubmitFixFeedback,
 					},
 				},
 			},

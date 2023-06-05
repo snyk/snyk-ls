@@ -154,7 +154,7 @@ func initApplication() {
 	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier, notifier) // don't use getters or it'll deadlock
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher, notifier)
+	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher, notifier, snykCodeClient)
 	command.SetService(command.NewService(authenticationService, notifier))
 }
 
@@ -233,4 +233,10 @@ func LearnService() learn.Service {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return learnService
+}
+
+func SnykCodeClient() code.SnykCodeClient {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return snykCodeClient
 }

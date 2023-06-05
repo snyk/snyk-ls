@@ -25,15 +25,18 @@ import (
 	"strings"
 	"time"
 
+	pkgerrors "github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -283,10 +286,10 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 
 		// Polling function just calls the endpoint and registers result, signalling `done` to the
 		// channel.
-		pollFunc := func() (edit *snyk.WorkspaceEdit, complete bool) {
+		pollFunc := func() (fix *AutofixSuggestion, complete bool) {
 			log.Info().Msg("polling")
 			fixSuggestions, fixStatus, err := b.SnykCode.RunAutofix(s.Context(), autofixOptions, b.rootPath)
-			edit = nil
+			fix = nil
 			complete = false
 			if err != nil {
 				log.Error().
@@ -296,13 +299,13 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 			} else if fixStatus.message == completeStatus {
 				if len(fixSuggestions) > 0 {
 					// TODO(alex.gronskiy): currently, only the first ([0]) fix suggstion goes into the fix
-					edit = &fixSuggestions[0].AutofixEdit
+					fix = &fixSuggestions[0]
 				} else {
 					log.Info().Str("method", method).Str("requestId", b.requestId).Msg("No good fix could be computed.")
 				}
 				complete = true
 			}
-			return edit, complete
+			return fix, complete
 		}
 
 		// Actual polling loop.
@@ -317,24 +320,66 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 				b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please try again. Request ID: "+b.requestId)
 				return nil
 			case <-pollingTicker.C:
-				edit, complete := pollFunc()
+				fix, complete := pollFunc()
 				if !complete {
 					continue
 				}
-				if edit != nil {
-					b.notifier.SendShowMessage(sglsp.Info, "Congratulations! 🎉 You’ve just fixed this "+issueTitle(issue)+" issue.")
-					progress.End()
-				} else {
+
+				if fix == nil {
 					b.notifier.SendShowMessage(sglsp.MTError, "Oh snap! 😔 The fix did not remediate the issue and was not applied.")
 					progress.End()
+					return nil
 				}
 
-				return edit
+				actionCommandMap, err := b.autofixFeedbackActions(fix.FixId)
+				successMessage := "Congratulations! 🎉 You’ve just fixed this " + issueTitle(issue) + " issue."
+				if err != nil {
+					b.notifier.SendShowMessage(sglsp.Info, successMessage)
+				} else {
+					b.notifier.Send(snyk.ShowMessageRequest{
+						Message: successMessage + " Was this fix helpful?",
+						Type:    snyk.Info,
+						Actions: actionCommandMap,
+					})
+				}
+
+				progress.End()
+				return &fix.AutofixEdit
 			}
 		}
 	}
 
 	return editFn
+}
+
+func (b *Bundle) autofixFeedbackActions(fixId string) (*data_structure.OrderedMap[snyk.MessageAction, snyk.Command], error) {
+	createCommandData := func(positive bool) (snyk.Command, error) {
+		commandData := snyk.CommandData{
+			Title:     snyk.CodeSubmitFixFeedback,
+			CommandId: snyk.CodeSubmitFixFeedback,
+			Arguments: []any{fixId, positive},
+		}
+
+		cmd, err := command.CreateFromCommandData(commandData, nil, nil, nil, nil, nil, b.SnykCode)
+		if err != nil {
+			message := "couldn't create code submit fix feedback command"
+			log.Err(err).Str("method", "autofixFeedbackActions").Msg(message)
+			b.errorReporter.CaptureError(pkgerrors.Wrap(err, message))
+		}
+
+		return cmd, err
+	}
+	actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
+	positiveFeedbackCmd, err1 := createCommandData(true)
+	negativeFeedbackCmd, err2 := createCommandData(false)
+	if err1 != nil || err2 != nil {
+		return nil, errors.Join(err1, err2)
+	}
+
+	actionCommandMap.Add("👍", positiveFeedbackCmd)
+	actionCommandMap.Add("👎", negativeFeedbackCmd)
+
+	return actionCommandMap, nil
 }
 
 // returns the deferred code action CodeAction which calls autofix.

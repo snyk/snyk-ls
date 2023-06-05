@@ -35,6 +35,7 @@ func CreateFromCommandData(
 	learnService learn.Service,
 	notifier noti.Notifier,
 	issueProvider ide.IssueProvider,
+	codeApiClient SnykCodeHttpClient,
 ) (snyk.Command, error) {
 
 	switch commandData.CommandId {
@@ -65,6 +66,8 @@ func CreateFromCommandData(
 		return &getActiveUser{command: commandData, authService: authService, notifier: notifier}, nil
 	case snyk.CodeFixCommand:
 		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier}, nil
+	case snyk.CodeSubmitFixFeedback:
+		return &codeFixFeedback{command: commandData, apiClient: codeApiClient}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

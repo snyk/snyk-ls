@@ -98,7 +98,7 @@ func TestInit(t *testing.T) {
 	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier, notifier)
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher, notifier)
+	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher, notifier, snykCodeClient)
 	t.Cleanup(
 		func() {
 			fakeClient.Clear()

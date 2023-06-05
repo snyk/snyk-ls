@@ -71,4 +71,6 @@ type SnykCodeClient interface {
 		AutofixStatus,
 		error,
 	)
+
+	SubmitAutofixFeedback(ctx context.Context, fixId string, positive bool) error
 }
