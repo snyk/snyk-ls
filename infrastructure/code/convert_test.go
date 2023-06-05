@@ -766,7 +766,7 @@ func TestSnykCodeBackendService_analysisRequestBodyIsCorrect(t *testing.T) {
 			Shard:        analysisOpts.shardKey,
 		},
 		Legacy:          false,
-		AnalysisContext: newCodeRequestContext(org),
+		AnalysisContext: newCodeRequestContext(),
 	}
 
 	// act
