@@ -25,18 +25,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
-type TestCommand struct {
-	executed bool
-}
-
-func (command *TestCommand) Command() snyk.CommandData {
-	return snyk.CommandData{}
-}
-func (command *TestCommand) Execute(_ context.Context) (any, error) {
-	command.executed = true
-	return nil, nil
-}
-
 func Test_ExecuteCommand(t *testing.T) {
 	authProvider := &snyk.FakeAuthenticationProvider{
 		ExpectedAuthURL: "https://auth.url",
