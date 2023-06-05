@@ -116,19 +116,31 @@ func initInfrastructure() {
 			})
 	}
 
-	initDefaultNetworkAccessHeaders(c)
+	// init NetworkAccess
+	networkAccess := c.Engine().GetNetworkAccess()
+	userAgentString := fmt.Sprintf("%s/%s (%s;%s) %s/%s (%s;%s)",
+		"snyk-ls",
+		config.Version,
+		runtime.GOOS,
+		runtime.GOARCH,
+		c.IntegrationName(),
+		c.IntegrationVersion(),
+		"language-server",
+		config.Version,
+	)
+	networkAccess.AddHeaderField("User-Agent", userAgentString)
 
 	notifier = domainNotify.NewNotifier()
 	errorReporter = sentry.NewSentryErrorReporter(notifier)
-	installer = install.NewInstaller(errorReporter, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
-	learnService = learn.New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient, errorReporter)
+	installer = install.NewInstaller(errorReporter, networkAccess.GetUnauthorizedHttpClient)
+	learnService = learn.New(c, networkAccess.GetUnauthorizedHttpClient, errorReporter)
 	instrumentor = sentry.NewInstrumentor()
-	snykApiClient = snyk_api.NewSnykApiClient(c.Engine().GetNetworkAccess().GetHttpClient)
+	snykApiClient = snyk_api.NewSnykApiClient(networkAccess.GetHttpClient)
 	analytics = amplitude.NewAmplitudeClient(snyk.AuthenticationCheck, errorReporter)
 	authProvider := cliauth.NewCliAuthenticationProvider(errorReporter)
 	authenticationService = snyk.NewAuthenticationService(authProvider, analytics, errorReporter, notifier)
 	snykCli = cli.NewExecutor(authenticationService, errorReporter, analytics, notifier)
-	snykCodeClient = code.NewHTTPRepository(instrumentor, errorReporter, c.Engine().GetNetworkAccess().GetHttpClient)
+	snykCodeClient = code.NewHTTPRepository(instrumentor, errorReporter, networkAccess.GetHttpClient)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli, learnService, notifier)
@@ -140,14 +152,6 @@ func initInfrastructure() {
 		cliInitializer,
 		authInitializer,
 	)
-}
-
-func initDefaultNetworkAccessHeaders(c *config.Config) {
-	const SNYK_LS_VERSION = "0.0.0"  // TODO: figure out where to get this from
-	const PLATFORM_VERSION = "0.0.0" // TODO: figure out where to get this from
-	const PLATFORM_NAME = "vscode"   // TODO: figure out where to get this from
-	networkAccess := c.Engine().GetNetworkAccess()
-	networkAccess.AddHeaderField("User-Agent", fmt.Sprintf("snyk-ls/%s (%s;%s) %s %s (%s;%s)", SNYK_LS_VERSION, runtime.GOOS, runtime.GOARCH, c.IntegrationName(), c.IntegrationVersion(), PLATFORM_NAME, PLATFORM_VERSION))
 }
 
 func initApplication() {
