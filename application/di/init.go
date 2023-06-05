@@ -24,6 +24,8 @@ import (
 
 	"github.com/adrg/xdg"
 
+	"github.com/snyk/go-application-framework/pkg/networking"
+
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
 	appNotification "github.com/snyk/snyk-ls/application/server/notification"
@@ -118,17 +120,7 @@ func initInfrastructure() {
 
 	// init NetworkAccess
 	networkAccess := c.Engine().GetNetworkAccess()
-	userAgentString := fmt.Sprintf("%s/%s (%s;%s) %s/%s (%s;%s)",
-		"snyk-ls",
-		config.Version,
-		runtime.GOOS,
-		runtime.GOARCH,
-		c.IntegrationName(),
-		c.IntegrationVersion(),
-		"language-server",
-		config.Version,
-	)
-	networkAccess.AddHeaderField("User-Agent", userAgentString)
+	initNetworkAccessHeaders(networkAccess, c)
 
 	notifier = domainNotify.NewNotifier()
 	errorReporter = sentry.NewSentryErrorReporter(notifier)
@@ -152,6 +144,19 @@ func initInfrastructure() {
 		cliInitializer,
 		authInitializer,
 	)
+}
+
+func initNetworkAccessHeaders(n networking.NetworkAccess, c *config.Config) {
+	n.AddHeaderField("User-Agent", fmt.Sprintf("%s/%s (%s;%s) %s/%s (%s;%s)",
+		"snyk-ls",
+		config.Version,
+		runtime.GOOS,
+		runtime.GOARCH,
+		c.IntegrationName(),
+		c.IntegrationVersion(),
+		"language-server",
+		config.Version,
+	))
 }
 
 func initApplication() {
