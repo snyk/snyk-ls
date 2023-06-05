@@ -38,7 +38,8 @@ const (
 	GetActiveUserCommand         = "snyk.getActiveUser"
 
 	// Snyk Code specific commands
-	CodeFixCommand = "snyk.code.fix"
+	CodeFixCommand        = "snyk.code.fix"
+	CodeSubmitFixFeedback = "snyk.code.submitFixFeedback"
 )
 
 var (

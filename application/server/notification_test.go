@@ -213,7 +213,7 @@ func TestShowMessageRequest(t *testing.T) {
 		data, err := command.CreateFromCommandData(snyk.CommandData{
 			CommandId: snyk.OpenBrowserCommand,
 			Arguments: []any{"https://snyk.io"},
-		}, loc.Server, di.AuthenticationService(), di.LearnService(), di.Notifier(), nil)
+		}, loc.Server, di.AuthenticationService(), di.LearnService(), di.Notifier(), nil, nil)
 		assert.NoError(t, err)
 		actionCommandMap.Add(
 			snyk.MessageAction(expectedTitle),
@@ -262,6 +262,7 @@ func TestShowMessageRequest(t *testing.T) {
 			di.AuthenticationService(),
 			di.LearnService(),
 			di.Notifier(),
+			nil,
 			nil,
 		)
 		assert.NoError(t, err)

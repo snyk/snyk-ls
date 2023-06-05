@@ -465,3 +465,43 @@ func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte
 	requestBody, err := json.Marshal(request)
 	return requestBody, err
 }
+
+func (s *SnykCodeHTTPClient) SubmitAutofixFeedback(ctx context.Context, fixId string, positive bool) error {
+	method := "code.SubmitAutofixFeedback"
+	span := s.instrumentor.StartSpan(ctx, method)
+	defer s.instrumentor.Finish(span)
+
+	requestId, err := performance2.GetTraceId(span.Context())
+	if err != nil {
+		log.Err(err).Str("method", method).Msg("Failed to obtain request id. " + err.Error())
+		return err
+	}
+
+	log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Submitting Autofix feedback")
+	defer log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Submitting Autofix feedback done")
+
+	var feedback string
+	if positive {
+		feedback = "POSITIVE"
+	} else {
+		feedback = "NEGATIVE"
+	}
+
+	request := AutofixFeedback{
+		FixId:    fixId,
+		Feedback: feedback,
+	}
+	requestBody, err := json.Marshal(request)
+	if err != nil {
+		log.Err(err).Str("method", method).Str("requestBody", string(requestBody)).Msg("error creating request body for autofix feedback")
+		return err
+	}
+
+	responseBody, err := s.doCall(span.Context(), "POST", "/autofix/feedback", requestBody)
+	if err != nil {
+		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response for autofix feedback")
+		return err
+	}
+
+	return nil
+}

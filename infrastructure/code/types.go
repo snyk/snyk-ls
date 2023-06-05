@@ -63,10 +63,11 @@ func (e SnykAutofixFailedError) Error() string { return e.Msg }
 
 // AutofixSuggestion models a fix returned by autofix service
 type AutofixSuggestion struct {
-	// CodeAction can contain workspace edits or commands to be executed.
-	// TODO(alex.gronskiy): currently we return full file fixed code and edits contain thus "full
-	// file replace".
-	// This is a known point of improvement which is easy to implement but will be
-	// done later on re-iteration.
+	FixId       string
 	AutofixEdit snyk.WorkspaceEdit
+}
+
+type AutofixFeedback struct {
+	FixId    string `json:"fixId"`
+	Feedback string `json:"feedback"`
 }

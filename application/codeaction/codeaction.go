@@ -17,6 +17,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -32,10 +33,11 @@ type CodeActionsService struct {
 
 	// actionsCache holds all the issues that were returns by the GetCodeActions method.
 	// This is used to resolve the code actions later on in ResolveCodeAction.
-	actionsCache map[uuid.UUID]cachedAction
-	logger       zerolog.Logger
-	fileWatcher  dirtyFilesWatcher
-	notifier     noti.Notifier
+	actionsCache  map[uuid.UUID]cachedAction
+	logger        zerolog.Logger
+	fileWatcher   dirtyFilesWatcher
+	notifier      noti.Notifier
+	codeApiClient code.SnykCodeClient
 }
 
 type cachedAction struct {
@@ -43,13 +45,14 @@ type cachedAction struct {
 	action snyk.CodeAction
 }
 
-func NewService(c *config.Config, provider ide.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier) *CodeActionsService {
+func NewService(c *config.Config, provider ide.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier, codeApiClient code.SnykCodeClient) *CodeActionsService {
 	return &CodeActionsService{
 		IssuesProvider: provider,
 		actionsCache:   make(map[uuid.UUID]cachedAction),
 		logger:         c.Logger().With().Str("service", "CodeActionsService").Logger(),
 		fileWatcher:    fileWatcher,
 		notifier:       notifier,
+		codeApiClient:  codeApiClient,
 	}
 }
 
@@ -136,7 +139,7 @@ func (c *CodeActionsService) handleCommand(
 		CommandId: action.Command.Command,
 		Arguments: action.Command.Arguments,
 	}
-	executableCmd, err := command.CreateFromCommandData(cmd, server, authService, learnService, c.notifier, c.IssuesProvider)
+	executableCmd, err := command.CreateFromCommandData(cmd, server, authService, learnService, c.notifier, c.IssuesProvider, c.codeApiClient)
 	if err != nil {
 		return lsp.CodeAction{}, err
 	}
