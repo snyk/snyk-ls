@@ -175,8 +175,10 @@ func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
 }
 
 func Test_ResolveCodeAction_UnknownCommandIsReported(t *testing.T) {
+	testutil.UnitTest(t)
 	// Arrange
 	service := setupService()
+	command.SetService(command.NewService(nil, nil, nil, nil, nil))
 
 	id := lsp.CodeActionData(uuid.New())
 	c := &sglsp.Command{
@@ -201,6 +203,7 @@ func Test_ResolveCodeAction_UnknownCommandIsReported(t *testing.T) {
 }
 
 func Test_ResolveCodeAction_CommandIsExecuted(t *testing.T) {
+	testutil.UnitTest(t)
 	// Arrange
 	service := setupService()
 
