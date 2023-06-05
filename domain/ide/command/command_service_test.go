@@ -18,6 +18,9 @@ package command
 
 import (
 	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
@@ -34,9 +37,17 @@ func (command *TestCommand) Execute(_ context.Context) (any, error) {
 	return nil, nil
 }
 
-// func Test_ExecuteCommand(t *testing.T) {
-// 	service := NewService(nil, nil, nil, nil, nil)
-// 	cmd := &TestCommand{}
-// 	_, _ = service.ExecuteCommandData(context.Background(), cmd)
-// 	assert.True(t, cmd.executed)
-// }
+func Test_ExecuteCommand(t *testing.T) {
+	authProvider := &snyk.FakeAuthenticationProvider{
+		ExpectedAuthURL: "https://auth.url",
+	}
+	authenticationService := snyk.NewAuthenticationService(authProvider, nil, nil, nil)
+	service := NewService(authenticationService, nil, nil, nil, nil)
+	cmd := snyk.CommandData{
+		CommandId: snyk.CopyAuthLinkCommand,
+	}
+
+	url, _ := service.ExecuteCommandData(context.Background(), cmd, nil)
+
+	assert.Equal(t, "https://auth.url", url)
+}
