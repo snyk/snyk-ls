@@ -17,14 +17,11 @@
 package di
 
 import (
-	"fmt"
 	"path/filepath"
 	"runtime"
 	"sync"
 
 	"github.com/adrg/xdg"
-
-	"github.com/snyk/go-application-framework/pkg/networking"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
@@ -120,7 +117,6 @@ func initInfrastructure() {
 
 	// init NetworkAccess
 	networkAccess := c.Engine().GetNetworkAccess()
-	initNetworkAccessHeaders(networkAccess, c)
 
 	notifier = domainNotify.NewNotifier()
 	errorReporter = sentry.NewSentryErrorReporter(notifier)
@@ -144,19 +140,6 @@ func initInfrastructure() {
 		cliInitializer,
 		authInitializer,
 	)
-}
-
-func initNetworkAccessHeaders(n networking.NetworkAccess, c *config.Config) {
-	n.AddHeaderField("User-Agent", fmt.Sprintf("%s/%s (%s;%s) %s/%s (%s;%s)",
-		"snyk-ls",
-		config.Version,
-		runtime.GOOS,
-		runtime.GOARCH,
-		c.IntegrationName(),
-		c.IntegrationVersion(),
-		"language-server",
-		config.Version,
-	))
 }
 
 func initApplication() {
