@@ -114,8 +114,7 @@ func (s *SnykApiClientImpl) doCall(method string,
 		return nil, NewSnykApiError(requestErr.Error(), 0)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	clientID := base64.URLEncoding.EncodeToString([]byte(config.Version))
-	req.Header.Set("x-snyk-ide", "snyk-ls-"+clientID)
+	req.Header.Set("x-snyk-ide", "snyk-ls-"+config.Version)
 
 	log.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
 	response, err := s.httpClientFunc().Do(req)
