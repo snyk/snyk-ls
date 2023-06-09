@@ -82,7 +82,7 @@ func (f *FakeApiClient) SastSettings() (SastResponse, error) {
 	}
 	return SastResponse{
 		SastEnabled: f.CodeEnabled,
-		LocalCodeEngine: localCodeEngine{
+		LocalCodeEngine: LocalCodeEngine{
 			Enabled: f.LocalCodeEngineEnabled,
 		},
 		AutofixEnabled: f.AutofixEnabled,

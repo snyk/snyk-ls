@@ -19,10 +19,10 @@ package code
 import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
-	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 )
 
@@ -32,18 +32,13 @@ const codeDisabledInOrganisationMessageText = "It looks like your organization h
 
 const enableSnykCodeMessageActionItemTitle snyk.MessageAction = "Enable Snyk Code"
 const closeMessageActionItemTitle snyk.MessageAction = "Close"
-const localCodeEngineWarning = "Snyk Code is configured to use a Local Code Engine instance. This setup is not yet supported."
 
-func (sc *Scanner) isSastEnabled() bool {
-	sastResponse, err := sc.SnykApiClient.SastSettings()
+func (sc *Scanner) isSastEnabled(sastResponse snyk_api.SastResponse) bool {
 	method := "isSastEnabled"
-	if err != nil {
-		log.Error().Err(err).Str("method", method).Msg("couldn't get sast enablement")
-		sc.errorReporter.CaptureError(err)
-		return false
-	}
 
 	if !sastResponse.SastEnabled {
+		// self-note: if LCE is enabled, this condition is satisfied. Why?
+
 		// this is processed in the listener registered to translate into the right client protocol
 		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
 		commandData := snyk.CommandData{
@@ -66,14 +61,6 @@ func (sc *Scanner) isSastEnabled() bool {
 			Type:    snyk.Warning,
 			Actions: actionCommandMap,
 		})
-		return false
-	}
-
-	if sastResponse.LocalCodeEngine.Enabled {
-		sc.notifier.SendShowMessage(
-			sglsp.Warning,
-			localCodeEngineWarning,
-		)
 		return false
 	}
 
