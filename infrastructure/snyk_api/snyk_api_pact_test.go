@@ -55,7 +55,7 @@ func TestSnykApiPact(t *testing.T) {
 	t.Run("Get SAST enablement", func(t *testing.T) {
 		expectedResponse := SastResponse{
 			SastEnabled:                 true,
-			LocalCodeEngine:             localCodeEngine{Enabled: false},
+			LocalCodeEngine:             LocalCodeEngine{Enabled: false},
 			ReportFalsePositivesEnabled: false,
 			AutofixEnabled:              false,
 		}
@@ -113,7 +113,7 @@ func TestSnykApiPact(t *testing.T) {
 
 		expectedResponse := SastResponse{
 			SastEnabled:                 true,
-			LocalCodeEngine:             localCodeEngine{Enabled: false},
+			LocalCodeEngine:             LocalCodeEngine{Enabled: false},
 			ReportFalsePositivesEnabled: false,
 			AutofixEnabled:              false,
 		}

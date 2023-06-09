@@ -33,7 +33,7 @@ type SnykApiClientImpl struct {
 	httpClientFunc func() *http.Client
 }
 
-type localCodeEngine struct {
+type LocalCodeEngine struct {
 	AllowCloudUpload bool   `json:"allowCloudUpload"`
 	Url              string `json:"url"`
 	Enabled          bool   `json:"enabled"`
@@ -41,7 +41,7 @@ type localCodeEngine struct {
 
 type SastResponse struct {
 	SastEnabled                 bool            `json:"sastEnabled"`
-	LocalCodeEngine             localCodeEngine `json:"localCodeEngine"`
+	LocalCodeEngine             LocalCodeEngine `json:"localCodeEngine"`
 	Org                         string          `json:"org"`
 	SupportedLanguages          []string        `json:"supportedLanguages"`
 	ReportFalsePositivesEnabled bool            `json:"reportFalsePositivesEnabled"`

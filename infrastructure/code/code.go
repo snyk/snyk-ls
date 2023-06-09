@@ -66,7 +66,7 @@ func NewScanStatus() *ScanStatus {
 }
 
 type Scanner struct {
-	BundleUploader    *BundleUploader
+  BundleUploader    *BundleUploader
 	SnykApiClient     snyk_api.SnykApiClient
 	errorReporter     error_reporting.ErrorReporter
 	analytics         ux2.Analytics
@@ -116,9 +116,25 @@ func (sc *Scanner) SupportedCommands() []snyk.CommandName {
 }
 
 func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (issues []snyk.Issue, err error) {
-	if !sc.isSastEnabled() {
+	sastResponse, err := sc.SnykApiClient.SastSettings()
+	method := "Scan"
+
+	if err != nil {
+		log.Error().Err(err).Str("method", method).Msg("couldn't get sast enablement")
+		sc.errorReporter.CaptureError(err)
+		return issues, errors.New("couldn't get sast enablement")
+	}
+
+	if !sc.isSastEnabled(sastResponse) {
 		return issues, errors.New("SAST is not enabled")
 	}
+
+	if isLocalEngineEnabled(sastResponse) {
+		isCodeApiUpdated := sc.updateCodeApiLocalEngine(sastResponse)
+		if !isCodeApiUpdated {
+			return issues, errors.New("Local engine not configured correctly.")
+		}
+ 	}
 
 	sc.changedFilesMutex.Lock()
 	if sc.changedPaths[folderPath] == nil {
