@@ -19,9 +19,7 @@ package code
 import (
 	"strconv"
 	"testing"
-	"time"
 
-	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -38,6 +36,15 @@ func TestIsSastEnabled(t *testing.T) {
 		ApiError:    nil,
 	}
 
+	mockedSastResponse := snyk_api.SastResponse{
+		SastEnabled: true,
+		LocalCodeEngine: snyk_api.LocalCodeEngine{
+			AllowCloudUpload: false,
+			Url: "http://local.engine",
+			Enabled: true,
+		},
+	}
+
 	scanner := &Scanner{
 		SnykApiClient: apiClient,
 		errorReporter: error_reporting.NewTestErrorReporter(),
@@ -45,104 +52,26 @@ func TestIsSastEnabled(t *testing.T) {
 	}
 
 	t.Run("should return false if Snyk Code is disabled", func(t *testing.T) {
-		apiClient.ApiError = nil
-		apiClient.CodeEnabled = false
-		apiClient.LocalCodeEngineEnabled = false
-		config.CurrentConfig().SetSnykCodeEnabled(false)
+		mockedSastResponse.SastEnabled = false
 
-		enabled := scanner.isSastEnabled()
+		enabled := scanner.isSastEnabled(mockedSastResponse)
 
 		assert.False(t, enabled)
 	})
 
-	t.Run("should call the API to check enablement if Snyk Code is enabled", func(t *testing.T) {
-		apiClient.ApiError = nil
+	t.Run("should return true if Snyk Code is enabled", func(t *testing.T) {
 		config.CurrentConfig().SetSnykCodeEnabled(true)
-
-		scanner.isSastEnabled()
-
-		assert.Equal(t, 1, len(apiClient.Calls))
-	})
-
-	t.Run("should return true if Snyk Code is enabled and the API returns true", func(t *testing.T) {
-		config.CurrentConfig().SetSnykCodeEnabled(true)
-		apiClient.ApiError = nil
-		apiClient.CodeEnabled = true
-		apiClient.LocalCodeEngineEnabled = false
-
-		enabled := scanner.isSastEnabled()
+		mockedSastResponse.SastEnabled = true
+		enabled := scanner.isSastEnabled(mockedSastResponse)
 
 		assert.True(t, enabled)
 	})
 
-	t.Run("should return false if Snyk Code is enabled and the API returns false", func(t *testing.T) {
-		config.CurrentConfig().SetSnykCodeEnabled(true)
-		apiClient.ApiError = nil
-		apiClient.CodeEnabled = false
-		apiClient.LocalCodeEngineEnabled = false
-
-		enabled := scanner.isSastEnabled()
-
-		assert.False(t, enabled)
-	})
-
-	t.Run("should return false if Snyk Code is enabled and the API returns an error", func(t *testing.T) {
-		config.CurrentConfig().SetSnykCodeEnabled(true)
-		apiClient.ApiError = &snyk_api.SnykApiError{}
-		apiClient.CodeEnabled = false
-		apiClient.LocalCodeEngineEnabled = false
-
-		enabled := scanner.isSastEnabled()
-
-		assert.False(t, enabled)
-	})
-
-	t.Run("should return false if Snyk Code is enabled and LocalCodeEngine is enabled", func(t *testing.T) {
-		config.CurrentConfig().SetSnykCodeEnabled(true)
-		apiClient.ApiError = nil
-		apiClient.CodeEnabled = true
-		apiClient.LocalCodeEngineEnabled = true
-
-		enabled := scanner.isSastEnabled()
-
-		assert.False(t, enabled)
-	})
-
-	t.Run("should send a warning notification if Snyk Code Local Engine is enabled", func(t *testing.T) {
-		apiClient.CodeEnabled = true
-		apiClient.LocalCodeEngineEnabled = true
-		apiClient.ApiError = nil
-		notifier := notification.NewNotifier()
-		// overwrite scanner, as we want our separate notifier
-		scanner := &Scanner{
-			SnykApiClient: apiClient,
-			errorReporter: error_reporting.NewTestErrorReporter(),
-			notifier:      notifier,
-		}
-		config.CurrentConfig().SetSnykCodeEnabled(true)
-		channel := make(chan any)
-		notifier.CreateListener(func(params any) {
-			channel <- params
-		})
-		defer notifier.DisposeListener()
-		expectedNotification := sglsp.ShowMessageParams{Type: sglsp.Warning, Message: localCodeEngineWarning}
-
-		scanner.isSastEnabled()
-
-		assert.Eventuallyf(
-			t,
-			func() bool { return expectedNotification == <-channel },
-			5*time.Second,
-			time.Millisecond,
-			"expected warning notification",
-		)
-	})
 
 	t.Run("should send a ShowMessageRequest notification if Snyk Code is enabled and the API returns false",
 		func(t *testing.T) {
-			apiClient.CodeEnabled = false
-			apiClient.LocalCodeEngineEnabled = false
-			apiClient.ApiError = nil
+			mockedSastResponse.SastEnabled = false
+
 			config.CurrentConfig().SetSnykCodeEnabled(true)
 			notifier := notification.NewNotifier()
 			// overwrite scanner, as we want our separate notifier
@@ -172,7 +101,7 @@ func TestIsSastEnabled(t *testing.T) {
 			})
 			defer notifier.DisposeListener()
 
-			scanner.isSastEnabled()
+			scanner.isSastEnabled(mockedSastResponse)
 
 			assert.Equal(t, expectedShowMessageRequest, <-channel)
 		})
@@ -183,8 +112,9 @@ func TestIsSastEnabled(t *testing.T) {
 		t.Run("should return "+autofixEnabledStr+" if Snyk Code is enabled and the API returns "+autofixEnabledStr, func(t *testing.T) {
 			apiClient.CodeEnabled = true
 			apiClient.AutofixEnabled = autofixEnabled
-
-			scanner.isSastEnabled()
+			mockedSastResponse.SastEnabled = true;
+			mockedSastResponse.AutofixEnabled = autofixEnabled
+			scanner.isSastEnabled(mockedSastResponse)
 
 			assert.Equal(t, autofixEnabled, getCodeSettings().isAutofixEnabled.Get())
 		})

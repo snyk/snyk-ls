@@ -26,7 +26,7 @@ import (
 
 const localCodeEngineWarning = "Warning! Local engine is enabled but URL is not configured."
 
-func isLocalEngineEnabled(sastResponse snyk_api.SastResponse) bool {
+func (sc *Scanner) isLocalEngineEnabled(sastResponse snyk_api.SastResponse) bool {
 	log.Info().Any("sastResponse", sastResponse).Msg("sast response")
 	if sastResponse.SastEnabled && sastResponse.LocalCodeEngine.Enabled {
 		return true
@@ -38,7 +38,7 @@ func isLocalEngineEnabled(sastResponse snyk_api.SastResponse) bool {
 func (sc *Scanner) updateCodeApiLocalEngine(sastResponse snyk_api.SastResponse) bool {
 		method := "updateCodeApiLocalEngine"
 
-		if isLocalEngineEnabled(sastResponse) && len(sastResponse.LocalCodeEngine.Url) > 1 {
+		if sc.isLocalEngineEnabled(sastResponse) && len(sastResponse.LocalCodeEngine.Url) > 1 {
 						config.CurrentConfig().SetSnykCodeApi(sastResponse.LocalCodeEngine.Url)
 						api := config.CurrentConfig().SnykCodeApi()
 						log.Info().Str("Updated SnykCodeApi to", api).Msg("SnykCodeApi Update - Local engine")
@@ -50,6 +50,5 @@ func (sc *Scanner) updateCodeApiLocalEngine(sastResponse snyk_api.SastResponse) 
 			)
 		log.Info().Str("method", method).Msg(localCodeEngineWarning)
 		return false
-
 
 }
