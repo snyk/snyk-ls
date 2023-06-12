@@ -158,7 +158,7 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 		Title:    sampleIssue.Title,
 		PublicId: sampleIssue.PublicID,
 		// Documentation is a URL which is constructed from the PublicID
-		Documentation: "https://snyk.io/security-rules/PublicID",
+		Documentation: "https://security.snyk.io/rules/cloud/PublicID",
 		LineNumber:    sampleIssue.LineNumber,
 		Issue:         sampleIssue.IacDescription.Issue,
 		Impact:        sampleIssue.IacDescription.Impact,
