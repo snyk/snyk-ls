@@ -18,6 +18,7 @@ package snyk_api
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -113,7 +114,8 @@ func (s *SnykApiClientImpl) doCall(method string,
 		return nil, NewSnykApiError(requestErr.Error(), 0)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-snyk-ide", "snyk-ls-"+config.Version)
+	clientID := base64.URLEncoding.EncodeToString([]byte(config.Version))
+	req.Header.Set("x-snyk-ide", "snyk-ls-"+clientID)
 
 	log.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
 	response, err := s.httpClientFunc().Do(req)
