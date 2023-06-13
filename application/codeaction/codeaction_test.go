@@ -45,7 +45,7 @@ const documentUriExample = sglsp.DocumentURI("file:///path/to/file")
 
 func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
 	// Arrange
-	t.Parallel()
+
 	expectedIssue := snyk.Issue{
 		CodeActions: []snyk.CodeAction{
 			{
@@ -66,7 +66,7 @@ func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
 
 func Test_GetCodeActions_FileIsDirty_ReturnsEmptyResults(t *testing.T) {
 	// Arrange
-	t.Parallel()
+
 	fakeIssue := snyk.Issue{
 		CodeActions: []snyk.CodeAction{
 			{
@@ -89,7 +89,7 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 	// It doesn't seem like there's a difference between returning a nil and returning an empty array. If this assumption
 	// is proved to be false, this test can be changed.
 	// Arrange
-	t.Parallel()
+
 	var issues []snyk.Issue
 	providerMock := new(mockIssuesProvider)
 	providerMock.On("IssuesFor", mock.Anything, mock.Anything).Return(issues)
@@ -113,7 +113,7 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 
 func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 	// Arrange
-	t.Parallel()
+
 	var mockTextEdit = snyk.TextEdit{
 		Range: snyk.Range{
 			Start: snyk.Position{Line: 1, Character: 2},

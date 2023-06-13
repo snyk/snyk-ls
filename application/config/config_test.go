@@ -23,10 +23,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/snyk/go-application-framework/pkg/auth"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
+
+	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
@@ -160,27 +161,27 @@ func Test_loadFile(t *testing.T) {
 
 func TestSnykCodeApi(t *testing.T) {
 	t.Run("endpoint not provided", func(t *testing.T) {
-		t.Parallel()
+
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint("")
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided without 'app' prefix", func(t *testing.T) {
-		t.Parallel()
+
 		endpoint := "https://snyk.io/api/v1"
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'app' prefix with v1 suffix", func(t *testing.T) {
-		t.Parallel()
+
 		endpoint := "https://app.snyk.io/api/v1"
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'app' prefix without v1 suffix", func(t *testing.T) {
-		t.Parallel()
+
 		endpoint := "https://app.snyk.io/api"
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
