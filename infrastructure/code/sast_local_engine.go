@@ -24,7 +24,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 )
 
-const localEngineMisConfiguredMsg = "Warning! Local engine is enabled but URL is not configured."
+const localEngineMisConfiguredMsg = "Local engine is enabled but URL is not configured."
 
 func (sc *Scanner) isLocalEngineEnabled(sastResponse snyk_api.SastResponse) bool {
 	log.Debug().Any("sastResponse", sastResponse).Msg("sast response")
@@ -41,10 +41,10 @@ func (sc *Scanner) updateCodeApiLocalEngine(sastResponse snyk_api.SastResponse) 
 		return true
 	}
 	sc.notifier.SendShowMessage(
-		sglsp.Warning,
+		sglsp.MessageType(sglsp.Error),
 		localEngineMisConfiguredMsg,
 	)
-	log.Warn().Str("method", method).Msg(localEngineMisConfiguredMsg)
+	log.Error().Str("method", method).Msg(localEngineMisConfiguredMsg)
 	return false
 
 }

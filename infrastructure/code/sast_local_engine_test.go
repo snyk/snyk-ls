@@ -97,7 +97,7 @@ func TestIsLocalEngine(t *testing.T) {
 		defer notifier.DisposeListener()
 
 		expectedShowMessageRequest := sglsp.ShowMessageParams{
-			Type:    2,
+			Type:    1,
 			Message: localEngineMisConfiguredMsg,
 		}
 
