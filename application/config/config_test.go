@@ -119,8 +119,7 @@ func Test_SnykCodeAnalysisTimeoutReturnsTimeoutFromEnvironment(t *testing.T) {
 
 func Test_SnykCodeAnalysisTimeoutReturnsDefaultIfNoEnvVariableFound(t *testing.T) {
 	t.Setenv(snykCodeTimeoutKey, "")
-	duration, _ := time.ParseDuration("10m")
-	assert.Equal(t, duration, snykCodeAnalysisTimeoutFromEnv())
+	assert.Equal(t, 12*time.Hour, snykCodeAnalysisTimeoutFromEnv())
 }
 
 func Test_updatePath(t *testing.T) {
