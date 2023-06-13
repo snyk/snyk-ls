@@ -4,48 +4,48 @@ version: v1.25.0
 ignore:
   'snyk:lic:golang:github.com:hashicorp:go-uuid:MPL-2.0':
     - '*':
-      reason: >-
+    - reason: >-
         https://docs.google.com/spreadsheets/d/1gOS6DzCAb9O9RzJqFaD52y5QRkcA5XGgiaOJeQEZ-Ao/edit#gid=0
-      expires: 2099-07-21T16:46:25.562Z
-      created: 2023-03-22T16:46:25.566Z
+    - expires: 2099-07-21T16:46:25.562Z
+    - created: 2023-03-22T16:46:25.566Z
   'snyk:lic:golang:github.com:hashicorp:hcl:MPL-2.0':
     - '*':
-      reason: >-
+    - reason: >-
         https://docs.google.com/spreadsheets/d/1gOS6DzCAb9O9RzJqFaD52y5QRkcA5XGgiaOJeQEZ-Ao/edit#gid=0
-      expires: 2099-07-21T16:46:25.562Z
-      created: 2023-03-22T16:46:25.566Z
+    - expires: 2099-07-21T16:46:25.562Z
+    - created: 2023-03-22T16:46:25.566Z
   'snyk:lic:golang:github.com:hashicorp:go-version:MPL-2.0':
     - '*':
-      reason: >-
+    - reason: >-
         https://docs.google.com/spreadsheets/d/1gOS6DzCAb9O9RzJqFaD52y5QRkcA5XGgiaOJeQEZ-Ao/edit#gid=0
-      expires: 2099-07-21T16:46:25.562Z
-      created: 2022-06-21T16:46:25.566Z
+    - expires: 2099-07-21T16:46:25.562Z
+    - created: 2022-06-21T16:46:25.566Z
   'snyk:lic:golang:github.com:hashicorp:logutils:MPL-2.0':
     - '*':
-      reason: >-
+    - reason: >-
         https://docs.google.com/spreadsheets/d/1gOS6DzCAb9O9RzJqFaD52y5QRkcA5XGgiaOJeQEZ-Ao/edit#gid=0
-      expires: 2099-07-21T16:46:25.562Z
-      created: 2022-06-21T16:46:25.566Z
+    - expires: 2099-07-21T16:46:25.562Z
+    - created: 2022-06-21T16:46:25.566Z
   'snyk:lic:golang:golang.design:x:clipboard:GPL-3.0':
     - '*':
-      reason: False positive, package uses MIT license
-      expires: 2099-07-21T16:46:25.562Z
-      created: 2022-06-21T16:46:25.566Z
+    - reason: 'False positive, package uses MIT license'
+    - expires: 2099-07-21T16:46:25.562Z
+    - created: 2022-06-21T16:46:25.566Z
   SNYK-CC-K8S-44:
-    - 'infrastructure/iac/testdata/RBAC-copy.yaml > [DocId: 1] > clusterrole > rules[0] > verbs':
-      reason: Test data
-      expires: 2099-08-18T11:28:11.797Z
-      created: 2022-07-19T11:28:11.800Z
-    - 'infrastructure/iac/testdata/RBAC-copy.yaml > [DocId: 1] > clusterrole > rules[0] > resources':
-      reason: Test data
-      expires: 2099-08-18T11:29:16.008Z
-      created: 2022-07-19T11:29:16.011Z
-    - 'infrastructure/iac/testdata/RBAC.yaml > [DocId: 1] > clusterrole > rules[0] > verbs':
-      reason: Test data
-      expires: 2099-08-18T11:29:20.184Z
-      created: 2022-07-19T11:29:20.187Z
-    - 'infrastructure/iac/testdata/RBAC.yaml > [DocId: 1] > clusterrole > rules[0] > resources':
-      reason: Test data
-      expires: 2099-08-18T11:29:24.503Z
-      created: 2022-07-19T11:29:24.505Z
+    - 'infrastructure/iac/testdata/RBAC-copy.yaml > [DocId: 1] > rules[0] > verbs':
+        reason: None Given
+        expires: 2099-07-13T13:34:42.506Z
+        created: 2023-06-13T13:34:42.511Z
+    - 'infrastructure/iac/testdata/RBAC-copy.yaml > [DocId: 1] > rules[0] > resources':
+        reason: None Given
+        expires: 2099-07-13T13:35:19.396Z
+        created: 2023-06-13T13:35:19.401Z
+    - 'infrastructure/iac/testdata/RBAC.yaml > [DocId: 1] > rules[0] > verbs':
+        reason: None Given
+        expires: 2099-07-13T13:35:55.757Z
+        created: 2023-06-13T13:35:55.761Z
+    - 'infrastructure/iac/testdata/RBAC.yaml > [DocId: 1] > rules[0] > resources':
+        reason: None Given
+        expires: 2099-07-13T13:36:28.381Z
+        created: 2023-06-13T13:36:28.385Z
 patch: {}
