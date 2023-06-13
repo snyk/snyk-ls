@@ -11,7 +11,7 @@ import (
 
 func Test_WhenFileUnchanged_FileIsNotDirty(t *testing.T) {
 	// Arrange
-	t.Parallel()
+
 	w := watcher.NewFileWatcher()
 	uri := uri2.PathToUri("path/to/file")
 
@@ -24,7 +24,7 @@ func Test_WhenFileUnchanged_FileIsNotDirty(t *testing.T) {
 
 func Test_WhenFileSaved_FileIsNotDirty(t *testing.T) {
 	// Arrange
-	t.Parallel()
+
 	w := watcher.NewFileWatcher()
 	uri := uri2.PathToUri("path/to/file")
 	w.SetFileAsChanged(uri)
@@ -38,7 +38,7 @@ func Test_WhenFileSaved_FileIsNotDirty(t *testing.T) {
 
 func Test_WhenFileChanged_FileIsDirty(t *testing.T) {
 	// Arrange
-	t.Parallel()
+
 	w := watcher.NewFileWatcher()
 	uri := uri2.PathToUri("path/to/file")
 

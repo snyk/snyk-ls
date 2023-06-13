@@ -44,8 +44,7 @@ var exampleRange = sglsp.Range{
 const documentUriExample = sglsp.DocumentURI("file:///path/to/file")
 
 func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
-	// Arrange
-	t.Parallel()
+	testutil.UnitTest(t)
 	expectedIssue := snyk.Issue{
 		CodeActions: []snyk.CodeAction{
 			{
@@ -65,8 +64,7 @@ func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
 }
 
 func Test_GetCodeActions_FileIsDirty_ReturnsEmptyResults(t *testing.T) {
-	// Arrange
-	t.Parallel()
+	testutil.UnitTest(t)
 	fakeIssue := snyk.Issue{
 		CodeActions: []snyk.CodeAction{
 			{
@@ -86,10 +84,11 @@ func Test_GetCodeActions_FileIsDirty_ReturnsEmptyResults(t *testing.T) {
 }
 
 func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
+	testutil.UnitTest(t)
 	// It doesn't seem like there's a difference between returning a nil and returning an empty array. If this assumption
 	// is proved to be false, this test can be changed.
 	// Arrange
-	t.Parallel()
+
 	var issues []snyk.Issue
 	providerMock := new(mockIssuesProvider)
 	providerMock.On("IssuesFor", mock.Anything, mock.Anything).Return(issues)
@@ -112,8 +111,9 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 }
 
 func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
+	testutil.UnitTest(t)
 	// Arrange
-	t.Parallel()
+
 	var mockTextEdit = snyk.TextEdit{
 		Range: snyk.Range{
 			Start: snyk.Position{Line: 1, Character: 2},
@@ -175,6 +175,7 @@ func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
 }
 
 func Test_ResolveCodeAction_UnknownCommandIsReported(t *testing.T) {
+	testutil.UnitTest(t)
 	// Arrange
 	service := setupService()
 
@@ -201,6 +202,7 @@ func Test_ResolveCodeAction_UnknownCommandIsReported(t *testing.T) {
 }
 
 func Test_ResolveCodeAction_CommandIsExecuted(t *testing.T) {
+	testutil.UnitTest(t)
 	// Arrange
 	service := setupService()
 
@@ -227,6 +229,7 @@ func Test_ResolveCodeAction_CommandIsExecuted(t *testing.T) {
 }
 
 func Test_ResolveCodeAction_KeyIsNull_ReturnsError(t *testing.T) {
+	testutil.UnitTest(t)
 	service := setupService()
 
 	ca := lsp.CodeAction{
