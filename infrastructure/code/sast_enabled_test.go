@@ -1,23 +1,22 @@
 /*
- * © 2023 Snyk Limited
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+* © 2023 Snyk Limited
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*     http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
  */
 
 package code
 
 import (
-	"fmt"
 	"strconv"
 	"testing"
 
@@ -42,8 +41,8 @@ func TestIsSastEnabled(t *testing.T) {
 		SastEnabled: true,
 		LocalCodeEngine: snyk_api.LocalCodeEngine{
 			AllowCloudUpload: false,
-			Url: "http://local.engine",
-			Enabled: true,
+			Url:              "http://local.engine",
+			Enabled:          true,
 		},
 	}
 
@@ -69,6 +68,13 @@ func TestIsSastEnabled(t *testing.T) {
 		assert.True(t, enabled)
 	})
 
+	t.Run("should return false if Snyk Code is enabled and API's SAST is disabled", func(t *testing.T) {
+		config.CurrentConfig().SetSnykCodeEnabled(true)
+		mockedSastResponse.SastEnabled = false
+		enabled := scanner.isSastEnabled(mockedSastResponse)
+
+		assert.False(t, enabled)
+	})
 
 	t.Run("should send a ShowMessageRequest notification if Snyk Code is enabled and the API returns false",
 		func(t *testing.T) {
@@ -77,8 +83,12 @@ func TestIsSastEnabled(t *testing.T) {
 			config.CurrentConfig().SetSnykCodeEnabled(true)
 			notifier := notification.NewNotifier()
 			// overwrite scanner, as we want our separate notifier
-			fmt.Print(notifier)
-			fmt.Print("------")
+			scanner := &Scanner{
+				SnykApiClient: apiClient,
+				errorReporter: error_reporting.NewTestErrorReporter(),
+				notifier:      notifier,
+			}
+
 			actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
 
 			data, err := command.CreateFromCommandData(
@@ -112,7 +122,6 @@ func TestIsSastEnabled(t *testing.T) {
 			defer notifier.DisposeListener()
 
 			scanner.isSastEnabled(mockedSastResponse)
-
 			assert.Equal(t, expectedShowMessageRequest, <-channel)
 		})
 
@@ -122,7 +131,7 @@ func TestIsSastEnabled(t *testing.T) {
 		t.Run("should return "+autofixEnabledStr+" if Snyk Code is enabled and the API returns "+autofixEnabledStr, func(t *testing.T) {
 			apiClient.CodeEnabled = true
 			apiClient.AutofixEnabled = autofixEnabled
-			mockedSastResponse.SastEnabled = true;
+			mockedSastResponse.SastEnabled = true
 			mockedSastResponse.AutofixEnabled = autofixEnabled
 			scanner.isSastEnabled(mockedSastResponse)
 

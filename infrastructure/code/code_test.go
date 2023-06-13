@@ -1,17 +1,17 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+* © 2022 Snyk Limited All rights reserved.
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*     http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
  */
 
 package code
@@ -728,4 +728,48 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			assert.Equal(t, val[0].NewText, FakeAutofixSuggestionNewText)
 		},
 	)
+}
+
+func Test_SastApiCall(t *testing.T) {
+	apiClient := &snyk_api.FakeApiClient{
+		CodeEnabled: false,
+		ApiError:    nil,
+	}
+
+	scanner := &Scanner{
+		SnykApiClient: apiClient,
+		errorReporter: error_reporting.NewTestErrorReporter(),
+		notifier:      notification.NewNotifier(),
+	}
+	t.Run("should return an error if Snyk Code is enabled and the API returns an error", func(t *testing.T) {
+		config.CurrentConfig().SetSnykCodeEnabled(true)
+		apiClient.ApiError = &snyk_api.SnykApiError{}
+		_, err := scanner.Scan(context.Background(), "fileName", "tempDir")
+
+		assert.Error(t, err)
+		assert.Equal(t, err.Error(), "couldn't get sast enablement")
+	})
+
+	t.Run("should return an error if Snyk Code is enabled and API SAST is disabled", func(t *testing.T) {
+		config.CurrentConfig().SetSnykCodeEnabled(true)
+		apiClient.ApiError = nil
+		apiClient.CodeEnabled = false
+		_, err := scanner.Scan(context.Background(), "fileName", "tempDir")
+
+		assert.Error(t, err)
+		assert.Equal(t, err.Error(), "SAST is not enabled")
+	})
+
+	t.Run("should throw an error if local engine is enabled and URL is misconfigured", func(t *testing.T) {
+		config.CurrentConfig().SetSnykCodeEnabled(true)
+		apiClient.ApiError = nil
+		apiClient.CodeEnabled = true
+		apiClient.LocalCodeEngine.Enabled = true
+		apiClient.LocalCodeEngine.Url = ""
+
+		_, err := scanner.Scan(context.Background(), "fileName", "tempDir")
+
+		assert.Error(t, err)
+		assert.Equal(t, err.Error(), "Local engine not configured correctly.")
+	})
 }
