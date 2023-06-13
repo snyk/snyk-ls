@@ -37,8 +37,6 @@ func (sc *Scanner) isSastEnabled(sastResponse snyk_api.SastResponse) bool {
 	method := "isSastEnabled"
 
 	if !sastResponse.SastEnabled {
-		// self-note: if LCE is enabled, this condition is satisfied. Why?
-
 		// this is processed in the listener registered to translate into the right client protocol
 		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
 		commandData := snyk.CommandData{
