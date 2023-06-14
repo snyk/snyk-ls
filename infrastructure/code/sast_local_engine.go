@@ -24,7 +24,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 )
 
-const localEngineMisConfiguredMsg = "Local engine is enabled but URL is not configured."
+const localEngineMisConfiguredMsg = "Snyk Code Local Engine (SCLE) is enabled but the SCLE URL is not configured. Read our docs on how you can configure the SCLE URL https://docs.snyk.io/products/snyk-code/deployment-options/snyk-code-local-engine/cli-and-ide"
 
 func (sc *Scanner) isLocalEngineEnabled(sastResponse snyk_api.SastResponse) bool {
 	log.Debug().Any("sastResponse", sastResponse).Msg("sast response")

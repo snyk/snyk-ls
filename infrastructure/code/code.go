@@ -132,8 +132,6 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	if sc.isLocalEngineEnabled(sastResponse) {
 		isCodeApiUpdated := sc.updateCodeApiLocalEngine(sastResponse)
 		if !isCodeApiUpdated {
-			err := errors.New("Local engine not configured correctly.")
-			sc.errorReporter.CaptureError(err)
 			return issues, err
 		}
 	}

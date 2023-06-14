@@ -780,17 +780,4 @@ func Test_SastApiCall(t *testing.T) {
 		assert.Error(t, err)
 		assert.Equal(t, err.Error(), "SAST is not enabled")
 	})
-
-	t.Run("should throw an error if local engine is enabled and URL is misconfigured", func(t *testing.T) {
-		config.CurrentConfig().SetSnykCodeEnabled(true)
-		apiClient.ApiError = nil
-		apiClient.CodeEnabled = true
-		apiClient.LocalCodeEngine.Enabled = true
-		apiClient.LocalCodeEngine.Url = ""
-
-		_, err := scanner.Scan(context.Background(), "fileName", "tempDir")
-
-		assert.Error(t, err)
-		assert.Equal(t, err.Error(), "Local engine not configured correctly.")
-	})
 }
