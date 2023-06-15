@@ -39,7 +39,10 @@ func initializeSentry() {
 		Release:          config.Version,
 		Debug:            config.IsDevelopment(),
 		BeforeSend:       beforeSend,
+		EnableTracing:    true,
 		TracesSampleRate: 1,
+		HTTPClient:       config.CurrentConfig().Engine().GetNetworkAccess().GetUnauthorizedHttpClient(),
+		AttachStacktrace: true,
 	})
 	if err != nil {
 		log.Error().Str("method", "Initialize").Msg(err.Error())
