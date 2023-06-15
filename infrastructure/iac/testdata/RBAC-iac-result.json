@@ -46,7 +46,7 @@
         "resolve": "Set only the necessary permissions required"
       },
       "lineNumber": 7,
-      "documentation": "https://snyk.io/security-rules/SNYK-CC-K8S-44",
+      "documentation": "https://security.snyk.io/rules/cloud/SNYK-CC-K8S-44",
       "isGeneratedByCustomRule": false,
       "path": [
         "[DocId: 1]",
@@ -78,7 +78,7 @@
         "resolve": "Set only the necessary permissions required"
       },
       "lineNumber": 7,
-      "documentation": "https://snyk.io/security-rules/SNYK-CC-K8S-44",
+      "documentation": "https://security.snyk.io/rules/cloud/SNYK-CC-K8S-44",
       "isGeneratedByCustomRule": false,
       "path": [
         "[DocId: 1]",

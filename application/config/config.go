@@ -557,7 +557,7 @@ func snykCodeAnalysisTimeoutFromEnv() time.Duration {
 	var err error
 	env := os.Getenv(snykCodeTimeoutKey)
 	if env == "" {
-		snykCodeTimeout = 10 * time.Minute
+		snykCodeTimeout = 12 * time.Hour
 	} else {
 		snykCodeTimeout, err = time.ParseDuration(env)
 		if err != nil {

@@ -439,7 +439,7 @@ func newIacCommand(codeActionTitle string, issueURL *url.URL) *snyk.CommandData 
 }
 
 func (iac *Scanner) createIssueURL(id string) *url.URL {
-	parse, err := url.Parse("https://snyk.io/security-rules/" + id)
+	parse, err := url.Parse("https://security.snyk.io/rules/cloud/" + id)
 	if err != nil {
 		iac.errorReporter.CaptureError(errors.Wrap(err, "unable to create issue link for iac issue "+id))
 	}

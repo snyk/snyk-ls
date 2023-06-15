@@ -112,7 +112,7 @@ type IaCIssueData struct {
 	Title string `json:"title"`
 	// PublicID: unique identifier for the issue; it is the same as the ScanIssue.ID
 	PublicId string `json:"publicId"`
-	// Documentation is a URL which is constructed from the PublicID (e.g. https://snyk.io/security-rules/SNYK-CC-K8S-13)
+	// Documentation is a URL which is constructed from the PublicID (e.g. https://security.snyk.io/rules/cloud/SNYK-CC-K8S-13)
 	Documentation string `json:"documentation"`
 	// LineNumber: line number of the issue in the file
 	LineNumber int `json:"lineNumber"`

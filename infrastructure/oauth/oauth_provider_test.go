@@ -25,10 +25,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/go-application-framework/pkg/auth"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
+
+	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 var defaultExpiry = time.Now().Add(2 * time.Second)
@@ -105,7 +106,6 @@ func (f *fakeOauthAuthenticator) IsSupported() bool {
 }
 
 func TestAuthenticateUsesAuthenticator(t *testing.T) {
-	t.Parallel()
 	config := configuration.New()
 	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, config).(*fakeOauthAuthenticator)
 
@@ -119,7 +119,6 @@ func TestAuthenticateUsesAuthenticator(t *testing.T) {
 }
 
 func TestAuthURL_ShouldReturnURL(t *testing.T) {
-	t.Parallel()
 	config := configuration.New()
 	authenticator := NewFakeOauthAuthenticator(time.Now().Add(10*time.Second), true, config).(*fakeOauthAuthenticator)
 	provider := NewOAuthProvider(config, authenticator)
