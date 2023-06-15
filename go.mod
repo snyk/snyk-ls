@@ -20,7 +20,7 @@ require (
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/segmentio/analytics-go v3.1.0+incompatible
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/snyk/go-application-framework v0.0.0-20230504094423-9452a0ac9448
+	github.com/snyk/go-application-framework v0.0.0-20230614130554-b66a702d7528
 	github.com/sourcegraph/go-lsp v0.0.0-20200429204803-219e11d77f5d
 	github.com/stretchr/testify v1.8.2
 	github.com/subosito/gotenv v1.4.2
@@ -40,7 +40,7 @@ require (
 	github.com/jcmturner/goidentity/v6 v6.0.1 // indirect
 	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
-	github.com/snyk/go-httpauth v0.0.0-20230328170530-1af63c87b650 // indirect
+	github.com/snyk/go-httpauth v0.0.0-20230512081507-800aedece3cb // indirect
 	golang.org/x/crypto v0.7.0 // indirect
 )
 
