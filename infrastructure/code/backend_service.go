@@ -157,99 +157,158 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 			return nil, errors.New("Code request id was not provided. " + err.Error())
 		}
 
-		b := new(bytes.Buffer)
-
-		mustBeEncoded := method == http.MethodPost || method == http.MethodPut
-
-		if mustBeEncoded {
-			enc := encoding.NewEncoder(b)
-			_, err := enc.Write(requestBody)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			b = bytes.NewBuffer(requestBody)
+		bodyBuffer, err := s.encodeIfNeeded(method, requestBody)
+		if err != nil {
+			return nil, err
 		}
 
 		c := config.CurrentConfig()
-		host := c.SnykCodeApi()
-
-		req, err := http.NewRequest(method, host+path, b)
+		req, err := s.newRequest(c, method, path, bodyBuffer, requestId)
 		if err != nil {
 			return nil, err
-		}
-		token := c.Token()
-		if c.AuthenticationMethod() == lsp.TokenAuthentication {
-			if len(token) > 0 {
-				req.Header.Set("Session-Token", token) // FIXME: this should be set by GAF, is in the works
-			} else {
-				err = errors.New("no token found, auth header not added")
-				s.errorReporter.CaptureError(err)
-				return nil, err
-			}
-		} else {
-			oauthToken, err := c.TokenAsOAuthToken()
-			if err == nil && len(oauthToken.AccessToken) > 0 {
-				req.Header.Set("Session-Token", "Bearer "+oauthToken.AccessToken) // FIXME: this should be set by GAF, is in the works
-			} else {
-				err = errors.New("token could not be converted to OAuth token, auth header not added")
-				s.errorReporter.CaptureError(err)
-				return nil, err
-			}
-		}
-
-		// Setting a chosen org name for the request
-		org := c.Organization()
-		if org != "" {
-			req.Header.Set("snyk-org-name", org)
-		}
-
-		req.Header.Set("snyk-request-id", requestId)
-		// https://www.keycdn.com/blog/http-cache-headers
-		req.Header.Set("Cache-Control", "private, max-age=0, no-cache")
-		if mustBeEncoded {
-			req.Header.Set("Content-Type", "application/octet-stream")
-			req.Header.Set("Content-Encoding", "gzip")
-		} else {
-			req.Header.Set("Content-Type", "application/json")
 		}
 
 		log.Trace().Str("requestBody", string(requestBody)).Str("snyk-request-id", requestId).Msg("SEND TO REMOTE")
-		response, err := s.client().Do(req)
-		if err != nil {
-			log.Err(err).Str("method", method).Msgf("got http error")
-			s.errorReporter.CaptureErrorAndReportAsIssue(path, err)
-			return nil, err
-		}
 
-		defer func(Body io.ReadCloser) {
-			err := Body.Close()
-			if err != nil {
-				log.Err(err).Msg("Couldn't close response body in call to Snyk Code")
-			}
-		}(response.Body)
-		responseBody, err := io.ReadAll(response.Body)
-		log.Trace().Str("response.Status", response.Status).Str("responseBody", string(responseBody)).Str("snyk-request-id",
-			requestId).Msg("RECEIVED FROM REMOTE")
+		response, responseBody, err := s.httpCall(req)
+		log.Trace().Str("response.Status", response.Status).
+			Str("responseBody", string(responseBody)).
+			Str("snyk-request-id", requestId).
+			Msg("RECEIVED FROM REMOTE")
+
 		if err != nil {
-			log.Err(err).Str("method", method).Msgf("error reading response body")
-			s.errorReporter.CaptureErrorAndReportAsIssue(path, err)
-			return nil, err
+			return nil, err // no retries for errors
 		}
 
 		err = s.checkResponseCode(response)
 
-		if err != nil && s.shouldRetry(response) {
-			continue
-		}
-
 		if err != nil {
+			if s.shouldRetry(response) {
+				log.Debug().Err(err).Str("method", method).Int("attempts done", i+1).Msgf("retrying")
+				if i < retryCount-1 {
+					continue
+				}
+				// return the error on last try
+				return nil, err
+			}
 			return nil, err
 		}
 
 		return responseBody, err
 	}
-	return nil, errors.New("code.doCall: failed to call Snyk Code API, this error should never happen")
+	return nil, errors.New("code.doCall: should never get here")
+}
+
+func (s *SnykCodeHTTPClient) httpCall(req *http.Request) (*http.Response, []byte, error) {
+	method := "code.httpCall"
+	response, err := s.client().Do(req)
+	if err != nil {
+		log.Err(err).Str("method", method).Msgf("got http error")
+		s.errorReporter.CaptureErrorAndReportAsIssue(req.RequestURI, err)
+		return nil, nil, err
+	}
+
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Err(err).Msg("Couldn't close response body in call to Snyk Code")
+		}
+	}(response.Body)
+	responseBody, err := io.ReadAll(response.Body)
+
+	if err != nil {
+		log.Err(err).Str("method", method).Msgf("error reading response body")
+		s.errorReporter.CaptureErrorAndReportAsIssue(req.RequestURI, err)
+		return nil, nil, err
+	}
+	return response, responseBody, nil
+}
+
+func (s *SnykCodeHTTPClient) newRequest(
+	c *config.Config,
+	method string,
+	path string,
+	body *bytes.Buffer,
+	requestId string,
+) (*http.Request, error) {
+
+	host := c.SnykCodeApi()
+	req, err := http.NewRequest(method, host+path, body)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err = s.addAuthHeader(c, req)
+	if err != nil {
+		return nil, err
+	}
+
+	s.addOrganization(c, req)
+	s.addDefaultHeaders(req, requestId, method)
+	return req, nil
+}
+
+func (s *SnykCodeHTTPClient) addDefaultHeaders(req *http.Request, requestId string, method string) {
+	req.Header.Set("snyk-request-id", requestId)
+	// https://www.keycdn.com/blog/http-cache-headers
+	req.Header.Set("Cache-Control", "private, max-age=0, no-cache")
+	if s.mustBeEncoded(method) {
+		req.Header.Set("Content-Type", "application/octet-stream")
+		req.Header.Set("Content-Encoding", "gzip")
+	} else {
+		req.Header.Set("Content-Type", "application/json")
+	}
+}
+
+func (s *SnykCodeHTTPClient) addOrganization(c *config.Config, req *http.Request) {
+	// Setting a chosen org name for the request
+	org := c.Organization()
+	if org != "" {
+		req.Header.Set("snyk-org-name", org)
+	}
+}
+
+func (s *SnykCodeHTTPClient) addAuthHeader(c *config.Config, req *http.Request) (*http.Request, error) {
+	token := c.Token()
+	if c.AuthenticationMethod() == lsp.TokenAuthentication {
+		if len(token) > 0 {
+			req.Header.Set("Session-Token", token) // FIXME: this should be set by GAF, is in the works
+		} else {
+			err := errors.New("no token found, auth header not added")
+			s.errorReporter.CaptureError(err)
+			return nil, err
+		}
+	} else {
+		oauthToken, err := c.TokenAsOAuthToken()
+		if err == nil && len(oauthToken.AccessToken) > 0 {
+			req.Header.Set("Session-Token", "Bearer "+oauthToken.AccessToken) // FIXME: this should be set by GAF, is in the works
+		} else {
+			err = errors.New("token could not be converted to OAuth token, auth header not added")
+			s.errorReporter.CaptureError(err)
+			return nil, err
+		}
+	}
+	return req, nil
+}
+
+func (s *SnykCodeHTTPClient) encodeIfNeeded(method string, requestBody []byte) (*bytes.Buffer, error) {
+	b := new(bytes.Buffer)
+	mustBeEncoded := s.mustBeEncoded(method)
+	if mustBeEncoded {
+		enc := encoding.NewEncoder(b)
+		_, err := enc.Write(requestBody)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		b = bytes.NewBuffer(requestBody)
+	}
+	return b, nil
+}
+
+func (s *SnykCodeHTTPClient) mustBeEncoded(method string) bool {
+	mustBeEncoded := method == http.MethodPost || method == http.MethodPut
+	return mustBeEncoded
 }
 
 func (s *SnykCodeHTTPClient) shouldRetry(response *http.Response) bool {
