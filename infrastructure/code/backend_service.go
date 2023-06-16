@@ -307,8 +307,7 @@ func (s *SnykCodeHTTPClient) encodeIfNeeded(method string, requestBody []byte) (
 }
 
 func (s *SnykCodeHTTPClient) mustBeEncoded(method string) bool {
-	mustBeEncoded := method == http.MethodPost || method == http.MethodPut
-	return mustBeEncoded
+	return method == http.MethodPost || method == http.MethodPut
 }
 
 var retryErrorCodes = map[int]bool{
