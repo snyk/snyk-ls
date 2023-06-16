@@ -49,6 +49,7 @@ func (r Range) String() string {
 	return fmt.Sprintf("%s-%s", r.Start, r.End)
 }
 
+// Contains returns true if the otherRange is contained within the range
 func (r Range) Contains(otherRange Range) bool {
 	if otherRange.Start.Line < r.Start.Line || otherRange.End.Line < r.Start.Line {
 		return false
@@ -65,6 +66,7 @@ func (r Range) Contains(otherRange Range) bool {
 	return true
 }
 
+// Overlaps returns true if the otherRange overlaps with the range
 func (r Range) Overlaps(otherRange Range) bool {
 	if r.Contains(otherRange) {
 		return true

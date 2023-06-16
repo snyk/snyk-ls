@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 )
 
 type FakeAuthenticationProvider struct {
@@ -30,8 +31,10 @@ type FakeAuthenticationProvider struct {
 
 func (a *FakeAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
 	if a.IsAuthenticated {
+		log.Info().Msgf("Fake Authentication - successful.")
 		return func() (string, error) { return "fake auth successful", nil }
 	}
+	log.Info().Msgf("Fake Authentication - failed.")
 	return func() (string, error) { return "", errors.New("Authentication failed. Please update your token.") }
 }
 

@@ -88,6 +88,7 @@ func TestInit(t *testing.T) {
 		scanNotifier,
 		snykApiClient,
 		authenticationService,
+		notifier,
 		snykCodeScanner,
 		infrastructureAsCodeScanner,
 		openSourceScanner,

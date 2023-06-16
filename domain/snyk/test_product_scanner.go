@@ -43,6 +43,10 @@ type TestProductScanner struct {
 	scanDuration time.Duration
 }
 
+func (t *TestProductScanner) GetInlineValues(_ string, _ Range) ([]InlineValue, error) {
+	return []InlineValue{}, nil
+}
+
 func (t *TestProductScanner) Scan(ctx context.Context, _ string, _ string) (issues []Issue, err error) {
 	log.Debug().Msg("Test product scanner running scan")
 	defer log.Debug().Msg("Test product scanner scan finished")

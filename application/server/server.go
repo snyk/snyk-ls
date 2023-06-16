@@ -99,6 +99,7 @@ func initHandlers(c *config.Config, srv *jrpc2.Server, handlers handler.Map) {
 	handlers["textDocument/hover"] = textDocumentHover()
 	handlers["textDocument/codeAction"] = textDocumentCodeActionHandler(c)
 	handlers["textDocument/codeLens"] = codeLensHandler()
+	handlers["textDocument/inlineValue"] = textDocumentInlineValueHandler(c)
 	handlers["textDocument/willSave"] = noOpHandler()
 	handlers["textDocument/willSaveWaitUntil"] = noOpHandler()
 	handlers["codeAction/resolve"] = codeActionResolveHandler(c, srv, di.AuthenticationService(), di.LearnService())
@@ -250,9 +251,10 @@ func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 						},
 					},
 				},
-				HoverProvider:      true,
-				CodeActionProvider: &lsp.CodeActionOptions{ResolveProvider: true},
-				CodeLensProvider:   &sglsp.CodeLensOptions{ResolveProvider: false},
+				HoverProvider:       true,
+				CodeActionProvider:  &lsp.CodeActionOptions{ResolveProvider: true},
+				CodeLensProvider:    &sglsp.CodeLensOptions{ResolveProvider: false},
+				InlineValueProvider: true,
 				ExecuteCommandProvider: &sglsp.ExecuteCommandOptions{
 					Commands: []string{
 						snyk.NavigateToRangeCommand,
@@ -273,6 +275,7 @@ func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 				},
 			},
 		}
+		log.Debug().Str("method", method).Any("result", result).Msg("SENDING")
 		return result, nil
 	})
 }

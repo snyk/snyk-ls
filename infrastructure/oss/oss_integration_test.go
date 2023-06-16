@@ -30,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
@@ -65,11 +66,16 @@ func Test_Scan(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
-	issues, _ := scanner.Scan(ctx, path, "")
+	issues, _ := scanner.Scan(ctx, path, workingDir)
 
 	assert.NotEqual(t, 0, len(issues))
 	assert.True(t, strings.Contains(issues[0].Message, "<p>"))
 	recorder := instrumentor.SpanRecorder
 	spans := (*recorder).Spans()
 	assert.Equal(t, "oss.Scan", spans[0].GetOperation())
+
+	myRange := snyk.Range{Start: snyk.Position{Line: 17}, End: snyk.Position{Line: 17}}
+	values, err := scanner.GetInlineValues(path, myRange)
+	assert.NoError(t, err)
+	assert.Greaterf(t, len(values), 0, "no inline values after scan")
 }

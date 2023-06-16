@@ -60,7 +60,7 @@ func (s *DefaultHoverService) isHoverForPosition(hover Hover[Context], pos snyk.
 	hoverRange := hover.Range
 	posRange := snyk.Range{Start: pos, End: pos}
 	overlaps := hoverRange.Overlaps(posRange)
-	log.Debug().Str("method", "isHoverForPosition").Msgf("hover: %v, pos: %v, overlaps: %v", hoverRange, pos, overlaps)
+	log.Trace().Str("method", "isHoverForPosition").Msgf("hover: %v, pos: %v, overlaps: %v", hoverRange, pos, overlaps)
 	return overlaps
 }
 

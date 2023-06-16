@@ -23,7 +23,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -1160,24 +1159,20 @@ func setupCustomTestRepo(url string, targetCommit string, t *testing.T) (string,
 
 //goland:noinspection ALL
 func Test_MonitorClientProcess(t *testing.T) {
-	testutil.IntegTest(t) // because we want to test it on windows, too
-
+	testutil.IntegTest(t)
+	testutil.NotOnWindows(t, "sleep doesn't exist on windows")
 	// start process that just sleeps
 	pidChan := make(chan int)
 	go func() {
-		var cmd *exec.Cmd
-		if runtime.GOOS != "windows" {
-			cmd = exec.Command("sleep", "2")
-		} else {
-			cmd = exec.Command("cmd.exe", "/c", "timeout", "/t", "2")
-		}
+		cmd := exec.Command("sleep", "5")
 		err := cmd.Start()
 		if err != nil {
 			log.Err(err).Msg("Couldn't sleep. Stopping test")
 			t.Fail()
 		}
 		pidChan <- cmd.Process.Pid
-		_ = cmd.Wait()
+		err = cmd.Wait()
+		assert.NoError(t, err)
 	}()
 	pid := <-pidChan
 	// make sure that we actually waited & monitored
