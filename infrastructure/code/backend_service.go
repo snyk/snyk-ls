@@ -152,7 +152,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 	const retryCount = 3
 	for i := 0; i < retryCount; i++ {
 
-		requestId, err := performance2.GetTraceId(ctx)
+		requestId, err := performance2.GetTraceId(span.Context())
 		if err != nil {
 			return nil, errors.New("Code request id was not provided. " + err.Error())
 		}
@@ -183,7 +183,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 		err = s.checkResponseCode(response)
 
 		if err != nil {
-			if s.shouldRetry(response) {
+			if retryErrorCodes[response.StatusCode] {
 				log.Debug().Err(err).Str("method", method).Int("attempts done", i+1).Msgf("retrying")
 				if i < retryCount-1 {
 					continue
@@ -311,20 +311,16 @@ func (s *SnykCodeHTTPClient) mustBeEncoded(method string) bool {
 	return mustBeEncoded
 }
 
-func (s *SnykCodeHTTPClient) shouldRetry(response *http.Response) bool {
-	retryErrorCodes := make(map[int]bool)
-
-	retryErrorCodes[http.StatusBadGateway] = true
-	retryErrorCodes[http.StatusNotFound] = true
-	retryErrorCodes[http.StatusConflict] = true
-	retryErrorCodes[http.StatusGone] = true
-	retryErrorCodes[http.StatusGatewayTimeout] = true
-	retryErrorCodes[http.StatusServiceUnavailable] = true
-	retryErrorCodes[http.StatusInsufficientStorage] = true
-	retryErrorCodes[http.StatusTooEarly] = true
-	retryErrorCodes[http.StatusTooManyRequests] = true
-
-	return retryErrorCodes[response.StatusCode]
+var retryErrorCodes = map[int]bool{
+	http.StatusBadGateway:          true,
+	http.StatusNotFound:            true,
+	http.StatusConflict:            true,
+	http.StatusGone:                true,
+	http.StatusGatewayTimeout:      true,
+	http.StatusServiceUnavailable:  true,
+	http.StatusInsufficientStorage: true,
+	http.StatusTooEarly:            true,
+	http.StatusTooManyRequests:     true,
 }
 
 func (s *SnykCodeHTTPClient) ExtendBundle(
