@@ -74,11 +74,6 @@ func Start(c *config.Config) {
 	initHandlers(c, srv, handlers)
 
 	log.Info().Msg("Starting up...")
-	log.Info().Msg("snyk-ls: " + config.Version + "(" + util.Result(os.Executable()) + ")")
-	log.Info().Msg("platform: " + runtime.GOOS + "/" + runtime.GOARCH)
-	log.Info().Msg("https_proxy: " + os.Getenv("HTTPS_PROXY"))
-	log.Info().Msg("http_proxy: " + os.Getenv("HTTP_PROXY"))
-	log.Info().Msg("no_proxy: " + os.Getenv("NO_PROXY"))
 	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
 
 	status := srv.WaitStatus()
@@ -292,7 +287,11 @@ func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 func initializedHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializedParams) (any, error) {
 		logger := log.With().Str("method", "initializedHandler").Logger()
-
+		logger.Info().Msg("snyk-ls: " + config.Version + " (" + util.Result(os.Executable()) + ")")
+		logger.Info().Msg("platform: " + runtime.GOOS + "/" + runtime.GOARCH)
+		logger.Info().Msg("https_proxy: " + os.Getenv("HTTPS_PROXY"))
+		logger.Info().Msg("http_proxy: " + os.Getenv("HTTP_PROXY"))
+		logger.Info().Msg("no_proxy: " + os.Getenv("NO_PROXY"))
 		// CLI & Authentication initialization
 		err := di.Scanner().Init()
 		if err != nil {
