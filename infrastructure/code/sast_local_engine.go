@@ -17,14 +17,20 @@
 package code
 
 import (
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
-	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/command"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/data_structure"
 )
 
-const localEngineMisConfiguredMsg = "Snyk Code Local Engine (SCLE) is enabled but the SCLE URL is not configured. Read our docs on how you can configure the SCLE URL https://docs.snyk.io/products/snyk-code/deployment-options/snyk-code-local-engine/cli-and-ide"
+const localEngineMisConfiguredActionItemTitle snyk.MessageAction = "SCLE Docs"
+const closeLocalEngineMisConfiguredActionItemTitle snyk.MessageAction = "Close"
+const localEngineMisConfiguredMsg = "Snyk Code Local Engine (SCLE) is enabled but the SCLE URL is not configured. Read our docs on how you can configure the SCLE URL"
+const localEngineDocsURL = "https://docs.snyk.io/products/snyk-code/deployment-options/snyk-code-local-engine/cli-and-ide"
 
 func (sc *Scanner) isLocalEngineEnabled(sastResponse snyk_api.SastResponse) bool {
 	log.Debug().Any("sastResponse", sastResponse).Msg("sast response")
@@ -33,18 +39,34 @@ func (sc *Scanner) isLocalEngineEnabled(sastResponse snyk_api.SastResponse) bool
 
 func (sc *Scanner) updateCodeApiLocalEngine(sastResponse snyk_api.SastResponse) bool {
 	method := "updateCodeApiLocalEngine"
-
 	if sc.isLocalEngineEnabled(sastResponse) && len(sastResponse.LocalCodeEngine.Url) > 1 {
 		config.CurrentConfig().SetSnykCodeApi(sastResponse.LocalCodeEngine.Url)
 		api := config.CurrentConfig().SnykCodeApi()
 		log.Debug().Str("snykCodeApi", api).Msg("updated Snyk Code API Local Engine")
 		return true
 	}
-	sc.notifier.SendShowMessage(
-		sglsp.MessageType(sglsp.Error),
-		localEngineMisConfiguredMsg,
-	)
+
+	actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
+	commandData := snyk.CommandData{
+		Title:     snyk.OpenBrowserCommand,
+		CommandId: snyk.OpenBrowserCommand,
+		Arguments: []any{localEngineDocsURL},
+	}
+	cmd, err := command.CreateFromCommandData(commandData, nil, nil, sc.learnService, sc.notifier, nil, nil)
+	if err != nil {
+		message := "couldn't create open browser command"
+		log.Err(err).Str("method", method).Msg(message)
+		sc.errorReporter.CaptureError(errors.Wrap(err, message))
+	} else {
+		actionCommandMap.Add(localEngineMisConfiguredActionItemTitle, cmd)
+	}
+	actionCommandMap.Add(closeLocalEngineMisConfiguredActionItemTitle, nil)
+
+	sc.notifier.Send(snyk.ShowMessageRequest{
+		Message: localEngineMisConfiguredMsg,
+		Type:    snyk.Error,
+		Actions: actionCommandMap,
+	})
 	log.Error().Str("method", method).Msg(localEngineMisConfiguredMsg)
 	return false
-
 }

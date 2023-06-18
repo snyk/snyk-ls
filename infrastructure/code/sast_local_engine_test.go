@@ -19,13 +19,14 @@ package code
 import (
 	"testing"
 
-	sglsp "github.com/sourcegraph/go-lsp"
-
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/notification"
 )
 
@@ -79,7 +80,6 @@ func TestIsLocalEngine(t *testing.T) {
 		mockedSastResponse.SastEnabled = true
 		mockedSastResponse.LocalCodeEngine.Enabled = true
 		mockedSastResponse.LocalCodeEngine.Url = ""
-		// scanner.updateCodeApiLocalEngine(mockedSastResponse)
 
 		notifier := notification.NewNotifier()
 		// overwrite scanner, as we want our separate notifier
@@ -89,6 +89,31 @@ func TestIsLocalEngine(t *testing.T) {
 			notifier:      notifier,
 		}
 
+		actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
+
+		data, err := command.CreateFromCommandData(
+			snyk.CommandData{
+				Title:     snyk.OpenBrowserCommand,
+				CommandId: snyk.OpenBrowserCommand,
+				Arguments: []any{localEngineDocsURL},
+			},
+			nil,
+			nil,
+			nil,
+			notifier,
+			nil,
+			nil,
+		)
+		assert.NoError(t, err)
+
+		actionMap.Add(localEngineMisConfiguredActionItemTitle, data)
+		actionMap.Add(closeLocalEngineMisConfiguredActionItemTitle, nil)
+		expectedShowMessageRequest := snyk.ShowMessageRequest{
+			Message: localEngineMisConfiguredMsg,
+			Type:    snyk.Error,
+			Actions: actionMap,
+		}
+
 		channel := make(chan any)
 
 		notifier.CreateListener(func(params any) {
@@ -96,13 +121,7 @@ func TestIsLocalEngine(t *testing.T) {
 		})
 		defer notifier.DisposeListener()
 
-		expectedShowMessageRequest := sglsp.ShowMessageParams{
-			Type:    1,
-			Message: localEngineMisConfiguredMsg,
-		}
-
 		scanner.updateCodeApiLocalEngine(mockedSastResponse)
 		assert.Equal(t, expectedShowMessageRequest, <-channel)
-
 	})
 }
