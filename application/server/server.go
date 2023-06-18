@@ -47,6 +47,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func Start(c *config.Config) {
@@ -73,6 +74,11 @@ func Start(c *config.Config) {
 	initHandlers(c, srv, handlers)
 
 	log.Info().Msg("Starting up...")
+	log.Info().Msg("snyk-ls: " + config.Version + "(" + util.Result(os.Executable()) + ")")
+	log.Info().Msg("platform: " + runtime.GOOS + "/" + runtime.GOARCH)
+	log.Info().Msg("https_proxy: " + os.Getenv("HTTPS_PROXY"))
+	log.Info().Msg("http_proxy: " + os.Getenv("HTTP_PROXY"))
+	log.Info().Msg("no_proxy: " + os.Getenv("NO_PROXY"))
 	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
 
 	status := srv.WaitStatus()
@@ -190,19 +196,18 @@ func initNetworkAccessHeaders(n networking.NetworkAccess) {
 	))
 }
 
-func logInitializeParams(params lsp.InitializeParams) {
+func logIntegration(params lsp.InitializeParams) {
 	initParams := params.InitializationOptions
 	log.Info().Msg("IDE: " + params.ClientInfo.Name + "/" + params.ClientInfo.Version)
 	if initParams.IntegrationName != "" && initParams.IntegrationVersion != "" {
 		log.Info().Msg("snyk-plugin: " + initParams.IntegrationName + "/" + initParams.IntegrationVersion)
 	}
-	log.Info().Msg("snyk-cli path: " + initParams.CliPath)
 }
 
 func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (any, error) {
 		method := "initializeHandler"
-		logInitializeParams(params)
+		logIntegration(params)
 		log.Info().Str("method", method).Any("params", params).Msg("RECEIVING")
 		InitializeSettings(params.InitializationOptions)
 		config.CurrentConfig().SetClientCapabilities(params.Capabilities)
