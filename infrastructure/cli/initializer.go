@@ -38,36 +38,49 @@ type Initializer struct {
 	errorReporter error_reporting.ErrorReporter
 	installer     install.Installer
 	notifier      noti.Notifier
+
+	// versionSource is an object that returns the version of the CLI.
+	versionSource cliVersionSource
 }
 
-func NewInitializer(errorReporter error_reporting.ErrorReporter, installer install.Installer, notifier noti.Notifier) *Initializer {
+func NewInitializer(errorReporter error_reporting.ErrorReporter,
+	installer install.Installer,
+	notifier noti.Notifier,
+	cli cliVersionSource,
+) *Initializer {
 	return &Initializer{
 		errorReporter: errorReporter,
 		installer:     installer,
 		notifier:      notifier,
+		versionSource: cli,
 	}
+}
+
+// cliVersionSource is an interface that returns the version of the CLI.
+type cliVersionSource interface {
+	CliVersion() string
 }
 
 func (i *Initializer) Init() error {
 	Mutex.Lock()
 	defer Mutex.Unlock()
 
+	logger := log.With().Str("method", "cli.Init").Logger()
 	cliInstalled := config.CurrentConfig().CliSettings().Installed()
-	log.Debug().Str("method", "cli.Init").Str("cliPath", config.CurrentConfig().CliSettings().Path()).Msgf("CLI installed: %v", cliInstalled)
+	logger.Debug().Str("cliPath", config.CurrentConfig().CliSettings().Path()).Msgf("CLI installed: %v", cliInstalled)
 	if !config.CurrentConfig().ManageBinariesAutomatically() {
 		if !cliInstalled {
-			i.notifier.SendShowMessage(sglsp.Warning, "Automatic CLI downloads are disabled and no CLI path is configured. Enable automatic downloads or set a valid CLI path.")
+			i.notifier.SendShowMessage(sglsp.Warning,
+				"Automatic CLI downloads are disabled and no CLI path is configured. Enable automatic downloads or set a valid CLI path.")
 			return errors.New("automatic management of binaries is disabled, and CLI is not found")
 		}
 		return nil
 	}
 
-	if cliInstalled && i.isOutdatedCli() {
-
-		go i.updateCli()
-	}
-
 	if cliInstalled {
+		if i.isOutdatedCli() {
+			go i.updateCli()
+		}
 		i.notifier.Send(lsp.SnykIsAvailableCli{CliPath: config.CurrentConfig().CliSettings().Path()})
 		return nil
 	}
@@ -124,6 +137,8 @@ func (i *Initializer) installCli() {
 
 	if cliPath != "" {
 		i.notifier.Send(lsp.SnykIsAvailableCli{CliPath: cliPath})
+		version := i.versionSource.CliVersion()
+		log.Info().Msg("snyk-cli: " + version + " (" + cliPath + ")")
 		log.Info().Str("method", "installCli").Str("snyk", cliPath).Msg("Snyk CLI found.")
 	} else {
 		i.notifier.SendShowMessage(sglsp.Warning, "Could not find, nor install Snyk CLI")

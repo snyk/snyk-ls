@@ -190,10 +190,20 @@ func initNetworkAccessHeaders(n networking.NetworkAccess) {
 	))
 }
 
+func logInitializeParams(params lsp.InitializeParams) {
+	initParams := params.InitializationOptions
+	log.Info().Msg("IDE: " + params.ClientInfo.Name + "/" + params.ClientInfo.Version)
+	if initParams.IntegrationName != "" && initParams.IntegrationVersion != "" {
+		log.Info().Msg("snyk-plugin: " + initParams.IntegrationName + "/" + initParams.IntegrationVersion)
+	}
+	log.Info().Msg("snyk-cli path: " + initParams.CliPath)
+}
+
 func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (any, error) {
 		method := "initializeHandler"
-		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
+		logInitializeParams(params)
+		log.Info().Str("method", method).Any("params", params).Msg("RECEIVING")
 		InitializeSettings(params.InitializationOptions)
 		config.CurrentConfig().SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
@@ -479,8 +489,16 @@ func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 	})
 }
 
-func codeActionResolveHandler(c *config.Config, server lsp.Server, authenticationService snyk.AuthenticationService, learnService learn.Service) handler.Func {
-	return handler.New(codeaction.ResolveCodeActionHandler(c, di.CodeActionService(), server, authenticationService, learnService))
+func codeActionResolveHandler(c *config.Config,
+	server lsp.Server,
+	authenticationService snyk.AuthenticationService,
+	learnService learn.Service,
+) handler.Func {
+	return handler.New(codeaction.ResolveCodeActionHandler(c,
+		di.CodeActionService(),
+		server,
+		authenticationService,
+		learnService))
 }
 
 func textDocumentCodeActionHandler(c *config.Config) handler.Func {

@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 	"runtime/debug"
 	"strings"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/server"
 	"github.com/snyk/snyk-ls/infrastructure/sentry"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func main() {
@@ -57,10 +59,16 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Snyk Language Server is licensed under the Apache 2.0 license")
 		fmt.Fprintln(os.Stderr, "The following dependencies and licenses are used in this project:")
 		fmt.Fprintln(os.Stderr, strings.ReplaceAll(output, " ", "\n"))
-		fmt.Fprintln(os.Stderr, "You can access the detailed license information under https://github.com/snyk/snyk-ls/tree/main/licenses")
+		fmt.Fprintln(os.Stderr,
+			"You can access the detailed license information under https://github.com/snyk/snyk-ls/tree/main/licenses")
 	}
 
-	log.Info().Msg(config.Version)
+	log.Info().Msg("snyk-ls: " + config.Version + "(" + util.Result(os.Executable()) + ")")
+	log.Info().Msg("platform: " + runtime.GOOS + "/" + runtime.GOARCH)
+	log.Info().Msg("https_proxy: " + os.Getenv("HTTPS_PROXY"))
+	log.Info().Msg("http_proxy: " + os.Getenv("HTTP_PROXY"))
+	log.Info().Msg("no_proxy: " + os.Getenv("NO_PROXY"))
+
 	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
 	server.Start(c)
 }

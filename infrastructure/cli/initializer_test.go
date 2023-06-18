@@ -33,9 +33,22 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
+func SetupInitializer(t *testing.T) *Initializer {
+	t.Helper()
+	return SetupInitializerWithInstaller(t, install.NewFakeInstaller())
+}
+
+func SetupInitializerWithInstaller(t *testing.T, installer install.Installer) *Initializer {
+	t.Helper()
+	return NewInitializer(error_reporting.NewTestErrorReporter(),
+		installer,
+		notification.NewNotifier(),
+		versionSource)
+}
+
 func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 	testutil.IntegTest(t)
-	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), install.NewFakeInstaller(), notification.NewNotifier())
+	initializer := SetupInitializer(t)
 	testutil.CreateDummyProgressListener(t)
 
 	config.CurrentConfig().CliSettings().SetPath("")
@@ -48,7 +61,7 @@ func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 
 func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
 	testutil.UnitTest(t)
-	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), install.NewFakeInstaller(), notification.NewNotifier())
+	initializer := SetupInitializer(t)
 
 	tempDir := t.TempDir()
 	tempFile := testutil.CreateTempFile(tempDir, t)
@@ -68,7 +81,7 @@ func TestInitializer_whenNoCli_Installs(t *testing.T) {
 	config.CurrentConfig().SetCliSettings(settings)
 
 	installer := install.NewFakeInstaller()
-	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer, notification.NewNotifier())
+	initializer := SetupInitializerWithInstaller(t, installer)
 
 	go func() { _ = initializer.Init() }()
 
@@ -85,7 +98,7 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 
 	clientFunc := func() *http.Client { return http.DefaultClient }
 	installer := install.NewInstaller(error_reporting.NewTestErrorReporter(), clientFunc)
-	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer, notification.NewNotifier())
+	initializer := SetupInitializerWithInstaller(t, installer)
 
 	// ensure CLI is not installed on the system
 	existingCliPath, _ := installer.Find()
@@ -99,7 +112,8 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 
 	// assert
 	lockFileName := config.CurrentConfig().CLIDownloadLockFileName()
-	expectedCliPath := filepath.Join(config.CurrentConfig().CliSettings().DefaultBinaryInstallPath(), filename.ExecutableName)
+	expectedCliPath := filepath.Join(config.CurrentConfig().CliSettings().DefaultBinaryInstallPath(),
+		filename.ExecutableName)
 
 	defer func() { // defer clean up
 		_, err := os.Stat(lockFileName)
@@ -132,7 +146,7 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_DoesNotInstall(t *testing.T) {
 	config.CurrentConfig().SetManageBinariesAutomatically(false)
 
 	installer := install.NewFakeInstaller()
-	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer, notification.NewNotifier())
+	initializer := SetupInitializerWithInstaller(t, installer)
 
 	go func() { _ = initializer.Init() }()
 	time.Sleep(time.Second)
@@ -148,7 +162,7 @@ func TestInitializer_whenOutdated_Updates(t *testing.T) {
 	createDummyCliBinaryWithCreatedDate(t, fiveDaysAgo)
 
 	installer := install.NewFakeInstaller()
-	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer, notification.NewNotifier())
+	initializer := SetupInitializerWithInstaller(t, installer)
 
 	_ = initializer.Init()
 
@@ -164,7 +178,7 @@ func TestInitializer_whenUpToDate_DoesNotUpdates(t *testing.T) {
 	createDummyCliBinaryWithCreatedDate(t, threeDaysAgo)
 
 	installer := install.NewFakeInstaller()
-	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer, notification.NewNotifier())
+	initializer := SetupInitializerWithInstaller(t, installer)
 
 	_ = initializer.Init()
 
@@ -179,7 +193,7 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_PreventsUpdate(t *testing.T) {
 	createDummyCliBinaryWithCreatedDate(t, fiveDaysAgo)
 
 	installer := install.NewFakeInstaller()
-	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer, notification.NewNotifier())
+	initializer := SetupInitializerWithInstaller(t, installer)
 
 	_ = initializer.Init()
 
@@ -193,7 +207,7 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_PreventsInstall(t *testing.T) {
 	config.CurrentConfig().SetManageBinariesAutomatically(false)
 
 	installer := install.NewFakeInstaller()
-	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer, notification.NewNotifier())
+	initializer := SetupInitializerWithInstaller(t, installer)
 
 	_ = initializer.Init()
 
@@ -208,7 +222,7 @@ func TestInitializer_whenBinaryUpdatesAllowed_Updates(t *testing.T) {
 	createDummyCliBinaryWithCreatedDate(t, fiveDaysAgo)
 
 	installer := install.NewFakeInstaller()
-	initializer := NewInitializer(error_reporting.NewTestErrorReporter(), installer, notification.NewNotifier())
+	initializer := SetupInitializerWithInstaller(t, installer)
 
 	_ = initializer.Init()
 
@@ -231,3 +245,9 @@ func createDummyCliBinaryWithCreatedDate(t *testing.T, binaryCreationDate time.T
 }
 
 var fiveDaysAgo = time.Now().Add(-time.Hour * 24 * 5)
+
+var versionSource = dummyVersionSource{}
+
+type dummyVersionSource struct{}
+
+func (d dummyVersionSource) CliVersion() string { return "0.0.0test" }
