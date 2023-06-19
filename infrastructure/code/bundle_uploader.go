@@ -50,26 +50,30 @@ func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, files map[st
 	s := b.instrumentor.StartSpan(ctx, method)
 	defer b.instrumentor.Finish(s)
 
-	uploadBatches := b.groupInBatches(s.Context(), bundle, files)
-	if len(uploadBatches) == 0 {
-		return bundle, nil
-	}
-
-	uploadedFiles := 0
+	// make uploads in batches until no missing files reported anymore
 	t := progress.NewTracker(false)
 	t.BeginWithMessage("Snyk Code analysis for "+bundle.rootPath, "Uploading batches...")
 	defer t.EndWithMessage("Upload done.")
-	for i, uploadBatch := range uploadBatches {
-		if err := ctx.Err(); err != nil {
-			return bundle, err
+
+	for len(bundle.missingFiles) > 0 {
+		uploadBatches := b.groupInBatches(s.Context(), bundle, files)
+		if len(uploadBatches) == 0 {
+			return bundle, nil
 		}
-		err := bundle.Upload(s.Context(), uploadBatch)
-		if err != nil {
-			return Bundle{}, err
+
+		uploadedFiles := 0
+		for i, uploadBatch := range uploadBatches {
+			if err := ctx.Err(); err != nil {
+				return bundle, err
+			}
+			err := bundle.Upload(s.Context(), uploadBatch)
+			if err != nil {
+				return Bundle{}, err
+			}
+			uploadedFiles += len(uploadBatch.documents)
+			percentage := float64(i) / float64(len(uploadBatches)) * 100
+			t.Report(int(math.RoundToEven(percentage)))
 		}
-		uploadedFiles += len(uploadBatch.documents)
-		percentage := float64(i) / float64(len(uploadBatches)) * 100
-		t.Report(int(math.RoundToEven(percentage)))
 	}
 
 	return bundle, nil
@@ -91,22 +95,22 @@ func (b *BundleUploader) groupInBatches(
 	var batches []*UploadBatch
 	uploadBatch := NewUploadBatch()
 	var i = 0
-	for _, documentURI := range bundle.missingFiles {
+	for _, filePath := range bundle.missingFiles {
 		if len(batches) == 0 { // first batch added after first file found
-			batches = append(batches, &uploadBatch)
+			batches = append(batches, uploadBatch)
 		}
 
-		file := files[documentURI]
+		file := files[filePath]
 		var fileContent = []byte(file.Content)
-		if uploadBatch.canFitFile(documentURI, fileContent) {
-			log.Trace().Str("path", documentURI).Int("size", len(fileContent)).Msgf("added to bundle #%v", len(batches))
-			uploadBatch.documents[documentURI] = file
+		if uploadBatch.canFitFile(filePath, fileContent) {
+			log.Trace().Str("path", filePath).Int("size", len(fileContent)).Msgf("added to bundle #%v", len(batches))
+			uploadBatch.documents[filePath] = file
 		} else {
-			log.Trace().Str("path", documentURI).Int("size",
+			log.Trace().Str("path", filePath).Int("size",
 				len(fileContent)).Msgf("created new bundle - %v bundles in this upload so far", len(batches))
 			newUploadBatch := NewUploadBatch()
-			newUploadBatch.documents[documentURI] = file
-			batches = append(batches, &newUploadBatch)
+			newUploadBatch.documents[filePath] = file
+			batches = append(batches, newUploadBatch)
 			uploadBatch = newUploadBatch
 		}
 		percentage := float64(i) / float64(len(files)) * 100
