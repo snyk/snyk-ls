@@ -127,6 +127,7 @@ func (i *Initializer) installCli() {
 			cliPath, _ = i.installer.Find()
 		} else {
 			i.notifier.SendShowMessage(sglsp.Info, "Snyk CLI has been downloaded.")
+			i.logCliVersion(cliPath)
 		}
 	} else {
 		// If the file is in the cliPath, log the current version
