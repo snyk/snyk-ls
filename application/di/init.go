@@ -114,17 +114,21 @@ func initInfrastructure() {
 				"/Library",
 			})
 	}
+
+	// init NetworkAccess
+	networkAccess := c.Engine().GetNetworkAccess()
+
 	notifier = domainNotify.NewNotifier()
 	errorReporter = sentry.NewSentryErrorReporter(notifier)
-	installer = install.NewInstaller(errorReporter, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
-	learnService = learn.New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient, errorReporter)
+	installer = install.NewInstaller(errorReporter, networkAccess.GetUnauthorizedHttpClient)
+	learnService = learn.New(c, networkAccess.GetUnauthorizedHttpClient, errorReporter)
 	instrumentor = sentry.NewInstrumentor()
-	snykApiClient = snyk_api.NewSnykApiClient(c.Engine().GetNetworkAccess().GetHttpClient)
+	snykApiClient = snyk_api.NewSnykApiClient(networkAccess.GetHttpClient)
 	analytics = amplitude.NewAmplitudeClient(snyk.AuthenticationCheck, errorReporter)
 	authProvider := cliauth.NewCliAuthenticationProvider(errorReporter)
 	authenticationService = snyk.NewAuthenticationService(authProvider, analytics, errorReporter, notifier)
 	snykCli = cli.NewExecutor(authenticationService, errorReporter, analytics, notifier)
-	snykCodeClient = code.NewHTTPRepository(instrumentor, errorReporter, c.Engine().GetNetworkAccess().GetHttpClient)
+	snykCodeClient = code.NewHTTPRepository(instrumentor, errorReporter, networkAccess.GetHttpClient)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli, learnService, notifier)

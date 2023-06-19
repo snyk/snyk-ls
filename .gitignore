@@ -44,3 +44,6 @@ Thumbs.db
 .DS_Store
 ._*
 webidentity.json
+
+infrastructure/snyk_api/pacts/snykls-snykapi.json
+infrastructure/code/pacts/snykls-snykcodeapi.json

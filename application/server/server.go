@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -30,6 +31,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/shirou/gopsutil/process"
 	sglsp "github.com/sourcegraph/go-lsp"
+
+	"github.com/snyk/go-application-framework/pkg/networking"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
@@ -85,7 +88,7 @@ const textDocumentDidOpenOperation = "textDocument/didOpen"
 const textDocumentDidSaveOperation = "textDocument/didSave"
 
 func initHandlers(c *config.Config, srv *jrpc2.Server, handlers handler.Map) {
-	handlers["initialize"] = initializeHandler(srv)
+	handlers["initialize"] = initializeHandler(srv, c)
 	handlers["initialized"] = initializedHandler(srv)
 	handlers["textDocument/didChange"] = textDocumentDidChangeHandler()
 	handlers["textDocument/didClose"] = noOpHandler()
@@ -174,13 +177,27 @@ func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler 
 	})
 }
 
-func initializeHandler(srv *jrpc2.Server) handler.Func {
+func initNetworkAccessHeaders(n networking.NetworkAccess) {
+	n.AddHeaderField("User-Agent", fmt.Sprintf("%s/%s (%s;%s) %s/%s (%s;%s)",
+		"snyk-ls",
+		config.Version,
+		runtime.GOOS,
+		runtime.GOARCH,
+		config.CurrentConfig().IntegrationName(),
+		config.CurrentConfig().IntegrationVersion(),
+		"language-server",
+		config.Version,
+	))
+}
+
+func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (any, error) {
 		method := "initializeHandler"
 		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
 		InitializeSettings(params.InitializationOptions)
 		config.CurrentConfig().SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
+		initNetworkAccessHeaders(c.Engine().GetNetworkAccess())
 		di.Analytics().Initialise()
 
 		// async processing listener

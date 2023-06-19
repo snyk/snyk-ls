@@ -39,7 +39,6 @@ import (
 const (
 	completeStatus     = "COMPLETE"
 	codeDescriptionURL = "https://docs.snyk.io/products/snyk-code/security-rules-used-by-snyk-code"
-	unknownOrgname     = "unknown"
 )
 
 var (
@@ -340,11 +339,6 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 }
 
 func (s *SnykCodeHTTPClient) analysisRequestBody(options *AnalysisOptions) ([]byte, error) {
-	orgName := unknownOrgname
-	if config.CurrentConfig().Organization() != "" {
-		orgName = config.CurrentConfig().Organization()
-	}
-
 	request := AnalysisRequest{
 		Key: AnalysisRequestKey{
 			Type:         "file",
@@ -352,7 +346,7 @@ func (s *SnykCodeHTTPClient) analysisRequestBody(options *AnalysisOptions) ([]by
 			LimitToFiles: options.limitToFiles,
 		},
 		Legacy:          false,
-		AnalysisContext: newCodeRequestContext(orgName),
+		AnalysisContext: newCodeRequestContext(),
 	}
 	if len(options.shardKey) > 0 {
 		request.Key.Shard = options.shardKey
@@ -438,11 +432,6 @@ func (s *SnykCodeHTTPClient) RunAutofix(
 }
 
 func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte, error) {
-	orgName := unknownOrgname
-	if config.CurrentConfig().Organization() != "" {
-		orgName = config.CurrentConfig().Organization()
-	}
-
 	_, ruleID, ok := getIssueLangAndRuleId(options.issue)
 	if !ok {
 		return nil, SnykAutofixFailedError{Msg: "Issue's ruleID does not follow <lang>/<ruleKey> format"}
@@ -456,7 +445,7 @@ func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte
 			RuleId:   ruleID,
 			LineNum:  options.issue.Range.Start.Line + 1,
 		},
-		AutofixContext: newCodeRequestContext(orgName),
+		AnalysisContext: newCodeRequestContext(),
 	}
 	if len(options.shardKey) > 0 {
 		request.Key.Shard = options.shardKey
@@ -488,8 +477,9 @@ func (s *SnykCodeHTTPClient) SubmitAutofixFeedback(ctx context.Context, fixId st
 	}
 
 	request := AutofixFeedback{
-		FixId:    fixId,
-		Feedback: feedback,
+		FixId:           fixId,
+		Feedback:        feedback,
+		AnalysisContext: newCodeRequestContext(),
 	}
 	requestBody, err := json.Marshal(request)
 	if err != nil {

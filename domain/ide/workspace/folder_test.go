@@ -351,7 +351,6 @@ func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 
 func Test_processResults_ShouldSendSuccess(t *testing.T) {
 	// Arrange
-	t.Parallel()
 	testutil.UnitTest(t)
 
 	f, scanNotifier := NewMockFolderWithScanNotifier(notification.NewNotifier())
@@ -369,7 +368,6 @@ func Test_processResults_ShouldSendSuccess(t *testing.T) {
 
 func Test_processResults_ShouldSendError(t *testing.T) {
 	// Arrange
-	t.Parallel()
 	testutil.UnitTest(t)
 
 	f, scanNotifier := NewMockFolderWithScanNotifier(notification.NewNotifier())

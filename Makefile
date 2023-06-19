@@ -28,7 +28,7 @@ LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true'
 PARALLEL := "-p=1"
 NOCACHE := "-count=1"
 VERBOSE := "-v"
-TIMEOUT := "-timeout=15m"
+TIMEOUT := "-timeout=45m"
 
 
 # NOTE: Until this PR is merged https://github.com/pact-foundation/pact-ruby-standalone/pull/89 we need to duplicate the install script

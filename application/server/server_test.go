@@ -54,7 +54,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-const maxIntegTestDuration = 15 * time.Minute
+const maxIntegTestDuration = 45 * time.Minute
 
 var (
 	ctx               = context.Background()

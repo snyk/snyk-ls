@@ -37,10 +37,16 @@ func (n *NoopSpan) Finish() {
 
 func (n *NoopSpan) SetTransactionName(txName string) { n.TxName = txName }
 func (n *NoopSpan) StartSpan(ctx context.Context) {
+	var traceID string
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	n.ctx = GetContextWithTraceId(ctx, uuid.New().String())
+	if t, ok := n.getTraceIDFromContext(ctx); ok {
+		traceID = t
+	} else {
+		traceID = uuid.New().String()
+	}
+	n.ctx = GetContextWithTraceId(ctx, traceID)
 	n.Started = true
 }
 
@@ -51,7 +57,16 @@ func (n *NoopSpan) GetTxName() string {
 	return n.TxName
 }
 func (n *NoopSpan) GetTraceId() string {
-	return n.ctx.Value(TraceIdContextKey("trace_id")).(string)
+	t, ok := n.getTraceIDFromContext(n.ctx)
+	if ok {
+		return t
+	}
+	return ""
+}
+
+func (n *NoopSpan) getTraceIDFromContext(ctx context.Context) (string, bool) {
+	t, ok := ctx.Value(TraceIdContextKey("trace_id")).(string)
+	return t, ok
 }
 func (n *NoopSpan) Context() context.Context {
 	return n.ctx

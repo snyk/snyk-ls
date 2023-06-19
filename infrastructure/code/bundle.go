@@ -239,9 +239,6 @@ func (b *Bundle) addIssueActions(ctx context.Context, issues []snyk.Issue) {
 }
 
 func (b *Bundle) getShardKey(rootPath string, authToken string) string {
-	if b.BundleHash != "" {
-		return util.Hash([]byte(b.BundleHash))
-	}
 	if len(rootPath) > 0 {
 		return util.Hash([]byte(rootPath))
 	}

@@ -148,7 +148,7 @@ func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 }
 
 func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
-	t.Parallel()
+
 	sampleIssue := sampleIssue()
 	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
 	issue, err := scanner.toIssue("test.yml", sampleIssue, "")
@@ -158,7 +158,7 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 		Title:    sampleIssue.Title,
 		PublicId: sampleIssue.PublicID,
 		// Documentation is a URL which is constructed from the PublicID
-		Documentation: "https://snyk.io/security-rules/PublicID",
+		Documentation: "https://security.snyk.io/rules/cloud/PublicID",
 		LineNumber:    sampleIssue.LineNumber,
 		Issue:         sampleIssue.IacDescription.Issue,
 		Impact:        sampleIssue.IacDescription.Impact,
@@ -172,7 +172,6 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 }
 
 func Test_getIssueId(t *testing.T) {
-	t.Parallel()
 
 	affectedFilePath := "path/to/file/test.yml"
 	id := getIssueKey(affectedFilePath, sampleIssue())

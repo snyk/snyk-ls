@@ -175,31 +175,3 @@ type run struct {
 	Results    []result      `json:"results"`
 	Properties runProperties `json:"ruleProperties"`
 }
-
-type AnalysisRequestKey struct {
-	Type         string   `json:"type"`
-	Hash         string   `json:"hash"`
-	LimitToFiles []string `json:"limitToFiles,omitempty"`
-	Shard        string   `json:"shard"`
-}
-
-type codeRequestContextOrg struct {
-	Name        string          `json:"name"`
-	DisplayName string          `json:"displayName"`
-	PublicId    string          `json:"publicId"`
-	Flags       map[string]bool `json:"flags"`
-}
-
-type codeRequestContext struct {
-	Initiator string                `json:"initiator"`
-	Flow      string                `json:"flow,omitempty"`
-	Org       codeRequestContextOrg `json:"org,omitempty"`
-}
-
-type AnalysisRequest struct {
-	Key             AnalysisRequestKey `json:"key"`
-	Severity        int                `json:"severity,omitempty"`
-	Prioritized     bool               `json:"prioritized,omitempty"`
-	Legacy          bool               `json:"legacy"`
-	AnalysisContext codeRequestContext `json:"analysisContext"`
-}

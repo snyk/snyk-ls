@@ -16,8 +16,15 @@
 
 package code
 
-func newCodeRequestContext(orgName string) codeRequestContext {
+import "github.com/snyk/snyk-ls/application/config"
+
+func newCodeRequestContext() codeRequestContext {
 	unknown := "unknown"
+	orgName := unknown
+	if config.CurrentConfig().Organization() != "" {
+		orgName = config.CurrentConfig().Organization()
+	}
+
 	return codeRequestContext{
 		Initiator: "IDE",
 		Flow:      "language-server",
