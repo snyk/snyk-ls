@@ -60,7 +60,7 @@ func (i *Initializer) Init() error {
 
 	logger := log.With().Str("method", "cli.Init").Logger()
 	cliInstalled := config.CurrentConfig().CliSettings().Installed()
-	logger.Debug().Str("cliPath", config.CurrentConfig().CliSettings().Path()).Msgf("CLI installed: %v", cliInstalled)
+	logger.Debug().Str("cliPath", cliPathInConfig()).Msgf("CLI installed: %v", cliInstalled)
 	if !config.CurrentConfig().ManageBinariesAutomatically() {
 		if !cliInstalled {
 			i.notifier.SendShowMessage(sglsp.Warning,
@@ -74,7 +74,7 @@ func (i *Initializer) Init() error {
 		if i.isOutdatedCli() {
 			go i.updateCli()
 		}
-		i.notifier.Send(lsp.SnykIsAvailableCli{CliPath: config.CurrentConfig().CliSettings().Path()})
+		i.notifier.Send(lsp.SnykIsAvailableCli{CliPath: cliPathInConfig()})
 		return nil
 	}
 
@@ -101,7 +101,7 @@ func (i *Initializer) installCli() {
 	var cliPath string
 	currentConfig := config.CurrentConfig()
 	if currentConfig.CliSettings().IsPathDefined() {
-		cliPath = currentConfig.CliSettings().Path()
+		cliPath = cliPathInConfig()
 		log.Info().Str("method", "installCli").Str("cliPath", cliPath).Msg("Using configured CLI path")
 	} else {
 		cliPath, err = i.installer.Find()
@@ -130,13 +130,7 @@ func (i *Initializer) installCli() {
 		}
 	} else {
 		// If the file is in the cliPath, log the current version
-		output, err := i.cli.Execute(context.Background(), []string{cliPath, "--version"}, "")
-		version := "unknown version"
-		if err == nil && len(output) > 0 {
-			version = string(output)
-			version = strings.Trim(version, "\n")
-		}
-		log.Info().Msg("snyk-cli: " + version + " (" + cliPath + ")")
+		i.logCliVersion(cliPath)
 	}
 
 	if cliPath != "" {
@@ -166,13 +160,14 @@ func (i *Initializer) updateCli() {
 
 	if updated {
 		log.Info().Str("method", "updateCli").Msg("CLI updated.")
+		i.logCliVersion(cliPathInConfig())
 	} else {
 		log.Info().Str("method", "updateCli").Msg("CLI is latest.")
 	}
 }
 
 func (i *Initializer) isOutdatedCli() bool {
-	cliPath := config.CurrentConfig().CliSettings().Path()
+	cliPath := cliPathInConfig()
 
 	fileInfo, err := os.Stat(cliPath) // todo: we can save stat calls by caching mod time
 	if err != nil {
@@ -184,3 +179,17 @@ func (i *Initializer) isOutdatedCli() bool {
 
 	return fileInfo.ModTime().Before(fourDaysAgo)
 }
+
+// logCliVersion runs the cli with `--version` and returns the version
+func (i *Initializer) logCliVersion(cliPath string) {
+	output, err := i.cli.Execute(context.Background(), []string{cliPath, "--version"}, "")
+	version := "unknown version"
+	if err == nil && len(output) > 0 {
+		version = string(output)
+		version = strings.Trim(version, "\n")
+	}
+	log.Info().Msg("snyk-cli: " + version + " (" + cliPath + ")")
+}
+
+// cliPath is a single source of truth for the CLI path
+func cliPathInConfig() string { return config.CurrentConfig().CliSettings().Path() }
