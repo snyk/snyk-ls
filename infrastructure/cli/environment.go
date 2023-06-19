@@ -84,8 +84,9 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) (updat
 	if currentConfig.IntegrationName() != "" {
 		updatedEnv = append(updatedEnv, IntegrationNameEnvVarKey+"="+currentConfig.IntegrationName())
 		updatedEnv = append(updatedEnv, IntegrationVersionEnvVarKey+"="+currentConfig.IntegrationVersion())
+		updatedEnv = append(updatedEnv, IntegrationEnvironmentEnvVarKey+"="+currentConfig.IntegrationName())
+		updatedEnv = append(updatedEnv, IntegrationEnvironmentVersionEnvVar+"="+currentConfig.IdeVersion())
 	}
-	updatedEnv = append(updatedEnv, IntegrationEnvironmentEnvVarKey+"="+IntegrationEnvironmentEnvVarValue)
-	updatedEnv = append(updatedEnv, IntegrationEnvironmentVersionEnvVar+"="+config.Version)
+
 	return
 }
