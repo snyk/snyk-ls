@@ -43,7 +43,7 @@ func SetupInitializerWithInstaller(t *testing.T, installer install.Installer) *I
 	return NewInitializer(error_reporting.NewTestErrorReporter(),
 		installer,
 		notification.NewNotifier(),
-		versionSource)
+		dummyCli)
 }
 
 func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
@@ -246,8 +246,4 @@ func createDummyCliBinaryWithCreatedDate(t *testing.T, binaryCreationDate time.T
 
 var fiveDaysAgo = time.Now().Add(-time.Hour * 24 * 5)
 
-var versionSource = dummyVersionSource{}
-
-type dummyVersionSource struct{}
-
-func (d dummyVersionSource) CliVersion() string { return "0.0.0test" }
+var dummyCli = NewTestExecutorWithResponse("0.0.0test")
