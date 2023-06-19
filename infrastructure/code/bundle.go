@@ -25,12 +25,10 @@ import (
 	"strings"
 	"time"
 
-	pkgerrors "github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
@@ -349,29 +347,17 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 	return editFn
 }
 
-func (b *Bundle) autofixFeedbackActions(fixId string) (*data_structure.OrderedMap[snyk.MessageAction, snyk.Command], error) {
-	createCommandData := func(positive bool) (snyk.Command, error) {
-		commandData := snyk.CommandData{
+func (b *Bundle) autofixFeedbackActions(fixId string) (*data_structure.OrderedMap[snyk.MessageAction, snyk.CommandData], error) {
+	createCommandData := func(positive bool) snyk.CommandData {
+		return snyk.CommandData{
 			Title:     snyk.CodeSubmitFixFeedback,
 			CommandId: snyk.CodeSubmitFixFeedback,
 			Arguments: []any{fixId, positive},
 		}
-
-		cmd, err := command.CreateFromCommandData(commandData, nil, nil, nil, nil, nil, b.SnykCode)
-		if err != nil {
-			message := "couldn't create code submit fix feedback command"
-			log.Err(err).Str("method", "autofixFeedbackActions").Msg(message)
-			b.errorReporter.CaptureError(pkgerrors.Wrap(err, message))
-		}
-
-		return cmd, err
 	}
-	actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
-	positiveFeedbackCmd, err1 := createCommandData(true)
-	negativeFeedbackCmd, err2 := createCommandData(false)
-	if err1 != nil || err2 != nil {
-		return nil, errors.Join(err1, err2)
-	}
+	actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
+	positiveFeedbackCmd := createCommandData(true)
+	negativeFeedbackCmd := createCommandData(false)
 
 	actionCommandMap.Add("👍", positiveFeedbackCmd)
 	actionCommandMap.Add("👎", negativeFeedbackCmd)

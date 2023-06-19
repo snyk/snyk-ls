@@ -147,7 +147,7 @@ func initApplication() {
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher, notifier, snykCodeClient)
-	command.SetService(command.NewService(authenticationService, notifier))
+	command.SetService(command.NewService(authenticationService, notifier, learnService, w, snykCodeClient))
 }
 
 /*

@@ -25,9 +25,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
@@ -42,14 +40,8 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 		defer log.Info().Str("method", method).Interface("command", params).Msg("SENDING")
 
 		commandData := snyk.CommandData{CommandId: params.Command, Arguments: params.Arguments, Title: params.Command}
-		cmd, err := command.CreateFromCommandData(commandData, srv, di.AuthenticationService(), di.LearnService(), di.Notifier(), workspace.Get(), di.SnykCodeClient())
 
-		if err != nil {
-			log.Error().Err(err).Str("method", method).Msg("failed to create command")
-			return nil, err
-		}
-
-		result, err := command.Service().ExecuteCommand(bgCtx, cmd)
+		result, err := command.Service().ExecuteCommandData(bgCtx, commandData, srv)
 		logError(err, fmt.Sprintf("Error executing command %v", commandData))
 		return result, err
 	})

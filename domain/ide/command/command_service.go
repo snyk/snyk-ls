@@ -21,23 +21,32 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog/log"
-	"github.com/sourcegraph/go-lsp"
+	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/domain/ide"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 var instance snyk.CommandService
 
 type serviceImpl struct {
-	authService snyk.AuthenticationService
-	notifier    noti.Notifier
+	authService   snyk.AuthenticationService
+	notifier      noti.Notifier
+	learnService  learn.Service
+	issueProvider ide.IssueProvider
+	codeApiClient SnykCodeHttpClient
 }
 
-func NewService(authService snyk.AuthenticationService, notifier noti.Notifier) snyk.CommandService {
+func NewService(authService snyk.AuthenticationService, notifier noti.Notifier, learnService learn.Service, issueProvider ide.IssueProvider, codeApiClient SnykCodeHttpClient) snyk.CommandService {
 	return &serviceImpl{
-		authService: authService,
-		notifier:    notifier,
+		authService:   authService,
+		notifier:      notifier,
+		learnService:  learnService,
+		issueProvider: issueProvider,
+		codeApiClient: codeApiClient,
 	}
 }
 
@@ -52,16 +61,21 @@ func Service() snyk.CommandService {
 	return instance
 }
 
-// ExecuteCommand implements Service
-func (service *serviceImpl) ExecuteCommand(ctx context.Context, command snyk.Command) (any, error) {
+func (service *serviceImpl) ExecuteCommandData(ctx context.Context, commandData snyk.CommandData, server lsp.Server) (any, error) {
 	log.Debug().Str(
 		"method",
-		"command.serviceImpl.ExecuteCommand",
-	).Msgf("executing command %s", command.Command().CommandId)
+		"command.serviceImpl.ExecuteCommandData",
+	).Msgf("executing command %s", commandData.CommandId)
+
+	command, err := CreateFromCommandData(commandData, server, service.authService, service.learnService, service.notifier, service.issueProvider, service.codeApiClient)
+	if err != nil {
+		log.Error().Err(err).Str("method", "command.serviceImpl.ExecuteCommandData").Msg("failed to create command")
+		return nil, err
+	}
 
 	result, err := command.Execute(ctx)
 	if err != nil && strings.Contains(err.Error(), "400 Bad Request") {
-		service.notifier.SendShowMessage(lsp.MTWarning, "Logging out automatically, available credentials are invalid. Please re-authenticate.")
+		service.notifier.SendShowMessage(sglsp.MTWarning, "Logging out automatically, available credentials are invalid. Please re-authenticate.")
 		service.authService.Logout(ctx)
 		return nil, nil
 	}

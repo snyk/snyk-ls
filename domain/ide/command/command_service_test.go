@@ -25,21 +25,17 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
-type TestCommand struct {
-	executed bool
-}
-
-func (command *TestCommand) Command() snyk.CommandData {
-	return snyk.CommandData{}
-}
-func (command *TestCommand) Execute(_ context.Context) (any, error) {
-	command.executed = true
-	return nil, nil
-}
-
 func Test_ExecuteCommand(t *testing.T) {
-	service := NewService(nil, nil)
-	cmd := &TestCommand{}
-	_, _ = service.ExecuteCommand(context.Background(), cmd)
-	assert.True(t, cmd.executed)
+	authProvider := &snyk.FakeAuthenticationProvider{
+		ExpectedAuthURL: "https://auth.url",
+	}
+	authenticationService := snyk.NewAuthenticationService(authProvider, nil, nil, nil)
+	service := NewService(authenticationService, nil, nil, nil, nil)
+	cmd := snyk.CommandData{
+		CommandId: snyk.CopyAuthLinkCommand,
+	}
+
+	url, _ := service.ExecuteCommandData(context.Background(), cmd, nil)
+
+	assert.Equal(t, "https://auth.url", url)
 }

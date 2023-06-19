@@ -900,7 +900,7 @@ func Test_CodeActionResolve_ShouldExecuteCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, expected, serviceMock.ExecutedCommands()[0].Command().CommandId)
+	assert.Equal(t, expected, serviceMock.ExecutedCommands()[0].CommandId)
 }
 
 func Test_SmokeWorkspaceScanOssAndCode(t *testing.T) {
