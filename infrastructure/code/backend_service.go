@@ -170,7 +170,8 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 
 		log.Trace().Str("requestBody", string(requestBody)).Str("snyk-request-id", requestId).Msg("SEND TO REMOTE")
 
-		response, responseBody, err := s.httpCall(req)
+		response, body, err := s.httpCall(req)
+		responseBody = body
 		log.Trace().Str("response.Status", response.Status).
 			Str("responseBody", string(responseBody)).
 			Str("snyk-request-id", requestId).
