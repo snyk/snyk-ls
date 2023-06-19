@@ -21,6 +21,8 @@ import (
 	"sync"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
+
+	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 const (
@@ -70,25 +72,27 @@ type CommandData struct {
 type CommandName string
 
 type CommandService interface {
-	ExecuteCommand(ctx context.Context, command Command) (any, error)
+	ExecuteCommandData(ctx context.Context, commandData CommandData, server lsp.Server) (any, error)
 }
 
 type CommandServiceMock struct {
 	m                sync.Mutex
-	executedCommands []Command
+	executedCommands []CommandData
 }
 
 func NewCommandServiceMock() *CommandServiceMock {
 	return &CommandServiceMock{}
 }
 
-func (service *CommandServiceMock) ExecuteCommand(_ context.Context, command Command) (any, error) {
+// todo:test
+func (service *CommandServiceMock) ExecuteCommandData(_ context.Context, command CommandData, server lsp.Server) (any, error) {
 	service.m.Lock()
 	service.executedCommands = append(service.executedCommands, command)
 	service.m.Unlock()
 	return nil, nil
 }
-func (service *CommandServiceMock) ExecutedCommands() []Command {
+
+func (service *CommandServiceMock) ExecutedCommands() []CommandData {
 	service.m.Lock()
 	cmds := service.executedCommands
 	service.m.Unlock()
