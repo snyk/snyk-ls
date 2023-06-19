@@ -294,7 +294,7 @@ func isNoFilesError(err error) bool {
 func (sc *Scanner) createBundle(ctx context.Context,
 	requestId string,
 	rootPath string,
-	files <-chan string,
+	filePaths <-chan string,
 	changedFiles map[string]bool,
 ) (b Bundle, err error) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.createBundle")
@@ -308,7 +308,7 @@ func (sc *Scanner) createBundle(ctx context.Context,
 	fileHashes := make(map[string]string)
 	bundleFiles := make(map[string]BundleFile)
 	noFiles := true
-	for absoluteFilePath := range files {
+	for absoluteFilePath := range filePaths {
 		noFiles = false
 		if ctx.Err() != nil {
 			return b, err // The cancellation error should be handled by the calling function

@@ -25,6 +25,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/rs/zerolog/log"
 
@@ -145,13 +146,12 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 	method string,
 	path string,
 	requestBody []byte,
-) ([]byte, error) {
+) (responseBody []byte, err error) {
 	span := s.instrumentor.StartSpan(ctx, "code.doCall")
 	defer s.instrumentor.Finish(span)
 
 	const retryCount = 3
 	for i := 0; i < retryCount; i++ {
-
 		requestId, err := performance2.GetTraceId(span.Context())
 		if err != nil {
 			return nil, errors.New("Code request id was not provided. " + err.Error())
@@ -181,11 +181,11 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 		}
 
 		err = s.checkResponseCode(response)
-
 		if err != nil {
 			if retryErrorCodes[response.StatusCode] {
 				log.Debug().Err(err).Str("method", method).Int("attempts done", i+1).Msgf("retrying")
 				if i < retryCount-1 {
+					time.Sleep(5 * time.Second)
 					continue
 				}
 				// return the error on last try
@@ -193,10 +193,10 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 			}
 			return nil, err
 		}
-
-		return responseBody, err
+		// no error, we can break the retry loop
+		break
 	}
-	return nil, errors.New("code.doCall: should never get here")
+	return responseBody, err
 }
 
 func (s *SnykCodeHTTPClient) httpCall(req *http.Request) (*http.Response, []byte, error) {
@@ -311,15 +311,10 @@ func (s *SnykCodeHTTPClient) mustBeEncoded(method string) bool {
 }
 
 var retryErrorCodes = map[int]bool{
-	http.StatusBadGateway:          true,
-	http.StatusNotFound:            true,
-	http.StatusConflict:            true,
-	http.StatusGone:                true,
-	http.StatusGatewayTimeout:      true,
 	http.StatusServiceUnavailable:  true,
-	http.StatusInsufficientStorage: true,
-	http.StatusTooEarly:            true,
-	http.StatusTooManyRequests:     true,
+	http.StatusBadGateway:          true,
+	http.StatusGatewayTimeout:      true,
+	http.StatusInternalServerError: true,
 }
 
 func (s *SnykCodeHTTPClient) ExtendBundle(
