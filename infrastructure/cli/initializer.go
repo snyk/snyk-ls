@@ -46,12 +46,17 @@ func NewInitializer(errorReporter error_reporting.ErrorReporter,
 	notifier noti.Notifier,
 	cli Executor,
 ) *Initializer {
-	return &Initializer{
+	i := &Initializer{
 		errorReporter: errorReporter,
 		installer:     installer,
 		notifier:      notifier,
 		cli:           cli,
 	}
+	settings := config.CurrentConfig().CliSettings()
+	if settings.Installed() {
+		i.logCliVersion(settings.Path())
+	}
+	return i
 }
 
 func (i *Initializer) Init() error {
