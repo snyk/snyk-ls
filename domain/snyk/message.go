@@ -29,7 +29,7 @@ const (
 )
 
 type ShowMessageRequest struct {
-	Message string                                             `json:"message"`
-	Type    MessageType                                        `json:"type"`
-	Actions *data_structure.OrderedMap[MessageAction, Command] `json:"actions"`
+	Message string                                                 `json:"message"`
+	Type    MessageType                                            `json:"type"`
+	Actions *data_structure.OrderedMap[MessageAction, CommandData] `json:"actions"`
 }

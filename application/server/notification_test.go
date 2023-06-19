@@ -208,12 +208,16 @@ func TestShowMessageRequest(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
+		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
 		expectedTitle := "test title"
-		data, err := command.CreateFromCommandData(snyk.CommandData{
+		// data, err := command.CreateFromCommandData(snyk.CommandData{
+		// 	CommandId: snyk.OpenBrowserCommand,
+		// 	Arguments: []any{"https://snyk.io"},
+		// }, loc.Server, di.AuthenticationService(), di.LearnService(), di.Notifier(), nil, nil)
+		data := snyk.CommandData{
 			CommandId: snyk.OpenBrowserCommand,
 			Arguments: []any{"https://snyk.io"},
-		}, loc.Server, di.AuthenticationService(), di.LearnService(), di.Notifier(), nil, nil)
+		}
 		assert.NoError(t, err)
 		actionCommandMap.Add(
 			snyk.MessageAction(expectedTitle),
@@ -255,19 +259,9 @@ func TestShowMessageRequest(t *testing.T) {
 			t.Fatal(err)
 		}
 		command.SetService(snyk.NewCommandServiceMock())
-		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
-		data, err := command.CreateFromCommandData(
-			snyk.CommandData{CommandId: snyk.OpenBrowserCommand, Arguments: []any{"https://snyk.io"}},
-			loc.Server,
-			di.AuthenticationService(),
-			di.LearnService(),
-			di.Notifier(),
-			nil,
-			nil,
-		)
-		assert.NoError(t, err)
+		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
 
-		actionCommandMap.Add(snyk.MessageAction(selectedAction), data)
+		actionCommandMap.Add(snyk.MessageAction(selectedAction), snyk.CommandData{CommandId: snyk.OpenBrowserCommand, Arguments: []any{"https://snyk.io"}})
 
 		request := snyk.ShowMessageRequest{Message: "message", Type: snyk.Info, Actions: actionCommandMap}
 
@@ -279,7 +273,7 @@ func TestShowMessageRequest(t *testing.T) {
 				// verify that passed command is eventually executed
 				commandService := command.Service()
 				commandServiceMock := commandService.(*snyk.CommandServiceMock)
-				return commandServiceMock.ExecutedCommands()[0].Command().CommandId == snyk.OpenBrowserCommand
+				return commandServiceMock.ExecutedCommands()[0].CommandId == snyk.OpenBrowserCommand
 			},
 			2*time.Second,
 			10*time.Millisecond,

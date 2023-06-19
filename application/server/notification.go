@@ -238,12 +238,12 @@ func handleShowMessageRequest(srv lsp.Server, params snyk.ShowMessageRequest) {
 			log.Info().Str("method", "registerNotifier").Msg("Action map key not found")
 			return
 		}
-		if selectedCommand == nil {
-			log.Info().Str("method", "registerNotifier").Msg("Void command selected")
+		if selectedCommand.CommandId == "" {
+			log.Info().Str("method", "registerNotifier").Msg("No command provided")
 			return
 		}
 
-		_, err := command.Service().ExecuteCommand(context.Background(), selectedCommand)
+		_, err := command.Service().ExecuteCommandData(context.Background(), selectedCommand, srv)
 		if err != nil {
 			log.Error().
 				Err(err).
