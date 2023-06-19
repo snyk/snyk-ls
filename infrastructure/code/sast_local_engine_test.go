@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
@@ -89,25 +88,14 @@ func TestIsLocalEngine(t *testing.T) {
 			notifier:      notifier,
 		}
 
-		actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
+		actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
 
-		data, err := command.CreateFromCommandData(
-			snyk.CommandData{
-				Title:     snyk.OpenBrowserCommand,
-				CommandId: snyk.OpenBrowserCommand,
-				Arguments: []any{localEngineDocsURL},
-			},
-			nil,
-			nil,
-			nil,
-			notifier,
-			nil,
-			nil,
-		)
-		assert.NoError(t, err)
-
-		actionMap.Add(localEngineMisConfiguredActionItemTitle, data)
-		actionMap.Add(closeLocalEngineMisConfiguredActionItemTitle, nil)
+		actionMap.Add(localEngineMisConfiguredActionItemTitle, snyk.CommandData{
+			Title:     snyk.OpenBrowserCommand,
+			CommandId: snyk.OpenBrowserCommand,
+			Arguments: []any{localEngineDocsURL},
+		})
+		actionMap.Add(closeLocalEngineMisConfiguredActionItemTitle, snyk.CommandData{})
 		expectedShowMessageRequest := snyk.ShowMessageRequest{
 			Message: localEngineMisConfiguredMsg,
 			Type:    snyk.Error,

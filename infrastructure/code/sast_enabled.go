@@ -17,8 +17,6 @@
 package code
 
 import (
-	"github.com/rs/zerolog/log"
-
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/data_structure"
@@ -32,8 +30,6 @@ const enableSnykCodeMessageActionItemTitle snyk.MessageAction = "Enable Snyk Cod
 const closeMessageActionItemTitle snyk.MessageAction = "Close"
 
 func (sc *Scanner) isSastEnabled(sastResponse snyk_api.SastResponse) bool {
-	method := "isSastEnabled"
-
 	if !sastResponse.SastEnabled {
 		// this is processed in the listener registered to translate into the right client protocol
 		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()

@@ -17,11 +17,9 @@
 package code
 
 import (
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/data_structure"
@@ -46,21 +44,15 @@ func (sc *Scanner) updateCodeApiLocalEngine(sastResponse snyk_api.SastResponse) 
 		return true
 	}
 
-	actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.Command]()
+	actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
 	commandData := snyk.CommandData{
 		Title:     snyk.OpenBrowserCommand,
 		CommandId: snyk.OpenBrowserCommand,
 		Arguments: []any{localEngineDocsURL},
 	}
-	cmd, err := command.CreateFromCommandData(commandData, nil, nil, sc.learnService, sc.notifier, nil, nil)
-	if err != nil {
-		message := "couldn't create open browser command"
-		log.Err(err).Str("method", method).Msg(message)
-		sc.errorReporter.CaptureError(errors.Wrap(err, message))
-	} else {
-		actionCommandMap.Add(localEngineMisConfiguredActionItemTitle, cmd)
-	}
-	actionCommandMap.Add(closeLocalEngineMisConfiguredActionItemTitle, nil)
+
+	actionCommandMap.Add(localEngineMisConfiguredActionItemTitle, commandData)
+	actionCommandMap.Add(closeLocalEngineMisConfiguredActionItemTitle, snyk.CommandData{})
 
 	sc.notifier.Send(snyk.ShowMessageRequest{
 		Message: localEngineMisConfiguredMsg,
