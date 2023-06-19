@@ -316,6 +316,10 @@ func (sc *Scanner) createBundle(ctx context.Context,
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.createBundle")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
+	t := progress.NewTracker(false)
+	t.BeginUnquantifiableLength("Creating file bundle", "Checking and adding files for analysis")
+	defer t.End()
+
 	var limitToFiles []string
 	fileHashes := make(map[string]string)
 	bundleFiles := make(map[string]BundleFile)
