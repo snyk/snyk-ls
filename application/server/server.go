@@ -366,7 +366,6 @@ func setClientInformation(initParams lsp.InitializeParams) {
 		integrationVersion = initParams.InitializationOptions.IntegrationVersion
 	} else if initParams.ClientInfo.Name != "" {
 		integrationName = strings.ToUpper(strings.Replace(initParams.ClientInfo.Name, " ", "_", -1))
-		integrationVersion = ""
 	} else if integrationNameEnvVar := os.Getenv(cli.IntegrationNameEnvVarKey); integrationNameEnvVar != "" {
 		integrationName = integrationNameEnvVar
 		integrationVersion = os.Getenv(cli.IntegrationVersionEnvVarKey)
