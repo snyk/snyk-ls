@@ -38,27 +38,20 @@ type Initializer struct {
 	errorReporter error_reporting.ErrorReporter
 	installer     install.Installer
 	notifier      noti.Notifier
-
-	// versionSource is an object that returns the version of the CLI.
-	versionSource cliVersionSource
+	cli           Executor
 }
 
 func NewInitializer(errorReporter error_reporting.ErrorReporter,
 	installer install.Installer,
 	notifier noti.Notifier,
-	cli cliVersionSource,
+	cli Executor,
 ) *Initializer {
 	return &Initializer{
 		errorReporter: errorReporter,
 		installer:     installer,
 		notifier:      notifier,
-		versionSource: cli,
+		cli:           cli,
 	}
-}
-
-// cliVersionSource is an interface that returns the version of the CLI.
-type cliVersionSource interface {
-	CliVersion() string
 }
 
 func (i *Initializer) Init() error {
@@ -85,6 +78,7 @@ func (i *Initializer) Init() error {
 		return nil
 	}
 
+	// When the CLI is not installed, try to install it
 	for attempt := 0; !config.CurrentConfig().CliSettings().Installed(); attempt++ {
 		if attempt > 2 {
 			config.CurrentConfig().SetSnykIacEnabled(false)
@@ -118,6 +112,7 @@ func (i *Initializer) installCli() {
 		} else {
 			log.Info().Str("method", "installCli").Str("cliPath", cliPath).Msgf("found CLI at %s", cliPath)
 		}
+
 		currentConfig.CliSettings().SetPath(cliPath)
 	}
 
@@ -133,12 +128,19 @@ func (i *Initializer) installCli() {
 		} else {
 			i.notifier.SendShowMessage(sglsp.Info, "Snyk CLI has been downloaded.")
 		}
+	} else {
+		// If the file is in the cliPath, log the current version
+		output, err := i.cli.Execute(context.Background(), []string{cliPath, "--version"}, "")
+		version := "unknown version"
+		if err == nil && len(output) > 0 {
+			version = string(output)
+			version = strings.Trim(version, "\n")
+		}
+		log.Info().Msg("snyk-cli: " + version + " (" + cliPath + ")")
 	}
 
 	if cliPath != "" {
 		i.notifier.Send(lsp.SnykIsAvailableCli{CliPath: cliPath})
-		version := i.versionSource.CliVersion()
-		log.Info().Msg("snyk-cli: " + version + " (" + cliPath + ")")
 		log.Info().Str("method", "installCli").Str("snyk", cliPath).Msg("Snyk CLI found.")
 	} else {
 		i.notifier.SendShowMessage(sglsp.Warning, "Could not find, nor install Snyk CLI")
