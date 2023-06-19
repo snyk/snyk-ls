@@ -279,7 +279,7 @@ func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 func initializedHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializedParams) (any, error) {
 		// Logging these messages only after the client has been initialized.
-		// It has been observed that VSCode changes the log messages format after the LS has been initialized.
+		// Logging to the client is only allowed after the client has been initialized according to LSP protocol.
 		// No reason to log the method name for these messages, because some of these values are empty and the messages
 		// looks weird when including the method name.
 		c := config.CurrentConfig()
