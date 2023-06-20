@@ -176,6 +176,8 @@ type Config struct {
 	logger                       *zerolog.Logger
 	storage                      StorageWithCallbacks
 	m                            sync.Mutex
+	ideVersion                   string
+	ideName                      string
 }
 
 func CurrentConfig() *Config {
@@ -681,6 +683,9 @@ func (c *Config) SetIntegrationVersion(integrationVersion string) {
 	c.integrationVersion = integrationVersion
 }
 
+func (c *Config) SetIdeName(ideName string)       { c.ideName = ideName }
+func (c *Config) SetIdeVersion(ideVersion string) { c.ideVersion = ideVersion }
+
 func (c *Config) TrustedFolders() []string {
 	return c.trustedFolders
 }
@@ -814,3 +819,6 @@ func (c *Config) TokenAsOAuthToken() (oauth2.Token, error) {
 func (c *Config) Storage() StorageWithCallbacks {
 	return c.storage
 }
+
+func (c *Config) IdeVersion() string { return c.ideVersion }
+func (c *Config) IdeName() string    { return c.ideName }

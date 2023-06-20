@@ -346,7 +346,7 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 	testutil.UnitTest(t)
 	// Arrange
 	workingDir, _ := os.Getwd()
-	fakeCli := cli.NewTestExecutorWithResponse(path.Join(workingDir, "testdata/oss-result.json"))
+	fakeCli := cli.NewTestExecutorWithResponseFromFile(path.Join(workingDir, "testdata/oss-result.json"))
 	fakeCli.ExecuteDuration = time.Millisecond
 	scanner := New(performance.NewTestInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
@@ -501,7 +501,8 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 
 	// Arrange
 	workingDir, _ := os.Getwd()
-	fakeCli := cli.NewTestExecutorWithResponse(path.Join(workingDir, "testdata/oss-result-without-targetFile.json"))
+	fakeCli := cli.NewTestExecutorWithResponseFromFile(path.Join(workingDir,
+		"testdata/oss-result-without-targetFile.json"))
 	fakeCli.ExecuteDuration = time.Millisecond
 	scanner := New(
 		performance.NewTestInstrumentor(),

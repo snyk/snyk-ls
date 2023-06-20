@@ -60,7 +60,8 @@ func TestInit(t *testing.T) {
 	authProvider := snyk.NewFakeCliAuthenticationProvider()
 	snykApiClient = &snyk_api.FakeApiClient{CodeEnabled: true}
 	authenticationService = snyk.NewAuthenticationService(authProvider, analytics, errorReporter, notifier)
-	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier)
+	snykCli := cli.NewExecutor(authenticationService, errorReporter, analytics, notifier)
+	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
 	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,
@@ -68,7 +69,6 @@ func TestInit(t *testing.T) {
 	)
 	fakeClient := &code.FakeSnykCodeClient{}
 	snykCodeClient = fakeClient
-	snykCli = cli.NewExecutor(authenticationService, errorReporter, analytics, notifier)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 	scanNotifier, _ = appNotification.NewScanNotifier(notifier)
 	// mock Learn Service

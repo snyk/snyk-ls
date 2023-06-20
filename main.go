@@ -57,10 +57,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Snyk Language Server is licensed under the Apache 2.0 license")
 		fmt.Fprintln(os.Stderr, "The following dependencies and licenses are used in this project:")
 		fmt.Fprintln(os.Stderr, strings.ReplaceAll(output, " ", "\n"))
-		fmt.Fprintln(os.Stderr, "You can access the detailed license information under https://github.com/snyk/snyk-ls/tree/main/licenses")
+		fmt.Fprintln(os.Stderr,
+			"You can access the detailed license information under https://github.com/snyk/snyk-ls/tree/main/licenses")
 	}
 
-	log.Info().Msg(config.Version)
 	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
 	server.Start(c)
 }

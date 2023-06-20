@@ -62,7 +62,6 @@ var instrumentor performance.Instrumentor
 var errorReporter er.ErrorReporter
 var installer install.Installer
 var analytics ux.Analytics
-var snykCli cli.Executor
 var hoverService hover.Service
 var scanner snyk.Scanner
 var cliInitializer *cli.Initializer
@@ -127,14 +126,14 @@ func initInfrastructure() {
 	analytics = amplitude.NewAmplitudeClient(snyk.AuthenticationCheck, errorReporter)
 	authProvider := cliauth.NewCliAuthenticationProvider(errorReporter)
 	authenticationService = snyk.NewAuthenticationService(authProvider, analytics, errorReporter, notifier)
-	snykCli = cli.NewExecutor(authenticationService, errorReporter, analytics, notifier)
+	snykCli := cli.NewExecutor(authenticationService, errorReporter, analytics, notifier)
 	snykCodeClient = code.NewHTTPRepository(instrumentor, errorReporter, networkAccess.GetHttpClient)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.New(instrumentor, errorReporter, analytics, snykCli, learnService, notifier)
 	scanNotifier, _ = appNotification.NewScanNotifier(notifier)
 	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, learnService, notifier)
-	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier)
+	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
 	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,
