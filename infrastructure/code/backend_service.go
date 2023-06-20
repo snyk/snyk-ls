@@ -25,6 +25,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/rs/zerolog/log"
 
@@ -145,42 +146,136 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 	method string,
 	path string,
 	requestBody []byte,
-) ([]byte, error) {
+) (responseBody []byte, err error) {
 	span := s.instrumentor.StartSpan(ctx, "code.doCall")
 	defer s.instrumentor.Finish(span)
 
-	requestId, err := performance2.GetTraceId(ctx)
-	if err != nil {
-		return nil, errors.New("Code request id was not provided. " + err.Error())
-	}
+	const retryCount = 3
+	for i := 0; i < retryCount; i++ {
+		requestId, err := performance2.GetTraceId(span.Context())
+		if err != nil {
+			return nil, errors.New("Code request id was not provided. " + err.Error())
+		}
 
-	b := new(bytes.Buffer)
-
-	mustBeEncoded := method == http.MethodPost || method == http.MethodPut
-
-	if mustBeEncoded {
-		enc := encoding.NewEncoder(b)
-		_, err := enc.Write(requestBody)
+		bodyBuffer, err := s.encodeIfNeeded(method, requestBody)
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		b = bytes.NewBuffer(requestBody)
+
+		c := config.CurrentConfig()
+		req, err := s.newRequest(c, method, path, bodyBuffer, requestId)
+		if err != nil {
+			return nil, err
+		}
+
+		log.Trace().Str("requestBody", string(requestBody)).Str("snyk-request-id", requestId).Msg("SEND TO REMOTE")
+
+		response, body, err := s.httpCall(req)
+		responseBody = body
+		log.Trace().Str("response.Status", response.Status).
+			Str("responseBody", string(responseBody)).
+			Str("snyk-request-id", requestId).
+			Msg("RECEIVED FROM REMOTE")
+
+		if err != nil {
+			return nil, err // no retries for errors
+		}
+
+		err = s.checkResponseCode(response)
+		if err != nil {
+			if retryErrorCodes[response.StatusCode] {
+				log.Debug().Err(err).Str("method", method).Int("attempts done", i+1).Msgf("retrying")
+				if i < retryCount-1 {
+					time.Sleep(5 * time.Second)
+					continue
+				}
+				// return the error on last try
+				return nil, err
+			}
+			return nil, err
+		}
+		// no error, we can break the retry loop
+		break
+	}
+	return responseBody, err
+}
+
+func (s *SnykCodeHTTPClient) httpCall(req *http.Request) (*http.Response, []byte, error) {
+	method := "code.httpCall"
+	response, err := s.client().Do(req)
+	if err != nil {
+		log.Err(err).Str("method", method).Msgf("got http error")
+		s.errorReporter.CaptureErrorAndReportAsIssue(req.RequestURI, err)
+		return nil, nil, err
 	}
 
-	c := config.CurrentConfig()
-	host := c.SnykCodeApi()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Err(err).Msg("Couldn't close response body in call to Snyk Code")
+		}
+	}(response.Body)
+	responseBody, err := io.ReadAll(response.Body)
 
-	req, err := http.NewRequest(method, host+path, b)
+	if err != nil {
+		log.Err(err).Str("method", method).Msgf("error reading response body")
+		s.errorReporter.CaptureErrorAndReportAsIssue(req.RequestURI, err)
+		return nil, nil, err
+	}
+	return response, responseBody, nil
+}
+
+func (s *SnykCodeHTTPClient) newRequest(
+	c *config.Config,
+	method string,
+	path string,
+	body *bytes.Buffer,
+	requestId string,
+) (*http.Request, error) {
+
+	host := c.SnykCodeApi()
+	req, err := http.NewRequest(method, host+path, body)
 	if err != nil {
 		return nil, err
 	}
+
+	req, err = s.addAuthHeader(c, req)
+	if err != nil {
+		return nil, err
+	}
+
+	s.addOrganization(c, req)
+	s.addDefaultHeaders(req, requestId, method)
+	return req, nil
+}
+
+func (s *SnykCodeHTTPClient) addDefaultHeaders(req *http.Request, requestId string, method string) {
+	req.Header.Set("snyk-request-id", requestId)
+	// https://www.keycdn.com/blog/http-cache-headers
+	req.Header.Set("Cache-Control", "private, max-age=0, no-cache")
+	if s.mustBeEncoded(method) {
+		req.Header.Set("Content-Type", "application/octet-stream")
+		req.Header.Set("Content-Encoding", "gzip")
+	} else {
+		req.Header.Set("Content-Type", "application/json")
+	}
+}
+
+func (s *SnykCodeHTTPClient) addOrganization(c *config.Config, req *http.Request) {
+	// Setting a chosen org name for the request
+	org := c.Organization()
+	if org != "" {
+		req.Header.Set("snyk-org-name", org)
+	}
+}
+
+func (s *SnykCodeHTTPClient) addAuthHeader(c *config.Config, req *http.Request) (*http.Request, error) {
 	token := c.Token()
 	if c.AuthenticationMethod() == lsp.TokenAuthentication {
 		if len(token) > 0 {
 			req.Header.Set("Session-Token", token) // FIXME: this should be set by GAF, is in the works
 		} else {
-			err = errors.New("no token found, auth header not added")
+			err := errors.New("no token found, auth header not added")
 			s.errorReporter.CaptureError(err)
 			return nil, err
 		}
@@ -194,52 +289,33 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 			return nil, err
 		}
 	}
+	return req, nil
+}
 
-	// Setting a chosen org name for the request
-	org := c.Organization()
-	if org != "" {
-		req.Header.Set("snyk-org-name", org)
-	}
-
-	req.Header.Set("snyk-request-id", requestId)
-	// https://www.keycdn.com/blog/http-cache-headers
-	req.Header.Set("Cache-Control", "private, max-age=0, no-cache")
+func (s *SnykCodeHTTPClient) encodeIfNeeded(method string, requestBody []byte) (*bytes.Buffer, error) {
+	b := new(bytes.Buffer)
+	mustBeEncoded := s.mustBeEncoded(method)
 	if mustBeEncoded {
-		req.Header.Set("Content-Type", "application/octet-stream")
-		req.Header.Set("Content-Encoding", "gzip")
-	} else {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	log.Trace().Str("requestBody", string(requestBody)).Str("snyk-request-id", requestId).Msg("SEND TO REMOTE")
-	response, err := s.client().Do(req)
-	if err != nil {
-		log.Err(err).Str("method", method).Msgf("got http error")
-		s.errorReporter.CaptureErrorAndReportAsIssue(path, err)
-		return nil, err
-	}
-
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		enc := encoding.NewEncoder(b)
+		_, err := enc.Write(requestBody)
 		if err != nil {
-			log.Err(err).Msg("Couldn't close response body in call to Snyk Code")
+			return nil, err
 		}
-	}(response.Body)
-	responseBody, err := io.ReadAll(response.Body)
-	log.Trace().Str("response.Status", response.Status).Str("responseBody", string(responseBody)).Str("snyk-request-id",
-		requestId).Msg("RECEIVED FROM REMOTE")
-	if err != nil {
-		log.Err(err).Str("method", method).Msgf("error reading response body")
-		s.errorReporter.CaptureErrorAndReportAsIssue(path, err)
-		return nil, err
+	} else {
+		b = bytes.NewBuffer(requestBody)
 	}
+	return b, nil
+}
 
-	err = s.checkResponseCode(response)
-	if err != nil {
-		return nil, err
-	}
+func (s *SnykCodeHTTPClient) mustBeEncoded(method string) bool {
+	return method == http.MethodPost || method == http.MethodPut
+}
 
-	return responseBody, err
+var retryErrorCodes = map[int]bool{
+	http.StatusServiceUnavailable:  true,
+	http.StatusBadGateway:          true,
+	http.StatusGatewayTimeout:      true,
+	http.StatusInternalServerError: true,
 }
 
 func (s *SnykCodeHTTPClient) ExtendBundle(
@@ -363,7 +439,6 @@ func (s *SnykCodeHTTPClient) checkResponseCode(r *http.Response) error {
 	if r.StatusCode >= 200 && r.StatusCode <= 299 {
 		return nil
 	}
-
 	return errors.New("Unexpected response code: " + r.Status)
 }
 

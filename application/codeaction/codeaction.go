@@ -139,11 +139,7 @@ func (c *CodeActionsService) handleCommand(
 		CommandId: action.Command.Command,
 		Arguments: action.Command.Arguments,
 	}
-	executableCmd, err := command.CreateFromCommandData(cmd, server, authService, learnService, c.notifier, c.IssuesProvider, c.codeApiClient)
-	if err != nil {
-		return lsp.CodeAction{}, err
-	}
-	_, err = command.Service().ExecuteCommand(context.Background(), executableCmd)
+	_, err := command.Service().ExecuteCommandData(context.Background(), cmd, server)
 	if err != nil {
 		return lsp.CodeAction{}, err
 	}

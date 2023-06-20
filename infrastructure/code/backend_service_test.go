@@ -101,6 +101,35 @@ func createTestExtendMap() map[string]BundleFile {
 	return filesExtend
 }
 
+// dummyTransport is a transport struct that always returns the response code specified in the constructor
+type dummyTransport struct {
+	responseCode int
+	status       string
+	calls        int
+}
+
+func (d *dummyTransport) RoundTrip(_ *http.Request) (*http.Response, error) {
+	d.calls++
+	return &http.Response{
+		StatusCode: d.responseCode,
+		Status:     d.status,
+	}, nil
+}
+
+func TestSnykCodeBackendService_doCall_shouldRetry(t *testing.T) {
+	testutil.UnitTest(t)
+	d := &dummyTransport{responseCode: 502, status: "502 Bad Gateway"}
+	dummyClientFunc := func() *http.Client {
+		return &http.Client{
+			Transport: d,
+		}
+	}
+	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), dummyClientFunc)
+	_, err := s.doCall(context.Background(), "GET", "https://httpstat.us/500", nil)
+	assert.Error(t, err)
+	assert.Equal(t, 3, d.calls)
+}
+
 func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 	testutil.SmokeTest(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)

@@ -33,8 +33,8 @@ type UploadBatch struct {
 	size      int
 }
 
-func NewUploadBatch() UploadBatch {
-	return UploadBatch{
+func NewUploadBatch() *UploadBatch {
+	return &UploadBatch{
 		documents: map[string]BundleFile{},
 	}
 }
