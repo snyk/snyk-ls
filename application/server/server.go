@@ -288,7 +288,7 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		log.Info().Msg("https_proxy: " + os.Getenv("HTTPS_PROXY"))
 		log.Info().Msg("http_proxy: " + os.Getenv("HTTP_PROXY"))
 		log.Info().Msg("no_proxy: " + os.Getenv("NO_PROXY"))
-		log.Info().Msg("IDE: " + c.IntegrationName() + "/" + c.IdeVersion())
+		log.Info().Msg("IDE: " + c.IdeName() + "/" + c.IdeVersion())
 		log.Info().Msg("snyk-plugin: " + c.IntegrationName() + "/" + c.IntegrationVersion())
 		logger := log.With().Str("method", "initializedHandler").Logger()
 		// CLI & Authentication initialization
@@ -376,6 +376,7 @@ func setClientInformation(initParams lsp.InitializeParams) {
 	c := config.CurrentConfig()
 	c.SetIntegrationName(integrationName)
 	c.SetIntegrationVersion(integrationVersion)
+	c.SetIdeName(initParams.ClientInfo.Name)
 	c.SetIdeVersion(initParams.ClientInfo.Version)
 }
 

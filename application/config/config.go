@@ -177,6 +177,7 @@ type Config struct {
 	storage                      StorageWithCallbacks
 	m                            sync.Mutex
 	ideVersion                   string
+	ideName                      string
 }
 
 func CurrentConfig() *Config {
@@ -682,6 +683,7 @@ func (c *Config) SetIntegrationVersion(integrationVersion string) {
 	c.integrationVersion = integrationVersion
 }
 
+func (c *Config) SetIdeName(ideName string)       { c.ideName = ideName }
 func (c *Config) SetIdeVersion(ideVersion string) { c.ideVersion = ideVersion }
 
 func (c *Config) TrustedFolders() []string {
@@ -819,3 +821,4 @@ func (c *Config) Storage() StorageWithCallbacks {
 }
 
 func (c *Config) IdeVersion() string { return c.ideVersion }
+func (c *Config) IdeName() string    { return c.ideName }
