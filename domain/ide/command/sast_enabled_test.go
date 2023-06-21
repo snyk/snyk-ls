@@ -27,8 +27,10 @@ import (
 
 func Test_ApiClient_isCalledAndResultReturned(t *testing.T) {
 	fakeApiClient := &snyk_api.FakeApiClient{
-		CodeEnabled:            true,
-		LocalCodeEngineEnabled: false,
+		CodeEnabled: true,
+		LocalCodeEngine: snyk_api.LocalCodeEngine{
+			Enabled: false,
+		},
 	}
 
 	sastEnabled := sastEnabled{apiClient: fakeApiClient}
@@ -40,8 +42,10 @@ func Test_ApiClient_isCalledAndResultReturned(t *testing.T) {
 
 func Test_ApiClient_ReturnsTrueIfLocalCodeEngineIsEnabled(t *testing.T) {
 	fakeApiClient := &snyk_api.FakeApiClient{
-		CodeEnabled:            true,
-		LocalCodeEngineEnabled: true,
+		CodeEnabled: true,
+		LocalCodeEngine: snyk_api.LocalCodeEngine{
+			Enabled: true,
+		},
 	}
 
 	sastEnabled := sastEnabled{apiClient: fakeApiClient}

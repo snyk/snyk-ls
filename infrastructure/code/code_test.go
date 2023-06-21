@@ -729,3 +729,55 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		},
 	)
 }
+
+func Test_SastApiCall(t *testing.T) {
+	apiClient := &snyk_api.FakeApiClient{
+		CodeEnabled: false,
+		ApiError:    nil,
+	}
+
+	scanner := &Scanner{
+		SnykApiClient: apiClient,
+		errorReporter: error_reporting.NewTestErrorReporter(),
+		notifier:      notification.NewNotifier(),
+	}
+
+	t.Run("should call the API to check enablement if Snyk Code is enabled", func(t *testing.T) {
+		apiClient.ApiError = nil
+		config.CurrentConfig().SetSnykCodeEnabled(true)
+
+		_, _ = scanner.Scan(context.Background(), "fileName", "tempDir")
+
+		assert.Equal(t, 1, len(apiClient.Calls))
+	})
+
+	t.Run("should return an error if Snyk Code is enabled and the API returns an error", func(t *testing.T) {
+		config.CurrentConfig().SetSnykCodeEnabled(true)
+		apiClient.ApiError = &snyk_api.SnykApiError{}
+		_, err := scanner.Scan(context.Background(), "fileName", "tempDir")
+
+		assert.Error(t, err)
+		assert.Equal(t, err.Error(), "couldn't get sast enablement")
+	})
+
+	t.Run("should return an error if Snyk Code is enabled and API SAST is disabled", func(t *testing.T) {
+		config.CurrentConfig().SetSnykCodeEnabled(true)
+		apiClient.ApiError = nil
+		apiClient.CodeEnabled = false
+		_, err := scanner.Scan(context.Background(), "fileName", "tempDir")
+
+		assert.Error(t, err)
+		assert.Equal(t, err.Error(), "SAST is not enabled")
+	})
+
+	t.Run("should return an error if API SAST is disabled and local-engine is enabled", func(t *testing.T) {
+		config.CurrentConfig().SetSnykCodeEnabled(true)
+		apiClient.ApiError = nil
+		apiClient.CodeEnabled = false
+		apiClient.LocalCodeEngine.Enabled = true
+		_, err := scanner.Scan(context.Background(), "fileName", "tempDir")
+
+		assert.Error(t, err)
+		assert.Equal(t, err.Error(), "SAST is not enabled")
+	})
+}

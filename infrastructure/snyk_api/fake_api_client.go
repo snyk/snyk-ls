@@ -23,11 +23,11 @@ const (
 )
 
 type FakeApiClient struct {
-	Calls                  map[string][][]any
-	CodeEnabled            bool
-	LocalCodeEngineEnabled bool
-	AutofixEnabled         bool
-	ApiError               *SnykApiError
+	Calls           map[string][][]any
+	CodeEnabled     bool
+	LocalCodeEngine LocalCodeEngine
+	AutofixEnabled  bool
+	ApiError        *SnykApiError
 }
 
 var (
@@ -82,8 +82,9 @@ func (f *FakeApiClient) SastSettings() (SastResponse, error) {
 	}
 	return SastResponse{
 		SastEnabled: f.CodeEnabled,
-		LocalCodeEngine: localCodeEngine{
-			Enabled: f.LocalCodeEngineEnabled,
+		LocalCodeEngine: LocalCodeEngine{
+			Enabled: f.LocalCodeEngine.Enabled,
+			Url:     f.LocalCodeEngine.Url,
 		},
 		AutofixEnabled: f.AutofixEnabled,
 	}, nil
