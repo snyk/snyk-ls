@@ -68,6 +68,20 @@ func ToCodeAction(issue snyk.Issue, action snyk.CodeAction) lsp.CodeAction {
 	}
 }
 
+func ToInlineValue(inlineValue snyk.InlineValue) lsp.InlineValue {
+	return lsp.InlineValue{
+		Range: ToRange(inlineValue.Range),
+		Text:  inlineValue.Text,
+	}
+}
+
+func ToInlineValues(inlineValues []snyk.InlineValue) (values []lsp.InlineValue) {
+	for _, inlineValue := range inlineValues {
+		values = append(values, ToInlineValue(inlineValue))
+	}
+	return values
+}
+
 func ToCommand(command *snyk.CommandData) *sglsp.Command {
 	if command == nil {
 		return nil

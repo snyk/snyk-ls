@@ -106,7 +106,10 @@ type Scanner struct {
 	scanCount               int
 	learnService            learn.Service
 	notifier                noti.Notifier
+	inlineValues            inlineValueMap
 }
+
+type inlineValueMap map[string][]snyk.InlineValue
 
 func New(instrumentor performance.Instrumentor,
 	errorReporter error_reporting.ErrorReporter,
@@ -127,6 +130,7 @@ func New(instrumentor performance.Instrumentor,
 		scanCount:               1,
 		learnService:            learnService,
 		notifier:                notifier,
+		inlineValues:            make(inlineValueMap),
 	}
 }
 
@@ -349,6 +353,12 @@ func (oss *Scanner) retrieveIssues(
 		issues = append(issues, oss.toIssue(uri.PathFromUri(documentUri), issue, issueRange))
 		duplicateCheckMap[key] = true
 	}
+
+	// clear cache
+	oss.inlineValues = make(inlineValueMap)
+
+	// repopulate
+	oss.addVulnerabilityCountsAsInlineValuesToCache(issues)
 
 	return issues
 }

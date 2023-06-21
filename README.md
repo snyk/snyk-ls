@@ -44,6 +44,7 @@ Right now the language server supports the following actions:
 - textDocument/didClose
 - textDocument/didSave
 - textDocument/hover
+- textDocument/inlineValue
 - shutdown
 - workspace/didChangeWorkspaceFolders
 - workspace/didChangeConfiguration

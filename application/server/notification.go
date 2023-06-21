@@ -109,7 +109,6 @@ func registerNotifier(srv lsp.Server) {
 			if len(params.Diagnostics) > 0 {
 				source = params.Diagnostics[0].Source
 			}
-			handleCodelensRefresh(srv)
 			log.Info().
 				Str("method", "registerNotifier").
 				Interface("documentURI", params.URI).
@@ -145,6 +144,11 @@ func registerNotifier(srv lsp.Server) {
 			log.Info().
 				Str("method", "registerNotifier").
 				Msg("sending codelens refresh request to client")
+		case lsp.InlineValueRefresh:
+			handleInlineValueRefresh(srv)
+			log.Info().
+				Str("method", "registerNotifier").
+				Msg("sending inline value refresh request to client")
 		default:
 			log.Warn().
 				Str("method", "registerNotifier").
@@ -154,6 +158,22 @@ func registerNotifier(srv lsp.Server) {
 	}
 	di.Notifier().CreateListener(callbackFunction)
 	log.Info().Str("method", "registerNotifier").Msg("registered notifier")
+}
+
+func handleInlineValueRefresh(srv lsp.Server) {
+	method := "handleInlineValueRefresh"
+	if !config.CurrentConfig().ClientCapabilities().Workspace.InlineValue.RefreshSupport {
+		log.Debug().Str("method", method).Msg("inlineValue/refresh not supported by client, not sending request")
+		return
+	}
+	log.Info().Str("method", method).Msg("sending inline value refresh request to client")
+
+	_, err := srv.Callback(context.Background(), "workspace/inlineValue/refresh", nil)
+	if err != nil {
+		log.Err(err).Str("method", method).
+			Msg("error while sending workspace/inlineValue/refresh request")
+		return
+	}
 }
 
 func handleCodelensRefresh(srv lsp.Server) {

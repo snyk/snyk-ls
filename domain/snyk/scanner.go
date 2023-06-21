@@ -24,13 +24,16 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
+	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
 type Scanner interface {
+	// Scan scans a workspace folder or file for issues, given its path. 'folderPath' provides a path to a workspace folder, if a file needs to be scanned.
 	Scan(
 		ctx context.Context,
 		path string,
@@ -49,6 +52,7 @@ type DelegatingConcurrentScanner struct {
 	scanNotifier  ScanNotifier
 	snykApiClient snyk_api.SnykApiClient
 	authService   AuthenticationService
+	notifier      notification.Notifier
 }
 
 func NewDelegatingScanner(
@@ -58,6 +62,7 @@ func NewDelegatingScanner(
 	scanNotifier ScanNotifier,
 	snykApiClient snyk_api.SnykApiClient,
 	authService AuthenticationService,
+	notifier notification.Notifier,
 	scanners ...ProductScanner,
 ) Scanner {
 	return &DelegatingConcurrentScanner{
@@ -68,7 +73,23 @@ func NewDelegatingScanner(
 		snykApiClient: snykApiClient,
 		scanners:      scanners,
 		authService:   authService,
+		notifier:      notifier,
 	}
+}
+
+func (sc *DelegatingConcurrentScanner) GetInlineValues(path string, myRange Range) (values []InlineValue, err error) {
+	for _, scanner := range sc.scanners {
+		if s, ok := scanner.(InlineValueProvider); ok && scanner.IsEnabled() {
+			inlineValues, err := s.GetInlineValues(path, myRange)
+			if err != nil {
+				log.Warn().Str("method", "DelegatingConcurrentScanner.getInlineValues").Err(err).
+					Msgf("couldn't get inline values from scanner %s", scanner.Product())
+				continue
+			}
+			values = append(values, inlineValues...)
+		}
+	}
+	return values, err
 }
 
 func (sc *DelegatingConcurrentScanner) Init() error {
@@ -153,6 +174,9 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	log.Debug().Msgf("All product scanners started for %s", path)
 	waitGroup.Wait()
 	log.Debug().Msgf("All product scanners finished for %s", path)
+	sc.notifier.Send(lsp.InlineValueRefresh{})
+	sc.notifier.Send(lsp.CodeLensRefresh{})
+	// TODO: handle learn actions centrally instead of in each scanner
 }
 
 func getEnabledAnalysisTypes(productScanners []ProductScanner) (analysisTypes []ux2.AnalysisType) {

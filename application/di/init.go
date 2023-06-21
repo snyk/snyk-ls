@@ -88,6 +88,7 @@ func initDomain() {
 		scanNotifier,
 		snykApiClient,
 		authenticationService,
+		notifier,
 		snykCodeScanner,
 		infrastructureAsCodeScanner,
 		openSourceScanner,

@@ -194,6 +194,7 @@ type ServerCapabilities struct {
 	ExecuteCommandProvider           *sglsp.ExecuteCommandOptions           `json:"executeCommandProvider,omitempty"`
 	SemanticHighlighting             *sglsp.SemanticHighlightingOptions     `json:"semanticHighlighting,omitempty"`
 	Workspace                        *Workspace                             `json:"workspace,omitempty"`
+	InlineValueProvider              bool                                   `json:"inlineValueProvider,omitempty"`
 }
 
 type ClientCapabilities struct {
@@ -210,6 +211,19 @@ type CodeLensWorkspaceClientCapabilities struct {
 	 *
 	 * Note that this event is global and will force the client to refresh all
 	 * code lenses currently shown. It should be used with absolute care and is
+	 * useful for situation where a server for example detect a project wide
+	 * change that requires such a calculation.
+	 */
+	RefreshSupport bool `json:"refreshSupport,omitempty"`
+}
+
+type InlineValueWorkspaceClientCapabilities struct {
+	/**
+	 * Whether the client implementation supports a refresh request sent from the
+	 * server to the client.
+	 *
+	 * Note that this event is global and will force the client to refresh all
+	 * inline values currently shown. It should be used with absolute care and is
 	 * useful for situation where a server for example detect a project wide
 	 * change that requires such a calculation.
 	 */
@@ -243,6 +257,8 @@ type WorkspaceClientCapabilities struct {
 	Configuration bool `json:"configuration,omitempty"`
 
 	CodeLens CodeLensWorkspaceClientCapabilities `json:"codeLens,omitempty"`
+
+	InlineValue InlineValueWorkspaceClientCapabilities `json:"inlineValue,omitempty"`
 }
 
 type TextDocumentClientCapabilities struct {
@@ -354,6 +370,69 @@ type TextDocumentClientCapabilities struct {
 	ColorProvider *struct {
 		DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
 	} `json:"colorProvider,omitempty"`
+
+	/**
+	 * Capabilities specific to the `textDocument/inlineValue` request.
+	 *
+	 * @since 3.17.0
+	 */
+	InlineValue *struct {
+		DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
+	} `json:"inlineValue,omitempty"`
+}
+
+/**
+ * A parameter literal used in inline value requests.
+ *
+ * @since 3.17.0
+ */
+type InlineValueParams struct {
+	/**
+	 * The text document.
+	 */
+	TextDocument sglsp.TextDocumentIdentifier `json:"textDocument"`
+
+	/**
+	 * The document range for which inline values should be computed.
+	 */
+	Range sglsp.Range `json:"range"`
+
+	/**
+	 * Additional information about the context in which inline values were
+	 * requested.
+	 */
+	Context InlineValueContext `json:"context"`
+}
+
+type InlineValueContext struct {
+	/**
+	 * The stack frame (as a DAP Id) where the execution has stopped.
+	 */
+	FrameId int `json:"frameId"`
+
+	/**
+	 * The document range where execution has stopped.
+	 * Typically the end position of the range denotes the line where the
+	 * inline values are shown.
+	 */
+	StoppedLocation sglsp.Range `json:"stoppedLocation"`
+}
+
+/**
+ * Provide inline value as text.
+ *
+ * @since 3.17.0
+ */
+type InlineValue struct {
+	/**
+	 * The document range for which the inline value applies.
+	 */
+	Range sglsp.Range `json:"range"`
+
+	/**
+	 * The text of the inline value.
+	 */
+	Text string `json:"text"`
 }
 
 type DocumentationFormat string
@@ -864,6 +943,7 @@ type ApplyWorkspaceEditParams struct {
 }
 
 type CodeLensRefresh struct{}
+type InlineValueRefresh struct{}
 
 type ApplyWorkspaceEditResult struct {
 	/**

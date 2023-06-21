@@ -73,6 +73,7 @@ func setupScanner(testProductScanners ...ProductScanner) (
 		scanNotifier,
 		apiClient,
 		authenticationService,
+		notifier,
 		testProductScanners...,
 	)
 	return scanner, analytics, scanNotifier
