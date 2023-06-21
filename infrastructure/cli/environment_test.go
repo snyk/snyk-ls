@@ -30,6 +30,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 	t.Run("Adds values to env", func(t *testing.T) {
 		const expectedIntegrationName = "ECLIPSE"
 		const expectedIntegrationVersion = "0.0.1rc1"
+		const expectedIdeVersion = "1.2.3"
 
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
@@ -37,6 +38,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		c.UpdateApiEndpoints("https://app.snyk.io/api")
 		c.SetIntegrationName(expectedIntegrationName)
 		c.SetIntegrationVersion(expectedIntegrationVersion)
+		c.SetIdeVersion(expectedIdeVersion)
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
@@ -44,8 +46,8 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		assert.Contains(t, updatedEnv, TokenEnvVar+"="+c.Token())
 		assert.Contains(t, updatedEnv, IntegrationNameEnvVarKey+"="+expectedIntegrationName)
 		assert.Contains(t, updatedEnv, IntegrationVersionEnvVarKey+"="+expectedIntegrationVersion)
-		assert.Contains(t, updatedEnv, IntegrationEnvironmentEnvVarKey+"="+IntegrationEnvironmentEnvVarValue)
-		assert.Contains(t, updatedEnv, IntegrationEnvironmentVersionEnvVar+"="+config.Version)
+		assert.Contains(t, updatedEnv, IntegrationEnvironmentEnvVarKey+"="+expectedIntegrationName)
+		assert.Contains(t, updatedEnv, IntegrationEnvironmentVersionEnvVar+"="+expectedIdeVersion)
 		assert.NotContains(t, updatedEnv, "SNYK_CFG_DISABLE_ANALYTICS=1")
 	})
 	t.Run("Removes existing snyk token env variables", func(t *testing.T) {

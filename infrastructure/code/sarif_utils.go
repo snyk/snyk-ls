@@ -20,18 +20,18 @@ import "github.com/snyk/snyk-ls/application/config"
 
 func newCodeRequestContext() codeRequestContext {
 	unknown := "unknown"
-	orgName := unknown
+	orgId := unknown
 	if config.CurrentConfig().Organization() != "" {
-		orgName = config.CurrentConfig().Organization()
+		orgId = config.CurrentConfig().Organization()
 	}
 
 	return codeRequestContext{
 		Initiator: "IDE",
 		Flow:      "language-server",
 		Org: codeRequestContextOrg{
-			Name:        orgName,
+			Name:        unknown,
 			DisplayName: unknown,
-			PublicId:    unknown,
+			PublicId:    orgId,
 		},
 	}
 }

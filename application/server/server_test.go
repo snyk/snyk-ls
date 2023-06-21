@@ -233,7 +233,9 @@ func Test_initialize_shouldInitToTokenAuthenticationWhenConfigured(t *testing.T)
 
 	assert.Equal(t, "*oauth.oAuthProvider", reflect.TypeOf(di.AuthenticationService().Provider()).String())
 
-	_, err = loc.Client.Call(ctx, "workspace/didChangeConfiguration", lsp.DidChangeConfigurationParams{Settings: lsp.Settings{AuthenticationMethod: lsp.TokenAuthentication}})
+	_, err = loc.Client.Call(ctx,
+		"workspace/didChangeConfiguration",
+		lsp.DidChangeConfigurationParams{Settings: lsp.Settings{AuthenticationMethod: lsp.TokenAuthentication}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -496,17 +498,22 @@ func Test_initialize_integrationInInitializationOptions_readFromInitializationOp
 func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
 	// Arrange
 	const expectedIntegrationName = "ECLIPSE"
-	const expectedIntegrationVersion = "0.0.1rc1"
+	const expectedIntegrationVersion = "8.0.0ServicePack92-preview4"
+	const expectedIdeVersion = "0.0.1rc1"
 
 	// The data in clientInfo takes priority over env-vars
 	t.Setenv(cli.IntegrationNameEnvVarKey, "NOT_"+expectedIntegrationName)
-	t.Setenv(cli.IntegrationVersionEnvVarKey, "NOT_"+expectedIntegrationVersion)
+	t.Setenv(cli.IntegrationVersionEnvVarKey, "NOT_"+expectedIdeVersion)
 
 	loc := setupServer(t)
 	clientParams := lsp.InitializeParams{
 		ClientInfo: sglsp.ClientInfo{
 			Name:    expectedIntegrationName,
-			Version: expectedIntegrationVersion,
+			Version: expectedIdeVersion,
+		},
+		InitializationOptions: lsp.Settings{
+			IntegrationName:    expectedIntegrationName,
+			IntegrationVersion: expectedIntegrationVersion,
 		},
 	}
 
@@ -520,6 +527,7 @@ func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
 	currentConfig := config.CurrentConfig()
 	assert.Equal(t, expectedIntegrationName, currentConfig.IntegrationName())
 	assert.Equal(t, expectedIntegrationVersion, currentConfig.IntegrationVersion())
+	assert.Equal(t, expectedIdeVersion, currentConfig.IdeVersion())
 }
 
 func Test_initialize_integrationOnlyInEnvVars_readFromEnvVars(t *testing.T) {
@@ -572,7 +580,12 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 	loc := setupServer(t)
 
 	scanner := &snyk.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))
+	workspace.Get().AddFolder(workspace.NewFolder("dummy",
+		"dummy",
+		scanner,
+		di.HoverService(),
+		di.ScanNotifier(),
+		di.Notifier()))
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -814,7 +827,12 @@ func sendFileSavedMessage(t *testing.T, filePath, fileDir string, loc server.Loc
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filePath)},
 	}
-	workspace.Get().AddFolder(workspace.NewFolder(fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier()))
+	workspace.Get().AddFolder(workspace.NewFolder(fileDir,
+		"Test",
+		di.Scanner(),
+		di.HoverService(),
+		di.ScanNotifier(),
+		di.Notifier()))
 
 	_, err := loc.Client.Call(ctx, textDocumentDidSaveOperation, didSaveParams)
 	if err != nil {

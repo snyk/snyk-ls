@@ -20,6 +20,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -48,7 +49,7 @@ func NewExecutor(
 	errorReporter error_reporting.ErrorReporter,
 	analytics ux.Analytics,
 	notifier noti.Notifier,
-) Executor {
+) *SnykCli {
 	concurrencyLimit := 2
 
 	return &SnykCli{
@@ -121,4 +122,15 @@ func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
 	}
 
 	return expandedParams
+}
+
+func (c SnykCli) CliVersion() string {
+	cmd := []string{"version"}
+	output, err := c.Execute(context.Background(), cmd, "")
+	if err != nil {
+		log.Error().Err(err).Msg("failed to run version command")
+		return ""
+	}
+
+	return strings.Trim(string(output), "\n")
 }

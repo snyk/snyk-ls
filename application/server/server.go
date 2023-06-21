@@ -43,10 +43,12 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func Start(c *config.Config) {
@@ -193,7 +195,7 @@ func initNetworkAccessHeaders(n networking.NetworkAccess) {
 func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (any, error) {
 		method := "initializeHandler"
-		log.Info().Str("method", method).Interface("params", params).Msg("RECEIVING")
+		log.Info().Str("method", method).Any("params", params).Msg("RECEIVING")
 		InitializeSettings(params.InitializationOptions)
 		config.CurrentConfig().SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
@@ -276,8 +278,19 @@ func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 }
 func initializedHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializedParams) (any, error) {
+		// Logging these messages only after the client has been initialized.
+		// Logging to the client is only allowed after the client has been initialized according to LSP protocol.
+		// No reason to log the method name for these messages, because some of these values are empty and the messages
+		// looks weird when including the method name.
+		c := config.CurrentConfig()
+		log.Info().Msg("snyk-ls: " + config.Version + " (" + util.Result(os.Executable()) + ")")
+		log.Info().Msg("platform: " + runtime.GOOS + "/" + runtime.GOARCH)
+		log.Info().Msg("https_proxy: " + os.Getenv("HTTPS_PROXY"))
+		log.Info().Msg("http_proxy: " + os.Getenv("HTTP_PROXY"))
+		log.Info().Msg("no_proxy: " + os.Getenv("NO_PROXY"))
+		log.Info().Msg("IDE: " + c.IdeName() + "/" + c.IdeVersion())
+		log.Info().Msg("snyk-plugin: " + c.IntegrationName() + "/" + c.IntegrationVersion())
 		logger := log.With().Str("method", "initializedHandler").Logger()
-
 		// CLI & Authentication initialization
 		err := di.Scanner().Init()
 		if err != nil {
@@ -342,6 +355,10 @@ func addWorkspaceFolders(params lsp.InitializeParams, w *workspace.Workspace) {
 	}
 }
 
+// setClientInformation sets the integration name and version from the client information.
+// The integration version refers to the plugin version, not the IDE version.
+// The function attempts to pull the values from the initialization options, then the client info, and finally
+// from the environment variables.
 func setClientInformation(initParams lsp.InitializeParams) {
 	var integrationName, integrationVersion string
 	if initParams.InitializationOptions.IntegrationName != "" {
@@ -349,16 +366,18 @@ func setClientInformation(initParams lsp.InitializeParams) {
 		integrationVersion = initParams.InitializationOptions.IntegrationVersion
 	} else if initParams.ClientInfo.Name != "" {
 		integrationName = strings.ToUpper(strings.Replace(initParams.ClientInfo.Name, " ", "_", -1))
-		integrationVersion = initParams.ClientInfo.Version
-	} else if integrationNameEnvVar := os.Getenv("SNYK_INTEGRATION_NAME"); integrationNameEnvVar != "" {
+	} else if integrationNameEnvVar := os.Getenv(cli.IntegrationNameEnvVarKey); integrationNameEnvVar != "" {
 		integrationName = integrationNameEnvVar
-		integrationVersion = os.Getenv("SNYK_INTEGRATION_VERSION")
+		integrationVersion = os.Getenv(cli.IntegrationVersionEnvVarKey)
 	} else {
 		return
 	}
 
-	config.CurrentConfig().SetIntegrationName(integrationName)
-	config.CurrentConfig().SetIntegrationVersion(integrationVersion)
+	c := config.CurrentConfig()
+	c.SetIntegrationName(integrationName)
+	c.SetIntegrationVersion(integrationVersion)
+	c.SetIdeName(initParams.ClientInfo.Name)
+	c.SetIdeVersion(initParams.ClientInfo.Version)
 }
 
 func monitorClientProcess(pid int) time.Duration {
@@ -479,8 +498,16 @@ func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 	})
 }
 
-func codeActionResolveHandler(c *config.Config, server lsp.Server, authenticationService snyk.AuthenticationService, learnService learn.Service) handler.Func {
-	return handler.New(codeaction.ResolveCodeActionHandler(c, di.CodeActionService(), server, authenticationService, learnService))
+func codeActionResolveHandler(c *config.Config,
+	server lsp.Server,
+	authenticationService snyk.AuthenticationService,
+	learnService learn.Service,
+) handler.Func {
+	return handler.New(codeaction.ResolveCodeActionHandler(c,
+		di.CodeActionService(),
+		server,
+		authenticationService,
+		learnService))
 }
 
 func textDocumentCodeActionHandler(c *config.Config) handler.Func {

@@ -38,7 +38,11 @@ func NewTestExecutor() *TestExecutor {
 	return &TestExecutor{ExecuteResponse: []byte("{}")}
 }
 
-func NewTestExecutorWithResponse(executeResponsePath string) *TestExecutor {
+func NewTestExecutorWithResponse(executeResponse string) *TestExecutor {
+	return &TestExecutor{ExecuteResponse: []byte(executeResponse)}
+}
+
+func NewTestExecutorWithResponseFromFile(executeResponsePath string) *TestExecutor {
 	fileContent, err := os.ReadFile(executeResponsePath)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to read test response file.")
