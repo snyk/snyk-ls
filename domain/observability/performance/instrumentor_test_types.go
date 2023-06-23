@@ -21,34 +21,34 @@ import (
 	"sync"
 )
 
-type SpanRecorder struct {
+type spanRecorderImpl struct {
 	mutex sync.Mutex
 	spans []Span
 }
 
-func newSpanRecorder() *SpanRecorder {
-	return &SpanRecorder{mutex: sync.Mutex{}, spans: []Span{}}
+func newSpanRecorder() SpanRecorder {
+	return &spanRecorderImpl{mutex: sync.Mutex{}, spans: []Span{}}
 }
 
-func (s *SpanRecorder) Record(span Span) {
+func (s *spanRecorderImpl) Record(span Span) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.spans = append(s.spans, span)
 }
 
-func (s *SpanRecorder) Spans() []Span {
+func (s *spanRecorderImpl) Spans() []Span {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	return s.spans
 }
 
-func (s *SpanRecorder) ClearSpans() {
+func (s *spanRecorderImpl) ClearSpans() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.spans = []Span{}
 }
 
-func (s *SpanRecorder) Finish(span Span) {
+func (s *spanRecorderImpl) Finish(span Span) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	for _, currSpan := range s.spans {
@@ -58,15 +58,34 @@ func (s *SpanRecorder) Finish(span Span) {
 	}
 }
 
-type TestInstrumentor struct {
-	SpanRecorder *SpanRecorder
+type localInstrumentor struct {
+	SpanRecorder SpanRecorder
 }
 
-func NewTestInstrumentor() *TestInstrumentor {
-	return &TestInstrumentor{SpanRecorder: newSpanRecorder()}
+type SpanRecorder interface {
+	Record(span Span)
+	Spans() []Span
+	ClearSpans()
+	Finish(span Span)
 }
 
-func (i *TestInstrumentor) StartSpan(ctx context.Context, operation string) Span {
+func NewLocalInstrumentor() Instrumentor {
+	return &localInstrumentor{SpanRecorder: newSpanRecorder()}
+}
+
+func (i *localInstrumentor) Record(span Span) {
+	i.SpanRecorder.Record(span)
+}
+
+func (i *localInstrumentor) Spans() []Span {
+	return i.SpanRecorder.Spans()
+}
+
+func (i *localInstrumentor) ClearSpans() {
+	i.SpanRecorder.ClearSpans()
+}
+
+func (i *localInstrumentor) StartSpan(ctx context.Context, operation string) Span {
 	span := &NoopSpan{
 		Operation: operation,
 		TxName:    "",
@@ -79,7 +98,7 @@ func (i *TestInstrumentor) StartSpan(ctx context.Context, operation string) Span
 	return span
 }
 
-func (i *TestInstrumentor) NewTransaction(ctx context.Context, txName string, operation string) Span {
+func (i *localInstrumentor) NewTransaction(ctx context.Context, txName string, operation string) Span {
 	s := &NoopSpan{
 		Operation: operation,
 		TxName:    txName,
@@ -91,6 +110,6 @@ func (i *TestInstrumentor) NewTransaction(ctx context.Context, txName string, op
 	return s
 }
 
-func (i *TestInstrumentor) Finish(span Span) {
+func (i *localInstrumentor) Finish(span Span) {
 	i.SpanRecorder.Finish(span)
 }

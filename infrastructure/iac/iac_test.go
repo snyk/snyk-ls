@@ -36,21 +36,25 @@ import (
 
 func Test_Scan_IsInstrumented(t *testing.T) {
 	testutil.UnitTest(t)
-	instrumentor := performance.NewTestInstrumentor()
+	instrumentor := performance.NewLocalInstrumentor()
 	scanner := New(instrumentor, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
 
 	_, _ = scanner.Scan(context.Background(), "fake.yml", "")
 
-	spans := instrumentor.SpanRecorder.Spans()
-	assert.Len(t, spans, 1)
-	assert.Equal(t, "iac.doScan", spans[0].GetOperation())
-	assert.Equal(t, "", spans[0].GetTxName())
+	if spanRecorder, ok := instrumentor.(performance.SpanRecorder); ok {
+		spans := spanRecorder.Spans()
+		assert.Len(t, spans, 1)
+		assert.Equal(t, "iac.doScan", spans[0].GetOperation())
+		assert.Equal(t, "", spans[0].GetTxName())
+	} else {
+		t.Fail()
+	}
 }
 
 func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 	testutil.UnitTest(t)
 	analytics := ux2.NewTestAnalytics()
-	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, cli.NewTestExecutor())
+	scanner := New(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, cli.NewTestExecutor())
 
 	_, _ = scanner.Scan(context.Background(), "fake.yml", "")
 
@@ -65,7 +69,7 @@ func Test_ErroredWorkspaceScan_TracksAnalytics(t *testing.T) {
 	testutil.UnitTest(t)
 	analytics := ux2.NewTestAnalytics()
 	executor := cli.NewTestExecutor()
-	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, executor)
+	scanner := New(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, executor)
 
 	executor.ExecuteResponse = []byte("invalid JSON")
 	_, _ = scanner.Scan(context.Background(), "fake.yml", "")
@@ -79,7 +83,7 @@ func Test_ErroredWorkspaceScan_TracksAnalytics(t *testing.T) {
 
 func Test_toHover_asHTML(t *testing.T) {
 	testutil.UnitTest(t)
-	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
+	scanner := New(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 
 	h := scanner.getExtendedMessage(sampleIssue())
@@ -93,7 +97,7 @@ func Test_toHover_asHTML(t *testing.T) {
 
 func Test_toHover_asMD(t *testing.T) {
 	testutil.UnitTest(t)
-	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
+	scanner := New(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
 	config.CurrentConfig().SetFormat(config.FormatMd)
 
 	h := scanner.getExtendedMessage(sampleIssue())
@@ -109,7 +113,7 @@ func Test_Scan_CancelledContext_DoesNotScan(t *testing.T) {
 	// Arrange
 	testutil.UnitTest(t)
 	cliMock := cli.NewTestExecutor()
-	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cliMock)
+	scanner := New(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cliMock)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -123,7 +127,7 @@ func Test_Scan_CancelledContext_DoesNotScan(t *testing.T) {
 func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 	testutil.UnitTest(t)
 
-	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
+	scanner := New(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
 
 	results := []iacScanResult{
 		{
@@ -150,7 +154,7 @@ func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 
 	sampleIssue := sampleIssue()
-	scanner := New(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
+	scanner := New(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
 	issue, err := scanner.toIssue("test.yml", sampleIssue, "")
 
 	expectedAdditionalData := snyk.IaCIssueData{

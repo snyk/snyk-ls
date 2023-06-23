@@ -57,7 +57,7 @@ func Test_Scan(t *testing.T) {
 		_ = di.Initializer().Init()
 	}
 
-	instrumentor := performance.NewTestInstrumentor()
+	instrumentor := performance.NewLocalInstrumentor()
 	er := error_reporting.NewTestErrorReporter()
 	analytics := ux.NewTestAnalytics()
 	cliExecutor := cli.NewExecutor(di.AuthenticationService(), er, analytics, notification.NewNotifier())
@@ -70,9 +70,12 @@ func Test_Scan(t *testing.T) {
 
 	assert.NotEqual(t, 0, len(issues))
 	assert.True(t, strings.Contains(issues[0].Message, "<p>"))
-	recorder := instrumentor.SpanRecorder
-	spans := (*recorder).Spans()
-	assert.Equal(t, "oss.Scan", spans[0].GetOperation())
+	if spanRecorder, ok := instrumentor.(performance.SpanRecorder); ok {
+		spans := spanRecorder.Spans()
+		assert.Equal(t, "oss.Scan", spans[0].GetOperation())
+	} else {
+		t.Fail()
+	}
 
 	myRange := snyk.Range{Start: snyk.Position{Line: 17}, End: snyk.Position{Line: 17}}
 	values, err := scanner.GetInlineValues(path, myRange)

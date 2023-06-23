@@ -44,7 +44,7 @@ import (
 // todo test issue parsing & conversion
 
 func Test_determineTargetFile(t *testing.T) {
-	scanner := New(performance.NewTestInstrumentor(),
+	scanner := New(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
@@ -65,7 +65,7 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 	p, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
 	scanner := New(
-		performance.NewTestInstrumentor(),
+		performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		analytics,
 		executor,
@@ -83,7 +83,7 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 
 func Test_FindRange(t *testing.T) {
 	scanner := New(
-		performance.NewTestInstrumentor(),
+		performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
@@ -144,7 +144,7 @@ func Test_introducingPackageAndVersionJava(t *testing.T) {
 
 func Test_ContextCanceled_Scan_DoesNotScan(t *testing.T) {
 	cliMock := cli.NewTestExecutor()
-	scanner := New(performance.NewTestInstrumentor(),
+	scanner := New(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cliMock,
@@ -177,7 +177,7 @@ func mavenTestIssue() ossIssue {
 }
 
 func TestUnmarshalOssJsonSingle(t *testing.T) {
-	scanner := New(performance.NewTestInstrumentor(),
+	scanner := New(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
@@ -200,7 +200,7 @@ func TestUnmarshalOssJsonSingle(t *testing.T) {
 }
 
 func TestUnmarshalOssJsonArray(t *testing.T) {
-	scanner := New(performance.NewTestInstrumentor(),
+	scanner := New(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
@@ -223,7 +223,7 @@ func TestUnmarshalOssJsonArray(t *testing.T) {
 }
 
 func TestUnmarshalOssErroneousJson(t *testing.T) {
-	scanner := New(performance.NewTestInstrumentor(),
+	scanner := New(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
@@ -280,7 +280,7 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 	folderPath := workingDir
 	fakeCli := cli.NewTestExecutor()
 	fakeCli.ExecuteDuration = time.Second
-	scanner := New(performance.NewTestInstrumentor(),
+	scanner := New(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		fakeCli,
@@ -325,7 +325,7 @@ func sampleIssue() ossIssue {
 
 func Test_prepareScanCommand_ExpandsAdditionalParameters(t *testing.T) {
 	testutil.UnitTest(t)
-	scanner := New(performance.NewTestInstrumentor(),
+	scanner := New(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
@@ -348,7 +348,7 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	fakeCli := cli.NewTestExecutorWithResponseFromFile(path.Join(workingDir, "testdata/oss-result.json"))
 	fakeCli.ExecuteDuration = time.Millisecond
-	scanner := New(performance.NewTestInstrumentor(),
+	scanner := New(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		fakeCli,
@@ -375,7 +375,7 @@ func Test_scheduleNewScan_CapturesAnalytics(t *testing.T) {
 	fakeCli := cli.NewTestExecutor()
 	analytics := ux2.NewTestAnalytics()
 	scanner := New(
-		performance.NewTestInstrumentor(),
+		performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		analytics,
 		fakeCli,
@@ -411,7 +411,7 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 	fakeCli.ExecuteDuration = time.Millisecond
 	analytics := ux2.NewTestAnalytics()
 	scanner := New(
-		performance.NewTestInstrumentor(),
+		performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		analytics,
 		fakeCli,
@@ -441,7 +441,7 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 	fakeCli.ExecuteDuration = time.Millisecond
 	analytics := ux2.NewTestAnalytics()
 	scanner := New(
-		performance.NewTestInstrumentor(),
+		performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		analytics,
 		fakeCli,
@@ -473,7 +473,7 @@ func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testin
 	fakeCli.ExecuteDuration = time.Millisecond
 	analytics := ux2.NewTestAnalytics()
 	scanner := New(
-		performance.NewTestInstrumentor(),
+		performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		analytics,
 		fakeCli,
@@ -505,7 +505,7 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 		"testdata/oss-result-without-targetFile.json"))
 	fakeCli.ExecuteDuration = time.Millisecond
 	scanner := New(
-		performance.NewTestInstrumentor(),
+		performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		fakeCli,
