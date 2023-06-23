@@ -38,7 +38,7 @@ func Test_Bundler_Upload(t *testing.T) {
 
 	t.Run("adds files to bundle", func(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{}
-		var bundleUploader = BundleUploader{SnykCode: snykCodeService, instrumentor: performance.NewTestInstrumentor()}
+		var bundleUploader = BundleUploader{SnykCode: snykCodeService, instrumentor: performance.NewLocalInstrumentor()}
 		documentURI, bundleFile := createTempFileInDir("bundleDoc.java", 10, temporaryDir, t)
 		bundleFileMap := map[string]BundleFile{}
 		bundleFileMap[documentURI] = bundleFile
@@ -53,7 +53,7 @@ func Test_Bundler_Upload(t *testing.T) {
 
 	t.Run("when loads of files breaks down in 4MB bundles", func(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{}
-		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: performance.NewTestInstrumentor()}
+		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: performance.NewLocalInstrumentor()}
 
 		bundleFileMap := map[string]BundleFile{}
 		var missingFiles []string
@@ -92,7 +92,7 @@ func createTempFileInDir(name string, size int, temporaryDir string, t *testing.
 func Test_IsSupportedLanguage(t *testing.T) {
 	const unsupportedFile = "C:\\some\\path\\Test.rs"
 	snykCodeMock := &FakeSnykCodeClient{}
-	bundler := NewBundler(snykCodeMock, performance.NewTestInstrumentor())
+	bundler := NewBundler(snykCodeMock, performance.NewLocalInstrumentor())
 
 	t.Run("should return true for supported languages", func(t *testing.T) {
 		path := "C:\\some\\path\\Test.java"
@@ -128,7 +128,7 @@ func Test_IsSupported_ConfigFile(t *testing.T) {
 	snykCodeMock := &FakeSnykCodeClient{
 		ConfigFiles: configFilesFromFiltersEndpoint,
 	}
-	bundler := NewBundler(snykCodeMock, performance.NewTestInstrumentor())
+	bundler := NewBundler(snykCodeMock, performance.NewLocalInstrumentor())
 	dir, _ := os.Getwd()
 
 	t.Run("should return true for supported config files", func(t *testing.T) {

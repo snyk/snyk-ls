@@ -54,7 +54,7 @@ func TestInit(t *testing.T) {
 	snyk.DefaultOpenBrowserFunc = func(url string) {}
 	notifier = domainNotify.NewNotifier()
 	analytics = ux.NewTestAnalytics()
-	instrumentor = performance.NewTestInstrumentor()
+	instrumentor = performance.NewLocalInstrumentor()
 	errorReporter = er.NewTestErrorReporter()
 	installer = install.NewFakeInstaller()
 	authProvider := snyk.NewFakeCliAuthenticationProvider()

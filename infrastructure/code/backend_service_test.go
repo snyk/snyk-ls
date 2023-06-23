@@ -62,7 +62,7 @@ func clientFunc() *http.Client {
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	testutil.SmokeTest(t)
 
-	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), clientFunc)
+	s := NewHTTPRepository(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), clientFunc)
 	files := map[string]string{}
 	randomAddition := fmt.Sprintf("\n public void random() { System.out.println(\"%d\") }", time.Now().UnixMicro())
 	files[path1] = util.Hash([]byte(content + randomAddition))
@@ -74,7 +74,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	testutil.SmokeTest(t)
-	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), clientFunc)
+	s := NewHTTPRepository(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), clientFunc)
 	var removedFiles []string
 	files := map[string]string{}
 	files[path1] = util.Hash([]byte(content))
@@ -124,7 +124,7 @@ func TestSnykCodeBackendService_doCall_shouldRetry(t *testing.T) {
 			Transport: d,
 		}
 	}
-	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), dummyClientFunc)
+	s := NewHTTPRepository(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), dummyClientFunc)
 	_, err := s.doCall(context.Background(), "GET", "https://httpstat.us/500", nil)
 	assert.Error(t, err)
 	assert.Equal(t, 3, d.calls)
@@ -134,7 +134,7 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 	testutil.SmokeTest(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 
-	s := NewHTTPRepository(performance.NewTestInstrumentor(), error_reporting.NewTestErrorReporter(), clientFunc)
+	s := NewHTTPRepository(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), clientFunc)
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []string
 	files := map[string]string{}
