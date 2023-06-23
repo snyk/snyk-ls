@@ -677,14 +677,22 @@ func (c *Config) addDefaults() {
 
 func (c *Config) SetIntegrationName(integrationName string) {
 	c.integrationName = integrationName
+	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_NAME, integrationName)
 }
 
 func (c *Config) SetIntegrationVersion(integrationVersion string) {
 	c.integrationVersion = integrationVersion
+	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_VERSION, integrationVersion)
 }
 
-func (c *Config) SetIdeName(ideName string)       { c.ideName = ideName }
-func (c *Config) SetIdeVersion(ideVersion string) { c.ideVersion = ideVersion }
+func (c *Config) SetIdeName(ideName string) {
+	c.ideName = ideName
+	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT, ideName)
+}
+func (c *Config) SetIdeVersion(ideVersion string) {
+	c.ideVersion = ideVersion
+	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT_VERSION, ideVersion)
+}
 
 func (c *Config) TrustedFolders() []string {
 	return c.trustedFolders
