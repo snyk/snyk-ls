@@ -1,0 +1,10 @@
+# add false positives here
+
+4634a347642138f0d0ce4913412de1ef452967cb:infrastructure/code/pacts/snykls-snykcodeapi.json:generic-api-key:72
+4c6048fb0de0ca6dd305cd1233299fbff4e91676:infrastructure/code/pacts/snykls-snykcodeapi.json:generic-api-key:18
+4c6048fb0de0ca6dd305cd1233299fbff4e91676:infrastructure/code/pacts/snykls-snykcodeapi.json:generic-api-key:72
+4c6048fb0de0ca6dd305cd1233299fbff4e91676:infrastructure/code/pacts/snykls-snykcodeapi.json:generic-api-key:130
+
+# file no longer exists
+96052e30cc5493da444d729b55f32d6a3b2915a4:internal/observability/infrastructure/segment/keys.go:generic-api-key:4
+96052e30cc5493da444d729b55f32d6a3b2915a4:internal/observability/infrastructure/segment/keys.go:generic-api-key:5
