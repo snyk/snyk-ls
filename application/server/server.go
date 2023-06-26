@@ -180,17 +180,10 @@ func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler 
 	})
 }
 
-func initNetworkAccessHeaders(n networking.NetworkAccess) {
-	n.AddHeaderField("User-Agent", fmt.Sprintf("%s/%s (%s;%s) %s/%s (%s;%s)",
-		"snyk-ls",
-		config.Version,
-		runtime.GOOS,
-		runtime.GOARCH,
-		config.CurrentConfig().IntegrationName(),
-		config.CurrentConfig().IntegrationVersion(),
-		"language-server",
-		config.Version,
-	))
+func initNetworkAccessHeaders() {
+	engine := config.CurrentConfig().Engine()
+	ua := networking.UserAgent(networking.UaWithConfig(engine.GetConfiguration()), networking.UaWithApplication("snyk-ls", config.Version))
+	engine.GetNetworkAccess().AddHeaderField("User-Agent", ua.String())
 }
 
 func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
@@ -200,7 +193,6 @@ func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 		InitializeSettings(params.InitializationOptions)
 		config.CurrentConfig().SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
-		initNetworkAccessHeaders(c.Engine().GetNetworkAccess())
 		di.Analytics().Initialise()
 
 		// async processing listener
@@ -381,6 +373,8 @@ func setClientInformation(initParams lsp.InitializeParams) {
 	c.SetIntegrationVersion(integrationVersion)
 	c.SetIdeName(initParams.ClientInfo.Name)
 	c.SetIdeVersion(initParams.ClientInfo.Version)
+
+	initNetworkAccessHeaders()
 }
 
 func monitorClientProcess(pid int) time.Duration {

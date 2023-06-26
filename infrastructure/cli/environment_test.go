@@ -29,8 +29,9 @@ import (
 func TestAddConfigValuesToEnv(t *testing.T) {
 	t.Run("Adds values to env", func(t *testing.T) {
 		const expectedIntegrationName = "ECLIPSE"
-		const expectedIntegrationVersion = "0.0.1rc1"
-		const expectedIdeVersion = "1.2.3"
+		const expectedIntegrationVersion = "20230606.182718"
+		const expectedIdeVersion = "4.27.0"
+		const expectedIdeName = "Eclipse"
 
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
@@ -39,6 +40,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		c.SetIntegrationName(expectedIntegrationName)
 		c.SetIntegrationVersion(expectedIntegrationVersion)
 		c.SetIdeVersion(expectedIdeVersion)
+		c.SetIdeName(expectedIdeName)
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
@@ -46,7 +48,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		assert.Contains(t, updatedEnv, TokenEnvVar+"="+c.Token())
 		assert.Contains(t, updatedEnv, IntegrationNameEnvVarKey+"="+expectedIntegrationName)
 		assert.Contains(t, updatedEnv, IntegrationVersionEnvVarKey+"="+expectedIntegrationVersion)
-		assert.Contains(t, updatedEnv, IntegrationEnvironmentEnvVarKey+"="+expectedIntegrationName)
+		assert.Contains(t, updatedEnv, IntegrationEnvironmentEnvVarKey+"="+expectedIdeName)
 		assert.Contains(t, updatedEnv, IntegrationEnvironmentVersionEnvVar+"="+expectedIdeVersion)
 		assert.NotContains(t, updatedEnv, "SNYK_CFG_DISABLE_ANALYTICS=1")
 	})

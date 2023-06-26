@@ -156,8 +156,6 @@ type Config struct {
 	clientCapabilities           lsp.ClientCapabilities
 	path                         string
 	defaultDirs                  []string
-	integrationName              string
-	integrationVersion           string
 	automaticAuthentication      bool
 	tokenChangeChannels          []chan string
 	filterSeverity               lsp.SeverityFilter
@@ -176,8 +174,6 @@ type Config struct {
 	logger                       *zerolog.Logger
 	storage                      StorageWithCallbacks
 	m                            sync.Mutex
-	ideVersion                   string
-	ideName                      string
 }
 
 func CurrentConfig() *Config {
@@ -338,9 +334,13 @@ func (c *Config) LogPath() string {
 func (c *Config) SnykApi() string                        { return c.snykApiUrl }
 func (c *Config) SnykCodeApi() string                    { return c.snykCodeApiUrl }
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
-func (c *Config) IntegrationName() string                { return c.integrationName }
-func (c *Config) IntegrationVersion() string             { return c.integrationVersion }
-func (c *Config) FilterSeverity() lsp.SeverityFilter     { return c.filterSeverity }
+func (c *Config) IntegrationName() string {
+	return c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_NAME)
+}
+func (c *Config) IntegrationVersion() string {
+	return c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_VERSION)
+}
+func (c *Config) FilterSeverity() lsp.SeverityFilter { return c.filterSeverity }
 func (c *Config) Token() string {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -676,15 +676,19 @@ func (c *Config) addDefaults() {
 }
 
 func (c *Config) SetIntegrationName(integrationName string) {
-	c.integrationName = integrationName
+	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_NAME, integrationName)
 }
 
 func (c *Config) SetIntegrationVersion(integrationVersion string) {
-	c.integrationVersion = integrationVersion
+	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_VERSION, integrationVersion)
 }
 
-func (c *Config) SetIdeName(ideName string)       { c.ideName = ideName }
-func (c *Config) SetIdeVersion(ideVersion string) { c.ideVersion = ideVersion }
+func (c *Config) SetIdeName(ideName string) {
+	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT, ideName)
+}
+func (c *Config) SetIdeVersion(ideVersion string) {
+	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT_VERSION, ideVersion)
+}
 
 func (c *Config) TrustedFolders() []string {
 	return c.trustedFolders
@@ -820,5 +824,9 @@ func (c *Config) Storage() StorageWithCallbacks {
 	return c.storage
 }
 
-func (c *Config) IdeVersion() string { return c.ideVersion }
-func (c *Config) IdeName() string    { return c.ideName }
+func (c *Config) IdeVersion() string {
+	return c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION)
+}
+func (c *Config) IdeName() string {
+	return c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT)
+}
