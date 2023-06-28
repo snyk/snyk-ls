@@ -66,19 +66,20 @@ type Issue struct {
 
 type CodeIssueData struct {
 	// Unique key identifying an issue in the whole result set
-	Key                string             `json:"key"`
-	Title              string             `json:"title"`
-	Message            string             `json:"message"`
-	Rule               string             `json:"rule"`
-	RuleId             string             `json:"ruleId"`
-	RepoDatasetSize    int                `json:"repoDatasetSize"`
-	ExampleCommitFixes []ExampleCommitFix `json:"exampleCommitFixes"`
-	CWE                []string           `json:"cwe"`
-	Text               string             `json:"text"`
-	Markers            []Marker           `json:"markers,omitempty"`
-	Cols               CodePoint          `json:"cols"`
-	Rows               CodePoint          `json:"rows"`
-	IsSecurityType     bool               `json:"isSecurityType"`
+	Key                 string             `json:"key"`
+	Title               string             `json:"title"`
+	Message             string             `json:"message"`
+	Rule                string             `json:"rule"`
+	RuleId              string             `json:"ruleId"`
+	RepoDatasetSize     int                `json:"repoDatasetSize"`
+	ExampleCommitFixes  []ExampleCommitFix `json:"exampleCommitFixes"`
+	CWE                 []string           `json:"cwe"`
+	Text                string             `json:"text"`
+	Markers             []Marker           `json:"markers,omitempty"`
+	Cols                CodePoint          `json:"cols"`
+	Rows                CodePoint          `json:"rows"`
+	IsSecurityType      bool               `json:"isSecurityType"`
+	AutofixCodeActionId string             `json:"codeActionId"`
 }
 
 type ExampleCommitFix struct {

@@ -1033,18 +1033,19 @@ type ScanIssue struct { // TODO - convert this to a generic type
 }
 
 type CodeIssueData struct {
-	Message            string             `json:"message"`
-	LeadURL            string             `json:"leadURL,omitempty"`
-	Rule               string             `json:"rule"`
-	RuleId             string             `json:"ruleId"`
-	RepoDatasetSize    int                `json:"repoDatasetSize"`
-	ExampleCommitFixes []ExampleCommitFix `json:"exampleCommitFixes"`
-	CWE                []string           `json:"cwe"`
-	Text               string             `json:"text"`
-	Markers            []Marker           `json:"markers,omitempty"`
-	Cols               Point              `json:"cols"`
-	Rows               Point              `json:"rows"`
-	IsSecurityType     bool               `json:"isSecurityType"`
+	Message             string             `json:"message"`
+	LeadURL             string             `json:"leadURL,omitempty"`
+	Rule                string             `json:"rule"`
+	RuleId              string             `json:"ruleId"`
+	RepoDatasetSize     int                `json:"repoDatasetSize"`
+	ExampleCommitFixes  []ExampleCommitFix `json:"exampleCommitFixes"`
+	CWE                 []string           `json:"cwe"`
+	Text                string             `json:"text"`
+	Markers             []Marker           `json:"markers,omitempty"`
+	Cols                Point              `json:"cols"`
+	Rows                Point              `json:"rows"`
+	IsSecurityType      bool               `json:"isSecurityType"`
+	AutofixCodeActionId string             `json:"autofixCodeActionId"`
 }
 
 type Point = [2]int

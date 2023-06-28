@@ -134,9 +134,10 @@ func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, folderPath s
 				})
 			}
 			exampleCommitFixes = append(exampleCommitFixes, lsp.ExampleCommitFix{
-				Id:        additionalData.ExampleCommitFixes[i].Id,
-				CommitURL: additionalData.ExampleCommitFixes[i].CommitURL,
-				Lines:     lines,
+				Id:          additionalData.ExampleCommitFixes[i].Id,
+				Explanation: additionalData.ExampleCommitFixes[i].Explanation,
+				CommitURL:   additionalData.ExampleCommitFixes[i].CommitURL,
+				Lines:       lines,
 			})
 		}
 
@@ -176,8 +177,9 @@ func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, folderPath s
 				Cols:               additionalData.Cols,
 				Rows:               additionalData.Rows,
 
-				Markers: markers,
-				LeadURL: "",
+				Markers:             markers,
+				LeadURL:             "",
+				AutofixCodeActionId: additionalData.AutofixCodeActionId,
 			},
 		})
 	}
