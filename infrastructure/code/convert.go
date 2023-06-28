@@ -239,8 +239,10 @@ func (r *rule) getExampleCommits() (exampleCommits []exampleCommit) {
 			index:       i,
 			description: r.getFixDescriptionsForRule(i),
 			fix: exampleCommitFix{
-				CommitURL: fix.CommitURL,
-				Lines:     fix.Lines,
+				Id:          fix.Id,
+				Explanation: fix.Explanation,
+				CommitURL:   fix.CommitURL,
+				Lines:       fix.Lines,
 			},
 		})
 	}
@@ -315,8 +317,10 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 				}
 
 				exampleFixes = append(exampleFixes, snyk.ExampleCommitFix{
-					CommitURL: commitURL,
-					Lines:     commitFixLines,
+					Id:          commit.fix.Id,
+					Explanation: commit.fix.Explanation,
+					CommitURL:   commitURL,
+					Lines:       commitFixLines,
 				})
 			}
 

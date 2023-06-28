@@ -134,6 +134,7 @@ func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, folderPath s
 				})
 			}
 			exampleCommitFixes = append(exampleCommitFixes, lsp.ExampleCommitFix{
+				Id:        additionalData.ExampleCommitFixes[i].Id,
 				CommitURL: additionalData.ExampleCommitFixes[i].CommitURL,
 				Lines:     lines,
 			})

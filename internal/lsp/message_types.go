@@ -1052,6 +1052,9 @@ type Point = [2]int
 type ExampleCommitFix struct {
 	CommitURL string             `json:"commitURL"`
 	Lines     []CommitChangeLine `json:"lines"`
+	// add id, explanation
+	Id          string `json:"id"`
+	Explanation string `json:"explanation"`
 }
 
 type CommitChangeLine struct {

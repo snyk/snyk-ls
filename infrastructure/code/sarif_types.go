@@ -102,8 +102,10 @@ type result struct {
 }
 
 type exampleCommitFix struct {
-	CommitURL string `json:"commitURL"`
-	Lines     []struct {
+	Id          string `json:"id"`
+	Explanation string `json:"explanation"`
+	CommitURL   string `json:"commitURL"`
+	Lines       []struct {
 		Line       string `json:"line"`
 		LineNumber int    `json:"lineNumber"`
 		LineChange string `json:"lineChange"`

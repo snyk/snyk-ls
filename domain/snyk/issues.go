@@ -82,8 +82,10 @@ type CodeIssueData struct {
 }
 
 type ExampleCommitFix struct {
-	CommitURL string             `json:"commitURL"`
-	Lines     []CommitChangeLine `json:"lines"`
+	Id          string             `json:"id"`
+	Explanation string             `json:"explanation"`
+	CommitURL   string             `json:"commitURL"`
+	Lines       []CommitChangeLine `json:"lines"`
 }
 
 type CommitChangeLine struct {
