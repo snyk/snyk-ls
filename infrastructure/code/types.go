@@ -74,7 +74,8 @@ type AutofixRequestKey struct {
 	RuleId   string `json:"ruleId"`
 	// 1-based to comply with Sarif and Code API, see
 	// https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Ref493492556
-	LineNum int `json:"lineNum"`
+	LineNum   int    `json:"lineNum"`
+	ExampleId string `json:"exampleId"`
 }
 
 type AutofixRequest struct {

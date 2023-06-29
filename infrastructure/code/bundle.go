@@ -29,6 +29,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
@@ -280,6 +281,7 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 			shardKey:   b.getShardKey(b.rootPath, config.CurrentConfig().Token()),
 			filePath:   encodedRelativePath,
 			issue:      issue,
+			exampleId:  command.SelectedExampleFixId,
 		}
 
 		// Polling function just calls the endpoint and registers result, signalling `done` to the

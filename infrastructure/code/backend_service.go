@@ -514,11 +514,12 @@ func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte
 
 	request := AutofixRequest{
 		Key: AutofixRequestKey{
-			Type:     "file",
-			Hash:     options.bundleHash,
-			FilePath: options.filePath,
-			RuleId:   ruleID,
-			LineNum:  options.issue.Range.Start.Line + 1,
+			Type:      "file",
+			Hash:      options.bundleHash,
+			FilePath:  options.filePath,
+			RuleId:    ruleID,
+			LineNum:   options.issue.Range.Start.Line + 1,
+			ExampleId: options.exampleId,
 		},
 		AnalysisContext: newCodeRequestContext(),
 	}

@@ -34,6 +34,7 @@ type AutofixOptions struct {
 	shardKey   string
 	filePath   string
 	issue      snyk.Issue
+	exampleId  string
 }
 
 type SnykCodeClient interface {

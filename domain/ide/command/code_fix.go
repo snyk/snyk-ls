@@ -32,6 +32,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
+var SelectedExampleFixId string
+
 type fixCodeIssue struct {
 	command       snyk.CommandData
 	issueProvider ide.IssueProvider
@@ -55,6 +57,13 @@ func (cmd *fixCodeIssue) Execute(ctx context.Context) (any, error) {
 	}
 	issuePath := args[1].(string)
 	issueRange := cmd.toRange(args[2])
+	exampleId, ok := args[3].(string)
+	if ok {
+		SelectedExampleFixId = exampleId
+		log.Info().Msgf("Context fix %s requested.", exampleId)
+	} else {
+		log.Info().Msg("Context fix not requested.")
+	}
 
 	issues := cmd.issueProvider.IssuesFor(issuePath, issueRange)
 	for i := range issues {
