@@ -61,7 +61,8 @@ type Issue struct {
 	// A slice of the CVEs of the issue
 	CVEs []string
 	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
-	AdditionalData any
+	AdditionalData      any
+	AutofixCodeActionId string
 }
 
 type CodeIssueData struct {

@@ -179,7 +179,7 @@ func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, folderPath s
 
 				Markers:             markers,
 				LeadURL:             "",
-				AutofixCodeActionId: additionalData.AutofixCodeActionId,
+				AutofixCodeActionId: issue.AutofixCodeActionId,
 			},
 		})
 	}

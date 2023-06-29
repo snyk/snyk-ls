@@ -225,12 +225,7 @@ func (b *Bundle) addIssueActions(ctx context.Context, issues []snyk.Issue) {
 					})
 
 					codeActionIdStr := codeActionId.String()
-					issueData, ok := issues[i].AdditionalData.(snyk.CodeIssueData)
-					if !ok {
-						log.Error().Str("method", method).Msg("Failed to cast AdditionalData.")
-					} else {
-						issueData.AutofixCodeActionId = codeActionIdStr
-					}
+					issues[i].AutofixCodeActionId = codeActionIdStr
 				} else {
 					log.Info().Str("method", method).Msg("Autofix is not supported for " + issues[i].AffectedFilePath + " file extension.")
 				}
