@@ -44,6 +44,8 @@ import (
 
 const govDomain = "snykgov.io"
 
+var cachedOriginalPath string = os.Getenv("PATH")
+
 func workspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeConfigurationParams) (bool, error) {
 		log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("RECEIVED")
@@ -343,7 +345,7 @@ func updateSnykCodeQuality(settings lsp.Settings) {
 
 // TODO store in config, move parsing to CLI
 func updatePath(settings lsp.Settings) {
-	err := os.Setenv("PATH", os.Getenv("PATH")+string(os.PathSeparator)+settings.Path)
+	err := os.Setenv("PATH", cachedOriginalPath+string(os.PathListSeparator)+settings.Path)
 	if err != nil {
 		log.Err(err).Msgf("couldn't add path %s", settings.Path)
 	}

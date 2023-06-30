@@ -282,7 +282,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, "https://snyk.io/api", c.SnykApi())
 		assert.Equal(t, "b", os.Getenv("a"))
 		assert.Equal(t, "d", os.Getenv("c"))
-		assert.True(t, strings.Contains(os.Getenv("PATH"), "addPath"))
+		assert.True(t, strings.HasSuffix(os.Getenv("PATH"), string(os.PathListSeparator)+"addPath"))
 		assert.True(t, c.IsErrorReportingEnabled())
 		assert.Equal(t, expectedOrgId, c.Organization())
 		assert.False(t, c.IsTelemetryEnabled())
