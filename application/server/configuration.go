@@ -343,7 +343,7 @@ func updateSnykCodeQuality(settings lsp.Settings) {
 
 // TODO store in config, move parsing to CLI
 func updatePath(settings lsp.Settings) {
-	err := os.Setenv("PATH", os.Getenv("PATH")+string(os.PathSeparator)+settings.Path)
+	err := os.Setenv("PATH", os.Getenv("PATH")+string(os.PathListSeparator)+settings.Path)
 	if err != nil {
 		log.Err(err).Msgf("couldn't add path %s", settings.Path)
 	}
