@@ -118,8 +118,10 @@ jobs:
 
       - name: Create Release Tag
         run: |
-          git tag "v$(git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)"
+          VERSION=$(git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)
+          git tag "v$VERSION"
           git push --tags
+          echo $VERSION >> $GITHUB_OUTPUT
 
       - name: Create License Report
         id: create_license_report
@@ -131,7 +133,12 @@ jobs:
           echo 'EOF' >> $GITHUB_OUTPUT
           echo $LICENSES
 
-      - name: Release binaries with GoReleaser
+      - name: Output compiled licenses
+        run: |
+          chmod +x build/snyk-ls_linux_amd64_v1/snyk-ls
+          build/snyk-ls_linux_amd64_v1/snyk-ls -licenses
+
+      - name: Build binaries and github release
         uses: goreleaser/goreleaser-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -139,10 +146,12 @@ jobs:
           AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
           LICENSES: ${{ steps.create_license_report.outputs.LICENSES }}
         with:
-          version: 1.12.3
-          args: release --rm-dist
+          args: release --clean
 
-      - name: Output compiled licenses
+      - name: Upload binaries to static.snyk.io
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
         run: |
-          chmod +x build/snyk-ls_linux_amd64_v1/snyk-ls
-          build/snyk-ls_linux_amd64_v1/snyk-ls -licenses
+          VERSION=$(cat build/metadata.json | jq .version) .github/upload_to_s3.sh
