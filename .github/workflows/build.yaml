@@ -286,6 +286,6 @@ jobs:
           chmod +x build/snyk-ls_linux_amd64_v1/snyk-ls
           build/snyk-ls_linux_amd64_v1/snyk-ls -licenses
 
-      - name: dry-run upload script
+      - name: Dry-run upload script
         run: |
-          VERSION=$(cat build/metadata.json | jq .version) .github/upload_to_s3.sh --dryrun
+          VERSION=${VERSION:-$(cat build/metadata.json | jq -r .version)} .github/upload-to-s3.sh --dry-run

@@ -153,5 +153,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
+          VERSION: ${{ steps.create_release_tag.outputs.VERSION }}
         run: |
-          VERSION=$(cat build/metadata.json | jq .version) .github/upload_to_s3.sh
+          VERSION=${VERSION:-$(cat build/metadata.json | jq -r .version)} .github/upload-to-s3.sh
