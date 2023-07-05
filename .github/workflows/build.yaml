@@ -288,4 +288,4 @@ jobs:
 
       - name: Dry-run upload script
         run: |
-          VERSION=${VERSION:-$(cat build/metadata.json | jq -r .version)} .github/upload-to-s3.sh --dry-run
+          VERSION=${VERSION:-$(cat build/metadata.json | jq -r .version)} .github/upload-to-s3.sh --dryrun

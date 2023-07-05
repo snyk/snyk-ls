@@ -15,13 +15,20 @@
 # limitations under the License.
 #
 
-set -euo pipefail
+set -exuo pipefail
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
 if [ -z "$VERSION" ]; then
   echo "VERSION is not set"
   exit 1
+fi
+
+# default to dry run
+AWS_S3_BUCKET_NAME="${AWS_S3_BUCKET_NAME:-snyk-test}"
+DRY_RUN=
+if [ $# -gt 0 ]; then
+  DRY_RUN=--dryrun
 fi
 
 function copyOrDownloadToTemp() {
@@ -43,13 +50,6 @@ function uploadFile() {
   # shellcheck disable=SC2086
   aws s3 cp $DRY_RUN "$FILENAME_SRC" "s3://$AWS_S3_BUCKET_NAME/snyk-ls/$PROTOCOL_VERSION/$FILENAME_DST"
 }
-
-# default to dry run
-AWS_S3_BUCKET_NAME="${AWS_S3_BUCKET_NAME:-snyk-test}"
-DRY_RUN=
-if [ $# -gt 0 ]; then
-  DRY_RUN=--dryrun
-fi
 
 pushd "$SCRIPT_DIR/.."
   PROTOCOL_VERSION=$(grep "LS_PROTOCOL_VERSION" .goreleaser.yaml | tail -1 | cut -f2 -d "=" | xargs)
