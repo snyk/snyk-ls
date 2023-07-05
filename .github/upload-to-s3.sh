@@ -24,8 +24,9 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
-# default to dry run
+AWS_REGION="${AWS_REGION:-us-east-1}"
 AWS_S3_BUCKET_NAME="${AWS_S3_BUCKET_NAME:-snyk-test}"
+
 DRY_RUN=
 if [ $# -gt 0 ]; then
   DRY_RUN=--dryrun
