@@ -6,8 +6,7 @@
 
 ## Supported features
 
-The language server follows
-the [Language Server Protocol](https://microsoft.github.io/language-server-protocol/specifications/specification-current/)
+The language server follows the [Language Server Protocol](https://microsoft.github.io/language-server-protocol/specifications/specification-current/)
 and integrates with Snyk Open Source, Snyk Infrastructure as Code and Snyk Code. For the former two, it uses the Snyk
 CLI as a data provider, for the latter it is connecting directly to the Snyk Code API.
 
