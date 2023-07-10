@@ -121,7 +121,6 @@ jobs:
           VERSION=$(git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)
           git tag "v$VERSION"
           git push --tags
-          echo $VERSION >> $GITHUB_OUTPUT
 
       - name: Create License Report
         id: create_license_report
@@ -153,6 +152,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
-          VERSION: ${{ steps.create_release_tag.outputs.VERSION }}
         run: |
           .github/upload-to-s3.sh
