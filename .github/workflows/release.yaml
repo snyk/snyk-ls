@@ -155,4 +155,4 @@ jobs:
           AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
           VERSION: ${{ steps.create_release_tag.outputs.VERSION }}
         run: |
-          VERSION=${VERSION:-$(cat build/metadata.json | jq -r .version)} .github/upload-to-s3.sh
+          .github/upload-to-s3.sh

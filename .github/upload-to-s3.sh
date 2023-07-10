@@ -18,14 +18,18 @@
 set -euo pipefail
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+# shellcheck disable=SC2002
+VERSION=${VERSION:-$(cat "$SCRIPT_DIR/../build/metadata.json" | jq -r .version)}
+PROTOCOL_VERSION=$(grep "LS_PROTOCOL_VERSION" "$SCRIPT_DIR/../.goreleaser.yaml" | tail -1 | cut -f2 -d "=" | xargs)
+BASE_URL="https://static.snyk.io/snyk-ls/$PROTOCOL_VERSION"
 
+
+AWS_REGION="${AWS_REGION:-us-east-1}"
+AWS_S3_BUCKET_NAME="${AWS_S3_BUCKET_NAME:-snyk-test}"
 if [ -z "$VERSION" ]; then
   echo "VERSION is not set"
   exit 1
 fi
-
-AWS_REGION="${AWS_REGION:-us-east-1}"
-AWS_S3_BUCKET_NAME="${AWS_S3_BUCKET_NAME:-snyk-test}"
 
 DRY_RUN=
 if [ $# -gt 0 ]; then
@@ -53,9 +57,6 @@ function uploadFile() {
 }
 
 pushd "$SCRIPT_DIR/.."
-  PROTOCOL_VERSION=$(grep "LS_PROTOCOL_VERSION" .goreleaser.yaml | tail -1 | cut -f2 -d "=" | xargs)
-  BASE_URL="https://static.snyk.io/snyk-ls/$PROTOCOL_VERSION"
-
   FILENAME_SRC="build/snyk-ls_windows_amd64_v1/snyk-ls.exe"
   FILENAME_DST="snyk-ls_${VERSION}_windows_amd64.exe"
   # shellcheck disable=SC2086
