@@ -140,12 +140,17 @@ jobs:
           chmod +x build/snyk-ls_linux_amd64_v1/snyk-ls
           build/snyk-ls_linux_amd64_v1/snyk-ls -licenses
 
-      - name: Login to AWS
-        run: |
-          .github/setup_aws_credentials.py \
-            --role-arn "arn:aws:iam::198361731867:role/Snyk-Assets-WriteOnly" \
-            --region "${{ secrets.AWS_REGION }}" \
+#      - name: Login to AWS
+#        run: |
+#          .github/setup_aws_credentials.py \
+#            --role-arn "arn:aws:iam::198361731867:role/Snyk-Assets-WriteOnly" \
+#            --region "${{ secrets.AWS_REGION }}" \
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: "arn:aws:iam::198361731867:role/Snyk-Assets-WriteOnly"
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Upload binaries to static.snyk.io
         env:
