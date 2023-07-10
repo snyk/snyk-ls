@@ -156,7 +156,6 @@ jobs:
       - name: Upload binaries to static.snyk.io
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
           AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
         run: |
           .github/upload-to-s3.sh
