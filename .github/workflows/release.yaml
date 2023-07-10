@@ -146,7 +146,7 @@ jobs:
           AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
           LICENSES: ${{ steps.create_license_report.outputs.LICENSES }}
         with:
-          args: release --clean
+          args: release --clean --skip-publish # TODO remove skip-publish
 
       - name: Upload binaries to static.snyk.io
         env:

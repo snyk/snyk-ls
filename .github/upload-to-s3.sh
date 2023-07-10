@@ -113,6 +113,7 @@ pushd "$SCRIPT_DIR/.."
 
   # publish metadata
   # shellcheck disable=SC2086
+  # TODO reactivate
 #  uploadFile build/metadata.json metadata.json $DRY_RUN
 
 popd
