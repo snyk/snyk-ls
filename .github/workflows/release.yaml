@@ -110,12 +110,6 @@ jobs:
       - name: Set up Git actions user
         uses: fregante/setup-git-user@v1
 
-      - name: Login to AWS
-        run: |
-          .github/setup_aws_credentials.py \
-            --role-arn "arn:aws:iam::198361731867:role/Snyk-Assets-WriteOnly" \
-            --region "${{ secrets.AWS_REGION }}" \
-
       - name: Create Release Tag
         run: |
           VERSION=$(git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)
@@ -141,11 +135,17 @@ jobs:
           LICENSES: ${{ steps.create_license_report.outputs.LICENSES }}
         with:
           args: release --clean --skip-publish # TODO remove skip-publish
-
       - name: Output compiled licenses
         run: |
           chmod +x build/snyk-ls_linux_amd64_v1/snyk-ls
           build/snyk-ls_linux_amd64_v1/snyk-ls -licenses
+
+      - name: Login to AWS
+        run: |
+          .github/setup_aws_credentials.py \
+            --role-arn "arn:aws:iam::198361731867:role/Snyk-Assets-WriteOnly" \
+            --region "${{ secrets.AWS_REGION }}" \
+
 
       - name: Upload binaries to static.snyk.io
         env:
