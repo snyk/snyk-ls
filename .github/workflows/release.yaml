@@ -151,6 +151,7 @@ jobs:
         with:
           role-to-assume: "arn:aws:iam::198361731867:role/Snyk-Assets-WriteOnly"
           aws-region: ${{ secrets.AWS_REGION }}
+          audience: "https://github.com/snyk"
 
       - name: Upload binaries to static.snyk.io
         env:
