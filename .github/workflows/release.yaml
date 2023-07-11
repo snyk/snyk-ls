@@ -134,7 +134,7 @@ jobs:
           AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
           LICENSES: ${{ steps.create_license_report.outputs.LICENSES }}
         with:
-          args: release --clean --skip-publish # TODO remove skip-publish
+          args: release --clean
       - name: Output compiled licenses
         run: |
           chmod +x build/snyk-ls_linux_amd64_v1/snyk-ls
