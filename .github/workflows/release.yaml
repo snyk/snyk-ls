@@ -145,6 +145,7 @@ jobs:
           .github/setup_aws_credentials.py \
             --role-arn "arn:aws:iam::198361731867:role/Snyk-Assets-WriteOnly" \
             --region "${{ secrets.AWS_REGION }}"
+          ls -al
 
 #      - name: Configure AWS credentials
 #        uses: aws-actions/configure-aws-credentials@v2
@@ -158,4 +159,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
         run: |
+          ls -al
           .github/upload-to-s3.sh
