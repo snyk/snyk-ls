@@ -56,51 +56,50 @@ function uploadFile() {
   aws s3 cp $DRY_RUN "$FILENAME_SRC" "s3://$AWS_S3_BUCKET_NAME/snyk-ls/$PROTOCOL_VERSION/$FILENAME_DST"
 }
 
-pushd "$SCRIPT_DIR/.."
-  FILENAME_SRC="build/snyk-ls_windows_amd64_v1/snyk-ls.exe"
+  FILENAME_SRC="$SCRIPT_DIR/../build/snyk-ls_windows_amd64_v1/snyk-ls.exe"
   FILENAME_DST="snyk-ls_${VERSION}_windows_amd64.exe"
   # shellcheck disable=SC2086
   uploadFile $FILENAME_SRC $FILENAME_DST $DRY_RUN
   copyOrDownloadToTemp $FILENAME_SRC "$FILENAME_DST" $DRY_RUN
 
-  FILENAME_SRC="build/snyk-ls_linux_amd64_v1/snyk-ls"
+  FILENAME_SRC="$SCRIPT_DIR/../build/snyk-ls_linux_amd64_v1/snyk-ls"
   FILENAME_DST="snyk-ls_${VERSION}_linux_amd64"
   # shellcheck disable=SC2086
   uploadFile $FILENAME_SRC $FILENAME_DST $DRY_RUN
   copyOrDownloadToTemp $FILENAME_SRC "$FILENAME_DST" $DRY_RUN
 
-  FILENAME_SRC="build/snyk-ls_darwin_arm64/snyk-ls"
+  FILENAME_SRC="$SCRIPT_DIR/../build/snyk-ls_darwin_arm64/snyk-ls"
   FILENAME_DST="snyk-ls_${VERSION}_darwin_arm64"
   # shellcheck disable=SC2086
   uploadFile $FILENAME_SRC $FILENAME_DST $DRY_RUN
   copyOrDownloadToTemp $FILENAME_SRC "$FILENAME_DST" $DRY_RUN
 
-  FILENAME_SRC="build/snyk-ls_darwin_amd64_v1/snyk-ls"
+  FILENAME_SRC="$SCRIPT_DIR/../build/snyk-ls_darwin_amd64_v1/snyk-ls"
   FILENAME_DST="snyk-ls_${VERSION}_darwin_amd64"
   # shellcheck disable=SC2086
   uploadFile $FILENAME_SRC $FILENAME_DST $DRY_RUN
   copyOrDownloadToTemp $FILENAME_SRC "$FILENAME_DST" $DRY_RUN
 
-  FILENAME_SRC="build/snyk-ls_linux_386/snyk-ls"
+  FILENAME_SRC="$SCRIPT_DIR/../build/snyk-ls_linux_386/snyk-ls"
   FILENAME_DST="snyk-ls_${VERSION}_linux_386"
   # shellcheck disable=SC2086
   uploadFile $FILENAME_SRC $FILENAME_DST $DRY_RUN
   copyOrDownloadToTemp $FILENAME_SRC "$FILENAME_DST" $DRY_RUN
 
-  FILENAME_SRC="build/snyk-ls_linux_arm64/snyk-ls"
+  FILENAME_SRC="$SCRIPT_DIR/../build/snyk-ls_linux_arm64/snyk-ls"
   FILENAME_DST="snyk-ls_${VERSION}_linux_arm64"
   # shellcheck disable=SC2086
   uploadFile $FILENAME_SRC $FILENAME_DST $DRY_RUN
   copyOrDownloadToTemp $FILENAME_SRC "$FILENAME_DST" $DRY_RUN
 
-  FILENAME_SRC="build/snyk-ls_windows_386/snyk-ls.exe"
+  FILENAME_SRC="$SCRIPT_DIR/../build/snyk-ls_windows_386/snyk-ls.exe"
   FILENAME_DST="snyk-ls_${VERSION}_windows_386.exe"
   # shellcheck disable=SC2086
   uploadFile $FILENAME_SRC $FILENAME_DST $DRY_RUN
   copyOrDownloadToTemp $FILENAME_SRC "$FILENAME_DST" $DRY_RUN
 
   # publish shasums
-  FILENAME_SRC="build/snyk-ls_${VERSION}_SHA256SUMS"
+  FILENAME_SRC="$SCRIPT_DIR/../build/snyk-ls_${VERSION}_SHA256SUMS"
   FILENAME_DST="snyk-ls_${VERSION}_SHA256SUMS"
   # shellcheck disable=SC2086
   uploadFile $FILENAME_SRC $FILENAME_DST $DRY_RUN
