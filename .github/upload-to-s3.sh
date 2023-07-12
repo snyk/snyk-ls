@@ -112,4 +112,8 @@ function uploadFile() {
 
   # publish metadata
   # shellcheck disable=SC2086
-  uploadFile build/metadata.json metadata.json $DRY_RUN
+  FILENAME_SRC="$SCRIPT_DIR/../build/metadata.json"
+  FILENAME_DST=metadata.json
+  uploadFile "$FILENAME_SRC" "$FILENAME_DST" $DRY_RUN
+  copyOrDownloadToTemp "$FILENAME_SRC" "$FILENAME_DST" $DRY_RUN
+  diff "$FILENAME_SRC" "/tmp/$FILENAME_DST"
