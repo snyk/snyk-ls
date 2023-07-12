@@ -135,6 +135,7 @@ jobs:
           LICENSES: ${{ steps.create_license_report.outputs.LICENSES }}
         with:
           args: release --clean
+
       - name: Output compiled licenses
         run: |
           chmod +x build/snyk-ls_linux_amd64_v1/snyk-ls
