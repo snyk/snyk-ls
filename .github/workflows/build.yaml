@@ -254,6 +254,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # does an unshallow checkout with tags & branches
 
       - name: Determine Go version
         run: |
@@ -279,9 +281,16 @@ jobs:
         env:
           LICENSES: ${{ steps.create_license_report.outputs.LICENSES }}
         with:
-          args: build --rm-dist --single-target --snapshot
+          args: release --clean --snapshot --skip-publish
 
       - name: Output compiled licenses
         run: |
           chmod +x build/snyk-ls_linux_amd64_v1/snyk-ls
           build/snyk-ls_linux_amd64_v1/snyk-ls -licenses
+
+      - name: Dry-run upload script
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
+        run: |
+          .github/upload-to-s3.sh --dryrun
