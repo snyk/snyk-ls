@@ -45,8 +45,7 @@ func main() {
 	}()
 
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	c := config.New()
-	config.SetCurrentConfig(c)
+	c := config.CurrentConfig()
 	output, err := parseFlags(os.Args, c)
 	if err != nil {
 		fmt.Println(err, output)
