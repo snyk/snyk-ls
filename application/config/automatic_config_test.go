@@ -85,8 +85,10 @@ func Test_FindBinaries(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		t.Setenv("JAVA_HOME", "")
-		binDir := filepath.Join(dir, "bin")
+		javaBaseDir := filepath.Join(dir, "java", "somewhere")
+		binDir := filepath.Join(javaBaseDir, "bin")
 		t.Setenv("PATH", binDir)
 		err = os.MkdirAll(binDir, 0700)
 		if err != nil {
@@ -99,10 +101,16 @@ func Test_FindBinaries(t *testing.T) {
 		}
 		defer func(file *os.File) { _ = file.Close() }(file)
 
+		anotherDir := filepath.Join(dir, "z", "another", javaBinary)
+		err = os.MkdirAll(anotherDir, 0700)
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		c := New()
 		c.AddBinaryLocationsToPath([]string{dir})
 
-		assert.Contains(t, os.Getenv("JAVA_HOME"), dir)
+		assert.Contains(t, os.Getenv("JAVA_HOME"), javaBaseDir)
 	})
 
 	t.Run("search for binary in default places", func(t *testing.T) {
