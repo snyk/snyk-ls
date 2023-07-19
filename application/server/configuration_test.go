@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"os"
 	"strconv"
@@ -56,6 +57,19 @@ var sampleSettings = lsp.Settings{
 	Token:                      "token",
 	SnykCodeApi:                "https://deeproxy.fake.snyk.io",
 	EnableSnykLearnCodeActions: "true",
+}
+
+func keyFoundInEnv(key string) bool {
+	found := false
+	env := os.Environ()
+	fmt.Println(env)
+	for _, v := range env {
+		if strings.HasPrefix(v, key+"=") {
+			found = true
+			break
+		}
+	}
+	return found
 }
 
 func Test_configureOauth_registersStorageCallback(t *testing.T) {
@@ -559,19 +573,25 @@ func Test_InitializeSettings(t *testing.T) {
 		first := "first"
 		second := "second"
 
+		upperCasePathKey := "PATH"
+		caseSensitivePathKey := "Path"
+		t.Setenv(caseSensitivePathKey, "something_meaningful")
+
 		// update path to hold a custom value
 		UpdateSettings(lsp.Settings{Path: first})
-		assert.True(t, strings.HasPrefix(os.Getenv("PATH"), first))
+		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), first+string(os.PathListSeparator)))
 
 		// update path to hold another value
 		UpdateSettings(lsp.Settings{Path: second})
-		assert.True(t, strings.HasPrefix(os.Getenv("PATH"), second))
-		assert.False(t, strings.Contains(os.Getenv("PATH"), first))
+		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), second+string(os.PathListSeparator)))
+		assert.False(t, strings.Contains(os.Getenv(upperCasePathKey), first))
 
 		// reset path with non-empty settings
 		UpdateSettings(lsp.Settings{Path: "", AuthenticationMethod: "token"})
-		assert.False(t, strings.Contains(os.Getenv("PATH"), second))
+		assert.False(t, strings.Contains(os.Getenv(upperCasePathKey), second))
 
+		assert.True(t, keyFoundInEnv(upperCasePathKey))
+		assert.False(t, keyFoundInEnv(caseSensitivePathKey))
 	})
 
 }
