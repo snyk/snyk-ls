@@ -44,7 +44,7 @@ import (
 
 const govDomain = "snykgov.io"
 
-var cachedOriginalPath string = os.Getenv("PATH")
+var cachedOriginalPath string = ""
 
 func workspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeConfigurationParams) (bool, error) {
@@ -137,7 +137,7 @@ func writeSettings(settings lsp.Settings, initialize bool) {
 	updateToken(settings.Token)
 
 	updateEnvironment(settings)
-	updatePath(settings)
+	updatePathFromSettings(settings)
 	updateTelemetry(settings)
 	updateOrganization(settings)
 	manageBinariesAutomatically(settings)
@@ -344,10 +344,18 @@ func updateSnykCodeQuality(settings lsp.Settings) {
 }
 
 // TODO store in config, move parsing to CLI
-func updatePath(settings lsp.Settings) {
-	err := os.Setenv("PATH", cachedOriginalPath+string(os.PathListSeparator)+settings.Path)
-	if err != nil {
-		log.Err(err).Msgf("couldn't add path %s", settings.Path)
+func updatePathFromSettings(settings lsp.Settings) {
+	if len(settings.Path) > 0 {
+		// when changing the path from settings, we cache the original path first, to be able to restore it later
+		if len(cachedOriginalPath) == 0 {
+			cachedOriginalPath = os.Getenv("PATH")
+		}
+
+		err := os.Setenv("PATH", settings.Path+string(os.PathListSeparator)+cachedOriginalPath)
+		log.Info().Str("method", "updatePathFromSettings").Msgf("added configured path to PATH Environment Variable '%s'", os.Getenv("PATH"))
+		if err != nil {
+			log.Err(err).Str("method", "updatePathFromSettings").Msgf("couldn't add path %s", settings.Path)
+		}
 	}
 }
 
