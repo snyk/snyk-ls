@@ -282,7 +282,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, "https://snyk.io/api", c.SnykApi())
 		assert.Equal(t, "b", os.Getenv("a"))
 		assert.Equal(t, "d", os.Getenv("c"))
-		assert.True(t, strings.HasSuffix(os.Getenv("PATH"), string(os.PathListSeparator)+"addPath"))
+		assert.True(t, strings.HasPrefix(os.Getenv("PATH"), "addPath"+string(os.PathListSeparator)))
 		assert.True(t, c.IsErrorReportingEnabled())
 		assert.Equal(t, expectedOrgId, c.Organization())
 		assert.False(t, c.IsTelemetryEnabled())
@@ -551,6 +551,27 @@ func Test_InitializeSettings(t *testing.T) {
 		InitializeSettings(lsp.Settings{AuthenticationMethod: lsp.OAuthAuthentication})
 
 		assert.Equal(t, lsp.OAuthAuthentication, c.AuthenticationMethod())
+	})
+
+	t.Run("custom path configuration", func(t *testing.T) {
+		testutil.UnitTest(t)
+
+		first := "first"
+		second := "second"
+
+		// update path to hold a custom value
+		UpdateSettings(lsp.Settings{Path: first})
+		assert.True(t, strings.HasPrefix(os.Getenv("PATH"), first))
+
+		// update path to hold another value
+		UpdateSettings(lsp.Settings{Path: second})
+		assert.True(t, strings.HasPrefix(os.Getenv("PATH"), second))
+		assert.False(t, strings.Contains(os.Getenv("PATH"), first))
+
+		// reset path with non-empty settings
+		UpdateSettings(lsp.Settings{Path: "", AuthenticationMethod: "token"})
+		assert.False(t, strings.Contains(os.Getenv("PATH"), second))
+
 	})
 
 }
