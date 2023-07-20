@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"os"
 	"strconv"
@@ -56,6 +57,19 @@ var sampleSettings = lsp.Settings{
 	Token:                      "token",
 	SnykCodeApi:                "https://deeproxy.fake.snyk.io",
 	EnableSnykLearnCodeActions: "true",
+}
+
+func keyFoundInEnv(key string) bool {
+	found := false
+	env := os.Environ()
+	fmt.Println(env)
+	for _, v := range env {
+		if strings.HasPrefix(v, key+"=") {
+			found = true
+			break
+		}
+	}
+	return found
 }
 
 func Test_configureOauth_registersStorageCallback(t *testing.T) {
@@ -282,7 +296,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, "https://snyk.io/api", c.SnykApi())
 		assert.Equal(t, "b", os.Getenv("a"))
 		assert.Equal(t, "d", os.Getenv("c"))
-		assert.True(t, strings.HasSuffix(os.Getenv("PATH"), string(os.PathListSeparator)+"addPath"))
+		assert.True(t, strings.HasPrefix(os.Getenv("PATH"), "addPath"+string(os.PathListSeparator)))
 		assert.True(t, c.IsErrorReportingEnabled())
 		assert.Equal(t, expectedOrgId, c.Organization())
 		assert.False(t, c.IsTelemetryEnabled())
@@ -551,6 +565,33 @@ func Test_InitializeSettings(t *testing.T) {
 		InitializeSettings(lsp.Settings{AuthenticationMethod: lsp.OAuthAuthentication})
 
 		assert.Equal(t, lsp.OAuthAuthentication, c.AuthenticationMethod())
+	})
+
+	t.Run("custom path configuration", func(t *testing.T) {
+		testutil.UnitTest(t)
+
+		first := "first"
+		second := "second"
+
+		upperCasePathKey := "PATH"
+		caseSensitivePathKey := "Path"
+		t.Setenv(caseSensitivePathKey, "something_meaningful")
+
+		// update path to hold a custom value
+		UpdateSettings(lsp.Settings{Path: first})
+		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), first+string(os.PathListSeparator)))
+
+		// update path to hold another value
+		UpdateSettings(lsp.Settings{Path: second})
+		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), second+string(os.PathListSeparator)))
+		assert.False(t, strings.Contains(os.Getenv(upperCasePathKey), first))
+
+		// reset path with non-empty settings
+		UpdateSettings(lsp.Settings{Path: "", AuthenticationMethod: "token"})
+		assert.False(t, strings.Contains(os.Getenv(upperCasePathKey), second))
+
+		assert.True(t, keyFoundInEnv(upperCasePathKey))
+		assert.False(t, keyFoundInEnv(caseSensitivePathKey))
 	})
 
 }

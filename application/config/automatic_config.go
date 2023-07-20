@@ -29,7 +29,7 @@ import (
 func (c *Config) determineJavaHome() {
 	javaHome := os.Getenv("JAVA_HOME")
 	if javaHome != "" {
-		log.Debug().Str("method", "determineJavaHome").Msgf("found javaHome %s in env", javaHome)
+		log.Info().Str("method", "determineJavaHome").Msgf("using JAVA_HOME from env %s", javaHome)
 		c.updatePath(javaHome + string(os.PathSeparator) + "bin")
 		return
 	}
@@ -41,11 +41,11 @@ func (c *Config) determineJavaHome() {
 	if done {
 		return
 	}
-	log.Debug().Str("method", "determineJavaHome").Msgf("found java binary at %s", path)
+	log.Info().Str("method", "determineJavaHome").Msgf("detected java binary at %s", path)
 	binDir := filepath.Dir(path)
 	javaHome = filepath.Dir(binDir)
 	c.updatePath(binDir)
-	log.Debug().Str("method", "determineJavaHome").Msgf("setting java home to %s", javaHome)
+	log.Info().Str("method", "determineJavaHome").Msgf("setting JAVA_HOME to %s", javaHome)
 	_ = os.Setenv("JAVA_HOME", javaHome)
 }
 
@@ -78,6 +78,7 @@ func (c *Config) determineMavenHome() {
 		return
 	}
 	c.updatePath(filepath.Dir(path))
+	log.Info().Str("method", "determineMavenHome").Msgf("detected maven binary at %s", path)
 }
 
 func getJavaBinaryName() string {
@@ -115,13 +116,12 @@ func (c *Config) FindBinaryInDirs(binaryName string) (foundPath string) {
 	for _, dir := range c.defaultDirs {
 		_, err := os.Stat(dir)
 		if err != nil {
-			log.Info().Str("method", method).Msg("no java dir found in " + dir)
 			continue
 		}
 		_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-			if filepath.Base(path) == binaryName {
+			if filepath.Base(path) == binaryName && d.Type().IsRegular() {
 				foundFilePaths = append(foundFilePaths, path)
-				log.Debug().Str("method", "FindBinaryInDirs").Msgf("found: %s", path)
+				log.Trace().Str("method", method).Msgf("found '%s' in '%s'", binaryName, path)
 			}
 			return err
 		})
@@ -129,6 +129,7 @@ func (c *Config) FindBinaryInDirs(binaryName string) (foundPath string) {
 		if count > 0 {
 			// take newest, as the dirwalk is lexical
 			foundPath = foundFilePaths[count-1]
+			log.Debug().Str("method", method).Msgf("using '%s' in '%s'", binaryName, foundPath)
 		}
 	}
 	return foundPath

@@ -510,10 +510,20 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 		w.Out = multiLevelWriter
 		w.NoColor = true
 		w.TimeFormat = time.RFC3339
+		w.PartsOrder = []string{
+			zerolog.TimestampFieldName,
+			zerolog.LevelFieldName,
+			"method",
+			"ext",
+			"separator",
+			zerolog.CallerFieldName,
+			zerolog.MessageFieldName,
+		}
+		w.FieldsExclude = []string{"method", "separator", "ext"}
 	})
 	c.m.Lock()
 	defer c.m.Unlock()
-	log.Logger = zerolog.New(writer).With().Timestamp().Logger()
+	log.Logger = zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
 	c.engine.SetLogger(&log.Logger)
 	c.logger = &log.Logger
 }
@@ -576,6 +586,7 @@ func (c *Config) updatePath(pathExtension string) {
 	err := os.Setenv("PATH", os.Getenv("PATH")+pathListSeparator+pathExtension)
 	c.path += pathListSeparator + pathExtension
 	log.Debug().Str("method", "updatePath").Msg("updated path with " + pathExtension)
+	log.Debug().Str("method", "updatePath").Msgf("PATH = %s", os.Getenv("PATH"))
 	if err != nil {
 		log.Warn().Str("method", "loadFile").Msg("Couldn't update path ")
 	}
