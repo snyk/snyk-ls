@@ -31,7 +31,7 @@ else
 fi
 
 PROTOCOL_VERSION=$(grep "LS_PROTOCOL_VERSION" .goreleaser.yaml | tail -1 | cut -f2 -d "=" |xargs)
-VERSION=$(curl -sSL https://static.snyk.io/snyk-ls/$PROTOCOL_VERSION/metadata.json | jq .version | sed -e s/\"//g)
+VERSION=$(curl -sSL --compressed https://static.snyk.io/snyk-ls/$PROTOCOL_VERSION/metadata.json | jq .version | sed -e s/\"//g)
 DESTINATION="/usr/local/bin/snyk-ls"
 DOWNLOAD_URL="https://static.snyk.io/snyk-ls/$PROTOCOL_VERSION/snyk-ls_${VERSION}_${OS}_${ARCH}"
 
@@ -44,7 +44,7 @@ echo "Destination Path: $DESTINATION"
 echo
 echo "Downloading from $DOWNLOAD_URL"
 echo
-curl -L --progress-bar $DOWNLOAD_URL > $DESTINATION
+curl -Lv --compressed $DOWNLOAD_URL > $DESTINATION
 chmod +x $DESTINATION
 echo
 echo "✨🎉 Snyk Language Server $VERSION installed to $DESTINATION."
