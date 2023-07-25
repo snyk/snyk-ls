@@ -285,7 +285,7 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		log.Info().Msg("no_proxy: " + os.Getenv("NO_PROXY"))
 		log.Info().Msg("IDE: " + c.IdeName() + "/" + c.IdeVersion())
 		log.Info().Msg("snyk-plugin: " + c.IntegrationName() + "/" + c.IntegrationVersion())
-		logger := log.With().Str("method", "initializedHandler").Logger()
+		logger := c.Logger().With().Str("method", "initializedHandler").Logger()
 		// CLI & Authentication initialization
 		err := di.Scanner().Init()
 		if err != nil {
@@ -297,6 +297,8 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		if err != nil {
 			logger.Error().Err(err).Msg("Not authenticated, or error checking authentication status")
 		}
+
+		registerDynamicCapabilities(c, srv)
 
 		autoScanEnabled := config.CurrentConfig().IsAutoScanEnabled()
 		if autoScanEnabled && authenticated {
@@ -312,6 +314,26 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		}
 		return nil, nil
 	})
+}
+
+func registerDynamicCapabilities(c *config.Config, srv *jrpc2.Server) {
+	logger := c.Logger().With().Str("method", "registerDynamicCapabilities").Logger()
+	registrationParams := lsp.RegistrationParams{
+		Registrations: []lsp.Registration{
+			{
+				Id:              "inlineValues",
+				Method:          "textDocument/inlineValue",
+				RegisterOptions: lsp.RegisterOptions{DocumentSelector: []lsp.DocumentSelector{{Language: "*"}}},
+			},
+		},
+	}
+
+	_, err := srv.Callback(context.Background(), "client/registerCapability", registrationParams)
+	if err != nil {
+		logger.Err(err).Msg("Error registering inline values capability")
+	} else {
+		logger.Info().Msg("Registered inline values capability")
+	}
 }
 
 func addWorkspaceFolders(params lsp.InitializeParams, w *workspace.Workspace) {

@@ -381,6 +381,24 @@ type TextDocumentClientCapabilities struct {
 	} `json:"inlineValue,omitempty"`
 }
 
+type DocumentSelector struct {
+	Language string `json:"language"`
+}
+
+type RegisterOptions struct {
+	DocumentSelector []DocumentSelector `json:"documentSelector"`
+}
+
+type Registration struct {
+	Id              string          `json:"id"`
+	Method          string          `json:"method"`
+	RegisterOptions RegisterOptions `json:"registerOptions"`
+}
+
+type RegistrationParams struct {
+	Registrations []Registration `json:"registrations"`
+}
+
 /**
  * A parameter literal used in inline value requests.
  *

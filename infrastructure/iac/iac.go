@@ -302,6 +302,19 @@ func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath str
 	return issues, nil
 }
 
+func (iac *Scanner) GetInlineValues(path string, myRange snyk.Range) (result []snyk.InlineValue, err error) {
+	return []snyk.InlineValue{
+		{
+			Path: path,
+			Range: snyk.Range{
+				Start: snyk.Position{Line: 1, Character: 1},
+				End:   snyk.Position{Line: 1, Character: 20},
+			},
+			Text: "inline value",
+		},
+	}, nil
+}
+
 func (iac *Scanner) trackResult(success bool) {
 	var result ux2.Result
 	if success {
