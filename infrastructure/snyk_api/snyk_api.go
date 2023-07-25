@@ -105,7 +105,7 @@ func (s *SnykApiClientImpl) SastSettings() (SastResponse, error) {
 func (s *SnykApiClientImpl) doCall(method string,
 	path string,
 	requestBody []byte,
-) ([]byte, *SnykApiError) {
+) ([]byte, error) {
 	host := config.CurrentConfig().SnykApi()
 	b := bytes.NewBuffer(requestBody)
 	req, requestErr := http.NewRequest(method, host+path, b)
@@ -128,7 +128,7 @@ func (s *SnykApiClientImpl) doCall(method string,
 	}(response.Body)
 
 	apiError := checkResponseCode(response)
-	if err != nil {
+	if apiError != nil {
 		return nil, apiError
 	}
 
