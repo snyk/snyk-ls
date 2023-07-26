@@ -43,6 +43,20 @@ import (
 
 // todo test issue parsing & conversion
 
+func Test_toIssueSeverity(t *testing.T) {
+	testutil.UnitTest(t)
+	issue := ossIssue{Severity: "critical"}
+	assert.Equal(t, snyk.High, issue.toIssueSeverity())
+	issue = ossIssue{Severity: "high"}
+	assert.Equal(t, snyk.High, issue.toIssueSeverity())
+	issue = ossIssue{Severity: "medium"}
+	assert.Equal(t, snyk.Medium, issue.toIssueSeverity())
+	issue = ossIssue{Severity: "info"}
+	assert.Equal(t, snyk.Low, issue.toIssueSeverity())
+	issue = ossIssue{Severity: "asdf"}
+	assert.Equal(t, snyk.Low, issue.toIssueSeverity())
+}
+
 func Test_determineTargetFile(t *testing.T) {
 	scanner := New(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
