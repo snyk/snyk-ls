@@ -48,8 +48,10 @@ import (
 
 var (
 	issuesSeverity = map[string]snyk.Severity{
-		"high": snyk.High,
-		"low":  snyk.Medium,
+		"critical": snyk.High,
+		"high":     snyk.High,
+		"low":      snyk.Low,
+		"medium":   snyk.Medium,
 	}
 
 	// todo do we really need this? shouldn't we simply ignore diagnostics in locks???
