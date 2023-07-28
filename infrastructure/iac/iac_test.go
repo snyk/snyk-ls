@@ -56,8 +56,10 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 	analytics := ux2.NewTestAnalytics()
 	scanner := New(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, cli.NewTestExecutor())
 
-	_, _ = scanner.Scan(context.Background(), "fake.yml", "")
+	issues, err := scanner.Scan(context.Background(), "fake.yml", "")
 
+	assert.Nil(t, err)
+	assert.Len(t, issues, 0)
 	assert.Len(t, analytics.GetAnalytics(), 1)
 	assert.Equal(t, ux2.AnalysisIsReadyProperties{
 		AnalysisType: ux2.InfrastructureAsCode,
@@ -72,8 +74,10 @@ func Test_ErroredWorkspaceScan_TracksAnalytics(t *testing.T) {
 	scanner := New(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, executor)
 
 	executor.ExecuteResponse = []byte("invalid JSON")
-	_, _ = scanner.Scan(context.Background(), "fake.yml", "")
+	issues, err := scanner.Scan(context.Background(), "fake.yml", "")
 
+	assert.NotNil(t, err)
+	assert.Len(t, issues, 0)
 	assert.Len(t, analytics.GetAnalytics(), 1)
 	assert.Equal(t, ux2.AnalysisIsReadyProperties{
 		AnalysisType: ux2.InfrastructureAsCode,
@@ -145,7 +149,7 @@ func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 			},
 		},
 	}
-	issues, err := scanner.retrieveIssues(results, []snyk.Issue{}, "", nil)
+	issues, err := scanner.retrieveIssues(results, []snyk.Issue{}, "")
 
 	assert.NoError(t, err)
 	assert.Len(t, issues, 1)
