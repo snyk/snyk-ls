@@ -151,7 +151,12 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 		}
 	}
 
-	issues, err = iac.retrieveIssues(scanResults, issues, workspacePath, err)
+	iac.trackResult(err == nil)
+	if err != nil {
+		return issues, err
+	}
+
+	issues, err = iac.retrieveIssues(scanResults, issues, workspacePath)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to retrieve IaC issues")
 	}
@@ -162,7 +167,6 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 func (iac *Scanner) retrieveIssues(scanResults []iacScanResult,
 	issues []snyk.Issue,
 	workspacePath string,
-	err error,
 ) ([]snyk.Issue, error) {
 	if len(scanResults) > 0 {
 		for _, s := range scanResults {
@@ -177,7 +181,6 @@ func (iac *Scanner) retrieveIssues(scanResults []iacScanResult,
 			}
 		}
 	}
-	iac.trackResult(err == nil)
 	return issues, nil
 }
 
@@ -224,7 +227,7 @@ func (iac *Scanner) doScan(ctx context.Context,
 			ERR:
 				errorOutput := string(res) + "\n\n\nSTDERR output:\n" + string(err.(*exec.ExitError).Stderr)
 				log.Err(err).Str("method", method).Str("output", errorOutput).Msg("Error while calling Snyk CLI")
-				err = errors.Wrap(err, fmt.Sprintf("Snyk CLI error executing %v. Output: %s", cmd, errorOutput))
+				err = errors.Wrap(err, fmt.Sprintf("Error executing %v.\n%s", cmd, errorOutput))
 				return nil, err
 			}
 		default:
