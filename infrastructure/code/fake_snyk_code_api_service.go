@@ -178,12 +178,10 @@ func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (
 	defer FakeSnykCodeApiServiceMutex.Unlock()
 	params := []any{filters.ConfigFiles,
 		filters.Extensions,
-		filters.AutofixExtensions,
 		err}
 	f.addCall(params, GetFiltersOperation)
 	return FiltersResponse{ConfigFiles: f.ConfigFiles,
-		Extensions:        FakeFilters,
-		AutofixExtensions: FakeAutofixFilters,
+		Extensions: FakeFilters,
 	}, nil
 }
 
