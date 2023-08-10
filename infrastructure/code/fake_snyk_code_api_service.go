@@ -78,6 +78,9 @@ var (
 		Message:          "This is a dummy error (severity error)",
 		CodelensCommands: []snyk.CommandData{FakeCommand, FakeFixCommand},
 		CodeActions:      []snyk.CodeAction{FakeCodeAction},
+		AdditionalData: snyk.CodeIssueData{
+			IsAutofixable: true,
+		},
 	}
 
 	FakeCodeAction = snyk.CodeAction{
@@ -245,6 +248,12 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	FakeSnykCodeApiServiceMutex.Unlock()
 
 	issues := []snyk.Issue{FakeIssue}
+	if f.NoFixSuggestions {
+		if issueData, ok := issues[0].AdditionalData.(snyk.CodeIssueData); ok {
+			issueData.IsAutofixable = false
+			issues[0].AdditionalData = issueData
+		}
+	}
 
 	log.Trace().Str("method", "RunAnalysis").Interface(
 		"fakeDiagnostic",
