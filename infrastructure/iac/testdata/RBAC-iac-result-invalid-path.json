@@ -84,7 +84,7 @@
         "[DocId: 1]",
         "clusterrole",
         "rules[0]",
-        1
+        false
       ]
     }
   ]

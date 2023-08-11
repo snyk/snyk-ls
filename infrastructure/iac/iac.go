@@ -423,6 +423,10 @@ func parseIacIssuePath(path []any) ([]string, error) {
 		switch val := p.(type) {
 		case int:
 			pathTokens = append(pathTokens, strconv.Itoa(val))
+		case float32:
+			pathTokens = append(pathTokens, strconv.FormatFloat(float64(val), 'f', -1, 32))
+		case float64:
+			pathTokens = append(pathTokens, strconv.FormatFloat(val, 'f', -1, 64))
 		case string:
 			pathTokens = append(pathTokens, val)
 		default:

@@ -18,6 +18,7 @@ package iac
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -189,8 +190,18 @@ func Test_getIssueId(t *testing.T) {
 
 func Test_parseIacIssuePath_SuccessfullyParses(t *testing.T) {
 	testutil.UnitTest(t)
-	rawPath := []any{"ingress", 0, "cidr_blocks", 0}
-	expectedPath := []string{"ingress", "0", "cidr_blocks", "0"}
+	// Unmarshall uses float64. From the docs:
+	// To unmarshal JSON into an interface value,
+	// Unmarshal stores one of these in the interface value:
+	//
+	//	bool, for JSON booleans
+	//	float64, for JSON numbers
+	//	string, for JSON strings
+	//	[]interface{}, for JSON arrays
+	//	map[string]interface{}, for JSON objects
+	//	nil for JSON null
+	rawPath := []any{"ingress", float32(32), "cidr_blocks", float64(64)}
+	expectedPath := []string{"ingress", "32", "cidr_blocks", "64"}
 
 	gotPath, gotErr := parseIacIssuePath(rawPath)
 
@@ -200,13 +211,45 @@ func Test_parseIacIssuePath_SuccessfullyParses(t *testing.T) {
 
 func Test_parseIacIssuePath_InvalidPathToken(t *testing.T) {
 	testutil.UnitTest(t)
-	rawPath := []any{"ingress", 0, "cidr_blocks", true}
+	rawPath := []any{"ingress", float64(0), "cidr_blocks", true}
 	expectedErrorMessage := "unexpected type bool for IaC issue path token: true"
 
 	gotPath, gotErr := parseIacIssuePath(rawPath)
 
 	assert.Nil(t, gotPath)
 	assert.EqualError(t, gotErr, expectedErrorMessage)
+}
+
+func Test_parseIacResult(t *testing.T) {
+	testutil.UnitTest(t)
+	testResult := "testdata/RBAC-iac-result.json"
+	result, err := os.ReadFile(testResult)
+	assert.NoError(t, err)
+	scanner := Scanner{errorReporter: error_reporting.NewTestErrorReporter()}
+
+	issues, err := scanner.unmarshal(result)
+	assert.NoError(t, err)
+
+	retrieveIssues, err := scanner.retrieveIssues(issues, []snyk.Issue{}, ".")
+	assert.NoError(t, err)
+
+	assert.Len(t, retrieveIssues, 2)
+}
+
+func Test_parseIacResult_failOnInvalidPath(t *testing.T) {
+	testutil.UnitTest(t)
+	testResult := "testdata/RBAC-iac-result-invalid-path.json"
+	result, err := os.ReadFile(testResult)
+	assert.NoError(t, err)
+	scanner := Scanner{errorReporter: error_reporting.NewTestErrorReporter()}
+
+	issues, err := scanner.unmarshal(result)
+	assert.NoError(t, err)
+
+	retrieveIssues, err := scanner.retrieveIssues(issues, []snyk.Issue{}, ".")
+	assert.Error(t, err)
+
+	assert.Len(t, retrieveIssues, 0)
 }
 
 func sampleIssue() iacIssue {
