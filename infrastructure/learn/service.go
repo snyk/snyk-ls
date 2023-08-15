@@ -27,6 +27,7 @@ import (
 	"github.com/erni27/imcache"
 	"github.com/pingcap/errors"
 	"github.com/rs/zerolog"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -266,11 +267,7 @@ func (s *serviceImpl) filterLessons(lessons []Lesson, params *LessonLookupParams
 		filteredLessons = s.filterForCVEs(filteredLessons, params.CVEs)
 	}
 	logger.Debug().Msgf("%d lessons found after filtering for CVEs", len(filteredLessons))
-	if len(filteredLessons) > 0 {
-		lessons = filteredLessons
-	}
-	logger.Debug().Msgf("%d lessons found after filtering", len(filteredLessons))
-	return lessons
+	return filteredLessons
 }
 
 func (s *serviceImpl) filterForCWEs(lessons []Lesson, cwes []string) (filteredLessons []Lesson) {
@@ -307,11 +304,15 @@ func (s *serviceImpl) lessonsLookupParams(
 	issueType snyk.Type,
 ) (params *LessonLookupParams) {
 	// the vscode service only takes the first CWE/CVE
-	if len(cwes) > 0 {
+	if len(cwes) > 0 && len(cwes[0]) > 0 {
 		cwes = []string{cwes[0]}
+	} else {
+		cwes = []string{}
 	}
-	if len(cves) > 0 {
+	if len(cves) > 0 && len(cves[0]) > 0 {
 		cves = []string{cves[0]}
+	} else {
+		cves = []string{}
 	}
 	switch issueType {
 	case snyk.DependencyVulnerability:
