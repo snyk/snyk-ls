@@ -241,7 +241,7 @@ func (s *serviceImpl) GetLesson(ecosystem string, rule string, cwes []string, cv
 
 	lessons = s.filterLessons(lessons, params)
 
-	if len(lessons) == 1 {
+	if len(lessons) >= 1 {
 		lesson = &lessons[0]
 		lesson.Url += "?loc=ide"
 		logger.Debug().Msgf("found lesson %v", lesson)
