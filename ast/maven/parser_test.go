@@ -21,16 +21,14 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCreateDependencyTree(t *testing.T) {
 	var testPath, _ = filepath.Abs("testdata/pom.xml")
 	var testContent, _ = os.ReadFile(testPath)
-	doc := lsp.DocumentURI(testPath)
 	parser := Parser{}
-	tree := parser.Parse(string(testContent), doc)
+	tree := parser.Parse(string(testContent), testPath)
 	children := tree.Root.Children
 	assert.Len(t, children, 2, "Should have extracted 2 deps from pom.xml")
 

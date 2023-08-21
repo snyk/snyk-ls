@@ -1,5 +1,5 @@
 /*
- * © 2022-2023 Snyk Limited
+ * © 2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,26 +17,31 @@
 package oss
 
 import (
-	"github.com/snyk/snyk-ls/ast/maven"
+	"fmt"
+
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/oss/parser"
 )
 
-type mavenRangeFinder struct {
-	path        string //todo remove lsp dependency
+type htmlRangeFinder struct {
+	path        string
 	fileContent []byte
+	config      *config.Config
 }
 
-func (m *mavenRangeFinder) find(issue ossIssue) snyk.Range {
-	searchPackage, _ := introducingPackageAndVersion(issue)
-	parser := maven.Parser{}
-	tree := parser.Parse(string(m.fileContent), m.path)
-	for _, depNode := range tree.Root.Children {
-		if searchPackage == depNode.Name {
-			return snyk.Range{
-				Start: snyk.Position{Line: depNode.Line, Character: depNode.StartChar},
-				End:   snyk.Position{Line: depNode.Line, Character: depNode.EndChar},
-			}
+func (h htmlRangeFinder) find(issue ossIssue) snyk.Range {
+	dependencyParser := parser.NewParser(h.config, h.path)
+	dependencies, err := dependencyParser.Parse(h.path)
+	if err != nil {
+		return snyk.Range{}
+	}
+	for _, dependency := range dependencies {
+		if fmt.Sprintf("%s@%s", dependency.ArtifactID, dependency.Version) == issue.From[0] {
+			return dependency.Range
 		}
 	}
 	return snyk.Range{}
 }
+
+var _ RangeFinder = &htmlRangeFinder{}

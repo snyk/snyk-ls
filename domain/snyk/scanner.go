@@ -32,6 +32,11 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
+var (
+	_ Scanner             = (*DelegatingConcurrentScanner)(nil)
+	_ InlineValueProvider = (*DelegatingConcurrentScanner)(nil)
+)
+
 type Scanner interface {
 	// Scan scans a workspace folder or file for issues, given its path. 'folderPath' provides a path to a workspace folder, if a file needs to be scanned.
 	Scan(
@@ -74,6 +79,14 @@ func NewDelegatingScanner(
 		scanners:      scanners,
 		authService:   authService,
 		notifier:      notifier,
+	}
+}
+
+func (sc *DelegatingConcurrentScanner) ClearInlineValues(path string) {
+	for _, scanner := range sc.scanners {
+		if s, ok := scanner.(InlineValueProvider); ok {
+			s.ClearInlineValues(path)
+		}
 	}
 }
 

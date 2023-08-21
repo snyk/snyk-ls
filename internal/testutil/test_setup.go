@@ -32,8 +32,8 @@ const (
 	smokeTestEnvVar = "SMOKE_TESTS"
 )
 
-func IntegTest(t *testing.T) {
-	prepareTestHelper(t, integTestEnvVar)
+func IntegTest(t *testing.T) *config.Config {
+	return prepareTestHelper(t, integTestEnvVar)
 }
 
 func SmokeTest(t *testing.T) *config.Config {

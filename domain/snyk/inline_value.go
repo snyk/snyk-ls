@@ -33,4 +33,5 @@ type InlineValueProvider interface {
 	// GetInlineValues returns inline values for a given path and range.
 	// This should be a very fast operation.
 	GetInlineValues(path string, myRange Range) ([]InlineValue, error)
+	ClearInlineValues(path string)
 }

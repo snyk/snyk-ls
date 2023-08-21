@@ -61,7 +61,14 @@ func Test_Scan(t *testing.T) {
 	er := error_reporting.NewTestErrorReporter()
 	analytics := ux.NewTestAnalytics()
 	cliExecutor := cli.NewExecutor(di.AuthenticationService(), er, analytics, notification.NewNotifier())
-	scanner := oss.New(instrumentor, er, analytics, cliExecutor, di.LearnService(), notification.NewNotifier())
+	scanner := oss.NewCliScanner(
+		instrumentor,
+		er,
+		analytics,
+		cliExecutor,
+		di.LearnService(),
+		notification.NewNotifier(),
+	)
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
@@ -72,13 +79,13 @@ func Test_Scan(t *testing.T) {
 	assert.True(t, strings.Contains(issues[0].Message, "<p>"))
 	if spanRecorder, ok := instrumentor.(performance.SpanRecorder); ok {
 		spans := spanRecorder.Spans()
-		assert.Equal(t, "oss.Scan", spans[0].GetOperation())
+		assert.Equal(t, "cliScanner.Scan", spans[0].GetOperation())
 	} else {
 		t.Fail()
 	}
 
 	myRange := snyk.Range{Start: snyk.Position{Line: 17}, End: snyk.Position{Line: 17}}
-	values, err := scanner.GetInlineValues(path, myRange)
+	values, err := scanner.(snyk.InlineValueProvider).GetInlineValues(path, myRange)
 	assert.NoError(t, err)
 	assert.Greaterf(t, len(values), 0, "no inline values after scan")
 }

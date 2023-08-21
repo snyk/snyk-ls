@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog/log"
-	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/ast"
 )
@@ -38,8 +37,8 @@ type dependency struct {
 	Scope      string `xml:"scope"`
 }
 
-func (p *Parser) Parse(content string, uri lsp.DocumentURI) ast.Tree {
-	tree := p.initTree(uri, content)
+func (p *Parser) Parse(content string, path string) ast.Tree {
+	tree := p.initTree(path, content)
 	d := xml.NewDecoder(strings.NewReader(content))
 	var offset int64
 	for {
@@ -62,7 +61,7 @@ func (p *Parser) Parse(content string, uri lsp.DocumentURI) ast.Tree {
 				}
 				offsetAfter := d.InputOffset()
 				node := p.addNewNodeTo(tree.Root, offset, offsetAfter, dep)
-				log.Debug().Interface("nodeName", node.Name).Str("uri", string(p.tree.Document)).Msg("Added dependency node")
+				log.Debug().Interface("nodeName", node.Name).Str("path", p.tree.Document).Msg("Added dependency node")
 			}
 		default:
 		}
@@ -70,7 +69,7 @@ func (p *Parser) Parse(content string, uri lsp.DocumentURI) ast.Tree {
 	return tree
 }
 
-func (p *Parser) initTree(uri lsp.DocumentURI, content string) ast.Tree {
+func (p *Parser) initTree(path string, content string) ast.Tree {
 	var currentLine = 0
 	root := ast.Node{
 		Line:      currentLine,
@@ -79,12 +78,12 @@ func (p *Parser) initTree(uri lsp.DocumentURI, content string) ast.Tree {
 		DocOffset: 0,
 		Parent:    nil,
 		Children:  nil,
-		Name:      string(uri),
+		Name:      string(path),
 		Value:     content,
 	}
 	p.tree = ast.Tree{
 		Root:     &root,
-		Document: uri,
+		Document: path,
 	}
 	return p.tree
 }

@@ -48,6 +48,7 @@ import (
 )
 
 var scanCount = 1
+var _ snyk.ProductScanner = (*Scanner)(nil)
 
 var (
 	issueSeverities = map[string]snyk.Severity{
