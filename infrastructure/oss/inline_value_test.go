@@ -36,7 +36,8 @@ func TestScanner_GetInlineValues_shouldCallPackageScanForHTMLFiles(t *testing.T)
 
 	path, err := filepath.Abs(filepath.Join("testdata", "test.html"))
 	assert.NoError(t, err)
-	outputFile := filepath.Join("testdata", "packageScanTestHtmlOutput.json")
+	outputFile, err := filepath.Abs(filepath.Join("testdata", "packageScanTestHtmlOutput.json"))
+	assert.NoError(t, err)
 
 	instrumentor := performance.NewLocalInstrumentor()
 	errorReporter := error_reporting.NewTestErrorReporter()
