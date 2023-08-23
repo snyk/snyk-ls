@@ -87,7 +87,7 @@ func (r *CLIRelease) GetLatestRelease(ctx context.Context) (*Release, error) {
 	p := Release{}
 	err = json.Unmarshal(body, &p)
 	if err != nil {
-		return nil, fmt.Errorf("%w: failed to unmarshal: %q", err, string(body))
+		return nil, fmt.Errorf("%w: unable to unmarshal: %q", err, string(body))
 	}
 
 	return &p, nil

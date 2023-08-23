@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 
 	"github.com/pkg/errors"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 
@@ -68,7 +69,7 @@ func GetActiveUser() (*ActiveUser, error) {
 	var user ActiveUser
 	err = json.Unmarshal(payloadBytes, &user)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to unmarshal user data")
+		return nil, errors.Wrap(err, "unable to unmarshal user data")
 	}
 
 	return &user, nil

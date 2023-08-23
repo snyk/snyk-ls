@@ -222,7 +222,7 @@ func New() *Config {
 	initWorkFlowEngine(c)
 	err := c.engine.Init()
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to initialize workflow engine")
+		log.Warn().Err(err).Msg("unable to initialize workflow engine")
 	}
 	c.enableSnykLearnCodeActions = true
 
@@ -238,7 +238,7 @@ func initWorkFlowEngine(c *Config) {
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 	err := localworkflows.InitWhoAmIWorkflow(c.engine)
 	if err != nil {
-		log.Err(err).Msg("Failed to initialize WhoAmI workflow")
+		log.Err(err).Msg("unable to initialize WhoAmI workflow")
 	}
 }
 
@@ -825,7 +825,7 @@ func (c *Config) TokenAsOAuthToken() (oauth2.Token, error) {
 	var oauthToken oauth2.Token
 	err := json.Unmarshal([]byte(c.Token()), &oauthToken)
 	if err != nil {
-		log.Debug().Err(err).Msg("failed to unmarshal oauth token")
+		log.Debug().Err(err).Msg("unable to unmarshal oauth token")
 		return oauthToken, err
 	}
 	return oauthToken, nil
