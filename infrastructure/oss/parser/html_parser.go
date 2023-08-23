@@ -108,11 +108,11 @@ func (h htmlParser) getPackageFromURL(url string) string {
 	}
 	if isPathBased != "" {
 		pkg := url[len(isPathBased):]
-		seperator := "/"
+		separator := "/"
 		if strings.Contains(pkg, "-") {
-			seperator = "-"
+			separator = "-"
 		}
-		parts := strings.Split(pkg, seperator)
+		parts := strings.Split(pkg, separator)
 		name := parts[0]
 		version := "latest"
 		if len(parts) > 1 {

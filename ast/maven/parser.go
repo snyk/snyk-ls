@@ -78,7 +78,7 @@ func (p *Parser) initTree(path string, content string) ast.Tree {
 		DocOffset: 0,
 		Parent:    nil,
 		Children:  nil,
-		Name:      string(path),
+		Name:      path,
 		Value:     content,
 	}
 	p.tree = ast.Tree{
