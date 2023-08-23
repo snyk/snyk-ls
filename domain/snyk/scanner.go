@@ -92,7 +92,7 @@ func (sc *DelegatingConcurrentScanner) ClearInlineValues(path string) {
 
 func (sc *DelegatingConcurrentScanner) GetInlineValues(path string, myRange Range) (values []InlineValue, err error) {
 	for _, scanner := range sc.scanners {
-		if s, ok := scanner.(InlineValueProvider); ok && scanner.IsEnabled() {
+		if s, ok := scanner.(InlineValueProvider); ok {
 			inlineValues, err := s.GetInlineValues(path, myRange)
 			if err != nil {
 				log.Warn().Str("method", "DelegatingConcurrentScanner.getInlineValues").Err(err).
