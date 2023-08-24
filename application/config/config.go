@@ -841,3 +841,17 @@ func (c *Config) IdeVersion() string {
 func (c *Config) IdeName() string {
 	return c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT)
 }
+
+func (c *Config) IsFedramp() bool {
+	url, err := url.Parse(c.SnykApi())
+	if err != nil {
+		return false
+	}
+	hostnameParts := strings.Split(url.Hostname(), ".")
+	if len(hostnameParts) < 3 {
+		return false
+	}
+	fedrampInstance := strings.HasPrefix(hostnameParts[1], "fedramp")
+	fedrampDomain := hostnameParts[2] == "snykgov" && hostnameParts[3] == "io"
+	return fedrampInstance && fedrampDomain
+}

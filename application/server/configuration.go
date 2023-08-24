@@ -42,9 +42,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
-const govDomain = "snykgov.io"
-
-var cachedOriginalPath string = ""
+var cachedOriginalPath = ""
 
 func workspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeConfigurationParams) (bool, error) {
@@ -279,7 +277,7 @@ func updateApiEndpoints(settings lsp.Settings, initialization bool) {
 	}
 
 	// overwrite authentication method if gov domain
-	if strings.Contains(snykApiUrl, govDomain) {
+	if c.IsFedramp() {
 		settings.AuthenticationMethod = lsp.OAuthAuthentication
 		updateAuthenticationMethod(settings)
 	}
