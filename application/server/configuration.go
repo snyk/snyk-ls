@@ -349,14 +349,14 @@ func updatePathFromSettings(settings lsp.Settings) {
 	}
 
 	if len(settings.Path) > 0 {
-		os.Unsetenv("Path") // unset the path first to work around issues on Windows OS, where PATH can be Path
+		_ = os.Unsetenv("Path") // unset the path first to work around issues on Windows OS, where PATH can be Path
 		err := os.Setenv("PATH", settings.Path+string(os.PathListSeparator)+cachedOriginalPath)
 		log.Info().Str("method", "updatePathFromSettings").Msgf("added configured path to PATH Environment Variable '%s'", os.Getenv("PATH"))
 		if err != nil {
 			log.Err(err).Str("method", "updatePathFromSettings").Msgf("couldn't add path %s", settings.Path)
 		}
 	} else {
-		os.Setenv("PATH", cachedOriginalPath)
+		_ = os.Setenv("PATH", cachedOriginalPath)
 		log.Info().Str("method", "updatePathFromSettings").Msgf("restore initial path '%s'", os.Getenv("PATH"))
 	}
 }

@@ -843,11 +843,11 @@ func (c *Config) IdeName() string {
 }
 
 func (c *Config) IsFedramp() bool {
-	url, err := url.Parse(c.SnykApi())
+	u, err := url.Parse(c.SnykApi())
 	if err != nil {
 		return false
 	}
-	hostnameParts := strings.Split(url.Hostname(), ".")
+	hostnameParts := strings.Split(u.Hostname(), ".")
 	if len(hostnameParts) < 3 {
 		return false
 	}
