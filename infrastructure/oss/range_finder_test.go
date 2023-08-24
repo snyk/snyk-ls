@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 func TestDefaultFinder_Find(t *testing.T) {
@@ -48,7 +47,7 @@ func TestDefaultFinder_Find(t *testing.T) {
 	var testPath, _ = filepath.Abs("testdata/go.mod")
 	var testContent, _ = os.ReadFile(testPath)
 	defaultFinder := DefaultFinder{
-		uri:         uri.PathToUri(testPath),
+		path:        testPath,
 		fileContent: testContent,
 	}
 

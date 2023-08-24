@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -474,6 +474,10 @@ type ignoreSettings struct {
 	DisregardFilesystemIgnores bool `json:"disregardFilesystemIgnores"`
 }
 
+type Insights struct {
+	TriageAdvice any `json:"triageAdvice"`
+}
+
 type remediation struct {
 	Unresolved []struct {
 		CVSSv3           string      `json:"CVSSv3,omitempty"`
@@ -497,18 +501,13 @@ type remediation struct {
 		Patches          []any       `json:"patches,omitempty"`
 		Proprietary      bool        `json:"proprietary,omitempty"`
 		PublicationTime  time.Time   `json:"publicationTime"`
-		References       []struct {
-			Title string `json:"title"`
-			Url   string `json:"url"`
-		} `json:"references,omitempty"`
-		Severity         string `json:"severity"`
-		SocialTrendAlert bool   `json:"socialTrendAlert,omitempty"`
-		Title            string `json:"title"`
-		Insights         struct {
-			TriageAdvice any `json:"triageAdvice"`
-		} `json:"insights,omitempty"`
-		FunctionsNew []any `json:"functions_new,omitempty"`
-		Semver       struct {
+		References       []reference `json:"references,omitempty"`
+		Severity         string      `json:"severity"`
+		SocialTrendAlert bool        `json:"socialTrendAlert,omitempty"`
+		Title            string      `json:"title"`
+		Insights         Insights    `json:"insights,omitempty"`
+		FunctionsNew     []any       `json:"functions_new,omitempty"`
+		Semver           struct {
 			Vulnerable []string `json:"vulnerable"`
 		} `json:"semver"`
 		MavenModuleName struct {
@@ -537,11 +536,10 @@ type remediation struct {
 	} `json:"pin"`
 }
 
-type ossScanResult struct {
+type scanResult struct {
 	Vulnerabilities   []ossIssue     `json:"vulnerabilities"`
 	Ok                bool           `json:"ok"`
 	DependencyCount   int            `json:"dependencyCount"`
-	Org               string         `json:"org"`
 	Policy            string         `json:"policy"`
 	IsPrivate         bool           `json:"isPrivate"`
 	LicensesPolicy    licensesPolicy `json:"licensesPolicy"`

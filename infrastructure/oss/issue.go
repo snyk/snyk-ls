@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,27 +29,37 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/internal/product"
 )
 
-func (i *ossIssue) GetCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter) (actions []snyk.CodeAction) {
+var issuesSeverity = map[string]snyk.Severity{
+	"critical": snyk.High,
+	"high":     snyk.High,
+	"low":      snyk.Low,
+	"medium":   snyk.Medium,
+}
+
+func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter) (actions []snyk.
+	CodeAction) {
 	title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", i.Title, i.PackageName)
 	command := &snyk.CommandData{
 		Title:     title,
 		CommandId: snyk.OpenBrowserCommand,
-		Arguments: []any{i.createIssueURL().String()},
+		Arguments: []any{i.CreateIssueURL().String()},
 	}
 
 	action, _ := snyk.NewCodeAction(title, nil, command)
 	actions = append(actions, action)
 
-	codeAction := i.addSnykLearnAction(learnService, ep)
+	codeAction := i.AddSnykLearnAction(learnService, ep)
 	if codeAction != nil {
 		actions = append(actions, *codeAction)
 	}
 	return actions
 }
 
-func (i *ossIssue) addSnykLearnAction(learnService learn.Service, ep error_reporting.ErrorReporter) (action *snyk.CodeAction) {
+func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_reporting.ErrorReporter) (action *snyk.
+	CodeAction) {
 	if config.CurrentConfig().IsSnykLearnCodeActionsEnabled() {
 		lesson, err := learnService.GetLesson(i.PackageManager, i.Id, i.Identifiers.CWE, i.Identifiers.CVE, snyk.DependencyVulnerability)
 		if err != nil {
@@ -69,13 +79,13 @@ func (i *ossIssue) addSnykLearnAction(learnService learn.Service, ep error_repor
 					Arguments: []any{lesson.Url},
 				},
 			}
-			log.Debug().Str("method", "oss.issue.addSnykLearnAction").Msgf("Learn action: %v", action)
+			log.Debug().Str("method", "oss.issue.AddSnykLearnAction").Msgf("Learn action: %v", action)
 		}
 	}
 	return action
 }
 
-func (i *ossIssue) getExtendedMessage(issue ossIssue) string {
+func (i *ossIssue) GetExtendedMessage(issue ossIssue) string {
 	title := issue.Title
 	description := issue.Description
 
@@ -108,10 +118,10 @@ func (i *ossIssue) createCveLink() string {
 }
 
 func (i *ossIssue) createIssueUrlMarkdown() string {
-	return fmt.Sprintf("| [%s](%s)", i.Id, i.createIssueURL().String())
+	return fmt.Sprintf("| [%s](%s)", i.Id, i.CreateIssueURL().String())
 }
 
-func (i *ossIssue) createIssueURL() *url.URL {
+func (i *ossIssue) CreateIssueURL() *url.URL {
 	parse, err := url.Parse("https://snyk.io/vuln/" + i.Id)
 	if err != nil {
 		log.Err(err).Msg("Unable to create issue link for issue:" + i.Id)
@@ -141,10 +151,82 @@ func (i *ossIssue) createCweLink() string {
 	return formattedCwe
 }
 
-func (i *ossIssue) toIssueSeverity() snyk.Severity {
+func (i *ossIssue) ToIssueSeverity() snyk.Severity {
 	sev, ok := issuesSeverity[i.Severity]
 	if !ok {
 		return snyk.Low
 	}
 	return sev
+}
+
+func toIssue(
+	affectedFilePath string,
+	issue ossIssue,
+	issueRange snyk.Range,
+	learnService learn.Service,
+	ep error_reporting.ErrorReporter,
+) snyk.Issue {
+	title := issue.Title
+
+	if config.CurrentConfig().Format() == config.FormatHtml {
+		title = string(markdown.ToHTML([]byte(title), nil, nil))
+	}
+	var action = "No fix available."
+	var resolution = ""
+	if issue.IsUpgradable {
+		action = "Upgrade to:"
+		resolution = issue.UpgradePath[len(issue.UpgradePath)-1].(string)
+	} else {
+		if len(issue.FixedIn) > 0 {
+			action = "No direct upgrade path, fixed in:"
+			resolution = fmt.Sprintf("%s@%s", issue.PackageName, issue.FixedIn[0])
+		}
+	}
+
+	message := fmt.Sprintf(
+		"%s affecting package %s. %s %s (Snyk)",
+		title,
+		issue.PackageName,
+		action,
+		resolution,
+	)
+	return snyk.Issue{
+		ID:                  issue.Id,
+		Message:             message,
+		FormattedMessage:    issue.GetExtendedMessage(issue),
+		Range:               issueRange,
+		Severity:            issue.ToIssueSeverity(),
+		AffectedFilePath:    affectedFilePath,
+		Product:             product.ProductOpenSource,
+		IssueDescriptionURL: issue.CreateIssueURL(),
+		IssueType:           snyk.DependencyVulnerability,
+		CodeActions:         issue.AddCodeActions(learnService, ep),
+		Ecosystem:           issue.PackageManager,
+		CWEs:                issue.Identifiers.CWE,
+		CVEs:                issue.Identifiers.CVE,
+	}
+}
+
+func convertScanResultToIssues(
+	res *scanResult,
+	path string,
+	fileContent []byte,
+	ls learn.Service,
+	ep error_reporting.ErrorReporter,
+) []snyk.Issue {
+	var issues []snyk.Issue
+
+	duplicateCheckMap := map[string]bool{}
+
+	for _, issue := range res.Vulnerabilities {
+		key := issue.Id + "@" + issue.PackageName
+		if duplicateCheckMap[key] {
+			continue
+		}
+
+		issueRange := findRange(issue, path, fileContent)
+		issues = append(issues, toIssue(path, issue, issueRange, ls, ep))
+		duplicateCheckMap[key] = true
+	}
+	return issues
 }

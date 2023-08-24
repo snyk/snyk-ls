@@ -38,7 +38,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 // todo test issue parsing & conversion
@@ -46,24 +45,24 @@ import (
 func Test_toIssueSeverity(t *testing.T) {
 	testutil.UnitTest(t)
 	issue := ossIssue{Severity: "critical"}
-	assert.Equal(t, snyk.High, issue.toIssueSeverity())
+	assert.Equal(t, snyk.High, issue.ToIssueSeverity())
 	issue = ossIssue{Severity: "high"}
-	assert.Equal(t, snyk.High, issue.toIssueSeverity())
+	assert.Equal(t, snyk.High, issue.ToIssueSeverity())
 	issue = ossIssue{Severity: "medium"}
-	assert.Equal(t, snyk.Medium, issue.toIssueSeverity())
+	assert.Equal(t, snyk.Medium, issue.ToIssueSeverity())
 	issue = ossIssue{Severity: "info"}
-	assert.Equal(t, snyk.Low, issue.toIssueSeverity())
+	assert.Equal(t, snyk.Low, issue.ToIssueSeverity())
 	issue = ossIssue{Severity: "asdf"}
-	assert.Equal(t, snyk.Low, issue.toIssueSeverity())
+	assert.Equal(t, snyk.Low, issue.ToIssueSeverity())
 }
 
 func Test_determineTargetFile(t *testing.T) {
-	scanner := New(performance.NewLocalInstrumentor(),
+	scanner := NewCliScanner(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
 		getLearnMock(t),
-		notification.NewNotifier())
+		notification.NewNotifier()).(*CLIScanner)
 	assert.Equal(t, "package.json", scanner.determineTargetFile("package-lock.json"))
 	assert.Equal(t, "pom.xml", scanner.determineTargetFile("pom.xml"))
 	assert.Equal(t, "asdf", scanner.determineTargetFile("asdf"))
@@ -78,7 +77,7 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 	executor.ExecuteResponse = fileContent
 	p, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
-	scanner := New(
+	scanner := NewCliScanner(
 		performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		analytics,
@@ -96,19 +95,11 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 }
 
 func Test_FindRange(t *testing.T) {
-	scanner := New(
-		performance.NewLocalInstrumentor(),
-		error_reporting.NewTestErrorReporter(),
-		ux2.NewTestAnalytics(),
-		cli.NewTestExecutor(),
-		getLearnMock(t),
-		notification.NewNotifier(),
-	)
 	issue := mavenTestIssue()
 	const content = "0\n1\n2\n  implementation 'a:test:4.17.4'"
 
-	var documentUri = uri.PathToUri("build.gradle")
-	foundRange := scanner.findRange(issue, documentUri, []byte(content))
+	var path = "build.gradle"
+	foundRange := findRange(issue, path, []byte(content))
 
 	assert.Equal(t, 3, foundRange.Start.Line)
 	assert.Equal(t, 20, foundRange.Start.Character)
@@ -136,11 +127,11 @@ func Test_introducingPackageAndVersion(t *testing.T) {
 
 func Test_toIssue_LearnParameterConversion(t *testing.T) {
 	ossIssue := sampleIssue()
-	scanner := Scanner{
+	scanner := CLIScanner{
 		learnService: getLearnMock(t),
 	}
 
-	issue := scanner.toIssue("testPath", ossIssue, snyk.Range{})
+	issue := toIssue("testPath", ossIssue, snyk.Range{}, scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, ossIssue.Id, issue.ID)
 	assert.Equal(t, ossIssue.Identifiers.CWE, issue.CWEs)
@@ -158,7 +149,7 @@ func Test_introducingPackageAndVersionJava(t *testing.T) {
 
 func Test_ContextCanceled_Scan_DoesNotScan(t *testing.T) {
 	cliMock := cli.NewTestExecutor()
-	scanner := New(performance.NewLocalInstrumentor(),
+	scanner := NewCliScanner(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cliMock,
@@ -191,13 +182,13 @@ func mavenTestIssue() ossIssue {
 }
 
 func TestUnmarshalOssJsonSingle(t *testing.T) {
-	scanner := New(performance.NewLocalInstrumentor(),
+	scanner := NewCliScanner(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
 		getLearnMock(t),
 		notification.NewNotifier(),
-	)
+	).(*CLIScanner)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -214,13 +205,13 @@ func TestUnmarshalOssJsonSingle(t *testing.T) {
 }
 
 func TestUnmarshalOssJsonArray(t *testing.T) {
-	scanner := New(performance.NewLocalInstrumentor(),
+	scanner := NewCliScanner(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
 		getLearnMock(t),
 		notification.NewNotifier(),
-	)
+	).(*CLIScanner)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -237,13 +228,13 @@ func TestUnmarshalOssJsonArray(t *testing.T) {
 }
 
 func TestUnmarshalOssErroneousJson(t *testing.T) {
-	scanner := New(performance.NewLocalInstrumentor(),
+	scanner := NewCliScanner(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
 		getLearnMock(t),
 		notification.NewNotifier(),
-	)
+	).(*CLIScanner)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -264,7 +255,7 @@ func Test_toHover_asHTML(t *testing.T) {
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 
 	var issue = sampleIssue()
-	h := issue.getExtendedMessage(issue)
+	h := issue.GetExtendedMessage(issue)
 
 	assert.Equal(
 		t,
@@ -278,7 +269,7 @@ func Test_toHover_asMarkdown(t *testing.T) {
 	config.CurrentConfig().SetFormat(config.FormatMd)
 
 	var issue = sampleIssue()
-	h := issue.getExtendedMessage(issue)
+	h := issue.GetExtendedMessage(issue)
 
 	assert.Equal(
 		t,
@@ -294,7 +285,7 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 	folderPath := workingDir
 	fakeCli := cli.NewTestExecutor()
 	fakeCli.ExecuteDuration = time.Second
-	scanner := New(performance.NewLocalInstrumentor(),
+	scanner := NewCliScanner(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		fakeCli,
@@ -339,19 +330,19 @@ func sampleIssue() ossIssue {
 
 func Test_prepareScanCommand_ExpandsAdditionalParameters(t *testing.T) {
 	testutil.UnitTest(t)
-	scanner := New(performance.NewLocalInstrumentor(),
+	scanner := NewCliScanner(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
 		getLearnMock(t),
 		notification.NewNotifier(),
-	)
+	).(*CLIScanner)
 
 	settings := config.CliSettings{
 		AdditionalOssParameters: []string{"--all-projects", "-d"},
 	}
 	config.CurrentConfig().SetCliSettings(&settings)
-	cmd := scanner.prepareScanCommand("a")
+	cmd := scanner.prepareScanCommand([]string{"a"})
 	assert.Contains(t, cmd, "--all-projects")
 	assert.Contains(t, cmd, "-d")
 }
@@ -362,13 +353,14 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	fakeCli := cli.NewTestExecutorWithResponseFromFile(path.Join(workingDir, "testdata/oss-result.json"))
 	fakeCli.ExecuteDuration = time.Millisecond
-	scanner := New(performance.NewLocalInstrumentor(),
+	scanner := NewCliScanner(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		fakeCli,
 		getLearnMock(t),
 		notification.NewNotifier(),
-	)
+	).(*CLIScanner)
+
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -388,14 +380,15 @@ func Test_scheduleNewScan_CapturesAnalytics(t *testing.T) {
 	// Arrange
 	fakeCli := cli.NewTestExecutor()
 	analytics := ux2.NewTestAnalytics()
-	scanner := New(
+	scanner := NewCliScanner(
 		performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		analytics,
 		fakeCli,
 		getLearnMock(t),
 		notification.NewNotifier(),
-	)
+	).(*CLIScanner)
+
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
 	p, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
@@ -424,14 +417,15 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 	fakeCli := cli.NewTestExecutor()
 	fakeCli.ExecuteDuration = time.Millisecond
 	analytics := ux2.NewTestAnalytics()
-	scanner := New(
+	scanner := NewCliScanner(
 		performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		analytics,
 		fakeCli,
 		getLearnMock(t),
 		notification.NewNotifier(),
-	)
+	).(*CLIScanner)
+
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
 	p, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
@@ -454,14 +448,15 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 	fakeCli := cli.NewTestExecutor()
 	fakeCli.ExecuteDuration = time.Millisecond
 	analytics := ux2.NewTestAnalytics()
-	scanner := New(
+	scanner := NewCliScanner(
 		performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		analytics,
 		fakeCli,
 		getLearnMock(t),
 		notification.NewNotifier(),
-	)
+	).(*CLIScanner)
+
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
 	targetPath, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
@@ -486,14 +481,15 @@ func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testin
 	fakeCli := cli.NewTestExecutor()
 	fakeCli.ExecuteDuration = time.Millisecond
 	analytics := ux2.NewTestAnalytics()
-	scanner := New(
+	scanner := NewCliScanner(
 		performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		analytics,
 		fakeCli,
 		getLearnMock(t),
 		notification.NewNotifier(),
-	)
+	).(*CLIScanner)
+
 	scanner.refreshScanWaitDuration = 2 * time.Second
 	workingDir, _ := os.Getwd()
 	targetPath, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
@@ -518,7 +514,7 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 	fakeCli := cli.NewTestExecutorWithResponseFromFile(path.Join(workingDir,
 		"testdata/oss-result-without-targetFile.json"))
 	fakeCli.ExecuteDuration = time.Millisecond
-	scanner := New(
+	scanner := NewCliScanner(
 		performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
