@@ -463,10 +463,13 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		// todo can we push cache management down?
 		f := workspace.Get().GetFolderContaining(filePath)
 		autoScanEnabled := config.CurrentConfig().IsAutoScanEnabled()
-		if f != nil && autoScanEnabled {
+		if f != nil {
 			f.ClearDiagnosticsFromFile(filePath)
 			di.HoverService().DeleteHover(params.TextDocument.URI)
-			go f.ScanFile(bgCtx, filePath)
+
+			if autoScanEnabled {
+				go f.ScanFile(bgCtx, filePath)
+			}
 		} else {
 			if autoScanEnabled {
 				logger.Warn().Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
