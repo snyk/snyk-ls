@@ -55,7 +55,7 @@ func (h htmlParser) parseDependencies(deps []string, fileContent string) (depend
 	for _, dep := range deps {
 		dependency, err := h.dependencyFromString(dep)
 		if err != nil {
-			return nil, err
+			continue
 		}
 		logger.Trace().Msgf("found dependency: %s", dependency)
 		before, _, found := strings.Cut(fileContent, dep)
