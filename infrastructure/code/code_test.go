@@ -654,14 +654,15 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 	)
 
 	t.Run(
-		"should not run autofix after analysis when is enabled but have disallowed extension",
+		"should not provide autofix code action when autofix enabled but issue not fixable",
 		func(t *testing.T) {
 			testutil.UnitTest(t)
 			autofixSetupAndCleanup(t)
 			getCodeSettings().isAutofixEnabled.Set(true)
-			getCodeSettings().setAutofixExtensionsIfNotSet([]string{".somenonexistent"})
 
 			snykCodeMock := &FakeSnykCodeClient{}
+			snykCodeMock.NoFixSuggestions = true
+
 			analytics := ux2.NewTestAnalytics()
 			c := New(
 				NewBundler(snykCodeMock, performance.NewLocalInstrumentor()),

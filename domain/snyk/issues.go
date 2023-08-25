@@ -79,6 +79,7 @@ type CodeIssueData struct {
 	Cols               CodePoint          `json:"cols"`
 	Rows               CodePoint          `json:"rows"`
 	IsSecurityType     bool               `json:"isSecurityType"`
+	IsAutofixable      bool               `json:"isAutofixable"`
 }
 
 type ExampleCommitFix struct {
