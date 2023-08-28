@@ -66,6 +66,7 @@ type CLIScanner struct {
 	analytics               ux2.Analytics
 	cli                     cli.Executor
 	mutex                   *sync.Mutex
+	packageScanMutex        *sync.Mutex
 	runningScans            map[string]*scans.ScanProgress
 	refreshScanWaitDuration time.Duration
 	scheduledScan           *time.Timer
@@ -75,7 +76,8 @@ type CLIScanner struct {
 	notifier                noti.Notifier
 	inlineValues            inlineValueMap
 	supportedFiles          map[string]bool
-	scanned                 map[string]bool
+	packageIssueCache       map[string][]snyk.Issue
+	config                  *config.Config
 }
 
 func NewCliScanner(instrumentor performance.Instrumentor,
@@ -84,6 +86,7 @@ func NewCliScanner(instrumentor performance.Instrumentor,
 	cli cli.Executor,
 	learnService learn.Service,
 	notifier noti.Notifier,
+	c *config.Config,
 ) snyk.ProductScanner {
 	scanner := CLIScanner{
 		instrumentor:            instrumentor,
@@ -91,6 +94,7 @@ func NewCliScanner(instrumentor performance.Instrumentor,
 		analytics:               analytics,
 		cli:                     cli,
 		mutex:                   &sync.Mutex{},
+		packageScanMutex:        &sync.Mutex{},
 		scheduledScanMtx:        &sync.Mutex{},
 		runningScans:            map[string]*scans.ScanProgress{},
 		refreshScanWaitDuration: 24 * time.Hour,
@@ -98,7 +102,8 @@ func NewCliScanner(instrumentor performance.Instrumentor,
 		learnService:            learnService,
 		notifier:                notifier,
 		inlineValues:            make(inlineValueMap),
-		scanned:                 make(map[string]bool),
+		packageIssueCache:       make(map[string][]snyk.Issue),
+		config:                  c,
 		supportedFiles: map[string]bool{
 			"yarn.lock":               true,
 			"package-lock.json":       true,
@@ -219,7 +224,6 @@ func (cliScanner *CLIScanner) scanInternal(
 	if issues != nil {
 		cliScanner.scheduleRefreshScan(context.Background(), path)
 	}
-	cliScanner.scanned[path] = true
 	return issues, nil
 }
 
@@ -350,10 +354,17 @@ func (cliScanner *CLIScanner) retrieveIssues(
 	path string,
 	fileContent []byte,
 ) []snyk.Issue {
-	issues := convertScanResultToIssues(res, path, fileContent, cliScanner.learnService, cliScanner.errorReporter)
+	issues := convertScanResultToIssues(
+		res,
+		path,
+		fileContent,
+		cliScanner.learnService,
+		cliScanner.errorReporter,
+		cliScanner.packageIssueCache,
+	)
 
 	// repopulate
-	addVulnerabilityCountsAsInlineValuesToCache(issues, cliScanner.inlineValues, cliScanner.errorReporter)
+	cliScanner.addVulnerabilityCountsToCache(issues)
 
 	return issues
 }

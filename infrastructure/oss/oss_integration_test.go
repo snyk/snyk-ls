@@ -68,6 +68,7 @@ func Test_Scan(t *testing.T) {
 		cliExecutor,
 		di.LearnService(),
 		notification.NewNotifier(),
+		c,
 	)
 
 	workingDir, _ := os.Getwd()

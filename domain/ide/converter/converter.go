@@ -70,8 +70,8 @@ func ToCodeAction(issue snyk.Issue, action snyk.CodeAction) lsp.CodeAction {
 
 func ToInlineValue(inlineValue snyk.InlineValue) lsp.InlineValue {
 	return lsp.InlineValue{
-		Range: ToRange(inlineValue.Range),
-		Text:  inlineValue.Text,
+		Range: ToRange(inlineValue.Range()),
+		Text:  inlineValue.Text(),
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/rs/zerolog/log"
 	"golang.org/x/net/html"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -26,6 +27,22 @@ type htmlParser struct {
 	config *config.Config
 }
 
+func (h htmlParser) ParseContent(content string) (dependencies []Dependency, err error) {
+	logger := h.config.Logger().With().Str("method", "ParseContent").Logger()
+	doc, err := html.Parse(strings.NewReader(content))
+	if err != nil {
+		logger.Err(err).Msg("couldn't parse file")
+	}
+
+	deps := extractSrc(doc)
+	dependencies, err = h.parseDependencies(deps, content)
+	if err != nil {
+		logger.Err(err).Msg("couldn't extract dependencies")
+		return nil, err
+	}
+	return dependencies, nil
+}
+
 func (h htmlParser) Parse(filePath string) (dependencies []Dependency, err error) {
 	logger := h.config.Logger().With().Str("method", "htmlParser.Parse").Str("file", filePath).Logger()
 
@@ -36,18 +53,7 @@ func (h htmlParser) Parse(filePath string) (dependencies []Dependency, err error
 	}
 	fileContent := string(bytes)
 
-	doc, err := html.Parse(strings.NewReader(fileContent))
-	if err != nil {
-		logger.Err(err).Msg("couldn't parse file")
-	}
-
-	deps := extractSrc(doc)
-	dependencies, err = h.parseDependencies(deps, fileContent)
-	if err != nil {
-		logger.Err(err).Msg("couldn't extract dependencies")
-		return nil, err
-	}
-	return dependencies, nil
+	return h.ParseContent(fileContent)
 }
 
 func (h htmlParser) parseDependencies(deps []string, fileContent string) (dependencies []Dependency, err error) {
@@ -55,7 +61,8 @@ func (h htmlParser) parseDependencies(deps []string, fileContent string) (depend
 	for _, dep := range deps {
 		dependency, err := h.dependencyFromString(dep)
 		if err != nil {
-			return nil, err
+			log.Debug().Any("dependency", dep).Msg("couldn't parse dependency, skipping.")
+			continue
 		}
 		logger.Trace().Msgf("found dependency: %s", dependency)
 		before, _, found := strings.Cut(fileContent, dep)

@@ -31,33 +31,99 @@ var (
 		".html": true,
 		".htm":  true,
 	}
+	_ snyk.PackageScanner = (*CLIScanner)(nil)
 )
 
 func (cliScanner *CLIScanner) ScanPackages(
 	ctx context.Context,
 	config *config.Config,
 	path string,
-) (issues []snyk.Issue, err error) {
-	logger := config.Logger().With().Str("method", "APIScanner.Scan").Logger()
+	content string,
+) {
+	cliScanner.packageScanMutex.Lock()
+	defer cliScanner.packageScanMutex.Unlock()
+
+	logger := config.Logger().With().Str("method", "CLIScanner.ScanPackages").Logger()
+
 	if !cliScanner.isPackageScanSupported(path) {
-		return issues, nil
+		logger.Debug().Msgf("package scan not supported for %s", path)
+		return
 	}
 
-	p := parser.NewParser(config, path)
-	dependencies, err := p.Parse(path)
+	// parse given path & content
+	dependencies, err := cliScanner.getDependencies(config, path, content)
 	if err != nil {
 		logger.Err(err).Msg("error parsing file")
-		return nil, err
+		return
 	}
 
-	commandFunc := func(_ []string) (deps []string) {
-		for _, d := range dependencies {
-			deps = append(deps, d.ArtifactID+"@"+d.Version)
+	notCached := cliScanner.updateCachedDependencies(dependencies)
+
+	if len(notCached) > 0 {
+		commandFunc := func(_ []string) (deps []string) {
+			for _, d := range notCached {
+				deps = append(deps, d.ArtifactID+"@"+d.Version)
+			}
+			return cliScanner.prepareScanCommand(deps)
 		}
-		return cliScanner.prepareScanCommand(deps)
+		_, err := cliScanner.scanInternal(ctx, path, commandFunc)
+		if err != nil {
+			logger.Err(err).Msg("error scanning packages")
+			return
+		}
 	}
+	return
+}
 
-	return cliScanner.scanInternal(ctx, path, commandFunc)
+func (cliScanner *CLIScanner) getDependencies(config *config.Config, path string,
+	content string) (dependencies []parser.Dependency, err error) {
+	logger := config.Logger().With().Str("method", "CLIScanner.getDependencies").Logger()
+	p := parser.NewParser(config, path)
+	if content == "" {
+		dependencies, err = p.Parse(path)
+		if err != nil {
+			logger.Err(err).Msg("error parsing file")
+			return nil, err
+		}
+	} else {
+		dependencies, err = p.ParseContent(content)
+		if err != nil {
+			logger.Err(err).Msg("error parsing content")
+			return nil, err
+		}
+	}
+	return dependencies, err
+}
+
+// updateCachedDependencies updates the packageIssueCache and returns the dependencies that are not cached
+func (cliScanner *CLIScanner) updateCachedDependencies(dependencies []parser.Dependency) (notCached []parser.Dependency) {
+	logger := cliScanner.config.Logger().With().Str("method", "CLIScanner.updateCachedDependencies").Logger()
+	for _, dependency := range dependencies {
+		key := dependency.ArtifactID + "@" + dependency.Version
+		cached := cliScanner.packageIssueCache[key]
+		if len(cached) == 0 {
+			// we need a full scan
+			logger.Trace().Str("dependency", dependency.String()).Msg("not cached")
+			notCached = append(notCached, dependency)
+
+		} else {
+			logger.Trace().Str("dependency", dependency.String()).Msg("cached")
+			cliScanner.removeVulnerabilityCountsFromCache(cached)
+			// update ranges of issues in inlinevalue cache
+			newCached := []snyk.Issue{}
+			for _, issue := range cached {
+				logger.Trace().Str("issue", issue.ID).
+					Str("old range", issue.Range.String()).
+					Str("new range", dependency.Range.String()).
+					Msg("updating range")
+				issue.Range = dependency.Range
+				newCached = append(newCached, issue)
+			}
+			cliScanner.packageIssueCache[key] = newCached
+			cliScanner.addVulnerabilityCountsToCache(newCached)
+		}
+	}
+	return notCached
 }
 
 func (cliScanner *CLIScanner) isPackageScanSupported(path string) bool {

@@ -32,7 +32,7 @@ import (
 )
 
 func TestScanner_GetInlineValues_shouldCallPackageScanForHTMLFiles(t *testing.T) {
-	testutil.IntegTest(t)
+	c := testutil.IntegTest(t)
 
 	path, err := filepath.Abs(filepath.Join("testdata", "test.html"))
 	assert.NoError(t, err)
@@ -49,13 +49,12 @@ func TestScanner_GetInlineValues_shouldCallPackageScanForHTMLFiles(t *testing.T)
 		errorReporter,
 		analytics,
 		executor,
-		getLearnMock(t), notifier,
+		getLearnMock(t),
+		notifier,
+		c,
 	).(snyk.InlineValueProvider)
 
-	values, err := scanner.GetInlineValues(
-		path,
-		snyk.Range{Start: snyk.Position{Line: 0, Character: 0}, End: snyk.Position{Line: 10, Character: 150}},
-	)
+	values, err := scanner.GetInlineValues(path, snyk.Range{Start: snyk.Position{Line: 0, Character: 0}, End: snyk.Position{Line: 10, Character: 150}})
 
 	assert.NoError(t, err)
 	assert.Len(t, values, 2)

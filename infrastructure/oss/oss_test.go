@@ -57,19 +57,20 @@ func Test_toIssueSeverity(t *testing.T) {
 }
 
 func Test_determineTargetFile(t *testing.T) {
+	c := testutil.UnitTest(t)
 	scanner := NewCliScanner(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
 		getLearnMock(t),
-		notification.NewNotifier()).(*CLIScanner)
+		notification.NewNotifier(), c).(*CLIScanner)
 	assert.Equal(t, "package.json", scanner.determineTargetFile("package-lock.json"))
 	assert.Equal(t, "pom.xml", scanner.determineTargetFile("pom.xml"))
 	assert.Equal(t, "asdf", scanner.determineTargetFile("asdf"))
 }
 
 func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	analytics := ux2.NewTestAnalytics()
 	workingDir, _ := os.Getwd()
 	executor := cli.NewTestExecutor()
@@ -83,7 +84,7 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 		analytics,
 		executor,
 		getLearnMock(t),
-		notification.NewNotifier(),
+		notification.NewNotifier(), c,
 	)
 	_, _ = scanner.Scan(context.Background(), p, "")
 
@@ -98,8 +99,8 @@ func Test_FindRange(t *testing.T) {
 	issue := mavenTestIssue()
 	const content = "0\n1\n2\n  implementation 'a:test:4.17.4'"
 
-	var path = "build.gradle"
-	foundRange := findRange(issue, path, []byte(content))
+	var p = "build.gradle"
+	foundRange := findRange(issue, p, []byte(content))
 
 	assert.Equal(t, 3, foundRange.Start.Line)
 	assert.Equal(t, 20, foundRange.Start.Character)
@@ -148,6 +149,7 @@ func Test_introducingPackageAndVersionJava(t *testing.T) {
 }
 
 func Test_ContextCanceled_Scan_DoesNotScan(t *testing.T) {
+	c := testutil.UnitTest(t)
 	cliMock := cli.NewTestExecutor()
 	scanner := NewCliScanner(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
@@ -155,6 +157,7 @@ func Test_ContextCanceled_Scan_DoesNotScan(t *testing.T) {
 		cliMock,
 		getLearnMock(t),
 		notification.NewNotifier(),
+		c,
 	)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -182,13 +185,14 @@ func mavenTestIssue() ossIssue {
 }
 
 func TestUnmarshalOssJsonSingle(t *testing.T) {
+	c := testutil.UnitTest(t)
 	scanner := NewCliScanner(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
 		getLearnMock(t),
 		notification.NewNotifier(),
-	).(*CLIScanner)
+		c).(*CLIScanner)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -205,13 +209,14 @@ func TestUnmarshalOssJsonSingle(t *testing.T) {
 }
 
 func TestUnmarshalOssJsonArray(t *testing.T) {
+	c := testutil.UnitTest(t)
 	scanner := NewCliScanner(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
 		getLearnMock(t),
 		notification.NewNotifier(),
-	).(*CLIScanner)
+		c).(*CLIScanner)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -228,13 +233,14 @@ func TestUnmarshalOssJsonArray(t *testing.T) {
 }
 
 func TestUnmarshalOssErroneousJson(t *testing.T) {
+	c := testutil.UnitTest(t)
 	scanner := NewCliScanner(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
 		getLearnMock(t),
 		notification.NewNotifier(),
-	).(*CLIScanner)
+		c).(*CLIScanner)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -251,8 +257,8 @@ func TestUnmarshalOssErroneousJson(t *testing.T) {
 }
 
 func Test_toHover_asHTML(t *testing.T) {
-	testutil.UnitTest(t)
-	config.CurrentConfig().SetFormat(config.FormatHtml)
+	c := testutil.UnitTest(t)
+	c.SetFormat(config.FormatHtml)
 
 	var issue = sampleIssue()
 	h := issue.GetExtendedMessage(issue)
@@ -265,8 +271,8 @@ func Test_toHover_asHTML(t *testing.T) {
 }
 
 func Test_toHover_asMarkdown(t *testing.T) {
-	testutil.UnitTest(t)
-	config.CurrentConfig().SetFormat(config.FormatMd)
+	c := testutil.UnitTest(t)
+	c.SetFormat(config.FormatMd)
 
 	var issue = sampleIssue()
 	h := issue.GetExtendedMessage(issue)
@@ -279,6 +285,7 @@ func Test_toHover_asMarkdown(t *testing.T) {
 }
 
 func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
+	c := testutil.UnitTest(t)
 	// Arrange
 	concurrentScanRequests := 10
 	workingDir, _ := os.Getwd()
@@ -291,6 +298,7 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 		fakeCli,
 		getLearnMock(t),
 		notification.NewNotifier(),
+		c,
 	)
 	wg := sync.WaitGroup{}
 	p, _ := filepath.Abs(workingDir + "/testdata/package.json")
@@ -329,26 +337,28 @@ func sampleIssue() ossIssue {
 }
 
 func Test_prepareScanCommand_ExpandsAdditionalParameters(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	scanner := NewCliScanner(performance.NewLocalInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
 		cli.NewTestExecutor(),
 		getLearnMock(t),
 		notification.NewNotifier(),
-	).(*CLIScanner)
+		c).(*CLIScanner)
 
 	settings := config.CliSettings{
 		AdditionalOssParameters: []string{"--all-projects", "-d"},
 	}
-	config.CurrentConfig().SetCliSettings(&settings)
+	c.SetCliSettings(&settings)
+
 	cmd := scanner.prepareScanCommand([]string{"a"})
+
 	assert.Contains(t, cmd, "--all-projects")
 	assert.Contains(t, cmd, "-d")
 }
 
 func Test_Scan_SchedulesNewScan(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	// Arrange
 	workingDir, _ := os.Getwd()
 	fakeCli := cli.NewTestExecutorWithResponseFromFile(path.Join(workingDir, "testdata/oss-result.json"))
@@ -359,10 +369,11 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 		fakeCli,
 		getLearnMock(t),
 		notification.NewNotifier(),
-	).(*CLIScanner)
+		c).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
+
 	t.Cleanup(cancel)
 	targetFile, _ := filepath.Abs(workingDir + "/testdata/package.json")
 
@@ -376,7 +387,7 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 }
 
 func Test_scheduleNewScan_CapturesAnalytics(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	// Arrange
 	fakeCli := cli.NewTestExecutor()
 	analytics := ux2.NewTestAnalytics()
@@ -387,7 +398,7 @@ func Test_scheduleNewScan_CapturesAnalytics(t *testing.T) {
 		fakeCli,
 		getLearnMock(t),
 		notification.NewNotifier(),
-	).(*CLIScanner)
+		c).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
@@ -410,7 +421,7 @@ func Test_scheduleNewScan_CapturesAnalytics(t *testing.T) {
 }
 
 func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	// Arrange
 	config.CurrentConfig().SetSnykOssEnabled(false)
@@ -424,7 +435,7 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 		fakeCli,
 		getLearnMock(t),
 		notification.NewNotifier(),
-	).(*CLIScanner)
+		c).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
@@ -442,7 +453,7 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 }
 
 func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	// Arrange
 	fakeCli := cli.NewTestExecutor()
@@ -455,7 +466,7 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 		fakeCli,
 		getLearnMock(t),
 		notification.NewNotifier(),
-	).(*CLIScanner)
+		c).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
@@ -475,7 +486,7 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 }
 
 func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	// Arrange
 	fakeCli := cli.NewTestExecutor()
@@ -488,7 +499,7 @@ func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testin
 		fakeCli,
 		getLearnMock(t),
 		notification.NewNotifier(),
-	).(*CLIScanner)
+		c).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 2 * time.Second
 	workingDir, _ := os.Getwd()
@@ -507,7 +518,7 @@ func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testin
 }
 
 func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	// Arrange
 	workingDir, _ := os.Getwd()
@@ -521,6 +532,7 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 		fakeCli,
 		getLearnMock(t),
 		notification.NewNotifier(),
+		c,
 	)
 	filePath, _ := filepath.Abs(workingDir + "/testdata/package.json")
 

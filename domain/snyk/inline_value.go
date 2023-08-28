@@ -18,14 +18,11 @@ package snyk
 
 import "fmt"
 
-type InlineValue struct {
-	Path  string
-	Range Range
-	Text  string
-}
-
-func (i InlineValue) String() string {
-	return fmt.Sprintf("path: %s, range: %s, text: %s", i.Path, i.Range, i.Text)
+type InlineValue interface {
+	Path() string
+	Range() Range
+	Text() string
+	fmt.Stringer
 }
 
 // InlineValueProvider provides inline values.
@@ -33,5 +30,7 @@ type InlineValueProvider interface {
 	// GetInlineValues returns inline values for a given path and range.
 	// This should be a very fast operation.
 	GetInlineValues(path string, myRange Range) ([]InlineValue, error)
+
+	// ClearInlineValues clears inline values for a given path.
 	ClearInlineValues(path string)
 }

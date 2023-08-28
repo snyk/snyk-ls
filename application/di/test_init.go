@@ -50,6 +50,7 @@ func TestInit(t *testing.T) {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	t.Helper()
+	c := config.CurrentConfig()
 	// we don't want to open browsers when testing
 	snyk.DefaultOpenBrowserFunc = func(url string) {}
 	notifier = domainNotify.NewNotifier()
@@ -79,7 +80,7 @@ func TestInit(t *testing.T) {
 		Return(&learn.Lesson{}, nil).AnyTimes()
 	learnService = learnMock
 	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, learnService, notifier)
-	openSourceScanner = oss.NewCliScanner(instrumentor, errorReporter, analytics, snykCli, learnService, notifier)
+	openSourceScanner = oss.NewCliScanner(instrumentor, errorReporter, analytics, snykCli, learnService, notifier, c)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	scanner = snyk.NewDelegatingScanner(
 		scanInitializer,
@@ -99,7 +100,7 @@ func TestInit(t *testing.T) {
 	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier, notifier)
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher, notifier, snykCodeClient)
+	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, snykCodeClient)
 	t.Cleanup(
 		func() {
 			fakeClient.Clear()

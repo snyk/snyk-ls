@@ -35,6 +35,7 @@ import (
 var (
 	_ Scanner             = (*DelegatingConcurrentScanner)(nil)
 	_ InlineValueProvider = (*DelegatingConcurrentScanner)(nil)
+	_ PackageScanner      = (*DelegatingConcurrentScanner)(nil)
 )
 
 type Scanner interface {
@@ -48,6 +49,10 @@ type Scanner interface {
 	Init() error
 }
 
+type PackageScanner interface {
+	ScanPackages(ctx context.Context, config *config.Config, path string, content string)
+}
+
 // DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
 type DelegatingConcurrentScanner struct {
 	scanners      []ProductScanner
@@ -58,6 +63,14 @@ type DelegatingConcurrentScanner struct {
 	snykApiClient snyk_api.SnykApiClient
 	authService   AuthenticationService
 	notifier      notification.Notifier
+}
+
+func (sc *DelegatingConcurrentScanner) ScanPackages(ctx context.Context, config *config.Config, path string, content string) {
+	for _, scanner := range sc.scanners {
+		if s, ok := scanner.(PackageScanner); ok {
+			s.ScanPackages(ctx, config, path, content)
+		}
+	}
 }
 
 func NewDelegatingScanner(
