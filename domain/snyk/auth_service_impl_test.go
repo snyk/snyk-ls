@@ -123,7 +123,7 @@ func Test_Logout(t *testing.T) {
 	hoverService := hover.NewFakeHoverService()
 	scanner := snyk.NewTestScanner()
 	scanNotifier, _ := appNotification.NewScanNotifier(notifier)
-	w := workspace.New(performance.NewLocalInstrumentor(), scanner, hoverService, scanNotifier, notifier)
+	w := workspace.New(performance.NewInstrumentor(), scanner, hoverService, scanNotifier, notifier)
 	workspace.Set(w)
 	f := workspace.NewFolder("", "", scanner, hoverService, scanNotifier, notifier)
 	w.AddFolder(f)

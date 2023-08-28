@@ -122,7 +122,7 @@ func initInfrastructure() {
 	errorReporter = sentry.NewSentryErrorReporter(notifier)
 	installer = install.NewInstaller(errorReporter, networkAccess.GetUnauthorizedHttpClient)
 	learnService = learn.New(c, networkAccess.GetUnauthorizedHttpClient, errorReporter)
-	instrumentor = performance.NewLocalInstrumentor()
+	instrumentor = performance.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient(networkAccess.GetHttpClient)
 	analytics = amplitude.NewAmplitudeClient(snyk.AuthenticationCheck, errorReporter)
 	authProvider := cliauth.NewCliAuthenticationProvider(errorReporter)

@@ -823,9 +823,13 @@ func (c *Config) Logger() *zerolog.Logger {
 
 func (c *Config) TokenAsOAuthToken() (oauth2.Token, error) {
 	var oauthToken oauth2.Token
+	if _, err := uuid.Parse(c.Token()); err == nil {
+		log.Trace().Msgf("token is a uuid, not an oauth token")
+		return oauthToken, fmt.Errorf("token is a uuid, not an oauth token")
+	}
 	err := json.Unmarshal([]byte(c.Token()), &oauthToken)
 	if err != nil {
-		log.Debug().Err(err).Msg("unable to unmarshal oauth token")
+		log.Trace().Err(err).Msg("unable to unmarshal oauth token")
 		return oauthToken, err
 	}
 	return oauthToken, nil

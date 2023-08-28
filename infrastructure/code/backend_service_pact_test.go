@@ -264,7 +264,7 @@ func setupPact(t *testing.T) {
 	config.CurrentConfig().UpdateApiEndpoints("http://localhost")
 	config.CurrentConfig().SetOrganization(orgUUID)
 
-	client = NewHTTPRepository(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), func() *http.Client { return http.DefaultClient })
+	client = NewHTTPRepository(performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), func() *http.Client { return http.DefaultClient })
 }
 
 func getPutPostHeaderMatcher() dsl.MapMatcher {

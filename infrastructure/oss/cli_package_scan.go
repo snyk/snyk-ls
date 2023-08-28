@@ -94,7 +94,8 @@ func (cliScanner *CLIScanner) getDependencies(config *config.Config, path string
 	return dependencies, err
 }
 
-// updateCachedDependencies updates the packageIssueCache and returns the dependencies that are not cached
+// updateCachedDependencies updates the packageIssueCache and returns the dependencies that are not cached.
+// This may also be because there are no issues for the dependency.
 func (cliScanner *CLIScanner) updateCachedDependencies(dependencies []parser.Dependency) (notCached []parser.Dependency) {
 	logger := cliScanner.config.Logger().With().Str("method", "CLIScanner.updateCachedDependencies").Logger()
 	for _, dependency := range dependencies {
@@ -104,7 +105,6 @@ func (cliScanner *CLIScanner) updateCachedDependencies(dependencies []parser.Dep
 			// we need a full scan
 			logger.Trace().Str("dependency", dependency.String()).Msg("not cached")
 			notCached = append(notCached, dependency)
-
 		} else {
 			logger.Trace().Str("dependency", dependency.String()).Msg("cached")
 			cliScanner.removeVulnerabilityCountsFromCache(cached)
