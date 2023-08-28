@@ -131,7 +131,7 @@ func initInfrastructure() {
 	snykCodeClient = code.NewHTTPRepository(instrumentor, errorReporter, networkAccess.GetHttpClient)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
-	openSourceScanner = oss.NewCliScanner(instrumentor, errorReporter, analytics, snykCli, learnService, notifier, c)
+	openSourceScanner = oss.NewCLIScanner(instrumentor, errorReporter, analytics, snykCli, learnService, notifier, c)
 	scanNotifier, _ = appNotification.NewScanNotifier(notifier)
 	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, learnService, notifier)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)

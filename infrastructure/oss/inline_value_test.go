@@ -44,7 +44,7 @@ func TestScanner_GetInlineValues_shouldCallPackageScanForHTMLFiles(t *testing.T)
 	analytics := ux.NewTestAnalytics()
 	notifier := notification.NewNotifier()
 	executor := cli.NewTestExecutorWithResponseFromFile(outputFile)
-	scanner := NewCliScanner(
+	scanner := NewCLIScanner(
 		instrumentor,
 		errorReporter,
 		analytics,

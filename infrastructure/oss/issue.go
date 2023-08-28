@@ -221,7 +221,7 @@ func convertScanResultToIssues(
 
 	for _, issue := range res.Vulnerabilities {
 		packageKey := issue.PackageName + "@" + issue.Version
-		duplicateKey := issue.Id + "|" + packageKey
+		duplicateKey := issue.Id + "|" + issue.PackageName
 		if duplicateCheckMap[duplicateKey] {
 			continue
 		}

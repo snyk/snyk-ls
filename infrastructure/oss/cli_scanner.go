@@ -80,7 +80,7 @@ type CLIScanner struct {
 	config                  *config.Config
 }
 
-func NewCliScanner(instrumentor performance.Instrumentor,
+func NewCLIScanner(instrumentor performance.Instrumentor,
 	errorReporter error_reporting.ErrorReporter,
 	analytics ux2.Analytics,
 	cli cli.Executor,
