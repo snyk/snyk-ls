@@ -88,6 +88,7 @@ type resultProperties struct {
 		Label bool   `json:"label"`
 		Type  string `json:"type"`
 	} `json:"priorityScoreFactors"`
+	IsAutofixable bool `json:"isAutofixable"`
 }
 
 type result struct {

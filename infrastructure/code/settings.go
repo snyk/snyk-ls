@@ -36,15 +36,12 @@ var (
 
 type codeSettings struct {
 	isAutofixEnabled concurrency.AtomicBool
-	// Files of this type shall have code actions enabled on them, see `GetFilters`
-	autofixExtensions *concurrency.AtomicMap
 }
 
 // Create new code settings
 func newCodeSettings() *codeSettings {
 	s := &codeSettings{}
 	s.isAutofixEnabled.Set(defaultAutofixEnabled)
-	s.autofixExtensions = nil
 	return s
 }
 
@@ -68,21 +65,6 @@ func (cs *codeSettings) SetAutofixEnabled(enabled bool) {
 	defer codeSettingsSingletonMutex.Unlock()
 
 	cs.isAutofixEnabled.Set(enabled)
-}
-
-// Does nothing if the extensions are already set
-func (cs *codeSettings) setAutofixExtensionsIfNotSet(autofixExtensions []string) {
-	codeSettingsSingletonMutex.Lock()
-	defer codeSettingsSingletonMutex.Unlock()
-
-	if cs.autofixExtensions != nil {
-		return
-	}
-
-	cs.autofixExtensions = &concurrency.AtomicMap{}
-	for _, ext := range autofixExtensions {
-		cs.autofixExtensions.Put(ext, true)
-	}
 }
 
 func getCodeEnablementUrl() string {
