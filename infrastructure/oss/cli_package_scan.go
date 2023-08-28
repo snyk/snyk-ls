@@ -72,7 +72,6 @@ func (cliScanner *CLIScanner) ScanPackages(
 			return
 		}
 	}
-	return
 }
 
 func (cliScanner *CLIScanner) getDependencies(config *config.Config, path string,
