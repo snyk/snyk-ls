@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
@@ -217,4 +219,24 @@ func Test_SetSeverityFilter(t *testing.T) {
 		modified = c.SetSeverityFilter(lowExcludedFilter)
 		assert.False(t, modified)
 	})
+}
+
+func Test_ManageBinariesAutomatically(t *testing.T) {
+	c := New()
+
+	// case: standalone, manage true
+	c.SetManageBinariesAutomatically(true)
+	assert.True(t, c.ManageBinariesAutomatically())
+	assert.True(t, c.ManageCliBinariesAutomatically())
+
+	// case: standalone, manage false
+	c.SetManageBinariesAutomatically(false)
+	assert.False(t, c.ManageBinariesAutomatically())
+	assert.False(t, c.ManageCliBinariesAutomatically())
+
+	// case: extension, manage true
+	c.SetManageBinariesAutomatically(true)
+	c.Engine().GetConfiguration().Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
+	assert.True(t, c.ManageBinariesAutomatically())
+	assert.False(t, c.ManageCliBinariesAutomatically())
 }

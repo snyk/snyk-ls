@@ -66,7 +66,7 @@ func (i *Initializer) Init() error {
 	logger := log.With().Str("method", "cli.Init").Logger()
 	cliInstalled := config.CurrentConfig().CliSettings().Installed()
 	logger.Debug().Str("cliPath", cliPathInConfig()).Msgf("CLI installed: %v", cliInstalled)
-	if !config.CurrentConfig().ManageBinariesAutomatically() {
+	if !config.CurrentConfig().ManageCliBinariesAutomatically() {
 		if !cliInstalled {
 			i.notifier.SendShowMessage(sglsp.Warning,
 				"Automatic CLI downloads are disabled and no CLI path is configured. Enable automatic downloads or set a valid CLI path.")
