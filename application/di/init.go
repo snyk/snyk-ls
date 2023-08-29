@@ -21,6 +21,8 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+
 	"github.com/adrg/xdg"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
@@ -128,6 +130,11 @@ func initInfrastructure() {
 	authProvider := cliauth.NewCliAuthenticationProvider(errorReporter)
 	authenticationService = snyk.NewAuthenticationService(authProvider, analytics, errorReporter, notifier)
 	snykCli := cli.NewExecutor(authenticationService, errorReporter, analytics, notifier)
+
+	if c.Engine().GetConfiguration().GetString(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION {
+		snykCli = cli.NewExtensionExecutor()
+	}
+
 	snykCodeClient = code.NewHTTPRepository(instrumentor, errorReporter, networkAccess.GetHttpClient)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)

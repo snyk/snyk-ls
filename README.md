@@ -241,7 +241,8 @@ synchronization. For further information please see [CONTRIBUTING.md](CONTRIBUTI
 level is `info`. This can be overruled by setting the env variable `SNYK_DEBUG_LEVEL`,
 e.g. `export SNYK_DEBUG_LEVEL=debug`
 
-`-licenses` displays the [licenses](https://github.com/snyk/snyk-ls/tree/main/licenses) used by Language Server
+`-licenses` (running standalone) displays the [licenses](https://github.com/snyk/snyk-ls/tree/main/licenses) used by Language Server\
+`--licenses` (running within Snyk CLI) 
 
 `-o <FORMAT>` allows to specify the output format (`md` or `html`) for issues
 

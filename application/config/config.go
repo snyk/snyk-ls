@@ -30,6 +30,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+
 	"github.com/adrg/xdg"
 	"github.com/denisbrodbeck/machineid"
 	"github.com/rs/zerolog"
@@ -236,6 +238,7 @@ func initWorkFlowEngine(c *Config) {
 	c.storage = NewStorage()
 	conf.SetStorage(c.storage)
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 	err := localworkflows.InitWhoAmIWorkflow(c.engine)
 	if err != nil {
 		log.Err(err).Msg("unable to initialize WhoAmI workflow")
@@ -624,6 +627,13 @@ func (c *Config) ManageBinariesAutomatically() bool {
 
 func (c *Config) SetManageBinariesAutomatically(enabled bool) {
 	c.manageBinariesAutomatically.Set(enabled)
+}
+
+func (c *Config) ManageCliBinariesAutomatically() bool {
+	if c.engine.GetConfiguration().GetString(cli_constants.EXECUTION_MODE_KEY) != cli_constants.EXECUTION_MODE_VALUE_STANDALONE {
+		return false
+	}
+	return c.ManageBinariesAutomatically()
 }
 
 func (c *Config) IsTelemetryEnabled() bool {
