@@ -21,28 +21,23 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"runtime/debug"
-	"strings"
+
+	"github.com/snyk/go-application-framework/pkg/utils"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
+	"github.com/snyk/snyk-ls/application/entrypoint"
+
+	"github.com/snyk/snyk-ls/ls_extension"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/server"
-	"github.com/snyk/snyk-ls/infrastructure/sentry"
 )
 
 func main() {
-	defer func() {
-		if err := recover(); err != nil {
-			fmt.Println("🚨 Panicking 🚨")
-			fmt.Println(err)
-			debug.PrintStack()
-			er := sentry.NewSentryErrorReporter(nil)
-			er.CaptureError(fmt.Errorf("%v", err))
-			er.FlushErrorReporting()
-		}
-	}()
+	defer entrypoint.OnPanicRecover()
 
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	c := config.CurrentConfig()
@@ -52,12 +47,7 @@ func main() {
 		os.Exit(1)
 	}
 	if output != "" {
-		fmt.Fprintln(os.Stderr, "License information")
-		fmt.Fprintln(os.Stderr, "Snyk Language Server is licensed under the Apache 2.0 license")
-		fmt.Fprintln(os.Stderr, "The following dependencies and licenses are used in this project:")
-		fmt.Fprintln(os.Stderr, strings.ReplaceAll(output, " ", "\n"))
-		fmt.Fprintln(os.Stderr,
-			"You can access the detailed license information under https://github.com/snyk/snyk-ls/tree/main/licenses")
+		entrypoint.PrintLicenseText(output)
 	}
 
 	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
@@ -89,6 +79,9 @@ func parseFlags(args []string, c *config.Config) (string, error) {
 		"licenses",
 		false,
 		"displays license information")
+
+	// remove extension command if specified to not fail flag parsing
+	args = utils.RemoveSimilar(args, workflow.GetCommandFromWorkflowIdentifier(ls_extension.WORKFLOWID_LS))
 
 	err := flags.Parse(args[1:])
 	if err != nil {
