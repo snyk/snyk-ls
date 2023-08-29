@@ -857,11 +857,11 @@ func (c *Config) IsFedramp() bool {
 	if err != nil {
 		return false
 	}
-	hostnameParts := strings.Split(u.Hostname(), ".")
-	if len(hostnameParts) < 4 {
-		return false
-	}
-	fedrampInstance := strings.HasPrefix(hostnameParts[1], "fedramp")
-	fedrampDomain := hostnameParts[2] == "snykgov" && hostnameParts[3] == "io"
+
+	host := strings.ToLower(u.Hostname())
+
+	// fedramp instance should have the format https://*.fedramp*.snykgov.io
+	fedrampInstance := strings.Contains(host, "fedramp")
+	fedrampDomain := strings.HasSuffix(host, ".snykgov.io")
 	return fedrampInstance && fedrampDomain
 }
