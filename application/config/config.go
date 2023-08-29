@@ -858,7 +858,7 @@ func (c *Config) IsFedramp() bool {
 		return false
 	}
 	hostnameParts := strings.Split(u.Hostname(), ".")
-	if len(hostnameParts) < 3 {
+	if len(hostnameParts) < 4 {
 		return false
 	}
 	fedrampInstance := strings.HasPrefix(hostnameParts[1], "fedramp")
