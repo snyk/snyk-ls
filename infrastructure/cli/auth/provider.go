@@ -36,6 +36,7 @@ import (
 
 type CliAuthenticationProvider struct {
 	authURL       string
+	cli           cli.Executor
 	errorReporter error_reporting.ErrorReporter
 }
 
@@ -43,8 +44,8 @@ func (a *CliAuthenticationProvider) GetCheckAuthenticationFunction() snyk.Authen
 	return snyk.AuthenticationCheck
 }
 
-func NewCliAuthenticationProvider(errorReporter error_reporting.ErrorReporter) snyk.AuthenticationProvider {
-	return &CliAuthenticationProvider{"", errorReporter}
+func NewCliAuthenticationProvider(errorReporter error_reporting.ErrorReporter, cli cli.Executor) snyk.AuthenticationProvider {
+	return &CliAuthenticationProvider{"", cli, errorReporter}
 }
 
 func (a *CliAuthenticationProvider) SetAuthURL(url string) {
