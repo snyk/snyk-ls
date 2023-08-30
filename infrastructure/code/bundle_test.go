@@ -120,7 +120,7 @@ func Test_AutofixMessages(t *testing.T) {
 	bundle := Bundle{
 		SnykCode:     &fakeSnykCode,
 		notifier:     mockNotifier,
-		instrumentor: performance.NewLocalInstrumentor(),
+		instrumentor: performance.NewInstrumentor(),
 	}
 
 	t.Run("Shows attempt message when fix requested", func(t *testing.T) {

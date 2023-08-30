@@ -213,20 +213,23 @@ func convertScanResultToIssues(
 	fileContent []byte,
 	ls learn.Service,
 	ep error_reporting.ErrorReporter,
+	packageIssueCache map[string][]snyk.Issue,
 ) []snyk.Issue {
 	var issues []snyk.Issue
 
 	duplicateCheckMap := map[string]bool{}
 
 	for _, issue := range res.Vulnerabilities {
-		key := issue.Id + "@" + issue.PackageName
-		if duplicateCheckMap[key] {
+		packageKey := issue.PackageName + "@" + issue.Version
+		duplicateKey := issue.Id + "|" + issue.PackageName
+		if duplicateCheckMap[duplicateKey] {
 			continue
 		}
-
 		issueRange := findRange(issue, path, fileContent)
-		issues = append(issues, toIssue(path, issue, issueRange, ls, ep))
-		duplicateCheckMap[key] = true
+		snykIssue := toIssue(path, issue, issueRange, ls, ep)
+		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
+		issues = append(issues, snykIssue)
+		duplicateCheckMap[duplicateKey] = true
 	}
 	return issues
 }

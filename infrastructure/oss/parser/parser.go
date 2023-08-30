@@ -37,6 +37,7 @@ func (d Dependency) String() string {
 type DependencyParser interface {
 	// Parse analyzes the given files contents and returns the found dependencies
 	Parse(filePath string) (dependencies []Dependency, err error)
+	ParseContent(content string) (dependencies []Dependency, err error)
 }
 
 var parserConstructors = map[string]func(config *config.Config) DependencyParser{

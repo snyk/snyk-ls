@@ -68,7 +68,7 @@ func setupScanner(testProductScanners ...ProductScanner) (
 	authenticationService := NewAuthenticationService(authenticationProvider, analytics, er, notifier)
 	scanner = NewDelegatingScanner(
 		initialize.NewDelegatingInitializer(),
-		performance.NewLocalInstrumentor(),
+		performance.NewInstrumentor(),
 		analytics,
 		scanNotifier,
 		apiClient,

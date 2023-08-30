@@ -114,7 +114,19 @@ func initHandlers(c *config.Config, srv *jrpc2.Server, handlers handler.Map) {
 
 func textDocumentDidChangeHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (any, error) {
+		c := config.CurrentConfig()
+		logger := c.Logger().With().Str("method", "TextDocumentDidChangeHandler").Logger()
+		logger.Trace().Msg("RECEIVING")
+		defer logger.Trace().Msg("SENDING")
+
 		di.FileWatcher().SetFileAsChanged(params.TextDocument.URI)
+
+		for _, change := range params.ContentChanges {
+			if packageScanner, ok := di.Scanner().(snyk.PackageScanner); ok {
+				packageScanner.ScanPackages(ctx, c, uri.PathFromUri(params.TextDocument.URI), change.Text)
+			}
+		}
+
 		return nil, nil
 	})
 }
@@ -191,7 +203,7 @@ func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 		method := "initializeHandler"
 		log.Info().Str("method", method).Any("params", params).Msg("RECEIVING")
 		InitializeSettings(params.InitializationOptions)
-		config.CurrentConfig().SetClientCapabilities(params.Capabilities)
+		c.SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
 		di.Analytics().Initialise()
 
@@ -220,7 +232,7 @@ func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 				TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{
 					Options: &sglsp.TextDocumentSyncOptions{
 						OpenClose:         true,
-						Change:            sglsp.TDSKIncremental,
+						Change:            sglsp.TDSKFull,
 						WillSave:          true,
 						WillSaveWaitUntil: true,
 						Save:              &sglsp.SaveOptions{IncludeText: true},
@@ -444,6 +456,10 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 				Diagnostics: converter.ToDiagnostics(filteredIssues),
 			}
 			di.Notifier().Send(diagnosticParams)
+		}
+
+		if scanner, ok := di.Scanner().(snyk.PackageScanner); ok {
+			scanner.ScanPackages(context.Background(), config.CurrentConfig(), filePath, "")
 		}
 		return nil, nil
 	})

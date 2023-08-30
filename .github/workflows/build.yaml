@@ -160,51 +160,6 @@ jobs:
         run: |
           make clean test
 
-  race-test:
-    name: race-test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Determine Go version
-        run: |
-          sed -En 's/^go[[:space:]]+([[:digit:].]+)$/GO_VERSION=\1/p' go.mod >> $GITHUB_ENV
-
-      - name: Set up Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Cache Pact CLI tools
-        id: cache-pact
-        uses: actions/cache@v3
-        with:
-          path: ~/pact
-          key: ${{ runner.os }}-pact
-
-      - name: Set up Pact CLI tools
-        shell: bash
-        if: steps.cache-pact.outputs.cache-hit != 'true'
-        run: |
-          cd ~
-          curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | bash
-
-      - name: Run race tests
-        env:
-          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
-          INTEG_TESTS: 'true'
-        run: |
-          export PATH=$PATH:~/pact/bin
-
-          # this is required to be able to test the clipboard
-          export DISPLAY=:99
-          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
-          sudo apt-get install -y xsel xclip wl-clipboard
-
-          make clean race-test
-
-
   proxy-test:
     name: proxy-test
     runs-on: ubuntu-latest

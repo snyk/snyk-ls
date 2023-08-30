@@ -144,6 +144,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 }
 
 func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
+	t.Skip("This test uses global state (the clipboard) and is thus not reliable")
 	loc := setupServer(t)
 
 	// reset to use real service

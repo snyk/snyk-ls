@@ -1,0 +1,176 @@
+/*
+ * © 2023 Snyk Limited
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package oss
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/exp/maps"
+
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
+	"github.com/snyk/snyk-ls/domain/observability/performance"
+	"github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/oss/parser"
+	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/testutil"
+)
+
+func TestCLIScanner_ScanPackages_WithoutContent(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	testFile, scanner := setupCLIScannerAsPackageScanner(t, c)
+
+	scanner.ScanPackages(context.Background(), c, testFile, "")
+
+	assert.Len(t, scanner.inlineValues, 1)
+	assert.Len(t, scanner.packageIssueCache, 2)
+}
+
+func TestCLIScanner_ScanPackages_WithContent(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	testFilePath, scanner := setupCLIScannerAsPackageScanner(t, c)
+
+	bytes, err := os.ReadFile(testFilePath)
+	fileContent := string(bytes)
+	assert.NoError(t, err)
+
+	scanner.ScanPackages(context.Background(), c, testFilePath, fileContent)
+
+	assert.Len(t, scanner.inlineValues, 1)
+	assert.Len(t, scanner.packageIssueCache, 2)
+}
+
+func TestCLIScanner_ScanPackages_WithContentAndNotSupportedFileExtension(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	testFilePath, scanner := setupCLIScannerAsPackageScanner(t, c)
+
+	bytes, err := os.ReadFile(testFilePath)
+	fileContent := string(bytes)
+	assert.NoError(t, err)
+
+	scanner.ScanPackages(context.Background(), c, "test.php", fileContent)
+
+	assert.Len(t, scanner.inlineValues, 0)
+	assert.Len(t, scanner.packageIssueCache, 0)
+}
+
+func TestCLIScanner_isPackageScanSupported_Positive(t *testing.T) {
+	c := testutil.UnitTest(t)
+	_, cliScanner := setupCLIScannerAsPackageScanner(t, c)
+
+	assert.True(t, cliScanner.isPackageScanSupported("test.html"))
+	assert.True(t, cliScanner.isPackageScanSupported("test.htm"))
+}
+func TestCLIScanner_isPackageScanSupported_Negative(t *testing.T) {
+	c := testutil.UnitTest(t)
+	_, cliScanner := setupCLIScannerAsPackageScanner(t, c)
+
+	assert.False(t, cliScanner.isPackageScanSupported("test.php"))
+}
+
+func TestCLIScanner_updateCachedDependencies_returns_not_cached_deps(t *testing.T) {
+	c := testutil.UnitTest(t)
+	_, cliScanner := setupCLIScannerAsPackageScanner(t, c)
+
+	dependencies := []parser.Dependency{
+		{
+			ArtifactID: "test",
+			Version:    "1.0.0",
+		},
+		{
+			ArtifactID: "test2",
+			Version:    "2.0.0",
+		},
+	}
+
+	notCached := cliScanner.updateCachedDependencies(dependencies)
+
+	assert.Len(t, notCached, 2)
+}
+
+func TestCLIScanner_updateCachedDependencies_updates_range_of_issues_in_cache(t *testing.T) {
+	c := testutil.UnitTest(t)
+	testFilePath, cliScanner := setupCLIScannerAsPackageScanner(t, c)
+
+	// first (=cache deps)
+	cliScanner.ScanPackages(context.Background(), c, testFilePath, "")
+	dependencies, err := cliScanner.getDependencies(c, testFilePath, "")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, dependencies)
+
+	assert.Len(t, cliScanner.updateCachedDependencies(dependencies), 1)
+
+	bytes, err := os.ReadFile(testFilePath)
+	assert.NoError(t, err)
+
+	// this should move the range of the issue in the cache down
+	fileContent := "\n\n\n\n" + string(bytes)
+
+	updatedDependencies, err := cliScanner.getDependencies(c, testFilePath, fileContent)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, updatedDependencies)
+
+	// we need to copy the cache to a different map because updateCachedDependencies will
+	// change the range of the issues in the map, which is a pointer
+	oldPackageCache := make(map[string][]snyk.Issue)
+	maps.Copy(oldPackageCache, cliScanner.packageIssueCache)
+
+	assert.Len(t, cliScanner.updateCachedDependencies(updatedDependencies), 1)
+
+	for key, issues := range oldPackageCache {
+		newIssues := cliScanner.packageIssueCache[key]
+		for i, issue := range issues {
+			assert.NotEqual(t, issue, newIssues[i])
+			assert.Equal(t, issue.ID, newIssues[i].ID)
+			assert.Equal(t, issue.Range.Start.Line, newIssues[i].Range.Start.Line-4)
+			assert.Equal(t, issue.Range.End.Line, newIssues[i].Range.End.Line-4)
+		}
+	}
+
+}
+
+func setupCLIScannerAsPackageScanner(t *testing.T, c *config.Config) (string, *CLIScanner) {
+	notifier := notification.NewMockNotifier()
+	instrumentor := performance.NewInstrumentor()
+	errorReporter := error_reporting.NewTestErrorReporter()
+	analytics := ux.NewTestAnalytics()
+	testDir := "testdata"
+	testFilePath, err := filepath.Abs(filepath.Join(testDir, "test.html"))
+	assert.NoError(t, err)
+	testResult, err := filepath.Abs(filepath.Join(testDir, "packageScanTestHtmlOutput.json"))
+	assert.NoError(t, err)
+	cliExecutor := cli.NewTestExecutorWithResponseFromFile(testResult)
+	scanner := NewCLIScanner(
+		instrumentor,
+		errorReporter,
+		analytics,
+		cliExecutor,
+		getLearnMock(t),
+		notifier,
+		c,
+	).(*CLIScanner)
+	return testFilePath, scanner
+}

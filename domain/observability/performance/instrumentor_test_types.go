@@ -69,7 +69,7 @@ type SpanRecorder interface {
 	Finish(span Span)
 }
 
-func NewLocalInstrumentor() Instrumentor {
+func NewInstrumentor() Instrumentor {
 	return &localInstrumentor{SpanRecorder: newSpanRecorder()}
 }
 
