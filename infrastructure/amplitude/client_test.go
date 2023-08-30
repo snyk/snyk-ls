@@ -31,7 +31,7 @@ import (
 )
 
 func TestClient_IdentifyAuthenticatedUser(t *testing.T) {
-	s, fakeSegmentClient := setupUnitTest(t)
+	s, fakeSegmentClient, _ := setupUnitTest(t)
 
 	s.Identify()
 
@@ -44,8 +44,8 @@ func TestClient_IdentifyAuthenticatedUser(t *testing.T) {
 }
 
 func TestClient_IdentifyAnonymousUser(t *testing.T) {
-	s, _ := setupUnitTest(t)
-	config.CurrentConfig().SetToken("")
+	s, _, c := setupUnitTest(t)
+	c.SetToken("")
 
 	s.Identify()
 
@@ -53,8 +53,8 @@ func TestClient_IdentifyAnonymousUser(t *testing.T) {
 }
 
 func TestClient_IdentifyWithDisabledTelemetry(t *testing.T) {
-	s, fakeSegmentClient := setupUnitTest(t)
-	config.CurrentConfig().SetTelemetryEnabled(false)
+	s, fakeSegmentClient, c := setupUnitTest(t)
+	c.SetTelemetryEnabled(false)
 
 	s.Identify()
 
@@ -62,9 +62,18 @@ func TestClient_IdentifyWithDisabledTelemetry(t *testing.T) {
 	assert.Equal(t, 0, len(fakeSegmentClient.trackedEvents))
 }
 
+func TestClient_NoIdentifyForFedramp(t *testing.T) {
+	s, fakeSegmentClient, c := setupUnitTest(t)
+	c.SetTelemetryEnabled(true)
+	c.UpdateApiEndpoints("https://api.fedramp.snykgov.io")
+
+	s.Identify()
+
+	assert.Equal(t, 0, len(fakeSegmentClient.trackedEvents))
+}
+
 func Test_AnalyticEvents(t *testing.T) {
-	s, fakeSegmentClient := setupUnitTest(t)
-	conf := config.CurrentConfig()
+	s, fakeSegmentClient, conf := setupUnitTest(t)
 	conf.SetRuntimeVersion("1.2.3")
 	conf.SetOsArch("amd64")
 	conf.SetOsPlatform("linux")
@@ -162,13 +171,22 @@ func Test_AnalyticEvents(t *testing.T) {
 		})
 	}
 }
+func Test_AnalyticEventsNotSentForFedramp(t *testing.T) {
+	s, fakeSegmentClient, c := setupUnitTest(t)
+	c.SetTelemetryEnabled(true)
+	c.UpdateApiEndpoints("https://api.fedramp.snykgov.io")
 
-func setupUnitTest(t *testing.T) (*Client, *FakeSegmentClient) {
-	testutil.UnitTest(t)
+	s.PluginIsInstalled(ux.PluginIsInstalledProperties{})
+
+	assert.Equal(t, 0, len(fakeSegmentClient.trackedEvents))
+}
+
+func setupUnitTest(t *testing.T) (*Client, *FakeSegmentClient, *config.Config) {
+	c := testutil.UnitTest(t)
 	authFunc := func() (string, error) { return "fakeUser", nil }
 	s := NewAmplitudeClient(authFunc, error_reporting.NewTestErrorReporter()).(*Client)
 	fakeSegmentClient := &FakeSegmentClient{mutex: &sync.Mutex{}}
-	config.CurrentConfig().SetIntegrationName("VS Code")
+	c.SetIntegrationName("VS Code")
 	s.destination.client = fakeSegmentClient
-	return s, fakeSegmentClient
+	return s, fakeSegmentClient, c
 }

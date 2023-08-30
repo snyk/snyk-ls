@@ -31,7 +31,7 @@ import (
 var installEventFile = filepath.Join(config.CurrentConfig().CliSettings().DefaultBinaryInstallPath(), ".installed_event_sent")
 
 func Test_NewInstallationCreatesStateFile(t *testing.T) {
-	s, _ := setupUnitTest(t)
+	s, _, _ := setupUnitTest(t)
 	cleanupInstallEventFile(t)
 
 	s.captureInstalledEvent()
@@ -41,8 +41,7 @@ func Test_NewInstallationCreatesStateFile(t *testing.T) {
 }
 
 func Test_NewInstallationSendsInstallEvent(t *testing.T) {
-	s, fakeSegmentClient := setupUnitTest(t)
-	conf := config.CurrentConfig()
+	s, fakeSegmentClient, conf := setupUnitTest(t)
 	conf.SetRuntimeVersion("1.2.3")
 	conf.SetOsArch("amd64")
 	conf.SetOsPlatform("linux")
@@ -68,7 +67,7 @@ func Test_NewInstallationSendsInstallEvent(t *testing.T) {
 }
 
 func Test_ExistingInstallationDoesntSendInstallEvent(t *testing.T) {
-	s, fakeSegmentClient := setupUnitTest(t)
+	s, fakeSegmentClient, _ := setupUnitTest(t)
 	cleanupInstallEventFile(t)
 	f, err := os.Create(installEventFile)
 	if err != nil {

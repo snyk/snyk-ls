@@ -62,7 +62,8 @@ func addUserId() {
 }
 
 func beforeSend(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
-	if config.CurrentConfig().IsErrorReportingEnabled() {
+	c := config.CurrentConfig()
+	if c.IsErrorReportingEnabled() && !c.IsFedramp() {
 		return event
 	}
 	return nil

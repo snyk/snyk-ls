@@ -42,9 +42,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
-const govDomain = "snykgov.io"
-
-var cachedOriginalPath string = ""
+var cachedOriginalPath = ""
 
 func workspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeConfigurationParams) (bool, error) {
@@ -279,7 +277,7 @@ func updateApiEndpoints(settings lsp.Settings, initialization bool) {
 	}
 
 	// overwrite authentication method if gov domain
-	if strings.Contains(snykApiUrl, govDomain) {
+	if c.IsFedramp() {
 		settings.AuthenticationMethod = lsp.OAuthAuthentication
 		updateAuthenticationMethod(settings)
 	}
@@ -351,14 +349,14 @@ func updatePathFromSettings(settings lsp.Settings) {
 	}
 
 	if len(settings.Path) > 0 {
-		os.Unsetenv("Path") // unset the path first to work around issues on Windows OS, where PATH can be Path
+		_ = os.Unsetenv("Path") // unset the path first to work around issues on Windows OS, where PATH can be Path
 		err := os.Setenv("PATH", settings.Path+string(os.PathListSeparator)+cachedOriginalPath)
 		log.Info().Str("method", "updatePathFromSettings").Msgf("added configured path to PATH Environment Variable '%s'", os.Getenv("PATH"))
 		if err != nil {
 			log.Err(err).Str("method", "updatePathFromSettings").Msgf("couldn't add path %s", settings.Path)
 		}
 	} else {
-		os.Setenv("PATH", cachedOriginalPath)
+		_ = os.Setenv("PATH", cachedOriginalPath)
 		log.Info().Str("method", "updatePathFromSettings").Msgf("restore initial path '%s'", os.Getenv("PATH"))
 	}
 }
