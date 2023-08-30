@@ -32,6 +32,7 @@ func (h htmlParser) ParseContent(content string) (dependencies []Dependency, err
 	doc, err := html.Parse(strings.NewReader(content))
 	if err != nil {
 		logger.Err(err).Msg("couldn't parse file")
+		return nil, err
 	}
 
 	deps := extractSrc(doc)
@@ -181,6 +182,9 @@ func (h htmlParser) dependencyFromString(dep string) (dependency *Dependency, er
 }
 
 func extractSrc(n *html.Node) []string {
+	if n == nil {
+		return []string{}
+	}
 	deps := []string{}
 	if n.Type == html.ElementNode && n.Data == "script" {
 		for _, attr := range n.Attr {

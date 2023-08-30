@@ -52,8 +52,15 @@ func (cliScanner *CLIScanner) ScanPackages(
 
 	// parse given path & content
 	dependencies, err := cliScanner.getDependencies(config, path, content)
-	if err != nil {
-		logger.Err(err).Msg("error parsing file")
+
+	if err != nil || len(dependencies) == 0 {
+		if err != nil {
+			logger.Err(err).Msg("error parsing file")
+		} else {
+			logger.Debug().Msg("no dependencies found")
+		}
+		logger.Debug().Msg("clearing inline values")
+		cliScanner.ClearInlineValues(path)
 		return
 	}
 
