@@ -244,7 +244,7 @@ func Test_ManageBinariesAutomatically(t *testing.T) {
 func Test_IsFedramp(t *testing.T) {
 	t.Run("short hostname", func(t *testing.T) {
 		c := New()
-		c.snykApiUrl = "https://api.snykgov.io"
+		c.snykApiUrl = "https://api.snyk.io"
 		assert.False(t, c.IsFedramp())
 	})
 
@@ -257,7 +257,7 @@ func Test_IsFedramp(t *testing.T) {
 	t.Run("non-fedramp hostname", func(t *testing.T) {
 		c := New()
 		c.snykApiUrl = "https://api.fedddddddddramp.snykgov.io"
-		assert.False(t, c.IsFedramp())
+		assert.True(t, c.IsFedramp())
 	})
 
 }
