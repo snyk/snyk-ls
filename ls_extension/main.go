@@ -17,6 +17,7 @@
 package ls_extension
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -24,6 +25,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/entrypoint"
 	"github.com/snyk/snyk-ls/application/server"
+	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 
 	"github.com/rs/zerolog"
@@ -94,7 +96,9 @@ func lsWorkflow(
 		fmt.Println(config.Version)
 		return output, err
 	} else if extensionConfig.GetBool("licenses") {
-		entrypoint.PrintLicenseText(config.LicenseInformation)
+		about, err := cli.NewExtensionExecutor().Execute(context.Background(), []string{"snyk", "--about"}, "")
+		fmt.Println(string(about))
+
 		return output, err
 	} else {
 		log.Trace().Interface("environment", os.Environ()).Msg("start environment")
