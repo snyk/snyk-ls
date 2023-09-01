@@ -206,7 +206,6 @@ func New() *Config {
 	c.configFile = ""
 	c.format = "md"
 	c.isErrorReportingEnabled.Set(true)
-	c.isTelemetryEnabled.Set(true)
 	c.isSnykOssEnabled.Set(true)
 	c.isSnykIacEnabled.Set(true)
 	c.manageBinariesAutomatically.Set(true)
@@ -227,6 +226,7 @@ func New() *Config {
 		log.Warn().Err(err).Msg("unable to initialize workflow engine")
 	}
 	c.enableSnykLearnCodeActions = true
+	c.SetTelemetryEnabled(true)
 
 	c.clientSettingsFromEnv()
 	return c
@@ -642,14 +642,15 @@ func (c *Config) IsTelemetryEnabled() bool {
 
 func (c *Config) SetTelemetryEnabled(enabled bool) {
 	c.isTelemetryEnabled.Set(enabled)
+	c.engine.GetConfiguration().Set(configuration.ANALYTICS_DISABLED, !enabled)
 }
 
 func (c *Config) telemetryEnablementFromEnv() {
 	value := os.Getenv(EnableTelemetry)
 	if value == "1" {
-		c.isTelemetryEnabled.Set(false)
+		c.SetTelemetryEnabled(false)
 	} else {
-		c.isTelemetryEnabled.Set(true)
+		c.SetTelemetryEnabled(true)
 	}
 }
 
