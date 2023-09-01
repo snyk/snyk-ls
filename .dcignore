@@ -1548,3 +1548,6 @@ build/
 
 # ignore TLS verify warning
 internal/httpclient/httpclient.go
+
+# ignore Hardcoded Credentials false positive
+infrastructure/amplitude/segment_plugin_test.go
