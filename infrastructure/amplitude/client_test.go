@@ -174,7 +174,7 @@ func Test_AnalyticEvents(t *testing.T) {
 func Test_AnalyticEventsNotSentForFedramp(t *testing.T) {
 	s, fakeSegmentClient, c := setupUnitTest(t)
 	c.SetTelemetryEnabled(true)
-	c.UpdateApiEndpoints("https://api.fedramp.snykgov.io")
+	c.UpdateApiEndpoints("https://api.feddramp.snykgov.io")
 
 	s.PluginIsInstalled(ux.PluginIsInstalledProperties{})
 

@@ -864,8 +864,7 @@ func (c *Config) IsFedramp() bool {
 
 	host := strings.ToLower(u.Hostname())
 
-	// fedramp instance should have the format https://*.fedramp*.snykgov.io
-	fedrampInstance := strings.Contains(host, "fedramp")
-	fedrampDomain := strings.HasSuffix(host, ".snykgov.io")
-	return fedrampInstance && fedrampDomain
+	// fedramp instance should have the format https://*.snykgov.io
+	snykgovDomain := strings.HasSuffix(host, ".snykgov.io")
+	return snykgovDomain
 }
