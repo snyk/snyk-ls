@@ -20,45 +20,16 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
-	"github.com/snyk/snyk-ls/internal/data_structure"
 )
-
-const localEngineMisConfiguredActionItemTitle snyk.MessageAction = "SCLE Docs"
-const closeLocalEngineMisConfiguredActionItemTitle snyk.MessageAction = "Close"
-const localEngineMisConfiguredMsg = "Snyk Code Local Engine (SCLE) is enabled but the SCLE URL is not configured. Read our docs on how you can configure the SCLE URL"
-const localEngineDocsURL = "https://docs.snyk.io/products/snyk-code/deployment-options/snyk-code-local-engine/cli-and-ide"
 
 func (sc *Scanner) isLocalEngineEnabled(sastResponse snyk_api.SastResponse) bool {
 	log.Debug().Any("sastResponse", sastResponse).Msg("sast response")
 	return sastResponse.SastEnabled && sastResponse.LocalCodeEngine.Enabled
 }
 
-func (sc *Scanner) updateCodeApiLocalEngine(sastResponse snyk_api.SastResponse) bool {
-	method := "updateCodeApiLocalEngine"
-	if sc.isLocalEngineEnabled(sastResponse) && len(sastResponse.LocalCodeEngine.Url) > 1 {
-		config.CurrentConfig().SetSnykCodeApi(sastResponse.LocalCodeEngine.Url)
-		api := config.CurrentConfig().SnykCodeApi()
-		log.Debug().Str("snykCodeApi", api).Msg("updated Snyk Code API Local Engine")
-		return true
-	}
-
-	actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
-	commandData := snyk.CommandData{
-		Title:     snyk.OpenBrowserCommand,
-		CommandId: snyk.OpenBrowserCommand,
-		Arguments: []any{localEngineDocsURL},
-	}
-
-	actionCommandMap.Add(localEngineMisConfiguredActionItemTitle, commandData)
-	actionCommandMap.Add(closeLocalEngineMisConfiguredActionItemTitle, snyk.CommandData{})
-
-	sc.notifier.Send(snyk.ShowMessageRequest{
-		Message: localEngineMisConfiguredMsg,
-		Type:    snyk.Error,
-		Actions: actionCommandMap,
-	})
-	log.Error().Str("method", method).Msg(localEngineMisConfiguredMsg)
-	return false
+func (sc *Scanner) updateCodeApiLocalEngine(sastResponse snyk_api.SastResponse) {
+	config.CurrentConfig().SetSnykCodeApi(sastResponse.LocalCodeEngine.Url)
+	api := config.CurrentConfig().SnykCodeApi()
+	log.Debug().Str("snykCodeApi", api).Msg("updated Snyk Code API Local Engine")
 }
