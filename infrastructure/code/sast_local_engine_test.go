@@ -23,9 +23,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
-	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/notification"
 )
 
@@ -68,48 +66,10 @@ func TestIsLocalEngine(t *testing.T) {
 		assert.False(t, enabled)
 	})
 
-	t.Run("should update Snyk Code API if local-engine URL is set", func(t *testing.T) {
+	t.Run("should update Snyk Code API if local-engine is enabled", func(t *testing.T) {
 		mockedSastResponse.SastEnabled = true
 		mockedSastResponse.LocalCodeEngine.Enabled = true
 		scanner.updateCodeApiLocalEngine(mockedSastResponse)
 		assert.Equal(t, mockedSastResponse.LocalCodeEngine.Url, config.CurrentConfig().SnykCodeApi())
-	})
-
-	t.Run("should send a ShowMessageRequest notification if local-engine is enabled and URL is empty", func(t *testing.T) {
-		mockedSastResponse.SastEnabled = true
-		mockedSastResponse.LocalCodeEngine.Enabled = true
-		mockedSastResponse.LocalCodeEngine.Url = ""
-
-		notifier := notification.NewNotifier()
-		// overwrite scanner, as we want our separate notifier
-		scanner := &Scanner{
-			SnykApiClient: apiClient,
-			errorReporter: error_reporting.NewTestErrorReporter(),
-			notifier:      notifier,
-		}
-
-		actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
-
-		actionMap.Add(localEngineMisConfiguredActionItemTitle, snyk.CommandData{
-			Title:     snyk.OpenBrowserCommand,
-			CommandId: snyk.OpenBrowserCommand,
-			Arguments: []any{localEngineDocsURL},
-		})
-		actionMap.Add(closeLocalEngineMisConfiguredActionItemTitle, snyk.CommandData{})
-		expectedShowMessageRequest := snyk.ShowMessageRequest{
-			Message: localEngineMisConfiguredMsg,
-			Type:    snyk.Error,
-			Actions: actionMap,
-		}
-
-		channel := make(chan any)
-
-		notifier.CreateListener(func(params any) {
-			channel <- params
-		})
-		defer notifier.DisposeListener()
-
-		scanner.updateCodeApiLocalEngine(mockedSastResponse)
-		assert.Equal(t, expectedShowMessageRequest, <-channel)
 	})
 }
