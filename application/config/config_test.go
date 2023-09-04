@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
@@ -217,4 +219,65 @@ func Test_SetSeverityFilter(t *testing.T) {
 		modified = c.SetSeverityFilter(lowExcludedFilter)
 		assert.False(t, modified)
 	})
+}
+
+func Test_ManageBinariesAutomatically(t *testing.T) {
+	c := New()
+
+	// case: standalone, manage true
+	c.SetManageBinariesAutomatically(true)
+	assert.True(t, c.ManageBinariesAutomatically())
+	assert.True(t, c.ManageCliBinariesAutomatically())
+
+	// case: standalone, manage false
+	c.SetManageBinariesAutomatically(false)
+	assert.False(t, c.ManageBinariesAutomatically())
+	assert.False(t, c.ManageCliBinariesAutomatically())
+
+	// case: extension, manage true
+	c.SetManageBinariesAutomatically(true)
+	c.Engine().GetConfiguration().Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
+	assert.True(t, c.ManageBinariesAutomatically())
+	assert.False(t, c.ManageCliBinariesAutomatically())
+}
+
+func Test_IsFedramp(t *testing.T) {
+	t.Run("short hostname", func(t *testing.T) {
+		c := New()
+		c.snykApiUrl = "https://api.snyk.io"
+		assert.False(t, c.IsFedramp())
+	})
+
+	t.Run("fedramp hostname", func(t *testing.T) {
+		c := New()
+		c.snykApiUrl = "https://api.fedramp.snykgov.io"
+		assert.True(t, c.IsFedramp())
+	})
+
+	t.Run("non-fedramp hostname", func(t *testing.T) {
+		c := New()
+		c.snykApiUrl = "https://api.fedddddddddramp.snykgov.io"
+		assert.True(t, c.IsFedramp())
+	})
+
+}
+
+func Test_IsTelemetryEnabled(t *testing.T) {
+	t.Setenv(EnableTelemetry, "1")
+	c := New()
+
+	// case: disabled via env var
+	assert.False(t, c.IsTelemetryEnabled())
+	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.ANALYTICS_DISABLED))
+
+	// case: enabled via setter
+	c.SetTelemetryEnabled(true)
+	assert.True(t, c.IsTelemetryEnabled())
+	assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.ANALYTICS_DISABLED))
+
+	// case: disabled via setter
+	c.SetTelemetryEnabled(false)
+	assert.False(t, c.IsTelemetryEnabled())
+	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.ANALYTICS_DISABLED))
+
 }

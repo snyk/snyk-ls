@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 func TestNpmRangeFinder_Find(t *testing.T) {
@@ -47,7 +46,7 @@ func TestNpmRangeFinder_Find(t *testing.T) {
 	var testPath, _ = filepath.Abs("testdata/package.json")
 	var testContent, _ = os.ReadFile(testPath)
 	npmRangeFinder := NpmRangeFinder{
-		uri:         uri.PathToUri(testPath),
+		uri:         testPath,
 		fileContent: testContent,
 		myRange:     snyk.Range{},
 	}
@@ -85,7 +84,7 @@ func TestNpmRangeFinder_Find_Scoped_Packages(t *testing.T) {
 	var testPath, _ = filepath.Abs("testdata/package.json")
 	var testContent, _ = os.ReadFile(testPath)
 	npmRangeFinder := NpmRangeFinder{
-		uri:         uri.PathToUri(testPath),
+		uri:         testPath,
 		fileContent: testContent,
 		myRange:     snyk.Range{},
 	}

@@ -77,5 +77,5 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 		assert.NoError(t, err)
 
 		return len(inlineValues) == 1 && inlineValues[0].Range.Start.Line == 17 && inlineValues[0].Range.End.Line == 17
-	}, 30*time.Second, 1*time.Second)
+	}, 30*time.Second, 1*time.Second, "expected inline values to be served, but they were not")
 }

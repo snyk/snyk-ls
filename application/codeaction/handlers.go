@@ -33,7 +33,7 @@ func ResolveCodeActionHandler(
 				logger.Debug().Msg("Skipping code action - missing key")
 				return nil, nil
 			}
-			logger.Error().Err(err).Msg("Failed to resolve code action")
+			logger.Error().Err(err).Msg("unable to resolve code action")
 			return nil, err
 		}
 		logger.Info().Any("response", action).Msg("SENDING")

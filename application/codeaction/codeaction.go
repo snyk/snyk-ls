@@ -69,7 +69,7 @@ func (c *CodeActionsService) GetCodeActions(params lsp.CodeActionParams) []lsp.C
 	c.logger.Info().Msg(logMsg)
 	actions := converter.ToCodeActions(issues)
 
-	// The cache is cleared every time GetCodeActions is called, because the assumed workflow is:
+	// The cache is cleared every time AddCodeActions is called, because the assumed workflow is:
 	// 1. User gets multiple code action options for a given path/range via textDocument/codeAction
 	// 2. User selects an action and the action is resolved via codeAction/resolve
 	// So there is no reason to store issues for longer than that.

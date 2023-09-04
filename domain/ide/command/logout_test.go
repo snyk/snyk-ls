@@ -53,7 +53,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	scanner := snyk.NewTestScanner()
 	scanner.Issues = []snyk.Issue{{ID: "issue-1"}}
 
-	w := workspace.New(performance.NewLocalInstrumentor(), scanner, hoverService, scanNotifier, notifier)
+	w := workspace.New(performance.NewInstrumentor(), scanner, hoverService, scanNotifier, notifier)
 	folder := workspace.NewFolder(
 		t.TempDir(),
 		t.Name(),

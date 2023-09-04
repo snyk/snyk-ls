@@ -179,11 +179,12 @@ func (c *Client) ScanModeIsSelected(properties ux2.ScanModeIsSelectedProperties)
 }
 
 func (c *Client) enqueueEvent(eventFn captureEvent) {
-	if config.CurrentConfig().IsTelemetryEnabled() {
+	conf := config.CurrentConfig()
+	if conf.IsTelemetryEnabled() && !conf.IsFedramp() {
 		eventFn(
 			c.authenticatedUserId,
 			ampli.EventOptions{
-				DeviceID: config.CurrentConfig().DeviceID(),
+				DeviceID: conf.DeviceID(),
 			})
 	}
 }
@@ -192,7 +193,8 @@ func (c *Client) Identify() {
 	method := "infrastructure.segment.client"
 	log.Debug().Str("method", method).Msg("Identifying a user.")
 
-	if !config.CurrentConfig().NonEmptyToken() {
+	conf := config.CurrentConfig()
+	if !conf.NonEmptyToken() {
 		c.authenticatedUserId = ""
 		return
 	}
@@ -208,7 +210,7 @@ func (c *Client) Identify() {
 	}
 	c.authenticatedUserId = userId
 
-	if !config.CurrentConfig().IsTelemetryEnabled() {
+	if !conf.IsTelemetryEnabled() || conf.IsFedramp() {
 		return
 	}
 	identifyEvent := ampli.Identify.Builder().UserId(userId).Build()

@@ -109,11 +109,15 @@ func (f *Folder) Contains(path string) bool {
 func (f *Folder) ClearDiagnosticsFromFile(filePath string) {
 	// todo: can we manage the cache internally without leaking it, e.g. by using as a key an MD5 hash rather than a path and defining a TTL?
 	f.documentDiagnosticCache.Delete(filePath)
+	if scanner, ok := f.scanner.(snyk.InlineValueProvider); ok {
+		scanner.ClearInlineValues(filePath)
+	}
 	f.notifier.Send(lsp.PublishDiagnosticsParams{
 		URI:         uri.PathToUri(filePath),
 		Diagnostics: []lsp.Diagnostic{},
 	})
 	f.ClearScannedStatus()
+
 }
 
 func (f *Folder) ClearDiagnosticsFromPathRecursively(removedPath string) {

@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -101,28 +100,6 @@ func getIssueLangAndRuleId(issue snyk.Issue) (string, string, bool) {
 	return ruleIdSplit[0], ruleIdSplit[1], true
 }
 
-// isAutofixSupportedForExtension shall call `GetFilters` if necessary and cache the results
-// in the `codeSettings` singleton.
-func (b *Bundle) isAutofixSupportedForExtension(ctx context.Context, file string) (bool, error) {
-	if getCodeSettings().autofixExtensions == nil {
-		// TODO: together with the endpoint redesign, this should use not the same `/filters` endpoint
-		// as the analysis one. Autofix should have a separate one.
-		filters, err := b.SnykCode.GetFilters(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("could not get filters")
-			return false, err
-		}
-
-		// It's not a mistake to have `..IfNotSet` here, because between the `GetFilters` and here
-		// things might have changed on the settings singleton. But we don't want to overlock it.
-		getCodeSettings().setAutofixExtensionsIfNotSet(filters.AutofixExtensions)
-	}
-
-	supported := getCodeSettings().autofixExtensions.Get(filepath.Ext(file))
-
-	return supported != nil && supported.(bool), nil
-}
-
 func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 	logger := log.With().Str("method", "retrieveAnalysis").Logger()
 
@@ -201,32 +178,26 @@ func (b *Bundle) addIssueActions(ctx context.Context, issues []snyk.Issue) {
 	}
 
 	for i := range issues {
-		if autoFixEnabled {
-			// We only allow the issues whose file extensions are supported by the
-			// backend.
-			supported, err := b.isAutofixSupportedForExtension(ctx, issues[i].AffectedFilePath)
-			if err != nil {
-				log.Error().Err(err).Str("method", method).Msg("Failed to check if autofix is supported for extension.")
-				b.errorReporter.CaptureError(err)
-			} else {
-				if supported {
-					codeAction := *b.createDeferredAutofixCodeAction(ctx, issues[i])
-					issues[i].CodeActions = append(issues[i].CodeActions, codeAction)
+		issueData, ok := issues[i].AdditionalData.(snyk.CodeIssueData)
+		if !ok {
+			log.Error().Str("method", method).Msg("Failed to fetch additional data")
+			continue
+		}
 
-					codeActionId := *codeAction.Uuid
-					issues[i].CodelensCommands = append(issues[i].CodelensCommands, snyk.CommandData{
-						Title:     "⚡ Fix this issue: " + issueTitle(issues[i]),
-						CommandId: snyk.CodeFixCommand,
-						Arguments: []any{
-							codeActionId,
-							issues[i].AffectedFilePath,
-							issues[i].Range,
-						},
-					})
-				} else {
-					log.Info().Str("method", method).Msg("Autofix is not supported for " + issues[i].AffectedFilePath + " file extension.")
-				}
-			}
+		if autoFixEnabled && issueData.IsAutofixable {
+			codeAction := *b.createDeferredAutofixCodeAction(ctx, issues[i])
+			issues[i].CodeActions = append(issues[i].CodeActions, codeAction)
+
+			codeActionId := *codeAction.Uuid
+			issues[i].CodelensCommands = append(issues[i].CodelensCommands, snyk.CommandData{
+				Title:     "⚡ Fix this issue: " + issueTitle(issues[i]),
+				CommandId: snyk.CodeFixCommand,
+				Arguments: []any{
+					codeActionId,
+					issues[i].AffectedFilePath,
+					issues[i].Range,
+				},
+			})
 		}
 
 		if learnEnabled {

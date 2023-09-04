@@ -16,10 +16,6 @@
 
 package ast
 
-import (
-	"github.com/sourcegraph/go-lsp"
-)
-
 type Node struct {
 	Line       int
 	StartChar  int
@@ -34,11 +30,11 @@ type Node struct {
 
 type Tree struct {
 	Root     *Node
-	Document lsp.DocumentURI
+	Document string
 }
 
 type Parser interface {
-	Parse(content []byte, uri lsp.DocumentURI) Tree
+	Parse(content []byte, uri string) Tree
 }
 
 type Visitor interface {

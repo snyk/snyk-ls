@@ -22,21 +22,38 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
-func (oss *Scanner) GetInlineValues(path string, myRange snyk.Range) (result []snyk.InlineValue, err error) {
-	logger := log.With().Str("method", "GetInlineValues").Logger()
+type inlineValueMap map[string][]snyk.InlineValue
+
+func (cliScanner *CLIScanner) GetInlineValues(path string, myRange snyk.Range) (result []snyk.InlineValue, err error) {
+	logger := log.With().Str("method", "CLIScanner.GetInlineValues").Logger()
 	logger.Debug().Str("path", path).Msg("called")
 
-	inlineValues := oss.inlineValues[path]
+	inlineValues := cliScanner.inlineValues[path]
+	result = filterInlineValuesForRange(inlineValues, myRange)
+	logger.Debug().Str("path", path).Msgf("%d inlineValues found", len(result))
+	return result, nil
+}
+
+func (cliScanner *CLIScanner) ClearInlineValues(path string) {
+	logger := log.With().Str("method", "CLIScanner.ClearInlineValues").Logger()
+
+	cliScanner.inlineValues[path] = nil
+	logger.Debug().Str("path", path).Msg("called")
+}
+
+func filterInlineValuesForRange(inlineValues []snyk.InlineValue, myRange snyk.Range) (result []snyk.InlineValue) {
 	if len(inlineValues) == 0 {
-		logger.Debug().Str("path", path).Msg("no inlineValues found")
-		return result, nil
+		return nil
 	}
 
 	for _, inlineValue := range inlineValues {
-		if myRange.Overlaps(inlineValue.Range) {
-			logger.Debug().Str("path", path).Msg("found inlineValues")
+		if myRange.Overlaps(inlineValue.Range()) {
 			result = append(result, inlineValue)
 		}
 	}
-	return result, nil
+	return result
+}
+
+func addToCache(iv snyk.InlineValue, cache inlineValueMap) {
+	cache[iv.Path()] = append(cache[iv.Path()], iv)
 }

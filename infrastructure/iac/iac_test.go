@@ -18,6 +18,7 @@ package iac
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -36,7 +37,7 @@ import (
 
 func Test_Scan_IsInstrumented(t *testing.T) {
 	testutil.UnitTest(t)
-	instrumentor := performance.NewLocalInstrumentor()
+	instrumentor := performance.NewInstrumentor()
 	scanner := New(instrumentor, error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
 
 	_, _ = scanner.Scan(context.Background(), "fake.yml", "")
@@ -54,10 +55,12 @@ func Test_Scan_IsInstrumented(t *testing.T) {
 func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 	testutil.UnitTest(t)
 	analytics := ux2.NewTestAnalytics()
-	scanner := New(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, cli.NewTestExecutor())
+	scanner := New(performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, cli.NewTestExecutor())
 
-	_, _ = scanner.Scan(context.Background(), "fake.yml", "")
+	issues, err := scanner.Scan(context.Background(), "fake.yml", "")
 
+	assert.Nil(t, err)
+	assert.Len(t, issues, 0)
 	assert.Len(t, analytics.GetAnalytics(), 1)
 	assert.Equal(t, ux2.AnalysisIsReadyProperties{
 		AnalysisType: ux2.InfrastructureAsCode,
@@ -69,11 +72,13 @@ func Test_ErroredWorkspaceScan_TracksAnalytics(t *testing.T) {
 	testutil.UnitTest(t)
 	analytics := ux2.NewTestAnalytics()
 	executor := cli.NewTestExecutor()
-	scanner := New(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, executor)
+	scanner := New(performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, executor)
 
 	executor.ExecuteResponse = []byte("invalid JSON")
-	_, _ = scanner.Scan(context.Background(), "fake.yml", "")
+	issues, err := scanner.Scan(context.Background(), "fake.yml", "")
 
+	assert.NotNil(t, err)
+	assert.Len(t, issues, 0)
 	assert.Len(t, analytics.GetAnalytics(), 1)
 	assert.Equal(t, ux2.AnalysisIsReadyProperties{
 		AnalysisType: ux2.InfrastructureAsCode,
@@ -83,7 +88,7 @@ func Test_ErroredWorkspaceScan_TracksAnalytics(t *testing.T) {
 
 func Test_toHover_asHTML(t *testing.T) {
 	testutil.UnitTest(t)
-	scanner := New(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
+	scanner := New(performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
 	config.CurrentConfig().SetFormat(config.FormatHtml)
 
 	h := scanner.getExtendedMessage(sampleIssue())
@@ -97,7 +102,7 @@ func Test_toHover_asHTML(t *testing.T) {
 
 func Test_toHover_asMD(t *testing.T) {
 	testutil.UnitTest(t)
-	scanner := New(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
+	scanner := New(performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
 	config.CurrentConfig().SetFormat(config.FormatMd)
 
 	h := scanner.getExtendedMessage(sampleIssue())
@@ -113,7 +118,7 @@ func Test_Scan_CancelledContext_DoesNotScan(t *testing.T) {
 	// Arrange
 	testutil.UnitTest(t)
 	cliMock := cli.NewTestExecutor()
-	scanner := New(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cliMock)
+	scanner := New(performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cliMock)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -127,7 +132,7 @@ func Test_Scan_CancelledContext_DoesNotScan(t *testing.T) {
 func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 	testutil.UnitTest(t)
 
-	scanner := New(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
+	scanner := New(performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
 
 	results := []iacScanResult{
 		{
@@ -145,7 +150,7 @@ func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 			},
 		},
 	}
-	issues, err := scanner.retrieveIssues(results, []snyk.Issue{}, "", nil)
+	issues, err := scanner.retrieveIssues(results, []snyk.Issue{}, "")
 
 	assert.NoError(t, err)
 	assert.Len(t, issues, 1)
@@ -154,7 +159,7 @@ func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 
 	sampleIssue := sampleIssue()
-	scanner := New(performance.NewLocalInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
+	scanner := New(performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
 	issue, err := scanner.toIssue("test.yml", sampleIssue, "")
 
 	expectedAdditionalData := snyk.IaCIssueData{
@@ -185,8 +190,18 @@ func Test_getIssueId(t *testing.T) {
 
 func Test_parseIacIssuePath_SuccessfullyParses(t *testing.T) {
 	testutil.UnitTest(t)
-	rawPath := []any{"ingress", 0, "cidr_blocks", 0}
-	expectedPath := []string{"ingress", "0", "cidr_blocks", "0"}
+	// Unmarshall uses float64. From the docs:
+	// To unmarshal JSON into an interface value,
+	// Unmarshal stores one of these in the interface value:
+	//
+	//	bool, for JSON booleans
+	//	float64, for JSON numbers
+	//	string, for JSON strings
+	//	[]interface{}, for JSON arrays
+	//	map[string]interface{}, for JSON objects
+	//	nil for JSON null
+	rawPath := []any{"ingress", float32(32), "cidr_blocks", float64(64)}
+	expectedPath := []string{"ingress", "32", "cidr_blocks", "64"}
 
 	gotPath, gotErr := parseIacIssuePath(rawPath)
 
@@ -196,13 +211,45 @@ func Test_parseIacIssuePath_SuccessfullyParses(t *testing.T) {
 
 func Test_parseIacIssuePath_InvalidPathToken(t *testing.T) {
 	testutil.UnitTest(t)
-	rawPath := []any{"ingress", 0, "cidr_blocks", true}
+	rawPath := []any{"ingress", float64(0), "cidr_blocks", true}
 	expectedErrorMessage := "unexpected type bool for IaC issue path token: true"
 
 	gotPath, gotErr := parseIacIssuePath(rawPath)
 
 	assert.Nil(t, gotPath)
 	assert.EqualError(t, gotErr, expectedErrorMessage)
+}
+
+func Test_parseIacResult(t *testing.T) {
+	testutil.UnitTest(t)
+	testResult := "testdata/RBAC-iac-result.json"
+	result, err := os.ReadFile(testResult)
+	assert.NoError(t, err)
+	scanner := Scanner{errorReporter: error_reporting.NewTestErrorReporter()}
+
+	issues, err := scanner.unmarshal(result)
+	assert.NoError(t, err)
+
+	retrieveIssues, err := scanner.retrieveIssues(issues, []snyk.Issue{}, ".")
+	assert.NoError(t, err)
+
+	assert.Len(t, retrieveIssues, 2)
+}
+
+func Test_parseIacResult_failOnInvalidPath(t *testing.T) {
+	testutil.UnitTest(t)
+	testResult := "testdata/RBAC-iac-result-invalid-path.json"
+	result, err := os.ReadFile(testResult)
+	assert.NoError(t, err)
+	scanner := Scanner{errorReporter: error_reporting.NewTestErrorReporter()}
+
+	issues, err := scanner.unmarshal(result)
+	assert.NoError(t, err)
+
+	retrieveIssues, err := scanner.retrieveIssues(issues, []snyk.Issue{}, ".")
+	assert.Error(t, err)
+
+	assert.Len(t, retrieveIssues, 0)
 }
 
 func sampleIssue() iacIssue {

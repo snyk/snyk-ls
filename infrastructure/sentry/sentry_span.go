@@ -52,7 +52,7 @@ func (s *span) Context() context.Context {
 func (s *span) StartSpan(ctx context.Context) {
 	var options []sentry.SpanOption
 	if s.txName != "" {
-		options = append(options, sentry.TransactionName(s.txName))
+		options = append(options, sentry.WithTransactionName(s.txName))
 	}
 	s.span = sentry.StartSpan(ctx, s.operation, options...)
 	s.span.SetTag("organization", config.CurrentConfig().Organization())

@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,21 +17,19 @@
 package oss
 
 import (
-	"github.com/sourcegraph/go-lsp"
-
 	"github.com/snyk/snyk-ls/ast/maven"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 type mavenRangeFinder struct {
-	uri         lsp.DocumentURI //todo remove lsp dependency
+	path        string //todo remove lsp dependency
 	fileContent []byte
 }
 
 func (m *mavenRangeFinder) find(issue ossIssue) snyk.Range {
 	searchPackage, _ := introducingPackageAndVersion(issue)
 	parser := maven.Parser{}
-	tree := parser.Parse(string(m.fileContent), m.uri)
+	tree := parser.Parse(string(m.fileContent), m.path)
 	for _, depNode := range tree.Root.Children {
 		if searchPackage == depNode.Name {
 			return snyk.Range{

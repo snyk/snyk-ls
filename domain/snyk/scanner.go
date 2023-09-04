@@ -32,6 +32,12 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
+var (
+	_ Scanner             = (*DelegatingConcurrentScanner)(nil)
+	_ InlineValueProvider = (*DelegatingConcurrentScanner)(nil)
+	_ PackageScanner      = (*DelegatingConcurrentScanner)(nil)
+)
+
 type Scanner interface {
 	// Scan scans a workspace folder or file for issues, given its path. 'folderPath' provides a path to a workspace folder, if a file needs to be scanned.
 	Scan(
@@ -41,6 +47,10 @@ type Scanner interface {
 		folderPath string,
 	)
 	Init() error
+}
+
+type PackageScanner interface {
+	ScanPackages(ctx context.Context, config *config.Config, path string, content string)
 }
 
 // DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
@@ -53,6 +63,14 @@ type DelegatingConcurrentScanner struct {
 	snykApiClient snyk_api.SnykApiClient
 	authService   AuthenticationService
 	notifier      notification.Notifier
+}
+
+func (sc *DelegatingConcurrentScanner) ScanPackages(ctx context.Context, config *config.Config, path string, content string) {
+	for _, scanner := range sc.scanners {
+		if s, ok := scanner.(PackageScanner); ok {
+			s.ScanPackages(ctx, config, path, content)
+		}
+	}
 }
 
 func NewDelegatingScanner(
@@ -77,9 +95,17 @@ func NewDelegatingScanner(
 	}
 }
 
+func (sc *DelegatingConcurrentScanner) ClearInlineValues(path string) {
+	for _, scanner := range sc.scanners {
+		if s, ok := scanner.(InlineValueProvider); ok {
+			s.ClearInlineValues(path)
+		}
+	}
+}
+
 func (sc *DelegatingConcurrentScanner) GetInlineValues(path string, myRange Range) (values []InlineValue, err error) {
 	for _, scanner := range sc.scanners {
-		if s, ok := scanner.(InlineValueProvider); ok && scanner.IsEnabled() {
+		if s, ok := scanner.(InlineValueProvider); ok {
 			inlineValues, err := s.GetInlineValues(path, myRange)
 			if err != nil {
 				log.Warn().Str("method", "DelegatingConcurrentScanner.getInlineValues").Err(err).

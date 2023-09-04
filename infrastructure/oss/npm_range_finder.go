@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,13 +20,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sourcegraph/go-lsp"
-
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 type NpmRangeFinder struct {
-	uri         lsp.DocumentURI
+	uri         string
 	fileContent []byte
 	myRange     snyk.Range
 }

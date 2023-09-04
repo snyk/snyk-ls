@@ -150,7 +150,12 @@ func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing
 		NewMockIssue("id3", "path1"),
 	}, nil)
 
-	assert.Equal(t, 1, f.documentDiagnosticCache.Size())
+	f.processResults(product.ProductOpenSource, []snyk.Issue{
+		NewMockIssue("id1", ""),
+		NewMockIssue("id3", ""),
+	}, nil)
+
+	assert.Equal(t, 2, f.documentDiagnosticCache.Size())
 	assert.NotNil(t, GetValueFromMap(f.documentDiagnosticCache, "path1"))
 	assert.Len(t, GetValueFromMap(f.documentDiagnosticCache, "path1"), 3)
 }

@@ -30,6 +30,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+
 	"github.com/adrg/xdg"
 	"github.com/denisbrodbeck/machineid"
 	"github.com/rs/zerolog"
@@ -204,7 +206,6 @@ func New() *Config {
 	c.configFile = ""
 	c.format = "md"
 	c.isErrorReportingEnabled.Set(true)
-	c.isTelemetryEnabled.Set(true)
 	c.isSnykOssEnabled.Set(true)
 	c.isSnykIacEnabled.Set(true)
 	c.manageBinariesAutomatically.Set(true)
@@ -222,9 +223,10 @@ func New() *Config {
 	initWorkFlowEngine(c)
 	err := c.engine.Init()
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to initialize workflow engine")
+		log.Warn().Err(err).Msg("unable to initialize workflow engine")
 	}
 	c.enableSnykLearnCodeActions = true
+	c.SetTelemetryEnabled(true)
 
 	c.clientSettingsFromEnv()
 	return c
@@ -236,9 +238,10 @@ func initWorkFlowEngine(c *Config) {
 	c.storage = NewStorage()
 	conf.SetStorage(c.storage)
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 	err := localworkflows.InitWhoAmIWorkflow(c.engine)
 	if err != nil {
-		log.Err(err).Msg("Failed to initialize WhoAmI workflow")
+		log.Err(err).Msg("unable to initialize WhoAmI workflow")
 	}
 }
 
@@ -626,20 +629,28 @@ func (c *Config) SetManageBinariesAutomatically(enabled bool) {
 	c.manageBinariesAutomatically.Set(enabled)
 }
 
+func (c *Config) ManageCliBinariesAutomatically() bool {
+	if c.engine.GetConfiguration().GetString(cli_constants.EXECUTION_MODE_KEY) != cli_constants.EXECUTION_MODE_VALUE_STANDALONE {
+		return false
+	}
+	return c.ManageBinariesAutomatically()
+}
+
 func (c *Config) IsTelemetryEnabled() bool {
 	return c.isTelemetryEnabled.Get()
 }
 
 func (c *Config) SetTelemetryEnabled(enabled bool) {
 	c.isTelemetryEnabled.Set(enabled)
+	c.engine.GetConfiguration().Set(configuration.ANALYTICS_DISABLED, !enabled)
 }
 
 func (c *Config) telemetryEnablementFromEnv() {
 	value := os.Getenv(EnableTelemetry)
 	if value == "1" {
-		c.isTelemetryEnabled.Set(false)
+		c.SetTelemetryEnabled(false)
 	} else {
-		c.isTelemetryEnabled.Set(true)
+		c.SetTelemetryEnabled(true)
 	}
 }
 
@@ -823,9 +834,13 @@ func (c *Config) Logger() *zerolog.Logger {
 
 func (c *Config) TokenAsOAuthToken() (oauth2.Token, error) {
 	var oauthToken oauth2.Token
+	if _, err := uuid.Parse(c.Token()); err == nil {
+		log.Trace().Msgf("token is a uuid, not an oauth token")
+		return oauthToken, fmt.Errorf("token is a uuid, not an oauth token")
+	}
 	err := json.Unmarshal([]byte(c.Token()), &oauthToken)
 	if err != nil {
-		log.Debug().Err(err).Msg("failed to unmarshal oauth token")
+		log.Trace().Err(err).Msg("unable to unmarshal oauth token")
 		return oauthToken, err
 	}
 	return oauthToken, nil
@@ -840,4 +855,17 @@ func (c *Config) IdeVersion() string {
 }
 func (c *Config) IdeName() string {
 	return c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT)
+}
+
+func (c *Config) IsFedramp() bool {
+	u, err := url.Parse(c.SnykApi())
+	if err != nil {
+		return false
+	}
+
+	host := strings.ToLower(u.Hostname())
+
+	// fedramp instance should have the format https://*.snykgov.io
+	snykgovDomain := strings.HasSuffix(host, ".snykgov.io")
+	return snykgovDomain
 }

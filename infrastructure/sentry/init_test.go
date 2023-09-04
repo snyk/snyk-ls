@@ -38,14 +38,19 @@ func Test_Sentry_Environment(t *testing.T) {
 }
 
 func Test_Sentry_BeforeSend(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	testEvent := sentry.NewEvent()
 
-	config.CurrentConfig().SetErrorReportingEnabled(true)
+	c.SetErrorReportingEnabled(true)
 	result := beforeSend(testEvent, nil)
 	assert.Equal(t, testEvent, result)
 
-	config.CurrentConfig().SetErrorReportingEnabled(false)
+	c.SetErrorReportingEnabled(true)
+	c.UpdateApiEndpoints("https://api.fedramp.snykgov.io")
+	result = beforeSend(testEvent, nil)
+	assert.Equal(t, (*sentry.Event)(nil), result)
+
+	c.SetErrorReportingEnabled(false)
 	result = beforeSend(testEvent, nil)
 	assert.Equal(t, (*sentry.Event)(nil), result)
 }
