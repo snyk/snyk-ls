@@ -261,3 +261,23 @@ func Test_IsFedramp(t *testing.T) {
 	})
 
 }
+
+func Test_IsTelemetryEnabled(t *testing.T) {
+	t.Setenv(EnableTelemetry, "1")
+	c := New()
+
+	// case: disabled via env var
+	assert.False(t, c.IsTelemetryEnabled())
+	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.ANALYTICS_DISABLED))
+
+	// case: enabled via setter
+	c.SetTelemetryEnabled(true)
+	assert.True(t, c.IsTelemetryEnabled())
+	assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.ANALYTICS_DISABLED))
+
+	// case: disabled via setter
+	c.SetTelemetryEnabled(false)
+	assert.False(t, c.IsTelemetryEnabled())
+	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.ANALYTICS_DISABLED))
+
+}
