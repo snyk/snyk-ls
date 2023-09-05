@@ -22,13 +22,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -69,22 +67,14 @@ func (a *CliAuthenticationProvider) Authenticate(ctx context.Context) (string, e
 }
 
 func (a *CliAuthenticationProvider) ClearAuthentication(ctx context.Context) error {
-	cmd, err := a.configUnsetAPICmd(ctx)
+	cmd := a.configUnsetAPICmd()
+
+	err := a.runCLICmd(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	var out strings.Builder
-	cmd.Stdout = &out
-
-	err = a.runCLICmd(ctx, cmd)
-
-	str := out.String()
-	log.Info().Str("output", str).Msg("unset Snyk CLI API token")
-
-	if err != nil {
-		return err
-	}
+	log.Info().Msg("unset Snyk CLI API token")
 
 	return err
 }
@@ -94,16 +84,12 @@ func (a *CliAuthenticationProvider) AuthURL(_ context.Context) string {
 }
 
 // Auth represents the `snyk auth` command.
-func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
+func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error { //
 	a.authURL = ""
 
-	cmd, err := a.authCmd(ctx)
-	if err != nil {
-		return err
-	}
+	cmd := a.authCmd()
 
-	reader, writer := io.Pipe()
-	go func() {
+	stdoutReaderFunc := func(reader *io.PipeReader, writer *io.PipeWriter) {
 		defer func(writer *io.PipeWriter) { _ = writer.Close() }(writer)
 
 		out := &strings.Builder{}
@@ -121,10 +107,20 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 		}
 
 		log.Info().Str("method", "authenticate").Str("output", out.String()).Msg("auth Snyk CLI")
-	}()
+	}
 
 	// by assigning the writer to stdout, we pipe the cmd output to the go routine that parses it
-	cmd.Stdout = writer
+	dir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	// reader, writer := io.Pipe()
+	err = a.cli.ExecuteWithFunc(ctx, cmd, dir, stdoutReaderFunc)
+	if err != nil {
+		return err
+	}
+
+	// cmd.Stdout = writer
 	err = a.runCLICmd(ctx, cmd)
 	return err
 }
@@ -147,15 +143,11 @@ func (a *CliAuthenticationProvider) getAuthURL(str string) string {
 }
 
 func (a *CliAuthenticationProvider) getToken(ctx context.Context) (string, error) {
-	cmd, err := a.configGetAPICmd(ctx)
-	if err != nil {
-		return "", err
-	}
+	cmd := a.configGetAPICmd()
 
 	var out strings.Builder
-	cmd.Stdout = &out
 
-	err = a.runCLICmd(ctx, cmd)
+	err := a.runCLICmd(ctx, cmd)
 	if err != nil {
 		return "", errors.Wrap(err, fmt.Sprintf("error getting token with %v", cmd))
 	}
@@ -171,51 +163,34 @@ func (a *CliAuthenticationProvider) getToken(ctx context.Context) (string, error
 	return token, nil
 }
 
-func (a *CliAuthenticationProvider) authCmd(ctx context.Context) (*exec.Cmd, error) {
+func (a *CliAuthenticationProvider) authCmd() []string {
 	log.Info().Msg("authenticate Snyk CLI with a Snyk account")
 	args := []string{"auth"}
-	return a.buildCLICmd(ctx, args...), nil
+	return args
 }
 
 // GetToken represents the `snyk config get api` command.
-func (a *CliAuthenticationProvider) configGetAPICmd(ctx context.Context) (*exec.Cmd, error) {
+func (a *CliAuthenticationProvider) configGetAPICmd() []string {
 	log.Info().Msg("get Snyk API token")
 	args := []string{"config", "get", "api"}
-	return a.buildCLICmd(ctx, args...), nil
+	return args
 }
 
-func (a *CliAuthenticationProvider) configUnsetAPICmd(ctx context.Context) (*exec.Cmd, error) {
+func (a *CliAuthenticationProvider) configUnsetAPICmd() []string {
 	log.Info().Msg("unset Snyk CLI API token")
 	args := []string{"config", "unset", "api"}
-	return a.buildCLICmd(ctx, args...), nil
+	return args
 }
 
-func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...string) *exec.Cmd {
-	if config.CurrentConfig().CliSettings().Insecure {
-		args = append(args, "--insecure")
-	}
-	cmd := exec.CommandContext(ctx, config.CurrentConfig().CliSettings().Path(), args...)
-	cmd.Env = cli.AppendCliEnvironmentVariables(os.Environ(), false)
-
-	log.Info().Str("command", cmd.String()).Interface("env", cmd.Env).Msg("running Snyk CLI command")
-	return cmd
-}
-
-func (a *CliAuthenticationProvider) runCLICmd(ctx context.Context, cmd *exec.Cmd) error {
-	// check for early cancellation
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default: // If no cancellation requested, do nothing
-	}
-
-	err := cmd.Run()
-	if err == nil && ctx.Err() != nil {
-		err = ctx.Err()
-	}
+func (a *CliAuthenticationProvider) runCLICmd(ctx context.Context, args []string) error {
+	dir, err := os.Getwd()
 	if err != nil {
-		log.Err(err).Msg("error while calling Snyk CLI command")
+		return err
 	}
+	_, err = a.cli.Execute(ctx, args, dir)
 
-	return err
+	if err != nil {
+		return err
+	}
+	return nil
 }

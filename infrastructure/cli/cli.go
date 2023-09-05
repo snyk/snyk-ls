@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -40,6 +41,11 @@ type SnykCli struct {
 	notifier      noti.Notifier
 }
 
+func (c SnykCli) ExecuteWithFunc(ctx context.Context, cmd []string, workingDir string, f func(reader *io.PipeReader, writer *io.PipeWriter)) error {
+	_, err := c.doExecute(ctx, cmd, workingDir, f)
+	return err
+}
+
 var Mutex = &sync.Mutex{}
 
 func NewExecutor(
@@ -60,6 +66,7 @@ func NewExecutor(
 
 type Executor interface {
 	Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error)
+	ExecuteWithFunc(ctx context.Context, cmd []string, workingDir string, f func(reader *io.PipeReader, writer *io.PipeWriter)) error
 	ExpandParametersFromConfig(base []string) []string
 }
 
@@ -79,13 +86,18 @@ func (c SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (
 		return nil, ctx.Err()
 	}
 
-	output, err := c.doExecute(ctx, cmd, workingDir)
+	output, err := c.doExecute(ctx, cmd, workingDir, func(reader *io.PipeReader, writer *io.PipeWriter) {
+		//
+	})
 	log.Trace().Str("method", method).Str("response", string(output))
 	return output, err
 }
 
-func (c SnykCli) doExecute(ctx context.Context, cmd []string, workingDir string) ([]byte, error) {
+func (c SnykCli) doExecute(ctx context.Context, cmd []string, workingDir string, stdoutFunc func(reader *io.PipeReader, writer *io.PipeWriter)) ([]byte, error) {
 	command := c.getCommand(cmd, workingDir, ctx)
+	reader, writer := io.Pipe()
+	command.Stdout = writer
+	go stdoutFunc(reader, writer)
 	output, err := command.Output()
 	return output, err
 }

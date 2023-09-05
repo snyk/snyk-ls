@@ -30,20 +30,21 @@ import (
 
 func TestAuth_authCmd(t *testing.T) {
 	testutil.UnitTest(t)
-	ctx := context.Background()
+	// ctx := context.Background()
 	provider := &CliAuthenticationProvider{}
 
-	authCmd, err := provider.authCmd(ctx)
+	// authCmd, err := provider.authCmd(ctx)
+	authCmd := provider.authCmd()
 
-	assert.NoError(t, err)
-	assertCmd(t, []string{"auth"}, authCmd)
+	// assert.NoError(t, err)
+	assertArgs(t, []string{"auth"}, authCmd)
 }
 
 func TestConfig_configGetAPICmd(t *testing.T) {
 	ctx := context.Background()
 	provider := &CliAuthenticationProvider{}
 
-	configGetAPICmd, err := provider.configGetAPICmd(ctx)
+	configGetAPICmd, err := provider.configGetAPICmd()
 
 	assert.NoError(t, err)
 	assertCmd(t, []string{"config", "get", "api"}, configGetAPICmd)

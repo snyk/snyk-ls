@@ -30,3 +30,8 @@ func assertCmd(t *testing.T, expectedArgs []string, actualCmd *exec.Cmd) {
 
 	assert.Equal(t, expectedArgs, actualArgs)
 }
+
+func assertArgs(t *testing.T, expectedArgs []string, actualArgs []string) {
+	t.Helper()
+	assert.Equal(t, expectedArgs, actualArgs)
+}
