@@ -1,0 +1,17 @@
+<component name="ProjectCodeStyleConfiguration">
+  <code_scheme name="Project" version="173">
+    <GoCodeStyleSettings>
+      <option name="REMOVE_REDUNDANT_IMPORT_ALIASES" value="true" />
+      <option name="IMPORT_SORTING" value="GOIMPORTS" />
+      <option name="MOVE_ALL_IMPORTS_IN_ONE_DECLARATION" value="true" />
+      <option name="MOVE_ALL_STDLIB_IMPORTS_IN_ONE_GROUP" value="true" />
+      <option name="GROUP_STDLIB_IMPORTS" value="true" />
+      <option name="CREATE_LOCAL_GROUP" value="true" />
+      <option name="LOCAL_GROUP_MODE" value="PREFIX" />
+      <option name="LOCAL_PACKAGE_PREFIXES" value="github.com/snyk/snyk-ls" />
+    </GoCodeStyleSettings>
+    <codeStyleSettings language="go">
+      <option name="WRAP_ON_TYPING" value="1" />
+    </codeStyleSettings>
+  </code_scheme>
+</component>
