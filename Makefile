@@ -44,16 +44,8 @@ ifeq (,$(wildcard ./.bin/golangci-lint*))
 else
 	@echo "==> golangci-lint is already installed"
 endif
-	@if [ ! -d ./.bin/pact ]; then\
-		echo "--- 🛠 Installing Pact CLI dependencies";\
-		mkdir -p ./.bin;\
-		cd ./.bin;\
-		../install.sh;\
-	else \
-		echo "==> Pact CLI is already installed";\
-	fi
-	export PATH=$PATH:$PWD/.bin/pact/bin;\
-	echo "Please make sure to install NPM locally to be able to run analytics verification Ampli."
+	@./install-pact.py
+	@echo "Please make sure to install NPM locally to be able to run analytics verification Ampli."
 
 ## clean: Delete the build directory
 .PHONY: clean
