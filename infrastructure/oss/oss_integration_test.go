@@ -60,7 +60,7 @@ func Test_Scan(t *testing.T) {
 	instrumentor := performance.NewInstrumentor()
 	er := error_reporting.NewTestErrorReporter()
 	analytics := ux.NewTestAnalytics()
-	cliExecutor := cli.NewExecutor(er, analytics, notification.NewNotifier())
+	cliExecutor := cli.NewExecutor(di.AuthenticationService(), er, analytics, notification.NewNotifier())
 	scanner := oss.NewCLIScanner(
 		instrumentor,
 		er,

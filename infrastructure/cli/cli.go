@@ -30,19 +30,22 @@ import (
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 type SnykCli struct {
-	errorReporter error_reporting.ErrorReporter
-	analytics     ux.Analytics
-	semaphore     chan int
-	cliTimeout    time.Duration
-	notifier      noti.Notifier
+	authenticationService snyk.AuthenticationService
+	errorReporter         error_reporting.ErrorReporter
+	analytics             ux.Analytics
+	semaphore             chan int
+	cliTimeout            time.Duration
+	notifier              noti.Notifier
 }
 
 var Mutex = &sync.Mutex{}
 
 func NewExecutor(
+	authenticationService snyk.AuthenticationService,
 	errorReporter error_reporting.ErrorReporter,
 	analytics ux.Analytics,
 	notifier noti.Notifier,
@@ -50,6 +53,7 @@ func NewExecutor(
 	concurrencyLimit := 2
 
 	return &SnykCli{
+		authenticationService,
 		errorReporter,
 		analytics,
 		make(chan int, concurrencyLimit),
