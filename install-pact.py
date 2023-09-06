@@ -68,7 +68,8 @@ def main():
 			os.symlink(source_path, dest_path)
 			print(f"Created symlink for {binary} at {dest_path}")
 		except OSError:
-			print(f"Cannot create symlink for {binary}. It most likely already exists. Please check {dest_path}")
+			if not os.path.exists(dest_path) or not os.path.islink(dest_path):
+				print(f"Cannot create symlink for {binary}. Please check {dest_path}")
 
 	print("--- 🛠 Pact CLI installed")
 
