@@ -13,7 +13,7 @@
 # limitations under the License.
 FROM golang:latest
 RUN apt-get update
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y sudo git squid curl git traceroute net-tools iptables vim make maven libx11-dev xvfb xsel xclip wl-clipboard
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y sudo git squid curl git traceroute net-tools iptables vim make maven libx11-dev xvfb xsel xclip wl-clipboard python3 python-is-python3 python3-requests
 
 RUN apt-get auto-remove -y && apt-get clean -y && rm -rf /var/lib/apt/
 RUN update-alternatives --set iptables /usr/sbin/iptables-legacy
