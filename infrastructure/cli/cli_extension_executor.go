@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"io"
 	"strings"
 	"time"
 
@@ -34,6 +35,11 @@ type ExtensionExecutor struct {
 	cliTimeout time.Duration
 }
 
+func (e ExtensionExecutor) ExecuteWithFunc(ctx context.Context, cmd []string, workingDir string, f func(reader *io.PipeReader, writer *io.PipeWriter)) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func NewExtensionExecutor() Executor {
 	concurrencyLimit := 2
 
@@ -43,28 +49,28 @@ func NewExtensionExecutor() Executor {
 	}
 }
 
-func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error) {
+func (e ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error) {
 	method := "ExtensionExecutor.Execute"
 	log.Debug().Str("method", method).Interface("cmd", cmd[1:]).Str("workingDir", workingDir).Msg("calling legacycli extension")
 
 	// set deadline to handle CLI hanging when obtaining semaphore
-	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(c.cliTimeout))
+	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(e.cliTimeout))
 	defer cancel()
 
 	// handle concurrency limit, and when context is cancelled
 	select {
-	case c.semaphore <- 1:
-		defer func() { <-c.semaphore }()
+	case e.semaphore <- 1:
+		defer func() { <-e.semaphore }()
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
 
-	output, err := c.doExecute(ctx, cmd, workingDir)
+	output, err := e.doExecute(ctx, cmd, workingDir)
 	log.Trace().Str("method", method).Str("response", string(output))
 	return output, err
 }
 
-func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingDir string) ([]byte, error) {
+func (e ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingDir string) ([]byte, error) {
 	output := []byte{}
 
 	engine := config.CurrentConfig().Engine()
@@ -82,13 +88,13 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 	return output, err
 }
 
-func (c ExtensionExecutor) ExpandParametersFromConfig(base []string) []string {
+func (e ExtensionExecutor) ExpandParametersFromConfig(base []string) []string {
 	return expandParametersFromConfig(base)
 }
 
-func (c ExtensionExecutor) CliVersion() string {
+func (e ExtensionExecutor) CliVersion() string {
 	cmd := []string{"version"}
-	output, err := c.Execute(context.Background(), cmd, "")
+	output, err := e.Execute(context.Background(), cmd, "")
 	if err != nil {
 		log.Error().Err(err).Msg("failed to run version command")
 		return ""
