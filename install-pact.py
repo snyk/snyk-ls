@@ -61,6 +61,8 @@ def main():
 		except OSError:
 			print(f"Error creating symlink for {binary}; skipped.")
 
+	print("--- 🛠 Pact CLI installed")
+
 
 if __name__ == "__main__":
 	main()
