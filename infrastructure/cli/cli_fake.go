@@ -18,7 +18,6 @@ package cli
 
 import (
 	"context"
-	"io"
 	"os"
 	"sync"
 	"time"
@@ -33,13 +32,6 @@ type TestExecutor struct {
 	startedScans    int
 	finishedScans   int
 	counterLock     sync.RWMutex
-}
-
-var _ Executor = (*TestExecutor)(nil)
-
-func (t *TestExecutor) ExecuteWithFunc(ctx context.Context, cmd []string, workingDir string, f func(reader *io.PipeReader, writer *io.PipeWriter)) error {
-	//TODO implement me
-	panic("implement me")
 }
 
 func NewTestExecutor() *TestExecutor {
