@@ -62,7 +62,6 @@ var authenticationService snyk.AuthenticationService
 var learnService learn.Service
 var instrumentor performance.Instrumentor
 var errorReporter er.ErrorReporter
-var snykCli cli.Executor
 var installer install.Installer
 var analytics ux.Analytics
 var hoverService hover.Service
@@ -128,8 +127,8 @@ func initInfrastructure() {
 	instrumentor = performance.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient(networkAccess.GetHttpClient)
 	analytics = amplitude.NewAmplitudeClient(snyk.AuthenticationCheck, errorReporter)
-	snykCli = cli.NewExecutor(errorReporter, analytics, notifier)
-	authProvider := cliauth.NewCliAuthenticationProvider(errorReporter, snykCli)
+	snykCli := cli.NewExecutor(errorReporter, analytics, notifier)
+	authProvider := cliauth.NewCliAuthenticationProvider(errorReporter)
 	authenticationService = snyk.NewAuthenticationService(authProvider, analytics, errorReporter, notifier)
 
 	if c.Engine().GetConfiguration().GetString(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION {
@@ -173,12 +172,6 @@ func ErrorReporter() er.ErrorReporter {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return errorReporter
-}
-
-func CliExecutor() cli.Executor {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return snykCli
 }
 
 func AuthenticationService() snyk.AuthenticationService {

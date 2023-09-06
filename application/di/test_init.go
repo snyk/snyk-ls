@@ -61,7 +61,7 @@ func TestInit(t *testing.T) {
 	authProvider := snyk.NewFakeCliAuthenticationProvider()
 	snykApiClient = &snyk_api.FakeApiClient{CodeEnabled: true}
 	authenticationService = snyk.NewAuthenticationService(authProvider, analytics, errorReporter, notifier)
-	snykCli = cli.NewExecutor(errorReporter, analytics, notifier)
+	snykCli := cli.NewExecutor(errorReporter, analytics, notifier)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
 	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(

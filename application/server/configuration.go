@@ -156,7 +156,7 @@ func updateAuthenticationMethod(settings lsp.Settings) {
 	if config.CurrentConfig().AuthenticationMethod() == lsp.OAuthAuthentication {
 		configureOAuth(c, auth.RefreshToken)
 	} else {
-		cliAuthenticationProvider := auth2.NewCliAuthenticationProvider(di.ErrorReporter(), di.CliExecutor())
+		cliAuthenticationProvider := auth2.NewCliAuthenticationProvider(di.ErrorReporter())
 		di.AuthenticationService().SetProvider(cliAuthenticationProvider)
 	}
 }
