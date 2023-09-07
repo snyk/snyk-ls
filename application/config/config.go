@@ -18,6 +18,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -60,6 +61,7 @@ const (
 	snykCodeTimeoutKey    = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
 	DefaultSnykApiUrl     = "https://snyk.io/api"
 	DefaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
+	DefaultFedrampApiUrl  = "https://api.snyk.io"
 	pathListSeparator     = string(os.PathListSeparator)
 	windows               = "windows"
 )
@@ -153,6 +155,7 @@ type Config struct {
 	snykCodeAnalysisTimeout      time.Duration
 	snykApiUrl                   string
 	snykCodeApiUrl               string
+	snykCodeApiFedrampUrl        string
 	token                        string
 	deviceId                     string
 	clientCapabilities           lsp.ClientCapabilities
@@ -212,6 +215,7 @@ func New() *Config {
 	c.logPath = ""
 	c.snykApiUrl = DefaultSnykApiUrl
 	c.snykCodeApiUrl = DefaultDeeproxyApiUrl
+	c.snykCodeApiFedrampUrl = DefaultFedrampApiUrl
 	c.snykCodeAnalysisTimeout = snykCodeAnalysisTimeoutFromEnv()
 	c.token = ""
 	c.trustedFoldersFeatureEnabled = true
@@ -380,6 +384,7 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 
 		c.SetSnykCodeApi(snykCodeApiUrl)
 		c.Engine().GetConfiguration().Set(configuration.API_URL, c.SnykApi())
+		// TODO: Set the fedramp URL as well
 		return true
 	}
 	return false
@@ -868,4 +873,18 @@ func (c *Config) IsFedramp() bool {
 	// fedramp instance should have the format https://*.snykgov.io
 	snykgovDomain := strings.HasSuffix(host, ".snykgov.io")
 	return snykgovDomain
+}
+
+func (c *Config) GetSnykCodeApi() (string, error) {
+	if !c.IsFedramp() {
+		return c.SnykCodeApi(), nil
+	}
+
+	if c.Organization() == "" {
+		return "", errors.New("Organization must be present in a fedramp environment")
+	}
+
+	path := "/org/" + c.Organization() + "/code"
+
+	return c.snykCodeApiFedrampUrl + path, nil
 }

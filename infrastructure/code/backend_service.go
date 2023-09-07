@@ -232,7 +232,11 @@ func (s *SnykCodeHTTPClient) newRequest(
 	requestId string,
 ) (*http.Request, error) {
 
-	host := c.SnykCodeApi()
+	host, err := c.GetSnykCodeApi()
+	if err != nil {
+		return nil, err
+	}
+
 	req, err := http.NewRequest(method, host+path, body)
 	if err != nil {
 		return nil, err
