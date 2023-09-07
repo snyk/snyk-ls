@@ -163,41 +163,59 @@ func Test_loadFile(t *testing.T) {
 func TestSnykCodeApi(t *testing.T) {
 	t.Run("endpoint not provided", func(t *testing.T) {
 
-		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint("")
+		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint("", false)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
+
+		codeApiEndpoint, _ = getCodeApiUrlFromCustomEndpoint("", true)
+		assert.Equal(t, "https://api.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided without 'app' prefix", func(t *testing.T) {
 
 		endpoint := "https://snyk.io/api/v1"
-		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
+		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint, false)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
+
+		codeApiEndpoint, _ = getCodeApiUrlFromCustomEndpoint(endpoint, true)
+		assert.Equal(t, "https://api.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'app' prefix with v1 suffix", func(t *testing.T) {
 
 		endpoint := "https://app.snyk.io/api/v1"
-		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
+		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint, false)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
+
+		codeApiEndpoint, _ = getCodeApiUrlFromCustomEndpoint(endpoint, true)
+		assert.Equal(t, "https://api.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'app' prefix without v1 suffix", func(t *testing.T) {
 
 		endpoint := "https://app.snyk.io/api"
-		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
+		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint, false)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
+
+		codeApiEndpoint, _ = getCodeApiUrlFromCustomEndpoint(endpoint, true)
+		assert.Equal(t, "https://api.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'api' prefix", func(t *testing.T) {
 		endpoint := "https://api.snyk.io"
-		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
+		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint, false)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
+
+		codeApiEndpoint, _ = getCodeApiUrlFromCustomEndpoint(endpoint, true)
+		assert.Equal(t, "https://api.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("proxy endpoint provided via 'DEEPROXY_API_URL' environment variable", func(t *testing.T) {
 		customDeeproxyUrl := "https://deeproxy.custom.url.snyk.io"
 		t.Setenv("DEEPROXY_API_URL", customDeeproxyUrl)
-		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint("")
+		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint("", false)
+		assert.Equal(t, customDeeproxyUrl, codeApiEndpoint)
+
+		codeApiEndpoint, _ = getCodeApiUrlFromCustomEndpoint("", true)
 		assert.Equal(t, customDeeproxyUrl, codeApiEndpoint)
 	})
 }
@@ -280,4 +298,25 @@ func Test_IsTelemetryEnabled(t *testing.T) {
 	assert.False(t, c.IsTelemetryEnabled())
 	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.ANALYTICS_DISABLED))
 
+}
+
+func Test_GetSnykCodeApi(t *testing.T) {
+	c := New()
+
+	apiUrl, err := c.GetSnykCodeApi()
+	assert.True(t, err == nil)
+	assert.Equal(t, c.SnykCodeApi(), apiUrl)
+
+	c.snykApiUrl = "https://app.fedramp.snykgov.io"
+	_, err = c.GetSnykCodeApi()
+	assert.False(t, err == nil)
+	assert.EqualError(t, err, "Organization must be present in a fedramp environment")
+
+	orgUuid, _ := uuid.NewRandom()
+	orgId := orgUuid.String()
+	c.SetOrganization(orgId)
+
+	apiUrl, err = c.GetSnykCodeApi()
+	assert.True(t, err == nil)
+	assert.Equal(t, apiUrl, "https://api.fedramp.snykgov.io/org/"+orgId+"/code")
 }
