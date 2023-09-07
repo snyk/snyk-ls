@@ -161,6 +161,7 @@ func Test_loadFile(t *testing.T) {
 }
 
 func TestSnykCodeApi(t *testing.T) {
+	t.Setenv("DEEPROXY_API_URL", "")
 	t.Run("endpoint not provided", func(t *testing.T) {
 
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint("", false)
@@ -308,6 +309,7 @@ func Test_GetSnykCodeApi(t *testing.T) {
 	assert.Equal(t, c.SnykCodeApi(), apiUrl)
 
 	c.snykApiUrl = "https://app.fedramp.snykgov.io"
+	c.SetOrganization("")
 	_, err = c.GetSnykCodeApi()
 	assert.False(t, err == nil)
 	assert.EqualError(t, err, "Organization must be present in a fedramp environment")

@@ -892,6 +892,7 @@ func (c *Config) GetSnykCodeApi() (string, error) {
 		return c.SnykCodeApi(), nil
 	}
 
+	// api url is fedramp, but code api url hasn't been updated properly
 	if strings.Contains(c.SnykCodeApi(), "deeproxy.") {
 		snykCodeApiUrl, err := getCodeApiUrlFromCustomEndpoint(c.SnykApi(), c.IsFedramp())
 		if err != nil {
