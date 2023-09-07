@@ -302,23 +302,36 @@ func Test_IsTelemetryEnabled(t *testing.T) {
 }
 
 func Test_GetSnykCodeApi(t *testing.T) {
-	c := New()
+	t.Setenv("DEEPROXY_API_URL", "")
+	t.Run("code api url is default", func(t *testing.T) {
+		c := New()
 
-	apiUrl, err := c.GetSnykCodeApi()
-	assert.True(t, err == nil)
-	assert.Equal(t, c.SnykCodeApi(), apiUrl)
+		apiUrl, err := c.GetSnykCodeApi()
+		assert.True(t, err == nil)
+		assert.Equal(t, c.SnykCodeApi(), apiUrl)
+	})
 
-	c.snykApiUrl = "https://app.fedramp.snykgov.io"
-	c.SetOrganization("")
-	_, err = c.GetSnykCodeApi()
-	assert.False(t, err == nil)
-	assert.EqualError(t, err, "Organization must be present in a fedramp environment")
+	t.Run("throws error due to missing orga", func(t *testing.T) {
+		c := New()
+		c.snykApiUrl = "https://app.fedramp.snykgov.io"
+		c.SetOrganization("")
 
-	orgUuid, _ := uuid.NewRandom()
-	orgId := orgUuid.String()
-	c.SetOrganization(orgId)
+		_, err := c.GetSnykCodeApi()
+		assert.False(t, err == nil)
+		assert.EqualError(t, err, "Organization must be present in a fedramp environment")
+	})
 
-	apiUrl, err = c.GetSnykCodeApi()
-	assert.True(t, err == nil)
-	assert.Equal(t, apiUrl, "https://api.fedramp.snykgov.io/org/"+orgId+"/code")
+	t.Run("code api url points to api subdomain, with org id in path", func(t *testing.T) {
+		c := New()
+		c.snykApiUrl = "https://app.fedramp.snykgov.io"
+		orgUuid, _ := uuid.NewRandom()
+		orgId := orgUuid.String()
+		c.SetOrganization(orgId)
+
+		assert.Equal(t, c.SnykCodeApi(), "https://deeproxy.snyk.io")
+
+		apiUrl, err := c.GetSnykCodeApi()
+		assert.True(t, err == nil)
+		assert.Equal(t, apiUrl, "https://api.fedramp.snykgov.io/org/"+orgId+"/code")
+	})
 }
