@@ -427,7 +427,6 @@ func exit(srv *jrpc2.Server, c *config.Config) jrpc2.Handler {
 		go srv.Stop()
 		time.Sleep(time.Second * 1)
 		logger.Info().Msg("Exiting...")
-		os.Exit(0)
 		return nil, nil
 	})
 }
