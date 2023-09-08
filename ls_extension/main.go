@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/snyk/snyk-ls/application/entrypoint"
 	"github.com/snyk/snyk-ls/application/server"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -42,6 +40,7 @@ func Init(engine workflow.Engine) error {
 
 	flags := pflag.NewFlagSet("language-server", pflag.ContinueOnError)
 	flags.BoolP("v", "v", false, "prints the version")
+	flags.BoolP("protocolVersionFlag", "p", false, "prints the Snyk ls protocol version used to sync client and server")
 	flags.StringP("logLevelFlag", "l", "info", "sets the log-level to <trace|debug|info|warn|error|fatal>")
 	flags.StringP("logPathFlag", "f", "", "sets the log file for the language server")
 	flags.StringP(
@@ -59,8 +58,8 @@ func Init(engine workflow.Engine) error {
 		false,
 		"displays license information")
 
-	config := workflow.ConfigurationOptionsFromFlagset(flags)
-	entry, _ := engine.Register(WORKFLOWID_LS, config, lsWorkflow)
+	flagsetConfig := workflow.ConfigurationOptionsFromFlagset(flags)
+	entry, _ := engine.Register(WORKFLOWID_LS, flagsetConfig, lsWorkflow)
 	entry.SetVisibility(false)
 
 	return nil
@@ -78,6 +77,7 @@ func lsWorkflow(
 	extensionConfig := invocation.GetConfiguration()
 
 	logger.Info().Msgf("LS Version: %s", config.Version)
+	logger.Info().Msgf("LS Protocol Version: %s", config.LsProtocolVersion)
 
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	c := config.CurrentConfig()
@@ -95,13 +95,17 @@ func lsWorkflow(
 	if extensionConfig.GetBool("v") {
 		fmt.Println(config.Version)
 		return output, err
+
 	} else if extensionConfig.GetBool("licenses") {
 		about, err := cli.NewExtensionExecutor().Execute(context.Background(), []string{"snyk", "--about"}, "")
 		fmt.Println(string(about))
+		return output, err
 
+	} else if extensionConfig.GetBool("protocolVersionFlag") {
+		fmt.Println(config.LsProtocolVersion)
 		return output, err
 	} else {
-		log.Trace().Interface("environment", os.Environ()).Msg("start environment")
+		logger.Trace().Interface("environment", os.Environ()).Msg("start environment")
 		server.Start(c)
 	}
 

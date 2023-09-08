@@ -285,9 +285,12 @@ func (c *Config) Load() {
 func (c *Config) loadFile(fileName string) {
 	file, err := os.Open(fileName)
 	if err != nil {
-		log.Info().Str("method", "loadFile").Msg("Couldn't load " + fileName)
 		return
+	} else {
+		// this is done before server start, so no logger config & no problem outputting
+		fmt.Println("loading config file:", fileName)
 	}
+
 	defer func(file *os.File) { _ = file.Close() }(file)
 	env := gotenv.Parse(file)
 	for k, v := range env {
@@ -295,7 +298,7 @@ func (c *Config) loadFile(fileName string) {
 		if !exists {
 			err := os.Setenv(k, v)
 			if err != nil {
-				log.Warn().Str("method", "loadFile").Msg("Couldn't set environment variable " + k)
+				fmt.Println("Couldn't set environment variable ", k)
 			}
 		} else {
 			// add to path, don't ignore additional paths
@@ -305,7 +308,6 @@ func (c *Config) loadFile(fileName string) {
 		}
 	}
 	c.updatePath(".")
-	log.Debug().Str("fileName", fileName).Msg("loaded.")
 }
 
 func (c *Config) NonEmptyToken() bool {

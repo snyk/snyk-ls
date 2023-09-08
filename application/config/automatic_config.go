@@ -29,7 +29,7 @@ import (
 func (c *Config) determineJavaHome() {
 	javaHome := os.Getenv("JAVA_HOME")
 	if javaHome != "" {
-		log.Info().Str("method", "determineJavaHome").Msgf("using JAVA_HOME from env %s", javaHome)
+		log.Debug().Str("method", "determineJavaHome").Msgf("using JAVA_HOME from env %s", javaHome)
 		c.updatePath(javaHome + string(os.PathSeparator) + "bin")
 		return
 	}
@@ -41,11 +41,11 @@ func (c *Config) determineJavaHome() {
 	if done {
 		return
 	}
-	log.Info().Str("method", "determineJavaHome").Msgf("detected java binary at %s", path)
+	log.Debug().Str("method", "determineJavaHome").Msgf("detected java binary at %s", path)
 	binDir := filepath.Dir(path)
 	javaHome = filepath.Dir(binDir)
 	c.updatePath(binDir)
-	log.Info().Str("method", "determineJavaHome").Msgf("setting JAVA_HOME to %s", javaHome)
+	log.Debug().Str("method", "determineJavaHome").Msgf("setting JAVA_HOME to %s", javaHome)
 	_ = os.Setenv("JAVA_HOME", javaHome)
 }
 

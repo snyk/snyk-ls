@@ -49,8 +49,9 @@ func main() {
 	if output != "" {
 		entrypoint.PrintLicenseText(output)
 	}
-
 	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
+	println("LS Version:", config.Version)
+	println("LS Protocol Version:", config.LsProtocolVersion)
 	server.Start(c)
 	log.Info().Msg("Exiting...")
 }
@@ -61,6 +62,7 @@ func parseFlags(args []string, c *config.Config) (string, error) {
 	flags.SetOutput(&buf)
 
 	versionFlag := flags.Bool("v", false, "prints the version")
+	protocolVersionFlag := flags.Bool("p", false, "prints the Snyk ls protocol version used to sync client and server")
 	logLevelFlag := flags.String("l", "info", "sets the log-level to <trace|debug|info|warn|error|fatal>")
 	logPathFlag := flags.String("f", "", "sets the log file for the language server")
 	formatFlag := flags.String(
@@ -91,6 +93,10 @@ func parseFlags(args []string, c *config.Config) (string, error) {
 
 	if *versionFlag {
 		return buf.String(), fmt.Errorf(config.Version)
+	}
+
+	if *protocolVersionFlag {
+		return buf.String(), fmt.Errorf(config.LsProtocolVersion)
 	}
 
 	if *licensesFlag {
