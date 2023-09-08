@@ -246,6 +246,8 @@ e.g. `export SNYK_DEBUG_LEVEL=debug`
 
 `-o <FORMAT>` allows to specify the output format (`md` or `html`) for issues
 
+`-p` outputs the supported Snyk protocol version for feature synchronization between client and server
+
 `-v ` prints the version of the Language Server
 
 ### Configuration
