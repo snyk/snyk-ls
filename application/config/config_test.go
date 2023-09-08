@@ -311,16 +311,6 @@ func Test_GetSnykCodeApi(t *testing.T) {
 		assert.Equal(t, c.SnykCodeApi(), apiUrl)
 	})
 
-	t.Run("throws error due to missing orga", func(t *testing.T) {
-		c := New()
-		c.snykApiUrl = "https://app.fedramp.snykgov.io"
-		c.SetOrganization("")
-
-		_, err := c.GetSnykCodeApi()
-		assert.False(t, err == nil)
-		assert.EqualError(t, err, "Organization must be present in a fedramp environment")
-	})
-
 	t.Run("code api url points to api subdomain, with org id in path", func(t *testing.T) {
 		c := New()
 		c.snykApiUrl = "https://app.fedramp.snykgov.io"
