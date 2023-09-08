@@ -182,6 +182,14 @@ func Test_initialize_shouldBeServed(t *testing.T) {
 	}
 }
 
+func Test_shutdown_shouldBeServed(t *testing.T) {
+	loc := setupServer(t)
+
+	rsp, err := loc.Client.Call(ctx, "shutdown", nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, rsp)
+}
+
 func Test_initialize_containsServerInfo(t *testing.T) {
 	loc := setupServer(t)
 

@@ -18,7 +18,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"runtime"
 	"strings"
@@ -53,17 +52,15 @@ import (
 
 func Start(c *config.Config) {
 	var srv *jrpc2.Server
+	jsonRPCLogger := zerolog.New(os.Stderr).With().Str("method", "JSON RPC").Logger()
 
 	handlers := handler.Map{}
 	srv = jrpc2.NewServer(handlers, &jrpc2.ServerOptions{
 		Logger: func(text string) {
-			if zerolog.GlobalLevel() == zerolog.TraceLevel {
-				if len(text) > 300 {
-					// this may not be sent to the logger, as it would produce a loop, therefore we write to stderr
-					_, _ = os.Stderr.WriteString(fmt.Sprintf("JSON RPC Log: %s... [TRUNCATED]", text[:300]))
-				} else {
-					_, _ = os.Stderr.WriteString(fmt.Sprintf("JSON RPC Log: %s", text))
-				}
+			if len(text) > 300 {
+				jsonRPCLogger.Debug().Msgf("JSON RPC Log: %s... [TRUNCATED]", text[:300])
+			} else {
+				jsonRPCLogger.Debug().Msgf("JSON RPC Log: %s... [TRUNCATED]", text)
 			}
 		},
 		RPCLog:    RPCLogger{},
@@ -103,8 +100,8 @@ func initHandlers(c *config.Config, srv *jrpc2.Server, handlers handler.Map) {
 	handlers["textDocument/willSave"] = noOpHandler()
 	handlers["textDocument/willSaveWaitUntil"] = noOpHandler()
 	handlers["codeAction/resolve"] = codeActionResolveHandler(c, srv, di.AuthenticationService(), di.LearnService())
-	handlers["shutdown"] = shutdown()
-	handlers["exit"] = exit(srv)
+	handlers["shutdown"] = shutdown(c)
+	handlers["exit"] = exit(srv, c)
 	handlers["workspace/didChangeWorkspaceFolders"] = workspaceDidChangeWorkspaceFoldersHandler(srv)
 	handlers["workspace/willDeleteFiles"] = workspaceWillDeleteFilesHandler()
 	handlers["workspace/didChangeConfiguration"] = workspaceDidChangeConfiguration(srv)
@@ -401,28 +398,36 @@ func monitorClientProcess(pid int) time.Duration {
 	return time.Since(start)
 }
 
-func shutdown() jrpc2.Handler {
+func shutdown(c *config.Config) jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (any, error) {
-		log.Info().Str("method", "Shutdown").Msg("RECEIVING")
-		defer log.Info().Str("method", "Shutdown").Msg("SENDING")
+		logger := c.Logger().With().Str("method", "Shutdown").Logger()
+		logger.Info().Msg("ENTERING")
+		defer logger.Info().Msg("RETURNING")
 		di.ErrorReporter().FlushErrorReporting()
 
-		disposeProgressListener()
-		di.Notifier().DisposeListener()
-		err := di.Analytics().Shutdown()
-		if err != nil {
-			log.Error().Str("method", "Shutdown").Msg("Failed to shutdown analytics.")
-		}
+		go disposeProgressListener()
+		go di.Notifier().DisposeListener()
+		go func() {
+			err := di.Analytics().Shutdown()
+			if err != nil {
+				logger.Err(err).Msg("Error shutting down analytics")
+			}
+		}()
 		return nil, nil
 	})
 }
 
-func exit(srv *jrpc2.Server) jrpc2.Handler {
+func exit(srv *jrpc2.Server, c *config.Config) jrpc2.Handler {
 	return handler.New(func(_ context.Context) (any, error) {
-		log.Info().Str("method", "Exit").Msg("RECEIVING")
-		log.Info().Msg("Stopping server...")
-		(*srv).Stop()
-		di.ErrorReporter().FlushErrorReporting()
+		logger := c.Logger().With().Str("method", "Exit").Logger()
+		logger.Info().Msg("ENTERING")
+		logger.Info().Msg("Flushing error reporting...")
+		go di.ErrorReporter().FlushErrorReporting()
+		logger.Info().Msg("Stopping server...")
+		go srv.Stop()
+		time.Sleep(time.Second * 1)
+		logger.Info().Msg("Exiting...")
+		os.Exit(0)
 		return nil, nil
 	})
 }
