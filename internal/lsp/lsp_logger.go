@@ -62,7 +62,12 @@ func (w *lspWriter) WriteLevel(level zerolog.Level, p []byte) (n int, err error)
 		}
 		return len(p), nil
 	}
-	return os.Stderr.Write(p)
+
+	if levelEnabled {
+		return os.Stderr.Write(p)
+	}
+
+	return 0, nil
 }
 
 func (w *lspWriter) startServerSenderRoutine() {
