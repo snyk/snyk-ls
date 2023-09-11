@@ -25,6 +25,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/google/uuid"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
@@ -166,3 +168,34 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 
 // todo analysis test limit files
 // todo analysis test severities
+
+func TestGetCodeApiUrl(t *testing.T) {
+
+	t.Run("Default deeprox url for code api", func(t *testing.T) {
+		c := config.CurrentConfig()
+
+		url, _ := getCodeApiUrl(c)
+		assert.Equal(t, c.SnykCodeApi(), url)
+	})
+
+	t.Run("Fedramp url for code api", func(t *testing.T) {
+		c := config.CurrentConfig()
+		c.UpdateApiEndpoints("https://app.snykgov.io")
+		orgUUID, _ := uuid.NewRandom()
+		c.SetOrganization(orgUUID.String())
+
+		url, err := getCodeApiUrl(c)
+		assert.Nil(t, err)
+		assert.Equal(t, "https://api.snykgov.io/hidden/orgs/"+orgUUID.String()+"/code", url)
+	})
+
+	t.Run("Fedramp url for code api", func(t *testing.T) {
+		c := config.CurrentConfig()
+		c.UpdateApiEndpoints("https://app.snykgov.io")
+		c.SetOrganization("")
+
+		url, err := getCodeApiUrl(c)
+		assert.NotNil(t, err)
+		assert.Equal(t, "", url)
+	})
+}
