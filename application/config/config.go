@@ -61,7 +61,7 @@ const (
 	snykCodeTimeoutKey       = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
 	DefaultSnykApiUrl        = "https://snyk.io/api"
 	DefaultDeeproxyApiUrl    = "https://deeproxy.snyk.io"
-	DefaultSnykCodeApiGovUrl = "https://api.snyk.io"
+	DefaultSnykCodeApiGovUrl = "https://api.snykgov.io"
 	pathListSeparator        = string(os.PathListSeparator)
 	windows                  = "windows"
 )
@@ -375,7 +375,7 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 		c.snykApiUrl = snykApiUrl
 
 		// Update Code API endpoint
-		snykCodeApiUrl, err := getCodeApiUrlFromCustomEndpoint(snykApiUrl, c.IsFedramp())
+		snykCodeApiUrl, err := c.GetCodeApiUrlFromCustomEndpoint(snykApiUrl)
 		if err != nil {
 			log.Error().Err(err).Msg("Couldn't obtain Snyk Code API url from CLI endpoint.")
 		}
@@ -546,7 +546,7 @@ func (c *Config) DisableLoggingToFile() {
 
 func (c *Config) SetConfigFile(configFile string) { c.configFile = configFile }
 
-func getCodeApiUrlFromCustomEndpoint(endpoint string, isFedramp bool) (string, error) {
+func (c *Config) GetCodeApiUrlFromCustomEndpoint(endpoint string) (string, error) {
 	// Code API endpoint can be set via env variable for debugging using local API instance
 	deeproxyEnvVarUrl := strings.Trim(os.Getenv(deeproxyApiUrlKey), "/")
 	if deeproxyEnvVarUrl != "" {
@@ -554,7 +554,7 @@ func getCodeApiUrlFromCustomEndpoint(endpoint string, isFedramp bool) (string, e
 	}
 
 	if endpoint == "" {
-		if isFedramp {
+		if c.IsFedramp() {
 			return DefaultSnykCodeApiGovUrl, nil
 		} else {
 			return DefaultDeeproxyApiUrl, nil
@@ -570,7 +570,7 @@ func getCodeApiUrlFromCustomEndpoint(endpoint string, isFedramp bool) (string, e
 	m := regexp.MustCompile(`^(ap[pi]\.)?`)
 
 	subdomain := "deeproxy."
-	if isFedramp {
+	if c.IsFedramp() {
 		subdomain = "api."
 	}
 
@@ -890,15 +890,6 @@ func (c *Config) IsFedramp() bool {
 func (c *Config) GetSnykCodeApi() (string, error) {
 	if !c.IsFedramp() {
 		return c.SnykCodeApi(), nil
-	}
-
-	// api url is fedramp, but code api url hasn't been updated properly
-	if strings.Contains(c.SnykCodeApi(), "deeproxy.") {
-		snykCodeApiUrl, err := getCodeApiUrlFromCustomEndpoint(c.SnykApi(), c.IsFedramp())
-		if err != nil {
-			return "", err
-		}
-		c.SetSnykCodeApi(snykCodeApiUrl)
 	}
 
 	if c.Organization() == "" {
