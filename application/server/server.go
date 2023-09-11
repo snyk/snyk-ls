@@ -397,14 +397,12 @@ func shutdown(c *config.Config) jrpc2.Handler {
 		defer logger.Info().Msg("RETURNING")
 		di.ErrorReporter().FlushErrorReporting()
 
-		go disposeProgressListener()
-		go di.Notifier().DisposeListener()
-		go func() {
-			err := di.Analytics().Shutdown()
-			if err != nil {
-				logger.Err(err).Msg("Error shutting down analytics")
-			}
-		}()
+		disposeProgressListener()
+		di.Notifier().DisposeListener()
+		err := di.Analytics().Shutdown()
+		if err != nil {
+			logger.Err(err).Msg("Error shutting down analytics")
+		}
 		return nil, nil
 	})
 }
@@ -414,7 +412,7 @@ func exit(srv *jrpc2.Server, c *config.Config) jrpc2.Handler {
 		logger := c.Logger().With().Str("method", "Exit").Logger()
 		logger.Info().Msg("ENTERING")
 		logger.Info().Msg("Flushing error reporting...")
-		go di.ErrorReporter().FlushErrorReporting()
+		di.ErrorReporter().FlushErrorReporting()
 		logger.Info().Msg("Stopping server...")
 		srv.Stop()
 		return nil, nil
