@@ -54,7 +54,7 @@ func Start(c *config.Config) {
 
 	handlers := handler.Map{}
 	srv = jrpc2.NewServer(handlers, &jrpc2.ServerOptions{
-		//RPCLog:    RPCLogger{c},
+		RPCLog:    RPCLogger{c},
 		AllowPush: true,
 	})
 
@@ -72,7 +72,6 @@ func Start(c *config.Config) {
 	} else {
 		logger.Debug().Msgf("server stopped gracefully stopped=%v closed=%v", status.Stopped, status.Closed)
 	}
-	logger.Info().Msg("Exiting...")
 }
 
 const textDocumentDidOpenOperation = "textDocument/didOpen"
@@ -418,8 +417,6 @@ func exit(srv *jrpc2.Server, c *config.Config) jrpc2.Handler {
 		go di.ErrorReporter().FlushErrorReporting()
 		logger.Info().Msg("Stopping server...")
 		srv.Stop()
-		time.Sleep(time.Second * 1)
-		logger.Info().Msg("Exiting...")
 		return nil, nil
 	})
 }

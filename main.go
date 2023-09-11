@@ -52,6 +52,7 @@ func main() {
 
 	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
 	server.Start(c)
+	log.Info().Msg("Exiting...")
 }
 
 func parseFlags(args []string, c *config.Config) (string, error) {
