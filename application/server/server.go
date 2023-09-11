@@ -26,7 +26,6 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/shirou/gopsutil/process"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -52,35 +51,28 @@ import (
 
 func Start(c *config.Config) {
 	var srv *jrpc2.Server
-	jsonRPCLogger := zerolog.New(os.Stderr).With().Str("method", "JSON RPC").Logger()
 
 	handlers := handler.Map{}
 	srv = jrpc2.NewServer(handlers, &jrpc2.ServerOptions{
-		Logger: func(text string) {
-			if len(text) > 300 {
-				jsonRPCLogger.Debug().Msgf("JSON RPC Log: %s... [TRUNCATED]", text[:300])
-			} else {
-				jsonRPCLogger.Debug().Msgf("JSON RPC Log: %s... [TRUNCATED]", text)
-			}
-		},
-		RPCLog:    RPCLogger{},
+		//RPCLog:    RPCLogger{c},
 		AllowPush: true,
 	})
 
 	c.ConfigureLogging(srv)
+	logger := c.Logger().With().Str("method", "server.Start").Logger()
 	di.Init()
 	initHandlers(c, srv, handlers)
 
-	log.Info().Msg("Starting up...")
+	logger.Info().Msg("Starting up...")
 	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
 
 	status := srv.WaitStatus()
 	if status.Err != nil {
-		log.Err(status.Err).Msg("server stopped because of error")
+		logger.Err(status.Err).Msg("server stopped because of error")
 	} else {
-		log.Debug().Msgf("server stopped gracefully stopped=%v closed=%v", status.Stopped, status.Closed)
+		logger.Debug().Msgf("server stopped gracefully stopped=%v closed=%v", status.Stopped, status.Closed)
 	}
-	log.Info().Msg("Exiting...")
+	logger.Info().Msg("Exiting...")
 }
 
 const textDocumentDidOpenOperation = "textDocument/didOpen"
@@ -198,7 +190,8 @@ func initNetworkAccessHeaders() {
 func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (any, error) {
 		method := "initializeHandler"
-		log.Info().Str("method", method).Any("params", params).Msg("RECEIVING")
+		logger := log.With().Str("method", method).Logger()
+		logger.Info().Any("params", params).Msg("RECEIVING")
 		InitializeSettings(params.InitializationOptions)
 		c.SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
@@ -214,7 +207,7 @@ func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 			}
 
 			monitorClientProcess(params.ProcessID)
-			log.Info().Msgf("Shutting down as client pid %d not running anymore.", params.ProcessID)
+			logger.Info().Msgf("Shutting down as client pid %d not running anymore.", params.ProcessID)
 			os.Exit(0)
 		}()
 
@@ -276,7 +269,7 @@ func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 				},
 			},
 		}
-		log.Debug().Str("method", method).Any("result", result).Msg("SENDING")
+		logger.Debug().Str("method", method).Any("result", result).Msg("SENDING")
 		return result, nil
 	})
 }
@@ -424,7 +417,7 @@ func exit(srv *jrpc2.Server, c *config.Config) jrpc2.Handler {
 		logger.Info().Msg("Flushing error reporting...")
 		go di.ErrorReporter().FlushErrorReporting()
 		logger.Info().Msg("Stopping server...")
-		go srv.Stop()
+		srv.Stop()
 		time.Sleep(time.Second * 1)
 		logger.Info().Msg("Exiting...")
 		return nil, nil
@@ -538,22 +531,21 @@ func noOpHandler() jrpc2.Handler {
 	})
 }
 
-type RPCLogger struct{}
+type RPCLogger struct {
+	c *config.Config
+}
 
-func (R RPCLogger) LogRequest(_ context.Context, req *jrpc2.Request) {
-	log.Debug().Msgf("Incoming JSON-RPC request. Method=%s. ID=%s. Is notification=%v.",
-		req.Method(),
-		req.ID(),
-		req.IsNotification())
-	log.Trace().Str("params", req.ParamString()).Msgf("Incoming JSON-RPC request. Method=%s. ID=%s. Is notification=%v.",
+func (r RPCLogger) LogRequest(_ context.Context, req *jrpc2.Request) {
+	r.c.Logger().Debug().Msgf("Incoming JSON-RPC request. Method=%s. ID=%s. Is notification=%v.",
 		req.Method(),
 		req.ID(),
 		req.IsNotification())
 }
 
-func (R RPCLogger) LogResponse(_ context.Context, rsp *jrpc2.Response) {
+func (r RPCLogger) LogResponse(_ context.Context, rsp *jrpc2.Response) {
+	logger := r.c.Logger()
 	if rsp.Error() != nil {
-		log.Err(rsp.Error()).Interface("rsp", *rsp).Msg("Outgoing JSON-RPC response error")
+		logger.Err(rsp.Error()).Interface("rsp", *rsp).Msg("Outgoing JSON-RPC response error")
 	}
-	log.Debug().Msgf("Outgoing JSON-RPC response. ID=%s", rsp.ID())
+	logger.Debug().Msgf("Outgoing JSON-RPC response. ID=%s", rsp.ID())
 }
