@@ -180,6 +180,7 @@ func TestGetCodeApiUrl(t *testing.T) {
 
 	t.Run("Fedramp url for code api", func(t *testing.T) {
 		c := config.CurrentConfig()
+		t.Setenv("DEEPROXY_API_URL", "")
 		c.UpdateApiEndpoints("https://app.snykgov.io")
 		orgUUID, _ := uuid.NewRandom()
 		c.SetOrganization(orgUUID.String())
