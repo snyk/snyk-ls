@@ -858,14 +858,5 @@ func (c *Config) IdeName() string {
 }
 
 func (c *Config) IsFedramp() bool {
-	u, err := url.Parse(c.SnykApi())
-	if err != nil {
-		return false
-	}
-
-	host := strings.ToLower(u.Hostname())
-
-	// fedramp instance should have the format https://*.snykgov.io
-	snykgovDomain := strings.HasSuffix(host, ".snykgov.io")
-	return snykgovDomain
+	return c.Engine().GetConfiguration().GetBool(configuration.IS_FEDRAMP)
 }
