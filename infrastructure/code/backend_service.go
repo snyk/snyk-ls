@@ -53,6 +53,8 @@ var (
 	}
 )
 
+var codeApiRegex = regexp.MustCompile(`^(deeproxy\.)?`)
+
 func issueSeverity(snykSeverity string) snyk.Severity {
 	sev, ok := issueSeverities[snykSeverity]
 	if !ok {
@@ -587,9 +589,7 @@ func getCodeApiUrl(c *config.Config) (string, error) {
 		return "", err
 	}
 
-	const pattern = `^(deeproxy)(\.)?`
-	var m = regexp.MustCompile(pattern)
-	url.Host = m.ReplaceAllString(url.Host, "api.")
+	url.Host = codeApiRegex.ReplaceAllString(url.Host, "api.")
 
 	if c.Organization() == "" {
 		return "", errors.New("Organization is required in a fedramp environment")
