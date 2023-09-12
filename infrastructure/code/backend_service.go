@@ -239,6 +239,8 @@ func (s *SnykCodeHTTPClient) newRequest(
 		return nil, err
 	}
 
+	log.Info().Str("method", "asd").Msg("BACKEND SErVICE HOST: " + host)
+
 	req, err := http.NewRequest(method, host+path, body)
 	if err != nil {
 		return nil, err
@@ -585,7 +587,8 @@ func getCodeApiUrl(c *config.Config) (string, error) {
 		return "", err
 	}
 
-	m := regexp.MustCompile(`^(deeproxy)(\.)?`)
+	const pattern = `^(deeproxy)(\.)?`
+	var m = regexp.MustCompile(pattern)
 	url.Host = m.ReplaceAllString(url.Host, "api.")
 
 	if c.Organization() == "" {
