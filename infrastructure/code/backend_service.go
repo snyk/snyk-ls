@@ -580,25 +580,19 @@ func getCodeApiUrl(c *config.Config) (string, error) {
 	if !c.IsFedramp() {
 		return c.SnykCodeApi(), nil
 	}
-
 	url, err := url.Parse(c.SnykCodeApi())
 	if err != nil {
 		return "", err
 	}
 
-	m := regexp.MustCompile(`^(deeproxy\.)?`)
+	m := regexp.MustCompile(`^(deeproxy)(\.)?`)
 	url.Host = m.ReplaceAllString(url.Host, "api.")
-	url.Path = ""
-
-	codeApiUrl := url.String()
-
-	if err != nil {
-		return "", err
-	}
 
 	if c.Organization() == "" {
 		return "", errors.New("Organization is required in a fedramp environment")
 	}
 
-	return codeApiUrl + "/hidden/orgs/" + c.Organization() + "/code", nil
+	url.Path = "/hidden/orgs/" + c.Organization() + "/code"
+
+	return url.String(), nil
 }

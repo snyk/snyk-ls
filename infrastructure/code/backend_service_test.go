@@ -171,32 +171,82 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 
 func TestGetCodeApiUrl(t *testing.T) {
 
+	t.Run("Snykgov instances code api url generation", func(t *testing.T) {
+		t.Setenv("DEEPROXY_API_URL", "")
+
+		var snykgovInstances = []string{
+			"snykgov",
+			"fedramp-alpha.snykgov",
+		}
+
+		for _, instance := range snykgovInstances {
+			inputList := []string{
+				"https://" + instance + ".io/api/v1",
+				"https://" + instance + ".io/api",
+				"https://app." + instance + ".io/api",
+				"https://app." + instance + ".io/api/v1",
+				"https://api." + instance + ".io/api/v1",
+				"https://api." + instance + ".io/v1",
+				"https://api." + instance + ".io",
+				"https://api." + instance + ".io?something=here",
+			}
+
+			for _, input := range inputList {
+				c := config.CurrentConfig()
+				random, _ := uuid.NewRandom()
+				orgUUID := random.String()
+
+				c.UpdateApiEndpoints(input)
+				c.SetOrganization(orgUUID)
+
+				expected := "https://api." + instance + ".io/hidden/orgs/" + orgUUID + "/code"
+
+				actual, err := getCodeApiUrl(c)
+				assert.Nil(t, err)
+				assert.Contains(t, actual, expected)
+			}
+		}
+	})
+
+	t.Run("Deeproxy instances code api url generation", func(t *testing.T) {
+		t.Setenv("DEEPROXY_API_URL", "")
+
+		var deeproxyInstances = []string{
+			"snyk",
+			"au.snyk",
+			"dev.snyk",
+		}
+
+		for _, instance := range deeproxyInstances {
+			inputList := []string{
+				"https://" + instance + ".io/api/v1",
+				"https://" + instance + ".io/api",
+				"https://app." + instance + ".io/api",
+				"https://app." + instance + ".io/api/v1",
+				"https://api." + instance + ".io/api/v1",
+				"https://api." + instance + ".io/v1",
+				"https://api." + instance + ".io",
+				"https://api." + instance + ".io?something=here",
+			}
+
+			expected := "https://deeproxy." + instance + ".io"
+
+			for _, input := range inputList {
+				c := config.CurrentConfig()
+				c.UpdateApiEndpoints(input)
+
+				actual, err := getCodeApiUrl(c)
+				t.Log(input, actual)
+				assert.Nil(t, err)
+				assert.Contains(t, actual, expected)
+			}
+		}
+	})
+
 	t.Run("Default deeprox url for code api", func(t *testing.T) {
 		c := config.CurrentConfig()
 
 		url, _ := getCodeApiUrl(c)
 		assert.Equal(t, c.SnykCodeApi(), url)
-	})
-
-	t.Run("Fedramp url for code api", func(t *testing.T) {
-		c := config.CurrentConfig()
-		t.Setenv("DEEPROXY_API_URL", "")
-		c.UpdateApiEndpoints("https://app.snykgov.io")
-		orgUUID, _ := uuid.NewRandom()
-		c.SetOrganization(orgUUID.String())
-
-		url, err := getCodeApiUrl(c)
-		assert.Nil(t, err)
-		assert.Equal(t, "https://api.snykgov.io/hidden/orgs/"+orgUUID.String()+"/code", url)
-	})
-
-	t.Run("Fedramp url for code api", func(t *testing.T) {
-		c := config.CurrentConfig()
-		c.UpdateApiEndpoints("https://app.snykgov.io")
-		c.SetOrganization("")
-
-		url, err := getCodeApiUrl(c)
-		assert.NotNil(t, err)
-		assert.Equal(t, "", url)
 	})
 }
