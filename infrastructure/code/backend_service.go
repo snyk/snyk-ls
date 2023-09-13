@@ -241,8 +241,6 @@ func (s *SnykCodeHTTPClient) newRequest(
 		return nil, err
 	}
 
-	log.Info().Str("method", "asd").Msg("BACKEND SErVICE HOST: " + host)
-
 	req, err := http.NewRequest(method, host+path, body)
 	if err != nil {
 		return nil, err
