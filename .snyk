@@ -48,4 +48,10 @@ ignore:
         reason: None Given
         expires: 2099-07-13T13:36:28.381Z
         created: 2023-06-13T13:36:28.385Z
+exclude:
+  global:
+    - infrastructure/oss/testdata
+    - infrastructure/iac/testdata
+    - application/server/testdata
+    - ast/maven/testdada
 patch: {}
