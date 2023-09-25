@@ -22,23 +22,21 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog/log"
-	sglsp "github.com/sourcegraph/go-lsp"
 
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 type Service interface {
-	DeleteHover(documentUri sglsp.DocumentURI)
+	DeleteHover(path string)
 	Channel() chan DocumentHovers
 	ClearAllHovers()
-	GetHover(fileUri sglsp.DocumentURI, pos snyk.Position) Result
+	GetHover(path string, pos snyk.Position) Result
 	SetAnalytics(analytics ux2.Analytics)
 }
 
 type DefaultHoverService struct {
-	hovers       map[sglsp.DocumentURI][]Hover[Context]
+	hovers       map[string][]Hover[Context]
 	hoverIndexes map[string]bool
 	hoverChan    chan DocumentHovers
 	mutex        *sync.Mutex
@@ -47,7 +45,7 @@ type DefaultHoverService struct {
 
 func NewDefaultService(analytics ux2.Analytics) Service {
 	s := &DefaultHoverService{}
-	s.hovers = map[sglsp.DocumentURI][]Hover[Context]{}
+	s.hovers = map[string][]Hover[Context]{}
 	s.hoverIndexes = map[string]bool{}
 	s.hoverChan = make(chan DocumentHovers, 100)
 	s.mutex = &sync.Mutex{}
@@ -69,8 +67,8 @@ func (s *DefaultHoverService) registerHovers(result DocumentHovers) {
 	defer s.mutex.Unlock()
 
 	for _, newHover := range result.Hover {
-		key := result.Uri
-		hoverIndex := uri.PathFromUri(key) + fmt.Sprintf("%v%v", newHover.Range, newHover.Id)
+		key := result.Path
+		hoverIndex := key + fmt.Sprintf("%v%v", newHover.Range, newHover.Id)
 
 		if !s.hoverIndexes[hoverIndex] {
 			log.Debug().
@@ -84,13 +82,13 @@ func (s *DefaultHoverService) registerHovers(result DocumentHovers) {
 	}
 }
 
-func (s *DefaultHoverService) DeleteHover(documentUri sglsp.DocumentURI) {
+func (s *DefaultHoverService) DeleteHover(path string) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	delete(s.hovers, documentUri)
+	delete(s.hovers, path)
 	for key := range s.hoverIndexes {
-		document := uri.PathFromUri(documentUri)
+		document := path
 		if strings.Contains(key, document) {
 			log.Debug().
 				Str("method", "DeleteHover").
@@ -110,16 +108,16 @@ func (s *DefaultHoverService) Channel() chan DocumentHovers {
 func (s *DefaultHoverService) ClearAllHovers() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.hovers = map[sglsp.DocumentURI][]Hover[Context]{}
+	s.hovers = map[string][]Hover[Context]{}
 	s.hoverIndexes = map[string]bool{}
 }
 
-func (s *DefaultHoverService) GetHover(fileUri sglsp.DocumentURI, pos snyk.Position) Result {
+func (s *DefaultHoverService) GetHover(path string, pos snyk.Position) Result {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
 	var hoverMessage string
-	for _, hover := range s.hovers[fileUri] {
+	for _, hover := range s.hovers[path] {
 		if s.isHoverForPosition(hover, pos) {
 			s.trackHoverDetails(hover)
 			hoverMessage += hover.Message
@@ -149,7 +147,7 @@ func (s *DefaultHoverService) createHoverListener() {
 		result := <-s.hoverChan
 		log.Trace().
 			Str("method", "createHoverListener").
-			Str("uri", string(result.Uri)).
+			Str("uri", string(result.Path)).
 			Msg("reading hover from chan.")
 
 		s.registerHovers(result)

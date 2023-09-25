@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2023 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -473,7 +473,7 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		autoScanEnabled := config.CurrentConfig().IsAutoScanEnabled()
 		if f != nil && autoScanEnabled {
 			f.ClearDiagnosticsFromFile(filePath)
-			di.HoverService().DeleteHover(params.TextDocument.URI)
+			di.HoverService().DeleteHover(filePath)
 			go f.ScanFile(bgCtx, filePath)
 		} else {
 			if autoScanEnabled {
@@ -490,7 +490,8 @@ func textDocumentHover() jrpc2.Handler {
 	return handler.New(func(_ context.Context, params hover.Params) (hover.Result, error) {
 		log.Info().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
 
-		hoverResult := di.HoverService().GetHover(params.TextDocument.URI, converter.FromPosition(params.Position))
+		path := uri.PathFromUri(params.TextDocument.URI)
+		hoverResult := di.HoverService().GetHover(path, converter.FromPosition(params.Position))
 		return hoverResult, nil
 	})
 }

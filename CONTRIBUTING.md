@@ -1,3 +1,10 @@
+# Dev Environment
+You'll need
+- Gnu Make
+- Bash
+- Python 3 (incl. requests module)
+- Go 1.21
+
 # Architecture
 
 Snyk language server acts as an integration point encompassing the following features:
@@ -86,7 +93,7 @@ the [getLanguageServer.sh](getLanguageServer.sh) script, which implements the sa
 as the Eclipse plugin for download.
 
 It is important to be aware of the variable `LS_PROTOCOL_VERSION`
-in [the goreleaser configuration](.goreleaser.yaml#L49). This controls the upload location
+in [the goreleaser configuration](.goreleaser.yaml#L53). This controls the upload location
 of the artifacts. The download URL is constructed as follows:
 
 ```https://static.snyk.io/snyk-ls/$LS_PROTOCOL_VERSION/snyk-ls_$VERSION_$OS_$ARCH```

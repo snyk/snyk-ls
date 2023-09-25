@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2023 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,15 +21,13 @@ import (
 	"testing"
 	"time"
 
-	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-func setupFakeHover() sglsp.DocumentURI {
+func setupFakeHover() string {
 	target := NewDefaultService(ux2.NewTestAnalytics()).(*DefaultHoverService)
 	fakeHover := []Hover[Context]{
 		{Range: snyk.Range{
@@ -39,22 +37,22 @@ func setupFakeHover() sglsp.DocumentURI {
 		},
 	}
 
-	filePath := uri.PathToUri("file:///fake-file.txt")
+	filePath := "file:///fake-file.txt"
 	target.hovers[filePath] = fakeHover
-	target.hoverIndexes[uri.PathFromUri(filePath+"rangepositionstuff")] = true
+	target.hoverIndexes[filePath+"rangepositionstuff"] = true
 
 	return filePath
 }
 
 func Test_registerHovers(t *testing.T) {
 	target := NewDefaultService(ux2.NewTestAnalytics()).(*DefaultHoverService)
-	hover, documentUri := fakeDocumentHover()
+	hover, path := fakeDocumentHover()
 
 	target.registerHovers(hover)
 	// assert de-duplication
 	target.registerHovers(hover)
 
-	assert.Equal(t, len(target.hovers[documentUri]), 1)
+	assert.Equal(t, len(target.hovers[path]), 1)
 	assert.Equal(t, len(target.hoverIndexes), 1)
 }
 
@@ -146,7 +144,7 @@ func Test_GetHoverMultiline(t *testing.T) {
 		},
 	}
 
-	path := uri.PathToUri("path/to/package.json")
+	path := "path/to/package.json"
 	for _, tc := range tests {
 		target.ClearAllHovers()
 		target.hovers[path] = tc.hoverDetails
@@ -163,9 +161,9 @@ func Test_TracksAnalytics(t *testing.T) {
 	target := NewDefaultService(analytics).(*DefaultHoverService)
 
 	path := "path/to/package.json"
-	documentURI := uri.PathToUri(path)
+
 	target.ClearAllHovers()
-	target.hovers[documentURI] = []Hover[Context]{
+	target.hovers[path] = []Hover[Context]{
 		{
 			Context: snyk.Issue{
 				ID:               "issue",
@@ -180,7 +178,7 @@ func Test_TracksAnalytics(t *testing.T) {
 			Message: "## Vulnerabilities found"},
 	}
 
-	target.GetHover(documentURI, snyk.Position{Line: 4, Character: 66})
+	target.GetHover(path, snyk.Position{Line: 4, Character: 66})
 	assert.Len(t, analytics.GetAnalytics(), 1)
 	assert.Equal(t, ux2.IssueHoverIsDisplayedProperties{
 		IssueId:   "issue",
@@ -196,7 +194,7 @@ func Test_SendingHovers_AfterClearAll_DoesNotBlock(t *testing.T) {
 
 	service.Channel() <- hover
 	assert.Eventually(t, func() bool {
-		return service.GetHover(hover.Uri, snyk.Position{
+		return service.GetHover(hover.Path, snyk.Position{
 			Line:      10,
 			Character: 14,
 		}).Contents.Value != ""
@@ -204,10 +202,10 @@ func Test_SendingHovers_AfterClearAll_DoesNotBlock(t *testing.T) {
 
 }
 
-func fakeDocumentHover() (DocumentHovers, sglsp.DocumentURI) {
-	documentUri := uri.PathToUri("fake-file.json")
+func fakeDocumentHover() (DocumentHovers, string) {
+	documentUri := "fake-file.json"
 	hover := DocumentHovers{
-		Uri: documentUri,
+		Path: documentUri,
 		Hover: []Hover[Context]{
 			{
 				Id: "test-id",
