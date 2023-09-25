@@ -147,7 +147,7 @@ func (s *DefaultHoverService) createHoverListener() {
 		result := <-s.hoverChan
 		log.Trace().
 			Str("method", "createHoverListener").
-			Str("uri", string(result.Path)).
+			Str("uri", result.Path).
 			Msg("reading hover from chan.")
 
 		s.registerHovers(result)
