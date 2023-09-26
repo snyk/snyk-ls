@@ -32,7 +32,7 @@ type Hover[T Context] struct {
 }
 
 type DocumentHovers struct {
-	Uri   sglsp.DocumentURI
+	Path  string
 	Hover []Hover[Context]
 }
 

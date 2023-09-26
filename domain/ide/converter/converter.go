@@ -175,7 +175,7 @@ func ToDiagnostics(issues []snyk.Issue) []lsp.Diagnostic {
 
 func ToHoversDocument(path string, issues []snyk.Issue) hover.DocumentHovers {
 	return hover.DocumentHovers{
-		Uri:   uri.PathToUri(path),
+		Path:  path,
 		Hover: ToHovers(issues),
 	}
 }

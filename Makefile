@@ -103,9 +103,16 @@ build-debug:
 	@make clean
 	@echo "==> Building binary..."
 	@echo "    running go build with debug flags"
-	@go build -o $(BUILD_DIR)/$(PROJECT_NAME) \
+
+ifeq ($(OS),Windows_NT)
+	@go build -o $(BUILD_DIR)/$(PROJECT_NAME).exe \
 		-ldflags=$(LDFLAGS_DEV) \
 		-gcflags="all=-N -l"
+else
+	@go build -o $(BUILD_DIR)/$(PROJECT_NAME) \
+		-ldflags=$(LDFLAGS_DEV)
+		-gcflags="all=-N -l"
+endif
 
 ## run: Compile and run LSP server.
 .PHONY: run

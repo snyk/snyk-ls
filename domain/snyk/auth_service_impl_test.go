@@ -140,7 +140,7 @@ func Test_Logout(t *testing.T) {
 	_, _ = service.Provider().Authenticate(context.Background())
 
 	hoverService.Channel() <- hover.DocumentHovers{
-		Uri:   "path/to/file.test",
+		Path:  "path/to/file.test",
 		Hover: hovers,
 	}
 
