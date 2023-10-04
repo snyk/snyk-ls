@@ -24,6 +24,8 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -50,6 +52,8 @@ var (
 		"error":   snyk.High,   // Sarif Level
 	}
 )
+
+var codeApiRegex = regexp.MustCompile(`^(deeproxy\.)?`)
 
 func issueSeverity(snykSeverity string) snyk.Severity {
 	sev, ok := issueSeverities[snykSeverity]
@@ -232,7 +236,11 @@ func (s *SnykCodeHTTPClient) newRequest(
 	requestId string,
 ) (*http.Request, error) {
 
-	host := c.SnykCodeApi()
+	host, err := getCodeApiUrl(c)
+	if err != nil {
+		return nil, err
+	}
+
 	req, err := http.NewRequest(method, host+path, body)
 	if err != nil {
 		return nil, err
@@ -568,4 +576,24 @@ func (s *SnykCodeHTTPClient) SubmitAutofixFeedback(ctx context.Context, fixId st
 	}
 
 	return nil
+}
+
+func getCodeApiUrl(c *config.Config) (string, error) {
+	if !c.IsFedramp() {
+		return c.SnykCodeApi(), nil
+	}
+	url, err := url.Parse(c.SnykCodeApi())
+	if err != nil {
+		return "", err
+	}
+
+	url.Host = codeApiRegex.ReplaceAllString(url.Host, "api.")
+
+	if c.Organization() == "" {
+		return "", errors.New("Organization is required in a fedramp environment")
+	}
+
+	url.Path = "/hidden/orgs/" + c.Organization() + "/code"
+
+	return url.String(), nil
 }
