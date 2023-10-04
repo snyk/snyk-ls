@@ -40,6 +40,7 @@ type ReleaseAssets struct {
 	Linux       *ReleaseAsset `json:"snyk-linux,omitempty"`
 	LinuxARM64  *ReleaseAsset `json:"snyk-linux-arm64,omitempty"`
 	MacOS       *ReleaseAsset `json:"snyk-macos,omitempty"`
+	MacOSARM64  *ReleaseAsset `json:"snyk-macos-arm64,omitempty"`
 	Windows     *ReleaseAsset `json:"snyk-win.exe,omitempty"`
 }
 
