@@ -1032,6 +1032,33 @@ type ScanIssue struct { // TODO - convert this to a generic type
 	AdditionalData any    `json:"additionalData,omitempty"`
 }
 
+// Snyk Open Source
+type OssIssueData struct {
+	License           string         `json:"license,omitempty"`
+	Identifiers       OssIdentifiers `json:"identifiers,omitempty"`
+	Description       string         `json:"description"`
+	Language          string         `json:"language"`
+	PackageManager    string         `json:"packageManager"`
+	PackageName       string         `json:"packageName"`
+	Name              string         `json:"name"`
+	Version           string         `json:"version"`
+	Exploit           string         `json:"exploit,omitempty"`
+	CVSSv3            string         `json:"CVSSv3,omitempty"`
+	CvssScore         string         `json:"cvssScore,omitempty"`
+	FixedIn           []string       `json:"fixedIn,omitempty"`
+	From              []string       `json:"from"`
+	UpgradePath       []string       `json:"upgradePath"`
+	IsPatchable       bool           `json:"isPatchable"`
+	IsUpgradable      bool           `json:"isUpgradable"`
+	ProjectName       string         `json:"projectName"`
+	DisplayTargetFile string         `json:"displayTargetFile"`
+}
+
+type OssIdentifiers struct {
+	CWE []string `json:"CWE,omitempty"`
+	CVE []string `json:"CVE,omitempty"`
+}
+
 type CodeIssueData struct {
 	Message            string             `json:"message"`
 	LeadURL            string             `json:"leadURL,omitempty"`
