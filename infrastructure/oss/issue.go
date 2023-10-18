@@ -17,8 +17,11 @@
 package oss
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/gomarkdown/markdown"
@@ -204,6 +207,56 @@ func toIssue(
 		Ecosystem:           issue.PackageManager,
 		CWEs:                issue.Identifiers.CWE,
 		CVEs:                issue.Identifiers.CVE,
+		AdditionalData:      issue.toAdditionalData(affectedFilePath),
+	}
+}
+
+func (o ossIssue) toAdditionalData(filepath string) snyk.OssIssueData {
+	var additionalData snyk.OssIssueData
+	additionalData.Key = getIssueKey(filepath, o)
+	additionalData.Name = o.Name
+	additionalData.LineNumber = o.LineNumber
+	additionalData.Description = o.Description
+	additionalData.References = o.toReferences()
+	additionalData.Version = o.Version
+	/** TODO: IDE (lsp.ScanIssue) requires the following fields from scanresult:
+	- License
+	- CVSSv3
+	- CvssScore
+	- Exploit
+	- IsPatchable
+	- ProjectName
+	- DisplayTargetFile
+	so we need to update convertScanResultToIssues to get these fields
+	**/
+	// additionalData.License = ???
+	additionalData.PackageManager = o.PackageManager
+	additionalData.PackageName = o.PackageName
+	additionalData.From = o.From
+	additionalData.GHSA = o.Identifiers.GHSA
+	additionalData.FixedIn = o.FixedIn
+	additionalData.UpgradePath = o.UpgradePath
+	additionalData.IsUpgradable = o.IsUpgradable
+
+	return additionalData
+}
+
+func (o ossIssue) toReferences() []snyk.Reference {
+	var references []snyk.Reference
+	for _, ref := range o.References {
+		references = append(references, ref.toReference())
+	}
+	return references
+}
+
+func (r reference) toReference() snyk.Reference {
+	url, err := url.Parse(string(r.Url))
+	if err != nil {
+		log.Err(err).Msg("Unable to parse reference url: " + string(r.Url))
+	}
+	return snyk.Reference{
+		Url:   url,
+		Title: r.Title,
 	}
 }
 
@@ -232,4 +285,9 @@ func convertScanResultToIssues(
 		duplicateCheckMap[duplicateKey] = true
 	}
 	return issues
+}
+
+func getIssueKey(affectedFilePath string, issue ossIssue) string {
+	id := sha256.Sum256([]byte(affectedFilePath + strconv.Itoa(issue.LineNumber) + issue.Id))
+	return hex.EncodeToString(id[:16])
 }

@@ -12,6 +12,7 @@ import (
 var enabledProducts = map[product.Product]bool{
 	product.ProductCode:                 true,
 	product.ProductInfrastructureAsCode: true,
+	product.ProductOpenSource:           true,
 }
 
 type scanNotifier struct {
@@ -88,6 +89,20 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 		},
 	)
 }
+
+// TODO: implement appendOssIssues
+// func (n *scanNotifier) appendOssIssues(scanIssues []lsp.ScanIssue, folderPath string, issues []snyk.Issue) []lsp.ScanIssue {
+// 	for _, issue := range issues {
+// 		additionalData, ok := issue.AdditionalData.(snyk.OssIssueData)
+// 		if !ok {
+// 			continue // skip non-oss issues
+// 		}
+
+// 		scanIssues = append(scanIssues, lsp.ScanIssue{})
+// 	}
+
+// 	return scanIssues
+// }
 
 func (n *scanNotifier) appendIacIssues(scanIssues []lsp.ScanIssue, folderPath string, issues []snyk.Issue) []lsp.ScanIssue {
 	for _, issue := range issues {
