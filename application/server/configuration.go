@@ -384,7 +384,7 @@ func updateCliConfig(settings lsp.Settings) {
 		log.Debug().Msg("couldn't parse insecure setting")
 	}
 	cliSettings.AdditionalOssParameters = strings.Split(settings.AdditionalParams, " ")
-	cliSettings.SetPath(settings.CliPath)
+	cliSettings.SetPath(strings.TrimSpace(settings.CliPath))
 	currentConfig := config.CurrentConfig()
 	conf := currentConfig.Engine().GetConfiguration()
 	conf.Set(configuration.INSECURE_HTTPS, cliSettings.Insecure)

@@ -19,6 +19,9 @@ package command
 import (
 	"context"
 
+	"github.com/rs/zerolog/log"
+
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 )
@@ -33,6 +36,10 @@ func (cmd *sastEnabled) Command() snyk.CommandData {
 }
 
 func (cmd *sastEnabled) Execute(_ context.Context) (any, error) {
+	if config.CurrentConfig().Token() == "" {
+		log.Info().Str("method", "sastEnabled.Execute").Msg("no token, skipping sast check")
+		return nil, nil
+	}
 	sastResponse, err := cmd.apiClient.SastSettings()
 	return sastResponse, err
 }
