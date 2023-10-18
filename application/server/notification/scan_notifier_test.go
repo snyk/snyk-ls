@@ -208,6 +208,106 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 	}
 }
 
+func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
+	testutil.UnitTest(t)
+
+	mockNotifier := notification.NewMockNotifier()
+	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
+
+	const folderPath = "/test/oss/folderPath"
+
+	expectedUIScanIssue := []lsp2.ScanIssue{
+		{
+			Id:       "ossID",
+			Title:    "ossTitle",
+			Severity: "critical",
+			FilePath: "ossAffectedFilePath",
+			AdditionalData: lsp2.OssIssueData{
+				License: "additionalData.License",
+				Identifiers: lsp2.OssIdentifiers{
+					CWE: []string{"789"},
+					CVE: []string{"123"},
+				},
+				Description:       "OSS description",
+				Language:          "additionalData.Language",
+				PackageManager:    "additionalData.PackageManager",
+				PackageName:       "additionalData.PackageName",
+				Name:              "additionalData.Name",
+				Version:           "additionalData.Version",
+				Exploit:           "additionalData.Exploit",
+				CVSSv3:            "additionalData.CVSSv3",
+				CvssScore:         "1.1",
+				FixedIn:           []string{"1.1.1"},
+				From:              []string{"1.1.1"},
+				UpgradePath:       []string{"1.1.1"},
+				IsPatchable:       true,
+				IsUpgradable:      true,
+				ProjectName:       "additionalData.ProjectName",
+				DisplayTargetFile: "additionalData.DisplayTargetFile",
+			},
+		},
+	}
+
+	issues := []snyk.Issue{
+		{ // OSS issue
+			ID:        "ossID",
+			Severity:  snyk.Critical,
+			IssueType: 1,
+			Range: snyk.Range{
+				Start: snyk.Position{
+					Line:      1,
+					Character: 1,
+				},
+				End: snyk.Position{
+					Line:      1,
+					Character: 2,
+				},
+			},
+			Message:             "ossMessage",
+			FormattedMessage:    "ossFormattedMessage",
+			AffectedFilePath:    "ossAffectedFilePath",
+			Product:             product.ProductOpenSource,
+			References:          []snyk.Reference{},
+			IssueDescriptionURL: &url.URL{},
+			CodeActions:         []snyk.CodeAction{},
+			CodelensCommands:    []snyk.CommandData{},
+			AdditionalData: lsp2.OssIssueData{
+				License: "additionalData.License",
+				Identifiers: lsp2.OssIdentifiers{
+					CWE: []string{"789"},
+					CVE: []string{"123"},
+				},
+				Description:       "OSS description",
+				Language:          "additionalData.Language",
+				PackageManager:    "additionalData.PackageManager",
+				PackageName:       "additionalData.PackageName",
+				Name:              "additionalData.Name",
+				Version:           "additionalData.Version",
+				Exploit:           "additionalData.Exploit",
+				CVSSv3:            "additionalData.CVSSv3",
+				CvssScore:         "1.1",
+				FixedIn:           []string{"1.1.1"},
+				From:              []string{"1.1.1"},
+				UpgradePath:       []string{"1.1.1"},
+				IsPatchable:       true,
+				IsUpgradable:      true,
+				ProjectName:       "additionalData.ProjectName",
+				DisplayTargetFile: "additionalData.DisplayTargetFile",
+			},
+		},
+	}
+
+	// Act - run the test
+	scanNotifier.SendSuccess(product.ProductOpenSource, folderPath, issues)
+
+	// Assert - check the messages matches the expected message for each product
+	for _, msg := range mockNotifier.SentMessages() {
+		actualUIOssIssue := msg.(lsp2.SnykScanParams).Issues
+		assert.Equal(t, expectedUIScanIssue, actualUIOssIssue)
+		return
+	}
+}
+
 func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
 	testutil.UnitTest(t)
 
