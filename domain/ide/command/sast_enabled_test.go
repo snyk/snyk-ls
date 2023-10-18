@@ -23,9 +23,11 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func Test_ApiClient_isCalledAndResultReturned(t *testing.T) {
+	testutil.UnitTest(t)
 	fakeApiClient := &snyk_api.FakeApiClient{
 		CodeEnabled: true,
 		LocalCodeEngine: snyk_api.LocalCodeEngine{
