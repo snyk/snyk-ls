@@ -118,7 +118,6 @@ type OssIssueData struct {
 	PackageManager    string      `json:"packageManager"`
 	PackageName       string      `json:"packageName"`
 	From              []string    `json:"from"`
-	GHSA              []string    `json:"GHSA,omitempty"`
 	FixedIn           []string    `json:"fixedIn,omitempty"`
 	UpgradePath       []any       `json:"upgradePath,omitempty"`
 	IsUpgradable      bool        `json:"isUpgradable,omitempty"`

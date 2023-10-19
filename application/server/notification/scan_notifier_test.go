@@ -289,7 +289,6 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 				PackageManager: "OSS PackageManager",
 				PackageName:    "OSS PackageName",
 				From:           []string{"babel/transverse@6.26.0"},
-				GHSA:           []string{"GHSA-123"},
 				FixedIn:        []string{},
 				UpgradePath: []any{
 					true,

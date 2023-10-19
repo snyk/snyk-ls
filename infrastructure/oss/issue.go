@@ -225,7 +225,6 @@ func (o ossIssue) toAdditionalData(filepath string, scanResult *scanResult) snyk
 	additionalData.PackageManager = o.PackageManager
 	additionalData.PackageName = o.PackageName
 	additionalData.From = o.From
-	additionalData.GHSA = o.Identifiers.GHSA
 	additionalData.FixedIn = o.FixedIn
 	additionalData.UpgradePath = o.UpgradePath
 	additionalData.IsUpgradable = o.IsUpgradable
