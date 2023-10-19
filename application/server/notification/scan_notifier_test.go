@@ -493,7 +493,7 @@ func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 	scanNotifier.SendInProgress("/test/folderPath")
 
 	// Assert
-	assert.Equal(t, 2, len(mockNotifier.SentMessages()))
+	assert.Equal(t, 3, len(mockNotifier.SentMessages()))
 }
 
 func containsMatchingMessage(t *testing.T,
