@@ -208,15 +208,14 @@ func toIssue(
 		Ecosystem:           issue.PackageManager,
 		CWEs:                issue.Identifiers.CWE,
 		CVEs:                issue.Identifiers.CVE,
-		ProjectName:         scanResult.ProjectName,
-		DisplayTargetFile:   scanResult.DisplayTargetFile,
-		AdditionalData:      issue.toAdditionalData(affectedFilePath),
+		AdditionalData:      issue.toAdditionalData(affectedFilePath, scanResult),
 	}
 }
 
-func (o ossIssue) toAdditionalData(filepath string) snyk.OssIssueData {
+func (o ossIssue) toAdditionalData(filepath string, scanResult *scanResult) snyk.OssIssueData {
 	var additionalData snyk.OssIssueData
 	additionalData.Key = getIssueKey(filepath, o)
+	additionalData.Title = o.Title
 	additionalData.Name = o.Name
 	additionalData.LineNumber = o.LineNumber
 	additionalData.Description = o.Description
@@ -234,6 +233,9 @@ func (o ossIssue) toAdditionalData(filepath string) snyk.OssIssueData {
 	additionalData.CvssScore = o.CvssScore
 	additionalData.Exploit = o.Exploit
 	additionalData.IsPatchable = o.IsPatchable
+	additionalData.ProjectName = scanResult.ProjectName
+	additionalData.DisplayTargetFile = scanResult.DisplayTargetFile
+	additionalData.Language = o.Language
 
 	return additionalData
 }

@@ -1047,7 +1047,7 @@ type OssIssueData struct {
 	CvssScore         string         `json:"cvssScore,omitempty"`
 	FixedIn           []string       `json:"fixedIn,omitempty"`
 	From              []string       `json:"from"`
-	UpgradePath       []string       `json:"upgradePath"`
+	UpgradePath       []any          `json:"upgradePath"`
 	IsPatchable       bool           `json:"isPatchable"`
 	IsUpgradable      bool           `json:"isUpgradable"`
 	ProjectName       string         `json:"projectName"`

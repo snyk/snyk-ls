@@ -54,6 +54,7 @@ type ossIssue struct {
 	Exploit        string      `json:"exploit,omitempty"`
 	IsPatchable    bool        `json:"isPatchable"`
 	License        string      `json:"license,omitempty"`
+	Language       string      `json:"language,omitempty"`
 }
 
 type licensesPolicy struct {

@@ -60,10 +60,6 @@ type Issue struct {
 	CWEs []string
 	// A slice of the CVEs of the issue
 	CVEs []string
-	// Name of project
-	ProjectName string
-	// target manifest file
-	DisplayTargetFile string
 	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
 	AdditionalData any
 }
@@ -112,6 +108,7 @@ type MarkerPosition struct {
 
 type OssIssueData struct {
 	Key               string      `json:"key"`
+	Title             string      `json:"title"`
 	Name              string      `json:"name"`
 	LineNumber        int         `json:"lineNumber"`
 	Description       string      `json:"description"`
@@ -131,6 +128,7 @@ type OssIssueData struct {
 	IsPatchable       bool        `json:"isPatchable"`
 	ProjectName       string      `json:"projectName"`
 	DisplayTargetFile string      `json:"displayTargetFile"`
+	Language          string      `json:"language"`
 }
 
 type IaCIssueData struct {
