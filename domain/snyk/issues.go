@@ -60,6 +60,10 @@ type Issue struct {
 	CWEs []string
 	// A slice of the CVEs of the issue
 	CVEs []string
+	// Name of project
+	ProjectName string
+	// target manifest file
+	DisplayTargetFile string
 	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
 	AdditionalData any
 }
