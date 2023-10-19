@@ -165,6 +165,7 @@ func (i *ossIssue) ToIssueSeverity() snyk.Severity {
 func toIssue(
 	affectedFilePath string,
 	issue ossIssue,
+	scanResult *scanResult,
 	issueRange snyk.Range,
 	learnService learn.Service,
 	ep error_reporting.ErrorReporter,
@@ -207,6 +208,8 @@ func toIssue(
 		Ecosystem:           issue.PackageManager,
 		CWEs:                issue.Identifiers.CWE,
 		CVEs:                issue.Identifiers.CVE,
+		ProjectName:         scanResult.ProjectName,
+		DisplayTargetFile:   scanResult.DisplayTargetFile,
 		AdditionalData:      issue.toAdditionalData(affectedFilePath),
 	}
 }
@@ -219,17 +222,7 @@ func (o ossIssue) toAdditionalData(filepath string) snyk.OssIssueData {
 	additionalData.Description = o.Description
 	additionalData.References = o.toReferences()
 	additionalData.Version = o.Version
-	/** TODO: IDE (lsp.ScanIssue) requires the following fields from scanresult:
-	- License
-	- CVSSv3
-	- CvssScore
-	- Exploit
-	- IsPatchable
-	- ProjectName
-	- DisplayTargetFile
-	so we need to update convertScanResultToIssues to get these fields
-	**/
-	// additionalData.License = ???
+	additionalData.License = o.License
 	additionalData.PackageManager = o.PackageManager
 	additionalData.PackageName = o.PackageName
 	additionalData.From = o.From
@@ -237,6 +230,10 @@ func (o ossIssue) toAdditionalData(filepath string) snyk.OssIssueData {
 	additionalData.FixedIn = o.FixedIn
 	additionalData.UpgradePath = o.UpgradePath
 	additionalData.IsUpgradable = o.IsUpgradable
+	additionalData.CVSSv3 = o.CVSSv3
+	additionalData.CvssScore = o.CvssScore
+	additionalData.Exploit = o.Exploit
+	additionalData.IsPatchable = o.IsPatchable
 
 	return additionalData
 }
@@ -279,7 +276,7 @@ func convertScanResultToIssues(
 			continue
 		}
 		issueRange := findRange(issue, path, fileContent)
-		snykIssue := toIssue(path, issue, issueRange, ls, ep)
+		snykIssue := toIssue(path, issue, res, issueRange, ls, ep)
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		issues = append(issues, snykIssue)
 		duplicateCheckMap[duplicateKey] = true
