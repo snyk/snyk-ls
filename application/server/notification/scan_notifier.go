@@ -2,6 +2,7 @@ package notification
 
 import (
 	"errors"
+	"strconv"
 
 	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -12,6 +13,7 @@ import (
 var enabledProducts = map[product.Product]bool{
 	product.ProductCode:                 true,
 	product.ProductInfrastructureAsCode: true,
+	product.ProductOpenSource:           true,
 }
 
 type scanNotifier struct {
@@ -77,6 +79,8 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 		scanIssues = n.appendIacIssues(scanIssues, folderPath, issues)
 	} else if pr == product.ProductCode {
 		scanIssues = n.appendCodeIssues(scanIssues, folderPath, issues)
+	} else if pr == product.ProductOpenSource {
+		scanIssues = n.appendOssIssues(scanIssues, folderPath, issues)
 	}
 
 	n.notifier.Send(
@@ -87,6 +91,47 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 			Issues:     scanIssues,
 		},
 	)
+}
+
+func (n *scanNotifier) appendOssIssues(scanIssues []lsp.ScanIssue, folderPath string, issues []snyk.Issue) []lsp.ScanIssue {
+	for _, issue := range issues {
+		additionalData, ok := issue.AdditionalData.(snyk.OssIssueData)
+		if !ok {
+			continue // skip non-oss issues
+		}
+
+		scanIssues = append(scanIssues, lsp.ScanIssue{
+			Id:       additionalData.Key,
+			Title:    additionalData.Title,
+			Severity: issue.Severity.String(),
+			FilePath: issue.AffectedFilePath,
+			AdditionalData: lsp.OssIssueData{
+				License: additionalData.License,
+				Identifiers: lsp.OssIdentifiers{
+					CWE: issue.CWEs,
+					CVE: issue.CVEs,
+				},
+				Description:       additionalData.Description,
+				Language:          additionalData.Language,
+				PackageManager:    additionalData.PackageManager,
+				PackageName:       additionalData.PackageName,
+				Name:              additionalData.Name,
+				Version:           additionalData.Version,
+				Exploit:           additionalData.Exploit,
+				CVSSv3:            additionalData.CVSSv3,
+				CvssScore:         strconv.FormatFloat(additionalData.CvssScore, 'f', 2, 64), // convert float64 to string with 2 decimal places
+				FixedIn:           additionalData.FixedIn,
+				From:              additionalData.From,
+				UpgradePath:       additionalData.UpgradePath,
+				IsPatchable:       additionalData.IsPatchable,
+				IsUpgradable:      additionalData.IsUpgradable,
+				ProjectName:       additionalData.ProjectName,
+				DisplayTargetFile: additionalData.DisplayTargetFile,
+			},
+		})
+	}
+
+	return scanIssues
 }
 
 func (n *scanNotifier) appendIacIssues(scanIssues []lsp.ScanIssue, folderPath string, issues []snyk.Issue) []lsp.ScanIssue {

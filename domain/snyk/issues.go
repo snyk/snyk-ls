@@ -106,6 +106,30 @@ type MarkerPosition struct {
 	File string    `json:"file"`
 }
 
+type OssIssueData struct {
+	Key               string      `json:"key"`
+	Title             string      `json:"title"`
+	Name              string      `json:"name"`
+	LineNumber        int         `json:"lineNumber"`
+	Description       string      `json:"description"`
+	References        []Reference `json:"references,omitempty"`
+	Version           string      `json:"version"`
+	License           string      `json:"license,omitempty"`
+	PackageManager    string      `json:"packageManager"`
+	PackageName       string      `json:"packageName"`
+	From              []string    `json:"from"`
+	FixedIn           []string    `json:"fixedIn,omitempty"`
+	UpgradePath       []any       `json:"upgradePath,omitempty"`
+	IsUpgradable      bool        `json:"isUpgradable,omitempty"`
+	CVSSv3            string      `json:"CVSSv3,omitempty"`
+	CvssScore         float64     `json:"cvssScore,omitempty"`
+	Exploit           string      `json:"exploit,omitempty"`
+	IsPatchable       bool        `json:"isPatchable"`
+	ProjectName       string      `json:"projectName"`
+	DisplayTargetFile string      `json:"displayTargetFile"`
+	Language          string      `json:"language"`
+}
+
 type IaCIssueData struct {
 	// Unique key identifying an issue in the whole result set
 	Key string `json:"key"`

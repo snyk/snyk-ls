@@ -49,6 +49,12 @@ type ossIssue struct {
 	FixedIn        []string    `json:"fixedIn,omitempty"`
 	UpgradePath    []any       `json:"upgradePath,omitempty"`
 	IsUpgradable   bool        `json:"isUpgradable,omitempty"`
+	CVSSv3         string      `json:"CVSSv3,omitempty"`
+	CvssScore      float64     `json:"cvssScore,omitempty"`
+	Exploit        string      `json:"exploit,omitempty"`
+	IsPatchable    bool        `json:"isPatchable"`
+	License        string      `json:"license,omitempty"`
+	Language       string      `json:"language,omitempty"`
 }
 
 type licensesPolicy struct {

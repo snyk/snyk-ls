@@ -208,6 +208,118 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 	}
 }
 
+func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
+	testutil.UnitTest(t)
+
+	mockNotifier := notification.NewMockNotifier()
+	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
+
+	const folderPath = "/test/oss/folderPath"
+
+	expectedUIScanIssue := []lsp2.ScanIssue{
+		{
+			Id:       "OSS Key",
+			Title:    "OSS Title",
+			Severity: "critical",
+			FilePath: "ossAffectedFilePath",
+			AdditionalData: lsp2.OssIssueData{
+				License: "OSS License",
+				Identifiers: lsp2.OssIdentifiers{
+					CWE: []string{"CWE-184"},
+					CVE: []string{"CVE-2023-45133"},
+				},
+				Description:    "OSS Description",
+				Language:       "js",
+				PackageManager: "OSS PackageManager",
+				PackageName:    "OSS PackageName",
+				Name:           "OSS Name",
+				Version:        "OSS Version",
+				Exploit:        "OSS Exploit",
+				CVSSv3:         "OSS CVSSv3",
+				CvssScore:      "9.90",
+				FixedIn:        []string{},
+				From:           []string{"babel/transverse@6.26.0"},
+				UpgradePath: []any{
+					true,
+					"babel-traverse@6.26.0",
+				},
+				IsPatchable:       false,
+				IsUpgradable:      false,
+				ProjectName:       "OSS ProjectName",
+				DisplayTargetFile: "OSS DisplayTargetFile",
+			},
+		},
+	}
+
+	issues := []snyk.Issue{
+		{ // OSS issue
+			ID:        "SNYK-JS-BABELTRAVERSE-5962463",
+			Severity:  snyk.Critical,
+			IssueType: 1,
+			Range: snyk.Range{
+				Start: snyk.Position{
+					Line:      1,
+					Character: 1,
+				},
+				End: snyk.Position{
+					Line:      1,
+					Character: 2,
+				},
+			},
+			Message:             "Incomplete List of Disallowed Inputs",
+			FormattedMessage:    "Incomplete List of Disallowed Inputs",
+			AffectedFilePath:    "ossAffectedFilePath",
+			Product:             product.ProductOpenSource,
+			References:          []snyk.Reference{},
+			IssueDescriptionURL: &url.URL{},
+			CodeActions:         []snyk.CodeAction{},
+			CodelensCommands:    []snyk.CommandData{},
+			Ecosystem:           "OSS Ecosystem",
+			CWEs:                []string{"CWE-184"},
+			CVEs:                []string{"CVE-2023-45133"},
+			AdditionalData: snyk.OssIssueData{
+				Key:            "OSS Key",
+				Title:          "OSS Title",
+				Name:           "OSS Name",
+				LineNumber:     1,
+				Description:    "OSS Description",
+				References:     []snyk.Reference{},
+				Version:        "OSS Version",
+				License:        "OSS License",
+				PackageManager: "OSS PackageManager",
+				PackageName:    "OSS PackageName",
+				From:           []string{"babel/transverse@6.26.0"},
+				FixedIn:        []string{},
+				UpgradePath: []any{
+					true,
+					"babel-traverse@6.26.0",
+				},
+				IsUpgradable:      false,
+				CVSSv3:            "OSS CVSSv3",
+				CvssScore:         9.9,
+				Exploit:           "OSS Exploit",
+				IsPatchable:       false,
+				ProjectName:       "OSS ProjectName",
+				DisplayTargetFile: "OSS DisplayTargetFile",
+				Language:          "js",
+			},
+		},
+	}
+
+	// Act - run the test
+	scanNotifier.SendSuccess(product.ProductOpenSource, folderPath, issues)
+
+	// Assert - check that there are messages sent
+	assert.NotEmpty(t, mockNotifier.SentMessages())
+
+	// Assert - check the messages matches the expected message for each product
+	for _, msg := range mockNotifier.SentMessages() {
+		actualUIOssIssue := msg.(lsp2.SnykScanParams).Issues
+		assert.Equal(t, expectedUIScanIssue, actualUIOssIssue)
+		return
+	}
+}
+
 func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
 	testutil.UnitTest(t)
 
@@ -380,7 +492,7 @@ func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 	scanNotifier.SendInProgress("/test/folderPath")
 
 	// Assert
-	assert.Equal(t, 2, len(mockNotifier.SentMessages()))
+	assert.Equal(t, 3, len(mockNotifier.SentMessages()))
 }
 
 func containsMatchingMessage(t *testing.T,

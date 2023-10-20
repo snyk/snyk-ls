@@ -17,8 +17,11 @@
 package oss
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/gomarkdown/markdown"
@@ -162,6 +165,7 @@ func (i *ossIssue) ToIssueSeverity() snyk.Severity {
 func toIssue(
 	affectedFilePath string,
 	issue ossIssue,
+	scanResult *scanResult,
 	issueRange snyk.Range,
 	learnService learn.Service,
 	ep error_reporting.ErrorReporter,
@@ -204,6 +208,53 @@ func toIssue(
 		Ecosystem:           issue.PackageManager,
 		CWEs:                issue.Identifiers.CWE,
 		CVEs:                issue.Identifiers.CVE,
+		AdditionalData:      issue.toAdditionalData(affectedFilePath, scanResult),
+	}
+}
+
+func (o ossIssue) toAdditionalData(filepath string, scanResult *scanResult) snyk.OssIssueData {
+	var additionalData snyk.OssIssueData
+	additionalData.Key = getIssueKey(filepath, o)
+	additionalData.Title = o.Title
+	additionalData.Name = o.Name
+	additionalData.LineNumber = o.LineNumber
+	additionalData.Description = o.Description
+	additionalData.References = o.toReferences()
+	additionalData.Version = o.Version
+	additionalData.License = o.License
+	additionalData.PackageManager = o.PackageManager
+	additionalData.PackageName = o.PackageName
+	additionalData.From = o.From
+	additionalData.FixedIn = o.FixedIn
+	additionalData.UpgradePath = o.UpgradePath
+	additionalData.IsUpgradable = o.IsUpgradable
+	additionalData.CVSSv3 = o.CVSSv3
+	additionalData.CvssScore = o.CvssScore
+	additionalData.Exploit = o.Exploit
+	additionalData.IsPatchable = o.IsPatchable
+	additionalData.ProjectName = scanResult.ProjectName
+	additionalData.DisplayTargetFile = scanResult.DisplayTargetFile
+	additionalData.Language = o.Language
+
+	return additionalData
+}
+
+func (o ossIssue) toReferences() []snyk.Reference {
+	var references []snyk.Reference
+	for _, ref := range o.References {
+		references = append(references, ref.toReference())
+	}
+	return references
+}
+
+func (r reference) toReference() snyk.Reference {
+	url, err := url.Parse(string(r.Url))
+	if err != nil {
+		log.Err(err).Msg("Unable to parse reference url: " + string(r.Url))
+	}
+	return snyk.Reference{
+		Url:   url,
+		Title: r.Title,
 	}
 }
 
@@ -226,10 +277,15 @@ func convertScanResultToIssues(
 			continue
 		}
 		issueRange := findRange(issue, path, fileContent)
-		snykIssue := toIssue(path, issue, issueRange, ls, ep)
+		snykIssue := toIssue(path, issue, res, issueRange, ls, ep)
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		issues = append(issues, snykIssue)
 		duplicateCheckMap[duplicateKey] = true
 	}
 	return issues
+}
+
+func getIssueKey(affectedFilePath string, issue ossIssue) string {
+	id := sha256.Sum256([]byte(affectedFilePath + strconv.Itoa(issue.LineNumber) + issue.Id))
+	return hex.EncodeToString(id[:16])
 }
