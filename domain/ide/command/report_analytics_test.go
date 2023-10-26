@@ -28,21 +28,25 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-func TestReportAnalyticsIsCallingExtension(t *testing.T) {
+type contentMatcher struct {
+	expected []byte
+}
+
+func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 	c := testutil.UnitTest(t)
 
+	testInput := "some data"
 	cmd := &reportAnalyticsCommand{
 		command: snyk.CommandData{
 			CommandId: snyk.ReportAnalyticsCommand,
+			Arguments: []any{testInput},
 		},
 	}
-
-	input := snyk.NewScanDoneAnalyticsData()
 
 	mockEngine, engineConfig := setUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS,
-		input, gomock.Any()).Return(nil, nil)
+		gomock.Any(), gomock.Any()).Return(nil, nil)
 
 	output, err := cmd.Execute(context.Background())
 	require.NoError(t, err)

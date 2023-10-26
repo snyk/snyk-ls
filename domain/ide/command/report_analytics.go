@@ -18,7 +18,12 @@ package command
 
 import (
 	"context"
+	"fmt"
 
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
@@ -31,5 +36,32 @@ func (cmd *reportAnalyticsCommand) Command() snyk.CommandData {
 }
 
 func (cmd *reportAnalyticsCommand) Execute(ctx context.Context) (any, error) {
-	panic("not implemented")
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", "reportAnalyticsCommand.Execute").Logger()
+	engine := c.Engine()
+
+	for _, arg := range cmd.command.Arguments {
+		inputString, ok := arg.(string)
+		if !ok {
+			return nil, fmt.Errorf("error converting argument to string. %v", arg)
+		}
+
+		inputData := workflow.NewData(
+			workflow.NewTypeIdentifier(localworkflows.WORKFLOWID_REPORT_ANALYTICS, "reportAnalytics"),
+			"application/json",
+			[]byte(inputString),
+		)
+
+		_, err := engine.InvokeWithInputAndConfig(
+			localworkflows.WORKFLOWID_REPORT_ANALYTICS,
+			[]workflow.Data{inputData},
+			engine.GetConfiguration(),
+		)
+
+		if err != nil {
+			logger.Err(err).Msg("error invoking workflow")
+			return nil, err
+		}
+	}
+	return nil, nil
 }
