@@ -21,10 +21,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/atotto/clipboard"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"

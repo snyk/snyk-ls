@@ -64,6 +64,8 @@ func CreateFromCommandData(
 		return &sastEnabled{command: commandData, apiClient: apiClient}, nil
 	case snyk.GetActiveUserCommand:
 		return &getActiveUser{command: commandData, authService: authService, notifier: notifier}, nil
+	case snyk.ReportAnalyticsCommand:
+		return &reportAnalyticsCommand{command: commandData}, nil
 	case snyk.CodeFixCommand:
 		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier}, nil
 	case snyk.CodeSubmitFixFeedback:
