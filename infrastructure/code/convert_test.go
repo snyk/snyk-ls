@@ -881,3 +881,19 @@ func Test_AutofixResponse_toAutofixSuggestion(t *testing.T) {
 
 	assert.Contains(t, editValues, "test1", "test2")
 }
+
+func Test_Result_getMarkers_basic(t *testing.T) {
+	r := result{
+		Message: resultMessage{
+			Text:     "",
+			Markdown: "Printing the stack trace of {0}. Production code should not use {1}. {3}",
+			Arguments: []string{"[java.lang.InterruptedException](0)", "[printStackTrace](1)(2)", "",
+				"[This is a test argument](3)"},
+		},
+	}
+
+	marker, err := r.getMarkers("")
+	assert.Nil(t, err)
+	assert.Len(t, marker, 3)
+
+}
