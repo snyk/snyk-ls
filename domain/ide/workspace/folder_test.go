@@ -23,7 +23,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/puzpuzpuz/xsync"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -388,6 +392,22 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 	assert.Empty(t, scanNotifier.SuccessCalls())
 	assert.Len(t, scanNotifier.ErrorCalls(), 1)
 }
+func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
+	// Arrange
+	c := testutil.UnitTest(t)
+
+	mockEngine, engineConfig := setUpEngineMock(t, c)
+	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS,
+		gomock.Any(), gomock.Any()).Return(nil, nil)
+
+	f, _ := NewMockFolderWithScanNotifier(notification.NewNotifier())
+	const filePath = "path1"
+	mockCodeIssue := NewMockIssue("id1", filePath)
+
+	// Act
+	f.processResults(product.ProductOpenSource, []snyk.Issue{mockCodeIssue}, nil)
+}
 
 func NewMockFolder(notifier noti.Notifier) *Folder {
 	return NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService(), snyk.NewMockScanNotifier(), notifier)
@@ -416,4 +436,12 @@ func NewMockIssueWithSeverity(id, path string, severity snyk.Severity) snyk.Issu
 func GetValueFromMap(m *xsync.MapOf[string, []snyk.Issue], key string) []snyk.Issue {
 	value, _ := m.Load(key)
 	return value
+}
+
+func setUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configuration.Configuration) {
+	ctrl := gomock.NewController(t)
+	mockEngine := mocks.NewMockEngine(ctrl)
+	engineConfig := c.Engine().GetConfiguration()
+	c.SetEngine(mockEngine)
+	return mockEngine, engineConfig
 }

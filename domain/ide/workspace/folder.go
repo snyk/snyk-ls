@@ -166,6 +166,8 @@ func (f *Folder) processResults(product product.Product, issues []snyk.Issue, er
 
 	dedupMap := f.createDedupMap()
 
+	// int critical, high, medium, low int
+
 	// TODO: perform issue diffing (current <-> newly reported)
 	// Update diagnostic cache
 	for _, issue := range issues {
@@ -176,14 +178,22 @@ func (f *Folder) processResults(product product.Product, issues []snyk.Issue, er
 
 		if !dedupMap[f.getUniqueIssueID(issue)] {
 			cachedIssues = append(cachedIssues, issue)
+			// incrementamos el contador de issues por criticalidad y producto
 		}
 
 		f.documentDiagnosticCache.Store(issue.AffectedFilePath, cachedIssues)
+
 	}
+	sendAnalytics(cachedIssues)
 
 	// Filter and publish cached diagnostics
 	f.FilterAndPublishCachedDiagnostics(product)
 }
+
+funct sendAnalytics(poduct ) void {
+
+}
+
 
 func (f *Folder) FilterAndPublishCachedDiagnostics(product product.Product) {
 	issuesByFile := f.filterCachedDiagnostics()
