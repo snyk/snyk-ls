@@ -432,20 +432,22 @@ func (r *result) getMarkers(baseDir string) ([]snyk.Marker, error) {
 		// extract the text between the brackets
 		strRegex := regexp.MustCompile(`\[(.*?)\]`)
 		// extract the text between the brackets (e.g. "printStackTrace" in the second array element from the above example)
-		substituteStr := strRegex.FindStringSubmatch(arg)[1]
+		if strFindResult := strRegex.FindStringSubmatch(arg); len(strFindResult) > 1 {
+			substituteStr := strFindResult[1]
 
-		// compute index to insert markers
-		indexTemplate := fmt.Sprintf("{%d}", i)
-		msgStartIndex := strings.LastIndex(markdownStr, indexTemplate)
-		msgEndIndex := msgStartIndex + len(substituteStr) - 1
+			// compute index to insert markers
+			indexTemplate := fmt.Sprintf("{%d}", i)
+			msgStartIndex := strings.LastIndex(markdownStr, indexTemplate)
+			msgEndIndex := msgStartIndex + len(substituteStr) - 1
 
-		markdownStr = strings.Replace(markdownStr, indexTemplate, substituteStr, 1)
+			markdownStr = strings.Replace(markdownStr, indexTemplate, substituteStr, 1)
 
-		// write the marker
-		markers = append(markers, snyk.Marker{
-			Msg: [2]int{msgStartIndex, msgEndIndex},
-			Pos: positions,
-		})
+			// write the marker
+			markers = append(markers, snyk.Marker{
+				Msg: [2]int{msgStartIndex, msgEndIndex},
+				Pos: positions,
+			})
+		}
 	}
 
 	return markers, nil
