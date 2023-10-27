@@ -36,7 +36,6 @@ import (
 	performance2 "github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code/encoding"
-	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 const (
@@ -246,11 +245,6 @@ func (s *SnykCodeHTTPClient) newRequest(
 		return nil, err
 	}
 
-	req, err = s.addAuthHeader(c, req)
-	if err != nil {
-		return nil, err
-	}
-
 	s.addOrganization(c, req)
 	s.addDefaultHeaders(req, requestId, method)
 	return req, nil
@@ -274,29 +268,6 @@ func (s *SnykCodeHTTPClient) addOrganization(c *config.Config, req *http.Request
 	if org != "" {
 		req.Header.Set("snyk-org-name", org)
 	}
-}
-
-func (s *SnykCodeHTTPClient) addAuthHeader(c *config.Config, req *http.Request) (*http.Request, error) {
-	token := c.Token()
-	if c.AuthenticationMethod() == lsp.TokenAuthentication {
-		if len(token) > 0 {
-			req.Header.Set("Session-Token", token) // FIXME: this should be set by GAF, is in the works
-		} else {
-			err := errors.New("no token found, auth header not added")
-			s.errorReporter.CaptureError(err)
-			return nil, err
-		}
-	} else {
-		oauthToken, err := c.TokenAsOAuthToken()
-		if err == nil && len(oauthToken.AccessToken) > 0 {
-			req.Header.Set("Session-Token", "Bearer "+oauthToken.AccessToken) // FIXME: this should be set by GAF, is in the works
-		} else {
-			err = errors.New("token could not be converted to OAuth token, auth header not added")
-			s.errorReporter.CaptureError(err)
-			return nil, err
-		}
-	}
-	return req, nil
 }
 
 func (s *SnykCodeHTTPClient) encodeIfNeeded(method string, requestBody []byte) (*bytes.Buffer, error) {

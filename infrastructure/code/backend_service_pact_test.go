@@ -37,8 +37,9 @@ const (
 	pactDir      = "./pacts"
 	pactProvider = "SnykCodeApi"
 
-	orgUUID     = "00000000-0000-0000-0000-000000000023"
-	uuidMatcher = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+	orgUUID             = "00000000-0000-0000-0000-000000000023"
+	sessionTokenMatcher = "^token [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+	uuidMatcher         = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 )
 
 // Common test data
@@ -264,14 +265,15 @@ func setupPact(t *testing.T) {
 	config.CurrentConfig().UpdateApiEndpoints("http://localhost")
 	config.CurrentConfig().SetOrganization(orgUUID)
 
-	client = NewHTTPRepository(performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), func() *http.Client { return http.DefaultClient })
+	client = NewHTTPRepository(performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(),
+		func() *http.Client { return config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient() })
 }
 
 func getPutPostHeaderMatcher() dsl.MapMatcher {
 	return dsl.MapMatcher{
 		"Content-Type":     dsl.String("application/octet-stream"),
 		"Content-Encoding": dsl.String("gzip"),
-		"Session-Token":    dsl.Regex("fc763eba-0905-41c5-a27f-3934ab26786c", uuidMatcher),
+		"Session-Token":    dsl.Regex("token fc763eba-0905-41c5-a27f-3934ab26786c", sessionTokenMatcher),
 		"snyk-org-name":    dsl.Regex(orgUUID, uuidMatcher),
 		"snyk-request-id":  getSnykRequestIdMatcher(),
 	}
