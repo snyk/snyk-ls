@@ -285,7 +285,7 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 			startLine := position.StartLine - 1
 			endLine := util.Max(position.EndLine-1, startLine)
 			startCol := position.StartColumn - 1
-			endCol := util.Max(position.EndColumn, 0)
+			endCol := util.Max(position.EndColumn-1, 0)
 
 			myRange := snyk.Range{
 				Start: snyk.Position{
