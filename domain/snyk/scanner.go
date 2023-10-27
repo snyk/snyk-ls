@@ -19,6 +19,7 @@ package snyk
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog/log"
 
@@ -189,11 +190,18 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				defer sc.instrumentor.Finish(span)
 				log.Info().Msgf("Scanning %s with %T: STARTED", path, s)
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
-				foundIssues, err := s.Scan(span.Context(), path, folderPath)
+
+				scanSpan := sc.instrumentor.StartSpan(span.Context(), "scan")
+				foundIssues, err := s.Scan(scanSpan.Context(), path, folderPath)
+				sc.instrumentor.Finish(scanSpan)
+
+				// now process
 				data := ScanData{
-					Product: s.Product(),
-					Issues:  foundIssues,
-					Err:     err,
+					Product:           s.Product(),
+					Issues:            foundIssues,
+					Err:               err,
+					DurationMs:        scanSpan.GetDurationMs(),
+					TimestampFinished: time.Now().UTC(),
 				}
 				processResults(data)
 				log.Info().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))

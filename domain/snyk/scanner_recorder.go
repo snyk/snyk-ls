@@ -19,6 +19,7 @@ package snyk
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/snyk/snyk-ls/internal/product"
 )
@@ -56,7 +57,13 @@ func (s *TestScanner) Scan(
 ) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	processResults(product.ProductOpenSource, s.Issues, nil)
+	data := ScanData{
+		Product:           product.ProductOpenSource,
+		Issues:            s.Issues,
+		DurationMs:        1234,
+		TimestampFinished: time.Now().UTC(),
+	}
+	processResults(data)
 	s.calls++
 }
 

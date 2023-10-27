@@ -201,6 +201,7 @@ func IsDevelopment() bool {
 // New creates a configuration object with default values
 func New() *Config {
 	c := &Config{}
+	c.logger = &log.Logger
 	c.cliSettings = NewCliSettings()
 	c.automaticAuthentication = true
 	c.configFile = ""
@@ -210,8 +211,6 @@ func New() *Config {
 	c.isSnykIacEnabled.Set(true)
 	c.manageBinariesAutomatically.Set(true)
 	c.logPath = ""
-	c.snykApiUrl = DefaultSnykApiUrl
-	c.snykCodeApiUrl = DefaultDeeproxyApiUrl
 	c.snykCodeAnalysisTimeout = snykCodeAnalysisTimeoutFromEnv()
 	c.token = ""
 	c.trustedFoldersFeatureEnabled = true
@@ -225,6 +224,7 @@ func New() *Config {
 	if err != nil {
 		log.Warn().Err(err).Msg("unable to initialize workflow engine")
 	}
+	c.UpdateApiEndpoints(DefaultSnykApiUrl)
 	c.enableSnykLearnCodeActions = true
 	c.SetTelemetryEnabled(true)
 

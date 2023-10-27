@@ -28,10 +28,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-type contentMatcher struct {
-	expected []byte
-}
-
 func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 	c := testutil.UnitTest(t)
 

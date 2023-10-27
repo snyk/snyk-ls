@@ -23,7 +23,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
@@ -46,6 +45,20 @@ type FolderStatus int
 const (
 	Unscanned FolderStatus = iota
 	Scanned   FolderStatus = iota
+)
+
+var (
+	os = map[string]string{
+		"darwin":  "macOS",
+		"linux":   "Linux",
+		"windows": "Windows",
+	}
+
+	arch = map[string]string{
+		"amd64": "x86_64",
+		"arm64": "arm64",
+		"386":   "386",
+	}
 )
 
 // TODO: 3: Extract reporting logic to a separate service
@@ -221,18 +234,6 @@ func sendAnalytics(data snyk.ScanData) {
 		return
 	}
 
-	os := map[string]string{
-		"darwin":  "macOS",
-		"linux":   "Linux",
-		"windows": "Windows",
-	}
-
-	arch := map[string]string{
-		"amd64": "x86_64",
-		"arm64": "arm64",
-		"386":   "386",
-	}
-
 	scanEvent := json_schemas.ScanDoneEvent{}
 	// Populate the fields with data
 	scanEvent.Data.Type = "analytics"
@@ -253,7 +254,7 @@ func sendAnalytics(data snyk.ScanData) {
 	scanEvent.Data.Attributes.UniqueIssueCount.Medium = data.Medium
 	scanEvent.Data.Attributes.UniqueIssueCount.Low = data.Low
 	scanEvent.Data.Attributes.DurationMs = fmt.Sprintf("%d", data.DurationMs)
-	scanEvent.Data.Attributes.TimestampFinished = time.Now()
+	scanEvent.Data.Attributes.TimestampFinished = data.TimestampFinished
 
 	bytes, err := json.Marshal(scanEvent)
 	if err != nil {
@@ -261,11 +262,13 @@ func sendAnalytics(data snyk.ScanData) {
 		return
 	}
 
-	err = analytics.SendAnalyticsToAPI(c, bytes)
-	if err != nil {
-		logger.Err(err).Msg("Error sending analytics to API")
-		return
-	}
+	go func(c *config.Config, bytes []byte) {
+		err = analytics.SendAnalyticsToAPI(c, bytes)
+		if err != nil {
+			logger.Err(err).Msg("Error sending analytics to API")
+			return
+		}
+	}(c, bytes)
 }
 
 func (f *Folder) FilterAndPublishCachedDiagnostics(product product.Product) {
