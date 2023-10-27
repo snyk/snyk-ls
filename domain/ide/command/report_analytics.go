@@ -20,11 +20,9 @@ import (
 	"context"
 	"fmt"
 
-	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/analytics"
 )
 
 type reportAnalyticsCommand struct {
@@ -35,31 +33,18 @@ func (cmd *reportAnalyticsCommand) Command() snyk.CommandData {
 	return cmd.command
 }
 
-func (cmd *reportAnalyticsCommand) Execute(ctx context.Context) (any, error) {
+func (cmd *reportAnalyticsCommand) Execute(_ context.Context) (any, error) {
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", "reportAnalyticsCommand.Execute").Logger()
-	engine := c.Engine()
 
 	for _, arg := range cmd.command.Arguments {
-		inputString, ok := arg.(string)
+		payload, ok := arg.(string)
 		if !ok {
 			return nil, fmt.Errorf("error converting argument to string. %v", arg)
 		}
-
-		inputData := workflow.NewData(
-			workflow.NewTypeIdentifier(localworkflows.WORKFLOWID_REPORT_ANALYTICS, "reportAnalytics"),
-			"application/json",
-			[]byte(inputString),
-		)
-
-		_, err := engine.InvokeWithInputAndConfig(
-			localworkflows.WORKFLOWID_REPORT_ANALYTICS,
-			[]workflow.Data{inputData},
-			engine.GetConfiguration(),
-		)
-
+		err := analytics.SendAnalyticsToAPI(c, []byte(payload))
 		if err != nil {
-			logger.Err(err).Msg("error invoking workflow")
+			logger.Err(err).Msg("error sending analytics to API")
 			return nil, err
 		}
 	}

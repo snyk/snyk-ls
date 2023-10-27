@@ -190,7 +190,12 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				log.Info().Msgf("Scanning %s with %T: STARTED", path, s)
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
 				foundIssues, err := s.Scan(span.Context(), path, folderPath)
-				processResults(s.Product(), foundIssues, err)
+				data := ScanData{
+					Product: s.Product(),
+					Issues:  foundIssues,
+					Err:     err,
+				}
+				processResults(data)
 				log.Info().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
 			}(scanner)
 		} else {
