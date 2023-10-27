@@ -24,6 +24,7 @@ const (
 	ProductOpenSource           Product = "Snyk Open Source"
 	ProductCode                 Product = "Snyk Code"
 	ProductInfrastructureAsCode Product = "Snyk IaC"
+	ProductContainer            Product = "Snyk Container"
 )
 
 const (
@@ -31,6 +32,7 @@ const (
 	FilterableIssueTypeCodeQuality          FilterableIssueType = "Code Quality"
 	FilterableIssueTypeCodeSecurity         FilterableIssueType = "Code Security"
 	FilterableIssueTypeInfrastructureAsCode FilterableIssueType = "Infrastructure As Code"
+	FilterableIssueTypeContainer            FilterableIssueType = "Container"
 )
 
 func ToProductCodename(product Product) string {

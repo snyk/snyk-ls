@@ -283,6 +283,7 @@ func Test_UpdateSettings(t *testing.T) {
 			ScanningMode:                "manual",
 			AuthenticationMethod:        lsp.OAuthAuthentication,
 			SnykCodeApi:                 sampleSettings.SnykCodeApi,
+			EnableAnalytics:             true,
 		}
 
 		UpdateSettings(settings)
@@ -312,6 +313,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.False(t, c.IsAutoScanEnabled())
 		assert.Equal(t, lsp.OAuthAuthentication, c.AuthenticationMethod())
 		assert.Equal(t, sampleSettings.SnykCodeApi, c.SnykCodeApi())
+		assert.Equal(t, settings.EnableAnalytics, c.IsAnalyticsEnabled())
 	})
 
 	t.Run("empty snyk code api is ignored and default is used", func(t *testing.T) {

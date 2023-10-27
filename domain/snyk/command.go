@@ -38,6 +38,7 @@ const (
 	GetLearnLesson               = "snyk.getLearnLesson"
 	GetSettingsSastEnabled       = "snyk.getSettingsSastEnabled"
 	GetActiveUserCommand         = "snyk.getActiveUser"
+	ReportAnalyticsCommand       = "snyk.reportAnalytics"
 
 	// Snyk Code specific commands
 	CodeFixCommand        = "snyk.code.fix"

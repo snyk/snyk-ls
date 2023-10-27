@@ -18,25 +18,32 @@ package performance
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 type NoopSpan struct {
-	Operation string
-	TxName    string
-	Started   bool
-	Finished  bool
-	ctx       context.Context
+	Operation  string
+	TxName     string
+	Started    bool
+	Finished   bool
+	ctx        context.Context
+	StartTime  int64
+	FinishTime int64
 }
+
+func (n *NoopSpan) GetDurationMs() int64 { return n.FinishTime - n.StartTime }
 
 func (n *NoopSpan) Finish() {
 	n.Started = false
 	n.Finished = true
+	n.FinishTime = time.Now().UnixMilli()
 }
 
 func (n *NoopSpan) SetTransactionName(txName string) { n.TxName = txName }
 func (n *NoopSpan) StartSpan(ctx context.Context) {
+	n.StartTime = time.Now().UnixMilli()
 	var traceID string
 	if ctx == nil {
 		ctx = context.Background()

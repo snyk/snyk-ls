@@ -16,8 +16,25 @@
 
 package snyk
 
-import "github.com/snyk/snyk-ls/internal/product"
+import (
+	"time"
 
-type ScanResultProcessor = func(product product.Product, issues []Issue, err error)
+	"github.com/snyk/snyk-ls/internal/product"
+)
 
-func NoopResultProcessor(_ product.Product, _ []Issue, _ error) {}
+type ScanData struct {
+	Product           product.Product
+	Issues            []Issue
+	Err               error
+	DurationMs        int64
+	TimestampFinished time.Time
+	Critical          int
+	High              int
+	Medium            int
+	Low               int
+}
+type ScanResultProcessor = func(scanData ScanData)
+
+//type ScanResultProcessor = func(product product.Product, issues []Issue, err error)
+
+func NoopResultProcessor(_ ScanData) {}

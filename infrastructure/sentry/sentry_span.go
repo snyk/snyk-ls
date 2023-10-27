@@ -27,12 +27,15 @@ import (
 )
 
 type span struct {
-	span      *sentry.Span
-	txName    string
-	operation string
-	ctx       context.Context
+	span       *sentry.Span
+	txName     string
+	operation  string
+	ctx        context.Context
+	startTime  int64
+	finishTime int64
 }
 
+func (s *span) GetDurationMs() int64 { return s.finishTime - s.startTime }
 func (s *span) GetTxName() string {
 	return s.txName
 }

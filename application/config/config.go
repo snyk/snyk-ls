@@ -176,6 +176,7 @@ type Config struct {
 	logger                       *zerolog.Logger
 	storage                      StorageWithCallbacks
 	m                            sync.Mutex
+	analyticsEnabled             bool
 }
 
 func CurrentConfig() *Config {
@@ -201,6 +202,7 @@ func IsDevelopment() bool {
 // New creates a configuration object with default values
 func New() *Config {
 	c := &Config{}
+	c.logger = &log.Logger
 	c.cliSettings = NewCliSettings()
 	c.automaticAuthentication = true
 	c.configFile = ""
@@ -210,8 +212,6 @@ func New() *Config {
 	c.isSnykIacEnabled.Set(true)
 	c.manageBinariesAutomatically.Set(true)
 	c.logPath = ""
-	c.snykApiUrl = DefaultSnykApiUrl
-	c.snykCodeApiUrl = DefaultDeeproxyApiUrl
 	c.snykCodeAnalysisTimeout = snykCodeAnalysisTimeoutFromEnv()
 	c.token = ""
 	c.trustedFoldersFeatureEnabled = true
@@ -225,6 +225,7 @@ func New() *Config {
 	if err != nil {
 		log.Warn().Err(err).Msg("unable to initialize workflow engine")
 	}
+	c.UpdateApiEndpoints(DefaultSnykApiUrl)
 	c.enableSnykLearnCodeActions = true
 	c.SetTelemetryEnabled(true)
 
@@ -859,4 +860,12 @@ func (c *Config) IdeName() string {
 
 func (c *Config) IsFedramp() bool {
 	return c.Engine().GetConfiguration().GetBool(configuration.IS_FEDRAMP)
+}
+
+func (c *Config) IsAnalyticsEnabled() bool {
+	return c.analyticsEnabled
+}
+
+func (c *Config) SetAnalyticsEnabled(enableAnalytics bool) {
+	c.analyticsEnabled = enableAnalytics
 }

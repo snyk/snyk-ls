@@ -34,4 +34,6 @@ type Span interface {
 	// GetTraceId Returns UUID of the trace
 	GetTraceId() string
 	Context() context.Context
+
+	GetDurationMs() int64
 }

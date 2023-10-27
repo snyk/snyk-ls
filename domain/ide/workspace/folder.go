@@ -18,17 +18,23 @@ package workspace
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -39,6 +45,20 @@ type FolderStatus int
 const (
 	Unscanned FolderStatus = iota
 	Scanned   FolderStatus = iota
+)
+
+var (
+	os = map[string]string{
+		"darwin":  "macOS",
+		"linux":   "Linux",
+		"windows": "Windows",
+	}
+
+	arch = map[string]string{
+		"amd64": "x86_64",
+		"arm64": "arm64",
+		"386":   "386",
+	}
 )
 
 // TODO: 3: Extract reporting logic to a separate service
@@ -141,7 +161,9 @@ func (f *Folder) scan(ctx context.Context, path string) {
 		log.Info().Str("method", method).
 			Int("issueSliceLength", len(issuesSlice)).
 			Msgf("Cached results found: Skipping scan for %s", path)
-		f.processResults("", issuesSlice, nil)
+		f.processResults(snyk.ScanData{
+			Issues: issuesSlice,
+		})
 		return
 	}
 
@@ -156,11 +178,11 @@ func (f *Folder) DocumentDiagnosticsFromCache(file string) []snyk.Issue {
 	return issues
 }
 
-func (f *Folder) processResults(product product.Product, issues []snyk.Issue, err error) {
-	if err != nil {
-		f.scanNotifier.SendError(product, f.path)
-		log.Err(err).Str("method", "processResults").
-			Msgf("%s returned an error: %s", product, err.Error())
+func (f *Folder) processResults(scanData snyk.ScanData) {
+	if scanData.Err != nil {
+		f.scanNotifier.SendError(scanData.Product, f.path)
+		log.Err(scanData.Err).Str("method", "processResults").
+			Msgf("%s returned an error: %s", scanData.Product, scanData.Err.Error())
 		return
 	}
 
@@ -168,7 +190,7 @@ func (f *Folder) processResults(product product.Product, issues []snyk.Issue, er
 
 	// TODO: perform issue diffing (current <-> newly reported)
 	// Update diagnostic cache
-	for _, issue := range issues {
+	for _, issue := range scanData.Issues {
 		cachedIssues, _ := f.documentDiagnosticCache.Load(issue.AffectedFilePath)
 		if cachedIssues == nil {
 			cachedIssues = []snyk.Issue{}
@@ -176,13 +198,75 @@ func (f *Folder) processResults(product product.Product, issues []snyk.Issue, er
 
 		if !dedupMap[f.getUniqueIssueID(issue)] {
 			cachedIssues = append(cachedIssues, issue)
+			switch issue.Severity {
+			case snyk.Critical:
+				scanData.Critical++
+			case snyk.High:
+				scanData.High++
+			case snyk.Medium:
+				scanData.Medium++
+			case snyk.Low:
+				scanData.Low++
+			}
 		}
 
 		f.documentDiagnosticCache.Store(issue.AffectedFilePath, cachedIssues)
+
 	}
+	sendAnalytics(scanData)
 
 	// Filter and publish cached diagnostics
-	f.FilterAndPublishCachedDiagnostics(product)
+	f.FilterAndPublishCachedDiagnostics(scanData.Product)
+}
+
+func sendAnalytics(data snyk.ScanData) {
+	c := config.CurrentConfig()
+	gafConfig := c.Engine().GetConfiguration()
+
+	logger := c.Logger().With().Str("method", "folder.sendAnalytics").Logger()
+	if data.Product == "" {
+		logger.Debug().Any("data", data).Msg("Skipping analytics for empty product")
+		return
+	}
+
+	if data.Err != nil {
+		logger.Debug().Err(data.Err).Msg("Skipping analytics for error")
+		return
+	}
+
+	scanEvent := json_schemas.ScanDoneEvent{}
+	// Populate the fields with data
+	scanEvent.Data.Type = "analytics"
+	scanEvent.Data.Attributes.DeviceId = c.DeviceID()
+	scanEvent.Data.Attributes.Application = "snyk-ls"
+	scanEvent.Data.Attributes.ApplicationVersion = config.Version
+	scanEvent.Data.Attributes.Os = os[runtime.GOOS]
+	scanEvent.Data.Attributes.Arch = arch[runtime.GOARCH]
+	scanEvent.Data.Attributes.IntegrationName = gafConfig.GetString(configuration.INTEGRATION_NAME)
+	scanEvent.Data.Attributes.IntegrationVersion = gafConfig.GetString(configuration.INTEGRATION_VERSION)
+	scanEvent.Data.Attributes.IntegrationEnvironment = gafConfig.GetString(configuration.INTEGRATION_ENVIRONMENT)
+	scanEvent.Data.Attributes.IntegrationEnvironmentVersion = gafConfig.GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION)
+	scanEvent.Data.Attributes.EventType = "Scan done"
+	scanEvent.Data.Attributes.Status = "Success"
+	scanEvent.Data.Attributes.ScanType = string(data.Product)
+	scanEvent.Data.Attributes.UniqueIssueCount.Critical = data.Critical
+	scanEvent.Data.Attributes.UniqueIssueCount.High = data.High
+	scanEvent.Data.Attributes.UniqueIssueCount.Medium = data.Medium
+	scanEvent.Data.Attributes.UniqueIssueCount.Low = data.Low
+	scanEvent.Data.Attributes.DurationMs = fmt.Sprintf("%d", data.DurationMs)
+	scanEvent.Data.Attributes.TimestampFinished = data.TimestampFinished
+
+	bytes, err := json.Marshal(scanEvent)
+	if err != nil {
+		logger.Err(err).Msg("Error marshalling scan event")
+		return
+	}
+
+	err = analytics.SendAnalyticsToAPI(c, bytes)
+	if err != nil {
+		logger.Err(err).Msg("Error sending analytics to API")
+		return
+	}
 }
 
 func (f *Folder) FilterAndPublishCachedDiagnostics(product product.Product) {
