@@ -262,13 +262,11 @@ func sendAnalytics(data snyk.ScanData) {
 		return
 	}
 
-	go func(c *config.Config, bytes []byte) {
-		err = analytics.SendAnalyticsToAPI(c, bytes)
-		if err != nil {
-			logger.Err(err).Msg("Error sending analytics to API")
-			return
-		}
-	}(c, bytes)
+	err = analytics.SendAnalyticsToAPI(c, bytes)
+	if err != nil {
+		logger.Err(err).Msg("Error sending analytics to API")
+		return
+	}
 }
 
 func (f *Folder) FilterAndPublishCachedDiagnostics(product product.Product) {

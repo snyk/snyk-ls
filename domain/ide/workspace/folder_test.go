@@ -18,6 +18,7 @@ package workspace
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sync"
 	"testing"
@@ -26,8 +27,12 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -448,10 +453,10 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 	assert.Len(t, scanNotifier.ErrorCalls(), 1)
 }
 func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
-	testutil.SmokeTest(t)
-	t.FailNow()
+	c := testutil.UnitTest(t)
 
-	// Arrange
+	engineMock, gafConfig := setUpEngineMock(t, c)
+
 	f, _ := NewMockFolderWithScanNotifier(notification.NewNotifier())
 	const filePath = "path1"
 	mockCodeIssue := NewMockIssue("id1", filePath)
@@ -460,6 +465,22 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 		Product: product.ProductOpenSource,
 		Issues:  []snyk.Issue{mockCodeIssue},
 	}
+
+	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
+	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
+		// this captures the call parameters of the mocked call
+		Do(func(id workflow.Identifier, workflowInputData []workflow.Data, config configuration.Configuration) {
+			require.Equal(t, 1, len(workflowInputData))
+			payloadBytes, ok := workflowInputData[0].GetPayload().([]byte)
+			require.True(t, ok)
+
+			var scanDoneEvent json_schemas.ScanDoneEvent
+			err := json.Unmarshal(payloadBytes, &scanDoneEvent)
+			require.NoError(t, err)
+			require.Equal(t, "Snyk Open Source", scanDoneEvent.Data.Attributes.ScanType)
+			require.Equal(t, 1, scanDoneEvent.Data.Attributes.UniqueIssueCount.Medium)
+		})
+
 	// Act
 	f.processResults(data)
 }
