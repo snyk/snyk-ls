@@ -145,6 +145,7 @@ func writeSettings(settings lsp.Settings, initialize bool) {
 	updateRuntimeInfo(settings)
 	updateAutoScan(settings)
 	updateSnykLearnCodeActions(settings)
+	config.CurrentConfig().SetAnalyticsEnabled(settings.EnableAnalytics)
 }
 
 func updateAuthenticationMethod(settings lsp.Settings) {

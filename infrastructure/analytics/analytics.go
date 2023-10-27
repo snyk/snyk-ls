@@ -25,7 +25,12 @@ import (
 
 func SendAnalyticsToAPI(c *config.Config, payload []byte) error {
 	logger := c.Logger().With().Str("method", "analytics.sendAnalyticsToAPI").Logger()
-	logger.Debug().Str("payload", string(payload)).Msg("Sending analytics")
+	logger.Debug().Str("payload", string(payload)).Msg("Analytics Payload")
+
+	if !c.IsAnalyticsEnabled() {
+		logger.Debug().Msg("Analytics disabled, skipping")
+		return nil
+	}
 
 	inputData := workflow.NewData(
 		workflow.NewTypeIdentifier(localworkflows.WORKFLOWID_REPORT_ANALYTICS, "reportAnalytics"),

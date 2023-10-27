@@ -547,6 +547,7 @@ type Settings struct {
 	AuthenticationMethod        AuthenticationMethod `json:"authenticationMethod,omitempty"`
 	SnykCodeApi                 string               `json:"snykCodeApi,omitempty"`
 	EnableSnykLearnCodeActions  string               `json:"enableSnykLearnCodeActions,omitempty"`
+	EnableAnalytics             bool                 `json:"enableAnalytics,omitempty"`
 }
 
 type AuthenticationMethod string

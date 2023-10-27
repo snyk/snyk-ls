@@ -176,6 +176,7 @@ type Config struct {
 	logger                       *zerolog.Logger
 	storage                      StorageWithCallbacks
 	m                            sync.Mutex
+	analyticsEnabled             bool
 }
 
 func CurrentConfig() *Config {
@@ -859,4 +860,12 @@ func (c *Config) IdeName() string {
 
 func (c *Config) IsFedramp() bool {
 	return c.Engine().GetConfiguration().GetBool(configuration.IS_FEDRAMP)
+}
+
+func (c *Config) IsAnalyticsEnabled() bool {
+	return c.analyticsEnabled
+}
+
+func (c *Config) SetAnalyticsEnabled(enableAnalytics bool) {
+	c.analyticsEnabled = enableAnalytics
 }
