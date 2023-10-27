@@ -30,6 +30,7 @@ import (
 
 func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 	c := testutil.UnitTest(t)
+	c.SetAnalyticsEnabled(true)
 
 	testInput := "some data"
 	cmd := &reportAnalyticsCommand{
