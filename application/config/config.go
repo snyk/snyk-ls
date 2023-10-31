@@ -415,7 +415,7 @@ func (c *Config) SetSeverityFilter(severityFilter lsp.SeverityFilter) bool {
 	}
 
 	filterModified := c.filterSeverity != severityFilter
-	log.Debug().Str("method", "SetSeverityFilter").Msgf("Setting severity filter: %v", severityFilter)
+	log.Debug().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter:")
 	c.filterSeverity = severityFilter
 	return filterModified
 }

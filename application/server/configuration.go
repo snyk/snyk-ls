@@ -420,7 +420,7 @@ func updateProductEnablement(settings lsp.Settings) {
 }
 
 func updateSeverityFilter(s lsp.SeverityFilter) {
-	log.Debug().Str("method", "updateSeverityFilter").Msgf("Updating severity filter: %v", s)
+	log.Debug().Str("method", "updateSeverityFilter").Interface("severityFilter", s).Msg("Updating severity filter:")
 	modified := config.CurrentConfig().SetSeverityFilter(s)
 
 	if modified {
