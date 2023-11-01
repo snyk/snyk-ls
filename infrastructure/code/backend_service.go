@@ -40,7 +40,7 @@ import (
 
 const (
 	completeStatus     = "COMPLETE"
-	codeDescriptionURL = "https://docs.snyk.io/products/snyk-code/security-rules-used-by-snyk-code"
+	codeDescriptionURL = "https://docs.snyk.io/scan-applications/snyk-code/security-rules-used-by-snyk-code"
 )
 
 var (
