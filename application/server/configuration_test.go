@@ -283,7 +283,7 @@ func Test_UpdateSettings(t *testing.T) {
 			ScanningMode:                "manual",
 			AuthenticationMethod:        lsp.OAuthAuthentication,
 			SnykCodeApi:                 sampleSettings.SnykCodeApi,
-			EnableAnalytics:             true,
+			EnableAnalytics:             false, // when updating settings, this is always false [HEAD-975]
 		}
 
 		UpdateSettings(settings)
