@@ -569,6 +569,18 @@ func Test_InitializeSettings(t *testing.T) {
 		assert.Equal(t, lsp.OAuthAuthentication, c.AuthenticationMethod())
 	})
 
+	t.Run("analytics is set to true", func(t *testing.T) {
+		testutil.UnitTest(t)
+		di.TestInit(t)
+		c := config.CurrentConfig()
+
+		assert.False(t, c.IsAnalyticsEnabled())
+
+		InitializeSettings(lsp.Settings{EnableAnalytics: true})
+
+		assert.True(t, c.IsAnalyticsEnabled())
+	})
+
 	t.Run("custom path configuration", func(t *testing.T) {
 		testutil.UnitTest(t)
 
