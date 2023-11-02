@@ -507,6 +507,36 @@ func Test_processResults_ShouldNotSendAnalyticsToAPIIfDisabled(t *testing.T) {
 	f.processResults(data)
 }
 
+func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetAnalyticsEnabled(false)
+
+	engineMock, gafConfig := setUpEngineMock(t, c)
+
+	f, _ := NewMockFolderWithScanNotifier(notification.NewNotifier())
+
+	scanData := snyk.ScanData{
+		Product:       product.ProductOpenSource,
+		SeverityCount: make(map[product.Product]map[string]int),
+		Issues: []snyk.Issue{
+			{Severity: snyk.Critical, Product: product.ProductOpenSource},
+			{Severity: snyk.Critical, Product: product.ProductOpenSource},
+			{Severity: snyk.High, Product: product.ProductOpenSource},
+			{Severity: snyk.High, Product: product.ProductOpenSource},
+			{Severity: snyk.Critical, Product: product.ProductInfrastructureAsCode},
+		},
+	}
+
+	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
+	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).Times(0)
+
+	// Act
+	f.processResults(scanData)
+
+	// Assert
+	require.Equal(t, 2, scanData.SeverityCount[product.ProductOpenSource][snyk.Critical.String()])
+}
+
 func NewMockFolder(notifier noti.Notifier) *Folder {
 	return NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService(), snyk.NewMockScanNotifier(), notifier)
 }

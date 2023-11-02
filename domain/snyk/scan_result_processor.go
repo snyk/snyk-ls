@@ -32,6 +32,7 @@ type ScanData struct {
 	High              int
 	Medium            int
 	Low               int
+	SeverityCount     map[product.Product]map[string]int
 }
 type ScanResultProcessor = func(scanData ScanData)
 

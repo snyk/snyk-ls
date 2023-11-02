@@ -181,8 +181,10 @@ func (f *Folder) DocumentDiagnosticsFromCache(file string) []snyk.Issue {
 func (f *Folder) processResults(scanData snyk.ScanData) {
 	if scanData.Err != nil {
 		f.scanNotifier.SendError(scanData.Product, f.path)
-		log.Err(scanData.Err).Str("method", "processResults").
-			Msgf("%s returned an error: %s", scanData.Product, scanData.Err.Error())
+		log.Err(scanData.Err).
+			Str("method", "processResults").
+			Str("product", string(scanData.Product)).
+			Msg("Product returned an error")
 		return
 	}
 
@@ -198,21 +200,26 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 
 		if !dedupMap[f.getUniqueIssueID(issue)] {
 			cachedIssues = append(cachedIssues, issue)
-			switch issue.Severity {
-			case snyk.Critical:
-				scanData.Critical++
-			case snyk.High:
-				scanData.High++
-			case snyk.Medium:
-				scanData.Medium++
-			case snyk.Low:
-				scanData.Low++
+
+			if scanData.SeverityCount == nil {
+				scanData.SeverityCount = make(map[product.Product]map[string]int)
 			}
+
+			if scanData.SeverityCount[issue.Product] == nil {
+				scanData.SeverityCount[issue.Product] = make(map[string]int)
+				scanData.SeverityCount[issue.Product]["Critical"] = 0
+				scanData.SeverityCount[issue.Product]["High"] = 0
+				scanData.SeverityCount[issue.Product]["Medium"] = 0
+				scanData.SeverityCount[issue.Product]["Low"] = 0
+			}
+
+			scanData.SeverityCount[issue.Product][issue.Severity.String()]++
 		}
 
 		f.documentDiagnosticCache.Store(issue.AffectedFilePath, cachedIssues)
 
 	}
+	log.Debug().Str("method", "processResults").Interface("scanData", scanData).Msg("Finished processing results. Sending analytics.")
 	sendAnalytics(scanData)
 
 	// Filter and publish cached diagnostics
@@ -249,10 +256,10 @@ func sendAnalytics(data snyk.ScanData) {
 	scanEvent.Data.Attributes.EventType = "Scan done"
 	scanEvent.Data.Attributes.Status = "Success"
 	scanEvent.Data.Attributes.ScanType = string(data.Product)
-	scanEvent.Data.Attributes.UniqueIssueCount.Critical = data.Critical
-	scanEvent.Data.Attributes.UniqueIssueCount.High = data.High
-	scanEvent.Data.Attributes.UniqueIssueCount.Medium = data.Medium
-	scanEvent.Data.Attributes.UniqueIssueCount.Low = data.Low
+	scanEvent.Data.Attributes.UniqueIssueCount.Critical = data.SeverityCount[data.Product]["critical"]
+	scanEvent.Data.Attributes.UniqueIssueCount.High = data.SeverityCount[data.Product]["high"]
+	scanEvent.Data.Attributes.UniqueIssueCount.Medium = data.SeverityCount[data.Product]["medium"]
+	scanEvent.Data.Attributes.UniqueIssueCount.Low = data.SeverityCount[data.Product]["low"]
 	scanEvent.Data.Attributes.DurationMs = fmt.Sprintf("%d", data.DurationMs)
 	scanEvent.Data.Attributes.TimestampFinished = data.TimestampFinished
 
@@ -275,14 +282,15 @@ func (f *Folder) FilterAndPublishCachedDiagnostics(product product.Product) {
 }
 
 func (f *Folder) filterCachedDiagnostics() (fileIssues map[string][]snyk.Issue) {
-	logger := log.With().Str("method", "processResults").Logger()
+	logger := log.With().Str("method", "filterCachedDiagnostics").Logger()
 
 	var issuesByFile = map[string][]snyk.Issue{}
 	if f.documentDiagnosticCache.Size() == 0 {
 		return issuesByFile
 	}
 
-	logger.Debug().Msgf("Filtering issues by severity: %v", config.CurrentConfig().FilterSeverity())
+	filterSeverity := config.CurrentConfig().FilterSeverity()
+	logger.Debug().Interface("filterSeverity", filterSeverity).Msg("Filtering issues by severity")
 
 	supportedIssueTypes := config.CurrentConfig().DisplayableIssueTypes()
 	f.documentDiagnosticCache.Range(func(filePath string, issues []snyk.Issue) bool {
