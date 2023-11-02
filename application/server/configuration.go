@@ -145,7 +145,10 @@ func writeSettings(settings lsp.Settings, initialize bool) {
 	updateRuntimeInfo(settings)
 	updateAutoScan(settings)
 	updateSnykLearnCodeActions(settings)
-	config.CurrentConfig().SetAnalyticsEnabled(settings.EnableAnalytics)
+
+	if initialize {
+		config.CurrentConfig().SetAnalyticsEnabled(settings.EnableAnalytics)
+	}
 }
 
 func updateAuthenticationMethod(settings lsp.Settings) {
@@ -417,7 +420,7 @@ func updateProductEnablement(settings lsp.Settings) {
 }
 
 func updateSeverityFilter(s lsp.SeverityFilter) {
-	log.Debug().Str("method", "updateSeverityFilter").Msgf("Updating severity filter: %v", s)
+	log.Debug().Str("method", "updateSeverityFilter").Interface("severityFilter", s).Msg("Updating severity filter:")
 	modified := config.CurrentConfig().SetSeverityFilter(s)
 
 	if modified {

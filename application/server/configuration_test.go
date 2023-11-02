@@ -283,7 +283,7 @@ func Test_UpdateSettings(t *testing.T) {
 			ScanningMode:                "manual",
 			AuthenticationMethod:        lsp.OAuthAuthentication,
 			SnykCodeApi:                 sampleSettings.SnykCodeApi,
-			EnableAnalytics:             true,
+			EnableAnalytics:             false, // when updating settings, this is always false [HEAD-975]
 		}
 
 		UpdateSettings(settings)
@@ -567,6 +567,18 @@ func Test_InitializeSettings(t *testing.T) {
 		InitializeSettings(lsp.Settings{AuthenticationMethod: lsp.OAuthAuthentication})
 
 		assert.Equal(t, lsp.OAuthAuthentication, c.AuthenticationMethod())
+	})
+
+	t.Run("analytics is set to true", func(t *testing.T) {
+		testutil.UnitTest(t)
+		di.TestInit(t)
+		c := config.CurrentConfig()
+
+		assert.False(t, c.IsAnalyticsEnabled())
+
+		InitializeSettings(lsp.Settings{EnableAnalytics: true})
+
+		assert.True(t, c.IsAnalyticsEnabled())
 	})
 
 	t.Run("custom path configuration", func(t *testing.T) {
