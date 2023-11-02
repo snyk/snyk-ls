@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/puzpuzpuz/xsync"
+	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"

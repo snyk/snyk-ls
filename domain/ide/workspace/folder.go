@@ -24,7 +24,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/puzpuzpuz/xsync"
+	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/rs/zerolog/log"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -87,7 +87,7 @@ func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hove
 		scanNotifier: scanNotifier,
 		notifier:     notifier,
 	}
-	folder.documentDiagnosticCache = xsync.NewMapOf[[]snyk.Issue]()
+	folder.documentDiagnosticCache = xsync.NewMapOf[string, []snyk.Issue]()
 	return &folder
 }
 

@@ -18,6 +18,7 @@ require (
 	github.com/pingcap/errors v0.11.4
 	github.com/pkg/errors v0.9.1
 	github.com/puzpuzpuz/xsync v1.5.2
+	github.com/puzpuzpuz/xsync/v3 v3.0.1
 	github.com/rs/zerolog v1.30.0
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/segmentio/analytics-go v3.1.0+incompatible
