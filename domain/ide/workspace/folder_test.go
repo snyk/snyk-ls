@@ -65,7 +65,7 @@ func Test_Scan_WhenNoIssues_shouldNotProcessResults(t *testing.T) {
 	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hoverRecorder, snyk.NewMockScanNotifier(), notification.NewNotifier())
 
 	data := snyk.ScanData{
-		Product: "unknown",
+		Product: "",
 		Issues:  []snyk.Issue{},
 	}
 	f.processResults(data)
@@ -517,7 +517,7 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 
 	scanData := snyk.ScanData{
 		Product:       product.ProductOpenSource,
-		SeverityCount: make(map[product.Product]map[string]int),
+		SeverityCount: make(map[product.Product]*snyk.SeverityCount),
 		Issues: []snyk.Issue{
 			{Severity: snyk.Critical, Product: product.ProductOpenSource},
 			{Severity: snyk.Critical, Product: product.ProductOpenSource},
@@ -534,7 +534,36 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	f.processResults(scanData)
 
 	// Assert
-	require.Equal(t, 2, scanData.SeverityCount[product.ProductOpenSource][snyk.Critical.String()])
+	require.Equal(t, 2, scanData.SeverityCount[product.ProductOpenSource].Critical)
+}
+
+func Test_SeverityCountInitialization(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetAnalyticsEnabled(false)
+
+	engineMock, gafConfig := setUpEngineMock(t, c)
+
+	f, _ := NewMockFolderWithScanNotifier(notification.NewNotifier())
+
+	scanData := snyk.ScanData{
+		Product:       product.ProductOpenSource,
+		SeverityCount: make(map[product.Product]*snyk.SeverityCount),
+		Issues: []snyk.Issue{
+			{Severity: snyk.Critical, Product: product.ProductOpenSource},
+			{Severity: snyk.High, Product: product.ProductOpenSource},
+			{Severity: snyk.Medium, Product: product.ProductOpenSource},
+			{Severity: snyk.Low, Product: product.ProductOpenSource},
+		},
+	}
+
+	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
+	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).Times(0)
+
+	// Act
+	f.processResults(scanData)
+
+	// Assert
+	require.Equal(t, 1, scanData.SeverityCount[product.ProductOpenSource].Critical)
 }
 
 func NewMockFolder(notifier noti.Notifier) *Folder {

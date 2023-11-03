@@ -200,20 +200,7 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 
 		if !dedupMap[f.getUniqueIssueID(issue)] {
 			cachedIssues = append(cachedIssues, issue)
-
-			if scanData.SeverityCount == nil {
-				scanData.SeverityCount = make(map[product.Product]map[string]int)
-			}
-
-			if scanData.SeverityCount[issue.Product] == nil {
-				scanData.SeverityCount[issue.Product] = make(map[string]int)
-				scanData.SeverityCount[issue.Product]["Critical"] = 0
-				scanData.SeverityCount[issue.Product]["High"] = 0
-				scanData.SeverityCount[issue.Product]["Medium"] = 0
-				scanData.SeverityCount[issue.Product]["Low"] = 0
-			}
-
-			scanData.SeverityCount[issue.Product][issue.Severity.String()]++
+			incrementSeverityCount(&scanData, issue)
 		}
 
 		f.documentDiagnosticCache.Store(issue.AffectedFilePath, cachedIssues)
@@ -226,7 +213,34 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 	f.FilterAndPublishCachedDiagnostics(scanData.Product)
 }
 
+func incrementSeverityCount(scanData *snyk.ScanData, issue snyk.Issue) {
+	if scanData.SeverityCount == nil {
+		scanData.SeverityCount = make(map[product.Product]*snyk.SeverityCount)
+	}
+
+	if scanData.SeverityCount[issue.Product] == nil {
+		scanData.SeverityCount[issue.Product] = &snyk.SeverityCount{}
+	}
+
+	switch issue.Severity {
+	case snyk.Critical:
+		scanData.SeverityCount[issue.Product].Critical++
+	case snyk.High:
+		scanData.SeverityCount[issue.Product].High++
+	case snyk.Medium:
+		scanData.SeverityCount[issue.Product].Medium++
+	case snyk.Low:
+		scanData.SeverityCount[issue.Product].Low++
+	}
+}
+
 func sendAnalytics(data snyk.ScanData) {
+	if data.SeverityCount == nil {
+		log.Debug().Str("method", "folder.sendAnalytics").Msg("SeverityCount is nil. Initializing...")
+		data.SeverityCount = make(map[product.Product]*snyk.SeverityCount)
+		data.SeverityCount[data.Product] = &snyk.SeverityCount{}
+	}
+
 	c := config.CurrentConfig()
 	gafConfig := c.Engine().GetConfiguration()
 
@@ -256,10 +270,10 @@ func sendAnalytics(data snyk.ScanData) {
 	scanEvent.Data.Attributes.EventType = "Scan done"
 	scanEvent.Data.Attributes.Status = "Success"
 	scanEvent.Data.Attributes.ScanType = string(data.Product)
-	scanEvent.Data.Attributes.UniqueIssueCount.Critical = data.SeverityCount[data.Product]["critical"]
-	scanEvent.Data.Attributes.UniqueIssueCount.High = data.SeverityCount[data.Product]["high"]
-	scanEvent.Data.Attributes.UniqueIssueCount.Medium = data.SeverityCount[data.Product]["medium"]
-	scanEvent.Data.Attributes.UniqueIssueCount.Low = data.SeverityCount[data.Product]["low"]
+	scanEvent.Data.Attributes.UniqueIssueCount.Critical = data.SeverityCount[data.Product].Critical
+	scanEvent.Data.Attributes.UniqueIssueCount.High = data.SeverityCount[data.Product].High
+	scanEvent.Data.Attributes.UniqueIssueCount.Medium = data.SeverityCount[data.Product].Medium
+	scanEvent.Data.Attributes.UniqueIssueCount.Low = data.SeverityCount[data.Product].Low
 	scanEvent.Data.Attributes.DurationMs = fmt.Sprintf("%d", data.DurationMs)
 	scanEvent.Data.Attributes.TimestampFinished = data.TimestampFinished
 
