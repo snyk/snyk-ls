@@ -523,7 +523,7 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 			{Severity: snyk.Critical, Product: product.ProductOpenSource},
 			{Severity: snyk.High, Product: product.ProductOpenSource},
 			{Severity: snyk.High, Product: product.ProductOpenSource},
-			{Severity: snyk.Critical, Product: product.ProductInfrastructureAsCode},
+			{Severity: snyk.Critical, Product: product.ProductInfrastructureAsCode}, // SeverityCount incremented by ScanData.Product
 		},
 	}
 
@@ -537,30 +537,30 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	require.Equal(t, 2, scanData.SeverityCount[product.ProductOpenSource].Critical)
 }
 
-func Test_SeverityCountInitialization(t *testing.T) {
+func Test_IncrementSeverityCount(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetAnalyticsEnabled(false)
 
 	engineMock, gafConfig := setUpEngineMock(t, c)
 
-	f, _ := NewMockFolderWithScanNotifier(notification.NewNotifier())
+	NewMockFolderWithScanNotifier(notification.NewNotifier())
+
+	issue := snyk.Issue{
+		Severity: snyk.Critical,
+		Product:  product.ProductOpenSource,
+	}
 
 	scanData := snyk.ScanData{
 		Product:       product.ProductOpenSource,
 		SeverityCount: make(map[product.Product]*snyk.SeverityCount),
-		Issues: []snyk.Issue{
-			{Severity: snyk.Critical, Product: product.ProductOpenSource},
-			{Severity: snyk.High, Product: product.ProductOpenSource},
-			{Severity: snyk.Medium, Product: product.ProductOpenSource},
-			{Severity: snyk.Low, Product: product.ProductOpenSource},
-		},
+		Issues:        []snyk.Issue{issue},
 	}
 
 	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
 	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).Times(0)
 
 	// Act
-	f.processResults(scanData)
+	incrementSeverityCount(&scanData, scanData.Issues[0])
 
 	// Assert
 	require.Equal(t, 1, scanData.SeverityCount[product.ProductOpenSource].Critical)

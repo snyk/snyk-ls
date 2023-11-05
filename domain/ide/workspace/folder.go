@@ -214,32 +214,43 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 }
 
 func incrementSeverityCount(scanData *snyk.ScanData, issue snyk.Issue) {
+	issueProduct := issue.Product
+	if issueProduct == "" {
+		log.Debug().Str("method", "incrementSeverityCount").Msg("Issue product is empty. Setting to unknown")
+		issueProduct = "unknown"
+	}
+
+	initializeSeverityCountForProduct(scanData, issueProduct)
+
+	switch issue.Severity {
+	case snyk.Critical:
+		scanData.SeverityCount[issueProduct].Critical++
+	case snyk.High:
+		scanData.SeverityCount[issueProduct].High++
+	case snyk.Medium:
+		scanData.SeverityCount[issueProduct].Medium++
+	case snyk.Low:
+		scanData.SeverityCount[issueProduct].Low++
+	}
+}
+
+func initializeSeverityCountForProduct(scanData *snyk.ScanData, productType product.Product) {
 	if scanData.SeverityCount == nil {
 		scanData.SeverityCount = make(map[product.Product]*snyk.SeverityCount)
 	}
 
-	if scanData.SeverityCount[issue.Product] == nil {
-		scanData.SeverityCount[issue.Product] = &snyk.SeverityCount{}
+	if productType == "" {
+		log.Debug().Str("method", "initializeSeverityCountForProduct").Msg("Product is empty. Setting to unknown")
+		productType = "unknown"
 	}
 
-	switch issue.Severity {
-	case snyk.Critical:
-		scanData.SeverityCount[issue.Product].Critical++
-	case snyk.High:
-		scanData.SeverityCount[issue.Product].High++
-	case snyk.Medium:
-		scanData.SeverityCount[issue.Product].Medium++
-	case snyk.Low:
-		scanData.SeverityCount[issue.Product].Low++
+	if _, exists := scanData.SeverityCount[productType]; !exists {
+		scanData.SeverityCount[productType] = &snyk.SeverityCount{}
 	}
 }
 
 func sendAnalytics(data snyk.ScanData) {
-	if data.SeverityCount == nil {
-		log.Debug().Str("method", "folder.sendAnalytics").Msg("SeverityCount is nil. Initializing...")
-		data.SeverityCount = make(map[product.Product]*snyk.SeverityCount)
-		data.SeverityCount[data.Product] = &snyk.SeverityCount{}
-	}
+	initializeSeverityCountForProduct(&data, data.Product)
 
 	c := config.CurrentConfig()
 	gafConfig := c.Engine().GetConfiguration()
