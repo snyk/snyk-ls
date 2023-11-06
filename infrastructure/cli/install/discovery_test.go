@@ -41,6 +41,9 @@ func TestDiscovery_DownloadURL(t *testing.T) {
 			Windows: &ReleaseAsset{
 				URL: "windows-download-url",
 			},
+			MacOSARM64: &ReleaseAsset{
+				URL: "macos-arm64-download-url",
+			},
 		},
 	}
 
