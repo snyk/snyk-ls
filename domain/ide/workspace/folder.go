@@ -207,7 +207,7 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 
 	}
 	log.Debug().Str("method", "processResults").Interface("scanData", scanData).Msg("Finished processing results. Sending analytics.")
-	sendAnalytics(scanData)
+	sendAnalytics(&scanData)
 
 	// Filter and publish cached diagnostics
 	f.FilterAndPublishCachedDiagnostics(scanData.Product)
@@ -222,21 +222,28 @@ func incrementSeverityCount(scanData *snyk.ScanData, issue snyk.Issue) {
 
 	initializeSeverityCountForProduct(scanData, issueProduct)
 
+	severityCount, exists := scanData.SeverityCount[issueProduct]
+	if !exists {
+		severityCount = snyk.SeverityCount{}
+	}
+
 	switch issue.Severity {
 	case snyk.Critical:
-		scanData.SeverityCount[issueProduct].Critical++
+		severityCount.Critical++
 	case snyk.High:
-		scanData.SeverityCount[issueProduct].High++
+		severityCount.High++
 	case snyk.Medium:
-		scanData.SeverityCount[issueProduct].Medium++
+		severityCount.Medium++
 	case snyk.Low:
-		scanData.SeverityCount[issueProduct].Low++
+		severityCount.Low++
 	}
+
+	scanData.SeverityCount[issueProduct] = severityCount // reassign the value to the map
 }
 
 func initializeSeverityCountForProduct(scanData *snyk.ScanData, productType product.Product) {
 	if scanData.SeverityCount == nil {
-		scanData.SeverityCount = make(map[product.Product]*snyk.SeverityCount)
+		scanData.SeverityCount = make(map[product.Product]snyk.SeverityCount)
 	}
 
 	if productType == "" {
@@ -245,12 +252,12 @@ func initializeSeverityCountForProduct(scanData *snyk.ScanData, productType prod
 	}
 
 	if _, exists := scanData.SeverityCount[productType]; !exists {
-		scanData.SeverityCount[productType] = &snyk.SeverityCount{}
+		scanData.SeverityCount[productType] = snyk.SeverityCount{}
 	}
 }
 
-func sendAnalytics(data snyk.ScanData) {
-	initializeSeverityCountForProduct(&data, data.Product)
+func sendAnalytics(data *snyk.ScanData) {
+	initializeSeverityCountForProduct(data, data.Product)
 
 	c := config.CurrentConfig()
 	gafConfig := c.Engine().GetConfiguration()

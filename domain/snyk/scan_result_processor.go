@@ -32,7 +32,7 @@ type ScanData struct {
 	High              int
 	Medium            int
 	Low               int
-	SeverityCount     map[product.Product]*SeverityCount
+	SeverityCount     map[product.Product]SeverityCount
 }
 
 type SeverityCount struct {
