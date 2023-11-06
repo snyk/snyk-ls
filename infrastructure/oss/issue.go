@@ -36,7 +36,7 @@ import (
 )
 
 var issuesSeverity = map[string]snyk.Severity{
-	"critical": snyk.High,
+	"critical": snyk.Critical,
 	"high":     snyk.High,
 	"low":      snyk.Low,
 	"medium":   snyk.Medium,

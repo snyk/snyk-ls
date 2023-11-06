@@ -45,7 +45,7 @@ import (
 func Test_toIssueSeverity(t *testing.T) {
 	testutil.UnitTest(t)
 	issue := ossIssue{Severity: "critical"}
-	assert.Equal(t, snyk.High, issue.ToIssueSeverity())
+	assert.Equal(t, snyk.Critical, issue.ToIssueSeverity())
 	issue = ossIssue{Severity: "high"}
 	assert.Equal(t, snyk.High, issue.ToIssueSeverity())
 	issue = ossIssue{Severity: "medium"}
