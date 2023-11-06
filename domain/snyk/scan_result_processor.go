@@ -32,8 +32,16 @@ type ScanData struct {
 	High              int
 	Medium            int
 	Low               int
-	SeverityCount     map[product.Product]map[string]int
+	SeverityCount     map[product.Product]SeverityCount
 }
+
+type SeverityCount struct {
+	Critical int
+	High     int
+	Medium   int
+	Low      int
+}
+
 type ScanResultProcessor = func(scanData ScanData)
 
 //type ScanResultProcessor = func(product product.Product, issues []Issue, err error)

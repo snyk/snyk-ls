@@ -65,7 +65,7 @@ func Test_Scan_WhenNoIssues_shouldNotProcessResults(t *testing.T) {
 	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hoverRecorder, snyk.NewMockScanNotifier(), notification.NewNotifier())
 
 	data := snyk.ScanData{
-		Product: "unknown",
+		Product: "",
 		Issues:  []snyk.Issue{},
 	}
 	f.processResults(data)
@@ -517,13 +517,13 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 
 	scanData := snyk.ScanData{
 		Product:       product.ProductOpenSource,
-		SeverityCount: make(map[product.Product]map[string]int),
+		SeverityCount: make(map[product.Product]snyk.SeverityCount),
 		Issues: []snyk.Issue{
 			{Severity: snyk.Critical, Product: product.ProductOpenSource},
 			{Severity: snyk.Critical, Product: product.ProductOpenSource},
 			{Severity: snyk.High, Product: product.ProductOpenSource},
 			{Severity: snyk.High, Product: product.ProductOpenSource},
-			{Severity: snyk.Critical, Product: product.ProductInfrastructureAsCode},
+			{Severity: snyk.Critical, Product: product.ProductInfrastructureAsCode}, // SeverityCount incremented by ScanData.Product
 		},
 	}
 
@@ -534,7 +534,58 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	f.processResults(scanData)
 
 	// Assert
-	require.Equal(t, 2, scanData.SeverityCount[product.ProductOpenSource][snyk.Critical.String()])
+	require.Equal(t, 2, scanData.SeverityCount[product.ProductOpenSource].Critical)
+}
+
+func Test_IncrementSeverityCount(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetAnalyticsEnabled(false)
+
+	engineMock, gafConfig := setUpEngineMock(t, c)
+
+	NewMockFolderWithScanNotifier(notification.NewNotifier())
+
+	issue := snyk.Issue{
+		Severity: snyk.Critical,
+		Product:  product.ProductOpenSource,
+	}
+
+	scanData := snyk.ScanData{
+		Product:       product.ProductOpenSource,
+		SeverityCount: make(map[product.Product]snyk.SeverityCount),
+		Issues:        []snyk.Issue{issue},
+	}
+
+	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
+	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).Times(0)
+
+	// Act
+	incrementSeverityCount(&scanData, scanData.Issues[0])
+
+	// Assert
+	require.Equal(t, 1, scanData.SeverityCount[product.ProductOpenSource].Critical)
+}
+
+func Test_initializeSeverityCountForProductWhenScanDataIsEmpty(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	engineMock, gafConfig := setUpEngineMock(t, c)
+
+	NewMockFolderWithScanNotifier(notification.NewNotifier())
+
+	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
+	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).Times(0)
+
+	scanData := snyk.ScanData{}
+
+	// Act
+	initializeSeverityCountForProduct(&scanData, "")
+
+	// Assert
+	require.Equal(t, 0, scanData.SeverityCount["unknown"].Critical)
+	require.Equal(t, 0, scanData.SeverityCount["unknown"].High)
+	require.Equal(t, 0, scanData.SeverityCount["unknown"].Medium)
+	require.Equal(t, 0, scanData.SeverityCount["unknown"].Low)
 }
 
 func NewMockFolder(notifier noti.Notifier) *Folder {

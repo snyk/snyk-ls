@@ -25,6 +25,7 @@ const (
 	ProductCode                 Product = "Snyk Code"
 	ProductInfrastructureAsCode Product = "Snyk IaC"
 	ProductContainer            Product = "Snyk Container"
+	ProductUnknown              Product = ""
 )
 
 const (

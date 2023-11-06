@@ -200,33 +200,65 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 
 		if !dedupMap[f.getUniqueIssueID(issue)] {
 			cachedIssues = append(cachedIssues, issue)
-
-			if scanData.SeverityCount == nil {
-				scanData.SeverityCount = make(map[product.Product]map[string]int)
-			}
-
-			if scanData.SeverityCount[issue.Product] == nil {
-				scanData.SeverityCount[issue.Product] = make(map[string]int)
-				scanData.SeverityCount[issue.Product]["Critical"] = 0
-				scanData.SeverityCount[issue.Product]["High"] = 0
-				scanData.SeverityCount[issue.Product]["Medium"] = 0
-				scanData.SeverityCount[issue.Product]["Low"] = 0
-			}
-
-			scanData.SeverityCount[issue.Product][issue.Severity.String()]++
+			incrementSeverityCount(&scanData, issue)
 		}
 
 		f.documentDiagnosticCache.Store(issue.AffectedFilePath, cachedIssues)
 
 	}
 	log.Debug().Str("method", "processResults").Interface("scanData", scanData).Msg("Finished processing results. Sending analytics.")
-	sendAnalytics(scanData)
+	sendAnalytics(&scanData)
 
 	// Filter and publish cached diagnostics
 	f.FilterAndPublishCachedDiagnostics(scanData.Product)
 }
 
-func sendAnalytics(data snyk.ScanData) {
+func incrementSeverityCount(scanData *snyk.ScanData, issue snyk.Issue) {
+	issueProduct := issue.Product
+	if issueProduct == "" {
+		log.Debug().Str("method", "incrementSeverityCount").Msg("Issue product is empty. Setting to unknown")
+		issueProduct = "unknown"
+	}
+
+	initializeSeverityCountForProduct(scanData, issueProduct)
+
+	severityCount, exists := scanData.SeverityCount[issueProduct]
+	if !exists {
+		severityCount = snyk.SeverityCount{}
+	}
+
+	switch issue.Severity {
+	case snyk.Critical:
+		severityCount.Critical++
+	case snyk.High:
+		severityCount.High++
+	case snyk.Medium:
+		severityCount.Medium++
+	case snyk.Low:
+		severityCount.Low++
+	}
+
+	scanData.SeverityCount[issueProduct] = severityCount // reassign the value to the map
+}
+
+func initializeSeverityCountForProduct(scanData *snyk.ScanData, productType product.Product) {
+	if scanData.SeverityCount == nil {
+		scanData.SeverityCount = make(map[product.Product]snyk.SeverityCount)
+	}
+
+	if productType == "" {
+		log.Debug().Str("method", "initializeSeverityCountForProduct").Msg("Product is empty. Setting to unknown")
+		productType = "unknown"
+	}
+
+	if _, exists := scanData.SeverityCount[productType]; !exists {
+		scanData.SeverityCount[productType] = snyk.SeverityCount{}
+	}
+}
+
+func sendAnalytics(data *snyk.ScanData) {
+	initializeSeverityCountForProduct(data, data.Product)
+
 	c := config.CurrentConfig()
 	gafConfig := c.Engine().GetConfiguration()
 
@@ -256,10 +288,10 @@ func sendAnalytics(data snyk.ScanData) {
 	scanEvent.Data.Attributes.EventType = "Scan done"
 	scanEvent.Data.Attributes.Status = "Success"
 	scanEvent.Data.Attributes.ScanType = string(data.Product)
-	scanEvent.Data.Attributes.UniqueIssueCount.Critical = data.SeverityCount[data.Product]["critical"]
-	scanEvent.Data.Attributes.UniqueIssueCount.High = data.SeverityCount[data.Product]["high"]
-	scanEvent.Data.Attributes.UniqueIssueCount.Medium = data.SeverityCount[data.Product]["medium"]
-	scanEvent.Data.Attributes.UniqueIssueCount.Low = data.SeverityCount[data.Product]["low"]
+	scanEvent.Data.Attributes.UniqueIssueCount.Critical = data.SeverityCount[data.Product].Critical
+	scanEvent.Data.Attributes.UniqueIssueCount.High = data.SeverityCount[data.Product].High
+	scanEvent.Data.Attributes.UniqueIssueCount.Medium = data.SeverityCount[data.Product].Medium
+	scanEvent.Data.Attributes.UniqueIssueCount.Low = data.SeverityCount[data.Product].Low
 	scanEvent.Data.Attributes.DurationMs = fmt.Sprintf("%d", data.DurationMs)
 	scanEvent.Data.Attributes.TimestampFinished = data.TimestampFinished
 
