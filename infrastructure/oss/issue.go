@@ -17,11 +17,8 @@
 package oss
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/gomarkdown/markdown"
@@ -214,7 +211,7 @@ func toIssue(
 
 func (o ossIssue) toAdditionalData(filepath string, scanResult *scanResult) snyk.OssIssueData {
 	var additionalData snyk.OssIssueData
-	additionalData.Key = getIssueKey(filepath, o)
+	additionalData.Key = o.Id
 	additionalData.Title = o.Title
 	additionalData.Name = o.Name
 	additionalData.LineNumber = o.LineNumber
@@ -283,9 +280,4 @@ func convertScanResultToIssues(
 		duplicateCheckMap[duplicateKey] = true
 	}
 	return issues
-}
-
-func getIssueKey(affectedFilePath string, issue ossIssue) string {
-	id := sha256.Sum256([]byte(affectedFilePath + strconv.Itoa(issue.LineNumber) + issue.Id))
-	return hex.EncodeToString(id[:16])
 }
