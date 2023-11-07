@@ -55,6 +55,7 @@ type ossIssue struct {
 	IsPatchable    bool        `json:"isPatchable"`
 	License        string      `json:"license,omitempty"`
 	Language       string      `json:"language,omitempty"`
+	matchingIssues []ossIssue  `json:"-"`
 }
 
 type licensesPolicy struct {

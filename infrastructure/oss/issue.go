@@ -25,6 +25,7 @@ import (
 	"github.com/gomarkdown/markdown"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/exp/maps"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -188,6 +189,14 @@ func toIssue(
 		}
 	}
 
+	matchingIssues := []ossIssue{}
+	for _, otherIssue := range scanResult.Vulnerabilities {
+		if otherIssue.Id == issue.Id {
+			matchingIssues = append(matchingIssues, otherIssue)
+		}
+	}
+	issue.matchingIssues = matchingIssues
+
 	message := fmt.Sprintf(
 		"%s affecting package %s. %s %s (Snyk)",
 		title,
@@ -257,6 +266,26 @@ func getExploitMaturity(issue *ossIssue) string {
 	}
 }
 
+func getIntroducedBy(issue *ossIssue) string {
+	m := make(map[string]string)
+
+	if len(issue.From) > 0 {
+		for _, v := range issue.matchingIssues {
+			if len(v.From) > 0 {
+				module := v.From[1]
+				url := fmt.Sprintf("https://app.snyk.io/test/%s/%s", issue.PackageManager, module)
+				htmlAnchor := fmt.Sprintf("<a href='%s'>%s</a>", url, module)
+				m[module] = htmlAnchor
+			}
+		}
+
+		return fmt.Sprintf("<div class='summary-item introduced-through'><div class='label font-light'>Introduced through</div>"+
+			"<div class='content'>%s</div></div>", strings.Join(maps.Values(m), ", "))
+	} else {
+		return ""
+	}
+}
+
 func getDetailsHtml(issue *ossIssue) string {
 	overview := markdown.ToHTML([]byte(issue.Description), nil, nil)
 
@@ -267,6 +296,7 @@ func getDetailsHtml(issue *ossIssue) string {
 	html = replaceVariableInHtml(html, "overview", string(overview))
 	html = replaceVariableInHtml(html, "identifiers", getIdentifiers(issue))
 	html = replaceVariableInHtml(html, "exploitMaturity", getExploitMaturity(issue))
+	html = replaceVariableInHtml(html, "introducedThrough", getIntroducedBy(issue))
 
 	return html
 }
