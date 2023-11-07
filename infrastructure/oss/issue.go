@@ -17,6 +17,7 @@
 package oss
 
 import (
+	_ "embed"
 	"fmt"
 	"net/url"
 	"strings"
@@ -31,6 +32,9 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/product"
 )
+
+//go:embed template/details.html
+var detailsHtmlTemplate string
 
 var issuesSeverity = map[string]snyk.Severity{
 	"critical": snyk.Critical,
@@ -209,6 +213,64 @@ func toIssue(
 	}
 }
 
+func replaceVariableInHtml(html string, variableName string, variableValue string) string {
+	return strings.ReplaceAll(html, fmt.Sprintf("${%s}", variableName), variableValue)
+}
+
+func getIdentifiers(issue *ossIssue) string {
+	identifierList := []string{}
+
+	issueTypeString := "Vulnerability"
+	if len(issue.License) > 0 {
+		issueTypeString = "License"
+	}
+
+	for _, id := range issue.Identifiers.CVE {
+		url := "https://cve.mitre.org/cgi-bin/cvename.cgi?name=" + id
+		htmlAnchor := fmt.Sprintf("<a href='%s'>%s</a>", url, id)
+		identifierList = append(identifierList, htmlAnchor)
+	}
+
+	for _, id := range issue.Identifiers.CWE {
+		linkId := strings.ReplaceAll(strings.ToUpper(id), "CWE-", "")
+		htmlAnchor := fmt.Sprintf("<a href='https://cwe.mitre.org/data/definitions/%s.html'>%s</a>", linkId, id)
+		identifierList = append(identifierList, htmlAnchor)
+	}
+
+	if issue.CvssScore > 0 {
+		htmlAnchor := fmt.Sprintf("CVSS %.1f", issue.CvssScore)
+		identifierList = append(identifierList, htmlAnchor)
+	}
+
+	htmlAnchor := fmt.Sprintf("<a href='https://snyk.io/vuln/%s'>%s</a>", issue.Id, strings.ToUpper(issue.Id))
+	identifierList = append(identifierList, htmlAnchor)
+
+	return fmt.Sprintf("%s %s", issueTypeString, strings.Join(identifierList, " "))
+}
+
+func getExploitMaturity(issue *ossIssue) string {
+	if len(issue.Exploit) > 0 {
+		return fmt.Sprintf("<div class='summary-item maturity'><div class='label font-light'>Exploit maturity</div>"+
+			"<div class='content'>%s</div></div>", issue.Exploit)
+	} else {
+		return ""
+	}
+}
+
+func getDetailsHtml(issue *ossIssue) string {
+	overview := markdown.ToHTML([]byte(issue.Description), nil, nil)
+
+	html := replaceVariableInHtml(detailsHtmlTemplate, "issueId", issue.Id)
+	html = replaceVariableInHtml(html, "issueTitle", issue.Title)
+	html = replaceVariableInHtml(html, "severityText", issue.Severity)
+	html = replaceVariableInHtml(html, "vulnerableModule", issue.Name)
+	html = replaceVariableInHtml(html, "overview", string(overview))
+	html = replaceVariableInHtml(html, "identifiers", getIdentifiers(issue))
+	html = replaceVariableInHtml(html, "exploitMaturity", getExploitMaturity(issue))
+
+	return html
+}
+
 func (o ossIssue) toAdditionalData(filepath string, scanResult *scanResult) snyk.OssIssueData {
 	var additionalData snyk.OssIssueData
 	additionalData.Key = o.Id
@@ -232,6 +294,7 @@ func (o ossIssue) toAdditionalData(filepath string, scanResult *scanResult) snyk
 	additionalData.ProjectName = scanResult.ProjectName
 	additionalData.DisplayTargetFile = scanResult.DisplayTargetFile
 	additionalData.Language = o.Language
+	additionalData.Details = getDetailsHtml(&o)
 
 	return additionalData
 }
