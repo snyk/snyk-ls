@@ -310,19 +310,27 @@ func getDetailedPaths(issue *ossIssue) string {
 	detailedPathHtml := ""
 
 	for _, vuln := range issue.matchingIssues {
-		// hasUpgradePath := len(vuln.UpgradePath) > 0
+		hasUpgradePath := len(vuln.UpgradePath) > 0
 		introducedThrough := strings.Join(vuln.From, " > ")
-		// isOutdated := hasUpgradePath && vuln.UpgradePath[1] == vuln.From[1]
-		// upgradeMessage := "Upgrade to " + vuln.UpgradePath[1].(string)
+		isOutdated := hasUpgradePath && vuln.UpgradePath[1] == vuln.From[1]
+		upgradeMessage := "Upgrade to " + vuln.UpgradePath[1].(string)
 		remediationAdvice := "none"
 
-		// if vuln.IsUpgradable || vuln.IsPatchable {
-		// 	if isOutdated && vuln.IsPatchable {
-		// 		remediationAdvice = upgradeMessage
-		// 	} else {
-		// 		remediationAdvice = "Your dependencies are out of date, otherwise you would be using a newer ${vulnerability.name} than ${vulnerability.name}@${vulnerability.version}." // TODO: complete this
-		// 	}
-		// }
+		if vuln.IsUpgradable || vuln.IsPatchable {
+			if isOutdated && vuln.IsPatchable {
+				remediationAdvice = upgradeMessage
+			} else {
+				remediationAdvice = fmt.Sprintf("Your dependencies are out of date, "+
+					"otherwise you would be using a newer %s than %s@%s.", vuln.Name, vuln.Name, vuln.Version)
+
+				if vuln.PackageManager == "npm" || vuln.PackageManager == "yarn" || vuln.PackageManager == "yarn-workspace" {
+					remediationAdvice += "Try relocking your lockfile or deleting <code>node_modules</code> and reinstalling" +
+						"your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
+				} else {
+					remediationAdvice += "Try reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
+				}
+			}
+		}
 
 		detailedPathHtml += fmt.Sprintf(`<div class="summary-item path">
 						<div class="label font-light">Introduced through</div>
