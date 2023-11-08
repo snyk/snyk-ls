@@ -60,7 +60,7 @@ func getIdentifiers(issue *ossIssue) string {
 	htmlAnchor := fmt.Sprintf("<a href='https://snyk.io/vuln/%s'>%s</a>", issue.Id, strings.ToUpper(issue.Id))
 	identifierList = append(identifierList, htmlAnchor)
 
-	return fmt.Sprintf("%s %s", issueTypeString, strings.Join(identifierList, "<span class='delimiter' />"))
+	return fmt.Sprintf("%s %s", issueTypeString, strings.Join(identifierList, "<span class='delimiter'> </span> "))
 }
 
 func getExploitMaturity(issue *ossIssue) string {
