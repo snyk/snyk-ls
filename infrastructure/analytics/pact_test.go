@@ -16,7 +16,7 @@ func TestAnalyticsProviderPact(t *testing.T) {
 		Consumer: "snyk-ls",
 		Provider: "AnalyticsProvider",
 		LogDir:   "logs",
-		PactDir:  "pacts",
+		PactDir:  "./pacts",
 		LogLevel: "DEBUG",
 	}
 
@@ -26,7 +26,12 @@ func TestAnalyticsProviderPact(t *testing.T) {
 		u := fmt.Sprintf("http://localhost:%d/rest/api/orgs/org_id/analytics", pact.Server.Port)
 
 		expectedBody := getExpectedBodyRequest()
-		bodyBytes, _ := json.Marshal(expectedBody)
+		bodyBytes, err := json.Marshal(expectedBody)
+
+		if err != nil {
+			fmt.Printf("Error marshaling payload: %v\n", err)
+			return err
+		}
 
 		req, err := http.NewRequest("POST", u, bytes.NewBuffer(bodyBytes))
 		if err != nil {
