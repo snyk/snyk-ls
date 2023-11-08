@@ -306,48 +306,18 @@ func getFixedIn(issue *ossIssue) string {
 	return fmt.Sprintf(result, issue.Name, strings.Join(issue.FixedIn, ", "))
 }
 
-/**
-function fillDetailedPaths() {
-      const paths = document.querySelector('.detailed-paths')!;
-      paths.innerHTML = ''; // reset node
+func getOutdatedDependencyMessage(vuln *ossIssue) string {
+	remediationAdvice := fmt.Sprintf("Your dependencies are out of date, "+
+		"otherwise you would be using a newer %s than %s@%s.", vuln.Name, vuln.Name, vuln.Version)
 
-      vulnerability.matchingIdVulnerabilities.forEach(vuln => {
-        const introducedThrough = vuln.from.join(' > ');
-
-        const isOutdated = vuln.upgradePath && vuln.upgradePath[1] === vuln.from[1];
-
-        // The logic as in registry
-        // https://github.com/snyk/registry/blob/5fe141a3c5eeb6b2c5e62cfa2b5a8643df29403d/frontend/src/components/IssueCardVulnerablePath/IssueCardVulnerablePath.vue#L109
-        let remediationAdvice: string;
-        const upgradeMessage = `Upgrade to ${vuln.upgradePath[1]}`;
-
-        if (vuln.isUpgradable || vuln.isPatchable) {
-          if (isOutdated) {
-            remediationAdvice = vuln.isPatchable ? upgradeMessage : getOutdatedDependencyMessage(vuln);
-          } else {
-            remediationAdvice = upgradeMessage;
-          }
-        } else {
-          remediationAdvice = 'none';
-        }
-
-        const html = `
-        <div class="summary-item path">
-          <div class="label font-light">Introduced through</div>
-          <div class="content">${introducedThrough}</div>
-        </div>
-        <div class="summary-item remediation">
-          <div class="label font-light">Remediation</div>
-          <div class="content">${remediationAdvice}</div>
-        </div>`;
-
-        const path = document.createElement('div');
-        path.className = 'detailed-path';
-        path.innerHTML = html;
-        paths.append(path);
-      });
-    }
-*/
+	if vuln.PackageManager == "npm" || vuln.PackageManager == "yarn" || vuln.PackageManager == "yarn-workspace" {
+		remediationAdvice += "Try relocking your lockfile or deleting <code>node_modules</code> and reinstalling" +
+			" your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
+	} else {
+		remediationAdvice += "Try reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
+	}
+	return remediationAdvice
+}
 
 func getDetailedPaths(issue *ossIssue) string {
 	detailedPathHtml := ""
@@ -364,20 +334,14 @@ func getDetailedPaths(issue *ossIssue) string {
 				upgradeMessage = "Upgrade to " + vuln.UpgradePath[1].(string)
 			}
 
-			if isOutdated && vuln.IsPatchable {
-				remediationAdvice = upgradeMessage
-			} else if isOutdated {
-				remediationAdvice = upgradeMessage
-			} else {
-				remediationAdvice = fmt.Sprintf("Your dependencies are out of date, "+
-					"otherwise you would be using a newer %s than %s@%s.", vuln.Name, vuln.Name, vuln.Version)
-
-				if vuln.PackageManager == "npm" || vuln.PackageManager == "yarn" || vuln.PackageManager == "yarn-workspace" {
-					remediationAdvice += "Try relocking your lockfile or deleting <code>node_modules</code> and reinstalling" +
-						"your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
+			if isOutdated {
+				if vuln.IsPatchable {
+					remediationAdvice = upgradeMessage
 				} else {
-					remediationAdvice += "Try reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
+					remediationAdvice = getOutdatedDependencyMessage(&vuln)
 				}
+			} else {
+				remediationAdvice = upgradeMessage
 			}
 		}
 
