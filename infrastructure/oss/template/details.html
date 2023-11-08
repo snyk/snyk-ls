@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' ${cspSource}; style-src 'nonce-${nonce}' ${cspSource}; script-src 'nonce-${nonce}';">
+  <style nonce="${nonce}">
     .suggestion {
       position: relative;
       display: flex;
@@ -111,7 +112,7 @@
     <div id="overview" class="vulnerability-overview">${overview}</div>
   </section>
 </div>
-<script>
+<script nonce="${nonce}">
   if (document.getElementById("learn--link")) {
     document.getElementById("learn").className = "learn show"
   }
