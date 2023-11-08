@@ -9,9 +9,13 @@ import (
 	"testing"
 
 	"github.com/pact-foundation/pact-go/dsl"
+
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestAnalyticsProviderPact(t *testing.T) {
+	testutil.NotOnWindows(t, "we don't have a pact cli")
+
 	pact := &dsl.Pact{
 		Consumer: "snyk-ls",
 		Provider: "AnalyticsProvider",
