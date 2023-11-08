@@ -4,12 +4,62 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
+    .suggestion {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+    }
+
+    .suggestion .suggestion-text {
+      padding: 0.4rem 0;
+      margin-bottom: 0.8rem;
+      font-size: 1.8rem;
+      font-weight: 500;
+      line-height: 2.4rem;
+    }
+
+    .severity {
+      display: flex;
+      flex-direction: column;
+      flex-grow: 0;
+      float: left;
+      margin: 0 1rem 0 0;
+      text-align: center;
+    }
+
+    .severity .icon {
+      width: 32px;
+      height: 32px;
+    }
+
+    .icon {
+      vertical-align: middle;
+      width: 16px;
+      height: 16px;
+    }
+
+    .identifiers {
+      font-size: 1.3rem;
+      line-height: 2rem;
+    }
+
+    .vscode-dark .light-only {
+      display: none;
+    }
+
+    .vscode-light .dark-only {
+      display: none;
+    }
+
     .learn {
       opacity: 0;
       height: 0;
       margin-top: 0;
       font-size: 1.3rem;
     }
+
     .learn.show {
       margin-top: 6px;
       opacity: 1;
@@ -17,9 +67,11 @@
       transition-duration: 500ms;
       transition-property: height, opacity, margin-top;
     }
+
     .learn--link {
       margin-left: 3px;
     }
+
     .learn__code .learn--link {
     }
 
@@ -64,6 +116,5 @@
     document.getElementById("learn").className = "learn show"
   }
 </script>
-<!--<script nonce="${nonce}" src="${scriptUri}"></script>-->
 </body>
 </html>
