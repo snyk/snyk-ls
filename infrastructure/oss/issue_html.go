@@ -142,7 +142,7 @@ func getDetailedPaths(issue *ossIssue) string {
 				if vuln.IsPatchable {
 					remediationAdvice = upgradeMessage
 				} else {
-					remediationAdvice = getOutdatedDependencyMessage(&vuln)
+					remediationAdvice = getOutdatedDependencyMessage(vuln)
 				}
 			} else {
 				remediationAdvice = upgradeMessage
