@@ -84,6 +84,7 @@ func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_repor
 					Arguments: []any{lesson.Url},
 				},
 			}
+			i.lesson = lesson
 			log.Debug().Str("method", "oss.issue.AddSnykLearnAction").Msgf("Learn action: %v", action)
 		}
 	}
@@ -189,6 +190,7 @@ func toIssue(
 		}
 	}
 
+	// find all issues with the same id
 	matchingIssues := []ossIssue{}
 	for _, otherIssue := range scanResult.Vulnerabilities {
 		if otherIssue.Id == issue.Id {
@@ -286,6 +288,24 @@ func getIntroducedBy(issue *ossIssue) string {
 	}
 }
 
+func getLearnLink(issue *ossIssue) string {
+	if issue.lesson == nil {
+		return ""
+	}
+
+	return fmt.Sprintf("<a class='learn--link' id='learn--link' href='%s'>Learn about this vulnerability</a>",
+		issue.lesson.Url)
+}
+
+func getFixedIn(issue *ossIssue) string {
+	if len(issue.FixedIn) == 0 {
+		return "Not fixed"
+	}
+
+	result := "%s@%v"
+	return fmt.Sprintf(result, issue.Name, strings.Join(issue.FixedIn, ", "))
+}
+
 func getDetailsHtml(issue *ossIssue) string {
 	overview := markdown.ToHTML([]byte(issue.Description), nil, nil)
 
@@ -297,6 +317,8 @@ func getDetailsHtml(issue *ossIssue) string {
 	html = replaceVariableInHtml(html, "identifiers", getIdentifiers(issue))
 	html = replaceVariableInHtml(html, "exploitMaturity", getExploitMaturity(issue))
 	html = replaceVariableInHtml(html, "introducedThrough", getIntroducedBy(issue))
+	html = replaceVariableInHtml(html, "learnLink", getLearnLink(issue))
+	html = replaceVariableInHtml(html, "fixedIn", getFixedIn(issue))
 
 	return html
 }

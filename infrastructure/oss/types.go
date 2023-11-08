@@ -19,6 +19,7 @@ package oss
 import (
 	"time"
 
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
@@ -34,28 +35,29 @@ type reference struct {
 }
 
 type ossIssue struct {
-	Id             string      `json:"id"`
-	Name           string      `json:"name"`
-	Title          string      `json:"title"`
-	Severity       string      `json:"severity"`
-	LineNumber     int         `json:"lineNumber"`
-	Description    string      `json:"description"`
-	References     []reference `json:"references,omitempty"`
-	Version        string      `json:"version"`
-	PackageManager string      `json:"packageManager"`
-	PackageName    string      `json:"packageName"`
-	From           []string    `json:"from"`
-	Identifiers    identifiers `json:"identifiers,omitempty"`
-	FixedIn        []string    `json:"fixedIn,omitempty"`
-	UpgradePath    []any       `json:"upgradePath,omitempty"`
-	IsUpgradable   bool        `json:"isUpgradable,omitempty"`
-	CVSSv3         string      `json:"CVSSv3,omitempty"`
-	CvssScore      float64     `json:"cvssScore,omitempty"`
-	Exploit        string      `json:"exploit,omitempty"`
-	IsPatchable    bool        `json:"isPatchable"`
-	License        string      `json:"license,omitempty"`
-	Language       string      `json:"language,omitempty"`
-	matchingIssues []ossIssue  `json:"-"`
+	Id             string        `json:"id"`
+	Name           string        `json:"name"`
+	Title          string        `json:"title"`
+	Severity       string        `json:"severity"`
+	LineNumber     int           `json:"lineNumber"`
+	Description    string        `json:"description"`
+	References     []reference   `json:"references,omitempty"`
+	Version        string        `json:"version"`
+	PackageManager string        `json:"packageManager"`
+	PackageName    string        `json:"packageName"`
+	From           []string      `json:"from"`
+	Identifiers    identifiers   `json:"identifiers,omitempty"`
+	FixedIn        []string      `json:"fixedIn,omitempty"`
+	UpgradePath    []any         `json:"upgradePath,omitempty"`
+	IsUpgradable   bool          `json:"isUpgradable,omitempty"`
+	CVSSv3         string        `json:"CVSSv3,omitempty"`
+	CvssScore      float64       `json:"cvssScore,omitempty"`
+	Exploit        string        `json:"exploit,omitempty"`
+	IsPatchable    bool          `json:"isPatchable"`
+	License        string        `json:"license,omitempty"`
+	Language       string        `json:"language,omitempty"`
+	matchingIssues []ossIssue    `json:"-"`
+	lesson         *learn.Lesson `json:"-"`
 }
 
 type licensesPolicy struct {

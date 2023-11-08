@@ -3,20 +3,41 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    .learn {
+      opacity: 0;
+      height: 0;
+      margin-top: 0;
+      font-size: 1.3rem;
+    }
+    .learn.show {
+      margin-top: 6px;
+      opacity: 1;
+      height: auto;
+      transition-duration: 500ms;
+      transition-property: height, opacity, margin-top;
+    }
+    .learn--link {
+      margin-left: 3px;
+    }
+    .learn__code .learn--link {
+    }
+
+  </style>
   ${headerEnd}
 </head>
 <body>
 <div class="suggestion">
   <section class="suggestion--header">
     <div class="severity">
-      <img id="severity-icon" src="${severityIcon}" alt="${severityText}"/>
+      <img id="severity-icon" src="${severityIcon}" alt="${severityText}" class="icon"/>
     </div>
     <div class="suggestion-text">${issueTitle}</div>
     <div class="identifiers">${identifiers}</div>
-    <!---<div class="learn">
-      <img class="icon" src="${images['learn-icon']}" />
-      <a class="learn--link"></a>
-    </div>-->
+    <div class="learn" id="learn">
+      <img class="icon" src="${learnIcon}" alt="learnIcon" />
+      ${learnLink}
+    </div>
   </section>
   <section class="delimiter-top summary">
     <div class="summary-item module">
@@ -26,7 +47,7 @@
     ${introducedThrough}
     <div class="summary-item fixed-in">
       <div class="label font-light">Fixed in</div>
-      <div class="content"></div>
+      <div class="content">${fixedIn}</div>
     </div>
     ${exploitMaturity}
   </section>
@@ -38,6 +59,11 @@
     <div id="overview" class="vulnerability-overview">${overview}</div>
   </section>
 </div>
+<script>
+  if (document.getElementById("learn--link")) {
+    document.getElementById("learn").className = "learn show"
+  }
+</script>
 <!--<script nonce="${nonce}" src="${scriptUri}"></script>-->
 </body>
 </html>
