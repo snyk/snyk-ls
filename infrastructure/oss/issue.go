@@ -307,14 +307,34 @@ func getFixedIn(issue *ossIssue) string {
 }
 
 func getDetailedPaths(issue *ossIssue) string {
+	detailedPathHtml := ""
+
 	for _, vuln := range issue.matchingIssues {
+		// hasUpgradePath := len(vuln.UpgradePath) > 0
 		introducedThrough := strings.Join(vuln.From, " > ")
-		isOutdated := len(vuln.UpgradePath) > 0 && vuln.UpgradePath[1] == vuln.From[1]
-		upgradeMessage := "Upgrade to " + vuln.UpgradePath[1].(string)
-		remediationAdvice :=
+		// isOutdated := hasUpgradePath && vuln.UpgradePath[1] == vuln.From[1]
+		// upgradeMessage := "Upgrade to " + vuln.UpgradePath[1].(string)
+		remediationAdvice := "none"
+
+		// if vuln.IsUpgradable || vuln.IsPatchable {
+		// 	if isOutdated && vuln.IsPatchable {
+		// 		remediationAdvice = upgradeMessage
+		// 	} else {
+		// 		remediationAdvice = "Your dependencies are out of date, otherwise you would be using a newer ${vulnerability.name} than ${vulnerability.name}@${vulnerability.version}." // TODO: complete this
+		// 	}
+		// }
+
+		detailedPathHtml += fmt.Sprintf(`<div class="summary-item path">
+						<div class="label font-light">Introduced through</div>
+						<div class="content">%s</div>
+					</div>
+					<div class="summary-item remediation">
+						<div class="label font-light">Remediation</div>
+						<div class="content">%s</div>
+					</div>`, introducedThrough, remediationAdvice)
 	}
 
-	return ""
+	return detailedPathHtml
 }
 
 func getDetailsHtml(issue *ossIssue) string {
