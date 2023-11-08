@@ -20,7 +20,6 @@ import (
 	_ "embed"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 	"testing"
 
@@ -33,7 +32,7 @@ import (
 func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	_ = testutil.UnitTest(t)
 	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${nonce}", "${severityIcon}", "${learnIcon}"}
-	sort.Strings(expectedVariables)
+	slices.Sort(expectedVariables)
 
 	issue := &ossIssue{
 		Title:       "myTitle",
@@ -62,7 +61,7 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	// compare
 	reg := regexp.MustCompile("\\$\\{\\w+\\}")
 	actualVariables := reg.FindAllString(issueDetailsPanelHtml, -1)
-	sort.Strings(actualVariables)
+	slices.Sort(actualVariables)
 	actualVariables = slices.Compact(actualVariables)
 
 	assert.Equal(t, expectedVariables, actualVariables)
