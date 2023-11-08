@@ -306,6 +306,17 @@ func getFixedIn(issue *ossIssue) string {
 	return fmt.Sprintf(result, issue.Name, strings.Join(issue.FixedIn, ", "))
 }
 
+func getDetailedPaths(issue *ossIssue) string {
+	for _, vuln := range issue.matchingIssues {
+		introducedThrough := strings.Join(vuln.From, " > ")
+		isOutdated := len(vuln.UpgradePath) > 0 && vuln.UpgradePath[1] == vuln.From[1]
+		upgradeMessage := "Upgrade to " + vuln.UpgradePath[1].(string)
+		remediationAdvice :=
+	}
+
+	return ""
+}
+
 func getDetailsHtml(issue *ossIssue) string {
 	overview := markdown.ToHTML([]byte(issue.Description), nil, nil)
 
@@ -319,6 +330,7 @@ func getDetailsHtml(issue *ossIssue) string {
 	html = replaceVariableInHtml(html, "introducedThrough", getIntroducedBy(issue))
 	html = replaceVariableInHtml(html, "learnLink", getLearnLink(issue))
 	html = replaceVariableInHtml(html, "fixedIn", getFixedIn(issue))
+	html = replaceVariableInHtml(html, "detailedPaths", getDetailedPaths(issue))
 
 	return html
 }
