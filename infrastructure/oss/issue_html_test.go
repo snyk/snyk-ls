@@ -59,7 +59,7 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	issueDetailsPanelHtml := getDetailsHtml(issue)
 
 	// compare
-	reg := regexp.MustCompile("\\$\\{\\w+\\}")
+	reg := regexp.MustCompile(`\$\{\w+\}`)
 	actualVariables := reg.FindAllString(issueDetailsPanelHtml, -1)
 	slices.Sort(actualVariables)
 	actualVariables = slices.Compact(actualVariables)
