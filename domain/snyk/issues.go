@@ -128,6 +128,7 @@ type OssIssueData struct {
 	ProjectName       string      `json:"projectName"`
 	DisplayTargetFile string      `json:"displayTargetFile"`
 	Language          string      `json:"language"`
+	Details           string      `json:"details"`
 }
 
 type IaCIssueData struct {

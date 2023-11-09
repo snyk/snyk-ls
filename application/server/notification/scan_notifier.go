@@ -127,6 +127,7 @@ func (n *scanNotifier) appendOssIssues(scanIssues []lsp.ScanIssue, folderPath st
 				IsUpgradable:      additionalData.IsUpgradable,
 				ProjectName:       additionalData.ProjectName,
 				DisplayTargetFile: additionalData.DisplayTargetFile,
+				Details:           additionalData.Details,
 			},
 		})
 	}

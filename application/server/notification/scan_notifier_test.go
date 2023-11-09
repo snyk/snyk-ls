@@ -247,6 +247,7 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 				IsUpgradable:      false,
 				ProjectName:       "OSS ProjectName",
 				DisplayTargetFile: "OSS DisplayTargetFile",
+				Details:           "",
 			},
 		},
 	}
@@ -302,6 +303,7 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 				ProjectName:       "OSS ProjectName",
 				DisplayTargetFile: "OSS DisplayTargetFile",
 				Language:          "js",
+				Details:           "",
 			},
 		},
 	}

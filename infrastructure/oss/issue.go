@@ -17,11 +17,9 @@
 package oss
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	_ "embed"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/gomarkdown/markdown"
@@ -82,6 +80,7 @@ func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_repor
 					Arguments: []any{lesson.Url},
 				},
 			}
+			i.lesson = lesson
 			log.Debug().Str("method", "oss.issue.AddSnykLearnAction").Msgf("Learn action: %v", action)
 		}
 	}
@@ -187,6 +186,15 @@ func toIssue(
 		}
 	}
 
+	// find all issues with the same id
+	matchingIssues := []*ossIssue{}
+	for _, otherIssue := range scanResult.Vulnerabilities {
+		if otherIssue.Id == issue.Id {
+			matchingIssues = append(matchingIssues, &otherIssue)
+		}
+	}
+	issue.matchingIssues = matchingIssues
+
 	message := fmt.Sprintf(
 		"%s affecting package %s. %s %s (Snyk)",
 		title,
@@ -214,7 +222,7 @@ func toIssue(
 
 func (o ossIssue) toAdditionalData(filepath string, scanResult *scanResult) snyk.OssIssueData {
 	var additionalData snyk.OssIssueData
-	additionalData.Key = getIssueKey(filepath, o)
+	additionalData.Key = o.Id
 	additionalData.Title = o.Title
 	additionalData.Name = o.Name
 	additionalData.LineNumber = o.LineNumber
@@ -235,6 +243,7 @@ func (o ossIssue) toAdditionalData(filepath string, scanResult *scanResult) snyk
 	additionalData.ProjectName = scanResult.ProjectName
 	additionalData.DisplayTargetFile = scanResult.DisplayTargetFile
 	additionalData.Language = o.Language
+	additionalData.Details = getDetailsHtml(&o)
 
 	return additionalData
 }
@@ -283,9 +292,4 @@ func convertScanResultToIssues(
 		duplicateCheckMap[duplicateKey] = true
 	}
 	return issues
-}
-
-func getIssueKey(affectedFilePath string, issue ossIssue) string {
-	id := sha256.Sum256([]byte(affectedFilePath + strconv.Itoa(issue.LineNumber) + issue.Id))
-	return hex.EncodeToString(id[:16])
 }

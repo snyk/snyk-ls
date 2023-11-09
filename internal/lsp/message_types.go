@@ -1053,6 +1053,7 @@ type OssIssueData struct {
 	IsUpgradable      bool           `json:"isUpgradable"`
 	ProjectName       string         `json:"projectName"`
 	DisplayTargetFile string         `json:"displayTargetFile"`
+	Details           string         `json:"details,omitempty"`
 }
 
 type OssIdentifiers struct {
