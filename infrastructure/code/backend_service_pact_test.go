@@ -51,6 +51,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) { // nolint:gocognit // this i
 	testutil.UnitTest(t)
 
 	setupPact(t)
+	config.CurrentConfig().UpdateApiEndpoints("http://localhost")
 	defer pact.Teardown()
 
 	defer func() {
@@ -262,7 +263,6 @@ func setupPact(t *testing.T) {
 	pact.Setup(true)
 
 	t.Setenv("DEEPROXY_API_URL", fmt.Sprintf("http://localhost:%d", pact.Server.Port))
-	config.CurrentConfig().UpdateApiEndpoints("http://localhost")
 	config.CurrentConfig().SetOrganization(orgUUID)
 
 	client = NewHTTPRepository(performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(),
@@ -285,4 +285,43 @@ func getPutPostBodyMatcher() dsl.Matcher {
 
 func getSnykRequestIdMatcher() dsl.Matcher {
 	return dsl.Regex("fc763eba-0905-41c5-a27f-3934ab26786c", uuidMatcher)
+}
+
+func TestSnykCodeBackendServicePact_LocalCodeEngine(t *testing.T) {
+	testutil.NotOnWindows(t, "we don't have a pact cli")
+	testutil.UnitTest(t)
+
+	setupPact(t)
+	config.CurrentConfig().SetSnykCodeApi(fmt.Sprintf("http://localhost:%d", pact.Server.Port))
+	config.CurrentConfig().SetOrganization(orgUUID)
+	defer pact.Teardown()
+
+	pact.AddInteraction().UponReceiving("Get filters").WithRequest(dsl.Request{
+		Method: "GET",
+		Path:   dsl.String("/filters"),
+		Headers: dsl.MapMatcher{
+			"Content-Type":    dsl.String("application/json"),
+			"snyk-request-id": getSnykRequestIdMatcher(),
+			"Session-Token":   dsl.Regex("token fc763eba-0905-41c5-a27f-3934ab26786c", sessionTokenMatcher),
+			"Authorization":   dsl.Regex("token fc763eba-0905-41c5-a27f-3934ab26786c", sessionTokenMatcher),
+		},
+	}).WillRespondWith(dsl.Response{
+		Status: 200,
+		Headers: dsl.MapMatcher{
+			"Content-Type": dsl.String("application/json"),
+		},
+		Body: dsl.Match(FiltersResponse{}),
+	})
+
+	test := func() error {
+		if _, err := client.GetFilters(context.Background()); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	err := pact.Verify(test)
+
+	assert.NoError(t, err)
+
 }

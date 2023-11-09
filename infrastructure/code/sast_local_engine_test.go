@@ -17,8 +17,10 @@
 package code
 
 import (
+	"slices"
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -71,5 +73,8 @@ func TestIsLocalEngine(t *testing.T) {
 		mockedSastResponse.LocalCodeEngine.Enabled = true
 		scanner.updateCodeApiLocalEngine(mockedSastResponse)
 		assert.Equal(t, mockedSastResponse.LocalCodeEngine.Url, config.CurrentConfig().SnykCodeApi())
+		additionalAuthUrls := config.CurrentConfig().Engine().GetConfiguration().GetStringSlice(configuration.
+			AUTHENTICATION_ADDITIONAL_URLS)
+		assert.True(t, slices.Contains(additionalAuthUrls, mockedSastResponse.LocalCodeEngine.Url))
 	})
 }
