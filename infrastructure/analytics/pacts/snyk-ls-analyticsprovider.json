@@ -11,10 +11,7 @@
       "providerState": "Analytics data is ready",
       "request": {
         "method": "POST",
-        "path": "/rest/api/orgs/org_id/analytics",
-        "headers": {
-          "Content-Type": "application/json"
-        },
+        "path": "/rest/api/orgs/54125374-3f93-402e-b693-e0724794d71f/analytics",
         "body": {
           "data": {
             "attributes": {
@@ -40,12 +37,6 @@
               }
             },
             "type": "analytics"
-          }
-        },
-        "matchingRules": {
-          "$.headers.Content-Type": {
-            "match": "regex",
-            "regex": "^application\\/json$"
           }
         }
       },

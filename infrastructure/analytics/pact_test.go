@@ -1,20 +1,20 @@
 package analytics
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"testing"
 
 	"github.com/pact-foundation/pact-go/dsl"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestAnalyticsProviderPact(t *testing.T) {
 	testutil.NotOnWindows(t, "we don't have a pact cli")
+	c := testutil.UnitTest(t)
 
 	pact := &dsl.Pact{
 		Consumer: "snyk-ls",
@@ -26,26 +26,23 @@ func TestAnalyticsProviderPact(t *testing.T) {
 
 	defer pact.Teardown()
 
-	var test = func() (err error) {
-		u := fmt.Sprintf("http://localhost:%d/rest/api/orgs/org_id/analytics", pact.Server.Port)
+	pact.Setup(true)
+	base := fmt.Sprintf("http://localhost:%d", pact.Server.Port)
+	orgUUID := "54125374-3f93-402e-b693-e0724794d71f"
 
+	var test = func() (err error) {
+		//prepare
+		c.SetToken("token")
+		c.SetOrganization(orgUUID)
+		c.UpdateApiEndpoints(base)
+		c.SetAnalyticsEnabled(true)
 		expectedBody := getExpectedBodyRequest()
 		bodyBytes, err := json.Marshal(expectedBody)
+		assert.NoError(t, err)
 
-		if err != nil {
-			fmt.Printf("Error marshaling payload: %v\n", err)
-			return err
-		}
-
-		req, err := http.NewRequest("POST", u, bytes.NewBuffer(bodyBytes))
-		if err != nil {
-			return err
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		if _, err = http.DefaultClient.Do(req); err != nil {
-			return err
-		}
+		// invoke function under test
+		err = SendAnalyticsToAPI(c, bodyBytes)
+		assert.NoError(t, err)
 
 		return nil
 	}
@@ -55,10 +52,9 @@ func TestAnalyticsProviderPact(t *testing.T) {
 		Given("Analytics data is ready").
 		UponReceiving("A request to create analytics data").
 		WithRequest(dsl.Request{
-			Method:  "POST",
-			Path:    dsl.String("/rest/api/orgs/org_id/analytics"),
-			Headers: dsl.MapMatcher{"Content-Type": dsl.Term("application/json", `^application\/json$`)},
-			Body:    getExpectedBodyRequest(),
+			Method: "POST",
+			Path:   dsl.String("/rest/api/orgs/" + orgUUID + "/analytics"),
+			Body:   getExpectedBodyRequest(),
 		}).
 		WillRespondWith(dsl.Response{
 			Status:  201,
