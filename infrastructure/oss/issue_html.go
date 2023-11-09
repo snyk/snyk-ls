@@ -77,7 +77,7 @@ func getIntroducedBy(issue *ossIssue) string {
 
 	if len(issue.From) > 0 {
 		for _, v := range issue.matchingIssues {
-			if len(v.From) > 0 {
+			if len(v.From) > 1 {
 				module := v.From[1]
 				url := fmt.Sprintf("https://app.snyk.io/test/%s/%s", issue.PackageManager, module)
 				htmlAnchor := fmt.Sprintf("<a href='%s'>%s</a>", url, module)
