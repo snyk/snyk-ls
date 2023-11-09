@@ -127,7 +127,7 @@ func getDetailedPaths(issue *ossIssue) string {
 	detailedPathHtml := ""
 
 	for _, vuln := range issue.matchingIssues {
-		hasUpgradePath := len(vuln.UpgradePath) > 0
+		hasUpgradePath := len(vuln.UpgradePath) > 1
 		introducedThrough := strings.Join(vuln.From, " > ")
 		isOutdated := hasUpgradePath && vuln.UpgradePath[1] == vuln.From[1]
 		remediationAdvice := "none"
