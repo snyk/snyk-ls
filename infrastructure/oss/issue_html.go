@@ -110,7 +110,7 @@ func getFixedIn(issue *ossIssue) string {
 	return fmt.Sprintf(result, issue.Name, strings.Join(issue.FixedIn, ", "))
 }
 
-func getOutdatedDependencyMessage(vuln *ossIssue) string {
+func getOutdatedDependencyMessage(vuln ossIssue) string {
 	remediationAdvice := fmt.Sprintf("Your dependencies are out of date, "+
 		"otherwise you would be using a newer %s than %s@%s.", vuln.Name, vuln.Name, vuln.Version)
 
