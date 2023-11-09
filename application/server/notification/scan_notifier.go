@@ -2,6 +2,7 @@ package notification
 
 import (
 	"errors"
+	"strconv"
 
 	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -100,11 +101,34 @@ func (n *scanNotifier) appendOssIssues(scanIssues []lsp.ScanIssue, folderPath st
 		}
 
 		scanIssues = append(scanIssues, lsp.ScanIssue{
-			Id:             additionalData.Key,
-			Title:          additionalData.Title,
-			Severity:       issue.Severity.String(),
-			FilePath:       issue.AffectedFilePath,
-			AdditionalData: additionalData,
+			Id:       additionalData.Key,
+			Title:    additionalData.Title,
+			Severity: issue.Severity.String(),
+			FilePath: issue.AffectedFilePath,
+			AdditionalData: lsp.OssIssueData{
+				License: additionalData.License,
+				Identifiers: lsp.OssIdentifiers{
+					CWE: issue.CWEs,
+					CVE: issue.CVEs,
+				},
+				Description:       additionalData.Description,
+				Language:          additionalData.Language,
+				PackageManager:    additionalData.PackageManager,
+				PackageName:       additionalData.PackageName,
+				Name:              additionalData.Name,
+				Version:           additionalData.Version,
+				Exploit:           additionalData.Exploit,
+				CVSSv3:            additionalData.CVSSv3,
+				CvssScore:         strconv.FormatFloat(additionalData.CvssScore, 'f', 2, 64), // convert float64 to string with 2 decimal places
+				FixedIn:           additionalData.FixedIn,
+				From:              additionalData.From,
+				UpgradePath:       additionalData.UpgradePath,
+				IsPatchable:       additionalData.IsPatchable,
+				IsUpgradable:      additionalData.IsUpgradable,
+				ProjectName:       additionalData.ProjectName,
+				DisplayTargetFile: additionalData.DisplayTargetFile,
+				Details:           additionalData.Details,
+			},
 		})
 	}
 
