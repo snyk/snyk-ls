@@ -35,6 +35,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
@@ -324,6 +325,33 @@ func Test_initialized_shouldInitializeAndTriggerCliDownload(t *testing.T) {
 	}
 
 	assert.Equal(t, 1, di.Installer().(*install.FakeInstaller).Installs())
+}
+
+func Test_initialized_shouldRedactToken(t *testing.T) {
+	loc := setupServer(t)
+	oldStdErr := os.Stderr
+	file, err := os.Create(filepath.Join(t.TempDir(), "stderr"))
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.Stderr = oldStdErr
+		_ = file.Close()
+	})
+
+	toBeRedacted := "uhuhuhu"
+	settings := lsp.Settings{Token: toBeRedacted}
+
+	os.Stderr, _ = file, err
+
+	_, err = loc.Client.Call(ctx, "initialize", lsp.InitializeParams{InitializationOptions: settings})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	os.Stderr = oldStdErr
+	actual, err := os.ReadFile(file.Name())
+	require.NoError(t, err)
+	require.NotContainsf(t, string(actual), toBeRedacted, "token should be redacted")
 }
 
 func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
