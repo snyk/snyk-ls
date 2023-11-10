@@ -392,6 +392,11 @@ func (c *Config) SetSnykCodeApi(snykCodeApiUrl string) {
 		return
 	}
 	c.snykCodeApiUrl = snykCodeApiUrl
+
+	config := c.engine.GetConfiguration()
+	additionalURLs := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
+	additionalURLs = append(additionalURLs, c.snykCodeApiUrl)
+	config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, additionalURLs)
 }
 
 func (c *Config) SetErrorReportingEnabled(enabled bool) { c.isErrorReportingEnabled.Set(enabled) }
