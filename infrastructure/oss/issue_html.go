@@ -110,11 +110,11 @@ func getFixedIn(issue *ossIssue) string {
 	return fmt.Sprintf(result, issue.Name, strings.Join(issue.FixedIn, ", "))
 }
 
-func getOutdatedDependencyMessage(vuln *ossIssue) string {
+func getOutdatedDependencyMessage(issue *ossIssue) string {
 	remediationAdvice := fmt.Sprintf("Your dependencies are out of date, "+
-		"otherwise you would be using a newer %s than %s@%s.", vuln.Name, vuln.Name, vuln.Version)
+		"otherwise you would be using a newer %s than %s@%s.", issue.Name, issue.Name, issue.Version)
 
-	if vuln.PackageManager == "npm" || vuln.PackageManager == "yarn" || vuln.PackageManager == "yarn-workspace" {
+	if issue.PackageManager == "npm" || issue.PackageManager == "yarn" || issue.PackageManager == "yarn-workspace" {
 		remediationAdvice += "Try relocking your lockfile or deleting <code>node_modules</code> and reinstalling" +
 			" your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
 	} else {
@@ -126,23 +126,23 @@ func getOutdatedDependencyMessage(vuln *ossIssue) string {
 func getDetailedPaths(issue *ossIssue) string {
 	detailedPathHtml := ""
 
-	for _, vuln := range issue.matchingIssues {
-		hasUpgradePath := len(vuln.UpgradePath) > 1
-		introducedThrough := strings.Join(vuln.From, " > ")
-		isOutdated := hasUpgradePath && vuln.UpgradePath[1] == vuln.From[1]
+	for _, matchingIssue := range issue.matchingIssues {
+		hasUpgradePath := len(matchingIssue.UpgradePath) > 1
+		introducedThrough := strings.Join(matchingIssue.From, " > ")
+		isOutdated := hasUpgradePath && matchingIssue.UpgradePath[1] == matchingIssue.From[1]
 		remediationAdvice := "none"
 		upgradeMessage := ""
 
-		if vuln.IsUpgradable || vuln.IsPatchable {
+		if matchingIssue.IsUpgradable || matchingIssue.IsPatchable {
 			if hasUpgradePath {
-				upgradeMessage = "Upgrade to " + vuln.UpgradePath[1].(string)
+				upgradeMessage = "Upgrade to " + matchingIssue.UpgradePath[1].(string)
 			}
 
 			if isOutdated {
-				if vuln.IsPatchable {
+				if matchingIssue.IsPatchable {
 					remediationAdvice = upgradeMessage
 				} else {
-					remediationAdvice = getOutdatedDependencyMessage(vuln)
+					remediationAdvice = getOutdatedDependencyMessage(&matchingIssue)
 				}
 			} else {
 				remediationAdvice = upgradeMessage

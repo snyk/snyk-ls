@@ -187,10 +187,10 @@ func toIssue(
 	}
 
 	// find all issues with the same id
-	matchingIssues := []*ossIssue{}
+	matchingIssues := []ossIssue{}
 	for _, otherIssue := range scanResult.Vulnerabilities {
 		if otherIssue.Id == issue.Id {
-			matchingIssues = append(matchingIssues, &otherIssue)
+			matchingIssues = append(matchingIssues, otherIssue)
 		}
 	}
 	issue.matchingIssues = matchingIssues

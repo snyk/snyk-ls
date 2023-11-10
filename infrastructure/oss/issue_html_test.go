@@ -34,7 +34,7 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${nonce}", "${severityIcon}", "${learnIcon}"}
 	slices.Sort(expectedVariables)
 
-	issue := &ossIssue{
+	issue := ossIssue{
 		Title:       "myTitle",
 		Name:        "myIssue",
 		Severity:    "SuperCritical",
@@ -43,7 +43,7 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 		From:        []string{"1", "2", "3", "4"},
 	}
 
-	issue2 := &ossIssue{
+	issue2 := ossIssue{
 		Title:       "myTitle2",
 		Name:        "myIssue2",
 		Severity:    "SuperCritical",
@@ -56,7 +56,7 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	issue.matchingIssues = append(issue.matchingIssues, issue2)
 
 	// invoke methode under test
-	issueDetailsPanelHtml := getDetailsHtml(issue)
+	issueDetailsPanelHtml := getDetailsHtml(&issue)
 
 	// compare
 	reg := regexp.MustCompile(`\$\{\w+\}`)
@@ -81,7 +81,7 @@ func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
 
 	lesson := &learn.Lesson{Url: "something"}
 
-	issue := &ossIssue{
+	issue := ossIssue{
 		Title:       "myTitle",
 		Name:        "myIssue",
 		Severity:    "SuperCritical",
@@ -94,7 +94,7 @@ func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
 	issue.matchingIssues = append(issue.matchingIssues, issue)
 
 	// invoke methode under test
-	issueDetailsPanelHtml := getDetailsHtml(issue)
+	issueDetailsPanelHtml := getDetailsHtml(&issue)
 
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "Learn about this vulnerability"))
 }
