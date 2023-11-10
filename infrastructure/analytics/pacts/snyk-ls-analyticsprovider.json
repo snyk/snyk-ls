@@ -1,0 +1,64 @@
+{
+  "consumer": {
+    "name": "snyk-ls"
+  },
+  "provider": {
+    "name": "AnalyticsProvider"
+  },
+  "interactions": [
+    {
+      "description": "A request to create analytics data",
+      "providerState": "Analytics data is ready",
+      "request": {
+        "method": "POST",
+        "path": "/rest/api/orgs/54125374-3f93-402e-b693-e0724794d71f/analytics",
+        "body": {
+          "data": {
+            "attributes": {
+              "application": "snyk-cli",
+              "application_version": "1.1233.0",
+              "arch": "AMD64",
+              "deviceId": "unique-uuid",
+              "duration_ms": "1000",
+              "event_type": "Scan done",
+              "integration_environment": "IntelliJ Ultimate",
+              "integration_environment_version": "2023.3",
+              "integration_name": "IntelliJ",
+              "integration_version": "2.5.5",
+              "os": "Windows",
+              "scan_type": "Snyk Open Source",
+              "status": "Succeeded",
+              "timestamp_finished": "2023-09-01T12:00:00Z",
+              "unique_issue_count": {
+                "critical": 15,
+                "high": 10,
+                "low": 2,
+                "medium": 1
+              }
+            },
+            "type": "analytics"
+          }
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+        },
+        "matchingRules": {
+          "$.headers.Content-Type": {
+            "match": "regex",
+            "regex": "^application\\/json$"
+          }
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "pactSpecification": {
+      "version": "2.0.0"
+    }
+  }
+}
