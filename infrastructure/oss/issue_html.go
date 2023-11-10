@@ -110,7 +110,7 @@ func getFixedIn(issue *ossIssue) string {
 	return fmt.Sprintf(result, issue.Name, strings.Join(issue.FixedIn, ", "))
 }
 
-func getOutdatedDependencyMessage(issue ossIssue) string {
+func getOutdatedDependencyMessage(issue *ossIssue) string {
 	remediationAdvice := fmt.Sprintf("Your dependencies are out of date, "+
 		"otherwise you would be using a newer %s than %s@%s.", issue.Name, issue.Name, issue.Version)
 
@@ -142,7 +142,7 @@ func getDetailedPaths(issue *ossIssue) string {
 				if matchingIssue.IsPatchable {
 					remediationAdvice = upgradeMessage
 				} else {
-					remediationAdvice = getOutdatedDependencyMessage(matchingIssue)
+					remediationAdvice = getOutdatedDependencyMessage(&matchingIssue)
 				}
 			} else {
 				remediationAdvice = upgradeMessage
