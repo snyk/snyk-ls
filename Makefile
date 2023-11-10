@@ -26,7 +26,6 @@ COMMIT := $(shell git show -s --format=%h)
 LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true' -X 'github.com/snyk/snyk-ls/application/config.Version=v$(VERSION)-SNAPSHOT-$(COMMIT)'"
 
 NOCACHE := "-count=1"
-VERBOSE := "-v"
 TIMEOUT := "-timeout=45m"
 
 
@@ -71,13 +70,13 @@ race-test:
 	@echo "==> Running integration tests with race-detector..."
 	@mkdir -p $(BUILD_DIR)
 	@export INTEG_TESTS=true
-	@go test $(NOCACHE) $(TIMEOUT) $(VERBOSE) -race -failfast ./...
+	@go test $(NOCACHE) $(TIMEOUT) -race -failfast ./...
 
 .PHONY: proxy-test
 proxy-test:
 	@echo "==> Running integration tests with proxy"
 	@docker build -t "snyk-ls:$(VERSION)" -f .github/docker-based-tests/Dockerfile .
-	@docker run --rm --cap-add=NET_ADMIN --name "snyk-ls" --env "SNYK_TOKEN=$(SNYK_TOKEN)" snyk-ls:$(VERSION) go test -failfast $(NOCACHE) $(TIMEOUT) $(VERBOSE) ./...
+	@docker run --rm --cap-add=NET_ADMIN --name "snyk-ls" --env "SNYK_TOKEN=$(SNYK_TOKEN)" snyk-ls:$(VERSION) go test -failfast $(NOCACHE) $(TIMEOUT) ./...
 
 instance-test:
 	@echo "==> Running instance tests with proxy"
