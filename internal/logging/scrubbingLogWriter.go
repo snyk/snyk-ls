@@ -23,8 +23,8 @@ import (
 )
 
 type scrubbingWriter struct {
-	writer   zerolog.LevelWriter
-	scubDict map[string]bool
+	writer    zerolog.LevelWriter
+	scrubDict map[string]bool
 }
 
 func (w *scrubbingWriter) WriteLevel(level zerolog.Level, p []byte) (n int, err error) {
@@ -33,8 +33,8 @@ func (w *scrubbingWriter) WriteLevel(level zerolog.Level, p []byte) (n int, err 
 
 func NewScrubbingWriter(writer zerolog.LevelWriter, scrubDict map[string]bool) zerolog.LevelWriter {
 	return &scrubbingWriter{
-		writer:   writer,
-		scubDict: scrubDict,
+		writer:    writer,
+		scrubDict: scrubDict,
 	}
 }
 
@@ -44,7 +44,7 @@ func (w *scrubbingWriter) Write(p []byte) (n int, err error) {
 
 func (w *scrubbingWriter) scrub(p []byte) []byte {
 	s := string(p)
-	for term := range w.scubDict {
+	for term := range w.scrubDict {
 		s = strings.Replace(s, term, "***", -1)
 	}
 	return []byte(s)
