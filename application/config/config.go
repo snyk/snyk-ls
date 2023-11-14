@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+	"github.com/snyk/snyk-ls/internal/logging"
 
 	"github.com/adrg/xdg"
 	"github.com/denisbrodbeck/machineid"
@@ -136,6 +137,7 @@ func (c *CliSettings) DefaultBinaryInstallPath() string {
 }
 
 type Config struct {
+	scrubDict                    map[string]bool
 	configLoaded                 concurrency.AtomicBool
 	cliSettings                  *CliSettings
 	configFile                   string
@@ -202,6 +204,7 @@ func IsDevelopment() bool {
 // New creates a configuration object with default values
 func New() *Config {
 	c := &Config{}
+	c.scrubDict = make(map[string]bool)
 	c.logger = &log.Logger
 	c.cliSettings = NewCliSettings()
 	c.automaticAuthentication = true
@@ -453,6 +456,9 @@ func (c *Config) SetToken(token string) {
 
 	// Notify that the token has changed
 	c.m.Lock()
+	if token != "" {
+		c.scrubDict[token] = true
+	}
 	for _, channel := range c.tokenChangeChannels {
 		select {
 		case channel <- token:
@@ -501,7 +507,7 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 	c.SetLogLevel(logLevel.String())
 	zerolog.TimeFieldFormat = time.RFC3339
 
-	levelWriter := lsp.New(server)
+	levelWriter := logging.New(server)
 	writers := []io.Writer{levelWriter}
 
 	if c.LogPath() != "" {
@@ -514,9 +520,9 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 		}
 	}
 
-	multiLevelWriter := zerolog.MultiLevelWriter(writers...)
+	scrubbingMultilevelWriter := logging.NewScrubbingWriter(zerolog.MultiLevelWriter(writers...), c.scrubDict)
 	writer := zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
-		w.Out = multiLevelWriter
+		w.Out = scrubbingMultilevelWriter
 		w.NoColor = true
 		w.TimeFormat = time.RFC3339
 		w.PartsOrder = []string{

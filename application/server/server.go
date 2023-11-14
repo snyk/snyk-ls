@@ -190,8 +190,10 @@ func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (any, error) {
 		method := "initializeHandler"
 		logger := log.With().Str("method", method).Logger()
-		logger.Info().Any("params", params).Msg("RECEIVING")
+		// we can only log, after we add the token to the list of forbidden outputs
+		defer logger.Info().Any("params", params).Msg("RECEIVING")
 		InitializeSettings(params.InitializationOptions)
+
 		c.SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
 		di.Analytics().Initialise()
