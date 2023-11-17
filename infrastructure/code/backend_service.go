@@ -180,6 +180,10 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 				Str("responseBody", string(responseBody)).
 				Str("snyk-request-id", requestId).
 				Msg("RECEIVED FROM REMOTE")
+		} else {
+			log.Trace().
+				Str("snyk-request-id", requestId).
+				Msg("RECEIVED FROM REMOTE")
 		}
 
 		if err != nil {
