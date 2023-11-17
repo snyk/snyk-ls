@@ -174,10 +174,17 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 
 		response, body, err := s.httpCall(req)
 		responseBody = body
-		log.Trace().Str("response.Status", response.Status).
-			Str("responseBody", string(responseBody)).
-			Str("snyk-request-id", requestId).
-			Msg("RECEIVED FROM REMOTE")
+
+		if response != nil && responseBody != nil {
+			log.Trace().Str("response.Status", response.Status).
+				Str("responseBody", string(responseBody)).
+				Str("snyk-request-id", requestId).
+				Msg("RECEIVED FROM REMOTE")
+		} else {
+			log.Trace().
+				Str("snyk-request-id", requestId).
+				Msg("RECEIVED FROM REMOTE")
+		}
 
 		if err != nil {
 			return nil, err // no retries for errors
