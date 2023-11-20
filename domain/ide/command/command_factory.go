@@ -38,6 +38,7 @@ func CreateFromCommandData(
 	codeApiClient SnykCodeHttpClient,
 ) (snyk.Command, error) {
 
+	// TODO: implement snyk.OpenIssueCommand
 	switch commandData.CommandId {
 	case snyk.NavigateToRangeCommand:
 		return &navigateToRangeCommand{command: commandData, srv: srv}, nil
