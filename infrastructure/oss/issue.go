@@ -40,8 +40,10 @@ var issuesSeverity = map[string]snyk.Severity{
 	"medium":   snyk.Medium,
 }
 
-func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter) (actions []snyk.
-	CodeAction) {
+func (i *ossIssue) AddCodeActions(
+	learnService learn.Service,
+	inlineValues []snyk.InlineValue,
+	ep error_reporting.ErrorReporter) (actions []snyk.CodeAction) {
 	title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", i.Title, i.PackageName)
 	command := &snyk.CommandData{
 		Title:     title,
@@ -56,7 +58,38 @@ func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting
 	if codeAction != nil {
 		actions = append(actions, *codeAction)
 	}
+
+	// add most severe issue action
+	mostSevereAction := i.AddMostSevereVulnerabilityActions(inlineValues, ep)
+	if mostSevereAction != nil {
+		actions = append(actions, *mostSevereAction)
+	}
+
 	return actions
+}
+
+func (i *ossIssue) AddMostSevereVulnerabilityActions(inlineValues []snyk.InlineValue, ep error_reporting.ErrorReporter) (action *snyk.CodeAction) {
+	mostSevereId := ""
+	for _, iv := range inlineValues {
+		if iv.(*VulnerabilityCountInformation).mostSevereVulnerabilityId == i.Id {
+			mostSevereId = iv.(*VulnerabilityCountInformation).mostSevereVulnerabilityId
+		}
+	}
+
+	if len(mostSevereId) > 0 {
+		title := fmt.Sprintf("Show most severe issue (%s) (Snyk)", mostSevereId)
+		action = &snyk.CodeAction{
+			Title: title,
+			Command: &snyk.CommandData{
+				Title:     title,
+				CommandId: snyk.NavigateToRangeCommand, // TODO: use the correct command once implemented
+				Arguments: []any{mostSevereId}, // TODO: use the correct arguments once implemented
+			},
+		}
+		log.Debug().Str("method", "oss.issue.AddMostSevereVulnerabilityActions").Msgf("Most severe action: %v", action)
+	}
+
+	return action
 }
 
 func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_reporting.ErrorReporter) (action *snyk.
@@ -168,6 +201,7 @@ func toIssue(
 	issueRange snyk.Range,
 	learnService learn.Service,
 	ep error_reporting.ErrorReporter,
+	iv inlineValueMap,
 ) snyk.Issue {
 	title := issue.Title
 
@@ -212,7 +246,7 @@ func toIssue(
 		Product:             product.ProductOpenSource,
 		IssueDescriptionURL: issue.CreateIssueURL(),
 		IssueType:           snyk.DependencyVulnerability,
-		CodeActions:         issue.AddCodeActions(learnService, ep),
+		CodeActions:         issue.AddCodeActions(learnService, getFromCache(affectedFilePath, iv), ep),
 		Ecosystem:           issue.PackageManager,
 		CWEs:                issue.Identifiers.CWE,
 		CVEs:                issue.Identifiers.CVE,
@@ -274,6 +308,7 @@ func convertScanResultToIssues(
 	ls learn.Service,
 	ep error_reporting.ErrorReporter,
 	packageIssueCache map[string][]snyk.Issue,
+	iv inlineValueMap,
 ) []snyk.Issue {
 	var issues []snyk.Issue
 
@@ -286,7 +321,7 @@ func convertScanResultToIssues(
 			continue
 		}
 		issueRange := findRange(issue, path, fileContent)
-		snykIssue := toIssue(path, issue, res, issueRange, ls, ep)
+		snykIssue := toIssue(path, issue, res, issueRange, ls, ep, iv)
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		issues = append(issues, snykIssue)
 		duplicateCheckMap[duplicateKey] = true

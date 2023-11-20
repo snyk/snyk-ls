@@ -57,3 +57,7 @@ func filterInlineValuesForRange(inlineValues []snyk.InlineValue, myRange snyk.Ra
 func addToCache(iv snyk.InlineValue, cache inlineValueMap) {
 	cache[iv.Path()] = append(cache[iv.Path()], iv)
 }
+
+func getFromCache(path string, cache inlineValueMap) []snyk.InlineValue {
+	return cache[path]
+}
