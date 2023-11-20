@@ -132,6 +132,17 @@ func TestSnykCodeBackendService_doCall_shouldRetry(t *testing.T) {
 	assert.Equal(t, 3, d.calls)
 }
 
+func TestSnykCodeBackendService_doCall_rejected(t *testing.T) {
+	testutil.UnitTest(t)
+	dummyClientFunc := func() *http.Client {
+		return &http.Client{}
+	}
+
+	s := NewHTTPRepository(performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), dummyClientFunc)
+	_, err := s.doCall(context.Background(), "GET", "https://127.0.0.1", nil)
+	assert.Error(t, err)
+}
+
 func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 	testutil.SmokeTest(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
