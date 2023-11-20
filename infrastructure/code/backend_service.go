@@ -39,8 +39,9 @@ import (
 )
 
 const (
-	completeStatus     = "COMPLETE"
-	codeDescriptionURL = "https://docs.snyk.io/scan-applications/snyk-code/security-rules-used-by-snyk-code"
+	completeStatus                = "COMPLETE"
+	codeDescriptionURL            = "https://docs.snyk.io/scan-using-snyk/snyk-code/snyk-code-security-rules"
+	failedToObtainRequestIdString = "Failed to obtain request id. "
 )
 
 var (
@@ -343,7 +344,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 
 	requestId, err := performance2.GetTraceId(span.Context())
 	if err != nil {
-		log.Err(err).Str("method", method).Msg("Failed to obtain request id. " + err.Error())
+		log.Err(err).Str("method", method).Msg(failedToObtainRequestIdString + err.Error())
 		return nil, AnalysisStatus{}, err
 	}
 	log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis for bundle")
@@ -438,7 +439,7 @@ func (s *SnykCodeHTTPClient) RunAutofix(
 
 	requestId, err := performance2.GetTraceId(span.Context())
 	if err != nil {
-		log.Err(err).Str("method", method).Msg("Failed to obtain request id. " + err.Error())
+		log.Err(err).Str("method", method).Msg(failedToObtainRequestIdString + err.Error())
 		return nil, AutofixStatus{}, err
 	}
 	log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving autofix for bundle")
@@ -515,7 +516,7 @@ func (s *SnykCodeHTTPClient) SubmitAutofixFeedback(ctx context.Context, fixId st
 
 	requestId, err := performance2.GetTraceId(span.Context())
 	if err != nil {
-		log.Err(err).Str("method", method).Msg("Failed to obtain request id. " + err.Error())
+		log.Err(err).Str("method", method).Msg(failedToObtainRequestIdString + err.Error())
 		return err
 	}
 
@@ -553,18 +554,18 @@ func getCodeApiUrl(c *config.Config) (string, error) {
 	if !c.IsFedramp() {
 		return c.SnykCodeApi(), nil
 	}
-	url, err := url.Parse(c.SnykCodeApi())
+	u, err := url.Parse(c.SnykCodeApi())
 	if err != nil {
 		return "", err
 	}
 
-	url.Host = codeApiRegex.ReplaceAllString(url.Host, "api.")
+	u.Host = codeApiRegex.ReplaceAllString(u.Host, "api.")
 
 	if c.Organization() == "" {
 		return "", errors.New("Organization is required in a fedramp environment")
 	}
 
-	url.Path = "/hidden/orgs/" + c.Organization() + "/code"
+	u.Path = "/hidden/orgs/" + c.Organization() + "/code"
 
-	return url.String(), nil
+	return u.String(), nil
 }
