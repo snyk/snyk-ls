@@ -39,11 +39,13 @@ func SendAnalyticsToAPI(c *config.Config, payload []byte) error {
 	)
 
 	engine := c.Engine()
+	configuration := engine.GetConfiguration().Clone()
+	configuration.Set("experimental", true)
 
 	_, err := engine.InvokeWithInputAndConfig(
 		localworkflows.WORKFLOWID_REPORT_ANALYTICS,
 		[]workflow.Data{inputData},
-		engine.GetConfiguration(),
+		configuration,
 	)
 
 	if err != nil {
