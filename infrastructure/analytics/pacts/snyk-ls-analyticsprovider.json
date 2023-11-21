@@ -18,7 +18,7 @@
               "application": "snyk-cli",
               "application_version": "1.1233.0",
               "arch": "AMD64",
-              "deviceId": "unique-uuid",
+              "device_id": "unique-uuid",
               "duration_ms": "1000",
               "event_type": "Scan done",
               "integration_environment": "IntelliJ Ultimate",
