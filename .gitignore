@@ -47,3 +47,5 @@ webidentity.json
 
 infrastructure/snyk_api/pacts/snykls-snykapi.json
 infrastructure/code/pacts/snykls-snykcodeapi.json
+infrastructure/analytics/pacts/snyk-ls-analyticsprovider.json
+infrastructure/oss/testdata/go.sum
