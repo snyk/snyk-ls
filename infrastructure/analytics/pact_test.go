@@ -73,7 +73,7 @@ func getExpectedBodyRequest() map[string]interface{} {
 		"data": map[string]interface{}{
 			"type": "analytics",
 			"attributes": map[string]interface{}{
-				"deviceId":                        "unique-uuid",
+				"device_id":                       "unique-uuid",
 				"application":                     "snyk-cli",
 				"application_version":             "1.1233.0",
 				"os":                              "Windows",

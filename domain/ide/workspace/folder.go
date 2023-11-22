@@ -50,8 +50,8 @@ const (
 var (
 	os = map[string]string{
 		"darwin":  "macOS",
-		"linux":   "Linux",
-		"windows": "Windows",
+		"linux":   "linux",
+		"windows": "windows",
 	}
 
 	arch = map[string]string{

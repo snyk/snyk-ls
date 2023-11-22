@@ -47,7 +47,7 @@ func GetActiveUser() (*ActiveUser, error) {
 	} else {
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, 0)
 	}
-	conf.Set("experimental", true)
+	conf.Set(configuration.FLAG_EXPERIMENTAL, true)
 	conf.Set("json", true)
 	result, err := c.Engine().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, conf)
 

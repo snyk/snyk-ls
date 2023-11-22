@@ -17,6 +17,7 @@
 package analytics
 
 import (
+	configuration2 "github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -39,11 +40,13 @@ func SendAnalyticsToAPI(c *config.Config, payload []byte) error {
 	)
 
 	engine := c.Engine()
+	configuration := engine.GetConfiguration().Clone()
+	configuration.Set(configuration2.FLAG_EXPERIMENTAL, true)
 
 	_, err := engine.InvokeWithInputAndConfig(
 		localworkflows.WORKFLOWID_REPORT_ANALYTICS,
 		[]workflow.Data{inputData},
-		engine.GetConfiguration(),
+		configuration,
 	)
 
 	if err != nil {
