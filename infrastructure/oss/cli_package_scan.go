@@ -67,11 +67,18 @@ func (cliScanner *CLIScanner) ScanPackages(
 	notCached := cliScanner.updateCachedDependencies(dependencies)
 
 	if len(notCached) > 0 {
-		commandFunc := func(_ []string) (deps []string) {
+		commandFunc := func(_ []string, _ map[string]bool) (deps []string) {
 			for _, d := range notCached {
 				deps = append(deps, d.ArtifactID+"@"+d.Version)
 			}
-			return cliScanner.prepareScanCommand(deps)
+
+			blacklist := map[string]bool{
+				"":               true,
+				"--all-projects": true,
+				"--dev":          true,
+			}
+
+			return cliScanner.prepareScanCommand(deps, blacklist)
 		}
 		_, err := cliScanner.scanInternal(ctx, path, commandFunc)
 		if err != nil {

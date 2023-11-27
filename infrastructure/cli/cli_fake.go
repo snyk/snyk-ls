@@ -32,6 +32,7 @@ type TestExecutor struct {
 	startedScans    int
 	finishedScans   int
 	counterLock     sync.RWMutex
+	cmd             []string
 }
 
 func NewTestExecutor() *TestExecutor {
@@ -62,7 +63,12 @@ func (t *TestExecutor) GetFinishedScans() int {
 	return t.finishedScans
 }
 
-func (t *TestExecutor) Execute(ctx context.Context, _ []string, _ string) (resp []byte, err error) {
+func (t *TestExecutor) GetCommand() []string {
+	return t.cmd
+}
+
+func (t *TestExecutor) Execute(ctx context.Context, cmd []string, _ string) (resp []byte, err error) {
+	t.cmd = cmd
 	err = ctx.Err()
 	if err != nil { // Checking for ctx cancellation before faking CLI execution
 		return resp, err

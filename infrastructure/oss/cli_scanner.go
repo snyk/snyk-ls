@@ -153,7 +153,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, path string, _ string) (
 func (cliScanner *CLIScanner) scanInternal(
 	ctx context.Context,
 	path string,
-	commandFunc func(args []string) []string,
+	commandFunc func(args []string, parameterBlacklist map[string]bool) []string,
 ) (issues []snyk.Issue,
 	err error) {
 	method := "cliScanner.Scan"
@@ -200,7 +200,7 @@ func (cliScanner *CLIScanner) scanInternal(
 	cliScanner.runningScans[workDir] = newScan
 	cliScanner.mutex.Unlock()
 
-	cmd := commandFunc([]string{workDir})
+	cmd := commandFunc([]string{workDir}, map[string]bool{"": true})
 	res, err := cliScanner.cli.Execute(ctx, cmd, workDir)
 	noCancellation := ctx.Err() == nil
 	if err != nil {
@@ -227,7 +227,7 @@ func (cliScanner *CLIScanner) scanInternal(
 	return issues, nil
 }
 
-func (cliScanner *CLIScanner) prepareScanCommand(args []string) []string {
+func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool) []string {
 	cmd := cliScanner.cli.ExpandParametersFromConfig([]string{
 		config.CurrentConfig().CliSettings().Path(),
 		"test",
@@ -236,7 +236,7 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string) []string {
 	cmd = append(cmd, "--json")
 	additionalParams := config.CurrentConfig().CliSettings().AdditionalOssParameters
 	for _, parameter := range additionalParams {
-		if parameter == "" {
+		if parameterBlacklist[parameter] {
 			continue
 		}
 		cmd = append(cmd, parameter)

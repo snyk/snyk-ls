@@ -40,6 +40,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
+const testDataPackageJson = "/testdata/package.json"
+
 // todo test issue parsing & conversion
 
 func Test_toIssueSeverity(t *testing.T) {
@@ -77,7 +79,7 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 	executor := cli.NewTestExecutor()
 	fileContent, _ := os.ReadFile(workingDir + "/testdata/oss-result.json")
 	executor.ExecuteResponse = fileContent
-	p, _ := filepath.Abs(workingDir + "/testdata/package.json")
+	p, _ := filepath.Abs(workingDir + testDataPackageJson)
 
 	scanner := NewCLIScanner(
 		performance.NewInstrumentor(),
@@ -302,7 +304,7 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 		c,
 	)
 	wg := sync.WaitGroup{}
-	p, _ := filepath.Abs(workingDir + "/testdata/package.json")
+	p, _ := filepath.Abs(workingDir + testDataPackageJson)
 
 	// Act
 	for i := 0; i < concurrentScanRequests; i++ {
@@ -352,7 +354,7 @@ func Test_prepareScanCommand_ExpandsAdditionalParameters(t *testing.T) {
 	}
 	c.SetCliSettings(&settings)
 
-	cmd := scanner.prepareScanCommand([]string{"a"})
+	cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{})
 
 	assert.Contains(t, cmd, "--all-projects")
 	assert.Contains(t, cmd, "-d")
@@ -376,7 +378,7 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	t.Cleanup(cancel)
-	targetFile, _ := filepath.Abs(workingDir + "/testdata/package.json")
+	targetFile, _ := filepath.Abs(workingDir + testDataPackageJson)
 
 	// Act
 	_, _ = scanner.Scan(ctx, targetFile, "")
@@ -403,7 +405,7 @@ func Test_scheduleNewScan_CapturesAnalytics(t *testing.T) {
 
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
-	p, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
+	p, _ := filepath.Abs(path.Join(workingDir, testDataPackageJson))
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
@@ -440,7 +442,7 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
-	p, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
+	p, _ := filepath.Abs(path.Join(workingDir, testDataPackageJson))
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
@@ -471,7 +473,7 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
-	targetPath, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
+	targetPath, _ := filepath.Abs(path.Join(workingDir, testDataPackageJson))
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	t.Cleanup(cancel1)
@@ -504,7 +506,7 @@ func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testin
 
 	scanner.refreshScanWaitDuration = 2 * time.Second
 	workingDir, _ := os.Getwd()
-	targetPath, _ := filepath.Abs(path.Join(workingDir, "/testdata/package.json"))
+	targetPath, _ := filepath.Abs(path.Join(workingDir, testDataPackageJson))
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Act
@@ -535,7 +537,7 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 		notification.NewNotifier(),
 		c,
 	)
-	filePath, _ := filepath.Abs(workingDir + "/testdata/package.json")
+	filePath, _ := filepath.Abs(workingDir + testDataPackageJson)
 
 	// Act
 	analysis, err := scanner.Scan(context.Background(), filePath, "")
