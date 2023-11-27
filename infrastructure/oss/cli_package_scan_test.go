@@ -39,18 +39,19 @@ import (
 func TestCLIScanner_ScanPackages_WithoutContent(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	testFile, scanner := setupCLIScannerAsPackageScanner(t, c)
+	testFilePath, scanner, cliExecutor := setupCLIScannerAsPackageScanner(t, c)
 
-	scanner.ScanPackages(context.Background(), c, testFile, "")
+	scanner.ScanPackages(context.Background(), c, testFilePath, "")
 
 	assert.Len(t, scanner.inlineValues, 1)
 	assert.Len(t, scanner.packageIssueCache, 2)
+	assert.NotContainsf(t, cliExecutor.GetCommand(), "--all-projects", "expected --all-projects NOT to be set")
 }
 
 func TestCLIScanner_ScanPackages_WithContent(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	testFilePath, scanner := setupCLIScannerAsPackageScanner(t, c)
+	testFilePath, scanner, _ := setupCLIScannerAsPackageScanner(t, c)
 
 	bytes, err := os.ReadFile(testFilePath)
 	fileContent := string(bytes)
@@ -65,7 +66,7 @@ func TestCLIScanner_ScanPackages_WithContent(t *testing.T) {
 func TestCLIScanner_ScanPackages_WithContentAndNotSupportedFileExtension(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	testFilePath, scanner := setupCLIScannerAsPackageScanner(t, c)
+	testFilePath, scanner, _ := setupCLIScannerAsPackageScanner(t, c)
 
 	bytes, err := os.ReadFile(testFilePath)
 	fileContent := string(bytes)
@@ -79,21 +80,21 @@ func TestCLIScanner_ScanPackages_WithContentAndNotSupportedFileExtension(t *test
 
 func TestCLIScanner_isPackageScanSupported_Positive(t *testing.T) {
 	c := testutil.UnitTest(t)
-	_, cliScanner := setupCLIScannerAsPackageScanner(t, c)
+	_, cliScanner, _ := setupCLIScannerAsPackageScanner(t, c)
 
 	assert.True(t, cliScanner.isPackageScanSupported("test.html"))
 	assert.True(t, cliScanner.isPackageScanSupported("test.htm"))
 }
 func TestCLIScanner_isPackageScanSupported_Negative(t *testing.T) {
 	c := testutil.UnitTest(t)
-	_, cliScanner := setupCLIScannerAsPackageScanner(t, c)
+	_, cliScanner, _ := setupCLIScannerAsPackageScanner(t, c)
 
 	assert.False(t, cliScanner.isPackageScanSupported("test.php"))
 }
 
 func TestCLIScanner_updateCachedDependencies_returns_not_cached_deps(t *testing.T) {
 	c := testutil.UnitTest(t)
-	_, cliScanner := setupCLIScannerAsPackageScanner(t, c)
+	_, cliScanner, _ := setupCLIScannerAsPackageScanner(t, c)
 
 	dependencies := []parser.Dependency{
 		{
@@ -113,7 +114,7 @@ func TestCLIScanner_updateCachedDependencies_returns_not_cached_deps(t *testing.
 
 func TestCLIScanner_updateCachedDependencies_updates_range_of_issues_in_cache(t *testing.T) {
 	c := testutil.UnitTest(t)
-	testFilePath, cliScanner := setupCLIScannerAsPackageScanner(t, c)
+	testFilePath, cliScanner, _ := setupCLIScannerAsPackageScanner(t, c)
 
 	// first (=cache deps)
 	cliScanner.ScanPackages(context.Background(), c, testFilePath, "")
@@ -152,7 +153,10 @@ func TestCLIScanner_updateCachedDependencies_updates_range_of_issues_in_cache(t 
 
 }
 
-func setupCLIScannerAsPackageScanner(t *testing.T, c *config.Config) (string, *CLIScanner) {
+func setupCLIScannerAsPackageScanner(t *testing.T, c *config.Config) (string, *CLIScanner, *cli.TestExecutor) {
+	c.SetCliSettings(&config.CliSettings{
+		AdditionalOssParameters: []string{"--all-projects"},
+	})
 	notifier := notification.NewMockNotifier()
 	instrumentor := performance.NewInstrumentor()
 	errorReporter := error_reporting.NewTestErrorReporter()
@@ -172,5 +176,5 @@ func setupCLIScannerAsPackageScanner(t *testing.T, c *config.Config) (string, *C
 		notifier,
 		c,
 	).(*CLIScanner)
-	return testFilePath, scanner
+	return testFilePath, scanner, cliExecutor
 }
