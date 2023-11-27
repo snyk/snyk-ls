@@ -67,6 +67,7 @@ func Test_determineTargetFile(t *testing.T) {
 	assert.Equal(t, "package.json", scanner.determineTargetFile("package-lock.json"))
 	assert.Equal(t, "pom.xml", scanner.determineTargetFile("pom.xml"))
 	assert.Equal(t, "asdf", scanner.determineTargetFile("asdf"))
+	assert.Equal(t, "js/package.json", scanner.determineTargetFile("js/package-lock.json"))
 }
 
 func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
