@@ -342,11 +342,13 @@ func (cliScanner *CLIScanner) handleError(path string, err error, res []byte, cm
 }
 
 func (cliScanner *CLIScanner) determineTargetFile(displayTargetFile string) string {
-	targetFile := lockFilesToManifestMap[displayTargetFile]
-	if targetFile == "" {
+	fileName := filepath.Base(displayTargetFile)
+	targetFileName := lockFilesToManifestMap[fileName]
+	if targetFileName == "" {
 		return displayTargetFile
 	}
-	return targetFile
+	targetFileName = strings.Replace(displayTargetFile, fileName, targetFileName, 1)
+	return targetFileName
 }
 
 func (cliScanner *CLIScanner) retrieveIssues(
