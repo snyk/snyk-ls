@@ -112,10 +112,10 @@ func getFixedIn(issue *ossIssue) string {
 
 func getOutdatedDependencyMessage(issue *ossIssue) string {
 	remediationAdvice := fmt.Sprintf("Your dependencies are out of date, "+
-		"otherwise you would be using a newer %s than %s@%s.", issue.Name, issue.Name, issue.Version)
+		"otherwise you would be using a newer %s than %s@%s. ", issue.Name, issue.Name, issue.Version)
 
 	if issue.PackageManager == "npm" || issue.PackageManager == "yarn" || issue.PackageManager == "yarn-workspace" {
-		remediationAdvice += "Try relocking your lockfile or deleting <code>node_modules</code> and reinstalling" +
+		remediationAdvice += "Try relocking your lockfile or deleting node_modules and reinstalling" +
 			" your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
 	} else {
 		remediationAdvice += "Try reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
@@ -127,27 +127,8 @@ func getDetailedPaths(issue *ossIssue) string {
 	detailedPathHtml := ""
 
 	for _, matchingIssue := range issue.matchingIssues {
-		hasUpgradePath := len(matchingIssue.UpgradePath) > 1
+		remediationAdvice := getRemediationAdvice(matchingIssue)
 		introducedThrough := strings.Join(matchingIssue.From, " > ")
-		isOutdated := hasUpgradePath && matchingIssue.UpgradePath[1] == matchingIssue.From[1]
-		remediationAdvice := "none"
-		upgradeMessage := ""
-
-		if matchingIssue.IsUpgradable || matchingIssue.IsPatchable {
-			if hasUpgradePath {
-				upgradeMessage = "Upgrade to " + matchingIssue.UpgradePath[1].(string)
-			}
-
-			if isOutdated {
-				if matchingIssue.IsPatchable {
-					remediationAdvice = upgradeMessage
-				} else {
-					remediationAdvice = getOutdatedDependencyMessage(&matchingIssue)
-				}
-			} else {
-				remediationAdvice = upgradeMessage
-			}
-		}
 
 		detailedPathHtml += fmt.Sprintf(`<div class="summary-item path">
 						<div class="label font-light">Introduced through</div>
@@ -160,6 +141,29 @@ func getDetailedPaths(issue *ossIssue) string {
 	}
 
 	return detailedPathHtml
+}
+
+func getRemediationAdvice(matchingIssue ossIssue) string {
+	hasUpgradePath := len(matchingIssue.UpgradePath) > 1
+	isOutdated := hasUpgradePath && matchingIssue.UpgradePath[1] == matchingIssue.From[1]
+	remediationAdvice := "No remediation advice available"
+	upgradeMessage := ""
+	if matchingIssue.IsUpgradable || matchingIssue.IsPatchable {
+		if hasUpgradePath {
+			upgradeMessage = "Upgrade to " + matchingIssue.UpgradePath[1].(string)
+		}
+
+		if isOutdated {
+			if matchingIssue.IsPatchable {
+				remediationAdvice = upgradeMessage
+			} else {
+				remediationAdvice = getOutdatedDependencyMessage(&matchingIssue)
+			}
+		} else {
+			remediationAdvice = upgradeMessage
+		}
+	}
+	return remediationAdvice
 }
 
 func getDetailsHtml(issue *ossIssue) string {
