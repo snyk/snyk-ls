@@ -174,17 +174,7 @@ func toIssue(
 	if config.CurrentConfig().Format() == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 	}
-	var action = "No fix available."
-	var resolution = ""
-	if issue.IsUpgradable {
-		action = "Upgrade to:"
-		resolution = issue.UpgradePath[len(issue.UpgradePath)-1].(string)
-	} else {
-		if len(issue.FixedIn) > 0 {
-			action = "No direct upgrade path, fixed in:"
-			resolution = fmt.Sprintf("%s@%s", issue.PackageName, issue.FixedIn[0])
-		}
-	}
+	remediationAdvice := getRemediationAdvice(issue)
 
 	// find all issues with the same id
 	matchingIssues := []ossIssue{}
@@ -196,12 +186,17 @@ func toIssue(
 	issue.matchingIssues = matchingIssues
 
 	message := fmt.Sprintf(
-		"%s affecting package %s. %s %s (Snyk)",
+		"%s affecting package %s. %s",
 		title,
 		issue.PackageName,
-		action,
-		resolution,
+		remediationAdvice,
 	)
+
+	const maxLength = 200
+	if len(message) > maxLength {
+		message = message[:maxLength] + "... (Snyk)"
+	}
+
 	return snyk.Issue{
 		ID:                  issue.Id,
 		Message:             message,
@@ -216,53 +211,53 @@ func toIssue(
 		Ecosystem:           issue.PackageManager,
 		CWEs:                issue.Identifiers.CWE,
 		CVEs:                issue.Identifiers.CVE,
-		AdditionalData:      issue.toAdditionalData(affectedFilePath, scanResult),
+		AdditionalData:      issue.toAdditionalData(scanResult),
 	}
 }
 
-func (o ossIssue) toAdditionalData(filepath string, scanResult *scanResult) snyk.OssIssueData {
+func (i *ossIssue) toAdditionalData(scanResult *scanResult) snyk.OssIssueData {
 	var additionalData snyk.OssIssueData
-	additionalData.Key = o.Id
-	additionalData.Title = o.Title
-	additionalData.Name = o.Name
-	additionalData.LineNumber = o.LineNumber
-	additionalData.Description = o.Description
-	additionalData.References = o.toReferences()
-	additionalData.Version = o.Version
-	additionalData.License = o.License
-	additionalData.PackageManager = o.PackageManager
-	additionalData.PackageName = o.PackageName
-	additionalData.From = o.From
-	additionalData.FixedIn = o.FixedIn
-	additionalData.UpgradePath = o.UpgradePath
-	additionalData.IsUpgradable = o.IsUpgradable
-	additionalData.CVSSv3 = o.CVSSv3
-	additionalData.CvssScore = o.CvssScore
-	additionalData.Exploit = o.Exploit
-	additionalData.IsPatchable = o.IsPatchable
+	additionalData.Key = i.Id
+	additionalData.Title = i.Title
+	additionalData.Name = i.Name
+	additionalData.LineNumber = i.LineNumber
+	additionalData.Description = i.Description
+	additionalData.References = i.toReferences()
+	additionalData.Version = i.Version
+	additionalData.License = i.License
+	additionalData.PackageManager = i.PackageManager
+	additionalData.PackageName = i.PackageName
+	additionalData.From = i.From
+	additionalData.FixedIn = i.FixedIn
+	additionalData.UpgradePath = i.UpgradePath
+	additionalData.IsUpgradable = i.IsUpgradable
+	additionalData.CVSSv3 = i.CVSSv3
+	additionalData.CvssScore = i.CvssScore
+	additionalData.Exploit = i.Exploit
+	additionalData.IsPatchable = i.IsPatchable
 	additionalData.ProjectName = scanResult.ProjectName
 	additionalData.DisplayTargetFile = scanResult.DisplayTargetFile
-	additionalData.Language = o.Language
-	additionalData.Details = getDetailsHtml(&o)
+	additionalData.Language = i.Language
+	additionalData.Details = getDetailsHtml(i)
 
 	return additionalData
 }
 
-func (o ossIssue) toReferences() []snyk.Reference {
+func (i *ossIssue) toReferences() []snyk.Reference {
 	var references []snyk.Reference
-	for _, ref := range o.References {
+	for _, ref := range i.References {
 		references = append(references, ref.toReference())
 	}
 	return references
 }
 
 func (r reference) toReference() snyk.Reference {
-	url, err := url.Parse(string(r.Url))
+	u, err := url.Parse(string(r.Url))
 	if err != nil {
 		log.Err(err).Msg("Unable to parse reference url: " + string(r.Url))
 	}
 	return snyk.Reference{
-		Url:   url,
+		Url:   u,
 		Title: r.Title,
 	}
 }
