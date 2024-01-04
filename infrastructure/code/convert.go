@@ -350,6 +350,7 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 				Rows:               [2]int{startLine, endLine},
 				IsSecurityType:     isSecurityType,
 				IsAutofixable:      result.Properties.IsAutofixable,
+				PriorityScore:      result.Properties.PriorityScore,
 			}
 
 			d := snyk.Issue{

@@ -220,6 +220,7 @@ func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, folderPath s
 				Text:               additionalData.Text,
 				Cols:               additionalData.Cols,
 				Rows:               additionalData.Rows,
+				PriorityScore:      additionalData.PriorityScore,
 
 				Markers: markers,
 				LeadURL: "",
