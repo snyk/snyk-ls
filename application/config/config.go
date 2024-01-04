@@ -45,6 +45,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
@@ -520,7 +521,7 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 		}
 	}
 
-	scrubbingMultilevelWriter := logging.NewScrubbingWriter(zerolog.MultiLevelWriter(writers...), c.scrubDict)
+	scrubbingMultilevelWriter := frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(writers...), c.scrubDict)
 	writer := zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
 		w.Out = scrubbingMultilevelWriter
 		w.NoColor = true
