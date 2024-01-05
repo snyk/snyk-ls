@@ -640,6 +640,7 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	assert.Equal(t, references, issue.References)
 	assert.Contains(t, issue.FormattedMessage, "Example Commit Fixes")
 	assert.Equal(t, markersForSampleSarifResponse(path), issue.AdditionalData.(snyk.CodeIssueData).Markers)
+	assert.Equal(t, 550, issue.AdditionalData.(snyk.CodeIssueData).PriorityScore)
 	assert.Equal(t, resp.Sarif.Runs[0].Tool.Driver.Rules[0].Properties.Cwe, issue.CWEs)
 }
 

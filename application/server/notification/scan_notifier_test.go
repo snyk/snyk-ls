@@ -113,6 +113,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 				Cols:               lsp2.Point{1, 1},
 				Rows:               lsp2.Point{1, 1},
 				Markers:            []lsp2.Marker{},
+				PriorityScore:      880,
 			},
 		},
 	}
@@ -186,6 +187,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 				Cols:               snyk.CodePoint{1, 1},
 				Rows:               snyk.CodePoint{1, 1},
 				Markers:            []snyk.Marker{},
+				PriorityScore:      880,
 			},
 		},
 	}
