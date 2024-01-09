@@ -505,7 +505,8 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	}
 
 	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
-	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).Times(0)
+	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(),
+		gomock.Any()).Times(1)
 
 	// Act
 	f.processResults(scanData)
