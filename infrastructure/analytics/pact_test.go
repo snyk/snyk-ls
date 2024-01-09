@@ -35,7 +35,6 @@ func TestAnalyticsProviderPact(t *testing.T) {
 		c.SetToken("token")
 		c.SetOrganization(orgUUID)
 		c.UpdateApiEndpoints(base)
-		c.SetAnalyticsEnabled(true)
 		expectedBody := getExpectedBodyRequest()
 		bodyBytes, err := json.Marshal(expectedBody)
 		assert.NoError(t, err)

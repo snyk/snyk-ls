@@ -454,7 +454,6 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 }
 func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetAnalyticsEnabled(true)
 
 	engineMock, gafConfig := setUpEngineMock(t, c)
 
@@ -509,7 +508,6 @@ func Test_processResults_ShouldNotSendAnalyticsToAPIIfDisabled(t *testing.T) {
 
 func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetAnalyticsEnabled(false)
 
 	engineMock, gafConfig := setUpEngineMock(t, c)
 
@@ -539,7 +537,6 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 
 func Test_IncrementSeverityCount(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetAnalyticsEnabled(false)
 
 	engineMock, gafConfig := setUpEngineMock(t, c)
 
