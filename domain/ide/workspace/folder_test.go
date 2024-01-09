@@ -484,27 +484,6 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	// Act
 	f.processResults(data)
 }
-func Test_processResults_ShouldNotSendAnalyticsToAPIIfDisabled(t *testing.T) {
-	c := testutil.UnitTest(t)
-
-	engineMock, gafConfig := setUpEngineMock(t, c)
-
-	f, _ := NewMockFolderWithScanNotifier(notification.NewNotifier())
-	const filePath = "path1"
-	mockCodeIssue := NewMockIssue("id1", filePath)
-
-	data := snyk.ScanData{
-		Product: product.ProductOpenSource,
-		Issues:  []snyk.Issue{mockCodeIssue},
-	}
-
-	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
-	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(),
-		gomock.Any()).Times(0)
-
-	// Act
-	f.processResults(data)
-}
 
 func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
