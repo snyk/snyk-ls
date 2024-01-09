@@ -483,6 +483,8 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 
 	// Act
 	f.processResults(data)
+	// wait for async analytics sending
+	time.Sleep(time.Second)
 }
 
 func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
@@ -513,6 +515,9 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 
 	// Assert
 	require.Equal(t, 2, scanData.SeverityCount[product.ProductOpenSource].Critical)
+
+	// wait for async analytics sending
+	time.Sleep(time.Second)
 }
 
 func Test_IncrementSeverityCount(t *testing.T) {
