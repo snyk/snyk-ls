@@ -207,7 +207,7 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 
 	}
 	log.Debug().Str("method", "processResults").Interface("scanData", scanData).Msg("Finished processing results. Sending analytics.")
-	sendAnalytics(&scanData)
+	go sendAnalytics(&scanData)
 
 	// Filter and publish cached diagnostics
 	f.FilterAndPublishCachedDiagnostics(scanData.Product)
