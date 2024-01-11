@@ -52,7 +52,7 @@ func TestAnalyticsProviderPact(t *testing.T) {
 		UponReceiving("A request to create analytics data").
 		WithRequest(dsl.Request{
 			Method: "POST",
-			Path:   dsl.String("/rest/api/orgs/" + orgUUID + "/analytics"),
+			Path:   dsl.String("/hidden/orgs/" + orgUUID + "/analytics"),
 			Body:   getExpectedBodyRequest(),
 		}).
 		WillRespondWith(dsl.Response{
