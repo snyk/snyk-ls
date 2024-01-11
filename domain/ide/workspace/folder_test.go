@@ -454,7 +454,6 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 }
 func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetAnalyticsEnabled(true)
 
 	engineMock, gafConfig := setUpEngineMock(t, c)
 
@@ -484,32 +483,12 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 
 	// Act
 	f.processResults(data)
-}
-func Test_processResults_ShouldNotSendAnalyticsToAPIIfDisabled(t *testing.T) {
-	c := testutil.UnitTest(t)
-
-	engineMock, gafConfig := setUpEngineMock(t, c)
-
-	f, _ := NewMockFolderWithScanNotifier(notification.NewNotifier())
-	const filePath = "path1"
-	mockCodeIssue := NewMockIssue("id1", filePath)
-
-	data := snyk.ScanData{
-		Product: product.ProductOpenSource,
-		Issues:  []snyk.Issue{mockCodeIssue},
-	}
-
-	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
-	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(),
-		gomock.Any()).Times(0)
-
-	// Act
-	f.processResults(data)
+	// wait for async analytics sending
+	time.Sleep(time.Second)
 }
 
 func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetAnalyticsEnabled(false)
 
 	engineMock, gafConfig := setUpEngineMock(t, c)
 
@@ -528,18 +507,21 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	}
 
 	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
-	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).Times(0)
+	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(),
+		gomock.Any()).Times(1)
 
 	// Act
 	f.processResults(scanData)
 
 	// Assert
 	require.Equal(t, 2, scanData.SeverityCount[product.ProductOpenSource].Critical)
+
+	// wait for async analytics sending
+	time.Sleep(time.Second)
 }
 
 func Test_IncrementSeverityCount(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetAnalyticsEnabled(false)
 
 	engineMock, gafConfig := setUpEngineMock(t, c)
 
