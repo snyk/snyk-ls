@@ -4,8 +4,8 @@ metadata:
   name: snyk-ls
   annotations:
     github.com/project-slug: snyk/snyk-ls
-    github.com/team-slug: snyk/hammerhead
+    github.com/team-slug: snyk/ide
 spec:
   type: external-tooling
   lifecycle: "-"
-  owner: hammerhead
+  owner: ide
