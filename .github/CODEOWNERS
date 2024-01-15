@@ -1,8 +1,1 @@
-* @snyk/hammerhead
-**/infrastructure/code/ @snyk/hammerhead @snyk/zenith
-**/infrastructure/code/sast_enabled.go @snyk/hammerhead @snyk/zenith @snyk/nebula
-**/infrastructure/code/sast_enabled_test.go @snyk/hammerhead @snyk/zenith @snyk/nebula
-**/infrastructure/code/sast_local_engine.go @snyk/hammerhead @snyk/zenith @snyk/nebula
-**/infrastructure/code/sast_local_engine_test.go @snyk/hammerhead @snyk/zenith @snyk/nebula
-**/infrastructure/code/code_test.go @snyk/hammerhead @snyk/zenith @snyk/nebula
-
+* @snyk/ide
