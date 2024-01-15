@@ -80,7 +80,7 @@ proxy-test:
 
 instance-test:
 	@echo "==> Running instance tests with proxy"
-	@export SMOKE_TESTS=1 && cd application/server && go test -run Test_SmokeWorkspaceScanOssAndCode && cd -
+	@export SMOKE_TESTS=1 && cd application/server && go test -run Test_Smoke && cd -
 
 ## build: Build binary for default local system's OS and architecture.
 .PHONY: build
