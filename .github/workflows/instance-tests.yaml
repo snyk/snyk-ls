@@ -16,6 +16,8 @@ name: instance-tests
 on:
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: '3 * * * *'  # hourly
   push:
     branches:
       - 'main'
