@@ -134,6 +134,11 @@ func prepareTestHelper(t *testing.T, envVar string) *config.Config {
 	c.SetTrustedFolderFeatureEnabled(false)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t)
+	snykApi := os.Getenv("SNYK_API")
+	if len(snykApi) == 0 {
+		snykApi = "https://snyk.io/api"
+	}
+	c.UpdateApiEndpoints(snykApi)
 	t.Cleanup(func() {
 		cleanupFakeCliFile(c)
 	})

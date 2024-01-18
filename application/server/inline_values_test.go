@@ -56,6 +56,7 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 			ManageBinariesAutomatically: "true",
 			EnableTrustedFoldersFeature: "false",
 			Token:                       os.Getenv("SNYK_TOKEN"),
+			Endpoint:                    os.Getenv("SNYK_API"),
 		},
 	}
 	_, err = loc.Client.Call(ctx, "initialize", clientParams)
