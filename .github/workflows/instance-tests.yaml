@@ -87,7 +87,7 @@ jobs:
         if: ${{ always()}}
         with:
           # For posting a simple plain text message
-          slack-message: "Knuts test msg!! <3 "
+          payload: '{"text": "Your message here" }'
  
         uses: slackapi/slack-github-action@v1.24
         env:
