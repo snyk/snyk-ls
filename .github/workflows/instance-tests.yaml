@@ -86,7 +86,5 @@ jobs:
         #if: ${{ failure() || cancelled() }}
         if: ${{ always()}}
         uses: slackapi/slack-github-action@v1.24
-        with:
-          status ${{job.status}}
         env:
           SLACK_WEBHOOK_URL: '${{ secrets.SLACK_WEBHOOK_URL }}'
