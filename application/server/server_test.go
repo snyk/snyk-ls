@@ -1130,13 +1130,29 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	jsonRPCRecorder.ClearNotifications()
 	cleanupChannels()
 	di.Init()
-	_, _ = loc.Client.Call(ctx, "initialize", nil)
 
 	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589", t)
 	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
+
+	folder := lsp.WorkspaceFolder{
+		Name: "Test Repo",
+		Uri:  uri.PathToUri(cloneTargetDir),
+	}
+
+	clientParams := lsp.InitializeParams{
+		WorkspaceFolders: []lsp.WorkspaceFolder{folder},
+		InitializationOptions: lsp.Settings{
+			Endpoint:                    os.Getenv("SNYK_API"),
+			Token:                       os.Getenv("SNYK_TOKEN"),
+			EnableTrustedFoldersFeature: "false",
+			FilterSeverity:              lsp.DefaultSeverityFilter(),
+		},
+	}
+
+	_, _ = loc.Client.Call(ctx, "initialize", clientParams)
 
 	testPath := filepath.Join(cloneTargetDir, "app.js")
 
