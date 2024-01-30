@@ -77,7 +77,7 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) (updat
 	if currentConfig.SnykApi() != "" {
 		updatedEnv = append(updatedEnv, ApiEnvVar+"="+currentConfig.SnykApi())
 	}
-	if !currentConfig.IsTelemetryEnabled() {
+	if !currentConfig.IsTelemetryEnabled() || !currentConfig.IsAnalyticsPermitted() {
 		updatedEnv = append(updatedEnv, DisableAnalyticsEnvVar+"=1")
 	}
 

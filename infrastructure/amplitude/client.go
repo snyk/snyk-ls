@@ -180,7 +180,7 @@ func (c *Client) ScanModeIsSelected(properties ux2.ScanModeIsSelectedProperties)
 
 func (c *Client) enqueueEvent(eventFn captureEvent) {
 	conf := config.CurrentConfig()
-	if conf.IsTelemetryEnabled() && !conf.IsFedramp() {
+	if conf.IsTelemetryEnabled() && conf.IsAnalyticsPermitted() {
 		eventFn(
 			c.authenticatedUserId,
 			ampli.EventOptions{
@@ -210,7 +210,7 @@ func (c *Client) Identify() {
 	}
 	c.authenticatedUserId = userId
 
-	if !conf.IsTelemetryEnabled() || conf.IsFedramp() {
+	if !conf.IsTelemetryEnabled() || !conf.IsAnalyticsPermitted() {
 		return
 	}
 	identifyEvent := ampli.Identify.Builder().UserId(userId).Build()

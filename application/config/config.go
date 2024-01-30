@@ -67,12 +67,16 @@ const (
 )
 
 var (
-	Version            = "SNAPSHOT"
-	LsProtocolVersion  = "development"
-	Development        = "true"
-	currentConfig      *Config
-	mutex              = &sync.Mutex{}
-	LicenseInformation = "License information\n FILLED DURING BUILD"
+	Version                        = "SNAPSHOT"
+	LsProtocolVersion              = "development"
+	Development                    = "true"
+	currentConfig                  *Config
+	mutex                          = &sync.Mutex{}
+	LicenseInformation             = "License information\n FILLED DURING BUILD"
+	analyticsPermittedEnvironments = map[string]bool{
+		"api.snyk.io":    true,
+		"api.us.snyk.io": true,
+	}
 )
 
 type CliSettings struct {
@@ -231,7 +235,6 @@ func New() *Config {
 	c.UpdateApiEndpoints(DefaultSnykApiUrl)
 	c.enableSnykLearnCodeActions = true
 	c.SetTelemetryEnabled(true)
-
 	c.clientSettingsFromEnv()
 	return c
 }
@@ -871,4 +874,19 @@ func (c *Config) IdeName() string {
 
 func (c *Config) IsFedramp() bool {
 	return c.Engine().GetConfiguration().GetBool(configuration.IS_FEDRAMP)
+}
+
+func (c *Config) IsAnalyticsPermitted() bool {
+	logger := c.Logger().With().Str("method", "IsAnalyticsPermitted").Logger()
+
+	u, err := url.Parse(c.Engine().GetConfiguration().GetString(configuration.API_URL))
+
+	if err != nil {
+		logger.Error().Err(err).Msg("unable to parse configured API_URL")
+		return false
+	}
+
+	_, found := analyticsPermittedEnvironments[u.Host]
+
+	return found
 }
