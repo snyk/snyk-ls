@@ -95,6 +95,10 @@ func getTestAsset() *Release {
 				URL:          "https://static.snyk.io/cli/v1.1141.0/snyk-macos",
 				ChecksumInfo: "f1ab84a2ad80d99c6293dda5bc7a80f0511222b29150960ff74c556966000c48  snyk-macos",
 			},
+			MacOSARM64: &ReleaseAsset{
+				URL:          "https://static.snyk.io/cli/v1.1141.0/snyk-macos",
+				ChecksumInfo: "f1ab84a2ad80d99c6293dda5bc7a80f0511222b29150960ff74c556966000c48  snyk-macos",
+			},
 			Linux: &ReleaseAsset{
 				URL:          "https://static.snyk.io/cli/v1.1141.0/snyk-linux",
 				ChecksumInfo: "d516eb4623acc86225efc4d6b29e1627ce541909cbbe89175f8b0e8285d3b359  snyk-linux",
