@@ -144,7 +144,7 @@ func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 				ChecksumInfo: checksumString + "  snyk-macos",
 			},
 			MacOSARM64: &ReleaseAsset{
-				ChecksumInfo: checksumString + "  snyk-macos",
+				ChecksumInfo: checksumString + "  snyk-macos-arm64",
 			},
 			Windows: &ReleaseAsset{
 				ChecksumInfo: checksumString + "  snyk-win.exe",
