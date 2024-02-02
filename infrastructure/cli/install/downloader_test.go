@@ -92,20 +92,24 @@ func getTestAsset() *Release {
 	r := &Release{
 		Assets: &ReleaseAssets{
 			MacOS: &ReleaseAsset{
-				URL:          "https://static.snyk.io/cli/v1.1141.0/snyk-macos",
-				ChecksumInfo: "f1ab84a2ad80d99c6293dda5bc7a80f0511222b29150960ff74c556966000c48  snyk-macos",
+				URL:          "https://static.snyk.io/cli/v1.1276.0/snyk-macos",
+				ChecksumInfo: "00c7f96ce389cff3f79e920ba345efef2ab78f80ffebd8922082dfca07ed3af0  snyk-macos",
+			},
+			MacOSARM64: &ReleaseAsset{
+				URL:          "https://static.snyk.io/cli/v1.1276.0/snyk-macos-arm64",
+				ChecksumInfo: "691b455a8fdcfb31089ca460658d060b51c58b2e37dc757e8b5434ca0a9b80cf  snyk-macos-arm64",
 			},
 			Linux: &ReleaseAsset{
-				URL:          "https://static.snyk.io/cli/v1.1141.0/snyk-linux",
-				ChecksumInfo: "d516eb4623acc86225efc4d6b29e1627ce541909cbbe89175f8b0e8285d3b359  snyk-linux",
+				URL:          "https://static.snyk.io/cli/v1.1276.0/snyk-linux",
+				ChecksumInfo: "4ade26062f3631bf04ca6a75a7c560752585d2aed025a6a4be97517dbb4701ce  snyk-linux",
 			},
 			LinuxARM64: &ReleaseAsset{
-				URL:          "https://static.snyk.io/cli/v1.1141.0/snyk-linux-arm64",
-				ChecksumInfo: "6d146cd8891c79234b6be3970ef6e6168fa250dd9f1257dbba6543d25f1ae797  snyk-linux-arm64",
+				URL:          "https://static.snyk.io/cli/v1.1276.0/snyk-linux-arm64",
+				ChecksumInfo: "c26cc7e49354c24d4eeaec41445c612f3b93ad782482fbf9f7d38947815f01a8  snyk-linux-arm64",
 			},
 			Windows: &ReleaseAsset{
-				URL:          "https://static.snyk.io/cli/v1.1141.0/snyk-win.exe",
-				ChecksumInfo: "68f7dc7565f7b4efd9516b5436c8cbf9217138194141636c39264ff6e4407bf9  snyk-win.exe",
+				URL:          "https://static.snyk.io/cli/v1.1276.0/snyk-win.exe",
+				ChecksumInfo: "76f38b24fe996dcdcb6750f005f2f07044c7a01b7f355d59f88104611a2c9d65  snyk-win.exe",
 			},
 		},
 	}

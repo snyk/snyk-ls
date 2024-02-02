@@ -69,6 +69,9 @@ func TestDiscovery_ChecksumURL(t *testing.T) {
 			MacOS: &ReleaseAsset{
 				ChecksumURL: "macos-checksum-url",
 			},
+			MacOSARM64: &ReleaseAsset{
+				ChecksumURL: "macos-arm64-checksum-url",
+			},
 			Windows: &ReleaseAsset{
 				ChecksumURL: "windows-checksum-url",
 			},
