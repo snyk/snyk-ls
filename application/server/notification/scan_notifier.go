@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strconv"
 
+	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
@@ -105,6 +106,7 @@ func (n *scanNotifier) appendOssIssues(scanIssues []lsp.ScanIssue, folderPath st
 			Title:    additionalData.Title,
 			Severity: issue.Severity.String(),
 			FilePath: issue.AffectedFilePath,
+			Range:    converter.ToRange(issue.Range),
 			AdditionalData: lsp.OssIssueData{
 				License: additionalData.License,
 				Identifiers: lsp.OssIdentifiers{
@@ -147,6 +149,7 @@ func (n *scanNotifier) appendIacIssues(scanIssues []lsp.ScanIssue, folderPath st
 			Title:    additionalData.Title,
 			Severity: issue.Severity.String(),
 			FilePath: issue.AffectedFilePath,
+			Range:    converter.ToRange(issue.Range),
 			AdditionalData: lsp.IacIssueData{
 				PublicId:      additionalData.PublicId,
 				Documentation: additionalData.Documentation,
@@ -209,6 +212,7 @@ func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, folderPath s
 			Title:    issue.Message,
 			Severity: issue.Severity.String(),
 			FilePath: issue.AffectedFilePath,
+			Range:    converter.ToRange(issue.Range),
 			AdditionalData: lsp.CodeIssueData{
 				Message:            additionalData.Message,
 				Rule:               additionalData.Rule,
