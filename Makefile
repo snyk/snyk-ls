@@ -82,8 +82,8 @@ instance-test:
 	@echo "==> Running instance tests with proxy"
 	@export SMOKE_TESTS=1 && cd application/server && go test -run Test_SmokeWorkspaceScanOssAndCode && cd -
 
-smoke-test-all:
-	@echo "==> Running all smoke tests with proxy"
+instance-standard-test:
+	@echo "==> Running instance tests for the Standard environment with proxy"
 	@export SMOKE_TESTS=1 && cd application/server && go test -run Test_Smoke && cd -
 
 ## build: Build binary for default local system's OS and architecture.
