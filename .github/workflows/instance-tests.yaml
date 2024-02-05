@@ -54,8 +54,8 @@ jobs:
         run: |
           make instance-test
 
-  smoke-tests:
-    name: smoke tests (Standard)
+  instance-standard-test:
+    name: instance tests (Standard)
     runs-on: ubuntu-latest
     environment: Standard
     steps:
@@ -75,19 +75,18 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-go-
 
-      - name: Run Smoke Tests
+      - name: Run Instance Tests on Standard Environment
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
           SNYK_API: ${{ secrets.SNYK_API }}
         run: |
-          make smoke-test-all
-          
+          make instance-standard-test
+
       - name: Slack Notification
         if: ${{ failure() || cancelled() }}
         with:
           payload: '{"text": "GitHub build result: ${{ job.status }} (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n${{ github.event.pull_request.html_url || github.event.head_commit.url }}" }'
- 
+
         uses: slackapi/slack-github-action@v1.24
         env:
-          SLACK_WEBHOOK_URL: '${{ secrets.SLACK_WEBHOOK_URL }}'
-
+          SLACK_WEBHOOK_URL: "${{ secrets.SLACK_WEBHOOK_URL }}"
