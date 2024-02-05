@@ -79,12 +79,14 @@ proxy-test:
 	@docker run --rm --cap-add=NET_ADMIN --name "snyk-ls" --env "SNYK_TOKEN=$(SNYK_TOKEN)" snyk-ls:$(VERSION) go test -failfast $(NOCACHE) $(TIMEOUT) ./...
 
 instance-test:
-	@echo "==> Running instance tests with proxy"
+	@echo "==> Running instance tests"
 	@export SMOKE_TESTS=1 && cd application/server && go test -run Test_SmokeWorkspaceScanOssAndCode && cd -
 
 instance-standard-test:
-	@echo "==> Running instance tests for the Standard environment with proxy"
+	@echo "==> Running instance tests for the standard environment"
 	@export SMOKE_TESTS=1 && cd application/server && go test -run Test_Smoke && cd -
+	@echo "==> Checking Eclipse storage buckets..."
+	@curl -sSL https://storage.googleapis.com/snyk-eclipse-plugin/weekly-2.1/repository/p2.index
 
 ## build: Build binary for default local system's OS and architecture.
 .PHONY: build
