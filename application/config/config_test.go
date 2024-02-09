@@ -262,6 +262,33 @@ func Test_IsFedramp(t *testing.T) {
 
 }
 
+func Test_IsAnalyticsPermitted(t *testing.T) {
+	t.Run("Analytics not permitted for EU app", func(t *testing.T) {
+		c := New()
+		assert.True(t, c.UpdateApiEndpoints("https://app.eu.snyk.io/api"))
+		assert.False(t, c.IsAnalyticsPermitted())
+	})
+
+	t.Run("Analytics not permitted for EU api", func(t *testing.T) {
+		c := New()
+		assert.True(t, c.UpdateApiEndpoints("https://api.eu.snyk.io"))
+		assert.False(t, c.IsAnalyticsPermitted())
+	})
+
+	t.Run("Analytics permitted hostname", func(t *testing.T) {
+		c := New()
+		assert.True(t, c.UpdateApiEndpoints("https://app.snyk.io/api"))
+		assert.True(t, c.IsAnalyticsPermitted())
+	})
+
+	t.Run("Analytics permitted US hostname", func(t *testing.T) {
+		c := New()
+		assert.True(t, c.UpdateApiEndpoints("https://app.us.snyk.io/api"))
+		assert.True(t, c.IsAnalyticsPermitted())
+	})
+
+}
+
 func Test_IsTelemetryEnabled(t *testing.T) {
 	t.Setenv(EnableTelemetry, "1")
 	c := New()

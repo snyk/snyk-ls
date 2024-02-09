@@ -112,4 +112,14 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 
 		assert.Contains(t, updatedEnv, "SNYK_CFG_DISABLE_ANALYTICS=1")
 	})
+
+	t.Run("Disables analytics, if analytics are not permitted for specific ApiUrl", func(t *testing.T) {
+		testutil.UnitTest(t)
+		config.CurrentConfig().SetTelemetryEnabled(true)
+		config.CurrentConfig().UpdateApiEndpoints("https://api.eu.snyk.io/api")
+
+		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
+
+		assert.Contains(t, updatedEnv, "SNYK_CFG_DISABLE_ANALYTICS=1")
+	})
 }

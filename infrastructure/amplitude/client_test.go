@@ -72,6 +72,26 @@ func TestClient_NoIdentifyForFedramp(t *testing.T) {
 	assert.Equal(t, 0, len(fakeSegmentClient.trackedEvents))
 }
 
+func TestClient_NoIdentifyForEUEnvironments(t *testing.T) {
+	s, fakeSegmentClient, c := setupUnitTest(t)
+	c.SetTelemetryEnabled(true)
+	c.UpdateApiEndpoints("https://app.eu.snyk.io")
+
+	s.Identify()
+
+	assert.Equal(t, 0, len(fakeSegmentClient.trackedEvents))
+}
+
+func TestClient_IdentifyForUSEnvironments(t *testing.T) {
+	s, fakeSegmentClient, c := setupUnitTest(t)
+	c.SetTelemetryEnabled(true)
+	c.UpdateApiEndpoints("https://app.snyk.io")
+
+	s.Identify()
+
+	assert.Equal(t, 1, len(fakeSegmentClient.trackedEvents))
+}
+
 func Test_AnalyticEvents(t *testing.T) {
 	s, fakeSegmentClient, conf := setupUnitTest(t)
 	conf.SetRuntimeVersion("1.2.3")
@@ -175,6 +195,36 @@ func Test_AnalyticEventsNotSentForFedramp(t *testing.T) {
 	s, fakeSegmentClient, c := setupUnitTest(t)
 	c.SetTelemetryEnabled(true)
 	c.UpdateApiEndpoints("https://api.feddramp.snykgov.io")
+
+	s.PluginIsInstalled(ux.PluginIsInstalledProperties{})
+
+	assert.Equal(t, 0, len(fakeSegmentClient.trackedEvents))
+}
+
+func Test_AnalyticEventsSentForAnalyticsPermittedEnvironments(t *testing.T) {
+	s, fakeSegmentClient, c := setupUnitTest(t)
+	c.SetTelemetryEnabled(true)
+	c.UpdateApiEndpoints("https://app.snyk.io")
+
+	s.PluginIsInstalled(ux.PluginIsInstalledProperties{})
+
+	assert.Equal(t, 1, len(fakeSegmentClient.trackedEvents))
+}
+
+func Test_AnalyticEventsSentForAnalyticsPermittedUSEnvironments(t *testing.T) {
+	s, fakeSegmentClient, c := setupUnitTest(t)
+	c.SetTelemetryEnabled(true)
+	c.UpdateApiEndpoints("https://app.us.snyk.io")
+
+	s.PluginIsInstalled(ux.PluginIsInstalledProperties{})
+
+	assert.Equal(t, 1, len(fakeSegmentClient.trackedEvents))
+}
+
+func Test_AnalyticEventsNotSentForAnalyticsNotPermittedEnvironments(t *testing.T) {
+	s, fakeSegmentClient, c := setupUnitTest(t)
+	c.SetTelemetryEnabled(true)
+	c.UpdateApiEndpoints("https://app.eu.snyk.io")
 
 	s.PluginIsInstalled(ux.PluginIsInstalledProperties{})
 
