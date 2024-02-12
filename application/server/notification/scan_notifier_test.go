@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	notification2 "github.com/snyk/snyk-ls/application/server/notification"
+	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	lsp2 "github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -77,13 +78,25 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 
 	const folderPath = "/test/iac/folderPath"
 
-	// expected message uses lsp2.ScanIssue && lsp2.CodeIssueData
+	testRange := snyk.Range{
+		Start: snyk.Position{
+			Line:      1,
+			Character: 1,
+		},
+		End: snyk.Position{
+			Line:      1,
+			Character: 2,
+		},
+	}
+	lspTestRange := converter.ToRange(testRange)
+
 	expectedIacIssue := []lsp2.ScanIssue{
 		{
 			Id:       "098f6bcd4621d373cade4e832627b4f6",
 			Title:    "iacTitle",
 			Severity: "critical",
 			FilePath: "iacAffectedFilePath",
+			Range:    lspTestRange,
 			AdditionalData: lsp2.IacIssueData{
 				PublicId:      "iacID",
 				Documentation: "iacDocumentation",
@@ -101,6 +114,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 			Title:    "codeMessage",
 			Severity: "low",
 			FilePath: "codeAffectedFilePath",
+			Range:    lspTestRange,
 			AdditionalData: lsp2.CodeIssueData{
 				Message:            "codeMessage",
 				Rule:               "codeRule",
@@ -120,19 +134,10 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 
 	scanIssues := []snyk.Issue{
 		{ // IaC issue
-			ID:        "iacID",
-			Severity:  snyk.Critical,
-			IssueType: 1,
-			Range: snyk.Range{
-				Start: snyk.Position{
-					Line:      1,
-					Character: 1,
-				},
-				End: snyk.Position{
-					Line:      1,
-					Character: 2,
-				},
-			},
+			ID:                  "iacID",
+			Severity:            snyk.Critical,
+			IssueType:           1,
+			Range:               testRange,
 			Message:             "iacMessage",
 			FormattedMessage:    "iacFormattedMessage",
 			AffectedFilePath:    "iacAffectedFilePath",
@@ -153,19 +158,10 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 			},
 		},
 		{ // Code issue
-			ID:        "codeID",
-			Severity:  snyk.Low,
-			IssueType: 1,
-			Range: snyk.Range{
-				Start: snyk.Position{
-					Line:      1,
-					Character: 1,
-				},
-				End: snyk.Position{
-					Line:      1,
-					Character: 2,
-				},
-			},
+			ID:                  "codeID",
+			Severity:            snyk.Low,
+			IssueType:           1,
+			Range:               testRange,
 			Message:             "codeMessage",
 			FormattedMessage:    "codeFormattedMessage",
 			AffectedFilePath:    "codeAffectedFilePath",
@@ -218,12 +214,25 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 
 	const folderPath = "/test/oss/folderPath"
 
+	r := snyk.Range{
+		Start: snyk.Position{
+			Line:      1,
+			Character: 1,
+		},
+		End: snyk.Position{
+			Line:      1,
+			Character: 2,
+		},
+	}
+	lspTestRange := converter.ToRange(r)
+
 	expectedUIScanIssue := []lsp2.ScanIssue{
 		{
 			Id:       "OSS Key",
 			Title:    "OSS Title",
 			Severity: "critical",
 			FilePath: "ossAffectedFilePath",
+			Range:    lspTestRange,
 			AdditionalData: lsp2.OssIssueData{
 				License: "OSS License",
 				Identifiers: lsp2.OssIdentifiers{
@@ -256,19 +265,10 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 
 	issues := []snyk.Issue{
 		{ // OSS issue
-			ID:        "SNYK-JS-BABELTRAVERSE-5962463",
-			Severity:  snyk.Critical,
-			IssueType: 1,
-			Range: snyk.Range{
-				Start: snyk.Position{
-					Line:      1,
-					Character: 1,
-				},
-				End: snyk.Position{
-					Line:      1,
-					Character: 2,
-				},
-			},
+			ID:                  "SNYK-JS-BABELTRAVERSE-5962463",
+			Severity:            snyk.Critical,
+			IssueType:           1,
+			Range:               r,
 			Message:             "Incomplete List of Disallowed Inputs",
 			FormattedMessage:    "Incomplete List of Disallowed Inputs",
 			AffectedFilePath:    "ossAffectedFilePath",
@@ -331,6 +331,17 @@ func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
 	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
 
 	const folderPath = "/test/iac/folderPath"
+	r := snyk.Range{
+		Start: snyk.Position{
+			Line:      1,
+			Character: 1,
+		},
+		End: snyk.Position{
+			Line:      1,
+			Character: 2,
+		},
+	}
+	lspTestRange := converter.ToRange(r)
 
 	expectedCodeIssue := []lsp2.ScanIssue{
 		{
@@ -338,6 +349,7 @@ func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
 			Title:    "codeMessage",
 			Severity: "low",
 			FilePath: "codeAffectedFilePath",
+			Range:    lspTestRange,
 			AdditionalData: lsp2.CodeIssueData{
 				Message:            "codeMessage",
 				Rule:               "codeRule",
@@ -356,19 +368,10 @@ func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
 
 	scanIssues := []snyk.Issue{
 		{ // Code issue
-			ID:        "codeID",
-			Severity:  snyk.Low,
-			IssueType: 1,
-			Range: snyk.Range{
-				Start: snyk.Position{
-					Line:      1,
-					Character: 1,
-				},
-				End: snyk.Position{
-					Line:      1,
-					Character: 2,
-				},
-			},
+			ID:                  "codeID",
+			Severity:            snyk.Low,
+			IssueType:           1,
+			Range:               r,
 			Message:             "codeMessage",
 			FormattedMessage:    "codeFormattedMessage",
 			AffectedFilePath:    "codeAffectedFilePath",
@@ -412,6 +415,17 @@ func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
 	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
 
 	const folderPath = "/test/iac/folderPath"
+	r := snyk.Range{
+		Start: snyk.Position{
+			Line:      1,
+			Character: 1,
+		},
+		End: snyk.Position{
+			Line:      1,
+			Character: 2,
+		},
+	}
+	lspTestRange := converter.ToRange(r)
 
 	// expected message uses lsp2.ScanIssue && lsp2.CodeIssueData
 	expectedIacIssue := []lsp2.ScanIssue{
@@ -420,6 +434,7 @@ func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
 			Title:    "iacTitle",
 			Severity: "critical",
 			FilePath: "iacAffectedFilePath",
+			Range:    lspTestRange,
 			AdditionalData: lsp2.IacIssueData{
 				PublicId:      "iacID",
 				Documentation: "iacDocumentation",
@@ -433,19 +448,10 @@ func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
 
 	scanIssues := []snyk.Issue{
 		{ // IaC issue
-			ID:        "iacID",
-			Severity:  snyk.Critical,
-			IssueType: 1,
-			Range: snyk.Range{
-				Start: snyk.Position{
-					Line:      1,
-					Character: 1,
-				},
-				End: snyk.Position{
-					Line:      1,
-					Character: 2,
-				},
-			},
+			ID:                  "iacID",
+			Severity:            snyk.Critical,
+			IssueType:           1,
+			Range:               r,
 			Message:             "iacMessage",
 			FormattedMessage:    "iacFormattedMessage",
 			AffectedFilePath:    "iacAffectedFilePath",

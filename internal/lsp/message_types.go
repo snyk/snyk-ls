@@ -1025,11 +1025,12 @@ type SnykScanParams struct {
 
 type ScanIssue struct { // TODO - convert this to a generic type
 	// Unique key identifying an issue in the whole result set. Not the same as the Snyk issue ID.
-	Id             string `json:"id"`
-	Title          string `json:"title"`
-	Severity       string `json:"severity"`
-	FilePath       string `json:"filePath"`
-	AdditionalData any    `json:"additionalData,omitempty"`
+	Id             string      `json:"id"`
+	Title          string      `json:"title"`
+	Severity       string      `json:"severity"`
+	FilePath       string      `json:"filePath"`
+	Range          sglsp.Range `json:"range"`
+	AdditionalData any         `json:"additionalData,omitempty"`
 }
 
 // Snyk Open Source
