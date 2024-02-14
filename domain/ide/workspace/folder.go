@@ -188,26 +188,20 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 		return
 	}
 
-	// [DEBUG:IDE-132] The key used in `createDedupMap()` is `issue.ID + "|" + issue.AffectedFilePath`.
-	// [DEBUG:IDE-132] `documentDiagnosticCache.Load` and `documentDiagnosticCache.Store` use `issue.AffectedFilePath` as a key.
-	// [DEBUG:IDE-132] There is a mismatch between with the keys used for caching and deduplication.
 	dedupMap := f.createDedupMap()
 
 	// TODO: perform issue diffing (current <-> newly reported)
 	// Update diagnostic cache
 	for _, issue := range scanData.Issues {
-		// [DEBUG:IDE-132]
 		cachedIssues, _ := f.documentDiagnosticCache.Load(issue.AffectedFilePath)
 		if cachedIssues == nil {
 			cachedIssues = []snyk.Issue{}
 		}
-		// [DEBUG:IDE-132] The mismatch causes that the dedupMap is always empty, so the condition is always true.
 		if !dedupMap[f.getUniqueIssueID(issue)] {
 			cachedIssues = append(cachedIssues, issue)
 			incrementSeverityCount(&scanData, issue)
 		}
 
-		// [DEBUG:IDE-132]
 		f.documentDiagnosticCache.Store(issue.AffectedFilePath, cachedIssues)
 
 	}
