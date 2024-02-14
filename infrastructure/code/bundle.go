@@ -198,6 +198,8 @@ func (b *Bundle) addIssueActions(ctx context.Context, issues []snyk.Issue) {
 					issues[i].Range,
 				},
 			})
+			issueData.HasAIFix = true
+			issues[i].AdditionalData = issueData
 		}
 
 		if learnEnabled {
