@@ -376,16 +376,28 @@ func (f *Folder) publishDiagnostics(product product.Product, issuesByFile map[st
 	f.sendHovers(issuesByFile) // TODO: this locks up the thread, need to investigate
 }
 
+// `createDedupMap` constructs a map of unique issue identifiers within the `documentDiagnosticCache`.
+// Each issue is identified by the combination of its ID and the associated file path.
+// This map, with unique identifiers as keys and boolean values set to true, serves to deduplicate
+// issues by indicating their presence in the cache.
 func (f *Folder) createDedupMap() (dedupMap map[string]bool) {
 	dedupMap = make(map[string]bool)
-	f.documentDiagnosticCache.Range(func(key string, value []snyk.Issue) bool {
-		issues := value
+
+	processCacheEntry := func(key string, issues []snyk.Issue) bool {
 		for _, issue := range issues {
 			uniqueID := f.getUniqueIssueID(issue)
 			dedupMap[uniqueID] = true
 		}
-		return true
-	})
+
+		log.Debug().
+			Str("method", "createDedupMap").
+			Str("cacheEntryKey", key).
+			Int("issuesCount", len(issues)).
+			Msg("Processed cache entry.")
+		return true // Continue the iteration
+	}
+
+	f.documentDiagnosticCache.Range(processCacheEntry)
 	return dedupMap
 }
 
