@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
@@ -15,19 +13,13 @@ type TextDocumentCodeActionHandler func(context.Context, lsp.CodeActionParams) (
 type ResolveHandler func(context.Context, lsp.CodeAction) (*lsp.CodeAction, error)
 
 // ResolveCodeActionHandler returns a jrpc2.Handler that can be used to handle the "codeAction/resolve" LSP method
-func ResolveCodeActionHandler(
-	c *config.Config,
-	service *CodeActionsService,
-	server lsp.Server,
-	authenticationService snyk.AuthenticationService,
-	learnService learn.Service,
-) ResolveHandler {
+func ResolveCodeActionHandler(c *config.Config, service *CodeActionsService, server lsp.Server) ResolveHandler {
 	logger := c.Logger().With().Str("method", "ResolveCodeActionHandler").Logger()
 	return func(ctx context.Context, params lsp.CodeAction) (*lsp.CodeAction, error) {
 		logger := logger.With().Interface("request", params).Logger()
 		logger.Info().Msg("RECEIVING")
 
-		action, err := service.ResolveCodeAction(params, server, authenticationService, learnService)
+		action, err := service.ResolveCodeAction(params, server)
 		if err != nil {
 			if IsMissingKeyError(err) { // If the key is missing, it means that the code action is not a deferred code action
 				logger.Debug().Msg("Skipping code action - missing key")
