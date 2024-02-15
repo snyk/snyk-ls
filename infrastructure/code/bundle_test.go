@@ -19,6 +19,7 @@ package code
 import (
 	"context"
 	"testing"
+	"time"
 
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
@@ -136,10 +137,21 @@ func Test_AutofixMessages(t *testing.T) {
 	t.Run("Shows success message when fix provided", func(t *testing.T) {
 		fn := bundle.autofixFunc(context.Background(), FakeIssue)
 		fn()
-
-		successMsgRequest := mockNotifier.SentMessages()[1].(snyk.ShowMessageRequest)
-		assert.Equal(t, snyk.Info, successMsgRequest.Type)
-		assert.Equal(t, "Congratulations! 🎉 You’ve just fixed this SNYK-123 issue. Was this fix helpful?", successMsgRequest.Message)
+		var feedbackMessageReq snyk.ShowMessageRequest
+		assert.Eventually(t, func() bool {
+			messages := mockNotifier.SentMessages()
+			if messages == nil || len(messages) < 2 {
+				return false
+			}
+			for _, message := range messages {
+				if _, ok := message.(snyk.ShowMessageRequest); ok {
+					feedbackMessageReq = message.(snyk.ShowMessageRequest)
+					break
+				}
+			}
+			return snyk.Info == feedbackMessageReq.Type &&
+				"Congratulations! 🎉 You’ve just fixed this SNYK-123 issue. Was this fix helpful?" == feedbackMessageReq.Message
+		}, 10*time.Second, 1*time.Second)
 
 		// Compare button action commands
 		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
@@ -158,10 +170,10 @@ func Test_AutofixMessages(t *testing.T) {
 		actionCommandMap.Add(positiveFeedback, commandData1)
 		actionCommandMap.Add(negativeFeedback, commandData2)
 
-		assert.Equal(t, actionCommandMap.Keys(), successMsgRequest.Actions.Keys())
+		assert.Equal(t, actionCommandMap.Keys(), feedbackMessageReq.Actions.Keys())
 
-		buttonAction1, _ := successMsgRequest.Actions.Get(positiveFeedback)
-		buttonAction2, _ := successMsgRequest.Actions.Get(negativeFeedback)
+		buttonAction1, _ := feedbackMessageReq.Actions.Get(positiveFeedback)
+		buttonAction2, _ := feedbackMessageReq.Actions.Get(negativeFeedback)
 		assert.Equal(t, commandData1, buttonAction1)
 		assert.Equal(t, commandData2, buttonAction2)
 	})
