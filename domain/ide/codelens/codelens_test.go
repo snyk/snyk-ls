@@ -60,7 +60,9 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	workspace.Get().AddFolder(folder)
 	folder.ScanFile(context.Background(), filePath)
 
-	assert.NotNil(t, folder.DocumentDiagnosticsFromCache(filePath))
+	issues, _ := folder.DocumentDiagnosticsFromCache(filePath)
+
+	assert.NotNil(t, issues)
 
 	lenses := GetFor(filePath)
 
