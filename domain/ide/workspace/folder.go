@@ -156,7 +156,9 @@ func (f *Folder) scan(ctx context.Context, path string) {
 		log.Warn().Str("path", path).Str("method", method).Msg("skipping scan of untrusted path")
 		return
 	}
-	issuesSlice := f.DocumentDiagnosticsFromCache(path)
+
+	issuesSlice, _ := f.DocumentDiagnosticsFromCache(path)
+
 	if issuesSlice != nil {
 		log.Info().Str("method", method).
 			Int("issueSliceLength", len(issuesSlice)).
@@ -170,12 +172,9 @@ func (f *Folder) scan(ctx context.Context, path string) {
 	f.scanner.Scan(ctx, path, f.processResults, f.path)
 }
 
-func (f *Folder) DocumentDiagnosticsFromCache(file string) []snyk.Issue {
-	issues, _ := f.documentDiagnosticCache.Load(file)
-	if issues == nil {
-		return nil
-	}
-	return issues
+func (f *Folder) DocumentDiagnosticsFromCache(file string) ([]snyk.Issue, bool) {
+	issues, ok := f.documentDiagnosticCache.Load(file)
+	return issues, ok
 }
 
 func (f *Folder) processResults(scanData snyk.ScanData) {
@@ -431,7 +430,7 @@ func (f *Folder) Status() FolderStatus { return f.status }
 
 func (f *Folder) IssuesFor(filePath string, requestedRange snyk.Range) (matchingIssues []snyk.Issue) {
 	method := "domain.ide.workspace.folder.getCodeActions"
-	issues := f.DocumentDiagnosticsFromCache(filePath)
+	issues, _ := f.DocumentDiagnosticsFromCache(filePath)
 	for _, issue := range issues {
 		if issue.Range.Overlaps(requestedRange) {
 			log.Debug().Str("method", method).Msg("appending code action for issue " + issue.String())
@@ -449,7 +448,8 @@ func (f *Folder) IssuesFor(filePath string, requestedRange snyk.Range) (matching
 }
 
 func (f *Folder) AllIssuesFor(filePath string) (matchingIssues []snyk.Issue) {
-	return f.DocumentDiagnosticsFromCache(filePath)
+	issues, _ := f.DocumentDiagnosticsFromCache(filePath)
+	return issues
 }
 
 func (f *Folder) ClearDiagnostics() {

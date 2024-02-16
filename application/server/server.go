@@ -449,7 +449,8 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 			return nil, nil
 		}
 
-		issues := folder.DocumentDiagnosticsFromCache(filePath)
+		issues, _ := folder.DocumentDiagnosticsFromCache(filePath)
+
 		filteredIssues := workspace.FilterIssues(issues, config.CurrentConfig().DisplayableIssueTypes())
 
 		if len(filteredIssues) > 0 {
