@@ -178,6 +178,42 @@ func Test_AutofixMessages(t *testing.T) {
 		assert.Equal(t, commandData2, buttonAction2)
 	})
 
+	t.Run("Shows success message when fix for test-issue provided", func(t *testing.T) {
+		// NOTE(alex.gronskiy): Code can return `<lang>/<ruleID>/test` ruleID
+		fakeTestIssue := FakeIssue
+		fakeTestIssue.ID = fakeTestIssue.ID + "/test"
+		fn := bundle.autofixFunc(context.Background(), fakeTestIssue)
+		fn()
+
+		successMsgRequest := mockNotifier.SentMessages()[1].(snyk.ShowMessageRequest)
+		assert.Equal(t, snyk.Info, successMsgRequest.Type)
+		assert.Equal(t, "Congratulations! 🎉 You’ve just fixed this SNYK-123 issue. Was this fix helpful?", successMsgRequest.Message)
+
+		// Compare button action commands
+		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
+		commandData1 := snyk.CommandData{
+			Title:     snyk.CodeSubmitFixFeedback,
+			CommandId: snyk.CodeSubmitFixFeedback,
+			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", true},
+		}
+		commandData2 := snyk.CommandData{
+			Title:     snyk.CodeSubmitFixFeedback,
+			CommandId: snyk.CodeSubmitFixFeedback,
+			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", false},
+		}
+		positiveFeedback := snyk.MessageAction("👍")
+		negativeFeedback := snyk.MessageAction("👎")
+		actionCommandMap.Add(positiveFeedback, commandData1)
+		actionCommandMap.Add(negativeFeedback, commandData2)
+
+		assert.Equal(t, actionCommandMap.Keys(), successMsgRequest.Actions.Keys())
+
+		buttonAction1, _ := successMsgRequest.Actions.Get(positiveFeedback)
+		buttonAction2, _ := successMsgRequest.Actions.Get(negativeFeedback)
+		assert.Equal(t, commandData1, buttonAction1)
+		assert.Equal(t, commandData2, buttonAction2)
+	})
+
 	t.Run("Shows error message when no fix available", func(t *testing.T) {
 		fakeSnykCode.NoFixSuggestions = true
 

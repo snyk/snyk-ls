@@ -91,13 +91,17 @@ func getIssueLangAndRuleId(issue snyk.Issue) (string, string, bool) {
 		logger.Trace().Str("file", issue.AffectedFilePath).Int("line", issue.Range.Start.Line).Msg("Can't access issue data")
 		return "", "", false
 	}
+	// NOTE(alex.gronskiy): we tend to receive either `<lang>/<ruleID>` or `<lang>/<ruleID>/test` (the
+	// latter is returned when a file is considered a "test" one, using complex heuristics on Suggest).
+	// For our purposes, we need to know language and rule ID regardless whether this is test file or not.
 	ruleIdSplit := strings.Split(issueData.RuleId, "/")
-	if len(ruleIdSplit) != 2 {
-		logger.Trace().Str("file", issue.AffectedFilePath).Int("line", issue.Range.Start.Line).Msg("Issue data does not contain RuleID")
-		return "", "", false
+	if len(ruleIdSplit) == 2 || len(ruleIdSplit) == 3 {
+		// 0: lang, 1: ruleId
+		return ruleIdSplit[0], ruleIdSplit[1], true
 	}
 
-	return ruleIdSplit[0], ruleIdSplit[1], true
+	logger.Trace().Str("file", issue.AffectedFilePath).Int("line", issue.Range.Start.Line).Msg("Issue data does not contain RuleID")
+	return "", "", false
 }
 
 func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
