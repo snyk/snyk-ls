@@ -81,6 +81,7 @@ type CodeIssueData struct {
 	IsSecurityType     bool               `json:"isSecurityType"`
 	IsAutofixable      bool               `json:"isAutofixable"`
 	PriorityScore      int                `json:"priorityScore"`
+	HasAIFix           bool               `json:"hasAIFix"`
 }
 
 type ExampleCommitFix struct {

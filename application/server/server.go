@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"runtime"
 	"strings"
@@ -281,14 +282,17 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		// No reason to log the method name for these messages, because some of these values are empty and the messages
 		// looks weird when including the method name.
 		c := config.CurrentConfig()
-		log.Info().Msg("snyk-ls: " + config.Version + " (" + util.Result(os.Executable()) + ")")
-		log.Info().Msg("platform: " + runtime.GOOS + "/" + runtime.GOARCH)
-		log.Info().Msg("https_proxy: " + os.Getenv("HTTPS_PROXY"))
-		log.Info().Msg("http_proxy: " + os.Getenv("HTTP_PROXY"))
-		log.Info().Msg("no_proxy: " + os.Getenv("NO_PROXY"))
-		log.Info().Msg("IDE: " + c.IdeName() + "/" + c.IdeVersion())
-		log.Info().Msg("snyk-plugin: " + c.IntegrationName() + "/" + c.IntegrationVersion())
-		logger := log.With().Str("method", "initializedHandler").Logger()
+		initialLogger := c.Logger()
+		initialLogger.Info().Msg("snyk-ls: " + config.Version + " (" + util.Result(os.Executable()) + ")")
+		initialLogger.Info().Msg("platform: " + runtime.GOOS + "/" + runtime.GOARCH)
+		initialLogger.Info().Msg("https_proxy: " + os.Getenv("HTTPS_PROXY"))
+		initialLogger.Info().Msg("http_proxy: " + os.Getenv("HTTP_PROXY"))
+		initialLogger.Info().Msg("no_proxy: " + os.Getenv("NO_PROXY"))
+		initialLogger.Info().Msg("IDE: " + c.IdeName() + "/" + c.IdeVersion())
+		initialLogger.Info().Msg("snyk-plugin: " + c.IntegrationName() + "/" + c.IntegrationVersion())
+
+		logger := c.Logger().With().Str("method", "initializedHandler").Logger()
+
 		// CLI & Authentication initialization
 		err := di.Scanner().Init()
 		if err != nil {
@@ -303,10 +307,15 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 
 		autoScanEnabled := config.CurrentConfig().IsAutoScanEnabled()
 		if autoScanEnabled && authenticated {
-			logger.Debug().Msg("triggering workspace scan after successful initialization")
+			logger.Info().Msg("triggering workspace scan after successful initialization")
 			workspace.Get().ScanWorkspace(context.Background())
 		} else {
-			logger.Debug().Msg("No automatic workspace scan on initialization - auto-scan is disabled")
+			msg := fmt.Sprintf(
+				"No automatic workspace scan on initialization: autoScanEnabled=%v, authenticated=%v",
+				autoScanEnabled,
+				authenticated,
+			)
+			logger.Info().Msg(msg)
 		}
 
 		if config.CurrentConfig().AutomaticAuthentication() || config.CurrentConfig().NonEmptyToken() {
@@ -511,11 +520,7 @@ func codeActionResolveHandler(c *config.Config,
 	authenticationService snyk.AuthenticationService,
 	learnService learn.Service,
 ) handler.Func {
-	return handler.New(codeaction.ResolveCodeActionHandler(c,
-		di.CodeActionService(),
-		server,
-		authenticationService,
-		learnService))
+	return handler.New(codeaction.ResolveCodeActionHandler(c, di.CodeActionService(), server))
 }
 
 func textDocumentCodeActionHandler(c *config.Config) handler.Func {

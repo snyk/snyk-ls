@@ -18,7 +18,6 @@ import (
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -69,13 +68,6 @@ func (c *CodeActionsService) GetCodeActions(params lsp.CodeActionParams) []lsp.C
 	c.logger.Info().Msg(logMsg)
 	actions := converter.ToCodeActions(issues)
 
-	// The cache is cleared every time AddCodeActions is called, because the assumed workflow is:
-	// 1. User gets multiple code action options for a given path/range via textDocument/codeAction
-	// 2. User selects an action and the action is resolved via codeAction/resolve
-	// So there is no reason to store issues for longer than that.
-	for key := range c.actionsCache {
-		delete(c.actionsCache, key)
-	}
 	for _, issue := range issues {
 		for _, action := range issue.CodeActions {
 			if action.Uuid != nil {
@@ -92,17 +84,12 @@ func (c *CodeActionsService) GetCodeActions(params lsp.CodeActionParams) []lsp.C
 	return actions
 }
 
-func (c *CodeActionsService) ResolveCodeAction(
-	action lsp.CodeAction,
-	server lsp.Server,
-	authService snyk.AuthenticationService,
-	learnService learn.Service,
-) (lsp.CodeAction, error) {
+func (c *CodeActionsService) ResolveCodeAction(action lsp.CodeAction, server lsp.Server) (lsp.CodeAction, error) {
 	c.logger.Info().Msg("Received code action resolve request")
 	t := time.Now()
 
 	if action.Command != nil {
-		codeAction, err := c.handleCommand(action, server, authService, learnService)
+		codeAction, err := c.handleCommand(action, server)
 		return codeAction, err
 	}
 
@@ -112,6 +99,8 @@ func (c *CodeActionsService) ResolveCodeAction(
 
 	key := uuid.UUID(*action.Data)
 	cached, found := c.actionsCache[key]
+	// only delete cache entry after it's been resolved
+	defer delete(c.actionsCache, key)
 	if !found {
 		return lsp.CodeAction{}, errors.New(fmt.Sprint("could not find cached action for uuid ", key))
 	}
@@ -127,12 +116,7 @@ func (c *CodeActionsService) ResolveCodeAction(
 	return codeAction, nil
 }
 
-func (c *CodeActionsService) handleCommand(
-	action lsp.CodeAction,
-	server lsp.Server,
-	authService snyk.AuthenticationService,
-	learnService learn.Service,
-) (lsp.CodeAction, error) {
+func (c *CodeActionsService) handleCommand(action lsp.CodeAction, server lsp.Server) (lsp.CodeAction, error) {
 	log.Info().Str("method", "codeaction.handleCommand").Msgf("handling command %s", action.Command.Command)
 	cmd := snyk.CommandData{
 		Title:     action.Command.Title,
@@ -152,6 +136,7 @@ func (e missingKeyError) Error() string {
 	return "code action lookup key is missing - this is not a deferred code action"
 }
 func IsMissingKeyError(err error) bool {
-	_, ok := err.(missingKeyError)
+	var missingKeyError missingKeyError
+	ok := errors.As(err, &missingKeyError)
 	return ok
 }

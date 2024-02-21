@@ -143,7 +143,7 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 	// Act
 	actions := service.GetCodeActions(codeActionsParam)
 	actionFromRequest := actions[0]
-	resolvedAction, _ := service.ResolveCodeAction(actionFromRequest, nil, nil, nil)
+	resolvedAction, _ := service.ResolveCodeAction(actionFromRequest, nil)
 
 	// Assert
 	assert.NotNil(t, resolvedAction)
@@ -168,7 +168,7 @@ func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
 
 	// Act
 	var err error
-	_, err = service.ResolveCodeAction(ca, nil, nil, nil)
+	_, err = service.ResolveCodeAction(ca, nil)
 
 	// Assert
 	assert.Error(t, err, "Expected error when resolving a code action with a key that doesn't exist")
@@ -195,7 +195,7 @@ func Test_ResolveCodeAction_UnknownCommandIsReported(t *testing.T) {
 
 	// Act
 	var err error
-	_, err = service.ResolveCodeAction(ca, nil, nil, nil)
+	_, err = service.ResolveCodeAction(ca, nil)
 
 	// Assert
 	assert.Error(t, err, "Command factory should have been called with fake command and returned not found err")
@@ -221,7 +221,7 @@ func Test_ResolveCodeAction_CommandIsExecuted(t *testing.T) {
 		Data:    &id,
 	}
 
-	_, err := service.ResolveCodeAction(ca, nil, nil, nil)
+	_, err := service.ResolveCodeAction(ca, nil)
 	assert.NoError(t, err, "command should be called without error")
 
 	serviceMock := command.Service().(*snyk.CommandServiceMock)
@@ -240,7 +240,7 @@ func Test_ResolveCodeAction_KeyIsNull_ReturnsError(t *testing.T) {
 		Data:    nil,
 	}
 
-	_, err := service.ResolveCodeAction(ca, nil, nil, nil)
+	_, err := service.ResolveCodeAction(ca, nil)
 	assert.Error(t, err, "Expected error when resolving a code action with a null key")
 	assert.True(t, codeaction.IsMissingKeyError(err))
 }

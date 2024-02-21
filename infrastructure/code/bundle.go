@@ -202,6 +202,8 @@ func (b *Bundle) addIssueActions(ctx context.Context, issues []snyk.Issue) {
 					issues[i].Range,
 				},
 			})
+			issueData.HasAIFix = true
+			issues[i].AdditionalData = issueData
 		}
 
 		if learnEnabled {
@@ -268,7 +270,7 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 				complete = true
 			} else if fixStatus.message == completeStatus {
 				if len(fixSuggestions) > 0 {
-					// TODO(alex.gronskiy): currently, only the first ([0]) fix suggstion goes into the fix
+					// TODO(alex.gronskiy): currently, only the first ([0]) fix suggestion goes into the fix
 					fix = &fixSuggestions[0]
 				} else {
 					log.Info().Str("method", method).Str("requestId", b.requestId).Msg("No good fix could be computed.")
@@ -297,23 +299,26 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 
 				if fix == nil {
 					b.notifier.SendShowMessage(sglsp.MTError, "Oh snap! 😔 The fix did not remediate the issue and was not applied.")
-					progress.End()
 					return nil
 				}
 
-				actionCommandMap, err := b.autofixFeedbackActions(fix.FixId)
-				successMessage := "Congratulations! 🎉 You’ve just fixed this " + issueTitle(issue) + " issue."
-				if err != nil {
-					b.notifier.SendShowMessage(sglsp.Info, successMessage)
-				} else {
-					b.notifier.Send(snyk.ShowMessageRequest{
-						Message: successMessage + " Was this fix helpful?",
-						Type:    snyk.Info,
-						Actions: actionCommandMap,
-					})
-				}
-
 				progress.End()
+				// send feedback asynchronously, so people can actually see the changes done by the fix
+				go func() {
+					actionCommandMap, err := b.autofixFeedbackActions(fix.FixId)
+					successMessage := "Congratulations! 🎉 You’ve just fixed this " + issueTitle(issue) + " issue."
+					if err != nil {
+						b.notifier.SendShowMessage(sglsp.Info, successMessage)
+					} else {
+						// sleep to give client side to actually apply & review the fix
+						time.Sleep(2 * time.Second)
+						b.notifier.Send(snyk.ShowMessageRequest{
+							Message: successMessage + " Was this fix helpful?",
+							Type:    snyk.Info,
+							Actions: actionCommandMap,
+						})
+					}
+				}()
 				return &fix.AutofixEdit
 			}
 		}

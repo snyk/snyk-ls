@@ -1075,6 +1075,7 @@ type CodeIssueData struct {
 	Rows               Point              `json:"rows"`
 	IsSecurityType     bool               `json:"isSecurityType"`
 	PriorityScore      int                `json:"priorityScore"`
+	HasAIFix           bool               `json:"hasAIFix"`
 }
 
 type Point = [2]int

@@ -128,6 +128,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 				Rows:               lsp2.Point{1, 1},
 				Markers:            []lsp2.Marker{},
 				PriorityScore:      880,
+				HasAIFix:           true,
 			},
 		},
 	}
@@ -184,6 +185,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 				Rows:               snyk.CodePoint{1, 1},
 				Markers:            []snyk.Marker{},
 				PriorityScore:      880,
+				HasAIFix:           true,
 			},
 		},
 	}
