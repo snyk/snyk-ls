@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/filesystem"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -100,7 +101,7 @@ func (c *exampleCommit) toReference() (reference snyk.Reference) {
 	return snyk.Reference{Title: c.description, Url: commitURL}
 }
 
-func (r *result) getCodeFlow(baseDir string) (dataflow []dataflowElement) {
+func (r *result) getCodeFlow(baseDir string) (dataflow []snyk.DataFlowElement) {
 	flows := r.CodeFlows
 	dedupMap := map[string]bool{}
 	for _, cFlow := range flows {
@@ -124,12 +125,19 @@ func (r *result) getCodeFlow(baseDir string) (dataflow []dataflowElement) {
 
 				key := fmt.Sprintf("%sL%4d", path, region.StartLine)
 				if !dedupMap[key] {
-					d := dataflowElement{
-						position:  len(dataflow),
-						filePath:  filepath.Join(baseDir, path),
-						flowRange: myRange,
+					fileUtil := filesystem.New()
+					filePath := filepath.Join(baseDir, path)
+					content, err := fileUtil.GetLineOfCode(filePath, myRange.Start.Line+1)
+					if err != nil {
+						log.Warn().Str("method", "code.getCodeFlow").Err(err).Msg("cannot load line Content from file")
 					}
-					log.Debug().Str("method", method).Str("dataflowElement", d.String()).Send()
+					d := snyk.DataFlowElement{
+						Position:  len(dataflow),
+						FilePath:  filePath,
+						FlowRange: myRange,
+						Content:   content,
+					}
+					log.Debug().Str("method", method).Str("DataFlowElement", d.String()).Send()
 					dataflow = append(dataflow, d)
 					dedupMap[key] = true
 				}
@@ -184,7 +192,7 @@ func (r *result) formattedMessage(rule rule, baseDir string) string {
 	builder.WriteString(separator)
 	builder.WriteString("### Data Flow\n\n")
 	for _, elem := range r.getCodeFlow(baseDir) {
-		builder.WriteString(elem.toMarkDown())
+		builder.WriteString(elem.ToMarkDown())
 	}
 	builder.WriteString(separator)
 	builder.WriteString("### Example Commit Fixes\n\n")
@@ -351,6 +359,7 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 				IsSecurityType:     isSecurityType,
 				IsAutofixable:      result.Properties.IsAutofixable,
 				PriorityScore:      result.Properties.PriorityScore,
+				DataFlow:           result.getCodeFlow(baseDir),
 			}
 
 			d := snyk.Issue{

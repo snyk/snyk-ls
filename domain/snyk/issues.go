@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,6 +82,7 @@ type CodeIssueData struct {
 	IsAutofixable      bool               `json:"isAutofixable"`
 	PriorityScore      int                `json:"priorityScore"`
 	HasAIFix           bool               `json:"hasAIFix"`
+	DataFlow           []DataFlowElement  `json:"dataFlow,omitempty"`
 }
 
 type ExampleCommitFix struct {

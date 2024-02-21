@@ -1,3 +1,19 @@
+/*
+ * © 2024 Snyk Limited
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package notification_test
 
 import (
@@ -129,6 +145,9 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 				Markers:            []lsp2.Marker{},
 				PriorityScore:      880,
 				HasAIFix:           true,
+				DataFlow: []lsp2.DataflowElement{
+					{FilePath: "testFile", FlowRange: converter.ToRange(testRange), Content: "testContent"},
+				},
 			},
 		},
 	}
@@ -186,6 +205,9 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 				Markers:            []snyk.Marker{},
 				PriorityScore:      880,
 				HasAIFix:           true,
+				DataFlow: []snyk.DataFlowElement{
+					{FilePath: "testFile", FlowRange: testRange, Content: "testContent"},
+				},
 			},
 		},
 	}
@@ -364,6 +386,9 @@ func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
 				Cols:               lsp2.Point{1, 1},
 				Rows:               lsp2.Point{1, 1},
 				Markers:            []lsp2.Marker{},
+				DataFlow: []lsp2.DataflowElement{
+					{FilePath: "testFile", FlowRange: converter.ToRange(r), Content: "testContent"},
+				},
 			},
 		},
 	}
@@ -395,6 +420,9 @@ func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
 				Cols:               snyk.CodePoint{1, 1},
 				Rows:               snyk.CodePoint{1, 1},
 				Markers:            []snyk.Marker{},
+				DataFlow: []snyk.DataFlowElement{
+					{FilePath: "testFile", FlowRange: r, Content: "testContent"},
+				},
 			},
 		},
 	}
