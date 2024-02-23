@@ -19,12 +19,18 @@ package code
 import (
 	"context"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
+	orchestration "github.com/snyk/orchestration-service/client/go"
+	orchFakeClient "github.com/snyk/orchestration-service/client/go/fakeclient"
+	"github.com/snyk/workspace-service/client/go/pkg/workspace"
+	workFakeClient "github.com/snyk/workspace-service/client/go/pkg/workspace/fakeclient"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
@@ -288,6 +294,53 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 		return []snyk.Issue{}, nil
 	}
 	sc.trackResult(err == nil, scanMetrics)
+	return issues, err
+}
+
+func (sc *Scanner) UploadAndAnalyzeV2(ctx context.Context,
+	files <-chan string,
+	path string,
+	scanMetrics *ScanMetrics,
+	changedFiles map[string]bool,
+) (issues []snyk.Issue, err error) {
+	if ctx.Err() != nil {
+		log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
+		return issues, nil
+	}
+
+	// TODO: code.uploadAndAnalyze for tracking time
+
+	// TODO: will need the org ID
+	orgId := uuid.UUID{}
+	// TODO: will need contents at the path
+	pathContent := ""
+
+	wsClient := workFakeClient.GetClient()
+
+	// TODO: use filters here
+	workspaceUrl, err := wsClient.NewWorkspace(ctx, orgId).
+		WithSettings(&workspace.WorkspaceSettings{
+			ExclusionGlobs: &[]string{"*.txt"},
+			InclusionGlobs: &[]string{"*.package.json"},
+		}).
+		FromLocalContent(strings.NewReader(pathContent), path)
+
+	orchClient := orchFakeClient.NewFakeClient(&orchFakeClient.FakeOptions{ScannerMaxQuietPeriod: time.Millisecond * 50})
+
+	// TODO: is this correct
+	flow := orchestration.CliTestFlow{}
+	scanJob, err := orchClient.Scan(ctx, orgId, flow, workspaceUrl)
+	for {
+		if scanJob.Status == orchestration.ScanJobStatusDone {
+			// TODO: get findings with ignores from scanJob
+		}
+		if scanJob.Status != orchestration.ScanJobStatusInProgress {
+			// TODO: error
+		}
+		// TODO: timeout
+	}
+
+	// TODO: track results
 	return issues, err
 }
 

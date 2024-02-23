@@ -24,18 +24,20 @@ require (
 	github.com/segmentio/analytics-go v3.1.0+incompatible
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/snyk/go-application-framework v0.0.0-20240111143643-fa847b8a9a3b
+	github.com/snyk/workspace-service/client/go/v6 v6.58.1
 	github.com/sourcegraph/go-lsp v0.0.0-20200429204803-219e11d77f5d
 	github.com/stretchr/testify v1.8.4
 	github.com/subosito/gotenv v1.6.0
 	github.com/xtgo/uuid v0.0.0-20140804021211-a0b114877d4c
 	go.lsp.dev/uri v0.3.0
 	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63
-	golang.org/x/net v0.14.0
+	golang.org/x/net v0.15.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
 	github.com/alexbrainman/sspi v0.0.0-20210105120005-909beea2cc74 // indirect
+	github.com/deepmap/oapi-codegen v1.16.2 // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
@@ -45,10 +47,11 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 // indirect
+	github.com/snyk/orchestration-service v2.10.0+incompatible // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
-	golang.org/x/crypto v0.12.0 // indirect
+	golang.org/x/crypto v0.13.0 // indirect
 )
 
 require (
@@ -87,8 +90,8 @@ require (
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	golang.org/x/sync v0.3.0 // indirect
-	golang.org/x/sys v0.11.0 // indirect
-	golang.org/x/text v0.12.0 // indirect
+	golang.org/x/sys v0.12.0 // indirect
+	golang.org/x/text v0.13.0 // indirect
 )
 
 //replace github.com/snyk/go-application-framework => ../go-application-framework
