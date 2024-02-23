@@ -312,16 +312,18 @@ func (sc *Scanner) UploadAndAnalyzeV2(ctx context.Context,
 
 	// TODO: will need the org ID
 	orgId := uuid.UUID{}
-	// TODO: will need contents at the path
+	// TODO: will need contents at the path so similarly to createBundle we need to build this (
+	// what if there's a lot of data)
 	pathContent := ""
 
+	// TODO: how can be authenticate?
 	wsClient := workFakeClient.GetClient()
 
-	// TODO: use filters here
+	// TODO: compute the globs from the filters here
 	workspaceUrl, err := wsClient.NewWorkspace(ctx, orgId).
 		WithSettings(&workspace.WorkspaceSettings{
-			ExclusionGlobs: &[]string{"*.txt"},
-			InclusionGlobs: &[]string{"*.package.json"},
+			ExclusionGlobs: &[]string{},
+			InclusionGlobs: &[]string{},
 		}).
 		FromLocalContent(strings.NewReader(pathContent), path)
 
@@ -332,7 +334,75 @@ func (sc *Scanner) UploadAndAnalyzeV2(ctx context.Context,
 	scanJob, err := orchClient.Scan(ctx, orgId, flow, workspaceUrl)
 	for {
 		if scanJob.Status == orchestration.ScanJobStatusDone {
-			// TODO: get findings with ignores from scanJob
+			// TODO: get findings with ignores from scanJob by downloading from bucket
+			// TODO: and transform from SARIF (or whatever) to the Snyk internal
+			// fow now it's fake data
+			issues = []snyk.Issue{
+				{
+					ID:              uuid.New().String(),
+					Severity:        snyk.High,
+					IssueType:       snyk.CodeSecurityVulnerability,
+					IssueIdentifier: uuid.New(),
+					IsIgnored:       false,
+					IgnoreDetails:   nil,
+					Range: snyk.Range{
+						Start: snyk.Position{
+							Line:      0,
+							Character: 0,
+						},
+						End: snyk.Position{
+							Line:      0,
+							Character: 10,
+						},
+					},
+					Message:             "You silly goose",
+					FormattedMessage:    "",
+					AffectedFilePath:    "foo/bar.go",
+					Product:             "Snyk Code",
+					References:          nil,
+					IssueDescriptionURL: nil,
+					CodeActions:         nil,
+					CodelensCommands:    nil,
+					Ecosystem:           "",
+					CWEs:                nil,
+					CVEs:                nil,
+					AdditionalData:      nil,
+				},
+				{
+					ID:              uuid.New().String(),
+					Severity:        snyk.High,
+					IssueType:       snyk.CodeSecurityVulnerability,
+					IssueIdentifier: uuid.New(),
+					IsIgnored:       false,
+					IgnoreDetails: &struct {
+						Reason: "False positive".
+						Expiry: time.Now(),
+					},
+					Range: snyk.Range{
+						Start: snyk.Position{
+							Line:      0,
+							Character: 0,
+						},
+						End: snyk.Position{
+							Line:      0,
+							Character: 10,
+						},
+					},
+					Message:             "This is a false positive",
+					FormattedMessage:    "",
+					AffectedFilePath:    "foo/bar.go",
+					Product:             "Snyk Code",
+					References:          nil,
+					IssueDescriptionURL: nil,
+					CodeActions:         nil,
+					CodelensCommands:    nil,
+					Ecosystem:           "",
+					CWEs:                nil,
+					CVEs:                nil,
+					AdditionalData:      nil,
+				},
+			}
+			return issues, err
 		}
 		if scanJob.Status != orchestration.ScanJobStatusInProgress {
 			// TODO: error
@@ -341,7 +411,6 @@ func (sc *Scanner) UploadAndAnalyzeV2(ctx context.Context,
 	}
 
 	// TODO: track results
-	return issues, err
 }
 
 func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg string, scanMetrics *ScanMetrics) {
