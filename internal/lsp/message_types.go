@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1061,6 +1061,13 @@ type OssIdentifiers struct {
 	CVE []string `json:"CVE,omitempty"`
 }
 
+type DataflowElement struct {
+	Position  int         `json:"position"`
+	FilePath  string      `json:"filePath"`
+	FlowRange sglsp.Range `json:"flowRange"`
+	Content   string      `json:"content"`
+}
+
 type CodeIssueData struct {
 	Message            string             `json:"message"`
 	LeadURL            string             `json:"leadURL,omitempty"`
@@ -1076,6 +1083,7 @@ type CodeIssueData struct {
 	IsSecurityType     bool               `json:"isSecurityType"`
 	PriorityScore      int                `json:"priorityScore"`
 	HasAIFix           bool               `json:"hasAIFix"`
+	DataFlow           []DataflowElement  `json:"dataFlow,omitempty"`
 }
 
 type Point = [2]int
