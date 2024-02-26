@@ -18,8 +18,8 @@ package code
 
 import (
 	"context"
+	"net/url"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -29,8 +29,8 @@ import (
 	"github.com/rs/zerolog/log"
 	orchestration "github.com/snyk/orchestration-service/client/go"
 	orchFakeClient "github.com/snyk/orchestration-service/client/go/fakeclient"
-	"github.com/snyk/workspace-service/client/go/pkg/workspace"
-	workFakeClient "github.com/snyk/workspace-service/client/go/pkg/workspace/fakeclient"
+	"github.com/snyk/workspace-service/client/go/v6/pkg/workspace"
+	workFakeClient "github.com/snyk/workspace-service/client/go/v6/pkg/workspace/fakeclient"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
@@ -194,7 +194,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	t.EndWithMessage("Collected files")
 	metrics := sc.newMetrics(startTime)
 	results, err := sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
-
+	//results, err := sc.UploadAndAnalyzeV2(span.Context(), sastResponse.Org, files, folderPath, metrics)
 	return results, err
 }
 
@@ -299,9 +299,9 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 
 func (sc *Scanner) UploadAndAnalyzeV2(ctx context.Context,
 	files <-chan string,
+	org string,
 	path string,
 	scanMetrics *ScanMetrics,
-	changedFiles map[string]bool,
 ) (issues []snyk.Issue, err error) {
 	if ctx.Err() != nil {
 		log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
@@ -310,26 +310,13 @@ func (sc *Scanner) UploadAndAnalyzeV2(ctx context.Context,
 
 	// TODO: code.uploadAndAnalyze for tracking time
 
-	// TODO: will need the org ID
-	orgId := uuid.UUID{}
-	// TODO: will need contents at the path so similarly to createBundle we need to build this (
-	// what if there's a lot of data)
-	pathContent := ""
+	orgId := uuid.MustParse(org)
 
-	// TODO: how can be authenticate?
-	wsClient := workFakeClient.GetClient()
-
-	// TODO: compute the globs from the filters here
-	workspaceUrl, err := wsClient.NewWorkspace(ctx, orgId).
-		WithSettings(&workspace.WorkspaceSettings{
-			ExclusionGlobs: &[]string{},
-			InclusionGlobs: &[]string{},
-		}).
-		FromLocalContent(strings.NewReader(pathContent), path)
+	workspaceUrl, err := sc.createWorkspace(ctx, uuid.MustParse(org), path, files)
 
 	orchClient := orchFakeClient.NewFakeClient(&orchFakeClient.FakeOptions{ScannerMaxQuietPeriod: time.Millisecond * 50})
 
-	// TODO: is this correct
+	// TODO: is this the correct flow
 	flow := orchestration.CliTestFlow{}
 	scanJob, err := orchClient.Scan(ctx, orgId, flow, workspaceUrl)
 	for {
@@ -374,8 +361,8 @@ func (sc *Scanner) UploadAndAnalyzeV2(ctx context.Context,
 					IssueType:       snyk.CodeSecurityVulnerability,
 					IssueIdentifier: uuid.New(),
 					IsIgnored:       false,
-					IgnoreDetails: &struct {
-						Reason: "False positive".
+					IgnoreDetails: &snyk.IgnoreDetails{
+						Reason: "False positive",
 						Expiry: time.Now(),
 					},
 					Range: snyk.Range{
@@ -402,15 +389,23 @@ func (sc *Scanner) UploadAndAnalyzeV2(ctx context.Context,
 					AdditionalData:      nil,
 				},
 			}
-			return issues, err
+			break
 		}
 		if scanJob.Status != orchestration.ScanJobStatusInProgress {
-			// TODO: error
+			if ctx.Err() != nil {
+				log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
+				return []snyk.Issue{}, nil
+			}
+			err = errors.New("scan failed")
+			break
 		}
 		// TODO: timeout
 	}
 
-	// TODO: track results
+	// TODO: what if there's an error in the context?
+
+	sc.trackResult(false, scanMetrics)
+	return issues, nil
 }
 
 func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg string, scanMetrics *ScanMetrics) {
@@ -498,6 +493,56 @@ func (sc *Scanner) createBundle(ctx context.Context,
 		b.BundleHash, b.missingFiles, err = sc.BundleUploader.SnykCode.CreateBundle(span.Context(), fileHashes)
 	}
 	return b, err
+}
+
+// TODO: this is probably not the best way to do this but I did the quickest POC.
+// TODO: can we add incremental files,
+func (sc *Scanner) createWorkspace(
+	ctx context.Context,
+	orgId uuid.UUID,
+	rootPath string,
+	filePaths <-chan string,
+) (*url.URL, error) {
+	// TODO: how can we authenticate?
+	wsClient := workFakeClient.GetClient()
+
+	var workspaceUrl *url.URL
+
+	noFiles := true
+	for absoluteFilePath := range filePaths {
+		noFiles = false
+		if ctx.Err() != nil {
+			return nil, nil // The cancellation error should be handled by the calling function
+		}
+
+		fileContentReader, err := os.Open(absoluteFilePath)
+		if err != nil {
+			log.Error().Err(err).Str("filePath", absoluteFilePath).Msg("could not load content of file")
+			continue
+		}
+
+		// TODO: max len size check?
+
+		if workspaceUrl == nil {
+			workspaceUrl, err = wsClient.NewWorkspace(ctx, orgId).
+				WithSettings(&workspace.WorkspaceSettings{
+					ExclusionGlobs: &[]string{},
+					InclusionGlobs: &[]string{},
+				}).FromLocalContent(fileContentReader, absoluteFilePath)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// todo: how do you add more files?
+		}
+
+	}
+
+	if noFiles {
+		return nil, noFilesError{}
+	}
+
+	return workspaceUrl, nil
 }
 
 type UploadStatus struct {

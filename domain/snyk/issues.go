@@ -32,19 +32,21 @@ type Reference struct {
 	Url   *url.URL
 }
 
+type IgnoreDetails struct {
+	Reason string
+	Expiry time.Time
+	// TODO: others?
+}
+
 // Issue models a problem, vulnerability, or situation within your code that requires your attention
 type Issue struct {
 	// ID uniquely identifies the issue, it is intended to be human-readable
 	ID              string
 	Severity        Severity
 	IssueType       Type
-	IssueIdentifier uuid.UUID // This is what's used for applying ignores and it's going to be uuid.Nil by default  so it doesn't break backwards compatibility
-	IsIgnored       bool      // If not here it defaults to false so it doesn't break backwards compatibility
-	IgnoreDetails   *struct { // It defaults to nil so it doesn't break backwards compatibility
-		Reason string
-		Expiry time.Time
-		// TODO: others?
-	}
+	IssueIdentifier uuid.UUID      // This is what's used for applying ignores and it's going to be uuid.Nil by default  so it doesn't break backwards compatibility
+	IsIgnored       bool           // If not here it defaults to false so it doesn't break backwards compatibility
+	IgnoreDetails   *IgnoreDetails // It defaults to nil so it doesn't break backwards compatibility
 	// Range identifies the location of this issue in its source of origin (e.g. line & character start & end)
 	Range Range
 	// Message is a human-readable description of the issue
