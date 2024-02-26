@@ -27,8 +27,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
-	orchestration "github.com/snyk/orchestration-service/client/go"
-	orchFakeClient "github.com/snyk/orchestration-service/client/go/fakeclient"
 	"github.com/snyk/workspace-service/client/go/v6/pkg/workspace"
 	workFakeClient "github.com/snyk/workspace-service/client/go/v6/pkg/workspace/fakeclient"
 
@@ -193,8 +191,8 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	files := fileFilter.FindNonIgnoredFiles()
 	t.EndWithMessage("Collected files")
 	metrics := sc.newMetrics(startTime)
-	results, err := sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
-	//results, err := sc.UploadAndAnalyzeV2(span.Context(), sastResponse.Org, files, folderPath, metrics)
+	//results, err := sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
+	results, err := sc.UploadAndAnalyzeV2(span.Context(), files, sastResponse.Org, folderPath, metrics)
 	return results, err
 }
 
@@ -294,6 +292,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 		return []snyk.Issue{}, nil
 	}
 	sc.trackResult(err == nil, scanMetrics)
+	// TODO: this is in target-service
 	return issues, err
 }
 
@@ -307,105 +306,105 @@ func (sc *Scanner) UploadAndAnalyzeV2(ctx context.Context,
 		log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
 		return issues, nil
 	}
-
-	// TODO: code.uploadAndAnalyze for tracking time
-
-	orgId := uuid.MustParse(org)
-
-	workspaceUrl, err := sc.createWorkspace(ctx, uuid.MustParse(org), path, files)
-
-	orchClient := orchFakeClient.NewFakeClient(&orchFakeClient.FakeOptions{ScannerMaxQuietPeriod: time.Millisecond * 50})
-
-	// TODO: is this the correct flow
-	flow := orchestration.CliTestFlow{}
-	scanJob, err := orchClient.Scan(ctx, orgId, flow, workspaceUrl)
-	for {
-		if scanJob.Status == orchestration.ScanJobStatusDone {
-			// TODO: get findings with ignores from scanJob by downloading from bucket
-			// TODO: and transform from SARIF (or whatever) to the Snyk internal
-			// fow now it's fake data
-			issues = []snyk.Issue{
-				{
-					ID:              uuid.New().String(),
-					Severity:        snyk.High,
-					IssueType:       snyk.CodeSecurityVulnerability,
-					IssueIdentifier: uuid.New(),
-					IsIgnored:       false,
-					IgnoreDetails:   nil,
-					Range: snyk.Range{
-						Start: snyk.Position{
-							Line:      0,
-							Character: 0,
-						},
-						End: snyk.Position{
-							Line:      0,
-							Character: 10,
-						},
-					},
-					Message:             "You silly goose",
-					FormattedMessage:    "",
-					AffectedFilePath:    "foo/bar.go",
-					Product:             "Snyk Code",
-					References:          nil,
-					IssueDescriptionURL: nil,
-					CodeActions:         nil,
-					CodelensCommands:    nil,
-					Ecosystem:           "",
-					CWEs:                nil,
-					CVEs:                nil,
-					AdditionalData:      nil,
+	return []snyk.Issue{
+		{
+			ID:              uuid.New().String(),
+			Severity:        snyk.High,
+			IssueType:       snyk.CodeSecurityVulnerability,
+			IssueIdentifier: uuid.New(),
+			IsIgnored:       false,
+			IgnoreDetails:   nil,
+			Range: snyk.Range{
+				Start: snyk.Position{
+					Line:      1,
+					Character: 1,
 				},
-				{
-					ID:              uuid.New().String(),
-					Severity:        snyk.High,
-					IssueType:       snyk.CodeSecurityVulnerability,
-					IssueIdentifier: uuid.New(),
-					IsIgnored:       false,
-					IgnoreDetails: &snyk.IgnoreDetails{
-						Reason: "False positive",
-						Expiry: time.Now(),
-					},
-					Range: snyk.Range{
-						Start: snyk.Position{
-							Line:      0,
-							Character: 0,
-						},
-						End: snyk.Position{
-							Line:      0,
-							Character: 10,
-						},
-					},
-					Message:             "This is a false positive",
-					FormattedMessage:    "",
-					AffectedFilePath:    "foo/bar.go",
-					Product:             "Snyk Code",
-					References:          nil,
-					IssueDescriptionURL: nil,
-					CodeActions:         nil,
-					CodelensCommands:    nil,
-					Ecosystem:           "",
-					CWEs:                nil,
-					CVEs:                nil,
-					AdditionalData:      nil,
+				End: snyk.Position{
+					Line:      1,
+					Character: 10,
 				},
-			}
-			break
-		}
-		if scanJob.Status != orchestration.ScanJobStatusInProgress {
-			if ctx.Err() != nil {
-				log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
-				return []snyk.Issue{}, nil
-			}
-			err = errors.New("scan failed")
-			break
-		}
-		// TODO: timeout
-	}
-
-	// TODO: what if there's an error in the context?
-
-	sc.trackResult(false, scanMetrics)
-	return issues, nil
+			},
+			Message:             "You silly goose",
+			FormattedMessage:    "",
+			AffectedFilePath:    "test/util/postgresql.ts",
+			Product:             product.ProductCode,
+			References:          []snyk.Reference{},
+			IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
+			CodeActions:         []snyk.CodeAction{},
+			CodelensCommands:    []snyk.CommandData{},
+			Ecosystem:           "npm",
+			CWEs:                []string{},
+			CVEs:                []string{},
+			AdditionalData: snyk.CodeIssueData{
+				Key:                "key1",
+				Title:              "Another title",
+				Message:            "You silly goose",
+				Rule:               "rule",
+				RuleId:             "ruleId",
+				RepoDatasetSize:    0,
+				ExampleCommitFixes: []snyk.ExampleCommitFix{},
+				CWE:                []string{},
+				Text:               "",
+				Markers:            []snyk.Marker{},
+				Cols:               snyk.CodePoint{},
+				Rows:               snyk.CodePoint{},
+				IsSecurityType:     true,
+				IsAutofixable:      false,
+				PriorityScore:      1,
+				HasAIFix:           false,
+			},
+		},
+		{
+			ID:              uuid.New().String(),
+			Severity:        snyk.High,
+			IssueType:       snyk.CodeSecurityVulnerability,
+			IssueIdentifier: uuid.New(),
+			IsIgnored:       false,
+			IgnoreDetails: &snyk.IgnoreDetails{
+				Reason: "False positive",
+				Expiry: time.Now(),
+			},
+			Range: snyk.Range{
+				Start: snyk.Position{
+					Line:      2,
+					Character: 1,
+				},
+				End: snyk.Position{
+					Line:      2,
+					Character: 10,
+				},
+			},
+			Message:             "This is a false positive",
+			FormattedMessage:    "",
+			AffectedFilePath:    "test/util/postgresql.ts",
+			Product:             product.ProductCode,
+			References:          []snyk.Reference{},
+			IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
+			CodeActions:         []snyk.CodeAction{},
+			CodelensCommands:    []snyk.CommandData{},
+			Ecosystem:           "npm",
+			CWEs:                []string{},
+			CVEs:                []string{},
+			AdditionalData: snyk.CodeIssueData{
+				Key:                "key2",
+				Title:              "Title",
+				Message:            "This is a false positive",
+				Rule:               "rule",
+				RuleId:             "ruleId",
+				RepoDatasetSize:    0,
+				ExampleCommitFixes: []snyk.ExampleCommitFix{},
+				CWE:                []string{},
+				Text:               "",
+				Markers:            []snyk.Marker{},
+				Cols:               snyk.CodePoint{},
+				Rows:               snyk.CodePoint{},
+				IsSecurityType:     true,
+				IsAutofixable:      false,
+				PriorityScore:      1,
+				HasAIFix:           false,
+			},
+		},
+	}, nil
 }
 
 func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg string, scanMetrics *ScanMetrics) {
@@ -523,8 +522,10 @@ func (sc *Scanner) createWorkspace(
 
 		// TODO: max len size check?
 
+		// TODO: how do you add more files?
+
 		if workspaceUrl == nil {
-			workspaceUrl, err = wsClient.NewWorkspace(ctx, orgId).
+			return wsClient.NewWorkspace(ctx, orgId).
 				WithSettings(&workspace.WorkspaceSettings{
 					ExclusionGlobs: &[]string{},
 					InclusionGlobs: &[]string{},
@@ -532,10 +533,7 @@ func (sc *Scanner) createWorkspace(
 			if err != nil {
 				return nil, err
 			}
-		} else {
-			// todo: how do you add more files?
 		}
-
 	}
 
 	if noFiles {
