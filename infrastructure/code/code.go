@@ -359,7 +359,7 @@ func (sc *Scanner) UploadAndAnalyzeV2(ctx context.Context,
 			Severity:        snyk.High,
 			IssueType:       snyk.CodeSecurityVulnerability,
 			IssueIdentifier: uuid.New(),
-			IsIgnored:       false,
+			IsIgnored:       true,
 			IgnoreDetails: &snyk.IgnoreDetails{
 				Reason: "False positive",
 				Expiry: time.Now(),

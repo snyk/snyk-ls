@@ -1031,6 +1031,7 @@ type ScanIssue struct { // TODO - convert this to a generic type
 	FilePath       string      `json:"filePath"`
 	Range          sglsp.Range `json:"range"`
 	AdditionalData any         `json:"additionalData,omitempty"`
+	IsIgnored      bool        `json:"isIgnored"`
 }
 
 // Snyk Open Source

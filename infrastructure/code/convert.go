@@ -27,6 +27,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"golang.org/x/exp/slices"
@@ -354,10 +355,15 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 			}
 
 			d := snyk.Issue{
-				ID:                  result.RuleID,
-				Range:               myRange,
-				Severity:            issueSeverity(result.Level),
-				Message:             message,
+				ID:        result.RuleID,
+				Range:     myRange,
+				Severity:  issueSeverity(result.Level),
+				Message:   message,
+				IsIgnored: false, // TODO: check feature flag
+				IgnoreDetails: &snyk.IgnoreDetails{
+					Reason: "",
+					Expiry: time.Time{},
+				},
 				FormattedMessage:    formattedMessage,
 				IssueType:           issueType,
 				AffectedFilePath:    absPath,
