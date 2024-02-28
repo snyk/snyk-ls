@@ -17,7 +17,9 @@
 package code
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"net/url"
 	"os"
 	"sync"
@@ -27,6 +29,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
+	orchestration "github.com/snyk/orchestration-service/client/go"
+	orchFakeClient "github.com/snyk/orchestration-service/client/go/fakeclient"
 	"github.com/snyk/workspace-service/client/go/v6/pkg/workspace"
 	workFakeClient "github.com/snyk/workspace-service/client/go/v6/pkg/workspace/fakeclient"
 
@@ -192,7 +196,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	t.EndWithMessage("Collected files")
 	metrics := sc.newMetrics(startTime)
 	//results, err := sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
-	results, err := sc.UploadAndAnalyzeV2(span.Context(), files, sastResponse.Org, folderPath, metrics)
+	results, err := sc.UploadAndAnalyzeV2(span.Context(), files, sastResponse.Org, folderPath, metrics, changedFiles)
 	return results, err
 }
 
@@ -292,7 +296,6 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 		return []snyk.Issue{}, nil
 	}
 	sc.trackResult(err == nil, scanMetrics)
-	// TODO: this is in target-service
 	return issues, err
 }
 
@@ -301,110 +304,211 @@ func (sc *Scanner) UploadAndAnalyzeV2(ctx context.Context,
 	org string,
 	path string,
 	scanMetrics *ScanMetrics,
+	changedFiles map[string]bool,
 ) (issues []snyk.Issue, err error) {
 	if ctx.Err() != nil {
 		log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
 		return issues, nil
 	}
-	return []snyk.Issue{
-		{
-			ID:              uuid.New().String(),
-			Severity:        snyk.High,
-			IssueType:       snyk.CodeSecurityVulnerability,
-			IssueIdentifier: uuid.New(),
-			IsIgnored:       false,
-			IgnoreDetails:   nil,
-			Range: snyk.Range{
-				Start: snyk.Position{
-					Line:      1,
-					Character: 1,
+
+	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.uploadAndAnalyze")
+
+	requestId := span.GetTraceId() // use span trace id as code-request-id
+	log.Info().Str("requestId", requestId).Msg("Starting Code analysis.")
+
+	bundle, err := sc.createBundle(span.Context(), requestId, path, files, changedFiles)
+	if err != nil {
+		if isNoFilesError(err) {
+			return issues, nil
+		}
+		if ctx.Err() == nil { // Only report errors that are not intentional cancellations
+			msg := "error creating bundle..."
+			sc.handleCreationAndUploadError(path, err, msg, scanMetrics)
+			return issues, err
+		} else {
+			log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
+			return issues, nil
+		}
+	}
+	scanMetrics.lastScanFileCount = len(bundle.Files)
+
+	uploadedBundle, err := sc.BundleUploader.Upload(span.Context(), bundle, bundle.Files)
+	// TODO LSP error handling should be pushed UP to the LSP layer
+	if err != nil {
+		if ctx.Err() != nil { // Only handle errors that are not intentional cancellations
+			msg := "error uploading files..."
+			sc.handleCreationAndUploadError(path, err, msg, scanMetrics)
+			return issues, err
+		} else {
+			log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
+			return issues, nil
+		}
+	}
+
+	if uploadedBundle.BundleHash == "" {
+		log.Info().Msg("empty bundle, no Snyk Code analysis")
+		return issues, nil
+	}
+	// TODO: where do we get this from?
+	orgId := uuid.New()
+
+	// TODO: how do we authenticate?
+	wsClient := workFakeClient.GetClient()
+	workspaceUrl, err := wsClient.NewWorkspace(ctx, orgId).
+		WithSettings(&workspace.WorkspaceSettings{
+			ExclusionGlobs: &[]string{},
+			InclusionGlobs: &[]string{},
+		}).FromLocalContent(bytes.NewReader([]byte("test")), "foo/bar.txt")
+
+	// TODO: this should always run, even if there's an error but for now it's just added here as a reminder
+	sc.BundleUploader.instrumentor.Finish(span)
+
+	p := progress.NewTracker(false)
+	p.BeginWithMessage("Snyk Code analysis for "+uploadedBundle.rootPath, "Retrieving results...")
+
+	orchClient := orchFakeClient.NewFakeClient(&orchFakeClient.FakeOptions{ScannerMaxQuietPeriod: time.Millisecond * 50})
+
+	method := "code.retrieveAnalysis"
+	s := uploadedBundle.instrumentor.StartSpan(ctx, method)
+
+	start := time.Now()
+	logger := log.With().Str("method", "retrieveAnalysis").Logger()
+
+	// TODO: is this the correct flow?
+	flow := orchestration.CliTestFlow{}
+	scanJob, err := orchClient.Scan(ctx, orgId, flow, workspaceUrl)
+	for {
+		if ctx.Err() != nil { // Cancellation requested
+			return []snyk.Issue{}, nil
+		}
+
+		scanJobResults, err := orchClient.GetScanJobResults(ctx, orgId, scanJob.Id)
+		if err != nil {
+			logger.Error().Err(err).
+				Str("requestId", uploadedBundle.requestId).
+				Int("fileCount", len(uploadedBundle.UploadBatches)).
+				Msg("error retrieving diagnostics...")
+			uploadedBundle.errorReporter.CaptureErrorAndReportAsIssue(uploadedBundle.rootPath, err)
+			p.EndWithMessage(fmt.Sprintf("Analysis failed: %v", err))
+			return []snyk.Issue{}, err
+		}
+
+		time.Sleep(2 * time.Second)
+		if scanJobResults.Status == orchestration.ScanJobStatusDone {
+			logger.Trace().Str("requestId", uploadedBundle.requestId).
+				Msg("sending diagnostics...")
+			p.EndWithMessage("Analysis complete.")
+
+			// TODO: response to issues
+			issues = []snyk.Issue{
+				{
+					ID:              uuid.New().String(),
+					Severity:        snyk.High,
+					IssueType:       snyk.CodeSecurityVulnerability,
+					IssueIdentifier: uuid.New(),
+					IsIgnored:       false,
+					IgnoreDetails:   nil,
+					Range: snyk.Range{
+						Start: snyk.Position{
+							Line:      1,
+							Character: 1,
+						},
+						End: snyk.Position{
+							Line:      1,
+							Character: 10,
+						},
+					},
+					Message:             "You silly goose",
+					FormattedMessage:    "",
+					AffectedFilePath:    "test/util/postgresql.ts",
+					Product:             product.ProductCode,
+					References:          []snyk.Reference{},
+					IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
+					CodeActions:         []snyk.CodeAction{},
+					CodelensCommands:    []snyk.CommandData{},
+					Ecosystem:           "npm",
+					CWEs:                []string{},
+					CVEs:                []string{},
+					AdditionalData: snyk.CodeIssueData{
+						Key:                "key1",
+						Title:              "Another title",
+						Message:            "You silly goose",
+						Rule:               "rule",
+						RuleId:             "ruleId",
+						RepoDatasetSize:    0,
+						ExampleCommitFixes: []snyk.ExampleCommitFix{},
+						CWE:                []string{},
+						Text:               "",
+						Markers:            []snyk.Marker{},
+						Cols:               snyk.CodePoint{},
+						Rows:               snyk.CodePoint{},
+						IsSecurityType:     true,
+						IsAutofixable:      false,
+						PriorityScore:      1,
+						HasAIFix:           false,
+					},
 				},
-				End: snyk.Position{
-					Line:      1,
-					Character: 10,
+				{
+					ID:              uuid.New().String(),
+					Severity:        snyk.High,
+					IssueType:       snyk.CodeSecurityVulnerability,
+					IssueIdentifier: uuid.New(),
+					IsIgnored:       true,
+					IgnoreDetails: &snyk.IgnoreDetails{
+						Reason: "False positive",
+						Expiry: time.Now(),
+					},
+					Range: snyk.Range{
+						Start: snyk.Position{
+							Line:      2,
+							Character: 1,
+						},
+						End: snyk.Position{
+							Line:      2,
+							Character: 10,
+						},
+					},
+					Message:             "This is a false positive",
+					FormattedMessage:    "",
+					AffectedFilePath:    "test/util/postgresql.ts",
+					Product:             product.ProductCode,
+					References:          []snyk.Reference{},
+					IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
+					Ecosystem:           "npm",
+					CWEs:                []string{},
+					CVEs:                []string{},
 				},
-			},
-			Message:             "You silly goose",
-			FormattedMessage:    "",
-			AffectedFilePath:    "test/util/postgresql.ts",
-			Product:             product.ProductCode,
-			References:          []snyk.Reference{},
-			IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
-			CodeActions:         []snyk.CodeAction{},
-			CodelensCommands:    []snyk.CommandData{},
-			Ecosystem:           "npm",
-			CWEs:                []string{},
-			CVEs:                []string{},
-			AdditionalData: snyk.CodeIssueData{
-				Key:                "key1",
-				Title:              "Another title",
-				Message:            "You silly goose",
-				Rule:               "rule",
-				RuleId:             "ruleId",
-				RepoDatasetSize:    0,
-				ExampleCommitFixes: []snyk.ExampleCommitFix{},
-				CWE:                []string{},
-				Text:               "",
-				Markers:            []snyk.Marker{},
-				Cols:               snyk.CodePoint{},
-				Rows:               snyk.CodePoint{},
-				IsSecurityType:     true,
-				IsAutofixable:      false,
-				PriorityScore:      1,
-				HasAIFix:           false,
-			},
-		},
-		{
-			ID:              uuid.New().String(),
-			Severity:        snyk.High,
-			IssueType:       snyk.CodeSecurityVulnerability,
-			IssueIdentifier: uuid.New(),
-			IsIgnored:       true,
-			IgnoreDetails: &snyk.IgnoreDetails{
-				Reason: "False positive",
-				Expiry: time.Now(),
-			},
-			Range: snyk.Range{
-				Start: snyk.Position{
-					Line:      2,
-					Character: 1,
-				},
-				End: snyk.Position{
-					Line:      2,
-					Character: 10,
-				},
-			},
-			Message:             "This is a false positive",
-			FormattedMessage:    "",
-			AffectedFilePath:    "test/util/postgresql.ts",
-			Product:             product.ProductCode,
-			References:          []snyk.Reference{},
-			IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
-			CodeActions:         []snyk.CodeAction{},
-			CodelensCommands:    []snyk.CommandData{},
-			Ecosystem:           "npm",
-			CWEs:                []string{},
-			CVEs:                []string{},
-			AdditionalData: snyk.CodeIssueData{
-				Key:                "key2",
-				Title:              "Title",
-				Message:            "This is a false positive",
-				Rule:               "rule",
-				RuleId:             "ruleId",
-				RepoDatasetSize:    0,
-				ExampleCommitFixes: []snyk.ExampleCommitFix{},
-				CWE:                []string{},
-				Text:               "",
-				Markers:            []snyk.Marker{},
-				Cols:               snyk.CodePoint{},
-				Rows:               snyk.CodePoint{},
-				IsSecurityType:     true,
-				IsAutofixable:      false,
-				PriorityScore:      1,
-				HasAIFix:           false,
-			},
-		},
-	}, nil
+			}
+			uploadedBundle.addIssueActions(ctx, issues)
+			break
+		}
+		if scanJobResults.Status != orchestration.ScanJobStatusInProgress {
+			if ctx.Err() != nil {
+				log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
+				return []snyk.Issue{}, nil
+			}
+			err = errors.New("scan failed")
+			break
+		}
+		logger.Trace().Msg("\"Analyzing\" message received, sending In-Progress message to client")
+
+		if time.Since(start) > config.CurrentConfig().SnykCodeAnalysisTimeout() {
+			err := errors.New("analysis call timed out")
+			log.Error().Err(err).Msg("timeout...")
+			uploadedBundle.errorReporter.CaptureErrorAndReportAsIssue(uploadedBundle.rootPath, err)
+			p.EndWithMessage("Snyk Code Analysis timed out")
+			return []snyk.Issue{}, err
+		}
+		time.Sleep(1 * time.Second)
+		// TODO: mock marking the scan as complete
+		_ = orchClient.MarkScanAsComplete(ctx, scanJob.Id)
+		// TODO: we do not have percentage
+		//p.Report(scanJobResults.percentage)
+	}
+
+	uploadedBundle.instrumentor.Finish(s)
+	sc.trackResult(err == nil, scanMetrics)
+	return issues, nil
 }
 
 func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg string, scanMetrics *ScanMetrics) {
@@ -492,55 +596,6 @@ func (sc *Scanner) createBundle(ctx context.Context,
 		b.BundleHash, b.missingFiles, err = sc.BundleUploader.SnykCode.CreateBundle(span.Context(), fileHashes)
 	}
 	return b, err
-}
-
-// TODO: this is probably not the best way to do this but I did the quickest POC.
-// TODO: can we add incremental files,
-func (sc *Scanner) createWorkspace(
-	ctx context.Context,
-	orgId uuid.UUID,
-	rootPath string,
-	filePaths <-chan string,
-) (*url.URL, error) {
-	// TODO: how can we authenticate?
-	wsClient := workFakeClient.GetClient()
-
-	var workspaceUrl *url.URL
-
-	noFiles := true
-	for absoluteFilePath := range filePaths {
-		noFiles = false
-		if ctx.Err() != nil {
-			return nil, nil // The cancellation error should be handled by the calling function
-		}
-
-		fileContentReader, err := os.Open(absoluteFilePath)
-		if err != nil {
-			log.Error().Err(err).Str("filePath", absoluteFilePath).Msg("could not load content of file")
-			continue
-		}
-
-		// TODO: max len size check?
-
-		// TODO: how do you add more files?
-
-		if workspaceUrl == nil {
-			return wsClient.NewWorkspace(ctx, orgId).
-				WithSettings(&workspace.WorkspaceSettings{
-					ExclusionGlobs: &[]string{},
-					InclusionGlobs: &[]string{},
-				}).FromLocalContent(fileContentReader, absoluteFilePath)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	if noFiles {
-		return nil, noFilesError{}
-	}
-
-	return workspaceUrl, nil
 }
 
 type UploadStatus struct {
