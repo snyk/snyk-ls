@@ -125,7 +125,7 @@ func Test_AutofixMessages(t *testing.T) {
 	}
 
 	t.Run("Shows attempt message when fix requested", func(t *testing.T) {
-		fn := bundle.autofixFunc(context.Background(), FakeIssue)
+		fn := bundle.AutofixFunc(context.Background(), FakeIssue)
 		fn()
 
 		assert.Contains(t, mockNotifier.SentMessages(), sglsp.ShowMessageParams{
@@ -135,7 +135,7 @@ func Test_AutofixMessages(t *testing.T) {
 	})
 
 	t.Run("Shows success message when fix provided", func(t *testing.T) {
-		fn := bundle.autofixFunc(context.Background(), FakeIssue)
+		fn := bundle.AutofixFunc(context.Background(), FakeIssue)
 		fn()
 		var feedbackMessageReq snyk.ShowMessageRequest
 		assert.Eventually(t, func() bool {
@@ -182,7 +182,7 @@ func Test_AutofixMessages(t *testing.T) {
 		// NOTE(alex.gronskiy): Code can return `<lang>/<ruleID>/test` ruleID
 		fakeTestIssue := FakeIssue
 		fakeTestIssue.ID = fakeTestIssue.ID + "/test"
-		fn := bundle.autofixFunc(context.Background(), fakeTestIssue)
+		fn := bundle.AutofixFunc(context.Background(), fakeTestIssue)
 		fn()
 
 		var feedbackMessageReq snyk.ShowMessageRequest
@@ -229,7 +229,7 @@ func Test_AutofixMessages(t *testing.T) {
 	t.Run("Shows error message when no fix available", func(t *testing.T) {
 		fakeSnykCode.NoFixSuggestions = true
 
-		fn := bundle.autofixFunc(context.Background(), FakeIssue)
+		fn := bundle.AutofixFunc(context.Background(), FakeIssue)
 		fn()
 
 		assert.Contains(t, mockNotifier.SentMessages(), sglsp.ShowMessageParams{

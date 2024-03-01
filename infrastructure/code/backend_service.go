@@ -429,7 +429,7 @@ func (s *SnykCodeHTTPClient) checkResponseCode(r *http.Response) error {
 }
 
 type AutofixStatus struct {
-	message string
+	Message string
 }
 
 func (s *SnykCodeHTTPClient) RunAutofix(
@@ -459,7 +459,7 @@ func (s *SnykCodeHTTPClient) RunAutofix(
 	}
 
 	responseBody, err := s.doCall(span.Context(), "POST", "/autofix/suggestions", requestBody)
-	failed := AutofixStatus{message: "FAILED"}
+	failed := AutofixStatus{Message: "FAILED"}
 	if err != nil {
 		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response from autofix")
 		return nil, failed, err
@@ -474,7 +474,7 @@ func (s *SnykCodeHTTPClient) RunAutofix(
 
 	log.Debug().Str("method", method).Str("requestId", requestId).Msgf("Status: %s", response.Status)
 
-	if response.Status == failed.message {
+	if response.Status == failed.Message {
 		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("autofix failed")
 		return nil, failed, SnykAutofixFailedError{Msg: string(responseBody)}
 	}
@@ -483,17 +483,17 @@ func (s *SnykCodeHTTPClient) RunAutofix(
 		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
 		return nil, failed, SnykAutofixFailedError{Msg: string(responseBody)}
 	}
-	status := AutofixStatus{message: response.Status}
+	status := AutofixStatus{Message: response.Status}
 	if response.Status != completeStatus {
 		return nil, status, nil
 	}
 
-	suggestions := response.toAutofixSuggestions(baseDir, options.filePath)
-	return suggestions, AutofixStatus{message: response.Status}, nil
+	suggestions := response.toAutofixSuggestions(baseDir, options.FilePath)
+	return suggestions, AutofixStatus{Message: response.Status}, nil
 }
 
 func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte, error) {
-	_, ruleID, ok := getIssueLangAndRuleId(options.issue)
+	_, ruleID, ok := getIssueLangAndRuleId(options.Issue)
 	if !ok {
 		return nil, SnykAutofixFailedError{Msg: "Issue's ruleID does not follow <lang>/<ruleKey> format"}
 	}
@@ -501,15 +501,15 @@ func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte
 	request := AutofixRequest{
 		Key: AutofixRequestKey{
 			Type:     "file",
-			Hash:     options.bundleHash,
-			FilePath: options.filePath,
+			Hash:     options.BundleHash,
+			FilePath: options.FilePath,
 			RuleId:   ruleID,
-			LineNum:  options.issue.Range.Start.Line + 1,
+			LineNum:  options.Issue.Range.Start.Line + 1,
 		},
 		AnalysisContext: newCodeRequestContext(),
 	}
-	if len(options.shardKey) > 0 {
-		request.Key.Shard = options.shardKey
+	if len(options.ShardKey) > 0 {
+		request.Key.Shard = options.ShardKey
 	}
 
 	requestBody, err := json.Marshal(request)

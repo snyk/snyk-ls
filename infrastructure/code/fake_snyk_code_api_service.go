@@ -267,14 +267,14 @@ func (f *FakeSnykCodeClient) RunAutofix(
 ) ([]AutofixSuggestion, AutofixStatus, error) {
 	<-time.After(f.AnalysisDuration)
 	FakeSnykCodeApiServiceMutex.Lock()
-	params := []any{options.bundleHash, options.filePath, options.issue.ID, options.issue.Range.Start.Line}
+	params := []any{options.BundleHash, options.FilePath, options.Issue.ID, options.Issue.Range.Start.Line}
 	f.addCall(params, RunAutofixOperation)
 	FakeSnykCodeApiServiceMutex.Unlock()
 
 	if f.NoFixSuggestions {
 		log.Trace().Str("method", "RunAutofix").Interface("fakeAutofix",
 			"someAutofixSuggestion").Msg("fake backend call received & answered with no suggestions")
-		return nil, AutofixStatus{message: "COMPLETE"}, nil
+		return nil, AutofixStatus{Message: "COMPLETE"}, nil
 	}
 
 	suggestions := []AutofixSuggestion{
@@ -283,7 +283,7 @@ func (f *FakeSnykCodeClient) RunAutofix(
 			FixId: "123e4567-e89b-12d3-a456-426614174000/1",
 			AutofixEdit: snyk.WorkspaceEdit{
 				Changes: map[string][]snyk.TextEdit{
-					options.filePath: {snyk.TextEdit{
+					options.FilePath: {snyk.TextEdit{
 						Range: snyk.Range{
 							Start: snyk.Position{Line: 0, Character: 0},
 							End:   snyk.Position{Line: 10000, Character: 0},
@@ -298,7 +298,7 @@ func (f *FakeSnykCodeClient) RunAutofix(
 			FixId: "123e4567-e89b-12d3-a456-426614174000/2",
 			AutofixEdit: snyk.WorkspaceEdit{
 				Changes: map[string][]snyk.TextEdit{
-					options.filePath: {snyk.TextEdit{
+					options.FilePath: {snyk.TextEdit{
 						Range: snyk.Range{
 							Start: snyk.Position{Line: 0, Character: 0},
 							End:   snyk.Position{Line: 10000, Character: 0},
@@ -312,7 +312,7 @@ func (f *FakeSnykCodeClient) RunAutofix(
 
 	log.Trace().Str("method", "RunAutofix").Interface("fakeAutofix",
 		"someAutofixSuggestion").Msg("fake backend call received & answered")
-	return suggestions, AutofixStatus{message: "COMPLETE"}, nil
+	return suggestions, AutofixStatus{Message: "COMPLETE"}, nil
 }
 
 func (f *FakeSnykCodeClient) SubmitAutofixFeedback(ctx context.Context, fixId string, positive bool) error {

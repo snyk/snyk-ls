@@ -187,7 +187,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	files := fileFilter.FindNonIgnoredFiles()
 	t.EndWithMessage("Collected files")
 	metrics := sc.newMetrics(startTime)
-	results, err := sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
+	results, _, err := sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
 
 	return results, err
 }
@@ -236,10 +236,10 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 	path string,
 	scanMetrics *ScanMetrics,
 	changedFiles map[string]bool,
-) (issues []snyk.Issue, err error) {
+) (issues []snyk.Issue, _ []*snyk.WorkspaceEdit, err error) {
 	if ctx.Err() != nil {
 		log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
-		return issues, nil
+		return issues, nil, nil
 	}
 
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.uploadAndAnalyze")
@@ -251,15 +251,15 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 	bundle, err := sc.createBundle(span.Context(), requestId, path, files, changedFiles)
 	if err != nil {
 		if isNoFilesError(err) {
-			return issues, nil
+			return issues, nil, nil
 		}
 		if ctx.Err() == nil { // Only report errors that are not intentional cancellations
 			msg := "error creating bundle..."
 			sc.handleCreationAndUploadError(path, err, msg, scanMetrics)
-			return issues, err
+			return issues, nil, err
 		} else {
 			log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
-			return issues, nil
+			return issues, nil, nil
 		}
 	}
 	scanMetrics.lastScanFileCount = len(bundle.Files)
@@ -270,25 +270,31 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 		if ctx.Err() != nil { // Only handle errors that are not intentional cancellations
 			msg := "error uploading files..."
 			sc.handleCreationAndUploadError(path, err, msg, scanMetrics)
-			return issues, err
+			return issues, nil, err
 		} else {
 			log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
-			return issues, nil
+			return issues, nil, nil
 		}
 	}
 
 	if uploadedBundle.BundleHash == "" {
 		log.Info().Msg("empty bundle, no Snyk Code analysis")
-		return issues, nil
+		return issues, nil, nil
 	}
 
 	issues, err = uploadedBundle.FetchDiagnosticsData(span.Context())
 	if ctx.Err() != nil {
 		log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
-		return []snyk.Issue{}, nil
+		return []snyk.Issue{}, nil, nil
 	}
 	sc.trackResult(err == nil, scanMetrics)
-	return issues, err
+
+	var workspaceEdits []*snyk.WorkspaceEdit
+	for _, issue := range issues {
+		workspaceEdit := uploadedBundle.AutofixFunc(ctx, issue)()
+		workspaceEdits = append(workspaceEdits, workspaceEdit)
+	}
+	return issues, workspaceEdits, err
 }
 
 func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg string, scanMetrics *ScanMetrics) {

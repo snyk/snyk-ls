@@ -30,10 +30,10 @@ type AnalysisOptions struct {
 }
 
 type AutofixOptions struct {
-	bundleHash string
-	shardKey   string
-	filePath   string
-	issue      snyk.Issue
+	BundleHash string
+	ShardKey   string
+	FilePath   string
+	Issue      snyk.Issue
 }
 
 type SnykCodeClient interface {

@@ -226,7 +226,7 @@ func (b *Bundle) getShardKey(rootPath string, authToken string) string {
 	return ""
 }
 
-func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk.WorkspaceEdit {
+func (b *Bundle) AutofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk.WorkspaceEdit {
 	editFn := func() *snyk.WorkspaceEdit {
 		method := "code.enhanceWithAutofixSuggestionEdits"
 		s := b.instrumentor.StartSpan(ctx, method)
@@ -250,10 +250,10 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 		encodedRelativePath := EncodePath(relativePath)
 
 		autofixOptions := AutofixOptions{
-			bundleHash: b.BundleHash,
-			shardKey:   b.getShardKey(b.rootPath, config.CurrentConfig().Token()),
-			filePath:   encodedRelativePath,
-			issue:      issue,
+			BundleHash: b.BundleHash,
+			ShardKey:   b.getShardKey(b.rootPath, config.CurrentConfig().Token()),
+			FilePath:   encodedRelativePath,
+			Issue:      issue,
 		}
 
 		// Polling function just calls the endpoint and registers result, signalling `done` to the
@@ -268,7 +268,7 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 					Err(err).Str("method", method).Str("requestId", b.requestId).
 					Str("stage", "requesting autofix").Msg("error requesting autofix")
 				complete = true
-			} else if fixStatus.message == completeStatus {
+			} else if fixStatus.Message == completeStatus {
 				if len(fixSuggestions) > 0 {
 					// TODO(alex.gronskiy): currently, only the first ([0]) fix suggestion goes into the fix
 					fix = &fixSuggestions[0]
@@ -347,7 +347,7 @@ func (b *Bundle) autofixFeedbackActions(fixId string) (*data_structure.OrderedMa
 
 // returns the deferred code action CodeAction which calls autofix.
 func (b *Bundle) createDeferredAutofixCodeAction(ctx context.Context, issue snyk.Issue) *snyk.CodeAction {
-	autofixEditCallback := b.autofixFunc(ctx, issue)
+	autofixEditCallback := b.AutofixFunc(ctx, issue)
 
 	action, err := snyk.NewDeferredCodeAction("⚡ Fix this issue: "+issueTitle(issue)+" (Snyk)", &autofixEditCallback, nil)
 	if err != nil {

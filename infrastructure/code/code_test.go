@@ -288,7 +288,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			docs := sliceToChannel([]string{fullPath})
 			metrics := c.newMetrics(time.Time{})
 
-			_, _ = c.UploadAndAnalyze(context.Background(), docs, baseDir, metrics, map[string]bool{})
+			_, _, _ = c.UploadAndAnalyze(context.Background(), docs, baseDir, metrics, map[string]bool{})
 
 			// verify that create bundle has been called on backend service
 			params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
@@ -318,7 +318,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			files := []string{diagnosticUri}
 			metrics := c.newMetrics(time.Time{})
 
-			issues, _ := c.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
+			issues, _, _ := c.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
 
 			assert.NotNil(t, issues)
 			assert.Equal(t, 1, len(issues))
@@ -356,7 +356,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			metrics := c.newMetrics(time.Now())
 
 			// execute
-			_, _ = c.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
+			_, _, _ = c.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
 
 			assert.Len(t, analytics.GetAnalytics(), 1)
 			assert.Equal(
@@ -645,7 +645,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			metrics := c.newMetrics(time.Now())
 
 			// execute
-			issues, _ := c.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
+			issues, _, _ := c.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
 
 			assert.Len(t, analytics.GetAnalytics(), 1)
 			// Default is to have 1 fake action from analysis + 0 from autofix
@@ -682,7 +682,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			metrics := c.newMetrics(time.Now())
 
 			// execute
-			issues, _ := c.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
+			issues, _, _ := c.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
 
 			assert.Len(t, analytics.GetAnalytics(), 1)
 			// Default is to have 1 fake action from analysis + 0 from autofix
@@ -716,7 +716,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			metrics := c.newMetrics(time.Now())
 
 			// execute
-			issues, _ := c.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
+			issues, _, _ := c.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
 
 			assert.Len(t, analytics.GetAnalytics(), 1)
 			assert.Len(t, issues[0].CodeActions, 2)
