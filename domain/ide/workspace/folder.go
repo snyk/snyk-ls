@@ -171,12 +171,33 @@ func (f *Folder) scan(ctx context.Context, path string) {
 	f.scanner.Scan(ctx, path, f.processResults, f.path)
 }
 
-func (f *Folder) CheckAndUpdateStorage(path string, scannedIssues []snyk.Issue) {
-	cachedIssues, ok := f.documentDiagnosticCache.Load(path)
+func (f *Folder) findResolvedIssues(cachedIssues, scannedIssues []snyk.Issue) (resolvedIssues []snyk.Issue) {
+	// Map of scannedIssues for quick lookup.
+	scannedIssuesMap := make(map[string]snyk.Issue)
+	for _, issue := range scannedIssues {
+		scannedIssuesMap[issue.ID] = issue
+	}
+
+	resolvedIssues = []snyk.Issue{}
+
+	// Iterate through cachedIssues, checking if each issue is present in the scannedIssues map.
+	for _, cached := range cachedIssues {
+		if _, ok := scannedIssuesMap[cached.ID]; !ok {
+			resolvedIssues = append(resolvedIssues, cached)
+		}
+	}
+
+	// If an issue from cachedIssues is not found in scannedIssuesMap,
+	// it's considered resolved and added to resolvedIssues.
+	return resolvedIssues
+}
+
+func (f *Folder) CheckAndUpdateStorage(filePath string, scannedIssues []snyk.Issue) {
+	cachedIssues, ok := f.documentDiagnosticCache.Load(filePath)
 
 	if !ok || len(cachedIssues) == 0 {
 		// If there are no cached issues, we can safely add the new ones
-		f.documentDiagnosticCache.Store(path, scannedIssues)
+		f.documentDiagnosticCache.Store(filePath, scannedIssues)
 		return
 	}
 
@@ -198,7 +219,8 @@ func (f *Folder) CheckAndUpdateStorage(path string, scannedIssues []snyk.Issue) 
 	}
 
 	if newIssuesAdded {
-		f.documentDiagnosticCache.Store(path, cachedIssues)
+		f.documentDiagnosticCache.Store(filePath, cachedIssues)
+		return
 	}
 }
 

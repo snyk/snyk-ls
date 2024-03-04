@@ -44,22 +44,98 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-func Test_CheckAndUpdateStorage_NewIssue(t *testing.T) {
+const folderPath = "folder-path"
+const folderName = "repo-name"
+const filePath = "file:///folder-path/repo-name/index.js"
+
+func Test_findResolvedIssues_NoIssuesResolved(t *testing.T) {
 	testutil.UnitTest(t)
 	// Arrange
-	folderPath, filePath := "UsersFolder", "file:///UsersFolder/aUser/aRepositoryName/index.js"
 	scanner := snyk.NewTestScanner()
 	fakeHoverService := hover.NewFakeHoverService()
 
-	f := NewFolder(folderPath, "TestFolder", scanner, fakeHoverService, snyk.NewMockScanNotifier(), notification.NewNotifier())
-	mockScannedIssues := []snyk.Issue{NewMockIssue("javascript/HardcodedSecret", filePath)}
+	f := NewFolder(folderPath, folderName, scanner, fakeHoverService, snyk.NewMockScanNotifier(), notification.NewNotifier())
 
-	// Pre-populate the cache with a mock issue
+	// Ensure they are the same
+	cachedIssues := []snyk.Issue{NewMockIssue("javascript/HardcodedSecret", filePath)}
+	scannedIssues := []snyk.Issue{NewMockIssue("javascript/HardcodedSecret", filePath)}
+
+	// Act
+	resolvedIssues := f.findResolvedIssues(cachedIssues, scannedIssues)
+
+	// Assert
+	if len(resolvedIssues) != 0 {
+		t.Errorf("Expected no resolved issues, found %d", len(resolvedIssues))
+	}
+}
+
+func Test_findResolvedIssues_AllIssuesResolved(t *testing.T) {
+	testutil.UnitTest(t)
+	// Arrange
+	scanner := snyk.NewTestScanner()
+	fakeHoverService := hover.NewFakeHoverService()
+
+	f := NewFolder(folderPath, folderName, scanner, fakeHoverService, snyk.NewMockScanNotifier(), notification.NewNotifier())
+
+	// All issues from cachedIssues are resolved (none appear in scannedIssues)
+	cachedIssues := []snyk.Issue{
+		NewMockIssue("javascript/HardcodedSecret", filePath),
+		NewMockIssue("javascript/InsecureHash", filePath)}
+	scannedIssues := []snyk.Issue{} // Empty, meaning all cached issues are resolved
+
+	// Act
+	resolvedIssues := f.findResolvedIssues(cachedIssues, scannedIssues)
+
+	// Assert
+	if len(resolvedIssues) != len(cachedIssues) {
+		t.Errorf("Expected 2 resolved issues, found %d", len(resolvedIssues))
+	}
+}
+
+func Test_findResolvedIssues_SomeIssuesResolved(t *testing.T) {
+	testutil.UnitTest(t)
+	// Arrange
+	scanner := snyk.NewTestScanner()
+	fakeHoverService := hover.NewFakeHoverService()
+
+	f := NewFolder(folderPath, folderName, scanner, fakeHoverService, snyk.NewMockScanNotifier(), notification.NewNotifier())
+
+	// Only 1 issue from cachedIssues is resolved (1 appears in scannedIssues)
+	cachedIssues := []snyk.Issue{
+		NewMockIssue("javascript/HardcodedSecret", filePath),
+		NewMockIssue("javascript/InsecureHash", filePath)}
+	scannedIssues := []snyk.Issue{NewMockIssue("javascript/HardcodedSecret", filePath)}
+
+	// Act
+	resolvedIssues := f.findResolvedIssues(cachedIssues, scannedIssues)
+
+	// Assert
+	if len(resolvedIssues) != 1 {
+		t.Errorf("Expected 1 resolved issue, found %d", len(resolvedIssues))
+	}
+
+	expectedResolved := NewMockIssue("javascript/InsecureHash", filePath)
+	if len(resolvedIssues) != 1 || resolvedIssues[0].ID != expectedResolved.ID {
+		t.Errorf("Expected 1 resolved issue with ID %s, found %d with ID %s",
+			expectedResolved.ID, len(resolvedIssues), resolvedIssues[0].ID)
+	}
+}
+
+func Test_CheckAndUpdateStorage_NewIssue(t *testing.T) {
+	testutil.UnitTest(t)
+	// Arrange
+	scanner := snyk.NewTestScanner()
+	fakeHoverService := hover.NewFakeHoverService()
+
+	f := NewFolder(folderPath, folderName, scanner, fakeHoverService, snyk.NewMockScanNotifier(), notification.NewNotifier())
+	scannedIssues := []snyk.Issue{NewMockIssue("javascript/HardcodedSecret", filePath)}
+
+	// Pre-populate the cache
 	existingIssue := []snyk.Issue{NewMockIssue("javascript/InsecureHash", filePath)}
 	f.documentDiagnosticCache.Store(filePath, existingIssue)
 
 	// Act
-	f.CheckAndUpdateStorage(filePath, mockScannedIssues)
+	f.CheckAndUpdateStorage(filePath, scannedIssues)
 
 	// Assert
 	issues, _ := f.documentDiagnosticCache.Load(filePath)
@@ -69,19 +145,18 @@ func Test_CheckAndUpdateStorage_NewIssue(t *testing.T) {
 func Test_CheckAndUpdateStorage_ExistingIssue(t *testing.T) {
 	testutil.UnitTest(t)
 	// Arrange
-	folderPath, filePath := "UsersFolder", "file:///UsersFolder/aUser/aRepositoryName/index.js"
 	scanner := snyk.NewTestScanner()
 	fakeHoverService := hover.NewFakeHoverService()
 
-	f := NewFolder(folderPath, "TestFolder", scanner, fakeHoverService, snyk.NewMockScanNotifier(), notification.NewNotifier())
-	mockScannedIssues := []snyk.Issue{NewMockIssue("javascript/HardcodedSecret", filePath)}
+	f := NewFolder(folderPath, folderName, scanner, fakeHoverService, snyk.NewMockScanNotifier(), notification.NewNotifier())
+	scannedIssues := []snyk.Issue{NewMockIssue("javascript/HardcodedSecret", filePath)}
 
 	// Pre-populate the cache with the SAME issue
 	existingIssue := []snyk.Issue{NewMockIssue("javascript/HardcodedSecret", filePath)}
 	f.documentDiagnosticCache.Store(filePath, existingIssue)
 
 	// Act
-	f.CheckAndUpdateStorage(filePath, mockScannedIssues)
+	f.CheckAndUpdateStorage(filePath, scannedIssues)
 
 	// Assert
 	issues, _ := f.documentDiagnosticCache.Load(filePath)
