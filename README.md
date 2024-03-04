@@ -6,7 +6,8 @@
 
 ## Supported features
 
-The language server follows the [Language Server Protocol](https://microsoft.github.io/language-server-protocol/specifications/specification-current/)
+The language server follows
+the [Language Server Protocol](https://microsoft.github.io/language-server-protocol/specifications/specification-current/)
 and integrates with Snyk Open Source, Snyk Infrastructure as Code and Snyk Code. For the former two, it uses the Snyk
 CLI as a data provider, for the latter it is connecting directly to the Snyk Code API.
 
@@ -191,7 +192,7 @@ Right now the language server supports the following actions:
 - `GetActiveUser` triggers the api call to get the active logged in user or an error if not logged in
   - command: `snyk.getActiveUser`
   - args: empty
-  - returns the active user and its orgs and groups or an error if not logged in. 
+  - returns the active user and its orgs and groups or an error if not logged in.
   ```json5
   {
     "id": "123",
@@ -207,6 +208,47 @@ Right now the language server supports the following actions:
      }
     ],
   }
+  ```
+- `Code Fix Command` triggers an autofix and applies the changes of the first suggestion
+  - command: `snyk.code.fix`
+  - args:
+    - `codeActionId` string
+    - `AffectedFilePath` string
+    - `range` Range
+  - returns an error if not successful
+
+- `Code Fix Diffs` allows to retrieve the diffs for autofix suggestions
+  - command: `snyk.code.fixDiffs`
+  - args:
+    - folderURI string
+    - fileURI string
+    - issueID string (UUID)
+  - returns an array of suggestions:
+  ```json5
+  [{
+    "fixId": "123",
+    "unifiedDiffsPerFile": {
+      "path/to/file": "diff"
+    }
+  }]
+  ```
+  - Diff Example:
+  ```
+  
+  --- /var/folders/vn/77lwfy3974g7vykcm5lr6mkh0000gn/T/Test_SmokeWorkspaceScanOssAndCode952013010/001/1
+  +++ /var/folders/vn/77lwfy3974g7vykcm5lr6mkh0000gn/T/Test_SmokeWorkspaceScanOssAndCode952013010/001/1-fixed
+  @@ -32,7 +32,8 @@
+  
+       test('should set success to OK upon success', function() {
+         // GIVEN
+  
+  -      comp.password = comp.confirmPassword = 'myPassword';
+  
+  +      comp.password = process.env.TEST_PASSWORD;
+  +      comp.confirmPassword = process.env.TEST_PASSWORD;
+  
+         // WHEN
+         comp.changePassword();
   ```
 
 ## Installation
@@ -241,8 +283,9 @@ synchronization. For further information please see [CONTRIBUTING.md](CONTRIBUTI
 level is `info`. This can be overruled by setting the env variable `SNYK_DEBUG_LEVEL`,
 e.g. `export SNYK_DEBUG_LEVEL=debug`
 
-`-licenses` (running standalone) displays the [licenses](https://github.com/snyk/snyk-ls/tree/main/licenses) used by Language Server\
-`--licenses` (running within Snyk CLI) 
+`-licenses` (running standalone) displays the [licenses](https://github.com/snyk/snyk-ls/tree/main/licenses) used by
+Language Server\
+`--licenses` (running within Snyk CLI)
 
 `-o <FORMAT>` allows to specify the output format (`md` or `html`) for issues
 
