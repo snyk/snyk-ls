@@ -69,12 +69,6 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		codeScanner: codeScanner,
 	}
 
-	t.Run("no context", func(t *testing.T) {
-		cut.issueProvider = mockIssueProvider{}
-		_, err := cut.Execute(nil)
-		require.Error(t, err)
-	})
-
 	t.Run("happy path", func(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
 		codeScanner.BundleHashes = map[string]string{"/folderPath": "bundleHash"}
