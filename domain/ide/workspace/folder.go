@@ -157,21 +157,22 @@ func (f *Folder) scan(ctx context.Context, path string) {
 		return
 	}
 
-	issuesSlice, _ := f.DocumentDiagnosticsFromCache(path)
+	issuesSlice, ok := f.DocumentDiagnosticsFromCache(path)
 
-	if issuesSlice != nil {
+	if ok && len(issuesSlice) > 0 {
 		log.Info().Str("method", method).
 			Int("issueSliceLength", len(issuesSlice)).
 			Msgf("Cached results found: Skipping scan for %s", path)
-		f.processResults(snyk.ScanData{
-			Issues: issuesSlice,
-		})
+
+		f.processResults(snyk.ScanData{Issues: issuesSlice})
 		return
 	}
 
 	f.scanner.Scan(ctx, path, f.processResults, f.path)
 }
 
+// `ok` allows distinguishes between a file not being in the cache at all (`ok == false`)
+// and a file being in the cache but with no issues (`ok == true` but `len(cachedIssues) == 0`).
 func (f *Folder) DocumentDiagnosticsFromCache(file string) ([]snyk.Issue, bool) {
 	issues, ok := f.documentDiagnosticCache.Load(file)
 	return issues, ok
