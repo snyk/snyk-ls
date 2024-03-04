@@ -171,6 +171,37 @@ func (f *Folder) scan(ctx context.Context, path string) {
 	f.scanner.Scan(ctx, path, f.processResults, f.path)
 }
 
+func (f *Folder) CheckAndUpdateStorage(path string, scannedIssues []snyk.Issue) {
+	cachedIssues, ok := f.documentDiagnosticCache.Load(path)
+
+	if !ok || len(cachedIssues) == 0 {
+		// If there are no cached issues, we can safely add the new ones
+		f.documentDiagnosticCache.Store(path, scannedIssues)
+		return
+	}
+
+	// Map of issue IDs for quick lookup
+	cachedIssuesMap := make(map[string]snyk.Issue)
+	for _, issue := range cachedIssues {
+		cachedIssuesMap[issue.ID] = issue
+	}
+
+	// Flag to check if new issues are added
+	newIssuesAdded := false
+
+	// Check if each scanned issue is in the cache and add it to the cache if it's not.
+	for _, scanned := range scannedIssues {
+		if _, ok := cachedIssuesMap[scanned.ID]; !ok {
+			cachedIssues = append(cachedIssues, scanned)
+			newIssuesAdded = true
+		}
+	}
+
+	if newIssuesAdded {
+		f.documentDiagnosticCache.Store(path, cachedIssues)
+	}
+}
+
 // `ok` allows distinguishes between a file not being in the cache at all (`ok == false`)
 // and a file being in the cache but with no issues (`ok == true` but `len(cachedIssues) == 0`).
 func (f *Folder) DocumentDiagnosticsFromCache(file string) ([]snyk.Issue, bool) {
