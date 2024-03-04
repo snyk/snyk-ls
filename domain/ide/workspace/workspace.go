@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,6 +46,16 @@ type Workspace struct {
 	trustMutex          sync.Mutex
 	trustRequestOngoing bool // for debouncing
 	notifier            noti.Notifier
+}
+
+func (w *Workspace) Issue(id string) snyk.Issue {
+	for _, folder := range w.folders {
+		issue := folder.Issue(id)
+		if issue.ID != "" {
+			return issue
+		}
+	}
+	return snyk.Issue{}
 }
 
 func New(instrumentor performance.Instrumentor,

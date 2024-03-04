@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -496,4 +496,17 @@ func (f *Folder) sendScanResults(processedProduct product.Product, issuesByFile 
 	} else {
 		f.scanNotifier.SendSuccessForAllProducts(f.Path(), productIssues)
 	}
+}
+
+func (f *Folder) Issue(id string) (issue snyk.Issue) {
+	f.documentDiagnosticCache.Range(func(filePath string, issues []snyk.Issue) bool {
+		for _, i := range issues {
+			if i.ID == id {
+				issue = i
+				return false
+			}
+		}
+		return true
+	})
+	return issue
 }

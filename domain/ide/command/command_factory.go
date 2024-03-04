@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited
+ * © 2023-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,6 +70,8 @@ func CreateFromCommandData(
 		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier}, nil
 	case snyk.CodeSubmitFixFeedback:
 		return &codeFixFeedback{command: commandData, apiClient: codeApiClient}, nil
+	case snyk.CodeFixDiffsCommand:
+		return &codeFixDiffs{command: commandData, issueProvider: issueProvider, notifier: notifier}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

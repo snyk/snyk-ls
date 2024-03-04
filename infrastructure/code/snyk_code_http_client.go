@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -432,64 +432,83 @@ type AutofixStatus struct {
 	message string
 }
 
-func (s *SnykCodeHTTPClient) RunAutofix(
+var failed = AutofixStatus{message: "FAILED"}
+
+func (s *SnykCodeHTTPClient) GetAutofixSuggestions(
 	ctx context.Context,
 	options AutofixOptions,
 	baseDir string,
-) ([]AutofixSuggestion,
-	AutofixStatus,
-	error,
+) (autofixSuggestions []AutofixSuggestion,
+	status AutofixStatus,
+	err error,
 ) {
-	method := "code.RunAutofix"
+	method := "code.GetAutofixSuggestions"
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
-
-	requestId, err := performance2.GetTraceId(span.Context())
-	if err != nil {
-		log.Err(err).Str("method", method).Msg(failedToObtainRequestIdString + err.Error())
-		return nil, AutofixStatus{}, err
-	}
-	log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving autofix for bundle")
-	defer log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving autofix done")
-
-	requestBody, err := s.autofixRequestBody(&options)
-	if err != nil {
-		log.Err(err).Str("method", method).Str("requestBody", string(requestBody)).Msg("error creating request body")
-		return nil, AutofixStatus{}, err
-	}
-
-	responseBody, err := s.doCall(span.Context(), "POST", "/autofix/suggestions", requestBody)
-	failed := AutofixStatus{message: "FAILED"}
-	if err != nil {
-		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response from autofix")
-		return nil, failed, err
-	}
+	logger := log.With().
+		Str("method", method).
+		Str("requestId", span.GetTraceId()).Logger()
 
 	var response AutofixResponse
-	err = json.Unmarshal(responseBody, &response)
+	response, err = s.RunAutofix(span.Context(), options)
 	if err != nil {
-		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
-		return nil, failed, err
+		return autofixSuggestions, status, err
 	}
 
-	log.Debug().Str("method", method).Str("requestId", requestId).Msgf("Status: %s", response.Status)
+	logger.Debug().Msgf("Status: %s", response.Status)
 
 	if response.Status == failed.message {
-		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("autofix failed")
-		return nil, failed, SnykAutofixFailedError{Msg: string(responseBody)}
+		logger.Err(err).Str("responseStatus", response.Status).Msg("autofix failed")
+		return nil, failed, err
 	}
 
 	if response.Status == "" {
-		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
-		return nil, failed, SnykAutofixFailedError{Msg: string(responseBody)}
+		log.Err(err).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
+		return nil, failed, err
 	}
-	status := AutofixStatus{message: response.Status}
+
+	status = AutofixStatus{message: response.Status}
 	if response.Status != completeStatus {
 		return nil, status, nil
 	}
 
 	suggestions := response.toAutofixSuggestions(baseDir, options.filePath)
 	return suggestions, AutofixStatus{message: response.Status}, nil
+}
+
+func (s *SnykCodeHTTPClient) RunAutofix(ctx context.Context, options AutofixOptions) (AutofixResponse, error) {
+	requestId, err := performance2.GetTraceId(ctx)
+	span := s.instrumentor.StartSpan(ctx, "code.RunAutofix")
+	defer span.Finish()
+
+	logger := log.With().Str("method", "code.RunAutofix").Str("requestId", requestId).Logger()
+	if err != nil {
+		logger.Err(err).Msg(failedToObtainRequestIdString + err.Error())
+		return AutofixResponse{}, err
+	}
+	logger.Debug().Msg("API: Retrieving autofix for bundle")
+	defer logger.Debug().Msg("API: Retrieving autofix done")
+
+	requestBody, err := s.autofixRequestBody(&options)
+	if err != nil {
+		logger.Err(err).Str("requestBody", string(requestBody)).Msg("error creating request body")
+		return AutofixResponse{}, err
+	}
+
+	responseBody, err := s.doCall(span.Context(), "POST", "/autofix/suggestions", requestBody)
+
+	if err != nil {
+		logger.Err(err).Str("responseBody", string(responseBody)).Msg("error response from autofix")
+		return AutofixResponse{}, err
+	}
+
+	var response AutofixResponse
+	err = json.Unmarshal(responseBody, &response)
+	if err != nil {
+		logger.Err(err).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
+		return AutofixResponse{}, err
+	}
+	return response, nil
 }
 
 func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte, error) {

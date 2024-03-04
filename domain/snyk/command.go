@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@ const (
 	// Snyk Code specific commands
 	CodeFixCommand        = "snyk.code.fix"
 	CodeSubmitFixFeedback = "snyk.code.submitFixFeedback"
+	CodeFixDiffsCommand   = "snyk.code.fixDiffs"
 )
 
 var (

@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,14 +44,13 @@ var bundleWithMultipleFiles = &UploadBatch{
 }
 
 func Test_getShardKey(t *testing.T) {
-	b := Bundle{BundleHash: ""}
 	const testToken = "TEST"
 	t.Run("should return root path hash", func(t *testing.T) {
 		// Case 1: rootPath exists
 		sampleRootPath := "C:\\GIT\\root"
 		// deepcode ignore HardcodedPassword/test: false positive
 		token := testToken
-		assert.Equal(t, util.Hash([]byte(sampleRootPath)), b.getShardKey(sampleRootPath, token))
+		assert.Equal(t, util.Hash([]byte(sampleRootPath)), getShardKey(sampleRootPath, token))
 	})
 
 	t.Run("should return token hash", func(t *testing.T) {
@@ -59,7 +58,7 @@ func Test_getShardKey(t *testing.T) {
 		sampleRootPath := ""
 		// deepcode ignore HardcodedPassword/test: false positive
 		token := testToken
-		assert.Equal(t, util.Hash([]byte(token)), b.getShardKey(sampleRootPath, token))
+		assert.Equal(t, util.Hash([]byte(token)), getShardKey(sampleRootPath, token))
 	})
 
 	t.Run("should return empty shard key", func(t *testing.T) {
@@ -67,7 +66,7 @@ func Test_getShardKey(t *testing.T) {
 		sampleRootPath := ""
 		// deepcode ignore HardcodedPassword/test: false positive
 		token := ""
-		assert.Equal(t, "", b.getShardKey(sampleRootPath, token))
+		assert.Equal(t, "", getShardKey(sampleRootPath, token))
 	})
 }
 

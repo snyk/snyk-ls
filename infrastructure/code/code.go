@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,6 +77,11 @@ type Scanner struct {
 	learnService      learn.Service
 	fileFilters       *xsync.MapOf[string, *filefilter.FileFilter]
 	notifier          notification.Notifier
+
+	// global map to store last used bundle hashes for each workspace folder
+	// these are needed when we want to retrieve auto-fixes for a previously
+	// analysed folder
+	BundleHashes map[string]string
 }
 
 func New(bundleUploader *BundleUploader,
@@ -96,6 +101,7 @@ func New(bundleUploader *BundleUploader,
 		fileFilters:    xsync.NewMapOf[*filefilter.FileFilter](),
 		learnService:   learnService,
 		notifier:       notifier,
+		BundleHashes:   map[string]string{},
 	}
 	return sc
 }
@@ -281,6 +287,8 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 		log.Info().Msg("empty bundle, no Snyk Code analysis")
 		return issues, nil
 	}
+
+	sc.BundleHashes[path] = uploadedBundle.BundleHash
 
 	issues, err = uploadedBundle.FetchDiagnosticsData(span.Context())
 	if ctx.Err() != nil {

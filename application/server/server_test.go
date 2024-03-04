@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -278,6 +278,7 @@ func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetActiveUserCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.CodeFixCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.CodeSubmitFixFeedback)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.CodeFixDiffsCommand)
 }
 
 func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
