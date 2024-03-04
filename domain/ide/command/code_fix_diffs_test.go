@@ -18,10 +18,10 @@ package command
 
 import (
 	"context"
+	"runtime"
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/observability/performance"
@@ -46,6 +46,10 @@ func (m mockIssueProvider) Issue(key string) snyk.Issue {
 }
 
 func Test_codeFixDiffs_Execute(t *testing.T) {
+	if //goland:noinspection GoBoolExpressions
+	runtime.GOOS == "windows" {
+		t.Skip("Skipping test on windows")
+	}
 	instrumentor := performance.NewInstrumentor()
 	snykCodeClient := &code.FakeSnykCodeClient{
 		UnifiedDiffSuggestions: []code.AutofixUnifiedDiffSuggestion{
@@ -75,12 +79,51 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
 		codeScanner.BundleHashes = map[string]string{"/folderPath": "bundleHash"}
 		cut.command = snyk.CommandData{
-			Arguments: []any{lsp.DocumentURI("file:///folderPath"), lsp.DocumentURI("file://issuePath"), "issueId"},
+			Arguments: []any{"file:///folderPath", "file:///folderPath/issuePath", "issueId"},
 		}
 
 		suggestions, err := cut.Execute(context.Background())
 
 		require.NotEmptyf(t, suggestions, "suggestions should not be empty")
 		require.NoError(t, err)
+	})
+
+	t.Run("unhappy - file not beneath folder", func(t *testing.T) {
+		cut.issueProvider = mockIssueProvider{}
+		codeScanner.BundleHashes = map[string]string{"/folderPath": "bundleHash"}
+		cut.command = snyk.CommandData{
+			Arguments: []any{"file:///folderPath", "file:///anotherFolder/issuePath", "issueId"},
+		}
+
+		suggestions, err := cut.Execute(context.Background())
+
+		require.Emptyf(t, suggestions, "suggestions should be empty")
+		require.Error(t, err)
+	})
+
+	t.Run("unhappy - folder empty", func(t *testing.T) {
+		cut.issueProvider = mockIssueProvider{}
+		codeScanner.BundleHashes = map[string]string{"/folderPath": "bundleHash"}
+		cut.command = snyk.CommandData{
+			Arguments: []any{"", "file:///anotherFolder/issuePath", "issueId"},
+		}
+
+		suggestions, err := cut.Execute(context.Background())
+
+		require.Emptyf(t, suggestions, "suggestions should be empty")
+		require.Error(t, err)
+	})
+
+	t.Run("unhappy - file empty", func(t *testing.T) {
+		cut.issueProvider = mockIssueProvider{}
+		codeScanner.BundleHashes = map[string]string{"/folderPath": "bundleHash"}
+		cut.command = snyk.CommandData{
+			Arguments: []any{"file://folder", "", "issueId"},
+		}
+
+		suggestions, err := cut.Execute(context.Background())
+
+		require.Emptyf(t, suggestions, "suggestions should be empty")
+		require.Error(t, err)
 	})
 }

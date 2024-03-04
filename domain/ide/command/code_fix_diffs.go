@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 
 	"github.com/sourcegraph/go-lsp"
 
@@ -59,9 +60,14 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 	}
 
 	issuePath := uri2.PathFromUri(lsp.DocumentURI(issueURI))
+
 	relPath, err := filepath.Rel(folderPath, issuePath)
 	if err != nil {
 		return nil, err
+	}
+
+	if strings.HasPrefix(relPath, "..") {
+		return nil, errors.New("issue path is not within the folder path")
 	}
 
 	id, ok := args[2].(string)
