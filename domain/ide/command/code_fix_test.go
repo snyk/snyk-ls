@@ -50,7 +50,7 @@ type issueProviderMock struct {
 	mock.Mock
 }
 
-func (m *issueProviderMock) Issue(id string) snyk.Issue {
+func (m *issueProviderMock) Issue(key string) snyk.Issue {
 	panic("this should not be called")
 }
 

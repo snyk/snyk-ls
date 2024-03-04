@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -154,7 +154,14 @@ func initApplication() {
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher, notifier, snykCodeClient)
-	command.SetService(command.NewService(authenticationService, notifier, learnService, w, snykCodeClient))
+	command.SetService(command.NewService(
+		authenticationService,
+		notifier,
+		learnService,
+		w,
+		snykCodeClient,
+		snykCodeScanner,
+	))
 }
 
 /*

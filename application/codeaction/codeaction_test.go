@@ -41,8 +41,8 @@ type mockIssuesProvider struct {
 	mock.Mock
 }
 
-func (m *mockIssuesProvider) Issue(id string) snyk.Issue {
-	return snyk.Issue{ID: id}
+func (m *mockIssuesProvider) Issue(key string) snyk.Issue {
+	return snyk.Issue{ID: key}
 }
 
 func (m *mockIssuesProvider) IssuesFor(path string, r snyk.Range) []snyk.Issue {
@@ -198,7 +198,14 @@ func Test_ResolveCodeAction_UnknownCommandIsReported(t *testing.T) {
 	testutil.UnitTest(t)
 	// Arrange
 	service := setupService()
-	command.SetService(command.NewService(nil, nil, nil, nil, nil))
+	command.SetService(command.NewService(
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+	))
 
 	id := lsp.CodeActionData(uuid.New())
 	c := &sglsp.Command{

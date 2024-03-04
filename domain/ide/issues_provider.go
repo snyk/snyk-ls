@@ -22,5 +22,5 @@ import "github.com/snyk/snyk-ls/domain/snyk"
 // This is used instead of any concrete dependency to allow for easier testing and more flexibility in implementation.
 type IssueProvider interface {
 	IssuesFor(path string, r snyk.Range) []snyk.Issue
-	Issue(id string) snyk.Issue
+	Issue(key string) snyk.Issue
 }

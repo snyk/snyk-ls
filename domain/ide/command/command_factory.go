@@ -23,6 +23,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/lsp"
@@ -36,6 +37,7 @@ func CreateFromCommandData(
 	notifier noti.Notifier,
 	issueProvider ide.IssueProvider,
 	codeApiClient SnykCodeHttpClient,
+	codeScanner *code.Scanner,
 ) (snyk.Command, error) {
 
 	switch commandData.CommandId {
@@ -71,7 +73,12 @@ func CreateFromCommandData(
 	case snyk.CodeSubmitFixFeedback:
 		return &codeFixFeedback{command: commandData, apiClient: codeApiClient}, nil
 	case snyk.CodeFixDiffsCommand:
-		return &codeFixDiffs{command: commandData, issueProvider: issueProvider, notifier: notifier}, nil
+		return &codeFixDiffs{
+			command:       commandData,
+			codeScanner:   codeScanner,
+			issueProvider: issueProvider,
+			notifier:      notifier,
+		}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

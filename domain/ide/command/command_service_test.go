@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited All rights reserved.
+ * © 2023-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ func Test_ExecuteCommand(t *testing.T) {
 		ExpectedAuthURL: "https://auth.url",
 	}
 	authenticationService := snyk.NewAuthenticationService(authProvider, nil, nil, nil)
-	service := NewService(authenticationService, nil, nil, nil, nil)
+	service := NewService(authenticationService, nil, nil, nil, nil, nil)
 	cmd := snyk.CommandData{
 		CommandId: snyk.CopyAuthLinkCommand,
 	}

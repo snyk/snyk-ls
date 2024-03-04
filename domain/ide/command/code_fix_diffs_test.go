@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/observability/performance"
@@ -40,8 +41,8 @@ type mockIssueProvider struct {
 func (m mockIssueProvider) IssuesFor(_ string, _ snyk.Range) []snyk.Issue {
 	panic("this should not be called")
 }
-func (m mockIssueProvider) Issue(id string) snyk.Issue {
-	return snyk.Issue{ID: id}
+func (m mockIssueProvider) Issue(key string) snyk.Issue {
+	return snyk.Issue{ID: key}
 }
 
 func Test_codeFixDiffs_Execute(t *testing.T) {
@@ -72,9 +73,9 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 
 	t.Run("happy path", func(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
-		codeScanner.BundleHashes = map[string]string{"folderPath": "bundleHash"}
+		codeScanner.BundleHashes = map[string]string{"/folderPath": "bundleHash"}
 		cut.command = snyk.CommandData{
-			Arguments: []any{"folderPath", "issuePath", "issueId"},
+			Arguments: []any{lsp.DocumentURI("file:///folderPath"), lsp.DocumentURI("file://issuePath"), "issueId"},
 		}
 
 		suggestions, err := cut.Execute(context.Background())

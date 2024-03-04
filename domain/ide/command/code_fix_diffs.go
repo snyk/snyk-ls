@@ -19,11 +19,15 @@ package command
 import (
 	"context"
 	"errors"
+	"path/filepath"
+
+	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/domain/ide"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	uri2 "github.com/snyk/snyk-ls/internal/uri"
 )
 
 type codeFixDiffs struct {
@@ -43,14 +47,21 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 		return nil, errors.New("Missing required arguments.")
 	}
 
-	folderPath, ok := args[0].(string)
+	folderURI, ok := args[0].(string)
 	if !ok {
 		return nil, errors.New("Failed to parse folder path.")
 	}
+	folderPath := uri2.PathFromUri(lsp.DocumentURI(folderURI))
 
-	issuePath, ok := args[1].(string)
+	issueURI, ok := args[1].(string)
 	if !ok {
 		return nil, errors.New("Failed to parse filepath.")
+	}
+
+	issuePath := uri2.PathFromUri(lsp.DocumentURI(issueURI))
+	relPath, err := filepath.Rel(folderPath, issuePath)
+	if err != nil {
+		return nil, err
 	}
 
 	id, ok := args[2].(string)
@@ -63,6 +74,6 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 		return nil, errors.New("Failed to find issue.")
 	}
 
-	suggestions := cmd.codeScanner.GetAutoFixDiffs(ctx, folderPath, issuePath, issue)
-	return suggestions, nil
+	suggestions, err := cmd.codeScanner.GetAutoFixDiffs(ctx, folderPath, relPath, issue)
+	return suggestions, err
 }

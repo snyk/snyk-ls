@@ -1035,6 +1035,44 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 	textDocumentDidSave(&loc, testPath, t)
 
 	assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
+
+	// check for snyk scan message & check autofix
+	var notifications []jrpc2.Request
+	var scanParams lsp.SnykScanParams
+	assert.Eventually(t, func() bool {
+		notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
+		for _, n := range notifications {
+			_ = n.UnmarshalParams(&scanParams)
+			if scanParams.Product != "code" ||
+				scanParams.FolderPath != uri.PathFromUri(folder.Uri) ||
+				scanParams.Status != "success" {
+				continue
+			}
+			return true
+		}
+		return false
+	}, 10*time.Second, 10*time.Millisecond)
+
+	// check for autofix diff
+	assert.Greater(t, len(scanParams.Issues), 0)
+	for _, issue := range scanParams.Issues {
+		codeIssueData, ok := issue.AdditionalData.(map[string]interface{})
+		if !ok || codeIssueData["hasAIFix"] == false {
+			continue
+		}
+		call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+			Command:   snyk.CodeFixDiffsCommand,
+			Arguments: []any{uri.PathToUri(scanParams.FolderPath), uri.PathToUri(issue.FilePath), issue.Id},
+		})
+		assert.NoError(t, err)
+		var unifiedDiffs []code.AutofixUnifiedDiffSuggestion
+		err = call.UnmarshalResult(&unifiedDiffs)
+		assert.NoError(t, err)
+		assert.Greater(t, len(unifiedDiffs), 0)
+		// don't check for all issues, just the first
+		break
+	}
+
 }
 
 // Check if published diagnostics for given testPath match the expectedNumber.

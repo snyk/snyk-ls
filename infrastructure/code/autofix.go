@@ -19,6 +19,7 @@ package code
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -38,23 +39,37 @@ func (a AutofixUnifiedDiffSuggestion) GetUnifiedDiffForFile(filePath string) str
 	return a.UnifiedDiffsPerFile[filePath]
 }
 
-func (s *SnykCodeHTTPClient) GetAutoFixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "GetAutoFixDiffs").Logger()
+func (s *SnykCodeHTTPClient) GetAutoFixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
+	method := "GetAutoFixDiffs"
+	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
+	span := s.instrumentor.StartSpan(ctx, method)
+	defer s.instrumentor.Finish(span)
 
-	response, err := s.RunAutofix(ctx, options)
+	var response AutofixResponse
+	response, err = s.RunAutofix(span.Context(), options)
 	if err != nil || response.Status == failed.message {
 		logger.Err(err).Msg("error getting autofix suggestions")
-		return unifiedDiffSuggestions
+		return unifiedDiffSuggestions, err
 	}
 
-	return response.toUnifiedDiffSuggestions(baseDir, options.filePath)
+	return response.toUnifiedDiffSuggestions(baseDir, options.filePath), err
 }
 
-func (sc *Scanner) GetAutoFixDiffs(ctx context.Context, baseDir string, filePath string, issue snyk.Issue) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion) {
+func (sc *Scanner) GetAutoFixDiffs(
+	ctx context.Context,
+	baseDir string,
+	filePath string,
+	issue snyk.Issue,
+) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
+	method := "GetAutoFixDiffs"
+	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
+	span := sc.BundleUploader.instrumentor.StartSpan(ctx, method)
+	defer sc.BundleUploader.instrumentor.Finish(span)
+
 	codeClient := sc.BundleUploader.SnykCode
 	bundleHash, found := sc.BundleHashes[baseDir]
 	if !found {
-		return unifiedDiffSuggestions
+		return unifiedDiffSuggestions, fmt.Errorf("bundle hash not found for baseDir: %s", baseDir)
 	}
 
 	options := AutofixOptions{
@@ -63,5 +78,28 @@ func (sc *Scanner) GetAutoFixDiffs(ctx context.Context, baseDir string, filePath
 		filePath:   filePath,
 		issue:      issue,
 	}
-	return codeClient.GetAutoFixDiffs(ctx, baseDir, options)
+
+	// ticker sends a trigger every second to its channel
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	// timeoutTimer sends a trigger after 2 minutes to its channel
+	timeoutTimer := time.NewTimer(2 * time.Minute)
+	defer timeoutTimer.Stop()
+	for {
+		select {
+		case <-timeoutTimer.C:
+			msg := "Timeout waiting for code fix diffs."
+			logger.Error().Msg(msg)
+			return nil, fmt.Errorf(msg)
+		case <-ticker.C:
+			suggestions, err := codeClient.GetAutoFixDiffs(span.Context(), baseDir, options)
+			if err != nil {
+				logger.Err(err).Msg("Error getting autofix suggestions")
+				return nil, err
+			}
+			if len(suggestions) > 0 {
+				return suggestions, nil
+			}
+		}
+	}
 }

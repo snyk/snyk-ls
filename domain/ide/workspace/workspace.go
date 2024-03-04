@@ -48,9 +48,9 @@ type Workspace struct {
 	notifier            noti.Notifier
 }
 
-func (w *Workspace) Issue(id string) snyk.Issue {
+func (w *Workspace) Issue(key string) snyk.Issue {
 	for _, folder := range w.folders {
-		issue := folder.Issue(id)
+		issue := folder.Issue(key)
 		if issue.ID != "" {
 			return issue
 		}

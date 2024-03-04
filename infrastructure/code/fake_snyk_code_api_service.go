@@ -129,8 +129,8 @@ type FakeSnykCodeClient struct {
 	Options                AnalysisOptions
 }
 
-func (f *FakeSnykCodeClient) GetAutoFixDiffs(_ context.Context, _ string, _ AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion) {
-	return f.UnifiedDiffSuggestions
+func (f *FakeSnykCodeClient) GetAutoFixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
+	return f.UnifiedDiffSuggestions, nil
 }
 
 func (f *FakeSnykCodeClient) addCall(params []any, op string) {
