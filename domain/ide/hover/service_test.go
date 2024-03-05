@@ -56,6 +56,42 @@ func Test_registerHovers(t *testing.T) {
 	assert.Equal(t, len(target.hoverIndexes), 1)
 }
 
+func Test_DeleteHoverForIssue(t *testing.T) {
+	// Arrange
+	target := NewDefaultService(ux2.NewTestAnalytics()).(*DefaultHoverService)
+	path := "file:///UsersFolder/aUser/aRepositoryName/index.js"
+	issueID := "javascript/HardcodedSecret"
+
+	target.hovers[path] = []Hover[Context]{
+		{
+			Id: "other-issue-id",
+			Range: snyk.Range{
+				Start: snyk.Position{Line: 2, Character: 30},
+				End:   snyk.Position{Line: 2, Character: 40},
+			},
+			Message: "Other hover",
+		},
+		{
+			Id: issueID, // Issue ID to delete
+			Range: snyk.Range{
+				Start: snyk.Position{Line: 1, Character: 10},
+				End:   snyk.Position{Line: 1, Character: 20},
+			},
+			Message: "Hover for deletion",
+		},
+	}
+
+	// Act
+	target.DeleteHoverForIssue(path, issueID)
+
+	// Assert
+	remainingHovers := target.hovers[path]
+	assert.Equal(t, 1, len(remainingHovers), "Hover count should be 1 after deletion")
+	for _, hover := range remainingHovers {
+		assert.NotEqual(t, issueID, hover.Id, "Deleted hover should not be present")
+	}
+}
+
 func Test_DeleteHover(t *testing.T) {
 	target := NewDefaultService(ux2.NewTestAnalytics()).(*DefaultHoverService)
 	documentUri := setupFakeHover()
