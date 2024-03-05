@@ -171,28 +171,10 @@ func (f *Folder) scan(ctx context.Context, path string) {
 	f.scanner.Scan(ctx, path, f.processResults, f.path)
 }
 
-func (f *Folder) findResolvedIssues(cachedIssues, scannedIssues []snyk.Issue) (resolvedIssues []snyk.Issue) {
-	// Map of scannedIssues for quick lookup.
-	scannedIssuesMap := make(map[string]snyk.Issue)
-	for _, issue := range scannedIssues {
-		scannedIssuesMap[issue.ID] = issue
-	}
-
-	resolvedIssues = []snyk.Issue{}
-
-	// Iterate through cachedIssues, checking if each issue is present in the scannedIssues map.
-	for _, cached := range cachedIssues {
-		if _, ok := scannedIssuesMap[cached.ID]; !ok {
-			resolvedIssues = append(resolvedIssues, cached)
-		}
-	}
-
-	// If an issue from cachedIssues is not found in scannedIssuesMap,
-	// it's considered resolved and added to resolvedIssues.
-	return resolvedIssues
-}
-
 func (f *Folder) CheckAndUpdateStorage(filePath string, scannedIssues []snyk.Issue) {
+	// TODO: Ensure that `cachedIssues` only contains issues that are also in `scannedIssues`
+	// when storing back to the cache. Use `updateIssues` instead of `cachedIssues` to store
+	// after processing BOTH existing and new issues.
 	cachedIssues, ok := f.documentDiagnosticCache.Load(filePath)
 
 	if !ok || len(cachedIssues) == 0 {
@@ -206,6 +188,23 @@ func (f *Folder) CheckAndUpdateStorage(filePath string, scannedIssues []snyk.Iss
 	for _, issue := range cachedIssues {
 		cachedIssuesMap[issue.ID] = issue
 	}
+
+	// Map of scannedIssues for quick lookup
+	scannedIssuesMap := make(map[string]snyk.Issue)
+	for _, issue := range scannedIssues {
+		scannedIssuesMap[issue.ID] = issue
+	}
+
+	updatedIssues := make([]snyk.Issue, 0)
+	for _, cachedIssue := range cachedIssues {
+		if _, exists := scannedIssuesMap[cachedIssue.ID]; exists {
+			updatedIssues = append(updatedIssues, cachedIssue)
+		} else {
+			f.hoverService.DeleteHoverForIssue(cachedIssue.AffectedFilePath, cachedIssue.ID)
+		}
+	}
+
+	f.documentDiagnosticCache.Store(filePath, updatedIssues)
 
 	// Flag to check if new issues are added
 	newIssuesAdded := false
