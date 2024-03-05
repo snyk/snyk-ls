@@ -1053,7 +1053,11 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 		return false
 	}, 10*time.Second, 10*time.Millisecond)
 
-	// check for autofix diff
+	if config.CurrentConfig().SnykCodeApi() != "https://deeproxy.snyk.io" {
+		return
+	}
+
+	// check for autofix diff on mt-us
 	assert.Greater(t, len(scanParams.Issues), 0)
 	for _, issue := range scanParams.Issues {
 		codeIssueData, ok := issue.AdditionalData.(map[string]interface{})
