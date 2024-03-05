@@ -1,49 +1,8 @@
-# Copyright 2022 Snyk Ltd.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-linters:
-  disable-all: true
-  enable:
-    - errcheck
-    - gofmt
-    - goimports
-    - gosimple
-    - ineffassign
-    - misspell
-    - staticcheck
-    - unconvert
-    - unused
-    - govet
-    - gocyclo
-    - dupl
-    - errchkjson
-    - exhaustive
-    - gocognit
-    - goconst
-    - tenv
-
-linters-settings:
-  goimports:
-    local-prefixes: github.com/snyk/snyk-ls
-  exhaustive:
-    default-signifies-exhaustive: true
-
-output:
-  format: tab
-
 run:
-  deadline: 2m
+  build-tags:
+    - integration
+  concurrency: 4
+  issues-exit-code: 1
   skip-dirs:
     - "docs"
     - "licenses"
@@ -53,3 +12,182 @@ run:
     - ".github"
     - ".vscode"
     - "build"
+  tests: true
+  timeout: 5m
+
+linters-settings:
+  errcheck:
+    check-blank: true
+    check-type-assertions: true
+  exhaustive:
+    default-signifies-exhaustive: true
+  goconst:
+    ignore-calls: false
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+  gocyclo:
+    min-complexity: 15
+  gofumpt:
+    module-path: github.com/snyk/snyk-ls
+    extra-rules: true
+  goimports:
+    local-prefixes: github.com/snyk/snyk-ls
+  gosimple:
+    checks: ['all']
+  govet:
+    check-shadowing: true
+    enable-all: true
+    disable:
+      - fieldalignment
+  lll:
+    line-length: 160
+  misspell:
+    locale: US
+  nolintlint:
+    allow-unused: false
+    require-explanation: true
+    require-specific: true
+  prealloc:
+    simple: true
+    range-loops: true
+    for-loops: true
+  promlinter:
+    strict: true
+  revive:
+    rules:
+      - name: blank-imports
+        disabled: true
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+        disable-stuttering-check: true
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+        disabled: true
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unused-parameter
+      - name: unreachable-code
+      - name: redefines-builtin-id
+  staticcheck:
+    checks: ['all']
+  stylecheck:
+    checks: ['all']
+    http-status-code-whitelist: []
+  varcheck:
+    exported-fields: true
+
+linters:
+  enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    # TODO(containedctx): revisit!
+    #- containedctx
+    # TODO(contextcheck): revisit
+    #- contextcheck
+    - dogsled
+    - dupl
+    - durationcheck
+    - errname
+    # TODO(errorlint): revisit
+    #- errorlint
+    - exhaustive
+    - exportloopref
+    # TODO(forbidigo): revisit
+    #- forbidigo
+    # TODO(forcetypeassert): revisit this one! beware fragile asserts in this codebase
+    #- forcetypeassert
+    # TODO(goconst): revisit
+    #- goconst
+    # TODO(gocritic): revisit
+    #- gocritic
+    - gocyclo
+    # TODO(godot): revisit
+    #- godot
+    # TODO(gofumpt): revisit
+    #- gofumpt
+    # TODO(goimports): revisit
+    #- goimports
+    - goprintffuncname
+    # TODO(gosec): revisit; consequences of revoking non-owner file permissions?
+    #- gosec
+    # TODO(interfacebloat): revisit in a followup; will require a breaking API change
+    #- interfacebloat
+    # TODO(ireturn): revisit in a followup; will require a breaking API change
+    #- ireturn
+    # TODO(lll): revisit in followup; formatting
+    #- lll
+    - misspell
+    - nakedret
+    # TODO(nestif): revisit in a followup; refactor will need more careful review
+    #- nestif
+    # TODO(nilerr): revisit; some tricky inversion of err in tests
+    #- nilerr
+    # TODO(nilnil): revisit
+    #- nilnil
+    # TODO(noctx): revisit in a followup; context lifecycle consequences and/or breaking API change
+    #- noctx
+    - nolintlint
+    # TODO(prealloc): revisit in a followup; some logic around slices are ignoring errors
+    #- prealloc
+    - predeclared
+    - promlinter
+    # TODO(revive): revisit in a followup; extensive changes, some breaking. godoc requirement would be good to introduce
+    #- revive
+    - rowserrcheck
+    - sqlclosecheck
+    # TODO(stylecheck): revisit in a followup; some breaking API changes
+    #- stylecheck
+    # NOTE: removed tagliatelle as it conflicts too much with existing API wireformats
+    - tenv
+    # TODO(testpackage): improve open vs closed-box testing in a followup
+    #- testpackage
+    - thelper
+    - tparallel
+    - unconvert
+    # TODO(unparam): revisit
+    #- unparam
+    - usestdlibvars
+    - wastedassign
+    - whitespace
+    # TODO(wrapcheck): wrap errors in a followup
+    #- wrapcheck
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - bodyclose
+        - forcetypeassert
+        - goconst
+        - ireturn
+    - path: test/
+      linters:
+        - testpackage
+    - path: \.go
+      # TODO: remove this soon; unchecked errors are BAD
+      linters:
+        - errcheck
+  include:
+    - EXC0012
+    - EXC0014

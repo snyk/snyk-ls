@@ -79,7 +79,7 @@ const (
 	AdvisorIssue              IssueType = "Advisor"
 	CodeQualityIssue          IssueType = "Code Quality Issue"
 	CodeSecurityVulnerability IssueType = "Code Security Vulnerability"
-	LicenceIssue              IssueType = "Licence Issue"
+	LicenceIssue              IssueType = "Licence Issue" //nolint:misspell // breaking api change
 	OpenSourceVulnerability   IssueType = "Open Source Vulnerability"
 	InfrastructureAsCodeIssue IssueType = "Infrastructure as Code Issue"
 	ContainerVulnerability    IssueType = "Container Vulnerability"

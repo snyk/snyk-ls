@@ -136,7 +136,7 @@ func (e missingKeyError) Error() string {
 	return "code action lookup key is missing - this is not a deferred code action"
 }
 func IsMissingKeyError(err error) bool {
-	var missingKeyError missingKeyError
-	ok := errors.As(err, &missingKeyError)
+	var missingKeyErr missingKeyError
+	ok := errors.As(err, &missingKeyErr)
 	return ok
 }

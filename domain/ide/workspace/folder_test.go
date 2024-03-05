@@ -601,6 +601,7 @@ func GetValueFromMap(m *xsync.MapOf[string, []snyk.Issue], key string) []snyk.Is
 }
 
 func setUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configuration.Configuration) {
+	t.Helper()
 	ctrl := gomock.NewController(t)
 	mockEngine := mocks.NewMockEngine(ctrl)
 	engineConfig := c.Engine().GetConfiguration()

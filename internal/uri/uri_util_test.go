@@ -76,7 +76,6 @@ func TestFolderContains(t *testing.T) {
 		assert.True(t, FolderContains("/folder", "/folder/"))
 		assert.True(t, FolderContains("/folder/", "/folder/"))
 	})
-
 }
 
 func TestUri_AddRangeToUri(t *testing.T) {

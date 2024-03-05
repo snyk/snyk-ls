@@ -1087,7 +1087,7 @@ var IssueHoverIsDisplayed = struct {
 
 		CodeSecurityVulnerability: `Code Security Vulnerability`,
 
-		LicenceIssue: `Licence Issue`,
+		LicenceIssue: `Licence Issue`, //nolint:misspell // breaking api change
 
 		OpenSourceVulnerability: `Open Source Vulnerability`,
 

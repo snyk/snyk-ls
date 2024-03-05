@@ -92,6 +92,7 @@ var (
 )
 
 func TempWorkdirWithVulnerabilities(t *testing.T) (filePath string, path string) {
+	t.Helper()
 	FakeSnykCodeApiServiceMutex.Lock()
 	defer FakeSnykCodeApiServiceMutex.Unlock()
 
@@ -236,7 +237,6 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	options AnalysisOptions,
 	_ string,
 ) ([]snyk.Issue, AnalysisStatus, error) {
-
 	FakeSnykCodeApiServiceMutex.Lock()
 	f.currentConcurrentScans++
 	if f.currentConcurrentScans > f.maxConcurrentScans {

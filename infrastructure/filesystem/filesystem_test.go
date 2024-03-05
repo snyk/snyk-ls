@@ -61,6 +61,7 @@ func TestGetLineOfCode(t *testing.T) {
 }
 
 func setupCodeFile(t *testing.T) string {
+	t.Helper()
 	dir := t.TempDir()
 	fileName := filepath.Join(dir, "testFile")
 	err := os.WriteFile(fileName, []byte("Line1\nLine2\nLine3\nLine4"), 0660)

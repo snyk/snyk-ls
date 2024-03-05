@@ -80,7 +80,7 @@ type Scanner struct {
 
 	// global map to store last used bundle hashes for each workspace folder
 	// these are needed when we want to retrieve auto-fixes for a previously
-	// analysed folder
+	// analyzed folder
 	BundleHashes map[string]string
 }
 
@@ -244,7 +244,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 	changedFiles map[string]bool,
 ) (issues []snyk.Issue, err error) {
 	if ctx.Err() != nil {
-		log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
+		log.Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
 		return issues, nil
 	}
 
@@ -264,7 +264,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 			sc.handleCreationAndUploadError(path, err, msg, scanMetrics)
 			return issues, err
 		} else {
-			log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
+			log.Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
 			return issues, nil
 		}
 	}
@@ -278,7 +278,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 			sc.handleCreationAndUploadError(path, err, msg, scanMetrics)
 			return issues, err
 		} else {
-			log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
+			log.Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
 			return issues, nil
 		}
 	}
@@ -292,7 +292,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 
 	issues, err = uploadedBundle.FetchDiagnosticsData(span.Context())
 	if ctx.Err() != nil {
-		log.Info().Msg("Cancelling Code scan - Code scanner received cancellation signal")
+		log.Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
 		return []snyk.Issue{}, nil
 	}
 	sc.trackResult(err == nil, scanMetrics)
@@ -317,7 +317,7 @@ func (sc *Scanner) createBundle(ctx context.Context,
 	rootPath string,
 	filePaths <-chan string,
 	changedFiles map[string]bool,
-) (b Bundle, err error) {
+) (Bundle, error) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.createBundle")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
@@ -332,11 +332,11 @@ func (sc *Scanner) createBundle(ctx context.Context,
 	for absoluteFilePath := range filePaths {
 		noFiles = false
 		if ctx.Err() != nil {
-			return b, err // The cancellation error should be handled by the calling function
+			return Bundle{}, nil // The cancellation error should be handled by the calling function
 		}
 		supported, err := sc.BundleUploader.isSupported(span.Context(), absoluteFilePath)
 		if err != nil {
-			return b, err
+			return Bundle{}, err
 		}
 		if !supported {
 			continue
@@ -367,9 +367,9 @@ func (sc *Scanner) createBundle(ctx context.Context,
 	}
 
 	if noFiles {
-		return b, noFilesError{}
+		return Bundle{}, noFilesError{}
 	}
-	b = Bundle{
+	b := Bundle{
 		SnykCode:      sc.BundleUploader.SnykCode,
 		Files:         bundleFiles,
 		instrumentor:  sc.BundleUploader.instrumentor,
@@ -380,6 +380,7 @@ func (sc *Scanner) createBundle(ctx context.Context,
 		learnService:  sc.learnService,
 		notifier:      sc.notifier,
 	}
+	var err error
 	if len(fileHashes) > 0 {
 		b.BundleHash, b.missingFiles, err = sc.BundleUploader.SnykCode.CreateBundle(span.Context(), fileHashes)
 	}

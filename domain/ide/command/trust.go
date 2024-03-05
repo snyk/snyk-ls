@@ -41,7 +41,6 @@ func HandleUntrustedFolders(ctx context.Context, srv lsp.Server) {
 
 	_, untrusted := w.GetFolderTrust()
 	if len(untrusted) > 0 {
-
 		decision, err := showTrustDialog(srv, untrusted, DoTrust, DontTrust)
 		if err != nil {
 			return

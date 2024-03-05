@@ -70,7 +70,7 @@ func (n *TestAnalytics) PluginIsInstalled(properties PluginIsInstalledProperties
 	log.Info().Str("method", "PluginIsInstalled").Msgf("no op - args %v", properties)
 }
 
-func (n *TestAnalytics) Initialise() {
+func (n *TestAnalytics) Initialise() { //nolint:misspell // breaking api change
 	log.Info().Str("method", "Init").Msgf("no op")
 	n.Initialized = true
 }

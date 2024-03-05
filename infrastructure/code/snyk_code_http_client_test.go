@@ -181,7 +181,6 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 // todo analysis test severities
 
 func TestGetCodeApiUrl(t *testing.T) {
-
 	t.Run("Snykgov instances code api url generation", func(t *testing.T) {
 		t.Setenv("DEEPROXY_API_URL", "")
 

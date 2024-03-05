@@ -46,7 +46,7 @@ func (ew *EncoderWriter) Write(b []byte) (int, error) {
 	if err = b64Writer.Close(); err != nil {
 		return n, err
 	}
-	if err := zipWriter.Close(); err != nil {
+	if err = zipWriter.Close(); err != nil {
 		return n, err
 	}
 

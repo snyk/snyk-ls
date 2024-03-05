@@ -163,7 +163,7 @@ func (cliScanner *CLIScanner) scanInternal(
 	defer log.Debug().Str("method", method).Msg("done.")
 
 	if ctx.Err() != nil {
-		log.Debug().Msg("Cancelling OSS scan - OSS scanner received cancellation signal")
+		log.Debug().Msg("Canceling OSS scan - OSS scanner received cancellation signal")
 		return issues, nil
 	}
 
@@ -208,7 +208,7 @@ func (cliScanner *CLIScanner) scanInternal(
 			if cliScanner.handleError(path, err, res, cmd) {
 				return nil, err
 			}
-		} else { // If scan was cancelled, return empty results
+		} else { // If scan was canceled, return empty results
 			return []snyk.Issue{}, nil
 		}
 	}
@@ -386,7 +386,7 @@ func (cliScanner *CLIScanner) trackResult(success bool) {
 
 // scheduleRefreshScan Schedules new scan after refreshScanWaitDuration once existing OSS results might be stale.
 // The timer is reset if a new scan is scheduled before the previous one is executed.
-// Cancelling the context will stop the timer and abort the scheduled scan.
+// Canceling the context will stop the timer and abort the scheduled scan.
 func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path string) {
 	logger := log.With().Str("method", "cliScanner.scheduleRefreshScan").Logger()
 	cliScanner.scheduledScanMtx.Lock()
@@ -407,7 +407,7 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path stri
 			}
 
 			if ctx.Err() != nil {
-				logger.Info().Msg("Scheduled scan cancelled")
+				logger.Info().Msg("Scheduled scan canceled")
 				return
 			}
 
@@ -426,7 +426,7 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path stri
 			logger.Info().Msg("Starting scheduled scan")
 			_, _ = cliScanner.Scan(span.Context(), path, "")
 		case <-ctx.Done():
-			logger.Info().Msg("Scheduled scan cancelled")
+			logger.Info().Msg("Scheduled scan canceled")
 			timer.Stop()
 			return
 		}

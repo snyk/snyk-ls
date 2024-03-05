@@ -52,7 +52,6 @@ func (p *Parser) Parse(content string, path string) ast.Tree {
 		}
 
 		switch xmlType := token.(type) {
-
 		case xml.StartElement:
 			if xmlType.Name.Local == "dependency" {
 				var dep dependency

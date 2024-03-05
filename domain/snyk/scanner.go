@@ -104,7 +104,8 @@ func (sc *DelegatingConcurrentScanner) ClearInlineValues(path string) {
 	}
 }
 
-func (sc *DelegatingConcurrentScanner) GetInlineValues(path string, myRange Range) (values []InlineValue, err error) {
+func (sc *DelegatingConcurrentScanner) GetInlineValues(path string, myRange Range) ([]InlineValue, error) {
+	var values []InlineValue
 	for _, scanner := range sc.scanners {
 		if s, ok := scanner.(InlineValueProvider); ok {
 			inlineValues, err := s.GetInlineValues(path, myRange)
@@ -116,7 +117,7 @@ func (sc *DelegatingConcurrentScanner) GetInlineValues(path string, myRange Rang
 			values = append(values, inlineValues...)
 		}
 	}
-	return values, err
+	return values, nil
 }
 
 func (sc *DelegatingConcurrentScanner) Init() error {
@@ -156,7 +157,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	go func() { // This goroutine will listen to token changes and cancel the scans using a context
 		select {
 		case <-tokenChangeChannel:
-			log.Info().Msg("Token was changed, cancelling scan")
+			log.Info().Msg("Token was changed, canceling scan")
 			cancelFunc()
 			return
 		case <-done: // The done channel prevents the goroutine from leaking after the scan is finished
@@ -165,7 +166,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	}()
 
 	if ctx.Err() != nil {
-		log.Info().Msg("Scan was cancelled")
+		log.Info().Msg("Scan was canceled")
 		return
 	}
 

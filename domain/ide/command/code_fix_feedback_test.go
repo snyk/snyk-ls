@@ -42,14 +42,14 @@ func (c *fakeCodeHttpClient) SubmitAutofixFeedback(ctx context.Context, fixId st
 
 func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
 	apiClient := fakeCodeHttpClient{}
-	codeFixFeedback := codeFixFeedback{
+	codeFixFeedbackCmd := codeFixFeedback{
 		command: snyk.CommandData{
 			Arguments: []any{"fixId", true},
 		},
 		apiClient: &apiClient,
 	}
 
-	_, err := codeFixFeedback.Execute(context.Background())
+	_, err := codeFixFeedbackCmd.Execute(context.Background())
 	assert.NoError(t, err)
 	assert.True(t, apiClient.feedbackSubmitted)
 }
@@ -58,14 +58,14 @@ func Test_codeFixFeedback_SubmissionFailed(t *testing.T) {
 	apiClient := fakeCodeHttpClient{
 		shouldError: true,
 	}
-	codeFixFeedback := codeFixFeedback{
+	codeFixFeedbackCmd := codeFixFeedback{
 		command: snyk.CommandData{
 			Arguments: []any{"fixId", true},
 		},
 		apiClient: &apiClient,
 	}
 
-	_, err := codeFixFeedback.Execute(context.Background())
+	_, err := codeFixFeedbackCmd.Execute(context.Background())
 	assert.Error(t, err)
 	assert.False(t, apiClient.feedbackSubmitted)
 }

@@ -119,7 +119,6 @@ func (s *SnykCodeHTTPClient) CreateBundle(
 	ctx context.Context,
 	filesToFilehashes map[string]string,
 ) (string, []string, error) {
-
 	method := "code.CreateBundle"
 	log.Debug().Str("method", method).Msg("API: Creating bundle for " + strconv.Itoa(len(filesToFilehashes)) + " files")
 
@@ -149,7 +148,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 	method string,
 	path string,
 	requestBody []byte,
-) (responseBody []byte, err error) {
+) (responseBody []byte, _ error) {
 	span := s.instrumentor.StartSpan(ctx, "code.doCall")
 	defer s.instrumentor.Finish(span)
 
@@ -173,7 +172,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 
 		log.Trace().Str("requestBody", string(requestBody)).Str("snyk-request-id", requestId).Msg("SEND TO REMOTE")
 
-		response, body, err := s.httpCall(req)
+		response, body, err := s.httpCall(req) //nolint:bodyclose // false positive
 		responseBody = body
 
 		if response != nil && responseBody != nil {
@@ -207,7 +206,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 		// no error, we can break the retry loop
 		break
 	}
-	return responseBody, err
+	return responseBody, nil
 }
 
 func (s *SnykCodeHTTPClient) httpCall(req *http.Request) (*http.Response, []byte, error) {
@@ -219,12 +218,12 @@ func (s *SnykCodeHTTPClient) httpCall(req *http.Request) (*http.Response, []byte
 		return nil, nil, err
 	}
 
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			log.Err(err).Msg("Couldn't close response body in call to Snyk Code")
+	defer func() {
+		closeErr := response.Body.Close()
+		if closeErr != nil {
+			log.Err(closeErr).Msg("Couldn't close response body in call to Snyk Code")
 		}
-	}(response.Body)
+	}()
 	responseBody, err := io.ReadAll(response.Body)
 
 	if err != nil {
@@ -242,7 +241,6 @@ func (s *SnykCodeHTTPClient) newRequest(
 	body *bytes.Buffer,
 	requestId string,
 ) (*http.Request, error) {
-
 	host, err := getCodeApiUrl(c)
 	if err != nil {
 		return nil, err
@@ -310,7 +308,6 @@ func (s *SnykCodeHTTPClient) ExtendBundle(
 	files map[string]BundleFile,
 	removedFiles []string,
 ) (string, []string, error) {
-
 	method := "code.ExtendBundle"
 	log.Debug().Str("method", method).Msg("API: Extending bundle for " + strconv.Itoa(len(files)) + " files")
 	defer log.Debug().Str("method", method).Msg("API: Extend done")
@@ -330,9 +327,9 @@ func (s *SnykCodeHTTPClient) ExtendBundle(
 	if err != nil {
 		return "", nil, err
 	}
-	var bundleResponse bundleResponse
-	err = json.Unmarshal(responseBody, &bundleResponse)
-	return bundleResponse.BundleHash, bundleResponse.MissingFiles, err
+	var bundleResp bundleResponse
+	err = json.Unmarshal(responseBody, &bundleResp)
+	return bundleResp.BundleHash, bundleResp.MissingFiles, err
 }
 
 type AnalysisStatus struct {

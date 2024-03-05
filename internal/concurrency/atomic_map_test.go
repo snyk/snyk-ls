@@ -100,5 +100,4 @@ func TestAtomicMap_Put(t *testing.T) {
 	assert.True(t, atomicMap.Contains("a"))
 	assert.True(t, atomicMap.Contains("b"))
 	assert.Equal(t, 2, atomicMap.Length())
-
 }

@@ -35,9 +35,9 @@ func Test_ApiClient_isCalledAndResultReturned(t *testing.T) {
 		},
 	}
 
-	sastEnabled := sastEnabled{apiClient: fakeApiClient}
+	sastEnabledCmd := sastEnabled{apiClient: fakeApiClient}
 
-	result, _ := sastEnabled.Execute(context.Background())
+	result, _ := sastEnabledCmd.Execute(context.Background())
 
 	assert.True(t, result.(snyk_api.SastResponse).SastEnabled)
 }
@@ -50,9 +50,9 @@ func Test_ApiClient_ReturnsTrueIfLocalCodeEngineIsEnabled(t *testing.T) {
 		},
 	}
 
-	sastEnabled := sastEnabled{apiClient: fakeApiClient}
+	sastEnabledCmd := sastEnabled{apiClient: fakeApiClient}
 
-	result, _ := sastEnabled.Execute(context.Background())
+	result, _ := sastEnabledCmd.Execute(context.Background())
 
 	assert.True(t, result.(snyk_api.SastResponse).LocalCodeEngine.Enabled)
 	assert.True(t, result.(snyk_api.SastResponse).SastEnabled)
@@ -65,9 +65,9 @@ func Test_ApiClient_isCalledAndErrorReturned(t *testing.T) {
 		CodeEnabled: true,
 	}
 
-	sastEnabled := sastEnabled{apiClient: fakeApiClient}
+	sastEnabledCmd := sastEnabled{apiClient: fakeApiClient}
 
-	result, err := sastEnabled.Execute(context.Background())
+	result, err := sastEnabledCmd.Execute(context.Background())
 
 	assert.Error(t, err)
 	assert.Equal(t, apiError, err)

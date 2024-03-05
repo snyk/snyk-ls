@@ -83,6 +83,7 @@ func Test_ExistingInstallationDoesntSendInstallEvent(t *testing.T) {
 }
 
 func cleanupInstallEventFile(t *testing.T) {
+	t.Helper()
 	err := os.Remove(installEventFile)
 	if err != nil && !os.IsNotExist(err) {
 		t.Error(err)

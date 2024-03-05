@@ -18,7 +18,6 @@ package learn
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -171,7 +170,7 @@ func (s *serviceImpl) GetAllLessons() (lessons []Lesson, err error) {
 		logger.Err(err).Msg("failed to retrieve lessons")
 		return lessons, err
 	}
-	defer func(Body io.ReadCloser) { _ = Body.Close() }(resp.Body)
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		logger.Err(err).Msg("failed to retrieve lessons")
@@ -220,7 +219,7 @@ func (s *serviceImpl) GetLesson(ecosystem string, rule string, cwes []string, cv
 
 	params := s.lessonsLookupParams(ecosystem, rule, cwes, cves, issueType)
 	if params == nil {
-		return
+		return nil, nil
 	}
 
 	lessons, exist := s.lessonsByRuleCache.Get(params.Rule)

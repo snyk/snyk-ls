@@ -64,7 +64,7 @@ func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
 	initializer := SetupInitializer(t)
 
 	tempDir := t.TempDir()
-	tempFile := testutil.CreateTempFile(tempDir, t)
+	tempFile := testutil.CreateTempFile(t, tempDir)
 	config.CurrentConfig().CliSettings().SetPath(tempFile.Name())
 
 	_ = initializer.Init()
@@ -232,9 +232,10 @@ func TestInitializer_whenBinaryUpdatesAllowed_Updates(t *testing.T) {
 }
 
 func createDummyCliBinaryWithCreatedDate(t *testing.T, binaryCreationDate time.Time) {
+	t.Helper()
 	// prepare user directory with OS specific dummy CLI binary
 	temp := t.TempDir()
-	file := testutil.CreateTempFile(temp, t)
+	file := testutil.CreateTempFile(t, temp)
 
 	config.CurrentConfig().CliSettings().SetPath(file.Name())
 

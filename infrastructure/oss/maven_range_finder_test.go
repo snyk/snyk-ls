@@ -47,7 +47,7 @@ func TestMavenRangeFinder_Find(t *testing.T) {
 	var testPath, _ = filepath.Abs("testdata/pom.xml")
 	var testContent, _ = os.ReadFile(testPath)
 
-	mavenRangeFinder := mavenRangeFinder{
+	finder := mavenRangeFinder{
 		path:        testPath,
 		fileContent: testContent,
 	}
@@ -63,6 +63,6 @@ func TestMavenRangeFinder_Find(t *testing.T) {
 		},
 	}
 
-	actualRange := mavenRangeFinder.find(issue)
+	actualRange := finder.find(issue)
 	assert.Equal(t, expectedRange, actualRange)
 }

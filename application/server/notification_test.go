@@ -134,7 +134,6 @@ func TestCancelProgress(t *testing.T) {
 		actualToken := <-progress.CancelProgressChannel
 		return expectedWorkdoneProgressCancelParams.Token == actualToken
 	}, time.Second*5, time.Millisecond)
-
 }
 
 func Test_NotifierShouldSendNotificationToClient(t *testing.T) {

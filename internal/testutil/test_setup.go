@@ -33,10 +33,12 @@ const (
 )
 
 func IntegTest(t *testing.T) *config.Config {
+	t.Helper()
 	return prepareTestHelper(t, integTestEnvVar)
 }
 
 func SmokeTest(t *testing.T) *config.Config {
+	t.Helper()
 	return prepareTestHelper(t, smokeTestEnvVar)
 }
 
@@ -116,7 +118,6 @@ func CreateDummyProgressListener(t *testing.T) {
 			}
 		}
 	}()
-
 }
 
 func prepareTestHelper(t *testing.T, envVar string) *config.Config {

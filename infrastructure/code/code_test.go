@@ -239,6 +239,7 @@ func sliceToChannel(slice []string) <-chan string {
 }
 
 func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient, string, *Scanner, string) {
+	t.Helper()
 	testutil.UnitTest(t)
 	dir := t.TempDir()
 	snykCodeMock, c := setupTestScanner(t)
@@ -247,6 +248,7 @@ func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient,
 }
 
 func setupTestScanner(t *testing.T) (*FakeSnykCodeClient, *Scanner) {
+	t.Helper()
 	snykCodeMock := &FakeSnykCodeClient{}
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))
 	learnMock.
@@ -535,8 +537,9 @@ func Test_Scan(t *testing.T) {
 }
 
 func setupIgnoreWorkspace(t *testing.T) (tempDir string, ignoredFilePath string, notIgnoredFilePath string) {
+	t.Helper()
 	expectedPatterns := "*.xml\n**/*.txt\nbin"
-	tempDir = writeTestGitIgnore(expectedPatterns, t)
+	tempDir = writeTestGitIgnore(t, expectedPatterns)
 
 	ignoredFilePath = filepath.Join(tempDir, "ignored.xml")
 	err := os.WriteFile(ignoredFilePath, []byte("test"), 0600)
@@ -557,13 +560,15 @@ func setupIgnoreWorkspace(t *testing.T) (tempDir string, ignoredFilePath string,
 	return tempDir, ignoredFilePath, notIgnoredFilePath
 }
 
-func writeTestGitIgnore(ignorePatterns string, t *testing.T) (tempDir string) {
+func writeTestGitIgnore(t *testing.T, ignorePatterns string) (tempDir string) {
+	t.Helper()
 	tempDir = t.TempDir()
-	writeGitIgnoreIntoDir(ignorePatterns, t, tempDir)
+	writeGitIgnoreIntoDir(t, ignorePatterns, tempDir)
 	return tempDir
 }
 
-func writeGitIgnoreIntoDir(ignorePatterns string, t *testing.T, tempDir string) {
+func writeGitIgnoreIntoDir(t *testing.T, ignorePatterns string, tempDir string) {
+	t.Helper()
 	filePath := filepath.Join(tempDir, ".gitignore")
 	err := os.WriteFile(filePath, []byte(ignorePatterns), 0600)
 	if err != nil {
@@ -611,6 +616,7 @@ func Test_IsEnabled(t *testing.T) {
 }
 
 func autofixSetupAndCleanup(t *testing.T) {
+	t.Helper()
 	resetCodeSettings()
 	t.Cleanup(resetCodeSettings)
 	config.CurrentConfig().SetSnykCodeEnabled(true)

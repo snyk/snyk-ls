@@ -25,26 +25,29 @@ VERSION := $(shell git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)
 COMMIT := $(shell git show -s --format=%h)
 LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true' -X 'github.com/snyk/snyk-ls/application/config.Version=v$(VERSION)-SNAPSHOT-$(COMMIT)'"
 
+TOOLS_BIN := $(shell pwd)/.bin
+
+OVERRIDE_GOCI_LINT_V := v1.55.2
+PACT_V := 2.4.2
+
 NOCACHE := "-count=1"
 TIMEOUT := "-timeout=45m"
 
 
-# NOTE: Until this PR is merged https://github.com/pact-foundation/pact-ruby-standalone/pull/89 we need to duplicate the install script
-# curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | bash;\
-# TODO: clean up this script once the PR is merged
-
 ## tools: Install required tooling.
 .PHONY: tools
-tools:
-	@echo "==> Installing go-licenses"
-	@go install github.com/google/go-licenses@latest
-ifeq (,$(wildcard ./.bin/golangci-lint*))
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b .bin/ v1.54.2
-else
-	@echo "==> golangci-lint is already installed"
-endif
-	@./install-pact.py
+tools: $(TOOLS_BIN)/go-licenses $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/pact/bin/pact
 	@echo "Please make sure to install NPM locally to be able to run analytics verification Ampli."
+
+$(TOOLS_BIN)/go-licenses:
+	@echo "==> Installing go-licenses"
+	@GOBIN=$(TOOLS_BIN) go install github.com/google/go-licenses@latest
+
+$(TOOLS_BIN)/golangci-lint:
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/$(OVERRIDE_GOCI_LINT_V)/install.sh | sh -s -- -b $(TOOLS_BIN)/ $(OVERRIDE_GOCI_LINT_V)
+
+$(TOOLS_BIN)/pact/bin/pact:
+	cd $(TOOLS_BIN); curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/v$(PACT_V)/install.sh | PACT_CLI_VERSION=v$(PACT_V) bash
 
 ## clean: Delete the build directory
 .PHONY: clean
@@ -54,9 +57,9 @@ clean:
 
 ## lint: Lint code with golangci-lint.
 .PHONY: lint
-lint: tools
+lint: $(TOOLS_BIN)/golangci-lint
 	@echo "==> Linting code with 'golangci-lint'..."
-	@.bin/golangci-lint run ./...
+	@$(TOOLS_BIN)/golangci-lint run ./...
 
 ## test: Run all tests.
 .PHONY: test
@@ -134,7 +137,7 @@ install:
 license-update:
 	@echo "==> Updating license information..."
 	@rm -rf licenses
-	@go-licenses save . --save_path="licenses" --ignore "github.com/snyk/snyk-ls"
+	@$(TOOLS_BIN)/go-licenses save . --save_path="licenses" --ignore "github.com/snyk/snyk-ls"
 
 # Verifies event tracking implementation in source code
 verify-analytics:

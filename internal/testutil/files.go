@@ -24,16 +24,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func CreateTempFile(tempDir string, t *testing.T) *os.File {
+func CreateTempFile(t *testing.T, tempDir string) *os.File {
+	t.Helper()
 	file, err := os.CreateTemp(tempDir, "")
-	if err != nil {
-		t.Fatal(t, "Couldn't create temp file")
-	}
+	assert.NoError(t, err)
 
-	t.Cleanup(func() {
-		_ = file.Close()
-		_ = os.Remove(file.Name())
-	})
+	t.Cleanup(func() { os.Remove(file.Name()) })
+	t.Cleanup(func() { file.Close() })
 	return file
 }
 

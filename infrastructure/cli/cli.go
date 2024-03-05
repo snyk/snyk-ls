@@ -75,7 +75,7 @@ func (c SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(c.cliTimeout))
 	defer cancel()
 
-	// handle concurrency limit, and when context is cancelled
+	// handle concurrency limit, and when context is canceled
 	select {
 	case c.semaphore <- 1:
 		defer func() { <-c.semaphore }()

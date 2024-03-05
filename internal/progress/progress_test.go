@@ -92,7 +92,6 @@ func TestEndProgress(t *testing.T) {
 
 func TestEndProgressTwice(t *testing.T) {
 	output := lsp.ProgressParams{
-		Token: "token",
 		Value: lsp.WorkDoneProgressEnd{
 			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "end"},
 			Message:              "end message",

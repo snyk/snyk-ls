@@ -199,7 +199,6 @@ func Test_SendingHovers_AfterClearAll_DoesNotBlock(t *testing.T) {
 			Character: 14,
 		}).Contents.Value != ""
 	}, 1*time.Second, 10*time.Millisecond)
-
 }
 
 func fakeDocumentHover() (DocumentHovers, string) {

@@ -183,7 +183,7 @@ func ToHoversDocument(path string, issues []snyk.Issue) hover.DocumentHovers {
 func ToHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
 	re := regexp.MustCompile(`<br\s?/?>`)
 	for _, i := range issues {
-		message := ""
+		var message string
 		if len(i.FormattedMessage) > 0 {
 			message = i.FormattedMessage
 		} else {

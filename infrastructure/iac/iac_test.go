@@ -157,7 +157,6 @@ func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 }
 
 func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
-
 	sampleIssue := sampleIssue()
 	scanner := New(performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(), cli.NewTestExecutor())
 	issue, err := scanner.toIssue("test.yml", sampleIssue, "")
@@ -181,7 +180,6 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 }
 
 func Test_getIssueId(t *testing.T) {
-
 	affectedFilePath := "path/to/file/test.yml"
 	id := getIssueKey(affectedFilePath, sampleIssue())
 

@@ -42,7 +42,8 @@ const (
 // Since we append, our values are overwriting existing env variables (because exec.Cmd.Env chooses the last value
 // in case of key duplications).
 // appendToken indicates whether we should append the token or not. No token should be appended in cases such as authentication.
-func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) (updatedEnv []string) {
+func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) []string {
+	var updatedEnv []string
 	currentConfig := config.CurrentConfig()
 
 	// remove any existing env vars that we are going to set
@@ -88,5 +89,5 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) (updat
 		updatedEnv = append(updatedEnv, IntegrationEnvironmentVersionEnvVar+"="+currentConfig.IdeVersion())
 	}
 
-	return
+	return updatedEnv
 }

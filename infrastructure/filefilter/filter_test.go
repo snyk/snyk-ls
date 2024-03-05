@@ -214,8 +214,8 @@ exclude:
 }
 
 func setupIgnoreFilesTest(t *testing.T, testCase ignoreFilesTestCase) {
-	testutil.UnitTest(t)
 	t.Helper()
+	testutil.UnitTest(t)
 	allFiles := append(testCase.expectedFiles, testCase.expectedExcludes...)
 
 	for ignoreFilePath, ignoreFileContent := range testCase.ignoreFiles {
