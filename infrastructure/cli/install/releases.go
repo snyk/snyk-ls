@@ -77,8 +77,6 @@ func (r *CLIRelease) GetLatestRelease(ctx context.Context) (*Release, error) {
 		return nil, fmt.Errorf("failed to obtained Snyk CLI release from %q: %s ", releaseURL, resp.Status)
 	}
 
-	defer func(Body io.ReadCloser) { _ = Body.Close() }(resp.Body)
-
 	log.Ctx(ctx).Trace().Str("response_status", resp.Status).Msg("received")
 
 	body, err := io.ReadAll(resp.Body)
