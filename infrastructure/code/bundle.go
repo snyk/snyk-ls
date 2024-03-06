@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,7 +121,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 
 	analysisOptions := AnalysisOptions{
 		bundleHash:   b.BundleHash,
-		shardKey:     b.getShardKey(b.rootPath, config.CurrentConfig().Token()),
+		shardKey:     getShardKey(b.rootPath, config.CurrentConfig().Token()),
 		limitToFiles: b.limitToFiles,
 		severity:     0,
 	}
@@ -215,9 +215,9 @@ func (b *Bundle) addIssueActions(ctx context.Context, issues []snyk.Issue) {
 	}
 }
 
-func (b *Bundle) getShardKey(rootPath string, authToken string) string {
-	if len(rootPath) > 0 {
-		return util.Hash([]byte(rootPath))
+func getShardKey(folderPath string, authToken string) string {
+	if len(folderPath) > 0 {
+		return util.Hash([]byte(folderPath))
 	}
 	if len(authToken) > 0 {
 		return util.Hash([]byte(authToken))
@@ -251,7 +251,7 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 
 		autofixOptions := AutofixOptions{
 			bundleHash: b.BundleHash,
-			shardKey:   b.getShardKey(b.rootPath, config.CurrentConfig().Token()),
+			shardKey:   getShardKey(b.rootPath, config.CurrentConfig().Token()),
 			filePath:   encodedRelativePath,
 			issue:      issue,
 		}
@@ -260,7 +260,7 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 		// channel.
 		pollFunc := func() (fix *AutofixSuggestion, complete bool) {
 			log.Info().Msg("polling")
-			fixSuggestions, fixStatus, err := b.SnykCode.RunAutofix(s.Context(), autofixOptions, b.rootPath)
+			fixSuggestions, fixStatus, err := b.SnykCode.GetAutofixSuggestions(s.Context(), autofixOptions, b.rootPath)
 			fix = nil
 			complete = false
 			if err != nil {
@@ -288,7 +288,7 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 		for {
 			select {
 			case <-timeoutTimer.C:
-				log.Error().Str("method", "RunAutofix").Str("requestId", b.requestId).Msg("timeout requesting autofix")
+				log.Error().Str("method", "GetAutofixSuggestions").Str("requestId", b.requestId).Msg("timeout requesting autofix")
 				b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please try again. Request ID: "+b.requestId)
 				return nil
 			case <-pollingTicker.C:

@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited
+ * © 2023-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,6 +48,10 @@ var sampleArgs = []any{codeActionId.String(), "test/path.js", sampleRangeArg}
 
 type issueProviderMock struct {
 	mock.Mock
+}
+
+func (m *issueProviderMock) Issue(key string) snyk.Issue {
+	panic("this should not be called")
 }
 
 func (m *issueProviderMock) IssuesFor(path string, r snyk.Range) []snyk.Issue {

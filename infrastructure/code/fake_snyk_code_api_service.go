@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,8 +88,7 @@ var (
 		Command: &FakeCommand,
 	}
 
-	FakeFilters        = []string{".cjs", ".ejs", ".es", ".es6", ".htm", ".html", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".vue", ".java", ".erb", ".haml", ".rb", ".rhtml", ".slim", ".kt", ".swift", ".cls", ".config", ".pom", ".wxs", ".xml", ".xsd", ".aspx", ".cs", ".py", ".go", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".php", ".phtml"}
-	FakeAutofixFilters = []string{FakeFileExtension} // Main test scenario -- allowlist the fake file for autofix
+	FakeFilters = []string{".cjs", ".ejs", ".es", ".es6", ".htm", ".html", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".vue", ".java", ".erb", ".haml", ".rb", ".rhtml", ".slim", ".kt", ".swift", ".cls", ".config", ".pom", ".wxs", ".xml", ".xsd", ".aspx", ".cs", ".py", ".go", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".php", ".phtml"}
 )
 
 func TempWorkdirWithVulnerabilities(t *testing.T) (filePath string, path string) {
@@ -126,6 +125,12 @@ type FakeSnykCodeClient struct {
 	currentConcurrentScans int
 	maxConcurrentScans     int
 	NoFixSuggestions       bool
+	UnifiedDiffSuggestions []AutofixUnifiedDiffSuggestion
+	Options                AnalysisOptions
+}
+
+func (f *FakeSnykCodeClient) GetAutoFixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
+	return f.UnifiedDiffSuggestions, nil
 }
 
 func (f *FakeSnykCodeClient) addCall(params []any, op string) {
@@ -252,7 +257,7 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 			issues[0].AdditionalData = issueData
 		}
 	}
-
+	f.Options = options
 	log.Trace().Str("method", "RunAnalysis").Interface(
 		"fakeDiagnostic",
 		FakeIssue,
@@ -260,7 +265,7 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	return issues, successfulResult, nil
 }
 
-func (f *FakeSnykCodeClient) RunAutofix(
+func (f *FakeSnykCodeClient) GetAutofixSuggestions(
 	_ context.Context,
 	options AutofixOptions,
 	baseDir string,
@@ -272,7 +277,7 @@ func (f *FakeSnykCodeClient) RunAutofix(
 	FakeSnykCodeApiServiceMutex.Unlock()
 
 	if f.NoFixSuggestions {
-		log.Trace().Str("method", "RunAutofix").Interface("fakeAutofix",
+		log.Trace().Str("method", "GetAutofixSuggestions").Interface("fakeAutofix",
 			"someAutofixSuggestion").Msg("fake backend call received & answered with no suggestions")
 		return nil, AutofixStatus{message: "COMPLETE"}, nil
 	}
@@ -310,7 +315,7 @@ func (f *FakeSnykCodeClient) RunAutofix(
 		},
 	}
 
-	log.Trace().Str("method", "RunAutofix").Interface("fakeAutofix",
+	log.Trace().Str("method", "GetAutofixSuggestions").Interface("fakeAutofix",
 		"someAutofixSuggestion").Msg("fake backend call received & answered")
 	return suggestions, AutofixStatus{message: "COMPLETE"}, nil
 }

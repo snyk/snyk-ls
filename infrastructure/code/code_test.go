@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -313,12 +313,12 @@ func TestUploadAndAnalyze(t *testing.T) {
 				learnMock,
 				notification.NewNotifier(),
 			)
-			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
+			filePath, path := TempWorkdirWithVulnerabilities(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
-			files := []string{diagnosticUri}
+			files := []string{filePath}
 			metrics := c.newMetrics(time.Time{})
 
-			issues, _ := c.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
+			issues, _ := c.UploadAndAnalyze(context.Background(), sliceToChannel(files), path, metrics, map[string]bool{})
 
 			assert.NotNil(t, issues)
 			assert.Equal(t, 1, len(issues))
@@ -334,6 +334,10 @@ func TestUploadAndAnalyze(t *testing.T) {
 			assert.NotNil(t, params)
 			assert.Equal(t, 3, len(params))
 			assert.Equal(t, 0, params[2])
+
+			// verify that bundle hash has been saved
+			assert.Equal(t, 1, len(c.BundleHashes))
+			assert.Equal(t, snykCodeMock.Options.bundleHash, c.BundleHashes[path])
 		},
 	)
 

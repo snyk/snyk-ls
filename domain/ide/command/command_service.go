@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited All rights reserved.
+ * © 2023-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
@@ -38,15 +39,24 @@ type serviceImpl struct {
 	learnService  learn.Service
 	issueProvider ide.IssueProvider
 	codeApiClient SnykCodeHttpClient
+	codeScanner   *code.Scanner
 }
 
-func NewService(authService snyk.AuthenticationService, notifier noti.Notifier, learnService learn.Service, issueProvider ide.IssueProvider, codeApiClient SnykCodeHttpClient) snyk.CommandService {
+func NewService(
+	authService snyk.AuthenticationService,
+	notifier noti.Notifier,
+	learnService learn.Service,
+	issueProvider ide.IssueProvider,
+	codeApiClient SnykCodeHttpClient,
+	codeScanner *code.Scanner,
+) snyk.CommandService {
 	return &serviceImpl{
 		authService:   authService,
 		notifier:      notifier,
 		learnService:  learnService,
 		issueProvider: issueProvider,
 		codeApiClient: codeApiClient,
+		codeScanner:   codeScanner,
 	}
 }
 
@@ -67,7 +77,16 @@ func (service *serviceImpl) ExecuteCommandData(ctx context.Context, commandData 
 		"command.serviceImpl.ExecuteCommandData",
 	).Msgf("executing command %s", commandData.CommandId)
 
-	command, err := CreateFromCommandData(commandData, server, service.authService, service.learnService, service.notifier, service.issueProvider, service.codeApiClient)
+	command, err := CreateFromCommandData(
+		commandData,
+		server,
+		service.authService,
+		service.learnService,
+		service.notifier,
+		service.issueProvider,
+		service.codeApiClient,
+		service.codeScanner,
+	)
 	if err != nil {
 		log.Error().Err(err).Str("method", "command.serviceImpl.ExecuteCommandData").Msg("failed to create command")
 		return nil, err

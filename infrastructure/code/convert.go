@@ -23,11 +23,15 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/hexops/gotextdiff"
+	"github.com/hexops/gotextdiff/myers"
+	"github.com/hexops/gotextdiff/span"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/exp/slices"
 
@@ -493,5 +497,35 @@ func (s *AutofixResponse) toAutofixSuggestions(baseDir string, filePath string) 
 		fixSuggestions = append(fixSuggestions, d)
 	}
 
+	return fixSuggestions
+}
+
+func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir string, filePath string) []AutofixUnifiedDiffSuggestion {
+	logger := log.With().Str("method", "toUnifiedDiffSuggestions").Logger()
+	var fixSuggestions []AutofixUnifiedDiffSuggestion
+	for _, suggestion := range s.AutofixSuggestions {
+		path := ToAbsolutePath(baseDir, filePath)
+		fileContent, err := os.ReadFile(path)
+		if err != nil {
+			logger.Err(err).Msgf("cannot read fileContent %s", baseDir)
+			return fixSuggestions
+		}
+		contentBefore := string(fileContent)
+		edits := myers.ComputeEdits(span.URIFromPath(baseDir), contentBefore, suggestion.Value)
+		unifiedDiff := fmt.Sprint(gotextdiff.ToUnified(baseDir, baseDir+"-fixed", contentBefore, edits))
+
+		logger.Debug().Msgf(unifiedDiff)
+
+		if len(edits) == 0 {
+			return fixSuggestions
+		}
+
+		d := AutofixUnifiedDiffSuggestion{
+			FixId:               suggestion.Id,
+			UnifiedDiffsPerFile: map[string]string{},
+		}
+		d.UnifiedDiffsPerFile[path] = unifiedDiff
+		fixSuggestions = append(fixSuggestions, d)
+	}
 	return fixSuggestions
 }

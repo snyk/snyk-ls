@@ -14,6 +14,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/gomarkdown/markdown v0.0.0-20230922112808-5421fefb8386
 	github.com/google/uuid v1.3.1
+	github.com/hexops/gotextdiff v1.0.3
 	github.com/pact-foundation/pact-go v1.7.0
 	github.com/pingcap/errors v0.11.4
 	github.com/pkg/errors v0.9.1
