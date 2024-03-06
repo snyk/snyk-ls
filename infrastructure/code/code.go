@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -29,6 +28,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
+	codeClient "github.com/snyk/code-client-go"
 	orchestration "github.com/snyk/orchestration-service/client/go"
 	orchFakeClient "github.com/snyk/orchestration-service/client/go/fakeclient"
 	"github.com/snyk/workspace-service/client/go/v6/pkg/workspace"
@@ -399,86 +399,87 @@ func (sc *Scanner) UploadAndAnalyzeV2(ctx context.Context,
 				Msg("sending diagnostics...")
 			p.EndWithMessage("Analysis complete.")
 
-			// TODO: response to issues
-			issues = []snyk.Issue{
-				{
-					ID:              uuid.New().String(),
-					Severity:        snyk.High,
-					IssueType:       snyk.CodeSecurityVulnerability,
-					IssueIdentifier: uuid.New(),
-					IsIgnored:       false,
-					IgnoreDetails:   nil,
-					Range: snyk.Range{
-						Start: snyk.Position{
-							Line:      1,
-							Character: 1,
-						},
-						End: snyk.Position{
-							Line:      1,
-							Character: 10,
-						},
-					},
-					Message:             "You silly goose",
-					FormattedMessage:    "",
-					AffectedFilePath:    "test/util/postgresql.ts",
-					Product:             product.ProductCode,
-					References:          []snyk.Reference{},
-					IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
-					CodeActions:         []snyk.CodeAction{},
-					CodelensCommands:    []snyk.CommandData{},
-					Ecosystem:           "npm",
-					CWEs:                []string{},
-					CVEs:                []string{},
-					AdditionalData: snyk.CodeIssueData{
-						Key:                "key1",
-						Title:              "Another title",
-						Message:            "You silly goose",
-						Rule:               "rule",
-						RuleId:             "ruleId",
-						RepoDatasetSize:    0,
-						ExampleCommitFixes: []snyk.ExampleCommitFix{},
-						CWE:                []string{},
-						Text:               "",
-						Markers:            []snyk.Marker{},
-						Cols:               snyk.CodePoint{},
-						Rows:               snyk.CodePoint{},
-						IsSecurityType:     true,
-						IsAutofixable:      false,
-						PriorityScore:      1,
-						HasAIFix:           false,
-					},
-				},
-				{
-					ID:              uuid.New().String(),
-					Severity:        snyk.High,
-					IssueType:       snyk.CodeSecurityVulnerability,
-					IssueIdentifier: uuid.New(),
-					IsIgnored:       true,
-					IgnoreDetails: &snyk.IgnoreDetails{
-						Reason: "False positive",
-						Expiry: time.Now(),
-					},
-					Range: snyk.Range{
-						Start: snyk.Position{
-							Line:      2,
-							Character: 1,
-						},
-						End: snyk.Position{
-							Line:      2,
-							Character: 10,
-						},
-					},
-					Message:             "This is a false positive",
-					FormattedMessage:    "",
-					AffectedFilePath:    "test/util/postgresql.ts",
-					Product:             product.ProductCode,
-					References:          []snyk.Reference{},
-					IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
-					Ecosystem:           "npm",
-					CWEs:                []string{},
-					CVEs:                []string{},
-				},
-			}
+			response, _ := codeClient.UploadAndAnalyze()
+			issues, _ = toIssues(response, uploadedBundle.rootPath)
+			//issues = []snyk.Issue{
+			//	{
+			//		ID:              uuid.New().String(),
+			//		Severity:        snyk.High,
+			//		IssueType:       snyk.CodeSecurityVulnerability,
+			//		IssueIdentifier: uuid.New(),
+			//		IsIgnored:       false,
+			//		IgnoreDetails:   nil,
+			//		Range: snyk.Range{
+			//			Start: snyk.Position{
+			//				Line:      1,
+			//				Character: 1,
+			//			},
+			//			End: snyk.Position{
+			//				Line:      1,
+			//				Character: 10,
+			//			},
+			//		},
+			//		Message:             "You silly goose",
+			//		FormattedMessage:    "",
+			//		AffectedFilePath:    "test/util/postgresql.ts",
+			//		Product:             product.ProductCode,
+			//		References:          []snyk.Reference{},
+			//		IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
+			//		CodeActions:         []snyk.CodeAction{},
+			//		CodelensCommands:    []snyk.CommandData{},
+			//		Ecosystem:           "npm",
+			//		CWEs:                []string{},
+			//		CVEs:                []string{},
+			//		AdditionalData: snyk.CodeIssueData{
+			//			Key:                "key1",
+			//			Title:              "Another title",
+			//			Message:            "You silly goose",
+			//			Rule:               "rule",
+			//			RuleId:             "ruleId",
+			//			RepoDatasetSize:    0,
+			//			ExampleCommitFixes: []snyk.ExampleCommitFix{},
+			//			CWE:                []string{},
+			//			Text:               "",
+			//			Markers:            []snyk.Marker{},
+			//			Cols:               snyk.CodePoint{},
+			//			Rows:               snyk.CodePoint{},
+			//			IsSecurityType:     true,
+			//			IsAutofixable:      false,
+			//			PriorityScore:      1,
+			//			HasAIFix:           false,
+			//		},
+			//	},
+			//	{
+			//		ID:              uuid.New().String(),
+			//		Severity:        snyk.High,
+			//		IssueType:       snyk.CodeSecurityVulnerability,
+			//		IssueIdentifier: uuid.New(),
+			//		IsIgnored:       true,
+			//		IgnoreDetails: &snyk.IgnoreDetails{
+			//			Reason: "False positive",
+			//			Expiry: time.Now(),
+			//		},
+			//		Range: snyk.Range{
+			//			Start: snyk.Position{
+			//				Line:      2,
+			//				Character: 1,
+			//			},
+			//			End: snyk.Position{
+			//				Line:      2,
+			//				Character: 10,
+			//			},
+			//		},
+			//		Message:             "This is a false positive",
+			//		FormattedMessage:    "",
+			//		AffectedFilePath:    "test/util/postgresql.ts",
+			//		Product:             product.ProductCode,
+			//		References:          []snyk.Reference{},
+			//		IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
+			//		Ecosystem:           "npm",
+			//		CWEs:                []string{},
+			//		CVEs:                []string{},
+			//	},
+			//}
 			uploadedBundle.addIssueActions(ctx, issues)
 			break
 		}

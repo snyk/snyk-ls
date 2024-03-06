@@ -396,6 +396,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		return nil, status, nil
 	}
 
+	// TODO: here?
 	issues, err := response.toIssues(baseDir)
 	return issues, status, err
 }
