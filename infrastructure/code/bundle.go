@@ -256,7 +256,7 @@ func (b *Bundle) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk
 			issue:      issue,
 		}
 
-		// Polling function just calls the endpoint and registers result, signalling `done` to the
+		// Polling function just calls the endpoint and registers result, signaling `done` to the
 		// channel.
 		pollFunc := func() (fix *AutofixSuggestion, complete bool) {
 			log.Info().Msg("polling")

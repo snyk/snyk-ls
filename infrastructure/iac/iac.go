@@ -102,7 +102,7 @@ func (iac *Scanner) SupportedCommands() []snyk.CommandName {
 
 func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue, err error) {
 	if ctx.Err() != nil {
-		log.Info().Msg("Cancelling IAC scan - IAC scanner received cancellation signal")
+		log.Info().Msg("Canceling IAC scan - IAC scanner received cancellation signal")
 		return issues, nil
 	}
 
@@ -147,7 +147,7 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 		noCancellation := ctx.Err() == nil
 		if noCancellation { // Only reports errors that are not intentional cancellations
 			iac.errorReporter.CaptureErrorAndReportAsIssue(path, err)
-		} else { // If the scan was cancelled, return empty results
+		} else { // If the scan was canceled, return empty results
 			return issues, nil
 		}
 	}
@@ -339,7 +339,6 @@ func (iac *Scanner) getExtendedMessage(issue iacIssue) string {
 		"\n### %s: %s\n\n**Issue:** %s\n\n**Impact:** %s\n\n**Resolve:** %s\n",
 		issue.PublicID, title, description, impact, resolve,
 	)
-
 }
 
 func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent string) (snyk.Issue, error) {

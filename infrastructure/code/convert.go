@@ -310,11 +310,11 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 				},
 			}
 
-			rule := r.getRule(result.RuleID)
-			message := result.getMessage(rule)
-			formattedMessage := result.formattedMessage(rule, baseDir)
+			testRule := r.getRule(result.RuleID)
+			message := result.getMessage(testRule)
+			formattedMessage := result.formattedMessage(testRule, baseDir)
 
-			exampleCommits := rule.getExampleCommits()
+			exampleCommits := testRule.getExampleCommits()
 			exampleFixes := make([]snyk.ExampleCommitFix, 0, len(exampleCommits))
 			for _, commit := range exampleCommits {
 				commitURL := commit.fix.CommitURL
@@ -332,7 +332,7 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 				})
 			}
 
-			issueType := rule.getCodeIssueType()
+			issueType := testRule.getCodeIssueType()
 			isSecurityType := true
 			if issueType == snyk.CodeQualityIssue {
 				isSecurityType = false
@@ -342,21 +342,21 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 			errs = errors.Join(errs, err)
 
 			key := getIssueKey(result.RuleID, absPath, startLine, endLine, startCol, endCol)
-			title := rule.ShortDescription.Text
+			title := testRule.ShortDescription.Text
 			if title == "" {
-				title = rule.ID
+				title = testRule.ID
 			}
 
 			additionalData := snyk.CodeIssueData{
 				Key:                key,
 				Title:              title,
 				Message:            result.Message.Text,
-				Rule:               rule.Name,
-				RuleId:             rule.ID,
-				RepoDatasetSize:    rule.Properties.RepoDatasetSize,
+				Rule:               testRule.Name,
+				RuleId:             testRule.ID,
+				RepoDatasetSize:    testRule.Properties.RepoDatasetSize,
 				ExampleCommitFixes: exampleFixes,
-				CWE:                rule.Properties.Cwe,
-				Text:               rule.Help.Markdown,
+				CWE:                testRule.Properties.Cwe,
+				Text:               testRule.Help.Markdown,
 				Markers:            markers,
 				Cols:               [2]int{startCol, endCol},
 				Rows:               [2]int{startLine, endLine},
@@ -376,9 +376,9 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 				AffectedFilePath:    absPath,
 				Product:             product.ProductCode,
 				IssueDescriptionURL: ruleLink,
-				References:          rule.getReferences(),
+				References:          testRule.getReferences(),
 				AdditionalData:      additionalData,
-				CWEs:                rule.Properties.Cwe,
+				CWEs:                testRule.Properties.Cwe,
 			}
 
 			issues = append(issues, d)

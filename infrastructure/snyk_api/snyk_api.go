@@ -120,12 +120,12 @@ func (s *SnykApiClientImpl) doCall(method string,
 	if err != nil {
 		return nil, NewSnykApiError(err.Error(), 0)
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			log.Err(err).Msg("Couldn't close response body in call to Snyk API")
+	defer func() {
+		closeErr := response.Body.Close()
+		if closeErr != nil {
+			log.Err(closeErr).Msg("Couldn't close response body in call to Snyk API")
 		}
-	}(response.Body)
+	}()
 
 	apiError := checkResponseCode(response)
 	if apiError != nil {
@@ -136,7 +136,7 @@ func (s *SnykApiClientImpl) doCall(method string,
 	log.Trace().Str("response.Status", response.Status).Str("responseBody",
 		string(responseBody)).Msg("RECEIVED FROM REMOTE")
 	if readErr != nil {
-		return nil, NewSnykApiError(err.Error(), 0)
+		return nil, NewSnykApiError(readErr.Error(), 0)
 	}
 	return responseBody, nil
 }

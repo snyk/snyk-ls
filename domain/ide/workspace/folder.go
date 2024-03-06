@@ -137,7 +137,6 @@ func (f *Folder) ClearDiagnosticsFromFile(filePath string) {
 		Diagnostics: []lsp.Diagnostic{},
 	})
 	f.ClearScannedStatus()
-
 }
 
 func (f *Folder) ClearDiagnosticsFromPathRecursively(removedPath string) {
@@ -204,7 +203,6 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 		}
 
 		f.documentDiagnosticCache.Store(issue.AffectedFilePath, cachedIssues)
-
 	}
 	log.Debug().Str("method", "processResults").Interface("scanData", scanData).Msg("Finished processing results. Sending analytics.")
 	go sendAnalytics(&scanData)
@@ -297,7 +295,7 @@ func sendAnalytics(data *snyk.ScanData) {
 
 	bytes, err := json.Marshal(scanEvent)
 	if err != nil {
-		logger.Err(err).Msg("Error marshalling scan event")
+		logger.Err(err).Msg("Error marshaling scan event")
 		return
 	}
 

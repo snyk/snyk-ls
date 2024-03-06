@@ -168,7 +168,7 @@ func filterCodeFixCodelens(lenses []sglsp.CodeLens) []sglsp.CodeLens {
 
 func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) (any, error) {
-		// The context provided by the JSON-RPC server is cancelled once a new message is being processed,
+		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
 		logger := log.With().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Logger()
@@ -197,7 +197,7 @@ func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 
 		c.SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
-		di.Analytics().Initialise()
+		di.Analytics().Initialise() //nolint:misspell // breaking api change
 
 		// async processing listener
 		go createProgressListener(progress.Channel, srv)
@@ -297,7 +297,7 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		// CLI & Authentication initialization
 		err := di.Scanner().Init()
 		if err != nil {
-			log.Error().Err(err).Msg("Scan initialization error, cancelling scan")
+			log.Error().Err(err).Msg("Scan initialization error, canceling scan")
 			return nil, err
 		}
 
@@ -471,7 +471,7 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 
 func textDocumentDidSaveHandler() jrpc2.Handler {
 	return handler.New(func(_ context.Context, params sglsp.DidSaveTextDocumentParams) (any, error) {
-		// The context provided by the JSON-RPC server is cancelled once a new message is being processed,
+		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
 		logger := log.With().Str("method", "TextDocumentDidSaveHandler").Logger()

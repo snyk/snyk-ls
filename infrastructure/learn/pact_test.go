@@ -38,6 +38,7 @@ const (
 var pact dsl.Pact
 
 func setupPact(t *testing.T) {
+	t.Helper()
 	testutil.NotOnWindows(t, "we don't have a pact cli")
 	testutil.UnitTest(t)
 
@@ -50,7 +51,7 @@ func setupPact(t *testing.T) {
 	}
 }
 
-func TestSnykLearnServicePact(t *testing.T) { // nolint:gocognit // this is a test wrapper function
+func TestSnykLearnServicePact(t *testing.T) { //nolint:gocognit // this is a test wrapper function
 	setupPact(t)
 	defer pact.Teardown()
 

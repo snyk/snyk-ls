@@ -16,7 +16,7 @@ type ResolveHandler func(context.Context, lsp.CodeAction) (*lsp.CodeAction, erro
 func ResolveCodeActionHandler(c *config.Config, service *CodeActionsService, server lsp.Server) ResolveHandler {
 	logger := c.Logger().With().Str("method", "ResolveCodeActionHandler").Logger()
 	return func(ctx context.Context, params lsp.CodeAction) (*lsp.CodeAction, error) {
-		logger := logger.With().Interface("request", params).Logger()
+		logger = logger.With().Interface("request", params).Logger()
 		logger.Info().Msg("RECEIVING")
 
 		action, err := service.ResolveCodeAction(params, server)
@@ -54,10 +54,10 @@ func GetCodeActionHandler(c *config.Config, service *CodeActionsService) TextDoc
 
 		// This handler uses debouncing because it is called very often on mouse/caret moves.
 		// The way debouncing is done is by waiting for a short period of time before actually running the handler.
-		// If the handler is called again during that time, the context is cancelled.
+		// If the handler is called again during that time, the context is canceled.
 		select { // Wait debounce duration while listening to cancellations
 		case <-ctx.Done():
-			logger.Debug().Msg("Cancelled textDocument/codeAction")
+			logger.Debug().Msg("Canceled textDocument/codeAction")
 			return nil, nil
 		case <-time.After(debounceDuration):
 			logger.Info().Any("request", params).Msg("RECEIVING")
@@ -68,7 +68,7 @@ func GetCodeActionHandler(c *config.Config, service *CodeActionsService) TextDoc
 		defer mu.Unlock()
 		select { // Checking for cancellation again because it might have happened while waiting for the lock
 		case <-ctx.Done():
-			logger.Debug().Msg("Cancelled textDocument/codeAction")
+			logger.Debug().Msg("Canceled textDocument/codeAction")
 			return nil, nil
 		default: // Continue execution if no cancellation happened
 		}

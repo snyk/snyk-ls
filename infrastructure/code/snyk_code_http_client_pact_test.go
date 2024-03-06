@@ -46,7 +46,8 @@ const (
 var pact dsl.Pact
 var client *SnykCodeHTTPClient
 
-func TestSnykCodeBackendServicePact(t *testing.T) { // nolint:gocognit // this is a test wrapper function
+//nolint:gocyclo // TODO: address tech debt
+func TestSnykCodeBackendServicePact(t *testing.T) {
 	testutil.NotOnWindows(t, "we don't have a pact cli")
 	testutil.UnitTest(t)
 
@@ -154,13 +155,13 @@ func TestSnykCodeBackendServicePact(t *testing.T) { // nolint:gocognit // this i
 			filesExtend := createTestExtendMap()
 			var removedFiles []string
 
-			bundleHash, missingFiles, err := client.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
+			extendedBundleHash, missingFiles, err := client.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
 
 			if err != nil {
 				return err
 			}
-			if bundleHash == "" {
-				return fmt.Errorf("bundleHash is null")
+			if extendedBundleHash == "" {
+				return fmt.Errorf("bundleHash is empty")
 			}
 			if len(missingFiles) == 0 {
 				return fmt.Errorf("missingFiles are empty")
@@ -253,6 +254,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) { // nolint:gocognit // this i
 }
 
 func setupPact(t *testing.T) {
+	t.Helper()
 	pact = dsl.Pact{
 		Consumer: consumer,
 		Provider: pactProvider,
@@ -323,5 +325,4 @@ func TestSnykCodeBackendServicePact_LocalCodeEngine(t *testing.T) {
 	err := pact.Verify(test)
 
 	assert.NoError(t, err)
-
 }

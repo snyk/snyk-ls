@@ -34,25 +34,21 @@ var mockDeferredCommand = func() *snyk.CommandData {
 }
 
 func Test_NewCodeAction_NoEditOrCommand_Errors(t *testing.T) {
-
 	_, err := snyk.NewCodeAction("title", nil, nil)
 	assert.Error(t, err)
 }
 
 func Test_NewDeferredCodeAction_NoEditOrCommand_Errors(t *testing.T) {
-
 	_, err := snyk.NewDeferredCodeAction("title", nil, nil)
 	assert.Error(t, err)
 }
 
 func Test_NewCodeAction(t *testing.T) {
-
 	action, err := snyk.NewCodeAction("title", mockEdit, mockCommand)
 	assertActionsInitializedCorrectly(t, err, action, mockEdit, mockCommand, nil, nil)
 }
 
 func Test_NewDeferredCodeAction(t *testing.T) {
-
 	action, err := snyk.NewDeferredCodeAction("title", &mockDeferredEdit, &mockDeferredCommand)
 
 	assertActionsInitializedCorrectly(t,
@@ -66,7 +62,6 @@ func Test_NewDeferredCodeAction(t *testing.T) {
 }
 
 func Test_NewPreferredCodeAction(t *testing.T) {
-
 	action, err := snyk.NewPreferredCodeAction("title", mockEdit, mockCommand)
 	assertActionsInitializedCorrectly(t, err, action, mockEdit, mockCommand, nil, nil)
 	assert.True(t, *action.IsPreferred)

@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"strconv"
@@ -141,7 +142,7 @@ func Test_configureOauth_oauthProvider_created_with_injected_refreshMethod(t *te
 	assert.True(t, ok, "provider should be of type providerWithAccessibleAuthenticator")
 
 	// AddAuthenticationHeader will trigger the refresh method
-	_ = provider.Authenticator().AddAuthenticationHeader(httptest.NewRequest("GET", "/", nil))
+	_ = provider.Authenticator().AddAuthenticationHeader(httptest.NewRequest(http.MethodGet, "/", nil))
 
 	assert.Eventuallyf(t, func() bool {
 		return <-triggeredChan
@@ -204,8 +205,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	}
 
 	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{}}
-	ctx := context.Background()
-	_, err = loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
+	_, err = loc.Client.Call(context.Background(), "workspace/didChangeConfiguration", params)
 	if err != nil {
 		t.Fatal(err, "error calling server")
 	}
@@ -232,9 +232,8 @@ func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
 	loc := setupCustomServer(t, callBackMock)
 
 	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{}}
-	ctx := context.Background()
 	var updated = true
-	err := loc.Client.CallResult(ctx, "workspace/didChangeConfiguration", params, &updated)
+	err := loc.Client.CallResult(context.Background(), "workspace/didChangeConfiguration", params, &updated)
 	if err != nil {
 		t.Fatal(err, "error calling server")
 	}
@@ -323,7 +322,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, config.DefaultDeeproxyApiUrl, c.SnykCodeApi())
 	})
 
-	t.Run("blank organisation is ignored", func(t *testing.T) {
+	t.Run("blank organization is ignored", func(t *testing.T) {
 		c := config.New()
 		config.SetCurrentConfig(c)
 		c.SetOrganization(expectedOrgId)
@@ -593,5 +592,4 @@ func Test_InitializeSettings(t *testing.T) {
 		assert.True(t, keyFoundInEnv(upperCasePathKey))
 		assert.False(t, keyFoundInEnv(caseSensitivePathKey))
 	})
-
 }

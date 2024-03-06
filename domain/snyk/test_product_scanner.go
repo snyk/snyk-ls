@@ -55,13 +55,13 @@ func (t *TestProductScanner) Scan(ctx context.Context, _ string, _ string) (issu
 	// (scanDuration passed & context is done) then one of the cases will be picked at random.
 	// This can happen if scanDuration is 0 and ctx.Done()
 	if ctx.Err() != nil {
-		log.Debug().Msg("Received cancellation signal - cancelling scan")
+		log.Debug().Msg("Received cancellation signal - canceling scan")
 		return issues, nil
 	}
 
 	select {
 	case <-ctx.Done():
-		log.Debug().Msg("Received cancellation signal - cancelling scan")
+		log.Debug().Msg("Received cancellation signal - canceling scan")
 		return issues, nil
 	case <-time.After(t.scanDuration):
 	}

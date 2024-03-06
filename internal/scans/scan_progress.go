@@ -27,7 +27,7 @@ import (
 const timeout = 5 * time.Second
 
 // ScanProgress is a type that's used for tracking current running scans, listen to their progress events
-// and invoke cancellations or "done" signals. This allows throttling or cancelling previous scans instead of
+// and invoke cancellations or "done" signals. This allows throttling or canceling previous scans instead of
 // having many scans running at once for the same files.
 //
 // The correct usage would be to create a NewScanProgress and call "go Listen()" to
@@ -59,7 +59,7 @@ func (rs *ScanProgress) IsDone() bool {
 }
 
 func (rs *ScanProgress) CancelScan() {
-	log.Debug().Msg("Cancelling scan")
+	log.Debug().Msg("Canceling scan")
 	select {
 	case <-time.After(timeout):
 		// This should not happen if ScanProgress is used correctly and is here for safety.
@@ -106,7 +106,7 @@ func (rs *ScanProgress) Listen(cancel context.CancelFunc, scanNumber int) {
 	doneChannel := rs.GetDoneChannel()
 	select {
 	case <-cancelChannel:
-		log.Debug().Msgf("Cancelling scan %v", scanNumber)
+		log.Debug().Msgf("Canceling scan %v", scanNumber)
 		cancel()
 		return
 	case <-doneChannel:

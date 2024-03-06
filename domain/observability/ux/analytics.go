@@ -17,7 +17,7 @@
 package ux
 
 type Analytics interface {
-	Initialise()
+	Initialise() //nolint:misspell // breaking api change
 	Shutdown() error
 	Identify()
 	AnalysisIsReady(properties AnalysisIsReadyProperties)

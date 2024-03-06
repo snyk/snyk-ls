@@ -109,7 +109,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 
 	var resp *http.Response
 
-	resp, err = d.httpClient().Get(downloadURL)
+	resp, err = d.httpClient().Get(downloadURL) //nolint:bodyclose // body is closed in a longer-lived goroutine
 	log.Debug().Any("response-headers", resp.Header).Msg("headers")
 	if err != nil {
 		return err
@@ -194,7 +194,7 @@ func (d *Downloader) createLockFile() error {
 	return nil
 }
 
-func (d *Downloader) moveToDestination(destinationFileName string, sourceFilePath string) (err error) {
+func (d *Downloader) moveToDestination(destinationFileName string, sourceFilePath string) error {
 	cliDirectory := filepath.Dir(config.CurrentConfig().CliSettings().Path())
 	destinationFilePath := filepath.Join(cliDirectory, destinationFileName) // snyk-win.exe.latest
 	log.Info().Str("method", "moveToDestination").Str("path", destinationFilePath).Msg("copying Snyk CLI to user directory")
@@ -208,7 +208,7 @@ func (d *Downloader) moveToDestination(destinationFileName string, sourceFilePat
 	}
 
 	log.Info().Str("method", "moveToDestination").Str("tempFilePath", sourceFilePath).Msg("tempfile path")
-	err = os.Rename(sourceFilePath, destinationFilePath)
+	err := os.Rename(sourceFilePath, destinationFilePath)
 	if err != nil {
 		return err
 	}

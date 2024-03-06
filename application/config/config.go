@@ -492,7 +492,7 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 
 	logLevel, err = zerolog.ParseLevel(c.LogLevel())
 	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "Can't set log level from flag. Setting to default (=info)")
+		fmt.Fprintln(os.Stderr, "Can't set log level from flag. Setting to default (=info)")
 		logLevel = zerolog.InfoLevel
 	}
 
@@ -500,10 +500,10 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 	envLogLevel := os.Getenv("SNYK_LOG_LEVEL")
 	if envLogLevel != "" {
 		msg := fmt.Sprint("Setting log level from environment variable (SNYK_LOG_LEVEL) \"", envLogLevel, "\"")
-		_, _ = fmt.Fprintln(os.Stderr, msg)
-		envLevel, err := zerolog.ParseLevel(envLogLevel)
-		if err == nil {
-			_, _ = fmt.Fprintln(os.Stderr, "Can't set log level from flag. Setting to default (=info)")
+		fmt.Fprintln(os.Stderr, msg)
+		envLevel, levelErr := zerolog.ParseLevel(envLogLevel)
+		if levelErr == nil {
+			fmt.Fprintln(os.Stderr, "Can't set log level from flag. Setting to default (=info)")
 			logLevel = envLevel
 		}
 	}
@@ -516,9 +516,9 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 	if c.LogPath() != "" {
 		c.logFile, err = os.OpenFile(c.LogPath(), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 		if err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, "couldn't open logfile")
+			fmt.Fprintln(os.Stderr, "couldn't open logfile")
 		} else {
-			_, _ = fmt.Fprintln(os.Stderr, fmt.Sprint("adding file logger to file ", c.logPath))
+			fmt.Fprintln(os.Stderr, fmt.Sprint("adding file logger to file ", c.logPath))
 			writers = append(writers, c.logFile)
 		}
 	}

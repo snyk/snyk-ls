@@ -18,9 +18,7 @@ package snyk
 
 import "testing"
 
-// dupl linter gives a false positive here, as it doesn't take the boolean expectation into account
-//
-//nolint:dupl
+//nolint:dupl // test cases differ by a boolean
 func Test_Range_Contains(t *testing.T) {
 	r := Range{
 		Start: Position{5, 10},
@@ -51,9 +49,7 @@ func Test_Range_Contains(t *testing.T) {
 	}
 }
 
-// dupl linter gives a false positive here, as it doesn't take the boolean expectation into account
-//
-//nolint:dupl
+//nolint:dupl // test cases differ by a boolean
 func Test_Range_Overlaps(t *testing.T) {
 	r := Range{
 		Start: Position{5, 10},

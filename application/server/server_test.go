@@ -68,6 +68,7 @@ var (
 )
 
 func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, string) {
+	t.Helper()
 	filePath, dirPath := code.TempWorkdirWithVulnerabilities(t)
 	didOpenParams := sglsp.DidOpenTextDocumentParams{
 		TextDocument: sglsp.TextDocumentItem{URI: uri.PathToUri(filePath)},
@@ -77,10 +78,12 @@ func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, string) {
 }
 
 func setupServer(t *testing.T) server.Local {
+	t.Helper()
 	return setupCustomServer(t, nil)
 }
 
 func setupServerWithCustomDI(t *testing.T, useMocks bool) server.Local {
+	t.Helper()
 	s := setupCustomServer(t, nil)
 	if !useMocks {
 		di.Init()
@@ -89,6 +92,7 @@ func setupServerWithCustomDI(t *testing.T, useMocks bool) server.Local {
 }
 
 func setupCustomServer(t *testing.T, callBackFn onCallbackFn) server.Local {
+	t.Helper()
 	testutil.UnitTest(t)
 	loc := startServer(callBackFn)
 	di.TestInit(t)
@@ -860,6 +864,7 @@ func Test_textDocumentDidSave_manualScanningMode_doesNotScan(t *testing.T) {
 }
 
 func sendFileSavedMessage(t *testing.T, filePath, fileDir string, loc server.Local) sglsp.DocumentURI {
+	t.Helper()
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filePath)},
 	}
@@ -900,7 +905,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	loc := setupServer(t)
 	testutil.IntegTest(t)
 	testutil.CreateDummyProgressListener(t)
-	file := testutil.CreateTempFile(t.TempDir(), t)
+	file := testutil.CreateTempFile(t, t.TempDir())
 	w := workspace.Get()
 
 	f := lsp.WorkspaceFolder{Name: filepath.Dir(file.Name()), Uri: uri.PathToUri(file.Name())}
@@ -960,22 +965,23 @@ func Test_CodeActionResolve_ShouldExecuteCommands(t *testing.T) {
 func Test_SmokeWorkspaceScanOssAndCode(t *testing.T) {
 	ossFile := "package.json"
 	codeFile := "app.js"
-	runSmokeTest("https://github.com/snyk-labs/nodejs-goof", "0336589", ossFile, codeFile, t)
+	runSmokeTest(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", ossFile, codeFile)
 }
 
 func Test_SmokeWorkspaceScanIacAndCode(t *testing.T) {
 	iacFile := "main.tf"
 	codeFile := "app.js"
-	runSmokeTest("https://github.com/deepcodeg/snykcon-goof.git", "eba8407", iacFile, codeFile, t)
+	runSmokeTest(t, "https://github.com/deepcodeg/snykcon-goof.git", "eba8407", iacFile, codeFile)
 }
 
 func Test_SmokeWorkspaceScanWithTwoUploadBatches(t *testing.T) {
 	ossFile := ""
 	codeFile := "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
-	runSmokeTest("https://github.com/apache/maven", "18725ec1e", ossFile, codeFile, t)
+	runSmokeTest(t, "https://github.com/apache/maven", "18725ec1e", ossFile, codeFile)
 }
 
-func runSmokeTest(repo string, commit string, file1 string, file2 string, t *testing.T) {
+func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 string) {
+	t.Helper()
 	loc := setupServer(t)
 	testutil.SmokeTest(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
@@ -986,7 +992,7 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 	cleanupChannels()
 	di.Init()
 
-	var cloneTargetDir, err = setupCustomTestRepo(repo, commit, t)
+	var cloneTargetDir, err = setupCustomTestRepo(t, repo, commit)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -1025,14 +1031,14 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 	var testPath string
 	if file1 != "" {
 		testPath = filepath.Join(cloneTargetDir, file1)
-		textDocumentDidSave(&loc, testPath, t)
+		textDocumentDidSave(t, &loc, testPath)
 		// serve diagnostics from file scan
 		assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
 	}
 
 	jsonRPCRecorder.ClearNotifications()
 	testPath = filepath.Join(cloneTargetDir, file2)
-	textDocumentDidSave(&loc, testPath, t)
+	textDocumentDidSave(t, &loc, testPath)
 
 	assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
 
@@ -1076,7 +1082,6 @@ func runSmokeTest(repo string, commit string, file1 string, file2 string, t *tes
 		// don't check for all issues, just the first
 		break
 	}
-
 }
 
 // Check if published diagnostics for given testPath match the expectedNumber.
@@ -1110,7 +1115,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
-	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589", t)
+	var cloneTargetDir, err = setupCustomTestRepo(t, "https://github.com/snyk-labs/nodejs-goof", "0336589")
 	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
@@ -1174,7 +1179,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 
-	var cloneTargetDir, err = setupCustomTestRepo("https://github.com/snyk-labs/nodejs-goof", "0336589", t)
+	var cloneTargetDir, err = setupCustomTestRepo(t, "https://github.com/snyk-labs/nodejs-goof", "0336589")
 	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
@@ -1203,12 +1208,13 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	f := workspace.NewFolder(cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier())
 	w.AddFolder(f)
 
-	_ = textDocumentDidSave(&loc, testPath, t)
+	_ = textDocumentDidSave(t, &loc, testPath)
 
 	assert.Eventually(t, checkForPublishedDiagnostics(testPath, 6), maxIntegTestDuration, 10*time.Millisecond)
 }
 
-func textDocumentDidSave(loc *server.Local, testPath string, t *testing.T) sglsp.DidSaveTextDocumentParams {
+func textDocumentDidSave(t *testing.T, loc *server.Local, testPath string) sglsp.DidSaveTextDocumentParams {
+	t.Helper()
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
 			URI: uri.PathToUri(testPath),
@@ -1223,7 +1229,8 @@ func textDocumentDidSave(loc *server.Local, testPath string, t *testing.T) sglsp
 	return didSaveParams
 }
 
-func setupCustomTestRepo(url string, targetCommit string, t *testing.T) (string, error) {
+func setupCustomTestRepo(t *testing.T, url string, targetCommit string) (string, error) {
+	t.Helper()
 	tempDir := t.TempDir()
 	repoDir := "1"
 	absoluteCloneRepoDir := filepath.Join(tempDir, repoDir)

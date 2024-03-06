@@ -29,7 +29,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
-func CreateFromCommandData(
+func CreateFromCommandData( //nolint:gocyclo // reasonable command dispatch
 	commandData snyk.CommandData,
 	srv lsp.Server,
 	authService snyk.AuthenticationService,
@@ -39,7 +39,6 @@ func CreateFromCommandData(
 	codeApiClient SnykCodeHttpClient,
 	codeScanner *code.Scanner,
 ) (snyk.Command, error) {
-
 	switch commandData.CommandId {
 	case snyk.NavigateToRangeCommand:
 		return &navigateToRangeCommand{command: commandData, srv: srv}, nil

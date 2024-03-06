@@ -515,7 +515,6 @@ func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
 }
 
 func Test_NewScanNotifier_NilNotifier_Errors(t *testing.T) {
-
 	scanNotifier, err := notification2.NewScanNotifier(nil)
 	assert.Error(t, err)
 	assert.Nil(t, scanNotifier)

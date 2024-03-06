@@ -39,7 +39,7 @@ func Test_Bundler_Upload(t *testing.T) {
 	t.Run("adds files to bundle", func(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{}
 		var bundleUploader = BundleUploader{SnykCode: snykCodeService, instrumentor: performance.NewInstrumentor()}
-		documentURI, bundleFile := createTempFileInDir("bundleDoc.java", 10, temporaryDir, t)
+		documentURI, bundleFile := createTempFileInDir(t, "bundleDoc.java", 10, temporaryDir)
 		bundleFileMap := map[string]BundleFile{}
 		bundleFileMap[documentURI] = bundleFile
 
@@ -57,19 +57,19 @@ func Test_Bundler_Upload(t *testing.T) {
 
 		bundleFileMap := map[string]BundleFile{}
 		var missingFiles []string
-		path, bundleFile := createTempFileInDir("bundleDoc1.java", (1024*1024)-1, temporaryDir, t)
+		path, bundleFile := createTempFileInDir(t, "bundleDoc1.java", (1024*1024)-1, temporaryDir)
 		bundleFileMap[path] = bundleFile
 		missingFiles = append(missingFiles, path)
-		path, bundleFile = createTempFileInDir("bundleDoc2.java", (1024*1024)-1, temporaryDir, t)
+		path, bundleFile = createTempFileInDir(t, "bundleDoc2.java", (1024*1024)-1, temporaryDir)
 		bundleFileMap[path] = bundleFile
 		missingFiles = append(missingFiles, path)
-		path, bundleFile = createTempFileInDir("bundleDoc3.java", (1024*1024)-1, temporaryDir, t)
+		path, bundleFile = createTempFileInDir(t, "bundleDoc3.java", (1024*1024)-1, temporaryDir)
 		bundleFileMap[path] = bundleFile
 		missingFiles = append(missingFiles, path)
-		path, bundleFile = createTempFileInDir("bundleDoc4.java", (1024*1024)-1, temporaryDir, t)
+		path, bundleFile = createTempFileInDir(t, "bundleDoc4.java", (1024*1024)-1, temporaryDir)
 		bundleFileMap[path] = bundleFile
 		missingFiles = append(missingFiles, path)
-		path, bundleFile = createTempFileInDir("bundleDoc5.java", 100, temporaryDir, t)
+		path, bundleFile = createTempFileInDir(t, "bundleDoc5.java", 100, temporaryDir)
 		bundleFileMap[path] = bundleFile
 		missingFiles = append(missingFiles, path)
 
@@ -84,8 +84,9 @@ func Test_Bundler_Upload(t *testing.T) {
 	})
 }
 
-func createTempFileInDir(name string, size int, temporaryDir string, t *testing.T) (string, BundleFile) {
-	documentURI, fileContent := createFileOfSize(name, size, temporaryDir, t)
+func createTempFileInDir(t *testing.T, name string, size int, temporaryDir string) (string, BundleFile) {
+	t.Helper()
+	documentURI, fileContent := createFileOfSize(t, name, size, temporaryDir)
 	return documentURI, BundleFile{Hash: util.Hash(fileContent), Content: string(fileContent)}
 }
 
@@ -160,6 +161,7 @@ func Test_IsSupported_ConfigFile(t *testing.T) {
 }
 
 func setup(t *testing.T) string {
+	t.Helper()
 	dir, err := os.MkdirTemp(xdg.DataHome, "createFileOfSize")
 	if err != nil {
 		t.Fatal(err, "Couldn't create test directory")
@@ -167,7 +169,8 @@ func setup(t *testing.T) string {
 	return dir
 }
 
-func createFileOfSize(filename string, contentSize int, dir string, t *testing.T) (string, []byte) {
+func createFileOfSize(t *testing.T, filename string, contentSize int, dir string) (string, []byte) {
+	t.Helper()
 	buf := new(bytes.Buffer)
 	buf.Grow(contentSize)
 	for i := 0; i < contentSize; i++ {

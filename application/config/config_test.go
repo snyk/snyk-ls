@@ -92,7 +92,6 @@ func Test_TokenChanged_ChannelsInformed(t *testing.T) {
 		<-tokenChangedChannel
 		return true
 	}, 5*time.Second, time.Millisecond, "Expected token changes channel to be informed, but it was not")
-
 }
 
 func Test_TokenChangedToSameToken_ChannelsNotInformed(t *testing.T) {
@@ -162,27 +161,23 @@ func Test_loadFile(t *testing.T) {
 
 func TestSnykCodeApi(t *testing.T) {
 	t.Run("endpoint not provided", func(t *testing.T) {
-
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint("")
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided without 'app' prefix", func(t *testing.T) {
-
 		endpoint := "https://snyk.io/api/v1"
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'app' prefix with v1 suffix", func(t *testing.T) {
-
 		endpoint := "https://app.snyk.io/api/v1"
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'app' prefix without v1 suffix", func(t *testing.T) {
-
 		endpoint := "https://app.snyk.io/api"
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
@@ -259,7 +254,6 @@ func Test_IsFedramp(t *testing.T) {
 		c.UpdateApiEndpoints("https://api.fedddddddddramp.snykgov.io")
 		assert.True(t, c.IsFedramp())
 	})
-
 }
 
 func Test_IsAnalyticsPermitted(t *testing.T) {
@@ -286,7 +280,6 @@ func Test_IsAnalyticsPermitted(t *testing.T) {
 		assert.True(t, c.UpdateApiEndpoints("https://app.us.snyk.io/api"))
 		assert.True(t, c.IsAnalyticsPermitted())
 	})
-
 }
 
 func Test_IsTelemetryEnabled(t *testing.T) {
@@ -306,5 +299,4 @@ func Test_IsTelemetryEnabled(t *testing.T) {
 	c.SetTelemetryEnabled(false)
 	assert.False(t, c.IsTelemetryEnabled())
 	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.ANALYTICS_DISABLED))
-
 }

@@ -60,7 +60,7 @@ func NewAmplitudeClient(authFunc func() (string, error), errorReporter error_rep
 	return client
 }
 
-func (c *Client) Initialise() {
+func (c *Client) Initialise() { //nolint:misspell // breaking api change
 	go c.captureInstalledEvent()
 }
 

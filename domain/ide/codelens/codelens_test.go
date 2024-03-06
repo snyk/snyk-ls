@@ -71,6 +71,7 @@ func Test_GetCodeLensForPath(t *testing.T) {
 }
 
 func dummyProgressListeners(t *testing.T) {
+	t.Helper()
 	t.Cleanup(func() { progress.CleanupChannels() })
 	go func() {
 		for {

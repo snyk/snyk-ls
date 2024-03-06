@@ -645,7 +645,6 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 }
 
 func referencesForSampleSarifResponse() []snyk.Reference {
-
 	exampleCommitFix1, _ := url.Parse("https://github.com/apache/flink/commit/5d7c5620804eddd59206b24c87ffc89c12fd1184?diff=split#diff-86ec3e3884662ba3b5f4bb5050221fd6L94")
 	exampleCommitFix2, _ := url.Parse("https://github.com/rtr-nettest/open-rmbt/commit/0fa9d5547c5300cf8162b8f31a40aea6847a5c32?diff=split#diff-7e23eb1aa3b7b4d5db89bfd2860277e5L75")
 	exampleCommitFix3, _ := url.Parse("https://github.com/wso2/developer-studio/commit/cfd84b83349e67de4b0239733bc6ed01287856b7?diff=split#diff-645425e844adc2eab8197719cbb2fe8dL285")
@@ -704,9 +703,9 @@ func Test_getFormattedMessage(t *testing.T) {
 	testutil.UnitTest(t)
 	p, _, sarifResponse := setupConversionTests(t, true, true)
 	run := sarifResponse.Sarif.Runs[0]
-	result := run.Results[0]
+	testResult := run.Results[0]
 
-	msg := result.formattedMessage(run.getRule("1"), filepath.Dir(p))
+	msg := testResult.formattedMessage(run.getRule("1"), filepath.Dir(p))
 
 	assert.Contains(t, msg, "Example Commit Fixes")
 	assert.Contains(t, msg, "Data Flow")
@@ -716,6 +715,7 @@ func setupConversionTests(t *testing.T,
 	activateSnykCodeSecurity bool,
 	activateSnykCodeQuality bool,
 ) (path string, issues []snyk.Issue, response SarifResponse) {
+	t.Helper()
 	testutil.UnitTest(t)
 	c := config.CurrentConfig()
 	c.EnableSnykCodeSecurity(activateSnykCodeSecurity)
@@ -818,47 +818,47 @@ func Test_getIssueId(t *testing.T) {
 
 func Test_getCodeIssueType(t *testing.T) {
 	t.Run("Security issue - single category", func(t *testing.T) {
-		rule := rule{
+		testRule := rule{
 			Properties: ruleProperties{
 				Categories: []string{"Security"},
 			},
 		}
 
-		rule.getCodeIssueType()
-		assert.Equal(t, snyk.CodeSecurityVulnerability, rule.getCodeIssueType())
+		testRule.getCodeIssueType()
+		assert.Equal(t, snyk.CodeSecurityVulnerability, testRule.getCodeIssueType())
 	})
 
 	t.Run("Security issue - multiple categories", func(t *testing.T) {
-		rule := rule{
+		testRule := rule{
 			Properties: ruleProperties{
 				Categories: []string{"Security", "Defect"},
 			},
 		}
 
-		rule.getCodeIssueType()
-		assert.Equal(t, snyk.CodeSecurityVulnerability, rule.getCodeIssueType())
+		testRule.getCodeIssueType()
+		assert.Equal(t, snyk.CodeSecurityVulnerability, testRule.getCodeIssueType())
 	})
 
 	t.Run("Quality - single category", func(t *testing.T) {
-		rule := rule{
+		testRule := rule{
 			Properties: ruleProperties{
 				Categories: []string{"Defect"},
 			},
 		}
 
-		rule.getCodeIssueType()
-		assert.Equal(t, snyk.CodeQualityIssue, rule.getCodeIssueType())
+		testRule.getCodeIssueType()
+		assert.Equal(t, snyk.CodeQualityIssue, testRule.getCodeIssueType())
 	})
 
 	t.Run("Quality - multiple categories", func(t *testing.T) {
-		rule := rule{
+		testRule := rule{
 			Properties: ruleProperties{
 				Categories: []string{"Defect", "Info"},
 			},
 		}
 
-		rule.getCodeIssueType()
-		assert.Equal(t, snyk.CodeQualityIssue, rule.getCodeIssueType())
+		testRule.getCodeIssueType()
+		assert.Equal(t, snyk.CodeQualityIssue, testRule.getCodeIssueType())
 	})
 }
 
@@ -898,5 +898,4 @@ func Test_Result_getMarkers_basic(t *testing.T) {
 	marker, err := r.getMarkers("")
 	assert.Nil(t, err)
 	assert.Len(t, marker, 3)
-
 }

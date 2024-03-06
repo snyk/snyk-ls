@@ -81,8 +81,8 @@ func TestIsSastEnabled(t *testing.T) {
 
 			config.CurrentConfig().SetSnykCodeEnabled(true)
 			notifier := notification.NewNotifier()
-			// overwrite scanner, as we want our separate notifier
-			scanner := &Scanner{
+			// overwrite notifiedScanner, as we want our separate notifier
+			notifiedScanner := &Scanner{
 				SnykApiClient: apiClient,
 				errorReporter: error_reporting.NewTestErrorReporter(),
 				notifier:      notifier,
@@ -108,7 +108,7 @@ func TestIsSastEnabled(t *testing.T) {
 			})
 			defer notifier.DisposeListener()
 
-			scanner.isSastEnabled(mockedSastResponse)
+			notifiedScanner.isSastEnabled(mockedSastResponse)
 			assert.Equal(t, expectedShowMessageRequest, <-channel)
 		})
 

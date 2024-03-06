@@ -150,10 +150,10 @@ func TestCLIScanner_updateCachedDependencies_updates_range_of_issues_in_cache(t 
 			assert.Equal(t, issue.Range.End.Line, newIssues[i].Range.End.Line-4)
 		}
 	}
-
 }
 
 func setupCLIScannerAsPackageScanner(t *testing.T, c *config.Config) (string, *CLIScanner, *cli.TestExecutor) {
+	t.Helper()
 	c.SetCliSettings(&config.CliSettings{
 		AdditionalOssParameters: []string{"--all-projects"},
 	})

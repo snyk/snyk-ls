@@ -31,7 +31,7 @@ import (
 
 func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.ExecuteCommandParams) (any, error) {
-		// The context provided by the JSON-RPC server is cancelled once a new message is being processed,
+		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
 		method := "ExecuteCommandHandler"

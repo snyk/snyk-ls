@@ -130,17 +130,17 @@ func Test_introducingPackageAndVersion(t *testing.T) {
 }
 
 func Test_toIssue_LearnParameterConversion(t *testing.T) {
-	ossIssue := sampleIssue()
+	sampleOssIssue := sampleIssue()
 	scanner := CLIScanner{
 		learnService: getLearnMock(t),
 	}
 
-	issue := toIssue("testPath", ossIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
 
-	assert.Equal(t, ossIssue.Id, issue.ID)
-	assert.Equal(t, ossIssue.Identifiers.CWE, issue.CWEs)
-	assert.Equal(t, ossIssue.Identifiers.CVE, issue.CVEs)
-	assert.Equal(t, ossIssue.PackageManager, issue.Ecosystem)
+	assert.Equal(t, sampleOssIssue.Id, issue.ID)
+	assert.Equal(t, sampleOssIssue.Identifiers.CWE, issue.CWEs)
+	assert.Equal(t, sampleOssIssue.Identifiers.CVE, issue.CVEs)
+	assert.Equal(t, sampleOssIssue.PackageManager, issue.Ecosystem)
 }
 
 func Test_introducingPackageAndVersionJava(t *testing.T) {
@@ -548,6 +548,7 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 }
 
 func getLearnMock(t *testing.T) learn.Service {
+	t.Helper()
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))
 	learnMock.
 		EXPECT().

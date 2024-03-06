@@ -71,6 +71,7 @@ func (r *CLIRelease) GetLatestRelease(ctx context.Context) (*Release, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to obtained Snyk CLI release from %q: %s ", releaseURL, resp.Status)

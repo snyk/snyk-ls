@@ -232,6 +232,7 @@ func Test_AnalyticEventsNotSentForAnalyticsNotPermittedEnvironments(t *testing.T
 }
 
 func setupUnitTest(t *testing.T) (*Client, *FakeSegmentClient, *config.Config) {
+	t.Helper()
 	c := testutil.UnitTest(t)
 	authFunc := func() (string, error) { return "fakeUser", nil }
 	s := NewAmplitudeClient(authFunc, error_reporting.NewTestErrorReporter()).(*Client)

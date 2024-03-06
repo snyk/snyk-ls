@@ -97,6 +97,7 @@ func Test_getActiveUser_Execute_Error_Result(t *testing.T) {
 }
 
 func whoamiWorkflowResponse(t *testing.T) (*snyk.ActiveUser, []workflow.Data) {
+	t.Helper()
 	expectedUser := snyk.ActiveUser{
 		Id:       "id",
 		UserName: "username",

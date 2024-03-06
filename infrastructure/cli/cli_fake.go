@@ -89,7 +89,7 @@ func (t *TestExecutor) Execute(ctx context.Context, cmd []string, _ string) (res
 		t.counterLock.Unlock()
 		return t.ExecuteResponse, err
 	case <-ctx.Done():
-		log.Debug().Msg("Dummy CLI Execution cancelled")
+		log.Debug().Msg("Dummy CLI Execution canceled")
 		return resp, ctx.Err()
 	}
 }

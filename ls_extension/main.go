@@ -39,7 +39,6 @@ import (
 var WORKFLOWID_LS workflow.Identifier = workflow.NewWorkflowIdentifier("language-server")
 
 func Init(engine workflow.Engine) error {
-
 	flags := pflag.NewFlagSet("language-server", pflag.ContinueOnError)
 	flags.BoolP("v", "v", false, "prints the version")
 	flags.StringP("logLevelFlag", "l", "info", "sets the log-level to <trace|debug|info|warn|error|fatal>")
