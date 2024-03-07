@@ -29,6 +29,12 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 )
 
+type FeatureFlagType string
+
+const (
+	FeatureFlagSnykCodeConsistentIgnores FeatureFlagType = "snykCodeConsistentIgnores"
+)
+
 type SnykApiClientImpl struct {
 	httpClientFunc func() *http.Client
 }
@@ -48,8 +54,14 @@ type SastResponse struct {
 	AutofixEnabled              bool            `json:"autofixEnabled"`
 }
 
+type FFResponse struct {
+	Ok          bool    `json:"ok"`
+	UserMessage *string `json:"userMessage,omitempty"`
+}
+
 type SnykApiClient interface {
 	SastSettings() (SastResponse, error)
+	FeatureFlagSettings(featureFlagType FeatureFlagType) (FFResponse, error)
 }
 
 type SnykApiError struct {
@@ -94,9 +106,35 @@ func (s *SnykApiClientImpl) SastSettings() (SastResponse, error) {
 	var response SastResponse
 	unmarshalErr := json.Unmarshal(responseBody, &response)
 	if unmarshalErr != nil {
-		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
+		fmtErr := fmt.Errorf("%v: %v", unmarshalErr, responseBody)
 		log.Err(fmtErr).Str("method", method).Msg("couldn't unmarshal SastResponse")
 		return SastResponse{}, err
+	}
+	log.Debug().Str("method", method).Msg("API: Done")
+	return response, nil
+}
+
+func (s *SnykApiClientImpl) FeatureFlagSettings(featureFlagType FeatureFlagType) (FFResponse, error) {
+	method := "FeatureFlagSettings"
+	log.Debug().Str("method", method).Msgf("API: Getting %s", featureFlagType.String())
+	path := "/cli-config/feature-flag/" + featureFlagType.String()
+	organization := config.CurrentConfig().Organization()
+	if organization != "" {
+		path += "?org=" + url.QueryEscape(organization)
+	}
+	responseBody, err := s.doCall("GET", path, nil)
+	if err != nil {
+		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
+		log.Err(fmtErr).Str("method", method).Msg("error when calling feature-flag endpoint")
+		return FFResponse{}, err
+	}
+
+	var response FFResponse
+	unmarshalErr := json.Unmarshal(responseBody, &response)
+	if unmarshalErr != nil {
+		fmtErr := fmt.Errorf("%v: %v", unmarshalErr, responseBody)
+		log.Err(fmtErr).Str("method", method).Msg("couldn't unmarshal FFResponse")
+		return FFResponse{}, err
 	}
 	log.Debug().Str("method", method).Msg("API: Done")
 	return response, nil
@@ -147,4 +185,8 @@ func checkResponseCode(r *http.Response) *SnykApiError {
 	}
 
 	return NewSnykApiError("Unexpected response code: "+r.Status, r.StatusCode)
+}
+
+func (f FeatureFlagType) String() string {
+	return string(f)
 }

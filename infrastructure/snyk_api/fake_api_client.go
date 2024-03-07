@@ -89,3 +89,12 @@ func (f *FakeApiClient) SastSettings() (SastResponse, error) {
 		AutofixEnabled: f.AutofixEnabled,
 	}, nil
 }
+
+func (f *FakeApiClient) FeatureFlagSettings(featureFlagType FeatureFlagType) (FFResponse, error) {
+	f.addCall([]any{featureFlagType}, "featureFlagSettings")
+
+	if f.ApiError != nil {
+		return FFResponse{}, f.ApiError
+	}
+	return FFResponse{}, nil
+}

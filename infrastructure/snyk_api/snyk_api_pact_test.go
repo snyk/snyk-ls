@@ -151,6 +151,50 @@ func TestSnykApiPact(t *testing.T) {
 
 		assert.NoError(t, err)
 	})
+
+	t.Run("Get feature flag status", func(t *testing.T) {
+		organization := orgUUID
+		config.CurrentConfig().SetOrganization(organization)
+		var featureFlagType FeatureFlagType = "snykCodeConsistentIgnores"
+
+		expectedResponse := FFResponse{
+			Ok:          true,
+			UserMessage: nil,
+		}
+
+		matcher := dsl.MapMatcher{}
+		matcher["org"] = dsl.String(organization)
+
+		interaction := pact.AddInteraction().
+			WithRequest(dsl.Request{
+				Method: "GET",
+				Path:   dsl.String("/cli-config/feature-flag/" + featureFlagType),
+				Query:  matcher,
+				Headers: dsl.MapMatcher{
+					"Content-Type":  dsl.String("application/json"),
+					"Authorization": dsl.Regex("token fc763eba-0905-41c5-a27f-3934ab26786c", `^token [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`),
+				},
+			}).WillRespondWith(dsl.Response{
+			Status: 200,
+			Headers: dsl.MapMatcher{
+				"Content-Type": dsl.String("application/json"),
+			},
+			Body: dsl.Match(expectedResponse),
+		})
+		interaction.Description = "feature flag with org as query param"
+
+		test := func() error {
+			_, err := client.FeatureFlagSettings("snykCodeConsistentIgnores")
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+
+		err := pact.Verify(test)
+
+		assert.NoError(t, err)
+	})
 }
 
 func setupPact() {
