@@ -20,6 +20,9 @@ import (
 	"os"
 )
 
-func GetEnvironmentToken() string {
+func GetEnvironmentToken(useConsistentIgnores bool) string {
+	if useConsistentIgnores {
+		return os.Getenv("SNYK_TOKEN_CONSISTENT_IGNORES")
+	}
 	return os.Getenv("SNYK_TOKEN")
 }

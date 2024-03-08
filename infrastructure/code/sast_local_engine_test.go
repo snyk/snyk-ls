@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
 )
@@ -46,7 +45,7 @@ func TestIsLocalEngine(t *testing.T) {
 
 	scanner := &Scanner{
 		SnykApiClient: apiClient,
-		errorReporter: error_reporting.NewTestErrorReporter(),
+		errorReporter: newTestCodeErrorReporter(),
 		notifier:      notification.NewNotifier(),
 	}
 

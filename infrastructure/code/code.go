@@ -22,18 +22,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
 	codeClient "github.com/snyk/code-client-go"
-
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/filefilter"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
@@ -65,7 +61,7 @@ func NewScanStatus() *ScanStatus {
 type Scanner struct {
 	BundleUploader    *BundleUploader
 	SnykApiClient     snyk_api.SnykApiClient
-	errorReporter     error_reporting.ErrorReporter
+	errorReporter     codeClientObservability.ErrorReporter
 	analytics         codeClientObservability.Analytics
 	changedFilesMutex sync.Mutex
 	scanStatusMutex   sync.Mutex
@@ -79,27 +75,29 @@ type Scanner struct {
 	// these are needed when we want to retrieve auto-fixes for a previously
 	// analyzed folder
 	BundleHashes map[string]string
+	codeScanner  codeClient.CodeScanner
 }
 
 func New(bundleUploader *BundleUploader,
 	apiClient snyk_api.SnykApiClient,
-	reporter error_reporting.ErrorReporter,
-	analytics ux2.Analytics,
+	reporter codeClientObservability.ErrorReporter,
+	analytics codeClientObservability.Analytics,
 	learnService learn.Service,
 	notifier notification.Notifier,
+	codeScanner codeClient.CodeScanner,
 ) *Scanner {
-	codeAnalytics := NewCodeAnalytics(analytics)
 	sc := &Scanner{
 		BundleUploader: bundleUploader,
 		SnykApiClient:  apiClient,
 		errorReporter:  reporter,
-		analytics:      codeAnalytics,
+		analytics:      analytics,
 		runningScans:   map[string]*ScanStatus{},
 		changedPaths:   map[string]map[string]bool{},
 		fileFilters:    xsync.NewMapOf[*filefilter.FileFilter](),
 		learnService:   learnService,
 		notifier:       notifier,
 		BundleHashes:   map[string]string{},
+		codeScanner:    codeScanner,
 	}
 	return sc
 }
@@ -125,7 +123,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 
 	if err != nil {
 		log.Error().Err(err).Str("method", method).Msg("couldn't get sast enablement")
-		sc.errorReporter.CaptureError(err)
+		sc.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{})
 		return issues, errors.New("couldn't get sast enablement")
 	}
 
@@ -194,7 +192,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 
 	var results []snyk.Issue
 	if sc.useIgnoresFlow() {
-		results, err = sc.UploadAndAnalyzeWithIgnores(span.Context(), folderPath)
+		results, err = sc.UploadAndAnalyzeWithIgnores(span.Context(), folderPath, files, startTime, changedFiles)
 	} else {
 		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
 	}
@@ -302,33 +300,49 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 	return issues, err
 }
 
-func (sc *Scanner) UploadAndAnalyzeWithIgnores(
-	ctx context.Context,
+func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
 	path string,
+	files <-chan string,
+	scanStartTime time.Time,
+	changedFiles map[string]bool,
 ) (issues []snyk.Issue, err error) {
-	response, err := codeClient.UploadAndAnalyze()
+	if scanStartTime.IsZero() {
+		scanStartTime = time.Now()
+	}
+
+	scanMetrics := codeClientObservability.NewScanMetrics(scanStartTime, 0)
+	c := config.CurrentConfig()
+
+	response, bundle, err := sc.codeScanner.UploadAndAnalyze(ctx, c.SnykCodeApi(), path, files, changedFiles, scanMetrics)
+	if ctx.Err() != nil {
+		log.Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
+		return []snyk.Issue{}, nil
+	}
 	if err != nil {
 		return []snyk.Issue{}, err
 	}
 
 	converter := SarifConverter{sarif: *response}
-	issues, _ = converter.toIssues(path)
+	issues, err = converter.toIssues(bundle.GetRootPath())
+	if err != nil {
+		return []snyk.Issue{}, err
+	}
 	issueEnhancer := newIssueEnhancer(
 		sc.BundleUploader.SnykCode,
 		sc.BundleUploader.instrumentor,
 		sc.errorReporter,
 		sc.notifier,
 		sc.learnService,
-		uuid.New().String(),
+		bundle.GetRequestId(),
 		path,
 	)
-	issueEnhancer.addIssueActions(ctx, issues, "fakeBundleHash")
+	issueEnhancer.addIssueActions(ctx, issues, bundle.GetBundleHash())
 
 	return issues, nil
 }
 
 func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg string, scanMetrics codeClientObservability.ScanMetrics) {
-	sc.errorReporter.CaptureErrorAndReportAsIssue(path, errors.Wrap(err, msg))
+	sc.errorReporter.CaptureError(errors.Wrap(err, msg), codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: path})
 	sc.analytics.TrackScan(err == nil, scanMetrics)
 }
 
@@ -381,7 +395,7 @@ func (sc *Scanner) createBundle(ctx context.Context,
 
 		relativePath, err := ToRelativeUnixPath(rootPath, absoluteFilePath)
 		if err != nil {
-			sc.errorReporter.CaptureErrorAndReportAsIssue(rootPath, err)
+			sc.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: rootPath})
 		}
 		relativePath = EncodePath(relativePath)
 
@@ -405,7 +419,6 @@ func (sc *Scanner) createBundle(ctx context.Context,
 		rootPath:      rootPath,
 		errorReporter: sc.errorReporter,
 		limitToFiles:  limitToFiles,
-		notifier:      sc.notifier,
 		issueEnhancer: newIssueEnhancer(
 			sc.BundleUploader.SnykCode,
 			sc.BundleUploader.instrumentor,

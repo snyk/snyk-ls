@@ -34,12 +34,12 @@ const (
 
 func IntegTest(t *testing.T) *config.Config {
 	t.Helper()
-	return prepareTestHelper(t, integTestEnvVar)
+	return prepareTestHelper(t, integTestEnvVar, false)
 }
 
-func SmokeTest(t *testing.T) *config.Config {
+func SmokeTest(t *testing.T, useConsistentIgnores bool) *config.Config {
 	t.Helper()
-	return prepareTestHelper(t, smokeTestEnvVar)
+	return prepareTestHelper(t, smokeTestEnvVar, useConsistentIgnores)
 }
 
 func UnitTest(t *testing.T) *config.Config {
@@ -120,7 +120,7 @@ func CreateDummyProgressListener(t *testing.T) {
 	}()
 }
 
-func prepareTestHelper(t *testing.T, envVar string) *config.Config {
+func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *config.Config {
 	t.Helper()
 	if os.Getenv(envVar) == "" {
 		t.Logf("%s is not set", envVar)
@@ -129,7 +129,7 @@ func prepareTestHelper(t *testing.T, envVar string) *config.Config {
 
 	c := config.New()
 	c.ConfigureLogging(nil)
-	c.SetToken(GetEnvironmentToken())
+	c.SetToken(GetEnvironmentToken(useConsistentIgnores))
 	c.SetErrorReportingEnabled(false)
 	c.SetTelemetryEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)

@@ -27,8 +27,6 @@ import (
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/notification"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
@@ -39,12 +37,11 @@ type Bundle struct {
 	UploadBatches []*UploadBatch
 	Files         map[string]BundleFile
 	instrumentor  codeClientObservability.Instrumentor
-	errorReporter error_reporting.ErrorReporter
+	errorReporter codeClientObservability.ErrorReporter
 	requestId     string
 	missingFiles  []string
 	limitToFiles  []string
 	rootPath      string
-	notifier      notification.Notifier
 	issueEnhancer IssueEnhancer
 }
 
@@ -134,7 +131,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 				Str("requestId", b.requestId).
 				Int("fileCount", len(b.UploadBatches)).
 				Msg("error retrieving diagnostics...")
-			b.errorReporter.CaptureErrorAndReportAsIssue(b.rootPath, err)
+			b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: b.rootPath})
 			p.EndWithMessage(fmt.Sprintf("Analysis failed: %v", err))
 			return []snyk.Issue{}, err
 		}
@@ -154,7 +151,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 		if time.Since(start) > config.CurrentConfig().SnykCodeAnalysisTimeout() {
 			err := errors.New("analysis call timed out")
 			log.Error().Err(err).Msg("timeout...")
-			b.errorReporter.CaptureErrorAndReportAsIssue(b.rootPath, err)
+			b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: b.rootPath})
 			p.EndWithMessage("Snyk Code Analysis timed out")
 			return []snyk.Issue{}, err
 		}

@@ -964,28 +964,81 @@ func Test_CodeActionResolve_ShouldExecuteCommands(t *testing.T) {
 	assert.Equal(t, expected, serviceMock.ExecutedCommands()[0].CommandId)
 }
 
-func Test_SmokeWorkspaceScanOssAndCode(t *testing.T) {
+func Test_SmokeWorkspaceScan(t *testing.T) {
 	ossFile := "package.json"
-	codeFile := "app.js"
-	runSmokeTest(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", ossFile, codeFile)
-}
-
-func Test_SmokeWorkspaceScanIacAndCode(t *testing.T) {
 	iacFile := "main.tf"
 	codeFile := "app.js"
-	runSmokeTest(t, "https://github.com/deepcodeg/snykcon-goof.git", "eba8407", iacFile, codeFile)
+
+	type test struct {
+		name                 string
+		repo                 string
+		commit               string
+		file1                string
+		file2                string
+		useConsistentIgnores bool
+	}
+
+	tests := []test{
+		{
+			name:                 "OSS and Code",
+			repo:                 "https://github.com/snyk-labs/nodejs-goof",
+			commit:               "0336589",
+			file1:                ossFile,
+			file2:                codeFile,
+			useConsistentIgnores: false,
+		},
+		{
+			name:                 "OSS and Code with consistent ignores",
+			repo:                 "https://github.com/snyk-labs/nodejs-goof",
+			commit:               "0336589",
+			file1:                ossFile,
+			file2:                codeFile,
+			useConsistentIgnores: false,
+		},
+		{
+			name:                 "IaC and Code",
+			repo:                 "https://github.com/deepcodeg/snykcon-goof.git",
+			commit:               "eba8407",
+			file1:                iacFile,
+			file2:                codeFile,
+			useConsistentIgnores: true,
+		},
+		{
+			name:                 "IaC and Code with consistent ignores",
+			repo:                 "https://github.com/deepcodeg/snykcon-goof.git",
+			commit:               "eba8407",
+			file1:                iacFile,
+			file2:                codeFile,
+			useConsistentIgnores: true,
+		},
+		{
+			name:                 "Two upload batches",
+			repo:                 "https://github.com/apache/maven",
+			commit:               "18725ec1e",
+			file1:                "",
+			file2:                "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java",
+			useConsistentIgnores: false,
+		},
+		{
+			name:                 "Two upload batches with consistent ignores",
+			repo:                 "https://github.com/apache/maven",
+			commit:               "18725ec1e",
+			file1:                "",
+			file2:                "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java",
+			useConsistentIgnores: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			runSmokeTest(t, tc.repo, tc.commit, tc.file1, tc.file2, tc.useConsistentIgnores)
+		})
+	}
 }
 
-func Test_SmokeWorkspaceScanWithTwoUploadBatches(t *testing.T) {
-	ossFile := ""
-	codeFile := "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java"
-	runSmokeTest(t, "https://github.com/apache/maven", "18725ec1e", ossFile, codeFile)
-}
-
-func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 string) {
+func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 string, useConsistentIgnores bool) {
 	t.Helper()
 	loc := setupServer(t)
-	testutil.SmokeTest(t)
+	testutil.SmokeTest(t, useConsistentIgnores)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	config.CurrentConfig().SetSnykIacEnabled(true)
 	config.CurrentConfig().SetSnykOssEnabled(true)
@@ -1201,7 +1254,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 }
 func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	loc := setupServer(t)
-	testutil.SmokeTest(t)
+	testutil.SmokeTest(t, false)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()

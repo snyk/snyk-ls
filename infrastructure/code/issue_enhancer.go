@@ -28,7 +28,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/data_structure"
@@ -39,7 +38,7 @@ import (
 type IssueEnhancer struct {
 	SnykCode      SnykCodeClient
 	instrumentor  codeClientObservability.Instrumentor
-	errorReporter error_reporting.ErrorReporter
+	errorReporter codeClientObservability.ErrorReporter
 	notifier      notification.Notifier
 	learnService  learn.Service
 	requestId     string
@@ -49,7 +48,7 @@ type IssueEnhancer struct {
 func newIssueEnhancer(
 	SnykCode SnykCodeClient,
 	instrumentor codeClientObservability.Instrumentor,
-	errorReporter error_reporting.ErrorReporter,
+	errorReporter codeClientObservability.ErrorReporter,
 	notifier notification.Notifier,
 	learnService learn.Service,
 	requestId string,
@@ -253,7 +252,7 @@ func (b *IssueEnhancer) createOpenSnykLearnCodeAction(issue snyk.Issue) (ca *sny
 	lesson, err := b.learnService.GetLesson(issue.Ecosystem, issue.ID, issue.CWEs, issue.CVEs, issue.IssueType)
 	if err != nil {
 		log.Err(err).Msg("failed to get lesson")
-		b.errorReporter.CaptureError(err)
+		b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: ""})
 		return nil
 	}
 

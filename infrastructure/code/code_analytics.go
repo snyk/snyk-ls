@@ -23,14 +23,19 @@ import (
 	"github.com/snyk/snyk-ls/internal/float"
 )
 
-type CodeAnalytics struct {
+type CodeAnalytics interface {
+	TrackScan(success bool, scanMetrics codeClientObservability.ScanMetrics)
+}
+
+type codeAnalyticsImpl struct {
 	analytics ux2.Analytics
 }
 
 func NewCodeAnalytics(analytics ux2.Analytics) CodeAnalytics {
-	return CodeAnalytics{analytics: analytics}
+	return codeAnalyticsImpl{analytics: analytics}
 }
-func (sc CodeAnalytics) TrackScan(success bool, scanMetrics codeClientObservability.ScanMetrics) {
+
+func (sc codeAnalyticsImpl) TrackScan(success bool, scanMetrics codeClientObservability.ScanMetrics) {
 	var result ux2.Result
 	if success {
 		result = ux2.Success
@@ -49,4 +54,18 @@ func (sc CodeAnalytics) TrackScan(success bool, scanMetrics codeClientObservabil
 			DurationInSeconds: lastScanDurationInSeconds,
 		},
 	)
+}
+
+var _ CodeAnalytics = &testCodeAnalytics{}
+
+type testCodeAnalytics struct {
+	ScanHasBeenTracked bool
+}
+
+func newTestCodeAnalytics() *testCodeAnalytics {
+	return &testCodeAnalytics{}
+}
+
+func (t *testCodeAnalytics) TrackScan(success bool, scanMetrics codeClientObservability.ScanMetrics) {
+	t.ScanHasBeenTracked = true
 }
