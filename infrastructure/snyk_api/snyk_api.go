@@ -110,7 +110,7 @@ func (s *SnykApiClientImpl) SastSettings() (SastResponse, error) {
 func (s *SnykApiClientImpl) FeatureFlagSettings(featureFlagType FeatureFlagType) (FFResponse, error) {
 	method := "FeatureFlagSettings"
 	var response FFResponse
-	log.Debug().Str("method", method).Msgf("API: Getting %s", featureFlagType.String())
+	log.Debug().Str("method", method).Msgf("API: Getting %s", featureFlagType)
 	path := path.Join("/cli-config/feature-flag/", string(featureFlagType))
 	organization := config.CurrentConfig().Organization()
 	if organization != "" {
@@ -182,8 +182,4 @@ func checkResponseCode(r *http.Response) *SnykApiError {
 	}
 
 	return NewSnykApiError("Unexpected response code: "+r.Status, r.StatusCode)
-}
-
-func (f FeatureFlagType) String() string {
-	return string(f)
 }
