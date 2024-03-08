@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	codeClient "github.com/snyk/code-client-go"
+	codeClient "github.com/snyk/code-client-go/sarif"
 
 	"github.com/rs/zerolog/log"
 

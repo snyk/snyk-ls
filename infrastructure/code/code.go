@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
 	codeClient "github.com/snyk/code-client-go"
+	codeClientObservability "github.com/snyk/code-client-go/observability"
 	orchestration "github.com/snyk/orchestration-service/client/go"
 	orchFakeClient "github.com/snyk/orchestration-service/client/go/fakeclient"
 	"github.com/snyk/workspace-service/client/go/v6/pkg/workspace"
@@ -85,6 +87,7 @@ type Scanner struct {
 	learnService      learn.Service
 	fileFilters       *xsync.MapOf[string, *filefilter.FileFilter]
 	notifier          notification.Notifier
+	codeScanner       codeClient.CodeScanner
 }
 
 func New(bundleUploader *BundleUploader,
@@ -93,6 +96,7 @@ func New(bundleUploader *BundleUploader,
 	analytics ux2.Analytics,
 	learnService learn.Service,
 	notifier notification.Notifier,
+	codeScanner codeClient.CodeScanner,
 ) *Scanner {
 	sc := &Scanner{
 		BundleUploader: bundleUploader,
@@ -104,6 +108,7 @@ func New(bundleUploader *BundleUploader,
 		fileFilters:    xsync.NewMapOf[*filefilter.FileFilter](),
 		learnService:   learnService,
 		notifier:       notifier,
+		codeScanner:    codeScanner,
 	}
 	return sc
 }
@@ -194,9 +199,10 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	}
 	files := fileFilter.FindNonIgnoredFiles()
 	t.EndWithMessage("Collected files")
-	metrics := sc.newMetrics(startTime)
+	//metrics := sc.newMetrics(startTime)
 	//results, err := sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
-	results, err := sc.UploadAndAnalyzeV2(span.Context(), files, sastResponse.Org, folderPath, metrics, changedFiles)
+	//results, err := sc.UploadAndAnalyzeV2(span.Context(), files, sastResponse.Org, folderPath, metrics, changedFiles)
+	results, err := sc.UploadAndAnalyzeV3(span.Context(), files, folderPath, startTime, changedFiles)
 	return results, err
 }
 
@@ -398,89 +404,86 @@ func (sc *Scanner) UploadAndAnalyzeV2(ctx context.Context,
 			logger.Trace().Str("requestId", uploadedBundle.requestId).
 				Msg("sending diagnostics...")
 			p.EndWithMessage("Analysis complete.")
-
-			response, _ := codeClient.UploadAndAnalyze()
-			issues, _ = toIssues(response, uploadedBundle.rootPath)
-			//issues = []snyk.Issue{
-			//	{
-			//		ID:              uuid.New().String(),
-			//		Severity:        snyk.High,
-			//		IssueType:       snyk.CodeSecurityVulnerability,
-			//		IssueIdentifier: uuid.New(),
-			//		IsIgnored:       false,
-			//		IgnoreDetails:   nil,
-			//		Range: snyk.Range{
-			//			Start: snyk.Position{
-			//				Line:      1,
-			//				Character: 1,
-			//			},
-			//			End: snyk.Position{
-			//				Line:      1,
-			//				Character: 10,
-			//			},
-			//		},
-			//		Message:             "You silly goose",
-			//		FormattedMessage:    "",
-			//		AffectedFilePath:    "test/util/postgresql.ts",
-			//		Product:             product.ProductCode,
-			//		References:          []snyk.Reference{},
-			//		IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
-			//		CodeActions:         []snyk.CodeAction{},
-			//		CodelensCommands:    []snyk.CommandData{},
-			//		Ecosystem:           "npm",
-			//		CWEs:                []string{},
-			//		CVEs:                []string{},
-			//		AdditionalData: snyk.CodeIssueData{
-			//			Key:                "key1",
-			//			Title:              "Another title",
-			//			Message:            "You silly goose",
-			//			Rule:               "rule",
-			//			RuleId:             "ruleId",
-			//			RepoDatasetSize:    0,
-			//			ExampleCommitFixes: []snyk.ExampleCommitFix{},
-			//			CWE:                []string{},
-			//			Text:               "",
-			//			Markers:            []snyk.Marker{},
-			//			Cols:               snyk.CodePoint{},
-			//			Rows:               snyk.CodePoint{},
-			//			IsSecurityType:     true,
-			//			IsAutofixable:      false,
-			//			PriorityScore:      1,
-			//			HasAIFix:           false,
-			//		},
-			//	},
-			//	{
-			//		ID:              uuid.New().String(),
-			//		Severity:        snyk.High,
-			//		IssueType:       snyk.CodeSecurityVulnerability,
-			//		IssueIdentifier: uuid.New(),
-			//		IsIgnored:       true,
-			//		IgnoreDetails: &snyk.IgnoreDetails{
-			//			Reason: "False positive",
-			//			Expiry: time.Now(),
-			//		},
-			//		Range: snyk.Range{
-			//			Start: snyk.Position{
-			//				Line:      2,
-			//				Character: 1,
-			//			},
-			//			End: snyk.Position{
-			//				Line:      2,
-			//				Character: 10,
-			//			},
-			//		},
-			//		Message:             "This is a false positive",
-			//		FormattedMessage:    "",
-			//		AffectedFilePath:    "test/util/postgresql.ts",
-			//		Product:             product.ProductCode,
-			//		References:          []snyk.Reference{},
-			//		IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
-			//		Ecosystem:           "npm",
-			//		CWEs:                []string{},
-			//		CVEs:                []string{},
-			//	},
-			//}
-			uploadedBundle.addIssueActions(ctx, issues)
+			issues = []snyk.Issue{
+				{
+					ID:              uuid.New().String(),
+					Severity:        snyk.High,
+					IssueType:       snyk.CodeSecurityVulnerability,
+					IssueIdentifier: uuid.New(),
+					IsIgnored:       false,
+					IgnoreDetails:   nil,
+					Range: snyk.Range{
+						Start: snyk.Position{
+							Line:      1,
+							Character: 1,
+						},
+						End: snyk.Position{
+							Line:      1,
+							Character: 10,
+						},
+					},
+					Message:             "You silly goose",
+					FormattedMessage:    "",
+					AffectedFilePath:    "test/util/postgresql.ts",
+					Product:             product.ProductCode,
+					References:          []snyk.Reference{},
+					IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
+					CodeActions:         []snyk.CodeAction{},
+					CodelensCommands:    []snyk.CommandData{},
+					Ecosystem:           "npm",
+					CWEs:                []string{},
+					CVEs:                []string{},
+					AdditionalData: snyk.CodeIssueData{
+						Key:                "key1",
+						Title:              "Another title",
+						Message:            "You silly goose",
+						Rule:               "rule",
+						RuleId:             "ruleId",
+						RepoDatasetSize:    0,
+						ExampleCommitFixes: []snyk.ExampleCommitFix{},
+						CWE:                []string{},
+						Text:               "",
+						Markers:            []snyk.Marker{},
+						Cols:               snyk.CodePoint{},
+						Rows:               snyk.CodePoint{},
+						IsSecurityType:     true,
+						IsAutofixable:      false,
+						PriorityScore:      1,
+						HasAIFix:           false,
+					},
+				},
+				{
+					ID:              uuid.New().String(),
+					Severity:        snyk.High,
+					IssueType:       snyk.CodeSecurityVulnerability,
+					IssueIdentifier: uuid.New(),
+					IsIgnored:       true,
+					IgnoreDetails: &snyk.IgnoreDetails{
+						Reason: "False positive",
+						Expiry: time.Now(),
+					},
+					Range: snyk.Range{
+						Start: snyk.Position{
+							Line:      2,
+							Character: 1,
+						},
+						End: snyk.Position{
+							Line:      2,
+							Character: 10,
+						},
+					},
+					Message:             "This is a false positive",
+					FormattedMessage:    "",
+					AffectedFilePath:    "test/util/postgresql.ts",
+					Product:             product.ProductCode,
+					References:          []snyk.Reference{},
+					IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
+					Ecosystem:           "npm",
+					CWEs:                []string{},
+					CVEs:                []string{},
+				},
+			}
+			uploadedBundle.issueEnhancer.addIssueActions(ctx, issues)
 			break
 		}
 		if scanJobResults.Status != orchestration.ScanJobStatusInProgress {
@@ -509,6 +512,35 @@ func (sc *Scanner) UploadAndAnalyzeV2(ctx context.Context,
 
 	uploadedBundle.instrumentor.Finish(s)
 	sc.trackResult(err == nil, scanMetrics)
+	return issues, nil
+}
+
+func (sc *Scanner) UploadAndAnalyzeV3(ctx context.Context,
+	files <-chan string,
+	path string,
+	scanStartTime time.Time,
+	changedFiles map[string]bool,
+) (issues []snyk.Issue, err error) {
+	if scanStartTime.IsZero() {
+		scanStartTime = time.Now()
+	}
+	scanMetrics := codeClientObservability.NewScanMetrics(scanStartTime, 0)
+
+	response, bundle, _ := sc.codeScanner.UploadAndAnalyze(ctx, files, path, changedFiles, scanMetrics)
+
+	issues, _ = toIssues(response, bundle.RootPath)
+	issueEnhancer := IssueEnhancer{
+		SnykCode:      sc.BundleUploader.SnykCode, // TODO: are these things okay to pass around
+		BundleHash:    bundle.BundleHash,
+		instrumentor:  sc.BundleUploader.instrumentor,
+		errorReporter: sc.errorReporter,
+		learnService:  sc.learnService,
+		notifier:      sc.notifier,
+		requestId:     bundle.RequestId,
+		rootPath:      bundle.RootPath,
+	}
+	issueEnhancer.addIssueActions(ctx, issues)
+
 	return issues, nil
 }
 
@@ -590,8 +622,15 @@ func (sc *Scanner) createBundle(ctx context.Context,
 		rootPath:      rootPath,
 		errorReporter: sc.errorReporter,
 		limitToFiles:  limitToFiles,
-		learnService:  sc.learnService,
-		notifier:      sc.notifier,
+		issueEnhancer: IssueEnhancer{
+			SnykCode:      sc.BundleUploader.SnykCode,
+			instrumentor:  sc.BundleUploader.instrumentor,
+			errorReporter: sc.errorReporter,
+			learnService:  sc.learnService,
+			notifier:      sc.notifier,
+			requestId:     requestId,
+			rootPath:      rootPath,
+		},
 	}
 	if len(fileHashes) > 0 {
 		b.BundleHash, b.missingFiles, err = sc.BundleUploader.SnykCode.CreateBundle(span.Context(), fileHashes)

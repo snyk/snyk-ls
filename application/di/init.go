@@ -21,6 +21,9 @@ import (
 	"runtime"
 	"sync"
 
+	codeClient "github.com/snyk/code-client-go"
+
+	"github.com/snyk/snyk-ls/domain/observability/logger"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 
 	"github.com/adrg/xdg"
@@ -135,12 +138,19 @@ func initInfrastructure() {
 		snykCli = cli.NewExtensionExecutor()
 	}
 
+	codeLogger := logger.NewLogger()
+	codeInstrumentor := performance.NewCodeClientInstrumentor()
+	codeAnalytics := code.NewCodeAnalytics(analytics)
+	codeClientScanner := codeClient.NewCodeScanner(networkAccess.GetHttpClient, codeLogger, codeInstrumentor,
+		errorReporter,
+		codeAnalytics)
+
 	snykCodeClient = code.NewHTTPRepository(instrumentor, errorReporter, networkAccess.GetHttpClient)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.NewCLIScanner(instrumentor, errorReporter, analytics, snykCli, learnService, notifier, c)
 	scanNotifier, _ = appNotification.NewScanNotifier(notifier)
-	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, learnService, notifier)
+	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, errorReporter, analytics, learnService, notifier, codeClientScanner)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
 	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
