@@ -195,6 +195,48 @@ func TestSnykApiPact(t *testing.T) {
 
 		assert.NoError(t, err)
 	})
+
+	t.Run("Get feature flag status when disabled for a ORG", func(t *testing.T) {
+		organization := "00000000-0000-0000-0000-000000000099"
+		config.CurrentConfig().SetOrganization(organization)
+		featureFlagType := FeatureFlagType("snykCodeConsistentIgnores")
+
+		message := "Org " + organization + " doesn't have '" + string(featureFlagType) + "' feature enabled"
+		disabledResponse := FFResponse{
+			Ok:          false,
+			UserMessage: &message,
+		}
+
+		matcher := dsl.MapMatcher{}
+		matcher["org"] = dsl.String(organization)
+
+		interaction := pact.AddInteraction().
+			WithRequest(dsl.Request{
+				Method: "GET",
+				Path:   dsl.String("/cli-config/feature-flag/" + featureFlagType),
+				Query:  matcher,
+				Headers: dsl.MapMatcher{
+					"Content-Type":  dsl.String("application/json"),
+					"Authorization": dsl.Regex("token fc763eba-0905-41c5-a27f-3934ab26786c", `^token [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`),
+				},
+			}).WillRespondWith(dsl.Response{
+			Status: 200,
+			Headers: dsl.MapMatcher{
+				"Content-Type": dsl.String("application/json"),
+			},
+			Body: dsl.Match(disabledResponse),
+		})
+		interaction.Description = fmt.Sprintf("feature flag '%s' disabled for org", featureFlagType)
+
+		test := func() error {
+			_, err := client.FeatureFlagSettings(featureFlagType)
+			t.Logf("err: %+v\n", err)
+			return err
+		}
+
+		err := pact.Verify(test)
+		assert.NoError(t, err)
+	})
 }
 
 func setupPact() {
