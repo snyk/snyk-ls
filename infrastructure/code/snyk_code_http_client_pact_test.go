@@ -268,7 +268,7 @@ func setupPact(t *testing.T) {
 	t.Setenv("DEEPROXY_API_URL", fmt.Sprintf("http://localhost:%d", pact.Server.Port))
 	config.CurrentConfig().SetOrganization(orgUUID)
 
-	client = NewHTTPRepository(performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(),
+	client = NewSnykCodeHTTPClient(performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(),
 		func() *http.Client { return config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient() })
 }
 

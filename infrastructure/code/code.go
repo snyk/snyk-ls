@@ -39,7 +39,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/filefilter"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
-	"github.com/snyk/snyk-ls/internal/float"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -536,27 +535,6 @@ type UploadStatus struct {
 	UploadedFiles int
 	TotalFiles    int
 }
-<<<<<<< HEAD
-
-func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics) {
-	var result ux2.Result
-	if success {
-		result = ux2.Success
-	} else {
-		result = ux2.Error
-	}
-
-	duration := time.Since(scanMetrics.lastScanStartTime)
-	scanMetrics.lastScanDurationInSeconds = float.ToFixed(duration.Seconds(), 2)
-	sc.analytics.AnalysisIsReady(
-		ux2.AnalysisIsReadyProperties{
-			AnalysisType:      ux2.CodeSecurity,
-			Result:            result,
-			FileCount:         scanMetrics.lastScanFileCount,
-			DurationInSeconds: scanMetrics.lastScanDurationInSeconds,
-		},
-	)
-}
 
 func (sc *Scanner) useIgnoresFlow() bool {
 	response, err := sc.SnykApiClient.FeatureFlagStatus(snyk_api.FeatureFlagSnykCodeConsistentIgnores)
@@ -569,5 +547,3 @@ func (sc *Scanner) useIgnoresFlow() bool {
 	}
 	return response.Ok
 }
-====== =
->>>>>>> d0502d2 (refactor: analytics for code-client-go )

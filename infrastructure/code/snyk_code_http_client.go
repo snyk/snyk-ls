@@ -31,6 +31,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 	codeClient "github.com/snyk/code-client-go"
+	codeClientObservability "github.com/snyk/code-client-go/observability"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -66,7 +67,7 @@ func issueSeverity(snykSeverity string) snyk.Severity {
 
 type SnykCodeHTTPClient struct {
 	client        func() *http.Client
-	instrumentor  performance2.Instrumentor
+	instrumentor  codeClientObservability.Instrumentor
 	errorReporter error_reporting.ErrorReporter
 }
 
@@ -85,8 +86,8 @@ type FiltersResponse struct {
 	Extensions  []string `json:"extensions" pact:"min=1"`
 }
 
-func NewHTTPRepository(
-	instrumentor performance2.Instrumentor,
+func NewSnykCodeHTTPClient(
+	instrumentor codeClientObservability.Instrumentor,
 	errorReporter error_reporting.ErrorReporter,
 	client func() *http.Client,
 ) *SnykCodeHTTPClient {
