@@ -22,6 +22,7 @@ require (
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/segmentio/analytics-go v3.1.0+incompatible
 	github.com/shirou/gopsutil v3.21.11+incompatible
+	github.com/snyk/code-client-go v0.0.0-20240307112310-c7f3dbe6e197
 	github.com/snyk/go-application-framework v0.0.0-20240111143643-fa847b8a9a3b
 	github.com/sourcegraph/go-lsp v0.0.0-20200429204803-219e11d77f5d
 	github.com/stretchr/testify v1.8.4
@@ -92,3 +93,4 @@ require (
 )
 
 //replace github.com/snyk/go-application-framework => ../go-application-framework
+//replace github.com/snyk/code-client-go => ../code-client-go
