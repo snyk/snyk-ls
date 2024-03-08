@@ -1,8 +1,6 @@
 module github.com/snyk/snyk-ls
 
-go 1.21
-
-toolchain go1.21.0
+go 1.21.7
 
 require (
 	github.com/adrg/xdg v0.4.0
@@ -45,6 +43,7 @@ require (
 	github.com/jcmturner/goidentity/v6 v6.0.1 // indirect
 	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
+	github.com/snyk/code-client-go v0.0.0-20240307112310-c7f3dbe6e197 // indirect
 	github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect

@@ -33,6 +33,7 @@ import (
 	"github.com/hexops/gotextdiff/myers"
 	"github.com/hexops/gotextdiff/span"
 	"github.com/rs/zerolog/log"
+	codeClient "github.com/snyk/code-client-go"
 	"golang.org/x/exp/slices"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -49,14 +50,50 @@ func createRuleLink() (u *url.URL) {
 	return u
 }
 
-func (r *rule) getReferences() (references []snyk.Reference) {
-	for _, commit := range r.getExampleCommits() {
+func issueSeverityToMarkdown(severity snyk.Severity) string {
+	switch severity {
+	case snyk.Critical:
+		return "🔥 Critical Severity"
+	case snyk.High:
+		return "🚨 High Severity"
+	case snyk.Medium:
+		return "⚠️ Medium Severity"
+	case snyk.Low:
+		return "⬇️ Low Severity"
+	default:
+		return "❔️ Unknown Severity"
+	}
+}
+
+func (c *exampleCommit) toReference() (reference snyk.Reference) {
+	commitURLString := c.fix.CommitURL
+	commitURL, err := url.Parse(commitURLString)
+	if err != nil {
+		log.Err(err).
+			Str("method", "code.toReference").
+			Str("commitURL", commitURLString).
+			Msgf("cannot parse commit url")
+	}
+	return snyk.Reference{Title: c.description, Url: commitURL}
+}
+
+func getIssueKey(ruleId string, path string, startLine int, endLine int, startCol int, endCol int) string {
+	id := sha256.Sum256([]byte(ruleId + path + strconv.Itoa(startLine) + strconv.Itoa(endLine) + strconv.Itoa(startCol) + strconv.Itoa(endCol)))
+	return hex.EncodeToString(id[:16])
+}
+
+type SarifConverter struct {
+	sarif codeClient.SarifResponse
+}
+
+func (s *SarifConverter) getReferences(r codeClient.Rule) (references []snyk.Reference) {
+	for _, commit := range s.getExampleCommits(r) {
 		references = append(references, commit.toReference())
 	}
 	return references
 }
 
-func (r *rule) getCodeIssueType() snyk.Type {
+func (s *SarifConverter) getCodeIssueType(r codeClient.Rule) snyk.Type {
 	isSecurity := slices.ContainsFunc(r.Properties.Categories, func(category string) bool {
 		return strings.ToLower(category) == "security"
 	})
@@ -68,7 +105,7 @@ func (r *rule) getCodeIssueType() snyk.Type {
 	return snyk.CodeQualityIssue
 }
 
-func (r *rule) cwe() string {
+func (s *SarifConverter) cwe(r codeClient.Rule) string {
 	count := len(r.Properties.Cwe)
 	if count == 0 {
 		return ""
@@ -93,19 +130,7 @@ func (r *rule) cwe() string {
 	return builder.String()
 }
 
-func (c *exampleCommit) toReference() (reference snyk.Reference) {
-	commitURLString := c.fix.CommitURL
-	commitURL, err := url.Parse(commitURLString)
-	if err != nil {
-		log.Err(err).
-			Str("method", "code.toReference").
-			Str("commitURL", commitURLString).
-			Msgf("cannot parse commit url")
-	}
-	return snyk.Reference{Title: c.description, Url: commitURL}
-}
-
-func (r *result) getCodeFlow(baseDir string) (dataflow []snyk.DataFlowElement) {
+func (s *SarifConverter) getCodeFlow(r codeClient.Result, baseDir string) (dataflow []snyk.DataFlowElement) {
 	flows := r.CodeFlows
 	dedupMap := map[string]bool{}
 	for _, cFlow := range flows {
@@ -151,7 +176,7 @@ func (r *result) getCodeFlow(baseDir string) (dataflow []snyk.DataFlowElement) {
 	return dataflow
 }
 
-func (r *result) priorityScore() string {
+func (s *SarifConverter) priorityScore(r codeClient.Result) string {
 	priorityScore := r.Properties.PriorityScore
 	if priorityScore == 0 {
 		return ""
@@ -162,14 +187,14 @@ func (r *result) priorityScore() string {
 	return builder.String()
 }
 
-func (r *rule) titleWithLeadingPipeOrEmpty() string {
+func (s *SarifConverter) titleWithLeadingPipeOrEmpty(r codeClient.Rule) string {
 	if r.ShortDescription.Text != "" {
 		return fmt.Sprintf(" | %s", r.ShortDescription.Text)
 	}
 	return ""
 }
 
-func (r *rule) detailsOrEmpty() string {
+func (s *SarifConverter) detailsOrEmpty(r codeClient.Rule) string {
 	details := r.Help.Markdown
 	if details != "" {
 		return regexp.MustCompile(`##\sDetails`).ReplaceAllString(details, "### Details")
@@ -177,14 +202,14 @@ func (r *rule) detailsOrEmpty() string {
 	return ""
 }
 
-func (r *result) formattedMessage(rule rule, baseDir string) string {
+func (s *SarifConverter) formattedMessage(r codeClient.Result, rule codeClient.Rule, baseDir string) string {
 	const separator = "\n\n\n\n"
 	var builder strings.Builder
 	builder.Grow(500)
 	builder.WriteString(fmt.Sprintf("### %s", issueSeverityToMarkdown(issueSeverity(r.Level))))
-	builder.WriteString(rule.titleWithLeadingPipeOrEmpty())
-	builder.WriteString(r.priorityScore())
-	cwe := rule.cwe()
+	builder.WriteString(s.titleWithLeadingPipeOrEmpty(rule))
+	builder.WriteString(s.priorityScore(r))
+	cwe := s.cwe(rule)
 	if cwe != "" {
 		builder.WriteString(" | ")
 	}
@@ -192,37 +217,22 @@ func (r *result) formattedMessage(rule rule, baseDir string) string {
 	builder.WriteString(separator)
 	builder.WriteString(r.Message.Text)
 	builder.WriteString(separator)
-	builder.WriteString(rule.detailsOrEmpty())
+	builder.WriteString(s.detailsOrEmpty(rule))
 	builder.WriteString(separator)
 	builder.WriteString("### Data Flow\n\n")
-	for _, elem := range r.getCodeFlow(baseDir) {
+	for _, elem := range s.getCodeFlow(r, baseDir) {
 		builder.WriteString(elem.ToMarkDown())
 	}
 	builder.WriteString(separator)
 	builder.WriteString("### Example Commit Fixes\n\n")
-	for _, fix := range rule.getExampleCommits() {
+	for _, fix := range s.getExampleCommits(rule) {
 		builder.WriteString(fix.toMarkdown())
 	}
 	builder.WriteString(separator)
 	return builder.String()
 }
 
-func issueSeverityToMarkdown(severity snyk.Severity) string {
-	switch severity {
-	case snyk.Critical:
-		return "🔥 Critical Severity"
-	case snyk.High:
-		return "🚨 High Severity"
-	case snyk.Medium:
-		return "⚠️ Medium Severity"
-	case snyk.Low:
-		return "⬇️ Low Severity"
-	default:
-		return "❔️ Unknown Severity"
-	}
-}
-
-func (r *result) getMessage(rule rule) string {
+func (s *SarifConverter) getMessage(r codeClient.Result, rule codeClient.Rule) string {
 	text := r.Message.Text
 	if rule.ShortDescription.Text != "" {
 		text = fmt.Sprintf("%s: %s", rule.ShortDescription.Text, text)
@@ -234,7 +244,7 @@ func (r *result) getMessage(rule rule) string {
 	return text
 }
 
-func (r *rule) getFixDescriptionsForRule(commitFixIndex int) string {
+func (s *SarifConverter) getFixDescriptionsForRule(r codeClient.Rule, commitFixIndex int) string {
 	fixDescriptions := r.Properties.ExampleCommitDescriptions
 	if len(fixDescriptions) > commitFixIndex {
 		return fixDescriptions[commitFixIndex]
@@ -242,15 +252,15 @@ func (r *rule) getFixDescriptionsForRule(commitFixIndex int) string {
 	return ""
 }
 
-func (r *rule) getExampleCommits() (exampleCommits []exampleCommit) {
+func (s *SarifConverter) getExampleCommits(r codeClient.Rule) (exampleCommits []exampleCommit) {
 	if len(r.Properties.ExampleCommitFixes) == 0 {
 		return exampleCommits
 	}
 	for i, fix := range r.Properties.ExampleCommitFixes {
 		exampleCommits = append(exampleCommits, exampleCommit{
 			index:       i,
-			description: r.getFixDescriptionsForRule(i),
-			fix: exampleCommitFix{
+			description: s.getFixDescriptionsForRule(r, i),
+			fix: codeClient.ExampleCommitFix{
 				CommitURL: fix.CommitURL,
 				Lines:     fix.Lines,
 			},
@@ -259,17 +269,17 @@ func (r *rule) getExampleCommits() (exampleCommits []exampleCommit) {
 	return exampleCommits
 }
 
-func (r *run) getRule(id string) rule {
+func (s *SarifConverter) getRule(r codeClient.Run, id string) codeClient.Rule {
 	for _, r := range r.Tool.Driver.Rules {
 		if r.ID == id {
 			return r
 		}
 	}
-	return rule{}
+	return codeClient.Rule{}
 }
 
-func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error) {
-	runs := s.Sarif.Runs
+func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err error) {
+	runs := s.sarif.Sarif.Runs
 	if len(runs) == 0 {
 		return issues, nil
 	}
@@ -310,11 +320,11 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 				},
 			}
 
-			testRule := r.getRule(result.RuleID)
-			message := result.getMessage(testRule)
-			formattedMessage := result.formattedMessage(testRule, baseDir)
+			testRule := s.getRule(r, result.RuleID)
+			message := s.getMessage(result, testRule)
+			formattedMessage := s.formattedMessage(result, testRule, baseDir)
 
-			exampleCommits := testRule.getExampleCommits()
+			exampleCommits := s.getExampleCommits(testRule)
 			exampleFixes := make([]snyk.ExampleCommitFix, 0, len(exampleCommits))
 			for _, commit := range exampleCommits {
 				commitURL := commit.fix.CommitURL
@@ -332,13 +342,13 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 				})
 			}
 
-			issueType := testRule.getCodeIssueType()
+			issueType := s.getCodeIssueType(testRule)
 			isSecurityType := true
 			if issueType == snyk.CodeQualityIssue {
 				isSecurityType = false
 			}
 
-			markers, err := result.getMarkers(baseDir)
+			markers, err := s.getMarkers(result, baseDir)
 			errs = errors.Join(errs, err)
 
 			key := getIssueKey(result.RuleID, absPath, startLine, endLine, startCol, endCol)
@@ -363,7 +373,7 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 				IsSecurityType:     isSecurityType,
 				IsAutofixable:      result.Properties.IsAutofixable,
 				PriorityScore:      result.Properties.PriorityScore,
-				DataFlow:           result.getCodeFlow(baseDir),
+				DataFlow:           s.getCodeFlow(result, baseDir),
 			}
 
 			d := snyk.Issue{
@@ -376,7 +386,7 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 				AffectedFilePath:    absPath,
 				Product:             product.ProductCode,
 				IssueDescriptionURL: ruleLink,
-				References:          testRule.getReferences(),
+				References:          s.getReferences(testRule),
 				AdditionalData:      additionalData,
 				CWEs:                testRule.Properties.Cwe,
 			}
@@ -387,12 +397,7 @@ func (s *SarifResponse) toIssues(baseDir string) (issues []snyk.Issue, err error
 	return issues, errs
 }
 
-func getIssueKey(ruleId string, path string, startLine int, endLine int, startCol int, endCol int) string {
-	id := sha256.Sum256([]byte(ruleId + path + strconv.Itoa(startLine) + strconv.Itoa(endLine) + strconv.Itoa(startCol) + strconv.Itoa(endCol)))
-	return hex.EncodeToString(id[:16])
-}
-
-func (r *result) getMarkers(baseDir string) ([]snyk.Marker, error) {
+func (s *SarifConverter) getMarkers(r codeClient.Result, baseDir string) ([]snyk.Marker, error) {
 	markers := make([]snyk.Marker, 0)
 
 	// Example markdown string:
