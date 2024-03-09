@@ -28,11 +28,29 @@ type FakeApiClient struct {
 	LocalCodeEngine LocalCodeEngine
 	AutofixEnabled  bool
 	ApiError        *SnykApiError
+	Responses       map[string]any
 }
 
 var (
 	mutex = &sync.Mutex{}
 )
+
+func (f *FakeApiClient) SetResponse(method string, response any) {
+	if f.Responses == nil {
+		f.Responses = make(map[string]any)
+	}
+	f.Responses[method] = response
+}
+
+func (f *FakeApiClient) addCallForMethod(method string, args []any) {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	if f.Calls == nil {
+		f.Calls = make(map[string][][]any)
+	}
+	f.Calls[method] = append(f.Calls[method], args)
+}
 
 func (f *FakeApiClient) addCall(params []any, op string) {
 	mutex.Lock()
@@ -62,7 +80,11 @@ func (f *FakeApiClient) GetCallParams(callNo int, op string) []any {
 }
 
 func (f *FakeApiClient) Clear() {
+	mutex.Lock()
+	defer mutex.Unlock()
+
 	f.Calls = map[string][][]any{}
+	f.Responses = map[string]any{}
 }
 
 func (f *FakeApiClient) GetAllCalls(op string) [][]any {
@@ -91,10 +113,12 @@ func (f *FakeApiClient) SastSettings() (SastResponse, error) {
 }
 
 func (f *FakeApiClient) FeatureFlagSettings(featureFlagType FeatureFlagType) (FFResponse, error) {
-	f.addCall([]any{featureFlagType}, "featureFlagSettings")
+	f.addCallForMethod("FeatureFlagSettings", []any{featureFlagType})
 
-	if f.ApiError != nil {
-		return FFResponse{}, f.ApiError
+	if resp, ok := f.Responses["FeatureFlagSettings"]; ok {
+		if ffResp, ok := resp.(FFResponse); ok {
+			return ffResp, nil
+		}
 	}
 	return FFResponse{}, nil
 }
