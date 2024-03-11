@@ -46,6 +46,26 @@ type IssueEnhancer struct {
 	rootPath      string
 }
 
+func newIssueEnhancer(
+	SnykCode SnykCodeClient,
+	instrumentor performance.Instrumentor,
+	errorReporter error_reporting.ErrorReporter,
+	notifier notification.Notifier,
+	learnService learn.Service,
+	requestId string,
+	rootPath string,
+) IssueEnhancer {
+	return IssueEnhancer{
+		SnykCode:      SnykCode,
+		instrumentor:  instrumentor,
+		errorReporter: errorReporter,
+		notifier:      notifier,
+		learnService:  learnService,
+		requestId:     requestId,
+		rootPath:      rootPath,
+	}
+}
+
 // Adds code actions and code lenses for issues found
 func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue, bundleHash string) {
 	method := "addCodeActions"

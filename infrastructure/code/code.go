@@ -378,15 +378,14 @@ func (sc *Scanner) createBundle(ctx context.Context,
 		errorReporter: sc.errorReporter,
 		limitToFiles:  limitToFiles,
 		notifier:      sc.notifier,
-		issueEnhancer: IssueEnhancer{
-			SnykCode:      sc.BundleUploader.SnykCode,
-			instrumentor:  sc.BundleUploader.instrumentor,
-			errorReporter: sc.errorReporter,
-			learnService:  sc.learnService,
-			notifier:      sc.notifier,
-			requestId:     requestId,
-			rootPath:      rootPath,
-		},
+		issueEnhancer: newIssueEnhancer(
+			sc.BundleUploader.SnykCode,
+			sc.BundleUploader.instrumentor,
+			sc.errorReporter,
+			sc.notifier,
+			sc.learnService,
+			requestId,
+			rootPath),
 	}
 	var err error
 	if len(fileHashes) > 0 {
