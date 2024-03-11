@@ -18,10 +18,12 @@ package code
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
@@ -306,7 +308,84 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 }
 
 func (sc *Scanner) UploadAndAnalyzeWithIgnores() (issues []snyk.Issue, err error) {
-	return []snyk.Issue{}, nil
+	return []snyk.Issue{
+		{
+			ID:        uuid.New().String(),
+			Severity:  snyk.High,
+			IssueType: snyk.CodeSecurityVulnerability,
+			Range: snyk.Range{
+				Start: snyk.Position{
+					Line:      1,
+					Character: 1,
+				},
+				End: snyk.Position{
+					Line:      1,
+					Character: 10,
+				},
+			},
+			Message:             "You silly goose",
+			FormattedMessage:    "",
+			AffectedFilePath:    "test/util/postgresql.ts",
+			Product:             product.ProductCode,
+			References:          []snyk.Reference{},
+			IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
+			CodeActions:         []snyk.CodeAction{},
+			CodelensCommands:    []snyk.CommandData{},
+			Ecosystem:           "npm",
+			CWEs:                []string{},
+			CVEs:                []string{},
+			AdditionalData: snyk.CodeIssueData{
+				Key:                "key1",
+				Title:              "Another title",
+				Message:            "You silly goose",
+				Rule:               "rule",
+				RuleId:             "ruleId",
+				RepoDatasetSize:    0,
+				ExampleCommitFixes: []snyk.ExampleCommitFix{},
+				CWE:                []string{},
+				Text:               "",
+				Markers:            []snyk.Marker{},
+				Cols:               snyk.CodePoint{},
+				Rows:               snyk.CodePoint{},
+				IsSecurityType:     true,
+				IsAutofixable:      false,
+				PriorityScore:      1,
+				HasAIFix:           false,
+			},
+		},
+		{
+			ID:        uuid.New().String(),
+			Severity:  snyk.High,
+			IssueType: snyk.CodeSecurityVulnerability,
+			IsIgnored: true,
+			IgnoreDetails: &snyk.IgnoreDetails{
+				Category:   "Won't fix",
+				Reason:     "False positive",
+				Expiration: time.Now().Add(3 * 24 * time.Hour),
+				IgnoredOn:  time.Now().Add(-3 * 24 * time.Hour),
+				IgnoredBy:  "Neil M",
+			},
+			Range: snyk.Range{
+				Start: snyk.Position{
+					Line:      2,
+					Character: 1,
+				},
+				End: snyk.Position{
+					Line:      2,
+					Character: 10,
+				},
+			},
+			Message:             "This is a false positive",
+			FormattedMessage:    "",
+			AffectedFilePath:    "test/util/postgresql.ts",
+			Product:             product.ProductCode,
+			References:          []snyk.Reference{},
+			IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
+			Ecosystem:           "npm",
+			CWEs:                []string{},
+			CVEs:                []string{},
+		},
+	}, nil
 }
 
 func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg string, scanMetrics *ScanMetrics) {

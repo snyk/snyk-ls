@@ -16,7 +16,9 @@
 
 package snyk_api
 
-import "sync"
+import (
+	"sync"
+)
 
 const (
 	SastEnabledOperation = "sastEnabled"
