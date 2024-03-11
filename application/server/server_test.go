@@ -279,6 +279,7 @@ func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetLearnLesson)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.OpenLearnLesson)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetSettingsSastEnabled)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetFeatureFlagStatus)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetActiveUserCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.CodeFixCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.CodeSubmitFixFeedback)
@@ -1082,6 +1083,28 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 		// don't check for all issues, just the first
 		break
 	}
+
+	// FeatureFlagStatus command
+	log.Info().Msg("FeatureFlagStatus command")
+	call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		Command:   snyk.GetFeatureFlagStatus,
+		Arguments: []any{"snykCodeConsistentIgnores"},
+	})
+
+	if err != nil {
+		t.Fatal("FeatureFlagStatus command failed", err)
+	}
+
+	var ffStatus bool
+	if err := call.UnmarshalResult(&ffStatus); err != nil {
+		log.Error().Err(err).Msg("Failed to unmarshal feature flag status")
+		t.Fatalf("Failed to unmarshal feature flag status: %v", err)
+	}
+
+	assert.NoError(t, err)
+	var featureFlagStatus bool
+	err = call.UnmarshalResult(&featureFlagStatus)
+	assert.NoError(t, err)
 }
 
 // Check if published diagnostics for given testPath match the expectedNumber.
