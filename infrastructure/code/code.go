@@ -193,7 +193,13 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	files := fileFilter.FindNonIgnoredFiles()
 	t.EndWithMessage("Collected files")
 	metrics := sc.newMetrics(startTime)
-	results, err := sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
+
+	var results []snyk.Issue
+	if sc.useIgnoresFlow() {
+		results, err = sc.UploadAndAnalyzeWithIgnores()
+	} else {
+		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
+	}
 
 	return results, err
 }
@@ -297,6 +303,10 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 	}
 	sc.trackResult(err == nil, scanMetrics)
 	return issues, err
+}
+
+func (sc *Scanner) UploadAndAnalyzeWithIgnores() (issues []snyk.Issue, err error) {
+	return []snyk.Issue{}, nil
 }
 
 func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg string, scanMetrics *ScanMetrics) {
@@ -417,4 +427,16 @@ func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics) {
 			DurationInSeconds: scanMetrics.lastScanDurationInSeconds,
 		},
 	)
+}
+
+func (sc *Scanner) useIgnoresFlow() bool {
+	response, err := sc.SnykApiClient.FeatureFlagSettings(snyk_api.FeatureFlagSnykCodeConsistentIgnores)
+	if err != nil {
+		log.Debug().Err(err).Msg("Failed to check if the ignores experience is enabled")
+		return false
+	}
+	if !response.Ok && response.UserMessage != nil {
+		log.Info().Msg(*response.UserMessage)
+	}
+	return response.Ok
 }
