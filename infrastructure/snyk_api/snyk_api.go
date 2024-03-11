@@ -23,10 +23,17 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
+)
+
+type FeatureFlagType string
+
+const (
+	FeatureFlagSnykCodeConsistentIgnores FeatureFlagType = "snykCodeConsistentIgnores"
 )
 
 type SnykApiClientImpl struct {
@@ -48,8 +55,14 @@ type SastResponse struct {
 	AutofixEnabled              bool            `json:"autofixEnabled"`
 }
 
+type FFResponse struct {
+	Ok          bool    `json:"ok"`
+	UserMessage *string `json:"userMessage,omitempty"`
+}
+
 type SnykApiClient interface {
 	SastSettings() (SastResponse, error)
+	FeatureFlagSettings(featureFlagType FeatureFlagType) (FFResponse, error)
 }
 
 type SnykApiError struct {
@@ -78,28 +91,38 @@ func NewSnykApiClient(client func() *http.Client) SnykApiClient {
 
 func (s *SnykApiClientImpl) SastSettings() (SastResponse, error) {
 	method := "SastSettings"
+	var response SastResponse
 	log.Debug().Str("method", method).Msg("API: Getting SastEnabled")
 	path := "/cli-config/settings/sast"
 	organization := config.CurrentConfig().Organization()
 	if organization != "" {
 		path += "?org=" + url.QueryEscape(organization)
 	}
-	responseBody, err := s.doCall("GET", path, nil)
+
+	err := s.processApiResponse(method, path, &response)
 	if err != nil {
-		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
-		log.Err(fmtErr).Str("method", method).Msg("error when calling sastEnabled endpoint")
+		log.Err(err).Str("method", method).Msg("error when calling sastEnabled endpoint")
 		return SastResponse{}, err
+	}
+	return response, err
+}
+
+func (s *SnykApiClientImpl) FeatureFlagSettings(featureFlagType FeatureFlagType) (FFResponse, error) {
+	method := "FeatureFlagSettings"
+	var response FFResponse
+	log.Debug().Str("method", method).Msgf("API: Getting %s", featureFlagType)
+	path := path.Join("/cli-config/feature-flag/", string(featureFlagType))
+	organization := config.CurrentConfig().Organization()
+	if organization != "" {
+		path += "?org=" + url.QueryEscape(organization)
 	}
 
-	var response SastResponse
-	unmarshalErr := json.Unmarshal(responseBody, &response)
-	if unmarshalErr != nil {
-		fmtErr := fmt.Errorf("%v: %v", err, responseBody)
-		log.Err(fmtErr).Str("method", method).Msg("couldn't unmarshal SastResponse")
-		return SastResponse{}, err
+	err := s.processApiResponse(method, path, &response)
+	if err != nil {
+		log.Err(err).Str("method", method).Msg("error when calling featureFlagSettings endpoint")
+		return FFResponse{}, err
 	}
-	log.Debug().Str("method", method).Msg("API: Done")
-	return response, nil
+	return response, err
 }
 
 func (s *SnykApiClientImpl) doCall(method string,
@@ -139,6 +162,18 @@ func (s *SnykApiClientImpl) doCall(method string,
 		return nil, NewSnykApiError(readErr.Error(), 0)
 	}
 	return responseBody, nil
+}
+
+func (s *SnykApiClientImpl) processApiResponse(method string, path string, v interface{}) error {
+	responseBody, err := s.doCall("GET", path, nil)
+	if err != nil {
+		return fmt.Errorf("%s: %v: %v", method, err, responseBody)
+	}
+
+	if err := json.Unmarshal(responseBody, v); err != nil {
+		return fmt.Errorf("%s: couldn't unmarshal: %v", method, err)
+	}
+	return nil
 }
 
 func checkResponseCode(r *http.Response) *SnykApiError {
