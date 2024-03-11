@@ -63,6 +63,9 @@ func CreateFromCommandData( //nolint:gocyclo // reasonable command dispatch
 	case snyk.GetSettingsSastEnabled:
 		apiClient := snyk_api.NewSnykApiClient(config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient)
 		return &sastEnabled{command: commandData, apiClient: apiClient}, nil
+	case snyk.GetFeatureFlagStatus:
+		apiClient := snyk_api.NewSnykApiClient(config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient)
+		return &featureFlagStatus{command: commandData, apiClient: apiClient}, nil
 	case snyk.GetActiveUserCommand:
 		return &getActiveUser{command: commandData, authService: authService, notifier: notifier}, nil
 	case snyk.ReportAnalyticsCommand:

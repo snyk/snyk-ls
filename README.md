@@ -250,6 +250,17 @@ Right now the language server supports the following actions:
          // WHEN
          comp.changePassword();
   ```
+- `Feature Flag Status Command` triggers the api call to check if a feature flag is enabled
+  - command: `snyk.getFeatureFlagStatus`
+  - args:
+    - `featureFlagType` string
+  - returns an object with the status of the feature flag and an optional user message
+  ```json5
+    {
+      "ok": true or false, // boolean indicating if the feature is enabled
+      "userMessage": "Optional message to the user" // present if 'ok' is false
+    }
+  ```
 
 ## Installation
 

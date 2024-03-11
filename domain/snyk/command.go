@@ -37,6 +37,7 @@ const (
 	OpenLearnLesson              = "snyk.openLearnLesson"
 	GetLearnLesson               = "snyk.getLearnLesson"
 	GetSettingsSastEnabled       = "snyk.getSettingsSastEnabled"
+	GetFeatureFlagStatus         = "snyk.getFeatureFlagStatus"
 	GetActiveUserCommand         = "snyk.getActiveUser"
 	ReportAnalyticsCommand       = "snyk.reportAnalytics"
 

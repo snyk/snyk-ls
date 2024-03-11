@@ -264,6 +264,7 @@ func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 						snyk.OpenLearnLesson,
 						snyk.GetLearnLesson,
 						snyk.GetSettingsSastEnabled,
+						snyk.GetFeatureFlagStatus,
 						snyk.GetActiveUserCommand,
 						snyk.CodeFixCommand,
 						snyk.CodeSubmitFixFeedback,
