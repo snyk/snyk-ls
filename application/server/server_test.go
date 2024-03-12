@@ -1071,14 +1071,14 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 		if !ok || codeIssueData["hasAIFix"] == false {
 			continue
 		}
-		call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		call, e := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   snyk.CodeFixDiffsCommand,
 			Arguments: []any{uri.PathToUri(scanParams.FolderPath), uri.PathToUri(issue.FilePath), issue.Id},
 		})
-		assert.NoError(t, err)
+		assert.NoError(t, e)
 		var unifiedDiffs []code.AutofixUnifiedDiffSuggestion
-		err = call.UnmarshalResult(&unifiedDiffs)
-		assert.NoError(t, err)
+		e = call.UnmarshalResult(&unifiedDiffs)
+		assert.NoError(t, e)
 		assert.Greater(t, len(unifiedDiffs), 0)
 		// don't check for all issues, just the first
 		break
@@ -1096,7 +1096,7 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 	}
 
 	var ffStatus bool
-	if err := call.UnmarshalResult(&ffStatus); err != nil {
+	if err = call.UnmarshalResult(&ffStatus); err != nil {
 		log.Error().Err(err).Msg("Failed to unmarshal feature flag status")
 		t.Fatalf("Failed to unmarshal feature flag status: %v", err)
 	}
