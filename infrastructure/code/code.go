@@ -20,6 +20,7 @@ import (
 	"context"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -198,7 +199,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 
 	var results []snyk.Issue
 	if sc.useIgnoresFlow() {
-		results, err = sc.UploadAndAnalyzeWithIgnores()
+		results, err = sc.UploadAndAnalyzeWithIgnores(folderPath)
 	} else {
 		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
 	}
@@ -307,7 +308,10 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 	return issues, err
 }
 
-func (sc *Scanner) UploadAndAnalyzeWithIgnores() (issues []snyk.Issue, err error) {
+func (sc *Scanner) UploadAndAnalyzeWithIgnores(
+	path string,
+) (issues []snyk.Issue, err error) {
+	absoluteUri, _ := filepath.Abs(path + "/src/main.ts")
 	return []snyk.Issue{
 		{
 			ID:        uuid.New().String(),
@@ -325,7 +329,7 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores() (issues []snyk.Issue, err error
 			},
 			Message:             "You silly goose",
 			FormattedMessage:    "",
-			AffectedFilePath:    "test/util/postgresql.ts",
+			AffectedFilePath:    absoluteUri,
 			Product:             product.ProductCode,
 			References:          []snyk.Reference{},
 			IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
@@ -351,6 +355,22 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores() (issues []snyk.Issue, err error
 				IsAutofixable:      false,
 				PriorityScore:      1,
 				HasAIFix:           false,
+				DataFlow: []snyk.DataFlowElement{
+					{
+						FilePath: absoluteUri,
+						FlowRange: snyk.Range{
+							Start: snyk.Position{
+								Line:      1,
+								Character: 1,
+							},
+							End: snyk.Position{
+								Line:      1,
+								Character: 2,
+							},
+						},
+						Content: "testContent",
+					},
+				},
 			},
 		},
 		{
@@ -377,13 +397,47 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores() (issues []snyk.Issue, err error
 			},
 			Message:             "This is a false positive",
 			FormattedMessage:    "",
-			AffectedFilePath:    "test/util/postgresql.ts",
+			AffectedFilePath:    absoluteUri,
 			Product:             product.ProductCode,
 			References:          []snyk.Reference{},
 			IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
 			Ecosystem:           "npm",
 			CWEs:                []string{},
 			CVEs:                []string{},
+			AdditionalData: snyk.CodeIssueData{
+				Key:                "key2",
+				Title:              "Another title",
+				Message:            "This is a false positive",
+				Rule:               "rule",
+				RuleId:             "ruleId",
+				RepoDatasetSize:    0,
+				ExampleCommitFixes: []snyk.ExampleCommitFix{},
+				CWE:                []string{},
+				Text:               "",
+				Markers:            []snyk.Marker{},
+				Cols:               snyk.CodePoint{},
+				Rows:               snyk.CodePoint{},
+				IsSecurityType:     true,
+				IsAutofixable:      false,
+				PriorityScore:      2,
+				HasAIFix:           false,
+				DataFlow: []snyk.DataFlowElement{
+					{
+						FilePath: absoluteUri,
+						FlowRange: snyk.Range{
+							Start: snyk.Position{
+								Line:      1,
+								Character: 1,
+							},
+							End: snyk.Position{
+								Line:      1,
+								Character: 2,
+							},
+						},
+						Content: "testContent",
+					},
+				},
+			},
 		},
 	}, nil
 }

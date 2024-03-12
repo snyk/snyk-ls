@@ -394,7 +394,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 		notification.NewNotifier(),
 	)
 
-	issues, _ := c.UploadAndAnalyzeWithIgnores()
+	issues, _ := c.UploadAndAnalyzeWithIgnores("test")
 	assert.Equal(t, false, issues[0].IsIgnored)
 	assert.Nil(t, issues[0].IgnoreDetails)
 	assert.Equal(t, true, issues[1].IsIgnored)

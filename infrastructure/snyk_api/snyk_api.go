@@ -111,7 +111,7 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 	method := "FeatureFlagStatus"
 	var response FFResponse
 	log.Debug().Str("method", method).Msgf("API: Getting %s", featureFlagType)
-	path := path.Join("/cli-config/feature-flag/", string(featureFlagType))
+	path := path.Join("/cli-config/feature-flags/", string(featureFlagType))
 	organization := config.CurrentConfig().Organization()
 	if organization != "" {
 		path += "?org=" + url.QueryEscape(organization)
