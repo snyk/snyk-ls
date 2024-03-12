@@ -44,6 +44,6 @@ func (cmd *featureFlagStatus) Execute(ctx context.Context) (any, error) {
 	}
 
 	ff := args[0].(snyk_api.FeatureFlagType)
-	featureFlagResponse, err := cmd.apiClient.FeatureFlagSettings(ff)
+	featureFlagResponse, err := cmd.apiClient.FeatureFlagStatus(ff)
 	return featureFlagResponse, err
 }

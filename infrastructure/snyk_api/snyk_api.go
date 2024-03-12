@@ -62,7 +62,7 @@ type FFResponse struct {
 
 type SnykApiClient interface {
 	SastSettings() (SastResponse, error)
-	FeatureFlagSettings(featureFlagType FeatureFlagType) (FFResponse, error)
+	FeatureFlagStatus(featureFlagType FeatureFlagType) (FFResponse, error)
 }
 
 type SnykApiError struct {
@@ -107,8 +107,8 @@ func (s *SnykApiClientImpl) SastSettings() (SastResponse, error) {
 	return response, err
 }
 
-func (s *SnykApiClientImpl) FeatureFlagSettings(featureFlagType FeatureFlagType) (FFResponse, error) {
-	method := "FeatureFlagSettings"
+func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (FFResponse, error) {
+	method := "FeatureFlagStatus"
 	var response FFResponse
 	log.Debug().Str("method", method).Msgf("API: Getting %s", featureFlagType)
 	path := path.Join("/cli-config/feature-flag/", string(featureFlagType))

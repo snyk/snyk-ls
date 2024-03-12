@@ -564,7 +564,7 @@ func Test_Scan(t *testing.T) {
 		testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{}
 		snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
-		snykApiMock.SetResponse("FeatureFlagSettings", snyk_api.FFResponse{Ok: false})
+		snykApiMock.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
 		learnMock := mock_learn.NewMockService(gomock.NewController(t))
 		learnMock.
 			EXPECT().
@@ -592,7 +592,7 @@ func Test_Scan(t *testing.T) {
 		testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{}
 		snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
-		snykApiMock.SetResponse("FeatureFlagSettings", snyk_api.FFResponse{Ok: true})
+		snykApiMock.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: true})
 		learnMock := mock_learn.NewMockService(gomock.NewController(t))
 		learnMock.
 			EXPECT().
