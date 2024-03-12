@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -1084,27 +1085,37 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 		break
 	}
 
-	// FeatureFlagStatus command
-	log.Info().Msg("FeatureFlagStatus command")
+	checkFeatureFlagStatus(t, &loc)
+}
+
+func checkFeatureFlagStatus(t *testing.T, loc *server.Local) {
+	t.Helper()
+
 	call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
 		Command:   snyk.GetFeatureFlagStatus,
-		Arguments: []any{"snykCodeConsistentIgnores"},
+		Arguments: []any{"bitbucketConnectApp"},
 	})
 
 	if err != nil {
 		t.Fatal("FeatureFlagStatus command failed", err)
 	}
 
-	var ffStatus bool
-	if err = call.UnmarshalResult(&ffStatus); err != nil {
-		log.Error().Err(err).Msg("Failed to unmarshal feature flag status")
-		t.Fatalf("Failed to unmarshal feature flag status: %v", err)
+	if err := call.Error(); err != nil {
+		log.Warn().Err(err).Msg("Received an error response from FeatureFlagStatus command")
 	}
 
-	assert.NoError(t, err)
-	var featureFlagStatus bool
-	err = call.UnmarshalResult(&featureFlagStatus)
-	assert.NoError(t, err)
+	log.Debug().Str("FeatureFlagStatus", call.ResultString()).Msg("Command result")
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(call.ResultString()), &result); err != nil {
+		t.Fatal("Failed to parse the command result", err)
+	}
+
+	if ok, exists := result["ok"]; exists {
+		assert.Equal(t, true, ok)
+	} else {
+		t.Fatal("Expected 'ok' field not found in the command result")
+	}
 }
 
 // Check if published diagnostics for given testPath match the expectedNumber.
