@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/pact-foundation/pact-go/dsl"
+	codeClient "github.com/snyk/code-client-go"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -190,7 +191,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) {
 			Headers: dsl.MapMatcher{
 				"Content-Type": dsl.String("application/json"),
 			},
-			Body: dsl.Match(SarifResponse{}),
+			Body: dsl.Match(codeClient.SarifResponse{}),
 		})
 
 		test := func() error {

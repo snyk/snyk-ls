@@ -25,6 +25,7 @@ import (
 	"strings"
 	"testing"
 
+	codeClient "github.com/snyk/code-client-go"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -705,7 +706,8 @@ func Test_getFormattedMessage(t *testing.T) {
 	run := sarifResponse.Sarif.Runs[0]
 	testResult := run.Results[0]
 
-	msg := testResult.formattedMessage(run.getRule("1"), filepath.Dir(p))
+	sarifConverter := SarifConverter{sarif: sarifResponse}
+	msg := sarifConverter.formattedMessage(testResult, sarifConverter.getRule(run, "1"), filepath.Dir(p))
 
 	assert.Contains(t, msg, "Example Commit Fixes")
 	assert.Contains(t, msg, "Data Flow")
@@ -714,7 +716,7 @@ func Test_getFormattedMessage(t *testing.T) {
 func setupConversionTests(t *testing.T,
 	activateSnykCodeSecurity bool,
 	activateSnykCodeQuality bool,
-) (path string, issues []snyk.Issue, response SarifResponse) {
+) (path string, issues []snyk.Issue, response codeClient.SarifResponse) {
 	t.Helper()
 	testutil.UnitTest(t)
 	c := config.CurrentConfig()
@@ -733,15 +735,17 @@ func setupConversionTests(t *testing.T,
 		t.Fatal(err, "couldn't get relative path")
 	}
 
-	var analysisResponse SarifResponse
+	var analysisResponse codeClient.SarifResponse
 	responseJson := getSarifResponseJson(encodedPath)
 	err = json.Unmarshal([]byte(responseJson), &analysisResponse)
+
+	sarifConverter := SarifConverter{sarif: analysisResponse}
 
 	if err != nil {
 		t.Fatal(err, "couldn't unmarshal sarif response")
 	}
 
-	issues, err = analysisResponse.toIssues(temp)
+	issues, err = sarifConverter.toIssues(temp)
 	assert.Nil(t, err)
 
 	return path, issues, analysisResponse
@@ -797,17 +801,19 @@ func Test_LineChangeChar(t *testing.T) {
 
 func Test_rule_cwe(t *testing.T) {
 	t.Run("display CWEs if reported", func(t *testing.T) {
-		cut := rule{Properties: ruleProperties{
+		cut := codeClient.Rule{Properties: codeClient.RuleProperties{
 			Cwe: []string{"CWE-23", "CWE-24"},
 		}}
-		assert.Contains(t, cut.cwe(), "https://cwe.mitre.org/data/definitions/23.html")
-		assert.Contains(t, cut.cwe(), "https://cwe.mitre.org/data/definitions/24.html")
+		sarifConverter := SarifConverter{sarif: codeClient.SarifResponse{}}
+		assert.Contains(t, sarifConverter.cwe(cut), "https://cwe.mitre.org/data/definitions/23.html")
+		assert.Contains(t, sarifConverter.cwe(cut), "https://cwe.mitre.org/data/definitions/24.html")
 	})
 	t.Run("dont display CWEs if not reported", func(t *testing.T) {
-		cut := rule{Properties: ruleProperties{
+		cut := codeClient.Rule{Properties: codeClient.RuleProperties{
 			Cwe: []string{},
 		}}
-		assert.NotContains(t, cut.cwe(), "CWE:")
+		sarifConverter := SarifConverter{sarif: codeClient.SarifResponse{}}
+		assert.NotContains(t, sarifConverter.cwe(cut), "CWE:")
 	})
 }
 
@@ -818,47 +824,51 @@ func Test_getIssueId(t *testing.T) {
 
 func Test_getCodeIssueType(t *testing.T) {
 	t.Run("Security issue - single category", func(t *testing.T) {
-		testRule := rule{
-			Properties: ruleProperties{
+		testRule := codeClient.Rule{
+			Properties: codeClient.RuleProperties{
 				Categories: []string{"Security"},
 			},
 		}
 
-		testRule.getCodeIssueType()
-		assert.Equal(t, snyk.CodeSecurityVulnerability, testRule.getCodeIssueType())
+		sarifConverter := SarifConverter{sarif: codeClient.SarifResponse{}}
+		sarifConverter.getCodeIssueType(testRule)
+		assert.Equal(t, snyk.CodeSecurityVulnerability, sarifConverter.getCodeIssueType(testRule))
 	})
 
 	t.Run("Security issue - multiple categories", func(t *testing.T) {
-		testRule := rule{
-			Properties: ruleProperties{
+		testRule := codeClient.Rule{
+			Properties: codeClient.RuleProperties{
 				Categories: []string{"Security", "Defect"},
 			},
 		}
 
-		testRule.getCodeIssueType()
-		assert.Equal(t, snyk.CodeSecurityVulnerability, testRule.getCodeIssueType())
+		sarifConverter := SarifConverter{sarif: codeClient.SarifResponse{}}
+		sarifConverter.getCodeIssueType(testRule)
+		assert.Equal(t, snyk.CodeSecurityVulnerability, sarifConverter.getCodeIssueType(testRule))
 	})
 
 	t.Run("Quality - single category", func(t *testing.T) {
-		testRule := rule{
-			Properties: ruleProperties{
+		testRule := codeClient.Rule{
+			Properties: codeClient.RuleProperties{
 				Categories: []string{"Defect"},
 			},
 		}
 
-		testRule.getCodeIssueType()
-		assert.Equal(t, snyk.CodeQualityIssue, testRule.getCodeIssueType())
+		sarifConverter := SarifConverter{sarif: codeClient.SarifResponse{}}
+		sarifConverter.getCodeIssueType(testRule)
+		assert.Equal(t, snyk.CodeQualityIssue, sarifConverter.getCodeIssueType(testRule))
 	})
 
 	t.Run("Quality - multiple categories", func(t *testing.T) {
-		testRule := rule{
-			Properties: ruleProperties{
+		testRule := codeClient.Rule{
+			Properties: codeClient.RuleProperties{
 				Categories: []string{"Defect", "Info"},
 			},
 		}
 
-		testRule.getCodeIssueType()
-		assert.Equal(t, snyk.CodeQualityIssue, testRule.getCodeIssueType())
+		sarifConverter := SarifConverter{sarif: codeClient.SarifResponse{}}
+		sarifConverter.getCodeIssueType(testRule)
+		assert.Equal(t, snyk.CodeQualityIssue, sarifConverter.getCodeIssueType(testRule))
 	})
 }
 
@@ -886,8 +896,8 @@ func Test_AutofixResponse_toAutofixSuggestion(t *testing.T) {
 }
 
 func Test_Result_getMarkers_basic(t *testing.T) {
-	r := result{
-		Message: resultMessage{
+	r := codeClient.Result{
+		Message: codeClient.ResultMessage{
 			Text:     "",
 			Markdown: "Printing the stack trace of {0}. Production code should not use {1}. {3}",
 			Arguments: []string{"[java.lang.InterruptedException](0)", "[printStackTrace](1)(2)", "",
@@ -895,7 +905,8 @@ func Test_Result_getMarkers_basic(t *testing.T) {
 		},
 	}
 
-	marker, err := r.getMarkers("")
+	sarifConverter := SarifConverter{sarif: codeClient.SarifResponse{}}
+	marker, err := sarifConverter.getMarkers(r, "")
 	assert.Nil(t, err)
 	assert.Len(t, marker, 3)
 }

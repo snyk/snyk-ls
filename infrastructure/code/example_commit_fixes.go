@@ -19,12 +19,14 @@ package code
 import (
 	"fmt"
 	"strings"
+
+	codeClient "github.com/snyk/code-client-go"
 )
 
 type exampleCommit struct {
 	index       int
 	description string
-	fix         exampleCommitFix
+	fix         codeClient.ExampleCommitFix
 }
 
 func (c *exampleCommit) toMarkdown() (msg string) {

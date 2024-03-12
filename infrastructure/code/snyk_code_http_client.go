@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	codeClient "github.com/snyk/code-client-go"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -367,7 +368,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		return nil, failed, err
 	}
 
-	var response SarifResponse
+	var response codeClient.SarifResponse
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
 		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
@@ -393,7 +394,8 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		return nil, status, nil
 	}
 
-	issues, err := response.toIssues(baseDir)
+	converter := SarifConverter{sarif: response}
+	issues, err := converter.toIssues(baseDir)
 	return issues, status, err
 }
 
