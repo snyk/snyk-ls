@@ -168,7 +168,7 @@ func TestSnykApiPact(t *testing.T) {
 		interaction := pact.AddInteraction().
 			WithRequest(dsl.Request{
 				Method: "GET",
-				Path:   dsl.String("/cli-config/feature-flag/" + featureFlagType),
+				Path:   dsl.String("/cli-config/feature-flags/" + featureFlagType),
 				Query:  matcher,
 				Headers: dsl.MapMatcher{
 					"Content-Type":  dsl.String("application/json"),
@@ -213,7 +213,7 @@ func TestSnykApiPact(t *testing.T) {
 		interaction := pact.AddInteraction().
 			WithRequest(dsl.Request{
 				Method: "GET",
-				Path:   dsl.String("/cli-config/feature-flag/" + featureFlagType),
+				Path:   dsl.String("/cli-config/feature-flags/" + featureFlagType),
 				Query:  matcher,
 				Headers: dsl.MapMatcher{
 					"Content-Type":  dsl.String("application/json"),
