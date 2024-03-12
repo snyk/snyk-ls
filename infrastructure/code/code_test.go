@@ -377,6 +377,30 @@ func TestUploadAndAnalyze(t *testing.T) {
 	)
 }
 
+func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
+	learnMock := mock_learn.NewMockService(gomock.NewController(t))
+	learnMock.
+		EXPECT().
+		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(&learn.Lesson{}, nil).AnyTimes()
+	testutil.UnitTest(t)
+	snykCodeMock := &FakeSnykCodeClient{}
+	c := New(
+		NewBundler(snykCodeMock, performance.NewInstrumentor()),
+		&snyk_api.FakeApiClient{CodeEnabled: true},
+		error_reporting.NewTestErrorReporter(),
+		ux2.NewTestAnalytics(),
+		learnMock,
+		notification.NewNotifier(),
+	)
+
+	issues, _ := c.UploadAndAnalyzeWithIgnores()
+	assert.Equal(t, false, issues[0].IsIgnored)
+	assert.Nil(t, issues[0].IgnoreDetails)
+	assert.Equal(t, true, issues[1].IsIgnored)
+	assert.Equal(t, "False positive", issues[1].IgnoreDetails.Reason)
+}
+
 func Test_Scan(t *testing.T) {
 	t.Run("Should update changed files", func(t *testing.T) {
 		testutil.UnitTest(t)
@@ -525,6 +549,62 @@ func Test_Scan(t *testing.T) {
 			error_reporting.NewTestErrorReporter(),
 			ux2.NewTestAnalytics(),
 			nil,
+			notification.NewNotifier(),
+		)
+		tempDir, _, _ := setupIgnoreWorkspace(t)
+
+		_, _ = c.Scan(context.Background(), "", tempDir)
+
+		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
+		assert.Nil(t, params)
+	})
+
+	//nolint:dupl // test cases differ by a boolean
+	t.Run("Should run existing flow if feature flag is disabled", func(t *testing.T) {
+		testutil.UnitTest(t)
+		snykCodeMock := &FakeSnykCodeClient{}
+		snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
+		snykApiMock.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+		learnMock := mock_learn.NewMockService(gomock.NewController(t))
+		learnMock.
+			EXPECT().
+			GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(&learn.Lesson{}, nil).AnyTimes()
+
+		c := New(
+			NewBundler(snykCodeMock, performance.NewInstrumentor()),
+			snykApiMock,
+			error_reporting.NewTestErrorReporter(),
+			ux2.NewTestAnalytics(),
+			learnMock,
+			notification.NewNotifier(),
+		)
+		tempDir, _, _ := setupIgnoreWorkspace(t)
+
+		_, _ = c.Scan(context.Background(), "", tempDir)
+
+		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
+		assert.NotNil(t, params)
+	})
+
+	//nolint:dupl // test cases differ by a boolean
+	t.Run("Should run new flow if feature flag is enabled", func(t *testing.T) {
+		testutil.UnitTest(t)
+		snykCodeMock := &FakeSnykCodeClient{}
+		snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
+		snykApiMock.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: true})
+		learnMock := mock_learn.NewMockService(gomock.NewController(t))
+		learnMock.
+			EXPECT().
+			GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(&learn.Lesson{}, nil).AnyTimes()
+
+		c := New(
+			NewBundler(snykCodeMock, performance.NewInstrumentor()),
+			snykApiMock,
+			error_reporting.NewTestErrorReporter(),
+			ux2.NewTestAnalytics(),
+			learnMock,
 			notification.NewNotifier(),
 		)
 		tempDir, _, _ := setupIgnoreWorkspace(t)

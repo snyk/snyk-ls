@@ -18,10 +18,12 @@ package code
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
@@ -193,7 +195,13 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	files := fileFilter.FindNonIgnoredFiles()
 	t.EndWithMessage("Collected files")
 	metrics := sc.newMetrics(startTime)
-	results, err := sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
+
+	var results []snyk.Issue
+	if sc.useIgnoresFlow() {
+		results, err = sc.UploadAndAnalyzeWithIgnores()
+	} else {
+		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
+	}
 
 	return results, err
 }
@@ -297,6 +305,87 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 	}
 	sc.trackResult(err == nil, scanMetrics)
 	return issues, err
+}
+
+func (sc *Scanner) UploadAndAnalyzeWithIgnores() (issues []snyk.Issue, err error) {
+	return []snyk.Issue{
+		{
+			ID:        uuid.New().String(),
+			Severity:  snyk.High,
+			IssueType: snyk.CodeSecurityVulnerability,
+			Range: snyk.Range{
+				Start: snyk.Position{
+					Line:      1,
+					Character: 1,
+				},
+				End: snyk.Position{
+					Line:      1,
+					Character: 10,
+				},
+			},
+			Message:             "You silly goose",
+			FormattedMessage:    "",
+			AffectedFilePath:    "test/util/postgresql.ts",
+			Product:             product.ProductCode,
+			References:          []snyk.Reference{},
+			IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
+			CodeActions:         []snyk.CodeAction{},
+			CodelensCommands:    []snyk.CommandData{},
+			Ecosystem:           "npm",
+			CWEs:                []string{},
+			CVEs:                []string{},
+			AdditionalData: snyk.CodeIssueData{
+				Key:                "key1",
+				Title:              "Another title",
+				Message:            "You silly goose",
+				Rule:               "rule",
+				RuleId:             "ruleId",
+				RepoDatasetSize:    0,
+				ExampleCommitFixes: []snyk.ExampleCommitFix{},
+				CWE:                []string{},
+				Text:               "",
+				Markers:            []snyk.Marker{},
+				Cols:               snyk.CodePoint{},
+				Rows:               snyk.CodePoint{},
+				IsSecurityType:     true,
+				IsAutofixable:      false,
+				PriorityScore:      1,
+				HasAIFix:           false,
+			},
+		},
+		{
+			ID:        uuid.New().String(),
+			Severity:  snyk.High,
+			IssueType: snyk.CodeSecurityVulnerability,
+			IsIgnored: true,
+			IgnoreDetails: &snyk.IgnoreDetails{
+				Category:   "Won't fix",
+				Reason:     "False positive",
+				Expiration: time.Now().Add(3 * 24 * time.Hour),
+				IgnoredOn:  time.Now().Add(-3 * 24 * time.Hour),
+				IgnoredBy:  "Neil M",
+			},
+			Range: snyk.Range{
+				Start: snyk.Position{
+					Line:      2,
+					Character: 1,
+				},
+				End: snyk.Position{
+					Line:      2,
+					Character: 10,
+				},
+			},
+			Message:             "This is a false positive",
+			FormattedMessage:    "",
+			AffectedFilePath:    "test/util/postgresql.ts",
+			Product:             product.ProductCode,
+			References:          []snyk.Reference{},
+			IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
+			Ecosystem:           "npm",
+			CWEs:                []string{},
+			CVEs:                []string{},
+		},
+	}, nil
 }
 
 func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg string, scanMetrics *ScanMetrics) {
@@ -417,4 +506,16 @@ func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics) {
 			DurationInSeconds: scanMetrics.lastScanDurationInSeconds,
 		},
 	)
+}
+
+func (sc *Scanner) useIgnoresFlow() bool {
+	response, err := sc.SnykApiClient.FeatureFlagStatus(snyk_api.FeatureFlagSnykCodeConsistentIgnores)
+	if err != nil {
+		log.Debug().Err(err).Msg("Failed to check if the ignores experience is enabled")
+		return false
+	}
+	if !response.Ok && response.UserMessage != nil {
+		log.Info().Msg(*response.UserMessage)
+	}
+	return response.Ok
 }

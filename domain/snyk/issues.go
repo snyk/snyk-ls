@@ -19,6 +19,7 @@ package snyk
 import (
 	"fmt"
 	"net/url"
+	"time"
 
 	"github.com/rs/zerolog/log"
 
@@ -36,6 +37,9 @@ type Issue struct {
 	ID        string
 	Severity  Severity
 	IssueType Type
+	IsIgnored bool // If not explicitly it will default to false so it doesn't break backwards
+	// compatibility
+	IgnoreDetails *IgnoreDetails // It defaults to nil so it doesn't break backwards compatibility
 	// Range identifies the location of this issue in its source of origin (e.g. line & character start & end)
 	Range Range
 	// Message is a human-readable description of the issue
@@ -62,6 +66,14 @@ type Issue struct {
 	CVEs []string
 	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
 	AdditionalData any
+}
+
+type IgnoreDetails struct {
+	Category   string
+	Reason     string
+	Expiration time.Time
+	IgnoredOn  time.Time
+	IgnoredBy  string
 }
 
 type CodeIssueData struct {

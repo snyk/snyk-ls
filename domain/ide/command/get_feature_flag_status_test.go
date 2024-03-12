@@ -35,7 +35,7 @@ func Test_ApiClient_FeatureFlagIsEnabled(t *testing.T) {
 	expectedResponse := snyk_api.FFResponse{Ok: true}
 
 	fakeApiClient := &snyk_api.FakeApiClient{}
-	fakeApiClient.SetResponse("FeatureFlagSettings", expectedResponse)
+	fakeApiClient.SetResponse("FeatureFlagStatus", expectedResponse)
 
 	// Pass the featureFlagType to the command
 	featureFlagStatusCmd := featureFlagStatus{

@@ -16,7 +16,9 @@
 
 package snyk_api
 
-import "sync"
+import (
+	"sync"
+)
 
 const (
 	SastEnabledOperation = "sastEnabled"
@@ -112,10 +114,10 @@ func (f *FakeApiClient) SastSettings() (SastResponse, error) {
 	}, nil
 }
 
-func (f *FakeApiClient) FeatureFlagSettings(featureFlagType FeatureFlagType) (FFResponse, error) {
-	f.addCallForMethod("FeatureFlagSettings", []any{featureFlagType})
+func (f *FakeApiClient) FeatureFlagStatus(featureFlagType FeatureFlagType) (FFResponse, error) {
+	f.addCallForMethod("FeatureFlagStatus", []any{featureFlagType})
 
-	if resp, ok := f.Responses["FeatureFlagSettings"]; ok {
+	if resp, ok := f.Responses["FeatureFlagStatus"]; ok {
 		if ffResp, ok := resp.(FFResponse); ok {
 			return ffResp, nil
 		}

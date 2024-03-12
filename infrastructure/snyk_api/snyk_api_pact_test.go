@@ -184,7 +184,7 @@ func TestSnykApiPact(t *testing.T) {
 		interaction.Description = "feature flag with org as query param"
 
 		test := func() error {
-			_, err := client.FeatureFlagSettings("snykCodeConsistentIgnores")
+			_, err := client.FeatureFlagStatus("snykCodeConsistentIgnores")
 			if err != nil {
 				return err
 			}
@@ -229,7 +229,7 @@ func TestSnykApiPact(t *testing.T) {
 		interaction.Description = fmt.Sprintf("feature flag '%s' disabled for org", featureFlagType)
 
 		test := func() error {
-			_, err := client.FeatureFlagSettings(featureFlagType)
+			_, err := client.FeatureFlagStatus(featureFlagType)
 			t.Logf("err: %+v\n", err)
 			return err
 		}
