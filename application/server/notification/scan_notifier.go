@@ -233,12 +233,13 @@ func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, folderPath s
 			})
 		}
 
-		scanIssues = append(scanIssues, lsp.ScanIssue{
-			Id:       additionalData.Key,
-			Title:    issue.Message,
-			Severity: issue.Severity.String(),
-			FilePath: issue.AffectedFilePath,
-			Range:    converter.ToRange(issue.Range),
+		scanIssue := lsp.ScanIssue{
+			Id:        additionalData.Key,
+			Title:     issue.Message,
+			Severity:  issue.Severity.String(),
+			FilePath:  issue.AffectedFilePath,
+			Range:     converter.ToRange(issue.Range),
+			IsIgnored: issue.IsIgnored,
 			AdditionalData: lsp.CodeIssueData{
 				Message:            additionalData.Message,
 				Rule:               additionalData.Rule,
@@ -256,7 +257,18 @@ func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, folderPath s
 				HasAIFix:           additionalData.HasAIFix,
 				DataFlow:           dataFlow,
 			},
-		})
+		}
+		if scanIssue.IsIgnored {
+			scanIssue.IgnoreDetails =
+				lsp.IgnoreDetails{
+					Category:   issue.IgnoreDetails.Category,
+					Reason:     issue.IgnoreDetails.Reason,
+					Expiration: issue.IgnoreDetails.Expiration,
+					IgnoredOn:  issue.IgnoreDetails.IgnoredOn,
+					IgnoredBy:  issue.IgnoreDetails.IgnoredBy,
+				}
+		}
+		scanIssues = append(scanIssues, scanIssue)
 	}
 
 	return scanIssues

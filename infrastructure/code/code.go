@@ -18,9 +18,7 @@ package code
 
 import (
 	"context"
-	"net/url"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -28,6 +26,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
+	codeClient "github.com/snyk/code-client-go"
 
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 
@@ -195,7 +194,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 
 	var results []snyk.Issue
 	if sc.useIgnoresFlow() {
-		results, err = sc.UploadAndAnalyzeWithIgnores(folderPath)
+		results, err = sc.UploadAndAnalyzeWithIgnores(span.Context(), folderPath)
 	} else {
 		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
 	}
@@ -304,137 +303,25 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 }
 
 func (sc *Scanner) UploadAndAnalyzeWithIgnores(
+	ctx context.Context,
 	path string,
 ) (issues []snyk.Issue, err error) {
-	absoluteUri, _ := filepath.Abs(path + "/src/main.ts")
-	return []snyk.Issue{
-		{
-			ID:        uuid.New().String(),
-			Severity:  snyk.High,
-			IssueType: snyk.CodeSecurityVulnerability,
-			Range: snyk.Range{
-				Start: snyk.Position{
-					Line:      1,
-					Character: 1,
-				},
-				End: snyk.Position{
-					Line:      1,
-					Character: 10,
-				},
-			},
-			Message:             "You silly goose",
-			FormattedMessage:    "",
-			AffectedFilePath:    absoluteUri,
-			Product:             product.ProductCode,
-			References:          []snyk.Reference{},
-			IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
-			CodeActions:         []snyk.CodeAction{},
-			CodelensCommands:    []snyk.CommandData{},
-			Ecosystem:           "npm",
-			CWEs:                []string{},
-			CVEs:                []string{},
-			AdditionalData: snyk.CodeIssueData{
-				Key:                "key1",
-				Title:              "Another title",
-				Message:            "You silly goose",
-				Rule:               "rule",
-				RuleId:             "ruleId",
-				RepoDatasetSize:    0,
-				ExampleCommitFixes: []snyk.ExampleCommitFix{},
-				CWE:                []string{},
-				Text:               "",
-				Markers:            []snyk.Marker{},
-				Cols:               snyk.CodePoint{},
-				Rows:               snyk.CodePoint{},
-				IsSecurityType:     true,
-				IsAutofixable:      false,
-				PriorityScore:      1,
-				HasAIFix:           false,
-				DataFlow: []snyk.DataFlowElement{
-					{
-						FilePath: absoluteUri,
-						FlowRange: snyk.Range{
-							Start: snyk.Position{
-								Line:      1,
-								Character: 1,
-							},
-							End: snyk.Position{
-								Line:      1,
-								Character: 2,
-							},
-						},
-						Content: "testContent",
-					},
-				},
-			},
-		},
-		{
-			ID:        uuid.New().String(),
-			Severity:  snyk.High,
-			IssueType: snyk.CodeSecurityVulnerability,
-			IsIgnored: true,
-			IgnoreDetails: &snyk.IgnoreDetails{
-				Category:   "Won't fix",
-				Reason:     "False positive",
-				Expiration: time.Now().Add(3 * 24 * time.Hour),
-				IgnoredOn:  time.Now().Add(-3 * 24 * time.Hour),
-				IgnoredBy:  "Neil M",
-			},
-			Range: snyk.Range{
-				Start: snyk.Position{
-					Line:      2,
-					Character: 1,
-				},
-				End: snyk.Position{
-					Line:      2,
-					Character: 10,
-				},
-			},
-			Message:             "This is a false positive",
-			FormattedMessage:    "",
-			AffectedFilePath:    absoluteUri,
-			Product:             product.ProductCode,
-			References:          []snyk.Reference{},
-			IssueDescriptionURL: &url.URL{Path: "https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032"},
-			Ecosystem:           "npm",
-			CWEs:                []string{},
-			CVEs:                []string{},
-			AdditionalData: snyk.CodeIssueData{
-				Key:                "key2",
-				Title:              "Another title",
-				Message:            "This is a false positive",
-				Rule:               "rule",
-				RuleId:             "ruleId",
-				RepoDatasetSize:    0,
-				ExampleCommitFixes: []snyk.ExampleCommitFix{},
-				CWE:                []string{},
-				Text:               "",
-				Markers:            []snyk.Marker{},
-				Cols:               snyk.CodePoint{},
-				Rows:               snyk.CodePoint{},
-				IsSecurityType:     true,
-				IsAutofixable:      false,
-				PriorityScore:      2,
-				HasAIFix:           false,
-				DataFlow: []snyk.DataFlowElement{
-					{
-						FilePath: absoluteUri,
-						FlowRange: snyk.Range{
-							Start: snyk.Position{
-								Line:      1,
-								Character: 1,
-							},
-							End: snyk.Position{
-								Line:      1,
-								Character: 2,
-							},
-						},
-						Content: "testContent",
-					},
-				},
-			},
-		},
-	}, nil
+	response, err := codeClient.UploadAndAnalyze()
+
+	converter := SarifConverter{sarif: *response}
+	issues, _ = converter.toIssues(path)
+	issueEnhancer := newIssueEnhancer(
+		sc.BundleUploader.SnykCode,
+		sc.BundleUploader.instrumentor,
+		sc.errorReporter,
+		sc.notifier,
+		sc.learnService,
+		uuid.New().String(),
+		path,
+	)
+	issueEnhancer.addIssueActions(ctx, issues, "fakeBundleHash")
+
+	return issues, nil
 }
 
 func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg string, scanMetrics codeClientObservability.ScanMetrics) {

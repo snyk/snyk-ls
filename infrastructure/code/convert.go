@@ -391,6 +391,21 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 				CWEs:                testRule.Properties.Cwe,
 			}
 
+			// this can be an array of multiple suppressions in SARIF
+			// but we only store one ignore for now
+			if len(result.Suppressions) == 1 {
+				d.IsIgnored = true
+				suppression := result.Suppressions[0]
+				d.IgnoreDetails = &snyk.IgnoreDetails{
+					Category:   suppression.Properties.Category,
+					Reason:     suppression.Justification,
+					Expiration: suppression.Properties.Expiration,
+					IgnoredOn:  suppression.Properties.IgnoredOn,
+					IgnoredBy:  suppression.Properties.IgnoredBy.Name,
+				}
+			} else {
+				d.IsIgnored = false
+			}
 			issues = append(issues, d)
 		}
 	}
