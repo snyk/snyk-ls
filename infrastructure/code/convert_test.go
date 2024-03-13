@@ -910,3 +910,56 @@ func Test_Result_getMarkers_basic(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Len(t, marker, 3)
 }
+
+func Test_Result_getIgnoreDetails(t *testing.T) {
+	t.Run("does not return ignore details if no suppressions", func(t *testing.T) {
+		r := codeClient.Result{
+			Message: codeClient.ResultMessage{
+				Text:     "",
+				Markdown: "Printing the stack trace of {0}. Production code should not use {1}. {3}",
+				Arguments: []string{"[java.lang.InterruptedException](0)", "[printStackTrace](1)(2)", "",
+					"[This is a test argument](3)"},
+			},
+		}
+
+		sarifConverter := SarifConverter{sarif: codeClient.SarifResponse{}}
+		isIgnored, ignoreDetails := sarifConverter.getIgnoreDetails(r)
+		assert.False(t, isIgnored)
+		assert.Nil(t, ignoreDetails)
+	})
+
+	t.Run("does return ignore details if one suppression", func(t *testing.T) {
+		expiration := "expiration"
+		r := codeClient.Result{
+			Message: codeClient.ResultMessage{
+				Text:     "",
+				Markdown: "Printing the stack trace of {0}. Production code should not use {1}. {3}",
+				Arguments: []string{"[java.lang.InterruptedException](0)", "[printStackTrace](1)(2)", "",
+					"[This is a test argument](3)"},
+			},
+			Suppressions: []codeClient.Suppression{
+				{
+					Justification: "reason",
+					Properties: codeClient.SuppressionProperties{
+						Category:   "category",
+						Expiration: &expiration,
+						IgnoredOn:  "2024-02-23T16:08:25Z",
+						IgnoredBy: codeClient.IgnoredBy{
+							Name: "name",
+						},
+					},
+				},
+			},
+		}
+
+		sarifConverter := SarifConverter{sarif: codeClient.SarifResponse{}}
+		isIgnored, ignoreDetails := sarifConverter.getIgnoreDetails(r)
+		assert.True(t, isIgnored)
+		assert.NotNil(t, ignoreDetails)
+		assert.Equal(t, "reason", ignoreDetails.Reason)
+		assert.Equal(t, "category", ignoreDetails.Category)
+		assert.Equal(t, "expiration", ignoreDetails.Expiration)
+		assert.Equal(t, 2024, ignoreDetails.IgnoredOn.Year())
+		assert.Equal(t, "name", ignoreDetails.IgnoredBy)
+	})
+}

@@ -392,38 +392,44 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 				CWEs:                testRule.Properties.Cwe,
 			}
 
-			// this can be an array of multiple suppressions in SARIF
-			// but we only store one ignore for now
-			if len(result.Suppressions) == 1 {
-				d.IsIgnored = true
-				suppression := result.Suppressions[0]
-				expiration := ""
-				if suppression.Properties.Expiration != nil {
-					expiration = *suppression.Properties.Expiration
-				}
-				ignoredOn, err := time.Parse("2024-02-23T16:08:25Z", suppression.Properties.IgnoredOn)
-				if err != nil {
-					log.Error().
-						Err(err).
-						Msg("failed to parse ignoredOn timestamp" +
-							suppression.Properties.IgnoredOn)
-					errs = errors.Join(errs, err)
-					ignoredOn = time.Now()
-				}
-				d.IgnoreDetails = &snyk.IgnoreDetails{
-					Category:   string(suppression.Properties.Category),
-					Reason:     suppression.Justification,
-					Expiration: expiration,
-					IgnoredOn:  ignoredOn,
-					IgnoredBy:  suppression.Properties.IgnoredBy.Name,
-				}
-			} else {
-				d.IsIgnored = false
-			}
+			d.IsIgnored, d.IgnoreDetails = s.getIgnoreDetails(result)
 			issues = append(issues, d)
 		}
 	}
 	return issues, errs
+}
+
+func (s *SarifConverter) getIgnoreDetails(result codeClient.Result) (bool, *snyk.IgnoreDetails) {
+	isIgnored := false
+	var ignoreDetails *snyk.IgnoreDetails
+
+	// this can be an array of multiple suppressions in SARIF
+	// but we only store one ignore for now
+	if len(result.Suppressions) == 1 {
+		isIgnored = true
+		suppression := result.Suppressions[0]
+		expiration := ""
+		if suppression.Properties.Expiration != nil {
+			expiration = *suppression.Properties.Expiration
+		}
+		ignoredOn, err := time.Parse(time.RFC3339, suppression.Properties.IgnoredOn)
+		if err != nil {
+			// We don't want to fail just because of this parsing logic
+			log.Error().
+				Err(err).
+				Msg("failed to parse ignoredOn timestamp " +
+					suppression.Properties.IgnoredOn)
+			ignoredOn = time.Now()
+		}
+		ignoreDetails = &snyk.IgnoreDetails{
+			Category:   string(suppression.Properties.Category),
+			Reason:     suppression.Justification,
+			Expiration: expiration,
+			IgnoredOn:  ignoredOn,
+			IgnoredBy:  suppression.Properties.IgnoredBy.Name,
+		}
+	}
+	return isIgnored, ignoreDetails
 }
 
 func (s *SarifConverter) getMarkers(r codeClient.Result, baseDir string) ([]snyk.Marker, error) {
