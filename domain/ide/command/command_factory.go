@@ -39,6 +39,8 @@ func CreateFromCommandData( //nolint:gocyclo // reasonable command dispatch
 	codeApiClient SnykCodeHttpClient,
 	codeScanner *code.Scanner,
 ) (snyk.Command, error) {
+	httpClient := config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient
+
 	switch commandData.CommandId {
 	case snyk.NavigateToRangeCommand:
 		return &navigateToRangeCommand{command: commandData, srv: srv}, nil
@@ -61,8 +63,11 @@ func CreateFromCommandData( //nolint:gocyclo // reasonable command dispatch
 	case snyk.OpenLearnLesson:
 		return &openLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case snyk.GetSettingsSastEnabled:
-		apiClient := snyk_api.NewSnykApiClient(config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient)
+		apiClient := snyk_api.NewSnykApiClient(httpClient)
 		return &sastEnabled{command: commandData, apiClient: apiClient}, nil
+	case snyk.GetFeatureFlagStatus:
+		apiClient := snyk_api.NewSnykApiClient(httpClient)
+		return &featureFlagStatus{command: commandData, apiClient: apiClient}, nil
 	case snyk.GetActiveUserCommand:
 		return &getActiveUser{command: commandData, authService: authService, notifier: notifier}, nil
 	case snyk.ReportAnalyticsCommand:

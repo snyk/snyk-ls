@@ -23,7 +23,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"path"
 
 	"github.com/rs/zerolog/log"
 
@@ -93,13 +92,13 @@ func (s *SnykApiClientImpl) SastSettings() (SastResponse, error) {
 	method := "SastSettings"
 	var response SastResponse
 	log.Debug().Str("method", method).Msg("API: Getting SastEnabled")
-	path := "/cli-config/settings/sast"
+	p := "/cli-config/settings/sast"
 	organization := config.CurrentConfig().Organization()
 	if organization != "" {
-		path += "?org=" + url.QueryEscape(organization)
+		p += "?org=" + url.QueryEscape(organization)
 	}
 
-	err := s.processApiResponse(method, path, &response)
+	err := s.processApiResponse(method, p, &response)
 	if err != nil {
 		log.Err(err).Str("method", method).Msg("error when calling sastEnabled endpoint")
 		return SastResponse{}, err
@@ -111,7 +110,7 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 	method := "FeatureFlagStatus"
 	var response FFResponse
 	log.Debug().Str("method", method).Msgf("API: Getting %s", featureFlagType)
-	path := path.Join("/cli-config/feature-flags/", string(featureFlagType))
+	path := fmt.Sprintf("/cli-config/feature-flags/%s", string(featureFlagType))
 	organization := config.CurrentConfig().Organization()
 	if organization != "" {
 		path += "?org=" + url.QueryEscape(organization)
@@ -125,13 +124,10 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 	return response, err
 }
 
-func (s *SnykApiClientImpl) doCall(method string,
-	path string,
-	requestBody []byte,
-) ([]byte, error) {
+func (s *SnykApiClientImpl) doCall(method string, endpointPath string, requestBody []byte) ([]byte, error) {
 	host := config.CurrentConfig().SnykApi()
 	b := bytes.NewBuffer(requestBody)
-	req, requestErr := http.NewRequest(method, host+path, b)
+	req, requestErr := http.NewRequest(method, host+endpointPath, b)
 	if requestErr != nil {
 		return nil, NewSnykApiError(requestErr.Error(), 0)
 	}

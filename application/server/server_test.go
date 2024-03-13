@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -279,6 +280,7 @@ func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetLearnLesson)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.OpenLearnLesson)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetSettingsSastEnabled)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetFeatureFlagStatus)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetActiveUserCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.CodeFixCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.CodeSubmitFixFeedback)
@@ -1082,6 +1084,33 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 		// don't check for all issues, just the first
 		break
 	}
+
+	checkFeatureFlagStatus(t, &loc)
+}
+
+func checkFeatureFlagStatus(t *testing.T, loc *server.Local) {
+	t.Helper()
+
+	call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		Command:   snyk.GetFeatureFlagStatus,
+		Arguments: []any{"bitbucketConnectApp"},
+	})
+
+	assert.NoError(t, err)
+
+	if err := call.Error(); err != nil {
+		log.Error().Err(err).Msg("FeatureFlagStatus Command failed")
+	}
+
+	log.Debug().Str("FeatureFlagStatus", call.ResultString()).Msg("Command result")
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(call.ResultString()), &result); err != nil {
+		t.Fatal("Failed to parse the command result", err)
+	}
+
+	ok, _ := result["ok"].(bool)
+	assert.True(t, ok)
 }
 
 // Check if published diagnostics for given testPath match the expectedNumber.

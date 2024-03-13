@@ -31,7 +31,6 @@ func Test_ApiClient_FeatureFlagIsEnabled(t *testing.T) {
 	testutil.UnitTest(t)
 
 	// Arrange
-	var featureFlagType snyk_api.FeatureFlagType = "snykCodeConsistentIgnores"
 	expectedResponse := snyk_api.FFResponse{Ok: true}
 
 	fakeApiClient := &snyk_api.FakeApiClient{}
@@ -40,7 +39,7 @@ func Test_ApiClient_FeatureFlagIsEnabled(t *testing.T) {
 	// Pass the featureFlagType to the command
 	featureFlagStatusCmd := featureFlagStatus{
 		apiClient: fakeApiClient,
-		command:   snyk.CommandData{Arguments: []interface{}{featureFlagType}},
+		command:   snyk.CommandData{Arguments: []interface{}{"snykCodeConsistentIgnores"}},
 	}
 
 	// Execute the command
