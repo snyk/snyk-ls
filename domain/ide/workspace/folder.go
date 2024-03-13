@@ -204,7 +204,7 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 
 		f.documentDiagnosticCache.Store(issue.AffectedFilePath, cachedIssues)
 	}
-	log.Debug().Str("method", "processResults").Interface("scanData", scanData).Msg("Finished processing results. Sending analytics.")
+
 	go sendAnalytics(&scanData)
 
 	// Filter and publish cached diagnostics
