@@ -23,9 +23,9 @@ import (
 
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
+	"github.com/snyk/go-application-framework/pkg/progress"
 
 	"github.com/snyk/snyk-ls/domain/observability/performance"
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 

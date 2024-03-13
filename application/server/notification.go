@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/rs/zerolog/log"
+	"github.com/snyk/go-application-framework/pkg/progress"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -27,7 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
-	"github.com/snyk/snyk-ls/internal/progress"
+	lspProgress "github.com/snyk/snyk-ls/internal/progress"
 )
 
 func notifier(srv lsp.Server, method string, params any) {
@@ -38,7 +39,7 @@ func notifier(srv lsp.Server, method string, params any) {
 
 var progressStopChan = make(chan bool, 1000)
 
-func createProgressListener(progressChannel chan lsp.ProgressParams, server lsp.Server) {
+func createProgressListener(progressChannel chan progress.ProgressParams, server lsp.Server) {
 	// cleanup stopchannel before starting
 	for {
 		select {
@@ -82,8 +83,8 @@ func disposeProgressListener() {
 	progressStopChan <- true
 }
 
-func CancelProgress(token lsp.ProgressToken) {
-	progress.CancelProgressChannel <- token
+func CancelProgress(token progress.ProgressToken) {
+	lspProgress.CancelProgressChannel <- token
 }
 
 func registerNotifier(srv lsp.Server) {

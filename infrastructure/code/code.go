@@ -28,6 +28,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
+	"github.com/snyk/go-application-framework/pkg/progress"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
@@ -39,7 +40,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/float"
 	"github.com/snyk/snyk-ls/internal/product"
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 

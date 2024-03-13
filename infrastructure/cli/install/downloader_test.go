@@ -22,19 +22,18 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/progress"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/lsp"
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestDownloader_Download(t *testing.T) {
 	testutil.IntegTest(t)
 	r := getTestAsset()
-	progressCh := make(chan lsp.ProgressParams, 100000)
-	cancelProgressCh := make(chan lsp.ProgressToken, 1)
+	progressCh := make(chan progress.ProgressParams, 100000)
+	cancelProgressCh := make(chan progress.ProgressToken, 1)
 	d := &Downloader{
 		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh),
 		httpClient:      func() *http.Client { return http.DefaultClient },
@@ -62,8 +61,8 @@ func TestDownloader_Download(t *testing.T) {
 
 func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	testutil.UnitTest(t)
-	progressCh := make(chan lsp.ProgressParams, 100000)
-	cancelProgressCh := make(chan lsp.ProgressToken, 1)
+	progressCh := make(chan progress.ProgressParams, 100000)
+	cancelProgressCh := make(chan progress.ProgressToken, 1)
 	d := &Downloader{
 		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh),
 		httpClient:      func() *http.Client { return http.DefaultClient },
