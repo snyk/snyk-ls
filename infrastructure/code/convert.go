@@ -405,7 +405,11 @@ func (s *SarifConverter) getIgnoreDetails(result codeClient.Result) (bool, *snyk
 
 	// this can be an array of multiple suppressions in SARIF
 	// but we only store one ignore for now
-	if len(result.Suppressions) == 1 {
+	if len(result.Suppressions) > 0 {
+		if len(result.Suppressions) > 1 {
+			log.Warn().Int("number of SARIF suppressions", len(result.Suppressions)).Msg(
+				"there are more suppressions than expected")
+		}
 		isIgnored = true
 		suppression := result.Suppressions[0]
 		expiration := ""
