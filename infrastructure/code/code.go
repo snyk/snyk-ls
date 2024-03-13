@@ -307,6 +307,9 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(
 	path string,
 ) (issues []snyk.Issue, err error) {
 	response, err := codeClient.UploadAndAnalyze()
+	if err != nil {
+		return []snyk.Issue{}, err
+	}
 
 	converter := SarifConverter{sarif: *response}
 	issues, _ = converter.toIssues(path)
