@@ -81,16 +81,19 @@ func Test_GetLesson(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Empty(t, lesson)
 	})
-	t.Run("Code security - lesson returned", func(t *testing.T) {
+	t.Run("Code security - lesson returned - javascript", func(t *testing.T) {
 		params := getRealCodeLookupParams()
 
-		lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, snyk.CodeSecurityVulnerability)
-
-		assert.NoError(t, err)
-		assert.NotEmpty(t, lesson)
-		assert.Contains(t, lesson.Cwes, params.CWEs[0])
-		assert.Equal(t, lesson.Ecosystem, params.Ecosystem)
+		checkLesson(t, cut, params)
 	})
+
+	t.Run("Code security - lesson returned - java", func(t *testing.T) {
+		params := getRealCodeLookupParams()
+		params.Ecosystem = "java"
+
+		checkLesson(t, cut, params)
+	})
+
 	t.Run("Code quality - no lessons returned", func(t *testing.T) {
 		params := getRealCodeLookupParams()
 
@@ -99,4 +102,14 @@ func Test_GetLesson(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Empty(t, lesson)
 	})
+}
+
+func checkLesson(t *testing.T, cut Service, params LessonLookupParams) {
+	t.Helper()
+	lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, snyk.CodeSecurityVulnerability)
+
+	assert.NoError(t, err)
+	assert.NotEmpty(t, lesson)
+	assert.Contains(t, lesson.Cwes, params.CWEs[0])
+	assert.Contains(t, lesson.Ecosystems, params.Ecosystem)
 }
