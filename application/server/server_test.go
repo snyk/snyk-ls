@@ -1072,14 +1072,14 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 		if !ok || codeIssueData["hasAIFix"] == false {
 			continue
 		}
-		call, e := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   snyk.CodeFixDiffsCommand,
 			Arguments: []any{uri.PathToUri(scanParams.FolderPath), uri.PathToUri(issue.FilePath), issue.Id},
 		})
-		assert.NoError(t, e)
+		assert.NoError(t, err)
 		var unifiedDiffs []code.AutofixUnifiedDiffSuggestion
-		e = call.UnmarshalResult(&unifiedDiffs)
-		assert.NoError(t, e)
+		err = call.UnmarshalResult(&unifiedDiffs)
+		assert.NoError(t, err)
 		assert.Greater(t, len(unifiedDiffs), 0)
 		// don't check for all issues, just the first
 		break
@@ -1096,26 +1096,21 @@ func checkFeatureFlagStatus(t *testing.T, loc *server.Local) {
 		Arguments: []any{"bitbucketConnectApp"},
 	})
 
-	if err != nil {
-		t.Fatal("FeatureFlagStatus command failed", err)
-	}
+	assert.NoError(t, err)
 
 	if err := call.Error(); err != nil {
-		log.Warn().Err(err).Msg("Received an error response from FeatureFlagStatus command")
+		log.Error().Err(err).Msg("FeatureFlagStatus Command failed")
 	}
 
 	log.Debug().Str("FeatureFlagStatus", call.ResultString()).Msg("Command result")
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal([]byte(call.ResultString()), &result); err != nil {
 		t.Fatal("Failed to parse the command result", err)
 	}
 
-	if ok, exists := result["ok"]; exists {
-		assert.Equal(t, true, ok)
-	} else {
-		t.Fatal("Expected 'ok' field not found in the command result")
-	}
+	ok, _ := result["ok"].(bool)
+	assert.True(t, ok)
 }
 
 // Check if published diagnostics for given testPath match the expectedNumber.

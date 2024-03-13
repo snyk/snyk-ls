@@ -23,7 +23,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"path"
 
 	"github.com/rs/zerolog/log"
 
@@ -111,13 +110,13 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 	method := "FeatureFlagStatus"
 	var response FFResponse
 	log.Debug().Str("method", method).Msgf("API: Getting %s", featureFlagType)
-	p := path.Join("/cli-config/feature-flags/", string(featureFlagType))
+	path := fmt.Sprintf("/cli-config/feature-flags/%s", string(featureFlagType))
 	organization := config.CurrentConfig().Organization()
 	if organization != "" {
-		p += "?org=" + url.QueryEscape(organization)
+		path += "?org=" + url.QueryEscape(organization)
 	}
 
-	err := s.processApiResponse(method, p, &response)
+	err := s.processApiResponse(method, path, &response)
 	if err != nil {
 		log.Err(err).Str("method", method).Msg("error when calling featureFlagSettings endpoint")
 		return FFResponse{}, err

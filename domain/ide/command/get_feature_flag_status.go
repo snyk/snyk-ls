@@ -38,24 +38,24 @@ func (cmd *featureFlagStatus) Command() snyk.CommandData {
 
 func (cmd *featureFlagStatus) Execute(ctx context.Context) (any, error) {
 	if config.CurrentConfig().Token() == "" {
-		return nil, errors.New("missing Snyk token")
+		return nil, errors.New("not authenticated, cannot retrieve feature flag status")
 	}
 
 	args := cmd.command.Arguments
 	if len(args) < 1 {
-		return nil, errors.New("missing feature flag required argument")
+		return nil, errors.New("missing feature flag required argument: feature flag name")
 	}
 
 	ffStr, ok := args[0].(string)
 	if !ok {
-		return nil, errors.New("invalid feature flag argument")
+		return nil, errors.New("invalid feature flag name argument")
 	}
 
 	ff := snyk_api.FeatureFlagType(ffStr)
 	ffResponse, err := cmd.apiClient.FeatureFlagStatus(ff)
 
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get feature flag status")
+		log.Error().Err(err).Msg("Failed to get feature flag status for feature flag: " + ffStr)
 		return nil, err
 	}
 	return ffResponse, err
