@@ -28,6 +28,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hexops/gotextdiff"
 	"github.com/hexops/gotextdiff/myers"
@@ -396,11 +397,24 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 			if len(result.Suppressions) == 1 {
 				d.IsIgnored = true
 				suppression := result.Suppressions[0]
+				expiration := ""
+				if suppression.Properties.Expiration != nil {
+					expiration = *suppression.Properties.Expiration
+				}
+				ignoredOn, err := time.Parse("2024-02-23T16:08:25Z", suppression.Properties.IgnoredOn)
+				if err != nil {
+					log.Error().
+						Err(err).
+						Msg("failed to parse ignoredOn timestamp" +
+							suppression.Properties.IgnoredOn)
+					errs = errors.Join(errs, err)
+					ignoredOn = time.Now()
+				}
 				d.IgnoreDetails = &snyk.IgnoreDetails{
-					Category:   suppression.Properties.Category,
+					Category:   string(suppression.Properties.Category),
 					Reason:     suppression.Justification,
-					Expiration: suppression.Properties.Expiration,
-					IgnoredOn:  suppression.Properties.IgnoredOn,
+					Expiration: expiration,
+					IgnoredOn:  ignoredOn,
 					IgnoredBy:  suppression.Properties.IgnoredBy.Name,
 				}
 			} else {
