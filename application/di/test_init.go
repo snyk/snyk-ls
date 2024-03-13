@@ -70,7 +70,8 @@ func TestInit(t *testing.T) {
 	)
 	fakeClient := &code.FakeSnykCodeClient{}
 	snykCodeClient = fakeClient
-	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
+	codeInstrumentor = code.NewCodeInstrumentor()
+	snykCodeBundleUploader = code.NewBundler(snykCodeClient, codeInstrumentor)
 	scanNotifier, _ = appNotification.NewScanNotifier(notifier)
 	// mock Learn Service
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))

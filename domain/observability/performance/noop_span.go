@@ -33,6 +33,16 @@ type NoopSpan struct {
 	FinishTime int64
 }
 
+func NewNoopSpan(ctx context.Context, operation string, txName string, started bool, finished bool) *NoopSpan {
+	return &NoopSpan{
+		Operation: operation,
+		TxName:    txName,
+		Started:   started,
+		Finished:  finished,
+		ctx:       ctx,
+	}
+}
+
 func (n *NoopSpan) GetDurationMs() int64 { return n.FinishTime - n.StartTime }
 
 func (n *NoopSpan) Finish() {

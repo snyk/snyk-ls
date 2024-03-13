@@ -23,8 +23,8 @@ import (
 
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
+	codeClientObservability "github.com/snyk/code-client-go/observability"
 
-	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -33,10 +33,10 @@ type BundleUploader struct {
 	SnykCode             SnykCodeClient
 	supportedExtensions  *xsync.MapOf[string, bool]
 	supportedConfigFiles *xsync.MapOf[string, bool]
-	instrumentor         performance.Instrumentor
+	instrumentor         codeClientObservability.Instrumentor
 }
 
-func NewBundler(SnykCode SnykCodeClient, instrumentor performance.Instrumentor) *BundleUploader {
+func NewBundler(SnykCode SnykCodeClient, instrumentor codeClientObservability.Instrumentor) *BundleUploader {
 	return &BundleUploader{
 		SnykCode:             SnykCode,
 		instrumentor:         instrumentor,

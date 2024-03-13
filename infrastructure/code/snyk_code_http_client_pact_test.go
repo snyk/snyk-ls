@@ -28,7 +28,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -268,7 +267,7 @@ func setupPact(t *testing.T) {
 	t.Setenv("DEEPROXY_API_URL", fmt.Sprintf("http://localhost:%d", pact.Server.Port))
 	config.CurrentConfig().SetOrganization(orgUUID)
 
-	client = NewHTTPRepository(performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(),
+	client = NewSnykCodeHTTPClient(NewCodeInstrumentor(), error_reporting.NewTestErrorReporter(),
 		func() *http.Client { return config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient() })
 }
 

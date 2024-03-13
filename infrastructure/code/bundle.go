@@ -24,11 +24,11 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	codeClientObservability "github.com/snyk/code-client-go/observability"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
@@ -38,7 +38,7 @@ type Bundle struct {
 	BundleHash    string
 	UploadBatches []*UploadBatch
 	Files         map[string]BundleFile
-	instrumentor  performance.Instrumentor
+	instrumentor  codeClientObservability.Instrumentor
 	errorReporter error_reporting.ErrorReporter
 	requestId     string
 	missingFiles  []string

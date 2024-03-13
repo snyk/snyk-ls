@@ -24,7 +24,6 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -65,7 +64,7 @@ func Test_autofixFunc(t *testing.T) {
 	issueEnhancer := IssueEnhancer{
 		SnykCode:     &fakeSnykCode,
 		notifier:     mockNotifier,
-		instrumentor: performance.NewInstrumentor(),
+		instrumentor: NewCodeInstrumentor(),
 	}
 
 	t.Run("Shows attempt message when fix requested", func(t *testing.T) {

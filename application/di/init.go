@@ -21,6 +21,8 @@ import (
 	"runtime"
 	"sync"
 
+	codeClientObservability "github.com/snyk/code-client-go/observability"
+
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 
 	"github.com/adrg/xdg"
@@ -72,6 +74,7 @@ var codeActionService *codeaction.CodeActionsService
 var fileWatcher *watcher.FileWatcher
 var initMutex = &sync.Mutex{}
 var notifier notification.Notifier
+var codeInstrumentor codeClientObservability.Instrumentor
 
 func Init() {
 	initMutex.Lock()
@@ -135,8 +138,9 @@ func initInfrastructure() {
 		snykCli = cli.NewExtensionExecutor()
 	}
 
-	snykCodeClient = code.NewHTTPRepository(instrumentor, errorReporter, networkAccess.GetHttpClient)
-	snykCodeBundleUploader = code.NewBundler(snykCodeClient, instrumentor)
+	codeInstrumentor = code.NewCodeInstrumentor()
+	snykCodeClient = code.NewSnykCodeHTTPClient(codeInstrumentor, errorReporter, networkAccess.GetHttpClient)
+	snykCodeBundleUploader = code.NewBundler(snykCodeClient, codeInstrumentor)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.NewCLIScanner(instrumentor, errorReporter, analytics, snykCli, learnService, notifier, c)
 	scanNotifier, _ = appNotification.NewScanNotifier(notifier)

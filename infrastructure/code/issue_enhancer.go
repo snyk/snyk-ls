@@ -23,12 +23,12 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	codeClientObservability "github.com/snyk/code-client-go/observability"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/data_structure"
@@ -38,7 +38,7 @@ import (
 
 type IssueEnhancer struct {
 	SnykCode      SnykCodeClient
-	instrumentor  performance.Instrumentor
+	instrumentor  codeClientObservability.Instrumentor
 	errorReporter error_reporting.ErrorReporter
 	notifier      notification.Notifier
 	learnService  learn.Service
@@ -48,7 +48,7 @@ type IssueEnhancer struct {
 
 func newIssueEnhancer(
 	SnykCode SnykCodeClient,
-	instrumentor performance.Instrumentor,
+	instrumentor codeClientObservability.Instrumentor,
 	errorReporter error_reporting.ErrorReporter,
 	notifier notification.Notifier,
 	learnService learn.Service,

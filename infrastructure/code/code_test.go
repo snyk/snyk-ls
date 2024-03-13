@@ -27,16 +27,17 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	"github.com/snyk/snyk-ls/domain/observability/performance"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/float"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -169,7 +170,7 @@ func TestCreateBundle(t *testing.T) {
 			ConfigFiles: []string{configFile},
 		}
 		scanner := New(
-			NewBundler(snykCodeMock, performance.NewInstrumentor()),
+			NewBundler(snykCodeMock, NewCodeInstrumentor()),
 			&snyk_api.FakeApiClient{CodeEnabled: true},
 			error_reporting.NewTestErrorReporter(),
 			ux2.NewTestAnalytics(),
@@ -256,7 +257,7 @@ func setupTestScanner(t *testing.T) (*FakeSnykCodeClient, *Scanner) {
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&learn.Lesson{}, nil).AnyTimes()
 	scanner := New(
-		NewBundler(snykCodeMock, performance.NewInstrumentor()),
+		NewBundler(snykCodeMock, NewCodeInstrumentor()),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
@@ -278,7 +279,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			testutil.UnitTest(t)
 			snykCodeMock := &FakeSnykCodeClient{}
 			c := New(
-				NewBundler(snykCodeMock, performance.NewInstrumentor()),
+				NewBundler(snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				error_reporting.NewTestErrorReporter(),
 				ux2.NewTestAnalytics(),
@@ -308,7 +309,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			testutil.UnitTest(t)
 			snykCodeMock := &FakeSnykCodeClient{}
 			c := New(
-				NewBundler(snykCodeMock, performance.NewInstrumentor()),
+				NewBundler(snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				error_reporting.NewTestErrorReporter(),
 				ux2.NewTestAnalytics(),
@@ -349,7 +350,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			snykCodeMock := &FakeSnykCodeClient{}
 			analytics := ux2.NewTestAnalytics()
 			c := New(
-				NewBundler(snykCodeMock, performance.NewInstrumentor()),
+				NewBundler(snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				error_reporting.NewTestErrorReporter(),
 				analytics,
@@ -359,7 +360,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
 			files := []string{diagnosticUri}
-			metrics := c.newMetrics(time.Now())
+			metrics := codeClientObservability.NewScanMetrics(time.Now(), 0)
 
 			// execute
 			_, _ = c.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
@@ -369,8 +370,8 @@ func TestUploadAndAnalyze(t *testing.T) {
 				t, ux2.AnalysisIsReadyProperties{
 					AnalysisType:      ux2.CodeSecurity,
 					Result:            ux2.Success,
-					FileCount:         metrics.lastScanFileCount,
-					DurationInSeconds: metrics.lastScanDurationInSeconds,
+					FileCount:         1,
+					DurationInSeconds: float.ToFixed(metrics.GetDuration().Seconds(), 2),
 				}, analytics.GetAnalytics()[0],
 			)
 		},
@@ -386,7 +387,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	testutil.UnitTest(t)
 	snykCodeMock := &FakeSnykCodeClient{}
 	c := New(
-		NewBundler(snykCodeMock, performance.NewInstrumentor()),
+		NewBundler(snykCodeMock, NewCodeInstrumentor()),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
 		error_reporting.NewTestErrorReporter(),
 		ux2.NewTestAnalytics(),
@@ -544,7 +545,7 @@ func Test_Scan(t *testing.T) {
 		testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{}
 		c := New(
-			NewBundler(snykCodeMock, performance.NewInstrumentor()),
+			NewBundler(snykCodeMock, NewCodeInstrumentor()),
 			&snyk_api.FakeApiClient{CodeEnabled: false},
 			error_reporting.NewTestErrorReporter(),
 			ux2.NewTestAnalytics(),
@@ -572,7 +573,7 @@ func Test_Scan(t *testing.T) {
 			Return(&learn.Lesson{}, nil).AnyTimes()
 
 		c := New(
-			NewBundler(snykCodeMock, performance.NewInstrumentor()),
+			NewBundler(snykCodeMock, NewCodeInstrumentor()),
 			snykApiMock,
 			error_reporting.NewTestErrorReporter(),
 			ux2.NewTestAnalytics(),
@@ -600,7 +601,7 @@ func Test_Scan(t *testing.T) {
 			Return(&learn.Lesson{}, nil).AnyTimes()
 
 		c := New(
-			NewBundler(snykCodeMock, performance.NewInstrumentor()),
+			NewBundler(snykCodeMock, NewCodeInstrumentor()),
 			snykApiMock,
 			error_reporting.NewTestErrorReporter(),
 			ux2.NewTestAnalytics(),
@@ -718,7 +719,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			snykCodeMock := &FakeSnykCodeClient{}
 			analytics := ux2.NewTestAnalytics()
 			c := New(
-				NewBundler(snykCodeMock, performance.NewInstrumentor()),
+				NewBundler(snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				error_reporting.NewTestErrorReporter(),
 				analytics,
@@ -755,7 +756,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 
 			analytics := ux2.NewTestAnalytics()
 			c := New(
-				NewBundler(snykCodeMock, performance.NewInstrumentor()),
+				NewBundler(snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				error_reporting.NewTestErrorReporter(),
 				analytics,
@@ -789,7 +790,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			snykCodeMock := &FakeSnykCodeClient{}
 			analytics := ux2.NewTestAnalytics()
 			c := New(
-				NewBundler(snykCodeMock, performance.NewInstrumentor()),
+				NewBundler(snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				error_reporting.NewTestErrorReporter(),
 				analytics,

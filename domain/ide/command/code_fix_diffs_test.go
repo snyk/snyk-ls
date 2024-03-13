@@ -24,7 +24,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
@@ -50,7 +49,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	runtime.GOOS == "windows" {
 		t.Skip("Skipping test on windows")
 	}
-	instrumentor := performance.NewInstrumentor()
+	instrumentor := code.NewCodeInstrumentor()
 	snykCodeClient := &code.FakeSnykCodeClient{
 		UnifiedDiffSuggestions: []code.AutofixUnifiedDiffSuggestion{
 			{
