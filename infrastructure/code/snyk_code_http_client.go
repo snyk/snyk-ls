@@ -374,7 +374,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
 		return nil, failed, err
 	} else {
-		log.Debug().Str("responseBody", string(responseBody)).Msg("Received response")
+		logSarifResponse(method, response)
 	}
 
 	log.Debug().Str("method", method).Str("requestId", requestId).Float64("progress",
@@ -397,6 +397,17 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 	converter := SarifConverter{sarif: response}
 	issues, err := converter.toIssues(baseDir)
 	return issues, status, err
+}
+
+func logSarifResponse(method string, sarifResponse codeClient.SarifResponse) {
+	log.Debug().
+		Str("method", method).
+		Str("status", sarifResponse.Status).
+		Float64("progress", sarifResponse.Progress).
+		Int("fetchingCodeTime", sarifResponse.Timing.FetchingCode).
+		Int("analysisTime", sarifResponse.Timing.Analysis).
+		Int("filesAnalyzed", len(sarifResponse.Coverage)).
+		Msg("Received response summary")
 }
 
 func (s *SnykCodeHTTPClient) analysisRequestBody(options *AnalysisOptions) ([]byte, error) {
