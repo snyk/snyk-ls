@@ -271,6 +271,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 			return issues, nil
 		}
 	}
+
 	scanMetrics.SetLastScanFileCount(len(bundle.Files))
 
 	uploadedBundle, err := sc.BundleUploader.Upload(span.Context(), bundle, bundle.Files)

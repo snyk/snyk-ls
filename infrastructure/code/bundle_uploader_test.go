@@ -26,7 +26,6 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -38,7 +37,7 @@ func Test_Bundler_Upload(t *testing.T) {
 
 	t.Run("adds files to bundle", func(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{}
-		var bundleUploader = BundleUploader{SnykCode: snykCodeService, instrumentor: performance.NewInstrumentor()}
+		var bundleUploader = BundleUploader{SnykCode: snykCodeService, instrumentor: NewCodeInstrumentor()}
 		documentURI, bundleFile := createTempFileInDir(t, "bundleDoc.java", 10, temporaryDir)
 		bundleFileMap := map[string]BundleFile{}
 		bundleFileMap[documentURI] = bundleFile
@@ -53,7 +52,7 @@ func Test_Bundler_Upload(t *testing.T) {
 
 	t.Run("when loads of files breaks down in 4MB bundles", func(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{}
-		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: performance.NewInstrumentor()}
+		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: NewCodeInstrumentor()}
 
 		bundleFileMap := map[string]BundleFile{}
 		var missingFiles []string
@@ -93,7 +92,7 @@ func createTempFileInDir(t *testing.T, name string, size int, temporaryDir strin
 func Test_IsSupportedLanguage(t *testing.T) {
 	const unsupportedFile = "C:\\some\\path\\Test.rs"
 	snykCodeMock := &FakeSnykCodeClient{}
-	bundler := NewBundler(snykCodeMock, performance.NewInstrumentor())
+	bundler := NewBundler(snykCodeMock, NewCodeInstrumentor())
 
 	t.Run("should return true for supported languages", func(t *testing.T) {
 		path := "C:\\some\\path\\Test.java"
@@ -129,7 +128,7 @@ func Test_IsSupported_ConfigFile(t *testing.T) {
 	snykCodeMock := &FakeSnykCodeClient{
 		ConfigFiles: configFilesFromFiltersEndpoint,
 	}
-	bundler := NewBundler(snykCodeMock, performance.NewInstrumentor())
+	bundler := NewBundler(snykCodeMock, NewCodeInstrumentor())
 	dir, _ := os.Getwd()
 
 	t.Run("should return true for supported config files", func(t *testing.T) {
