@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/creachadair/jrpc2"
+	"github.com/snyk/go-application-framework/pkg/progress"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/di"
@@ -31,7 +32,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/lsp"
-	"github.com/snyk/snyk-ls/internal/progress"
 )
 
 type ServerImplMock struct{}
@@ -48,11 +48,11 @@ func (b *ServerImplMock) Notify(_ context.Context, _ string, _ any) error {
 }
 
 func TestCreateProgressListener(t *testing.T) {
-	progressChannel := make(chan lsp.ProgressParams, 1)
-	progressNotification := lsp.ProgressParams{
+	progressChannel := make(chan progress.ProgressParams, 1)
+	progressNotification := progress.ProgressParams{
 		Token: "token",
-		Value: lsp.WorkDoneProgressBegin{
-			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "begin"},
+		Value: progress.WorkDoneProgressBegin{
+			WorkDoneProgressKind: progress.WorkDoneProgressKind{Kind: "begin"},
 			Title:                "title",
 			Message:              "message",
 			Cancellable:          true,
@@ -101,7 +101,7 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 		func() bool {
 			callbacks := jsonRPCRecorder.FindCallbacksByMethod("window/workDoneProgress/create")
 			for _, c := range callbacks {
-				actualProgress := lsp.ProgressParams{}
+				actualProgress := progress.ProgressParams{}
 				_ = c.UnmarshalParams(&actualProgress)
 				if progressTracker.GetToken() == actualProgress.Token {
 					return true

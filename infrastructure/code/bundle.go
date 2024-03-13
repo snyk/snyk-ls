@@ -24,13 +24,13 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"github.com/snyk/go-application-framework/pkg/progress"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/progress"
 )
 
 type Bundle struct {
