@@ -19,6 +19,7 @@ package notification_test
 import (
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -400,6 +401,112 @@ func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
 			IssueType:           1,
 			Range:               r,
 			Message:             "codeMessage",
+			FormattedMessage:    "codeFormattedMessage",
+			AffectedFilePath:    "codeAffectedFilePath",
+			Product:             product.ProductCode,
+			References:          []snyk.Reference{},
+			IssueDescriptionURL: &url.URL{},
+			CodeActions:         []snyk.CodeAction{},
+			CodelensCommands:    []snyk.CommandData{},
+			AdditionalData: snyk.CodeIssueData{
+				Key:                "5a105e8b9d40e1329780d62ea2265d8a",
+				Message:            "codeMessage",
+				Rule:               "codeRule",
+				RuleId:             "codeRuleID",
+				RepoDatasetSize:    2,
+				ExampleCommitFixes: []snyk.ExampleCommitFix{},
+				CWE:                []string{},
+				IsSecurityType:     false,
+				Text:               "codeText",
+				Cols:               snyk.CodePoint{1, 1},
+				Rows:               snyk.CodePoint{1, 1},
+				Markers:            []snyk.Marker{},
+				DataFlow: []snyk.DataFlowElement{
+					{FilePath: "testFile", FlowRange: r, Content: "testContent"},
+				},
+			},
+		},
+	}
+
+	// Act - run the test
+	scanNotifier.SendSuccess(product.ProductCode, folderPath, scanIssues)
+
+	// Assert - check the messages matches the expected message for each product
+	for _, msg := range mockNotifier.SentMessages() {
+		actualCodeIssue := msg.(lsp2.SnykScanParams).Issues
+		assert.Equal(t, expectedCodeIssue, actualCodeIssue)
+		return
+	}
+}
+
+func Test_SendSuccess_SendsForSnykCode_WithIgnores(t *testing.T) {
+	testutil.UnitTest(t)
+
+	mockNotifier := notification.NewMockNotifier()
+	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
+
+	const folderPath = "/test/iac/folderPath"
+	r := snyk.Range{
+		Start: snyk.Position{
+			Line:      1,
+			Character: 1,
+		},
+		End: snyk.Position{
+			Line:      1,
+			Character: 2,
+		},
+	}
+	lspTestRange := converter.ToRange(r)
+
+	ignoredOn := time.Now()
+	expectedCodeIssue := []lsp2.ScanIssue{
+		{
+			Id:        "5a105e8b9d40e1329780d62ea2265d8a",
+			Title:     "codeMessage",
+			Severity:  "low",
+			FilePath:  "codeAffectedFilePath",
+			Range:     lspTestRange,
+			IsIgnored: true,
+			IgnoreDetails: lsp2.IgnoreDetails{
+				Category:   "category",
+				Reason:     "reason",
+				Expiration: "expiration",
+				IgnoredOn:  ignoredOn,
+				IgnoredBy:  "ignoredBy",
+			}, AdditionalData: lsp2.CodeIssueData{
+				Message:            "codeMessage",
+				Rule:               "codeRule",
+				RuleId:             "codeRuleID",
+				RepoDatasetSize:    2,
+				ExampleCommitFixes: []lsp2.ExampleCommitFix{},
+				CWE:                []string{},
+				IsSecurityType:     false,
+				Text:               "codeText",
+				Cols:               lsp2.Point{1, 1},
+				Rows:               lsp2.Point{1, 1},
+				Markers:            []lsp2.Marker{},
+				DataFlow: []lsp2.DataflowElement{
+					{FilePath: "testFile", FlowRange: converter.ToRange(r), Content: "testContent"},
+				},
+			},
+		},
+	}
+
+	scanIssues := []snyk.Issue{
+		{ // Code issue
+			ID:        "codeID",
+			Severity:  snyk.Low,
+			IssueType: 1,
+			Range:     r,
+			Message:   "codeMessage",
+			IsIgnored: true,
+			IgnoreDetails: &snyk.IgnoreDetails{
+				Category:   "category",
+				Reason:     "reason",
+				Expiration: "expiration",
+				IgnoredOn:  ignoredOn,
+				IgnoredBy:  "ignoredBy",
+			},
 			FormattedMessage:    "codeFormattedMessage",
 			AffectedFilePath:    "codeAffectedFilePath",
 			Product:             product.ProductCode,

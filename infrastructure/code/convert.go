@@ -28,6 +28,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hexops/gotextdiff"
 	"github.com/hexops/gotextdiff/myers"
@@ -391,10 +392,48 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 				CWEs:                testRule.Properties.Cwe,
 			}
 
+			d.IsIgnored, d.IgnoreDetails = s.getIgnoreDetails(result)
 			issues = append(issues, d)
 		}
 	}
 	return issues, errs
+}
+
+func (s *SarifConverter) getIgnoreDetails(result codeClient.Result) (bool, *snyk.IgnoreDetails) {
+	isIgnored := false
+	var ignoreDetails *snyk.IgnoreDetails
+
+	// this can be an array of multiple suppressions in SARIF
+	// but we only store one ignore for now
+	if len(result.Suppressions) > 0 {
+		if len(result.Suppressions) > 1 {
+			log.Warn().Int("number of SARIF suppressions", len(result.Suppressions)).Msg(
+				"there are more suppressions than expected")
+		}
+		isIgnored = true
+		suppression := result.Suppressions[0]
+		expiration := ""
+		if suppression.Properties.Expiration != nil {
+			expiration = *suppression.Properties.Expiration
+		}
+		ignoredOn, err := time.Parse(time.RFC3339, suppression.Properties.IgnoredOn)
+		if err != nil {
+			// We don't want to fail just because of this parsing logic
+			log.Error().
+				Err(err).
+				Msg("failed to parse ignoredOn timestamp " +
+					suppression.Properties.IgnoredOn)
+			ignoredOn = time.Now()
+		}
+		ignoreDetails = &snyk.IgnoreDetails{
+			Category:   string(suppression.Properties.Category),
+			Reason:     suppression.Justification,
+			Expiration: expiration,
+			IgnoredOn:  ignoredOn,
+			IgnoredBy:  suppression.Properties.IgnoredBy.Name,
+		}
+	}
+	return isIgnored, ignoreDetails
 }
 
 func (s *SarifConverter) getMarkers(r codeClient.Result, baseDir string) ([]snyk.Marker, error) {

@@ -17,6 +17,8 @@
 package lsp
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	sglsp "github.com/sourcegraph/go-lsp"
 )
@@ -1025,12 +1027,22 @@ type SnykScanParams struct {
 
 type ScanIssue struct { // TODO - convert this to a generic type
 	// Unique key identifying an issue in the whole result set. Not the same as the Snyk issue ID.
-	Id             string      `json:"id"`
-	Title          string      `json:"title"`
-	Severity       string      `json:"severity"`
-	FilePath       string      `json:"filePath"`
-	Range          sglsp.Range `json:"range"`
-	AdditionalData any         `json:"additionalData,omitempty"`
+	Id             string        `json:"id"`
+	Title          string        `json:"title"`
+	Severity       string        `json:"severity"`
+	FilePath       string        `json:"filePath"`
+	Range          sglsp.Range   `json:"range"`
+	IsIgnored      bool          `json:"isIgnored"`
+	IgnoreDetails  IgnoreDetails `json:"ignoreDetails"`
+	AdditionalData any           `json:"additionalData,omitempty"`
+}
+
+type IgnoreDetails struct {
+	Category   string    `json:"category"`
+	Reason     string    `json:"reason"`
+	Expiration string    `json:"expiration"`
+	IgnoredOn  time.Time `json:"ignoredOn"`
+	IgnoredBy  string    `json:"ignoredBy"`
 }
 
 // Snyk Open Source

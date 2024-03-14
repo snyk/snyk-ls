@@ -71,7 +71,7 @@ type Issue struct {
 type IgnoreDetails struct {
 	Category   string
 	Reason     string
-	Expiration time.Time
+	Expiration string
 	IgnoredOn  time.Time
 	IgnoredBy  string
 }
