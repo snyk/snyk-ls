@@ -51,7 +51,7 @@ type Lesson struct {
 	Cves          []string `json:"cves"`
 	Cwes          []string `json:"cwes"`
 	Description   string   `json:"description"`
-	Ecosystem     string   `json:"ecosystem"`
+	Ecosystems    []string `json:"ecosystems"`
 	Rules         []string `json:"rules"`
 	Slug          string   `json:"slug"`
 	Published     bool     `json:"published"`
@@ -204,13 +204,14 @@ func (s *serviceImpl) updateCaches(lessons []Lesson) {
 			lessonsForRule = append(lessonsForRule, lesson)
 			s.lessonsByRuleCache.Set(lesson.Slug, lessonsForRule, expiration)
 		}
-
-		lessonsForEcosystem, exists := s.lessonsByEcosystemCache.Get(lesson.Ecosystem)
-		if !exists {
-			lessonsForEcosystem = []Lesson{}
+		for _, ecosystem := range lesson.Ecosystems {
+			lessonsForEcosystem, exists := s.lessonsByEcosystemCache.Get(ecosystem)
+			if !exists {
+				lessonsForEcosystem = []Lesson{}
+			}
+			lessonsForEcosystem = append(lessonsForEcosystem, lesson)
+			s.lessonsByEcosystemCache.Set(ecosystem, lessonsForEcosystem, expiration)
 		}
-		lessonsForEcosystem = append(lessonsForEcosystem, lesson)
-		s.lessonsByEcosystemCache.Set(lesson.Ecosystem, lessonsForEcosystem, expiration)
 	}
 }
 
