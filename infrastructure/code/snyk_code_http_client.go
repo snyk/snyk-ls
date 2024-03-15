@@ -30,8 +30,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
-	codeClient "github.com/snyk/code-client-go"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
+	codeClient "github.com/snyk/code-client-go/sarif"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
