@@ -49,7 +49,9 @@
             ],
             "datePublished": "string",
             "description": "string",
-            "ecosystem": "string",
+            "ecosystems": [
+              "string"
+            ],
             "img": "string",
             "lessonId": "string",
             "published": true,
@@ -101,7 +103,13 @@
           "$.body[*].description": {
             "match": "type"
           },
-          "$.body[*].ecosystem": {
+          "$.body[*].ecosystems": {
+            "min": 1
+          },
+          "$.body[*].ecosystems[*].*": {
+            "match": "type"
+          },
+          "$.body[*].ecosystems[*]": {
             "match": "type"
           },
           "$.body[*].img": {
