@@ -83,7 +83,7 @@ jobs:
           make instance-standard-test
 
       - name: Slack Notification
-        if: ${{ github.event_name != 'push' && (failure() || cancelled()) }}
+        if: ${{ (github.event_name != 'push' || github.ref == 'refs/heads/main') && (failure() || cancelled()) }}
         with:
           payload: '{"text": "GitHub build result: ${{ job.status }} (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n${{ github.event.pull_request.html_url || github.event.head_commit.url }}" }'
 
