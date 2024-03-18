@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	codeClient "github.com/snyk/code-client-go"
+	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -716,7 +716,7 @@ func Test_getFormattedMessage(t *testing.T) {
 func setupConversionTests(t *testing.T,
 	activateSnykCodeSecurity bool,
 	activateSnykCodeQuality bool,
-) (path string, issues []snyk.Issue, response codeClient.SarifResponse) {
+) (path string, issues []snyk.Issue, response codeClientSarif.SarifResponse) {
 	t.Helper()
 	testutil.UnitTest(t)
 	c := config.CurrentConfig()
@@ -735,7 +735,7 @@ func setupConversionTests(t *testing.T,
 		t.Fatal(err, "couldn't get relative path")
 	}
 
-	var analysisResponse codeClient.SarifResponse
+	var analysisResponse codeClientSarif.SarifResponse
 	responseJson := getSarifResponseJson(encodedPath)
 	err = json.Unmarshal([]byte(responseJson), &analysisResponse)
 
@@ -801,18 +801,18 @@ func Test_LineChangeChar(t *testing.T) {
 
 func Test_rule_cwe(t *testing.T) {
 	t.Run("display CWEs if reported", func(t *testing.T) {
-		cut := codeClient.Rule{Properties: codeClient.RuleProperties{
+		cut := codeClientSarif.Rule{Properties: codeClientSarif.RuleProperties{
 			Cwe: []string{"CWE-23", "CWE-24"},
 		}}
-		sarifConverter := SarifConverter{sarif: codeClient.SarifResponse{}}
+		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
 		assert.Contains(t, sarifConverter.cwe(cut), "https://cwe.mitre.org/data/definitions/23.html")
 		assert.Contains(t, sarifConverter.cwe(cut), "https://cwe.mitre.org/data/definitions/24.html")
 	})
 	t.Run("dont display CWEs if not reported", func(t *testing.T) {
-		cut := codeClient.Rule{Properties: codeClient.RuleProperties{
+		cut := codeClientSarif.Rule{Properties: codeClientSarif.RuleProperties{
 			Cwe: []string{},
 		}}
-		sarifConverter := SarifConverter{sarif: codeClient.SarifResponse{}}
+		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
 		assert.NotContains(t, sarifConverter.cwe(cut), "CWE:")
 	})
 }
@@ -824,49 +824,49 @@ func Test_getIssueId(t *testing.T) {
 
 func Test_getCodeIssueType(t *testing.T) {
 	t.Run("Security issue - single category", func(t *testing.T) {
-		testRule := codeClient.Rule{
-			Properties: codeClient.RuleProperties{
+		testRule := codeClientSarif.Rule{
+			Properties: codeClientSarif.RuleProperties{
 				Categories: []string{"Security"},
 			},
 		}
 
-		sarifConverter := SarifConverter{sarif: codeClient.SarifResponse{}}
+		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
 		sarifConverter.getCodeIssueType(testRule)
 		assert.Equal(t, snyk.CodeSecurityVulnerability, sarifConverter.getCodeIssueType(testRule))
 	})
 
 	t.Run("Security issue - multiple categories", func(t *testing.T) {
-		testRule := codeClient.Rule{
-			Properties: codeClient.RuleProperties{
+		testRule := codeClientSarif.Rule{
+			Properties: codeClientSarif.RuleProperties{
 				Categories: []string{"Security", "Defect"},
 			},
 		}
 
-		sarifConverter := SarifConverter{sarif: codeClient.SarifResponse{}}
+		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
 		sarifConverter.getCodeIssueType(testRule)
 		assert.Equal(t, snyk.CodeSecurityVulnerability, sarifConverter.getCodeIssueType(testRule))
 	})
 
 	t.Run("Quality - single category", func(t *testing.T) {
-		testRule := codeClient.Rule{
-			Properties: codeClient.RuleProperties{
+		testRule := codeClientSarif.Rule{
+			Properties: codeClientSarif.RuleProperties{
 				Categories: []string{"Defect"},
 			},
 		}
 
-		sarifConverter := SarifConverter{sarif: codeClient.SarifResponse{}}
+		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
 		sarifConverter.getCodeIssueType(testRule)
 		assert.Equal(t, snyk.CodeQualityIssue, sarifConverter.getCodeIssueType(testRule))
 	})
 
 	t.Run("Quality - multiple categories", func(t *testing.T) {
-		testRule := codeClient.Rule{
-			Properties: codeClient.RuleProperties{
+		testRule := codeClientSarif.Rule{
+			Properties: codeClientSarif.RuleProperties{
 				Categories: []string{"Defect", "Info"},
 			},
 		}
 
-		sarifConverter := SarifConverter{sarif: codeClient.SarifResponse{}}
+		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
 		sarifConverter.getCodeIssueType(testRule)
 		assert.Equal(t, snyk.CodeQualityIssue, sarifConverter.getCodeIssueType(testRule))
 	})
@@ -896,8 +896,8 @@ func Test_AutofixResponse_toAutofixSuggestion(t *testing.T) {
 }
 
 func Test_Result_getMarkers_basic(t *testing.T) {
-	r := codeClient.Result{
-		Message: codeClient.ResultMessage{
+	r := codeClientSarif.Result{
+		Message: codeClientSarif.ResultMessage{
 			Text:     "",
 			Markdown: "Printing the stack trace of {0}. Production code should not use {1}. {3}",
 			Arguments: []string{"[java.lang.InterruptedException](0)", "[printStackTrace](1)(2)", "",
@@ -905,7 +905,7 @@ func Test_Result_getMarkers_basic(t *testing.T) {
 		},
 	}
 
-	sarifConverter := SarifConverter{sarif: codeClient.SarifResponse{}}
+	sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
 	marker, err := sarifConverter.getMarkers(r, "")
 	assert.Nil(t, err)
 	assert.Len(t, marker, 3)
@@ -913,8 +913,8 @@ func Test_Result_getMarkers_basic(t *testing.T) {
 
 func Test_Result_getIgnoreDetails(t *testing.T) {
 	t.Run("does not return ignore details if no suppressions", func(t *testing.T) {
-		r := codeClient.Result{
-			Message: codeClient.ResultMessage{
+		r := codeClientSarif.Result{
+			Message: codeClientSarif.ResultMessage{
 				Text:     "",
 				Markdown: "Printing the stack trace of {0}. Production code should not use {1}. {3}",
 				Arguments: []string{"[java.lang.InterruptedException](0)", "[printStackTrace](1)(2)", "",
@@ -922,7 +922,7 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 			},
 		}
 
-		sarifConverter := SarifConverter{sarif: codeClient.SarifResponse{}}
+		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
 		isIgnored, ignoreDetails := sarifConverter.getIgnoreDetails(r)
 		assert.False(t, isIgnored)
 		assert.Nil(t, ignoreDetails)
@@ -930,21 +930,21 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 
 	t.Run("does return ignore details if one suppression", func(t *testing.T) {
 		expiration := "expiration"
-		r := codeClient.Result{
-			Message: codeClient.ResultMessage{
+		r := codeClientSarif.Result{
+			Message: codeClientSarif.ResultMessage{
 				Text:     "",
 				Markdown: "Printing the stack trace of {0}. Production code should not use {1}. {3}",
 				Arguments: []string{"[java.lang.InterruptedException](0)", "[printStackTrace](1)(2)", "",
 					"[This is a test argument](3)"},
 			},
-			Suppressions: []codeClient.Suppression{
+			Suppressions: []codeClientSarif.Suppression{
 				{
 					Justification: "reason",
-					Properties: codeClient.SuppressionProperties{
+					Properties: codeClientSarif.SuppressionProperties{
 						Category:   "category",
 						Expiration: &expiration,
 						IgnoredOn:  "2024-02-23T16:08:25Z",
-						IgnoredBy: codeClient.IgnoredBy{
+						IgnoredBy: codeClientSarif.IgnoredBy{
 							Name: "name",
 						},
 					},
@@ -952,7 +952,7 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 			},
 		}
 
-		sarifConverter := SarifConverter{sarif: codeClient.SarifResponse{}}
+		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
 		isIgnored, ignoreDetails := sarifConverter.getIgnoreDetails(r)
 		assert.True(t, isIgnored)
 		assert.NotNil(t, ignoreDetails)

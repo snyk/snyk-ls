@@ -34,7 +34,7 @@ import (
 	"github.com/hexops/gotextdiff/myers"
 	"github.com/hexops/gotextdiff/span"
 	"github.com/rs/zerolog/log"
-	codeClient "github.com/snyk/code-client-go"
+	codeClient "github.com/snyk/code-client-go/sarif"
 	"golang.org/x/exp/slices"
 
 	"github.com/snyk/snyk-ls/domain/snyk"

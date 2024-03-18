@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	codeClient "github.com/snyk/code-client-go"
+	codeClient "github.com/snyk/code-client-go/sarif"
 )
 
 type exampleCommit struct {
