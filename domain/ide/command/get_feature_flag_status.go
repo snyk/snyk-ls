@@ -19,6 +19,7 @@ package command
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -56,15 +57,16 @@ func (cmd *featureFlagStatus) Execute(ctx context.Context) (any, error) {
 	ff := snyk_api.FeatureFlagType(ffStr)
 	ffResponse, err := cmd.apiClient.FeatureFlagStatus(ff)
 
-	logger.Debug().Msg("Feature flag status: " + ffStr)
+	message := "Feature flag status for: " + ffStr + " is: " + fmt.Sprintf("%v", ffResponse.Ok)
+	logger.Debug().Msg(message)
 
 	if err != nil {
 		logger.Err(err).Msg("Failed to get feature flag status for feature flag: " + ffStr)
-		return nil, err
+		return nil, nil
 	}
 
 	isFeatureFlagEnable := snyk_api.FFResponse{
 		Ok: ffResponse.Ok,
 	}
-	return isFeatureFlagEnable, err
+	return isFeatureFlagEnable, nil
 }
