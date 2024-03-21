@@ -104,17 +104,18 @@ func initInfrastructure() {
 	c := config.CurrentConfig()
 	//goland:noinspection GoBoolExpressions
 	if runtime.GOOS == "windows" {
-		// on windows add the locations in the background, as it can take a while and shouldn't block the server
 		go c.AddBinaryLocationsToPath([]string{
 			"C:\\Program Files",
 			"C:\\Program Files (x86)",
 		})
 	} else {
-		c.AddBinaryLocationsToPath(
+		go c.AddBinaryLocationsToPath(
 			[]string{
 				filepath.Join(xdg.Home, ".sdkman"),
 				"/usr/lib",
 				"/usr/java",
+				"/usr/local/bin",
+				"/opt/homebrew/bin",
 				"/opt",
 				"/Library",
 			})
