@@ -158,8 +158,7 @@ func TestSnykApiPact(t *testing.T) {
 		var featureFlagType FeatureFlagType = "snykCodeConsistentIgnores"
 
 		expectedResponse := FFResponse{
-			Ok:          true,
-			UserMessage: nil,
+			Ok: true,
 		}
 
 		matcher := dsl.MapMatcher{}
@@ -204,7 +203,7 @@ func TestSnykApiPact(t *testing.T) {
 		message := "Org " + organization + " doesn't have '" + string(featureFlagType) + "' feature enabled"
 		disabledResponse := FFResponse{
 			Ok:          false,
-			UserMessage: &message,
+			UserMessage: message,
 		}
 
 		matcher := dsl.MapMatcher{}

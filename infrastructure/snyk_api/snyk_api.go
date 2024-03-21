@@ -55,8 +55,8 @@ type SastResponse struct {
 }
 
 type FFResponse struct {
-	Ok          bool    `json:"ok"`
-	UserMessage *string `json:"userMessage,omitempty"`
+	Ok          bool   `json:"ok"`
+	UserMessage string `json:"userMessage,omitempty"`
 }
 
 type SnykApiClient interface {
@@ -108,17 +108,21 @@ func (s *SnykApiClientImpl) SastSettings() (SastResponse, error) {
 
 func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (FFResponse, error) {
 	method := "FeatureFlagStatus"
+	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
+
 	var response FFResponse
-	log.Debug().Str("method", method).Msgf("API: Getting %s", featureFlagType)
+	logger.Debug().Msgf("API: Getting %s", featureFlagType)
 	path := fmt.Sprintf("/cli-config/feature-flags/%s", string(featureFlagType))
 	organization := config.CurrentConfig().Organization()
 	if organization != "" {
 		path += "?org=" + url.QueryEscape(organization)
 	}
 
+	logger.Debug().Str("path", path).Msg("API: Getting feature flag status")
+
 	err := s.processApiResponse(method, path, &response)
 	if err != nil {
-		log.Err(err).Str("method", method).Msg("error when calling featureFlagSettings endpoint")
+		log.Err(err).Msg("error when calling featureFlagSettings endpoint")
 		return FFResponse{}, err
 	}
 	return response, err

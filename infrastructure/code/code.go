@@ -433,8 +433,8 @@ func (sc *Scanner) useIgnoresFlow() bool {
 		log.Debug().Err(err).Msg("Failed to check if the ignores experience is enabled")
 		return false
 	}
-	if !response.Ok && response.UserMessage != nil {
-		log.Info().Msg(*response.UserMessage)
+	if !response.Ok && response.UserMessage != "" {
+		log.Info().Msg(response.UserMessage)
 	}
 	return response.Ok
 }
