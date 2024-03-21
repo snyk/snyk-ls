@@ -22,15 +22,21 @@ import (
 )
 
 type FakeHoverService struct {
-	hovers chan DocumentHovers
-	calls  int
+	hovers        chan DocumentHovers
+	calls         int
+	DeletedIssues map[string][]string // Track DeleteHoverForIssue calls
 }
 
 func NewFakeHoverService() *FakeHoverService {
 	return &FakeHoverService{
-		calls:  0,
-		hovers: make(chan DocumentHovers, 10000),
+		calls:         0,
+		hovers:        make(chan DocumentHovers, 10000),
+		DeletedIssues: make(map[string][]string),
 	}
+}
+
+func (t *FakeHoverService) DeleteHoverForIssue(path string, issueID string) {
+	t.DeletedIssues[path] = append(t.DeletedIssues[path], issueID)
 }
 
 func (t *FakeHoverService) DeleteHover(_ string) {

@@ -451,7 +451,8 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 			return nil, nil
 		}
 
-		issues := folder.DocumentDiagnosticsFromCache(filePath)
+		issues, _ := folder.DocumentDiagnosticsFromCache(filePath)
+
 		filteredIssues := workspace.FilterIssues(issues, config.CurrentConfig().DisplayableIssueTypes())
 
 		if len(filteredIssues) > 0 {
@@ -477,22 +478,36 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		bgCtx := context.Background()
 		logger := log.With().Str("method", "TextDocumentDidSaveHandler").Logger()
 
-		logger.Info().Interface("params", params).Msg("Receiving")
-		di.FileWatcher().SetFileAsSaved(params.TextDocument.URI)
 		filePath := uri.PathFromUri(params.TextDocument.URI)
+
+		logger.Info().
+			Str("documentURI", filePath).
+			Msg("Received save event for document")
+
+		di.FileWatcher().SetFileAsSaved(params.TextDocument.URI)
 
 		// todo can we push cache management down?
 		f := workspace.Get().GetFolderContaining(filePath)
 		autoScanEnabled := config.CurrentConfig().IsAutoScanEnabled()
+
 		if f != nil && autoScanEnabled {
+			logger.Info().
+				Str("documentURI", filePath).
+				Msg("Starting scan for saved document")
+
 			f.ClearDiagnosticsFromFile(filePath)
 			di.HoverService().DeleteHover(filePath)
+
 			go f.ScanFile(bgCtx, filePath)
 		} else {
-			if autoScanEnabled {
-				logger.Warn().Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
-			} else {
-				logger.Warn().Msg("Not scanning, auto-scan is disabled")
+			if f == nil {
+				logger.Warn().
+					Str("documentURI", filePath).
+					Msg("Not scanning: File not part of the workspace")
+			}
+			if !autoScanEnabled {
+				logger.Warn().
+					Msg("Not scanning: Auto-scan feature is disabled")
 			}
 		}
 		return nil, nil

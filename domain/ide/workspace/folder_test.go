@@ -44,6 +44,89 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
+const folderPath = "folder-path"
+const folderName = "repo-name"
+const filePath = "file:///folder-path/repo-name/index.js"
+
+func Test_CheckAndUpdateStorage_NewIssue(t *testing.T) {
+	testutil.UnitTest(t)
+	// Arrange
+	scanner := snyk.NewTestScanner()
+	fakeHoverService := hover.NewFakeHoverService()
+
+	f := NewFolder(folderPath, folderName, scanner, fakeHoverService, snyk.NewMockScanNotifier(), notification.NewNotifier())
+	scannedIssues := []snyk.Issue{
+		NewMockIssue("javascript/HardcodedSecret", filePath),
+		NewMockIssue("javascript/InsecureHash", filePath),
+	}
+
+	// Pre-populate the cache
+	existingIssue := []snyk.Issue{NewMockIssue("javascript/InsecureHash", filePath)}
+	f.documentDiagnosticCache.Store(filePath, existingIssue)
+
+	// Act
+	f.CheckAndUpdateStorage(filePath, scannedIssues)
+
+	// Assert
+	issues, _ := f.documentDiagnosticCache.Load(filePath)
+	assert.Len(t, issues, 2)
+}
+
+func Test_CheckAndUpdateStorage_ExistingIssue(t *testing.T) {
+	testutil.UnitTest(t)
+	// Arrange
+	scanner := snyk.NewTestScanner()
+	fakeHoverService := hover.NewFakeHoverService()
+
+	f := NewFolder(folderPath, folderName, scanner, fakeHoverService, snyk.NewMockScanNotifier(), notification.NewNotifier())
+	scannedIssues := []snyk.Issue{NewMockIssue("javascript/HardcodedSecret", filePath)}
+
+	// Pre-populate the cache with the SAME issue
+	existingIssue := []snyk.Issue{NewMockIssue("javascript/HardcodedSecret", filePath)}
+	f.documentDiagnosticCache.Store(filePath, existingIssue)
+
+	// Act
+	f.CheckAndUpdateStorage(filePath, scannedIssues)
+
+	// Assert
+	issues, _ := f.documentDiagnosticCache.Load(filePath)
+	assert.Len(t, issues, 1)
+}
+
+func Test_CheckAndUpdateStorage_ResolvedIssue(t *testing.T) {
+	testutil.UnitTest(t)
+	// Arrange
+	scanner := snyk.NewTestScanner()
+	fakeHoverService := hover.NewFakeHoverService()
+
+	f := NewFolder(folderPath, folderName, scanner, fakeHoverService, snyk.NewMockScanNotifier(), notification.NewNotifier())
+	scannedIssues := []snyk.Issue{NewMockIssue("javascript/HardcodedSecret", filePath)}
+
+	// Pre-populate the cache
+	existingIssue := []snyk.Issue{
+		NewMockIssue("javascript/InsecureHash", filePath),
+		NewMockIssue("javascript/HardcodedSecret", filePath),
+	}
+	f.documentDiagnosticCache.Store(filePath, existingIssue)
+
+	// Act
+	f.CheckAndUpdateStorage(filePath, scannedIssues)
+
+	// Assert
+	issues, _ := f.documentDiagnosticCache.Load(filePath)
+	mockScannedId := scannedIssues[0].ID
+	issuesCount := len(issues)
+
+	assert.Len(t, issues, 1)
+	if issuesCount != 1 || issues[0].ID != mockScannedId {
+		t.Errorf("Expected storage to have 1 unresolved issue with ID %s, found %d issues",
+			mockScannedId, issuesCount)
+	}
+	deletedIssues, exists := fakeHoverService.DeletedIssues[filePath]
+	assert.True(t, exists, "DeleteHoverForIssue should have been called for the file path")
+	assert.Contains(t, deletedIssues, "javascript/InsecureHash")
+}
+
 func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
 	testutil.UnitTest(t)
 	folderPath, filePath := "testFolderDir", "testPath"

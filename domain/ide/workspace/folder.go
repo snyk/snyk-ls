@@ -155,26 +155,78 @@ func (f *Folder) scan(ctx context.Context, path string) {
 		log.Warn().Str("path", path).Str("method", method).Msg("skipping scan of untrusted path")
 		return
 	}
-	issuesSlice := f.DocumentDiagnosticsFromCache(path)
-	if issuesSlice != nil {
+
+	issuesSlice, ok := f.DocumentDiagnosticsFromCache(path)
+
+	if ok && len(issuesSlice) > 0 {
 		log.Info().Str("method", method).
 			Int("issueSliceLength", len(issuesSlice)).
 			Msgf("Cached results found: Skipping scan for %s", path)
-		f.processResults(snyk.ScanData{
-			Issues: issuesSlice,
-		})
+
+		f.processResults(snyk.ScanData{Issues: issuesSlice})
 		return
 	}
 
 	f.scanner.Scan(ctx, path, f.processResults, f.path)
 }
 
-func (f *Folder) DocumentDiagnosticsFromCache(file string) []snyk.Issue {
-	issues, _ := f.documentDiagnosticCache.Load(file)
-	if issues == nil {
-		return nil
+func (f *Folder) CheckAndUpdateStorage(filePath string, scannedIssues []snyk.Issue) {
+	// TODO: Ensure that `cachedIssues` only contains issues that are also in `scannedIssues`
+	// when storing back to the cache. Use `updateIssues` instead of `cachedIssues` to store
+	// after processing BOTH existing and new issues.
+	cachedIssues, ok := f.documentDiagnosticCache.Load(filePath)
+
+	if !ok || len(cachedIssues) == 0 {
+		// If there are no cached issues, we can safely add the new ones
+		f.documentDiagnosticCache.Store(filePath, scannedIssues)
+		return
 	}
-	return issues
+
+	// Map of issue IDs for quick lookup
+	cachedIssuesMap := make(map[string]snyk.Issue)
+	for _, issue := range cachedIssues {
+		cachedIssuesMap[issue.ID] = issue
+	}
+
+	// Map of scannedIssues for quick lookup
+	scannedIssuesMap := make(map[string]snyk.Issue)
+	for _, issue := range scannedIssues {
+		scannedIssuesMap[issue.ID] = issue
+	}
+
+	updatedIssues := make([]snyk.Issue, 0)
+	for _, cachedIssue := range cachedIssues {
+		if _, exists := scannedIssuesMap[cachedIssue.ID]; exists {
+			updatedIssues = append(updatedIssues, cachedIssue)
+		} else {
+			f.hoverService.DeleteHoverForIssue(cachedIssue.AffectedFilePath, cachedIssue.ID)
+		}
+	}
+
+	f.documentDiagnosticCache.Store(filePath, updatedIssues)
+
+	// Flag to check if new issues are added
+	newIssuesAdded := false
+
+	// Check if each scanned issue is in the cache and add it to the cache if it's not.
+	for _, scanned := range scannedIssues {
+		if _, ok := cachedIssuesMap[scanned.ID]; !ok {
+			cachedIssues = append(cachedIssues, scanned)
+			newIssuesAdded = true
+		}
+	}
+
+	if newIssuesAdded {
+		f.documentDiagnosticCache.Store(filePath, cachedIssues)
+		return
+	}
+}
+
+// `ok` allows distinguishes between a file not being in the cache at all (`ok == false`)
+// and a file being in the cache but with no issues (`ok == true` but `len(cachedIssues) == 0`).
+func (f *Folder) DocumentDiagnosticsFromCache(file string) ([]snyk.Issue, bool) {
+	issues, ok := f.documentDiagnosticCache.Load(file)
+	return issues, ok
 }
 
 func (f *Folder) processResults(scanData snyk.ScanData) {
@@ -196,7 +248,6 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 		if cachedIssues == nil {
 			cachedIssues = []snyk.Issue{}
 		}
-
 		if !dedupMap[f.getUniqueIssueID(issue)] {
 			cachedIssues = append(cachedIssues, issue)
 			incrementSeverityCount(&scanData, issue)
@@ -369,16 +420,28 @@ func (f *Folder) publishDiagnostics(product product.Product, issuesByFile map[st
 	f.sendHovers(issuesByFile) // TODO: this locks up the thread, need to investigate
 }
 
+// `createDedupMap` constructs a map of unique issue identifiers within the `documentDiagnosticCache`.
+// Each issue is identified by the combination of its ID and the associated file path.
+// This map, with unique identifiers as keys and boolean values set to true, serves to deduplicate
+// issues by indicating their presence in the cache.
 func (f *Folder) createDedupMap() (dedupMap map[string]bool) {
 	dedupMap = make(map[string]bool)
-	f.documentDiagnosticCache.Range(func(key string, value []snyk.Issue) bool {
-		issues := value
+
+	processCacheEntry := func(key string, issues []snyk.Issue) bool {
 		for _, issue := range issues {
 			uniqueID := f.getUniqueIssueID(issue)
 			dedupMap[uniqueID] = true
 		}
-		return true
-	})
+
+		log.Debug().
+			Str("method", "createDedupMap").
+			Str("cacheEntryKey", key).
+			Int("issuesCount", len(issues)).
+			Msg("Processed cache entry.")
+		return true // Continue the iteration
+	}
+
+	f.documentDiagnosticCache.Range(processCacheEntry)
 	return dedupMap
 }
 
@@ -418,7 +481,7 @@ func (f *Folder) Status() FolderStatus { return f.status }
 
 func (f *Folder) IssuesFor(filePath string, requestedRange snyk.Range) (matchingIssues []snyk.Issue) {
 	method := "domain.ide.workspace.folder.getCodeActions"
-	issues := f.DocumentDiagnosticsFromCache(filePath)
+	issues, _ := f.DocumentDiagnosticsFromCache(filePath)
 	for _, issue := range issues {
 		if issue.Range.Overlaps(requestedRange) {
 			log.Debug().Str("method", method).Msg("appending code action for issue " + issue.String())
@@ -436,7 +499,8 @@ func (f *Folder) IssuesFor(filePath string, requestedRange snyk.Range) (matching
 }
 
 func (f *Folder) AllIssuesFor(filePath string) (matchingIssues []snyk.Issue) {
-	return f.DocumentDiagnosticsFromCache(filePath)
+	issues, _ := f.DocumentDiagnosticsFromCache(filePath)
+	return issues
 }
 
 func (f *Folder) ClearDiagnostics() {

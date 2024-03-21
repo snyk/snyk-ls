@@ -29,6 +29,7 @@ import (
 
 type Service interface {
 	DeleteHover(path string)
+	DeleteHoverForIssue(path string, issueID string)
 	Channel() chan DocumentHovers
 	ClearAllHovers()
 	GetHover(path string, pos snyk.Position) Result
@@ -78,6 +79,18 @@ func (s *DefaultHoverService) registerHovers(result DocumentHovers) {
 
 			s.hovers[key] = append(s.hovers[key], newHover)
 			s.hoverIndexes[hoverIndex] = true
+		}
+	}
+}
+
+func (s *DefaultHoverService) DeleteHoverForIssue(path string, issueID string) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	for i, hover := range s.hovers[path] {
+		if hover.Id == issueID {
+			s.hovers[path] = append(s.hovers[path][:i], s.hovers[path][i+1:]...)
+			break
 		}
 	}
 }
