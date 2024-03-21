@@ -20,9 +20,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -72,10 +72,9 @@ func Service() snyk.CommandService {
 }
 
 func (service *serviceImpl) ExecuteCommandData(ctx context.Context, commandData snyk.CommandData, server lsp.Server) (any, error) {
-	log.Debug().Str(
-		"method",
-		"command.serviceImpl.ExecuteCommandData",
-	).Msgf("executing command %s", commandData.CommandId)
+	logger := config.CurrentConfig().Logger().With().Str("method", "command.serviceImpl.ExecuteCommandData").Logger()
+
+	logger.Debug().Msgf("executing command %s", commandData.CommandId)
 
 	command, err := CreateFromCommandData(
 		commandData,
@@ -88,11 +87,16 @@ func (service *serviceImpl) ExecuteCommandData(ctx context.Context, commandData 
 		service.codeScanner,
 	)
 	if err != nil {
-		log.Error().Err(err).Str("method", "command.serviceImpl.ExecuteCommandData").Msg("failed to create command")
+		logger.Err(err).Msg("failed to create command")
 		return nil, err
 	}
 
 	result, err := command.Execute(ctx)
+
+	if err != nil {
+		logger.Err(err).Msg("failed to execute command")
+	}
+
 	if err != nil && strings.Contains(err.Error(), "400 Bad Request") {
 		service.notifier.SendShowMessage(sglsp.MTWarning, "Logging out automatically, available credentials are invalid. Please re-authenticate.")
 		service.authService.Logout(ctx)

@@ -19,8 +19,7 @@ package command
 import (
 	"context"
 	"errors"
-
-	"github.com/rs/zerolog/log"
+	"fmt"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -37,6 +36,8 @@ func (cmd *featureFlagStatus) Command() snyk.CommandData {
 }
 
 func (cmd *featureFlagStatus) Execute(ctx context.Context) (any, error) {
+	logger := config.CurrentConfig().Logger().With().Str("method", "featureFlagStatus.Execute").Logger()
+
 	if config.CurrentConfig().Token() == "" {
 		return nil, errors.New("not authenticated, cannot retrieve feature flag status")
 	}
@@ -54,9 +55,13 @@ func (cmd *featureFlagStatus) Execute(ctx context.Context) (any, error) {
 	ff := snyk_api.FeatureFlagType(ffStr)
 	ffResponse, err := cmd.apiClient.FeatureFlagStatus(ff)
 
+	message := fmt.Sprintf("Feature flag status for '%s': %v", ffStr, ffResponse.Ok)
+	logger.Debug().Msg(message)
+
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get feature flag status for feature flag: " + ffStr)
-		return nil, err
+		logger.Err(err).Msg("Failed to get feature flag status for feature flag: " + ffStr)
+		return snyk_api.FFResponse{Ok: false, UserMessage: err.Error()}, nil
 	}
-	return ffResponse, err
+
+	return snyk_api.FFResponse{Ok: ffResponse.Ok}, nil
 }
