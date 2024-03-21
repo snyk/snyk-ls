@@ -36,7 +36,7 @@ func (cmd *featureFlagStatus) Command() snyk.CommandData {
 }
 
 func (cmd *featureFlagStatus) Execute(ctx context.Context) (any, error) {
-	logger := config.CurrentConfig().Logger()
+	logger := config.CurrentConfig().Logger().With().Str("method", "featureFlagStatus.Execute").Logger()
 
 	if config.CurrentConfig().Token() == "" {
 		return nil, errors.New("not authenticated, cannot retrieve feature flag status")
@@ -52,21 +52,16 @@ func (cmd *featureFlagStatus) Execute(ctx context.Context) (any, error) {
 		return nil, errors.New("invalid feature flag name argument")
 	}
 
-	logger.Debug().Msg("Getting feature flag status for feature flag: " + ffStr)
-
 	ff := snyk_api.FeatureFlagType(ffStr)
 	ffResponse, err := cmd.apiClient.FeatureFlagStatus(ff)
 
-	message := "Feature flag status for: " + ffStr + " is: " + fmt.Sprintf("%v", ffResponse.Ok)
+	message := fmt.Sprintf("Feature flag status for '%s': %v", ffStr, ffResponse.Ok)
 	logger.Debug().Msg(message)
 
 	if err != nil {
 		logger.Err(err).Msg("Failed to get feature flag status for feature flag: " + ffStr)
-		return nil, nil
+		return snyk_api.FFResponse{Ok: false, UserMessage: err.Error()}, nil
 	}
 
-	isFeatureFlagEnable := snyk_api.FFResponse{
-		Ok: ffResponse.Ok,
-	}
-	return isFeatureFlagEnable, nil
+	return snyk_api.FFResponse{Ok: ffResponse.Ok}, nil
 }

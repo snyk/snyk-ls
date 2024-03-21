@@ -93,8 +93,6 @@ func (service *serviceImpl) ExecuteCommandData(ctx context.Context, commandData 
 
 	result, err := command.Execute(ctx)
 
-	logger.Debug().Msgf("%v", result)
-
 	if err != nil {
 		logger.Err(err).Msg("failed to execute command")
 	}
