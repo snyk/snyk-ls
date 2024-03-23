@@ -18,7 +18,31 @@ package code
 
 import (
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 )
+
+type identifiers struct {
+	CWE  []string `json:"CWE,omitempty"`
+	GHSA []string `json:"GHSA,omitempty"`
+	CVE  []string `json:"CVE,omitempty"`
+}
+
+type codeIssue struct {
+	Id             string        `json:"id"`
+	Name           string        `json:"name"`
+	Title          string        `json:"title"`
+	Severity       string        `json:"severity"`
+	Description    string        `json:"description"`
+	Version        string        `json:"version"`
+	PackageManager string        `json:"packageManager"`
+	From           []string      `json:"from"`
+	Identifiers    identifiers   `json:"identifiers,omitempty"`
+	FixedIn        []string      `json:"fixedIn,omitempty"`
+	CvssScore      float64       `json:"cvssScore,omitempty"`
+	Exploit        string        `json:"exploit,omitempty"`
+	License        string        `json:"license,omitempty"`
+	lesson         *learn.Lesson `json:"-"`
+}
 
 type SnykAnalysisFailedError struct {
 	Msg string
