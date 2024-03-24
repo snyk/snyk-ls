@@ -38,12 +38,31 @@ func getLearnLink(issue *codeIssue) string {
 		issue.lesson.Url)
 }
 
+func getDataFlowHtml(issue *codeIssue) string {
+	dataFlowHtml := ""
+	for i, flow := range issue.DataFlow {
+		dataFlowHtml += fmt.Sprintf(`
+		<div class="data-flow-row">
+		  <span class="data-flow-number">%d</span>
+		  <span class="data-flow-blank"> </span>
+		  <span class="data-flow-filepath">%s:%d</span>
+		  <span class="data-flow-delimiter">|</span>
+		  <span class="data-flow-text">%s</span>
+		</div>`, i+1, flow.FilePath, flow.Position, flow.Content)
+	}
+	return dataFlowHtml
+}
+
 func getDetailsHtml(issue *codeIssue) string {
+	dataFlowHtml := getDataFlowHtml(issue)
+
 	html := replaceVariableInHtml(detailsHtmlTemplate, "issueId", issue.Id)
 	html = replaceVariableInHtml(html, "issueTitle", issue.Title)
 	html = replaceVariableInHtml(html, "severityText", issue.Severity)
 	html = replaceVariableInHtml(html, "vulnerableModule", issue.Name)
 	html = replaceVariableInHtml(html, "learnLink", getLearnLink(issue))
+	html = replaceVariableInHtml(html, "dataFlow", dataFlowHtml)
+	html = replaceVariableInHtml(html, "dataFlowCount", fmt.Sprintf("%d", len(issue.DataFlow)))
 
 	return html
 }

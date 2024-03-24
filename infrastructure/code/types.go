@@ -28,20 +28,21 @@ type identifiers struct {
 }
 
 type codeIssue struct {
-	Id             string        `json:"id"`
-	Name           string        `json:"name"`
-	Title          string        `json:"title"`
-	Severity       string        `json:"severity"`
-	Description    string        `json:"description"`
-	Version        string        `json:"version"`
-	PackageManager string        `json:"packageManager"`
-	From           []string      `json:"from"`
-	Identifiers    identifiers   `json:"identifiers,omitempty"`
-	FixedIn        []string      `json:"fixedIn,omitempty"`
-	CvssScore      float64       `json:"cvssScore,omitempty"`
-	Exploit        string        `json:"exploit,omitempty"`
-	License        string        `json:"license,omitempty"`
-	lesson         *learn.Lesson `json:"-"`
+	Id             string                  `json:"id"`
+	Name           string                  `json:"name"`
+	Title          string                  `json:"title"`
+	Severity       string                  `json:"severity"`
+	Description    string                  `json:"description"`
+	Version        string                  `json:"version"`
+	PackageManager string                  `json:"packageManager"`
+	From           []string                `json:"from"`
+	Identifiers    identifiers             `json:"identifiers,omitempty"`
+	FixedIn        []string                `json:"fixedIn,omitempty"`
+	CvssScore      float64                 `json:"cvssScore,omitempty"`
+	Exploit        string                  `json:"exploit,omitempty"`
+	License        string                  `json:"license,omitempty"`
+	lesson         *learn.Lesson           `json:"-"`
+	DataFlow       []*snyk.DataFlowElement `json:"dataFlow,omitempty"`
 }
 
 type SnykAnalysisFailedError struct {

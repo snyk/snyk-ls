@@ -107,15 +107,17 @@
     </section>
     <section id="suggestion-info" class="delimiter-top">
       <div id="description" class="suggestion-text"></div>
-      <div class="suggestion-links">
-        <div id="lead-url" class="clickable hidden">
-          <img class="icon" src="${images['icon-external']}" /> More info
-        </div>
+    </section>
+
+    <!-- Data Flow -->
+    <section class="data-flow">
+      <h2>Data Flow - ${dataFlowCount} steps</h2>
+      <div class="data-flow-body">
+        ${dataFlow}
       </div>
     </section>
-    <section class="delimiter-top suggestion-details-content">
-      <div id="suggestion-details" class="suggestion-details"></div>
-    </section>
+
+    <!-- TODO: External example fixes -->
   </div>
   <script nonce="${nonce}">
     if (document.getElementById("learn--link")) {

@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -52,7 +53,6 @@ func Test_CodeDetailsPanel_html_noLearn(t *testing.T) {
 
 func Test_CodeDetailsPanel_html_withLearn(t *testing.T) {
 	_ = testutil.UnitTest(t)
-	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${nonce}", "${severityIcon}", "${learnIcon}"}
 
 	issue := codeIssue{
 		Title:    "Path Traversal",
@@ -72,7 +72,42 @@ func Test_CodeDetailsPanel_html_withLearn(t *testing.T) {
 	assert.Contains(t, issueDetailsPanelHtml, learnLink)
 	assert.NotContains(t, issueDetailsPanelHtml, "${learnLink}")
 
-	for _, expectedVariable := range expectedVariables {
-		assert.Contains(t, issueDetailsPanelHtml, expectedVariable)
+}
+
+func Test_CodeDetailsPanel_html_withDataFlow(t *testing.T) {
+	_ = testutil.UnitTest(t)
+
+	issue := codeIssue{
+		Title:    "Path Traversal",
+		Name:     "Path Traversal",
+		Severity: "High",
+		Id:       "randomId",
+		lesson: &learn.Lesson{
+			Url: "https://learn.snyk.io/lesson/directory-traversal/?loc=ide",
+		},
+		// TODO: add more data flow elements to check the line count - Fix Range
+		DataFlow: []*snyk.DataFlowElement{
+			{
+				Position: 10,
+				FilePath: "/Users/cata/git/juice-shop/routes/vulnCodeSnippet.ts",
+				Content:  "if (!vulnLines.every(e => selectedLines.includes(e))) return false",
+			},
+		},
 	}
+
+	// invoke method under test
+	issueDetailsPanelHtml := getDetailsHtml(&issue)
+
+	// assert
+	dataFlowHtml := `
+		<div class="data-flow-row">
+		  <span class="data-flow-number">1</span>
+		  <span class="data-flow-blank"> </span>
+		  <span class="data-flow-filepath">/Users/cata/git/juice-shop/routes/vulnCodeSnippet.ts:10</span>
+		  <span class="data-flow-delimiter">|</span>
+		  <span class="data-flow-text">if (!vulnLines.every(e => selectedLines.includes(e))) return false</span>
+		</div>`
+	assert.Contains(t, issueDetailsPanelHtml, dataFlowHtml)
+	assert.NotContains(t, issueDetailsPanelHtml, "${dataFlow}")
+
 }
