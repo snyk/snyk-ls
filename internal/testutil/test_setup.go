@@ -37,6 +37,7 @@ func IntegTest(t *testing.T) *config.Config {
 	return prepareTestHelper(t, integTestEnvVar, false)
 }
 
+// TODO: remove useConsistentIgnores once we have fully rolled out the feature
 func SmokeTest(t *testing.T, useConsistentIgnores bool) *config.Config {
 	t.Helper()
 	return prepareTestHelper(t, smokeTestEnvVar, useConsistentIgnores)
