@@ -27,7 +27,7 @@ import (
 
 func Test_CodeDetailsPanel_html_withDataFlow(t *testing.T) {
 	_ = testutil.UnitTest(t)
-	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${nonce}", "${severityIcon}", "${learnIcon}"}
+	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${nonce}", "${severityIcon}"}
 
 	issue := snyk.Issue{
 		ID:       "java/DontUsePrintStackTrace",

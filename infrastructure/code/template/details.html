@@ -67,27 +67,6 @@
     .vscode-light .dark-only {
       display: none;
     }
-
-    .learn {
-      opacity: 0;
-      height: 0;
-      margin-top: 0;
-      font-size: 1.3rem;
-    }
-
-    .learn.show {
-      margin-top: 6px;
-      opacity: 1;
-      height: auto;
-      transition-duration: 500ms;
-      transition-property: height, opacity, margin-top;
-    }
-
-    .learn--link {
-      margin-left: 3px;
-    }
-
-    .learn__code .learn--link {}
   </style>
   ${headerEnd}
 </head>
@@ -100,10 +79,6 @@
       </div>
       <div class="suggestion-text">${issueTitle}</div>
       <div id="meta" class="suggestion-metas">${meta}</div>
-      <div class="learn" id="learn">
-        <img class="icon" src="${learnIcon}" alt="learnIcon" />
-        ${learnLink}
-      </div>
     </section>
     <section id="suggestion-info" class="delimiter-top">
       <div id="description" class="suggestion-text"></div>
@@ -119,11 +94,6 @@
 
     <!-- TODO: External example fixes -->
   </div>
-  <script nonce="${nonce}">
-    if (document.getElementById("learn--link")) {
-      document.getElementById("learn").className = "learn show"
-    }
-  </script>
 </body>
 
 </html>

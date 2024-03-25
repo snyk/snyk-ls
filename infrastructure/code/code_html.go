@@ -31,15 +31,6 @@ func replaceVariableInHtml(html string, variableName string, variableValue strin
 	return strings.ReplaceAll(html, fmt.Sprintf("${%s}", variableName), variableValue)
 }
 
-// func getLearnLink(issue *snyk.CodeIssueData) string {
-// 	if issue.lesson == nil {
-// 		return ""
-// 	}
-
-// 	return fmt.Sprintf("<a class='learn--link' id='learn--link' href='%s'>Learn about this vulnerability</a>",
-// 		issue.lesson.Url)
-// }
-
 func getDataFlowHtml(issue snyk.CodeIssueData) string {
 	dataFlowHtml := ""
 	for i, flow := range issue.DataFlow {
@@ -61,7 +52,6 @@ func getDetailsHtml(issue snyk.Issue) string {
 	html := replaceVariableInHtml(detailsHtmlTemplate, "issueId", issue.ID)
 	html = replaceVariableInHtml(html, "issueTitle", issue.AdditionalData.(snyk.CodeIssueData).Title)
 	html = replaceVariableInHtml(html, "severityText", issue.Severity.String())
-	// html = replaceVariableInHtml(html, "learnLink", getLearnLink(issue))
 	html = replaceVariableInHtml(html, "dataFlow", dataFlowHtml)
 	html = replaceVariableInHtml(html, "dataFlowCount", fmt.Sprintf("%d", len(issue.AdditionalData.(snyk.CodeIssueData).DataFlow)))
 
