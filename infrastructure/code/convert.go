@@ -394,6 +394,16 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 			}
 
 			d.IsIgnored, d.IgnoreDetails = s.getIgnoreDetails(result)
+			additionalDataDetails := getDetailsHtml(d)
+
+			codeIssueData, ok := d.AdditionalData.(snyk.CodeIssueData)
+			if !ok {
+				log.Error().Msg("Failed to cast additional data to CodeIssueData")
+				return issues, errors.New("failed to cast additional data to CodeIssueData")
+			}
+			codeIssueData.Details = additionalDataDetails
+			d.AdditionalData = codeIssueData
+
 			issues = append(issues, d)
 		}
 	}

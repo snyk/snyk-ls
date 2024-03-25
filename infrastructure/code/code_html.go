@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
@@ -47,13 +49,19 @@ func getDataFlowHtml(issue snyk.CodeIssueData) string {
 }
 
 func getDetailsHtml(issue snyk.Issue) string {
-	dataFlowHtml := getDataFlowHtml(issue.AdditionalData.(snyk.CodeIssueData))
+	additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+	if !ok {
+		log.Error().Msg("Failed to cast additional data to CodeIssueData")
+		return ""
+	}
+
+	dataFlowHtml := getDataFlowHtml(additionalData)
 
 	html := replaceVariableInHtml(detailsHtmlTemplate, "issueId", issue.ID)
-	html = replaceVariableInHtml(html, "issueTitle", issue.AdditionalData.(snyk.CodeIssueData).Title)
+	html = replaceVariableInHtml(html, "issueTitle", additionalData.Title)
 	html = replaceVariableInHtml(html, "severityText", issue.Severity.String())
 	html = replaceVariableInHtml(html, "dataFlow", dataFlowHtml)
-	html = replaceVariableInHtml(html, "dataFlowCount", fmt.Sprintf("%d", len(issue.AdditionalData.(snyk.CodeIssueData).DataFlow)))
+	html = replaceVariableInHtml(html, "dataFlowCount", fmt.Sprintf("%d", len(additionalData.DataFlow)))
 
 	return html
 }
