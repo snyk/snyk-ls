@@ -384,7 +384,7 @@ func getSarifResponseJson2(filePath string) string {
 `, filePath, filePath, filePath, filePath, filePath)
 }
 
-func (f *FakeCodeScannerClient) UploadAndAnalyze(ctx context.Context, host string, path string, files <-chan string,
+func (f *FakeCodeScannerClient) UploadAndAnalyze(ctx context.Context, path string, files <-chan string,
 	changedFiles map[string]bool) (*codeClientSarif.SarifResponse,
 	codeClientBundle.Bundle, error) {
 	var analysisResponse codeClientSarif.SarifResponse
@@ -400,7 +400,7 @@ type FakeBundle struct {
 	rootPath string
 }
 
-func (f FakeBundle) UploadBatch(ctx context.Context, host string, batch *codeClientBundle.Batch) error {
+func (f FakeBundle) UploadBatch(ctx context.Context, batch *codeClientBundle.Batch) error {
 	return nil
 }
 

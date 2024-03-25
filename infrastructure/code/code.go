@@ -309,9 +309,7 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
 	files <-chan string,
 	changedFiles map[string]bool,
 ) (issues []snyk.Issue, err error) {
-	c := config.CurrentConfig()
-
-	response, bundle, err := sc.codeScanner.UploadAndAnalyze(ctx, c.SnykCodeApi(), path, files, changedFiles)
+	response, bundle, err := sc.codeScanner.UploadAndAnalyze(ctx, path, files, changedFiles)
 	if ctx.Err() != nil {
 		log.Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
 		return []snyk.Issue{}, nil
