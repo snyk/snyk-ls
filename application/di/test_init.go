@@ -82,8 +82,7 @@ func TestInit(t *testing.T) {
 	learnService = learnMock
 	codeClientScanner := &code.FakeCodeScannerClient{}
 	codeErrorReporter = code.NewCodeErrorReporter(notifier)
-	codeAnalytics := code.NewCodeAnalytics(analytics)
-	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, codeAnalytics, learnService,
+	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, analytics, learnService,
 		notifier, codeClientScanner)
 	openSourceScanner = oss.NewCLIScanner(instrumentor, errorReporter, analytics, snykCli, learnService, notifier, c)
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)

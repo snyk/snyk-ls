@@ -147,7 +147,6 @@ func initInfrastructure() {
 
 	codeInstrumentor = code.NewCodeInstrumentor()
 	codeErrorReporter = code.NewCodeErrorReporter(notifier)
-	codeAnalytics := code.NewCodeAnalytics(analytics)
 
 	snykCodeClient = code.NewSnykCodeHTTPClient(codeInstrumentor, codeErrorReporter, networkAccess.GetHttpClient)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, codeInstrumentor)
@@ -159,14 +158,14 @@ func initInfrastructure() {
 		bundleManager,
 		codeInstrumentor,
 		codeErrorReporter,
-		codeAnalytics,
 		engine.GetLogger(),
 	)
 
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.NewCLIScanner(instrumentor, errorReporter, analytics, snykCli, learnService, notifier, c)
 	scanNotifier, _ = appNotification.NewScanNotifier(notifier)
-	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, codeAnalytics, learnService, notifier, codeClientScanner)
+	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, analytics, learnService, notifier,
+		codeClientScanner)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
 	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(

@@ -24,7 +24,6 @@ import (
 
 	codeClientBundle "github.com/snyk/code-client-go/bundle"
 	codeClientDeepCode "github.com/snyk/code-client-go/deepcode"
-	codeClientObservability "github.com/snyk/code-client-go/observability"
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 )
 
@@ -386,7 +385,7 @@ func getSarifResponseJson2(filePath string) string {
 }
 
 func (f *FakeCodeScannerClient) UploadAndAnalyze(ctx context.Context, host string, path string, files <-chan string,
-	changedFiles map[string]bool, scanMetrics codeClientObservability.ScanMetrics) (*codeClientSarif.SarifResponse,
+	changedFiles map[string]bool) (*codeClientSarif.SarifResponse,
 	codeClientBundle.Bundle, error) {
 	var analysisResponse codeClientSarif.SarifResponse
 	responseJson := getSarifResponseJson2(path)
