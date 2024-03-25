@@ -20,6 +20,8 @@ import (
 	_ "embed"
 	"fmt"
 	"strings"
+
+	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 //go:embed template/details.html
@@ -29,16 +31,16 @@ func replaceVariableInHtml(html string, variableName string, variableValue strin
 	return strings.ReplaceAll(html, fmt.Sprintf("${%s}", variableName), variableValue)
 }
 
-func getLearnLink(issue *codeIssue) string {
-	if issue.lesson == nil {
-		return ""
-	}
+// func getLearnLink(issue *snyk.CodeIssueData) string {
+// 	if issue.lesson == nil {
+// 		return ""
+// 	}
 
-	return fmt.Sprintf("<a class='learn--link' id='learn--link' href='%s'>Learn about this vulnerability</a>",
-		issue.lesson.Url)
-}
+// 	return fmt.Sprintf("<a class='learn--link' id='learn--link' href='%s'>Learn about this vulnerability</a>",
+// 		issue.lesson.Url)
+// }
 
-func getDataFlowHtml(issue *codeIssue) string {
+func getDataFlowHtml(issue snyk.CodeIssueData) string {
 	dataFlowHtml := ""
 	for i, flow := range issue.DataFlow {
 		dataFlowHtml += fmt.Sprintf(`
@@ -48,21 +50,20 @@ func getDataFlowHtml(issue *codeIssue) string {
 		  <span class="data-flow-filepath">%s:%d</span>
 		  <span class="data-flow-delimiter">|</span>
 		  <span class="data-flow-text">%s</span>
-		</div>`, i+1, flow.FilePath, flow.Position, flow.Content)
+		</div>`, i+1, flow.FilePath, flow.FlowRange.Start.Line+1, flow.Content)
 	}
 	return dataFlowHtml
 }
 
-func getDetailsHtml(issue *codeIssue) string {
-	dataFlowHtml := getDataFlowHtml(issue)
+func getDetailsHtml(issue snyk.Issue) string {
+	dataFlowHtml := getDataFlowHtml(issue.AdditionalData.(snyk.CodeIssueData))
 
-	html := replaceVariableInHtml(detailsHtmlTemplate, "issueId", issue.Id)
-	html = replaceVariableInHtml(html, "issueTitle", issue.Title)
-	html = replaceVariableInHtml(html, "severityText", issue.Severity)
-	html = replaceVariableInHtml(html, "vulnerableModule", issue.Name)
-	html = replaceVariableInHtml(html, "learnLink", getLearnLink(issue))
+	html := replaceVariableInHtml(detailsHtmlTemplate, "issueId", issue.ID)
+	html = replaceVariableInHtml(html, "issueTitle", issue.AdditionalData.(snyk.CodeIssueData).Title)
+	html = replaceVariableInHtml(html, "severityText", issue.Severity.String())
+	// html = replaceVariableInHtml(html, "learnLink", getLearnLink(issue))
 	html = replaceVariableInHtml(html, "dataFlow", dataFlowHtml)
-	html = replaceVariableInHtml(html, "dataFlowCount", fmt.Sprintf("%d", len(issue.DataFlow)))
+	html = replaceVariableInHtml(html, "dataFlowCount", fmt.Sprintf("%d", len(issue.AdditionalData.(snyk.CodeIssueData).DataFlow)))
 
 	return html
 }

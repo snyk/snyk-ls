@@ -95,6 +95,7 @@ type CodeIssueData struct {
 	PriorityScore      int                `json:"priorityScore"`
 	HasAIFix           bool               `json:"hasAIFix"`
 	DataFlow           []DataFlowElement  `json:"dataFlow,omitempty"`
+	Details            string             `json:"details"`
 }
 
 type ExampleCommitFix struct {
