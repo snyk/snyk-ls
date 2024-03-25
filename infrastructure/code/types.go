@@ -20,12 +20,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
-type identifiers struct {
-	CWE  []string `json:"CWE,omitempty"`
-	GHSA []string `json:"GHSA,omitempty"`
-	CVE  []string `json:"CVE,omitempty"`
-}
-
 type SnykAnalysisFailedError struct {
 	Msg string
 }
