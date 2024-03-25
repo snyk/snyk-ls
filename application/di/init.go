@@ -146,7 +146,7 @@ func initInfrastructure() {
 	}
 
 	codeInstrumentor = code.NewCodeInstrumentor()
-	codeErrorReporter = code.NewCodeErrorReporter(notifier)
+	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 
 	snykCodeClient = code.NewSnykCodeHTTPClient(codeInstrumentor, codeErrorReporter, networkAccess.GetHttpClient)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, codeInstrumentor)

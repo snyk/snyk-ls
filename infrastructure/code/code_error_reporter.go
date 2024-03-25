@@ -17,50 +17,33 @@
 package code
 
 import (
-	"time"
-
-	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog/log"
 	codeClient "github.com/snyk/code-client-go/observability"
 
-	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/notification"
+	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 )
 
 // A Sentry implementation of our error reporter that respects user preferences regarding tracking
 // And can be used for Snyk Code scanning
 type codeErrorReporter struct {
-	notifier notification.Notifier
+	errorReporter error_reporting.ErrorReporter
 }
 
 func (c codeErrorReporter) FlushErrorReporting() {
-	// Set the timeout to the maximum duration the program can afford to wait
-	defer sentry.Flush(2 * time.Second)
+	c.errorReporter.FlushErrorReporting()
 }
 
 func (c *codeErrorReporter) CaptureError(err error, options codeClient.ErrorReporterOptions) bool {
-	if options.ErrorDiagnosticPath != "" && c.notifier != nil {
-		c.notifier.SendErrorDiagnostic(options.ErrorDiagnosticPath, err)
+	if options.ErrorDiagnosticPath != "" {
+		return c.errorReporter.CaptureErrorAndReportAsIssue(options.ErrorDiagnosticPath, err)
 	} else {
-		c.notifier.SendError(err)
+		return c.errorReporter.CaptureError(err)
 	}
-	return c.sendToSentry(err)
 }
 
-func (s *codeErrorReporter) sendToSentry(err error) (reportedToSentry bool) {
-	if config.CurrentConfig().IsErrorReportingEnabled() {
-		eventId := sentry.CaptureException(err)
-		if eventId != nil {
-			log.Info().Err(err).Str("method", "CaptureError").Msgf("Sent error to Sentry (ID: %v)", *eventId)
-			return true
-		}
-	}
-	return false
-}
-
-func NewCodeErrorReporter(notifier notification.Notifier) codeClient.ErrorReporter {
+func NewCodeErrorReporter(errorReporter error_reporting.ErrorReporter) codeClient.ErrorReporter {
 	return &codeErrorReporter{
-		notifier: notifier,
+		errorReporter: errorReporter,
 	}
 }
 

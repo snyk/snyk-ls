@@ -28,11 +28,11 @@ import (
 )
 
 // A Sentry implementation of our error reporter that respects user preferences regarding tracking
-type gdprAwareSentryErrorReporter struct {
+type GDPRAwareSentryErrorReporter struct {
 	notifier notification.Notifier
 }
 
-func (s *gdprAwareSentryErrorReporter) CaptureErrorAndReportAsIssue(path string, err error) bool {
+func (s *GDPRAwareSentryErrorReporter) CaptureErrorAndReportAsIssue(path string, err error) bool {
 	if s.notifier != nil {
 		s.notifier.SendErrorDiagnostic(path, err)
 	}
@@ -41,20 +41,20 @@ func (s *gdprAwareSentryErrorReporter) CaptureErrorAndReportAsIssue(path string,
 
 func NewSentryErrorReporter(notifier notification.Notifier) error_reporting.ErrorReporter {
 	initializeSentry()
-	return &gdprAwareSentryErrorReporter{notifier: notifier}
+	return &GDPRAwareSentryErrorReporter{notifier: notifier}
 }
 
-func (s *gdprAwareSentryErrorReporter) FlushErrorReporting() {
+func (s *GDPRAwareSentryErrorReporter) FlushErrorReporting() {
 	// Set the timeout to the maximum duration the program can afford to wait
 	defer sentry.Flush(2 * time.Second)
 }
 
-func (s *gdprAwareSentryErrorReporter) CaptureError(err error) bool {
+func (s *GDPRAwareSentryErrorReporter) CaptureError(err error) bool {
 	s.notifier.SendError(err)
 	return s.sendToSentry(err)
 }
 
-func (s *gdprAwareSentryErrorReporter) sendToSentry(err error) (reportedToSentry bool) {
+func (s *GDPRAwareSentryErrorReporter) sendToSentry(err error) (reportedToSentry bool) {
 	if config.CurrentConfig().IsErrorReportingEnabled() {
 		eventId := sentry.CaptureException(err)
 		if eventId != nil {
