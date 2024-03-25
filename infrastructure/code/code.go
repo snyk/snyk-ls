@@ -192,7 +192,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 
 	var results []snyk.Issue
 	if sc.useIgnoresFlow() {
-		results, err = sc.UploadAndAnalyzeWithIgnores(span.Context(), folderPath, files, startTime, changedFiles)
+		results, err = sc.UploadAndAnalyzeWithIgnores(span.Context(), folderPath, files, metrics, changedFiles)
 	} else {
 		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
 	}
@@ -303,14 +303,9 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
 	path string,
 	files <-chan string,
-	scanStartTime time.Time,
+	scanMetrics codeClientObservability.ScanMetrics,
 	changedFiles map[string]bool,
 ) (issues []snyk.Issue, err error) {
-	if scanStartTime.IsZero() {
-		scanStartTime = time.Now()
-	}
-
-	scanMetrics := codeClientObservability.NewScanMetrics(scanStartTime, 0)
 	c := config.CurrentConfig()
 
 	response, bundle, err := sc.codeScanner.UploadAndAnalyze(ctx, c.SnykCodeApi(), path, files, changedFiles, scanMetrics)
