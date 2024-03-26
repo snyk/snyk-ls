@@ -23,7 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/data_structure"
@@ -47,7 +46,7 @@ func TestIsSastEnabled(t *testing.T) {
 
 	scanner := &Scanner{
 		SnykApiClient: apiClient,
-		errorReporter: error_reporting.NewTestErrorReporter(),
+		errorReporter: newTestCodeErrorReporter(),
 		notifier:      notification.NewNotifier(),
 	}
 
@@ -84,7 +83,7 @@ func TestIsSastEnabled(t *testing.T) {
 			// overwrite notifiedScanner, as we want our separate notifier
 			notifiedScanner := &Scanner{
 				SnykApiClient: apiClient,
-				errorReporter: error_reporting.NewTestErrorReporter(),
+				errorReporter: newTestCodeErrorReporter(),
 				notifier:      notifier,
 			}
 			actionMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()

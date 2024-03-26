@@ -31,10 +31,9 @@ import (
 
 	"github.com/rs/zerolog/log"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
-	codeClient "github.com/snyk/code-client-go/sarif"
+	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	performance2 "github.com/snyk/snyk-ls/domain/observability/performance"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code/encoding"
@@ -68,7 +67,7 @@ func issueSeverity(snykSeverity string) snyk.Severity {
 type SnykCodeHTTPClient struct {
 	client        func() *http.Client
 	instrumentor  codeClientObservability.Instrumentor
-	errorReporter error_reporting.ErrorReporter
+	errorReporter codeClientObservability.ErrorReporter
 }
 
 type bundleResponse struct {
@@ -88,7 +87,7 @@ type FiltersResponse struct {
 
 func NewSnykCodeHTTPClient(
 	instrumentor codeClientObservability.Instrumentor,
-	errorReporter error_reporting.ErrorReporter,
+	errorReporter codeClientObservability.ErrorReporter,
 	client func() *http.Client,
 ) *SnykCodeHTTPClient {
 	return &SnykCodeHTTPClient{client, instrumentor, errorReporter}
@@ -216,7 +215,7 @@ func (s *SnykCodeHTTPClient) httpCall(req *http.Request) (*http.Response, []byte
 	response, err := s.client().Do(req)
 	if err != nil {
 		log.Err(err).Str("method", method).Msgf("got http error")
-		s.errorReporter.CaptureErrorAndReportAsIssue(req.RequestURI, err)
+		s.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: req.RequestURI})
 		return nil, nil, err
 	}
 
@@ -230,7 +229,7 @@ func (s *SnykCodeHTTPClient) httpCall(req *http.Request) (*http.Response, []byte
 
 	if err != nil {
 		log.Err(err).Str("method", method).Msgf("error reading response body")
-		s.errorReporter.CaptureErrorAndReportAsIssue(req.RequestURI, err)
+		s.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: req.RequestURI})
 		return nil, nil, err
 	}
 	return response, responseBody, nil
@@ -369,7 +368,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		return nil, failed, err
 	}
 
-	var response codeClient.SarifResponse
+	var response codeClientSarif.SarifResponse
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
 		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
@@ -400,7 +399,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 	return issues, status, err
 }
 
-func logSarifResponse(method string, sarifResponse codeClient.SarifResponse) {
+func logSarifResponse(method string, sarifResponse codeClientSarif.SarifResponse) {
 	log.Debug().
 		Str("method", method).
 		Str("status", sarifResponse.Status).

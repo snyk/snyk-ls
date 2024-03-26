@@ -34,7 +34,8 @@ import (
 	"github.com/hexops/gotextdiff/myers"
 	"github.com/hexops/gotextdiff/span"
 	"github.com/rs/zerolog/log"
-	codeClient "github.com/snyk/code-client-go/sarif"
+
+	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"golang.org/x/exp/slices"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -84,17 +85,17 @@ func getIssueKey(ruleId string, path string, startLine int, endLine int, startCo
 }
 
 type SarifConverter struct {
-	sarif codeClient.SarifResponse
+	sarif codeClientSarif.SarifResponse
 }
 
-func (s *SarifConverter) getReferences(r codeClient.Rule) (references []snyk.Reference) {
+func (s *SarifConverter) getReferences(r codeClientSarif.Rule) (references []snyk.Reference) {
 	for _, commit := range s.getExampleCommits(r) {
 		references = append(references, commit.toReference())
 	}
 	return references
 }
 
-func (s *SarifConverter) getCodeIssueType(r codeClient.Rule) snyk.Type {
+func (s *SarifConverter) getCodeIssueType(r codeClientSarif.Rule) snyk.Type {
 	isSecurity := slices.ContainsFunc(r.Properties.Categories, func(category string) bool {
 		return strings.ToLower(category) == "security"
 	})
@@ -106,7 +107,7 @@ func (s *SarifConverter) getCodeIssueType(r codeClient.Rule) snyk.Type {
 	return snyk.CodeQualityIssue
 }
 
-func (s *SarifConverter) cwe(r codeClient.Rule) string {
+func (s *SarifConverter) cwe(r codeClientSarif.Rule) string {
 	count := len(r.Properties.Cwe)
 	if count == 0 {
 		return ""
@@ -131,7 +132,7 @@ func (s *SarifConverter) cwe(r codeClient.Rule) string {
 	return builder.String()
 }
 
-func (s *SarifConverter) getCodeFlow(r codeClient.Result, baseDir string) (dataflow []snyk.DataFlowElement) {
+func (s *SarifConverter) getCodeFlow(r codeClientSarif.Result, baseDir string) (dataflow []snyk.DataFlowElement) {
 	flows := r.CodeFlows
 	dedupMap := map[string]bool{}
 	for _, cFlow := range flows {
@@ -177,7 +178,7 @@ func (s *SarifConverter) getCodeFlow(r codeClient.Result, baseDir string) (dataf
 	return dataflow
 }
 
-func (s *SarifConverter) priorityScore(r codeClient.Result) string {
+func (s *SarifConverter) priorityScore(r codeClientSarif.Result) string {
 	priorityScore := r.Properties.PriorityScore
 	if priorityScore == 0 {
 		return ""
@@ -188,14 +189,14 @@ func (s *SarifConverter) priorityScore(r codeClient.Result) string {
 	return builder.String()
 }
 
-func (s *SarifConverter) titleWithLeadingPipeOrEmpty(r codeClient.Rule) string {
+func (s *SarifConverter) titleWithLeadingPipeOrEmpty(r codeClientSarif.Rule) string {
 	if r.ShortDescription.Text != "" {
 		return fmt.Sprintf(" | %s", r.ShortDescription.Text)
 	}
 	return ""
 }
 
-func (s *SarifConverter) detailsOrEmpty(r codeClient.Rule) string {
+func (s *SarifConverter) detailsOrEmpty(r codeClientSarif.Rule) string {
 	details := r.Help.Markdown
 	if details != "" {
 		return regexp.MustCompile(`##\sDetails`).ReplaceAllString(details, "### Details")
@@ -203,7 +204,7 @@ func (s *SarifConverter) detailsOrEmpty(r codeClient.Rule) string {
 	return ""
 }
 
-func (s *SarifConverter) formattedMessage(r codeClient.Result, rule codeClient.Rule, baseDir string) string {
+func (s *SarifConverter) formattedMessage(r codeClientSarif.Result, rule codeClientSarif.Rule, baseDir string) string {
 	const separator = "\n\n\n\n"
 	var builder strings.Builder
 	builder.Grow(500)
@@ -233,7 +234,7 @@ func (s *SarifConverter) formattedMessage(r codeClient.Result, rule codeClient.R
 	return builder.String()
 }
 
-func (s *SarifConverter) getMessage(r codeClient.Result, rule codeClient.Rule) string {
+func (s *SarifConverter) getMessage(r codeClientSarif.Result, rule codeClientSarif.Rule) string {
 	text := r.Message.Text
 	if rule.ShortDescription.Text != "" {
 		text = fmt.Sprintf("%s: %s", rule.ShortDescription.Text, text)
@@ -245,7 +246,7 @@ func (s *SarifConverter) getMessage(r codeClient.Result, rule codeClient.Rule) s
 	return text
 }
 
-func (s *SarifConverter) getFixDescriptionsForRule(r codeClient.Rule, commitFixIndex int) string {
+func (s *SarifConverter) getFixDescriptionsForRule(r codeClientSarif.Rule, commitFixIndex int) string {
 	fixDescriptions := r.Properties.ExampleCommitDescriptions
 	if len(fixDescriptions) > commitFixIndex {
 		return fixDescriptions[commitFixIndex]
@@ -253,7 +254,7 @@ func (s *SarifConverter) getFixDescriptionsForRule(r codeClient.Rule, commitFixI
 	return ""
 }
 
-func (s *SarifConverter) getExampleCommits(r codeClient.Rule) (exampleCommits []exampleCommit) {
+func (s *SarifConverter) getExampleCommits(r codeClientSarif.Rule) (exampleCommits []exampleCommit) {
 	if len(r.Properties.ExampleCommitFixes) == 0 {
 		return exampleCommits
 	}
@@ -261,7 +262,7 @@ func (s *SarifConverter) getExampleCommits(r codeClient.Rule) (exampleCommits []
 		exampleCommits = append(exampleCommits, exampleCommit{
 			index:       i,
 			description: s.getFixDescriptionsForRule(r, i),
-			fix: codeClient.ExampleCommitFix{
+			fix: codeClientSarif.ExampleCommitFix{
 				CommitURL: fix.CommitURL,
 				Lines:     fix.Lines,
 			},
@@ -270,13 +271,13 @@ func (s *SarifConverter) getExampleCommits(r codeClient.Rule) (exampleCommits []
 	return exampleCommits
 }
 
-func (s *SarifConverter) getRule(r codeClient.Run, id string) codeClient.Rule {
+func (s *SarifConverter) getRule(r codeClientSarif.Run, id string) codeClientSarif.Rule {
 	for _, r := range r.Tool.Driver.Rules {
 		if r.ID == id {
 			return r
 		}
 	}
-	return codeClient.Rule{}
+	return codeClientSarif.Rule{}
 }
 
 func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err error) {
@@ -399,7 +400,7 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 	return issues, errs
 }
 
-func (s *SarifConverter) getIgnoreDetails(result codeClient.Result) (bool, *snyk.IgnoreDetails) {
+func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, *snyk.IgnoreDetails) {
 	isIgnored := false
 	var ignoreDetails *snyk.IgnoreDetails
 
@@ -436,7 +437,7 @@ func (s *SarifConverter) getIgnoreDetails(result codeClient.Result) (bool, *snyk
 	return isIgnored, ignoreDetails
 }
 
-func (s *SarifConverter) getMarkers(r codeClient.Result, baseDir string) ([]snyk.Marker, error) {
+func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir string) ([]snyk.Marker, error) {
 	markers := make([]snyk.Marker, 0)
 
 	// Example markdown string:

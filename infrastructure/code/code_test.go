@@ -27,17 +27,14 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
-	"github.com/snyk/snyk-ls/internal/float"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -172,10 +169,11 @@ func TestCreateBundle(t *testing.T) {
 		scanner := New(
 			NewBundler(snykCodeMock, NewCodeInstrumentor()),
 			&snyk_api.FakeApiClient{CodeEnabled: true},
-			error_reporting.NewTestErrorReporter(),
+			newTestCodeErrorReporter(),
 			ux2.NewTestAnalytics(),
 			nil,
 			notification.NewNotifier(),
+			&FakeCodeScannerClient{},
 		)
 		tempDir := t.TempDir()
 		file := filepath.Join(tempDir, configFile)
@@ -259,10 +257,11 @@ func setupTestScanner(t *testing.T) (*FakeSnykCodeClient, *Scanner) {
 	scanner := New(
 		NewBundler(snykCodeMock, NewCodeInstrumentor()),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
-		error_reporting.NewTestErrorReporter(),
+		newTestCodeErrorReporter(),
 		ux2.NewTestAnalytics(),
 		learnMock,
 		notification.NewNotifier(),
+		&FakeCodeScannerClient{},
 	)
 
 	return snykCodeMock, scanner
@@ -281,10 +280,11 @@ func TestUploadAndAnalyze(t *testing.T) {
 			c := New(
 				NewBundler(snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
-				error_reporting.NewTestErrorReporter(),
+				newTestCodeErrorReporter(),
 				ux2.NewTestAnalytics(),
 				learnMock,
 				notification.NewNotifier(),
+				&FakeCodeScannerClient{},
 			)
 			baseDir, firstDoc, _, content1, _ := setupDocs(t)
 			fullPath := uri.PathFromUri(firstDoc.URI)
@@ -311,10 +311,11 @@ func TestUploadAndAnalyze(t *testing.T) {
 			c := New(
 				NewBundler(snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
-				error_reporting.NewTestErrorReporter(),
+				newTestCodeErrorReporter(),
 				ux2.NewTestAnalytics(),
 				learnMock,
 				notification.NewNotifier(),
+				&FakeCodeScannerClient{},
 			)
 			filePath, path := TempWorkdirWithVulnerabilities(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
@@ -352,15 +353,16 @@ func TestUploadAndAnalyze(t *testing.T) {
 			c := New(
 				NewBundler(snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
-				error_reporting.NewTestErrorReporter(),
+				newTestCodeErrorReporter(),
 				analytics,
 				learnMock,
 				notification.NewNotifier(),
+				&FakeCodeScannerClient{},
 			)
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
 			files := []string{diagnosticUri}
-			metrics := codeClientObservability.NewScanMetrics(time.Now(), 0)
+			metrics := c.newMetrics(time.Now())
 
 			// execute
 			_, _ = c.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
@@ -370,8 +372,8 @@ func TestUploadAndAnalyze(t *testing.T) {
 				t, ux2.AnalysisIsReadyProperties{
 					AnalysisType:      ux2.CodeSecurity,
 					Result:            ux2.Success,
-					FileCount:         1,
-					DurationInSeconds: float.ToFixed(metrics.GetDuration().Seconds(), 2),
+					FileCount:         metrics.lastScanFileCount,
+					DurationInSeconds: metrics.lastScanDurationInSeconds,
 				}, analytics.GetAnalytics()[0],
 			)
 		},
@@ -386,17 +388,24 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 		Return(&learn.Lesson{}, nil).AnyTimes()
 	testutil.UnitTest(t)
 	snykCodeMock := &FakeSnykCodeClient{}
+
+	diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
+	defer func(path string) { _ = os.RemoveAll(path) }(path)
+	files := []string{diagnosticUri}
+	fakeCodeScanner := &FakeCodeScannerClient{rootPath: diagnosticUri}
+
 	c := New(
 		NewBundler(snykCodeMock, NewCodeInstrumentor()),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
-		error_reporting.NewTestErrorReporter(),
+		newTestCodeErrorReporter(),
 		ux2.NewTestAnalytics(),
 		learnMock,
 		notification.NewNotifier(),
+		fakeCodeScanner,
 	)
-
-	issues, _ := c.UploadAndAnalyzeWithIgnores(context.Background(), "test")
-	assert.Equal(t, false, issues[0].IsIgnored)
+	issues, _ := c.UploadAndAnalyzeWithIgnores(context.Background(), "", sliceToChannel(files), map[string]bool{})
+	assert.True(t, fakeCodeScanner.UploadAndAnalyzeWasCalled)
+	assert.False(t, issues[0].IsIgnored)
 	assert.Nil(t, issues[0].IgnoreDetails)
 	assert.Equal(t, true, issues[1].IsIgnored)
 	assert.Equal(t, "wont-fix", issues[1].IgnoreDetails.Category)
@@ -551,10 +560,11 @@ func Test_Scan(t *testing.T) {
 		c := New(
 			NewBundler(snykCodeMock, NewCodeInstrumentor()),
 			&snyk_api.FakeApiClient{CodeEnabled: false},
-			error_reporting.NewTestErrorReporter(),
+			newTestCodeErrorReporter(),
 			ux2.NewTestAnalytics(),
 			nil,
 			notification.NewNotifier(),
+			&FakeCodeScannerClient{},
 		)
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
@@ -579,10 +589,11 @@ func Test_Scan(t *testing.T) {
 		c := New(
 			NewBundler(snykCodeMock, NewCodeInstrumentor()),
 			snykApiMock,
-			error_reporting.NewTestErrorReporter(),
+			newTestCodeErrorReporter(),
 			ux2.NewTestAnalytics(),
 			learnMock,
 			notification.NewNotifier(),
+			&FakeCodeScannerClient{},
 		)
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
@@ -607,10 +618,11 @@ func Test_Scan(t *testing.T) {
 		c := New(
 			NewBundler(snykCodeMock, NewCodeInstrumentor()),
 			snykApiMock,
-			error_reporting.NewTestErrorReporter(),
+			newTestCodeErrorReporter(),
 			ux2.NewTestAnalytics(),
 			learnMock,
 			notification.NewNotifier(),
+			&FakeCodeScannerClient{},
 		)
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
@@ -662,7 +674,7 @@ func writeGitIgnoreIntoDir(t *testing.T, ignorePatterns string, tempDir string) 
 }
 
 func Test_IsEnabled(t *testing.T) {
-	scanner := &Scanner{errorReporter: error_reporting.NewTestErrorReporter()}
+	scanner := &Scanner{errorReporter: newTestCodeErrorReporter()}
 	t.Run(
 		"should return true if Snyk Code is generally enabled", func(t *testing.T) {
 			config.CurrentConfig().SetSnykCodeEnabled(true)
@@ -725,10 +737,11 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			c := New(
 				NewBundler(snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
-				error_reporting.NewTestErrorReporter(),
+				newTestCodeErrorReporter(),
 				analytics,
 				learnMock,
 				notification.NewNotifier(),
+				&FakeCodeScannerClient{},
 			)
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			t.Cleanup(
@@ -762,10 +775,11 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			c := New(
 				NewBundler(snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
-				error_reporting.NewTestErrorReporter(),
+				newTestCodeErrorReporter(),
 				analytics,
 				learnMock,
 				notification.NewNotifier(),
+				&FakeCodeScannerClient{},
 			)
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			t.Cleanup(
@@ -796,10 +810,11 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			c := New(
 				NewBundler(snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
-				error_reporting.NewTestErrorReporter(),
+				newTestCodeErrorReporter(),
 				analytics,
 				learnMock,
 				notification.NewNotifier(),
+				&FakeCodeScannerClient{},
 			)
 			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 			t.Cleanup(
@@ -834,7 +849,7 @@ func Test_SastApiCall(t *testing.T) {
 
 	scanner := &Scanner{
 		SnykApiClient: apiClient,
-		errorReporter: error_reporting.NewTestErrorReporter(),
+		errorReporter: newTestCodeErrorReporter(),
 		notifier:      notification.NewNotifier(),
 	}
 

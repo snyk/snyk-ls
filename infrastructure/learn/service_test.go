@@ -59,7 +59,7 @@ func getRealCodeLookupParams() LessonLookupParams {
 }
 
 func Test_GetLesson(t *testing.T) {
-	c := testutil.SmokeTest(t)
+	c := testutil.SmokeTest(t, false)
 	c.UpdateApiEndpoints("https://snyk.io/api")
 	cut := New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient, errorreporting.NewTestErrorReporter())
 	t.Run("OSS vulnerability - lesson returned", func(t *testing.T) {
@@ -73,7 +73,7 @@ func Test_GetLesson(t *testing.T) {
 	})
 
 	t.Run("OSS license - no lessons returned", func(t *testing.T) {
-		testutil.SmokeTest(t)
+		testutil.SmokeTest(t, false)
 		params := getRealOSSLookupParams()
 
 		lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, snyk.LicenceIssue)

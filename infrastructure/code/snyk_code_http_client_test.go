@@ -28,7 +28,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -61,9 +60,9 @@ func clientFunc() *http.Client {
 }
 
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
-	testutil.SmokeTest(t)
+	testutil.SmokeTest(t, false)
 
-	s := NewSnykCodeHTTPClient(NewCodeInstrumentor(), error_reporting.NewTestErrorReporter(), clientFunc)
+	s := NewSnykCodeHTTPClient(NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
 	files := map[string]string{}
 	randomAddition := fmt.Sprintf("\n public void random() { System.out.println(\"%d\") }", time.Now().UnixMicro())
 	files[path1] = util.Hash([]byte(content + randomAddition))
@@ -74,8 +73,8 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 }
 
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
-	testutil.SmokeTest(t)
-	s := NewSnykCodeHTTPClient(NewCodeInstrumentor(), error_reporting.NewTestErrorReporter(), clientFunc)
+	testutil.SmokeTest(t, false)
+	s := NewSnykCodeHTTPClient(NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
 	var removedFiles []string
 	files := map[string]string{}
 	files[path1] = util.Hash([]byte(content))
@@ -125,7 +124,7 @@ func TestSnykCodeBackendService_doCall_shouldRetry(t *testing.T) {
 			Transport: d,
 		}
 	}
-	s := NewSnykCodeHTTPClient(NewCodeInstrumentor(), error_reporting.NewTestErrorReporter(), dummyClientFunc)
+	s := NewSnykCodeHTTPClient(NewCodeInstrumentor(), newTestCodeErrorReporter(), dummyClientFunc)
 	_, err := s.doCall(context.Background(), "GET", "https://httpstat.us/500", nil)
 	assert.Error(t, err)
 	assert.Equal(t, 3, d.calls)
@@ -137,16 +136,16 @@ func TestSnykCodeBackendService_doCall_rejected(t *testing.T) {
 		return &http.Client{}
 	}
 
-	s := NewSnykCodeHTTPClient(NewCodeInstrumentor(), error_reporting.NewTestErrorReporter(), dummyClientFunc)
+	s := NewSnykCodeHTTPClient(NewCodeInstrumentor(), newTestCodeErrorReporter(), dummyClientFunc)
 	_, err := s.doCall(context.Background(), "GET", "https://127.0.0.1", nil)
 	assert.Error(t, err)
 }
 
 func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
-	testutil.SmokeTest(t)
+	testutil.SmokeTest(t, false)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 
-	s := NewSnykCodeHTTPClient(NewCodeInstrumentor(), error_reporting.NewTestErrorReporter(), clientFunc)
+	s := NewSnykCodeHTTPClient(NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []string
 	files := map[string]string{}
