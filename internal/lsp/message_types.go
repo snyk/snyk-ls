@@ -1096,6 +1096,7 @@ type CodeIssueData struct {
 	PriorityScore      int                `json:"priorityScore"`
 	HasAIFix           bool               `json:"hasAIFix"`
 	DataFlow           []DataflowElement  `json:"dataFlow,omitempty"`
+	Details            string             `json:"details,omitempty"`
 }
 
 type Point = [2]int

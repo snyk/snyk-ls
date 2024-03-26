@@ -256,6 +256,7 @@ func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, folderPath s
 				LeadURL:            "",
 				HasAIFix:           additionalData.HasAIFix,
 				DataFlow:           dataFlow,
+				Details:            additionalData.Details,
 			},
 		}
 		if scanIssue.IsIgnored {
