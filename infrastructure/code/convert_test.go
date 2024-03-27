@@ -643,6 +643,9 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	assert.Equal(t, markersForSampleSarifResponse(path), issue.AdditionalData.(snyk.CodeIssueData).Markers)
 	assert.Equal(t, 550, issue.AdditionalData.(snyk.CodeIssueData).PriorityScore)
 	assert.Equal(t, resp.Sarif.Runs[0].Tool.Driver.Rules[0].Properties.Cwe, issue.CWEs)
+	assert.Nil(t, issues[0].IgnoreDetails)
+	assert.False(t, issues[0].IsIgnored)
+	assert.Contains(t, (issues[0].AdditionalData).(snyk.CodeIssueData).Details, "<h2>Data Flow - 4 steps</h2>")
 }
 
 func referencesForSampleSarifResponse() []snyk.Reference {

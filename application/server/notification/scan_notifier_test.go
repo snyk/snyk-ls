@@ -488,6 +488,7 @@ func Test_SendSuccess_SendsForSnykCode_WithIgnores(t *testing.T) {
 				DataFlow: []lsp2.DataflowElement{
 					{FilePath: "testFile", FlowRange: converter.ToRange(r), Content: "testContent"},
 				},
+				Details: "<!-- Data Flow -->\n <span class=\"data-flow-filepath\">testFile/data-subject.service.ts:27</span>\n\t\t",
 			},
 		},
 	}
@@ -530,6 +531,7 @@ func Test_SendSuccess_SendsForSnykCode_WithIgnores(t *testing.T) {
 				DataFlow: []snyk.DataFlowElement{
 					{FilePath: "testFile", FlowRange: r, Content: "testContent"},
 				},
+				Details: "<!-- Data Flow -->\n <span class=\"data-flow-filepath\">testFile/data-subject.service.ts:27</span>\n\t\t",
 			},
 		},
 	}
