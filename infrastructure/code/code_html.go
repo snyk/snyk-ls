@@ -48,6 +48,15 @@ func getDataFlowHtml(issue snyk.CodeIssueData) string {
 	return dataFlowHtml
 }
 
+func getExampleFixCodeDiffHtml(fix snyk.ExampleCommitFix) string {
+	linesHtml := ""
+	for _, commit := range fix.Lines {
+		linesHtml += fmt.Sprintf(`
+		<div class="tab-content example-line %s"><code>%s</code></div>`, commit.LineChange, commit.Line)
+	}
+	return linesHtml
+}
+
 func getDetailsHtml(issue snyk.Issue) string {
 	additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 	if !ok {

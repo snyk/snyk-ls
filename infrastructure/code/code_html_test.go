@@ -72,3 +72,33 @@ func Test_CodeDetailsPanel_html_withDataFlow(t *testing.T) {
 		assert.Contains(t, issueDetailsPanelHtml, expectedVariable)
 	}
 }
+
+func Test_CodeDetailsPanel_html_withExternalFixes(t *testing.T) {
+	_ = testutil.UnitTest(t)
+
+	fix := snyk.ExampleCommitFix{
+		CommitURL: "https://github.com/apache/flink/commit/1a2b3c4d5e6f7g8h9i0j",
+		Lines: []snyk.CommitChangeLine{
+			{
+				Line:       "    e.printStackTrace();",
+				LineNumber: 944,
+				LineChange: "removed",
+			},
+			{
+				Line:       "    LOG.error(e);",
+				LineNumber: 104,
+				LineChange: "added",
+			},
+		},
+	}
+
+	// invoke method under test
+	fixesHtml := getExampleFixCodeDiffHtml(fix)
+
+	// assert
+	expectedHtml := `
+		<div class="tab-content example-line removed"><code>    e.printStackTrace();</code></div>
+		<div class="tab-content example-line added"><code>    LOG.error(e);</code></div>`
+
+	assert.Contains(t, fixesHtml, expectedHtml)
+}
