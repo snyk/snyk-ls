@@ -61,7 +61,7 @@ func Test_CodeDetailsPanel_html_withDataFlow(t *testing.T) {
 		<div class="data-flow-row">
 		  <span class="data-flow-number">1</span>
 		  <span class="data-flow-blank"> </span>
-		  <span class="data-flow-filepath">/Users/cata/git/juice-shop/routes/vulnCodeSnippet.ts:68</span>
+		  <span class="data-flow-filepath" file-path="/Users/cata/git/juice-shop/routes/vulnCodeSnippet.ts" start-line="67" end-line="67" start-character="28" end-character="42">vulnCodeSnippet.ts:68</span>
 		  <span class="data-flow-delimiter">|</span>
 		  <span class="data-flow-text">if (!vulnLines.every(e => selectedLines.includes(e))) return false</span>
 		</div>`
