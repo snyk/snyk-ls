@@ -48,6 +48,45 @@ func getDataFlowHtml(issue snyk.CodeIssueData) string {
 	return dataFlowHtml
 }
 
+func getExampleFixCodeDiffHtml(fix snyk.ExampleCommitFix) string {
+	linesHtml := ""
+	for _, commit := range fix.Lines {
+		linesHtml += fmt.Sprintf(`
+		<div class="example-line %s"><code>%s</code></div>`, commit.LineChange, commit.Line)
+	}
+	return linesHtml
+}
+
+func getTabsHtml(fixes []snyk.ExampleCommitFix) string {
+	tabsHtml := `<div class="tabs-nav">`
+
+	for i, fix := range fixes {
+		// Add the is-selected class to the first tab item only
+		// The IDE handles the tab switching with the is-selected class
+		isSelectedClass := ""
+		if i == 0 {
+			isSelectedClass = "is-selected"
+		}
+		tabsHtml += fmt.Sprintf(`<span class="tab-item %s" id="tab-link-%d">%s</span>`, isSelectedClass, i, fix.CommitURL)
+	}
+
+	tabsHtml += "</div>"
+
+	// Generate the contents for each tab
+	for i, fix := range fixes {
+		// Add the is-selected class to the first tab content only
+		// The IDE handles the content display with the is-selected class
+		isSelectedClass := ""
+		if i == 0 {
+			isSelectedClass = "is-selected"
+		}
+		contentHtml := getExampleFixCodeDiffHtml(fix)
+		tabsHtml += fmt.Sprintf(`<div id="tab-content-%d" class="tab-content %s">%s</div>`, i, isSelectedClass, contentHtml)
+	}
+
+	return tabsHtml
+}
+
 func getDetailsHtml(issue snyk.Issue) string {
 	additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 	if !ok {
@@ -60,8 +99,15 @@ func getDetailsHtml(issue snyk.Issue) string {
 	html := replaceVariableInHtml(detailsHtmlTemplate, "issueId", issue.ID)
 	html = replaceVariableInHtml(html, "issueTitle", additionalData.Title)
 	html = replaceVariableInHtml(html, "severityText", issue.Severity.String())
-	html = replaceVariableInHtml(html, "dataFlow", dataFlowHtml)
+
+	//Data flow
 	html = replaceVariableInHtml(html, "dataFlowCount", fmt.Sprintf("%d", len(additionalData.DataFlow)))
+	html = replaceVariableInHtml(html, "dataFlow", dataFlowHtml)
+
+	//External example fixes
+	html = replaceVariableInHtml(html, "repoCount", fmt.Sprintf("%d", additionalData.RepoDatasetSize))
+	html = replaceVariableInHtml(html, "exampleCount", fmt.Sprintf("%d", len(additionalData.ExampleCommitFixes)))
+	html = replaceVariableInHtml(html, "tabsNav", getTabsHtml(additionalData.ExampleCommitFixes))
 
 	return html
 }
