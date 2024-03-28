@@ -52,9 +52,39 @@ func getExampleFixCodeDiffHtml(fix snyk.ExampleCommitFix) string {
 	linesHtml := ""
 	for _, commit := range fix.Lines {
 		linesHtml += fmt.Sprintf(`
-		<div class="tab-content example-line %s"><code>%s</code></div>`, commit.LineChange, commit.Line)
+		<div class="example-line %s"><code>%s</code></div>`, commit.LineChange, commit.Line)
 	}
 	return linesHtml
+}
+
+func getTabsHtml(fixes []snyk.ExampleCommitFix) string {
+	tabsHtml := `<div class="tabs-nav">`
+
+	for i, fix := range fixes {
+		// Add the is-selected class to the first tab item only
+		// The IDE handles the tab switching with the is-selected class
+		isSelectedClass := ""
+		if i == 0 {
+			isSelectedClass = "is-selected"
+		}
+		tabsHtml += fmt.Sprintf(`<span class="tab-item %s" id="tab-link-%d">%s</span>`, isSelectedClass, i, fix.CommitURL)
+	}
+
+	tabsHtml += "</div>"
+
+	// Generate the contents for each tab
+	for i, fix := range fixes {
+		// Add the is-selected class to the first tab content only
+		// The IDE handles the content display with the is-selected class
+		isSelectedClass := ""
+		if i == 0 {
+			isSelectedClass = "is-selected"
+		}
+		contentHtml := getExampleFixCodeDiffHtml(fix)
+		tabsHtml += fmt.Sprintf(`<div id="tab-content-%d" class="tab-content %s">%s</div>`, i, isSelectedClass, contentHtml)
+	}
+
+	return tabsHtml
 }
 
 func getDetailsHtml(issue snyk.Issue) string {
