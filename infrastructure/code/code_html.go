@@ -48,7 +48,7 @@ func getDataFlowHtml(issue snyk.CodeIssueData) string {
 	return dataFlowHtml
 }
 
-func getExampleFixCodeDiffHtml(fix snyk.ExampleCommitFix) string {
+func getCodeDiffHtml(fix snyk.ExampleCommitFix) string {
 	linesHtml := ""
 	for _, commit := range fix.Lines {
 		linesHtml += fmt.Sprintf(`
@@ -80,7 +80,7 @@ func getTabsHtml(fixes []snyk.ExampleCommitFix) string {
 		if i == 0 {
 			isSelectedClass = "is-selected"
 		}
-		contentHtml := getExampleFixCodeDiffHtml(fix)
+		contentHtml := getCodeDiffHtml(fix)
 		tabsHtml += fmt.Sprintf(`<div id="tab-content-%d" class="tab-content %s">%s</div>`, i, isSelectedClass, contentHtml)
 	}
 

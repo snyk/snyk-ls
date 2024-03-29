@@ -27,22 +27,26 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-func Test_CodeDetailsPanel_getDetailsHtml_withDataFlow(t *testing.T) {
+func Test_CodeDetailsPanel_html_getDetailsHtml(t *testing.T) {
 	_ = testutil.UnitTest(t)
 
 	dataFlow := getDataFlowElements()
+	fixes := getFixes()
+	repoCount := 54387
 	issue := snyk.Issue{
 		ID:       "java/DontUsePrintStackTrace",
 		Severity: 3,
 		AdditionalData: snyk.CodeIssueData{
-			DataFlow: dataFlow,
+			DataFlow:           dataFlow,
+			ExampleCommitFixes: fixes,
+			RepoDatasetSize:    repoCount,
 		},
 	}
 
 	// invoke method under test
-	issueDetailsPanelHtml := getDetailsHtml(issue)
+	codePanelHtml := getDetailsHtml(issue)
 
-	// assert
+	// assert Data Flow section
 	expectedDataFlowHeading := fmt.Sprintf("<h2>Data Flow - %d steps</h2>", len(dataFlow)) // TODO: handle pluralization
 	expectedDataFlowHtml := `
 		<div class="data-flow-row">
@@ -52,40 +56,24 @@ func Test_CodeDetailsPanel_getDetailsHtml_withDataFlow(t *testing.T) {
 		  <span class="data-flow-delimiter">|</span>
 		  <span class="data-flow-text">if (!vulnLines.every(e => selectedLines.includes(e))) return false</span>
 		</div>`
-	assert.Contains(t, issueDetailsPanelHtml, expectedDataFlowHeading)
-	assert.Contains(t, issueDetailsPanelHtml, expectedDataFlowHtml)
-	assert.NotContains(t, issueDetailsPanelHtml, "${dataFlow}")
-	assert.NotContains(t, issueDetailsPanelHtml, "${dataFlowCount}")
-}
 
-func Test_codeDetailsPanel_getDetailsHtml_withExampleFixes(t *testing.T) {
-	_ = testutil.UnitTest(t)
+	assert.Contains(t, codePanelHtml, expectedDataFlowHeading)
+	assert.Contains(t, codePanelHtml, expectedDataFlowHtml)
+	assert.NotContains(t, codePanelHtml, "${dataFlow}")
+	assert.NotContains(t, codePanelHtml, "${dataFlowCount}")
 
-	fixes := getFixes()
-	repoCount := 54387
-	issue := snyk.Issue{
-		ID:       "java/DontUsePrintStackTrace",
-		Severity: 3,
-		AdditionalData: snyk.CodeIssueData{
-			ExampleCommitFixes: fixes,
-			RepoDatasetSize:    repoCount,
-		},
-	}
+	// assert Fixes section
+	fixesDescription := fmt.Sprintf(`\s*This issue was fixed by %d projects. Here are %d example fixes:\s*`, repoCount, len(fixes))
+	expectedFixesDescription := regexp.MustCompile(fixesDescription)
+	expectedTabsNav := regexp.MustCompile(`\s*<div class="tabs-nav">\s*`)
+	expectedTabSelected := regexp.MustCompile(`\s*<span class="tab-item is-selected" id="tab-link-0">apache/flink</span>\s*`)
+	expectedTab2 := regexp.MustCompile(`\s*<span class="tab-item\s*" id="tab-link-1">apache/tomcat</span>\s*`)
 
-	// invoke method under test
-	issueDetailsPanelHtml := getDetailsHtml(issue)
+	assert.Regexp(t, expectedFixesDescription, codePanelHtml)
+	assert.Regexp(t, expectedTabsNav, codePanelHtml)
+	assert.Regexp(t, expectedTabSelected, codePanelHtml)
+	assert.Regexp(t, expectedTab2, codePanelHtml)
 
-	// assert
-	expectedFixesDescription := fmt.Sprintf(`\s*This issue was fixed by %d projects. Here are %d example fixes:\s*`, repoCount, len(fixes))
-	expectedFixesDescriptionRegex := regexp.MustCompile(expectedFixesDescription)
-	expectedTabsNavRegex := regexp.MustCompile(`\s*<div class="tabs-nav">\s*`)
-	expectedTab1Regex := regexp.MustCompile(`\s*<span class="tab-item is-selected" id="tab-link-0">apache/flink</span>\s*`)
-	expectedTab2Regex := regexp.MustCompile(`\s*<span class="tab-item\s*" id="tab-link-1">apache/tomcat</span>\s*`)
-
-	assert.Regexp(t, expectedFixesDescriptionRegex, issueDetailsPanelHtml)
-	assert.Regexp(t, expectedTabsNavRegex, issueDetailsPanelHtml)
-	assert.Regexp(t, expectedTab1Regex, issueDetailsPanelHtml)
-	assert.Regexp(t, expectedTab2Regex, issueDetailsPanelHtml)
 }
 
 func Test_CodeDetailsPanel_html_getExampleFixCodeDiffHtml(t *testing.T) {
@@ -94,7 +82,7 @@ func Test_CodeDetailsPanel_html_getExampleFixCodeDiffHtml(t *testing.T) {
 	fix := getFixes()[0]
 
 	// invoke method under test
-	fixesHtml := getExampleFixCodeDiffHtml(fix)
+	fixesHtml := getCodeDiffHtml(fix)
 
 	// assert
 	expectedHtml := `
@@ -172,6 +160,51 @@ func getDataFlowElements() []snyk.DataFlowElement {
 				},
 			},
 			Position: 0,
+		},
+		{
+			Content:  "import * as http from 'http';",
+			FilePath: "main.ts",
+			FlowRange: snyk.Range{
+				End: snyk.Position{
+					Character: 33,
+					Line:      4,
+				},
+				Start: snyk.Position{
+					Character: 13,
+					Line:      4,
+				},
+			},
+			Position: 1,
+		},
+		{
+			Content:  "import { ExpressAdapter } from '@nestjs/platform-express';",
+			FilePath: "main.ts",
+			FlowRange: snyk.Range{
+				End: snyk.Position{
+					Character: 23,
+					Line:      5,
+				},
+				Start: snyk.Position{
+					Character: 8,
+					Line:      5,
+				},
+			},
+			Position: 2,
+		},
+		{
+			Content:  "import { LoggerFactory } from './log';",
+			FilePath: "main.ts",
+			FlowRange: snyk.Range{
+				End: snyk.Position{
+					Character: 10,
+					Line:      9,
+				},
+				Start: snyk.Position{
+					Character: 9,
+					Line:      97,
+				},
+			},
+			Position: 4,
 		},
 	}
 }
