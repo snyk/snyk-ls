@@ -35,7 +35,7 @@ func Test_CodeDetailsPanel_html_getDetailsHtml(t *testing.T) {
 	repoCount := 54387
 	issue := snyk.Issue{
 		ID:       "java/DontUsePrintStackTrace",
-		Severity: 3,
+		Severity: 2,
 		AdditionalData: snyk.CodeIssueData{
 			Title:              "Allocation of Resources Without Limits or Throttling",
 			DataFlow:           dataFlow,
