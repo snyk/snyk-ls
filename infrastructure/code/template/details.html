@@ -26,34 +26,33 @@
 </head>
 
 <body>
-  <div class="suggestion">
-    <section class="suggestion--header">
-      <div class="severity">
-        <img id="severity-icon" src="${severityIcon}" alt="${severityText}" class="icon" />
-      </div>
-      <div class="suggestion-text">${issueTitle}</div>
-    </section>
-    <section id="suggestion-info" class="delimiter-top">
-      <div id="description" class="suggestion-text"></div>
-    </section>
+  <!-- Panel header -->
+  <header class="panel-header">
+    <div class="severity-container">
+      <img src="${severityIcon}" alt="low" class="severity-icon">
+      <div class="severity-title">${issueTitle}</div>
+    </div>
+    <div class="severity-type">${issueType}</div>
+  </header>
 
+  <main>
     <!-- Data Flow -->
-    <section class="data-flow">
+    <article class="data-flow-section">
       <h2>Data Flow - ${dataFlowCount} steps</h2>
       <div class="data-flow-body">
         ${dataFlow}
       </div>
-    </section>
+    </article>
 
     <!-- External example fixes -->
-    <section class="external-example-fixes">
+    <article class="external-example-fixes">
       <h2>External example fixes</h2>
       <p id="info-top" class="font-light">
         This issue was fixed by ${repoCount} projects. Here are ${exampleCount} example fixes:
       </p>
       ${tabsNav}
-    </section>
-  </div>
+    </article>
+  </main>
 </body>
 
 </html>

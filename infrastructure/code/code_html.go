@@ -96,18 +96,27 @@ func getDetailsHtml(issue snyk.Issue) string {
 
 	dataFlowHtml := getDataFlowHtml(additionalData)
 
+	// Header
 	html := replaceVariableInHtml(detailsHtmlTemplate, "issueId", issue.ID)
 	html = replaceVariableInHtml(html, "issueTitle", additionalData.Title)
+	html = replaceVariableInHtml(html, "issueType", getIssueType(additionalData))
 	html = replaceVariableInHtml(html, "severityText", issue.Severity.String())
 
-	//Data flow
+	// Data flow
 	html = replaceVariableInHtml(html, "dataFlowCount", fmt.Sprintf("%d", len(additionalData.DataFlow)))
 	html = replaceVariableInHtml(html, "dataFlow", dataFlowHtml)
 
-	//External example fixes
+	// External example fixes
 	html = replaceVariableInHtml(html, "repoCount", fmt.Sprintf("%d", additionalData.RepoDatasetSize))
 	html = replaceVariableInHtml(html, "exampleCount", fmt.Sprintf("%d", len(additionalData.ExampleCommitFixes)))
 	html = replaceVariableInHtml(html, "tabsNav", getTabsHtml(additionalData.ExampleCommitFixes))
 
 	return html
+}
+
+func getIssueType(additionalData snyk.CodeIssueData) string {
+	if additionalData.IsSecurityType {
+		return "Vulnerability"
+	}
+	return "Quality Issue"
 }
