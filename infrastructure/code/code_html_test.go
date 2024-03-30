@@ -112,6 +112,38 @@ func Test_CodeDetailsPanel_html_getTabsHtml(t *testing.T) {
 	assert.Regexp(t, expectedTab2, tabsHtml)
 }
 
+func Test_CodeDetailsPanel_html_getFileName(t *testing.T) {
+	_ = testutil.UnitTest(t)
+
+	testCases := []struct {
+		name     string
+		path     string
+		expected string
+	}{
+		{"Standard Unix path", "/Users/johnDoe/project/file.txt", "file.txt"},
+		{"Windows path", "C:\\Users\\johnDoe\\project\\file.txt", "file.txt"},
+		{"No directory", "file.txt", "file.txt"},
+		{"Trailing slash", "/Users/johnDoe/project/", ""},
+		{"Dot file", "/Users/johnDoe/.config", ".config"},
+		{"Path with spaces", "/Users/john Doe/documents/Test File.pdf", "Test File.pdf"},
+		{"Empty string", "", ""}, // is this what we want?
+		{"Only slashes", "/////", ""},
+		{"Nested directories with no file", "/a/b/c/d/e/", ""},
+		{"URL-like string", "http://example.com/file.txt", "file.txt"},
+		{"Path with multiple dots", "/path/to/my.file.name.ext", "my.file.name.ext"},
+		{"Unix root directory", "/", ""},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			result := getFileName(testCase.path)
+			if result != testCase.expected {
+				t.Errorf("For path '%s', expected '%s', but got '%s'", testCase.path, testCase.expected, result)
+			}
+		})
+	}
+}
+
 func getFixes() []snyk.ExampleCommitFix {
 	return []snyk.ExampleCommitFix{
 		{
@@ -150,7 +182,7 @@ func getDataFlowElements() []snyk.DataFlowElement {
 	return []snyk.DataFlowElement{
 		{
 			Content:  "if (!vulnLines.every(e => selectedLines.includes(e))) return false",
-			FilePath: "vulnCodeSnippet.ts",
+			FilePath: "juice-shop/routes/vulnCodeSnippet.ts",
 			FlowRange: snyk.Range{
 				End: snyk.Position{
 					Character: 42,

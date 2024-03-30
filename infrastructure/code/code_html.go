@@ -19,6 +19,7 @@ package code
 import (
 	_ "embed"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -43,7 +44,7 @@ func getDataFlowHtml(issue snyk.CodeIssueData) string {
 		  <span class="data-flow-filepath">%s:%d</span>
 		  <span class="data-flow-delimiter">|</span>
 		  <span class="data-flow-text">%s</span>
-		</div>`, i+1, flow.FilePath, flow.FlowRange.Start.Line+1, flow.Content)
+		</div>`, i+1, getFileName(flow.FilePath), flow.FlowRange.Start.Line+1, flow.Content)
 	}
 	return dataFlowHtml
 }
@@ -113,6 +114,23 @@ func getDetailsHtml(issue snyk.Issue) string {
 	html = replaceVariableInHtml(html, "tabsNav", getTabsHtml(additionalData.ExampleCommitFixes))
 
 	return html
+}
+
+func getFileName(filePath string) string {
+	if filePath == "" {
+		return ""
+	}
+
+	// Windows paths
+	filePath = strings.Replace(filePath, "\\", "/", -1)
+
+	// Handle trailing slash
+	if strings.HasSuffix(filePath, "/") {
+		return ""
+	}
+
+	filename := filepath.Base(filePath)
+	return filename
 }
 
 func getIssueType(additionalData snyk.CodeIssueData) string {
