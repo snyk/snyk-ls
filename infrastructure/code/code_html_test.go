@@ -76,7 +76,6 @@ func Test_CodeDetailsPanel_html_getDetailsHtml(t *testing.T) {
 	assert.Regexp(t, expectedTabsNav, codePanelHtml)
 	assert.Regexp(t, expectedTabSelected, codePanelHtml)
 	assert.Regexp(t, expectedTab2, codePanelHtml)
-
 }
 
 func Test_CodeDetailsPanel_html_getExampleFixCodeDiffHtml(t *testing.T) {
@@ -146,6 +145,7 @@ func Test_CodeDetailsPanel_html_getFileName(t *testing.T) {
 }
 
 func Test_CodeDetailsPanel_html_getRepoName(t *testing.T) {
+	// Logic copied from Snyk IntelliJ plugin
 	// https://github.com/snyk/snyk-intellij-plugin/blob/master/src/main/kotlin/io/snyk/plugin/ui/toolwindow/panels/SuggestionDescriptionPanelFromLS.kt#L256-L262
 	testCases := []struct {
 		name     string
