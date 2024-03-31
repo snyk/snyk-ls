@@ -104,6 +104,7 @@ func getDetailsHtml(issue snyk.Issue) string {
 	html = replaceVariableInHtml(html, "severityText", issue.Severity.String())
 	html = replaceVariableInHtml(html, "severityIcon", getSeverityIconSvg(issue))
 
+	html = replaceVariableInHtml(html, "issueOverview", additionalData.Message)
 	// Data flow
 	html = replaceVariableInHtml(html, "dataFlowCount", fmt.Sprintf("%d", len(additionalData.DataFlow)))
 	html = replaceVariableInHtml(html, "dataFlow", dataFlowHtml)

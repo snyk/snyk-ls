@@ -42,6 +42,7 @@ func Test_CodeDetailsPanel_html_getDetailsHtml(t *testing.T) {
 			ExampleCommitFixes: fixes,
 			RepoDatasetSize:    repoCount,
 			IsSecurityType:     true,
+			Message:            "Either rethrow this java.lang.InterruptedException or set the interrupted flag on the current thread with 'Thread.currentThread().interrupt()'. Otherwise the information that the current thread was interrupted will be lost.",
 		},
 	}
 
