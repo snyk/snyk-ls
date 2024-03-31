@@ -20,6 +20,7 @@ import (
 	_ "embed"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -68,7 +69,7 @@ func getTabsHtml(fixes []snyk.ExampleCommitFix) string {
 		if i == 0 {
 			isSelectedClass = "is-selected"
 		}
-		tabsHtml += fmt.Sprintf(`<span class="tab-item %s" id="tab-link-%d">%s</span>`, isSelectedClass, i, fix.CommitURL)
+		tabsHtml += fmt.Sprintf(`<span class="tab-item %s" id="tab-link-%d">%s</span>`, isSelectedClass, i, getRepoName(fix.CommitURL))
 	}
 
 	tabsHtml += "</div>"
@@ -139,6 +140,24 @@ func getIssueType(additionalData snyk.CodeIssueData) string {
 		return "Vulnerability"
 	}
 	return "Quality Issue"
+}
+
+func getRepoName(commitURL string) string {
+	trimmedURL := strings.TrimPrefix(commitURL, "https://")
+
+	re := regexp.MustCompile(`/commit/.*`)
+	shortURL := re.ReplaceAllString(trimmedURL, "")
+
+	tabTitle := shortURL
+	if strings.HasPrefix(shortURL, "github.com/") {
+		tabTitle = strings.TrimPrefix(shortURL, "github.com/")
+	}
+
+	if len(tabTitle) > 50 {
+		tabTitle = tabTitle[:50] + "..."
+	}
+
+	return tabTitle
 }
 
 func getSeverityIconSvg(issue snyk.Issue) string {

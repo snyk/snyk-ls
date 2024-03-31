@@ -145,10 +145,55 @@ func Test_CodeDetailsPanel_html_getFileName(t *testing.T) {
 	}
 }
 
+func Test_CodeDetailsPanel_html_getRepoName(t *testing.T) {
+	// https://github.com/snyk/snyk-intellij-plugin/blob/master/src/main/kotlin/io/snyk/plugin/ui/toolwindow/panels/SuggestionDescriptionPanelFromLS.kt#L256-L262
+	testCases := []struct {
+		name     string
+		url      string
+		expected string
+	}{
+		{
+			name:     "Standard GitHub URL",
+			url:      "https://github.com/apache/flink/commit/5d7c5620804eddd59206b24c87ffc89c12fd1184",
+			expected: "apache/flink",
+		},
+		{
+			name:     "GitHub URL with parameters",
+			url:      "https://github.com/juice-shop/juice-shop/commit/0fa9d5547c5300cf8162b8f31a40aea6847a5c32?diff=split#diff-7e23eb1aa3b7b4d5db89bfd2860277e5L75",
+			expected: "juice-shop/juice-shop",
+		},
+		{
+			name:     "GitHub URL with a dot in the repo name",
+			url:      "https://github.com/juice-shop/.github/commit/67603b2f2b4f02fbc65f53bda7c3f56a5d341987",
+			expected: "juice-shop/.github",
+		},
+		// TODO: Do we support non-GitHub URLs?
+		// {
+		// 	name:     "Non-GitHub URL",
+		// 	url:      "https://gitlab.com/gitlab-org/gitlab-runner/-/commit/e02bce8e5dea4df1a8efd5b7dcfe7189d15a58bc",
+		// 	expected: "gitlab.com/gitlab-org/gitlab-runner/-",
+		// },
+		// {
+		// 	name:     "Bitbucket URL",
+		// 	url:      "https://bitbucket.org/snyk/snyk-pipelines/src/master/bitbucket-pipelines.yml",
+		// 	expected: "snyk/snyk-pipelines",
+		// },
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := getRepoName(tc.url)
+			if result != tc.expected {
+				t.Errorf("For URL '%s', expected '%s', but got '%s'", tc.url, tc.expected, result)
+			}
+		})
+	}
+}
+
 func getFixes() []snyk.ExampleCommitFix {
 	return []snyk.ExampleCommitFix{
 		{
-			CommitURL: "apache/flink",
+			CommitURL: "https://github.com/apache/flink/commit/5d7c5620804eddd59206b24c87ffc89c12fd1184",
 			Lines: []snyk.CommitChangeLine{
 				{
 					Line:       "    e.printStackTrace();",
@@ -163,7 +208,7 @@ func getFixes() []snyk.ExampleCommitFix {
 			},
 		},
 		{
-			CommitURL: "apache/tomcat",
+			CommitURL: "https://github.com/apache/tomcat/commit/0fa9d5547c5300cf8162b8f31a40aea6847a5c32?diff=split#diff-7e23eb1aa3b7b4d5db89bfd2860277e5L75",
 			Lines: []snyk.CommitChangeLine{
 				{
 					Line:       "         try { mutex.wait(); } catch ( java.lang.InterruptedException x ) {Thread.interrupted();}",
