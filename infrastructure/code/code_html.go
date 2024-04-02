@@ -35,6 +35,16 @@ func replaceVariableInHtml(html string, variableName string, variableValue strin
 	return strings.ReplaceAll(html, fmt.Sprintf("${%s}", variableName), variableValue)
 }
 
+func getDataFlowHeadingHtml(issue snyk.CodeIssueData) string {
+	dataFlowCount := len(issue.DataFlow)
+	stepWord := "step"
+
+	if dataFlowCount > 1 {
+		stepWord += "s"
+	}
+	return fmt.Sprintf("Data Flow - %d %s", dataFlowCount, stepWord)
+}
+
 func getDataFlowHtml(issue snyk.CodeIssueData) string {
 	dataFlowHtml := ""
 	for i, flow := range issue.DataFlow {
@@ -117,7 +127,7 @@ func getDetailsHtml(issue snyk.Issue) string {
 
 	html = replaceVariableInHtml(html, "issueOverview", additionalData.Message)
 	// Data flow
-	html = replaceVariableInHtml(html, "dataFlowCount", fmt.Sprintf("%d", len(additionalData.DataFlow)))
+	html = replaceVariableInHtml(html, "dataFlowHeading", getDataFlowHeadingHtml(additionalData))
 	html = replaceVariableInHtml(html, "dataFlow", dataFlowHtml)
 
 	// External example fixes
