@@ -19,6 +19,7 @@ package code
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 
@@ -188,7 +189,7 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 		defer pollingTicker.Stop()
 		timeoutTimer := time.NewTimer(2 * time.Minute)
 		defer timeoutTimer.Stop()
-		tries := 1
+		tries := 1.0
 		for {
 			select {
 			case <-timeoutTimer.C:
@@ -196,9 +197,10 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 				b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please try again. Request ID: "+b.requestId)
 				return nil
 			case <-pollingTicker.C:
-				p.ReportWithMessage(tries, "Polling for fix...")
+				p.ReportWithMessage(int(math.Max(tries, 99)), "Polling for fix...")
 				fix, complete := pollFunc()
 				if !complete {
+					tries++
 					continue
 				}
 
