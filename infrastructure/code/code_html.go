@@ -128,23 +128,6 @@ func getDetailsHtml(issue snyk.Issue) string {
 	return html
 }
 
-func getFileName(filePath string) string {
-	if filePath == "" {
-		return ""
-	}
-
-	// Windows paths
-	filePath = strings.Replace(filePath, "\\", "/", -1)
-
-	// Handle trailing slash
-	if strings.HasSuffix(filePath, "/") {
-		return ""
-	}
-
-	filename := filepath.Base(filePath)
-	return filename
-}
-
 func getIssueType(additionalData snyk.CodeIssueData) string {
 	if additionalData.IsSecurityType {
 		return "Vulnerability"
