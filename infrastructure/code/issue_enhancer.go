@@ -134,9 +134,10 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 		s := b.instrumentor.StartSpan(ctx, method)
 		defer b.instrumentor.Finish(s)
 
-		progress := progress.NewTracker(true)
+		p := progress.NewTracker(true)
 		fixMsg := "Attempting to fix " + issueTitle(issue) + " (Snyk)"
-		progress.BeginWithMessage(fixMsg, "")
+		p.BeginWithMessage(fixMsg, "")
+		defer p.End()
 		b.notifier.SendShowMessage(sglsp.Info, fixMsg)
 
 		relativePath, err := ToRelativeUnixPath(b.rootPath, issue.AffectedFilePath)
@@ -187,6 +188,7 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 		defer pollingTicker.Stop()
 		timeoutTimer := time.NewTimer(2 * time.Minute)
 		defer timeoutTimer.Stop()
+		tries := 1
 		for {
 			select {
 			case <-timeoutTimer.C:
@@ -194,6 +196,7 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 				b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please try again. Request ID: "+b.requestId)
 				return nil
 			case <-pollingTicker.C:
+				p.ReportWithMessage(tries, "Polling for fix...")
 				fix, complete := pollFunc()
 				if !complete {
 					continue
@@ -204,7 +207,7 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 					return nil
 				}
 
-				progress.End()
+				p.End()
 				// send feedback asynchronously, so people can actually see the changes done by the fix
 				go func() {
 					actionCommandMap, err := b.autofixFeedbackActions(fix.FixId)
