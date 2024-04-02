@@ -51,17 +51,14 @@ func Test_CodeDetailsPanel_html_getDetailsHtml(t *testing.T) {
 
 	// assert Data Flow section
 	expectedDataFlowHeading := fmt.Sprintf("<h2>Data Flow - %d steps</h2>", len(dataFlow)) // TODO: handle pluralization
-	expectedDataFlowHtml := `
-		<div class="data-flow-row">
-		  <span class="data-flow-number">1</span>
-		  <span class="data-flow-blank"> </span>
-		  <span class="data-flow-filepath">vulnCodeSnippet.ts:68</span>
-		  <span class="data-flow-delimiter">|</span>
-		  <span class="data-flow-text">if (!vulnLines.every(e => selectedLines.includes(e))) return false</span>
-		</div>`
 
 	assert.Contains(t, codePanelHtml, expectedDataFlowHeading)
-	assert.Contains(t, codePanelHtml, expectedDataFlowHtml)
+	assert.Contains(t, codePanelHtml, "<h2>Data Flow - 4 steps</h2>")
+	assert.Contains(t, codePanelHtml, "class=\"data-flow-section\"")
+	assert.Contains(t, codePanelHtml, "class=\"data-flow-row\"")
+	assert.Contains(t, codePanelHtml, "if (!vulnLines.every(e => selectedLines.includes(e))) return false")
+	assert.Contains(t, codePanelHtml, `<span class="data-flow-filepath" file-path="juice-shop/routes/vulnCodeSnippet.ts" start-line="67" end-line="67" start-character="28" end-character="42">vulnCodeSnippet.ts:68</span>`)
+
 	assert.NotContains(t, codePanelHtml, "${dataFlow}")
 	assert.NotContains(t, codePanelHtml, "${dataFlowCount}")
 

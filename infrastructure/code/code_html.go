@@ -38,14 +38,24 @@ func replaceVariableInHtml(html string, variableName string, variableValue strin
 func getDataFlowHtml(issue snyk.CodeIssueData) string {
 	dataFlowHtml := ""
 	for i, flow := range issue.DataFlow {
+		fileName := filepath.Base(flow.FilePath)
 		dataFlowHtml += fmt.Sprintf(`
 		<div class="data-flow-row">
 		  <span class="data-flow-number">%d</span>
 		  <span class="data-flow-blank"> </span>
-		  <span class="data-flow-filepath">%s:%d</span>
+		  <span class="data-flow-filepath" file-path="%s" start-line="%d" end-line="%d" start-character="%d" end-character="%d">%s:%d</span>
 		  <span class="data-flow-delimiter">|</span>
 		  <span class="data-flow-text">%s</span>
-		</div>`, i+1, getFileName(flow.FilePath), flow.FlowRange.Start.Line+1, flow.Content)
+		</div>`,
+			i+1,
+			flow.FilePath,
+			flow.FlowRange.Start.Line,
+			flow.FlowRange.End.Line,
+			flow.FlowRange.Start.Character,
+			flow.FlowRange.End.Character,
+			fileName,
+			flow.FlowRange.Start.Line+1,
+			flow.Content)
 	}
 	return dataFlowHtml
 }
