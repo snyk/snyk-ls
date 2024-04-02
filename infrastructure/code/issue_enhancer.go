@@ -197,7 +197,7 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 				b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please try again. Request ID: "+b.requestId)
 				return nil
 			case <-pollingTicker.C:
-				p.ReportWithMessage(int(math.Max(tries, 99)), "Polling for fix...")
+				p.ReportWithMessage(int(math.Min(tries, 99)), "Polling for fix...")
 				fix, complete := pollFunc()
 				if !complete {
 					tries++
