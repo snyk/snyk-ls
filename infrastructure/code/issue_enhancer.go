@@ -207,7 +207,6 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 					return nil
 				}
 
-				p.End()
 				// send feedback asynchronously, so people can actually see the changes done by the fix
 				go func() {
 					actionCommandMap, err := b.autofixFeedbackActions(fix.FixId)
