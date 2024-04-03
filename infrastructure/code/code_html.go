@@ -19,6 +19,7 @@ package code
 import (
 	_ "embed"
 	"fmt"
+	"html"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -46,27 +47,29 @@ func getDataFlowHeadingHtml(issue snyk.CodeIssueData) string {
 }
 
 func getDataFlowHtml(issue snyk.CodeIssueData) string {
-	dataFlowHtml := ""
+	dataFlowHtml := `<table class="data-flow-body"><tbody>`
+
 	for i, flow := range issue.DataFlow {
 		fileName := filepath.Base(flow.FilePath)
 		dataFlowHtml += fmt.Sprintf(`
-		<div class="data-flow-row">
-		  <span class="data-flow-number">%d</span>
-		  <span class="data-flow-blank"> </span>
-		  <span class="data-flow-filepath" file-path="%s" start-line="%d" end-line="%d" start-character="%d" end-character="%d">%s:%d</span>
-		  <span class="data-flow-delimiter">|</span>
-		  <span class="data-flow-text">%s</span>
-		</div>`,
+		  <tr class="data-flow-row">
+		    <td class="data-flow-number">%d</td>
+		    <td class="data-flow-clickable-row" file-path="%s" start-line="%d" end-line="%d" start-character="%d" end-character="%d">%s:%d</td>
+		    <td class="data-flow-delimiter">|</td>
+		    <td class="data-flow-text">%s</td>
+		  </tr>`,
 			i+1,
-			flow.FilePath,
+			html.EscapeString(flow.FilePath),
 			flow.FlowRange.Start.Line,
 			flow.FlowRange.End.Line,
 			flow.FlowRange.Start.Character,
 			flow.FlowRange.End.Character,
-			fileName,
+			html.EscapeString(fileName),
 			flow.FlowRange.Start.Line+1,
-			flow.Content)
+			html.EscapeString(flow.Content))
 	}
+
+	dataFlowHtml += `</tbody></table>`
 	return dataFlowHtml
 }
 
@@ -135,6 +138,7 @@ func getDetailsHtml(issue snyk.Issue) string {
 	html = replaceVariableInHtml(html, "exampleCount", fmt.Sprintf("%d", len(additionalData.ExampleCommitFixes)))
 	html = replaceVariableInHtml(html, "tabsNav", getTabsHtml(additionalData.ExampleCommitFixes))
 
+	log.Debug().Msgf("Code details HTML: %s", html)
 	return html
 }
 
