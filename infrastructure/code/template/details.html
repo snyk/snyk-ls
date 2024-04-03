@@ -56,26 +56,6 @@
       border-bottom: 1px solid #333;
     }
 
-    .tab-item {
-      float: left;
-      display: block;
-      color: white;
-      text-align: center;
-      padding: 14px 16px;
-      text-decoration: none;
-      transition: 0.3s;
-    }
-
-    .tab-item:hover {
-      background-color: #555;
-    }
-
-    .tab-item.is-selected {
-      /* background-color: #1e1e1e; */
-      color: #ffffff;
-      border-bottom: 2px solid #f48024;
-    }
-
     .tab-content {
       display: none;
       padding: 15px;
@@ -199,6 +179,7 @@
       color: #cc7832;
     }
 
+    /* TODO: refactor tabs */
     .tab-item {
       padding: 8px 16px;
       cursor: pointer;
@@ -212,6 +193,27 @@
       background-color: #4c4f52;
       border-color: #4c4f52;
     }
+
+    .tab-item {
+      float: left;
+      display: block;
+      color: white;
+      text-align: center;
+      padding: 14px 16px;
+      text-decoration: none;
+      transition: 0.3s;
+    }
+
+    .tab-item:hover {
+      background-color: #555;
+    }
+
+    .tab-item.is-selected {
+      color: #ffffff;
+      border-bottom: 2px solid #f48024;
+    }
+
+    /* TODO: refactor tabs */
 
     .example-line {
       font-family: "Courier New", Courier, monospace;
