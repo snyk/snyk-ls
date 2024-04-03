@@ -22,6 +22,241 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
+    body {
+      color: #d4d4d4;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      margin: 20px;
+      padding: 0;
+    }
+
+    h2 {
+      font-size: 1.1rem;
+      margin-block-start: 0;
+      margin-block-end: 0.4rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #bbbbbb;
+    }
+
+    .overview-text {
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: 18px;
+      padding: 8px 8px 0 0;
+    }
+
+    .tabs-nav {
+      display: flex;
+      margin-top: 16px;
+      list-style-type: none;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+      border-bottom: 1px solid #333;
+    }
+
+    .tab-item {
+      float: left;
+      display: block;
+      color: white;
+      text-align: center;
+      padding: 14px 16px;
+      text-decoration: none;
+      transition: 0.3s;
+    }
+
+    .tab-item:hover {
+      background-color: #555;
+    }
+
+    .tab-item.is-selected {
+      /* background-color: #1e1e1e; */
+      color: #ffffff;
+      border-bottom: 2px solid #f48024;
+    }
+
+    .tab-content {
+      display: none;
+      padding: 15px;
+      border: none;
+      background-color: #46494a;
+    }
+
+    .tab-content.is-selected {
+      display: block;
+    }
+
+    .panel-header {
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      border-bottom: 1px solid #3c3f41;
+    }
+
+    .severity-container {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .severity-title {
+      color: #ccc;
+      font-size: 16px;
+      font-style: normal;
+      font-weight: 600;
+      line-height: 14px;
+      padding-left: 8px;
+    }
+
+    .severity-type {
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: 14px;
+    }
+
+    .issue-overview,
+    .data-flow-section {
+      padding: 16px;
+    }
+
+    .example-fixes {
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: 18px;
+    }
+
+    .example-fixes-header {
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 500;
+      line-height: 18px;
+    }
+
+    .example-fixes-text {
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: 18px;
+      margin-block-end: 1rem;
+    }
+
+    .issue-details {
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: 18px;
+      padding: 8px 0px;
+    }
+
+    .data-flow-row.is-selected {
+      background-color: #43454a;
+    }
+
+    .data-flow-header {
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 500;
+      line-height: 18px;
+    }
+
+    .data-flow-body {
+      /* background-color: #2b2b2b; */
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: 18px;
+      border-spacing: 0px 2px;
+    }
+
+    .data-flow-row {
+      display: flex;
+      align-items: center;
+      padding: 4px 0;
+      font-family: 'Courier New', monospace;
+    }
+
+    .data-flow-number {
+      width: 15px;
+      text-align: right;
+      margin-right: 8px;
+    }
+
+    .data-flow-filepath {
+      color: #759af3;
+      display: block;
+      margin: 0px 24px;
+    }
+
+    .data-flow-filepath:hover {
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    .data-flow-text {
+      margin-right: 8px;
+      padding-left: 10px;
+    }
+
+    .data-flow-delimiter {
+      font-weight: bold;
+      color: #cc7832;
+    }
+
+    .tab-item {
+      padding: 8px 16px;
+      cursor: pointer;
+      background-color: #3c3f41;
+      border: 1px solid #3c3f41;
+      margin-right: 4px;
+    }
+
+    .tab-item.is-selected,
+    .tab-item:hover {
+      background-color: #4c4f52;
+      border-color: #4c4f52;
+    }
+
+    .example-line {
+      font-family: "Courier New", Courier, monospace;
+      font-size: 12px;
+    }
+
+    .example-line>code {
+      display: block;
+      padding-left: 30px;
+      white-space: pre-wrap;
+      /* color: var(--vscode-editor-foreground); */
+      font-weight: 400;
+      background-color: transparent;
+    }
+
+    .example-line.added {
+      background-color: #334937;
+      color: #d4d4d4;
+    }
+
+    .example-line.added::before {
+      content: "+";
+      position: absolute;
+      padding: 0 4px;
+      line-height: 1;
+    }
+
+    .example-line.removed {
+      background-color: #563f3f;
+      color: #d4d4d4;
+    }
+
+    .example-line.removed::before {
+      content: "-";
+      position: absolute;
+      padding: 0 4px;
+      line-height: 1;
+    }
   </style>
 </head>
 
@@ -45,18 +280,18 @@
 
     <!-- Data Flow -->
     <article class="data-flow-section">
-      <h2>${dataFlowHeading}</h2>
+      <h2 class="data-flow-header">${dataFlowHeading}</h2>
       <div class="data-flow-body">
         ${dataFlow}
       </div>
     </article>
 
     <!-- External example fixes -->
-    <article class="external-example-fixes">
-      <h2>External example fixes</h2>
-      <p id="info-top" class="font-light">
+    <article class="example-fixes">
+      <h2 class="example-fixes-header">External example fixes</h2>
+      <div class="example-fixes-text">
         This issue was fixed by ${repoCount} projects. Here are ${exampleCount} example fixes:
-      </p>
+      </div>
       ${tabsNav}
     </article>
   </main>
