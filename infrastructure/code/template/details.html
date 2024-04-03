@@ -22,27 +22,61 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
+    html {
+      font-size: 16px;
+      /* 1rem = 16px */
+    }
+
+    *,
+    *:before,
+    *:after {
+      box-sizing: border-box;
+    }
+
     body {
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
       color: #d4d4d4;
       font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-      margin: 20px;
-      padding: 0;
     }
 
     h2 {
       font-size: 1.1rem;
       margin-block-start: 0;
-      margin-block-end: 0.4rem;
+      margin-block-end: 0.25rem;
       font-weight: 700;
       text-transform: uppercase;
       color: #bbbbbb;
     }
 
+    .overview-text,
+    .severity-type,
+    .issue-details,
+    .example-fixes,
+    .example-fixes-header,
+    .example-fixes-text,
+    .data-flow-header,
+    .data-flow-body,
+    .example-line {
+      font-size: 0.75rem;
+      font-weight: 400;
+      line-height: 1.125rem;
+    }
+
+    .severity-title,
+    .tab-item {
+      font-size: 1rem;
+      /* 16px */
+      font-weight: 600;
+    }
+
     .overview-text {
-      font-size: 12px;
       font-style: normal;
       font-weight: 400;
-      line-height: 18px;
+      line-height: 1.25rem;
       padding: 8px 8px 0 0;
     }
 
@@ -83,9 +117,7 @@
 
     .severity-title {
       color: #ccc;
-      font-size: 16px;
       font-style: normal;
-      font-weight: 600;
       line-height: 14px;
       padding-left: 8px;
     }
@@ -153,9 +185,9 @@
     }
 
     .data-flow-number {
-      width: 15px;
-      text-align: right;
       margin-right: 8px;
+      width: 0.9375rem;
+      text-align: right;
     }
 
     .data-flow-clickable-row {
@@ -179,41 +211,30 @@
       color: #cc7832;
     }
 
-    /* TODO: refactor tabs */
-    .tab-item {
-      padding: 8px 16px;
-      cursor: pointer;
-      background-color: #3c3f41;
-      border: 1px solid #3c3f41;
-      margin-right: 4px;
-    }
-
-    .tab-item.is-selected,
-    .tab-item:hover {
-      background-color: #4c4f52;
-      border-color: #4c4f52;
-    }
-
     .tab-item {
       float: left;
       display: block;
       color: white;
       text-align: center;
-      padding: 14px 16px;
+      padding: 8px 16px;
       text-decoration: none;
-      transition: 0.3s;
+      background-color: #3c3f41;
+      border: 1px solid #3c3f41;
+      margin-right: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s, border-color 0.3s;
     }
 
-    .tab-item:hover {
-      background-color: #555;
+    .tab-item:hover,
+    .tab-item.is-selected {
+      background-color: #4c4f52;
+      border-color: #4c4f52;
     }
 
     .tab-item.is-selected {
       color: #ffffff;
       border-bottom: 2px solid #f48024;
     }
-
-    /* TODO: refactor tabs */
 
     .example-line {
       font-family: "Courier New", Courier, monospace;
@@ -222,7 +243,7 @@
 
     .example-line>code {
       display: block;
-      padding-left: 30px;
+      padding-left: 1.875rem;
       white-space: pre-wrap;
       /* color: var(--vscode-editor-foreground); */
       font-weight: 400;
