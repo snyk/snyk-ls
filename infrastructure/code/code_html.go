@@ -143,9 +143,9 @@ func getRowOfCWEs(cwes []string) string {
 	html := ""
 	for i, cwe := range cwes {
 		href := getCWELabel(cwe)
-		html += fmt.Sprintf(`<a class="cwe" target="_blank" href="%s">%s</a>`, href, cwe)
+		html += fmt.Sprintf(`<a class="cwe" target="_blank" rel="noopener noreferrer" href="%s">%s</a>`, href, cwe)
 		if i != len(cwes)-1 {
-			html += `<span class = "cwe-separator">|</span>`
+			html += `<span class="cwe-separator">|</span>`
 		}
 	}
 	return html
