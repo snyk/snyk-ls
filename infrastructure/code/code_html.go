@@ -138,7 +138,6 @@ func getDetailsHtml(issue snyk.Issue) string {
 	html = replaceVariableInHtml(html, "exampleCount", fmt.Sprintf("%d", len(additionalData.ExampleCommitFixes)))
 	html = replaceVariableInHtml(html, "tabsNav", getTabsHtml(additionalData.ExampleCommitFixes))
 
-	log.Debug().Msgf("Code details HTML: %s", html)
 	return html
 }
 
