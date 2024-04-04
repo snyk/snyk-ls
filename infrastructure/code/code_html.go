@@ -127,6 +127,7 @@ func getDetailsHtml(issue snyk.Issue) string {
 	html = replaceVariableInHtml(html, "issueType", getIssueType(additionalData))
 	html = replaceVariableInHtml(html, "severityText", issue.Severity.String())
 	html = replaceVariableInHtml(html, "severityIcon", getSeverityIconSvg(issue))
+	html = replaceVariableInHtml(html, "cwes", getRowOfCWEs(issue.CWEs))
 
 	html = replaceVariableInHtml(html, "issueOverview", additionalData.Message)
 	// Data flow
@@ -138,6 +139,18 @@ func getDetailsHtml(issue snyk.Issue) string {
 	html = replaceVariableInHtml(html, "exampleCount", fmt.Sprintf("%d", len(additionalData.ExampleCommitFixes)))
 	html = replaceVariableInHtml(html, "tabsNav", getTabsHtml(additionalData.ExampleCommitFixes))
 
+	return html
+}
+
+func getRowOfCWEs(cwes []string) string {
+	html := ""
+	for i, cwe := range cwes {
+		href := getCWELabel(cwe)
+		html += fmt.Sprintf(`<a class="cwe" target="_blank" rel="noopener noreferrer" href="%s">%s</a>`, href, cwe)
+		if i != len(cwes)-1 {
+			html += `<span class="cwe-separator">|</span>`
+		}
+	}
 	return html
 }
 
@@ -191,4 +204,8 @@ func getSeverityIconSvg(issue snyk.Issue) string {
 	default:
 		return ``
 	}
+}
+
+func getCWELabel(cwe string) string {
+	return fmt.Sprintf("https://cwe.mitre.org/data/definitions/%s.html", strings.TrimPrefix(cwe, "CWE-"))
 }
