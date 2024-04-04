@@ -23,7 +23,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     html {
-      font-size: 16px;
+      font-size: 18px;
       /* 1rem = 16px */
     }
 
@@ -53,7 +53,12 @@
     }
 
     .overview-text,
-    .severity-type,
+    .severity-type {
+      font-size: 0.75rem;
+      font-weight: 400;
+      line-height: 1.125rem;
+    }
+
     .issue-details,
     .example-fixes,
     .example-fixes-header,
@@ -66,12 +71,18 @@
       line-height: 1.125rem;
     }
 
-    .severity-title,
-    .tab-item {
+    .severity-title {
       font-size: 1rem;
       /* 16px */
       font-weight: 600;
     }
+
+    .tab-item {
+      font-size: 0.80rem;
+      /* 16px */
+      font-weight: 500;
+    }
+
 
     .overview-text {
       font-style: normal;
@@ -90,11 +101,15 @@
       border-bottom: 1px solid #333;
     }
 
+    .tab-container {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background-color: #46494a;
+    }
+
     .tab-content {
       display: none;
-      padding: 15px;
-      border: none;
-      background-color: #46494a;
     }
 
     .tab-content.is-selected {
@@ -104,7 +119,7 @@
     .panel-header {
       display: flex;
       flex-direction: column;
-      padding: 16px;
+      padding: 16px 0 0;
       border-bottom: 1px solid #3c3f41;
     }
 
@@ -131,7 +146,7 @@
 
     .issue-overview,
     .data-flow-section {
-      padding: 16px;
+      padding: 16px 0;
     }
 
     .example-fixes {
@@ -164,8 +179,9 @@
       padding: 8px 0px;
     }
 
-    .data-flow-row.is-selected {
-      background-color: #43454a;
+    .data-flow-body {
+      font-size: 0.88rem;
+      font-weight: 500;
     }
 
     .data-flow-header {
@@ -176,12 +192,9 @@
     }
 
     .data-flow-body {
-      font-size: 12px;
-      font-style: normal;
-      font-weight: 400;
-      line-height: 18px;
-      border-spacing: 0px 2px;
       font-family: 'Courier New', Courier, monospace;
+      background: #45494A;
+      padding-left: 8px;
     }
 
     .data-flow-number {
@@ -191,9 +204,9 @@
     }
 
     .data-flow-clickable-row {
-      color: #759af3;
+      color: #599DF6;
       display: block;
-      margin: 0px 24px;
+      margin: 0px 16px;
     }
 
     .data-flow-clickable-row:hover {
@@ -208,7 +221,7 @@
 
     .data-flow-delimiter {
       font-weight: bold;
-      color: #cc7832;
+      color: #BBBBBB;
     }
 
     .tab-item {
@@ -216,29 +229,32 @@
       display: block;
       color: white;
       text-align: center;
-      padding: 8px 16px;
+      padding: 4px 16px 5px 16px;
       text-decoration: none;
-      background-color: #3c3f41;
-      border: 1px solid #3c3f41;
       margin-right: 4px;
       cursor: pointer;
       transition: background-color 0.3s, border-color 0.3s;
     }
 
-    .tab-item:hover,
-    .tab-item.is-selected {
-      background-color: #4c4f52;
-      border-color: #4c4f52;
+    .tab-item:hover {
+      background-color: #2F3133;
+
     }
 
     .tab-item.is-selected {
-      color: #ffffff;
-      border-bottom: 2px solid #f48024;
+      background-color: #3D4B5B;
+
+    }
+
+    .tab-item.is-selected {
+      color: #BBBBBB;
+      border-bottom: 3px solid #4A87C7;
     }
 
     .example-line {
       font-family: "Courier New", Courier, monospace;
       font-size: 12px;
+      padding: 2px 0 24px 0;
     }
 
     .example-line>code {

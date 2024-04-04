@@ -95,7 +95,7 @@ func getTabsHtml(fixes []snyk.ExampleCommitFix) string {
 		tabsHtml += fmt.Sprintf(`<span class="tab-item %s" id="tab-link-%d">%s</span>`, isSelectedClass, i, getRepoName(fix.CommitURL))
 	}
 
-	tabsHtml += "</div>"
+	tabsHtml += `</div><div class="tab-container">`
 
 	// Generate the contents for each tab
 	for i, fix := range fixes {
@@ -108,6 +108,8 @@ func getTabsHtml(fixes []snyk.ExampleCommitFix) string {
 		contentHtml := getCodeDiffHtml(fix)
 		tabsHtml += fmt.Sprintf(`<div id="tab-content-%d" class="tab-content %s">%s</div>`, i, isSelectedClass, contentHtml)
 	}
+
+	tabsHtml += `</div>`
 
 	return tabsHtml
 }
@@ -138,6 +140,8 @@ func getDetailsHtml(issue snyk.Issue) string {
 	html = replaceVariableInHtml(html, "repoCount", fmt.Sprintf("%d", additionalData.RepoDatasetSize))
 	html = replaceVariableInHtml(html, "exampleCount", fmt.Sprintf("%d", len(additionalData.ExampleCommitFixes)))
 	html = replaceVariableInHtml(html, "tabsNav", getTabsHtml(additionalData.ExampleCommitFixes))
+
+	log.Debug().Msgf("Details HTML: %s", html)
 
 	return html
 }
