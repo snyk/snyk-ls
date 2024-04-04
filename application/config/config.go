@@ -104,7 +104,7 @@ func (c *CliSettings) Installed() bool {
 }
 
 func (c *CliSettings) CliPathFileInfo() (os.FileInfo, error) {
-	stat, err := os.Lstat(c.cliPath)
+	stat, err := os.Stat(c.cliPath)
 	if err == nil {
 		log.Debug().Str("method", "config.cliSettings.Installed").Msgf("CLI path: %s, Size: %d, Perm: %s",
 			c.cliPath,

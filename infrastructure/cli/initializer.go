@@ -168,7 +168,7 @@ func (i *Initializer) updateCli() {
 func (i *Initializer) isOutdatedCli() bool {
 	cliPath := cliPathInConfig()
 
-	fileInfo, err := os.Lstat(cliPath)
+	fileInfo, err := os.Stat(cliPath)
 	if err != nil {
 		log.Err(err).Str("method", "isOutdatedCli").Msg("Failed to stat CLI file.")
 		return false
