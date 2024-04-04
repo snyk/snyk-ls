@@ -144,7 +144,8 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 		logger.Err(err).Msg("couldn't create xdg.DataHome directory")
 		return err
 	}
-	tmpDirPath, err := os.MkdirTemp(xdg.DataHome, "downloads")
+	cliDirectory := filepath.Dir(config.CurrentConfig().CliSettings().Path())
+	tmpDirPath, err := os.MkdirTemp(cliDirectory, "downloads")
 	if err != nil {
 		logger.Err(err).Msg("couldn't create tmpdir")
 		return err
