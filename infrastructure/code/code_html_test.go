@@ -109,6 +109,16 @@ func Test_CodeDetailsPanel_html_getTabsHtml(t *testing.T) {
 	assert.Regexp(t, expectedTab2, tabsHtml)
 }
 
+func Test_CodeDetailsPanel_html_getRowOfCWEs(t *testing.T) {
+	_ = testutil.UnitTest(t)
+
+	cwes := []string{"CWE-1", "CWE-2"}
+
+	html := getRowOfCWEs(cwes)
+
+	assert.Equal(t, `<a class="cwe" target="_blank" rel="noopener noreferrer" href="https://cwe.mitre.org/data/definitions/1.html">CWE-1</a><span class="cwe-separator">|</span><a class="cwe" target="_blank" rel="noopener noreferrer" href="https://cwe.mitre.org/data/definitions/2.html">CWE-2</a>`, html)
+}
+
 func Test_CodeDetailsPanel_html_getRepoName(t *testing.T) {
 	// Logic copied from Snyk IntelliJ plugin
 	// https://github.com/snyk/snyk-intellij-plugin/blob/master/src/main/kotlin/io/snyk/plugin/ui/toolwindow/panels/SuggestionDescriptionPanelFromLS.kt#L256-L262
