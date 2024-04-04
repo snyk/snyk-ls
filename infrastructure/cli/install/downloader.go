@@ -23,7 +23,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/adrg/xdg"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
@@ -139,12 +138,12 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	// pipe stream
 	cliReader := io.TeeReader(resp.Body, newWriter(resp.ContentLength, d.progressTracker, onProgress))
 
-	err = os.MkdirAll(xdg.DataHome, 0755)
+	cliDirectory := filepath.Dir(config.CurrentConfig().CliSettings().Path())
+	err = os.MkdirAll(cliDirectory, 0755)
 	if err != nil {
-		logger.Err(err).Msg("couldn't create xdg.DataHome directory")
+		logger.Err(err).Msg("couldn't create directory for Snyk CLI")
 		return err
 	}
-	cliDirectory := filepath.Dir(config.CurrentConfig().CliSettings().Path())
 	tmpDirPath, err := os.MkdirTemp(cliDirectory, "downloads")
 	if err != nil {
 		logger.Err(err).Msg("couldn't create tmpdir")
