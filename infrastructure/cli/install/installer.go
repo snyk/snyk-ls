@@ -152,7 +152,7 @@ func replaceOutdatedCli(cliDiscovery Discovery) error {
 
 		// Cleanup an old executable, if left after previous update.
 		// There should be no chance that this is still running due to 4-day update cycle. Any CLI run should be guaranteed to terminate within 4 days.
-		if _, err := os.Stat(tildeExecutableName); err == nil {
+		if _, err := os.Lstat(tildeExecutableName); err == nil {
 			err = os.Remove(tildeExecutableName)
 			if err != nil {
 				log.Warn().Err(err).Str("method", "replaceOutdatedCli").Msg("couldn't remove old CLI on Windows")
