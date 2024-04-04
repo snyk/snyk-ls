@@ -331,3 +331,21 @@
 </body>
 
 </html>
+<script>
+  const tabLinks = document.querySelectorAll('.tab-item');
+  const tabContents = document.querySelectorAll('.tab-content');
+  document.querySelector('.tabs-nav').addEventListener('click', (event) => {
+    const clickedTab = event.target.closest('.tab-item');
+    if (!clickedTab) return;
+
+    tabLinks.forEach(tab => {
+      tab.classList.toggle('is-selected', tab === clickedTab);
+    });
+
+    const targetContentId = clickedTab.id.replace('tab-link', 'tab-content');
+    tabContents.forEach(content => {
+      content.classList.toggle('is-selected', content.id === targetContentId);
+    });
+  });
+
+</script>
