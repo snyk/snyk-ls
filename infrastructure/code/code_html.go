@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 
@@ -44,6 +45,43 @@ func getDataFlowHeadingHtml(issue snyk.CodeIssueData) string {
 		stepWord += "s"
 	}
 	return fmt.Sprintf("Data Flow - %d %s", dataFlowCount, stepWord)
+}
+
+func getIgnoreDetailsHtml(isIgnored bool, ignoreDetails *snyk.IgnoreDetails) (string, string) {
+	if !isIgnored {
+		return "ignore-details-section-hidden", ""
+	}
+
+	ignoreDetailsHtml := fmt.Sprintf(`<div class="ignore-details-column">
+%s
+%s
+</div>
+<div class="ignore-details-column">
+%s
+%s
+</div>
+%s
+`,
+		getIgnoreDetailsRow("Category", ignoreDetails.Category, "  "),
+		getIgnoreDetailsRow("Expiration", ignoreDetails.Expiration, "  "),
+		getIgnoreDetailsRow("Ignored On", formatDate(ignoreDetails.IgnoredOn), "  "),
+		getIgnoreDetailsRow("Ignored By", ignoreDetails.IgnoredBy, "  "),
+		getIgnoreDetailsRow("Reason", ignoreDetails.Reason, ""),
+	)
+	warning := `<p>Ignores are currently managed in the Snyk web app.
+To edit or remove the ignore please go to: <a href="https://app.snyk.io" target="_blank" rel="noopener noreferrer" >https://app.snyk.
+io</a>.</p>` // TODO: what about different env
+	ignoreDetailsHtml += warning
+	return "", ignoreDetailsHtml
+}
+func getIgnoreDetailsRow(label, text, tab string) string {
+	html := replaceVariableInHtml(`${tab}<div class="ignore-details-row">
+${tab}  <div class="ignore-details-row-column">${label}</div>
+${tab}  <div class="ignore-details-row-column">${text}</div>
+${tab}</div>`, "label", label)
+	html = replaceVariableInHtml(html, "text", text)
+	html = replaceVariableInHtml(html, "tab", tab)
+	return html
 }
 
 func getDataFlowHtml(issue snyk.CodeIssueData) string {
@@ -121,8 +159,6 @@ func getDetailsHtml(issue snyk.Issue) string {
 		return ""
 	}
 
-	dataFlowHtml := getDataFlowHtml(additionalData)
-
 	// Header
 	html := replaceVariableInHtml(detailsHtmlTemplate, "issueId", issue.ID)
 	html = replaceVariableInHtml(html, "issueTitle", additionalData.Title)
@@ -132,7 +168,14 @@ func getDetailsHtml(issue snyk.Issue) string {
 	html = replaceVariableInHtml(html, "cwes", getRowOfCWEs(issue.CWEs))
 
 	html = replaceVariableInHtml(html, "issueOverview", additionalData.Message)
+
+	// Ignore details
+	ignoreDetailsSectionVisibilityClass, ignoreDetailsHtml := getIgnoreDetailsHtml(issue.IsIgnored, issue.IgnoreDetails)
+	html = replaceVariableInHtml(html, "ignoreDetailsSectionVisibilityClass", ignoreDetailsSectionVisibilityClass)
+	html = replaceVariableInHtml(html, "ignoreDetails", ignoreDetailsHtml)
+
 	// Data flow
+	dataFlowHtml := getDataFlowHtml(additionalData)
 	html = replaceVariableInHtml(html, "dataFlowHeading", getDataFlowHeadingHtml(additionalData))
 	html = replaceVariableInHtml(html, "dataFlow", dataFlowHtml)
 
@@ -212,4 +255,9 @@ func getSeverityIconSvg(issue snyk.Issue) string {
 
 func getCWELabel(cwe string) string {
 	return fmt.Sprintf("https://cwe.mitre.org/data/definitions/%s.html", strings.TrimPrefix(cwe, "CWE-"))
+}
+
+func formatDate(date time.Time) string {
+	month := date.Format("January")
+	return fmt.Sprintf("%s %02d, %d", month, date.Day(), date.Year())
 }

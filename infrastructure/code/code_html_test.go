@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -60,6 +61,10 @@ func Test_CodeDetailsPanel_html_getDetailsHtml(t *testing.T) {
 	assert.NotContains(t, codePanelHtml, "${dataFlow}")
 	assert.NotContains(t, codePanelHtml, "${dataFlowCount}")
 
+	assert.Contains(t, codePanelHtml, " ignore-details-section-hidden")
+	assert.NotContains(t, codePanelHtml, "${ignoreDetailsSectionVisibilityClass}")
+	assert.NotContains(t, codePanelHtml, "${ignoreDetails}")
+
 	// assert Fixes section
 	fixesDescription := fmt.Sprintf(`\s*This issue was fixed by %d projects. Here are %d example fixes:\s*`, repoCount, len(fixes))
 	expectedFixesDescription := regexp.MustCompile(fixesDescription)
@@ -71,6 +76,41 @@ func Test_CodeDetailsPanel_html_getDetailsHtml(t *testing.T) {
 	assert.Regexp(t, expectedTabsNav, codePanelHtml)
 	assert.Regexp(t, expectedTabSelected, codePanelHtml)
 	assert.Regexp(t, expectedTab2, codePanelHtml)
+}
+
+func Test_CodeDetailsPanel_html_getDetailsHtml_ignored(t *testing.T) {
+	_ = testutil.UnitTest(t)
+
+	dataFlow := getDataFlowElements()
+	fixes := getFixes()
+	repoCount := 54387
+	issue := snyk.Issue{
+		ID:        "java/DontUsePrintStackTrace",
+		Severity:  2,
+		IsIgnored: true,
+		IgnoreDetails: &snyk.IgnoreDetails{
+			Category:   "wont-fix",
+			Reason:     "False positive",
+			Expiration: "13 days",
+			IgnoredOn:  time.Now(),
+			IgnoredBy:  "Test",
+		},
+		AdditionalData: snyk.CodeIssueData{
+			Title:              "Allocation of Resources Without Limits or Throttling",
+			DataFlow:           dataFlow,
+			ExampleCommitFixes: fixes,
+			RepoDatasetSize:    repoCount,
+			IsSecurityType:     true,
+			Message:            "Either rethrow this java.lang.InterruptedException or set the interrupted flag on the current thread with 'Thread.currentThread().interrupt()'. Otherwise the information that the current thread was interrupted will be lost.",
+		},
+	}
+
+	// invoke method under test
+	codePanelHtml := getDetailsHtml(issue)
+
+	assert.NotContains(t, codePanelHtml, " ignore-details-section-hidden")
+	assert.NotContains(t, codePanelHtml, "${ignoreDetailsSectionVisibilityClass}")
+	assert.NotContains(t, codePanelHtml, "${ignoreDetails}")
 }
 
 func Test_CodeDetailsPanel_html_getExampleFixCodeDiffHtml(t *testing.T) {
@@ -87,6 +127,56 @@ func Test_CodeDetailsPanel_html_getExampleFixCodeDiffHtml(t *testing.T) {
 		<div class="example-line added"><code>    LOG.error(e);</code></div>`
 
 	assert.Contains(t, fixesHtml, expectedHtml)
+}
+
+func Test_CodeDetailsPanel_html_getIgnoreDetailsHtml(t *testing.T) {
+	_ = testutil.UnitTest(t)
+
+	ignoredOn, _ := time.Parse(time.RFC3339, "2024-02-23T16:08:25Z")
+	ignoreDetails := &snyk.IgnoreDetails{
+		Category:   "wont-fix",
+		Reason:     "False positive",
+		Expiration: "13 days",
+		IgnoredOn:  ignoredOn,
+		IgnoredBy:  "Test",
+	}
+
+	ignoreDetailsSectionVisibilityClass, actualHtml := getIgnoreDetailsHtml(true, ignoreDetails)
+	expectedHtml := `<div class="ignore-details-column">
+  <div class="ignore-details-row">
+    <div class="ignore-details-row-column">Category</div>
+    <div class="ignore-details-row-column">wont-fix</div>
+  </div>
+  <div class="ignore-details-row">
+    <div class="ignore-details-row-column">Expiration</div>
+    <div class="ignore-details-row-column">13 days</div>
+  </div>
+</div>
+<div class="ignore-details-column">
+  <div class="ignore-details-row">
+    <div class="ignore-details-row-column">Ignored On</div>
+    <div class="ignore-details-row-column">February 23, 2024</div>
+  </div>
+  <div class="ignore-details-row">
+    <div class="ignore-details-row-column">Ignored By</div>
+    <div class="ignore-details-row-column">Test</div>
+  </div>
+</div>
+<div class="ignore-details-row">
+  <div class="ignore-details-row-column">Reason</div>
+  <div class="ignore-details-row-column">False positive</div>
+</div>
+<p>Ignores are currently managed in the Snyk web app.
+To edit or remove the ignore please go to: <a href="https://app.snyk.io" target="_blank" rel="noopener noreferrer" >https://app.snyk.
+io</a>.</p>`
+
+	assert.Equal(t, expectedHtml, actualHtml)
+	assert.Equal(t, "", ignoreDetailsSectionVisibilityClass)
+
+	ignoreDetailsSectionVisibilityClass, actualHtml = getIgnoreDetailsHtml(false, ignoreDetails)
+
+	assert.Equal(t, "", actualHtml)
+	assert.Equal(t, "ignore-details-section-hidden", ignoreDetailsSectionVisibilityClass)
 }
 
 func Test_CodeDetailsPanel_html_getTabsHtml(t *testing.T) {

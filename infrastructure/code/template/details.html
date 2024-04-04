@@ -63,6 +63,7 @@
     .example-fixes,
     .example-fixes-header,
     .example-fixes-text,
+    .ignore-details-header,
     .data-flow-header,
     .data-flow-body,
     .example-line {
@@ -116,6 +117,7 @@
       display: block;
     }
 
+    .ignore-header,
     .panel-header {
       display: flex;
       flex-direction: column;
@@ -145,10 +147,29 @@
     }
 
     .issue-overview,
+    .ignore-details-section,
     .data-flow-section {
       padding: 16px 0;
     }
 
+    .ignore-details-section {
+      display: flex;
+    }
+
+    .ignore-details-section-hidden {
+      display: none;
+    }
+
+    .ignore-details-column {
+      flex: 50%;
+    }
+    .ignore-details-row {
+      display: flex;
+    }
+    .ignore-details-row-column {
+      flex: 50%;
+    }
+    
     .example-fixes {
       font-size: 12px;
       font-style: normal;
@@ -293,6 +314,9 @@
 </head>
 
 <body>
+  <!-- Ignore header -->
+  <div class="ignore-header ${ignoreDetailsSectionVisibilityClass}">Ignored. This issue is currently ignored.</div>
+
   <!-- Panel header -->
   <header class="panel-header">
     <div class="severity-container">
@@ -301,6 +325,7 @@
     </div>
     <div class="severity-type">${issueType}</div>
     ${cwes}
+    <div class="ignore-label ${ignoreDetailsSectionVisibilityClass}">Ignored</div>
   </header>
 
   <main>
@@ -308,6 +333,14 @@
     <article class="issue-overview">
       <div class="overview-text">
         ${issueOverview}
+      </div>
+    </article>
+
+    <!-- Ignore Details -->
+    <article class="ignore-details-section ${ignoreDetailsSectionVisibilityClass}">
+      <h2 class="ignore-details-header">Ignore Details</h2>
+      <div class="ignore-details-body">
+        ${ignoreDetails}
       </div>
     </article>
 
