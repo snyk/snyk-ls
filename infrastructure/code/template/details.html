@@ -24,7 +24,7 @@
   <style>
     html {
       font-size: 18px;
-      /* 1rem = 16px */
+      background-color: #45494A;
     }
 
     *,
@@ -52,8 +52,7 @@
       color: #bbbbbb;
     }
 
-    .overview-text,
-    .severity-type {
+    .overview-text {
       font-size: 0.75rem;
       font-weight: 400;
       line-height: 1.125rem;
@@ -71,15 +70,8 @@
       line-height: 1.125rem;
     }
 
-    .severity-title {
-      font-size: 1rem;
-      /* 16px */
-      font-weight: 600;
-    }
-
     .tab-item {
       font-size: 0.80rem;
-      /* 16px */
       font-weight: 500;
     }
 
@@ -131,17 +123,41 @@
     }
 
     .severity-title {
+      font-size: 1rem;
+      font-weight: 600;
       color: #ccc;
       font-style: normal;
-      line-height: 14px;
+      line-height: 1.5rem;
       padding-left: 8px;
     }
 
     .severity-type {
-      font-size: 12px;
       font-style: normal;
       font-weight: 400;
-      line-height: 14px;
+      font-size: 0.75rem;
+      line-height: 1.125rem;
+    }
+
+    .cwe {
+      color: #4daafc;
+      text-decoration: none;
+    }
+
+    .severity-type-container {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      font-size: 0.75rem;
+      color: #ccc;
+      margin-bottom: 8px;
+    }
+
+    .delimiter {
+      width: 0;
+      height: 1.3rem;
+      margin: 0 8px;
+      border-left: 1px solid #3c3c3c;
+      display: inline-block;
     }
 
     .issue-overview,
@@ -261,7 +277,6 @@
       display: block;
       padding-left: 1.875rem;
       white-space: pre-wrap;
-      /* color: var(--vscode-editor-foreground); */
       font-weight: 400;
       background-color: transparent;
     }
@@ -299,8 +314,10 @@
       ${severityIcon}
       <div class="severity-title">${issueTitle}</div>
     </div>
-    <div class="severity-type">${issueType}</div>
-    ${cwes}
+    <div class="severity-type-container">
+      <div class="severity-type">${issueType}</div>
+      ${cwes}
+    </div>
   </header>
 
   <main>

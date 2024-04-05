@@ -141,18 +141,17 @@ func getDetailsHtml(issue snyk.Issue) string {
 	html = replaceVariableInHtml(html, "exampleCount", fmt.Sprintf("%d", len(additionalData.ExampleCommitFixes)))
 	html = replaceVariableInHtml(html, "tabsNav", getTabsHtml(additionalData.ExampleCommitFixes))
 
-	log.Debug().Msgf("Details HTML: %s", html)
-
 	return html
 }
 
 func getRowOfCWEs(cwes []string) string {
-	html := ""
+	delimeter := `<span class="delimiter"></span>`
+	html := delimeter
 	for i, cwe := range cwes {
 		href := getCWELabel(cwe)
 		html += fmt.Sprintf(`<a class="cwe" target="_blank" rel="noopener noreferrer" href="%s">%s</a>`, href, cwe)
 		if i != len(cwes)-1 {
-			html += `<span class="cwe-separator">|</span>`
+			html += delimeter
 		}
 	}
 	return html
