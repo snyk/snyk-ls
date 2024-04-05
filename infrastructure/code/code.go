@@ -309,17 +309,19 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
 	files <-chan string,
 	changedFiles map[string]bool,
 ) (issues []snyk.Issue, err error) {
-	response, bundle, err := sc.codeScanner.UploadAndAnalyze(ctx, path, files, changedFiles)
-	if ctx.Err() != nil {
-		log.Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
-		return []snyk.Issue{}, nil
-	}
+	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.uploadAndAnalyze")
+	defer sc.BundleUploader.instrumentor.Finish(span)
+
+	requestId := span.GetTraceId() // use span trace id as code-request-id
+	log.Info().Str("requestId", requestId).Msg("Starting Code analysis.")
+
+	sarif, bundleHash, err := sc.codeScanner.UploadAndAnalyze(ctx, requestId, path, files, changedFiles)
 	if err != nil {
 		return []snyk.Issue{}, err
 	}
 
-	converter := SarifConverter{sarif: *response}
-	issues, err = converter.toIssues(bundle.GetRootPath())
+	converter := SarifConverter{sarif: *sarif}
+	issues, err = converter.toIssues(path)
 	if err != nil {
 		return []snyk.Issue{}, err
 	}
@@ -329,10 +331,10 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
 		sc.errorReporter,
 		sc.notifier,
 		sc.learnService,
-		bundle.GetRequestId(),
+		requestId,
 		path,
 	)
-	issueEnhancer.addIssueActions(ctx, issues, bundle.GetBundleHash())
+	issueEnhancer.addIssueActions(ctx, issues, bundleHash)
 
 	return issues, nil
 }

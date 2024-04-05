@@ -22,8 +22,6 @@ import (
 	"sync"
 
 	codeClient "github.com/snyk/code-client-go"
-	codeClientBundle "github.com/snyk/code-client-go/bundle"
-	codeClientDeepCode "github.com/snyk/code-client-go/deepcode"
 	codeClientHTTP "github.com/snyk/code-client-go/http"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 
@@ -151,13 +149,11 @@ func initInfrastructure() {
 	snykCodeClient = code.NewSnykCodeHTTPClient(codeInstrumentor, codeErrorReporter, networkAccess.GetHttpClient)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, codeInstrumentor)
 
-	httpClient := codeClientHTTP.NewHTTPClient(engine.GetLogger(), config.CurrentConfig(),
-		networkAccess.GetHttpClient, codeInstrumentor,
+	httpClient := codeClientHTTP.NewHTTPClient(engine.GetLogger(), networkAccess.GetHttpClient, codeInstrumentor,
 		codeErrorReporter)
-	snykCode := codeClientDeepCode.NewSnykCodeClient(engine.GetLogger(), httpClient, codeInstrumentor)
-	bundleManager := codeClientBundle.NewBundleManager(engine.GetLogger(), snykCode, codeInstrumentor, codeErrorReporter)
 	codeClientScanner := codeClient.NewCodeScanner(
-		bundleManager,
+		httpClient,
+		config.CurrentConfig(),
 		codeInstrumentor,
 		codeErrorReporter,
 		engine.GetLogger(),

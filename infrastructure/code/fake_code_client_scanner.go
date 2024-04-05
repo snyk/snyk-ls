@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"strings"
 
-	codeClientBundle "github.com/snyk/code-client-go/bundle"
-	codeClientDeepCode "github.com/snyk/code-client-go/deepcode"
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 )
 
@@ -384,42 +382,12 @@ func getSarifResponseJson2(filePath string) string {
 `, filePath, filePath, filePath, filePath, filePath)
 }
 
-func (f *FakeCodeScannerClient) UploadAndAnalyze(ctx context.Context, path string, files <-chan string,
-	changedFiles map[string]bool) (*codeClientSarif.SarifResponse,
-	codeClientBundle.Bundle, error) {
+func (f *FakeCodeScannerClient) UploadAndAnalyze(ctx context.Context, requestId string, path string,
+	files <-chan string,
+	changedFiles map[string]bool) (*codeClientSarif.SarifResponse, string, error) {
 	var analysisResponse codeClientSarif.SarifResponse
 	responseJson := getSarifResponseJson2(path)
 	err := json.Unmarshal([]byte(responseJson), &analysisResponse)
 	f.UploadAndAnalyzeWasCalled = true
-	return &analysisResponse, FakeBundle{
-		rootPath: f.rootPath,
-	}, err
-}
-
-type FakeBundle struct {
-	rootPath string
-}
-
-func (f FakeBundle) UploadBatch(ctx context.Context, batch *codeClientBundle.Batch) error {
-	return nil
-}
-
-func (f FakeBundle) GetBundleHash() string {
-	return "testBundleHash"
-}
-
-func (f FakeBundle) GetRootPath() string {
-	return f.rootPath
-}
-
-func (f FakeBundle) GetRequestId() string {
-	return "testRequestId"
-}
-
-func (f FakeBundle) GetFiles() map[string]codeClientDeepCode.BundleFile {
-	return map[string]codeClientDeepCode.BundleFile{}
-}
-
-func (f FakeBundle) GetMissingFiles() []string {
-	return []string{}
+	return &analysisResponse, "", err
 }
