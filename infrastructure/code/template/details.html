@@ -24,7 +24,6 @@
   <style>
     html {
       font-size: 18px;
-      /* 1rem = 16px */
     }
 
     *,
@@ -52,14 +51,13 @@
       color: #bbbbbb;
     }
 
-    .overview-text,
-    .severity-type {
-      font-size: 0.75rem;
-      font-weight: 400;
-      line-height: 1.125rem;
+    .overview-text {
+      padding: 8px 8px 0 0;
     }
 
-    .issue-details,
+    .cwe,
+    .severity-type,
+    .overview-text,
     .example-fixes,
     .example-fixes-header,
     .example-fixes-text,
@@ -70,26 +68,6 @@
       font-size: 0.75rem;
       font-weight: 400;
       line-height: 1.125rem;
-    }
-
-    .severity-title {
-      font-size: 1rem;
-      /* 16px */
-      font-weight: 600;
-    }
-
-    .tab-item {
-      font-size: 0.80rem;
-      /* 16px */
-      font-weight: 500;
-    }
-
-
-    .overview-text {
-      font-style: normal;
-      font-weight: 400;
-      line-height: 1.25rem;
-      padding: 8px 8px 0 0;
     }
 
     .tabs-nav {
@@ -133,17 +111,31 @@
     }
 
     .severity-title {
+      font-size: 1rem;
+      font-weight: 600;
       color: #ccc;
-      font-style: normal;
-      line-height: 14px;
       padding-left: 8px;
     }
 
-    .severity-type {
-      font-size: 12px;
-      font-style: normal;
-      font-weight: 400;
-      line-height: 14px;
+    .cwe {
+      color: #4daafc;
+      text-decoration: none;
+    }
+
+    .severity-type-container {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      color: #ccc;
+      margin-bottom: 8px;
+    }
+
+    .delimiter {
+      width: 0;
+      height: 1.3rem;
+      margin: 0 8px;
+      border-left: 1px solid #505254;
+      display: inline-block;
     }
 
     .issue-overview,
@@ -163,59 +155,26 @@
     .ignore-details-column {
       flex: 50%;
     }
+
     .ignore-details-row {
       display: flex;
     }
+
     .ignore-details-row-column {
       flex: 50%;
     }
-    
-    .example-fixes {
-      font-size: 12px;
-      font-style: normal;
-      font-weight: 400;
-      line-height: 18px;
-    }
-
-    .example-fixes-header {
-      font-size: 12px;
-      font-style: normal;
-      font-weight: 500;
-      line-height: 18px;
-    }
 
     .example-fixes-text {
-      font-size: 12px;
-      font-style: normal;
-      font-weight: 400;
-      line-height: 18px;
       margin-block-end: 1rem;
-    }
-
-    .issue-details {
-      font-size: 12px;
-      font-style: normal;
-      font-weight: 400;
-      line-height: 18px;
-      padding: 8px 0px;
-    }
-
-    .data-flow-body {
-      font-size: 0.88rem;
-      font-weight: 500;
-    }
-
-    .data-flow-header {
-      font-size: 12px;
-      font-style: normal;
-      font-weight: 500;
-      line-height: 18px;
     }
 
     .data-flow-body {
       font-family: 'Courier New', Courier, monospace;
-      background: #45494A;
-      padding-left: 8px;
+      border-collapse: collapse;
+    }
+
+    .data-flow-body tbody {
+      background-color: #46494A;
     }
 
     .data-flow-number {
@@ -246,6 +205,8 @@
     }
 
     .tab-item {
+      font-size: 0.80rem;
+      font-weight: 500;
       float: left;
       display: block;
       color: white;
@@ -259,30 +220,23 @@
 
     .tab-item:hover {
       background-color: #2F3133;
-
-    }
-
-    .tab-item.is-selected {
-      background-color: #3D4B5B;
-
     }
 
     .tab-item.is-selected {
       color: #BBBBBB;
       border-bottom: 3px solid #4A87C7;
+      background-color: #3D4B5B;
     }
 
     .example-line {
       font-family: "Courier New", Courier, monospace;
-      font-size: 12px;
-      padding: 2px 0 24px 0;
+      padding: 2px 0 18px 0;
     }
 
     .example-line>code {
       display: block;
       padding-left: 1.875rem;
       white-space: pre-wrap;
-      /* color: var(--vscode-editor-foreground); */
       font-weight: 400;
       background-color: transparent;
     }
@@ -296,7 +250,6 @@
       content: "+";
       position: absolute;
       padding: 0 4px;
-      line-height: 1;
     }
 
     .example-line.removed {
@@ -308,7 +261,6 @@
       content: "-";
       position: absolute;
       padding: 0 4px;
-      line-height: 1;
     }
   </style>
 </head>
@@ -323,9 +275,11 @@
       ${severityIcon}
       <div class="severity-title">${issueTitle}</div>
     </div>
-    <div class="severity-type">${issueType}</div>
-    ${cwes}
-    <div class="ignore-label ${ignoreDetailsSectionVisibilityClass}">Ignored</div>
+    <div class="severity-type-container">
+      <div class="severity-type">${issueType}</div>
+      ${cwes}
+      <div class="ignore-label ${ignoreDetailsSectionVisibilityClass}">Ignored</div>
+    </div>
   </header>
 
   <main>

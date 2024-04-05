@@ -204,7 +204,10 @@ func Test_CodeDetailsPanel_html_getRowOfCWEs(t *testing.T) {
 
 	html := getRowOfCWEs(cwes)
 
-	assert.Equal(t, `<a class="cwe" target="_blank" rel="noopener noreferrer" href="https://cwe.mitre.org/data/definitions/1.html">CWE-1</a><span class="cwe-separator">|</span><a class="cwe" target="_blank" rel="noopener noreferrer" href="https://cwe.mitre.org/data/definitions/2.html">CWE-2</a>`, html)
+	delimeter := `<span class="delimiter"></span>`
+	linkClasses := `class="cwe" target="_blank" rel="noopener noreferrer"`
+	expected := fmt.Sprintf(`%s<a %s href="https://cwe.mitre.org/data/definitions/1.html">CWE-1</a>%s<a %s href="https://cwe.mitre.org/data/definitions/2.html">CWE-2</a>`, delimeter, linkClasses, delimeter, linkClasses)
+	assert.Equal(t, expected, html)
 }
 
 func Test_CodeDetailsPanel_html_getRepoName(t *testing.T) {
