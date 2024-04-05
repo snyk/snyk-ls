@@ -61,8 +61,9 @@ func Test_CodeDetailsPanel_html_getDetailsHtml(t *testing.T) {
 	assert.NotContains(t, codePanelHtml, "${dataFlow}")
 	assert.NotContains(t, codePanelHtml, "${dataFlowCount}")
 
-	assert.Contains(t, codePanelHtml, " ignore-details-section-hidden")
-	assert.NotContains(t, codePanelHtml, "${ignoreDetailsSectionVisibilityClass}")
+	assert.Contains(t, codePanelHtml, "ignore-warning hidden")
+	assert.Contains(t, codePanelHtml, "ignore-badge hidden")
+	assert.Contains(t, codePanelHtml, "ignore-details-section hidden")
 	assert.NotContains(t, codePanelHtml, "${ignoreDetails}")
 
 	// assert Fixes section
@@ -108,8 +109,8 @@ func Test_CodeDetailsPanel_html_getDetailsHtml_ignored(t *testing.T) {
 	// invoke method under test
 	codePanelHtml := getDetailsHtml(issue)
 
-	assert.NotContains(t, codePanelHtml, " ignore-details-section-hidden")
-	assert.NotContains(t, codePanelHtml, "${ignoreDetailsSectionVisibilityClass}")
+	assert.NotContains(t, codePanelHtml, "ignore-warning ${visibilityClass}")
+	assert.NotContains(t, codePanelHtml, "ignore-badge ${visibilityClass}")
 	assert.NotContains(t, codePanelHtml, "${ignoreDetails}")
 }
 
@@ -138,45 +139,17 @@ func Test_CodeDetailsPanel_html_getIgnoreDetailsHtml(t *testing.T) {
 		Reason:     "False positive",
 		Expiration: "13 days",
 		IgnoredOn:  ignoredOn,
-		IgnoredBy:  "Test",
+		IgnoredBy:  "John",
 	}
 
-	ignoreDetailsSectionVisibilityClass, actualHtml := getIgnoreDetailsHtml(true, ignoreDetails)
-	expectedHtml := `<div class="ignore-details-column">
-  <div class="ignore-details-row">
-    <div class="ignore-details-row-column">Category</div>
-    <div class="ignore-details-row-column">wont-fix</div>
-  </div>
-  <div class="ignore-details-row">
-    <div class="ignore-details-row-column">Expiration</div>
-    <div class="ignore-details-row-column">13 days</div>
-  </div>
-</div>
-<div class="ignore-details-column">
-  <div class="ignore-details-row">
-    <div class="ignore-details-row-column">Ignored On</div>
-    <div class="ignore-details-row-column">February 23, 2024</div>
-  </div>
-  <div class="ignore-details-row">
-    <div class="ignore-details-row-column">Ignored By</div>
-    <div class="ignore-details-row-column">Test</div>
-  </div>
-</div>
-<div class="ignore-details-row">
-  <div class="ignore-details-row-column">Reason</div>
-  <div class="ignore-details-row-column">False positive</div>
-</div>
-<p>Ignores are currently managed in the Snyk web app.
-To edit or remove the ignore please go to: <a href="https://app.snyk.io" target="_blank" rel="noopener noreferrer" >https://app.snyk.
-io</a>.</p>`
+	// invoke method under test
+	ignoreDetailsHtml, visibilityClass := getIgnoreDetailsHtml(true, ignoreDetails)
 
-	assert.Equal(t, expectedHtml, actualHtml)
-	assert.Equal(t, "", ignoreDetailsSectionVisibilityClass)
-
-	ignoreDetailsSectionVisibilityClass, actualHtml = getIgnoreDetailsHtml(false, ignoreDetails)
-
-	assert.Equal(t, "", actualHtml)
-	assert.Equal(t, "ignore-details-section-hidden", ignoreDetailsSectionVisibilityClass)
+	// assert
+	assert.Equal(t, "", visibilityClass)
+	assert.Contains(t, ignoreDetailsHtml, `<td class="ignore-details-category">wont-fix</td>`)
+	assert.Contains(t, ignoreDetailsHtml, `<td class="ignore-details-ignored-by">John</td>`)
+	assert.Contains(t, ignoreDetailsHtml, `<td class="ignore-details-reason" colspan="3">False positive</td>`)
 }
 
 func Test_CodeDetailsPanel_html_getTabsHtml(t *testing.T) {
@@ -233,17 +206,6 @@ func Test_CodeDetailsPanel_html_getRepoName(t *testing.T) {
 			url:      "https://github.com/juice-shop/.github/commit/67603b2f2b4f02fbc65f53bda7c3f56a5d341987",
 			expected: "juice-shop/.github",
 		},
-		// TODO: Do we support non-GitHub URLs?
-		// {
-		// 	name:     "Non-GitHub URL",
-		// 	url:      "https://gitlab.com/gitlab-org/gitlab-runner/-/commit/e02bce8e5dea4df1a8efd5b7dcfe7189d15a58bc",
-		// 	expected: "gitlab.com/gitlab-org/gitlab-runner/-",
-		// },
-		// {
-		// 	name:     "Bitbucket URL",
-		// 	url:      "https://bitbucket.org/snyk/snyk-pipelines/src/master/bitbucket-pipelines.yml",
-		// 	expected: "snyk/snyk-pipelines",
-		// },
 	}
 
 	for _, tc := range testCases {

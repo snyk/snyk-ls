@@ -47,41 +47,51 @@ func getDataFlowHeadingHtml(issue snyk.CodeIssueData) string {
 	return fmt.Sprintf("Data Flow - %d %s", dataFlowCount, stepWord)
 }
 
-func getIgnoreDetailsHtml(isIgnored bool, ignoreDetails *snyk.IgnoreDetails) (string, string) {
+func getIgnoreDetailsHtml(isIgnored bool, ignoreDetails *snyk.IgnoreDetails) (ignoreDetailsHtml string, visibilityClass string) {
 	if !isIgnored {
-		return "ignore-details-section-hidden", ""
+		return "", "hidden"
 	}
 
-	ignoreDetailsHtml := fmt.Sprintf(`<div class="ignore-details-column">
-%s
-%s
-</div>
-<div class="ignore-details-column">
-%s
-%s
-</div>
-%s
-`,
-		getIgnoreDetailsRow("Category", ignoreDetails.Category, "  "),
-		getIgnoreDetailsRow("Expiration", ignoreDetails.Expiration, "  "),
-		getIgnoreDetailsRow("Ignored On", formatDate(ignoreDetails.IgnoredOn), "  "),
-		getIgnoreDetailsRow("Ignored By", ignoreDetails.IgnoredBy, "  "),
-		getIgnoreDetailsRow("Reason", ignoreDetails.Reason, ""),
-	)
-	warning := `<p>Ignores are currently managed in the Snyk web app.
-To edit or remove the ignore please go to: <a href="https://app.snyk.io" target="_blank" rel="noopener noreferrer" >https://app.snyk.
-io</a>.</p>` // TODO: what about different env
-	ignoreDetailsHtml += warning
-	return "", ignoreDetailsHtml
-}
-func getIgnoreDetailsRow(label, text, tab string) string {
-	html := replaceVariableInHtml(`${tab}<div class="ignore-details-row">
-${tab}  <div class="ignore-details-row-column">${label}</div>
-${tab}  <div class="ignore-details-row-column">${text}</div>
-${tab}</div>`, "label", label)
-	html = replaceVariableInHtml(html, "text", text)
-	html = replaceVariableInHtml(html, "tab", tab)
-	return html
+	categoryLabel := `<th class="ignore-details-category-label">Category</th>`
+	categoryValue := fmt.Sprintf(`<td class="ignore-details-category">%s</td>`, ignoreDetails.Category)
+	expirationLabel := `<th class="ignore-details-expiration-label">Expiration</th>`
+	expirationValue := fmt.Sprintf(`<td class="ignore-details-expiration">%s</td>`, ignoreDetails.Expiration)
+	ignoredOnLabel := `<th class="ignore-details-ignored-on-label">Ignored On</th>`
+	ignoredOnValue := fmt.Sprintf(`<td class="ignore-details-ignored-on">%s</td>`, formatDate(ignoreDetails.IgnoredOn))
+	ignoredByLabel := `<th class="ignore-details-ignored-by-label">Ignored By</th>`
+	ignoredByValue := fmt.Sprintf(`<td class="ignore-details-ignored-by">%s</td>`, ignoreDetails.IgnoredBy)
+	reasonLabel := `<th class="ignore-details-reason-label">Reason</th>`
+	reasonValue := fmt.Sprintf(`<td class="ignore-details-reason" colspan="3">%s</td>`, ignoreDetails.Reason)
+
+	ignoreDetailsHtml = fmt.Sprintf(`
+		<table class="ignore-details-body">
+		<tbody>
+			<tr class="ignore-details-row">
+				%s
+				%s
+				%s
+				%s
+			</tr>
+			<tr class="ignore-details-row">
+				%s
+				%s
+				%s
+				%s
+			</tr>
+			<tr class="ignore-details-row">
+				%s
+				%s
+			</tr>
+		</tbody>
+	</table>`, categoryLabel, categoryValue, expirationLabel, expirationValue,
+		ignoredOnLabel, ignoredOnValue, ignoredByLabel, ignoredByValue, reasonLabel, reasonValue)
+
+	// TODO: Add warning message
+	// warning := `<p>Ignores are currently managed in the Snyk web app.
+	// 	To edit or remove the ignore please go to: <a href="https://app.snyk.io" target="_blank" rel="noopener noreferrer" >https://app.snyk.io</a>.</p>`
+	// ignoreDetailsHtml += warning
+
+	return ignoreDetailsHtml, ""
 }
 
 func getDataFlowHtml(issue snyk.CodeIssueData) string {
@@ -124,8 +134,6 @@ func getTabsHtml(fixes []snyk.ExampleCommitFix) string {
 	tabsHtml := `<div class="tabs-nav">`
 
 	for i, fix := range fixes {
-		// Add the is-selected class to the first tab item only
-		// The IDE handles the tab switching with the is-selected class
 		isSelectedClass := ""
 		if i == 0 {
 			isSelectedClass = "is-selected"
@@ -137,8 +145,6 @@ func getTabsHtml(fixes []snyk.ExampleCommitFix) string {
 
 	// Generate the contents for each tab
 	for i, fix := range fixes {
-		// Add the is-selected class to the first tab content only
-		// The IDE handles the content display with the is-selected class
 		isSelectedClass := ""
 		if i == 0 {
 			isSelectedClass = "is-selected"
@@ -170,8 +176,8 @@ func getDetailsHtml(issue snyk.Issue) string {
 	html = replaceVariableInHtml(html, "issueOverview", additionalData.Message)
 
 	// Ignore details
-	ignoreDetailsSectionVisibilityClass, ignoreDetailsHtml := getIgnoreDetailsHtml(issue.IsIgnored, issue.IgnoreDetails)
-	html = replaceVariableInHtml(html, "ignoreDetailsSectionVisibilityClass", ignoreDetailsSectionVisibilityClass)
+	ignoreDetailsHtml, visibilityClass := getIgnoreDetailsHtml(issue.IsIgnored, issue.IgnoreDetails)
+	html = replaceVariableInHtml(html, "visibilityClass", visibilityClass)
 	html = replaceVariableInHtml(html, "ignoreDetails", ignoreDetailsHtml)
 
 	// Data flow

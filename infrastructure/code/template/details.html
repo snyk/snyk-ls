@@ -39,7 +39,7 @@
       padding: 0;
       overflow: hidden;
       color: #d4d4d4;
-      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      font-family: "SF Pro Text", "Segoe UI", "Ubuntu", Tahoma, Geneva, Verdana, sans-serif;
     }
 
     h2 {
@@ -49,6 +49,10 @@
       font-weight: 700;
       text-transform: uppercase;
       color: #bbbbbb;
+    }
+
+    .hidden {
+      display: none;
     }
 
     .overview-text {
@@ -62,6 +66,7 @@
     .example-fixes-header,
     .example-fixes-text,
     .ignore-details-header,
+    .ignore-details-body,
     .data-flow-header,
     .data-flow-body,
     .example-line {
@@ -95,7 +100,6 @@
       display: block;
     }
 
-    .ignore-header,
     .panel-header {
       display: flex;
       flex-direction: column;
@@ -139,29 +143,31 @@
     }
 
     .issue-overview,
-    .ignore-details-section,
     .data-flow-section {
       padding: 16px 0;
     }
 
-    .ignore-details-section {
-      display: flex;
+    .ignore-details-row th {
+      font-weight: 500;
+      text-align: left;
+      white-space: nowrap;
+      padding: 0 30px 10px 0;
     }
 
-    .ignore-details-section-hidden {
-      display: none;
+    .ignore-details-row td {
+      font-weight: 400;
+      padding: 0 30px 10px 0;
     }
 
-    .ignore-details-column {
-      flex: 50%;
+    .ignore-details-body {
+      /* width: 800px; */
+      border-collapse: separate;
+      border-spacing: 0;
     }
 
-    .ignore-details-row {
-      display: flex;
-    }
-
-    .ignore-details-row-column {
-      flex: 50%;
+    .ignore-details-reason-label {
+      vertical-align: top;
+      text-align: left;
     }
 
     .example-fixes-text {
@@ -267,7 +273,7 @@
 
 <body>
   <!-- Ignore header -->
-  <div class="ignore-header ${ignoreDetailsSectionVisibilityClass}">Ignored. This issue is currently ignored.</div>
+  <div class="ignore-warning ${visibilityClass}">Ignored. This issue is currently ignored.</div>
 
   <!-- Panel header -->
   <header class="panel-header">
@@ -278,7 +284,7 @@
     <div class="severity-type-container">
       <div class="severity-type">${issueType}</div>
       ${cwes}
-      <div class="ignore-label ${ignoreDetailsSectionVisibilityClass}">Ignored</div>
+      <div class="ignore-badge ${visibilityClass}">Ignored</div>
     </div>
   </header>
 
@@ -291,7 +297,7 @@
     </article>
 
     <!-- Ignore Details -->
-    <article class="ignore-details-section ${ignoreDetailsSectionVisibilityClass}">
+    <article class="ignore-details-section ${visibilityClass}">
       <h2 class="ignore-details-header">Ignore Details</h2>
       <div class="ignore-details-body">
         ${ignoreDetails}
