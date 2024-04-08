@@ -149,9 +149,14 @@ func Test_CodeDetailsPanel_html_getIgnoreDetailsHtml(t *testing.T) {
 
 	// assert
 	assert.Equal(t, "", visibilityClass)
-	assert.Contains(t, ignoreDetailsHtml, `<td class="ignore-details-category">wont-fix</td>`)
-	assert.Contains(t, ignoreDetailsHtml, `<td class="ignore-details-ignored-by">John</td>`)
-	assert.Contains(t, ignoreDetailsHtml, `<td class="ignore-details-reason" colspan="3">False positive</td>`)
+	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-label">Category</div>`)
+	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-value">wont-fix</div>`)
+	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-label">Ignored On</div>`)
+	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-value">February 23, 2024</div>`)
+	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-label">Expiration</div>`)
+	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-value">13 days</div>`)
+	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-label">Ignored By</div>`)
+	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-value">John</div>`)
 }
 
 func Test_CodeDetailsPanel_html_getTabsHtml(t *testing.T) {
@@ -180,7 +185,7 @@ func Test_CodeDetailsPanel_html_getRowOfCWEs(t *testing.T) {
 	html := getRowOfCWEs(cwes)
 
 	delimeter := `<span class="delimiter"></span>`
-	linkClasses := `class="cwe" target="_blank" rel="noopener noreferrer"`
+	linkClasses := `class="cwe styled-link" target="_blank" rel="noopener noreferrer"`
 	expected := fmt.Sprintf(`%s<a %s href="https://cwe.mitre.org/data/definitions/1.html">CWE-1</a>%s<a %s href="https://cwe.mitre.org/data/definitions/2.html">CWE-2</a>`, delimeter, linkClasses, delimeter, linkClasses)
 	assert.Equal(t, expected, html)
 }

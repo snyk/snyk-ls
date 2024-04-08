@@ -66,7 +66,11 @@
     .example-fixes-header,
     .example-fixes-text,
     .ignore-details-header,
-    .ignore-details-body,
+    .ignore-details-label,
+    .ignore-details-value,
+    .ignore-details-reason-label,
+    .ignore-details-reason-text,
+    .ignore-next-step-text,
     .data-flow-header,
     .data-flow-body,
     .example-line {
@@ -147,51 +151,46 @@
       padding: 16px 0;
     }
 
-    .ignore-details-row th {
-      width: 25%;
-      text-align: left;
-      white-space: nowrap;
-      padding: 0 30px 10px 0;
-
-      font-weight: 600;
-      vertical-align: top;
-    }
-
-    .ignore-details-row td {
-      width: 25%;
+    .ignore-details-header {
+      font-size: 0.75rem;
       font-weight: 400;
-      padding: 0 30px 10px 0;
+      line-height: 1.125rem;
     }
 
-    .ignore-details-body {
-      table-layout: fixed;
-      width: 100%;
-      border-collapse: separate;
-      border-spacing: 0;
+    .ignore-details-wrapper {
+      display: flex;
+      flex-wrap: wrap;
+    }
+
+    .ignore-details-row {
+      display: flex;
+      flex-basis: 50%;
+      margin-bottom: 10px;
+    }
+
+    .ignore-details-label {
+      flex: 0 0 auto;
+      width: 20%;
+      font-weight: 600;
+    }
+
+    .ignore-details-value {
+      flex: 1;
+    }
+
+    .ignore-details-reason-wrapper {
+      display: flex;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
     }
 
     .ignore-details-reason-label {
-      vertical-align: top;
-      text-align: left;
+      flex: 0 0 10%;
     }
 
-    .ignore-details-reason {
-      min-width: 100px;
-      text-align: left;
-    }
-
-    .ignore-details-category-label,
-    .ignore-details-expiration-label,
-    .ignore-details-ignored-on-label,
-    .ignore-details-ignored-by-label {
-      width: 20%;
-    }
-
-    .ignore-details-category,
-    .ignore-details-expiration,
-    .ignore-details-ignored-on,
-    .ignore-details-ignored-by {
-      width: 30%;
+    .ignore-details-reason-text {
+      flex: 1;
     }
 
     .example-fixes-text {

@@ -52,44 +52,34 @@ func getIgnoreDetailsHtml(isIgnored bool, ignoreDetails *snyk.IgnoreDetails) (ig
 		return "", "hidden"
 	}
 
-	categoryLabel := `<th class="ignore-details-category-label">Category</th>`
-	categoryValue := fmt.Sprintf(`<td class="ignore-details-category">%s</td>`, ignoreDetails.Category)
-	expirationLabel := `<th class="ignore-details-expiration-label">Expiration</th>`
-	expirationValue := fmt.Sprintf(`<td class="ignore-details-expiration">%s</td>`, ignoreDetails.Expiration)
-	ignoredOnLabel := `<th class="ignore-details-ignored-on-label">Ignored On</th>`
-	ignoredOnValue := fmt.Sprintf(`<td class="ignore-details-ignored-on">%s</td>`, formatDate(ignoreDetails.IgnoredOn))
-	ignoredByLabel := `<th class="ignore-details-ignored-by-label">Ignored By</th>`
-	ignoredByValue := fmt.Sprintf(`<td class="ignore-details-ignored-by">%s</td>`, ignoreDetails.IgnoredBy)
-	reasonLabel := `<th class="ignore-details-reason-label">Reason</th>`
-	reasonValue := fmt.Sprintf(`<td class="ignore-details-reason" colspan="3">%s</td>`, ignoreDetails.Reason)
+	labels := []string{"Category", "Ignored On", "Expiration", "Ignored By"}
 
-	ignoreDetailsHtml = fmt.Sprintf(`
-		<table class="ignore-details-body">
-		<tbody>
-			<tr class="ignore-details-row">
-				%s
-				%s
-				%s
-				%s
-			</tr>
-			<tr class="ignore-details-row">
-				%s
-				%s
-				%s
-				%s
-			</tr>
-			<tr class="ignore-details-row">
-				%s
-				%s
-			</tr>
-		</tbody>
-	</table>`, categoryLabel, categoryValue, expirationLabel, expirationValue,
-		ignoredOnLabel, ignoredOnValue, ignoredByLabel, ignoredByValue, reasonLabel, reasonValue)
+	detailsMap := map[string]string{
+		"Category":   ignoreDetails.Category,
+		"Ignored On": formatDate(ignoreDetails.IgnoredOn),
+		"Expiration": ignoreDetails.Expiration,
+		"Ignored By": ignoreDetails.IgnoredBy,
+	}
+
+	pairs := `<div class="ignore-details-wrapper">`
+	for _, label := range labels {
+		value := detailsMap[label]
+		pairs += fmt.Sprintf(`<div class="ignore-details-row">
+		<div class="ignore-details-label">%s</div>
+		<div class="ignore-details-value">%s</div>
+		</div>`, label, value)
+	}
+	pairs += `</div>`
+
+	reason := fmt.Sprintf(`<div class="ignore-details-reason-wrapper">
+		<div class="ignore-details-reason-label">Reason</div>
+		<div class="ignore-details-reason-text">%s</div>
+	</div>`, ignoreDetails.Reason)
 
 	warning := `<div class="ignore-next-step-text">Ignores are currently managed in the Snyk web app.
 		To edit or remove the ignore please go to: <a class="styled-link" href="https://app.snyk.io" target="_blank" rel="noopener noreferrer" >https://app.snyk.io</a>.</div>`
-	ignoreDetailsHtml += warning
 
+	ignoreDetailsHtml = pairs + reason + warning
 	return ignoreDetailsHtml, ""
 }
 
