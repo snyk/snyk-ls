@@ -86,10 +86,9 @@ func getIgnoreDetailsHtml(isIgnored bool, ignoreDetails *snyk.IgnoreDetails) (ig
 	</table>`, categoryLabel, categoryValue, expirationLabel, expirationValue,
 		ignoredOnLabel, ignoredOnValue, ignoredByLabel, ignoredByValue, reasonLabel, reasonValue)
 
-	// TODO: Add warning message
-	// warning := `<p>Ignores are currently managed in the Snyk web app.
-	// 	To edit or remove the ignore please go to: <a href="https://app.snyk.io" target="_blank" rel="noopener noreferrer" >https://app.snyk.io</a>.</p>`
-	// ignoreDetailsHtml += warning
+	warning := `<div class="ignore-next-step-text">Ignores are currently managed in the Snyk web app.
+		To edit or remove the ignore please go to: <a class="styled-link" href="https://app.snyk.io" target="_blank" rel="noopener noreferrer" >https://app.snyk.io</a>.</div>`
+	ignoreDetailsHtml += warning
 
 	return ignoreDetailsHtml, ""
 }
@@ -198,7 +197,7 @@ func getRowOfCWEs(cwes []string) string {
 	html := delimeter
 	for i, cwe := range cwes {
 		href := getCWELabel(cwe)
-		html += fmt.Sprintf(`<a class="cwe" target="_blank" rel="noopener noreferrer" href="%s">%s</a>`, href, cwe)
+		html += fmt.Sprintf(`<a class="cwe styled-link" target="_blank" rel="noopener noreferrer" href="%s">%s</a>`, href, cwe)
 		if i != len(cwes)-1 {
 			html += delimeter
 		}

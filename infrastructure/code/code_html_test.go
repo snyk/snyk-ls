@@ -35,6 +35,7 @@ func Test_CodeDetailsPanel_html_getDetailsHtml(t *testing.T) {
 	fixes := getFixes()
 	repoCount := 54387
 	issue := snyk.Issue{
+		CWEs:     []string{"CWE-123", "CWE-456"},
 		ID:       "java/DontUsePrintStackTrace",
 		Severity: 2,
 		AdditionalData: snyk.CodeIssueData{
@@ -88,13 +89,14 @@ func Test_CodeDetailsPanel_html_getDetailsHtml_ignored(t *testing.T) {
 	issue := snyk.Issue{
 		ID:        "java/DontUsePrintStackTrace",
 		Severity:  2,
+		CWEs:      []string{"CWE-123", "CWE-456"},
 		IsIgnored: true,
 		IgnoreDetails: &snyk.IgnoreDetails{
 			Category:   "wont-fix",
-			Reason:     "False positive",
+			Reason:     "After a comprehensive review, our security team determined that the risk associated with this specific XSS vulnerability is mitigated by additional security measures implemented at the network and application layers.",
 			Expiration: "13 days",
 			IgnoredOn:  time.Now(),
-			IgnoredBy:  "Test",
+			IgnoredBy:  "John Smith",
 		},
 		AdditionalData: snyk.CodeIssueData{
 			Title:              "Allocation of Resources Without Limits or Throttling",

@@ -121,7 +121,7 @@
       padding-left: 8px;
     }
 
-    .cwe {
+    .styled-link {
       color: #4daafc;
       text-decoration: none;
     }
@@ -148,19 +148,24 @@
     }
 
     .ignore-details-row th {
-      font-weight: 500;
+      width: 25%;
       text-align: left;
       white-space: nowrap;
       padding: 0 30px 10px 0;
+
+      font-weight: 600;
+      vertical-align: top;
     }
 
     .ignore-details-row td {
+      width: 25%;
       font-weight: 400;
       padding: 0 30px 10px 0;
     }
 
     .ignore-details-body {
-      /* width: 800px; */
+      table-layout: fixed;
+      width: 100%;
       border-collapse: separate;
       border-spacing: 0;
     }
@@ -168,6 +173,25 @@
     .ignore-details-reason-label {
       vertical-align: top;
       text-align: left;
+    }
+
+    .ignore-details-reason {
+      min-width: 100px;
+      text-align: left;
+    }
+
+    .ignore-details-category-label,
+    .ignore-details-expiration-label,
+    .ignore-details-ignored-on-label,
+    .ignore-details-ignored-by-label {
+      width: 20%;
+    }
+
+    .ignore-details-category,
+    .ignore-details-expiration,
+    .ignore-details-ignored-on,
+    .ignore-details-ignored-by {
+      width: 30%;
     }
 
     .example-fixes-text {
