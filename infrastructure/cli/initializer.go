@@ -109,15 +109,8 @@ func (i *Initializer) installCli() {
 		cliPath = cliPathInConfig()
 		log.Info().Str("method", "installCli").Str("cliPath", cliPath).Msg("Using configured CLI path")
 	} else {
-		cliPath, err = i.installer.Find()
-		if err != nil {
-			log.Info().Str("method", "installCli").Msg("could not find Snyk CLI in user directories and PATH.")
-			cliFileName := (&install.Discovery{}).ExecutableName(false)
-			cliPath = filepath.Join(currentConfig.CliSettings().DefaultBinaryInstallPath(), cliFileName)
-		} else {
-			log.Info().Str("method", "installCli").Str("cliPath", cliPath).Msgf("found CLI at %s", cliPath)
-		}
-
+		cliFileName := (&install.Discovery{}).ExecutableName(false)
+		cliPath = filepath.Join(currentConfig.CliSettings().DefaultBinaryInstallPath(), cliFileName)
 		currentConfig.CliSettings().SetPath(cliPath)
 	}
 
@@ -175,7 +168,7 @@ func (i *Initializer) updateCli() {
 func (i *Initializer) isOutdatedCli() bool {
 	cliPath := cliPathInConfig()
 
-	fileInfo, err := os.Stat(cliPath) // todo: we can save stat calls by caching mod time
+	fileInfo, err := os.Stat(cliPath)
 	if err != nil {
 		log.Err(err).Str("method", "isOutdatedCli").Msg("Failed to stat CLI file.")
 		return false
