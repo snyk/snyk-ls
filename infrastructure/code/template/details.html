@@ -134,7 +134,8 @@
       flex-direction: row;
       align-items: center;
       color: #ccc;
-      margin-bottom: 8px;
+      margin-bottom: 1em;
+      line-height: 1em;
     }
 
     .delimiter {
@@ -148,6 +149,16 @@
     .issue-overview,
     .data-flow-section {
       padding: 16px 0;
+    }
+
+    .ignore-badge {
+      font-size: 0.60rem;
+      background: #FFF4ED;
+      color: #B6540B;
+      padding: 0 0.5em;
+      border-radius: 0.25em;
+      margin-left: 1em;
+      border: 1px solid #E27122;
     }
 
     .ignore-details-header {
@@ -310,7 +321,7 @@
     <div class="severity-type-container">
       <div class="severity-type">${issueType}</div>
       ${cwes}
-      <div class="ignore-badge ${visibilityClass}">Ignored</div>
+      <div class="ignore-badge ${visibilityClass}">IGNORED</div>
     </div>
   </header>
 
