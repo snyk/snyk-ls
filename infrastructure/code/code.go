@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/erni27/imcache"
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog/log"
@@ -78,6 +79,7 @@ type Scanner struct {
 	// analyzed folder
 	BundleHashes map[string]string
 	codeScanner  codeClient.CodeScanner
+	issueCache   *imcache.Cache[string, []snyk.Issue]
 }
 
 func New(bundleUploader *BundleUploader,
@@ -100,6 +102,9 @@ func New(bundleUploader *BundleUploader,
 		notifier:       notifier,
 		BundleHashes:   map[string]string{},
 		codeScanner:    codeScanner,
+		issueCache: imcache.New[string, []snyk.Issue](
+			imcache.WithDefaultExpirationOption[string, []snyk.Issue](time.Hour * 24),
+		),
 	}
 	return sc
 }
@@ -120,11 +125,11 @@ func (sc *Scanner) SupportedCommands() []snyk.CommandName {
 }
 
 func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (issues []snyk.Issue, err error) {
+	logger := config.CurrentConfig().Logger().With().Str("method", "code.Scan").Logger()
 	sastResponse, err := sc.SnykApiClient.SastSettings()
-	method := "Scan"
 
 	if err != nil {
-		log.Error().Err(err).Str("method", method).Msg("couldn't get sast enablement")
+		logger.Error().Err(err).Msg("couldn't get sast enablement")
 		sc.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{})
 		return issues, errors.New("couldn't get sast enablement")
 	}
@@ -166,14 +171,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 		sc.changedFilesMutex.Unlock()
 		return []snyk.Issue{}, nil
 	}
-
-	changedFiles := make(map[string]bool)
-	for changedPath := range sc.changedPaths[folderPath] {
-		if !uri.IsDirectory(changedPath) {
-			changedFiles[changedPath] = true
-		}
-		delete(sc.changedPaths[folderPath], changedPath)
-	}
+	filesToBeScanned := sc.getFilesToBeScanned(folderPath)
 	sc.changedFilesMutex.Unlock()
 
 	startTime := time.Now()
@@ -185,21 +183,62 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	t.BeginWithMessage("Snyk Code: Collecting files in \""+folderPath+"\"", "Evaluating ignores and counting files...")
 	fileFilter, _ := sc.fileFilters.Load(folderPath)
 	if fileFilter == nil {
-		fileFilter = filefilter.NewFileFilter(folderPath, config.CurrentConfig().Logger())
+		fileFilter = filefilter.NewFileFilter(folderPath, &logger, t)
 		sc.fileFilters.Store(folderPath, fileFilter)
 	}
 	files := fileFilter.FindNonIgnoredFiles()
-	t.EndWithMessage("Collected files")
 	metrics := sc.newMetrics(startTime)
 
 	var results []snyk.Issue
 	if sc.useIgnoresFlow() {
-		results, err = sc.UploadAndAnalyzeWithIgnores(span.Context(), folderPath, files, changedFiles)
+		results, err = sc.UploadAndAnalyzeWithIgnores(span.Context(), folderPath, files, filesToBeScanned)
 	} else {
-		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, changedFiles)
+		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, filesToBeScanned)
 	}
 
+	// add to cache
+	sc.expireCache(filesToBeScanned)
+	sc.addToCache(results)
+
 	return results, err
+}
+
+// getFilesToBeScanned returns a map of files that need to be scanned and removes them from the changedPaths set.
+// This function also analyzes interfile dependencies, taking into account the dataflow between files.
+func (sc *Scanner) getFilesToBeScanned(folderPath string) map[string]bool {
+	changedFiles := make(map[string]bool)
+	for changedPath := range sc.changedPaths[folderPath] {
+		if !uri.IsDirectory(changedPath) {
+			changedFiles[changedPath] = true
+			issues, found := sc.issueCache.Get(changedPath)
+			if !found {
+				continue
+			}
+			referencedFiles := getReferencedFiles(issues)
+			for _, referencedFile := range referencedFiles {
+				changedFiles[referencedFile] = true
+			}
+		}
+		delete(sc.changedPaths[folderPath], changedPath)
+	}
+	return changedFiles
+}
+
+func getReferencedFiles(issues []snyk.Issue) []string {
+	var referencedFiles []string
+	for _, issue := range issues {
+		if issue.AdditionalData == nil {
+			continue
+		}
+		codeIssueData, ok := issue.AdditionalData.(*snyk.CodeIssueData)
+		if !ok {
+			continue
+		}
+		for _, dataFlow := range codeIssueData.DataFlow {
+			referencedFiles = append(referencedFiles, dataFlow.FilePath)
+		}
+	}
+	return referencedFiles
 }
 
 func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath string) (waiting bool) {
@@ -473,4 +512,49 @@ func (sc *Scanner) useIgnoresFlow() bool {
 		log.Info().Msg(response.UserMessage)
 	}
 	return response.Ok
+}
+
+func (sc *Scanner) addToCache(results []snyk.Issue) {
+	sc.issueCache.RemoveExpired()
+	for _, issue := range results {
+		value, present := sc.issueCache.Get(issue.AffectedFilePath)
+		if present {
+			value = append(value, issue)
+			sc.issueCache.Set(issue.AffectedFilePath, value, imcache.WithDefaultExpiration())
+		} else {
+			sc.issueCache.Set(issue.AffectedFilePath, []snyk.Issue{issue}, imcache.WithDefaultExpiration())
+		}
+	}
+}
+
+func (sc *Scanner) expireCache(files map[string]bool) {
+	for filePath := range files {
+		sc.issueCache.Remove(filePath)
+	}
+	sc.issueCache.RemoveExpired()
+}
+
+func (sc *Scanner) IssuesFor(path string, r snyk.Range) []snyk.Issue {
+	issues, found := sc.issueCache.Get(path)
+	if !found {
+		return []snyk.Issue{}
+	}
+	var filteredIssues []snyk.Issue
+	for _, issue := range issues {
+		if issue.Range.Overlaps(r) {
+			filteredIssues = append(filteredIssues, issue)
+		}
+	}
+	return filteredIssues
+}
+
+func (sc *Scanner) Issue(key string) snyk.Issue {
+	for _, issues := range sc.issueCache.GetAll() {
+		for _, genericIssue := range issues {
+			if codeIssueData, ok := genericIssue.AdditionalData.(*snyk.CodeIssueData); ok && codeIssueData.Key == key {
+				return genericIssue
+			}
+		}
+	}
+	return snyk.Issue{}
 }

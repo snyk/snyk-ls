@@ -26,12 +26,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erni27/imcache"
 	"github.com/golang/mock/gomock"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
@@ -890,5 +893,120 @@ func Test_SastApiCall(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.Equal(t, err.Error(), "SAST is not enabled")
+	})
+}
+
+func TestScanner_getFilesToBeScanned(t *testing.T) {
+	config.CurrentConfig().SetSnykCodeEnabled(true)
+	_, scanner := setupTestScanner(t)
+	tempDir := t.TempDir()
+	scanner.changedPaths = make(map[string]map[string]bool)
+	scanner.changedPaths[tempDir] = make(map[string]bool)
+
+	changedFile := "file1.java"
+	t.Run("should add all files from changedPaths map and delete them from changedPaths", func(t *testing.T) {
+		scanner.changedPaths[tempDir][changedFile] = true
+		scanner.changedPaths[tempDir]["file2.java"] = true
+
+		files := scanner.getFilesToBeScanned(tempDir)
+
+		require.Contains(t, files, changedFile)
+		require.Contains(t, files, "file2.java")
+		require.Len(t, scanner.changedPaths[tempDir], 0)
+	})
+
+	t.Run("should add all files that have dataflow items of a changed file", func(t *testing.T) {
+		fromChangeAffectedFile := "juice-shop/routes/vulnCodeSnippet.ts"
+
+		// we need to add a fake issue to the cache, let's keep it to the minimum needed
+		// we are reusing the test data from the code_html test
+		codeIssueData := &snyk.CodeIssueData{
+			DataFlow: getDataFlowElements(),
+		}
+
+		// add the changed file to the changed paths store
+		scanner.changedPaths[tempDir][changedFile] = true
+
+		// add the issue to the changed file. The issue references `fromChangeAffectedFile` in the dataflow
+		issue := snyk.Issue{AdditionalData: codeIssueData}
+		scanner.issueCache.Set(changedFile, []snyk.Issue{issue}, imcache.WithDefaultExpiration())
+		defer scanner.issueCache.RemoveAll()
+
+		files := scanner.getFilesToBeScanned(tempDir)
+
+		// The changed file is file1.java, but it mentions `fromChangeAffectedFile` in the dataflow
+		// Thus, now we should have both files
+		require.Contains(t, files, changedFile)
+		require.Contains(t, files, fromChangeAffectedFile)
+	})
+}
+
+func TestScanner_Cache(t *testing.T) {
+	_, scanner := setupTestScanner(t)
+	t.Run("should add issues to the cache", func(t *testing.T) {
+		scanner.addToCache([]snyk.Issue{{ID: "issue1", AffectedFilePath: "file1.java"}})
+		scanner.addToCache([]snyk.Issue{{ID: "issue2", AffectedFilePath: "file2.java"}})
+
+		_, added := scanner.issueCache.Get("file1.java")
+		require.True(t, added)
+		_, added = scanner.issueCache.Get("file2.java")
+		require.True(t, added)
+	})
+	t.Run("should expire entries", func(t *testing.T) {
+		issue := snyk.Issue{ID: "issue1", AffectedFilePath: "file1.java"}
+		scanner.addToCache([]snyk.Issue{issue})
+
+		scanner.expireCache(map[string]bool{"file1.java": true})
+
+		_, found := scanner.issueCache.Get("file1.java")
+		require.False(t, found)
+	})
+	t.Run("should automatically expire entries", func(t *testing.T) {
+		scanner.issueCache = imcache.New[string, []snyk.Issue](
+			imcache.WithDefaultExpirationOption[string, []snyk.Issue](time.Microsecond),
+		)
+		issue := snyk.Issue{ID: "issue1", AffectedFilePath: "file1.java"}
+		scanner.addToCache([]snyk.Issue{issue})
+
+		time.Sleep(time.Millisecond)
+		_, found := scanner.issueCache.Get("file1.java")
+		require.False(t, found)
+	})
+	t.Run("should add scan results to cache", func(t *testing.T) {
+		panic("not implemented")
+	})
+}
+
+func TestScanner_IssueProvider(t *testing.T) {
+	t.Run("should find issue by key", func(t *testing.T) {
+		_, scanner := setupTestScanner(t)
+		issue := snyk.Issue{ID: "issue1", AffectedFilePath: "file1.java", AdditionalData: &snyk.CodeIssueData{Key: "key"}}
+		scanner.addToCache([]snyk.Issue{issue})
+
+		foundIssue := scanner.Issue("key")
+		require.Equal(t, issue, foundIssue)
+	})
+
+	t.Run("should find issue by path and range", func(t *testing.T) {
+		_, scanner := setupTestScanner(t)
+		issue := snyk.Issue{ID: "issue1", AffectedFilePath: "file1.java", AdditionalData: &snyk.CodeIssueData{Key: "key"}}
+		scanner.addToCache([]snyk.Issue{issue})
+
+		foundIssues := scanner.IssuesFor("file1.java", issue.Range)
+		require.Contains(t, foundIssues, issue)
+	})
+	t.Run("should not find issue by path when range does not overlap", func(t *testing.T) {
+		_, scanner := setupTestScanner(t)
+		issue := snyk.Issue{ID: "issue1", AffectedFilePath: "file1.java", AdditionalData: &snyk.CodeIssueData{Key: "key"}}
+		scanner.addToCache([]snyk.Issue{issue})
+
+		foundIssues := scanner.IssuesFor(
+			"file1.java",
+			snyk.Range{
+				Start: snyk.Position{Line: 3},
+				End:   snyk.Position{Line: 4},
+			},
+		)
+		require.NotContains(t, foundIssues, issue)
 	})
 }

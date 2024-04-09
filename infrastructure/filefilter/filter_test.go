@@ -8,6 +8,8 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/filefilter"
+	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -32,7 +34,7 @@ func Test_FindNonIgnoredFiles(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			setupIgnoreFilesTest(t, testCase)
 
-			filter := filefilter.NewFileFilter(testCase.repoPath, config.CurrentConfig().Logger())
+			filter := filefilter.NewFileFilter(testCase.repoPath, config.CurrentConfig().Logger(), nil)
 			var files []string
 			for f := range filter.FindNonIgnoredFiles() {
 				files = append(files, f)
@@ -71,7 +73,10 @@ func Test_FindNonIgnoredFiles_MultipleWorkDirs(t *testing.T) {
 
 	for _, testCase := range cases {
 		// Act
-		files := util.ChannelToSlice(filefilter.FindNonIgnoredFiles(testCase.repoPath, config.CurrentConfig().Logger()))
+		progressCh := make(chan lsp.ProgressParams, 100000)
+		cancelProgressCh := make(chan lsp.ProgressToken, 1)
+		files := util.ChannelToSlice(
+			filefilter.FindNonIgnoredFiles(testCase.repoPath, config.CurrentConfig().Logger(), progress.NewTestTracker(progressCh, cancelProgressCh)))
 
 		// Assert
 		assertFilesFiltered(t, testCase, files)
@@ -97,7 +102,7 @@ func Test_FindNonIgnoredFile_FilesChanged_ReturnsCorrectResults(t *testing.T) {
 		expectedAddedExcludes: []string{"foo2.go", "bar2.go"},
 	}
 	setupIgnoreFilesTest(t, testCase.ignoreFilesTestCase)
-	fileFilter := filefilter.NewFileFilter(repoFolder, config.CurrentConfig().Logger())
+	fileFilter := filefilter.NewFileFilter(repoFolder, config.CurrentConfig().Logger(), nil)
 	originalFilteredFiles := util.ChannelToSlice(fileFilter.FindNonIgnoredFiles()) // Calling it a first time
 
 	// Act - Changing folder content
@@ -251,7 +256,7 @@ func Test_FindNonIgnoredFiles_IgnoredFolderContainsNestedNegationRules_NestedRul
 	testutil.CreateFileOrFail(t, filepath.Join(repoFolder, ".gitignore"), []byte(".gitignore\n/a/\n"))
 	testutil.CreateFileOrFail(t, filepath.Join(repoFolder, "a", ".gitignore"), []byte("!b.txt"))
 	testutil.CreateFileOrFail(t, filepath.Join(repoFolder, "a", "b.txt"), []byte("some content"))
-	fileFilter := filefilter.NewFileFilter(repoFolder, config.CurrentConfig().Logger())
+	fileFilter := filefilter.NewFileFilter(repoFolder, config.CurrentConfig().Logger(), nil)
 
 	// Act
 	filteredFiles := util.ChannelToSlice(fileFilter.FindNonIgnoredFiles())
