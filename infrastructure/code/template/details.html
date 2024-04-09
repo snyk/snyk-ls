@@ -151,6 +151,35 @@
       padding: 16px 0;
     }
 
+    .ignore-warning-icon {
+      margin-right: 0.5em;
+    }
+
+    .ignore-warning-wrapper {
+      display: flex;
+      align-items: center;
+      margin: 0 0 1em;
+    }
+
+    .ignore-warning-wrapper.hidden {
+      display: none;
+    }
+
+    .ignore-warning {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      font-size: 0.75rem;
+      line-height: 1.125rem;
+      background: #FFF4ED;
+      color: #B6540B;
+      padding: 0.5em;
+      border-radius: 0.25em;
+      border: 1px solid #E27122;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
     .ignore-badge {
       font-size: 0.60rem;
       background: #FFF4ED;
@@ -310,7 +339,17 @@
 
 <body>
   <!-- Ignore header -->
-  <div class="ignore-warning ${visibilityClass}">Ignored. This issue is currently ignored.</div>
+  <div class="ignore-warning-wrapper ${visibilityClass}">
+    <div class="ignore-warning ">
+      <svg class="ignore-warning-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"
+        xmlns="http://www.w3.org/2000/svg">
+        <path
+          d="M1.25199 12.9165C0.663992 14.0677 1.13999 15 2.31599 15H13.684C14.86 15 15.336 14.0758 14.748 12.9165L9.071 1.86645C8.476 0.71524 7.524 0.707133 6.929 1.86645L1.25899 12.9165H1.25199ZM9 13H7V11H9V13ZM9 10H7V6H9V10Z"
+          fill="#D68000" />
+      </svg>
+      <span><strong>Ignored.</strong> This issue is currently ignored.</span>
+    </div>
+  </div>
 
   <!-- Panel header -->
   <header class="panel-header">

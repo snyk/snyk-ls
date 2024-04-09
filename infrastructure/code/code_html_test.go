@@ -62,22 +62,21 @@ func Test_CodeDetailsPanel_html_getDetailsHtml(t *testing.T) {
 	assert.NotContains(t, codePanelHtml, "${dataFlow}")
 	assert.NotContains(t, codePanelHtml, "${dataFlowCount}")
 
-	assert.Contains(t, codePanelHtml, "ignore-warning hidden")
+	assert.Contains(t, codePanelHtml, "ignore-warning-wrapper hidden")
 	assert.Contains(t, codePanelHtml, "ignore-badge hidden")
 	assert.Contains(t, codePanelHtml, "ignore-details-section hidden")
 	assert.NotContains(t, codePanelHtml, "${ignoreDetails}")
 
 	// assert Fixes section
-	fixesDescription := fmt.Sprintf(`\s*This issue was fixed by %d projects. Here are %d example fixes:\s*`, repoCount, len(fixes))
-	expectedFixesDescription := regexp.MustCompile(fixesDescription)
-	expectedTabsNav := regexp.MustCompile(`\s*<div class="tabs-nav">\s*`)
-	expectedTabSelected := regexp.MustCompile(`\s*<span class="tab-item is-selected" id="tab-link-0">apache/flink</span>\s*`)
-	expectedTab2 := regexp.MustCompile(`\s*<span class="tab-item\s*" id="tab-link-1">apache/tomcat</span>\s*`)
+	expectedFixesDescription := fmt.Sprintf(`\s*This issue was fixed by %d projects. Here are %d example fixes:\s*`, repoCount, len(fixes))
+	expectedTabSelected := regexp.MustCompile(`<span class="tab-item is-selected" id="tab-link-0">`)
+	expectedRepoNameTabSelected := regexp.MustCompile("apache/flink</span>")
+	expectedRepoNameOtherTab := regexp.MustCompile("apache/tomcat</span>")
 
-	assert.Regexp(t, expectedFixesDescription, codePanelHtml)
-	assert.Regexp(t, expectedTabsNav, codePanelHtml)
+	assert.Regexp(t, regexp.MustCompile(expectedFixesDescription), codePanelHtml)
 	assert.Regexp(t, expectedTabSelected, codePanelHtml)
-	assert.Regexp(t, expectedTab2, codePanelHtml)
+	assert.Regexp(t, expectedRepoNameTabSelected, codePanelHtml)
+	assert.Regexp(t, expectedRepoNameOtherTab, codePanelHtml)
 }
 
 func Test_CodeDetailsPanel_html_getDetailsHtml_ignored(t *testing.T) {
@@ -111,7 +110,7 @@ func Test_CodeDetailsPanel_html_getDetailsHtml_ignored(t *testing.T) {
 	// invoke method under test
 	codePanelHtml := getDetailsHtml(issue)
 
-	assert.NotContains(t, codePanelHtml, "ignore-warning ${visibilityClass}")
+	assert.NotContains(t, codePanelHtml, "ignore-warning-wrapper ${visibilityClass}")
 	assert.NotContains(t, codePanelHtml, "ignore-badge ${visibilityClass}")
 	assert.NotContains(t, codePanelHtml, "${ignoreDetails}")
 }
@@ -157,24 +156,6 @@ func Test_CodeDetailsPanel_html_getIgnoreDetailsHtml(t *testing.T) {
 	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-value">13 days</div>`)
 	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-label">Ignored By</div>`)
 	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-value">John</div>`)
-}
-
-func Test_CodeDetailsPanel_html_getTabsHtml(t *testing.T) {
-	_ = testutil.UnitTest(t)
-
-	fixes := getFixes()
-
-	// invoke method under test
-	tabsHtml := getTabsHtml(fixes)
-
-	// assert
-	expectedTabsNav := regexp.MustCompile(`<div class="tabs-nav">`)
-	expectedTab1 := regexp.MustCompile(`<span class="tab-item is-selected" id="tab-link-0">apache/flink</span>`)
-	expectedTab2 := regexp.MustCompile(`<span class="tab-item " id="tab-link-1">apache/tomcat</span>`)
-
-	assert.Regexp(t, expectedTabsNav, tabsHtml)
-	assert.Regexp(t, expectedTab1, tabsHtml)
-	assert.Regexp(t, expectedTab2, tabsHtml)
 }
 
 func Test_CodeDetailsPanel_html_getRowOfCWEs(t *testing.T) {
