@@ -50,7 +50,7 @@ type issueProviderMock struct {
 	mock.Mock
 }
 
-func (m *issueProviderMock) Issue(key string) snyk.Issue {
+func (m *issueProviderMock) Issue(_ string) snyk.Issue {
 	panic("this should not be called")
 }
 
@@ -59,7 +59,7 @@ func (m *issueProviderMock) IssuesForRange(path string, r snyk.Range) []snyk.Iss
 	return args.Get(0).([]snyk.Issue)
 }
 
-func (m *issueProviderMock) IssuesForFile(path string) []snyk.Issue {
+func (m *issueProviderMock) IssuesForFile(_ string) []snyk.Issue {
 	panic("this should not be called")
 }
 
@@ -164,9 +164,9 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 }
 
 func Test_fixCodeIssue_noEdit(t *testing.T) {
-	config := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	// arrange
-	setupClientCapability(config)
+	setupClientCapability(c)
 
 	mockNotifier := notification.NewMockNotifier()
 	cmd := setupCommand(mockNotifier)
@@ -200,9 +200,9 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 }
 
 func Test_fixCodeIssue_NoIssueFound(t *testing.T) {
-	config := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	// arrange
-	setupClientCapability(config)
+	setupClientCapability(c)
 
 	mockNotifier := notification.NewMockNotifier()
 	cmd := setupCommand(mockNotifier)

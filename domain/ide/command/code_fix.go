@@ -41,7 +41,7 @@ func (cmd *fixCodeIssue) Command() snyk.CommandData {
 	return cmd.command
 }
 
-func (cmd *fixCodeIssue) Execute(ctx context.Context) (any, error) {
+func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 	if !config.CurrentConfig().ClientCapabilities().Workspace.ApplyEdit {
 		log.Error().Msg("Client doesn't support 'workspace/applyEdit' capability, skipping fix attempt.")
 		return nil, errors.New("Client doesn't support 'workspace/applyEdit' capability.")
