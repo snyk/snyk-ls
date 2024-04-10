@@ -68,7 +68,8 @@ func Test_CodeDetailsPanel_html_getDetailsHtml(t *testing.T) {
 	assert.NotContains(t, codePanelHtml, "${ignoreDetails}")
 
 	// assert Fixes section
-	expectedFixesDescription := fmt.Sprintf(`\s*This issue was fixed by %d projects. Here are %d example fixes:\s*`, repoCount, len(fixes))
+	expectedFixesDescription := fmt.Sprintf(`\s*This issue was fixed by %d projects. Here are %d example fixes.\s*`,
+		repoCount, len(fixes))
 	expectedTabSelected := regexp.MustCompile(`<span class="tab-item is-selected" id="tab-link-0">`)
 	expectedRepoNameTabSelected := regexp.MustCompile("apache/flink</span>")
 	expectedRepoNameOtherTab := regexp.MustCompile("apache/tomcat</span>")
@@ -125,8 +126,8 @@ func Test_CodeDetailsPanel_html_getExampleFixCodeDiffHtml(t *testing.T) {
 
 	// assert
 	expectedHtml := `
-		<div class="example-line removed"><code>    e.printStackTrace();</code></div>
-		<div class="example-line added"><code>    LOG.error(e);</code></div>`
+		<div class="example-line removed"><span class="example-line-number">944</span> <code>    e.printStackTrace();</code></div>
+		<div class="example-line added"><span class="example-line-number">104</span> <code>    LOG.error(e);</code></div>`
 
 	assert.Contains(t, fixesHtml, expectedHtml)
 }

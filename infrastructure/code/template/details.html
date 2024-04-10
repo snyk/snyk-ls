@@ -35,107 +35,58 @@
     body {
       height: 100%;
       width: 100%;
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
       color: #d4d4d4;
       font-family: "SF Pro Text", "Segoe UI", "Ubuntu", Tahoma, Geneva, Verdana, sans-serif;
+      font-weight: 400;
+      font-size: 0.75rem;
+      border-radius: 4px;
+      margin: 16px;
+      overflow: scroll;
     }
 
     h2 {
-      font-size: 1.1rem;
-      margin-block-start: 0;
-      margin-block-end: 0.25rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      color: #bbbbbb;
-    }
-
-    .hidden {
-      display: none;
-    }
-
-    .overview-text {
-      padding: 8px 8px 0 0;
-    }
-
-    .cwe,
-    .severity-type,
-    .overview-text,
-    .example-fixes,
-    .example-fixes-header,
-    .example-fixes-text,
-    .ignore-details-header,
-    .ignore-details-label,
-    .ignore-details-value,
-    .ignore-details-reason-label,
-    .ignore-details-reason-text,
-    .ignore-next-step-text,
-    .data-flow-header,
-    .data-flow-body,
-    .example-line {
-      font-size: 0.75rem;
-      font-weight: 400;
-      line-height: 1.125rem;
-    }
-
-    .tabs-nav {
-      display: flex;
-      margin-top: 16px;
-      list-style-type: none;
-      overflow: hidden;
-      padding: 0;
-      border-bottom: 1px solid #333;
-    }
-
-    .tab-container {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      background-color: #46494a;
-    }
-
-    .tab-content {
-      display: none;
-    }
-
-    .tab-content.is-selected {
-      display: block;
+      color: #DEDFE2;
+      font-weight: 600;
     }
 
     .panel-header {
       display: flex;
       flex-direction: column;
-      padding: 16px 0 0;
-      border-bottom: 1px solid #3c3f41;
+    }
+
+    .ignore-details-header,
+    .data-flow-header,
+    .example-fixes-header {
+      font-size: 0.75rem;
+      line-height: 1.25rem;
+    }
+
+    .severity-title {
+      padding-left: 8px;
     }
 
     .severity-container {
       display: flex;
       flex-direction: row;
       align-items: center;
-      margin-bottom: 8px;
-    }
-
-    .severity-title {
-      font-size: 1rem;
-      font-weight: 600;
-      color: #ccc;
-      padding-left: 8px;
-    }
-
-    .styled-link {
-      color: #4daafc;
-      text-decoration: none;
     }
 
     .severity-type-container {
       display: flex;
       flex-direction: row;
       align-items: center;
-      color: #ccc;
       margin-bottom: 1em;
       line-height: 1em;
+      font-size: 0.85rem;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .styled-link {
+      color: #759AF3;
+      text-decoration: none;
     }
 
     .delimiter {
@@ -146,9 +97,11 @@
       display: inline-block;
     }
 
+    .panel-header,
     .issue-overview,
-    .data-flow-section {
-      padding: 16px 0;
+    .data-flow-section,
+    .example-fixes {
+      padding: 8px 0 0 0;
     }
 
     .ignore-warning-icon {
@@ -169,7 +122,7 @@
       display: flex;
       align-items: center;
       justify-content: flex-start;
-      font-size: 0.75rem;
+      font-size: 0.85rem;
       line-height: 1.125rem;
       background: #FFF4ED;
       color: #B6540B;
@@ -181,19 +134,13 @@
     }
 
     .ignore-badge {
-      font-size: 0.60rem;
+      font-size: 0.75rem;
       background: #FFF4ED;
       color: #B6540B;
-      padding: 0 0.5em;
+      padding: 0.35em 0.35em;
       border-radius: 0.25em;
       margin-left: 1em;
       border: 1px solid #E27122;
-    }
-
-    .ignore-details-header {
-      font-size: 0.75rem;
-      font-weight: 400;
-      line-height: 1.125rem;
     }
 
     .ignore-details-wrapper {
@@ -226,23 +173,16 @@
 
     .ignore-details-reason-label {
       flex: 0 0 10%;
+      font-weight: 600;
     }
 
     .ignore-details-reason-text {
       flex: 1;
     }
 
-    .example-fixes-text {
-      margin-block-end: 1rem;
-    }
-
     .data-flow-body {
       font-family: 'Courier New', Courier, monospace;
       border-collapse: collapse;
-    }
-
-    .data-flow-body tbody {
-      background-color: #46494A;
     }
 
     .data-flow-number {
@@ -252,9 +192,10 @@
     }
 
     .data-flow-clickable-row {
-      color: #599DF6;
       display: block;
       margin: 0px 16px;
+      color: #759AF3;
+      font-weight: 400;
     }
 
     .data-flow-clickable-row:hover {
@@ -265,6 +206,8 @@
     .data-flow-text {
       margin-right: 8px;
       padding-left: 10px;
+      color: #DEDFE2;
+      font-weight: 400;
     }
 
     .data-flow-delimiter {
@@ -272,12 +215,31 @@
       color: #BBBBBB;
     }
 
+    .tabs-nav {
+      display: flex;
+      margin-top: 16px;
+      list-style-type: none;
+      overflow: hidden;
+      padding: 0;
+      border-bottom: 1px solid #333;
+    }
+
+    .tab-content {
+      display: none;
+      border: 1px solid #1E1F21;
+      border-top-style: hidden;
+    }
+
+    .tab-content.is-selected {
+      display: block;
+    }
+
     .tab-item-icon {
       vertical-align: middle;
     }
 
     .tab-item {
-      font-size: 0.80rem;
+      font-size: 0.75rem;
       font-weight: 500;
       float: left;
       display: block;
@@ -297,39 +259,46 @@
     .tab-item.is-selected {
       color: #BBBBBB;
       border-bottom: 3px solid #4A87C7;
-      background-color: #3D4B5B;
     }
 
     .example-line {
-      font-family: "Courier New", Courier, monospace;
+      display: block;
       padding: 2px 0 18px 0;
+      background-color: #494949;
+    }
+
+    .example-line-number {
+      padding-left: 2rem;
     }
 
     .example-line>code {
-      display: block;
-      padding-left: 1.875rem;
+      padding-left: 0.75rem;
+    }
+
+    .example-line-number,
+    .example-line>code {
+      font-family: "Courier New", Courier, monospace;
+      display: inline-block;
       white-space: pre-wrap;
       font-weight: 400;
       background-color: transparent;
     }
 
     .example-line.added {
-      background-color: #334937;
-      color: #d4d4d4;
+      background-color: #33412E;
     }
 
-    .example-line.added::before {
+    .example-line.removed {
+      background-color: #593D41;
+    }
+
+    .example-line.added>.example-line-number::after {
       content: "+";
       position: absolute;
       padding: 0 4px;
     }
 
-    .example-line.removed {
-      background-color: #563f3f;
-      color: #d4d4d4;
-    }
-
-    .example-line.removed::before {
+    .example-line.removed>.example-line-number::after {
       content: "-";
       position: absolute;
       padding: 0 4px;
@@ -352,7 +321,7 @@
   <header class="panel-header">
     <div class="severity-container">
       ${severityIcon}
-      <div class="severity-title">${issueTitle}</div>
+      <h2 class="severity-title">${issueTitle}</h2>
     </div>
     <div class="severity-type-container">
       <div class="severity-type">${issueType}</div>
@@ -389,7 +358,7 @@
     <article class="example-fixes">
       <h2 class="example-fixes-header">External example fixes</h2>
       <div class="example-fixes-text">
-        This issue was fixed by ${repoCount} projects. Here are ${exampleCount} example fixes:
+        This issue was fixed by ${repoCount} projects. Here are ${exampleCount} example fixes.
       </div>
       ${tabsNav}
     </article>
