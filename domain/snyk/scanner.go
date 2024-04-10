@@ -37,6 +37,7 @@ var (
 	_ Scanner             = (*DelegatingConcurrentScanner)(nil)
 	_ InlineValueProvider = (*DelegatingConcurrentScanner)(nil)
 	_ PackageScanner      = (*DelegatingConcurrentScanner)(nil)
+	_ CacheProvider       = (*DelegatingConcurrentScanner)(nil)
 )
 
 type Scanner interface {
@@ -64,6 +65,18 @@ type DelegatingConcurrentScanner struct {
 	snykApiClient snyk_api.SnykApiClient
 	authService   AuthenticationService
 	notifier      notification.Notifier
+}
+
+func (sc *DelegatingConcurrentScanner) Issues() map[string][]Issue {
+	issues := make(map[string][]Issue)
+	for _, scanner := range sc.scanners {
+		if issueProvider, ok := scanner.(IssueProvider); ok {
+			for filePath, issueSlice := range issueProvider.Issues() {
+				issues[filePath] = append(issues[filePath], issueSlice...)
+			}
+		}
+	}
+	return issues
 }
 
 func (sc *DelegatingConcurrentScanner) ScanPackages(ctx context.Context, config *config.Config, path string, content string) {

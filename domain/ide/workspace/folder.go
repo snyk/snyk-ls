@@ -59,6 +59,8 @@ var (
 		"arm64": "arm64",
 		"386":   "386",
 	}
+
+	_ snyk.CacheProvider = (*Folder)(nil)
 )
 
 // TODO: 3: Extract reporting logic to a separate service
@@ -75,6 +77,25 @@ type Folder struct {
 	mutex                   sync.Mutex
 	scanNotifier            snyk.ScanNotifier
 	notifier                noti.Notifier
+}
+
+func (f *Folder) Issues() map[string][]snyk.Issue {
+	issues := make(map[string][]snyk.Issue)
+	f.documentDiagnosticCache.Range(func(key string, value []snyk.Issue) bool {
+		issues[key] = value
+		return true
+	})
+
+	cachedScannerIssues := f.scanner.(snyk.IssueProvider).Issues()
+	for key, value := range cachedScannerIssues {
+		issues[key] = append(issues[key], value...)
+	}
+	return issues
+}
+
+func (f *Folder) IsProviderFor(product product.Product) bool {
+	// it either caches itself, or uses the global folder caching mechanism
+	return true
 }
 
 func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hover.Service, scanNotifier snyk.ScanNotifier, notifier noti.Notifier) *Folder {
@@ -327,39 +348,33 @@ func (f *Folder) FilterAndPublishCachedDiagnostics(product product.Product) {
 	f.publishDiagnostics(product, issuesByFile)
 }
 
-func (f *Folder) filterCachedDiagnostics() (fileIssues map[string][]snyk.Issue) {
+func (f *Folder) filterCachedDiagnostics() map[string][]snyk.Issue {
 	logger := log.With().Str("method", "filterCachedDiagnostics").Logger()
-
-	var issuesByFile = map[string][]snyk.Issue{}
-	if f.documentDiagnosticCache.Size() == 0 {
-		return issuesByFile
-	}
 
 	filterSeverity := config.CurrentConfig().FilterSeverity()
 	logger.Debug().Interface("filterSeverity", filterSeverity).Msg("Filtering issues by severity")
 
 	supportedIssueTypes := config.CurrentConfig().DisplayableIssueTypes()
-	f.documentDiagnosticCache.Range(func(filePath string, issues []snyk.Issue) bool {
-		// Consider doing the loop body in parallel for performance (and use a thread-safe map)
-		filteredIssues := FilterIssues(issues, supportedIssueTypes)
-		issuesByFile[filePath] = filteredIssues
-		return true
-	})
-
+	issuesByFile := FilterIssues(f.Issues(), supportedIssueTypes)
 	return issuesByFile
 }
 
-func FilterIssues(issues []snyk.Issue, supportedIssueTypes map[product.FilterableIssueType]bool) []snyk.Issue {
+func FilterIssues(
+	issuesByFile map[string][]snyk.Issue,
+	supportedIssueTypes map[product.FilterableIssueType]bool,
+) map[string][]snyk.Issue {
 	logger := log.With().Str("method", "FilterIssues").Logger()
-	filteredIssues := make([]snyk.Issue, 0)
 
-	for _, issue := range issues {
-		// Logging here might hurt performance, should benchmark if filtering is slow
-		if isVisibleSeverity(issue) && supportedIssueTypes[issue.GetFilterableIssueType()] {
-			logger.Trace().Msgf("Including visible severity issue: %v", issue)
-			filteredIssues = append(filteredIssues, issue)
-		} else {
-			logger.Trace().Msgf("Filtering out issue %v", issue)
+	filteredIssues := make(map[string][]snyk.Issue)
+	for filePath, issueSlice := range issuesByFile {
+		for _, issue := range issueSlice {
+			// Logging here might hurt performance, should benchmark if filtering is slow
+			if isVisibleSeverity(issue) && supportedIssueTypes[issue.GetFilterableIssueType()] {
+				logger.Trace().Msgf("Including visible severity issue: %v", issue)
+				filteredIssues[filePath] = append(filteredIssues[filePath], issue)
+			} else {
+				logger.Trace().Msgf("Filtering out issue %v", issue)
+			}
 		}
 	}
 	return filteredIssues
@@ -523,5 +538,10 @@ func (f *Folder) Issue(key string) snyk.Issue {
 		}
 		return true
 	})
+	if foundIssue.ID == "" {
+		if scanner, ok := f.scanner.(snyk.IssueProvider); ok {
+			foundIssue = scanner.Issue(key)
+		}
+	}
 	return foundIssue
 }

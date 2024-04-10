@@ -451,14 +451,13 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 			return nil, nil
 		}
 
-		issues := folder.DocumentDiagnosticsFromCache(filePath)
-		filteredIssues := workspace.FilterIssues(issues, config.CurrentConfig().DisplayableIssueTypes())
+		filteredIssues := workspace.FilterIssues(folder.Issues(), config.CurrentConfig().DisplayableIssueTypes())
 
 		if len(filteredIssues) > 0 {
 			logger.Info().Msg("Sending cached issues")
 			diagnosticParams := lsp.PublishDiagnosticsParams{
 				URI:         params.TextDocument.URI,
-				Diagnostics: converter.ToDiagnostics(filteredIssues),
+				Diagnostics: converter.ToDiagnostics(filteredIssues[filePath]),
 			}
 			di.Notifier().Send(diagnosticParams)
 		}

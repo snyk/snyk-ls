@@ -42,6 +42,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
+var _ snyk.CacheProvider = (*Scanner)(nil)
+
 type ScanStatus struct {
 	// finished channel is closed once the scan has finished
 	finished chan bool
@@ -391,11 +393,11 @@ func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg stri
 type noFilesError struct{}
 
 func (e noFilesError) Error() string { return "no files to scan" }
+
 func isNoFilesError(err error) bool {
 	_, ok := err.(noFilesError)
 	return ok
 }
-
 func (sc *Scanner) createBundle(ctx context.Context,
 	requestId string,
 	rootPath string,
@@ -549,7 +551,7 @@ func (sc *Scanner) IssuesForRange(path string, r snyk.Range) []snyk.Issue {
 func (sc *Scanner) Issue(key string) snyk.Issue {
 	for _, issues := range sc.issueCache.GetAll() {
 		for _, issue := range issues {
-			if codeIssueData, ok := issue.AdditionalData.(*snyk.CodeIssueData); ok && codeIssueData.Key == key {
+			if codeIssueData, ok := issue.AdditionalData.(snyk.CodeIssueData); ok && codeIssueData.Key == key {
 				return issue
 			}
 		}
@@ -569,6 +571,10 @@ func (sc *Scanner) IssuesForFile(path string) []snyk.Issue {
 		return []snyk.Issue{}
 	}
 	return issues
+}
+
+func (sc *Scanner) Issues() map[string][]snyk.Issue {
+	return sc.issueCache.GetAll()
 }
 
 func (sc *Scanner) IsProviderFor(product product.Product) bool {

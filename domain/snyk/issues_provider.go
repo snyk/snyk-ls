@@ -24,6 +24,7 @@ type IssueProvider interface {
 	IssuesForFile(path string) []Issue
 	IssuesForRange(path string, r Range) []Issue
 	Issue(key string) Issue
+	Issues() map[string][]Issue
 }
 
 type CacheProvider interface {

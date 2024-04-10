@@ -48,6 +48,16 @@ type Workspace struct {
 	notifier            noti.Notifier
 }
 
+func (w *Workspace) Issues() map[string][]snyk.Issue {
+	issues := make(map[string][]snyk.Issue)
+	for _, folder := range w.folders {
+		for filePath, issueSlice := range folder.Issues() {
+			issues[filePath] = append(issues[filePath], issueSlice...)
+		}
+	}
+	return issues
+}
+
 func (w *Workspace) Issue(key string) snyk.Issue {
 	for _, folder := range w.folders {
 		issue := folder.Issue(key)
