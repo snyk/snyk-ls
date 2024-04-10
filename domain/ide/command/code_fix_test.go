@@ -50,6 +50,10 @@ type issueProviderMock struct {
 	mock.Mock
 }
 
+func (m *issueProviderMock) Issues() map[string][]snyk.Issue {
+	panic("this should not be called")
+}
+
 func (m *issueProviderMock) Issue(_ string) snyk.Issue {
 	panic("this should not be called")
 }

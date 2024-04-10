@@ -41,6 +41,11 @@ type mockIssuesProvider struct {
 	mock.Mock
 }
 
+func (m *mockIssuesProvider) Issues() map[string][]snyk.Issue {
+	args := m.Called()
+	return args.Get(0).(map[string][]snyk.Issue)
+}
+
 func (m *mockIssuesProvider) IssuesForFile(path string) []snyk.Issue {
 	args := m.Called(path)
 	return args.Get(0).([]snyk.Issue)

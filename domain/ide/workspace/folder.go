@@ -86,14 +86,17 @@ func (f *Folder) Issues() map[string][]snyk.Issue {
 		return true
 	})
 
-	cachedScannerIssues := f.scanner.(snyk.IssueProvider).Issues()
-	for key, value := range cachedScannerIssues {
-		issues[key] = append(issues[key], value...)
+	issueProvider, scannerIsIssueProvider := f.scanner.(snyk.IssueProvider)
+	if scannerIsIssueProvider {
+		cachedScannerIssues := issueProvider.Issues()
+		for key, value := range cachedScannerIssues {
+			issues[key] = append(issues[key], value...)
+		}
 	}
 	return issues
 }
 
-func (f *Folder) IsProviderFor(product product.Product) bool {
+func (f *Folder) IsProviderFor(_ product.Product) bool {
 	// it either caches itself, or uses the global folder caching mechanism
 	return true
 }
