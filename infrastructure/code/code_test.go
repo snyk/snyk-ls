@@ -1003,6 +1003,13 @@ func TestScanner_Cache(t *testing.T) {
 			}
 		}
 	})
+	t.Run("should de-duplicate issues", func(t *testing.T) {
+		filePath, folderPath := TempWorkdirWithVulnerabilities(t)
+
+		// first scan should add issues to the cache
+		_, err := scanner.Scan(context.Background(), filePath, folderPath)
+		require.NoError(t, err)
+	})
 }
 
 func TestScanner_IssueProvider(t *testing.T) {

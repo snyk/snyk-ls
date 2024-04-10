@@ -524,14 +524,27 @@ func (sc *Scanner) useIgnoresFlow() bool {
 func (sc *Scanner) addToCache(results []snyk.Issue) {
 	sc.issueCache.RemoveExpired()
 	for _, issue := range results {
-		value, present := sc.issueCache.Get(issue.AffectedFilePath)
+		cachedIssues, present := sc.issueCache.Get(issue.AffectedFilePath)
 		if present {
-			value = append(value, issue)
-			sc.issueCache.Set(issue.AffectedFilePath, value, imcache.WithDefaultExpiration())
+			cachedIssues = append(cachedIssues, issue)
+			sc.deduplicate(cachedIssues)
+			sc.issueCache.Set(issue.AffectedFilePath, cachedIssues, imcache.WithDefaultExpiration())
 		} else {
 			sc.issueCache.Set(issue.AffectedFilePath, []snyk.Issue{issue}, imcache.WithDefaultExpiration())
 		}
 	}
+}
+
+func (sc *Scanner) deduplicate(issues []snyk.Issue) []snyk.Issue {
+	seen := map[string]bool{}
+	for _, issue := range issues {
+		uniqueID := issue.AdditionalData.GetKey()
+		if !seen[uniqueID] {
+			seen[uniqueID] = true
+			issues = append(issues, issue)
+		}
+	}
+	return issues
 }
 
 func (sc *Scanner) IssuesForRange(path string, r snyk.Range) []snyk.Issue {

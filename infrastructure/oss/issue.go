@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 var issuesSeverity = map[string]snyk.Severity{
@@ -217,7 +218,7 @@ func toIssue(
 
 func (i *ossIssue) toAdditionalData(scanResult *scanResult) snyk.OssIssueData {
 	var additionalData snyk.OssIssueData
-	additionalData.Key = i.Id
+	additionalData.Key = util.GetIssueKey(i.Id, scanResult.DisplayTargetFile, i.LineNumber, i.LineNumber, 0, 0)
 	additionalData.Title = i.Title
 	additionalData.Name = i.Name
 	additionalData.LineNumber = i.LineNumber

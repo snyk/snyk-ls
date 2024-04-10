@@ -179,25 +179,19 @@ func (f *Folder) scan(ctx context.Context, path string) {
 		log.Warn().Str("path", path).Str("method", method).Msg("skipping scan of untrusted path")
 		return
 	}
-	issuesSlice := f.DocumentDiagnosticsFromCache(path)
+	issuesSlice := f.IssuesForFile(path)
 	if issuesSlice != nil {
 		log.Info().Str("method", method).
 			Int("issueSliceLength", len(issuesSlice)).
 			Msgf("Cached results found: Skipping scan for %s", path)
-		f.processResults(snyk.ScanData{
-			Issues: issuesSlice,
-		})
+		f.processResults(snyk.ScanData{Issues: issuesSlice})
 		return
 	}
 
 	f.scanner.Scan(ctx, path, f.processResults, f.path)
 }
 
-func (f *Folder) IssuesForFile(filePath string) []snyk.Issue {
-	return f.DocumentDiagnosticsFromCache(filePath)
-}
-
-func (f *Folder) DocumentDiagnosticsFromCache(file string) []snyk.Issue {
+func (f *Folder) IssuesForFile(file string) []snyk.Issue {
 	// try to delegate to scanners first
 	var issues []snyk.Issue
 	if scanner, ok := f.scanner.(snyk.IssueProvider); ok {
@@ -232,8 +226,9 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 			continue
 		}
 
-		cachedIssues := f.IssuesForFile(issue.AffectedFilePath)
-		if cachedIssues == nil {
+		// global cache deduplication
+		cachedIssues, found := f.documentDiagnosticCache.Load(issue.AffectedFilePath)
+		if !found {
 			cachedIssues = []snyk.Issue{}
 		}
 
@@ -417,7 +412,7 @@ func (f *Folder) createDedupMap() (dedupMap map[string]bool) {
 }
 
 func (f *Folder) getUniqueIssueID(issue snyk.Issue) string {
-	uniqueID := issue.ID + "|" + issue.AffectedFilePath
+	uniqueID := issue.AdditionalData.GetKey()
 	return uniqueID
 }
 
@@ -452,7 +447,7 @@ func (f *Folder) Status() FolderStatus { return f.status }
 
 func (f *Folder) IssuesForRange(filePath string, requestedRange snyk.Range) (matchingIssues []snyk.Issue) {
 	method := "domain.ide.workspace.folder.getCodeActions"
-	issues := f.DocumentDiagnosticsFromCache(filePath)
+	issues := f.IssuesForFile(filePath)
 	for _, issue := range issues {
 		if issue.Range.Overlaps(requestedRange) {
 			log.Debug().Str("method", method).Msg("appending code action for issue " + issue.String())
@@ -467,10 +462,6 @@ func (f *Folder) IssuesForRange(filePath string, requestedRange snyk.Range) (mat
 		requestedRange,
 	)
 	return matchingIssues
-}
-
-func (f *Folder) AllIssuesFor(filePath string) (matchingIssues []snyk.Issue) {
-	return f.DocumentDiagnosticsFromCache(filePath)
 }
 
 func (f *Folder) ClearDiagnostics() {

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
@@ -42,6 +43,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
@@ -49,7 +51,7 @@ func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
 	folderPath, filePath := "testFolderDir", "testPath"
 	scanner := snyk.NewTestScanner()
 
-	scanner.Issues = []snyk.Issue{NewMockIssue("1", filePath)}
+	scanner.AddTestIssue(NewMockIssue("1", filePath))
 	f := NewFolder(folderPath, "Test", scanner, hover.NewFakeHoverService(), snyk.NewMockScanNotifier(), notification.NewNotifier())
 	ctx := context.Background()
 
@@ -119,18 +121,18 @@ func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 	testutil.UnitTest(t)
 	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService(), snyk.NewMockScanNotifier(), notification.NewNotifier())
 
+	filePath := "path1"
 	data := snyk.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []snyk.Issue{
-			NewMockIssue("id1", "path1"),
-			NewMockIssue("id2", "path1"),
+			NewMockIssue("id1", filePath),
+			NewMockIssue("id2", filePath),
 		},
 	}
 	f.processResults(data)
 
-	assert.Equal(t, 1, f.documentDiagnosticCache.Size())
-	assert.NotNil(t, GetValueFromMap(f.documentDiagnosticCache, "path1"))
-	assert.Len(t, GetValueFromMap(f.documentDiagnosticCache, "path1"), 2)
+	assert.Equal(t, 1, len(f.Issues()))
+	assert.Len(t, f.IssuesForFile(filePath), 2)
 }
 
 func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
@@ -180,18 +182,22 @@ func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing
 	testutil.UnitTest(t)
 	f := NewMockFolder(notification.NewNotifier())
 
+	issue1 := NewMockIssue("id1", "path1")
+	issue2 := NewMockIssue("id2", "path1")
+	issue3 := NewMockIssue("id3", "path1")
+
 	data := snyk.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []snyk.Issue{
-			NewMockIssue("id1", "path1"),
-			NewMockIssue("id2", "path1"),
+			issue1,
+			issue2,
 		},
 	}
 	f.processResults(data)
 
 	data.Issues = []snyk.Issue{
-		NewMockIssue("id1", "path1"),
-		NewMockIssue("id3", "path1"),
+		issue1,
+		issue3,
 	}
 	f.processResults(data)
 
@@ -350,10 +356,29 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 
 	// arrange
 	filePath, folderPath := "test/path", "test"
-	criticalIssue := snyk.Issue{AffectedFilePath: filePath, Severity: snyk.Critical, Product: product.ProductOpenSource}
-	highIssue := snyk.Issue{AffectedFilePath: filePath, Severity: snyk.High, Product: product.ProductOpenSource}
-	mediumIssue := snyk.Issue{AffectedFilePath: filePath, Severity: snyk.Medium, Product: product.ProductOpenSource}
-	lowIssue := snyk.Issue{AffectedFilePath: filePath, Severity: snyk.Low, Product: product.ProductOpenSource}
+
+	criticalIssue := snyk.Issue{AffectedFilePath: filePath, Severity: snyk.Critical,
+		Product: product.ProductOpenSource, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}}
+
+	highIssue := snyk.Issue{
+		AffectedFilePath: filePath,
+		Severity:         snyk.High,
+		Product:          product.ProductOpenSource,
+		AdditionalData:   snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()},
+	}
+	mediumIssue := snyk.Issue{
+		AffectedFilePath: filePath,
+		Severity:         snyk.Medium,
+		Product:          product.ProductOpenSource,
+		AdditionalData:   snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()},
+	}
+	lowIssue := snyk.Issue{
+		AffectedFilePath: filePath,
+		Severity:         snyk.Low,
+		Product:          product.ProductOpenSource,
+		AdditionalData:   snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()},
+	}
+
 	scannerRecorder := snyk.NewTestScanner()
 	scannerRecorder.Issues = []snyk.Issue{
 		criticalIssue,
@@ -401,7 +426,7 @@ func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 	f.ClearDiagnosticsByIssueType(removedIssueType)
 
 	// Assert
-	issues := f.AllIssuesFor(filePath)
+	issues := f.IssuesForFile(filePath)
 	t.Run("Does not return diagnostics of that type", func(t *testing.T) {
 		for _, issue := range issues {
 			assert.NotEqual(t, removedIssueType, issue.Product)
@@ -499,11 +524,12 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 		Product:       product.ProductOpenSource,
 		SeverityCount: make(map[product.Product]snyk.SeverityCount),
 		Issues: []snyk.Issue{
-			{Severity: snyk.Critical, Product: product.ProductOpenSource},
-			{Severity: snyk.Critical, Product: product.ProductOpenSource},
-			{Severity: snyk.High, Product: product.ProductOpenSource},
-			{Severity: snyk.High, Product: product.ProductOpenSource},
-			{Severity: snyk.Critical, Product: product.ProductInfrastructureAsCode}, // SeverityCount incremented by ScanData.Product
+			{Severity: snyk.Critical, Product: product.ProductOpenSource, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
+			{Severity: snyk.Critical, Product: product.ProductOpenSource, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
+			{Severity: snyk.High, Product: product.ProductOpenSource, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
+			{Severity: snyk.High, Product: product.ProductOpenSource, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
+			{Severity: snyk.Critical, Product: product.ProductInfrastructureAsCode, AdditionalData: snyk.IaCIssueData{Key: util.Result(uuid.NewUUID()).String()}},
+			// SeverityCount incremented by ScanData.Product
 		},
 	}
 
@@ -586,6 +612,7 @@ func NewMockIssue(id, path string) snyk.Issue {
 		AffectedFilePath: path,
 		Product:          product.ProductOpenSource,
 		Severity:         snyk.Medium,
+		AdditionalData:   snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()},
 	}
 }
 
