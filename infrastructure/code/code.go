@@ -79,7 +79,9 @@ type Scanner struct {
 	// analyzed folder
 	BundleHashes map[string]string
 	codeScanner  codeClient.CodeScanner
-	issueCache   *imcache.Cache[string, []snyk.Issue]
+	// this is the local scanner issue cache. In the future, it should be used as source of truth for the issues
+	// the cache in workspace/folder should just delegate to this cache
+	issueCache *imcache.Cache[string, []snyk.Issue]
 }
 
 func New(bundleUploader *BundleUploader,
@@ -194,9 +196,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, filesToBeScanned)
 	}
 
-	// add to cache
 	sc.addToCache(results)
-
 	return results, err
 }
 
@@ -212,14 +212,13 @@ func (sc *Scanner) getFilesToBeScanned(folderPath string) map[string]bool {
 		delete(sc.changedPaths[folderPath], changedPath)
 
 		// determine interfile dependencies
-		cachedIssues := sc.issueCache.GetAll()
-		for filePath, fileIssues := range cachedIssues {
+		cache := sc.issueCache.GetAll()
+		for filePath, fileIssues := range cache {
 			referencedFiles := getReferencedFiles(fileIssues)
 			for _, referencedFile := range referencedFiles {
-				if referencedFile != changedPath {
-					continue
+				if referencedFile == changedPath {
+					changedFiles[filePath] = true
 				}
-				changedFiles[filePath] = true
 			}
 		}
 	}
