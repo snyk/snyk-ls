@@ -195,7 +195,6 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	}
 
 	// add to cache
-	sc.expireCache(filesToBeScanned)
 	sc.addToCache(results)
 
 	return results, err
@@ -206,18 +205,21 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 func (sc *Scanner) getFilesToBeScanned(folderPath string) map[string]bool {
 	changedFiles := make(map[string]bool)
 	for changedPath := range sc.changedPaths[folderPath] {
-		if !uri.IsDirectory(changedPath) {
-			changedFiles[changedPath] = true
-			delete(sc.changedPaths[folderPath], changedPath)
+		if uri.IsDirectory(changedPath) {
+			continue
+		}
+		changedFiles[changedPath] = true
+		delete(sc.changedPaths[folderPath], changedPath)
 
-			// determine interfile dependencies
-			issues, found := sc.issueCache.Get(changedPath)
-			if !found {
-				continue
-			}
-			referencedFiles := getReferencedFiles(issues)
+		// determine interfile dependencies
+		cachedIssues := sc.issueCache.GetAll()
+		for filePath, fileIssues := range cachedIssues {
+			referencedFiles := getReferencedFiles(fileIssues)
 			for _, referencedFile := range referencedFiles {
-				changedFiles[referencedFile] = true
+				if referencedFile != changedPath {
+					continue
+				}
+				changedFiles[filePath] = true
 			}
 		}
 	}
@@ -230,7 +232,7 @@ func getReferencedFiles(issues []snyk.Issue) []string {
 		if issue.AdditionalData == nil {
 			continue
 		}
-		codeIssueData, ok := issue.AdditionalData.(*snyk.CodeIssueData)
+		codeIssueData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 		if !ok {
 			continue
 		}
@@ -241,7 +243,7 @@ func getReferencedFiles(issues []snyk.Issue) []string {
 	return referencedFiles
 }
 
-func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath string) (waiting bool) {
+func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath string) bool {
 	waitForPreviousScan := false
 	scanStatus.isRunning = true
 	sc.scanStatusMutex.Lock()
@@ -525,13 +527,6 @@ func (sc *Scanner) addToCache(results []snyk.Issue) {
 			sc.issueCache.Set(issue.AffectedFilePath, []snyk.Issue{issue}, imcache.WithDefaultExpiration())
 		}
 	}
-}
-
-func (sc *Scanner) expireCache(files map[string]bool) {
-	for filePath := range files {
-		sc.issueCache.Remove(filePath)
-	}
-	sc.issueCache.RemoveExpired()
 }
 
 func (sc *Scanner) IssuesFor(path string, r snyk.Range) []snyk.Issue {

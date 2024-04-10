@@ -496,26 +496,16 @@ func (f *Folder) sendScanResults(processedProduct product.Product, issuesByFile 
 	}
 }
 
-func (f *Folder) Issue(key string) (issue snyk.Issue) {
+func (f *Folder) Issue(key string) snyk.Issue {
+	var foundIssue snyk.Issue
 	f.documentDiagnosticCache.Range(func(filePath string, issues []snyk.Issue) bool {
 		for _, i := range issues {
-			var issueKey string
-			switch i.Product {
-			case product.ProductOpenSource:
-				issueKey = i.AdditionalData.(snyk.OssIssueData).Key
-			case product.ProductInfrastructureAsCode:
-				issueKey = i.AdditionalData.(snyk.IaCIssueData).Key
-			case product.ProductCode:
-				issueKey = i.AdditionalData.(snyk.CodeIssueData).Key
-			default:
-				issueKey = ""
-			}
-			if issueKey == key {
-				issue = i
+			if i.AdditionalData.GetKey() == key {
+				foundIssue = i
 				return false
 			}
 		}
 		return true
 	})
-	return issue
+	return foundIssue
 }

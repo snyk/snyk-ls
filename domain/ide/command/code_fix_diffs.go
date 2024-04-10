@@ -24,7 +24,6 @@ import (
 
 	"github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/domain/ide"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -34,7 +33,7 @@ import (
 type codeFixDiffs struct {
 	command       snyk.CommandData
 	notifier      notification.Notifier
-	issueProvider ide.IssueProvider
+	issueProvider snyk.IssueProvider
 	codeScanner   *code.Scanner
 }
 
@@ -45,18 +44,18 @@ func (cmd *codeFixDiffs) Command() snyk.CommandData {
 func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 	args := cmd.command.Arguments
 	if len(args) < 3 {
-		return nil, errors.New("Missing required arguments.")
+		return nil, errors.New("missing required arguments")
 	}
 
 	folderURI, ok := args[0].(string)
 	if !ok {
-		return nil, errors.New("Failed to parse folder path.")
+		return nil, errors.New("failed to parse folder path")
 	}
 	folderPath := uri2.PathFromUri(lsp.DocumentURI(folderURI))
 
 	issueURI, ok := args[1].(string)
 	if !ok {
-		return nil, errors.New("Failed to parse filepath.")
+		return nil, errors.New("failed to parse filepath")
 	}
 
 	issuePath := uri2.PathFromUri(lsp.DocumentURI(issueURI))
@@ -72,12 +71,12 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 
 	id, ok := args[2].(string)
 	if !ok {
-		return nil, errors.New("Failed to parse issue id.")
+		return nil, errors.New("failed to parse issue id")
 	}
 
 	issue := cmd.issueProvider.Issue(id)
 	if issue.ID == "" {
-		return nil, errors.New("Failed to find issue.")
+		return nil, errors.New("failed to find issue")
 	}
 
 	suggestions, err := cmd.codeScanner.GetAutoFixDiffs(ctx, folderPath, relPath, issue)

@@ -903,8 +903,8 @@ func TestScanner_getFilesToBeScanned(t *testing.T) {
 	scanner.changedPaths = make(map[string]map[string]bool)
 	scanner.changedPaths[tempDir] = make(map[string]bool)
 
-	changedFile := "file1.java"
 	t.Run("should add all files from changedPaths map and delete them from changedPaths", func(t *testing.T) {
+		changedFile := "file1.java"
 		scanner.changedPaths[tempDir][changedFile] = true
 		scanner.changedPaths[tempDir]["file2.java"] = true
 
@@ -916,25 +916,26 @@ func TestScanner_getFilesToBeScanned(t *testing.T) {
 	})
 
 	t.Run("should add all files that have dataflow items of a changed file", func(t *testing.T) {
+		changedFile := "main.ts"
 		fromChangeAffectedFile := "juice-shop/routes/vulnCodeSnippet.ts"
 
 		// we need to add a fake issue to the cache, let's keep it to the minimum needed
 		// we are reusing the test data from the code_html test
-		codeIssueData := &snyk.CodeIssueData{
+		codeIssueData := snyk.CodeIssueData{
 			DataFlow: getDataFlowElements(),
 		}
 
 		// add the changed file to the changed paths store
 		scanner.changedPaths[tempDir][changedFile] = true
 
-		// add the issue to the changed file. The issue references `fromChangeAffectedFile` in the dataflow
+		// add the issue. The issue references `changedFile` in the dataflow
 		issue := snyk.Issue{AdditionalData: codeIssueData}
-		scanner.issueCache.Set(changedFile, []snyk.Issue{issue}, imcache.WithDefaultExpiration())
+		scanner.issueCache.Set(fromChangeAffectedFile, []snyk.Issue{issue}, imcache.WithDefaultExpiration())
 		defer scanner.issueCache.RemoveAll()
 
 		files := scanner.getFilesToBeScanned(tempDir)
 
-		// The changed file is file1.java, but it mentions `fromChangeAffectedFile` in the dataflow
+		// The `changedFile` is automatically scanned, but it is mentioned by `fromChangeAffectedFile` in the dataflow
 		// Thus, now we should have both files
 		require.Contains(t, files, changedFile)
 		require.Contains(t, files, fromChangeAffectedFile)
@@ -952,16 +953,7 @@ func TestScanner_Cache(t *testing.T) {
 		_, added = scanner.issueCache.Get("file2.java")
 		require.True(t, added)
 	})
-	t.Run("should expire entries", func(t *testing.T) {
-		issue := snyk.Issue{ID: "issue1", AffectedFilePath: "file1.java"}
-		scanner.addToCache([]snyk.Issue{issue})
-
-		scanner.expireCache(map[string]bool{"file1.java": true})
-
-		_, found := scanner.issueCache.Get("file1.java")
-		require.False(t, found)
-	})
-	t.Run("should automatically expire entries", func(t *testing.T) {
+	t.Run("should automatically expire entries after a time", func(t *testing.T) {
 		scanner.issueCache = imcache.New[string, []snyk.Issue](
 			imcache.WithDefaultExpirationOption[string, []snyk.Issue](time.Microsecond),
 		)
@@ -973,7 +965,15 @@ func TestScanner_Cache(t *testing.T) {
 		require.False(t, found)
 	})
 	t.Run("should add scan results to cache", func(t *testing.T) {
-		panic("not implemented")
+		scanner.issueCache.RemoveAll()
+		scanner.issueCache.Set("file2.java", []snyk.Issue{{ID: "issue2"}}, imcache.WithDefaultExpiration())
+		filePath, folderPath := TempWorkdirWithVulnerabilities(t)
+
+		_, err := scanner.Scan(context.Background(), filePath, folderPath)
+		require.NoError(t, err)
+
+		issue := scanner.Issue(FakeIssue.AdditionalData.GetKey())
+		require.NotNil(t, issue)
 	})
 }
 

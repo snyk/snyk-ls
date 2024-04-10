@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/go-uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
@@ -79,6 +80,7 @@ var (
 		CodelensCommands: []snyk.CommandData{FakeCommand, FakeFixCommand},
 		CodeActions:      []snyk.CodeAction{FakeCodeAction},
 		AdditionalData: snyk.CodeIssueData{
+			Key:           util.Result(uuid.GenerateUUID()),
 			IsAutofixable: true,
 		},
 	}
@@ -91,7 +93,7 @@ var (
 	FakeFilters = []string{".cjs", ".ejs", ".es", ".es6", ".htm", ".html", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".vue", ".java", ".erb", ".haml", ".rb", ".rhtml", ".slim", ".kt", ".swift", ".cls", ".config", ".pom", ".wxs", ".xml", ".xsd", ".aspx", ".cs", ".py", ".go", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".php", ".phtml"}
 )
 
-func TempWorkdirWithVulnerabilities(t *testing.T) (filePath string, path string) {
+func TempWorkdirWithVulnerabilities(t *testing.T) (filePath string, folderPath string) {
 	t.Helper()
 	FakeSnykCodeApiServiceMutex.Lock()
 	defer FakeSnykCodeApiServiceMutex.Unlock()
@@ -100,7 +102,7 @@ func TempWorkdirWithVulnerabilities(t *testing.T) (filePath string, path string)
 	temp = filepath.Clean(temp)
 	temp, err := filepath.Abs(temp)
 	if err != nil {
-		t.Fatal(err, "couldn't get abs path of tempdir")
+		t.Fatal(err, "couldn't get abs folderPath of tempdir")
 	}
 
 	filePath = filepath.Join(temp, "Dummy"+FakeFileExtension)

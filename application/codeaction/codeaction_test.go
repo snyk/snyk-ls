@@ -42,7 +42,8 @@ type mockIssuesProvider struct {
 }
 
 func (m *mockIssuesProvider) Issue(key string) snyk.Issue {
-	return snyk.Issue{ID: key}
+	additionalData := snyk.CodeIssueData{Key: key}
+	return snyk.Issue{ID: "mockIssue", AdditionalData: additionalData}
 }
 
 func (m *mockIssuesProvider) IssuesFor(path string, r snyk.Range) []snyk.Issue {

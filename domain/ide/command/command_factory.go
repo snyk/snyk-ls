@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -35,7 +34,7 @@ func CreateFromCommandData( //nolint:gocyclo // reasonable command dispatch
 	authService snyk.AuthenticationService,
 	learnService learn.Service,
 	notifier noti.Notifier,
-	issueProvider ide.IssueProvider,
+	issueProvider snyk.IssueProvider,
 	codeApiClient SnykCodeHttpClient,
 	codeScanner *code.Scanner,
 ) (snyk.Command, error) {

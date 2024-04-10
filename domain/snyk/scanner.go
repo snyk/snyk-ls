@@ -241,3 +241,25 @@ func getEnabledAnalysisTypes(productScanners []ProductScanner) (analysisTypes []
 	}
 	return analysisTypes
 }
+
+func (sc *DelegatingConcurrentScanner) IssuesFor(path string, r Range) []Issue {
+	var issues []Issue
+	for _, scanner := range sc.scanners {
+		if s, ok := scanner.(IssueProvider); ok {
+			issues = append(issues, s.IssuesFor(path, r)...)
+		}
+	}
+	return issues
+}
+
+func (sc *DelegatingConcurrentScanner) Issue(key string) Issue {
+	for _, scanner := range sc.scanners {
+		if s, ok := scanner.(IssueProvider); ok {
+			issue := s.Issue(key)
+			if issue.ID != "" {
+				return issue
+			}
+		}
+	}
+	return Issue{}
+}

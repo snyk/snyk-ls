@@ -25,7 +25,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -34,7 +33,7 @@ import (
 
 type fixCodeIssue struct {
 	command       snyk.CommandData
-	issueProvider ide.IssueProvider
+	issueProvider snyk.IssueProvider
 	notifier      notification.Notifier
 }
 
