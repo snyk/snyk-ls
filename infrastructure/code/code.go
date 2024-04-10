@@ -179,11 +179,9 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
 	// Start the scan
-	t := progress.NewTracker(false)
-	t.BeginWithMessage("Snyk Code: Collecting files in \""+folderPath+"\"", "Evaluating ignores and counting files...")
 	fileFilter, _ := sc.fileFilters.Load(folderPath)
 	if fileFilter == nil {
-		fileFilter = filefilter.NewFileFilter(folderPath, &logger, t)
+		fileFilter = filefilter.NewFileFilter(folderPath, &logger)
 		sc.fileFilters.Store(folderPath, fileFilter)
 	}
 	files := fileFilter.FindNonIgnoredFiles()
@@ -210,6 +208,9 @@ func (sc *Scanner) getFilesToBeScanned(folderPath string) map[string]bool {
 	for changedPath := range sc.changedPaths[folderPath] {
 		if !uri.IsDirectory(changedPath) {
 			changedFiles[changedPath] = true
+			delete(sc.changedPaths[folderPath], changedPath)
+
+			// determine interfile dependencies
 			issues, found := sc.issueCache.Get(changedPath)
 			if !found {
 				continue
@@ -219,7 +220,6 @@ func (sc *Scanner) getFilesToBeScanned(folderPath string) map[string]bool {
 				changedFiles[referencedFile] = true
 			}
 		}
-		delete(sc.changedPaths[folderPath], changedPath)
 	}
 	return changedFiles
 }

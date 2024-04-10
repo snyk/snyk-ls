@@ -34,7 +34,7 @@ func Test_FindNonIgnoredFiles(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			setupIgnoreFilesTest(t, testCase)
 
-			filter := filefilter.NewFileFilter(testCase.repoPath, config.CurrentConfig().Logger(), nil)
+			filter := filefilter.NewFileFilter(testCase.repoPath, config.CurrentConfig().Logger())
 			var files []string
 			for f := range filter.FindNonIgnoredFiles() {
 				files = append(files, f)
@@ -102,7 +102,7 @@ func Test_FindNonIgnoredFile_FilesChanged_ReturnsCorrectResults(t *testing.T) {
 		expectedAddedExcludes: []string{"foo2.go", "bar2.go"},
 	}
 	setupIgnoreFilesTest(t, testCase.ignoreFilesTestCase)
-	fileFilter := filefilter.NewFileFilter(repoFolder, config.CurrentConfig().Logger(), nil)
+	fileFilter := filefilter.NewFileFilter(repoFolder, config.CurrentConfig().Logger())
 	originalFilteredFiles := util.ChannelToSlice(fileFilter.FindNonIgnoredFiles()) // Calling it a first time
 
 	// Act - Changing folder content
@@ -256,7 +256,7 @@ func Test_FindNonIgnoredFiles_IgnoredFolderContainsNestedNegationRules_NestedRul
 	testutil.CreateFileOrFail(t, filepath.Join(repoFolder, ".gitignore"), []byte(".gitignore\n/a/\n"))
 	testutil.CreateFileOrFail(t, filepath.Join(repoFolder, "a", ".gitignore"), []byte("!b.txt"))
 	testutil.CreateFileOrFail(t, filepath.Join(repoFolder, "a", "b.txt"), []byte("some content"))
-	fileFilter := filefilter.NewFileFilter(repoFolder, config.CurrentConfig().Logger(), nil)
+	fileFilter := filefilter.NewFileFilter(repoFolder, config.CurrentConfig().Logger())
 
 	// Act
 	filteredFiles := util.ChannelToSlice(fileFilter.FindNonIgnoredFiles())
