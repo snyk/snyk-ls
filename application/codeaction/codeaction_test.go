@@ -41,12 +41,17 @@ type mockIssuesProvider struct {
 	mock.Mock
 }
 
+func (m *mockIssuesProvider) IssuesForFile(path string) []snyk.Issue {
+	args := m.Called(path)
+	return args.Get(0).([]snyk.Issue)
+}
+
 func (m *mockIssuesProvider) Issue(key string) snyk.Issue {
 	additionalData := snyk.CodeIssueData{Key: key}
 	return snyk.Issue{ID: "mockIssue", AdditionalData: additionalData}
 }
 
-func (m *mockIssuesProvider) IssuesFor(path string, r snyk.Range) []snyk.Issue {
+func (m *mockIssuesProvider) IssuesForRange(path string, r snyk.Range) []snyk.Issue {
 	args := m.Called(path, r)
 	return args.Get(0).([]snyk.Issue)
 }
@@ -112,7 +117,7 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 
 	var issues []snyk.Issue
 	providerMock := new(mockIssuesProvider)
-	providerMock.On("IssuesFor", mock.Anything, mock.Anything).Return(issues)
+	providerMock.On("IssuesForRange", mock.Anything, mock.Anything).Return(issues)
 	fakeClient := &code.FakeSnykCodeClient{}
 	snykCodeClient := fakeClient
 	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewNotifier(), snykCodeClient)
@@ -275,7 +280,7 @@ func Test_ResolveCodeAction_KeyIsNull_ReturnsError(t *testing.T) {
 
 func setupService() *codeaction.CodeActionsService {
 	providerMock := new(mockIssuesProvider)
-	providerMock.On("IssuesFor", mock.Anything, mock.Anything).Return([]snyk.Issue{})
+	providerMock.On("IssuesForRange", mock.Anything, mock.Anything).Return([]snyk.Issue{})
 	fakeClient := &code.FakeSnykCodeClient{}
 	snykCodeClient := fakeClient
 	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewNotifier(), snykCodeClient)
@@ -288,7 +293,7 @@ func setupWithSingleIssue(issue snyk.Issue) (*codeaction.CodeActionsService, lsp
 	path := uri.PathFromUri(uriPath)
 	providerMock := new(mockIssuesProvider)
 	issues := []snyk.Issue{issue}
-	providerMock.On("IssuesFor", path, converter.FromRange(r)).Return(issues)
+	providerMock.On("IssuesForRange", path, converter.FromRange(r)).Return(issues)
 	fileWatcher := watcher.NewFileWatcher()
 	fakeClient := &code.FakeSnykCodeClient{}
 	snykCodeClient := fakeClient

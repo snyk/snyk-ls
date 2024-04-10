@@ -242,11 +242,11 @@ func getEnabledAnalysisTypes(productScanners []ProductScanner) (analysisTypes []
 	return analysisTypes
 }
 
-func (sc *DelegatingConcurrentScanner) IssuesFor(path string, r Range) []Issue {
+func (sc *DelegatingConcurrentScanner) IssuesForRange(path string, r Range) []Issue {
 	var issues []Issue
 	for _, scanner := range sc.scanners {
 		if s, ok := scanner.(IssueProvider); ok {
-			issues = append(issues, s.IssuesFor(path, r)...)
+			issues = append(issues, s.IssuesForRange(path, r)...)
 		}
 	}
 	return issues
@@ -262,4 +262,25 @@ func (sc *DelegatingConcurrentScanner) Issue(key string) Issue {
 		}
 	}
 	return Issue{}
+}
+
+func (sc *DelegatingConcurrentScanner) IssuesForFile(path string) []Issue {
+	var issues []Issue
+	for _, scanner := range sc.scanners {
+		if s, ok := scanner.(IssueProvider); ok {
+			issues = append(issues, s.IssuesForFile(path)...)
+		}
+	}
+	return issues
+}
+
+func (sc *DelegatingConcurrentScanner) IsProviderFor(product product.Product) bool {
+	for _, scanner := range sc.scanners {
+		if s, ok := scanner.(CacheProvider); ok {
+			if s.IsProviderFor(product) {
+				return true
+			}
+		}
+	}
+	return false
 }

@@ -62,7 +62,7 @@ func (c *CodeActionsService) GetCodeActions(params lsp.CodeActionParams) []lsp.C
 	}
 	path := uri.PathFromUri(params.TextDocument.URI)
 	r := converter.FromRange(params.Range)
-	issues := c.IssuesProvider.IssuesFor(path, r)
+	issues := c.IssuesProvider.IssuesForRange(path, r)
 	logMsg := fmt.Sprint("Found ", len(issues), " issues for path ", path, " and range ", r)
 	c.logger.Info().Msg(logMsg)
 	actions := converter.ToCodeActions(issues)

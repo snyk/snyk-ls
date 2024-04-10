@@ -55,7 +55,7 @@ func (cmd *fixCodeIssue) Execute(ctx context.Context) (any, error) {
 	issuePath := args[1].(string)
 	issueRange := cmd.toRange(args[2])
 
-	issues := cmd.issueProvider.IssuesFor(issuePath, issueRange)
+	issues := cmd.issueProvider.IssuesForRange(issuePath, issueRange)
 	for i := range issues {
 		for _, action := range issues[i].CodeActions {
 			if action.Uuid == nil || *action.Uuid != codeActionId {

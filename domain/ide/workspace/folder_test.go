@@ -105,6 +105,7 @@ func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 			NewMockIssue("id2", "path2"),
 		},
 	}
+	f.ScanFolder(context.Background())
 	f.processResults(data)
 
 	assert.Equal(t, 2, f.documentDiagnosticCache.Size())

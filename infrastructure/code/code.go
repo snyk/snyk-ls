@@ -195,7 +195,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	} else {
 		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, filesToBeScanned)
 	}
-
+	sc.removeFromCache(filesToBeScanned)
 	sc.addToCache(results)
 	return results, err
 }
@@ -203,13 +203,16 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 // getFilesToBeScanned returns a map of files that need to be scanned and removes them from the changedPaths set.
 // This function also analyzes interfile dependencies, taking into account the dataflow between files.
 func (sc *Scanner) getFilesToBeScanned(folderPath string) map[string]bool {
+	logger := config.CurrentConfig().Logger().With().Str("method", "code.getFilesToBeScanned").Logger()
 	changedFiles := make(map[string]bool)
 	for changedPath := range sc.changedPaths[folderPath] {
 		if uri.IsDirectory(changedPath) {
+			logger.Debug().Str("path", changedPath).Msg("skipping directory")
 			continue
 		}
 		changedFiles[changedPath] = true
 		delete(sc.changedPaths[folderPath], changedPath)
+		logger.Debug().Str("path", changedPath).Msg("added to changed files")
 
 		// determine interfile dependencies
 		cache := sc.issueCache.GetAll()
@@ -218,6 +221,7 @@ func (sc *Scanner) getFilesToBeScanned(folderPath string) map[string]bool {
 			for _, referencedFile := range referencedFiles {
 				if referencedFile == changedPath {
 					changedFiles[filePath] = true
+					logger.Debug().Str("path", filePath).Str("referencedFile", referencedFile).Msg("added to changed files")
 				}
 			}
 		}
@@ -528,7 +532,7 @@ func (sc *Scanner) addToCache(results []snyk.Issue) {
 	}
 }
 
-func (sc *Scanner) IssuesFor(path string, r snyk.Range) []snyk.Issue {
+func (sc *Scanner) IssuesForRange(path string, r snyk.Range) []snyk.Issue {
 	issues, found := sc.issueCache.Get(path)
 	if !found {
 		return []snyk.Issue{}
@@ -551,4 +555,22 @@ func (sc *Scanner) Issue(key string) snyk.Issue {
 		}
 	}
 	return snyk.Issue{}
+}
+
+func (sc *Scanner) removeFromCache(scanned map[string]bool) {
+	for path := range scanned {
+		sc.issueCache.Remove(path)
+	}
+}
+
+func (sc *Scanner) IssuesForFile(path string) []snyk.Issue {
+	issues, found := sc.issueCache.Get(path)
+	if !found {
+		return []snyk.Issue{}
+	}
+	return issues
+}
+
+func (sc *Scanner) IsProviderFor(product product.Product) bool {
+	return product == sc.Product()
 }

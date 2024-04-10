@@ -169,10 +169,19 @@ func (f *Folder) scan(ctx context.Context, path string) {
 	f.scanner.Scan(ctx, path, f.processResults, f.path)
 }
 
+func (f *Folder) IssuesForFile(filePath string) []snyk.Issue {
+	return f.DocumentDiagnosticsFromCache(filePath)
+}
+
 func (f *Folder) DocumentDiagnosticsFromCache(file string) []snyk.Issue {
-	issues, _ := f.documentDiagnosticCache.Load(file)
-	if issues == nil {
-		return nil
+	// try to delegate to scanners first
+	var issues []snyk.Issue
+	if scanner, ok := f.scanner.(snyk.IssueProvider); ok {
+		issues = append(issues, scanner.IssuesForFile(file)...)
+	}
+	globalIssues, ok := f.documentDiagnosticCache.Load(file)
+	if ok {
+		issues = append(issues, globalIssues...)
 	}
 	return issues
 }
@@ -192,7 +201,14 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 	// TODO: perform issue diffing (current <-> newly reported)
 	// Update diagnostic cache
 	for _, issue := range scanData.Issues {
-		cachedIssues, _ := f.documentDiagnosticCache.Load(issue.AffectedFilePath)
+		// only update global cache if we don't have scanner-local cache
+		cacheProvider, isCacheProvider := f.scanner.(snyk.CacheProvider)
+		if isCacheProvider && cacheProvider.IsProviderFor(issue.Product) {
+			// we expect the cache provider to do their own cache management and deduplication
+			continue
+		}
+
+		cachedIssues := f.IssuesForFile(issue.AffectedFilePath)
 		if cachedIssues == nil {
 			cachedIssues = []snyk.Issue{}
 		}
@@ -416,7 +432,7 @@ func (f *Folder) Path() string         { return f.path }
 func (f *Folder) Name() string         { return f.name }
 func (f *Folder) Status() FolderStatus { return f.status }
 
-func (f *Folder) IssuesFor(filePath string, requestedRange snyk.Range) (matchingIssues []snyk.Issue) {
+func (f *Folder) IssuesForRange(filePath string, requestedRange snyk.Range) (matchingIssues []snyk.Issue) {
 	method := "domain.ide.workspace.folder.getCodeActions"
 	issues := f.DocumentDiagnosticsFromCache(filePath)
 	for _, issue := range issues {

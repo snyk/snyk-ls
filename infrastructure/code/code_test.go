@@ -28,6 +28,7 @@ import (
 
 	"github.com/erni27/imcache"
 	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog/log"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -975,6 +976,33 @@ func TestScanner_Cache(t *testing.T) {
 		issue := scanner.Issue(FakeIssue.AdditionalData.GetKey())
 		require.NotNil(t, issue)
 	})
+	t.Run("should removeFromCache previous scan results for files to be scanned from cache", func(t *testing.T) {
+		evictionChan := make(chan string)
+		scanner.issueCache = imcache.New[string, []snyk.Issue](imcache.WithEvictionCallbackOption(func(key string, value []snyk.Issue, reason imcache.EvictionReason) {
+			go func() {
+				evictionChan <- key
+			}()
+		}))
+		scanner.issueCache.Set("file2.java", []snyk.Issue{{ID: "issue2"}}, imcache.WithDefaultExpiration())
+		filePath, folderPath := TempWorkdirWithVulnerabilities(t)
+
+		// first scan should add issues to the cache
+		_, err := scanner.Scan(context.Background(), filePath, folderPath)
+		require.NoError(t, err)
+
+		// second scan should evict the previous results from the cache
+		results, err := scanner.Scan(context.Background(), filePath, folderPath)
+		require.NoError(t, err)
+
+		for i := 0; i < len(results); i++ {
+			select {
+			case key := <-evictionChan:
+				log.Debug().Msg("evicted from cache" + key)
+			case <-time.After(time.Second):
+				t.Fatal("timeout waiting for eviction")
+			}
+		}
+	})
 }
 
 func TestScanner_IssueProvider(t *testing.T) {
@@ -992,7 +1020,8 @@ func TestScanner_IssueProvider(t *testing.T) {
 		issue := snyk.Issue{ID: "issue1", AffectedFilePath: "file1.java", AdditionalData: &snyk.CodeIssueData{Key: "key"}}
 		scanner.addToCache([]snyk.Issue{issue})
 
-		foundIssues := scanner.IssuesFor("file1.java", issue.Range)
+		foundIssues := scanner.IssuesForRange("file1.java", issue.Range)
+
 		require.Contains(t, foundIssues, issue)
 	})
 	t.Run("should not find issue by path when range does not overlap", func(t *testing.T) {
@@ -1000,7 +1029,7 @@ func TestScanner_IssueProvider(t *testing.T) {
 		issue := snyk.Issue{ID: "issue1", AffectedFilePath: "file1.java", AdditionalData: &snyk.CodeIssueData{Key: "key"}}
 		scanner.addToCache([]snyk.Issue{issue})
 
-		foundIssues := scanner.IssuesFor(
+		foundIssues := scanner.IssuesForRange(
 			"file1.java",
 			snyk.Range{
 				Start: snyk.Position{Line: 3},

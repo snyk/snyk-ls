@@ -37,7 +37,11 @@ func Test_codeFixDiffs_Command(t *testing.T) {
 type mockIssueProvider struct {
 }
 
-func (m mockIssueProvider) IssuesFor(_ string, _ snyk.Range) []snyk.Issue {
+func (m mockIssueProvider) IssuesForFile(_ string) []snyk.Issue {
+	panic("this should not be called")
+}
+
+func (m mockIssueProvider) IssuesForRange(_ string, _ snyk.Range) []snyk.Issue {
 	panic("this should not be called")
 }
 func (m mockIssueProvider) Issue(key string) snyk.Issue {

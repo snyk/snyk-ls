@@ -112,13 +112,21 @@ func (w *Workspace) AddFolder(f *Folder) {
 	w.folders[f.Path()] = f
 }
 
-func (w *Workspace) IssuesFor(path string, r snyk.Range) []snyk.Issue {
+func (w *Workspace) IssuesForFile(path string) []snyk.Issue {
+	folder := w.GetFolderContaining(path)
+	if folder == nil {
+		return nil
+	}
+	return folder.IssuesForFile(path)
+}
+
+func (w *Workspace) IssuesForRange(path string, r snyk.Range) []snyk.Issue {
 	folder := w.GetFolderContaining(path)
 	if folder == nil {
 		return nil
 	}
 
-	return folder.IssuesFor(path, r)
+	return folder.IssuesForRange(path, r)
 }
 
 func (w *Workspace) GetFolderContaining(path string) (folder *Folder) {
