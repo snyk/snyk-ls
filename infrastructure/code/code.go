@@ -548,9 +548,9 @@ func (sc *Scanner) IssuesForRange(path string, r snyk.Range) []snyk.Issue {
 
 func (sc *Scanner) Issue(key string) snyk.Issue {
 	for _, issues := range sc.issueCache.GetAll() {
-		for _, genericIssue := range issues {
-			if codeIssueData, ok := genericIssue.AdditionalData.(*snyk.CodeIssueData); ok && codeIssueData.Key == key {
-				return genericIssue
+		for _, issue := range issues {
+			if codeIssueData, ok := issue.AdditionalData.(*snyk.CodeIssueData); ok && codeIssueData.Key == key {
+				return issue
 			}
 		}
 	}
