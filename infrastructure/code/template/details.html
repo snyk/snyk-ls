@@ -39,7 +39,7 @@
       padding: 0;
       overflow: hidden;
       color: #d4d4d4;
-      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      font-family: "SF Pro Text", "Segoe UI", "Ubuntu", Tahoma, Geneva, Verdana, sans-serif;
     }
 
     h2 {
@@ -49,6 +49,10 @@
       font-weight: 700;
       text-transform: uppercase;
       color: #bbbbbb;
+    }
+
+    .hidden {
+      display: none;
     }
 
     .overview-text {
@@ -61,6 +65,12 @@
     .example-fixes,
     .example-fixes-header,
     .example-fixes-text,
+    .ignore-details-header,
+    .ignore-details-label,
+    .ignore-details-value,
+    .ignore-details-reason-label,
+    .ignore-details-reason-text,
+    .ignore-next-step-text,
     .data-flow-header,
     .data-flow-body,
     .example-line {
@@ -74,7 +84,6 @@
       margin-top: 16px;
       list-style-type: none;
       overflow: hidden;
-      margin: 0;
       padding: 0;
       border-bottom: 1px solid #333;
     }
@@ -115,7 +124,7 @@
       padding-left: 8px;
     }
 
-    .cwe {
+    .styled-link {
       color: #4daafc;
       text-decoration: none;
     }
@@ -125,7 +134,8 @@
       flex-direction: row;
       align-items: center;
       color: #ccc;
-      margin-bottom: 8px;
+      margin-bottom: 1em;
+      line-height: 1em;
     }
 
     .delimiter {
@@ -139,6 +149,87 @@
     .issue-overview,
     .data-flow-section {
       padding: 16px 0;
+    }
+
+    .ignore-warning-icon {
+      margin-right: 0.5em;
+    }
+
+    .ignore-warning-wrapper {
+      display: flex;
+      align-items: center;
+      margin: 0 0 1em;
+    }
+
+    .ignore-warning-wrapper.hidden {
+      display: none;
+    }
+
+    .ignore-warning {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      font-size: 0.75rem;
+      line-height: 1.125rem;
+      background: #FFF4ED;
+      color: #B6540B;
+      padding: 0.5em;
+      border-radius: 0.25em;
+      border: 1px solid #E27122;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .ignore-badge {
+      font-size: 0.60rem;
+      background: #FFF4ED;
+      color: #B6540B;
+      padding: 0 0.5em;
+      border-radius: 0.25em;
+      margin-left: 1em;
+      border: 1px solid #E27122;
+    }
+
+    .ignore-details-header {
+      font-size: 0.75rem;
+      font-weight: 400;
+      line-height: 1.125rem;
+    }
+
+    .ignore-details-wrapper {
+      display: flex;
+      flex-wrap: wrap;
+    }
+
+    .ignore-details-row {
+      display: flex;
+      flex-basis: 50%;
+      margin-bottom: 10px;
+    }
+
+    .ignore-details-label {
+      flex: 0 0 auto;
+      width: 20%;
+      font-weight: 600;
+    }
+
+    .ignore-details-value {
+      flex: 1;
+    }
+
+    .ignore-details-reason-wrapper {
+      display: flex;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .ignore-details-reason-label {
+      flex: 0 0 10%;
+    }
+
+    .ignore-details-reason-text {
+      flex: 1;
     }
 
     .example-fixes-text {
@@ -179,6 +270,10 @@
     .data-flow-delimiter {
       font-weight: bold;
       color: #BBBBBB;
+    }
+
+    .tab-item-icon {
+      vertical-align: middle;
     }
 
     .tab-item {
@@ -243,6 +338,16 @@
 </head>
 
 <body>
+  <!-- Ignore header -->
+  <div class="ignore-warning-wrapper ${visibilityClass}">
+    <div class="ignore-warning ">
+      <svg class="ignore-warning-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24">
+        <path d="M12,2L1,21H23M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16" fill="#D68000" />
+      </svg>
+      <span><strong>Ignored.</strong> This issue is currently ignored.</span>
+    </div>
+  </div>
+
   <!-- Panel header -->
   <header class="panel-header">
     <div class="severity-container">
@@ -252,6 +357,7 @@
     <div class="severity-type-container">
       <div class="severity-type">${issueType}</div>
       ${cwes}
+      <div class="ignore-badge ${visibilityClass}">IGNORED</div>
     </div>
   </header>
 
@@ -260,6 +366,14 @@
     <article class="issue-overview">
       <div class="overview-text">
         ${issueOverview}
+      </div>
+    </article>
+
+    <!-- Ignore Details -->
+    <article class="ignore-details-section ${visibilityClass}">
+      <h2 class="ignore-details-header">Ignore Details</h2>
+      <div class="ignore-details-body">
+        ${ignoreDetails}
       </div>
     </article>
 
