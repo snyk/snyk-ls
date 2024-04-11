@@ -89,19 +89,13 @@ func getIgnoreDetailsHtml(isIgnored bool, ignoreDetails *snyk.IgnoreDetails) (ig
 func getDataFlowHeadingHtml(issue snyk.CodeIssueData) string {
 	tmp := `Data Flow - {{len .DataFlow}} {{if gt (len .DataFlow) 1}}steps{{else}}step{{end}}`
 
-	t, err := template.New("dataFlowHeading").Parse(tmp)
+	html, err := templateHelper(tmp, "dataFlowHeading", issue)
 	if err != nil {
-		log.Error().Msg("Failed to parse data flow heading html template")
+		log.Error().Msg(err.Error())
 		return ""
 	}
 
-	var dataFlowHeading bytes.Buffer
-	err = t.Execute(&dataFlowHeading, issue)
-	if err != nil {
-		log.Error().Msg("Failed to execute data flow heading html template")
-		return ""
-	}
-	return dataFlowHeading.String()
+	return html
 }
 
 func getDataFlowTableHtml(issue snyk.CodeIssueData) string {
@@ -139,20 +133,13 @@ func getDataFlowTableHtml(issue snyk.CodeIssueData) string {
 		{{end}}
 	</tbody></table>`
 
-	t, err := template.New("dataFlow").Parse(tmpl)
+	html, err := templateHelper(tmpl, "dataFlow", items)
 	if err != nil {
-		log.Error().Msg("Failed to parse data flow table html template")
+		log.Error().Msg(err.Error())
 		return ""
 	}
 
-	var tableHtml bytes.Buffer
-	err = t.Execute(&tableHtml, items)
-	if err != nil {
-		log.Error().Msg("Failed to execute data flow table html template")
-		return ""
-	}
-
-	return tableHtml.String()
+	return html
 }
 
 func getCodeDiffHtml(fix snyk.ExampleCommitFix) template.HTML {
@@ -163,20 +150,13 @@ func getCodeDiffHtml(fix snyk.ExampleCommitFix) template.HTML {
 		</div>
 	{{end}}`
 
-	t, err := template.New("codeDiff").Parse(tmpl)
+	html, err := templateHelper(tmpl, "codeDiff", fix.Lines)
 	if err != nil {
-		log.Error().Msg("Failed to parse code diff html template")
+		log.Error().Msg(err.Error())
 		return ""
 	}
 
-	var fixHtml bytes.Buffer
-	err = t.Execute(&fixHtml, fix.Lines)
-	if err != nil {
-		log.Error().Msg("Failed to execute code diff html template")
-		return ""
-	}
-
-	return template.HTML(fixHtml.String())
+	return template.HTML(html)
 }
 
 func getExampleCommitFixesHtml(fixes []snyk.ExampleCommitFix) string {
@@ -202,20 +182,13 @@ func getExampleCommitFixesHtml(fixes []snyk.ExampleCommitFix) string {
 		"codeDiffHtml":  getCodeDiffHtml,
 	}
 
-	t, err := template.New("tabsCodeDiff").Funcs(funcMap).Parse(tmpl)
+	html, err := templateHelperWithFuncMap(tmpl, "exampleCommitFixes", fixes, funcMap)
 	if err != nil {
-		log.Error().Msg("Failed to parse commit fixes html template")
+		log.Error().Msg(err.Error())
 		return ""
 	}
 
-	var commitFixesHtml bytes.Buffer
-	err = t.Execute(&commitFixesHtml, fixes)
-	if err != nil {
-		log.Error().Msg("Failed to execute commit fixes html template")
-		return ""
-	}
-
-	return commitFixesHtml.String()
+	return html
 }
 
 func getDetailsHtml(issue snyk.Issue) string {
@@ -289,6 +262,66 @@ func getRepoName(commitURL string) string {
 	}
 
 	return tabTitle
+}
+
+// templateHelper creates a string from a template string and data.
+// Use this to dynamically generate strings with conditional formatting or data insertion.
+//
+// Example:
+//
+//		lines := []snyk.CommitChangeLine{
+//	    {
+//		    Line:       "    e.printStackTrace();",
+//		    LineNumber: 944,
+//		    LineChange: "removed",
+//	    }
+//		}
+//
+// tmpl := `
+//
+//	{{range .}}
+//	<div class="example-line {{.LineChange}}">
+//		<code>{{.Line}}</code>
+//	</div>
+//
+// {{end}}`
+//
+// html, err := templateHelper(tmpl, "codeDiff", fix.Lines)
+//
+//	if err != nil {
+//	    // handle error
+//	}
+//
+// fmt.Println(html)
+// Output:
+// <div class="example-line removed">
+//
+//	<code>    e.printStackTrace();</code>
+//
+// </div>
+func templateHelper(tmplString string, tmplName string, data interface{}) (string, error) {
+	return templateHelperWithFuncMap(tmplString, tmplName, data, nil)
+}
+
+func templateHelperWithFuncMap(tmplString string, tmplName string, data interface{}, funcMap template.FuncMap) (string, error) {
+	t := template.New(tmplName)
+
+	if funcMap != nil {
+		t = t.Funcs(funcMap)
+	}
+
+	t, err := t.Parse(tmplString)
+
+	if err != nil {
+		return "", fmt.Errorf("failed to parse %s template: %w", tmplName, err)
+	}
+
+	var tmpl bytes.Buffer
+	if err = t.Execute(&tmpl, data); err != nil {
+		return "", fmt.Errorf("failed to execute %s template: %w", tmplName, err)
+	}
+
+	return tmpl.String(), nil
 }
 
 func getSeverityIconSvg(issue snyk.Issue) string {
