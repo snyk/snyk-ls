@@ -149,7 +149,6 @@ func Test_SmokeIssueCaching(t *testing.T) {
 
 	codeIssuesForFileSecondScan := folder.IssuesForFile(filepath.Join(cloneTargetDir, "app.js"))
 	require.Equal(t, len(codeIssuesForFile), len(codeIssuesForFileSecondScan))
-
 }
 
 func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 string, useConsistentIgnores bool) {
