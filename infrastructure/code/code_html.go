@@ -114,12 +114,19 @@ func getCodeDiffHtml(fix snyk.ExampleCommitFix) string {
 	linesHtml := ""
 	for _, commit := range fix.Lines {
 		linesHtml += fmt.Sprintf(`
-		<div class="example-line %s"><code>%s</code></div>`, commit.LineChange, commit.Line)
+		<div class="example-line %s"><span class="example-line-number">%d</span> <code>%s</code></div>`,
+			commit.LineChange,
+			commit.LineNumber,
+			commit.Line)
 	}
 	return linesHtml
 }
 
 func getTabsHtml(fixes []snyk.ExampleCommitFix) string {
+	if len(fixes) == 0 {
+		return `<p>No example fixes available.`
+	}
+
 	tabsHtml := `<div class="tabs-nav">`
 
 	for i, fix := range fixes {
@@ -186,6 +193,10 @@ func getDetailsHtml(issue snyk.Issue) string {
 }
 
 func getRowOfCWEs(cwes []string) string {
+	if len(cwes) == 0 {
+		return ""
+	}
+	
 	delimeter := `<span class="delimiter"></span>`
 	html := delimeter
 	for i, cwe := range cwes {
