@@ -20,7 +20,6 @@ import (
 	"bytes"
 	_ "embed"
 	"fmt"
-	"html"
 	"html/template"
 	"path/filepath"
 	"regexp"
@@ -31,6 +30,18 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
+
+type DataFlowItem struct {
+	Number         int
+	FilePath       string
+	StartLine      int
+	EndLine        int
+	StartCharacter int
+	EndCharacter   int
+	FileName       string
+	Content        string
+	StartLineValue int
+}
 
 //go:embed template/details.html
 var detailsHtmlTemplate string
@@ -85,31 +96,55 @@ func getIgnoreDetailsHtml(isIgnored bool, ignoreDetails *snyk.IgnoreDetails) (ig
 	return ignoreDetailsHtml, ""
 }
 
-func getDataFlowHtml(issue snyk.CodeIssueData) string {
-	dataFlowHtml := `<table class="data-flow-body"><tbody>`
-
+func getDataFlowTableHtml(issue snyk.CodeIssueData) string {
+	var items []DataFlowItem
 	for i, flow := range issue.DataFlow {
-		fileName := filepath.Base(flow.FilePath)
-		dataFlowHtml += fmt.Sprintf(`
-		  <tr class="data-flow-row">
-		    <td class="data-flow-number">%d</td>
-		    <td class="data-flow-clickable-row" file-path="%s" start-line="%d" end-line="%d" start-character="%d" end-character="%d">%s:%d</td>
-		    <td class="data-flow-delimiter">|</td>
-		    <td class="data-flow-text">%s</td>
-		  </tr>`,
-			i+1,
-			html.EscapeString(flow.FilePath),
-			flow.FlowRange.Start.Line,
-			flow.FlowRange.End.Line,
-			flow.FlowRange.Start.Character,
-			flow.FlowRange.End.Character,
-			html.EscapeString(fileName),
-			flow.FlowRange.Start.Line+1,
-			html.EscapeString(flow.Content))
+		items = append(items, DataFlowItem{
+			Number:         i + 1,
+			FilePath:       flow.FilePath,
+			StartLine:      flow.FlowRange.Start.Line,
+			EndLine:        flow.FlowRange.End.Line,
+			StartCharacter: flow.FlowRange.Start.Character,
+			EndCharacter:   flow.FlowRange.End.Character,
+			FileName:       filepath.Base(flow.FilePath),
+			Content:        flow.Content,
+			StartLineValue: flow.FlowRange.Start.Line + 1,
+		})
 	}
 
-	dataFlowHtml += `</tbody></table>`
-	return dataFlowHtml
+	tmpl := `
+	<table class="data-flow-body"><tbody>
+		{{range .}}
+			<tr class="data-flow-row">
+				<td class="data-flow-number">{{.Number}}</td>
+				<td class="data-flow-clickable-row"
+						file-path="{{.FilePath}}"
+						start-line="{{.StartLine}}"
+						end-line="{{.EndLine}}"
+						start-character="{{.StartCharacter}}"
+						end-character="{{.EndCharacter}}">
+							{{.FileName}}:{{.StartLineValue}}
+				</td>
+				<td class="data-flow-delimiter">|</td>
+				<td class="data-flow-text">{{.Content}}</td>
+			</tr>
+		{{end}}
+	</tbody></table>`
+
+	t, err := template.New("dataFlow").Parse(tmpl)
+	if err != nil {
+		log.Error().Msg("Failed to parse data flow table html template")
+		return ""
+	}
+
+	var tableHtml bytes.Buffer
+	err = t.Execute(&tableHtml, items)
+	if err != nil {
+		log.Error().Msg("Failed to execute data flow table html template")
+		return ""
+	}
+
+	return tableHtml.String()
 }
 
 func getCodeDiffHtml(fix snyk.ExampleCommitFix) template.HTML {
@@ -198,9 +233,8 @@ func getDetailsHtml(issue snyk.Issue) string {
 	html = replaceVariableInHtml(html, "ignoreDetails", ignoreDetailsHtml)
 
 	// Data flow
-	dataFlowHtml := getDataFlowHtml(additionalData)
 	html = replaceVariableInHtml(html, "dataFlowHeading", getDataFlowHeadingHtml(additionalData))
-	html = replaceVariableInHtml(html, "dataFlow", dataFlowHtml)
+	html = replaceVariableInHtml(html, "dataFlowTable", getDataFlowTableHtml(additionalData))
 
 	// External example fixes
 	html = replaceVariableInHtml(html, "repoCount", fmt.Sprintf("%d", additionalData.RepoDatasetSize))

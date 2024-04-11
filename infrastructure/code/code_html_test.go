@@ -53,15 +53,14 @@ func Test_Code_Html_getDetailsHtml(t *testing.T) {
 
 	// assert Data Flow section
 	expectedDataFlowHeading := fmt.Sprintf(`<h2 class="data-flow-header">Data Flow - %d steps</h2>`, len(dataFlow))
-
 	assert.Contains(t, codePanelHtml, expectedDataFlowHeading)
 	assert.Contains(t, codePanelHtml, `<table class="data-flow-body"><tbody>`)
-	assert.Contains(t, codePanelHtml, `<td class="data-flow-clickable-row" file-path="juice-shop/routes/vulnCodeSnippet.ts" start-line="67" end-line="67" start-character="28" end-character="42">vulnCodeSnippet.ts:68</td>`)
-	assert.Contains(t, codePanelHtml, `<td class="data-flow-text">if (!vulnLines.every(e =&gt; selectedLines.includes(e))) return false</td>`)
-
+	assert.Contains(t, codePanelHtml, `main.ts:5`)
+	assert.Contains(t, codePanelHtml, `<td class="data-flow-text">import * as http from &#39;http&#39;;</td>`)
 	assert.NotContains(t, codePanelHtml, "${dataFlow}")
 	assert.NotContains(t, codePanelHtml, "${dataFlowCount}")
 
+	// assert Ignore Details section
 	assert.Contains(t, codePanelHtml, "ignore-warning-wrapper hidden")
 	assert.Contains(t, codePanelHtml, "ignore-badge hidden")
 	assert.Contains(t, codePanelHtml, "ignore-details-section hidden")
@@ -109,6 +108,25 @@ func Test_Code_Html_getDetailsHtml_ignored(t *testing.T) {
 	assert.NotContains(t, codePanelHtml, "ignore-warning-wrapper ${visibilityClass}")
 	assert.NotContains(t, codePanelHtml, "ignore-badge ${visibilityClass}")
 	assert.NotContains(t, codePanelHtml, "${ignoreDetails}")
+}
+
+func Test_Code_Html_getDataFlowTable(t *testing.T) {
+	_ = testutil.UnitTest(t)
+
+	additionalData := snyk.CodeIssueData{
+		DataFlow: getDataFlowElements(),
+	}
+
+	// invoke method under test
+	dataFlowTable := getDataFlowTableHtml(additionalData)
+
+	// assert
+	assert.Contains(t, dataFlowTable, `<td class="data-flow-number">1</td>`)
+	assert.Contains(t, dataFlowTable, `<tr class="data-flow-row">`)
+	assert.Contains(t, dataFlowTable, `file-path="juice-shop/routes/vulnCodeSnippet.ts"`)
+	assert.Contains(t, dataFlowTable, `end-line="67"`)
+	assert.Contains(t, dataFlowTable, `vulnCodeSnippet.ts:68`)
+	assert.Contains(t, dataFlowTable, `<td class="data-flow-text">if (!vulnLines.every(e =&gt; selectedLines.includes(e))) return false</td>`)
 }
 
 func Test_Code_Html_getCodeDiffHtml(t *testing.T) {
