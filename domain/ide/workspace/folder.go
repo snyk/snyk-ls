@@ -80,12 +80,15 @@ type Folder struct {
 }
 
 func (f *Folder) Issues() map[string][]snyk.Issue {
+	// we want both global issues (OSS and IaC at the moment) and scanner-local issues (Code at the moment)
+	// so we get the global issues first, then append the scanner-local issues
 	issues := make(map[string][]snyk.Issue)
 	f.documentDiagnosticCache.Range(func(key string, value []snyk.Issue) bool {
 		issues[key] = value
 		return true
 	})
 
+	// scanner-local issues: if the scanner is an IssueProvider, we append the issues it knows about
 	issueProvider, scannerIsIssueProvider := f.scanner.(snyk.IssueProvider)
 	if scannerIsIssueProvider {
 		cachedScannerIssues := issueProvider.Issues()
