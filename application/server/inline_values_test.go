@@ -26,7 +26,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -43,19 +45,21 @@ func Test_textDocumentInlineValues_shouldBeServed(t *testing.T) {
 
 func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 	loc := setupServer(t)
+	testutil.IntegTest(t)
 	di.Init()
 	dir, err := filepath.Abs("testdata")
 	assert.NoError(t, err)
 
+	discovery := install.Discovery{}
 	clientParams := lsp.InitializeParams{
 		RootURI: uri.PathToUri(dir),
 		InitializationOptions: lsp.Settings{
 			ActivateSnykCode:            "false",
 			ActivateSnykOpenSource:      "true",
 			ActivateSnykIac:             "false",
-			ManageBinariesAutomatically: "true",
 			EnableTrustedFoldersFeature: "false",
 			Token:                       os.Getenv("SNYK_TOKEN"),
+			CliPath:                     filepath.Join(t.TempDir(), discovery.ExecutableName(false)),
 		},
 	}
 	_, err = loc.Client.Call(ctx, "initialize", clientParams)
