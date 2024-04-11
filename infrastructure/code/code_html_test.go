@@ -28,7 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-func Test_CodeDetailsPanel_html_getDetailsHtml(t *testing.T) {
+func Test_Code_Html_getDetailsHtml(t *testing.T) {
 	_ = testutil.UnitTest(t)
 
 	dataFlow := getDataFlowElements()
@@ -69,17 +69,13 @@ func Test_CodeDetailsPanel_html_getDetailsHtml(t *testing.T) {
 
 	// assert Fixes section
 	expectedFixesDescription := fmt.Sprintf(`\s*This issue was fixed by %d projects. Here are %d example fixes:\s*`, repoCount, len(fixes))
-	expectedTabSelected := regexp.MustCompile(`<span class="tab-item is-selected" id="tab-link-0">`)
-	expectedRepoNameTabSelected := regexp.MustCompile("apache/flink</span>")
-	expectedRepoNameOtherTab := regexp.MustCompile("apache/tomcat</span>")
-
 	assert.Regexp(t, regexp.MustCompile(expectedFixesDescription), codePanelHtml)
-	assert.Regexp(t, expectedTabSelected, codePanelHtml)
-	assert.Regexp(t, expectedRepoNameTabSelected, codePanelHtml)
-	assert.Regexp(t, expectedRepoNameOtherTab, codePanelHtml)
+	assert.Contains(t, codePanelHtml, `<span class="tab-item is-selected" id="tab-link-0">`, "Two tabs, first is selected")
+	assert.Contains(t, codePanelHtml, "</svg> apache/flink", "GitHub icon preceding the repo name is present")
+	assert.Contains(t, codePanelHtml, "</svg> apache/tomcat", "Second tab is present")
 }
 
-func Test_CodeDetailsPanel_html_getDetailsHtml_ignored(t *testing.T) {
+func Test_Code_Html_getDetailsHtml_ignored(t *testing.T) {
 	_ = testutil.UnitTest(t)
 
 	dataFlow := getDataFlowElements()
@@ -115,23 +111,32 @@ func Test_CodeDetailsPanel_html_getDetailsHtml_ignored(t *testing.T) {
 	assert.NotContains(t, codePanelHtml, "${ignoreDetails}")
 }
 
-func Test_CodeDetailsPanel_html_getExampleFixCodeDiffHtml(t *testing.T) {
+func Test_Code_Html_getCodeDiffHtml(t *testing.T) {
 	_ = testutil.UnitTest(t)
 
-	fix := getFixes()[0]
-
 	// invoke method under test
-	fixesHtml := getCodeDiffHtml(fix)
+	fixesHtml := getCodeDiffHtml(getFixes()[0])
 
 	// assert
-	expectedHtml := `
-		<div class="example-line removed"><code>    e.printStackTrace();</code></div>
-		<div class="example-line added"><code>    LOG.error(e);</code></div>`
-
-	assert.Contains(t, fixesHtml, expectedHtml)
+	assert.Contains(t, fixesHtml, `<div class="example-line removed">`)
+	assert.Contains(t, fixesHtml, `<code>    e.printStackTrace();</code>`)
+	assert.Contains(t, fixesHtml, `<div class="example-line added">`)
+	assert.Contains(t, fixesHtml, `<code>    LOG.error(e);</code>`)
 }
 
-func Test_CodeDetailsPanel_html_getIgnoreDetailsHtml(t *testing.T) {
+func Test_Code_Html_getExampleCommitFixesHtml(t *testing.T) {
+	_ = testutil.UnitTest(t)
+
+	// invoke method under test
+	fixesHtml := getExampleCommitFixesHtml(getFixes())
+
+	// assert
+	assert.Contains(t, fixesHtml, `<span class="tab-item is-selected" id="tab-link-0">`)
+	assert.Contains(t, fixesHtml, `<svg class="tab-item-icon" width="18" height="16"`, "SVG code is not escaped")
+	assert.Contains(t, fixesHtml, `<code>    LOG.error(e);</code>`, "Code is not escaped")
+}
+
+func Test_Code_Html_getIgnoreDetailsHtml(t *testing.T) {
 	_ = testutil.UnitTest(t)
 
 	ignoredOn, _ := time.Parse(time.RFC3339, "2024-02-23T16:08:25Z")
@@ -158,7 +163,7 @@ func Test_CodeDetailsPanel_html_getIgnoreDetailsHtml(t *testing.T) {
 	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-value">John</div>`)
 }
 
-func Test_CodeDetailsPanel_html_getRowOfCWEs(t *testing.T) {
+func Test_Code_Html_getRowOfCWEs(t *testing.T) {
 	_ = testutil.UnitTest(t)
 
 	cwes := []string{"CWE-1", "CWE-2"}
@@ -171,8 +176,8 @@ func Test_CodeDetailsPanel_html_getRowOfCWEs(t *testing.T) {
 	assert.Equal(t, expected, html)
 }
 
-func Test_CodeDetailsPanel_html_getRepoName(t *testing.T) {
-	// Logic copied from Snyk IntelliJ plugin
+func Test_Code_Html_getRepoName(t *testing.T) {
+	// Source Snyk IntelliJ plugin
 	// https://github.com/snyk/snyk-intellij-plugin/blob/master/src/main/kotlin/io/snyk/plugin/ui/toolwindow/panels/SuggestionDescriptionPanelFromLS.kt#L256-L262
 	testCases := []struct {
 		name     string
