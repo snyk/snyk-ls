@@ -1004,11 +1004,17 @@ func TestScanner_Cache(t *testing.T) {
 		}
 	})
 	t.Run("should de-duplicate issues", func(t *testing.T) {
-		filePath, folderPath := TempWorkdirWithVulnerabilities(t)
+		scanner.issueCache.RemoveAll()
+		issue1 := snyk.Issue{ID: "issue1", AffectedFilePath: "file2.java", AdditionalData: snyk.CodeIssueData{Key: "1"}}
+		issue2 := snyk.Issue{ID: "issue2", AffectedFilePath: "file2.java", AdditionalData: snyk.CodeIssueData{Key: "2"}}
+		issue3 := snyk.Issue{ID: "issue3", AffectedFilePath: "file2.java", AdditionalData: snyk.CodeIssueData{Key: "3"}}
 
-		// first scan should add issues to the cache
-		_, err := scanner.Scan(context.Background(), filePath, folderPath)
-		require.NoError(t, err)
+		issues := []snyk.Issue{issue1, issue2, issue3}
+
+		scanner.addToCache(issues)
+		scanner.addToCache(issues)
+
+		require.Len(t, scanner.IssuesForFile("file2.java"), len(issues))
 	})
 }
 

@@ -527,7 +527,7 @@ func (sc *Scanner) addToCache(results []snyk.Issue) {
 		cachedIssues, present := sc.issueCache.Get(issue.AffectedFilePath)
 		if present {
 			cachedIssues = append(cachedIssues, issue)
-			sc.deduplicate(cachedIssues)
+			cachedIssues = sc.deduplicate(cachedIssues)
 			sc.issueCache.Set(issue.AffectedFilePath, cachedIssues, imcache.WithDefaultExpiration())
 		} else {
 			sc.issueCache.Set(issue.AffectedFilePath, []snyk.Issue{issue}, imcache.WithDefaultExpiration())
@@ -536,15 +536,16 @@ func (sc *Scanner) addToCache(results []snyk.Issue) {
 }
 
 func (sc *Scanner) deduplicate(issues []snyk.Issue) []snyk.Issue {
+	var deduplicatedSlice []snyk.Issue
 	seen := map[string]bool{}
 	for _, issue := range issues {
 		uniqueID := issue.AdditionalData.GetKey()
 		if !seen[uniqueID] {
 			seen[uniqueID] = true
-			issues = append(issues, issue)
+			deduplicatedSlice = append(deduplicatedSlice, issue)
 		}
 	}
-	return issues
+	return deduplicatedSlice
 }
 
 func (sc *Scanner) IssuesForRange(path string, r snyk.Range) []snyk.Issue {

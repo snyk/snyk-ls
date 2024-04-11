@@ -17,6 +17,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -28,6 +29,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
@@ -110,46 +112,59 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	}
 }
 
+func Test_SmokeIssueCaching(t *testing.T) {
+	loc := setupServer(t)
+	c := testutil.SmokeTest(t, false)
+	c.SetSnykCodeEnabled(true)
+	c.SetSnykOssEnabled(true)
+	c.SetSnykIacEnabled(false)
+	di.Init()
+
+	var cloneTargetDir = setupRepoAndInitialize(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", loc)
+	folder := workspace.Get().GetFolderContaining(cloneTargetDir)
+
+	// wait till the whole workspace is scanned
+	assert.Eventually(t, func() bool {
+		return folder != nil && folder.IsScanned()
+	}, maxIntegTestDuration, time.Millisecond)
+
+	ossIssuesForFile := folder.IssuesForFile(filepath.Join(cloneTargetDir, "package.json"))
+	require.Greater(t, len(ossIssuesForFile), 108) // 108 is the number of issues in the package.json file as of now
+
+	codeIssuesForFile := folder.IssuesForFile(filepath.Join(cloneTargetDir, "app.js"))
+	require.Greater(t, len(codeIssuesForFile), 5) // 5 is the number of issues in the app.js file as of now
+
+	_, err := loc.Client.Call(context.Background(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		Command: "snyk.workspace.scan",
+	})
+	require.NoError(t, err)
+
+	// wait till the whole workspace is scanned
+	assert.Eventually(t, func() bool {
+		return folder != nil && folder.IsScanned()
+	}, maxIntegTestDuration, time.Millisecond)
+
+	ossIssuesForFileSecondScan := folder.IssuesForFile(filepath.Join(cloneTargetDir, "package.json"))
+	require.Equal(t, len(ossIssuesForFile), len(ossIssuesForFileSecondScan))
+
+	codeIssuesForFileSecondScan := folder.IssuesForFile(filepath.Join(cloneTargetDir, "app.js"))
+	require.Equal(t, len(codeIssuesForFile), len(codeIssuesForFileSecondScan))
+
+}
+
 func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 string, useConsistentIgnores bool) {
 	t.Helper()
 	loc := setupServer(t)
-	testutil.SmokeTest(t, useConsistentIgnores)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
-	config.CurrentConfig().SetSnykIacEnabled(true)
-	config.CurrentConfig().SetSnykOssEnabled(true)
+	c := testutil.SmokeTest(t, useConsistentIgnores)
+	c.SetSnykCodeEnabled(true)
+	c.SetSnykIacEnabled(true)
+	c.SetSnykOssEnabled(true)
 	jsonRPCRecorder.ClearCallbacks()
 	jsonRPCRecorder.ClearNotifications()
 	cleanupChannels()
 	di.Init()
 
-	var cloneTargetDir, err = setupCustomTestRepo(t, repo, commit)
-	if err != nil {
-		t.Fatal(err, "Couldn't setup test repo")
-	}
-
-	folder := lsp.WorkspaceFolder{
-		Name: "Test Repo",
-		Uri:  uri.PathToUri(cloneTargetDir),
-	}
-
-	clientParams := lsp.InitializeParams{
-		WorkspaceFolders: []lsp.WorkspaceFolder{folder},
-		InitializationOptions: lsp.Settings{
-			Endpoint:                    os.Getenv("SNYK_API"),
-			Token:                       os.Getenv("SNYK_TOKEN"),
-			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              lsp.DefaultSeverityFilter(),
-		},
-	}
-
-	_, err = loc.Client.Call(ctx, "initialize", clientParams)
-	if err != nil {
-		t.Fatal(err, "Initialize failed")
-	}
-	_, err = loc.Client.Call(ctx, "initialized", nil)
-	if err != nil {
-		t.Fatal(err, "Initialized failed")
-	}
+	cloneTargetDir := setupRepoAndInitialize(t, repo, commit, loc)
 
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
@@ -180,7 +195,7 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 		for _, n := range notifications {
 			_ = n.UnmarshalParams(&scanParams)
 			if scanParams.Product != "code" ||
-				scanParams.FolderPath != uri.PathFromUri(folder.Uri) ||
+				scanParams.FolderPath != cloneTargetDir ||
 				scanParams.Status != "success" {
 				continue
 			}
@@ -214,6 +229,39 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 	}
 
 	checkFeatureFlagStatus(t, &loc)
+}
+
+func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server.Local) string {
+	t.Helper()
+	var cloneTargetDir, err = setupCustomTestRepo(t, repo, commit)
+	if err != nil {
+		t.Fatal(err, "Couldn't setup test repo")
+	}
+
+	folder := lsp.WorkspaceFolder{
+		Name: "Test Repo",
+		Uri:  uri.PathToUri(cloneTargetDir),
+	}
+
+	clientParams := lsp.InitializeParams{
+		WorkspaceFolders: []lsp.WorkspaceFolder{folder},
+		InitializationOptions: lsp.Settings{
+			Endpoint:                    os.Getenv("SNYK_API"),
+			Token:                       os.Getenv("SNYK_TOKEN"),
+			EnableTrustedFoldersFeature: "false",
+			FilterSeverity:              lsp.DefaultSeverityFilter(),
+		},
+	}
+
+	_, err = loc.Client.Call(ctx, "initialize", clientParams)
+	if err != nil {
+		t.Fatal(err, "Initialize failed")
+	}
+	_, err = loc.Client.Call(ctx, "initialized", nil)
+	if err != nil {
+		t.Fatal(err, "Initialized failed")
+	}
+	return cloneTargetDir
 }
 
 func checkFeatureFlagStatus(t *testing.T, loc *server.Local) {
