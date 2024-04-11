@@ -50,16 +50,6 @@ func replaceVariableInHtml(html string, variableName string, variableValue strin
 	return strings.ReplaceAll(html, fmt.Sprintf("${%s}", variableName), variableValue)
 }
 
-func getDataFlowHeadingHtml(issue snyk.CodeIssueData) string {
-	dataFlowCount := len(issue.DataFlow)
-	stepWord := "step"
-
-	if dataFlowCount > 1 {
-		stepWord += "s"
-	}
-	return fmt.Sprintf("Data Flow - %d %s", dataFlowCount, stepWord)
-}
-
 func getIgnoreDetailsHtml(isIgnored bool, ignoreDetails *snyk.IgnoreDetails) (ignoreDetailsHtml string, visibilityClass string) {
 	if !isIgnored {
 		return "", "hidden"
@@ -94,6 +84,24 @@ func getIgnoreDetailsHtml(isIgnored bool, ignoreDetails *snyk.IgnoreDetails) (ig
 
 	ignoreDetailsHtml = pairs + reason + warning
 	return ignoreDetailsHtml, ""
+}
+
+func getDataFlowHeadingHtml(issue snyk.CodeIssueData) string {
+	tmp := `Data Flow - {{len .DataFlow}} {{if gt (len .DataFlow) 1}}steps{{else}}step{{end}}`
+
+	t, err := template.New("dataFlowHeading").Parse(tmp)
+	if err != nil {
+		log.Error().Msg("Failed to parse data flow heading html template")
+		return ""
+	}
+
+	var dataFlowHeading bytes.Buffer
+	err = t.Execute(&dataFlowHeading, issue)
+	if err != nil {
+		log.Error().Msg("Failed to execute data flow heading html template")
+		return ""
+	}
+	return dataFlowHeading.String()
 }
 
 func getDataFlowTableHtml(issue snyk.CodeIssueData) string {
