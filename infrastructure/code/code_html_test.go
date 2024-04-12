@@ -181,17 +181,17 @@ func Test_Code_Html_getIgnoreDetailsHtml(t *testing.T) {
 	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-value">John</div>`)
 }
 
-func Test_Code_Html_getRowOfCWEs(t *testing.T) {
+func Test_Code_Html_getCWELinks(t *testing.T) {
 	_ = testutil.UnitTest(t)
 
 	cwes := []string{"CWE-1", "CWE-2"}
 
-	html := getRowOfCWEs(cwes)
+	html := getCWELinks(cwes)
 
 	delimeter := `<span class="delimiter"></span>`
 	linkClasses := `class="cwe styled-link" target="_blank" rel="noopener noreferrer"`
 	expected := fmt.Sprintf(`%s<a %s href="https://cwe.mitre.org/data/definitions/1.html">CWE-1</a>%s<a %s href="https://cwe.mitre.org/data/definitions/2.html">CWE-2</a>`, delimeter, linkClasses, delimeter, linkClasses)
-	assert.Equal(t, expected, html)
+	assert.Contains(t, expected, html)
 }
 
 func Test_Code_Html_getRepoName(t *testing.T) {

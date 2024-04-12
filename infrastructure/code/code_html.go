@@ -204,7 +204,7 @@ func getDetailsHtml(issue snyk.Issue) string {
 	html = replaceVariableInHtml(html, "issueType", getIssueType(additionalData))
 	html = replaceVariableInHtml(html, "severityText", issue.Severity.String())
 	html = replaceVariableInHtml(html, "severityIcon", getSeverityIconSvg(issue))
-	html = replaceVariableInHtml(html, "cwes", getRowOfCWEs(issue.CWEs))
+	html = replaceVariableInHtml(html, "cweLinks", getCWELinks(issue.CWEs))
 
 	html = replaceVariableInHtml(html, "issueOverview", additionalData.Message)
 
@@ -226,16 +226,21 @@ func getDetailsHtml(issue snyk.Issue) string {
 	return html
 }
 
-func getRowOfCWEs(cwes []string) string {
-	delimeter := `<span class="delimiter"></span>`
-	html := delimeter
-	for i, cwe := range cwes {
-		href := getCWELabel(cwe)
-		html += fmt.Sprintf(`<a class="cwe styled-link" target="_blank" rel="noopener noreferrer" href="%s">%s</a>`, href, cwe)
-		if i != len(cwes)-1 {
-			html += delimeter
-		}
+func getCWELinks(cwes []string) string {
+	tmpl := `
+	{{range $cwe :=.}}
+		<a class="cwe styled-link" target="_blank" rel="noopener noreferrer" href={{href}}">{{$cwe}}</a>
+		{{if ne $cwe (index . -1)}}<span class="delimiter"></span>{{end}}
+	{{end}}`
+
+	funcMap := template.FuncMap{"href": getCWELabel}
+
+	html, err := templateHelperWithFuncMap(tmpl, "cweLinks", cwes, funcMap)
+	if err != nil {
+		log.Error().Msg(err.Error())
+		return ""
 	}
+
 	return html
 }
 
