@@ -31,6 +31,11 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
+type IgnoreDetail struct {
+	Label string
+	Value string
+}
+
 type DataFlowItem struct {
 	Number         int
 	FilePath       string
@@ -43,106 +48,96 @@ type DataFlowItem struct {
 	StartLineValue int
 }
 
-type IgnoreDetail struct {
-	Label string
-	Value string
+type ExampleCommit struct {
+	CommitURL string
+	IconSVG   template.HTML
+	RepoName  string
+	DiffHTML  template.HTML
 }
 
 //go:embed template/details.html
 var detailsHtmlTemplate string
 
-func replaceVariableInHtml(html string, variableName string, variableValue string) string {
-	return strings.ReplaceAll(html, fmt.Sprintf("${%s}", variableName), variableValue)
+var globalTemplate *template.Template
+
+func init() {
+	funcMap := template.FuncMap{
+		"vendorIconSvg": getVendorIconSvg,
+		"repoName":      getRepoName,
+		"codeDiffHtml":  getCodeDiffHtml,
+		"trimCWEPrefix": trimCWEPrefix,
+		"idxMinusOne":   idxMinusOne,
+	}
+
+	var err error
+	globalTemplate, err = template.New("code").Funcs(funcMap).Parse(detailsHtmlTemplate)
+	if err != nil {
+		log.Error().Msgf("Failed to parse details template: %s", err)
+	}
 }
 
-func getCWELinks(cwes []string) string {
-	tmpl := `
-	{{range $cwe :=.}}
-		<a class="cwe styled-link" target="_blank" rel="noopener noreferrer" href={{href}}">{{$cwe}}</a>
-		{{if ne $cwe (index . -1)}}<span class="delimiter"></span>{{end}}
-	{{end}}`
-
-	funcMap := template.FuncMap{"href": getCWELabel}
-
-	html, err := templateHelperWithFuncMap(tmpl, "cweLinks", cwes, funcMap)
-	if err != nil {
-		log.Error().Msg(err.Error())
+func getCodeDetailsHtml(issue snyk.Issue) string {
+	additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+	if !ok {
+		log.Error().Msg("Failed to cast additional data to CodeIssueData")
 		return ""
 	}
 
-	return html
-}
-
-func getIgnoreDetailsHtml(isIgnored bool, ignoreDetails *snyk.IgnoreDetails) (ignoreDetailsHtml string, visibilityClass string) {
-	if !isIgnored {
-		return "", "hidden"
+	data := map[string]interface{}{
+		"IssueTitle":         additionalData.Title,
+		"IssueType":          getIssueType(additionalData),
+		"SeverityIcon":       getSeverityIconSvg(issue),
+		"CWEs":               issue.CWEs,
+		"IssueOverview":      additionalData.Message,
+		"VisibilityClass":    getVisibilityClass(issue.IsIgnored),
+		"DataFlow":           additionalData.DataFlow,
+		"DataFlowTable":      prepareDataFlowTable(additionalData),
+		"RepoCount":          additionalData.RepoDatasetSize,
+		"ExampleCount":       len(additionalData.ExampleCommitFixes),
+		"ExampleCommitFixes": prepareExampleCommitFixes(additionalData.ExampleCommitFixes),
 	}
 
-	detailsRow := []IgnoreDetail{
+	if issue.IsIgnored {
+		data["IgnoreDetails"] = prepareIgnoreDetailsRow(issue.IgnoreDetails)
+	}
+
+	// Execute the main template with all data
+	var html bytes.Buffer
+	if err := globalTemplate.Execute(&html, data); err != nil {
+		log.Error().Msgf("Failed to execute main details template: %v", err)
+		return ""
+	}
+
+	return html.String()
+}
+
+func idxMinusOne(n int) int {
+	return n - 1
+}
+
+func trimCWEPrefix(cwe string) string {
+	return strings.TrimPrefix(cwe, "CWE-")
+}
+
+func getVisibilityClass(isIgnored bool) string {
+	if isIgnored {
+		return ""
+	}
+	return "hidden"
+}
+
+func prepareIgnoreDetailsRow(ignoreDetails *snyk.IgnoreDetails) []IgnoreDetail {
+	return []IgnoreDetail{
 		{"Category", ignoreDetails.Category},
 		{"Ignored On", formatDate(ignoreDetails.IgnoredOn)},
 		{"Expiration", ignoreDetails.Expiration},
 		{"Ignored By", ignoreDetails.IgnoredBy},
 	}
-
-	tmpl := `
-	<div class="ignore-details-wrapper">
-		{{range .}}
-			<div class="ignore-details-row">
-				<div class="ignore-details-label">{{.Label}}</div>
-				<div class="ignore-details-value">{{.Value}}</div>
-			</div>
-		{{end}}
-	</div>`
-
-	details, err := templateHelper(tmpl, "ignoreDetails", detailsRow)
-	if err != nil {
-		log.Error().Msg(err.Error())
-		return "", "hidden"
-	}
-
-	reasonHtml := getIgnoreReasonHtml(ignoreDetails)
-	warningHtml := getWarningHtml()
-
-	ignoreDetailsHtml = details + reasonHtml + warningHtml
-
-	return ignoreDetailsHtml, ""
 }
 
-func getIgnoreReasonHtml(ignoreDetails *snyk.IgnoreDetails) string {
-	tmpl := `
-	<div class="ignore-details-reason-wrapper">
-		<div class="ignore-details-reason-label">Reason</div>
-		<div class="ignore-details-reason-text">{{.}}</div>
-	</div>`
+func prepareDataFlowTable(issue snyk.CodeIssueData) []DataFlowItem {
+	items := make([]DataFlowItem, 0, len(issue.DataFlow))
 
-	html, err := templateHelper(tmpl, "ignoreReason", ignoreDetails.Reason)
-	if err != nil {
-		log.Error().Msg(err.Error())
-		return ""
-	}
-	return html
-}
-
-func getWarningHtml() string {
-	return `<div class="ignore-next-step-text">Ignores are currently managed in the Snyk web app.
-		To edit or remove the ignore please go to: <a class="styled-link" href="https://app.snyk.io" target="_blank" rel="noopener noreferrer" >https://app.snyk.io</a>.</div>`
-}
-
-func getDataFlowHeadingHtml(issue snyk.CodeIssueData) string {
-	tmp := `Data Flow - {{len .DataFlow}} {{if gt (len .DataFlow) 1}}steps{{else}}step{{end}}`
-
-	html, err := templateHelper(tmp, "dataFlowHeading", issue)
-	if err != nil {
-		log.Error().Msg(err.Error())
-		return ""
-	}
-
-	return html
-}
-
-func getDataFlowTableHtml(issue snyk.CodeIssueData) string {
-	var items []DataFlowItem
 	for i, flow := range issue.DataFlow {
 		items = append(items, DataFlowItem{
 			Number:         i + 1,
@@ -156,33 +151,7 @@ func getDataFlowTableHtml(issue snyk.CodeIssueData) string {
 			StartLineValue: flow.FlowRange.Start.Line + 1,
 		})
 	}
-
-	tmpl := `
-	<table class="data-flow-body"><tbody>
-		{{range .}}
-			<tr class="data-flow-row">
-				<td class="data-flow-number">{{.Number}}</td>
-				<td class="data-flow-clickable-row"
-						file-path="{{.FilePath}}"
-						start-line="{{.StartLine}}"
-						end-line="{{.EndLine}}"
-						start-character="{{.StartCharacter}}"
-						end-character="{{.EndCharacter}}">
-							{{.FileName}}:{{.StartLineValue}}
-				</td>
-				<td class="data-flow-delimiter">|</td>
-				<td class="data-flow-text">{{.Content}}</td>
-			</tr>
-		{{end}}
-	</tbody></table>`
-
-	html, err := templateHelper(tmpl, "dataFlow", items)
-	if err != nil {
-		log.Error().Msg(err.Error())
-		return ""
-	}
-
-	return html
+	return items
 }
 
 func getCodeDiffHtml(fix snyk.ExampleCommitFix) template.HTML {
@@ -202,71 +171,17 @@ func getCodeDiffHtml(fix snyk.ExampleCommitFix) template.HTML {
 	return template.HTML(html)
 }
 
-func getExampleCommitFixesHtml(fixes []snyk.ExampleCommitFix) string {
-	tmpl := `
-	<div class="tabs-nav">
-		{{range $index, $fix := .}}
-			<span class="tab-item {{if eq $index 0}}is-selected{{end}}" id="tab-link-{{$index}}">
-				{{vendorIconSvg}} {{repoName $fix.CommitURL}}
-			</span>
-		{{end}}
-	</div>
-	<div class="tab-container">
-		{{range $index, $fix := .}}
-			<div id="tab-content-{{$index}}" class="tab-content {{if eq $index 0}}is-selected{{end}}">
-				{{codeDiffHtml $fix}}
-			</div>
-		{{end}}
-	</div>`
-
-	funcMap := template.FuncMap{
-		"vendorIconSvg": getVendorIconSvg,
-		"repoName":      getRepoName,
-		"codeDiffHtml":  getCodeDiffHtml,
+func prepareExampleCommitFixes(fixes []snyk.ExampleCommitFix) []ExampleCommit {
+	var fixData []ExampleCommit
+	for _, fix := range fixes {
+		fixData = append(fixData, ExampleCommit{
+			CommitURL: fix.CommitURL,
+			IconSVG:   getVendorIconSvg(),
+			RepoName:  getRepoName(fix.CommitURL),
+			DiffHTML:  getCodeDiffHtml(fix),
+		})
 	}
-
-	html, err := templateHelperWithFuncMap(tmpl, "exampleCommitFixes", fixes, funcMap)
-	if err != nil {
-		log.Error().Msg(err.Error())
-		return ""
-	}
-
-	return html
-}
-
-func getDetailsHtml(issue snyk.Issue) string {
-	additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
-	if !ok {
-		log.Error().Msg("Failed to cast additional data to CodeIssueData")
-		return ""
-	}
-
-	// Header
-	html := replaceVariableInHtml(detailsHtmlTemplate, "issueId", issue.ID)
-	html = replaceVariableInHtml(html, "issueTitle", additionalData.Title)
-	html = replaceVariableInHtml(html, "issueType", getIssueType(additionalData))
-	html = replaceVariableInHtml(html, "severityText", issue.Severity.String())
-	html = replaceVariableInHtml(html, "severityIcon", string(getSeverityIconSvg(issue)))
-	html = replaceVariableInHtml(html, "cweLinks", getCWELinks(issue.CWEs))
-
-	html = replaceVariableInHtml(html, "issueOverview", additionalData.Message)
-
-	// Ignore details
-	ignoreDetailsHtml, visibilityClass := getIgnoreDetailsHtml(issue.IsIgnored, issue.IgnoreDetails)
-	html = replaceVariableInHtml(html, "visibilityClass", visibilityClass)
-	html = replaceVariableInHtml(html, "ignoreDetails", ignoreDetailsHtml)
-
-	// Data flow
-	html = replaceVariableInHtml(html, "dataFlowHeading", getDataFlowHeadingHtml(additionalData))
-	html = replaceVariableInHtml(html, "dataFlowTable", getDataFlowTableHtml(additionalData))
-
-	// External example fixes
-	html = replaceVariableInHtml(html, "repoCount", fmt.Sprintf("%d", additionalData.RepoDatasetSize))
-	html = replaceVariableInHtml(html, "exampleCount", fmt.Sprintf("%d", len(additionalData.ExampleCommitFixes)))
-	html = replaceVariableInHtml(html, "exampleCommitFixes", getExampleCommitFixesHtml(additionalData.ExampleCommitFixes))
-
-	log.Debug().Msgf(html)
-	return html
+	return fixData
 }
 
 func getIssueType(additionalData snyk.CodeIssueData) string {
@@ -294,10 +209,6 @@ func getRepoName(commitURL string) string {
 	return tabTitle
 }
 
-func getCWELabel(cwe string) string {
-	return fmt.Sprintf("https://cwe.mitre.org/data/definitions/%s.html", strings.TrimPrefix(cwe, "CWE-"))
-}
-
 func formatDate(date time.Time) string {
 	month := date.Format("January")
 	return fmt.Sprintf("%s %02d, %d", month, date.Day(), date.Year())
@@ -306,17 +217,7 @@ func formatDate(date time.Time) string {
 // templateHelpers returns formatted text where the formatting depends on the data.
 // The helper uses the Go `template/html` package, which automatically escapes HTML content.
 func templateHelper(tmplString string, tmplName string, data interface{}) (string, error) {
-	return templateHelperWithFuncMap(tmplString, tmplName, data, nil)
-}
-
-func templateHelperWithFuncMap(tmplString string, tmplName string, data interface{}, funcMap template.FuncMap) (string, error) {
-	t := template.New(tmplName)
-
-	if funcMap != nil {
-		t = t.Funcs(funcMap)
-	}
-
-	t, err := t.Parse(tmplString)
+	t, err := template.New(tmplName).Parse(tmplString)
 
 	if err != nil {
 		return "", fmt.Errorf("failed to parse %s template: %w", tmplName, err)

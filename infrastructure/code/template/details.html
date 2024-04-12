@@ -37,7 +37,6 @@
       width: 100%;
       margin: 0;
       padding: 0;
-      overflow: hidden;
       color: #d4d4d4;
       font-family: "SF Pro Text", "Segoe UI", "Ubuntu", Tahoma, Geneva, Verdana, sans-serif;
     }
@@ -339,7 +338,7 @@
 
 <body>
   <!-- Ignore header -->
-  <div class="ignore-warning-wrapper ${visibilityClass}">
+  <div class="ignore-warning-wrapper {{.VisibilityClass}}">
     <div class="ignore-warning ">
       <svg class="ignore-warning-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24">
         <path d="M12,2L1,21H23M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16" fill="#D68000" />
@@ -351,13 +350,17 @@
   <!-- Panel header -->
   <header class="panel-header">
     <div class="severity-container">
-      ${severityIcon}
-      <div class="severity-title">${issueTitle}</div>
+      {{.SeverityIcon}}
+      <div class="severity-title">{{.IssueTitle}}</div>
     </div>
     <div class="severity-type-container">
-      <div class="severity-type">${issueType}</div>
-      ${cweLinks}
-      <div class="ignore-badge ${visibilityClass}">IGNORED</div>
+      <div class="severity-type">{{.IssueType}}</div>
+      {{range $index, $cwe := .CWEs}}
+      <a class="cwe styled-link" target="_blank" rel="noopener noreferrer"
+        href="https://cwe.mitre.org/data/definitions/{{trimCWEPrefix $cwe}}.html">{{$cwe}}</a>
+      {{if ne $index (idxMinusOne (len $.CWEs))}}<span class="delimiter"></span>{{end}}
+      {{end}}
+      <div class="ignore-badge {{.VisibilityClass}}">IGNORED</div>
     </div>
   </header>
 
@@ -365,23 +368,57 @@
     <!-- issue overview -->
     <article class="issue-overview">
       <div class="overview-text">
-        ${issueOverview}
+        {{.IssueOverview}}
       </div>
     </article>
 
     <!-- Ignore Details -->
-    <article class="ignore-details-section ${visibilityClass}">
+    <article class="ignore-details-section {{.VisibilityClass}}">
       <h2 class="ignore-details-header">Ignore Details</h2>
       <div class="ignore-details-body">
-        ${ignoreDetails}
+        <div class="ignore-details-wrapper">
+          {{range .IgnoreDetails}}
+          <div class="ignore-details-row">
+            <div class="ignore-details-label">{{.Label}}</div>
+            <div class="ignore-details-value">{{.Value}}</div>
+          </div>
+          {{end}}
+        </div>
+        <div class="ignore-details-reason-wrapper">
+          <div class="ignore-details-reason-label">Reason</div>
+          <div class="ignore-details-reason-text">{{.IgnoreReason}}</div>
+        </div>
+        <div class="ignore-next-step-text">
+          Ignores are currently managed in the Snyk web app.
+          To edit or remove the ignore please go to:
+          <a class="styled-link" href="https://app.snyk.io" target="_blank"
+            rel="noopener noreferrer">https://app.snyk.io</a>.
+        </div>
       </div>
     </article>
 
+
     <!-- Data Flow -->
     <article class="data-flow-section">
-      <h2 class="data-flow-header">${dataFlowHeading}</h2>
+      <h2 class="data-flow-header">
+        Data Flow - {{len .DataFlow}} {{if gt (len .DataFlow) 1}}steps{{else}}step{{end}}
+      </h2>
       <div class="data-flow-body">
-        ${dataFlowTable}
+        <table class="data-flow-body">
+          <tbody>
+            {{range .DataFlowTable}}
+            <tr class="data-flow-row">
+              <td class="data-flow-number">{{.Number}}</td>
+              <td class="data-flow-clickable-row" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
+                end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
+                {{.FileName}}:{{.StartLineValue}}
+              </td>
+              <td class="data-flow-delimiter">|</td>
+              <td class="data-flow-text">{{.Content}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
       </div>
     </article>
 
@@ -389,9 +426,22 @@
     <article class="example-fixes">
       <h2 class="example-fixes-header">External example fixes</h2>
       <div class="example-fixes-text">
-        This issue was fixed by ${repoCount} projects. Here are ${exampleCount} example fixes:
+        This issue was fixed by {{.RepoCount}} projects. Here are {{.ExampleCount}} example fixes:
       </div>
-      ${exampleCommitFixes}
+      <div class="tabs-nav">
+        {{range $index, $fix := .ExampleCommitFixes}}
+        <span class="tab-item {{if eq $index 0}}is-selected{{end}}" id="tab-link-{{$index}}">
+          {{$fix.IconSVG}} {{$fix.RepoName}}
+        </span>
+        {{end}}
+      </div>
+      <div class="tab-container">
+        {{range $index, $fix := .ExampleCommitFixes}}
+        <div id="tab-content-{{$index}}" class="tab-content {{if eq $index 0}}is-selected{{end}}">
+          {{$fix.DiffHTML}}
+        </div>
+        {{end}}
+      </div>
     </article>
   </main>
 </body>
