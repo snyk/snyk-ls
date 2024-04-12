@@ -905,14 +905,15 @@ func TestScanner_getFilesToBeScanned(t *testing.T) {
 	scanner.changedPaths[tempDir] = make(map[string]bool)
 
 	t.Run("should add all files from changedPaths map and delete them from changedPaths", func(t *testing.T) {
-		changedFile := "file1.java"
-		scanner.changedPaths[tempDir][changedFile] = true
-		scanner.changedPaths[tempDir]["file2.java"] = true
+		changedFile1 := "file1.java"
+		changedFile2 := "file2.java"
+		scanner.changedPaths[tempDir][changedFile1] = true
+		scanner.changedPaths[tempDir][changedFile2] = true
 
 		files := scanner.getFilesToBeScanned(tempDir)
 
-		require.Contains(t, files, changedFile)
-		require.Contains(t, files, "file2.java")
+		require.Contains(t, files, changedFile1)
+		require.Contains(t, files, changedFile2)
 		require.Len(t, scanner.changedPaths[tempDir], 0)
 	})
 
@@ -920,17 +921,11 @@ func TestScanner_getFilesToBeScanned(t *testing.T) {
 		changedFile := "main.ts"
 		fromChangeAffectedFile := "juice-shop/routes/vulnCodeSnippet.ts"
 
-		// we need to add a fake issue to the cache, let's keep it to the minimum needed
-		// we are reusing the test data from the code_html test
-		codeIssueData := snyk.CodeIssueData{
-			DataFlow: getDataFlowElements(),
-		}
-
 		// add the changed file to the changed paths store
 		scanner.changedPaths[tempDir][changedFile] = true
 
 		// add the issue. The issue references `changedFile` in the dataflow
-		issue := snyk.Issue{AdditionalData: codeIssueData}
+		issue := snyk.Issue{AdditionalData: getInterfileTestCodeIssueData()}
 		scanner.issueCache.Set(fromChangeAffectedFile, []snyk.Issue{issue}, imcache.WithDefaultExpiration())
 		defer scanner.issueCache.RemoveAll()
 
@@ -941,6 +936,43 @@ func TestScanner_getFilesToBeScanned(t *testing.T) {
 		require.Contains(t, files, changedFile)
 		require.Contains(t, files, fromChangeAffectedFile)
 	})
+}
+
+func getInterfileTestCodeIssueData() snyk.CodeIssueData {
+	return snyk.CodeIssueData{
+		DataFlow: []snyk.DataFlowElement{
+			{
+				Content:  "if (!vulnLines.every(e => selectedLines.includes(e))) return false",
+				FilePath: "juice-shop/routes/vulnCodeSnippet.ts",
+				FlowRange: snyk.Range{
+					End: snyk.Position{
+						Character: 42,
+						Line:      67,
+					},
+					Start: snyk.Position{
+						Character: 28,
+						Line:      67,
+					},
+				},
+				Position: 0,
+			},
+			{
+				Content:  "import { LoggerFactory } from './log';",
+				FilePath: "main.ts",
+				FlowRange: snyk.Range{
+					End: snyk.Position{
+						Character: 10,
+						Line:      9,
+					},
+					Start: snyk.Position{
+						Character: 9,
+						Line:      97,
+					},
+				},
+				Position: 4,
+			},
+		},
+	}
 }
 
 func TestScanner_Cache(t *testing.T) {

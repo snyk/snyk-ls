@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_getIssueId(t *testing.T) {
+func Test_GetIssueKey(t *testing.T) {
 	id := GetIssueKey("java/DontUsePrintStackTrace", "file/path.java", 15, 17, 15, 35)
 	assert.Equal(t, "8423559307c17d15f5617ae2e29dbf02", id)
 }
