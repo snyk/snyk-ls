@@ -43,6 +43,11 @@ type DataFlowItem struct {
 	StartLineValue int
 }
 
+type IgnoreDetail struct {
+	Label string
+	Value string
+}
+
 //go:embed template/details.html
 var detailsHtmlTemplate string
 
@@ -73,35 +78,55 @@ func getIgnoreDetailsHtml(isIgnored bool, ignoreDetails *snyk.IgnoreDetails) (ig
 		return "", "hidden"
 	}
 
-	labels := []string{"Category", "Ignored On", "Expiration", "Ignored By"}
-
-	detailsMap := map[string]string{
-		"Category":   ignoreDetails.Category,
-		"Ignored On": formatDate(ignoreDetails.IgnoredOn),
-		"Expiration": ignoreDetails.Expiration,
-		"Ignored By": ignoreDetails.IgnoredBy,
+	detailsRow := []IgnoreDetail{
+		{"Category", ignoreDetails.Category},
+		{"Ignored On", formatDate(ignoreDetails.IgnoredOn)},
+		{"Expiration", ignoreDetails.Expiration},
+		{"Ignored By", ignoreDetails.IgnoredBy},
 	}
 
-	pairs := `<div class="ignore-details-wrapper">`
-	for _, label := range labels {
-		value := detailsMap[label]
-		pairs += fmt.Sprintf(`<div class="ignore-details-row">
-		<div class="ignore-details-label">%s</div>
-		<div class="ignore-details-value">%s</div>
-		</div>`, label, value)
+	tmpl := `
+	<div class="ignore-details-wrapper">
+		{{range .}}
+			<div class="ignore-details-row">
+				<div class="ignore-details-label">{{.Label}}</div>
+				<div class="ignore-details-value">{{.Value}}</div>
+			</div>
+		{{end}}
+	</div>`
+
+	details, err := templateHelper(tmpl, "ignoreDetails", detailsRow)
+	if err != nil {
+		log.Error().Msg(err.Error())
+		return "", "hidden"
 	}
-	pairs += `</div>`
 
-	reason := fmt.Sprintf(`<div class="ignore-details-reason-wrapper">
-		<div class="ignore-details-reason-label">Reason</div>
-		<div class="ignore-details-reason-text">%s</div>
-	</div>`, ignoreDetails.Reason)
+	reasonHtml := getIgnoreReasonHtml(ignoreDetails)
+	warningHtml := getWarningHtml()
 
-	warning := `<div class="ignore-next-step-text">Ignores are currently managed in the Snyk web app.
-		To edit or remove the ignore please go to: <a class="styled-link" href="https://app.snyk.io" target="_blank" rel="noopener noreferrer" >https://app.snyk.io</a>.</div>`
+	ignoreDetailsHtml = details + reasonHtml + warningHtml
 
-	ignoreDetailsHtml = pairs + reason + warning
 	return ignoreDetailsHtml, ""
+}
+
+func getIgnoreReasonHtml(ignoreDetails *snyk.IgnoreDetails) string {
+	tmpl := `
+	<div class="ignore-details-reason-wrapper">
+		<div class="ignore-details-reason-label">Reason</div>
+		<div class="ignore-details-reason-text">{{.}}</div>
+	</div>`
+
+	html, err := templateHelper(tmpl, "ignoreReason", ignoreDetails.Reason)
+	if err != nil {
+		log.Error().Msg(err.Error())
+		return ""
+	}
+	return html
+}
+
+func getWarningHtml() string {
+	return `<div class="ignore-next-step-text">Ignores are currently managed in the Snyk web app.
+		To edit or remove the ignore please go to: <a class="styled-link" href="https://app.snyk.io" target="_blank" rel="noopener noreferrer" >https://app.snyk.io</a>.</div>`
 }
 
 func getDataFlowHeadingHtml(issue snyk.CodeIssueData) string {
