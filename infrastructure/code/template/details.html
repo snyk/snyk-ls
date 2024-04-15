@@ -326,6 +326,7 @@
     <div class="severity-type-container">
       <div class="severity-type">{{.IssueType}}</div>
       {{if gt (len .CWEs) 0}}
+      <span class="delimiter"></span>
       {{range $index, $cwe := .CWEs}}
       <a class="cwe styled-link" target="_blank" rel="noopener noreferrer"
         href="https://cwe.mitre.org/data/definitions/{{trimCWEPrefix $cwe}}.html">{{$cwe}}</a>

@@ -168,7 +168,7 @@ func getCodeDiffHtml(fix snyk.ExampleCommitFix) template.HTML {
 		log.Error().Msg(err.Error())
 		return ""
 	}
-	log.Debug().Msgf("[[getCodeDiffHtml]] %s", html)
+
 	return template.HTML(html)
 }
 
