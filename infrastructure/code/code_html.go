@@ -100,7 +100,6 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 		data["IgnoreDetails"] = prepareIgnoreDetailsRow(issue.IgnoreDetails)
 	}
 
-	// Execute the main template with all data
 	var html bytes.Buffer
 	if err := globalTemplate.Execute(&html, data); err != nil {
 		log.Error().Msgf("Failed to execute main details template: %v", err)
