@@ -12,7 +12,6 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
@@ -28,7 +27,7 @@ type dirtyFilesWatcher interface {
 
 // CodeActionsService is an application-layer service for handling code actions.
 type CodeActionsService struct {
-	IssuesProvider ide.IssueProvider
+	IssuesProvider snyk.IssueProvider
 
 	// actionsCache holds all the issues that were returns by the GetCodeActions method.
 	// This is used to resolve the code actions later on in ResolveCodeAction.
@@ -44,7 +43,7 @@ type cachedAction struct {
 	action snyk.CodeAction
 }
 
-func NewService(c *config.Config, provider ide.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier, codeApiClient code.SnykCodeClient) *CodeActionsService {
+func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier, codeApiClient code.SnykCodeClient) *CodeActionsService {
 	return &CodeActionsService{
 		IssuesProvider: provider,
 		actionsCache:   make(map[uuid.UUID]cachedAction),
@@ -63,7 +62,7 @@ func (c *CodeActionsService) GetCodeActions(params lsp.CodeActionParams) []lsp.C
 	}
 	path := uri.PathFromUri(params.TextDocument.URI)
 	r := converter.FromRange(params.Range)
-	issues := c.IssuesProvider.IssuesFor(path, r)
+	issues := c.IssuesProvider.IssuesForRange(path, r)
 	logMsg := fmt.Sprint("Found ", len(issues), " issues for path ", path, " and range ", r)
 	c.logger.Info().Msg(logMsg)
 	actions := converter.ToCodeActions(issues)

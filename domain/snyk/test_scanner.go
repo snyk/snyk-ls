@@ -21,7 +21,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type TestScanner struct {
@@ -74,5 +77,11 @@ func (s *TestScanner) Calls() int {
 }
 
 func (s *TestScanner) AddTestIssue(issue Issue) {
+	if issue.AdditionalData == nil {
+		issue.AdditionalData = CodeIssueData{
+			Key: util.Result(uuid.NewUUID()).String(),
+		}
+		issue.Product = product.ProductCode
+	}
 	s.Issues = append(s.Issues, issue)
 }

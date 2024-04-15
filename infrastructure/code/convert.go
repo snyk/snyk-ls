@@ -17,8 +17,6 @@
 package code
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -77,11 +75,6 @@ func (c *exampleCommit) toReference() (reference snyk.Reference) {
 			Msgf("cannot parse commit url")
 	}
 	return snyk.Reference{Title: c.description, Url: commitURL}
-}
-
-func getIssueKey(ruleId string, path string, startLine int, endLine int, startCol int, endCol int) string {
-	id := sha256.Sum256([]byte(ruleId + path + strconv.Itoa(startLine) + strconv.Itoa(endLine) + strconv.Itoa(startCol) + strconv.Itoa(endCol)))
-	return hex.EncodeToString(id[:16])
 }
 
 type SarifConverter struct {
@@ -353,7 +346,7 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 			markers, err := s.getMarkers(result, baseDir)
 			errs = errors.Join(errs, err)
 
-			key := getIssueKey(result.RuleID, absPath, startLine, endLine, startCol, endCol)
+			key := util.GetIssueKey(result.RuleID, absPath, startLine, endLine, startCol, endCol)
 			title := testRule.ShortDescription.Text
 			if title == "" {
 				title = testRule.ID

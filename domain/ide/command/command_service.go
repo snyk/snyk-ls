@@ -23,7 +23,6 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -37,7 +36,7 @@ type serviceImpl struct {
 	authService   snyk.AuthenticationService
 	notifier      noti.Notifier
 	learnService  learn.Service
-	issueProvider ide.IssueProvider
+	issueProvider snyk.IssueProvider
 	codeApiClient SnykCodeHttpClient
 	codeScanner   *code.Scanner
 }
@@ -46,7 +45,7 @@ func NewService(
 	authService snyk.AuthenticationService,
 	notifier noti.Notifier,
 	learnService learn.Service,
-	issueProvider ide.IssueProvider,
+	issueProvider snyk.IssueProvider,
 	codeApiClient SnykCodeHttpClient,
 	codeScanner *code.Scanner,
 ) snyk.CommandService {

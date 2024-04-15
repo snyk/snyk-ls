@@ -51,7 +51,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	}
 
 	scanner := snyk.NewTestScanner()
-	scanner.Issues = []snyk.Issue{{ID: "issue-1"}}
+	scanner.AddTestIssue(snyk.Issue{ID: "issue-1"})
 
 	w := workspace.New(performance.NewInstrumentor(), scanner, hoverService, scanNotifier, notifier)
 	folder := workspace.NewFolder(
@@ -75,6 +75,6 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	authenticated, err := authenticationService.IsAuthenticated()
 	assert.NoError(t, err)
 	assert.False(t, authenticated)
-	assert.Empty(t, folder.AllIssuesFor(t.TempDir()))
+	assert.Empty(t, folder.IssuesForFile(t.TempDir()))
 	assert.Empty(t, len(hoverService.Channel()))
 }

@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
-package ide
+package util
 
-import "github.com/snyk/snyk-ls/domain/snyk"
+import (
+	"testing"
 
-// IssueProvider is an interface that allows to retrieve issues for a given path and range.
-// This is used instead of any concrete dependency to allow for easier testing and more flexibility in implementation.
-type IssueProvider interface {
-	IssuesFor(path string, r snyk.Range) []snyk.Issue
-	Issue(key string) snyk.Issue
+	"github.com/stretchr/testify/assert"
+)
+
+func Test_GetIssueKey(t *testing.T) {
+	id := GetIssueKey("java/DontUsePrintStackTrace", "file/path.java", 15, 17, 15, 35)
+	assert.Equal(t, "8423559307c17d15f5617ae2e29dbf02", id)
 }

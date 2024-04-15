@@ -37,6 +37,7 @@ var (
 	_ Scanner             = (*DelegatingConcurrentScanner)(nil)
 	_ InlineValueProvider = (*DelegatingConcurrentScanner)(nil)
 	_ PackageScanner      = (*DelegatingConcurrentScanner)(nil)
+	_ CacheProvider       = (*DelegatingConcurrentScanner)(nil)
 )
 
 type Scanner interface {
@@ -64,6 +65,18 @@ type DelegatingConcurrentScanner struct {
 	snykApiClient snyk_api.SnykApiClient
 	authService   AuthenticationService
 	notifier      notification.Notifier
+}
+
+func (sc *DelegatingConcurrentScanner) Issues() map[string][]Issue {
+	issues := make(map[string][]Issue)
+	for _, scanner := range sc.scanners {
+		if issueProvider, ok := scanner.(IssueProvider); ok {
+			for filePath, issueSlice := range issueProvider.Issues() {
+				issues[filePath] = append(issues[filePath], issueSlice...)
+			}
+		}
+	}
+	return issues
 }
 
 func (sc *DelegatingConcurrentScanner) ScanPackages(ctx context.Context, config *config.Config, path string, content string) {
@@ -240,4 +253,47 @@ func getEnabledAnalysisTypes(productScanners []ProductScanner) (analysisTypes []
 		}
 	}
 	return analysisTypes
+}
+
+func (sc *DelegatingConcurrentScanner) IssuesForRange(path string, r Range) []Issue {
+	var issues []Issue
+	for _, scanner := range sc.scanners {
+		if s, ok := scanner.(IssueProvider); ok {
+			issues = append(issues, s.IssuesForRange(path, r)...)
+		}
+	}
+	return issues
+}
+
+func (sc *DelegatingConcurrentScanner) Issue(key string) Issue {
+	for _, scanner := range sc.scanners {
+		if s, ok := scanner.(IssueProvider); ok {
+			issue := s.Issue(key)
+			if issue.ID != "" {
+				return issue
+			}
+		}
+	}
+	return Issue{}
+}
+
+func (sc *DelegatingConcurrentScanner) IssuesForFile(path string) []Issue {
+	var issues []Issue
+	for _, scanner := range sc.scanners {
+		if s, ok := scanner.(IssueProvider); ok {
+			issues = append(issues, s.IssuesForFile(path)...)
+		}
+	}
+	return issues
+}
+
+func (sc *DelegatingConcurrentScanner) IsProviderFor(product product.Product) bool {
+	for _, scanner := range sc.scanners {
+		if s, ok := scanner.(CacheProvider); ok {
+			if s.IsProviderFor(product) {
+				return true
+			}
+		}
+	}
+	return false
 }

@@ -87,7 +87,6 @@ func NewCommandServiceMock() *CommandServiceMock {
 	return &CommandServiceMock{}
 }
 
-// todo:test
 func (service *CommandServiceMock) ExecuteCommandData(_ context.Context, command CommandData, server lsp.Server) (any, error) {
 	service.m.Lock()
 	service.executedCommands = append(service.executedCommands, command)
