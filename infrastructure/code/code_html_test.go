@@ -64,7 +64,7 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	assert.Contains(t, codePanelHtml, "ignore-details-section hidden")
 
 	// assert Fixes section
-	expectedFixesDescription := fmt.Sprintf(`\s*This issue was fixed by %d projects. Here are %d example fixes:\s*`, repoCount, len(fixes))
+	expectedFixesDescription := fmt.Sprintf(`\s*This issue was fixed by %d projects. Here are %d example fixe.\s*`, repoCount, len(fixes))
 	assert.Regexp(t, regexp.MustCompile(expectedFixesDescription), codePanelHtml)
 	assert.Contains(t, codePanelHtml, `<span class="tab-item is-selected" id="tab-link-0">`, "Two tabs, first is selected")
 	assert.Contains(t, codePanelHtml, "</svg> apache/flink", "GitHub icon preceding the repo name is present")

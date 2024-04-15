@@ -421,9 +421,8 @@
     <article class="example-fixes">
       <h2 class="example-fixes-header">External example fixes</h2>
       <div class="example-fixes-text">
-        This issue was fixed by {{.RepoCount}} projects.
         {{if gt (len .ExampleCommitFixes) 0}}
-        Here are {{.ExampleCount}} example fixes.
+        This issue was fixed by {{.RepoCount}} projects. Here are {{.ExampleCount}} example fixes.
         <div class="tabs-nav">
           {{range $index, $fix := .ExampleCommitFixes}}
           <span class="tab-item {{if eq $index 0}}is-selected{{end}}" id="tab-link-{{$index}}">
