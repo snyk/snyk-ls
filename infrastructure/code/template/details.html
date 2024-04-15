@@ -22,8 +22,28 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
+    :root {
+      --text-color: #d4d4d4;
+      --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    ::-webkit-scrollbar {
+      width: 8px;
+      background: #2b2d30;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #48494b;
+      border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #595a5c;
+    }
+
     html {
-      font-size: 18px;
+      height: 100%;
+      font-size: 16px;
     }
 
     *,
@@ -33,15 +53,17 @@
     }
 
     body {
+      margin: 0;
+      padding: 16px;
       height: 100%;
-      width: 100%;
-      color: #d4d4d4;
-      font-family: "SF Pro Text", "Segoe UI", "Ubuntu", Tahoma, Geneva, Verdana, sans-serif;
+      min-height: 100vh;
+      overflow-y: auto;
+      overflow-x: hidden;
+      color: var(--text-color);
+      font-family: var(--default-font);
       font-weight: 400;
-      font-size: 0.75rem;
-      border-radius: 4px;
-      margin: 16px;
-      overflow: scroll;
+      font-size: 0.875rem;
+      background-color: inherit;
     }
 
     h2 {
