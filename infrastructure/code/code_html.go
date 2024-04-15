@@ -49,10 +49,10 @@ type DataFlowItem struct {
 }
 
 type ExampleCommit struct {
-	CommitURL string
-	IconSVG   template.HTML
-	RepoName  string
-	DiffHTML  template.HTML
+	CommitURL    string
+	IconSVG      template.HTML
+	RepoName     string
+	ExampleLines []ExampleLines
 }
 
 //go:embed template/details.html
@@ -64,7 +64,6 @@ func init() {
 	funcMap := template.FuncMap{
 		"vendorIconSvg": getVendorIconSvg,
 		"repoName":      getRepoName,
-		"codeDiffHtml":  getCodeDiffHtml,
 		"trimCWEPrefix": trimCWEPrefix,
 		"idxMinusOne":   idxMinusOne,
 	}
@@ -154,32 +153,32 @@ func prepareDataFlowTable(issue snyk.CodeIssueData) []DataFlowItem {
 	return items
 }
 
-func getCodeDiffHtml(fix snyk.ExampleCommitFix) template.HTML {
-	tmpl := `
-	{{range .}}
-		<div class="example-line {{.LineChange}}">
-			<span class="example-line-number">{{.LineNumber}}</span>
-			<code>{{.Line}}</code>
-		</div>
-	{{end}}`
+type ExampleLines struct {
+	LineNumber int
+	Line       string
+	LineChange string
+}
 
-	html, err := templateHelper(tmpl, "codeDiff", fix.Lines)
-	if err != nil {
-		log.Error().Msg(err.Error())
-		return ""
+func prepareExampleLines(lines []snyk.CommitChangeLine) []ExampleLines {
+	var exampleLines []ExampleLines
+	for _, line := range lines {
+		exampleLines = append(exampleLines, ExampleLines{
+			LineNumber: line.LineNumber,
+			Line:       line.Line,
+			LineChange: line.LineChange,
+		})
 	}
-
-	return template.HTML(html)
+	return exampleLines
 }
 
 func prepareExampleCommitFixes(fixes []snyk.ExampleCommitFix) []ExampleCommit {
 	var fixData []ExampleCommit
 	for _, fix := range fixes {
 		fixData = append(fixData, ExampleCommit{
-			CommitURL: fix.CommitURL,
-			IconSVG:   getVendorIconSvg(),
-			RepoName:  getRepoName(fix.CommitURL),
-			DiffHTML:  getCodeDiffHtml(fix),
+			CommitURL:    fix.CommitURL,
+			IconSVG:      getVendorIconSvg(),
+			RepoName:     getRepoName(fix.CommitURL),
+			ExampleLines: prepareExampleLines(fix.Lines),
 		})
 	}
 	return fixData
@@ -213,23 +212,6 @@ func getRepoName(commitURL string) string {
 func formatDate(date time.Time) string {
 	month := date.Format("January")
 	return fmt.Sprintf("%s %02d, %d", month, date.Day(), date.Year())
-}
-
-// templateHelpers returns formatted text where the formatting depends on the data.
-// The helper uses the Go `template/html` package, which automatically escapes HTML content.
-func templateHelper(tmplString string, tmplName string, data interface{}) (string, error) {
-	t, err := template.New(tmplName).Parse(tmplString)
-
-	if err != nil {
-		return "", fmt.Errorf("failed to parse %s template: %w", tmplName, err)
-	}
-
-	var tmpl bytes.Buffer
-	if err = t.Execute(&tmpl, data); err != nil {
-		return "", fmt.Errorf("failed to execute %s template: %w", tmplName, err)
-	}
-
-	return tmpl.String(), nil
 }
 
 func getSeverityIconSvg(issue snyk.Issue) template.HTML {

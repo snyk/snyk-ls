@@ -54,7 +54,7 @@
 
     body {
       margin: 0;
-      padding: 16px;
+      padding: 0 16px;
       height: 100%;
       min-height: 100vh;
       overflow-y: auto;
@@ -119,7 +119,6 @@
       display: inline-block;
     }
 
-    .panel-header,
     .issue-overview,
     .data-flow-section,
     .example-fixes {
@@ -433,7 +432,12 @@
         <div class="tab-container">
           {{range $index, $fix := .ExampleCommitFixes}}
           <div id="tab-content-{{$index}}" class="tab-content {{if eq $index 0}}is-selected{{end}}">
-            {{$fix.DiffHTML}}
+            {{range $fix.ExampleLines}}
+            <div class="example-line {{.LineChange}}">
+              <span class="example-line-number">{{.LineNumber}}</span>
+              <code>{{.Line}}</code>
+            </div>
+            {{end}}
           </div>
           {{end}}
         </div>
