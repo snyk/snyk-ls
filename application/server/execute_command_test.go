@@ -93,7 +93,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 		return scannerForFolder.Calls() == 2 && scannerForDontClear.Calls() == 1
 	}, 2*time.Second, time.Millisecond)
 
-	assert.Equal(t, 1, len(dontClear.AllIssuesFor(dontClearIssuePath)))
+	assert.Equal(t, 1, len(dontClear.IssuesForFile(dontClearIssuePath)))
 }
 
 func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {

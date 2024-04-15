@@ -85,19 +85,6 @@ func Test_Find_CliPathInSettings_CliPathFound(t *testing.T) {
 	assert.Equal(t, cliPath, foundPath)
 }
 
-func TestInstaller_Find_emptyPath(t *testing.T) {
-	testutil.IntegTest(t)
-	t.Skipf("removes real binaries from user directory")
-
-	t.Setenv("PATH", "")
-	i := NewInstaller(error_reporting.NewTestErrorReporter(), nil)
-
-	execPath, err := i.Find()
-
-	assert.Error(t, err)
-	assert.Empty(t, execPath)
-}
-
 func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 	r := getTestAsset()
 

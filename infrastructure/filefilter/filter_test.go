@@ -8,6 +8,8 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/filefilter"
+	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -71,7 +73,10 @@ func Test_FindNonIgnoredFiles_MultipleWorkDirs(t *testing.T) {
 
 	for _, testCase := range cases {
 		// Act
-		files := util.ChannelToSlice(filefilter.FindNonIgnoredFiles(testCase.repoPath, config.CurrentConfig().Logger()))
+		progressCh := make(chan lsp.ProgressParams, 100000)
+		cancelProgressCh := make(chan lsp.ProgressToken, 1)
+		files := util.ChannelToSlice(
+			filefilter.FindNonIgnoredFiles(testCase.repoPath, config.CurrentConfig().Logger(), progress.NewTestTracker(progressCh, cancelProgressCh)))
 
 		// Assert
 		assertFilesFiltered(t, testCase, files)

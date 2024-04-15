@@ -65,7 +65,12 @@ type Issue struct {
 	// A slice of the CVEs of the issue
 	CVEs []string
 	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
-	AdditionalData any
+	AdditionalData IssueAdditionalData
+}
+
+type IssueAdditionalData interface {
+	GetKey() string
+	GetTitle() string
 }
 
 type IgnoreDetails struct {
@@ -96,6 +101,14 @@ type CodeIssueData struct {
 	HasAIFix           bool               `json:"hasAIFix"`
 	DataFlow           []DataFlowElement  `json:"dataFlow,omitempty"`
 	Details            string             `json:"details"`
+}
+
+func (c CodeIssueData) GetKey() string {
+	return c.Key
+}
+
+func (c CodeIssueData) GetTitle() string {
+	return c.Title
 }
 
 type ExampleCommitFix struct {
@@ -147,6 +160,14 @@ type OssIssueData struct {
 	Details           string      `json:"details"`
 }
 
+func (o OssIssueData) GetKey() string {
+	return o.Key
+}
+
+func (o OssIssueData) GetTitle() string {
+	return o.Title
+}
+
 type IaCIssueData struct {
 	// Unique key identifying an issue in the whole result set
 	Key string `json:"key"`
@@ -168,6 +189,14 @@ type IaCIssueData struct {
 	Path []string `json:"path"`
 	// References: List of reference URLs
 	References []string `json:"references,omitempty"`
+}
+
+func (i IaCIssueData) GetKey() string {
+	return i.Key
+}
+
+func (i IaCIssueData) GetTitle() string {
+	return i.Title
 }
 
 func (i Issue) GetFilterableIssueType() product.FilterableIssueType {

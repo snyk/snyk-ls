@@ -50,13 +50,21 @@ type issueProviderMock struct {
 	mock.Mock
 }
 
-func (m *issueProviderMock) Issue(key string) snyk.Issue {
+func (m *issueProviderMock) Issues() map[string][]snyk.Issue {
 	panic("this should not be called")
 }
 
-func (m *issueProviderMock) IssuesFor(path string, r snyk.Range) []snyk.Issue {
+func (m *issueProviderMock) Issue(_ string) snyk.Issue {
+	panic("this should not be called")
+}
+
+func (m *issueProviderMock) IssuesForRange(path string, r snyk.Range) []snyk.Issue {
 	args := m.Called(path, r)
 	return args.Get(0).([]snyk.Issue)
+}
+
+func (m *issueProviderMock) IssuesForFile(_ string) []snyk.Issue {
+	panic("this should not be called")
 }
 
 func setupClientCapability(config *config.Config) {
@@ -126,9 +134,9 @@ func Test_fixCodeIssue_ErrorsWhenNoCapability(t *testing.T) {
 }
 
 func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
-	config := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	// arrange
-	setupClientCapability(config)
+	setupClientCapability(c)
 
 	mockNotifier := notification.NewMockNotifier()
 	cmd := setupCommand(mockNotifier)
@@ -143,7 +151,7 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 	issues := setupSampleIssues(issueRange, codeAction, cmd.command)
 
 	issueProviderMock := new(issueProviderMock)
-	issueProviderMock.On("IssuesFor", filePath, issueRange).Return(issues)
+	issueProviderMock.On("IssuesForRange", filePath, issueRange).Return(issues)
 	cmd.issueProvider = issueProviderMock
 
 	// act
@@ -160,9 +168,9 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 }
 
 func Test_fixCodeIssue_noEdit(t *testing.T) {
-	config := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	// arrange
-	setupClientCapability(config)
+	setupClientCapability(c)
 
 	mockNotifier := notification.NewMockNotifier()
 	cmd := setupCommand(mockNotifier)
@@ -179,7 +187,7 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 	issues := setupSampleIssues(issueRange, codeAction, cmd.command)
 
 	issueProviderMock := new(issueProviderMock)
-	issueProviderMock.On("IssuesFor", filePath, issueRange).Return(issues)
+	issueProviderMock.On("IssuesForRange", filePath, issueRange).Return(issues)
 	cmd.issueProvider = issueProviderMock
 
 	// act
@@ -196,9 +204,9 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 }
 
 func Test_fixCodeIssue_NoIssueFound(t *testing.T) {
-	config := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	// arrange
-	setupClientCapability(config)
+	setupClientCapability(c)
 
 	mockNotifier := notification.NewMockNotifier()
 	cmd := setupCommand(mockNotifier)
@@ -207,7 +215,7 @@ func Test_fixCodeIssue_NoIssueFound(t *testing.T) {
 	issueRange := cmd.toRange(sampleArgs[2])
 
 	issueProviderMock := new(issueProviderMock)
-	issueProviderMock.On("IssuesFor", filePath, issueRange).Return([]snyk.Issue{})
+	issueProviderMock.On("IssuesForRange", filePath, issueRange).Return([]snyk.Issue{})
 	cmd.issueProvider = issueProviderMock
 
 	// act

@@ -395,7 +395,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 		t,
 		func() bool {
 			path := uri.PathFromUri(didOpenParams.TextDocument.URI)
-			return workspace.Get().GetFolderContaining(path).DocumentDiagnosticsFromCache(path) != nil
+			return workspace.Get().GetFolderContaining(path).IssuesForFile(path) != nil
 		},
 		50*time.Second,
 		time.Millisecond,
@@ -452,7 +452,7 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeFixLenses(t *testing.T
 		t,
 		func() bool {
 			path := uri.PathFromUri(didOpenParams.TextDocument.URI)
-			return workspace.Get().GetFolderContaining(path).DocumentDiagnosticsFromCache(path) != nil
+			return workspace.Get().GetFolderContaining(path).IssuesForFile(path) != nil
 		},
 		50*time.Second,
 		time.Millisecond,

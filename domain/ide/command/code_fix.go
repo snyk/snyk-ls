@@ -25,7 +25,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -34,7 +33,7 @@ import (
 
 type fixCodeIssue struct {
 	command       snyk.CommandData
-	issueProvider ide.IssueProvider
+	issueProvider snyk.IssueProvider
 	notifier      notification.Notifier
 }
 
@@ -42,7 +41,7 @@ func (cmd *fixCodeIssue) Command() snyk.CommandData {
 	return cmd.command
 }
 
-func (cmd *fixCodeIssue) Execute(ctx context.Context) (any, error) {
+func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 	if !config.CurrentConfig().ClientCapabilities().Workspace.ApplyEdit {
 		log.Error().Msg("Client doesn't support 'workspace/applyEdit' capability, skipping fix attempt.")
 		return nil, errors.New("Client doesn't support 'workspace/applyEdit' capability.")
@@ -56,7 +55,7 @@ func (cmd *fixCodeIssue) Execute(ctx context.Context) (any, error) {
 	issuePath := args[1].(string)
 	issueRange := cmd.toRange(args[2])
 
-	issues := cmd.issueProvider.IssuesFor(issuePath, issueRange)
+	issues := cmd.issueProvider.IssuesForRange(issuePath, issueRange)
 	for i := range issues {
 		for _, action := range issues[i].CodeActions {
 			if action.Uuid == nil || *action.Uuid != codeActionId {

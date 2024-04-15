@@ -48,6 +48,16 @@ type Workspace struct {
 	notifier            noti.Notifier
 }
 
+func (w *Workspace) Issues() map[string][]snyk.Issue {
+	issues := make(map[string][]snyk.Issue)
+	for _, folder := range w.folders {
+		for filePath, issueSlice := range folder.Issues() {
+			issues[filePath] = append(issues[filePath], issueSlice...)
+		}
+	}
+	return issues
+}
+
 func (w *Workspace) Issue(key string) snyk.Issue {
 	for _, folder := range w.folders {
 		issue := folder.Issue(key)
@@ -112,13 +122,21 @@ func (w *Workspace) AddFolder(f *Folder) {
 	w.folders[f.Path()] = f
 }
 
-func (w *Workspace) IssuesFor(path string, r snyk.Range) []snyk.Issue {
+func (w *Workspace) IssuesForFile(path string) []snyk.Issue {
+	folder := w.GetFolderContaining(path)
+	if folder == nil {
+		return nil
+	}
+	return folder.IssuesForFile(path)
+}
+
+func (w *Workspace) IssuesForRange(path string, r snyk.Range) []snyk.Issue {
 	folder := w.GetFolderContaining(path)
 	if folder == nil {
 		return nil
 	}
 
-	return folder.IssuesFor(path, r)
+	return folder.IssuesForRange(path, r)
 }
 
 func (w *Workspace) GetFolderContaining(path string) (folder *Folder) {
