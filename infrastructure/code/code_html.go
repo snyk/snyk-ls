@@ -29,6 +29,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/product"
 )
 
 type IgnoreDetail struct {
@@ -69,7 +70,7 @@ func init() {
 	}
 
 	var err error
-	globalTemplate, err = template.New("code").Funcs(funcMap).Parse(detailsHtmlTemplate)
+	globalTemplate, err = template.New(string(product.ProductCode)).Funcs(funcMap).Parse(detailsHtmlTemplate)
 	if err != nil {
 		log.Error().Msgf("Failed to parse details template: %s", err)
 	}
@@ -88,7 +89,7 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 		"SeverityIcon":       getSeverityIconSvg(issue),
 		"CWEs":               issue.CWEs,
 		"IssueOverview":      additionalData.Message,
-		"VisibilityClass":    getVisibilityClass(issue.IsIgnored),
+		"IsIgnored":          issue.IsIgnored,
 		"DataFlow":           additionalData.DataFlow,
 		"DataFlowTable":      prepareDataFlowTable(additionalData),
 		"RepoCount":          additionalData.RepoDatasetSize,
@@ -115,13 +116,6 @@ func idxMinusOne(n int) int {
 
 func trimCWEPrefix(cwe string) string {
 	return strings.TrimPrefix(cwe, "CWE-")
-}
-
-func getVisibilityClass(isIgnored bool) string {
-	if isIgnored {
-		return ""
-	}
-	return "hidden"
 }
 
 func prepareIgnoreDetailsRow(ignoreDetails *snyk.IgnoreDetails) []IgnoreDetail {

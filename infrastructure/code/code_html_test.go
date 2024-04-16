@@ -58,10 +58,10 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	assert.Contains(t, codePanelHtml, `main.ts:5`)
 	assert.Contains(t, codePanelHtml, `<td class="data-flow-text">import * as http from &#39;http&#39;;</td>`)
 
-	// assert Ignore Details section
-	assert.Contains(t, codePanelHtml, "ignore-warning-wrapper hidden")
-	assert.Contains(t, codePanelHtml, "ignore-badge hidden")
-	assert.Contains(t, codePanelHtml, "ignore-details-section hidden")
+	// assert Ignore Details section - Elements should not be present
+	assert.NotContains(t, codePanelHtml, `class=ignore-warning-wrapper`)
+	assert.NotContains(t, codePanelHtml, `class="ignore-badge"`)
+	assert.NotContains(t, codePanelHtml, `class="ignore-details-section"`)
 
 	// assert Fixes section
 	expectedFixesDescription := fmt.Sprintf(`\s*This issue was fixed by %d projects. Here are %d example fixe.\s*`, repoCount, len(fixes))
@@ -102,8 +102,10 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	// invoke method under test
 	codePanelHtml := getCodeDetailsHtml(issue)
 
-	assert.NotContains(t, codePanelHtml, "ignore-warning-wrapper ${visibilityClass}")
-	assert.NotContains(t, codePanelHtml, "ignore-badge ${visibilityClass}")
+	// assert Ignore Details section - Elements should be present
+	assert.Contains(t, codePanelHtml, `class="ignore-warning-wrapper"`)
+	assert.Contains(t, codePanelHtml, `class="ignore-badge"`)
+	assert.Contains(t, codePanelHtml, `class="ignore-details-section"`)
 }
 
 func getFixes() []snyk.ExampleCommitFix {

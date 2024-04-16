@@ -102,10 +102,6 @@
       font-size: 0.85rem;
     }
 
-    .hidden {
-      display: none;
-    }
-
     .styled-link {
       color: #759AF3;
       text-decoration: none;
@@ -133,10 +129,6 @@
       display: flex;
       align-items: center;
       margin: 0 0 1em;
-    }
-
-    .ignore-warning-wrapper.hidden {
-      display: none;
     }
 
     .ignore-warning {
@@ -329,7 +321,8 @@
 
 <body>
   <!-- Ignore header -->
-  <div class="ignore-warning-wrapper {{.VisibilityClass}}">
+  {{if .IsIgnored}}
+  <div class="ignore-warning-wrapper">
     <div class="ignore-warning ">
       <svg class="ignore-warning-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24">
         <path d="M12,2L1,21H23M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16" fill="#D68000" />
@@ -337,7 +330,7 @@
       <span><strong>Ignored.</strong> This issue is currently ignored.</span>
     </div>
   </div>
-
+  {{end}}
   <!-- Panel header -->
   <header class="panel-header">
     <div class="severity-container">
@@ -354,7 +347,7 @@
       {{if ne $index (idxMinusOne (len $.CWEs))}}<span class="delimiter"></span>{{end}}
       {{end}}
       {{end}}
-      <div class="ignore-badge {{.VisibilityClass}}">IGNORED</div>
+      {{if .IsIgnored}}<div class="ignore-badge">IGNORED</div>{{end}}
     </div>
   </header>
 
@@ -367,7 +360,8 @@
     </article>
 
     <!-- Ignore Details -->
-    <article class="ignore-details-section {{.VisibilityClass}}">
+    {{if .IsIgnored}}
+    <article class="ignore-details-section">
       <h2 class="ignore-details-header">Ignore Details</h2>
       <div class="ignore-details-body">
         <div class="ignore-details-wrapper">
@@ -390,7 +384,7 @@
         </div>
       </div>
     </article>
-
+    {{end}}
 
     <!-- Data Flow -->
     <article class="data-flow-section">
