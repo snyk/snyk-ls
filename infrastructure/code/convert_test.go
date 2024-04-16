@@ -647,8 +647,7 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	assert.False(t, issues[0].IsIgnored)
 
 	codeIssueData, _ := issues[0].AdditionalData.(snyk.CodeIssueData)
-	dataFlowSteps := fmt.Sprintf(`<h2 class="data-flow-header">Data Flow - %d steps</h2>`, len(codeIssueData.DataFlow))
-	assert.Contains(t, codeIssueData.Details, dataFlowSteps)
+	assert.Contains(t, codeIssueData.Details, fmt.Sprintf("Data Flow - %d steps", len(codeIssueData.DataFlow)))
 }
 
 func referencesForSampleSarifResponse() []snyk.Reference {

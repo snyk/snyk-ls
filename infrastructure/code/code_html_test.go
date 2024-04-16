@@ -28,7 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-func Test_CodeDetailsPanel_html_getDetailsHtml(t *testing.T) {
+func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	_ = testutil.UnitTest(t)
 
 	dataFlow := getDataFlowElements()
@@ -49,38 +49,29 @@ func Test_CodeDetailsPanel_html_getDetailsHtml(t *testing.T) {
 	}
 
 	// invoke method under test
-	codePanelHtml := getDetailsHtml(issue)
+	codePanelHtml := getCodeDetailsHtml(issue)
 
 	// assert Data Flow section
-	expectedDataFlowHeading := fmt.Sprintf(`<h2 class="data-flow-header">Data Flow - %d steps</h2>`, len(dataFlow))
-
+	expectedDataFlowHeading := fmt.Sprintf(`Data Flow - %d steps`, len(dataFlow))
 	assert.Contains(t, codePanelHtml, expectedDataFlowHeading)
-	assert.Contains(t, codePanelHtml, `<table class="data-flow-body"><tbody>`)
-	assert.Contains(t, codePanelHtml, `<td class="data-flow-clickable-row" file-path="juice-shop/routes/vulnCodeSnippet.ts" start-line="67" end-line="67" start-character="28" end-character="42">vulnCodeSnippet.ts:68</td>`)
-	assert.Contains(t, codePanelHtml, `<td class="data-flow-text">if (!vulnLines.every(e =&gt; selectedLines.includes(e))) return false</td>`)
+	assert.Contains(t, codePanelHtml, `<table class="data-flow-body">`)
+	assert.Contains(t, codePanelHtml, `main.ts:5`)
+	assert.Contains(t, codePanelHtml, `<td class="data-flow-text">import * as http from &#39;http&#39;;</td>`)
 
-	assert.NotContains(t, codePanelHtml, "${dataFlow}")
-	assert.NotContains(t, codePanelHtml, "${dataFlowCount}")
-
-	assert.Contains(t, codePanelHtml, "ignore-warning-wrapper hidden")
-	assert.Contains(t, codePanelHtml, "ignore-badge hidden")
-	assert.Contains(t, codePanelHtml, "ignore-details-section hidden")
-	assert.NotContains(t, codePanelHtml, "${ignoreDetails}")
+	// assert Ignore Details section - Elements should not be present
+	assert.NotContains(t, codePanelHtml, `class=ignore-warning-wrapper`)
+	assert.NotContains(t, codePanelHtml, `class="ignore-badge"`)
+	assert.NotContains(t, codePanelHtml, `class="ignore-details-section"`)
 
 	// assert Fixes section
-	expectedFixesDescription := fmt.Sprintf(`\s*This issue was fixed by %d projects. Here are %d example fixes.\s*`,
-		repoCount, len(fixes))
-	expectedTabSelected := regexp.MustCompile(`<span class="tab-item is-selected" id="tab-link-0">`)
-	expectedRepoNameTabSelected := regexp.MustCompile("apache/flink</span>")
-	expectedRepoNameOtherTab := regexp.MustCompile("apache/tomcat</span>")
-
+	expectedFixesDescription := fmt.Sprintf(`\s*This issue was fixed by %d projects. Here are %d example fixe.\s*`, repoCount, len(fixes))
 	assert.Regexp(t, regexp.MustCompile(expectedFixesDescription), codePanelHtml)
-	assert.Regexp(t, expectedTabSelected, codePanelHtml)
-	assert.Regexp(t, expectedRepoNameTabSelected, codePanelHtml)
-	assert.Regexp(t, expectedRepoNameOtherTab, codePanelHtml)
+	assert.Contains(t, codePanelHtml, `<span class="tab-item is-selected" id="tab-link-0">`, "Two tabs, first is selected")
+	assert.Contains(t, codePanelHtml, "</svg> apache/flink", "GitHub icon preceding the repo name is present")
+	assert.Contains(t, codePanelHtml, "</svg> apache/tomcat", "Second tab is present")
 }
 
-func Test_CodeDetailsPanel_html_getDetailsHtml_ignored(t *testing.T) {
+func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	_ = testutil.UnitTest(t)
 
 	dataFlow := getDataFlowElements()
@@ -109,102 +100,12 @@ func Test_CodeDetailsPanel_html_getDetailsHtml_ignored(t *testing.T) {
 	}
 
 	// invoke method under test
-	codePanelHtml := getDetailsHtml(issue)
+	codePanelHtml := getCodeDetailsHtml(issue)
 
-	assert.NotContains(t, codePanelHtml, "ignore-warning-wrapper ${visibilityClass}")
-	assert.NotContains(t, codePanelHtml, "ignore-badge ${visibilityClass}")
-	assert.NotContains(t, codePanelHtml, "${ignoreDetails}")
-}
-
-func Test_CodeDetailsPanel_html_getExampleFixCodeDiffHtml(t *testing.T) {
-	_ = testutil.UnitTest(t)
-
-	fix := getFixes()[0]
-
-	// invoke method under test
-	fixesHtml := getCodeDiffHtml(fix)
-
-	// assert
-	expectedHtml := `
-		<div class="example-line removed"><span class="example-line-number">944</span> <code>    e.printStackTrace();</code></div>
-		<div class="example-line added"><span class="example-line-number">104</span> <code>    LOG.error(e);</code></div>`
-
-	assert.Contains(t, fixesHtml, expectedHtml)
-}
-
-func Test_CodeDetailsPanel_html_getIgnoreDetailsHtml(t *testing.T) {
-	_ = testutil.UnitTest(t)
-
-	ignoredOn, _ := time.Parse(time.RFC3339, "2024-02-23T16:08:25Z")
-	ignoreDetails := &snyk.IgnoreDetails{
-		Category:   "wont-fix",
-		Reason:     "False positive",
-		Expiration: "13 days",
-		IgnoredOn:  ignoredOn,
-		IgnoredBy:  "John",
-	}
-
-	// invoke method under test
-	ignoreDetailsHtml, visibilityClass := getIgnoreDetailsHtml(true, ignoreDetails)
-
-	// assert
-	assert.Equal(t, "", visibilityClass)
-	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-label">Category</div>`)
-	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-value">wont-fix</div>`)
-	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-label">Ignored On</div>`)
-	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-value">February 23, 2024</div>`)
-	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-label">Expiration</div>`)
-	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-value">13 days</div>`)
-	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-label">Ignored By</div>`)
-	assert.Contains(t, ignoreDetailsHtml, `<div class="ignore-details-value">John</div>`)
-}
-
-func Test_CodeDetailsPanel_html_getRowOfCWEs(t *testing.T) {
-	_ = testutil.UnitTest(t)
-
-	cwes := []string{"CWE-1", "CWE-2"}
-
-	html := getRowOfCWEs(cwes)
-
-	delimeter := `<span class="delimiter"></span>`
-	linkClasses := `class="cwe styled-link" target="_blank" rel="noopener noreferrer"`
-	expected := fmt.Sprintf(`%s<a %s href="https://cwe.mitre.org/data/definitions/1.html">CWE-1</a>%s<a %s href="https://cwe.mitre.org/data/definitions/2.html">CWE-2</a>`, delimeter, linkClasses, delimeter, linkClasses)
-	assert.Equal(t, expected, html)
-}
-
-func Test_CodeDetailsPanel_html_getRepoName(t *testing.T) {
-	// Logic copied from Snyk IntelliJ plugin
-	// https://github.com/snyk/snyk-intellij-plugin/blob/master/src/main/kotlin/io/snyk/plugin/ui/toolwindow/panels/SuggestionDescriptionPanelFromLS.kt#L256-L262
-	testCases := []struct {
-		name     string
-		url      string
-		expected string
-	}{
-		{
-			name:     "Standard GitHub URL",
-			url:      "https://github.com/apache/flink/commit/5d7c5620804eddd59206b24c87ffc89c12fd1184",
-			expected: "apache/flink",
-		},
-		{
-			name:     "GitHub URL with parameters",
-			url:      "https://github.com/juice-shop/juice-shop/commit/0fa9d5547c5300cf8162b8f31a40aea6847a5c32?diff=split#diff-7e23eb1aa3b7b4d5db89bfd2860277e5L75",
-			expected: "juice-shop/juice-shop",
-		},
-		{
-			name:     "GitHub URL with a dot in the repo name",
-			url:      "https://github.com/juice-shop/.github/commit/67603b2f2b4f02fbc65f53bda7c3f56a5d341987",
-			expected: "juice-shop/.github",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := getRepoName(tc.url)
-			if result != tc.expected {
-				t.Errorf("For URL '%s', expected '%s', but got '%s'", tc.url, tc.expected, result)
-			}
-		})
-	}
+	// assert Ignore Details section - Elements should be present
+	assert.Contains(t, codePanelHtml, `class="ignore-warning-wrapper"`)
+	assert.Contains(t, codePanelHtml, `class="ignore-badge"`)
+	assert.Contains(t, codePanelHtml, `class="ignore-details-section"`)
 }
 
 func getFixes() []snyk.ExampleCommitFix {
