@@ -47,6 +47,11 @@
 
       --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Tahoma, Geneva, Verdana, sans-serif;
 
+      --scrollbar-thumb-color-light: #C6C6C6;
+      --scrollbar-thumb-color-dark: #48494b;
+      --scrollbar-color-light: #F7F8FA;
+      --scrollbar-color-dark: #2B2D30;
+
       /* Snyk Colors */
       --data-flow-file-color-light: #2470B3;
       --data-flow-file-color-dark: #589DF6;
@@ -72,11 +77,11 @@
 
     ::-webkit-scrollbar {
       width: 8px;
-      background: #2b2d30;
+      background: var(--scrollbar-color);
     }
 
     ::-webkit-scrollbar-thumb {
-      background: #48494b;
+      background: var(--scrollbar-thumb-color);
       border-radius: 10px;
     }
 
@@ -342,7 +347,6 @@
     .example-line {
       display: block;
       padding: 2px 0 18px 0;
-      /* background-color: #494949; */
     }
 
     .example-line-number {
