@@ -134,6 +134,11 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	codeIssuesForFile := folder.IssuesForFile(filepath.Join(cloneTargetDir, "app.js"))
 	require.Greater(t, len(codeIssuesForFile), 5) // 5 is the number of issues in the app.js file as of now
 
+	checkDiagnosticPublishingForCachingSmokeTest(t, 1, 1)
+
+	jsonRPCRecorder.ClearNotifications()
+	jsonRPCRecorder.ClearCallbacks()
+
 	_, err := loc.Client.Call(context.Background(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 		Command: "snyk.workspace.scan",
 	})
@@ -149,6 +154,59 @@ func Test_SmokeIssueCaching(t *testing.T) {
 
 	codeIssuesForFileSecondScan := folder.IssuesForFile(filepath.Join(cloneTargetDir, "app.js"))
 	require.Equal(t, len(codeIssuesForFile), len(codeIssuesForFileSecondScan))
+
+	checkDiagnosticPublishingForCachingSmokeTest(t, 2, 2)
+}
+
+// check that notifications are sent
+// we expect one empty publishDiagnostics per changed file, and one for the new findings
+func checkDiagnosticPublishingForCachingSmokeTest(t *testing.T, expectedCode, expectedOSS int) {
+	t.Helper()
+
+	appJsEmptyFound := false
+	appJsNewFound := false
+	packageJsonEmptyFound := false
+	packageJsonNewFound := false
+	appJsCount := 0
+	packageJsonCount := 0
+
+	require.Eventually(t, func() bool {
+		notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
+		for _, notification := range notifications {
+			var param lsp.PublishDiagnosticsParams
+			err := json.Unmarshal([]byte(notification.ParamString()), &param)
+			require.NoError(t, err)
+			if filepath.Base(uri.PathFromUri(param.URI)) == "package.json" {
+				log.Debug().Any("notification", notification.ParamString()).Send()
+				if len(param.Diagnostics) == 0 || expectedOSS == 1 { // if expected == 1, we don't expect empty
+					packageJsonEmptyFound = true
+				}
+				if len(param.Diagnostics) > 0 {
+					packageJsonNewFound = true
+				}
+				packageJsonCount++
+			}
+
+			if filepath.Base(uri.PathFromUri(param.URI)) == "app.js" {
+				log.Debug().Any("notification", notification.ParamString()).Send()
+				if len(param.Diagnostics) == 0 || expectedOSS == 1 { // if expected == 1, we don't expect empty
+					appJsEmptyFound = true
+				}
+				if len(param.Diagnostics) > 0 {
+					appJsNewFound = true
+				}
+				appJsCount++
+			}
+		}
+		result := appJsEmptyFound &&
+			appJsNewFound &&
+			packageJsonNewFound &&
+			packageJsonEmptyFound &&
+			appJsCount == expectedCode &&
+			packageJsonCount == expectedOSS
+
+		return result
+	}, time.Second*5, time.Second)
 }
 
 func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 string, useConsistentIgnores bool) {

@@ -67,7 +67,23 @@ type DelegatingConcurrentScanner struct {
 	notifier      notification.Notifier
 }
 
-func (sc *DelegatingConcurrentScanner) Issues() map[string][]Issue {
+func (sc *DelegatingConcurrentScanner) ClearIssues(path string) {
+	for _, productScanner := range sc.scanners {
+		if cacheProvider, isCacheProvider := productScanner.(CacheProvider); isCacheProvider {
+			cacheProvider.ClearIssues(path)
+		}
+	}
+}
+
+func (sc *DelegatingConcurrentScanner) RegisterCacheRemovalHandler(handler func(path string)) {
+	for _, productScanner := range sc.scanners {
+		if cacheProvider, isCacheProvider := productScanner.(CacheProvider); isCacheProvider {
+			cacheProvider.RegisterCacheRemovalHandler(handler)
+		}
+	}
+}
+
+func (sc *DelegatingConcurrentScanner) Issues() IssuesByFile {
 	issues := make(map[string][]Issue)
 	for _, scanner := range sc.scanners {
 		if issueProvider, ok := scanner.(IssueProvider); ok {

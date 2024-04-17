@@ -480,7 +480,6 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		di.FileWatcher().SetFileAsSaved(params.TextDocument.URI)
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 
-		// todo can we push cache management down?
 		f := workspace.Get().GetFolderContaining(filePath)
 		autoScanEnabled := config.CurrentConfig().IsAutoScanEnabled()
 		if f != nil && autoScanEnabled {

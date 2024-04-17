@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -45,21 +46,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/util"
 )
-
-func Test_Scan_WhenCachedResults_shouldNotReScan(t *testing.T) {
-	testutil.UnitTest(t)
-	folderPath, filePath := "testFolderDir", "testPath"
-	scanner := snyk.NewTestScanner()
-
-	scanner.AddTestIssue(NewMockIssue("1", filePath))
-	f := NewFolder(folderPath, "Test", scanner, hover.NewFakeHoverService(), snyk.NewMockScanNotifier(), notification.NewNotifier())
-	ctx := context.Background()
-
-	f.ScanFile(ctx, filePath)
-	f.ScanFile(ctx, filePath)
-
-	assert.Equal(t, 1, scanner.Calls())
-}
 
 func Test_Scan_WhenNoIssues_shouldNotProcessResults(t *testing.T) {
 	hoverRecorder := hover.NewFakeHoverService()
@@ -121,7 +107,7 @@ func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 	testutil.UnitTest(t)
 	f := NewFolder("dummy", "dummy", snyk.NewTestScanner(), hover.NewFakeHoverService(), snyk.NewMockScanNotifier(), notification.NewNotifier())
 
-	filePath := "path1"
+	filePath := "dummy/path1"
 	data := snyk.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []snyk.Issue{
@@ -225,11 +211,11 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 	data := snyk.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []snyk.Issue{
-			NewMockIssueWithSeverity("id1", "path1", snyk.Critical),
-			NewMockIssueWithSeverity("id2", "path1", snyk.High),
-			NewMockIssueWithSeverity("id3", "path1", snyk.Medium),
-			NewMockIssueWithSeverity("id4", "path1", snyk.Low),
-			NewMockIssueWithSeverity("id5", "path1", snyk.Critical),
+			NewMockIssueWithSeverity("id1", filepath.Join(f.path, "path1"), snyk.Critical),
+			NewMockIssueWithSeverity("id2", filepath.Join(f.path, "path1"), snyk.High),
+			NewMockIssueWithSeverity("id3", filepath.Join(f.path, "path1"), snyk.Medium),
+			NewMockIssueWithSeverity("id4", filepath.Join(f.path, "path1"), snyk.Low),
+			NewMockIssueWithSeverity("id5", filepath.Join(f.path, "path1"), snyk.Critical),
 		},
 	}
 	f.processResults(data)
@@ -394,7 +380,7 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 
 	// act
 	f.ScanFile(ctx, filePath)
-	filteredDiagnostics := f.filterCachedDiagnostics()
+	filteredDiagnostics := f.filterDiagnostics(f.Issues())
 
 	// assert
 	assert.Len(t, filteredDiagnostics[filePath], 2)
@@ -407,16 +393,16 @@ func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 	testutil.UnitTest(t)
 	f := NewMockFolder(notification.NewNotifier())
 	const filePath = "path1"
-	mockCodeIssue := NewMockIssue("id1", filePath)
+	mockOpenSourceIssue := NewMockIssue("id1", filePath)
 	removedIssueType := product.FilterableIssueTypeOpenSource
-	mockCodeIssue.Product = product.ProductOpenSource
+	mockOpenSourceIssue.Product = product.ProductOpenSource
 	mockIacIssue := NewMockIssue("id2", filePath)
 	mockIacIssue.Product = product.ProductInfrastructureAsCode
 	data := snyk.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []snyk.Issue{
 			mockIacIssue,
-			mockCodeIssue,
+			mockOpenSourceIssue,
 		},
 	}
 	f.processResults(data)
@@ -443,8 +429,8 @@ func Test_processResults_ShouldSendSuccess(t *testing.T) {
 	testutil.UnitTest(t)
 
 	f, scanNotifier := NewMockFolderWithScanNotifier(notification.NewNotifier())
-	const filePath = "path1"
-	mockCodeIssue := NewMockIssue("id1", filePath)
+	const path = "path1"
+	mockCodeIssue := NewMockIssue("id1", filepath.Join(f.path, path))
 
 	data := snyk.ScanData{
 		Product: product.ProductOpenSource,
@@ -478,6 +464,7 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 	assert.Empty(t, scanNotifier.SuccessCalls())
 	assert.Len(t, scanNotifier.ErrorCalls(), 1)
 }
+
 func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	c := testutil.UnitTest(t)
 

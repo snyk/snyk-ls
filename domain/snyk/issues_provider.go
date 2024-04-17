@@ -18,16 +18,21 @@ package snyk
 
 import "github.com/snyk/snyk-ls/internal/product"
 
+type IssuesByFile map[string][]Issue
+type ProductIssuesByFile map[product.Product]IssuesByFile
+
 // IssueProvider is an interface that allows to retrieve issues for a given path and range.
 // This is used instead of any concrete dependency to allow for easier testing and more flexibility in implementation.
 type IssueProvider interface {
 	IssuesForFile(path string) []Issue
 	IssuesForRange(path string, r Range) []Issue
 	Issue(key string) Issue
-	Issues() map[string][]Issue
+	Issues() IssuesByFile
 }
 
 type CacheProvider interface {
 	IssueProvider
 	IsProviderFor(product product.Product) bool
+	ClearIssues(path string)
+	RegisterCacheRemovalHandler(handler func(path string))
 }
