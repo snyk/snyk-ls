@@ -109,7 +109,7 @@ func New(bundleUploader *BundleUploader,
 		codeScanner:    codeScanner,
 	}
 	sc.issueCache = imcache.New[string, []snyk.Issue](
-		imcache.WithDefaultExpirationOption[string, []snyk.Issue](time.Hour * 24),
+		imcache.WithDefaultExpirationOption[string, []snyk.Issue](time.Hour * 12),
 	)
 	return sc
 }
