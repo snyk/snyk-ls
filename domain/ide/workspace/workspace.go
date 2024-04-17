@@ -100,7 +100,7 @@ func (w *Workspace) RemoveFolder(folderPath string) {
 	if folder == nil {
 		return
 	}
-	folder.ClearDiagnosticsFromPathRecursively(folderPath)
+	folder.ClearDiagnostics()
 	delete(w.folders, folderPath)
 }
 
@@ -171,6 +171,7 @@ func (w *Workspace) ChangeWorkspaceFolders(ctx context.Context, params lsp.DidCh
 	for _, folder := range params.Event.Removed {
 		w.RemoveFolder(uri.PathFromUri(folder.Uri))
 	}
+
 	for _, folder := range params.Event.Added {
 		f := NewFolder(uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier)
 		w.AddFolder(f)

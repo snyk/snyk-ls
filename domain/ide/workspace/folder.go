@@ -523,7 +523,7 @@ func (f *Folder) IssuesForRange(filePath string, requestedRange snyk.Range) (mat
 func (f *Folder) ClearDiagnostics() {
 	// send global cache evictions
 	f.documentDiagnosticCache.Range(func(key string, _ []snyk.Issue) bool {
-		f.sendEmptyDiagnosticForFile(key)
+		f.ClearDiagnosticsFromFile(key)
 		return true
 	})
 	f.documentDiagnosticCache.Clear()
