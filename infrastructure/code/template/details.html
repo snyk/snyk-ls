@@ -53,14 +53,19 @@
       --scrollbar-color-dark: #2B2D30;
 
       /* Snyk Colors */
+      --data-flow-body-color-light: #FFFFFF;
+      --data-flow-body-color-dark: #2B2D30;
+      --data-flow-body-color-darcula: #45494A;
       --data-flow-file-color-light: #2470B3;
       --data-flow-file-color-dark: #589DF6;
 
       --example-line-removed-color-light: #F5E6E7;
-      --example-line-removed-color-dark: #593D41;
+      --example-line-removed-color-dark: #352628;
+      --example-line-removed-color-darcula: #563E3F;
 
       --example-line-added-color-light: #BAEEBA;
-      --example-line-added-color-dark: #33412E;
+      --example-line-added-color-dark: #202d24;
+      --example-line-added-color-darcula: #344937;
 
       --tabs-bottom-color-light: #D1D1D1;
       --tabs-bottom-color-dark: #323232;
@@ -102,7 +107,6 @@
 
     body {
       color: var(--text-color);
-      background-color: var(--background-color);
       font-family: var(--default-font);
 
       font-weight: 400;
@@ -262,6 +266,7 @@
     }
 
     .data-flow-body {
+      background-color: var(--data-flow-body-color);
       font-family: 'Courier New', Courier, monospace;
       border-collapse: collapse;
     }
