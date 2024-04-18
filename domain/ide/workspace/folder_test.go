@@ -482,7 +482,7 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	engineMock, gafConfig := setUpEngineMock(t, c)
 
 	f, _ := NewMockFolderWithScanNotifier(notification.NewNotifier())
-	const filePath = "path1"
+	filePath := filepath.Join(f.path, "path1")
 	mockCodeIssue := NewMockIssue("id1", filePath)
 
 	data := snyk.ScanData{
@@ -518,15 +518,16 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 
 	f, _ := NewMockFolderWithScanNotifier(notification.NewNotifier())
 
+	filePath := filepath.Join(f.Path(), "dummy.java")
 	scanData := snyk.ScanData{
 		Product:       product.ProductOpenSource,
 		SeverityCount: make(map[product.Product]snyk.SeverityCount),
 		Issues: []snyk.Issue{
-			{Severity: snyk.Critical, Product: product.ProductOpenSource, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
-			{Severity: snyk.Critical, Product: product.ProductOpenSource, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
-			{Severity: snyk.High, Product: product.ProductOpenSource, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
-			{Severity: snyk.High, Product: product.ProductOpenSource, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
-			{Severity: snyk.Critical, Product: product.ProductInfrastructureAsCode, AdditionalData: snyk.IaCIssueData{Key: util.Result(uuid.NewUUID()).String()}},
+			{Severity: snyk.Critical, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
+			{Severity: snyk.Critical, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
+			{Severity: snyk.High, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
+			{Severity: snyk.High, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
+			{Severity: snyk.Critical, Product: product.ProductInfrastructureAsCode, AffectedFilePath: filePath, AdditionalData: snyk.IaCIssueData{Key: util.Result(uuid.NewUUID()).String()}},
 			// SeverityCount incremented by ScanData.Product
 		},
 	}
