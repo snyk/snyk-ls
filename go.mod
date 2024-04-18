@@ -12,6 +12,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/gomarkdown/markdown v0.0.0-20230922112808-5421fefb8386
 	github.com/google/uuid v1.6.0
+	github.com/hashicorp/go-uuid v1.0.3
 	github.com/hexops/gotextdiff v1.0.3
 	github.com/pact-foundation/pact-go v1.7.0
 	github.com/pingcap/errors v0.11.4
@@ -22,7 +23,7 @@ require (
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/segmentio/analytics-go v3.1.0+incompatible
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/snyk/code-client-go v1.4.2
+	github.com/snyk/code-client-go v1.4.5
 	github.com/snyk/go-application-framework v0.0.0-20240111143643-fa847b8a9a3b
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/stretchr/testify v1.9.0
@@ -52,7 +53,6 @@ require (
 	github.com/go-openapi/jsonpointer v0.20.0 // indirect
 	github.com/go-openapi/swag v0.22.4 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
-	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/invopop/yaml v0.2.0 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
