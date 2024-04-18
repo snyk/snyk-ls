@@ -184,6 +184,8 @@ func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local) *workspace.Fo
 	return folderJuice
 }
 
+// check that $/snyk.scan messages are sent
+// check that they only contain issues that belong to the scanned folder
 func checkScanResultsPublishingForCachingSmokeTest(t *testing.T, folderJuice *workspace.Folder, folderGoof *workspace.Folder) {
 	t.Helper()
 
