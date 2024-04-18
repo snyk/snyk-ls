@@ -94,6 +94,9 @@ func (f *Folder) RegisterCacheRemovalHandler(handler func(path string)) {
 func (f *Folder) IssuesByProduct() snyk.ProductIssuesByFile {
 	issuesForProduct := snyk.ProductIssuesByFile{}
 	for path, issues := range f.Issues() {
+		if !f.Contains(path) {
+			panic("issue found in cache that does not pertain to folder")
+		}
 		for _, issue := range issues {
 			p := issue.Product
 			productIssuesByFile := issuesForProduct[p]
@@ -114,6 +117,8 @@ func (f *Folder) Issues() snyk.IssuesByFile {
 	f.documentDiagnosticCache.Range(func(path string, value []snyk.Issue) bool {
 		if f.Contains(path) {
 			issues[path] = value
+		} else {
+			panic("issue found in cache that does not pertain to folder")
 		}
 		return true
 	})
@@ -191,9 +196,9 @@ func (f *Folder) Contains(path string) bool {
 	return uri.FolderContains(f.path, path)
 }
 
-// ClearDiagnosticsFromFile will clear all diagnostics of a file from memory, and send a notification to the client
+// ClearDiagnosticsFromGlobalCache will clear all diagnostics of a file from memory, and send a notification to the client
 // with empty diagnostics results for the specific file
-func (f *Folder) ClearDiagnosticsFromFile(filePath string) {
+func (f *Folder) ClearDiagnosticsFromGlobalCache(filePath string) {
 	f.documentDiagnosticCache.Delete(filePath)
 	if scanner, ok := f.scanner.(snyk.InlineValueProvider); ok {
 		scanner.ClearInlineValues(filePath)
@@ -205,7 +210,7 @@ func (f *Folder) ClearDiagnosticsFromFile(filePath string) {
 func (f *Folder) ClearDiagnosticsFromPathRecursively(removedPath string) {
 	f.documentDiagnosticCache.Range(func(key string, value []snyk.Issue) bool {
 		if strings.Contains(key, removedPath) {
-			f.ClearDiagnosticsFromFile(key)
+			f.ClearDiagnosticsFromGlobalCache(key)
 		}
 
 		return true // Continue the iteration
@@ -218,14 +223,6 @@ func (f *Folder) scan(ctx context.Context, path string) {
 		log.Warn().Str("path", path).Str("method", method).Msg("skipping scan of untrusted path")
 		return
 	}
-	//issuesSlice := f.IssuesForFile(path)
-	//if issuesSlice != nil {
-	//	log.Info().Str("method", method).
-	//		Int("issueSliceLength", len(issuesSlice)).
-	//		Msgf("Cached results found: Skipping scan for %s", path)
-	//	f.processResults(snyk.ScanData{Issues: issuesSlice})
-	//	return
-	//}
 
 	f.scanner.Scan(ctx, path, f.processResults, f.path)
 }
@@ -258,6 +255,9 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 	// TODO: perform issue diffing (current <-> newly reported)
 	// Update diagnostic cache
 	for _, issue := range scanData.Issues {
+		if !f.Contains(issue.AffectedFilePath) {
+			panic("issue found in scanData that does not pertain to folder")
+		}
 		// only update global cache if we don't have scanner-local cache
 		cacheProvider, isCacheProvider := f.scanner.(snyk.CacheProvider)
 		if isCacheProvider && cacheProvider.IsProviderFor(issue.Product) {
@@ -391,6 +391,9 @@ func (f *Folder) FilterAndPublishDiagnostics(issues snyk.IssuesByFile) {
 func (f *Folder) groupIssuesByProduct(issuesByFile snyk.IssuesByFile) snyk.ProductIssuesByFile {
 	var productIssuesByFile = snyk.ProductIssuesByFile{}
 	for path, fileIssues := range issuesByFile {
+		if !f.Contains(path) {
+			panic("issue found in cache that does not pertain to folder")
+		}
 		for _, issue := range fileIssues {
 			tempIssuesByFile := productIssuesByFile[issue.Product]
 			if tempIssuesByFile == nil {
@@ -410,15 +413,19 @@ func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
 	logger.Debug().Interface("filterSeverity", filterSeverity).Msg("Filtering issues by severity")
 
 	supportedIssueTypes := config.CurrentConfig().DisplayableIssueTypes()
-	filteredIssuesByFile := FilterIssues(issues, supportedIssueTypes)
+	filteredIssuesByFile := f.FilterIssues(issues, supportedIssueTypes)
 	return filteredIssuesByFile
 }
 
-func FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[product.FilterableIssueType]bool) snyk.IssuesByFile {
+func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[product.FilterableIssueType]bool) snyk.
+	IssuesByFile {
 	logger := log.With().Str("method", "FilterIssues").Logger()
 
 	filteredIssues := snyk.IssuesByFile{}
 	for path, issueSlice := range issues {
+		if !f.Contains(path) {
+			panic("issue found in cache that does not pertain to folder")
+		}
 		for _, issue := range issueSlice {
 			// Logging here might hurt performance, should benchmark if filtering is slow
 			if isVisibleSeverity(issue) && supportedIssueTypes[issue.GetFilterableIssueType()] {
@@ -503,6 +510,10 @@ func (f *Folder) Status() FolderStatus { return f.status }
 
 func (f *Folder) IssuesForRange(filePath string, requestedRange snyk.Range) (matchingIssues []snyk.Issue) {
 	method := "domain.ide.workspace.folder.getCodeActions"
+	if !f.Contains(filePath) {
+		panic("this folder should not be asked to handle " + filePath)
+	}
+
 	issues := f.IssuesForFile(filePath)
 	for _, issue := range issues {
 		if issue.Range.Overlaps(requestedRange) {
@@ -523,7 +534,7 @@ func (f *Folder) IssuesForRange(filePath string, requestedRange snyk.Range) (mat
 func (f *Folder) ClearDiagnostics() {
 	// send global cache evictions
 	f.documentDiagnosticCache.Range(func(key string, _ []snyk.Issue) bool {
-		f.ClearDiagnosticsFromFile(key)
+		f.ClearDiagnosticsFromGlobalCache(key)
 		return true
 	})
 	f.documentDiagnosticCache.Clear()
@@ -540,6 +551,7 @@ func (f *Folder) ClearDiagnostics() {
 }
 
 func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssueType) {
+	// TODO implement scanner variant
 	f.documentDiagnosticCache.Range(func(filePath string, previousIssues []snyk.Issue) bool {
 		newIssues := []snyk.Issue{}
 		for _, issue := range previousIssues {
@@ -548,10 +560,14 @@ func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssue
 			}
 		}
 
-		if len(previousIssues) != len(newIssues) { // Only send diagnostics update when issues were removed
-			f.documentDiagnosticCache.Store(filePath, newIssues)
-			f.sendDiagnosticsForFile(filePath, newIssues)
-			f.sendHoversForFile(filePath, newIssues)
+		if len(previousIssues) != len(newIssues) {
+			if f.Contains(filePath) {
+				f.documentDiagnosticCache.Store(filePath, newIssues)
+				f.sendDiagnosticsForFile(filePath, newIssues)
+				f.sendHoversForFile(filePath, newIssues)
+			} else {
+				panic("this should never happen")
+			}
 		}
 
 		return true

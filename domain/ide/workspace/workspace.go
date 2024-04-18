@@ -109,7 +109,7 @@ func (w *Workspace) DeleteFile(filePath string) {
 	defer w.mutex.Unlock()
 	folder := w.GetFolderContaining(filePath)
 	if folder != nil {
-		folder.ClearDiagnosticsFromFile(filePath)
+		folder.ClearDiagnosticsFromGlobalCache(filePath)
 	}
 }
 

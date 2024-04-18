@@ -37,6 +37,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -115,23 +116,24 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 func Test_SmokeIssueCaching(t *testing.T) {
 	loc := setupServer(t)
 	c := testutil.SmokeTest(t, false)
-	c.SetSnykCodeEnabled(true)
+	c.EnableSnykCodeSecurity(true)
+	c.EnableSnykCodeQuality(false)
 	c.SetSnykOssEnabled(true)
 	c.SetSnykIacEnabled(false)
 	di.Init()
 
-	var cloneTargetDir = setupRepoAndInitialize(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", loc)
-	folder := workspace.Get().GetFolderContaining(cloneTargetDir)
+	var cloneTargetDirGoof = setupRepoAndInitialize(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", loc)
+	folderGoof := workspace.Get().GetFolderContaining(cloneTargetDirGoof)
 
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
-		return folder != nil && folder.IsScanned()
+		return folderGoof != nil && folderGoof.IsScanned()
 	}, maxIntegTestDuration, time.Millisecond)
 
-	ossIssuesForFile := folder.IssuesForFile(filepath.Join(cloneTargetDir, "package.json"))
+	ossIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "package.json"))
 	require.Greater(t, len(ossIssuesForFile), 108) // 108 is the number of issues in the package.json file as of now
 
-	codeIssuesForFile := folder.IssuesForFile(filepath.Join(cloneTargetDir, "app.js"))
+	codeIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "app.js"))
 	require.Greater(t, len(codeIssuesForFile), 5) // 5 is the number of issues in the app.js file as of now
 
 	checkDiagnosticPublishingForCachingSmokeTest(t, 1, 1)
@@ -139,23 +141,93 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	jsonRPCRecorder.ClearNotifications()
 	jsonRPCRecorder.ClearCallbacks()
 
+	// now we add juice shop as second folder/repo
+	folderJuice := addJuiceShopAsWorkspaceFolder(t, loc)
+
+	// now scan the whole workspace
 	_, err := loc.Client.Call(context.Background(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 		Command: "snyk.workspace.scan",
 	})
+
 	require.NoError(t, err)
 
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
-		return folder != nil && folder.IsScanned()
+		return folderGoof != nil && folderGoof.IsScanned() && folderJuice != nil && folderJuice.IsScanned()
 	}, maxIntegTestDuration, time.Millisecond)
 
-	ossIssuesForFileSecondScan := folder.IssuesForFile(filepath.Join(cloneTargetDir, "package.json"))
+	ossIssuesForFileSecondScan := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "package.json"))
 	require.Equal(t, len(ossIssuesForFile), len(ossIssuesForFileSecondScan))
 
-	codeIssuesForFileSecondScan := folder.IssuesForFile(filepath.Join(cloneTargetDir, "app.js"))
+	codeIssuesForFileSecondScan := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "app.js"))
 	require.Equal(t, len(codeIssuesForFile), len(codeIssuesForFileSecondScan))
 
 	checkDiagnosticPublishingForCachingSmokeTest(t, 2, 2)
+	checkScanResultsPublishingForCachingSmokeTest(t, folderJuice, folderGoof)
+}
+
+func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local) *workspace.Folder {
+	t.Helper()
+	var cloneTargetDirJuice, err = setupCustomTestRepo(t, "https://github.com/juice-shop/juice-shop", "bc9cef127")
+	require.NoError(t, err)
+
+	juiceLspWorkspaceFolder := lsp.WorkspaceFolder{Uri: uri.PathToUri(cloneTargetDirJuice), Name: "juicy-mac-juice-face"}
+	didChangeWorkspaceFoldersParams := lsp.DidChangeWorkspaceFoldersParams{
+		Event: lsp.WorkspaceFoldersChangeEvent{Added: []lsp.WorkspaceFolder{juiceLspWorkspaceFolder}},
+	}
+
+	_, err = loc.Client.Call(context.Background(), "workspace/didChangeWorkspaceFolders", didChangeWorkspaceFoldersParams)
+	require.NoError(t, err)
+
+	folderJuice := workspace.Get().GetFolderContaining(cloneTargetDirJuice)
+	require.NotNil(t, folderJuice)
+	return folderJuice
+}
+
+func checkScanResultsPublishingForCachingSmokeTest(t *testing.T, folderJuice *workspace.Folder, folderGoof *workspace.Folder) {
+	t.Helper()
+
+	require.Eventually(t, func() bool {
+		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
+		scanResultCodeJuiceShopFound := false
+		onlyIssuesForJuiceShop := false
+		scanResultCodeGoofFound := false
+		onlyIssuesForGoof := false
+
+		for _, notification := range notifications {
+			var scanResult lsp.SnykScanParams
+			require.NoError(t, json.Unmarshal([]byte(notification.ParamString()), &scanResult))
+			if scanResult.Status != lsp.Success {
+				continue
+			}
+			if scanResult.Product == product.ToProductCodename(product.ProductCode) {
+				switch scanResult.FolderPath {
+				case folderGoof.Path():
+					scanResultCodeGoofFound = true
+					onlyIssuesForGoof = true
+					for _, issue := range scanResult.Issues {
+						issueContainedInGoof := folderGoof.Contains(issue.FilePath)
+						onlyIssuesForGoof = onlyIssuesForGoof && issueContainedInGoof
+					}
+				case folderJuice.Path():
+					scanResultCodeJuiceShopFound = true
+					onlyIssuesForJuiceShop = true
+					for _, issue := range scanResult.Issues {
+						issueContainedInJuiceShop := folderJuice.Contains(issue.FilePath)
+						onlyIssuesForJuiceShop = onlyIssuesForJuiceShop && issueContainedInJuiceShop
+					}
+				}
+			}
+		}
+		log.Debug().Bool("scanResultCodeGoofFound", scanResultCodeGoofFound).Send()
+		log.Debug().Bool("scanResultCodeJuiceShopFound", scanResultCodeJuiceShopFound).Send()
+		log.Debug().Bool("onlyIssuesForGoof", onlyIssuesForGoof).Send()
+		log.Debug().Bool("onlyIssuesForJuiceShop", onlyIssuesForJuiceShop).Send()
+		return scanResultCodeGoofFound &&
+			scanResultCodeJuiceShopFound &&
+			onlyIssuesForGoof &&
+			onlyIssuesForJuiceShop
+	}, time.Second*5, time.Second)
 }
 
 // check that notifications are sent
