@@ -343,7 +343,7 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 	assert.Greater(t, len(scanParams.Issues), 0)
 	for _, issue := range scanParams.Issues {
 		codeIssueData, ok := issue.AdditionalData.(map[string]interface{})
-		if !ok || codeIssueData["hasAIFix"] == false {
+		if !ok || codeIssueData["hasAIFix"] == false && codeIssueData["rule"] != "WebCookieSecureDisabledByDefault" {
 			continue
 		}
 		call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
