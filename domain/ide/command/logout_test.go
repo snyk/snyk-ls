@@ -18,6 +18,7 @@ package command
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -51,7 +52,6 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	}
 
 	scanner := snyk.NewTestScanner()
-	scanner.AddTestIssue(snyk.Issue{ID: "issue-1"})
 
 	w := workspace.New(performance.NewInstrumentor(), scanner, hoverService, scanNotifier, notifier)
 	folder := workspace.NewFolder(
@@ -66,6 +66,8 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	w.AddFolder(folder)
 
 	ctx := context.Background()
+	path := filepath.Join(folder.Path(), "path1")
+	scanner.AddTestIssue(snyk.Issue{ID: "issue-1", AffectedFilePath: path})
 
 	folder.ScanFolder(ctx)
 

@@ -226,15 +226,15 @@ func (s *serviceImpl) GetLesson(ecosystem string, rule string, cwes []string, cv
 	lessons, exist := s.lessonsByRuleCache.Get(params.Rule)
 
 	if !exist || len(lessons) == 0 {
-		logger.Debug().Msgf("no lesson found for rule %v, falling back to ecosystem", params.Rule)
+		logger.Trace().Msgf("no lesson found for rule %v, falling back to ecosystem", params.Rule)
 		lessons = s.getLessonsByEcosystem(params)
 		if len(lessons) == 0 {
-			logger.Debug().Msgf("no lesson found for ecosystem %v, falling back to all", params.Ecosystem)
+			logger.Trace().Msgf("no lesson found for ecosystem %v, falling back to all", params.Ecosystem)
 			for _, v := range s.lessonsByEcosystemCache.GetAll() {
 				lessons = append(lessons, v...)
 			}
 		}
-		logger.Debug().Msgf("%d lessons found", len(lessons))
+		logger.Trace().Msgf("%d lessons found", len(lessons))
 		if len(lessons) == 0 {
 			return lesson, err
 		}
@@ -245,7 +245,7 @@ func (s *serviceImpl) GetLesson(ecosystem string, rule string, cwes []string, cv
 	if len(lessons) >= 1 {
 		lesson = &lessons[0]
 		lesson.Url += "?loc=ide"
-		logger.Debug().Msgf("found lesson %v", lesson)
+		logger.Trace().Msgf("found lesson %v", lesson)
 	}
 	return lesson, err
 }
@@ -259,14 +259,14 @@ func (s *serviceImpl) filterLessons(lessons []Lesson, params *LessonLookupParams
 	logger := s.logger.With().Str("method", "filterLessons").Logger()
 
 	filteredLessons := s.filterForCWEs(lessons, params.CWEs)
-	logger.Debug().Msgf("%d lessons found after filtering for CWEs", len(filteredLessons))
+	logger.Trace().Msgf("%d lessons found after filtering for CWEs", len(filteredLessons))
 
 	if len(filteredLessons) == 0 && len(params.CVEs) > 0 {
 		filteredLessons = s.filterForCVEs(lessons, params.CVEs)
 	} else if len(filteredLessons) > 1 && len(params.CVEs) > 0 {
 		filteredLessons = s.filterForCVEs(filteredLessons, params.CVEs)
 	}
-	logger.Debug().Msgf("%d lessons found after filtering for CVEs", len(filteredLessons))
+	logger.Trace().Msgf("%d lessons found after filtering for CVEs", len(filteredLessons))
 	return filteredLessons
 }
 

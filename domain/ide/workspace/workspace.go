@@ -48,7 +48,7 @@ type Workspace struct {
 	notifier            noti.Notifier
 }
 
-func (w *Workspace) Issues() map[string][]snyk.Issue {
+func (w *Workspace) Issues() snyk.IssuesByFile {
 	issues := make(map[string][]snyk.Issue)
 	for _, folder := range w.folders {
 		for filePath, issueSlice := range folder.Issues() {
@@ -100,7 +100,7 @@ func (w *Workspace) RemoveFolder(folderPath string) {
 	if folder == nil {
 		return
 	}
-	folder.ClearDiagnosticsFromPathRecursively(folderPath)
+	folder.ClearDiagnostics()
 	delete(w.folders, folderPath)
 }
 
@@ -109,7 +109,7 @@ func (w *Workspace) DeleteFile(filePath string) {
 	defer w.mutex.Unlock()
 	folder := w.GetFolderContaining(filePath)
 	if folder != nil {
-		folder.ClearDiagnosticsFromFile(filePath)
+		folder.ClearDiagnosticsFromGlobalCache(filePath)
 	}
 }
 
@@ -171,13 +171,13 @@ func (w *Workspace) ChangeWorkspaceFolders(ctx context.Context, params lsp.DidCh
 	for _, folder := range params.Event.Removed {
 		w.RemoveFolder(uri.PathFromUri(folder.Uri))
 	}
+
 	for _, folder := range params.Event.Added {
 		f := NewFolder(uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier)
 		w.AddFolder(f)
-	}
-
-	if config.CurrentConfig().IsAutoScanEnabled() {
-		w.ScanWorkspace(ctx)
+		if config.CurrentConfig().IsAutoScanEnabled() {
+			f.ScanFolder(ctx)
+		}
 	}
 }
 

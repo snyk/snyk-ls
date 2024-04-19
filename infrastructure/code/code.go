@@ -83,7 +83,8 @@ type Scanner struct {
 	codeScanner  codeClient.CodeScanner
 	// this is the local scanner issue cache. In the future, it should be used as source of truth for the issues
 	// the cache in workspace/folder should just delegate to this cache
-	issueCache *imcache.Cache[string, []snyk.Issue]
+	issueCache          *imcache.Cache[string, []snyk.Issue]
+	cacheRemovalHandler func(path string)
 }
 
 func New(bundleUploader *BundleUploader,
@@ -106,10 +107,10 @@ func New(bundleUploader *BundleUploader,
 		notifier:       notifier,
 		BundleHashes:   map[string]string{},
 		codeScanner:    codeScanner,
-		issueCache: imcache.New[string, []snyk.Issue](
-			imcache.WithDefaultExpirationOption[string, []snyk.Issue](time.Hour * 24),
-		),
 	}
+	sc.issueCache = imcache.New[string, []snyk.Issue](
+		imcache.WithDefaultExpirationOption[string, []snyk.Issue](time.Hour * 12),
+	)
 	return sc
 }
 
@@ -519,78 +520,4 @@ func (sc *Scanner) useIgnoresFlow() bool {
 		log.Info().Msg(response.UserMessage)
 	}
 	return response.Ok
-}
-
-func (sc *Scanner) addToCache(results []snyk.Issue) {
-	sc.issueCache.RemoveExpired()
-	for _, issue := range results {
-		cachedIssues, present := sc.issueCache.Get(issue.AffectedFilePath)
-		if present {
-			cachedIssues = append(cachedIssues, issue)
-			cachedIssues = sc.deduplicate(cachedIssues)
-			sc.issueCache.Set(issue.AffectedFilePath, cachedIssues, imcache.WithDefaultExpiration())
-		} else {
-			sc.issueCache.Set(issue.AffectedFilePath, []snyk.Issue{issue}, imcache.WithDefaultExpiration())
-		}
-	}
-}
-
-func (sc *Scanner) deduplicate(issues []snyk.Issue) []snyk.Issue {
-	var deduplicatedSlice []snyk.Issue
-	seen := map[string]bool{}
-	for _, issue := range issues {
-		uniqueID := issue.AdditionalData.GetKey()
-		if !seen[uniqueID] {
-			seen[uniqueID] = true
-			deduplicatedSlice = append(deduplicatedSlice, issue)
-		}
-	}
-	return deduplicatedSlice
-}
-
-func (sc *Scanner) IssuesForRange(path string, r snyk.Range) []snyk.Issue {
-	issues, found := sc.issueCache.Get(path)
-	if !found {
-		return []snyk.Issue{}
-	}
-	var filteredIssues []snyk.Issue
-	for _, issue := range issues {
-		if issue.Range.Overlaps(r) {
-			filteredIssues = append(filteredIssues, issue)
-		}
-	}
-	return filteredIssues
-}
-
-func (sc *Scanner) Issue(key string) snyk.Issue {
-	for _, issues := range sc.issueCache.GetAll() {
-		for _, issue := range issues {
-			if issue.AdditionalData.GetKey() == key {
-				return issue
-			}
-		}
-	}
-	return snyk.Issue{}
-}
-
-func (sc *Scanner) removeFromCache(scanned map[string]bool) {
-	for path := range scanned {
-		sc.issueCache.Remove(path)
-	}
-}
-
-func (sc *Scanner) IssuesForFile(path string) []snyk.Issue {
-	issues, found := sc.issueCache.Get(path)
-	if !found {
-		return []snyk.Issue{}
-	}
-	return issues
-}
-
-func (sc *Scanner) Issues() map[string][]snyk.Issue {
-	return sc.issueCache.GetAll()
-}
-
-func (sc *Scanner) IsProviderFor(product product.Product) bool {
-	return product == sc.Product()
 }

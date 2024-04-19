@@ -451,7 +451,7 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 			return nil, nil
 		}
 
-		filteredIssues := workspace.FilterIssues(folder.Issues(), config.CurrentConfig().DisplayableIssueTypes())
+		filteredIssues := folder.FilterIssues(folder.Issues(), config.CurrentConfig().DisplayableIssueTypes())
 
 		if len(filteredIssues) > 0 {
 			logger.Info().Msg("Sending cached issues")
@@ -480,11 +480,10 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		di.FileWatcher().SetFileAsSaved(params.TextDocument.URI)
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 
-		// todo can we push cache management down?
 		f := workspace.Get().GetFolderContaining(filePath)
 		autoScanEnabled := config.CurrentConfig().IsAutoScanEnabled()
 		if f != nil && autoScanEnabled {
-			f.ClearDiagnosticsFromFile(filePath)
+			f.ClearDiagnosticsFromGlobalCache(filePath)
 			di.HoverService().DeleteHover(filePath)
 			go f.ScanFile(bgCtx, filePath)
 		} else {

@@ -54,7 +54,7 @@ func (cmd *workspaceFolderScanCommand) Execute(ctx context.Context) (any, error)
 		return nil, err
 	}
 	f.ClearScannedStatus()
-	f.ClearDiagnosticsFromPathRecursively(path)
+	f.ClearDiagnostics()
 	f.ScanFolder(ctx)
 	HandleUntrustedFolders(ctx, cmd.srv)
 	return nil, nil
