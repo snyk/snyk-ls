@@ -18,7 +18,9 @@ package code
 
 import (
 	"bytes"
+	"crypto/rand"
 	_ "embed"
+	"encoding/base64"
 	"fmt"
 	"html/template"
 	"path/filepath"
@@ -83,7 +85,14 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 		return ""
 	}
 
+	nonce, err := generateNonce()
+	if err != nil {
+		log.Error().Msgf("Failed to generate nonce: %v", err)
+		return ""
+	}
+
 	data := map[string]interface{}{
+		"Nonce":              nonce,
 		"IssueTitle":         additionalData.Title,
 		"IssueType":          getIssueType(additionalData),
 		"SeverityIcon":       getSeverityIconSvg(issue),
@@ -205,6 +214,14 @@ func getRepoName(commitURL string) string {
 func formatDate(date time.Time) string {
 	month := date.Format("January")
 	return fmt.Sprintf("%s %02d, %d", month, date.Day(), date.Year())
+}
+
+func generateNonce() (string, error) {
+	nonceBytes := make([]byte, 16)
+	if _, err := rand.Read(nonceBytes); err != nil {
+		return "", fmt.Errorf("error generating nonce: %v", err)
+	}
+	return base64.StdEncoding.EncodeToString(nonceBytes), nil
 }
 
 func getSeverityIconSvg(issue snyk.Issue) template.HTML {
