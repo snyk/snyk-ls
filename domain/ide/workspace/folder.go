@@ -79,12 +79,47 @@ type Folder struct {
 	notifier                noti.Notifier
 }
 
-func (f *Folder) Issues() map[string][]snyk.Issue {
+func (f *Folder) ClearIssues(path string) {
+	if cacheProvider, isCacheProvider := f.scanner.(snyk.CacheProvider); isCacheProvider {
+		cacheProvider.ClearIssues(path)
+	}
+}
+
+func (f *Folder) RegisterCacheRemovalHandler(handler func(path string)) {
+	if cacheProvider, isCacheProvider := f.scanner.(snyk.CacheProvider); isCacheProvider {
+		cacheProvider.RegisterCacheRemovalHandler(handler)
+	}
+}
+
+func (f *Folder) IssuesByProduct() snyk.ProductIssuesByFile {
+	issuesForProduct := snyk.ProductIssuesByFile{}
+	for path, issues := range f.Issues() {
+		if !f.Contains(path) {
+			panic("issue found in cache that does not pertain to folder")
+		}
+		for _, issue := range issues {
+			p := issue.Product
+			productIssuesByFile := issuesForProduct[p]
+			if productIssuesByFile == nil {
+				productIssuesByFile = snyk.IssuesByFile{}
+			}
+			productIssuesByFile[path] = append(productIssuesByFile[path], issue)
+			issuesForProduct[p] = productIssuesByFile
+		}
+	}
+	return issuesForProduct
+}
+
+func (f *Folder) Issues() snyk.IssuesByFile {
 	// we want both global issues (OSS and IaC at the moment) and scanner-local issues (Code at the moment)
 	// so we get the global issues first, then append the scanner-local issues
-	issues := make(map[string][]snyk.Issue)
-	f.documentDiagnosticCache.Range(func(key string, value []snyk.Issue) bool {
-		issues[key] = value
+	issues := snyk.IssuesByFile{}
+	f.documentDiagnosticCache.Range(func(path string, value []snyk.Issue) bool {
+		if f.Contains(path) {
+			issues[path] = value
+		} else {
+			panic("issue found in cache that does not pertain to folder")
+		}
 		return true
 	})
 
@@ -92,8 +127,10 @@ func (f *Folder) Issues() map[string][]snyk.Issue {
 	issueProvider, scannerIsIssueProvider := f.scanner.(snyk.IssueProvider)
 	if scannerIsIssueProvider {
 		cachedScannerIssues := issueProvider.Issues()
-		for key, value := range cachedScannerIssues {
-			issues[key] = append(issues[key], value...)
+		for path, issuesForPath := range cachedScannerIssues {
+			if f.Contains(path) {
+				issues[path] = append(issues[path], issuesForPath...)
+			}
 		}
 	}
 	return issues
@@ -115,7 +152,15 @@ func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hove
 		notifier:     notifier,
 	}
 	folder.documentDiagnosticCache = xsync.NewMapOf[string, []snyk.Issue]()
+	if cacheProvider, isCacheProvider := scanner.(snyk.CacheProvider); isCacheProvider {
+		cacheProvider.RegisterCacheRemovalHandler(folder.sendEmptyDiagnosticForFile)
+	}
 	return &folder
+}
+
+func (f *Folder) sendEmptyDiagnosticForFile(path string) {
+	config.CurrentConfig().Logger().Debug().Str("filePath", path).Msg("sending empty diagnostic for file")
+	f.sendDiagnosticsForFile(path, []snyk.Issue{})
 }
 
 func (f *Folder) IsScanned() bool {
@@ -151,25 +196,21 @@ func (f *Folder) Contains(path string) bool {
 	return uri.FolderContains(f.path, path)
 }
 
-// ClearDiagnosticsFromFile will clear all diagnostics of a file from memory, and send a notification to the client
+// ClearDiagnosticsFromGlobalCache will clear all diagnostics of a file from memory, and send a notification to the client
 // with empty diagnostics results for the specific file
-func (f *Folder) ClearDiagnosticsFromFile(filePath string) {
-	// todo: can we manage the cache internally without leaking it, e.g. by using as a key an MD5 hash rather than a path and defining a TTL?
+func (f *Folder) ClearDiagnosticsFromGlobalCache(filePath string) {
 	f.documentDiagnosticCache.Delete(filePath)
 	if scanner, ok := f.scanner.(snyk.InlineValueProvider); ok {
 		scanner.ClearInlineValues(filePath)
 	}
-	f.notifier.Send(lsp.PublishDiagnosticsParams{
-		URI:         uri.PathToUri(filePath),
-		Diagnostics: []lsp.Diagnostic{},
-	})
+	f.sendEmptyDiagnosticForFile(filePath)
 	f.ClearScannedStatus()
 }
 
 func (f *Folder) ClearDiagnosticsFromPathRecursively(removedPath string) {
 	f.documentDiagnosticCache.Range(func(key string, value []snyk.Issue) bool {
 		if strings.Contains(key, removedPath) {
-			f.ClearDiagnosticsFromFile(key)
+			f.ClearDiagnosticsFromGlobalCache(key)
 		}
 
 		return true // Continue the iteration
@@ -180,14 +221,6 @@ func (f *Folder) scan(ctx context.Context, path string) {
 	const method = "domain.ide.workspace.folder.scan"
 	if !f.IsTrusted() {
 		log.Warn().Str("path", path).Str("method", method).Msg("skipping scan of untrusted path")
-		return
-	}
-	issuesSlice := f.IssuesForFile(path)
-	if issuesSlice != nil {
-		log.Info().Str("method", method).
-			Int("issueSliceLength", len(issuesSlice)).
-			Msgf("Cached results found: Skipping scan for %s", path)
-		f.processResults(snyk.ScanData{Issues: issuesSlice})
 		return
 	}
 
@@ -222,6 +255,9 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 	// TODO: perform issue diffing (current <-> newly reported)
 	// Update diagnostic cache
 	for _, issue := range scanData.Issues {
+		if !f.Contains(issue.AffectedFilePath) {
+			panic("issue found in scanData that does not pertain to folder")
+		}
 		// only update global cache if we don't have scanner-local cache
 		cacheProvider, isCacheProvider := f.scanner.(snyk.CacheProvider)
 		if isCacheProvider && cacheProvider.IsProviderFor(issue.Product) {
@@ -246,7 +282,7 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 	go sendAnalytics(&scanData)
 
 	// Filter and publish cached diagnostics
-	f.FilterAndPublishCachedDiagnostics(scanData.Product)
+	f.FilterAndPublishDiagnostics(f.IssuesByProduct()[scanData.Product])
 }
 
 func incrementSeverityCount(scanData *snyk.ScanData, issue snyk.Issue) {
@@ -344,35 +380,57 @@ func sendAnalytics(data *snyk.ScanData) {
 	}
 }
 
-func (f *Folder) FilterAndPublishCachedDiagnostics(product product.Product) {
-	issuesByFile := f.filterCachedDiagnostics()
-	f.publishDiagnostics(product, issuesByFile)
+func (f *Folder) FilterAndPublishDiagnostics(issues snyk.IssuesByFile) {
+	issuesByFile := f.filterDiagnostics(issues)
+	productIssuesByFile := f.groupIssuesByProduct(issuesByFile)
+	for p, pIssues := range productIssuesByFile {
+		f.publishDiagnostics(p, pIssues)
+	}
 }
 
-func (f *Folder) filterCachedDiagnostics() map[string][]snyk.Issue {
-	logger := log.With().Str("method", "filterCachedDiagnostics").Logger()
+func (f *Folder) groupIssuesByProduct(issuesByFile snyk.IssuesByFile) snyk.ProductIssuesByFile {
+	var productIssuesByFile = snyk.ProductIssuesByFile{}
+	for path, fileIssues := range issuesByFile {
+		if !f.Contains(path) {
+			panic("issue found in cache that does not pertain to folder")
+		}
+		for _, issue := range fileIssues {
+			tempIssuesByFile := productIssuesByFile[issue.Product]
+			if tempIssuesByFile == nil {
+				tempIssuesByFile = snyk.IssuesByFile{}
+			}
+			tempIssuesByFile[path] = append(tempIssuesByFile[path], issue)
+			productIssuesByFile[issue.Product] = tempIssuesByFile
+		}
+	}
+	return productIssuesByFile
+}
+
+func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
+	logger := log.With().Str("method", "filterDiagnostics").Logger()
 
 	filterSeverity := config.CurrentConfig().FilterSeverity()
 	logger.Debug().Interface("filterSeverity", filterSeverity).Msg("Filtering issues by severity")
 
 	supportedIssueTypes := config.CurrentConfig().DisplayableIssueTypes()
-	issuesByFile := FilterIssues(f.Issues(), supportedIssueTypes)
-	return issuesByFile
+	filteredIssuesByFile := f.FilterIssues(issues, supportedIssueTypes)
+	return filteredIssuesByFile
 }
 
-func FilterIssues(
-	issuesByFile map[string][]snyk.Issue,
-	supportedIssueTypes map[product.FilterableIssueType]bool,
-) map[string][]snyk.Issue {
+func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[product.FilterableIssueType]bool) snyk.
+	IssuesByFile {
 	logger := log.With().Str("method", "FilterIssues").Logger()
 
-	filteredIssues := make(map[string][]snyk.Issue)
-	for filePath, issueSlice := range issuesByFile {
+	filteredIssues := snyk.IssuesByFile{}
+	for path, issueSlice := range issues {
+		if !f.Contains(path) {
+			panic("issue found in cache that does not pertain to folder")
+		}
 		for _, issue := range issueSlice {
 			// Logging here might hurt performance, should benchmark if filtering is slow
 			if isVisibleSeverity(issue) && supportedIssueTypes[issue.GetFilterableIssueType()] {
 				logger.Trace().Msgf("Including visible severity issue: %v", issue)
-				filteredIssues[filePath] = append(filteredIssues[filePath], issue)
+				filteredIssues[path] = append(filteredIssues[path], issue)
 			} else {
 				logger.Trace().Msgf("Filtering out issue %v", issue)
 			}
@@ -395,7 +453,7 @@ func isVisibleSeverity(issue snyk.Issue) bool {
 	return false
 }
 
-func (f *Folder) publishDiagnostics(product product.Product, issuesByFile map[string][]snyk.Issue) {
+func (f *Folder) publishDiagnostics(product product.Product, issuesByFile snyk.IssuesByFile) {
 	f.sendDiagnostics(issuesByFile)
 	f.sendScanResults(product, issuesByFile)
 	f.sendHovers(issuesByFile) // TODO: this locks up the thread, need to investigate
@@ -419,22 +477,24 @@ func (f *Folder) getUniqueIssueID(issue snyk.Issue) string {
 	return uniqueID
 }
 
-func (f *Folder) sendDiagnostics(issuesByFile map[string][]snyk.Issue) {
+func (f *Folder) sendDiagnostics(issuesByFile snyk.IssuesByFile) {
 	for path, issues := range issuesByFile {
 		f.sendDiagnosticsForFile(path, issues)
 	}
 }
 
 func (f *Folder) sendDiagnosticsForFile(path string, issues []snyk.Issue) {
-	log.Debug().Str("method", "sendDiagnosticsForFile").Str("affectedFilePath", path).Int("issueCount",
-		len(issues)).Send()
+	log.Debug().
+		Str("method", "sendDiagnosticsForFile").
+		Str("affectedFilePath", path).Int("issueCount", len(issues)).Send()
+
 	f.notifier.Send(lsp.PublishDiagnosticsParams{
 		URI:         uri.PathToUri(path),
 		Diagnostics: converter.ToDiagnostics(issues),
 	})
 }
 
-func (f *Folder) sendHovers(issuesByFile map[string][]snyk.Issue) {
+func (f *Folder) sendHovers(issuesByFile snyk.IssuesByFile) {
 	for path, issues := range issuesByFile {
 		f.sendHoversForFile(path, issues)
 	}
@@ -450,6 +510,10 @@ func (f *Folder) Status() FolderStatus { return f.status }
 
 func (f *Folder) IssuesForRange(filePath string, requestedRange snyk.Range) (matchingIssues []snyk.Issue) {
 	method := "domain.ide.workspace.folder.getCodeActions"
+	if !f.Contains(filePath) {
+		panic("this folder should not be asked to handle " + filePath)
+	}
+
 	issues := f.IssuesForFile(filePath)
 	for _, issue := range issues {
 		if issue.Range.Overlaps(requestedRange) {
@@ -468,18 +532,26 @@ func (f *Folder) IssuesForRange(filePath string, requestedRange snyk.Range) (mat
 }
 
 func (f *Folder) ClearDiagnostics() {
+	// send global cache evictions
 	f.documentDiagnosticCache.Range(func(key string, _ []snyk.Issue) bool {
-		// we must republish empty diagnostics for all files that were reported with diagnostics
-		f.notifier.Send(lsp.PublishDiagnosticsParams{
-			URI:         uri.PathToUri(key),
-			Diagnostics: []lsp.Diagnostic{},
-		})
-		f.documentDiagnosticCache.Delete(key)
+		f.ClearDiagnosticsFromGlobalCache(key)
 		return true
 	})
+	f.documentDiagnosticCache.Clear()
+
+	// let scanner-local cache handle its own stuff
+	if cacheProvider, isCacheProvider := f.scanner.(snyk.CacheProvider); isCacheProvider {
+		issues := cacheProvider.Issues()
+		for path := range issues {
+			if f.Contains(path) {
+				cacheProvider.ClearIssues(path)
+			}
+		}
+	}
 }
 
 func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssueType) {
+	// TODO implement scanner variant
 	f.documentDiagnosticCache.Range(func(filePath string, previousIssues []snyk.Issue) bool {
 		newIssues := []snyk.Issue{}
 		for _, issue := range previousIssues {
@@ -488,10 +560,14 @@ func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssue
 			}
 		}
 
-		if len(previousIssues) != len(newIssues) { // Only send diagnostics update when issues were removed
-			f.documentDiagnosticCache.Store(filePath, newIssues)
-			f.sendDiagnosticsForFile(filePath, newIssues)
-			f.sendHoversForFile(filePath, newIssues)
+		if len(previousIssues) != len(newIssues) {
+			if f.Contains(filePath) {
+				f.documentDiagnosticCache.Store(filePath, newIssues)
+				f.sendDiagnosticsForFile(filePath, newIssues)
+				f.sendHoversForFile(filePath, newIssues)
+			} else {
+				panic("this should never happen")
+			}
 		}
 
 		return true
@@ -511,7 +587,7 @@ func (f *Folder) IsTrusted() bool {
 	return false
 }
 
-func (f *Folder) sendScanResults(processedProduct product.Product, issuesByFile map[string][]snyk.Issue) {
+func (f *Folder) sendScanResults(processedProduct product.Product, issuesByFile snyk.IssuesByFile) {
 	var productIssues []snyk.Issue
 	for _, issues := range issuesByFile {
 		productIssues = append(productIssues, issues...)

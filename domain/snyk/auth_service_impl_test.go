@@ -19,6 +19,7 @@ package snyk_test
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -125,11 +126,11 @@ func Test_Logout(t *testing.T) {
 	scanNotifier, _ := appNotification.NewScanNotifier(notifier)
 	w := workspace.New(performance.NewInstrumentor(), scanner, hoverService, scanNotifier, notifier)
 	workspace.Set(w)
-	f := workspace.NewFolder("", "", scanner, hoverService, scanNotifier, notifier)
+	f := workspace.NewFolder("/testFolder", "testFikder", scanner, hoverService, scanNotifier, notifier)
 	w.AddFolder(f)
 
 	// fake existing diagnostic & hover
-	issueFile := "path/to/file.test"
+	issueFile := filepath.Join(f.Path(), "path/to/file.test")
 	issue := snyk.Issue{AffectedFilePath: issueFile}
 	scanner.AddTestIssue(issue)
 	f.ScanFile(context.Background(), issueFile)
@@ -140,7 +141,7 @@ func Test_Logout(t *testing.T) {
 	_, _ = service.Provider().Authenticate(context.Background())
 
 	hoverService.Channel() <- hover.DocumentHovers{
-		Path:  "path/to/file.test",
+		Path:  issueFile,
 		Hover: hovers,
 	}
 
