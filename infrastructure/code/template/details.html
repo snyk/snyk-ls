@@ -21,7 +21,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; style-src 'self' 'nonce-{{.Nonce}}'; script-src 'nonce-{{.Nonce}}';">
+  <style nonce="{{.Nonce}}">
     :root {
       /* JetBrains Typography */
       --text-color-light: #000000;
@@ -518,7 +520,7 @@
 </body>
 
 </html>
-<script>
+<script nonce="{{.Nonce}}">
   const tabLinks = document.querySelectorAll('.tab-item');
   const tabContents = document.querySelectorAll('.tab-content');
   document.querySelector('.tabs-nav').addEventListener('click', (event) => {
