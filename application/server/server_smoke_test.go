@@ -116,7 +116,6 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 
 func Test_SmokeIssueCaching(t *testing.T) {
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
-
 		loc, jsonRPCRecorder := setupServer(t)
 		c := testutil.SmokeTest(t, false)
 		c.EnableSnykCodeSecurity(true)
@@ -171,7 +170,6 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderJuice, folderGoof)
 	})
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
-
 		loc, jsonRPCRecorder := setupServer(t)
 		c := testutil.SmokeTest(t, false)
 		c.EnableSnykCodeSecurity(true)
