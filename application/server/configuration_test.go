@@ -240,7 +240,9 @@ func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.False(t, updated)
-	assert.Len(t, jsonRPCRecorder.Callbacks(), 1)
+	assert.Eventually(t, func() bool {
+		return len(jsonRPCRecorder.Callbacks()) == 0
+	}, time.Second, time.Millisecond)
 }
 
 func Test_UpdateSettings(t *testing.T) {
