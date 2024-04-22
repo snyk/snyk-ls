@@ -149,17 +149,18 @@ func initInfrastructure() {
 	snykCodeClient = code.NewSnykCodeHTTPClient(codeInstrumentor, codeErrorReporter, networkAccess.GetHttpClient)
 	snykCodeBundleUploader = code.NewBundler(snykCodeClient, codeInstrumentor)
 
-	httpClient := codeClientHTTP.NewHTTPClient(networkAccess.GetHttpClient,
+	httpClient := codeClientHTTP.NewHTTPClient(
+		networkAccess.GetHttpClient,
 		codeClientHTTP.WithLogger(engine.GetLogger()),
 		codeClientHTTP.WithInstrumentor(codeInstrumentor),
 		codeClientHTTP.WithErrorReporter(codeErrorReporter),
 	)
 	codeClientScanner := codeClient.NewCodeScanner(
-		httpClient,
 		config.CurrentConfig(),
-		codeInstrumentor,
-		codeErrorReporter,
-		engine.GetLogger(),
+		httpClient,
+		codeClient.WithLogger(engine.GetLogger()),
+		codeClient.WithInstrumentor(codeInstrumentor),
+		codeClient.WithErrorReporter(codeErrorReporter),
 	)
 
 	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
