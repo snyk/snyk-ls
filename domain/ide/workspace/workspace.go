@@ -100,7 +100,7 @@ func (w *Workspace) RemoveFolder(folderPath string) {
 	if folder == nil {
 		return
 	}
-	folder.ClearDiagnostics()
+	folder.Clear()
 	delete(w.folders, folderPath)
 }
 
@@ -109,7 +109,7 @@ func (w *Workspace) DeleteFile(filePath string) {
 	defer w.mutex.Unlock()
 	folder := w.GetFolderContaining(filePath)
 	if folder != nil {
-		folder.ClearDiagnosticsFromGlobalCache(filePath)
+		folder.ClearIssues(filePath)
 	}
 }
 
@@ -181,12 +181,12 @@ func (w *Workspace) ChangeWorkspaceFolders(ctx context.Context, params lsp.DidCh
 	}
 }
 
-func (w *Workspace) ClearIssues(_ context.Context) {
+func (w *Workspace) Clear() {
 	for _, folder := range w.folders {
-		folder.ClearScannedStatus()
-		folder.ClearDiagnostics()
+		folder.Clear()
 	}
 
+	// this should already be done for each path by the folder.Clear() and is just a fail-safe
 	w.hoverService.ClearAllHovers()
 }
 

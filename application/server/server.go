@@ -483,8 +483,6 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		f := workspace.Get().GetFolderContaining(filePath)
 		autoScanEnabled := config.CurrentConfig().IsAutoScanEnabled()
 		if f != nil && autoScanEnabled {
-			f.ClearDiagnosticsFromGlobalCache(filePath)
-			di.HoverService().DeleteHover(filePath)
 			go f.ScanFile(bgCtx, filePath)
 		} else {
 			if autoScanEnabled {

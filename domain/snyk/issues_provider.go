@@ -32,7 +32,8 @@ type IssueProvider interface {
 
 type CacheProvider interface {
 	IssueProvider
-	IsProviderFor(product product.Product) bool
+	IsProviderFor(issueType product.FilterableIssueType) bool
+	Clear()
 	ClearIssues(path string)
 	RegisterCacheRemovalHandler(handler func(path string))
 }

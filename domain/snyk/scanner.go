@@ -67,20 +67,16 @@ type DelegatingConcurrentScanner struct {
 	notifier      notification.Notifier
 }
 
-func (sc *DelegatingConcurrentScanner) ClearIssues(path string) {
-	for _, productScanner := range sc.scanners {
-		if cacheProvider, isCacheProvider := productScanner.(CacheProvider); isCacheProvider {
-			cacheProvider.ClearIssues(path)
+func (sc *DelegatingConcurrentScanner) Issue(key string) Issue {
+	for _, scanner := range sc.scanners {
+		if s, ok := scanner.(IssueProvider); ok {
+			issue := s.Issue(key)
+			if issue.ID != "" {
+				return issue
+			}
 		}
 	}
-}
-
-func (sc *DelegatingConcurrentScanner) RegisterCacheRemovalHandler(handler func(path string)) {
-	for _, productScanner := range sc.scanners {
-		if cacheProvider, isCacheProvider := productScanner.(CacheProvider); isCacheProvider {
-			cacheProvider.RegisterCacheRemovalHandler(handler)
-		}
-	}
+	return Issue{}
 }
 
 func (sc *DelegatingConcurrentScanner) Issues() IssuesByFile {
@@ -93,6 +89,78 @@ func (sc *DelegatingConcurrentScanner) Issues() IssuesByFile {
 		}
 	}
 	return issues
+}
+
+func (sc *DelegatingConcurrentScanner) IssuesForFile(path string) []Issue {
+	var issues []Issue
+	for _, scanner := range sc.scanners {
+		if s, ok := scanner.(IssueProvider); ok {
+			issues = append(issues, s.IssuesForFile(path)...)
+		}
+	}
+	return issues
+}
+
+func (sc *DelegatingConcurrentScanner) IssuesForRange(path string, r Range) []Issue {
+	var issues []Issue
+	for _, scanner := range sc.scanners {
+		if s, ok := scanner.(IssueProvider); ok {
+			issues = append(issues, s.IssuesForRange(path, r)...)
+		}
+	}
+	return issues
+}
+
+func (sc *DelegatingConcurrentScanner) IsProviderFor(issueType product.FilterableIssueType) bool {
+	for _, scanner := range sc.scanners {
+		if s, ok := scanner.(CacheProvider); ok {
+			if s.IsProviderFor(issueType) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (sc *DelegatingConcurrentScanner) Clear() {
+	for _, productScanner := range sc.scanners {
+		if cacheProvider, isCacheProvider := productScanner.(CacheProvider); isCacheProvider {
+			cacheProvider.Clear()
+		}
+	}
+}
+
+func (sc *DelegatingConcurrentScanner) ClearIssues(path string) {
+	for _, productScanner := range sc.scanners {
+		if cacheProvider, isCacheProvider := productScanner.(CacheProvider); isCacheProvider {
+			cacheProvider.ClearIssues(path)
+		}
+	}
+
+	for _, productScanner := range sc.scanners {
+		// inline values should be cleared, when issues of a file are cleared
+		// this *may* already already happen in the previous ClearIssues call, but
+		// a scanner can be an InlineValueProvider, without having its own cache (e.g. oss.Scanner)
+		if scanner, ok := productScanner.(InlineValueProvider); ok {
+			scanner.ClearInlineValues(path)
+		}
+	}
+}
+
+func (sc *DelegatingConcurrentScanner) ClearInlineValues(path string) {
+	for _, scanner := range sc.scanners {
+		if s, ok := scanner.(InlineValueProvider); ok {
+			s.ClearInlineValues(path)
+		}
+	}
+}
+
+func (sc *DelegatingConcurrentScanner) RegisterCacheRemovalHandler(handler func(path string)) {
+	for _, productScanner := range sc.scanners {
+		if cacheProvider, isCacheProvider := productScanner.(CacheProvider); isCacheProvider {
+			cacheProvider.RegisterCacheRemovalHandler(handler)
+		}
+	}
 }
 
 func (sc *DelegatingConcurrentScanner) ScanPackages(ctx context.Context, config *config.Config, path string, content string) {
@@ -122,14 +190,6 @@ func NewDelegatingScanner(
 		scanners:      scanners,
 		authService:   authService,
 		notifier:      notifier,
-	}
-}
-
-func (sc *DelegatingConcurrentScanner) ClearInlineValues(path string) {
-	for _, scanner := range sc.scanners {
-		if s, ok := scanner.(InlineValueProvider); ok {
-			s.ClearInlineValues(path)
-		}
 	}
 }
 
@@ -269,47 +329,4 @@ func getEnabledAnalysisTypes(productScanners []ProductScanner) (analysisTypes []
 		}
 	}
 	return analysisTypes
-}
-
-func (sc *DelegatingConcurrentScanner) IssuesForRange(path string, r Range) []Issue {
-	var issues []Issue
-	for _, scanner := range sc.scanners {
-		if s, ok := scanner.(IssueProvider); ok {
-			issues = append(issues, s.IssuesForRange(path, r)...)
-		}
-	}
-	return issues
-}
-
-func (sc *DelegatingConcurrentScanner) Issue(key string) Issue {
-	for _, scanner := range sc.scanners {
-		if s, ok := scanner.(IssueProvider); ok {
-			issue := s.Issue(key)
-			if issue.ID != "" {
-				return issue
-			}
-		}
-	}
-	return Issue{}
-}
-
-func (sc *DelegatingConcurrentScanner) IssuesForFile(path string) []Issue {
-	var issues []Issue
-	for _, scanner := range sc.scanners {
-		if s, ok := scanner.(IssueProvider); ok {
-			issues = append(issues, s.IssuesForFile(path)...)
-		}
-	}
-	return issues
-}
-
-func (sc *DelegatingConcurrentScanner) IsProviderFor(product product.Product) bool {
-	for _, scanner := range sc.scanners {
-		if s, ok := scanner.(CacheProvider); ok {
-			if s.IsProviderFor(product) {
-				return true
-			}
-		}
-	}
-	return false
 }

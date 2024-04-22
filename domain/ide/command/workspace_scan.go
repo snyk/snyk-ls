@@ -35,7 +35,7 @@ func (cmd *workspaceScanCommand) Command() snyk.CommandData {
 
 func (cmd *workspaceScanCommand) Execute(ctx context.Context) (any, error) {
 	w := workspace.Get()
-	w.ClearIssues(ctx)
+	w.Clear()
 	w.ScanWorkspace(ctx)
 	HandleUntrustedFolders(ctx, cmd.srv)
 	return nil, nil

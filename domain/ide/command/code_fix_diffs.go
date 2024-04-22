@@ -24,6 +24,7 @@ import (
 
 	"github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -42,6 +43,7 @@ func (cmd *codeFixDiffs) Command() snyk.CommandData {
 }
 
 func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
+	logger := config.CurrentConfig().Logger().With().Str("method", "codeFixDiffs.Execute").Logger()
 	args := cmd.command.Arguments
 	if len(args) < 3 {
 		return nil, errors.New("missing required arguments")
@@ -80,5 +82,10 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 	}
 
 	suggestions, err := cmd.codeScanner.GetAutoFixDiffs(ctx, folderPath, relPath, issue)
+	if err != nil {
+		// as long as the backend service doesn't support good error handling, we'll just log the error
+		logger.Err(err).Msgf("received an error from API: %s", err.Error())
+		return suggestions, nil
+	}
 	return suggestions, err
 }
