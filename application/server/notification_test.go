@@ -74,7 +74,7 @@ func TestCreateProgressListener(t *testing.T) {
 }
 
 func TestServerInitializeShouldStartProgressListener(t *testing.T) {
-	loc := setupServer(t)
+	loc, jsonRPCRecorder := setupServer(t)
 
 	clientParams := lsp.InitializeParams{
 		Capabilities: lsp.ClientCapabilities{
@@ -115,7 +115,7 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 }
 
 func TestCancelProgress(t *testing.T) {
-	loc := setupServer(t)
+	loc, _ := setupServer(t)
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -137,7 +137,7 @@ func TestCancelProgress(t *testing.T) {
 }
 
 func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
-	loc := setupServer(t)
+	loc, jsonRPCRecorder := setupServer(t)
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -168,7 +168,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 }
 
 func Test_IsAvailableCliNotification(t *testing.T) {
-	loc := setupServer(t)
+	loc, jsonRPCRecorder := setupServer(t)
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -200,7 +200,7 @@ func Test_IsAvailableCliNotification(t *testing.T) {
 
 func TestShowMessageRequest(t *testing.T) {
 	t.Run("should send request to client", func(t *testing.T) {
-		loc := setupServer(t)
+		loc, jsonRPCRecorder := setupServer(t)
 
 		_, err := loc.Client.Call(ctx, "initialize", nil)
 		if err != nil {
@@ -248,7 +248,7 @@ func TestShowMessageRequest(t *testing.T) {
 
 	t.Run("should execute a command when action item is selected", func(t *testing.T) {
 		selectedAction := "Open browser"
-		loc := setupCustomServer(t, func(_ context.Context, _ *jrpc2.Request) (any, error) {
+		loc, _ := setupCustomServer(t, func(_ context.Context, _ *jrpc2.Request) (any, error) {
 			return lsp.MessageActionItem{
 				Title: selectedAction,
 			}, nil

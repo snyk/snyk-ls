@@ -115,119 +115,124 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 }
 
 func Test_SmokeIssueCaching(t *testing.T) {
-	loc := setupServer(t)
-	c := testutil.SmokeTest(t, false)
-	c.EnableSnykCodeSecurity(true)
-	c.EnableSnykCodeQuality(false)
-	c.SetSnykOssEnabled(true)
-	c.SetSnykIacEnabled(false)
-	di.Init()
+	t.Run("adds issues to cache correctly", func(t *testing.T) {
 
-	var cloneTargetDirGoof = setupRepoAndInitialize(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", loc)
-	folderGoof := workspace.Get().GetFolderContaining(cloneTargetDirGoof)
+		loc, jsonRPCRecorder := setupServer(t)
+		c := testutil.SmokeTest(t, false)
+		c.EnableSnykCodeSecurity(true)
+		c.EnableSnykCodeQuality(false)
+		c.SetSnykOssEnabled(true)
+		c.SetSnykIacEnabled(false)
+		di.Init()
 
-	// wait till the whole workspace is scanned
-	assert.Eventually(t, func() bool {
-		return folderGoof != nil && folderGoof.IsScanned()
-	}, maxIntegTestDuration, time.Millisecond)
+		var cloneTargetDirGoof = setupRepoAndInitialize(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", loc)
+		folderGoof := workspace.Get().GetFolderContaining(cloneTargetDirGoof)
 
-	ossIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "package.json"))
-	require.Greater(t, len(ossIssuesForFile), 108) // 108 is the number of issues in the package.json file as of now
+		// wait till the whole workspace is scanned
+		assert.Eventually(t, func() bool {
+			return folderGoof != nil && folderGoof.IsScanned()
+		}, maxIntegTestDuration, time.Millisecond)
 
-	codeIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "app.js"))
-	require.Greater(t, len(codeIssuesForFile), 5) // 5 is the number of issues in the app.js file as of now
+		ossIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "package.json"))
+		require.Greater(t, len(ossIssuesForFile), 108) // 108 is the number of issues in the package.json file as of now
 
-	checkDiagnosticPublishingForCachingSmokeTest(t, 1, 1)
+		codeIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "app.js"))
+		require.Greater(t, len(codeIssuesForFile), 5) // 5 is the number of issues in the app.js file as of now
 
-	jsonRPCRecorder.ClearNotifications()
-	jsonRPCRecorder.ClearCallbacks()
+		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 1, 1)
 
-	// now we add juice shop as second folder/repo
-	folderJuice := addJuiceShopAsWorkspaceFolder(t, loc)
+		jsonRPCRecorder.ClearNotifications()
+		jsonRPCRecorder.ClearCallbacks()
 
-	// now scan the whole workspace
-	_, err := loc.Client.Call(context.Background(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
-		Command: "snyk.workspace.scan",
+		// now we add juice shop as second folder/repo
+		folderJuice := addJuiceShopAsWorkspaceFolder(t, loc)
+
+		// now scan the whole workspace
+		_, err := loc.Client.Call(context.Background(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
+			Command: "snyk.workspace.scan",
+		})
+
+		require.NoError(t, err)
+
+		// wait till the whole workspace is scanned
+		assert.Eventually(t, func() bool {
+			return folderGoof != nil && folderGoof.IsScanned() && folderJuice != nil && folderJuice.IsScanned()
+		}, maxIntegTestDuration, time.Millisecond)
+
+		ossIssuesForFileSecondScan := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "package.json"))
+		require.Equal(t, len(ossIssuesForFile), len(ossIssuesForFileSecondScan))
+
+		codeIssuesForFileSecondScan := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "app.js"))
+		require.Equal(t, len(codeIssuesForFile), len(codeIssuesForFileSecondScan))
+
+		// OSS: empty, package.json goof, package.json juice = 3
+		// Code: empty, app.js = 2
+		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 2, 3)
+		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderJuice, folderGoof)
 	})
+	t.Run("clears issues from cache correctly", func(t *testing.T) {
 
-	require.NoError(t, err)
+		loc, jsonRPCRecorder := setupServer(t)
+		c := testutil.SmokeTest(t, false)
+		c.EnableSnykCodeSecurity(true)
+		c.EnableSnykCodeQuality(false)
+		c.SetSnykOssEnabled(true)
+		c.SetSnykIacEnabled(false)
+		di.Init()
 
-	// wait till the whole workspace is scanned
-	assert.Eventually(t, func() bool {
-		return folderGoof != nil && folderGoof.IsScanned() && folderJuice != nil && folderJuice.IsScanned()
-	}, maxIntegTestDuration, time.Millisecond)
+		var cloneTargetDirGoof = setupRepoAndInitialize(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", loc)
+		folderGoof := workspace.Get().GetFolderContaining(cloneTargetDirGoof)
 
-	ossIssuesForFileSecondScan := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "package.json"))
-	require.Equal(t, len(ossIssuesForFile), len(ossIssuesForFileSecondScan))
+		// wait till the whole workspace is scanned
+		assert.Eventually(t, func() bool {
+			return folderGoof != nil && folderGoof.IsScanned()
+		}, maxIntegTestDuration, time.Millisecond)
 
-	codeIssuesForFileSecondScan := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "app.js"))
-	require.Equal(t, len(codeIssuesForFile), len(codeIssuesForFileSecondScan))
+		ossFilePath := "package.json"
+		ossIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, ossFilePath))
+		require.Greater(t, len(ossIssuesForFile), 108) // 108 is the number of issues in the package.json file as of now
+		codeFilePath := "app.js"
+		codeIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, codeFilePath))
+		require.Greater(t, len(codeIssuesForFile), 5) // 5 is the number of issues in the app.js file as of now
+		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 1, 1)
+		require.Greater(t, len(folderGoof.Issues()), 0)
+		jsonRPCRecorder.ClearNotifications()
+		jsonRPCRecorder.ClearCallbacks()
 
-	checkDiagnosticPublishingForCachingSmokeTest(t, 1, 1)
-	checkScanResultsPublishingForCachingSmokeTest(t, folderJuice, folderGoof)
-}
+		folderGoof.Clear()
 
-func Test_SmokeIssueCaching_ClearFolder(t *testing.T) {
-	loc := setupServer(t)
-	c := testutil.SmokeTest(t, false)
-	c.EnableSnykCodeSecurity(true)
-	c.EnableSnykCodeQuality(false)
-	c.SetSnykOssEnabled(true)
-	c.SetSnykIacEnabled(false)
-	di.Init()
-
-	var cloneTargetDirGoof = setupRepoAndInitialize(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", loc)
-	folderGoof := workspace.Get().GetFolderContaining(cloneTargetDirGoof)
-
-	// wait till the whole workspace is scanned
-	assert.Eventually(t, func() bool {
-		return folderGoof != nil && folderGoof.IsScanned()
-	}, maxIntegTestDuration, time.Millisecond)
-
-	ossFilePath := "package.json"
-	ossIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, ossFilePath))
-	require.Greater(t, len(ossIssuesForFile), 108) // 108 is the number of issues in the package.json file as of now
-	codeFilePath := "app.js"
-	codeIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, codeFilePath))
-	require.Greater(t, len(codeIssuesForFile), 5) // 5 is the number of issues in the app.js file as of now
-	checkDiagnosticPublishingForCachingSmokeTest(t, 1, 1)
-	require.Greater(t, len(folderGoof.Issues()), 0)
-	jsonRPCRecorder.ClearNotifications()
-	jsonRPCRecorder.ClearCallbacks()
-
-	folderGoof.Clear()
-
-	// empty file diagnostic
-	require.Eventually(t, func() bool {
-		notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
-		emptyOSSFound := false
-		emptyCodeFound := false
-		for _, notification := range notifications {
-			var diagnostic lsp.PublishDiagnosticsParams
-			require.NoError(t, json.Unmarshal([]byte(notification.ParamString()), &diagnostic))
-			if filepath.Base(uri.PathFromUri(diagnostic.URI)) == ossFilePath && len(diagnostic.Diagnostics) == 0 {
-				emptyOSSFound = true
+		// empty file diagnostic
+		require.Eventually(t, func() bool {
+			notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
+			emptyOSSFound := false
+			emptyCodeFound := false
+			for _, notification := range notifications {
+				var diagnostic lsp.PublishDiagnosticsParams
+				require.NoError(t, json.Unmarshal([]byte(notification.ParamString()), &diagnostic))
+				if filepath.Base(uri.PathFromUri(diagnostic.URI)) == ossFilePath && len(diagnostic.Diagnostics) == 0 {
+					emptyOSSFound = true
+				}
+				if filepath.Base(uri.PathFromUri(diagnostic.URI)) == codeFilePath && len(diagnostic.Diagnostics) == 0 {
+					emptyCodeFound = true
+				}
 			}
-			if filepath.Base(uri.PathFromUri(diagnostic.URI)) == codeFilePath && len(diagnostic.Diagnostics) == 0 {
-				emptyCodeFound = true
-			}
-		}
-		return emptyOSSFound && emptyCodeFound
-	}, time.Second*5, time.Second)
+			return emptyOSSFound && emptyCodeFound
+		}, time.Second*5, time.Second)
 
-	// check issues deleted
-	require.Empty(t, folderGoof.Issues())
+		// check issues deleted
+		require.Empty(t, folderGoof.Issues())
 
-	// check hovers deleted
-	response, err := loc.Client.Call(context.Background(), "textDocument/hover", hover.Params{
-		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filepath.Join(folderGoof.Path(), ossFilePath))},
-		// at that file position, there should be a hover normally
-		Position: sglsp.Position{Line: 27, Character: 20},
+		// check hovers deleted
+		response, err := loc.Client.Call(context.Background(), "textDocument/hover", hover.Params{
+			TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filepath.Join(folderGoof.Path(), ossFilePath))},
+			// at that file position, there should be a hover normally
+			Position: sglsp.Position{Line: 27, Character: 20},
+		})
+		require.NoError(t, err)
+		var emptyHover hover.Result
+		require.NoError(t, response.UnmarshalResult(&emptyHover))
+		require.Empty(t, emptyHover.Contents.Value)
 	})
-	require.NoError(t, err)
-	var emptyHover hover.Result
-	require.NoError(t, response.UnmarshalResult(&emptyHover))
-	require.Empty(t, emptyHover.Contents.Value)
 }
 
 func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local) *workspace.Folder {
@@ -250,7 +255,12 @@ func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local) *workspace.Fo
 
 // check that $/snyk.scan messages are sent
 // check that they only contain issues that belong to the scanned folder
-func checkScanResultsPublishingForCachingSmokeTest(t *testing.T, folderJuice *workspace.Folder, folderGoof *workspace.Folder) {
+func checkScanResultsPublishingForCachingSmokeTest(
+	t *testing.T,
+	jsonRPCRecorder *testutil.JsonRPCRecorder,
+	folderJuice *workspace.Folder,
+	folderGoof *workspace.Folder,
+) {
 	t.Helper()
 
 	require.Eventually(t, func() bool {
@@ -298,18 +308,21 @@ func checkScanResultsPublishingForCachingSmokeTest(t *testing.T, folderJuice *wo
 
 // check that notifications are sent
 // we expect one empty publishDiagnostics per changed file, and one for the new findings
-func checkDiagnosticPublishingForCachingSmokeTest(t *testing.T, expectedCode, expectedOSS int) {
+func checkDiagnosticPublishingForCachingSmokeTest(
+	t *testing.T,
+	jsonRPCRecorder *testutil.JsonRPCRecorder,
+	expectedCode, expectedOSS int,
+) {
 	t.Helper()
-
-	appJsEmptyFound := false
-	appJsNewFound := false
-	packageJsonEmptyFound := false
-	packageJsonNewFound := false
-	appJsCount := 0
-	packageJsonCount := 0
-
 	require.Eventually(t, func() bool {
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
+		appJsEmptyFound := false
+		appJsNewFound := false
+		packageJsonEmptyFound := false
+		packageJsonNewFound := false
+		appJsCount := 0
+		packageJsonCount := 0
+
 		for _, notification := range notifications {
 			var param lsp.PublishDiagnosticsParams
 			err := json.Unmarshal([]byte(notification.ParamString()), &param)
@@ -326,7 +339,6 @@ func checkDiagnosticPublishingForCachingSmokeTest(t *testing.T, expectedCode, ex
 			}
 
 			if filepath.Base(uri.PathFromUri(param.URI)) == "app.js" {
-				log.Debug().Any("notification", notification.ParamString()).Send()
 				if len(param.Diagnostics) == 0 || expectedOSS == 1 { // if expected == 1, we don't expect empty
 					appJsEmptyFound = true
 				}
@@ -336,6 +348,12 @@ func checkDiagnosticPublishingForCachingSmokeTest(t *testing.T, expectedCode, ex
 				appJsCount++
 			}
 		}
+		log.Debug().Bool("appJsEmptyFound", appJsEmptyFound).Send()
+		log.Debug().Bool("appJsNewFound", appJsNewFound).Send()
+		log.Debug().Bool("packageJsonNewFound", packageJsonNewFound).Send()
+		log.Debug().Bool("packageJsonEmptyFound", packageJsonEmptyFound).Send()
+		log.Debug().Int("appJsCount", appJsCount).Send()
+		log.Debug().Int("packageJsonCount", packageJsonCount).Send()
 		result := appJsEmptyFound &&
 			appJsNewFound &&
 			packageJsonNewFound &&
@@ -349,13 +367,11 @@ func checkDiagnosticPublishingForCachingSmokeTest(t *testing.T, expectedCode, ex
 
 func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 string, useConsistentIgnores bool) {
 	t.Helper()
-	loc := setupServer(t)
+	loc, jsonRPCRecorder := setupServer(t)
 	c := testutil.SmokeTest(t, useConsistentIgnores)
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykIacEnabled(true)
 	c.SetSnykOssEnabled(true)
-	jsonRPCRecorder.ClearCallbacks()
-	jsonRPCRecorder.ClearNotifications()
 	cleanupChannels()
 	di.Init()
 
@@ -373,14 +389,14 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 		testPath = filepath.Join(cloneTargetDir, file1)
 		textDocumentDidSave(t, &loc, testPath)
 		// serve diagnostics from file scan
-		assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
+		assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 	}
 
 	jsonRPCRecorder.ClearNotifications()
 	testPath = filepath.Join(cloneTargetDir, file2)
 	textDocumentDidSave(t, &loc, testPath)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(testPath, -1), maxIntegTestDuration, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 
 	// check for snyk scan message & check autofix
 	var notifications []jrpc2.Request
@@ -485,11 +501,9 @@ func checkFeatureFlagStatus(t *testing.T, loc *server.Local) {
 }
 
 func Test_SmokeSnykCodeFileScan(t *testing.T) {
-	loc := setupServer(t)
+	loc, jsonRPCRecorder := setupServer(t)
 	testutil.SmokeTest(t, false)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
-	jsonRPCRecorder.ClearCallbacks()
-	jsonRPCRecorder.ClearNotifications()
 	cleanupChannels()
 	di.Init()
 
@@ -524,7 +538,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 
 	_ = textDocumentDidSave(t, &loc, testPath)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(testPath, 6), maxIntegTestDuration, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, 6, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 }
 
 func textDocumentDidSave(t *testing.T, loc *server.Local, testPath string) sglsp.DidSaveTextDocumentParams {

@@ -33,7 +33,7 @@ import (
 )
 
 func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) {
-	loc := setupServerWithCustomDI(t, false)
+	loc, _ := setupServerWithCustomDI(t, false)
 
 	scanner := &snyk.TestScanner{}
 	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))
@@ -49,7 +49,7 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 }
 
 func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceipt(t *testing.T) {
-	loc := setupServerWithCustomDI(t, false)
+	loc, _ := setupServerWithCustomDI(t, false)
 
 	scanner := &snyk.TestScanner{}
 	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))
@@ -65,7 +65,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceip
 }
 
 func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostics(t *testing.T) {
-	loc := setupServerWithCustomDI(t, false)
+	loc, _ := setupServerWithCustomDI(t, false)
 
 	scannerForFolder := snyk.NewTestScanner()
 	scannerForDontClear := snyk.NewTestScanner()
@@ -97,7 +97,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 }
 
 func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
-	loc := setupServerWithCustomDI(t, false)
+	loc, jsonRPCRecorder := setupServerWithCustomDI(t, false)
 
 	scanner := &snyk.TestScanner{}
 	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))
@@ -110,13 +110,13 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Eventually(t, func() bool {
-		return scanner.Calls() == 0 && checkTrustMessageRequest()
+		return scanner.Calls() == 0 && checkTrustMessageRequest(jsonRPCRecorder)
 	}, 2*time.Second, time.Millisecond)
 }
 
 func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	// Arrange
-	loc := setupServer(t)
+	loc, jsonRPCRecorder := setupServer(t)
 
 	// reset to use real service
 	command.SetService(command.NewService(
@@ -151,7 +151,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 
 func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
 	t.Skip("This test uses global state (the clipboard) and is thus not reliable")
-	loc := setupServer(t)
+	loc, _ := setupServer(t)
 
 	// reset to use real service
 	command.SetService(command.NewService(
@@ -177,7 +177,7 @@ func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
 
 func Test_TrustWorkspaceFolders(t *testing.T) {
 	t.Run("Doesn't mutate trusted folders, if trusted folders disabled", func(t *testing.T) {
-		loc := setupServerWithCustomDI(t, false)
+		loc, _ := setupServerWithCustomDI(t, false)
 		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier()))
 
 		params := lsp.ExecuteCommandParams{Command: snyk.TrustWorkspaceFoldersCommand}
@@ -190,7 +190,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 	})
 
 	t.Run("Updates trusted workspace folders", func(t *testing.T) {
-		loc := setupServerWithCustomDI(t, false)
+		loc, _ := setupServerWithCustomDI(t, false)
 
 		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier()))
 		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder2", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier()))
@@ -207,7 +207,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 	})
 
 	t.Run("Existing trusted workspace folders are not removed", func(t *testing.T) {
-		loc := setupServerWithCustomDI(t, false)
+		loc, _ := setupServerWithCustomDI(t, false)
 
 		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier()))
 		config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
