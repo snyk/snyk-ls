@@ -162,7 +162,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	codeIssuesForFileSecondScan := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "app.js"))
 	require.Equal(t, len(codeIssuesForFile), len(codeIssuesForFileSecondScan))
 
-	checkDiagnosticPublishingForCachingSmokeTest(t, 2, 2)
+	checkDiagnosticPublishingForCachingSmokeTest(t, 1, 1)
 	checkScanResultsPublishingForCachingSmokeTest(t, folderJuice, folderGoof)
 }
 

@@ -43,7 +43,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -91,7 +90,7 @@ func initHandlers(c *config.Config, srv *jrpc2.Server, handlers handler.Map) {
 	handlers["textDocument/inlineValue"] = textDocumentInlineValueHandler(c)
 	handlers["textDocument/willSave"] = noOpHandler()
 	handlers["textDocument/willSaveWaitUntil"] = noOpHandler()
-	handlers["codeAction/resolve"] = codeActionResolveHandler(c, srv, di.AuthenticationService(), di.LearnService())
+	handlers["codeAction/resolve"] = codeActionResolveHandler(c, srv)
 	handlers["shutdown"] = shutdown(c)
 	handlers["exit"] = exit(srv, c)
 	handlers["workspace/didChangeWorkspaceFolders"] = workspaceDidChangeWorkspaceFoldersHandler(srv)
@@ -513,11 +512,7 @@ func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 	})
 }
 
-func codeActionResolveHandler(c *config.Config,
-	server lsp.Server,
-	authenticationService snyk.AuthenticationService,
-	learnService learn.Service,
-) handler.Func {
+func codeActionResolveHandler(c *config.Config, server lsp.Server) handler.Func {
 	return handler.New(codeaction.ResolveCodeActionHandler(c, di.CodeActionService(), server))
 }
 
