@@ -12,7 +12,6 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/gomarkdown/markdown v0.0.0-20230922112808-5421fefb8386
 	github.com/google/uuid v1.6.0
-	github.com/hashicorp/go-uuid v1.0.3
 	github.com/hexops/gotextdiff v1.0.3
 	github.com/pact-foundation/pact-go v1.7.0
 	github.com/pingcap/errors v0.11.4
@@ -53,6 +52,7 @@ require (
 	github.com/go-openapi/jsonpointer v0.20.0 // indirect
 	github.com/go-openapi/swag v0.22.4 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
+	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/invopop/yaml v0.2.0 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
