@@ -167,7 +167,6 @@ func (f *Folder) RegisterCacheRemovalHandler(handler func(path string)) {
 	}
 }
 
-// TODO write more smoke tests for this
 func (f *Folder) Clear() {
 	issuesByFile := f.Issues()
 	for path := range issuesByFile {
@@ -176,7 +175,6 @@ func (f *Folder) Clear() {
 	f.clearScannedStatus()
 }
 
-// TODO write more smoke tests for this
 func (f *Folder) ClearIssues(path string) {
 	// send global cache evictions
 	f.documentDiagnosticCache.Range(func(path string, _ []snyk.Issue) bool {

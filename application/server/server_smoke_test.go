@@ -33,6 +33,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -164,6 +165,69 @@ func Test_SmokeIssueCaching(t *testing.T) {
 
 	checkDiagnosticPublishingForCachingSmokeTest(t, 1, 1)
 	checkScanResultsPublishingForCachingSmokeTest(t, folderJuice, folderGoof)
+}
+
+func Test_SmokeIssueCaching_ClearFolder(t *testing.T) {
+	loc := setupServer(t)
+	c := testutil.SmokeTest(t, false)
+	c.EnableSnykCodeSecurity(true)
+	c.EnableSnykCodeQuality(false)
+	c.SetSnykOssEnabled(true)
+	c.SetSnykIacEnabled(false)
+	di.Init()
+
+	var cloneTargetDirGoof = setupRepoAndInitialize(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", loc)
+	folderGoof := workspace.Get().GetFolderContaining(cloneTargetDirGoof)
+
+	// wait till the whole workspace is scanned
+	assert.Eventually(t, func() bool {
+		return folderGoof != nil && folderGoof.IsScanned()
+	}, maxIntegTestDuration, time.Millisecond)
+
+	ossFilePath := "package.json"
+	ossIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, ossFilePath))
+	require.Greater(t, len(ossIssuesForFile), 108) // 108 is the number of issues in the package.json file as of now
+	codeFilePath := "app.js"
+	codeIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, codeFilePath))
+	require.Greater(t, len(codeIssuesForFile), 5) // 5 is the number of issues in the app.js file as of now
+	checkDiagnosticPublishingForCachingSmokeTest(t, 1, 1)
+	require.Greater(t, len(folderGoof.Issues()), 0)
+	jsonRPCRecorder.ClearNotifications()
+	jsonRPCRecorder.ClearCallbacks()
+
+	folderGoof.Clear()
+
+	// empty file diagnostic
+	require.Eventually(t, func() bool {
+		notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
+		emptyOSSFound := false
+		emptyCodeFound := false
+		for _, notification := range notifications {
+			var diagnostic lsp.PublishDiagnosticsParams
+			require.NoError(t, json.Unmarshal([]byte(notification.ParamString()), &diagnostic))
+			if filepath.Base(uri.PathFromUri(diagnostic.URI)) == ossFilePath && len(diagnostic.Diagnostics) == 0 {
+				emptyOSSFound = true
+			}
+			if filepath.Base(uri.PathFromUri(diagnostic.URI)) == codeFilePath && len(diagnostic.Diagnostics) == 0 {
+				emptyCodeFound = true
+			}
+		}
+		return emptyOSSFound && emptyCodeFound
+	}, time.Second*5, time.Second)
+
+	// check issues deleted
+	require.Empty(t, folderGoof.Issues())
+
+	// check hovers deleted
+	response, err := loc.Client.Call(context.Background(), "textDocument/hover", hover.Params{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filepath.Join(folderGoof.Path(), ossFilePath))},
+		// at that file position, there should be a hover normally
+		Position: sglsp.Position{Line: 27, Character: 20},
+	})
+	require.NoError(t, err)
+	var emptyHover hover.Result
+	require.NoError(t, response.UnmarshalResult(&emptyHover))
+	require.Empty(t, emptyHover.Contents.Value)
 }
 
 func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local) *workspace.Folder {
