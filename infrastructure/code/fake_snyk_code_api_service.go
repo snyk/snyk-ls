@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/go-uuid"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
@@ -80,7 +80,7 @@ var (
 		CodelensCommands: []snyk.CommandData{FakeCommand, FakeFixCommand},
 		CodeActions:      []snyk.CodeAction{FakeCodeAction},
 		AdditionalData: snyk.CodeIssueData{
-			Key:           util.Result(uuid.GenerateUUID()),
+			Key:           uuid.New().String(),
 			IsAutofixable: true,
 		},
 	}
