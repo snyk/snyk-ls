@@ -97,13 +97,13 @@ func (s *SnykApiClientImpl) SastSettings() (SastResponse, error) {
 	logger.Debug().Msg("API: Getting SastEnabled")
 
 	p := s.normalizeAPIPathForV1(c, "/cli-config/settings/sast")
-	q, err := url.ParseQuery(p)
+	u, err := url.Parse(p)
 	if err != nil {
 		return SastResponse{}, err
 	}
-	s.addOrgToQuery(c, &q)
+	u = s.addOrgToQuery(c, u)
 
-	err = s.processApiResponse(method, p, &response)
+	err = s.processApiResponse(method, u.String(), &response)
 	if err != nil {
 		logger.Err(err).Msg("error when calling sastEnabled endpoint")
 		return SastResponse{}, err
@@ -111,11 +111,14 @@ func (s *SnykApiClientImpl) SastSettings() (SastResponse, error) {
 	return response, err
 }
 
-func (s *SnykApiClientImpl) addOrgToQuery(c *config.Config, query *url.Values) {
+func (s *SnykApiClientImpl) addOrgToQuery(c *config.Config, u *url.URL) *url.URL {
 	organization := c.Organization()
 	if organization != "" {
-		query.Add("org", organization)
+		q := u.Query()
+		q.Set("org", organization)
+		u.RawQuery = q.Encode()
 	}
+	return u
 }
 
 func (s *SnykApiClientImpl) normalizeAPIPathForV1(c *config.Config, path string) string {
@@ -135,14 +138,14 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 	var response FFResponse
 	logger.Debug().Msgf("API: Getting %s", featureFlagType)
 	path := s.normalizeAPIPathForV1(c, fmt.Sprintf("/cli-config/feature-flags/%s", string(featureFlagType)))
-	q, err := url.ParseQuery(path)
+	u, err := url.Parse(path)
 	if err != nil {
 		return FFResponse{}, err
 	}
-	s.addOrgToQuery(c, &q)
+	u = s.addOrgToQuery(c, u)
 	logger.Debug().Str("path", path).Msg("API: Getting feature flag status")
 
-	err = s.processApiResponse(method, path, &response)
+	err = s.processApiResponse(method, u.String(), &response)
 	if err != nil {
 		if strings.Contains(err.Error(), "403 Forbidden") {
 			logger.Debug().Msgf("Feature flag '%s' is disabled", featureFlagType)
