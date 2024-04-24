@@ -530,19 +530,6 @@ func (f *Folder) publishDiagnostics(product product.Product, issuesByFile snyk.I
 	f.sendHovers(issuesByFile) // TODO: this locks up the thread, need to investigate
 }
 
-//func (f *Folder) createDedupMap() (dedupMap map[string]bool) {
-//	dedupMap = make(map[string]bool)
-//	f.documentDiagnosticCache.Range(func(key string, value []snyk.Issue) bool {
-//		issues := value
-//		for _, issue := range issues {
-//			uniqueID := f.getUniqueIssueID(issue)
-//			dedupMap[uniqueID] = true
-//		}
-//		return true
-//	})
-//	return dedupMap
-//}
-
 func (f *Folder) getUniqueIssueID(issue snyk.Issue) string {
 	uniqueID := issue.AdditionalData.GetKey()
 	return uniqueID
