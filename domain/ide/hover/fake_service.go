@@ -22,20 +22,21 @@ import (
 )
 
 type FakeHoverService struct {
-	hovers chan DocumentHovers
-	calls  int
+	hovers        chan DocumentHovers
+	calls         int
+	DeletedHovers map[string]bool
 }
 
 func NewFakeHoverService() *FakeHoverService {
 	return &FakeHoverService{
-		calls:  0,
-		hovers: make(chan DocumentHovers, 10000),
+		calls:         0,
+		hovers:        make(chan DocumentHovers, 10000),
+		DeletedHovers: make(map[string]bool),
 	}
 }
 
-func (t *FakeHoverService) DeleteHover(_ string) {
-	//TODO implement me
-	panic("implement me")
+func (t *FakeHoverService) DeleteHover(path string) {
+	t.DeletedHovers[path] = true
 }
 
 func (t *FakeHoverService) Channel() chan DocumentHovers {

@@ -18,10 +18,13 @@ package code
 
 import (
 	"github.com/erni27/imcache"
+	"golang.org/x/exp/slices"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 )
+
+var _ snyk.CacheProvider = (*Scanner)(nil)
 
 func (sc *Scanner) addToCache(results []snyk.Issue) {
 	sc.issueCache.RemoveExpired()
@@ -34,6 +37,12 @@ func (sc *Scanner) addToCache(results []snyk.Issue) {
 		} else {
 			sc.issueCache.Set(issue.AffectedFilePath, []snyk.Issue{issue}, imcache.WithDefaultExpiration())
 		}
+	}
+}
+
+func (sc *Scanner) removeFromCache(scanned map[string]bool) {
+	for path := range scanned {
+		sc.ClearIssues(path)
 	}
 }
 
@@ -50,6 +59,29 @@ func (sc *Scanner) deduplicate(issues []snyk.Issue) []snyk.Issue {
 	return deduplicatedSlice
 }
 
+func (sc *Scanner) Issue(key string) snyk.Issue {
+	for _, issues := range sc.issueCache.GetAll() {
+		for _, issue := range issues {
+			if issue.AdditionalData.GetKey() == key {
+				return issue
+			}
+		}
+	}
+	return snyk.Issue{}
+}
+
+func (sc *Scanner) Issues() snyk.IssuesByFile {
+	return sc.issueCache.GetAll()
+}
+
+func (sc *Scanner) IssuesForFile(path string) []snyk.Issue {
+	issues, found := sc.issueCache.Get(path)
+	if !found {
+		return []snyk.Issue{}
+	}
+	return issues
+}
+
 func (sc *Scanner) IssuesForRange(path string, r snyk.Range) []snyk.Issue {
 	issues, found := sc.issueCache.Get(path)
 	if !found {
@@ -64,37 +96,14 @@ func (sc *Scanner) IssuesForRange(path string, r snyk.Range) []snyk.Issue {
 	return filteredIssues
 }
 
-func (sc *Scanner) Issue(key string) snyk.Issue {
-	for _, issues := range sc.issueCache.GetAll() {
-		for _, issue := range issues {
-			if issue.AdditionalData.GetKey() == key {
-				return issue
-			}
-		}
-	}
-	return snyk.Issue{}
+func (sc *Scanner) IsProviderFor(issueType product.FilterableIssueType) bool {
+	return slices.Contains(sc.Product().ToFilterableIssueType(), issueType)
 }
 
-func (sc *Scanner) removeFromCache(scanned map[string]bool) {
-	for path := range scanned {
+func (sc *Scanner) Clear() {
+	for path := range sc.Issues() {
 		sc.ClearIssues(path)
 	}
-}
-
-func (sc *Scanner) IssuesForFile(path string) []snyk.Issue {
-	issues, found := sc.issueCache.Get(path)
-	if !found {
-		return []snyk.Issue{}
-	}
-	return issues
-}
-
-func (sc *Scanner) Issues() snyk.IssuesByFile {
-	return sc.issueCache.GetAll()
-}
-
-func (sc *Scanner) IsProviderFor(product product.Product) bool {
-	return product == sc.Product()
 }
 
 func (sc *Scanner) ClearIssues(path string) {

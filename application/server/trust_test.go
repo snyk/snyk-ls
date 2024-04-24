@@ -30,23 +30,24 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScan(t *testing.T) {
-	loc := setupServer(t)
+	loc, jsonRPCRecorder := setupServer(t)
 	w := workspace.Get()
 	scanner := &snyk.TestScanner{}
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 	w.AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))
 	command.HandleUntrustedFolders(context.Background(), loc.Server)
 
-	assert.True(t, checkTrustMessageRequest())
+	assert.True(t, checkTrustMessageRequest(jsonRPCRecorder))
 	assert.Equal(t, scanner.Calls(), 0)
 }
 
 func Test_handleUntrustedFolders_shouldNotTriggerTrustRequestWhenAlreadyRequesting(t *testing.T) {
-	loc := setupServer(t)
+	loc, jsonRPCRecorder := setupServer(t)
 	w := workspace.Get()
 	scanner := &snyk.TestScanner{}
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
@@ -60,7 +61,7 @@ func Test_handleUntrustedFolders_shouldNotTriggerTrustRequestWhenAlreadyRequesti
 }
 
 func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmation(t *testing.T) {
-	loc := setupCustomServer(t, func(_ context.Context, _ *jrpc2.Request) (any, error) {
+	loc, jsonRPCRecorder := setupCustomServer(t, func(_ context.Context, _ *jrpc2.Request) (any, error) {
 		return lsp.MessageActionItem{
 			Title: command.DoTrust,
 		}, nil
@@ -81,7 +82,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 }
 
 func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativeConfirmation(t *testing.T) {
-	loc := setupCustomServer(t, func(_ context.Context, _ *jrpc2.Request) (any, error) {
+	loc, _ := setupCustomServer(t, func(_ context.Context, _ *jrpc2.Request) (any, error) {
 		return lsp.MessageActionItem{
 			Title: command.DontTrust,
 		}, nil
@@ -98,7 +99,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 }
 
 func Test_initializeHandler_shouldCallHandleUntrustedFolders(t *testing.T) {
-	loc := setupServer(t)
+	loc, jsonRPCRecorder := setupServer(t)
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -116,11 +117,11 @@ func Test_initializeHandler_shouldCallHandleUntrustedFolders(t *testing.T) {
 	}
 
 	assert.NoError(t, err)
-	assert.Eventually(t, func() bool { return checkTrustMessageRequest() }, time.Second, time.Millisecond)
+	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder) }, time.Second, time.Millisecond)
 }
 
 func Test_DidWorkspaceFolderChange_shouldCallHandleUntrustedFolders(t *testing.T) {
-	loc := setupServer(t)
+	loc, jsonRPCRecorder := setupServer(t)
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 
 	_, err := loc.Client.Call(context.Background(), "workspace/didChangeWorkspaceFolders", lsp.DidChangeWorkspaceFoldersParams{
@@ -133,10 +134,10 @@ func Test_DidWorkspaceFolderChange_shouldCallHandleUntrustedFolders(t *testing.T
 	})
 
 	assert.NoError(t, err)
-	assert.Eventually(t, func() bool { return checkTrustMessageRequest() }, time.Second, time.Millisecond)
+	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder) }, time.Second, time.Millisecond)
 }
 
-func checkTrustMessageRequest() bool {
+func checkTrustMessageRequest(jsonRPCRecorder *testutil.JsonRPCRecorder) bool {
 	callbacks := jsonRPCRecorder.FindCallbacksByMethod("window/showMessageRequest")
 	if len(callbacks) == 0 {
 		return false

@@ -48,3 +48,35 @@ func ToProductCodename(product Product) string {
 		return ""
 	}
 }
+
+func (p Product) ToFilterableIssueType() []FilterableIssueType {
+	switch p {
+	case ProductOpenSource:
+		return []FilterableIssueType{FilterableIssueTypeOpenSource}
+	case ProductCode:
+		return []FilterableIssueType{FilterableIssueTypeCodeQuality, FilterableIssueTypeCodeSecurity}
+	case ProductInfrastructureAsCode:
+		return []FilterableIssueType{FilterableIssueTypeInfrastructureAsCode}
+	case ProductContainer:
+		return []FilterableIssueType{FilterableIssueTypeContainer}
+	default:
+		return []FilterableIssueType{}
+	}
+}
+
+func (f FilterableIssueType) ToProduct() Product {
+	switch f {
+	case FilterableIssueTypeOpenSource:
+		return ProductOpenSource
+	case FilterableIssueTypeCodeQuality:
+		return ProductCode
+	case FilterableIssueTypeCodeSecurity:
+		return ProductCode
+	case FilterableIssueTypeInfrastructureAsCode:
+		return ProductInfrastructureAsCode
+	case FilterableIssueTypeContainer:
+		return ProductContainer
+	default:
+		return ProductUnknown
+	}
+}

@@ -42,8 +42,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-var _ snyk.CacheProvider = (*Scanner)(nil)
-
 type ScanStatus struct {
 	// finished channel is closed once the scan has finished
 	finished chan bool

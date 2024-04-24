@@ -152,7 +152,7 @@ func Test_configureOauth_oauthProvider_created_with_injected_refreshMethod(t *te
 func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	testutil.UnitTest(t)
 	di.TestInit(t)
-	loc := setupServer(t)
+	loc, _ := setupServer(t)
 
 	t.Setenv("a", "")
 	t.Setenv("c", "")
@@ -181,17 +181,9 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	assert.Equal(t, sampleSettings.EnableSnykLearnCodeActions, strconv.FormatBool(c.IsSnykLearnCodeActionsEnabled()))
 }
 
-func callBackMock(_ context.Context, request *jrpc2.Request) (any, error) {
-	jsonRPCRecorder.Record(*request)
-	if request.Method() == "workspace/configuration" {
-		return []lsp.Settings{sampleSettings}, nil
-	}
-	return nil, nil
-}
-
 func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	testutil.UnitTest(t)
-	loc := setupCustomServer(t, callBackMock)
+	loc, _ := setupCustomServer(t, callBackMock)
 
 	_, err := loc.Client.Call(ctx, "initialize", lsp.InitializeParams{
 		Capabilities: lsp.ClientCapabilities{
@@ -227,9 +219,17 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	assert.Equal(t, sampleSettings.EnableSnykLearnCodeActions, strconv.FormatBool(c.IsSnykLearnCodeActionsEnabled()))
 }
 
+func callBackMock(_ context.Context, request *jrpc2.Request) (any, error) {
+	if request.Method() == "workspace/configuration" {
+		return []lsp.Settings{sampleSettings}, nil
+	}
+	return nil, nil
+}
+
 func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
 	testutil.UnitTest(t)
-	loc := setupCustomServer(t, callBackMock)
+
+	loc, jsonRPCRecorder := setupCustomServer(t, callBackMock)
 
 	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{}}
 	var updated = true
@@ -240,6 +240,9 @@ func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.False(t, updated)
+	assert.Eventually(t, func() bool {
+		return len(jsonRPCRecorder.Callbacks()) == 0
+	}, time.Second, time.Millisecond)
 }
 
 func Test_UpdateSettings(t *testing.T) {

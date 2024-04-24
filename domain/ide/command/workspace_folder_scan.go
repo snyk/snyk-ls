@@ -53,8 +53,7 @@ func (cmd *workspaceFolderScanCommand) Execute(ctx context.Context) (any, error)
 		log.Warn().Interface("folders", w.Folders())
 		return nil, err
 	}
-	f.ClearScannedStatus()
-	f.ClearDiagnostics()
+	f.Clear()
 	f.ScanFolder(ctx)
 	HandleUntrustedFolders(ctx, cmd.srv)
 	return nil, nil
