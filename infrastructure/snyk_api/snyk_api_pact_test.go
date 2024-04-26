@@ -80,7 +80,7 @@ func TestSnykApiPact(t *testing.T) {
 
 		interactionConfigSettings := pact.AddInteraction().WithRequest(dsl.Request{
 			Method: "GET",
-			Path:   dsl.String("/cli-config/settings/sast"),
+			Path:   dsl.String("/v1/cli-config/settings/sast"),
 			Headers: dsl.MapMatcher{
 				"Content-Type":  dsl.String("application/json"),
 				"Authorization": dsl.Regex("token fc763eba-0905-41c5-a27f-3934ab26786c", `^token [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`),
@@ -124,7 +124,7 @@ func TestSnykApiPact(t *testing.T) {
 		interaction := pact.AddInteraction().
 			WithRequest(dsl.Request{
 				Method: "GET",
-				Path:   dsl.String("/cli-config/settings/sast"),
+				Path:   dsl.String("/v1/cli-config/settings/sast"),
 				Query:  matcher,
 				Headers: dsl.MapMatcher{
 					"Content-Type":  dsl.String("application/json"),
@@ -167,7 +167,7 @@ func TestSnykApiPact(t *testing.T) {
 		interaction := pact.AddInteraction().
 			WithRequest(dsl.Request{
 				Method: "GET",
-				Path:   dsl.String("/cli-config/feature-flags/" + featureFlagType),
+				Path:   dsl.String("/v1/cli-config/feature-flags/" + featureFlagType),
 				Query:  matcher,
 				Headers: dsl.MapMatcher{
 					"Content-Type":  dsl.String("application/json"),
@@ -212,7 +212,7 @@ func TestSnykApiPact(t *testing.T) {
 		interaction := pact.AddInteraction().
 			WithRequest(dsl.Request{
 				Method: "GET",
-				Path:   dsl.String("/cli-config/feature-flags/" + featureFlagType),
+				Path:   dsl.String("/v1/cli-config/feature-flags/" + featureFlagType),
 				Query:  matcher,
 				Headers: dsl.MapMatcher{
 					"Content-Type":  dsl.String("application/json"),
