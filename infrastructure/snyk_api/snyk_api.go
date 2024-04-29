@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 
@@ -92,7 +93,12 @@ func (s *SnykApiClientImpl) SastSettings() (SastResponse, error) {
 	method := "SastSettings"
 	var response SastResponse
 	log.Debug().Str("method", method).Msg("API: Getting SastEnabled")
+
 	p := "/cli-config/settings/sast"
+	host := config.CurrentConfig().SnykApi()
+	if !strings.HasSuffix(host, "/v1") {
+		p = "/v1" + p
+	}
 	organization := config.CurrentConfig().Organization()
 	if organization != "" {
 		p += "?org=" + url.QueryEscape(organization)
@@ -113,6 +119,10 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 	var response FFResponse
 	logger.Debug().Msgf("API: Getting %s", featureFlagType)
 	path := fmt.Sprintf("/cli-config/feature-flags/%s", string(featureFlagType))
+	host := config.CurrentConfig().SnykApi()
+	if !strings.HasSuffix(host, "/v1") {
+		path = "/v1" + path
+	}
 	organization := config.CurrentConfig().Organization()
 	if organization != "" {
 		path += "?org=" + url.QueryEscape(organization)
