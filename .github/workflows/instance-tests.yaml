@@ -83,11 +83,43 @@ jobs:
         run: |
           make instance-standard-test
 
+  slackNotification:
+    needs: [instance-tests, instance-standard-test]
+    runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' && (needs.instance-tests.result != 'success' || needs.instance-standard-test.result != 'success') }}
+    steps:
       - name: Slack Notification
-        if: ${{ (github.event_name != 'push' || github.ref == 'refs/heads/main') && (failure() || cancelled()) }}
-        with:
-          payload: '{"text": "GitHub build result: ${{ job.status }} (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n${{ github.event.pull_request.html_url || github.event.head_commit.url }}" }'
-
         uses: slackapi/slack-github-action@v1.24
+        with:
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": ":WARNING: Language Server Instance Tests Failed\n*<https://github.com/snyk/snyk-ls/actions/workflows/instance-tests.yaml|GHA Workflow - Instance Tests>*"
+                  },
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "<https://github.com/${{ github.repository }}|${{ github.repository }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ github.ref_name }}"
+                    }
+                  ]
+                }
+              ]
+            }
         env:
           SLACK_WEBHOOK_URL: "${{ secrets.SLACK_WEBHOOK_URL }}"
