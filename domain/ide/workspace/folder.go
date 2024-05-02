@@ -132,12 +132,10 @@ func (f *Folder) IssuesByProduct() snyk.ProductIssuesByFile {
 		}
 		for _, issue := range issues {
 			p := issue.Product
-			productIssuesByFile := issuesForProduct[p]
-			if productIssuesByFile == nil {
-				productIssuesByFile = snyk.IssuesByFile{}
+			if issuesForProduct[p] == nil {
+				issuesForProduct[p] = snyk.IssuesByFile{}
 			}
-			productIssuesByFile[path] = append(productIssuesByFile[path], issue)
-			issuesForProduct[p] = productIssuesByFile
+			issuesForProduct[p][path] = append(issuesForProduct[p][path], issue)
 		}
 	}
 	return issuesForProduct
@@ -310,7 +308,7 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 	go sendAnalytics(&scanData)
 
 	// Filter and publish cached diagnostics
-	f.FilterAndPublishDiagnostics(f.IssuesByProduct()[scanData.Product])
+	f.FilterAndPublishDiagnostics(&scanData.Product)
 }
 
 func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *snyk.ScanData) {
@@ -451,38 +449,20 @@ func sendAnalytics(data *snyk.ScanData) {
 	}
 }
 
-func (f *Folder) FilterAndPublishDiagnostics(issues snyk.IssuesByFile) {
-	issuesByFile := f.filterDiagnostics(issues)
-	productIssuesByFile := f.groupIssuesByProduct(issuesByFile)
-	for p, pIssues := range productIssuesByFile {
-		f.publishDiagnostics(p, pIssues)
-	}
-}
-
-func (f *Folder) groupIssuesByProduct(issuesByFile snyk.IssuesByFile) snyk.ProductIssuesByFile {
-	var productIssuesByFile = snyk.ProductIssuesByFile{}
-	for path, fileIssues := range issuesByFile {
-		if !f.Contains(path) {
-			panic("issue found in cache that does not pertain to folder")
-		}
-		for _, issue := range fileIssues {
-			tempIssuesByFile := productIssuesByFile[issue.Product]
-			if tempIssuesByFile == nil {
-				tempIssuesByFile = snyk.IssuesByFile{}
-			}
-			tempIssuesByFile[path] = append(tempIssuesByFile[path], issue)
-			productIssuesByFile[issue.Product] = tempIssuesByFile
+func (f *Folder) FilterAndPublishDiagnostics(p *product.Product) {
+	productIssuesByFile := f.IssuesByProduct()
+	if p != nil {
+		filteredIssues := f.filterDiagnostics(productIssuesByFile[*p])
+		f.publishDiagnostics(*p, filteredIssues)
+	} else {
+		for p, pIssues := range productIssuesByFile {
+			filteredIssues := f.filterDiagnostics(pIssues)
+			f.publishDiagnostics(p, filteredIssues)
 		}
 	}
-	return productIssuesByFile
 }
 
 func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
-	logger := log.With().Str("method", "filterDiagnostics").Logger()
-
-	filterSeverity := config.CurrentConfig().FilterSeverity()
-	logger.Debug().Interface("filterSeverity", filterSeverity).Msg("Filtering issues by severity")
-
 	supportedIssueTypes := config.CurrentConfig().DisplayableIssueTypes()
 	filteredIssuesByFile := f.FilterIssues(issues, supportedIssueTypes)
 	return filteredIssuesByFile
@@ -511,6 +491,11 @@ func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[
 }
 
 func isVisibleSeverity(issue snyk.Issue) bool {
+	logger := log.With().Str("method", "isVisibleSeverity").Logger()
+
+	filterSeverity := config.CurrentConfig().FilterSeverity()
+	logger.Debug().Interface("filterSeverity", filterSeverity).Msg("Filtering issues by severity")
+
 	switch issue.Severity {
 	case snyk.Critical:
 		return config.CurrentConfig().FilterSeverity().Critical
