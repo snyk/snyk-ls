@@ -125,16 +125,18 @@ func (f *Folder) Issues() snyk.IssuesByFile {
 }
 
 func (f *Folder) IssuesByProduct() snyk.ProductIssuesByFile {
-	issuesForProduct := snyk.ProductIssuesByFile{}
+	issuesForProduct := snyk.ProductIssuesByFile{
+		product.ProductOpenSource:           snyk.IssuesByFile{},
+		product.ProductCode:                 snyk.IssuesByFile{},
+		product.ProductInfrastructureAsCode: snyk.IssuesByFile{},
+		product.ProductContainer:            snyk.IssuesByFile{},
+	}
 	for path, issues := range f.Issues() {
 		if !f.Contains(path) {
 			panic("issue found in cache that does not pertain to folder")
 		}
 		for _, issue := range issues {
 			p := issue.Product
-			if issuesForProduct[p] == nil {
-				issuesForProduct[p] = snyk.IssuesByFile{}
-			}
 			issuesForProduct[p][path] = append(issuesForProduct[p][path], issue)
 		}
 	}
@@ -469,7 +471,7 @@ func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
 }
 
 func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[product.FilterableIssueType]bool) snyk.
-	IssuesByFile {
+IssuesByFile {
 	logger := log.With().Str("method", "FilterIssues").Logger()
 
 	filteredIssues := snyk.IssuesByFile{}
