@@ -55,6 +55,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 		file1                string
 		file2                string
 		useConsistentIgnores bool
+		hasVulns             bool
 	}
 
 	tests := []test{
@@ -65,6 +66,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file1:                ossFile,
 			file2:                codeFile,
 			useConsistentIgnores: false,
+			hasVulns:             true,
 		},
 		{
 			name:                 "OSS and Code with consistent ignores",
@@ -73,6 +75,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file1:                ossFile,
 			file2:                codeFile,
 			useConsistentIgnores: true,
+			hasVulns:             true,
 		},
 		{
 			name:                 "IaC and Code",
@@ -81,6 +84,16 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file1:                iacFile,
 			file2:                codeFile,
 			useConsistentIgnores: false,
+			hasVulns:             true,
+		},
+		{
+			name:                 "Code without vulns",
+			repo:                 "https://github.com/imagec/simple-repo",
+			commit:               "75bcc55",
+			file1:                "",
+			file2:                "providers.tf",
+			useConsistentIgnores: false,
+			hasVulns:             false,
 		},
 		{
 			name:                 "IaC and Code with consistent ignores",
@@ -89,6 +102,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file1:                iacFile,
 			file2:                codeFile,
 			useConsistentIgnores: true,
+			hasVulns:             true,
 		},
 		{
 			name:                 "Two upload batches",
@@ -97,6 +111,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file1:                "",
 			file2:                "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java",
 			useConsistentIgnores: false,
+			hasVulns:             true,
 		},
 		{
 			name:                 "Two upload batches with consistent ignores",
@@ -105,11 +120,12 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file1:                "",
 			file2:                "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java",
 			useConsistentIgnores: true,
+			hasVulns:             true,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			runSmokeTest(t, tc.repo, tc.commit, tc.file1, tc.file2, tc.useConsistentIgnores)
+			runSmokeTest(t, tc.repo, tc.commit, tc.file1, tc.file2, tc.useConsistentIgnores, tc.hasVulns)
 		})
 	}
 }
@@ -363,7 +379,7 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 	}, time.Second*5, time.Second)
 }
 
-func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 string, useConsistentIgnores bool) {
+func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 string, useConsistentIgnores bool, hasVulns bool) {
 	t.Helper()
 	loc, jsonRPCRecorder := setupServer(t)
 	c := testutil.SmokeTest(t, useConsistentIgnores)
@@ -418,23 +434,25 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 	}
 
 	// check for autofix diff on mt-us
-	assert.Greater(t, len(scanParams.Issues), 0)
-	for _, issue := range scanParams.Issues {
-		codeIssueData, ok := issue.AdditionalData.(map[string]interface{})
-		if !ok || codeIssueData["hasAIFix"] == false || codeIssueData["rule"] != "WebCookieSecureDisabledByDefault" {
-			continue
+	if hasVulns {
+		assert.Greater(t, len(scanParams.Issues), 0)
+		for _, issue := range scanParams.Issues {
+			codeIssueData, ok := issue.AdditionalData.(map[string]interface{})
+			if !ok || codeIssueData["hasAIFix"] == false || codeIssueData["rule"] != "WebCookieSecureDisabledByDefault" {
+				continue
+			}
+			call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+				Command:   snyk.CodeFixDiffsCommand,
+				Arguments: []any{uri.PathToUri(scanParams.FolderPath), uri.PathToUri(issue.FilePath), issue.Id},
+			})
+			assert.NoError(t, err)
+			var unifiedDiffs []code.AutofixUnifiedDiffSuggestion
+			err = call.UnmarshalResult(&unifiedDiffs)
+			assert.NoError(t, err)
+			assert.Greater(t, len(unifiedDiffs), 0)
+			// don't check for all issues, just the first
+			break
 		}
-		call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
-			Command:   snyk.CodeFixDiffsCommand,
-			Arguments: []any{uri.PathToUri(scanParams.FolderPath), uri.PathToUri(issue.FilePath), issue.Id},
-		})
-		assert.NoError(t, err)
-		var unifiedDiffs []code.AutofixUnifiedDiffSuggestion
-		err = call.UnmarshalResult(&unifiedDiffs)
-		assert.NoError(t, err)
-		assert.Greater(t, len(unifiedDiffs), 0)
-		// don't check for all issues, just the first
-		break
 	}
 
 	checkFeatureFlagStatus(t, &loc)
