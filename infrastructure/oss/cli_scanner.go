@@ -232,7 +232,7 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 		config.CurrentConfig().CliSettings().Path(),
 		"test",
 	})
-	cmd = append(cmd, args...)
+	//cmd = append(cmd, args...)
 	cmd = append(cmd, "--json")
 	additionalParams := config.CurrentConfig().CliSettings().AdditionalOssParameters
 	for _, parameter := range additionalParams {
