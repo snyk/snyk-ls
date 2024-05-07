@@ -200,7 +200,7 @@ func (cliScanner *CLIScanner) scanInternal(
 	cliScanner.runningScans[workDir] = newScan
 	cliScanner.mutex.Unlock()
 
-	cmd := commandFunc([]string{workDir}, map[string]bool{"": true})
+	cmd := commandFunc([]string{}, map[string]bool{"": true})
 	res, err := cliScanner.cli.Execute(ctx, cmd, workDir)
 	noCancellation := ctx.Err() == nil
 	if err != nil {
@@ -232,7 +232,7 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 		config.CurrentConfig().CliSettings().Path(),
 		"test",
 	})
-	//cmd = append(cmd, args...)
+	cmd = append(cmd, args...)
 	cmd = append(cmd, "--json")
 	additionalParams := config.CurrentConfig().CliSettings().AdditionalOssParameters
 	for _, parameter := range additionalParams {
