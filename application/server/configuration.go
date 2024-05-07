@@ -426,7 +426,7 @@ func updateSeverityFilter(s lsp.SeverityFilter) {
 		}
 
 		for _, folder := range ws.Folders() {
-			folder.FilterAndPublishDiagnostics(folder.Issues())
+			folder.FilterAndPublishDiagnostics(nil)
 		}
 	}
 }
