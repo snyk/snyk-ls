@@ -117,6 +117,34 @@ func (n *scanNotifier) appendOssIssues(scanIssues []lsp.ScanIssue, folderPath st
 			continue // skip non-oss issues
 		}
 
+		matchingIssues := make([]lsp.OssIssueData, len(additionalData.MatchingIssues))
+		for i, matchingIssue := range additionalData.MatchingIssues {
+			matchingIssues[i] = lsp.OssIssueData{
+				License: matchingIssue.License,
+				Identifiers: lsp.OssIdentifiers{
+					CWE: issue.CWEs,
+					CVE: issue.CVEs,
+				},
+				Description:       matchingIssue.Description,
+				Language:          matchingIssue.Language,
+				PackageManager:    matchingIssue.PackageManager,
+				PackageName:       matchingIssue.PackageName,
+				Name:              matchingIssue.Name,
+				Version:           matchingIssue.Version,
+				Exploit:           matchingIssue.Exploit,
+				CVSSv3:            matchingIssue.CVSSv3,
+				CvssScore:         strconv.FormatFloat(matchingIssue.CvssScore, 'f', 2, 64), // convert float64 to string with 2 decimal places
+				FixedIn:           matchingIssue.FixedIn,
+				From:              matchingIssue.From,
+				UpgradePath:       matchingIssue.UpgradePath,
+				IsPatchable:       matchingIssue.IsPatchable,
+				IsUpgradable:      matchingIssue.IsUpgradable,
+				ProjectName:       matchingIssue.ProjectName,
+				DisplayTargetFile: matchingIssue.DisplayTargetFile,
+				Details:           matchingIssue.Details,
+			}
+		}
+
 		scanIssues = append(scanIssues, lsp.ScanIssue{
 			Id:       additionalData.Key,
 			Title:    additionalData.Title,
@@ -146,6 +174,8 @@ func (n *scanNotifier) appendOssIssues(scanIssues []lsp.ScanIssue, folderPath st
 				ProjectName:       additionalData.ProjectName,
 				DisplayTargetFile: additionalData.DisplayTargetFile,
 				Details:           additionalData.Details,
+				MatchingIssues:    matchingIssues,
+				Lesson:            additionalData.Lesson,
 			},
 		})
 	}

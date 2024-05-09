@@ -25,7 +25,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -34,29 +34,31 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${nonce}", "${severityIcon}", "${learnIcon}"}
 	slices.Sort(expectedVariables)
 
-	issue := ossIssue{
+	issueAdditionalData := snyk.OssIssueData{
 		Title:       "myTitle",
 		Name:        "myIssue",
-		Severity:    "SuperCritical",
-		Id:          "randomId",
 		Description: "- list",
 		From:        []string{"1", "2", "3", "4"},
 	}
 
-	issue2 := ossIssue{
+	issue2 := snyk.OssIssueData{
 		Title:       "myTitle2",
 		Name:        "myIssue2",
-		Severity:    "SuperCritical",
-		Id:          "randomId2",
 		Description: "- list2",
 		From:        []string{"5", "6", "7", "8"},
 	}
 
-	issue.matchingIssues = append(issue.matchingIssues, issue)
-	issue.matchingIssues = append(issue.matchingIssues, issue2)
+	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
+	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issue2)
+
+	issue := snyk.Issue{
+		ID:             "randomId",
+		Severity:       snyk.Critical,
+		AdditionalData: issueAdditionalData,
+	}
 
 	// invoke methode under test
-	issueDetailsPanelHtml := getDetailsHtml(&issue)
+	issueDetailsPanelHtml := getDetailsHtml(issue)
 
 	// compare
 	reg := regexp.MustCompile(`\$\{\w+\}`)
@@ -66,11 +68,11 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 
 	assert.Equal(t, expectedVariables, actualVariables)
 
-	assert.True(t, strings.Contains(issueDetailsPanelHtml, issue.Name))
-	assert.True(t, strings.Contains(issueDetailsPanelHtml, issue.Id))
-	assert.True(t, strings.Contains(issueDetailsPanelHtml, issue.Title))
-	assert.True(t, strings.Contains(issueDetailsPanelHtml, issue.Severity))
-	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issue.From, " > ")))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, issueAdditionalData.Name))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, issue.ID))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, issueAdditionalData.Title))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, issue.Severity.String()))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issueAdditionalData.From, " > ")))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issue2.From, " > ")))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "<li>list</li>"))
 	assert.False(t, strings.Contains(issueDetailsPanelHtml, "Learn about this vulnerability"))
@@ -79,22 +81,23 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
 	_ = testutil.UnitTest(t)
 
-	lesson := &learn.Lesson{Url: "something"}
-
-	issue := ossIssue{
-		Title:       "myTitle",
-		Name:        "myIssue",
-		Severity:    "SuperCritical",
-		Id:          "randomId",
-		Description: "- list",
-		From:        []string{"1", "2", "3", "4"},
-		lesson:      lesson,
+	issueAdditionalData := snyk.OssIssueData{
+		Title: "myTitle",
+		Name:  "myIssue", Description: "- list",
+		From:   []string{"1", "2", "3", "4"},
+		Lesson: "something",
 	}
 
-	issue.matchingIssues = append(issue.matchingIssues, issue)
+	issue := snyk.Issue{
+		ID:             "randomId",
+		Severity:       snyk.Critical,
+		AdditionalData: issueAdditionalData,
+	}
+
+	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
 
 	// invoke methode under test
-	issueDetailsPanelHtml := getDetailsHtml(&issue)
+	issueDetailsPanelHtml := getDetailsHtml(issue)
 
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "Learn about this vulnerability"))
 }
