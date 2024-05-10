@@ -44,6 +44,9 @@ func toIssue(
 	learnService learn.Service,
 	ep error_reporting.ErrorReporter,
 ) snyk.Issue {
+	// this needs to be first so that the lesson from Snyk Learn is added
+	codeActions := issue.AddCodeActions(learnService, ep)
+
 	// find all issues with the same id
 	matchingIssues := []snyk.OssIssueData{}
 	for _, otherIssue := range scanResult.Vulnerabilities {
@@ -82,7 +85,7 @@ func toIssue(
 		Product:             product.ProductOpenSource,
 		IssueDescriptionURL: issue.CreateIssueURL(),
 		IssueType:           snyk.DependencyVulnerability,
-		CodeActions:         issue.AddCodeActions(learnService, ep),
+		CodeActions:         codeActions,
 		Ecosystem:           issue.PackageManager,
 		CWEs:                issue.Identifiers.CWE,
 		CVEs:                issue.Identifiers.CVE,
