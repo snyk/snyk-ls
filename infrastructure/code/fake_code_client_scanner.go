@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/code-client-go/scan"
 )
 
 type FakeCodeScannerClient struct {
@@ -382,11 +383,11 @@ func getSarifResponseJson2(filePath string) string {
 `, filePath, filePath, filePath, filePath, filePath)
 }
 
-func (f *FakeCodeScannerClient) UploadAndAnalyze(ctx context.Context, requestId string, path string,
+func (f *FakeCodeScannerClient) UploadAndAnalyze(ctx context.Context, requestId string, target scan.Target,
 	files <-chan string,
 	changedFiles map[string]bool) (*codeClientSarif.SarifResponse, string, error) {
 	var analysisResponse codeClientSarif.SarifResponse
-	responseJson := getSarifResponseJson2(path)
+	responseJson := getSarifResponseJson2(target.GetPath())
 	err := json.Unmarshal([]byte(responseJson), &analysisResponse)
 	f.UploadAndAnalyzeWasCalled = true
 	return &analysisResponse, "", err
