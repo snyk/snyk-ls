@@ -28,6 +28,7 @@ import (
 	"github.com/rs/zerolog/log"
 	codeClient "github.com/snyk/code-client-go"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
+	"github.com/snyk/code-client-go/scan"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
@@ -360,7 +361,12 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
 	requestId := span.GetTraceId() // use span trace id as code-request-id
 	log.Info().Str("requestId", requestId).Msg("Starting Code analysis.")
 
-	sarif, bundleHash, err := sc.codeScanner.UploadAndAnalyze(ctx, requestId, path, files, changedFiles)
+	target, err := scan.NewRepositoryTarget(path)
+	if err != nil {
+		log.Warn().Err(err)
+	}
+
+	sarif, bundleHash, err := sc.codeScanner.UploadAndAnalyze(ctx, requestId, target, files, changedFiles)
 	if err != nil {
 		return []snyk.Issue{}, err
 	}
