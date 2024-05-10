@@ -22,7 +22,10 @@ import (
 	"strings"
 
 	"github.com/gomarkdown/markdown"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/exp/maps"
+
+	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 //go:embed template/details.html
@@ -32,7 +35,7 @@ func replaceVariableInHtml(html string, variableName string, variableValue strin
 	return strings.ReplaceAll(html, fmt.Sprintf("${%s}", variableName), variableValue)
 }
 
-func getIdentifiers(issue *ossIssue) string {
+func getIdentifiers(id string, issue snyk.OssIssueData) string {
 	identifierList := []string{""}
 
 	issueTypeString := "Vulnerability"
@@ -57,13 +60,13 @@ func getIdentifiers(issue *ossIssue) string {
 		identifierList = append(identifierList, htmlAnchor)
 	}
 
-	htmlAnchor := fmt.Sprintf("<a href='https://snyk.io/vuln/%s'>%s</a>", issue.Id, strings.ToUpper(issue.Id))
+	htmlAnchor := fmt.Sprintf("<a href='https://snyk.io/vuln/%s'>%s</a>", id, strings.ToUpper(id))
 	identifierList = append(identifierList, htmlAnchor)
 
 	return fmt.Sprintf("%s %s", issueTypeString, strings.Join(identifierList, "<span class='delimiter'> </span> "))
 }
 
-func getExploitMaturity(issue *ossIssue) string {
+func getExploitMaturity(issue snyk.OssIssueData) string {
 	if len(issue.Exploit) > 0 {
 		return fmt.Sprintf("<div class='summary-item maturity'><div class='label font-light'>Exploit maturity</div>"+
 			"<div class='content'>%s</div></div>", issue.Exploit)
@@ -72,11 +75,11 @@ func getExploitMaturity(issue *ossIssue) string {
 	}
 }
 
-func getIntroducedBy(issue *ossIssue) string {
+func getIntroducedBy(issue snyk.OssIssueData) string {
 	m := make(map[string]string)
 
 	if len(issue.From) > 0 {
-		for _, v := range issue.matchingIssues {
+		for _, v := range issue.MatchingIssues {
 			if len(v.From) > 1 {
 				module := v.From[1]
 				url := fmt.Sprintf("https://app.snyk.io/test/%s/%s", issue.PackageManager, module)
@@ -92,16 +95,16 @@ func getIntroducedBy(issue *ossIssue) string {
 	}
 }
 
-func getLearnLink(issue *ossIssue) string {
-	if issue.lesson == nil {
+func getLearnLink(issue snyk.OssIssueData) string {
+	if issue.Lesson == "" {
 		return ""
 	}
 
 	return fmt.Sprintf("<a class='learn--link' id='learn--link' href='%s'>Learn about this vulnerability</a>",
-		issue.lesson.Url)
+		issue.Lesson)
 }
 
-func getFixedIn(issue *ossIssue) string {
+func getFixedIn(issue snyk.OssIssueData) string {
 	if len(issue.FixedIn) == 0 {
 		return "Not fixed"
 	}
@@ -110,7 +113,7 @@ func getFixedIn(issue *ossIssue) string {
 	return fmt.Sprintf(result, issue.Name, strings.Join(issue.FixedIn, ", "))
 }
 
-func getOutdatedDependencyMessage(issue *ossIssue) string {
+func getOutdatedDependencyMessage(issue snyk.OssIssueData) string {
 	remediationAdvice := fmt.Sprintf("Your dependencies are out of date, "+
 		"otherwise you would be using a newer %s than %s@%s. ", issue.Name, issue.Name, issue.Version)
 
@@ -123,10 +126,10 @@ func getOutdatedDependencyMessage(issue *ossIssue) string {
 	return remediationAdvice
 }
 
-func getDetailedPaths(issue *ossIssue) string {
+func getDetailedPaths(issue snyk.OssIssueData) string {
 	detailedPathHtml := ""
 
-	for _, matchingIssue := range issue.matchingIssues {
+	for _, matchingIssue := range issue.MatchingIssues {
 		remediationAdvice := getRemediationAdvice(matchingIssue)
 		introducedThrough := strings.Join(matchingIssue.From, " > ")
 
@@ -143,21 +146,21 @@ func getDetailedPaths(issue *ossIssue) string {
 	return detailedPathHtml
 }
 
-func getRemediationAdvice(matchingIssue ossIssue) string {
-	hasUpgradePath := len(matchingIssue.UpgradePath) > 1
-	isOutdated := hasUpgradePath && matchingIssue.UpgradePath[1] == matchingIssue.From[1]
+func getRemediationAdvice(issue snyk.OssIssueData) string {
+	hasUpgradePath := len(issue.UpgradePath) > 1
+	isOutdated := hasUpgradePath && issue.UpgradePath[1] == issue.From[1]
 	remediationAdvice := "No remediation advice available"
 	upgradeMessage := ""
-	if matchingIssue.IsUpgradable || matchingIssue.IsPatchable {
+	if issue.IsUpgradable || issue.IsPatchable {
 		if hasUpgradePath {
-			upgradeMessage = "Upgrade to " + matchingIssue.UpgradePath[1].(string)
+			upgradeMessage = "Upgrade to " + issue.UpgradePath[1].(string)
 		}
 
 		if isOutdated {
-			if matchingIssue.IsPatchable {
+			if issue.IsPatchable {
 				remediationAdvice = upgradeMessage
 			} else {
-				remediationAdvice = getOutdatedDependencyMessage(&matchingIssue)
+				remediationAdvice = getOutdatedDependencyMessage(issue)
 			}
 		} else {
 			remediationAdvice = upgradeMessage
@@ -166,20 +169,25 @@ func getRemediationAdvice(matchingIssue ossIssue) string {
 	return remediationAdvice
 }
 
-func getDetailsHtml(issue *ossIssue) string {
-	overview := markdown.ToHTML([]byte(issue.Description), nil, nil)
+func getDetailsHtml(issue snyk.Issue) string {
+	additionalData, ok := issue.AdditionalData.(snyk.OssIssueData)
+	if !ok {
+		log.Error().Msg("Failed to cast additional data to OssIssueData")
+		return ""
+	}
+	overview := markdown.ToHTML([]byte(additionalData.Description), nil, nil)
 
-	html := replaceVariableInHtml(detailsHtmlTemplate, "issueId", issue.Id)
-	html = replaceVariableInHtml(html, "issueTitle", issue.Title)
-	html = replaceVariableInHtml(html, "severityText", issue.Severity)
-	html = replaceVariableInHtml(html, "vulnerableModule", issue.Name)
+	html := replaceVariableInHtml(detailsHtmlTemplate, "issueId", issue.ID)
+	html = replaceVariableInHtml(html, "issueTitle", additionalData.Title)
+	html = replaceVariableInHtml(html, "severityText", issue.Severity.String())
+	html = replaceVariableInHtml(html, "vulnerableModule", additionalData.Name)
 	html = replaceVariableInHtml(html, "overview", string(overview))
-	html = replaceVariableInHtml(html, "identifiers", getIdentifiers(issue))
-	html = replaceVariableInHtml(html, "exploitMaturity", getExploitMaturity(issue))
-	html = replaceVariableInHtml(html, "introducedThrough", getIntroducedBy(issue))
-	html = replaceVariableInHtml(html, "learnLink", getLearnLink(issue))
-	html = replaceVariableInHtml(html, "fixedIn", getFixedIn(issue))
-	html = replaceVariableInHtml(html, "detailedPaths", getDetailedPaths(issue))
+	html = replaceVariableInHtml(html, "identifiers", getIdentifiers(issue.ID, additionalData))
+	html = replaceVariableInHtml(html, "exploitMaturity", getExploitMaturity(additionalData))
+	html = replaceVariableInHtml(html, "introducedThrough", getIntroducedBy(additionalData))
+	html = replaceVariableInHtml(html, "learnLink", getLearnLink(additionalData))
+	html = replaceVariableInHtml(html, "fixedIn", getFixedIn(additionalData))
+	html = replaceVariableInHtml(html, "detailedPaths", getDetailedPaths(additionalData))
 
 	return html
 }

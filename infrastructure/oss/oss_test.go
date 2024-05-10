@@ -141,6 +141,7 @@ func Test_toIssue_LearnParameterConversion(t *testing.T) {
 	assert.Equal(t, sampleOssIssue.Identifiers.CWE, issue.CWEs)
 	assert.Equal(t, sampleOssIssue.Identifiers.CVE, issue.CVEs)
 	assert.Equal(t, sampleOssIssue.PackageManager, issue.Ecosystem)
+	assert.Equal(t, "url", (issue.AdditionalData).(snyk.OssIssueData).Lesson)
 }
 
 func Test_introducingPackageAndVersionJava(t *testing.T) {
@@ -553,6 +554,6 @@ func getLearnMock(t *testing.T) learn.Service {
 	learnMock.
 		EXPECT().
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(&learn.Lesson{}, nil).AnyTimes()
+		Return(&learn.Lesson{Url: "url"}, nil).AnyTimes()
 	return learnMock
 }

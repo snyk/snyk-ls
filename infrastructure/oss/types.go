@@ -17,10 +17,21 @@
 package oss
 
 import (
+	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
+	"github.com/gomarkdown/markdown"
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
+
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type identifiers struct {
@@ -56,8 +67,181 @@ type ossIssue struct {
 	IsPatchable    bool          `json:"isPatchable"`
 	License        string        `json:"license,omitempty"`
 	Language       string        `json:"language,omitempty"`
-	matchingIssues []ossIssue    `json:"-"`
 	lesson         *learn.Lesson `json:"-"`
+}
+
+func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []snyk.OssIssueData) snyk.OssIssueData {
+	var additionalData snyk.OssIssueData
+	additionalData.Key = util.GetIssueKey(i.Id, scanResult.DisplayTargetFile, i.LineNumber, i.LineNumber, 0, 0)
+	additionalData.Title = i.Title
+	additionalData.Name = i.Name
+	additionalData.Identifiers = snyk.Identifiers{
+		CWE: i.Identifiers.CWE,
+		CVE: i.Identifiers.CVE,
+	}
+	additionalData.LineNumber = i.LineNumber
+	additionalData.Description = i.Description
+	additionalData.References = i.toReferences()
+	additionalData.Version = i.Version
+	additionalData.License = i.License
+	additionalData.PackageManager = i.PackageManager
+	additionalData.PackageName = i.PackageName
+	additionalData.From = i.From
+	additionalData.FixedIn = i.FixedIn
+	additionalData.UpgradePath = i.UpgradePath
+	additionalData.IsUpgradable = i.IsUpgradable
+	additionalData.CVSSv3 = i.CVSSv3
+	additionalData.CvssScore = i.CvssScore
+	additionalData.Exploit = i.Exploit
+	additionalData.IsPatchable = i.IsPatchable
+	additionalData.ProjectName = scanResult.ProjectName
+	additionalData.DisplayTargetFile = scanResult.DisplayTargetFile
+	additionalData.Language = i.Language
+	additionalData.MatchingIssues = matchingIssues
+	if i.lesson != nil {
+		additionalData.Lesson = i.lesson.Url
+	}
+
+	return additionalData
+}
+
+func (i *ossIssue) toReferences() []snyk.Reference {
+	var references []snyk.Reference
+	for _, ref := range i.References {
+		references = append(references, ref.toReference())
+	}
+	return references
+}
+
+func (r reference) toReference() snyk.Reference {
+	u, err := url.Parse(string(r.Url))
+	if err != nil {
+		log.Err(err).Msg("Unable to parse reference url: " + string(r.Url))
+	}
+	return snyk.Reference{
+		Url:   u,
+		Title: r.Title,
+	}
+}
+
+func (i *ossIssue) GetExtendedMessage(issue ossIssue) string {
+	title := issue.Title
+	description := issue.Description
+
+	if config.CurrentConfig().Format() == config.FormatHtml {
+		title = string(markdown.ToHTML([]byte(title), nil, nil))
+		description = string(markdown.ToHTML([]byte(description), nil, nil))
+	}
+	summary := fmt.Sprintf("### Vulnerability %s %s %s \n **Fixed in: %s | Exploit maturity: %s**",
+		issue.createCveLink(),
+		issue.createCweLink(),
+		issue.createIssueUrlMarkdown(),
+		issue.createFixedIn(),
+		strings.ToUpper(issue.Severity),
+	)
+
+	return fmt.Sprintf("\n### %s: %s affecting %s package \n%s \n%s",
+		issue.Id,
+		title,
+		issue.PackageName,
+		summary,
+		description)
+}
+
+func (i *ossIssue) createCveLink() string {
+	var formattedCve string
+	for _, c := range i.Identifiers.CVE {
+		formattedCve += fmt.Sprintf("| [%s](https://cve.mitre.org/cgi-bin/cvename.cgi?name=%s)", c, c)
+	}
+	return formattedCve
+}
+
+func (i *ossIssue) createIssueUrlMarkdown() string {
+	return fmt.Sprintf("| [%s](%s)", i.Id, i.CreateIssueURL().String())
+}
+
+func (i *ossIssue) CreateIssueURL() *url.URL {
+	parse, err := url.Parse("https://snyk.io/vuln/" + i.Id)
+	if err != nil {
+		log.Err(err).Msg("Unable to create issue link for issue:" + i.Id)
+	}
+	return parse
+}
+
+func (i *ossIssue) createFixedIn() string {
+	var f string
+	if len(i.FixedIn) < 1 {
+		f += "Not Fixed"
+	} else {
+		f += "@" + i.FixedIn[0]
+		for _, version := range i.FixedIn[1:] {
+			f += fmt.Sprintf(", %s", version)
+		}
+	}
+	return f
+}
+
+func (i *ossIssue) createCweLink() string {
+	var formattedCwe string
+	for _, c := range i.Identifiers.CWE {
+		id := strings.Replace(c, "CWE-", "", -1)
+		formattedCwe += fmt.Sprintf("| [%s](https://cwe.mitre.org/data/definitions/%s.html)", c, id)
+	}
+	return formattedCwe
+}
+
+func (i *ossIssue) ToIssueSeverity() snyk.Severity {
+	sev, ok := issuesSeverity[i.Severity]
+	if !ok {
+		return snyk.Low
+	}
+	return sev
+}
+func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter) (actions []snyk.
+	CodeAction) {
+	title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", i.Title, i.PackageName)
+	command := &snyk.CommandData{
+		Title:     title,
+		CommandId: snyk.OpenBrowserCommand,
+		Arguments: []any{i.CreateIssueURL().String()},
+	}
+
+	action, _ := snyk.NewCodeAction(title, nil, command)
+	actions = append(actions, action)
+
+	codeAction := i.AddSnykLearnAction(learnService, ep)
+	if codeAction != nil {
+		actions = append(actions, *codeAction)
+	}
+	return actions
+}
+
+func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_reporting.ErrorReporter) (action *snyk.
+	CodeAction) {
+	if config.CurrentConfig().IsSnykLearnCodeActionsEnabled() {
+		lesson, err := learnService.GetLesson(i.PackageManager, i.Id, i.Identifiers.CWE, i.Identifiers.CVE, snyk.DependencyVulnerability)
+		if err != nil {
+			msg := "failed to get lesson"
+			log.Err(err).Msg(msg)
+			ep.CaptureError(errors.WithMessage(err, msg))
+			return nil
+		}
+
+		if lesson != nil && lesson.Url != "" {
+			title := fmt.Sprintf("Learn more about %s (Snyk)", i.Title)
+			action = &snyk.CodeAction{
+				Title: title,
+				Command: &snyk.CommandData{
+					Title:     title,
+					CommandId: snyk.OpenBrowserCommand,
+					Arguments: []any{lesson.Url},
+				},
+			}
+			i.lesson = lesson
+			log.Debug().Str("method", "oss.issue.AddSnykLearnAction").Msgf("Learn action: %v", action)
+		}
+	}
+	return action
 }
 
 type licensesPolicy struct {

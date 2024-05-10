@@ -284,6 +284,8 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 				ProjectName:       "OSS ProjectName",
 				DisplayTargetFile: "OSS DisplayTargetFile",
 				Details:           "",
+				MatchingIssues:    []lsp2.OssIssueData{},
+				Lesson:            "test",
 			},
 		},
 	}
@@ -331,6 +333,7 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 				DisplayTargetFile: "OSS DisplayTargetFile",
 				Language:          "js",
 				Details:           "",
+				Lesson:            "test",
 			},
 		},
 	}

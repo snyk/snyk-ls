@@ -19,19 +19,14 @@ package oss
 import (
 	_ "embed"
 	"fmt"
-	"net/url"
-	"strings"
 
 	"github.com/gomarkdown/markdown"
-	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/product"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 var issuesSeverity = map[string]snyk.Severity{
@@ -39,127 +34,6 @@ var issuesSeverity = map[string]snyk.Severity{
 	"high":     snyk.High,
 	"low":      snyk.Low,
 	"medium":   snyk.Medium,
-}
-
-func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter) (actions []snyk.
-	CodeAction) {
-	title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", i.Title, i.PackageName)
-	command := &snyk.CommandData{
-		Title:     title,
-		CommandId: snyk.OpenBrowserCommand,
-		Arguments: []any{i.CreateIssueURL().String()},
-	}
-
-	action, _ := snyk.NewCodeAction(title, nil, command)
-	actions = append(actions, action)
-
-	codeAction := i.AddSnykLearnAction(learnService, ep)
-	if codeAction != nil {
-		actions = append(actions, *codeAction)
-	}
-	return actions
-}
-
-func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_reporting.ErrorReporter) (action *snyk.
-	CodeAction) {
-	if config.CurrentConfig().IsSnykLearnCodeActionsEnabled() {
-		lesson, err := learnService.GetLesson(i.PackageManager, i.Id, i.Identifiers.CWE, i.Identifiers.CVE, snyk.DependencyVulnerability)
-		if err != nil {
-			msg := "failed to get lesson"
-			log.Err(err).Msg(msg)
-			ep.CaptureError(errors.WithMessage(err, msg))
-			return nil
-		}
-
-		if lesson != nil && lesson.Url != "" {
-			title := fmt.Sprintf("Learn more about %s (Snyk)", i.Title)
-			action = &snyk.CodeAction{
-				Title: title,
-				Command: &snyk.CommandData{
-					Title:     title,
-					CommandId: snyk.OpenBrowserCommand,
-					Arguments: []any{lesson.Url},
-				},
-			}
-			i.lesson = lesson
-			log.Debug().Str("method", "oss.issue.AddSnykLearnAction").Msgf("Learn action: %v", action)
-		}
-	}
-	return action
-}
-
-func (i *ossIssue) GetExtendedMessage(issue ossIssue) string {
-	title := issue.Title
-	description := issue.Description
-
-	if config.CurrentConfig().Format() == config.FormatHtml {
-		title = string(markdown.ToHTML([]byte(title), nil, nil))
-		description = string(markdown.ToHTML([]byte(description), nil, nil))
-	}
-	summary := fmt.Sprintf("### Vulnerability %s %s %s \n **Fixed in: %s | Exploit maturity: %s**",
-		issue.createCveLink(),
-		issue.createCweLink(),
-		issue.createIssueUrlMarkdown(),
-		issue.createFixedIn(),
-		strings.ToUpper(issue.Severity),
-	)
-
-	return fmt.Sprintf("\n### %s: %s affecting %s package \n%s \n%s",
-		issue.Id,
-		title,
-		issue.PackageName,
-		summary,
-		description)
-}
-
-func (i *ossIssue) createCveLink() string {
-	var formattedCve string
-	for _, c := range i.Identifiers.CVE {
-		formattedCve += fmt.Sprintf("| [%s](https://cve.mitre.org/cgi-bin/cvename.cgi?name=%s)", c, c)
-	}
-	return formattedCve
-}
-
-func (i *ossIssue) createIssueUrlMarkdown() string {
-	return fmt.Sprintf("| [%s](%s)", i.Id, i.CreateIssueURL().String())
-}
-
-func (i *ossIssue) CreateIssueURL() *url.URL {
-	parse, err := url.Parse("https://snyk.io/vuln/" + i.Id)
-	if err != nil {
-		log.Err(err).Msg("Unable to create issue link for issue:" + i.Id)
-	}
-	return parse
-}
-
-func (i *ossIssue) createFixedIn() string {
-	var f string
-	if len(i.FixedIn) < 1 {
-		f += "Not Fixed"
-	} else {
-		f += "@" + i.FixedIn[0]
-		for _, version := range i.FixedIn[1:] {
-			f += fmt.Sprintf(", %s", version)
-		}
-	}
-	return f
-}
-
-func (i *ossIssue) createCweLink() string {
-	var formattedCwe string
-	for _, c := range i.Identifiers.CWE {
-		id := strings.Replace(c, "CWE-", "", -1)
-		formattedCwe += fmt.Sprintf("| [%s](https://cwe.mitre.org/data/definitions/%s.html)", c, id)
-	}
-	return formattedCwe
-}
-
-func (i *ossIssue) ToIssueSeverity() snyk.Severity {
-	sev, ok := issuesSeverity[i.Severity]
-	if !ok {
-		return snyk.Low
-	}
-	return sev
 }
 
 func toIssue(
@@ -170,21 +44,25 @@ func toIssue(
 	learnService learn.Service,
 	ep error_reporting.ErrorReporter,
 ) snyk.Issue {
-	title := issue.Title
+	// this needs to be first so that the lesson from Snyk Learn is added
+	codeActions := issue.AddCodeActions(learnService, ep)
 
+	// find all issues with the same id
+	matchingIssues := []snyk.OssIssueData{}
+	for _, otherIssue := range scanResult.Vulnerabilities {
+		if otherIssue.Id == issue.Id {
+			matchingIssues = append(matchingIssues, otherIssue.toAdditionalData(scanResult,
+				[]snyk.OssIssueData{}))
+		}
+	}
+
+	additionalData := issue.toAdditionalData(scanResult, matchingIssues)
+
+	title := issue.Title
 	if config.CurrentConfig().Format() == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 	}
-	remediationAdvice := getRemediationAdvice(issue)
-
-	// find all issues with the same id
-	matchingIssues := []ossIssue{}
-	for _, otherIssue := range scanResult.Vulnerabilities {
-		if otherIssue.Id == issue.Id {
-			matchingIssues = append(matchingIssues, otherIssue)
-		}
-	}
-	issue.matchingIssues = matchingIssues
+	remediationAdvice := getRemediationAdvice(additionalData)
 
 	message := fmt.Sprintf(
 		"%s affecting package %s. %s",
@@ -197,8 +75,7 @@ func toIssue(
 	if len(message) > maxLength {
 		message = message[:maxLength] + "... (Snyk)"
 	}
-
-	return snyk.Issue{
+	d := snyk.Issue{
 		ID:                  issue.Id,
 		Message:             message,
 		FormattedMessage:    issue.GetExtendedMessage(issue),
@@ -208,59 +85,17 @@ func toIssue(
 		Product:             product.ProductOpenSource,
 		IssueDescriptionURL: issue.CreateIssueURL(),
 		IssueType:           snyk.DependencyVulnerability,
-		CodeActions:         issue.AddCodeActions(learnService, ep),
+		CodeActions:         codeActions,
 		Ecosystem:           issue.PackageManager,
 		CWEs:                issue.Identifiers.CWE,
 		CVEs:                issue.Identifiers.CVE,
-		AdditionalData:      issue.toAdditionalData(scanResult),
+		AdditionalData:      additionalData,
 	}
-}
 
-func (i *ossIssue) toAdditionalData(scanResult *scanResult) snyk.OssIssueData {
-	var additionalData snyk.OssIssueData
-	additionalData.Key = util.GetIssueKey(i.Id, scanResult.DisplayTargetFile, i.LineNumber, i.LineNumber, 0, 0)
-	additionalData.Title = i.Title
-	additionalData.Name = i.Name
-	additionalData.LineNumber = i.LineNumber
-	additionalData.Description = i.Description
-	additionalData.References = i.toReferences()
-	additionalData.Version = i.Version
-	additionalData.License = i.License
-	additionalData.PackageManager = i.PackageManager
-	additionalData.PackageName = i.PackageName
-	additionalData.From = i.From
-	additionalData.FixedIn = i.FixedIn
-	additionalData.UpgradePath = i.UpgradePath
-	additionalData.IsUpgradable = i.IsUpgradable
-	additionalData.CVSSv3 = i.CVSSv3
-	additionalData.CvssScore = i.CvssScore
-	additionalData.Exploit = i.Exploit
-	additionalData.IsPatchable = i.IsPatchable
-	additionalData.ProjectName = scanResult.ProjectName
-	additionalData.DisplayTargetFile = scanResult.DisplayTargetFile
-	additionalData.Language = i.Language
-	additionalData.Details = getDetailsHtml(i)
+	additionalData.Details = getDetailsHtml(d)
+	d.AdditionalData = additionalData
 
-	return additionalData
-}
-
-func (i *ossIssue) toReferences() []snyk.Reference {
-	var references []snyk.Reference
-	for _, ref := range i.References {
-		references = append(references, ref.toReference())
-	}
-	return references
-}
-
-func (r reference) toReference() snyk.Reference {
-	u, err := url.Parse(string(r.Url))
-	if err != nil {
-		log.Err(err).Msg("Unable to parse reference url: " + string(r.Url))
-	}
-	return snyk.Reference{
-		Url:   u,
-		Title: r.Title,
-	}
+	return d
 }
 
 func convertScanResultToIssues(
