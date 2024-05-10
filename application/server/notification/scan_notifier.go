@@ -152,6 +152,7 @@ func (n *scanNotifier) appendOssIssues(scanIssues []lsp.ScanIssue, folderPath st
 			FilePath: issue.AffectedFilePath,
 			Range:    converter.ToRange(issue.Range),
 			AdditionalData: lsp.OssIssueData{
+				RuleId:  issue.ID,
 				License: additionalData.License,
 				Identifiers: lsp.OssIdentifiers{
 					CWE: issue.CWEs,
