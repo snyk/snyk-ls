@@ -1047,6 +1047,7 @@ type IgnoreDetails struct {
 
 // Snyk Open Source
 type OssIssueData struct {
+	RuleId            string         `json:"ruleId"`
 	License           string         `json:"license,omitempty"`
 	Identifiers       OssIdentifiers `json:"identifiers,omitempty"`
 	Description       string         `json:"description"`

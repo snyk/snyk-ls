@@ -259,6 +259,7 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 			FilePath: "ossAffectedFilePath",
 			Range:    lspTestRange,
 			AdditionalData: lsp2.OssIssueData{
+				RuleId:  "SNYK-JS-BABELTRAVERSE-5962463",
 				License: "OSS License",
 				Identifiers: lsp2.OssIdentifiers{
 					CWE: []string{"CWE-184"},
