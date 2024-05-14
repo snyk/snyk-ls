@@ -132,7 +132,7 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 
 	err := s.processApiResponse(method, path, &response)
 	if err != nil {
-		log.Err(err).Msg("error when calling featureFlagSettings endpoint")
+		log.Debug().Msg("error when calling featureFlagSettings endpoint")
 		return FFResponse{}, err
 	}
 	return response, err
