@@ -346,8 +346,17 @@ func (c *Config) LogPath() string {
 	defer c.m.Unlock()
 	return c.logPath
 }
-func (c *Config) SnykApi() string                        { return c.snykApiUrl }
-func (c *Config) SnykCodeApi() string                    { return c.snykCodeApiUrl }
+func (c *Config) SnykApi() string     { return c.snykApiUrl }
+func (c *Config) SnykCodeApi() string { return c.snykCodeApiUrl }
+func (c *Config) SnykUi() string {
+	parsedUrl, err := url.Parse(c.snykApiUrl)
+	if err != nil {
+		return "https://app.snyk.io"
+	}
+	host := parsedUrl.Host
+	appHostname := strings.Replace(host, "api", "app", 1)
+	return fmt.Sprintf("%s://%s", parsedUrl.Scheme, appHostname)
+}
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
 func (c *Config) IntegrationName() string {
 	return c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_NAME)
