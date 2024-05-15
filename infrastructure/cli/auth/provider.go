@@ -172,7 +172,7 @@ func (a *CliAuthenticationProvider) getToken(ctx context.Context) (string, error
 
 func (a *CliAuthenticationProvider) authCmd(ctx context.Context) (*exec.Cmd, error) {
 	log.Info().Msg("authenticate Snyk CLI with a Snyk account")
-	args := []string{"auth"}
+	args := []string{"auth", "--auth-type=token"}
 	return a.buildCLICmd(ctx, args...), nil
 }
 

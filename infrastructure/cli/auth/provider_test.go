@@ -36,7 +36,7 @@ func TestAuth_authCmd(t *testing.T) {
 	authCmd, err := provider.authCmd(ctx)
 
 	assert.NoError(t, err)
-	assertCmd(t, []string{"auth"}, authCmd)
+	assertCmd(t, []string{"auth", "--auth-type=token"}, authCmd)
 }
 
 func TestConfig_configGetAPICmd(t *testing.T) {
