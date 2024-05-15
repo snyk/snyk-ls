@@ -117,24 +117,11 @@ func getFixedIn(issue snyk.OssIssueData) string {
 	return fmt.Sprintf(result, issue.Name, strings.Join(issue.FixedIn, ", "))
 }
 
-func getOutdatedDependencyMessage(issue snyk.OssIssueData) string {
-	remediationAdvice := fmt.Sprintf("Your dependencies are out of date, "+
-		"otherwise you would be using a newer %s than %s@%s. ", issue.Name, issue.Name, issue.Version)
-
-	if issue.PackageManager == "npm" || issue.PackageManager == "yarn" || issue.PackageManager == "yarn-workspace" {
-		remediationAdvice += "Try relocking your lockfile or deleting node_modules and reinstalling" +
-			" your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
-	} else {
-		remediationAdvice += "Try reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
-	}
-	return remediationAdvice
-}
-
 func getDetailedPaths(issue snyk.OssIssueData) string {
 	detailedPathHtml := ""
 
 	for _, matchingIssue := range issue.MatchingIssues {
-		remediationAdvice := getRemediationAdvice(matchingIssue)
+		remediationAdvice := matchingIssue.Remediation
 		introducedThrough := strings.Join(matchingIssue.From, " > ")
 
 		detailedPathHtml += fmt.Sprintf(`<div class="summary-item path">
@@ -148,29 +135,6 @@ func getDetailedPaths(issue snyk.OssIssueData) string {
 	}
 
 	return detailedPathHtml
-}
-
-func getRemediationAdvice(issue snyk.OssIssueData) string {
-	hasUpgradePath := len(issue.UpgradePath) > 1
-	isOutdated := hasUpgradePath && issue.UpgradePath[1] == issue.From[1]
-	remediationAdvice := "No remediation advice available"
-	upgradeMessage := ""
-	if issue.IsUpgradable || issue.IsPatchable {
-		if hasUpgradePath {
-			upgradeMessage = "Upgrade to " + issue.UpgradePath[1].(string)
-		}
-
-		if isOutdated {
-			if issue.IsPatchable {
-				remediationAdvice = upgradeMessage
-			} else {
-				remediationAdvice = getOutdatedDependencyMessage(issue)
-			}
-		} else {
-			remediationAdvice = upgradeMessage
-		}
-	}
-	return remediationAdvice
 }
 
 func getDetailsHtml(issue snyk.Issue) string {

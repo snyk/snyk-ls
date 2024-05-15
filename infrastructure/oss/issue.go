@@ -45,7 +45,7 @@ func toIssue(
 	ep error_reporting.ErrorReporter,
 ) snyk.Issue {
 	// this needs to be first so that the lesson from Snyk Learn is added
-	codeActions := issue.AddCodeActions(learnService, ep)
+	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueRange)
 
 	// find all issues with the same id
 	matchingIssues := []snyk.OssIssueData{}
@@ -62,13 +62,12 @@ func toIssue(
 	if config.CurrentConfig().Format() == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 	}
-	remediationAdvice := getRemediationAdvice(additionalData)
 
 	message := fmt.Sprintf(
 		"%s affecting package %s. %s",
 		title,
 		issue.PackageName,
-		remediationAdvice,
+		additionalData.Remediation,
 	)
 
 	const maxLength = 200

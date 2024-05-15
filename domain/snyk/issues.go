@@ -162,6 +162,7 @@ type OssIssueData struct {
 	Details           string         `json:"details"`
 	MatchingIssues    []OssIssueData `json:"matchingIssues"`
 	Lesson            string         `json:"lesson,omitempty"`
+	Remediation       string         `json:"remediation"`
 }
 
 type Identifiers struct {
