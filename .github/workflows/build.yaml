@@ -29,7 +29,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version-file: './go.mod'
+          go-version-file: "./go.mod"
 
       - name: Set up Snyk CLI
         uses: snyk/actions/setup@master
@@ -46,7 +46,7 @@ jobs:
         if: steps.cache-pact.outputs.cache-hit != 'true'
         run: |
           cd ~
-          curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | bash
+          curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | PACT_CLI_VERSION=v2.4.2 sh
 
       - name: Cache Go modules
         uses: actions/cache@v3
@@ -94,7 +94,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ ubuntu-latest, macos-latest, windows-latest ]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - name: Prepare git
         run: git config --global core.autocrlf false
@@ -104,7 +104,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version-file: './go.mod'
+          go-version-file: "./go.mod"
 
       - name: Cache Pact CLI tools
         if: matrix.os != 'windows-latest'
@@ -119,14 +119,14 @@ jobs:
         if: steps.cache-pact.outputs.cache-hit != 'true' && matrix.os != 'windows-latest'
         run: |
           cd ~
-          curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | bash
+          curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | PACT_CLI_VERSION=v2.4.2 sh
 
       - name: Run integration tests with Pact
         if: matrix.os == 'ubuntu-latest'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
-          INTEG_TESTS: 'true'
+          INTEG_TESTS: "true"
         run: |
           export PATH=$PATH:~/pact/bin
 
@@ -142,7 +142,7 @@ jobs:
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
-          INTEG_TESTS: 'true'
+          INTEG_TESTS: "true"
         run: |
           export PATH=$PATH:~/pact/bin
 
@@ -157,7 +157,7 @@ jobs:
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
-          INTEG_TESTS: 'true'
+          INTEG_TESTS: "true"
         run: |
           make clean test
 
@@ -175,7 +175,7 @@ jobs:
 
   update-licenses:
     name: update licenses
-    needs: [ unit-tests ]
+    needs: [unit-tests]
     runs-on: ubuntu-latest
     steps:
       - name: Prepare git
@@ -190,7 +190,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version-file: './go.mod'
+          go-version-file: "./go.mod"
 
       - name: update licenses
         run: |
@@ -202,8 +202,8 @@ jobs:
           default_author: github_actor
           committer_name: Github Actions
           committer_email: noreply@snyk.io
-          message: 'docs: updated licenses'
-          add: 'licenses'
+          message: "docs: updated licenses"
+          add: "licenses"
           push: true
   test-release:
     name: test-release
