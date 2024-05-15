@@ -45,7 +45,6 @@ jobs:
         shell: bash
         if: steps.cache-pact.outputs.cache-hit != 'true'
         run: |
-          cd ~
           make tools
 
       - name: Cache Go modules
@@ -118,7 +117,6 @@ jobs:
         shell: bash
         if: steps.cache-pact.outputs.cache-hit != 'true' && matrix.os != 'windows-latest'
         run: |
-          cd ~
           make tools
 
       - name: Run integration tests with Pact

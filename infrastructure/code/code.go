@@ -515,13 +515,14 @@ func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics) {
 }
 
 func (sc *Scanner) useIgnoresFlow() bool {
+	logger := config.CurrentConfig().Logger().With().Str("method", "code.useIgnoresFlow").Logger()
 	response, err := sc.SnykApiClient.FeatureFlagStatus(snyk_api.FeatureFlagSnykCodeConsistentIgnores)
 	if err != nil {
-		log.Debug().Err(err).Msg("Failed to check if the ignores experience is enabled")
+		logger.Debug().Msg("Failed to check if the ignores experience is enabled")
 		return false
 	}
 	if !response.Ok && response.UserMessage != "" {
-		log.Info().Msg(response.UserMessage)
+		logger.Info().Msg(response.UserMessage)
 	}
 	return response.Ok
 }
