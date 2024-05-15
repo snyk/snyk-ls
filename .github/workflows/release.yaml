@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - 'main'
+      - "main"
 
 # Grant an OIDC token which we can exchange for an AWS IAM role
 permissions:
@@ -35,7 +35,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0 # does an unshallow checkout with tags & branches
-
 
       # this step can be removed if setup-go will support reading go-version from go.mod
       - name: Determine Go version
@@ -58,8 +57,7 @@ jobs:
         shell: bash
         if: steps.cache-pact.outputs.cache-hit != 'true'
         run: |
-          cd ~
-          curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | bash
+          make tools
 
       - name: Cache Go modules
         uses: actions/cache@v3
@@ -96,8 +94,8 @@ jobs:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
           SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES }}
-          INTEG_TESTS: 'true'
-          SMOKE_TESTS: 'true'
+          INTEG_TESTS: "true"
+          SMOKE_TESTS: "true"
         run: |
           export PATH=$PATH:~/pact/bin
 

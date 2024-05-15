@@ -113,11 +113,10 @@ func (s *SnykApiClientImpl) SastSettings() (SastResponse, error) {
 }
 
 func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (FFResponse, error) {
-	method := "FeatureFlagStatus"
+	method := "snyk_api.FeatureFlagStatus"
 	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
 
 	var response FFResponse
-	logger.Debug().Msgf("API: Getting %s", featureFlagType)
 	path := fmt.Sprintf("/cli-config/feature-flags/%s", string(featureFlagType))
 	host := config.CurrentConfig().SnykApi()
 	if !strings.HasSuffix(host, "/v1") {
@@ -128,14 +127,18 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 		path += "?org=" + url.QueryEscape(organization)
 	}
 
-	logger.Debug().Str("path", path).Msg("API: Getting feature flag status")
+	logger.Debug().Str("path", path).Msg("Getting feature flag status")
 
 	err := s.processApiResponse(method, path, &response)
 	if err != nil {
-		log.Err(err).Msg("error when calling featureFlagSettings endpoint")
+		if strings.Contains(err.Error(), "403 Forbidden") {
+			logger.Debug().Msgf("Feature flag '%s' is disabled", featureFlagType)
+			return FFResponse{Ok: false}, nil
+		}
+		logger.Err(err).Msg("Error when calling featureFlagSettings endpoint")
 		return FFResponse{}, err
 	}
-	return response, err
+	return response, nil
 }
 
 func (s *SnykApiClientImpl) doCall(method string, endpointPath string, requestBody []byte) ([]byte, error) {
