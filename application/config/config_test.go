@@ -300,3 +300,39 @@ func Test_IsTelemetryEnabled(t *testing.T) {
 	assert.False(t, c.IsTelemetryEnabled())
 	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.ANALYTICS_DISABLED))
 }
+
+func TestSnykUiEndpoint(t *testing.T) {
+	c := New()
+	t.Run("Default Api Endpoint with /api prefix", func(t *testing.T) {
+		uiEndpoint := c.SnykUi()
+		assert.Equal(t, "https://snyk.io", uiEndpoint)
+	})
+
+	t.Run("API endpoint provided without 'app' prefix", func(t *testing.T) {
+		apiEndpoint := "https://snyk.io/api/v1"
+		c.UpdateApiEndpoints(apiEndpoint)
+		uiEndpoint := c.SnykUi()
+		assert.Equal(t, "https://snyk.io", uiEndpoint)
+	})
+
+	t.Run("API endpoint provided with 'app' prefix with v1 suffix", func(t *testing.T) {
+		apiEndpoint := "https://app.snyk.io/api/v1"
+		c.UpdateApiEndpoints(apiEndpoint)
+		uiEndpoint := c.SnykUi()
+		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
+	})
+
+	t.Run("endpoint provided with 'app' prefix without v1 suffix", func(t *testing.T) {
+		apiEndpoint := "https://app.snyk.io/api"
+		c.UpdateApiEndpoints(apiEndpoint)
+		uiEndpoint := c.SnykUi()
+		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
+	})
+
+	t.Run("Api endpoint provided with 'api' prefix", func(t *testing.T) {
+		apiEndpoint := "https://api.snyk.io"
+		c.UpdateApiEndpoints(apiEndpoint)
+		uiEndpoint := c.SnykUi()
+		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
+	})
+}
