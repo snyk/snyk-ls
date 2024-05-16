@@ -61,6 +61,7 @@ const (
 	FormatMd              = "md"
 	snykCodeTimeoutKey    = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
 	DefaultSnykApiUrl     = "https://snyk.io/api"
+	DefaultSnykUiUrl      = "https://app.snyk.io/"
 	DefaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
 	pathListSeparator     = string(os.PathListSeparator)
 	windows               = "windows"
@@ -351,7 +352,7 @@ func (c *Config) SnykCodeApi() string { return c.snykCodeApiUrl }
 func (c *Config) SnykUi() string {
 	parsedUrl, err := url.Parse(c.snykApiUrl)
 	if err != nil {
-		return "https://app.snyk.io"
+		return DefaultSnykUiUrl
 	}
 	host := parsedUrl.Host
 	appHostname := strings.Replace(host, "api", "app", 1)
