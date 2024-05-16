@@ -59,7 +59,7 @@ func (cmd *featureFlagStatus) Execute(ctx context.Context) (any, error) {
 	logger.Debug().Msg(message)
 
 	if err != nil {
-		logger.Err(err).Msg("Failed to get feature flag status for feature flag: " + ffStr)
+		logger.Err(err).Msg("Failed to get feature flag: " + ffStr)
 		return snyk_api.FFResponse{Ok: false, UserMessage: err.Error()}, nil
 	}
 
