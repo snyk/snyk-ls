@@ -351,7 +351,7 @@ func (c *Config) SnykApi() string     { return c.snykApiUrl }
 func (c *Config) SnykCodeApi() string { return c.snykCodeApiUrl }
 func (c *Config) SnykUi() string {
 	parsedUrl, err := url.Parse(c.snykApiUrl)
-	if err != nil {
+	if err != nil || !parsedUrl.IsAbs() {
 		return DefaultSnykUiUrl
 	}
 	host := parsedUrl.Host
