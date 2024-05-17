@@ -350,13 +350,12 @@ func (c *Config) LogPath() string {
 func (c *Config) SnykApi() string     { return c.snykApiUrl }
 func (c *Config) SnykCodeApi() string { return c.snykCodeApiUrl }
 func (c *Config) SnykUi() string {
-	parsedUrl, err := url.Parse(c.snykApiUrl)
-	if err != nil || !parsedUrl.IsAbs() {
+	snykUiUrl, err := getCustomEndpointUrlFromSnykApi(c.snykApiUrl, "app")
+	if err != nil && snykUiUrl == "" {
 		return DefaultSnykUiUrl
 	}
-	host := parsedUrl.Host
-	appHostname := strings.Replace(host, "api", "app", 1)
-	return fmt.Sprintf("%s://%s", parsedUrl.Scheme, appHostname)
+
+	return snykUiUrl
 }
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
 func (c *Config) IntegrationName() string {
@@ -585,16 +584,20 @@ func getCodeApiUrlFromCustomEndpoint(endpoint string) (string, error) {
 	}
 
 	// Use Snyk API endpoint to determine deeproxy API URL
-	endpointUrl, err := url.Parse(strings.Trim(endpoint, " "))
-	if err != nil {
+	return getCustomEndpointUrlFromSnykApi(endpoint, "deeproxy")
+}
+
+func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, error) {
+	snykApiUrl, err := url.Parse(strings.Trim(snykApi, " "))
+	if err != nil && !snykApiUrl.IsAbs() {
 		return "", err
 	}
 
 	m := regexp.MustCompile(`^(ap[pi]\.)?`)
-	endpointUrl.Host = m.ReplaceAllString(endpointUrl.Host, "deeproxy.")
-	endpointUrl.Path = ""
+	snykApiUrl.Host = m.ReplaceAllString(snykApiUrl.Host, subdomain+".")
+	snykApiUrl.Path = ""
 
-	return endpointUrl.String(), nil
+	return snykApiUrl.String(), nil
 }
 
 func snykCodeAnalysisTimeoutFromEnv() time.Duration {
