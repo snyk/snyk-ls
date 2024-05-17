@@ -349,5 +349,4 @@ func TestSnykUiEndpoint(t *testing.T) {
 		uiEndpoint := c.SnykUi()
 		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
 	})
-
 }
