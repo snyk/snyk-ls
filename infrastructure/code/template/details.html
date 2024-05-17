@@ -350,6 +350,10 @@
       {{if ne $index (idxMinusOne (len $.CWEs))}}<span class="delimiter"></span>{{end}}
       {{end}}
       {{end}}
+      {{if ge .PriorityScore 0}}
+      <span class="delimiter"></span>
+      <div class="priority-score">Priority score: {{.PriorityScore}}</div>
+      {{end}}
       {{if .IsIgnored}}<div class="ignore-badge">IGNORED</div>{{end}}
     </div>
   </header>
