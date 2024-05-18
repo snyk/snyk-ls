@@ -355,15 +355,16 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
 	files <-chan string,
 	changedFiles map[string]bool,
 ) (issues []snyk.Issue, err error) {
+	logger := config.CurrentConfig().Logger().With().Str("method", "code.UploadAndAnalyzeWithIgnores").Logger()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.uploadAndAnalyze")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
 	requestId := span.GetTraceId() // use span trace id as code-request-id
-	log.Info().Str("requestId", requestId).Msg("Starting Code analysis.")
+	logger.Info().Str("requestId", requestId).Msg("Starting Code analysis.")
 
 	target, err := scan.NewRepositoryTarget(path)
 	if err != nil {
-		log.Warn().Err(err)
+		logger.Warn().Err(err)
 	}
 
 	sarif, bundleHash, err := sc.codeScanner.UploadAndAnalyze(ctx, requestId, target, files, changedFiles)

@@ -105,6 +105,22 @@
       font-size: 0.85rem;
     }
 
+    .lesson-container {
+      display: flex;
+      align-items: center;
+      gap: 0.5em;
+    }
+
+    .lesson-icon {
+      display: flex;
+      align-items: center;
+    }
+
+    .lesson-link {
+      display: flex;
+      align-items: center;
+    }
+
     .styled-link {
       text-decoration: none;
     }
@@ -356,6 +372,15 @@
       {{end}}
       {{if .IsIgnored}}<div class="ignore-badge">IGNORED</div>{{end}}
     </div>
+    {{if .LessonUrl}}
+    <div class="lesson-container">
+      <div class="lesson-icon">
+        {{.LessonIcon}}
+      </div>
+      <a class="lesson-link styled-link" target="_blank" rel="noopener noreferrer" href="{{.LessonUrl}}">Learn about
+        this vulnerability</a>
+    </div>
+    {{end}}
   </header>
 
   <main>

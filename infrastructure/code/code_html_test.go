@@ -46,6 +46,7 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 			IsSecurityType:     true,
 			Message:            "Either rethrow this java.lang.InterruptedException or set the interrupted flag on the current thread with 'Thread.currentThread().interrupt()'. Otherwise the information that the current thread was interrupted will be lost.",
 			PriorityScore:      890,
+			LessonUrl:          "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
 		},
 	}
 
@@ -54,6 +55,7 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 
 	// assert Header section
 	assert.Contains(t, codePanelHtml, "Priority score: 890")
+	assert.Contains(t, codePanelHtml, `href="https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide"`)
 
 	// assert Data Flow section
 	expectedDataFlowHeading := fmt.Sprintf(`Data Flow - %d steps`, len(dataFlow))
@@ -109,6 +111,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 
 	// assert Header section
 	assert.Contains(t, codePanelHtml, "Priority score: 0")
+	assert.NotContains(t, codePanelHtml, `href="https://when-no-lesson-data-element-not-in-the-template"`)
 
 	// assert Ignore Details section - Elements should be present
 	assert.Contains(t, codePanelHtml, `class="ignore-warning-wrapper"`)

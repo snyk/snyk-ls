@@ -66,6 +66,32 @@ func newIssueEnhancer(
 	}
 }
 
+// Populate HTML template
+func (b *IssueEnhancer) enhanceIssuesDetails(issues []snyk.Issue) {
+	logger := log.With().Str("method", "issue_enhancer.enhanceIssuesDetails").Logger()
+
+	for i := range issues {
+		issue := &issues[i]
+		issueData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+		if !ok {
+			logger.Error().Msg("Failed to fetch additional data")
+			continue
+		}
+
+		lesson, err := b.learnService.GetLesson(issue.Ecosystem, issue.ID, issue.CWEs, issue.CVEs, issue.IssueType)
+		if err != nil {
+			logger.Warn().Err(err).Msg("Failed to get lesson")
+			b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: ""})
+		} else if lesson != nil && lesson.Url != "" {
+			issueData.LessonUrl = lesson.Url
+		}
+
+		issue.AdditionalData = issueData
+		issueData.Details = getCodeDetailsHtml(*issue)
+		issue.AdditionalData = issueData
+	}
+}
+
 // Adds code actions and code lenses for issues found
 func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue, bundleHash string) {
 	method := "addCodeActions"
@@ -79,6 +105,9 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 		log.Trace().Msg("Autofix | Snyk Learn code actions are disabled, not adding code actions")
 		return
 	}
+
+	// Populate HTML template
+	b.enhanceIssuesDetails(issues)
 
 	for i := range issues {
 		issueData, ok := issues[i].AdditionalData.(snyk.CodeIssueData)

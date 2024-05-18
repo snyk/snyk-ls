@@ -101,6 +101,7 @@ type CodeIssueData struct {
 	HasAIFix           bool               `json:"hasAIFix"`
 	DataFlow           []DataFlowElement  `json:"dataFlow,omitempty"`
 	Details            string             `json:"details"`
+	LessonUrl          string             `json:"url"`
 }
 
 func (c CodeIssueData) GetKey() string {
