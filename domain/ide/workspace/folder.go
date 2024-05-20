@@ -19,15 +19,18 @@ package workspace
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"runtime"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/rs/zerolog/log"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	gapanalytics "github.com/snyk/go-application-framework/pkg/analytics"
+	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
+	"github.com/snyk/go-application-framework/pkg/networking"
+	"github.com/snyk/go-application-framework/pkg/utils"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
@@ -45,22 +48,6 @@ type FolderStatus int
 const (
 	Unscanned FolderStatus = iota
 	Scanned   FolderStatus = iota
-)
-
-var (
-	os = map[string]string{
-		"darwin":  "macOS",
-		"linux":   "linux",
-		"windows": "windows",
-	}
-
-	arch = map[string]string{
-		"amd64": "x86_64",
-		"arm64": "arm64",
-		"386":   "386",
-	}
-
-	_ snyk.CacheProvider = (*Folder)(nil)
 )
 
 // TODO: 3: Extract reporting logic to a separate service
@@ -417,39 +404,87 @@ func sendAnalytics(data *snyk.ScanData) {
 		return
 	}
 
-	scanEvent := json_schemas.ScanDoneEvent{}
-	// Populate the fields with data
-	scanEvent.Data.Type = "analytics"
-	scanEvent.Data.Attributes.DeviceId = c.DeviceID()
-	scanEvent.Data.Attributes.Application = "snyk-ls"
-	scanEvent.Data.Attributes.ApplicationVersion = config.Version
-	scanEvent.Data.Attributes.Os = os[runtime.GOOS]
-	scanEvent.Data.Attributes.Arch = arch[runtime.GOARCH]
-	scanEvent.Data.Attributes.IntegrationName = gafConfig.GetString(configuration.INTEGRATION_NAME)
-	scanEvent.Data.Attributes.IntegrationVersion = gafConfig.GetString(configuration.INTEGRATION_VERSION)
-	scanEvent.Data.Attributes.IntegrationEnvironment = gafConfig.GetString(configuration.INTEGRATION_ENVIRONMENT)
-	scanEvent.Data.Attributes.IntegrationEnvironmentVersion = gafConfig.GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION)
-	scanEvent.Data.Attributes.EventType = "Scan done"
-	scanEvent.Data.Attributes.Status = "Success"
-	scanEvent.Data.Attributes.ScanType = string(data.Product)
-	scanEvent.Data.Attributes.UniqueIssueCount.Critical = data.SeverityCount[data.Product].Critical
-	scanEvent.Data.Attributes.UniqueIssueCount.High = data.SeverityCount[data.Product].High
-	scanEvent.Data.Attributes.UniqueIssueCount.Medium = data.SeverityCount[data.Product].Medium
-	scanEvent.Data.Attributes.UniqueIssueCount.Low = data.SeverityCount[data.Product].Low
-	scanEvent.Data.Attributes.DurationMs = fmt.Sprintf("%d", data.DurationMs)
-	scanEvent.Data.Attributes.TimestampFinished = data.TimestampFinished
+	//https://snyksec.atlassian.net/browse/CLI-306
+	ic := gapanalytics.NewInstrumentationCollector()
 
-	bytes, err := json.Marshal(scanEvent)
+	ic.SetStage("dev")
+	ic.SetStatus("Success") //or get result status from scan
+	ic.SetType("Scan done")
+	ic.SetDuration(time.Duration(data.DurationMs))
+	ic.SetTimestamp(data.TimestampFinished)
+
+	//Do we need to do a product.ToProductCodename(data.Product) to use Product Codename eg. ´oss´ instead of ´Snyk Open Source´?
+	categories := setupCategories(data, c)
+	ic.SetCategory(categories)
+
+	//todo Should we make this a singleton?
+	ua := networking.UserAgent(networking.UaWithConfig(gafConfig), networking.UaWithApplication("snyk-ls", config.Version))
+	ic.SetUserAgent(ua)
+
+	iid := instrumentation.AssembleUrnFromUUID(uuid.NewString())
+	ic.SetInteractionId(iid)
+
+	//todo call helperfunction to get the Target Id
+	//https://snyksec.atlassian.net/browse/CLI-308
+	//targetId := utils.GetTargetId()
+	ic.SetTargetId("pkg:github/package-url/purl-spec@244fd47e07d1004f0aed9c")
+
+	summary := createTestSummary(data)
+	ic.SetTestSummary(summary)
+
+	ic.AddExtension("deviceid", c.DeviceID())
+
+	analyticsData, err := gapanalytics.GetV2InstrumentationObject(ic)
 	if err != nil {
-		logger.Err(err).Msg("Error marshaling scan event")
+		logger.Err(err).Msg("Error creating the instrumentation collection object")
 		return
 	}
 
-	err = analytics.SendAnalyticsToAPI(c, bytes)
+	v2InstrumentationData := utils.ValueOf(json.Marshal(analyticsData))
+
+	logger.Debug().Any("v2InstrumentationData", string(v2InstrumentationData)).Msg("Analytics data")
+
+	err = analytics.SendAnalyticsToAPI(c, v2InstrumentationData)
 	if err != nil {
-		logger.Err(err).Msg("Error sending analytics to API")
+		logger.Err(err).Msg("Error sending analytics to API: " + string(v2InstrumentationData))
 		return
 	}
+}
+
+func setupCategories(data *snyk.ScanData, c *config.Config) []string {
+	args := []string{string(data.Product), "test"}
+	args = append(args, c.CliSettings().AdditionalOssParameters...)
+	knownCommands, knownFlags := instrumentation.GetKnownCommandsAndFlags(c.Engine())
+	categories := instrumentation.DetermineCategoryFromArgs(args, knownCommands, knownFlags)
+	return categories
+}
+
+func createTestSummary(data *snyk.ScanData) json_schemas.TestSummary {
+	testSummary := json_schemas.TestSummary{
+		Results: []json_schemas.TestSummaryResult{{
+			Severity: "critical",
+			Total:    data.SeverityCount[data.Product].Critical,
+			Open:     0,
+			Ignored:  0,
+		}, {
+			Severity: "high",
+			Total:    data.SeverityCount[data.Product].High,
+			Open:     0,
+			Ignored:  0,
+		}, {
+			Severity: "medium",
+			Total:    data.SeverityCount[data.Product].Medium,
+			Open:     0,
+			Ignored:  0,
+		}, {
+			Severity: "low",
+			Total:    data.SeverityCount[data.Product].Low,
+			Open:     0,
+			Ignored:  0,
+		}},
+		Type: string(data.Product),
+	}
+	return testSummary
 }
 
 func (f *Folder) FilterAndPublishDiagnostics(p *product.Product) {

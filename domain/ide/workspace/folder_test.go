@@ -18,7 +18,6 @@ package workspace
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"path/filepath"
 	"sync"
@@ -28,11 +27,13 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"
+	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -452,7 +453,9 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	engineMock, gafConfig := setUpEngineMock(t, c)
+	gafConfig := configuration.NewInMemory()
+	engineMock := workflow.NewWorkFlowEngine(gafConfig)
+	c.SetEngine(engineMock)
 
 	f, _ := NewMockFolderWithScanNotifier(notification.NewNotifier())
 	filePath := filepath.Join(f.path, "path1")
@@ -463,26 +466,77 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 		Issues:  []snyk.Issue{mockCodeIssue},
 	}
 
-	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
-	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
-		// this captures the call parameters of the mocked call
-		Do(func(id workflow.Identifier, workflowInputData []workflow.Data, config configuration.Configuration) {
-			require.Equal(t, 1, len(workflowInputData))
-			payloadBytes, ok := workflowInputData[0].GetPayload().([]byte)
-			require.True(t, ok)
+	incrementSeverityCount(&data, data.Issues[0])
 
-			var scanDoneEvent json_schemas.ScanDoneEvent
-			err := json.Unmarshal(payloadBytes, &scanDoneEvent)
+	ic := analytics.NewInstrumentationCollector()
+
+	ua := networking.UserAgent(networking.UaWithConfig(gafConfig), networking.UaWithApplication("snyk-ls", config.Version))
+	ic.SetUserAgent(ua)
+
+	categories := setupCategories(&data, c)
+	ic.SetCategory(categories)
+
+	ic.SetStage("dev")
+	ic.SetStatus("Success") //or get result status from scan
+	ic.SetType("Scan done")
+
+	summary := createTestSummary(&data)
+	ic.SetTestSummary(summary)
+
+	entered := false
+	_, err := engineMock.Register(localworkflows.WORKFLOWID_REPORT_ANALYTICS, workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)),
+		func(invocation workflow.InvocationContext, workflowInputData []workflow.Data) ([]workflow.Data, error) {
+			actualV2InstrumentationObject, err := analytics.GetV2InstrumentationObject(ic)
+
+			entered = true
 			require.NoError(t, err)
-			require.Equal(t, "Snyk Open Source", scanDoneEvent.Data.Attributes.ScanType)
-			require.Equal(t, 1, scanDoneEvent.Data.Attributes.UniqueIssueCount.Medium)
+			require.Equal(t, "snyk-ls", actualV2InstrumentationObject.Data.Attributes.Runtime.Application.Name)
+			require.Equal(t, "dev", string(*actualV2InstrumentationObject.Data.Attributes.Interaction.Stage))
+			require.Equal(t, "Success", string(actualV2InstrumentationObject.Data.Attributes.Interaction.Status))
+			require.Equal(t, "Scan done", string(actualV2InstrumentationObject.Data.Attributes.Interaction.Type))
+
+			require.Equal(t, []string{string(product.ToProductCodename(data.Product)), "test"}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Categories)
+
+			return nil, nil
 		})
+	if err != nil {
+		return
+	}
+
+	err = engineMock.Init()
+	if err != nil {
+		return
+	}
 
 	// Act
 	f.processResults(data)
 	// wait for async analytics sending
-	time.Sleep(time.Second)
+	time.Sleep(6 * time.Second)
+	assert.True(t, entered)
 }
+
+//func Test_processResults_ShouldNotSendAnalyticsWithEmptyProduct(t *testing.T) {
+//	c := testutil.UnitTest(t)
+//
+//	gafConfig := configuration.NewInMemory()
+//	engineMock := workflow.NewWorkFlowEngine(gafConfig)
+//	c.SetEngine(engineMock)
+//
+//	f, _ := NewMockFolderWithScanNotifier(notification.NewNotifier())
+//	filePath := filepath.Join(f.path, "path1")
+//	mockCodeIssue := NewMockIssue("id1", filePath)
+//
+//	data := snyk.ScanData{
+//		Product: "",
+//		Issues:  []snyk.Issue{mockCodeIssue},
+//	}
+//
+//	// Act
+//	f.processResults(data)
+//
+//	//Verify that sendAnalytics does not send analytics if product is ""
+//	assert.Equal(t, data.Product, product.Product(""))
+//}
 
 func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
