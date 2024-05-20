@@ -21,13 +21,10 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/adrg/xdg"
 	codeClient "github.com/snyk/code-client-go"
 	codeClientHTTP "github.com/snyk/code-client-go/http"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
-
-	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
-
-	"github.com/adrg/xdg"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
@@ -45,6 +42,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/amplitude"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	cliauth "github.com/snyk/snyk-ls/infrastructure/cli/auth"
+	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/iac"
@@ -155,9 +153,11 @@ func initInfrastructure() {
 		codeClientHTTP.WithInstrumentor(codeInstrumentor),
 		codeClientHTTP.WithErrorReporter(codeErrorReporter),
 	)
+
 	codeClientScanner := codeClient.NewCodeScanner(
 		config.CurrentConfig(),
 		httpClient,
+		codeClient.WithTrackerFactory(code.NewCodeTrackerFactory()),
 		codeClient.WithLogger(engine.GetLogger()),
 		codeClient.WithInstrumentor(codeInstrumentor),
 		codeClient.WithErrorReporter(codeErrorReporter),

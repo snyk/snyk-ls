@@ -160,7 +160,7 @@ func newProgressParams(title, message string, cancellable, unquantifiableLength 
 
 func (t *Tracker) send(progress lsp.ProgressParams) {
 	if progress.Token == "" {
-		log.Error().Str("method", "EndProgress").Msg("progress has no token")
+		log.Error().Str("method", "send").Msg("progress has no token")
 	}
 	t.channel <- progress
 }
