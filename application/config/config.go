@@ -351,7 +351,7 @@ func (c *Config) SnykApi() string     { return c.snykApiUrl }
 func (c *Config) SnykCodeApi() string { return c.snykCodeApiUrl }
 func (c *Config) SnykUi() string {
 	snykUiUrl, err := getCustomEndpointUrlFromSnykApi(c.snykApiUrl, "app")
-	if err != nil && snykUiUrl == "" {
+	if err != nil || snykUiUrl == "" {
 		return DefaultSnykUiUrl
 	}
 
@@ -589,7 +589,7 @@ func getCodeApiUrlFromCustomEndpoint(endpoint string) (string, error) {
 
 func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, error) {
 	snykApiUrl, err := url.Parse(strings.Trim(snykApi, " "))
-	if err != nil && !snykApiUrl.IsAbs() {
+	if err != nil || !snykApiUrl.IsAbs() {
 		return "", err
 	}
 
