@@ -401,7 +401,6 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 	if endpoint != "" && endpoint != "/v1" {
 		t.Setenv("SNYK_API", endpoint)
 	}
-	loc := setupServer(t)
 	loc, jsonRPCRecorder := setupServer(t)
 	c := testutil.SmokeTest(t, useConsistentIgnores)
 	c.SetSnykCodeEnabled(true)

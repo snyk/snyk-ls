@@ -133,6 +133,7 @@ func (s *SnykApiClientImpl) normalizeAPIPathForV1(c *config.Config, path string)
 
 func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (FFResponse, error) {
 	method := "snyk_api.FeatureFlagStatus"
+	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", method).Logger()
 
 	var response FFResponse
