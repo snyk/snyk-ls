@@ -636,6 +636,51 @@ func Test_Scan(t *testing.T) {
 	})
 }
 
+func Test_enhanceIssuesDetails(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Arrange
+	learnMock := mock_learn.NewMockService(ctrl)
+	errorReporterMock := newTestCodeErrorReporter()
+
+	expectedLessonUrl := "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide"
+
+	learnMock.
+		EXPECT().
+		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(&learn.Lesson{Url: expectedLessonUrl}, nil).AnyTimes()
+
+	scanner := &Scanner{
+		learnService:      learnMock,
+		errorReporter:     errorReporterMock,
+		changedPaths:      make(map[string]map[string]bool),
+		changedFilesMutex: sync.Mutex{},
+	}
+
+	issues := []snyk.Issue{
+		{
+			CWEs:     []string{"CWE-123", "CWE-456"},
+			ID:       "java/DontUsePrintStackTrace",
+			Severity: 2,
+			AdditionalData: snyk.CodeIssueData{
+				Title:          "Allocation of Resources Without Limits or Throttling",
+				IsSecurityType: true,
+				Message:        "Either rethrow this java.lang.InterruptedException or set the interrupted flag on the current thread with 'Thread.currentThread().interrupt()'. Otherwise the information that the current thread was interrupted will be lost.",
+				PriorityScore:  890,
+				LessonUrl:      expectedLessonUrl,
+			},
+		},
+	}
+
+	// Act
+	scanner.enhanceIssuesDetails(issues)
+
+	// Assert
+	assert.Equal(t, expectedLessonUrl, issues[0].AdditionalData.(snyk.CodeIssueData).LessonUrl)
+	assert.Contains(t, issues[0].AdditionalData.(snyk.CodeIssueData).Details, `href="https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide"`)
+}
+
 func setupIgnoreWorkspace(t *testing.T) (tempDir string, ignoredFilePath string, notIgnoredFilePath string) {
 	t.Helper()
 	expectedPatterns := "*.xml\n**/*.txt\nbin"
