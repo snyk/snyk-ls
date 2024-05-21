@@ -16,8 +16,6 @@
 package code
 
 import (
-	"net/url"
-	"strings"
 	"sync"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -68,23 +66,7 @@ func (cs *codeSettings) SetAutofixEnabled(enabled bool) {
 }
 
 func getCodeEnablementUrl() string {
-	api := config.CurrentConfig().SnykApi()
-	apiUrl, err := url.Parse(api)
-	if err != nil {
-		return "default api url"
-	}
-
-	apiUrl.Path = "/"
-
-	// if multi tenant, add `app.` subdomain
-	if !isSingleTenant(apiUrl) {
-		apiUrl.Host = "app." + apiUrl.Host
-	}
-
-	integrationName := config.CurrentConfig().IntegrationName()
-	return apiUrl.String() + "manage/snyk-code?from=" + integrationName
-}
-
-func isSingleTenant(url *url.URL) bool {
-	return strings.HasPrefix(url.Host, "app") && strings.HasSuffix(url.Host, "snyk.io")
+	c := config.CurrentConfig()
+	integrationName := c.IntegrationName()
+	return c.SnykUi() + "/manage/snyk-code?from=" + integrationName
 }
