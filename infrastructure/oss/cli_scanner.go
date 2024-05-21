@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"golang.org/x/exp/slices"
 
 	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
@@ -241,6 +242,11 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 		}
 		cmd = append(cmd, parameter)
 	}
+	allProjectsParam := "--all-projects"
+	if !slices.Contains(cmd, allProjectsParam) && !parameterBlacklist[allProjectsParam] {
+		cmd = append(cmd, allProjectsParam)
+	}
+
 	return cmd
 }
 

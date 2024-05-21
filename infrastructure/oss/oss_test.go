@@ -340,7 +340,7 @@ func sampleIssue() ossIssue {
 	}
 }
 
-func Test_prepareScanCommand_ExpandsAdditionalParameters(t *testing.T) {
+func Test_prepareScanCommand(t *testing.T) {
 	c := testutil.UnitTest(t)
 	scanner := NewCLIScanner(performance.NewInstrumentor(),
 		error_reporting.NewTestErrorReporter(),
@@ -350,15 +350,29 @@ func Test_prepareScanCommand_ExpandsAdditionalParameters(t *testing.T) {
 		notification.NewNotifier(),
 		c).(*CLIScanner)
 
-	settings := config.CliSettings{
-		AdditionalOssParameters: []string{"--all-projects", "-d"},
-	}
-	c.SetCliSettings(&settings)
+	t.Run("Expands parameters", func(t *testing.T) {
+		settings := config.CliSettings{
+			AdditionalOssParameters: []string{"--all-projects", "-d"},
+		}
+		c.SetCliSettings(&settings)
 
-	cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{})
+		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{})
 
-	assert.Contains(t, cmd, "--all-projects")
-	assert.Contains(t, cmd, "-d")
+		assert.Contains(t, cmd, "--all-projects")
+		assert.Contains(t, cmd, "-d")
+	})
+
+	t.Run("Uses --all-projects by default", func(t *testing.T) {
+		settings := config.CliSettings{
+			AdditionalOssParameters: []string{"-d"},
+		}
+		c.SetCliSettings(&settings)
+
+		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{})
+
+		assert.Contains(t, cmd, "--all-projects")
+		assert.Len(t, cmd, 4)
+	})
 }
 
 func Test_Scan_SchedulesNewScan(t *testing.T) {
