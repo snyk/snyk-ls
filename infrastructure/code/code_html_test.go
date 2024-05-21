@@ -24,7 +24,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -110,10 +109,10 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 }
 
 func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
-	_ = testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	customEndpoint := "https://app.dev.snyk.io"
-	config.CurrentConfig().UpdateApiEndpoints(customEndpoint + "/api")
+	c.UpdateApiEndpoints(customEndpoint + "/api")
 
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()

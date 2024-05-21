@@ -25,7 +25,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -105,10 +104,10 @@ func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
 }
 
 func Test_OssDetailsPanel_html_withLearn_withCustomEndpoint(t *testing.T) {
-	_ = testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	customEndpoint := "https://app.dev.snyk.io"
-	config.CurrentConfig().UpdateApiEndpoints(customEndpoint + "/api")
+	c.UpdateApiEndpoints(customEndpoint + "/api")
 
 	issueAdditionalData := snyk.OssIssueData{
 		Title:       "myTitle",
