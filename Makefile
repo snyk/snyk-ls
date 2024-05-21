@@ -28,6 +28,7 @@ LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true'
 TOOLS_BIN := $(shell pwd)/.bin
 
 OVERRIDE_GOCI_LINT_V := v1.55.2
+PACT_V := 2.4.2
 
 NOCACHE := "-count=1"
 TIMEOUT := "-timeout=45m"
@@ -46,7 +47,7 @@ $(TOOLS_BIN)/golangci-lint:
 	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/$(OVERRIDE_GOCI_LINT_V)/install.sh | sh -s -- -b $(TOOLS_BIN)/ $(OVERRIDE_GOCI_LINT_V)
 
 $(TOOLS_BIN)/pact/bin/pact:
-	@python3 ./install-pact.py
+	cd $(TOOLS_BIN); curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/v$(PACT_V)/install.sh | PACT_CLI_VERSION=v$(PACT_V) bash
 
 ## clean: Delete the build directory
 .PHONY: clean
