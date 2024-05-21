@@ -91,45 +91,62 @@ func NewSnykApiClient(client func() *http.Client) SnykApiClient {
 
 func (s *SnykApiClientImpl) SastSettings() (SastResponse, error) {
 	method := "SastSettings"
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", method).Logger()
 	var response SastResponse
-	log.Debug().Str("method", method).Msg("API: Getting SastEnabled")
+	logger.Debug().Msg("API: Getting SastEnabled")
 
-	p := "/cli-config/settings/sast"
-	host := config.CurrentConfig().SnykApi()
-	if !strings.HasSuffix(host, "/v1") {
-		p = "/v1" + p
-	}
-	organization := config.CurrentConfig().Organization()
-	if organization != "" {
-		p += "?org=" + url.QueryEscape(organization)
-	}
-
-	err := s.processApiResponse(method, p, &response)
+	p := s.normalizeAPIPathForV1(c, "/cli-config/settings/sast")
+	u, err := url.Parse(p)
 	if err != nil {
-		log.Err(err).Str("method", method).Msg("error when calling sastEnabled endpoint")
+		return SastResponse{}, err
+	}
+	u = s.addOrgToQuery(c, u)
+
+	err = s.processApiResponse(method, u.String(), &response)
+	if err != nil {
+		logger.Err(err).Msg("error when calling sastEnabled endpoint")
 		return SastResponse{}, err
 	}
 	return response, err
 }
 
-func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (FFResponse, error) {
-	method := "snyk_api.FeatureFlagStatus"
-	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
+func (s *SnykApiClientImpl) addOrgToQuery(c *config.Config, u *url.URL) *url.URL {
+	organization := c.Organization()
+	if organization != "" {
+		q := u.Query()
+		q.Set("org", organization)
+		u.RawQuery = q.Encode()
+	}
+	return u
+}
 
-	var response FFResponse
-	path := fmt.Sprintf("/cli-config/feature-flags/%s", string(featureFlagType))
-	host := config.CurrentConfig().SnykApi()
-	if !strings.HasSuffix(host, "/v1") {
+func (s *SnykApiClientImpl) normalizeAPIPathForV1(c *config.Config, path string) string {
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	if !strings.HasSuffix(c.SnykApi(), "/v1") {
 		path = "/v1" + path
 	}
-	organization := config.CurrentConfig().Organization()
-	if organization != "" {
-		path += "?org=" + url.QueryEscape(organization)
+	return path
+}
+
+func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (FFResponse, error) {
+	method := "snyk_api.FeatureFlagStatus"
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", method).Logger()
+
+	var response FFResponse
+	logger.Debug().Msgf("API: Getting %s", featureFlagType)
+	path := s.normalizeAPIPathForV1(c, fmt.Sprintf("/cli-config/feature-flags/%s", string(featureFlagType)))
+	u, err := url.Parse(path)
+	if err != nil {
+		return FFResponse{}, err
 	}
+	u = s.addOrgToQuery(c, u)
+	logger.Debug().Str("path", path).Msg("API: Getting feature flag status")
 
-	logger.Debug().Str("path", path).Msg("Getting feature flag status")
-
-	err := s.processApiResponse(method, path, &response)
+	err = s.processApiResponse(method, u.String(), &response)
 	if err != nil {
 		if strings.Contains(err.Error(), "403 Forbidden") {
 			logger.Debug().Msgf("Feature flag '%s' is disabled", featureFlagType)
@@ -177,14 +194,14 @@ func (s *SnykApiClientImpl) doCall(method string, endpointPath string, requestBo
 	return responseBody, nil
 }
 
-func (s *SnykApiClientImpl) processApiResponse(method string, path string, v interface{}) error {
+func (s *SnykApiClientImpl) processApiResponse(caller string, path string, v interface{}) error {
 	responseBody, err := s.doCall("GET", path, nil)
 	if err != nil {
-		return fmt.Errorf("%s: %v: %v", method, err, responseBody)
+		return fmt.Errorf("%s: %v: %v", caller, err, responseBody)
 	}
 
 	if err := json.Unmarshal(responseBody, v); err != nil {
-		return fmt.Errorf("%s: couldn't unmarshal: %v", method, err)
+		return fmt.Errorf("%s: couldn't unmarshal: %v", caller, err)
 	}
 	return nil
 }

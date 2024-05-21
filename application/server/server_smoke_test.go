@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 	"time"
@@ -56,6 +57,12 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 		file2                string
 		useConsistentIgnores bool
 		hasVulns             bool
+		endpoint             string
+	}
+
+	endpoint := os.Getenv("SNYK_API")
+	if endpoint == "" {
+		t.Setenv("SNYK_API", "https://api.snyk.io")
 	}
 
 	tests := []test{
@@ -67,6 +74,15 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                codeFile,
 			useConsistentIgnores: false,
 			hasVulns:             true,
+		},
+		{
+			name:                 "OSS and Code with V1 endpoint",
+			repo:                 "https://github.com/snyk-labs/nodejs-goof",
+			commit:               "0336589",
+			file1:                ossFile,
+			file2:                codeFile,
+			useConsistentIgnores: false,
+			endpoint:             path.Join(endpoint, "/v1"),
 		},
 		{
 			name:                 "OSS and Code with consistent ignores",
@@ -125,7 +141,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			runSmokeTest(t, tc.repo, tc.commit, tc.file1, tc.file2, tc.useConsistentIgnores, tc.hasVulns)
+			runSmokeTest(t, tc.repo, tc.commit, tc.file1, tc.file2, tc.useConsistentIgnores, tc.hasVulns, "")
 		})
 	}
 }
@@ -379,8 +395,12 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 	}, time.Second*5, time.Second)
 }
 
-func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 string, useConsistentIgnores bool, hasVulns bool) {
+func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 string, useConsistentIgnores bool,
+	hasVulns bool, endpoint string) {
 	t.Helper()
+	if endpoint != "" && endpoint != "/v1" {
+		t.Setenv("SNYK_API", endpoint)
+	}
 	loc, jsonRPCRecorder := setupServer(t)
 	c := testutil.SmokeTest(t, useConsistentIgnores)
 	c.SetSnykCodeEnabled(true)
