@@ -21,25 +21,30 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func Test_getCodeEnablementUrl_CustomEndpoint(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	t.Cleanup(resetCodeSettings)
-	config.CurrentConfig().SetIntegrationName("VS_CODE")
+	c.SetIntegrationName("VS_CODE")
+	path := "/manage/snyk-code?from=VS_CODE"
+
+	t.Run("api subdomain", func(t *testing.T) {
+		c.UpdateApiEndpoints("https://api.snyk.io")
+		assert.Equal(t, "https://app.snyk.io"+path, getCodeEnablementUrl())
+	})
 
 	t.Run("Custom endpoint configuration", func(t *testing.T) {
-		config.CurrentConfig().UpdateApiEndpoints("https://custom.endpoint.com/api")
-		assert.Equal(t, "https://app.custom.endpoint.com/manage/snyk-code?from=VS_CODE", getCodeEnablementUrl())
+		c.UpdateApiEndpoints("https://custom.endpoint.com/api")
+		assert.Equal(t, "https://app.custom.endpoint.com"+path, getCodeEnablementUrl())
 	})
 	t.Run("Single tenant endpoint configuration", func(t *testing.T) {
-		config.CurrentConfig().UpdateApiEndpoints("https://app.custom.snyk.io/api")
+		c.UpdateApiEndpoints("https://app.custom.snyk.io/api")
 		assert.Equal(t, "https://app.custom.snyk.io/manage/snyk-code?from=VS_CODE", getCodeEnablementUrl())
 	})
 	t.Run("Arbitrary path in url", func(t *testing.T) {
-		config.CurrentConfig().UpdateApiEndpoints("https://dev.snyk.io/api/v1")
+		c.UpdateApiEndpoints("https://dev.snyk.io/api/v1")
 		assert.Equal(t, "https://app.dev.snyk.io/manage/snyk-code?from=VS_CODE", getCodeEnablementUrl())
 	})
 }
