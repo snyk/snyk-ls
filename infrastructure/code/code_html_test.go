@@ -45,11 +45,15 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 			RepoDatasetSize:    repoCount,
 			IsSecurityType:     true,
 			Message:            "Either rethrow this java.lang.InterruptedException or set the interrupted flag on the current thread with 'Thread.currentThread().interrupt()'. Otherwise the information that the current thread was interrupted will be lost.",
+			PriorityScore:      890,
 		},
 	}
 
 	// invoke method under test
 	codePanelHtml := getCodeDetailsHtml(issue)
+
+	// assert Header section
+	assert.Contains(t, codePanelHtml, "Priority score: 890")
 
 	// assert Data Flow section
 	expectedDataFlowHeading := fmt.Sprintf(`Data Flow - %d steps`, len(dataFlow))
@@ -96,11 +100,15 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 			RepoDatasetSize:    repoCount,
 			IsSecurityType:     true,
 			Message:            "Either rethrow this java.lang.InterruptedException or set the interrupted flag on the current thread with 'Thread.currentThread().interrupt()'. Otherwise the information that the current thread was interrupted will be lost.",
+			PriorityScore:      0,
 		},
 	}
 
 	// invoke method under test
 	codePanelHtml := getCodeDetailsHtml(issue)
+
+	// assert Header section
+	assert.Contains(t, codePanelHtml, "Priority score: 0")
 
 	// assert Ignore Details section - Elements should be present
 	assert.Contains(t, codePanelHtml, `class="ignore-warning-wrapper"`)

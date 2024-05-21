@@ -105,6 +105,7 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 		"RepoCount":          additionalData.RepoDatasetSize,
 		"ExampleCount":       len(additionalData.ExampleCommitFixes),
 		"ExampleCommitFixes": prepareExampleCommitFixes(additionalData.ExampleCommitFixes),
+		"PriorityScore":      additionalData.PriorityScore,
 		"SnykUi":             config.CurrentConfig().SnykUi(),
 	}
 
