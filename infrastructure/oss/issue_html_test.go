@@ -82,10 +82,11 @@ func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
 	_ = testutil.UnitTest(t)
 
 	issueAdditionalData := snyk.OssIssueData{
-		Title: "myTitle",
-		Name:  "myIssue", Description: "- list",
-		From:   []string{"1", "2", "3", "4"},
-		Lesson: "something",
+		Title:       "myTitle",
+		Name:        "myIssue",
+		Description: "- list",
+		From:        []string{"1", "2", "3", "4"},
+		Lesson:      "something",
 	}
 
 	issue := snyk.Issue{
@@ -100,4 +101,36 @@ func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
 	issueDetailsPanelHtml := getDetailsHtml(issue)
 
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "Learn about this vulnerability"))
+}
+
+func Test_OssDetailsPanel_html_withLearn_withCustomEndpoint(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	customEndpoint := "https://app.dev.snyk.io"
+	c.UpdateApiEndpoints(customEndpoint + "/api")
+
+	issueAdditionalData := snyk.OssIssueData{
+		Title:       "myTitle",
+		Name:        "myIssue",
+		Description: "- list",
+		From:        []string{"1", "2", "3", "4"},
+		Lesson:      "something",
+		MatchingIssues: []snyk.OssIssueData{
+			{
+				From: []string{"1", "2", "3", "4"},
+			},
+		},
+	}
+
+	issue := snyk.Issue{
+		ID:             "randomId",
+		Severity:       snyk.Critical,
+		AdditionalData: issueAdditionalData,
+	}
+
+	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
+
+	issueDetailsPanelHtml := getDetailsHtml(issue)
+
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, customEndpoint))
 }
