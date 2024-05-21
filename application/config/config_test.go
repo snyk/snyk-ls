@@ -349,4 +349,11 @@ func TestSnykUiEndpoint(t *testing.T) {
 		uiEndpoint := c.SnykUi()
 		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
 	})
+
+	t.Run("Fedramp API Endpoint provided with 'api' prefix", func(t *testing.T) {
+		apiEndpoint := "https://api.fedramp.snykgov.io"
+		c.UpdateApiEndpoints(apiEndpoint)
+		uiEndpoint := c.SnykUi()
+		assert.Equal(t, "https://app.fedramp.snykgov.io", uiEndpoint)
+	})
 }
