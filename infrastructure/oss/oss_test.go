@@ -373,7 +373,6 @@ func Test_prepareScanCommand(t *testing.T) {
 		assert.Contains(t, cmd, "--all-projects")
 		assert.Len(t, cmd, 4)
 	})
-
 }
 
 func Test_Scan_SchedulesNewScan(t *testing.T) {
