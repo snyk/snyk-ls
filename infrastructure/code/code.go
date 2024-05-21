@@ -223,10 +223,9 @@ func (sc *Scanner) enhanceIssuesDetails(issues []snyk.Issue) {
 			logger.Warn().Err(err).Msg("Failed to get lesson")
 			sc.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: ""})
 		} else if lesson != nil && lesson.Url != "" {
-			issueData.LessonUrl = lesson.Url
+			issue.LessonUrl = lesson.Url
 		}
 
-		issue.AdditionalData = issueData
 		issueData.Details = getCodeDetailsHtml(*issue)
 		issue.AdditionalData = issueData
 	}

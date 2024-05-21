@@ -107,7 +107,7 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 		"ExampleCommitFixes": prepareExampleCommitFixes(additionalData.ExampleCommitFixes),
 		"PriorityScore":      additionalData.PriorityScore,
 		"SnykUi":             config.CurrentConfig().SnykUi(),
-		"LessonUrl":          additionalData.LessonUrl,
+		"LessonUrl":          issue.LessonUrl,
 		"LessonIcon":         getLessonIconSvg(),
 	}
 

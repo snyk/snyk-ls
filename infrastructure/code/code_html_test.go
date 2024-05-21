@@ -35,9 +35,10 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	fixes := getFixes()
 	repoCount := 54387
 	issue := snyk.Issue{
-		CWEs:     []string{"CWE-123", "CWE-456"},
-		ID:       "java/DontUsePrintStackTrace",
-		Severity: 2,
+		CWEs:      []string{"CWE-123", "CWE-456"},
+		ID:        "java/DontUsePrintStackTrace",
+		Severity:  2,
+		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
 		AdditionalData: snyk.CodeIssueData{
 			Title:              "Allocation of Resources Without Limits or Throttling",
 			DataFlow:           dataFlow,
@@ -46,7 +47,6 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 			IsSecurityType:     true,
 			Message:            "Either rethrow this java.lang.InterruptedException or set the interrupted flag on the current thread with 'Thread.currentThread().interrupt()'. Otherwise the information that the current thread was interrupted will be lost.",
 			PriorityScore:      890,
-			LessonUrl:          "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
 		},
 	}
 

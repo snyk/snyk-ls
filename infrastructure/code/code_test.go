@@ -660,15 +660,15 @@ func Test_enhanceIssuesDetails(t *testing.T) {
 
 	issues := []snyk.Issue{
 		{
-			CWEs:     []string{"CWE-123", "CWE-456"},
-			ID:       "java/DontUsePrintStackTrace",
-			Severity: 2,
+			CWEs:      []string{"CWE-123", "CWE-456"},
+			ID:        "java/DontUsePrintStackTrace",
+			Severity:  2,
+			LessonUrl: expectedLessonUrl,
 			AdditionalData: snyk.CodeIssueData{
 				Title:          "Allocation of Resources Without Limits or Throttling",
 				IsSecurityType: true,
 				Message:        "Either rethrow this java.lang.InterruptedException or set the interrupted flag on the current thread with 'Thread.currentThread().interrupt()'. Otherwise the information that the current thread was interrupted will be lost.",
 				PriorityScore:  890,
-				LessonUrl:      expectedLessonUrl,
 			},
 		},
 	}
@@ -677,7 +677,7 @@ func Test_enhanceIssuesDetails(t *testing.T) {
 	scanner.enhanceIssuesDetails(issues)
 
 	// Assert
-	assert.Equal(t, expectedLessonUrl, issues[0].AdditionalData.(snyk.CodeIssueData).LessonUrl)
+	assert.Equal(t, expectedLessonUrl, issues[0].LessonUrl)
 	assert.Contains(t, issues[0].AdditionalData.(snyk.CodeIssueData).Details, `href="https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide"`)
 }
 

@@ -66,6 +66,8 @@ type Issue struct {
 	CVEs []string
 	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
 	AdditionalData IssueAdditionalData
+	// Learn Service Lesson URL
+	LessonUrl string `json:"url"`
 }
 
 type IssueAdditionalData interface {
@@ -101,7 +103,6 @@ type CodeIssueData struct {
 	HasAIFix           bool               `json:"hasAIFix"`
 	DataFlow           []DataFlowElement  `json:"dataFlow,omitempty"`
 	Details            string             `json:"details"`
-	LessonUrl          string             `json:"url"`
 }
 
 func (c CodeIssueData) GetKey() string {
