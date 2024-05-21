@@ -61,6 +61,7 @@ const (
 	FormatMd              = "md"
 	snykCodeTimeoutKey    = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
 	DefaultSnykApiUrl     = "https://snyk.io/api"
+	DefaultSnykUiUrl      = "https://app.snyk.io"
 	DefaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
 	pathListSeparator     = string(os.PathListSeparator)
 	windows               = "windows"
@@ -346,8 +347,16 @@ func (c *Config) LogPath() string {
 	defer c.m.Unlock()
 	return c.logPath
 }
-func (c *Config) SnykApi() string                        { return c.snykApiUrl }
-func (c *Config) SnykCodeApi() string                    { return c.snykCodeApiUrl }
+func (c *Config) SnykApi() string     { return c.snykApiUrl }
+func (c *Config) SnykCodeApi() string { return c.snykCodeApiUrl }
+func (c *Config) SnykUi() string {
+	snykUiUrl, err := getCustomEndpointUrlFromSnykApi(c.snykApiUrl, "app")
+	if err != nil || snykUiUrl == "" {
+		return DefaultSnykUiUrl
+	}
+
+	return snykUiUrl
+}
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
 func (c *Config) IntegrationName() string {
 	return c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_NAME)
@@ -575,16 +584,20 @@ func getCodeApiUrlFromCustomEndpoint(endpoint string) (string, error) {
 	}
 
 	// Use Snyk API endpoint to determine deeproxy API URL
-	endpointUrl, err := url.Parse(strings.Trim(endpoint, " "))
-	if err != nil {
+	return getCustomEndpointUrlFromSnykApi(endpoint, "deeproxy")
+}
+
+func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, error) {
+	snykApiUrl, err := url.Parse(strings.Trim(snykApi, " "))
+	if err != nil || !snykApiUrl.IsAbs() {
 		return "", err
 	}
 
 	m := regexp.MustCompile(`^(ap[pi]\.)?`)
-	endpointUrl.Host = m.ReplaceAllString(endpointUrl.Host, "deeproxy.")
-	endpointUrl.Path = ""
+	snykApiUrl.Host = m.ReplaceAllString(snykApiUrl.Host, subdomain+".")
+	snykApiUrl.Path = ""
 
-	return endpointUrl.String(), nil
+	return snykApiUrl.String(), nil
 }
 
 func snykCodeAnalysisTimeoutFromEnv() time.Duration {

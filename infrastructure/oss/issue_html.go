@@ -25,6 +25,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"golang.org/x/exp/maps"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
@@ -82,8 +83,7 @@ func getIntroducedBy(issue snyk.OssIssueData) string {
 		for _, v := range issue.MatchingIssues {
 			if len(v.From) > 1 {
 				module := v.From[1]
-				url := fmt.Sprintf("https://app.snyk.io/test/%s/%s", issue.PackageManager, module)
-				htmlAnchor := fmt.Sprintf("<a href='%s'>%s</a>", url, module)
+				htmlAnchor := getVulnHtmlAnchor(issue.PackageManager, module)
 				m[module] = htmlAnchor
 			}
 		}
@@ -93,6 +93,11 @@ func getIntroducedBy(issue snyk.OssIssueData) string {
 	} else {
 		return ""
 	}
+}
+
+func getVulnHtmlAnchor(packageManager string, module string) string {
+	snykUi := config.CurrentConfig().SnykUi()
+	return fmt.Sprintf("<a href='%s/test/%s'>%s</a>", snykUi, packageManager, module)
 }
 
 func getLearnLink(issue snyk.OssIssueData) string {

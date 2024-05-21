@@ -30,6 +30,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 )
@@ -104,6 +105,7 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 		"RepoCount":          additionalData.RepoDatasetSize,
 		"ExampleCount":       len(additionalData.ExampleCommitFixes),
 		"ExampleCommitFixes": prepareExampleCommitFixes(additionalData.ExampleCommitFixes),
+		"SnykUi":             config.CurrentConfig().SnykUi(),
 	}
 
 	if issue.IsIgnored {

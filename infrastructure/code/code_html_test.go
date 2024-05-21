@@ -108,6 +108,44 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	assert.Contains(t, codePanelHtml, `class="ignore-details-section"`)
 }
 
+func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	customEndpoint := "https://app.dev.snyk.io"
+	c.UpdateApiEndpoints(customEndpoint + "/api")
+
+	dataFlow := getDataFlowElements()
+	fixes := getFixes()
+	repoCount := 54387
+	issue := snyk.Issue{
+		ID:        "java/DontUsePrintStackTrace",
+		Severity:  2,
+		CWEs:      []string{"CWE-123", "CWE-456"},
+		IsIgnored: true,
+		IgnoreDetails: &snyk.IgnoreDetails{
+			Category:   "wont-fix",
+			Reason:     "After a comprehensive review, our security team determined that the risk associated with this specific XSS vulnerability is mitigated by additional security measures implemented at the network and application layers.",
+			Expiration: "13 days",
+			IgnoredOn:  time.Now(),
+			IgnoredBy:  "John Smith",
+		},
+		AdditionalData: snyk.CodeIssueData{
+			Title:              "Allocation of Resources Without Limits or Throttling",
+			DataFlow:           dataFlow,
+			ExampleCommitFixes: fixes,
+			RepoDatasetSize:    repoCount,
+			IsSecurityType:     true,
+			Message:            "Either rethrow this java.lang.InterruptedException or set the interrupted flag on the current thread with 'Thread.currentThread().interrupt()'. Otherwise the information that the current thread was interrupted will be lost.",
+		},
+	}
+
+	// invoke method under test
+	codePanelHtml := getCodeDetailsHtml(issue)
+
+	// assert Ignore Details section - Ignore link must be the custom endpoint
+	assert.Contains(t, codePanelHtml, customEndpoint)
+}
+
 func getFixes() []snyk.ExampleCommitFix {
 	return []snyk.ExampleCommitFix{
 		{
