@@ -242,9 +242,9 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 		}
 		cmd = append(cmd, parameter)
 	}
-
-	if !slices.Contains(cmd, "--all-projects") {
-		cmd = append(cmd, "--all-projects")
+	allProjectsParam := "--all-projects"
+	if !slices.Contains(cmd, allProjectsParam) && !parameterBlacklist[allProjectsParam] {
+		cmd = append(cmd, allProjectsParam)
 	}
 
 	return cmd
