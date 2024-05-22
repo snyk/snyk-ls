@@ -387,7 +387,6 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 			}
 
 			d.IsIgnored, d.IgnoreDetails = s.getIgnoreDetails(result)
-			additionalData.Details = getCodeDetailsHtml(d)
 			d.AdditionalData = additionalData
 
 			issues = append(issues, d)

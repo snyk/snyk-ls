@@ -155,6 +155,8 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 		logger.Err(err).Msg("Error when calling featureFlagSettings endpoint")
 		return FFResponse{}, err
 	}
+
+	logger.Debug().Msgf("Feature flag '%s' is enabled", featureFlagType)
 	return response, nil
 }
 

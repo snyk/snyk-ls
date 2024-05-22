@@ -35,9 +35,10 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	fixes := getFixes()
 	repoCount := 54387
 	issue := snyk.Issue{
-		CWEs:     []string{"CWE-123", "CWE-456"},
-		ID:       "java/DontUsePrintStackTrace",
-		Severity: 2,
+		CWEs:      []string{"CWE-123", "CWE-456"},
+		ID:        "java/DontUsePrintStackTrace",
+		Severity:  2,
+		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
 		AdditionalData: snyk.CodeIssueData{
 			Title:              "Allocation of Resources Without Limits or Throttling",
 			DataFlow:           dataFlow,
@@ -54,6 +55,7 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 
 	// assert Header section
 	assert.Contains(t, codePanelHtml, "Priority score: 890")
+	assert.Contains(t, codePanelHtml, `href="https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide"`)
 
 	// assert Data Flow section
 	expectedDataFlowHeading := fmt.Sprintf(`Data Flow - %d steps`, len(dataFlow))
@@ -109,6 +111,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 
 	// assert Header section
 	assert.Contains(t, codePanelHtml, "Priority score: 0")
+	assert.NotContains(t, codePanelHtml, `href="https://when-no-lesson-data-element-not-in-the-template"`)
 
 	// assert Ignore Details section - Elements should be present
 	assert.Contains(t, codePanelHtml, `class="ignore-warning-wrapper"`)

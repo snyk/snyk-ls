@@ -66,6 +66,8 @@ type Issue struct {
 	CVEs []string
 	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
 	AdditionalData IssueAdditionalData
+	// Learn Service Lesson URL
+	LessonUrl string `json:"url"`
 }
 
 type IssueAdditionalData interface {

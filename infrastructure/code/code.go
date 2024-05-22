@@ -197,9 +197,38 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	} else {
 		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, filesToBeScanned)
 	}
+
+	// Populate HTML template
+	sc.enhanceIssuesDetails(results)
+
 	sc.removeFromCache(filesToBeScanned)
 	sc.addToCache(results)
 	return results, err
+}
+
+// Populate HTML template
+func (sc *Scanner) enhanceIssuesDetails(issues []snyk.Issue) {
+	logger := log.With().Str("method", "issue_enhancer.enhanceIssuesDetails").Logger()
+
+	for i := range issues {
+		issue := &issues[i]
+		issueData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+		if !ok {
+			logger.Error().Msg("Failed to fetch additional data")
+			continue
+		}
+
+		lesson, err := sc.learnService.GetLesson(issue.Ecosystem, issue.ID, issue.CWEs, issue.CVEs, issue.IssueType)
+		if err != nil {
+			logger.Warn().Err(err).Msg("Failed to get lesson")
+			sc.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: ""})
+		} else if lesson != nil && lesson.Url != "" {
+			issue.LessonUrl = lesson.Url
+		}
+
+		issueData.Details = getCodeDetailsHtml(*issue)
+		issue.AdditionalData = issueData
+	}
 }
 
 // getFilesToBeScanned returns a map of files that need to be scanned and removes them from the changedPaths set.
@@ -355,15 +384,16 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
 	files <-chan string,
 	changedFiles map[string]bool,
 ) (issues []snyk.Issue, err error) {
+	logger := config.CurrentConfig().Logger().With().Str("method", "code.UploadAndAnalyzeWithIgnores").Logger()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.uploadAndAnalyze")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
 	requestId := span.GetTraceId() // use span trace id as code-request-id
-	log.Info().Str("requestId", requestId).Msg("Starting Code analysis.")
+	logger.Info().Str("requestId", requestId).Msg("Starting Code analysis.")
 
 	target, err := scan.NewRepositoryTarget(path)
 	if err != nil {
-		log.Warn().Err(err)
+		logger.Warn().Err(err)
 	}
 
 	sarif, bundleHash, err := sc.codeScanner.UploadAndAnalyze(ctx, requestId, target, files, changedFiles)

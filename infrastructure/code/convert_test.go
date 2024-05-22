@@ -645,9 +645,6 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	assert.Equal(t, resp.Sarif.Runs[0].Tool.Driver.Rules[0].Properties.Cwe, issue.CWEs)
 	assert.Nil(t, issues[0].IgnoreDetails)
 	assert.False(t, issues[0].IsIgnored)
-
-	codeIssueData, _ := issues[0].AdditionalData.(snyk.CodeIssueData)
-	assert.Contains(t, codeIssueData.Details, fmt.Sprintf("Data Flow - %d steps", len(codeIssueData.DataFlow)))
 }
 
 func referencesForSampleSarifResponse() []snyk.Reference {
