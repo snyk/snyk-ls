@@ -39,7 +39,7 @@ func AuthenticationCheck() (string, error) {
 func GetActiveUser() (*ActiveUser, error) {
 	c := config.CurrentConfig()
 	if c.Token() == "" {
-		return nil, errors.New("token is empty")
+		return nil, errors.New("no credentials found")
 	}
 	conf := c.Engine().GetConfiguration().Clone()
 	if c.AuthenticationMethod() == lsp.OAuthAuthentication {

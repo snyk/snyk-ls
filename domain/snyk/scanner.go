@@ -246,7 +246,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	go func() { // This goroutine will listen to token changes and cancel the scans using a context
 		select {
 		case <-tokenChangeChannel:
-			log.Info().Msg("Token was changed, canceling scan")
+			log.Info().Msg("credentials have changed, canceling scan")
 			cancelFunc()
 			return
 		case <-done: // The done channel prevents the goroutine from leaking after the scan is finished

@@ -103,7 +103,7 @@ func (a *authenticationService) Logout(ctx context.Context) {
 func (a *authenticationService) IsAuthenticated() (bool, error) {
 	c := config.CurrentConfig()
 	if !c.NonEmptyToken() {
-		c.Logger().Info().Str("method", "IsAuthenticated").Msg("No token set")
+		c.Logger().Info().Str("method", "IsAuthenticated").Msg("no credentials found")
 		return false, nil
 	}
 
