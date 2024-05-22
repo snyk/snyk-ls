@@ -106,13 +106,15 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 		"ExampleCount":       len(additionalData.ExampleCommitFixes),
 		"ExampleCommitFixes": prepareExampleCommitFixes(additionalData.ExampleCommitFixes),
 		"PriorityScore":      additionalData.PriorityScore,
-		"SnykUi":             config.CurrentConfig().SnykUi(),
+		"SnykWebUrl":         config.CurrentConfig().SnykUi(),
 		"LessonUrl":          issue.LessonUrl,
 		"LessonIcon":         getLessonIconSvg(),
+		"IgnoreLineAction":   getLineToIgnoreAction(issue),
 	}
 
 	if issue.IsIgnored {
 		data["IgnoreDetails"] = prepareIgnoreDetailsRow(issue.IgnoreDetails)
+		data["IgnoreReason"] = issue.IgnoreDetails.Reason
 	}
 
 	var html bytes.Buffer
@@ -122,6 +124,10 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 	}
 
 	return html.String()
+}
+
+func getLineToIgnoreAction(issue snyk.Issue) int {
+	return issue.Range.Start.Line + 1
 }
 
 func idxMinusOne(n int) int {

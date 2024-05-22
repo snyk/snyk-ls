@@ -25,6 +25,8 @@
   <style nonce="{{.Nonce}}">
     :root {
       --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Tahoma, Geneva, Verdana, sans-serif;
+      /* TODO: Colors are linked to the IDE (JetBrains, VSCode,...) and IDE theme */
+      --vscode-textLink-foreground: #006ab1;
     }
 
     ::-webkit-scrollbar {
@@ -40,9 +42,14 @@
       background: #595a5c;
     }
 
-    html {
+    html,
+    body {
       height: 100%;
       font-size: 16px;
+      display: flex;
+      flex-direction: column;
+      margin: 0;
+      padding: 0;
     }
 
     *,
@@ -54,13 +61,8 @@
     body {
       color: var(--text-color);
       font-family: var(--default-font);
-
       font-weight: 400;
       font-size: 0.875rem;
-      margin: 0;
-      padding: 0 16px;
-      height: 100%;
-      min-height: 100vh;
       overflow-y: auto;
       overflow-x: hidden;
     }
@@ -72,6 +74,17 @@
     a,
     .link {
       color: var(--link-color);
+    }
+
+    main {
+      flex: 1 0 auto;
+      overflow-y: auto;
+    }
+
+    header,
+    article,
+    footer {
+      padding: 20px;
     }
 
     .panel-header {
@@ -125,18 +138,16 @@
       text-decoration: none;
     }
 
+    .delimiter-sections {
+      border-top: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
     .delimiter {
       width: 0;
       height: 1.3rem;
       margin: 0 8px;
       border-left: 1px solid #505254;
       display: inline-block;
-    }
-
-    .issue-overview,
-    .data-flow-section,
-    .example-fixes {
-      padding: 8px 0 0 0;
     }
 
     .ignore-warning-icon {
@@ -335,6 +346,45 @@
       position: absolute;
       padding: 0 4px;
     }
+
+    /* Footer Styles */
+    .ignore-action-container {
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+      background-color: var(--vscode-editor-background);
+      background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.075));
+      box-shadow: 0 -1px 3px rgba(0, 0, 0, .05);
+    }
+
+    .actions {
+      justify-content: space-between;
+      display: flex;
+    }
+
+    .row {
+      display: flex;
+      flex-direction: row;
+      width: 100%;
+    }
+
+    .ignore-button.secondary {
+      cursor: pointer;
+      width: auto;
+      padding: 6px 16px;
+      border: 1px solid var(--vscode-textLink-foreground);
+      border-radius: 3px;
+      background: none;
+      line-height: 1;
+      color: var(--vscode-textLink-foreground);
+    }
+
+    .ignore-button.secondary:hover,
+    .ignore-button.secondary:active {
+      background: var(--vscode-button-hoverBackground);
+      border-color: var(--vscode-button-hoverBackground);
+      color: var(--vscode-button-foreground);
+    }
   </style>
 </head>
 
@@ -366,9 +416,13 @@
       {{if ne $index (idxMinusOne (len $.CWEs))}}<span class="delimiter"></span>{{end}}
       {{end}}
       {{end}}
+      {{if .IgnoreLineAction}}
+      <span class="delimiter"></span>
+      <div>Position line: {{.IgnoreLineAction}}</div>
+      {{end}}
       {{if ge .PriorityScore 0}}
       <span class="delimiter"></span>
-      <div class="priority-score">Priority score: {{.PriorityScore}}</div>
+      <div>Priority score: {{.PriorityScore}}</div>
       {{end}}
       {{if .IsIgnored}}<div class="ignore-badge">IGNORED</div>{{end}}
     </div>
@@ -383,7 +437,7 @@
     {{end}}
   </header>
 
-  <main>
+  <main class="code-issue-container">
     <!-- issue overview -->
     <article class="issue-overview">
       <div class="overview-text">
@@ -411,8 +465,7 @@
         <div class="ignore-next-step-text">
           Ignores are currently managed in the Snyk web app.
           To edit or remove the ignore please go to:
-          <a class="styled-link" href="{{.SnykUi}}" target="_blank"
-            rel="noopener noreferrer">{{.SnykUi}}</a>.
+          <a class="styled-link" href="{{.SnykWebUrl}}" target="_blank" rel="noopener noreferrer">{{.SnykWebUrl}}</a>.
         </div>
       </div>
     </article>
@@ -473,6 +526,21 @@
       </div>
     </article>
   </main>
+
+  <!-- Ignore In Line Actions -->
+  {{if not .IsIgnored}}
+  <footer class="ignore-action-container delimiter-sections">
+    <div id="ignore-actions">
+      <div class="actions row">
+        <button id="ignore-line-issue" class="ignore-button secondary">Ignore on line <span
+            id="action-ignore-line">{{.IgnoreLineAction}}</span></button>
+        <button id="ignore-file-issue" class="ignore-button secondary">Ignore in this file</button>
+      </div>
+    </div>
+  </footer>
+  {{end}}
+
+  <!-- Scripts -->
   <script nonce="{{.Nonce}}">
     const tabLinks = document.querySelectorAll('.tab-item');
     const tabContents = document.querySelectorAll('.tab-content');
