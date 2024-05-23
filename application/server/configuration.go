@@ -79,6 +79,10 @@ func workspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 		}
 
 		if !reflect.DeepEqual(fetchedSettings[0], emptySettings) {
+			// TODO: check
+			// TODO: write smoke test? initialise client with an org and from the server side do a callback to the client
+			// asking for the config change with the new org and see if it's changed
+			log.Info().Interface("fetchedSettings", fetchedSettings[0]).Msg("---HERE")
 			UpdateSettings(fetchedSettings[0])
 			return true, nil
 		}

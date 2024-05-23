@@ -27,6 +27,7 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
@@ -263,6 +264,40 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		require.NoError(t, response.UnmarshalResult(&emptyHover))
 		require.Empty(t, emptyHover.Contents.Value)
 	})
+}
+
+func Test_SmokeSettingsChange(t *testing.T) {
+	loc, jsonRPCRecorder := setupCustomServer(t, func(_ context.Context, request *jrpc2.Request) (any, error) {
+		if request.Method() == "workspace/configuration" {
+			return []lsp.Settings{sampleSettings}, nil
+		}
+		return nil, nil
+	})
+
+	oldOrgUuid, _ := uuid.NewRandom()
+	newOrgUuid, _ := uuid.NewRandom()
+
+	c := testutil.SmokeTest(t, false)
+	c.SetOrganization(oldOrgUuid.String())
+	c.SetLogLevel("trace")
+	di.Init()
+
+	jsonRPCRecorder.ClearNotifications()
+	jsonRPCRecorder.ClearCallbacks()
+
+	// now change the organisation
+	_, err := loc.Client.Call(context.Background(), "workspace/didChangeConfiguration", sglsp.DidChangeConfigurationParams{
+		Settings: lsp.Settings{
+			Organization: newOrgUuid.String(),
+		},
+	})
+
+	require.NoError(t, err)
+
+	// wait till the organisation has changed
+	assert.Eventually(t, func() bool {
+		return c.Organization() == newOrgUuid.String()
+	}, maxIntegTestDuration, time.Millisecond)
 }
 
 func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local) *workspace.Folder {
