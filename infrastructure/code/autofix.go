@@ -72,10 +72,14 @@ func (sc *Scanner) GetAutoFixDiffs(
 		return unifiedDiffSuggestions, fmt.Errorf("bundle hash not found for baseDir: %s", baseDir)
 	}
 
+	encodedNormalizedPath, err := ToEncodedNormalizedPath(baseDir, filePath)
+	if err != nil {
+		return unifiedDiffSuggestions, err
+	}
 	options := AutofixOptions{
 		bundleHash: bundleHash,
 		shardKey:   getShardKey(baseDir, config.CurrentConfig().Token()),
-		filePath:   filePath,
+		filePath:   encodedNormalizedPath,
 		issue:      issue,
 	}
 

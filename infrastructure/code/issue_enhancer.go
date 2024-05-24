@@ -131,6 +131,7 @@ func (b *IssueEnhancer) createDeferredAutofixCodeAction(ctx context.Context, iss
 func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 	bundleHash string) func() *snyk.WorkspaceEdit {
 	editFn := func() *snyk.WorkspaceEdit {
+		c := config.CurrentConfig()
 		method := "code.enhanceWithAutofixSuggestionEdits"
 		s := b.instrumentor.StartSpan(ctx, method)
 		defer b.instrumentor.Finish(s)
@@ -141,9 +142,9 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 		defer p.End()
 		b.notifier.SendShowMessage(sglsp.Info, fixMsg)
 
-		relativePath, err := ToRelativeUnixPath(b.rootPath, issue.AffectedFilePath)
+		encodedNormalizedPath, err := ToEncodedNormalizedPath(b.rootPath, issue.AffectedFilePath)
 		if err != nil {
-			log.Error().
+			c.Logger().
 				Err(err).Str("method", method).
 				Str("rootPath", b.rootPath).
 				Str("AffectedFilePath", issue.AffectedFilePath).
@@ -151,12 +152,11 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 			b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please contact Snyk support.")
 			return nil
 		}
-		encodedRelativePath := EncodePath(relativePath)
 
 		autofixOptions := AutofixOptions{
 			bundleHash: bundleHash,
-			shardKey:   getShardKey(b.rootPath, config.CurrentConfig().Token()),
-			filePath:   encodedRelativePath,
+			shardKey:   getShardKey(b.rootPath, c.Token()),
+			filePath:   encodedNormalizedPath,
 			issue:      issue,
 		}
 
@@ -231,6 +231,17 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 	}
 
 	return editFn
+}
+
+func ToEncodedNormalizedPath(rootPath string, filePath string) (string, error) {
+	relativePath, err := ToRelativeUnixPath(rootPath, filePath)
+	if err != nil {
+		// couldn't make it relative, so it's already relative
+		relativePath = filePath
+	}
+
+	encodedRelativePath := EncodePath(relativePath)
+	return encodedRelativePath, nil
 }
 
 func (b *IssueEnhancer) autofixFeedbackActions(fixId string) (*data_structure.OrderedMap[snyk.MessageAction, snyk.CommandData], error) {
