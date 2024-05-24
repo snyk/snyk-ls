@@ -148,7 +148,8 @@ func (c *CliSettings) DefaultBinaryInstallPath() string {
 }
 
 type Config struct {
-	scrubDict                    map[string]bool
+	scrubbingDict                frameworkLogging.ScrubbingDict
+	scrubbingWriter              zerolog.LevelWriter
 	configLoaded                 concurrency.AtomicBool
 	cliSettings                  *CliSettings
 	configFile                   string
@@ -214,7 +215,7 @@ func IsDevelopment() bool {
 // New creates a configuration object with default values
 func New() *Config {
 	c := &Config{}
-	c.scrubDict = make(map[string]bool)
+	c.scrubbingDict = frameworkLogging.ScrubbingDict{}
 	c.logger = &log.Logger
 	c.cliSettings = NewCliSettings()
 	c.automaticAuthentication = true
@@ -230,14 +231,10 @@ func New() *Config {
 	c.trustedFoldersFeatureEnabled = true
 	c.automaticScanning = true
 	c.authenticationMethod = lsp.TokenAuthentication
+	initWorkFlowEngine(c)
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = lsp.DefaultSeverityFilter()
-	initWorkFlowEngine(c)
-	err := c.engine.Init()
-	if err != nil {
-		log.Warn().Err(err).Msg("unable to initialize workflow engine")
-	}
 	c.UpdateApiEndpoints(DefaultSnykApiUrl)
 	c.enableSnykLearnCodeActions = true
 	c.SetTelemetryEnabled(true)
@@ -246,15 +243,27 @@ func New() *Config {
 }
 
 func initWorkFlowEngine(c *Config) {
+	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(logging.New(nil), c.scrubbingDict)
+	writer := c.getConsoleWriter(c.scrubbingWriter)
+	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
+	log.Logger = logger
+	c.logger = &logger
+
 	conf := configuration.NewInMemory()
-	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf))
+	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(&logger))
 	c.storage = NewStorage()
 	conf.SetStorage(c.storage)
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
+
 	err := localworkflows.InitWhoAmIWorkflow(c.engine)
 	if err != nil {
 		log.Err(err).Msg("unable to initialize WhoAmI workflow")
+	}
+
+	err = c.engine.Init()
+	if err != nil {
+		log.Warn().Err(err).Msg("unable to initialize workflow engine")
 	}
 }
 
@@ -457,7 +466,7 @@ func (c *Config) SetToken(token string) {
 	isOauthToken := err == nil
 	conf := c.engine.GetConfiguration()
 	if !isOauthToken && conf.GetString(configuration.AUTHENTICATION_TOKEN) != token {
-		log.Info().Msg("Token is not an OAuth token, setting token authentication in GAF")
+		log.Info().Msg("Setting legacy authentication in GAF")
 		conf.Set(configuration.AUTHENTICATION_TOKEN, token)
 	}
 
@@ -471,17 +480,17 @@ func (c *Config) SetToken(token string) {
 		return
 	}
 
-	// Notify that the token has changed
 	c.m.Lock()
-	if token != "" {
-		c.scrubDict[token] = true
+	if w, ok := c.scrubbingWriter.(frameworkLogging.ScrubbingLogWriter); ok {
+		w.AddTerm(token, 0)
 	}
+
 	for _, channel := range c.tokenChangeChannels {
 		select {
 		case channel <- token:
 		default:
 			// Using select and a default case avoids deadlock when the channel is full
-			log.Warn().Msg("Cannot send cancellation token to channel - channel is full")
+			log.Warn().Msg("Cannot send cancellation to channel - channel is full")
 		}
 	}
 	c.tokenChangeChannels = []chan string{}
@@ -537,9 +546,20 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 		}
 	}
 
-	scrubbingMultilevelWriter := frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(writers...), c.scrubDict)
-	writer := zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
-		w.Out = scrubbingMultilevelWriter
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	// overwrite a potential already existing writer, so we have the latest settings
+	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(writers...), c.scrubbingDict)
+	writer := c.getConsoleWriter(c.scrubbingWriter)
+	log.Logger = zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
+	c.engine.SetLogger(&log.Logger)
+	c.logger = &log.Logger
+}
+
+func (c *Config) getConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
+	w := zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+		w.Out = writer
 		w.NoColor = true
 		w.TimeFormat = time.RFC3339
 		w.PartsOrder = []string{
@@ -553,11 +573,7 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 		}
 		w.FieldsExclude = []string{"method", "separator", "ext"}
 	})
-	c.m.Lock()
-	defer c.m.Unlock()
-	log.Logger = zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
-	c.engine.SetLogger(&log.Logger)
-	c.logger = &log.Logger
+	return w
 }
 
 // DisableLoggingToFile closes the open log file and sets the global logger back to it's default
@@ -868,12 +884,13 @@ func (c *Config) Logger() *zerolog.Logger {
 func (c *Config) TokenAsOAuthToken() (oauth2.Token, error) {
 	var oauthToken oauth2.Token
 	if _, err := uuid.Parse(c.Token()); err == nil {
-		log.Trace().Msgf("token is a uuid, not an oauth token")
-		return oauthToken, fmt.Errorf("token is a uuid, not an oauth token")
+		msg := "creds are legacy, not oauth"
+		log.Trace().Msgf(msg)
+		return oauthToken, fmt.Errorf(msg)
 	}
 	err := json.Unmarshal([]byte(c.Token()), &oauthToken)
 	if err != nil {
-		log.Trace().Err(err).Msg("unable to unmarshal oauth token")
+		log.Trace().Err(err).Msg("unable to unmarshal oauth creds")
 		return oauthToken, err
 	}
 	return oauthToken, nil

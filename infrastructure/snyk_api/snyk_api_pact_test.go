@@ -64,7 +64,7 @@ func TestSnykApiPact(t *testing.T) {
 		interactionOrg := pact.AddInteraction().WithRequest(dsl.Request{
 			Method: "GET",
 			Path:   dsl.String("/rest/self"),
-			Query:  dsl.MapMatcher{"version": dsl.String("2022-09-15~experimental")},
+			Query:  dsl.MapMatcher{"version": dsl.String("2024-04-22")},
 			Headers: dsl.MapMatcher{
 				"Authorization": dsl.Regex("token fc763eba-0905-41c5-a27f-3934ab26786c", `^token [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`),
 			},

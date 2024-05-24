@@ -58,9 +58,9 @@ func (a *CliAuthenticationProvider) Authenticate(ctx context.Context) (string, e
 		a.errorReporter.CaptureError(err)
 	}
 	token, err := a.getToken(ctx)
-	log.Debug().Str("method", "Authenticate").Int("token length", len(token)).Msg("got token")
+	log.Debug().Str("method", "Authenticate").Int("length", len(token)).Msg("got creds")
 	if err != nil {
-		log.Err(err).Str("method", "Authenticate").Msg("error getting token after azuthenticating")
+		log.Err(err).Str("method", "Authenticate").Msg("error getting creds after authenticating")
 		a.errorReporter.CaptureError(err)
 	}
 
@@ -79,7 +79,7 @@ func (a *CliAuthenticationProvider) ClearAuthentication(ctx context.Context) err
 	err = a.runCLICmd(ctx, cmd)
 
 	str := out.String()
-	log.Info().Str("output", str).Msg("unset Snyk CLI API token")
+	log.Info().Str("output", str).Msg("unset Snyk CLI API creds")
 
 	if err != nil {
 		return err
@@ -156,7 +156,7 @@ func (a *CliAuthenticationProvider) getToken(ctx context.Context) (string, error
 
 	err = a.runCLICmd(ctx, cmd)
 	if err != nil {
-		return "", errors.Wrap(err, fmt.Sprintf("error getting token with %v", cmd))
+		return "", errors.Wrap(err, fmt.Sprintf("error getting creds with %v", cmd))
 	}
 
 	token := out.String()
@@ -178,13 +178,13 @@ func (a *CliAuthenticationProvider) authCmd(ctx context.Context) (*exec.Cmd, err
 
 // GetToken represents the `snyk config get api` command.
 func (a *CliAuthenticationProvider) configGetAPICmd(ctx context.Context) (*exec.Cmd, error) {
-	log.Info().Msg("get Snyk API token")
+	log.Info().Msg("get Snyk API creds")
 	args := []string{"config", "get", "api"}
 	return a.buildCLICmd(ctx, args...), nil
 }
 
 func (a *CliAuthenticationProvider) configUnsetAPICmd(ctx context.Context) (*exec.Cmd, error) {
-	log.Info().Msg("unset Snyk CLI API token")
+	log.Info().Msg("unset Snyk CLI API creds")
 	args := []string{"config", "unset", "api"}
 	return a.buildCLICmd(ctx, args...), nil
 }

@@ -164,7 +164,7 @@ func updateAuthenticationMethod(settings lsp.Settings) {
 func credentialsUpdateCallback(_ string, value any) {
 	newToken, ok := value.(string)
 	if !ok {
-		msg := fmt.Sprintf("Failed to cast token value of type %T to string", value)
+		msg := fmt.Sprintf("Failed to cast creds of type %T to string", value)
 		log.Error().Str("method", "storage callback token").
 			Msgf(msg)
 		di.ErrorReporter().CaptureError(errors.New(msg))
