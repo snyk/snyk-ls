@@ -90,7 +90,7 @@ func (t *Tracker) ReportWithMessage(percentage int, message string) {
 	progress := lsp.ProgressParams{
 		Token: t.token,
 		Value: lsp.WorkDoneProgressReport{
-			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "report"},
+			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: lsp.WorkDoneProgressReportKind},
 			Percentage:           percentage,
 			Message:              message,
 		},
@@ -116,7 +116,7 @@ func (t *Tracker) EndWithMessage(message string) {
 	progress := lsp.ProgressParams{
 		Token: t.token,
 		Value: lsp.WorkDoneProgressEnd{
-			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "end"},
+			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: lsp.WorkDoneProgressEndKind},
 			Message:              message,
 		},
 	}
@@ -149,7 +149,7 @@ func newProgressParams(title, message string, cancellable, unquantifiableLength 
 	return lsp.ProgressParams{
 		Token: lsp.ProgressToken(id),
 		Value: lsp.WorkDoneProgressBegin{
-			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "begin"},
+			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: lsp.WorkDoneProgressBeginKind},
 			Title:                title,
 			Message:              message,
 			Cancellable:          cancellable,
@@ -160,7 +160,7 @@ func newProgressParams(title, message string, cancellable, unquantifiableLength 
 
 func (t *Tracker) send(progress lsp.ProgressParams) {
 	if progress.Token == "" {
-		log.Error().Str("method", "EndProgress").Msg("progress has no token")
+		log.Error().Str("method", "send").Msg("progress has no token")
 	}
 	t.channel <- progress
 }
