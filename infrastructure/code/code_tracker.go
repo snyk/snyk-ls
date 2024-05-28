@@ -62,7 +62,7 @@ func (t *tracker) Begin(title, message string) {
 	t.send(lsp.ProgressParams{
 		Token: t.token,
 		Value: lsp.WorkDoneProgressBegin{
-			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "begin"},
+			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: lsp.WorkDoneProgressBeginKind},
 			Title:                title,
 			Message:              message,
 			Cancellable:          false,
@@ -73,13 +73,13 @@ func (t *tracker) Begin(title, message string) {
 
 func (t *tracker) End(message string) {
 	if t.finished {
-		panic("Called end progress twice. This breaks LSP in Eclipse fix me now and avoid headaches later")
+		panic("Called end progress twice. This breaks LSP in Eclipse. Fix me now and avoid headaches later")
 	}
 	t.finished = true
 	t.send(lsp.ProgressParams{
 		Token: t.token,
 		Value: lsp.WorkDoneProgressEnd{
-			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "end"},
+			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: lsp.WorkDoneProgressEndKind},
 			Message:              message,
 		},
 	})

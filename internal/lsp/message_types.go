@@ -600,6 +600,10 @@ type ProgressParams struct {
 	Value any `json:"value,omitempty"`
 }
 
+const WorkDoneProgressBeginKind = "begin"
+const WorkDoneProgressReportKind = "report"
+const WorkDoneProgressEndKind = "end"
+
 type WorkDoneProgressKind struct {
 	Kind string `json:"kind"`
 }
