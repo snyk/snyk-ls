@@ -493,8 +493,8 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 
 			require.Equal(t, "snyk-ls", actualV2InstrumentationObject.Data.Attributes.Runtime.Application.Name)
 			require.Equal(t, "dev", string(*actualV2InstrumentationObject.Data.Attributes.Interaction.Stage))
-			require.Equal(t, "Success", string(actualV2InstrumentationObject.Data.Attributes.Interaction.Status))
-			require.Equal(t, []string{string(product.ToProductCodename(data.Product)), "test"}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Categories)
+			require.Equal(t, "Success", actualV2InstrumentationObject.Data.Attributes.Interaction.Status)
+			require.Equal(t, []string{product.ToProductCodename(data.Product), "test"}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Categories)
 			require.Equal(t, "Scan done", actualV2InstrumentationObject.Data.Type)
 
 			return nil, nil

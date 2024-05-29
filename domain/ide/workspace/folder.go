@@ -404,7 +404,6 @@ func sendAnalytics(data *snyk.ScanData, path string) {
 		return
 	}
 
-	//https://snyksec.atlassian.net/browse/CLI-306
 	ic := gapanalytics.NewInstrumentationCollector()
 
 	ic.SetStage("dev")
@@ -424,13 +423,10 @@ func sendAnalytics(data *snyk.ScanData, path string) {
 	iid := instrumentation.AssembleUrnFromUUID(uuid.NewString())
 	ic.SetInteractionId(iid)
 
-	//Do we have path available in other objects in this function?
-	//If not, do we want to add the path to scanData or pass it to the sendAnalytics function?
 	targetid, err := instrumentation.GetTargetId(path, instrumentation.AutoDetectedTargetId)
 	if err != nil {
 		logger.Err(err).Msg("Error creating the Target Id")
 	}
-
 	ic.SetTargetId(targetid)
 
 	summary := createTestSummary(data)
