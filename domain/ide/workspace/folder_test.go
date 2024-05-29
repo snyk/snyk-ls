@@ -490,12 +490,12 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 
 			entered = true
 			require.NoError(t, err)
+
 			require.Equal(t, "snyk-ls", actualV2InstrumentationObject.Data.Attributes.Runtime.Application.Name)
 			require.Equal(t, "dev", string(*actualV2InstrumentationObject.Data.Attributes.Interaction.Stage))
 			require.Equal(t, "Success", string(actualV2InstrumentationObject.Data.Attributes.Interaction.Status))
-			require.Equal(t, "Scan done", string(actualV2InstrumentationObject.Data.Attributes.Interaction.Type))
-
 			require.Equal(t, []string{string(product.ToProductCodename(data.Product)), "test"}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Categories)
+			require.Equal(t, "Scan done", actualV2InstrumentationObject.Data.Type)
 
 			return nil, nil
 		})
@@ -514,29 +514,6 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	time.Sleep(6 * time.Second)
 	assert.True(t, entered)
 }
-
-//func Test_processResults_ShouldNotSendAnalyticsWithEmptyProduct(t *testing.T) {
-//	c := testutil.UnitTest(t)
-//
-//	gafConfig := configuration.NewInMemory()
-//	engineMock := workflow.NewWorkFlowEngine(gafConfig)
-//	c.SetEngine(engineMock)
-//
-//	f, _ := NewMockFolderWithScanNotifier(notification.NewNotifier())
-//	filePath := filepath.Join(f.path, "path1")
-//	mockCodeIssue := NewMockIssue("id1", filePath)
-//
-//	data := snyk.ScanData{
-//		Product: "",
-//		Issues:  []snyk.Issue{mockCodeIssue},
-//	}
-//
-//	// Act
-//	f.processResults(data)
-//
-//	//Verify that sendAnalytics does not send analytics if product is ""
-//	assert.Equal(t, data.Product, product.Product(""))
-//}
 
 func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	c := testutil.UnitTest(t)

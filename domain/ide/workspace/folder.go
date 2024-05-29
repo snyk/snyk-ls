@@ -295,7 +295,7 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 	// this also updates the severity counts in scan data, therefore we pass a pointer
 	f.updateGlobalCacheAndSeverityCounts(&scanData)
 
-	go sendAnalytics(&scanData)
+	go sendAnalytics(&scanData, f.path)
 
 	// Filter and publish cached diagnostics
 	f.FilterAndPublishDiagnostics(&scanData.Product)
@@ -387,7 +387,7 @@ func initializeSeverityCountForProduct(scanData *snyk.ScanData, productType prod
 	}
 }
 
-func sendAnalytics(data *snyk.ScanData) {
+func sendAnalytics(data *snyk.ScanData, path string) {
 	initializeSeverityCountForProduct(data, data.Product)
 
 	c := config.CurrentConfig()
@@ -424,10 +424,14 @@ func sendAnalytics(data *snyk.ScanData) {
 	iid := instrumentation.AssembleUrnFromUUID(uuid.NewString())
 	ic.SetInteractionId(iid)
 
-	//todo call helperfunction to get the Target Id
-	//https://snyksec.atlassian.net/browse/CLI-308
-	//targetId := utils.GetTargetId()
-	ic.SetTargetId("pkg:github/package-url/purl-spec@244fd47e07d1004f0aed9c")
+	//Do we have path available in other objects in this function?
+	//If not, do we want to add the path to scanData or pass it to the sendAnalytics function?
+	targetid, err := instrumentation.GetTargetId(path, instrumentation.AutoDetectedTargetId)
+	if err != nil {
+		logger.Err(err).Msg("Error creating the Target Id")
+	}
+
+	ic.SetTargetId(targetid)
 
 	summary := createTestSummary(data)
 	ic.SetTestSummary(summary)
