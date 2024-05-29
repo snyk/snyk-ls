@@ -399,8 +399,10 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
 	target, err := scan.NewRepositoryTarget(path)
 	if err != nil {
 		// target is a mandatory parameter for uploadAndAnalyze
-		logger.Warn().Err(err).Msg("could not determine target, scan aborted")
-		return issues, err
+		msg := "could not determine repository URL (target), scan aborted"
+		wrappedErr := errors.Wrap(err, msg)
+		logger.Warn().Err(wrappedErr).Send()
+		return issues, wrappedErr
 	}
 
 	sarif, bundleHash, err := sc.codeScanner.UploadAndAnalyze(ctx, requestId, target, files, changedFiles)
