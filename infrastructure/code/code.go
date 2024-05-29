@@ -398,7 +398,7 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
 
 	target, err := scan.NewRepositoryTarget(path)
 	if err != nil {
-		logger.Warn().Err(err)
+		logger.Warn().Err(err).Send()
 	}
 
 	sarif, bundleHash, err := sc.codeScanner.UploadAndAnalyze(ctx, requestId, target, files, changedFiles)
