@@ -39,7 +39,8 @@ type sendMessageTestCase struct {
 }
 
 func Test_SendMessage(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
 
 	const folderPath = "/test/folderPath"
 
@@ -634,17 +635,54 @@ func Test_NewScanNotifier_NilNotifier_Errors(t *testing.T) {
 }
 
 func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
+	t.Run("snyk code enabled via general flag", func(t *testing.T) {
+		c.SetSnykIacEnabled(true)
+		c.SetSnykOssEnabled(true)
+		c.SetSnykCodeEnabled(true)
 
-	// Arrange
-	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
+		// Arrange
+		mockNotifier := notification.NewMockNotifier()
+		scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
 
-	// Act
-	scanNotifier.SendInProgress("/test/folderPath")
+		// Act
+		scanNotifier.SendInProgress("/test/folderPath")
 
-	// Assert
-	assert.Equal(t, 3, len(mockNotifier.SentMessages()))
+		// Assert
+		assert.Equal(t, 3, len(mockNotifier.SentMessages()))
+	})
+	t.Run("snyk code enabled via security", func(t *testing.T) {
+		c.SetSnykIacEnabled(true)
+		c.SetSnykOssEnabled(true)
+		c.SetSnykCodeEnabled(false)
+		c.EnableSnykCodeSecurity(true)
+
+		// Arrange
+		mockNotifier := notification.NewMockNotifier()
+		scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
+
+		// Act
+		scanNotifier.SendInProgress("/test/folderPath")
+
+		// Assert
+		assert.Equal(t, 3, len(mockNotifier.SentMessages()))
+	})
+	t.Run("snyk code enabled via quality", func(t *testing.T) {
+		c.SetSnykIacEnabled(true)
+		c.SetSnykOssEnabled(true)
+		c.SetSnykCodeEnabled(false)
+		c.EnableSnykCodeQuality(true)
+
+		// Arrange
+		mockNotifier := notification.NewMockNotifier()
+		scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
+
+		// Act
+		scanNotifier.SendInProgress("/test/folderPath")
+
+		// Assert
+		assert.Equal(t, 3, len(mockNotifier.SentMessages()))
+	})
 }
 
 func containsMatchingMessage(t *testing.T,

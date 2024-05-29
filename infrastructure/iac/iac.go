@@ -101,8 +101,15 @@ func (iac *Scanner) SupportedCommands() []snyk.CommandName {
 }
 
 func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue, err error) {
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", "iac.Scan").Logger()
+	if !c.NonEmptyToken() {
+		logger.Info().Msg("not authenticated, not scanning")
+		return issues, err
+	}
+
 	if ctx.Err() != nil {
-		log.Info().Msg("Canceling IAC scan - IAC scanner received cancellation signal")
+		logger.Info().Msg("Canceling IAC scan - IAC scanner received cancellation signal")
 		return issues, nil
 	}
 
@@ -133,7 +140,7 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	go newScan.Listen(cancel, i)
 	defer func() {
 		iac.mutex.Lock()
-		log.Debug().Msgf("Scan %v is done", i)
+		logger.Debug().Msgf("Scan %v is done", i)
 		newScan.SetDone() // Calling SetDone is safe even after cancellation
 		iac.mutex.Unlock()
 	}()

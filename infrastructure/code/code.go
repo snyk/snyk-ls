@@ -129,7 +129,12 @@ func (sc *Scanner) SupportedCommands() []snyk.CommandName {
 }
 
 func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (issues []snyk.Issue, err error) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "code.Scan").Logger()
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", "code.Scan").Logger()
+	if !c.NonEmptyToken() {
+		logger.Info().Msg("not authenticated, not scanning")
+		return issues, err
+	}
 	sastResponse, err := sc.SnykApiClient.SastSettings()
 
 	if err != nil {
@@ -393,7 +398,11 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
 
 	target, err := scan.NewRepositoryTarget(path)
 	if err != nil {
-		logger.Warn().Err(err)
+		// target is a mandatory parameter for uploadAndAnalyze
+		msg := "could not determine repository URL (target), scan aborted"
+		wrappedErr := errors.Wrap(err, msg)
+		logger.Warn().Err(wrappedErr).Send()
+		return issues, wrappedErr
 	}
 
 	sarif, bundleHash, err := sc.codeScanner.UploadAndAnalyze(ctx, requestId, target, files, changedFiles)

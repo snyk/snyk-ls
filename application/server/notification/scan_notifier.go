@@ -20,18 +20,13 @@ import (
 	"errors"
 	"strconv"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/product"
 )
-
-var enabledProducts = map[product.Product]bool{
-	product.ProductCode:                 true,
-	product.ProductInfrastructureAsCode: true,
-	product.ProductOpenSource:           true,
-}
 
 type scanNotifier struct {
 	notifier notification.Notifier
@@ -57,24 +52,23 @@ func (n *scanNotifier) SendError(pr product.Product, folderPath string) {
 	)
 }
 
-// Reports success for all enabled products
+// SendSuccessForAllProducts reports success for all enabled products
 func (n *scanNotifier) SendSuccessForAllProducts(folderPath string, issues []snyk.Issue) {
-	for product, enabled := range enabledProducts {
-		if enabled {
-			n.sendSuccess(product, folderPath, issues)
+	for _, p := range n.supportedProducts() {
+		if n.isProductEnabled(p) {
+			n.sendSuccess(p, folderPath, issues)
 		}
 	}
 }
 
-// Sends scan success message for a single enabled product
+// SendSuccess sends scan success message for a single enabled product
 func (n *scanNotifier) SendSuccess(reportedProduct product.Product, folderPath string, issues []snyk.Issue) {
 	// If no issues found, we still should send success message the reported product
 	productIssues := make([]snyk.Issue, 0)
 
 	for _, issue := range issues {
-		product := issue.Product
-		enabled, ok := enabledProducts[product]
-		if !enabled || !ok {
+		p := issue.Product
+		if !n.isProductEnabled(p) {
 			continue // skip disabled products
 		}
 
@@ -85,19 +79,18 @@ func (n *scanNotifier) SendSuccess(reportedProduct product.Product, folderPath s
 }
 
 func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues []snyk.Issue) {
-	enabled, ok := enabledProducts[pr]
-	if !enabled || !ok {
+	if !n.isProductEnabled(pr) {
 		return
 	}
 
 	var scanIssues []lsp.ScanIssue
 	// check product type
 	if pr == product.ProductInfrastructureAsCode {
-		scanIssues = n.appendIacIssues(scanIssues, folderPath, issues)
+		scanIssues = n.appendIacIssues(scanIssues, issues)
 	} else if pr == product.ProductCode {
-		scanIssues = n.appendCodeIssues(scanIssues, folderPath, issues)
+		scanIssues = n.appendCodeIssues(scanIssues, issues)
 	} else if pr == product.ProductOpenSource {
-		scanIssues = n.appendOssIssues(scanIssues, folderPath, issues)
+		scanIssues = n.appendOssIssues(scanIssues, issues)
 	}
 
 	n.notifier.Send(
@@ -110,7 +103,7 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 	)
 }
 
-func (n *scanNotifier) appendOssIssues(scanIssues []lsp.ScanIssue, folderPath string, issues []snyk.Issue) []lsp.ScanIssue {
+func (n *scanNotifier) appendOssIssues(scanIssues []lsp.ScanIssue, issues []snyk.Issue) []lsp.ScanIssue {
 	for _, issue := range issues {
 		additionalData, ok := issue.AdditionalData.(snyk.OssIssueData)
 		if !ok {
@@ -184,7 +177,7 @@ func (n *scanNotifier) appendOssIssues(scanIssues []lsp.ScanIssue, folderPath st
 	return scanIssues
 }
 
-func (n *scanNotifier) appendIacIssues(scanIssues []lsp.ScanIssue, folderPath string, issues []snyk.Issue) []lsp.ScanIssue {
+func (n *scanNotifier) appendIacIssues(scanIssues []lsp.ScanIssue, issues []snyk.Issue) []lsp.ScanIssue {
 	for _, issue := range issues {
 		additionalData, ok := issue.AdditionalData.(snyk.IaCIssueData)
 		if !ok {
@@ -212,7 +205,7 @@ func (n *scanNotifier) appendIacIssues(scanIssues []lsp.ScanIssue, folderPath st
 	return scanIssues
 }
 
-func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, folderPath string, issues []snyk.Issue) []lsp.ScanIssue {
+func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, issues []snyk.Issue) []lsp.ScanIssue {
 	for _, issue := range issues {
 		additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 		if !ok {
@@ -306,10 +299,25 @@ func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, folderPath s
 	return scanIssues
 }
 
+func (n *scanNotifier) isProductEnabled(p product.Product) bool {
+	c := config.CurrentConfig()
+	switch p {
+	case product.ProductCode:
+		return c.IsSnykCodeEnabled() || c.IsSnykCodeQualityEnabled() || c.IsSnykCodeSecurityEnabled()
+	case product.ProductOpenSource:
+		return c.IsSnykOssEnabled()
+	case product.ProductInfrastructureAsCode:
+		return c.IsSnykIacEnabled()
+	default:
+		return false
+	}
+}
+
 // Notifies all snyk/scan enabled product messages
 func (n *scanNotifier) SendInProgress(folderPath string) {
-	for pr, enabled := range enabledProducts {
-		if !enabled {
+	products := n.supportedProducts()
+	for _, pr := range products {
+		if !n.isProductEnabled(pr) {
 			continue
 		}
 
@@ -322,4 +330,9 @@ func (n *scanNotifier) SendInProgress(folderPath string) {
 			},
 		)
 	}
+}
+
+func (n *scanNotifier) supportedProducts() []product.Product {
+	products := []product.Product{product.ProductOpenSource, product.ProductInfrastructureAsCode, product.ProductCode}
+	return products
 }

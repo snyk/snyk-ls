@@ -144,9 +144,15 @@ func (cliScanner *CLIScanner) Product() product.Product {
 }
 
 func (cliScanner *CLIScanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue, err error) {
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", "CLIScanner.scan").Logger()
+	if !c.NonEmptyToken() {
+		logger.Info().Msg("not authenticated, not scanning")
+		return issues, err
+	}
 	cliPathScan := cliScanner.isSupported(path)
 	if !cliPathScan {
-		log.Debug().Msgf("OSS Scan not supported for %s", path)
+		logger.Debug().Msgf("OSS Scan not supported for %s", path)
 		return issues, nil
 	}
 	return cliScanner.scanInternal(ctx, path, cliScanner.prepareScanCommand)
@@ -158,13 +164,16 @@ func (cliScanner *CLIScanner) scanInternal(
 ) (issues []snyk.Issue,
 	err error) {
 	method := "cliScanner.Scan"
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", method).Logger()
+
 	s := cliScanner.instrumentor.StartSpan(ctx, method)
 	defer cliScanner.instrumentor.Finish(s)
-	log.Debug().Str("method", method).Msg("started.")
-	defer log.Debug().Str("method", method).Msg("done.")
+	logger.Debug().Str("method", method).Msg("started.")
+	defer logger.Debug().Str("method", method).Msg("done.")
 
 	if ctx.Err() != nil {
-		log.Debug().Msg("Canceling OSS scan - OSS scanner received cancellation signal")
+		logger.Debug().Msg("Canceling OSS scan - OSS scanner received cancellation signal")
 		return issues, nil
 	}
 
@@ -177,7 +186,7 @@ func (cliScanner *CLIScanner) scanInternal(
 
 	path, err = filepath.Abs(path)
 	if err != nil {
-		log.Err(err).Str("method", method).
+		logger.Err(err).Str("method", method).
 			Msg("Error while extracting file absolutePath")
 	}
 
@@ -218,7 +227,7 @@ func (cliScanner *CLIScanner) scanInternal(
 	cliScanner.trackResult(true)
 
 	cliScanner.mutex.Lock()
-	log.Debug().Msgf("Scan %v is done", i)
+	logger.Debug().Msgf("Scan %v is done", i)
 	newScan.SetDone()
 	cliScanner.mutex.Unlock()
 
