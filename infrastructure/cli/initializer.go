@@ -64,10 +64,12 @@ func (i *Initializer) Init() error {
 	defer Mutex.Unlock()
 
 	logger := log.With().Str("method", "cli.Init").Logger()
-	cliInstalled := config.CurrentConfig().CliSettings().Installed()
+	c := config.CurrentConfig()
+	cliSettings := c.CliSettings()
+	cliInstalled := cliSettings.Installed()
 	logger.Debug().Str("cliPath", cliPathInConfig()).Msgf("CLI installed: %v", cliInstalled)
-	if !config.CurrentConfig().ManageCliBinariesAutomatically() {
-		if !cliInstalled {
+	if !c.ManageCliBinariesAutomatically() {
+		if !cliSettings.IsPathDefined() {
 			i.notifier.SendShowMessage(sglsp.Warning,
 				"Automatic CLI downloads are disabled and no CLI path is configured. Enable automatic downloads or set a valid CLI path.")
 			return errors.New("automatic management of binaries is disabled, and CLI is not found")
@@ -84,16 +86,16 @@ func (i *Initializer) Init() error {
 	}
 
 	// When the CLI is not installed, try to install it
-	for attempt := 0; !config.CurrentConfig().CliSettings().Installed(); attempt++ {
+	for attempt := 0; !c.CliSettings().Installed(); attempt++ {
 		if attempt > 2 {
-			config.CurrentConfig().SetSnykIacEnabled(false)
-			config.CurrentConfig().SetSnykOssEnabled(false)
+			c.SetSnykIacEnabled(false)
+			c.SetSnykOssEnabled(false)
 			log.Warn().Str("method", "cli.Init").Msg("Disabling Snyk OSS and Snyk Iac as no CLI found after 3 tries")
 
 			return errors.New("could not find or download CLI")
 		}
 		i.installCli()
-		if !config.CurrentConfig().CliSettings().Installed() {
+		if !c.CliSettings().Installed() {
 			log.Debug().Str("method", "cli.Init").Msg("CLI not found, retrying in 2s")
 			time.Sleep(2 * time.Second)
 		}

@@ -58,8 +58,8 @@ func (i *Initializer) Init() error {
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
 	const errorMessage = "Auth Initializer failed to authenticate."
-	currentConfig := config.CurrentConfig()
-	if currentConfig.NonEmptyToken() {
+	c := config.CurrentConfig()
+	if c.NonEmptyToken() {
 		cmd, _ := command.CreateFromCommandData(snyk.CommandData{CommandId: snyk.GetActiveUserCommand}, nil, i.authenticationService, nil, i.notifier, nil, nil, nil)
 		user, _ := cmd.Execute(context.Background())
 		if user != nil {
@@ -69,7 +69,9 @@ func (i *Initializer) Init() error {
 
 		return nil
 	}
-	if !currentConfig.AutomaticAuthentication() {
+
+	// token is empty from here on
+	if !c.AutomaticAuthentication() {
 		err := i.handleNotAuthenticatedAndManualAuthActive()
 		if err != nil {
 			return err
@@ -77,6 +79,7 @@ func (i *Initializer) Init() error {
 		return nil
 	}
 
+	// automatic authentication enabled && token is empty
 	err := i.authenticate(i.authenticationService, errorMessage)
 	if err != nil {
 		log.Err(err).Str("method", "auth.initializer.init").Msg("failed to authenticate")
@@ -105,8 +108,6 @@ func (i *Initializer) authenticate(authenticationService snyk.AuthenticationServ
 }
 
 func (i *Initializer) handleNotAuthenticatedAndManualAuthActive() error {
-	err := &snyk.AuthenticationFailedError{ManualAuthentication: true}
-	i.notifier.SendError(err)
 	msg := "Skipping scan - user is not authenticated and automatic authentication is disabled"
 	log.Info().Msg(msg)
 
