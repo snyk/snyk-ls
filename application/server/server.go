@@ -306,7 +306,7 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 			logger.Error().Err(err).Msg("Not authenticated, or error checking authentication status")
 		}
 
-		autoScanEnabled := config.CurrentConfig().IsAutoScanEnabled()
+		autoScanEnabled := c.IsAutoScanEnabled()
 		if autoScanEnabled && authenticated {
 			logger.Info().Msg("triggering workspace scan after successful initialization")
 			workspace.Get().ScanWorkspace(context.Background())
@@ -319,7 +319,7 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 			logger.Info().Msg(msg)
 		}
 
-		if config.CurrentConfig().AutomaticAuthentication() || config.CurrentConfig().NonEmptyToken() {
+		if c.AutomaticAuthentication() || c.NonEmptyToken() {
 			logger.Debug().Msg("trying to get trusted status for untrusted folders")
 			go command.HandleUntrustedFolders(context.Background(), srv)
 		}
