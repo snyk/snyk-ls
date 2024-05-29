@@ -129,7 +129,12 @@ func (sc *Scanner) SupportedCommands() []snyk.CommandName {
 }
 
 func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (issues []snyk.Issue, err error) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "code.Scan").Logger()
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", "code.Scan").Logger()
+	if !c.NonEmptyToken() {
+		logger.Info().Msg("not authenticated, not scanning")
+		return issues, err
+	}
 	sastResponse, err := sc.SnykApiClient.SastSettings()
 
 	if err != nil {
