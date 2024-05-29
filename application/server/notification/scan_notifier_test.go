@@ -70,7 +70,6 @@ func Test_SendMessage(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-
 			expectedProduct := "code"
 			mockNotifier := notification.NewMockNotifier()
 			scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
