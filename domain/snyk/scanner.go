@@ -226,13 +226,15 @@ func (sc *DelegatingConcurrentScanner) Scan(
 ) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
 	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", method).Logger()
 
 	authenticated, err := sc.authService.IsAuthenticated()
 	if err != nil {
-		log.Error().Err(err).Msg("Error checking authentication status")
+		logger.Err(err).Msg("Error checking authentication status")
 	}
 
 	if !authenticated {
+		logger.Info().Msgf("Not authenticated, not scanning.")
 		return
 	}
 
