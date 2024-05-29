@@ -110,6 +110,7 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 		"LessonUrl":          issue.LessonUrl,
 		"LessonIcon":         getLessonIconSvg(),
 		"IgnoreLineAction":   getLineToIgnoreAction(issue),
+		"HasAIFix":           additionalData.HasAIFix,
 	}
 
 	if issue.IsIgnored {
@@ -141,9 +142,10 @@ func trimCWEPrefix(cwe string) string {
 func prepareIgnoreDetailsRow(ignoreDetails *snyk.IgnoreDetails) []IgnoreDetail {
 	return []IgnoreDetail{
 		{"Category", ignoreDetails.Category},
-		{"Ignored On", formatDate(ignoreDetails.IgnoredOn)},
 		{"Expiration", ignoreDetails.Expiration},
+		{"Ignored On", formatDate(ignoreDetails.IgnoredOn)},
 		{"Ignored By", ignoreDetails.IgnoredBy},
+		{"Reason", ignoreDetails.Reason},
 	}
 }
 

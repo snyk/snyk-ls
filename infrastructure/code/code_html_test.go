@@ -46,7 +46,7 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 			ExampleCommitFixes: fixes,
 			RepoDatasetSize:    repoCount,
 			IsSecurityType:     true,
-			Message:            "Either rethrow this java.lang.InterruptedException or set the interrupted flag on the current thread with 'Thread.currentThread().interrupt()'. Otherwise the information that the current thread was interrupted will be lost.",
+			Message:            getVulnerabilityOverviewText(),
 			PriorityScore:      890,
 		},
 	}
@@ -91,11 +91,12 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	issue := snyk.Issue{
 		ID:        "java/DontUsePrintStackTrace",
 		Severity:  2,
+		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
 		CWEs:      []string{"CWE-123", "CWE-456"},
 		IsIgnored: true,
 		IgnoreDetails: &snyk.IgnoreDetails{
 			Category:   "wont-fix",
-			Reason:     "After a comprehensive review, our security team determined that the risk associated with this specific XSS vulnerability is mitigated by additional security measures implemented at the network and application layers.",
+			Reason:     getIgnoreReason("long"),
 			Expiration: "13 days",
 			IgnoredOn:  time.Now(),
 			IgnoredBy:  "John Smith",
@@ -106,7 +107,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 			ExampleCommitFixes: fixes,
 			RepoDatasetSize:    repoCount,
 			IsSecurityType:     true,
-			Message:            "Either rethrow this java.lang.InterruptedException or set the interrupted flag on the current thread with 'Thread.currentThread().interrupt()'. Otherwise the information that the current thread was interrupted will be lost.",
+			Message:            getVulnerabilityOverviewText(),
 			PriorityScore:      0,
 		},
 	}
@@ -121,7 +122,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	// assert Ignore Details section - Elements should be present
 	assert.Contains(t, codePanelHtml, `class="ignore-warning-wrapper"`)
 	assert.Contains(t, codePanelHtml, `class="ignore-badge"`)
-	assert.Contains(t, codePanelHtml, `class="ignore-details-section"`)
+	assert.Contains(t, codePanelHtml, `data-content="ignore-details"`)
 
 	// assert Footer buttons are not present when issue is ignored
 	assert.NotContains(t, codePanelHtml, `id="ignore-actions"`)
@@ -141,9 +142,10 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 		Severity:  2,
 		CWEs:      []string{"CWE-123", "CWE-456"},
 		IsIgnored: true,
+		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
 		IgnoreDetails: &snyk.IgnoreDetails{
 			Category:   "wont-fix",
-			Reason:     "After a comprehensive review, our security team determined that the risk associated with this specific XSS vulnerability is mitigated by additional security measures implemented at the network and application layers.",
+			Reason:     getIgnoreReason("short"),
 			Expiration: "13 days",
 			IgnoredOn:  time.Now(),
 			IgnoredBy:  "John Smith",
@@ -154,7 +156,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 			ExampleCommitFixes: fixes,
 			RepoDatasetSize:    repoCount,
 			IsSecurityType:     true,
-			Message:            "Either rethrow this java.lang.InterruptedException or set the interrupted flag on the current thread with 'Thread.currentThread().interrupt()'. Otherwise the information that the current thread was interrupted will be lost.",
+			Message:            getVulnerabilityOverviewText(),
 		},
 	}
 
@@ -275,4 +277,21 @@ func getIssueRange() snyk.Range {
 			Character: 42,
 		},
 	}
+}
+
+func getVulnerabilityOverviewText() string {
+	return `A Directory Traversal attack (also known as path traversal) aims to access files and directories that are stored outside the intended folder.
+	By manipulating files with "dot-dot-slash (../)" sequences and its variations, or by using absolute file paths, it may be possible to access arbitrary files
+	and directories stored on file system, including application source code, configuration, and other critical system files.
+
+	Being able to access and manipulate an arbitrary path leads to vulnerabilities when a program is being run with privileges that the user providing the path
+	should not have. A website with a path traversal vulnerability would allow users access to sensitive files on the server hosting it.
+	CLI programs may also be vulnerable to path traversal if they are being ran with elevated privileges (such as with the setuid or setgid flags in Unix systems).`
+}
+
+func getIgnoreReason(version string) string {
+	if version == "short" {
+		return "Vulnerability found in a test file."
+	}
+	return `After a comprehensive review, our security team determined that the risk associated with this specific XSS vulnerability is mitigated by additional security measures implemented at the network and application layers.`
 }
