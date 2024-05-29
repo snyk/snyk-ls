@@ -35,8 +35,9 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	fixes := getFixes()
 	repoCount := 54387
 	issue := snyk.Issue{
+		Range:     getIssueRange(),
 		CWEs:      []string{"CWE-123", "CWE-456"},
-		ID:        "java/DontUsePrintStackTrace",
+		ID:        "go/NoHardcodedCredentials/test",
 		Severity:  2,
 		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
 		AdditionalData: snyk.CodeIssueData{
@@ -75,6 +76,10 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	assert.Contains(t, codePanelHtml, `<span class="tab-item is-selected" id="tab-link-0">`, "Two tabs, first is selected")
 	assert.Contains(t, codePanelHtml, "</svg> apache/flink", "GitHub icon preceding the repo name is present")
 	assert.Contains(t, codePanelHtml, "</svg> apache/tomcat", "Second tab is present")
+
+	// assert Footer
+	assert.Contains(t, codePanelHtml, `id="action-ignore-line">68</span>`)
+	assert.Contains(t, codePanelHtml, `class="ignore-button secondary">Ignore in this file</button>`)
 }
 
 func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
@@ -117,6 +122,9 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	assert.Contains(t, codePanelHtml, `class="ignore-warning-wrapper"`)
 	assert.Contains(t, codePanelHtml, `class="ignore-badge"`)
 	assert.Contains(t, codePanelHtml, `class="ignore-details-section"`)
+
+	// assert Footer buttons are not present when issue is ignored
+	assert.NotContains(t, codePanelHtml, `id="ignore-actions"`)
 }
 
 func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
@@ -252,6 +260,19 @@ func getDataFlowElements() []snyk.DataFlowElement {
 				},
 			},
 			Position: 4,
+		},
+	}
+}
+
+func getIssueRange() snyk.Range {
+	return snyk.Range{
+		Start: snyk.Position{
+			Line:      67,
+			Character: 28,
+		},
+		End: snyk.Position{
+			Line:      67,
+			Character: 42,
 		},
 	}
 }
