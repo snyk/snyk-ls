@@ -106,7 +106,7 @@ func (f *Folder) Issues() snyk.IssuesByFile {
 		if f.Contains(path) {
 			issues[path] = value
 		} else {
-			panic("issue found in cache that does not pertain to folder")
+			log.Error().Msg(fmt.Sprintf("issue found in cache that does not pertain to folder, path: %v", path))
 		}
 		return true
 	})
@@ -133,7 +133,8 @@ func (f *Folder) IssuesByProduct() snyk.ProductIssuesByFile {
 	}
 	for path, issues := range f.Issues() {
 		if !f.Contains(path) {
-			panic("issue found in cache that does not pertain to folder")
+			log.Error().Msg("issue found in cache that does not pertain to folder")
+			continue
 		}
 		for _, issue := range issues {
 			p := issue.Product
@@ -471,13 +472,14 @@ func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
 }
 
 func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[product.FilterableIssueType]bool) snyk.
-IssuesByFile {
+	IssuesByFile {
 	logger := log.With().Str("method", "FilterIssues").Logger()
 
 	filteredIssues := snyk.IssuesByFile{}
 	for path, issueSlice := range issues {
 		if !f.Contains(path) {
-			panic("issue found in cache that does not pertain to folder")
+			logger.Error().Msg("issue found in cache that does not pertain to folder")
+			continue
 		}
 		for _, issue := range issueSlice {
 			// Logging here might hurt performance, should benchmark if filtering is slow
