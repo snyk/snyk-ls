@@ -39,7 +39,8 @@ type sendMessageTestCase struct {
 }
 
 func Test_SendMessage(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
 
 	const folderPath = "/test/folderPath"
 
@@ -69,6 +70,7 @@ func Test_SendMessage(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+
 			expectedProduct := "code"
 			mockNotifier := notification.NewMockNotifier()
 			scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
