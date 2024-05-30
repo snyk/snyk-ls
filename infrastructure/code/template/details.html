@@ -21,8 +21,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; style-src 'self' 'nonce-{{.Nonce}}'; script-src 'nonce-{{.Nonce}}';">
-  <style nonce="{{.Nonce}}">
+    content="default-src 'none'; style-src 'self' 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
+  <style nonce="${nonce}">
+    :root {
+      --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
     ::-webkit-scrollbar {
       width: 8px;
     }
@@ -74,7 +78,7 @@
     footer {
       padding: 10px 20px;
     }
-    
+
     .panel-header {
       display: flex;
       flex-direction: column;
@@ -344,11 +348,12 @@
       text-align: left;
       align-self: stretch;
     }
-    ${ideStyle}
   </style>
+
+  ${ideStyle}
 </head>
 
-<body class="snyk-ide">
+<body>
   <!-- Ignore header -->
   {{if .IsIgnored}}
   <div class="ignore-warning-wrapper">
@@ -550,7 +555,7 @@
   {{end}}
 
   <!-- Scripts -->
-  <script nonce="{{.Nonce}}">
+  <script nonce="${nonce}">
     const MAIN_TAB_NAV_SELECTOR = '.main-tabs-nav';
     const MAIN_TAB_ITEM_SELECTOR = '.main-tabs-nav .tab-item';
     const MAIN_TAB_CONTENT_SELECTOR = '.tab-container > .tab-content';
