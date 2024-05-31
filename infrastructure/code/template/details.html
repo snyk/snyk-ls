@@ -607,22 +607,31 @@
   <script nonce="{{.Nonce}}">
     const ideType = 'snyk-vscode';
 
-    document.addEventListener('DOMContentLoaded', () => {
-      const mainTabLinks = document.querySelectorAll('.main-tabs-nav .tab-item');
-      const mainTabContents = document.querySelectorAll('.tab-container > .tab-content');
+    const MAIN_TAB_NAV_SELECTOR = '.main-tabs-nav';
+    const MAIN_TAB_ITEM_SELECTOR = '.main-tabs-nav .tab-item';
+    const MAIN_TAB_CONTENT_SELECTOR = '.tab-container > .tab-content';
+    const EXAMPLE_TAB_NAV_SELECTOR = '.example-fixes-tabs-nav';
+    const EXAMPLE_TAB_ITEM_SELECTOR = '.example-fixes-tabs-nav .tab-item';
+    const EXAMPLE_TAB_CONTENT_SELECTOR = '.example-fixes .tab-content';
+    const IGNORE_WARNING_SELECTOR = '.ignore-warning-wrapper';
+    const FIRST_EXAMPLE_CONTENT_ID = '#tab-content-0';
 
-      const isIgnored = document.querySelector('.ignore-warning-wrapper');
+    document.addEventListener('DOMContentLoaded', () => {
+      const mainTabLinks = document.querySelectorAll(MAIN_TAB_ITEM_SELECTOR);
+      const mainTabContents = document.querySelectorAll(MAIN_TAB_CONTENT_SELECTOR);
+
+      const isIgnored = document.querySelector(IGNORE_WARNING_SELECTOR);
 
       // On load, set the last selected tab and content
       let lastSelectedTab = isIgnored ? 'ignore-details' : 'fix-analysis';
-      let lastSelectedFixContent = document.querySelector('#tab-content-0');
+      let lastSelectedFixContent = document.querySelector(FIRST_EXAMPLE_CONTENT_ID);
 
       // Ensure the default nested content is displayed
       if (lastSelectedFixContent) {
         lastSelectedFixContent.classList.add('is-selected');
       }
 
-      document.querySelector('.main-tabs-nav').addEventListener('click', (event) => {
+      document.querySelector(MAIN_TAB_NAV_SELECTOR).addEventListener('click', (event) => {
         const clickedTab = event.target.closest('.tab-item');
         if (!clickedTab) return;
 
@@ -642,7 +651,7 @@
 
         // Ensure the last selected nested tab content is displayed when switching back
         if (selectedTab === 'fix-analysis' && lastSelectedFixContent) {
-          document.querySelectorAll('.example-fixes .tab-content').forEach(content => {
+          document.querySelectorAll(EXAMPLE_TAB_CONTENT_SELECTOR).forEach(content => {
             content.classList.remove('is-selected');
           });
           lastSelectedFixContent.classList.add('is-selected');
@@ -659,15 +668,15 @@
       });
 
       // Nested example-fixes tabs setup
-      const exampleTabLinks = document.querySelectorAll('.example-fixes-tabs-nav .tab-item');
-      const exampleTabContents = document.querySelectorAll('.example-fixes .tab-content');
+      const exampleTabLinks = document.querySelectorAll(EXAMPLE_TAB_ITEM_SELECTOR);
+      const exampleTabContents = document.querySelectorAll(EXAMPLE_TAB_CONTENT_SELECTOR);
 
       // Ensure the first example fix tab content is shown by default
       if (exampleTabContents.length > 0) {
         exampleTabContents[0].classList.add('is-selected');
       }
 
-      document.querySelector('.example-fixes-tabs-nav').addEventListener('click', (event) => {
+      document.querySelector(EXAMPLE_TAB_NAV_SELECTOR).addEventListener('click', (event) => {
         const clickedTab = event.target.closest('.tab-item');
         if (!clickedTab) return;
 
