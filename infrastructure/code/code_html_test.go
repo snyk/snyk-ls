@@ -46,7 +46,7 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 			ExampleCommitFixes: fixes,
 			RepoDatasetSize:    repoCount,
 			IsSecurityType:     true,
-			Message:            getVulnerabilityOverviewText(),
+			Text:               getVulnerabilityOverviewText(),
 			PriorityScore:      890,
 		},
 	}
@@ -107,7 +107,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 			ExampleCommitFixes: fixes,
 			RepoDatasetSize:    repoCount,
 			IsSecurityType:     true,
-			Message:            getVulnerabilityOverviewText(),
+			Text:               getVulnerabilityOverviewText(),
 			PriorityScore:      0,
 		},
 	}
@@ -156,7 +156,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 			ExampleCommitFixes: fixes,
 			RepoDatasetSize:    repoCount,
 			IsSecurityType:     true,
-			Message:            getVulnerabilityOverviewText(),
+			Text:               getVulnerabilityOverviewText(),
 		},
 	}
 
@@ -280,13 +280,7 @@ func getIssueRange() snyk.Range {
 }
 
 func getVulnerabilityOverviewText() string {
-	return `A Directory Traversal attack (also known as path traversal) aims to access files and directories that are stored outside the intended folder.
-	By manipulating files with "dot-dot-slash (../)" sequences and its variations, or by using absolute file paths, it may be possible to access arbitrary files
-	and directories stored on file system, including application source code, configuration, and other critical system files.
-
-	Being able to access and manipulate an arbitrary path leads to vulnerabilities when a program is being run with privileges that the user providing the path
-	should not have. A website with a path traversal vulnerability would allow users access to sensitive files on the server hosting it.
-	CLI programs may also be vulnerable to path traversal if they are being ran with elevated privileges (such as with the setuid or setgid flags in Unix systems).`
+	return `## Details\n\nA cross-site scripting attack occurs when the attacker tricks a legitimate web-based application or site to accept a request as originating from a trusted source.\n\nThis is done by escaping the context of the web application; the web application then delivers that data to its users along with other trusted dynamic content, without validating it. The browser unknowingly executes malicious script on the client side (through client-side languages; usually JavaScript or HTML)  in order to perform actions that are otherwise typically blocked by the browser's Same Origin Policy.`
 }
 
 func getIgnoreReason(version string) string {

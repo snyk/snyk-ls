@@ -91,6 +91,7 @@
       flex-direction: column;
     }
 
+    .issue-overview-header,
     .ignore-details-header,
     .data-flow-header,
     .example-fixes-header {
@@ -580,7 +581,6 @@
           <!-- Content for Vulnerability Overview -->
           <section class="issue-overview">
             <div class="overview-text">
-              <h2>Details</h2>
               {{.IssueOverview}}
             </div>
           </section>
@@ -615,8 +615,14 @@
     const EXAMPLE_TAB_CONTENT_SELECTOR = '.example-fixes .tab-content';
     const IGNORE_WARNING_SELECTOR = '.ignore-warning-wrapper';
     const FIRST_EXAMPLE_CONTENT_ID = '#tab-content-0';
+    const ISSUE_OVERVIEW_MD_HEADER = '.issue-overview .overview-text h2';
 
     document.addEventListener('DOMContentLoaded', () => {
+      const overviewHeader = document.querySelector(ISSUE_OVERVIEW_MD_HEADER);
+      if (overviewHeader) {
+        overviewHeader.classList.add('issue-overview-header');
+      }
+
       const mainTabLinks = document.querySelectorAll(MAIN_TAB_ITEM_SELECTOR);
       const mainTabContents = document.querySelectorAll(MAIN_TAB_CONTENT_SELECTOR);
 

@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gomarkdown/markdown"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -98,7 +99,7 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 		"IssueType":          getIssueType(additionalData),
 		"SeverityIcon":       getSeverityIconSvg(issue),
 		"CWEs":               issue.CWEs,
-		"IssueOverview":      additionalData.Message,
+		"IssueOverview":      markdownToHTML(additionalData.Text),
 		"IsIgnored":          issue.IsIgnored,
 		"DataFlow":           additionalData.DataFlow,
 		"DataFlowTable":      prepareDataFlowTable(additionalData),
@@ -125,6 +126,11 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 	}
 
 	return html.String()
+}
+
+func markdownToHTML(md string) template.HTML {
+	html := markdown.ToHTML([]byte(md), nil, nil)
+	return template.HTML(html)
 }
 
 func getLineToIgnoreAction(issue snyk.Issue) int {
