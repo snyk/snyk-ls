@@ -412,7 +412,6 @@ func sendAnalytics(data *snyk.ScanData, path string) {
 	ic.SetDuration(time.Duration(data.DurationMs) * time.Millisecond)
 	ic.SetTimestamp(data.TimestampFinished)
 
-	//Do we need to do a product.ToProductCodename(data.Product) to use Product Codename eg. ´oss´ instead of ´Snyk Open Source´?
 	categories := setupCategories(data, c)
 	ic.SetCategory(categories)
 
@@ -507,7 +506,7 @@ func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
 }
 
 func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[product.FilterableIssueType]bool) snyk.
-	IssuesByFile {
+IssuesByFile {
 	logger := log.With().Str("method", "FilterIssues").Logger()
 
 	filteredIssues := snyk.IssuesByFile{}
