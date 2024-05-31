@@ -18,7 +18,10 @@ package notification
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
@@ -26,6 +29,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 type scanNotifier struct {
@@ -72,7 +76,12 @@ func (n *scanNotifier) SendSuccess(reportedProduct product.Product, folderPath s
 			continue // skip disabled products
 		}
 
-		productIssues = append(productIssues, issue)
+		if uri.FolderContains(folderPath, issue.AffectedFilePath) {
+			productIssues = append(productIssues, issue)
+		} else {
+			msg := fmt.Sprintf("got an issue that is not contained in the folder: %v", issue)
+			log.Error().Str("method", "scanNotifier.SendSuccess").Msgf(msg)
+		}
 	}
 
 	n.sendSuccess(reportedProduct, folderPath, productIssues)
