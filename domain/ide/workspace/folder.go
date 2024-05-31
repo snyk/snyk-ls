@@ -409,7 +409,7 @@ func sendAnalytics(data *snyk.ScanData, path string) {
 	ic.SetStage("dev")
 	ic.SetStatus("Success") //or get result status from scan
 	ic.SetType("Scan done")
-	ic.SetDuration(time.Duration(data.DurationMs))
+	ic.SetDuration(time.Duration(data.DurationMs) * time.Millisecond)
 	ic.SetTimestamp(data.TimestampFinished)
 
 	//Do we need to do a product.ToProductCodename(data.Product) to use Product Codename eg. ´oss´ instead of ´Snyk Open Source´?
