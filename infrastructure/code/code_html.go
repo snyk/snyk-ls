@@ -88,6 +88,7 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 
 	data := map[string]interface{}{
 		"IssueTitle":         additionalData.Title,
+		"IssueMessage":       additionalData.Message,
 		"IssueType":          getIssueType(additionalData),
 		"SeverityIcon":       getSeverityIconSvg(issue),
 		"CWEs":               issue.CWEs,

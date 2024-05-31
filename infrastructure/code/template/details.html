@@ -39,16 +39,6 @@
       background: #595a5c;
     }
 
-    html,
-    body {
-      height: 100%;
-      font-size: 16px;
-      display: flex;
-      flex-direction: column;
-      margin: 0;
-      padding: 0;
-    }
-
     *,
     *:before,
     *:after {
@@ -57,8 +47,6 @@
 
     body {
       font-family: var(--default-font);
-      font-weight: 400;
-      font-size: 0.875rem;
       overflow-y: auto;
       overflow-x: hidden;
     }
@@ -87,8 +75,8 @@
     .issue-overview-header,
     .ignore-details-header,
     .data-flow-header,
+    .ai-fix-header,
     .example-fixes-header {
-      font-size: 0.75rem;
       line-height: 1.25rem;
     }
 
@@ -108,7 +96,6 @@
       align-items: center;
       margin-bottom: 1em;
       line-height: 1em;
-      font-size: 0.85rem;
     }
 
     .lesson-container {
@@ -125,6 +112,10 @@
     .lesson-link {
       display: flex;
       align-items: center;
+    }
+
+    .is-external {
+      padding-right: 12px;
     }
 
     .styled-link {
@@ -156,7 +147,6 @@
       display: flex;
       align-items: center;
       justify-content: flex-start;
-      font-size: 0.85rem;
       line-height: 1.125rem;
       padding: 0.5em;
       border-radius: 0.25em;
@@ -165,10 +155,13 @@
     }
 
     .ignore-badge {
-      font-size: 0.75rem;
       padding: 0.35em 0.35em;
       border-radius: 0.25em;
       margin-left: 1em;
+    }
+
+    .position-line:hover{
+      cursor: pointer;
     }
 
     .data-flow-body {
@@ -226,7 +219,6 @@
     }
 
     .tab-item {
-      font-size: 0.75rem;
       font-weight: 500;
       float: left;
       display: block;
@@ -236,6 +228,10 @@
       margin-right: 4px;
       cursor: pointer;
       transition: background-color 0.3s, border-color 0.3s;
+    }
+
+    .tab-item-icon {
+      color: inherit;
     }
 
     .example-repo-link {
@@ -251,7 +247,6 @@
 
     .example-line {
       display: block;
-      padding: 2px 0 18px 0;
     }
 
     .example-line-number {
@@ -346,6 +341,278 @@
       text-align: left;
       align-self: stretch;
     }
+
+    button,
+    .button {
+      border-radius: 3px;
+    }
+
+    /*AI fix tab */
+    .row.between {
+      justify-content: space-between;
+    }
+    .row {
+      display: flex;
+      flex-direction: row;
+      width: 100%;
+    }
+
+    .suggestion-text {
+      padding: 0.4rem 0;
+      margin-bottom: 0.8rem;
+      line-height: 2.4rem;
+    }
+
+    .suggestion-text {
+      line-height: 1.6;
+    }
+
+    .suggestion-links {
+      display: flex;
+      width: 100%;
+      line-height: 1;
+    }
+
+    .ai-fix {
+      padding-bottom: 0;
+    }
+
+    .ai-fix p {
+      margin-bottom: 0;
+    }
+
+    .sn-fix-wrapper {
+      padding: 2rem;
+      margin-top:1rem;
+      border-radius: .8rem;
+      overflow: hidden;
+    }
+
+    .generate-ai-fix {
+      width: auto;
+      padding: 8px 16px;
+    }
+
+    .sn-apply-fix {}
+
+    .sn-readmore {
+      margin-top: 1.6rem;
+    }
+
+    .sn-loading {
+      display: flex;
+    }
+
+    .sn-loading svg {
+      inline-size: 6rem;
+      block-size: auto
+    }
+
+    .sn-loading-wrapper {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+    }
+
+    .sn-loading-message {
+      opacity: 0;
+      position: absolute;
+      width: 100%;
+      padding-left: 16px;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .sn-loading-title {
+      font-weight: 600;
+      line-height: 1.5;
+    }
+
+    .sn-loading-description {
+      margin-bottom: 0;
+      opacity: .75
+    }
+
+    .sn-msg-1 {
+      animation: reduce 4s ease-in;
+    }
+
+    .sn-msg-2 {
+      animation: reduce 4s ease-in;
+      animation-delay: 4s;
+    }
+
+    .sn-msg-3 {
+      animation: reduce 4s ease-in;
+      animation-delay: 8s;
+    }
+
+    .sn-msg-4 {
+      animation: inference 4s ease-in infinite;
+      animation-delay: 12s;
+    }
+
+    #s0 {
+      animation: s0ani 3000ms linear infinite;
+    }
+
+    #l1 {
+      animation: l1ani 3000ms linear infinite;
+    }
+
+    #l2 {
+      animation: l2ani 3000ms linear infinite;
+    }
+
+    #l3 {
+      animation: l3ani 3000ms linear infinite;
+    }
+
+    #b1 {
+      animation: b1ani 3000ms linear infinite;
+    }
+
+    #b2 {
+      animation: b2ani 3000ms linear infinite;
+    }
+
+    #b3 {
+      animation: b3ani 3000ms linear infinite;
+    }
+
+    @keyframes s0ani {
+      0% {
+        transform: translate(50%, -15%);
+      }
+
+      100% {
+        transform: translate(50%, 115%);
+      }
+    }
+
+    @keyframes l1ani {
+
+      0%,
+      23% {
+        fill: rgba(255, 255, 255, 0.2);
+      }
+
+      40%,
+      100% {
+        fill: rgba(249, 122, 153, 0.6);
+      }
+    }
+
+    @keyframes l2ani {
+
+      0%,
+      40% {
+        fill: rgba(255, 255, 255, 0.2);
+      }
+
+      56%,
+      100% {
+        fill: rgba(249, 122, 153, 0.6);
+      }
+    }
+
+    @keyframes l3ani {
+
+      0%,
+      56% {
+        fill: rgba(255, 255, 255, 0.2);
+      }
+
+      72%,
+      100% {
+        fill: rgba(67, 181, 154, 0.6);
+      }
+    }
+
+    @keyframes b1ani {
+
+      0%,
+      8% {
+        opacity: 0;
+        transform: scale(1, 1);
+      }
+
+      33% {
+        transform: translate(-10%, -18%) scale(1.6, 1.6);
+      }
+
+      53%,
+      100% {
+        opacity: 1;
+        transform: scale(1, 1);
+      }
+    }
+
+    @keyframes b2ani {
+
+      0%,
+      36% {
+        opacity: 0;
+        transform: scale(1, 1);
+      }
+
+      50% {
+        transform: translate(-20%, -18%) scale(1.4, 1.4);
+      }
+
+      60%,
+      100% {
+        opacity: 1;
+        transform: scale(1, 1);
+      }
+    }
+
+    @keyframes b3ani {
+
+      0%,
+      54% {
+        opacity: 0;
+        transform: scale(1, 1);
+      }
+
+      66% {
+        transform: translate(-10%, -27%) scale(1.4, 1.4);
+      }
+
+      76%,
+      100% {
+        opacity: 1;
+        transform: scale(1, 1);
+      }
+    }
+
+
+    @keyframes reduce {
+
+      15%,
+      85% {
+        opacity: 1
+      }
+
+      86%,
+      100%,
+      0% {
+        opacity: 0;
+      }
+    }
+
+    @keyframes inference {
+      0%,
+      25%,
+      100% {
+        opacity: 1
+      }
+    }
+
+    .hidden {
+      display: none;
+    }
   </style>
 
   ${ideStyle}
@@ -381,7 +648,7 @@
       {{end}}
       {{if .IgnoreLineAction}}
       <span class="delimiter"></span>
-      <div>Position line: {{.IgnoreLineAction}}</div>
+      <div>Position line: <a id="position-line">{{.IgnoreLineAction}}</a></div>
       {{end}}
       {{if ge .PriorityScore 0}}
       <span class="delimiter"></span>
@@ -396,6 +663,12 @@
       </div>
       <a class="lesson-link styled-link" target="_blank" rel="noopener noreferrer" href="{{.LessonUrl}}">Learn about
         this vulnerability</a>
+      <div class="learn--link is-external">
+        <svg width="9" height="9" viewBox="0 0 9 9" xmlns="http://www.w3.org/2000/svg" fill="none">
+          <path d="M4.99998 0L6.64648 1.6465L3.14648 5.1465L3.85348 5.8535L7.35348 2.3535L8.99998 4V0H4.99998Z" fill="#888"/>
+          <path d="M8 8H1V1H4.5L3.5 0H1C0.4485 0 0 0.4485 0 1V8C0 8.5515 0.4485 9 1 9H8C8.5515 9 9 8.5515 9 8V5.5L8 4.5V8Z" fill="#888"/>
+        </svg>
+      </div>
     </div>
     {{end}}
   </header>
@@ -408,21 +681,13 @@
         <span data-tab="ignore-details" id="ignore-details-tab" class="tab-item is-selected ignore-details-tab">
           Ignore Details
         </span>
-        <span data-tab="fix-analysis" id="fix-analysis-tab" class="tab-item fix-analysis-tab">
-          Fix Analysis
-        </span>
-        <span data-tab="vuln-overview" id="vuln-overview-tab" class="tab-item vuln-overview-tab">
-          Vulnerability Overview
-        </span>
-        {{else}}
-        <span data-tab="fix-analysis" id="fix-analysis-tab"
-          class="tab-item is-selected sn-fix-analysis fix-analysis-tab">
+        {{end}}
+        <span data-tab="fix-analysis" id="fix-analysis-tab" class="tab-item {{if not .IsIgnored}}is-selected{{end}} sn-fix-analysis fix-analysis-tab">
           Fix Analysis
         </span>
         <span data-tab="vuln-overview" id="vuln-overview-tab" class="tab-item sn-vuln-overview vuln-overview-tab">
           Vulnerability Overview
         </span>
-        {{end}}
       </div>
 
       <!-- Dynamic Content Sections -->
@@ -451,84 +716,169 @@
         <!-- Start Fix Analysis section for tab id="fix-analysis-tab" -->
         <div data-content="fix-analysis" id="fix-analysis-content"
           class="tab-content main-tab-content {{if not .IsIgnored}}is-selected{{end}}">
-
-          {{if .HasAIFix }}
-          <!-- AI Fix -->
-          <section class="ai-fix">
-            <div class="fix-analysis-description">Unsanitized input from cookies flows into send, where it is used to
-              render an HTML page returned to the
-              user. This may result in a Cross-Site Scripting attack (XSS).</div>
-            <h2 class="fix-analysis--header">
-              DeepCode AI Fixes
-            </h2>
-            <span>⚡️ Fix this issue by generating a solution using Snyk DeepCode AI</span>
-            <button>✨ Generate fix using Snyk DeepCode AI</button>
-          </section>
-          {{else}}
-          <!-- We need Data Flow and Fixed Code Examples -->
-          <!-- Data Flow -->
-          <section class="data-flow-section">
-            <h2 class="data-flow-header">
-              Data Flow - {{len .DataFlow}} {{if gt (len .DataFlow) 1}}steps{{else}}step{{end}}
-            </h2>
-            <div class="data-flow-body">
-              <table class="data-flow-body">
-                <tbody>
-                  {{range .DataFlowTable}}
-                  <tr class="data-flow-row">
-                    <td class="data-flow-number">{{.Number}}</td>
-                    <td class="data-flow-clickable-row" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
-                      end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
-                      {{.FileName}}:{{.StartLineValue}}
-                    </td>
-                    <td class="data-flow-delimiter">|</td>
-                    <td class="data-flow-text">{{.Content}}</td>
-                  </tr>
-                  {{end}}
-                </tbody>
-              </table>
+          <section id="suggestion-info" class="delimiter-top">
+            <div id="description" class="suggestion-text">{{.IssueMessage}}</div>
+            <div class="suggestion-links">
+              <div id="lead-url" class="clickable hidden">
+                <svg width="9" height="9" viewBox="0 0 9 9" xmlns="http://www.w3.org/2000/svg" fill="none">
+                  <path d="M4.99998 0L6.64648 1.6465L3.14648 5.1465L3.85348 5.8535L7.35348 2.3535L8.99998 4V0H4.99998Z" fill="#888"/>
+                  <path d="M8 8H1V1H4.5L3.5 0H1C0.4485 0 0 0.4485 0 1V8C0 8.5515 0.4485 9 1 9H8C8.5515 9 9 8.5515 9 8V5.5L8 4.5V8Z" fill="#888"/>
+                </svg> More info
+              </div>
             </div>
           </section>
 
-          <!-- Fixed Code Examples -->
-          <section class="example-fixes">
-            <h2 class="example-fixes-header">Fixed Code Examples</h2>
-            <div class="example-fixes-text">
-              {{if gt (len .ExampleCommitFixes) 0}}
-              This issue was fixed by {{.RepoCount}} projects. Here are {{.ExampleCount}} example fixes.
-              <div class="example-fixes-tabs-nav example-fixes-tabs">
-                {{range $index, $fix := .ExampleCommitFixes}}
-                <span class="tab-item {{if eq $index 0}}is-selected{{end}}" id="tab-link-{{$index}}">
-                  {{$fix.IconSVG}} <a class="example-repo-link" target="_blank" rel="noopener noreferrer"
-                    href="{{.RepoLink}}">
-                    {{$fix.RepoName}}</a>
-                </span>
-                {{end}}
+          <!-- AI Fix -->
+          <div id="ai-fix-wrapper" class="{{if not .HasAIFix}}hidden{{end}}">
+            <!-- AI fix buttons -->
+            <section id="fix-wrapper" class="ai-fix">
+              <h2 class="ai-fix-header">
+                DeepCode AI Fixes
+              </h2>
+
+              <p>⚡ Fix this issue by generating a solution using Snyk DeepCode AI</p>
+
+              <div class="sn-fix-wrapper">
+                <button id="generate-ai-fix" class="generate-ai-fix">✨ Generate fix <span class="wide">using Snyk DeepCode AI</span></button>
+
+                <div id="fix-loading-indicator" class="sn-loading hidden">
+                  <div class="sn-loading-icon">
+                    <svg id="scan-animation" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 248 204" shape-rendering="geometricPrecision"><defs><linearGradient id="mg" x1="16.0903" y1="180" x2="92.743" y2="107.462" spreadMethod="pad" gradientUnits="userSpaceOnUse" gradientTransform="translate(0 0)"><stop id="eQeHIUZsTfX2-fill-0" offset="0%" stop-color="#145deb"/><stop id="eQeHIUZsTfX2-fill-1" offset="100%" stop-color="#441c99"/></linearGradient><linearGradient id="sg" x1="116" y1="0" x2="116" y2="64" spreadMethod="pad" gradientUnits="userSpaceOnUse" gradientTransform="translate(0 0)"><stop id="eQeHIUZsTfX26-fill-0" offset="0%" stop-color="#ff78e1"/><stop id="eQeHIUZsTfX26-fill-1" offset="100%" stop-color="rgba(255,120,225,0)"/></linearGradient></defs><rect width="224" height="180" rx="16" ry="16" transform="translate(12 12)" fill="url(#mg)"/><circle r="4" transform="translate(28 28)" opacity="0.3" fill="#fff"/><circle r="4" transform="translate(40 28)" opacity="0.25" fill="#fff"/><circle r="4" transform="translate(52 28)" opacity="0.2" fill="#fff"/><rect width="48" height="12" rx="6" ry="6" transform="translate(162 56)" opacity="0.2" fill="#fff"/><rect width="80" height="12" rx="6" ry="6" transform="translate(32 92)" opacity="0.2" fill="#fff"/><rect width="72" height="12" rx="6" ry="6" transform="translate(96 164)" opacity="0.2" fill="#fff"/><rect width="56" height="12" rx="6" ry="6" transform="translate(156 128)" opacity="0.2" fill="#fff"/><rect id="l3" width="80" height="12" rx="6" ry="6" transform="translate(64 128)"/><rect id="l2" width="64" height="12" rx="6" ry="6" transform="translate(150 92)"/><rect id="l1" width="117" height="12" rx="6" ry="6" transform="translate(32 56)"/><g id="b3"><rect width="32" height="32" rx="6" ry="6" transform="translate(48 118)" fill="#43b59a"/><path d="M54.5991,134c.7987-.816,2.0938-.816,2.8926,0l2.8926,2.955l10.124-10.343c.7988-.816,2.0939-.816,2.8926,0c.7988.816.7988,2.139,0,2.955L61.8306,141.388c-.7988.816-2.0939.816-2.8926,0l-4.3389-4.433c-.7988-.816-.7988-2.139,0-2.955Z" fill="#fff"/></g><g id="b2"><rect width="32" height="32" rx="6" ry="6" transform="translate(124 81)" fill="#f97a99"/><path d="M142,91c0,.7685-.433,5.3087-1.069,8h-1.862c-.636-2.6913-1.069-7.2315-1.069-8c0-1.1046.895-2,2-2s2,.8954,2,2Z" fill="#fff"/><path d="M140,104c1.105,0,2-.895,2-2s-.895-2-2-2-2,.895-2,2s.895,2,2,2Z" fill="#fff"/></g><g id="b1"><rect width="24" height="24" rx="6" ry="6" transform="translate(28 50)" fill="#f97a99"/><path d="M42,56c0,.7685-.4335,5.3087-1.0693,8h-1.8614C38.4335,61.3087,38,56.7685,38,56c0-1.1046.8954-2,2-2s2,.8954,2,2Z" fill="#fff"/><path d="M40,69c1.1046,0,2-.8954,2-2s-.8954-2-2-2-2,.8954-2,2s.8954,2,2,2Z" fill="#fff"/></g><g id="s0" transform="translate(124,-40)"><g transform="translate(-124,-40)"><rect width="232" height="64" rx="0" ry="0" transform="matrix(1 0 0-1 8 64)" opacity="0.5" fill="url(#sg)"/><rect width="248" height="16" rx="8" ry="8" transform="translate(0 64)" fill="#e555ac"/></g></g></svg>
+                  </div>
+                  <div class="sn-loading-wrapper">
+                    <div class="sn-loading-message sn-msg-1">
+                      <span class="sn-loading-title">1<span class="font-light">/4</span> Code Reduction...</span>
+                      <p class="sn-loading-description">Reduces the given files to a smaller and relevant code snippet.</p>
+                    </div>
+                    <div class="sn-loading-message sn-msg-2">
+                      <span class="sn-loading-title">2<span class="font-light">/4</span> Parsing...</span>
+                      <p class="sn-loading-description">Analyzing symbols and generating the graph representation.</p>
+                    </div>
+                    <div class="sn-loading-message sn-msg-3">
+                      <span class="sn-loading-title">3<span class="font-light">/4</span> Static Analysis...</span>
+                      <p class="sn-loading-description">Examining the vulnerability code without having to execute the program.</p>
+                    </div>
+                    <div class="sn-loading-message sn-msg-4">
+                      <span class="sn-loading-title">4<span class="font-light">/4</span> Inferencing...</span>
+                      <p class="sn-loading-description">Feeding the reduced code to our neural network to obtain the prediction.</p>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div class="tab-container">
-                {{range $index, $fix := .ExampleCommitFixes}}
-                <div id="tab-content-{{$index}}"
-                  class="tab-content example-fix-tab-content {{if eq $index 0}}is-selected{{end}}">
-                  {{range $fix.ExampleLines}}
-                  <div class="example-line {{.LineChange}}">
-                    <span class="example-line-number">{{.LineNumber}}</span>
-                    <code>{{.Line}}</code>
+            </section>
+
+            <!-- AI fixes -->
+            <section id="fixes-section" class="sn-ai-fixes hidden">
+              <div id="info-no-diffs" class="font-light">
+                There are no fix diffs for this issue.
+              </div>
+              <div id="diff-top" class="row between">
+                <div id="info-top" class="font-light">Here are <span id="diff-number"></span> AI-generated solutions:</div>
+                <div class="diffs-nav">
+                  <span id="previous-diff" class="arrow" title="Previous diff">
+                    <svg class="arrow-icon dark-only" width="10" height="12" viewBox="0 0 10 12
+  " fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M8.86723 11.4303L8.86721 11.4302L0.641823 6.22447L0.387031 6.62706L0.641821 6.22447C0.532336 6.15518 0.5 6.06763 0.5 6.00001C0.5 5.93239 0.532336 5.84484 0.641821 5.77555L0.641824 5.77555L8.86721 0.569741L8.86723 0.569731C9.00417 0.483055 9.17298 0.480315 9.31053 0.543871C9.44734 0.607082 9.5 0.705333 9.5 0.79421V11.2058C9.5 11.2947 9.44734 11.3929 9.31054 11.4561C9.173 11.5197 9.00418 11.5169 8.86723 11.4303Z" stroke="#CCCCCC"/>
+  </svg>
+                    <svg class="arrow-icon light-only" width="10" height="12" viewBox="0 0 10 12
+  " fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M8.86723 11.4303L8.86721 11.4302L0.641823 6.22447L0.387031 6.62706L0.641821 6.22447C0.532336 6.15518 0.5 6.06763 0.5 6.00001C0.5 5.93239 0.532336 5.84484 0.641821 5.77555L0.641824 5.77555L8.86721 0.569741L8.86723 0.569731C9.00417 0.483055 9.17298 0.480315 9.31053 0.543871C9.44734 0.607082 9.5 0.705333 9.5 0.79421V11.2058C9.5 11.2947 9.44734 11.3929 9.31054 11.4561C9.173 11.5197 9.00418 11.5169 8.86723 11.4303Z" stroke="#3B3B3B"/>
+  </svg>
+                  </span>
+                  <span id="diff-text">
+                    AI solution <strong id="diff-counter">1</strong>/<span id="diff-number2"></span>
+                  </span>
+                  <span id="next-diff" class="arrow" title="Next diff">
+                    <svg class="arrow-icon dark-only" width="10" height="12" viewBox="0 0 10 12
+    " fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M1.13277 11.4303L1.13279 11.4302L9.35818 6.22447L9.61297 6.62706L9.35818 6.22447C9.46766 6.15518 9.5 6.06763 9.5 6.00001C9.5 5.93239 9.46766 5.84484 9.35818 5.77555L9.35818 5.77555L1.13279 0.569741L1.13277 0.569731C0.995832 0.483055 0.827023 0.480315 0.689467 0.543871C0.55266 0.607082 0.5 0.705333 0.5 0.79421V11.2058C0.5 11.2947 0.552661 11.3929 0.689456 11.4561C0.827003 11.5197 0.99582 11.5169 1.13277 11.4303Z" stroke="#CCCCCC"/>
+    </svg>
+                    <svg class="arrow-icon light-only" width="10" height="12" viewBox="0 0 10
+    12" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M1.13277 11.4303L1.13279 11.4302L9.35818 6.22447L9.61297 6.62706L9.35818 6.22447C9.46766 6.15518 9.5 6.06763 9.5 6.00001C9.5 5.93239 9.46766 5.84484 9.35818 5.77555L9.35818 5.77555L1.13279 0.569741L1.13277 0.569731C0.995832 0.483055 0.827023 0.480315 0.689467 0.543871C0.55266 0.607082 0.5 0.705333 0.5 0.79421V11.2058C0.5 11.2947 0.552661 11.3929 0.689456 11.4561C0.827003 11.5197 0.99582 11.5169 1.13277 11.4303Z" stroke="#3B3B3B"/>
+    </svg>
+              </span>
+                </div>
+              </div>
+              <div id="diff"></div>
+              <button id="apply-fix" class="button sn-apply-fix">Apply fix</button>
+            </section>
+
+            <!-- AI fix errors -->
+            <section id="fixes-error-section" class="sn-ai-fix-error hidden">
+              <div id="info-no-diffs" class="font-light">
+                ⚠️ There was an issue generating the fix
+              </div>
+              <div class="sn-fix-wrapper">
+                <button id="retry-generate-fix" class="button generate-ai-fix">✨ Retry generating AI fixes</button>
+              </div>
+            </section>
+          </div>
+
+          <!-- Data Flow and Fixed Code Examples -->
+          <div id="no-ai-fix-wrapper" class="{{if .HasAIFix}}hidden{{end}}">
+            <!-- Data Flow -->
+            <section class="data-flow-section">
+              <h2 class="data-flow-header">
+                Data Flow - {{len .DataFlow}} {{if gt (len .DataFlow) 1}}steps{{else}}step{{end}}
+              </h2>
+              <div class="data-flow-body">
+                <table class="data-flow-body">
+                  <tbody>
+                    {{range .DataFlowTable}}
+                    <tr class="data-flow-row">
+                      <td class="data-flow-number">{{.Number}}</td>
+                      <td class="data-flow-clickable-row" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
+                        end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
+                        {{.FileName}}:{{.StartLineValue}}
+                      </td>
+                      <td class="data-flow-delimiter">|</td>
+                      <td class="data-flow-text">{{.Content}}</td>
+                    </tr>
+                    {{end}}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <!-- Fixed Code Examples -->
+            <section class="example-fixes">
+              <h2 class="example-fixes-header">Fixed Code Examples</h2>
+              <div class="example-fixes-text">
+                {{if gt (len .ExampleCommitFixes) 0}}
+                This issue was fixed by {{.RepoCount}} projects. Here are {{.ExampleCount}} example fixes.
+                <div class="example-fixes-tabs-nav example-fixes-tabs">
+                  {{range $index, $fix := .ExampleCommitFixes}}
+                  <span class="tab-item {{if eq $index 0}}is-selected{{end}}" id="tab-link-{{$index}}">
+                    {{$fix.IconSVG}} <a class="example-repo-link" target="_blank" rel="noopener noreferrer"
+                      href="{{.RepoLink}}">
+                      {{$fix.RepoName}}</a>
+                  </span>
+                  {{end}}
+                </div>
+                <div class="tab-container">
+                  {{range $index, $fix := .ExampleCommitFixes}}
+                  <div id="tab-content-{{$index}}"
+                    class="tab-content example-fix-tab-content {{if eq $index 0}}is-selected{{end}}">
+                    {{range $fix.ExampleLines}}
+                    <div class="example-line {{.LineChange}}">
+                      <span class="example-line-number">{{.LineNumber}}</span>
+                      <code>{{.Line}}</code>
+                    </div>
+                    {{end}}
                   </div>
                   {{end}}
                 </div>
+                {{else}}
+                No example fixes are available.
                 {{end}}
               </div>
-              {{else}}
-              No example fixes are available.
-              {{end}}
-            </div>
-          </section>
-          {{end}}
+            </section>
+          </div>
         </div>
         <!-- End Fix Analysis section -->
 
         <!-- Start Vulnerability Overview section for tab id="vuln-overview-tab" -->
-
         <div id="vuln-overview-content" class="tab-content main-tab-content" data-content="vuln-overview">
           <!-- Content for Vulnerability Overview -->
           <section class="issue-overview">
@@ -600,8 +950,9 @@
       };
 
       // Event listeners for main and nested tabs
+      // TODO: move this into the HTML as an onclick
       document.querySelector(MAIN_TAB_NAV_SELECTOR).addEventListener('click', onMainTabClicked);
-      document.querySelector(EXAMPLE_TAB_NAV_SELECTOR).addEventListener('click', onExampleTabClicked);
+      document.querySelector(EXAMPLE_TAB_NAV_SELECTOR)?.addEventListener('click', onExampleTabClicked);
     });
   </script>
 

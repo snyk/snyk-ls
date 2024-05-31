@@ -76,6 +76,8 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	assert.NotContains(t, codePanelHtml, `class="ignore-details-section"`)
 
 	// assert Fixes section
+	assert.Contains(t, codePanelHtml, ` id="ai-fix-wrapper" class="hidden">`)
+	assert.Contains(t, codePanelHtml, ` id="no-ai-fix-wrapper" class="">`)
 	expectedFixesDescription := fmt.Sprintf(`\s*This issue was fixed by %d projects. Here are %d example fixe.\s*`, repoCount, len(fixes))
 	assert.Regexp(t, regexp.MustCompile(expectedFixesDescription), codePanelHtml)
 	assert.Contains(t, codePanelHtml, `<span class="tab-item is-selected" id="tab-link-0">`, "Two tabs, first is selected")
@@ -86,6 +88,39 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	// assert Footer
 	assert.Contains(t, codePanelHtml, `id="action-ignore-line">68</span>`)
 	assert.Contains(t, codePanelHtml, `class="ignore-button secondary">Ignore in this file</button>`)
+}
+
+func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
+	_ = testutil.UnitTest(t)
+
+	dataFlow := getDataFlowElements()
+	fixes := getFixes()
+	repoCount := 54387
+	issue := snyk.Issue{
+		Range:     getIssueRange(),
+		CWEs:      []string{"CWE-123", "CWE-456"},
+		ID:        "go/NoHardcodedCredentials/test",
+		Severity:  2,
+		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
+		AdditionalData: snyk.CodeIssueData{
+			Title:              "Allocation of Resources Without Limits or Throttling",
+			DataFlow:           dataFlow,
+			ExampleCommitFixes: fixes,
+			RepoDatasetSize:    repoCount,
+			IsSecurityType:     true,
+			Text:               getVulnerabilityOverviewText(),
+			PriorityScore:      890,
+			HasAIFix:           true,
+		},
+	}
+
+	// invoke method under test
+	codePanelHtml := getCodeDetailsHtml(issue)
+
+	// assert Fixes section
+	assert.Contains(t, codePanelHtml, ` id="ai-fix-wrapper" class="">`)
+	assert.Contains(t, codePanelHtml, `Generate fix <span class="wide">using Snyk DeepCode AI</span>`)
+	assert.Contains(t, codePanelHtml, ` id="no-ai-fix-wrapper" class="hidden">`)
 }
 
 func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
