@@ -178,7 +178,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		// now we add juice shop as second folder/repo
 		folderJuice := addJuiceShopAsWorkspaceFolder(t, loc)
 
-		// now scan the folders
+		// scan both created folders
 		_, err := loc.Client.Call(context.Background(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   "snyk.workspaceFolder.scan",
 			Arguments: []any{folderGoof.Path()},
@@ -186,7 +186,6 @@ func Test_SmokeIssueCaching(t *testing.T) {
 
 		require.NoError(t, err)
 
-		// now scan the whole workspace
 		_, err = loc.Client.Call(context.Background(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   "snyk.workspaceFolder.scan",
 			Arguments: []any{folderJuice.Path()},
@@ -194,7 +193,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 
 		require.NoError(t, err)
 
-		// wait till the whole workspace is scanned
+		// wait till both folders are scanned
 		assert.Eventually(t, func() bool {
 			return folderGoof != nil && folderGoof.IsScanned() && folderJuice != nil && folderJuice.IsScanned()
 		}, maxIntegTestDuration, time.Millisecond)
