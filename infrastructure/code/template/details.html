@@ -659,15 +659,12 @@
         }
       };
 
-      document.querySelector(MAIN_TAB_NAV_SELECTOR).addEventListener('click', onMainTabClicked);
-
-      document.querySelector(EXAMPLE_TAB_NAV_SELECTOR).addEventListener('click', (event) => {
+      const onExampleTabClicked = event => {
         const clickedTab = event.target.closest('.tab-item');
         if (!clickedTab) return;
 
         const targetContentId = clickedTab.id.replace('tab-link-', 'tab-content-');
         toggleIsSelectedClass(exampleTabLinks, tab => tab === clickedTab);
-
         toggleIsSelectedClass(exampleTabContents, content => {
           const isSelected = content.id === targetContentId;
           if (isSelected) {
@@ -675,7 +672,11 @@
           }
           return isSelected;
         });
-      });
+      };
+
+      // Event listeners for main and nested tabs
+      document.querySelector(MAIN_TAB_NAV_SELECTOR).addEventListener('click', onMainTabClicked);
+      document.querySelector(EXAMPLE_TAB_NAV_SELECTOR).addEventListener('click', onExampleTabClicked);
 
       // Restore the last selected tab on page load
       toggleIsSelectedClass(mainTabContents, content => content.getAttribute('data-content') === lastSelectedTab);
