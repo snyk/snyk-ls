@@ -614,13 +614,22 @@
     const IGNORE_WARNING_SELECTOR = '.ignore-warning-wrapper';
     const FIRST_EXAMPLE_CONTENT_ID = '#tab-content-0';
 
+    const toggleIsSelectedClass = (elements, shouldToggle) => {
+      elements.forEach(el => {
+        // toggle(token, force) - force is a boolean value that determines whether the class should be added or removed.
+        el.classList.toggle('is-selected', shouldToggle(el));
+      });
+    }
+
     // Ensure the document is fully loaded before executing script to manipulate DOM.
     document.addEventListener('DOMContentLoaded', () => {
       const mainTabLinks = document.querySelectorAll(MAIN_TAB_ITEM_SELECTOR);
       const mainTabContents = document.querySelectorAll(MAIN_TAB_CONTENT_SELECTOR);
+      // Nested tabs
+      const exampleTabLinks = document.querySelectorAll(EXAMPLE_TAB_ITEM_SELECTOR);
+      const exampleTabContents = document.querySelectorAll(EXAMPLE_TAB_CONTENT_SELECTOR);
 
       const isIgnored = document.querySelector(IGNORE_WARNING_SELECTOR);
-
       // On load, set the last selected tab and content
       let lastSelectedTab = isIgnored ? 'ignore-details' : 'fix-analysis';
       let lastSelectedFixContent = document.querySelector(FIRST_EXAMPLE_CONTENT_ID);
@@ -630,68 +639,52 @@
         lastSelectedFixContent.classList.add('is-selected');
       }
 
-      document.querySelector(MAIN_TAB_NAV_SELECTOR).addEventListener('click', (event) => {
+      const onMainTabClicked = event => {
         const clickedTab = event.target.closest('.tab-item');
         if (!clickedTab) return;
 
         const selectedTab = clickedTab.getAttribute('data-tab');
-
         // Save the current selected tab
         lastSelectedTab = selectedTab;
 
         // Toggle selected tab and content
-        mainTabLinks.forEach(tab => {
-          tab.classList.toggle('is-selected', tab === clickedTab);
-        });
-
-        mainTabContents.forEach(content => {
-          content.classList.toggle('is-selected', content.getAttribute('data-content') === selectedTab);
-        });
+        toggleIsSelectedClass(mainTabLinks, tab => tab === clickedTab);
+        toggleIsSelectedClass(mainTabContents, content => content.getAttribute('data-content') === selectedTab);
 
         // Ensure the last selected nested tab content is displayed when switching back
         if (selectedTab === 'fix-analysis' && lastSelectedFixContent) {
-          document.querySelectorAll(EXAMPLE_TAB_CONTENT_SELECTOR).forEach(content => {
-            content.classList.remove('is-selected');
-          });
+          // Remove 'is-selected' from all
+          toggleIsSelectedClass(exampleTabContents, () => false);
           lastSelectedFixContent.classList.add('is-selected');
         }
-      });
+      };
 
-      // Restore the last selected tab on page load
-      mainTabContents.forEach(content => {
-        content.classList.toggle('is-selected', content.getAttribute('data-content') === lastSelectedTab);
-      });
-
-      mainTabLinks.forEach(tab => {
-        tab.classList.toggle('is-selected', tab.getAttribute('data-tab') === lastSelectedTab);
-      });
-
-      // Nested example-fixes tabs setup
-      const exampleTabLinks = document.querySelectorAll(EXAMPLE_TAB_ITEM_SELECTOR);
-      const exampleTabContents = document.querySelectorAll(EXAMPLE_TAB_CONTENT_SELECTOR);
-
-      // Ensure the first example fix tab content is shown by default
-      if (exampleTabContents.length > 0) {
-        exampleTabContents[0].classList.add('is-selected');
-      }
+      document.querySelector(MAIN_TAB_NAV_SELECTOR).addEventListener('click', onMainTabClicked);
 
       document.querySelector(EXAMPLE_TAB_NAV_SELECTOR).addEventListener('click', (event) => {
         const clickedTab = event.target.closest('.tab-item');
         if (!clickedTab) return;
 
         const targetContentId = clickedTab.id.replace('tab-link-', 'tab-content-');
+        toggleIsSelectedClass(exampleTabLinks, tab => tab === clickedTab);
 
-        exampleTabLinks.forEach(tab => {
-          tab.classList.toggle('is-selected', tab === clickedTab);
-        });
-
-        exampleTabContents.forEach(content => {
-          content.classList.toggle('is-selected', content.id === targetContentId);
-          if (content.id === targetContentId) {
+        toggleIsSelectedClass(exampleTabContents, content => {
+          const isSelected = content.id === targetContentId;
+          if (isSelected) {
             lastSelectedFixContent = content; // Track the last selected content
           }
+          return isSelected;
         });
       });
+
+      // Restore the last selected tab on page load
+      toggleIsSelectedClass(mainTabContents, content => content.getAttribute('data-content') === lastSelectedTab);
+      toggleIsSelectedClass(mainTabLinks, tab => tab.getAttribute('data-tab') === lastSelectedTab);
+
+      // Ensure the first example fix tab content is shown by default
+      if (exampleTabContents.length > 0) {
+        exampleTabContents[0].classList.add('is-selected');
+      }
     });
   </script>
 
