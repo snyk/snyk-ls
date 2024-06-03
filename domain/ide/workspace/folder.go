@@ -19,6 +19,7 @@ package workspace
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -406,15 +407,6 @@ func sendAnalytics(data *snyk.ScanData, path string) {
 
 	ic := gapanalytics.NewInstrumentationCollector()
 
-	ic.SetStage("dev")
-	ic.SetStatus("Success") //or get result status from scan
-	ic.SetInteractionType("Scan done")
-	ic.SetDuration(time.Duration(data.DurationMs) * time.Millisecond)
-	ic.SetTimestamp(data.TimestampFinished)
-
-	categories := setupCategories(data, c)
-	ic.SetCategory(categories)
-
 	//todo Should we make this a singleton?
 	ua := networking.UserAgent(networking.UaWithConfig(gafConfig), networking.UaWithApplication("snyk-ls", config.Version))
 	ic.SetUserAgent(ua)
@@ -422,17 +414,28 @@ func sendAnalytics(data *snyk.ScanData, path string) {
 	iid := instrumentation.AssembleUrnFromUUID(uuid.NewString())
 	ic.SetInteractionId(iid)
 
+	ic.SetTimestamp(data.TimestampFinished)
+	ic.SetDuration(time.Duration(data.DurationMs) * time.Millisecond)
+
+	ic.SetStage("dev")
+	ic.SetType("Analytics")
+	ic.SetInteractionType("Scan done")
+
+	categories := setupCategories(data, c)
+	ic.SetCategory(categories)
+
+	ic.SetStatus("Success") //or get result status from scan
+
+	summary := createTestSummary(data)
+	ic.SetTestSummary(summary)
+
 	targetid, err := instrumentation.GetTargetId(path, instrumentation.AutoDetectedTargetId)
 	if err != nil {
 		logger.Err(err).Msg("Error creating the Target Id")
 	}
 	ic.SetTargetId(targetid)
 
-	summary := createTestSummary(data)
-	ic.SetTestSummary(summary)
-
 	ic.AddExtension("deviceid", c.DeviceID())
-	ic.SetType("Analytics")
 
 	analyticsData, err := gapanalytics.GetV2InstrumentationObject(ic)
 	if err != nil {
