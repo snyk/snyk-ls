@@ -418,7 +418,7 @@
       <div class="tab-container">
         {{if .IsIgnored}}
         <!-- Start Ignore Details section for tab id="ignore-details-tab" -->
-        <div data-content="ignore-details" id="ignore-details-content" class="tab-content is-selected">
+        <div data-content="ignore-details" id="ignore-details-content" class="tab-content main-tab-content is-selected">
           <div class="ignore-details">
             {{range .IgnoreDetails}}
             <div class="ignore-details-row">
@@ -439,7 +439,7 @@
 
         <!-- Start Fix Analysis section for tab id="fix-analysis-tab" -->
         <div data-content="fix-analysis" id="fix-analysis-content"
-          class="tab-content {{if not .IsIgnored}}is-selected{{end}}">
+          class="tab-content main-tab-content {{if not .IsIgnored}}is-selected{{end}}">
 
           {{if .HasAIFix }}
           <!-- AI Fix -->
@@ -494,7 +494,7 @@
               </div>
               <div class="tab-container">
                 {{range $index, $fix := .ExampleCommitFixes}}
-                <div id="tab-content-{{$index}}" class="tab-content {{if eq $index 0}}is-selected{{end}}">
+                <div id="tab-content-{{$index}}" class="tab-content example-fix-tab-content {{if eq $index 0}}is-selected{{end}}">
                   {{range $fix.ExampleLines}}
                   <div class="example-line {{.LineChange}}">
                     <span class="example-line-number">{{.LineNumber}}</span>
@@ -515,7 +515,7 @@
 
         <!-- Start Vulnerability Overview section for tab id="vuln-overview-tab" -->
 
-        <div id="vuln-overview-content" class="tab-content" data-content="vuln-overview">
+        <div id="vuln-overview-content" class="tab-content main-tab-content" data-content="vuln-overview">
           <!-- Content for Vulnerability Overview -->
           <section class="issue-overview">
             <div class="overview-text">
@@ -545,12 +545,10 @@
   <script nonce="${nonce}">
     const MAIN_TAB_NAV_SELECTOR = '.main-tabs-nav';
     const MAIN_TAB_ITEM_SELECTOR = '.main-tabs-nav .tab-item';
-    const MAIN_TAB_CONTENT_SELECTOR = '.tab-container > .tab-content';
+    const MAIN_TAB_CONTENT_SELECTOR = '.tab-container > .main-tab-content';
     const EXAMPLE_TAB_NAV_SELECTOR = '.example-fixes-tabs-nav';
     const EXAMPLE_TAB_ITEM_SELECTOR = '.example-fixes-tabs-nav .tab-item';
-    const EXAMPLE_TAB_CONTENT_SELECTOR = '.example-fixes .tab-content';
-    const IGNORE_WARNING_SELECTOR = '.ignore-warning-wrapper';
-    const FIRST_EXAMPLE_CONTENT_ID = '#tab-content-0';
+    const EXAMPLE_TAB_CONTENT_SELECTOR = '.tab-container > .example-fix-tab-content';
 
     const toggleIsSelectedClass = (elements, shouldToggle) => {
       elements.forEach(el => {
@@ -567,34 +565,15 @@
       const exampleTabLinks = document.querySelectorAll(EXAMPLE_TAB_ITEM_SELECTOR);
       const exampleTabContents = document.querySelectorAll(EXAMPLE_TAB_CONTENT_SELECTOR);
 
-      const isIgnored = document.querySelector(IGNORE_WARNING_SELECTOR);
-      // On load, set the last selected tab and content
-      let lastSelectedTab = isIgnored ? 'ignore-details' : 'fix-analysis';
-      let lastSelectedFixContent = document.querySelector(FIRST_EXAMPLE_CONTENT_ID);
-
-      // Ensure the default nested content is displayed
-      if (lastSelectedFixContent) {
-        lastSelectedFixContent.classList.add('is-selected');
-      }
-
       const onMainTabClicked = event => {
         const clickedTab = event.target.closest('.tab-item');
         if (!clickedTab) return;
 
         const selectedTab = clickedTab.getAttribute('data-tab');
-        // Save the current selected tab
-        lastSelectedTab = selectedTab;
 
         // Toggle selected tab and content
         toggleIsSelectedClass(mainTabLinks, tab => tab === clickedTab);
         toggleIsSelectedClass(mainTabContents, content => content.getAttribute('data-content') === selectedTab);
-
-        // Ensure the last selected nested tab content is displayed when switching back
-        if (selectedTab === 'fix-analysis' && lastSelectedFixContent) {
-          // Remove 'is-selected' from all
-          toggleIsSelectedClass(exampleTabContents, () => false);
-          lastSelectedFixContent.classList.add('is-selected');
-        }
       };
 
       const onExampleTabClicked = event => {
@@ -603,27 +582,12 @@
 
         const targetContentId = clickedTab.id.replace('tab-link-', 'tab-content-');
         toggleIsSelectedClass(exampleTabLinks, tab => tab === clickedTab);
-        toggleIsSelectedClass(exampleTabContents, content => {
-          const isSelected = content.id === targetContentId;
-          if (isSelected) {
-            lastSelectedFixContent = content; // Track the last selected content
-          }
-          return isSelected;
-        });
+        toggleIsSelectedClass(exampleTabContents, content => content.id === targetContentId);
       };
 
       // Event listeners for main and nested tabs
       document.querySelector(MAIN_TAB_NAV_SELECTOR).addEventListener('click', onMainTabClicked);
       document.querySelector(EXAMPLE_TAB_NAV_SELECTOR).addEventListener('click', onExampleTabClicked);
-
-      // Restore the last selected tab on page load
-      toggleIsSelectedClass(mainTabContents, content => content.getAttribute('data-content') === lastSelectedTab);
-      toggleIsSelectedClass(mainTabLinks, tab => tab.getAttribute('data-tab') === lastSelectedTab);
-
-      // Ensure the first example fix tab content is shown by default
-      if (exampleTabContents.length > 0) {
-        exampleTabContents[0].classList.add('is-selected');
-      }
     });
   </script>
 
