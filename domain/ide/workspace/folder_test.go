@@ -472,16 +472,14 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 
 	ua := networking.UserAgent(networking.UaWithConfig(gafConfig), networking.UaWithApplication("snyk-ls", config.Version))
 	ic.SetUserAgent(ua)
-
 	categories := setupCategories(&data, c)
 	ic.SetCategory(categories)
-
 	ic.SetStage("dev")
 	ic.SetStatus("Success") //or get result status from scan
-	ic.SetType("Scan done")
-
+	ic.SetInteractionType("Scan done")
 	summary := createTestSummary(&data)
 	ic.SetTestSummary(summary)
+	ic.SetType("Analytics")
 
 	entered := false
 	_, err := engineMock.Register(localworkflows.WORKFLOWID_REPORT_ANALYTICS, workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)),
@@ -494,8 +492,9 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 			require.Equal(t, "snyk-ls", actualV2InstrumentationObject.Data.Attributes.Runtime.Application.Name)
 			require.Equal(t, "dev", string(*actualV2InstrumentationObject.Data.Attributes.Interaction.Stage))
 			require.Equal(t, "Success", actualV2InstrumentationObject.Data.Attributes.Interaction.Status)
+			require.Equal(t, "Scan done", actualV2InstrumentationObject.Data.Attributes.Interaction.Type)
 			require.Equal(t, []string{product.ToProductCodename(data.Product), "test"}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Categories)
-			require.Equal(t, "Scan done", actualV2InstrumentationObject.Data.Type)
+			require.Equal(t, "Analytics", actualV2InstrumentationObject.Data.Type)
 
 			return nil, nil
 		})

@@ -408,7 +408,7 @@ func sendAnalytics(data *snyk.ScanData, path string) {
 
 	ic.SetStage("dev")
 	ic.SetStatus("Success") //or get result status from scan
-	ic.SetType("Scan done")
+	ic.SetInteractionType("Scan done")
 	ic.SetDuration(time.Duration(data.DurationMs) * time.Millisecond)
 	ic.SetTimestamp(data.TimestampFinished)
 
@@ -432,6 +432,7 @@ func sendAnalytics(data *snyk.ScanData, path string) {
 	ic.SetTestSummary(summary)
 
 	ic.AddExtension("deviceid", c.DeviceID())
+	ic.SetType("Analytics")
 
 	analyticsData, err := gapanalytics.GetV2InstrumentationObject(ic)
 	if err != nil {
@@ -506,7 +507,7 @@ func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
 }
 
 func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[product.FilterableIssueType]bool) snyk.
-IssuesByFile {
+	IssuesByFile {
 	logger := log.With().Str("method", "FilterIssues").Logger()
 
 	filteredIssues := snyk.IssuesByFile{}
