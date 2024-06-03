@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gomarkdown/markdown"
 	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -98,7 +99,7 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 		"IssueType":          getIssueType(additionalData),
 		"SeverityIcon":       getSeverityIconSvg(issue),
 		"CWEs":               issue.CWEs,
-		"IssueOverview":      additionalData.Message,
+		"IssueOverview":      markdownToHTML(additionalData.Text),
 		"IsIgnored":          issue.IsIgnored,
 		"DataFlow":           additionalData.DataFlow,
 		"DataFlowTable":      prepareDataFlowTable(additionalData),
@@ -110,6 +111,7 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 		"LessonUrl":          issue.LessonUrl,
 		"LessonIcon":         getLessonIconSvg(),
 		"IgnoreLineAction":   getLineToIgnoreAction(issue),
+		"HasAIFix":           additionalData.HasAIFix,
 	}
 
 	if issue.IsIgnored {
@@ -124,6 +126,11 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 	}
 
 	return html.String()
+}
+
+func markdownToHTML(md string) template.HTML {
+	html := markdown.ToHTML([]byte(md), nil, nil)
+	return template.HTML(html)
 }
 
 func getLineToIgnoreAction(issue snyk.Issue) int {
@@ -141,9 +148,10 @@ func trimCWEPrefix(cwe string) string {
 func prepareIgnoreDetailsRow(ignoreDetails *snyk.IgnoreDetails) []IgnoreDetail {
 	return []IgnoreDetail{
 		{"Category", ignoreDetails.Category},
-		{"Ignored On", formatDate(ignoreDetails.IgnoredOn)},
 		{"Expiration", ignoreDetails.Expiration},
+		{"Ignored On", formatDate(ignoreDetails.IgnoredOn)},
 		{"Ignored By", ignoreDetails.IgnoredBy},
+		{"Reason", ignoreDetails.Reason},
 	}
 }
 

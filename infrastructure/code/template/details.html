@@ -25,8 +25,6 @@
   <style nonce="{{.Nonce}}">
     :root {
       --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Tahoma, Geneva, Verdana, sans-serif;
-      /* TODO: Colors are linked to the IDE (JetBrains, VSCode,...) and IDE theme */
-      --vscode-textLink-foreground: #006ab1;
     }
 
     ::-webkit-scrollbar {
@@ -81,10 +79,11 @@
       overflow-y: auto;
     }
 
+    .ignore-warning-wrapper,
     header,
     article,
     footer {
-      padding: 20px;
+      padding: 10px 20px;
     }
 
     .panel-header {
@@ -92,12 +91,20 @@
       flex-direction: column;
     }
 
+    .issue-overview-header,
     .ignore-details-header,
     .data-flow-header,
     .example-fixes-header {
       font-size: 0.75rem;
       line-height: 1.25rem;
     }
+
+    .ignore-details-header,
+    .data-flow-header,
+    .example-fixes-header {
+      text-transform: uppercase;
+    }
+
 
     .severity-title {
       padding-left: 8px;
@@ -185,43 +192,6 @@
       border: 1px solid #E27122;
     }
 
-    .ignore-details-wrapper {
-      display: flex;
-      flex-wrap: wrap;
-    }
-
-    .ignore-details-row {
-      display: flex;
-      flex-basis: 50%;
-      margin-bottom: 10px;
-    }
-
-    .ignore-details-label {
-      flex: 0 0 auto;
-      width: 20%;
-      font-weight: 600;
-    }
-
-    .ignore-details-value {
-      flex: 1;
-    }
-
-    .ignore-details-reason-wrapper {
-      display: flex;
-      align-items: flex-start;
-      flex-wrap: wrap;
-      margin-bottom: 10px;
-    }
-
-    .ignore-details-reason-label {
-      flex: 0 0 10%;
-      font-weight: 600;
-    }
-
-    .ignore-details-reason-text {
-      flex: 1;
-    }
-
     .data-flow-body {
       background-color: var(--data-flow-body-color);
       font-family: 'Courier New', Courier, monospace;
@@ -257,9 +227,10 @@
       color: #BBBBBB;
     }
 
+    .main-tabs-nav,
+    .example-fixes-tabs-nav,
     .tabs-nav {
       display: flex;
-      margin-top: 16px;
       list-style-type: none;
       overflow: hidden;
       padding: 0;
@@ -385,10 +356,53 @@
       border-color: var(--vscode-button-hoverBackground);
       color: var(--vscode-button-foreground);
     }
+
+    .ignore-details-tab,
+    .fix-analysis-tab,
+    .vuln-overview-tab {
+      text-transform: uppercase;
+    }
+
+    .ignore-details {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 20px 0;
+      gap: 12px;
+      box-sizing: border-box;
+      width: 100%;
+    }
+
+    .ignore-details-row {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      align-items: flex-start;
+    }
+
+    .ignore-details-row {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      align-items: flex-start;
+    }
+
+    .ignore-details-label {
+      width: 30%;
+      text-align: left;
+      font-weight: bold;
+      padding-right: 10px;
+    }
+
+    .ignore-details-value {
+      flex-grow: 1;
+      text-align: left;
+      align-self: stretch;
+    }
   </style>
 </head>
 
-<body>
+<body class="snyk-ide">
   <!-- Ignore header -->
   {{if .IsIgnored}}
   <div class="ignore-warning-wrapper">
@@ -438,91 +452,140 @@
   </header>
 
   <main class="code-issue-container">
-    <!-- issue overview -->
-    <article class="issue-overview">
-      <div class="overview-text">
-        {{.IssueOverview}}
+    <!-- Tabs Issue Overview Container -->
+    <article class="code-issue-panel">
+      <div class="main-tabs-nav">
+        {{if .IsIgnored}}
+        <span data-tab="ignore-details" id="ignore-details-tab" class="tab-item is-selected ignore-details-tab">
+          Ignore Details
+        </span>
+        <span data-tab="fix-analysis" id="fix-analysis-tab" class="tab-item fix-analysis-tab">
+          Fix Analysis
+        </span>
+        <span data-tab="vuln-overview" id="vuln-overview-tab" class="tab-item vuln-overview-tab">
+          Vulnerability Overview
+        </span>
+        {{else}}
+        <span data-tab="fix-analysis" id="fix-analysis-tab"
+          class="tab-item is-selected sn-fix-analysis fix-analysis-tab">
+          Fix Analysis
+        </span>
+        <span data-tab="vuln-overview" id="vuln-overview-tab" class="tab-item sn-vuln-overview vuln-overview-tab">
+          Vulnerability Overview
+        </span>
+        {{end}}
       </div>
-    </article>
 
-    <!-- Ignore Details -->
-    {{if .IsIgnored}}
-    <article class="ignore-details-section">
-      <h2 class="ignore-details-header">Ignore Details</h2>
-      <div class="ignore-details-body">
-        <div class="ignore-details-wrapper">
-          {{range .IgnoreDetails}}
-          <div class="ignore-details-row">
-            <div class="ignore-details-label">{{.Label}}</div>
-            <div class="ignore-details-value">{{.Value}}</div>
-          </div>
-          {{end}}
-        </div>
-        <div class="ignore-details-reason-wrapper">
-          <div class="ignore-details-reason-label">Reason</div>
-          <div class="ignore-details-reason-text">{{.IgnoreReason}}</div>
-        </div>
-        <div class="ignore-next-step-text">
-          Ignores are currently managed in the Snyk web app.
-          To edit or remove the ignore please go to:
-          <a class="styled-link" href="{{.SnykWebUrl}}" target="_blank" rel="noopener noreferrer">{{.SnykWebUrl}}</a>.
-        </div>
-      </div>
-    </article>
-    {{end}}
-
-    <!-- Data Flow -->
-    <article class="data-flow-section">
-      <h2 class="data-flow-header">
-        Data Flow - {{len .DataFlow}} {{if gt (len .DataFlow) 1}}steps{{else}}step{{end}}
-      </h2>
-      <div class="data-flow-body">
-        <table class="data-flow-body">
-          <tbody>
-            {{range .DataFlowTable}}
-            <tr class="data-flow-row">
-              <td class="data-flow-number">{{.Number}}</td>
-              <td class="data-flow-clickable-row" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
-                end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
-                {{.FileName}}:{{.StartLineValue}}
-              </td>
-              <td class="data-flow-delimiter">|</td>
-              <td class="data-flow-text">{{.Content}}</td>
-            </tr>
-            {{end}}
-          </tbody>
-        </table>
-      </div>
-    </article>
-
-    <!-- External example fixes -->
-    <article class="example-fixes">
-      <h2 class="example-fixes-header">External example fixes</h2>
-      <div class="example-fixes-text">
-        {{if gt (len .ExampleCommitFixes) 0}}
-        This issue was fixed by {{.RepoCount}} projects. Here are {{.ExampleCount}} example fixes.
-        <div class="tabs-nav">
-          {{range $index, $fix := .ExampleCommitFixes}}
-          <span class="tab-item {{if eq $index 0}}is-selected{{end}}" id="tab-link-{{$index}}">
-            {{$fix.IconSVG}} {{$fix.RepoName}}
-          </span>
-          {{end}}
-        </div>
-        <div class="tab-container">
-          {{range $index, $fix := .ExampleCommitFixes}}
-          <div id="tab-content-{{$index}}" class="tab-content {{if eq $index 0}}is-selected{{end}}">
-            {{range $fix.ExampleLines}}
-            <div class="example-line {{.LineChange}}">
-              <span class="example-line-number">{{.LineNumber}}</span>
-              <code>{{.Line}}</code>
+      <!-- Dynamic Content Sections -->
+      <div class="tab-container">
+        {{if .IsIgnored}}
+        <!-- Start Ignore Details section for tab id="ignore-details-tab" -->
+        <div data-content="ignore-details" id="ignore-details-content" class="tab-content is-selected">
+          <div class="ignore-details">
+            {{range .IgnoreDetails}}
+            <div class="ignore-details-row">
+              <div class="ignore-details-label">{{.Label}}</div>
+              <div class="ignore-details-value">{{.Value}}</div>
             </div>
             {{end}}
+            <div class="ignore-next-step-text">
+              Ignores are currently managed in the Snyk web app.
+              To edit or remove the ignore please go to:
+              <a class="styled-link" href="{{.SnykWebUrl}}" target="_blank"
+                rel="noopener noreferrer">{{.SnykWebUrl}}</a>.
+            </div>
           </div>
+        </div>
+        {{end}}
+        <!-- End Ignored Details section -->
+
+        <!-- Start Fix Analysis section for tab id="fix-analysis-tab" -->
+        <div data-content="fix-analysis" id="fix-analysis-content"
+          class="tab-content {{if not .IsIgnored}}is-selected{{end}}">
+
+          {{if .HasAIFix }}
+          <!-- AI Fix -->
+          <section class="ai-fix">
+            <div class="fix-analysis-description">Unsanitized input from cookies flows into send, where it is used to
+              render an HTML page returned to the
+              user. This may result in a Cross-Site Scripting attack (XSS).</div>
+            <h2 class="fix-analysis--header">
+              DeepCode AI Fixes
+            </h2>
+            <span>⚡️ Fix this issue by generating a solution using Snyk DeepCode AI</span>
+            <button>✨ Generate fix using Snyk DeepCode AI</button>
+          </section>
+          {{else}}
+          <!-- We need Data Flow and Fixed Code Examples -->
+          <!-- Data Flow -->
+          <section class="data-flow-section">
+            <h2 class="data-flow-header">
+              Data Flow - {{len .DataFlow}} {{if gt (len .DataFlow) 1}}steps{{else}}step{{end}}
+            </h2>
+            <div class="data-flow-body">
+              <table class="data-flow-body">
+                <tbody>
+                  {{range .DataFlowTable}}
+                  <tr class="data-flow-row">
+                    <td class="data-flow-number">{{.Number}}</td>
+                    <td class="data-flow-clickable-row" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
+                      end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
+                      {{.FileName}}:{{.StartLineValue}}
+                    </td>
+                    <td class="data-flow-delimiter">|</td>
+                    <td class="data-flow-text">{{.Content}}</td>
+                  </tr>
+                  {{end}}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- Fixed Code Examples -->
+          <section class="example-fixes">
+            <h2 class="example-fixes-header">Fixed Code Examples</h2>
+            <div class="example-fixes-text">
+              {{if gt (len .ExampleCommitFixes) 0}}
+              This issue was fixed by {{.RepoCount}} projects. Here are {{.ExampleCount}} example fixes.
+              <div class="example-fixes-tabs-nav example-fixes-tabs">
+                {{range $index, $fix := .ExampleCommitFixes}}
+                <span class="tab-item {{if eq $index 0}}is-selected{{end}}" id="tab-link-{{$index}}">
+                  {{$fix.IconSVG}} {{$fix.RepoName}}
+                </span>
+                {{end}}
+              </div>
+              <div class="tab-container">
+                {{range $index, $fix := .ExampleCommitFixes}}
+                <div id="tab-content-{{$index}}" class="tab-content {{if eq $index 0}}is-selected{{end}}">
+                  {{range $fix.ExampleLines}}
+                  <div class="example-line {{.LineChange}}">
+                    <span class="example-line-number">{{.LineNumber}}</span>
+                    <code>{{.Line}}</code>
+                  </div>
+                  {{end}}
+                </div>
+                {{end}}
+              </div>
+              {{else}}
+              No example fixes are available.
+              {{end}}
+            </div>
+          </section>
           {{end}}
         </div>
-        {{else}}
-        No example fixes are available.
-        {{end}}
+        <!-- End Fix Analysis section -->
+
+        <!-- Start Vulnerability Overview section for tab id="vuln-overview-tab" -->
+
+        <div id="vuln-overview-content" class="tab-content" data-content="vuln-overview">
+          <!-- Content for Vulnerability Overview -->
+          <section class="issue-overview">
+            <div class="overview-text">
+              {{.IssueOverview}}
+            </div>
+          </section>
+        </div>
+        <!-- End Vulnerability Overview section -->
       </div>
     </article>
   </main>
@@ -542,22 +605,88 @@
 
   <!-- Scripts -->
   <script nonce="{{.Nonce}}">
-    const tabLinks = document.querySelectorAll('.tab-item');
-    const tabContents = document.querySelectorAll('.tab-content');
-    document.querySelector('.tabs-nav').addEventListener('click', (event) => {
-      const clickedTab = event.target.closest('.tab-item');
-      if (!clickedTab) return;
+    const MAIN_TAB_NAV_SELECTOR = '.main-tabs-nav';
+    const MAIN_TAB_ITEM_SELECTOR = '.main-tabs-nav .tab-item';
+    const MAIN_TAB_CONTENT_SELECTOR = '.tab-container > .tab-content';
+    const EXAMPLE_TAB_NAV_SELECTOR = '.example-fixes-tabs-nav';
+    const EXAMPLE_TAB_ITEM_SELECTOR = '.example-fixes-tabs-nav .tab-item';
+    const EXAMPLE_TAB_CONTENT_SELECTOR = '.example-fixes .tab-content';
+    const IGNORE_WARNING_SELECTOR = '.ignore-warning-wrapper';
+    const FIRST_EXAMPLE_CONTENT_ID = '#tab-content-0';
 
-      tabLinks.forEach(tab => {
-        tab.classList.toggle('is-selected', tab === clickedTab);
+    const toggleIsSelectedClass = (elements, shouldToggle) => {
+      elements.forEach(el => {
+        // toggle(token, force) - force is a boolean value that determines whether the class should be added or removed.
+        el.classList.toggle('is-selected', shouldToggle(el));
       });
+    }
 
-      const targetContentId = clickedTab.id.replace('tab-link', 'tab-content');
-      tabContents.forEach(content => {
-        content.classList.toggle('is-selected', content.id === targetContentId);
-      });
+    // Ensure the document is fully loaded before executing script to manipulate DOM.
+    document.addEventListener('DOMContentLoaded', () => {
+      const mainTabLinks = document.querySelectorAll(MAIN_TAB_ITEM_SELECTOR);
+      const mainTabContents = document.querySelectorAll(MAIN_TAB_CONTENT_SELECTOR);
+      // Nested tabs
+      const exampleTabLinks = document.querySelectorAll(EXAMPLE_TAB_ITEM_SELECTOR);
+      const exampleTabContents = document.querySelectorAll(EXAMPLE_TAB_CONTENT_SELECTOR);
+
+      const isIgnored = document.querySelector(IGNORE_WARNING_SELECTOR);
+      // On load, set the last selected tab and content
+      let lastSelectedTab = isIgnored ? 'ignore-details' : 'fix-analysis';
+      let lastSelectedFixContent = document.querySelector(FIRST_EXAMPLE_CONTENT_ID);
+
+      // Ensure the default nested content is displayed
+      if (lastSelectedFixContent) {
+        lastSelectedFixContent.classList.add('is-selected');
+      }
+
+      const onMainTabClicked = event => {
+        const clickedTab = event.target.closest('.tab-item');
+        if (!clickedTab) return;
+
+        const selectedTab = clickedTab.getAttribute('data-tab');
+        // Save the current selected tab
+        lastSelectedTab = selectedTab;
+
+        // Toggle selected tab and content
+        toggleIsSelectedClass(mainTabLinks, tab => tab === clickedTab);
+        toggleIsSelectedClass(mainTabContents, content => content.getAttribute('data-content') === selectedTab);
+
+        // Ensure the last selected nested tab content is displayed when switching back
+        if (selectedTab === 'fix-analysis' && lastSelectedFixContent) {
+          // Remove 'is-selected' from all
+          toggleIsSelectedClass(exampleTabContents, () => false);
+          lastSelectedFixContent.classList.add('is-selected');
+        }
+      };
+
+      const onExampleTabClicked = event => {
+        const clickedTab = event.target.closest('.tab-item');
+        if (!clickedTab) return;
+
+        const targetContentId = clickedTab.id.replace('tab-link-', 'tab-content-');
+        toggleIsSelectedClass(exampleTabLinks, tab => tab === clickedTab);
+        toggleIsSelectedClass(exampleTabContents, content => {
+          const isSelected = content.id === targetContentId;
+          if (isSelected) {
+            lastSelectedFixContent = content; // Track the last selected content
+          }
+          return isSelected;
+        });
+      };
+
+      // Event listeners for main and nested tabs
+      document.querySelector(MAIN_TAB_NAV_SELECTOR).addEventListener('click', onMainTabClicked);
+      document.querySelector(EXAMPLE_TAB_NAV_SELECTOR).addEventListener('click', onExampleTabClicked);
+
+      // Restore the last selected tab on page load
+      toggleIsSelectedClass(mainTabContents, content => content.getAttribute('data-content') === lastSelectedTab);
+      toggleIsSelectedClass(mainTabLinks, tab => tab.getAttribute('data-tab') === lastSelectedTab);
+
+      // Ensure the first example fix tab content is shown by default
+      if (exampleTabContents.length > 0) {
+        exampleTabContents[0].classList.add('is-selected');
+      }
     });
-
   </script>
 
 </body>
