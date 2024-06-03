@@ -54,6 +54,9 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	// invoke method under test
 	codePanelHtml := getCodeDetailsHtml(issue)
 
+	// assert injectable style
+	assert.Contains(t, codePanelHtml, "${ideStyle}")
+
 	// assert Header section
 	assert.Contains(t, codePanelHtml, "Priority score: 890")
 	assert.Contains(t, codePanelHtml, `href="https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide"`)
