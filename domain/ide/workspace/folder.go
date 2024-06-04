@@ -418,13 +418,13 @@ func sendAnalytics(data *snyk.ScanData, path string) {
 	ic.SetDuration(time.Duration(data.DurationMs) * time.Millisecond)
 
 	ic.SetStage("dev")
-	ic.SetType("Analytics")
+	ic.SetType("analytics")
 	ic.SetInteractionType("Scan done")
 
 	categories := setupCategories(data, c)
 	ic.SetCategory(categories)
 
-	ic.SetStatus("Success") //or get result status from scan
+	ic.SetStatus("success") //or get result status from scan
 
 	summary := createTestSummary(data)
 	ic.SetTestSummary(summary)
@@ -455,7 +455,7 @@ func sendAnalytics(data *snyk.ScanData, path string) {
 }
 
 func setupCategories(data *snyk.ScanData, c *config.Config) []string {
-	args := []string{string(data.Product), "test"}
+	args := []string{"", product.ToProductCodename(data.Product), "test"}
 	args = append(args, c.CliSettings().AdditionalOssParameters...)
 	knownCommands, knownFlags := instrumentation.GetKnownCommandsAndFlags(c.Engine())
 	categories := instrumentation.DetermineCategoryFromArgs(args, knownCommands, knownFlags)
