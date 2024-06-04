@@ -268,6 +268,7 @@ func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 						snyk.CodeFixCommand,
 						snyk.CodeSubmitFixFeedback,
 						snyk.CodeFixDiffsCommand,
+						snyk.DummyCommand,
 					},
 				},
 			},

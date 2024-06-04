@@ -71,6 +71,8 @@ func CreateFromCommandData( //nolint:gocyclo // reasonable command dispatch
 		return &getActiveUser{command: commandData, authService: authService, notifier: notifier}, nil
 	case snyk.ReportAnalyticsCommand:
 		return &reportAnalyticsCommand{command: commandData}, nil
+	case snyk.DummyCommand:
+		return &dummyCommand{command: commandData}, nil
 	case snyk.CodeFixCommand:
 		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier}, nil
 	case snyk.CodeSubmitFixFeedback:

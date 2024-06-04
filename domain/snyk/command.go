@@ -40,6 +40,7 @@ const (
 	GetFeatureFlagStatus         = "snyk.getFeatureFlagStatus"
 	GetActiveUserCommand         = "snyk.getActiveUser"
 	ReportAnalyticsCommand       = "snyk.reportAnalytics"
+	DummyCommand                 = "snyk.dummyCommand"
 
 	// Snyk Code specific commands
 	CodeFixCommand        = "snyk.code.fix"
