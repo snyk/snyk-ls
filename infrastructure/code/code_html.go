@@ -55,6 +55,7 @@ type ExampleCommit struct {
 	CommitURL    string
 	IconSVG      template.HTML
 	RepoName     string
+	RepoLink     string
 	ExampleLines []ExampleLines
 }
 
@@ -191,6 +192,7 @@ func prepareExampleCommitFixes(fixes []snyk.ExampleCommitFix) []ExampleCommit {
 			IconSVG:      getVendorIconSvg(),
 			RepoName:     getRepoName(fix.CommitURL),
 			ExampleLines: prepareExampleLines(fix.Lines),
+			RepoLink:     fix.CommitURL,
 		})
 	}
 	return fixData

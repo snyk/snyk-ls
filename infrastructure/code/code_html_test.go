@@ -77,8 +77,9 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	expectedFixesDescription := fmt.Sprintf(`\s*This issue was fixed by %d projects. Here are %d example fixe.\s*`, repoCount, len(fixes))
 	assert.Regexp(t, regexp.MustCompile(expectedFixesDescription), codePanelHtml)
 	assert.Contains(t, codePanelHtml, `<span class="tab-item is-selected" id="tab-link-0">`, "Two tabs, first is selected")
-	assert.Contains(t, codePanelHtml, "</svg> apache/flink", "GitHub icon preceding the repo name is present")
-	assert.Contains(t, codePanelHtml, "</svg> apache/tomcat", "Second tab is present")
+	assert.Contains(t, codePanelHtml, `</svg> <a class="example-repo-link"`, "GitHub icon preceding the repo name is present")
+	assert.Contains(t, codePanelHtml, `apache/tomcat</a>`, "Second tab is present")
+	assert.Contains(t, codePanelHtml, `href="https://github.com/apache/tomcat/commit/0fa9d5547c5300cf8162b8f31a40aea6847a5c32?diff=split#diff-7e23eb1aa3b7b4d5db89bfd2860277e5L75"`, "Repo name has GitHub link")
 
 	// assert Footer
 	assert.Contains(t, codePanelHtml, `id="action-ignore-line">68</span>`)
