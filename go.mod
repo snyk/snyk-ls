@@ -135,5 +135,6 @@ require (
 	golang.org/x/text v0.15.0 // indirect
 )
 
-//replace github.com/snyk/go-application-framework => ../go-application-framework
+replace github.com/snyk/go-application-framework => ../go-application-framework
+
 //replace github.com/snyk/code-client-go => ../code-client-go
