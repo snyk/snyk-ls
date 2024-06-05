@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"regexp"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -104,7 +103,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 			Category:   "wont-fix",
 			Reason:     getIgnoreReason("long"),
 			Expiration: "13 days",
-			IgnoredOn:  time.Now(),
+			IgnoredOn:  "June 5, 2024",
 			IgnoredBy:  "John Smith",
 		},
 		AdditionalData: snyk.CodeIssueData{
@@ -153,7 +152,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 			Category:   "wont-fix",
 			Reason:     getIgnoreReason("short"),
 			Expiration: "13 days",
-			IgnoredOn:  time.Now(),
+			IgnoredOn:  "June 5, 2024",
 			IgnoredBy:  "John Smith",
 		},
 		AdditionalData: snyk.CodeIssueData{

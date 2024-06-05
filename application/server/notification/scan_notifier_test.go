@@ -19,7 +19,6 @@ package notification_test
 import (
 	"net/url"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -463,7 +462,7 @@ func Test_SendSuccess_SendsForSnykCode_WithIgnores(t *testing.T) {
 	}
 	lspTestRange := converter.ToRange(r)
 
-	ignoredOn := time.Now()
+	ignoredOn := "June 5, 2024"
 	expectedCodeIssue := []lsp2.ScanIssue{
 		{
 			Id:        "5a105e8b9d40e1329780d62ea2265d8a",

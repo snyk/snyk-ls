@@ -19,7 +19,6 @@ package snyk
 import (
 	"fmt"
 	"net/url"
-	"time"
 
 	"github.com/rs/zerolog/log"
 
@@ -79,7 +78,7 @@ type IgnoreDetails struct {
 	Category   string
 	Reason     string
 	Expiration string
-	IgnoredOn  time.Time
+	IgnoredOn  string
 	IgnoredBy  string
 }
 
