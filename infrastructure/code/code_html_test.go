@@ -56,6 +56,8 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 
 	// assert injectable style
 	assert.Contains(t, codePanelHtml, "${ideStyle}")
+	// assert injectable script
+	assert.Contains(t, codePanelHtml, "${ideScript}")
 
 	// assert Header section
 	assert.Contains(t, codePanelHtml, "Priority score: 890")
