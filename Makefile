@@ -86,6 +86,8 @@ instance-test:
 	@export SMOKE_TESTS=1 && cd application/server && go test -run Test_SmokeWorkspaceScan && cd -
 
 instance-standard-test:
+	@echo "==> Introducing a failure for testing"
+	@false
 	@echo "==> Running instance tests for the standard environment"
 	@export SMOKE_TESTS=1 && cd application/server && go test -run Test_Smoke && cd -
 	@echo "==> Checking Eclipse storage buckets..."
