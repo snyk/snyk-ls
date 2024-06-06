@@ -514,15 +514,16 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 		if entered {
 			break
 		}
-		if time.Since(startTime) > maxWaitTime {
-			t.Fatalf("time out. condition wasn't met. current timeout value is: %s", maxWaitTime)
-		}
+
 		time.Sleep(waitTime)
 		waitTime *= 2
 		// if waitTime is greater than the allowed elapsed time,
 		// Set the wait time to be exactly the allowed remaining time until timeout
 		elapsedTime := time.Since(startTime)
 		allowedRemainingTime := maxWaitTime - elapsedTime
+		if allowedRemainingTime <= 0 {
+			t.Fatalf("time out. condition wasn't met. current timeout value is: %s", maxWaitTime)
+		}
 		if waitTime > allowedRemainingTime {
 			waitTime = allowedRemainingTime
 		}
