@@ -424,11 +424,7 @@ func sendAnalytics(data *snyk.ScanData, path string) {
 	categories := setupCategories(data, c)
 	ic.SetCategory(categories)
 
-	if data.Err == nil {
-		ic.SetStatus(gafanalytics.Success)
-	} else {
-		ic.SetStatus(gafanalytics.Failure)
-	}
+	ic.SetStatus(gafanalytics.Success)
 
 	summary := createTestSummary(data)
 	ic.SetTestSummary(summary)
