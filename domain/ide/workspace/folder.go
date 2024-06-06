@@ -412,8 +412,7 @@ func sendAnalytics(data *snyk.ScanData) {
 }
 
 func setupCategories(data *snyk.ScanData, c *config.Config) []string {
-	// Empty string added for binary name (os.Args)
-	args := []string{"", product.ToProductCodename(data.Product), "test"}
+	args := []string{product.ToProductCodename(data.Product), "test"}
 	args = append(args, c.CliSettings().AdditionalOssParameters...)
 	categories := instrumentation.DetermineCategory(args, c.Engine())
 	return categories
