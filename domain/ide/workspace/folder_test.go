@@ -478,12 +478,11 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	ic.SetTestSummary(summary)
 	ic.SetType("Analytics")
 
-	entered := false
+	entered := make(chan struct{})
 	_, err := engineMock.Register(localworkflows.WORKFLOWID_REPORT_ANALYTICS, workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)),
 		func(invocation workflow.InvocationContext, workflowInputData []workflow.Data) ([]workflow.Data, error) {
 			actualV2InstrumentationObject, err := analytics.GetV2InstrumentationObject(ic)
 
-			entered = true
 			require.NoError(t, err)
 
 			require.Equal(t, "snyk-ls", actualV2InstrumentationObject.Data.Attributes.Runtime.Application.Name)
@@ -493,6 +492,7 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 			require.Equal(t, []string{product.ToProductCodename(data.Product), "test"}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Categories)
 			require.Equal(t, "Analytics", actualV2InstrumentationObject.Data.Type)
 
+			close(entered)
 			return nil, nil
 		})
 
@@ -504,28 +504,12 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	// Act
 	f.processResults(data)
 	maxWaitTime := 10 * time.Second
-	startTime := time.Now()
-	waitTime := 100 * time.Millisecond
 
-	for {
-		if entered {
-			break
-		}
-
-		waitTime *= 2
-		// if waitTime is greater than the allowed elapsed time,
-		// Set the wait time to be exactly the allowed remaining time until timeout
-		elapsedTime := time.Since(startTime)
-		allowedRemainingTime := maxWaitTime - elapsedTime
-		if allowedRemainingTime <= 0 {
-			t.Fatalf("time out. condition wasn't met. current timeout value is: %s", maxWaitTime)
-		}
-		if waitTime > allowedRemainingTime {
-			waitTime = allowedRemainingTime
-		}
+	select {
+	case <-entered:
+	case <-time.After(maxWaitTime):
+		t.Fatalf("time out. condition wasn't met. current timeout value is: %s", maxWaitTime)
 	}
-
-	assert.True(t, entered)
 }
 
 func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
