@@ -27,53 +27,47 @@ func TestUpdateSeverityCount(t *testing.T) {
 		initial  SeverityIssueCounts
 		issue    Issue
 		expected SeverityIssueCounts
-	}{
-		{
-			name:    "Add new Critical issue",
-			initial: make(SeverityIssueCounts),
-			issue: Issue{
-				Severity: Critical,
-			},
-			expected: SeverityIssueCounts{
-				Critical: {Total: 1, Ignored: 0, Open: 1},
-			},
+	}{{
+		name:    "Add new Critical issue",
+		initial: make(SeverityIssueCounts),
+		issue: Issue{
+			Severity: Critical,
 		},
-		{
-			name: "Add ignored High issue",
-			initial: SeverityIssueCounts{
-				High: {Total: 1, Ignored: 1, Open: 0},
-			},
-			issue: Issue{
-				Severity:  High,
-				IsIgnored: true,
-			},
-			expected: SeverityIssueCounts{
-				High: {Total: 2, Ignored: 2, Open: 0},
-			},
+		expected: SeverityIssueCounts{
+			Critical: {Total: 1, Ignored: 0, Open: 1},
 		},
-		{
-			name: "Add new Medium issue",
-			initial: SeverityIssueCounts{
-				Medium: {Total: 2, Ignored: 1, Open: 1},
-			},
-			issue: Issue{
-				Severity: Medium,
-			},
-			expected: SeverityIssueCounts{
-				Medium: {Total: 3, Ignored: 1, Open: 2},
-			},
+	}, {
+		name: "Add ignored High issue",
+		initial: SeverityIssueCounts{
+			High: {Total: 1, Ignored: 1, Open: 0},
 		},
-		{
-			name:    "Add new Low issue",
-			initial: make(SeverityIssueCounts),
-			issue: Issue{
-				Severity: Low,
-			},
-			expected: SeverityIssueCounts{
-				Low: {Total: 1, Ignored: 0, Open: 1},
-			},
+		issue: Issue{
+			Severity:  High,
+			IsIgnored: true,
 		},
-	}
+		expected: SeverityIssueCounts{
+			High: {Total: 2, Ignored: 2, Open: 0},
+		},
+	}, {
+		name: "Add new Medium issue",
+		initial: SeverityIssueCounts{
+			Medium: {Total: 2, Ignored: 1, Open: 1},
+		},
+		issue: Issue{
+			Severity: Medium,
+		},
+		expected: SeverityIssueCounts{
+			Medium: {Total: 3, Ignored: 1, Open: 2},
+		},
+	}, {
+		name:    "Add new Low issue",
+		initial: make(SeverityIssueCounts),
+		issue: Issue{
+			Severity: Low,
+		},
+		expected: SeverityIssueCounts{
+			Low: {Total: 1, Ignored: 0, Open: 1},
+		}}}
 
 	for _, testStruct := range tests {
 		t.Run(testStruct.name, func(t *testing.T) {
@@ -97,27 +91,25 @@ func TestGetSeverityIssueCounts(t *testing.T) {
 		name     string
 		scanData ScanData
 		expected SeverityIssueCounts
-	}{
-		{
-			name: "Mixed issues",
-			scanData: ScanData{
-				Issues: []Issue{
-					{Severity: Critical, IsIgnored: false},
-					{Severity: Critical, IsIgnored: true},
-					{Severity: High, IsIgnored: false},
-					{Severity: Medium, IsIgnored: true},
-					{Severity: Medium, IsIgnored: false},
-					{Severity: Low, IsIgnored: false},
-				},
-			},
-			expected: SeverityIssueCounts{
-				Critical: {Total: 2, Ignored: 1, Open: 1},
-				High:     {Total: 1, Ignored: 0, Open: 1},
-				Medium:   {Total: 2, Ignored: 1, Open: 1},
-				Low:      {Total: 1, Ignored: 0, Open: 1},
+	}{{
+		name: "Mixed issues",
+		scanData: ScanData{
+			Issues: []Issue{
+				{Severity: Critical, IsIgnored: false},
+				{Severity: Critical, IsIgnored: true},
+				{Severity: High, IsIgnored: false},
+				{Severity: Medium, IsIgnored: true},
+				{Severity: Medium, IsIgnored: false},
+				{Severity: Low, IsIgnored: false},
 			},
 		},
-	}
+		expected: SeverityIssueCounts{
+			Critical: {Total: 2, Ignored: 1, Open: 1},
+			High:     {Total: 1, Ignored: 0, Open: 1},
+			Medium:   {Total: 2, Ignored: 1, Open: 1},
+			Low:      {Total: 1, Ignored: 0, Open: 1},
+		},
+	}}
 
 	for _, testStruct := range tests {
 		t.Run(testStruct.name, func(t *testing.T) {
