@@ -31,7 +31,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/mocks"
-	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
@@ -466,18 +465,16 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 		Issues:  []snyk.Issue{mockCodeIssue},
 	}
 
-	incrementSeverityCount(&data, data.Issues[0])
-
 	ic := analytics.NewInstrumentationCollector()
 
-	ua := networking.UserAgent(networking.UaWithConfig(gafConfig), networking.UaWithApplication("snyk-ls", config.Version))
+	ua := util.GetUserAgent(gafConfig, config.Version)
 	ic.SetUserAgent(ua)
 	categories := setupCategories(&data, c)
 	ic.SetCategory(categories)
 	ic.SetStage("dev")
 	ic.SetStatus("Success") //or get result status from scan
 	ic.SetInteractionType("Scan done")
-	summary := createTestSummary(&data)
+	summary := createTestSummary(&data, c)
 	ic.SetTestSummary(summary)
 	ic.SetType("Analytics")
 
@@ -509,8 +506,28 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 
 	// Act
 	f.processResults(data)
-	// wait for async analytics sending
-	time.Sleep(6 * time.Second)
+	maxWaitTime := 10 * time.Second
+	startTime := time.Now()
+	waitTime := 100 * time.Millisecond
+
+	for {
+		if entered {
+			break
+		}
+		if time.Since(startTime) > maxWaitTime {
+			t.Fatalf("time out. condition wasn't met. current timeout value is: %s", maxWaitTime)
+		}
+		time.Sleep(waitTime)
+		waitTime *= 2
+		// if waitTime is greater than the allowed elapsed time,
+		// Set the wait time to be exactly the allowed remaining time until timeout
+		elapsedTime := time.Since(startTime)
+		allowedRemainingTime := maxWaitTime - elapsedTime
+		if waitTime > allowedRemainingTime {
+			waitTime = allowedRemainingTime
+		}
+	}
+
 	assert.True(t, entered)
 }
 
@@ -523,15 +540,13 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 
 	filePath := filepath.Join(f.Path(), "dummy.java")
 	scanData := snyk.ScanData{
-		Product:       product.ProductOpenSource,
-		SeverityCount: make(map[product.Product]snyk.SeverityCount),
+		Product: product.ProductOpenSource,
 		Issues: []snyk.Issue{
 			{Severity: snyk.Critical, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
 			{Severity: snyk.Critical, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
+			{Severity: snyk.Critical, IsIgnored: true, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
 			{Severity: snyk.High, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
 			{Severity: snyk.High, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
-			{Severity: snyk.Critical, Product: product.ProductInfrastructureAsCode, AffectedFilePath: filePath, AdditionalData: snyk.IaCIssueData{Key: util.Result(uuid.NewUUID()).String()}},
-			// SeverityCount incremented by ScanData.Product
 		},
 	}
 
@@ -544,60 +559,14 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	f.processResults(scanData)
 
 	// Assert
-	require.Equal(t, 2, scanData.SeverityCount[product.ProductOpenSource].Critical)
+	require.NotEmpty(t, scanData.GetSeverityIssueCounts())
+	require.Equal(t, product.ProductOpenSource, scanData.Product)
+	require.Equal(t, 3, scanData.GetSeverityIssueCounts()[snyk.Critical].Total)
+	require.Equal(t, 2, scanData.GetSeverityIssueCounts()[snyk.Critical].Open)
+	require.Equal(t, 1, scanData.GetSeverityIssueCounts()[snyk.Critical].Ignored)
 
 	// wait for async analytics sending
 	time.Sleep(time.Second)
-}
-
-func Test_IncrementSeverityCount(t *testing.T) {
-	c := testutil.UnitTest(t)
-
-	engineMock, gafConfig := setUpEngineMock(t, c)
-
-	NewMockFolderWithScanNotifier(notification.NewNotifier())
-
-	issue := snyk.Issue{
-		Severity: snyk.Critical,
-		Product:  product.ProductOpenSource,
-	}
-
-	scanData := snyk.ScanData{
-		Product:       product.ProductOpenSource,
-		SeverityCount: make(map[product.Product]snyk.SeverityCount),
-		Issues:        []snyk.Issue{issue},
-	}
-
-	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
-	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).Times(0)
-
-	// Act
-	incrementSeverityCount(&scanData, scanData.Issues[0])
-
-	// Assert
-	require.Equal(t, 1, scanData.SeverityCount[product.ProductOpenSource].Critical)
-}
-
-func Test_initializeSeverityCountForProductWhenScanDataIsEmpty(t *testing.T) {
-	c := testutil.UnitTest(t)
-
-	engineMock, gafConfig := setUpEngineMock(t, c)
-
-	NewMockFolderWithScanNotifier(notification.NewNotifier())
-
-	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
-	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).Times(0)
-
-	scanData := snyk.ScanData{}
-
-	// Act
-	initializeSeverityCountForProduct(&scanData, "")
-
-	// Assert
-	require.Equal(t, 0, scanData.SeverityCount["unknown"].Critical)
-	require.Equal(t, 0, scanData.SeverityCount["unknown"].High)
-	require.Equal(t, 0, scanData.SeverityCount["unknown"].Medium)
-	require.Equal(t, 0, scanData.SeverityCount["unknown"].Low)
 }
 
 func NewMockFolder(notifier noti.Notifier) *Folder {
