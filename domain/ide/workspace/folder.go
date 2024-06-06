@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"
@@ -30,7 +29,6 @@ import (
 	gafanalytics "github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
-	"github.com/snyk/go-application-framework/pkg/networking"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
@@ -41,6 +39,11 @@ import (
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/util"
+)
+
+var (
+	_ snyk.CacheProvider = (*Folder)(nil)
 )
 
 type FolderStatus int
@@ -295,7 +298,7 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 	// this also updates the severity counts in scan data, therefore we pass a pointer
 	f.updateGlobalCacheAndSeverityCounts(&scanData)
 
-	go sendAnalytics(&scanData, f.path)
+	go sendAnalytics(&scanData)
 
 	// Filter and publish cached diagnostics
 	f.FilterAndPublishDiagnostics(&scanData.Product)
@@ -317,7 +320,6 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *snyk.ScanData) {
 			// severity counts here, too
 			if !dedupMap[uniqueIssueID] {
 				dedupMap[uniqueIssueID] = true
-				incrementSeverityCount(scanData, issue)
 			}
 			continue
 		}
@@ -334,7 +336,6 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *snyk.ScanData) {
 		if !dedupMap[uniqueIssueID] {
 			dedupMap[uniqueIssueID] = true
 			cachedIssues = append(cachedIssues, issue)
-			incrementSeverityCount(scanData, issue)
 		}
 		newCache[issue.AffectedFilePath] = cachedIssues
 	}
@@ -344,52 +345,7 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *snyk.ScanData) {
 	}
 }
 
-func incrementSeverityCount(scanData *snyk.ScanData, issue snyk.Issue) {
-	issueProduct := issue.Product
-	if issueProduct == "" {
-		log.Debug().Str("method", "incrementSeverityCount").Msg("Issue product is empty. Setting to unknown")
-		issueProduct = "unknown"
-	}
-
-	initializeSeverityCountForProduct(scanData, issueProduct)
-
-	severityCount, exists := scanData.SeverityCount[issueProduct]
-	if !exists {
-		severityCount = snyk.SeverityCount{}
-	}
-
-	switch issue.Severity {
-	case snyk.Critical:
-		severityCount.Critical++
-	case snyk.High:
-		severityCount.High++
-	case snyk.Medium:
-		severityCount.Medium++
-	case snyk.Low:
-		severityCount.Low++
-	}
-
-	scanData.SeverityCount[issueProduct] = severityCount // reassign the value to the map
-}
-
-func initializeSeverityCountForProduct(scanData *snyk.ScanData, productType product.Product) {
-	if scanData.SeverityCount == nil {
-		scanData.SeverityCount = make(map[product.Product]snyk.SeverityCount)
-	}
-
-	if productType == "" {
-		log.Debug().Str("method", "initializeSeverityCountForProduct").Msg("Product is empty. Setting to unknown")
-		productType = "unknown"
-	}
-
-	if _, exists := scanData.SeverityCount[productType]; !exists {
-		scanData.SeverityCount[productType] = snyk.SeverityCount{}
-	}
-}
-
-func sendAnalytics(data *snyk.ScanData, path string) {
-	initializeSeverityCountForProduct(data, data.Product)
-
+func sendAnalytics(data *snyk.ScanData) {
 	c := config.CurrentConfig()
 	gafConfig := c.Engine().GetConfiguration()
 
@@ -406,15 +362,14 @@ func sendAnalytics(data *snyk.ScanData, path string) {
 
 	ic := gafanalytics.NewInstrumentationCollector()
 
-	//todo Should we make this a singleton?
-	ua := networking.UserAgent(networking.UaWithConfig(gafConfig), networking.UaWithApplication("snyk-ls", config.Version))
+	ua := util.GetUserAgent(gafConfig, config.Version)
 	ic.SetUserAgent(ua)
 
 	iid := instrumentation.AssembleUrnFromUUID(uuid.NewString())
 	ic.SetInteractionId(iid)
 
 	ic.SetTimestamp(data.TimestampFinished)
-	ic.SetDuration(time.Duration(data.DurationMs) * time.Millisecond)
+	ic.SetDuration(data.DurationMs)
 
 	ic.SetStage("dev")
 	ic.SetType("analytics")
@@ -425,10 +380,10 @@ func sendAnalytics(data *snyk.ScanData, path string) {
 
 	ic.SetStatus(gafanalytics.Success)
 
-	summary := createTestSummary(data)
+	summary := createTestSummary(data, c)
 	ic.SetTestSummary(summary)
 
-	targetId, err := instrumentation.GetTargetId(path, instrumentation.AutoDetectedTargetId)
+	targetId, err := instrumentation.GetTargetId(data.Path, instrumentation.AutoDetectedTargetId)
 	if err != nil {
 		logger.Err(err).Msg("Error creating the Target Id")
 	}
@@ -457,6 +412,7 @@ func sendAnalytics(data *snyk.ScanData, path string) {
 }
 
 func setupCategories(data *snyk.ScanData, c *config.Config) []string {
+	// Empty string added for binary name (os.Args)
 	args := []string{"", product.ToProductCodename(data.Product), "test"}
 	args = append(args, c.CliSettings().AdditionalOssParameters...)
 	knownCommands, knownFlags := instrumentation.GetKnownCommandsAndFlags(c.Engine())
@@ -464,31 +420,52 @@ func setupCategories(data *snyk.ScanData, c *config.Config) []string {
 	return categories
 }
 
-func createTestSummary(data *snyk.ScanData) json_schemas.TestSummary {
-	testSummary := json_schemas.TestSummary{
-		Results: []json_schemas.TestSummaryResult{{
-			Severity: "critical",
-			Total:    data.SeverityCount[data.Product].Critical,
-			Open:     0,
-			Ignored:  0,
-		}, {
-			Severity: "high",
-			Total:    data.SeverityCount[data.Product].High,
-			Open:     0,
-			Ignored:  0,
-		}, {
-			Severity: "medium",
-			Total:    data.SeverityCount[data.Product].Medium,
-			Open:     0,
-			Ignored:  0,
-		}, {
-			Severity: "low",
-			Total:    data.SeverityCount[data.Product].Low,
-			Open:     0,
-			Ignored:  0,
-		}},
-		Type: string(data.Product),
+func createTestSummary(data *snyk.ScanData, c *config.Config) json_schemas.TestSummary {
+	logger := c.Logger().With().Str("method", "folder.createTestSummary").Logger()
+	sic := data.GetSeverityIssueCounts()
+	testSummary := json_schemas.TestSummary{Type: string(data.Product)}
+
+	if len(sic) == 0 {
+		logger.Info().Msgf("skipping create test summary. no issues found for product %v", string(data.Product))
+		return testSummary
 	}
+
+	var results []json_schemas.TestSummaryResult
+	if ic, exists := sic[snyk.Critical]; exists {
+		results = append(results, json_schemas.TestSummaryResult{
+			Severity: "critical",
+			Total:    ic.Total,
+			Open:     ic.Open,
+			Ignored:  ic.Ignored,
+		})
+	}
+	if ic, exists := sic[snyk.High]; exists {
+		results = append(results, json_schemas.TestSummaryResult{
+			Severity: "high",
+			Total:    ic.Total,
+			Open:     ic.Open,
+			Ignored:  ic.Ignored,
+		})
+	}
+	if ic, exists := sic[snyk.Medium]; exists {
+		results = append(results, json_schemas.TestSummaryResult{
+			Severity: "medium",
+			Total:    ic.Total,
+			Open:     ic.Open,
+			Ignored:  ic.Ignored,
+		})
+	}
+	if ic, exists := sic[snyk.Low]; exists {
+		results = append(results, json_schemas.TestSummaryResult{
+			Severity: "low",
+			Total:    ic.Total,
+			Open:     ic.Open,
+			Ignored:  ic.Ignored,
+		})
+	}
+
+	testSummary.Results = results
+
 	return testSummary
 }
 
