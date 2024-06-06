@@ -27,7 +27,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/rs/zerolog/log"
-	gapanalytics "github.com/snyk/go-application-framework/pkg/analytics"
+	gafanalytics "github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -405,7 +405,7 @@ func sendAnalytics(data *snyk.ScanData, path string) {
 		return
 	}
 
-	ic := gapanalytics.NewInstrumentationCollector()
+	ic := gafanalytics.NewInstrumentationCollector()
 
 	//todo Should we make this a singleton?
 	ua := networking.UserAgent(networking.UaWithConfig(gafConfig), networking.UaWithApplication("snyk-ls", config.Version))
@@ -437,7 +437,7 @@ func sendAnalytics(data *snyk.ScanData, path string) {
 
 	ic.AddExtension("deviceid", c.DeviceID())
 
-	analyticsData, err := gapanalytics.GetV2InstrumentationObject(ic)
+	analyticsData, err := gafanalytics.GetV2InstrumentationObject(ic)
 	if err != nil {
 		logger.Err(err).Msg("Error creating the instrumentation collection object")
 		return
