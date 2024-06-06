@@ -75,39 +75,6 @@ func TestAnalyticsProviderPactV2(t *testing.T) {
 	}
 }
 
-//func testGetAnalyticsV2Payload2() []byte {
-//
-//	ic := analytics.NewInstrumentationCollector()
-//
-//	mockUserAgent := networking.UserAgentInfo{}
-//	mockInteractionId := "interactionID"
-//	mockTimestamp := time.Now()
-//	mockStage := "cicd"
-//	mockInstrumentationType := "analytics"
-//	mockInteractionType := "Scan done"
-//	mockCategory := []string{"code", "test"}
-//	mockStatus := "success"
-//	mockTestSummary := json_schemas.NewTestSummary("sast")
-//	mockTargetId := "targetID"
-//	mockExtension := map[string]interface{}{"strings": "hello world"}
-//
-//	ic.SetInteractionId(mockInteractionId)
-//	ic.SetTimestamp(mockTimestamp)
-//	ic.SetStage(mockStage)
-//	ic.SetType(mockInstrumentationType)
-//	ic.SetInteractionType(mockInteractionType)
-//	ic.SetCategory(mockCategory)
-//	ic.SetStatus(mockStatus)
-//	ic.SetTestSummary(*mockTestSummary)
-//	ic.SetTargetId(mockTargetId)
-//	ic.AddExtension(mockExtension)
-//
-//	actualV2InstrumentationObject, _ := analytics.GetV2InstrumentationObject(ic)
-//	v2InstrumentationData := utils.ValueOf(json.Marshal(actualV2InstrumentationObject))
-//
-//	return v2InstrumentationData
-//}
-
 func testGetAnalyticsV2Payload() interface{} {
 	gafConfig := configuration.NewInMemory()
 	conf := config.CurrentConfig()
