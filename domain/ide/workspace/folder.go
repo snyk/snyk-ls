@@ -415,8 +415,7 @@ func setupCategories(data *snyk.ScanData, c *config.Config) []string {
 	// Empty string added for binary name (os.Args)
 	args := []string{"", product.ToProductCodename(data.Product), "test"}
 	args = append(args, c.CliSettings().AdditionalOssParameters...)
-	knownCommands, knownFlags := instrumentation.GetKnownCommandsAndFlags(c.Engine())
-	categories := instrumentation.DetermineCategoryFromArgs(args, knownCommands, knownFlags)
+	categories := instrumentation.DetermineCategory(args, c.Engine())
 	return categories
 }
 

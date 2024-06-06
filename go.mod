@@ -23,7 +23,7 @@ require (
 	github.com/segmentio/analytics-go v3.1.0+incompatible
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/snyk/code-client-go v1.7.0
-	github.com/snyk/go-application-framework v0.0.0-20240531131804-44c710e2a81b
+	github.com/snyk/go-application-framework v0.0.0-20240606122504-961e838cb356
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/stretchr/testify v1.9.0
 	github.com/subosito/gotenv v1.6.0
