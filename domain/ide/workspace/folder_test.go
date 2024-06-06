@@ -495,14 +495,11 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 
 			return nil, nil
 		})
-	if err != nil {
-		return
-	}
+
+	assert.NoError(t, err)
 
 	err = engineMock.Init()
-	if err != nil {
-		return
-	}
+	assert.NoError(t, err)
 
 	// Act
 	f.processResults(data)
@@ -515,7 +512,6 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 			break
 		}
 
-		time.Sleep(waitTime)
 		waitTime *= 2
 		// if waitTime is greater than the allowed elapsed time,
 		// Set the wait time to be exactly the allowed remaining time until timeout
