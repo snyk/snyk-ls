@@ -424,18 +424,22 @@ func sendAnalytics(data *snyk.ScanData, path string) {
 	categories := setupCategories(data, c)
 	ic.SetCategory(categories)
 
-	ic.SetStatus("success") //or get result status from scan
+	if data.Err == nil {
+		ic.SetStatus(gafanalytics.Success)
+	} else {
+		ic.SetStatus(gafanalytics.Failure)
+	}
 
 	summary := createTestSummary(data)
 	ic.SetTestSummary(summary)
 
-	targetid, err := instrumentation.GetTargetId(path, instrumentation.AutoDetectedTargetId)
+	targetId, err := instrumentation.GetTargetId(path, instrumentation.AutoDetectedTargetId)
 	if err != nil {
 		logger.Err(err).Msg("Error creating the Target Id")
 	}
-	ic.SetTargetId(targetid)
+	ic.SetTargetId(targetId)
 
-	ic.AddExtension("deviceid", c.DeviceID())
+	ic.AddExtension("device_id", c.DeviceID())
 
 	analyticsData, err := gafanalytics.GetV2InstrumentationObject(ic)
 	if err != nil {
