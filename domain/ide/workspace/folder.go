@@ -31,7 +31,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
-	"github.com/snyk/go-application-framework/pkg/utils"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
@@ -443,7 +442,10 @@ func sendAnalytics(data *snyk.ScanData, path string) {
 		return
 	}
 
-	v2InstrumentationData := utils.ValueOf(json.Marshal(analyticsData))
+	v2InstrumentationData, err := json.Marshal(analyticsData)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to marshal analytics")
+	}
 
 	logger.Debug().Any("v2InstrumentationData", string(v2InstrumentationData)).Msg("Analytics data")
 
