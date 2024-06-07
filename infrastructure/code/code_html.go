@@ -139,12 +139,25 @@ func trimCWEPrefix(cwe string) string {
 
 func prepareIgnoreDetailsRow(ignoreDetails *snyk.IgnoreDetails) []IgnoreDetail {
 	return []IgnoreDetail{
-		{"Category", ignoreDetails.Category},
+		{"Category", parseCategory(ignoreDetails.Category)},
 		{"Expiration", ignoreDetails.Expiration},
 		{"Ignored On", formatDate(ignoreDetails.IgnoredOn)},
 		{"Ignored By", ignoreDetails.IgnoredBy},
 		{"Reason", ignoreDetails.Reason},
 	}
+}
+
+func parseCategory(category string) string {
+	categoryMap := map[string]string{
+		"not-vulnerable":   "Not vulnerable",
+		"temporary-ignore": "Ignored temporarily",
+		"wont-fix":         "Ignored permanently",
+	}
+
+	if result, ok := categoryMap[category]; ok {
+		return result
+	}
+	return category
 }
 
 func prepareDataFlowTable(issue snyk.CodeIssueData) []DataFlowItem {
