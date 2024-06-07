@@ -31,8 +31,6 @@ import (
 	"github.com/shirou/gopsutil/process"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/go-application-framework/pkg/networking"
-
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
@@ -182,7 +180,7 @@ func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler 
 
 func initNetworkAccessHeaders() {
 	engine := config.CurrentConfig().Engine()
-	ua := networking.UserAgent(networking.UaWithConfig(engine.GetConfiguration()), networking.UaWithApplication("snyk-ls", config.Version))
+	ua := util.GetUserAgent(engine.GetConfiguration(), config.Version)
 	engine.GetNetworkAccess().AddHeaderField("User-Agent", ua.String())
 }
 

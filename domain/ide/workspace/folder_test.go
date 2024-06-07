@@ -18,7 +18,6 @@ package workspace
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"path/filepath"
 	"sync"
@@ -28,11 +27,12 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"
+	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -452,7 +452,9 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	engineMock, gafConfig := setUpEngineMock(t, c)
+	gafConfig := configuration.NewInMemory()
+	engineMock := workflow.NewWorkFlowEngine(gafConfig)
+	c.SetEngine(engineMock)
 
 	f, _ := NewMockFolderWithScanNotifier(notification.NewNotifier())
 	filePath := filepath.Join(f.path, "path1")
@@ -463,25 +465,53 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 		Issues:  []snyk.Issue{mockCodeIssue},
 	}
 
-	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
-	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
-		// this captures the call parameters of the mocked call
-		Do(func(id workflow.Identifier, workflowInputData []workflow.Data, config configuration.Configuration) {
-			require.Equal(t, 1, len(workflowInputData))
-			payloadBytes, ok := workflowInputData[0].GetPayload().([]byte)
-			require.True(t, ok)
+	ic := analytics.NewInstrumentationCollector()
 
-			var scanDoneEvent json_schemas.ScanDoneEvent
-			err := json.Unmarshal(payloadBytes, &scanDoneEvent)
+	ua := util.GetUserAgent(gafConfig, config.Version)
+	ic.SetUserAgent(ua)
+	categories := setupCategories(&data, c)
+	ic.SetCategory(categories)
+	ic.SetStage("dev")
+	ic.SetStatus("Success") //or get result status from scan
+	ic.SetInteractionType("Scan done")
+	summary := createTestSummary(&data, c)
+	ic.SetTestSummary(summary)
+	ic.SetType("Analytics")
+
+	entered := make(chan struct{})
+	_, err := engineMock.Register(localworkflows.WORKFLOWID_REPORT_ANALYTICS, workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)),
+		func(invocation workflow.InvocationContext, workflowInputData []workflow.Data) ([]workflow.Data, error) {
+			actualV2InstrumentationObject, err := analytics.GetV2InstrumentationObject(ic)
+
 			require.NoError(t, err)
-			require.Equal(t, "Snyk Open Source", scanDoneEvent.Data.Attributes.ScanType)
-			require.Equal(t, 1, scanDoneEvent.Data.Attributes.UniqueIssueCount.Medium)
+
+			require.Equal(t, "snyk-ls", actualV2InstrumentationObject.Data.Attributes.Runtime.Application.Name)
+			require.Equal(t, "dev", string(*actualV2InstrumentationObject.Data.Attributes.Interaction.Stage))
+			require.Equal(t, "Success", actualV2InstrumentationObject.Data.Attributes.Interaction.Status)
+			require.Equal(t, "Scan done", actualV2InstrumentationObject.Data.Attributes.Interaction.Type)
+			require.Equal(t, []string{product.ToProductCodename(data.Product), "test"}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Categories)
+			require.Equal(t, "Analytics", actualV2InstrumentationObject.Data.Type)
+			require.Empty(t, actualV2InstrumentationObject.Data.Attributes.Interaction.Errors)
+			require.Equal(t, []map[string]interface{}{{"name": "medium", "count": 1}}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Results)
+
+			close(entered)
+			return nil, nil
 		})
+
+	assert.NoError(t, err)
+
+	err = engineMock.Init()
+	assert.NoError(t, err)
 
 	// Act
 	f.processResults(data)
-	// wait for async analytics sending
-	time.Sleep(time.Second)
+	maxWaitTime := 10 * time.Second
+
+	select {
+	case <-entered:
+	case <-time.After(maxWaitTime):
+		t.Fatalf("time out. condition wasn't met. current timeout value is: %s", maxWaitTime)
+	}
 }
 
 func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
@@ -493,19 +523,18 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 
 	filePath := filepath.Join(f.Path(), "dummy.java")
 	scanData := snyk.ScanData{
-		Product:       product.ProductOpenSource,
-		SeverityCount: make(map[product.Product]snyk.SeverityCount),
+		Product: product.ProductOpenSource,
 		Issues: []snyk.Issue{
 			{Severity: snyk.Critical, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
 			{Severity: snyk.Critical, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
+			{Severity: snyk.Critical, IsIgnored: true, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
 			{Severity: snyk.High, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
 			{Severity: snyk.High, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
-			{Severity: snyk.Critical, Product: product.ProductInfrastructureAsCode, AffectedFilePath: filePath, AdditionalData: snyk.IaCIssueData{Key: util.Result(uuid.NewUUID()).String()}},
-			// SeverityCount incremented by ScanData.Product
 		},
 	}
 
 	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
+	engineMock.EXPECT().GetWorkflows().AnyTimes()
 	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(),
 		gomock.Any()).Times(1)
 
@@ -513,60 +542,14 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	f.processResults(scanData)
 
 	// Assert
-	require.Equal(t, 2, scanData.SeverityCount[product.ProductOpenSource].Critical)
+	require.NotEmpty(t, scanData.GetSeverityIssueCounts())
+	require.Equal(t, product.ProductOpenSource, scanData.Product)
+	require.Equal(t, 3, scanData.GetSeverityIssueCounts()[snyk.Critical].Total)
+	require.Equal(t, 2, scanData.GetSeverityIssueCounts()[snyk.Critical].Open)
+	require.Equal(t, 1, scanData.GetSeverityIssueCounts()[snyk.Critical].Ignored)
 
 	// wait for async analytics sending
 	time.Sleep(time.Second)
-}
-
-func Test_IncrementSeverityCount(t *testing.T) {
-	c := testutil.UnitTest(t)
-
-	engineMock, gafConfig := setUpEngineMock(t, c)
-
-	NewMockFolderWithScanNotifier(notification.NewNotifier())
-
-	issue := snyk.Issue{
-		Severity: snyk.Critical,
-		Product:  product.ProductOpenSource,
-	}
-
-	scanData := snyk.ScanData{
-		Product:       product.ProductOpenSource,
-		SeverityCount: make(map[product.Product]snyk.SeverityCount),
-		Issues:        []snyk.Issue{issue},
-	}
-
-	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
-	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).Times(0)
-
-	// Act
-	incrementSeverityCount(&scanData, scanData.Issues[0])
-
-	// Assert
-	require.Equal(t, 1, scanData.SeverityCount[product.ProductOpenSource].Critical)
-}
-
-func Test_initializeSeverityCountForProductWhenScanDataIsEmpty(t *testing.T) {
-	c := testutil.UnitTest(t)
-
-	engineMock, gafConfig := setUpEngineMock(t, c)
-
-	NewMockFolderWithScanNotifier(notification.NewNotifier())
-
-	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
-	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).Times(0)
-
-	scanData := snyk.ScanData{}
-
-	// Act
-	initializeSeverityCountForProduct(&scanData, "")
-
-	// Assert
-	require.Equal(t, 0, scanData.SeverityCount["unknown"].Critical)
-	require.Equal(t, 0, scanData.SeverityCount["unknown"].High)
-	require.Equal(t, 0, scanData.SeverityCount["unknown"].Medium)
-	require.Equal(t, 0, scanData.SeverityCount["unknown"].Low)
 }
 
 func NewMockFolder(notifier noti.Notifier) *Folder {
