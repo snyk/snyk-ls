@@ -412,24 +412,34 @@ func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, 
 		if suppression.Properties.Expiration != nil {
 			expiration = *suppression.Properties.Expiration
 		}
-		ignoredOn, err := time.Parse(time.RFC3339, suppression.Properties.IgnoredOn)
-		if err != nil {
-			// We don't want to fail just because of this parsing logic
-			log.Error().
-				Err(err).
-				Msg("failed to parse ignoredOn timestamp " +
-					suppression.Properties.IgnoredOn)
-			ignoredOn = time.Now()
-		}
+
 		ignoreDetails = &snyk.IgnoreDetails{
 			Category:   string(suppression.Properties.Category),
 			Reason:     suppression.Justification,
 			Expiration: expiration,
-			IgnoredOn:  ignoredOn,
+			IgnoredOn:  parseDateFromString(suppression.Properties.IgnoredOn),
 			IgnoredBy:  suppression.Properties.IgnoredBy.Name,
 		}
 	}
 	return isIgnored, ignoreDetails
+}
+
+func parseDateFromString(date string) time.Time {
+	logger := log.With().Str("method", "convert.parseDateFromString").Logger()
+	layouts := []string{
+		"Mon Jan 02 2006", // TODO: when this gets fixed, we can remove this option [IGNR-365]
+		time.RFC3339,      // Standard format
+	}
+
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, date); err == nil {
+			return t
+		}
+	}
+
+	// Fallback to today's date if parsing fails
+	logger.Warn().Str("date", date).Msg("failed to parse date. Using current date.")
+	return time.Now().UTC()
 }
 
 func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir string) ([]snyk.Marker, error) {

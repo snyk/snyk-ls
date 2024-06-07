@@ -225,7 +225,7 @@ func getRepoName(commitURL string) string {
 
 func formatDate(date time.Time) string {
 	month := date.Format("January")
-	return fmt.Sprintf("%s %02d, %d", month, date.Day(), date.Year())
+	return fmt.Sprintf("%s %d, %d", month, date.Day(), date.Year())
 }
 
 func getSeverityIconSvg(issue snyk.Issue) template.HTML {
