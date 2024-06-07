@@ -402,8 +402,6 @@ func sendAnalytics(data *snyk.ScanData) {
 		logger.Error().Err(err).Msg("Failed to marshal analytics")
 	}
 
-	logger.Debug().Any("v2InstrumentationData", string(v2InstrumentationData)).Msg("Analytics data")
-
 	err = analytics.SendAnalyticsToAPI(c, v2InstrumentationData)
 	if err != nil {
 		logger.Err(err).Msg("Error sending analytics to API: " + string(v2InstrumentationData))
@@ -424,47 +422,32 @@ func createTestSummary(data *snyk.ScanData, c *config.Config) json_schemas.TestS
 	testSummary := json_schemas.TestSummary{Type: string(data.Product)}
 
 	if len(sic) == 0 {
-		logger.Info().Msgf("skipping create test summary. no issues found for product %v", string(data.Product))
+		logger.Debug().Msgf("no scan issues found for product %v", string(data.Product))
 		return testSummary
 	}
 
 	var results []json_schemas.TestSummaryResult
-	if ic, exists := sic[snyk.Critical]; exists {
-		results = append(results, json_schemas.TestSummaryResult{
-			Severity: "critical",
-			Total:    ic.Total,
-			Open:     ic.Open,
-			Ignored:  ic.Ignored,
-		})
-	}
-	if ic, exists := sic[snyk.High]; exists {
-		results = append(results, json_schemas.TestSummaryResult{
-			Severity: "high",
-			Total:    ic.Total,
-			Open:     ic.Open,
-			Ignored:  ic.Ignored,
-		})
-	}
-	if ic, exists := sic[snyk.Medium]; exists {
-		results = append(results, json_schemas.TestSummaryResult{
-			Severity: "medium",
-			Total:    ic.Total,
-			Open:     ic.Open,
-			Ignored:  ic.Ignored,
-		})
-	}
-	if ic, exists := sic[snyk.Low]; exists {
-		results = append(results, json_schemas.TestSummaryResult{
-			Severity: "low",
-			Total:    ic.Total,
-			Open:     ic.Open,
-			Ignored:  ic.Ignored,
-		})
-	}
+	results = appendTestResults(sic, results, snyk.Critical)
+	results = appendTestResults(sic, results, snyk.High)
+	results = appendTestResults(sic, results, snyk.Medium)
+	results = appendTestResults(sic, results, snyk.Low)
 
 	testSummary.Results = results
 
 	return testSummary
+}
+
+func appendTestResults(sic snyk.SeverityIssueCounts, results []json_schemas.TestSummaryResult,
+	severity snyk.Severity) []json_schemas.TestSummaryResult {
+	if ic, exists := sic[severity]; exists {
+		results = append(results, json_schemas.TestSummaryResult{
+			Severity: severity.String(),
+			Total:    ic.Total,
+			Open:     ic.Open,
+			Ignored:  ic.Ignored,
+		})
+	}
+	return results
 }
 
 func (f *Folder) FilterAndPublishDiagnostics(p *product.Product) {
