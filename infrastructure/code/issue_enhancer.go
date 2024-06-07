@@ -87,7 +87,7 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 			continue
 		}
 
-		if autoFixEnabled && issueData.IsAutofixable {
+		if autoFixEnabled && issueData.IsAutofixable && !issues[i].IsIgnored {
 			codeAction := *b.createDeferredAutofixCodeAction(ctx, issues[i], bundleHash)
 			issues[i].CodeActions = append(issues[i].CodeActions, codeAction)
 

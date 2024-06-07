@@ -21,12 +21,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -179,5 +183,85 @@ func Test_autofixFunc(t *testing.T) {
 			Type:    sglsp.MTError,
 			Message: "Oh snap! 😔 The fix did not remediate the issue and was not applied.",
 		})
+	})
+}
+
+func Test_addIssueActions(t *testing.T) {
+	fakeSnykCode := FakeSnykCodeClient{}
+	bundleHash := ""
+	mockNotifier := notification.NewMockNotifier()
+	issueEnhancer := IssueEnhancer{
+		SnykCode:     &fakeSnykCode,
+		notifier:     mockNotifier,
+		instrumentor: NewCodeInstrumentor(),
+	}
+
+	var setupCodeSettings = func() {
+		resetCodeSettings()
+		config.CurrentConfig().SetSnykCodeEnabled(true)
+		config.CurrentConfig().SetSnykLearnCodeActionsEnabled(false)
+		getCodeSettings().SetAutofixEnabled(true)
+	}
+
+	var setupFakeIssues = func(isIgnored bool, isAutofixable bool) []snyk.Issue {
+		return []snyk.Issue{
+			{
+				ID:               "SNYK-123",
+				Range:            fakeRange,
+				Severity:         snyk.High,
+				Product:          product.ProductCode,
+				IssueType:        snyk.CodeQualityIssue,
+				Message:          "This is a dummy error (severity error)",
+				CodelensCommands: []snyk.CommandData{FakeCommand},
+				CodeActions:      []snyk.CodeAction{FakeCodeAction},
+				IsIgnored:        isIgnored,
+				AdditionalData: snyk.CodeIssueData{
+					Key:           uuid.New().String(),
+					IsAutofixable: isAutofixable,
+				},
+			},
+		}
+	}
+
+	t.Run("Includes AI fixes if issue is not ignored", func(t *testing.T) {
+		setupCodeSettings()
+		defer t.Cleanup(resetCodeSettings)
+		fakeIssues := setupFakeIssues(false, true)
+
+		issueEnhancer.addIssueActions(context.Background(), fakeIssues, bundleHash)
+
+		issueData, ok := fakeIssues[0].AdditionalData.(snyk.CodeIssueData)
+		require.True(t, ok)
+		assert.True(t, issueData.HasAIFix)
+		assert.Len(t, fakeIssues[0].CodelensCommands, 2)
+		assert.Len(t, fakeIssues[0].CodeActions, 2)
+	})
+
+	t.Run("Includes AI fixes if issue is not autofixable", func(t *testing.T) {
+		setupCodeSettings()
+		defer t.Cleanup(resetCodeSettings)
+		fakeIssues := setupFakeIssues(false, false)
+
+		issueEnhancer.addIssueActions(context.Background(), fakeIssues, bundleHash)
+
+		issueData, ok := fakeIssues[0].AdditionalData.(snyk.CodeIssueData)
+		require.True(t, ok)
+		assert.False(t, issueData.HasAIFix)
+		assert.Len(t, fakeIssues[0].CodelensCommands, 1)
+		assert.Len(t, fakeIssues[0].CodeActions, 1)
+	})
+
+	t.Run("Does not include AI fixes if issue is ignored", func(t *testing.T) {
+		setupCodeSettings()
+		defer t.Cleanup(resetCodeSettings)
+		fakeIssues := setupFakeIssues(true, true)
+
+		issueEnhancer.addIssueActions(context.Background(), fakeIssues, bundleHash)
+
+		issueData, ok := fakeIssues[0].AdditionalData.(snyk.CodeIssueData)
+		require.True(t, ok)
+		assert.False(t, issueData.HasAIFix)
+		assert.Len(t, fakeIssues[0].CodelensCommands, 1)
+		assert.Len(t, fakeIssues[0].CodeActions, 1)
 	})
 }
