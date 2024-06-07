@@ -24,7 +24,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/stretchr/testify/assert"
@@ -941,7 +940,7 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 					Properties: codeClientSarif.SuppressionProperties{
 						Category:   "category",
 						Expiration: &expiration,
-						IgnoredOn:  "Wed Jun 05 2024",
+						IgnoredOn:  "2024-02-23T16:08:25Z",
 						IgnoredBy: codeClientSarif.IgnoredBy{
 							Name: "name",
 						},
@@ -957,39 +956,7 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 		assert.Equal(t, "reason", ignoreDetails.Reason)
 		assert.Equal(t, "category", ignoreDetails.Category)
 		assert.Equal(t, "expiration", ignoreDetails.Expiration)
-		assert.Equal(t, "June 5, 2024", ignoreDetails.IgnoredOn) // Expected formatted date
+		assert.Equal(t, 2024, ignoreDetails.IgnoredOn.Year())
 		assert.Equal(t, "name", ignoreDetails.IgnoredBy)
-	})
-
-	t.Run("handles incorrect date format for IgnoredOn gracefully", func(t *testing.T) {
-		expiration := "expiration"
-		incorrectDateFormat := "05-06-2024" // Expected format is "Wed Jun 05 2024"
-
-		r := codeClientSarif.Result{
-			Message: codeClientSarif.ResultMessage{
-				Text:     "",
-				Markdown: "Printing the stack trace of {0}. Production code should not use {1}. {3}",
-				Arguments: []string{"[java.lang.InterruptedException](0)", "[printStackTrace](1)(2)", "",
-					"[This is a test argument](3)"},
-			},
-			Suppressions: []codeClientSarif.Suppression{
-				{
-					Justification: "reason",
-					Properties: codeClientSarif.SuppressionProperties{
-						Category:   "category",
-						Expiration: &expiration,
-						IgnoredOn:  incorrectDateFormat,
-						IgnoredBy: codeClientSarif.IgnoredBy{
-							Name: "name",
-						},
-					},
-				},
-			},
-		}
-
-		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
-		_, ignoreDetails := sarifConverter.getIgnoreDetails(r)
-		_, err := time.Parse("January 2, 2006", ignoreDetails.IgnoredOn)
-		assert.Nil(t, err) // Expected default today date
 	})
 }

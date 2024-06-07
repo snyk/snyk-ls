@@ -19,10 +19,12 @@ package code
 import (
 	"bytes"
 	_ "embed"
+	"fmt"
 	"html/template"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/gomarkdown/markdown"
 	"github.com/rs/zerolog/log"
@@ -139,7 +141,7 @@ func prepareIgnoreDetailsRow(ignoreDetails *snyk.IgnoreDetails) []IgnoreDetail {
 	return []IgnoreDetail{
 		{"Category", ignoreDetails.Category},
 		{"Expiration", ignoreDetails.Expiration},
-		{"Ignored On", ignoreDetails.IgnoredOn},
+		{"Ignored On", formatDate(ignoreDetails.IgnoredOn)},
 		{"Ignored By", ignoreDetails.IgnoredBy},
 		{"Reason", ignoreDetails.Reason},
 	}
@@ -219,6 +221,11 @@ func getRepoName(commitURL string) string {
 	}
 
 	return tabTitle
+}
+
+func formatDate(date time.Time) string {
+	month := date.Format("January")
+	return fmt.Sprintf("%s %02d, %d", month, date.Day(), date.Year())
 }
 
 func getSeverityIconSvg(issue snyk.Issue) template.HTML {

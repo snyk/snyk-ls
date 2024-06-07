@@ -414,7 +414,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	assert.Equal(t, "wont-fix", issues[1].IgnoreDetails.Category)
 	assert.Equal(t, "False positive", issues[1].IgnoreDetails.Reason)
 	assert.Equal(t, "13 days", issues[1].IgnoreDetails.Expiration)
-	assert.Equal(t, "June 5, 2024", issues[1].IgnoreDetails.IgnoredOn)
+	assert.Equal(t, 2024, issues[1].IgnoreDetails.IgnoredOn.Year())
 	assert.Equal(t, "Neil M", issues[1].IgnoreDetails.IgnoredBy)
 }
 

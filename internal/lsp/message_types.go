@@ -17,6 +17,8 @@
 package lsp
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	sglsp "github.com/sourcegraph/go-lsp"
 )
@@ -1040,11 +1042,11 @@ type ScanIssue struct { // TODO - convert this to a generic type
 }
 
 type IgnoreDetails struct {
-	Category   string `json:"category"`
-	Reason     string `json:"reason"`
-	Expiration string `json:"expiration"`
-	IgnoredOn  string `json:"ignoredOn"`
-	IgnoredBy  string `json:"ignoredBy"`
+	Category   string    `json:"category"`
+	Reason     string    `json:"reason"`
+	Expiration string    `json:"expiration"`
+	IgnoredOn  time.Time `json:"ignoredOn"`
+	IgnoredBy  string    `json:"ignoredBy"`
 }
 
 // Snyk Open Source

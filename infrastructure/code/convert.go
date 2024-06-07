@@ -396,7 +396,6 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 }
 
 func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, *snyk.IgnoreDetails) {
-	logger := log.With().Str("method", "convert.getIgnoreDetails").Logger()
 	isIgnored := false
 	var ignoreDetails *snyk.IgnoreDetails
 
@@ -404,7 +403,7 @@ func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, 
 	// but we only store one ignore for now
 	if len(result.Suppressions) > 0 {
 		if len(result.Suppressions) > 1 {
-			logger.Warn().Int("number of SARIF suppressions", len(result.Suppressions)).Msg(
+			log.Warn().Int("number of SARIF suppressions", len(result.Suppressions)).Msg(
 				"there are more suppressions than expected")
 		}
 		isIgnored = true
@@ -413,21 +412,20 @@ func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, 
 		if suppression.Properties.Expiration != nil {
 			expiration = *suppression.Properties.Expiration
 		}
-		ignoredOn, err := time.Parse("Mon Jan 02 2006", suppression.Properties.IgnoredOn)
+		ignoredOn, err := time.Parse(time.RFC3339, suppression.Properties.IgnoredOn)
 		if err != nil {
 			// We don't want to fail just because of this parsing logic
-			logger.Warn().
+			log.Error().
 				Err(err).
-				Msg("failed to parse ignoredOn timestamp " + suppression.Properties.IgnoredOn)
+				Msg("failed to parse ignoredOn timestamp " +
+					suppression.Properties.IgnoredOn)
 			ignoredOn = time.Now()
 		}
-		formattedIgnoredOn := ignoredOn.Format("January 2, 2006")
-
 		ignoreDetails = &snyk.IgnoreDetails{
 			Category:   string(suppression.Properties.Category),
 			Reason:     suppression.Justification,
 			Expiration: expiration,
-			IgnoredOn:  formattedIgnoredOn,
+			IgnoredOn:  ignoredOn,
 			IgnoredBy:  suppression.Properties.IgnoredBy.Name,
 		}
 	}
