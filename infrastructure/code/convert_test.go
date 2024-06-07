@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/stretchr/testify/assert"
@@ -959,4 +960,50 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 		assert.Equal(t, 2024, ignoreDetails.IgnoredOn.Year())
 		assert.Equal(t, "name", ignoreDetails.IgnoredBy)
 	})
+}
+
+func Test_ParseDateFromString(t *testing.T) {
+	today := time.Now().UTC()
+
+	type testCase struct {
+		name string
+		date string
+		want time.Time
+	}
+
+	tests := []testCase{
+		{
+			name: "accepted date format",
+			date: "Wed Jun 05 2024",
+			want: time.Date(2024, time.June, 5, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "valid RFC3339 format",
+			date: "2024-02-23T16:08:25Z",
+			want: time.Date(2024, time.February, 23, 16, 8, 25, 0, time.UTC),
+		},
+		{
+			name: "invalid date format",
+			date: "Jun 05 2024 Wednesday",
+			want: today, // Only assert day, month, and year
+		},
+		{
+			name: "invalid date format: empty date",
+			date: "",
+			want: today, // Only assert day, month, and year
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseDateFromString(tt.date)
+			if strings.Contains(tt.name, "invalid date format") {
+				if got.Year() != today.Year() || got.Month() != today.Month() || got.Day() != today.Day() {
+					t.Errorf("Expected today's date: %v, but got %v", today, got)
+				}
+			} else {
+				assert.Equal(t, tt.want, got)
+			}
+		})
+	}
 }
