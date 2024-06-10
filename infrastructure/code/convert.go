@@ -426,7 +426,7 @@ func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, 
 }
 
 func parseDateFromString(date string) time.Time {
-	logger := log.With().Str("method", "convert.parseDateFromString").Logger()
+	logger := config.CurrentConfig().Logger().With().Str("method", "convert.parseDateFromString").Logger()
 	layouts := []string{
 		"Mon Jan 02 2006", // TODO: when this gets fixed, we can remove this option [IGNR-365]
 		time.RFC3339,      // Standard format

@@ -28,6 +28,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
+// CreateFromCommandData gets a command based on the given parameters that can be passed to the CommandService
+// nolint: gocyclo, nolintlint // this is a factory, it's ok to have high cyclomatic complexity here
 func CreateFromCommandData(c *config.Config, commandData snyk.CommandData, srv lsp.Server, authService snyk.AuthenticationService, learnService learn.Service, notifier noti.Notifier, issueProvider snyk.IssueProvider, codeApiClient SnykCodeHttpClient, codeScanner *code.Scanner) (snyk.Command, error) {
 	httpClient := c.Engine().GetNetworkAccess().GetHttpClient
 

@@ -25,10 +25,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"
-	"github.com/rs/zerolog/log"
 	gafanalytics "github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 
 	"github.com/snyk/snyk-ls/application/config"
