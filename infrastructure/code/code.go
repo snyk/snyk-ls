@@ -25,7 +25,6 @@ import (
 	"github.com/erni27/imcache"
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
-	"github.com/rs/zerolog/log"
 	codeClient "github.com/snyk/code-client-go"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/snyk/code-client-go/scan"
@@ -84,6 +83,7 @@ type Scanner struct {
 	// the cache in workspace/folder should just delegate to this cache
 	issueCache          *imcache.Cache[string, []snyk.Issue]
 	cacheRemovalHandler func(path string)
+	c                   *config.Config
 }
 
 func New(bundleUploader *BundleUploader,
@@ -106,6 +106,7 @@ func New(bundleUploader *BundleUploader,
 		notifier:       notifier,
 		BundleHashes:   map[string]string{},
 		codeScanner:    codeScanner,
+		c:              bundleUploader.c,
 	}
 	sc.issueCache = imcache.New[string, []snyk.Issue](
 		imcache.WithDefaultExpirationOption[string, []snyk.Issue](time.Hour * 12),
@@ -114,10 +115,9 @@ func New(bundleUploader *BundleUploader,
 }
 
 func (sc *Scanner) IsEnabled() bool {
-	currentConfig := config.CurrentConfig
-	return currentConfig().IsSnykCodeEnabled() ||
-		currentConfig().IsSnykCodeQualityEnabled() ||
-		currentConfig().IsSnykCodeSecurityEnabled()
+	return sc.c.IsSnykCodeEnabled() ||
+		sc.c.IsSnykCodeQualityEnabled() ||
+		sc.c.IsSnykCodeSecurityEnabled()
 }
 
 func (sc *Scanner) Product() product.Product {
@@ -213,7 +213,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 
 // Populate HTML template
 func (sc *Scanner) enhanceIssuesDetails(issues []snyk.Issue) {
-	logger := log.With().Str("method", "issue_enhancer.enhanceIssuesDetails").Logger()
+	logger := sc.c.Logger().With().Str("method", "issue_enhancer.enhanceIssuesDetails").Logger()
 
 	for i := range issues {
 		issue := &issues[i]
@@ -328,7 +328,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 	changedFiles map[string]bool,
 ) (issues []snyk.Issue, err error) {
 	if ctx.Err() != nil {
-		log.Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
+		sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
 		return issues, nil
 	}
 
@@ -336,7 +336,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
 	requestId := span.GetTraceId() // use span trace id as code-request-id
-	log.Info().Str("requestId", requestId).Msg("Starting Code analysis.")
+	sc.c.Logger().Info().Str("requestId", requestId).Msg("Starting Code analysis.")
 
 	bundle, err := sc.createBundle(span.Context(), requestId, path, files, changedFiles)
 	if err != nil {
@@ -348,7 +348,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 			sc.handleCreationAndUploadError(path, err, msg, scanMetrics)
 			return issues, err
 		} else {
-			log.Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
+			sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
 			return issues, nil
 		}
 	}
@@ -363,13 +363,13 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 			sc.handleCreationAndUploadError(path, err, msg, scanMetrics)
 			return issues, err
 		} else {
-			log.Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
+			sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
 			return issues, nil
 		}
 	}
 
 	if uploadedBundle.BundleHash == "" {
-		log.Info().Msg("empty bundle, no Snyk Code analysis")
+		sc.c.Logger().Info().Msg("empty bundle, no Snyk Code analysis")
 		return issues, nil
 	}
 
@@ -377,7 +377,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 
 	issues, err = uploadedBundle.FetchDiagnosticsData(span.Context())
 	if ctx.Err() != nil {
-		log.Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
+		sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
 		return []snyk.Issue{}, nil
 	}
 	sc.trackResult(err == nil, scanMetrics)
@@ -410,7 +410,7 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
 		return []snyk.Issue{}, err
 	}
 
-	converter := SarifConverter{sarif: *sarif}
+	converter := SarifConverter{sarif: *sarif, c: sc.c}
 	issues, err = converter.toIssues(path)
 	if err != nil {
 		return []snyk.Issue{}, err
@@ -423,6 +423,7 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
 		sc.learnService,
 		requestId,
 		path,
+		sc.c,
 	)
 	issueEnhancer.addIssueActions(ctx, issues, bundleHash)
 
@@ -473,7 +474,7 @@ func (sc *Scanner) createBundle(ctx context.Context,
 		}
 		fileContent, err := os.ReadFile(absoluteFilePath)
 		if err != nil {
-			log.Error().Err(err).Str("filePath", absoluteFilePath).Msg("could not load content of file")
+			sc.c.Logger().Error().Err(err).Str("filePath", absoluteFilePath).Msg("could not load content of file")
 			continue
 		}
 
@@ -487,7 +488,7 @@ func (sc *Scanner) createBundle(ctx context.Context,
 		}
 		relativePath = EncodePath(relativePath)
 
-		bundleFile := getFileFrom(absoluteFilePath, fileContent)
+		bundleFile := sc.getFileFrom(absoluteFilePath, fileContent)
 		bundleFiles[relativePath] = bundleFile
 		fileHashes[relativePath] = bundleFile.Hash
 
@@ -514,7 +515,10 @@ func (sc *Scanner) createBundle(ctx context.Context,
 			sc.notifier,
 			sc.learnService,
 			requestId,
-			rootPath),
+			rootPath,
+			sc.c,
+		),
+		logger: sc.c.Logger(),
 	}
 	var err error
 	if len(fileHashes) > 0 {

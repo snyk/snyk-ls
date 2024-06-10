@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/snyk/snyk-ls/application/entrypoint"
 	"github.com/snyk/snyk-ls/application/server"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -36,7 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 )
 
-var WORKFLOWID_LS workflow.Identifier = workflow.NewWorkflowIdentifier("language-server")
+var WORKFLOWID_LS = workflow.NewWorkflowIdentifier("language-server")
 
 func Init(engine workflow.Engine) error {
 	flags := pflag.NewFlagSet("language-server", pflag.ContinueOnError)
@@ -95,12 +93,12 @@ func lsWorkflow(
 		fmt.Println(config.Version)
 		return output, err
 	} else if extensionConfig.GetBool("licenses") {
-		about, err := cli.NewExtensionExecutor().Execute(context.Background(), []string{"snyk", "--about"}, "")
+		about, err := cli.NewExtensionExecutor(c).Execute(context.Background(), []string{"snyk", "--about"}, "")
 		fmt.Println(string(about))
 
 		return output, err
 	} else {
-		log.Trace().Interface("environment", os.Environ()).Msg("start environment")
+		c.Logger().Trace().Interface("environment", os.Environ()).Msg("start environment")
 		server.Start(c)
 	}
 

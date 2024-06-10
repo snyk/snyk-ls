@@ -21,8 +21,8 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
@@ -54,13 +54,14 @@ func HandleUntrustedFolders(ctx context.Context, srv lsp.Server) {
 
 func showTrustDialog(srv lsp.Server, untrusted []*workspace.Folder, dontTrust string, doTrust string) (lsp.MessageActionItem, error) {
 	method := "showTrustDialog"
+	logger := config.CurrentConfig().Logger()
 	result, err := srv.Callback(context.Background(), "window/showMessageRequest", lsp.ShowMessageRequestParams{
 		Type:    lsp.Warning,
 		Message: GetTrustMessage(untrusted),
 		Actions: []lsp.MessageActionItem{{Title: dontTrust}, {Title: doTrust}},
 	})
 	if err != nil {
-		log.Err(errors.Wrap(err, "couldn't show trust message")).Str("method", method).Send()
+		logger.Err(errors.Wrap(err, "couldn't show trust message")).Str("method", method).Send()
 		return lsp.MessageActionItem{Title: dontTrust}, err
 	}
 
@@ -68,7 +69,7 @@ func showTrustDialog(srv lsp.Server, untrusted []*workspace.Folder, dontTrust st
 	if result != nil {
 		err = result.UnmarshalResult(&trust)
 		if err != nil {
-			log.Err(errors.Wrap(err, "couldn't unmarshal trust message")).Str("method", method).Send()
+			logger.Err(errors.Wrap(err, "couldn't unmarshal trust message")).Str("method", method).Send()
 			return lsp.MessageActionItem{Title: dontTrust}, err
 		}
 	}

@@ -27,7 +27,6 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -156,7 +155,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.SetSnykIacEnabled(false)
 		di.Init()
 
-		var cloneTargetDirGoof = setupRepoAndInitialize(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", loc)
+		var cloneTargetDirGoof = setupRepoAndInitialize(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", loc, c)
 		folderGoof := workspace.Get().GetFolderContaining(cloneTargetDirGoof)
 
 		// wait till the whole workspace is scanned
@@ -170,13 +169,13 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		codeIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "app.js"))
 		require.Greater(t, len(codeIssuesForFile), 5) // 5 is the number of issues in the app.js file as of now
 
-		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 1, 1)
+		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 1, 1, c)
 
 		jsonRPCRecorder.ClearNotifications()
 		jsonRPCRecorder.ClearCallbacks()
 
 		// now we add juice shop as second folder/repo
-		folderJuice := addJuiceShopAsWorkspaceFolder(t, loc)
+		folderJuice := addJuiceShopAsWorkspaceFolder(t, loc, c)
 
 		// scan both created folders
 		_, err := loc.Client.Call(context.Background(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
@@ -206,8 +205,8 @@ func Test_SmokeIssueCaching(t *testing.T) {
 
 		// OSS: empty, package.json goof, package.json juice = 3
 		// Code: empty, app.js = 2
-		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 2, 3)
-		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderJuice, folderGoof)
+		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 2, 3, c)
+		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderJuice, folderGoof, c)
 	})
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
 		loc, jsonRPCRecorder := setupServer(t)
@@ -218,7 +217,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.SetSnykIacEnabled(false)
 		di.Init()
 
-		var cloneTargetDirGoof = setupRepoAndInitialize(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", loc)
+		var cloneTargetDirGoof = setupRepoAndInitialize(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", loc, c)
 		folderGoof := workspace.Get().GetFolderContaining(cloneTargetDirGoof)
 
 		// wait till the whole workspace is scanned
@@ -232,7 +231,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		codeFilePath := "app.js"
 		codeIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, codeFilePath))
 		require.Greater(t, len(codeIssuesForFile), 5) // 5 is the number of issues in the app.js file as of now
-		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 1, 1)
+		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 1, 1, c)
 		require.Greater(t, len(folderGoof.Issues()), 0)
 		jsonRPCRecorder.ClearNotifications()
 		jsonRPCRecorder.ClearCallbacks()
@@ -273,9 +272,9 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	})
 }
 
-func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local) *workspace.Folder {
+func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, c *config.Config) *workspace.Folder {
 	t.Helper()
-	var cloneTargetDirJuice, err = setupCustomTestRepo(t, "https://github.com/juice-shop/juice-shop", "bc9cef127")
+	var cloneTargetDirJuice, err = setupCustomTestRepo(t, "https://github.com/juice-shop/juice-shop", "bc9cef127", c.Logger())
 	require.NoError(t, err)
 
 	juiceLspWorkspaceFolder := lsp.WorkspaceFolder{Uri: uri.PathToUri(cloneTargetDirJuice), Name: "juicy-mac-juice-face"}
@@ -298,6 +297,7 @@ func checkScanResultsPublishingForCachingSmokeTest(
 	jsonRPCRecorder *testutil.JsonRPCRecorder,
 	folderJuice *workspace.Folder,
 	folderGoof *workspace.Folder,
+	c *config.Config,
 ) {
 	t.Helper()
 
@@ -335,10 +335,10 @@ func checkScanResultsPublishingForCachingSmokeTest(
 				}
 			}
 		}
-		log.Debug().Bool("scanResultCodeGoofFound", scanResultCodeGoofFound).Send()
-		log.Debug().Bool("scanResultCodeJuiceShopFound", scanResultCodeJuiceShopFound).Send()
-		log.Debug().Bool("onlyIssuesForGoof", onlyIssuesForGoof).Send()
-		log.Debug().Bool("onlyIssuesForJuiceShop", onlyIssuesForJuiceShop).Send()
+		c.Logger().Debug().Bool("scanResultCodeGoofFound", scanResultCodeGoofFound).Send()
+		c.Logger().Debug().Bool("scanResultCodeJuiceShopFound", scanResultCodeJuiceShopFound).Send()
+		c.Logger().Debug().Bool("onlyIssuesForGoof", onlyIssuesForGoof).Send()
+		c.Logger().Debug().Bool("onlyIssuesForJuiceShop", onlyIssuesForJuiceShop).Send()
 		return scanResultCodeGoofFound &&
 			scanResultCodeJuiceShopFound &&
 			onlyIssuesForGoof &&
@@ -352,6 +352,7 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 	t *testing.T,
 	jsonRPCRecorder *testutil.JsonRPCRecorder,
 	expectedCode, expectedOSS int,
+	c *config.Config,
 ) {
 	t.Helper()
 	require.Eventually(t, func() bool {
@@ -368,7 +369,7 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 			err := json.Unmarshal([]byte(notification.ParamString()), &param)
 			require.NoError(t, err)
 			if filepath.Base(uri.PathFromUri(param.URI)) == "package.json" {
-				log.Debug().Any("notification", notification.ParamString()).Send()
+				c.Logger().Debug().Any("notification", notification.ParamString()).Send()
 				if len(param.Diagnostics) == 0 || expectedOSS == 1 { // if expected == 1, we don't expect empty
 					packageJsonEmptyFound = true
 				}
@@ -388,12 +389,12 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 				appJsCount++
 			}
 		}
-		log.Debug().Bool("appJsEmptyFound", appJsEmptyFound).Send()
-		log.Debug().Bool("appJsNewFound", appJsNewFound).Send()
-		log.Debug().Bool("packageJsonNewFound", packageJsonNewFound).Send()
-		log.Debug().Bool("packageJsonEmptyFound", packageJsonEmptyFound).Send()
-		log.Debug().Int("appJsCount", appJsCount).Send()
-		log.Debug().Int("packageJsonCount", packageJsonCount).Send()
+		c.Logger().Debug().Bool("appJsEmptyFound", appJsEmptyFound).Send()
+		c.Logger().Debug().Bool("appJsNewFound", appJsNewFound).Send()
+		c.Logger().Debug().Bool("packageJsonNewFound", packageJsonNewFound).Send()
+		c.Logger().Debug().Bool("packageJsonEmptyFound", packageJsonEmptyFound).Send()
+		c.Logger().Debug().Int("appJsCount", appJsCount).Send()
+		c.Logger().Debug().Int("packageJsonCount", packageJsonCount).Send()
 		result := appJsEmptyFound &&
 			appJsNewFound &&
 			packageJsonNewFound &&
@@ -419,7 +420,7 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 	cleanupChannels()
 	di.Init()
 
-	cloneTargetDir := setupRepoAndInitialize(t, repo, commit, loc)
+	cloneTargetDir := setupRepoAndInitialize(t, repo, commit, loc, c)
 
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
@@ -485,12 +486,12 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 		}
 	}
 
-	checkFeatureFlagStatus(t, &loc)
+	checkFeatureFlagStatus(t, &loc, c)
 }
 
-func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server.Local) string {
+func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server.Local, c *config.Config) string {
 	t.Helper()
-	var cloneTargetDir, err = setupCustomTestRepo(t, repo, commit)
+	var cloneTargetDir, err = setupCustomTestRepo(t, repo, commit, c.Logger())
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -521,7 +522,7 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server
 	return cloneTargetDir
 }
 
-func checkFeatureFlagStatus(t *testing.T, loc *server.Local) {
+func checkFeatureFlagStatus(t *testing.T, loc *server.Local, c *config.Config) {
 	t.Helper()
 
 	call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
@@ -532,10 +533,10 @@ func checkFeatureFlagStatus(t *testing.T, loc *server.Local) {
 	assert.NoError(t, err)
 
 	if err := call.Error(); err != nil {
-		log.Error().Err(err).Msg("FeatureFlagStatus Command failed")
+		c.Logger().Error().Err(err).Msg("FeatureFlagStatus Command failed")
 	}
 
-	log.Debug().Str("FeatureFlagStatus", call.ResultString()).Msg("Command result")
+	c.Logger().Debug().Str("FeatureFlagStatus", call.ResultString()).Msg("Command result")
 
 	var result map[string]any
 	if err := json.Unmarshal([]byte(call.ResultString()), &result); err != nil {
@@ -548,12 +549,12 @@ func checkFeatureFlagStatus(t *testing.T, loc *server.Local) {
 
 func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
-	testutil.SmokeTest(t, false)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
+	c := testutil.SmokeTest(t, false)
+	c.SetSnykCodeEnabled(true)
 	cleanupChannels()
 	di.Init()
 
-	var cloneTargetDir, err = setupCustomTestRepo(t, "https://github.com/snyk-labs/nodejs-goof", "0336589")
+	var cloneTargetDir, err = setupCustomTestRepo(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
 	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
@@ -579,7 +580,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	testPath := filepath.Join(cloneTargetDir, "app.js")
 
 	w := workspace.Get()
-	f := workspace.NewFolder(cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier())
+	f := workspace.NewFolder(c, cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier())
 	w.AddFolder(f)
 
 	_ = textDocumentDidSave(t, &loc, testPath)

@@ -22,9 +22,9 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
@@ -34,15 +34,15 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
+		c := config.CurrentConfig()
 		method := "ExecuteCommandHandler"
-
-		log.Info().Str("method", method).Interface("command", params).Msg("RECEIVING")
-		defer log.Info().Str("method", method).Interface("command", params).Msg("SENDING")
+		c.Logger().Info().Str("method", method).Interface("command", params).Msg("RECEIVING")
+		defer c.Logger().Info().Str("method", method).Interface("command", params).Msg("SENDING")
 
 		commandData := snyk.CommandData{CommandId: params.Command, Arguments: params.Arguments, Title: params.Command}
 
 		result, err := command.Service().ExecuteCommandData(bgCtx, commandData, srv)
-		logError(err, fmt.Sprintf("Error executing command %v", commandData))
+		logError(c.Logger(), err, fmt.Sprintf("Error executing command %v", commandData))
 		return result, err
 	})
 }

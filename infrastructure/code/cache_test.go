@@ -22,14 +22,15 @@ import (
 	"time"
 
 	"github.com/erni27/imcache"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 func TestScanner_Cache(t *testing.T) {
 	_, scanner := setupTestScanner(t)
+	c := config.CurrentConfig()
 	t.Run("should add issues to the cache", func(t *testing.T) {
 		scanner.addToCache([]snyk.Issue{{ID: "issue1", AffectedFilePath: "file1.java"}})
 		scanner.addToCache([]snyk.Issue{{ID: "issue2", AffectedFilePath: "file2.java"}})
@@ -82,7 +83,7 @@ func TestScanner_Cache(t *testing.T) {
 		for i := 0; i < len(results); i++ {
 			select {
 			case key := <-evictionChan:
-				log.Debug().Msg("evicted from cache" + key)
+				c.Logger().Debug().Msg("evicted from cache" + key)
 			case <-time.After(time.Second):
 				t.Fatal("timeout waiting for eviction")
 			}
@@ -112,7 +113,7 @@ func TestScanner_Cache(t *testing.T) {
 		for i := 0; i < len(results); i++ {
 			select {
 			case path := <-evictionChan:
-				log.Debug().Msg("evicted from cache" + path)
+				c.Logger().Debug().Msg("evicted from cache" + path)
 			case <-time.After(time.Second):
 				t.Fatal("timeout waiting for eviction")
 			}
@@ -138,7 +139,7 @@ func TestScanner_Cache(t *testing.T) {
 		for i := 0; i < len(results); i++ {
 			select {
 			case path := <-evictionChan:
-				log.Debug().Msg("evicted from cache" + path)
+				c.Logger().Debug().Msg("evicted from cache" + path)
 			case <-time.After(time.Second):
 				t.Fatal("timeout waiting for eviction")
 			}

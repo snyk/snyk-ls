@@ -17,13 +17,14 @@
 package error_reporting
 
 import (
-	"github.com/rs/zerolog/log"
+	"github.com/snyk/snyk-ls/application/config"
 )
 
 type testErrorReporter struct{}
 
 func (s *testErrorReporter) CaptureErrorAndReportAsIssue(path string, err error) bool {
-	log.Log().Err(err).Msg("An error has been captured by the testing error reporter")
+	logger := config.CurrentConfig().Logger()
+	logger.Log().Err(err).Msg("An error has been captured by the testing error reporter")
 	return true
 }
 
@@ -35,6 +36,7 @@ func (s *testErrorReporter) FlushErrorReporting() {
 }
 
 func (s *testErrorReporter) CaptureError(err error) bool {
-	log.Log().Err(err).Msg("An error has been captured by the testing error reporter")
+	logger := config.CurrentConfig().Logger()
+	logger.Log().Err(err).Msg("An error has been captured by the testing error reporter")
 	return true
 }

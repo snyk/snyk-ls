@@ -29,7 +29,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
+
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
@@ -68,6 +69,7 @@ type SnykCodeHTTPClient struct {
 	client        func() *http.Client
 	instrumentor  codeClientObservability.Instrumentor
 	errorReporter codeClientObservability.ErrorReporter
+	c             *config.Config
 }
 
 type bundleResponse struct {
@@ -86,11 +88,12 @@ type FiltersResponse struct {
 }
 
 func NewSnykCodeHTTPClient(
+	c *config.Config,
 	instrumentor codeClientObservability.Instrumentor,
 	errorReporter codeClientObservability.ErrorReporter,
 	client func() *http.Client,
 ) *SnykCodeHTTPClient {
-	return &SnykCodeHTTPClient{client, instrumentor, errorReporter}
+	return &SnykCodeHTTPClient{client, instrumentor, errorReporter, c}
 }
 
 func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (
@@ -98,7 +101,7 @@ func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (
 	err error,
 ) {
 	method := "code.GetFilters"
-	log.Debug().Str("method", method).Msg("API: Getting file extension filters")
+	s.c.Logger().Debug().Str("method", method).Msg("API: Getting file extension filters")
 
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
@@ -112,7 +115,7 @@ func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (
 	if err != nil {
 		return FiltersResponse{ConfigFiles: nil, Extensions: nil}, err
 	}
-	log.Debug().Str("method", method).Msg("API: Finished getting filters")
+	s.c.Logger().Debug().Str("method", method).Msg("API: Finished getting filters")
 	return filters, nil
 }
 
@@ -121,7 +124,7 @@ func (s *SnykCodeHTTPClient) CreateBundle(
 	filesToFilehashes map[string]string,
 ) (string, []string, error) {
 	method := "code.CreateBundle"
-	log.Debug().Str("method", method).Msg("API: Creating bundle for " + strconv.Itoa(len(filesToFilehashes)) + " files")
+	s.c.Logger().Debug().Str("method", method).Msg("API: Creating bundle for " + strconv.Itoa(len(filesToFilehashes)) + " files")
 
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
@@ -141,7 +144,7 @@ func (s *SnykCodeHTTPClient) CreateBundle(
 	if err != nil {
 		return "", nil, err
 	}
-	log.Debug().Str("method", method).Msg("API: Create done")
+	s.c.Logger().Debug().Str("method", method).Msg("API: Create done")
 	return bundle.BundleHash, bundle.MissingFiles, nil
 }
 
@@ -171,18 +174,18 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 			return nil, err
 		}
 
-		log.Trace().Str("requestBody", string(requestBody)).Str("snyk-request-id", requestId).Msg("SEND TO REMOTE")
+		s.c.Logger().Trace().Str("requestBody", string(requestBody)).Str("snyk-request-id", requestId).Msg("SEND TO REMOTE")
 
 		response, body, err := s.httpCall(req) //nolint:bodyclose // false positive
 		responseBody = body
 
 		if response != nil && responseBody != nil {
-			log.Trace().Str("response.Status", response.Status).
+			s.c.Logger().Trace().Str("response.Status", response.Status).
 				Str("responseBody", string(responseBody)).
 				Str("snyk-request-id", requestId).
 				Msg("RECEIVED FROM REMOTE")
 		} else {
-			log.Trace().
+			s.c.Logger().Trace().
 				Str("snyk-request-id", requestId).
 				Msg("RECEIVED FROM REMOTE")
 		}
@@ -194,7 +197,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 		err = s.checkResponseCode(response)
 		if err != nil {
 			if retryErrorCodes[response.StatusCode] {
-				log.Debug().Err(err).Str("method", method).Int("attempts done", i+1).Msgf("retrying")
+				s.c.Logger().Debug().Err(err).Str("method", method).Int("attempts done", i+1).Msgf("retrying")
 				if i < retryCount-1 {
 					time.Sleep(5 * time.Second)
 					continue
@@ -214,7 +217,7 @@ func (s *SnykCodeHTTPClient) httpCall(req *http.Request) (*http.Response, []byte
 	method := "code.httpCall"
 	response, err := s.client().Do(req)
 	if err != nil {
-		log.Err(err).Str("method", method).Msgf("got http error")
+		s.c.Logger().Err(err).Str("method", method).Msgf("got http error")
 		s.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: req.RequestURI})
 		return nil, nil, err
 	}
@@ -222,13 +225,13 @@ func (s *SnykCodeHTTPClient) httpCall(req *http.Request) (*http.Response, []byte
 	defer func() {
 		closeErr := response.Body.Close()
 		if closeErr != nil {
-			log.Err(closeErr).Msg("Couldn't close response body in call to Snyk Code")
+			s.c.Logger().Err(closeErr).Msg("Couldn't close response body in call to Snyk Code")
 		}
 	}()
 	responseBody, err := io.ReadAll(response.Body)
 
 	if err != nil {
-		log.Err(err).Str("method", method).Msgf("error reading response body")
+		s.c.Logger().Err(err).Str("method", method).Msgf("error reading response body")
 		s.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: req.RequestURI})
 		return nil, nil, err
 	}
@@ -310,8 +313,8 @@ func (s *SnykCodeHTTPClient) ExtendBundle(
 	removedFiles []string,
 ) (string, []string, error) {
 	method := "code.ExtendBundle"
-	log.Debug().Str("method", method).Msg("API: Extending bundle for " + strconv.Itoa(len(files)) + " files")
-	defer log.Debug().Str("method", method).Msg("API: Extend done")
+	s.c.Logger().Debug().Str("method", method).Msg("API: Extending bundle for " + strconv.Itoa(len(files)) + " files")
+	defer s.c.Logger().Debug().Str("method", method).Msg("API: Extend done")
 
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
@@ -349,44 +352,44 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 
 	requestId, err := performance2.GetTraceId(span.Context())
 	if err != nil {
-		log.Err(err).Str("method", method).Msg(failedToObtainRequestIdString + err.Error())
+		s.c.Logger().Err(err).Str("method", method).Msg(failedToObtainRequestIdString + err.Error())
 		return nil, AnalysisStatus{}, err
 	}
-	log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis for bundle")
-	defer log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis done")
+	s.c.Logger().Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis for bundle")
+	defer s.c.Logger().Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis done")
 
 	requestBody, err := s.analysisRequestBody(&options)
 	if err != nil {
-		log.Err(err).Str("method", method).Str("requestBody", string(requestBody)).Msg("error creating request body")
+		s.c.Logger().Err(err).Str("method", method).Str("requestBody", string(requestBody)).Msg("error creating request body")
 		return nil, AnalysisStatus{}, err
 	}
 
 	responseBody, err := s.doCall(span.Context(), "POST", "/analysis", requestBody)
 	failed := AnalysisStatus{message: "FAILED"}
 	if err != nil {
-		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response from analysis")
+		s.c.Logger().Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response from analysis")
 		return nil, failed, err
 	}
 
 	var response codeClientSarif.SarifResponse
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
-		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
+		s.c.Logger().Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
 		return nil, failed, err
 	} else {
-		logSarifResponse(method, response)
+		logSarifResponse(method, response, s.c.Logger())
 	}
 
-	log.Debug().Str("method", method).Str("requestId", requestId).Float64("progress",
+	s.c.Logger().Debug().Str("method", method).Str("requestId", requestId).Float64("progress",
 		response.Progress).Msgf("Status: %s", response.Status)
 
 	if response.Status == failed.message {
-		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("analysis failed")
+		s.c.Logger().Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("analysis failed")
 		return nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
 
 	if response.Status == "" {
-		log.Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
+		s.c.Logger().Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
 		return nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
 	}
 	status := AnalysisStatus{message: response.Status, percentage: int(math.RoundToEven(response.Progress * 100))}
@@ -394,13 +397,13 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		return nil, status, nil
 	}
 
-	converter := SarifConverter{sarif: response}
+	converter := SarifConverter{sarif: response, c: s.c}
 	issues, err := converter.toIssues(baseDir)
 	return issues, status, err
 }
 
-func logSarifResponse(method string, sarifResponse codeClientSarif.SarifResponse) {
-	log.Debug().
+func logSarifResponse(method string, sarifResponse codeClientSarif.SarifResponse, logger *zerolog.Logger) {
+	logger.Debug().
 		Str("method", method).
 		Str("status", sarifResponse.Status).
 		Float64("progress", sarifResponse.Progress).
@@ -455,7 +458,7 @@ func (s *SnykCodeHTTPClient) GetAutofixSuggestions(
 	method := "code.GetAutofixSuggestions"
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
-	logger := log.With().
+	logger := s.c.Logger().With().
 		Str("method", method).
 		Str("requestId", span.GetTraceId()).Logger()
 
@@ -473,7 +476,7 @@ func (s *SnykCodeHTTPClient) GetAutofixSuggestions(
 	}
 
 	if response.Status == "" {
-		log.Err(err).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
+		s.c.Logger().Err(err).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
 		return nil, failed, err
 	}
 
@@ -491,7 +494,7 @@ func (s *SnykCodeHTTPClient) RunAutofix(ctx context.Context, options AutofixOpti
 	span := s.instrumentor.StartSpan(ctx, "code.RunAutofix")
 	defer span.Finish()
 
-	logger := log.With().Str("method", "code.RunAutofix").Str("requestId", requestId).Logger()
+	logger := s.c.Logger().With().Str("method", "code.RunAutofix").Str("requestId", requestId).Logger()
 	if err != nil {
 		logger.Err(err).Msg(failedToObtainRequestIdString + err.Error())
 		return AutofixResponse{}, err
@@ -552,12 +555,12 @@ func (s *SnykCodeHTTPClient) SubmitAutofixFeedback(ctx context.Context, fixId st
 
 	requestId, err := performance2.GetTraceId(span.Context())
 	if err != nil {
-		log.Err(err).Str("method", method).Msg(failedToObtainRequestIdString + err.Error())
+		s.c.Logger().Err(err).Str("method", method).Msg(failedToObtainRequestIdString + err.Error())
 		return err
 	}
 
-	log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Submitting Autofix feedback")
-	defer log.Debug().Str("method", method).Str("requestId", requestId).Msg("API: Submitting Autofix feedback done")
+	s.c.Logger().Debug().Str("method", method).Str("requestId", requestId).Msg("API: Submitting Autofix feedback")
+	defer s.c.Logger().Debug().Str("method", method).Str("requestId", requestId).Msg("API: Submitting Autofix feedback done")
 
 	var feedback string
 	if positive {
@@ -573,13 +576,13 @@ func (s *SnykCodeHTTPClient) SubmitAutofixFeedback(ctx context.Context, fixId st
 	}
 	requestBody, err := json.Marshal(request)
 	if err != nil {
-		log.Err(err).Str("method", method).Str("requestBody", string(requestBody)).Msg("error creating request body for autofix feedback")
+		s.c.Logger().Err(err).Str("method", method).Str("requestBody", string(requestBody)).Msg("error creating request body for autofix feedback")
 		return err
 	}
 
 	responseBody, err := s.doCall(span.Context(), "POST", "/autofix/feedback", requestBody)
 	if err != nil {
-		log.Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response for autofix feedback")
+		s.c.Logger().Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response for autofix feedback")
 		return err
 	}
 

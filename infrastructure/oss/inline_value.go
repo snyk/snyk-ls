@@ -17,15 +17,13 @@
 package oss
 
 import (
-	"github.com/rs/zerolog/log"
-
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 type inlineValueMap map[string][]snyk.InlineValue
 
 func (cliScanner *CLIScanner) GetInlineValues(path string, myRange snyk.Range) (result []snyk.InlineValue, err error) {
-	logger := log.With().Str("method", "CLIScanner.GetInlineValues").Logger()
+	logger := cliScanner.config.Logger().With().Str("method", "CLIScanner.GetInlineValues").Logger()
 	logger.Debug().Str("path", path).Msg("called")
 
 	inlineValues := cliScanner.inlineValues[path]
@@ -35,7 +33,7 @@ func (cliScanner *CLIScanner) GetInlineValues(path string, myRange snyk.Range) (
 }
 
 func (cliScanner *CLIScanner) ClearInlineValues(path string) {
-	logger := log.With().Str("method", "CLIScanner.ClearInlineValues").Logger()
+	logger := cliScanner.config.Logger().With().Str("method", "CLIScanner.ClearInlineValues").Logger()
 
 	cliScanner.inlineValues[path] = nil
 	logger.Debug().Str("path", path).Msg("called")

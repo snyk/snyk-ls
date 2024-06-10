@@ -54,25 +54,25 @@ func TestInit(t *testing.T) {
 	// we don't want to open browsers when testing
 	snyk.DefaultOpenBrowserFunc = func(url string) {}
 	notifier = domainNotify.NewNotifier()
-	analytics = ux.NewTestAnalytics()
+	analytics = ux.NewTestAnalytics(c)
 	instrumentor = performance.NewInstrumentor()
 	errorReporter = er.NewTestErrorReporter()
 	installer = install.NewFakeInstaller()
-	authProvider := snyk.NewFakeCliAuthenticationProvider()
+	authProvider := snyk.NewFakeCliAuthenticationProvider(c)
 	snykApiClient = &snyk_api.FakeApiClient{CodeEnabled: true}
-	authenticationService = snyk.NewAuthenticationService(authProvider, analytics, errorReporter, notifier)
-	snykCli := cli.NewExecutor(authenticationService, errorReporter, analytics, notifier)
+	authenticationService = snyk.NewAuthenticationService(c, authProvider, analytics, errorReporter, notifier)
+	snykCli := cli.NewExecutor(c, authenticationService, errorReporter, analytics, notifier)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
-	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics, notifier)
+	authInitializer := cliauth.NewInitializer(c, authenticationService, errorReporter, analytics, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,
 		authInitializer,
 	)
-	fakeClient := &code.FakeSnykCodeClient{}
+	fakeClient := &code.FakeSnykCodeClient{C: c}
 	snykCodeClient = fakeClient
 	codeInstrumentor = code.NewCodeInstrumentor()
-	snykCodeBundleUploader = code.NewBundler(snykCodeClient, codeInstrumentor)
-	scanNotifier, _ = appNotification.NewScanNotifier(notifier)
+	snykCodeBundleUploader = code.NewBundler(c, snykCodeClient, codeInstrumentor)
+	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
 	// mock Learn Service
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))
 	learnMock.
@@ -84,9 +84,10 @@ func TestInit(t *testing.T) {
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, analytics, learnService,
 		notifier, codeClientScanner)
-	openSourceScanner = oss.NewCLIScanner(instrumentor, errorReporter, analytics, snykCli, learnService, notifier, c)
-	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
+	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, analytics, snykCli, learnService, notifier)
+	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, analytics, snykCli)
 	scanner = snyk.NewDelegatingScanner(
+		c,
 		scanInitializer,
 		instrumentor,
 		analytics,
@@ -98,10 +99,10 @@ func TestInit(t *testing.T) {
 		infrastructureAsCodeScanner,
 		openSourceScanner,
 	)
-	hoverService = hover.NewDefaultService(analytics)
+	hoverService = hover.NewDefaultService(c, analytics)
 	command.SetService(&snyk.CommandServiceMock{})
 	// don't use getters or it'll deadlock
-	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier, notifier)
+	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier)
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, snykCodeClient)

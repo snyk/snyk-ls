@@ -2,6 +2,15 @@
   <code_scheme name="Project" version="173">
     <GoCodeStyleSettings>
       <option name="REMOVE_REDUNDANT_IMPORT_ALIASES" value="true" />
+      <option name="ADD_LEADING_SPACE_TO_COMMENTS" value="true" />
+      <option name="COMMENTS_WITHOUT_LEADING_SPACE">
+        <value>
+          <prefixes>
+            <prefix value="//nolint:" />
+          </prefixes>
+        </value>
+      </option>
+      <option name="FILL_PARAGRAPH_WIDTH" value="120" />
       <option name="IMPORT_SORTING" value="GOIMPORTS" />
       <option name="MOVE_ALL_IMPORTS_IN_ONE_DECLARATION" value="true" />
       <option name="MOVE_ALL_STDLIB_IMPORTS_IN_ONE_GROUP" value="true" />

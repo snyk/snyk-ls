@@ -59,17 +59,9 @@ func Test_Scan(t *testing.T) {
 
 	instrumentor := performance.NewInstrumentor()
 	er := error_reporting.NewTestErrorReporter()
-	analytics := ux.NewTestAnalytics()
-	cliExecutor := cli.NewExecutor(di.AuthenticationService(), er, analytics, notification.NewNotifier())
-	scanner := oss.NewCLIScanner(
-		instrumentor,
-		er,
-		analytics,
-		cliExecutor,
-		di.LearnService(),
-		notification.NewNotifier(),
-		c,
-	)
+	analytics := ux.NewTestAnalytics(c)
+	cliExecutor := cli.NewExecutor(c, di.AuthenticationService(), er, analytics, notification.NewNotifier())
+	scanner := oss.NewCLIScanner(c, instrumentor, er, analytics, cliExecutor, di.LearnService(), notification.NewNotifier())
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")

@@ -3,7 +3,6 @@ package analytics
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"testing"
 	"time"
 
@@ -71,7 +70,7 @@ func TestAnalyticsProviderPactV2(t *testing.T) {
 
 	// Verify runs the current test case against a Mock Service.
 	if err := pact.Verify(test); err != nil {
-		log.Fatalf("Error on Verify: %v", err)
+		t.Fatalf("Error on Verify: %v", err)
 	}
 }
 

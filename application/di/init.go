@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/adrg/xdg"
+
 	codeClient "github.com/snyk/code-client-go"
 	codeClientHTTP "github.com/snyk/code-client-go/http"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
@@ -80,14 +81,16 @@ var codeErrorReporter codeClientObservability.ErrorReporter
 func Init() {
 	initMutex.Lock()
 	defer initMutex.Unlock()
-	initInfrastructure()
-	initDomain()
-	initApplication()
+	c := config.CurrentConfig()
+	initInfrastructure(c)
+	initDomain(c)
+	initApplication(c)
 }
 
-func initDomain() {
-	hoverService = hover.NewDefaultService(analytics)
+func initDomain(c *config.Config) {
+	hoverService = hover.NewDefaultService(c, analytics)
 	scanner = snyk.NewDelegatingScanner(
+		c,
 		scanInitializer,
 		instrumentor,
 		analytics,
@@ -101,8 +104,7 @@ func initDomain() {
 	)
 }
 
-func initInfrastructure() {
-	c := config.CurrentConfig()
+func initInfrastructure(c *config.Config) {
 	//goland:noinspection GoBoolExpressions
 	if runtime.GOOS == "windows" {
 		go c.AddBinaryLocationsToPath([]string{
@@ -127,25 +129,25 @@ func initInfrastructure() {
 	networkAccess := engine.GetNetworkAccess()
 
 	notifier = domainNotify.NewNotifier()
-	errorReporter = sentry.NewSentryErrorReporter(notifier)
+	errorReporter = sentry.NewSentryErrorReporter(c, notifier)
 	installer = install.NewInstaller(errorReporter, networkAccess.GetUnauthorizedHttpClient)
 	learnService = learn.New(c, networkAccess.GetUnauthorizedHttpClient, errorReporter)
 	instrumentor = performance.NewInstrumentor()
-	snykApiClient = snyk_api.NewSnykApiClient(networkAccess.GetHttpClient)
-	analytics = amplitude.NewAmplitudeClient(snyk.AuthenticationCheck, errorReporter)
-	authProvider := cliauth.NewCliAuthenticationProvider(errorReporter)
-	authenticationService = snyk.NewAuthenticationService(authProvider, analytics, errorReporter, notifier)
-	snykCli := cli.NewExecutor(authenticationService, errorReporter, analytics, notifier)
+	snykApiClient = snyk_api.NewSnykApiClient(c, networkAccess.GetHttpClient)
+	analytics = amplitude.NewAmplitudeClient(c, snyk.AuthenticationCheck, errorReporter)
+	authProvider := cliauth.NewCliAuthenticationProvider(c, errorReporter)
+	authenticationService = snyk.NewAuthenticationService(c, authProvider, analytics, errorReporter, notifier)
+	snykCli := cli.NewExecutor(c, authenticationService, errorReporter, analytics, notifier)
 
 	if c.Engine().GetConfiguration().GetString(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION {
-		snykCli = cli.NewExtensionExecutor()
+		snykCli = cli.NewExtensionExecutor(c)
 	}
 
 	codeInstrumentor = code.NewCodeInstrumentor()
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 
-	snykCodeClient = code.NewSnykCodeHTTPClient(codeInstrumentor, codeErrorReporter, networkAccess.GetHttpClient)
-	snykCodeBundleUploader = code.NewBundler(snykCodeClient, codeInstrumentor)
+	snykCodeClient = code.NewSnykCodeHTTPClient(c, codeInstrumentor, codeErrorReporter, networkAccess.GetHttpClient)
+	snykCodeBundleUploader = code.NewBundler(c, snykCodeClient, codeInstrumentor)
 
 	httpClient := codeClientHTTP.NewHTTPClient(
 		networkAccess.GetHttpClient,
@@ -155,7 +157,7 @@ func initInfrastructure() {
 	)
 
 	codeClientScanner := codeClient.NewCodeScanner(
-		config.CurrentConfig(),
+		c,
 		httpClient,
 		codeClient.WithTrackerFactory(code.NewCodeTrackerFactory()),
 		codeClient.WithLogger(engine.GetLogger()),
@@ -163,24 +165,24 @@ func initInfrastructure() {
 		codeClient.WithErrorReporter(codeErrorReporter),
 	)
 
-	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
-	openSourceScanner = oss.NewCLIScanner(instrumentor, errorReporter, analytics, snykCli, learnService, notifier, c)
-	scanNotifier, _ = appNotification.NewScanNotifier(notifier)
+	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, analytics, snykCli)
+	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, analytics, snykCli, learnService, notifier)
+	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
 	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, analytics, learnService, notifier,
 		codeClientScanner)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
-	authInitializer := cliauth.NewInitializer(authenticationService, errorReporter, analytics, notifier)
+	authInitializer := cliauth.NewInitializer(c, authenticationService, errorReporter, analytics, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,
 		authInitializer,
 	)
 }
 
-func initApplication() {
-	w := workspace.New(instrumentor, scanner, hoverService, scanNotifier, notifier) // don't use getters or it'll deadlock
+func initApplication(c *config.Config) {
+	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier) // don't use getters or it'll deadlock
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(config.CurrentConfig(), w, fileWatcher, notifier, snykCodeClient)
+	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, snykCodeClient)
 	command.SetService(command.NewService(
 		authenticationService,
 		notifier,

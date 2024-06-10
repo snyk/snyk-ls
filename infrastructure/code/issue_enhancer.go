@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/rs/zerolog/log"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	sglsp "github.com/sourcegraph/go-lsp"
 
@@ -44,6 +43,7 @@ type IssueEnhancer struct {
 	learnService  learn.Service
 	requestId     string
 	rootPath      string
+	c             *config.Config
 }
 
 func newIssueEnhancer(
@@ -54,6 +54,7 @@ func newIssueEnhancer(
 	learnService learn.Service,
 	requestId string,
 	rootPath string,
+	c *config.Config,
 ) IssueEnhancer {
 	return IssueEnhancer{
 		SnykCode:      SnykCode,
@@ -63,6 +64,7 @@ func newIssueEnhancer(
 		learnService:  learnService,
 		requestId:     requestId,
 		rootPath:      rootPath,
+		c:             c,
 	}
 }
 
@@ -72,18 +74,18 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 
 	autoFixEnabled := getCodeSettings().isAutofixEnabled.Get()
 	learnEnabled := config.CurrentConfig().IsSnykLearnCodeActionsEnabled()
-	log.Info().Str("method", method).Msg("Autofix is enabled: " + strconv.FormatBool(autoFixEnabled))
-	log.Info().Str("method", method).Msg("Snyk Learn is enabled: " + strconv.FormatBool(learnEnabled))
+	b.c.Logger().Info().Str("method", method).Msg("Autofix is enabled: " + strconv.FormatBool(autoFixEnabled))
+	b.c.Logger().Info().Str("method", method).Msg("Snyk Learn is enabled: " + strconv.FormatBool(learnEnabled))
 
 	if !autoFixEnabled && !learnEnabled {
-		log.Trace().Msg("Autofix | Snyk Learn code actions are disabled, not adding code actions")
+		b.c.Logger().Trace().Msg("Autofix | Snyk Learn code actions are disabled, not adding code actions")
 		return
 	}
 
 	for i := range issues {
 		issueData, ok := issues[i].AdditionalData.(snyk.CodeIssueData)
 		if !ok {
-			log.Error().Str("method", method).Msg("Failed to fetch additional data")
+			b.c.Logger().Error().Str("method", method).Msg("Failed to fetch additional data")
 			continue
 		}
 
@@ -121,7 +123,7 @@ func (b *IssueEnhancer) createDeferredAutofixCodeAction(ctx context.Context, iss
 
 	action, err := snyk.NewDeferredCodeAction("⚡ Fix this issue: "+issueTitle(issue)+" (Snyk)", &autofixEditCallback, nil)
 	if err != nil {
-		log.Error().Msg("failed to create deferred autofix code action")
+		b.c.Logger().Error().Msg("failed to create deferred autofix code action")
 		b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please contact Snyk support.")
 		return nil
 	}
@@ -163,12 +165,12 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 		// Polling function just calls the endpoint and registers result, signaling `done` to the
 		// channel.
 		pollFunc := func() (fix *AutofixSuggestion, complete bool) {
-			log.Info().Msg("polling")
+			b.c.Logger().Info().Msg("polling")
 			fixSuggestions, fixStatus, err := b.SnykCode.GetAutofixSuggestions(s.Context(), autofixOptions, b.rootPath)
 			fix = nil
 			complete = false
 			if err != nil {
-				log.Error().
+				b.c.Logger().Error().
 					Err(err).Str("method", method).Str("requestId", b.requestId).
 					Str("stage", "requesting autofix").Msg("error requesting autofix")
 				complete = true
@@ -177,7 +179,7 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 					// TODO(alex.gronskiy): currently, only the first ([0]) fix suggestion goes into the fix
 					fix = &fixSuggestions[0]
 				} else {
-					log.Info().Str("method", method).Str("requestId", b.requestId).Msg("No good fix could be computed.")
+					b.c.Logger().Info().Str("method", method).Str("requestId", b.requestId).Msg("No good fix could be computed.")
 				}
 				complete = true
 			}
@@ -193,7 +195,7 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 		for {
 			select {
 			case <-timeoutTimer.C:
-				log.Error().Str("method", "GetAutofixSuggestions").Str("requestId", b.requestId).Msg("timeout requesting autofix")
+				b.c.Logger().Error().Str("method", "GetAutofixSuggestions").Str("requestId", b.requestId).Msg("timeout requesting autofix")
 				b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please try again. Request ID: "+b.requestId)
 				return nil
 			case <-pollingTicker.C:
@@ -266,7 +268,7 @@ func (b *IssueEnhancer) createOpenSnykLearnCodeAction(issue snyk.Issue) (ca *sny
 	title := fmt.Sprintf("Learn more about %s (Snyk)", issueTitle(issue))
 	lesson, err := b.learnService.GetLesson(issue.Ecosystem, issue.ID, issue.CWEs, issue.CVEs, issue.IssueType)
 	if err != nil {
-		log.Err(err).Msg("failed to get lesson")
+		b.c.Logger().Err(err).Msg("failed to get lesson")
 		b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: ""})
 		return nil
 	}

@@ -156,25 +156,18 @@ func setupCLIScannerAsPackageScanner(t *testing.T, c *config.Config) (string, *C
 	t.Helper()
 	c.SetCliSettings(&config.CliSettings{
 		AdditionalOssParameters: []string{"--all-projects"},
+		C:                       c,
 	})
 	notifier := notification.NewMockNotifier()
 	instrumentor := performance.NewInstrumentor()
 	errorReporter := error_reporting.NewTestErrorReporter()
-	analytics := ux.NewTestAnalytics()
+	analytics := ux.NewTestAnalytics(c)
 	testDir := "testdata"
 	testFilePath, err := filepath.Abs(filepath.Join(testDir, "test.html"))
 	assert.NoError(t, err)
 	testResult, err := filepath.Abs(filepath.Join(testDir, "packageScanTestHtmlOutput.json"))
 	assert.NoError(t, err)
-	cliExecutor := cli.NewTestExecutorWithResponseFromFile(testResult)
-	scanner := NewCLIScanner(
-		instrumentor,
-		errorReporter,
-		analytics,
-		cliExecutor,
-		getLearnMock(t),
-		notifier,
-		c,
-	).(*CLIScanner)
+	cliExecutor := cli.NewTestExecutorWithResponseFromFile(testResult, c.Logger())
+	scanner := NewCLIScanner(c, instrumentor, errorReporter, analytics, cliExecutor, getLearnMock(t), notifier).(*CLIScanner)
 	return testFilePath, scanner, cliExecutor
 }

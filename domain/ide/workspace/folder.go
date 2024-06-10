@@ -25,7 +25,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"
-	"github.com/rs/zerolog/log"
 	gafanalytics "github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -67,6 +66,7 @@ type Folder struct {
 	mutex                   sync.Mutex
 	scanNotifier            snyk.ScanNotifier
 	notifier                noti.Notifier
+	c                       *config.Config
 }
 
 func (f *Folder) Issue(key string) snyk.Issue {
@@ -96,7 +96,7 @@ func (f *Folder) Issues() snyk.IssuesByFile {
 		if f.Contains(path) {
 			issues[path] = value
 		} else {
-			log.Error().Msg(fmt.Sprintf("issue found in cache that does not pertain to folder, path: %v", path))
+			f.c.Logger().Error().Msg(fmt.Sprintf("issue found in cache that does not pertain to folder, path: %v", path))
 		}
 		return true
 	})
@@ -123,7 +123,7 @@ func (f *Folder) IssuesByProduct() snyk.ProductIssuesByFile {
 	}
 	for path, issues := range f.Issues() {
 		if !f.Contains(path) {
-			log.Error().Msg("issue found in cache that does not pertain to folder")
+			f.c.Logger().Error().Msg("issue found in cache that does not pertain to folder")
 			continue
 		}
 		for _, issue := range issues {
@@ -226,7 +226,15 @@ func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssue
 	}
 }
 
-func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hover.Service, scanNotifier snyk.ScanNotifier, notifier noti.Notifier) *Folder {
+func NewFolder(
+	c *config.Config,
+	path string,
+	name string,
+	scanner snyk.Scanner,
+	hoverService hover.Service,
+	scanNotifier snyk.ScanNotifier,
+	notifier noti.Notifier,
+) *Folder {
 	folder := Folder{
 		scanner:      scanner,
 		path:         strings.TrimSuffix(path, "/"),
@@ -235,6 +243,7 @@ func NewFolder(path string, name string, scanner snyk.Scanner, hoverService hove
 		hoverService: hoverService,
 		scanNotifier: scanNotifier,
 		notifier:     notifier,
+		c:            c,
 	}
 	folder.documentDiagnosticCache = xsync.NewMapOf[string, []snyk.Issue]()
 	if cacheProvider, isCacheProvider := scanner.(snyk.CacheProvider); isCacheProvider {
@@ -278,7 +287,7 @@ func (f *Folder) Contains(path string) bool {
 func (f *Folder) scan(ctx context.Context, path string) {
 	const method = "domain.ide.workspace.folder.scan"
 	if !f.IsTrusted() {
-		log.Warn().Str("path", path).Str("method", method).Msg("skipping scan of untrusted path")
+		f.c.Logger().Warn().Str("path", path).Str("method", method).Msg("skipping scan of untrusted path")
 		return
 	}
 
@@ -288,7 +297,7 @@ func (f *Folder) scan(ctx context.Context, path string) {
 func (f *Folder) processResults(scanData snyk.ScanData) {
 	if scanData.Err != nil {
 		f.scanNotifier.SendError(scanData.Product, f.path)
-		log.Err(scanData.Err).
+		f.c.Logger().Err(scanData.Err).
 			Str("method", "processResults").
 			Str("product", string(scanData.Product)).
 			Msg("Product returned an error")
@@ -471,7 +480,7 @@ func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
 
 func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[product.FilterableIssueType]bool) snyk.
 	IssuesByFile {
-	logger := log.With().Str("method", "FilterIssues").Logger()
+	logger := f.c.Logger().With().Str("method", "FilterIssues").Logger()
 
 	filteredIssues := snyk.IssuesByFile{}
 	for path, issueSlice := range issues {
@@ -493,7 +502,7 @@ func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[
 }
 
 func isVisibleSeverity(issue snyk.Issue) bool {
-	logger := log.With().Str("method", "isVisibleSeverity").Logger()
+	logger := config.CurrentConfig().Logger().With().Str("method", "isVisibleSeverity").Logger()
 
 	filterSeverity := config.CurrentConfig().FilterSeverity()
 	logger.Debug().Interface("filterSeverity", filterSeverity).Msg("Filtering issues by severity")
@@ -529,7 +538,7 @@ func (f *Folder) sendDiagnostics(issuesByFile snyk.IssuesByFile) {
 }
 
 func (f *Folder) sendDiagnosticsForFile(path string, issues []snyk.Issue) {
-	log.Debug().
+	f.c.Logger().Debug().
 		Str("method", "sendDiagnosticsForFile").
 		Str("affectedFilePath", path).Int("issueCount", len(issues)).Send()
 
@@ -562,12 +571,12 @@ func (f *Folder) IssuesForRange(filePath string, requestedRange snyk.Range) (mat
 	issues := f.IssuesForFile(filePath)
 	for _, issue := range issues {
 		if issue.Range.Overlaps(requestedRange) {
-			log.Debug().Str("method", method).Msg("appending code action for issue " + issue.String())
+			f.c.Logger().Debug().Str("method", method).Msg("appending code action for issue " + issue.String())
 			matchingIssues = append(matchingIssues, issue)
 		}
 	}
 
-	log.Debug().Str("method", method).Msgf(
+	f.c.Logger().Debug().Str("method", method).Msgf(
 		"found %d code actions for %s, %s",
 		len(matchingIssues),
 		filePath,

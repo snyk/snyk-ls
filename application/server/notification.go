@@ -19,7 +19,7 @@ package server
 import (
 	"context"
 
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -30,15 +30,15 @@ import (
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 
-func notifier(srv lsp.Server, method string, params any) {
-	log.Debug().Str("method", "notifier").Msgf("Notifying")
+func notifier(c *config.Config, srv lsp.Server, method string, params any) {
+	c.Logger().Debug().Str("method", "notifier").Msgf("Notifying")
 	err := srv.Notify(context.Background(), method, params)
-	logError(err, "notifier")
+	logError(c.Logger(), err, "notifier")
 }
 
 var progressStopChan = make(chan bool, 1000)
 
-func createProgressListener(progressChannel chan lsp.ProgressParams, server lsp.Server) {
+func createProgressListener(progressChannel chan lsp.ProgressParams, server lsp.Server, logger *zerolog.Logger) {
 	// cleanup stopchannel before starting
 	for {
 		select {
@@ -49,17 +49,17 @@ func createProgressListener(progressChannel chan lsp.ProgressParams, server lsp.
 		}
 		break
 	}
-	log.Debug().Str("method", "createProgressListener").Msg("started listener")
-	defer log.Debug().Str("method", "createProgressListener").Msg("stopped listener")
+	logger.Debug().Msg("started listener")
+	defer logger.Debug().Msg("stopped listener")
 	for {
 		select {
 		case p := <-progressChannel:
 			if p.Value == nil {
-				log.Debug().Str("method", "createProgressListener").Msg("sending create progress msg ")
+				logger.Debug().Msg("sending create progress msg ")
 				_, err := server.Callback(context.Background(), "window/workDoneProgress/create", p) // response is void, see https://microsoft.github.io/language-server-protocol/specification#window_workDoneProgress_create
 
 				if err != nil {
-					log.Error().
+					logger.Error().
 						Err(err).
 						Str("method", "window/workDoneProgress/create").
 						Msg("error while sending workDoneProgress request")
@@ -68,11 +68,11 @@ func createProgressListener(progressChannel chan lsp.ProgressParams, server lsp.
 					CancelProgress(p.Token)
 				}
 			} else {
-				log.Debug().Str("method", "createProgressListener").Interface("progress", p).Msg("sending create progress report")
+				logger.Debug().Interface("progress", p).Msg("sending create progress report")
 				_ = server.Notify(context.Background(), "$/progress", p)
 			}
 		case <-progressStopChan:
-			log.Debug().Str("method", "createProgressListener").Msg("received stop message")
+			logger.Debug().Msg("received stop message")
 			return
 		}
 	}
@@ -86,121 +86,108 @@ func CancelProgress(token lsp.ProgressToken) {
 	progress.CancelProgressChannel <- token
 }
 
-func registerNotifier(srv lsp.Server) {
+func registerNotifier(c *config.Config, srv lsp.Server) {
+	logger := c.Logger().With().Str("method", "registerNotifier").Logger()
 	callbackFunction := func(params any) {
 		switch params := params.(type) {
 		case lsp.AuthenticationParams:
-			notifier(srv, "$/snyk.hasAuthenticated", params)
-			log.Info().Str("method", "registerNotifier").
-				Msg("sending token")
+			notifier(c, srv, "$/snyk.hasAuthenticated", params)
+			logger.Info().Msg("sending token")
 		case lsp.SnykIsAvailableCli:
-			notifier(srv, "$/snyk.isAvailableCli", params)
-			log.Info().Str("method", "registerNotifier").
-				Msg("sending cli path")
+			notifier(c, srv, "$/snyk.isAvailableCli", params)
+			logger.Info().Msg("sending cli path")
 		case sglsp.ShowMessageParams:
-			notifier(srv, "window/showMessage", params)
-			log.Info().
-				Str("method", "registerNotifier").
-				Interface("message", params).
-				Msg("showing message")
+			notifier(c, srv, "window/showMessage", params)
+			logger.Info().Interface("message", params).Msg("showing message")
 		case lsp.PublishDiagnosticsParams:
-			notifier(srv, "textDocument/publishDiagnostics", params)
+			notifier(c, srv, "textDocument/publishDiagnostics", params)
 			source := "LSP"
 			if len(params.Diagnostics) > 0 {
 				source = params.Diagnostics[0].Source
 			}
-			log.Info().
-				Str("method", "registerNotifier").
+			logger.Info().
 				Interface("documentURI", params.URI).
 				Interface("source", source).
 				Interface("diagnosticCount", len(params.Diagnostics)).
 				Msg("publishing diagnostics")
 		case lsp.SnykTrustedFoldersParams:
-			notifier(srv, "$/snyk.addTrustedFolders", params)
-			log.Info().
-				Str("method", "registerNotifier").
+			notifier(c, srv, "$/snyk.addTrustedFolders", params)
+			logger.Info().
 				Interface("trustedPaths", params.TrustedFolders).
 				Msg("sending trusted Folders to client")
 		case lsp.SnykScanParams:
-			notifier(srv, "$/snyk.scan", params)
-			log.Info().
-				Str("method", "registerNotifier").
+			notifier(c, srv, "$/snyk.scan", params)
+			logger.Info().
 				Interface("product", params.Product).
 				Interface("status", params.Status).
 				Msg("sending scan data to client")
 		case snyk.ShowMessageRequest:
 			// Function blocks on callback, so we need to run it in a separate goroutine
-			go handleShowMessageRequest(srv, params)
-			log.Info().
-				Str("method", "registerNotifier").
-				Msg("sending show message request to client")
+			go handleShowMessageRequest(srv, params, &logger)
+			logger.Info().Msg("sending show message request to client")
 		case lsp.ApplyWorkspaceEditParams:
-			handleApplyWorkspaceEdit(srv, params)
-			log.Info().
-				Str("method", "registerNotifier").
+			handleApplyWorkspaceEdit(srv, params, &logger)
+			logger.Info().
 				Msg("sending apply workspace edit request to client")
 		case lsp.CodeLensRefresh:
-			handleCodelensRefresh(srv)
-			log.Info().
-				Str("method", "registerNotifier").
+			handleCodelensRefresh(srv, &logger)
+			logger.Info().
 				Msg("sending codelens refresh request to client")
 		case lsp.InlineValueRefresh:
-			handleInlineValueRefresh(srv)
-			log.Info().
-				Str("method", "registerNotifier").
+			handleInlineValueRefresh(srv, &logger)
+			logger.Info().
 				Msg("sending inline value refresh request to client")
 		default:
-			log.Warn().
-				Str("method", "registerNotifier").
+			logger.Warn().
 				Interface("params", params).
 				Msg("received unconfigured notification object")
 		}
 	}
 	di.Notifier().CreateListener(callbackFunction)
-	log.Info().Str("method", "registerNotifier").Msg("registered notifier")
+	logger.Info().Str("method", "registerNotifier").Msg("registered notifier")
 }
 
-func handleInlineValueRefresh(srv lsp.Server) {
+func handleInlineValueRefresh(srv lsp.Server, logger *zerolog.Logger) {
 	method := "handleInlineValueRefresh"
 	if !config.CurrentConfig().ClientCapabilities().Workspace.InlineValue.RefreshSupport {
-		log.Debug().Str("method", method).Msg("inlineValue/refresh not supported by client, not sending request")
+		logger.Debug().Str("method", method).Msg("inlineValue/refresh not supported by client, not sending request")
 		return
 	}
-	log.Info().Str("method", method).Msg("sending inline value refresh request to client")
+	logger.Info().Str("method", method).Msg("sending inline value refresh request to client")
 
 	_, err := srv.Callback(context.Background(), "workspace/inlineValue/refresh", nil)
 	if err != nil {
-		log.Err(err).Str("method", method).
+		logger.Err(err).Str("method", method).
 			Msg("error while sending workspace/inlineValue/refresh request")
 		return
 	}
 }
 
-func handleCodelensRefresh(srv lsp.Server) {
+func handleCodelensRefresh(srv lsp.Server, logger *zerolog.Logger) {
 	method := "handleCodeLensRefresh"
 	if !config.CurrentConfig().ClientCapabilities().Workspace.CodeLens.RefreshSupport {
-		log.Debug().Str("method", method).Msg("codelens/refresh not supported by client, not sending request")
+		logger.Debug().Str("method", method).Msg("codelens/refresh not supported by client, not sending request")
 		return
 	}
-	log.Info().Str("method", method).Msg("sending codelens refresh request to client")
+	logger.Info().Str("method", method).Msg("sending codelens refresh request to client")
 
 	_, err := srv.Callback(context.Background(), "workspace/codeLens/refresh", nil)
 	if err != nil {
-		log.Err(err).Str("method", method).
+		logger.Err(err).Str("method", method).
 			Msg("error while sending workspace/codeLens/refresh request")
 		return
 	}
 }
 
-func handleApplyWorkspaceEdit(srv lsp.Server, params lsp.ApplyWorkspaceEditParams) {
+func handleApplyWorkspaceEdit(srv lsp.Server, params lsp.ApplyWorkspaceEditParams, logger *zerolog.Logger) {
 	method := "handleApplyWorkspaceEdit"
 	if !config.CurrentConfig().ClientCapabilities().Workspace.ApplyEdit {
-		log.Debug().Str("method", method).Msg("workspace/applyEdit not supported by client, not sending request")
+		logger.Debug().Str("method", method).Msg("workspace/applyEdit not supported by client, not sending request")
 		return
 	}
 	callback, err := srv.Callback(context.Background(), "workspace/applyEdit", params)
 	if err != nil {
-		log.Err(err).Str("method", method).Msg("error while sending workspace/applyEdit request")
+		logger.Err(err).Str("method", method).Msg("error while sending workspace/applyEdit request")
 		return
 	}
 	if callback == nil {
@@ -210,15 +197,15 @@ func handleApplyWorkspaceEdit(srv lsp.Server, params lsp.ApplyWorkspaceEditParam
 	var editResult lsp.ApplyWorkspaceEditResult
 	err = callback.UnmarshalResult(&editResult)
 	if err != nil {
-		log.Err(err).Str("method", method).Msg("error while unmarshalling workspace/applyEdit result response")
+		logger.Err(err).Str("method", method).Msg("error while unmarshalling workspace/applyEdit result response")
 		return
 	}
 
-	log.Info().Str("method", method).
+	logger.Info().Str("method", method).
 		Msgf("Workspace edit applied %t. %s", editResult.Applied, editResult.FailureReason)
 }
 
-func handleShowMessageRequest(srv lsp.Server, params snyk.ShowMessageRequest) {
+func handleShowMessageRequest(srv lsp.Server, params snyk.ShowMessageRequest, logger *zerolog.Logger) {
 	// convert our internal message request to LSP message request
 	requestParams := lsp.ShowMessageRequestParams{
 		Type:    lsp.MessageType(params.Type),
@@ -229,14 +216,14 @@ func handleShowMessageRequest(srv lsp.Server, params snyk.ShowMessageRequest) {
 			Title: string(action),
 		})
 	}
-	log.Info().
+	logger.Info().
 		Str("method", "registerNotifier").
 		Interface("message", requestParams).
 		Msg("showing message request")
 
 	callback, err := srv.Callback(context.Background(), "window/showMessageRequest", requestParams)
 	if err != nil {
-		log.Error().
+		logger.Error().
 			Err(err).
 			Str("method", "registerNotifier").
 			Msg("error while sending message request")
@@ -246,7 +233,7 @@ func handleShowMessageRequest(srv lsp.Server, params snyk.ShowMessageRequest) {
 		var actionItem lsp.MessageActionItem
 		err = callback.UnmarshalResult(&actionItem)
 		if err != nil {
-			log.Error().
+			logger.Error().
 				Err(err).
 				Str("method", "registerNotifier").
 				Msg("error while unmarshalling message request response")
@@ -255,17 +242,17 @@ func handleShowMessageRequest(srv lsp.Server, params snyk.ShowMessageRequest) {
 
 		selectedCommand, ok := params.Actions.Get(snyk.MessageAction(actionItem.Title))
 		if !ok {
-			log.Info().Str("method", "registerNotifier").Msg("Action map key not found")
+			logger.Info().Str("method", "registerNotifier").Msg("Action map key not found")
 			return
 		}
 		if selectedCommand.CommandId == "" {
-			log.Info().Str("method", "registerNotifier").Msg("No command provided")
+			logger.Info().Str("method", "registerNotifier").Msg("No command provided")
 			return
 		}
 
 		_, err := command.Service().ExecuteCommandData(context.Background(), selectedCommand, srv)
 		if err != nil {
-			log.Error().
+			logger.Error().
 				Err(err).
 				Str("method", "registerNotifier").
 				Msg("failed to execute command")

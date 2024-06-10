@@ -23,7 +23,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/rs/zerolog/log"
+	"github.com/snyk/snyk-ls/application/config"
 )
 
 const defaultBaseURL = "https://static.snyk.io"
@@ -64,8 +64,9 @@ func NewCLIRelease(httpClient func() *http.Client) *CLIRelease {
 }
 
 func (r *CLIRelease) GetLatestRelease(ctx context.Context) (*Release, error) {
+	logger := config.CurrentConfig().Logger()
 	releaseURL := fmt.Sprintf("%s/cli/latest/release.json", r.baseURL)
-	log.Ctx(ctx).Trace().Str("url", releaseURL).Msg("requesting version for Snyk CLI")
+	logger.Trace().Str("url", releaseURL).Msg("requesting version for Snyk CLI")
 
 	resp, err := r.httpClient().Get(releaseURL)
 	if err != nil {
@@ -77,7 +78,7 @@ func (r *CLIRelease) GetLatestRelease(ctx context.Context) (*Release, error) {
 		return nil, fmt.Errorf("failed to obtained Snyk CLI release from %q: %s ", releaseURL, resp.Status)
 	}
 
-	log.Ctx(ctx).Trace().Str("response_status", resp.Status).Msg("received")
+	logger.Trace().Str("response_status", resp.Status).Msg("received")
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

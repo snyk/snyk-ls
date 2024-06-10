@@ -23,13 +23,15 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func Test_ExecuteCommand(t *testing.T) {
+	c := testutil.UnitTest(t)
 	authProvider := &snyk.FakeAuthenticationProvider{
 		ExpectedAuthURL: "https://auth.url",
 	}
-	authenticationService := snyk.NewAuthenticationService(authProvider, nil, nil, nil)
+	authenticationService := snyk.NewAuthenticationService(c, authProvider, nil, nil, nil)
 	service := NewService(authenticationService, nil, nil, nil, nil, nil)
 	cmd := snyk.CommandData{
 		CommandId: snyk.CopyAuthLinkCommand,

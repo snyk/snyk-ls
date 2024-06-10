@@ -27,10 +27,10 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
-	"github.com/rs/zerolog/log"
+	"golang.org/x/oauth2"
+
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
@@ -46,19 +46,20 @@ var cachedOriginalPath = ""
 
 func workspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeConfigurationParams) (bool, error) {
-		log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("RECEIVED")
-		defer log.Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("DONE")
+		c := config.CurrentConfig()
+		c.Logger().Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("RECEIVED")
+		defer c.Logger().Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("DONE")
 
 		emptySettings := lsp.Settings{}
 		if !reflect.DeepEqual(params.Settings, emptySettings) {
 			// client used settings push
-			UpdateSettings(params.Settings)
+			UpdateSettings(c, params.Settings)
 			return true, nil
 		}
 
 		// client expects settings pull. E.g. VS Code uses pull model & sends empty settings when configuration is updated.
-		if !config.CurrentConfig().ClientCapabilities().Workspace.Configuration {
-			log.Info().Msg("Pull model for workspace configuration not supported, ignoring workspace/didChangeConfiguration notification.")
+		if !c.ClientCapabilities().Workspace.Configuration {
+			c.Logger().Info().Msg("Pull model for workspace configuration not supported, ignoring workspace/didChangeConfiguration notification.")
 			return false, nil
 		}
 
@@ -79,7 +80,7 @@ func workspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 		}
 
 		if !reflect.DeepEqual(fetchedSettings[0], emptySettings) {
-			UpdateSettings(fetchedSettings[0])
+			UpdateSettings(c, fetchedSettings[0])
 			return true, nil
 		}
 
@@ -87,24 +88,23 @@ func workspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 	})
 }
 
-func InitializeSettings(settings lsp.Settings) {
-	writeSettings(settings, true)
-	updateAutoAuthentication(settings)
-	updateDeviceInformation(settings)
-	updateAutoScan(settings)
+func InitializeSettings(c *config.Config, settings lsp.Settings) {
+	writeSettings(c, settings, true)
+	updateAutoAuthentication(c, settings)
+	updateDeviceInformation(c, settings)
+	updateAutoScan(c, settings)
 }
 
-func UpdateSettings(settings lsp.Settings) {
-	currentConfig := config.CurrentConfig()
-	previouslyEnabledProducts := currentConfig.DisplayableIssueTypes()
-	previousAutoScan := currentConfig.IsAutoScanEnabled()
+func UpdateSettings(c *config.Config, settings lsp.Settings) {
+	previouslyEnabledProducts := c.DisplayableIssueTypes()
+	previousAutoScan := c.IsAutoScanEnabled()
 
-	writeSettings(settings, false)
+	writeSettings(c, settings, false)
 
 	// If a product was removed, clear all issues for this product
 	ws := workspace.Get()
 	if ws != nil {
-		newSupportedProducts := currentConfig.DisplayableIssueTypes()
+		newSupportedProducts := c.DisplayableIssueTypes()
 		for removedIssueType, wasSupported := range previouslyEnabledProducts {
 			if wasSupported && !newSupportedProducts[removedIssueType] {
 				ws.ClearIssuesByType(removedIssueType)
@@ -112,51 +112,50 @@ func UpdateSettings(settings lsp.Settings) {
 		}
 	}
 
-	if currentConfig.IsAutoScanEnabled() != previousAutoScan {
+	if c.IsAutoScanEnabled() != previousAutoScan {
 		di.Analytics().ScanModeIsSelected(ux.ScanModeIsSelectedProperties{ScanningMode: settings.ScanningMode})
 	}
 }
 
-func writeSettings(settings lsp.Settings, initialize bool) {
+func writeSettings(c *config.Config, settings lsp.Settings, initialize bool) {
 	emptySettings := lsp.Settings{}
 	if reflect.DeepEqual(settings, emptySettings) {
 		return
 	}
-	updateSeverityFilter(settings.FilterSeverity)
-	updateProductEnablement(settings)
-	updateCliConfig(settings)
+	updateSeverityFilter(c, settings.FilterSeverity)
+	updateProductEnablement(c, settings)
+	updateCliConfig(c, settings)
 
 	// updateApiEndpoints overwrites the authentication method in certain cases (oauth2)
 	// this is why it needs to be called after updateAuthenticationMethod
-	updateAuthenticationMethod(settings)
-	updateApiEndpoints(settings, initialize)
+	updateAuthenticationMethod(c, settings)
+	updateApiEndpoints(c, settings, initialize)
 
 	// setting the token requires to know the authentication method
 	updateToken(settings.Token)
 
-	updateEnvironment(settings)
-	updatePathFromSettings(settings)
-	updateTelemetry(settings)
-	updateOrganization(settings)
-	manageBinariesAutomatically(settings)
-	updateTrustedFolders(settings)
-	updateSnykCodeSecurity(settings)
-	updateSnykCodeQuality(settings)
-	updateRuntimeInfo(settings)
-	updateAutoScan(settings)
-	updateSnykLearnCodeActions(settings)
+	updateEnvironment(c, settings)
+	updatePathFromSettings(c, settings)
+	updateTelemetry(c, settings)
+	updateOrganization(c, settings)
+	manageBinariesAutomatically(c, settings)
+	updateTrustedFolders(c, settings)
+	updateSnykCodeSecurity(c, settings)
+	updateSnykCodeQuality(c, settings)
+	updateRuntimeInfo(c, settings)
+	updateAutoScan(c, settings)
+	updateSnykLearnCodeActions(c, settings)
 }
 
-func updateAuthenticationMethod(settings lsp.Settings) {
+func updateAuthenticationMethod(c *config.Config, settings lsp.Settings) {
 	if settings.AuthenticationMethod == "" {
 		return
 	}
-	c := config.CurrentConfig()
 	c.SetAuthenticationMethod(settings.AuthenticationMethod)
-	if config.CurrentConfig().AuthenticationMethod() == lsp.OAuthAuthentication {
+	if c.AuthenticationMethod() == lsp.OAuthAuthentication {
 		configureOAuth(c, auth.RefreshToken)
 	} else {
-		cliAuthenticationProvider := auth2.NewCliAuthenticationProvider(di.ErrorReporter())
+		cliAuthenticationProvider := auth2.NewCliAuthenticationProvider(c, di.ErrorReporter())
 		di.AuthenticationService().SetProvider(cliAuthenticationProvider)
 	}
 }
@@ -165,8 +164,6 @@ func credentialsUpdateCallback(_ string, value any) {
 	newToken, ok := value.(string)
 	if !ok {
 		msg := fmt.Sprintf("Failed to cast creds of type %T to string", value)
-		log.Error().Str("method", "storage callback token").
-			Msgf(msg)
 		di.ErrorReporter().CaptureError(errors.New(msg))
 		return
 	}
@@ -199,66 +196,65 @@ func configureOAuth(
 		auth.WithOpenBrowserFunc(openBrowserFunc),
 		auth.WithTokenRefresherFunc(customTokenRefresherFunc),
 	)
-	oAuthProvider := oauth.NewOAuthProvider(conf, authenticator)
+	oAuthProvider := oauth.NewOAuthProvider(conf, authenticator, c.Logger())
 	authenticationService.SetProvider(oAuthProvider)
 }
 
-func updateRuntimeInfo(settings lsp.Settings) {
-	c := config.CurrentConfig()
+func updateRuntimeInfo(c *config.Config, settings lsp.Settings) {
 	c.SetOsArch(settings.OsArch)
 	c.SetOsPlatform(settings.OsPlatform)
 	c.SetRuntimeVersion(settings.RuntimeVersion)
 	c.SetRuntimeName(settings.RuntimeName)
 }
 
-func updateTrustedFolders(settings lsp.Settings) {
+func updateTrustedFolders(c *config.Config, settings lsp.Settings) {
 	trustedFoldersFeatureEnabled, err := strconv.ParseBool(settings.EnableTrustedFoldersFeature)
 	if err == nil {
-		config.CurrentConfig().SetTrustedFolderFeatureEnabled(trustedFoldersFeatureEnabled)
+		c.SetTrustedFolderFeatureEnabled(trustedFoldersFeatureEnabled)
 	} else {
-		config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
+		c.SetTrustedFolderFeatureEnabled(true)
 	}
 
 	if settings.TrustedFolders != nil {
-		config.CurrentConfig().SetTrustedFolders(settings.TrustedFolders)
+		c.SetTrustedFolders(settings.TrustedFolders)
 	}
 }
 
-func updateAutoAuthentication(settings lsp.Settings) {
+func updateAutoAuthentication(c *config.Config, settings lsp.Settings) {
 	// Unless the field is included and set to false, auto-auth should be true by default.
 	autoAuth, err := strconv.ParseBool(settings.AutomaticAuthentication)
 	if err == nil {
-		config.CurrentConfig().SetAutomaticAuthentication(autoAuth)
+		c.SetAutomaticAuthentication(autoAuth)
 	} else {
 		// When the field is omitted, set to true by default
-		config.CurrentConfig().SetAutomaticAuthentication(true)
+		c.SetAutomaticAuthentication(true)
 	}
 }
 
-func updateDeviceInformation(settings lsp.Settings) {
+func updateDeviceInformation(c *config.Config, settings lsp.Settings) {
 	deviceId := strings.TrimSpace(settings.DeviceId)
 	if deviceId != "" {
-		config.CurrentConfig().SetDeviceID(deviceId)
+		c.SetDeviceID(deviceId)
 	}
 }
 
-func updateAutoScan(settings lsp.Settings) {
+func updateAutoScan(c *config.Config, settings lsp.Settings) {
 	// Auto scan true by default unless the AutoScan value in the settings is not missing & false
 	autoScan := true
 	if settings.ScanningMode == "manual" {
 		autoScan = false
 	}
 
-	config.CurrentConfig().SetAutomaticScanning(autoScan)
+	c.SetAutomaticScanning(autoScan)
 }
 
-func updateSnykLearnCodeActions(settings lsp.Settings) {
+func updateSnykLearnCodeActions(c *config.Config, settings lsp.Settings) {
 	enable := true
 	if settings.EnableSnykLearnCodeActions == "false" {
 		enable = false
 	}
 
-	config.CurrentConfig().SetSnykLearnCodeActionsEnabled(enable)
+	c.SetSnykLearnCodeActionsEnabled(enable)
 }
 
 func updateToken(token string) {
@@ -266,9 +262,8 @@ func updateToken(token string) {
 	di.AuthenticationService().UpdateCredentials(token, false)
 }
 
-func updateApiEndpoints(settings lsp.Settings, initialization bool) {
+func updateApiEndpoints(c *config.Config, settings lsp.Settings, initialization bool) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
-	c := config.CurrentConfig()
 	endpointsUpdated := c.UpdateApiEndpoints(snykApiUrl)
 
 	if endpointsUpdated && !initialization {
@@ -279,7 +274,7 @@ func updateApiEndpoints(settings lsp.Settings, initialization bool) {
 	// overwrite authentication method if gov domain
 	if c.IsFedramp() {
 		settings.AuthenticationMethod = lsp.OAuthAuthentication
-		updateAuthenticationMethod(settings)
+		updateAuthenticationMethod(c, settings)
 	}
 
 	// a custom set snyk code api (e.g. for testing) always overwrites automatic config
@@ -288,61 +283,61 @@ func updateApiEndpoints(settings lsp.Settings, initialization bool) {
 	}
 }
 
-func updateOrganization(settings lsp.Settings) {
+func updateOrganization(c *config.Config, settings lsp.Settings) {
 	org := strings.TrimSpace(settings.Organization)
 	if org != "" {
-		config.CurrentConfig().SetOrganization(org)
+		c.SetOrganization(org)
 	}
 }
 
-func updateTelemetry(settings lsp.Settings) {
+func updateTelemetry(c *config.Config, settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.SendErrorReports)
 	if err != nil {
-		log.Debug().Msgf("couldn't read send error reports %s", settings.SendErrorReports)
+		c.Logger().Debug().Msgf("couldn't read send error reports %s", settings.SendErrorReports)
 	} else {
-		config.CurrentConfig().SetErrorReportingEnabled(parseBool)
+		c.SetErrorReportingEnabled(parseBool)
 	}
 
 	parseBool, err = strconv.ParseBool(settings.EnableTelemetry)
 	if err != nil {
-		log.Debug().Msgf("couldn't read enable telemetry %s", settings.SendErrorReports)
+		c.Logger().Debug().Msgf("couldn't read enable telemetry %s", settings.SendErrorReports)
 	} else {
-		config.CurrentConfig().SetTelemetryEnabled(parseBool)
+		c.SetTelemetryEnabled(parseBool)
 		if parseBool {
 			go di.Analytics().Identify()
 		}
 	}
 }
 
-func manageBinariesAutomatically(settings lsp.Settings) {
+func manageBinariesAutomatically(c *config.Config, settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ManageBinariesAutomatically)
 	if err != nil {
-		log.Debug().Msgf("couldn't read manage binaries automatically %s", settings.ManageBinariesAutomatically)
+		c.Logger().Debug().Msgf("couldn't read manage binaries automatically %s", settings.ManageBinariesAutomatically)
 	} else {
-		config.CurrentConfig().SetManageBinariesAutomatically(parseBool)
+		c.SetManageBinariesAutomatically(parseBool)
 	}
 }
 
-func updateSnykCodeSecurity(settings lsp.Settings) {
+func updateSnykCodeSecurity(c *config.Config, settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ActivateSnykCodeSecurity)
 	if err != nil {
-		log.Debug().Msgf("couldn't read IsSnykCodeSecurityEnabled %s", settings.ActivateSnykCodeSecurity)
+		c.Logger().Debug().Msgf("couldn't read IsSnykCodeSecurityEnabled %s", settings.ActivateSnykCodeSecurity)
 	} else {
-		config.CurrentConfig().EnableSnykCodeSecurity(parseBool)
+		c.EnableSnykCodeSecurity(parseBool)
 	}
 }
 
-func updateSnykCodeQuality(settings lsp.Settings) {
+func updateSnykCodeQuality(c *config.Config, settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ActivateSnykCodeQuality)
 	if err != nil {
-		log.Debug().Msgf("couldn't read IsSnykCodeQualityEnabled %s", settings.ActivateSnykCodeQuality)
+		c.Logger().Debug().Msgf("couldn't read IsSnykCodeQualityEnabled %s", settings.ActivateSnykCodeQuality)
 	} else {
-		config.CurrentConfig().EnableSnykCodeQuality(parseBool)
+		c.EnableSnykCodeQuality(parseBool)
 	}
 }
 
 // TODO store in config, move parsing to CLI
-func updatePathFromSettings(settings lsp.Settings) {
+func updatePathFromSettings(c *config.Config, settings lsp.Settings) {
 	// when changing the path from settings, we cache the original path first, to be able to restore it later
 	if len(cachedOriginalPath) == 0 {
 		cachedOriginalPath = os.Getenv("PATH")
@@ -351,18 +346,18 @@ func updatePathFromSettings(settings lsp.Settings) {
 	if len(settings.Path) > 0 {
 		_ = os.Unsetenv("Path") // unset the path first to work around issues on Windows OS, where PATH can be Path
 		err := os.Setenv("PATH", settings.Path+string(os.PathListSeparator)+cachedOriginalPath)
-		log.Info().Str("method", "updatePathFromSettings").Msgf("added configured path to PATH Environment Variable '%s'", os.Getenv("PATH"))
+		c.Logger().Info().Str("method", "updatePathFromSettings").Msgf("added configured path to PATH Environment Variable '%s'", os.Getenv("PATH"))
 		if err != nil {
-			log.Err(err).Str("method", "updatePathFromSettings").Msgf("couldn't add path %s", settings.Path)
+			c.Logger().Err(err).Str("method", "updatePathFromSettings").Msgf("couldn't add path %s", settings.Path)
 		}
 	} else {
 		_ = os.Setenv("PATH", cachedOriginalPath)
-		log.Info().Str("method", "updatePathFromSettings").Msgf("restore initial path '%s'", os.Getenv("PATH"))
+		c.Logger().Info().Str("method", "updatePathFromSettings").Msgf("restore initial path '%s'", os.Getenv("PATH"))
 	}
 }
 
 // TODO store in config, move parsing to CLI
-func updateEnvironment(settings lsp.Settings) {
+func updateEnvironment(c *config.Config, settings lsp.Settings) {
 	envVars := strings.Split(settings.AdditionalEnv, ";")
 	for _, envVar := range envVars {
 		v := strings.Split(envVar, "=")
@@ -371,53 +366,52 @@ func updateEnvironment(settings lsp.Settings) {
 		}
 		err := os.Setenv(v[0], v[1])
 		if err != nil {
-			log.Err(err).Msgf("couldn't set env variable %s", envVar)
+			c.Logger().Err(err).Msgf("couldn't set env variable %s", envVar)
 		}
 	}
 }
 
-func updateCliConfig(settings lsp.Settings) {
+func updateCliConfig(c *config.Config, settings lsp.Settings) {
 	var err error
-	cliSettings := &config.CliSettings{}
+	cliSettings := &config.CliSettings{C: c}
 	cliSettings.Insecure, err = strconv.ParseBool(settings.Insecure)
 	if err != nil {
-		log.Debug().Msg("couldn't parse insecure setting")
+		c.Logger().Debug().Msg("couldn't parse insecure setting")
 	}
 	cliSettings.AdditionalOssParameters = strings.Split(settings.AdditionalParams, " ")
 	cliSettings.SetPath(strings.TrimSpace(settings.CliPath))
-	currentConfig := config.CurrentConfig()
+	currentConfig := c
 	conf := currentConfig.Engine().GetConfiguration()
 	conf.Set(configuration.INSECURE_HTTPS, cliSettings.Insecure)
 	currentConfig.SetCliSettings(cliSettings)
 }
 
-func updateProductEnablement(settings lsp.Settings) {
+func updateProductEnablement(c *config.Config, settings lsp.Settings) {
 	parseBool, err := strconv.ParseBool(settings.ActivateSnykCode)
-	currentConfig := config.CurrentConfig()
 	if err != nil {
-		log.Debug().Msg("couldn't parse code setting")
+		c.Logger().Debug().Msg("couldn't parse code setting")
 	} else {
-		currentConfig.SetSnykCodeEnabled(parseBool)
-		currentConfig.EnableSnykCodeQuality(parseBool)
-		currentConfig.EnableSnykCodeSecurity(parseBool)
+		c.SetSnykCodeEnabled(parseBool)
+		c.EnableSnykCodeQuality(parseBool)
+		c.EnableSnykCodeSecurity(parseBool)
 	}
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykOpenSource)
 	if err != nil {
-		log.Debug().Msg("couldn't parse open source setting")
+		c.Logger().Debug().Msg("couldn't parse open source setting")
 	} else {
-		currentConfig.SetSnykOssEnabled(parseBool)
+		c.SetSnykOssEnabled(parseBool)
 	}
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykIac)
 	if err != nil {
-		log.Debug().Msg("couldn't parse iac setting")
+		c.Logger().Debug().Msg("couldn't parse iac setting")
 	} else {
-		currentConfig.SetSnykIacEnabled(parseBool)
+		c.SetSnykIacEnabled(parseBool)
 	}
 }
 
-func updateSeverityFilter(s lsp.SeverityFilter) {
-	log.Debug().Str("method", "updateSeverityFilter").Interface("severityFilter", s).Msg("Updating severity filter:")
-	modified := config.CurrentConfig().SetSeverityFilter(s)
+func updateSeverityFilter(c *config.Config, s lsp.SeverityFilter) {
+	c.Logger().Debug().Str("method", "updateSeverityFilter").Interface("severityFilter", s).Msg("Updating severity filter:")
+	modified := c.SetSeverityFilter(s)
 
 	if modified {
 		ws := workspace.Get()

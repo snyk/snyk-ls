@@ -21,7 +21,7 @@ import (
 	"encoding/json"
 
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -32,6 +32,7 @@ import (
 type navigateToRangeCommand struct {
 	command snyk.CommandData
 	srv     lsp.Server
+	logger  *zerolog.Logger
 }
 
 func (cmd *navigateToRangeCommand) Command() snyk.CommandData {
@@ -41,7 +42,7 @@ func (cmd *navigateToRangeCommand) Command() snyk.CommandData {
 func (cmd *navigateToRangeCommand) Execute(ctx context.Context) (any, error) {
 	method := "navigateToRangeCommand.Execute"
 	if len(cmd.command.Arguments) < 2 {
-		log.Warn().Str("method", method).Msg("received NavigateToRangeCommand without range")
+		cmd.logger.Warn().Str("method", method).Msg("received NavigateToRangeCommand without range")
 	}
 	// convert to correct type
 	var myRange snyk.Range
@@ -62,11 +63,11 @@ func (cmd *navigateToRangeCommand) Execute(ctx context.Context) (any, error) {
 		Selection: converter.ToRange(myRange),
 	}
 
-	log.Info().
+	cmd.logger.Info().
 		Str("method", method).
 		Interface("params", params).
 		Msg("showing Document")
 	rsp, err := cmd.srv.Callback(context.Background(), "window/showDocument", params)
-	log.Debug().Str("method", method).Interface("callback", rsp).Send()
+	cmd.logger.Debug().Str("method", method).Interface("callback", rsp).Send()
 	return nil, err
 }

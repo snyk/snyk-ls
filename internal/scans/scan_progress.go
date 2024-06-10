@@ -21,7 +21,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
+
+	"github.com/snyk/snyk-ls/application/config"
 )
 
 const timeout = 5 * time.Second
@@ -38,79 +40,81 @@ type ScanProgress struct {
 	done   chan bool
 	cancel chan bool
 	mutex  sync.Mutex
+	logger *zerolog.Logger
 }
 
 func NewScanProgress() *ScanProgress {
 	return &ScanProgress{
 		cancel: make(chan bool),
 		done:   make(chan bool),
+		logger: config.CurrentConfig().Logger(),
 	}
 }
 
-func (rs *ScanProgress) GetDoneChannel() <-chan bool { return rs.done }
+func (sp *ScanProgress) GetDoneChannel() <-chan bool { return sp.done }
 
-func (rs *ScanProgress) GetCancelChannel() <-chan bool { return rs.cancel }
+func (sp *ScanProgress) GetCancelChannel() <-chan bool { return sp.cancel }
 
 // IsDone is true if the scan finished whether by cancellation or by a SetDone call
-func (rs *ScanProgress) IsDone() bool {
-	rs.mutex.Lock()
-	defer rs.mutex.Unlock()
-	return rs.isDone
+func (sp *ScanProgress) IsDone() bool {
+	sp.mutex.Lock()
+	defer sp.mutex.Unlock()
+	return sp.isDone
 }
 
-func (rs *ScanProgress) CancelScan() {
-	log.Debug().Msg("Canceling scan")
+func (sp *ScanProgress) CancelScan() {
+	sp.logger.Debug().Msg("Canceling scan")
 	select {
 	case <-time.After(timeout):
 		// This should not happen if ScanProgress is used correctly and is here for safety.
 		// Seeing this message in a log is a sign that something is wrong.
 		// There should always be a goroutine that listens for this channel
-		log.Warn().Str("method", "CancelScan").Msg("No listeners for cancel message - timing out")
+		sp.logger.Warn().Str("method", "CancelScan").Msg("No listeners for cancel message - timing out")
 		return
-	case rs.cancel <- true:
-		log.Debug().Msg("Cancel signal sent")
-		rs.mutex.Lock()
-		defer rs.mutex.Unlock()
-		rs.isDone = true
+	case sp.cancel <- true:
+		sp.logger.Debug().Msg("Cancel signal sent")
+		sp.mutex.Lock()
+		defer sp.mutex.Unlock()
+		sp.isDone = true
 	}
 }
 
 // SetDone will mark the ScanProgress as done and send a message to the "done" channel.
 // It is safe to call SetDone repeatedly, or after CancelScan was called, so it's ok to
 // defer a function that calls SetDone in a locked section.
-func (rs *ScanProgress) SetDone() {
-	rs.mutex.Lock()
-	defer rs.mutex.Unlock()
-	if rs.isDone {
-		log.Debug().Msg("Scan progress is already done - returning without further action")
+func (sp *ScanProgress) SetDone() {
+	sp.mutex.Lock()
+	defer sp.mutex.Unlock()
+	if sp.isDone {
+		sp.logger.Debug().Msg("Scan progress is already done - returning without further action")
 		return
 	}
-	rs.isDone = true
+	sp.isDone = true
 	select {
 	case <-time.After(timeout):
 		// This should not happen if ScanProgress is used correctly and is here for safety.
 		// Seeing this message in a log is a sign that something is wrong.
 		// There should always be a goroutine that listens for this channel
-		log.Warn().Str("method", "SetDone").Msg("No listeners for Done message - timing out")
-	case rs.done <- true:
-		log.Debug().Msg("Done signal sent")
+		sp.logger.Warn().Str("method", "SetDone").Msg("No listeners for Done message - timing out")
+	case sp.done <- true:
+		sp.logger.Debug().Msg("Done signal sent")
 	}
 }
 
 // Listen waits for cancel or done signals until one of them is received.
 // If the cancel signal is received, the cancel function will be called.
 // Listen stops after the first signal is processed.
-func (rs *ScanProgress) Listen(cancel context.CancelFunc, scanNumber int) {
-	log.Debug().Msgf("Starting goroutine for scan %v", scanNumber)
-	cancelChannel := rs.GetCancelChannel()
-	doneChannel := rs.GetDoneChannel()
+func (sp *ScanProgress) Listen(cancel context.CancelFunc, scanNumber int) {
+	sp.logger.Debug().Msgf("Starting goroutine for scan %v", scanNumber)
+	cancelChannel := sp.GetCancelChannel()
+	doneChannel := sp.GetDoneChannel()
 	select {
 	case <-cancelChannel:
-		log.Debug().Msgf("Canceling scan %v", scanNumber)
+		sp.logger.Debug().Msgf("Canceling scan %v", scanNumber)
 		cancel()
 		return
 	case <-doneChannel:
-		log.Debug().Msgf("Scan %v is done", scanNumber)
+		sp.logger.Debug().Msgf("Scan %v is done", scanNumber)
 		return
 	}
 }

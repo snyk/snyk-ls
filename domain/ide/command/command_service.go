@@ -71,20 +71,12 @@ func Service() snyk.CommandService {
 }
 
 func (service *serviceImpl) ExecuteCommandData(ctx context.Context, commandData snyk.CommandData, server lsp.Server) (any, error) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "command.serviceImpl.ExecuteCommandData").Logger()
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", "command.serviceImpl.ExecuteCommandData").Logger()
 
 	logger.Debug().Msgf("executing command %s", commandData.CommandId)
 
-	command, err := CreateFromCommandData(
-		commandData,
-		server,
-		service.authService,
-		service.learnService,
-		service.notifier,
-		service.issueProvider,
-		service.codeApiClient,
-		service.codeScanner,
-	)
+	command, err := CreateFromCommandData(c, commandData, server, service.authService, service.learnService, service.notifier, service.issueProvider, service.codeApiClient, service.codeScanner)
 	if err != nil {
 		logger.Err(err).Msg("failed to create command")
 		return nil, err

@@ -22,9 +22,9 @@ import (
 	"path/filepath"
 
 	"github.com/puzpuzpuz/xsync"
-	"github.com/rs/zerolog/log"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -34,14 +34,16 @@ type BundleUploader struct {
 	supportedExtensions  *xsync.MapOf[string, bool]
 	supportedConfigFiles *xsync.MapOf[string, bool]
 	instrumentor         codeClientObservability.Instrumentor
+	c                    *config.Config
 }
 
-func NewBundler(SnykCode SnykCodeClient, instrumentor codeClientObservability.Instrumentor) *BundleUploader {
+func NewBundler(c *config.Config, SnykCode SnykCodeClient, instrumentor codeClientObservability.Instrumentor) *BundleUploader {
 	return &BundleUploader{
 		SnykCode:             SnykCode,
 		instrumentor:         instrumentor,
 		supportedExtensions:  xsync.NewMapOf[bool](),
 		supportedConfigFiles: xsync.NewMapOf[bool](),
+		c:                    c,
 	}
 }
 
@@ -103,10 +105,10 @@ func (b *BundleUploader) groupInBatches(
 		file := files[filePath]
 		var fileContent = []byte(file.Content)
 		if uploadBatch.canFitFile(filePath, fileContent) {
-			log.Trace().Str("path", filePath).Int("size", len(fileContent)).Msgf("added to bundle #%v", len(batches))
+			b.c.Logger().Trace().Str("path", filePath).Int("size", len(fileContent)).Msgf("added to bundle #%v", len(batches))
 			uploadBatch.documents[filePath] = file
 		} else {
-			log.Trace().Str("path", filePath).Int("size",
+			b.c.Logger().Trace().Str("path", filePath).Int("size",
 				len(fileContent)).Msgf("created new bundle - %v bundles in this upload so far", len(batches))
 			newUploadBatch := NewUploadBatch()
 			newUploadBatch.documents[filePath] = file
@@ -123,7 +125,7 @@ func (b *BundleUploader) isSupported(ctx context.Context, file string) (bool, er
 	if b.supportedExtensions.Size() == 0 && b.supportedConfigFiles.Size() == 0 {
 		filters, err := b.SnykCode.GetFilters(ctx)
 		if err != nil {
-			log.Error().Err(err).Msg("could not get filters")
+			b.c.Logger().Error().Err(err).Msg("could not get filters")
 			return false, err
 		}
 
@@ -148,11 +150,11 @@ func (b *BundleUploader) isSupported(ctx context.Context, file string) (bool, er
 	return isSupportedExtension || isSupportedConfigFile, nil
 }
 
-func getFileFrom(filePath string, content []byte) BundleFile {
+func (sc *Scanner) getFileFrom(filePath string, content []byte) BundleFile {
 	file := BundleFile{
 		Hash:    util.Hash(content),
 		Content: string(content),
 	}
-	log.Trace().Str("method", "getFileFrom").Str("hash", file.Hash).Str("filePath", filePath).Send()
+	sc.c.Logger().Trace().Str("method", "getFileFrom").Str("hash", file.Hash).Str("filePath", filePath).Send()
 	return file
 }

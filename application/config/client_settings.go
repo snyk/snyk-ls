@@ -19,8 +19,6 @@ package config
 import (
 	"os"
 	"strconv"
-
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -68,7 +66,7 @@ func (c *Config) productEnablementFromEnv() {
 	if oss != "" {
 		parseBool, err := strconv.ParseBool(oss)
 		if err != nil {
-			log.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse oss config %s", oss)
+			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse oss config %s", oss)
 		}
 		c.isSnykOssEnabled.Set(parseBool)
 	}
@@ -76,7 +74,7 @@ func (c *Config) productEnablementFromEnv() {
 	if code != "" {
 		parseBool, err := strconv.ParseBool(code)
 		if err != nil {
-			log.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse code config %s", code)
+			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse code config %s", code)
 		}
 		c.isSnykCodeEnabled.Set(parseBool)
 	}
@@ -84,7 +82,7 @@ func (c *Config) productEnablementFromEnv() {
 	if iac != "" {
 		parseBool, err := strconv.ParseBool(iac)
 		if err != nil {
-			log.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse iac config %s", iac)
+			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse iac config %s", iac)
 		}
 		c.isSnykIacEnabled.Set(parseBool)
 	}
@@ -92,14 +90,14 @@ func (c *Config) productEnablementFromEnv() {
 	if container != "" {
 		parseBool, err := strconv.ParseBool(container)
 		if err != nil {
-			log.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse container config %s", container)
+			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse container config %s", container)
 		}
 		c.isSnykContainerEnabled.Set(parseBool)
 	}
 	if advisor != "" {
 		parseBool, err := strconv.ParseBool(advisor)
 		if err != nil {
-			log.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse advisor config %s", advisor)
+			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse advisor config %s", advisor)
 		}
 		c.isSnykAdvisorEnabled.Set(parseBool)
 	}

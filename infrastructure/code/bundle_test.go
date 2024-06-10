@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/application/config"
 )
 
 var bundleWithFiles = &UploadBatch{
@@ -40,6 +42,7 @@ func Test_BundleGroup_AddBundle(t *testing.T) {
 		fakeSnykCode := FakeSnykCodeClient{}
 		bundle := Bundle{
 			SnykCode: &fakeSnykCode,
+			logger:   config.CurrentConfig().Logger(),
 		}
 
 		emptyBundle := &UploadBatch{}
@@ -54,6 +57,7 @@ func Test_BundleGroup_AddBundle(t *testing.T) {
 		fakeSnykCode := FakeSnykCodeClient{}
 		bundle := Bundle{
 			SnykCode: &fakeSnykCode,
+			logger:   config.CurrentConfig().Logger(),
 		}
 
 		_ = bundle.Upload(context.Background(), bundleWithFiles)
@@ -65,6 +69,7 @@ func Test_BundleGroup_AddBundle(t *testing.T) {
 		fakeSnykCode := FakeSnykCodeClient{}
 		bundle := Bundle{
 			SnykCode: &fakeSnykCode,
+			logger:   config.CurrentConfig().Logger(),
 		}
 
 		_ = bundle.Upload(context.Background(), bundleWithFiles)

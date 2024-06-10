@@ -62,13 +62,15 @@ func Test_getShardKey(t *testing.T) {
 }
 
 func Test_autofixFunc(t *testing.T) {
-	fakeSnykCode := FakeSnykCodeClient{}
+	c := config.CurrentConfig()
+	fakeSnykCode := FakeSnykCodeClient{C: c}
 	bundleHash := ""
 	mockNotifier := notification.NewMockNotifier()
 	issueEnhancer := IssueEnhancer{
 		SnykCode:     &fakeSnykCode,
 		notifier:     mockNotifier,
 		instrumentor: NewCodeInstrumentor(),
+		c:            c,
 	}
 
 	t.Run("Shows attempt message when fix requested", func(t *testing.T) {
@@ -187,19 +189,21 @@ func Test_autofixFunc(t *testing.T) {
 }
 
 func Test_addIssueActions(t *testing.T) {
-	fakeSnykCode := FakeSnykCodeClient{}
+	c := config.CurrentConfig()
+	fakeSnykCode := FakeSnykCodeClient{C: c}
 	bundleHash := ""
 	mockNotifier := notification.NewMockNotifier()
 	issueEnhancer := IssueEnhancer{
 		SnykCode:     &fakeSnykCode,
 		notifier:     mockNotifier,
 		instrumentor: NewCodeInstrumentor(),
+		c:            c,
 	}
 
 	var setupCodeSettings = func() {
 		resetCodeSettings()
-		config.CurrentConfig().SetSnykCodeEnabled(true)
-		config.CurrentConfig().SetSnykLearnCodeActionsEnabled(false)
+		c.SetSnykCodeEnabled(true)
+		c.SetSnykLearnCodeActionsEnabled(false)
 		getCodeSettings().SetAutofixEnabled(true)
 	}
 

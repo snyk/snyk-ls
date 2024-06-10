@@ -26,6 +26,8 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -35,15 +37,16 @@ func Test_Bundler_Upload(t *testing.T) {
 		_ = os.RemoveAll(temporaryDir)
 	})
 
+	c := config.CurrentConfig()
 	t.Run("adds files to bundle", func(t *testing.T) {
-		snykCodeService := &FakeSnykCodeClient{}
-		var bundleUploader = BundleUploader{SnykCode: snykCodeService, instrumentor: NewCodeInstrumentor()}
+		snykCodeService := &FakeSnykCodeClient{C: c}
+		var bundleUploader = BundleUploader{SnykCode: snykCodeService, instrumentor: NewCodeInstrumentor(), c: c}
 		documentURI, bundleFile := createTempFileInDir(t, "bundleDoc.java", 10, temporaryDir)
 		bundleFileMap := map[string]BundleFile{}
 		bundleFileMap[documentURI] = bundleFile
 
 		_, err := bundleUploader.Upload(context.Background(),
-			Bundle{SnykCode: snykCodeService, missingFiles: []string{documentURI}},
+			Bundle{SnykCode: snykCodeService, missingFiles: []string{documentURI}, logger: c.Logger()},
 			bundleFileMap)
 
 		assert.Equal(t, 1, snykCodeService.TotalBundleCount)
@@ -51,8 +54,8 @@ func Test_Bundler_Upload(t *testing.T) {
 	})
 
 	t.Run("when loads of files breaks down in 4MB bundles", func(t *testing.T) {
-		snykCodeService := &FakeSnykCodeClient{}
-		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: NewCodeInstrumentor()}
+		snykCodeService := &FakeSnykCodeClient{C: c}
+		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: NewCodeInstrumentor(), c: c}
 
 		bundleFileMap := map[string]BundleFile{}
 		var missingFiles []string
@@ -73,7 +76,7 @@ func Test_Bundler_Upload(t *testing.T) {
 		missingFiles = append(missingFiles, path)
 
 		_, err := bundler.Upload(context.Background(),
-			Bundle{SnykCode: snykCodeService, missingFiles: missingFiles},
+			Bundle{SnykCode: snykCodeService, missingFiles: missingFiles, logger: c.Logger()},
 			bundleFileMap)
 
 		assert.True(t, snykCodeService.HasExtendedBundle)
@@ -90,9 +93,10 @@ func createTempFileInDir(t *testing.T, name string, size int, temporaryDir strin
 }
 
 func Test_IsSupportedLanguage(t *testing.T) {
+	c := testutil.UnitTest(t)
 	const unsupportedFile = "C:\\some\\path\\Test.rs"
-	snykCodeMock := &FakeSnykCodeClient{}
-	bundler := NewBundler(snykCodeMock, NewCodeInstrumentor())
+	snykCodeMock := &FakeSnykCodeClient{C: c}
+	bundler := NewBundler(c, snykCodeMock, NewCodeInstrumentor())
 
 	t.Run("should return true for supported languages", func(t *testing.T) {
 		path := "C:\\some\\path\\Test.java"
@@ -115,6 +119,7 @@ func Test_IsSupportedLanguage(t *testing.T) {
 }
 
 func Test_IsSupported_ConfigFile(t *testing.T) {
+	c := testutil.UnitTest(t)
 	configFilesFromFiltersEndpoint := []string{
 		".supportedConfigFile",
 		".snyk",
@@ -128,7 +133,7 @@ func Test_IsSupported_ConfigFile(t *testing.T) {
 	snykCodeMock := &FakeSnykCodeClient{
 		ConfigFiles: configFilesFromFiltersEndpoint,
 	}
-	bundler := NewBundler(snykCodeMock, NewCodeInstrumentor())
+	bundler := NewBundler(c, snykCodeMock, NewCodeInstrumentor())
 	dir, _ := os.Getwd()
 
 	t.Run("should return true for supported config files", func(t *testing.T) {

@@ -34,27 +34,30 @@ import (
 )
 
 func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	notifier := notification.NewNotifier()
-	provider := snyk.NewFakeCliAuthenticationProvider()
+	provider := snyk.NewFakeCliAuthenticationProvider(c)
 	hoverService := hover.NewFakeHoverService()
 	provider.IsAuthenticated = true
 	scanNotifier := snyk.NewMockScanNotifier()
 	authenticationService := snyk.NewAuthenticationService(
+		c,
 		provider,
-		ux.NewTestAnalytics(),
+		ux.NewTestAnalytics(c),
 		error_reporting.NewTestErrorReporter(),
 		notifier,
 	)
 	cmd := logoutCommand{
 		command:     snyk.CommandData{CommandId: snyk.LogoutCommand},
 		authService: authenticationService,
+		logger:      c.Logger(),
 	}
 
 	scanner := snyk.NewTestScanner()
 
-	w := workspace.New(performance.NewInstrumentor(), scanner, hoverService, scanNotifier, notifier)
+	w := workspace.New(c, performance.NewInstrumentor(), scanner, hoverService, scanNotifier, notifier)
 	folder := workspace.NewFolder(
+		c,
 		t.TempDir(),
 		t.Name(),
 		scanner,

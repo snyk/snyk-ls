@@ -21,7 +21,6 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -38,19 +37,16 @@ type Initializer struct {
 	analytics             ux.Analytics
 	notifier              noti.Notifier
 	mutex                 sync.Mutex
+	c                     *config.Config
 }
 
-func NewInitializer(
-	authenticator snyk.AuthenticationService,
-	errorReporter error_reporting.ErrorReporter,
-	analytics ux.Analytics,
-	notifier noti.Notifier,
-) *Initializer {
+func NewInitializer(c *config.Config, authenticator snyk.AuthenticationService, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics, notifier noti.Notifier) *Initializer {
 	return &Initializer{
 		authenticationService: authenticator,
 		errorReporter:         errorReporter,
 		analytics:             analytics,
 		notifier:              notifier,
+		c:                     c,
 	}
 }
 
@@ -60,10 +56,10 @@ func (i *Initializer) Init() error {
 	const errorMessage = "Auth Initializer failed to authenticate."
 	c := config.CurrentConfig()
 	if c.NonEmptyToken() {
-		cmd, _ := command.CreateFromCommandData(snyk.CommandData{CommandId: snyk.GetActiveUserCommand}, nil, i.authenticationService, nil, i.notifier, nil, nil, nil)
+		cmd, _ := command.CreateFromCommandData(c, snyk.CommandData{CommandId: snyk.GetActiveUserCommand}, nil, i.authenticationService, nil, i.notifier, nil, nil, nil)
 		user, _ := cmd.Execute(context.Background())
 		if user != nil {
-			log.Info().Str("method", "auth.initializer.init").Msg("Skipping authentication - user is already authenticated")
+			c.Logger().Info().Str("method", "auth.initializer.init").Msg("Skipping authentication - user is already authenticated")
 			return nil
 		}
 
@@ -82,7 +78,7 @@ func (i *Initializer) Init() error {
 	// automatic authentication enabled && token is empty
 	err := i.authenticate(i.authenticationService, errorMessage)
 	if err != nil {
-		log.Err(err).Str("method", "auth.initializer.init").Msg("failed to authenticate")
+		c.Logger().Err(err).Str("method", "auth.initializer.init").Msg("failed to authenticate")
 		i.notifier.SendError(err)
 		i.errorReporter.CaptureError(err)
 		return err
@@ -100,7 +96,7 @@ func (i *Initializer) authenticate(authenticationService snyk.AuthenticationServ
 		}
 		i.notifier.SendError(err)
 		err = errors.Wrap(err, errorMessage)
-		log.Err(err).Msg(errorMessage)
+		i.c.Logger().Err(err).Msg(errorMessage)
 		i.errorReporter.CaptureError(err)
 		return err
 	}
@@ -109,7 +105,7 @@ func (i *Initializer) authenticate(authenticationService snyk.AuthenticationServ
 
 func (i *Initializer) handleNotAuthenticatedAndManualAuthActive() error {
 	msg := "Skipping scan - user is not authenticated and automatic authentication is disabled"
-	log.Info().Msg(msg)
+	i.c.Logger().Info().Msg(msg)
 
 	// If the user is not authenticated and auto-authentication is disabled, return an error to indicate the user
 	// could not be authenticated and the scan cannot start

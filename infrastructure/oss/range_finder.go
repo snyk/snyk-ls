@@ -20,8 +20,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
@@ -32,11 +30,13 @@ type RangeFinder interface {
 type DefaultFinder struct {
 	path        string
 	fileContent []byte
+	c           *config.Config
 }
 
 func findRange(issue ossIssue, path string, fileContent []byte) snyk.Range {
 	var foundRange snyk.Range
 	var finder RangeFinder
+	c := config.CurrentConfig()
 
 	if len(fileContent) == 0 {
 		return snyk.Range{Start: snyk.Position{}, End: snyk.Position{}}
@@ -45,15 +45,15 @@ func findRange(issue ossIssue, path string, fileContent []byte) snyk.Range {
 	switch issue.PackageManager {
 	case "npm":
 		if packageScanSupportedExtensions[filepath.Ext(path)] {
-			finder = &htmlRangeFinder{path: path, fileContent: fileContent, config: config.CurrentConfig()}
+			finder = &htmlRangeFinder{path: path, fileContent: fileContent, config: c}
 		} else {
 			finder = &NpmRangeFinder{uri: path, fileContent: fileContent}
 		}
 	case "maven":
 		if strings.HasSuffix(path, "pom.xml") {
-			finder = &mavenRangeFinder{path: path, fileContent: fileContent}
+			finder = &mavenRangeFinder{path: path, fileContent: fileContent, c: c}
 		} else {
-			finder = &DefaultFinder{path: path, fileContent: fileContent}
+			finder = &DefaultFinder{path: path, fileContent: fileContent, c: c}
 		}
 	default:
 		finder = &DefaultFinder{path: path, fileContent: fileContent}
@@ -77,7 +77,7 @@ func (f *DefaultFinder) find(issue ossIssue) snyk.Range {
 				Start: snyk.Position{Line: i, Character: strings.Index(line, searchPackage)},
 				End:   snyk.Position{Line: i, Character: endChar},
 			}
-			log.Debug().Str("package", searchPackage).
+			f.c.Logger().Debug().Str("package", searchPackage).
 				Str("version", version).
 				Str("issueId", issue.Id).
 				Str("path", f.path).

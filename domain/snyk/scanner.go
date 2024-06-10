@@ -21,8 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
@@ -65,6 +63,7 @@ type DelegatingConcurrentScanner struct {
 	snykApiClient snyk_api.SnykApiClient
 	authService   AuthenticationService
 	notifier      notification.Notifier
+	c             *config.Config
 }
 
 func (sc *DelegatingConcurrentScanner) Issue(key string) Issue {
@@ -172,6 +171,7 @@ func (sc *DelegatingConcurrentScanner) ScanPackages(ctx context.Context, config 
 }
 
 func NewDelegatingScanner(
+	c *config.Config,
 	initializer initialize.Initializer,
 	instrumentor performance.Instrumentor,
 	analytics ux2.Analytics,
@@ -190,6 +190,7 @@ func NewDelegatingScanner(
 		scanners:      scanners,
 		authService:   authService,
 		notifier:      notifier,
+		c:             c,
 	}
 }
 
@@ -199,7 +200,7 @@ func (sc *DelegatingConcurrentScanner) GetInlineValues(path string, myRange Rang
 		if s, ok := scanner.(InlineValueProvider); ok {
 			inlineValues, err := s.GetInlineValues(path, myRange)
 			if err != nil {
-				log.Warn().Str("method", "DelegatingConcurrentScanner.getInlineValues").Err(err).
+				sc.c.Logger().Warn().Str("method", "DelegatingConcurrentScanner.getInlineValues").Err(err).
 					Msgf("couldn't get inline values from scanner %s", scanner.Product())
 				continue
 			}
@@ -212,7 +213,7 @@ func (sc *DelegatingConcurrentScanner) GetInlineValues(path string, myRange Rang
 func (sc *DelegatingConcurrentScanner) Init() error {
 	err := sc.initializer.Init()
 	if err != nil {
-		log.Error().Err(err).Msg("Scanner initialization error")
+		sc.c.Logger().Error().Err(err).Msg("Scanner initialization error")
 		return err
 	}
 	return nil
@@ -248,7 +249,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	go func() { // This goroutine will listen to token changes and cancel the scans using a context
 		select {
 		case <-tokenChangeChannel:
-			log.Info().Msg("credentials have changed, canceling scan")
+			logger.Info().Msg("credentials have changed, canceling scan")
 			cancelFunc()
 			return
 		case <-done: // The done channel prevents the goroutine from leaking after the scan is finished
@@ -257,7 +258,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	}()
 
 	if ctx.Err() != nil {
-		log.Info().Msg("Scan was canceled")
+		logger.Info().Msg("Scan was canceled")
 		return
 	}
 
@@ -280,7 +281,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				defer waitGroup.Done()
 				span := sc.instrumentor.NewTransaction(context.WithValue(ctx, s.Product(), s), string(s.Product()), method)
 				defer sc.instrumentor.Finish(span)
-				log.Info().Msgf("Scanning %s with %T: STARTED", path, s)
+				logger.Info().Msgf("Scanning %s with %T: STARTED", path, s)
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
 
 				scanSpan := sc.instrumentor.StartSpan(span.Context(), "scan")
@@ -297,15 +298,15 @@ func (sc *DelegatingConcurrentScanner) Scan(
 					Path:              folderPath,
 				}
 				processResults(data)
-				log.Info().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
+				logger.Info().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
 			}(scanner)
 		} else {
-			log.Debug().Msgf("Skipping scan with %T because it is not enabled", scanner)
+			logger.Debug().Msgf("Skipping scan with %T because it is not enabled", scanner)
 		}
 	}
-	log.Debug().Msgf("All product scanners started for %s", path)
+	logger.Debug().Msgf("All product scanners started for %s", path)
 	waitGroup.Wait()
-	log.Debug().Msgf("All product scanners finished for %s", path)
+	c.Logger().Debug().Msgf("All product scanners finished for %s", path)
 	sc.notifier.Send(lsp.InlineValueRefresh{})
 	sc.notifier.Send(lsp.CodeLensRefresh{})
 	// TODO: handle learn actions centrally instead of in each scanner

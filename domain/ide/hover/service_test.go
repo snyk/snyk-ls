@@ -23,12 +23,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func setupFakeHover() string {
-	target := NewDefaultService(ux2.NewTestAnalytics()).(*DefaultHoverService)
+	c := config.CurrentConfig()
+	target := NewDefaultService(c, ux2.NewTestAnalytics(c)).(*DefaultHoverService)
 	fakeHover := []Hover[Context]{
 		{Range: snyk.Range{
 			Start: snyk.Position{Line: 3, Character: 56},
@@ -45,7 +48,9 @@ func setupFakeHover() string {
 }
 
 func Test_registerHovers(t *testing.T) {
-	target := NewDefaultService(ux2.NewTestAnalytics()).(*DefaultHoverService)
+	c := testutil.UnitTest(t)
+
+	target := NewDefaultService(c, ux2.NewTestAnalytics(c)).(*DefaultHoverService)
 	hover, path := fakeDocumentHover()
 
 	target.registerHovers(hover)
@@ -57,7 +62,8 @@ func Test_registerHovers(t *testing.T) {
 }
 
 func Test_DeleteHover(t *testing.T) {
-	target := NewDefaultService(ux2.NewTestAnalytics()).(*DefaultHoverService)
+	c := testutil.UnitTest(t)
+	target := NewDefaultService(c, ux2.NewTestAnalytics(c)).(*DefaultHoverService)
 	documentUri := setupFakeHover()
 	target.DeleteHover(documentUri)
 
@@ -66,7 +72,8 @@ func Test_DeleteHover(t *testing.T) {
 }
 
 func Test_ClearAllHovers(t *testing.T) {
-	target := NewDefaultService(ux2.NewTestAnalytics()).(*DefaultHoverService)
+	c := testutil.UnitTest(t)
+	target := NewDefaultService(c, ux2.NewTestAnalytics(c)).(*DefaultHoverService)
 	documentUri := setupFakeHover()
 	target.ClearAllHovers()
 
@@ -75,7 +82,8 @@ func Test_ClearAllHovers(t *testing.T) {
 }
 
 func Test_GetHoverMultiline(t *testing.T) {
-	target := NewDefaultService(ux2.NewTestAnalytics()).(*DefaultHoverService)
+	c := testutil.UnitTest(t)
+	target := NewDefaultService(c, ux2.NewTestAnalytics(c)).(*DefaultHoverService)
 
 	tests := []struct {
 		hoverDetails []Hover[Context]
@@ -157,8 +165,9 @@ func Test_GetHoverMultiline(t *testing.T) {
 }
 
 func Test_TracksAnalytics(t *testing.T) {
-	analytics := ux2.NewTestAnalytics()
-	target := NewDefaultService(analytics).(*DefaultHoverService)
+	c := testutil.UnitTest(t)
+	analytics := ux2.NewTestAnalytics(c)
+	target := NewDefaultService(c, analytics).(*DefaultHoverService)
 
 	path := "path/to/package.json"
 
@@ -188,7 +197,8 @@ func Test_TracksAnalytics(t *testing.T) {
 }
 
 func Test_SendingHovers_AfterClearAll_DoesNotBlock(t *testing.T) {
-	service := NewDefaultService(ux2.NewTestAnalytics()).(*DefaultHoverService)
+	c := testutil.UnitTest(t)
+	service := NewDefaultService(c, ux2.NewTestAnalytics(c)).(*DefaultHoverService)
 	service.ClearAllHovers()
 	hover, _ := fakeDocumentHover()
 

@@ -22,12 +22,15 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestCreateDependencyTree(t *testing.T) {
+	c := testutil.UnitTest(t)
 	var testPath, _ = filepath.Abs("testdata/pom.xml")
 	var testContent, _ = os.ReadFile(testPath)
-	parser := Parser{}
+	parser := Parser{config: c}
 	tree := parser.Parse(string(testContent), testPath)
 	children := tree.Root.Children
 	assert.Len(t, children, 2, "Should have extracted 2 deps from pom.xml")

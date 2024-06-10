@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atotto/clipboard"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
@@ -34,9 +33,10 @@ import (
 
 func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) {
 	loc, _ := setupServerWithCustomDI(t, false)
+	c := config.CurrentConfig()
 
 	scanner := &snyk.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))
+	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))
 
 	params := lsp.ExecuteCommandParams{Command: snyk.WorkspaceScanCommand}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -50,9 +50,10 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 
 func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceipt(t *testing.T) {
 	loc, _ := setupServerWithCustomDI(t, false)
+	c := config.CurrentConfig()
 
 	scanner := &snyk.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))
+	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))
 
 	params := lsp.ExecuteCommandParams{Command: snyk.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -66,11 +67,12 @@ func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceip
 
 func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostics(t *testing.T) {
 	loc, _ := setupServerWithCustomDI(t, false)
+	c := config.CurrentConfig()
 
 	scannerForFolder := snyk.NewTestScanner()
 	scannerForDontClear := snyk.NewTestScanner()
-	folder := workspace.NewFolder("dummy", "dummy", scannerForFolder, di.HoverService(), di.ScanNotifier(), di.Notifier())
-	dontClear := workspace.NewFolder("dontclear", "dontclear", scannerForDontClear, di.HoverService(), di.ScanNotifier(), di.Notifier())
+	folder := workspace.NewFolder(c, "dummy", "dummy", scannerForFolder, di.HoverService(), di.ScanNotifier(), di.Notifier())
+	dontClear := workspace.NewFolder(c, "dontclear", "dontclear", scannerForDontClear, di.HoverService(), di.ScanNotifier(), di.Notifier())
 
 	dontClearIssuePath := "dontclear/file.txt"
 	scannerForDontClear.AddTestIssue(snyk.Issue{AffectedFilePath: dontClearIssuePath})
@@ -98,9 +100,10 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 
 func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 	loc, jsonRPCRecorder := setupServerWithCustomDI(t, false)
+	c := config.CurrentConfig()
 
 	scanner := &snyk.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder("dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))
+	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))
 	// explicitly enable folder trust which is disabled by default in tests
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 
@@ -149,36 +152,12 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	assert.Equal(t, 1, len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated")))
 }
 
-func Test_executeCommand_shouldCopyAuthURLToClipboard(t *testing.T) {
-	t.Skip("This test uses global state (the clipboard) and is thus not reliable")
-	loc, _ := setupServer(t)
-
-	// reset to use real service
-	command.SetService(command.NewService(
-		di.AuthenticationService(),
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-	))
-
-	authenticationMock := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
-	params := lsp.ExecuteCommandParams{Command: snyk.CopyAuthLinkCommand}
-
-	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
-	if err != nil {
-		t.Fatal(err)
-	}
-	actualURL, _ := clipboard.ReadAll()
-
-	assert.Equal(t, authenticationMock.ExpectedAuthURL, actualURL)
-}
-
 func Test_TrustWorkspaceFolders(t *testing.T) {
 	t.Run("Doesn't mutate trusted folders, if trusted folders disabled", func(t *testing.T) {
 		loc, _ := setupServerWithCustomDI(t, false)
-		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier()))
+		c := config.CurrentConfig()
+
+		workspace.Get().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier()))
 
 		params := lsp.ExecuteCommandParams{Command: snyk.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -191,9 +170,10 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 	t.Run("Updates trusted workspace folders", func(t *testing.T) {
 		loc, _ := setupServerWithCustomDI(t, false)
+		c := config.CurrentConfig()
 
-		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier()))
-		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder2", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier()))
+		workspace.Get().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier()))
+		workspace.Get().AddFolder(workspace.NewFolder(c, "/path/to/folder2", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier()))
 		config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 
 		params := lsp.ExecuteCommandParams{Command: snyk.TrustWorkspaceFoldersCommand}
@@ -208,8 +188,9 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 	t.Run("Existing trusted workspace folders are not removed", func(t *testing.T) {
 		loc, _ := setupServerWithCustomDI(t, false)
+		c := config.CurrentConfig()
 
-		workspace.Get().AddFolder(workspace.NewFolder("/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier()))
+		workspace.Get().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier()))
 		config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 		config.CurrentConfig().SetTrustedFolders([]string{"/path/to/folder2"})
 

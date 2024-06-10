@@ -25,8 +25,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/snyk/snyk-ls/application/config"
 )
 
@@ -38,6 +36,7 @@ const (
 
 type SnykApiClientImpl struct {
 	httpClientFunc func() *http.Client
+	c              *config.Config
 }
 
 type LocalCodeEngine struct {
@@ -82,9 +81,10 @@ func (e *SnykApiError) StatusCode() int {
 	return e.statusCode
 }
 
-func NewSnykApiClient(client func() *http.Client) SnykApiClient {
+func NewSnykApiClient(c *config.Config, client func() *http.Client) SnykApiClient {
 	s := SnykApiClientImpl{
 		httpClientFunc: client,
+		c:              c,
 	}
 	return &s
 }
@@ -161,7 +161,7 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 }
 
 func (s *SnykApiClientImpl) doCall(method string, endpointPath string, requestBody []byte) ([]byte, error) {
-	host := config.CurrentConfig().SnykApi()
+	host := s.c.SnykApi()
 	b := bytes.NewBuffer(requestBody)
 	req, requestErr := http.NewRequest(method, host+endpointPath, b)
 	if requestErr != nil {
@@ -170,7 +170,7 @@ func (s *SnykApiClientImpl) doCall(method string, endpointPath string, requestBo
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-snyk-ide", "snyk-ls-"+config.Version)
 
-	log.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
+	s.c.Logger().Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
 	response, err := s.httpClientFunc().Do(req)
 	if err != nil {
 		return nil, NewSnykApiError(err.Error(), 0)
@@ -178,7 +178,7 @@ func (s *SnykApiClientImpl) doCall(method string, endpointPath string, requestBo
 	defer func() {
 		closeErr := response.Body.Close()
 		if closeErr != nil {
-			log.Err(closeErr).Msg("Couldn't close response body in call to Snyk API")
+			s.c.Logger().Err(closeErr).Msg("Couldn't close response body in call to Snyk API")
 		}
 	}()
 
@@ -188,7 +188,7 @@ func (s *SnykApiClientImpl) doCall(method string, endpointPath string, requestBo
 	}
 
 	responseBody, readErr := io.ReadAll(response.Body)
-	log.Trace().Str("response.Status", response.Status).Str("responseBody",
+	s.c.Logger().Trace().Str("response.Status", response.Status).Str("responseBody",
 		string(responseBody)).Msg("RECEIVED FROM REMOTE")
 	if readErr != nil {
 		return nil, NewSnykApiError(readErr.Error(), 0)

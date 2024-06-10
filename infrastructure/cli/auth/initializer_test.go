@@ -36,14 +36,15 @@ func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
 func getAutoAuthenticationTest(autoAuthentication bool, expectError bool) func(t *testing.T) {
 	return func(t *testing.T) {
 		// Arrange
-		config.CurrentConfig().SetToken("")
-		config.CurrentConfig().SetAutomaticAuthentication(autoAuthentication)
-		analytics := ux2.NewTestAnalytics()
+		c := config.CurrentConfig()
+		c.SetToken("")
+		c.SetAutomaticAuthentication(autoAuthentication)
+		analytics := ux2.NewTestAnalytics(c)
 
-		provider := snyk.NewFakeCliAuthenticationProvider()
+		provider := snyk.NewFakeCliAuthenticationProvider(c)
 		notifier := notification.NewNotifier()
-		authenticator := snyk.NewAuthenticationService(provider, analytics, errorreporting.NewTestErrorReporter(), notifier)
-		initializer := NewInitializer(authenticator, errorreporting.NewTestErrorReporter(), analytics, notifier)
+		authenticator := snyk.NewAuthenticationService(c, provider, analytics, errorreporting.NewTestErrorReporter(), notifier)
+		initializer := NewInitializer(c, authenticator, errorreporting.NewTestErrorReporter(), analytics, notifier)
 
 		// Act
 		err := initializer.Init()

@@ -36,7 +36,6 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/denisbrodbeck/machineid"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/subosito/gotenv"
 	"github.com/xtgo/uuid"
 	"golang.org/x/oauth2"
@@ -85,10 +84,11 @@ type CliSettings struct {
 	AdditionalOssParameters []string
 	cliPath                 string
 	cliPathAccessMutex      sync.Mutex
+	C                       *Config
 }
 
-func NewCliSettings() *CliSettings {
-	settings := &CliSettings{}
+func NewCliSettings(c *Config) *CliSettings {
+	settings := &CliSettings{C: c}
 	settings.SetPath("")
 	return settings
 }
@@ -99,7 +99,7 @@ func (c *CliSettings) Installed() bool {
 	stat, err := c.CliPathFileInfo()
 	isDirectory := stat != nil && stat.IsDir()
 	if isDirectory {
-		log.Warn().Msgf("CLI path (%s) refers to a directory and not a file", c.cliPath)
+		c.C.Logger().Warn().Msgf("CLI path (%s) refers to a directory and not a file", c.cliPath)
 	}
 	return c.cliPath != "" && err == nil && !isDirectory
 }
@@ -107,7 +107,7 @@ func (c *CliSettings) Installed() bool {
 func (c *CliSettings) CliPathFileInfo() (os.FileInfo, error) {
 	stat, err := os.Stat(c.cliPath)
 	if err == nil {
-		log.Debug().Str("method", "config.cliSettings.Installed").Msgf("CLI path: %s, Size: %d, Perm: %s",
+		c.C.Logger().Debug().Str("method", "config.cliSettings.Installed").Msgf("CLI path: %s, Size: %d, Perm: %s",
 			c.cliPath,
 			stat.Size(),
 			stat.Mode().Perm())
@@ -141,7 +141,7 @@ func (c *CliSettings) DefaultBinaryInstallPath() string {
 	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
 	err := os.MkdirAll(lsPath, 0755)
 	if err != nil {
-		log.Err(err).Str("method", "lsPath").Msgf("couldn't create %s", lsPath)
+		c.C.Logger().Err(err).Str("method", "lsPath").Msgf("couldn't create %s", lsPath)
 		return ""
 	}
 	return lsPath
@@ -216,8 +216,8 @@ func IsDevelopment() bool {
 func New() *Config {
 	c := &Config{}
 	c.scrubbingDict = frameworkLogging.ScrubbingDict{}
-	c.logger = &log.Logger
-	c.cliSettings = NewCliSettings()
+	c.logger = getNewScrubbingLogger(c)
+	c.cliSettings = NewCliSettings(c)
 	c.automaticAuthentication = true
 	c.configFile = ""
 	c.format = "md"
@@ -226,7 +226,7 @@ func New() *Config {
 	c.isSnykIacEnabled.Set(true)
 	c.manageBinariesAutomatically.Set(true)
 	c.logPath = ""
-	c.snykCodeAnalysisTimeout = snykCodeAnalysisTimeoutFromEnv()
+	c.snykCodeAnalysisTimeout = c.snykCodeAnalysisTimeoutFromEnv()
 	c.token = ""
 	c.trustedFoldersFeatureEnabled = true
 	c.automaticScanning = true
@@ -243,14 +243,8 @@ func New() *Config {
 }
 
 func initWorkFlowEngine(c *Config) {
-	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(logging.New(nil), c.scrubbingDict)
-	writer := c.getConsoleWriter(c.scrubbingWriter)
-	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
-	log.Logger = logger
-	c.logger = &logger
-
 	conf := configuration.NewInMemory()
-	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(&logger))
+	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
 	c.storage = NewStorage()
 	conf.SetStorage(c.storage)
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
@@ -258,13 +252,20 @@ func initWorkFlowEngine(c *Config) {
 
 	err := localworkflows.InitWhoAmIWorkflow(c.engine)
 	if err != nil {
-		log.Err(err).Msg("unable to initialize WhoAmI workflow")
+		c.Logger().Err(err).Msg("unable to initialize WhoAmI workflow")
 	}
 
 	err = c.engine.Init()
 	if err != nil {
-		log.Warn().Err(err).Msg("unable to initialize workflow engine")
+		c.Logger().Warn().Err(err).Msg("unable to initialize workflow engine")
 	}
+}
+
+func getNewScrubbingLogger(c *Config) *zerolog.Logger {
+	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(logging.New(nil), c.scrubbingDict)
+	writer := c.getConsoleWriter(c.scrubbingWriter)
+	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
+	return &logger
 }
 
 func (c *Config) AddBinaryLocationsToPath(searchDirectories []string) {
@@ -276,7 +277,7 @@ func (c *Config) AddBinaryLocationsToPath(searchDirectories []string) {
 func (c *Config) determineDeviceId() string {
 	id, machineErr := machineid.ProtectedID("Snyk-LS")
 	if machineErr != nil {
-		log.Err(machineErr).Str("method", "config.New").Msg("cannot retrieve machine id")
+		c.Logger().Err(machineErr).Str("method", "config.New").Msg("cannot retrieve machine id")
 		if c.token != "" {
 			return util.Hash([]byte(c.token))
 		} else {
@@ -307,7 +308,7 @@ func (c *Config) Load() {
 func (c *Config) loadFile(fileName string) {
 	file, err := os.Open(fileName)
 	if err != nil {
-		log.Info().Str("method", "loadFile").Msg("Couldn't load " + fileName)
+		c.Logger().Info().Str("method", "loadFile").Msg("Couldn't load " + fileName)
 		return
 	}
 	defer func(file *os.File) { _ = file.Close() }(file)
@@ -317,7 +318,7 @@ func (c *Config) loadFile(fileName string) {
 		if !exists {
 			err := os.Setenv(k, v)
 			if err != nil {
-				log.Warn().Str("method", "loadFile").Msg("Couldn't set environment variable " + k)
+				c.Logger().Warn().Str("method", "loadFile").Msg("Couldn't set environment variable " + k)
 			}
 		} else {
 			// add to path, don't ignore additional paths
@@ -327,7 +328,7 @@ func (c *Config) loadFile(fileName string) {
 		}
 	}
 	c.updatePath(".")
-	log.Debug().Str("fileName", fileName).Msg("loaded.")
+	c.Logger().Debug().Str("fileName", fileName).Msg("loaded.")
 }
 
 func (c *Config) NonEmptyToken() bool {
@@ -399,17 +400,18 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 		snykApiUrl = DefaultSnykApiUrl
 	}
 
+	c.Engine().GetConfiguration().Set(configuration.API_URL, snykApiUrl)
+
 	if snykApiUrl != c.snykApiUrl {
 		c.snykApiUrl = snykApiUrl
 
 		// Update Code API endpoint
 		snykCodeApiUrl, err := getCodeApiUrlFromCustomEndpoint(snykApiUrl)
 		if err != nil {
-			log.Error().Err(err).Msg("Couldn't obtain Snyk Code API url from CLI endpoint.")
+			c.Logger().Error().Err(err).Msg("Couldn't obtain Snyk Code API url from CLI endpoint.")
 		}
 
 		c.SetSnykCodeApi(snykCodeApiUrl)
-		c.Engine().GetConfiguration().Set(configuration.API_URL, c.SnykApi())
 		return true
 	}
 	return false
@@ -449,7 +451,7 @@ func (c *Config) SetSeverityFilter(severityFilter lsp.SeverityFilter) bool {
 	}
 
 	filterModified := c.filterSeverity != severityFilter
-	log.Debug().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter:")
+	c.Logger().Debug().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter:")
 	c.filterSeverity = severityFilter
 	return filterModified
 }
@@ -466,12 +468,12 @@ func (c *Config) SetToken(token string) {
 	isOauthToken := err == nil
 	conf := c.engine.GetConfiguration()
 	if !isOauthToken && conf.GetString(configuration.AUTHENTICATION_TOKEN) != token {
-		log.Info().Msg("Setting legacy authentication in GAF")
+		c.Logger().Info().Msg("Setting legacy authentication in GAF")
 		conf.Set(configuration.AUTHENTICATION_TOKEN, token)
 	}
 
 	if isOauthToken && conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN) != token {
-		log.Info().Err(err).Msg("setting oauth authentication in GAF")
+		c.Logger().Info().Err(err).Msg("setting oauth authentication in GAF")
 		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, token)
 	}
 
@@ -490,7 +492,7 @@ func (c *Config) SetToken(token string) {
 		case channel <- token:
 		default:
 			// Using select and a default case avoids deadlock when the channel is full
-			log.Warn().Msg("Cannot send cancellation to channel - channel is full")
+			c.Logger().Warn().Msg("Cannot send cancellation to channel - channel is full")
 		}
 	}
 	c.tokenChangeChannels = []chan string{}
@@ -552,9 +554,9 @@ func (c *Config) ConfigureLogging(server lsp.Server) {
 	// overwrite a potential already existing writer, so we have the latest settings
 	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(writers...), c.scrubbingDict)
 	writer := c.getConsoleWriter(c.scrubbingWriter)
-	log.Logger = zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
-	c.engine.SetLogger(&log.Logger)
-	c.logger = &log.Logger
+	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
+	c.logger = &logger
+	c.engine.SetLogger(&logger)
 }
 
 func (c *Config) getConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
@@ -578,9 +580,8 @@ func (c *Config) getConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
 
 // DisableLoggingToFile closes the open log file and sets the global logger back to it's default
 func (c *Config) DisableLoggingToFile() {
-	log.Info().Msgf("Disabling file logging to %v", c.logPath)
+	c.Logger().Info().Msgf("Disabling file logging to %v", c.logPath)
 	c.logPath = ""
-	log.Logger = zerolog.New(os.Stderr).With().Timestamp().Logger()
 	if c.logFile != nil {
 		_ = c.logFile.Close()
 	}
@@ -616,7 +617,7 @@ func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, 
 	return snykApiUrl.String(), nil
 }
 
-func snykCodeAnalysisTimeoutFromEnv() time.Duration {
+func (c *Config) snykCodeAnalysisTimeoutFromEnv() time.Duration {
 	var snykCodeTimeout time.Duration
 	var err error
 	env := os.Getenv(snykCodeTimeoutKey)
@@ -625,7 +626,7 @@ func snykCodeAnalysisTimeoutFromEnv() time.Duration {
 	} else {
 		snykCodeTimeout, err = time.ParseDuration(env)
 		if err != nil {
-			log.Err(err).Msg("couldn't convert timeout env variable to integer")
+			c.Logger().Err(err).Msg("couldn't convert timeout env variable to integer")
 		}
 	}
 	return snykCodeTimeout
@@ -637,10 +638,10 @@ func (c *Config) updatePath(pathExtension string) {
 	}
 	err := os.Setenv("PATH", os.Getenv("PATH")+pathListSeparator+pathExtension)
 	c.path += pathListSeparator + pathExtension
-	log.Debug().Str("method", "updatePath").Msg("updated path with " + pathExtension)
-	log.Debug().Str("method", "updatePath").Msgf("PATH = %s", os.Getenv("PATH"))
+	c.Logger().Debug().Str("method", "updatePath").Msg("updated path with " + pathExtension)
+	c.Logger().Debug().Str("method", "updatePath").Msgf("PATH = %s", os.Getenv("PATH"))
 	if err != nil {
-		log.Warn().Str("method", "loadFile").Msg("Couldn't update path ")
+		c.Logger().Warn().Str("method", "loadFile").Msg("Couldn't update path ")
 	}
 }
 
@@ -885,12 +886,12 @@ func (c *Config) TokenAsOAuthToken() (oauth2.Token, error) {
 	var oauthToken oauth2.Token
 	if _, err := uuid.Parse(c.Token()); err == nil {
 		msg := "creds are legacy, not oauth"
-		log.Trace().Msgf(msg)
+		c.Logger().Trace().Msgf(msg)
 		return oauthToken, fmt.Errorf(msg)
 	}
 	err := json.Unmarshal([]byte(c.Token()), &oauthToken)
 	if err != nil {
-		log.Trace().Err(err).Msg("unable to unmarshal oauth creds")
+		c.Logger().Trace().Err(err).Msg("unable to unmarshal oauth creds")
 		return oauthToken, err
 	}
 	return oauthToken, nil

@@ -20,8 +20,6 @@ import (
 	"context"
 	"reflect"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -47,15 +45,17 @@ type authenticationService struct {
 	analytics              ux.Analytics
 	errorReporter          error_reporting.ErrorReporter
 	notifier               noti.Notifier
+	c                      *config.Config
 }
 
 func NewAuthenticationService(
+	c *config.Config,
 	authenticationProvider AuthenticationProvider,
 	analytics ux.Analytics,
 	errorReporter error_reporting.ErrorReporter,
 	notifier noti.Notifier,
 ) AuthenticationService {
-	return &authenticationService{authenticationProvider, analytics, errorReporter, notifier}
+	return &authenticationService{authenticationProvider, analytics, errorReporter, notifier, c}
 }
 
 func (a *authenticationService) Provider() AuthenticationProvider {
@@ -65,7 +65,7 @@ func (a *authenticationService) Provider() AuthenticationProvider {
 func (a *authenticationService) Authenticate(ctx context.Context) (string, error) {
 	token, err := a.authenticationProvider.Authenticate(ctx)
 	if token == "" || err != nil {
-		log.Error().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.Provider()))
+		a.c.Logger().Error().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.Provider()))
 		return "", err
 	}
 	a.UpdateCredentials(token, true)
@@ -90,7 +90,7 @@ func (a *authenticationService) UpdateCredentials(newToken string, sendNotificat
 func (a *authenticationService) Logout(ctx context.Context) {
 	err := a.authenticationProvider.ClearAuthentication(ctx)
 	if err != nil {
-		log.Error().Err(err).Str("method", "Logout").Msg("Failed to log out.")
+		a.c.Logger().Error().Err(err).Str("method", "Logout").Msg("Failed to log out.")
 		a.errorReporter.CaptureError(err)
 		return
 	}
@@ -110,11 +110,11 @@ func (a *authenticationService) IsAuthenticated() (bool, error) {
 	user, getActiveUserErr := a.authenticationProvider.GetCheckAuthenticationFunction()()
 
 	if getActiveUserErr != nil {
-		log.Err(getActiveUserErr).Str("method", "IsAuthenticated").Msg("Failed to get active user")
+		a.c.Logger().Err(getActiveUserErr).Str("method", "IsAuthenticated").Msg("Failed to get active user")
 		return false, getActiveUserErr
 	}
 
-	log.Debug().Msg("IsAuthenticated: " + user)
+	a.c.Logger().Debug().Msg("IsAuthenticated: " + user)
 	return true, nil
 }
 

@@ -21,8 +21,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/rs/zerolog/log"
-
+	"github.com/snyk/snyk-ls/application/config"
 	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
@@ -41,15 +40,17 @@ type DefaultHoverService struct {
 	hoverChan    chan DocumentHovers
 	mutex        *sync.Mutex
 	analytics    ux2.Analytics
+	c            *config.Config
 }
 
-func NewDefaultService(analytics ux2.Analytics) Service {
+func NewDefaultService(c *config.Config, analytics ux2.Analytics) Service {
 	s := &DefaultHoverService{}
 	s.hovers = map[string][]Hover[Context]{}
 	s.hoverIndexes = map[string]bool{}
 	s.hoverChan = make(chan DocumentHovers, 100)
 	s.mutex = &sync.Mutex{}
 	s.analytics = analytics
+	s.c = c
 	go s.createHoverListener()
 	return s
 }
@@ -58,7 +59,7 @@ func (s *DefaultHoverService) isHoverForPosition(hover Hover[Context], pos snyk.
 	hoverRange := hover.Range
 	posRange := snyk.Range{Start: pos, End: pos}
 	overlaps := hoverRange.Overlaps(posRange)
-	log.Trace().Str("method", "isHoverForPosition").Msgf("hover: %v, pos: %v, overlaps: %v", hoverRange, pos, overlaps)
+	s.c.Logger().Trace().Str("method", "isHoverForPosition").Msgf("hover: %v, pos: %v, overlaps: %v", hoverRange, pos, overlaps)
 	return overlaps
 }
 
@@ -71,7 +72,7 @@ func (s *DefaultHoverService) registerHovers(result DocumentHovers) {
 		hoverIndex := key + fmt.Sprintf("%v%v", newHover.Range, newHover.Id)
 
 		if !s.hoverIndexes[hoverIndex] {
-			log.Debug().
+			s.c.Logger().Debug().
 				Str("method", "registerHovers").
 				Str("hoverIndex", hoverIndex).
 				Msg("registering hover")
@@ -90,7 +91,7 @@ func (s *DefaultHoverService) DeleteHover(path string) {
 	for key := range s.hoverIndexes {
 		document := path
 		if strings.Contains(key, document) {
-			log.Debug().
+			s.c.Logger().Debug().
 				Str("method", "DeleteHover").
 				Str("key", key).
 				Str("document", document).
@@ -138,14 +139,14 @@ func (s *DefaultHoverService) trackHoverDetails(hover Hover[Context]) {
 		issue := hover.Context.(snyk.Issue)
 		s.analytics.IssueHoverIsDisplayed(NewIssueHoverIsDisplayedProperties(issue))
 	default:
-		log.Warn().Msgf("unknown context for hover %v", hover)
+		s.c.Logger().Warn().Msgf("unknown context for hover %v", hover)
 	}
 }
 
 func (s *DefaultHoverService) createHoverListener() {
 	for {
 		result := <-s.hoverChan
-		log.Trace().
+		s.c.Logger().Trace().
 			Str("method", "createHoverListener").
 			Str("uri", result.Path).
 			Msg("reading hover from chan.")

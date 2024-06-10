@@ -24,8 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -40,16 +38,12 @@ type SnykCli struct {
 	semaphore             chan int
 	cliTimeout            time.Duration
 	notifier              noti.Notifier
+	c                     *config.Config
 }
 
 var Mutex = &sync.Mutex{}
 
-func NewExecutor(
-	authenticationService snyk.AuthenticationService,
-	errorReporter error_reporting.ErrorReporter,
-	analytics ux.Analytics,
-	notifier noti.Notifier,
-) Executor {
+func NewExecutor(c *config.Config, authenticationService snyk.AuthenticationService, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics, notifier noti.Notifier) Executor {
 	concurrencyLimit := 2
 
 	return &SnykCli{
@@ -59,6 +53,7 @@ func NewExecutor(
 		make(chan int, concurrencyLimit),
 		90 * time.Minute, // TODO: add preference to make this configurable [ROAD-1184]
 		notifier,
+		c,
 	}
 }
 
@@ -69,7 +64,7 @@ type Executor interface {
 
 func (c SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error) {
 	method := "SnykCli.Execute"
-	log.Debug().Str("method", method).Interface("cmd", cmd).Str("workingDir", workingDir).Msg("calling Snyk CLI")
+	c.c.Logger().Debug().Str("method", method).Interface("cmd", cmd).Str("workingDir", workingDir).Msg("calling Snyk CLI")
 
 	// set deadline to handle CLI hanging when obtaining semaphore
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(c.cliTimeout))
@@ -84,7 +79,7 @@ func (c SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (
 	}
 
 	output, err := c.doExecute(ctx, cmd, workingDir)
-	log.Trace().Str("method", method).Str("response", string(output))
+	c.c.Logger().Trace().Str("method", method).Str("response", string(output))
 	return output, err
 }
 
@@ -99,9 +94,9 @@ func (c SnykCli) getCommand(cmd []string, workingDir string, ctx context.Context
 	command.Dir = workingDir
 	cliEnv := AppendCliEnvironmentVariables(os.Environ(), true)
 	command.Env = cliEnv
-	log.Trace().Str("method", "getCommand").Interface("command.Args", command.Args).Send()
-	log.Trace().Str("method", "getCommand").Interface("command.Env", command.Env).Send()
-	log.Trace().Str("method", "getCommand").Interface("command.Dir", command.Dir).Send()
+	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Args", command.Args).Send()
+	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Env", command.Env).Send()
+	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Dir", command.Dir).Send()
 	return command
 }
 
@@ -132,7 +127,7 @@ func (c SnykCli) CliVersion() string {
 	cmd := []string{"version"}
 	output, err := c.Execute(context.Background(), cmd, "")
 	if err != nil {
-		log.Error().Err(err).Msg("failed to run version command")
+		c.c.Logger().Error().Err(err).Msg("failed to run version command")
 		return ""
 	}
 

@@ -30,8 +30,9 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-func textDocumentInlineValueHandler(c *config.Config) jrpc2.Handler {
+func textDocumentInlineValueHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.InlineValueParams) (any, error) {
+		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "textDocumentInlineValueHandler").Logger()
 		documentURI := params.TextDocument.URI
 		logger.Info().Msgf("Request for %s:%s RECEIVED", documentURI, params.Range.String())

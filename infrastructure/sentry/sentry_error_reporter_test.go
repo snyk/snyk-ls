@@ -20,7 +20,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
@@ -32,7 +31,7 @@ import (
 )
 
 func TestErrorReporting_CaptureError(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	e := errors.New("test error")
 	channel := make(chan sglsp.ShowMessageParams)
 	notifier := notification.NewNotifier()
@@ -41,11 +40,11 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 		case sglsp.ShowMessageParams:
 			channel <- p
 		default:
-			log.Debug().Msgf("Unexpected notification: %v", params)
+			c.Logger().Debug().Msgf("Unexpected notification: %v", params)
 			return
 		}
 	})
-	var target = NewSentryErrorReporter(notifier)
+	var target = NewSentryErrorReporter(c, notifier)
 
 	config.CurrentConfig().SetErrorReportingEnabled(false)
 	captured := target.CaptureError(e)
@@ -60,7 +59,7 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 }
 
 func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	path := "testPath"
 	text := "test error"
 	channel := make(chan lsp.PublishDiagnosticsParams)
@@ -70,11 +69,11 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 		case lsp.PublishDiagnosticsParams:
 			channel <- p
 		default:
-			log.Debug().Msgf("Unexpected notification: %v", params)
+			c.Logger().Debug().Msgf("Unexpected notification: %v", params)
 			return
 		}
 	})
-	var target = NewSentryErrorReporter(notifier)
+	var target = NewSentryErrorReporter(c, notifier)
 
 	e := errors.New(text)
 	config.CurrentConfig().SetErrorReportingEnabled(false)

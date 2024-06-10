@@ -20,8 +20,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
@@ -29,6 +30,7 @@ import (
 )
 
 func TestIsLocalEngine(t *testing.T) {
+	c := config.CurrentConfig()
 	apiClient := &snyk_api.FakeApiClient{
 		CodeEnabled: true,
 		ApiError:    nil,
@@ -47,6 +49,7 @@ func TestIsLocalEngine(t *testing.T) {
 		SnykApiClient: apiClient,
 		errorReporter: newTestCodeErrorReporter(),
 		notifier:      notification.NewNotifier(),
+		c:             c,
 	}
 
 	t.Run("should return true if SAST and local engine is enabled is disabled", func(t *testing.T) {

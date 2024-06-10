@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/gomarkdown/markdown"
-	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -75,14 +74,15 @@ func init() {
 	var err error
 	globalTemplate, err = template.New(string(product.ProductCode)).Funcs(funcMap).Parse(detailsHtmlTemplate)
 	if err != nil {
-		log.Error().Msgf("Failed to parse details template: %s", err)
+		config.CurrentConfig().Logger().Error().Msgf("Failed to parse details template: %s", err)
 	}
 }
 
 func getCodeDetailsHtml(issue snyk.Issue) string {
+	c := config.CurrentConfig()
 	additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 	if !ok {
-		log.Error().Msg("Failed to cast additional data to CodeIssueData")
+		c.Logger().Error().Msg("Failed to cast additional data to CodeIssueData")
 		return ""
 	}
 
@@ -115,7 +115,7 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 
 	var html bytes.Buffer
 	if err := globalTemplate.Execute(&html, data); err != nil {
-		log.Error().Msgf("Failed to execute main details template: %v", err)
+		c.Logger().Error().Msgf("Failed to execute main details template: %v", err)
 		return ""
 	}
 

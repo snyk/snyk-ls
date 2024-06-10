@@ -257,7 +257,7 @@ Right now the language server supports the following actions:
   - returns an object with the status of the feature flag and an optional user message
   ```json5
     {
-      "ok": true or false, // boolean indicating if the feature is enabled
+      "ok": true, // boolean indicating if the feature is enabled (true or false)
       "userMessage": "Optional message to the user" // present if 'ok' is false
     }
   ```

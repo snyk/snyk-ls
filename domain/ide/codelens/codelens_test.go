@@ -44,7 +44,7 @@ func Test_GetCodeLensFromCommand(t *testing.T) {
 }
 
 func Test_GetCodeLensForPath(t *testing.T) {
-	testutil.IntegTest(t)
+	c := testutil.IntegTest(t)
 	di.TestInit(t) // IntegTest doesn't automatically inits DI
 	testutil.OnlyEnableCode()
 
@@ -55,8 +55,9 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	filePath, dir := code.TempWorkdirWithVulnerabilities(t)
-	folder := workspace.NewFolder(dir, "dummy", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier())
-	workspace.Set(workspace.New(performance.NewInstrumentor(), di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier()))
+	folder := workspace.NewFolder(c, dir, "dummy", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier())
+	workspace.Set(workspace.New(c, performance.NewInstrumentor(), di.Scanner(), di.HoverService(), di.ScanNotifier(),
+		di.Notifier()))
 	workspace.Get().AddFolder(folder)
 	folder.ScanFile(context.Background(), filePath)
 

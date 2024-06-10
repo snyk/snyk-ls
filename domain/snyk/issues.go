@@ -21,8 +21,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/rs/zerolog/log"
-
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -223,8 +222,7 @@ func (i Issue) GetFilterableIssueType() product.FilterableIssueType {
 			return product.FilterableIssueTypeCodeSecurity
 		default:
 			const msg = "Failed to resolve code issue type. Product is Code, but issue type unspecified. Defaulting to Security issue type"
-			//goland:noinspection GoRedundantConversion
-			log.Warn().Int8("IssueType", int8(i.IssueType)).Msg(msg)
+			config.CurrentConfig().Logger().Warn().Int8("IssueType", int8(i.IssueType)).Msg(msg)
 			return product.FilterableIssueTypeCodeSecurity
 		}
 	default:

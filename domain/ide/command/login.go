@@ -19,7 +19,7 @@ package command
 import (
 	"context"
 
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -30,6 +30,7 @@ type loginCommand struct {
 	command     snyk.CommandData
 	authService snyk.AuthenticationService
 	notifier    noti.Notifier
+	logger      *zerolog.Logger
 }
 
 func (cmd *loginCommand) Command() snyk.CommandData {
@@ -37,14 +38,14 @@ func (cmd *loginCommand) Command() snyk.CommandData {
 }
 
 func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
-	log.Debug().Str("method", "loginCommand.Execute").Msgf("logging in")
+	cmd.logger.Debug().Str("method", "loginCommand.Execute").Msgf("logging in")
 	token, err := cmd.authService.Authenticate(ctx)
 	if err != nil {
-		log.Err(err).Msg("Error on snyk.login command")
+		cmd.logger.Err(err).Msg("Error on snyk.login command")
 		cmd.notifier.SendError(err)
 	}
 	if err == nil && token != "" {
-		log.Debug().Str("method", "loginCommand.Execute").
+		cmd.logger.Debug().Str("method", "loginCommand.Execute").
 			Str("hashed token", util.Hash([]byte(token))[0:16]).
 			Msgf("authentication successful, received token")
 	}

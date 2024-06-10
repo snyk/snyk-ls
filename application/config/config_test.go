@@ -22,11 +22,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
-
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
+
+	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -115,18 +115,24 @@ func Test_TokenChangedToSameToken_ChannelsNotInformed(t *testing.T) {
 func Test_SnykCodeAnalysisTimeoutReturnsTimeoutFromEnvironment(t *testing.T) {
 	t.Setenv(snykCodeTimeoutKey, "1s")
 	duration, _ := time.ParseDuration("1s")
-	assert.Equal(t, duration, snykCodeAnalysisTimeoutFromEnv())
+	c := CurrentConfig()
+
+	assert.Equal(t, duration, c.snykCodeAnalysisTimeoutFromEnv())
 }
 
 func Test_SnykCodeAnalysisTimeoutReturnsDefaultIfNoEnvVariableFound(t *testing.T) {
 	t.Setenv(snykCodeTimeoutKey, "")
-	assert.Equal(t, 12*time.Hour, snykCodeAnalysisTimeoutFromEnv())
+	c := CurrentConfig()
+
+	assert.Equal(t, 12*time.Hour, c.snykCodeAnalysisTimeoutFromEnv())
 }
 
 func Test_updatePath(t *testing.T) {
 	t.Setenv("PATH", "a")
 	c := New()
+
 	c.updatePath("b")
+
 	assert.Contains(t, c.path, string(os.PathListSeparator)+"b")
 	assert.Contains(t, c.path, "a"+string(os.PathListSeparator))
 }
