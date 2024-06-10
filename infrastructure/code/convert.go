@@ -31,8 +31,9 @@ import (
 	"github.com/hexops/gotextdiff"
 	"github.com/hexops/gotextdiff/myers"
 	"github.com/hexops/gotextdiff/span"
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"golang.org/x/exp/slices"
+
+	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -552,7 +553,7 @@ func (s *AutofixResponse) toAutofixSuggestions(baseDir string, filePath string) 
 }
 
 func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir string, filePath string) []AutofixUnifiedDiffSuggestion {
-	logger := s.c.Logger().With().Str("method", "toUnifiedDiffSuggestions").Logger()
+	logger := config.CurrentConfig().Logger().With().Str("method", "toUnifiedDiffSuggestions").Logger()
 	var fixSuggestions []AutofixUnifiedDiffSuggestion
 	for _, suggestion := range s.AutofixSuggestions {
 		path := ToAbsolutePath(baseDir, filePath)

@@ -17,7 +17,6 @@
 package code
 
 import (
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
@@ -60,7 +59,6 @@ type AnalysisRequest struct {
 type AutofixResponse struct {
 	Status             string                     `json:"status"`
 	AutofixSuggestions []autofixResponseSingleFix `json:"fixes"`
-	c                  *config.Config
 }
 
 type autofixResponseSingleFix struct {
