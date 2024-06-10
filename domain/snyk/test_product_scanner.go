@@ -31,6 +31,7 @@ func NewTestProductScanner(product product.Product, enabled bool) *TestProductSc
 		enabled: enabled,
 		scans:   0,
 		mutex:   sync.Mutex{},
+		c:       config.CurrentConfig(),
 	}
 }
 
