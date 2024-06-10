@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/adrg/xdg"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -138,8 +139,8 @@ func Test_FindBinaries(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		c := New()
-		c.defaultDirs = []string{filepath.Dir(javaHome)}
+		nop := zerolog.Nop()
+		c := &Config{defaultDirs: []string{filepath.Dir(javaHome)}, logger: &nop}
 
 		java := c.findBinary(getJavaBinaryName())
 
