@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
@@ -396,7 +397,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		return nil, status, nil
 	}
 
-	converter := SarifConverter{sarif: response}
+	converter := SarifConverter{sarif: response, c: s.c}
 	issues, err := converter.toIssues(baseDir)
 	return issues, status, err
 }
