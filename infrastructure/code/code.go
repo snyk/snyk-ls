@@ -409,6 +409,7 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
 	if err != nil {
 		return []snyk.Issue{}, err
 	}
+	sc.BundleHashes[path] = bundleHash
 
 	converter := SarifConverter{sarif: *sarif, c: sc.c}
 	issues, err = converter.toIssues(path)

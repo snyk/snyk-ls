@@ -400,6 +400,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 
 	scanner := New(
 		NewBundler(c, snykCodeMock, NewCodeInstrumentor()),
+
 		&snyk_api.FakeApiClient{CodeEnabled: true},
 		newTestCodeErrorReporter(),
 		ux2.NewTestAnalytics(c),
@@ -408,6 +409,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 		fakeCodeScanner,
 	)
 	issues, _ := scanner.UploadAndAnalyzeWithIgnores(context.Background(), "", sliceToChannel(files), map[string]bool{})
+
 	assert.True(t, fakeCodeScanner.UploadAndAnalyzeWasCalled)
 	assert.False(t, issues[0].IsIgnored)
 	assert.Nil(t, issues[0].IgnoreDetails)
@@ -417,6 +419,10 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	assert.Equal(t, "13 days", issues[1].IgnoreDetails.Expiration)
 	assert.Equal(t, 2024, issues[1].IgnoreDetails.IgnoredOn.Year())
 	assert.Equal(t, "Neil M", issues[1].IgnoreDetails.IgnoredBy)
+
+	// verify that bundle hash has been saved
+	assert.Equal(t, 1, len(scanner.BundleHashes))
+	assert.Equal(t, snykCodeMock.Options.bundleHash, scanner.BundleHashes[path])
 }
 
 func Test_Scan(t *testing.T) {
