@@ -32,6 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 type ServerImplMock struct{}
@@ -48,6 +49,7 @@ func (b *ServerImplMock) Notify(_ context.Context, _ string, _ any) error {
 }
 
 func TestCreateProgressListener(t *testing.T) {
+	c := testutil.UnitTest(t)
 	progressChannel := make(chan lsp.ProgressParams, 1)
 	progressNotification := lsp.ProgressParams{
 		Token: "token",
@@ -63,7 +65,7 @@ func TestCreateProgressListener(t *testing.T) {
 
 	server := ServerImplMock{}
 
-	go createProgressListener(progressChannel, &server)
+	go createProgressListener(progressChannel, &server, c.Logger())
 	defer func() { notified.Set(false) }()
 
 	assert.Eventually(t, func() bool {

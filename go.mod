@@ -23,7 +23,7 @@ require (
 	github.com/segmentio/analytics-go v3.1.0+incompatible
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/snyk/code-client-go v1.7.1
-	github.com/snyk/go-application-framework v0.0.0-20240528105122-fac0dc7970b1
+	github.com/snyk/go-application-framework v0.0.0-20240605102342-67b064c1e417
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/stretchr/testify v1.9.0
 	github.com/subosito/gotenv v1.6.0
@@ -80,7 +80,7 @@ require (
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.2.2 // indirect
-	github.com/snyk/error-catalog-golang-public v0.0.0-20240425141803-2516e42296c3 // indirect
+	github.com/snyk/error-catalog-golang-public v0.0.0-20240527112826-2b77438d25f1 // indirect
 	github.com/snyk/go-httpauth v0.0.0-20240307114523-1f5ea3f55c65 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/cobra v1.8.0 // indirect

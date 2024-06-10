@@ -58,15 +58,17 @@ func setupScanner(testProductScanners ...ProductScanner) (
 	analytics *ux.TestAnalytics,
 	scanNotifier ScanNotifier,
 ) {
-	analytics = ux.NewTestAnalytics()
+	c := config.CurrentConfig()
+	analytics = ux.NewTestAnalytics(c)
 	scanNotifier = NewMockScanNotifier()
 	notifier := notification.NewNotifier()
 	apiClient := &snyk_api.FakeApiClient{CodeEnabled: false}
 	er := error_reporting.NewTestErrorReporter()
-	authenticationProvider := NewFakeCliAuthenticationProvider()
+	authenticationProvider := NewFakeCliAuthenticationProvider(c)
 	authenticationProvider.IsAuthenticated = true
-	authenticationService := NewAuthenticationService(authenticationProvider, analytics, er, notifier)
+	authenticationService := NewAuthenticationService(c, authenticationProvider, analytics, er, notifier)
 	scanner = NewDelegatingScanner(
+		c,
 		initialize.NewDelegatingInitializer(),
 		performance.NewInstrumentor(),
 		analytics,

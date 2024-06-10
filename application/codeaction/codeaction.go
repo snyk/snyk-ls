@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -116,7 +115,7 @@ func (c *CodeActionsService) ResolveCodeAction(action lsp.CodeAction, server lsp
 }
 
 func (c *CodeActionsService) handleCommand(action lsp.CodeAction, server lsp.Server) (lsp.CodeAction, error) {
-	log.Info().Str("method", "codeaction.handleCommand").Msgf("handling command %s", action.Command.Command)
+	c.logger.Info().Str("method", "codeaction.handleCommand").Msgf("handling command %s", action.Command.Command)
 	cmd := snyk.CommandData{
 		Title:     action.Command.Title,
 		CommandId: action.Command.Command,

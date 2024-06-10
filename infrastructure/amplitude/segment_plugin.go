@@ -1,10 +1,9 @@
 package amplitude
 
 import (
-	"github.com/rs/zerolog/log"
 	segment "github.com/segmentio/analytics-go"
 
-	"github.com/snyk/snyk-ls/application/config"
+	c2 "github.com/snyk/snyk-ls/application/config"
 
 	"github.com/amplitude/analytics-go/amplitude"
 	"github.com/amplitude/analytics-go/amplitude/types"
@@ -20,10 +19,11 @@ func NewSegmentPlugin() *SegmentPlugin {
 }
 
 // Setup is called on plugin installation
-func (plugin *SegmentPlugin) Setup(config amplitude.Config) {
-	client, err := segment.NewWithConfig(getSegmentPublicKey(), segment.Config{Logger: &segmentLogger{}})
+func (plugin *SegmentPlugin) Setup(_ amplitude.Config) {
+	c := c2.CurrentConfig()
+	client, err := segment.NewWithConfig(getSegmentPublicKey(), segment.Config{Logger: &segmentLogger{c}})
 	if err != nil {
-		log.Error().Str("method", "NewSegmentClient").Err(err).Msg("Error creating Segment client")
+		c.Logger().Error().Str("method", "NewSegmentClient").Err(err).Msg("Error creating Segment client")
 	}
 
 	plugin.client = client
@@ -54,24 +54,26 @@ func (plugin *SegmentPlugin) Execute(event *amplitude.Event) {
 }
 
 func (plugin *SegmentPlugin) track(userId string, event *types.Event, method string) {
+	c := c2.CurrentConfig()
 	err := plugin.client.Enqueue(segment.Track{
 		UserId:      userId,
 		Event:       event.EventType,
 		Properties:  event.EventProperties,
-		AnonymousId: config.CurrentConfig().DeviceID(),
+		AnonymousId: c.DeviceID(),
 	})
 	if err != nil {
-		log.Warn().Err(err).Str("method", method).Msg("Couldn't enqueue tracking event.")
+		c.Logger().Warn().Err(err).Str("method", method).Msg("Couldn't enqueue tracking event.")
 	}
 }
 
 func (plugin *SegmentPlugin) identify(userId string, method string) {
+	c := c2.CurrentConfig()
 	err := plugin.client.Enqueue(segment.Identify{
-		AnonymousId: config.CurrentConfig().DeviceID(),
+		AnonymousId: c.DeviceID(),
 		UserId:      userId,
 	})
 	if err != nil {
-		log.Warn().Err(err).Str("method", method).Msg("Couldn't enqueue identify message.")
+		c.Logger().Warn().Err(err).Str("method", method).Msg("Couldn't enqueue identify message.")
 	}
 }
 
@@ -80,11 +82,12 @@ func (plugin *SegmentPlugin) Shutdown() error {
 }
 
 func getSegmentPublicKey() string {
-	if config.IsDevelopment() {
-		log.Info().Str("method", "getSegmentPublicKey").Msg("Configured segment client with dev key")
+	c := c2.CurrentConfig()
+	if c2.IsDevelopment() {
+		c.Logger().Info().Str("method", "getSegmentPublicKey").Msg("Configured segment client with dev key")
 		return developmentPublicKey
 	} else {
-		log.Info().Str("method", "getSegmentPublicKey").Msg("Configured segment client with prod key")
+		c.Logger().Info().Str("method", "getSegmentPublicKey").Msg("Configured segment client with prod key")
 		return productionPublicKey
 	}
 }

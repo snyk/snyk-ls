@@ -18,7 +18,6 @@ package sentry
 
 import (
 	"github.com/getsentry/sentry-go"
-	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/concurrency"
@@ -28,7 +27,7 @@ const sentryDsn = "https://f760a2feb30c40198cef550edf6221de@o30291.ingest.sentry
 
 var initialized = concurrency.AtomicBool{}
 
-func initializeSentry() {
+func initializeSentry(c *config.Config) {
 	if initialized.Get() {
 		return
 	}
@@ -45,9 +44,9 @@ func initializeSentry() {
 		AttachStacktrace: true,
 	})
 	if err != nil {
-		log.Error().Str("method", "Initialize").Msg(err.Error())
+		c.Logger().Error().Str("method", "Initialize").Msg(err.Error())
 	} else {
-		log.Info().Msg("Error reporting initialized")
+		c.Logger().Info().Msg("Error reporting initialized")
 	}
 	addUserId()
 }

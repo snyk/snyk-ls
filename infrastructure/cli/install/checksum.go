@@ -24,7 +24,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/rs/zerolog/log"
+	"github.com/snyk/snyk-ls/application/config"
 )
 
 type HashSum []byte
@@ -53,7 +53,7 @@ func compareChecksum(expectedSum HashSum, filename string) error {
 			hex.EncodeToString(calculatedSum))
 	}
 
-	log.Info().Msgf("checksum matches: %q", hex.EncodeToString(calculatedSum))
+	config.CurrentConfig().Logger().Info().Msgf("checksum matches: %q", hex.EncodeToString(calculatedSum))
 
 	return nil
 }
@@ -67,7 +67,7 @@ func getChecksum(filename string) ([]byte, error) {
 	}
 	defer func(r *os.File) { _ = r.Close() }(r)
 
-	log.Info().Msgf("copying %q to calculate checksum", filename)
+	config.CurrentConfig().Logger().Info().Msgf("copying %q to calculate checksum", filename)
 	_, err = io.Copy(h, r)
 	if err != nil {
 		return nil, err

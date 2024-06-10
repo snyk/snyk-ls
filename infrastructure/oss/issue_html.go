@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/gomarkdown/markdown"
-	"github.com/rs/zerolog/log"
 	"golang.org/x/exp/maps"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -177,7 +176,7 @@ func getRemediationAdvice(issue snyk.OssIssueData) string {
 func getDetailsHtml(issue snyk.Issue) string {
 	additionalData, ok := issue.AdditionalData.(snyk.OssIssueData)
 	if !ok {
-		log.Error().Msg("Failed to cast additional data to OssIssueData")
+		config.CurrentConfig().Logger().Error().Msg("Failed to cast additional data to OssIssueData")
 		return ""
 	}
 	overview := markdown.ToHTML([]byte(additionalData.Description), nil, nil)

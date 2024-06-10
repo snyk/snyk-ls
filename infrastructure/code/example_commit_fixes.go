@@ -21,12 +21,15 @@ import (
 	"strings"
 
 	codeClient "github.com/snyk/code-client-go/sarif"
+
+	"github.com/snyk/snyk-ls/application/config"
 )
 
 type exampleCommit struct {
 	index       int
 	description string
 	fix         codeClient.ExampleCommitFix
+	c           *config.Config
 }
 
 func (c *exampleCommit) toMarkdown() (msg string) {

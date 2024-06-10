@@ -20,7 +20,7 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -30,6 +30,7 @@ import (
 type workspaceFolderScanCommand struct {
 	command snyk.CommandData
 	srv     lsp.Server
+	logger  *zerolog.Logger
 }
 
 func (cmd *workspaceFolderScanCommand) Command() snyk.CommandData {
@@ -42,15 +43,15 @@ func (cmd *workspaceFolderScanCommand) Execute(ctx context.Context) (any, error)
 	w := workspace.Get()
 	if len(args) != 1 {
 		err := errors.New("received WorkspaceFolderScanCommand without path")
-		log.Warn().Str("method", method).Err(err).Send()
+		cmd.logger.Warn().Str("method", method).Err(err).Send()
 		return nil, err
 	}
 	path := args[0].(string)
 	f := w.GetFolderContaining(path)
 	if f == nil {
 		err := errors.New("received WorkspaceFolderScanCommand with path not in workspace")
-		log.Warn().Str("method", method).Err(err).Send()
-		log.Warn().Interface("folders", w.Folders())
+		cmd.logger.Warn().Str("method", method).Err(err).Send()
+		cmd.logger.Warn().Interface("folders", w.Folders())
 		return nil, err
 	}
 	f.Clear()

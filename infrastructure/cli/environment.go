@@ -34,7 +34,6 @@ const (
 	IntegrationVersionEnvVarKey         = "SNYK_INTEGRATION_VERSION"
 	IntegrationEnvironmentEnvVarKey     = "SNYK_INTEGRATION_ENVIRONMENT"
 	IntegrationEnvironmentVersionEnvVar = "SNYK_INTEGRATION_ENVIRONMENT_VERSION"
-	IntegrationEnvironmentEnvVarValue   = "language-server"
 	SnykOauthTokenEnvVar                = "SNYK_OAUTH_TOKEN"
 )
 

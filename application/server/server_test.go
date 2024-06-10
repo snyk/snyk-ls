@@ -32,7 +32,6 @@ import (
 	"github.com/creachadair/jrpc2/server"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -92,7 +91,7 @@ func setupServerWithCustomDI(t *testing.T, useMocks bool) (server.Local, *testut
 
 func setupCustomServer(t *testing.T, callBackFn onCallbackFn) (server.Local, *testutil.JsonRPCRecorder) {
 	t.Helper()
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	jsonRPCRecorder := &testutil.JsonRPCRecorder{}
 	loc := startServer(callBackFn, jsonRPCRecorder)
 	di.TestInit(t)
@@ -101,7 +100,7 @@ func setupCustomServer(t *testing.T, callBackFn onCallbackFn) (server.Local, *te
 	t.Cleanup(func() {
 		err := loc.Close()
 		if err != nil {
-			log.Error().Err(err).Msg("Error when closing down server")
+			c.Logger().Error().Err(err).Msg("Error when closing down server")
 		}
 		cleanupChannels()
 		jsonRPCRecorder.ClearCallbacks()
@@ -616,9 +615,10 @@ func Test_initialize_callsInitializeOnAnalytics(t *testing.T) {
 
 func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 	loc, _ := setupServer(t)
+	c := config.CurrentConfig()
 
 	scanner := &snyk.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder("dummy",
+	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy",
 		"dummy",
 		scanner,
 		di.HoverService(),
@@ -774,7 +774,8 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 
 func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 	loc, _ := setupServer(t)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
+	c := config.CurrentConfig()
+	c.SetSnykCodeEnabled(true)
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -786,7 +787,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 		URI: uri.PathToUri(filePath),
 	}}
 
-	folder := workspace.NewFolder(fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier())
+	folder := workspace.NewFolder(c, fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier())
 	workspace.Get().AddFolder(folder)
 
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
@@ -863,10 +864,11 @@ func Test_textDocumentDidSave_manualScanningMode_doesNotScan(t *testing.T) {
 
 func sendFileSavedMessage(t *testing.T, filePath, fileDir string, loc server.Local) sglsp.DocumentURI {
 	t.Helper()
+	c := config.CurrentConfig()
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filePath)},
 	}
-	workspace.Get().AddFolder(workspace.NewFolder(fileDir,
+	workspace.Get().AddFolder(workspace.NewFolder(c, fileDir,
 		"Test",
 		di.Scanner(),
 		di.HoverService(),
@@ -987,12 +989,12 @@ func checkForPublishedDiagnostics(t *testing.T, testPath string, expectedNumber 
 
 func Test_IntegrationHoverResults(t *testing.T) {
 	loc, _ := setupServer(t)
-	testutil.IntegTest(t)
+	c := testutil.IntegTest(t)
 
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
-	var cloneTargetDir, err = setupCustomTestRepo(t, "https://github.com/snyk-labs/nodejs-goof", "0336589")
+	var cloneTargetDir, err = setupCustomTestRepo(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
 	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
@@ -1048,13 +1050,13 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	assert.Equal(t, hoverResult.Contents.Kind, "markdown")
 }
 
-func setupCustomTestRepo(t *testing.T, url string, targetCommit string) (string, error) {
+func setupCustomTestRepo(t *testing.T, url string, targetCommit string, logger *zerolog.Logger) (string, error) {
 	t.Helper()
 	tempDir := t.TempDir()
 	repoDir := "1"
 	absoluteCloneRepoDir := filepath.Join(tempDir, repoDir)
 	cmd := []string{"clone", url, repoDir}
-	log.Debug().Interface("cmd", cmd).Msg("clone command")
+	logger.Debug().Interface("cmd", cmd).Msg("clone command")
 	clone := exec.Command("git", cmd...)
 	clone.Dir = tempDir
 	reset := exec.Command("git", "reset", "--hard", targetCommit)
@@ -1068,19 +1070,19 @@ func setupCustomTestRepo(t *testing.T, url string, targetCommit string) (string,
 		t.Fatal(err, "clone didn't work")
 	}
 
-	log.Debug().Msg(string(output))
+	logger.Debug().Msg(string(output))
 	output, _ = reset.CombinedOutput()
 
-	log.Debug().Msg(string(output))
+	logger.Debug().Msg(string(output))
 	output, err = clean.CombinedOutput()
 
-	log.Debug().Msg(string(output))
+	logger.Debug().Msg(string(output))
 	return absoluteCloneRepoDir, err
 }
 
 //goland:noinspection ALL
 func Test_MonitorClientProcess(t *testing.T) {
-	testutil.IntegTest(t)
+	c := testutil.IntegTest(t)
 	testutil.NotOnWindows(t, "sleep doesn't exist on windows")
 	// start process that just sleeps
 	pidChan := make(chan int)
@@ -1088,7 +1090,7 @@ func Test_MonitorClientProcess(t *testing.T) {
 		cmd := exec.Command("sleep", "5")
 		err := cmd.Start()
 		if err != nil {
-			log.Err(err).Msg("Couldn't sleep. Stopping test")
+			c.Logger().Err(err).Msg("Couldn't sleep. Stopping test")
 			t.Fail()
 		}
 		pidChan <- cmd.Process.Pid

@@ -17,7 +17,6 @@
 package code
 
 import (
-	"github.com/rs/zerolog/log"
 	codeClient "github.com/snyk/code-client-go/observability"
 
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -57,6 +56,5 @@ func (s *testCodeErrorReporter) FlushErrorReporting() {
 }
 
 func (s *testCodeErrorReporter) CaptureError(err error, options codeClient.ErrorReporterOptions) bool {
-	log.Log().Err(err).Msg("An error has been captured by the testing error reporter")
 	return true
 }

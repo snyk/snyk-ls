@@ -42,9 +42,10 @@ import (
 
 func Test_UpdateCredentials(t *testing.T) {
 	t.Run("CLI Authentication", func(t *testing.T) {
-		testutil.UnitTest(t)
-		analytics := ux.NewTestAnalytics()
+		c := testutil.UnitTest(t)
+		analytics := ux.NewTestAnalytics(c)
 		service := snyk.NewAuthenticationService(
+			c,
 			nil,
 			analytics,
 			error_reporting.NewTestErrorReporter(),
@@ -57,10 +58,11 @@ func Test_UpdateCredentials(t *testing.T) {
 	})
 
 	t.Run("OAuth Authentication Authentication", func(t *testing.T) {
-		testutil.UnitTest(t)
+		c := testutil.UnitTest(t)
 		config.CurrentConfig().SetAuthenticationMethod(lsp.OAuthAuthentication)
-		analytics := ux.NewTestAnalytics()
-		service := snyk.NewAuthenticationService(nil, analytics, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		analytics := ux.NewTestAnalytics(c)
+		service := snyk.NewAuthenticationService(c, nil, analytics, error_reporting.NewTestErrorReporter(),
+			notification.NewNotifier())
 		oauthCred := oauth2.Token{
 			AccessToken:  t.Name(),
 			TokenType:    "b",
@@ -79,11 +81,11 @@ func Test_UpdateCredentials(t *testing.T) {
 
 func Test_IsAuthenticated(t *testing.T) {
 	t.Run("User is authenticated", func(t *testing.T) {
-		testutil.UnitTest(t)
-		analytics := ux.NewTestAnalytics()
+		c := testutil.UnitTest(t)
+		analytics := ux.NewTestAnalytics(c)
 
-		service := snyk.NewAuthenticationService(
-			&snyk.FakeAuthenticationProvider{IsAuthenticated: true},
+		service := snyk.NewAuthenticationService(c,
+			&snyk.FakeAuthenticationProvider{IsAuthenticated: true, C: c},
 			analytics,
 			error_reporting.NewTestErrorReporter(),
 			notification.NewNotifier(),
@@ -96,10 +98,11 @@ func Test_IsAuthenticated(t *testing.T) {
 	})
 
 	t.Run("User is not authenticated", func(t *testing.T) {
-		testutil.UnitTest(t)
-		analytics := ux.NewTestAnalytics()
+		c := testutil.UnitTest(t)
+		analytics := ux.NewTestAnalytics(c)
 		service := snyk.NewAuthenticationService(
-			&snyk.FakeAuthenticationProvider{IsAuthenticated: false},
+			c,
+			&snyk.FakeAuthenticationProvider{IsAuthenticated: false, C: c},
 			analytics,
 			error_reporting.NewTestErrorReporter(),
 			notification.NewNotifier(),
@@ -113,20 +116,21 @@ func Test_IsAuthenticated(t *testing.T) {
 }
 
 func Test_Logout(t *testing.T) {
-	testutil.IntegTest(t)
+	c := testutil.IntegTest(t)
 
 	// arrange
 	// set up workspace
 	notifier := notification.NewNotifier()
-	analytics := ux.NewTestAnalytics()
+	analytics := ux.NewTestAnalytics(c)
 	authProvider := snyk.FakeAuthenticationProvider{}
-	service := snyk.NewAuthenticationService(&authProvider, analytics, error_reporting.NewTestErrorReporter(), notifier)
+	service := snyk.NewAuthenticationService(c, &authProvider, analytics, error_reporting.NewTestErrorReporter(),
+		notifier)
 	hoverService := hover.NewFakeHoverService()
 	scanner := snyk.NewTestScanner()
-	scanNotifier, _ := appNotification.NewScanNotifier(notifier)
-	w := workspace.New(performance.NewInstrumentor(), scanner, hoverService, scanNotifier, notifier)
+	scanNotifier, _ := appNotification.NewScanNotifier(c, notifier)
+	w := workspace.New(c, performance.NewInstrumentor(), scanner, hoverService, scanNotifier, notifier)
 	workspace.Set(w)
-	f := workspace.NewFolder("/testFolder", "testFikder", scanner, hoverService, scanNotifier, notifier)
+	f := workspace.NewFolder(c, "/testFolder", "testFikder", scanner, hoverService, scanNotifier, notifier)
 	w.AddFolder(f)
 
 	// fake existing diagnostic & hover

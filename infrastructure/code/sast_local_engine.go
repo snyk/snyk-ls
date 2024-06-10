@@ -17,19 +17,17 @@
 package code
 
 import (
-	"github.com/rs/zerolog/log"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 )
 
 func (sc *Scanner) isLocalEngineEnabled(sastResponse snyk_api.SastResponse) bool {
-	log.Debug().Any("sastResponse", sastResponse).Msg("sast response")
+	sc.c.Logger().Debug().Any("sastResponse", sastResponse).Msg("sast response")
 	return sastResponse.SastEnabled && sastResponse.LocalCodeEngine.Enabled
 }
 
 func (sc *Scanner) updateCodeApiLocalEngine(sastResponse snyk_api.SastResponse) {
 	config.CurrentConfig().SetSnykCodeApi(sastResponse.LocalCodeEngine.Url)
 	api := config.CurrentConfig().SnykCodeApi()
-	log.Debug().Str("snykCodeApi", api).Msg("updated Snyk Code API Local Engine")
+	sc.c.Logger().Debug().Str("snykCodeApi", api).Msg("updated Snyk Code API Local Engine")
 }

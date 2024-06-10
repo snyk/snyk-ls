@@ -20,8 +20,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 )
@@ -40,14 +38,14 @@ func (c *Client) captureInstalledEvent() {
 	method := "segment.captureInstalledEvent"
 
 	if !os.IsNotExist(err) {
-		log.Error().Err(err).Str("method", method).Msg("Failed to verify if installation analytics have been captured.")
+		c.c.Logger().Error().Err(err).Str("method", method).Msg("Failed to verify if installation analytics have been captured.")
 		c.errorReporter.CaptureError(err)
 		return
 	}
 
 	f, err := os.Create(installFile)
 	if err != nil {
-		log.Error().Err(err).Str("method", method).Msg("Failed to save installation analytics state.")
+		c.c.Logger().Error().Err(err).Str("method", method).Msg("Failed to save installation analytics state.")
 		c.errorReporter.CaptureError(err)
 		return
 	}
@@ -56,5 +54,5 @@ func (c *Client) captureInstalledEvent() {
 	}(f)
 
 	c.PluginIsInstalled(ux.PluginIsInstalledProperties{})
-	log.Info().Str("method", method).Msg("Installation event captured.")
+	c.c.Logger().Info().Str("method", method).Msg("Installation event captured.")
 }

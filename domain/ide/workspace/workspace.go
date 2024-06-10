@@ -20,8 +20,6 @@ import (
 	"context"
 	"sync"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
@@ -46,6 +44,7 @@ type Workspace struct {
 	trustMutex          sync.Mutex
 	trustRequestOngoing bool // for debouncing
 	notifier            noti.Notifier
+	c                   *config.Config
 }
 
 func (w *Workspace) Issues() snyk.IssuesByFile {
@@ -68,19 +67,22 @@ func (w *Workspace) Issue(key string) snyk.Issue {
 	return snyk.Issue{}
 }
 
-func New(instrumentor performance.Instrumentor,
+func New(
+	c *config.Config,
+	instrumentor performance.Instrumentor,
 	scanner snyk.Scanner,
 	hoverService hover.Service,
 	scanNotifier snyk.ScanNotifier,
 	notifier noti.Notifier,
 ) *Workspace {
 	return &Workspace{
-		folders:      make(map[string]*Folder, 0),
+		folders:      make(map[string]*Folder),
 		instrumentor: instrumentor,
 		scanner:      scanner,
 		hoverService: hoverService,
 		scanNotifier: scanNotifier,
 		notifier:     notifier,
+		c:            c,
 	}
 }
 
@@ -173,7 +175,7 @@ func (w *Workspace) ChangeWorkspaceFolders(ctx context.Context, params lsp.DidCh
 	}
 
 	for _, folder := range params.Event.Added {
-		f := NewFolder(uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier)
+		f := NewFolder(w.c, uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier)
 		w.AddFolder(f)
 		if config.CurrentConfig().IsAutoScanEnabled() {
 			f.ScanFolder(ctx)
@@ -206,10 +208,10 @@ func (w *Workspace) GetFolderTrust() (trusted []*Folder, untrusted []*Folder) {
 	for _, folder := range w.folders {
 		if folder.IsTrusted() {
 			trusted = append(trusted, folder)
-			log.Info().Str("folder", folder.Path()).Msg("Trusted folder")
+			w.c.Logger().Info().Str("folder", folder.Path()).Msg("Trusted folder")
 		} else {
 			untrusted = append(untrusted, folder)
-			log.Info().Str("folder", folder.Path()).Msg("Untrusted folder")
+			w.c.Logger().Info().Str("folder", folder.Path()).Msg("Untrusted folder")
 		}
 	}
 	return trusted, untrusted

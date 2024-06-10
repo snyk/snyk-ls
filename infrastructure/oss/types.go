@@ -24,7 +24,6 @@ import (
 
 	"github.com/gomarkdown/markdown"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -116,7 +115,7 @@ func (i *ossIssue) toReferences() []snyk.Reference {
 func (r reference) toReference() snyk.Reference {
 	u, err := url.Parse(string(r.Url))
 	if err != nil {
-		log.Err(err).Msg("Unable to parse reference url: " + string(r.Url))
+		config.CurrentConfig().Logger().Err(err).Msg("Unable to parse reference url: " + string(r.Url))
 	}
 	return snyk.Reference{
 		Url:   u,
@@ -163,7 +162,7 @@ func (i *ossIssue) createIssueUrlMarkdown() string {
 func (i *ossIssue) CreateIssueURL() *url.URL {
 	parse, err := url.Parse("https://snyk.io/vuln/" + i.Id)
 	if err != nil {
-		log.Err(err).Msg("Unable to create issue link for issue:" + i.Id)
+		config.CurrentConfig().Logger().Err(err).Msg("Unable to create issue link for issue:" + i.Id)
 	}
 	return parse
 }
@@ -222,7 +221,7 @@ func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_repor
 		lesson, err := learnService.GetLesson(i.PackageManager, i.Id, i.Identifiers.CWE, i.Identifiers.CVE, snyk.DependencyVulnerability)
 		if err != nil {
 			msg := "failed to get lesson"
-			log.Err(err).Msg(msg)
+			config.CurrentConfig().Logger().Err(err).Msg(msg)
 			ep.CaptureError(errors.WithMessage(err, msg))
 			return nil
 		}
@@ -238,7 +237,7 @@ func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_repor
 				},
 			}
 			i.lesson = lesson
-			log.Debug().Str("method", "oss.issue.AddSnykLearnAction").Msgf("Learn action: %v", action)
+			config.CurrentConfig().Logger().Debug().Str("method", "oss.issue.AddSnykLearnAction").Msgf("Learn action: %v", action)
 		}
 	}
 	return action

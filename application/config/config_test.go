@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+	"github.com/snyk/snyk-ls/internal/testutil"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -113,14 +114,16 @@ func Test_TokenChangedToSameToken_ChannelsNotInformed(t *testing.T) {
 }
 
 func Test_SnykCodeAnalysisTimeoutReturnsTimeoutFromEnvironment(t *testing.T) {
+	c := testutil.UnitTest(t)
 	t.Setenv(snykCodeTimeoutKey, "1s")
 	duration, _ := time.ParseDuration("1s")
-	assert.Equal(t, duration, snykCodeAnalysisTimeoutFromEnv())
+	assert.Equal(t, duration, c.snykCodeAnalysisTimeoutFromEnv())
 }
 
 func Test_SnykCodeAnalysisTimeoutReturnsDefaultIfNoEnvVariableFound(t *testing.T) {
+	c := testutil.UnitTest(t)
 	t.Setenv(snykCodeTimeoutKey, "")
-	assert.Equal(t, 12*time.Hour, snykCodeAnalysisTimeoutFromEnv())
+	assert.Equal(t, 12*time.Hour, c.snykCodeAnalysisTimeoutFromEnv())
 }
 
 func Test_updatePath(t *testing.T) {

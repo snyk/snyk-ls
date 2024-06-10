@@ -21,7 +21,6 @@ import (
 
 	"github.com/amplitude/analytics-go/amplitude"
 	"github.com/amplitude/analytics-go/amplitude/plugins/destination"
-	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/ampli"
 	"github.com/snyk/snyk-ls/application/config"
@@ -34,11 +33,12 @@ type Client struct {
 	destination         *SegmentPlugin
 	errorReporter       error_reporting.ErrorReporter
 	authFunc            func() (string, error)
+	c                   *config.Config
 }
 
 type captureEvent func(userId string, eventOptions ...ampli.EventOptions)
 
-func NewAmplitudeClient(authFunc func() (string, error), errorReporter error_reporting.ErrorReporter) ux2.Analytics {
+func NewAmplitudeClient(c *config.Config, authFunc func() (string, error), errorReporter error_reporting.ErrorReporter) ux2.Analytics {
 	ampliConfig := amplitude.NewConfig("")
 
 	ampli.Instance.Load(ampli.LoadOptions{
@@ -55,6 +55,7 @@ func NewAmplitudeClient(authFunc func() (string, error), errorReporter error_rep
 		destination:   segmentPlugin,
 		errorReporter: errorReporter,
 		authFunc:      authFunc,
+		c:             c,
 	}
 
 	return client
@@ -69,7 +70,7 @@ func (c *Client) Shutdown() error {
 }
 
 func (c *Client) AnalysisIsReady(properties ux2.AnalysisIsReadyProperties) {
-	log.Debug().Str("method", "AnalysisIsReady").Msg("analytics enqueued")
+	c.c.Logger().Debug().Str("method", "AnalysisIsReady").Msg("analytics enqueued")
 	analysisType := ampli.AnalysisIsReadyAnalysisType(properties.AnalysisType)
 	ide := ampli.AnalysisIsReadyIde(getIdeProperty())
 	result := ampli.AnalysisIsReadyResult(properties.Result)
@@ -93,7 +94,7 @@ func (c *Client) AnalysisIsReady(properties ux2.AnalysisIsReadyProperties) {
 }
 
 func (c *Client) AnalysisIsTriggered(properties ux2.AnalysisIsTriggeredProperties) {
-	log.Debug().Str("method", "AnalysisIsTriggered").Msg("analytics enqueued")
+	c.c.Logger().Debug().Str("method", "AnalysisIsTriggered").Msg("analytics enqueued")
 	analysisTypes := make([]string, 0, len(properties.AnalysisType))
 	for _, analysisType := range properties.AnalysisType {
 		analysisTypes = append(analysisTypes, string(analysisType))
@@ -118,7 +119,7 @@ func (c *Client) AnalysisIsTriggered(properties ux2.AnalysisIsTriggeredPropertie
 }
 
 func (c *Client) IssueHoverIsDisplayed(properties ux2.IssueHoverIsDisplayedProperties) {
-	log.Debug().Str("method", "IssueHoverIsDisplayed").Msg("analytics enqueued")
+	c.c.Logger().Debug().Str("method", "IssueHoverIsDisplayed").Msg("analytics enqueued")
 	ide := ampli.IssueHoverIsDisplayedIde(getIdeProperty())
 	issueType := ampli.IssueHoverIsDisplayedIssueType(properties.IssueType)
 	severity := ampli.IssueHoverIsDisplayedSeverity(properties.Severity)
@@ -141,7 +142,7 @@ func (c *Client) IssueHoverIsDisplayed(properties ux2.IssueHoverIsDisplayedPrope
 }
 
 func (c *Client) PluginIsInstalled(_ ux2.PluginIsInstalledProperties) {
-	log.Debug().Str("method", "PluginIsInstalled").Msg("analytics enqueued")
+	c.c.Logger().Debug().Str("method", "PluginIsInstalled").Msg("analytics enqueued")
 	conf := config.CurrentConfig()
 
 	ide := ampli.PluginIsInstalledIde(getIdeProperty())
@@ -191,7 +192,7 @@ func (c *Client) enqueueEvent(eventFn captureEvent) {
 
 func (c *Client) Identify() {
 	method := "infrastructure.segment.client"
-	log.Debug().Str("method", method).Msg("Identifying a user.")
+	c.c.Logger().Debug().Str("method", method).Msg("Identifying a user.")
 
 	conf := config.CurrentConfig()
 	if !conf.NonEmptyToken() {
@@ -205,7 +206,7 @@ func (c *Client) Identify() {
 
 	userId, err := c.authFunc()
 	if err != nil {
-		log.Debug().Str("method", method).Err(err).Msg("Failed to identify user.")
+		c.c.Logger().Debug().Str("method", method).Err(err).Msg("Failed to identify user.")
 		return
 	}
 	c.authenticatedUserId = userId
@@ -225,7 +226,7 @@ func getIdeProperty() ux2.IDE {
 	switch integrationName {
 	case string(ux2.Eclipse):
 		return ux2.Eclipse
-	case string("vs code"):
+	case "vs code":
 		return ux2.VisualStudioCode
 	case string(ux2.VisualStudio):
 		return ux2.VisualStudio
@@ -236,12 +237,14 @@ func getIdeProperty() ux2.IDE {
 	}
 }
 
-type segmentLogger struct{}
+type segmentLogger struct {
+	c *config.Config
+}
 
 func (s *segmentLogger) Logf(format string, args ...any) {
-	log.Debug().Msgf(format, args...)
+	s.c.Logger().Debug().Msgf(format, args...)
 }
 
 func (s *segmentLogger) Errorf(format string, args ...any) {
-	log.Error().Msgf(format, args...)
+	s.c.Logger().Error().Msgf(format, args...)
 }

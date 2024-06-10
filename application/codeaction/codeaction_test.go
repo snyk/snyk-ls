@@ -115,7 +115,7 @@ func Test_GetCodeActions_FileIsDirty_ReturnsEmptyResults(t *testing.T) {
 }
 
 func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	// It doesn't seem like there's a difference between returning a nil and returning an empty array. If this assumption
 	// is proved to be false, this test can be changed.
 	// Arrange
@@ -123,7 +123,7 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 	var issues []snyk.Issue
 	providerMock := new(mockIssuesProvider)
 	providerMock.On("IssuesForRange", mock.Anything, mock.Anything).Return(issues)
-	fakeClient := &code.FakeSnykCodeClient{}
+	fakeClient := &code.FakeSnykCodeClient{C: c}
 	snykCodeClient := fakeClient
 	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewNotifier(), snykCodeClient)
 	codeActionsParam := lsp.CodeActionParams{
@@ -286,7 +286,7 @@ func Test_ResolveCodeAction_KeyIsNull_ReturnsError(t *testing.T) {
 func setupService() *codeaction.CodeActionsService {
 	providerMock := new(mockIssuesProvider)
 	providerMock.On("IssuesForRange", mock.Anything, mock.Anything).Return([]snyk.Issue{})
-	fakeClient := &code.FakeSnykCodeClient{}
+	fakeClient := &code.FakeSnykCodeClient{C: config.CurrentConfig()}
 	snykCodeClient := fakeClient
 	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewNotifier(), snykCodeClient)
 	return service
@@ -300,7 +300,7 @@ func setupWithSingleIssue(issue snyk.Issue) (*codeaction.CodeActionsService, lsp
 	issues := []snyk.Issue{issue}
 	providerMock.On("IssuesForRange", path, converter.FromRange(r)).Return(issues)
 	fileWatcher := watcher.NewFileWatcher()
-	fakeClient := &code.FakeSnykCodeClient{}
+	fakeClient := &code.FakeSnykCodeClient{C: config.CurrentConfig()}
 	snykCodeClient := fakeClient
 	service := codeaction.NewService(config.CurrentConfig(), providerMock, fileWatcher, notification.NewNotifier(), snykCodeClient)
 

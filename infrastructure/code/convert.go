@@ -31,11 +31,10 @@ import (
 	"github.com/hexops/gotextdiff"
 	"github.com/hexops/gotextdiff/myers"
 	"github.com/hexops/gotextdiff/span"
-	"github.com/rs/zerolog/log"
-
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"golang.org/x/exp/slices"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/filesystem"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -66,10 +65,11 @@ func issueSeverityToMarkdown(severity snyk.Severity) string {
 }
 
 func (c *exampleCommit) toReference() (reference snyk.Reference) {
+	conf := config.CurrentConfig()
 	commitURLString := c.fix.CommitURL
 	commitURL, err := url.Parse(commitURLString)
 	if err != nil {
-		log.Err(err).
+		conf.Logger().Err(err).
 			Str("method", "code.toReference").
 			Str("commitURL", commitURLString).
 			Msgf("cannot parse commit url")
@@ -79,6 +79,7 @@ func (c *exampleCommit) toReference() (reference snyk.Reference) {
 
 type SarifConverter struct {
 	sarif codeClientSarif.SarifResponse
+	c     *config.Config
 }
 
 func (s *SarifConverter) getReferences(r codeClientSarif.Rule) (references []snyk.Reference) {
@@ -153,7 +154,7 @@ func (s *SarifConverter) getCodeFlow(r codeClientSarif.Result, baseDir string) (
 					filePath := filepath.Join(baseDir, path)
 					content, err := fileUtil.GetLineOfCode(filePath, myRange.Start.Line+1)
 					if err != nil {
-						log.Warn().Str("method", "code.getCodeFlow").Err(err).Msg("cannot load line Content from file")
+						s.c.Logger().Warn().Str("method", "code.getCodeFlow").Err(err).Msg("cannot load line Content from file")
 					}
 					d := snyk.DataFlowElement{
 						Position:  len(dataflow),
@@ -161,7 +162,7 @@ func (s *SarifConverter) getCodeFlow(r codeClientSarif.Result, baseDir string) (
 						FlowRange: myRange,
 						Content:   content,
 					}
-					log.Debug().Str("method", method).Str("DataFlowElement", d.String()).Send()
+					s.c.Logger().Debug().Str("method", method).Str("DataFlowElement", d.String()).Send()
 					dataflow = append(dataflow, d)
 					dedupMap[key] = true
 				}
@@ -287,7 +288,7 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 			// Response contains encoded relative paths that should be decoded and converted to absolute.
 			absPath, err := DecodePath(ToAbsolutePath(baseDir, loc.PhysicalLocation.ArtifactLocation.URI))
 			if err != nil {
-				log.Error().
+				s.c.Logger().Error().
 					Err(err).
 					Msg("failed to convert URI to absolute path: base directory: " +
 						baseDir +
@@ -403,7 +404,7 @@ func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, 
 	// but we only store one ignore for now
 	if len(result.Suppressions) > 0 {
 		if len(result.Suppressions) > 1 {
-			log.Warn().Int("number of SARIF suppressions", len(result.Suppressions)).Msg(
+			s.c.Logger().Warn().Int("number of SARIF suppressions", len(result.Suppressions)).Msg(
 				"there are more suppressions than expected")
 		}
 		isIgnored = true
@@ -415,7 +416,7 @@ func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, 
 		ignoredOn, err := time.Parse(time.RFC3339, suppression.Properties.IgnoredOn)
 		if err != nil {
 			// We don't want to fail just because of this parsing logic
-			log.Error().
+			s.c.Logger().Error().
 				Err(err).
 				Msg("failed to parse ignoredOn timestamp " +
 					suppression.Properties.IgnoredOn)
@@ -468,7 +469,7 @@ func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir string) ([
 
 			filePath, err := DecodePath(ToAbsolutePath(baseDir, loc.Location.PhysicalLocation.ArtifactLocation.URI))
 			if err != nil {
-				log.Error().
+				s.c.Logger().Error().
 					Err(err).
 					Msg("failed to convert URI to absolute path: base directory: " +
 						baseDir +
@@ -541,7 +542,7 @@ func (s *AutofixResponse) toAutofixSuggestions(baseDir string, filePath string) 
 }
 
 func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir string, filePath string) []AutofixUnifiedDiffSuggestion {
-	logger := log.With().Str("method", "toUnifiedDiffSuggestions").Logger()
+	logger := s.c.Logger().With().Str("method", "toUnifiedDiffSuggestions").Logger()
 	var fixSuggestions []AutofixUnifiedDiffSuggestion
 	for _, suggestion := range s.AutofixSuggestions {
 		path := ToAbsolutePath(baseDir, filePath)

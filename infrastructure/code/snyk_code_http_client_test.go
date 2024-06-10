@@ -60,9 +60,8 @@ func clientFunc() *http.Client {
 }
 
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
-	testutil.SmokeTest(t, false)
-
-	s := NewSnykCodeHTTPClient(NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
+	c := testutil.SmokeTest(t, false)
+	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
 	files := map[string]string{}
 	randomAddition := fmt.Sprintf("\n public void random() { System.out.println(\"%d\") }", time.Now().UnixMicro())
 	files[path1] = util.Hash([]byte(content + randomAddition))
@@ -73,8 +72,8 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 }
 
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
-	testutil.SmokeTest(t, false)
-	s := NewSnykCodeHTTPClient(NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
+	c := testutil.SmokeTest(t, false)
+	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
 	var removedFiles []string
 	files := map[string]string{}
 	files[path1] = util.Hash([]byte(content))
@@ -117,35 +116,35 @@ func (d *dummyTransport) RoundTrip(_ *http.Request) (*http.Response, error) {
 }
 
 func TestSnykCodeBackendService_doCall_shouldRetry(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	d := &dummyTransport{responseCode: 502, status: "502 Bad Gateway"}
 	dummyClientFunc := func() *http.Client {
 		return &http.Client{
 			Transport: d,
 		}
 	}
-	s := NewSnykCodeHTTPClient(NewCodeInstrumentor(), newTestCodeErrorReporter(), dummyClientFunc)
+	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), dummyClientFunc)
 	_, err := s.doCall(context.Background(), "GET", "https://httpstat.us/500", nil)
 	assert.Error(t, err)
 	assert.Equal(t, 3, d.calls)
 }
 
 func TestSnykCodeBackendService_doCall_rejected(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	dummyClientFunc := func() *http.Client {
 		return &http.Client{}
 	}
 
-	s := NewSnykCodeHTTPClient(NewCodeInstrumentor(), newTestCodeErrorReporter(), dummyClientFunc)
+	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), dummyClientFunc)
 	_, err := s.doCall(context.Background(), "GET", "https://127.0.0.1", nil)
 	assert.Error(t, err)
 }
 
 func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
-	testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, false)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 
-	s := NewSnykCodeHTTPClient(NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
+	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []string
 	files := map[string]string{}

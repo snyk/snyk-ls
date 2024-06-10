@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -43,6 +43,7 @@ type Bundle struct {
 	limitToFiles  []string
 	rootPath      string
 	issueEnhancer IssueEnhancer
+	logger        *zerolog.Logger
 }
 
 func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {
@@ -60,7 +61,7 @@ func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) err
 	if uploadBatch.hasContent() {
 		b.BundleHash, b.missingFiles, err = b.SnykCode.ExtendBundle(ctx, b.BundleHash, uploadBatch.documents,
 			removeFiles)
-		log.Debug().Str("requestId", b.requestId).Interface(
+		b.logger.Debug().Str("requestId", b.requestId).Interface(
 			"missingFiles",
 			b.missingFiles,
 		).Msg("extended bundle on backend")
@@ -72,13 +73,13 @@ func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) err
 func (b *Bundle) FetchDiagnosticsData(
 	ctx context.Context,
 ) ([]snyk.Issue, error) {
-	defer log.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
-	log.Debug().Str("method", "FetchDiagnosticsData").Msg("started.")
+	defer b.logger.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
+	b.logger.Debug().Str("method", "FetchDiagnosticsData").Msg("started.")
 	return b.retrieveAnalysis(ctx)
 }
 
 func getIssueLangAndRuleId(issue snyk.Issue) (string, string, bool) {
-	logger := log.With().Str("method", "getIssueLangAndRuleId").Logger()
+	logger := config.CurrentConfig().Logger().With().Str("method", "getIssueLangAndRuleId").Logger()
 	issueData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 	if !ok {
 		logger.Trace().Str("file", issue.AffectedFilePath).Int("line", issue.Range.Start.Line).Msg("Can't access issue data")
@@ -98,7 +99,7 @@ func getIssueLangAndRuleId(issue snyk.Issue) (string, string, bool) {
 }
 
 func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
-	logger := log.With().Str("method", "retrieveAnalysis").Logger()
+	logger := b.logger.With().Str("method", "retrieveAnalysis").Logger()
 
 	if b.BundleHash == "" {
 		logger.Warn().Str("rootPath", b.rootPath).Msg("bundle hash is empty")
@@ -150,7 +151,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 
 		if time.Since(start) > config.CurrentConfig().SnykCodeAnalysisTimeout() {
 			err := errors.New("analysis call timed out")
-			log.Error().Err(err).Msg("timeout...")
+			b.logger.Error().Err(err).Msg("timeout...")
 			b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: b.rootPath})
 			p.EndWithMessage("Snyk Code Analysis timed out")
 			return []snyk.Issue{}, err

@@ -28,7 +28,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog/log"
 	"golang.org/x/exp/slices"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -136,7 +135,7 @@ func NewCLIScanner(instrumentor performance.Instrumentor,
 }
 
 func (cliScanner *CLIScanner) IsEnabled() bool {
-	return config.CurrentConfig().IsSnykOssEnabled()
+	return cliScanner.config.IsSnykOssEnabled()
 }
 
 func (cliScanner *CLIScanner) Product() product.Product {
@@ -144,9 +143,8 @@ func (cliScanner *CLIScanner) Product() product.Product {
 }
 
 func (cliScanner *CLIScanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue, err error) {
-	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", "CLIScanner.scan").Logger()
-	if !c.NonEmptyToken() {
+	logger := cliScanner.config.Logger().With().Str("method", "CLIScanner.scan").Logger()
+	if !cliScanner.config.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
@@ -164,8 +162,7 @@ func (cliScanner *CLIScanner) scanInternal(
 ) (issues []snyk.Issue,
 	err error) {
 	method := "cliScanner.Scan"
-	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", method).Logger()
+	logger := cliScanner.config.Logger().With().Str("method", method).Logger()
 
 	s := cliScanner.instrumentor.StartSpan(ctx, method)
 	defer cliScanner.instrumentor.Finish(s)
@@ -239,12 +236,12 @@ func (cliScanner *CLIScanner) scanInternal(
 
 func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool) []string {
 	cmd := cliScanner.cli.ExpandParametersFromConfig([]string{
-		config.CurrentConfig().CliSettings().Path(),
+		cliScanner.config.CliSettings().Path(),
 		"test",
 	})
 	cmd = append(cmd, args...)
 	cmd = append(cmd, "--json")
-	additionalParams := config.CurrentConfig().CliSettings().AdditionalOssParameters
+	additionalParams := cliScanner.config.CliSettings().AdditionalOssParameters
 	for _, parameter := range additionalParams {
 		if parameterBlacklist[parameter] {
 			continue
@@ -336,15 +333,16 @@ func (cliScanner *CLIScanner) handleError(path string, err error, res []byte, cm
 		case 1:
 			return false
 		case 2:
-			log.Err(newError).Str("method", "cliScanner.Scan").Str("output", errorOutput).Msg("Error while calling Snyk CLI")
+			cliScanner.config.Logger().Err(newError).Str("method", "cliScanner.Scan").Str("output",
+				errorOutput).Msg("Error while calling Snyk CLI")
 			// we want a user notification, but don't want to send it to sentry
 			cliScanner.notifier.SendErrorDiagnostic(path, newError)
 			return true
 		case 3:
-			log.Debug().Str("method", "cliScanner.Scan").Msg("no supported projects/files detected.")
+			cliScanner.config.Logger().Debug().Str("method", "cliScanner.Scan").Msg("no supported projects/files detected.")
 			return true
 		default:
-			log.Err(newError).Str("method", "cliScanner.Scan").Msg("Error while calling Snyk CLI")
+			cliScanner.config.Logger().Err(newError).Str("method", "cliScanner.Scan").Msg("Error while calling Snyk CLI")
 			cliScanner.errorReporter.CaptureErrorAndReportAsIssue(path, newError)
 		}
 	default:
@@ -403,7 +401,7 @@ func (cliScanner *CLIScanner) trackResult(success bool) {
 // The timer is reset if a new scan is scheduled before the previous one is executed.
 // Canceling the context will stop the timer and abort the scheduled scan.
 func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path string) {
-	logger := log.With().Str("method", "cliScanner.scheduleRefreshScan").Logger()
+	logger := cliScanner.config.Logger().With().Str("method", "cliScanner.scheduleRefreshScan").Logger()
 	cliScanner.scheduledScanMtx.Lock()
 	if cliScanner.scheduledScan != nil {
 		// Cancel previously scheduled scan

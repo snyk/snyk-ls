@@ -20,21 +20,23 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
+
+	"github.com/snyk/snyk-ls/application/config"
 )
 
 type FakeAuthenticationProvider struct {
 	ExpectedAuthURL string
 	IsAuthenticated bool
 	authURL         string
+	C               *config.Config
 }
 
 func (a *FakeAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
 	if a.IsAuthenticated {
-		log.Info().Msgf("Fake Authentication - successful.")
+		a.C.Logger().Info().Msgf("Fake Authentication - successful.")
 		return func() (string, error) { return "fake auth successful", nil }
 	}
-	log.Info().Msgf("Fake Authentication - failed.")
+	a.C.Logger().Info().Msgf("Fake Authentication - failed.")
 	return func() (string, error) { return "", errors.New("Authentication failed. Please update your token.") }
 }
 
@@ -56,6 +58,6 @@ func (a *FakeAuthenticationProvider) SetAuthURL(url string) {
 	a.authURL = url
 }
 
-func NewFakeCliAuthenticationProvider() *FakeAuthenticationProvider {
-	return &FakeAuthenticationProvider{ExpectedAuthURL: "https://app.snyk.io/login?token=someToken"}
+func NewFakeCliAuthenticationProvider(c *config.Config) *FakeAuthenticationProvider {
+	return &FakeAuthenticationProvider{ExpectedAuthURL: "https://app.snyk.io/login?token=someToken", C: c}
 }

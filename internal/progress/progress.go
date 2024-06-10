@@ -20,8 +20,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
@@ -160,7 +160,7 @@ func newProgressParams(title, message string, cancellable, unquantifiableLength 
 
 func (t *Tracker) send(progress lsp.ProgressParams) {
 	if progress.Token == "" {
-		log.Error().Str("method", "send").Msg("progress has no token")
+		config.CurrentConfig().Logger().Error().Str("method", "send").Msg("progress has no token")
 	}
 	t.channel <- progress
 }

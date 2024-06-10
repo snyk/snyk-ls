@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/rs/zerolog/log"
 	"golang.org/x/net/html"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -62,7 +61,7 @@ func (h htmlParser) parseDependencies(deps []string, fileContent string) (depend
 	for _, dep := range deps {
 		dependency, err := h.dependencyFromString(dep)
 		if err != nil {
-			log.Debug().Any("dependency", dep).Msg("couldn't parse dependency, skipping.")
+			h.config.Logger().Debug().Any("dependency", dep).Msg("couldn't parse dependency, skipping.")
 			continue
 		}
 		logger.Trace().Msgf("found dependency: %s", dependency)

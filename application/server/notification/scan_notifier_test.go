@@ -72,7 +72,7 @@ func Test_SendMessage(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			expectedProduct := "code"
 			mockNotifier := notification.NewMockNotifier()
-			scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
+			scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
 			// Act - run the test
 			test.act(scanNotifier)
@@ -89,10 +89,10 @@ func Test_SendMessage(t *testing.T) {
 }
 
 func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
+	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
 	const folderPath = "/test/iac/folderPath"
 
@@ -233,10 +233,10 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 }
 
 func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
+	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
 	const folderPath = "/test/oss/folderPath"
 
@@ -355,10 +355,10 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 }
 
 func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
+	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
 	const folderPath = "/test/iac/folderPath"
 	r := snyk.Range{
@@ -445,10 +445,10 @@ func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
 }
 
 func Test_SendSuccess_SendsForSnykCode_WithIgnores(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
+	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
 	const folderPath = "/test/iac/folderPath"
 	r := snyk.Range{
@@ -553,10 +553,10 @@ func Test_SendSuccess_SendsForSnykCode_WithIgnores(t *testing.T) {
 }
 
 func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
+	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
 	const folderPath = "/test/iac/folderPath"
 	r := snyk.Range{
@@ -629,7 +629,8 @@ func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
 }
 
 func Test_NewScanNotifier_NilNotifier_Errors(t *testing.T) {
-	scanNotifier, err := notification2.NewScanNotifier(nil)
+	c := testutil.UnitTest(t)
+	scanNotifier, err := notification2.NewScanNotifier(c, nil)
 	assert.Error(t, err)
 	assert.Nil(t, scanNotifier)
 }
@@ -643,7 +644,7 @@ func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 
 		// Arrange
 		mockNotifier := notification.NewMockNotifier()
-		scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
+		scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
 		// Act
 		scanNotifier.SendInProgress("/test/folderPath")
@@ -659,7 +660,7 @@ func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 
 		// Arrange
 		mockNotifier := notification.NewMockNotifier()
-		scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
+		scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
 		// Act
 		scanNotifier.SendInProgress("/test/folderPath")
@@ -675,7 +676,7 @@ func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 
 		// Arrange
 		mockNotifier := notification.NewMockNotifier()
-		scanNotifier, _ := notification2.NewScanNotifier(mockNotifier)
+		scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
 		// Act
 		scanNotifier.SendInProgress("/test/folderPath")

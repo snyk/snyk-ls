@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
@@ -35,6 +34,7 @@ type fixCodeIssue struct {
 	command       snyk.CommandData
 	issueProvider snyk.IssueProvider
 	notifier      notification.Notifier
+	c             *config.Config
 }
 
 func (cmd *fixCodeIssue) Command() snyk.CommandData {
@@ -43,7 +43,7 @@ func (cmd *fixCodeIssue) Command() snyk.CommandData {
 
 func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 	if !config.CurrentConfig().ClientCapabilities().Workspace.ApplyEdit {
-		log.Error().Msg("Client doesn't support 'workspace/applyEdit' capability, skipping fix attempt.")
+		cmd.c.Logger().Error().Msg("Client doesn't support 'workspace/applyEdit' capability, skipping fix attempt.")
 		return nil, errors.New("Client doesn't support 'workspace/applyEdit' capability.")
 	}
 
@@ -65,7 +65,7 @@ func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 			// execute autofix codeaction
 			edit := (*action.DeferredEdit)()
 			if edit == nil {
-				log.Info().Msg("No fix could be computed.")
+				cmd.c.Logger().Info().Msg("No fix could be computed.")
 				return nil, nil
 			}
 

@@ -19,13 +19,13 @@ package ux
 import (
 	"sync"
 
-	"github.com/rs/zerolog/log"
+	"github.com/snyk/snyk-ls/application/config"
 )
 
 var _ Analytics = &TestAnalytics{} // Explicit interface implementation
 
-func NewTestAnalytics() *TestAnalytics {
-	return &TestAnalytics{}
+func NewTestAnalytics(c *config.Config) *TestAnalytics {
+	return &TestAnalytics{c: c}
 }
 
 type TestAnalytics struct {
@@ -34,6 +34,7 @@ type TestAnalytics struct {
 	Identified              bool
 	Initialized             bool
 	ScanModeIsSelectedCount int
+	c                       *config.Config
 }
 
 func (n *TestAnalytics) GetAnalytics() []any {
@@ -46,45 +47,45 @@ func (n *TestAnalytics) AnalysisIsReady(properties AnalysisIsReadyProperties) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.analytics = append(n.analytics, properties)
-	log.Info().Str("method", "AnalysisIsReady").Msgf("no op - args %v", properties)
+	n.c.Logger().Info().Str("method", "AnalysisIsReady").Msgf("no op - args %v", properties)
 }
 
 func (n *TestAnalytics) AnalysisIsTriggered(properties AnalysisIsTriggeredProperties) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.analytics = append(n.analytics, properties)
-	log.Info().Str("method", "AnalysisIsTriggered").Msgf("no op - args %v", properties)
+	n.c.Logger().Info().Str("method", "AnalysisIsTriggered").Msgf("no op - args %v", properties)
 }
 
 func (n *TestAnalytics) IssueHoverIsDisplayed(properties IssueHoverIsDisplayedProperties) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.analytics = append(n.analytics, properties)
-	log.Info().Str("method", "IssueHoverIsDisplayed").Msgf("no op - args %v", properties)
+	n.c.Logger().Info().Str("method", "IssueHoverIsDisplayed").Msgf("no op - args %v", properties)
 }
 
 func (n *TestAnalytics) PluginIsInstalled(properties PluginIsInstalledProperties) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.analytics = append(n.analytics, properties)
-	log.Info().Str("method", "PluginIsInstalled").Msgf("no op - args %v", properties)
+	n.c.Logger().Info().Str("method", "PluginIsInstalled").Msgf("no op - args %v", properties)
 }
 
 func (n *TestAnalytics) Initialise() { //nolint:misspell // breaking api change
-	log.Info().Str("method", "Init").Msgf("no op")
+	n.c.Logger().Info().Str("method", "Init").Msgf("no op")
 	n.Initialized = true
 }
 func (n *TestAnalytics) Shutdown() error {
-	log.Info().Str("method", "Shutdown").Msgf("no op")
+	n.c.Logger().Info().Str("method", "Shutdown").Msgf("no op")
 	return nil
 }
 func (n *TestAnalytics) Identify() {
-	log.Info().Str("method", "Identify").Msgf("no op")
+	n.c.Logger().Info().Str("method", "Identify").Msgf("no op")
 	n.Identified = true
 }
 
 func (n *TestAnalytics) ScanModeIsSelected(properties ScanModeIsSelectedProperties) {
-	log.Info().Str("method", "ScanModeIsSelected").Msgf("no op")
+	n.c.Logger().Info().Str("method", "ScanModeIsSelected").Msgf("no op")
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.ScanModeIsSelectedCount++

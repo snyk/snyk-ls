@@ -32,7 +32,7 @@ import (
 )
 
 func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	// Prepare
 	cmd := []string{"snyk", "test"}
@@ -47,9 +47,9 @@ func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
 	workflowId := workflow.NewWorkflowIdentifier("legacycli")
 	engine := app.CreateAppEngine()
 	_, err := engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
-		config := invocation.GetConfiguration()
-		actualSnykCommand = config.GetStringSlice(configuration.RAW_CMD_ARGS)
-		actualWorkingDir = config.GetString(configuration.WORKING_DIRECTORY)
+		gafConf := invocation.GetConfiguration()
+		actualSnykCommand = gafConf.GetStringSlice(configuration.RAW_CMD_ARGS)
+		actualWorkingDir = gafConf.GetString(configuration.WORKING_DIRECTORY)
 		data := workflow.NewData(workflow.NewTypeIdentifier(workflowId, "testdata"), "txt", expectedPayload)
 		return []workflow.Data{data}, nil
 	})
@@ -61,7 +61,7 @@ func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
 	config.CurrentConfig().SetEngine(engine)
 
 	// Run
-	executorUnderTest := NewExtensionExecutor()
+	executorUnderTest := NewExtensionExecutor(c)
 	actualData, err := executorUnderTest.Execute(context.Background(), cmd, expectedWorkingDir)
 	assert.Nil(t, err)
 
@@ -72,7 +72,7 @@ func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
 }
 
 func Test_ExecuteLegacyCLI_FAILED(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	// Prepare
 	engine := app.CreateAppEngine()
@@ -81,7 +81,7 @@ func Test_ExecuteLegacyCLI_FAILED(t *testing.T) {
 	expectedPayload := []byte{}
 
 	// Run
-	executorUnderTest := NewExtensionExecutor()
+	executorUnderTest := NewExtensionExecutor(c)
 	actualData, err := executorUnderTest.Execute(context.Background(), cmd, "")
 
 	// Compare

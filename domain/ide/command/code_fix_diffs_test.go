@@ -28,6 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func Test_codeFixDiffs_Command(t *testing.T) {
@@ -57,6 +58,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	runtime.GOOS == "windows" {
 		t.Skip("Skipping test on windows")
 	}
+	c := testutil.UnitTest(t)
 	instrumentor := code.NewCodeInstrumentor()
 	snykCodeClient := &code.FakeSnykCodeClient{
 		UnifiedDiffSuggestions: []code.AutofixUnifiedDiffSuggestion{
@@ -68,7 +70,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	}
 	snykApiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
 	codeScanner := &code.Scanner{
-		BundleUploader: code.NewBundler(snykCodeClient, instrumentor),
+		BundleUploader: code.NewBundler(c, snykCodeClient, instrumentor),
 		SnykApiClient:  snykApiClient,
 	}
 	cut := codeFixDiffs{

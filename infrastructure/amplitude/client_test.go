@@ -235,7 +235,7 @@ func setupUnitTest(t *testing.T) (*Client, *FakeSegmentClient, *config.Config) {
 	t.Helper()
 	c := testutil.UnitTest(t)
 	authFunc := func() (string, error) { return "fakeUser", nil }
-	s := NewAmplitudeClient(authFunc, error_reporting.NewTestErrorReporter()).(*Client)
+	s := NewAmplitudeClient(c, authFunc, error_reporting.NewTestErrorReporter()).(*Client)
 	fakeSegmentClient := &FakeSegmentClient{mutex: &sync.Mutex{}}
 	c.SetIntegrationName("VS Code")
 	s.destination.client = fakeSegmentClient

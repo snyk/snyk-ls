@@ -3,7 +3,6 @@ package analytics
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"testing"
 
 	"github.com/pact-foundation/pact-go/dsl"
@@ -63,7 +62,7 @@ func TestAnalyticsProviderPact(t *testing.T) {
 
 	// Verify runs the current test case against a Mock Service.
 	if err := pact.Verify(test); err != nil {
-		log.Fatalf("Error on Verify: %v", err)
+		t.Fatalf("Error on Verify: %v", err)
 	}
 }
 

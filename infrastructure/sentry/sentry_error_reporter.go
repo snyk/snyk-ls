@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
@@ -30,6 +29,7 @@ import (
 // A Sentry implementation of our error reporter that respects user preferences regarding tracking
 type GDPRAwareSentryErrorReporter struct {
 	notifier notification.Notifier
+	c        *config.Config
 }
 
 func (s *GDPRAwareSentryErrorReporter) CaptureErrorAndReportAsIssue(path string, err error) bool {
@@ -39,9 +39,9 @@ func (s *GDPRAwareSentryErrorReporter) CaptureErrorAndReportAsIssue(path string,
 	return s.sendToSentry(err)
 }
 
-func NewSentryErrorReporter(notifier notification.Notifier) error_reporting.ErrorReporter {
-	initializeSentry()
-	return &GDPRAwareSentryErrorReporter{notifier: notifier}
+func NewSentryErrorReporter(notifier notification.Notifier, c *config.Config) error_reporting.ErrorReporter {
+	initializeSentry(c)
+	return &GDPRAwareSentryErrorReporter{notifier: notifier, c: c}
 }
 
 func (s *GDPRAwareSentryErrorReporter) FlushErrorReporting() {
@@ -55,10 +55,10 @@ func (s *GDPRAwareSentryErrorReporter) CaptureError(err error) bool {
 }
 
 func (s *GDPRAwareSentryErrorReporter) sendToSentry(err error) (reportedToSentry bool) {
-	if config.CurrentConfig().IsErrorReportingEnabled() {
+	if s.c.IsErrorReportingEnabled() {
 		eventId := sentry.CaptureException(err)
 		if eventId != nil {
-			log.Info().Err(err).Str("method", "CaptureError").Msgf("Sent error to Sentry (ID: %v)", *eventId)
+			s.c.Logger().Info().Err(err).Str("method", "CaptureError").Msgf("Sent error to Sentry (ID: %v)", *eventId)
 			return true
 		}
 	}

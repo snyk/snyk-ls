@@ -74,9 +74,8 @@ func keyFoundInEnv(key string) bool {
 }
 
 func Test_configureOauth_registersStorageCallback(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	di.TestInit(t)
-	c := config.CurrentConfig()
 	c.SetAuthenticationMethod(lsp.OAuthAuthentication)
 
 	// a token that's set into the configuration
@@ -105,9 +104,8 @@ func Test_configureOauth_registersStorageCallback(t *testing.T) {
 }
 
 func Test_configureOauth_oauthProvider_created_with_injected_refreshMethod(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	di.TestInit(t)
-	c := config.CurrentConfig()
 	c.SetAuthenticationMethod(lsp.OAuthAuthentication)
 
 	// an expired token that's set into the configuration
@@ -150,7 +148,7 @@ func Test_configureOauth_oauthProvider_created_with_injected_refreshMethod(t *te
 }
 
 func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	di.TestInit(t)
 	loc, _ := setupServer(t)
 
@@ -162,8 +160,7 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 		t.Fatal(err, "error calling server")
 	}
 
-	c := config.CurrentConfig()
-	conf := config.CurrentConfig().Engine().GetConfiguration()
+	conf := c.Engine().GetConfiguration()
 	assert.Equal(t, false, c.IsSnykCodeEnabled())
 	assert.Equal(t, false, c.IsSnykOssEnabled())
 	assert.Equal(t, false, c.IsSnykIacEnabled())
@@ -182,7 +179,7 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 }
 
 func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	loc, _ := setupCustomServer(t, callBackMock)
 
 	_, err := loc.Client.Call(ctx, "initialize", lsp.InitializeParams{
@@ -203,8 +200,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	}
 	assert.NoError(t, err)
 
-	c := config.CurrentConfig()
-	conf := config.CurrentConfig().Engine().GetConfiguration()
+	conf := c.Engine().GetConfiguration()
 	assert.Equal(t, false, c.IsSnykCodeEnabled())
 	assert.Equal(t, false, c.IsSnykOssEnabled())
 	assert.Equal(t, false, c.IsSnykIacEnabled())
@@ -246,7 +242,7 @@ func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
 }
 
 func Test_UpdateSettings(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	di.TestInit(t)
 
 	orgUuid, _ := uuid.NewRandom()
@@ -254,12 +250,12 @@ func Test_UpdateSettings(t *testing.T) {
 
 	t.Run("snykgov.io substring endpoint enables oauth authentication in init", func(t *testing.T) {
 		endpoint := "https://app.fedramp.snykgov.io/api/v1"
-		updateApiEndpoints(lsp.Settings{Endpoint: endpoint}, true)
+		updateApiEndpoints(c, lsp.Settings{Endpoint: endpoint}, true)
 		assert.Equal(t, lsp.OAuthAuthentication, config.CurrentConfig().AuthenticationMethod())
 	})
 
 	t.Run("All settings are updated", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		c := testutil.UnitTest(t)
 
 		settings := lsp.Settings{
 			ActivateSnykOpenSource:      "false",
@@ -287,9 +283,8 @@ func Test_UpdateSettings(t *testing.T) {
 			SnykCodeApi:                 sampleSettings.SnykCodeApi,
 		}
 
-		UpdateSettings(settings)
+		UpdateSettings(c, settings)
 
-		c := config.CurrentConfig()
 		assert.Equal(t, false, c.IsSnykCodeEnabled())
 		assert.Equal(t, false, c.IsSnykOssEnabled())
 		assert.Equal(t, false, c.IsSnykIacEnabled())
@@ -317,70 +312,68 @@ func Test_UpdateSettings(t *testing.T) {
 	})
 
 	t.Run("empty snyk code api is ignored and default is used", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		c := testutil.UnitTest(t)
 
-		UpdateSettings(lsp.Settings{})
+		UpdateSettings(c, lsp.Settings{})
 
-		c := config.CurrentConfig()
 		assert.Equal(t, config.DefaultDeeproxyApiUrl, c.SnykCodeApi())
 	})
 
 	t.Run("blank organization is ignored", func(t *testing.T) {
-		c := config.New()
-		config.SetCurrentConfig(c)
+		c := testutil.UnitTest(t)
 		c.SetOrganization(expectedOrgId)
 
-		UpdateSettings(lsp.Settings{Organization: " "})
+		UpdateSettings(c, lsp.Settings{Organization: " "})
 
 		assert.Equal(t, expectedOrgId, c.Organization())
 	})
 
 	t.Run("incomplete env vars", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		c := testutil.UnitTest(t)
 
-		UpdateSettings(lsp.Settings{AdditionalEnv: "a="})
+		UpdateSettings(c, lsp.Settings{AdditionalEnv: "a="})
 
 		assert.Empty(t, os.Getenv("a"))
 	})
 
 	t.Run("empty env vars", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		c := testutil.UnitTest(t)
 		varCount := len(os.Environ())
 
-		UpdateSettings(lsp.Settings{AdditionalEnv: " "})
+		UpdateSettings(c, lsp.Settings{AdditionalEnv: " "})
 
 		assert.Equal(t, varCount, len(os.Environ()))
 	})
 
 	t.Run("broken env variables", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		c := testutil.UnitTest(t)
 
-		UpdateSettings(lsp.Settings{AdditionalEnv: "a=; b"})
+		UpdateSettings(c, lsp.Settings{AdditionalEnv: "a=; b"})
 
 		assert.Empty(t, os.Getenv("a"))
 		assert.Empty(t, os.Getenv("b"))
 		assert.Empty(t, os.Getenv(";"))
 	})
 	t.Run("trusted folders", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		c := testutil.UnitTest(t)
 
-		UpdateSettings(lsp.Settings{TrustedFolders: []string{"/a/b", "/b/c"}})
+		UpdateSettings(c, lsp.Settings{TrustedFolders: []string{"/a/b", "/b/c"}})
 
-		c := config.CurrentConfig()
 		assert.Contains(t, c.TrustedFolders(), "/a/b")
 		assert.Contains(t, c.TrustedFolders(), "/b/c")
 	})
 
 	t.Run("manage binaries automatically", func(t *testing.T) {
+		c := testutil.UnitTest(t)
 		t.Run("true", func(t *testing.T) {
-			UpdateSettings(lsp.Settings{
+			UpdateSettings(c, lsp.Settings{
 				ManageBinariesAutomatically: "true",
 			})
 
 			assert.True(t, config.CurrentConfig().ManageBinariesAutomatically())
 		})
 		t.Run("false", func(t *testing.T) {
-			UpdateSettings(lsp.Settings{
+			UpdateSettings(c, lsp.Settings{
 				ManageBinariesAutomatically: "false",
 			})
 
@@ -388,11 +381,11 @@ func Test_UpdateSettings(t *testing.T) {
 		})
 
 		t.Run("invalid value does not update", func(t *testing.T) {
-			UpdateSettings(lsp.Settings{
+			UpdateSettings(c, lsp.Settings{
 				ManageBinariesAutomatically: "true",
 			})
 
-			UpdateSettings(lsp.Settings{
+			UpdateSettings(c, lsp.Settings{
 				ManageBinariesAutomatically: "dog",
 			})
 
@@ -401,176 +394,153 @@ func Test_UpdateSettings(t *testing.T) {
 	})
 
 	t.Run("activateSnykCodeSecurity is passed", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		c := testutil.UnitTest(t)
 
-		UpdateSettings(lsp.Settings{ActivateSnykCodeSecurity: "true"})
+		UpdateSettings(c, lsp.Settings{ActivateSnykCodeSecurity: "true"})
 
-		c := config.CurrentConfig()
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 	})
 	t.Run("activateSnykCodeSecurity is not passed", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		c := testutil.UnitTest(t)
 
-		UpdateSettings(lsp.Settings{})
+		UpdateSettings(c, lsp.Settings{})
 
-		c := config.CurrentConfig()
 		assert.Equal(t, false, c.IsSnykCodeSecurityEnabled())
 
-		config.SetCurrentConfig(config.New())
-		c = config.CurrentConfig()
 		c.EnableSnykCodeSecurity(true)
 
-		UpdateSettings(lsp.Settings{})
+		UpdateSettings(c, lsp.Settings{})
 
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 	})
 	t.Run("activateSnykCodeQuality is passed", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		c := testutil.UnitTest(t)
 
-		UpdateSettings(lsp.Settings{ActivateSnykCodeQuality: "true"})
+		UpdateSettings(c, lsp.Settings{ActivateSnykCodeQuality: "true"})
 
-		c := config.CurrentConfig()
 		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
 	})
 	t.Run("activateSnykCodeQuality is not passed", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		c := testutil.UnitTest(t)
 
-		UpdateSettings(lsp.Settings{})
+		UpdateSettings(c, lsp.Settings{})
 
-		c := config.CurrentConfig()
 		assert.Equal(t, false, c.IsSnykCodeQualityEnabled())
 
-		config.SetCurrentConfig(config.New())
-		c = config.CurrentConfig()
 		c.EnableSnykCodeQuality(true)
 
-		UpdateSettings(lsp.Settings{})
+		UpdateSettings(c, lsp.Settings{})
 
 		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
 	})
 	t.Run("activateSnykCode sets SnykCodeQuality and SnykCodeSecurity", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		c := testutil.UnitTest(t)
 
-		UpdateSettings(lsp.Settings{
+		UpdateSettings(c, lsp.Settings{
 			ActivateSnykCode: "true",
 		})
 
-		c := config.CurrentConfig()
 		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 		assert.Equal(t, true, c.IsSnykCodeEnabled())
 	})
 
 	t.Run("severity filter", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		c := testutil.UnitTest(t)
 		t.Run("filtering gets passed", func(t *testing.T) {
 			mixedSeverityFilter := lsp.NewSeverityFilter(true, false, true, false)
-			UpdateSettings(lsp.Settings{FilterSeverity: mixedSeverityFilter})
+			UpdateSettings(c, lsp.Settings{FilterSeverity: mixedSeverityFilter})
 
-			c := config.CurrentConfig()
 			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
 		})
 	})
 }
 
 func Test_ScanningModeChanged_AnalyticsNotified(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	di.TestInit(t)
-	config.SetCurrentConfig(config.New())
 	analytics := di.Analytics().(*ux.TestAnalytics)
 	callCount := analytics.ScanModeIsSelectedCount
 
-	UpdateSettings(lsp.Settings{ScanningMode: "manual"})
+	UpdateSettings(c, lsp.Settings{ScanningMode: "manual"})
 
 	assert.Equal(t, callCount+1, analytics.ScanModeIsSelectedCount)
 }
 
 func Test_InitializeSettings(t *testing.T) {
-	testutil.UnitTest(t)
 	di.TestInit(t)
 
 	t.Run("device ID is passed", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		c := testutil.UnitTest(t)
 		deviceId := "test-device-id"
 
-		InitializeSettings(lsp.Settings{DeviceId: deviceId})
+		InitializeSettings(c, lsp.Settings{DeviceId: deviceId})
 
-		c := config.CurrentConfig()
 		assert.Equal(t, deviceId, c.DeviceID())
 	})
 
 	t.Run("device ID is not passed", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
-		curentDeviceId := config.CurrentConfig().DeviceID()
+		c := testutil.UnitTest(t)
+		deviceId := c.DeviceID()
 
-		InitializeSettings(lsp.Settings{})
+		InitializeSettings(c, lsp.Settings{})
 
-		c := config.CurrentConfig()
-		assert.Equal(t, curentDeviceId, c.DeviceID())
+		assert.Equal(t, deviceId, c.DeviceID())
 	})
 
 	t.Run("activateSnykCodeSecurity is passed", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		c := testutil.UnitTest(t)
 
-		InitializeSettings(lsp.Settings{ActivateSnykCodeSecurity: "true"})
+		InitializeSettings(c, lsp.Settings{ActivateSnykCodeSecurity: "true"})
 
-		c := config.CurrentConfig()
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 	})
 	t.Run("activateSnykCodeSecurity is not passed", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		c := testutil.UnitTest(t)
 
-		InitializeSettings(lsp.Settings{})
+		InitializeSettings(c, lsp.Settings{})
 
-		c := config.CurrentConfig()
 		assert.Equal(t, false, c.IsSnykCodeSecurityEnabled())
 
-		config.SetCurrentConfig(config.New())
-		c = config.CurrentConfig()
 		c.EnableSnykCodeSecurity(true)
 
-		InitializeSettings(lsp.Settings{})
+		InitializeSettings(c, lsp.Settings{})
 
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 	})
 	t.Run("activateSnykCodeQuality is passed", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		c := testutil.UnitTest(t)
 
-		InitializeSettings(lsp.Settings{ActivateSnykCodeQuality: "true"})
+		InitializeSettings(c, lsp.Settings{ActivateSnykCodeQuality: "true"})
 
-		c := config.CurrentConfig()
 		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
 	})
 	t.Run("activateSnykCodeQuality is not passed", func(t *testing.T) {
-		config.SetCurrentConfig(config.New())
+		c := testutil.UnitTest(t)
 
-		InitializeSettings(lsp.Settings{})
+		InitializeSettings(c, lsp.Settings{})
 
-		c := config.CurrentConfig()
 		assert.Equal(t, false, c.IsSnykCodeQualityEnabled())
 
-		config.SetCurrentConfig(config.New())
-		c = config.CurrentConfig()
 		c.EnableSnykCodeQuality(true)
 
-		InitializeSettings(lsp.Settings{})
+		InitializeSettings(c, lsp.Settings{})
 
 		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
 	})
 
 	t.Run("authenticationMethod is passed", func(t *testing.T) {
-		testutil.UnitTest(t)
+		c := testutil.UnitTest(t)
 		di.TestInit(t)
-		c := config.CurrentConfig()
 		assert.Equal(t, lsp.TokenAuthentication, c.AuthenticationMethod())
 
-		InitializeSettings(lsp.Settings{AuthenticationMethod: lsp.OAuthAuthentication})
+		InitializeSettings(c, lsp.Settings{AuthenticationMethod: lsp.OAuthAuthentication})
 
 		assert.Equal(t, lsp.OAuthAuthentication, c.AuthenticationMethod())
 	})
 
 	t.Run("custom path configuration", func(t *testing.T) {
-		testutil.UnitTest(t)
+		c := testutil.UnitTest(t)
 
 		first := "first"
 		second := "second"
@@ -580,16 +550,16 @@ func Test_InitializeSettings(t *testing.T) {
 		t.Setenv(caseSensitivePathKey, "something_meaningful")
 
 		// update path to hold a custom value
-		UpdateSettings(lsp.Settings{Path: first})
+		UpdateSettings(c, lsp.Settings{Path: first})
 		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), first+string(os.PathListSeparator)))
 
 		// update path to hold another value
-		UpdateSettings(lsp.Settings{Path: second})
+		UpdateSettings(c, lsp.Settings{Path: second})
 		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), second+string(os.PathListSeparator)))
 		assert.False(t, strings.Contains(os.Getenv(upperCasePathKey), first))
 
 		// reset path with non-empty settings
-		UpdateSettings(lsp.Settings{Path: "", AuthenticationMethod: "token"})
+		UpdateSettings(c, lsp.Settings{Path: "", AuthenticationMethod: "token"})
 		assert.False(t, strings.Contains(os.Getenv(upperCasePathKey), second))
 
 		assert.True(t, keyFoundInEnv(upperCasePathKey))

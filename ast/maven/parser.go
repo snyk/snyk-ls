@@ -21,13 +21,13 @@ import (
 	"io"
 	"strings"
 
-	"github.com/rs/zerolog/log"
-
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast"
 )
 
 type Parser struct {
-	tree ast.Tree
+	tree   ast.Tree
+	config *config.Config
 }
 
 type dependency struct {
@@ -35,6 +35,12 @@ type dependency struct {
 	ArtifactId string `xml:"artifactId"`
 	Version    string `xml:"version"`
 	Scope      string `xml:"scope"`
+}
+
+func New(c *config.Config) Parser {
+	return Parser{
+		config: c,
+	}
 }
 
 func (p *Parser) Parse(content string, path string) ast.Tree {
@@ -48,7 +54,7 @@ func (p *Parser) Parse(content string, path string) ast.Tree {
 			// EOF means we're done.
 			break
 		} else if err != nil {
-			log.Err(err).Msg("Couldn't parse XML")
+			p.config.Logger().Err(err).Msg("Couldn't parse XML")
 		}
 
 		switch xmlType := token.(type) {
@@ -56,11 +62,11 @@ func (p *Parser) Parse(content string, path string) ast.Tree {
 			if xmlType.Name.Local == "dependency" {
 				var dep dependency
 				if err = d.DecodeElement(&dep, &xmlType); err != nil {
-					log.Err(err).Msg("Couldn't decode dependency")
+					p.config.Logger().Err(err).Msg("Couldn't decode dependency")
 				}
 				offsetAfter := d.InputOffset()
 				node := p.addNewNodeTo(tree.Root, offset, offsetAfter, dep)
-				log.Debug().Interface("nodeName", node.Name).Str("path", p.tree.Document).Msg("Added dependency node")
+				p.config.Logger().Debug().Interface("nodeName", node.Name).Str("path", p.tree.Document).Msg("Added dependency node")
 			}
 		default:
 		}

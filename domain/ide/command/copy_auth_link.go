@@ -20,8 +20,8 @@ import (
 	"context"
 
 	"github.com/atotto/clipboard"
-	"github.com/rs/zerolog/log"
 
+	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
@@ -30,6 +30,7 @@ type copyAuthLinkCommand struct {
 	command     snyk.CommandData
 	authService snyk.AuthenticationService
 	notifier    noti.Notifier
+	c           *config.Config
 }
 
 func (cmd *copyAuthLinkCommand) Command() snyk.CommandData {
@@ -38,13 +39,13 @@ func (cmd *copyAuthLinkCommand) Command() snyk.CommandData {
 
 func (cmd *copyAuthLinkCommand) Execute(ctx context.Context) (any, error) {
 	url := cmd.authService.Provider().AuthURL(ctx)
-	log.Debug().Str("method", "copyAuthLinkCommand.Execute").
+	cmd.c.Logger().Debug().Str("method", "copyAuthLinkCommand.Execute").
 		Str("url", url).
 		Msgf("copying auth link to clipboard")
 	err := clipboard.WriteAll(url)
 
 	if err != nil {
-		log.Err(err).Msg("Error on snyk.copyAuthLink command")
+		cmd.c.Logger().Err(err).Msg("Error on snyk.copyAuthLink command")
 		cmd.notifier.SendError(err)
 	}
 	return url, err

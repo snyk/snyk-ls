@@ -28,8 +28,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -130,6 +130,7 @@ type FakeSnykCodeClient struct {
 	NoFixSuggestions       bool
 	UnifiedDiffSuggestions []AutofixUnifiedDiffSuggestion
 	Options                AnalysisOptions
+	C                      *config.Config
 }
 
 func (f *FakeSnykCodeClient) GetAutoFixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
@@ -260,7 +261,7 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 		}
 	}
 	f.Options = options
-	log.Trace().Str("method", "RunAnalysis").Interface(
+	f.C.Logger().Trace().Str("method", "RunAnalysis").Interface(
 		"fakeDiagnostic",
 		FakeIssue,
 	).Msg("fake backend call received & answered")
@@ -279,7 +280,7 @@ func (f *FakeSnykCodeClient) GetAutofixSuggestions(
 	FakeSnykCodeApiServiceMutex.Unlock()
 
 	if f.NoFixSuggestions {
-		log.Trace().Str("method", "GetAutofixSuggestions").Interface("fakeAutofix",
+		f.C.Logger().Trace().Str("method", "GetAutofixSuggestions").Interface("fakeAutofix",
 			"someAutofixSuggestion").Msg("fake backend call received & answered with no suggestions")
 		return nil, AutofixStatus{message: "COMPLETE"}, nil
 	}
@@ -317,7 +318,7 @@ func (f *FakeSnykCodeClient) GetAutofixSuggestions(
 		},
 	}
 
-	log.Trace().Str("method", "GetAutofixSuggestions").Interface("fakeAutofix",
+	f.C.Logger().Trace().Str("method", "GetAutofixSuggestions").Interface("fakeAutofix",
 		"someAutofixSuggestion").Msg("fake backend call received & answered")
 	return suggestions, AutofixStatus{message: "COMPLETE"}, nil
 }

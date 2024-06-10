@@ -62,10 +62,10 @@ func CreateFromCommandData( //nolint:gocyclo // reasonable command dispatch
 	case snyk.OpenLearnLesson:
 		return &openLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case snyk.GetSettingsSastEnabled:
-		apiClient := snyk_api.NewSnykApiClient(httpClient)
+		apiClient := snyk_api.NewSnykApiClient(httpClient, nil)
 		return &sastEnabled{command: commandData, apiClient: apiClient}, nil
 	case snyk.GetFeatureFlagStatus:
-		apiClient := snyk_api.NewSnykApiClient(httpClient)
+		apiClient := snyk_api.NewSnykApiClient(httpClient, nil)
 		return &featureFlagStatus{command: commandData, apiClient: apiClient}, nil
 	case snyk.GetActiveUserCommand:
 		return &getActiveUser{command: commandData, authService: authService, notifier: notifier}, nil

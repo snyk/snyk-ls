@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 )
 
 type TestExecutor struct {
@@ -33,6 +33,7 @@ type TestExecutor struct {
 	finishedScans   int
 	counterLock     sync.RWMutex
 	cmd             []string
+	logger          *zerolog.Logger
 }
 
 func NewTestExecutor() *TestExecutor {
@@ -43,12 +44,12 @@ func NewTestExecutorWithResponse(executeResponse string) *TestExecutor {
 	return &TestExecutor{ExecuteResponse: []byte(executeResponse)}
 }
 
-func NewTestExecutorWithResponseFromFile(executeResponsePath string) *TestExecutor {
+func NewTestExecutorWithResponseFromFile(executeResponsePath string, logger *zerolog.Logger) *TestExecutor {
 	fileContent, err := os.ReadFile(executeResponsePath)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to read test response file.")
+		logger.Fatal().Err(err).Msg("Failed to read test response file.")
 	}
-	return &TestExecutor{ExecuteResponse: fileContent}
+	return &TestExecutor{ExecuteResponse: fileContent, logger: logger}
 }
 
 func (t *TestExecutor) GetStartedScans() int {
@@ -81,7 +82,7 @@ func (t *TestExecutor) Execute(ctx context.Context, cmd []string, _ string) (res
 
 	select {
 	case <-time.After(t.ExecuteDuration):
-		log.Debug().Msg("Dummy CLI Execution time finished")
+		t.logger.Debug().Msg("Dummy CLI Execution time finished")
 		// Indicate that the scan has finished and return the ExecuteResponse
 		t.wasExecuted = true
 		t.counterLock.Lock()
@@ -89,7 +90,7 @@ func (t *TestExecutor) Execute(ctx context.Context, cmd []string, _ string) (res
 		t.counterLock.Unlock()
 		return t.ExecuteResponse, err
 	case <-ctx.Done():
-		log.Debug().Msg("Dummy CLI Execution canceled")
+		t.logger.Debug().Msg("Dummy CLI Execution canceled")
 		return resp, ctx.Err()
 	}
 }

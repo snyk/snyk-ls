@@ -160,13 +160,13 @@ func setupCLIScannerAsPackageScanner(t *testing.T, c *config.Config) (string, *C
 	notifier := notification.NewMockNotifier()
 	instrumentor := performance.NewInstrumentor()
 	errorReporter := error_reporting.NewTestErrorReporter()
-	analytics := ux.NewTestAnalytics()
+	analytics := ux.NewTestAnalytics(c)
 	testDir := "testdata"
 	testFilePath, err := filepath.Abs(filepath.Join(testDir, "test.html"))
 	assert.NoError(t, err)
 	testResult, err := filepath.Abs(filepath.Join(testDir, "packageScanTestHtmlOutput.json"))
 	assert.NoError(t, err)
-	cliExecutor := cli.NewTestExecutorWithResponseFromFile(testResult)
+	cliExecutor := cli.NewTestExecutorWithResponseFromFile(testResult, c.Logger())
 	scanner := NewCLIScanner(
 		instrumentor,
 		errorReporter,

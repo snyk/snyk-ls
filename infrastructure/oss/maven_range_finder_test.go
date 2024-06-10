@@ -29,8 +29,8 @@ import (
 )
 
 func TestMavenRangeFinder_Find(t *testing.T) {
-	testutil.UnitTest(t)
-	config.CurrentConfig().SetFormat(config.FormatHtml)
+	c := testutil.UnitTest(t)
+	c.SetFormat(config.FormatHtml)
 
 	var issue = ossIssue{
 		Id:             "testIssue",
@@ -50,6 +50,7 @@ func TestMavenRangeFinder_Find(t *testing.T) {
 	finder := mavenRangeFinder{
 		path:        testPath,
 		fileContent: testContent,
+		c:           c,
 	}
 
 	expectedRange := snyk.Range{

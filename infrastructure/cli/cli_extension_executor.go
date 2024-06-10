@@ -24,28 +24,29 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/snyk/snyk-ls/application/config"
 )
 
 type ExtensionExecutor struct {
 	semaphore  chan int
 	cliTimeout time.Duration
+	c          *config.Config
 }
 
-func NewExtensionExecutor() Executor {
+func NewExtensionExecutor(c *config.Config) Executor {
 	concurrencyLimit := 2
 
 	return &ExtensionExecutor{
 		make(chan int, concurrencyLimit),
 		90 * time.Minute, // TODO: add preference to make this configurable [ROAD-1184]
+		c,
 	}
 }
 
 func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error) {
 	method := "ExtensionExecutor.Execute"
-	log.Debug().Str("method", method).Interface("cmd", cmd[1:]).Str("workingDir", workingDir).Msg("calling legacycli extension")
+	c.c.Logger().Debug().Str("method", method).Interface("cmd", cmd[1:]).Str("workingDir",
+		workingDir).Msg("calling legacycli extension")
 
 	// set deadline to handle CLI hanging when obtaining semaphore
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(c.cliTimeout))
@@ -60,7 +61,7 @@ func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir
 	}
 
 	output, err := c.doExecute(ctx, cmd, workingDir)
-	log.Trace().Str("method", method).Str("response", string(output))
+	c.c.Logger().Trace().Str("method", method).Str("response", string(output))
 	return output, err
 }
 
@@ -90,7 +91,7 @@ func (c ExtensionExecutor) CliVersion() string {
 	cmd := []string{"version"}
 	output, err := c.Execute(context.Background(), cmd, "")
 	if err != nil {
-		log.Error().Err(err).Msg("failed to run version command")
+		c.c.Logger().Error().Err(err).Msg("failed to run version command")
 		return ""
 	}
 

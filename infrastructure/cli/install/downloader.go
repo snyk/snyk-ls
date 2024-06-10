@@ -24,7 +24,6 @@ import (
 	"path/filepath"
 
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -77,7 +76,8 @@ func (d *Downloader) lockFileName() string {
 }
 
 func (d *Downloader) Download(r *Release, isUpdate bool) error {
-	logger := log.With().Str("method", "Download").Logger()
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", "Download").Logger()
 	if r == nil {
 		return fmt.Errorf("release cannot be nil")
 	}
@@ -138,7 +138,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	// pipe stream
 	cliReader := io.TeeReader(resp.Body, newWriter(resp.ContentLength, d.progressTracker, onProgress))
 
-	cliDirectory := filepath.Dir(config.CurrentConfig().CliSettings().Path())
+	cliDirectory := filepath.Dir(c.CliSettings().Path())
 	err = os.MkdirAll(cliDirectory, 0755)
 	if err != nil {
 		logger.Err(err).Msg("couldn't create directory for Snyk CLI")
@@ -193,7 +193,7 @@ func (d *Downloader) createLockFile() error {
 
 	file, err := os.Create(lockFile)
 	if err != nil {
-		log.Err(err).Str("method", "createLockFile").Str("lockfile", lockFile).Msg("couldn't create lockfile")
+		config.CurrentConfig().Logger().Err(err).Str("method", "createLockFile").Str("lockfile", lockFile).Msg("couldn't create lockfile")
 		return err
 	}
 	defer func(file *os.File) { _ = file.Close() }(file)

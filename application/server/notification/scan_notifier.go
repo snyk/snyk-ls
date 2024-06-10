@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/notification"
@@ -34,15 +32,17 @@ import (
 
 type scanNotifier struct {
 	notifier notification.Notifier
+	c        *config.Config
 }
 
-func NewScanNotifier(notifier notification.Notifier) (snyk.ScanNotifier, error) {
+func NewScanNotifier(c *config.Config, notifier notification.Notifier) (snyk.ScanNotifier, error) {
 	if notifier == nil {
 		return nil, errors.New("notifier cannot be null")
 	}
 
 	return &scanNotifier{
 		notifier: notifier,
+		c:        c,
 	}, nil
 }
 
@@ -80,7 +80,7 @@ func (n *scanNotifier) SendSuccess(reportedProduct product.Product, folderPath s
 			productIssues = append(productIssues, issue)
 		} else {
 			msg := fmt.Sprintf("got an issue that is not contained in the folder: %v", issue)
-			log.Error().Str("method", "scanNotifier.SendSuccess").Msgf(msg)
+			n.c.Logger().Error().Str("method", "scanNotifier.SendSuccess").Msgf(msg)
 		}
 	}
 

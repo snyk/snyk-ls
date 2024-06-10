@@ -17,18 +17,20 @@
 package oss
 
 import (
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast/maven"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 type mavenRangeFinder struct {
-	path        string //todo remove lsp dependency
+	path        string
 	fileContent []byte
+	c           *config.Config
 }
 
 func (m *mavenRangeFinder) find(issue ossIssue) snyk.Range {
 	searchPackage, _ := introducingPackageAndVersion(issue)
-	parser := maven.Parser{}
+	parser := maven.New(m.c)
 	tree := parser.Parse(string(m.fileContent), m.path)
 	for _, depNode := range tree.Root.Children {
 		if searchPackage == depNode.Name {

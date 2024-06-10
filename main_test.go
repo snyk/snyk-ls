@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -117,16 +116,16 @@ func Test_shouldSetReportErrorsViaFlag(t *testing.T) {
 }
 
 func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	logPath := t.TempDir()
 	logFile := filepath.Join(logPath, "a.txt")
-	config.CurrentConfig().SetLogPath(logFile)
+	c.SetLogPath(logFile)
 	t.Cleanup(func() {
-		config.CurrentConfig().DisableLoggingToFile()
+		c.DisableLoggingToFile()
 	})
 
-	config.CurrentConfig().ConfigureLogging(nil)
-	log.Error().Msg("test")
+	c.ConfigureLogging(nil)
+	c.Logger().Error().Msg("test")
 
 	assert.Eventuallyf(t, func() bool {
 		bytes, err := os.ReadFile(config.CurrentConfig().LogPath())
