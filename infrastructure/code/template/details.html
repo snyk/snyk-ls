@@ -842,36 +842,36 @@
 
             <!-- Fixed Code Examples -->
             <section class="example-fixes">
-              <h2 class="example-fixes-header">Fixed Code Examples</h2>
-              <div class="example-fixes-text">
-                {{if gt (len .ExampleCommitFixes) 0}}
-                This issue was fixed by {{.RepoCount}} projects. Here are {{.ExampleCount}} example fixes.
-                <div class="example-fixes-tabs-nav example-fixes-tabs">
-                  {{range $index, $fix := .ExampleCommitFixes}}
-                  <span class="tab-item {{if eq $index 0}}is-selected{{end}}" id="tab-link-{{$index}}">
-                    {{$fix.GitHubIcon}} <a class="example-repo-link" target="_blank" rel="noopener noreferrer"
-                      href="{{.RepoLink}}">
-                      {{$fix.RepoName}}</a>
-                  </span>
-                  {{end}}
-                </div>
-                <div class="tab-container">
-                  {{range $index, $fix := .ExampleCommitFixes}}
-                  <div id="tab-content-{{$index}}"
-                    class="tab-content example-fix-tab-content {{if eq $index 0}}is-selected{{end}}">
-                    {{range $fix.ExampleLines}}
-                    <div class="example-line {{.LineChange}}">
-                      <span class="example-line-number">{{.LineNumber}}</span>
-                      <code>{{.Line}}</code>
-                    </div>
-                    {{end}}
-                  </div>
-                  {{end}}
-                </div>
-                {{else}}
+              <h2>Fixed Code Examples</h2>
+              {{if eq (len .ExampleCommitFixes) 0}}
+              <div id="info-no-examples" class="font-light">
                 No example fixes are available.
-                {{end}}
               </div>
+              {{else}}
+              <p id="example-fixes-info-top" class="font-light">
+                This type of vulnerability was fixed in {{.RepoCount}} open source projects.
+              </p>
+              <div id="example-top" class="row between">
+                <div id="current-example" class="repo clickable">
+                  {{.GitHubIcon}}
+                  <span id="example-link" class="repo-link">{{(index .ExampleCommitFixes 0).RepoName}}</span>
+                </div>
+                <div class="examples-nav">
+                  <span id="previous-example" class="arrow" title="Previous example">
+                    {{.ArrowLeftDark}}
+                    {{.ArrowLeftLight}}
+                  </span>
+                  <span id="example-text">
+                    Example <strong id="example-counter">1</strong>/<span id="example-number2"></span>
+                  </span>
+                  <span id="next-example" class="arrow" title="Next example">
+                    {{.ArrowRightDark}}
+                    {{.ArrowRightLight}}
+                  </span>
+                </div>
+              </div>
+              <div id="example" class="example"></div>
+              {{end}}
             </section>
           </div>
         </div>

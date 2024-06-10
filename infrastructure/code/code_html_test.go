@@ -78,12 +78,9 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	// assert Fixes section
 	assert.Contains(t, codePanelHtml, ` id="ai-fix-wrapper" class="hidden">`)
 	assert.Contains(t, codePanelHtml, ` id="no-ai-fix-wrapper" class="">`)
-	expectedFixesDescription := fmt.Sprintf(`\s*This issue was fixed by %d projects. Here are %d example fixe.\s*`, repoCount, len(fixes))
+	expectedFixesDescription := fmt.Sprintf(`This type of vulnerability was fixed in %d open source projects.`, repoCount)
 	assert.Regexp(t, regexp.MustCompile(expectedFixesDescription), codePanelHtml)
-	assert.Contains(t, codePanelHtml, `<span class="tab-item is-selected" id="tab-link-0">`, "Two tabs, first is selected")
-	assert.Contains(t, codePanelHtml, `</svg> <a class="example-repo-link"`, "GitHub icon preceding the repo name is present")
-	assert.Contains(t, codePanelHtml, `apache/tomcat</a>`, "Second tab is present")
-	assert.Contains(t, codePanelHtml, `href="https://github.com/apache/tomcat/commit/0fa9d5547c5300cf8162b8f31a40aea6847a5c32?diff=split#diff-7e23eb1aa3b7b4d5db89bfd2860277e5L75"`, "Repo name has GitHub link")
+	assert.Contains(t, codePanelHtml, `<span id="example-link" class="repo-link">`, "GitHub icon preceding the repo name is present")
 
 	// assert Footer
 	assert.Contains(t, codePanelHtml, `id="action-ignore-line">68</span>`)
@@ -119,7 +116,7 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 
 	// assert Fixes section
 	assert.Contains(t, codePanelHtml, ` id="ai-fix-wrapper" class="">`)
-	assert.Contains(t, codePanelHtml, `Generate fix <span class="wide">using Snyk DeepCode AI</span>`)
+	assert.Contains(t, codePanelHtml, `Generate fix <span class="wide">using Snyk`)
 	assert.Contains(t, codePanelHtml, ` id="no-ai-fix-wrapper" class="hidden">`)
 }
 
