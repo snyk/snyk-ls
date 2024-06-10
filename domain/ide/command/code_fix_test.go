@@ -81,6 +81,7 @@ func setupCommand(mockNotifier *notification.MockNotifier) *fixCodeIssue {
 	cmd := &fixCodeIssue{
 		command:  cmdData,
 		notifier: mockNotifier,
+		logger:   config.CurrentConfig().Logger(),
 	}
 	return cmd
 }
@@ -119,8 +120,9 @@ func setupSampleIssues(issueRange snyk.Range, codeAction snyk.CodeAction, cmdDat
 }
 
 func Test_fixCodeIssue_ErrorsWhenNoCapability(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	cmd := &fixCodeIssue{
+		logger: c.Logger(),
 		command: snyk.CommandData{
 			CommandId: snyk.CodeFixCommand,
 			Arguments: []any{sampleArgs},

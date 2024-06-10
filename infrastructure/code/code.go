@@ -410,7 +410,7 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
 		return []snyk.Issue{}, err
 	}
 
-	converter := SarifConverter{sarif: *sarif}
+	converter := SarifConverter{sarif: *sarif, c: sc.c}
 	issues, err = converter.toIssues(path)
 	if err != nil {
 		return []snyk.Issue{}, err

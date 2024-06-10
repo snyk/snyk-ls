@@ -56,7 +56,7 @@ func (i *Initializer) Init() error {
 	const errorMessage = "Auth Initializer failed to authenticate."
 	c := config.CurrentConfig()
 	if c.NonEmptyToken() {
-		cmd, _ := command.CreateFromCommandData(snyk.CommandData{CommandId: snyk.GetActiveUserCommand}, nil, i.authenticationService, nil, i.notifier, nil, nil, nil)
+		cmd, _ := command.CreateFromCommandData(c, snyk.CommandData{CommandId: snyk.GetActiveUserCommand}, nil, i.authenticationService, nil, i.notifier, nil, nil, nil)
 		user, _ := cmd.Execute(context.Background())
 		if user != nil {
 			c.Logger().Info().Str("method", "auth.initializer.init").Msg("Skipping authentication - user is already authenticated")

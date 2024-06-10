@@ -371,7 +371,7 @@ func updateEnvironment(c *config.Config, settings lsp.Settings) {
 
 func updateCliConfig(c *config.Config, settings lsp.Settings) {
 	var err error
-	cliSettings := &config.CliSettings{}
+	cliSettings := &config.CliSettings{C: c}
 	cliSettings.Insecure, err = strconv.ParseBool(settings.Insecure)
 	if err != nil {
 		c.Logger().Debug().Msg("couldn't parse insecure setting")

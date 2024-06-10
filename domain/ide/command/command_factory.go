@@ -28,51 +28,42 @@ import (
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
-func CreateFromCommandData( //nolint:gocyclo // reasonable command dispatch
-	commandData snyk.CommandData,
-	srv lsp.Server,
-	authService snyk.AuthenticationService,
-	learnService learn.Service,
-	notifier noti.Notifier,
-	issueProvider snyk.IssueProvider,
-	codeApiClient SnykCodeHttpClient,
-	codeScanner *code.Scanner,
-) (snyk.Command, error) {
-	httpClient := config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient
+func CreateFromCommandData(c *config.Config, commandData snyk.CommandData, srv lsp.Server, authService snyk.AuthenticationService, learnService learn.Service, notifier noti.Notifier, issueProvider snyk.IssueProvider, codeApiClient SnykCodeHttpClient, codeScanner *code.Scanner) (snyk.Command, error) {
+	httpClient := c.Engine().GetNetworkAccess().GetHttpClient
 
 	switch commandData.CommandId {
 	case snyk.NavigateToRangeCommand:
-		return &navigateToRangeCommand{command: commandData, srv: srv}, nil
+		return &navigateToRangeCommand{command: commandData, srv: srv, logger: c.Logger()}, nil
 	case snyk.WorkspaceScanCommand:
 		return &workspaceScanCommand{command: commandData, srv: srv}, nil
 	case snyk.WorkspaceFolderScanCommand:
-		return &workspaceFolderScanCommand{command: commandData, srv: srv}, nil
+		return &workspaceFolderScanCommand{command: commandData, srv: srv, logger: c.Logger()}, nil
 	case snyk.OpenBrowserCommand:
-		return &openBrowserCommand{command: commandData}, nil
+		return &openBrowserCommand{command: commandData, logger: c.Logger()}, nil
 	case snyk.LoginCommand:
-		return &loginCommand{command: commandData, authService: authService, notifier: notifier}, nil
+		return &loginCommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger()}, nil
 	case snyk.CopyAuthLinkCommand:
-		return &copyAuthLinkCommand{command: commandData, authService: authService, notifier: notifier}, nil
+		return &copyAuthLinkCommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger()}, nil
 	case snyk.LogoutCommand:
-		return &logoutCommand{command: commandData, authService: authService}, nil
+		return &logoutCommand{command: commandData, authService: authService, logger: c.Logger()}, nil
 	case snyk.TrustWorkspaceFoldersCommand:
-		return &trustWorkspaceFoldersCommand{command: commandData, notifier: notifier}, nil
+		return &trustWorkspaceFoldersCommand{command: commandData, notifier: notifier, logger: c.Logger()}, nil
 	case snyk.GetLearnLesson:
 		return &getLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case snyk.OpenLearnLesson:
 		return &openLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case snyk.GetSettingsSastEnabled:
-		apiClient := snyk_api.NewSnykApiClient(httpClient, nil)
-		return &sastEnabled{command: commandData, apiClient: apiClient}, nil
+		apiClient := snyk_api.NewSnykApiClient(httpClient, c)
+		return &sastEnabled{command: commandData, apiClient: apiClient, logger: c.Logger()}, nil
 	case snyk.GetFeatureFlagStatus:
-		apiClient := snyk_api.NewSnykApiClient(httpClient, nil)
+		apiClient := snyk_api.NewSnykApiClient(httpClient, c)
 		return &featureFlagStatus{command: commandData, apiClient: apiClient}, nil
 	case snyk.GetActiveUserCommand:
 		return &getActiveUser{command: commandData, authService: authService, notifier: notifier}, nil
 	case snyk.ReportAnalyticsCommand:
 		return &reportAnalyticsCommand{command: commandData}, nil
 	case snyk.CodeFixCommand:
-		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier}, nil
+		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier, logger: c.Logger()}, nil
 	case snyk.CodeSubmitFixFeedback:
 		return &codeFixFeedback{command: commandData, apiClient: codeApiClient}, nil
 	case snyk.CodeFixDiffsCommand:

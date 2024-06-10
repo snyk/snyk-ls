@@ -85,7 +85,7 @@ func TestInit(t *testing.T) {
 	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, analytics, learnService,
 		notifier, codeClientScanner)
 	openSourceScanner = oss.NewCLIScanner(instrumentor, errorReporter, analytics, snykCli, learnService, notifier, c)
-	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
+	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, analytics, snykCli)
 	scanner = snyk.NewDelegatingScanner(
 		c,
 		scanInitializer,

@@ -84,11 +84,11 @@ type CliSettings struct {
 	AdditionalOssParameters []string
 	cliPath                 string
 	cliPathAccessMutex      sync.Mutex
-	c                       *Config
+	C                       *Config
 }
 
 func NewCliSettings(c *Config) *CliSettings {
-	settings := &CliSettings{c: c}
+	settings := &CliSettings{C: c}
 	settings.SetPath("")
 	return settings
 }
@@ -99,7 +99,7 @@ func (c *CliSettings) Installed() bool {
 	stat, err := c.CliPathFileInfo()
 	isDirectory := stat != nil && stat.IsDir()
 	if isDirectory {
-		c.c.Logger().Warn().Msgf("CLI path (%s) refers to a directory and not a file", c.cliPath)
+		c.C.Logger().Warn().Msgf("CLI path (%s) refers to a directory and not a file", c.cliPath)
 	}
 	return c.cliPath != "" && err == nil && !isDirectory
 }
@@ -107,7 +107,7 @@ func (c *CliSettings) Installed() bool {
 func (c *CliSettings) CliPathFileInfo() (os.FileInfo, error) {
 	stat, err := os.Stat(c.cliPath)
 	if err == nil {
-		c.c.Logger().Debug().Str("method", "config.cliSettings.Installed").Msgf("CLI path: %s, Size: %d, Perm: %s",
+		c.C.Logger().Debug().Str("method", "config.cliSettings.Installed").Msgf("CLI path: %s, Size: %d, Perm: %s",
 			c.cliPath,
 			stat.Size(),
 			stat.Mode().Perm())
@@ -141,7 +141,7 @@ func (c *CliSettings) DefaultBinaryInstallPath() string {
 	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
 	err := os.MkdirAll(lsPath, 0755)
 	if err != nil {
-		c.c.Logger().Err(err).Str("method", "lsPath").Msgf("couldn't create %s", lsPath)
+		c.C.Logger().Err(err).Str("method", "lsPath").Msgf("couldn't create %s", lsPath)
 		return ""
 	}
 	return lsPath
@@ -216,7 +216,7 @@ func IsDevelopment() bool {
 func New() *Config {
 	c := &Config{}
 	c.scrubbingDict = frameworkLogging.ScrubbingDict{}
-	c.logger = getNewScrubbingLogger(nil)
+	c.logger = getNewScrubbingLogger(c)
 	c.cliSettings = NewCliSettings(c)
 	c.automaticAuthentication = true
 	c.configFile = ""

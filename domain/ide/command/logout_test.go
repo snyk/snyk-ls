@@ -50,6 +50,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	cmd := logoutCommand{
 		command:     snyk.CommandData{CommandId: snyk.LogoutCommand},
 		authService: authenticationService,
+		logger:      c.Logger(),
 	}
 
 	scanner := snyk.NewTestScanner()

@@ -138,9 +138,10 @@ func Test_FindBinaries(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		defaultDirs := []string{filepath.Dir(javaHome)}
+		c := New()
+		c.defaultDirs = []string{filepath.Dir(javaHome)}
 
-		java := (&Config{defaultDirs: defaultDirs}).findBinary(getJavaBinaryName())
+		java := c.findBinary(getJavaBinaryName())
 
 		assert.Equal(t, file.Name(), java)
 	})

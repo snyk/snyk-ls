@@ -29,12 +29,13 @@ import (
 )
 
 func Test_ExpandParametersFromConfig(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	testOrg, err := uuid.NewUUID()
 	assert.NoError(t, err)
 	config.CurrentConfig().SetOrganization(testOrg.String())
 	settings := config.CliSettings{
 		Insecure: true,
+		C:        c,
 	}
 	config.CurrentConfig().SetCliSettings(&settings)
 	var cmd = []string{"a", "b"}
@@ -48,10 +49,10 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 }
 
 func TestGetCommand_AddsToEnvironmentAndSetsDir(t *testing.T) {
-	testutil.UnitTest(t)
-	config.CurrentConfig().SetTelemetryEnabled(false)
+	c := testutil.UnitTest(t)
+	c.SetTelemetryEnabled(false)
 
-	cmd := SnykCli{}.getCommand([]string{"executable", "arg"}, xdg.DataHome, context.Background())
+	cmd := SnykCli{c: c}.getCommand([]string{"executable", "arg"}, xdg.DataHome, context.Background())
 
 	assert.Equal(t, xdg.DataHome, cmd.Dir)
 	assert.Contains(t, cmd.Env, DisableAnalyticsEnvVar+"=1")

@@ -29,9 +29,9 @@ import (
 // todo: int tests for interface public methods ?
 
 func TestAuth_authCmd(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	ctx := context.Background()
-	provider := &CliAuthenticationProvider{}
+	provider := &CliAuthenticationProvider{c: c}
 
 	authCmd, err := provider.authCmd(ctx)
 
@@ -40,8 +40,9 @@ func TestAuth_authCmd(t *testing.T) {
 }
 
 func TestConfig_configGetAPICmd(t *testing.T) {
+	c := testutil.UnitTest(t)
 	ctx := context.Background()
-	provider := &CliAuthenticationProvider{}
+	provider := &CliAuthenticationProvider{c: c}
 
 	configGetAPICmd, err := provider.configGetAPICmd(ctx)
 
@@ -51,8 +52,8 @@ func TestConfig_configGetAPICmd(t *testing.T) {
 
 func TestSetAuthURLCmd(t *testing.T) {
 	t.Run("works for the default endpoint", func(t *testing.T) {
-		testutil.UnitTest(t)
-		provider := &CliAuthenticationProvider{}
+		c := testutil.UnitTest(t)
+		provider := &CliAuthenticationProvider{c: c}
 
 		var expectedURL = "https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
 
@@ -62,8 +63,8 @@ func TestSetAuthURLCmd(t *testing.T) {
 	})
 
 	t.Run("works for a custom endpoint", func(t *testing.T) {
-		testutil.UnitTest(t)
-		provider := &CliAuthenticationProvider{}
+		c := testutil.UnitTest(t)
+		provider := &CliAuthenticationProvider{c: c}
 
 		var expectedURL = "https://myOwnCompanyURL/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
 
@@ -73,8 +74,8 @@ func TestSetAuthURLCmd(t *testing.T) {
 	})
 
 	t.Run("works when URL is in a substring", func(t *testing.T) {
-		testutil.UnitTest(t)
-		provider := &CliAuthenticationProvider{}
+		c := testutil.UnitTest(t)
+		provider := &CliAuthenticationProvider{c: c}
 
 		var stringWithURL = "If auth does not automatically redirect you, copy this auth link: https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
 		var expectedURL = "https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
@@ -85,8 +86,8 @@ func TestSetAuthURLCmd(t *testing.T) {
 	})
 
 	t.Run("errors when there is a problem extracting the auth url", func(t *testing.T) {
-		testutil.UnitTest(t)
-		provider := &CliAuthenticationProvider{}
+		c := testutil.UnitTest(t)
+		provider := &CliAuthenticationProvider{c: c}
 
 		var badURL = "https://invlidAuthURL.com"
 
@@ -98,11 +99,12 @@ func TestSetAuthURLCmd(t *testing.T) {
 
 func TestBuildCLICmd(t *testing.T) {
 	t.Run("Insecure is respected", func(t *testing.T) {
-		testutil.UnitTest(t)
+		c := testutil.UnitTest(t)
 		ctx := context.Background()
-		provider := &CliAuthenticationProvider{}
+		provider := &CliAuthenticationProvider{c: c}
 		config.CurrentConfig().SetCliSettings(&config.CliSettings{
 			Insecure: true,
+			C:        c,
 		})
 
 		cmd := provider.buildCLICmd(ctx, "auth")
@@ -111,9 +113,9 @@ func TestBuildCLICmd(t *testing.T) {
 	})
 
 	t.Run("Api endpoint is respected", func(t *testing.T) {
-		testutil.UnitTest(t)
+		c := testutil.UnitTest(t)
 		ctx := context.Background()
-		provider := &CliAuthenticationProvider{}
+		provider := &CliAuthenticationProvider{c: c}
 		config.CurrentConfig().UpdateApiEndpoints("https://app.snyk.io/api")
 
 		cmd := provider.buildCLICmd(ctx, "auth")
@@ -122,9 +124,9 @@ func TestBuildCLICmd(t *testing.T) {
 	})
 
 	t.Run("Telemetry disabled setting is respected", func(t *testing.T) {
-		testutil.UnitTest(t)
+		c := testutil.UnitTest(t)
 		ctx := context.Background()
-		provider := &CliAuthenticationProvider{}
+		provider := &CliAuthenticationProvider{c: c}
 		config.CurrentConfig().SetTelemetryEnabled(false)
 
 		cmd := provider.buildCLICmd(ctx, "auth")
@@ -133,9 +135,9 @@ func TestBuildCLICmd(t *testing.T) {
 	})
 
 	t.Run("Telemetry env var isn't set if telemetry enabled", func(t *testing.T) {
-		testutil.UnitTest(t)
+		c := testutil.UnitTest(t)
 		ctx := context.Background()
-		provider := &CliAuthenticationProvider{}
+		provider := &CliAuthenticationProvider{c: c}
 
 		cmd := provider.buildCLICmd(ctx, "auth")
 

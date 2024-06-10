@@ -164,7 +164,7 @@ func initInfrastructure(c *config.Config) {
 		codeClient.WithErrorReporter(codeErrorReporter),
 	)
 
-	infrastructureAsCodeScanner = iac.New(instrumentor, errorReporter, analytics, snykCli)
+	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, analytics, snykCli)
 	openSourceScanner = oss.NewCLIScanner(instrumentor, errorReporter, analytics, snykCli, learnService, notifier, c)
 	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
 	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, analytics, learnService, notifier,

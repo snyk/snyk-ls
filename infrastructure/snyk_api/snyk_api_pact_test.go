@@ -41,9 +41,9 @@ var client SnykApiClient
 
 func TestSnykApiPact(t *testing.T) {
 	testutil.NotOnWindows(t, "we don't have a pact cli")
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
-	setupPact()
+	setupPact(c)
 	defer pact.Teardown()
 
 	defer func() {
@@ -109,7 +109,7 @@ func TestSnykApiPact(t *testing.T) {
 
 	t.Run("Get SAST enablement with org", func(t *testing.T) {
 		organization := orgUUID
-		config.CurrentConfig().SetOrganization(organization)
+		c.SetOrganization(organization)
 
 		expectedResponse := SastResponse{
 			SastEnabled:                 true,
@@ -238,7 +238,7 @@ func TestSnykApiPact(t *testing.T) {
 	})
 }
 
-func setupPact() {
+func setupPact(c *config.Config) {
 	pact = dsl.Pact{
 		Consumer: consumer,
 		Provider: pactProvider,
@@ -248,7 +248,6 @@ func setupPact() {
 	// Proactively start service to get access to the port
 	pact.Setup(true)
 
-	c := config.CurrentConfig()
 	c.UpdateApiEndpoints(fmt.Sprintf("http://localhost:%d", pact.Server.Port))
-	client = NewSnykApiClient(func() *http.Client { return c.Engine().GetNetworkAccess().GetHttpClient() }, nil)
+	client = NewSnykApiClient(func() *http.Client { return c.Engine().GetNetworkAccess().GetHttpClient() }, c)
 }

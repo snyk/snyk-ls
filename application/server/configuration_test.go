@@ -148,9 +148,9 @@ func Test_configureOauth_oauthProvider_created_with_injected_refreshMethod(t *te
 }
 
 func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
-	c := testutil.UnitTest(t)
 	di.TestInit(t)
 	loc, _ := setupServer(t)
+	c := config.CurrentConfig()
 
 	t.Setenv("a", "")
 	t.Setenv("c", "")
@@ -179,8 +179,8 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 }
 
 func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
-	c := testutil.UnitTest(t)
 	loc, _ := setupCustomServer(t, callBackMock)
+	c := config.CurrentConfig()
 
 	_, err := loc.Client.Call(ctx, "initialize", lsp.InitializeParams{
 		Capabilities: lsp.ClientCapabilities{

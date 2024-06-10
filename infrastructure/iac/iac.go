@@ -73,11 +73,7 @@ type Scanner struct {
 	c             *config.Config
 }
 
-func New(instrumentor performance.Instrumentor,
-	errorReporter error_reporting.ErrorReporter,
-	analytics ux2.Analytics,
-	cli cli.Executor,
-) *Scanner {
+func New(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux2.Analytics, cli cli.Executor) *Scanner {
 	return &Scanner{
 		instrumentor:  instrumentor,
 		errorReporter: errorReporter,
@@ -85,6 +81,7 @@ func New(instrumentor performance.Instrumentor,
 		cli:           cli,
 		mutex:         sync.Mutex{},
 		runningScans:  map[sglsp.DocumentURI]*scans.ScanProgress{},
+		c:             c,
 	}
 }
 

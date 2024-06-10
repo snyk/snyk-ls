@@ -156,6 +156,7 @@ func setupCLIScannerAsPackageScanner(t *testing.T, c *config.Config) (string, *C
 	t.Helper()
 	c.SetCliSettings(&config.CliSettings{
 		AdditionalOssParameters: []string{"--all-projects"},
+		C:                       c,
 	})
 	notifier := notification.NewMockNotifier()
 	instrumentor := performance.NewInstrumentor()

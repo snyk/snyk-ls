@@ -253,7 +253,7 @@ func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient,
 func setupTestScanner(t *testing.T) (*FakeSnykCodeClient, *Scanner) {
 	t.Helper()
 	c := config.CurrentConfig()
-	snykCodeMock := &FakeSnykCodeClient{}
+	snykCodeMock := &FakeSnykCodeClient{C: c}
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))
 	learnMock.
 		EXPECT().
@@ -281,8 +281,8 @@ func TestUploadAndAnalyze(t *testing.T) {
 		Return(&learn.Lesson{}, nil).AnyTimes()
 	t.Run(
 		"should create bundle when hash empty", func(t *testing.T) {
-			snykCodeMock := &FakeSnykCodeClient{}
-			c := New(
+			snykCodeMock := &FakeSnykCodeClient{C: c}
+			s := New(
 				NewBundler(c, snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				newTestCodeErrorReporter(),
@@ -294,9 +294,9 @@ func TestUploadAndAnalyze(t *testing.T) {
 			baseDir, firstDoc, _, content1, _ := setupDocs(t)
 			fullPath := uri.PathFromUri(firstDoc.URI)
 			docs := sliceToChannel([]string{fullPath})
-			metrics := c.newMetrics(time.Time{})
+			metrics := s.newMetrics(time.Time{})
 
-			_, _ = c.UploadAndAnalyze(context.Background(), docs, baseDir, metrics, map[string]bool{})
+			_, _ = s.UploadAndAnalyze(context.Background(), docs, baseDir, metrics, map[string]bool{})
 
 			// verify that create bundle has been called on backend service
 			params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
@@ -311,7 +311,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 
 	t.Run(
 		"should retrieve from backend", func(t *testing.T) {
-			snykCodeMock := &FakeSnykCodeClient{}
+			snykCodeMock := &FakeSnykCodeClient{C: c}
 			scanner := New(
 				NewBundler(c, snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
@@ -351,7 +351,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 
 	t.Run(
 		"should track analytics", func(t *testing.T) {
-			snykCodeMock := &FakeSnykCodeClient{}
+			snykCodeMock := &FakeSnykCodeClient{C: c}
 			analytics := ux2.NewTestAnalytics(c)
 			c := New(
 				NewBundler(c, snykCodeMock, NewCodeInstrumentor()),
@@ -391,7 +391,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&learn.Lesson{}, nil).AnyTimes()
 	testutil.UnitTest(t)
-	snykCodeMock := &FakeSnykCodeClient{}
+	snykCodeMock := &FakeSnykCodeClient{C: c}
 
 	diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
 	defer func(path string) { _ = os.RemoveAll(path) }(path)
@@ -560,7 +560,7 @@ func Test_Scan(t *testing.T) {
 
 	t.Run("Shouldn't run if Sast is disabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		snykCodeMock := &FakeSnykCodeClient{}
+		snykCodeMock := &FakeSnykCodeClient{C: c}
 		scanner := New(
 			NewBundler(c, snykCodeMock, NewCodeInstrumentor()),
 			&snyk_api.FakeApiClient{CodeEnabled: false},
@@ -581,7 +581,7 @@ func Test_Scan(t *testing.T) {
 	//nolint:dupl // test cases differ by a boolean
 	t.Run("Should run existing flow if feature flag is disabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		snykCodeMock := &FakeSnykCodeClient{}
+		snykCodeMock := &FakeSnykCodeClient{C: c}
 		snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
 		snykApiMock.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
 		learnMock := mock_learn.NewMockService(gomock.NewController(t))
@@ -610,7 +610,7 @@ func Test_Scan(t *testing.T) {
 	//nolint:dupl // test cases differ by a boolean
 	t.Run("Should run new flow if feature flag is enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		snykCodeMock := &FakeSnykCodeClient{}
+		snykCodeMock := &FakeSnykCodeClient{C: c}
 		snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
 		snykApiMock.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: true})
 		learnMock := mock_learn.NewMockService(gomock.NewController(t))
@@ -638,6 +638,7 @@ func Test_Scan(t *testing.T) {
 }
 
 func Test_enhanceIssuesDetails(t *testing.T) {
+	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -657,6 +658,7 @@ func Test_enhanceIssuesDetails(t *testing.T) {
 		errorReporter:     errorReporterMock,
 		changedPaths:      make(map[string]map[string]bool),
 		changedFilesMutex: sync.Mutex{},
+		c:                 c,
 	}
 
 	issues := []snyk.Issue{
@@ -781,7 +783,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			c := testutil.UnitTest(t)
 			autofixSetupAndCleanup(t)
 
-			snykCodeMock := &FakeSnykCodeClient{}
+			snykCodeMock := &FakeSnykCodeClient{C: c}
 			analytics := ux2.NewTestAnalytics(c)
 			scanner := New(
 				NewBundler(c, snykCodeMock, NewCodeInstrumentor()),
@@ -817,7 +819,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			autofixSetupAndCleanup(t)
 			getCodeSettings().isAutofixEnabled.Set(true)
 
-			snykCodeMock := &FakeSnykCodeClient{}
+			snykCodeMock := &FakeSnykCodeClient{C: c}
 			snykCodeMock.NoFixSuggestions = true
 
 			analytics := ux2.NewTestAnalytics(c)
@@ -854,7 +856,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			autofixSetupAndCleanup(t)
 			getCodeSettings().isAutofixEnabled.Set(true)
 
-			snykCodeMock := &FakeSnykCodeClient{}
+			snykCodeMock := &FakeSnykCodeClient{C: c}
 			analytics := ux2.NewTestAnalytics(c)
 			scanner := New(
 				NewBundler(c, snykCodeMock, NewCodeInstrumentor()),

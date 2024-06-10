@@ -353,6 +353,7 @@ func Test_prepareScanCommand(t *testing.T) {
 	t.Run("Expands parameters", func(t *testing.T) {
 		settings := config.CliSettings{
 			AdditionalOssParameters: []string{"--all-projects", "-d"},
+			C:                       c,
 		}
 		c.SetCliSettings(&settings)
 
@@ -365,6 +366,7 @@ func Test_prepareScanCommand(t *testing.T) {
 	t.Run("Uses --all-projects by default", func(t *testing.T) {
 		settings := config.CliSettings{
 			AdditionalOssParameters: []string{"-d"},
+			C:                       c,
 		}
 		c.SetCliSettings(&settings)
 

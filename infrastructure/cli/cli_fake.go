@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+
+	"github.com/snyk/snyk-ls/application/config"
 )
 
 type TestExecutor struct {
@@ -37,11 +39,11 @@ type TestExecutor struct {
 }
 
 func NewTestExecutor() *TestExecutor {
-	return &TestExecutor{ExecuteResponse: []byte("{}")}
+	return &TestExecutor{ExecuteResponse: []byte("{}"), logger: config.CurrentConfig().Logger()}
 }
 
 func NewTestExecutorWithResponse(executeResponse string) *TestExecutor {
-	return &TestExecutor{ExecuteResponse: []byte(executeResponse)}
+	return &TestExecutor{ExecuteResponse: []byte(executeResponse), logger: config.CurrentConfig().Logger()}
 }
 
 func NewTestExecutorWithResponseFromFile(executeResponsePath string, logger *zerolog.Logger) *TestExecutor {

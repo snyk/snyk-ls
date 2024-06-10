@@ -73,9 +73,9 @@ func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
 }
 
 func TestInitializer_whenNoCli_Installs(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	config.CurrentConfig().SetManageBinariesAutomatically(true)
-	settings := &config.CliSettings{}
+	settings := &config.CliSettings{C: c}
 	testCliPath := filepath.Join(t.TempDir(), "dummy.cli")
 	settings.SetPath(testCliPath)
 	config.CurrentConfig().SetCliSettings(settings)
