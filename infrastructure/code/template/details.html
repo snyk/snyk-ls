@@ -19,9 +19,9 @@
 
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; style-src 'self' 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
+    content="default-src 'none'; style-src 'self' 'nonce-${nonce}'; script-src 'nonce-${nonce}';" />
   <style nonce="${nonce}">
     :root {
       --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Tahoma, Geneva, Verdana, sans-serif;
@@ -165,13 +165,13 @@
       margin-left: 1em;
     }
 
-    .position-line:hover{
+    .position-line:hover {
       cursor: pointer;
     }
 
     .data-flow-body {
       border-collapse: collapse;
-      font-family: 'Courier New', Courier, monospace;
+      font-family: "Courier New", Courier, monospace;
     }
 
     .data-flow-number {
@@ -356,6 +356,7 @@
     .row.between {
       justify-content: space-between;
     }
+
     .row {
       display: flex;
       flex-direction: row;
@@ -388,8 +389,8 @@
 
     .sn-fix-wrapper {
       padding: 2rem;
-      margin-top:1rem;
-      border-radius: .8rem;
+      margin-top: 1rem;
+      border-radius: 0.8rem;
       overflow: hidden;
     }
 
@@ -410,7 +411,7 @@
 
     .sn-loading svg {
       inline-size: 6rem;
-      block-size: auto
+      block-size: auto;
     }
 
     .sn-loading-wrapper {
@@ -436,7 +437,7 @@
 
     .sn-loading-description {
       margin-bottom: 0;
-      opacity: .75
+      opacity: 0.75;
     }
 
     .sn-msg-1 {
@@ -592,12 +593,11 @@
       }
     }
 
-
     @keyframes reduce {
 
       15%,
       85% {
-        opacity: 1
+        opacity: 1;
       }
 
       86%,
@@ -608,10 +608,11 @@
     }
 
     @keyframes inference {
+
       0%,
       25%,
       100% {
-        opacity: 1
+        opacity: 1;
       }
     }
 
@@ -683,7 +684,8 @@
           Ignore Details
         </span>
         {{end}}
-        <span data-tab="fix-analysis" id="fix-analysis-tab" class="tab-item {{if not .IsIgnored}}is-selected{{end}} sn-fix-analysis fix-analysis-tab">
+        <span data-tab="fix-analysis" id="fix-analysis-tab"
+          class="tab-item {{if not .IsIgnored}}is-selected{{end}} sn-fix-analysis fix-analysis-tab">
           Fix Analysis
         </span>
         <span data-tab="vuln-overview" id="vuln-overview-tab" class="tab-item sn-vuln-overview vuln-overview-tab">
@@ -722,8 +724,11 @@
             <div class="suggestion-links">
               <div id="lead-url" class="clickable hidden">
                 <svg width="9" height="9" viewBox="0 0 9 9" xmlns="http://www.w3.org/2000/svg" fill="none">
-                  <path d="M4.99998 0L6.64648 1.6465L3.14648 5.1465L3.85348 5.8535L7.35348 2.3535L8.99998 4V0H4.99998Z" fill="#888"/>
-                  <path d="M8 8H1V1H4.5L3.5 0H1C0.4485 0 0 0.4485 0 1V8C0 8.5515 0.4485 9 1 9H8C8.5515 9 9 8.5515 9 8V5.5L8 4.5V8Z" fill="#888"/>
+                  <path d="M4.99998 0L6.64648 1.6465L3.14648 5.1465L3.85348 5.8535L7.35348 2.3535L8.99998 4V0H4.99998Z"
+                    fill="#888" />
+                  <path
+                    d="M8 8H1V1H4.5L3.5 0H1C0.4485 0 0 0.4485 0 1V8C0 8.5515 0.4485 9 1 9H8C8.5515 9 9 8.5515 9 8V5.5L8 4.5V8Z"
+                    fill="#888" />
                 </svg> More info
               </div>
             </div>
@@ -740,16 +745,75 @@
               <p>⚡ Fix this issue by generating a solution using Snyk DeepCode AI</p>
 
               <div class="sn-fix-wrapper">
-                <button id="generate-ai-fix" class="generate-ai-fix">✨ Generate fix <span class="wide">using Snyk DeepCode AI</span></button>
+                <button id="generate-ai-fix" class="generate-ai-fix">✨ Generate fix <span class="wide">using Snyk
+                    DeepCode AI</span></button>
 
                 <div id="fix-loading-indicator" class="sn-loading hidden">
                   <div class="sn-loading-icon">
-                    <svg id="scan-animation" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 248 204" shape-rendering="geometricPrecision"><defs><linearGradient id="mg" x1="16.0903" y1="180" x2="92.743" y2="107.462" spreadMethod="pad" gradientUnits="userSpaceOnUse" gradientTransform="translate(0 0)"><stop id="eQeHIUZsTfX2-fill-0" offset="0%" stop-color="#145deb"/><stop id="eQeHIUZsTfX2-fill-1" offset="100%" stop-color="#441c99"/></linearGradient><linearGradient id="sg" x1="116" y1="0" x2="116" y2="64" spreadMethod="pad" gradientUnits="userSpaceOnUse" gradientTransform="translate(0 0)"><stop id="eQeHIUZsTfX26-fill-0" offset="0%" stop-color="#ff78e1"/><stop id="eQeHIUZsTfX26-fill-1" offset="100%" stop-color="rgba(255,120,225,0)"/></linearGradient></defs><rect width="224" height="180" rx="16" ry="16" transform="translate(12 12)" fill="url(#mg)"/><circle r="4" transform="translate(28 28)" opacity="0.3" fill="#fff"/><circle r="4" transform="translate(40 28)" opacity="0.25" fill="#fff"/><circle r="4" transform="translate(52 28)" opacity="0.2" fill="#fff"/><rect width="48" height="12" rx="6" ry="6" transform="translate(162 56)" opacity="0.2" fill="#fff"/><rect width="80" height="12" rx="6" ry="6" transform="translate(32 92)" opacity="0.2" fill="#fff"/><rect width="72" height="12" rx="6" ry="6" transform="translate(96 164)" opacity="0.2" fill="#fff"/><rect width="56" height="12" rx="6" ry="6" transform="translate(156 128)" opacity="0.2" fill="#fff"/><rect id="l3" width="80" height="12" rx="6" ry="6" transform="translate(64 128)"/><rect id="l2" width="64" height="12" rx="6" ry="6" transform="translate(150 92)"/><rect id="l1" width="117" height="12" rx="6" ry="6" transform="translate(32 56)"/><g id="b3"><rect width="32" height="32" rx="6" ry="6" transform="translate(48 118)" fill="#43b59a"/><path d="M54.5991,134c.7987-.816,2.0938-.816,2.8926,0l2.8926,2.955l10.124-10.343c.7988-.816,2.0939-.816,2.8926,0c.7988.816.7988,2.139,0,2.955L61.8306,141.388c-.7988.816-2.0939.816-2.8926,0l-4.3389-4.433c-.7988-.816-.7988-2.139,0-2.955Z" fill="#fff"/></g><g id="b2"><rect width="32" height="32" rx="6" ry="6" transform="translate(124 81)" fill="#f97a99"/><path d="M142,91c0,.7685-.433,5.3087-1.069,8h-1.862c-.636-2.6913-1.069-7.2315-1.069-8c0-1.1046.895-2,2-2s2,.8954,2,2Z" fill="#fff"/><path d="M140,104c1.105,0,2-.895,2-2s-.895-2-2-2-2,.895-2,2s.895,2,2,2Z" fill="#fff"/></g><g id="b1"><rect width="24" height="24" rx="6" ry="6" transform="translate(28 50)" fill="#f97a99"/><path d="M42,56c0,.7685-.4335,5.3087-1.0693,8h-1.8614C38.4335,61.3087,38,56.7685,38,56c0-1.1046.8954-2,2-2s2,.8954,2,2Z" fill="#fff"/><path d="M40,69c1.1046,0,2-.8954,2-2s-.8954-2-2-2-2,.8954-2,2s.8954,2,2,2Z" fill="#fff"/></g><g id="s0" transform="translate(124,-40)"><g transform="translate(-124,-40)"><rect width="232" height="64" rx="0" ry="0" transform="matrix(1 0 0-1 8 64)" opacity="0.5" fill="url(#sg)"/><rect width="248" height="16" rx="8" ry="8" transform="translate(0 64)" fill="#e555ac"/></g></g></svg>
+                    <svg id="scan-animation" xmlns="http://www.w3.org/2000/svg"
+                      xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 248 204"
+                      shape-rendering="geometricPrecision">
+                      <defs>
+                        <linearGradient id="mg" x1="16.0903" y1="180" x2="92.743" y2="107.462" spreadMethod="pad"
+                          gradientUnits="userSpaceOnUse" gradientTransform="translate(0 0)">
+                          <stop id="eQeHIUZsTfX2-fill-0" offset="0%" stop-color="#145deb" />
+                          <stop id="eQeHIUZsTfX2-fill-1" offset="100%" stop-color="#441c99" />
+                        </linearGradient>
+                        <linearGradient id="sg" x1="116" y1="0" x2="116" y2="64" spreadMethod="pad"
+                          gradientUnits="userSpaceOnUse" gradientTransform="translate(0 0)">
+                          <stop id="eQeHIUZsTfX26-fill-0" offset="0%" stop-color="#ff78e1" />
+                          <stop id="eQeHIUZsTfX26-fill-1" offset="100%" stop-color="rgba(255,120,225,0)" />
+                        </linearGradient>
+                      </defs>
+                      <rect width="224" height="180" rx="16" ry="16" transform="translate(12 12)" fill="url(#mg)" />
+                      <circle r="4" transform="translate(28 28)" opacity="0.3" fill="#fff" />
+                      <circle r="4" transform="translate(40 28)" opacity="0.25" fill="#fff" />
+                      <circle r="4" transform="translate(52 28)" opacity="0.2" fill="#fff" />
+                      <rect width="48" height="12" rx="6" ry="6" transform="translate(162 56)" opacity="0.2"
+                        fill="#fff" />
+                      <rect width="80" height="12" rx="6" ry="6" transform="translate(32 92)" opacity="0.2"
+                        fill="#fff" />
+                      <rect width="72" height="12" rx="6" ry="6" transform="translate(96 164)" opacity="0.2"
+                        fill="#fff" />
+                      <rect width="56" height="12" rx="6" ry="6" transform="translate(156 128)" opacity="0.2"
+                        fill="#fff" />
+                      <rect id="l3" width="80" height="12" rx="6" ry="6" transform="translate(64 128)" />
+                      <rect id="l2" width="64" height="12" rx="6" ry="6" transform="translate(150 92)" />
+                      <rect id="l1" width="117" height="12" rx="6" ry="6" transform="translate(32 56)" />
+                      <g id="b3">
+                        <rect width="32" height="32" rx="6" ry="6" transform="translate(48 118)" fill="#43b59a" />
+                        <path
+                          d="M54.5991,134c.7987-.816,2.0938-.816,2.8926,0l2.8926,2.955l10.124-10.343c.7988-.816,2.0939-.816,2.8926,0c.7988.816.7988,2.139,0,2.955L61.8306,141.388c-.7988.816-2.0939.816-2.8926,0l-4.3389-4.433c-.7988-.816-.7988-2.139,0-2.955Z"
+                          fill="#fff" />
+                      </g>
+                      <g id="b2">
+                        <rect width="32" height="32" rx="6" ry="6" transform="translate(124 81)" fill="#f97a99" />
+                        <path
+                          d="M142,91c0,.7685-.433,5.3087-1.069,8h-1.862c-.636-2.6913-1.069-7.2315-1.069-8c0-1.1046.895-2,2-2s2,.8954,2,2Z"
+                          fill="#fff" />
+                        <path d="M140,104c1.105,0,2-.895,2-2s-.895-2-2-2-2,.895-2,2s.895,2,2,2Z" fill="#fff" />
+                      </g>
+                      <g id="b1">
+                        <rect width="24" height="24" rx="6" ry="6" transform="translate(28 50)" fill="#f97a99" />
+                        <path
+                          d="M42,56c0,.7685-.4335,5.3087-1.0693,8h-1.8614C38.4335,61.3087,38,56.7685,38,56c0-1.1046.8954-2,2-2s2,.8954,2,2Z"
+                          fill="#fff" />
+                        <path d="M40,69c1.1046,0,2-.8954,2-2s-.8954-2-2-2-2,.8954-2,2s.8954,2,2,2Z" fill="#fff" />
+                      </g>
+                      <g id="s0" transform="translate(124,-40)">
+                        <g transform="translate(-124,-40)">
+                          <rect width="232" height="64" rx="0" ry="0" transform="matrix(1 0 0-1 8 64)" opacity="0.5"
+                            fill="url(#sg)" />
+                          <rect width="248" height="16" rx="8" ry="8" transform="translate(0 64)" fill="#e555ac" />
+                        </g>
+                      </g>
+                    </svg>
                   </div>
                   <div class="sn-loading-wrapper">
                     <div class="sn-loading-message sn-msg-1">
                       <span class="sn-loading-title">1<span class="font-light">/4</span> Code Reduction...</span>
-                      <p class="sn-loading-description">Reduces the given files to a smaller and relevant code snippet.</p>
+                      <p class="sn-loading-description">Reduces the given files to a smaller and relevant code snippet.
+                      </p>
                     </div>
                     <div class="sn-loading-message sn-msg-2">
                       <span class="sn-loading-title">2<span class="font-light">/4</span> Parsing...</span>
@@ -757,11 +821,13 @@
                     </div>
                     <div class="sn-loading-message sn-msg-3">
                       <span class="sn-loading-title">3<span class="font-light">/4</span> Static Analysis...</span>
-                      <p class="sn-loading-description">Examining the vulnerability code without having to execute the program.</p>
+                      <p class="sn-loading-description">Examining the vulnerability code without having to execute the
+                        program.</p>
                     </div>
                     <div class="sn-loading-message sn-msg-4">
                       <span class="sn-loading-title">4<span class="font-light">/4</span> Inferencing...</span>
-                      <p class="sn-loading-description">Feeding the reduced code to our neural network to obtain the prediction.</p>
+                      <p class="sn-loading-description">Feeding the reduced code to our neural network to obtain the
+                        prediction.</p>
                     </div>
                   </div>
                 </div>
@@ -774,31 +840,40 @@
                 There are no fix diffs for this issue.
               </div>
               <div id="diff-top" class="row between">
-                <div id="info-top" class="font-light">Here are <span id="diff-number"></span> AI-generated solutions:</div>
+                <div id="info-top" class="font-light">Here are <span id="diff-number"></span> AI-generated solutions:
+                </div>
                 <div class="diffs-nav">
                   <span id="previous-diff" class="arrow" title="Previous diff">
-                    <svg class="arrow-icon dark-only" width="10" height="12" viewBox="0 0 10 12
-  " fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M8.86723 11.4303L8.86721 11.4302L0.641823 6.22447L0.387031 6.62706L0.641821 6.22447C0.532336 6.15518 0.5 6.06763 0.5 6.00001C0.5 5.93239 0.532336 5.84484 0.641821 5.77555L0.641824 5.77555L8.86721 0.569741L8.86723 0.569731C9.00417 0.483055 9.17298 0.480315 9.31053 0.543871C9.44734 0.607082 9.5 0.705333 9.5 0.79421V11.2058C9.5 11.2947 9.44734 11.3929 9.31054 11.4561C9.173 11.5197 9.00418 11.5169 8.86723 11.4303Z" stroke="#CCCCCC"/>
-  </svg>
-                    <svg class="arrow-icon light-only" width="10" height="12" viewBox="0 0 10 12
-  " fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M8.86723 11.4303L8.86721 11.4302L0.641823 6.22447L0.387031 6.62706L0.641821 6.22447C0.532336 6.15518 0.5 6.06763 0.5 6.00001C0.5 5.93239 0.532336 5.84484 0.641821 5.77555L0.641824 5.77555L8.86721 0.569741L8.86723 0.569731C9.00417 0.483055 9.17298 0.480315 9.31053 0.543871C9.44734 0.607082 9.5 0.705333 9.5 0.79421V11.2058C9.5 11.2947 9.44734 11.3929 9.31054 11.4561C9.173 11.5197 9.00418 11.5169 8.86723 11.4303Z" stroke="#3B3B3B"/>
-  </svg>
+                    <svg class="arrow-icon dark-only" width="10" height="12" viewBox="0 0 10 12" fill="none"
+                      xmlns="http://www.w3.org/2000/svg">
+                      <path
+                        d="M8.86723 11.4303L8.86721 11.4302L0.641823 6.22447L0.387031 6.62706L0.641821 6.22447C0.532336 6.15518 0.5 6.06763 0.5 6.00001C0.5 5.93239 0.532336 5.84484 0.641821 5.77555L0.641824 5.77555L8.86721 0.569741L8.86723 0.569731C9.00417 0.483055 9.17298 0.480315 9.31053 0.543871C9.44734 0.607082 9.5 0.705333 9.5 0.79421V11.2058C9.5 11.2947 9.44734 11.3929 9.31054 11.4561C9.173 11.5197 9.00418 11.5169 8.86723 11.4303Z"
+                        stroke="#CCCCCC" />
+                    </svg>
+                    <svg class="arrow-icon light-only" width="10" height="12" viewBox="0 0 10 12" fill="none"
+                      xmlns="http://www.w3.org/2000/svg">
+                      <path
+                        d="M8.86723 11.4303L8.86721 11.4302L0.641823 6.22447L0.387031 6.62706L0.641821 6.22447C0.532336 6.15518 0.5 6.06763 0.5 6.00001C0.5 5.93239 0.532336 5.84484 0.641821 5.77555L0.641824 5.77555L8.86721 0.569741L8.86723 0.569731C9.00417 0.483055 9.17298 0.480315 9.31053 0.543871C9.44734 0.607082 9.5 0.705333 9.5 0.79421V11.2058C9.5 11.2947 9.44734 11.3929 9.31054 11.4561C9.173 11.5197 9.00418 11.5169 8.86723 11.4303Z"
+                        stroke="#3B3B3B" />
+                    </svg>
                   </span>
                   <span id="diff-text">
                     AI solution <strong id="diff-counter">1</strong>/<span id="diff-number2"></span>
                   </span>
                   <span id="next-diff" class="arrow" title="Next diff">
-                    <svg class="arrow-icon dark-only" width="10" height="12" viewBox="0 0 10 12
-    " fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M1.13277 11.4303L1.13279 11.4302L9.35818 6.22447L9.61297 6.62706L9.35818 6.22447C9.46766 6.15518 9.5 6.06763 9.5 6.00001C9.5 5.93239 9.46766 5.84484 9.35818 5.77555L9.35818 5.77555L1.13279 0.569741L1.13277 0.569731C0.995832 0.483055 0.827023 0.480315 0.689467 0.543871C0.55266 0.607082 0.5 0.705333 0.5 0.79421V11.2058C0.5 11.2947 0.552661 11.3929 0.689456 11.4561C0.827003 11.5197 0.99582 11.5169 1.13277 11.4303Z" stroke="#CCCCCC"/>
-    </svg>
-                    <svg class="arrow-icon light-only" width="10" height="12" viewBox="0 0 10
-    12" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M1.13277 11.4303L1.13279 11.4302L9.35818 6.22447L9.61297 6.62706L9.35818 6.22447C9.46766 6.15518 9.5 6.06763 9.5 6.00001C9.5 5.93239 9.46766 5.84484 9.35818 5.77555L9.35818 5.77555L1.13279 0.569741L1.13277 0.569731C0.995832 0.483055 0.827023 0.480315 0.689467 0.543871C0.55266 0.607082 0.5 0.705333 0.5 0.79421V11.2058C0.5 11.2947 0.552661 11.3929 0.689456 11.4561C0.827003 11.5197 0.99582 11.5169 1.13277 11.4303Z" stroke="#3B3B3B"/>
-    </svg>
-              </span>
+                    <svg class="arrow-icon dark-only" width="10" height="12" viewBox="0 0 10 12" fill="none"
+                      xmlns="http://www.w3.org/2000/svg">
+                      <path
+                        d="M1.13277 11.4303L1.13279 11.4302L9.35818 6.22447L9.61297 6.62706L9.35818 6.22447C9.46766 6.15518 9.5 6.06763 9.5 6.00001C9.5 5.93239 9.46766 5.84484 9.35818 5.77555L9.35818 5.77555L1.13279 0.569741L1.13277 0.569731C0.995832 0.483055 0.827023 0.480315 0.689467 0.543871C0.55266 0.607082 0.5 0.705333 0.5 0.79421V11.2058C0.5 11.2947 0.552661 11.3929 0.689456 11.4561C0.827003 11.5197 0.99582 11.5169 1.13277 11.4303Z"
+                        stroke="#CCCCCC" />
+                    </svg>
+                    <svg class="arrow-icon light-only" width="10" height="12" viewBox="0 0 10 12" fill="none"
+                      xmlns="http://www.w3.org/2000/svg">
+                      <path
+                        d="M1.13277 11.4303L1.13279 11.4302L9.35818 6.22447L9.61297 6.62706L9.35818 6.22447C9.46766 6.15518 9.5 6.06763 9.5 6.00001C9.5 5.93239 9.46766 5.84484 9.35818 5.77555L9.35818 5.77555L1.13279 0.569741L1.13277 0.569731C0.995832 0.483055 0.827023 0.480315 0.689467 0.543871C0.55266 0.607082 0.5 0.705333 0.5 0.79421V11.2058C0.5 11.2947 0.552661 11.3929 0.689456 11.4561C0.827003 11.5197 0.99582 11.5169 1.13277 11.4303Z"
+                        stroke="#3B3B3B" />
+                    </svg>
+                  </span>
                 </div>
               </div>
               <div id="diff"></div>
