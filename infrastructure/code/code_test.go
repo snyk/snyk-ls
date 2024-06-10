@@ -725,7 +725,8 @@ func writeGitIgnoreIntoDir(t *testing.T, ignorePatterns string, tempDir string) 
 }
 
 func Test_IsEnabled(t *testing.T) {
-	scanner := &Scanner{errorReporter: newTestCodeErrorReporter()}
+	c := config.CurrentConfig()
+	scanner := &Scanner{errorReporter: newTestCodeErrorReporter(), c: c}
 	t.Run(
 		"should return true if Snyk Code is generally enabled", func(t *testing.T) {
 			config.CurrentConfig().SetSnykCodeEnabled(true)
@@ -735,18 +736,18 @@ func Test_IsEnabled(t *testing.T) {
 	)
 	t.Run(
 		"should return true if Snyk Code Quality is enabled", func(t *testing.T) {
-			config.CurrentConfig().SetSnykCodeEnabled(false)
-			config.CurrentConfig().EnableSnykCodeQuality(true)
-			config.CurrentConfig().EnableSnykCodeSecurity(false)
+			c.SetSnykCodeEnabled(false)
+			c.EnableSnykCodeQuality(true)
+			c.EnableSnykCodeSecurity(false)
 			enabled := scanner.IsEnabled()
 			assert.True(t, enabled)
 		},
 	)
 	t.Run(
 		"should return true if Snyk Code Security is enabled", func(t *testing.T) {
-			config.CurrentConfig().SetSnykCodeEnabled(false)
-			config.CurrentConfig().EnableSnykCodeQuality(false)
-			config.CurrentConfig().EnableSnykCodeSecurity(true)
+			c.SetSnykCodeEnabled(false)
+			c.EnableSnykCodeQuality(false)
+			c.EnableSnykCodeSecurity(true)
 			enabled := scanner.IsEnabled()
 			assert.True(t, enabled)
 		},
@@ -754,9 +755,9 @@ func Test_IsEnabled(t *testing.T) {
 	t.Run(
 		"should return false if Snyk Code is disabled and Snyk Code Quality and Security are not enabled",
 		func(t *testing.T) {
-			config.CurrentConfig().SetSnykCodeEnabled(false)
-			config.CurrentConfig().EnableSnykCodeQuality(false)
-			config.CurrentConfig().EnableSnykCodeSecurity(false)
+			c.SetSnykCodeEnabled(false)
+			c.EnableSnykCodeQuality(false)
+			c.EnableSnykCodeSecurity(false)
 			enabled := scanner.IsEnabled()
 			assert.False(t, enabled)
 		},
