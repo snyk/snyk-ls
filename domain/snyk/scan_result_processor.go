@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2024 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,24 +26,43 @@ type ScanData struct {
 	Product           product.Product
 	Issues            []Issue
 	Err               error
-	DurationMs        int64
+	DurationMs        time.Duration
 	TimestampFinished time.Time
-	Critical          int
-	High              int
-	Medium            int
-	Low               int
-	SeverityCount     map[product.Product]SeverityCount
-}
-
-type SeverityCount struct {
-	Critical int
-	High     int
-	Medium   int
-	Low      int
+	Path              string
 }
 
 type ScanResultProcessor = func(scanData ScanData)
 
-//type ScanResultProcessor = func(product product.Product, issues []Issue, err error)
+type SeverityIssueCounts map[Severity]IssueCount
+type IssueCount struct {
+	Total   int
+	Open    int
+	Ignored int
+}
 
 func NoopResultProcessor(_ ScanData) {}
+
+func (s ScanData) GetSeverityIssueCounts() SeverityIssueCounts {
+	sic := make(SeverityIssueCounts)
+
+	for _, issue := range s.Issues {
+		updateSeverityCount(sic, issue)
+	}
+
+	return sic
+}
+
+func updateSeverityCount(sic SeverityIssueCounts, issue Issue) {
+	ic, exists := sic[issue.Severity]
+	if !exists {
+		ic = IssueCount{}
+	}
+	if issue.IsIgnored {
+		ic.Ignored++
+	} else {
+		ic.Open++
+	}
+	ic.Total++
+
+	sic[issue.Severity] = ic
+}

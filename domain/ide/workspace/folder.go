@@ -20,11 +20,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"runtime"
 	"strings"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"
+	"github.com/rs/zerolog/log"
+	gafanalytics "github.com/snyk/go-application-framework/pkg/analytics"
+	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 
@@ -37,6 +40,11 @@ import (
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/util"
+)
+
+var (
+	_ snyk.CacheProvider = (*Folder)(nil)
 )
 
 type FolderStatus int
@@ -44,22 +52,6 @@ type FolderStatus int
 const (
 	Unscanned FolderStatus = iota
 	Scanned   FolderStatus = iota
-)
-
-var (
-	os = map[string]string{
-		"darwin":  "macOS",
-		"linux":   "linux",
-		"windows": "windows",
-	}
-
-	arch = map[string]string{
-		"amd64": "x86_64",
-		"arm64": "arm64",
-		"386":   "386",
-	}
-
-	_ snyk.CacheProvider = (*Folder)(nil)
 )
 
 // TODO: 3: Extract reporting logic to a separate service
@@ -339,7 +331,6 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *snyk.ScanData) {
 			// severity counts here, too
 			if !dedupMap[uniqueIssueID] {
 				dedupMap[uniqueIssueID] = true
-				incrementSeverityCount(scanData, issue)
 			}
 			continue
 		}
@@ -356,7 +347,6 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *snyk.ScanData) {
 		if !dedupMap[uniqueIssueID] {
 			dedupMap[uniqueIssueID] = true
 			cachedIssues = append(cachedIssues, issue)
-			incrementSeverityCount(scanData, issue)
 		}
 		newCache[issue.AffectedFilePath] = cachedIssues
 	}
@@ -366,55 +356,7 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *snyk.ScanData) {
 	}
 }
 
-func incrementSeverityCount(scanData *snyk.ScanData, issue snyk.Issue) {
-	c := config.CurrentConfig()
-	issueProduct := issue.Product
-	if issueProduct == "" {
-		c.Logger().Debug().Str("method", "incrementSeverityCount").Msg("Issue product is empty. " +
-			"Setting to unknown")
-		issueProduct = "unknown"
-	}
-
-	initializeSeverityCountForProduct(scanData, issueProduct)
-
-	severityCount, exists := scanData.SeverityCount[issueProduct]
-	if !exists {
-		severityCount = snyk.SeverityCount{}
-	}
-
-	switch issue.Severity {
-	case snyk.Critical:
-		severityCount.Critical++
-	case snyk.High:
-		severityCount.High++
-	case snyk.Medium:
-		severityCount.Medium++
-	case snyk.Low:
-		severityCount.Low++
-	}
-
-	scanData.SeverityCount[issueProduct] = severityCount // reassign the value to the map
-}
-
-func initializeSeverityCountForProduct(scanData *snyk.ScanData, productType product.Product) {
-	c := config.CurrentConfig()
-	if scanData.SeverityCount == nil {
-		scanData.SeverityCount = make(map[product.Product]snyk.SeverityCount)
-	}
-
-	if productType == "" {
-		c.Logger().Debug().Str("method", "initializeSeverityCountForProduct").Msg("Product is empty. Setting to unknown")
-		productType = "unknown"
-	}
-
-	if _, exists := scanData.SeverityCount[productType]; !exists {
-		scanData.SeverityCount[productType] = snyk.SeverityCount{}
-	}
-}
-
 func sendAnalytics(data *snyk.ScanData) {
-	initializeSeverityCountForProduct(data, data.Product)
-
 	c := config.CurrentConfig()
 	gafConfig := c.Engine().GetConfiguration()
 
@@ -429,39 +371,94 @@ func sendAnalytics(data *snyk.ScanData) {
 		return
 	}
 
-	scanEvent := json_schemas.ScanDoneEvent{}
-	// Populate the fields with data
-	scanEvent.Data.Type = "analytics"
-	scanEvent.Data.Attributes.DeviceId = c.DeviceID()
-	scanEvent.Data.Attributes.Application = "snyk-ls"
-	scanEvent.Data.Attributes.ApplicationVersion = config.Version
-	scanEvent.Data.Attributes.Os = os[runtime.GOOS]
-	scanEvent.Data.Attributes.Arch = arch[runtime.GOARCH]
-	scanEvent.Data.Attributes.IntegrationName = gafConfig.GetString(configuration.INTEGRATION_NAME)
-	scanEvent.Data.Attributes.IntegrationVersion = gafConfig.GetString(configuration.INTEGRATION_VERSION)
-	scanEvent.Data.Attributes.IntegrationEnvironment = gafConfig.GetString(configuration.INTEGRATION_ENVIRONMENT)
-	scanEvent.Data.Attributes.IntegrationEnvironmentVersion = gafConfig.GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION)
-	scanEvent.Data.Attributes.EventType = "Scan done"
-	scanEvent.Data.Attributes.Status = "Success"
-	scanEvent.Data.Attributes.ScanType = string(data.Product)
-	scanEvent.Data.Attributes.UniqueIssueCount.Critical = data.SeverityCount[data.Product].Critical
-	scanEvent.Data.Attributes.UniqueIssueCount.High = data.SeverityCount[data.Product].High
-	scanEvent.Data.Attributes.UniqueIssueCount.Medium = data.SeverityCount[data.Product].Medium
-	scanEvent.Data.Attributes.UniqueIssueCount.Low = data.SeverityCount[data.Product].Low
-	scanEvent.Data.Attributes.DurationMs = fmt.Sprintf("%d", data.DurationMs)
-	scanEvent.Data.Attributes.TimestampFinished = data.TimestampFinished
+	ic := gafanalytics.NewInstrumentationCollector()
 
-	bytes, err := json.Marshal(scanEvent)
+	ua := util.GetUserAgent(gafConfig, config.Version)
+	ic.SetUserAgent(ua)
+
+	iid := instrumentation.AssembleUrnFromUUID(uuid.NewString())
+	ic.SetInteractionId(iid)
+
+	ic.SetTimestamp(data.TimestampFinished)
+	ic.SetDuration(data.DurationMs)
+
+	ic.SetStage("dev")
+	ic.SetType("analytics")
+	ic.SetInteractionType("Scan done")
+
+	categories := setupCategories(data, c)
+	ic.SetCategory(categories)
+
+	ic.SetStatus(gafanalytics.Success)
+
+	summary := createTestSummary(data, c)
+	ic.SetTestSummary(summary)
+
+	targetId, err := instrumentation.GetTargetId(data.Path, instrumentation.AutoDetectedTargetId)
 	if err != nil {
-		logger.Err(err).Msg("Error marshaling scan event")
+		logger.Err(err).Msg("Error creating the Target Id")
+	}
+	ic.SetTargetId(targetId)
+
+	ic.AddExtension("device_id", c.DeviceID())
+
+	analyticsData, err := gafanalytics.GetV2InstrumentationObject(ic)
+	if err != nil {
+		logger.Err(err).Msg("Error creating the instrumentation collection object")
 		return
 	}
 
-	err = analytics.SendAnalyticsToAPI(c, bytes)
+	v2InstrumentationData, err := json.Marshal(analyticsData)
 	if err != nil {
-		logger.Err(err).Msg("Error sending analytics to API")
+		logger.Error().Err(err).Msg("Failed to marshal analytics")
+	}
+
+	err = analytics.SendAnalyticsToAPI(c, v2InstrumentationData)
+	if err != nil {
+		logger.Err(err).Msg("Error sending analytics to API: " + string(v2InstrumentationData))
 		return
 	}
+}
+
+func setupCategories(data *snyk.ScanData, c *config.Config) []string {
+	args := []string{product.ToProductCodename(data.Product), "test"}
+	args = append(args, c.CliSettings().AdditionalOssParameters...)
+	categories := instrumentation.DetermineCategory(args, c.Engine())
+	return categories
+}
+
+func createTestSummary(data *snyk.ScanData, c *config.Config) json_schemas.TestSummary {
+	logger := c.Logger().With().Str("method", "folder.createTestSummary").Logger()
+	sic := data.GetSeverityIssueCounts()
+	testSummary := json_schemas.TestSummary{Type: string(data.Product)}
+
+	if len(sic) == 0 {
+		logger.Debug().Msgf("no scan issues found for product %v", string(data.Product))
+		return testSummary
+	}
+
+	var results []json_schemas.TestSummaryResult
+	results = appendTestResults(sic, results, snyk.Critical)
+	results = appendTestResults(sic, results, snyk.High)
+	results = appendTestResults(sic, results, snyk.Medium)
+	results = appendTestResults(sic, results, snyk.Low)
+
+	testSummary.Results = results
+
+	return testSummary
+}
+
+func appendTestResults(sic snyk.SeverityIssueCounts, results []json_schemas.TestSummaryResult,
+	severity snyk.Severity) []json_schemas.TestSummaryResult {
+	if ic, exists := sic[severity]; exists {
+		results = append(results, json_schemas.TestSummaryResult{
+			Severity: severity.String(),
+			Total:    ic.Total,
+			Open:     ic.Open,
+			Ignored:  ic.Ignored,
+		})
+	}
+	return results
 }
 
 func (f *Folder) FilterAndPublishDiagnostics(p *product.Product) {

@@ -80,7 +80,7 @@ require (
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.2.2 // indirect
-	github.com/snyk/error-catalog-golang-public v0.0.0-20240527112826-2b77438d25f1 // indirect
+	github.com/snyk/error-catalog-golang-public v0.0.0-20240605115201-8461850930e6 // indirect
 	github.com/snyk/go-httpauth v0.0.0-20240307114523-1f5ea3f55c65 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/cobra v1.8.0 // indirect
@@ -136,4 +136,5 @@ require (
 )
 
 //replace github.com/snyk/go-application-framework => ../go-application-framework
+
 //replace github.com/snyk/code-client-go => ../code-client-go

@@ -293,8 +293,9 @@ func (sc *DelegatingConcurrentScanner) Scan(
 					Product:           s.Product(),
 					Issues:            foundIssues,
 					Err:               err,
-					DurationMs:        scanSpan.GetDurationMs(),
+					DurationMs:        time.Duration(scanSpan.GetDurationMs()),
 					TimestampFinished: time.Now().UTC(),
+					Path:              folderPath,
 				}
 				processResults(data)
 				logger.Info().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))

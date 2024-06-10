@@ -235,7 +235,7 @@ jobs:
         env:
           LICENSES: ${{ steps.create_license_report.outputs.LICENSES }}
         with:
-          args: release --clean --snapshot --skip-publish
+          args: release --clean --snapshot --skip=publish
 
       - name: Output compiled licenses
         run: |

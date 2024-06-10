@@ -139,12 +139,25 @@ func trimCWEPrefix(cwe string) string {
 
 func prepareIgnoreDetailsRow(ignoreDetails *snyk.IgnoreDetails) []IgnoreDetail {
 	return []IgnoreDetail{
-		{"Category", ignoreDetails.Category},
+		{"Category", parseCategory(ignoreDetails.Category)},
 		{"Expiration", ignoreDetails.Expiration},
 		{"Ignored On", formatDate(ignoreDetails.IgnoredOn)},
 		{"Ignored By", ignoreDetails.IgnoredBy},
 		{"Reason", ignoreDetails.Reason},
 	}
+}
+
+func parseCategory(category string) string {
+	categoryMap := map[string]string{
+		"not-vulnerable":   "Not vulnerable",
+		"temporary-ignore": "Ignored temporarily",
+		"wont-fix":         "Ignored permanently",
+	}
+
+	if result, ok := categoryMap[category]; ok {
+		return result
+	}
+	return category
 }
 
 func prepareDataFlowTable(issue snyk.CodeIssueData) []DataFlowItem {
@@ -225,7 +238,7 @@ func getRepoName(commitURL string) string {
 
 func formatDate(date time.Time) string {
 	month := date.Format("January")
-	return fmt.Sprintf("%s %02d, %d", month, date.Day(), date.Year())
+	return fmt.Sprintf("%s %d, %d", month, date.Day(), date.Year())
 }
 
 func getSeverityIconSvg(issue snyk.Issue) template.HTML {

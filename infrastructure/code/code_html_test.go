@@ -129,6 +129,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	assert.Contains(t, codePanelHtml, `class="ignore-warning-wrapper"`)
 	assert.Contains(t, codePanelHtml, `class="ignore-badge"`)
 	assert.Contains(t, codePanelHtml, `data-content="ignore-details"`)
+	assert.Contains(t, codePanelHtml, `class="ignore-details-value">Ignored permanently</div>`)
 
 	// assert Footer buttons are not present when issue is ignored
 	assert.NotContains(t, codePanelHtml, `id="ignore-actions"`)
