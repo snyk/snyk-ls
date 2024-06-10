@@ -52,7 +52,7 @@ type DataFlowItem struct {
 
 type ExampleCommit struct {
 	CommitURL    string
-	IconSVG      template.HTML
+	GitHubIcon   template.HTML
 	RepoName     string
 	RepoLink     string
 	ExampleLines []ExampleLines
@@ -65,7 +65,7 @@ var globalTemplate *template.Template
 
 func init() {
 	funcMap := template.FuncMap{
-		"vendorIconSvg": getVendorIconSvg,
+		"githubIcon":    getGitHubIconSvg,
 		"repoName":      getRepoName,
 		"trimCWEPrefix": trimCWEPrefix,
 		"idxMinusOne":   idxMinusOne,
@@ -106,6 +106,12 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 		"IgnoreLineAction":   getLineToIgnoreAction(issue),
 		"HasAIFix":           additionalData.HasAIFix,
 		"ExternalIcon":       getExternalIconSvg(),
+		"ScanAnimation":      getScanAnimationSvg(),
+		"GitHubIcon":         getGitHubIconSvg(),
+		"ArrowLeftDark":      getArrowLeftDarkSvg(),
+		"ArrowLeftLight":     getArrowLeftLightSvg(),
+		"ArrowRightDark":     getArrowRightDarkSvg(),
+		"ArrowRightLight":    getArrowRightLightSvg(),
 	}
 
 	if issue.IsIgnored {
@@ -204,7 +210,7 @@ func prepareExampleCommitFixes(fixes []snyk.ExampleCommitFix) []ExampleCommit {
 	for _, fix := range fixes {
 		fixData = append(fixData, ExampleCommit{
 			CommitURL:    fix.CommitURL,
-			IconSVG:      getVendorIconSvg(),
+			GitHubIcon:   getGitHubIconSvg(),
 			RepoName:     getRepoName(fix.CommitURL),
 			ExampleLines: prepareExampleLines(fix.Lines),
 			RepoLink:     fix.CommitURL,
@@ -244,11 +250,10 @@ func formatDate(date time.Time) string {
 }
 
 func getExternalIconSvg() template.HTML {
-	return template.HTML(` <svg class="is-external-icon" width="9" height="9" viewBox="0 0 9 9" xmlns="http://www.w3.
-org/2000/svg" fill="none">
-          <path d="M4.99998 0L6.64648 1.6465L3.14648 5.1465L3.85348 5.8535L7.35348 2.3535L8.99998 4V0H4.99998Z" fill="#888"/>
-          <path d="M8 8H1V1H4.5L3.5 0H1C0.4485 0 0 0.4485 0 1V8C0 8.5515 0.4485 9 1 9H8C8.5515 9 9 8.5515 9 8V5.5L8 4.5V8Z" fill="#888"/>
-        </svg>`)
+	return template.HTML(` <svg class="is-external-icon" width="9" height="9" viewBox="0 0 9 9" xmlns="http://www.w3.org/2000/svg" fill="none">
+		<path d="M4.99998 0L6.64648 1.6465L3.14648 5.1465L3.85348 5.8535L7.35348 2.3535L8.99998 4V0H4.99998Z" fill="#888"/>
+		<path d="M8 8H1V1H4.5L3.5 0H1C0.4485 0 0 0.4485 0 1V8C0 8.5515 0.4485 9 1 9H8C8.5515 9 9 8.5515 9 8V5.5L8 4.5V8Z" fill="#888"/>
+	</svg>`)
 }
 
 func getSeverityIconSvg(issue snyk.Issue) template.HTML {
@@ -278,7 +283,7 @@ func getSeverityIconSvg(issue snyk.Issue) template.HTML {
 	}
 }
 
-func getVendorIconSvg() template.HTML {
+func getGitHubIconSvg() template.HTML {
 	return template.HTML(`<svg class="tab-item-icon" width="18" height="16" viewBox="0 0 98 96" xmlns="http://www.w3.org/2000/svg">
 		<path
 			fill-rule="evenodd"
@@ -293,4 +298,91 @@ func getLessonIconSvg() template.HTML {
 	<path d="M8.25 0L0 4.5L3 6.135V10.635L8.25 13.5L13.5 10.635V6.135L15 5.3175V10.5H16.5V4.5L8.25 0ZM13.365 4.5L8.25 7.29L3.135 4.5L8.25 1.71L13.365 4.5ZM12 9.75L8.25 11.79L4.5 9.75V6.9525L8.25 9L12 6.9525V9.75Z" fill="#888"/>
 	</svg>
 	`)
+}
+
+func getScanAnimationSvg() template.HTML {
+	return template.HTML(`<svg id="scan-animation" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 248 204" shape-rendering="geometricPrecision">
+	<defs>
+		<linearGradient id="mg" x1="16.0903" y1="180" x2="92.743" y2="107.462" spreadMethod="pad"
+			gradientUnits="userSpaceOnUse" gradientTransform="translate(0 0)">
+			<stop id="eQeHIUZsTfX2-fill-0" offset="0%" stop-color="#145deb" />
+			<stop id="eQeHIUZsTfX2-fill-1" offset="100%" stop-color="#441c99" />
+		</linearGradient>
+		<linearGradient id="sg" x1="116" y1="0" x2="116" y2="64" spreadMethod="pad" gradientUnits="userSpaceOnUse"
+			gradientTransform="translate(0 0)">
+			<stop id="eQeHIUZsTfX26-fill-0" offset="0%" stop-color="#ff78e1" />
+			<stop id="eQeHIUZsTfX26-fill-1" offset="100%" stop-color="rgba(255,120,225,0)" />
+		</linearGradient>
+	</defs>
+	<rect width="224" height="180" rx="16" ry="16" transform="translate(12 12)" fill="url(#mg)" />
+	<circle r="4" transform="translate(28 28)" opacity="0.3" fill="#fff" />
+	<circle r="4" transform="translate(40 28)" opacity="0.25" fill="#fff" />
+	<circle r="4" transform="translate(52 28)" opacity="0.2" fill="#fff" />
+	<rect width="48" height="12" rx="6" ry="6" transform="translate(162 56)" opacity="0.2" fill="#fff" />
+	<rect width="80" height="12" rx="6" ry="6" transform="translate(32 92)" opacity="0.2" fill="#fff" />
+	<rect width="72" height="12" rx="6" ry="6" transform="translate(96 164)" opacity="0.2" fill="#fff" />
+	<rect width="56" height="12" rx="6" ry="6" transform="translate(156 128)" opacity="0.2" fill="#fff" />
+	<rect id="l3" width="80" height="12" rx="6" ry="6" transform="translate(64 128)" />
+	<rect id="l2" width="64" height="12" rx="6" ry="6" transform="translate(150 92)" />
+	<rect id="l1" width="117" height="12" rx="6" ry="6" transform="translate(32 56)" />
+	<g id="b3">
+		<rect width="32" height="32" rx="6" ry="6" transform="translate(48 118)" fill="#43b59a" />
+		<path
+			d="M54.5991,134c.7987-.816,2.0938-.816,2.8926,0l2.8926,2.955l10.124-10.343c.7988-.816,2.0939-.816,2.8926,0c.7988.816.7988,2.139,0,2.955L61.8306,141.388c-.7988.816-2.0939.816-2.8926,0l-4.3389-4.433c-.7988-.816-.7988-2.139,0-2.955Z"
+			fill="#fff" />
+	</g>
+	<g id="b2">
+		<rect width="32" height="32" rx="6" ry="6" transform="translate(124 81)" fill="#f97a99" />
+		<path
+			d="M142,91c0,.7685-.433,5.3087-1.069,8h-1.862c-.636-2.6913-1.069-7.2315-1.069-8c0-1.1046.895-2,2-2s2,.8954,2,2Z"
+			fill="#fff" />
+		<path d="M140,104c1.105,0,2-.895,2-2s-.895-2-2-2-2,.895-2,2s.895,2,2,2Z" fill="#fff" />
+	</g>
+	<g id="b1">
+		<rect width="24" height="24" rx="6" ry="6" transform="translate(28 50)" fill="#f97a99" />
+		<path
+			d="M42,56c0,.7685-.4335,5.3087-1.0693,8h-1.8614C38.4335,61.3087,38,56.7685,38,56c0-1.1046.8954-2,2-2s2,.8954,2,2Z"
+			fill="#fff" />
+		<path d="M40,69c1.1046,0,2-.8954,2-2s-.8954-2-2-2-2,.8954-2,2s.8954,2,2,2Z" fill="#fff" />
+	</g>
+	<g id="s0" transform="translate(124,-40)">
+		<g transform="translate(-124,-40)">
+			<rect width="232" height="64" rx="0" ry="0" transform="matrix(1 0 0-1 8 64)" opacity="0.5" fill="url(#sg)" />
+			<rect width="248" height="16" rx="8" ry="8" transform="translate(0 64)" fill="#e555ac" />
+		</g>
+	</g>
+	</svg>`)
+}
+
+func getArrowLeftDarkSvg() template.HTML {
+	return template.HTML(`<svg class="arrow-icon dark-only" width="10" height="12" viewBox="0 0 10 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path
+    d="M8.86723 11.4303L8.86721 11.4302L0.641823 6.22447L0.387031 6.62706L0.641821 6.22447C0.532336 6.15518 0.5 6.06763 0.5 6.00001C0.5 5.93239 0.532336 5.84484 0.641821 5.77555L0.641824 5.77555L8.86721 0.569741L8.86723 0.569731C9.00417 0.483055 9.17298 0.480315 9.31053 0.543871C9.44734 0.607082 9.5 0.705333 9.5 0.79421V11.2058C9.5 11.2947 9.44734 11.3929 9.31054 11.4561C9.173 11.5197 9.00418 11.5169 8.86723 11.4303Z"
+    stroke="#CCCCCC" />
+	</svg>`)
+}
+
+func getArrowLeftLightSvg() template.HTML {
+	return template.HTML(`<svg class="arrow-icon light-only" width="10" height="12" viewBox="0 0 10 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path
+    d="M8.86723 11.4303L8.86721 11.4302L0.641823 6.22447L0.387031 6.62706L0.641821 6.22447C0.532336 6.15518 0.5 6.06763 0.5 6.00001C0.5 5.93239 0.532336 5.84484 0.641821 5.77555L0.641824 5.77555L8.86721 0.569741L8.86723 0.569731C9.00417 0.483055 9.17298 0.480315 9.31053 0.543871C9.44734 0.607082 9.5 0.705333 9.5 0.79421V11.2058C9.5 11.2947 9.44734 11.3929 9.31054 11.4561C9.173 11.5197 9.00418 11.5169 8.86723 11.4303Z"
+    stroke="#3B3B3B" />
+	</svg>`)
+}
+
+func getArrowRightDarkSvg() template.HTML {
+	return template.HTML(`
+	<svg class="arrow-icon dark-only" width="10" height="12" viewBox="0 0 10 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path
+    d="M1.13277 11.4303L1.13279 11.4302L9.35818 6.22447L9.61297 6.62706L9.35818 6.22447C9.46766 6.15518 9.5 6.06763 9.5 6.00001C9.5 5.93239 9.46766 5.84484 9.35818 5.77555L9.35818 5.77555L1.13279 0.569741L1.13277 0.569731C0.995832 0.483055 0.827023 0.480315 0.689467 0.543871C0.55266 0.607082 0.5 0.705333 0.5 0.79421V11.2058C0.5 11.2947 0.552661 11.3929 0.689456 11.4561C0.827003 11.5197 0.99582 11.5169 1.13277 11.4303Z"
+    stroke="#CCCCCC" />
+	</svg>`)
+}
+
+func getArrowRightLightSvg() template.HTML {
+	return template.HTML(`<svg class="arrow-icon light-only" width="10" height="12" viewBox="0 0 10 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path
+    d="M1.13277 11.4303L1.13279 11.4302L9.35818 6.22447L9.61297 6.62706L9.35818 6.22447C9.46766 6.15518 9.5 6.06763 9.5 6.00001C9.5 5.93239 9.46766 5.84484 9.35818 5.77555L9.35818 5.77555L1.13279 0.569741L1.13277 0.569731C0.995832 0.483055 0.827023 0.480315 0.689467 0.543871C0.55266 0.607082 0.5 0.705333 0.5 0.79421V11.2058C0.5 11.2947 0.552661 11.3929 0.689456 11.4561C0.827003 11.5197 0.99582 11.5169 1.13277 11.4303Z"
+    stroke="#3B3B3B" />
+	</svg>`)
 }
