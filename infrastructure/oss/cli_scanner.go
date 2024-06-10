@@ -80,14 +80,7 @@ type CLIScanner struct {
 	config                  *config.Config
 }
 
-func NewCLIScanner(instrumentor performance.Instrumentor,
-	errorReporter error_reporting.ErrorReporter,
-	analytics ux2.Analytics,
-	cli cli.Executor,
-	learnService learn.Service,
-	notifier noti.Notifier,
-	c *config.Config,
-) snyk.ProductScanner {
+func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux2.Analytics, cli cli.Executor, learnService learn.Service, notifier noti.Notifier) snyk.ProductScanner {
 	scanner := CLIScanner{
 		instrumentor:            instrumentor,
 		errorReporter:           errorReporter,

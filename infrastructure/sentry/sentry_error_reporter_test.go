@@ -44,7 +44,7 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 			return
 		}
 	})
-	var target = NewSentryErrorReporter(notifier, c)
+	var target = NewSentryErrorReporter(c, notifier)
 
 	config.CurrentConfig().SetErrorReportingEnabled(false)
 	captured := target.CaptureError(e)
@@ -73,7 +73,7 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 			return
 		}
 	})
-	var target = NewSentryErrorReporter(notifier, c)
+	var target = NewSentryErrorReporter(c, notifier)
 
 	e := errors.New(text)
 	config.CurrentConfig().SetErrorReportingEnabled(false)

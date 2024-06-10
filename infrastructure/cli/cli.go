@@ -43,13 +43,7 @@ type SnykCli struct {
 
 var Mutex = &sync.Mutex{}
 
-func NewExecutor(
-	authenticationService snyk.AuthenticationService,
-	errorReporter error_reporting.ErrorReporter,
-	analytics ux.Analytics,
-	notifier noti.Notifier,
-	c *config.Config,
-) Executor {
+func NewExecutor(c *config.Config, authenticationService snyk.AuthenticationService, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics, notifier noti.Notifier) Executor {
 	concurrencyLimit := 2
 
 	return &SnykCli{

@@ -40,7 +40,7 @@ type Initializer struct {
 	c                     *config.Config
 }
 
-func NewInitializer(authenticator snyk.AuthenticationService, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics, notifier noti.Notifier, c *config.Config) *Initializer {
+func NewInitializer(c *config.Config, authenticator snyk.AuthenticationService, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics, notifier noti.Notifier) *Initializer {
 	return &Initializer{
 		authenticationService: authenticator,
 		errorReporter:         errorReporter,

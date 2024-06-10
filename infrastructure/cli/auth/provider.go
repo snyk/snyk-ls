@@ -43,7 +43,7 @@ func (a *CliAuthenticationProvider) GetCheckAuthenticationFunction() snyk.Authen
 	return snyk.AuthenticationCheck
 }
 
-func NewCliAuthenticationProvider(errorReporter error_reporting.ErrorReporter, c *config.Config) snyk.AuthenticationProvider {
+func NewCliAuthenticationProvider(c *config.Config, errorReporter error_reporting.ErrorReporter) snyk.AuthenticationProvider {
 	return &CliAuthenticationProvider{"", errorReporter, c}
 }
 

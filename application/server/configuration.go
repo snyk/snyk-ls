@@ -27,9 +27,10 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
+	"golang.org/x/oauth2"
+
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
@@ -153,7 +154,7 @@ func updateAuthenticationMethod(c *config.Config, settings lsp.Settings) {
 	if c.AuthenticationMethod() == lsp.OAuthAuthentication {
 		configureOAuth(c, auth.RefreshToken)
 	} else {
-		cliAuthenticationProvider := auth2.NewCliAuthenticationProvider(di.ErrorReporter(), c)
+		cliAuthenticationProvider := auth2.NewCliAuthenticationProvider(c, di.ErrorReporter())
 		di.AuthenticationService().SetProvider(cliAuthenticationProvider)
 	}
 }

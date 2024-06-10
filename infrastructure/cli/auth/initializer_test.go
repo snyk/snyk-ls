@@ -44,7 +44,7 @@ func getAutoAuthenticationTest(autoAuthentication bool, expectError bool) func(t
 		provider := snyk.NewFakeCliAuthenticationProvider(c)
 		notifier := notification.NewNotifier()
 		authenticator := snyk.NewAuthenticationService(c, provider, analytics, errorreporting.NewTestErrorReporter(), notifier)
-		initializer := NewInitializer(authenticator, errorreporting.NewTestErrorReporter(), analytics, notifier, c)
+		initializer := NewInitializer(c, authenticator, errorreporting.NewTestErrorReporter(), analytics, notifier)
 
 		// Act
 		err := initializer.Init()

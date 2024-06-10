@@ -39,7 +39,7 @@ func (s *GDPRAwareSentryErrorReporter) CaptureErrorAndReportAsIssue(path string,
 	return s.sendToSentry(err)
 }
 
-func NewSentryErrorReporter(notifier notification.Notifier, c *config.Config) error_reporting.ErrorReporter {
+func NewSentryErrorReporter(c *config.Config, notifier notification.Notifier) error_reporting.ErrorReporter {
 	initializeSentry(c)
 	return &GDPRAwareSentryErrorReporter{notifier: notifier, c: c}
 }

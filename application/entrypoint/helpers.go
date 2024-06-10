@@ -15,7 +15,7 @@ func OnPanicRecover() {
 		fmt.Println("🚨 Panicking 🚨")
 		fmt.Println(err)
 		debug.PrintStack()
-		er := sentry.NewSentryErrorReporter(nil, config.CurrentConfig())
+		er := sentry.NewSentryErrorReporter(config.CurrentConfig(), nil)
 		er.CaptureError(fmt.Errorf("%v", err))
 		er.FlushErrorReporting()
 	}

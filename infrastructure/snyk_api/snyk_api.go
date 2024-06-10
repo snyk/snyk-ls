@@ -81,7 +81,7 @@ func (e *SnykApiError) StatusCode() int {
 	return e.statusCode
 }
 
-func NewSnykApiClient(client func() *http.Client, c *config.Config) SnykApiClient {
+func NewSnykApiClient(c *config.Config, client func() *http.Client) SnykApiClient {
 	s := SnykApiClientImpl{
 		httpClientFunc: client,
 		c:              c,

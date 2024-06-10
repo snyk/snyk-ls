@@ -26,8 +26,9 @@ import (
 	"testing"
 	"time"
 
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/stretchr/testify/assert"
+
+	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -704,12 +705,12 @@ func markersForSampleSarifResponse(path string) []snyk.Marker {
 }
 
 func Test_getFormattedMessage(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	p, _, sarifResponse := setupConversionTests(t, true, true)
 	run := sarifResponse.Sarif.Runs[0]
 	testResult := run.Results[0]
 
-	sarifConverter := SarifConverter{sarif: sarifResponse}
+	sarifConverter := SarifConverter{sarif: sarifResponse, c: c}
 	msg := sarifConverter.formattedMessage(testResult, sarifConverter.getRule(run, "1"), filepath.Dir(p))
 
 	assert.Contains(t, msg, "Example Commit Fixes")
@@ -742,7 +743,7 @@ func setupConversionTests(t *testing.T,
 	responseJson := getSarifResponseJson(encodedPath)
 	err = json.Unmarshal([]byte(responseJson), &analysisResponse)
 
-	sarifConverter := SarifConverter{sarif: analysisResponse}
+	sarifConverter := SarifConverter{sarif: analysisResponse, c: c}
 
 	if err != nil {
 		t.Fatal(err, "couldn't unmarshal sarif response")
