@@ -69,7 +69,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 		}, nil
 	})
 	c := config.CurrentConfig()
-	registerNotifier(loc.Server, c.Logger())
+	registerNotifier(c, loc.Server)
 
 	w := workspace.Get()
 	scanner := &snyk.TestScanner{}
@@ -91,7 +91,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 		}, nil
 	})
 	c := config.CurrentConfig()
-	registerNotifier(loc.Server, c.Logger())
+	registerNotifier(c, loc.Server)
 	w := workspace.Get()
 	scanner := &snyk.TestScanner{}
 	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))

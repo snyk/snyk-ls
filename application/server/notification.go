@@ -30,10 +30,10 @@ import (
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 
-func notifier(srv lsp.Server, method string, params any, logger *zerolog.Logger) {
-	logger.Debug().Str("method", "notifier").Msgf("Notifying")
+func notifier(c *config.Config, srv lsp.Server, method string, params any) {
+	c.Logger().Debug().Str("method", "notifier").Msgf("Notifying")
 	err := srv.Notify(context.Background(), method, params)
-	logError(logger, err, "notifier")
+	logError(c.Logger(), err, "notifier")
 }
 
 var progressStopChan = make(chan bool, 1000)
@@ -86,72 +86,59 @@ func CancelProgress(token lsp.ProgressToken) {
 	progress.CancelProgressChannel <- token
 }
 
-func registerNotifier(srv lsp.Server, logger *zerolog.Logger) {
+func registerNotifier(c *config.Config, srv lsp.Server) {
+	logger := c.Logger().With().Str("method", "registerNotifier").Logger()
 	callbackFunction := func(params any) {
 		switch params := params.(type) {
 		case lsp.AuthenticationParams:
-			notifier(srv, "$/snyk.hasAuthenticated", params, logger)
-			logger.Info().Str("method", "registerNotifier").
-				Msg("sending token")
+			notifier(c, srv, "$/snyk.hasAuthenticated", params)
+			logger.Info().Msg("sending token")
 		case lsp.SnykIsAvailableCli:
-			notifier(srv, "$/snyk.isAvailableCli", params, logger)
-			logger.Info().Str("method", "registerNotifier").
-				Msg("sending cli path")
+			notifier(c, srv, "$/snyk.isAvailableCli", params)
+			logger.Info().Msg("sending cli path")
 		case sglsp.ShowMessageParams:
-			notifier(srv, "window/showMessage", params, logger)
-			logger.Info().
-				Str("method", "registerNotifier").
-				Interface("message", params).
-				Msg("showing message")
+			notifier(c, srv, "window/showMessage", params)
+			logger.Info().Interface("message", params).Msg("showing message")
 		case lsp.PublishDiagnosticsParams:
-			notifier(srv, "textDocument/publishDiagnostics", params, logger)
+			notifier(c, srv, "textDocument/publishDiagnostics", params)
 			source := "LSP"
 			if len(params.Diagnostics) > 0 {
 				source = params.Diagnostics[0].Source
 			}
 			logger.Info().
-				Str("method", "registerNotifier").
 				Interface("documentURI", params.URI).
 				Interface("source", source).
 				Interface("diagnosticCount", len(params.Diagnostics)).
 				Msg("publishing diagnostics")
 		case lsp.SnykTrustedFoldersParams:
-			notifier(srv, "$/snyk.addTrustedFolders", params, logger)
+			notifier(c, srv, "$/snyk.addTrustedFolders", params)
 			logger.Info().
-				Str("method", "registerNotifier").
 				Interface("trustedPaths", params.TrustedFolders).
 				Msg("sending trusted Folders to client")
 		case lsp.SnykScanParams:
-			notifier(srv, "$/snyk.scan", params, logger)
+			notifier(c, srv, "$/snyk.scan", params)
 			logger.Info().
-				Str("method", "registerNotifier").
 				Interface("product", params.Product).
 				Interface("status", params.Status).
 				Msg("sending scan data to client")
 		case snyk.ShowMessageRequest:
 			// Function blocks on callback, so we need to run it in a separate goroutine
-			go handleShowMessageRequest(srv, params, logger)
-			logger.Info().
-				Str("method", "registerNotifier").
-				Msg("sending show message request to client")
+			go handleShowMessageRequest(srv, params, &logger)
+			logger.Info().Msg("sending show message request to client")
 		case lsp.ApplyWorkspaceEditParams:
-			handleApplyWorkspaceEdit(srv, params, logger)
+			handleApplyWorkspaceEdit(srv, params, &logger)
 			logger.Info().
-				Str("method", "registerNotifier").
 				Msg("sending apply workspace edit request to client")
 		case lsp.CodeLensRefresh:
-			handleCodelensRefresh(srv, logger)
+			handleCodelensRefresh(srv, &logger)
 			logger.Info().
-				Str("method", "registerNotifier").
 				Msg("sending codelens refresh request to client")
 		case lsp.InlineValueRefresh:
-			handleInlineValueRefresh(srv, logger)
+			handleInlineValueRefresh(srv, &logger)
 			logger.Info().
-				Str("method", "registerNotifier").
 				Msg("sending inline value refresh request to client")
 		default:
 			logger.Warn().
-				Str("method", "registerNotifier").
 				Interface("params", params).
 				Msg("received unconfigured notification object")
 		}
