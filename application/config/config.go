@@ -400,6 +400,8 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 		snykApiUrl = DefaultSnykApiUrl
 	}
 
+	c.Engine().GetConfiguration().Set(configuration.API_URL, snykApiUrl)
+
 	if snykApiUrl != c.snykApiUrl {
 		c.snykApiUrl = snykApiUrl
 
@@ -410,7 +412,6 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 		}
 
 		c.SetSnykCodeApi(snykCodeApiUrl)
-		c.Engine().GetConfiguration().Set(configuration.API_URL, c.SnykApi())
 		return true
 	}
 	return false

@@ -76,26 +76,26 @@ const textDocumentDidOpenOperation = "textDocument/didOpen"
 const textDocumentDidSaveOperation = "textDocument/didSave"
 
 func initHandlers(c *config.Config, srv *jrpc2.Server, handlers handler.Map) {
-	handlers["initialize"] = initializeHandler(srv, c)
+	handlers["initialize"] = initializeHandler(srv)
 	handlers["initialized"] = initializedHandler(srv)
 	handlers["textDocument/didChange"] = textDocumentDidChangeHandler()
-	handlers["textDocument/didClose"] = noOpHandler(c)
-	handlers[textDocumentDidOpenOperation] = textDocumentDidOpenHandler(c)
-	handlers[textDocumentDidSaveOperation] = textDocumentDidSaveHandler(c)
-	handlers["textDocument/hover"] = textDocumentHover(c)
-	handlers["textDocument/codeAction"] = textDocumentCodeActionHandler(c)
-	handlers["textDocument/codeLens"] = codeLensHandler(c)
-	handlers["textDocument/inlineValue"] = textDocumentInlineValueHandler(c)
-	handlers["textDocument/willSave"] = noOpHandler(c)
-	handlers["textDocument/willSaveWaitUntil"] = noOpHandler(c)
-	handlers["codeAction/resolve"] = codeActionResolveHandler(c, srv)
-	handlers["shutdown"] = shutdown(c)
-	handlers["exit"] = exit(srv, c)
-	handlers["workspace/didChangeWorkspaceFolders"] = workspaceDidChangeWorkspaceFoldersHandler(c, srv)
+	handlers["textDocument/didClose"] = noOpHandler()
+	handlers[textDocumentDidOpenOperation] = textDocumentDidOpenHandler()
+	handlers[textDocumentDidSaveOperation] = textDocumentDidSaveHandler()
+	handlers["textDocument/hover"] = textDocumentHover()
+	handlers["textDocument/codeAction"] = textDocumentCodeActionHandler()
+	handlers["textDocument/codeLens"] = codeLensHandler()
+	handlers["textDocument/inlineValue"] = textDocumentInlineValueHandler()
+	handlers["textDocument/willSave"] = noOpHandler()
+	handlers["textDocument/willSaveWaitUntil"] = noOpHandler()
+	handlers["codeAction/resolve"] = codeActionResolveHandler(srv)
+	handlers["shutdown"] = shutdown()
+	handlers["exit"] = exit(srv)
+	handlers["workspace/didChangeWorkspaceFolders"] = workspaceDidChangeWorkspaceFoldersHandler(srv)
 	handlers["workspace/willDeleteFiles"] = workspaceWillDeleteFilesHandler()
-	handlers["workspace/didChangeConfiguration"] = workspaceDidChangeConfiguration(srv, c)
-	handlers["window/workDoneProgress/cancel"] = windowWorkDoneProgressCancelHandler(c)
-	handlers["workspace/executeCommand"] = executeCommandHandler(c, srv)
+	handlers["workspace/didChangeConfiguration"] = workspaceDidChangeConfiguration(srv)
+	handlers["window/workDoneProgress/cancel"] = windowWorkDoneProgressCancelHandler()
+	handlers["workspace/executeCommand"] = executeCommandHandler(srv)
 }
 
 func textDocumentDidChangeHandler() jrpc2.Handler {
@@ -134,8 +134,9 @@ func workspaceWillDeleteFilesHandler() jrpc2.Handler {
 	})
 }
 
-func codeLensHandler(c *config.Config) jrpc2.Handler {
+func codeLensHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.CodeLensParams) ([]sglsp.CodeLens, error) {
+		c := config.CurrentConfig()
 		c.Logger().Info().Str("method", "CodeLensHandler").Msg("RECEIVING")
 		defer c.Logger().Info().Str("method", "CodeLensHandler").Msg("SENDING")
 
@@ -163,11 +164,12 @@ func filterCodeFixCodelens(lenses []sglsp.CodeLens) []sglsp.CodeLens {
 	return filteredLenses
 }
 
-func workspaceDidChangeWorkspaceFoldersHandler(c *config.Config, srv *jrpc2.Server) jrpc2.Handler {
+func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) (any, error) {
 		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
+		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Logger()
 
 		logger.Info().Msg("RECEIVING")
@@ -184,9 +186,10 @@ func initNetworkAccessHeaders() {
 	engine.GetNetworkAccess().AddHeaderField("User-Agent", ua.String())
 }
 
-func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
+func initializeHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (any, error) {
 		method := "initializeHandler"
+		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", method).Logger()
 		// we can only log, after we add the token to the list of forbidden outputs
 		defer logger.Info().Any("params", params).Msg("RECEIVING")
@@ -405,8 +408,9 @@ func monitorClientProcess(pid int) time.Duration {
 	return time.Since(start)
 }
 
-func shutdown(c *config.Config) jrpc2.Handler {
+func shutdown() jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (any, error) {
+		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "Shutdown").Logger()
 		logger.Info().Msg("ENTERING")
 		defer logger.Info().Msg("RETURNING")
@@ -422,8 +426,9 @@ func shutdown(c *config.Config) jrpc2.Handler {
 	})
 }
 
-func exit(srv *jrpc2.Server, c *config.Config) jrpc2.Handler {
+func exit(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(_ context.Context) (any, error) {
+		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "Exit").Logger()
 		logger.Info().Msg("ENTERING")
 		logger.Info().Msg("Flushing error reporting...")
@@ -441,8 +446,9 @@ func logError(logger *zerolog.Logger, err error, method string) {
 	}
 }
 
-func textDocumentDidOpenHandler(c *config.Config) jrpc2.Handler {
+func textDocumentDidOpenHandler() jrpc2.Handler {
 	return handler.New(func(_ context.Context, params sglsp.DidOpenTextDocumentParams) (any, error) {
+		c := config.CurrentConfig()
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 		logger := c.Logger().With().Str("method", "TextDocumentDidOpenHandler").Str("documentURI", filePath).Logger()
 
@@ -471,11 +477,12 @@ func textDocumentDidOpenHandler(c *config.Config) jrpc2.Handler {
 	})
 }
 
-func textDocumentDidSaveHandler(c *config.Config) jrpc2.Handler {
+func textDocumentDidSaveHandler() jrpc2.Handler {
 	return handler.New(func(_ context.Context, params sglsp.DidSaveTextDocumentParams) (any, error) {
 		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
+		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "TextDocumentDidSaveHandler").Logger()
 
 		logger.Info().Interface("params", params).Msg("Receiving")
@@ -497,8 +504,9 @@ func textDocumentDidSaveHandler(c *config.Config) jrpc2.Handler {
 	})
 }
 
-func textDocumentHover(c *config.Config) jrpc2.Handler {
+func textDocumentHover() jrpc2.Handler {
 	return handler.New(func(_ context.Context, params hover.Params) (hover.Result, error) {
+		c := config.CurrentConfig()
 		c.Logger().Info().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
 
 		path := uri.PathFromUri(params.TextDocument.URI)
@@ -507,24 +515,28 @@ func textDocumentHover(c *config.Config) jrpc2.Handler {
 	})
 }
 
-func windowWorkDoneProgressCancelHandler(c *config.Config) jrpc2.Handler {
+func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 	return handler.New(func(_ context.Context, params lsp.WorkdoneProgressCancelParams) (any, error) {
+		c := config.CurrentConfig()
 		c.Logger().Info().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
 		CancelProgress(params.Token)
 		return nil, nil
 	})
 }
 
-func codeActionResolveHandler(c *config.Config, server lsp.Server) handler.Func {
+func codeActionResolveHandler(server lsp.Server) handler.Func {
+	c := config.CurrentConfig()
 	return handler.New(codeaction.ResolveCodeActionHandler(c, di.CodeActionService(), server))
 }
 
-func textDocumentCodeActionHandler(c *config.Config) handler.Func {
+func textDocumentCodeActionHandler() handler.Func {
+	c := config.CurrentConfig()
 	return handler.New(codeaction.GetCodeActionHandler(c, di.CodeActionService()))
 }
 
-func noOpHandler(c *config.Config) jrpc2.Handler {
+func noOpHandler() jrpc2.Handler {
 	return handler.New(func(_ context.Context, params sglsp.DidCloseTextDocumentParams) (any, error) {
+		c := config.CurrentConfig()
 		c.Logger().Info().Str("method", "NoOpHandler").Interface("params", params).Msg("RECEIVING")
 		return nil, nil
 	})

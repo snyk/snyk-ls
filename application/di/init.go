@@ -157,7 +157,7 @@ func initInfrastructure(c *config.Config) {
 	)
 
 	codeClientScanner := codeClient.NewCodeScanner(
-		config.CurrentConfig(),
+		c,
 		httpClient,
 		codeClient.WithTrackerFactory(code.NewCodeTrackerFactory()),
 		codeClient.WithLogger(engine.GetLogger()),

@@ -63,7 +63,7 @@ func TestInit(t *testing.T) {
 	authenticationService = snyk.NewAuthenticationService(c, authProvider, analytics, errorReporter, notifier)
 	snykCli := cli.NewExecutor(c, authenticationService, errorReporter, analytics, notifier)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
-	authInitializer := cliauth.NewInitializer(nil, authenticationService, errorReporter, analytics, notifier)
+	authInitializer := cliauth.NewInitializer(c, authenticationService, errorReporter, analytics, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,
 		authInitializer,

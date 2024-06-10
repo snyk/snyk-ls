@@ -29,13 +29,13 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
-func executeCommandHandler(c *config.Config, srv *jrpc2.Server) jrpc2.Handler {
+func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.ExecuteCommandParams) (any, error) {
 		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
+		c := config.CurrentConfig()
 		method := "ExecuteCommandHandler"
-
 		c.Logger().Info().Str("method", method).Interface("command", params).Msg("RECEIVING")
 		defer c.Logger().Info().Str("method", method).Interface("command", params).Msg("SENDING")
 

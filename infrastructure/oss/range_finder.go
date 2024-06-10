@@ -45,7 +45,7 @@ func findRange(issue ossIssue, path string, fileContent []byte) snyk.Range {
 	switch issue.PackageManager {
 	case "npm":
 		if packageScanSupportedExtensions[filepath.Ext(path)] {
-			finder = &htmlRangeFinder{path: path, fileContent: fileContent, config: config.CurrentConfig()}
+			finder = &htmlRangeFinder{path: path, fileContent: fileContent, config: c}
 		} else {
 			finder = &NpmRangeFinder{uri: path, fileContent: fileContent}
 		}
