@@ -75,8 +75,7 @@
     .issue-overview-header,
     .ignore-details-header,
     .data-flow-header,
-    .ai-fix-header,
-    .example-fixes-header {
+    .ai-fix-header {
       line-height: 1.25rem;
     }
 
@@ -202,7 +201,6 @@
     }
 
     .main-tabs-nav,
-    .example-fixes-tabs-nav,
     .tabs-nav {
       display: flex;
       list-style-type: none;
@@ -909,9 +907,6 @@
     const MAIN_TAB_NAV_SELECTOR = '.main-tabs-nav';
     const MAIN_TAB_ITEM_SELECTOR = '.main-tabs-nav .tab-item';
     const MAIN_TAB_CONTENT_SELECTOR = '.tab-container > .main-tab-content';
-    const EXAMPLE_TAB_NAV_SELECTOR = '.example-fixes-tabs-nav';
-    const EXAMPLE_TAB_ITEM_SELECTOR = '.example-fixes-tabs-nav .tab-item';
-    const EXAMPLE_TAB_CONTENT_SELECTOR = '.tab-container > .example-fix-tab-content';
 
     const toggleIsSelectedClass = (elements, shouldToggle) => {
       elements.forEach(el => {
@@ -924,9 +919,6 @@
     document.addEventListener('DOMContentLoaded', () => {
       const mainTabLinks = document.querySelectorAll(MAIN_TAB_ITEM_SELECTOR);
       const mainTabContents = document.querySelectorAll(MAIN_TAB_CONTENT_SELECTOR);
-      // Nested tabs
-      const exampleTabLinks = document.querySelectorAll(EXAMPLE_TAB_ITEM_SELECTOR);
-      const exampleTabContents = document.querySelectorAll(EXAMPLE_TAB_CONTENT_SELECTOR);
 
       const onMainTabClicked = event => {
         const clickedTab = event.target.closest('.tab-item');
@@ -939,19 +931,9 @@
         toggleIsSelectedClass(mainTabContents, content => content.getAttribute('data-content') === selectedTab);
       };
 
-      const onExampleTabClicked = event => {
-        const clickedTab = event.target.closest('.tab-item');
-        if (!clickedTab) return;
-
-        const targetContentId = clickedTab.id.replace('tab-link-', 'tab-content-');
-        toggleIsSelectedClass(exampleTabLinks, tab => tab === clickedTab);
-        toggleIsSelectedClass(exampleTabContents, content => content.id === targetContentId);
-      };
-
-      // Event listeners for main and nested tabs
+      // Event listeners for main
       // TODO: move this into the HTML as an onclick
       document.querySelector(MAIN_TAB_NAV_SELECTOR).addEventListener('click', onMainTabClicked);
-      document.querySelector(EXAMPLE_TAB_NAV_SELECTOR)?.addEventListener('click', onExampleTabClicked);
     });
   </script>
 
