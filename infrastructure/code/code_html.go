@@ -19,6 +19,7 @@ package code
 import (
 	"bytes"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"path/filepath"
@@ -86,6 +87,9 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 		return ""
 	}
 
+	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
+	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits)
+
 	data := map[string]interface{}{
 		"IssueTitle":         additionalData.Title,
 		"IssueMessage":       additionalData.Message,
@@ -98,7 +102,8 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 		"DataFlowTable":      prepareDataFlowTable(additionalData),
 		"RepoCount":          additionalData.RepoDatasetSize,
 		"ExampleCount":       len(additionalData.ExampleCommitFixes),
-		"ExampleCommitFixes": prepareExampleCommitFixes(additionalData.ExampleCommitFixes),
+		"ExampleCommitFixes": exampleCommits,
+		"CommitFixes":        commitFixes,
 		"PriorityScore":      additionalData.PriorityScore,
 		"SnykWebUrl":         config.CurrentConfig().SnykUi(),
 		"LessonUrl":          issue.LessonUrl,
@@ -205,18 +210,27 @@ func prepareExampleLines(lines []snyk.CommitChangeLine) []ExampleLines {
 	return exampleLines
 }
 
-func prepareExampleCommitFixes(fixes []snyk.ExampleCommitFix) []ExampleCommit {
+func prepareExampleCommits(fixes []snyk.ExampleCommitFix) []ExampleCommit {
 	var fixData []ExampleCommit
 	for _, fix := range fixes {
 		fixData = append(fixData, ExampleCommit{
-			CommitURL:    fix.CommitURL,
-			GitHubIcon:   getGitHubIconSvg(),
+			CommitURL: fix.CommitURL,
+			// GitHubIcon:   getGitHubIconSvg(),
 			RepoName:     getRepoName(fix.CommitURL),
 			ExampleLines: prepareExampleLines(fix.Lines),
 			RepoLink:     fix.CommitURL,
 		})
 	}
 	return fixData
+}
+
+func parseExampleCommitsToTemplateJS(fixes []ExampleCommit) template.JS {
+	jsonFixes, err := json.Marshal(fixes)
+	if err != nil {
+		config.CurrentConfig().Logger().Error().Msgf("Failed to marshal example commit fixes: %v", err)
+		return ""
+	}
+	return template.JS(jsonFixes)
 }
 
 func getIssueType(additionalData snyk.CodeIssueData) string {

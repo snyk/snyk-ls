@@ -252,15 +252,10 @@
       display: block;
     }
 
-    .example-line-number {
-      padding-left: 2rem;
-    }
-
     .example-line>code {
       padding-left: 0.75rem;
     }
 
-    .example-line-number,
     .example-line>code {
       font-family: "Courier New", Courier, monospace;
       display: inline-block;
@@ -269,13 +264,13 @@
       background-color: transparent;
     }
 
-    .example-line.added>.example-line-number::after {
+    .example-line.added>code::after {
       content: "+";
       position: absolute;
       padding: 0 4px;
     }
 
-    .example-line.removed>.example-line-number::after {
+    .example-line.removed>code::after {
       content: "-";
       position: absolute;
       padding: 0 4px;
@@ -860,7 +855,7 @@
                     {{.ArrowLeftLight}}
                   </span>
                   <span id="example-text">
-                    Example <strong id="example-counter">1</strong>/<span id="example-number2"></span>
+                    Example <strong id="example-counter">1</strong>/<span id="example-number2">{{.ExampleCount}}</span>
                   </span>
                   <span id="next-example" class="arrow" title="Next example">
                     {{.ArrowRightDark}}
@@ -868,7 +863,22 @@
                   </span>
                 </div>
               </div>
-              <div id="example" class="example"></div>
+
+              <div id="example" class="example">
+                {{range $index, $element := .ExampleCommitFixes}}
+                <div class="example-detail {{if ne $index 0}}hidden{{end}}" data-index=" {{$index}}">
+                  <a href="{{$element.CommitURL}}" target="_blank" rel="noopener noreferrer">{{$element.RepoName}}</a>
+                  <div>
+                    {{range $element.ExampleLines}}
+                    <div class="example-line {{.LineChange}}">
+                      <code>{{.Line}}</code>
+                    </div>
+                    {{end}}
+                  </div>
+                </div>
+                {{end}}
+
+              </div>
               {{end}}
             </section>
           </div>
@@ -904,15 +914,89 @@
 
   <!-- Scripts -->
   <script nonce="${nonce}">
+    /**
+   * Represents a single line change in a commit.
+   * @typedef {Object} ExampleLine
+   * @property {number} LineNumber  - The line number of the change.
+   * @property {string} Line        - The content of the line.
+   * @property {string} LineChange  - The type of change ('added' or 'removed').
+   */
+
+    /**
+     * Represents a commit fix with detailed change lines.
+     * @typedef {Object} ExampleCommitFix
+     * @property {string} CommitURL           - URL to the full commit diff.
+     * @property {string} GitHubIcon          - GitHub SVG icon.
+     * @property {string} RepoName            - Name of the repository.
+     * @property {string} RepoLink            - Direct link to the repository.
+     * @property {ExampleLine[]} ExampleLines - An array of line changes.
+     */
+
     const MAIN_TAB_NAV_SELECTOR = '.main-tabs-nav';
     const MAIN_TAB_ITEM_SELECTOR = '.main-tabs-nav .tab-item';
     const MAIN_TAB_CONTENT_SELECTOR = '.tab-container > .main-tab-content';
+
+    const EXAMPLE_COUNTER = document.getElementById('example-counter');
+    const EXAMPLE_TOP = document.getElementById('example-top');
+    const EXAMPLE_CONTENT = document.getElementById('example');
+    const EXAMPLE_PREVIOUS = document.getElementById('previous-example');
+    const EXAMPLE_NEXT = document.getElementById('next-example');
+    const EXAMPLE_REPO_LINK = document.getElementById('example-link')
+    const ALL_EXAMPLES_DETAIL = document.querySelectorAll('.example-detail');
+
+    let exampleCount = 0;
+
+    /** @type {ExampleCommitFix[]} */
+    const exampleCommitFixes = JSON.parse("{{.CommitFixes}}" || '[]')
 
     const toggleIsSelectedClass = (elements, shouldToggle) => {
       elements.forEach(el => {
         // toggle(token, force) - force is a boolean value that determines whether the class should be added or removed.
         el.classList.toggle('is-selected', shouldToggle(el));
       });
+    }
+
+    function toggleElement(element, toggle) {
+      if (!element) {
+        return;
+      }
+
+      if (toggle === 'show') {
+        element.classList.remove('hidden');
+      } else if (toggle === 'hide') {
+        element.classList.add('hidden');
+      } else {
+        console.error('Unexpected toggle value', toggle);
+      }
+    }
+
+    // == Fixed Code Examples Component ==
+    function showCurrentExample() {
+      ALL_EXAMPLES_DETAIL.forEach((example, idx) => {
+        if (idx === exampleCount) {
+          example.classList.remove('hidden');
+        } else {
+          example.classList.add('hidden');
+        }
+      });
+
+      EXAMPLE_COUNTER.textContent = exampleCount + 1;
+      const repoName = exampleCommitFixes[exampleCount].RepoName;
+      EXAMPLE_REPO_LINK.textContent = repoName;
+    }
+
+    function previousExample() {
+      if (exampleCount > 0) {
+        exampleCount--;
+        showCurrentExample();
+      }
+    }
+
+    function nextExample() {
+      if (exampleCount < exampleCommitFixes.length - 1) {
+        exampleCount++;
+        showCurrentExample();
+      }
     }
 
     // Ensure the document is fully loaded before executing script to manipulate DOM.
@@ -934,6 +1018,11 @@
       // Event listeners for main
       // TODO: move this into the HTML as an onclick
       document.querySelector(MAIN_TAB_NAV_SELECTOR).addEventListener('click', onMainTabClicked);
+
+      // Event listeners for example fixes
+      EXAMPLE_PREVIOUS.addEventListener('click', previousExample);
+      EXAMPLE_NEXT.addEventListener('click', nextExample);
+      showCurrentExample();
     });
   </script>
 
