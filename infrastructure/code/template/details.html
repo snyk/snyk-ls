@@ -60,6 +60,10 @@
       overflow-y: auto;
     }
 
+    section {
+      padding: 10px;
+    }
+
     .ignore-warning-wrapper,
     header,
     article,
@@ -169,20 +173,40 @@
       cursor: pointer;
     }
 
+    .data-flow-file {
+      font-weight: bold;
+      font-size: 1em;
+      display: flex;
+      align-items: center;
+    }
+
+    .data-flow-file-icon {
+      margin-left: 4px;
+      margin-right: 4px;
+    }
+
     .data-flow-body {
+      margin-top: 5px;
+    }
+
+    .data-flow-table {
+      margin-top: 5px;
+      margin-left: 15px;
+    }
+
+    .data-flow-row {
       border-collapse: collapse;
       font-family: "Courier New", Courier, monospace;
     }
 
     .data-flow-number {
-      margin-right: 8px;
+      padding-left: 14px;
+      padding-right: 14px;
       width: 0.9375rem;
       text-align: right;
     }
 
     .data-flow-clickable-row {
-      display: block;
-      margin: 0px 16px;
       font-weight: 400;
     }
 
@@ -199,6 +223,13 @@
 
     .data-flow-delimiter {
       font-weight: bold;
+    }
+
+    .data-flow-number,
+    .data-flow-clickable-row,
+    .data-flow-delimiter,
+    .data-flow-text {
+      display: inline;
     }
 
     .main-tabs-nav,
@@ -842,18 +873,24 @@
                 Data Flow - {{len .DataFlow}} {{if gt (len .DataFlow) 1}}steps{{else}}step{{end}}
               </h2>
               <div class="data-flow-body">
-                <table class="data-flow-body">
+                <table class="data-flow-table">
                   <tbody>
-                    {{range .DataFlowTable}}
-                    <tr class="data-flow-row">
-                      <td class="data-flow-number">{{.Number}}</td>
-                      <td class="data-flow-clickable-row" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
-                        end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
-                        {{.FileName}}:{{.StartLineValue}}
-                      </td>
-                      <td class="data-flow-delimiter">|</td>
-                      <td class="data-flow-text">{{.Content}}</td>
-                    </tr>
+                    {{range $fileName, $dataFlowItems := .DataFlowTable}}
+                    <div class="data-flow-file">
+                      {{$.FileIcon}}
+                      <span class="data-flow-file-name">{{$fileName}}</span>
+                    </div>
+                    {{range $dataFlowItems}}
+                      <tr class="data-flow-row">
+                        <td class="data-flow-number">{{.Number}}</td>
+                        <td class="data-flow-clickable-row" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
+                          end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
+                          line:{{.StartLineValue}}
+                        </td>
+                        <td class="data-flow-delimiter">|</td>
+                        <td class="data-flow-text">{{.Content}}</td>
+                      </tr>
+                    {{end}}
                     {{end}}
                   </tbody>
                 </table>
