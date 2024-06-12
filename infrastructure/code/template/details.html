@@ -19,9 +19,9 @@
 
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; style-src 'self' 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
+    content="default-src 'none'; style-src 'self' 'nonce-${nonce}'; script-src 'nonce-${nonce}';" />
   <style nonce="${nonce}">
     :root {
       --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Tahoma, Geneva, Verdana, sans-serif;
@@ -72,11 +72,11 @@
       flex-direction: column;
     }
 
+    .example-fixes-header,
     .issue-overview-header,
     .ignore-details-header,
     .data-flow-header,
-    .ai-fix-header,
-    .example-fixes-header {
+    .ai-fix-header {
       line-height: 1.25rem;
     }
 
@@ -165,13 +165,13 @@
       margin-left: 1em;
     }
 
-    .position-line:hover{
+    .position-line:hover {
       cursor: pointer;
     }
 
     .data-flow-body {
       border-collapse: collapse;
-      font-family: 'Courier New', Courier, monospace;
+      font-family: "Courier New", Courier, monospace;
     }
 
     .data-flow-number {
@@ -202,7 +202,6 @@
     }
 
     .main-tabs-nav,
-    .example-fixes-tabs-nav,
     .tabs-nav {
       display: flex;
       list-style-type: none;
@@ -239,6 +238,18 @@
       color: inherit;
     }
 
+    .example-fixes h2 {
+      margin-bottom: 0.5em;
+    }
+
+    .example-fixes-info-top {
+      margin-bottom: 0.5em;
+    }
+
+    .example {
+      margin-top: 0.75rem;
+    }
+
     .example-repo-link {
       text-decoration: none;
       color: inherit;
@@ -250,20 +261,25 @@
       color: inherit;
     }
 
-    .example-line {
-      display: block;
+    .example-repo-link a {
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
     }
 
-    .example-line-number {
-      padding-left: 2rem;
+    .example-repo-link a:hover {
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .example-line {
+      display: block;
+      position: relative;
+      padding-left: 20px;
     }
 
     .example-line>code {
       padding-left: 0.75rem;
-    }
-
-    .example-line-number,
-    .example-line>code {
       font-family: "Courier New", Courier, monospace;
       display: inline-block;
       white-space: pre-wrap;
@@ -271,16 +287,20 @@
       background-color: transparent;
     }
 
-    .example-line.added>.example-line-number::after {
-      content: "+";
+    .example-line.added>code::before,
+    .example-line.removed>code::before {
       position: absolute;
-      padding: 0 4px;
+      left: 5px;
+      top: 50%;
+      transform: translateY(-50%);
     }
 
-    .example-line.removed>.example-line-number::after {
+    .example-line.added>code::before {
+      content: "+";
+    }
+
+    .example-line.removed>code::before {
       content: "-";
-      position: absolute;
-      padding: 0 4px;
     }
 
     /* Footer Styles */
@@ -356,6 +376,7 @@
     .row.between {
       justify-content: space-between;
     }
+
     .row {
       display: flex;
       flex-direction: row;
@@ -388,8 +409,8 @@
 
     .sn-fix-wrapper {
       padding: 2rem;
-      margin-top:1rem;
-      border-radius: .8rem;
+      margin-top: 1rem;
+      border-radius: 0.8rem;
       overflow: hidden;
     }
 
@@ -410,7 +431,7 @@
 
     .sn-loading svg {
       inline-size: 6rem;
-      block-size: auto
+      block-size: auto;
     }
 
     .sn-loading-wrapper {
@@ -436,7 +457,7 @@
 
     .sn-loading-description {
       margin-bottom: 0;
-      opacity: .75
+      opacity: 0.75;
     }
 
     .sn-msg-1 {
@@ -592,12 +613,11 @@
       }
     }
 
-
     @keyframes reduce {
 
       15%,
       85% {
-        opacity: 1
+        opacity: 1;
       }
 
       86%,
@@ -608,10 +628,11 @@
     }
 
     @keyframes inference {
+
       0%,
       25%,
       100% {
-        opacity: 1
+        opacity: 1;
       }
     }
 
@@ -683,7 +704,8 @@
           Ignore Details
         </span>
         {{end}}
-        <span data-tab="fix-analysis" id="fix-analysis-tab" class="tab-item {{if not .IsIgnored}}is-selected{{end}} sn-fix-analysis fix-analysis-tab">
+        <span data-tab="fix-analysis" id="fix-analysis-tab"
+          class="tab-item {{if not .IsIgnored}}is-selected{{end}} sn-fix-analysis fix-analysis-tab">
           Fix Analysis
         </span>
         <span data-tab="vuln-overview" id="vuln-overview-tab" class="tab-item sn-vuln-overview vuln-overview-tab">
@@ -722,8 +744,11 @@
             <div class="suggestion-links">
               <div id="lead-url" class="clickable hidden">
                 <svg width="9" height="9" viewBox="0 0 9 9" xmlns="http://www.w3.org/2000/svg" fill="none">
-                  <path d="M4.99998 0L6.64648 1.6465L3.14648 5.1465L3.85348 5.8535L7.35348 2.3535L8.99998 4V0H4.99998Z" fill="#888"/>
-                  <path d="M8 8H1V1H4.5L3.5 0H1C0.4485 0 0 0.4485 0 1V8C0 8.5515 0.4485 9 1 9H8C8.5515 9 9 8.5515 9 8V5.5L8 4.5V8Z" fill="#888"/>
+                  <path d="M4.99998 0L6.64648 1.6465L3.14648 5.1465L3.85348 5.8535L7.35348 2.3535L8.99998 4V0H4.99998Z"
+                    fill="#888" />
+                  <path
+                    d="M8 8H1V1H4.5L3.5 0H1C0.4485 0 0 0.4485 0 1V8C0 8.5515 0.4485 9 1 9H8C8.5515 9 9 8.5515 9 8V5.5L8 4.5V8Z"
+                    fill="#888" />
                 </svg> More info
               </div>
             </div>
@@ -732,7 +757,7 @@
           <!-- AI Fix -->
           <div id="ai-fix-wrapper" class="{{if not .HasAIFix}}hidden{{end}}">
             <!-- AI fix buttons -->
-            <section id="fix-wrapper" class="ai-fix">
+            <section id="fix-wrapper" class="ai-fix delimiter-top">
               <h2 class="ai-fix-header">
                 DeepCode AI Fixes
               </h2>
@@ -740,16 +765,18 @@
               <p>⚡ Fix this issue by generating a solution using Snyk DeepCode AI</p>
 
               <div class="sn-fix-wrapper">
-                <button id="generate-ai-fix" class="generate-ai-fix">✨ Generate fix <span class="wide">using Snyk DeepCode AI</span></button>
+                <button id="generate-ai-fix" class="generate-ai-fix">✨ Generate fix <span class="wide">using Snyk
+                    DeepCode AI</span></button>
 
                 <div id="fix-loading-indicator" class="sn-loading hidden">
                   <div class="sn-loading-icon">
-                    <svg id="scan-animation" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 248 204" shape-rendering="geometricPrecision"><defs><linearGradient id="mg" x1="16.0903" y1="180" x2="92.743" y2="107.462" spreadMethod="pad" gradientUnits="userSpaceOnUse" gradientTransform="translate(0 0)"><stop id="eQeHIUZsTfX2-fill-0" offset="0%" stop-color="#145deb"/><stop id="eQeHIUZsTfX2-fill-1" offset="100%" stop-color="#441c99"/></linearGradient><linearGradient id="sg" x1="116" y1="0" x2="116" y2="64" spreadMethod="pad" gradientUnits="userSpaceOnUse" gradientTransform="translate(0 0)"><stop id="eQeHIUZsTfX26-fill-0" offset="0%" stop-color="#ff78e1"/><stop id="eQeHIUZsTfX26-fill-1" offset="100%" stop-color="rgba(255,120,225,0)"/></linearGradient></defs><rect width="224" height="180" rx="16" ry="16" transform="translate(12 12)" fill="url(#mg)"/><circle r="4" transform="translate(28 28)" opacity="0.3" fill="#fff"/><circle r="4" transform="translate(40 28)" opacity="0.25" fill="#fff"/><circle r="4" transform="translate(52 28)" opacity="0.2" fill="#fff"/><rect width="48" height="12" rx="6" ry="6" transform="translate(162 56)" opacity="0.2" fill="#fff"/><rect width="80" height="12" rx="6" ry="6" transform="translate(32 92)" opacity="0.2" fill="#fff"/><rect width="72" height="12" rx="6" ry="6" transform="translate(96 164)" opacity="0.2" fill="#fff"/><rect width="56" height="12" rx="6" ry="6" transform="translate(156 128)" opacity="0.2" fill="#fff"/><rect id="l3" width="80" height="12" rx="6" ry="6" transform="translate(64 128)"/><rect id="l2" width="64" height="12" rx="6" ry="6" transform="translate(150 92)"/><rect id="l1" width="117" height="12" rx="6" ry="6" transform="translate(32 56)"/><g id="b3"><rect width="32" height="32" rx="6" ry="6" transform="translate(48 118)" fill="#43b59a"/><path d="M54.5991,134c.7987-.816,2.0938-.816,2.8926,0l2.8926,2.955l10.124-10.343c.7988-.816,2.0939-.816,2.8926,0c.7988.816.7988,2.139,0,2.955L61.8306,141.388c-.7988.816-2.0939.816-2.8926,0l-4.3389-4.433c-.7988-.816-.7988-2.139,0-2.955Z" fill="#fff"/></g><g id="b2"><rect width="32" height="32" rx="6" ry="6" transform="translate(124 81)" fill="#f97a99"/><path d="M142,91c0,.7685-.433,5.3087-1.069,8h-1.862c-.636-2.6913-1.069-7.2315-1.069-8c0-1.1046.895-2,2-2s2,.8954,2,2Z" fill="#fff"/><path d="M140,104c1.105,0,2-.895,2-2s-.895-2-2-2-2,.895-2,2s.895,2,2,2Z" fill="#fff"/></g><g id="b1"><rect width="24" height="24" rx="6" ry="6" transform="translate(28 50)" fill="#f97a99"/><path d="M42,56c0,.7685-.4335,5.3087-1.0693,8h-1.8614C38.4335,61.3087,38,56.7685,38,56c0-1.1046.8954-2,2-2s2,.8954,2,2Z" fill="#fff"/><path d="M40,69c1.1046,0,2-.8954,2-2s-.8954-2-2-2-2,.8954-2,2s.8954,2,2,2Z" fill="#fff"/></g><g id="s0" transform="translate(124,-40)"><g transform="translate(-124,-40)"><rect width="232" height="64" rx="0" ry="0" transform="matrix(1 0 0-1 8 64)" opacity="0.5" fill="url(#sg)"/><rect width="248" height="16" rx="8" ry="8" transform="translate(0 64)" fill="#e555ac"/></g></g></svg>
+                    {{.ScanAnimation}}
                   </div>
                   <div class="sn-loading-wrapper">
                     <div class="sn-loading-message sn-msg-1">
                       <span class="sn-loading-title">1<span class="font-light">/4</span> Code Reduction...</span>
-                      <p class="sn-loading-description">Reduces the given files to a smaller and relevant code snippet.</p>
+                      <p class="sn-loading-description">Reduces the given files to a smaller and relevant code snippet.
+                      </p>
                     </div>
                     <div class="sn-loading-message sn-msg-2">
                       <span class="sn-loading-title">2<span class="font-light">/4</span> Parsing...</span>
@@ -757,11 +784,13 @@
                     </div>
                     <div class="sn-loading-message sn-msg-3">
                       <span class="sn-loading-title">3<span class="font-light">/4</span> Static Analysis...</span>
-                      <p class="sn-loading-description">Examining the vulnerability code without having to execute the program.</p>
+                      <p class="sn-loading-description">Examining the vulnerability code without having to execute the
+                        program.</p>
                     </div>
                     <div class="sn-loading-message sn-msg-4">
                       <span class="sn-loading-title">4<span class="font-light">/4</span> Inferencing...</span>
-                      <p class="sn-loading-description">Feeding the reduced code to our neural network to obtain the prediction.</p>
+                      <p class="sn-loading-description">Feeding the reduced code to our neural network to obtain the
+                        prediction.</p>
                     </div>
                   </div>
                 </div>
@@ -769,36 +798,25 @@
             </section>
 
             <!-- AI fixes -->
-            <section id="fixes-section" class="sn-ai-fixes hidden">
+            <section id="fixes-section" class="sn-ai-fixes delimiter-top hidden">
               <div id="info-no-diffs" class="font-light">
                 There are no fix diffs for this issue.
               </div>
               <div id="diff-top" class="row between">
-                <div id="info-top" class="font-light">Here are <span id="diff-number"></span> AI-generated solutions:</div>
+                <div id="info-top" class="font-light">Here are <span id="diff-number"></span> AI-generated solutions:
+                </div>
                 <div class="diffs-nav">
                   <span id="previous-diff" class="arrow" title="Previous diff">
-                    <svg class="arrow-icon dark-only" width="10" height="12" viewBox="0 0 10 12
-  " fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M8.86723 11.4303L8.86721 11.4302L0.641823 6.22447L0.387031 6.62706L0.641821 6.22447C0.532336 6.15518 0.5 6.06763 0.5 6.00001C0.5 5.93239 0.532336 5.84484 0.641821 5.77555L0.641824 5.77555L8.86721 0.569741L8.86723 0.569731C9.00417 0.483055 9.17298 0.480315 9.31053 0.543871C9.44734 0.607082 9.5 0.705333 9.5 0.79421V11.2058C9.5 11.2947 9.44734 11.3929 9.31054 11.4561C9.173 11.5197 9.00418 11.5169 8.86723 11.4303Z" stroke="#CCCCCC"/>
-  </svg>
-                    <svg class="arrow-icon light-only" width="10" height="12" viewBox="0 0 10 12
-  " fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M8.86723 11.4303L8.86721 11.4302L0.641823 6.22447L0.387031 6.62706L0.641821 6.22447C0.532336 6.15518 0.5 6.06763 0.5 6.00001C0.5 5.93239 0.532336 5.84484 0.641821 5.77555L0.641824 5.77555L8.86721 0.569741L8.86723 0.569731C9.00417 0.483055 9.17298 0.480315 9.31053 0.543871C9.44734 0.607082 9.5 0.705333 9.5 0.79421V11.2058C9.5 11.2947 9.44734 11.3929 9.31054 11.4561C9.173 11.5197 9.00418 11.5169 8.86723 11.4303Z" stroke="#3B3B3B"/>
-  </svg>
+                    {{.ArrowLeftDark}}
+                    {{.ArrowLeftLight}}
                   </span>
                   <span id="diff-text">
                     AI solution <strong id="diff-counter">1</strong>/<span id="diff-number2"></span>
                   </span>
                   <span id="next-diff" class="arrow" title="Next diff">
-                    <svg class="arrow-icon dark-only" width="10" height="12" viewBox="0 0 10 12
-    " fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M1.13277 11.4303L1.13279 11.4302L9.35818 6.22447L9.61297 6.62706L9.35818 6.22447C9.46766 6.15518 9.5 6.06763 9.5 6.00001C9.5 5.93239 9.46766 5.84484 9.35818 5.77555L9.35818 5.77555L1.13279 0.569741L1.13277 0.569731C0.995832 0.483055 0.827023 0.480315 0.689467 0.543871C0.55266 0.607082 0.5 0.705333 0.5 0.79421V11.2058C0.5 11.2947 0.552661 11.3929 0.689456 11.4561C0.827003 11.5197 0.99582 11.5169 1.13277 11.4303Z" stroke="#CCCCCC"/>
-    </svg>
-                    <svg class="arrow-icon light-only" width="10" height="12" viewBox="0 0 10
-    12" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M1.13277 11.4303L1.13279 11.4302L9.35818 6.22447L9.61297 6.62706L9.35818 6.22447C9.46766 6.15518 9.5 6.06763 9.5 6.00001C9.5 5.93239 9.46766 5.84484 9.35818 5.77555L9.35818 5.77555L1.13279 0.569741L1.13277 0.569731C0.995832 0.483055 0.827023 0.480315 0.689467 0.543871C0.55266 0.607082 0.5 0.705333 0.5 0.79421V11.2058C0.5 11.2947 0.552661 11.3929 0.689456 11.4561C0.827003 11.5197 0.99582 11.5169 1.13277 11.4303Z" stroke="#3B3B3B"/>
-    </svg>
-              </span>
+                    {{.ArrowRightDark}}
+                    {{.ArrowRightLight}}
+                  </span>
                 </div>
               </div>
               <div id="diff"></div>
@@ -806,7 +824,7 @@
             </section>
 
             <!-- AI fix errors -->
-            <section id="fixes-error-section" class="sn-ai-fix-error hidden">
+            <section id="fixes-error-section" class="sn-ai-fix-error delimiter-top hidden">
               <div id="info-no-diffs" class="font-light">
                 ⚠️ There was an issue generating the fix
               </div>
@@ -819,7 +837,7 @@
           <!-- Data Flow and Fixed Code Examples -->
           <div id="no-ai-fix-wrapper" class="{{if .HasAIFix}}hidden{{end}}">
             <!-- Data Flow -->
-            <section class="data-flow-section">
+            <section class="data-flow-section delimiter-top">
               <h2 class="data-flow-header">
                 Data Flow - {{len .DataFlow}} {{if gt (len .DataFlow) 1}}steps{{else}}step{{end}}
               </h2>
@@ -843,37 +861,55 @@
             </section>
 
             <!-- Fixed Code Examples -->
-            <section class="example-fixes">
+            <section class="example-fixes delimiter-top">
               <h2 class="example-fixes-header">Fixed Code Examples</h2>
-              <div class="example-fixes-text">
-                {{if gt (len .ExampleCommitFixes) 0}}
-                This issue was fixed by {{.RepoCount}} projects. Here are {{.ExampleCount}} example fixes.
-                <div class="example-fixes-tabs-nav example-fixes-tabs">
-                  {{range $index, $fix := .ExampleCommitFixes}}
-                  <span class="tab-item {{if eq $index 0}}is-selected{{end}}" id="tab-link-{{$index}}">
-                    {{$fix.IconSVG}} <a class="example-repo-link" target="_blank" rel="noopener noreferrer"
-                      href="{{.RepoLink}}">
-                      {{$fix.RepoName}}</a>
+              {{if eq (len .ExampleCommitFixes) 0}}
+              <div id="info-no-examples" class="font-light">
+                No example fixes are available.
+              </div>
+              {{else}}
+              <p id="example-fixes-info-top" class="example-fixes-info-top font-light">
+                This type of vulnerability was fixed in {{.RepoCount}} open source projects.
+              </p>
+              <div id="example-top" class="row between">
+                <div id="current-example" class="repo clickable">
+                  {{.GitHubIcon}}
+                  <span id="example-link" class="example-repo-link">
+                    <a id="example-repo-anchor" href="{{(index .ExampleCommitFixes 0).RepoLink}}" target="_blank"
+                      rel="noopener noreferrer">
+                      {{(index .ExampleCommitFixes 0).RepoName}}
+                    </a>
                   </span>
-                  {{end}}
                 </div>
-                <div class="tab-container">
-                  {{range $index, $fix := .ExampleCommitFixes}}
-                  <div id="tab-content-{{$index}}"
-                    class="tab-content example-fix-tab-content {{if eq $index 0}}is-selected{{end}}">
-                    {{range $fix.ExampleLines}}
+                <div class="examples-nav">
+                  <span id="previous-example" class="arrow" title="Previous example">
+                    {{.ArrowLeftDark}}
+                    {{.ArrowLeftLight}}
+                  </span>
+                  <span id="example-text">
+                    Example <strong id="example-counter">1</strong>/<span id="example-number2">{{.ExampleCount}}</span>
+                  </span>
+                  <span id="next-example" class="arrow" title="Next example">
+                    {{.ArrowRightDark}}
+                    {{.ArrowRightLight}}
+                  </span>
+                </div>
+              </div>
+
+              <div id="example" class="example">
+                {{range $index, $element := .ExampleCommitFixes}}
+                <div class="example-detail {{if ne $index 0}}hidden{{end}}" data-index=" {{$index}}">
+                  <div>
+                    {{range $element.ExampleLines}}
                     <div class="example-line {{.LineChange}}">
-                      <span class="example-line-number">{{.LineNumber}}</span>
                       <code>{{.Line}}</code>
                     </div>
                     {{end}}
                   </div>
-                  {{end}}
                 </div>
-                {{else}}
-                No example fixes are available.
                 {{end}}
               </div>
+              {{end}}
             </section>
           </div>
         </div>
@@ -882,7 +918,7 @@
         <!-- Start Vulnerability Overview section for tab id="vuln-overview-tab" -->
         <div id="vuln-overview-content" class="tab-content main-tab-content" data-content="vuln-overview">
           <!-- Content for Vulnerability Overview -->
-          <section class="issue-overview">
+          <section class="issue-overview delimiter-top">
             <div class="overview-text">
               {{.IssueOverview}}
             </div>
@@ -908,27 +944,102 @@
 
   <!-- Scripts -->
   <script nonce="${nonce}">
+    /**
+     * Represents a single line change in a commit.
+     * @typedef {Object} ExampleLine
+     * @property {number} LineNumber  - The line number of the change.
+     * @property {string} Line        - The content of the line.
+     * @property {string} LineChange  - The type of change ('added' or 'removed').
+     */
+
+    /**
+     * Represents a commit fix with detailed change lines.
+     * @typedef {Object} ExampleCommitFix
+     * @property {string} CommitURL           - URL to the full commit diff.
+     * @property {string} RepoName            - Name of the repository.
+     * @property {string} RepoLink            - Direct link to the repository.
+     * @property {ExampleLine[]} ExampleLines - An array of line changes.
+     */
+
+    // Constants for class and ID names
     const MAIN_TAB_NAV_SELECTOR = '.main-tabs-nav';
     const MAIN_TAB_ITEM_SELECTOR = '.main-tabs-nav .tab-item';
     const MAIN_TAB_CONTENT_SELECTOR = '.tab-container > .main-tab-content';
-    const EXAMPLE_TAB_NAV_SELECTOR = '.example-fixes-tabs-nav';
-    const EXAMPLE_TAB_ITEM_SELECTOR = '.example-fixes-tabs-nav .tab-item';
-    const EXAMPLE_TAB_CONTENT_SELECTOR = '.tab-container > .example-fix-tab-content';
 
+    const EXAMPLE_COUNTER = 'example-counter';
+    const EXAMPLE_PREVIOUS = 'previous-example';
+    const EXAMPLE_NEXT = 'next-example';
+    const EXAMPLE_REPO_ANCHOR = 'example-repo-anchor';
+    const ALL_EXAMPLES_DETAIL = '.example-detail';
+
+    // Utility functions
     const toggleIsSelectedClass = (elements, shouldToggle) => {
       elements.forEach(el => {
         // toggle(token, force) - force is a boolean value that determines whether the class should be added or removed.
         el.classList.toggle('is-selected', shouldToggle(el));
       });
+    };
+
+    function toggleElement(element, toggle) {
+      if (!element) {
+        return;
+      }
+
+      if (toggle === 'show') {
+        element.classList.remove('hidden');
+      } else if (toggle === 'hide') {
+        element.classList.add('hidden');
+      } else {
+        console.error('Unexpected toggle value', toggle);
+      }
     }
 
-    // Ensure the document is fully loaded before executing script to manipulate DOM.
     document.addEventListener('DOMContentLoaded', () => {
+      const exampleCounter = document.getElementById(EXAMPLE_COUNTER);
+      const examplePrevious = document.getElementById(EXAMPLE_PREVIOUS);
+      const exampleNext = document.getElementById(EXAMPLE_NEXT);
+      const exampleRepoAnchor = document.getElementById(EXAMPLE_REPO_ANCHOR);
+      const allExamplesDetail = document.querySelectorAll(ALL_EXAMPLES_DETAIL);
       const mainTabLinks = document.querySelectorAll(MAIN_TAB_ITEM_SELECTOR);
       const mainTabContents = document.querySelectorAll(MAIN_TAB_CONTENT_SELECTOR);
-      // Nested tabs
-      const exampleTabLinks = document.querySelectorAll(EXAMPLE_TAB_ITEM_SELECTOR);
-      const exampleTabContents = document.querySelectorAll(EXAMPLE_TAB_CONTENT_SELECTOR);
+      const mainTabNav = document.querySelector(MAIN_TAB_NAV_SELECTOR);
+
+      let exampleCount = 0;
+
+      /** @type {ExampleCommitFix[]} */
+      const exampleCommitFixes = JSON.parse("{{.CommitFixes}}" || '[]');
+
+      // Functions dependent on the DOM
+      function showCurrentExample() {
+        allExamplesDetail.forEach((example, idx) => {
+          if (idx === exampleCount) {
+            example.classList.remove('hidden');
+          } else {
+            example.classList.add('hidden');
+          }
+        });
+
+        exampleCounter.textContent = exampleCount + 1;
+        const repoName = exampleCommitFixes[exampleCount].RepoName;
+        const repoLink = exampleCommitFixes[exampleCount].RepoLink;
+
+        exampleRepoAnchor.textContent = repoName;
+        exampleRepoAnchor.href = repoLink;
+      }
+
+      function previousExample() {
+        if (exampleCount > 0) {
+          exampleCount--;
+          showCurrentExample();
+        }
+      }
+
+      function nextExample() {
+        if (exampleCount < exampleCommitFixes.length - 1) {
+          exampleCount++;
+          showCurrentExample();
+        }
+      }
 
       const onMainTabClicked = event => {
         const clickedTab = event.target.closest('.tab-item');
@@ -941,22 +1052,15 @@
         toggleIsSelectedClass(mainTabContents, content => content.getAttribute('data-content') === selectedTab);
       };
 
-      const onExampleTabClicked = event => {
-        const clickedTab = event.target.closest('.tab-item');
-        if (!clickedTab) return;
+      // Event listeners
+      mainTabNav.addEventListener('click', onMainTabClicked);
+      examplePrevious.addEventListener('click', previousExample);
+      exampleNext.addEventListener('click', nextExample);
 
-        const targetContentId = clickedTab.id.replace('tab-link-', 'tab-content-');
-        toggleIsSelectedClass(exampleTabLinks, tab => tab === clickedTab);
-        toggleIsSelectedClass(exampleTabContents, content => content.id === targetContentId);
-      };
-
-      // Event listeners for main and nested tabs
-      // TODO: move this into the HTML as an onclick
-      document.querySelector(MAIN_TAB_NAV_SELECTOR).addEventListener('click', onMainTabClicked);
-      document.querySelector(EXAMPLE_TAB_NAV_SELECTOR)?.addEventListener('click', onExampleTabClicked);
+      // Initial function calls
+      showCurrentExample();
     });
   </script>
-
   ${ideScript}
 </body>
 
