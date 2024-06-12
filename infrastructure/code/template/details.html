@@ -930,12 +930,12 @@
   <!-- Scripts -->
   <script nonce="${nonce}">
     /**
-   * Represents a single line change in a commit.
-   * @typedef {Object} ExampleLine
-   * @property {number} LineNumber  - The line number of the change.
-   * @property {string} Line        - The content of the line.
-   * @property {string} LineChange  - The type of change ('added' or 'removed').
-   */
+     * Represents a single line change in a commit.
+     * @typedef {Object} ExampleLine
+     * @property {number} LineNumber  - The line number of the change.
+     * @property {string} Line        - The content of the line.
+     * @property {string} LineChange  - The type of change ('added' or 'removed').
+     */
 
     /**
      * Represents a commit fix with detailed change lines.
@@ -946,30 +946,24 @@
      * @property {ExampleLine[]} ExampleLines - An array of line changes.
      */
 
+    // Constants for class and ID names
     const MAIN_TAB_NAV_SELECTOR = '.main-tabs-nav';
     const MAIN_TAB_ITEM_SELECTOR = '.main-tabs-nav .tab-item';
     const MAIN_TAB_CONTENT_SELECTOR = '.tab-container > .main-tab-content';
 
-    const EXAMPLE_COUNTER = document.getElementById('example-counter');
-    const EXAMPLE_TOP = document.getElementById('example-top');
-    const EXAMPLE_CONTENT = document.getElementById('example');
-    const EXAMPLE_PREVIOUS = document.getElementById('previous-example');
-    const EXAMPLE_NEXT = document.getElementById('next-example');
-    const EXAMPLE_REPO_LINK = document.getElementById('example-repo-link')
-    const EXAMPLE_REPO_ANCHOR = document.getElementById('example-repo-anchor');
-    const ALL_EXAMPLES_DETAIL = document.querySelectorAll('.example-detail');
+    const EXAMPLE_COUNTER = 'example-counter';
+    const EXAMPLE_PREVIOUS = 'previous-example';
+    const EXAMPLE_NEXT = 'next-example';
+    const EXAMPLE_REPO_ANCHOR = 'example-repo-anchor';
+    const ALL_EXAMPLES_DETAIL = '.example-detail';
 
-    let exampleCount = 0;
-
-    /** @type {ExampleCommitFix[]} */
-    const exampleCommitFixes = JSON.parse("{{.CommitFixes}}" || '[]')
-
+    // Utility functions
     const toggleIsSelectedClass = (elements, shouldToggle) => {
       elements.forEach(el => {
         // toggle(token, force) - force is a boolean value that determines whether the class should be added or removed.
         el.classList.toggle('is-selected', shouldToggle(el));
       });
-    }
+    };
 
     function toggleElement(element, toggle) {
       if (!element) {
@@ -985,42 +979,52 @@
       }
     }
 
-    // == Fixed Code Examples Component ==
-    function showCurrentExample() {
-      ALL_EXAMPLES_DETAIL.forEach((example, idx) => {
-        if (idx === exampleCount) {
-          example.classList.remove('hidden');
-        } else {
-          example.classList.add('hidden');
-        }
-      });
-
-      EXAMPLE_COUNTER.textContent = exampleCount + 1;
-      const repoName = exampleCommitFixes[exampleCount].RepoName;
-      const repoLink = exampleCommitFixes[exampleCount].RepoLink;
-
-      EXAMPLE_REPO_ANCHOR.textContent = repoName;
-      EXAMPLE_REPO_ANCHOR.href = repoLink;
-    }
-
-    function previousExample() {
-      if (exampleCount > 0) {
-        exampleCount--;
-        showCurrentExample();
-      }
-    }
-
-    function nextExample() {
-      if (exampleCount < exampleCommitFixes.length - 1) {
-        exampleCount++;
-        showCurrentExample();
-      }
-    }
-
-    // Ensure the document is fully loaded before executing script to manipulate DOM.
     document.addEventListener('DOMContentLoaded', () => {
+      const exampleCounter = document.getElementById(EXAMPLE_COUNTER);
+      const examplePrevious = document.getElementById(EXAMPLE_PREVIOUS);
+      const exampleNext = document.getElementById(EXAMPLE_NEXT);
+      const exampleRepoAnchor = document.getElementById(EXAMPLE_REPO_ANCHOR);
+      const allExamplesDetail = document.querySelectorAll(ALL_EXAMPLES_DETAIL);
       const mainTabLinks = document.querySelectorAll(MAIN_TAB_ITEM_SELECTOR);
       const mainTabContents = document.querySelectorAll(MAIN_TAB_CONTENT_SELECTOR);
+      const mainTabNav = document.querySelector(MAIN_TAB_NAV_SELECTOR);
+
+      let exampleCount = 0;
+
+      /** @type {ExampleCommitFix[]} */
+      const exampleCommitFixes = JSON.parse("{{.CommitFixes}}" || '[]');
+
+      // Functions dependent on the DOM
+      function showCurrentExample() {
+        allExamplesDetail.forEach((example, idx) => {
+          if (idx === exampleCount) {
+            example.classList.remove('hidden');
+          } else {
+            example.classList.add('hidden');
+          }
+        });
+
+        exampleCounter.textContent = exampleCount + 1;
+        const repoName = exampleCommitFixes[exampleCount].RepoName;
+        const repoLink = exampleCommitFixes[exampleCount].RepoLink;
+
+        exampleRepoAnchor.textContent = repoName;
+        exampleRepoAnchor.href = repoLink;
+      }
+
+      function previousExample() {
+        if (exampleCount > 0) {
+          exampleCount--;
+          showCurrentExample();
+        }
+      }
+
+      function nextExample() {
+        if (exampleCount < exampleCommitFixes.length - 1) {
+          exampleCount++;
+          showCurrentExample();
+        }
+      }
 
       const onMainTabClicked = event => {
         const clickedTab = event.target.closest('.tab-item');
@@ -1033,17 +1037,15 @@
         toggleIsSelectedClass(mainTabContents, content => content.getAttribute('data-content') === selectedTab);
       };
 
-      // Event listeners for main
-      // TODO: move this into the HTML as an onclick
-      document.querySelector(MAIN_TAB_NAV_SELECTOR).addEventListener('click', onMainTabClicked);
+      // Event listeners
+      mainTabNav.addEventListener('click', onMainTabClicked);
+      examplePrevious.addEventListener('click', previousExample);
+      exampleNext.addEventListener('click', nextExample);
 
-      // Event listeners for example fixes
-      EXAMPLE_PREVIOUS.addEventListener('click', previousExample);
-      EXAMPLE_NEXT.addEventListener('click', nextExample);
+      // Initial function calls
       showCurrentExample();
     });
   </script>
-
   ${ideScript}
 </body>
 
