@@ -65,7 +65,6 @@ var globalTemplate *template.Template
 
 func init() {
 	funcMap := template.FuncMap{
-		"githubIcon":    getGitHubIconSvg,
 		"repoName":      getRepoName,
 		"trimCWEPrefix": trimCWEPrefix,
 		"idxMinusOne":   idxMinusOne,
