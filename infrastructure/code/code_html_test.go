@@ -80,7 +80,7 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	assert.Contains(t, codePanelHtml, ` id="no-ai-fix-wrapper" class="">`)
 	expectedFixesDescription := fmt.Sprintf(`This type of vulnerability was fixed in %d open source projects.`, repoCount)
 	assert.Regexp(t, regexp.MustCompile(expectedFixesDescription), codePanelHtml)
-	assert.Contains(t, codePanelHtml, `<span id="example-link" class="repo-link">`, "GitHub icon preceding the repo name is present")
+	assert.Contains(t, codePanelHtml, `<span id="example-link" class="example-repo-link">`, "GitHub icon preceding the repo name is present")
 
 	// assert Footer
 	assert.Contains(t, codePanelHtml, `id="action-ignore-line">68</span>`)

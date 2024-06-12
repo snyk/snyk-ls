@@ -248,6 +248,17 @@
       color: inherit;
     }
 
+    .example-repo-link a {
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
+    }
+
+    .example-repo-link a:hover {
+      text-decoration: none;
+      color: inherit;
+    }
+
     .example-line {
       display: block;
     }
@@ -847,7 +858,12 @@
               <div id="example-top" class="row between">
                 <div id="current-example" class="repo clickable">
                   {{.GitHubIcon}}
-                  <span id="example-link" class="repo-link">{{(index .ExampleCommitFixes 0).RepoName}}</span>
+                  <span id="example-link" class="example-repo-link">
+                    <a id="example-repo-anchor" href="{{(index .ExampleCommitFixes 0).RepoLink}}" target="_blank"
+                      rel="noopener noreferrer">
+                      {{(index .ExampleCommitFixes 0).RepoName}}
+                    </a>
+                  </span>
                 </div>
                 <div class="examples-nav">
                   <span id="previous-example" class="arrow" title="Previous example">
@@ -867,7 +883,6 @@
               <div id="example" class="example">
                 {{range $index, $element := .ExampleCommitFixes}}
                 <div class="example-detail {{if ne $index 0}}hidden{{end}}" data-index=" {{$index}}">
-                  <a href="{{$element.CommitURL}}" target="_blank" rel="noopener noreferrer">{{$element.RepoName}}</a>
                   <div>
                     {{range $element.ExampleLines}}
                     <div class="example-line {{.LineChange}}">
@@ -926,7 +941,6 @@
      * Represents a commit fix with detailed change lines.
      * @typedef {Object} ExampleCommitFix
      * @property {string} CommitURL           - URL to the full commit diff.
-     * @property {string} GitHubIcon          - GitHub SVG icon.
      * @property {string} RepoName            - Name of the repository.
      * @property {string} RepoLink            - Direct link to the repository.
      * @property {ExampleLine[]} ExampleLines - An array of line changes.
@@ -941,7 +955,8 @@
     const EXAMPLE_CONTENT = document.getElementById('example');
     const EXAMPLE_PREVIOUS = document.getElementById('previous-example');
     const EXAMPLE_NEXT = document.getElementById('next-example');
-    const EXAMPLE_REPO_LINK = document.getElementById('example-link')
+    const EXAMPLE_REPO_LINK = document.getElementById('example-repo-link')
+    const EXAMPLE_REPO_ANCHOR = document.getElementById('example-repo-anchor');
     const ALL_EXAMPLES_DETAIL = document.querySelectorAll('.example-detail');
 
     let exampleCount = 0;
@@ -982,7 +997,10 @@
 
       EXAMPLE_COUNTER.textContent = exampleCount + 1;
       const repoName = exampleCommitFixes[exampleCount].RepoName;
-      EXAMPLE_REPO_LINK.textContent = repoName;
+      const repoLink = exampleCommitFixes[exampleCount].RepoLink;
+
+      EXAMPLE_REPO_ANCHOR.textContent = repoName;
+      EXAMPLE_REPO_ANCHOR.href = repoLink;
     }
 
     function previousExample() {

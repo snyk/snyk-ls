@@ -53,7 +53,6 @@ type DataFlowItem struct {
 
 type ExampleCommit struct {
 	CommitURL    string
-	GitHubIcon   template.HTML
 	RepoName     string
 	RepoLink     string
 	ExampleLines []ExampleLines
@@ -214,11 +213,10 @@ func prepareExampleCommits(fixes []snyk.ExampleCommitFix) []ExampleCommit {
 	var fixData []ExampleCommit
 	for _, fix := range fixes {
 		fixData = append(fixData, ExampleCommit{
-			CommitURL: fix.CommitURL,
-			// GitHubIcon:   getGitHubIconSvg(),
+			CommitURL:    fix.CommitURL,
 			RepoName:     getRepoName(fix.CommitURL),
-			ExampleLines: prepareExampleLines(fix.Lines),
 			RepoLink:     fix.CommitURL,
+			ExampleLines: prepareExampleLines(fix.Lines),
 		})
 	}
 	return fixData
