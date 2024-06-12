@@ -237,6 +237,10 @@
       color: inherit;
     }
 
+    .example {
+      margin-top: 0.75rem;
+    }
+
     .example-repo-link {
       text-decoration: none;
       color: inherit;
@@ -261,13 +265,12 @@
 
     .example-line {
       display: block;
+      position: relative;
+      padding-left: 20px;
     }
 
     .example-line>code {
       padding-left: 0.75rem;
-    }
-
-    .example-line>code {
       font-family: "Courier New", Courier, monospace;
       display: inline-block;
       white-space: pre-wrap;
@@ -275,16 +278,20 @@
       background-color: transparent;
     }
 
-    .example-line.added>code::after {
-      content: "+";
+    .example-line.added>code::before,
+    .example-line.removed>code::before {
       position: absolute;
-      padding: 0 4px;
+      left: 5px;
+      top: 50%;
+      transform: translateY(-50%);
     }
 
-    .example-line.removed>code::after {
+    .example-line.added>code::before {
+      content: "+";
+    }
+
+    .example-line.removed>code::before {
       content: "-";
-      position: absolute;
-      padding: 0 4px;
     }
 
     /* Footer Styles */
