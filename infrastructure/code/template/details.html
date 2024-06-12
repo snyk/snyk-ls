@@ -72,6 +72,7 @@
       flex-direction: column;
     }
 
+    .example-fixes-header,
     .issue-overview-header,
     .ignore-details-header,
     .data-flow-header,
@@ -235,6 +236,14 @@
 
     .tab-item-icon {
       color: inherit;
+    }
+
+    .example-fixes h2 {
+      margin-bottom: 0.5em;
+    }
+
+    .example-fixes-info-top {
+      margin-bottom: 0.5em;
     }
 
     .example {
@@ -748,7 +757,7 @@
           <!-- AI Fix -->
           <div id="ai-fix-wrapper" class="{{if not .HasAIFix}}hidden{{end}}">
             <!-- AI fix buttons -->
-            <section id="fix-wrapper" class="ai-fix">
+            <section id="fix-wrapper" class="ai-fix delimiter-top">
               <h2 class="ai-fix-header">
                 DeepCode AI Fixes
               </h2>
@@ -789,7 +798,7 @@
             </section>
 
             <!-- AI fixes -->
-            <section id="fixes-section" class="sn-ai-fixes hidden">
+            <section id="fixes-section" class="sn-ai-fixes delimiter-top hidden">
               <div id="info-no-diffs" class="font-light">
                 There are no fix diffs for this issue.
               </div>
@@ -815,7 +824,7 @@
             </section>
 
             <!-- AI fix errors -->
-            <section id="fixes-error-section" class="sn-ai-fix-error hidden">
+            <section id="fixes-error-section" class="sn-ai-fix-error delimiter-top hidden">
               <div id="info-no-diffs" class="font-light">
                 ⚠️ There was an issue generating the fix
               </div>
@@ -828,7 +837,7 @@
           <!-- Data Flow and Fixed Code Examples -->
           <div id="no-ai-fix-wrapper" class="{{if .HasAIFix}}hidden{{end}}">
             <!-- Data Flow -->
-            <section class="data-flow-section">
+            <section class="data-flow-section delimiter-top">
               <h2 class="data-flow-header">
                 Data Flow - {{len .DataFlow}} {{if gt (len .DataFlow) 1}}steps{{else}}step{{end}}
               </h2>
@@ -852,14 +861,14 @@
             </section>
 
             <!-- Fixed Code Examples -->
-            <section class="example-fixes">
-              <h2>Fixed Code Examples</h2>
+            <section class="example-fixes delimiter-top">
+              <h2 class="example-fixes-header">Fixed Code Examples</h2>
               {{if eq (len .ExampleCommitFixes) 0}}
               <div id="info-no-examples" class="font-light">
                 No example fixes are available.
               </div>
               {{else}}
-              <p id="example-fixes-info-top" class="font-light">
+              <p id="example-fixes-info-top" class="example-fixes-info-top font-light">
                 This type of vulnerability was fixed in {{.RepoCount}} open source projects.
               </p>
               <div id="example-top" class="row between">
@@ -899,7 +908,6 @@
                   </div>
                 </div>
                 {{end}}
-
               </div>
               {{end}}
             </section>
@@ -910,7 +918,7 @@
         <!-- Start Vulnerability Overview section for tab id="vuln-overview-tab" -->
         <div id="vuln-overview-content" class="tab-content main-tab-content" data-content="vuln-overview">
           <!-- Content for Vulnerability Overview -->
-          <section class="issue-overview">
+          <section class="issue-overview delimiter-top">
             <div class="overview-text">
               {{.IssueOverview}}
             </div>
