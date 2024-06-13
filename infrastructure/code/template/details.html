@@ -873,14 +873,14 @@
                 Data Flow - {{len .DataFlow}} {{if gt (len .DataFlow) 1}}steps{{else}}step{{end}}
               </h2>
               <div class="data-flow-body">
+                {{range $fileName, $dataFlowItems := .DataFlowTable}}
+                <div class="data-flow-file">
+                  {{$.FileIcon}}
+                  <span class="data-flow-file-name">{{$fileName}}</span>
+                </div>
                 <table class="data-flow-table">
                   <tbody>
-                    {{range $fileName, $dataFlowItems := .DataFlowTable}}
-                    <div class="data-flow-file">
-                      {{$.FileIcon}}
-                      <span class="data-flow-file-name">{{$fileName}}</span>
-                    </div>
-                    {{range $dataFlowItems}}
+                      {{range $dataFlowItems}}
                       <tr class="data-flow-row">
                         <td class="data-flow-number">{{.Number}}</td>
                         <td class="data-flow-clickable-row" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
@@ -890,10 +890,10 @@
                         <td class="data-flow-delimiter">|</td>
                         <td class="data-flow-text">{{.Content}}</td>
                       </tr>
-                    {{end}}
-                    {{end}}
+                      {{end}}
                   </tbody>
                 </table>
+                {{end}}
               </div>
             </section>
 
