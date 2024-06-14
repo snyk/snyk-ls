@@ -28,10 +28,48 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
+func Test_DefaultFinder_FindRange(t *testing.T) {
+	issue, testPath, testContent := setupDefaultFinderEnvForTesting()
+	expectedRange := getExpectedRangeForDefaultFinderTests()
+
+	actualRange := findRange(issue, testPath, testContent)
+
+	assert.Equal(t, expectedRange, actualRange)
+}
+
 func TestDefaultFinder_Find(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetFormat(config.FormatHtml)
 
+	issue, testPath, testContent := setupDefaultFinderEnvForTesting()
+
+	defaultFinder := DefaultFinder{
+		path:        testPath,
+		fileContent: testContent,
+		c:           c,
+	}
+
+	expectedRange := getExpectedRangeForDefaultFinderTests()
+
+	actualRange := defaultFinder.find(issue)
+	assert.Equal(t, expectedRange, actualRange)
+}
+
+func getExpectedRangeForDefaultFinderTests() snyk.Range {
+	expectedRange := snyk.Range{
+		Start: snyk.Position{
+			Line:      9,
+			Character: 1,
+		},
+		End: snyk.Position{
+			Line:      9,
+			Character: 32,
+		},
+	}
+	return expectedRange
+}
+
+func setupDefaultFinderEnvForTesting() (ossIssue, string, []byte) {
 	var issue = ossIssue{
 		Id:             "testIssue",
 		Name:           "SNYK-TEST-ISSUE-1",
@@ -46,23 +84,5 @@ func TestDefaultFinder_Find(t *testing.T) {
 	}
 	var testPath, _ = filepath.Abs("testdata/go.mod")
 	var testContent, _ = os.ReadFile(testPath)
-	defaultFinder := DefaultFinder{
-		path:        testPath,
-		fileContent: testContent,
-		c:           c,
-	}
-
-	expectedRange := snyk.Range{
-		Start: snyk.Position{
-			Line:      9,
-			Character: 1,
-		},
-		End: snyk.Position{
-			Line:      9,
-			Character: 32,
-		},
-	}
-
-	actualRange := defaultFinder.find(issue)
-	assert.Equal(t, expectedRange, actualRange)
+	return issue, testPath, testContent
 }
