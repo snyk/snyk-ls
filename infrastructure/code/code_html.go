@@ -115,6 +115,7 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 		"ArrowLeftLight":     getArrowLeftLightSvg(),
 		"ArrowRightDark":     getArrowRightDarkSvg(),
 		"ArrowRightLight":    getArrowRightLightSvg(),
+		"FileIcon":           getFileIconSvg(),
 	}
 
 	if issue.IsIgnored {
@@ -171,18 +172,22 @@ func parseCategory(category string) string {
 	return category
 }
 
-func prepareDataFlowTable(issue snyk.CodeIssueData) []DataFlowItem {
-	items := make([]DataFlowItem, 0, len(issue.DataFlow))
+func prepareDataFlowTable(issue snyk.CodeIssueData) map[string][]DataFlowItem {
+	items := make(map[string][]DataFlowItem, 0)
 
 	for i, flow := range issue.DataFlow {
-		items = append(items, DataFlowItem{
+		fileName := filepath.Base(flow.FilePath)
+		if items[fileName] == nil {
+			items[fileName] = []DataFlowItem{}
+		}
+		items[fileName] = append(items[fileName], DataFlowItem{
 			Number:         i + 1,
 			FilePath:       flow.FilePath,
 			StartLine:      flow.FlowRange.Start.Line,
 			EndLine:        flow.FlowRange.End.Line,
 			StartCharacter: flow.FlowRange.Start.Character,
 			EndCharacter:   flow.FlowRange.End.Character,
-			FileName:       filepath.Base(flow.FilePath),
+			FileName:       fileName,
 			Content:        flow.Content,
 			StartLineValue: flow.FlowRange.Start.Line + 1,
 		})
@@ -258,6 +263,13 @@ func getRepoName(commitURL string) string {
 func formatDate(date time.Time) string {
 	month := date.Format("January")
 	return fmt.Sprintf("%s %d, %d", month, date.Day(), date.Year())
+}
+
+func getFileIconSvg() template.HTML {
+	return template.HTML(`<svg class="data-flow-file-icon" width="16" height="16" viewBox="0 0 32 32" xmlns="http
+://www.w3.
+org/2000/svg" fill="none"">
+	<path d="M20.414,2H5V30H27V8.586ZM7,28V4H19v6h6V28Z" fill="#888"/></svg>`)
 }
 
 func getExternalIconSvg() template.HTML {
