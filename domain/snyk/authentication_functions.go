@@ -23,9 +23,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
-
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 func AuthenticationCheck() (string, error) {
@@ -42,11 +40,6 @@ func GetActiveUser() (*ActiveUser, error) {
 		return nil, errors.New("no credentials found")
 	}
 	conf := c.Engine().GetConfiguration().Clone()
-	if c.AuthenticationMethod() == lsp.OAuthAuthentication {
-		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, 1)
-	} else {
-		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, 0)
-	}
 	conf.Set(configuration.FLAG_EXPERIMENTAL, true)
 	conf.Set("json", true)
 	result, err := c.Engine().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, conf)
