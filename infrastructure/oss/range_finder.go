@@ -56,7 +56,7 @@ func findRange(issue ossIssue, path string, fileContent []byte) snyk.Range {
 			finder = &DefaultFinder{path: path, fileContent: fileContent, c: c}
 		}
 	default:
-		finder = &DefaultFinder{path: path, fileContent: fileContent}
+		finder = &DefaultFinder{path: path, fileContent: fileContent, c: c}
 	}
 
 	foundRange = finder.find(issue)
