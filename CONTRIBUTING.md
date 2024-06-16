@@ -52,6 +52,18 @@ Server: [Snyk LSP Contribution Example](./docs/example.md).
 Error reporting and performance monitoring is done via [Sentry](https://sentry.io/). Analytics are captured
 via [Segment](https://segment.com/) and further propagated to [Amplitude Analytics](https://amplitude.com/).
 
+## UI Rendering with LSP
+
+To learn more about the architecture and interaction between the Language Server and IDEs for UI rendering, please refer to our detailed documentation: [UI Rendering with LSP](./docs/ui_rendering.md).
+
+This document covers:
+- The process of generating HTML templates using the Go `html/template` library.
+- How the LSP includes scaffolding CSS and how IDEs inject their own theming.
+- Step-by-step guidance on adding and modifying UI components.
+
+This guide is intended to help contributors add or modify UI components in the IDEs that support Language Server.
+
+
 ### Error reporting
 
 `error_reporting.ErrorReporter` can be injected via the new scanner's constructor. It is used to report errors to Sentry
