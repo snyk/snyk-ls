@@ -212,7 +212,7 @@ func Test_initialize_shouldDefaultToTokenAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, lsp.TokenAuthentication, config.CurrentConfig().AuthenticationMethod())
+	assert.Equal(t, lsp.OAuthAuthentication, config.CurrentConfig().AuthenticationMethod())
 	assert.Equal(t, "*snyk.FakeAuthenticationProvider", reflect.TypeOf(di.AuthenticationService().Provider()).String())
 }
 
