@@ -532,11 +532,11 @@ func Test_InitializeSettings(t *testing.T) {
 	t.Run("authenticationMethod is passed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		di.TestInit(t)
-		assert.Equal(t, lsp.TokenAuthentication, c.AuthenticationMethod())
-
-		InitializeSettings(c, lsp.Settings{AuthenticationMethod: lsp.OAuthAuthentication})
-
 		assert.Equal(t, lsp.OAuthAuthentication, c.AuthenticationMethod())
+
+		InitializeSettings(c, lsp.Settings{AuthenticationMethod: lsp.TokenAuthentication})
+
+		assert.Equal(t, lsp.TokenAuthentication, c.AuthenticationMethod())
 	})
 
 	t.Run("custom path configuration", func(t *testing.T) {
