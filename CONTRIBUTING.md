@@ -54,11 +54,11 @@ via [Segment](https://segment.com/) and further propagated to [Amplitude Analyti
 
 ## UI Rendering with LSP
 
-To learn more about the architecture and interaction between the Language Server and IDEs for UI rendering, please refer to our detailed documentation: [UI Rendering with LSP](./docs/ui_rendering.md).
+To learn more about the architecture and interaction between the Language Server and IDEs for UI rendering, please refer to our detailed documentation: [UI Rendering with LSP](./docs/ui-rendering.md).
 
 This document covers:
 - The process of generating HTML templates using the Go `html/template` library.
-- How the LSP includes scaffolding CSS and how IDEs inject their own theming.
+- How the LS includes scaffolding CSS and how IDEs inject their own theming.
 - Step-by-step guidance on adding and modifying UI components.
 
 This guide is intended to help contributors add or modify UI components in the IDEs that support Language Server.

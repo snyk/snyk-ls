@@ -27,9 +27,10 @@ sequenceDiagram
 
 ### Adding or Modifying UI Components
 
+#### Snyk Code Suggestion Panel
 To add or modify UI components in the IDEs that support the Language Server, follow these steps:
 
-1. Process the dynamic data to be rendered in the in the HTML template in `infrastructure/code/code_html.go`. For example, to display the issue ecosystem in the UI:
+1. Process the dynamic data to be rendered in the HTML template in `infrastructure/code/code_html.go`. For example, to display the issue ecosystem in the UI:
 
 ```go
 func getCodeDetailsHtml(issue snyk.Issue) string {
@@ -76,15 +77,15 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 </body>
 ```
 
-1. If necessary, add IDE-specific CSS:
+3. If necessary, add IDE-specific CSS:
 
 **VSCode**
-- CSS: [suggestionLS.scss](https://github.com/snyk/vscode-extension/blob/main/media/views/snykCode/suggestion/suggestionLS.scss)
-- HTML Rendering: [showPanel](https://github.com/snyk/vscode-extension/blob/main/src/snyk/snykCode/views/suggestion/codeSuggestionWebviewProvider.ts#L92)
-- Script Injection: [codeSuggestionWebviewScriptLS.ts](https://github.com/snyk/vscode-extension/blob/main/src/snyk/snykCode/views/suggestion/codeSuggestionWebviewScriptLS.ts)
+- CSS: [suggestionLS.scss](https://github.com/snyk/vscode-extension/blob/ae111dd5aa7a1e1eaa33bef33b2af7c15ef558d2/media/views/snykCode/suggestion/suggestionLS.scss)
+- HTML Rendering: [codeSuggestionWebviewProvider.ts](https://github.com/snyk/vscode-extension/blob/ae111dd5aa7a1e1eaa33bef33b2af7c15ef558d2/src/snyk/snykCode/views/suggestion/codeSuggestionWebviewProvider.ts#L92)
+- Script Injection: [codeSuggestionWebviewScriptLS.ts](https://github.com/snyk/vscode-extension/blob/ae111dd5aa7a1e1eaa33bef33b2af7c15ef558d2/src/snyk/snykCode/views/suggestion/codeSuggestionWebviewScriptLS.ts)
 
 **IntelliJ**
-- CSS: [snyk_code_suggestion.scss](https://github.com/snyk/snyk-intellij-plugin/blob/master/src/main/resources/stylesheets/snyk_code_suggestion.scss)
-- HTML Rendering: [OpenFileLoadHandlerGenerator](https://github.com/snyk/snyk-intellij-plugin/blob/master/src/main/kotlin/io/snyk/plugin/ui/jcef/OpenFileLoadHandlerGenerator.kt)
+- CSS: [snyk_code_suggestion.scss](https://github.com/snyk/snyk-intellij-plugin/blob/2581e2dc2e8722a960d0f0095377b7912a3789fe/src/main/resources/stylesheets/snyk_code_suggestion.scss)
+- HTML Rendering: [JCEFDescriptionPanel.kt](https://github.com/snyk/snyk-intellij-plugin/blob/2581e2dc2e8722a960d0f0095377b7912a3789fe/src/main/kotlin/io/snyk/plugin/ui/toolwindow/panels/JCEFDescriptionPanel.kt)
 
-<img src="https://github.com/snyk/snyk-ls/assets/1948377/01644706-f884-48cd-b98d-24868030677c" width="640">
+  <img src="https://github.com/snyk/snyk-ls/assets/1948377/01644706-f884-48cd-b98d-24868030677c" width="640">
