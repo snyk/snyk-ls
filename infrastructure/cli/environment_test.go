@@ -17,9 +17,13 @@
 package cli
 
 import (
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/lsp"
@@ -41,11 +45,22 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		c.SetIntegrationVersion(expectedIntegrationVersion)
 		c.SetIdeVersion(expectedIdeVersion)
 		c.SetIdeName(expectedIdeName)
+		s := oauth2.Token{
+			AccessToken:  "test",
+			TokenType:    "test",
+			RefreshToken: "test",
+			Expiry:       time.Time{},
+		}
+		marshal, err := json.Marshal(s)
+		require.NoError(t, err)
+		c.SetToken(string(marshal))
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
 		assert.Contains(t, updatedEnv, ApiEnvVar+"=https://app.snyk.io/api")
-		assert.Contains(t, updatedEnv, TokenEnvVar+"="+c.Token())
+		token, err := c.TokenAsOAuthToken()
+		require.NoError(t, err)
+		assert.Contains(t, updatedEnv, SnykOauthTokenEnvVar+"="+token.AccessToken)
 		assert.Contains(t, updatedEnv, IntegrationNameEnvVarKey+"="+expectedIntegrationName)
 		assert.Contains(t, updatedEnv, IntegrationVersionEnvVarKey+"="+expectedIntegrationVersion)
 		assert.Contains(t, updatedEnv, IntegrationEnvironmentEnvVarKey+"="+expectedIdeName)
