@@ -402,6 +402,64 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 	return issues, status, err
 }
 
+func (s *SnykCodeHTTPClient) RunAnalysisWithDelta(
+	ctx context.Context,
+	options AnalysisOptions,
+	baseDir string,
+) (*codeClientSarif.SarifResponse, AnalysisStatus, error) {
+	method := "code.RunAnalysis"
+	span := s.instrumentor.StartSpan(ctx, method)
+	defer s.instrumentor.Finish(span)
+
+	requestId, err := performance2.GetTraceId(span.Context())
+	if err != nil {
+		s.c.Logger().Err(err).Str("method", method).Msg(failedToObtainRequestIdString + err.Error())
+		return nil, AnalysisStatus{}, err
+	}
+	s.c.Logger().Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis for bundle")
+	defer s.c.Logger().Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis done")
+
+	requestBody, err := s.analysisRequestBody(&options)
+	if err != nil {
+		s.c.Logger().Err(err).Str("method", method).Str("requestBody", string(requestBody)).Msg("error creating request body")
+		return nil, AnalysisStatus{}, err
+	}
+
+	responseBody, err := s.doCall(span.Context(), "POST", "/analysis", requestBody)
+	failed := AnalysisStatus{message: "FAILED"}
+	if err != nil {
+		s.c.Logger().Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response from analysis")
+		return nil, failed, err
+	}
+
+	var response codeClientSarif.SarifResponse
+	err = json.Unmarshal(responseBody, &response)
+	if err != nil {
+		s.c.Logger().Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
+		return nil, failed, err
+	} else {
+		logSarifResponse(method, response, s.c.Logger())
+	}
+
+	s.c.Logger().Debug().Str("method", method).Str("requestId", requestId).Float64("progress",
+		response.Progress).Msgf("Status: %s", response.Status)
+
+	if response.Status == failed.message {
+		s.c.Logger().Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("analysis failed")
+		return nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
+	}
+
+	if response.Status == "" {
+		s.c.Logger().Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
+		return nil, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
+	}
+	status := AnalysisStatus{message: response.Status, percentage: int(math.RoundToEven(response.Progress * 100))}
+	if response.Status != completeStatus {
+		return nil, status, nil
+	}
+	return &response, status, err
+}
+
 func logSarifResponse(method string, sarifResponse codeClientSarif.SarifResponse, logger *zerolog.Logger) {
 	logger.Debug().
 		Str("method", method).
