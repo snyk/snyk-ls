@@ -44,6 +44,7 @@ func SendAnalyticsToAPI(c *config.Config, payload []byte) error {
 		configuration,
 	)
 
+	// This workflow should fail silently if the endpoint can not be found and write the error to the log.
 	if err != nil {
 		logger.Err(err).Msg("error invoking workflow")
 	}
