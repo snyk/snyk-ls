@@ -131,6 +131,11 @@
       text-decoration: none;
     }
 
+    .styled-link:hover {
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
     .delimiter-sections {
       border-top: 1px solid rgba(0, 0, 0, 0.05);
     }
@@ -167,10 +172,6 @@
       padding: 0.35em 0.35em;
       border-radius: 0.25em;
       margin-left: 1em;
-    }
-
-    .position-line:hover {
-      cursor: pointer;
     }
 
     .data-flow-file {
@@ -705,7 +706,7 @@
       {{end}}
       {{if .IgnoreLineAction}}
       <span class="delimiter"></span>
-      <div>Position line: <a id="position-line">{{.IgnoreLineAction}}</a></div>
+      <div>Position line: <a class="styled-link" id="position-line">{{.IgnoreLineAction}}</a></div>
       {{end}}
       {{if ge .PriorityScore 0}}
       <span class="delimiter"></span>
