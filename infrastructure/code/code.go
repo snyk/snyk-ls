@@ -18,6 +18,10 @@ package code
 
 import (
 	"context"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/rs/zerolog"
+	"github.com/snyk/code-client-go/sarif"
 	"os"
 	"sync"
 	"time"
@@ -129,6 +133,7 @@ func (sc *Scanner) SupportedCommands() []snyk.CommandName {
 }
 
 func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (issues []snyk.Issue, err error) {
+	return sc.ScanWithDelta(ctx, path, folderPath, "master")
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", "code.Scan").Logger()
 	if !c.NonEmptyToken() {
@@ -209,6 +214,205 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	sc.removeFromCache(filesToBeScanned)
 	sc.addToCache(results)
 	return results, err
+}
+
+func cloneBaseBranch(currentRepoPath string, branchName string, logger *zerolog.Logger) (string, error) {
+	tmpDir, err := os.MkdirTemp("", "snyk_tmp_repo")
+	logger.Info().Msg("Creating tmp directory for base branch")
+
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to create tmp directory for base branch")
+		return "", err
+	}
+
+	baseBranchName := plumbing.NewBranchReferenceName(branchName)
+	currentRepo, err := git.PlainOpen(currentRepoPath)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to open current repo in go-git " + currentRepoPath)
+		return "", err
+	}
+
+	currentRepoBranch, err := currentRepo.Head()
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to get HEAD for " + currentRepoPath)
+		return "", err
+	}
+
+	if currentRepoBranch.Name() == baseBranchName {
+		logger.Info().Msg("Current branch is the same as base. Skipping cloning")
+		return "", nil
+	}
+
+	_, err = git.PlainClone(tmpDir, false, &git.CloneOptions{
+		URL:           currentRepoPath,
+		ReferenceName: baseBranchName,
+		SingleBranch:  true,
+	})
+
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to clone base in temp repo with go-git " + tmpDir)
+		return "", err
+	}
+
+	return tmpDir, nil
+}
+
+func (sc *Scanner) ScanWithDelta(ctx context.Context, path string, folderPath string, mainBranchName string) (issues []snyk.Issue, err error) {
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", "code.Scan").Logger()
+	if !c.NonEmptyToken() {
+		logger.Info().Msg("not authenticated, not scanning")
+		return issues, err
+	}
+	sastResponse, err := sc.SnykApiClient.SastSettings()
+
+	if err != nil {
+		logger.Error().Err(err).Msg("couldn't get sast enablement")
+		sc.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{})
+		return issues, errors.New("couldn't get sast enablement")
+	}
+
+	if !sc.isSastEnabled(sastResponse) {
+		return issues, errors.New("SAST is not enabled")
+	}
+
+	if sc.isLocalEngineEnabled(sastResponse) {
+		sc.updateCodeApiLocalEngine(sastResponse)
+	}
+	mainPath, err := cloneBaseBranch(folderPath, mainBranchName, &logger)
+	// TODO: Handle cases when mainPath is null by skipping bundling and scanning on base.
+	if err != nil {
+		return issues, err
+	}
+	defer func() {
+		err := os.RemoveAll(mainPath)
+		logger.Info().Msg("removing base branch tmp dir " + mainPath)
+
+		if err != nil {
+			logger.Error().Err(err).Msg("couldn't remove tmp dir " + mainPath)
+		}
+	}()
+
+	sc.changedFilesMutex.Lock()
+	if sc.changedPaths[folderPath] == nil {
+		sc.changedPaths[folderPath] = map[string]bool{}
+	}
+	sc.changedPaths[folderPath][path] = true
+	sc.changedFilesMutex.Unlock()
+
+	// When starting a scan for a folderPath that's already scanned, the new scan will wait for the previous scan
+	// to finish before starting.
+	// When there's already a scan waiting, the function returns immediately with empty results.
+	scanStatus := NewScanStatus()
+	isAlreadyWaiting := sc.waitForScanToFinish(scanStatus, folderPath)
+	if isAlreadyWaiting {
+		return []snyk.Issue{}, nil // Returning an empty slice implies that no vulnerabilities were found
+	}
+	defer func() {
+		sc.scanStatusMutex.Lock()
+		scanStatus.isRunning = false
+		close(scanStatus.finished)
+		sc.scanStatusMutex.Unlock()
+	}()
+
+	// Proceed to scan only if there are any changed paths. This ensures the following race condition coverage:
+	// It could be that one of throttled scans updated the changedPaths set, but the initial scan has picked up it's updated and proceeded with a scan in the meantime.
+	sc.changedFilesMutex.Lock()
+	if len(sc.changedPaths[folderPath]) <= 0 {
+		sc.changedFilesMutex.Unlock()
+		return []snyk.Issue{}, nil
+	}
+
+	// TODO: Decide what to do regarding getFilesToBeScanned. Method must only be called once
+	filesToBeScanned := sc.getFilesToBeScanned(folderPath)
+	mainFilesToBeScanned := sc.getFilesToBeScanned(mainPath)
+	sc.changedFilesMutex.Unlock()
+
+	startTime := time.Now()
+	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
+	defer sc.BundleUploader.instrumentor.Finish(span)
+
+	// Start the scan
+	// Scan for main
+	mainFileFilter, _ := sc.fileFilters.Load(mainPath)
+	if mainFileFilter == nil {
+		mainFileFilter = filefilter.NewFileFilter(mainPath, &logger)
+		sc.fileFilters.Store(mainPath, mainFileFilter)
+	}
+
+	mainFiles := mainFileFilter.FindNonIgnoredFiles()
+	mainMetrics := sc.newMetrics(startTime)
+	logger.Info().Msg("Scanning base branch")
+
+	mainSarifResponse, _, err := sc.UploadAndAnalyzeWithDelta(span.Context(), mainFiles, mainPath, mainMetrics, mainFilesToBeScanned)
+	if mainSarifResponse == nil {
+		return issues, err
+	}
+
+	// Scan for current branch
+	fileFilter, _ := sc.fileFilters.Load(folderPath)
+	if fileFilter == nil {
+		fileFilter = filefilter.NewFileFilter(folderPath, &logger)
+		sc.fileFilters.Store(folderPath, fileFilter)
+	}
+	files := fileFilter.FindNonIgnoredFiles()
+	metrics := sc.newMetrics(startTime)
+	logger.Info().Msg("Scanning current branch")
+	sarifResponse, bundle, err := sc.UploadAndAnalyzeWithDelta(span.Context(), files, folderPath, metrics, filesToBeScanned)
+	if sarifResponse == nil {
+		return issues, err
+	}
+
+	var results []snyk.Issue
+	diff := getSarifDiff(*mainSarifResponse, *sarifResponse)
+
+	converter := SarifConverter{sarif: *diff, c: sc.c}
+	results, err = converter.toIssues(path)
+
+	if len(results) > 0 {
+		bundle.issueEnhancer.addIssueActions(ctx, results, bundle.BundleHash)
+	}
+
+	// Populate HTML template
+	sc.enhanceIssuesDetails(results)
+
+	sc.removeFromCache(filesToBeScanned)
+	sc.addToCache(results)
+	return results, err
+}
+
+func getSarifDiff(mainSarif sarif.SarifResponse, currentBranchSarif sarif.SarifResponse) *sarif.SarifResponse {
+	var deltaResults []sarif.Result
+	history, err := identify(mainSarif, []sarif.SarifResponse{})
+	if err != nil {
+		return nil
+	}
+
+	currentBranch, err := identify(currentBranchSarif, []sarif.SarifResponse{history})
+	if err != nil {
+		return nil
+	}
+
+	if len(currentBranch.Sarif.Runs) > 0 && len(history.Sarif.Runs) > 0 {
+		branchResults := currentBranch.Sarif.Runs[0].Results
+		baseResults := history.Sarif.Runs[0].Results
+
+		for _, branchIssue := range branchResults {
+			found := false
+			for _, baseIssue := range baseResults {
+				if baseIssue.Identity == branchIssue.Identity {
+					found = true
+					break
+				}
+			}
+			if !found {
+				deltaResults = append(deltaResults, branchIssue)
+			}
+		}
+	}
+
+	currentBranch.Sarif.Runs[0].Results = deltaResults
+	return &currentBranch
 }
 
 // Populate HTML template
@@ -382,6 +586,71 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 	}
 	sc.trackResult(err == nil, scanMetrics)
 	return issues, err
+}
+
+func (sc *Scanner) UploadAndAnalyzeWithDelta(ctx context.Context,
+	files <-chan string,
+	path string,
+	scanMetrics *ScanMetrics,
+	changedFiles map[string]bool,
+) (sarif *sarif.SarifResponse, bundle *Bundle, err error) {
+	if ctx.Err() != nil {
+		sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
+		return nil, nil, nil
+	}
+
+	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.uploadAndAnalyze")
+	defer sc.BundleUploader.instrumentor.Finish(span)
+
+	requestId := span.GetTraceId() // use span trace id as code-request-id
+	sc.c.Logger().Info().Str("requestId", requestId).Msg("Starting Code analysis.")
+
+	resBundle, err := sc.createBundle(span.Context(), requestId, path, files, changedFiles)
+	bundle = &resBundle
+	if err != nil {
+		if isNoFilesError(err) {
+			return nil, nil, nil
+		}
+		if ctx.Err() == nil { // Only report errors that are not intentional cancellations
+			msg := "error creating bundle..."
+			sc.handleCreationAndUploadError(path, err, msg, scanMetrics)
+			return nil, nil, err
+		} else {
+			sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
+			return nil, nil, nil
+		}
+	}
+
+	scanMetrics.lastScanFileCount = len(bundle.Files)
+
+	uploadedBundle, err := sc.BundleUploader.Upload(span.Context(), *bundle, bundle.Files)
+	// TODO LSP error handling should be pushed UP to the LSP layer
+	if err != nil {
+		if ctx.Err() != nil { // Only handle errors that are not intentional cancellations
+			msg := "error uploading files..."
+			sc.handleCreationAndUploadError(path, err, msg, scanMetrics)
+			return nil, nil, err
+		} else {
+			sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
+			return nil, nil, nil
+		}
+	}
+
+	if uploadedBundle.BundleHash == "" {
+		sc.c.Logger().Info().Msg("empty bundle, no Snyk Code analysis")
+		return nil, nil, nil
+	}
+
+	sc.BundleHashes[path] = uploadedBundle.BundleHash
+
+	sarif, err = uploadedBundle.FetchDiagnosticsDataWithDelta(span.Context())
+
+	if ctx.Err() != nil {
+		sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
+		return nil, nil, nil
+	}
+	sc.trackResult(err == nil, scanMetrics)
+	return sarif, bundle, err
 }
 
 func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
