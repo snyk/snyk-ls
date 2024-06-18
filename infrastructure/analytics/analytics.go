@@ -46,7 +46,6 @@ func SendAnalyticsToAPI(c *config.Config, payload []byte) error {
 
 	if err != nil {
 		logger.Err(err).Msg("error invoking workflow")
-		return err
 	}
 	return nil
 }
