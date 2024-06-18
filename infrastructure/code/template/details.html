@@ -22,6 +22,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'none'; style-src 'self' 'nonce-${nonce}'; script-src 'nonce-${nonce}';" />
+
   <style nonce="${nonce}">
     :root {
       --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Tahoma, Geneva, Verdana, sans-serif;
@@ -53,6 +54,7 @@
 
     h2 {
       font-weight: 600;
+      margin-bottom: 10px;
     }
 
     main {
@@ -85,9 +87,10 @@
     .issue-overview-header,
     .ignore-details-header,
     .data-flow-header,
-    .ai-fix-header {
+    .ai-fix-header,
+    .overview-text > h2 {
       line-height: 1.25rem;
-      font-size: 1.4rem;
+      font-size: 1.2rem;
       margin-bottom: 10px;
     }
 
