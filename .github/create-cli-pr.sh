@@ -28,6 +28,11 @@ pushd $CLI_DIR
 
   git config --global user.email "team-ide@snyk.io"
   git config --global user.name "Snyk Team IDE"
+  git config --global gpg.format ssh
+  git config --global commit.gpgsign true
+
+  echo $PUB_SIGNING_KEY > signingkey.pub
+  git config --global user.signingkey ./signingkey.pub
 
   git commit -am "feat: automatic integration of language server $LS_VERSION"
   git push --set-upstream origin $BRANCH
