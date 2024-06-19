@@ -18,15 +18,15 @@
 set -ex
 
 CLI_DIR=$(mktemp -d)
-gh repo clone snyk/cli $CLI_DIR
+gh repo clone git@github.com:snyk/cli.git $CLI_DIR -- --depth=1
 pushd $CLI_DIR
   UPGRADE=$(go run scripts/upgrade-snyk-go-dependencies.go --name=snyk-ls)
   LS_VERSION=$(echo $UPGRADE | sed 's/.*Sha: \(.*\) URL.*/\1/')
   BRANCH=feat/automatic-upgrade-of-ls-to-$LS_VERSION
   git checkout -b $BRANCH
 
-  git config --global user.email "team-ide-user@snyk.io"
-  git config --global user.name "Snyk Team IDE User"
+  git config --global user.email "team-ide@snyk.io"
+  git config --global user.name "Snyk Team IDE"
 
   git commit -am "feat: automatic integration of language server $LS_VERSION"
   git push --set-upstream origin $BRANCH
