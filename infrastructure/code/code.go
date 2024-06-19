@@ -325,7 +325,7 @@ func (sc *Scanner) ScanWithDelta(ctx context.Context, path string, folderPath st
 
 	// TODO: Decide what to do regarding getFilesToBeScanned. Method must only be called once
 	filesToBeScanned := sc.getFilesToBeScanned(folderPath)
-	mainFilesToBeScanned := sc.getFilesToBeScanned(mainPath)
+	mainFilesToBeScanned := make(map[string]bool)
 	sc.changedFilesMutex.Unlock()
 
 	startTime := time.Now()
@@ -364,7 +364,7 @@ func (sc *Scanner) ScanWithDelta(ctx context.Context, path string, folderPath st
 	}
 
 	var results []snyk.Issue
-	diff := getSarifDiff(*mainSarifResponse, *sarifResponse)
+	diff := getSarifDiff(*mainSarifResponse, *sarifResponse, len(path) > 0)
 
 	converter := SarifConverter{sarif: *diff, c: sc.c}
 	results, err = converter.toIssues(path)
@@ -381,14 +381,14 @@ func (sc *Scanner) ScanWithDelta(ctx context.Context, path string, folderPath st
 	return results, err
 }
 
-func getSarifDiff(mainSarif sarif.SarifResponse, currentBranchSarif sarif.SarifResponse) *sarif.SarifResponse {
+func getSarifDiff(mainSarif sarif.SarifResponse, currentBranchSarif sarif.SarifResponse, isPartialScan bool) *sarif.SarifResponse {
 	var deltaResults []sarif.Result
-	history, err := identify(mainSarif, []sarif.SarifResponse{})
+	history, err := identify(mainSarif, []sarif.SarifResponse{}, isPartialScan)
 	if err != nil {
 		return nil
 	}
 
-	currentBranch, err := identify(currentBranchSarif, []sarif.SarifResponse{history})
+	currentBranch, err := identify(currentBranchSarif, []sarif.SarifResponse{history}, isPartialScan)
 	if err != nil {
 		return nil
 	}
