@@ -158,7 +158,6 @@
     .ignore-warning-wrapper {
       display: flex;
       align-items: center;
-      margin: 0 0 1em;
     }
 
     .ignore-warning {
@@ -193,6 +192,7 @@
 
     .data-flow-body {
       margin-top: 5px;
+      margin-bottom: 10px;
     }
 
     .data-flow-table {
@@ -202,6 +202,7 @@
 
     .data-flow-row {
       border-collapse: collapse;
+      vertical-align: baseline;
     }
 
     .data-flow-number {
@@ -213,6 +214,8 @@
 
     .data-flow-clickable-row {
       font-weight: 400;
+      width: 3.9375rem;
+      text-align: right;
     }
 
     .data-flow-clickable-row:hover {
@@ -227,13 +230,6 @@
 
     .data-flow-delimiter {
       opacity: 0.5;
-    }
-
-    .data-flow-number,
-    .data-flow-clickable-row,
-    .data-flow-delimiter,
-    .data-flow-text {
-      display: inline;
     }
 
     .main-tabs-nav,
@@ -344,6 +340,11 @@
       bottom: 0;
       width: 100%;
       margin-block-end: 0;
+    }
+
+    #ignore-actions {
+      margin-top: 10px;
+      margin-bottom: 5px;
     }
 
     .actions {
@@ -749,7 +750,7 @@
         {{if .IsIgnored}}
         <!-- Start Ignore Details section for tab id="ignore-details-tab" -->
         <div data-content="ignore-details" id="ignore-details-content" class="tab-content main-tab-content is-selected">
-          <div class="ignore-details">
+          <div class="ignore-details delimiter-top">
             {{range .IgnoreDetails}}
             <div class="ignore-details-row">
               <div class="ignore-details-label">{{.Label}}</div>
