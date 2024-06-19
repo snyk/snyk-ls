@@ -33,5 +33,5 @@ pushd $CLI_DIR
   git push --set-upstream origin $BRANCH
 
   COMMIT_HASH=$(git log --pretty=tformat:"%h" -n1 .)
-  gh pr create --repo github.com/snyk/cli --base $BASE --head $COMMIT_HASH --title "feat(language-server): integrate LS ($LS_VERSION)" --body "$(echo $UPGRADE | sed 's/.*Message: \(.*\) URL.*$/\1/')"
+  gh pr create --repo github.com/snyk/cli --base main --head $BRANCH --title "feat(language-server): integrate LS ($LS_VERSION)" --body "$(echo $UPGRADE | sed 's/.*Message: \(.*\) URL.*$/\1/')"
 popd
