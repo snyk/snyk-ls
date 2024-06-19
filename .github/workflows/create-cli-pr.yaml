@@ -8,6 +8,9 @@ jobs:
       - name: Prepare git
         run: git config --global core.autocrlf false
 
+      - name: Set up Git actions user
+        uses: fregante/setup-git-user@v1
+
       - name: Checkout
         uses: actions/checkout@v4
 

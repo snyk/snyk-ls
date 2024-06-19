@@ -119,6 +119,22 @@ jobs:
         run: |
           make tools
 
+      # REMOVE THIS BEFORE MERGING TODO
+      # REMOVE THIS BEFORE MERGING TODO
+      # REMOVE THIS BEFORE MERGING TODO
+      - name: Set up Git actions user
+        uses: fregante/setup-git-user@v1
+
+      # REMOVE THIS BEFORE MERGING TODO
+      # REMOVE THIS BEFORE MERGING TODO
+      # REMOVE THIS BEFORE MERGING TODO
+      - name: Create PR in CLI to integrate LS
+        env:
+          GH_TOKEN: ${{ secrets.HAMMERHEAD_GITHUB_PAT_SNYKLS }}
+        run: |
+          .github/create-cli-pr.sh
+
+
       - name: Run integration tests with Pact
         if: matrix.os == 'ubuntu-latest'
         env:
