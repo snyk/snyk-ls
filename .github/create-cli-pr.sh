@@ -23,6 +23,7 @@ pushd $CLI_DIR
   UPGRADE=$(go run scripts/upgrade-snyk-go-dependencies.go --name=snyk-ls)
   LS_VERSION=$(echo $UPGRADE | sed 's/.*Sha: \(.*\) URL.*/\1/')
   BRANCH=feat/automatic-upgrade-of-ls-to-$LS_VERSION
+  BASE=$(git log --pretty=tformat:"%h" -n1 .)
   git checkout -b $BRANCH
 
   git config --global user.email "team-ide@snyk.io"
@@ -32,5 +33,5 @@ pushd $CLI_DIR
   git push --set-upstream origin $BRANCH
 
   COMMIT_HASH=$(git log --pretty=tformat:"%h" -n1 .)
-  gh pr create --repo github.com/snyk/cli --base main --fill-verbose --head $COMMIT_HASH --title "feat(language-server): integrate LS (automatic PR) ($LS_VERSION)" --body "$(echo $UPGRADE | sed 's/.*Message: \(.*\) URL.*$/\1/')"
+  gh pr create --repo github.com/snyk/cli --base $BASE --head $COMMIT_HASH --title "feat(language-server): integrate LS ($LS_VERSION)" --body "$(echo $UPGRADE | sed 's/.*Message: \(.*\) URL.*$/\1/')"
 popd
