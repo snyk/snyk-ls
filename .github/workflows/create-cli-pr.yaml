@@ -8,9 +8,6 @@ jobs:
       - name: Prepare git
         run: git config --global core.autocrlf false
 
-      - name: Set up Git actions user
-        uses: fregante/setup-git-user@v1
-
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -22,6 +19,9 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+
+      - name: Set up Git actions user
+        uses: fregante/setup-git-user@v2
 
       - name: Create PR in CLI to integrate LS
         env:
