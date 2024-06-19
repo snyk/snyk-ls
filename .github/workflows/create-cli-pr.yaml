@@ -23,6 +23,6 @@ jobs:
 
       - name: Create PR in CLI to integrate LS
         env:
-          GH_TOKEN: ${{ HAMMERHEAD_GITHUB_PAT_SNYKLS }}
+          GH_TOKEN: ${{ secrets.HAMMERHEAD_GITHUB_PAT_SNYKLS }}
         run: |
           .github/create-cli-pr.sh
