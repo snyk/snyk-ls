@@ -1,0 +1,28 @@
+name: Create CLI PR
+on:
+  workflow_dispatch:
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare git
+        run: git config --global core.autocrlf false
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine Go version
+        run: |
+          sed -En 's/^go[[:space:]]+([[:digit:].]+)$/GO_VERSION=\1/p' go.mod >> $GITHUB_ENV
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Create PR in CLI to integrate LS
+        env:
+          GH_TOKEN: ${{ HAMMERHEAD_GITHUB_PAT_SNYKLS }}
+        run: |
+          .github/create-cli-pr.sh
