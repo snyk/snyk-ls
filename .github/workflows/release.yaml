@@ -107,7 +107,7 @@ jobs:
           make clean test
 
       - name: Set up Git actions user
-        uses: fregante/setup-git-user@v1
+        uses: fregante/setup-git-user@v2
 
       - name: Create Release Tag
         run: |

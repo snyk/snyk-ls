@@ -123,12 +123,6 @@ jobs:
       # REMOVE THIS BEFORE MERGING TODO
       # REMOVE THIS BEFORE MERGING TODO
       # REMOVE THIS BEFORE MERGING TODO
-      - name: Set up Git actions user
-        uses: fregante/setup-git-user@v2
-
-      # REMOVE THIS BEFORE MERGING TODO
-      # REMOVE THIS BEFORE MERGING TODO
-      # REMOVE THIS BEFORE MERGING TODO
       - name: Create PR in CLI to integrate LS
         env:
           GH_TOKEN: ${{ secrets.HAMMERHEAD_GITHUB_PAT_SNYKLS }}
