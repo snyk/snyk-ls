@@ -1,6 +1,7 @@
 name: Create CLI PR
 on:
   workflow_dispatch:
+
 jobs:
   create-pr:
     runs-on: ubuntu-latest
