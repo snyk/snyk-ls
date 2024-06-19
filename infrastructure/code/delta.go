@@ -17,13 +17,13 @@
 package code
 
 import (
+	"github.com/adrg/strutil"
+	"github.com/adrg/strutil/metrics"
 	"github.com/google/uuid"
 	"github.com/snyk/code-client-go/sarif"
-	"github.com/xrash/smetrics"
 	"math"
 	"path/filepath"
 	"strings"
-	"sync"
 )
 
 type IssueConfidence struct {
@@ -46,18 +46,33 @@ type Identity struct {
 }
 
 var weights = struct {
-	FilePositionDistance        float64
-	RecentHistoryDistance       float64
-	FingerprintConfidence       float64
-	MinimumAcceptableConfidence float64
+	MinimumAcceptableConfidence               float64
+	MinimumAcceptableConfidenceForPartialScan float64
+	FilePositionDistance                      float64
+	RecentHistoryDistance                     float64
+	FingerprintConfidence                     float64
+	PathSimilarity                            float64
+	LineSimilarity                            float64
+
+	DirSimilarity           float64
+	FileNameSimilarity      float64
+	FileExtensionSimilarity float64
 }{
-	FilePositionDistance:        0.3,
-	RecentHistoryDistance:       0.2,
-	FingerprintConfidence:       0.5,
-	MinimumAcceptableConfidence: 0.4,
+	MinimumAcceptableConfidence:               0.4,
+	MinimumAcceptableConfidenceForPartialScan: 0.8,
+	FilePositionDistance:                      0.3,
+	RecentHistoryDistance:                     0.2,
+	FingerprintConfidence:                     0.5,
+
+	PathSimilarity: 0.8,
+	LineSimilarity: 0.2,
+
+	DirSimilarity:           0.5,
+	FileNameSimilarity:      0.3,
+	FileExtensionSimilarity: 0.2,
 }
 
-func identify(sarif sarif.SarifResponse, listOfHistoricResults []sarif.SarifResponse) (sarif.SarifResponse, error) {
+func identify(sarif sarif.SarifResponse, listOfHistoricResults []sarif.SarifResponse, isPartial bool) (sarif.SarifResponse, error) {
 	results := sarif.Sarif.Runs[0].Results
 	totalIdentitiesCount := len(results)
 	identityCounter := IdentityCounter{}
@@ -68,7 +83,6 @@ func identify(sarif sarif.SarifResponse, listOfHistoricResults []sarif.SarifResp
 		return sarif, nil
 	}
 
-	var wg sync.WaitGroup
 	strongMatchingIssues := make(map[string]IssueConfidence) // Map issue index to best identity
 	existingAssignedIds := make(map[string]bool)
 
@@ -78,9 +92,8 @@ func identify(sarif sarif.SarifResponse, listOfHistoricResults []sarif.SarifResp
 			identityCounter.ExactMatch++
 			continue
 		}
-
 		//wg.Add(1)
-		findMatch(issue, index, &wg, listOfHistoricResults, strongMatchingIssues)
+		findMatch(issue, index, listOfHistoricResults, strongMatchingIssues, isPartial)
 	}
 
 	//wg.Wait()
@@ -104,24 +117,17 @@ func identify(sarif sarif.SarifResponse, listOfHistoricResults []sarif.SarifResp
 	return sarif, nil
 }
 
-func findMatch(issue sarif.Result, index int, wg *sync.WaitGroup, listOfHistoricResults []sarif.SarifResponse, strongMatchingIssues map[string]IssueConfidence) {
-	//mutex := sync.RWMutex{}
-
-	//defer wg.Done()
-	//mutex.Lock()
-	matches := findMatches(issue, index, listOfHistoricResults)
-	//	mutex.Unlock()
+func findMatch(issue sarif.Result, index int, listOfHistoricResults []sarif.SarifResponse, strongMatchingIssues map[string]IssueConfidence, isPartialScan bool) {
+	matches := findMatches(issue, index, listOfHistoricResults, isPartialScan)
 
 	for _, match := range matches {
-		//	mutex.Lock()
 		if existing, exists := strongMatchingIssues[match.HistoricUUID]; !exists || existing.Confidence < match.Confidence {
 			strongMatchingIssues[match.HistoricUUID] = match
 		}
-		//mutex.Unlock()
 	}
 }
 
-func findMatches(issue sarif.Result, index int, listOfHistoricResults []sarif.SarifResponse) IssueConfidenceList {
+func findMatches(issue sarif.Result, index int, listOfHistoricResults []sarif.SarifResponse, isPartialScan bool) IssueConfidenceList {
 	similarIssues := make(IssueConfidenceList, 0)
 
 	for historicVersionInTime, historicLog := range listOfHistoricResults {
@@ -131,7 +137,7 @@ func findMatches(issue sarif.Result, index int, listOfHistoricResults []sarif.Sa
 				continue
 			}
 
-			filePositionDistance := filePositionConfidence(historicResult.Locations[0], issue.Locations[0])
+			filePositionDistance := filePositionConfidence(historicResult.Locations[0], issue.Locations[0], isPartialScan)
 			recentHistoryDistance := historicConfidenceCalculator(historicVersionInTime, len(listOfHistoricResults))
 			fingerprintConfidence := fingerprintDistance(historicResult.Fingerprints.Num1, issue.Fingerprints.Num1)
 
@@ -148,7 +154,8 @@ func findMatches(issue sarif.Result, index int, listOfHistoricResults []sarif.Sa
 				break
 			}
 
-			if overallConfidence > weights.MinimumAcceptableConfidence {
+			if overallConfidence > weights.MinimumAcceptableConfidence && !isPartialScan ||
+				(isPartialScan && overallConfidence > weights.MinimumAcceptableConfidenceForPartialScan) {
 				similarIssues = append(similarIssues, IssueConfidence{
 					HistoricUUID:       historicResult.Identity,
 					IssueIDResultIndex: index,
@@ -191,15 +198,37 @@ func fingerprintDistance(historicFingerprints, currentFingerprints string) float
 	return float64(similar) / float64(totalParts)
 }
 
-func filePositionConfidence(historicLocation, currentLocation sarif.Location) float64 {
-	dirSimilarity := checkDirs(historicLocation.PhysicalLocation.ArtifactLocation.URI, currentLocation.PhysicalLocation.ArtifactLocation.URI)
-	fileNameSimilarity := fileNameSimilarity(historicLocation.PhysicalLocation.ArtifactLocation.URI, currentLocation.PhysicalLocation.ArtifactLocation.URI)
-	fileExtSimilarity := fileExtSimilarity(historicLocation.PhysicalLocation.ArtifactLocation.URI, currentLocation.PhysicalLocation.ArtifactLocation.URI)
+func filePositionConfidence(historicLocation, currentLocation sarif.Location, isPartialScan bool) float64 {
+	dirSimilarity := checkDirs(historicLocation.PhysicalLocation.ArtifactLocation.URI, currentLocation.PhysicalLocation.ArtifactLocation.URI, isPartialScan)
+	fileNameSimilarity := fileNameSimilarity(historicLocation.PhysicalLocation.ArtifactLocation.URI, currentLocation.PhysicalLocation.ArtifactLocation.URI, isPartialScan)
+	fileExtSimilarity := fileExtSimilarity(filepath.Ext(historicLocation.PhysicalLocation.ArtifactLocation.URI), filepath.Ext(currentLocation.PhysicalLocation.ArtifactLocation.URI), isPartialScan)
 
-	return dirSimilarity*weights.FilePositionDistance + fileNameSimilarity*weights.FingerprintConfidence + fileExtSimilarity*weights.RecentHistoryDistance
+	pathSimilarity :=
+		dirSimilarity*weights.DirSimilarity +
+			fileNameSimilarity*weights.FileNameSimilarity +
+			fileExtSimilarity*weights.FileExtensionSimilarity
+
+	startLineSimilarity := similarityToDistance(historicLocation.PhysicalLocation.Region.StartLine, currentLocation.PhysicalLocation.Region.StartLine, isPartialScan)
+	startColumnSimilarity := similarityToDistance(historicLocation.PhysicalLocation.Region.StartColumn, currentLocation.PhysicalLocation.Region.StartColumn, isPartialScan)
+	endColumnSimilarity := similarityToDistance(historicLocation.PhysicalLocation.Region.EndColumn, currentLocation.PhysicalLocation.Region.EndColumn, isPartialScan)
+	endLineSimilarity := similarityToDistance(historicLocation.PhysicalLocation.Region.EndLine, currentLocation.PhysicalLocation.Region.EndLine, isPartialScan)
+	//Effectively weighting each line number pos at 25%
+	totalLineSimilarity := (startLineSimilarity +
+		startColumnSimilarity +
+		endColumnSimilarity +
+		endLineSimilarity) / 4
+	fileLocationConfidence :=
+		pathSimilarity*weights.PathSimilarity +
+			totalLineSimilarity*weights.LineSimilarity
+
+	return fileLocationConfidence
 }
 
-func checkDirs(path1, path2 string) float64 {
+func checkDirs(path1, path2 string, isPartialScan bool) float64 {
+	if isPartialScan {
+		return hardMatchFor(path1, path2)
+	}
+
 	if path1 == path2 {
 		return 1
 	}
@@ -212,18 +241,43 @@ func checkDirs(path1, path2 string) float64 {
 	return 1 - relativePathDistance/longestPossiblePath
 }
 
-func fileNameSimilarity(file1, file2 string) float64 {
-	return smetrics.Jaro(file1, file2)
+func fileNameSimilarity(file1, file2 string, isPartialScan bool) float64 {
+	if isPartialScan {
+		return hardMatchFor(file1, file2)
+	}
+
+	return strutil.Similarity(file1, file2, metrics.NewLevenshtein())
 }
 
-func fileExtSimilarity(ext1, ext2 string) float64 {
-	distance := smetrics.WagnerFischer(ext1, ext2, 1, 1, 1)
-	maxLen := max(len(ext1), len(ext2))
-	if maxLen == 0 {
-		return 1.0
+func hardMatchFor(file1 string, file2 string) float64 {
+	if file1 == file2 {
+		return 1
+	} else {
+		return 0
 	}
-	// Return similarity as a proportion of the longest string length.
-	return 1.0 - float64(distance)/float64(maxLen)
+}
+
+func similarityToDistance(value1, value2 int, isPartialScan bool) float64 {
+	if isPartialScan {
+		if value1 == value2 {
+			return 1
+		} else {
+			return 0
+		}
+	}
+
+	if value1 == value2 {
+		return 1
+	}
+	return 1 - math.Abs(float64(value1-value2))/math.Max(float64(value1), float64(value2))
+}
+
+func fileExtSimilarity(ext1, ext2 string, isPartialScan bool) float64 {
+	if isPartialScan {
+		return hardMatchFor(ext1, ext2)
+	}
+
+	return strutil.Similarity(ext1, ext2, metrics.NewLevenshtein())
 }
 
 func assignUUIDForNewProject(sarif *sarif.SarifResponse) {
