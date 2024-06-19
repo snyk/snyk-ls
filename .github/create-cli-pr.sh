@@ -18,7 +18,7 @@
 set -ex
 
 CLI_DIR=$(mktemp -d)
-git clone --depth 1 https://github.com/snyk/cli $CLI_DIR
+git clone --depth 1 git@github.com:snyk/cli.git $CLI_DIR
 pushd $CLI_DIR
   UPGRADE=$(go run scripts/upgrade-snyk-go-dependencies.go --name=snyk-ls)
   LS_VERSION=$(echo $UPGRADE | sed 's/.*Sha: \(.*\) URL.*/\1/')
