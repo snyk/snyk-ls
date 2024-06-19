@@ -29,7 +29,8 @@ pushd $CLI_DIR
   git config --global user.name "Snyk Team IDE User"
 
   git commit -am "feat: automatic integration of language server $LS_VERSION"
-#  git push --set-upstream origin $BRANCH
+  git push --set-upstream origin $BRANCH
+
   COMMIT_HASH=$(git log --pretty=tformat:"%h" -n1 .)
-  gh pr create --repo github.com/snyk/cli --dry-run --base main --fill-verbose --head $COMMIT_HASH --title "feat(language-server): integrate LS (automatic PR) ($LS_VERSION)" --body "$(echo $UPGRADE | sed 's/.*Message: \(.*\) URL.*$/\1/')"
+  gh pr create --repo github.com/snyk/cli --base main --fill-verbose --head $COMMIT_HASH --title "feat(language-server): integrate LS (automatic PR) ($LS_VERSION)" --body "$(echo $UPGRADE | sed 's/.*Message: \(.*\) URL.*$/\1/')"
 popd
