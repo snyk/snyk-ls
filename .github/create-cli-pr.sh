@@ -41,7 +41,8 @@ pushd $CLI_DIR
   echo $PUB_SIGNING_KEY > signingkey.pub
   git config --global user.signingkey ./signingkey.pub
 
-  git commit -am "feat: automatic integration of language server $LS_VERSION"
+  git commit -am "feat: automatic integration of language server $LS_VERSION" || echo "No files to commit" && exit 0
+
   git push -f --set-upstream origin $BRANCH
 
   TITLE="feat(language-server): integrate LS"
