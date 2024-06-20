@@ -18,7 +18,7 @@
 set -ex
 
 CLI_DIR=$(mktemp -d)
-gh repo clone git@github.com:snyk/cli.git $CLI_DIR -- --depth=1
+gh repo clone git@github.com:snyk/cli.git $CLI_DIR
 pushd "$CLI_DIR/cliv2"
   LS_COMMIT_HASH=$(grep snyk-ls go.mod| cut -d "-" -f 4)
 popd
@@ -30,7 +30,7 @@ pushd $CLI_DIR
   UPGRADE=$(go run scripts/upgrade-snyk-go-dependencies.go --name=snyk-ls)
   LS_VERSION=$(echo $UPGRADE | sed 's/.*Sha: \(.*\) URL.*/\1/')
   BRANCH=feat/automatic-upgrade-of-ls
-  git checkout -b $BRANCH
+  git checkout $BRANCH || git checkout -b $BRANCH
 
   git config --global user.email "team-ide@snyk.io"
   git config --global user.name "Snyk Team IDE"
@@ -51,5 +51,5 @@ pushd $CLI_DIR
   else
     gh pr edit $PR --repo github.com/snyk/cli --body "$BODY"
   fi
-  gh pr merge -m --auto
+  gh pr merge -m --auto --delete-branch
 popd
