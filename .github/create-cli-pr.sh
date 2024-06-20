@@ -29,7 +29,7 @@ BODY=$(printf "## Changes since last integration of Language Server\n\n\`\`\`\n%
 pushd $CLI_DIR
   UPGRADE=$(go run scripts/upgrade-snyk-go-dependencies.go --name=snyk-ls)
   LS_VERSION=$(echo $UPGRADE | sed 's/.*Sha: \(.*\) URL.*/\1/')
-  BRANCH=feat/automatic-upgrade-of-ls-to-$LS_VERSION
+  BRANCH=feat/automatic-upgrade-of-ls
   git checkout -b $BRANCH
 
   git config --global user.email "team-ide@snyk.io"
@@ -41,8 +41,15 @@ pushd $CLI_DIR
   git config --global user.signingkey ./signingkey.pub
 
   git commit -am "feat: automatic integration of language server $LS_VERSION"
-  git push --set-upstream origin $BRANCH
+  git push -f --set-upstream origin $BRANCH
 
-  gh pr create --repo github.com/snyk/cli --base main --head $BRANCH --title "feat(language-server): integrate LS ($LS_VERSION)" --body "$BODY"
+  TITLE="feat(language-server): integrate LS"
+  PR=$(gh pr list --search "$TITLE" 2>&1 | grep -e "$TITLE" | cut -f1)
+  if [[ ! $PR  ]]; then
+    echo "Creating new PR"
+    gh pr create --repo github.com/snyk/cli --base main --head $BRANCH --title "$TITLE" --body "$BODY"
+  elif
+    gh pr edit $PR --repo github.com/snyk/cli --body "$BODY"
+  fi
   gh pr merge -m --auto
 popd
