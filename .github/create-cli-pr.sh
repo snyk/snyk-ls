@@ -48,7 +48,7 @@ pushd $CLI_DIR
   if [[ ! $PR  ]]; then
     echo "Creating new PR"
     gh pr create --repo github.com/snyk/cli --base main --head $BRANCH --title "$TITLE" --body "$BODY"
-  elif
+  else
     gh pr edit $PR --repo github.com/snyk/cli --body "$BODY"
   fi
   gh pr merge -m --auto
