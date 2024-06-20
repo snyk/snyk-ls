@@ -25,12 +25,13 @@ popd
 
 WHAT_CHANGED=$(git whatchanged "$LS_COMMIT_HASH"...HEAD)
 BODY=$(printf "## Changes since last integration of Language Server\n\n\`\`\`\n%s\n\`\`\`" "$WHAT_CHANGED")
+BRANCH=feat/automatic-upgrade-of-ls
 
 pushd $CLI_DIR
+  git checkout $BRANCH || git checkout -b $BRANCH
+
   UPGRADE=$(go run scripts/upgrade-snyk-go-dependencies.go --name=snyk-ls)
   LS_VERSION=$(echo $UPGRADE | sed 's/.*Sha: \(.*\) URL.*/\1/')
-  BRANCH=feat/automatic-upgrade-of-ls
-  git checkout $BRANCH || git checkout -b $BRANCH
 
   git config --global user.email "team-ide@snyk.io"
   git config --global user.name "Snyk Team IDE"
