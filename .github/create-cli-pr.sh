@@ -18,19 +18,20 @@
 set -ex
 
 CLI_DIR=$(mktemp -d)
-gh repo clone git@github.com:snyk/cli.git $CLI_DIR -- --depth=1
+gh repo clone git@github.com:snyk/cli.git $CLI_DIR
 pushd "$CLI_DIR/cliv2"
   LS_COMMIT_HASH=$(grep snyk-ls go.mod| cut -d "-" -f 4)
 popd
 
 WHAT_CHANGED=$(git whatchanged "$LS_COMMIT_HASH"...HEAD)
 BODY=$(printf "## Changes since last integration of Language Server\n\n\`\`\`\n%s\n\`\`\`" "$WHAT_CHANGED")
+BRANCH=feat/automatic-upgrade-of-ls
 
 pushd $CLI_DIR
+  git checkout $BRANCH || git checkout -b $BRANCH
+
   UPGRADE=$(go run scripts/upgrade-snyk-go-dependencies.go --name=snyk-ls)
   LS_VERSION=$(echo $UPGRADE | sed 's/.*Sha: \(.*\) URL.*/\1/')
-  BRANCH=feat/automatic-upgrade-of-ls-to-$LS_VERSION
-  git checkout -b $BRANCH
 
   git config --global user.email "team-ide@snyk.io"
   git config --global user.name "Snyk Team IDE"
@@ -40,9 +41,17 @@ pushd $CLI_DIR
   echo $PUB_SIGNING_KEY > signingkey.pub
   git config --global user.signingkey ./signingkey.pub
 
-  git commit -am "feat: automatic integration of language server $LS_VERSION"
-  git push --set-upstream origin $BRANCH
+  git commit -am "feat: automatic integration of language server $LS_VERSION" || echo "No files to commit" && exit 0
 
-  gh pr create --repo github.com/snyk/cli --base main --head $BRANCH --title "feat(language-server): integrate LS ($LS_VERSION)" --body "$BODY"
-  gh pr merge -m --auto
+  git push -f --set-upstream origin $BRANCH
+
+  TITLE="feat(language-server): integrate LS"
+  PR=$(gh pr list --search "$TITLE" 2>&1 | grep -e "$TITLE" | cut -f1)
+  if [[ ! $PR  ]]; then
+    echo "Creating new PR"
+    gh pr create --repo github.com/snyk/cli --base main --head $BRANCH --title "$TITLE" --body "$BODY"
+  else
+    gh pr edit $PR --repo github.com/snyk/cli --body "$BODY"
+  fi
+  gh pr merge -m --auto --delete-branch
 popd
