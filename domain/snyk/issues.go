@@ -30,6 +30,9 @@ type Reference struct {
 	Url   *url.URL
 }
 
+type CodeIssueComparer struct {
+}
+
 // Issue models a problem, vulnerability, or situation within your code that requires your attention
 type Issue struct {
 	// ID uniquely identifies the issue, it is intended to be human-readable
@@ -37,6 +40,7 @@ type Issue struct {
 	Severity  Severity
 	IssueType Type
 	IsIgnored bool // If not explicitly it will default to false so it doesn't break backwards
+	IsNew     bool
 	// compatibility
 	IgnoreDetails *IgnoreDetails // It defaults to nil so it doesn't break backwards compatibility
 	// Range identifies the location of this issue in its source of origin (e.g. line & character start & end)
@@ -66,7 +70,32 @@ type Issue struct {
 	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
 	AdditionalData IssueAdditionalData
 	// Learn Service Lesson URL
-	LessonUrl string `json:"url"`
+	LessonUrl   string `json:"url"`
+	Fingerprint string
+}
+
+func (i Issue) getID() string {
+	return i.ID
+}
+
+func (i Issue) setIsNew() bool {
+	return i.IsNew
+}
+
+func (i Issue) getRange() Range {
+	return i.Range
+}
+
+func (i Issue) getPath() string {
+	return i.AffectedFilePath
+}
+
+func (i Issue) getFingerprint() string {
+	return i.Fingerprint
+}
+
+func (i Issue) getIssueRule() string {
+	return i.ID
 }
 
 type IssueAdditionalData interface {
