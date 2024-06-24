@@ -89,7 +89,9 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 			continue
 		}
 
-		if autoFixEnabled && issueData.IsAutofixable && !issues[i].IsIgnored {
+		issueData.HasAIFix = autoFixEnabled && issueData.IsAutofixable
+
+		if issueData.HasAIFix && !issues[i].IsIgnored {
 			codeAction := *b.createDeferredAutofixCodeAction(ctx, issues[i], bundleHash)
 			issues[i].CodeActions = append(issues[i].CodeActions, codeAction)
 
@@ -103,9 +105,8 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 					issues[i].Range,
 				},
 			})
-			issueData.HasAIFix = true
-			issues[i].AdditionalData = issueData
 		}
+		issues[i].AdditionalData = issueData
 
 		if learnEnabled {
 			action := b.createOpenSnykLearnCodeAction(issues[i])

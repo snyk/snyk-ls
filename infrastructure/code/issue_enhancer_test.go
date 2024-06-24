@@ -264,7 +264,7 @@ func Test_addIssueActions(t *testing.T) {
 
 		issueData, ok := fakeIssues[0].AdditionalData.(snyk.CodeIssueData)
 		require.True(t, ok)
-		assert.False(t, issueData.HasAIFix)
+		assert.True(t, issueData.HasAIFix)
 		assert.Len(t, fakeIssues[0].CodelensCommands, 1)
 		assert.Len(t, fakeIssues[0].CodeActions, 1)
 	})
