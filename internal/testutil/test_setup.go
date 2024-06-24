@@ -128,10 +128,13 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 
 	c := config.New()
 	c.ConfigureLogging(nil)
-	c.SetToken(GetEnvironmentToken(useConsistentIgnores))
+	token := GetEnvironmentToken(useConsistentIgnores)
+	t.Setenv("SNYK_TOKEN", token)
+	c.SetToken(token)
 	c.SetErrorReportingEnabled(false)
 	c.SetTelemetryEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
+	c.UpdateApiEndpoints(os.Getenv("SNYK_API"))
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t)
 	t.Cleanup(func() {

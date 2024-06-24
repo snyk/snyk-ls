@@ -61,7 +61,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 
 	endpoint := os.Getenv("SNYK_API")
 	if endpoint == "" {
-		t.Setenv("SNYK_API", "https://api.snyk.io")
+		endpoint = "https://api.snyk.io"
 	}
 	v1Endpoint := path.Join(endpoint, "/v1")
 
@@ -74,6 +74,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                codeFile,
 			useConsistentIgnores: false,
 			hasVulns:             true,
+			endpoint:             endpoint,
 		},
 		{
 			name:                 "OSS and Code with V1 endpoint",
@@ -92,6 +93,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                codeFile,
 			useConsistentIgnores: true,
 			hasVulns:             true,
+			endpoint:             endpoint, //TODO: dev endpoint
 		},
 		{
 			name:                 "IaC and Code",
@@ -101,6 +103,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                codeFile,
 			useConsistentIgnores: false,
 			hasVulns:             true,
+			endpoint:             endpoint,
 		},
 		{
 			name:                 "Code without vulns",
@@ -110,6 +113,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                "providers.tf",
 			useConsistentIgnores: false,
 			hasVulns:             false,
+			endpoint:             endpoint,
 		},
 		{
 			name:                 "IaC and Code with consistent ignores",
@@ -119,6 +123,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                codeFile,
 			useConsistentIgnores: true,
 			hasVulns:             true,
+			endpoint:             endpoint,
 		},
 		{
 			name:                 "Two upload batches",
@@ -128,6 +133,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java",
 			useConsistentIgnores: false,
 			hasVulns:             true,
+			endpoint:             endpoint,
 		},
 		{
 			name:                 "Two upload batches with consistent ignores",
@@ -137,11 +143,12 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java",
 			useConsistentIgnores: true,
 			hasVulns:             true,
+			endpoint:             endpoint,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			runSmokeTest(t, tc.repo, tc.commit, tc.file1, tc.file2, tc.useConsistentIgnores, tc.hasVulns, "")
+			runSmokeTest(t, tc.repo, tc.commit, tc.file1, tc.file2, tc.useConsistentIgnores, tc.hasVulns, tc.endpoint)
 		})
 	}
 }
@@ -410,9 +417,7 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 string, useConsistentIgnores bool,
 	hasVulns bool, endpoint string) {
 	t.Helper()
-	if endpoint != "" && endpoint != "/v1" {
-		t.Setenv("SNYK_API", endpoint)
-	}
+	t.Setenv("SNYK_API", endpoint)
 	loc, jsonRPCRecorder := setupServer(t)
 	c := testutil.SmokeTest(t, useConsistentIgnores)
 	c.SetSnykCodeEnabled(true)
