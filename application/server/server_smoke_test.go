@@ -63,6 +63,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	if endpoint == "" {
 		t.Setenv("SNYK_API", "https://api.snyk.io")
 	}
+	v1Endpoint := path.Join(endpoint, "/v1")
 
 	tests := []test{
 		{
@@ -81,7 +82,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file1:                ossFile,
 			file2:                codeFile,
 			useConsistentIgnores: false,
-			endpoint:             path.Join(endpoint, "/v1"),
+			endpoint:             v1Endpoint,
 		},
 		{
 			name:                 "OSS and Code with consistent ignores",
