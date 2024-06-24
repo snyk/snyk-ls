@@ -22,6 +22,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'none'; style-src 'self' 'nonce-${nonce}'; script-src 'nonce-${nonce}';" />
+
   <style nonce="${nonce}">
     :root {
       --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Tahoma, Geneva, Verdana, sans-serif;
@@ -53,6 +54,7 @@
 
     h2 {
       font-weight: 600;
+      margin-bottom: 10px;
     }
 
     main {
@@ -60,15 +62,16 @@
       overflow-y: auto;
     }
 
-    section {
-      padding: 10px;
+    .arrow  {
+      margin: 3px;
+      cursor: pointer;
     }
 
     .ignore-warning-wrapper,
     header,
     article,
     footer {
-      padding: 10px 20px;
+      padding: 0px 20px 5px 20px;
     }
 
     .panel-header {
@@ -76,12 +79,19 @@
       flex-direction: column;
     }
 
+    .code-issue-panel {
+      margin-bottom: 30px;
+    }
+
     .example-fixes-header,
     .issue-overview-header,
     .ignore-details-header,
     .data-flow-header,
-    .ai-fix-header {
+    .ai-fix-header,
+    .overview-text > h2 {
       line-height: 1.25rem;
+      font-size: 1.2rem;
+      margin-bottom: 10px;
     }
 
     .severity-title {
@@ -92,6 +102,7 @@
       display: flex;
       flex-direction: row;
       align-items: center;
+      margin-bottom: 3px;
     }
 
     .severity-type-container {
@@ -124,22 +135,20 @@
 
     .is-external-icon {
       margin-bottom: 8px;
-      margin-left: 2px;
+      margin-left: 4px;
     }
 
     .styled-link {
       text-decoration: none;
     }
 
-    .delimiter-sections {
-      border-top: 1px solid rgba(0, 0, 0, 0.05);
+    .styled-link:hover {
+      cursor: pointer;
+      text-decoration: underline;
     }
 
     .delimiter {
-      width: 0;
-      height: 1.3rem;
       margin: 0 8px;
-      display: inline-block;
     }
 
     .ignore-warning-icon {
@@ -149,7 +158,6 @@
     .ignore-warning-wrapper {
       display: flex;
       align-items: center;
-      margin: 0 0 1em;
     }
 
     .ignore-warning {
@@ -161,16 +169,18 @@
       border-radius: 0.25em;
       width: 100%;
       box-sizing: border-box;
+      background: #FFF4ED;
+      color: #B6540B;
+      border: 1px solid #E27122;
     }
-
+    
     .ignore-badge {
       padding: 0.35em 0.35em;
       border-radius: 0.25em;
       margin-left: 1em;
-    }
-
-    .position-line:hover {
-      cursor: pointer;
+      background: #FFF4ED;
+      color: #B6540B;
+      border: 1px solid #E27122;
     }
 
     .data-flow-file {
@@ -178,6 +188,7 @@
       font-size: 1em;
       display: flex;
       align-items: center;
+      margin-top: 5px;
     }
 
     .data-flow-file-icon {
@@ -187,6 +198,7 @@
 
     .data-flow-body {
       margin-top: 5px;
+      margin-bottom: 10px;
     }
 
     .data-flow-table {
@@ -196,7 +208,7 @@
 
     .data-flow-row {
       border-collapse: collapse;
-      font-family: "Courier New", Courier, monospace;
+      vertical-align: baseline;
     }
 
     .data-flow-number {
@@ -208,6 +220,8 @@
 
     .data-flow-clickable-row {
       font-weight: 400;
+      width: 3.9375rem;
+      text-align: right;
     }
 
     .data-flow-clickable-row:hover {
@@ -217,19 +231,13 @@
 
     .data-flow-text {
       margin-right: 8px;
-      padding-left: 10px;
       font-weight: 400;
+      font-size: 1.4rem;
+      word-break: break-all;
     }
 
     .data-flow-delimiter {
-      font-weight: bold;
-    }
-
-    .data-flow-number,
-    .data-flow-clickable-row,
-    .data-flow-delimiter,
-    .data-flow-text {
-      display: inline;
+      opacity: 0.5;
     }
 
     .main-tabs-nav,
@@ -258,7 +266,7 @@
       float: left;
       display: block;
       text-align: center;
-      padding: 10px 16px 10px 16px;
+      padding: 10px 16px 8px 16px;
       text-decoration: none;
       margin-right: 4px;
       cursor: pointer;
@@ -311,10 +319,10 @@
 
     .example-line>code {
       padding-left: 0.75rem;
-      font-family: "Courier New", Courier, monospace;
       display: inline-block;
       white-space: pre-wrap;
       font-weight: 400;
+      font-size: 1.4rem;
       background-color: transparent;
     }
 
@@ -339,6 +347,12 @@
       position: fixed;
       bottom: 0;
       width: 100%;
+      margin-block-end: 0;
+    }
+
+    #ignore-actions {
+      margin-top: 10px;
+      margin-bottom: 5px;
     }
 
     .actions {
@@ -416,11 +430,6 @@
 
     .suggestion-text {
       padding: 0.4rem 0;
-      margin-bottom: 0.8rem;
-      line-height: 2.4rem;
-    }
-
-    .suggestion-text {
       line-height: 1.6;
     }
 
@@ -696,7 +705,7 @@
     <div class="severity-type-container">
       <div class="severity-type">{{.IssueType}}</div>
       {{if gt (len .CWEs) 0}}
-      <span class="delimiter"></span>
+      <span class="delimiter">|</span>
       {{range $index, $cwe := .CWEs}}
       <a class="cwe styled-link" target="_blank" rel="noopener noreferrer"
         href="https://cwe.mitre.org/data/definitions/{{trimCWEPrefix $cwe}}.html">{{$cwe}}</a>
@@ -704,11 +713,11 @@
       {{end}}
       {{end}}
       {{if .IgnoreLineAction}}
-      <span class="delimiter"></span>
-      <div>Position line: <a id="position-line">{{.IgnoreLineAction}}</a></div>
+      <span class="delimiter">|</span>
+      <div>Position line: <a class="styled-link" id="position-line">{{.IgnoreLineAction}}</a></div>
       {{end}}
       {{if ge .PriorityScore 0}}
-      <span class="delimiter"></span>
+      <span class="delimiter">|</span>
       <div>Priority score: {{.PriorityScore}}</div>
       {{end}}
       {{if .IsIgnored}}<div class="ignore-badge">IGNORED</div>{{end}}
@@ -749,7 +758,7 @@
         {{if .IsIgnored}}
         <!-- Start Ignore Details section for tab id="ignore-details-tab" -->
         <div data-content="ignore-details" id="ignore-details-content" class="tab-content main-tab-content is-selected">
-          <div class="ignore-details">
+          <div class="ignore-details delimiter-top">
             {{range .IgnoreDetails}}
             <div class="ignore-details-row">
               <div class="ignore-details-label">{{.Label}}</div>
@@ -887,7 +896,7 @@
                           end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
                           line:{{.StartLineValue}}
                         </td>
-                        <td class="data-flow-delimiter">|</td>
+                        <td class="delimiter data-flow-delimiter">|</td>
                         <td class="data-flow-text">{{.Content}}</td>
                       </tr>
                       {{end}}
@@ -968,7 +977,7 @@
 
   <!-- Ignore In Line Actions -->
   {{if not .IsIgnored}}
-  <footer class="ignore-action-container delimiter-sections">
+  <footer class="ignore-action-container">
     <div id="ignore-actions">
       <div class="actions row">
         <button id="ignore-line-issue" class="ignore-button secondary">Ignore on line <span
