@@ -241,7 +241,7 @@ func Test_addIssueActions(t *testing.T) {
 		assert.Len(t, fakeIssues[0].CodeActions, 2)
 	})
 
-	t.Run("Includes AI fixes if issue is not autofixable", func(t *testing.T) {
+	t.Run("Does not include AI fixes if issue is not autofixable", func(t *testing.T) {
 		setupCodeSettings()
 		defer t.Cleanup(resetCodeSettings)
 		fakeIssues := setupFakeIssues(false, false)
@@ -255,7 +255,7 @@ func Test_addIssueActions(t *testing.T) {
 		assert.Len(t, fakeIssues[0].CodeActions, 1)
 	})
 
-	t.Run("Does not include AI fixes if issue is ignored", func(t *testing.T) {
+	t.Run("Does not include AI fixes even if it is autofixable if issue is ignored", func(t *testing.T) {
 		setupCodeSettings()
 		defer t.Cleanup(resetCodeSettings)
 		fakeIssues := setupFakeIssues(true, true)
