@@ -17,16 +17,21 @@
 package install
 
 import (
-	"context"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"path"
+	"strings"
 
+	"github.com/pkg/errors"
+
+	http2 "github.com/snyk/code-client-go/http"
 	"github.com/snyk/snyk-ls/application/config"
 )
 
-const defaultBaseURL = "https://static.snyk.io"
+const DefaultBaseURL = "https://static.snyk.io"
 
 // Release represents a Snyk CLI release with assets.
 type Release struct {
@@ -58,14 +63,15 @@ type CLIRelease struct {
 
 func NewCLIRelease(httpClient func() *http.Client) *CLIRelease {
 	return &CLIRelease{
-		baseURL:    defaultBaseURL,
+		baseURL:    DefaultBaseURL,
 		httpClient: httpClient,
 	}
 }
 
-func (r *CLIRelease) GetLatestRelease(ctx context.Context) (*Release, error) {
+func (r *CLIRelease) GetLatestReleaseByChannel(releaseChannel string, fipsAvailable bool) (*Release, error) {
 	logger := config.CurrentConfig().Logger()
-	releaseURL := fmt.Sprintf("%s/cli/latest/release.json", r.baseURL)
+	baseURL := getBaseURL(r.baseURL, fipsAvailable)
+	releaseURL := fmt.Sprintf("%s/cli/%s/release.json", baseURL, releaseChannel)
 	logger.Trace().Str("url", releaseURL).Msg("requesting version for Snyk CLI")
 
 	resp, err := r.httpClient().Get(releaseURL)
@@ -92,4 +98,62 @@ func (r *CLIRelease) GetLatestRelease(ctx context.Context) (*Release, error) {
 	}
 
 	return &p, nil
+}
+
+func getBaseURL(baseURL string, fipsAvailable bool) string {
+	if fipsAvailable {
+		baseURL = path.Join(DefaultBaseURL, "/fips")
+	}
+	return baseURL
+}
+
+func (r *CLIRelease) GetLatestRelease() (*Release, error) {
+	return r.GetLatestReleaseByChannel("latest", false)
+}
+
+func getDistributionChannel(c *config.Config) string {
+	info := c.Engine().GetRuntimeInfo()
+	if info == nil {
+		return "stable"
+	}
+	version := info.GetVersion()
+	if strings.Contains(version, "preview") {
+		return "preview"
+	}
+	if strings.Contains(version, "rc") {
+		return "rc"
+	}
+	return "stable"
+}
+
+func GetCLIDownloadURL(c *config.Config, baseURL string, httpClient http2.HTTPClient) string {
+	logger := c.Logger().With().Str("method", "getCLIDownloadURL").Logger()
+	defaultFallBack := "https://github.com/snyk/cli/releases"
+	releaseChannel := getDistributionChannel(c)
+	versionURL := baseURL + path.Join("/cli", releaseChannel, "ls-protocol-version-"+config.LsProtocolVersion)
+
+	bodyReader := &bytes.Buffer{}
+	req, err := http.NewRequest(http.MethodGet, versionURL, bodyReader)
+	if err != nil {
+		logger.Err(err).Msg("could not create request to retrieve CLI version")
+		return defaultFallBack
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil || resp.StatusCode >= http.StatusBadRequest {
+		logger.Err(errors.Wrap(err, "couldn't get version of CLI that supports current protocol version"))
+		return defaultFallBack
+	}
+	defer resp.Body.Close()
+
+	versionBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logger.Err(errors.Wrap(err, "couldn't get version of CLI that supports current protocol version"))
+		return defaultFallBack
+	}
+
+	version := string(versionBytes)
+	discovery := Discovery{}
+	downloadURL := baseURL + path.Join("/cli", "v"+version, discovery.ExecutableName(false))
+	return downloadURL
 }

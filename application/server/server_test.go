@@ -36,6 +36,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
@@ -45,6 +46,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/lsp"
@@ -1101,4 +1103,32 @@ func Test_MonitorClientProcess(t *testing.T) {
 	// make sure that we actually waited & monitored
 	expectedMinimumDuration, _ := time.ParseDuration("999ms")
 	assert.True(t, monitorClientProcess(pid) > expectedMinimumDuration)
+}
+
+func Test_getDownloadURL(t *testing.T) {
+	t.Run("CLI", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		c.Engine().GetConfiguration().Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
+
+		downloadURL := getDownloadURL(c)
+
+		// default CLI fallback, as we're not mocking the CLI calls
+		assert.Equal(t, "https://github.com/snyk/cli/releases", downloadURL)
+	})
+
+	t.Run("LS standalone", func(t *testing.T) {
+		testutil.NotOnWindows(t, "don't want to handle the exe extension")
+		c := testutil.UnitTest(t)
+		engine := c.Engine()
+		engine.GetConfiguration().Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
+		engine.SetRuntimeInfo(runtimeinfo.New(
+			runtimeinfo.WithName("snyk-ls"),
+			runtimeinfo.WithVersion("v1.234"),
+		),
+		)
+
+		downloadURL := getDownloadURL(c)
+
+		assert.Equal(t, "https://static.snyk.io/snyk-ls/"+config.LsProtocolVersion+"/snyk-ls", downloadURL)
+	})
 }

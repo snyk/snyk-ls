@@ -203,7 +203,15 @@ type ClientCapabilities struct {
 	Workspace    WorkspaceClientCapabilities    `json:"workspace,omitempty"`
 	TextDocument TextDocumentClientCapabilities `json:"textDocument,omitempty"`
 	Window       WindowClientCapabilities       `json:"window,omitempty"`
-	Experimental interface{}                    `json:"experimental,omitempty"`
+	Experimental *SnykClientCapabilities        `json:"experimental,omitempty"`
+}
+
+type SnykClientCapabilities struct {
+	RequiredProtocolVersion       int  `json:"requiredProtocolVersion,omitempty"`
+	HasAuthenticatedNotification  bool `json:"hasAuthenticatedNotification,omitempty"`
+	AddTrustedFoldersNotification bool `json:"addTrustedFolders,omitempty"`
+	IsAvailableCli                bool `json:"isAvailableCli,omitempty"`
+	SnykScanNotification          bool `json:"snykScanNotification,omitempty"`
 }
 
 type CodeLensWorkspaceClientCapabilities struct {

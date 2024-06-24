@@ -20,7 +20,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,6 +43,9 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+	"github.com/snyk/snyk-ls/infrastructure/cli/install"
+	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -195,13 +200,16 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 		defer logger.Info().Any("params", params).Msg("RECEIVING")
 		InitializeSettings(c, params.InitializationOptions)
 
-		c.SetClientCapabilities(params.Capabilities)
+		clientCapabilities := params.Capabilities
+		snykClientCapabilities := clientCapabilities.Experimental
+		c.SetClientCapabilities(clientCapabilities)
 		setClientInformation(params)
 		di.Analytics().Initialise() //nolint:misspell // breaking api change
 
 		// async processing listener
 		go createProgressListener(progress.Channel, srv, c.Logger())
 		registerNotifier(c, srv)
+		handleProtocolVersion(c, snykClientCapabilities)
 		go func() {
 			if params.ProcessID == 0 {
 				// if started on its own, no need to exit or to monitor
@@ -277,6 +285,65 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 		return result, nil
 	})
 }
+
+func handleProtocolVersion(c *config.Config, snykClientCapabilities *lsp.SnykClientCapabilities) {
+	logger := c.Logger().With().Str("method", "handleProtocolVersion").Logger()
+	if snykClientCapabilities == nil {
+		logger.Debug().Msg("no custom client capabilities found")
+		return
+	}
+
+	requiredProtocolVersion := snykClientCapabilities.RequiredProtocolVersion
+	protocolVersion, err := strconv.Atoi(config.LsProtocolVersion)
+	if err != nil {
+		logger.Warn().Str("protocol version", config.LsProtocolVersion).Msg("failed to parse current protocol version")
+	}
+
+	if requiredProtocolVersion == protocolVersion {
+		logger.Debug().Msg("protocol version is the same")
+		return
+	}
+
+	if requiredProtocolVersion < protocolVersion {
+		logger.Error().Msg("required protocol version is lower than language server protocol version")
+		actions := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
+
+		openBrowserCommandData := snyk.CommandData{
+			Title:     "Download manually in browser",
+			CommandId: snyk.OpenBrowserCommand,
+			Arguments: []any{getDownloadURL(c)},
+		}
+
+		actions.Add(snyk.MessageAction(openBrowserCommandData.Title), openBrowserCommandData)
+
+		msg := snyk.ShowMessageRequest{
+			Message: "",
+			Type:    snyk.Error,
+			Actions: actions,
+		}
+		di.Notifier().Send(msg)
+	}
+
+	if requiredProtocolVersion < protocolVersion {
+		msg := "required protocol version is lower than language server protocol version"
+		logger.Debug().Msg(msg)
+		// TODO send MessageRequest
+	}
+
+}
+
+func getDownloadURL(c *config.Config) (u string) {
+	gafConfig := c.Engine().GetConfiguration()
+
+	runsEmbeddedFromCLI := gafConfig.Get(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION
+
+	if runsEmbeddedFromCLI {
+		return install.GetCLIDownloadURL(c, install.DefaultBaseURL, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient())
+	} else {
+		return install.DefaultBaseURL + path.Join("/snyk-ls", config.LsProtocolVersion, c.Engine().GetRuntimeInfo().GetName())
+	}
+}
+
 func initializedHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializedParams) (any, error) {
 		// Logging these messages only after the client has been initialized.
