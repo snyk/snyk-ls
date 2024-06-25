@@ -2,7 +2,6 @@ version: 2.1
 
 orbs:
   prodsec: snyk/prodsec-orb@1
-  slack: circleci/slack@4
 
 jobs:
   security-scans:
