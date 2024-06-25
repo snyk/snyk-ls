@@ -19,6 +19,7 @@ package oss
 import (
 	_ "embed"
 	"fmt"
+	"strings"
 
 	"github.com/gomarkdown/markdown"
 
@@ -47,6 +48,21 @@ func toIssue(
 	// this needs to be first so that the lesson from Snyk Learn is added
 	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueRange)
 
+	var codelensCommands []snyk.CommandData
+	for _, codeAction := range codeActions {
+		fmt.Println(codeAction.Title)
+		if strings.Contains(codeAction.Title, "Upgrade to") {
+			codelensCommands = append(codelensCommands, snyk.CommandData{
+				Title:     "⚡ Fix this issue: " + codeAction.Title,
+				CommandId: snyk.CodeFixCommand,
+				Arguments: []any{
+					codeAction.Uuid,
+					affectedFilePath,
+					issueRange,
+				},
+			})
+		}
+	}
 	// find all issues with the same id
 	matchingIssues := []snyk.OssIssueData{}
 	for _, otherIssue := range scanResult.Vulnerabilities {
@@ -85,6 +101,7 @@ func toIssue(
 		IssueDescriptionURL: issue.CreateIssueURL(),
 		IssueType:           snyk.DependencyVulnerability,
 		CodeActions:         codeActions,
+		CodelensCommands:    codelensCommands,
 		Ecosystem:           issue.PackageManager,
 		CWEs:                issue.Identifiers.CWE,
 		CVEs:                issue.Identifiers.CVE,

@@ -149,6 +149,8 @@ func Test_toIssue_CodeActions_WithNPMFix(t *testing.T) {
 	assert.Equal(t, "Open description of 'THOU SHALL NOT PASS affecting package pkg' in browser (Snyk)",
 		issue.CodeActions[1].Title)
 	assert.Equal(t, "Learn more about THOU SHALL NOT PASS (Snyk)", issue.CodeActions[2].Title)
+	assert.Equal(t, 1, len(issue.CodelensCommands))
+	assert.Equal(t, "⚡ Fix this issue: Upgrade to \"pkg\": \"v2\" (Snyk)", issue.CodelensCommands[0].Title)
 }
 
 func Test_toIssue_CodeActions_WithGomodFix(t *testing.T) {
@@ -166,6 +168,8 @@ func Test_toIssue_CodeActions_WithGomodFix(t *testing.T) {
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 3, len(issue.CodeActions))
 	assert.Equal(t, "Upgrade to vv2 (Snyk)", issue.CodeActions[0].Title)
+	assert.Equal(t, 1, len(issue.CodelensCommands))
+	assert.Equal(t, "⚡ Fix this issue: Upgrade to vv2 (Snyk)", issue.CodelensCommands[0].Title)
 }
 
 func Test_toIssue_CodeActions_WithMavenFix(t *testing.T) {
@@ -183,6 +187,8 @@ func Test_toIssue_CodeActions_WithMavenFix(t *testing.T) {
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 3, len(issue.CodeActions))
 	assert.Equal(t, "Upgrade to v2 (Snyk)", issue.CodeActions[0].Title)
+	assert.Equal(t, 1, len(issue.CodelensCommands))
+	assert.Equal(t, "⚡ Fix this issue: Upgrade to v2 (Snyk)", issue.CodelensCommands[0].Title)
 }
 
 func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
@@ -199,6 +205,7 @@ func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
 	assert.Equal(t, "Open description of 'THOU SHALL NOT PASS affecting package pkg' in browser (Snyk)",
 		issue.CodeActions[0].Title)
 	assert.Equal(t, "Learn more about THOU SHALL NOT PASS (Snyk)", issue.CodeActions[1].Title)
+	assert.Equal(t, 0, len(issue.CodelensCommands))
 }
 
 func Test_introducingPackageAndVersionJava(t *testing.T) {
