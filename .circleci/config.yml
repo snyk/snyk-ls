@@ -12,8 +12,9 @@ jobs:
     steps:
       - checkout
       - prodsec/security_scans:
-          mode: upload
+          mode: auto
           open-source-additional-arguments: --exclude=testdata
+          iac-scan: disabled
 
 workflows:
   version: 2
