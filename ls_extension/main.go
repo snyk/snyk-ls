@@ -28,8 +28,9 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
+
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 )

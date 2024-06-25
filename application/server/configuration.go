@@ -93,6 +93,7 @@ func InitializeSettings(c *config.Config, settings lsp.Settings) {
 	updateAutoAuthentication(c, settings)
 	updateDeviceInformation(c, settings)
 	updateAutoScan(c, settings)
+	c.SetClientProtocolVersion(settings.RequiredProtocolVersion)
 }
 
 func UpdateSettings(c *config.Config, settings lsp.Settings) {

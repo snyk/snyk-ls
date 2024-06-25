@@ -22,7 +22,6 @@ import (
 	"os"
 	"path"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
@@ -40,6 +39,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -64,7 +64,7 @@ func Start(c *config.Config) {
 	c.ConfigureLogging(srv)
 	logger := c.Logger().With().Str("method", "server.Start").Logger()
 	di.Init()
-	initHandlers(c, srv, handlers)
+	initHandlers(srv, handlers)
 
 	logger.Info().Msg("Starting up...")
 	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
@@ -80,7 +80,7 @@ func Start(c *config.Config) {
 const textDocumentDidOpenOperation = "textDocument/didOpen"
 const textDocumentDidSaveOperation = "textDocument/didSave"
 
-func initHandlers(c *config.Config, srv *jrpc2.Server, handlers handler.Map) {
+func initHandlers(srv *jrpc2.Server, handlers handler.Map) {
 	handlers["initialize"] = initializeHandler(srv)
 	handlers["initialized"] = initializedHandler(srv)
 	handlers["textDocument/didChange"] = textDocumentDidChangeHandler()
@@ -128,12 +128,12 @@ func workspaceWillDeleteFilesHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DeleteFilesParams) (any, error) {
 		ws := workspace.Get()
 		for _, file := range params.Files {
-			path := uri.PathFromUri(file.Uri)
+			pathFromUri := uri.PathFromUri(file.Uri)
 
 			// Instead of branching whether it's a file or a folder, we'll attempt to remove both and the redundant case
 			// will be a no-op
-			ws.RemoveFolder(path)
-			ws.DeleteFile(path)
+			ws.RemoveFolder(pathFromUri)
+			ws.DeleteFile(pathFromUri)
 		}
 		return nil, nil
 	})
@@ -200,16 +200,13 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 		defer logger.Info().Any("params", params).Msg("RECEIVING")
 		InitializeSettings(c, params.InitializationOptions)
 
-		clientCapabilities := params.Capabilities
-		snykClientCapabilities := clientCapabilities.Experimental
-		c.SetClientCapabilities(clientCapabilities)
+		c.SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
 		di.Analytics().Initialise() //nolint:misspell // breaking api change
 
 		// async processing listener
 		go createProgressListener(progress.Channel, srv, c.Logger())
 		registerNotifier(c, srv)
-		handleProtocolVersion(c, snykClientCapabilities)
 		go func() {
 			if params.ProcessID == 0 {
 				// if started on its own, no need to exit or to monitor
@@ -286,26 +283,28 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 	})
 }
 
-func handleProtocolVersion(c *config.Config, snykClientCapabilities *lsp.SnykClientCapabilities) {
+func handleProtocolVersion(c *config.Config, noti noti.Notifier, ourProtocolVersion string, clientProtocolVersion string) {
 	logger := c.Logger().With().Str("method", "handleProtocolVersion").Logger()
-	if snykClientCapabilities == nil {
+	if ourProtocolVersion == "" {
 		logger.Debug().Msg("no custom client capabilities found")
 		return
 	}
 
-	requiredProtocolVersion := snykClientCapabilities.RequiredProtocolVersion
-	protocolVersion, err := strconv.Atoi(config.LsProtocolVersion)
-	if err != nil {
-		logger.Warn().Str("protocol version", config.LsProtocolVersion).Msg("failed to parse current protocol version")
-	}
-
-	if requiredProtocolVersion == protocolVersion {
+	if clientProtocolVersion == ourProtocolVersion {
 		logger.Debug().Msg("protocol version is the same")
 		return
 	}
 
-	if requiredProtocolVersion < protocolVersion {
-		logger.Error().Msg("required protocol version is lower than language server protocol version")
+	if clientProtocolVersion != ourProtocolVersion {
+		m := fmt.Sprintf(
+			"Your Snyk plugin requires a different binary. The client-side required protocol version does not match "+
+				"the running language server protocol version. Required: %s, Actual: %s. "+
+				"You can update to the necessary version by enabling automatic management of binaries in the settings. "+
+				"Alternatively, you can manually download the correct binary by clicking the button.",
+			clientProtocolVersion,
+			ourProtocolVersion,
+		)
+		logger.Error().Msg(m)
 		actions := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
 
 		openBrowserCommandData := snyk.CommandData{
@@ -315,21 +314,17 @@ func handleProtocolVersion(c *config.Config, snykClientCapabilities *lsp.SnykCli
 		}
 
 		actions.Add(snyk.MessageAction(openBrowserCommandData.Title), openBrowserCommandData)
+		doNothingKey := "Do nothing"
+		// if we don't provide a commandId, nothing is done
+		actions.Add(snyk.MessageAction(doNothingKey), snyk.CommandData{Title: doNothingKey})
 
 		msg := snyk.ShowMessageRequest{
-			Message: "",
+			Message: m,
 			Type:    snyk.Error,
 			Actions: actions,
 		}
-		di.Notifier().Send(msg)
+		noti.Send(msg)
 	}
-
-	if requiredProtocolVersion < protocolVersion {
-		msg := "required protocol version is lower than language server protocol version"
-		logger.Debug().Msg(msg)
-		// TODO send MessageRequest
-	}
-
 }
 
 func getDownloadURL(c *config.Config) (u string) {
@@ -361,6 +356,8 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		initialLogger.Info().Msg("snyk-plugin: " + c.IntegrationName() + "/" + c.IntegrationVersion())
 
 		logger := c.Logger().With().Str("method", "initializedHandler").Logger()
+
+		handleProtocolVersion(c, di.Notifier(), config.LsProtocolVersion, c.ClientProtocolVersion())
 
 		// CLI & Authentication initialization
 		err := di.Scanner().Init()
@@ -576,8 +573,8 @@ func textDocumentHover() jrpc2.Handler {
 		c := config.CurrentConfig()
 		c.Logger().Info().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
 
-		path := uri.PathFromUri(params.TextDocument.URI)
-		hoverResult := di.HoverService().GetHover(path, converter.FromPosition(params.Position))
+		pathFromUri := uri.PathFromUri(params.TextDocument.URI)
+		hoverResult := di.HoverService().GetHover(pathFromUri, converter.FromPosition(params.Position))
 		return hoverResult, nil
 	})
 }

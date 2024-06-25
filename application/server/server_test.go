@@ -50,6 +50,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -150,7 +151,7 @@ func startServer(callBackFn onCallbackFn, jsonRPCRecorder *testutil.JsonRPCRecor
 	c.ConfigureLogging(nil)
 
 	// the learn service isnt needed as the smoke tests use it directly
-	initHandlers(c, srv, handlers)
+	initHandlers(srv, handlers)
 
 	return loc
 }
@@ -205,6 +206,28 @@ func Test_initialize_containsServerInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, config.LsProtocolVersion, result.ServerInfo.Version)
+}
+
+func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
+	loc, jsonRpcRecorder := setupServer(t)
+
+	params := lsp.InitializeParams{
+		InitializationOptions: lsp.Settings{RequiredProtocolVersion: "22"},
+	}
+
+	rsp, err := loc.Client.Call(ctx, "initialize", params)
+	require.NoError(t, err)
+	var result lsp.InitializeResult
+	err = rsp.UnmarshalResult(&result)
+	require.NoError(t, err)
+
+	_, err = loc.Client.Call(ctx, "initialized", params)
+	require.NoError(t, err)
+	assert.Eventuallyf(t, func() bool {
+		callbacks := jsonRpcRecorder.Callbacks()
+		return len(callbacks) > 0
+	}, time.Second*10, time.Millisecond,
+		"did not receive callback because of wrong protocol version")
 }
 
 func Test_initialize_shouldDefaultToTokenAuthentication(t *testing.T) {
@@ -1121,14 +1144,64 @@ func Test_getDownloadURL(t *testing.T) {
 		c := testutil.UnitTest(t)
 		engine := c.Engine()
 		engine.GetConfiguration().Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
-		engine.SetRuntimeInfo(runtimeinfo.New(
-			runtimeinfo.WithName("snyk-ls"),
-			runtimeinfo.WithVersion("v1.234"),
-		),
+		engine.SetRuntimeInfo(
+			runtimeinfo.New(
+				runtimeinfo.WithName("snyk-ls"),
+				runtimeinfo.WithVersion("v1.234"),
+			),
 		)
 
 		downloadURL := getDownloadURL(c)
 
 		assert.Equal(t, "https://static.snyk.io/snyk-ls/"+config.LsProtocolVersion+"/snyk-ls", downloadURL)
+	})
+}
+
+func Test_handleProtocolVersion(t *testing.T) {
+	t.Run("required != current", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+
+		ourProtocolVersion := "12"
+		reqProtocolVersion := "1"
+
+		notificationReceived := make(chan bool)
+		f := func(params any) {
+			mrq, ok := params.(snyk.ShowMessageRequest)
+			require.True(t, ok)
+			require.Contains(t, mrq.Message, "does not match")
+			notificationReceived <- true
+		}
+		testNotifier := notification.NewNotifier()
+		go testNotifier.CreateListener(f)
+		handleProtocolVersion(
+			c,
+			testNotifier,
+			ourProtocolVersion,
+			reqProtocolVersion,
+		)
+
+		assert.Eventuallyf(t, func() bool {
+			return <-notificationReceived
+		}, 10*time.Second, 10*time.Millisecond, "no message sent via notifier")
+	})
+
+	t.Run("required == current", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		ourProtocolVersion := "11"
+		f := func(params any) {
+			require.FailNow(t, "did not expect a message")
+		}
+
+		testNotifier := notification.NewNotifier()
+		go testNotifier.CreateListener(f)
+
+		handleProtocolVersion(
+			c,
+			testNotifier,
+			ourProtocolVersion,
+			ourProtocolVersion,
+		)
+		// give goroutine of callback function a chance to fail the test
+		time.Sleep(time.Second)
 	})
 }
