@@ -1,18 +1,8 @@
 version: 2.1
 
 orbs:
-  prodsec: snyk/prodsec-orb@1.0
+  prodsec: snyk/prodsec-orb@1
   slack: circleci/slack@4
-
-commands:
-  slack_fail_notify:
-    description: Notify Slack on failure
-    steps:
-      - slack/notify:
-          event: fail
-          channel: snyk-on-snyk-devex_ide
-          branch_pattern: "main"
-          template: basic_fail_1
 
 jobs:
   security-scans:
@@ -33,6 +23,7 @@ workflows:
           name: Scan repository for secrets
           context:
             - snyk-bot-slack
-          channel: dx-local-alerts
+          channel: 
+          
       - security-scans:
           context: devex_ide
