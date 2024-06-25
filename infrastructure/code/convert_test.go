@@ -961,6 +961,40 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 		assert.Equal(t, 2024, ignoreDetails.IgnoredOn.Year())
 		assert.Equal(t, "name", ignoreDetails.IgnoredBy)
 	})
+
+	t.Run("sets reason to a default value if justification not provided in suppression", func(t *testing.T) {
+		expiration := "expiration"
+		r := codeClientSarif.Result{
+			Message: codeClientSarif.ResultMessage{
+				Text:     "",
+				Markdown: "Printing the stack trace of {0}. Production code should not use {1}. {3}",
+				Arguments: []string{"[java.lang.InterruptedException](0)", "[printStackTrace](1)(2)", "",
+					"[This is a test argument](3)"},
+			},
+			Suppressions: []codeClientSarif.Suppression{
+				{
+					Properties: codeClientSarif.SuppressionProperties{
+						Category:   "category",
+						Expiration: &expiration,
+						IgnoredOn:  "2024-02-23T16:08:25Z",
+						IgnoredBy: codeClientSarif.IgnoredBy{
+							Name: "name",
+						},
+					},
+				},
+			},
+		}
+
+		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
+		isIgnored, ignoreDetails := sarifConverter.getIgnoreDetails(r)
+		assert.True(t, isIgnored)
+		assert.NotNil(t, ignoreDetails)
+		assert.Equal(t, "None given", ignoreDetails.Reason)
+		assert.Equal(t, "category", ignoreDetails.Category)
+		assert.Equal(t, "expiration", ignoreDetails.Expiration)
+		assert.Equal(t, 2024, ignoreDetails.IgnoredOn.Year())
+		assert.Equal(t, "name", ignoreDetails.IgnoredBy)
+	})
 }
 
 func Test_ParseDateFromString(t *testing.T) {
