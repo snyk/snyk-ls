@@ -12,7 +12,7 @@ jobs:
     steps:
       - checkout
       - prodsec/security_scans:
-          mode: auto
+          mode: upload
           open-source-additional-arguments: --exclude=testdata
 
 workflows:
