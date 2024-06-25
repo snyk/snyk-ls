@@ -285,7 +285,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 
 func handleProtocolVersion(c *config.Config, noti noti.Notifier, ourProtocolVersion string, clientProtocolVersion string) {
 	logger := c.Logger().With().Str("method", "handleProtocolVersion").Logger()
-	if ourProtocolVersion == "" {
+	if clientProtocolVersion == "" {
 		logger.Debug().Msg("no custom client capabilities found")
 		return
 	}
