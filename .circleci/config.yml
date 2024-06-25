@@ -13,7 +13,7 @@ jobs:
       - checkout
       - prodsec/security_scans:
           mode: auto
-          open-source-additional-arguments: --exclude=test
+          open-source-additional-arguments: --exclude=testdata
 
 workflows:
   version: 2
