@@ -8,7 +8,7 @@ jobs:
   security-scans:
     resource_class: small
     docker:
-      - image: ubuntu-latest
+      - image: cimg/go:stable
     steps:
       - checkout
       - prodsec/security_scans:
@@ -23,7 +23,11 @@ workflows:
           name: Scan repository for secrets
           context:
             - snyk-bot-slack
-          channel: 
+          channel: snyk-on-snyk-devex_ide
+          filters:
+            branches:
+              ignore:
+                - main  
           
       - security-scans:
           context: devex_ide
