@@ -215,6 +215,8 @@ func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
 		InitializationOptions: lsp.Settings{RequiredProtocolVersion: "22"},
 	}
 
+	config.LsProtocolVersion = "12"
+
 	rsp, err := loc.Client.Call(ctx, "initialize", params)
 	require.NoError(t, err)
 	var result lsp.InitializeResult
