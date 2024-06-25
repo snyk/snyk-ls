@@ -122,6 +122,10 @@ else
 		-gcflags="all=-N -l"
 endif
 
+.PHONY: build-release
+build-release: $(TOOLS_BIN)/go-licenses
+	@LICENSES=$(go-licenses report . --ignore github.com/snyk/snyk-ls) goreleaser release --clean --snapshot
+
 ## run: Compile and run LSP server.
 .PHONY: run
 run:

@@ -290,7 +290,7 @@ func handleProtocolVersion(c *config.Config, noti noti.Notifier, ourProtocolVers
 		return
 	}
 
-	if clientProtocolVersion == ourProtocolVersion {
+	if clientProtocolVersion == ourProtocolVersion || ourProtocolVersion == "development" {
 		logger.Debug().Msg("protocol version is the same")
 		return
 	}

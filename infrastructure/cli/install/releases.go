@@ -132,6 +132,8 @@ func GetCLIDownloadURL(c *config.Config, baseURL string, httpClient http2.HTTPCl
 	releaseChannel := getDistributionChannel(c)
 	versionURL := baseURL + path.Join("/cli", releaseChannel, "ls-protocol-version-"+config.LsProtocolVersion)
 
+	logger.Debug().Str("versionURL", versionURL).Msg("determined base version URL")
+
 	bodyReader := &bytes.Buffer{}
 	req, err := http.NewRequest(http.MethodGet, versionURL, bodyReader)
 	if err != nil {
@@ -153,6 +155,8 @@ func GetCLIDownloadURL(c *config.Config, baseURL string, httpClient http2.HTTPCl
 	}
 
 	version := string(versionBytes)
+	logger.Debug().Str("version", version).Msg("retrieved version from web")
+
 	discovery := Discovery{}
 	downloadURL := baseURL + path.Join("/cli", "v"+version, discovery.ExecutableName(false))
 	return downloadURL
