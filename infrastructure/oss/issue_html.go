@@ -20,13 +20,15 @@ import (
 	"bytes"
 	_ "embed"
 	"fmt"
-	"github.com/gomarkdown/markdown"
-	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/code"
-	"github.com/snyk/snyk-ls/internal/product"
 	"html/template"
 	"strings"
+
+	"github.com/gomarkdown/markdown"
+
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/html"
+	"github.com/snyk/snyk-ls/internal/product"
 )
 
 //go:embed template/details.html
@@ -36,8 +38,8 @@ var globalTemplate *template.Template
 
 func init() {
 	funcMap := template.FuncMap{
-		"trimCWEPrefix": code.TrimCWEPrefix,
-		"idxMinusOne":   code.IdxMinusOne,
+		"trimCWEPrefix": html.TrimCWEPrefix,
+		"idxMinusOne":   html.IdxMinusOne,
 		"join":          join,
 	}
 
@@ -66,16 +68,16 @@ func getDetailsHtml(issue snyk.Issue) string {
 		"IssueTitle":         additionalData.Title,
 		"IssueType":          getIssueType(additionalData),
 		"SeverityText":       issue.Severity.String(),
-		"SeverityIcon":       code.GetSeverityIconSvg(issue),
+		"SeverityIcon":       html.GetSeverityIconSvg(issue),
 		"VulnerableModule":   additionalData.Name,
-		"IssueOverview":      markdwonToHTML(string(overview)),
+		"IssueOverview":      html.MarkdownToHTML(string(overview)),
 		"CVEs":               additionalData.Identifiers.CVE,
 		"CWEs":               additionalData.Identifiers.CWE,
 		"CvssScore":          fmt.Sprintf("%.1f", additionalData.CvssScore),
 		"ExploitMaturity":    getExploitMaturity(additionalData),
 		"IntroducedThroughs": getIntroducedThroughs(additionalData),
 		"LessonUrl":          additionalData.Lesson,
-		"LessonIcon":         code.GetLessonIconSvg(),
+		"LessonIcon":         html.GetLessonIconSvg(),
 		"FixedIn":            additionalData.FixedIn,
 		"DetailedPaths":      getDetailedPaths(additionalData),
 	}
@@ -103,12 +105,6 @@ func getExploitMaturity(issue snyk.OssIssueData) string {
 	} else {
 		return ""
 	}
-}
-
-// TODO: common
-func markdwonToHTML(md string) template.HTML {
-	html := markdown.ToHTML([]byte(md), nil, nil)
-	return template.HTML(html)
 }
 
 type IntroducedThrough struct {
