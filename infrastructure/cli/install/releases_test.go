@@ -109,12 +109,18 @@ func Test_getLSDownloadURLTest(t *testing.T) {
 			Body:       io.NopCloser(bytes.NewReader(metadataJson)),
 		}, nil).Times(1)
 
+		var extIfNecessary = ""
+		if runtime.GOOS == "windows" {
+			extIfNecessary = ".exe"
+		}
+
 		expectedURL := fmt.Sprintf(
-			"https://static.snyk.io/snyk-ls/%s/snyk-ls_%s_%s_%s",
+			"https://static.snyk.io/snyk-ls/%s/snyk-ls_%s_%s_%s%s",
 			config.LsProtocolVersion,
 			metadata.Version,
 			runtime.GOOS,
 			runtime.GOARCH,
+			extIfNecessary,
 		)
 
 		downloadURL := GetLSDownloadURL(c, httpClient)
