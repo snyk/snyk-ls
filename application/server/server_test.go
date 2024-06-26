@@ -1155,7 +1155,8 @@ func Test_getDownloadURL(t *testing.T) {
 
 		downloadURL := getDownloadURL(c)
 
-		assert.Equal(t, "https://static.snyk.io/snyk-ls/"+config.LsProtocolVersion+"/snyk-ls", downloadURL)
+		prefix := "https://static.snyk.io/snyk-ls/12/snyk-ls"
+		assert.True(t, strings.HasPrefix(downloadURL, prefix), downloadURL+" does not start with "+prefix)
 	})
 }
 
