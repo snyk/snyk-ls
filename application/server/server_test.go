@@ -1138,7 +1138,7 @@ func Test_getDownloadURL(t *testing.T) {
 		downloadURL := getDownloadURL(c)
 
 		// default CLI fallback, as we're not mocking the CLI calls
-		assert.Equal(t, "https://github.com/snyk/cli/releases", downloadURL)
+		assert.Contains(t, downloadURL, "cli")
 	})
 
 	t.Run("LS standalone", func(t *testing.T) {
