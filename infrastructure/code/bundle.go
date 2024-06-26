@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"strings"
 	"time"
 
@@ -156,75 +155,6 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context) ([]snyk.Issue, error) {
 			b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: b.rootPath})
 			p.EndWithMessage("Snyk Code Analysis timed out")
 			return []snyk.Issue{}, err
-		}
-		time.Sleep(1 * time.Second)
-		p.Report(status.percentage)
-	}
-}
-
-func (b *Bundle) FetchDiagnosticsDataWithDelta(
-	ctx context.Context,
-) (*codeClientSarif.SarifResponse, error) {
-	defer b.logger.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
-	b.logger.Debug().Str("method", "FetchDiagnosticsData").Msg("started.")
-	return b.retrieveAnalysisWithDelta(ctx)
-}
-
-func (b *Bundle) retrieveAnalysisWithDelta(ctx context.Context) (*codeClientSarif.SarifResponse, error) {
-	logger := b.logger.With().Str("method", "retrieveAnalysis").Logger()
-
-	if b.BundleHash == "" {
-		logger.Warn().Str("rootPath", b.rootPath).Msg("bundle hash is empty")
-		return nil, nil
-	}
-
-	p := progress.NewTracker(false)
-	p.BeginWithMessage("Snyk Code analysis for "+b.rootPath, "Retrieving results...")
-
-	method := "code.retrieveAnalysis"
-	s := b.instrumentor.StartSpan(ctx, method)
-	defer b.instrumentor.Finish(s)
-
-	analysisOptions := AnalysisOptions{
-		bundleHash:   b.BundleHash,
-		shardKey:     getShardKey(b.rootPath, config.CurrentConfig().Token()),
-		limitToFiles: b.limitToFiles,
-		severity:     0,
-	}
-
-	start := time.Now()
-	for {
-		if ctx.Err() != nil { // Cancellation requested
-			return nil, nil
-		}
-		issues, status, err := b.SnykCode.RunAnalysisWithDelta(s.Context(), analysisOptions, b.rootPath)
-
-		if err != nil {
-			logger.Error().Err(err).
-				Str("requestId", b.requestId).
-				Int("fileCount", len(b.UploadBatches)).
-				Msg("error retrieving diagnostics...")
-			b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: b.rootPath})
-			p.EndWithMessage(fmt.Sprintf("Analysis failed: %v", err))
-			return nil, err
-		}
-
-		if status.message == completeStatus {
-			logger.Trace().Str("requestId", b.requestId).
-				Msg("sending diagnostics...")
-			p.EndWithMessage("Analysis complete.")
-
-			return issues, nil
-		} else if status.message == "ANALYZING" {
-			logger.Trace().Msg("\"Analyzing\" message received, sending In-Progress message to client")
-		}
-
-		if time.Since(start) > config.CurrentConfig().SnykCodeAnalysisTimeout() {
-			err := errors.New("analysis call timed out")
-			b.logger.Error().Err(err).Msg("timeout...")
-			b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: b.rootPath})
-			p.EndWithMessage("Snyk Code Analysis timed out")
-			return nil, err
 		}
 		time.Sleep(1 * time.Second)
 		p.Report(status.percentage)

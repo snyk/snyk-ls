@@ -3,6 +3,7 @@ module github.com/snyk/snyk-ls
 go 1.21
 
 require (
+	github.com/adrg/strutil v0.3.1
 	github.com/adrg/xdg v0.4.0
 	github.com/atotto/clipboard v0.1.4
 	github.com/creachadair/jrpc2 v1.1.1
@@ -14,7 +15,6 @@ require (
 	github.com/gomarkdown/markdown v0.0.0-20230922112808-5421fefb8386
 	github.com/google/uuid v1.6.0
 	github.com/hexops/gotextdiff v1.0.3
-	github.com/otiai10/copy v1.14.0
 	github.com/pact-foundation/pact-go v1.7.0
 	github.com/pingcap/errors v0.11.4
 	github.com/pkg/errors v0.9.1
@@ -40,7 +40,6 @@ require (
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.0.0 // indirect
-	github.com/adrg/strutil v0.3.1 // indirect
 	github.com/alexbrainman/sspi v0.0.0-20231016080023-1a75b4708caa // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect

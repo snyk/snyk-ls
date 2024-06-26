@@ -20,16 +20,18 @@ var _ Identifiable = (*Issue)(nil)
 var _ IdentityEnricher = (*CodeIdentityEnricher)(nil)
 
 type Identifiable interface {
-	getRange() Range
-	getPath() string
-	getFingerprint() string
-	getIssueRule() string
-	getID() string
-	setIsNew() bool
+	GetRange() Range
+	GetPath() string
+	GetFingerPrint() string
+	GetRuleId() string
+	GetGlobalIdentity() string
+	SetGlobalIdentity(globalIdentity string)
+	SetIsNew(isNew bool)
+	GetIsNew() bool
 }
 
 type IdentityEnricher interface {
-	EnrichWithId(history, current []*Identifiable)
+	EnrichWithId(history, current []Identifiable)
 }
 
 // For the IDE this will just set the IsNew value. Not sure if it should be like this. The CLI will probably require a new result
@@ -38,15 +40,20 @@ type Differ interface {
 }
 
 type CodeIdentityEnricher struct{}
-type CodeDiffer struct{}
+type GlobalDiffer struct{}
 
-func (_ CodeIdentityEnricher) EnrichWithId(history, current []*Identifiable) {
+func (_ CodeIdentityEnricher) EnrichWithId(history, current []Identifiable) {
 }
 
-func (_ CodeDiffer) Diff(history, current []*Identifiable) {
+func (_ GlobalDiffer) Diff(history, current []Identifiable) {
 }
 
 //type Comparable interface {
 //	Identifiable
 //	CompareTo(Comparable) Comparable
 //}
+
+// we have two result lists. Base branch scan result list, current branch scan result list
+// Enriching with Ids -> code-issue-identity-port
+// Calculate the diff
+// additional enrichments, etc.
