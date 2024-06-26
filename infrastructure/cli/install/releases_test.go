@@ -152,12 +152,12 @@ func Test_GetCLIDownloadURL(t *testing.T) {
 	t.Run("CLI, preview, non fips", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		releaseChannel := "preview"
-		version := fmt.Sprintf("v1.234-%s", releaseChannel)
+		version := fmt.Sprintf("v1.234-%s.", releaseChannel)
 		httpClient, name := setupCLIDownloadURLTest(t, releaseChannel, version, c)
 
 		actual := GetCLIDownloadURL(c, DefaultBaseURL, httpClient)
 
-		assert.Equal(t, "https://static.snyk.io/cli/v1.234-preview/"+name, actual)
+		assert.Equal(t, "https://static.snyk.io/cli/v1.234-preview./"+name, actual)
 	})
 }
 
