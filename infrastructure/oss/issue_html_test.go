@@ -31,7 +31,7 @@ import (
 
 func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	_ = testutil.UnitTest(t)
-	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${nonce}", "${severityIcon}", "${learnIcon}"}
+	expectedVariables := []string{"${ideStyle}", "${cspSource}", "${nonce}", "${severityIcon}", "${learnIcon}"}
 	slices.Sort(expectedVariables)
 
 	issueAdditionalData := snyk.OssIssueData{
