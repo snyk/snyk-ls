@@ -23,7 +23,9 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"runtime"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -59,6 +61,15 @@ type ReleaseAsset struct {
 type CLIRelease struct {
 	baseURL    string
 	httpClient func() *http.Client
+}
+
+type LSReleaseMetadata struct {
+	ProjectName string    `json:"project_name"`
+	Tag         string    `json:"tag"`
+	PreviousTag string    `json:"previous_tag"`
+	Version     string    `json:"version"`
+	Commit      string    `json:"commit"`
+	Date        time.Time `json:"date"`
 }
 
 func NewCLIRelease(httpClient func() *http.Client) *CLIRelease {
@@ -130,7 +141,7 @@ func GetCLIDownloadURL(c *config.Config, baseURL string, httpClient http2.HTTPCl
 	logger := c.Logger().With().Str("method", "getCLIDownloadURL").Logger()
 	defaultFallBack := "https://github.com/snyk/cli/releases"
 	releaseChannel := getDistributionChannel(c)
-	versionURL := baseURL + path.Join("/cli", releaseChannel, "ls-protocol-version-"+config.LsProtocolVersion)
+	versionURL := fmt.Sprintf("%s/cli/%s/ls-protocol-version-%s", baseURL, releaseChannel, config.LsProtocolVersion)
 
 	logger.Debug().Str("versionURL", versionURL).Msg("determined base version URL")
 
@@ -158,6 +169,54 @@ func GetCLIDownloadURL(c *config.Config, baseURL string, httpClient http2.HTTPCl
 	logger.Debug().Str("version", version).Msg("retrieved version from web")
 
 	discovery := Discovery{}
-	downloadURL := baseURL + path.Join("/cli", "v"+version, discovery.ExecutableName(false))
+	downloadURL := fmt.Sprintf("%s/cli/v%s/%s", baseURL, version, discovery.ExecutableName(false))
+	return downloadURL
+}
+
+func GetLSDownloadURL(c *config.Config, httpClient http2.HTTPClient) string {
+	logger := c.Logger().With().Str("method", "GetLSDownloadURL").Logger()
+	defaultFallBack := "https://github.com/snyk/snyk-ls/releases"
+	baseURL := fmt.Sprintf("https://static.snyk.io/snyk-ls/%s", config.LsProtocolVersion)
+	metadataURL := fmt.Sprintf("%s/metadata.json", baseURL)
+	bodyReader := &bytes.Buffer{}
+
+	req, err := http.NewRequest(http.MethodGet, metadataURL, bodyReader)
+	if err != nil {
+		logger.Err(err).Msg("couldn't create request")
+		return defaultFallBack
+	}
+
+	response, err := httpClient.Do(req)
+	if err != nil {
+		logger.Err(err).Msg("couldn't get metadata for download")
+		return defaultFallBack
+	}
+
+	if response.StatusCode >= http.StatusBadRequest {
+		logger.Error().
+			Int("statusCode", response.StatusCode).
+			Str("status", response.Status).
+			Msg("http request returned error status code")
+		return defaultFallBack
+	}
+	defer response.Body.Close()
+
+	metadataJson, err := io.ReadAll(response.Body)
+	if err != nil {
+		logger.Err(err).Msg("couldn't read response body")
+	}
+
+	var metadata LSReleaseMetadata
+	err = json.Unmarshal(metadataJson, &metadata)
+	if err != nil {
+		logger.Err(err).Str("metadata", string(metadataJson)).Msg("couldn't unmarshall metadata")
+		return defaultFallBack
+	}
+	exeIfNeeded := ""
+	if runtime.GOOS == "windows" {
+		exeIfNeeded = ".exe"
+	}
+	downloadURL := fmt.Sprintf("%s/snyk-ls_%s_%s_%s%s", baseURL, metadata.Version, runtime.GOOS, runtime.GOARCH, exeIfNeeded)
+
 	return downloadURL
 }

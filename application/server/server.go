@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path"
 	"runtime"
 	"strings"
 	"time"
@@ -314,7 +313,7 @@ func handleProtocolVersion(c *config.Config, noti noti.Notifier, ourProtocolVers
 		}
 
 		actions.Add(snyk.MessageAction(openBrowserCommandData.Title), openBrowserCommandData)
-		doNothingKey := "Do nothing"
+		doNothingKey := "Cancel"
 		// if we don't provide a commandId, nothing is done
 		actions.Add(snyk.MessageAction(doNothingKey), snyk.CommandData{Title: doNothingKey})
 
@@ -335,7 +334,7 @@ func getDownloadURL(c *config.Config) (u string) {
 	if runsEmbeddedFromCLI {
 		return install.GetCLIDownloadURL(c, install.DefaultBaseURL, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient())
 	} else {
-		return install.DefaultBaseURL + path.Join("/snyk-ls", config.LsProtocolVersion, c.Engine().GetRuntimeInfo().GetName())
+		return install.GetLSDownloadURL(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient())
 	}
 }
 

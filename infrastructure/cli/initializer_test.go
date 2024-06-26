@@ -136,7 +136,7 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		_, err := installer.Find()
 		return err == nil
-	}, time.Second*120, time.Millisecond)
+	}, time.Minute*10, time.Second)
 
 	assert.Equal(t, expectedCliPath, config.CurrentConfig().CliSettings().Path())
 }

@@ -18,15 +18,18 @@ package install
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/code-client-go/http/mocks"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
@@ -84,6 +87,42 @@ func Test_getDistributionChannel(t *testing.T) {
 	})
 }
 
+func Test_getLSDownloadURLTest(t *testing.T) {
+	metadata := LSReleaseMetadata{
+		ProjectName: "snyk-ls",
+		Tag:         "v20240626.123445",
+		Version:     "20240626.123445",
+	}
+	metadataJson, err := json.Marshal(metadata)
+	require.NoError(t, err)
+
+	t.Run("Gets download URL", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		ctrl := gomock.NewController(t)
+		httpClient := mocks.NewMockHTTPClient(ctrl)
+		httpClient.EXPECT().Do(mock.MatchedBy(func(i interface{}) bool {
+			req := i.(*http.Request)
+			return req.Method == http.MethodGet &&
+				req.URL.String() == fmt.Sprintf("https://static.snyk.io/snyk-ls/%s/metadata.json", config.LsProtocolVersion)
+		})).Return(&http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewReader(metadataJson)),
+		}, nil).Times(1)
+
+		expectedURL := fmt.Sprintf(
+			"https://static.snyk.io/snyk-ls/%s/snyk-ls_%s_%s_%s",
+			config.LsProtocolVersion,
+			metadata.Version,
+			runtime.GOOS,
+			runtime.GOARCH,
+		)
+
+		downloadURL := GetLSDownloadURL(c, httpClient)
+
+		require.Equal(t, expectedURL, downloadURL)
+	})
+}
+
 func Test_GetCLIDownloadURL(t *testing.T) {
 	t.Run("CLI, default fallback URL", func(t *testing.T) {
 		c := testutil.UnitTest(t)
@@ -137,6 +176,7 @@ func setupCLIDownloadURLTest(t *testing.T, releaseChannel, version string, c *co
 		Body:       io.NopCloser(bytes.NewReader([]byte(strings.TrimPrefix(version, "v")))),
 	}, nil).Times(1)
 	discovery := Discovery{}
+
 	name := discovery.ExecutableName(false)
 	return httpClient, name
 }
