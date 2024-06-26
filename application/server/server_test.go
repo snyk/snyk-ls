@@ -799,6 +799,57 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	)
 }
 
+func createTemporaryDirectoryWithSnykFile(t *testing.T) (snykFilePath string, folderPath string) {
+	t.Helper()
+
+	temp := t.TempDir()
+	temp = filepath.Clean(temp)
+	temp, err := filepath.Abs(temp)
+	if err != nil {
+		t.Fatalf("couldn't get abs folder path of temp dir: %v", err)
+	}
+
+	snykFilePath = filepath.Join(temp, ".snyk")
+	yamlContent := `
+ignore:
+  SNYK-JS-QS-3153490:
+    - '*':
+        reason: Ignore me 30 days
+        expires: 2024-08-26T13:55:05.414Z
+        created: 2024-07-26T13:55:05.417Z
+patch: {}
+`
+	err = os.WriteFile(snykFilePath, []byte(yamlContent), 0600)
+	if err != nil {
+		t.Fatalf("couldn't create temp .snyk file: %v", err)
+	}
+	return snykFilePath, temp
+}
+
+func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.T) {
+	loc, jsonRPCRecorder := setupServer(t)
+	config.CurrentConfig().SetSnykCodeEnabled(false)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
+	fakeAuthenticationProvider.IsAuthenticated = true
+
+	_, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		t.Fatalf("initialization failed: %v", err)
+	}
+
+	snykFilePath, folderPath := createTemporaryDirectoryWithSnykFile(t)
+
+	sendFileSavedMessage(t, snykFilePath, folderPath, loc)
+
+	// Wait for $/snyk.scan notification
+	assert.Eventually(
+		t,
+		checkForSnykScan(t, jsonRPCRecorder),
+		5*time.Second,
+		50*time.Millisecond,
+	)
+}
+
 func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 	loc, _ := setupServer(t)
 	c := config.CurrentConfig()
@@ -1011,6 +1062,14 @@ func checkForPublishedDiagnostics(t *testing.T, testPath string, expectedNumber 
 			}
 		}
 		return false
+	}
+}
+
+func checkForSnykScan(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder) func() bool {
+	t.Helper()
+	return func() bool {
+		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
+		return len(notifications) > 0
 	}
 }
 

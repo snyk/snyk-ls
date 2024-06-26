@@ -540,6 +540,14 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 	})
 }
 
+func isDotSnykFile(uri sglsp.DocumentURI) bool {
+	return strings.HasSuffix(string(uri), ".snyk")
+}
+
+func dotSnykFileDidChangeScan(ctx context.Context, workspaceFolderPath *workspace.Folder) {
+	go workspaceFolderPath.ScanFolder(ctx)
+}
+
 func textDocumentDidSaveHandler() jrpc2.Handler {
 	return handler.New(func(_ context.Context, params sglsp.DidSaveTextDocumentParams) (any, error) {
 		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
@@ -553,6 +561,11 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 
 		f := workspace.Get().GetFolderContaining(filePath)
+
+		if isDotSnykFile(params.TextDocument.URI) {
+			dotSnykFileDidChangeScan(bgCtx, f)
+			return nil, nil
+		}
 
 		autoScanEnabled := cfg.IsAutoScanEnabled()
 		if f != nil {
