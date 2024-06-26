@@ -132,6 +132,7 @@ func Test_toIssue_LearnParameterConversion(t *testing.T) {
 	assert.Equal(t, "url", (issue.AdditionalData).(snyk.OssIssueData).Lesson)
 }
 
+//nolint:dupl // test cases differ by package name
 func Test_toIssue_CodeActions_WithNPMFix(t *testing.T) {
 	config.CurrentConfig().SetSnykOSSQuickFixCodeActionsEnabled(true)
 
@@ -151,6 +152,28 @@ func Test_toIssue_CodeActions_WithNPMFix(t *testing.T) {
 	assert.Equal(t, "Learn more about THOU SHALL NOT PASS (Snyk)", issue.CodeActions[2].Title)
 	assert.Equal(t, 1, len(issue.CodelensCommands))
 	assert.Equal(t, "⚡ Fix this issue: Upgrade to \"pkg\": \"v2\" (Snyk)", issue.CodelensCommands[0].Title)
+}
+
+//nolint:dupl // test cases differ by package name
+func Test_toIssue_CodeActions_WithScopedNPMFix(t *testing.T) {
+	config.CurrentConfig().SetSnykOSSQuickFixCodeActionsEnabled(true)
+
+	sampleOssIssue := sampleIssue()
+	scanner := CLIScanner{
+		learnService: getLearnMock(t),
+	}
+	sampleOssIssue.UpgradePath = []any{"false", "@org/pkg@v2"}
+
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+
+	assert.Equal(t, sampleOssIssue.Id, issue.ID)
+	assert.Equal(t, 3, len(issue.CodeActions))
+	assert.Equal(t, "Upgrade to \"@org/pkg\": \"v2\" (Snyk)", issue.CodeActions[0].Title)
+	assert.Equal(t, "Open description of 'THOU SHALL NOT PASS affecting package pkg' in browser (Snyk)",
+		issue.CodeActions[1].Title)
+	assert.Equal(t, "Learn more about THOU SHALL NOT PASS (Snyk)", issue.CodeActions[2].Title)
+	assert.Equal(t, 1, len(issue.CodelensCommands))
+	assert.Equal(t, "⚡ Fix this issue: Upgrade to \"@org/pkg\": \"v2\" (Snyk)", issue.CodelensCommands[0].Title)
 }
 
 func Test_toIssue_CodeActions_WithGomodFix(t *testing.T) {

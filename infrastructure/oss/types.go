@@ -327,8 +327,10 @@ func (i *ossIssue) getQuickfixEdit() string {
 
 	// UpgradePath[0] is the upgrade for the package that was scanned
 	// UpgradePath[1] is the upgrade for the root dependency
-	upgradePathPkg := strings.Split(i.UpgradePath[1].(string), "@")[0]
-	upgradePathVersion := strings.Split(i.UpgradePath[1].(string), "@")[1]
+	rootDependencyUpgrade := i.UpgradePath[1].(string)
+	rootDependencyUpgradeSplit := strings.Split(rootDependencyUpgrade, "@")
+	upgradePathPkg := strings.Join(rootDependencyUpgradeSplit[:len(rootDependencyUpgradeSplit)-1], "@")
+	upgradePathVersion := rootDependencyUpgradeSplit[len(rootDependencyUpgradeSplit)-1]
 	if i.PackageManager == "npm" || i.PackageManager == "yarn" || i.PackageManager == "yarn-workspace" {
 		return fmt.Sprintf("\"%s\": \"%s\"", upgradePathPkg, upgradePathVersion)
 	} else if i.PackageManager == "maven" || i.PackageManager == "gradle" {
