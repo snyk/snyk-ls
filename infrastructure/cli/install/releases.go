@@ -128,10 +128,10 @@ func getDistributionChannel(c *config.Config) string {
 		return "stable"
 	}
 	version := info.GetVersion()
-	if strings.Contains(version, "preview") {
+	if strings.Contains(version, "-preview.") {
 		return "preview"
 	}
-	if strings.Contains(version, "rc") {
+	if strings.Contains(version, "-rc.") {
 		return "rc"
 	}
 	return "stable"
