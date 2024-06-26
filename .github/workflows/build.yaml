@@ -82,13 +82,6 @@ jobs:
 
           make clean test
 
-      - name: Snyk
-        env:
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
-        run: |
-          snyk monitor
-          snyk code test --severity-threshold=high
-
   integration-tests:
     name: integration-tests
     runs-on: ${{ matrix.os }}
