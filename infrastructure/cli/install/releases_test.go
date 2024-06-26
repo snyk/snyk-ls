@@ -65,7 +65,7 @@ func Test_getDistributionChannel(t *testing.T) {
 		c := testutil.UnitTest(t)
 		runtimeInfo := runtimeinfo.New(
 			runtimeinfo.WithName("snyk-cli"),
-			runtimeinfo.WithVersion("v1.1234.4-preview"),
+			runtimeinfo.WithVersion("v1.1234.4-preview."),
 		)
 		c.Engine().SetRuntimeInfo(runtimeInfo)
 
@@ -77,7 +77,7 @@ func Test_getDistributionChannel(t *testing.T) {
 		c := testutil.UnitTest(t)
 		runtimeInfo := runtimeinfo.New(
 			runtimeinfo.WithName("snyk-cli"),
-			runtimeinfo.WithVersion("v1.1234.4-rc"),
+			runtimeinfo.WithVersion("v1.1234.4-rc."),
 		)
 		c.Engine().SetRuntimeInfo(runtimeInfo)
 
