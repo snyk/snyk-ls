@@ -545,23 +545,24 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
-		c := config.CurrentConfig()
-		logger := c.Logger().With().Str("method", "TextDocumentDidSaveHandler").Logger()
+		cfg := config.CurrentConfig()
+		logger := cfg.Logger().With().Str("method", "TextDocumentDidSaveHandler").Logger()
 
 		logger.Info().Interface("params", params).Msg("Receiving")
 		di.FileWatcher().SetFileAsSaved(params.TextDocument.URI)
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 
 		f := workspace.Get().GetFolderContaining(filePath)
-		autoScanEnabled := config.CurrentConfig().IsAutoScanEnabled()
-		if f != nil && autoScanEnabled {
-			go f.ScanFile(bgCtx, filePath)
-		} else {
+
+		autoScanEnabled := cfg.IsAutoScanEnabled()
+		if f != nil {
 			if autoScanEnabled {
-				logger.Warn().Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
+				go f.ScanFile(bgCtx, filePath)
 			} else {
 				logger.Warn().Msg("Not scanning, auto-scan is disabled")
 			}
+		} else if autoScanEnabled {
+			logger.Warn().Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
 		}
 		return nil, nil
 	})
