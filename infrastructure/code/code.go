@@ -21,7 +21,6 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/rs/zerolog"
-	"github.com/snyk/code-client-go/sarif"
 	"os"
 	"sync"
 	"time"
@@ -344,8 +343,8 @@ func (sc *Scanner) ScanWithDelta(ctx context.Context, path string, folderPath st
 	mainMetrics := sc.newMetrics(startTime)
 	logger.Info().Msg("Scanning base branch")
 
-	mainSarifResponse, _, err := sc.UploadAndAnalyzeWithDelta(span.Context(), mainFiles, mainPath, mainMetrics, mainFilesToBeScanned)
-	if mainSarifResponse == nil {
+	baseScanResults, err := sc.UploadAndAnalyze(span.Context(), mainFiles, mainPath, mainMetrics, mainFilesToBeScanned)
+	if baseScanResults == nil {
 		return issues, err
 	}
 
@@ -358,20 +357,12 @@ func (sc *Scanner) ScanWithDelta(ctx context.Context, path string, folderPath st
 	files := fileFilter.FindNonIgnoredFiles()
 	metrics := sc.newMetrics(startTime)
 	logger.Info().Msg("Scanning current branch")
-	sarifResponse, bundle, err := sc.UploadAndAnalyzeWithDelta(span.Context(), files, folderPath, metrics, filesToBeScanned)
-	if sarifResponse == nil {
+	currentScanResults, err := sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, filesToBeScanned)
+	if currentScanResults == nil {
 		return issues, err
 	}
 
-	var results []snyk.Issue
-	diff := getSarifDiff(*mainSarifResponse, *sarifResponse, len(path) > 0)
-
-	converter := SarifConverter{sarif: *diff, c: sc.c}
-	results, err = converter.toIssues(path)
-
-	if len(results) > 0 {
-		bundle.issueEnhancer.addIssueActions(ctx, results, bundle.BundleHash)
-	}
+	results := getSarifDiff(baseScanResults, currentScanResults)
 
 	// Populate HTML template
 	sc.enhanceIssuesDetails(results)
@@ -381,26 +372,23 @@ func (sc *Scanner) ScanWithDelta(ctx context.Context, path string, folderPath st
 	return results, err
 }
 
-func getSarifDiff(mainSarif sarif.SarifResponse, currentBranchSarif sarif.SarifResponse, isPartialScan bool) *sarif.SarifResponse {
-	var deltaResults []sarif.Result
-	history, err := identify(mainSarif, []sarif.SarifResponse{}, isPartialScan)
+func getSarifDiff(baseIssueList []snyk.Issue, currentIssueList []snyk.Issue) []snyk.Issue {
+	var deltaResults []snyk.Issue
+	baseBranchResults, err := identify(baseIssueList, [][]snyk.Issue{})
 	if err != nil {
 		return nil
 	}
 
-	currentBranch, err := identify(currentBranchSarif, []sarif.SarifResponse{history}, isPartialScan)
+	currentBranchResults, err := identify(currentIssueList, [][]snyk.Issue{baseBranchResults})
 	if err != nil {
 		return nil
 	}
 
-	if len(currentBranch.Sarif.Runs) > 0 && len(history.Sarif.Runs) > 0 {
-		branchResults := currentBranch.Sarif.Runs[0].Results
-		baseResults := history.Sarif.Runs[0].Results
-
-		for _, branchIssue := range branchResults {
+	if len(currentBranchResults) > 0 && len(baseBranchResults) > 0 {
+		for _, branchIssue := range currentBranchResults {
 			found := false
-			for _, baseIssue := range baseResults {
-				if baseIssue.Identity == branchIssue.Identity {
+			for _, baseIssue := range baseBranchResults {
+				if baseIssue.GetGlobalIdentity() == branchIssue.GetGlobalIdentity() {
 					found = true
 					break
 				}
@@ -411,8 +399,7 @@ func getSarifDiff(mainSarif sarif.SarifResponse, currentBranchSarif sarif.SarifR
 		}
 	}
 
-	currentBranch.Sarif.Runs[0].Results = deltaResults
-	return &currentBranch
+	return deltaResults
 }
 
 // Populate HTML template
@@ -586,71 +573,6 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 	}
 	sc.trackResult(err == nil, scanMetrics)
 	return issues, err
-}
-
-func (sc *Scanner) UploadAndAnalyzeWithDelta(ctx context.Context,
-	files <-chan string,
-	path string,
-	scanMetrics *ScanMetrics,
-	changedFiles map[string]bool,
-) (sarif *sarif.SarifResponse, bundle *Bundle, err error) {
-	if ctx.Err() != nil {
-		sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
-		return nil, nil, nil
-	}
-
-	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.uploadAndAnalyze")
-	defer sc.BundleUploader.instrumentor.Finish(span)
-
-	requestId := span.GetTraceId() // use span trace id as code-request-id
-	sc.c.Logger().Info().Str("requestId", requestId).Msg("Starting Code analysis.")
-
-	resBundle, err := sc.createBundle(span.Context(), requestId, path, files, changedFiles)
-	bundle = &resBundle
-	if err != nil {
-		if isNoFilesError(err) {
-			return nil, nil, nil
-		}
-		if ctx.Err() == nil { // Only report errors that are not intentional cancellations
-			msg := "error creating bundle..."
-			sc.handleCreationAndUploadError(path, err, msg, scanMetrics)
-			return nil, nil, err
-		} else {
-			sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
-			return nil, nil, nil
-		}
-	}
-
-	scanMetrics.lastScanFileCount = len(bundle.Files)
-
-	uploadedBundle, err := sc.BundleUploader.Upload(span.Context(), *bundle, bundle.Files)
-	// TODO LSP error handling should be pushed UP to the LSP layer
-	if err != nil {
-		if ctx.Err() != nil { // Only handle errors that are not intentional cancellations
-			msg := "error uploading files..."
-			sc.handleCreationAndUploadError(path, err, msg, scanMetrics)
-			return nil, nil, err
-		} else {
-			sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
-			return nil, nil, nil
-		}
-	}
-
-	if uploadedBundle.BundleHash == "" {
-		sc.c.Logger().Info().Msg("empty bundle, no Snyk Code analysis")
-		return nil, nil, nil
-	}
-
-	sc.BundleHashes[path] = uploadedBundle.BundleHash
-
-	sarif, err = uploadedBundle.FetchDiagnosticsDataWithDelta(span.Context())
-
-	if ctx.Err() != nil {
-		sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
-		return nil, nil, nil
-	}
-	sc.trackResult(err == nil, scanMetrics)
-	return sarif, bundle, err
 }
 
 func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,

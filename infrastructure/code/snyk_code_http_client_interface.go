@@ -18,8 +18,6 @@ package code
 
 import (
 	"context"
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
-
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
@@ -60,16 +58,6 @@ type SnykCodeClient interface {
 		baseDir string,
 	) (
 		[]snyk.Issue,
-		AnalysisStatus,
-		error,
-	)
-
-	RunAnalysisWithDelta(
-		ctx context.Context,
-		options AnalysisOptions,
-		baseDir string,
-	) (
-		*codeClientSarif.SarifResponse,
 		AnalysisStatus,
 		error,
 	)

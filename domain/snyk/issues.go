@@ -39,10 +39,10 @@ type Issue struct {
 	ID        string
 	Severity  Severity
 	IssueType Type
-	IsIgnored bool // If not explicitly it will default to false so it doesn't break backwards
+	IsIgnored bool // If not explicitly it will default to false, so it doesn't break backwards
 	IsNew     bool
 	// compatibility
-	IgnoreDetails *IgnoreDetails // It defaults to nil so it doesn't break backwards compatibility
+	IgnoreDetails *IgnoreDetails // It defaults to nil, so it doesn't break backwards compatibility
 	// Range identifies the location of this issue in its source of origin (e.g. line & character start & end)
 	Range Range
 	// Message is a human-readable description of the issue
@@ -70,31 +70,43 @@ type Issue struct {
 	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
 	AdditionalData IssueAdditionalData
 	// Learn Service Lesson URL
-	LessonUrl   string `json:"url"`
-	Fingerprint string
+	LessonUrl      string `json:"url"`
+	fingerprint    string
+	globalIdentity string
 }
 
-func (i Issue) getID() string {
-	return i.ID
-}
-
-func (i Issue) setIsNew() bool {
+func (i Issue) GetIsNew() bool {
 	return i.IsNew
 }
 
-func (i Issue) getRange() Range {
+func (i Issue) SetIsNew(isNew bool) {
+	i.IsNew = isNew
+}
+
+func (i Issue) GetGlobalIdentity() string {
+	return i.globalIdentity
+}
+
+func (i Issue) SetGlobalIdentity(globalIdentity string) {
+	i.globalIdentity = globalIdentity
+}
+
+func (i Issue) GetRange() Range {
 	return i.Range
 }
 
-func (i Issue) getPath() string {
+func (i Issue) GetPath() string {
 	return i.AffectedFilePath
 }
 
-func (i Issue) getFingerprint() string {
-	return i.Fingerprint
+func (i Issue) GetFingerPrint() string {
+	return i.fingerprint
+}
+func (i Issue) SetFingerPrint(fingerprint string) {
+	i.fingerprint = fingerprint
 }
 
-func (i Issue) getIssueRule() string {
+func (i Issue) GetRuleId() string {
 	return i.ID
 }
 

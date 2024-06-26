@@ -19,7 +19,6 @@ package code
 import (
 	"context"
 	"fmt"
-	"github.com/snyk/code-client-go/sarif"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -267,39 +266,6 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 		FakeIssue,
 	).Msg("fake backend call received & answered")
 	return issues, successfulResult, nil
-}
-
-func (f *FakeSnykCodeClient) RunAnalysisWithDelta(
-	_ context.Context,
-	options AnalysisOptions,
-	_ string,
-) (*sarif.SarifResponse, AnalysisStatus, error) {
-	FakeSnykCodeApiServiceMutex.Lock()
-	f.currentConcurrentScans++
-	if f.currentConcurrentScans > f.maxConcurrentScans {
-		f.maxConcurrentScans = f.currentConcurrentScans
-	}
-	FakeSnykCodeApiServiceMutex.Unlock()
-	<-time.After(f.AnalysisDuration)
-	FakeSnykCodeApiServiceMutex.Lock()
-	f.currentConcurrentScans--
-	params := []any{options.bundleHash, options.limitToFiles, options.severity}
-	f.addCall(params, RunAnalysisOperation)
-	FakeSnykCodeApiServiceMutex.Unlock()
-
-	issues := []snyk.Issue{FakeIssue}
-	if f.NoFixSuggestions {
-		if issueData, ok := issues[0].AdditionalData.(snyk.CodeIssueData); ok {
-			issueData.IsAutofixable = false
-			issues[0].AdditionalData = issueData
-		}
-	}
-	f.Options = options
-	f.C.Logger().Trace().Str("method", "RunAnalysis").Interface(
-		"fakeDiagnostic",
-		FakeIssue,
-	).Msg("fake backend call received & answered")
-	return nil, successfulResult, nil
 }
 
 func (f *FakeSnykCodeClient) GetAutofixSuggestions(
