@@ -20,7 +20,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self' 'none'; style-src 'self' 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
+        content="default-src 'self' ${cspSource}; style-src 'self' 'nonce-${nonce}' ${cspSource}; script-src 'nonce-${nonce}' ${cspSource};">
 
   <style nonce="${nonce}">
     .suggestion {
@@ -97,6 +97,8 @@
 
   </style>
 
+  ${headerEnd}
+
   ${ideStyle}
 </head>
 
@@ -110,7 +112,7 @@
     <div class="identifiers">
       {{.IssueType}}
       {{if gt (len .CVEs) 0}}
-      <span class="delimiter">|</span>
+      <span class="delimiter"> </span>
       {{range $index, $cve := .CVEs}}
       <a class="cve styled-link" target="_blank" rel="noopener noreferrer"
          href="https://cve.mitre.org/cgi-bin/cvename.cgi?name=$cve">{{$cve}}</a>
@@ -119,7 +121,7 @@
       {{end}}
 
       {{if gt (len .CWEs) 0}}
-      <span class="delimiter">|</span>
+      <span class="delimiter"> </span>
       {{range $index, $cwe := .CWEs}}
       <a class="cwe styled-link" target="_blank" rel="noopener noreferrer"
          href="https://cwe.mitre.org/data/definitions/{{trimCWEPrefix $cwe}}.html">{{$cwe}}</a>
@@ -128,11 +130,11 @@
       {{end}}
 
       {{if gt (len .CvssScore) 0}}
-      <span class="delimiter">|</span>
-      <span>{{.CvssScore}}</span>
+      <span class="delimiter"> </span>
+      <span>CVSS {{.CvssScore}}</span>
       {{end}}
 
-      <span class="delimiter">|</span>
+      <span class="delimiter"> </span>
       <a class="styled-link" target="_blank" rel="noopener noreferrer"
          href="https://snyk.io/vuln/{{.IssueId}}">{{.IssueId}}</a>
     </div>

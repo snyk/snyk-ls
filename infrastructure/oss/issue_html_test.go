@@ -31,7 +31,7 @@ import (
 
 func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	_ = testutil.UnitTest(t)
-	expectedVariables := []string{"${ideStyle}", "${nonce}"}
+	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${ideStyle}", "${nonce}"}
 	slices.Sort(expectedVariables)
 
 	issueAdditionalData := snyk.OssIssueData{
@@ -131,6 +131,6 @@ func Test_OssDetailsPanel_html_withLearn_withCustomEndpoint(t *testing.T) {
 	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
 
 	issueDetailsPanelHtml := getDetailsHtml(issue)
-	
+
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, customEndpoint))
 }
