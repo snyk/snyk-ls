@@ -83,7 +83,7 @@ proxy-test:
 
 instance-test:
 	@echo "==> Running instance tests"
-	@export SMOKE_TESTS=1 && cd application/server && go test -run Test_SmokeWorkspaceScan && cd -
+	@export SMOKE_TESTS=1 && cd application/server && go test $(TIMEOUT) -run Test_SmokeWorkspaceScan && cd -
 
 instance-standard-test:
 	@echo "==> Running instance tests for the standard environment"
