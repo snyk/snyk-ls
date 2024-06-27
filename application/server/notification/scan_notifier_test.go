@@ -328,7 +328,7 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 				},
 				IsUpgradable:      false,
 				CVSSv3:            "OSS CVSSv3",
-				CvssScore:         9.9,
+				CVSSv4:            9.9,
 				Exploit:           "OSS Exploit",
 				IsPatchable:       false,
 				ProjectName:       "OSS ProjectName",

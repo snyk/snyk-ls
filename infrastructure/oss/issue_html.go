@@ -73,7 +73,7 @@ func getDetailsHtml(issue snyk.Issue) string {
 		"IssueOverview":      html.MarkdownToHTML(string(overview)),
 		"CVEs":               additionalData.Identifiers.CVE,
 		"CWEs":               additionalData.Identifiers.CWE,
-		"CvssScore":          fmt.Sprintf("%.1f", additionalData.CvssScore),
+		"CVSSv4":             fmt.Sprintf("%.1f", additionalData.CVSSv4),
 		"ExploitMaturity":    getExploitMaturity(additionalData),
 		"IntroducedThroughs": getIntroducedThroughs(additionalData),
 		"LessonUrl":          additionalData.Lesson,

@@ -90,7 +90,7 @@ func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []sny
 	additionalData.UpgradePath = i.UpgradePath
 	additionalData.IsUpgradable = i.IsUpgradable
 	additionalData.CVSSv3 = i.CVSSv3
-	additionalData.CvssScore = i.CvssScore
+	additionalData.CVSSv4 = i.CvssScore
 	additionalData.Exploit = i.Exploit
 	additionalData.IsPatchable = i.IsPatchable
 	additionalData.ProjectName = scanResult.ProjectName

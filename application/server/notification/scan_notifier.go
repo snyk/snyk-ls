@@ -135,7 +135,7 @@ func (n *scanNotifier) appendOssIssues(scanIssues []lsp.ScanIssue, issues []snyk
 				Version:           matchingIssue.Version,
 				Exploit:           matchingIssue.Exploit,
 				CVSSv3:            matchingIssue.CVSSv3,
-				CvssScore:         strconv.FormatFloat(matchingIssue.CvssScore, 'f', 2, 64), // convert float64 to string with 2 decimal places
+				CvssScore:         strconv.FormatFloat(matchingIssue.CVSSv4, 'f', 2, 64), // convert float64 to string with 2 decimal places
 				FixedIn:           matchingIssue.FixedIn,
 				From:              matchingIssue.From,
 				UpgradePath:       matchingIssue.UpgradePath,
@@ -168,7 +168,7 @@ func (n *scanNotifier) appendOssIssues(scanIssues []lsp.ScanIssue, issues []snyk
 				Version:           additionalData.Version,
 				Exploit:           additionalData.Exploit,
 				CVSSv3:            additionalData.CVSSv3,
-				CvssScore:         strconv.FormatFloat(additionalData.CvssScore, 'f', 2, 64), // convert float64 to string with 2 decimal places
+				CvssScore:         strconv.FormatFloat(additionalData.CVSSv4, 'f', 2, 64), // convert float64 to string with 2 decimal places
 				FixedIn:           additionalData.FixedIn,
 				From:              additionalData.From,
 				UpgradePath:       additionalData.UpgradePath,
