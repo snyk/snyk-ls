@@ -16,44 +16,82 @@
 
 package snyk
 
+import "github.com/google/uuid"
+
 var _ Identifiable = (*Issue)(nil)
-var _ IdentityEnricher = (*CodeIdentityEnricher)(nil)
+var _ IdentityEnricher = (*GlobalIdentityEnricher)(nil)
+var _ Matcher = (*CodeIdentityMatcher)(nil)
+var _ Differ = (*GlobalDiffer)(nil)
+
+type Fingerprintable interface {
+	Fingerprint() string
+}
 
 type Identifiable interface {
-	GetRange() Range
-	GetPath() string
-	GetFingerPrint() string
-	GetRuleId() string
-	GetGlobalIdentity() string
+	Path() string
+	RuleId() string
+	GlobalIdentity() string
 	SetGlobalIdentity(globalIdentity string)
 	SetIsNew(isNew bool)
-	GetIsNew() bool
+	IsNew() bool
 }
 
 type IdentityEnricher interface {
-	EnrichWithId(history, current []Identifiable)
+	EnrichWithId(base []Identifiable) []Identifiable
 }
 
-// For the IDE this will just set the IsNew value. Not sure if it should be like this. The CLI will probably require a new result
 type Differ interface {
-	Diff(history, current []Identifiable) []Identifiable
+	Diff(base []Identifiable) []Identifiable
 }
 
-type CodeIdentityEnricher struct{}
-type GlobalDiffer struct{}
-
-func (_ CodeIdentityEnricher) EnrichWithId(history, current []Identifiable) {
+type Matcher interface {
+	Match(base []Identifiable) ([]Identifiable, error)
 }
 
-func (_ GlobalDiffer) Diff(history, current []Identifiable) {
+type GlobalDiffer struct {
+	currentIssueList []Identifiable
 }
 
-//type Comparable interface {
-//	Identifiable
-//	CompareTo(Comparable) Comparable
-//}
+type CodeIdentityMatcher struct {
+	currentIssueList []Identifiable
+}
 
-// we have two result lists. Base branch scan result list, current branch scan result list
-// Enriching with Ids -> code-issue-identity-port
-// Calculate the diff
-// additional enrichments, etc.
+func (ci CodeIdentityMatcher) Match(baseIssueList []Identifiable) ([]Identifiable, error) {
+
+}
+
+type GlobalIdentityEnricher struct {
+}
+
+func (_ GlobalIdentityEnricher) EnrichWithId(issueList []Identifiable) []Identifiable {
+	for i := range issueList {
+		if issueList[i].GlobalIdentity() == "" {
+			issueList[i].SetGlobalIdentity(uuid.New().String())
+		}
+	}
+
+	return issueList
+}
+
+func (gd GlobalDiffer) Diff(baseIssueList []Identifiable) []Identifiable {
+	var deltaResults []Identifiable
+
+	if len(gd.currentIssueList) == 0 || len(baseIssueList) == 0 {
+		return deltaResults
+	}
+
+	for i := range gd.currentIssueList {
+		found := false
+		for j := range baseIssueList {
+			if baseIssueList[j].GlobalIdentity() == gd.currentIssueList[i].GlobalIdentity() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			deltaResults = append(deltaResults, gd.currentIssueList[i])
+		}
+	}
+
+	return deltaResults
+}
