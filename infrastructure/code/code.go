@@ -388,7 +388,7 @@ func getSarifDiff(baseIssueList []snyk.Issue, currentIssueList []snyk.Issue) []s
 		for _, branchIssue := range currentBranchResults {
 			found := false
 			for _, baseIssue := range baseBranchResults {
-				if baseIssue.GetGlobalIdentity() == branchIssue.GetGlobalIdentity() {
+				if baseIssue.GlobalIdentity() == branchIssue.GlobalIdentity() {
 					found = true
 					break
 				}

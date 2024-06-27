@@ -40,7 +40,7 @@ type Issue struct {
 	Severity  Severity
 	IssueType Type
 	IsIgnored bool // If not explicitly it will default to false, so it doesn't break backwards
-	IsNew     bool
+	isNew     bool
 	// compatibility
 	IgnoreDetails *IgnoreDetails // It defaults to nil, so it doesn't break backwards compatibility
 	// Range identifies the location of this issue in its source of origin (e.g. line & character start & end)
@@ -75,38 +75,38 @@ type Issue struct {
 	globalIdentity string
 }
 
-func (i Issue) GetIsNew() bool {
-	return i.IsNew
+func (i *Issue) IsNew() bool {
+	return i.isNew
 }
 
-func (i Issue) SetIsNew(isNew bool) {
-	i.IsNew = isNew
+func (i *Issue) SetIsNew(isNew bool) {
+	i.isNew = isNew
 }
 
-func (i Issue) GetGlobalIdentity() string {
+func (i *Issue) GlobalIdentity() string {
 	return i.globalIdentity
 }
 
-func (i Issue) SetGlobalIdentity(globalIdentity string) {
+func (i *Issue) SetGlobalIdentity(globalIdentity string) {
 	i.globalIdentity = globalIdentity
 }
 
-func (i Issue) GetRange() Range {
+func (i *Issue) GetRange() Range {
 	return i.Range
 }
 
-func (i Issue) GetPath() string {
+func (i *Issue) Path() string {
 	return i.AffectedFilePath
 }
 
-func (i Issue) GetFingerPrint() string {
+func (i *Issue) Fingerprint() string {
 	return i.fingerprint
 }
-func (i Issue) SetFingerPrint(fingerprint string) {
+func (i *Issue) SetFingerPrint(fingerprint string) {
 	i.fingerprint = fingerprint
 }
 
-func (i Issue) GetRuleId() string {
+func (i *Issue) RuleId() string {
 	return i.ID
 }
 
@@ -250,7 +250,7 @@ func (i IaCIssueData) GetTitle() string {
 	return i.Title
 }
 
-func (i Issue) GetFilterableIssueType() product.FilterableIssueType {
+func (i *Issue) GetFilterableIssueType() product.FilterableIssueType {
 	switch i.Product {
 	case product.ProductOpenSource:
 		return product.FilterableIssueTypeOpenSource
@@ -272,7 +272,7 @@ func (i Issue) GetFilterableIssueType() product.FilterableIssueType {
 	}
 }
 
-func (i Issue) String() string {
+func (i *Issue) String() string {
 	return fmt.Sprintf("%s, ID: %s, Range: %s", i.AffectedFilePath, i.ID, i.Range)
 }
 

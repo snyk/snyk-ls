@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # project variables
-PROJECT_NAME := snyk-ls
+PROJECT_NAME := snyk-delta-ls
 
 # build variables
 .DEFAULT_GOAL = test
