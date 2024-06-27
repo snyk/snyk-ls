@@ -540,34 +540,27 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 	})
 }
 
-func isDotSnykFile(uri sglsp.DocumentURI) bool {
-	return strings.HasSuffix(string(uri), ".snyk")
-}
-
-func dotSnykFileDidChangeScan(ctx context.Context, workspaceFolderPath *workspace.Folder) {
-	go workspaceFolderPath.ScanFolder(ctx)
-}
-
 func textDocumentDidSaveHandler() jrpc2.Handler {
 	return handler.New(func(_ context.Context, params sglsp.DidSaveTextDocumentParams) (any, error) {
 		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
-		cfg := config.CurrentConfig()
-		logger := cfg.Logger().With().Str("method", "TextDocumentDidSaveHandler").Logger()
-
+		c := config.CurrentConfig()
+		logger := c.Logger().With().Str("method", "TextDocumentDidSaveHandler").Logger()
 		logger.Info().Interface("params", params).Msg("Receiving")
+
+		autoScanEnabled := c.IsAutoScanEnabled()
+
 		di.FileWatcher().SetFileAsSaved(params.TextDocument.URI)
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 
-		f := workspace.Get().GetFolderContaining(filePath)
-
-		if isDotSnykFile(params.TextDocument.URI) {
-			dotSnykFileDidChangeScan(bgCtx, f)
+		ws := workspace.Get()
+		if ws != nil && autoScanEnabled && uri.IsDotSnykFile(params.TextDocument.URI) {
+			go ws.ScanWorkspace(bgCtx)
 			return nil, nil
 		}
 
-		autoScanEnabled := cfg.IsAutoScanEnabled()
+		f := ws.GetFolderContaining(filePath)
 		if f != nil {
 			if autoScanEnabled {
 				go f.ScanFile(bgCtx, filePath)

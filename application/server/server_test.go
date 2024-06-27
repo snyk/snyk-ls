@@ -820,9 +820,7 @@ ignore:
 patch: {}
 `
 	err = os.WriteFile(snykFilePath, []byte(yamlContent), 0600)
-	if err != nil {
-		t.Fatalf("couldn't create temp .snyk file: %v", err)
-	}
+	assert.Nil(t, err)
 	return snykFilePath, temp
 }
 
