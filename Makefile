@@ -87,7 +87,7 @@ instance-test:
 
 instance-standard-test:
 	@echo "==> Running instance tests for the standard environment"
-	@export SMOKE_TESTS=1 && cd application/server && go test -run Test_Smoke && cd -
+	@export SMOKE_TESTS=1 && cd application/server && go test $(TIMEOUT) -failfast -run Test_Smoke && cd -
 	@echo "==> Checking Eclipse storage buckets..."
 	@curl -sSL https://static.snyk.io/eclipse/stable/p2.index
 
