@@ -134,19 +134,6 @@ func getIntroducedThroughs(issue snyk.OssIssueData) []IntroducedThrough {
 	return introducedThroughs
 }
 
-func getOutdatedDependencyMessage(issue snyk.OssIssueData) string {
-	remediationAdvice := fmt.Sprintf("Your dependencies are out of date, "+
-		"otherwise you would be using a newer %s than %s@%s. ", issue.Name, issue.Name, issue.Version)
-
-	if issue.PackageManager == "npm" || issue.PackageManager == "yarn" || issue.PackageManager == "yarn-workspace" {
-		remediationAdvice += "Try relocking your lockfile or deleting node_modules and reinstalling" +
-			" your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
-	} else {
-		remediationAdvice += "Try reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
-	}
-	return remediationAdvice
-}
-
 type DetailedPath struct {
 	From        []string
 	Remediation string
@@ -185,6 +172,19 @@ func getRemediationAdvice(issue snyk.OssIssueData) string {
 		} else {
 			remediationAdvice = upgradeMessage
 		}
+	}
+	return remediationAdvice
+}
+
+func getOutdatedDependencyMessage(issue snyk.OssIssueData) string {
+	remediationAdvice := fmt.Sprintf("Your dependencies are out of date, "+
+		"otherwise you would be using a newer %s than %s@%s. ", issue.Name, issue.Name, issue.Version)
+
+	if issue.PackageManager == "npm" || issue.PackageManager == "yarn" || issue.PackageManager == "yarn-workspace" {
+		remediationAdvice += "Try relocking your lockfile or deleting node_modules and reinstalling" +
+			" your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
+	} else {
+		remediationAdvice += "Try reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
 	}
 	return remediationAdvice
 }

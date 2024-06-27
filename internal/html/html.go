@@ -61,7 +61,7 @@ func GetSeverityIconSvg(issue snyk.Issue) template.HTML {
 			 <path d="M3 3h2l2.997 7.607L11 3h2L9 13H7L3 3Zm0 0h2v10l-2-.001V3.001Zm8 0h2V13h-2V3Z" fill="#fff"/>
 		 </svg>`)
 	case snyk.Low:
-		return template.HTML(`<svg id="severity-icon" class="icon low" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32"	viewBox="0 0 16 16">
+		return template.HTML(`<svg id="severity-icon" class="icon low" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 			 <rect width="16" height="16" rx="2" fill="#88879E"/>
 			 <path d="M11 11v2H6.705v-2H11ZM7 3v10H5V3h2Z" fill="#fff"/>
 		 </svg>`)
