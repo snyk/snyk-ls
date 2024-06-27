@@ -214,6 +214,62 @@ func Test_toIssue_CodeActions_WithMavenFix(t *testing.T) {
 	assert.Equal(t, "⚡ Fix this issue: Upgrade to v2 (Snyk)", issue.CodelensCommands[0].Title)
 }
 
+func Test_toIssue_CodeActions_WithMavenFixForBuildGradle(t *testing.T) {
+	config.CurrentConfig().SetSnykOSSQuickFixCodeActionsEnabled(true)
+
+	sampleOssIssue := sampleIssue()
+	scanner := CLIScanner{
+		learnService: getLearnMock(t),
+	}
+	sampleOssIssue.PackageManager = "maven"
+	sampleOssIssue.UpgradePath = []any{"false", "a:pkg@v2"}
+
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+
+	assert.Equal(t, sampleOssIssue.Id, issue.ID)
+	assert.Equal(t, 3, len(issue.CodeActions))
+	assert.Equal(t, "Upgrade to v2 (Snyk)", issue.CodeActions[0].Title)
+	assert.Equal(t, 1, len(issue.CodelensCommands))
+	assert.Equal(t, "⚡ Fix this issue: Upgrade to v2 (Snyk)", issue.CodelensCommands[0].Title)
+
+	// TODO: remove once https://snyksec.atlassian.net/browse/OSM-1775 is fixed
+	issue = toIssue("build.gradle", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+
+	assert.Equal(t, sampleOssIssue.Id, issue.ID)
+	assert.Equal(t, 3, len(issue.CodeActions))
+	assert.Equal(t, "Upgrade to pkg:v2 (Snyk)", issue.CodeActions[0].Title)
+	assert.Equal(t, 1, len(issue.CodelensCommands))
+	assert.Equal(t, "⚡ Fix this issue: Upgrade to pkg:v2 (Snyk)", issue.CodelensCommands[0].Title)
+
+	// TODO: remove once https://snyksec.atlassian.net/browse/OSM-1775 is fixed
+	issue = toIssue("build.gradle.kts", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+
+	assert.Equal(t, sampleOssIssue.Id, issue.ID)
+	assert.Equal(t, 3, len(issue.CodeActions))
+	assert.Equal(t, "Upgrade to pkg:v2 (Snyk)", issue.CodeActions[0].Title)
+	assert.Equal(t, 1, len(issue.CodelensCommands))
+	assert.Equal(t, "⚡ Fix this issue: Upgrade to pkg:v2 (Snyk)", issue.CodelensCommands[0].Title)
+}
+
+func Test_toIssue_CodeActions_WithGradleFix(t *testing.T) {
+	config.CurrentConfig().SetSnykOSSQuickFixCodeActionsEnabled(true)
+
+	sampleOssIssue := sampleIssue()
+	scanner := CLIScanner{
+		learnService: getLearnMock(t),
+	}
+	sampleOssIssue.PackageManager = "gradle"
+	sampleOssIssue.UpgradePath = []any{"false", "a:pkg@v2"}
+
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+
+	assert.Equal(t, sampleOssIssue.Id, issue.ID)
+	assert.Equal(t, 3, len(issue.CodeActions))
+	assert.Equal(t, "Upgrade to pkg:v2 (Snyk)", issue.CodeActions[0].Title)
+	assert.Equal(t, 1, len(issue.CodelensCommands))
+	assert.Equal(t, "⚡ Fix this issue: Upgrade to pkg:v2 (Snyk)", issue.CodelensCommands[0].Title)
+}
+
 func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
 	sampleOssIssue := sampleIssue()
 	scanner := CLIScanner{
