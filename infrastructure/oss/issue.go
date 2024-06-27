@@ -50,7 +50,6 @@ func toIssue(
 
 	var codelensCommands []snyk.CommandData
 	for _, codeAction := range codeActions {
-		fmt.Println(codeAction.Title)
 		if strings.Contains(codeAction.Title, "Upgrade to") {
 			codelensCommands = append(codelensCommands, snyk.CommandData{
 				Title:     "⚡ Fix this issue: " + codeAction.Title,
