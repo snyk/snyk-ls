@@ -19,6 +19,8 @@ package cli
 import (
 	"strings"
 
+	"github.com/rs/zerolog"
+
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
@@ -86,6 +88,10 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) []stri
 		updatedEnv = append(updatedEnv, IntegrationVersionEnvVarKey+"="+currentConfig.IntegrationVersion())
 		updatedEnv = append(updatedEnv, IntegrationEnvironmentEnvVarKey+"="+currentConfig.IdeName())
 		updatedEnv = append(updatedEnv, IntegrationEnvironmentVersionEnvVar+"="+currentConfig.IdeVersion())
+	}
+
+	if currentConfig.Logger().GetLevel() == zerolog.TraceLevel {
+		updatedEnv = append(updatedEnv, "SNYK_LOG_LEVEL=trace")
 	}
 
 	return updatedEnv

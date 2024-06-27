@@ -172,7 +172,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	defer func(f string) { _ = os.Remove(f) }(cliFilePath)
 
 	r := NewCLIRelease(i.httpClient)
-	release, err := r.GetLatestRelease(ctx)
+	release, err := r.GetLatestRelease()
 	if err != nil {
 		t.Fatal(err, "Error getting latest release info")
 	}

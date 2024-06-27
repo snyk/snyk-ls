@@ -69,7 +69,7 @@ func (i *Install) Find() (string, error) {
 
 func (i *Install) Install(ctx context.Context) (string, error) {
 	r := NewCLIRelease(i.httpClient)
-	latestRelease, err := r.GetLatestRelease(ctx)
+	latestRelease, err := r.GetLatestRelease()
 	if err != nil {
 		return "", err
 	}
@@ -95,7 +95,7 @@ func (i *Install) installRelease(release *Release) (string, error) {
 
 func (i *Install) Update(ctx context.Context) (bool, error) {
 	r := NewCLIRelease(i.httpClient)
-	latestRelease, err := r.GetLatestRelease(ctx)
+	latestRelease, err := r.GetLatestRelease()
 	if err != nil {
 		return false, err
 	}

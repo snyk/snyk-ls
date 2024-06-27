@@ -203,7 +203,7 @@ type ClientCapabilities struct {
 	Workspace    WorkspaceClientCapabilities    `json:"workspace,omitempty"`
 	TextDocument TextDocumentClientCapabilities `json:"textDocument,omitempty"`
 	Window       WindowClientCapabilities       `json:"window,omitempty"`
-	Experimental interface{}                    `json:"experimental,omitempty"`
+	Experimental any                            `json:"experimental,omitempty"`
 }
 
 type CodeLensWorkspaceClientCapabilities struct {
@@ -549,6 +549,7 @@ type Settings struct {
 	AuthenticationMethod        AuthenticationMethod `json:"authenticationMethod,omitempty"`
 	SnykCodeApi                 string               `json:"snykCodeApi,omitempty"`
 	EnableSnykLearnCodeActions  string               `json:"enableSnykLearnCodeActions,omitempty"`
+	RequiredProtocolVersion     string               `json:"requiredProtocolVersion,omitempty"`
 }
 
 type AuthenticationMethod string

@@ -38,9 +38,13 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+	"github.com/snyk/snyk-ls/infrastructure/cli/install"
+	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -59,7 +63,7 @@ func Start(c *config.Config) {
 	c.ConfigureLogging(srv)
 	logger := c.Logger().With().Str("method", "server.Start").Logger()
 	di.Init()
-	initHandlers(c, srv, handlers)
+	initHandlers(srv, handlers)
 
 	logger.Info().Msg("Starting up...")
 	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
@@ -75,7 +79,7 @@ func Start(c *config.Config) {
 const textDocumentDidOpenOperation = "textDocument/didOpen"
 const textDocumentDidSaveOperation = "textDocument/didSave"
 
-func initHandlers(c *config.Config, srv *jrpc2.Server, handlers handler.Map) {
+func initHandlers(srv *jrpc2.Server, handlers handler.Map) {
 	handlers["initialize"] = initializeHandler(srv)
 	handlers["initialized"] = initializedHandler(srv)
 	handlers["textDocument/didChange"] = textDocumentDidChangeHandler()
@@ -123,12 +127,12 @@ func workspaceWillDeleteFilesHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params lsp.DeleteFilesParams) (any, error) {
 		ws := workspace.Get()
 		for _, file := range params.Files {
-			path := uri.PathFromUri(file.Uri)
+			pathFromUri := uri.PathFromUri(file.Uri)
 
 			// Instead of branching whether it's a file or a folder, we'll attempt to remove both and the redundant case
 			// will be a no-op
-			ws.RemoveFolder(path)
-			ws.DeleteFile(path)
+			ws.RemoveFolder(pathFromUri)
+			ws.DeleteFile(pathFromUri)
 		}
 		return nil, nil
 	})
@@ -277,6 +281,63 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 		return result, nil
 	})
 }
+
+func handleProtocolVersion(c *config.Config, noti noti.Notifier, ourProtocolVersion string, clientProtocolVersion string) {
+	logger := c.Logger().With().Str("method", "handleProtocolVersion").Logger()
+	if clientProtocolVersion == "" {
+		logger.Debug().Msg("no client protocol version specified")
+		return
+	}
+
+	if clientProtocolVersion == ourProtocolVersion || ourProtocolVersion == "development" {
+		logger.Debug().Msg("protocol version is the same")
+		return
+	}
+
+	if clientProtocolVersion != ourProtocolVersion {
+		m := fmt.Sprintf(
+			"Your Snyk plugin requires a different binary. The client-side required protocol version does not match "+
+				"the running language server protocol version. Required: %s, Actual: %s. "+
+				"You can update to the necessary version by enabling automatic management of binaries in the settings. "+
+				"Alternatively, you can manually download the correct binary by clicking the button.",
+			clientProtocolVersion,
+			ourProtocolVersion,
+		)
+		logger.Error().Msg(m)
+		actions := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
+
+		openBrowserCommandData := snyk.CommandData{
+			Title:     "Download manually in browser",
+			CommandId: snyk.OpenBrowserCommand,
+			Arguments: []any{getDownloadURL(c)},
+		}
+
+		actions.Add(snyk.MessageAction(openBrowserCommandData.Title), openBrowserCommandData)
+		doNothingKey := "Cancel"
+		// if we don't provide a commandId, nothing is done
+		actions.Add(snyk.MessageAction(doNothingKey), snyk.CommandData{Title: doNothingKey})
+
+		msg := snyk.ShowMessageRequest{
+			Message: m,
+			Type:    snyk.Error,
+			Actions: actions,
+		}
+		noti.Send(msg)
+	}
+}
+
+func getDownloadURL(c *config.Config) (u string) {
+	gafConfig := c.Engine().GetConfiguration()
+
+	runsEmbeddedFromCLI := gafConfig.Get(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION
+
+	if runsEmbeddedFromCLI {
+		return install.GetCLIDownloadURL(c, install.DefaultBaseURL, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient())
+	} else {
+		return install.GetLSDownloadURL(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient())
+	}
+}
+
 func initializedHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params lsp.InitializedParams) (any, error) {
 		// Logging these messages only after the client has been initialized.
@@ -294,6 +355,8 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		initialLogger.Info().Msg("snyk-plugin: " + c.IntegrationName() + "/" + c.IntegrationVersion())
 
 		logger := c.Logger().With().Str("method", "initializedHandler").Logger()
+
+		handleProtocolVersion(c, di.Notifier(), config.LsProtocolVersion, c.ClientProtocolVersion())
 
 		// CLI & Authentication initialization
 		err := di.Scanner().Init()
@@ -509,8 +572,8 @@ func textDocumentHover() jrpc2.Handler {
 		c := config.CurrentConfig()
 		c.Logger().Info().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
 
-		path := uri.PathFromUri(params.TextDocument.URI)
-		hoverResult := di.HoverService().GetHover(path, converter.FromPosition(params.Position))
+		pathFromUri := uri.PathFromUri(params.TextDocument.URI)
+		hoverResult := di.HoverService().GetHover(pathFromUri, converter.FromPosition(params.Position))
 		return hoverResult, nil
 	})
 }

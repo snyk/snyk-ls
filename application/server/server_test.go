@@ -36,6 +36,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
@@ -45,9 +46,11 @@ import (
 	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -148,7 +151,7 @@ func startServer(callBackFn onCallbackFn, jsonRPCRecorder *testutil.JsonRPCRecor
 	c.ConfigureLogging(nil)
 
 	// the learn service isnt needed as the smoke tests use it directly
-	initHandlers(c, srv, handlers)
+	initHandlers(srv, handlers)
 
 	return loc
 }
@@ -203,6 +206,30 @@ func Test_initialize_containsServerInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, config.LsProtocolVersion, result.ServerInfo.Version)
+}
+
+func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
+	loc, jsonRpcRecorder := setupServer(t)
+
+	params := lsp.InitializeParams{
+		InitializationOptions: lsp.Settings{RequiredProtocolVersion: "22"},
+	}
+
+	config.LsProtocolVersion = "12"
+
+	rsp, err := loc.Client.Call(ctx, "initialize", params)
+	require.NoError(t, err)
+	var result lsp.InitializeResult
+	err = rsp.UnmarshalResult(&result)
+	require.NoError(t, err)
+
+	_, err = loc.Client.Call(ctx, "initialized", params)
+	require.NoError(t, err)
+	assert.Eventuallyf(t, func() bool {
+		callbacks := jsonRpcRecorder.Callbacks()
+		return len(callbacks) > 0
+	}, time.Second*10, time.Millisecond,
+		"did not receive callback because of wrong protocol version")
 }
 
 func Test_initialize_shouldDefaultToTokenAuthentication(t *testing.T) {
@@ -1101,4 +1128,83 @@ func Test_MonitorClientProcess(t *testing.T) {
 	// make sure that we actually waited & monitored
 	expectedMinimumDuration, _ := time.ParseDuration("999ms")
 	assert.True(t, monitorClientProcess(pid) > expectedMinimumDuration)
+}
+
+func Test_getDownloadURL(t *testing.T) {
+	t.Run("CLI", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		c.Engine().GetConfiguration().Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
+
+		downloadURL := getDownloadURL(c)
+
+		// default CLI fallback, as we're not mocking the CLI calls
+		assert.Contains(t, downloadURL, "cli")
+	})
+
+	t.Run("LS standalone", func(t *testing.T) {
+		testutil.NotOnWindows(t, "don't want to handle the exe extension")
+		c := testutil.UnitTest(t)
+		engine := c.Engine()
+		engine.GetConfiguration().Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
+		engine.SetRuntimeInfo(
+			runtimeinfo.New(
+				runtimeinfo.WithName("snyk-ls"),
+				runtimeinfo.WithVersion("v1.234"),
+			),
+		)
+
+		downloadURL := getDownloadURL(c)
+
+		prefix := "https://static.snyk.io/snyk-ls/12/snyk-ls"
+		assert.True(t, strings.HasPrefix(downloadURL, prefix), downloadURL+" does not start with "+prefix)
+	})
+}
+
+func Test_handleProtocolVersion(t *testing.T) {
+	t.Run("required != current", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+
+		ourProtocolVersion := "12"
+		reqProtocolVersion := "1"
+
+		notificationReceived := make(chan bool)
+		f := func(params any) {
+			mrq, ok := params.(snyk.ShowMessageRequest)
+			require.True(t, ok)
+			require.Contains(t, mrq.Message, "does not match")
+			notificationReceived <- true
+		}
+		testNotifier := notification.NewNotifier()
+		go testNotifier.CreateListener(f)
+		handleProtocolVersion(
+			c,
+			testNotifier,
+			ourProtocolVersion,
+			reqProtocolVersion,
+		)
+
+		assert.Eventuallyf(t, func() bool {
+			return <-notificationReceived
+		}, 10*time.Second, 10*time.Millisecond, "no message sent via notifier")
+	})
+
+	t.Run("required == current", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		ourProtocolVersion := "11"
+		f := func(params any) {
+			require.FailNow(t, "did not expect a message")
+		}
+
+		testNotifier := notification.NewNotifier()
+		go testNotifier.CreateListener(f)
+
+		handleProtocolVersion(
+			c,
+			testNotifier,
+			ourProtocolVersion,
+			ourProtocolVersion,
+		)
+		// give goroutine of callback function a chance to fail the test
+		time.Sleep(time.Second)
+	})
 }

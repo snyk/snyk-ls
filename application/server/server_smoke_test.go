@@ -47,6 +47,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	ossFile := "package.json"
 	iacFile := "main.tf"
 	codeFile := "app.js"
+	testutil.CreateDummyProgressListener(t)
 
 	type test struct {
 		name                 string
