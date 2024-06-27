@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
@@ -85,11 +87,15 @@ func (c SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (
 
 func (c SnykCli) doExecute(ctx context.Context, cmd []string, workingDir string) ([]byte, error) {
 	command := c.getCommand(cmd, workingDir, ctx)
+	command.Stderr = c.c.Logger()
 	output, err := command.Output()
 	return output, err
 }
 
 func (c SnykCli) getCommand(cmd []string, workingDir string, ctx context.Context) *exec.Cmd {
+	if c.c.Logger().GetLevel() < zerolog.InfoLevel {
+		cmd = append(cmd, "-d")
+	}
 	command := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
 	command.Dir = workingDir
 	cliEnv := AppendCliEnvironmentVariables(os.Environ(), true)
