@@ -14,17 +14,19 @@
  * limitations under the License.
  */
 
-package code
+package snyk
 
 import (
 	"github.com/adrg/strutil"
 	"github.com/adrg/strutil/metrics"
 	"github.com/google/uuid"
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/application/config"
 	"math"
 	"path/filepath"
 	"strings"
 )
+
+var _ Matcher = (*CodeIdentityMatcher)(nil)
 
 type IssueConfidence struct {
 	HistoricUUID       string
@@ -64,21 +66,26 @@ var weights = struct {
 	FileExtensionSimilarity: 0.2,
 }
 
-func identify(currentIssueList []snyk.Issue, listOfHistoricResults [][]snyk.Issue) ([]snyk.Issue, error) {
-	if len(listOfHistoricResults) == 0 {
-		assignUUIDForNewProject(currentIssueList)
-		return currentIssueList, nil
+type CodeIdentityMatcher struct {
+	currentIssueList []Identifiable
+	config           *config.Config
+}
+
+func (cim *CodeIdentityMatcher) Match(c *config.Config, baseIssueList []Identifiable) ([]Identifiable, error) {
+	logger := c.Logger().With().Str("method", "Match").Logger()
+	if len(cim.currentIssueList) == 0 || len(baseIssueList) == 0 {
+		logger.Error().Msg("currentIssueList or baseIssueList is empty")
 	}
 
 	strongMatchingIssues := make(map[string]IssueConfidence)
 	existingAssignedIds := make(map[string]bool)
 
-	for index, issue := range currentIssueList {
+	for index, issue := range cim.currentIssueList {
 		if len(issue.GlobalIdentity()) > 0 {
 			existingAssignedIds[issue.GlobalIdentity()] = true
 			continue
 		}
-		findMatch(issue, index, listOfHistoricResults, strongMatchingIssues)
+		findMatch(issue, index, baseIssueList, strongMatchingIssues)
 	}
 
 	finalResult := deduplicateIssues(strongMatchingIssues)
@@ -86,16 +93,16 @@ func identify(currentIssueList []snyk.Issue, listOfHistoricResults [][]snyk.Issu
 	// Assign identities found to results
 	for i, identity := range finalResult {
 		if !existingAssignedIds[identity.IdentityID] {
-			currentIssueList[i].SetGlobalIdentity(identity.IdentityID)
+			cim.currentIssueList[i].SetGlobalIdentity(identity.IdentityID)
 		}
 	}
 
 	// Assign UUIDs for any new issues
-	assignUUIDForNewProject(currentIssueList)
-	return currentIssueList, nil
+	assignUUIDForNewProject(cim.currentIssueList)
+	return cim.currentIssueList, nil
 }
 
-func findMatch(issue snyk.Issue, index int, listOfHistoricResults [][]snyk.Issue, strongMatchingIssues map[string]IssueConfidence) {
+func findMatch(issue Issue, index int, listOfHistoricResults [][]Identifiable, strongMatchingIssues map[string]IssueConfidence) {
 	matches := findMatches(issue, index, listOfHistoricResults)
 
 	for _, match := range matches {
@@ -105,7 +112,7 @@ func findMatch(issue snyk.Issue, index int, listOfHistoricResults [][]snyk.Issue
 	}
 }
 
-func findMatches(issue snyk.Issue, index int, listOfHistoricResults [][]snyk.Issue) IssueConfidenceList {
+func findMatches(issue Identifiable, index int, listOfHistoricResults [][]Identifiable) IssueConfidenceList {
 	similarIssues := make(IssueConfidenceList, 0)
 
 	for historicVersionInTime, historicResults := range listOfHistoricResults {
@@ -174,7 +181,7 @@ func fingerprintDistance(historicFingerprints, currentFingerprints string) float
 	return float64(similar) / float64(totalParts)
 }
 
-func filePositionConfidence(historicIssue, currentIssue snyk.Issue) float64 {
+func filePositionConfidence(historicIssue, currentIssue Identifiable) float64 {
 	dirSimilarity := checkDirs(historicIssue.Path(), currentIssue.Path())
 	fileNameSimilarity := fileNameSimilarity(historicIssue.Path(), currentIssue.Path())
 	fileExtSimilarity := fileExtSimilarity(filepath.Ext(historicIssue.Path()),
@@ -185,13 +192,8 @@ func filePositionConfidence(historicIssue, currentIssue snyk.Issue) float64 {
 			fileNameSimilarity*weights.FileNameSimilarity +
 			fileExtSimilarity*weights.FileExtensionSimilarity
 
-	historicRange := historicIssue.GetRange()
-	currentRange := currentIssue.GetRange()
-	startLineSimilarity := similarityToDistance(historicRange.Start.Line, currentRange.Start.Line)
-	startColumnSimilarity := similarityToDistance(historicRange.Start.Character,
-		currentRange.Start.Character)
-	endColumnSimilarity := similarityToDistance(historicRange.End.Character, currentRange.End.Character)
-	endLineSimilarity := similarityToDistance(historicRange.End.Line, currentRange.End.Line)
+	startLineSimilarity, startColumnSimilarity, endColumnSimilarity, endLineSimilarity :=
+		matchDistance(historicIssue, currentIssue)
 	// Effectively weighting each line number pos at 25%
 	totalLineSimilarity := (startLineSimilarity +
 		startColumnSimilarity +
@@ -202,6 +204,17 @@ func filePositionConfidence(historicIssue, currentIssue snyk.Issue) float64 {
 			totalLineSimilarity*weights.LineSimilarity
 
 	return fileLocationConfidence
+}
+
+func matchDistance(historicIssue Identifiable, currentIssue Identifiable) (float64, float64, float64, float64) {
+	historicRange := historicIssue.GetRange()
+	currentRange := currentIssue.GetRange()
+	startLineSimilarity := similarityToDistance(historicRange.Start.Line, currentRange.Start.Line)
+	startColumnSimilarity := similarityToDistance(historicRange.Start.Character,
+		currentRange.Start.Character)
+	endColumnSimilarity := similarityToDistance(historicRange.End.Character, currentRange.End.Character)
+	endLineSimilarity := similarityToDistance(historicRange.End.Line, currentRange.End.Line)
+	return startLineSimilarity, startColumnSimilarity, endColumnSimilarity, endLineSimilarity
 }
 
 func checkDirs(path1, path2 string) float64 {
@@ -232,7 +245,7 @@ func fileExtSimilarity(ext1, ext2 string) float64 {
 	return strutil.Similarity(ext1, ext2, metrics.NewLevenshtein())
 }
 
-func assignUUIDForNewProject(currentResults []snyk.Issue) {
+func assignUUIDForNewProject(currentResults []Issue) {
 	for i := range currentResults {
 		if currentResults[i].GlobalIdentity() == "" {
 			currentResults[i].SetGlobalIdentity(uuid.New().String())
