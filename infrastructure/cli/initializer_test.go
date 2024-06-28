@@ -91,7 +91,7 @@ func TestInitializer_whenNoCli_Installs(t *testing.T) {
 }
 
 func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
-	testutil.SmokeTest(t, false)
+	testutil.SmokeTest(t)
 
 	// arrange
 	config.CurrentConfig().SetManageBinariesAutomatically(true)

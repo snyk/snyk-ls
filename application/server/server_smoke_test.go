@@ -48,14 +48,13 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	codeFile := "app.js"
 
 	type test struct {
-		name                 string
-		repo                 string
-		commit               string
-		file1                string
-		file2                string
-		useConsistentIgnores bool
-		hasVulns             bool
-		endpoint             string
+		name     string
+		repo     string
+		commit   string
+		file1    string
+		file2    string
+		hasVulns bool
+		endpoint string
 	}
 
 	endpoint := os.Getenv("SNYK_API")
@@ -66,14 +65,13 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 
 	tests := []test{
 		{
-			name:                 "OSS and Code",
-			repo:                 "https://github.com/snyk-labs/nodejs-goof",
-			commit:               "0336589",
-			file1:                ossFile,
-			file2:                codeFile,
-			useConsistentIgnores: false,
-			hasVulns:             true,
-			endpoint:             endpoint,
+			name:     "OSS and Code",
+			repo:     "https://github.com/snyk-labs/nodejs-goof",
+			commit:   "0336589",
+			file1:    ossFile,
+			file2:    codeFile,
+			hasVulns: true,
+			endpoint: endpoint,
 		},
 		//{
 		//	name:                 "OSS and Code with V1 endpoint",
@@ -81,73 +79,92 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 		//	commit:               "0336589",
 		//	file1:                ossFile,
 		//	file2:                codeFile,
-		//	useConsistentIgnores: false,
 		//	endpoint:             v1Endpoint,
 		//},
 		{
-			name:                 "OSS and Code with consistent ignores",
-			repo:                 "https://github.com/snyk-labs/nodejs-goof",
-			commit:               "0336589",
-			file1:                ossFile,
-			file2:                codeFile,
-			useConsistentIgnores: true,
-			hasVulns:             true,
-			endpoint:             "https://api.dev.snyk.io",
+			name:     "IaC and Code",
+			repo:     "https://github.com/deepcodeg/snykcon-goof.git",
+			commit:   "eba8407",
+			file1:    iacFile,
+			file2:    codeFile,
+			hasVulns: true,
+			endpoint: endpoint,
 		},
 		{
-			name:                 "IaC and Code",
-			repo:                 "https://github.com/deepcodeg/snykcon-goof.git",
-			commit:               "eba8407",
-			file1:                iacFile,
-			file2:                codeFile,
-			useConsistentIgnores: false,
-			hasVulns:             true,
-			endpoint:             endpoint,
+			name:     "Code without vulns",
+			repo:     "https://github.com/imagec/simple-repo",
+			commit:   "75bcc55",
+			file1:    "",
+			file2:    "providers.tf",
+			hasVulns: false,
+			endpoint: endpoint,
 		},
 		{
-			name:                 "Code without vulns",
-			repo:                 "https://github.com/imagec/simple-repo",
-			commit:               "75bcc55",
-			file1:                "",
-			file2:                "providers.tf",
-			useConsistentIgnores: false,
-			hasVulns:             false,
-			endpoint:             endpoint,
-		},
-		{
-			name:                 "IaC and Code with consistent ignores",
-			repo:                 "https://github.com/deepcodeg/snykcon-goof.git",
-			commit:               "eba8407",
-			file1:                iacFile,
-			file2:                codeFile,
-			useConsistentIgnores: true,
-			hasVulns:             true,
-			endpoint:             "https://api.dev.snyk.io",
-		},
-		{
-			name:                 "Two upload batches",
-			repo:                 "https://github.com/apache/maven",
-			commit:               "18725ec1e",
-			file1:                "",
-			file2:                "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java",
-			useConsistentIgnores: false,
-			hasVulns:             true,
-			endpoint:             endpoint,
-		},
-		{
-			name:                 "Two upload batches with consistent ignores",
-			repo:                 "https://github.com/apache/maven",
-			commit:               "18725ec1e",
-			file1:                "",
-			file2:                "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java",
-			useConsistentIgnores: true,
-			hasVulns:             true,
-			endpoint:             "https://api.dev.snyk.io",
+			name:     "Two upload batches",
+			repo:     "https://github.com/apache/maven",
+			commit:   "18725ec1e",
+			file1:    "",
+			file2:    "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java",
+			hasVulns: true,
+			endpoint: endpoint,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			runSmokeTest(t, tc.repo, tc.commit, tc.file1, tc.file2, tc.useConsistentIgnores, tc.hasVulns, tc.endpoint)
+			runSmokeTest(t, tc.repo, tc.commit, tc.file1, tc.file2, false, tc.hasVulns, tc.endpoint)
+		})
+	}
+}
+
+func Test_SmokeWorkspaceScan_WithConsistentIgnores(t *testing.T) {
+	ossFile := "package.json"
+	iacFile := "main.tf"
+	codeFile := "app.js"
+
+	type test struct {
+		name     string
+		repo     string
+		commit   string
+		file1    string
+		file2    string
+		hasVulns bool
+		endpoint string
+	}
+
+	endpoint := "https://api.dev.snyk.io"
+
+	tests := []test{
+		{
+			name:     "OSS and Code",
+			repo:     "https://github.com/snyk-labs/nodejs-goof",
+			commit:   "0336589",
+			file1:    ossFile,
+			file2:    codeFile,
+			hasVulns: true,
+			endpoint: endpoint,
+		},
+		{
+			name:     "IaC and Code",
+			repo:     "https://github.com/deepcodeg/snykcon-goof.git",
+			commit:   "eba8407",
+			file1:    iacFile,
+			file2:    codeFile,
+			hasVulns: true,
+			endpoint: endpoint,
+		},
+		{
+			name:     "Two upload batches",
+			repo:     "https://github.com/apache/maven",
+			commit:   "18725ec1e",
+			file1:    "",
+			file2:    "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java",
+			hasVulns: true,
+			endpoint: endpoint,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			runSmokeTest(t, tc.repo, tc.commit, tc.file1, tc.file2, true, tc.hasVulns, tc.endpoint)
 		})
 	}
 }
@@ -155,7 +172,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 func Test_SmokeIssueCaching(t *testing.T) {
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
 		loc, jsonRPCRecorder := setupServer(t)
-		c := testutil.SmokeTest(t, false)
+		c := testutil.SmokeTest(t)
 		c.EnableSnykCodeSecurity(true)
 		c.EnableSnykCodeQuality(false)
 		c.SetSnykOssEnabled(true)
@@ -217,7 +234,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	})
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
 		loc, jsonRPCRecorder := setupServer(t)
-		c := testutil.SmokeTest(t, false)
+		c := testutil.SmokeTest(t)
 		c.EnableSnykCodeSecurity(true)
 		c.EnableSnykCodeQuality(false)
 		c.SetSnykOssEnabled(true)
@@ -417,8 +434,11 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 	hasVulns bool, endpoint string) {
 	t.Helper()
 	t.Setenv("SNYK_API", endpoint)
+	if useConsistentIgnores {
+		t.Setenv("SNYK_TOKEN", os.Getenv("SNYK_TOKEN_CONSISTENT_IGNORES"))
+	}
 	loc, jsonRPCRecorder := setupServer(t)
-	c := testutil.SmokeTest(t, useConsistentIgnores)
+	c := testutil.SmokeTest(t)
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykIacEnabled(true)
 	c.SetSnykOssEnabled(true)
@@ -554,7 +574,7 @@ func checkFeatureFlagStatus(t *testing.T, loc *server.Local, c *config.Config) {
 
 func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t)
 	c.SetSnykCodeEnabled(true)
 	cleanupChannels()
 	di.Init()

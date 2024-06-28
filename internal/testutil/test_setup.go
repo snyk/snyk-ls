@@ -32,13 +32,13 @@ const (
 
 func IntegTest(t *testing.T) *config.Config {
 	t.Helper()
-	return prepareTestHelper(t, integTestEnvVar, false)
+	return prepareTestHelper(t, integTestEnvVar)
 }
 
 // TODO: remove useConsistentIgnores once we have fully rolled out the feature
-func SmokeTest(t *testing.T, useConsistentIgnores bool) *config.Config {
+func SmokeTest(t *testing.T) *config.Config {
 	t.Helper()
-	return prepareTestHelper(t, smokeTestEnvVar, useConsistentIgnores)
+	return prepareTestHelper(t, smokeTestEnvVar)
 }
 
 func UnitTest(t *testing.T) *config.Config {
@@ -119,7 +119,7 @@ func CreateDummyProgressListener(t *testing.T) {
 	}()
 }
 
-func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *config.Config {
+func prepareTestHelper(t *testing.T, envVar string) *config.Config {
 	t.Helper()
 	if os.Getenv(envVar) == "" {
 		t.Logf("%s is not set", envVar)
@@ -128,8 +128,7 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 
 	c := config.New()
 	c.ConfigureLogging(nil)
-	token := GetEnvironmentToken(useConsistentIgnores)
-	c.SetToken(token)
+	c.SetToken(GetEnvironmentToken())
 	c.SetErrorReportingEnabled(false)
 	c.SetTelemetryEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)

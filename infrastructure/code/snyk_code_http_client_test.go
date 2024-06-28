@@ -60,7 +60,7 @@ func clientFunc() *http.Client {
 }
 
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t)
 	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
 	files := map[string]string{}
 	randomAddition := fmt.Sprintf("\n public void random() { System.out.println(\"%d\") }", time.Now().UnixMicro())
@@ -72,7 +72,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 }
 
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t)
 	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
 	var removedFiles []string
 	files := map[string]string{}
@@ -141,7 +141,7 @@ func TestSnykCodeBackendService_doCall_rejected(t *testing.T) {
 }
 
 func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 
 	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
