@@ -20,7 +20,7 @@ import (
 	"errors"
 	"github.com/adrg/strutil"
 	"github.com/adrg/strutil/metrics"
-	"github.com/snyk/snyk-ls/domain/snyk/delta"
+	"github.com/snyk/snyk-ls/infrastructure/delta"
 	"math"
 	"path/filepath"
 	"strings"
