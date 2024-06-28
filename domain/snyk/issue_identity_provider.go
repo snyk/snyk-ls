@@ -16,12 +16,14 @@
 
 package snyk
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+	"github.com/snyk/snyk-ls/application/config"
+)
 
 var _ Identifiable = (*Issue)(nil)
-var _ IdentityEnricher = (*GlobalIdentityEnricher)(nil)
-var _ Matcher = (*CodeIdentityMatcher)(nil)
-var _ Differ = (*GlobalDiffer)(nil)
+var _ IdentityEnricher = (*FindingsIdEnricher)(nil)
+var _ Differ = (*FindingsDiffer)(nil)
 
 type Fingerprintable interface {
 	Fingerprint() string
@@ -45,25 +47,17 @@ type Differ interface {
 }
 
 type Matcher interface {
-	Match(base []Identifiable) ([]Identifiable, error)
+	Match(c *config.Config, base []Identifiable) ([]Identifiable, error)
 }
 
-type GlobalDiffer struct {
+type FindingsDiffer struct {
 	currentIssueList []Identifiable
 }
 
-type CodeIdentityMatcher struct {
-	currentIssueList []Identifiable
+type FindingsIdEnricher struct {
 }
 
-func (ci CodeIdentityMatcher) Match(baseIssueList []Identifiable) ([]Identifiable, error) {
-
-}
-
-type GlobalIdentityEnricher struct {
-}
-
-func (_ GlobalIdentityEnricher) EnrichWithId(issueList []Identifiable) []Identifiable {
+func (_ FindingsIdEnricher) EnrichWithId(issueList []Identifiable) []Identifiable {
 	for i := range issueList {
 		if issueList[i].GlobalIdentity() == "" {
 			issueList[i].SetGlobalIdentity(uuid.New().String())
@@ -73,7 +67,7 @@ func (_ GlobalIdentityEnricher) EnrichWithId(issueList []Identifiable) []Identif
 	return issueList
 }
 
-func (gd GlobalDiffer) Diff(baseIssueList []Identifiable) []Identifiable {
+func (gd FindingsDiffer) Diff(baseIssueList []Identifiable) []Identifiable {
 	var deltaResults []Identifiable
 
 	if len(gd.currentIssueList) == 0 || len(baseIssueList) == 0 {
