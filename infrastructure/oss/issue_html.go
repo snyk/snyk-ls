@@ -17,124 +17,41 @@
 package oss
 
 import (
+	"bytes"
 	_ "embed"
 	"fmt"
+	"html/template"
 	"strings"
 
 	"github.com/gomarkdown/markdown"
-	"golang.org/x/exp/maps"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/html"
+	"github.com/snyk/snyk-ls/internal/product"
 )
 
 //go:embed template/details.html
 var detailsHtmlTemplate string
 
-func replaceVariableInHtml(html string, variableName string, variableValue string) string {
-	return strings.ReplaceAll(html, fmt.Sprintf("${%s}", variableName), variableValue)
-}
+var globalTemplate *template.Template
 
-func getIdentifiers(id string, issue snyk.OssIssueData) string {
-	identifierList := []string{""}
-
-	issueTypeString := "Vulnerability"
-	if len(issue.License) > 0 {
-		issueTypeString = "License"
+func init() {
+	funcMap := template.FuncMap{
+		"trimCWEPrefix": html.TrimCWEPrefix,
+		"idxMinusOne":   html.IdxMinusOne,
+		"join":          join,
 	}
 
-	for _, id := range issue.Identifiers.CVE {
-		url := "https://cve.mitre.org/cgi-bin/cvename.cgi?name=" + id
-		htmlAnchor := fmt.Sprintf("<a href='%s'>%s</a>", url, id)
-		identifierList = append(identifierList, htmlAnchor)
-	}
-
-	for _, id := range issue.Identifiers.CWE {
-		linkId := strings.ReplaceAll(strings.ToUpper(id), "CWE-", "")
-		htmlAnchor := fmt.Sprintf("<a href='https://cwe.mitre.org/data/definitions/%s.html'>%s</a>", linkId, id)
-		identifierList = append(identifierList, htmlAnchor)
-	}
-
-	if issue.CvssScore > 0 {
-		htmlAnchor := fmt.Sprintf("<span>CVSS %.1f</span>", issue.CvssScore)
-		identifierList = append(identifierList, htmlAnchor)
-	}
-
-	htmlAnchor := fmt.Sprintf("<a href='https://snyk.io/vuln/%s'>%s</a>", id, strings.ToUpper(id))
-	identifierList = append(identifierList, htmlAnchor)
-
-	return fmt.Sprintf("%s %s", issueTypeString, strings.Join(identifierList, "<span class='delimiter'> </span> "))
-}
-
-func getExploitMaturity(issue snyk.OssIssueData) string {
-	if len(issue.Exploit) > 0 {
-		return fmt.Sprintf("<div class='summary-item maturity'><div class='label font-light'>Exploit maturity</div>"+
-			"<div class='content'>%s</div></div>", issue.Exploit)
-	} else {
-		return ""
+	var err error
+	globalTemplate, err = template.New(string(product.ProductOpenSource)).Funcs(funcMap).Parse(detailsHtmlTemplate)
+	if err != nil {
+		config.CurrentConfig().Logger().Error().Msgf("Failed to parse details template: %s", err)
 	}
 }
 
-func getIntroducedBy(issue snyk.OssIssueData) string {
-	m := make(map[string]string)
-
-	if len(issue.From) > 0 {
-		for _, v := range issue.MatchingIssues {
-			if len(v.From) > 1 {
-				module := v.From[1]
-				htmlAnchor := getVulnHtmlAnchor(issue.PackageManager, module)
-				m[module] = htmlAnchor
-			}
-		}
-
-		return fmt.Sprintf("<div class='summary-item introduced-through'><div class='label font-light'>Introduced through</div>"+
-			"<div class='content'>%s</div></div>", strings.Join(maps.Values(m), ", "))
-	} else {
-		return ""
-	}
-}
-
-func getVulnHtmlAnchor(packageManager string, module string) string {
-	snykUi := config.CurrentConfig().SnykUi()
-	return fmt.Sprintf("<a href='%s/test/%s'>%s</a>", snykUi, packageManager, module)
-}
-
-func getLearnLink(issue snyk.OssIssueData) string {
-	if issue.Lesson == "" {
-		return ""
-	}
-
-	return fmt.Sprintf("<a class='learn--link' id='learn--link' href='%s'>Learn about this vulnerability</a>",
-		issue.Lesson)
-}
-
-func getFixedIn(issue snyk.OssIssueData) string {
-	if len(issue.FixedIn) == 0 {
-		return "Not fixed"
-	}
-
-	result := "%s@%v"
-	return fmt.Sprintf(result, issue.Name, strings.Join(issue.FixedIn, ", "))
-}
-
-func getDetailedPaths(issue snyk.OssIssueData) string {
-	detailedPathHtml := ""
-
-	for _, matchingIssue := range issue.MatchingIssues {
-		remediationAdvice := matchingIssue.Remediation
-		introducedThrough := strings.Join(matchingIssue.From, " > ")
-
-		detailedPathHtml += fmt.Sprintf(`<div class="summary-item path">
-						<div class="label font-light">Introduced through</div>
-						<div class="content">%s</div>
-					</div>
-					<div class="summary-item remediation">
-						<div class="label font-light">Remediation</div>
-						<div class="content">%s</div>
-					</div>`, introducedThrough, remediationAdvice)
-	}
-
-	return detailedPathHtml
+func join(sep string, s []string) string {
+	return strings.Join(s, sep)
 }
 
 func getDetailsHtml(issue snyk.Issue) string {
@@ -145,17 +62,126 @@ func getDetailsHtml(issue snyk.Issue) string {
 	}
 	overview := markdown.ToHTML([]byte(additionalData.Description), nil, nil)
 
-	html := replaceVariableInHtml(detailsHtmlTemplate, "issueId", issue.ID)
-	html = replaceVariableInHtml(html, "issueTitle", additionalData.Title)
-	html = replaceVariableInHtml(html, "severityText", issue.Severity.String())
-	html = replaceVariableInHtml(html, "vulnerableModule", additionalData.Name)
-	html = replaceVariableInHtml(html, "overview", string(overview))
-	html = replaceVariableInHtml(html, "identifiers", getIdentifiers(issue.ID, additionalData))
-	html = replaceVariableInHtml(html, "exploitMaturity", getExploitMaturity(additionalData))
-	html = replaceVariableInHtml(html, "introducedThrough", getIntroducedBy(additionalData))
-	html = replaceVariableInHtml(html, "learnLink", getLearnLink(additionalData))
-	html = replaceVariableInHtml(html, "fixedIn", getFixedIn(additionalData))
-	html = replaceVariableInHtml(html, "detailedPaths", getDetailedPaths(additionalData))
+	data := map[string]interface{}{
+		"IssueId":            issue.ID,
+		"IssueName":          additionalData.Name,
+		"IssueTitle":         additionalData.Title,
+		"IssueType":          getIssueType(additionalData),
+		"SeverityText":       issue.Severity.String(),
+		"SeverityIcon":       html.GetSeverityIconSvg(issue),
+		"VulnerableModule":   additionalData.Name,
+		"IssueOverview":      html.MarkdownToHTML(string(overview)),
+		"CVEs":               additionalData.Identifiers.CVE,
+		"CWEs":               additionalData.Identifiers.CWE,
+		"CvssScore":          fmt.Sprintf("%.1f", additionalData.CvssScore),
+		"ExploitMaturity":    getExploitMaturity(additionalData),
+		"IntroducedThroughs": getIntroducedThroughs(additionalData),
+		"LessonUrl":          additionalData.Lesson,
+		"LessonIcon":         html.GetLessonIconSvg(),
+		"FixedIn":            additionalData.FixedIn,
+		"DetailedPaths":      getDetailedPaths(additionalData),
+	}
 
-	return html
+	var html bytes.Buffer
+	if err := globalTemplate.Execute(&html, data); err != nil {
+		config.CurrentConfig().Logger().Error().Msgf("Failed to execute main details template: %v", err)
+		return ""
+	}
+
+	return html.String()
+}
+
+func getIssueType(issue snyk.OssIssueData) string {
+	if len(issue.License) > 0 {
+		return "License"
+	}
+
+	return "Vulnerability"
+}
+
+func getExploitMaturity(issue snyk.OssIssueData) string {
+	if len(issue.Exploit) > 0 {
+		return issue.Exploit
+	} else {
+		return ""
+	}
+}
+
+type IntroducedThrough struct {
+	SnykUI         string
+	PackageManager string
+	Module         string
+}
+
+func getIntroducedThroughs(issue snyk.OssIssueData) []IntroducedThrough {
+	introducedThroughs := []IntroducedThrough{}
+
+	snykUi := config.CurrentConfig().SnykUi()
+	if len(issue.From) > 0 {
+		for _, v := range issue.MatchingIssues {
+			if len(v.From) > 1 {
+				introducedThroughs = append(introducedThroughs, IntroducedThrough{
+					SnykUI:         snykUi,
+					PackageManager: issue.PackageManager,
+					Module:         v.From[1],
+				})
+			}
+		}
+	}
+	return introducedThroughs
+}
+
+type DetailedPath struct {
+	From        []string
+	Remediation string
+}
+
+func getDetailedPaths(issue snyk.OssIssueData) []DetailedPath {
+	var detailedPaths = make([]DetailedPath, len(issue.MatchingIssues))
+
+	for i, matchingIssue := range issue.MatchingIssues {
+		remediationAdvice := getRemediationAdvice(matchingIssue)
+
+		detailedPaths[i] = DetailedPath{
+			From:        matchingIssue.From,
+			Remediation: remediationAdvice,
+		}
+	}
+	return detailedPaths
+}
+
+func getRemediationAdvice(issue snyk.OssIssueData) string {
+	hasUpgradePath := len(issue.UpgradePath) > 1
+	isOutdated := hasUpgradePath && issue.UpgradePath[1] == issue.From[1]
+	remediationAdvice := "No remediation advice available"
+	upgradeMessage := ""
+	if issue.IsUpgradable || issue.IsPatchable {
+		if hasUpgradePath {
+			upgradeMessage = "Upgrade to " + issue.UpgradePath[1].(string)
+		}
+
+		if isOutdated {
+			if issue.IsPatchable {
+				remediationAdvice = upgradeMessage
+			} else {
+				remediationAdvice = getOutdatedDependencyMessage(issue)
+			}
+		} else {
+			remediationAdvice = upgradeMessage
+		}
+	}
+	return remediationAdvice
+}
+
+func getOutdatedDependencyMessage(issue snyk.OssIssueData) string {
+	remediationAdvice := fmt.Sprintf("Your dependencies are out of date, "+
+		"otherwise you would be using a newer %s than %s@%s. ", issue.Name, issue.Name, issue.Version)
+
+	if issue.PackageManager == "npm" || issue.PackageManager == "yarn" || issue.PackageManager == "yarn-workspace" {
+		remediationAdvice += "Try relocking your lockfile or deleting node_modules and reinstalling" +
+			" your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
+	} else {
+		remediationAdvice += "Try reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
+	}
+	return remediationAdvice
 }
