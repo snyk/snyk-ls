@@ -22,11 +22,11 @@ import (
 
 type Finder struct {
 	findingsEnricher Enricher
-	matcher          FindingsMatcher
+	matcher          Matcher
 	differ           Differ
 }
 
-func (f *Finder) Init(e Enricher, m FindingsMatcher, d Differ) *Finder {
+func (f *Finder) Init(e Enricher, m Matcher, d Differ) *Finder {
 	return &Finder{
 		findingsEnricher: e,
 		matcher:          m,
@@ -34,7 +34,7 @@ func (f *Finder) Init(e Enricher, m FindingsMatcher, d Differ) *Finder {
 	}
 }
 
-func (f *Finder) Find(baseList, currentList []FindingsIdentifiable) (enrichedList, deltaList []FindingsIdentifiable, err error) {
+func (f *Finder) Find(baseList, currentList []Identifiable) (enrichedList, deltaList []Identifiable, err error) {
 	if len(baseList) == 0 || len(currentList) == 0 {
 		return nil, nil, errors.New("baselist or currentlist is empty")
 	}

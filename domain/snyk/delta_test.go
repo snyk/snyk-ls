@@ -56,7 +56,7 @@ func Test_New_Issue(t *testing.T) {
 	_, deltaList, err := df.Find(baseFindingIdentifiable, currentFindingIdentifiable)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(deltaList))
-	finding, ok := deltaList[0].(delta.FindingsFingerprintable)
+	finding, ok := deltaList[0].(delta.Fingerprintable)
 	assert.True(t, ok)
 	assert.Equal(t, newIssue.GetFingerprint(), finding.GetFingerprint())
 	assert.True(t, finding.IsNew())
@@ -120,8 +120,8 @@ func getIssueList() []Issue {
 	return issueList
 }
 
-func convertToFindingsIdentifiable(baseIssueList []Issue) []delta.FindingsIdentifiable {
-	baseFindingIdentifiable := make([]delta.FindingsIdentifiable, len(baseIssueList))
+func convertToFindingsIdentifiable(baseIssueList []Issue) []delta.Identifiable {
+	baseFindingIdentifiable := make([]delta.Identifiable, len(baseIssueList))
 	for i := range baseIssueList {
 		baseFindingIdentifiable[i] = &baseIssueList[i]
 	}

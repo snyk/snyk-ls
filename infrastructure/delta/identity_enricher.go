@@ -23,14 +23,14 @@ import (
 var _ Enricher = (*FindingsEnricher)(nil)
 
 type Enricher interface {
-	EnrichWithId(issueList []FindingsIdentifiable) []FindingsIdentifiable
-	EnrichWithIsNew(issueList, deltaList []FindingsIdentifiable) []FindingsIdentifiable
+	EnrichWithId(issueList []Identifiable) []Identifiable
+	EnrichWithIsNew(issueList, deltaList []Identifiable) []Identifiable
 }
 
 type FindingsEnricher struct {
 }
 
-func (_ FindingsEnricher) EnrichWithId(issueList []FindingsIdentifiable) []FindingsIdentifiable {
+func (_ FindingsEnricher) EnrichWithId(issueList []Identifiable) []Identifiable {
 	for i := range issueList {
 		if issueList[i].GetGlobalIdentity() == "" {
 			issueList[i].SetGlobalIdentity(uuid.New().String())
@@ -40,7 +40,7 @@ func (_ FindingsEnricher) EnrichWithId(issueList []FindingsIdentifiable) []Findi
 	return issueList
 }
 
-func (_ FindingsEnricher) EnrichWithIsNew(issueList, deltaList []FindingsIdentifiable) []FindingsIdentifiable {
+func (_ FindingsEnricher) EnrichWithIsNew(issueList, deltaList []Identifiable) []Identifiable {
 	for i := range issueList {
 		for j := range deltaList {
 			if issueList[i].GetGlobalIdentity() == deltaList[j].GetGlobalIdentity() {

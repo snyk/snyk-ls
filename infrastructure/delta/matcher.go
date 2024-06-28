@@ -16,6 +16,6 @@
 
 package delta
 
-type FindingsMatcher interface {
-	Match(baseIssueList, currentIssueList []FindingsIdentifiable) ([]FindingsIdentifiable, error)
+type Matcher interface {
+	Match(baseIssueList, currentIssueList []Identifiable) ([]Identifiable, error)
 }
