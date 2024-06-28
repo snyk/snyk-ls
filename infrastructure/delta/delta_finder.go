@@ -21,16 +21,16 @@ import (
 )
 
 type Finder struct {
-	findingsEnricher Enricher
-	matcher          Matcher
-	differ           Differ
+	enricher Enricher
+	matcher  Matcher
+	differ   Differ
 }
 
 func (f *Finder) Init(e Enricher, m Matcher, d Differ) *Finder {
 	return &Finder{
-		findingsEnricher: e,
-		matcher:          m,
-		differ:           d,
+		enricher: e,
+		matcher:  m,
+		differ:   d,
 	}
 }
 
@@ -39,8 +39,8 @@ func (f *Finder) Find(baseList, currentList []Identifiable) (enrichedList, delta
 		return nil, nil, errors.New("baselist or currentlist is empty")
 	}
 
-	if f.findingsEnricher != nil {
-		f.findingsEnricher.EnrichWithId(baseList)
+	if f.enricher != nil {
+		f.enricher.EnrichWithId(baseList)
 	}
 
 	if f.matcher != nil {
@@ -52,8 +52,8 @@ func (f *Finder) Find(baseList, currentList []Identifiable) (enrichedList, delta
 	}
 
 	// Ensure new findings have ids
-	if f.findingsEnricher != nil {
-		f.findingsEnricher.EnrichWithId(currentList)
+	if f.enricher != nil {
+		f.enricher.EnrichWithId(currentList)
 	}
 
 	if f.differ == nil {
@@ -63,8 +63,8 @@ func (f *Finder) Find(baseList, currentList []Identifiable) (enrichedList, delta
 	deltaList = f.differ.Diff(baseList, currentList)
 
 	// Enrich IsNew property
-	if f.findingsEnricher != nil {
-		currentList = f.findingsEnricher.EnrichWithIsNew(currentList, deltaList)
+	if f.enricher != nil {
+		currentList = f.enricher.EnrichWithIsNew(currentList, deltaList)
 	}
 
 	return currentList, deltaList, nil
