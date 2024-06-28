@@ -111,6 +111,16 @@ func textDocumentDidChangeHandler() jrpc2.Handler {
 
 		di.FileWatcher().SetFileAsChanged(params.TextDocument.URI)
 
+		filePath := uri.PathFromUri(params.TextDocument.URI)
+		autoScanEnabled := c.IsAutoScanEnabled()
+
+		f := workspace.Get().GetFolderContaining(filePath)
+
+		if f != nil && autoScanEnabled && uri.IsDotSnykFile(params.TextDocument.URI) {
+			go f.ScanFolder(ctx)
+			return nil, nil
+		}
+
 		for _, change := range params.ContentChanges {
 			if packageScanner, ok := di.Scanner().(snyk.PackageScanner); ok {
 				packageScanner.ScanPackages(ctx, c, uri.PathFromUri(params.TextDocument.URI), change.Text)
