@@ -17,10 +17,9 @@
 package snyk
 
 import (
+	"errors"
 	"github.com/adrg/strutil"
 	"github.com/adrg/strutil/metrics"
-	"github.com/google/uuid"
-	"github.com/rs/zerolog"
 	"github.com/snyk/snyk-ls/domain/snyk/delta"
 	"math"
 	"path/filepath"
@@ -68,20 +67,17 @@ var weights = struct {
 }
 
 type CodeIdentityMatcher struct {
-	currentIssueList []delta.FindingsIdentifiable
-	config           *zerolog.Logger
 }
 
-func (cim *CodeIdentityMatcher) Match(zlog *zerolog.Logger, baseIssueList []delta.FindingsIdentifiable) ([]delta.FindingsIdentifiable, error) {
-	logger := zlog.With().Str("method", "Match").Logger()
-	if len(cim.currentIssueList) == 0 || len(baseIssueList) == 0 {
-		logger.Error().Msg("currentIssueList or baseIssueList is empty")
+func (_ CodeIdentityMatcher) Match(baseIssueList, currentIssueList []delta.FindingsIdentifiable) error {
+	if len(currentIssueList) == 0 || len(baseIssueList) == 0 {
+		return errors.New("base or current issue list is empty")
 	}
 
 	strongMatchingIssues := make(map[string]IssueConfidence)
 	existingAssignedIds := make(map[string]bool)
 
-	for index, issue := range cim.currentIssueList {
+	for index, issue := range currentIssueList {
 		if len(issue.GlobalIdentity()) > 0 {
 			existingAssignedIds[issue.GlobalIdentity()] = true
 			continue
@@ -94,12 +90,12 @@ func (cim *CodeIdentityMatcher) Match(zlog *zerolog.Logger, baseIssueList []delt
 	// Assign identities found to results
 	for i, identity := range finalResult {
 		if !existingAssignedIds[identity.IdentityID] {
-			cim.currentIssueList[i].SetGlobalIdentity(identity.IdentityID)
+			currentIssueList[i].SetGlobalIdentity(identity.IdentityID)
 		}
 	}
 
 	// Assign UUIDs for any new issues
-	return cim.currentIssueList, nil
+	return nil
 }
 
 func findMatch(issue delta.FindingsIdentifiable, index int, baseIssueList []delta.FindingsIdentifiable, strongMatchingIssues map[string]IssueConfidence) {
@@ -233,13 +229,11 @@ func matchDistance(baseIssue delta.FindingsIdentifiable, currentIssue delta.Find
 	if !ok {
 		return 0, 0, 0, 0
 	}
-	baseRange := baseRangeable.GetLocation()
-	currentRange := currentRangeable.GetLocation()
-	startLineSimilarity := similarityToDistance(baseRange.Start.Line, currentRange.Start.Line)
-	startColumnSimilarity := similarityToDistance(baseRange.Start.Character,
-		currentRange.Start.Character)
-	endColumnSimilarity := similarityToDistance(baseRange.End.Character, currentRange.End.Character)
-	endLineSimilarity := similarityToDistance(baseRange.End.Line, currentRange.End.Line)
+	startLineSimilarity := similarityToDistance(baseRangeable.StartLine(), currentRangeable.StartLine())
+	startColumnSimilarity := similarityToDistance(baseRangeable.StartColumn(),
+		currentRangeable.StartColumn())
+	endColumnSimilarity := similarityToDistance(baseRangeable.EndColumn(), currentRangeable.EndColumn())
+	endLineSimilarity := similarityToDistance(baseRangeable.EndLine(), currentRangeable.EndLine())
 	return startLineSimilarity, startColumnSimilarity, endColumnSimilarity, endLineSimilarity
 }
 
@@ -269,14 +263,6 @@ func similarityToDistance(value1, value2 int) float64 {
 
 func fileExtSimilarity(ext1, ext2 string) float64 {
 	return strutil.Similarity(ext1, ext2, metrics.NewLevenshtein())
-}
-
-func assignUUIDForNewProject(currentResults []delta.FindingsIdentifiable) {
-	for i := range currentResults {
-		if currentResults[i].GlobalIdentity() == "" {
-			currentResults[i].SetGlobalIdentity(uuid.New().String())
-		}
-	}
 }
 
 func historicConfidenceCalculator() float64 {

@@ -16,10 +16,6 @@
 
 package delta
 
-import (
-	"github.com/rs/zerolog"
-)
-
 type FindingsMatcher interface {
-	Match(c *zerolog.Logger, base []FindingsIdentifiable) ([]FindingsIdentifiable, error)
+	Match(baseIssueList, currentIssueList []FindingsIdentifiable) error
 }

@@ -20,16 +20,16 @@ import (
 	"github.com/google/uuid"
 )
 
-var _ IdentityEnricher = (*FindingsIdEnricher)(nil)
+var _ IdentityEnricher = (*FindingsEnricher)(nil)
 
 type IdentityEnricher interface {
 	EnrichWithId(base []FindingsIdentifiable) []FindingsIdentifiable
 }
 
-type FindingsIdEnricher struct {
+type FindingsEnricher struct {
 }
 
-func (_ FindingsIdEnricher) EnrichWithId(issueList []FindingsIdentifiable) []FindingsIdentifiable {
+func (_ FindingsEnricher) EnrichWithId(issueList []FindingsIdentifiable) []FindingsIdentifiable {
 	for i := range issueList {
 		if issueList[i].GlobalIdentity() == "" {
 			issueList[i].SetGlobalIdentity(uuid.New().String())

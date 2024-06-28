@@ -74,6 +74,24 @@ type Issue struct {
 }
 
 var _ delta.FindingsIdentifiable = (*Issue)(nil)
+var _ delta.FindingsFingerprintable = (*Issue)(nil)
+var _ delta.FingingsLocationable = (*Issue)(nil)
+
+func (i *Issue) StartLine() int {
+	return i.Range.Start.Line
+}
+
+func (i *Issue) EndLine() int {
+	return i.Range.End.Line
+}
+
+func (i *Issue) StartColumn() int {
+	return i.Range.Start.Character
+}
+
+func (i *Issue) EndColumn() int {
+	return i.Range.End.Character
+}
 
 func (i *Issue) IsNew() bool {
 	return i.isNew
@@ -89,10 +107,6 @@ func (i *Issue) GlobalIdentity() string {
 
 func (i *Issue) SetGlobalIdentity(globalIdentity string) {
 	i.globalIdentity = globalIdentity
-}
-
-func (i *Issue) GetLocation() Range {
-	return i.Range
 }
 
 func (i *Issue) Path() string {

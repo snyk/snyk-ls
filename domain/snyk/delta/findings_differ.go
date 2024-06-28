@@ -19,30 +19,30 @@ package delta
 var _ Differ = (*FindingsDiffer)(nil)
 
 type Differ interface {
-	Diff(base []FindingsIdentifiable) []FindingsIdentifiable
+	Diff(baseIssueList, currentIssueList []FindingsIdentifiable) []FindingsIdentifiable
 }
 
 type FindingsDiffer struct {
-	currentIssueList []FindingsIdentifiable
 }
 
-func (gd FindingsDiffer) Diff(baseIssueList []FindingsIdentifiable) []FindingsIdentifiable {
+func (_ FindingsDiffer) Diff(baseIssueList, currentIssueList []FindingsIdentifiable) []FindingsIdentifiable {
 	var deltaResults []FindingsIdentifiable
 
-	if len(gd.currentIssueList) == 0 || len(baseIssueList) == 0 {
-		return gd.currentIssueList
+	if len(currentIssueList) == 0 || len(baseIssueList) == 0 {
+		return currentIssueList
 	}
 
-	for i := range gd.currentIssueList {
+	for i := range currentIssueList {
 		found := false
 		for j := range baseIssueList {
-			if baseIssueList[j].GlobalIdentity() == gd.currentIssueList[i].GlobalIdentity() {
+			if baseIssueList[j].GlobalIdentity() == currentIssueList[i].GlobalIdentity() {
 				found = true
 				break
 			}
 		}
 		if !found {
-			deltaResults = append(deltaResults, gd.currentIssueList[i])
+			deltaResults = append(deltaResults, currentIssueList[i])
+			currentIssueList[i].SetIsNew(true)
 		}
 	}
 
