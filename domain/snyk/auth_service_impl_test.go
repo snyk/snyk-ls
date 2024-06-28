@@ -166,7 +166,7 @@ func TestHandleInvalidCredentials(t *testing.T) {
 		provider := snyk.NewFakeCliAuthenticationProvider(c)
 		provider.IsAuthenticated = false
 		c.SetToken("invalidCreds")
-		cut := snyk.NewAuthenticationService(c, provider, analytics, errorReporter, notifier)
+		cut := snyk.NewAuthenticationService(c, provider, analytics, errorReporter, notifier).(*snyk.AuthenticationServiceImpl)
 		messageRequestReceived := false
 		tokenResetReceived := false
 		callback := func(params any) {
@@ -188,7 +188,7 @@ func TestHandleInvalidCredentials(t *testing.T) {
 		}
 		go notifier.CreateListener(callback)
 
-		cut.handleInvalidCredentials(c)
+		cut.HandleInvalidCredentials(c)
 
 		maxWait := time.Second * 10
 		assert.Eventuallyf(t, func() bool {

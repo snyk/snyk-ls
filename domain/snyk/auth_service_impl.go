@@ -41,7 +41,7 @@ type ActiveUser struct {
 	} `json:"orgs,omitempty"`
 }
 
-type authenticationService struct {
+type AuthenticationServiceImpl struct {
 	authenticationProvider AuthenticationProvider
 	analytics              ux.Analytics
 	errorReporter          error_reporting.ErrorReporter
@@ -56,14 +56,14 @@ func NewAuthenticationService(
 	errorReporter error_reporting.ErrorReporter,
 	notifier noti.Notifier,
 ) AuthenticationService {
-	return &authenticationService{authenticationProvider, analytics, errorReporter, notifier, c}
+	return &AuthenticationServiceImpl{authenticationProvider, analytics, errorReporter, notifier, c}
 }
 
-func (a *authenticationService) Provider() AuthenticationProvider {
+func (a *AuthenticationServiceImpl) Provider() AuthenticationProvider {
 	return a.authenticationProvider
 }
 
-func (a *authenticationService) Authenticate(ctx context.Context) (string, error) {
+func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (string, error) {
 	token, err := a.authenticationProvider.Authenticate(ctx)
 	if token == "" || err != nil {
 		a.c.Logger().Error().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.Provider()))
@@ -74,7 +74,7 @@ func (a *authenticationService) Authenticate(ctx context.Context) (string, error
 	return token, err
 }
 
-func (a *authenticationService) UpdateCredentials(newToken string, sendNotification bool) {
+func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotification bool) {
 	c := config.CurrentConfig()
 	oldToken := c.Token()
 	if oldToken == newToken {
@@ -88,7 +88,7 @@ func (a *authenticationService) UpdateCredentials(newToken string, sendNotificat
 	}
 }
 
-func (a *authenticationService) Logout(ctx context.Context) {
+func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
 	err := a.authenticationProvider.ClearAuthentication(ctx)
 	if err != nil {
 		a.c.Logger().Error().Err(err).Str("method", "Logout").Msg("Failed to log out.")
@@ -101,7 +101,7 @@ func (a *authenticationService) Logout(ctx context.Context) {
 
 // IsAuthenticated returns true if the token is verified
 // If the token is set, but not valid IsAuthenticated returns false and the reported error
-func (a *authenticationService) IsAuthenticated() (bool, error) {
+func (a *AuthenticationServiceImpl) IsAuthenticated() (bool, error) {
 	c := config.CurrentConfig()
 	if !c.NonEmptyToken() {
 		c.Logger().Info().Str("method", "IsAuthenticated").Msg("no credentials found")
@@ -112,7 +112,7 @@ func (a *authenticationService) IsAuthenticated() (bool, error) {
 
 	if getActiveUserErr != nil {
 		a.c.Logger().Err(getActiveUserErr).Str("method", "IsAuthenticated").Msg("Failed to get active user")
-		a.handleInvalidCredentials(c)
+		a.HandleInvalidCredentials(c)
 		return false, getActiveUserErr
 	}
 
@@ -120,12 +120,12 @@ func (a *authenticationService) IsAuthenticated() (bool, error) {
 	return true, nil
 }
 
-func (a *authenticationService) SetProvider(provider AuthenticationProvider) {
+func (a *AuthenticationServiceImpl) SetProvider(provider AuthenticationProvider) {
 	a.authenticationProvider = provider
 }
 
-func (a *authenticationService) handleInvalidCredentials(c *config.Config) {
-	logger := c.Logger().With().Str("method", "authenticationService.handleInvalidCredentials").Logger()
+func (a *AuthenticationServiceImpl) HandleInvalidCredentials(c *config.Config) {
+	logger := c.Logger().With().Str("method", "AuthenticationServiceImpl.HandleInvalidCredentials").Logger()
 	msg := "Your authentication credentials cannot be validated. Automatically clearing credentials. You need to re-authenticate to use Snyk."
 	logger.Debug().Msg("logging out")
 	a.Logout(context.Background())
