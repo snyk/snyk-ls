@@ -20,10 +20,11 @@ import (
 	"github.com/google/uuid"
 )
 
-var _ IdentityEnricher = (*FindingsEnricher)(nil)
+var _ Enricher = (*FindingsEnricher)(nil)
 
-type IdentityEnricher interface {
-	EnrichWithId(base []FindingsIdentifiable) []FindingsIdentifiable
+type Enricher interface {
+	EnrichWithId(issueList []FindingsIdentifiable) []FindingsIdentifiable
+	EnrichWithIsNew(issueList, deltaList []FindingsIdentifiable) []FindingsIdentifiable
 }
 
 type FindingsEnricher struct {
@@ -31,8 +32,20 @@ type FindingsEnricher struct {
 
 func (_ FindingsEnricher) EnrichWithId(issueList []FindingsIdentifiable) []FindingsIdentifiable {
 	for i := range issueList {
-		if issueList[i].GlobalIdentity() == "" {
+		if issueList[i].GetGlobalIdentity() == "" {
 			issueList[i].SetGlobalIdentity(uuid.New().String())
+		}
+	}
+
+	return issueList
+}
+
+func (_ FindingsEnricher) EnrichWithIsNew(issueList, deltaList []FindingsIdentifiable) []FindingsIdentifiable {
+	for i := range issueList {
+		for j := range deltaList {
+			if issueList[i].GetGlobalIdentity() == deltaList[j].GetGlobalIdentity() {
+				issueList[i].SetIsNew(true)
+			}
 		}
 	}
 

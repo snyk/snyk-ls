@@ -41,7 +41,7 @@ type CodeAction struct {
 	// DeferredEdit is a function that returns a WorkspaceEdit.
 	// Used for heavy calculations that shouldn't be done ahead of time.
 	// A CodeAction cannot have both Edit and DeferredEdit.
-	DeferredEdit *func() *WorkspaceEdit
+	DeferredEdit *func() *WorkspaceEdit `json:"-"`
 
 	// Command that will be executed after the Edit (if present).
 	Command *CommandData
@@ -49,7 +49,7 @@ type CodeAction struct {
 	// DeferredCommand is a function that returns a Command.
 	// Used for heavy calculations that shouldn't be done ahead of time.
 	// A CodeAction cannot have both Command and DeferredCommand.
-	DeferredCommand *func() *CommandData
+	DeferredCommand *func() *CommandData `json:"-"`
 
 	// UUID is a unique identifier for this code action. This is used for deferred resolution of a command or edit.
 	Uuid *uuid.UUID
