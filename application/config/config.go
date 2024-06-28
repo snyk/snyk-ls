@@ -149,49 +149,50 @@ func (c *CliSettings) DefaultBinaryInstallPath() string {
 }
 
 type Config struct {
-	scrubbingDict                frameworkLogging.ScrubbingDict
-	scrubbingWriter              zerolog.LevelWriter
-	configLoaded                 concurrency.AtomicBool
-	cliSettings                  *CliSettings
-	configFile                   string
-	format                       string
-	isErrorReportingEnabled      concurrency.AtomicBool
-	isSnykCodeEnabled            concurrency.AtomicBool
-	isSnykOssEnabled             concurrency.AtomicBool
-	isSnykIacEnabled             concurrency.AtomicBool
-	isSnykContainerEnabled       concurrency.AtomicBool
-	isSnykAdvisorEnabled         concurrency.AtomicBool
-	isTelemetryEnabled           concurrency.AtomicBool
-	manageBinariesAutomatically  concurrency.AtomicBool
-	logPath                      string
-	logFile                      *os.File
-	snykCodeAnalysisTimeout      time.Duration
-	snykApiUrl                   string
-	snykCodeApiUrl               string
-	token                        string
-	deviceId                     string
-	clientCapabilities           lsp.ClientCapabilities
-	path                         string
-	defaultDirs                  []string
-	automaticAuthentication      bool
-	tokenChangeChannels          []chan string
-	filterSeverity               lsp.SeverityFilter
-	trustedFolders               []string
-	trustedFoldersFeatureEnabled bool
-	activateSnykCodeSecurity     bool
-	activateSnykCodeQuality      bool
-	osPlatform                   string
-	osArch                       string
-	runtimeName                  string
-	runtimeVersion               string
-	automaticScanning            bool
-	authenticationMethod         lsp.AuthenticationMethod
-	engine                       workflow.Engine
-	enableSnykLearnCodeActions   bool
-	logger                       *zerolog.Logger
-	storage                      StorageWithCallbacks
-	m                            sync.Mutex
-	clientProtocolVersion        string
+	scrubbingDict                    frameworkLogging.ScrubbingDict
+	scrubbingWriter                  zerolog.LevelWriter
+	configLoaded                     concurrency.AtomicBool
+	cliSettings                      *CliSettings
+	configFile                       string
+	format                           string
+	isErrorReportingEnabled          concurrency.AtomicBool
+	isSnykCodeEnabled                concurrency.AtomicBool
+	isSnykOssEnabled                 concurrency.AtomicBool
+	isSnykIacEnabled                 concurrency.AtomicBool
+	isSnykContainerEnabled           concurrency.AtomicBool
+	isSnykAdvisorEnabled             concurrency.AtomicBool
+	isTelemetryEnabled               concurrency.AtomicBool
+	manageBinariesAutomatically      concurrency.AtomicBool
+	logPath                          string
+	logFile                          *os.File
+	snykCodeAnalysisTimeout          time.Duration
+	snykApiUrl                       string
+	snykCodeApiUrl                   string
+	token                            string
+	deviceId                         string
+	clientCapabilities               lsp.ClientCapabilities
+	path                             string
+	defaultDirs                      []string
+	automaticAuthentication          bool
+	tokenChangeChannels              []chan string
+	filterSeverity                   lsp.SeverityFilter
+	trustedFolders                   []string
+	trustedFoldersFeatureEnabled     bool
+	activateSnykCodeSecurity         bool
+	activateSnykCodeQuality          bool
+	osPlatform                       string
+	osArch                           string
+	runtimeName                      string
+	runtimeVersion                   string
+	automaticScanning                bool
+	authenticationMethod             lsp.AuthenticationMethod
+	engine                           workflow.Engine
+	enableSnykLearnCodeActions       bool
+	enableSnykOSSQuickFixCodeActions bool
+	logger                           *zerolog.Logger
+	storage                          StorageWithCallbacks
+	m                                sync.Mutex
+	clientProtocolVersion            string
 }
 
 func CurrentConfig() *Config {
@@ -871,6 +872,14 @@ func (c *Config) IsSnykLearnCodeActionsEnabled() bool {
 
 func (c *Config) SetSnykLearnCodeActionsEnabled(enabled bool) {
 	c.enableSnykLearnCodeActions = enabled
+}
+
+func (c *Config) IsSnyOSSQuickFixCodeActionsEnabled() bool {
+	return c.enableSnykOSSQuickFixCodeActions
+}
+
+func (c *Config) SetSnykOSSQuickFixCodeActionsEnabled(enabled bool) {
+	c.enableSnykOSSQuickFixCodeActions = enabled
 }
 
 func (c *Config) SetLogLevel(level string) {

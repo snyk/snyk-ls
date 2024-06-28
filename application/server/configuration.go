@@ -146,6 +146,7 @@ func writeSettings(c *config.Config, settings lsp.Settings, initialize bool) {
 	updateRuntimeInfo(c, settings)
 	updateAutoScan(c, settings)
 	updateSnykLearnCodeActions(c, settings)
+	updateSnykOSSQuickFixCodeActions(c, settings)
 }
 
 func updateAuthenticationMethod(c *config.Config, settings lsp.Settings) {
@@ -256,6 +257,15 @@ func updateSnykLearnCodeActions(c *config.Config, settings lsp.Settings) {
 	}
 
 	c.SetSnykLearnCodeActionsEnabled(enable)
+}
+
+func updateSnykOSSQuickFixCodeActions(c *config.Config, settings lsp.Settings) {
+	enable := true
+	if settings.EnableSnykOSSQuickFixCodeActions == "false" {
+		enable = false
+	}
+
+	c.SetSnykOSSQuickFixCodeActionsEnabled(enable)
 }
 
 func updateToken(token string) {
