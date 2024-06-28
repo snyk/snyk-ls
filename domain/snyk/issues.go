@@ -76,6 +76,7 @@ type Issue struct {
 var _ delta.FindingsIdentifiable = (*Issue)(nil)
 var _ delta.FindingsFingerprintable = (*Issue)(nil)
 var _ delta.FingingsLocationable = (*Issue)(nil)
+var _ delta.FindingsPathable = (*Issue)(nil)
 
 func (i *Issue) StartLine() int {
 	return i.Range.Start.Line
