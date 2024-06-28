@@ -129,7 +129,6 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 	c := config.New()
 	c.ConfigureLogging(nil)
 	token := GetEnvironmentToken(useConsistentIgnores)
-	t.Setenv("SNYK_TOKEN", token)
 	c.SetToken(token)
 	c.SetErrorReportingEnabled(false)
 	c.SetTelemetryEnabled(false)

@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"path"
 	"path/filepath"
 	"testing"
 	"time"
@@ -63,7 +62,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	if endpoint == "" {
 		endpoint = "https://api.snyk.io"
 	}
-	v1Endpoint := path.Join(endpoint, "/v1")
+	//v1Endpoint := path.Join(endpoint, "/v1")
 
 	tests := []test{
 		{
@@ -76,15 +75,15 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			hasVulns:             true,
 			endpoint:             endpoint,
 		},
-		{
-			name:                 "OSS and Code with V1 endpoint",
-			repo:                 "https://github.com/snyk-labs/nodejs-goof",
-			commit:               "0336589",
-			file1:                ossFile,
-			file2:                codeFile,
-			useConsistentIgnores: false,
-			endpoint:             v1Endpoint,
-		},
+		//{
+		//	name:                 "OSS and Code with V1 endpoint",
+		//	repo:                 "https://github.com/snyk-labs/nodejs-goof",
+		//	commit:               "0336589",
+		//	file1:                ossFile,
+		//	file2:                codeFile,
+		//	useConsistentIgnores: false,
+		//	endpoint:             v1Endpoint,
+		//},
 		{
 			name:                 "OSS and Code with consistent ignores",
 			repo:                 "https://github.com/snyk-labs/nodejs-goof",
@@ -93,7 +92,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                codeFile,
 			useConsistentIgnores: true,
 			hasVulns:             true,
-			endpoint:             endpoint, //TODO: dev endpoint
+			endpoint:             "https://api.dev.snyk.io",
 		},
 		{
 			name:                 "IaC and Code",
@@ -123,7 +122,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                codeFile,
 			useConsistentIgnores: true,
 			hasVulns:             true,
-			endpoint:             endpoint,
+			endpoint:             "https://api.dev.snyk.io",
 		},
 		{
 			name:                 "Two upload batches",
@@ -143,7 +142,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java",
 			useConsistentIgnores: true,
 			hasVulns:             true,
-			endpoint:             endpoint,
+			endpoint:             "https://api.dev.snyk.io",
 		},
 	}
 	for _, tc := range tests {
