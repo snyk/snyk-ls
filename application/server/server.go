@@ -554,13 +554,13 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		di.FileWatcher().SetFileAsSaved(params.TextDocument.URI)
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 
-		ws := workspace.Get()
-		if ws != nil && autoScanEnabled && uri.IsDotSnykFile(params.TextDocument.URI) {
-			go ws.ScanWorkspace(bgCtx)
+		f := workspace.Get().GetFolderContaining(filePath)
+
+		if f != nil && autoScanEnabled && uri.IsDotSnykFile(params.TextDocument.URI) {
+			go f.ScanFolder(bgCtx)
 			return nil, nil
 		}
 
-		f := ws.GetFolderContaining(filePath)
 		if f != nil {
 			if autoScanEnabled {
 				go f.ScanFile(bgCtx, filePath)

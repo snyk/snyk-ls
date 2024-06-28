@@ -37,6 +37,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
@@ -772,7 +773,7 @@ func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 		t.Fatal(err, "couldn't send initialized")
 	}
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder) }, time.Second, time.Millisecond)
 }
 
@@ -820,7 +821,7 @@ ignore:
 patch: {}
 `
 	err = os.WriteFile(snykFilePath, []byte(yamlContent), 0600)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	return snykFilePath, temp
 }
 
