@@ -14,14 +14,12 @@
  * limitations under the License.
  */
 
-package snyk
+package delta
 
 import (
-	"github.com/snyk/snyk-ls/domain/snyk/delta"
+	"github.com/rs/zerolog"
 )
 
-type DeltaFinder struct {
-	identityEnricher delta.IdentityEnricher
-	matcher          delta.FindingsMatcher
-	differ           delta.Differ
+type FindingsMatcher interface {
+	Match(c *zerolog.Logger, base []FindingsIdentifiable) ([]FindingsIdentifiable, error)
 }

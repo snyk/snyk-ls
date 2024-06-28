@@ -20,16 +20,17 @@ import (
 	"github.com/adrg/strutil"
 	"github.com/adrg/strutil/metrics"
 	"github.com/google/uuid"
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/rs/zerolog"
+	"github.com/snyk/snyk-ls/domain/snyk/delta"
 	"math"
 	"path/filepath"
 	"strings"
 )
 
-var _ Matcher = (*CodeIdentityMatcher)(nil)
+var _ delta.FindingsMatcher = (*CodeIdentityMatcher)(nil)
 
 type IssueConfidence struct {
-	HistoricUUID       string
+	BaseUUID           string
 	IssueIDResultIndex int
 	Confidence         float64
 }
@@ -67,12 +68,12 @@ var weights = struct {
 }
 
 type CodeIdentityMatcher struct {
-	currentIssueList []Identifiable
-	config           *config.Config
+	currentIssueList []delta.FindingsIdentifiable
+	config           *zerolog.Logger
 }
 
-func (cim *CodeIdentityMatcher) Match(c *config.Config, baseIssueList []Identifiable) ([]Identifiable, error) {
-	logger := c.Logger().With().Str("method", "Match").Logger()
+func (cim *CodeIdentityMatcher) Match(zlog *zerolog.Logger, baseIssueList []delta.FindingsIdentifiable) ([]delta.FindingsIdentifiable, error) {
+	logger := zlog.With().Str("method", "Match").Logger()
 	if len(cim.currentIssueList) == 0 || len(baseIssueList) == 0 {
 		logger.Error().Msg("currentIssueList or baseIssueList is empty")
 	}
@@ -98,53 +99,52 @@ func (cim *CodeIdentityMatcher) Match(c *config.Config, baseIssueList []Identifi
 	}
 
 	// Assign UUIDs for any new issues
-	assignUUIDForNewProject(cim.currentIssueList)
 	return cim.currentIssueList, nil
 }
 
-func findMatch(issue Issue, index int, listOfHistoricResults [][]Identifiable, strongMatchingIssues map[string]IssueConfidence) {
-	matches := findMatches(issue, index, listOfHistoricResults)
+func findMatch(issue delta.FindingsIdentifiable, index int, baseIssueList []delta.FindingsIdentifiable, strongMatchingIssues map[string]IssueConfidence) {
+	matches := findMatches(issue, index, baseIssueList)
 
 	for _, match := range matches {
-		if existing, exists := strongMatchingIssues[match.HistoricUUID]; !exists || existing.Confidence < match.Confidence {
-			strongMatchingIssues[match.HistoricUUID] = match
+		if existing, exists := strongMatchingIssues[match.BaseUUID]; !exists || existing.Confidence < match.Confidence {
+			strongMatchingIssues[match.BaseUUID] = match
 		}
 	}
 }
 
-func findMatches(issue Identifiable, index int, listOfHistoricResults [][]Identifiable) IssueConfidenceList {
+func findMatches(currentIssue delta.FindingsIdentifiable, index int, baseIssues []delta.FindingsIdentifiable) IssueConfidenceList {
 	similarIssues := make(IssueConfidenceList, 0)
 
-	for historicVersionInTime, historicResults := range listOfHistoricResults {
-		for _, historicResult := range historicResults {
-			if historicResult.RuleId() != issue.RuleId() {
-				continue
-			}
+	for _, baseIssue := range baseIssues {
+		if baseIssue.RuleId() != currentIssue.RuleId() {
+			continue
+		}
 
-			filePositionDistance := filePositionConfidence(historicResult, issue)
-			recentHistoryDistance := historicConfidenceCalculator(historicVersionInTime, len(listOfHistoricResults))
-			fingerprintConfidence := fingerprintDistance(historicResult.Fingerprint(), issue.Fingerprint())
+		filePositionDistance := filePositionConfidence(baseIssue, currentIssue)
+		// Calculation of History is not needed here for IDE since we are not persisting old scan results.
+		//We will always return 1.
+		recentHistoryDistance := historicConfidenceCalculator()
+		fingerprintConfidence := fingerprintDistance(baseIssue, currentIssue)
 
-			overallConfidence := filePositionDistance*weights.FilePositionDistance +
-				recentHistoryDistance*weights.RecentHistoryDistance +
-				fingerprintConfidence*weights.FingerprintConfidence
+		overallConfidence := filePositionDistance*weights.FilePositionDistance +
+			recentHistoryDistance*weights.RecentHistoryDistance +
+			fingerprintConfidence*weights.FingerprintConfidence
 
-			if overallConfidence == 1 {
-				similarIssues = append(similarIssues, IssueConfidence{
-					HistoricUUID:       historicResult.GlobalIdentity(),
-					IssueIDResultIndex: index,
-					Confidence:         overallConfidence,
-				})
-				break
-			}
+		if overallConfidence == 1 {
+			similarIssues = append(similarIssues, IssueConfidence{
+				BaseUUID:           baseIssue.GlobalIdentity(),
+				IssueIDResultIndex: index,
+				Confidence:         overallConfidence,
+			})
+			break
+		}
 
-			if overallConfidence > weights.MinimumAcceptableConfidence {
-				similarIssues = append(similarIssues, IssueConfidence{
-					HistoricUUID:       historicResult.GlobalIdentity(),
-					IssueIDResultIndex: index,
-					Confidence:         overallConfidence,
-				})
-			}
+		if overallConfidence > weights.MinimumAcceptableConfidence {
+			similarIssues = append(similarIssues, IssueConfidence{
+				BaseUUID:           baseIssue.GlobalIdentity(),
+				IssueIDResultIndex: index,
+				Confidence:         overallConfidence,
+			})
 		}
 	}
 
@@ -156,7 +156,7 @@ func deduplicateIssues(strongMatchingIssues map[string]IssueConfidence) Deduplic
 	for _, issue := range strongMatchingIssues {
 		if existing, exists := finalResult[issue.IssueIDResultIndex]; !exists || existing.Confidence < issue.Confidence {
 			finalResult[issue.IssueIDResultIndex] = Identity{
-				IdentityID: issue.HistoricUUID,
+				IdentityID: issue.BaseUUID,
 				Confidence: issue.Confidence,
 			}
 		}
@@ -164,10 +164,19 @@ func deduplicateIssues(strongMatchingIssues map[string]IssueConfidence) Deduplic
 	return finalResult
 }
 
-func fingerprintDistance(historicFingerprints, currentFingerprints string) float64 {
+func fingerprintDistance(baseFingerprints, currentFingerprints delta.FindingsIdentifiable) float64 {
+	baseFingerprintable, ok := baseFingerprints.(delta.FindingsFingerprintable)
+	if !ok {
+		return 0
+	}
+	currentFingerprintable, ok := currentFingerprints.(delta.FindingsFingerprintable)
+	if !ok {
+		return 0
+	}
+
 	// Split into parts and compare
-	parts1 := strings.Split(historicFingerprints, ".")
-	parts2 := strings.Split(currentFingerprints, ".")
+	parts1 := strings.Split(baseFingerprintable.Fingerprint(), ".")
+	parts2 := strings.Split(currentFingerprintable.Fingerprint(), ".")
 	similar := 0
 	for i := 0; i < len(parts1) && i < len(parts2); i++ {
 		if parts1[i] == parts2[i] {
@@ -176,16 +185,25 @@ func fingerprintDistance(historicFingerprints, currentFingerprints string) float
 	}
 	totalParts := max(len(parts1), len(parts2))
 	if totalParts == 0 {
-		return 0.0
+		return 0
 	}
 	return float64(similar) / float64(totalParts)
 }
 
-func filePositionConfidence(historicIssue, currentIssue Identifiable) float64 {
-	dirSimilarity := checkDirs(historicIssue.Path(), currentIssue.Path())
-	fileNameSimilarity := fileNameSimilarity(historicIssue.Path(), currentIssue.Path())
-	fileExtSimilarity := fileExtSimilarity(filepath.Ext(historicIssue.Path()),
-		filepath.Ext(currentIssue.Path()))
+func filePositionConfidence(baseIssue, currentIssue delta.FindingsIdentifiable) float64 {
+	basePathable, ok := baseIssue.(delta.FindingsPathable)
+	if !ok {
+		return 0
+	}
+	currentPathable, ok := currentIssue.(delta.FindingsPathable)
+	if !ok {
+		return 0
+	}
+
+	dirSimilarity := checkDirs(basePathable.Path(), currentPathable.Path())
+	fileNameSimilarity := fileNameSimilarity(basePathable.Path(), currentPathable.Path())
+	fileExtSimilarity := fileExtSimilarity(filepath.Ext(basePathable.Path()),
+		filepath.Ext(currentPathable.Path()))
 
 	pathSimilarity :=
 		dirSimilarity*weights.DirSimilarity +
@@ -193,7 +211,7 @@ func filePositionConfidence(historicIssue, currentIssue Identifiable) float64 {
 			fileExtSimilarity*weights.FileExtensionSimilarity
 
 	startLineSimilarity, startColumnSimilarity, endColumnSimilarity, endLineSimilarity :=
-		matchDistance(historicIssue, currentIssue)
+		matchDistance(baseIssue, currentIssue)
 	// Effectively weighting each line number pos at 25%
 	totalLineSimilarity := (startLineSimilarity +
 		startColumnSimilarity +
@@ -206,14 +224,22 @@ func filePositionConfidence(historicIssue, currentIssue Identifiable) float64 {
 	return fileLocationConfidence
 }
 
-func matchDistance(historicIssue Identifiable, currentIssue Identifiable) (float64, float64, float64, float64) {
-	historicRange := historicIssue.GetRange()
-	currentRange := currentIssue.GetRange()
-	startLineSimilarity := similarityToDistance(historicRange.Start.Line, currentRange.Start.Line)
-	startColumnSimilarity := similarityToDistance(historicRange.Start.Character,
+func matchDistance(baseIssue delta.FindingsIdentifiable, currentIssue delta.FindingsIdentifiable) (float64, float64, float64, float64) {
+	baseRangeable, ok := baseIssue.(delta.FingingsLocationable)
+	if !ok {
+		return 0, 0, 0, 0
+	}
+	currentRangeable, ok := currentIssue.(delta.FingingsLocationable)
+	if !ok {
+		return 0, 0, 0, 0
+	}
+	baseRange := baseRangeable.GetLocation()
+	currentRange := currentRangeable.GetLocation()
+	startLineSimilarity := similarityToDistance(baseRange.Start.Line, currentRange.Start.Line)
+	startColumnSimilarity := similarityToDistance(baseRange.Start.Character,
 		currentRange.Start.Character)
-	endColumnSimilarity := similarityToDistance(historicRange.End.Character, currentRange.End.Character)
-	endLineSimilarity := similarityToDistance(historicRange.End.Line, currentRange.End.Line)
+	endColumnSimilarity := similarityToDistance(baseRange.End.Character, currentRange.End.Character)
+	endLineSimilarity := similarityToDistance(baseRange.End.Line, currentRange.End.Line)
 	return startLineSimilarity, startColumnSimilarity, endColumnSimilarity, endLineSimilarity
 }
 
@@ -245,7 +271,7 @@ func fileExtSimilarity(ext1, ext2 string) float64 {
 	return strutil.Similarity(ext1, ext2, metrics.NewLevenshtein())
 }
 
-func assignUUIDForNewProject(currentResults []Issue) {
+func assignUUIDForNewProject(currentResults []delta.FindingsIdentifiable) {
 	for i := range currentResults {
 		if currentResults[i].GlobalIdentity() == "" {
 			currentResults[i].SetGlobalIdentity(uuid.New().String())
@@ -253,11 +279,8 @@ func assignUUIDForNewProject(currentResults []Issue) {
 	}
 }
 
-func historicConfidenceCalculator(currentVersion, totalNumOfVersions int) float64 {
-	if currentVersion == 0 {
-		return 1
-	}
-	return 1 - math.Abs(float64(currentVersion-totalNumOfVersions))/math.Max(float64(currentVersion), float64(totalNumOfVersions))
+func historicConfidenceCalculator() float64 {
+	return 1
 }
 
 func relative(path1, path2 string) string {

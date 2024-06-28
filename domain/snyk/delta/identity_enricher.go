@@ -14,14 +14,27 @@
  * limitations under the License.
  */
 
-package snyk
+package delta
 
 import (
-	"github.com/snyk/snyk-ls/domain/snyk/delta"
+	"github.com/google/uuid"
 )
 
-type DeltaFinder struct {
-	identityEnricher delta.IdentityEnricher
-	matcher          delta.FindingsMatcher
-	differ           delta.Differ
+var _ IdentityEnricher = (*FindingsIdEnricher)(nil)
+
+type IdentityEnricher interface {
+	EnrichWithId(base []FindingsIdentifiable) []FindingsIdentifiable
+}
+
+type FindingsIdEnricher struct {
+}
+
+func (_ FindingsIdEnricher) EnrichWithId(issueList []FindingsIdentifiable) []FindingsIdentifiable {
+	for i := range issueList {
+		if issueList[i].GlobalIdentity() == "" {
+			issueList[i].SetGlobalIdentity(uuid.New().String())
+		}
+	}
+
+	return issueList
 }
