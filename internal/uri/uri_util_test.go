@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/sourcegraph/go-lsp"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -112,6 +113,65 @@ func TestUri_AddRangeToUri(t *testing.T) {
 		actual := string(AddRangeToUri("file://asdf#L1,1-L1,1", r))
 		assert.Equal(t, "file://asdf#L1,1-L1,1", actual)
 	})
+}
+
+func TestUri_IsDotSnykFile(t *testing.T) {
+	tests := []struct {
+		name     string
+		uri      sglsp.DocumentURI
+		expected bool
+	}{
+		// POSIX paths
+		{
+			name:     "POSIX: file with .snyk extension",
+			uri:      sglsp.DocumentURI("file:///path/to/file.snyk"),
+			expected: true,
+		},
+		{
+			name:     "POSIX: file without .snyk extension",
+			uri:      sglsp.DocumentURI("file:///path/to/file.txt"),
+			expected: false,
+		},
+		// Windows URIs
+		{
+			name:     "Windows URI: file with .snyk extension",
+			uri:      sglsp.DocumentURI("file:///C:/path/to/file.snyk"),
+			expected: true,
+		},
+		{
+			name:     "Windows URI: URI with encoded colon and file with .snyk extension",
+			uri:      sglsp.DocumentURI("file:///c%3A/Users/git/node-restify/examples/todoapp/lib/file.snyk"),
+			expected: true,
+		},
+		{
+			name:     "Windows URI: URI with encoded colon and file without .snyk extension",
+			uri:      sglsp.DocumentURI("file:///c%3A/Users/git/node-restify/examples/todoapp/lib/file.txt"),
+			expected: false,
+		},
+		// Windows paths with backslashes
+		{
+			name:     "Windows Path: file with .snyk extension",
+			uri:      sglsp.DocumentURI("C:\\path\\to\\file.snyk"),
+			expected: true,
+		},
+		{
+			name:     "Windows URI: file without .snyk extension",
+			uri:      sglsp.DocumentURI("file:///C:/path/to/file.txt"),
+			expected: false,
+		},
+		{
+			name:     "Windows Path: file without .snyk extension",
+			uri:      sglsp.DocumentURI("C:\\path\\to\\file.txt"),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsDotSnykFile(tt.uri)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
 
 func getTestRange() Range {
