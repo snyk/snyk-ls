@@ -16,25 +16,25 @@
 
 package delta
 
-type FindingsFingerprintable interface {
-	FindingsIdentifiable
+type Fingerprintable interface {
+	Identifiable
 	GetFingerprint() string
 }
 
-type FingingsLocationable interface {
-	FindingsIdentifiable
+type Locationable interface {
+	Identifiable
 	StartLine() int
 	EndLine() int
 	StartColumn() int
 	EndColumn() int
 }
 
-type FindingsPathable interface {
-	FindingsIdentifiable
+type Pathable interface {
+	Identifiable
 	Path() string
 }
 
-type FindingsIdentifiable interface {
+type Identifiable interface {
 	RuleId() string
 	GetGlobalIdentity() string
 	SetGlobalIdentity(globalIdentity string)

@@ -73,10 +73,10 @@ type Issue struct {
 	GlobalIdentity string
 }
 
-var _ delta.FindingsIdentifiable = (*Issue)(nil)
-var _ delta.FindingsFingerprintable = (*Issue)(nil)
-var _ delta.FingingsLocationable = (*Issue)(nil)
-var _ delta.FindingsPathable = (*Issue)(nil)
+var _ delta.Identifiable = (*Issue)(nil)
+var _ delta.Fingerprintable = (*Issue)(nil)
+var _ delta.Locationable = (*Issue)(nil)
+var _ delta.Pathable = (*Issue)(nil)
 
 func (i *Issue) StartLine() int {
 	return i.Range.Start.Line

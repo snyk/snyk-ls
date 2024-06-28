@@ -19,14 +19,14 @@ package delta
 var _ Differ = (*FindingsDiffer)(nil)
 
 type Differ interface {
-	Diff(baseIssueList, currentIssueList []FindingsIdentifiable) []FindingsIdentifiable
+	Diff(baseIssueList, currentIssueList []Identifiable) []Identifiable
 }
 
 type FindingsDiffer struct {
 }
 
-func (_ FindingsDiffer) Diff(baseIssueList, currentIssueList []FindingsIdentifiable) []FindingsIdentifiable {
-	var deltaResults []FindingsIdentifiable
+func (_ FindingsDiffer) Diff(baseIssueList, currentIssueList []Identifiable) []Identifiable {
+	var deltaResults []Identifiable
 
 	if len(currentIssueList) == 0 || len(baseIssueList) == 0 {
 		return currentIssueList

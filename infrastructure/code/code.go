@@ -381,11 +381,11 @@ func getDelta(zlog *zerolog.Logger, baseIssueList []snyk.Issue, currentIssueList
 	gd := &delta.FindingsDiffer{}
 
 	df = df.Init(fe, cim, gd)
-	baseFindingIdentifiable := make([]delta.FindingsIdentifiable, len(baseIssueList))
+	baseFindingIdentifiable := make([]delta.Identifiable, len(baseIssueList))
 	for i := range baseIssueList {
 		baseFindingIdentifiable[i] = &baseIssueList[i]
 	}
-	currentFindingIdentifiable := make([]delta.FindingsIdentifiable, len(currentIssueList))
+	currentFindingIdentifiable := make([]delta.Identifiable, len(currentIssueList))
 	for i := range currentIssueList {
 		currentFindingIdentifiable[i] = &currentIssueList[i]
 	}

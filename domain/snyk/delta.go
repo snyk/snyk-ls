@@ -26,7 +26,7 @@ import (
 	"strings"
 )
 
-var _ delta.FindingsMatcher = (*CodeIdentityMatcher)(nil)
+var _ delta.Matcher = (*CodeIdentityMatcher)(nil)
 
 type IssueConfidence struct {
 	BaseUUID           string
@@ -69,7 +69,7 @@ var weights = struct {
 type CodeIdentityMatcher struct {
 }
 
-func (_ CodeIdentityMatcher) Match(baseIssueList, currentIssueList []delta.FindingsIdentifiable) ([]delta.FindingsIdentifiable, error) {
+func (_ CodeIdentityMatcher) Match(baseIssueList, currentIssueList []delta.Identifiable) ([]delta.Identifiable, error) {
 	if len(currentIssueList) == 0 || len(baseIssueList) == 0 {
 		return nil, errors.New("base or current issue list is empty")
 	}
@@ -98,7 +98,7 @@ func (_ CodeIdentityMatcher) Match(baseIssueList, currentIssueList []delta.Findi
 	return currentIssueList, nil
 }
 
-func findMatch(issue delta.FindingsIdentifiable, index int, baseIssueList []delta.FindingsIdentifiable, strongMatchingIssues map[string]IssueConfidence) {
+func findMatch(issue delta.Identifiable, index int, baseIssueList []delta.Identifiable, strongMatchingIssues map[string]IssueConfidence) {
 	matches := findMatches(issue, index, baseIssueList)
 
 	for _, match := range matches {
@@ -108,7 +108,7 @@ func findMatch(issue delta.FindingsIdentifiable, index int, baseIssueList []delt
 	}
 }
 
-func findMatches(currentIssue delta.FindingsIdentifiable, index int, baseIssues []delta.FindingsIdentifiable) IssueConfidenceList {
+func findMatches(currentIssue delta.Identifiable, index int, baseIssues []delta.Identifiable) IssueConfidenceList {
 	similarIssues := make(IssueConfidenceList, 0)
 
 	for _, baseIssue := range baseIssues {
@@ -160,12 +160,12 @@ func deduplicateIssues(strongMatchingIssues map[string]IssueConfidence) Deduplic
 	return finalResult
 }
 
-func fingerprintDistance(baseFingerprints, currentFingerprints delta.FindingsIdentifiable) float64 {
-	baseFingerprintable, ok := baseFingerprints.(delta.FindingsFingerprintable)
+func fingerprintDistance(baseFingerprints, currentFingerprints delta.Identifiable) float64 {
+	baseFingerprintable, ok := baseFingerprints.(delta.Fingerprintable)
 	if !ok {
 		return 0
 	}
-	currentFingerprintable, ok := currentFingerprints.(delta.FindingsFingerprintable)
+	currentFingerprintable, ok := currentFingerprints.(delta.Fingerprintable)
 	if !ok {
 		return 0
 	}
@@ -186,12 +186,12 @@ func fingerprintDistance(baseFingerprints, currentFingerprints delta.FindingsIde
 	return float64(similar) / float64(totalParts)
 }
 
-func filePositionConfidence(baseIssue, currentIssue delta.FindingsIdentifiable) float64 {
-	basePathable, ok := baseIssue.(delta.FindingsPathable)
+func filePositionConfidence(baseIssue, currentIssue delta.Identifiable) float64 {
+	basePathable, ok := baseIssue.(delta.Pathable)
 	if !ok {
 		return 0
 	}
-	currentPathable, ok := currentIssue.(delta.FindingsPathable)
+	currentPathable, ok := currentIssue.(delta.Pathable)
 	if !ok {
 		return 0
 	}
@@ -220,12 +220,12 @@ func filePositionConfidence(baseIssue, currentIssue delta.FindingsIdentifiable) 
 	return fileLocationConfidence
 }
 
-func matchDistance(baseIssue delta.FindingsIdentifiable, currentIssue delta.FindingsIdentifiable) (float64, float64, float64, float64) {
-	baseRangeable, ok := baseIssue.(delta.FingingsLocationable)
+func matchDistance(baseIssue delta.Identifiable, currentIssue delta.Identifiable) (float64, float64, float64, float64) {
+	baseRangeable, ok := baseIssue.(delta.Locationable)
 	if !ok {
 		return 0, 0, 0, 0
 	}
-	currentRangeable, ok := currentIssue.(delta.FingingsLocationable)
+	currentRangeable, ok := currentIssue.(delta.Locationable)
 	if !ok {
 		return 0, 0, 0, 0
 	}
