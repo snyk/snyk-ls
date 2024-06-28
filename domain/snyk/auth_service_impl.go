@@ -24,6 +24,7 @@ import (
 	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
@@ -111,6 +112,7 @@ func (a *authenticationService) IsAuthenticated() (bool, error) {
 
 	if getActiveUserErr != nil {
 		a.c.Logger().Err(getActiveUserErr).Str("method", "IsAuthenticated").Msg("Failed to get active user")
+		a.handleInvalidCredentials(c)
 		return false, getActiveUserErr
 	}
 
@@ -120,4 +122,24 @@ func (a *authenticationService) IsAuthenticated() (bool, error) {
 
 func (a *authenticationService) SetProvider(provider AuthenticationProvider) {
 	a.authenticationProvider = provider
+}
+
+func (a *authenticationService) handleInvalidCredentials(c *config.Config) {
+	logger := c.Logger().With().Str("method", "authenticationService.handleInvalidCredentials").Logger()
+	msg := "Your authentication credentials cannot be validated. Automatically clearing credentials. You need to re-authenticate to use Snyk."
+	logger.Debug().Msg("logging out")
+	a.Logout(context.Background())
+
+	actions := data_structure.OrderedMap[MessageAction, CommandData]{}
+	actions.Add("Authenticate", CommandData{
+		Title:     "Authenticate",
+		CommandId: LoginCommand,
+	})
+	actions.Add("Cancel", CommandData{})
+
+	a.notifier.Send(ShowMessageRequest{
+		Message: msg,
+		Type:    Warning,
+		Actions: &actions,
+	})
 }
