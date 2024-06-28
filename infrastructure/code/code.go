@@ -21,6 +21,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/rs/zerolog"
+	"github.com/snyk/snyk-ls/domain/snyk/delta"
 	"os"
 	"sync"
 	"time"
@@ -362,7 +363,7 @@ func (sc *Scanner) ScanWithDelta(ctx context.Context, path string, folderPath st
 		return issues, err
 	}
 
-	results := getSarifDiff(baseScanResults, currentScanResults)
+	results := getDelta(c.Logger(), baseScanResults, currentScanResults)
 
 	// Populate HTML template
 	sc.enhanceIssuesDetails(results)
@@ -372,34 +373,34 @@ func (sc *Scanner) ScanWithDelta(ctx context.Context, path string, folderPath st
 	return results, err
 }
 
-func getSarifDiff(baseIssueList []snyk.Issue, currentIssueList []snyk.Issue) []snyk.Issue {
-	var deltaResults []snyk.Issue
-	baseBranchResults, err := identify(baseIssueList, [][]snyk.Issue{})
+func getDelta(zlog *zerolog.Logger, baseIssueList []snyk.Issue, currentIssueList []snyk.Issue) []snyk.Issue {
+	logger := zlog.With().Str("method", "getDelta").Logger()
+	df := &delta.Finder{}
+	fe := &delta.FindingsEnricher{}
+	cim := &snyk.CodeIdentityMatcher{}
+	gd := &delta.FindingsDiffer{}
+
+	df = df.Init(fe, cim, gd)
+	baseFindingIdentifiable := make([]delta.FindingsIdentifiable, len(baseIssueList))
+	for i := range baseIssueList {
+		baseFindingIdentifiable[i] = &baseIssueList[i]
+	}
+	currentFindingIdentifiable := make([]delta.FindingsIdentifiable, len(currentIssueList))
+	for i := range currentIssueList {
+		currentFindingIdentifiable[i] = &currentIssueList[i]
+	}
+	diff, err := df.Find(baseFindingIdentifiable, currentFindingIdentifiable)
 	if err != nil {
+		logger.Error().Err(err).Msg("couldn't calculate delta")
 		return nil
 	}
 
-	currentBranchResults, err := identify(currentIssueList, [][]snyk.Issue{baseBranchResults})
-	if err != nil {
-		return nil
+	deltaSnykIssues := make([]snyk.Issue, len(diff))
+	for i := range diff {
+		deltaSnykIssues[i] = *diff[i].(*snyk.Issue)
 	}
 
-	if len(currentBranchResults) > 0 && len(baseBranchResults) > 0 {
-		for _, branchIssue := range currentBranchResults {
-			found := false
-			for _, baseIssue := range baseBranchResults {
-				if baseIssue.GlobalIdentity() == branchIssue.GlobalIdentity() {
-					found = true
-					break
-				}
-			}
-			if !found {
-				deltaResults = append(deltaResults, branchIssue)
-			}
-		}
-	}
-
-	return deltaResults
+	return deltaSnykIssues
 }
 
 // Populate HTML template

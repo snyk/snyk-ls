@@ -16,8 +16,6 @@
 
 package delta
 
-import "github.com/snyk/snyk-ls/domain/snyk"
-
 type FindingsFingerprintable interface {
 	FindingsIdentifiable
 	Fingerprint() string
@@ -25,9 +23,10 @@ type FindingsFingerprintable interface {
 
 type FingingsLocationable interface {
 	FindingsIdentifiable
-	// We should use snyk.Range type here. But since we will move it to GAF
-	// We need to decide what we will do regarding this type in LS.
-	GetLocation() snyk.Range
+	StartLine() int
+	EndLine() int
+	StartColumn() int
+	EndColumn() int
 }
 
 type FindingsPathable interface {
