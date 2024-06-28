@@ -18,7 +18,7 @@ package delta
 
 type FindingsFingerprintable interface {
 	FindingsIdentifiable
-	Fingerprint() string
+	GetFingerprint() string
 }
 
 type FingingsLocationable interface {
@@ -36,7 +36,7 @@ type FindingsPathable interface {
 
 type FindingsIdentifiable interface {
 	RuleId() string
-	GlobalIdentity() string
+	GetGlobalIdentity() string
 	SetGlobalIdentity(globalIdentity string)
 	SetIsNew(isNew bool)
 	IsNew() bool

@@ -389,7 +389,7 @@ func getDelta(zlog *zerolog.Logger, baseIssueList []snyk.Issue, currentIssueList
 	for i := range currentIssueList {
 		currentFindingIdentifiable[i] = &currentIssueList[i]
 	}
-	diff, err := df.Find(baseFindingIdentifiable, currentFindingIdentifiable)
+	_, diff, err := df.Find(baseFindingIdentifiable, currentFindingIdentifiable)
 	if err != nil {
 		logger.Error().Err(err).Msg("couldn't calculate delta")
 		return nil

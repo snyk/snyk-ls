@@ -35,14 +35,13 @@ func (_ FindingsDiffer) Diff(baseIssueList, currentIssueList []FindingsIdentifia
 	for i := range currentIssueList {
 		found := false
 		for j := range baseIssueList {
-			if baseIssueList[j].GlobalIdentity() == currentIssueList[i].GlobalIdentity() {
+			if baseIssueList[j].GetGlobalIdentity() == currentIssueList[i].GetGlobalIdentity() {
 				found = true
 				break
 			}
 		}
 		if !found {
 			deltaResults = append(deltaResults, currentIssueList[i])
-			currentIssueList[i].SetIsNew(true)
 		}
 	}
 

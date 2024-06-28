@@ -21,48 +21,51 @@ import (
 )
 
 type Finder struct {
-	identityEnricher IdentityEnricher
+	findingsEnricher Enricher
 	matcher          FindingsMatcher
 	differ           Differ
 }
 
-func (f *Finder) Init(ie IdentityEnricher, m FindingsMatcher, d Differ) *Finder {
+func (f *Finder) Init(e Enricher, m FindingsMatcher, d Differ) *Finder {
 	return &Finder{
-		identityEnricher: ie,
+		findingsEnricher: e,
 		matcher:          m,
 		differ:           d,
 	}
 }
 
-func (f *Finder) Find(baseList, currentList []FindingsIdentifiable) ([]FindingsIdentifiable, error) {
+func (f *Finder) Find(baseList, currentList []FindingsIdentifiable) (enrichedList, deltaList []FindingsIdentifiable, err error) {
 	if len(baseList) == 0 || len(currentList) == 0 {
-		return nil, errors.New("baselist or currentlist is empty")
+		return nil, nil, errors.New("baselist or currentlist is empty")
 	}
 
-	if f.identityEnricher != nil {
-		f.identityEnricher.EnrichWithId(baseList)
+	if f.findingsEnricher != nil {
+		f.findingsEnricher.EnrichWithId(baseList)
 	}
 
-	if f.matcher == nil {
-		return nil, errors.New("findings matcher not defined")
-	}
-
-	// Match ids from baseList to currentList if the issue is similar.
-	err := f.matcher.Match(baseList, currentList)
-	if err != nil {
-		return nil, err
+	if f.matcher != nil {
+		// Match ids from baseList to currentList if the issue is similar.
+		currentList, err = f.matcher.Match(baseList, currentList)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	// Ensure new findings have ids
-	if f.identityEnricher != nil {
-		f.identityEnricher.EnrichWithId(currentList)
+	if f.findingsEnricher != nil {
+		f.findingsEnricher.EnrichWithId(currentList)
 	}
 
 	if f.differ == nil {
-		return nil, errors.New("findings differ not defined")
+		return nil, nil, errors.New("findings differ not defined")
 	}
 
-	delta := f.differ.Diff(baseList, currentList)
+	deltaList = f.differ.Diff(baseList, currentList)
 
-	return delta, nil
+	// Enrich IsNew property
+	if f.findingsEnricher != nil {
+		currentList = f.findingsEnricher.EnrichWithIsNew(currentList, deltaList)
+	}
+
+	return currentList, deltaList, nil
 }

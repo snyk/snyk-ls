@@ -69,17 +69,17 @@ var weights = struct {
 type CodeIdentityMatcher struct {
 }
 
-func (_ CodeIdentityMatcher) Match(baseIssueList, currentIssueList []delta.FindingsIdentifiable) error {
+func (_ CodeIdentityMatcher) Match(baseIssueList, currentIssueList []delta.FindingsIdentifiable) ([]delta.FindingsIdentifiable, error) {
 	if len(currentIssueList) == 0 || len(baseIssueList) == 0 {
-		return errors.New("base or current issue list is empty")
+		return nil, errors.New("base or current issue list is empty")
 	}
 
 	strongMatchingIssues := make(map[string]IssueConfidence)
 	existingAssignedIds := make(map[string]bool)
 
 	for index, issue := range currentIssueList {
-		if len(issue.GlobalIdentity()) > 0 {
-			existingAssignedIds[issue.GlobalIdentity()] = true
+		if len(issue.GetGlobalIdentity()) > 0 {
+			existingAssignedIds[issue.GetGlobalIdentity()] = true
 			continue
 		}
 		findMatch(issue, index, baseIssueList, strongMatchingIssues)
@@ -95,7 +95,7 @@ func (_ CodeIdentityMatcher) Match(baseIssueList, currentIssueList []delta.Findi
 	}
 
 	// Assign UUIDs for any new issues
-	return nil
+	return currentIssueList, nil
 }
 
 func findMatch(issue delta.FindingsIdentifiable, index int, baseIssueList []delta.FindingsIdentifiable, strongMatchingIssues map[string]IssueConfidence) {
@@ -128,7 +128,7 @@ func findMatches(currentIssue delta.FindingsIdentifiable, index int, baseIssues 
 
 		if overallConfidence == 1 {
 			similarIssues = append(similarIssues, IssueConfidence{
-				BaseUUID:           baseIssue.GlobalIdentity(),
+				BaseUUID:           baseIssue.GetGlobalIdentity(),
 				IssueIDResultIndex: index,
 				Confidence:         overallConfidence,
 			})
@@ -137,7 +137,7 @@ func findMatches(currentIssue delta.FindingsIdentifiable, index int, baseIssues 
 
 		if overallConfidence > weights.MinimumAcceptableConfidence {
 			similarIssues = append(similarIssues, IssueConfidence{
-				BaseUUID:           baseIssue.GlobalIdentity(),
+				BaseUUID:           baseIssue.GetGlobalIdentity(),
 				IssueIDResultIndex: index,
 				Confidence:         overallConfidence,
 			})
@@ -171,8 +171,8 @@ func fingerprintDistance(baseFingerprints, currentFingerprints delta.FindingsIde
 	}
 
 	// Split into parts and compare
-	parts1 := strings.Split(baseFingerprintable.Fingerprint(), ".")
-	parts2 := strings.Split(currentFingerprintable.Fingerprint(), ".")
+	parts1 := strings.Split(baseFingerprintable.GetFingerprint(), ".")
+	parts2 := strings.Split(currentFingerprintable.GetFingerprint(), ".")
 	similar := 0
 	for i := 0; i < len(parts1) && i < len(parts2); i++ {
 		if parts1[i] == parts2[i] {

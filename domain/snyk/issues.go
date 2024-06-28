@@ -69,8 +69,8 @@ type Issue struct {
 	AdditionalData IssueAdditionalData
 	// Learn Service Lesson URL
 	LessonUrl      string `json:"url"`
-	fingerprint    string
-	globalIdentity string
+	Fingerprint    string
+	GlobalIdentity string
 }
 
 var _ delta.FindingsIdentifiable = (*Issue)(nil)
@@ -102,23 +102,23 @@ func (i *Issue) SetIsNew(isNew bool) {
 	i.isNew = isNew
 }
 
-func (i *Issue) GlobalIdentity() string {
-	return i.globalIdentity
+func (i *Issue) GetGlobalIdentity() string {
+	return i.GlobalIdentity
 }
 
 func (i *Issue) SetGlobalIdentity(globalIdentity string) {
-	i.globalIdentity = globalIdentity
+	i.GlobalIdentity = globalIdentity
 }
 
 func (i *Issue) Path() string {
 	return i.AffectedFilePath
 }
 
-func (i *Issue) Fingerprint() string {
-	return i.fingerprint
+func (i *Issue) GetFingerprint() string {
+	return i.Fingerprint
 }
 func (i *Issue) SetFingerPrint(fingerprint string) {
-	i.fingerprint = fingerprint
+	i.Fingerprint = fingerprint
 }
 
 func (i *Issue) RuleId() string {
