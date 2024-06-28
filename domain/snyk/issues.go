@@ -18,6 +18,7 @@ package snyk
 
 import (
 	"fmt"
+	"github.com/snyk/snyk-ls/domain/snyk/delta"
 	"net/url"
 	"time"
 
@@ -72,6 +73,8 @@ type Issue struct {
 	globalIdentity string
 }
 
+var _ delta.FindingsIdentifiable = (*Issue)(nil)
+
 func (i *Issue) IsNew() bool {
 	return i.isNew
 }
@@ -88,7 +91,7 @@ func (i *Issue) SetGlobalIdentity(globalIdentity string) {
 	i.globalIdentity = globalIdentity
 }
 
-func (i *Issue) GetRange() Range {
+func (i *Issue) GetLocation() Range {
 	return i.Range
 }
 
