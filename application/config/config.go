@@ -235,7 +235,7 @@ func New() *Config {
 	c.token = ""
 	c.trustedFoldersFeatureEnabled = true
 	c.automaticScanning = true
-	c.authenticationMethod = lsp.TokenAuthentication
+	c.authenticationMethod = lsp.OAuthAuthentication
 	initWorkFlowEngine(c)
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()

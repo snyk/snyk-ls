@@ -509,6 +509,7 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server
 			Token:                       os.Getenv("SNYK_TOKEN"),
 			EnableTrustedFoldersFeature: "false",
 			FilterSeverity:              lsp.DefaultSeverityFilter(),
+			AuthenticationMethod:        lsp.TokenAuthentication,
 		},
 	}
 
