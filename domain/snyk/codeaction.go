@@ -85,14 +85,3 @@ func NewDeferredCodeAction(title string,
 	}
 	return action, nil
 }
-
-func NewPreferredCodeAction(title string, edit *WorkspaceEdit, command *CommandData) (CodeAction, error) {
-	action, err := NewCodeAction(title, edit, command)
-	if err != nil {
-		return CodeAction{}, err
-	}
-
-	action.IsPreferred = new(bool)
-	*action.IsPreferred = true
-	return action, nil
-}

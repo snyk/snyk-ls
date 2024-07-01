@@ -18,6 +18,7 @@ package oss
 
 import (
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"net/url"
 	"strings"
 	"time"
@@ -100,6 +101,7 @@ func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []sny
 	if i.lesson != nil {
 		additionalData.Lesson = i.lesson.Url
 	}
+	additionalData.Remediation = i.GetRemediation()
 
 	return additionalData
 }
@@ -121,6 +123,44 @@ func (r reference) toReference() snyk.Reference {
 		Url:   u,
 		Title: r.Title,
 	}
+}
+
+func (i *ossIssue) getUpgradeMessage() string {
+	hasUpgradePath := len(i.UpgradePath) > 1
+	if hasUpgradePath {
+		return "Upgrade to " + i.UpgradePath[1].(string)
+	}
+	return ""
+}
+
+func (i *ossIssue) getOutdatedDependencyMessage() string {
+	remediationAdvice := fmt.Sprintf("Your dependencies are out of date, "+
+		"otherwise you would be using a newer %s than %s@%s. ", i.Name, i.Name, i.Version)
+
+	if i.PackageManager == "npm" || i.PackageManager == "yarn" || i.PackageManager == "yarn-workspace" {
+		remediationAdvice += "Try relocking your lockfile or deleting node_modules and reinstalling" +
+			" your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
+	} else {
+		remediationAdvice += "Try reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
+	}
+	return remediationAdvice
+}
+
+func (i *ossIssue) GetRemediation() string {
+	upgradeMessage := i.getUpgradeMessage()
+	isOutdated := upgradeMessage != "" && i.UpgradePath[1] == i.From[1]
+	if i.IsUpgradable || i.IsPatchable {
+		if isOutdated {
+			if i.IsPatchable {
+				return upgradeMessage
+			} else {
+				return i.getOutdatedDependencyMessage()
+			}
+		} else {
+			return upgradeMessage
+		}
+	}
+	return "No remediation advice available"
 }
 
 func (i *ossIssue) GetExtendedMessage(issue ossIssue) string {
@@ -196,8 +236,14 @@ func (i *ossIssue) ToIssueSeverity() snyk.Severity {
 	}
 	return sev
 }
-func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter) (actions []snyk.
+func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter,
+	affectedFilePath string, issueRange snyk.Range) (actions []snyk.
 	CodeAction) {
+	quickFixAction := i.AddQuickFixAction(affectedFilePath, issueRange)
+	if quickFixAction != nil {
+		actions = append(actions, *quickFixAction)
+	}
+
 	title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", i.Title, i.PackageName)
 	command := &snyk.CommandData{
 		Title:     title,
@@ -212,6 +258,7 @@ func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting
 	if codeAction != nil {
 		actions = append(actions, *codeAction)
 	}
+
 	return actions
 }
 
@@ -241,6 +288,68 @@ func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_repor
 		}
 	}
 	return action
+}
+
+func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Range) *snyk.CodeAction {
+	if !config.CurrentConfig().IsSnyOSSQuickFixCodeActionsEnabled() {
+		return nil
+	}
+	log.Debug().Msg("create deferred quickfix code action")
+	quickfixEdit := i.getQuickfixEdit(affectedFilePath)
+	if quickfixEdit == "" {
+		return nil
+	}
+	upgradeMessage := "Upgrade to " + quickfixEdit + " (Snyk)"
+	autofixEditCallback := func() *snyk.WorkspaceEdit {
+		edit := &snyk.WorkspaceEdit{}
+		singleTextEdit := snyk.TextEdit{
+			Range:   issueRange,
+			NewText: quickfixEdit,
+		}
+		edit.Changes = make(map[string][]snyk.TextEdit)
+		edit.Changes[affectedFilePath] = []snyk.TextEdit{singleTextEdit}
+		return edit
+	}
+
+	action, err := snyk.NewDeferredCodeAction(upgradeMessage, &autofixEditCallback, nil)
+	if err != nil {
+		log.Error().Msg("failed to create deferred quickfix code action")
+		return nil
+	}
+	return &action
+}
+
+func (i *ossIssue) getQuickfixEdit(affectedFilePath string) string {
+	hasUpgradePath := len(i.UpgradePath) > 1
+	if !hasUpgradePath {
+		return ""
+	}
+
+	// UpgradePath[0] is the upgrade for the package that was scanned
+	// UpgradePath[1] is the upgrade for the root dependency
+	rootDependencyUpgrade := strings.Split(i.UpgradePath[1].(string), "@")
+	depName := strings.Join(rootDependencyUpgrade[:len(rootDependencyUpgrade)-1], "@")
+	depVersion := rootDependencyUpgrade[len(rootDependencyUpgrade)-1]
+	if i.PackageManager == "npm" || i.PackageManager == "yarn" || i.PackageManager == "yarn-workspace" {
+		return fmt.Sprintf("\"%s\": \"%s\"", depName, depVersion)
+	} else if i.PackageManager == "maven" {
+		depNameSplit := strings.Split(depName, ":")
+		depName = depNameSplit[len(depNameSplit)-1]
+		// TODO: remove once https://snyksec.atlassian.net/browse/OSM-1775 is fixed
+		if strings.Contains(affectedFilePath, "build.gradle") {
+			return fmt.Sprintf("%s:%s", depName, depVersion)
+		}
+		return depVersion
+	} else if i.PackageManager == "gradle" {
+		depNameSplit := strings.Split(depName, ":")
+		depName = depNameSplit[len(depNameSplit)-1]
+		return fmt.Sprintf("%s:%s", depName, depVersion)
+	}
+	if i.PackageManager == "gomodules" {
+		return fmt.Sprintf("v%s", depVersion)
+	}
+
+	return ""
 }
 
 type licensesPolicy struct {

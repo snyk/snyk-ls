@@ -19,6 +19,7 @@ package oss
 import (
 	_ "embed"
 	"fmt"
+	"strings"
 
 	"github.com/gomarkdown/markdown"
 
@@ -45,8 +46,22 @@ func toIssue(
 	ep error_reporting.ErrorReporter,
 ) snyk.Issue {
 	// this needs to be first so that the lesson from Snyk Learn is added
-	codeActions := issue.AddCodeActions(learnService, ep)
+	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueRange)
 
+	var codelensCommands []snyk.CommandData
+	for _, codeAction := range codeActions {
+		if strings.Contains(codeAction.Title, "Upgrade to") {
+			codelensCommands = append(codelensCommands, snyk.CommandData{
+				Title:     "⚡ Fix this issue: " + codeAction.Title,
+				CommandId: snyk.CodeFixCommand,
+				Arguments: []any{
+					codeAction.Uuid,
+					affectedFilePath,
+					issueRange,
+				},
+			})
+		}
+	}
 	// find all issues with the same id
 	matchingIssues := []snyk.OssIssueData{}
 	for _, otherIssue := range scanResult.Vulnerabilities {
@@ -62,13 +77,12 @@ func toIssue(
 	if config.CurrentConfig().Format() == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 	}
-	remediationAdvice := getRemediationAdvice(additionalData)
 
 	message := fmt.Sprintf(
 		"%s affecting package %s. %s",
 		title,
 		issue.PackageName,
-		remediationAdvice,
+		additionalData.Remediation,
 	)
 
 	const maxLength = 200
@@ -86,6 +100,7 @@ func toIssue(
 		IssueDescriptionURL: issue.CreateIssueURL(),
 		IssueType:           snyk.DependencyVulnerability,
 		CodeActions:         codeActions,
+		CodelensCommands:    codelensCommands,
 		Ecosystem:           issue.PackageManager,
 		CWEs:                issue.Identifiers.CWE,
 		CVEs:                issue.Identifiers.CVE,
