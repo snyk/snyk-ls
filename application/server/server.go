@@ -367,7 +367,7 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 
 		authenticated, err := di.AuthenticationService().IsAuthenticated()
 		if err != nil {
-			logger.Error().Err(err).Msg("Not authenticated, or error checking authentication status")
+			logger.Err(err).Msg("invalid credentials or could not validate credentials")
 		}
 
 		autoScanEnabled := c.IsAutoScanEnabled()

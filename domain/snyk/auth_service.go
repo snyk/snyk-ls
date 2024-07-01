@@ -16,7 +16,9 @@
 
 package snyk
 
-import "context"
+import (
+	"context"
+)
 
 type AuthenticationService interface {
 	// Authenticate attempts to authenticate the user, and sends a notification to the client when successful
