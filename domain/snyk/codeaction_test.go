@@ -61,12 +61,6 @@ func Test_NewDeferredCodeAction(t *testing.T) {
 	assert.NotNil(t, action.Uuid, "UUID should be initialized")
 }
 
-func Test_NewPreferredCodeAction(t *testing.T) {
-	action, err := snyk.NewPreferredCodeAction("title", mockEdit, mockCommand)
-	assertActionsInitializedCorrectly(t, err, action, mockEdit, mockCommand, nil, nil)
-	assert.True(t, *action.IsPreferred)
-}
-
 func assertActionsInitializedCorrectly(t *testing.T,
 	err error,
 	action snyk.CodeAction,

@@ -32,7 +32,7 @@ jobs:
         run: git config --global core.autocrlf false
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0 # does an unshallow checkout with tags & branches
 
@@ -42,7 +42,7 @@ jobs:
           sed -En 's/^go[[:space:]]+([[:digit:].]+)$/GO_VERSION=\1/p' go.mod >> $GITHUB_ENV
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
 
@@ -107,7 +107,7 @@ jobs:
           make clean test
 
       - name: Set up Git actions user
-        uses: fregante/setup-git-user@v1
+        uses: fregante/setup-git-user@v2
 
       - name: Create Release Tag
         run: |
@@ -126,7 +126,7 @@ jobs:
           echo $LICENSES
 
       - name: Build binaries and github release
-        uses: goreleaser/goreleaser-action@v3
+        uses: goreleaser/goreleaser-action@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -152,3 +152,15 @@ jobs:
           AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
         run: |
           .github/upload-to-s3.sh
+
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.TEAM_IDE_USER_SSH }}
+
+      - name: Create PR in CLI to integrate LS
+        env:
+          GH_TOKEN: ${{ secrets.HAMMERHEAD_GITHUB_PAT_SNYKLS }}
+          GITHUB_TOKEN: ${{ secrets.HAMMERHEAD_GITHUB_PAT_SNYKLS }}
+          PUB_SIGNING_KEY: ${{ secrets.TEAM_IDE_USER_SSH_PUB }}
+        run: |
+          .github/create-cli-pr.sh

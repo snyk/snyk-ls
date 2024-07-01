@@ -132,6 +132,161 @@ func Test_toIssue_LearnParameterConversion(t *testing.T) {
 	assert.Equal(t, "url", (issue.AdditionalData).(snyk.OssIssueData).Lesson)
 }
 
+//nolint:dupl // test cases differ by package name
+func Test_toIssue_CodeActions_WithNPMFix(t *testing.T) {
+	config.CurrentConfig().SetSnykOSSQuickFixCodeActionsEnabled(true)
+
+	sampleOssIssue := sampleIssue()
+	scanner := CLIScanner{
+		learnService: getLearnMock(t),
+	}
+	sampleOssIssue.UpgradePath = []any{"false", "pkg@v2"}
+
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+
+	assert.Equal(t, sampleOssIssue.Id, issue.ID)
+	assert.Equal(t, 3, len(issue.CodeActions))
+	assert.Equal(t, "Upgrade to \"pkg\": \"v2\" (Snyk)", issue.CodeActions[0].Title)
+	assert.Equal(t, "Open description of 'THOU SHALL NOT PASS affecting package pkg' in browser (Snyk)",
+		issue.CodeActions[1].Title)
+	assert.Equal(t, "Learn more about THOU SHALL NOT PASS (Snyk)", issue.CodeActions[2].Title)
+	assert.Equal(t, 1, len(issue.CodelensCommands))
+	assert.Equal(t, "⚡ Fix this issue: Upgrade to \"pkg\": \"v2\" (Snyk)", issue.CodelensCommands[0].Title)
+}
+
+//nolint:dupl // test cases differ by package name
+func Test_toIssue_CodeActions_WithScopedNPMFix(t *testing.T) {
+	config.CurrentConfig().SetSnykOSSQuickFixCodeActionsEnabled(true)
+
+	sampleOssIssue := sampleIssue()
+	scanner := CLIScanner{
+		learnService: getLearnMock(t),
+	}
+	sampleOssIssue.UpgradePath = []any{"false", "@org/pkg@v2"}
+
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+
+	assert.Equal(t, sampleOssIssue.Id, issue.ID)
+	assert.Equal(t, 3, len(issue.CodeActions))
+	assert.Equal(t, "Upgrade to \"@org/pkg\": \"v2\" (Snyk)", issue.CodeActions[0].Title)
+	assert.Equal(t, "Open description of 'THOU SHALL NOT PASS affecting package pkg' in browser (Snyk)",
+		issue.CodeActions[1].Title)
+	assert.Equal(t, "Learn more about THOU SHALL NOT PASS (Snyk)", issue.CodeActions[2].Title)
+	assert.Equal(t, 1, len(issue.CodelensCommands))
+	assert.Equal(t, "⚡ Fix this issue: Upgrade to \"@org/pkg\": \"v2\" (Snyk)", issue.CodelensCommands[0].Title)
+}
+
+func Test_toIssue_CodeActions_WithGomodFix(t *testing.T) {
+	config.CurrentConfig().SetSnykOSSQuickFixCodeActionsEnabled(true)
+
+	sampleOssIssue := sampleIssue()
+	scanner := CLIScanner{
+		learnService: getLearnMock(t),
+	}
+	sampleOssIssue.PackageManager = "gomodules"
+	sampleOssIssue.UpgradePath = []any{"false", "pkg@v2"}
+
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+
+	assert.Equal(t, sampleOssIssue.Id, issue.ID)
+	assert.Equal(t, 3, len(issue.CodeActions))
+	assert.Equal(t, "Upgrade to vv2 (Snyk)", issue.CodeActions[0].Title)
+	assert.Equal(t, 1, len(issue.CodelensCommands))
+	assert.Equal(t, "⚡ Fix this issue: Upgrade to vv2 (Snyk)", issue.CodelensCommands[0].Title)
+}
+
+func Test_toIssue_CodeActions_WithMavenFix(t *testing.T) {
+	config.CurrentConfig().SetSnykOSSQuickFixCodeActionsEnabled(true)
+
+	sampleOssIssue := sampleIssue()
+	scanner := CLIScanner{
+		learnService: getLearnMock(t),
+	}
+	sampleOssIssue.PackageManager = "maven"
+	sampleOssIssue.UpgradePath = []any{"false", "pkg@v2"}
+
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+
+	assert.Equal(t, sampleOssIssue.Id, issue.ID)
+	assert.Equal(t, 3, len(issue.CodeActions))
+	assert.Equal(t, "Upgrade to v2 (Snyk)", issue.CodeActions[0].Title)
+	assert.Equal(t, 1, len(issue.CodelensCommands))
+	assert.Equal(t, "⚡ Fix this issue: Upgrade to v2 (Snyk)", issue.CodelensCommands[0].Title)
+}
+
+func Test_toIssue_CodeActions_WithMavenFixForBuildGradle(t *testing.T) {
+	config.CurrentConfig().SetSnykOSSQuickFixCodeActionsEnabled(true)
+
+	sampleOssIssue := sampleIssue()
+	scanner := CLIScanner{
+		learnService: getLearnMock(t),
+	}
+	sampleOssIssue.PackageManager = "maven"
+	sampleOssIssue.UpgradePath = []any{"false", "a:pkg@v2"}
+
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+
+	assert.Equal(t, sampleOssIssue.Id, issue.ID)
+	assert.Equal(t, 3, len(issue.CodeActions))
+	assert.Equal(t, "Upgrade to v2 (Snyk)", issue.CodeActions[0].Title)
+	assert.Equal(t, 1, len(issue.CodelensCommands))
+	assert.Equal(t, "⚡ Fix this issue: Upgrade to v2 (Snyk)", issue.CodelensCommands[0].Title)
+
+	// TODO: remove once https://snyksec.atlassian.net/browse/OSM-1775 is fixed
+	issue = toIssue("build.gradle", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+
+	assert.Equal(t, sampleOssIssue.Id, issue.ID)
+	assert.Equal(t, 3, len(issue.CodeActions))
+	assert.Equal(t, "Upgrade to pkg:v2 (Snyk)", issue.CodeActions[0].Title)
+	assert.Equal(t, 1, len(issue.CodelensCommands))
+	assert.Equal(t, "⚡ Fix this issue: Upgrade to pkg:v2 (Snyk)", issue.CodelensCommands[0].Title)
+
+	// TODO: remove once https://snyksec.atlassian.net/browse/OSM-1775 is fixed
+	issue = toIssue("build.gradle.kts", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+
+	assert.Equal(t, sampleOssIssue.Id, issue.ID)
+	assert.Equal(t, 3, len(issue.CodeActions))
+	assert.Equal(t, "Upgrade to pkg:v2 (Snyk)", issue.CodeActions[0].Title)
+	assert.Equal(t, 1, len(issue.CodelensCommands))
+	assert.Equal(t, "⚡ Fix this issue: Upgrade to pkg:v2 (Snyk)", issue.CodelensCommands[0].Title)
+}
+
+func Test_toIssue_CodeActions_WithGradleFix(t *testing.T) {
+	config.CurrentConfig().SetSnykOSSQuickFixCodeActionsEnabled(true)
+
+	sampleOssIssue := sampleIssue()
+	scanner := CLIScanner{
+		learnService: getLearnMock(t),
+	}
+	sampleOssIssue.PackageManager = "gradle"
+	sampleOssIssue.UpgradePath = []any{"false", "a:pkg@v2"}
+
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+
+	assert.Equal(t, sampleOssIssue.Id, issue.ID)
+	assert.Equal(t, 3, len(issue.CodeActions))
+	assert.Equal(t, "Upgrade to pkg:v2 (Snyk)", issue.CodeActions[0].Title)
+	assert.Equal(t, 1, len(issue.CodelensCommands))
+	assert.Equal(t, "⚡ Fix this issue: Upgrade to pkg:v2 (Snyk)", issue.CodelensCommands[0].Title)
+}
+
+func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
+	sampleOssIssue := sampleIssue()
+	scanner := CLIScanner{
+		learnService: getLearnMock(t),
+	}
+	sampleOssIssue.UpgradePath = []any{"*"}
+
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+
+	assert.Equal(t, sampleOssIssue.Id, issue.ID)
+	assert.Equal(t, 2, len(issue.CodeActions))
+	assert.Equal(t, "Open description of 'THOU SHALL NOT PASS affecting package pkg' in browser (Snyk)",
+		issue.CodeActions[0].Title)
+	assert.Equal(t, "Learn more about THOU SHALL NOT PASS (Snyk)", issue.CodeActions[1].Title)
+	assert.Equal(t, 0, len(issue.CodelensCommands))
+}
+
 func Test_introducingPackageAndVersionJava(t *testing.T) {
 	issue := mavenTestIssue()
 
@@ -232,7 +387,8 @@ func Test_toHover_asHTML(t *testing.T) {
 
 	assert.Equal(
 		t,
-		"\n### testIssue: <p>THOU SHALL NOT PASS</p>\n affecting  package \n### Vulnerability  | [CWE-123](https://cwe.mitre.org/data/definitions/123.html) | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \n<p>Getting into Moria is an issue!</p>\n",
+		"\n### testIssue: <p>THOU SHALL NOT PASS</p>\n affecting pkg package \n### Vulnerability  | [CWE-123]("+
+			"https://cwe.mitre.org/data/definitions/123.html) | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \n<p>Getting into Moria is an issue!</p>\n",
 		h,
 	)
 }
@@ -246,7 +402,8 @@ func Test_toHover_asMarkdown(t *testing.T) {
 
 	assert.Equal(
 		t,
-		"\n### testIssue: THOU SHALL NOT PASS affecting  package \n### Vulnerability  | [CWE-123](https://cwe.mitre.org/data/definitions/123.html) | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \nGetting into Moria is an issue!",
+		"\n### testIssue: THOU SHALL NOT PASS affecting pkg package \n### Vulnerability  | [CWE-123](https://cwe.mitre."+
+			"org/data/definitions/123.html) | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \nGetting into Moria is an issue!",
 		h,
 	)
 }
@@ -290,6 +447,7 @@ func sampleIssue() ossIssue {
 		Description:    "Getting into Moria is an issue!",
 		References:     nil,
 		Version:        "",
+		PackageName:    "pkg",
 		PackageManager: "npm",
 		From:           []string{"goof@1.0.1", "lodash@4.17.4"},
 		Identifiers:    identifiers{CWE: []string{"CWE-123"}},

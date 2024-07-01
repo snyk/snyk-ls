@@ -83,11 +83,11 @@ proxy-test:
 
 instance-test:
 	@echo "==> Running instance tests"
-	@export SMOKE_TESTS=1 && cd application/server && go test -run Test_SmokeWorkspaceScan && cd -
+	@export SMOKE_TESTS=1 && cd application/server && go test $(TIMEOUT) -failfast -run Test_SmokeWorkspaceScan && cd -
 
 instance-standard-test:
 	@echo "==> Running instance tests for the standard environment"
-	@export SMOKE_TESTS=1 && cd application/server && go test -run Test_Smoke && cd -
+	@export SMOKE_TESTS=1 && cd application/server && go test $(TIMEOUT) -failfast -run Test_Smoke && cd -
 	@echo "==> Checking Eclipse storage buckets..."
 	@curl -sSL https://static.snyk.io/eclipse/stable/p2.index
 
@@ -121,6 +121,10 @@ else
 		-ldflags=$(LDFLAGS_DEV)
 		-gcflags="all=-N -l"
 endif
+
+.PHONY: build-release
+build-release: $(TOOLS_BIN)/go-licenses
+	@LICENSES=$(go-licenses report . --ignore github.com/snyk/snyk-ls) goreleaser release --clean --snapshot
 
 ## run: Compile and run LSP server.
 .PHONY: run

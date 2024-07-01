@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/internal/logging"
 
@@ -148,48 +149,50 @@ func (c *CliSettings) DefaultBinaryInstallPath() string {
 }
 
 type Config struct {
-	scrubbingDict                frameworkLogging.ScrubbingDict
-	scrubbingWriter              zerolog.LevelWriter
-	configLoaded                 concurrency.AtomicBool
-	cliSettings                  *CliSettings
-	configFile                   string
-	format                       string
-	isErrorReportingEnabled      concurrency.AtomicBool
-	isSnykCodeEnabled            concurrency.AtomicBool
-	isSnykOssEnabled             concurrency.AtomicBool
-	isSnykIacEnabled             concurrency.AtomicBool
-	isSnykContainerEnabled       concurrency.AtomicBool
-	isSnykAdvisorEnabled         concurrency.AtomicBool
-	isTelemetryEnabled           concurrency.AtomicBool
-	manageBinariesAutomatically  concurrency.AtomicBool
-	logPath                      string
-	logFile                      *os.File
-	snykCodeAnalysisTimeout      time.Duration
-	snykApiUrl                   string
-	snykCodeApiUrl               string
-	token                        string
-	deviceId                     string
-	clientCapabilities           lsp.ClientCapabilities
-	path                         string
-	defaultDirs                  []string
-	automaticAuthentication      bool
-	tokenChangeChannels          []chan string
-	filterSeverity               lsp.SeverityFilter
-	trustedFolders               []string
-	trustedFoldersFeatureEnabled bool
-	activateSnykCodeSecurity     bool
-	activateSnykCodeQuality      bool
-	osPlatform                   string
-	osArch                       string
-	runtimeName                  string
-	runtimeVersion               string
-	automaticScanning            bool
-	authenticationMethod         lsp.AuthenticationMethod
-	engine                       workflow.Engine
-	enableSnykLearnCodeActions   bool
-	logger                       *zerolog.Logger
-	storage                      StorageWithCallbacks
-	m                            sync.Mutex
+	scrubbingDict                    frameworkLogging.ScrubbingDict
+	scrubbingWriter                  zerolog.LevelWriter
+	configLoaded                     concurrency.AtomicBool
+	cliSettings                      *CliSettings
+	configFile                       string
+	format                           string
+	isErrorReportingEnabled          concurrency.AtomicBool
+	isSnykCodeEnabled                concurrency.AtomicBool
+	isSnykOssEnabled                 concurrency.AtomicBool
+	isSnykIacEnabled                 concurrency.AtomicBool
+	isSnykContainerEnabled           concurrency.AtomicBool
+	isSnykAdvisorEnabled             concurrency.AtomicBool
+	isTelemetryEnabled               concurrency.AtomicBool
+	manageBinariesAutomatically      concurrency.AtomicBool
+	logPath                          string
+	logFile                          *os.File
+	snykCodeAnalysisTimeout          time.Duration
+	snykApiUrl                       string
+	snykCodeApiUrl                   string
+	token                            string
+	deviceId                         string
+	clientCapabilities               lsp.ClientCapabilities
+	path                             string
+	defaultDirs                      []string
+	automaticAuthentication          bool
+	tokenChangeChannels              []chan string
+	filterSeverity                   lsp.SeverityFilter
+	trustedFolders                   []string
+	trustedFoldersFeatureEnabled     bool
+	activateSnykCodeSecurity         bool
+	activateSnykCodeQuality          bool
+	osPlatform                       string
+	osArch                           string
+	runtimeName                      string
+	runtimeVersion                   string
+	automaticScanning                bool
+	authenticationMethod             lsp.AuthenticationMethod
+	engine                           workflow.Engine
+	enableSnykLearnCodeActions       bool
+	enableSnykOSSQuickFixCodeActions bool
+	logger                           *zerolog.Logger
+	storage                          StorageWithCallbacks
+	m                                sync.Mutex
+	clientProtocolVersion            string
 }
 
 func CurrentConfig() *Config {
@@ -206,6 +209,8 @@ func SetCurrentConfig(config *Config) {
 	defer mutex.Unlock()
 	currentConfig = config
 }
+
+func (c *Config) ClientProtocolVersion() string { return c.clientProtocolVersion }
 
 func IsDevelopment() bool {
 	parseBool, _ := strconv.ParseBool(Development)
@@ -258,6 +263,14 @@ func initWorkFlowEngine(c *Config) {
 	err = c.engine.Init()
 	if err != nil {
 		c.Logger().Warn().Err(err).Msg("unable to initialize workflow engine")
+	}
+
+	// if running in standalone-mode, runtime info is not set, else, when in extension mode
+	// it's already set by the CLI initialization
+	// see https://github.com/snyk/cli/blob/main/cliv2/cmd/cliv2/main.go#L460
+	if c.engine.GetRuntimeInfo() == nil {
+		rti := runtimeinfo.New(runtimeinfo.WithName("snyk-ls"), runtimeinfo.WithVersion(Version))
+		c.engine.SetRuntimeInfo(rti)
 	}
 }
 
@@ -861,6 +874,14 @@ func (c *Config) SetSnykLearnCodeActionsEnabled(enabled bool) {
 	c.enableSnykLearnCodeActions = enabled
 }
 
+func (c *Config) IsSnyOSSQuickFixCodeActionsEnabled() bool {
+	return c.enableSnykOSSQuickFixCodeActions
+}
+
+func (c *Config) SetSnykOSSQuickFixCodeActionsEnabled(enabled bool) {
+	c.enableSnykOSSQuickFixCodeActions = enabled
+}
+
 func (c *Config) SetLogLevel(level string) {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -925,4 +946,8 @@ func (c *Config) IsAnalyticsPermitted() bool {
 	_, found := analyticsPermittedEnvironments[u.Host]
 
 	return found
+}
+
+func (c *Config) SetClientProtocolVersion(requiredProtocolVersion string) {
+	c.clientProtocolVersion = requiredProtocolVersion
 }

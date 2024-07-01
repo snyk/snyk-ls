@@ -414,10 +414,14 @@ func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, 
 		if suppression.Properties.Expiration != nil {
 			expiration = *suppression.Properties.Expiration
 		}
-
+		
+		reason := suppression.Justification
+		if reason == "" {
+			reason = "None given"
+		}
 		ignoreDetails = &snyk.IgnoreDetails{
 			Category:   string(suppression.Properties.Category),
-			Reason:     suppression.Justification,
+			Reason:     reason,
 			Expiration: expiration,
 			IgnoredOn:  parseDateFromString(suppression.Properties.IgnoredOn),
 			IgnoredBy:  suppression.Properties.IgnoredBy.Name,

@@ -203,7 +203,7 @@ type ClientCapabilities struct {
 	Workspace    WorkspaceClientCapabilities    `json:"workspace,omitempty"`
 	TextDocument TextDocumentClientCapabilities `json:"textDocument,omitempty"`
 	Window       WindowClientCapabilities       `json:"window,omitempty"`
-	Experimental interface{}                    `json:"experimental,omitempty"`
+	Experimental any                            `json:"experimental,omitempty"`
 }
 
 type CodeLensWorkspaceClientCapabilities struct {
@@ -518,37 +518,39 @@ type WorkspaceFoldersChangeEvent struct {
 
 // Settings is the struct that is parsed from the InitializationParams.InitializationOptions field
 type Settings struct {
-	ActivateSnykOpenSource      string               `json:"activateSnykOpenSource,omitempty"`
-	ActivateSnykCode            string               `json:"activateSnykCode,omitempty"`
-	ActivateSnykIac             string               `json:"activateSnykIac,omitempty"`
-	Insecure                    string               `json:"insecure,omitempty"`
-	Endpoint                    string               `json:"endpoint,omitempty"`
-	AdditionalParams            string               `json:"additionalParams,omitempty"`
-	AdditionalEnv               string               `json:"additionalEnv,omitempty"`
-	Path                        string               `json:"path,omitempty"`
-	SendErrorReports            string               `json:"sendErrorReports,omitempty"`
-	Organization                string               `json:"organization,omitempty"`
-	EnableTelemetry             string               `json:"enableTelemetry,omitempty"`
-	ManageBinariesAutomatically string               `json:"manageBinariesAutomatically,omitempty"`
-	CliPath                     string               `json:"cliPath,omitempty"`
-	Token                       string               `json:"token,omitempty"`
-	IntegrationName             string               `json:"integrationName,omitempty"`
-	IntegrationVersion          string               `json:"integrationVersion,omitempty"`
-	AutomaticAuthentication     string               `json:"automaticAuthentication,omitempty"`
-	DeviceId                    string               `json:"deviceId,omitempty"`
-	FilterSeverity              SeverityFilter       `json:"filterSeverity,omitempty"`
-	EnableTrustedFoldersFeature string               `json:"enableTrustedFoldersFeature,omitempty"`
-	TrustedFolders              []string             `json:"trustedFolders,omitempty"`
-	ActivateSnykCodeSecurity    string               `json:"activateSnykCodeSecurity,omitempty"`
-	ActivateSnykCodeQuality     string               `json:"activateSnykCodeQuality,omitempty"`
-	OsPlatform                  string               `json:"osPlatform,omitempty"`
-	OsArch                      string               `json:"osArch,omitempty"`
-	RuntimeVersion              string               `json:"runtimeVersion,omitempty"`
-	RuntimeName                 string               `json:"runtimeName,omitempty"`
-	ScanningMode                string               `json:"scanningMode,omitempty"`
-	AuthenticationMethod        AuthenticationMethod `json:"authenticationMethod,omitempty"`
-	SnykCodeApi                 string               `json:"snykCodeApi,omitempty"`
-	EnableSnykLearnCodeActions  string               `json:"enableSnykLearnCodeActions,omitempty"`
+	ActivateSnykOpenSource           string               `json:"activateSnykOpenSource,omitempty"`
+	ActivateSnykCode                 string               `json:"activateSnykCode,omitempty"`
+	ActivateSnykIac                  string               `json:"activateSnykIac,omitempty"`
+	Insecure                         string               `json:"insecure,omitempty"`
+	Endpoint                         string               `json:"endpoint,omitempty"`
+	AdditionalParams                 string               `json:"additionalParams,omitempty"`
+	AdditionalEnv                    string               `json:"additionalEnv,omitempty"`
+	Path                             string               `json:"path,omitempty"`
+	SendErrorReports                 string               `json:"sendErrorReports,omitempty"`
+	Organization                     string               `json:"organization,omitempty"`
+	EnableTelemetry                  string               `json:"enableTelemetry,omitempty"`
+	ManageBinariesAutomatically      string               `json:"manageBinariesAutomatically,omitempty"`
+	CliPath                          string               `json:"cliPath,omitempty"`
+	Token                            string               `json:"token,omitempty"`
+	IntegrationName                  string               `json:"integrationName,omitempty"`
+	IntegrationVersion               string               `json:"integrationVersion,omitempty"`
+	AutomaticAuthentication          string               `json:"automaticAuthentication,omitempty"`
+	DeviceId                         string               `json:"deviceId,omitempty"`
+	FilterSeverity                   SeverityFilter       `json:"filterSeverity,omitempty"`
+	EnableTrustedFoldersFeature      string               `json:"enableTrustedFoldersFeature,omitempty"`
+	TrustedFolders                   []string             `json:"trustedFolders,omitempty"`
+	ActivateSnykCodeSecurity         string               `json:"activateSnykCodeSecurity,omitempty"`
+	ActivateSnykCodeQuality          string               `json:"activateSnykCodeQuality,omitempty"`
+	OsPlatform                       string               `json:"osPlatform,omitempty"`
+	OsArch                           string               `json:"osArch,omitempty"`
+	RuntimeVersion                   string               `json:"runtimeVersion,omitempty"`
+	RuntimeName                      string               `json:"runtimeName,omitempty"`
+	ScanningMode                     string               `json:"scanningMode,omitempty"`
+	AuthenticationMethod             AuthenticationMethod `json:"authenticationMethod,omitempty"`
+	SnykCodeApi                      string               `json:"snykCodeApi,omitempty"`
+	EnableSnykLearnCodeActions       string               `json:"enableSnykLearnCodeActions,omitempty"`
+	EnableSnykOSSQuickFixCodeActions string               `json:"enableSnykOSSQuickFixCodeActions,omitempty"`
+	RequiredProtocolVersion          string               `json:"requiredProtocolVersion,omitempty"`
 }
 
 type AuthenticationMethod string

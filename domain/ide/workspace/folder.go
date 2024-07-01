@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/snyk/snyk-ls/internal/util"
 	"strings"
 	"sync"
 
@@ -38,7 +39,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/uri"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 var (
@@ -371,22 +371,15 @@ func sendAnalytics(data *snyk.ScanData) {
 
 	ic := gafanalytics.NewInstrumentationCollector()
 
-	ua := util.GetUserAgent(gafConfig, config.Version)
-	ic.SetUserAgent(ua)
-
+	//Add to the interaction attribute in the analytics event
 	iid := instrumentation.AssembleUrnFromUUID(uuid.NewString())
 	ic.SetInteractionId(iid)
-
 	ic.SetTimestamp(data.TimestampFinished)
-	ic.SetDuration(data.DurationMs)
-
 	ic.SetStage("dev")
-	ic.SetType("analytics")
 	ic.SetInteractionType("Scan done")
 
 	categories := setupCategories(data, c)
 	ic.SetCategory(categories)
-
 	ic.SetStatus(gafanalytics.Success)
 
 	summary := createTestSummary(data, c)
@@ -399,6 +392,14 @@ func sendAnalytics(data *snyk.ScanData) {
 	ic.SetTargetId(targetId)
 
 	ic.AddExtension("device_id", c.DeviceID())
+
+	//Populate the runtime attribute of the analytics event
+	ua := util.GetUserAgent(gafConfig, config.Version)
+	ic.SetUserAgent(ua)
+	ic.SetDuration(data.DurationMs)
+
+	//Set the final type attribute of the analytics event
+	ic.SetType("analytics")
 
 	analyticsData, err := gafanalytics.GetV2InstrumentationObject(ic)
 	if err != nil {

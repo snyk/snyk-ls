@@ -372,6 +372,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
   // Specifies the authentication method to use: "token" for Snyk API token or "oauth" for Snyk OAuth flow. Default is token.
   "snykCodeApi": "https://deeproxy.snyk.io",
   // Specifies the Snyk Code API endpoint to use. Default is https://deeproxy.snyk.io
+  "requiredProtocolVersion": "11"
 }
 ```
 
