@@ -25,7 +25,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 const (
@@ -65,17 +64,17 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) []stri
 		updatedEnv = append(updatedEnv, s)
 	}
 
-	if appendToken {
-		// there can only be one - highlander principle
-		if currentConfig.AuthenticationMethod() == lsp.OAuthAuthentication {
-			oAuthToken, err := currentConfig.TokenAsOAuthToken()
-			if err == nil && len(oAuthToken.AccessToken) > 0 {
-				updatedEnv = append(updatedEnv, SnykOauthTokenEnvVar+"="+oAuthToken.AccessToken)
-			}
+	if appendToken && currentConfig.NonEmptyToken() {
+		// default to oauth, if not there, try to set the api key
+		oAuthToken, err := currentConfig.TokenAsOAuthToken()
+		if err == nil && len(oAuthToken.AccessToken) > 0 {
+			updatedEnv = append(updatedEnv, SnykOauthTokenEnvVar+"="+oAuthToken.AccessToken)
 		} else {
+			// fallback to token if existent
 			updatedEnv = append(updatedEnv, TokenEnvVar+"="+currentConfig.Token())
 		}
 	}
+
 	if currentConfig.SnykApi() != "" {
 		updatedEnv = append(updatedEnv, ApiEnvVar+"="+currentConfig.SnykApi())
 	}
