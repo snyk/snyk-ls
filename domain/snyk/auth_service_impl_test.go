@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -154,4 +155,48 @@ func Test_Logout(t *testing.T) {
 
 	// assert
 	assert.False(t, authProvider.IsAuthenticated)
+}
+
+func TestHandleInvalidCredentials(t *testing.T) {
+	t.Run("should send request to client", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		analytics := ux.NewTestAnalytics(c)
+		errorReporter := error_reporting.NewTestErrorReporter()
+		notifier := notification.NewNotifier()
+		provider := snyk.NewFakeCliAuthenticationProvider(c)
+		provider.IsAuthenticated = false
+		c.SetToken("invalidCreds")
+		cut := snyk.NewAuthenticationService(c, provider, analytics, errorReporter, notifier).(*snyk.AuthenticationServiceImpl)
+		messageRequestReceived := false
+		tokenResetReceived := false
+		callback := func(params any) {
+			switch p := params.(type) {
+			case snyk.ShowMessageRequest:
+				actions := p.Actions
+				keys := actions.Keys()
+				loginAction, ok := actions.Get(keys[0])
+				require.True(t, ok)
+				require.Equal(t, snyk.LoginCommand, loginAction.CommandId)
+				cancelAction, ok := actions.Get(keys[1])
+				require.True(t, ok)
+				require.Empty(t, cancelAction.CommandId)
+				messageRequestReceived = true
+			case lsp.AuthenticationParams:
+				require.Empty(t, p.Token)
+				tokenResetReceived = true
+			}
+		}
+		go notifier.CreateListener(callback)
+
+		cut.HandleInvalidCredentials(c)
+
+		maxWait := time.Second * 10
+		assert.Eventuallyf(t, func() bool {
+			return messageRequestReceived
+		}, maxWait, time.Millisecond, "didn't receive show message request to re-authenticate")
+
+		assert.Eventuallyf(t, func() bool {
+			return tokenResetReceived
+		}, maxWait, time.Millisecond, "didn't receive token reset")
+	})
 }
