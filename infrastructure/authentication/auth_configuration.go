@@ -26,34 +26,21 @@ import (
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // Token authentication configures token only authentication
-func Token(
-	c *config.Config,
-	analytics ux.Analytics,
-	notifier notification.Notifier,
-	errorReporter error_reporting.ErrorReporter,
-) AuthenticationService {
-	authProviders := []AuthenticationProvider{NewCliAuthenticationProvider(c, errorReporter)}
-	return NewAuthenticationService(c, authProviders, analytics, errorReporter, notifier)
+func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) []AuthenticationProvider {
+	return []AuthenticationProvider{NewCliAuthenticationProvider(c, errorReporter)}
 }
 
 // Default authentication configures two authenticators, the first OAuth2,
 // the second, as fallback, CLI Token auth
-func Default(
-	c *config.Config,
-	analytics ux.Analytics,
-	notifier notification.Notifier,
-	errorReporter error_reporting.ErrorReporter,
-) AuthenticationService {
+// the auth service parameter is needed, as the oauth2 provider needs a callback function
+func Default(c *config.Config, errorReporter error_reporting.ErrorReporter, authenticationService AuthenticationService) []AuthenticationProvider {
 	authProviders := []AuthenticationProvider{}
-	authenticationService := NewAuthenticationService(c, authProviders, analytics, errorReporter, notifier)
 
 	credentialsUpdateCallback := func(_ string, value any) {
 		newToken, ok := value.(string)
@@ -73,7 +60,7 @@ func Default(
 	}
 
 	// add both OAuth2 and CLI, with preference to OAuth2
-	authenticationService.AddProvider(
+	authProviders = append(authProviders,
 		NewOAuthProvider(
 			c,
 			auth.RefreshToken,
@@ -81,8 +68,8 @@ func Default(
 			openBrowserFunc,
 		),
 	)
-	authenticationService.AddProvider(NewCliAuthenticationProvider(c, errorReporter))
-	return authenticationService
+	authProviders = append(authProviders, NewCliAuthenticationProvider(c, errorReporter))
+	return authProviders
 }
 
 func NewOAuthProvider(

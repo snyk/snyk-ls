@@ -136,7 +136,11 @@ func initInfrastructure(c *config.Config) {
 	analytics = amplitude.NewAmplitudeClient(c, authentication.AuthenticationCheck, errorReporter)
 	gafConfiguration := c.Engine().GetConfiguration()
 
-	authenticationService = authentication.Default(c, analytics, notifier, errorReporter)
+	// we initialize the service without providers
+	authenticationService = authentication.NewAuthenticationService(c, nil, analytics, errorReporter, notifier)
+	// after having an instance, we pass it into the default configuration method
+	// so that the oauth2 provider can use it for its callback
+	authenticationService.SetProviders(authentication.Default(c, errorReporter, authenticationService))
 
 	snykCli := cli.NewExecutor(c, errorReporter, analytics, notifier)
 
@@ -269,10 +273,4 @@ func LearnService() learn.Service {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return learnService
-}
-
-func SetAuthenticationService(as authentication.AuthenticationService) {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	authenticationService = as
 }
