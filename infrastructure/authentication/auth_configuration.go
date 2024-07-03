@@ -33,6 +33,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+// Token authentication configures token only authentication
 func Token(
 	c *config.Config,
 	analytics ux.Analytics,
@@ -43,6 +44,8 @@ func Token(
 	return NewAuthenticationService(c, authProviders, analytics, errorReporter, notifier)
 }
 
+// Default authentication configures two authenticators, the first OAuth2,
+// the second, as fallback, CLI Token auth
 func Default(
 	c *config.Config,
 	analytics ux.Analytics,
