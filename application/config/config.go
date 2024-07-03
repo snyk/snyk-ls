@@ -487,7 +487,7 @@ func (c *Config) SetToken(token string) {
 	}
 
 	if isOauthToken && conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN) != token {
-		c.Logger().Info().Err(err).Msg("setting authentication authentication in GAF")
+		c.Logger().Info().Err(err).Msg("setting oauth2 authentication in GAF")
 		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, token)
 	}
 
