@@ -49,7 +49,7 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	for _, provider := range a.providers {
 		token, err = provider.Authenticate(ctx)
 		if token == "" || err != nil {
-			a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.Providers()))
+			a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(provider))
 			continue
 		}
 		a.UpdateCredentials(token, true)

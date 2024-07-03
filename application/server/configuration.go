@@ -138,13 +138,18 @@ func writeSettings(c *config.Config, settings lsp.Settings, initialize bool) {
 
 func updateAuthenticationMethod(c *config.Config, settings lsp.Settings) {
 	var as []authentication.AuthenticationProvider
-	if settings.AuthenticationMethod == lsp.TokenAuthentication {
-		// if token authentication is explicitly requested, we remove the oauth2 provider
+	switch settings.AuthenticationMethod {
+	case lsp.FakeAuthentication:
+		di.AuthenticationService().SetProviders([]authentication.AuthenticationProvider{authentication.NewFakeCliAuthenticationProvider(c)})
+	case lsp.TokenAuthentication:
 		as = authentication.Token(c, di.ErrorReporter())
-	} else {
+		di.AuthenticationService().SetProviders(as)
+	case "":
+		// don't do anything
+	default:
 		as = authentication.Default(c, di.ErrorReporter(), di.AuthenticationService())
+		di.AuthenticationService().SetProviders(as)
 	}
-	di.AuthenticationService().SetProviders(as)
 }
 
 func updateRuntimeInfo(c *config.Config, settings lsp.Settings) {
