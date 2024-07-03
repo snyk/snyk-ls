@@ -35,6 +35,9 @@ type AuthenticationService interface {
 	// IsAuthenticated returns true if the token is verified
 	IsAuthenticated() (bool, error)
 
-	// SetProvider sets the authentication provider
+	// AddProvider sets the authentication provider
 	AddProvider(provider AuthenticationProvider)
+
+	// SetProviders allows to overwrite the default authenticators
+	SetProviders(providers []AuthenticationProvider)
 }

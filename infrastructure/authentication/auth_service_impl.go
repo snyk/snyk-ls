@@ -121,6 +121,10 @@ func (a *AuthenticationServiceImpl) AddProvider(provider AuthenticationProvider)
 	a.providers = append(a.providers, provider)
 }
 
+func (a *AuthenticationServiceImpl) SetProviders(providers []AuthenticationProvider) {
+	a.providers = providers
+}
+
 func (a *AuthenticationServiceImpl) HandleInvalidCredentials(c *config.Config) {
 	logger := c.Logger().With().Str("method", "AuthenticationServiceImpl.HandleInvalidCredentials").Logger()
 	msg := "Your authentication credentials cannot be validated. Automatically clearing credentials. You need to re-authenticate to use Snyk."

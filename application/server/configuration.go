@@ -30,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
 )
@@ -118,12 +119,9 @@ func writeSettings(c *config.Config, settings lsp.Settings, initialize bool) {
 	updateSeverityFilter(c, settings.FilterSeverity)
 	updateProductEnablement(c, settings)
 	updateCliConfig(c, settings)
-
+	updateAuthenticationMethod(c, settings)
 	updateApiEndpoints(c, settings, initialize)
-
-	// setting the token requires to know the authentication method
 	updateToken(settings.Token)
-
 	updateEnvironment(c, settings)
 	updatePathFromSettings(c, settings)
 	updateTelemetry(c, settings)
@@ -136,6 +134,17 @@ func writeSettings(c *config.Config, settings lsp.Settings, initialize bool) {
 	updateAutoScan(c, settings)
 	updateSnykLearnCodeActions(c, settings)
 	updateSnykOSSQuickFixCodeActions(c, settings)
+}
+
+func updateAuthenticationMethod(c *config.Config, settings lsp.Settings) {
+	var as authentication.AuthenticationService
+	if settings.AuthenticationMethod == lsp.TokenAuthentication {
+		// if token authentication is explicitly requested, we remove the oauth2 provider
+		as = authentication.Token(c, di.Analytics(), di.Notifier(), di.ErrorReporter())
+	} else {
+		as = authentication.Default(c, di.Analytics(), di.Notifier(), di.ErrorReporter())
+	}
+	di.SetAuthenticationService(as)
 }
 
 func updateRuntimeInfo(c *config.Config, settings lsp.Settings) {
