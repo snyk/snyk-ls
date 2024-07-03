@@ -54,12 +54,11 @@ func (i *Initializer) Init() error {
 	const errorMessage = "Auth Initializer failed to authenticate."
 	c := config.CurrentConfig()
 	if c.NonEmptyToken() {
-		user, err := AuthenticationCheck()
-		if user != "" {
+		authenticated, err := i.authenticationService.IsAuthenticated()
+		if authenticated {
 			c.Logger().Info().Str("method", "auth.initializer.init").Msg("Skipping authentication - user is already authenticated")
 			return nil
 		}
-
 		return err
 	}
 

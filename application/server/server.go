@@ -359,35 +359,27 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 
 		handleProtocolVersion(c, di.Notifier(), config.LsProtocolVersion, c.ClientProtocolVersion())
 
-		// CLI & Authentication initialization
+		// CLI & Authentication initialization - returns error if not authenticated
 		err := di.Scanner().Init()
 		if err != nil {
 			logger.Error().Err(err).Msg("Scan initialization error, canceling scan")
 			return nil, err
 		}
 
-		authenticated, err := di.AuthenticationService().IsAuthenticated()
-		if err != nil {
-			logger.Err(err).Msg("invalid credentials or could not validate credentials")
-		}
-
 		autoScanEnabled := c.IsAutoScanEnabled()
-		if autoScanEnabled && authenticated {
+		if autoScanEnabled {
 			logger.Info().Msg("triggering workspace scan after successful initialization")
 			workspace.Get().ScanWorkspace(context.Background())
 		} else {
 			msg := fmt.Sprintf(
-				"No automatic workspace scan on initialization: autoScanEnabled=%v, authenticated=%v",
+				"No automatic workspace scan on initialization: autoScanEnabled=%v",
 				autoScanEnabled,
-				authenticated,
 			)
 			logger.Info().Msg(msg)
 		}
 
-		if c.AutomaticAuthentication() || c.NonEmptyToken() {
-			logger.Debug().Msg("trying to get trusted status for untrusted folders")
-			go command.HandleUntrustedFolders(context.Background(), srv)
-		}
+		logger.Debug().Msg("trying to get trusted status for untrusted folders")
+		go command.HandleUntrustedFolders(context.Background(), srv)
 		return nil, nil
 	})
 }

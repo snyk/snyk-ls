@@ -17,8 +17,6 @@
 package di
 
 import (
-	"errors"
-	"fmt"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -28,7 +26,6 @@ import (
 	codeClient "github.com/snyk/code-client-go"
 	codeClientHTTP "github.com/snyk/code-client-go/http"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
-	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
 	appNotification "github.com/snyk/snyk-ls/application/server/notification"
@@ -54,7 +51,6 @@ import (
 	er "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
-	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var snykApiClient snyk_api.SnykApiClient
@@ -140,7 +136,7 @@ func initInfrastructure(c *config.Config) {
 	analytics = amplitude.NewAmplitudeClient(c, authentication.AuthenticationCheck, errorReporter)
 	gafConfiguration := c.Engine().GetConfiguration()
 
-	configureAuthentication(c)
+	authenticationService = authentication.Default(c, analytics, notifier, errorReporter)
 
 	snykCli := cli.NewExecutor(c, errorReporter, analytics, notifier)
 
@@ -181,39 +177,6 @@ func initInfrastructure(c *config.Config) {
 		cliInitializer,
 		authInitializer,
 	)
-}
-
-func configureAuthentication(c *config.Config) {
-	authProviders := []authentication.AuthenticationProvider{}
-	authenticationService = authentication.NewAuthenticationService(c, authProviders, analytics, errorReporter, notifier)
-
-	credentialsUpdateCallback := func(_ string, value any) {
-		newToken, ok := value.(string)
-		if !ok {
-			msg := fmt.Sprintf("Failed to cast creds of type %T to string", value)
-			errorReporter.CaptureError(errors.New(msg))
-			return
-		}
-		go authenticationService.UpdateCredentials(newToken, true)
-	}
-
-	openBrowserFunc := func(url string) {
-		for _, provider := range authenticationService.Providers() {
-			provider.SetAuthURL(url)
-		}
-		types.DefaultOpenBrowserFunc(url)
-	}
-
-	authenticationService.AddProvider(
-		authentication.NewOAuthProvider(
-			c,
-			auth.RefreshToken,
-			credentialsUpdateCallback,
-			openBrowserFunc,
-		),
-	)
-
-	authenticationService.AddProvider(authentication.NewCliAuthenticationProvider(c, errorReporter))
 }
 
 func initApplication(c *config.Config) {
@@ -306,4 +269,10 @@ func LearnService() learn.Service {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return learnService
+}
+
+func SetAuthenticationService(as authentication.AuthenticationService) {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	authenticationService = as
 }
