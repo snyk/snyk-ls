@@ -25,15 +25,16 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type getLearnLesson struct {
-	command      snyk.CommandData
+	command      types.CommandData
 	srv          lsp.Server
 	learnService learn.Service
 }
 
-func (cmd *getLearnLesson) Command() snyk.CommandData {
+func (cmd *getLearnLesson) Command() types.CommandData {
 	return cmd.command
 }
 

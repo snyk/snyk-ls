@@ -18,19 +18,21 @@ package oss
 
 import (
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/gomarkdown/markdown"
 	"github.com/pkg/errors"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -245,9 +247,9 @@ func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting
 	}
 
 	title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", i.Title, i.PackageName)
-	command := &snyk.CommandData{
+	command := &types.CommandData{
 		Title:     title,
-		CommandId: snyk.OpenBrowserCommand,
+		CommandId: types.OpenBrowserCommand,
 		Arguments: []any{i.CreateIssueURL().String()},
 	}
 
@@ -277,9 +279,9 @@ func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_repor
 			title := fmt.Sprintf("Learn more about %s (Snyk)", i.Title)
 			action = &snyk.CodeAction{
 				Title: title,
-				Command: &snyk.CommandData{
+				Command: &types.CommandData{
 					Title:     title,
-					CommandId: snyk.OpenBrowserCommand,
+					CommandId: types.OpenBrowserCommand,
 					Arguments: []any{lesson.Url},
 				},
 			}

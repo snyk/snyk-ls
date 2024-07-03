@@ -23,8 +23,9 @@ import (
 	"testing"
 
 	"github.com/pact-foundation/pact-go/dsl"
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/stretchr/testify/assert"
+
+	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"

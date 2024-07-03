@@ -26,7 +26,6 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -70,7 +69,6 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 	t.Run("Removes existing snyk token env variables", func(t *testing.T) {
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
-		c.SetAuthenticationMethod(lsp.OAuthAuthentication)
 		c.SetToken("{\"access_token\": \"testToken\"}")
 		tokenVar := TokenEnvVar + "={asdf}"
 		inputEnv := []string{tokenVar}
@@ -82,10 +80,9 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		assert.Contains(t, updatedEnv, SnykOauthTokenEnvVar+"="+token.AccessToken)
 		assert.NotContains(t, updatedEnv, tokenVar)
 	})
-	t.Run("Removes existing oauth env variables", func(t *testing.T) {
+	t.Run("Removes existing authentication env variables", func(t *testing.T) {
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
-		c.SetAuthenticationMethod(lsp.TokenAuthentication)
 		c.SetToken("testToken")
 		oauthVar := SnykOauthTokenEnvVar + "={asdf}"
 		inputEnv := []string{oauthVar}
@@ -98,7 +95,6 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 	t.Run("Adds Snyk Token to env", func(t *testing.T) {
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
-		c.SetAuthenticationMethod(lsp.TokenAuthentication)
 		c.SetToken("testToken")
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
@@ -109,7 +105,6 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 	t.Run("Adds OAuth Token to env", func(t *testing.T) {
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
-		c.SetAuthenticationMethod(lsp.OAuthAuthentication)
 		c.SetToken("{\"access_token\": \"testToken\"}")
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)

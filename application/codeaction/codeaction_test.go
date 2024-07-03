@@ -34,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -246,11 +247,11 @@ func Test_ResolveCodeAction_CommandIsExecuted(t *testing.T) {
 	service := setupService()
 
 	id := lsp.CodeActionData(uuid.New())
-	command.SetService(snyk.NewCommandServiceMock())
+	command.SetService(types.NewCommandServiceMock())
 
 	c := &sglsp.Command{
-		Title:   snyk.LoginCommand,
-		Command: snyk.LoginCommand,
+		Title:   types.LoginCommand,
+		Command: types.LoginCommand,
 	}
 	ca := lsp.CodeAction{
 		Title:   "Made up CA",
@@ -262,7 +263,7 @@ func Test_ResolveCodeAction_CommandIsExecuted(t *testing.T) {
 	_, err := service.ResolveCodeAction(ca, nil)
 	assert.NoError(t, err, "command should be called without error")
 
-	serviceMock := command.Service().(*snyk.CommandServiceMock)
+	serviceMock := command.Service().(*types.CommandServiceMock)
 	assert.Len(t, serviceMock.ExecutedCommands(), 1)
 	assert.Equal(t, serviceMock.ExecutedCommands()[0].CommandId, c.Command)
 }

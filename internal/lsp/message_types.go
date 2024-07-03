@@ -556,7 +556,7 @@ type Settings struct {
 type AuthenticationMethod string
 
 const TokenAuthentication AuthenticationMethod = "token"
-const OAuthAuthentication AuthenticationMethod = "oauth"
+const OAuthAuthentication AuthenticationMethod = "authentication"
 
 type DidChangeConfigurationParams struct {
 	// The actual changed settings

@@ -24,8 +24,8 @@ import (
 
 	"github.com/snyk/snyk-ls/ampli"
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 type Client struct {
@@ -38,7 +38,7 @@ type Client struct {
 
 type captureEvent func(userId string, eventOptions ...ampli.EventOptions)
 
-func NewAmplitudeClient(c *config.Config, authFunc func() (string, error), errorReporter error_reporting.ErrorReporter) ux2.Analytics {
+func NewAmplitudeClient(c *config.Config, authFunc func() (string, error), errorReporter error_reporting.ErrorReporter) ux.Analytics {
 	ampliConfig := amplitude.NewConfig("")
 
 	ampli.Instance.Load(ampli.LoadOptions{
@@ -69,7 +69,7 @@ func (c *Client) Shutdown() error {
 	return c.destination.Shutdown()
 }
 
-func (c *Client) AnalysisIsReady(properties ux2.AnalysisIsReadyProperties) {
+func (c *Client) AnalysisIsReady(properties ux.AnalysisIsReadyProperties) {
 	c.c.Logger().Debug().Str("method", "AnalysisIsReady").Msg("analytics enqueued")
 	analysisType := ampli.AnalysisIsReadyAnalysisType(properties.AnalysisType)
 	ide := ampli.AnalysisIsReadyIde(getIdeProperty())
@@ -93,7 +93,7 @@ func (c *Client) AnalysisIsReady(properties ux2.AnalysisIsReadyProperties) {
 	c.enqueueEvent(captureFn)
 }
 
-func (c *Client) AnalysisIsTriggered(properties ux2.AnalysisIsTriggeredProperties) {
+func (c *Client) AnalysisIsTriggered(properties ux.AnalysisIsTriggeredProperties) {
 	c.c.Logger().Debug().Str("method", "AnalysisIsTriggered").Msg("analytics enqueued")
 	analysisTypes := make([]string, 0, len(properties.AnalysisType))
 	for _, analysisType := range properties.AnalysisType {
@@ -118,7 +118,7 @@ func (c *Client) AnalysisIsTriggered(properties ux2.AnalysisIsTriggeredPropertie
 	c.enqueueEvent(captureFn)
 }
 
-func (c *Client) IssueHoverIsDisplayed(properties ux2.IssueHoverIsDisplayedProperties) {
+func (c *Client) IssueHoverIsDisplayed(properties ux.IssueHoverIsDisplayedProperties) {
 	c.c.Logger().Debug().Str("method", "IssueHoverIsDisplayed").Msg("analytics enqueued")
 	ide := ampli.IssueHoverIsDisplayedIde(getIdeProperty())
 	issueType := ampli.IssueHoverIsDisplayedIssueType(properties.IssueType)
@@ -141,7 +141,7 @@ func (c *Client) IssueHoverIsDisplayed(properties ux2.IssueHoverIsDisplayedPrope
 	c.enqueueEvent(captureFn)
 }
 
-func (c *Client) PluginIsInstalled(_ ux2.PluginIsInstalledProperties) {
+func (c *Client) PluginIsInstalled(_ ux.PluginIsInstalledProperties) {
 	c.c.Logger().Debug().Str("method", "PluginIsInstalled").Msg("analytics enqueued")
 	conf := config.CurrentConfig()
 
@@ -160,7 +160,7 @@ func (c *Client) PluginIsInstalled(_ ux2.PluginIsInstalledProperties) {
 	c.enqueueEvent(captureFn)
 }
 
-func (c *Client) ScanModeIsSelected(properties ux2.ScanModeIsSelectedProperties) {
+func (c *Client) ScanModeIsSelected(properties ux.ScanModeIsSelectedProperties) {
 	conf := config.CurrentConfig()
 	ide := ampli.ScanModeIsSelectedIde(getIdeProperty())
 
@@ -219,19 +219,19 @@ func (c *Client) Identify() {
 }
 
 // Only return an IDE property if it's a recognized IDE in the tracking plan
-func getIdeProperty() ux2.IDE {
+func getIdeProperty() ux.IDE {
 	// Standardize the names
 	integrationName := strings.Replace(strings.ToLower(config.CurrentConfig().IntegrationName()), "_", " ", -1)
 
 	switch integrationName {
-	case string(ux2.Eclipse):
-		return ux2.Eclipse
+	case string(ux.Eclipse):
+		return ux.Eclipse
 	case "vs code":
-		return ux2.VisualStudioCode
-	case string(ux2.VisualStudio):
-		return ux2.VisualStudio
-	case string(ux2.JetBrains):
-		return ux2.JetBrains
+		return ux.VisualStudioCode
+	case string(ux.VisualStudio):
+		return ux.VisualStudio
+	case string(ux.JetBrains):
+		return ux.JetBrains
 	default:
 		return "Other" // ensure we pass Amplitude validation, when IDE is not in the tracking plan
 	}

@@ -22,19 +22,19 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/application/config"
-	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	noti "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type trustWorkspaceFoldersCommand struct {
-	command  snyk.CommandData
+	command  types.CommandData
 	notifier noti.Notifier
 	logger   *zerolog.Logger
 }
 
-func (cmd *trustWorkspaceFoldersCommand) Command() snyk.CommandData {
+func (cmd *trustWorkspaceFoldersCommand) Command() types.CommandData {
 	return cmd.command
 }
 

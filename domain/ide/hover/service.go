@@ -22,8 +22,8 @@ import (
 	"sync"
 
 	"github.com/snyk/snyk-ls/application/config"
-	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	ux2 "github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 type Service interface {

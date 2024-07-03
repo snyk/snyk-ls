@@ -5,12 +5,24 @@ import (
 
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-func NewNotifier() notification.Notifier {
+// Notifier should be passed as a dependency to the types that call "notification.x" functions.
+// This allows using mocks and enables us to gradually refactor out the direct calls to
+// the "notification" package functions.
+type Notifier interface {
+	SendShowMessage(messageType sglsp.MessageType, message string)
+	Send(msg any)
+	SendError(err error)
+	SendErrorDiagnostic(path string, err error)
+	Receive() (payload any, stop bool)
+	CreateListener(callback func(params any))
+	DisposeListener()
+}
+
+func NewNotifier() Notifier {
 	return &notifierImpl{
 		channel:     make(chan any, 100),
 		stopChannel: make(chan any, 100),

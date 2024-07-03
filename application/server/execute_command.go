@@ -26,7 +26,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/command"
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
@@ -39,7 +39,7 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 		c.Logger().Info().Str("method", method).Interface("command", params).Msg("RECEIVING")
 		defer c.Logger().Info().Str("method", method).Interface("command", params).Msg("SENDING")
 
-		commandData := snyk.CommandData{CommandId: params.Command, Arguments: params.Arguments, Title: params.Command}
+		commandData := types.CommandData{CommandId: params.Command, Arguments: params.Arguments, Title: params.Command}
 
 		result, err := command.Service().ExecuteCommandData(bgCtx, commandData, srv)
 		logError(c.Logger(), err, fmt.Sprintf("Error executing command %v", commandData))

@@ -21,19 +21,20 @@ import (
 
 	"github.com/rs/zerolog"
 
-	noti "github.com/snyk/snyk-ls/domain/ide/notification"
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	noti "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type loginCommand struct {
-	command     snyk.CommandData
-	authService snyk.AuthenticationService
+	command     types.CommandData
+	authService authentication.AuthenticationService
 	notifier    noti.Notifier
 	logger      *zerolog.Logger
 }
 
-func (cmd *loginCommand) Command() snyk.CommandData {
+func (cmd *loginCommand) Command() types.CommandData {
 	return cmd.command
 }
 

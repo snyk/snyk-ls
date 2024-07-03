@@ -17,6 +17,8 @@
 package di
 
 import (
+	"errors"
+	"fmt"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -26,7 +28,7 @@ import (
 	codeClient "github.com/snyk/code-client-go"
 	codeClientHTTP "github.com/snyk/code-client-go/http"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
-
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
 	appNotification "github.com/snyk/snyk-ls/application/server/notification"
@@ -34,15 +36,11 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
-	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	er "github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	"github.com/snyk/snyk-ls/domain/observability/performance"
-	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/amplitude"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
-	cliauth "github.com/snyk/snyk-ls/infrastructure/cli/auth"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -51,7 +49,12 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/oss"
 	"github.com/snyk/snyk-ls/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/notification"
 	domainNotify "github.com/snyk/snyk-ls/internal/notification"
+	er "github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var snykApiClient snyk_api.SnykApiClient
@@ -61,9 +64,9 @@ var snykCodeScanner *code.Scanner
 var infrastructureAsCodeScanner *iac.Scanner
 var openSourceScanner snyk.ProductScanner
 var scanInitializer initialize.Initializer
-var authenticationService snyk.AuthenticationService
+var authenticationService authentication.AuthenticationService
 var learnService learn.Service
-var instrumentor performance.Instrumentor
+var instrumentor performance2.Instrumentor
 var errorReporter er.ErrorReporter
 var installer install.Installer
 var analytics ux.Analytics
@@ -132,14 +135,16 @@ func initInfrastructure(c *config.Config) {
 	errorReporter = sentry.NewSentryErrorReporter(c, notifier)
 	installer = install.NewInstaller(errorReporter, networkAccess.GetUnauthorizedHttpClient)
 	learnService = learn.New(c, networkAccess.GetUnauthorizedHttpClient, errorReporter)
-	instrumentor = performance.NewInstrumentor()
+	instrumentor = performance2.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient(c, networkAccess.GetHttpClient)
-	analytics = amplitude.NewAmplitudeClient(c, snyk.AuthenticationCheck, errorReporter)
-	authProvider := cliauth.NewCliAuthenticationProvider(c, errorReporter)
-	authenticationService = snyk.NewAuthenticationService(c, authProvider, analytics, errorReporter, notifier)
-	snykCli := cli.NewExecutor(c, authenticationService, errorReporter, analytics, notifier)
+	analytics = amplitude.NewAmplitudeClient(c, authentication.AuthenticationCheck, errorReporter)
+	gafConfiguration := c.Engine().GetConfiguration()
 
-	if c.Engine().GetConfiguration().GetString(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION {
+	configureAuthentication(c)
+
+	snykCli := cli.NewExecutor(c, errorReporter, analytics, notifier)
+
+	if gafConfiguration.GetString(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION {
 		snykCli = cli.NewExtensionExecutor(c)
 	}
 
@@ -171,11 +176,44 @@ func initInfrastructure(c *config.Config) {
 	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, analytics, learnService, notifier,
 		codeClientScanner)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
-	authInitializer := cliauth.NewInitializer(c, authenticationService, errorReporter, analytics, notifier)
+	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, analytics, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,
 		authInitializer,
 	)
+}
+
+func configureAuthentication(c *config.Config) {
+	authProviders := []authentication.AuthenticationProvider{}
+	authenticationService = authentication.NewAuthenticationService(c, authProviders, analytics, errorReporter, notifier)
+
+	credentialsUpdateCallback := func(_ string, value any) {
+		newToken, ok := value.(string)
+		if !ok {
+			msg := fmt.Sprintf("Failed to cast creds of type %T to string", value)
+			errorReporter.CaptureError(errors.New(msg))
+			return
+		}
+		go authenticationService.UpdateCredentials(newToken, true)
+	}
+
+	openBrowserFunc := func(url string) {
+		for _, provider := range authenticationService.Providers() {
+			provider.SetAuthURL(url)
+		}
+		types.DefaultOpenBrowserFunc(url)
+	}
+
+	authenticationService.AddProvider(
+		authentication.NewOAuthProvider(
+			c,
+			auth.RefreshToken,
+			credentialsUpdateCallback,
+			openBrowserFunc,
+		),
+	)
+
+	authenticationService.AddProvider(authentication.NewCliAuthenticationProvider(c, errorReporter))
 }
 
 func initApplication(c *config.Config) {
@@ -210,7 +248,7 @@ func ErrorReporter() er.ErrorReporter {
 	return errorReporter
 }
 
-func AuthenticationService() snyk.AuthenticationService {
+func AuthenticationService() authentication.AuthenticationService {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return authenticationService

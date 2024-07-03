@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var sampleRangeArg = map[string]interface{}{
@@ -74,8 +75,8 @@ func setupClientCapability(config *config.Config) {
 }
 
 func setupCommand(mockNotifier *notification.MockNotifier) *fixCodeIssue {
-	cmdData := snyk.CommandData{
-		CommandId: snyk.CodeFixCommand,
+	cmdData := types.CommandData{
+		CommandId: types.CodeFixCommand,
 		Arguments: sampleArgs,
 	}
 	cmd := &fixCodeIssue{
@@ -104,7 +105,7 @@ func setupMockEdit() (edit *snyk.WorkspaceEdit, deferredEdit func() *snyk.Worksp
 	return mockEdit, deferredMockEdit
 }
 
-func setupSampleIssues(issueRange snyk.Range, codeAction snyk.CodeAction, cmdData snyk.CommandData) []snyk.Issue {
+func setupSampleIssues(issueRange snyk.Range, codeAction snyk.CodeAction, cmdData types.CommandData) []snyk.Issue {
 	return []snyk.Issue{{
 		ID:          "SNYK-123",
 		Range:       issueRange,
@@ -113,7 +114,7 @@ func setupSampleIssues(issueRange snyk.Range, codeAction snyk.CodeAction, cmdDat
 		IssueType:   snyk.CodeSecurityVulnerability,
 		Message:     "This is a dummy error (severity error)",
 		CodeActions: []snyk.CodeAction{codeAction},
-		CodelensCommands: []snyk.CommandData{
+		CodelensCommands: []types.CommandData{
 			cmdData,
 		},
 	}}
@@ -123,8 +124,8 @@ func Test_fixCodeIssue_ErrorsWhenNoCapability(t *testing.T) {
 	c := testutil.UnitTest(t)
 	cmd := &fixCodeIssue{
 		logger: c.Logger(),
-		command: snyk.CommandData{
-			CommandId: snyk.CodeFixCommand,
+		command: types.CommandData{
+			CommandId: types.CodeFixCommand,
 			Arguments: []any{sampleArgs},
 		},
 	}

@@ -18,8 +18,6 @@ package server
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"os"
 	"reflect"
 	"strconv"
@@ -27,19 +25,13 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
-	"golang.org/x/oauth2"
 
-	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/observability/ux"
-	"github.com/snyk/snyk-ls/domain/snyk"
-	auth2 "github.com/snyk/snyk-ls/infrastructure/cli/auth"
-	"github.com/snyk/snyk-ls/infrastructure/oauth"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 var cachedOriginalPath = ""
@@ -127,9 +119,6 @@ func writeSettings(c *config.Config, settings lsp.Settings, initialize bool) {
 	updateProductEnablement(c, settings)
 	updateCliConfig(c, settings)
 
-	// updateApiEndpoints overwrites the authentication method in certain cases (oauth2)
-	// this is why it needs to be called after updateAuthenticationMethod
-	updateAuthenticationMethod(c, settings)
 	updateApiEndpoints(c, settings, initialize)
 
 	// setting the token requires to know the authentication method
@@ -147,59 +136,6 @@ func writeSettings(c *config.Config, settings lsp.Settings, initialize bool) {
 	updateAutoScan(c, settings)
 	updateSnykLearnCodeActions(c, settings)
 	updateSnykOSSQuickFixCodeActions(c, settings)
-}
-
-func updateAuthenticationMethod(c *config.Config, settings lsp.Settings) {
-	if settings.AuthenticationMethod == "" {
-		return
-	}
-	c.SetAuthenticationMethod(settings.AuthenticationMethod)
-	if c.AuthenticationMethod() == lsp.OAuthAuthentication {
-		configureOAuth(c, auth.RefreshToken)
-	} else {
-		cliAuthenticationProvider := auth2.NewCliAuthenticationProvider(c, di.ErrorReporter())
-		di.AuthenticationService().SetProvider(cliAuthenticationProvider)
-	}
-}
-
-func credentialsUpdateCallback(_ string, value any) {
-	newToken, ok := value.(string)
-	if !ok {
-		msg := fmt.Sprintf("Failed to cast creds of type %T to string", value)
-		di.ErrorReporter().CaptureError(errors.New(msg))
-		return
-	}
-	go di.AuthenticationService().UpdateCredentials(newToken, true)
-}
-
-func configureOAuth(
-	c *config.Config,
-	customTokenRefresherFunc func(
-		ctx context.Context,
-		oauthConfig *oauth2.Config,
-		token *oauth2.Token,
-	) (*oauth2.Token, error),
-) {
-	engine := c.Engine()
-	conf := engine.GetConfiguration()
-
-	authenticationService := di.AuthenticationService()
-
-	openBrowserFunc := func(url string) {
-		authenticationService.Provider().SetAuthURL(url)
-		snyk.DefaultOpenBrowserFunc(url)
-	}
-	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
-
-	c.Storage().RegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN, credentialsUpdateCallback)
-
-	authenticator := auth.NewOAuth2AuthenticatorWithOpts(
-		conf,
-		auth.WithOpenBrowserFunc(openBrowserFunc),
-		auth.WithTokenRefresherFunc(customTokenRefresherFunc),
-	)
-	oAuthProvider := oauth.NewOAuthProvider(conf, authenticator, c.Logger())
-	authenticationService.SetProvider(oAuthProvider)
 }
 
 func updateRuntimeInfo(c *config.Config, settings lsp.Settings) {
@@ -280,12 +216,6 @@ func updateApiEndpoints(c *config.Config, settings lsp.Settings, initialization 
 	if endpointsUpdated && !initialization {
 		di.AuthenticationService().Logout(context.Background())
 		workspace.Get().Clear()
-	}
-
-	// overwrite authentication method if gov domain
-	if c.IsFedramp() {
-		settings.AuthenticationMethod = lsp.OAuthAuthentication
-		updateAuthenticationMethod(c, settings)
 	}
 
 	// a custom set snyk code api (e.g. for testing) always overwrites automatic config

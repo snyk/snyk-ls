@@ -29,6 +29,8 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) {
@@ -38,7 +40,7 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 	scanner := &snyk.TestScanner{}
 	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))
 
-	params := lsp.ExecuteCommandParams{Command: snyk.WorkspaceScanCommand}
+	params := lsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +57,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceip
 	scanner := &snyk.TestScanner{}
 	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))
 
-	params := lsp.ExecuteCommandParams{Command: snyk.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
+	params := lsp.ExecuteCommandParams{Command: types.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +87,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 	folder.ScanFolder(context.Background())
 	dontClear.ScanFolder(context.Background())
 
-	params := lsp.ExecuteCommandParams{Command: snyk.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
+	params := lsp.ExecuteCommandParams{Command: types.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
@@ -107,7 +109,7 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 	// explicitly enable folder trust which is disabled by default in tests
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 
-	params := lsp.ExecuteCommandParams{Command: snyk.WorkspaceScanCommand}
+	params := lsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
@@ -136,9 +138,9 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = false
-	params := lsp.ExecuteCommandParams{Command: snyk.LoginCommand}
+	params := lsp.ExecuteCommandParams{Command: types.LoginCommand}
 
 	// Act
 	_, err = loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -159,7 +161,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 		workspace.Get().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier()))
 
-		params := lsp.ExecuteCommandParams{Command: snyk.TrustWorkspaceFoldersCommand}
+		params := lsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 		if err != nil {
 			t.Fatal(err)
@@ -176,7 +178,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		workspace.Get().AddFolder(workspace.NewFolder(c, "/path/to/folder2", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier()))
 		config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 
-		params := lsp.ExecuteCommandParams{Command: snyk.TrustWorkspaceFoldersCommand}
+		params := lsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 		if err != nil {
 			t.Fatal(err)
@@ -194,7 +196,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 		config.CurrentConfig().SetTrustedFolders([]string{"/path/to/folder2"})
 
-		params := lsp.ExecuteCommandParams{Command: snyk.TrustWorkspaceFoldersCommand}
+		params := lsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 		if err != nil {
 			t.Fatal(err)

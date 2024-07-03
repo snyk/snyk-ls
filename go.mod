@@ -13,6 +13,7 @@ require (
 	github.com/gomarkdown/markdown v0.0.0-20230922112808-5421fefb8386
 	github.com/google/uuid v1.6.0
 	github.com/hexops/gotextdiff v1.0.3
+	github.com/modern-go/reflect2 v1.0.2
 	github.com/pact-foundation/pact-go v1.7.0
 	github.com/pingcap/errors v0.11.4
 	github.com/pkg/errors v0.9.1

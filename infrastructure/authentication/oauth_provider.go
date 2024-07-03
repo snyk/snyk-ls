@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package oauth
+package authentication
 
 import (
 	"context"
@@ -23,37 +23,35 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-
-	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
-type oAuthProvider struct {
+type OAuth2Provider struct {
 	authenticator auth.Authenticator
 	config        configuration.Configuration
 	authURL       string
 	logger        *zerolog.Logger
 }
 
-func (p *oAuthProvider) GetCheckAuthenticationFunction() snyk.AuthenticationFunction {
-	return snyk.AuthenticationCheck
+func (p *OAuth2Provider) GetCheckAuthenticationFunction() AuthenticationFunction {
+	return AuthenticationCheck
 }
 
-func NewOAuthProvider(config configuration.Configuration, authenticator auth.Authenticator, logger *zerolog.Logger) snyk.AuthenticationProvider {
+func newOAuthProvider(config configuration.Configuration, authenticator auth.Authenticator, logger *zerolog.Logger) *OAuth2Provider {
 	logger.Debug().Msg("creating new OAuth provider")
-	return &oAuthProvider{authenticator: authenticator, config: config, logger: logger}
+	return &OAuth2Provider{authenticator: authenticator, config: config, logger: logger}
 }
 
-func (p *oAuthProvider) Authenticate(_ context.Context) (string, error) {
+func (p *OAuth2Provider) Authenticate(_ context.Context) (string, error) {
 	err := p.authenticator.Authenticate()
 	p.logger.Debug().Msg("authenticated with OAuth")
 	return p.config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), err
 }
 
-func (p *oAuthProvider) SetAuthURL(url string) {
+func (p *OAuth2Provider) SetAuthURL(url string) {
 	p.authURL = url
 }
 
-func (p *oAuthProvider) ClearAuthentication(_ context.Context) error {
+func (p *OAuth2Provider) ClearAuthentication(_ context.Context) error {
 	p.logger.Debug().Msg("clearing authentication")
 	p.config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
 	p.config.Set(configuration.AUTHENTICATION_TOKEN, "")
@@ -61,10 +59,10 @@ func (p *oAuthProvider) ClearAuthentication(_ context.Context) error {
 	return nil
 }
 
-func (p *oAuthProvider) AuthURL(_ context.Context) string {
+func (p *OAuth2Provider) AuthURL(_ context.Context) string {
 	return p.authURL
 }
 
-func (p *oAuthProvider) Authenticator() auth.Authenticator {
+func (p *OAuth2Provider) Authenticator() auth.Authenticator {
 	return p.authenticator
 }

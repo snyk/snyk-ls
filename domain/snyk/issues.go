@@ -23,6 +23,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type Reference struct {
@@ -56,7 +57,7 @@ type Issue struct {
 	// CodeActions can contain workspace edits or commands to be executed
 	CodeActions []CodeAction
 	// CodelensCommands that can be executed via a codelens
-	CodelensCommands []CommandData
+	CodelensCommands []types.CommandData
 	// The Ecosystem of the issue, e.g. npm, maven, nuget, etc.
 	Ecosystem string
 	// A slice of the CWEs of the issue, e.g. CWEs-79

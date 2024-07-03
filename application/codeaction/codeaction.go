@@ -13,10 +13,11 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
-	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	noti "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -116,7 +117,7 @@ func (c *CodeActionsService) ResolveCodeAction(action lsp.CodeAction, server lsp
 
 func (c *CodeActionsService) handleCommand(action lsp.CodeAction, server lsp.Server) (lsp.CodeAction, error) {
 	c.logger.Info().Str("method", "codeaction.handleCommand").Msgf("handling command %s", action.Command.Command)
-	cmd := snyk.CommandData{
+	cmd := types.CommandData{
 		Title:     action.Command.Title,
 		CommandId: action.Command.Command,
 		Arguments: action.Command.Arguments,

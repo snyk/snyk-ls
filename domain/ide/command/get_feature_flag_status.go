@@ -22,16 +22,16 @@ import (
 	"fmt"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type featureFlagStatus struct {
-	command   snyk.CommandData
+	command   types.CommandData
 	apiClient snyk_api.SnykApiClient
 }
 
-func (cmd *featureFlagStatus) Command() snyk.CommandData {
+func (cmd *featureFlagStatus) Command() types.CommandData {
 	return cmd.command
 }
 

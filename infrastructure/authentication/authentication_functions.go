@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited
+ * © 2023-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package snyk
+package authentication
 
 import (
 	"encoding/json"
@@ -26,6 +26,21 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 )
 
+type AuthenticationFunction func() (string, error)
+
+type ActiveUser struct {
+	Id       string `json:"id"`
+	UserName string `json:"username,omitempty"`
+	Orgs     []struct {
+		Name  string `json:"name,omitempty"`
+		Id    string `json:"id,omitempty"`
+		Group struct {
+			Name string `json:"name,omitempty"`
+			Id   string `json:"id,omitempty"`
+		} `json:"group,omitempty"`
+	} `json:"orgs,omitempty"`
+}
+
 func AuthenticationCheck() (string, error) {
 	user, err := GetActiveUser()
 	if err != nil {
@@ -36,6 +51,7 @@ func AuthenticationCheck() (string, error) {
 
 func GetActiveUser() (*ActiveUser, error) {
 	c := config.CurrentConfig()
+	c.Logger().Debug().Str("method", "getActiveUser").Msg("checking active user")
 	if c.Token() == "" {
 		return nil, errors.New("no credentials found")
 	}

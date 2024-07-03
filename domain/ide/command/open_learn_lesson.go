@@ -21,19 +21,19 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type openLearnLesson struct {
-	command               snyk.CommandData
+	command               types.CommandData
 	srv                   lsp.Server
 	learnService          learn.Service
 	openBrowserHandleFunc func(url string)
 }
 
-func (cmd *openLearnLesson) Command() snyk.CommandData {
+func (cmd *openLearnLesson) Command() types.CommandData {
 	return cmd.command
 }
 
@@ -48,7 +48,7 @@ func (cmd *openLearnLesson) Execute(_ context.Context) (any, error) {
 	if cmd.openBrowserHandleFunc != nil {
 		cmd.openBrowserHandleFunc(lesson.Url)
 	} else {
-		snyk.DefaultOpenBrowserFunc(lesson.Url)
+		types.DefaultOpenBrowserFunc(lesson.Url)
 	}
 	return lesson, err
 }

@@ -66,7 +66,7 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) []stri
 	}
 
 	if appendToken && currentConfig.NonEmptyToken() {
-		// default to oauth, if not there, try to set the api key
+		// default to authentication, if not there, try to set the api key
 		oAuthToken, err := currentConfig.TokenAsOAuthToken()
 		if err == nil && len(oAuthToken.AccessToken) > 0 {
 			logger.Debug().Msg("using oauth2 authentication")

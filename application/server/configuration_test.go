@@ -18,10 +18,7 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"strconv"
 	"strings"
@@ -31,16 +28,13 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/oauth2"
 
-	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/domain/observability/ux"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -71,80 +65,6 @@ func keyFoundInEnv(key string) bool {
 		}
 	}
 	return found
-}
-
-func Test_configureOauth_registersStorageCallback(t *testing.T) {
-	c := testutil.UnitTest(t)
-	di.TestInit(t)
-	c.SetAuthenticationMethod(lsp.OAuthAuthentication)
-
-	// a token that's set into the configuration
-	token := oauth2.Token{
-		AccessToken:  t.Name(),
-		RefreshToken: t.Name(),
-		Expiry:       time.Now().Add(1 * time.Hour),
-	}
-
-	configureOAuth(c, auth.RefreshToken)
-
-	tokenReceived := make(chan bool, 1)
-	di.Notifier().CreateListener(func(params any) {
-		msg, ok := params.(lsp.AuthenticationParams)
-		assert.True(t, ok, "Received unexpected message type %v", params)
-		assert.Contains(t, msg.Token, token.AccessToken)
-		tokenReceived <- true
-	})
-	marshal, err := json.Marshal(token)
-	assert.NoError(t, err)
-	err = c.Storage().Set(auth.CONFIG_KEY_OAUTH_TOKEN, string(marshal))
-	assert.NoError(t, err)
-	assert.Eventuallyf(t, func() bool {
-		return <-tokenReceived
-	}, 5*time.Second, 100*time.Millisecond, "token should have been received")
-}
-
-func Test_configureOauth_oauthProvider_created_with_injected_refreshMethod(t *testing.T) {
-	c := testutil.UnitTest(t)
-	di.TestInit(t)
-	c.SetAuthenticationMethod(lsp.OAuthAuthentication)
-
-	// an expired token that's set into the configuration
-	token := oauth2.Token{
-		AccessToken:  t.Name(),
-		RefreshToken: t.Name(),
-		Expiry:       time.Now().Add(-1 * time.Hour),
-	}
-
-	tokenBytes, err := json.Marshal(token)
-	assert.NoError(t, err)
-
-	c.SetToken(string(tokenBytes))
-
-	// refresh func is replaced with func that sends true into a channel when called
-	triggeredChan := make(chan bool, 1)
-	testFunc := func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
-		triggeredChan <- true
-		token.Expiry = time.Now().Add(1 * time.Hour)
-		return token, nil
-	}
-
-	// test interface to be able to access the Authenticator (oauthProvider implements it)
-	type providerWithAccessibleAuthenticator interface {
-		snyk.AuthenticationProvider
-		Authenticator() auth.Authenticator
-	}
-
-	configureOAuth(c, testFunc)
-
-	provider, ok := di.AuthenticationService().Provider().(providerWithAccessibleAuthenticator)
-	assert.True(t, ok, "provider should be of type providerWithAccessibleAuthenticator")
-
-	// AddAuthenticationHeader will trigger the refresh method
-	_ = provider.Authenticator().AddAuthenticationHeader(httptest.NewRequest(http.MethodGet, "/", nil))
-
-	assert.Eventuallyf(t, func() bool {
-		return <-triggeredChan
-	}, 5*time.Second, 100*time.Millisecond, "refresh should have been triggered")
 }
 
 func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
@@ -242,17 +162,10 @@ func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
 }
 
 func Test_UpdateSettings(t *testing.T) {
-	c := testutil.UnitTest(t)
 	di.TestInit(t)
 
 	orgUuid, _ := uuid.NewRandom()
 	expectedOrgId := orgUuid.String()
-
-	t.Run("snykgov.io substring endpoint enables oauth authentication in init", func(t *testing.T) {
-		endpoint := "https://app.fedramp.snykgov.io/api/v1"
-		updateApiEndpoints(c, lsp.Settings{Endpoint: endpoint}, true)
-		assert.Equal(t, lsp.OAuthAuthentication, config.CurrentConfig().AuthenticationMethod())
-	})
 
 	t.Run("All settings are updated", func(t *testing.T) {
 		c := testutil.UnitTest(t)
@@ -307,7 +220,6 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, settings.RuntimeName, c.RuntimeName())
 		assert.Equal(t, settings.RuntimeVersion, c.RuntimeVersion())
 		assert.False(t, c.IsAutoScanEnabled())
-		assert.Equal(t, lsp.OAuthAuthentication, c.AuthenticationMethod())
 		assert.Equal(t, sampleSettings.SnykCodeApi, c.SnykCodeApi())
 	})
 
@@ -527,16 +439,6 @@ func Test_InitializeSettings(t *testing.T) {
 		InitializeSettings(c, lsp.Settings{})
 
 		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
-	})
-
-	t.Run("authenticationMethod is passed", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		di.TestInit(t)
-		assert.Equal(t, lsp.OAuthAuthentication, c.AuthenticationMethod())
-
-		InitializeSettings(c, lsp.Settings{AuthenticationMethod: lsp.TokenAuthentication})
-
-		assert.Equal(t, lsp.TokenAuthentication, c.AuthenticationMethod())
 	})
 
 	t.Run("custom path configuration", func(t *testing.T) {

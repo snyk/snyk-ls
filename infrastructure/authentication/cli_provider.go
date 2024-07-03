@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package auth
+package authentication
 
 import (
 	"bufio"
@@ -28,9 +28,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 )
 
 type CliAuthenticationProvider struct {
@@ -39,11 +38,11 @@ type CliAuthenticationProvider struct {
 	c             *config.Config
 }
 
-func (a *CliAuthenticationProvider) GetCheckAuthenticationFunction() snyk.AuthenticationFunction {
-	return snyk.AuthenticationCheck
+func (a *CliAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
+	return AuthenticationCheck
 }
 
-func NewCliAuthenticationProvider(c *config.Config, errorReporter error_reporting.ErrorReporter) snyk.AuthenticationProvider {
+func NewCliAuthenticationProvider(c *config.Config, errorReporter error_reporting.ErrorReporter) *CliAuthenticationProvider {
 	return &CliAuthenticationProvider{"", errorReporter, c}
 }
 
@@ -164,7 +163,7 @@ func (a *CliAuthenticationProvider) getToken(ctx context.Context) (string, error
 	token = strings.TrimSuffix(token, "\n")
 
 	if token == "" {
-		return "", snyk.ErrEmptyAPIToken
+		return "", ErrEmptyAPIToken
 	}
 
 	return token, nil

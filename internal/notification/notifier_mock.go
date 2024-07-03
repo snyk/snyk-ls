@@ -5,12 +5,11 @@ import (
 
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-var _ notification.Notifier = &MockNotifier{}
+var _ Notifier = &MockNotifier{}
 
 type MockNotifier struct {
 	sendShowMessageCounter     int

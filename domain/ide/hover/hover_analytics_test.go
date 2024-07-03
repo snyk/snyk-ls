@@ -20,8 +20,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 func TestNewIssueHoverIsDisplayedProperties(t *testing.T) {

@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-package auth
+package authentication
 
 import (
 	"context"
+	"os/exec"
 	"testing"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -26,7 +27,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// todo: int tests for interface public methods ?
+func assertCmd(t *testing.T, expectedArgs []string, actualCmd *exec.Cmd) {
+	t.Helper()
+
+	actualArgs := actualCmd.Args[1:]
+
+	assert.Equal(t, expectedArgs, actualArgs)
+}
 
 func TestAuth_authCmd(t *testing.T) {
 	c := testutil.UnitTest(t)

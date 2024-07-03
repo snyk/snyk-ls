@@ -1,5 +1,5 @@
 /*
- * © 2022-2023 Snyk Limited
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package snyk
+package authentication
 
 import (
 	"context"
@@ -24,7 +24,7 @@ type AuthenticationService interface {
 	// Authenticate attempts to authenticate the user, and sends a notification to the client when successful
 	Authenticate(ctx context.Context) (string, error)
 
-	Provider() AuthenticationProvider
+	Providers() []AuthenticationProvider
 
 	// UpdateCredentials stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
 	// client if sendNotification is true
@@ -36,5 +36,5 @@ type AuthenticationService interface {
 	IsAuthenticated() (bool, error)
 
 	// SetProvider sets the authentication provider
-	SetProvider(provider AuthenticationProvider)
+	AddProvider(provider AuthenticationProvider)
 }

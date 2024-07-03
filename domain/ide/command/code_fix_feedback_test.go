@@ -23,7 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type fakeCodeHttpClient struct {
@@ -43,7 +43,7 @@ func (c *fakeCodeHttpClient) SubmitAutofixFeedback(ctx context.Context, fixId st
 func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
 	apiClient := fakeCodeHttpClient{}
 	codeFixFeedbackCmd := codeFixFeedback{
-		command: snyk.CommandData{
+		command: types.CommandData{
 			Arguments: []any{"fixId", true},
 		},
 		apiClient: &apiClient,
@@ -59,7 +59,7 @@ func Test_codeFixFeedback_SubmissionFailed(t *testing.T) {
 		shouldError: true,
 	}
 	codeFixFeedbackCmd := codeFixFeedback{
-		command: snyk.CommandData{
+		command: types.CommandData{
 			Arguments: []any{"fixId", true},
 		},
 		apiClient: &apiClient,

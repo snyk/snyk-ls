@@ -33,12 +33,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
-	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -174,7 +174,7 @@ func TestCreateBundle(t *testing.T) {
 			NewBundler(c, snykCodeMock, NewCodeInstrumentor()),
 			&snyk_api.FakeApiClient{CodeEnabled: true},
 			newTestCodeErrorReporter(),
-			ux2.NewTestAnalytics(c),
+			ux.NewTestAnalytics(c),
 			nil,
 			notification.NewNotifier(),
 			&FakeCodeScannerClient{},
@@ -263,7 +263,7 @@ func setupTestScanner(t *testing.T) (*FakeSnykCodeClient, *Scanner) {
 		NewBundler(c, snykCodeMock, NewCodeInstrumentor()),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
 		newTestCodeErrorReporter(),
-		ux2.NewTestAnalytics(c),
+		ux.NewTestAnalytics(c),
 		learnMock,
 		notification.NewNotifier(),
 		&FakeCodeScannerClient{},
@@ -286,7 +286,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 				NewBundler(c, snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				newTestCodeErrorReporter(),
-				ux2.NewTestAnalytics(c),
+				ux.NewTestAnalytics(c),
 				learnMock,
 				notification.NewNotifier(),
 				&FakeCodeScannerClient{},
@@ -316,7 +316,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 				NewBundler(c, snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				newTestCodeErrorReporter(),
-				ux2.NewTestAnalytics(c),
+				ux.NewTestAnalytics(c),
 				learnMock,
 				notification.NewNotifier(),
 				&FakeCodeScannerClient{},
@@ -352,7 +352,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 	t.Run(
 		"should track analytics", func(t *testing.T) {
 			snykCodeMock := &FakeSnykCodeClient{C: c}
-			analytics := ux2.NewTestAnalytics(c)
+			analytics := ux.NewTestAnalytics(c)
 			c := New(
 				NewBundler(c, snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
@@ -372,9 +372,9 @@ func TestUploadAndAnalyze(t *testing.T) {
 
 			assert.Len(t, analytics.GetAnalytics(), 1)
 			assert.Equal(
-				t, ux2.AnalysisIsReadyProperties{
-					AnalysisType:      ux2.CodeSecurity,
-					Result:            ux2.Success,
+				t, ux.AnalysisIsReadyProperties{
+					AnalysisType:      ux.CodeSecurity,
+					Result:            ux.Success,
 					FileCount:         metrics.lastScanFileCount,
 					DurationInSeconds: metrics.lastScanDurationInSeconds,
 				}, analytics.GetAnalytics()[0],
@@ -403,7 +403,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 
 		&snyk_api.FakeApiClient{CodeEnabled: true},
 		newTestCodeErrorReporter(),
-		ux2.NewTestAnalytics(c),
+		ux.NewTestAnalytics(c),
 		learnMock,
 		notification.NewNotifier(),
 		fakeCodeScanner,
@@ -571,7 +571,7 @@ func Test_Scan(t *testing.T) {
 			NewBundler(c, snykCodeMock, NewCodeInstrumentor()),
 			&snyk_api.FakeApiClient{CodeEnabled: false},
 			newTestCodeErrorReporter(),
-			ux2.NewTestAnalytics(c),
+			ux.NewTestAnalytics(c),
 			nil,
 			notification.NewNotifier(),
 			&FakeCodeScannerClient{},
@@ -600,7 +600,7 @@ func Test_Scan(t *testing.T) {
 			NewBundler(c, snykCodeMock, NewCodeInstrumentor()),
 			snykApiMock,
 			newTestCodeErrorReporter(),
-			ux2.NewTestAnalytics(c),
+			ux.NewTestAnalytics(c),
 			learnMock,
 			notification.NewNotifier(),
 			&FakeCodeScannerClient{},
@@ -629,7 +629,7 @@ func Test_Scan(t *testing.T) {
 			NewBundler(c, snykCodeMock, NewCodeInstrumentor()),
 			snykApiMock,
 			newTestCodeErrorReporter(),
-			ux2.NewTestAnalytics(c),
+			ux.NewTestAnalytics(c),
 			learnMock,
 			notification.NewNotifier(),
 			&FakeCodeScannerClient{},
@@ -791,7 +791,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			autofixSetupAndCleanup(t)
 
 			snykCodeMock := &FakeSnykCodeClient{C: c}
-			analytics := ux2.NewTestAnalytics(c)
+			analytics := ux.NewTestAnalytics(c)
 			scanner := New(
 				NewBundler(c, snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
@@ -829,7 +829,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			snykCodeMock := &FakeSnykCodeClient{C: c}
 			snykCodeMock.NoFixSuggestions = true
 
-			analytics := ux2.NewTestAnalytics(c)
+			analytics := ux.NewTestAnalytics(c)
 			scanner := New(
 				NewBundler(c, snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
@@ -864,7 +864,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			getCodeSettings().isAutofixEnabled.Set(true)
 
 			snykCodeMock := &FakeSnykCodeClient{C: c}
-			analytics := ux2.NewTestAnalytics(c)
+			analytics := ux.NewTestAnalytics(c)
 			scanner := New(
 				NewBundler(c, snykCodeMock, NewCodeInstrumentor()),
 				&snyk_api.FakeApiClient{CodeEnabled: true},

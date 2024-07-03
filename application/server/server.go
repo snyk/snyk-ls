@@ -38,7 +38,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
-	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -46,7 +45,9 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -159,7 +160,7 @@ func codeLensHandler() jrpc2.Handler {
 func filterCodeFixCodelens(lenses []sglsp.CodeLens) []sglsp.CodeLens {
 	var filteredLenses []sglsp.CodeLens
 	for _, lense := range lenses {
-		if lense.Command.Command == snyk.CodeFixCommand {
+		if lense.Command.Command == types.CodeFixCommand {
 			continue
 		}
 
@@ -257,22 +258,22 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 				InlineValueProvider: true,
 				ExecuteCommandProvider: &sglsp.ExecuteCommandOptions{
 					Commands: []string{
-						snyk.NavigateToRangeCommand,
-						snyk.WorkspaceScanCommand,
-						snyk.WorkspaceFolderScanCommand,
-						snyk.OpenBrowserCommand,
-						snyk.LoginCommand,
-						snyk.CopyAuthLinkCommand,
-						snyk.LogoutCommand,
-						snyk.TrustWorkspaceFoldersCommand,
-						snyk.OpenLearnLesson,
-						snyk.GetLearnLesson,
-						snyk.GetSettingsSastEnabled,
-						snyk.GetFeatureFlagStatus,
-						snyk.GetActiveUserCommand,
-						snyk.CodeFixCommand,
-						snyk.CodeSubmitFixFeedback,
-						snyk.CodeFixDiffsCommand,
+						types.NavigateToRangeCommand,
+						types.WorkspaceScanCommand,
+						types.WorkspaceFolderScanCommand,
+						types.OpenBrowserCommand,
+						types.LoginCommand,
+						types.CopyAuthLinkCommand,
+						types.LogoutCommand,
+						types.TrustWorkspaceFoldersCommand,
+						types.OpenLearnLesson,
+						types.GetLearnLesson,
+						types.GetSettingsSastEnabled,
+						types.GetFeatureFlagStatus,
+						types.GetActiveUserCommand,
+						types.CodeFixCommand,
+						types.CodeSubmitFixFeedback,
+						types.CodeFixDiffsCommand,
 					},
 				},
 			},
@@ -304,22 +305,22 @@ func handleProtocolVersion(c *config.Config, noti noti.Notifier, ourProtocolVers
 			ourProtocolVersion,
 		)
 		logger.Error().Msg(m)
-		actions := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
+		actions := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
 
-		openBrowserCommandData := snyk.CommandData{
+		openBrowserCommandData := types.CommandData{
 			Title:     "Download manually in browser",
-			CommandId: snyk.OpenBrowserCommand,
+			CommandId: types.OpenBrowserCommand,
 			Arguments: []any{getDownloadURL(c)},
 		}
 
-		actions.Add(snyk.MessageAction(openBrowserCommandData.Title), openBrowserCommandData)
+		actions.Add(types.MessageAction(openBrowserCommandData.Title), openBrowserCommandData)
 		doNothingKey := "Cancel"
 		// if we don't provide a commandId, nothing is done
-		actions.Add(snyk.MessageAction(doNothingKey), snyk.CommandData{Title: doNothingKey})
+		actions.Add(types.MessageAction(doNothingKey), types.CommandData{Title: doNothingKey})
 
-		msg := snyk.ShowMessageRequest{
+		msg := types.ShowMessageRequest{
 			Message: m,
-			Type:    snyk.Error,
+			Type:    types.Error,
 			Actions: actions,
 		}
 		noti.Send(msg)
