@@ -70,12 +70,12 @@ type ossIssue struct {
 	License            string        `json:"license,omitempty"`
 	Language           string        `json:"language,omitempty"`
 	lesson             *learn.Lesson `json:"-"`
-	AppliedPolicyRules []Annotation  `json:"appliedPolicyRules"`
+	AppliedPolicyRules []Annotation  `json:"appliedPolicyRules,omitempty"`
 }
 
 type Annotation struct {
-	Value  string `json:"value"`
-	Reason string `json:"reason"`
+	Value  string `json:"value,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
 
 func (i *ossIssue) ToAppliedPolicyRules() (annotations []snyk.Annotation) {

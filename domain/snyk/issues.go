@@ -164,12 +164,12 @@ type OssIssueData struct {
 	MatchingIssues     []OssIssueData `json:"matchingIssues"`
 	Lesson             string         `json:"lesson,omitempty"`
 	Remediation        string         `json:"remediation"`
-	AppliedPolicyRules []Annotation   `json:"appliedPolicyRules"`
+	AppliedPolicyRules []Annotation   `json:"appliedPolicyRules,omitempty"`
 }
 
 type Annotation struct {
-	Value  string `json:"value"`
-	Reason string `json:"reason"`
+	Value  string `json:"value,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
 
 type Identifiers struct {
