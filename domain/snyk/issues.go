@@ -138,32 +138,38 @@ type MarkerPosition struct {
 }
 
 type OssIssueData struct {
-	Key               string         `json:"key"`
-	Title             string         `json:"title"`
-	Name              string         `json:"name"`
-	LineNumber        int            `json:"lineNumber"`
-	Identifiers       Identifiers    `jsom:"identifiers"`
-	Description       string         `json:"description"`
-	References        []Reference    `json:"references,omitempty"`
-	Version           string         `json:"version"`
-	License           string         `json:"license,omitempty"`
-	PackageManager    string         `json:"packageManager"`
-	PackageName       string         `json:"packageName"`
-	From              []string       `json:"from"`
-	FixedIn           []string       `json:"fixedIn,omitempty"`
-	UpgradePath       []any          `json:"upgradePath,omitempty"`
-	IsUpgradable      bool           `json:"isUpgradable,omitempty"`
-	CVSSv3            string         `json:"CVSSv3,omitempty"`
-	CvssScore         float64        `json:"cvssScore,omitempty"`
-	Exploit           string         `json:"exploit,omitempty"`
-	IsPatchable       bool           `json:"isPatchable"`
-	ProjectName       string         `json:"projectName"`
-	DisplayTargetFile string         `json:"displayTargetFile"`
-	Language          string         `json:"language"`
-	Details           string         `json:"details"`
-	MatchingIssues    []OssIssueData `json:"matchingIssues"`
-	Lesson            string         `json:"lesson,omitempty"`
-	Remediation       string         `json:"remediation"`
+	Key                string         `json:"key"`
+	Title              string         `json:"title"`
+	Name               string         `json:"name"`
+	LineNumber         int            `json:"lineNumber"`
+	Identifiers        Identifiers    `jsom:"identifiers"`
+	Description        string         `json:"description"`
+	References         []Reference    `json:"references,omitempty"`
+	Version            string         `json:"version"`
+	License            string         `json:"license,omitempty"`
+	PackageManager     string         `json:"packageManager"`
+	PackageName        string         `json:"packageName"`
+	From               []string       `json:"from"`
+	FixedIn            []string       `json:"fixedIn,omitempty"`
+	UpgradePath        []any          `json:"upgradePath,omitempty"`
+	IsUpgradable       bool           `json:"isUpgradable,omitempty"`
+	CVSSv3             string         `json:"CVSSv3,omitempty"`
+	CvssScore          float64        `json:"cvssScore,omitempty"`
+	Exploit            string         `json:"exploit,omitempty"`
+	IsPatchable        bool           `json:"isPatchable"`
+	ProjectName        string         `json:"projectName"`
+	DisplayTargetFile  string         `json:"displayTargetFile"`
+	Language           string         `json:"language"`
+	Details            string         `json:"details"`
+	MatchingIssues     []OssIssueData `json:"matchingIssues"`
+	Lesson             string         `json:"lesson,omitempty"`
+	Remediation        string         `json:"remediation"`
+	AppliedPolicyRules []Annotation   `json:"appliedPolicyRules"`
+}
+
+type Annotation struct {
+	Value  string `json:"value"`
+	Reason string `json:"reason"`
 }
 
 type Identifiers struct {
