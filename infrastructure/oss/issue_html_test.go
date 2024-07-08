@@ -199,3 +199,66 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 	assert.False(t, strings.Contains(issueDetailsPanelHtml, "Learn about this vulnerability"))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "...and"))
 }
+
+func Test_OssDetailsPanel_html_withAnnotationsPolicy(t *testing.T) {
+	_ = testutil.UnitTest(t)
+
+	// Arrange
+	issueAdditionalData := snyk.OssIssueData{
+		Title:       "myTitle",
+		Name:        "myIssue",
+		Description: "- list",
+		From:        []string{"1", "2", "3", "4"},
+		AppliedPolicyRules: snyk.AppliedPolicyRules{
+			Annotation: snyk.Annotation{
+				Value:  "This vulnerability was overridden to low severity due to our internal risk assessment that determined it poses minimal risk in our environment.",
+				Reason: "Our application does not use the affected functionality in a way that exposes it to the vulnerability. Therefore, it has a lower priority for fixing compared to other issues.",
+			},
+		},
+	}
+
+	issue := snyk.Issue{
+		ID:       "randomId",
+		Severity: snyk.Low,
+		// OriginalSeverity: snyk.Critical, // Mock original severity for testing
+		AdditionalData: issueAdditionalData,
+	}
+
+	// Act
+	issueDetailsPanelHtml := getDetailsHtml(issue)
+
+	// Assert
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, "User note"))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, "Note reason"))
+}
+
+func Test_OssDetailsPanel_html_withSeverityChangePolicy(t *testing.T) {
+	_ = testutil.UnitTest(t)
+
+	// Arrange
+	issueAdditionalData := snyk.OssIssueData{
+		Title:       "myTitle",
+		Name:        "myIssue",
+		Description: "- list",
+		From:        []string{"1", "2", "3", "4"},
+		AppliedPolicyRules: snyk.AppliedPolicyRules{
+			SeverityChange: snyk.SeverityChange{
+				OriginalSeverity: snyk.Critical.String(),
+				NewSeverity:      snyk.Low.String(),
+				Reason:           "Changing severity to low due to internal risk assessment.",
+			},
+		},
+	}
+
+	issue := snyk.Issue{
+		ID:             "randomId",
+		Severity:       snyk.Low,
+		AdditionalData: issueAdditionalData,
+	}
+
+	// Act
+	issueDetailsPanelHtml := getDetailsHtml(issue)
+
+	// Assert
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, "A policy has affected the severity of this issue. It was originally critical severity"))
+}
