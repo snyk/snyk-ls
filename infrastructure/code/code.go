@@ -309,6 +309,7 @@ func scanBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Scanner, fol
 
 func getDelta(zlog *zerolog.Logger, baseIssueList []snyk.Issue, currentIssueList []snyk.Issue) []snyk.Issue {
 	logger := zlog.With().Str("method", "getDelta").Logger()
+
 	df := delta.NewFinder(
 		delta.WithEnricher(&delta.FindingsEnricher{}),
 		delta.WithMatcher(&delta.CodeMatcher{}),
@@ -322,7 +323,7 @@ func getDelta(zlog *zerolog.Logger, baseIssueList []snyk.Issue, currentIssueList
 	for i := range currentIssueList {
 		currentFindingIdentifiable[i] = &currentIssueList[i]
 	}
-	_, diff, err := df.Find(baseFindingIdentifiable, currentFindingIdentifiable)
+	diff, err := df.FindDiff(baseFindingIdentifiable, currentFindingIdentifiable)
 	if err != nil {
 		logger.Error().Err(err).Msg("couldn't calculate delta")
 		return nil

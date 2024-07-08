@@ -52,13 +52,30 @@ func WithDiffer(differ Differ) func(*Finder) {
 	}
 }
 
-func (f *Finder) Find(baseList, currentList []Identifiable) (enrichedList, deltaList []Identifiable, err error) {
-	if len(baseList) == 0 || len(currentList) == 0 {
-		return nil, nil, errors.New("baselist or currentlist is empty")
+func (f *Finder) Find(baseList, currentList []Identifiable) (enrichedList []Identifiable, err error) {
+	deltaList, err := f.FindDiff(baseList, currentList)
+	if err != nil {
+		return nil, err
+	}
+	// Enrich IsNew property
+	if f.enricher != nil {
+		currentList = f.enricher.EnrichWithIsNew(currentList, deltaList)
+	}
+
+	return currentList, nil
+}
+
+func (f *Finder) FindDiff(baseList, currentList []Identifiable) (deltaList []Identifiable, err error) {
+	if len(currentList) == 0 {
+		return nil, errors.New("currentlist is empty")
+	}
+
+	if len(baseList) == 0 {
+		return currentList, nil
 	}
 
 	if f.differ == nil {
-		return nil, nil, errors.New("findings differ not defined")
+		return nil, errors.New("findings differ not defined")
 	}
 
 	if f.enricher != nil {
@@ -69,7 +86,7 @@ func (f *Finder) Find(baseList, currentList []Identifiable) (enrichedList, delta
 		// Match ids from baseList to currentList if the issue is similar.
 		currentList, err = f.matcher.Match(baseList, currentList)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		// Ensure new findings have ids
 		if f.enricher != nil {
@@ -79,10 +96,5 @@ func (f *Finder) Find(baseList, currentList []Identifiable) (enrichedList, delta
 
 	deltaList = f.differ.Diff(baseList, currentList)
 
-	// Enrich IsNew property
-	if f.enricher != nil {
-		currentList = f.enricher.EnrichWithIsNew(currentList, deltaList)
-	}
-
-	return currentList, deltaList, nil
+	return deltaList, nil
 }

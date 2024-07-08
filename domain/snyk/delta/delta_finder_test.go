@@ -25,14 +25,14 @@ import (
 
 func TestFind_EmptyLists(t *testing.T) {
 	f := NewFinder()
-	_, _, err := f.Find([]Identifiable{}, []Identifiable{})
+	_, err := f.Find([]Identifiable{}, []Identifiable{})
 
-	assert.EqualError(t, err, "baselist or currentlist is empty")
+	assert.EqualError(t, err, "currentlist is empty")
 }
 
 func TestFind_MissingDiffer(t *testing.T) {
 	f := NewFinder(WithEnricher(FindingsEnricher{}))
-	_, _, err := f.Find(
+	_, err := f.Find(
 		[]Identifiable{&mockIdentifiable{globalIdentity: "1"}},
 		[]Identifiable{&mockIdentifiable{globalIdentity: "2"}})
 
@@ -41,7 +41,7 @@ func TestFind_MissingDiffer(t *testing.T) {
 
 func TestFind_OnlyDiffer(t *testing.T) {
 	f := NewFinder(WithDiffer(FindingsDiffer{}))
-	enrichedList, deltaList, err := f.Find(
+	deltaList, err := f.FindDiff(
 		[]Identifiable{&mockIdentifiable{globalIdentity: "1"}},
 		[]Identifiable{
 			&mockIdentifiable{globalIdentity: "1"},
@@ -49,7 +49,6 @@ func TestFind_OnlyDiffer(t *testing.T) {
 		})
 
 	assert.NoError(t, err)
-	assert.Len(t, enrichedList, 2)
 	assert.Len(t, deltaList, 1)
 }
 
@@ -59,7 +58,7 @@ func TestFind_DifferWithEnricher(t *testing.T) {
 		WithDiffer(FindingsDiffer{}),
 	)
 
-	enrichedList, deltaList, err := f.Find(
+	enrichedList, err := f.Find(
 		[]Identifiable{&mockIdentifiable{globalIdentity: "1"}},
 		[]Identifiable{
 			&mockIdentifiable{globalIdentity: "1"},
@@ -68,10 +67,8 @@ func TestFind_DifferWithEnricher(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Len(t, enrichedList, 2)
-	assert.Len(t, deltaList, 1)
 
 	assert.True(t, enrichedList[1].IsNew())
-	assert.Equal(t, enrichedList[1].GetGlobalIdentity(), deltaList[0].GetGlobalIdentity())
 }
 
 func TestFind_DifferWithEnricherWithMatcher(t *testing.T) {
@@ -116,14 +113,13 @@ func TestFind_DifferWithEnricherWithMatcher(t *testing.T) {
 	currentIssueList = append(currentIssueList, newIssue)
 	baseFindingIdentifiable := convertToFindingsIdentifiable(baseIssueList)
 	currentFindingIdentifiable := convertToFindingsIdentifiable(currentIssueList)
-	enrichedList, deltaList, err := f.Find(baseFindingIdentifiable, currentFindingIdentifiable)
+	enrichedList, err := f.Find(baseFindingIdentifiable, currentFindingIdentifiable)
 
 	assert.NoError(t, err)
 	assert.Len(t, enrichedList, 3)
-	assert.Len(t, deltaList, 1)
 
 	assert.True(t, enrichedList[2].IsNew())
-	assert.Equal(t, enrichedList[2].GetGlobalIdentity(), deltaList[0].GetGlobalIdentity())
+	assert.Equal(t, enrichedList[2].GetGlobalIdentity(), currentIssueList[2].GetGlobalIdentity())
 }
 
 func TestFind_DifferWithEnricherWithMatcher_NoNewIssues(t *testing.T) {
@@ -155,11 +151,10 @@ func TestFind_DifferWithEnricherWithMatcher_NoNewIssues(t *testing.T) {
 	}
 
 	baseFindingIdentifiable := convertToFindingsIdentifiable(baseIssueList)
-	enrichedList, deltaList, err := f.Find(baseFindingIdentifiable, baseFindingIdentifiable)
+	enrichedList, err := f.Find(baseFindingIdentifiable, baseFindingIdentifiable)
 
 	assert.NoError(t, err)
 	assert.Len(t, enrichedList, 2)
-	assert.Len(t, deltaList, 0)
 	for _, enriched := range enrichedList {
 		assert.False(t, enriched.IsNew())
 		assert.NotEmpty(t, enriched.GetGlobalIdentity())
