@@ -185,7 +185,6 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 		return []snyk.Issue{}, nil
 	}
 
-	// TODO: Decide what to do regarding getFilesToBeScanned. Method must only be called once
 	filesToBeScanned := sc.getFilesToBeScanned(folderPath)
 	sc.changedFilesMutex.Unlock()
 
@@ -201,7 +200,6 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	}
 	files := fileFilter.FindNonIgnoredFiles()
 	metrics := sc.newMetrics(startTime)
-	logger.Info().Msg("Scanning current branch")
 	var results []snyk.Issue
 	if sc.useIgnoresFlow() {
 		results, err = sc.UploadAndAnalyzeWithIgnores(span.Context(), folderPath, files, filesToBeScanned)
