@@ -375,12 +375,11 @@ func (sc *Scanner) ScanWithDelta(ctx context.Context, path string, folderPath st
 
 func getDelta(zlog *zerolog.Logger, baseIssueList []snyk.Issue, currentIssueList []snyk.Issue) []snyk.Issue {
 	logger := zlog.With().Str("method", "getDelta").Logger()
-	df := &delta.Finder{}
-	fe := &delta.FindingsEnricher{}
-	cim := &snyk.CodeMatcher{}
-	gd := &delta.FindingsDiffer{}
+	df := delta.NewFinder(
+		delta.WithEnricher(&delta.FindingsEnricher{}),
+		delta.WithMatcher(&snyk.CodeMatcher{}),
+		delta.WithDiffer(&delta.FindingsDiffer{}))
 
-	df = df.Init(fe, cim, gd)
 	baseFindingIdentifiable := make([]delta.Identifiable, len(baseIssueList))
 	for i := range baseIssueList {
 		baseFindingIdentifiable[i] = &baseIssueList[i]

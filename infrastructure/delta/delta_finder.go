@@ -26,11 +26,29 @@ type Finder struct {
 	differ   Differ
 }
 
-func (f *Finder) Init(e Enricher, m Matcher, d Differ) *Finder {
-	return &Finder{
-		enricher: e,
-		matcher:  m,
-		differ:   d,
+func NewFinder(options ...func(*Finder)) *Finder {
+	f := &Finder{}
+	for _, option := range options {
+		option(f)
+	}
+	return f
+}
+
+func WithEnricher(enricher Enricher) func(*Finder) {
+	return func(f *Finder) {
+		f.enricher = enricher
+	}
+}
+
+func WithMatcher(matcher Matcher) func(*Finder) {
+	return func(f *Finder) {
+		f.matcher = matcher
+	}
+}
+
+func WithDiffer(differ Differ) func(*Finder) {
+	return func(f *Finder) {
+		f.differ = differ
 	}
 }
 

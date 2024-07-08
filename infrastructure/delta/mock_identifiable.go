@@ -19,11 +19,11 @@ package delta
 type mockIdentifiable struct {
 	globalIdentity string
 	isNew          bool
+	ruleId         string
 }
 
 func (m *mockIdentifiable) RuleId() string {
-	//Not used, but needed for the interface
-	panic("implement me")
+	return m.ruleId
 }
 
 func (m *mockIdentifiable) SetIsNew(isNew bool) {
