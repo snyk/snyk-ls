@@ -23,33 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type MockIdentifiable struct {
-	globalIdentity string
-}
-
-func (m *MockIdentifiable) RuleId() string {
-	//Not used, but needed for the interface
-	panic("implement me")
-}
-
-func (m *MockIdentifiable) SetIsNew(isNew bool) {
-	//Not used, but needed for the interface
-	panic("implement me")
-}
-
-func (m *MockIdentifiable) IsNew() bool {
-	//Not used, but needed for the interface
-	panic("implement me")
-}
-
-func (m *MockIdentifiable) GetGlobalIdentity() string {
-	return m.globalIdentity
-}
-
-func (m *MockIdentifiable) SetGlobalIdentity(id string) {
-	m.globalIdentity = id
-}
-
 func TestFindingsEnricher_EnrichWithId(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -66,8 +39,8 @@ func TestFindingsEnricher_EnrichWithId(t *testing.T) {
 		{
 			name: "List with empty IDs",
 			input: []Identifiable{
-				&MockIdentifiable{globalIdentity: ""},
-				&MockIdentifiable{globalIdentity: ""},
+				&mockIdentifiable{globalIdentity: ""},
+				&mockIdentifiable{globalIdentity: ""},
 			},
 			wantLen:  2,
 			wantFill: true,
@@ -75,9 +48,9 @@ func TestFindingsEnricher_EnrichWithId(t *testing.T) {
 		{
 			name: "List with some filled IDs",
 			input: []Identifiable{
-				&MockIdentifiable{globalIdentity: ""},
-				&MockIdentifiable{globalIdentity: "existing-id"},
-				&MockIdentifiable{globalIdentity: uuid.New().String()},
+				&mockIdentifiable{globalIdentity: ""},
+				&mockIdentifiable{globalIdentity: uuid.New().String()},
+				&mockIdentifiable{globalIdentity: uuid.New().String()},
 			},
 			wantLen:  3,
 			wantFill: true,

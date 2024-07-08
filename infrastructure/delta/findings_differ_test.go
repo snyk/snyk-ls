@@ -33,19 +33,19 @@ func TestFindingsDiffer_Diff(t *testing.T) {
 			name:     "Empty base list",
 			baseList: []Identifiable{},
 			currentList: []Identifiable{
-				&MockIdentifiable{globalIdentity: "issue1"},
-				&MockIdentifiable{globalIdentity: "issue2"},
+				&mockIdentifiable{globalIdentity: "issue1"},
+				&mockIdentifiable{globalIdentity: "issue2"},
 			},
 			expectedDelta: []Identifiable{
-				&MockIdentifiable{globalIdentity: "issue1"},
-				&MockIdentifiable{globalIdentity: "issue2"},
+				&mockIdentifiable{globalIdentity: "issue1"},
+				&mockIdentifiable{globalIdentity: "issue2"},
 			},
 		},
 		{
 			name: "Empty current list",
 			baseList: []Identifiable{
-				&MockIdentifiable{globalIdentity: "issue1"},
-				&MockIdentifiable{globalIdentity: "issue2"},
+				&mockIdentifiable{globalIdentity: "issue1"},
+				&mockIdentifiable{globalIdentity: "issue2"},
 			},
 			currentList:   []Identifiable{},
 			expectedDelta: []Identifiable{},
@@ -53,27 +53,27 @@ func TestFindingsDiffer_Diff(t *testing.T) {
 		{
 			name: "No changes",
 			baseList: []Identifiable{
-				&MockIdentifiable{globalIdentity: "issue1"},
-				&MockIdentifiable{globalIdentity: "issue2"},
+				&mockIdentifiable{globalIdentity: "issue1"},
+				&mockIdentifiable{globalIdentity: "issue2"},
 			},
 			currentList: []Identifiable{
-				&MockIdentifiable{globalIdentity: "issue1"},
-				&MockIdentifiable{globalIdentity: "issue2"},
+				&mockIdentifiable{globalIdentity: "issue1"},
+				&mockIdentifiable{globalIdentity: "issue2"},
 			},
 			expectedDelta: []Identifiable{},
 		},
 		{
 			name: "Added items",
 			baseList: []Identifiable{
-				&MockIdentifiable{globalIdentity: "issue1"},
-				&MockIdentifiable{globalIdentity: "issue2"},
+				&mockIdentifiable{globalIdentity: "issue1"},
+				&mockIdentifiable{globalIdentity: "issue2"},
 			},
 			currentList: []Identifiable{
-				&MockIdentifiable{globalIdentity: "issue1"},
-				&MockIdentifiable{globalIdentity: "issue2"},
-				&MockIdentifiable{globalIdentity: "issue3"},
+				&mockIdentifiable{globalIdentity: "issue1"},
+				&mockIdentifiable{globalIdentity: "issue2"},
+				&mockIdentifiable{globalIdentity: "issue3"},
 			},
-			expectedDelta: []Identifiable{&MockIdentifiable{globalIdentity: "issue3"}},
+			expectedDelta: []Identifiable{&mockIdentifiable{globalIdentity: "issue3"}},
 		},
 	}
 
