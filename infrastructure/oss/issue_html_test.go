@@ -31,7 +31,7 @@ import (
 
 func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	_ = testutil.UnitTest(t)
-	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${nonce}", "${severityIcon}", "${learnIcon}"}
+	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${ideStyle}", "${nonce}"}
 	slices.Sort(expectedVariables)
 
 	issueAdditionalData := snyk.OssIssueData{
@@ -72,8 +72,8 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, issue.ID))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, issueAdditionalData.Title))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, issue.Severity.String()))
-	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issueAdditionalData.From, " > ")))
-	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issue2.From, " > ")))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issueAdditionalData.From, " &gt; ")))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issue2.From, " &gt; ")))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "<li>list</li>"))
 	assert.False(t, strings.Contains(issueDetailsPanelHtml, "Learn about this vulnerability"))
 }
