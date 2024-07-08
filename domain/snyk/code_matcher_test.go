@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// This test is temporarily relying on snyk.Issue struct until the new Local findings model is implemented.
 package snyk
 
 import (
@@ -131,7 +132,7 @@ func convertToFindingsIdentifiable(baseIssueList []Issue) []delta.Identifiable {
 func initDeltaFinder() *delta.Finder {
 	df := &delta.Finder{}
 	fe := &delta.FindingsEnricher{}
-	cim := &CodeIdentityMatcher{}
+	cim := &CodeMatcher{}
 	gd := &delta.FindingsDiffer{}
 	return df.Init(fe, cim, gd)
 }

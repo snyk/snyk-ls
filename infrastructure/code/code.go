@@ -377,7 +377,7 @@ func getDelta(zlog *zerolog.Logger, baseIssueList []snyk.Issue, currentIssueList
 	logger := zlog.With().Str("method", "getDelta").Logger()
 	df := &delta.Finder{}
 	fe := &delta.FindingsEnricher{}
-	cim := &snyk.CodeIdentityMatcher{}
+	cim := &snyk.CodeMatcher{}
 	gd := &delta.FindingsDiffer{}
 
 	df = df.Init(fe, cim, gd)

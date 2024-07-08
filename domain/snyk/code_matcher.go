@@ -26,7 +26,7 @@ import (
 	"strings"
 )
 
-var _ delta.Matcher = (*CodeIdentityMatcher)(nil)
+var _ delta.Matcher = (*CodeMatcher)(nil)
 
 type IssueConfidence struct {
 	BaseUUID           string
@@ -66,10 +66,10 @@ var weights = struct {
 	FileExtensionSimilarity: 0.2,
 }
 
-type CodeIdentityMatcher struct {
+type CodeMatcher struct {
 }
 
-func (_ CodeIdentityMatcher) Match(baseIssueList, currentIssueList []delta.Identifiable) ([]delta.Identifiable, error) {
+func (_ CodeMatcher) Match(baseIssueList, currentIssueList []delta.Identifiable) ([]delta.Identifiable, error) {
 	if len(currentIssueList) == 0 || len(baseIssueList) == 0 {
 		return nil, errors.New("base or current issue list is empty")
 	}
