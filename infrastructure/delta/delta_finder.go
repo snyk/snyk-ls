@@ -39,6 +39,10 @@ func (f *Finder) Find(baseList, currentList []Identifiable) (enrichedList, delta
 		return nil, nil, errors.New("baselist or currentlist is empty")
 	}
 
+	if f.differ == nil {
+		return nil, nil, errors.New("findings differ not defined")
+	}
+
 	if f.enricher != nil {
 		f.enricher.EnrichWithId(baseList)
 	}
@@ -49,15 +53,10 @@ func (f *Finder) Find(baseList, currentList []Identifiable) (enrichedList, delta
 		if err != nil {
 			return nil, nil, err
 		}
-	}
-
-	// Ensure new findings have ids
-	if f.enricher != nil {
-		f.enricher.EnrichWithId(currentList)
-	}
-
-	if f.differ == nil {
-		return nil, nil, errors.New("findings differ not defined")
+		// Ensure new findings have ids
+		if f.enricher != nil {
+			f.enricher.EnrichWithId(currentList)
+		}
 	}
 
 	deltaList = f.differ.Diff(baseList, currentList)
