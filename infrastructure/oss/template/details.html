@@ -19,7 +19,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' ${cspSource}; style-src 'nonce-${nonce}' ${cspSource}; script-src 'nonce-${nonce}';">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self' ${cspSource}; style-src 'self' 'nonce-${nonce}' ${cspSource}; script-src 'nonce-${nonce}' ${cspSource};">
+
   <style nonce="${nonce}">
     .suggestion {
       position: relative;
@@ -62,6 +64,7 @@
       line-height: 2rem;
     }
 
+    /*TODO: move to vscode*/
     .vscode-dark .light-only {
       display: none;
     }
@@ -93,39 +96,104 @@
     }
 
   </style>
+
   ${headerEnd}
+
+  ${ideStyle}
 </head>
+
 <body>
 <div class="suggestion">
   <section class="suggestion--header">
     <div class="severity">
-      <img id="severity-icon" src="${severityIcon}" alt="${severityText}" class="icon"/>
+      {{.SeverityIcon}}
     </div>
-    <div class="suggestion-text">${issueTitle}</div>
-    <div class="identifiers">${identifiers}</div>
-    <div class="learn" id="learn">
-      <img class="icon" src="${learnIcon}" alt="learnIcon" />
-      ${learnLink}
+    <div class="suggestion-text">{{.IssueTitle}}</div>
+    <div class="identifiers">
+      {{.IssueType}}
+      {{if gt (len .CVEs) 0}}
+      <span class="delimiter"> </span>
+      {{range $index, $cve := .CVEs}}
+      <a class="cve styled-link" target="_blank" rel="noopener noreferrer"
+         href="https://cve.mitre.org/cgi-bin/cvename.cgi?name=$cve">{{$cve}}</a>
+      {{if ne $index (idxMinusOne (len $.CVEs))}}<span class="delimiter"></span>{{end}}
+      {{end}}
+      {{end}}
+
+      {{if gt (len .CWEs) 0}}
+      <span class="delimiter"> </span>
+      {{range $index, $cwe := .CWEs}}
+      <a class="cwe styled-link" target="_blank" rel="noopener noreferrer"
+         href="https://cwe.mitre.org/data/definitions/{{trimCWEPrefix $cwe}}.html">{{$cwe}}</a>
+      {{if ne $index (idxMinusOne (len $.CWEs))}}<span class="delimiter"></span>{{end}}
+      {{end}}
+      {{end}}
+
+      {{if gt (len .CvssScore) 0}}
+      <span class="delimiter"> </span>
+      <span>CVSS {{.CvssScore}}</span>
+      {{end}}
+
+      <span class="delimiter"> </span>
+      <a class="styled-link" target="_blank" rel="noopener noreferrer"
+         href="https://snyk.io/vuln/{{.IssueId}}">{{.IssueId}}</a>
     </div>
+    {{ if .LessonUrl }}
+      <div class="learn" id="learn">
+        {{.LessonIcon}}
+        <a class="learn--link" id="learn--link" href="{{.LessonUrl}}">Learn about this vulnerability</a>
+      </div>
+    {{end}}
   </section>
   <section class="delimiter-top summary">
     <div class="summary-item module">
       <div class="label font-light">Vulnerable module</div>
-      <div class="content">${vulnerableModule}</div>
+      <div class="content">{{.VulnerableModule}}</div>
     </div>
-    ${introducedThrough}
+    {{range .IntroducedThroughs}}
+    <div class="summary-item introduced-through">
+      <div class="label font-light">Introduced through</div>
+      <div class="content">
+        <a href="{{.SnykUI}}/test/{{.PackageManager}}">{{.Module}}</a>
+      </div>
+    </div>
+    {{end}}
     <div class="summary-item fixed-in">
       <div class="label font-light">Fixed in</div>
-      <div class="content">${fixedIn}</div>
+      <div class="content">
+        {{ if eq (len .FixedIn) 0 }}
+        Not fixed
+        {{else}}
+        {{.IssueName}}@{{ join ", " .FixedIn }}
+        {{end}}
+      </div>
     </div>
-    ${exploitMaturity}
+    {{ if .ExploitMaturity }}
+    <div class="summary-item maturity">
+      <div class="label font-light">Exploit maturity</div>
+      <div class="content">{{.ExploitMaturity}}</div>
+    </div>
+    {{end}}
   </section>
   <section class="delimiter-top summary">
     <h2>Detailed paths</h2>
-    <div class="detailed-paths">${detailedPaths}</div>
+    <div class="detailed-paths">
+      {{range .DetailedPaths}}
+        <div class="summary-item path">
+          <div class="label font-light">Introduced through</div>
+          <div class="content">{{join " > " .From}}</div>
+        </div>
+        <div class="summary-item remediation">
+          <div class="label font-light">Remediation</div>
+          <div class="content">{{.Remediation}}</div>
+        </div>
+      {{end}}
+    </div>
   </section>
   <section class="delimiter-top">
-    <div id="overview" class="vulnerability-overview">${overview}</div>
+    <div id="overview" class="vulnerability-overview">
+      {{.IssueOverview}}
+    </div>
   </section>
 </div>
 <script nonce="${nonce}">
