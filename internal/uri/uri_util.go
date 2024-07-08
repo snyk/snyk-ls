@@ -72,6 +72,10 @@ func IsDirectory(path string) bool {
 	return stat.IsDir()
 }
 
+func IsDotSnykFile(uri sglsp.DocumentURI) bool {
+	return strings.HasSuffix(string(uri), ".snyk")
+}
+
 // Range gives a position in a document. All attributes are 0-based
 type Range struct {
 	StartLine int
