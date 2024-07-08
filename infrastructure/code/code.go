@@ -277,7 +277,7 @@ func scanBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Scanner, fol
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
 	defer func() {
-		err := os.RemoveAll(folderPath)
+		err = os.RemoveAll(folderPath)
 		logger.Info().Msg("removing base branch tmp dir " + folderPath)
 
 		if err != nil {
