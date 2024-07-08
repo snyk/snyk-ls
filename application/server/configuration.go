@@ -271,7 +271,7 @@ func updateSnykOSSQuickFixCodeActions(c *config.Config, settings lsp.Settings) {
 
 func updateDeltaFindings(c *config.Config, settings lsp.Settings) {
 	enable := true
-	if settings.EnableDeltaFindings == "false" {
+	if settings.EnableDeltaFindings == "" || settings.EnableDeltaFindings == "false" {
 		enable = false
 	}
 

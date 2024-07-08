@@ -133,7 +133,6 @@ func (sc *Scanner) SupportedCommands() []snyk.CommandName {
 }
 
 func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (issues []snyk.Issue, err error) {
-	return sc.ScanWithDelta(ctx, path, folderPath, "master")
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", "code.Scan").Logger()
 	if !c.NonEmptyToken() {
@@ -185,6 +184,8 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 		sc.changedFilesMutex.Unlock()
 		return []snyk.Issue{}, nil
 	}
+
+	// TODO: Decide what to do regarding getFilesToBeScanned. Method must only be called once
 	filesToBeScanned := sc.getFilesToBeScanned(folderPath)
 	sc.changedFilesMutex.Unlock()
 
@@ -200,12 +201,17 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	}
 	files := fileFilter.FindNonIgnoredFiles()
 	metrics := sc.newMetrics(startTime)
-
+	logger.Info().Msg("Scanning current branch")
 	var results []snyk.Issue
 	if sc.useIgnoresFlow() {
 		results, err = sc.UploadAndAnalyzeWithIgnores(span.Context(), folderPath, files, filesToBeScanned)
 	} else {
 		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, filesToBeScanned)
+	}
+
+	if c.IsDeltaFindingsEnabled() {
+		baseScanResults, _ := scanBaseBranch(ctx, logger, sc, folderPath)
+		results = getDelta(c.Logger(), baseScanResults, results)
 	}
 
 	// Populate HTML template
@@ -257,120 +263,50 @@ func cloneBaseBranch(currentRepoPath string, branchName string, logger *zerolog.
 	return tmpDir, nil
 }
 
-func (sc *Scanner) ScanWithDelta(ctx context.Context, path string, folderPath string, mainBranchName string) (issues []snyk.Issue, err error) {
-	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", "code.Scan").Logger()
-	if !c.NonEmptyToken() {
-		logger.Info().Msg("not authenticated, not scanning")
-		return issues, err
-	}
-	sastResponse, err := sc.SnykApiClient.SastSettings()
-
+func scanBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Scanner, folderPath string) ([]snyk.Issue, error) {
+	filesToBeScanned := make(map[string]bool)
+	mainBranchName := "master"
+	folderPath, err := cloneBaseBranch(folderPath, mainBranchName, &logger)
 	if err != nil {
-		logger.Error().Err(err).Msg("couldn't get sast enablement")
-		sc.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{})
-		return issues, errors.New("couldn't get sast enablement")
+		logger.Error().Err(err).Msg("Failed to clone base branch")
+		return []snyk.Issue{}, err
 	}
-
-	if !sc.isSastEnabled(sastResponse) {
-		return issues, errors.New("SAST is not enabled")
-	}
-
-	if sc.isLocalEngineEnabled(sastResponse) {
-		sc.updateCodeApiLocalEngine(sastResponse)
-	}
-	mainPath, err := cloneBaseBranch(folderPath, mainBranchName, &logger)
-	// TODO: Handle cases when mainPath is null by skipping bundling and scanning on base.
-	if err != nil {
-		return issues, err
-	}
-	defer func() {
-		err := os.RemoveAll(mainPath)
-		logger.Info().Msg("removing base branch tmp dir " + mainPath)
-
-		if err != nil {
-			logger.Error().Err(err).Msg("couldn't remove tmp dir " + mainPath)
-		}
-	}()
-
-	sc.changedFilesMutex.Lock()
-	if sc.changedPaths[folderPath] == nil {
-		sc.changedPaths[folderPath] = map[string]bool{}
-	}
-	sc.changedPaths[folderPath][path] = true
-	sc.changedFilesMutex.Unlock()
-
-	// When starting a scan for a folderPath that's already scanned, the new scan will wait for the previous scan
-	// to finish before starting.
-	// When there's already a scan waiting, the function returns immediately with empty results.
-	scanStatus := NewScanStatus()
-	isAlreadyWaiting := sc.waitForScanToFinish(scanStatus, folderPath)
-	if isAlreadyWaiting {
-		return []snyk.Issue{}, nil // Returning an empty slice implies that no vulnerabilities were found
-	}
-	defer func() {
-		sc.scanStatusMutex.Lock()
-		scanStatus.isRunning = false
-		close(scanStatus.finished)
-		sc.scanStatusMutex.Unlock()
-	}()
-
-	// Proceed to scan only if there are any changed paths. This ensures the following race condition coverage:
-	// It could be that one of throttled scans updated the changedPaths set, but the initial scan has picked up it's updated and proceeded with a scan in the meantime.
-	sc.changedFilesMutex.Lock()
-	if len(sc.changedPaths[folderPath]) <= 0 {
-		sc.changedFilesMutex.Unlock()
-		return []snyk.Issue{}, nil
-	}
-
-	// TODO: Decide what to do regarding getFilesToBeScanned. Method must only be called once
-	filesToBeScanned := sc.getFilesToBeScanned(folderPath)
-	mainFilesToBeScanned := make(map[string]bool)
-	sc.changedFilesMutex.Unlock()
 
 	startTime := time.Now()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
-	// Start the scan
-	// Scan for main
-	mainFileFilter, _ := sc.fileFilters.Load(mainPath)
+	defer func() {
+		err := os.RemoveAll(folderPath)
+		logger.Info().Msg("removing base branch tmp dir " + folderPath)
+
+		if err != nil {
+			logger.Error().Err(err).Msg("couldn't remove tmp dir " + folderPath)
+		}
+	}()
+
+	mainFileFilter, _ := sc.fileFilters.Load(folderPath)
 	if mainFileFilter == nil {
-		mainFileFilter = filefilter.NewFileFilter(mainPath, &logger)
-		sc.fileFilters.Store(mainPath, mainFileFilter)
+		mainFileFilter = filefilter.NewFileFilter(folderPath, &logger)
+		sc.fileFilters.Store(folderPath, mainFileFilter)
 	}
 
-	mainFiles := mainFileFilter.FindNonIgnoredFiles()
-	mainMetrics := sc.newMetrics(startTime)
+	files := mainFileFilter.FindNonIgnoredFiles()
+	metrics := sc.newMetrics(startTime)
 	logger.Info().Msg("Scanning base branch")
 
-	baseScanResults, err := sc.UploadAndAnalyze(span.Context(), mainFiles, mainPath, mainMetrics, mainFilesToBeScanned)
-	if baseScanResults == nil {
-		return issues, err
+	var baseScanResults []snyk.Issue
+	if sc.useIgnoresFlow() {
+		baseScanResults, err = sc.UploadAndAnalyzeWithIgnores(span.Context(), folderPath, files, filesToBeScanned)
+	} else {
+		baseScanResults, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, filesToBeScanned)
 	}
 
-	// Scan for current branch
-	fileFilter, _ := sc.fileFilters.Load(folderPath)
-	if fileFilter == nil {
-		fileFilter = filefilter.NewFileFilter(folderPath, &logger)
-		sc.fileFilters.Store(folderPath, fileFilter)
-	}
-	files := fileFilter.FindNonIgnoredFiles()
-	metrics := sc.newMetrics(startTime)
-	logger.Info().Msg("Scanning current branch")
-	currentScanResults, err := sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, filesToBeScanned)
-	if currentScanResults == nil {
-		return issues, err
+	if err != nil {
+		return []snyk.Issue{}, err
 	}
 
-	results := getDelta(c.Logger(), baseScanResults, currentScanResults)
-
-	// Populate HTML template
-	sc.enhanceIssuesDetails(results)
-
-	sc.removeFromCache(filesToBeScanned)
-	sc.addToCache(results)
-	return results, err
+	return baseScanResults, nil
 }
 
 func getDelta(zlog *zerolog.Logger, baseIssueList []snyk.Issue, currentIssueList []snyk.Issue) []snyk.Issue {
