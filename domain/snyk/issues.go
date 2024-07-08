@@ -18,7 +18,7 @@ package snyk
 
 import (
 	"fmt"
-	"github.com/snyk/snyk-ls/infrastructure/delta"
+	"github.com/snyk/snyk-ls/domain/snyk/delta"
 	"net/url"
 	"time"
 

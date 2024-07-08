@@ -21,7 +21,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/rs/zerolog"
-	"github.com/snyk/snyk-ls/infrastructure/delta"
+	"github.com/snyk/snyk-ls/domain/snyk/delta"
 	"os"
 	"sync"
 	"time"
@@ -377,7 +377,7 @@ func getDelta(zlog *zerolog.Logger, baseIssueList []snyk.Issue, currentIssueList
 	logger := zlog.With().Str("method", "getDelta").Logger()
 	df := delta.NewFinder(
 		delta.WithEnricher(&delta.FindingsEnricher{}),
-		delta.WithMatcher(&snyk.CodeMatcher{}),
+		delta.WithMatcher(&delta.CodeMatcher{}),
 		delta.WithDiffer(&delta.FindingsDiffer{}))
 
 	baseFindingIdentifiable := make([]delta.Identifiable, len(baseIssueList))
