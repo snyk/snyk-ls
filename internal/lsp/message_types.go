@@ -550,6 +550,7 @@ type Settings struct {
 	SnykCodeApi                      string               `json:"snykCodeApi,omitempty"`
 	EnableSnykLearnCodeActions       string               `json:"enableSnykLearnCodeActions,omitempty"`
 	EnableSnykOSSQuickFixCodeActions string               `json:"enableSnykOSSQuickFixCodeActions,omitempty"`
+	EnableDeltaFindings              string               `json:"enableDeltaFindings,omitempty"`
 	RequiredProtocolVersion          string               `json:"requiredProtocolVersion,omitempty"`
 }
 
