@@ -33,6 +33,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/internal/logging"
+	storage2 "github.com/snyk/snyk-ls/internal/storage"
 
 	"github.com/adrg/xdg"
 	"github.com/denisbrodbeck/machineid"
@@ -190,7 +191,7 @@ type Config struct {
 	enableSnykLearnCodeActions       bool
 	enableSnykOSSQuickFixCodeActions bool
 	logger                           *zerolog.Logger
-	storage                          StorageWithCallbacks
+	storage                          storage2.StorageWithCallbacks
 	m                                sync.Mutex
 	clientProtocolVersion            string
 }
@@ -250,7 +251,7 @@ func New() *Config {
 func initWorkFlowEngine(c *Config) {
 	conf := configuration.NewInMemory()
 	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
-	c.storage = NewStorage()
+	c.storage = storage2.NewStorage()
 	conf.SetStorage(c.storage)
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
@@ -486,7 +487,7 @@ func (c *Config) SetToken(token string) {
 	}
 
 	if isOauthToken && conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN) != token {
-		c.Logger().Info().Err(err).Msg("setting oauth authentication in GAF")
+		c.Logger().Info().Err(err).Msg("setting oauth2 authentication in GAF")
 		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, token)
 	}
 
@@ -850,14 +851,6 @@ func (c *Config) IsAutoScanEnabled() bool {
 	return c.automaticScanning
 }
 
-func (c *Config) SetAuthenticationMethod(method lsp.AuthenticationMethod) {
-	c.authenticationMethod = method
-}
-
-func (c *Config) AuthenticationMethod() lsp.AuthenticationMethod {
-	return c.authenticationMethod
-}
-
 func (c *Config) Engine() workflow.Engine {
 	return c.engine
 }
@@ -906,19 +899,19 @@ func (c *Config) Logger() *zerolog.Logger {
 func (c *Config) TokenAsOAuthToken() (oauth2.Token, error) {
 	var oauthToken oauth2.Token
 	if _, err := uuid.Parse(c.Token()); err == nil {
-		msg := "creds are legacy, not oauth"
+		msg := "creds are legacy, not oauth2"
 		c.Logger().Trace().Msgf(msg)
 		return oauthToken, fmt.Errorf(msg)
 	}
 	err := json.Unmarshal([]byte(c.Token()), &oauthToken)
 	if err != nil {
-		c.Logger().Trace().Err(err).Msg("unable to unmarshal oauth creds")
+		c.Logger().Trace().Err(err).Msg("unable to unmarshal creds to oauth2 token")
 		return oauthToken, err
 	}
 	return oauthToken, nil
 }
 
-func (c *Config) Storage() StorageWithCallbacks {
+func (c *Config) Storage() storage2.StorageWithCallbacks {
 	return c.storage
 }
 
@@ -950,4 +943,12 @@ func (c *Config) IsAnalyticsPermitted() bool {
 
 func (c *Config) SetClientProtocolVersion(requiredProtocolVersion string) {
 	c.clientProtocolVersion = requiredProtocolVersion
+}
+
+func (c *Config) AuthenticationMethod() lsp.AuthenticationMethod {
+	return c.authenticationMethod
+}
+
+func (c *Config) SetAuthenticationMethod(authMethod lsp.AuthenticationMethod) {
+	c.authenticationMethod = authMethod
 }

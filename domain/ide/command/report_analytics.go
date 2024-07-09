@@ -21,15 +21,15 @@ import (
 	"fmt"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type reportAnalyticsCommand struct {
-	command snyk.CommandData
+	command types.CommandData
 }
 
-func (cmd *reportAnalyticsCommand) Command() snyk.CommandData {
+func (cmd *reportAnalyticsCommand) Command() types.CommandData {
 	return cmd.command
 }
 

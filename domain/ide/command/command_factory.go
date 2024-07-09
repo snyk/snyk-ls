@@ -20,55 +20,57 @@ import (
 	"fmt"
 
 	"github.com/snyk/snyk-ls/application/config"
-	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	noti "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // CreateFromCommandData gets a command based on the given parameters that can be passed to the CommandService
 // nolint: gocyclo, nolintlint // this is a factory, it's ok to have high cyclomatic complexity here
-func CreateFromCommandData(c *config.Config, commandData snyk.CommandData, srv lsp.Server, authService snyk.AuthenticationService, learnService learn.Service, notifier noti.Notifier, issueProvider snyk.IssueProvider, codeApiClient SnykCodeHttpClient, codeScanner *code.Scanner) (snyk.Command, error) {
+func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv lsp.Server, authService authentication.AuthenticationService, learnService learn.Service, notifier noti.Notifier, issueProvider snyk.IssueProvider, codeApiClient SnykCodeHttpClient, codeScanner *code.Scanner) (types.Command, error) {
 	httpClient := c.Engine().GetNetworkAccess().GetHttpClient
 
 	switch commandData.CommandId {
-	case snyk.NavigateToRangeCommand:
+	case types.NavigateToRangeCommand:
 		return &navigateToRangeCommand{command: commandData, srv: srv, logger: c.Logger()}, nil
-	case snyk.WorkspaceScanCommand:
+	case types.WorkspaceScanCommand:
 		return &workspaceScanCommand{command: commandData, srv: srv}, nil
-	case snyk.WorkspaceFolderScanCommand:
+	case types.WorkspaceFolderScanCommand:
 		return &workspaceFolderScanCommand{command: commandData, srv: srv, logger: c.Logger()}, nil
-	case snyk.OpenBrowserCommand:
+	case types.OpenBrowserCommand:
 		return &openBrowserCommand{command: commandData, logger: c.Logger()}, nil
-	case snyk.LoginCommand:
+	case types.LoginCommand:
 		return &loginCommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger()}, nil
-	case snyk.CopyAuthLinkCommand:
+	case types.CopyAuthLinkCommand:
 		return &copyAuthLinkCommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger()}, nil
-	case snyk.LogoutCommand:
+	case types.LogoutCommand:
 		return &logoutCommand{command: commandData, authService: authService, logger: c.Logger()}, nil
-	case snyk.TrustWorkspaceFoldersCommand:
+	case types.TrustWorkspaceFoldersCommand:
 		return &trustWorkspaceFoldersCommand{command: commandData, notifier: notifier, logger: c.Logger()}, nil
-	case snyk.GetLearnLesson:
+	case types.GetLearnLesson:
 		return &getLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
-	case snyk.OpenLearnLesson:
+	case types.OpenLearnLesson:
 		return &openLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
-	case snyk.GetSettingsSastEnabled:
+	case types.GetSettingsSastEnabled:
 		apiClient := snyk_api.NewSnykApiClient(c, httpClient)
 		return &sastEnabled{command: commandData, apiClient: apiClient, logger: c.Logger()}, nil
-	case snyk.GetFeatureFlagStatus:
+	case types.GetFeatureFlagStatus:
 		apiClient := snyk_api.NewSnykApiClient(c, httpClient)
 		return &featureFlagStatus{command: commandData, apiClient: apiClient}, nil
-	case snyk.GetActiveUserCommand:
+	case types.GetActiveUserCommand:
 		return &getActiveUser{command: commandData, authService: authService, notifier: notifier}, nil
-	case snyk.ReportAnalyticsCommand:
+	case types.ReportAnalyticsCommand:
 		return &reportAnalyticsCommand{command: commandData}, nil
-	case snyk.CodeFixCommand:
+	case types.CodeFixCommand:
 		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier, logger: c.Logger()}, nil
-	case snyk.CodeSubmitFixFeedback:
+	case types.CodeSubmitFixFeedback:
 		return &codeFixFeedback{command: commandData, apiClient: codeApiClient}, nil
-	case snyk.CodeFixDiffsCommand:
+	case types.CodeFixDiffsCommand:
 		return &codeFixDiffs{
 			command:       commandData,
 			codeScanner:   codeScanner,

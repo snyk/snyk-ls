@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 
 	"github.com/snyk/snyk-ls/application/config"

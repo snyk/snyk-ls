@@ -20,16 +20,16 @@ import (
 	"context"
 
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type workspaceScanCommand struct {
-	command snyk.CommandData
+	command types.CommandData
 	srv     lsp.Server
 }
 
-func (cmd *workspaceScanCommand) Command() snyk.CommandData {
+func (cmd *workspaceScanCommand) Command() types.CommandData {
 	return cmd.command
 }
 

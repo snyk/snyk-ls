@@ -17,9 +17,13 @@
 package cli
 
 import (
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/lsp"
@@ -27,6 +31,17 @@ import (
 )
 
 func TestAddConfigValuesToEnv(t *testing.T) {
+	t.Run("Adds legacy token to env", func(t *testing.T) {
+		testutil.UnitTest(t)
+		c := config.CurrentConfig()
+		c.SetAuthenticationMethod(lsp.TokenAuthentication)
+
+		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
+
+		token := c.Token()
+		assert.Contains(t, updatedEnv, TokenEnvVar+"="+token)
+	})
+
 	t.Run("Adds values to env", func(t *testing.T) {
 		const expectedIntegrationName = "ECLIPSE"
 		const expectedIntegrationVersion = "20230606.182718"
@@ -41,11 +56,22 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		c.SetIntegrationVersion(expectedIntegrationVersion)
 		c.SetIdeVersion(expectedIdeVersion)
 		c.SetIdeName(expectedIdeName)
+		s := oauth2.Token{
+			AccessToken:  "test",
+			TokenType:    "test",
+			RefreshToken: "test",
+			Expiry:       time.Time{},
+		}
+		marshal, err := json.Marshal(s)
+		require.NoError(t, err)
+		c.SetToken(string(marshal))
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
 		assert.Contains(t, updatedEnv, ApiEnvVar+"=https://app.snyk.io/api")
-		assert.Contains(t, updatedEnv, TokenEnvVar+"="+c.Token())
+		token, err := c.TokenAsOAuthToken()
+		require.NoError(t, err)
+		assert.Contains(t, updatedEnv, SnykOauthTokenEnvVar+"="+token.AccessToken)
 		assert.Contains(t, updatedEnv, IntegrationNameEnvVarKey+"="+expectedIntegrationName)
 		assert.Contains(t, updatedEnv, IntegrationVersionEnvVarKey+"="+expectedIntegrationVersion)
 		assert.Contains(t, updatedEnv, IntegrationEnvironmentEnvVarKey+"="+expectedIdeName)
@@ -55,7 +81,6 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 	t.Run("Removes existing snyk token env variables", func(t *testing.T) {
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
-		c.SetAuthenticationMethod(lsp.OAuthAuthentication)
 		c.SetToken("{\"access_token\": \"testToken\"}")
 		tokenVar := TokenEnvVar + "={asdf}"
 		inputEnv := []string{tokenVar}
@@ -67,10 +92,9 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		assert.Contains(t, updatedEnv, SnykOauthTokenEnvVar+"="+token.AccessToken)
 		assert.NotContains(t, updatedEnv, tokenVar)
 	})
-	t.Run("Removes existing oauth env variables", func(t *testing.T) {
+	t.Run("Removes existing authentication env variables", func(t *testing.T) {
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
-		c.SetAuthenticationMethod(lsp.TokenAuthentication)
 		c.SetToken("testToken")
 		oauthVar := SnykOauthTokenEnvVar + "={asdf}"
 		inputEnv := []string{oauthVar}
@@ -83,7 +107,6 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 	t.Run("Adds Snyk Token to env", func(t *testing.T) {
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
-		c.SetAuthenticationMethod(lsp.TokenAuthentication)
 		c.SetToken("testToken")
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
@@ -94,7 +117,6 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 	t.Run("Adds OAuth Token to env", func(t *testing.T) {
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
-		c.SetAuthenticationMethod(lsp.OAuthAuthentication)
 		c.SetToken("{\"access_token\": \"testToken\"}")
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)

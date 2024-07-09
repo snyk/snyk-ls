@@ -29,6 +29,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -105,7 +106,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 func Test_initializeHandler_shouldCallHandleUntrustedFolders(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	_, err := loc.Client.Call(context.Background(), "initialize", lsp.InitializeParams{

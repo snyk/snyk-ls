@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -86,36 +87,36 @@ func Test_autofixFunc(t *testing.T) {
 	t.Run("Shows success message when fix provided", func(t *testing.T) {
 		fn := issueEnhancer.autofixFunc(context.Background(), FakeIssue, bundleHash)
 		fn()
-		var feedbackMessageReq snyk.ShowMessageRequest
+		var feedbackMessageReq types.ShowMessageRequest
 		assert.Eventually(t, func() bool {
 			messages := mockNotifier.SentMessages()
 			if messages == nil || len(messages) < 2 {
 				return false
 			}
 			for _, message := range messages {
-				if _, ok := message.(snyk.ShowMessageRequest); ok {
-					feedbackMessageReq = message.(snyk.ShowMessageRequest)
+				if _, ok := message.(types.ShowMessageRequest); ok {
+					feedbackMessageReq = message.(types.ShowMessageRequest)
 					break
 				}
 			}
-			return snyk.Info == feedbackMessageReq.Type &&
+			return types.Info == feedbackMessageReq.Type &&
 				"Congratulations! 🎉 You’ve just fixed this SNYK-123 issue. Was this fix helpful?" == feedbackMessageReq.Message
 		}, 10*time.Second, 1*time.Second)
 
 		// Compare button action commands
-		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
-		commandData1 := snyk.CommandData{
-			Title:     snyk.CodeSubmitFixFeedback,
-			CommandId: snyk.CodeSubmitFixFeedback,
+		actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
+		commandData1 := types.CommandData{
+			Title:     types.CodeSubmitFixFeedback,
+			CommandId: types.CodeSubmitFixFeedback,
 			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", true},
 		}
-		commandData2 := snyk.CommandData{
-			Title:     snyk.CodeSubmitFixFeedback,
-			CommandId: snyk.CodeSubmitFixFeedback,
+		commandData2 := types.CommandData{
+			Title:     types.CodeSubmitFixFeedback,
+			CommandId: types.CodeSubmitFixFeedback,
 			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", false},
 		}
-		positiveFeedback := snyk.MessageAction("👍")
-		negativeFeedback := snyk.MessageAction("👎")
+		positiveFeedback := types.MessageAction("👍")
+		negativeFeedback := types.MessageAction("👎")
 		actionCommandMap.Add(positiveFeedback, commandData1)
 		actionCommandMap.Add(negativeFeedback, commandData2)
 
@@ -134,36 +135,36 @@ func Test_autofixFunc(t *testing.T) {
 		fn := issueEnhancer.autofixFunc(context.Background(), fakeTestIssue, bundleHash)
 		fn()
 
-		var feedbackMessageReq snyk.ShowMessageRequest
+		var feedbackMessageReq types.ShowMessageRequest
 		assert.Eventually(t, func() bool {
 			messages := mockNotifier.SentMessages()
 			if messages == nil || len(messages) < 2 {
 				return false
 			}
 			for _, message := range messages {
-				if _, ok := message.(snyk.ShowMessageRequest); ok {
-					feedbackMessageReq = message.(snyk.ShowMessageRequest)
+				if _, ok := message.(types.ShowMessageRequest); ok {
+					feedbackMessageReq = message.(types.ShowMessageRequest)
 					break
 				}
 			}
-			return snyk.Info == feedbackMessageReq.Type &&
+			return types.Info == feedbackMessageReq.Type &&
 				"Congratulations! 🎉 You’ve just fixed this SNYK-123 issue. Was this fix helpful?" == feedbackMessageReq.Message
 		}, 10*time.Second, 1*time.Second)
 
 		// Compare button action commands
-		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
-		commandData1 := snyk.CommandData{
-			Title:     snyk.CodeSubmitFixFeedback,
-			CommandId: snyk.CodeSubmitFixFeedback,
+		actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
+		commandData1 := types.CommandData{
+			Title:     types.CodeSubmitFixFeedback,
+			CommandId: types.CodeSubmitFixFeedback,
 			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", true},
 		}
-		commandData2 := snyk.CommandData{
-			Title:     snyk.CodeSubmitFixFeedback,
-			CommandId: snyk.CodeSubmitFixFeedback,
+		commandData2 := types.CommandData{
+			Title:     types.CodeSubmitFixFeedback,
+			CommandId: types.CodeSubmitFixFeedback,
 			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", false},
 		}
-		positiveFeedback := snyk.MessageAction("👍")
-		negativeFeedback := snyk.MessageAction("👎")
+		positiveFeedback := types.MessageAction("👍")
+		negativeFeedback := types.MessageAction("👎")
 		actionCommandMap.Add(positiveFeedback, commandData1)
 		actionCommandMap.Add(negativeFeedback, commandData2)
 
@@ -216,7 +217,7 @@ func Test_addIssueActions(t *testing.T) {
 				Product:          product.ProductCode,
 				IssueType:        snyk.CodeQualityIssue,
 				Message:          "This is a dummy error (severity error)",
-				CodelensCommands: []snyk.CommandData{FakeCommand},
+				CodelensCommands: []types.CommandData{FakeCommand},
 				CodeActions:      []snyk.CodeAction{FakeCodeAction},
 				IsIgnored:        isIgnored,
 				AdditionalData: snyk.CodeIssueData{

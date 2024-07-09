@@ -31,13 +31,13 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/snyk/snyk-ls/application/config"
-	noti "github.com/snyk/snyk-ls/domain/ide/notification"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	"github.com/snyk/snyk-ls/domain/observability/performance"
-	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
+	noti "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/scans"
@@ -63,7 +63,7 @@ var (
 type CLIScanner struct {
 	instrumentor            performance.Instrumentor
 	errorReporter           error_reporting.ErrorReporter
-	analytics               ux2.Analytics
+	analytics               ux.Analytics
 	cli                     cli.Executor
 	mutex                   *sync.Mutex
 	packageScanMutex        *sync.Mutex
@@ -80,7 +80,7 @@ type CLIScanner struct {
 	config                  *config.Config
 }
 
-func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux2.Analytics, cli cli.Executor, learnService learn.Service, notifier noti.Notifier) snyk.ProductScanner {
+func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics, cli cli.Executor, learnService learn.Service, notifier noti.Notifier) snyk.ProductScanner {
 	scanner := CLIScanner{
 		instrumentor:            instrumentor,
 		errorReporter:           errorReporter,
@@ -378,14 +378,14 @@ func (cliScanner *CLIScanner) retrieveIssues(
 }
 
 func (cliScanner *CLIScanner) trackResult(success bool) {
-	var result ux2.Result
+	var result ux.Result
 	if success {
-		result = ux2.Success
+		result = ux.Success
 	} else {
-		result = ux2.Error
+		result = ux.Error
 	}
-	cliScanner.analytics.AnalysisIsReady(ux2.AnalysisIsReadyProperties{
-		AnalysisType: ux2.OpenSource,
+	cliScanner.analytics.AnalysisIsReady(ux.AnalysisIsReadyProperties{
+		AnalysisType: ux.OpenSource,
 		Result:       result,
 	})
 }
@@ -418,8 +418,8 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path stri
 			}
 
 			cliScanner.analytics.AnalysisIsTriggered(
-				ux2.AnalysisIsTriggeredProperties{
-					AnalysisType:    []ux2.AnalysisType{ux2.OpenSource},
+				ux.AnalysisIsTriggeredProperties{
+					AnalysisType:    []ux.AnalysisType{ux.OpenSource},
 					TriggeredByUser: false,
 				},
 			)

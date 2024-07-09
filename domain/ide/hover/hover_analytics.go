@@ -17,8 +17,8 @@
 package hover
 
 import (
-	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 func NewIssueHoverIsDisplayedProperties(issue snyk.Issue) ux.IssueHoverIsDisplayedProperties {

@@ -19,24 +19,25 @@ package command
 import (
 	"context"
 
-	noti "github.com/snyk/snyk-ls/domain/ide/notification"
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	noti "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// oauthRefreshCommand is a command that refreshes the oauth token
+// oauthRefreshCommand is a command that refreshes the authentication token
 // This is needed because the token is only valid for a certain period of time
 // For doing this we call the whoami workflow that will refresh the token automatically
 type getActiveUser struct {
-	command     snyk.CommandData
-	authService snyk.AuthenticationService
+	command     types.CommandData
+	authService authentication.AuthenticationService
 	notifier    noti.Notifier
 }
 
-func (cmd *getActiveUser) Command() snyk.CommandData {
+func (cmd *getActiveUser) Command() types.CommandData {
 	return cmd.command
 }
 
 func (cmd *getActiveUser) Execute(ctx context.Context) (any, error) {
-	user, err := snyk.GetActiveUser()
+	user, err := authentication.GetActiveUser()
 	return user, err
 }

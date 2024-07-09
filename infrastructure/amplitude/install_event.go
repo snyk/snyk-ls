@@ -21,7 +21,7 @@ import (
 	"path/filepath"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 const (

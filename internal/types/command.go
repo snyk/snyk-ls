@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package snyk
+package types
 
 import (
 	"context"

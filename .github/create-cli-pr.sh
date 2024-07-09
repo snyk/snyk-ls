@@ -28,7 +28,8 @@ BODY=$(printf "## Changes since last integration of Language Server\n\n\`\`\`\n%
 BRANCH=feat/automatic-upgrade-of-ls
 
 pushd $CLI_DIR
-  git checkout $BRANCH || git checkout -b $BRANCH
+  git checkout -B $BRANCH
+  git rebase --ignore-whitespace main
 
   UPGRADE=$(go run scripts/upgrade-snyk-go-dependencies.go --name=snyk-ls)
   LS_VERSION=$(echo $UPGRADE | sed 's/.*Sha: \(.*\) URL.*/\1/')

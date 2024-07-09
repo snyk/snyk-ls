@@ -25,7 +25,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 const (
@@ -46,6 +45,7 @@ const (
 func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) []string {
 	var updatedEnv []string
 	currentConfig := config.CurrentConfig()
+	logger := currentConfig.Logger().With().Str("method", "AppendCliEnvironmentVariables").Logger()
 
 	// remove any existing env vars that we are going to set
 	valuesToRemove := map[string]bool{
@@ -65,21 +65,25 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) []stri
 		updatedEnv = append(updatedEnv, s)
 	}
 
-	if appendToken {
-		// there can only be one - highlander principle
-		if currentConfig.AuthenticationMethod() == lsp.OAuthAuthentication {
-			oAuthToken, err := currentConfig.TokenAsOAuthToken()
-			if err == nil && len(oAuthToken.AccessToken) > 0 {
-				updatedEnv = append(updatedEnv, SnykOauthTokenEnvVar+"="+oAuthToken.AccessToken)
-			}
+	if appendToken && currentConfig.NonEmptyToken() {
+		// default to authentication, if not there, try to set the api key
+		oAuthToken, err := currentConfig.TokenAsOAuthToken()
+		if err == nil && len(oAuthToken.AccessToken) > 0 {
+			logger.Debug().Msg("using oauth2 authentication")
+			updatedEnv = append(updatedEnv, SnykOauthTokenEnvVar+"="+oAuthToken.AccessToken)
 		} else {
+			// fallback to token if existent
+			logger.Debug().Msg("falling back to API key authentication")
 			updatedEnv = append(updatedEnv, TokenEnvVar+"="+currentConfig.Token())
 		}
 	}
+
 	if currentConfig.SnykApi() != "" {
+		logger.Debug().Msgf("adding endpoint: %s", currentConfig.SnykApi())
 		updatedEnv = append(updatedEnv, ApiEnvVar+"="+currentConfig.SnykApi())
 	}
 	if !currentConfig.IsTelemetryEnabled() || !currentConfig.IsAnalyticsPermitted() {
+		logger.Debug().Msgf("disabling amplitude")
 		updatedEnv = append(updatedEnv, DisableAnalyticsEnvVar+"=1")
 	}
 
@@ -91,6 +95,7 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) []stri
 	}
 
 	if currentConfig.Logger().GetLevel() == zerolog.TraceLevel {
+		logger.Trace().Msgf("setting log-level to trace")
 		updatedEnv = append(updatedEnv, "SNYK_LOG_LEVEL=trace")
 	}
 

@@ -17,34 +17,34 @@
 package code
 
 import (
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/data_structure"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 const codeDisabledInOrganisationMessageText = "It looks like your organization has disabled Snyk Code. " +
 	"You can easily enable it by clicking on 'Enable Snyk Code'. " +
 	"This will open your organization settings in your browser."
 
-const enableSnykCodeMessageActionItemTitle snyk.MessageAction = "Enable Snyk Code"
-const closeMessageActionItemTitle snyk.MessageAction = "Close"
+const enableSnykCodeMessageActionItemTitle types.MessageAction = "Enable Snyk Code"
+const closeMessageActionItemTitle types.MessageAction = "Close"
 
 func (sc *Scanner) isSastEnabled(sastResponse snyk_api.SastResponse) bool {
 	if !sastResponse.SastEnabled {
 		// this is processed in the listener registered to translate into the right client protocol
-		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
-		commandData := snyk.CommandData{
-			Title:     snyk.OpenBrowserCommand,
-			CommandId: snyk.OpenBrowserCommand,
+		actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
+		commandData := types.CommandData{
+			Title:     types.OpenBrowserCommand,
+			CommandId: types.OpenBrowserCommand,
 			Arguments: []any{getCodeEnablementUrl()},
 		}
 
 		actionCommandMap.Add(enableSnykCodeMessageActionItemTitle, commandData)
-		actionCommandMap.Add(closeMessageActionItemTitle, snyk.CommandData{})
+		actionCommandMap.Add(closeMessageActionItemTitle, types.CommandData{})
 
-		sc.notifier.Send(snyk.ShowMessageRequest{
+		sc.notifier.Send(types.ShowMessageRequest{
 			Message: codeDisabledInOrganisationMessageText,
-			Type:    snyk.Warning,
+			Type:    types.Warning,
 			Actions: actionCommandMap,
 		})
 		return false

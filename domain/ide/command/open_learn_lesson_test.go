@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 //goland:noinspection GoRedundantConversion because a json unmarshal would produce a float64, not an int8
@@ -44,9 +45,9 @@ func Test_openLearnLesson_Execute(t *testing.T) {
 	rule := "javascript%2Fsqlinjection"
 	cwes := "CWE-89,CWE-ZZ"
 	cves := "CVE-2020-1234"
-	data := snyk.CommandData{
-		Title:     snyk.OpenLearnLesson,
-		CommandId: snyk.OpenLearnLesson,
+	data := types.CommandData{
+		Title:     types.OpenLearnLesson,
+		CommandId: types.OpenLearnLesson,
 		Arguments: []any{rule, eco, cwes, cves, float64(snyk.DependencyVulnerability)},
 	}
 	mockService := mock_learn.NewMockService(ctrl)

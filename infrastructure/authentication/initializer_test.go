@@ -1,5 +1,5 @@
 /*
- * © 2022-2023 Snyk Limited
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package auth
+package authentication
 
 import (
 	"testing"
@@ -22,10 +22,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	errorreporting "github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
+	errorreporting "github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	ux2 "github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
@@ -41,9 +40,10 @@ func getAutoAuthenticationTest(autoAuthentication bool, expectError bool) func(t
 		c.SetAutomaticAuthentication(autoAuthentication)
 		analytics := ux2.NewTestAnalytics(c)
 
-		provider := snyk.NewFakeCliAuthenticationProvider(c)
+		provider := NewFakeCliAuthenticationProvider(c)
+		providers := []AuthenticationProvider{provider}
 		notifier := notification.NewNotifier()
-		authenticator := snyk.NewAuthenticationService(c, provider, analytics, errorreporting.NewTestErrorReporter(), notifier)
+		authenticator := NewAuthenticationService(c, providers, analytics, errorreporting.NewTestErrorReporter(), notifier)
 		initializer := NewInitializer(c, authenticator, errorreporting.NewTestErrorReporter(), analytics, notifier)
 
 		// Act

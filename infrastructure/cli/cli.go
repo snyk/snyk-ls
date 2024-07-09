@@ -27,29 +27,26 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/application/config"
-	noti "github.com/snyk/snyk-ls/domain/ide/notification"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	"github.com/snyk/snyk-ls/domain/observability/ux"
-	"github.com/snyk/snyk-ls/domain/snyk"
+	noti "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 type SnykCli struct {
-	authenticationService snyk.AuthenticationService
-	errorReporter         error_reporting.ErrorReporter
-	analytics             ux.Analytics
-	semaphore             chan int
-	cliTimeout            time.Duration
-	notifier              noti.Notifier
-	c                     *config.Config
+	errorReporter error_reporting.ErrorReporter
+	analytics     ux.Analytics
+	semaphore     chan int
+	cliTimeout    time.Duration
+	notifier      noti.Notifier
+	c             *config.Config
 }
 
 var Mutex = &sync.Mutex{}
 
-func NewExecutor(c *config.Config, authenticationService snyk.AuthenticationService, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics, notifier noti.Notifier) Executor {
+func NewExecutor(c *config.Config, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics, notifier noti.Notifier) Executor {
 	concurrencyLimit := 2
 
 	return &SnykCli{
-		authenticationService,
 		errorReporter,
 		analytics,
 		make(chan int, concurrencyLimit),
@@ -98,7 +95,7 @@ func (c SnykCli) getCommand(cmd []string, workingDir string, ctx context.Context
 	}
 	command := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
 	command.Dir = workingDir
-	cliEnv := AppendCliEnvironmentVariables(os.Environ(), true)
+	cliEnv := AppendCliEnvironmentVariables(os.Environ(), c.c.NonEmptyToken())
 	command.Env = cliEnv
 	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Args", command.Args).Send()
 	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Env", command.Env).Send()

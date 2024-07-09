@@ -5,9 +5,10 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/stretchr/testify/assert"
 )
 
 func Test_ExtensionEntryPoint(t *testing.T) {

@@ -19,6 +19,7 @@ package code
 import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+
 	codeClientScan "github.com/snyk/code-client-go/scan"
 
 	"github.com/snyk/snyk-ls/internal/lsp"
