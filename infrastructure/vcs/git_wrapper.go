@@ -18,6 +18,7 @@ package vcs
 
 import (
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 )
 
 var _ GitOps = (*GitWrapper)(nil)
@@ -25,6 +26,7 @@ var _ GitOps = (*GitWrapper)(nil)
 type GitOps interface {
 	PlainOpen(path string) (*git.Repository, error)
 	PlainClone(path string, bare bool, options *git.CloneOptions) (*git.Repository, error)
+	Head(repo *git.Repository) (*plumbing.Reference, error)
 }
 
 type GitWrapper struct {
@@ -36,4 +38,8 @@ func (g *GitWrapper) PlainOpen(path string) (*git.Repository, error) {
 
 func (g *GitWrapper) PlainClone(path string, bare bool, options *git.CloneOptions) (*git.Repository, error) {
 	return git.PlainClone(path, bare, options)
+}
+
+func (g *GitWrapper) Head(repo *git.Repository) (*plumbing.Reference, error) {
+	return repo.Head()
 }

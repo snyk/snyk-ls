@@ -20,46 +20,37 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/rs/zerolog"
-	"os"
 )
 
-func Clone(repoPath string, branchName string, logger *zerolog.Logger, gitOps GitOps) (string, error) {
-	tmpDir, err := os.MkdirTemp("", "snyk_tmp_repo")
-	logger.Info().Msg("Creating tmp directory for base branch")
-
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to create tmp directory for base branch")
-		return "", err
-	}
-
+func Clone(repoPath string, destinationPath string, branchName string, logger *zerolog.Logger, gitOps GitOps) error {
 	baseBranchName := plumbing.NewBranchReferenceName(branchName)
 	currentRepo, err := gitOps.PlainOpen(repoPath)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to open current repo in go-git " + repoPath)
-		return "", err
+		return err
 	}
 
-	currentRepoBranch, err := currentRepo.Head()
+	currentRepoBranch, err := gitOps.Head(currentRepo)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to get HEAD for " + repoPath)
-		return "", err
+		return err
 	}
 
 	if currentRepoBranch.Name() == baseBranchName {
 		logger.Info().Msg("Current branch is the same as base. Skipping cloning")
-		return "", nil
+		return nil
 	}
 
-	_, err = gitOps.PlainClone(tmpDir, false, &git.CloneOptions{
+	_, err = gitOps.PlainClone(destinationPath, false, &git.CloneOptions{
 		URL:           repoPath,
 		ReferenceName: baseBranchName,
 		SingleBranch:  true,
 	})
 
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to clone base in temp repo with go-git " + tmpDir)
-		return "", err
+		logger.Error().Err(err).Msg("Failed to clone base in temp repo with go-git " + destinationPath)
+		return err
 	}
 
-	return tmpDir, nil
+	return nil
 }

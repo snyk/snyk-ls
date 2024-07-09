@@ -227,27 +227,36 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath string, logger ze
 
 func scanBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Scanner, folderPath string) ([]snyk.Issue, error) {
 	mainBranchName := getBaseBranchName()
+	destinationPath, err := os.MkdirTemp("", "snyk_tmp_repo")
+	logger.Info().Msg("Creating tmp directory for base branch")
+
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to create tmp directory for base branch")
+		return []snyk.Issue{}, err
+	}
+
 	gw := &vcs.GitWrapper{}
-	folderPath, err := vcs.Clone(folderPath, mainBranchName, &logger, gw)
+	err = vcs.Clone(folderPath, destinationPath, mainBranchName, &logger, gw)
+
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to clone base branch")
 		return []snyk.Issue{}, err
 	}
 
 	defer func() {
-		if folderPath == "" {
+		if destinationPath == "" {
 			return
 		}
-		err = os.RemoveAll(folderPath)
-		logger.Info().Msg("removing base branch tmp dir " + folderPath)
+		err = os.RemoveAll(destinationPath)
+		logger.Info().Msg("removing base branch tmp dir " + destinationPath)
 
 		if err != nil {
-			logger.Error().Err(err).Msg("couldn't remove tmp dir " + folderPath)
+			logger.Error().Err(err).Msg("couldn't remove tmp dir " + destinationPath)
 		}
 	}()
 
 	filesToBeScanned := make(map[string]bool)
-	results, err := internalScan(ctx, sc, folderPath, logger, err, filesToBeScanned)
+	results, err := internalScan(ctx, sc, destinationPath, logger, err, filesToBeScanned)
 
 	if err != nil {
 		return []snyk.Issue{}, err
