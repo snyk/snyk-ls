@@ -136,6 +136,10 @@ func writeSettings(c *config.Config, settings lsp.Settings, initialize bool) {
 }
 
 func updateAuthenticationMethod(c *config.Config, settings lsp.Settings) {
+	if lsp.EmptyAuthenticationMethod == settings.AuthenticationMethod {
+		return
+	}
+
 	c.SetAuthenticationMethod(settings.AuthenticationMethod)
 	di.AuthenticationService().ConfigureProviders(c)
 }
