@@ -121,7 +121,7 @@ func (a *AuthenticationServiceImpl) AddProvider(provider AuthenticationProvider)
 	a.providers = append(a.providers, provider)
 }
 
-func (a *AuthenticationServiceImpl) SetProviders(providers []AuthenticationProvider) {
+func (a *AuthenticationServiceImpl) setProviders(providers []AuthenticationProvider) {
 	a.providers = providers
 }
 

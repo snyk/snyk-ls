@@ -781,9 +781,13 @@ patch: {}
 
 func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
-	config.CurrentConfig().SetSnykCodeEnabled(false)
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
-	fakeAuthenticationProvider.IsAuthenticated = true
+	c := config.CurrentConfig()
+	c.SetSnykCodeEnabled(false)
+	c.SetAuthenticationMethod(lsp.FakeAuthentication)
+	di.AuthenticationService().ConfigureProviders(c)
+
+	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0]
+	fakeAuthenticationProvider.(*authentication.FakeAuthenticationProvider).IsAuthenticated = true
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {

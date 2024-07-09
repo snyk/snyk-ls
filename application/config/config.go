@@ -944,3 +944,11 @@ func (c *Config) IsAnalyticsPermitted() bool {
 func (c *Config) SetClientProtocolVersion(requiredProtocolVersion string) {
 	c.clientProtocolVersion = requiredProtocolVersion
 }
+
+func (c *Config) AuthenticationMethod() lsp.AuthenticationMethod {
+	return c.authenticationMethod
+}
+
+func (c *Config) SetAuthenticationMethod(authMethod lsp.AuthenticationMethod) {
+	c.authenticationMethod = authMethod
+}

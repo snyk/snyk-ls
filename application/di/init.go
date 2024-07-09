@@ -140,7 +140,7 @@ func initInfrastructure(c *config.Config) {
 	authenticationService = authentication.NewAuthenticationService(c, nil, analytics, errorReporter, notifier)
 	// after having an instance, we pass it into the default configuration method
 	// so that the oauth2 provider can use it for its callback
-	authenticationService.SetProviders(authentication.Default(c, errorReporter, authenticationService))
+	authenticationService.ConfigureProviders(c)
 
 	snykCli := cli.NewExecutor(c, errorReporter, analytics, notifier)
 

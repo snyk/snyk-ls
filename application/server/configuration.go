@@ -30,7 +30,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/observability/ux"
 )
@@ -137,19 +136,8 @@ func writeSettings(c *config.Config, settings lsp.Settings, initialize bool) {
 }
 
 func updateAuthenticationMethod(c *config.Config, settings lsp.Settings) {
-	var as []authentication.AuthenticationProvider
-	switch settings.AuthenticationMethod {
-	case lsp.FakeAuthentication:
-		di.AuthenticationService().SetProviders([]authentication.AuthenticationProvider{authentication.NewFakeCliAuthenticationProvider(c)})
-	case lsp.TokenAuthentication:
-		as = authentication.Token(c, di.ErrorReporter())
-		di.AuthenticationService().SetProviders(as)
-	case "":
-		// don't do anything
-	default:
-		as = authentication.Default(c, di.ErrorReporter(), di.AuthenticationService())
-		di.AuthenticationService().SetProviders(as)
-	}
+	c.SetAuthenticationMethod(settings.AuthenticationMethod)
+	di.AuthenticationService().ConfigureProviders(c)
 }
 
 func updateRuntimeInfo(c *config.Config, settings lsp.Settings) {

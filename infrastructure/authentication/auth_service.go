@@ -18,6 +18,8 @@ package authentication
 
 import (
 	"context"
+
+	"github.com/snyk/snyk-ls/application/config"
 )
 
 type AuthenticationService interface {
@@ -38,6 +40,6 @@ type AuthenticationService interface {
 	// AddProvider sets the authentication provider
 	AddProvider(provider AuthenticationProvider)
 
-	// SetProviders allows to overwrite the default authenticators
-	SetProviders(providers []AuthenticationProvider)
+	// ConfigureProviders updates the providers based on the stored configuration
+	ConfigureProviders(c *config.Config)
 }
