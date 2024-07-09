@@ -19,7 +19,7 @@ package command
 import (
 	"context"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type SnykCodeHttpClient interface {
@@ -27,11 +27,11 @@ type SnykCodeHttpClient interface {
 }
 
 type codeFixFeedback struct {
-	command   snyk.CommandData
+	command   types.CommandData
 	apiClient SnykCodeHttpClient
 }
 
-func (cmd *codeFixFeedback) Command() snyk.CommandData {
+func (cmd *codeFixFeedback) Command() types.CommandData {
 	return cmd.command
 }
 

@@ -22,16 +22,17 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type logoutCommand struct {
-	command     snyk.CommandData
-	authService snyk.AuthenticationService
+	command     types.CommandData
+	authService authentication.AuthenticationService
 	logger      *zerolog.Logger
 }
 
-func (cmd *logoutCommand) Command() snyk.CommandData {
+func (cmd *logoutCommand) Command() types.CommandData {
 	return cmd.command
 }
 

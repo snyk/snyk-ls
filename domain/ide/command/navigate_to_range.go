@@ -26,16 +26,17 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 type navigateToRangeCommand struct {
-	command snyk.CommandData
+	command types.CommandData
 	srv     lsp.Server
 	logger  *zerolog.Logger
 }
 
-func (cmd *navigateToRangeCommand) Command() snyk.CommandData {
+func (cmd *navigateToRangeCommand) Command() types.CommandData {
 	return cmd.command
 }
 

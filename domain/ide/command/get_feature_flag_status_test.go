@@ -22,9 +22,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_ApiClient_FeatureFlagIsEnabled(t *testing.T) {
@@ -39,7 +39,7 @@ func Test_ApiClient_FeatureFlagIsEnabled(t *testing.T) {
 	// Pass the featureFlagType to the command
 	featureFlagStatusCmd := featureFlagStatus{
 		apiClient: fakeApiClient,
-		command:   snyk.CommandData{Arguments: []interface{}{"snykCodeConsistentIgnores"}},
+		command:   types.CommandData{Arguments: []interface{}{"snykCodeConsistentIgnores"}},
 	}
 
 	// Execute the command

@@ -29,6 +29,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_codeFixDiffs_Command(t *testing.T) {
@@ -81,7 +82,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
 		codeScanner.BundleHashes = map[string]string{"/folderPath": "bundleHash"}
-		cut.command = snyk.CommandData{
+		cut.command = types.CommandData{
 			Arguments: []any{"file:///folderPath", "file:///folderPath/issuePath", "issueId"},
 		}
 
@@ -94,7 +95,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	t.Run("unhappy - file not beneath folder", func(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
 		codeScanner.BundleHashes = map[string]string{"/folderPath": "bundleHash"}
-		cut.command = snyk.CommandData{
+		cut.command = types.CommandData{
 			Arguments: []any{"file:///folderPath", "file:///anotherFolder/issuePath", "issueId"},
 		}
 
@@ -107,7 +108,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	t.Run("unhappy - folder empty", func(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
 		codeScanner.BundleHashes = map[string]string{"/folderPath": "bundleHash"}
-		cut.command = snyk.CommandData{
+		cut.command = types.CommandData{
 			Arguments: []any{"", "file:///anotherFolder/issuePath", "issueId"},
 		}
 
@@ -120,7 +121,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	t.Run("unhappy - file empty", func(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
 		codeScanner.BundleHashes = map[string]string{"/folderPath": "bundleHash"}
-		cut.command = snyk.CommandData{
+		cut.command = types.CommandData{
 			Arguments: []any{"file://folder", "", "issueId"},
 		}
 

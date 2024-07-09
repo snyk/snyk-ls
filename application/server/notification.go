@@ -25,9 +25,9 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func notifier(c *config.Config, srv lsp.Server, method string, params any) {
@@ -121,7 +121,7 @@ func registerNotifier(c *config.Config, srv lsp.Server) {
 				Interface("product", params.Product).
 				Interface("status", params.Status).
 				Msg("sending scan data to client")
-		case snyk.ShowMessageRequest:
+		case types.ShowMessageRequest:
 			// Function blocks on callback, so we need to run it in a separate goroutine
 			go handleShowMessageRequest(srv, params, &logger)
 			logger.Info().Msg("sending show message request to client")
@@ -205,7 +205,7 @@ func handleApplyWorkspaceEdit(srv lsp.Server, params lsp.ApplyWorkspaceEditParam
 		Msgf("Workspace edit applied %t. %s", editResult.Applied, editResult.FailureReason)
 }
 
-func handleShowMessageRequest(srv lsp.Server, params snyk.ShowMessageRequest, logger *zerolog.Logger) {
+func handleShowMessageRequest(srv lsp.Server, params types.ShowMessageRequest, logger *zerolog.Logger) {
 	// convert our internal message request to LSP message request
 	requestParams := lsp.ShowMessageRequestParams{
 		Type:    lsp.MessageType(params.Type),
@@ -240,7 +240,7 @@ func handleShowMessageRequest(srv lsp.Server, params snyk.ShowMessageRequest, lo
 			return
 		}
 
-		selectedCommand, ok := params.Actions.Get(snyk.MessageAction(actionItem.Title))
+		selectedCommand, ok := params.Actions.Get(types.MessageAction(actionItem.Title))
 		if !ok {
 			logger.Info().Str("method", "registerNotifier").Msg("Action map key not found")
 			return

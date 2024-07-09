@@ -24,13 +24,15 @@ import (
 	"time"
 
 	codeClientObservability "github.com/snyk/code-client-go/observability"
+	"github.com/snyk/snyk-ls/internal/types"
+
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/data_structure"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -96,9 +98,9 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 			issues[i].CodeActions = append(issues[i].CodeActions, codeAction)
 
 			codeActionId := *codeAction.Uuid
-			issues[i].CodelensCommands = append(issues[i].CodelensCommands, snyk.CommandData{
+			issues[i].CodelensCommands = append(issues[i].CodelensCommands, types.CommandData{
 				Title:     "⚡ Fix this issue: " + issueTitle(issues[i]),
-				CommandId: snyk.CodeFixCommand,
+				CommandId: types.CodeFixCommand,
 				Arguments: []any{
 					codeActionId,
 					issues[i].AffectedFilePath,
@@ -221,9 +223,9 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 					} else {
 						// sleep to give client side to actually apply & review the fix
 						time.Sleep(2 * time.Second)
-						b.notifier.Send(snyk.ShowMessageRequest{
+						b.notifier.Send(types.ShowMessageRequest{
 							Message: successMessage + " Was this fix helpful?",
-							Type:    snyk.Info,
+							Type:    types.Info,
 							Actions: actionCommandMap,
 						})
 					}
@@ -247,15 +249,15 @@ func ToEncodedNormalizedPath(rootPath string, filePath string) (string, error) {
 	return encodedRelativePath, nil
 }
 
-func (b *IssueEnhancer) autofixFeedbackActions(fixId string) (*data_structure.OrderedMap[snyk.MessageAction, snyk.CommandData], error) {
-	createCommandData := func(positive bool) snyk.CommandData {
-		return snyk.CommandData{
-			Title:     snyk.CodeSubmitFixFeedback,
-			CommandId: snyk.CodeSubmitFixFeedback,
+func (b *IssueEnhancer) autofixFeedbackActions(fixId string) (*data_structure.OrderedMap[types.MessageAction, types.CommandData], error) {
+	createCommandData := func(positive bool) types.CommandData {
+		return types.CommandData{
+			Title:     types.CodeSubmitFixFeedback,
+			CommandId: types.CodeSubmitFixFeedback,
 			Arguments: []any{fixId, positive},
 		}
 	}
-	actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
+	actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
 	positiveFeedbackCmd := createCommandData(true)
 	negativeFeedbackCmd := createCommandData(false)
 
@@ -277,9 +279,9 @@ func (b *IssueEnhancer) createOpenSnykLearnCodeAction(issue snyk.Issue) (ca *sny
 	if lesson != nil && lesson.Url != "" {
 		ca = &snyk.CodeAction{
 			Title: title,
-			Command: &snyk.CommandData{
+			Command: &types.CommandData{
 				Title:     title,
-				CommandId: snyk.OpenBrowserCommand,
+				CommandId: types.OpenBrowserCommand,
 				Arguments: []any{lesson.Url},
 			},
 		}

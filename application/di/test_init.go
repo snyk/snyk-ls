@@ -29,12 +29,9 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	er "github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	"github.com/snyk/snyk-ls/domain/observability/performance"
-	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
-	cliauth "github.com/snyk/snyk-ls/infrastructure/cli/auth"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/iac"
@@ -43,6 +40,10 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/oss"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	domainNotify "github.com/snyk/snyk-ls/internal/notification"
+	er "github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // TODO this is becoming a hot mess we need to unify integ. test strategies
@@ -52,18 +53,18 @@ func TestInit(t *testing.T) {
 	t.Helper()
 	c := config.CurrentConfig()
 	// we don't want to open browsers when testing
-	snyk.DefaultOpenBrowserFunc = func(url string) {}
+	types.DefaultOpenBrowserFunc = func(url string) {}
 	notifier = domainNotify.NewNotifier()
 	analytics = ux.NewTestAnalytics(c)
 	instrumentor = performance.NewInstrumentor()
 	errorReporter = er.NewTestErrorReporter()
 	installer = install.NewFakeInstaller()
-	authProvider := snyk.NewFakeCliAuthenticationProvider(c)
+	authProvider := authentication.NewFakeCliAuthenticationProvider(c)
 	snykApiClient = &snyk_api.FakeApiClient{CodeEnabled: true}
-	authenticationService = snyk.NewAuthenticationService(c, authProvider, analytics, errorReporter, notifier)
-	snykCli := cli.NewExecutor(c, authenticationService, errorReporter, analytics, notifier)
+	authenticationService = authentication.NewAuthenticationService(c, []authentication.AuthenticationProvider{authProvider}, analytics, errorReporter, notifier)
+	snykCli := cli.NewExecutor(c, errorReporter, analytics, notifier)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
-	authInitializer := cliauth.NewInitializer(c, authenticationService, errorReporter, analytics, notifier)
+	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, analytics, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,
 		authInitializer,
@@ -100,7 +101,7 @@ func TestInit(t *testing.T) {
 		openSourceScanner,
 	)
 	hoverService = hover.NewDefaultService(c, analytics)
-	command.SetService(&snyk.CommandServiceMock{})
+	command.SetService(&types.CommandServiceMock{})
 	// don't use getters or it'll deadlock
 	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier)
 	workspace.Set(w)

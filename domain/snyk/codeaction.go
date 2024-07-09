@@ -20,6 +20,8 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // CodeAction represents a code action that can be executed by the client using an in-document menu.
@@ -44,18 +46,18 @@ type CodeAction struct {
 	DeferredEdit *func() *WorkspaceEdit `json:"-"`
 
 	// Command that will be executed after the Edit (if present).
-	Command *CommandData
+	Command *types.CommandData
 
 	// DeferredCommand is a function that returns a Command.
 	// Used for heavy calculations that shouldn't be done ahead of time.
 	// A CodeAction cannot have both Command and DeferredCommand.
-	DeferredCommand *func() *CommandData `json:"-"`
+	DeferredCommand *func() *types.CommandData `json:"-"`
 
 	// UUID is a unique identifier for this code action. This is used for deferred resolution of a command or edit.
 	Uuid *uuid.UUID
 }
 
-func NewCodeAction(title string, edit *WorkspaceEdit, command *CommandData) (CodeAction, error) {
+func NewCodeAction(title string, edit *WorkspaceEdit, command *types.CommandData) (CodeAction, error) {
 	if edit == nil && command == nil {
 		return CodeAction{}, errors.New("a non-deferred action must have either an edit or a command")
 	}
@@ -70,7 +72,7 @@ func NewCodeAction(title string, edit *WorkspaceEdit, command *CommandData) (Cod
 
 func NewDeferredCodeAction(title string,
 	deferredEdit *func() *WorkspaceEdit,
-	deferredCommand *func() *CommandData,
+	deferredCommand *func() *types.CommandData,
 ) (CodeAction, error) {
 	if deferredEdit == nil && deferredCommand == nil {
 		return CodeAction{}, errors.New("deferredEdit and deferredCommand cannot both be nil")

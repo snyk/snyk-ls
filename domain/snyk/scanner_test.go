@@ -26,11 +26,12 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	"github.com/snyk/snyk-ls/domain/observability/performance"
-	"github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
+	ux2 "github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -55,18 +56,18 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 
 func setupScanner(testProductScanners ...ProductScanner) (
 	scanner Scanner,
-	analytics *ux.TestAnalytics,
+	analytics *ux2.TestAnalytics,
 	scanNotifier ScanNotifier,
 ) {
 	c := config.CurrentConfig()
-	analytics = ux.NewTestAnalytics(c)
+	analytics = ux2.NewTestAnalytics(c)
 	scanNotifier = NewMockScanNotifier()
 	notifier := notification.NewNotifier()
 	apiClient := &snyk_api.FakeApiClient{CodeEnabled: false}
 	er := error_reporting.NewTestErrorReporter()
-	authenticationProvider := NewFakeCliAuthenticationProvider(c)
+	authenticationProvider := authentication.NewFakeCliAuthenticationProvider(c)
 	authenticationProvider.IsAuthenticated = true
-	authenticationService := NewAuthenticationService(c, authenticationProvider, analytics, er, notifier)
+	authenticationService := authentication.NewAuthenticationService(c, []authentication.AuthenticationProvider{authenticationProvider}, analytics, er, notifier)
 	scanner = NewDelegatingScanner(
 		c,
 		initialize.NewDelegatingInitializer(),
@@ -91,8 +92,8 @@ func TestScan_whenProductScannerEnabled_SendsAnalysisTriggered(t *testing.T) {
 	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
 
 	assert.Contains(t, analytics.GetAnalytics(),
-		ux.AnalysisIsTriggeredProperties{
-			AnalysisType:    []ux.AnalysisType{ux.CodeQuality, ux.CodeSecurity},
+		ux2.AnalysisIsTriggeredProperties{
+			AnalysisType:    []ux2.AnalysisType{ux2.CodeQuality, ux2.CodeSecurity},
 			TriggeredByUser: false,
 		})
 }

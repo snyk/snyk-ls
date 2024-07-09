@@ -1,5 +1,5 @@
 /*
- * © 2022-2023 Snyk Limited
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package snyk
+package authentication
 
 import (
 	"context"
@@ -36,8 +36,6 @@ func (e *AuthenticationFailedError) Error() string {
 
 	return message
 }
-
-type AuthenticationFunction func() (string, error)
 
 type AuthenticationProvider interface {
 	// Authenticate triggers the authentication. This may involve manual steps, like logging in using a browser

@@ -24,10 +24,11 @@ import (
 	"github.com/gomarkdown/markdown"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var issuesSeverity = map[string]snyk.Severity{
@@ -48,12 +49,12 @@ func toIssue(
 	// this needs to be first so that the lesson from Snyk Learn is added
 	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueRange)
 
-	var codelensCommands []snyk.CommandData
+	var codelensCommands []types.CommandData
 	for _, codeAction := range codeActions {
 		if strings.Contains(codeAction.Title, "Upgrade to") {
-			codelensCommands = append(codelensCommands, snyk.CommandData{
+			codelensCommands = append(codelensCommands, types.CommandData{
 				Title:     "⚡ Fix this issue: " + codeAction.Title,
-				CommandId: snyk.CodeFixCommand,
+				CommandId: types.CodeFixCommand,
 				Arguments: []any{
 					codeAction.Uuid,
 					affectedFilePath,

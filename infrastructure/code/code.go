@@ -28,18 +28,20 @@ import (
 	"github.com/erni27/imcache"
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
+
 	codeClient "github.com/snyk/code-client-go"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/snyk/code-client-go/scan"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
+	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/notification"
-	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/filefilter"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/float"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -68,7 +70,7 @@ type Scanner struct {
 	BundleUploader    *BundleUploader
 	SnykApiClient     snyk_api.SnykApiClient
 	errorReporter     codeClientObservability.ErrorReporter
-	analytics         ux2.Analytics
+	analytics         ux.Analytics
 	changedFilesMutex sync.Mutex
 	scanStatusMutex   sync.Mutex
 	runningScans      map[string]*ScanStatus
@@ -92,7 +94,7 @@ type Scanner struct {
 func New(bundleUploader *BundleUploader,
 	apiClient snyk_api.SnykApiClient,
 	reporter codeClientObservability.ErrorReporter,
-	analytics ux2.Analytics,
+	analytics ux.Analytics,
 	learnService learn.Service,
 	notifier notification.Notifier,
 	codeScanner codeClient.CodeScanner,
@@ -127,8 +129,8 @@ func (sc *Scanner) Product() product.Product {
 	return product.ProductCode
 }
 
-func (sc *Scanner) SupportedCommands() []snyk.CommandName {
-	return []snyk.CommandName{snyk.NavigateToRangeCommand}
+func (sc *Scanner) SupportedCommands() []types.CommandName {
+	return []types.CommandName{types.NavigateToRangeCommand}
 }
 
 func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (issues []snyk.Issue, err error) {
@@ -627,17 +629,17 @@ type ScanMetrics struct {
 }
 
 func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics) {
-	var result ux2.Result
+	var result ux.Result
 	if success {
-		result = ux2.Success
+		result = ux.Success
 	} else {
-		result = ux2.Error
+		result = ux.Error
 	}
 	duration := time.Since(scanMetrics.lastScanStartTime)
 	scanMetrics.lastScanDurationInSeconds = float.ToFixed(duration.Seconds(), 2)
 	sc.analytics.AnalysisIsReady(
-		ux2.AnalysisIsReadyProperties{
-			AnalysisType:      ux2.CodeSecurity,
+		ux.AnalysisIsReadyProperties{
+			AnalysisType:      ux.CodeSecurity,
 			Result:            result,
 			FileCount:         scanMetrics.lastScanFileCount,
 			DurationInSeconds: scanMetrics.lastScanDurationInSeconds,

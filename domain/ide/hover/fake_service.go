@@ -17,8 +17,8 @@
 package hover
 
 import (
-	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	ux2 "github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 type FakeHoverService struct {

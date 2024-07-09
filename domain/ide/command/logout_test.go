@@ -25,30 +25,32 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	"github.com/snyk/snyk-ls/domain/observability/performance"
-	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	c := testutil.UnitTest(t)
 	notifier := notification.NewNotifier()
-	provider := snyk.NewFakeCliAuthenticationProvider(c)
+	provider := authentication.NewFakeCliAuthenticationProvider(c)
 	hoverService := hover.NewFakeHoverService()
 	provider.IsAuthenticated = true
 	scanNotifier := snyk.NewMockScanNotifier()
-	authenticationService := snyk.NewAuthenticationService(
+	authenticationService := authentication.NewAuthenticationService(
 		c,
-		provider,
+		[]authentication.AuthenticationProvider{provider},
 		ux.NewTestAnalytics(c),
 		error_reporting.NewTestErrorReporter(),
 		notifier,
 	)
 	cmd := logoutCommand{
-		command:     snyk.CommandData{CommandId: snyk.LogoutCommand},
+		command:     types.CommandData{CommandId: types.LogoutCommand},
 		authService: authenticationService,
 		logger:      c.Logger(),
 	}

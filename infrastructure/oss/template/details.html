@@ -150,14 +150,15 @@
       <div class="label font-light">Vulnerable module</div>
       <div class="content">{{.VulnerableModule}}</div>
     </div>
-    {{range .IntroducedThroughs}}
     <div class="summary-item introduced-through">
       <div class="label font-light">Introduced through</div>
       <div class="content">
-        <a href="{{.SnykUI}}/test/{{.PackageManager}}">{{.Module}}</a>
+        {{range $i, $element := .IntroducedThroughs}}
+          <a href="{{$element.SnykUI}}/test/{{$element.PackageManager}}">{{$element.Module}}</a>
+          {{ if lt $i (idxMinusOne (len $.IntroducedThroughs)) }}, {{end}}
+        {{end}}
       </div>
     </div>
-    {{end}}
     <div class="summary-item fixed-in">
       <div class="label font-light">Fixed in</div>
       <div class="content">
@@ -178,15 +179,18 @@
   <section class="delimiter-top summary">
     <h2>Detailed paths</h2>
     <div class="detailed-paths">
-      {{range .DetailedPaths}}
-        <div class="summary-item path">
+      {{range $i, $element := .DetailedPaths}}
+        <div class="summary-item path {{ if gt $i 3 }}hidden{{end}}">
           <div class="label font-light">Introduced through</div>
-          <div class="content">{{join " > " .From}}</div>
+          <div class="content">{{join " > " $element.From}}</div>
         </div>
-        <div class="summary-item remediation">
+        <div class="summary-item remediation {{ if gt $i 3 }}hidden{{end}}">
           <div class="label font-light">Remediation</div>
-          <div class="content">{{.Remediation}}</div>
+          <div class="content">{{$element.Remediation}}</div>
         </div>
+      {{end}}
+      {{ if gt .MoreDetailedPaths 0 }}
+      <a id="more-detailed-paths--link">...and {{ .MoreDetailedPaths}} more</a>
       {{end}}
     </div>
   </section>
@@ -199,6 +203,19 @@
 <script nonce="${nonce}">
   if (document.getElementById("learn--link")) {
     document.getElementById("learn").className = "learn show"
+  }
+  if (document.getElementById("more-detailed-paths--link")) {
+    document.getElementById("more-detailed-paths--link").addEventListener('click', () => {
+      const paths = document.getElementsByClassName("path");
+      for(const path of paths) {
+        path.classList.remove("hidden");
+      }
+      const remediations = document.getElementsByClassName("remediation")
+      for(const remediation of remediations) {
+        remediation.classList.remove("hidden");
+      }
+      document.getElementById("more-detailed-paths--link").classList.add("hidden");
+    })
   }
 </script>
 </body>

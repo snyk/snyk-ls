@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package oauth
+package authentication
 
 import (
 	"context"
@@ -111,7 +111,7 @@ func TestAuthenticateUsesAuthenticator(t *testing.T) {
 	config := configuration.New()
 	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, config).(*fakeOauthAuthenticator)
 
-	provider := NewOAuthProvider(config, authenticator, config2.CurrentConfig().Logger())
+	provider := newOAuthProvider(config, authenticator, config2.CurrentConfig().Logger())
 
 	authToken, err := provider.Authenticate(context.Background())
 
@@ -123,7 +123,7 @@ func TestAuthenticateUsesAuthenticator(t *testing.T) {
 func TestAuthURL_ShouldReturnURL(t *testing.T) {
 	config := configuration.New()
 	authenticator := NewFakeOauthAuthenticator(time.Now().Add(10*time.Second), true, config).(*fakeOauthAuthenticator)
-	provider := NewOAuthProvider(config, authenticator, config2.CurrentConfig().Logger())
+	provider := newOAuthProvider(config, authenticator, config2.CurrentConfig().Logger())
 	provider.SetAuthURL("https://auth.fake.snyk.io")
 	url := provider.AuthURL(context.Background())
 

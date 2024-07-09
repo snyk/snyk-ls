@@ -21,10 +21,12 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/snyk-ls/internal/types"
+
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -33,8 +35,8 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 
 	testInput := "some data"
 	cmd := &reportAnalyticsCommand{
-		command: snyk.CommandData{
-			CommandId: snyk.ReportAnalyticsCommand,
+		command: types.CommandData{
+			CommandId: types.ReportAnalyticsCommand,
 			Arguments: []any{testInput},
 		},
 	}

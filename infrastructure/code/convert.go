@@ -414,7 +414,7 @@ func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, 
 		if suppression.Properties.Expiration != nil {
 			expiration = *suppression.Properties.Expiration
 		}
-		
+
 		reason := suppression.Justification
 		if reason == "" {
 			reason = "None given"
@@ -567,6 +567,8 @@ func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir string, filePath stri
 			return fixSuggestions
 		}
 		contentBefore := string(fileContent)
+		// Workaround: AI Suggestion API only returns \n new lines. It doesn't consider carriage returns.
+		contentBefore = strings.Replace(contentBefore, "\r\n", "\n", -1)
 		edits := myers.ComputeEdits(span.URIFromPath(baseDir), contentBefore, suggestion.Value)
 		unifiedDiff := fmt.Sprint(gotextdiff.ToUnified(baseDir, baseDir+"-fixed", contentBefore, edits))
 

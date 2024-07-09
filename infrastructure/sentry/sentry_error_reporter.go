@@ -22,8 +22,8 @@ import (
 	"github.com/getsentry/sentry-go"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/notification"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 )
 
 // A Sentry implementation of our error reporter that respects user preferences regarding tracking

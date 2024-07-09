@@ -558,6 +558,8 @@ type AuthenticationMethod string
 
 const TokenAuthentication AuthenticationMethod = "token"
 const OAuthAuthentication AuthenticationMethod = "oauth"
+const FakeAuthentication AuthenticationMethod = "fake"
+const EmptyAuthenticationMethod AuthenticationMethod = ""
 
 type DidChangeConfigurationParams struct {
 	// The actual changed settings

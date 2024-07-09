@@ -339,7 +339,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
   "cliPath": "/a/patch/snyk-cli",
   // The path where the CLI can be found, or where it should be downloaded to
   "token": "secret-token",
-  // The Snyk token, e.g.: snyk config get api or a token from oauth flow
+  // The Snyk token, e.g.: snyk config get api or a token from authentication flow
   "automaticAuthentication": "true",
   // Whether LS will automatically authenticate on scan start (default: true)
   "enableTrustedFoldersFeature": "true",
@@ -369,7 +369,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
   "scanningMode": "auto",
   // Specifies the mode for scans: "auto" for background scans or "manual" for scans on command
   "authenticationMethod": "token",
-  // Specifies the authentication method to use: "token" for Snyk API token or "oauth" for Snyk OAuth flow. Default is token.
+  // Specifies the authentication method to use: "token" for Snyk API token or "authentication" for Snyk OAuth flow. Default is token.
   "snykCodeApi": "https://deeproxy.snyk.io",
   // Specifies the Snyk Code API endpoint to use. Default is https://deeproxy.snyk.io
   "requiredProtocolVersion": "11"

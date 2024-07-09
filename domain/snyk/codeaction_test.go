@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var mockTextEdit = snyk.TextEdit{
@@ -21,7 +22,7 @@ var mockEdit = &snyk.WorkspaceEdit{
 	},
 }
 
-var mockCommand = &snyk.CommandData{
+var mockCommand = &types.CommandData{
 	Title: "command",
 }
 
@@ -29,7 +30,7 @@ var mockDeferredEdit = func() *snyk.WorkspaceEdit {
 	return mockEdit
 }
 
-var mockDeferredCommand = func() *snyk.CommandData {
+var mockDeferredCommand = func() *types.CommandData {
 	return mockCommand
 }
 
@@ -55,7 +56,7 @@ func Test_NewDeferredCodeAction(t *testing.T) {
 		err,
 		action,
 		(*snyk.WorkspaceEdit)(nil),
-		(*snyk.CommandData)(nil),
+		(*types.CommandData)(nil),
 		&mockDeferredEdit,
 		&mockDeferredCommand)
 	assert.NotNil(t, action.Uuid, "UUID should be initialized")
@@ -65,9 +66,9 @@ func assertActionsInitializedCorrectly(t *testing.T,
 	err error,
 	action snyk.CodeAction,
 	expectedEdit *snyk.WorkspaceEdit,
-	expectedCommand *snyk.CommandData,
+	expectedCommand *types.CommandData,
 	mockDeferredEdit *func() *snyk.WorkspaceEdit,
-	mockDeferredCommand *func() *snyk.CommandData,
+	mockDeferredCommand *func() *types.CommandData,
 ) {
 	t.Helper()
 	assert.NoError(t, err)
