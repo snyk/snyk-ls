@@ -25,20 +25,21 @@ import (
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/types"
 	uri2 "github.com/snyk/snyk-ls/internal/uri"
 )
 
 type codeFixDiffs struct {
-	command       snyk.CommandData
+	command       types.CommandData
 	notifier      notification.Notifier
 	issueProvider snyk.IssueProvider
 	codeScanner   *code.Scanner
 }
 
-func (cmd *codeFixDiffs) Command() snyk.CommandData {
+func (cmd *codeFixDiffs) Command() types.CommandData {
 	return cmd.command
 }
 

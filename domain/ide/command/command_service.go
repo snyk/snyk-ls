@@ -23,17 +23,19 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
-	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	noti "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var instance snyk.CommandService
+var instance types.CommandService
 
 type serviceImpl struct {
-	authService   snyk.AuthenticationService
+	authService   authentication.AuthenticationService
 	notifier      noti.Notifier
 	learnService  learn.Service
 	issueProvider snyk.IssueProvider
@@ -42,13 +44,13 @@ type serviceImpl struct {
 }
 
 func NewService(
-	authService snyk.AuthenticationService,
+	authService authentication.AuthenticationService,
 	notifier noti.Notifier,
 	learnService learn.Service,
 	issueProvider snyk.IssueProvider,
 	codeApiClient SnykCodeHttpClient,
 	codeScanner *code.Scanner,
-) snyk.CommandService {
+) types.CommandService {
 	return &serviceImpl{
 		authService:   authService,
 		notifier:      notifier,
@@ -60,17 +62,17 @@ func NewService(
 }
 
 // SetService sets the singleton instance of the command service.
-func SetService(service snyk.CommandService) {
+func SetService(service types.CommandService) {
 	instance = service
 }
 
 // Service returns the singleton instance of the command service. If not already created,
 // it will create a new instance.
-func Service() snyk.CommandService {
+func Service() types.CommandService {
 	return instance
 }
 
-func (service *serviceImpl) ExecuteCommandData(ctx context.Context, commandData snyk.CommandData, server lsp.Server) (any, error) {
+func (service *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.CommandData, server lsp.Server) (any, error) {
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", "command.serviceImpl.ExecuteCommandData").Logger()
 

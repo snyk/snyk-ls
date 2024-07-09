@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package auth
+package authentication
 
 import (
 	"context"
@@ -24,15 +24,13 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/command"
-	noti "github.com/snyk/snyk-ls/domain/ide/notification"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	"github.com/snyk/snyk-ls/domain/observability/ux"
-	"github.com/snyk/snyk-ls/domain/snyk"
+	noti "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 type Initializer struct {
-	authenticationService snyk.AuthenticationService
+	authenticationService AuthenticationService
 	errorReporter         error_reporting.ErrorReporter
 	analytics             ux.Analytics
 	notifier              noti.Notifier
@@ -40,7 +38,7 @@ type Initializer struct {
 	c                     *config.Config
 }
 
-func NewInitializer(c *config.Config, authenticator snyk.AuthenticationService, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics, notifier noti.Notifier) *Initializer {
+func NewInitializer(c *config.Config, authenticator AuthenticationService, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics, notifier noti.Notifier) *Initializer {
 	return &Initializer{
 		authenticationService: authenticator,
 		errorReporter:         errorReporter,
@@ -56,14 +54,12 @@ func (i *Initializer) Init() error {
 	const errorMessage = "Auth Initializer failed to authenticate."
 	c := config.CurrentConfig()
 	if c.NonEmptyToken() {
-		cmd, _ := command.CreateFromCommandData(c, snyk.CommandData{CommandId: snyk.GetActiveUserCommand}, nil, i.authenticationService, nil, i.notifier, nil, nil, nil)
-		user, _ := cmd.Execute(context.Background())
-		if user != nil {
+		authenticated, err := i.authenticationService.IsAuthenticated()
+		if authenticated {
 			c.Logger().Info().Str("method", "auth.initializer.init").Msg("Skipping authentication - user is already authenticated")
 			return nil
 		}
-
-		return nil
+		return err
 	}
 
 	// token is empty from here on
@@ -86,13 +82,13 @@ func (i *Initializer) Init() error {
 	return nil
 }
 
-func (i *Initializer) authenticate(authenticationService snyk.AuthenticationService, errorMessage string) error {
+func (i *Initializer) authenticate(authenticationService AuthenticationService, errorMessage string) error {
 	i.notifier.SendShowMessage(sglsp.Info, "Authenticating to Snyk. This could open a browser window.")
 
 	token, err := authenticationService.Authenticate(context.Background())
 	if token == "" || err != nil {
 		if err == nil {
-			err = &snyk.AuthenticationFailedError{}
+			err = &AuthenticationFailedError{}
 		}
 		i.notifier.SendError(err)
 		err = errors.Wrap(err, errorMessage)

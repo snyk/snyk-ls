@@ -35,11 +35,11 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -474,7 +474,7 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 				continue
 			}
 			call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
-				Command:   snyk.CodeFixDiffsCommand,
+				Command:   types.CodeFixDiffsCommand,
 				Arguments: []any{uri.PathToUri(scanParams.FolderPath), uri.PathToUri(issue.FilePath), issue.Id},
 			})
 			assert.NoError(t, err)
@@ -509,6 +509,7 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server
 			Token:                       os.Getenv("SNYK_TOKEN"),
 			EnableTrustedFoldersFeature: "false",
 			FilterSeverity:              lsp.DefaultSeverityFilter(),
+			AuthenticationMethod:        lsp.TokenAuthentication,
 		},
 	}
 
@@ -527,7 +528,7 @@ func checkFeatureFlagStatus(t *testing.T, loc *server.Local, c *config.Config) {
 	t.Helper()
 
 	call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
-		Command:   snyk.GetFeatureFlagStatus,
+		Command:   types.GetFeatureFlagStatus,
 		Arguments: []any{"bitbucketConnectApp"},
 	})
 

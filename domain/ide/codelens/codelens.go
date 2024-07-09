@@ -22,6 +22,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func GetFor(filePath string) (lenses []sglsp.CodeLens) {
@@ -39,7 +40,7 @@ func GetFor(filePath string) (lenses []sglsp.CodeLens) {
 	return lenses
 }
 
-func getCodeLensFromCommand(issue snyk.Issue, command snyk.CommandData) sglsp.CodeLens {
+func getCodeLensFromCommand(issue snyk.Issue, command types.CommandData) sglsp.CodeLens {
 	return sglsp.CodeLens{
 		Range: converter.ToRange(issue.Range),
 		Command: sglsp.Command{

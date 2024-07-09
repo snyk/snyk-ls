@@ -22,16 +22,16 @@ import (
 	"fmt"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type featureFlagStatus struct {
-	command   snyk.CommandData
+	command   types.CommandData
 	apiClient snyk_api.SnykApiClient
 }
 
-func (cmd *featureFlagStatus) Command() snyk.CommandData {
+func (cmd *featureFlagStatus) Command() types.CommandData {
 	return cmd.command
 }
 
@@ -39,7 +39,7 @@ func (cmd *featureFlagStatus) Execute(ctx context.Context) (any, error) {
 	logger := config.CurrentConfig().Logger().With().Str("method", "featureFlagStatus.Execute").Logger()
 
 	if config.CurrentConfig().Token() == "" {
-		return nil, errors.New("not authenticated, cannot retrieve feature flag status")
+		return snyk_api.FFResponse{Ok: false, UserMessage: "not authenticated, cannot retrieve feature flags"}, nil
 	}
 
 	args := cmd.command.Arguments
@@ -59,7 +59,7 @@ func (cmd *featureFlagStatus) Execute(ctx context.Context) (any, error) {
 	logger.Debug().Msg(message)
 
 	if err != nil {
-		logger.Err(err).Msg("Failed to get feature flag: " + ffStr)
+		logger.Warn().Err(err).Msg("Failed to get feature flag: " + ffStr)
 		return snyk_api.FFResponse{Ok: false, UserMessage: err.Error()}, nil
 	}
 

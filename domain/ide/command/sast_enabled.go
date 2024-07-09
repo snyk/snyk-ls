@@ -22,17 +22,17 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type sastEnabled struct {
-	command   snyk.CommandData
+	command   types.CommandData
 	apiClient snyk_api.SnykApiClient
 	logger    *zerolog.Logger
 }
 
-func (cmd *sastEnabled) Command() snyk.CommandData {
+func (cmd *sastEnabled) Command() types.CommandData {
 	return cmd.command
 }
 

@@ -23,28 +23,28 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/internal/types"
+
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func Test_getActiveUser_Execute_User_found(t *testing.T) {
 	testutil.UnitTest(t)
 	cmd := &getActiveUser{
-		command: snyk.CommandData{
-			CommandId: snyk.GetActiveUserCommand,
+		command: types.CommandData{
+			CommandId: types.GetActiveUserCommand,
 		},
 	}
 
 	expectedUser, expectedUserData := whoamiWorkflowResponse(t)
 
 	c := config.CurrentConfig()
-	c.SetAuthenticationMethod(lsp.OAuthAuthentication)
 	mockEngine, engineConfig := setUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return(expectedUserData, nil)
@@ -58,13 +58,12 @@ func Test_getActiveUser_Execute_User_found(t *testing.T) {
 func Test_getActiveUser_Execute_Result_Empty(t *testing.T) {
 	testutil.UnitTest(t)
 	cmd := &getActiveUser{
-		command: snyk.CommandData{
-			CommandId: snyk.GetActiveUserCommand,
+		command: types.CommandData{
+			CommandId: types.GetActiveUserCommand,
 		},
 	}
 
 	c := config.CurrentConfig()
-	c.SetAuthenticationMethod(lsp.OAuthAuthentication)
 	mockEngine, engineConfig := setUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return([]workflow.Data{}, nil)
@@ -78,13 +77,12 @@ func Test_getActiveUser_Execute_Result_Empty(t *testing.T) {
 func Test_getActiveUser_Execute_Error_Result(t *testing.T) {
 	testutil.UnitTest(t)
 	cmd := &getActiveUser{
-		command: snyk.CommandData{
-			CommandId: snyk.GetActiveUserCommand,
+		command: types.CommandData{
+			CommandId: types.GetActiveUserCommand,
 		},
 	}
 
 	c := config.CurrentConfig()
-	c.SetAuthenticationMethod(lsp.OAuthAuthentication)
 	mockEngine, engineConfig := setUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	testError := errors.New("test error")
@@ -96,9 +94,9 @@ func Test_getActiveUser_Execute_Error_Result(t *testing.T) {
 	assert.Empty(t, actualUser)
 }
 
-func whoamiWorkflowResponse(t *testing.T) (*snyk.ActiveUser, []workflow.Data) {
+func whoamiWorkflowResponse(t *testing.T) (*authentication.ActiveUser, []workflow.Data) {
 	t.Helper()
-	expectedUser := snyk.ActiveUser{
+	expectedUser := authentication.ActiveUser{
 		Id:       "id",
 		UserName: "username",
 	}

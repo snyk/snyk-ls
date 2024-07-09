@@ -25,6 +25,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -82,7 +83,7 @@ func ToInlineValues(inlineValues []snyk.InlineValue) (values []lsp.InlineValue) 
 	return values
 }
 
-func ToCommand(command *snyk.CommandData) *sglsp.Command {
+func ToCommand(command *types.CommandData) *sglsp.Command {
 	if command == nil {
 		return nil
 	}

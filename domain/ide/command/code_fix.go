@@ -26,19 +26,20 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
-	"github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type fixCodeIssue struct {
-	command       snyk.CommandData
+	command       types.CommandData
 	issueProvider snyk.IssueProvider
 	notifier      notification.Notifier
 	logger        *zerolog.Logger
 }
 
-func (cmd *fixCodeIssue) Command() snyk.CommandData {
+func (cmd *fixCodeIssue) Command() types.CommandData {
 	return cmd.command
 }
 

@@ -23,11 +23,12 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
-	"github.com/snyk/snyk-ls/domain/ide/notification"
-	"github.com/snyk/snyk-ls/domain/observability/performance"
-	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -58,10 +59,10 @@ type DelegatingConcurrentScanner struct {
 	scanners      []ProductScanner
 	initializer   initialize.Initializer
 	instrumentor  performance.Instrumentor
-	analytics     ux2.Analytics
+	analytics     ux.Analytics
 	scanNotifier  ScanNotifier
 	snykApiClient snyk_api.SnykApiClient
-	authService   AuthenticationService
+	authService   authentication.AuthenticationService
 	notifier      notification.Notifier
 	c             *config.Config
 }
@@ -174,10 +175,10 @@ func NewDelegatingScanner(
 	c *config.Config,
 	initializer initialize.Initializer,
 	instrumentor performance.Instrumentor,
-	analytics ux2.Analytics,
+	analytics ux.Analytics,
 	scanNotifier ScanNotifier,
 	snykApiClient snyk_api.SnykApiClient,
-	authService AuthenticationService,
+	authService authentication.AuthenticationService,
 	notifier notification.Notifier,
 	scanners ...ProductScanner,
 ) Scanner {
@@ -265,7 +266,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	analysisTypes := getEnabledAnalysisTypes(sc.scanners)
 	if len(analysisTypes) > 0 {
 		sc.analytics.AnalysisIsTriggered(
-			ux2.AnalysisIsTriggeredProperties{
+			ux.AnalysisIsTriggeredProperties{
 				AnalysisType:    analysisTypes,
 				TriggeredByUser: false,
 			},
@@ -312,23 +313,23 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	// TODO: handle learn actions centrally instead of in each scanner
 }
 
-func getEnabledAnalysisTypes(productScanners []ProductScanner) (analysisTypes []ux2.AnalysisType) {
+func getEnabledAnalysisTypes(productScanners []ProductScanner) (analysisTypes []ux.AnalysisType) {
 	for _, ps := range productScanners {
 		if !ps.IsEnabled() {
 			continue
 		}
 		if ps.Product() == product.ProductInfrastructureAsCode {
-			analysisTypes = append(analysisTypes, ux2.InfrastructureAsCode)
+			analysisTypes = append(analysisTypes, ux.InfrastructureAsCode)
 		}
 		if ps.Product() == product.ProductOpenSource {
-			analysisTypes = append(analysisTypes, ux2.OpenSource)
+			analysisTypes = append(analysisTypes, ux.OpenSource)
 		}
 		if ps.Product() == product.ProductCode {
 			if config.CurrentConfig().IsSnykCodeQualityEnabled() || config.CurrentConfig().IsSnykCodeEnabled() {
-				analysisTypes = append(analysisTypes, ux2.CodeQuality)
+				analysisTypes = append(analysisTypes, ux.CodeQuality)
 			}
 			if config.CurrentConfig().IsSnykCodeSecurityEnabled() || config.CurrentConfig().IsSnykCodeEnabled() {
-				analysisTypes = append(analysisTypes, ux2.CodeSecurity)
+				analysisTypes = append(analysisTypes, ux.CodeSecurity)
 			}
 		}
 	}

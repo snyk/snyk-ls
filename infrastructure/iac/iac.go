@@ -35,14 +35,15 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	"github.com/snyk/snyk-ls/domain/observability/performance"
-	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/scans"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -66,14 +67,14 @@ var extensions = map[string]bool{
 type Scanner struct {
 	instrumentor  performance.Instrumentor
 	errorReporter error_reporting.ErrorReporter
-	analytics     ux2.Analytics
+	analytics     ux.Analytics
 	cli           cli.Executor
 	mutex         sync.Mutex
 	runningScans  map[sglsp.DocumentURI]*scans.ScanProgress
 	c             *config.Config
 }
 
-func New(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux2.Analytics, cli cli.Executor) *Scanner {
+func New(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics, cli cli.Executor) *Scanner {
 	return &Scanner{
 		instrumentor:  instrumentor,
 		errorReporter: errorReporter,
@@ -93,8 +94,8 @@ func (iac *Scanner) Product() product.Product {
 	return product.ProductInfrastructureAsCode
 }
 
-func (iac *Scanner) SupportedCommands() []snyk.CommandName {
-	return []snyk.CommandName{}
+func (iac *Scanner) SupportedCommands() []types.CommandName {
+	return []types.CommandName{}
 }
 
 func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue, err error) {
@@ -311,15 +312,15 @@ func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath str
 }
 
 func (iac *Scanner) trackResult(success bool) {
-	var result ux2.Result
+	var result ux.Result
 	if success {
-		result = ux2.Success
+		result = ux.Success
 	} else {
-		result = ux2.Error
+		result = ux.Error
 	}
 	iac.analytics.AnalysisIsReady(
-		ux2.AnalysisIsReadyProperties{
-			AnalysisType: ux2.InfrastructureAsCode,
+		ux.AnalysisIsReadyProperties{
+			AnalysisType: ux.InfrastructureAsCode,
 			Result:       result,
 		},
 	)
@@ -440,10 +441,10 @@ func parseIacIssuePath(path []any) ([]string, error) {
 	return pathTokens, nil
 }
 
-func newIacCommand(codeActionTitle string, issueURL *url.URL) *snyk.CommandData {
-	command := &snyk.CommandData{
+func newIacCommand(codeActionTitle string, issueURL *url.URL) *types.CommandData {
+	command := &types.CommandData{
 		Title:     codeActionTitle,
-		CommandId: snyk.OpenBrowserCommand,
+		CommandId: types.OpenBrowserCommand,
 		Arguments: []any{issueURL.String()},
 	}
 	return command

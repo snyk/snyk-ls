@@ -27,12 +27,12 @@ import (
 
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type ServerImplMock struct{}
@@ -209,23 +209,23 @@ func TestShowMessageRequest(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
+		actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
 		expectedTitle := "test title"
 		// data, err := command.CreateFromCommandData(snyk.CommandData{
 		// 	CommandId: snyk.OpenBrowserCommand,
 		// 	Arguments: []any{"https://snyk.io"},
 		// }, loc.Server, di.AuthenticationService(), di.LearnService(), di.Notifier(), nil, nil)
-		data := snyk.CommandData{
-			CommandId: snyk.OpenBrowserCommand,
+		data := types.CommandData{
+			CommandId: types.OpenBrowserCommand,
 			Arguments: []any{"https://snyk.io"},
 		}
 		assert.NoError(t, err)
 		actionCommandMap.Add(
-			snyk.MessageAction(expectedTitle),
+			types.MessageAction(expectedTitle),
 			data,
 		)
 
-		expected := snyk.ShowMessageRequest{Message: "message", Type: snyk.Info, Actions: actionCommandMap}
+		expected := types.ShowMessageRequest{Message: "message", Type: types.Info, Actions: actionCommandMap}
 
 		di.Notifier().Send(expected)
 
@@ -238,7 +238,7 @@ func TestShowMessageRequest(t *testing.T) {
 				}
 				var actual lsp.ShowMessageRequestParams
 				_ = callbacks[0].UnmarshalParams(&actual)
-				_, ok := expected.Actions.Get(snyk.MessageAction(expectedTitle))
+				_, ok := expected.Actions.Get(types.MessageAction(expectedTitle))
 				return ok &&
 					expected.Message == actual.Message &&
 					int(expected.Type) == int(actual.Type)
@@ -259,12 +259,12 @@ func TestShowMessageRequest(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		command.SetService(snyk.NewCommandServiceMock())
-		actionCommandMap := data_structure.NewOrderedMap[snyk.MessageAction, snyk.CommandData]()
+		command.SetService(types.NewCommandServiceMock())
+		actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
 
-		actionCommandMap.Add(snyk.MessageAction(selectedAction), snyk.CommandData{CommandId: snyk.OpenBrowserCommand, Arguments: []any{"https://snyk.io"}})
+		actionCommandMap.Add(types.MessageAction(selectedAction), types.CommandData{CommandId: types.OpenBrowserCommand, Arguments: []any{"https://snyk.io"}})
 
-		request := snyk.ShowMessageRequest{Message: "message", Type: snyk.Info, Actions: actionCommandMap}
+		request := types.ShowMessageRequest{Message: "message", Type: types.Info, Actions: actionCommandMap}
 
 		di.Notifier().Send(request)
 
@@ -273,8 +273,8 @@ func TestShowMessageRequest(t *testing.T) {
 			func() bool {
 				// verify that passed command is eventually executed
 				commandService := command.Service()
-				commandServiceMock := commandService.(*snyk.CommandServiceMock)
-				return commandServiceMock.ExecutedCommands()[0].CommandId == snyk.OpenBrowserCommand
+				commandServiceMock := commandService.(*types.CommandServiceMock)
+				return commandServiceMock.ExecutedCommands()[0].CommandId == types.OpenBrowserCommand
 			},
 			2*time.Second,
 			10*time.Millisecond,

@@ -18,8 +18,7 @@ package code
 
 import (
 	codeClient "github.com/snyk/code-client-go/observability"
-
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 )
 
 // A Sentry implementation of our error reporter that respects user preferences regarding tracking

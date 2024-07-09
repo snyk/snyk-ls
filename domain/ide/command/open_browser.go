@@ -20,17 +20,17 @@ import (
 	"context"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/auth"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type openBrowserCommand struct {
-	command snyk.CommandData
+	command types.CommandData
 	logger  *zerolog.Logger
 }
 
-func (cmd *openBrowserCommand) Command() snyk.CommandData {
+func (cmd *openBrowserCommand) Command() types.CommandData {
 	return cmd.command
 }
 

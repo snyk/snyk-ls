@@ -20,12 +20,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/snyk/snyk-ls/internal/util"
 	"strings"
 	"sync"
 
+	"github.com/snyk/snyk-ls/internal/util"
+
 	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"
+
 	gafanalytics "github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -33,10 +35,10 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
-	noti "github.com/snyk/snyk-ls/domain/ide/notification"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/lsp"
+	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/uri"
 )

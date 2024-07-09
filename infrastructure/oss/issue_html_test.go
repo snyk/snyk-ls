@@ -31,7 +31,7 @@ import (
 
 func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	_ = testutil.UnitTest(t)
-	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${nonce}", "${severityIcon}", "${learnIcon}"}
+	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${ideStyle}", "${nonce}"}
 	slices.Sort(expectedVariables)
 
 	issueAdditionalData := snyk.OssIssueData{
@@ -72,8 +72,8 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, issue.ID))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, issueAdditionalData.Title))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, issue.Severity.String()))
-	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issueAdditionalData.From, " > ")))
-	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issue2.From, " > ")))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issueAdditionalData.From, " &gt; ")))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issue2.From, " &gt; ")))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "<li>list</li>"))
 	assert.False(t, strings.Contains(issueDetailsPanelHtml, "Learn about this vulnerability"))
 }
@@ -133,4 +133,69 @@ func Test_OssDetailsPanel_html_withLearn_withCustomEndpoint(t *testing.T) {
 	issueDetailsPanelHtml := getDetailsHtml(issue)
 
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, customEndpoint))
+}
+
+func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
+	_ = testutil.UnitTest(t)
+	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${ideStyle}", "${nonce}"}
+	slices.Sort(expectedVariables)
+
+	issueAdditionalData := snyk.OssIssueData{
+		Title:       "myTitle",
+		Name:        "myIssue",
+		Description: "- list",
+		From:        []string{"1", "2", "3", "4"},
+	}
+
+	issue2 := snyk.OssIssueData{
+		Title:       "myTitle2",
+		Name:        "myIssue2",
+		Description: "- list2",
+		From:        []string{"5", "6", "7", "8"},
+	}
+
+	issue3 := snyk.OssIssueData{
+		Title:       "myTitle3",
+		Name:        "myIssue3",
+		Description: "- list3",
+		From:        []string{"9", "10"},
+	}
+
+	issue4 := snyk.OssIssueData{
+		Title:       "myTitle4",
+		Name:        "myIssue4",
+		Description: "- list4",
+		From:        []string{"11"},
+	}
+	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
+	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issue2)
+	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issue3)
+	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issue4)
+
+	issue := snyk.Issue{
+		ID:             "randomId",
+		Severity:       snyk.Critical,
+		AdditionalData: issueAdditionalData,
+	}
+
+	// invoke methode under test
+	issueDetailsPanelHtml := getDetailsHtml(issue)
+
+	// compare
+	reg := regexp.MustCompile(`\$\{\w+\}`)
+	actualVariables := reg.FindAllString(issueDetailsPanelHtml, -1)
+	slices.Sort(actualVariables)
+	actualVariables = slices.Compact(actualVariables)
+
+	assert.Equal(t, expectedVariables, actualVariables)
+
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, issueAdditionalData.Name))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, issue.ID))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, issueAdditionalData.Title))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, issue.Severity.String()))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issueAdditionalData.From, " &gt; ")))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issue2.From, " &gt; ")))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, "<li>list</li>"))
+	assert.False(t, strings.Contains(issueDetailsPanelHtml, "Learn about this vulnerability"))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, "...and"))
 }

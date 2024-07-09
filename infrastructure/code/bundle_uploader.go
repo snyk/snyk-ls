@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 
 	"github.com/puzpuzpuz/xsync"
+
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 
 	"github.com/snyk/snyk-ls/application/config"

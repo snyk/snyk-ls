@@ -32,6 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -59,14 +60,14 @@ var (
 			Character: 7,
 		},
 	}
-	FakeCommand = snyk.CommandData{
+	FakeCommand = types.CommandData{
 		Title:     "Code Flow blah blah fake",
-		CommandId: snyk.NavigateToRangeCommand,
+		CommandId: types.NavigateToRangeCommand,
 		Arguments: []any{"path", fakeRange},
 	}
-	FakeFixCommand = snyk.CommandData{
+	FakeFixCommand = types.CommandData{
 		Title:     "Code Flow blah blah fake",
-		CommandId: snyk.CodeFixCommand,
+		CommandId: types.CodeFixCommand,
 		Arguments: []any{"id", "path", fakeRange},
 	}
 
@@ -77,7 +78,7 @@ var (
 		Product:          product.ProductCode,
 		IssueType:        snyk.CodeQualityIssue,
 		Message:          "This is a dummy error (severity error)",
-		CodelensCommands: []snyk.CommandData{FakeCommand, FakeFixCommand},
+		CodelensCommands: []types.CommandData{FakeCommand, FakeFixCommand},
 		CodeActions:      []snyk.CodeAction{FakeCodeAction},
 		AdditionalData: snyk.CodeIssueData{
 			Key:           uuid.New().String(),

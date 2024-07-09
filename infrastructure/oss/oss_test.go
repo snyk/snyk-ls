@@ -29,14 +29,14 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/observability/error_reporting"
-	"github.com/snyk/snyk-ls/domain/observability/performance"
-	ux2 "github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -60,7 +60,7 @@ func Test_toIssueSeverity(t *testing.T) {
 
 func Test_determineTargetFile(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(c), cli.NewTestExecutor(), getLearnMock(t), notification.NewNotifier()).(*CLIScanner)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux.NewTestAnalytics(c), cli.NewTestExecutor(), getLearnMock(t), notification.NewNotifier()).(*CLIScanner)
 	assert.Equal(t, "package.json", scanner.determineTargetFile("package-lock.json"))
 	assert.Equal(t, "pom.xml", scanner.determineTargetFile("pom.xml"))
 	assert.Equal(t, "asdf", scanner.determineTargetFile("asdf"))
@@ -69,7 +69,7 @@ func Test_determineTargetFile(t *testing.T) {
 
 func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 	c := testutil.UnitTest(t)
-	analytics := ux2.NewTestAnalytics(c)
+	analytics := ux.NewTestAnalytics(c)
 	workingDir, _ := os.Getwd()
 	executor := cli.NewTestExecutor()
 	fileContent, _ := os.ReadFile(workingDir + "/testdata/oss-result.json")
@@ -80,9 +80,9 @@ func Test_SuccessfulScanFile_TracksAnalytics(t *testing.T) {
 	_, _ = scanner.Scan(context.Background(), p, "")
 
 	assert.Len(t, analytics.GetAnalytics(), 1)
-	assert.Equal(t, ux2.AnalysisIsReadyProperties{
-		AnalysisType: ux2.OpenSource,
-		Result:       ux2.Success,
+	assert.Equal(t, ux.AnalysisIsReadyProperties{
+		AnalysisType: ux.OpenSource,
+		Result:       ux.Success,
 	}, analytics.GetAnalytics()[0])
 }
 
@@ -298,7 +298,7 @@ func Test_introducingPackageAndVersionJava(t *testing.T) {
 func Test_ContextCanceled_Scan_DoesNotScan(t *testing.T) {
 	c := testutil.UnitTest(t)
 	cliMock := cli.NewTestExecutor()
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(c), cliMock, getLearnMock(t), notification.NewNotifier())
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux.NewTestAnalytics(c), cliMock, getLearnMock(t), notification.NewNotifier())
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -326,7 +326,7 @@ func mavenTestIssue() ossIssue {
 
 func TestUnmarshalOssJsonSingle(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(c), cli.NewTestExecutor(), getLearnMock(t), notification.NewNotifier()).(*CLIScanner)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux.NewTestAnalytics(c), cli.NewTestExecutor(), getLearnMock(t), notification.NewNotifier()).(*CLIScanner)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -344,7 +344,7 @@ func TestUnmarshalOssJsonSingle(t *testing.T) {
 
 func TestUnmarshalOssJsonArray(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(c), cli.NewTestExecutor(), getLearnMock(t), notification.NewNotifier()).(*CLIScanner)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux.NewTestAnalytics(c), cli.NewTestExecutor(), getLearnMock(t), notification.NewNotifier()).(*CLIScanner)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -362,7 +362,7 @@ func TestUnmarshalOssJsonArray(t *testing.T) {
 
 func TestUnmarshalOssErroneousJson(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(c), cli.NewTestExecutor(), getLearnMock(t), notification.NewNotifier()).(*CLIScanner)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux.NewTestAnalytics(c), cli.NewTestExecutor(), getLearnMock(t), notification.NewNotifier()).(*CLIScanner)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -416,7 +416,7 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 	folderPath := workingDir
 	fakeCli := cli.NewTestExecutor()
 	fakeCli.ExecuteDuration = time.Second
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(c), fakeCli, getLearnMock(t), notification.NewNotifier())
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux.NewTestAnalytics(c), fakeCli, getLearnMock(t), notification.NewNotifier())
 	wg := sync.WaitGroup{}
 	p, _ := filepath.Abs(workingDir + testDataPackageJson)
 
@@ -456,7 +456,7 @@ func sampleIssue() ossIssue {
 
 func Test_prepareScanCommand(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(c), cli.NewTestExecutor(), getLearnMock(t), notification.NewNotifier()).(*CLIScanner)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux.NewTestAnalytics(c), cli.NewTestExecutor(), getLearnMock(t), notification.NewNotifier()).(*CLIScanner)
 
 	t.Run("Expands parameters", func(t *testing.T) {
 		settings := config.CliSettings{
@@ -491,7 +491,7 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	fakeCli := cli.NewTestExecutorWithResponseFromFile(path.Join(workingDir, "testdata/oss-result.json"), c.Logger())
 	fakeCli.ExecuteDuration = time.Millisecond
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(c), fakeCli, getLearnMock(t), notification.NewNotifier()).(*CLIScanner)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux.NewTestAnalytics(c), fakeCli, getLearnMock(t), notification.NewNotifier()).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
@@ -512,7 +512,7 @@ func Test_scheduleNewScan_CapturesAnalytics(t *testing.T) {
 	c := testutil.UnitTest(t)
 	// Arrange
 	fakeCli := cli.NewTestExecutor()
-	analytics := ux2.NewTestAnalytics(c)
+	analytics := ux.NewTestAnalytics(c)
 	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, fakeCli, getLearnMock(t), notification.NewNotifier()).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
@@ -529,8 +529,8 @@ func Test_scheduleNewScan_CapturesAnalytics(t *testing.T) {
 		return fakeCli.GetFinishedScans() == 1
 	}, 3*time.Second, 50*time.Millisecond)
 
-	assert.Equal(t, ux2.AnalysisIsTriggeredProperties{
-		AnalysisType:    []ux2.AnalysisType{ux2.OpenSource},
+	assert.Equal(t, ux.AnalysisIsTriggeredProperties{
+		AnalysisType:    []ux.AnalysisType{ux.OpenSource},
 		TriggeredByUser: false,
 	}, analytics.GetAnalytics()[0])
 }
@@ -542,7 +542,7 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 	config.CurrentConfig().SetSnykOssEnabled(false)
 	fakeCli := cli.NewTestExecutor()
 	fakeCli.ExecuteDuration = time.Millisecond
-	analytics := ux2.NewTestAnalytics(c)
+	analytics := ux.NewTestAnalytics(c)
 	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, fakeCli, getLearnMock(t), notification.NewNotifier()).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
@@ -566,7 +566,7 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 	// Arrange
 	fakeCli := cli.NewTestExecutor()
 	fakeCli.ExecuteDuration = time.Millisecond
-	analytics := ux2.NewTestAnalytics(c)
+	analytics := ux.NewTestAnalytics(c)
 	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, fakeCli, getLearnMock(t), notification.NewNotifier()).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
@@ -592,7 +592,7 @@ func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testin
 	// Arrange
 	fakeCli := cli.NewTestExecutor()
 	fakeCli.ExecuteDuration = time.Millisecond
-	analytics := ux2.NewTestAnalytics(c)
+	analytics := ux.NewTestAnalytics(c)
 	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), analytics, fakeCli, getLearnMock(t), notification.NewNotifier()).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 2 * time.Second
@@ -619,7 +619,7 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 	fakeCli := cli.NewTestExecutorWithResponseFromFile(path.Join(workingDir,
 		"testdata/oss-result-without-targetFile.json"), c.Logger())
 	fakeCli.ExecuteDuration = time.Millisecond
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux2.NewTestAnalytics(c), fakeCli, getLearnMock(t), notification.NewNotifier())
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), ux.NewTestAnalytics(c), fakeCli, getLearnMock(t), notification.NewNotifier())
 	filePath, _ := filepath.Abs(workingDir + testDataPackageJson)
 
 	// Act

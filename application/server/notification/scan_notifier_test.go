@@ -30,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type sendMessageTestCase struct {
@@ -167,7 +168,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 			References:          []snyk.Reference{},
 			IssueDescriptionURL: &url.URL{},
 			CodeActions:         []snyk.CodeAction{},
-			CodelensCommands:    []snyk.CommandData{},
+			CodelensCommands:    []types.CommandData{},
 			AdditionalData: snyk.IaCIssueData{
 				Key:           "098f6bcd4621d373cade4e832627b4f6",
 				Title:         "iacTitle",
@@ -191,7 +192,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 			References:          []snyk.Reference{},
 			IssueDescriptionURL: &url.URL{},
 			CodeActions:         []snyk.CodeAction{},
-			CodelensCommands:    []snyk.CommandData{},
+			CodelensCommands:    []types.CommandData{},
 			AdditionalData: snyk.CodeIssueData{
 				Key:                "5a105e8b9d40e1329780d62ea2265d8a",
 				Message:            "codeMessage",
@@ -305,7 +306,7 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 			References:          []snyk.Reference{},
 			IssueDescriptionURL: &url.URL{},
 			CodeActions:         []snyk.CodeAction{},
-			CodelensCommands:    []snyk.CommandData{},
+			CodelensCommands:    []types.CommandData{},
 			Ecosystem:           "OSS Ecosystem",
 			CWEs:                []string{"CWE-184"},
 			CVEs:                []string{"CVE-2023-45133"},
@@ -412,7 +413,7 @@ func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
 			References:          []snyk.Reference{},
 			IssueDescriptionURL: &url.URL{},
 			CodeActions:         []snyk.CodeAction{},
-			CodelensCommands:    []snyk.CommandData{},
+			CodelensCommands:    []types.CommandData{},
 			AdditionalData: snyk.CodeIssueData{
 				Key:                "5a105e8b9d40e1329780d62ea2265d8a",
 				Message:            "codeMessage",
@@ -519,7 +520,7 @@ func Test_SendSuccess_SendsForSnykCode_WithIgnores(t *testing.T) {
 			References:          []snyk.Reference{},
 			IssueDescriptionURL: &url.URL{},
 			CodeActions:         []snyk.CodeAction{},
-			CodelensCommands:    []snyk.CommandData{},
+			CodelensCommands:    []types.CommandData{},
 			AdditionalData: snyk.CodeIssueData{
 				Key:                "5a105e8b9d40e1329780d62ea2265d8a",
 				Message:            "codeMessage",
@@ -603,7 +604,7 @@ func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
 			References:          []snyk.Reference{},
 			IssueDescriptionURL: &url.URL{},
 			CodeActions:         []snyk.CodeAction{},
-			CodelensCommands:    []snyk.CommandData{},
+			CodelensCommands:    []types.CommandData{},
 			AdditionalData: snyk.IaCIssueData{
 				Key:           "098f6bcd4621d373cade4e832627b4f6",
 				Title:         "iacTitle",

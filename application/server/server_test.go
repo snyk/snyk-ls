@@ -22,7 +22,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -37,22 +36,25 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/observability/ux"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -61,10 +63,10 @@ const maxIntegTestDuration = 45 * time.Minute
 var (
 	ctx               = context.Background()
 	supportedCommands = []string{
-		snyk.WorkspaceScanCommand,
-		snyk.OpenBrowserCommand,
-		snyk.NavigateToRangeCommand,
-		snyk.LoginCommand,
+		types.WorkspaceScanCommand,
+		types.OpenBrowserCommand,
+		types.NavigateToRangeCommand,
+		types.LoginCommand,
 	}
 )
 
@@ -232,53 +234,6 @@ func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
 		"did not receive callback because of wrong protocol version")
 }
 
-func Test_initialize_shouldDefaultToTokenAuthentication(t *testing.T) {
-	loc, _ := setupServer(t)
-
-	_, err := loc.Client.Call(ctx, "initialize", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, lsp.TokenAuthentication, config.CurrentConfig().AuthenticationMethod())
-	assert.Equal(t, "*snyk.FakeAuthenticationProvider", reflect.TypeOf(di.AuthenticationService().Provider()).String())
-}
-
-func Test_initialize_shouldInitToOauthAuthenticationWhenConfigured(t *testing.T) {
-	loc, _ := setupServer(t)
-
-	settings := lsp.Settings{AuthenticationMethod: lsp.OAuthAuthentication}
-
-	_, err := loc.Client.Call(ctx, "initialize", lsp.InitializeParams{InitializationOptions: settings})
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, lsp.OAuthAuthentication, config.CurrentConfig().AuthenticationMethod())
-	assert.Equal(t, "*oauth.oAuthProvider", reflect.TypeOf(di.AuthenticationService().Provider()).String())
-}
-
-func Test_initialize_shouldInitToTokenAuthenticationWhenConfigured(t *testing.T) {
-	loc, _ := setupServer(t)
-
-	settings := lsp.Settings{AuthenticationMethod: lsp.OAuthAuthentication}
-
-	_, err := loc.Client.Call(ctx, "initialize", lsp.InitializeParams{InitializationOptions: settings})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, "*oauth.oAuthProvider", reflect.TypeOf(di.AuthenticationService().Provider()).String())
-
-	_, err = loc.Client.Call(ctx,
-		"workspace/didChangeConfiguration",
-		lsp.DidChangeConfigurationParams{Settings: lsp.Settings{AuthenticationMethod: lsp.TokenAuthentication}})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, lsp.TokenAuthentication, config.CurrentConfig().AuthenticationMethod())
-	assert.Equal(t, "*auth.CliAuthenticationProvider", reflect.TypeOf(di.AuthenticationService().Provider()).String())
-}
-
 func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 	loc, _ := setupServer(t)
 
@@ -291,22 +246,22 @@ func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.NavigateToRangeCommand)
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.WorkspaceScanCommand)
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.WorkspaceFolderScanCommand)
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.OpenBrowserCommand)
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.LoginCommand)
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.CopyAuthLinkCommand)
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.LogoutCommand)
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.TrustWorkspaceFoldersCommand)
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetLearnLesson)
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.OpenLearnLesson)
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetSettingsSastEnabled)
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetFeatureFlagStatus)
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.GetActiveUserCommand)
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.CodeFixCommand)
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.CodeSubmitFixFeedback)
-	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, snyk.CodeFixDiffsCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.NavigateToRangeCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.WorkspaceScanCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.WorkspaceFolderScanCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.OpenBrowserCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.LoginCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.CopyAuthLinkCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.LogoutCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.TrustWorkspaceFoldersCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.GetLearnLesson)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.OpenLearnLesson)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.GetSettingsSastEnabled)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.GetFeatureFlagStatus)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.GetActiveUserCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.CodeFixCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.CodeSubmitFixFeedback)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.CodeFixDiffsCommand)
 }
 
 func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
@@ -387,7 +342,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	testutil.IntegTest(t) // this needs an authenticated user
 	loc, _ := setupServer(t)
 	didOpenParams, dir := didOpenTextParams(t)
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	clientParams := lsp.InitializeParams{
@@ -444,7 +399,7 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeFixLenses(t *testing.T
 	testutil.IntegTest(t) // this needs an authenticated user
 	loc, _ := setupServer(t)
 	didOpenParams, dir := didOpenTextParams(t)
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	clientParams := lsp.InitializeParams{
@@ -735,7 +690,7 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 		Token:                       "token",
 	}
 
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	params := lsp.InitializeParams{
@@ -772,14 +727,14 @@ func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 		t.Fatal(err, "couldn't send initialized")
 	}
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder) }, time.Second, time.Millisecond)
 }
 
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
@@ -794,6 +749,59 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	assert.Eventually(
 		t,
 		checkForPublishedDiagnostics(t, uri.PathFromUri(fileUri), -1, jsonRPCRecorder),
+		5*time.Second,
+		50*time.Millisecond,
+	)
+}
+
+func createTemporaryDirectoryWithSnykFile(t *testing.T) (snykFilePath string, folderPath string) {
+	t.Helper()
+
+	temp := t.TempDir()
+	temp = filepath.Clean(temp)
+	temp, err := filepath.Abs(temp)
+	if err != nil {
+		t.Fatalf("couldn't get abs folder path of temp dir: %v", err)
+	}
+
+	snykFilePath = filepath.Join(temp, ".snyk")
+	yamlContent := `
+ignore:
+  SNYK-JS-QS-3153490:
+    - '*':
+        reason: Ignore me 30 days
+        expires: 2024-08-26T13:55:05.414Z
+        created: 2024-07-26T13:55:05.417Z
+patch: {}
+`
+	err = os.WriteFile(snykFilePath, []byte(yamlContent), 0600)
+	assert.NoError(t, err)
+	return snykFilePath, temp
+}
+
+func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.T) {
+	loc, jsonRPCRecorder := setupServer(t)
+	c := config.CurrentConfig()
+	c.SetSnykCodeEnabled(false)
+	c.SetAuthenticationMethod(lsp.FakeAuthentication)
+	di.AuthenticationService().ConfigureProviders(c)
+
+	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0]
+	fakeAuthenticationProvider.(*authentication.FakeAuthenticationProvider).IsAuthenticated = true
+
+	_, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		t.Fatalf("initialization failed: %v", err)
+	}
+
+	snykFilePath, folderPath := createTemporaryDirectoryWithSnykFile(t)
+
+	sendFileSavedMessage(t, snykFilePath, folderPath, loc)
+
+	// Wait for $/snyk.scan notification
+	assert.Eventually(
+		t,
+		checkForSnykScan(t, jsonRPCRecorder),
 		5*time.Second,
 		50*time.Millisecond,
 	)
@@ -829,7 +837,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -971,8 +979,8 @@ func Test_CodeActionResolve_ShouldExecuteCommands(t *testing.T) {
 	}
 	config.CurrentConfig().SetAutomaticScanning(false)
 
-	expected := snyk.OpenBrowserCommand
-	serviceMock := snyk.NewCommandServiceMock()
+	expected := types.OpenBrowserCommand
+	serviceMock := types.NewCommandServiceMock()
 	command.SetService(serviceMock)
 
 	_, err = loc.Client.Call(ctx, "codeAction/resolve", lsp.CodeAction{
@@ -1014,11 +1022,19 @@ func checkForPublishedDiagnostics(t *testing.T, testPath string, expectedNumber 
 	}
 }
 
+func checkForSnykScan(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder) func() bool {
+	t.Helper()
+	return func() bool {
+		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
+		return len(notifications) > 0
+	}
+}
+
 func Test_IntegrationHoverResults(t *testing.T) {
 	loc, _ := setupServer(t)
 	c := testutil.IntegTest(t)
 
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*snyk.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	var cloneTargetDir, err = setupCustomTestRepo(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
@@ -1169,7 +1185,7 @@ func Test_handleProtocolVersion(t *testing.T) {
 
 		notificationReceived := make(chan bool)
 		f := func(params any) {
-			mrq, ok := params.(snyk.ShowMessageRequest)
+			mrq, ok := params.(types.ShowMessageRequest)
 			require.True(t, ok)
 			require.Contains(t, mrq.Message, "does not match")
 			notificationReceived <- true
