@@ -52,8 +52,8 @@ func WithDiffer(differ Differ) func(*Finder) {
 	}
 }
 
-func (f *Finder) Find(baseList, currentList []Identifiable) (enrichedList []Identifiable, err error) {
-	deltaList, err := f.FindDiff(baseList, currentList)
+func (f *Finder) Enrich(baseList, currentList []Identifiable) (enrichedList []Identifiable, err error) {
+	deltaList, err := f.Diff(baseList, currentList)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (f *Finder) Find(baseList, currentList []Identifiable) (enrichedList []Iden
 	return currentList, nil
 }
 
-func (f *Finder) FindDiff(baseList, currentList []Identifiable) (deltaList []Identifiable, err error) {
+func (f *Finder) Diff(baseList, currentList []Identifiable) (diffList []Identifiable, err error) {
 	if len(currentList) == 0 {
 		return nil, errors.New("currentlist is empty")
 	}
@@ -94,7 +94,7 @@ func (f *Finder) FindDiff(baseList, currentList []Identifiable) (deltaList []Ide
 		}
 	}
 
-	deltaList = f.differ.Diff(baseList, currentList)
+	diffList = f.differ.Diff(baseList, currentList)
 
-	return deltaList, nil
+	return diffList, nil
 }

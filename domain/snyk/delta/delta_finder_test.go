@@ -25,14 +25,14 @@ import (
 
 func TestFind_EmptyLists(t *testing.T) {
 	f := NewFinder()
-	_, err := f.Find([]Identifiable{}, []Identifiable{})
+	_, err := f.Enrich([]Identifiable{}, []Identifiable{})
 
 	assert.EqualError(t, err, "currentlist is empty")
 }
 
 func TestFind_MissingDiffer(t *testing.T) {
 	f := NewFinder(WithEnricher(FindingsEnricher{}))
-	_, err := f.Find(
+	_, err := f.Enrich(
 		[]Identifiable{&mockIdentifiable{globalIdentity: "1"}},
 		[]Identifiable{&mockIdentifiable{globalIdentity: "2"}})
 
@@ -41,7 +41,7 @@ func TestFind_MissingDiffer(t *testing.T) {
 
 func TestFind_OnlyDiffer(t *testing.T) {
 	f := NewFinder(WithDiffer(FindingsDiffer{}))
-	deltaList, err := f.FindDiff(
+	deltaList, err := f.Diff(
 		[]Identifiable{&mockIdentifiable{globalIdentity: "1"}},
 		[]Identifiable{
 			&mockIdentifiable{globalIdentity: "1"},
@@ -58,7 +58,7 @@ func TestFind_DifferWithEnricher(t *testing.T) {
 		WithDiffer(FindingsDiffer{}),
 	)
 
-	enrichedList, err := f.Find(
+	enrichedList, err := f.Enrich(
 		[]Identifiable{&mockIdentifiable{globalIdentity: "1"}},
 		[]Identifiable{
 			&mockIdentifiable{globalIdentity: "1"},
@@ -113,7 +113,7 @@ func TestFind_DifferWithEnricherWithMatcher(t *testing.T) {
 	currentIssueList = append(currentIssueList, newIssue)
 	baseFindingIdentifiable := convertToFindingsIdentifiable(baseIssueList)
 	currentFindingIdentifiable := convertToFindingsIdentifiable(currentIssueList)
-	enrichedList, err := f.Find(baseFindingIdentifiable, currentFindingIdentifiable)
+	enrichedList, err := f.Enrich(baseFindingIdentifiable, currentFindingIdentifiable)
 
 	assert.NoError(t, err)
 	assert.Len(t, enrichedList, 3)
@@ -151,7 +151,7 @@ func TestFind_DifferWithEnricherWithMatcher_NoNewIssues(t *testing.T) {
 	}
 
 	baseFindingIdentifiable := convertToFindingsIdentifiable(baseIssueList)
-	enrichedList, err := f.Find(baseFindingIdentifiable, baseFindingIdentifiable)
+	enrichedList, err := f.Enrich(baseFindingIdentifiable, baseFindingIdentifiable)
 
 	assert.NoError(t, err)
 	assert.Len(t, enrichedList, 2)
