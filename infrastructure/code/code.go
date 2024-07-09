@@ -207,8 +207,8 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	}
 
 	if c.IsDeltaFindingsEnabled() {
-		baseScanResults, err := scanBaseBranch(ctx, logger, sc, folderPath)
-		if err == nil {
+		baseScanResults, baseScanErr := scanBaseBranch(ctx, logger, sc, folderPath)
+		if baseScanErr == nil {
 			results = getDelta(c.Logger(), baseScanResults, results)
 		}
 	}
