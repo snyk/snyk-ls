@@ -26,27 +26,10 @@ import (
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/types"
 )
-
-func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
-	var as []AuthenticationProvider
-	switch c.AuthenticationMethod() {
-	case lsp.FakeAuthentication:
-		a.setProviders([]AuthenticationProvider{NewFakeCliAuthenticationProvider(c)})
-	case lsp.TokenAuthentication:
-		as = Token(c, a.errorReporter)
-		a.setProviders(as)
-	case "":
-		// don't do anything
-	default:
-		as = Default(c, a.errorReporter, a)
-		a.setProviders(as)
-	}
-}
 
 // Token authentication configures token only authentication
 func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) []AuthenticationProvider {

@@ -125,6 +125,22 @@ func (a *AuthenticationServiceImpl) setProviders(providers []AuthenticationProvi
 	a.providers = providers
 }
 
+func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
+	var as []AuthenticationProvider
+	switch c.AuthenticationMethod() {
+	case lsp.FakeAuthentication:
+		a.setProviders([]AuthenticationProvider{NewFakeCliAuthenticationProvider(c)})
+	case lsp.TokenAuthentication:
+		as = Token(c, a.errorReporter)
+		a.setProviders(as)
+	case "":
+		// don't do anything
+	default:
+		as = Default(c, a.errorReporter, a)
+		a.setProviders(as)
+	}
+}
+
 func (a *AuthenticationServiceImpl) HandleInvalidCredentials(c *config.Config) {
 	logger := c.Logger().With().Str("method", "AuthenticationServiceImpl.HandleInvalidCredentials").Logger()
 	msg := "Your authentication credentials cannot be validated. Automatically clearing credentials. You need to re-authenticate to use Snyk."
