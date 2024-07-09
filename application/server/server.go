@@ -540,21 +540,28 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		bgCtx := context.Background()
 		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "TextDocumentDidSaveHandler").Logger()
-
 		logger.Info().Interface("params", params).Msg("Receiving")
+
+		autoScanEnabled := c.IsAutoScanEnabled()
+
 		di.FileWatcher().SetFileAsSaved(params.TextDocument.URI)
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 
 		f := workspace.Get().GetFolderContaining(filePath)
-		autoScanEnabled := config.CurrentConfig().IsAutoScanEnabled()
-		if f != nil && autoScanEnabled {
-			go f.ScanFile(bgCtx, filePath)
-		} else {
+
+		if f != nil && autoScanEnabled && uri.IsDotSnykFile(params.TextDocument.URI) {
+			go f.ScanFolder(bgCtx)
+			return nil, nil
+		}
+
+		if f != nil {
 			if autoScanEnabled {
-				logger.Warn().Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
+				go f.ScanFile(bgCtx, filePath)
 			} else {
 				logger.Warn().Msg("Not scanning, auto-scan is disabled")
 			}
+		} else if autoScanEnabled {
+			logger.Warn().Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
 		}
 		return nil, nil
 	})
