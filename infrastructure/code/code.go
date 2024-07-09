@@ -18,10 +18,9 @@ package code
 
 import (
 	"context"
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/rs/zerolog"
 	"github.com/snyk/snyk-ls/domain/snyk/delta"
+	"github.com/snyk/snyk-ls/infrastructure/vcs"
 	"os"
 	"sync"
 	"time"
@@ -208,8 +207,10 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	}
 
 	if c.IsDeltaFindingsEnabled() {
-		baseScanResults, _ := scanBaseBranch(ctx, logger, sc, folderPath)
-		results = getDelta(c.Logger(), baseScanResults, results)
+		baseScanResults, err := scanBaseBranch(ctx, logger, sc, folderPath)
+		if err == nil {
+			results = getDelta(c.Logger(), baseScanResults, results)
+		}
 	}
 
 	// Populate HTML template
@@ -220,61 +221,19 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	return results, err
 }
 
-func cloneBaseBranch(currentRepoPath string, branchName string, logger *zerolog.Logger) (string, error) {
-	tmpDir, err := os.MkdirTemp("", "snyk_tmp_repo")
-	logger.Info().Msg("Creating tmp directory for base branch")
-
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to create tmp directory for base branch")
-		return "", err
-	}
-
-	baseBranchName := plumbing.NewBranchReferenceName(branchName)
-	currentRepo, err := git.PlainOpen(currentRepoPath)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to open current repo in go-git " + currentRepoPath)
-		return "", err
-	}
-
-	currentRepoBranch, err := currentRepo.Head()
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to get HEAD for " + currentRepoPath)
-		return "", err
-	}
-
-	if currentRepoBranch.Name() == baseBranchName {
-		logger.Info().Msg("Current branch is the same as base. Skipping cloning")
-		return "", nil
-	}
-
-	_, err = git.PlainClone(tmpDir, false, &git.CloneOptions{
-		URL:           currentRepoPath,
-		ReferenceName: baseBranchName,
-		SingleBranch:  true,
-	})
-
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to clone base in temp repo with go-git " + tmpDir)
-		return "", err
-	}
-
-	return tmpDir, nil
-}
-
 func scanBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Scanner, folderPath string) ([]snyk.Issue, error) {
-	filesToBeScanned := make(map[string]bool)
-	mainBranchName := "master"
-	folderPath, err := cloneBaseBranch(folderPath, mainBranchName, &logger)
+	mainBranchName := getBaseBranchName()
+	gw := &vcs.GitWrapper{}
+	folderPath, err := vcs.Clone(folderPath, mainBranchName, &logger, gw)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to clone base branch")
 		return []snyk.Issue{}, err
 	}
 
-	startTime := time.Now()
-	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
-	defer sc.BundleUploader.instrumentor.Finish(span)
-
 	defer func() {
+		if folderPath == "" {
+			return
+		}
 		err = os.RemoveAll(folderPath)
 		logger.Info().Msg("removing base branch tmp dir " + folderPath)
 
@@ -282,6 +241,11 @@ func scanBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Scanner, fol
 			logger.Error().Err(err).Msg("couldn't remove tmp dir " + folderPath)
 		}
 	}()
+
+	filesToBeScanned := make(map[string]bool)
+	startTime := time.Now()
+	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
+	defer sc.BundleUploader.instrumentor.Finish(span)
 
 	mainFileFilter, _ := sc.fileFilters.Load(folderPath)
 	if mainFileFilter == nil {
@@ -305,6 +269,10 @@ func scanBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Scanner, fol
 	}
 
 	return baseScanResults, nil
+}
+
+func getBaseBranchName() string {
+	return "master"
 }
 
 func getDelta(zlog *zerolog.Logger, baseIssueList []snyk.Issue, currentIssueList []snyk.Issue) []snyk.Issue {
