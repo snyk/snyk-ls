@@ -62,6 +62,8 @@ func getDetailsHtml(issue snyk.Issue) string {
 	}
 	overview := markdown.ToHTML([]byte(additionalData.Description), nil, nil)
 
+	detailedPaths := getDetailedPaths(additionalData)
+
 	data := map[string]interface{}{
 		"IssueId":            issue.ID,
 		"IssueName":          additionalData.Name,
@@ -79,7 +81,8 @@ func getDetailsHtml(issue snyk.Issue) string {
 		"LessonUrl":          additionalData.Lesson,
 		"LessonIcon":         html.GetLessonIconSvg(),
 		"FixedIn":            additionalData.FixedIn,
-		"DetailedPaths":      getDetailedPaths(additionalData),
+		"DetailedPaths":      detailedPaths,
+		"MoreDetailedPaths":  len(detailedPaths) - 3,
 	}
 
 	var html bytes.Buffer
@@ -114,7 +117,7 @@ type IntroducedThrough struct {
 }
 
 func getIntroducedThroughs(issue snyk.OssIssueData) []IntroducedThrough {
-	introducedThroughs := []IntroducedThrough{}
+	var introducedThroughs []IntroducedThrough
 
 	snykUi := config.CurrentConfig().SnykUi()
 	if len(issue.From) > 0 {
