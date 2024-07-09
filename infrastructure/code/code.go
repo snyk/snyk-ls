@@ -187,24 +187,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	filesToBeScanned := sc.getFilesToBeScanned(folderPath)
 	sc.changedFilesMutex.Unlock()
 
-	startTime := time.Now()
-	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
-	defer sc.BundleUploader.instrumentor.Finish(span)
-
-	// Start the scan
-	fileFilter, _ := sc.fileFilters.Load(folderPath)
-	if fileFilter == nil {
-		fileFilter = filefilter.NewFileFilter(folderPath, &logger)
-		sc.fileFilters.Store(folderPath, fileFilter)
-	}
-	files := fileFilter.FindNonIgnoredFiles()
-	metrics := sc.newMetrics(startTime)
-	var results []snyk.Issue
-	if sc.useIgnoresFlow() {
-		results, err = sc.UploadAndAnalyzeWithIgnores(span.Context(), folderPath, files, filesToBeScanned)
-	} else {
-		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, filesToBeScanned)
-	}
+	results, err := internalScan(ctx, sc, folderPath, logger, err, filesToBeScanned)
 
 	if c.IsDeltaFindingsEnabled() {
 		baseScanResults, baseScanErr := scanBaseBranch(ctx, logger, sc, folderPath)
@@ -218,6 +201,27 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 
 	sc.removeFromCache(filesToBeScanned)
 	sc.addToCache(results)
+	return results, err
+}
+
+func internalScan(ctx context.Context, sc *Scanner, folderPath string, logger zerolog.Logger, err error, filesToBeScanned map[string]bool) ([]snyk.Issue, error) {
+	startTime := time.Now()
+	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
+	defer sc.BundleUploader.instrumentor.Finish(span)
+
+	fileFilter, _ := sc.fileFilters.Load(folderPath)
+	if fileFilter == nil {
+		fileFilter = filefilter.NewFileFilter(folderPath, &logger)
+		sc.fileFilters.Store(folderPath, fileFilter)
+	}
+	files := fileFilter.FindNonIgnoredFiles()
+	metrics := sc.newMetrics(startTime)
+	var results []snyk.Issue
+	if sc.useIgnoresFlow() {
+		results, err = sc.UploadAndAnalyzeWithIgnores(span.Context(), folderPath, files, filesToBeScanned)
+	} else {
+		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, filesToBeScanned)
+	}
 	return results, err
 }
 
@@ -243,32 +247,13 @@ func scanBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Scanner, fol
 	}()
 
 	filesToBeScanned := make(map[string]bool)
-	startTime := time.Now()
-	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
-	defer sc.BundleUploader.instrumentor.Finish(span)
-
-	mainFileFilter, _ := sc.fileFilters.Load(folderPath)
-	if mainFileFilter == nil {
-		mainFileFilter = filefilter.NewFileFilter(folderPath, &logger)
-		sc.fileFilters.Store(folderPath, mainFileFilter)
-	}
-
-	files := mainFileFilter.FindNonIgnoredFiles()
-	metrics := sc.newMetrics(startTime)
-	logger.Info().Msg("Scanning base branch")
-
-	var baseScanResults []snyk.Issue
-	if sc.useIgnoresFlow() {
-		baseScanResults, err = sc.UploadAndAnalyzeWithIgnores(span.Context(), folderPath, files, filesToBeScanned)
-	} else {
-		baseScanResults, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, filesToBeScanned)
-	}
+	results, err := internalScan(ctx, sc, folderPath, logger, err, filesToBeScanned)
 
 	if err != nil {
 		return []snyk.Issue{}, err
 	}
 
-	return baseScanResults, nil
+	return results, nil
 }
 
 func getBaseBranchName() string {
