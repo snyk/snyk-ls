@@ -162,7 +162,6 @@ type Config struct {
 	isSnykIacEnabled                 concurrency.AtomicBool
 	isSnykContainerEnabled           concurrency.AtomicBool
 	isSnykAdvisorEnabled             concurrency.AtomicBool
-	isTelemetryEnabled               concurrency.AtomicBool
 	manageBinariesAutomatically      concurrency.AtomicBool
 	logPath                          string
 	logFile                          *os.File

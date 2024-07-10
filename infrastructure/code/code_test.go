@@ -269,9 +269,8 @@ func TestUploadAndAnalyze(t *testing.T) {
 			baseDir, firstDoc, _, content1, _ := setupDocs(t)
 			fullPath := uri.PathFromUri(firstDoc.URI)
 			docs := sliceToChannel([]string{fullPath})
-			metrics := s.newMetrics(time.Time{})
 
-			_, _ = s.UploadAndAnalyze(context.Background(), docs, baseDir, metrics, map[string]bool{})
+			_, _ = s.UploadAndAnalyze(context.Background(), docs, baseDir, map[string]bool{})
 
 			// verify that create bundle has been called on backend service
 			params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
@@ -291,9 +290,8 @@ func TestUploadAndAnalyze(t *testing.T) {
 			filePath, path := TempWorkdirWithVulnerabilities(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
 			files := []string{filePath}
-			metrics := scanner.newMetrics(time.Time{})
 
-			issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), path, metrics, map[string]bool{})
+			issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), path, map[string]bool{})
 
 			assert.NotNil(t, issues)
 			assert.Equal(t, 1, len(issues))
@@ -700,10 +698,9 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 				},
 			)
 			files := []string{diagnosticUri}
-			metrics := scanner.newMetrics(time.Now())
 
 			// execute
-			issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
+			issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", map[string]bool{})
 
 			// Default is to have 1 fake action from analysis + 0 from autofix
 			assert.Len(t, issues[0].CodeActions, 1)
@@ -728,10 +725,9 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 				},
 			)
 			files := []string{diagnosticUri}
-			metrics := scanner.newMetrics(time.Now())
 
 			// execute
-			issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
+			issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", map[string]bool{})
 
 			// Default is to have 1 fake action from analysis + 0 from autofix
 			assert.Len(t, issues[0].CodeActions, 1)
@@ -753,10 +749,9 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 				},
 			)
 			files := []string{diagnosticUri}
-			metrics := scanner.newMetrics(time.Now())
 
 			// execute
-			issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", metrics, map[string]bool{})
+			issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", map[string]bool{})
 
 			assert.Len(t, issues[0].CodeActions, 2)
 			val, ok := (*issues[0].CodeActions[1].DeferredEdit)().Changes[EncodePath(issues[0].AffectedFilePath)]
