@@ -18,6 +18,7 @@ package snyk
 
 import (
 	"fmt"
+	"github.com/snyk/snyk-ls/internal/delta"
 	"net/url"
 	"time"
 
@@ -37,9 +38,10 @@ type Issue struct {
 	ID        string
 	Severity  Severity
 	IssueType Type
-	IsIgnored bool // If not explicitly it will default to false so it doesn't break backwards
+	IsIgnored bool // If not explicitly it will default to false, so it doesn't break backwards
+	isNew     bool
 	// compatibility
-	IgnoreDetails *IgnoreDetails // It defaults to nil so it doesn't break backwards compatibility
+	IgnoreDetails *IgnoreDetails // It defaults to nil, so it doesn't break backwards compatibility
 	// Range identifies the location of this issue in its source of origin (e.g. line & character start & end)
 	Range Range
 	// Message is a human-readable description of the issue
@@ -67,7 +69,61 @@ type Issue struct {
 	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
 	AdditionalData IssueAdditionalData
 	// Learn Service Lesson URL
-	LessonUrl string `json:"url"`
+	LessonUrl      string `json:"url"`
+	Fingerprint    string
+	GlobalIdentity string
+}
+
+var _ delta.Identifiable = (*Issue)(nil)
+var _ delta.Fingerprintable = (*Issue)(nil)
+var _ delta.Locatable = (*Issue)(nil)
+var _ delta.Pathable = (*Issue)(nil)
+
+func (i *Issue) StartLine() int {
+	return i.Range.Start.Line
+}
+
+func (i *Issue) EndLine() int {
+	return i.Range.End.Line
+}
+
+func (i *Issue) StartColumn() int {
+	return i.Range.Start.Character
+}
+
+func (i *Issue) EndColumn() int {
+	return i.Range.End.Character
+}
+
+func (i *Issue) IsNew() bool {
+	return i.isNew
+}
+
+func (i *Issue) SetIsNew(isNew bool) {
+	i.isNew = isNew
+}
+
+func (i *Issue) GetGlobalIdentity() string {
+	return i.GlobalIdentity
+}
+
+func (i *Issue) SetGlobalIdentity(globalIdentity string) {
+	i.GlobalIdentity = globalIdentity
+}
+
+func (i *Issue) Path() string {
+	return i.AffectedFilePath
+}
+
+func (i *Issue) GetFingerprint() string {
+	return i.Fingerprint
+}
+func (i *Issue) SetFingerPrint(fingerprint string) {
+	i.Fingerprint = fingerprint
+}
+
+func (i *Issue) RuleId() string {
+	return i.ID
 }
 
 type IssueAdditionalData interface {
@@ -227,7 +283,7 @@ func (i IaCIssueData) GetTitle() string {
 	return i.Title
 }
 
-func (i Issue) GetFilterableIssueType() product.FilterableIssueType {
+func (i *Issue) GetFilterableIssueType() product.FilterableIssueType {
 	switch i.Product {
 	case product.ProductOpenSource:
 		return product.FilterableIssueTypeOpenSource
@@ -249,7 +305,7 @@ func (i Issue) GetFilterableIssueType() product.FilterableIssueType {
 	}
 }
 
-func (i Issue) String() string {
+func (i *Issue) String() string {
 	return fmt.Sprintf("%s, ID: %s, Range: %s", i.AffectedFilePath, i.ID, i.Range)
 }
 

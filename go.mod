@@ -3,12 +3,14 @@ module github.com/snyk/snyk-ls
 go 1.21
 
 require (
+	github.com/adrg/strutil v0.3.1
 	github.com/adrg/xdg v0.5.0
 	github.com/atotto/clipboard v0.1.4
 	github.com/creachadair/jrpc2 v1.2.0
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/erni27/imcache v1.2.0
 	github.com/getsentry/sentry-go v0.28.1
+	github.com/go-git/go-git/v5 v5.12.0
 	github.com/golang/mock v1.6.0
 	github.com/gomarkdown/markdown v0.0.0-20240626202925-2eda941fd024
 	github.com/google/uuid v1.6.0
@@ -53,7 +55,6 @@ require (
 	github.com/getkin/kin-openapi v0.124.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.5.0 // indirect
-	github.com/go-git/go-git/v5 v5.12.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect

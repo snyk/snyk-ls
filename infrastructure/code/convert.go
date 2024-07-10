@@ -387,7 +387,7 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 				AdditionalData:      additionalData,
 				CWEs:                testRule.Properties.Cwe,
 			}
-
+			d.SetFingerPrint(result.Fingerprints.Num1)
 			d.IsIgnored, d.IgnoreDetails = s.getIgnoreDetails(result)
 			d.AdditionalData = additionalData
 

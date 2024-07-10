@@ -189,6 +189,7 @@ type Config struct {
 	engine                           workflow.Engine
 	enableSnykLearnCodeActions       bool
 	enableSnykOSSQuickFixCodeActions bool
+	enableDeltaFindings              bool
 	logger                           *zerolog.Logger
 	storage                          storage2.StorageWithCallbacks
 	m                                sync.Mutex
@@ -853,6 +854,14 @@ func (c *Config) IsSnyOSSQuickFixCodeActionsEnabled() bool {
 
 func (c *Config) SetSnykOSSQuickFixCodeActionsEnabled(enabled bool) {
 	c.enableSnykOSSQuickFixCodeActions = enabled
+}
+
+func (c *Config) IsDeltaFindingsEnabled() bool {
+	return c.enableDeltaFindings
+}
+
+func (c *Config) SetDeltaFindingsEnabled(enabled bool) {
+	c.enableDeltaFindings = enabled
 }
 
 func (c *Config) SetLogLevel(level string) {

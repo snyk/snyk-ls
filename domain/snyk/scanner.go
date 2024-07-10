@@ -230,7 +230,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	tokenChangeChannel := c.TokenChangesChannel()
 	done := make(chan bool)
 	defer close(done)
-
 	ctx, cancelFunc := context.WithCancel(ctx)
 	defer cancelFunc()
 

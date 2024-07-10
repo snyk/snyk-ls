@@ -18,7 +18,6 @@ package code
 
 import (
 	"context"
-
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 

@@ -126,6 +126,7 @@ func writeSettings(c *config.Config, settings lsp.Settings, initialize bool) {
 	updateAutoScan(c, settings)
 	updateSnykLearnCodeActions(c, settings)
 	updateSnykOSSQuickFixCodeActions(c, settings)
+	updateDeltaFindings(c, settings)
 }
 
 func updateAuthenticationMethod(c *config.Config, settings lsp.Settings) {
@@ -201,6 +202,15 @@ func updateSnykOSSQuickFixCodeActions(c *config.Config, settings lsp.Settings) {
 	}
 
 	c.SetSnykOSSQuickFixCodeActionsEnabled(enable)
+}
+
+func updateDeltaFindings(c *config.Config, settings lsp.Settings) {
+	enable := true
+	if settings.EnableDeltaFindings == "" || settings.EnableDeltaFindings == "false" {
+		enable = false
+	}
+
+	c.SetDeltaFindingsEnabled(enable)
 }
 
 func updateToken(token string) {

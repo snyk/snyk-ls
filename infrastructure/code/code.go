@@ -18,7 +18,12 @@ package code
 
 import (
 	"context"
+	"fmt"
+	"github.com/rs/zerolog"
+	"github.com/snyk/snyk-ls/internal/delta"
+	"github.com/snyk/snyk-ls/internal/vcs"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -171,25 +176,17 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 		sc.changedFilesMutex.Unlock()
 		return []snyk.Issue{}, nil
 	}
+
 	filesToBeScanned := sc.getFilesToBeScanned(folderPath)
 	sc.changedFilesMutex.Unlock()
 
-	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
-	defer sc.BundleUploader.instrumentor.Finish(span)
+	results, err := internalScan(ctx, sc, folderPath, logger, filesToBeScanned)
 
-	// Start the scan
-	fileFilter, _ := sc.fileFilters.Load(folderPath)
-	if fileFilter == nil {
-		fileFilter = filefilter.NewFileFilter(folderPath, &logger)
-		sc.fileFilters.Store(folderPath, fileFilter)
-	}
-	files := fileFilter.FindNonIgnoredFiles()
-
-	var results []snyk.Issue
-	if sc.useIgnoresFlow() {
-		results, err = sc.UploadAndAnalyzeWithIgnores(span.Context(), folderPath, files, filesToBeScanned)
-	} else {
-		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, filesToBeScanned)
+	if c.IsDeltaFindingsEnabled() {
+		baseScanResults, baseScanErr := scanBaseBranch(ctx, logger, sc, folderPath)
+		if baseScanErr == nil {
+			results = getDelta(c.Logger(), baseScanResults, results)
+		}
 	}
 
 	// Populate HTML template
@@ -198,6 +195,100 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	sc.removeFromCache(filesToBeScanned)
 	sc.addToCache(results)
 	return results, err
+}
+
+func internalScan(ctx context.Context, sc *Scanner, folderPath string, logger zerolog.Logger, filesToBeScanned map[string]bool) (results []snyk.Issue, err error) {
+	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
+	defer sc.BundleUploader.instrumentor.Finish(span)
+
+	fileFilter, _ := sc.fileFilters.Load(folderPath)
+	if fileFilter == nil {
+		fileFilter = filefilter.NewFileFilter(folderPath, &logger)
+		sc.fileFilters.Store(folderPath, fileFilter)
+	}
+	files := fileFilter.FindNonIgnoredFiles()
+
+	if sc.useIgnoresFlow() {
+		results, err = sc.UploadAndAnalyzeWithIgnores(span.Context(), folderPath, files, filesToBeScanned)
+	} else {
+		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, filesToBeScanned)
+	}
+	return results, err
+}
+
+func scanBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Scanner, folderPath string) ([]snyk.Issue, error) {
+	mainBranchName := getBaseBranchName()
+	tmpFolderName := fmt.Sprintf("snyk_delta_%s_%s", mainBranchName, filepath.Base(folderPath))
+	destinationPath, err := os.MkdirTemp("", tmpFolderName)
+	logger.Info().Msg("Creating tmp directory for base branch")
+
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to create tmp directory for base branch")
+		return []snyk.Issue{}, err
+	}
+
+	gw := &vcs.GitWrapper{}
+	err = vcs.Clone(folderPath, destinationPath, mainBranchName, &logger, gw)
+
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to clone base branch")
+		return []snyk.Issue{}, err
+	}
+
+	defer func() {
+		if destinationPath == "" {
+			return
+		}
+		err = os.RemoveAll(destinationPath)
+		logger.Info().Msg("removing base branch tmp dir " + destinationPath)
+
+		if err != nil {
+			logger.Error().Err(err).Msg("couldn't remove tmp dir " + destinationPath)
+		}
+	}()
+
+	filesToBeScanned := make(map[string]bool)
+	results, err := internalScan(ctx, sc, destinationPath, logger, filesToBeScanned)
+
+	if err != nil {
+		return []snyk.Issue{}, err
+	}
+
+	return results, nil
+}
+
+func getBaseBranchName() string {
+	return "master"
+}
+
+func getDelta(zlog *zerolog.Logger, baseIssueList []snyk.Issue, currentIssueList []snyk.Issue) []snyk.Issue {
+	logger := zlog.With().Str("method", "getDelta").Logger()
+
+	df := delta.NewFinder(
+		delta.WithEnricher(delta.NewFindingsEnricher()),
+		delta.WithMatcher(delta.NewCodeMatcher()),
+		delta.WithDiffer(delta.NewFindingsDiffer()))
+
+	baseFindingIdentifiable := make([]delta.Identifiable, len(baseIssueList))
+	for i := range baseIssueList {
+		baseFindingIdentifiable[i] = &baseIssueList[i]
+	}
+	currentFindingIdentifiable := make([]delta.Identifiable, len(currentIssueList))
+	for i := range currentIssueList {
+		currentFindingIdentifiable[i] = &currentIssueList[i]
+	}
+	diff, err := df.Diff(baseFindingIdentifiable, currentFindingIdentifiable)
+	if err != nil {
+		logger.Error().Err(err).Msg("couldn't calculate delta")
+		return nil
+	}
+
+	deltaSnykIssues := make([]snyk.Issue, len(diff))
+	for i := range diff {
+		deltaSnykIssues[i] = *diff[i].(*snyk.Issue)
+	}
+
+	return deltaSnykIssues
 }
 
 // Populate HTML template
