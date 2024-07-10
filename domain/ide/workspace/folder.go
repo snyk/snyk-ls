@@ -463,7 +463,12 @@ func appendTestResults(sic snyk.SeverityIssueCounts, results []json_schemas.Test
 }
 
 func (f *Folder) FilterAndPublishDiagnostics(p *product.Product) {
+	//	c := config.CurrentConfig()
 	productIssuesByFile := f.IssuesByProduct()
+	//if c.IsDeltaFindingsEnabled() {
+	//	productIssuesByFile = getDelta(config.CurrentConfig(), productIssuesByFile)
+	//}
+
 	if p != nil {
 		filteredIssues := f.filterDiagnostics(productIssuesByFile[*p])
 		f.publishDiagnostics(*p, filteredIssues)
@@ -474,6 +479,30 @@ func (f *Folder) FilterAndPublishDiagnostics(p *product.Product) {
 		}
 	}
 }
+
+//func getDelta(config *config.Config, productIssuesByFile snyk.ProductIssuesByFile) snyk.ProductIssuesByFile {
+//	if _, ok := productIssuesByFile[product.ProductCode]; !ok {
+//		return productIssuesByFile
+//	}
+//
+//	codeIssues := productIssuesByFile[product.ProductCode]
+//	// Append all issues to one flat list
+//	// Get Delta
+//	// Recreate the productIssue File
+//	var flatIssueList []snyk.Issue
+//	for _, issueList := range codeIssues {
+//		for _, issue := range issueList {
+//			flatIssueList = append(flatIssueList, issue)
+//		}
+//	}
+//	// Load results from Cache
+//	// Get Delta
+//	var finalResult snyk.IssuesByFile
+//	for _, issuesForPath := range flatIssueList {
+//		finalResult[path] = append(finalResult[path], issuesForPath...)
+//		}
+//	}
+//}
 
 func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
 	supportedIssueTypes := config.CurrentConfig().DisplayableIssueTypes()

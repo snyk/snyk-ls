@@ -85,6 +85,7 @@ require (
 	github.com/snyk/error-catalog-golang-public v0.0.0-20240605115201-8461850930e6 // indirect
 	github.com/snyk/go-httpauth v0.0.0-20240307114523-1f5ea3f55c65 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
+	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/cobra v1.8.0 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
