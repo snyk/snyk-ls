@@ -18,10 +18,12 @@ package code
 
 import (
 	"context"
+	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/snyk/snyk-ls/domain/snyk/delta"
 	"github.com/snyk/snyk-ls/infrastructure/vcs"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -228,7 +230,8 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath string, logger ze
 
 func scanBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Scanner, folderPath string) ([]snyk.Issue, error) {
 	mainBranchName := getBaseBranchName()
-	destinationPath, err := os.MkdirTemp("", "snyk_tmp_repo")
+	tmpFolderName := fmt.Sprintf("snyk_delta_%s_%s", mainBranchName, filepath.Base(folderPath))
+	destinationPath, err := os.MkdirTemp("", tmpFolderName)
 	logger.Info().Msg("Creating tmp directory for base branch")
 
 	if err != nil {
