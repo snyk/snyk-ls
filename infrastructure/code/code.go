@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/rs/zerolog"
-	"github.com/snyk/snyk-ls/domain/snyk/delta"
+	"github.com/snyk/snyk-ls/internal/delta"
 	"github.com/snyk/snyk-ls/internal/vcs"
 	"os"
 	"path/filepath"
