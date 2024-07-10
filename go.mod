@@ -97,6 +97,7 @@ require (
 	github.com/skeema/knownhosts v1.2.2 // indirect
 	github.com/snyk/error-catalog-golang-public v0.0.0-20240527112826-2b77438d25f1 // indirect
 	github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 // indirect
+	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/cobra v1.8.0 // indirect
