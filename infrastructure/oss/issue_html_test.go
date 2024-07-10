@@ -220,9 +220,8 @@ func Test_OssDetailsPanel_html_withAnnotationsPolicy(t *testing.T) {
 	}
 
 	issue := snyk.Issue{
-		ID:       "randomId",
-		Severity: snyk.Low,
-		// OriginalSeverity: snyk.Critical, // Mock original severity for testing
+		ID:             "randomId",
+		Severity:       snyk.Low,
 		AdditionalData: issueAdditionalData,
 	}
 
