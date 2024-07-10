@@ -147,18 +147,16 @@ func (a *AuthenticationServiceImpl) setProviders(providers []AuthenticationProvi
 }
 
 func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
-	var as []AuthenticationProvider
+	var authenticationProviders []AuthenticationProvider
 	switch c.AuthenticationMethod() {
 	case lsp.FakeAuthentication:
 		a.setProviders([]AuthenticationProvider{NewFakeCliAuthenticationProvider(c)})
 	case lsp.TokenAuthentication:
-		as = Token(c, a.errorReporter)
-		a.setProviders(as)
-	case "":
-		// don't do anything
+		authenticationProviders = Token(c, a.errorReporter)
+		a.setProviders(authenticationProviders)
 	default:
-		as = Default(c, a.errorReporter, a)
-		a.setProviders(as)
+		authenticationProviders = Default(c, a.errorReporter, a)
+		a.setProviders(authenticationProviders)
 	}
 }
 
