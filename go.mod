@@ -31,7 +31,7 @@ require (
 	go.lsp.dev/uri v0.3.0
 	golang.org/x/exp v0.0.0-20240707233637-46b078467d37
 	golang.org/x/net v0.27.0
-	golang.org/x/oauth2 v0.15.0
+	golang.org/x/oauth2 v0.21.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
