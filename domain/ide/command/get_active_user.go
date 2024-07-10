@@ -19,6 +19,7 @@ package command
 import (
 	"context"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -28,16 +29,27 @@ import (
 // This is needed because the token is only valid for a certain period of time
 // For doing this we call the whoami workflow that will refresh the token automatically
 type getActiveUser struct {
-	command     types.CommandData
-	authService authentication.AuthenticationService
-	notifier    noti.Notifier
+	command               types.CommandData
+	authenticationService authentication.AuthenticationService
+	notifier              noti.Notifier
 }
 
 func (cmd *getActiveUser) Command() types.CommandData {
 	return cmd.command
 }
 
-func (cmd *getActiveUser) Execute(ctx context.Context) (any, error) {
+func (cmd *getActiveUser) Execute(_ context.Context) (any, error) {
+	logger := config.CurrentConfig().Logger().With().Str("method", "getActiveUser.Execute").Logger()
+	isAuthenticated, err := cmd.authenticationService.IsAuthenticated()
+	if err != nil {
+		logger.Warn().Err(err).Msg("error checking auth status")
+	}
+
+	if !isAuthenticated {
+		logger.Info().Msg("not authenticated, skipping user retrieval")
+		return nil, nil
+	}
+
 	user, err := authentication.GetActiveUser()
 	return user, err
 }

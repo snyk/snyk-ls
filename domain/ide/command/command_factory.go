@@ -58,14 +58,14 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 		return &openLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case types.GetSettingsSastEnabled:
 		apiClient := snyk_api.NewSnykApiClient(c, httpClient)
-		return &sastEnabled{command: commandData, apiClient: apiClient, logger: c.Logger()}, nil
+		return &sastEnabled{command: commandData, apiClient: apiClient, logger: c.Logger(), authenticationService: authService}, nil
 	case types.GetFeatureFlagStatus:
 		apiClient := snyk_api.NewSnykApiClient(c, httpClient)
-		return &featureFlagStatus{command: commandData, apiClient: apiClient}, nil
+		return &featureFlagStatus{command: commandData, apiClient: apiClient, authenticationService: authService}, nil
 	case types.GetActiveUserCommand:
-		return &getActiveUser{command: commandData, authService: authService, notifier: notifier}, nil
+		return &getActiveUser{command: commandData, authenticationService: authService, notifier: notifier}, nil
 	case types.ReportAnalyticsCommand:
-		return &reportAnalyticsCommand{command: commandData}, nil
+		return &reportAnalyticsCommand{command: commandData, authenticationService: authService}, nil
 	case types.CodeFixCommand:
 		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier, logger: c.Logger()}, nil
 	case types.CodeSubmitFixFeedback:
