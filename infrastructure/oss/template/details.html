@@ -260,26 +260,29 @@
         {{.IssueOverview}}
       </div>
     </section>
-    {{ if .Policy }}
+    {{ if .Policy.HasPolicy }}
     <section class="delimiter-top summary">
       <h2>Policy Applied</h2>
       {{ if .Policy.OriginalSeverity }}
       <p>A policy has affected the severity of this issue. It was originally {{.Policy.OriginalSeverity}} severity.</p>
-      {{end}}
-      {{ if .Policy.UserNote }}
+      {{ end }}
       <div class="detailed-paths">
+        {{ if .Policy.UserNote }}
         <div class="summary-item path">
           <div class="label font-light">User note</div>
           <div class="content">{{.Policy.UserNote}}</div>
         </div>
-        <div class="summary-item remediation">
+        {{ end }}
+        {{ if .Policy.NoteReason }}
+        <div class="summary-item">
           <div class="label font-light">Note reason</div>
           <div class="content">{{.Policy.NoteReason}}</div>
         </div>
+        {{ end }}
       </div>
-      {{end}}
     </section>
-    {{end}}
+    {{ end }}
+
   </div>
   <script nonce="${nonce}">
     if (document.getElementById("learn--link")) {
