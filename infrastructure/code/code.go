@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/snyk/snyk-ls/domain/snyk/delta"
-	"github.com/snyk/snyk-ls/infrastructure/vcs"
+	"github.com/snyk/snyk-ls/internal/vcs"
 	"os"
 	"path/filepath"
 	"sync"
