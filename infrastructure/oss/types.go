@@ -48,44 +48,38 @@ type reference struct {
 }
 
 type ossIssue struct {
-	Id                 string        `json:"id"`
-	Name               string        `json:"name"`
-	Title              string        `json:"title"`
-	Severity           string        `json:"severity"`
-	LineNumber         int           `json:"lineNumber"`
-	Description        string        `json:"description"`
-	References         []reference   `json:"references,omitempty"`
-	Version            string        `json:"version"`
-	PackageManager     string        `json:"packageManager"`
-	PackageName        string        `json:"packageName"`
-	From               []string      `json:"from"`
-	Identifiers        identifiers   `json:"identifiers,omitempty"`
-	FixedIn            []string      `json:"fixedIn,omitempty"`
-	UpgradePath        []any         `json:"upgradePath,omitempty"`
-	IsUpgradable       bool          `json:"isUpgradable,omitempty"`
-	CVSSv3             string        `json:"CVSSv3,omitempty"`
-	CvssScore          float64       `json:"cvssScore,omitempty"`
-	Exploit            string        `json:"exploit,omitempty"`
-	IsPatchable        bool          `json:"isPatchable"`
-	License            string        `json:"license,omitempty"`
-	Language           string        `json:"language,omitempty"`
-	lesson             *learn.Lesson `json:"-"`
-	AppliedPolicyRules []Annotation  `json:"appliedPolicyRules,omitempty"`
+	Id                 string             `json:"id"`
+	Name               string             `json:"name"`
+	Title              string             `json:"title"`
+	Severity           string             `json:"severity"`
+	LineNumber         int                `json:"lineNumber"`
+	Description        string             `json:"description"`
+	References         []reference        `json:"references,omitempty"`
+	Version            string             `json:"version"`
+	PackageManager     string             `json:"packageManager"`
+	PackageName        string             `json:"packageName"`
+	From               []string           `json:"from"`
+	Identifiers        identifiers        `json:"identifiers,omitempty"`
+	FixedIn            []string           `json:"fixedIn,omitempty"`
+	UpgradePath        []any              `json:"upgradePath,omitempty"`
+	IsUpgradable       bool               `json:"isUpgradable,omitempty"`
+	CVSSv3             string             `json:"CVSSv3,omitempty"`
+	CvssScore          float64            `json:"cvssScore,omitempty"`
+	Exploit            string             `json:"exploit,omitempty"`
+	IsPatchable        bool               `json:"isPatchable"`
+	License            string             `json:"license,omitempty"`
+	Language           string             `json:"language,omitempty"`
+	lesson             *learn.Lesson      `json:"-"`
+	AppliedPolicyRules AppliedPolicyRules `json:"appliedPolicyRules,omitempty"`
+}
+
+type AppliedPolicyRules struct {
+	Annotation Annotation `json:"annotation,omitempty"`
 }
 
 type Annotation struct {
 	Value  string `json:"value,omitempty"`
 	Reason string `json:"reason,omitempty"`
-}
-
-func (i *ossIssue) ToAppliedPolicyRules() (annotations []snyk.Annotation) {
-	for _, annotation := range i.AppliedPolicyRules {
-		annotations = append(annotations, snyk.Annotation{
-			Value:  annotation.Value,
-			Reason: annotation.Reason,
-		})
-	}
-	return annotations
 }
 
 func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []snyk.OssIssueData) snyk.OssIssueData {
@@ -120,7 +114,12 @@ func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []sny
 		additionalData.Lesson = i.lesson.Url
 	}
 	additionalData.Remediation = i.GetRemediation()
-	additionalData.AppliedPolicyRules = i.ToAppliedPolicyRules()
+	additionalData.AppliedPolicyRules = snyk.AppliedPolicyRules{
+		Annotation: snyk.Annotation{
+			Value:  i.AppliedPolicyRules.Annotation.Value,
+			Reason: i.AppliedPolicyRules.Annotation.Reason,
+		},
+	}
 
 	return additionalData
 }
