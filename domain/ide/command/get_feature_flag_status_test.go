@@ -22,13 +22,18 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_ApiClient_FeatureFlagIsEnabled(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	// Arrange
 	expectedResponse := snyk_api.FFResponse{Ok: true}
@@ -36,11 +41,7 @@ func Test_ApiClient_FeatureFlagIsEnabled(t *testing.T) {
 	fakeApiClient := &snyk_api.FakeApiClient{}
 	fakeApiClient.SetResponse("FeatureFlagStatus", expectedResponse)
 
-	// Pass the featureFlagType to the command
-	featureFlagStatusCmd := featureFlagStatus{
-		apiClient: fakeApiClient,
-		command:   types.CommandData{Arguments: []interface{}{"snykCodeConsistentIgnores"}},
-	}
+	featureFlagStatusCmd := setupFeatureFlagCommand(c, fakeApiClient, t)
 
 	// Execute the command
 	result, err := featureFlagStatusCmd.Execute(context.Background())
@@ -50,4 +51,24 @@ func Test_ApiClient_FeatureFlagIsEnabled(t *testing.T) {
 	ffResponse, ok := result.(snyk_api.FFResponse)
 	assert.True(t, ok)
 	assert.True(t, ffResponse.Ok)
+}
+
+func setupFeatureFlagCommand(c *config.Config, fakeApiClient *snyk_api.FakeApiClient, t *testing.T) featureFlagStatus {
+	t.Helper()
+	provider := authentication.NewFakeCliAuthenticationProvider(c)
+	provider.IsAuthenticated = true
+
+	// Pass the featureFlagType to the command
+	featureFlagStatusCmd := featureFlagStatus{
+		apiClient: fakeApiClient,
+		command:   types.CommandData{Arguments: []interface{}{"snykCodeConsistentIgnores"}},
+		authenticationService: authentication.NewAuthenticationService(
+			c,
+			[]authentication.AuthenticationProvider{provider},
+			ux.NewTestAnalytics(c),
+			error_reporting.NewTestErrorReporter(),
+			notification.NewNotifier(),
+		),
+	}
+	return featureFlagStatusCmd
 }

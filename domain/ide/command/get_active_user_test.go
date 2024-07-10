@@ -39,7 +39,7 @@ import (
 
 func Test_getActiveUser_Execute_User_found(t *testing.T) {
 	c := testutil.UnitTest(t)
-	cmd := setupCommandWithAuthService(c)
+	cmd := setupCommandWithAuthService(c, t)
 
 	expectedUser, expectedUserData := whoamiWorkflowResponse(t)
 
@@ -53,7 +53,8 @@ func Test_getActiveUser_Execute_User_found(t *testing.T) {
 	assert.Equal(t, expectedUser, actualUser)
 }
 
-func setupCommandWithAuthService(c *config.Config) *getActiveUser {
+func setupCommandWithAuthService(c *config.Config, t *testing.T) *getActiveUser {
+	t.Helper()
 	provider := authentication.NewFakeCliAuthenticationProvider(c)
 	provider.IsAuthenticated = true
 
@@ -74,7 +75,7 @@ func setupCommandWithAuthService(c *config.Config) *getActiveUser {
 
 func Test_getActiveUser_Execute_Result_Empty(t *testing.T) {
 	c := testutil.UnitTest(t)
-	cmd := setupCommandWithAuthService(c)
+	cmd := setupCommandWithAuthService(c, t)
 
 	mockEngine, engineConfig := setUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
@@ -88,7 +89,7 @@ func Test_getActiveUser_Execute_Result_Empty(t *testing.T) {
 
 func Test_getActiveUser_Execute_Error_Result(t *testing.T) {
 	c := testutil.UnitTest(t)
-	cmd := setupCommandWithAuthService(c)
+	cmd := setupCommandWithAuthService(c, t)
 
 	mockEngine, engineConfig := setUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
