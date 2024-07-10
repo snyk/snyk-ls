@@ -99,17 +99,33 @@ func getDetailsHtml(issue snyk.Issue) string {
 
 func buildPolicyMap(additionalData snyk.OssIssueData) map[string]interface{} {
 	policy := map[string]interface{}{}
+	severityChange := additionalData.AppliedPolicyRules.SeverityChange
+	annotation := additionalData.AppliedPolicyRules.Annotation
 
-	if additionalData.AppliedPolicyRules.SeverityChange.OriginalSeverity != "" {
-		policy["OriginalSeverity"] = additionalData.AppliedPolicyRules.SeverityChange.OriginalSeverity
-		policy["NewSeverity"] = additionalData.AppliedPolicyRules.SeverityChange.NewSeverity
-		policy["Reason"] = additionalData.AppliedPolicyRules.SeverityChange.Reason
+	hasPolicy := severityChange.OriginalSeverity != "" || annotation.Value != "" || annotation.Reason != ""
+	hasUserNote := annotation.Value != ""
+	hasNotes := severityChange.Reason != "" || annotation.Reason != ""
+
+	if severityChange.OriginalSeverity != "" {
+		policy["OriginalSeverity"] = severityChange.OriginalSeverity
+		policy["NewSeverity"] = severityChange.NewSeverity
 	}
 
-	if additionalData.AppliedPolicyRules.Annotation.Value != "" {
-		policy["UserNote"] = additionalData.AppliedPolicyRules.Annotation.Value
-		policy["NoteReason"] = additionalData.AppliedPolicyRules.Annotation.Reason
+	if severityChange.Reason != "" {
+		policy["NoteReason"] = severityChange.Reason
 	}
+
+	if annotation.Value != "" {
+		policy["UserNote"] = annotation.Value
+	}
+
+	if annotation.Reason != "" {
+		policy["NoteReason"] = annotation.Reason
+	}
+
+	policy["HasPolicy"] = hasPolicy
+	policy["HasNotes"] = hasNotes
+	policy["HasUserNote"] = hasUserNote
 
 	return policy
 }
