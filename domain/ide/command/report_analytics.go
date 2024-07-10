@@ -22,11 +22,13 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type reportAnalyticsCommand struct {
-	command types.CommandData
+	command               types.CommandData
+	authenticationService authentication.AuthenticationService
 }
 
 func (cmd *reportAnalyticsCommand) Command() types.CommandData {
@@ -36,6 +38,16 @@ func (cmd *reportAnalyticsCommand) Command() types.CommandData {
 func (cmd *reportAnalyticsCommand) Execute(_ context.Context) (any, error) {
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", "reportAnalyticsCommand.Execute").Logger()
+
+	isAuthenticated, err := cmd.authenticationService.IsAuthenticated()
+	if err != nil {
+		logger.Warn().Err(err).Msg("error checking auth status")
+	}
+
+	if !isAuthenticated {
+		logger.Info().Msg("not authenticated, skipping analytics reporting")
+		return nil, nil
+	}
 
 	for _, arg := range cmd.command.Arguments {
 		payload, ok := arg.(string)

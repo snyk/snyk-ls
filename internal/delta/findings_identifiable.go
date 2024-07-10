@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,30 @@
  * limitations under the License.
  */
 
-package amplitude
+package delta
 
-const (
-	productionPublicKey  = "siBHQPKb4KmNaWv2PBJz1hP8YzYEPqLr"
-	developmentPublicKey = "l9KwTXkL1muK8WYkIc00w6Ef8VRlMe9K"
-)
+type Fingerprintable interface {
+	Identifiable
+	GetFingerprint() string
+}
+
+type Locatable interface {
+	Identifiable
+	StartLine() int
+	EndLine() int
+	StartColumn() int
+	EndColumn() int
+}
+
+type Pathable interface {
+	Identifiable
+	Path() string
+}
+
+type Identifiable interface {
+	RuleId() string
+	GetGlobalIdentity() string
+	SetGlobalIdentity(globalIdentity string)
+	SetIsNew(isNew bool)
+	IsNew() bool
+}

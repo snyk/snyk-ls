@@ -82,10 +82,6 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) []stri
 		logger.Debug().Msgf("adding endpoint: %s", currentConfig.SnykApi())
 		updatedEnv = append(updatedEnv, ApiEnvVar+"="+currentConfig.SnykApi())
 	}
-	if !currentConfig.IsTelemetryEnabled() || !currentConfig.IsAnalyticsPermitted() {
-		logger.Debug().Msgf("disabling amplitude")
-		updatedEnv = append(updatedEnv, DisableAnalyticsEnvVar+"=1")
-	}
 
 	if currentConfig.IntegrationName() != "" {
 		updatedEnv = append(updatedEnv, IntegrationNameEnvVarKey+"="+currentConfig.IntegrationName())

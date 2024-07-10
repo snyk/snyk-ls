@@ -130,7 +130,6 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 	c.ConfigureLogging(nil)
 	c.SetToken(GetEnvironmentToken(useConsistentIgnores))
 	c.SetErrorReportingEnabled(false)
-	c.SetTelemetryEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t)

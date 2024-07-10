@@ -32,7 +32,7 @@ func Test_ExecuteCommand(t *testing.T) {
 	authProvider := &authentication.FakeAuthenticationProvider{
 		ExpectedAuthURL: "https://auth.url",
 	}
-	authenticationService := authentication.NewAuthenticationService(c, []authentication.AuthenticationProvider{authProvider}, nil, nil, nil)
+	authenticationService := authentication.NewAuthenticationService(c, []authentication.AuthenticationProvider{authProvider}, nil, nil)
 	service := NewService(authenticationService, nil, nil, nil, nil, nil)
 	cmd := types.CommandData{
 		CommandId: types.CopyAuthLinkCommand,

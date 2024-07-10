@@ -60,6 +60,7 @@ func getDetailsHtml(issue snyk.Issue) string {
 		config.CurrentConfig().Logger().Error().Msg("Failed to cast additional data to OssIssueData")
 		return ""
 	}
+
 	overview := markdown.ToHTML([]byte(additionalData.Description), nil, nil)
 
 	detailedPaths := getDetailedPaths(additionalData)
@@ -75,6 +76,7 @@ func getDetailsHtml(issue snyk.Issue) string {
 		"IssueOverview":      html.MarkdownToHTML(string(overview)),
 		"CVEs":               additionalData.Identifiers.CVE,
 		"CWEs":               additionalData.Identifiers.CWE,
+		"CVSSv3":             template.URL(additionalData.CVSSv3),
 		"CvssScore":          fmt.Sprintf("%.1f", additionalData.CvssScore),
 		"ExploitMaturity":    getExploitMaturity(additionalData),
 		"IntroducedThroughs": getIntroducedThroughs(additionalData),
@@ -83,6 +85,7 @@ func getDetailsHtml(issue snyk.Issue) string {
 		"FixedIn":            additionalData.FixedIn,
 		"DetailedPaths":      detailedPaths,
 		"MoreDetailedPaths":  len(detailedPaths) - 3,
+		"Policy":             buildPolicyMap(additionalData),
 	}
 
 	var html bytes.Buffer
@@ -92,6 +95,39 @@ func getDetailsHtml(issue snyk.Issue) string {
 	}
 
 	return html.String()
+}
+
+func buildPolicyMap(additionalData snyk.OssIssueData) map[string]interface{} {
+	policy := map[string]interface{}{}
+	severityChange := additionalData.AppliedPolicyRules.SeverityChange
+	annotation := additionalData.AppliedPolicyRules.Annotation
+
+	hasPolicy := severityChange.OriginalSeverity != "" || annotation.Value != "" || annotation.Reason != ""
+	hasUserNote := annotation.Value != ""
+	hasNotes := severityChange.Reason != "" || annotation.Reason != ""
+
+	if severityChange.OriginalSeverity != "" {
+		policy["OriginalSeverity"] = severityChange.OriginalSeverity
+		policy["NewSeverity"] = severityChange.NewSeverity
+	}
+
+	if severityChange.Reason != "" {
+		policy["NoteReason"] = severityChange.Reason
+	}
+
+	if annotation.Value != "" {
+		policy["UserNote"] = annotation.Value
+	}
+
+	if annotation.Reason != "" {
+		policy["NoteReason"] = annotation.Reason
+	}
+
+	policy["HasPolicy"] = hasPolicy
+	policy["HasNotes"] = hasNotes
+	policy["HasUserNote"] = hasUserNote
+
+	return policy
 }
 
 func getIssueType(issue snyk.OssIssueData) string {

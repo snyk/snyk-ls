@@ -1,5 +1,5 @@
 /*
- * © 2022-2023 Snyk Limited
+ * © 2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,8 @@
  * limitations under the License.
  */
 
-package ux
+package delta
 
-type Analytics interface {
-	Initialise() //nolint:misspell // breaking api change
-	Shutdown() error
-	Identify()
-	AnalysisIsReady(properties AnalysisIsReadyProperties)
-	AnalysisIsTriggered(properties AnalysisIsTriggeredProperties)
-	IssueHoverIsDisplayed(properties IssueHoverIsDisplayedProperties)
-	PluginIsInstalled(properties PluginIsInstalledProperties)
-	ScanModeIsSelected(properties ScanModeIsSelectedProperties)
+type Matcher interface {
+	Match(baseIssueList, currentIssueList []Identifiable) ([]Identifiable, error)
 }

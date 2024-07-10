@@ -19,26 +19,36 @@ package authentication
 import (
 	"context"
 	"reflect"
+	"time"
+
+	"github.com/erni27/imcache"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type AuthenticationServiceImpl struct {
 	providers     []AuthenticationProvider
-	analytics     ux.Analytics
 	errorReporter error_reporting.ErrorReporter
 	notifier      noti.Notifier
 	c             *config.Config
+	// key = token, value = isAuthenticated
+	authCache *imcache.Cache[string, bool]
 }
 
-func NewAuthenticationService(c *config.Config, authProviders []AuthenticationProvider, analytics ux.Analytics, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
-	return &AuthenticationServiceImpl{authProviders, analytics, errorReporter, notifier, c}
+func NewAuthenticationService(c *config.Config, authProviders []AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
+	cache := imcache.New[string, bool]()
+	return &AuthenticationServiceImpl{
+		authProviders,
+		errorReporter,
+		notifier,
+		c,
+		cache,
+	}
 }
 
 func (a *AuthenticationServiceImpl) Providers() []AuthenticationProvider {
@@ -53,7 +63,6 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 			continue
 		}
 		a.UpdateCredentials(token, true)
-		a.analytics.Identify()
 		return token, err
 	}
 	return token, err
@@ -66,6 +75,9 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 		return
 	}
 
+	// remove old token from cache, but don't add new token, as we want the entry only when
+	// checks are performed - e.g. in IsAuthenticated or Authenticate which call the API to check for real
+	a.authCache.Remove(oldToken)
 	c.SetToken(newToken)
 
 	if sendNotification {
@@ -92,6 +104,13 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() (bool, error) {
 		logger.Info().Str("method", "IsAuthenticated").Msg("no credentials found")
 		return false, nil
 	}
+
+	_, found := a.authCache.Get(a.c.Token())
+	if found {
+		a.c.Logger().Debug().Msg("IsAuthenticated (found in cache)")
+		return true, nil
+	}
+
 	var user string
 	var err error
 	for _, provider := range a.providers {
@@ -113,7 +132,9 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() (bool, error) {
 		return false, err
 	}
 
-	a.c.Logger().Debug().Msg("IsAuthenticated: " + user)
+	// we cache the API auth ok for up to 12 hours after last access. Afterwards, a new check is performed.
+	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute*5))
+	a.c.Logger().Debug().Msg("IsAuthenticated: " + user + ", adding to cache.")
 	return true, nil
 }
 
