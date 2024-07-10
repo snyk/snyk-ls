@@ -60,6 +60,7 @@ func getDetailsHtml(issue snyk.Issue) string {
 		config.CurrentConfig().Logger().Error().Msg("Failed to cast additional data to OssIssueData")
 		return ""
 	}
+
 	overview := markdown.ToHTML([]byte(additionalData.Description), nil, nil)
 
 	detailedPaths := getDetailedPaths(additionalData)
@@ -75,6 +76,7 @@ func getDetailsHtml(issue snyk.Issue) string {
 		"IssueOverview":      html.MarkdownToHTML(string(overview)),
 		"CVEs":               additionalData.Identifiers.CVE,
 		"CWEs":               additionalData.Identifiers.CWE,
+		"CVSSv3":             template.URL(additionalData.CVSSv3),
 		"CvssScore":          fmt.Sprintf("%.1f", additionalData.CvssScore),
 		"ExploitMaturity":    getExploitMaturity(additionalData),
 		"IntroducedThroughs": getIntroducedThroughs(additionalData),
