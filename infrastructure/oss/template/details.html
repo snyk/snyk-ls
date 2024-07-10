@@ -16,13 +16,54 @@
 
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self' ${cspSource}; style-src 'self' 'nonce-${nonce}' ${cspSource}; script-src 'nonce-${nonce}' ${cspSource};">
+    content="default-src 'self' ${cspSource}; style-src 'self' 'nonce-${nonce}' ${cspSource}; script-src 'nonce-${nonce}' ${cspSource};">
 
   <style nonce="${nonce}">
+    :root {
+      --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #595a5c;
+    }
+
+    body {
+      font-family: var(--default-font);
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    h2 {
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    section {
+      padding: 0px 20px 5px 20px;
+    }
+
+    .styled-link {
+      text-decoration: none;
+    }
+
+    .styled-link:hover {
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
     .suggestion {
       position: relative;
       display: flex;
@@ -32,7 +73,6 @@
     }
 
     .suggestion .suggestion-text {
-      padding: 0.4rem 0;
       margin-bottom: 0.8rem;
       font-size: 1.8rem;
       font-weight: 500;
@@ -59,25 +99,48 @@
       height: 16px;
     }
 
-    .identifiers {
-      font-size: 1.3rem;
-      line-height: 2rem;
+    .clickable:hover {
+      cursor: pointer;
     }
 
-    /*TODO: move to vscode*/
-    .vscode-dark .light-only {
-      display: none;
+    .delimiter {
+      width: 0;
+      height: 1.3rem;
+      margin: 0 0.8rem 0 0.8rem;
+      line-height: 1rem;
     }
 
-    .vscode-light .dark-only {
-      display: none;
+    .summary .summary-item {
+      display: flex;
+      margin: 0.3em 0 0.3em 0;
+    }
+
+    .summary .label {
+      width: 160px;
+    }
+
+    .summary .content {
+      flex: 70%;
+    }
+
+    .summary .remediation {
+      margin-bottom: 1.6rem
+    }
+
+    .summary .detailed-path:last-child .remediation {
+      margin-bottom: 0
+    }
+
+    .vulnerability-overview pre {
+      padding: 8px 16px;
+      overflow-x: auto;
+      border-radius: 4px;
     }
 
     .learn {
       opacity: 0;
       height: 0;
       margin-top: 0;
-      font-size: 1.3rem;
     }
 
     .learn.show {
@@ -92,9 +155,7 @@
       margin-left: 3px;
     }
 
-    .learn__code .learn--link {
-    }
-
+    .learn__code .learn--link {}
   </style>
 
   ${headerEnd}
@@ -103,83 +164,83 @@
 </head>
 
 <body>
-<div class="suggestion">
-  <section class="suggestion--header">
-    <div class="severity">
-      {{.SeverityIcon}}
-    </div>
-    <div class="suggestion-text">{{.IssueTitle}}</div>
-    <div class="identifiers">
-      {{.IssueType}}
-      {{if gt (len .CVEs) 0}}
-      <span class="delimiter"> </span>
-      {{range $index, $cve := .CVEs}}
-      <a class="cve styled-link" target="_blank" rel="noopener noreferrer"
-         href="https://cve.mitre.org/cgi-bin/cvename.cgi?name=$cve">{{$cve}}</a>
-      {{if ne $index (idxMinusOne (len $.CVEs))}}<span class="delimiter"></span>{{end}}
-      {{end}}
-      {{end}}
+  <div class="suggestion">
+    <section class="suggestion--header">
+      <div class="severity">
+        {{.SeverityIcon}}
+      </div>
+      <div class="suggestion-text">{{.IssueTitle}}</div>
+      <div class="identifiers">
+        {{.IssueType}}
+        {{if gt (len .CVEs) 0}}
+        <span class="delimiter"> </span>
+        {{range $index, $cve := .CVEs}}
+        <a class="cve styled-link" target="_blank" rel="noopener noreferrer"
+          href="https://cve.mitre.org/cgi-bin/cvename.cgi?name=$cve">{{$cve}}</a>
+        {{if ne $index (idxMinusOne (len $.CVEs))}}<span class="delimiter"></span>{{end}}
+        {{end}}
+        {{end}}
 
-      {{if gt (len .CWEs) 0}}
-      <span class="delimiter"> </span>
-      {{range $index, $cwe := .CWEs}}
-      <a class="cwe styled-link" target="_blank" rel="noopener noreferrer"
-         href="https://cwe.mitre.org/data/definitions/{{trimCWEPrefix $cwe}}.html">{{$cwe}}</a>
-      {{if ne $index (idxMinusOne (len $.CWEs))}}<span class="delimiter"></span>{{end}}
-      {{end}}
-      {{end}}
+        {{if gt (len .CWEs) 0}}
+        <span class="delimiter"> </span>
+        {{range $index, $cwe := .CWEs}}
+        <a class="cwe styled-link" target="_blank" rel="noopener noreferrer"
+          href="https://cwe.mitre.org/data/definitions/{{trimCWEPrefix $cwe}}.html">{{$cwe}}</a>
+        {{if ne $index (idxMinusOne (len $.CWEs))}}<span class="delimiter"></span>{{end}}
+        {{end}}
+        {{end}}
 
-      {{if gt (len .CvssScore) 0}}
-      <span class="delimiter"> </span>
-      <span>CVSS {{.CvssScore}}</span>
-      {{end}}
+        {{if gt (len .CvssScore) 0}}
+        <span class="delimiter"> </span>
+        <span>CVSS {{.CvssScore}}</span>
+        {{end}}
 
-      <span class="delimiter"> </span>
-      <a class="styled-link" target="_blank" rel="noopener noreferrer"
-         href="https://snyk.io/vuln/{{.IssueId}}">{{.IssueId}}</a>
-    </div>
-    {{ if .LessonUrl }}
+        <span class="delimiter"> </span>
+        <a class="styled-link" target="_blank" rel="noopener noreferrer"
+          href="https://snyk.io/vuln/{{.IssueId}}">{{.IssueId}}</a>
+      </div>
+      {{ if .LessonUrl }}
       <div class="learn" id="learn">
         {{.LessonIcon}}
         <a class="learn--link" id="learn--link" href="{{.LessonUrl}}">Learn about this vulnerability</a>
       </div>
-    {{end}}
-  </section>
-  <section class="delimiter-top summary">
-    <div class="summary-item module">
-      <div class="label font-light">Vulnerable module</div>
-      <div class="content">{{.VulnerableModule}}</div>
-    </div>
-    <div class="summary-item introduced-through">
-      <div class="label font-light">Introduced through</div>
-      <div class="content">
-        {{range $i, $element := .IntroducedThroughs}}
+      {{end}}
+    </section>
+    <section class="delimiter-top summary">
+      <div class="summary-item module">
+        <div class="label font-light">Vulnerable module</div>
+        <div class="content">{{.VulnerableModule}}</div>
+      </div>
+      <div class="summary-item introduced-through">
+        <div class="label font-light">Introduced through</div>
+        <div class="content">
+          {{range $i, $element := .IntroducedThroughs}}
           <a href="{{$element.SnykUI}}/test/{{$element.PackageManager}}">{{$element.Module}}</a>
           {{ if lt $i (idxMinusOne (len $.IntroducedThroughs)) }}, {{end}}
-        {{end}}
+          {{end}}
+        </div>
       </div>
-    </div>
-    <div class="summary-item fixed-in">
-      <div class="label font-light">Fixed in</div>
-      <div class="content">
-        {{ if eq (len .FixedIn) 0 }}
-        Not fixed
-        {{else}}
-        {{.IssueName}}@{{ join ", " .FixedIn }}
-        {{end}}
+      <div class="summary-item fixed-in">
+        <div class="label font-light">Fixed in</div>
+        <div class="content">
+          {{ if eq (len .FixedIn) 0 }}
+          Not fixed
+          {{else}}
+          {{.IssueName}}@{{ join ", " .FixedIn }}
+          {{end}}
+        </div>
       </div>
-    </div>
-    {{ if .ExploitMaturity }}
-    <div class="summary-item maturity">
-      <div class="label font-light">Exploit maturity</div>
-      <div class="content">{{.ExploitMaturity}}</div>
-    </div>
-    {{end}}
-  </section>
-  <section class="delimiter-top summary">
-    <h2>Detailed paths</h2>
-    <div class="detailed-paths">
-      {{range $i, $element := .DetailedPaths}}
+      {{ if .ExploitMaturity }}
+      <div class="summary-item maturity">
+        <div class="label font-light">Exploit maturity</div>
+        <div class="content">{{.ExploitMaturity}}</div>
+      </div>
+      {{end}}
+    </section>
+    <section class="delimiter-top summary">
+      <h2>Detailed paths</h2>
+      <div class="detailed-paths">
+        {{range $i, $element := .DetailedPaths}}
         <div class="summary-item path {{ if gt $i 3 }}hidden{{end}}">
           <div class="label font-light">Introduced through</div>
           <div class="content">{{join " > " $element.From}}</div>
@@ -188,35 +249,56 @@
           <div class="label font-light">Remediation</div>
           <div class="content">{{$element.Remediation}}</div>
         </div>
+        {{end}}
+        {{ if gt .MoreDetailedPaths 0 }}
+        <a id="more-detailed-paths--link">...and {{ .MoreDetailedPaths}} more</a>
+        {{end}}
+      </div>
+    </section>
+    <section class="delimiter-top">
+      <div id="overview" class="vulnerability-overview">
+        {{.IssueOverview}}
+      </div>
+    </section>
+    {{ if .Policy }}
+    <section class="delimiter-top summary">
+      <h2>Policy Applied</h2>
+      {{ if .Policy.OriginalSeverity }}
+      <p>A policy has affected the severity of this issue. It was originally {{.Policy.OriginalSeverity}} severity.</p>
       {{end}}
-      {{ if gt .MoreDetailedPaths 0 }}
-      <a id="more-detailed-paths--link">...and {{ .MoreDetailedPaths}} more</a>
+      {{ if .Policy.UserNote }}
+      <div class="detailed-paths">
+        <div class="summary-item path">
+          <div class="label font-light">User note</div>
+          <div class="content">{{.Policy.UserNote}}</div>
+        </div>
+        <div class="summary-item remediation">
+          <div class="label font-light">Note reason</div>
+          <div class="content">{{.Policy.NoteReason}}</div>
+        </div>
+      </div>
       {{end}}
-    </div>
-  </section>
-  <section class="delimiter-top">
-    <div id="overview" class="vulnerability-overview">
-      {{.IssueOverview}}
-    </div>
-  </section>
-</div>
-<script nonce="${nonce}">
-  if (document.getElementById("learn--link")) {
-    document.getElementById("learn").className = "learn show"
-  }
-  if (document.getElementById("more-detailed-paths--link")) {
-    document.getElementById("more-detailed-paths--link").addEventListener('click', () => {
-      const paths = document.getElementsByClassName("path");
-      for(const path of paths) {
-        path.classList.remove("hidden");
-      }
-      const remediations = document.getElementsByClassName("remediation")
-      for(const remediation of remediations) {
-        remediation.classList.remove("hidden");
-      }
-      document.getElementById("more-detailed-paths--link").classList.add("hidden");
-    })
-  }
-</script>
+    </section>
+    {{end}}
+  </div>
+  <script nonce="${nonce}">
+    if (document.getElementById("learn--link")) {
+      document.getElementById("learn").className = "learn show"
+    }
+    if (document.getElementById("more-detailed-paths--link")) {
+      document.getElementById("more-detailed-paths--link").addEventListener('click', () => {
+        const paths = document.getElementsByClassName("path");
+        for (const path of paths) {
+          path.classList.remove("hidden");
+        }
+        const remediations = document.getElementsByClassName("remediation")
+        for (const remediation of remediations) {
+          remediation.classList.remove("hidden");
+        }
+        document.getElementById("more-detailed-paths--link").classList.add("hidden");
+      })
+    }
+  </script>
 </body>
+
 </html>

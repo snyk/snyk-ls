@@ -83,6 +83,7 @@ func getDetailsHtml(issue snyk.Issue) string {
 		"FixedIn":            additionalData.FixedIn,
 		"DetailedPaths":      detailedPaths,
 		"MoreDetailedPaths":  len(detailedPaths) - 3,
+		"Policy":             buildPolicyMap(additionalData),
 	}
 
 	var html bytes.Buffer
@@ -92,6 +93,23 @@ func getDetailsHtml(issue snyk.Issue) string {
 	}
 
 	return html.String()
+}
+
+func buildPolicyMap(additionalData snyk.OssIssueData) map[string]interface{} {
+	policy := map[string]interface{}{}
+
+	if additionalData.AppliedPolicyRules.SeverityChange.OriginalSeverity != "" {
+		policy["OriginalSeverity"] = additionalData.AppliedPolicyRules.SeverityChange.OriginalSeverity
+		policy["NewSeverity"] = additionalData.AppliedPolicyRules.SeverityChange.NewSeverity
+		policy["Reason"] = additionalData.AppliedPolicyRules.SeverityChange.Reason
+	}
+
+	if additionalData.AppliedPolicyRules.Annotation.Value != "" {
+		policy["UserNote"] = additionalData.AppliedPolicyRules.Annotation.Value
+		policy["NoteReason"] = additionalData.AppliedPolicyRules.Annotation.Reason
+	}
+
+	return policy
 }
 
 func getIssueType(issue snyk.OssIssueData) string {
