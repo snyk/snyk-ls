@@ -40,7 +40,7 @@ type AuthenticationServiceImpl struct {
 	authCache *imcache.Cache[string, bool]
 }
 
-func NewAuthenticationService(c *config.Config, authProviders []AuthenticationProvider, analytics ux.Analytics, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
+func NewAuthenticationService(c *config.Config, authProviders []AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
 	cache := imcache.New[string, bool]()
 	return &AuthenticationServiceImpl{
 		authProviders,

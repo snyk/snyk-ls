@@ -27,7 +27,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -57,7 +56,6 @@ func setupSastEnabledCommand(t *testing.T, c *config.Config, fakeApiClient *snyk
 		authenticationService: authentication.NewAuthenticationService(
 			c,
 			[]authentication.AuthenticationProvider{provider},
-			ux.NewTestAnalytics(c),
 			error_reporting.NewTestErrorReporter(),
 			notification.NewNotifier(),
 		),
