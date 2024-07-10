@@ -32,7 +32,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -161,13 +160,12 @@ func setupCLIScannerAsPackageScanner(t *testing.T, c *config.Config) (string, *C
 	notifier := notification.NewMockNotifier()
 	instrumentor := performance.NewInstrumentor()
 	errorReporter := error_reporting.NewTestErrorReporter()
-	analytics := ux.NewTestAnalytics(c)
 	testDir := "testdata"
 	testFilePath, err := filepath.Abs(filepath.Join(testDir, "test.html"))
 	assert.NoError(t, err)
 	testResult, err := filepath.Abs(filepath.Join(testDir, "packageScanTestHtmlOutput.json"))
 	assert.NoError(t, err)
 	cliExecutor := cli.NewTestExecutorWithResponseFromFile(testResult, c.Logger())
-	scanner := NewCLIScanner(c, instrumentor, errorReporter, analytics, cliExecutor, getLearnMock(t), notifier).(*CLIScanner)
+	scanner := NewCLIScanner(c, instrumentor, errorReporter, cliExecutor, getLearnMock(t), notifier).(*CLIScanner)
 	return testFilePath, scanner, cliExecutor
 }

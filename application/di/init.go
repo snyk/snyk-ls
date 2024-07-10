@@ -35,7 +35,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/amplitude"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
@@ -50,7 +49,6 @@ import (
 	domainNotify "github.com/snyk/snyk-ls/internal/notification"
 	er "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 var snykApiClient snyk_api.SnykApiClient
@@ -65,7 +63,6 @@ var learnService learn.Service
 var instrumentor performance2.Instrumentor
 var errorReporter er.ErrorReporter
 var installer install.Installer
-var analytics ux.Analytics
 var hoverService hover.Service
 var scanner snyk.Scanner
 var cliInitializer *cli.Initializer
@@ -87,20 +84,8 @@ func Init() {
 }
 
 func initDomain(c *config.Config) {
-	hoverService = hover.NewDefaultService(c, analytics)
-	scanner = snyk.NewDelegatingScanner(
-		c,
-		scanInitializer,
-		instrumentor,
-		analytics,
-		scanNotifier,
-		snykApiClient,
-		authenticationService,
-		notifier,
-		snykCodeScanner,
-		infrastructureAsCodeScanner,
-		openSourceScanner,
-	)
+	hoverService = hover.NewDefaultService(c)
+	scanner = snyk.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
 }
 
 func initInfrastructure(c *config.Config) {
@@ -133,16 +118,15 @@ func initInfrastructure(c *config.Config) {
 	learnService = learn.New(c, networkAccess.GetUnauthorizedHttpClient, errorReporter)
 	instrumentor = performance2.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient(c, networkAccess.GetHttpClient)
-	analytics = amplitude.NewAmplitudeClient(c, authentication.AuthenticationCheck, errorReporter)
 	gafConfiguration := c.Engine().GetConfiguration()
 
 	// we initialize the service without providers
-	authenticationService = authentication.NewAuthenticationService(c, nil, analytics, errorReporter, notifier)
+	authenticationService = authentication.NewAuthenticationService(c, nil, errorReporter, notifier)
 	// after having an instance, we pass it into the default configuration method
 	// so that the oauth2 provider can use it for its callback
 	authenticationService.ConfigureProviders(c)
 
-	snykCli := cli.NewExecutor(c, errorReporter, analytics, notifier)
+	snykCli := cli.NewExecutor(c, errorReporter, notifier)
 
 	if gafConfiguration.GetString(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION {
 		snykCli = cli.NewExtensionExecutor(c)
@@ -170,13 +154,12 @@ func initInfrastructure(c *config.Config) {
 		codeClient.WithErrorReporter(codeErrorReporter),
 	)
 
-	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, analytics, snykCli)
-	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, analytics, snykCli, learnService, notifier)
+	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
+	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
 	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
-	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, analytics, learnService, notifier,
-		codeClientScanner)
+	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
-	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, analytics, notifier)
+	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,
 		authInitializer,
@@ -243,12 +226,6 @@ func Initializer() initialize.Initializer {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return scanInitializer
-}
-
-func Analytics() ux.Analytics {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return analytics
 }
 
 func Installer() install.Installer {

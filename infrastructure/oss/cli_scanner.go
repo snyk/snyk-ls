@@ -37,7 +37,6 @@ import (
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/scans"
@@ -63,7 +62,6 @@ var (
 type CLIScanner struct {
 	instrumentor            performance.Instrumentor
 	errorReporter           error_reporting.ErrorReporter
-	analytics               ux.Analytics
 	cli                     cli.Executor
 	mutex                   *sync.Mutex
 	packageScanMutex        *sync.Mutex
@@ -80,11 +78,10 @@ type CLIScanner struct {
 	config                  *config.Config
 }
 
-func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics, cli cli.Executor, learnService learn.Service, notifier noti.Notifier) snyk.ProductScanner {
+func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier) snyk.ProductScanner {
 	scanner := CLIScanner{
 		instrumentor:            instrumentor,
 		errorReporter:           errorReporter,
-		analytics:               analytics,
 		cli:                     cli,
 		mutex:                   &sync.Mutex{},
 		packageScanMutex:        &sync.Mutex{},
@@ -214,7 +211,6 @@ func (cliScanner *CLIScanner) scanInternal(
 	}
 
 	issues = cliScanner.unmarshallAndRetrieveAnalysis(ctx, res, workDir, path)
-	cliScanner.trackResult(true)
 
 	cliScanner.mutex.Lock()
 	logger.Debug().Msgf("Scan %v is done", i)
@@ -377,19 +373,6 @@ func (cliScanner *CLIScanner) retrieveIssues(
 	return issues
 }
 
-func (cliScanner *CLIScanner) trackResult(success bool) {
-	var result ux.Result
-	if success {
-		result = ux.Success
-	} else {
-		result = ux.Error
-	}
-	cliScanner.analytics.AnalysisIsReady(ux.AnalysisIsReadyProperties{
-		AnalysisType: ux.OpenSource,
-		Result:       result,
-	})
-}
-
 // scheduleRefreshScan Schedules new scan after refreshScanWaitDuration once existing OSS results might be stale.
 // The timer is reset if a new scan is scheduled before the previous one is executed.
 // Canceling the context will stop the timer and abort the scheduled scan.
@@ -416,13 +399,6 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path stri
 				logger.Info().Msg("Scheduled scan canceled")
 				return
 			}
-
-			cliScanner.analytics.AnalysisIsTriggered(
-				ux.AnalysisIsTriggeredProperties{
-					AnalysisType:    []ux.AnalysisType{ux.OpenSource},
-					TriggeredByUser: false,
-				},
-			)
 
 			span := cliScanner.instrumentor.NewTransaction(context.WithValue(ctx, cliScanner.Product(), cliScanner),
 				string(cliScanner.Product()),

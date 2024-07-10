@@ -23,7 +23,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	ux2 "github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 type Service interface {
@@ -31,7 +30,6 @@ type Service interface {
 	Channel() chan DocumentHovers
 	ClearAllHovers()
 	GetHover(path string, pos snyk.Position) Result
-	SetAnalytics(analytics ux2.Analytics)
 }
 
 type DefaultHoverService struct {
@@ -39,17 +37,15 @@ type DefaultHoverService struct {
 	hoverIndexes map[string]bool
 	hoverChan    chan DocumentHovers
 	mutex        *sync.Mutex
-	analytics    ux2.Analytics
 	c            *config.Config
 }
 
-func NewDefaultService(c *config.Config, analytics ux2.Analytics) Service {
+func NewDefaultService(c *config.Config) Service {
 	s := &DefaultHoverService{}
 	s.hovers = map[string][]Hover[Context]{}
 	s.hoverIndexes = map[string]bool{}
 	s.hoverChan = make(chan DocumentHovers, 100)
 	s.mutex = &sync.Mutex{}
-	s.analytics = analytics
 	s.c = c
 	go s.createHoverListener()
 	return s
@@ -120,7 +116,6 @@ func (s *DefaultHoverService) GetHover(path string, pos snyk.Position) Result {
 	var hoverMessage string
 	for _, hover := range s.hovers[path] {
 		if s.isHoverForPosition(hover, pos) {
-			s.trackHoverDetails(hover)
 			hoverMessage += hover.Message
 		}
 	}
@@ -130,16 +125,6 @@ func (s *DefaultHoverService) GetHover(path string, pos snyk.Position) Result {
 			Kind:  "markdown",
 			Value: hoverMessage,
 		},
-	}
-}
-
-func (s *DefaultHoverService) trackHoverDetails(hover Hover[Context]) {
-	switch hover.Context.(type) {
-	case snyk.Issue:
-		issue := hover.Context.(snyk.Issue)
-		s.analytics.IssueHoverIsDisplayed(NewIssueHoverIsDisplayedProperties(issue))
-	default:
-		s.c.Logger().Warn().Msgf("unknown context for hover %v", hover)
 	}
 }
 
@@ -153,8 +138,4 @@ func (s *DefaultHoverService) createHoverListener() {
 
 		s.registerHovers(result)
 	}
-}
-
-func (s *DefaultHoverService) SetAnalytics(analytics ux2.Analytics) {
-	s.analytics = analytics
 }

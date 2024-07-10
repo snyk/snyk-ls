@@ -21,15 +21,16 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type sastEnabled struct {
-	command   types.CommandData
-	apiClient snyk_api.SnykApiClient
-	logger    *zerolog.Logger
+	command               types.CommandData
+	apiClient             snyk_api.SnykApiClient
+	logger                *zerolog.Logger
+	authenticationService authentication.AuthenticationService
 }
 
 func (cmd *sastEnabled) Command() types.CommandData {
@@ -37,10 +38,16 @@ func (cmd *sastEnabled) Command() types.CommandData {
 }
 
 func (cmd *sastEnabled) Execute(_ context.Context) (any, error) {
-	if config.CurrentConfig().Token() == "" {
-		cmd.logger.Info().Str("method", "sastEnabled.Execute").Msg("no token, skipping sast check")
+	isAuthenticated, err := cmd.authenticationService.IsAuthenticated()
+	if err != nil {
+		cmd.logger.Warn().Err(err).Str("method", "sastEnabled.Execute").Msg("error checking auth status")
+	}
+
+	if !isAuthenticated {
+		cmd.logger.Info().Str("method", "sastEnabled.Execute").Msg("not authenticated, skipping sast check")
 		return nil, nil
 	}
+
 	sastResponse, err := cmd.apiClient.SastSettings()
 	return sastResponse, err
 }

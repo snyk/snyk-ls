@@ -18,7 +18,6 @@ package hover
 
 import (
 	"github.com/snyk/snyk-ls/domain/snyk"
-	ux2 "github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 type FakeHoverService struct {
@@ -51,11 +50,6 @@ func (t *FakeHoverService) ClearAllHovers() {
 }
 
 func (t *FakeHoverService) GetHover(_ string, _ snyk.Position) Result {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (t *FakeHoverService) SetAnalytics(_ ux2.Analytics) {
 	//TODO implement me
 	panic("implement me")
 }

@@ -129,25 +129,4 @@ func TestBuildCLICmd(t *testing.T) {
 
 		assert.Contains(t, cmd.Env, "SNYK_API=https://app.snyk.io/api")
 	})
-
-	t.Run("Telemetry disabled setting is respected", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		ctx := context.Background()
-		provider := &CliAuthenticationProvider{c: c}
-		config.CurrentConfig().SetTelemetryEnabled(false)
-
-		cmd := provider.buildCLICmd(ctx, "auth")
-
-		assert.Contains(t, cmd.Env, "SNYK_CFG_DISABLE_ANALYTICS=1")
-	})
-
-	t.Run("Telemetry env var isn't set if telemetry enabled", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		ctx := context.Background()
-		provider := &CliAuthenticationProvider{c: c}
-
-		cmd := provider.buildCLICmd(ctx, "auth")
-
-		assert.NotContains(t, cmd.Env, "SNYK_CFG_DISABLE_ANALYTICS=1")
-	})
 }

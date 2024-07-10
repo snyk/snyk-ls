@@ -30,7 +30,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -42,13 +41,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	hoverService := hover.NewFakeHoverService()
 	provider.IsAuthenticated = true
 	scanNotifier := snyk.NewMockScanNotifier()
-	authenticationService := authentication.NewAuthenticationService(
-		c,
-		[]authentication.AuthenticationProvider{provider},
-		ux.NewTestAnalytics(c),
-		error_reporting.NewTestErrorReporter(),
-		notifier,
-	)
+	authenticationService := authentication.NewAuthenticationService(c, []authentication.AuthenticationProvider{provider}, error_reporting.NewTestErrorReporter(), notifier)
 	cmd := logoutCommand{
 		command:     types.CommandData{CommandId: types.LogoutCommand},
 		authService: authenticationService,

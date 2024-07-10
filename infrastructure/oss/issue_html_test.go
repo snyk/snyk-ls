@@ -145,6 +145,7 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 		Name:        "myIssue",
 		Description: "- list",
 		From:        []string{"1", "2", "3", "4"},
+		CVSSv3:      "CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H/E:P",
 	}
 
 	issue2 := snyk.OssIssueData{
@@ -198,4 +199,68 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "<li>list</li>"))
 	assert.False(t, strings.Contains(issueDetailsPanelHtml, "Learn about this vulnerability"))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "...and"))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, "https://www.first.org/cvss/calculator/3.1#CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H/E:P"))
+}
+
+func Test_OssDetailsPanel_html_withAnnotationsPolicy(t *testing.T) {
+	_ = testutil.UnitTest(t)
+
+	// Arrange
+	issueAdditionalData := snyk.OssIssueData{
+		Title:       "myTitle",
+		Name:        "myIssue",
+		Description: "- list",
+		From:        []string{"1", "2", "3", "4"},
+		AppliedPolicyRules: snyk.AppliedPolicyRules{
+			Annotation: snyk.Annotation{
+				Value:  "This vulnerability was overridden to low severity due to our internal risk assessment that determined it poses minimal risk in our environment.",
+				Reason: "Our application does not use the affected functionality in a way that exposes it to the vulnerability. Therefore, it has a lower priority for fixing compared to other issues.",
+			},
+		},
+	}
+
+	issue := snyk.Issue{
+		ID:       "randomId",
+		Severity: snyk.Low,
+		// OriginalSeverity: snyk.Critical, // Mock original severity for testing
+		AdditionalData: issueAdditionalData,
+	}
+
+	// Act
+	issueDetailsPanelHtml := getDetailsHtml(issue)
+
+	// Assert
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, "User note"))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, "Note reason"))
+}
+
+func Test_OssDetailsPanel_html_withSeverityChangePolicy(t *testing.T) {
+	_ = testutil.UnitTest(t)
+
+	// Arrange
+	issueAdditionalData := snyk.OssIssueData{
+		Title:       "myTitle",
+		Name:        "myIssue",
+		Description: "- list",
+		From:        []string{"1", "2", "3", "4"},
+		AppliedPolicyRules: snyk.AppliedPolicyRules{
+			SeverityChange: snyk.SeverityChange{
+				OriginalSeverity: snyk.Critical.String(),
+				NewSeverity:      snyk.Low.String(),
+				Reason:           "Changing severity to low due to internal risk assessment.",
+			},
+		},
+	}
+
+	issue := snyk.Issue{
+		ID:             "randomId",
+		Severity:       snyk.Low,
+		AdditionalData: issueAdditionalData,
+	}
+
+	// Act
+	issueDetailsPanelHtml := getDetailsHtml(issue)
+
+	// Assert
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, "A policy has affected the severity of this issue. It was originally critical severity"))
 }

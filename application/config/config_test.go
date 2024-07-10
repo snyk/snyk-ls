@@ -62,7 +62,6 @@ func TestSetToken(t *testing.T) {
 func TestConfigDefaults(t *testing.T) {
 	c := New()
 
-	assert.True(t, c.IsTelemetryEnabled(), "Telemetry should be enabled by default")
 	assert.True(t, c.IsErrorReportingEnabled(), "Error Reporting should be enabled by default")
 	assert.False(t, c.IsSnykAdvisorEnabled(), "Advisor should be disabled by default")
 	assert.False(t, c.IsSnykCodeEnabled(), "Snyk Code should be disabled by default")
@@ -287,25 +286,6 @@ func Test_IsAnalyticsPermitted(t *testing.T) {
 		assert.True(t, c.UpdateApiEndpoints("https://app.us.snyk.io/api"))
 		assert.True(t, c.IsAnalyticsPermitted())
 	})
-}
-
-func Test_IsTelemetryEnabled(t *testing.T) {
-	t.Setenv(EnableTelemetry, "1")
-	c := New()
-
-	// case: disabled via env var
-	assert.False(t, c.IsTelemetryEnabled())
-	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.ANALYTICS_DISABLED))
-
-	// case: enabled via setter
-	c.SetTelemetryEnabled(true)
-	assert.True(t, c.IsTelemetryEnabled())
-	assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.ANALYTICS_DISABLED))
-
-	// case: disabled via setter
-	c.SetTelemetryEnabled(false)
-	assert.False(t, c.IsTelemetryEnabled())
-	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.ANALYTICS_DISABLED))
 }
 
 func TestSnykUiEndpoint(t *testing.T) {

@@ -60,6 +60,7 @@ func getDetailsHtml(issue snyk.Issue) string {
 		config.CurrentConfig().Logger().Error().Msg("Failed to cast additional data to OssIssueData")
 		return ""
 	}
+
 	overview := markdown.ToHTML([]byte(additionalData.Description), nil, nil)
 
 	detailedPaths := getDetailedPaths(additionalData)
@@ -75,6 +76,7 @@ func getDetailsHtml(issue snyk.Issue) string {
 		"IssueOverview":      html.MarkdownToHTML(string(overview)),
 		"CVEs":               additionalData.Identifiers.CVE,
 		"CWEs":               additionalData.Identifiers.CWE,
+		"CVSSv3":             template.URL(additionalData.CVSSv3),
 		"CvssScore":          fmt.Sprintf("%.1f", additionalData.CvssScore),
 		"ExploitMaturity":    getExploitMaturity(additionalData),
 		"IntroducedThroughs": getIntroducedThroughs(additionalData),
@@ -83,6 +85,7 @@ func getDetailsHtml(issue snyk.Issue) string {
 		"FixedIn":            additionalData.FixedIn,
 		"DetailedPaths":      detailedPaths,
 		"MoreDetailedPaths":  len(detailedPaths) - 3,
+		"Policy":             buildPolicyMap(additionalData),
 	}
 
 	var html bytes.Buffer
@@ -92,6 +95,23 @@ func getDetailsHtml(issue snyk.Issue) string {
 	}
 
 	return html.String()
+}
+
+func buildPolicyMap(additionalData snyk.OssIssueData) map[string]interface{} {
+	policy := map[string]interface{}{}
+
+	if additionalData.AppliedPolicyRules.SeverityChange.OriginalSeverity != "" {
+		policy["OriginalSeverity"] = additionalData.AppliedPolicyRules.SeverityChange.OriginalSeverity
+		policy["NewSeverity"] = additionalData.AppliedPolicyRules.SeverityChange.NewSeverity
+		policy["Reason"] = additionalData.AppliedPolicyRules.SeverityChange.Reason
+	}
+
+	if additionalData.AppliedPolicyRules.Annotation.Value != "" {
+		policy["UserNote"] = additionalData.AppliedPolicyRules.Annotation.Value
+		policy["NoteReason"] = additionalData.AppliedPolicyRules.Annotation.Reason
+	}
+
+	return policy
 }
 
 func getIssueType(issue snyk.OssIssueData) string {
