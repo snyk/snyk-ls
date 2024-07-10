@@ -23,6 +23,11 @@ import (
 	"github.com/golang/mock/gomock"
 
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/stretchr/testify/require"
@@ -34,12 +39,7 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	testInput := "some data"
-	cmd := &reportAnalyticsCommand{
-		command: types.CommandData{
-			CommandId: types.ReportAnalyticsCommand,
-			Arguments: []any{testInput},
-		},
-	}
+	cmd := setupReportAnalyticsCommand(t, c, testInput)
 
 	mockEngine, engineConfig := setUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
@@ -49,4 +49,24 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 	output, err := cmd.Execute(context.Background())
 	require.NoError(t, err)
 	require.Emptyf(t, output, "output should be empty")
+}
+
+func setupReportAnalyticsCommand(t *testing.T, c *config.Config, testInput string) *reportAnalyticsCommand {
+	t.Helper()
+	provider := authentication.NewFakeCliAuthenticationProvider(c)
+	provider.IsAuthenticated = true
+
+	cmd := &reportAnalyticsCommand{
+		command: types.CommandData{
+			CommandId: types.ReportAnalyticsCommand,
+			Arguments: []any{testInput},
+		},
+		authenticationService: authentication.NewAuthenticationService(
+			c,
+			[]authentication.AuthenticationProvider{provider},
+			ux.NewTestAnalytics(c),
+			error_reporting.NewTestErrorReporter(),
+			notification.NewNotifier(),
+		)}
+	return cmd
 }
