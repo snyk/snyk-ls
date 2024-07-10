@@ -22,12 +22,17 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func Test_ApiClient_isCalledAndResultReturned(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	fakeApiClient := &snyk_api.FakeApiClient{
 		CodeEnabled: true,
 		LocalCodeEngine: snyk_api.LocalCodeEngine{
@@ -35,14 +40,33 @@ func Test_ApiClient_isCalledAndResultReturned(t *testing.T) {
 		},
 	}
 
-	sastEnabledCmd := sastEnabled{apiClient: fakeApiClient}
+	sastEnabledCmd := setupSastEnabledCommand(t, c, fakeApiClient)
 
 	result, _ := sastEnabledCmd.Execute(context.Background())
 
 	assert.True(t, result.(snyk_api.SastResponse).SastEnabled)
 }
 
+func setupSastEnabledCommand(t *testing.T, c *config.Config, fakeApiClient *snyk_api.FakeApiClient) sastEnabled {
+	t.Helper()
+	provider := authentication.NewFakeCliAuthenticationProvider(c)
+	provider.IsAuthenticated = true
+
+	sastEnabledCmd := sastEnabled{
+		apiClient: fakeApiClient,
+		authenticationService: authentication.NewAuthenticationService(
+			c,
+			[]authentication.AuthenticationProvider{provider},
+			ux.NewTestAnalytics(c),
+			error_reporting.NewTestErrorReporter(),
+			notification.NewNotifier(),
+		),
+	}
+	return sastEnabledCmd
+}
+
 func Test_ApiClient_ReturnsTrueIfLocalCodeEngineIsEnabled(t *testing.T) {
+	c := testutil.UnitTest(t)
 	fakeApiClient := &snyk_api.FakeApiClient{
 		CodeEnabled: true,
 		LocalCodeEngine: snyk_api.LocalCodeEngine{
@@ -50,7 +74,7 @@ func Test_ApiClient_ReturnsTrueIfLocalCodeEngineIsEnabled(t *testing.T) {
 		},
 	}
 
-	sastEnabledCmd := sastEnabled{apiClient: fakeApiClient}
+	sastEnabledCmd := setupSastEnabledCommand(t, c, fakeApiClient)
 
 	result, _ := sastEnabledCmd.Execute(context.Background())
 
@@ -59,13 +83,14 @@ func Test_ApiClient_ReturnsTrueIfLocalCodeEngineIsEnabled(t *testing.T) {
 }
 
 func Test_ApiClient_isCalledAndErrorReturned(t *testing.T) {
+	c := testutil.UnitTest(t)
 	apiError := snyk_api.NewSnykApiError("oh oh. an error", 500)
 	fakeApiClient := &snyk_api.FakeApiClient{
 		ApiError:    apiError,
 		CodeEnabled: true,
 	}
 
-	sastEnabledCmd := sastEnabled{apiClient: fakeApiClient}
+	sastEnabledCmd := setupSastEnabledCommand(t, c, fakeApiClient)
 
 	result, err := sastEnabledCmd.Execute(context.Background())
 
