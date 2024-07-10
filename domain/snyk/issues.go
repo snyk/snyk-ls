@@ -167,8 +167,15 @@ type OssIssueData struct {
 	AppliedPolicyRules AppliedPolicyRules `json:"appliedPolicyRules,omitempty"`
 }
 
+type SeverityChange struct {
+	OriginalSeverity string `json:"originalSeverity"`
+	NewSeverity      string `json:"newSeverity"`
+	Reason           string `json:"reason"`
+}
+
 type AppliedPolicyRules struct {
-	Annotation Annotation `json:"annotation,omitempty"`
+	Annotation     Annotation     `json:"annotation,omitempty"`
+	SeverityChange SeverityChange `json:"severityChange,omitempty"`
 }
 
 type Annotation struct {

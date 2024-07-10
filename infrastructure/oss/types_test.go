@@ -52,9 +52,37 @@ func Test_ossIssue_toAdditionalData_ConvertsPolicyAnnotations(t *testing.T) {
 	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.Annotation.Reason)
 }
 
+func Test_ossIssue_toAdditionalData_ConvertsSeverityChange(t *testing.T) {
+	testutil.UnitTest(t)
+	issue := setupOssIssueWithSeverityChangePolicy(t)
+	fakeScanResult := &scanResult{
+		DisplayTargetFile: "testFile",
+		ProjectName:       "test",
+	}
+
+	convertedIssue := issue.toAdditionalData(fakeScanResult, []snyk.OssIssueData{})
+
+	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.SeverityChange.OriginalSeverity)
+	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.SeverityChange.NewSeverity)
+	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.SeverityChange.Reason)
+}
+
 func setupOssIssueWithPolicyAnnotations(t *testing.T) ossIssue {
 	t.Helper()
 	name := filepath.Join("testdata", "policyAnnotationsInputData.json")
+	issue := unmarshalFromFile(t, name)
+	return issue
+}
+
+func setupOssIssueWithSeverityChangePolicy(t *testing.T) ossIssue {
+	t.Helper()
+	name := filepath.Join("testdata", "policySeverityChangeInputData.json")
+	issue := unmarshalFromFile(t, name)
+	return issue
+}
+
+func unmarshalFromFile(t *testing.T, name string) ossIssue {
+	t.Helper()
 	inputJson, err := os.ReadFile(name)
 	require.NoError(t, err)
 
