@@ -133,7 +133,7 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() (bool, error) {
 	}
 
 	// we cache the API auth ok for up to 12 hours after last access. Afterwards, a new check is performed.
-	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Hour*12))
+	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute*5))
 	a.c.Logger().Debug().Msg("IsAuthenticated: " + user + ", adding to cache.")
 	return true, nil
 }
