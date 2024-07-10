@@ -41,7 +41,7 @@ func Test_ApiClient_FeatureFlagIsEnabled(t *testing.T) {
 	fakeApiClient := &snyk_api.FakeApiClient{}
 	fakeApiClient.SetResponse("FeatureFlagStatus", expectedResponse)
 
-	featureFlagStatusCmd := setupFeatureFlagCommand(c, fakeApiClient, t)
+	featureFlagStatusCmd := setupFeatureFlagCommand(t, c, fakeApiClient)
 
 	// Execute the command
 	result, err := featureFlagStatusCmd.Execute(context.Background())
@@ -53,7 +53,7 @@ func Test_ApiClient_FeatureFlagIsEnabled(t *testing.T) {
 	assert.True(t, ffResponse.Ok)
 }
 
-func setupFeatureFlagCommand(c *config.Config, fakeApiClient *snyk_api.FakeApiClient, t *testing.T) featureFlagStatus {
+func setupFeatureFlagCommand(t *testing.T, c *config.Config, fakeApiClient *snyk_api.FakeApiClient) featureFlagStatus {
 	t.Helper()
 	provider := authentication.NewFakeCliAuthenticationProvider(c)
 	provider.IsAuthenticated = true
