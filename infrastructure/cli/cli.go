@@ -29,12 +29,10 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 type SnykCli struct {
 	errorReporter error_reporting.ErrorReporter
-	analytics     ux.Analytics
 	semaphore     chan int
 	cliTimeout    time.Duration
 	notifier      noti.Notifier
@@ -43,12 +41,11 @@ type SnykCli struct {
 
 var Mutex = &sync.Mutex{}
 
-func NewExecutor(c *config.Config, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics, notifier noti.Notifier) Executor {
+func NewExecutor(c *config.Config, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) Executor {
 	concurrencyLimit := 2
 
 	return &SnykCli{
 		errorReporter,
-		analytics,
 		make(chan int, concurrencyLimit),
 		90 * time.Minute, // TODO: add preference to make this configurable [ROAD-1184]
 		notifier,

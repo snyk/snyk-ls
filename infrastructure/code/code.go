@@ -29,7 +29,6 @@ import (
 	codeClient "github.com/snyk/code-client-go"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/snyk/code-client-go/scan"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -37,7 +36,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/filefilter"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
-	"github.com/snyk/snyk-ls/internal/float"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
@@ -67,7 +65,6 @@ type Scanner struct {
 	BundleUploader    *BundleUploader
 	SnykApiClient     snyk_api.SnykApiClient
 	errorReporter     codeClientObservability.ErrorReporter
-	analytics         ux.Analytics
 	changedFilesMutex sync.Mutex
 	scanStatusMutex   sync.Mutex
 	runningScans      map[string]*ScanStatus
@@ -88,19 +85,11 @@ type Scanner struct {
 	c                   *config.Config
 }
 
-func New(bundleUploader *BundleUploader,
-	apiClient snyk_api.SnykApiClient,
-	reporter codeClientObservability.ErrorReporter,
-	analytics ux.Analytics,
-	learnService learn.Service,
-	notifier notification.Notifier,
-	codeScanner codeClient.CodeScanner,
-) *Scanner {
+func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeScanner codeClient.CodeScanner) *Scanner {
 	sc := &Scanner{
 		BundleUploader: bundleUploader,
 		SnykApiClient:  apiClient,
 		errorReporter:  reporter,
-		analytics:      analytics,
 		runningScans:   map[string]*ScanStatus{},
 		changedPaths:   map[string]map[string]bool{},
 		fileFilters:    xsync.NewMapOf[*filefilter.FileFilter](),
@@ -382,7 +371,6 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 		sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
 		return []snyk.Issue{}, nil
 	}
-	sc.trackResult(err == nil, scanMetrics)
 	return issues, err
 }
 
@@ -435,7 +423,6 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
 
 func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg string, scanMetrics *ScanMetrics) {
 	sc.errorReporter.CaptureError(errors.Wrap(err, msg), codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: path})
-	sc.trackResult(err == nil, scanMetrics)
 }
 
 type noFilesError struct{}
@@ -539,25 +526,6 @@ type ScanMetrics struct {
 	lastScanStartTime         time.Time
 	lastScanDurationInSeconds float64
 	lastScanFileCount         int
-}
-
-func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics) {
-	var result ux.Result
-	if success {
-		result = ux.Success
-	} else {
-		result = ux.Error
-	}
-	duration := time.Since(scanMetrics.lastScanStartTime)
-	scanMetrics.lastScanDurationInSeconds = float.ToFixed(duration.Seconds(), 2)
-	sc.analytics.AnalysisIsReady(
-		ux.AnalysisIsReadyProperties{
-			AnalysisType:      ux.CodeSecurity,
-			Result:            result,
-			FileCount:         scanMetrics.lastScanFileCount,
-			DurationInSeconds: scanMetrics.lastScanDurationInSeconds,
-		},
-	)
 }
 
 func (sc *Scanner) useIgnoresFlow() bool {

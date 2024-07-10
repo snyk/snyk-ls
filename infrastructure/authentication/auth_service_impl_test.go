@@ -30,7 +30,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -38,14 +37,7 @@ import (
 func Test_UpdateCredentials(t *testing.T) {
 	t.Run("CLI Authentication", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		analytics := ux.NewTestAnalytics(c)
-		service := NewAuthenticationService(
-			c,
-			nil,
-			analytics,
-			error_reporting.NewTestErrorReporter(),
-			notification.NewNotifier(),
-		)
+		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
 
 		service.UpdateCredentials("new-token", false)
 
@@ -54,9 +46,7 @@ func Test_UpdateCredentials(t *testing.T) {
 
 	t.Run("OAuth Authentication Authentication", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		analytics := ux.NewTestAnalytics(c)
-		service := NewAuthenticationService(c, nil, analytics, error_reporting.NewTestErrorReporter(),
-			notification.NewNotifier())
+		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
 		oauthCred := oauth2.Token{
 			AccessToken:  t.Name(),
 			TokenType:    "b",
@@ -76,16 +66,10 @@ func Test_UpdateCredentials(t *testing.T) {
 func Test_IsAuthenticated(t *testing.T) {
 	t.Run("User is authenticated", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		analytics := ux.NewTestAnalytics(c)
 
 		provider := FakeAuthenticationProvider{IsAuthenticated: true, C: c}
 		providers := []AuthenticationProvider{&provider}
-		service := NewAuthenticationService(c,
-			providers,
-			analytics,
-			error_reporting.NewTestErrorReporter(),
-			notification.NewNotifier(),
-		)
+		service := NewAuthenticationService(c, providers, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
 
 		isAuthenticated, err := service.IsAuthenticated()
 
@@ -95,16 +79,9 @@ func Test_IsAuthenticated(t *testing.T) {
 
 	t.Run("User is not authenticated", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		analytics := ux.NewTestAnalytics(c)
 		provider := FakeAuthenticationProvider{IsAuthenticated: false, C: c}
 		providers := []AuthenticationProvider{&provider}
-		service := NewAuthenticationService(
-			c,
-			providers,
-			analytics,
-			error_reporting.NewTestErrorReporter(),
-			notification.NewNotifier(),
-		)
+		service := NewAuthenticationService(c, providers, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
 
 		isAuthenticated, err := service.IsAuthenticated()
 
@@ -116,13 +93,7 @@ func Test_IsAuthenticated(t *testing.T) {
 func Test_Logout(t *testing.T) {
 	c := testutil.IntegTest(t)
 	provider := FakeAuthenticationProvider{IsAuthenticated: true}
-	service := NewAuthenticationService(
-		c,
-		[]AuthenticationProvider{&provider},
-		ux.NewTestAnalytics(c),
-		error_reporting.NewTestErrorReporter(),
-		notification.NewNotifier(),
-	)
+	service := NewAuthenticationService(c, []AuthenticationProvider{&provider}, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
 
 	// act
 	service.Logout(context.Background())
@@ -134,14 +105,13 @@ func Test_Logout(t *testing.T) {
 func TestHandleInvalidCredentials(t *testing.T) {
 	t.Run("should send request to client", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		analytics := ux.NewTestAnalytics(c)
 		errorReporter := error_reporting.NewTestErrorReporter()
 		notifier := notification.NewNotifier()
 		provider := NewFakeCliAuthenticationProvider(c)
 		provider.IsAuthenticated = false
 		providers := []AuthenticationProvider{provider}
 		c.SetToken("invalidCreds")
-		cut := NewAuthenticationService(c, providers, analytics, errorReporter, notifier).(*AuthenticationServiceImpl)
+		cut := NewAuthenticationService(c, providers, errorReporter, notifier).(*AuthenticationServiceImpl)
 		messageRequestReceived := false
 		tokenResetReceived := false
 		callback := func(params any) {

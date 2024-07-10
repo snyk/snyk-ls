@@ -17,10 +17,8 @@
 package cli
 
 import (
-	"context"
 	"testing"
 
-	"github.com/adrg/xdg"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
@@ -46,14 +44,4 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	assert.Contains(t, cmd, "b")
 	assert.Contains(t, cmd, "--insecure")
 	assert.Contains(t, cmd, "--org="+testOrg.String())
-}
-
-func TestGetCommand_AddsToEnvironmentAndSetsDir(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetTelemetryEnabled(false)
-
-	cmd := SnykCli{c: c}.getCommand([]string{"executable", "arg"}, xdg.DataHome, context.Background())
-
-	assert.Equal(t, xdg.DataHome, cmd.Dir)
-	assert.Contains(t, cmd.Env, DisableAnalyticsEnvVar+"=1")
 }

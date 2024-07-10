@@ -28,13 +28,11 @@ import (
 	"github.com/snyk/snyk-ls/internal/lsp"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type AuthenticationServiceImpl struct {
 	providers     []AuthenticationProvider
-	analytics     ux.Analytics
 	errorReporter error_reporting.ErrorReporter
 	notifier      noti.Notifier
 	c             *config.Config
@@ -46,7 +44,6 @@ func NewAuthenticationService(c *config.Config, authProviders []AuthenticationPr
 	cache := imcache.New[string, bool]()
 	return &AuthenticationServiceImpl{
 		authProviders,
-		analytics,
 		errorReporter,
 		notifier,
 		c,
@@ -66,7 +63,6 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 			continue
 		}
 		a.UpdateCredentials(token, true)
-		a.analytics.Identify()
 		return token, err
 	}
 	return token, err

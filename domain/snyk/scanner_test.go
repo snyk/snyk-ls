@@ -31,7 +31,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
-	ux2 "github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -40,7 +39,7 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	testutil.UnitTest(t)
 	enabledScanner := NewTestProductScanner(product.ProductCode, true)
 	disabledScanner := NewTestProductScanner(product.ProductOpenSource, false)
-	scanner, _, _ := setupScanner(enabledScanner, disabledScanner)
+	scanner, _ := setupScanner(enabledScanner, disabledScanner)
 
 	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
 
@@ -56,61 +55,24 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 
 func setupScanner(testProductScanners ...ProductScanner) (
 	scanner Scanner,
-	analytics *ux2.TestAnalytics,
 	scanNotifier ScanNotifier,
 ) {
 	c := config.CurrentConfig()
-	analytics = ux2.NewTestAnalytics(c)
 	scanNotifier = NewMockScanNotifier()
 	notifier := notification.NewNotifier()
 	apiClient := &snyk_api.FakeApiClient{CodeEnabled: false}
 	er := error_reporting.NewTestErrorReporter()
 	authenticationProvider := authentication.NewFakeCliAuthenticationProvider(c)
 	authenticationProvider.IsAuthenticated = true
-	authenticationService := authentication.NewAuthenticationService(c, []authentication.AuthenticationProvider{authenticationProvider}, analytics, er, notifier)
-	scanner = NewDelegatingScanner(
-		c,
-		initialize.NewDelegatingInitializer(),
-		performance.NewInstrumentor(),
-		analytics,
-		scanNotifier,
-		apiClient,
-		authenticationService,
-		notifier,
-		testProductScanners...,
-	)
-	return scanner, analytics, scanNotifier
-}
-
-func TestScan_whenProductScannerEnabled_SendsAnalysisTriggered(t *testing.T) {
-	testutil.UnitTest(t)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
-	enabledScanner := NewTestProductScanner(product.ProductCode, true)
-	disabledScanner := NewTestProductScanner(product.ProductOpenSource, false)
-	scanner, analytics, _ := setupScanner(enabledScanner, disabledScanner)
-
-	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
-
-	assert.Contains(t, analytics.GetAnalytics(),
-		ux2.AnalysisIsTriggeredProperties{
-			AnalysisType:    []ux2.AnalysisType{ux2.CodeQuality, ux2.CodeSecurity},
-			TriggeredByUser: false,
-		})
-}
-
-func TestScan_whenNoProductScannerEnabled_SendsNoAnalytics(t *testing.T) {
-	disabledScanner := NewTestProductScanner(product.ProductOpenSource, false)
-	scanner, analytics, _ := setupScanner(disabledScanner)
-
-	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
-
-	assert.Len(t, analytics.GetAnalytics(), 0)
+	authenticationService := authentication.NewAuthenticationService(c, []authentication.AuthenticationProvider{authenticationProvider}, er, notifier)
+	scanner = NewDelegatingScanner(c, initialize.NewDelegatingInitializer(), performance.NewInstrumentor(), scanNotifier, apiClient, authenticationService, notifier, testProductScanners...)
+	return scanner, scanNotifier
 }
 
 func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 	// Arrange
 	productScanner := NewTestProductScanner(product.ProductOpenSource, true)
-	scanner, _, _ := setupScanner(productScanner)
+	scanner, _ := setupScanner(productScanner)
 	config.CurrentConfig().SetToken("")
 	emptyToken := !config.CurrentConfig().NonEmptyToken()
 
@@ -127,7 +89,7 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 	config.CurrentConfig().SetToken("")
 	productScanner := NewTestProductScanner(product.ProductOpenSource, true)
 	productScanner.SetScanDuration(2 * time.Second)
-	scanner, _, _ := setupScanner(productScanner)
+	scanner, _ := setupScanner(productScanner)
 	done := make(chan bool)
 
 	// Act
@@ -149,7 +111,7 @@ func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
 	testutil.UnitTest(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	enabledScanner := NewTestProductScanner(product.ProductCode, true)
-	scanner, _, scanNotifier := setupScanner(enabledScanner)
+	scanner, scanNotifier := setupScanner(enabledScanner)
 	mockScanNotifier := scanNotifier.(*MockScanNotifier)
 
 	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
