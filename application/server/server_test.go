@@ -51,7 +51,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -568,31 +567,6 @@ func Test_initialize_integrationOnlyInEnvVars_readFromEnvVars(t *testing.T) {
 	currentConfig := config.CurrentConfig()
 	assert.Equal(t, expectedIntegrationName, currentConfig.IntegrationName())
 	assert.Equal(t, expectedIntegrationVersion, currentConfig.IntegrationVersion())
-}
-
-func Test_initialize_callsInitializeOnAnalytics(t *testing.T) {
-	// Analytics should be initialized only after the "initialize" message was received from the client.
-	// The "initialize" message contains the IDE data that's used in the "Plugin is installed" event.
-
-	// Arrange
-	loc, _ := setupServer(t)
-	params := lsp.InitializeParams{
-		ClientInfo: sglsp.ClientInfo{
-			Name:    "ECLIPSE",
-			Version: "1.0.0",
-		},
-	}
-	analytics := di.Analytics().(*ux.TestAnalytics)
-	assert.False(t, analytics.Initialized)
-
-	// Act
-	_, err := loc.Client.Call(ctx, "initialize", params)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Assert
-	assert.True(t, analytics.Initialized)
 }
 
 func Test_initialize_shouldOfferAllCommands(t *testing.T) {

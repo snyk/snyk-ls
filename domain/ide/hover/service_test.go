@@ -25,13 +25,12 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func setupFakeHover() string {
 	c := config.CurrentConfig()
-	target := NewDefaultService(c, ux.NewTestAnalytics(c)).(*DefaultHoverService)
+	target := NewDefaultService(c).(*DefaultHoverService)
 	fakeHover := []Hover[Context]{
 		{Range: snyk.Range{
 			Start: snyk.Position{Line: 3, Character: 56},
@@ -50,7 +49,7 @@ func setupFakeHover() string {
 func Test_registerHovers(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	target := NewDefaultService(c, ux.NewTestAnalytics(c)).(*DefaultHoverService)
+	target := NewDefaultService(c).(*DefaultHoverService)
 	hover, path := fakeDocumentHover()
 
 	target.registerHovers(hover)
@@ -63,7 +62,7 @@ func Test_registerHovers(t *testing.T) {
 
 func Test_DeleteHover(t *testing.T) {
 	c := testutil.UnitTest(t)
-	target := NewDefaultService(c, ux.NewTestAnalytics(c)).(*DefaultHoverService)
+	target := NewDefaultService(c).(*DefaultHoverService)
 	documentUri := setupFakeHover()
 	target.DeleteHover(documentUri)
 
@@ -73,7 +72,7 @@ func Test_DeleteHover(t *testing.T) {
 
 func Test_ClearAllHovers(t *testing.T) {
 	c := testutil.UnitTest(t)
-	target := NewDefaultService(c, ux.NewTestAnalytics(c)).(*DefaultHoverService)
+	target := NewDefaultService(c).(*DefaultHoverService)
 	documentUri := setupFakeHover()
 	target.ClearAllHovers()
 
@@ -83,7 +82,7 @@ func Test_ClearAllHovers(t *testing.T) {
 
 func Test_GetHoverMultiline(t *testing.T) {
 	c := testutil.UnitTest(t)
-	target := NewDefaultService(c, ux.NewTestAnalytics(c)).(*DefaultHoverService)
+	target := NewDefaultService(c).(*DefaultHoverService)
 
 	tests := []struct {
 		hoverDetails []Hover[Context]
@@ -164,41 +163,9 @@ func Test_GetHoverMultiline(t *testing.T) {
 	}
 }
 
-func Test_TracksAnalytics(t *testing.T) {
-	c := testutil.UnitTest(t)
-	analytics := ux.NewTestAnalytics(c)
-	target := NewDefaultService(c, analytics).(*DefaultHoverService)
-
-	path := "path/to/package.json"
-
-	target.ClearAllHovers()
-	target.hovers[path] = []Hover[Context]{
-		{
-			Context: snyk.Issue{
-				ID:               "issue",
-				Severity:         snyk.Medium,
-				IssueType:        snyk.ContainerVulnerability,
-				AffectedFilePath: path,
-			},
-			Range: snyk.Range{
-				Start: snyk.Position{Line: 3, Character: 56},
-				End:   snyk.Position{Line: 5, Character: 80},
-			},
-			Message: "## Vulnerabilities found"},
-	}
-
-	target.GetHover(path, snyk.Position{Line: 4, Character: 66})
-	assert.Len(t, analytics.GetAnalytics(), 1)
-	assert.Equal(t, ux.IssueHoverIsDisplayedProperties{
-		IssueId:   "issue",
-		IssueType: ux.ContainerVulnerability,
-		Severity:  ux.Medium,
-	}, analytics.GetAnalytics()[0])
-}
-
 func Test_SendingHovers_AfterClearAll_DoesNotBlock(t *testing.T) {
 	c := testutil.UnitTest(t)
-	service := NewDefaultService(c, ux.NewTestAnalytics(c)).(*DefaultHoverService)
+	service := NewDefaultService(c).(*DefaultHoverService)
 	service.ClearAllHovers()
 	hover, _ := fakeDocumentHover()
 

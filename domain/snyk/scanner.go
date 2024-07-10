@@ -28,7 +28,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -59,7 +58,6 @@ type DelegatingConcurrentScanner struct {
 	scanners      []ProductScanner
 	initializer   initialize.Initializer
 	instrumentor  performance.Instrumentor
-	analytics     ux.Analytics
 	scanNotifier  ScanNotifier
 	snykApiClient snyk_api.SnykApiClient
 	authService   authentication.AuthenticationService
@@ -171,20 +169,9 @@ func (sc *DelegatingConcurrentScanner) ScanPackages(ctx context.Context, config 
 	}
 }
 
-func NewDelegatingScanner(
-	c *config.Config,
-	initializer initialize.Initializer,
-	instrumentor performance.Instrumentor,
-	analytics ux.Analytics,
-	scanNotifier ScanNotifier,
-	snykApiClient snyk_api.SnykApiClient,
-	authService authentication.AuthenticationService,
-	notifier notification.Notifier,
-	scanners ...ProductScanner,
-) Scanner {
+func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanners ...ProductScanner) Scanner {
 	return &DelegatingConcurrentScanner{
 		instrumentor:  instrumentor,
-		analytics:     analytics,
 		initializer:   initializer,
 		scanNotifier:  scanNotifier,
 		snykApiClient: snykApiClient,
@@ -263,16 +250,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 		return
 	}
 
-	analysisTypes := getEnabledAnalysisTypes(sc.scanners)
-	if len(analysisTypes) > 0 {
-		sc.analytics.AnalysisIsTriggered(
-			ux.AnalysisIsTriggeredProperties{
-				AnalysisType:    analysisTypes,
-				TriggeredByUser: false,
-			},
-		)
-		sc.scanNotifier.SendInProgress(folderPath)
-	}
+	sc.scanNotifier.SendInProgress(folderPath)
 
 	waitGroup := &sync.WaitGroup{}
 	for _, scanner := range sc.scanners {
@@ -311,27 +289,4 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	sc.notifier.Send(lsp.InlineValueRefresh{})
 	sc.notifier.Send(lsp.CodeLensRefresh{})
 	// TODO: handle learn actions centrally instead of in each scanner
-}
-
-func getEnabledAnalysisTypes(productScanners []ProductScanner) (analysisTypes []ux.AnalysisType) {
-	for _, ps := range productScanners {
-		if !ps.IsEnabled() {
-			continue
-		}
-		if ps.Product() == product.ProductInfrastructureAsCode {
-			analysisTypes = append(analysisTypes, ux.InfrastructureAsCode)
-		}
-		if ps.Product() == product.ProductOpenSource {
-			analysisTypes = append(analysisTypes, ux.OpenSource)
-		}
-		if ps.Product() == product.ProductCode {
-			if config.CurrentConfig().IsSnykCodeQualityEnabled() || config.CurrentConfig().IsSnykCodeEnabled() {
-				analysisTypes = append(analysisTypes, ux.CodeQuality)
-			}
-			if config.CurrentConfig().IsSnykCodeSecurityEnabled() || config.CurrentConfig().IsSnykCodeEnabled() {
-				analysisTypes = append(analysisTypes, ux.CodeSecurity)
-			}
-		}
-	}
-	return analysisTypes
 }

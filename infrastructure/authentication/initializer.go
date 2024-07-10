@@ -26,23 +26,20 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 type Initializer struct {
 	authenticationService AuthenticationService
 	errorReporter         error_reporting.ErrorReporter
-	analytics             ux.Analytics
 	notifier              noti.Notifier
 	mutex                 sync.Mutex
 	c                     *config.Config
 }
 
-func NewInitializer(c *config.Config, authenticator AuthenticationService, errorReporter error_reporting.ErrorReporter, analytics ux.Analytics, notifier noti.Notifier) *Initializer {
+func NewInitializer(c *config.Config, authenticator AuthenticationService, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) *Initializer {
 	return &Initializer{
 		authenticationService: authenticator,
 		errorReporter:         errorReporter,
-		analytics:             analytics,
 		notifier:              notifier,
 		c:                     c,
 	}

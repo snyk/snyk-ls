@@ -29,7 +29,6 @@ import (
 	codeClient "github.com/snyk/code-client-go"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/snyk/code-client-go/scan"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -37,7 +36,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/filefilter"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
-	"github.com/snyk/snyk-ls/internal/float"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
@@ -67,7 +65,6 @@ type Scanner struct {
 	BundleUploader    *BundleUploader
 	SnykApiClient     snyk_api.SnykApiClient
 	errorReporter     codeClientObservability.ErrorReporter
-	analytics         ux.Analytics
 	changedFilesMutex sync.Mutex
 	scanStatusMutex   sync.Mutex
 	runningScans      map[string]*ScanStatus
@@ -88,19 +85,11 @@ type Scanner struct {
 	c                   *config.Config
 }
 
-func New(bundleUploader *BundleUploader,
-	apiClient snyk_api.SnykApiClient,
-	reporter codeClientObservability.ErrorReporter,
-	analytics ux.Analytics,
-	learnService learn.Service,
-	notifier notification.Notifier,
-	codeScanner codeClient.CodeScanner,
-) *Scanner {
+func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeScanner codeClient.CodeScanner) *Scanner {
 	sc := &Scanner{
 		BundleUploader: bundleUploader,
 		SnykApiClient:  apiClient,
 		errorReporter:  reporter,
-		analytics:      analytics,
 		runningScans:   map[string]*ScanStatus{},
 		changedPaths:   map[string]map[string]bool{},
 		fileFilters:    xsync.NewMapOf[*filefilter.FileFilter](),
@@ -185,7 +174,6 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	filesToBeScanned := sc.getFilesToBeScanned(folderPath)
 	sc.changedFilesMutex.Unlock()
 
-	startTime := time.Now()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
@@ -196,13 +184,12 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 		sc.fileFilters.Store(folderPath, fileFilter)
 	}
 	files := fileFilter.FindNonIgnoredFiles()
-	metrics := sc.newMetrics(startTime)
 
 	var results []snyk.Issue
 	if sc.useIgnoresFlow() {
 		results, err = sc.UploadAndAnalyzeWithIgnores(span.Context(), folderPath, files, filesToBeScanned)
 	} else {
-		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, metrics, filesToBeScanned)
+		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, filesToBeScanned)
 	}
 
 	// Populate HTML template
@@ -313,22 +300,7 @@ func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath string
 	return false
 }
 
-func (sc *Scanner) newMetrics(scanStartTime time.Time) *ScanMetrics {
-	if scanStartTime.IsZero() {
-		scanStartTime = time.Now()
-	}
-
-	return &ScanMetrics{
-		lastScanStartTime: scanStartTime,
-	}
-}
-
-func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
-	files <-chan string,
-	path string,
-	scanMetrics *ScanMetrics,
-	changedFiles map[string]bool,
-) (issues []snyk.Issue, err error) {
+func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files <-chan string, path string, changedFiles map[string]bool) (issues []snyk.Issue, err error) {
 	if ctx.Err() != nil {
 		sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
 		return issues, nil
@@ -347,7 +319,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 		}
 		if ctx.Err() == nil { // Only report errors that are not intentional cancellations
 			msg := "error creating bundle..."
-			sc.handleCreationAndUploadError(path, err, msg, scanMetrics)
+			sc.handleCreationAndUploadError(path, err, msg)
 			return issues, err
 		} else {
 			sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
@@ -355,14 +327,12 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 		}
 	}
 
-	scanMetrics.lastScanFileCount = len(bundle.Files)
-
 	uploadedBundle, err := sc.BundleUploader.Upload(span.Context(), bundle, bundle.Files)
 	// TODO LSP error handling should be pushed UP to the LSP layer
 	if err != nil {
 		if ctx.Err() != nil { // Only handle errors that are not intentional cancellations
 			msg := "error uploading files..."
-			sc.handleCreationAndUploadError(path, err, msg, scanMetrics)
+			sc.handleCreationAndUploadError(path, err, msg)
 			return issues, err
 		} else {
 			sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
@@ -382,7 +352,6 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context,
 		sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
 		return []snyk.Issue{}, nil
 	}
-	sc.trackResult(err == nil, scanMetrics)
 	return issues, err
 }
 
@@ -433,9 +402,8 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
 	return issues, nil
 }
 
-func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg string, scanMetrics *ScanMetrics) {
+func (sc *Scanner) handleCreationAndUploadError(path string, err error, msg string) {
 	sc.errorReporter.CaptureError(errors.Wrap(err, msg), codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: path})
-	sc.trackResult(err == nil, scanMetrics)
 }
 
 type noFilesError struct{}
@@ -533,31 +501,6 @@ func (sc *Scanner) createBundle(ctx context.Context,
 type UploadStatus struct {
 	UploadedFiles int
 	TotalFiles    int
-}
-
-type ScanMetrics struct {
-	lastScanStartTime         time.Time
-	lastScanDurationInSeconds float64
-	lastScanFileCount         int
-}
-
-func (sc *Scanner) trackResult(success bool, scanMetrics *ScanMetrics) {
-	var result ux.Result
-	if success {
-		result = ux.Success
-	} else {
-		result = ux.Error
-	}
-	duration := time.Since(scanMetrics.lastScanStartTime)
-	scanMetrics.lastScanDurationInSeconds = float.ToFixed(duration.Seconds(), 2)
-	sc.analytics.AnalysisIsReady(
-		ux.AnalysisIsReadyProperties{
-			AnalysisType:      ux.CodeSecurity,
-			Result:            result,
-			FileCount:         scanMetrics.lastScanFileCount,
-			DurationInSeconds: scanMetrics.lastScanDurationInSeconds,
-		},
-	)
 }
 
 func (sc *Scanner) useIgnoresFlow() bool {

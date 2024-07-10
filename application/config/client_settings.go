@@ -36,7 +36,6 @@ func (c *Config) clientSettingsFromEnv() {
 	c.productEnablementFromEnv()
 	c.errorReportsEnablementFromEnv()
 	c.orgFromEnv()
-	c.telemetryEnablementFromEnv()
 	c.path = os.Getenv("PATH")
 }
 

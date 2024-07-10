@@ -30,7 +30,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
@@ -209,7 +208,6 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.True(t, strings.HasPrefix(os.Getenv("PATH"), "addPath"+string(os.PathListSeparator)))
 		assert.True(t, c.IsErrorReportingEnabled())
 		assert.Equal(t, expectedOrgId, c.Organization())
-		assert.False(t, c.IsTelemetryEnabled())
 		assert.False(t, c.ManageBinariesAutomatically())
 		assert.Equal(t, "C:\\Users\\CliPath\\snyk-ls.exe", c.CliSettings().Path())
 		assert.Equal(t, "a fancy token", c.Token())
@@ -366,17 +364,6 @@ func Test_UpdateSettings(t *testing.T) {
 			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
 		})
 	})
-}
-
-func Test_ScanningModeChanged_AnalyticsNotified(t *testing.T) {
-	c := testutil.UnitTest(t)
-	di.TestInit(t)
-	analytics := di.Analytics().(*ux.TestAnalytics)
-	callCount := analytics.ScanModeIsSelectedCount
-
-	UpdateSettings(c, lsp.Settings{ScanningMode: "manual"})
-
-	assert.Equal(t, callCount+1, analytics.ScanModeIsSelectedCount)
 }
 
 func Test_InitializeSettings(t *testing.T) {

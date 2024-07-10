@@ -31,7 +31,6 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/internal/lsp"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 )
 
 var cachedOriginalPath = ""
@@ -90,8 +89,6 @@ func InitializeSettings(c *config.Config, settings lsp.Settings) {
 
 func UpdateSettings(c *config.Config, settings lsp.Settings) {
 	previouslyEnabledProducts := c.DisplayableIssueTypes()
-	previousAutoScan := c.IsAutoScanEnabled()
-
 	writeSettings(c, settings, false)
 
 	// If a product was removed, clear all issues for this product
@@ -103,10 +100,6 @@ func UpdateSettings(c *config.Config, settings lsp.Settings) {
 				ws.ClearIssuesByType(removedIssueType)
 			}
 		}
-	}
-
-	if c.IsAutoScanEnabled() != previousAutoScan {
-		di.Analytics().ScanModeIsSelected(ux.ScanModeIsSelectedProperties{ScanningMode: settings.ScanningMode})
 	}
 }
 
@@ -243,16 +236,6 @@ func updateTelemetry(c *config.Config, settings lsp.Settings) {
 		c.Logger().Debug().Msgf("couldn't read send error reports %s", settings.SendErrorReports)
 	} else {
 		c.SetErrorReportingEnabled(parseBool)
-	}
-
-	parseBool, err = strconv.ParseBool(settings.EnableTelemetry)
-	if err != nil {
-		c.Logger().Debug().Msgf("couldn't read enable telemetry %s", settings.SendErrorReports)
-	} else {
-		c.SetTelemetryEnabled(parseBool)
-		if parseBool {
-			go di.Analytics().Identify()
-		}
 	}
 }
 

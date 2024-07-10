@@ -28,13 +28,11 @@ import (
 	"github.com/snyk/snyk-ls/internal/lsp"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type AuthenticationServiceImpl struct {
 	providers     []AuthenticationProvider
-	analytics     ux.Analytics
 	errorReporter error_reporting.ErrorReporter
 	notifier      noti.Notifier
 	c             *config.Config
@@ -42,11 +40,10 @@ type AuthenticationServiceImpl struct {
 	authCache *imcache.Cache[string, bool]
 }
 
-func NewAuthenticationService(c *config.Config, authProviders []AuthenticationProvider, analytics ux.Analytics, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
+func NewAuthenticationService(c *config.Config, authProviders []AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
 	cache := imcache.New[string, bool]()
 	return &AuthenticationServiceImpl{
 		authProviders,
-		analytics,
 		errorReporter,
 		notifier,
 		c,
@@ -66,7 +63,6 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 			continue
 		}
 		a.UpdateCredentials(token, true)
-		a.analytics.Identify()
 		return token, err
 	}
 	return token, err
@@ -137,7 +133,7 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() (bool, error) {
 	}
 
 	// we cache the API auth ok for up to 12 hours after last access. Afterwards, a new check is performed.
-	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Hour*12))
+	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute*5))
 	a.c.Logger().Debug().Msg("IsAuthenticated: " + user + ", adding to cache.")
 	return true, nil
 }

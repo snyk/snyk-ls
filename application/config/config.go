@@ -162,7 +162,6 @@ type Config struct {
 	isSnykIacEnabled                 concurrency.AtomicBool
 	isSnykContainerEnabled           concurrency.AtomicBool
 	isSnykAdvisorEnabled             concurrency.AtomicBool
-	isTelemetryEnabled               concurrency.AtomicBool
 	manageBinariesAutomatically      concurrency.AtomicBool
 	logPath                          string
 	logFile                          *os.File
@@ -243,7 +242,6 @@ func New() *Config {
 	c.filterSeverity = lsp.DefaultSeverityFilter()
 	c.UpdateApiEndpoints(DefaultSnykApiUrl)
 	c.enableSnykLearnCodeActions = true
-	c.SetTelemetryEnabled(true)
 	c.clientSettingsFromEnv()
 	return c
 }
@@ -698,24 +696,6 @@ func (c *Config) ManageCliBinariesAutomatically() bool {
 		return false
 	}
 	return c.ManageBinariesAutomatically()
-}
-
-func (c *Config) IsTelemetryEnabled() bool {
-	return c.isTelemetryEnabled.Get()
-}
-
-func (c *Config) SetTelemetryEnabled(enabled bool) {
-	c.isTelemetryEnabled.Set(enabled)
-	c.engine.GetConfiguration().Set(configuration.ANALYTICS_DISABLED, !enabled)
-}
-
-func (c *Config) telemetryEnablementFromEnv() {
-	value := os.Getenv(EnableTelemetry)
-	if value == "1" {
-		c.SetTelemetryEnabled(false)
-	} else {
-		c.SetTelemetryEnabled(true)
-	}
 }
 
 func (c *Config) DeviceID() string {

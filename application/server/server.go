@@ -202,7 +202,6 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 
 		c.SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
-		di.Analytics().Initialise() //nolint:misspell // breaking api change
 
 		// async processing listener
 		go createProgressListener(progress.Channel, srv, c.Logger())
@@ -474,10 +473,6 @@ func shutdown() jrpc2.Handler {
 
 		disposeProgressListener()
 		di.Notifier().DisposeListener()
-		err := di.Analytics().Shutdown()
-		if err != nil {
-			logger.Err(err).Msg("Error shutting down analytics")
-		}
 		return nil, nil
 	})
 }

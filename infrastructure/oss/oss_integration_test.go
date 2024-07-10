@@ -34,7 +34,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -59,9 +58,8 @@ func Test_Scan(t *testing.T) {
 
 	instrumentor := performance.NewInstrumentor()
 	er := error_reporting.NewTestErrorReporter()
-	analytics := ux.NewTestAnalytics(c)
-	cliExecutor := cli.NewExecutor(c, er, analytics, notification.NewNotifier())
-	scanner := oss.NewCLIScanner(c, instrumentor, er, analytics, cliExecutor, di.LearnService(), notification.NewNotifier())
+	cliExecutor := cli.NewExecutor(c, er, notification.NewNotifier())
+	scanner := oss.NewCLIScanner(c, instrumentor, er, cliExecutor, di.LearnService(), notification.NewNotifier())
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(workingDir + "/testdata/package.json")

@@ -42,7 +42,6 @@ import (
 	domainNotify "github.com/snyk/snyk-ls/internal/notification"
 	er "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
-	"github.com/snyk/snyk-ls/internal/observability/ux"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -55,16 +54,15 @@ func TestInit(t *testing.T) {
 	// we don't want to open browsers when testing
 	types.DefaultOpenBrowserFunc = func(url string) {}
 	notifier = domainNotify.NewNotifier()
-	analytics = ux.NewTestAnalytics(c)
 	instrumentor = performance.NewInstrumentor()
 	errorReporter = er.NewTestErrorReporter()
 	installer = install.NewFakeInstaller()
 	authProvider := authentication.NewFakeCliAuthenticationProvider(c)
 	snykApiClient = &snyk_api.FakeApiClient{CodeEnabled: true}
-	authenticationService = authentication.NewAuthenticationService(c, []authentication.AuthenticationProvider{authProvider}, analytics, errorReporter, notifier)
-	snykCli := cli.NewExecutor(c, errorReporter, analytics, notifier)
+	authenticationService = authentication.NewAuthenticationService(c, []authentication.AuthenticationProvider{authProvider}, errorReporter, notifier)
+	snykCli := cli.NewExecutor(c, errorReporter, notifier)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
-	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, analytics, notifier)
+	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,
 		authInitializer,
@@ -83,24 +81,11 @@ func TestInit(t *testing.T) {
 	learnService = learnMock
 	codeClientScanner := &code.FakeCodeScannerClient{}
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
-	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, analytics, learnService,
-		notifier, codeClientScanner)
-	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, analytics, snykCli, learnService, notifier)
-	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, analytics, snykCli)
-	scanner = snyk.NewDelegatingScanner(
-		c,
-		scanInitializer,
-		instrumentor,
-		analytics,
-		scanNotifier,
-		snykApiClient,
-		authenticationService,
-		notifier,
-		snykCodeScanner,
-		infrastructureAsCodeScanner,
-		openSourceScanner,
-	)
-	hoverService = hover.NewDefaultService(c, analytics)
+	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner)
+	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
+	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
+	scanner = snyk.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
+	hoverService = hover.NewDefaultService(c)
 	command.SetService(&types.CommandServiceMock{})
 	// don't use getters or it'll deadlock
 	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier)
