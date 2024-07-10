@@ -30,6 +30,10 @@ type Enricher interface {
 type FindingsEnricher struct {
 }
 
+func NewFindingsEnricher() *FindingsEnricher {
+	return &FindingsEnricher{}
+}
+
 func (_ FindingsEnricher) EnrichWithId(issueList []Identifiable) []Identifiable {
 	for i := range issueList {
 		if issueList[i].GetGlobalIdentity() == "" {

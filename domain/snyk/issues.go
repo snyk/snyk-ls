@@ -76,7 +76,7 @@ type Issue struct {
 
 var _ delta.Identifiable = (*Issue)(nil)
 var _ delta.Fingerprintable = (*Issue)(nil)
-var _ delta.Locationable = (*Issue)(nil)
+var _ delta.Locatable = (*Issue)(nil)
 var _ delta.Pathable = (*Issue)(nil)
 
 func (i *Issue) StartLine() int {

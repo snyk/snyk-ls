@@ -25,6 +25,10 @@ type Differ interface {
 type FindingsDiffer struct {
 }
 
+func NewFindingsDiffer() *FindingsDiffer {
+	return &FindingsDiffer{}
+}
+
 func (_ FindingsDiffer) Diff(baseIssueList, currentIssueList []Identifiable) []Identifiable {
 	var deltaResults []Identifiable
 

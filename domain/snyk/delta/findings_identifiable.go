@@ -21,7 +21,7 @@ type Fingerprintable interface {
 	GetFingerprint() string
 }
 
-type Locationable interface {
+type Locatable interface {
 	Identifiable
 	StartLine() int
 	EndLine() int

@@ -18,7 +18,7 @@ package delta
 
 var _ Identifiable = (*mockIdentifiable)(nil)
 var _ Fingerprintable = (*mockIdentifiable)(nil)
-var _ Locationable = (*mockIdentifiable)(nil)
+var _ Locatable = (*mockIdentifiable)(nil)
 var _ Pathable = (*mockIdentifiable)(nil)
 
 type mockIdentifiable struct {

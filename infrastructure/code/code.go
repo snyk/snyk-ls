@@ -274,9 +274,9 @@ func getDelta(zlog *zerolog.Logger, baseIssueList []snyk.Issue, currentIssueList
 	logger := zlog.With().Str("method", "getDelta").Logger()
 
 	df := delta.NewFinder(
-		delta.WithEnricher(&delta.FindingsEnricher{}),
-		delta.WithMatcher(&delta.CodeMatcher{}),
-		delta.WithDiffer(&delta.FindingsDiffer{}))
+		delta.WithEnricher(delta.NewFindingsEnricher()),
+		delta.WithMatcher(delta.NewCodeMatcher()),
+		delta.WithDiffer(delta.NewFindingsDiffer()))
 
 	baseFindingIdentifiable := make([]delta.Identifiable, len(baseIssueList))
 	for i := range baseIssueList {

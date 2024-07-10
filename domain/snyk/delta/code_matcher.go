@@ -68,6 +68,10 @@ var weights = struct {
 type CodeMatcher struct {
 }
 
+func NewCodeMatcher() *CodeMatcher {
+	return &CodeMatcher{}
+}
+
 func (_ CodeMatcher) Match(baseIssueList, currentIssueList []Identifiable) ([]Identifiable, error) {
 	if len(currentIssueList) == 0 || len(baseIssueList) == 0 {
 		return nil, errors.New("base or current issue list is empty")
@@ -93,7 +97,6 @@ func (_ CodeMatcher) Match(baseIssueList, currentIssueList []Identifiable) ([]Id
 		}
 	}
 
-	// Assign UUIDs for any new issues
 	return currentIssueList, nil
 }
 
@@ -101,7 +104,7 @@ func findMatch(issue Identifiable, index int, baseIssueList []Identifiable, stro
 	matches := findMatches(issue, index, baseIssueList)
 
 	for _, match := range matches {
-		if existing, exists := strongMatchingIssues[match.BaseUUID]; !exists || existing.Confidence < match.Confidence {
+		if existingIssue, ok := strongMatchingIssues[match.BaseUUID]; !ok || existingIssue.Confidence < match.Confidence {
 			strongMatchingIssues[match.BaseUUID] = match
 		}
 	}
@@ -115,15 +118,15 @@ func findMatches(currentIssue Identifiable, index int, baseIssues []Identifiable
 			continue
 		}
 
-		filePositionDistance := filePositionConfidence(baseIssue, currentIssue)
+		fpd := filePositionDistance(baseIssue, currentIssue)
 		// Calculation of History is not needed here for IDE since we are not persisting old scan results.
 		//We will always return 1.
-		recentHistoryDistance := historicConfidenceCalculator()
-		fingerprintConfidence := fingerprintDistance(baseIssue, currentIssue)
+		hd := historicDistance()
+		fd := fingerprintDistance(baseIssue, currentIssue)
 
-		overallConfidence := filePositionDistance*weights.FilePositionDistance +
-			recentHistoryDistance*weights.RecentHistoryDistance +
-			fingerprintConfidence*weights.FingerprintConfidence
+		overallConfidence := fpd*weights.FilePositionDistance +
+			hd*weights.RecentHistoryDistance +
+			fd*weights.FingerprintConfidence
 
 		if overallConfidence == 1 {
 			similarIssues = append(similarIssues, IssueConfidence{
@@ -149,7 +152,7 @@ func findMatches(currentIssue Identifiable, index int, baseIssues []Identifiable
 func deduplicateIssues(strongMatchingIssues map[string]IssueConfidence) DeduplicatedIssuesToIDs {
 	finalResult := make(DeduplicatedIssuesToIDs)
 	for _, issue := range strongMatchingIssues {
-		if existing, exists := finalResult[issue.IssueIDResultIndex]; !exists || existing.Confidence < issue.Confidence {
+		if existingIdentity, ok := finalResult[issue.IssueIDResultIndex]; !ok || existingIdentity.Confidence < issue.Confidence {
 			finalResult[issue.IssueIDResultIndex] = Identity{
 				IdentityID: issue.BaseUUID,
 				Confidence: issue.Confidence,
@@ -185,7 +188,7 @@ func fingerprintDistance(baseFingerprints, currentFingerprints Identifiable) flo
 	return float64(similar) / float64(totalParts)
 }
 
-func filePositionConfidence(baseIssue, currentIssue Identifiable) float64 {
+func filePositionDistance(baseIssue, currentIssue Identifiable) float64 {
 	basePathable, ok := baseIssue.(Pathable)
 	if !ok {
 		return 0
@@ -220,11 +223,11 @@ func filePositionConfidence(baseIssue, currentIssue Identifiable) float64 {
 }
 
 func matchDistance(baseIssue Identifiable, currentIssue Identifiable) (float64, float64, float64, float64) {
-	baseRangeable, ok := baseIssue.(Locationable)
+	baseRangeable, ok := baseIssue.(Locatable)
 	if !ok {
 		return 0, 0, 0, 0
 	}
-	currentRangeable, ok := currentIssue.(Locationable)
+	currentRangeable, ok := currentIssue.(Locatable)
 	if !ok {
 		return 0, 0, 0, 0
 	}
@@ -264,7 +267,7 @@ func fileExtSimilarity(ext1, ext2 string) float64 {
 	return strutil.Similarity(ext1, ext2, metrics.NewLevenshtein())
 }
 
-func historicConfidenceCalculator() float64 {
+func historicDistance() float64 {
 	return 1
 }
 
