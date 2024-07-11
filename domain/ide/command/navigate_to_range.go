@@ -25,14 +25,13 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 type navigateToRangeCommand struct {
 	command types.CommandData
-	srv     lsp.Server
+	srv     types.Server
 	logger  *zerolog.Logger
 }
 
@@ -57,7 +56,7 @@ func (cmd *navigateToRangeCommand) Execute(ctx context.Context) (any, error) {
 		return nil, errors.Wrap(err, "couldn't unmarshal range from json")
 	}
 
-	params := lsp.ShowDocumentParams{
+	params := types.ShowDocumentParams{
 		Uri:       uri.PathToUri(args[0].(string)),
 		External:  false,
 		TakeFocus: true,

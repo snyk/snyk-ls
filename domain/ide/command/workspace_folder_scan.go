@@ -23,13 +23,12 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type workspaceFolderScanCommand struct {
 	command types.CommandData
-	srv     lsp.Server
+	srv     types.Server
 	logger  *zerolog.Logger
 }
 

@@ -24,10 +24,10 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -91,12 +91,12 @@ func Test_AddAndRemoveFoldersAndTriggerScan(t *testing.T) {
 	c.SetTrustedFolders([]string{trustedPathAfterConversions})
 	c.SetAutomaticScanning(true)
 
-	params := lsp.DidChangeWorkspaceFoldersParams{Event: lsp.WorkspaceFoldersChangeEvent{
-		Added: []lsp.WorkspaceFolder{
+	params := types.DidChangeWorkspaceFoldersParams{Event: types.WorkspaceFoldersChangeEvent{
+		Added: []types.WorkspaceFolder{
 			{Name: trustedDummy, Uri: uri.PathToUri(trustedDummy)},
 			{Name: untrustedDummy, Uri: uri.PathToUri(untrustedDummy)},
 		},
-		Removed: []lsp.WorkspaceFolder{
+		Removed: []types.WorkspaceFolder{
 			{Name: toBeRemoved, Uri: uri.PathToUri(toBeRemoved)},
 		},
 	}}

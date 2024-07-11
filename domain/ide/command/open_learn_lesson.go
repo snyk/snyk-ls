@@ -22,13 +22,12 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/snyk/snyk-ls/infrastructure/learn"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type openLearnLesson struct {
 	command               types.CommandData
-	srv                   lsp.Server
+	srv                   types.Server
 	learnService          learn.Service
 	openBrowserHandleFunc func(url string)
 }

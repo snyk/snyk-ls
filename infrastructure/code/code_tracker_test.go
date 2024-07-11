@@ -22,11 +22,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var testProgressChannels = make(chan lsp.ProgressParams, 10000)
-var testCancelProgressChannel = make(chan lsp.ProgressToken, 10000)
+var testProgressChannels = make(chan types.ProgressParams, 10000)
+var testCancelProgressChannel = make(chan types.ProgressToken, 10000)
 
 func Test_Tracker_Begin(t *testing.T) {
 	tracker := newCodeTracker(testProgressChannels, testCancelProgressChannel)
@@ -44,12 +44,12 @@ func Test_Tracker_Begin(t *testing.T) {
 						return false
 					} else {
 						switch value := p.Value.(type) {
-						case lsp.WorkDoneProgressBegin:
+						case types.WorkDoneProgressBegin:
 							if !hasBegun {
 								return false
 							}
 							return value.Title == "title" && value.Message == "message"
-						case lsp.WorkDoneProgressEnd:
+						case types.WorkDoneProgressEnd:
 							return false
 						}
 					}
@@ -78,9 +78,9 @@ func Test_Tracker_End(t *testing.T) {
 						return false
 					} else {
 						switch value := p.Value.(type) {
-						case lsp.WorkDoneProgressBegin:
+						case types.WorkDoneProgressBegin:
 							return false
-						case lsp.WorkDoneProgressEnd:
+						case types.WorkDoneProgressEnd:
 							return value.Message == "message"
 						}
 					}

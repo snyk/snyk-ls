@@ -18,15 +18,15 @@ func (m *MockScanNotifier) SendInProgress(folderPath string) {
 	m.inProgressCalls = append(m.inProgressCalls, folderPath)
 }
 
-func (m *MockScanNotifier) SendSuccessForAllProducts(folderPath string, issues []Issue) {
+func (m *MockScanNotifier) SendSuccessForAllProducts(folderPath string, _ []Issue) {
 	m.successCalls = append(m.successCalls, folderPath)
 }
 
-func (m *MockScanNotifier) SendSuccess(product product.Product, folderPath string, issues []Issue) {
+func (m *MockScanNotifier) SendSuccess(_ product.Product, folderPath string, _ []Issue) {
 	m.successCalls = append(m.successCalls, folderPath)
 }
 
-func (m *MockScanNotifier) SendError(product product.Product, folderPath string) {
+func (m *MockScanNotifier) SendError(_ product.Product, folderPath string, _ string) {
 	m.errorCalls = append(m.errorCalls, folderPath)
 }
 

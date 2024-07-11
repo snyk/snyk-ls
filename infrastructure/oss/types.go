@@ -30,7 +30,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -43,8 +42,8 @@ type identifiers struct {
 }
 
 type reference struct {
-	Title string  `json:"title"`
-	Url   lsp.Uri `json:"url"`
+	Title string    `json:"title"`
+	Url   types.Uri `json:"url"`
 }
 
 type ossIssue struct {

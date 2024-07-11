@@ -23,7 +23,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -51,6 +50,6 @@ func (cmd *trustWorkspaceFoldersCommand) Execute(_ context.Context) (any, error)
 	}
 
 	config.CurrentConfig().SetTrustedFolders(trustedFolderPaths)
-	cmd.notifier.Send(lsp.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
+	cmd.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
 	return nil, nil
 }

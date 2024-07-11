@@ -23,10 +23,10 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/internal/concurrency"
-	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var params = lsp.AuthenticationParams{Token: "test event"}
+var params = types.AuthenticationParams{Token: "test event"}
 
 func TestSendReceive(t *testing.T) {
 	n := NewNotifier()

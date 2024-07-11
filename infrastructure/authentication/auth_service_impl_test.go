@@ -27,7 +27,6 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -126,7 +125,7 @@ func TestHandleInvalidCredentials(t *testing.T) {
 				require.True(t, ok)
 				require.Empty(t, cancelAction.CommandId)
 				messageRequestReceived = true
-			case lsp.AuthenticationParams:
+			case types.AuthenticationParams:
 				require.Empty(t, p.Token)
 				tokenResetReceived = true
 			}

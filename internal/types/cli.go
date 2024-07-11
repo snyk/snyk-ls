@@ -1,5 +1,5 @@
 /*
- * © 2023-2024 Snyk Limited
+ * © 2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,20 +16,21 @@
 
 package types
 
-import "github.com/snyk/snyk-ls/internal/data_structure"
+import "encoding/json"
 
-type MessageAction string
+type CliOutput struct {
+	Code         int    `json:"code,omitempty"`
+	ErrorMessage string `json:"error,omitempty"`
+	Path         string `json:"path,omitempty"`
+	Command      string `json:"command,omitempty"`
+}
 
-type MessageType int
+type CliError CliOutput
 
-const (
-	Error   MessageType = 1
-	Warning MessageType = 2
-	Info    MessageType = 3
-)
-
-type ShowMessageRequest struct {
-	Message string                                                 `json:"message"`
-	Type    MessageType                                            `json:"type"`
-	Actions *data_structure.OrderedMap[MessageAction, CommandData] `json:"actions"`
+func (e CliError) Error() string {
+	marshal, err := json.Marshal(e)
+	if err != nil {
+		return e.ErrorMessage
+	}
+	return string(marshal)
 }

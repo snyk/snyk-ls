@@ -22,23 +22,23 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var Channel = make(chan lsp.ProgressParams, 10000)
-var CancelProgressChannel = make(chan lsp.ProgressToken, 10000)
+var Channel = make(chan types.ProgressParams, 10000)
+var CancelProgressChannel = make(chan types.ProgressToken, 10000)
 
 type Tracker struct {
-	channel              chan lsp.ProgressParams
-	cancelChannel        chan lsp.ProgressToken
-	token                lsp.ProgressToken
+	channel              chan types.ProgressParams
+	cancelChannel        chan types.ProgressToken
+	token                types.ProgressToken
 	cancellable          bool
 	lastReport           time.Time
 	lastReportPercentage int
 	finished             bool
 }
 
-func NewTestTracker(channel chan lsp.ProgressParams, cancelChannel chan lsp.ProgressToken) *Tracker {
+func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan types.ProgressToken) *Tracker {
 	return &Tracker{
 		channel:       channel,
 		cancelChannel: cancelChannel,
@@ -66,7 +66,7 @@ func (t *Tracker) begin(title string, message string, unquantifiableLength bool)
 	params := newProgressParams(title, message, t.cancellable, unquantifiableLength)
 	t.token = params.Token
 
-	t.send(lsp.ProgressParams{
+	t.send(types.ProgressParams{
 		Token: t.token,
 		Value: nil,
 	})
@@ -87,10 +87,10 @@ func (t *Tracker) ReportWithMessage(percentage int, message string) {
 	if time.Now().Before(t.lastReport.Add(time.Second)) || percentage <= t.lastReportPercentage {
 		return
 	}
-	progress := lsp.ProgressParams{
+	progress := types.ProgressParams{
 		Token: t.token,
-		Value: lsp.WorkDoneProgressReport{
-			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: lsp.WorkDoneProgressReportKind},
+		Value: types.WorkDoneProgressReport{
+			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressReportKind},
 			Percentage:           percentage,
 			Message:              message,
 		},
@@ -113,10 +113,10 @@ func (t *Tracker) EndWithMessage(message string) {
 		panic("Called end progress twice. This breaks LSP in Eclipse fix me now and avoid headaches later")
 	}
 	t.finished = true
-	progress := lsp.ProgressParams{
+	progress := types.ProgressParams{
 		Token: t.token,
-		Value: lsp.WorkDoneProgressEnd{
-			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: lsp.WorkDoneProgressEndKind},
+		Value: types.WorkDoneProgressEnd{
+			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressEndKind},
 			Message:              message,
 		},
 	}
@@ -136,20 +136,20 @@ func (t *Tracker) CancelOrDone(onCancel func(), doneCh chan bool) {
 	}
 }
 
-func (t *Tracker) GetToken() lsp.ProgressToken {
+func (t *Tracker) GetToken() types.ProgressToken {
 	return t.token
 }
 
-func newProgressParams(title, message string, cancellable, unquantifiableLength bool) lsp.ProgressParams {
+func newProgressParams(title, message string, cancellable, unquantifiableLength bool) types.ProgressParams {
 	id := uuid.New().String()
 	percentage := 1
 	if unquantifiableLength {
 		percentage = 0
 	}
-	return lsp.ProgressParams{
-		Token: lsp.ProgressToken(id),
-		Value: lsp.WorkDoneProgressBegin{
-			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: lsp.WorkDoneProgressBeginKind},
+	return types.ProgressParams{
+		Token: types.ProgressToken(id),
+		Value: types.WorkDoneProgressBegin{
+			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressBeginKind},
 			Title:                title,
 			Message:              message,
 			Cancellable:          cancellable,
@@ -158,7 +158,7 @@ func newProgressParams(title, message string, cancellable, unquantifiableLength 
 	}
 }
 
-func (t *Tracker) send(progress lsp.ProgressParams) {
+func (t *Tracker) send(progress types.ProgressParams) {
 	if progress.Token == "" {
 		config.CurrentConfig().Logger().Error().Str("method", "send").Msg("progress has no token")
 	}

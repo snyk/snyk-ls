@@ -26,12 +26,12 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 func textDocumentInlineValueHandler() jrpc2.Handler {
-	return handler.New(func(ctx context.Context, params lsp.InlineValueParams) (any, error) {
+	return handler.New(func(ctx context.Context, params types.InlineValueParams) (any, error) {
 		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "textDocumentInlineValueHandler").Logger()
 		documentURI := params.TextDocument.URI

@@ -31,7 +31,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -127,12 +126,12 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 	fakeClient := &code.FakeSnykCodeClient{C: c}
 	snykCodeClient := fakeClient
 	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewNotifier(), snykCodeClient)
-	codeActionsParam := lsp.CodeActionParams{
+	codeActionsParam := types.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
 			URI: documentUriExample,
 		},
 		Range:   exampleRange,
-		Context: lsp.CodeActionContext{},
+		Context: types.CodeActionContext{},
 	}
 
 	// Act
@@ -179,7 +178,7 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 
 	// Assert
 	assert.NotNil(t, resolvedAction)
-	assert.Equal(t, lsp.CodeActionData(id), *resolvedAction.Data)
+	assert.Equal(t, types.CodeActionData(id), *resolvedAction.Data)
 	assert.Nil(t, actionFromRequest.Edit)
 	assert.Nil(t, actionFromRequest.Command)
 	assert.NotNil(t, resolvedAction.Edit)
@@ -190,8 +189,8 @@ func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
 	// Arrange
 	service := setupService()
 
-	id := lsp.CodeActionData(uuid.New())
-	ca := lsp.CodeAction{
+	id := types.CodeActionData(uuid.New())
+	ca := types.CodeAction{
 		Title:   "Made up CA",
 		Edit:    nil,
 		Command: nil,
@@ -219,13 +218,13 @@ func Test_ResolveCodeAction_UnknownCommandIsReported(t *testing.T) {
 		nil,
 	))
 
-	id := lsp.CodeActionData(uuid.New())
+	id := types.CodeActionData(uuid.New())
 	c := &sglsp.Command{
 		Title:     "test",
 		Command:   "test",
 		Arguments: []any{"test"},
 	}
-	ca := lsp.CodeAction{
+	ca := types.CodeAction{
 		Title:   "Made up CA",
 		Edit:    nil,
 		Command: c,
@@ -246,14 +245,14 @@ func Test_ResolveCodeAction_CommandIsExecuted(t *testing.T) {
 	// Arrange
 	service := setupService()
 
-	id := lsp.CodeActionData(uuid.New())
+	id := types.CodeActionData(uuid.New())
 	command.SetService(types.NewCommandServiceMock())
 
 	c := &sglsp.Command{
 		Title:   types.LoginCommand,
 		Command: types.LoginCommand,
 	}
-	ca := lsp.CodeAction{
+	ca := types.CodeAction{
 		Title:   "Made up CA",
 		Edit:    nil,
 		Command: c,
@@ -272,7 +271,7 @@ func Test_ResolveCodeAction_KeyIsNull_ReturnsError(t *testing.T) {
 	testutil.UnitTest(t)
 	service := setupService()
 
-	ca := lsp.CodeAction{
+	ca := types.CodeAction{
 		Title:   "Made up CA",
 		Edit:    nil,
 		Command: nil,
@@ -293,7 +292,7 @@ func setupService() *codeaction.CodeActionsService {
 	return service
 }
 
-func setupWithSingleIssue(issue snyk.Issue) (*codeaction.CodeActionsService, lsp.CodeActionParams, *watcher.FileWatcher) {
+func setupWithSingleIssue(issue snyk.Issue) (*codeaction.CodeActionsService, types.CodeActionParams, *watcher.FileWatcher) {
 	r := exampleRange
 	uriPath := documentUriExample
 	path := uri.PathFromUri(uriPath)
@@ -305,12 +304,12 @@ func setupWithSingleIssue(issue snyk.Issue) (*codeaction.CodeActionsService, lsp
 	snykCodeClient := fakeClient
 	service := codeaction.NewService(config.CurrentConfig(), providerMock, fileWatcher, notification.NewNotifier(), snykCodeClient)
 
-	codeActionsParam := lsp.CodeActionParams{
+	codeActionsParam := types.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
 			URI: uriPath,
 		},
 		Range:   r,
-		Context: lsp.CodeActionContext{},
+		Context: types.CodeActionContext{},
 	}
 	return service, codeActionsParam, fileWatcher
 }

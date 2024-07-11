@@ -29,7 +29,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/data_structure"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -50,11 +49,11 @@ func (b *ServerImplMock) Notify(_ context.Context, _ string, _ any) error {
 
 func TestCreateProgressListener(t *testing.T) {
 	c := testutil.UnitTest(t)
-	progressChannel := make(chan lsp.ProgressParams, 1)
-	progressNotification := lsp.ProgressParams{
+	progressChannel := make(chan types.ProgressParams, 1)
+	progressNotification := types.ProgressParams{
 		Token: "token",
-		Value: lsp.WorkDoneProgressBegin{
-			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "begin"},
+		Value: types.WorkDoneProgressBegin{
+			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: "begin"},
 			Title:                "title",
 			Message:              "message",
 			Cancellable:          true,
@@ -78,9 +77,9 @@ func TestCreateProgressListener(t *testing.T) {
 func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
 
-	clientParams := lsp.InitializeParams{
-		Capabilities: lsp.ClientCapabilities{
-			Window: lsp.WindowClientCapabilities{
+	clientParams := types.InitializeParams{
+		Capabilities: types.ClientCapabilities{
+			Window: types.WindowClientCapabilities{
 				WorkDoneProgress: true,
 			},
 		},
@@ -90,7 +89,7 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var result lsp.InitializeResult
+	var result types.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +102,7 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 		func() bool {
 			callbacks := jsonRPCRecorder.FindCallbacksByMethod("window/workDoneProgress/create")
 			for _, c := range callbacks {
-				actualProgress := lsp.ProgressParams{}
+				actualProgress := types.ProgressParams{}
 				_ = c.UnmarshalParams(&actualProgress)
 				if progressTracker.GetToken() == actualProgress.Token {
 					return true
@@ -124,7 +123,7 @@ func TestCancelProgress(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expectedWorkdoneProgressCancelParams := lsp.WorkdoneProgressCancelParams{
+	expectedWorkdoneProgressCancelParams := types.WorkdoneProgressCancelParams{
 		Token: "token",
 	}
 	_, err = loc.Client.Call(ctx, "window/workDoneProgress/cancel", expectedWorkdoneProgressCancelParams)
@@ -145,7 +144,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var expected = lsp.AuthenticationParams{Token: "test token"}
+	var expected = types.AuthenticationParams{Token: "test token"}
 
 	di.Notifier().Send(expected)
 	assert.Eventually(
@@ -156,7 +155,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 				return false
 			}
 			for _, n := range notifications {
-				var actual = lsp.AuthenticationParams{}
+				var actual = types.AuthenticationParams{}
 				_ = n.UnmarshalParams(&actual)
 				if reflect.DeepEqual(expected, actual) {
 					return true
@@ -176,7 +175,7 @@ func Test_IsAvailableCliNotification(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var expected = lsp.SnykIsAvailableCli{CliPath: "path"}
+	var expected = types.SnykIsAvailableCli{CliPath: "path"}
 
 	di.Notifier().Send(expected)
 	assert.Eventually(
@@ -187,7 +186,7 @@ func Test_IsAvailableCliNotification(t *testing.T) {
 				return false
 			}
 			for _, n := range notifications {
-				var actual = lsp.SnykIsAvailableCli{}
+				var actual = types.SnykIsAvailableCli{}
 				_ = n.UnmarshalParams(&actual)
 				if reflect.DeepEqual(expected, actual) {
 					return true
@@ -236,7 +235,7 @@ func TestShowMessageRequest(t *testing.T) {
 				if len(callbacks) < 1 {
 					return false
 				}
-				var actual lsp.ShowMessageRequestParams
+				var actual types.ShowMessageRequestParams
 				_ = callbacks[0].UnmarshalParams(&actual)
 				_, ok := expected.Actions.Get(types.MessageAction(expectedTitle))
 				return ok &&
@@ -251,7 +250,7 @@ func TestShowMessageRequest(t *testing.T) {
 	t.Run("should execute a command when action item is selected", func(t *testing.T) {
 		selectedAction := "Open browser"
 		loc, _ := setupCustomServer(t, func(_ context.Context, _ *jrpc2.Request) (any, error) {
-			return lsp.MessageActionItem{
+			return types.MessageActionItem{
 				Title: selectedAction,
 			}, nil
 		})

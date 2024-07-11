@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 
 	"github.com/google/uuid"
@@ -37,7 +38,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -298,7 +298,7 @@ func (f *Folder) scan(ctx context.Context, path string) {
 
 func (f *Folder) processResults(scanData snyk.ScanData) {
 	if scanData.Err != nil {
-		f.scanNotifier.SendError(scanData.Product, f.path)
+		f.scanNotifier.SendError(scanData.Product, f.path, scanData.Err.Error())
 		f.c.Logger().Err(scanData.Err).
 			Str("method", "processResults").
 			Str("product", string(scanData.Product)).
@@ -422,7 +422,7 @@ func sendAnalytics(data *snyk.ScanData) {
 }
 
 func setupCategories(data *snyk.ScanData, c *config.Config) []string {
-	args := []string{product.ToProductCodename(data.Product), "test"}
+	args := []string{data.Product.ToProductCodename(), "test"}
 	args = append(args, c.CliSettings().AdditionalOssParameters...)
 	categories := instrumentation.DetermineCategory(args, c.Engine())
 	return categories
@@ -545,7 +545,7 @@ func (f *Folder) sendDiagnosticsForFile(path string, issues []snyk.Issue) {
 		Str("method", "sendDiagnosticsForFile").
 		Str("affectedFilePath", path).Int("issueCount", len(issues)).Send()
 
-	f.notifier.Send(lsp.PublishDiagnosticsParams{
+	f.notifier.Send(types.PublishDiagnosticsParams{
 		URI:         uri.PathToUri(path),
 		Diagnostics: converter.ToDiagnostics(issues),
 	})

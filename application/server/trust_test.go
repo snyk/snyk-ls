@@ -30,8 +30,8 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -65,7 +65,7 @@ func Test_handleUntrustedFolders_shouldNotTriggerTrustRequestWhenAlreadyRequesti
 
 func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmation(t *testing.T) {
 	loc, jsonRPCRecorder := setupCustomServer(t, func(_ context.Context, _ *jrpc2.Request) (any, error) {
-		return lsp.MessageActionItem{
+		return types.MessageActionItem{
 			Title: command.DoTrust,
 		}, nil
 	})
@@ -87,7 +87,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 
 func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativeConfirmation(t *testing.T) {
 	loc, _ := setupCustomServer(t, func(_ context.Context, _ *jrpc2.Request) (any, error) {
-		return lsp.MessageActionItem{
+		return types.MessageActionItem{
 			Title: command.DontTrust,
 		}, nil
 	})
@@ -109,7 +109,7 @@ func Test_initializeHandler_shouldCallHandleUntrustedFolders(t *testing.T) {
 	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
-	_, err := loc.Client.Call(context.Background(), "initialize", lsp.InitializeParams{
+	_, err := loc.Client.Call(context.Background(), "initialize", types.InitializeParams{
 		RootURI: uri.PathToUri("/untrusted/dummy"),
 	})
 	if err != nil {
@@ -129,12 +129,12 @@ func Test_DidWorkspaceFolderChange_shouldCallHandleUntrustedFolders(t *testing.T
 	loc, jsonRPCRecorder := setupServer(t)
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 
-	_, err := loc.Client.Call(context.Background(), "workspace/didChangeWorkspaceFolders", lsp.DidChangeWorkspaceFoldersParams{
-		Event: lsp.WorkspaceFoldersChangeEvent{
-			Added: []lsp.WorkspaceFolder{
+	_, err := loc.Client.Call(context.Background(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+		Event: types.WorkspaceFoldersChangeEvent{
+			Added: []types.WorkspaceFolder{
 				{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"},
 			},
-			Removed: []lsp.WorkspaceFolder{},
+			Removed: []types.WorkspaceFolder{},
 		},
 	})
 
@@ -147,8 +147,8 @@ func checkTrustMessageRequest(jsonRPCRecorder *testutil.JsonRPCRecorder) bool {
 	if len(callbacks) == 0 {
 		return false
 	}
-	var params lsp.ShowMessageRequestParams
+	var params types.ShowMessageRequestParams
 	_ = callbacks[0].UnmarshalParams(&params)
 	_, untrusted := workspace.Get().GetFolderTrust()
-	return params.Type == lsp.Warning && params.Message == command.GetTrustMessage(untrusted)
+	return params.Type == types.Warning && params.Message == command.GetTrustMessage(untrusted)
 }

@@ -24,13 +24,13 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 const DoTrust = "Trust folders and continue"
 const DontTrust = "Don't trust folders"
 
-func HandleUntrustedFolders(ctx context.Context, srv lsp.Server) {
+func HandleUntrustedFolders(ctx context.Context, srv types.Server) {
 	w := workspace.Get()
 	// debounce requests from overzealous clients (Eclipse, I'm looking at you)
 	if w.IsTrustRequestOngoing() {
@@ -52,25 +52,25 @@ func HandleUntrustedFolders(ctx context.Context, srv lsp.Server) {
 	}
 }
 
-func showTrustDialog(srv lsp.Server, untrusted []*workspace.Folder, dontTrust string, doTrust string) (lsp.MessageActionItem, error) {
+func showTrustDialog(srv types.Server, untrusted []*workspace.Folder, dontTrust string, doTrust string) (types.MessageActionItem, error) {
 	method := "showTrustDialog"
 	logger := config.CurrentConfig().Logger()
-	result, err := srv.Callback(context.Background(), "window/showMessageRequest", lsp.ShowMessageRequestParams{
-		Type:    lsp.Warning,
+	result, err := srv.Callback(context.Background(), "window/showMessageRequest", types.ShowMessageRequestParams{
+		Type:    types.Warning,
 		Message: GetTrustMessage(untrusted),
-		Actions: []lsp.MessageActionItem{{Title: dontTrust}, {Title: doTrust}},
+		Actions: []types.MessageActionItem{{Title: dontTrust}, {Title: doTrust}},
 	})
 	if err != nil {
 		logger.Err(errors.Wrap(err, "couldn't show trust message")).Str("method", method).Send()
-		return lsp.MessageActionItem{Title: dontTrust}, err
+		return types.MessageActionItem{Title: dontTrust}, err
 	}
 
-	var trust lsp.MessageActionItem
+	var trust types.MessageActionItem
 	if result != nil {
 		err = result.UnmarshalResult(&trust)
 		if err != nil {
 			logger.Err(errors.Wrap(err, "couldn't unmarshal trust message")).Str("method", method).Send()
-			return lsp.MessageActionItem{Title: dontTrust}, err
+			return types.MessageActionItem{Title: dontTrust}, err
 		}
 	}
 	return trust, err
