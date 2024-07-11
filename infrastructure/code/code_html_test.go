@@ -136,7 +136,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 		IgnoreDetails: &snyk.IgnoreDetails{
 			Category:   "wont-fix",
 			Reason:     getIgnoreReason("long"),
-			Expiration: "13 days",
+			Expiration: "",
 			IgnoredOn:  time.Now(),
 			IgnoredBy:  "John Smith",
 		},
@@ -163,9 +163,37 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	assert.Contains(t, codePanelHtml, `class="ignore-badge"`)
 	assert.Contains(t, codePanelHtml, `data-content="ignore-details"`)
 	assert.Contains(t, codePanelHtml, `class="ignore-details-value">Ignored permanently</div>`)
+	assert.Contains(t, codePanelHtml, `class="ignore-details-value">No expiration</div>`) // Because category is "wont-fix"
 
 	// assert Footer buttons are not present when issue is ignored
 	assert.NotContains(t, codePanelHtml, `id="ignore-actions"`)
+}
+
+func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
+	_ = testutil.UnitTest(t)
+
+	issue := snyk.Issue{
+		ID:        "scala/DontUsePrintStackTrace",
+		Severity:  2,
+		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
+		CWEs:      []string{"CWE-123", "CWE-456"},
+		IsIgnored: true,
+		IgnoreDetails: &snyk.IgnoreDetails{
+			Category:   "temporary-ignore",
+			Reason:     getIgnoreReason("long"),
+			Expiration: "2023-08-26T13:16:53.177Z",
+			IgnoredOn:  time.Now(),
+			IgnoredBy:  "John Smith",
+		},
+		AdditionalData: snyk.CodeIssueData{},
+	}
+
+	// invoke method under test
+	codePanelHtml := getCodeDetailsHtml(issue)
+
+	// assert Ignore Details section
+	// Asserting an expired date to prevent the test from breaking in the future as the current date changes
+	assert.Contains(t, codePanelHtml, `class="ignore-details-value">Expired</div>`)
 }
 
 func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {

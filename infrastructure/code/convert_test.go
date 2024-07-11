@@ -928,7 +928,7 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 	})
 
 	t.Run("does return ignore details if one suppression", func(t *testing.T) {
-		expiration := "expiration"
+		expiration := "2024-08-06T13:16:53Z"
 		r := codeClientSarif.Result{
 			Message: codeClientSarif.ResultMessage{
 				Text:     "",
@@ -957,13 +957,13 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 		assert.NotNil(t, ignoreDetails)
 		assert.Equal(t, "reason", ignoreDetails.Reason)
 		assert.Equal(t, "category", ignoreDetails.Category)
-		assert.Equal(t, "expiration", ignoreDetails.Expiration)
+		assert.Equal(t, expiration, ignoreDetails.Expiration)
 		assert.Equal(t, 2024, ignoreDetails.IgnoredOn.Year())
 		assert.Equal(t, "name", ignoreDetails.IgnoredBy)
 	})
 
 	t.Run("sets reason to a default value if justification not provided in suppression", func(t *testing.T) {
-		expiration := "expiration"
+		expiration := "2024-08-06T13:16:53Z"
 		r := codeClientSarif.Result{
 			Message: codeClientSarif.ResultMessage{
 				Text:     "",
@@ -991,7 +991,7 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 		assert.NotNil(t, ignoreDetails)
 		assert.Equal(t, "None given", ignoreDetails.Reason)
 		assert.Equal(t, "category", ignoreDetails.Category)
-		assert.Equal(t, "expiration", ignoreDetails.Expiration)
+		assert.Equal(t, expiration, ignoreDetails.Expiration)
 		assert.Equal(t, 2024, ignoreDetails.IgnoredOn.Year())
 		assert.Equal(t, "name", ignoreDetails.IgnoredBy)
 	})
