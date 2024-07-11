@@ -488,7 +488,7 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 			require.Equal(t, "dev", string(*actualV2InstrumentationObject.Data.Attributes.Interaction.Stage))
 			require.Equal(t, "Success", actualV2InstrumentationObject.Data.Attributes.Interaction.Status)
 			require.Equal(t, "Scan done", actualV2InstrumentationObject.Data.Attributes.Interaction.Type)
-			require.Equal(t, []string{product.ToProductCodename(data.Product), "test"}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Categories)
+			require.Equal(t, []string{data.Product.ToProductCodename(), "test"}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Categories)
 			require.Equal(t, "Analytics", actualV2InstrumentationObject.Data.Type)
 			require.Empty(t, actualV2InstrumentationObject.Data.Attributes.Interaction.Errors)
 			require.Equal(t, []map[string]interface{}{{"name": "medium", "count": 1}}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Results)

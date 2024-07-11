@@ -26,7 +26,7 @@ func (m *MockScanNotifier) SendSuccess(product product.Product, folderPath strin
 	m.successCalls = append(m.successCalls, folderPath)
 }
 
-func (m *MockScanNotifier) SendError(product product.Product, folderPath string) {
+func (m *MockScanNotifier) SendError(product product.Product, folderPath string, errorMessage string) {
 	m.errorCalls = append(m.errorCalls, folderPath)
 }
 

@@ -263,14 +263,14 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
 
 				scanSpan := sc.instrumentor.StartSpan(span.Context(), "scan")
-				foundIssues, err := s.Scan(scanSpan.Context(), path, folderPath)
+				foundIssues, scanError := s.Scan(scanSpan.Context(), path, folderPath)
 				sc.instrumentor.Finish(scanSpan)
 
 				// now process
 				data := ScanData{
 					Product:           s.Product(),
 					Issues:            foundIssues,
-					Err:               err,
+					Err:               scanError,
 					DurationMs:        time.Duration(scanSpan.GetDurationMs()),
 					TimestampFinished: time.Now().UTC(),
 					Path:              folderPath,

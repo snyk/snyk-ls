@@ -298,7 +298,7 @@ func (f *Folder) scan(ctx context.Context, path string) {
 
 func (f *Folder) processResults(scanData snyk.ScanData) {
 	if scanData.Err != nil {
-		f.scanNotifier.SendError(scanData.Product, f.path)
+		f.scanNotifier.SendError(scanData.Product, f.path, scanData.Err.Error())
 		f.c.Logger().Err(scanData.Err).
 			Str("method", "processResults").
 			Str("product", string(scanData.Product)).
@@ -422,7 +422,7 @@ func sendAnalytics(data *snyk.ScanData) {
 }
 
 func setupCategories(data *snyk.ScanData, c *config.Config) []string {
-	args := []string{product.ToProductCodename(data.Product), "test"}
+	args := []string{data.Product.ToProductCodename(), "test"}
 	args = append(args, c.CliSettings().AdditionalOssParameters...)
 	categories := instrumentation.DetermineCategory(args, c.Engine())
 	return categories

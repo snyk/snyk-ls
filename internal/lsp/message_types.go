@@ -1024,7 +1024,7 @@ const (
 
 // SnykScanParams is the type for the $/snyk/scan message
 type SnykScanParams struct {
-	// Status can be either Initial, InProgress or Success
+	// Status can be either InProgress, Success or ErrorStatus
 	Status ScanStatus `json:"status"`
 	// Product under scan (Snyk Code, Snyk Open Source, etc...)
 	Product string `json:"product"`
@@ -1032,6 +1032,8 @@ type SnykScanParams struct {
 	FolderPath string `json:"folderPath"`
 	// Issues contain the scan results in the common issues model
 	Issues []ScanIssue `json:"issues"`
+	// Error Message
+	ErrorMessage string `json:"errorMessage,omitempty"`
 }
 
 type ScanIssue struct { // TODO - convert this to a generic type

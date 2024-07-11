@@ -46,12 +46,13 @@ func NewScanNotifier(c *config.Config, notifier notification.Notifier) (snyk.Sca
 	}, nil
 }
 
-func (n *scanNotifier) SendError(pr product.Product, folderPath string) {
+func (n *scanNotifier) SendError(product product.Product, folderPath string, errorMessage string) {
 	n.notifier.Send(
 		lsp.SnykScanParams{
-			Status:     lsp.ErrorStatus,
-			Product:    product.ToProductCodename(pr),
-			FolderPath: folderPath,
+			Status:       lsp.ErrorStatus,
+			Product:      product.ToProductCodename(),
+			FolderPath:   folderPath,
+			ErrorMessage: errorMessage,
 		},
 	)
 }
@@ -105,7 +106,7 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 	n.notifier.Send(
 		lsp.SnykScanParams{
 			Status:     lsp.Success,
-			Product:    product.ToProductCodename(pr),
+			Product:    pr.ToProductCodename(),
 			FolderPath: folderPath,
 			Issues:     scanIssues,
 		},
@@ -322,7 +323,7 @@ func (n *scanNotifier) isProductEnabled(p product.Product) bool {
 	}
 }
 
-// Notifies all snyk/scan enabled product messages
+// SendInProgress Notifies all snyk/scan enabled product messages
 func (n *scanNotifier) SendInProgress(folderPath string) {
 	products := n.supportedProducts()
 	for _, pr := range products {
@@ -333,7 +334,7 @@ func (n *scanNotifier) SendInProgress(folderPath string) {
 		n.notifier.Send(
 			lsp.SnykScanParams{
 				Status:     lsp.InProgress,
-				Product:    product.ToProductCodename(pr),
+				Product:    pr.ToProductCodename(),
 				FolderPath: folderPath,
 				Issues:     nil,
 			},

@@ -315,7 +315,7 @@ func checkScanResultsPublishingForCachingSmokeTest(
 			if scanResult.Status != lsp.Success {
 				continue
 			}
-			if scanResult.Product == product.ToProductCodename(product.ProductCode) {
+			if scanResult.Product == product.ProductCode.ToProductCodename() {
 				switch scanResult.FolderPath {
 				case folderGoof.Path():
 					scanResultCodeGoofFound = true

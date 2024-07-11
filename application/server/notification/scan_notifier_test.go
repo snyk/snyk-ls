@@ -63,7 +63,7 @@ func Test_SendMessage(t *testing.T) {
 		{
 			name: "SendErrorMessage",
 			act: func(scanNotifier snyk.ScanNotifier) {
-				scanNotifier.SendError(product.ProductCode, folderPath)
+				scanNotifier.SendError(product.ProductCode, folderPath, "")
 			},
 			expectedStatus: lsp2.ErrorStatus,
 		},
