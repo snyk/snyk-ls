@@ -291,7 +291,7 @@ func getSarifResponseJson2(filePath string) string {
 								"justification": "False positive",
 								"properties": {
 									"category": "wont-fix",
-									"expiration": "13 days",
+									"expiration": "2024-07-11T10:06:44Z",
 									"ignoredOn": "2024-02-23T16:08:25Z",
 									"ignoredBy": {
 										"name": "Neil M",

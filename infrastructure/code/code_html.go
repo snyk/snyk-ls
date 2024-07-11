@@ -138,7 +138,7 @@ func getLineToIgnoreAction(issue snyk.Issue) int {
 func prepareIgnoreDetailsRow(ignoreDetails *snyk.IgnoreDetails) []IgnoreDetail {
 	return []IgnoreDetail{
 		{"Category", parseCategory(ignoreDetails.Category)},
-		{"Expiration", ignoreDetails.Expiration},
+		{"Expiration", formatExpirationDate(ignoreDetails.Expiration)},
 		{"Ignored On", formatDate(ignoreDetails.IgnoredOn)},
 		{"Ignored By", ignoreDetails.IgnoredBy},
 		{"Reason", ignoreDetails.Reason},
@@ -244,6 +244,26 @@ func getRepoName(commitURL string) string {
 	}
 
 	return tabTitle
+}
+
+func formatExpirationDate(expiration string) string {
+	if expiration == "" {
+		return "No expiration"
+	}
+	parsedDate, err := time.Parse(time.RFC3339, expiration)
+	if err != nil {
+		return expiration // Original string if parsing fails
+	}
+
+	// Calculate the difference in days
+	daysRemaining := int(time.Until(parsedDate).Hours() / 24)
+
+	if daysRemaining < 0 {
+		return "Expired"
+	} else if daysRemaining == 1 {
+		return "1 day"
+	}
+	return fmt.Sprintf("%d days", daysRemaining)
 }
 
 func formatDate(date time.Time) string {

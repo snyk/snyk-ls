@@ -410,10 +410,6 @@ func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, 
 		}
 		isIgnored = true
 		suppression := result.Suppressions[0]
-		expiration := ""
-		if suppression.Properties.Expiration != nil {
-			expiration = *suppression.Properties.Expiration
-		}
 
 		reason := suppression.Justification
 		if reason == "" {
@@ -422,12 +418,21 @@ func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, 
 		ignoreDetails = &snyk.IgnoreDetails{
 			Category:   string(suppression.Properties.Category),
 			Reason:     reason,
-			Expiration: expiration,
+			Expiration: parseExpirationDateFromString(suppression.Properties.Expiration),
 			IgnoredOn:  parseDateFromString(suppression.Properties.IgnoredOn),
 			IgnoredBy:  suppression.Properties.IgnoredBy.Name,
 		}
 	}
 	return isIgnored, ignoreDetails
+}
+
+func parseExpirationDateFromString(date *string) string {
+	if date == nil {
+		return ""
+	}
+
+	parsedDate := parseDateFromString(*date)
+	return parsedDate.Format(time.RFC3339)
 }
 
 func parseDateFromString(date string) time.Time {
