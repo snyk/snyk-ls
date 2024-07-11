@@ -36,7 +36,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/infrastructure/code"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -245,7 +244,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 			emptyOSSFound := false
 			emptyCodeFound := false
 			for _, notification := range notifications {
-				var diagnostic lsp.PublishDiagnosticsParams
+				var diagnostic types.PublishDiagnosticsParams
 				require.NoError(t, json.Unmarshal([]byte(notification.ParamString()), &diagnostic))
 				if filepath.Base(uri.PathFromUri(diagnostic.URI)) == ossFilePath && len(diagnostic.Diagnostics) == 0 {
 					emptyOSSFound = true
@@ -278,9 +277,9 @@ func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, c *config.Con
 	var cloneTargetDirJuice, err = setupCustomTestRepo(t, "https://github.com/juice-shop/juice-shop", "bc9cef127", c.Logger())
 	require.NoError(t, err)
 
-	juiceLspWorkspaceFolder := lsp.WorkspaceFolder{Uri: uri.PathToUri(cloneTargetDirJuice), Name: "juicy-mac-juice-face"}
-	didChangeWorkspaceFoldersParams := lsp.DidChangeWorkspaceFoldersParams{
-		Event: lsp.WorkspaceFoldersChangeEvent{Added: []lsp.WorkspaceFolder{juiceLspWorkspaceFolder}},
+	juiceLspWorkspaceFolder := types.WorkspaceFolder{Uri: uri.PathToUri(cloneTargetDirJuice), Name: "juicy-mac-juice-face"}
+	didChangeWorkspaceFoldersParams := types.DidChangeWorkspaceFoldersParams{
+		Event: types.WorkspaceFoldersChangeEvent{Added: []types.WorkspaceFolder{juiceLspWorkspaceFolder}},
 	}
 
 	_, err = loc.Client.Call(context.Background(), "workspace/didChangeWorkspaceFolders", didChangeWorkspaceFoldersParams)
@@ -310,9 +309,9 @@ func checkScanResultsPublishingForCachingSmokeTest(
 		onlyIssuesForGoof := false
 
 		for _, notification := range notifications {
-			var scanResult lsp.SnykScanParams
+			var scanResult types.SnykScanParams
 			require.NoError(t, json.Unmarshal([]byte(notification.ParamString()), &scanResult))
-			if scanResult.Status != lsp.Success {
+			if scanResult.Status != types.Success {
 				continue
 			}
 			if scanResult.Product == product.ProductCode.ToProductCodename() {
@@ -366,7 +365,7 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 		packageJsonCount := 0
 
 		for _, notification := range notifications {
-			var param lsp.PublishDiagnosticsParams
+			var param types.PublishDiagnosticsParams
 			err := json.Unmarshal([]byte(notification.ParamString()), &param)
 			require.NoError(t, err)
 			if filepath.Base(uri.PathFromUri(param.URI)) == "package.json" {
@@ -446,7 +445,7 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 
 	// check for snyk scan message & check autofix
 	var notifications []jrpc2.Request
-	var scanParams lsp.SnykScanParams
+	var scanParams types.SnykScanParams
 	assert.Eventually(t, func() bool {
 		notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
 		for _, n := range notifications {
@@ -497,19 +496,19 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server
 		t.Fatal(err, "Couldn't setup test repo")
 	}
 
-	folder := lsp.WorkspaceFolder{
+	folder := types.WorkspaceFolder{
 		Name: "Test Repo",
 		Uri:  uri.PathToUri(cloneTargetDir),
 	}
 
-	clientParams := lsp.InitializeParams{
-		WorkspaceFolders: []lsp.WorkspaceFolder{folder},
-		InitializationOptions: lsp.Settings{
+	clientParams := types.InitializeParams{
+		WorkspaceFolders: []types.WorkspaceFolder{folder},
+		InitializationOptions: types.Settings{
 			Endpoint:                    os.Getenv("SNYK_API"),
 			Token:                       os.Getenv("SNYK_TOKEN"),
 			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              lsp.DefaultSeverityFilter(),
-			AuthenticationMethod:        lsp.TokenAuthentication,
+			FilterSeverity:              types.DefaultSeverityFilter(),
+			AuthenticationMethod:        types.TokenAuthentication,
 		},
 	}
 
@@ -562,18 +561,18 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
 
-	folder := lsp.WorkspaceFolder{
+	folder := types.WorkspaceFolder{
 		Name: "Test Repo",
 		Uri:  uri.PathToUri(cloneTargetDir),
 	}
 
-	clientParams := lsp.InitializeParams{
-		WorkspaceFolders: []lsp.WorkspaceFolder{folder},
-		InitializationOptions: lsp.Settings{
+	clientParams := types.InitializeParams{
+		WorkspaceFolders: []types.WorkspaceFolder{folder},
+		InitializationOptions: types.Settings{
 			Endpoint:                    os.Getenv("SNYK_API"),
 			Token:                       os.Getenv("SNYK_TOKEN"),
 			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              lsp.DefaultSeverityFilter(),
+			FilterSeverity:              types.DefaultSeverityFilter(),
 		},
 	}
 

@@ -34,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/internal/logging"
 	storage2 "github.com/snyk/snyk-ls/internal/storage"
+	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/adrg/xdg"
 	"github.com/denisbrodbeck/machineid"
@@ -51,7 +52,6 @@ import (
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/concurrency"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -170,12 +170,12 @@ type Config struct {
 	snykCodeApiUrl                   string
 	token                            string
 	deviceId                         string
-	clientCapabilities               lsp.ClientCapabilities
+	clientCapabilities               types.ClientCapabilities
 	path                             string
 	defaultDirs                      []string
 	automaticAuthentication          bool
 	tokenChangeChannels              []chan string
-	filterSeverity                   lsp.SeverityFilter
+	filterSeverity                   types.SeverityFilter
 	trustedFolders                   []string
 	trustedFoldersFeatureEnabled     bool
 	activateSnykCodeSecurity         bool
@@ -185,7 +185,7 @@ type Config struct {
 	runtimeName                      string
 	runtimeVersion                   string
 	automaticScanning                bool
-	authenticationMethod             lsp.AuthenticationMethod
+	authenticationMethod             types.AuthenticationMethod
 	engine                           workflow.Engine
 	enableSnykLearnCodeActions       bool
 	enableSnykOSSQuickFixCodeActions bool
@@ -236,11 +236,11 @@ func New() *Config {
 	c.token = ""
 	c.trustedFoldersFeatureEnabled = true
 	c.automaticScanning = true
-	c.authenticationMethod = lsp.TokenAuthentication
+	c.authenticationMethod = types.TokenAuthentication
 	initWorkFlowEngine(c)
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
-	c.filterSeverity = lsp.DefaultSeverityFilter()
+	c.filterSeverity = types.DefaultSeverityFilter()
 	c.UpdateApiEndpoints(DefaultSnykApiUrl)
 	c.enableSnykLearnCodeActions = true
 	c.clientSettingsFromEnv()
@@ -387,7 +387,7 @@ func (c *Config) IntegrationName() string {
 func (c *Config) IntegrationVersion() string {
 	return c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_VERSION)
 }
-func (c *Config) FilterSeverity() lsp.SeverityFilter { return c.filterSeverity }
+func (c *Config) FilterSeverity() types.SeverityFilter { return c.filterSeverity }
 func (c *Config) Token() string {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -457,8 +457,8 @@ func (c *Config) SetSnykContainerEnabled(enabled bool) { c.isSnykContainerEnable
 
 func (c *Config) SetSnykAdvisorEnabled(enabled bool) { c.isSnykAdvisorEnabled.Set(enabled) }
 
-func (c *Config) SetSeverityFilter(severityFilter lsp.SeverityFilter) bool {
-	emptySeverityFilter := lsp.SeverityFilter{}
+func (c *Config) SetSeverityFilter(severityFilter types.SeverityFilter) bool {
+	emptySeverityFilter := types.SeverityFilter{}
 	if severityFilter == emptySeverityFilter {
 		return false
 	}
@@ -524,7 +524,7 @@ func (c *Config) SetLogPath(logPath string) {
 	c.logPath = logPath
 }
 
-func (c *Config) ConfigureLogging(server lsp.Server) {
+func (c *Config) ConfigureLogging(server types.Server) {
 	var logLevel zerolog.Level
 	var err error
 
@@ -707,11 +707,11 @@ func (c *Config) SetDeviceID(deviceId string) {
 	c.deviceId = deviceId
 }
 
-func (c *Config) ClientCapabilities() lsp.ClientCapabilities {
+func (c *Config) ClientCapabilities() types.ClientCapabilities {
 	return c.clientCapabilities
 }
 
-func (c *Config) SetClientCapabilities(capabilities lsp.ClientCapabilities) {
+func (c *Config) SetClientCapabilities(capabilities types.ClientCapabilities) {
 	c.clientCapabilities = capabilities
 }
 
@@ -934,10 +934,10 @@ func (c *Config) SetClientProtocolVersion(requiredProtocolVersion string) {
 	c.clientProtocolVersion = requiredProtocolVersion
 }
 
-func (c *Config) AuthenticationMethod() lsp.AuthenticationMethod {
+func (c *Config) AuthenticationMethod() types.AuthenticationMethod {
 	return c.authenticationMethod
 }
 
-func (c *Config) SetAuthenticationMethod(authMethod lsp.AuthenticationMethod) {
+func (c *Config) SetAuthenticationMethod(authMethod types.AuthenticationMethod) {
 	c.authenticationMethod = authMethod
 }

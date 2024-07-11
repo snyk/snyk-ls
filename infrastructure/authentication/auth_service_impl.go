@@ -25,7 +25,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/data_structure"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -81,7 +80,7 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 	c.SetToken(newToken)
 
 	if sendNotification {
-		a.notifier.Send(lsp.AuthenticationParams{Token: newToken})
+		a.notifier.Send(types.AuthenticationParams{Token: newToken})
 	}
 }
 
@@ -149,9 +148,9 @@ func (a *AuthenticationServiceImpl) setProviders(providers []AuthenticationProvi
 func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
 	var as []AuthenticationProvider
 	switch c.AuthenticationMethod() {
-	case lsp.FakeAuthentication:
+	case types.FakeAuthentication:
 		a.setProviders([]AuthenticationProvider{NewFakeCliAuthenticationProvider(c)})
-	case lsp.TokenAuthentication:
+	case types.TokenAuthentication:
 		as = Token(c, a.errorReporter)
 		a.setProviders(as)
 	case "":

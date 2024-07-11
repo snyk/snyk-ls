@@ -6,16 +6,16 @@ import (
 	"time"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-type TextDocumentCodeActionHandler func(context.Context, lsp.CodeActionParams) ([]lsp.CodeAction, error)
-type ResolveHandler func(context.Context, lsp.CodeAction) (*lsp.CodeAction, error)
+type TextDocumentCodeActionHandler func(context.Context, types.CodeActionParams) ([]types.CodeAction, error)
+type ResolveHandler func(context.Context, types.CodeAction) (*types.CodeAction, error)
 
 // ResolveCodeActionHandler returns a jrpc2.Handler that can be used to handle the "codeAction/resolve" LSP method
-func ResolveCodeActionHandler(c *config.Config, service *CodeActionsService, server lsp.Server) ResolveHandler {
+func ResolveCodeActionHandler(c *config.Config, service *CodeActionsService, server types.Server) ResolveHandler {
 	logger := c.Logger().With().Str("method", "ResolveCodeActionHandler").Logger()
-	return func(ctx context.Context, params lsp.CodeAction) (*lsp.CodeAction, error) {
+	return func(ctx context.Context, params types.CodeAction) (*types.CodeAction, error) {
 		logger = logger.With().Interface("request", params).Logger()
 		logger.Info().Msg("RECEIVING")
 
@@ -43,7 +43,7 @@ func GetCodeActionHandler(c *config.Config, service *CodeActionsService) TextDoc
 	_, cancel := context.WithCancel(context.Background())
 	logger := c.Logger().With().Str("method", "CodeActionHandler").Logger()
 
-	return func(paramCtx context.Context, params lsp.CodeActionParams) ([]lsp.CodeAction, error) {
+	return func(paramCtx context.Context, params types.CodeActionParams) ([]types.CodeAction, error) {
 		// We want to avoid concurrent runs of this handler to prevent race condition.
 		var ctx context.Context
 		mu.Lock()

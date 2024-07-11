@@ -44,7 +44,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/internal/data_structure"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -125,7 +124,7 @@ func textDocumentDidChangeHandler() jrpc2.Handler {
 // WorkspaceWillDeleteFilesHandler handles the workspace/willDeleteFiles message that's raised by the client
 // when files are deleted
 func workspaceWillDeleteFilesHandler() jrpc2.Handler {
-	return handler.New(func(ctx context.Context, params lsp.DeleteFilesParams) (any, error) {
+	return handler.New(func(ctx context.Context, params types.DeleteFilesParams) (any, error) {
 		ws := workspace.Get()
 		for _, file := range params.Files {
 			pathFromUri := uri.PathFromUri(file.Uri)
@@ -170,7 +169,7 @@ func filterCodeFixCodelens(lenses []sglsp.CodeLens) []sglsp.CodeLens {
 }
 
 func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler {
-	return handler.New(func(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) (any, error) {
+	return handler.New(func(ctx context.Context, params types.DidChangeWorkspaceFoldersParams) (any, error) {
 		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
@@ -192,7 +191,7 @@ func initNetworkAccessHeaders() {
 }
 
 func initializeHandler(srv *jrpc2.Server) handler.Func {
-	return handler.New(func(ctx context.Context, params lsp.InitializeParams) (any, error) {
+	return handler.New(func(ctx context.Context, params types.InitializeParams) (any, error) {
 		method := "initializeHandler"
 		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", method).Logger()
@@ -219,12 +218,12 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 
 		addWorkspaceFolders(c, params, workspace.Get())
 
-		result := lsp.InitializeResult{
-			ServerInfo: lsp.ServerInfo{
+		result := types.InitializeResult{
+			ServerInfo: types.ServerInfo{
 				Name:    "snyk-ls",
 				Version: config.LsProtocolVersion,
 			},
-			Capabilities: lsp.ServerCapabilities{
+			Capabilities: types.ServerCapabilities{
 				TextDocumentSync: &sglsp.TextDocumentSyncOptionsOrKind{
 					Options: &sglsp.TextDocumentSyncOptions{
 						OpenClose:         true,
@@ -234,16 +233,16 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 						Save:              &sglsp.SaveOptions{IncludeText: true},
 					},
 				},
-				Workspace: &lsp.Workspace{
-					WorkspaceFolders: &lsp.WorkspaceFoldersServerCapabilities{
+				Workspace: &types.Workspace{
+					WorkspaceFolders: &types.WorkspaceFoldersServerCapabilities{
 						Supported:           true,
 						ChangeNotifications: "snyk-ls",
 					},
-					FileOperations: &lsp.FileOperationsServerCapabilities{
-						WillDelete: lsp.FileOperationRegistrationOptions{
-							Filters: []lsp.FileOperationFilter{
+					FileOperations: &types.FileOperationsServerCapabilities{
+						WillDelete: types.FileOperationRegistrationOptions{
+							Filters: []types.FileOperationFilter{
 								{
-									Pattern: lsp.FileOperationPattern{
+									Pattern: types.FileOperationPattern{
 										Glob: "**",
 									},
 								},
@@ -252,7 +251,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 					},
 				},
 				HoverProvider:       true,
-				CodeActionProvider:  &lsp.CodeActionOptions{ResolveProvider: true},
+				CodeActionProvider:  &types.CodeActionOptions{ResolveProvider: true},
 				CodeLensProvider:    &sglsp.CodeLensOptions{ResolveProvider: false},
 				InlineValueProvider: true,
 				ExecuteCommandProvider: &sglsp.ExecuteCommandOptions{
@@ -339,7 +338,7 @@ func getDownloadURL(c *config.Config) (u string) {
 }
 
 func initializedHandler(srv *jrpc2.Server) handler.Func {
-	return handler.New(func(ctx context.Context, params lsp.InitializedParams) (any, error) {
+	return handler.New(func(ctx context.Context, params types.InitializedParams) (any, error) {
 		// Logging these messages only after the client has been initialized.
 		// Logging to the client is only allowed after the client has been initialized according to LSP protocol.
 		// No reason to log the method name for these messages, because some of these values are empty and the messages
@@ -383,7 +382,7 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 	})
 }
 
-func addWorkspaceFolders(c *config.Config, params lsp.InitializeParams, w *workspace.Workspace) {
+func addWorkspaceFolders(c *config.Config, params types.InitializeParams, w *workspace.Workspace) {
 	const method = "addWorkspaceFolders"
 	if len(params.WorkspaceFolders) > 0 {
 		for _, workspaceFolder := range params.WorkspaceFolders {
@@ -428,7 +427,7 @@ func addWorkspaceFolders(c *config.Config, params lsp.InitializeParams, w *works
 // The integration version refers to the plugin version, not the IDE version.
 // The function attempts to pull the values from the initialization options, then the client info, and finally
 // from the environment variables.
-func setClientInformation(initParams lsp.InitializeParams) {
+func setClientInformation(initParams types.InitializeParams) {
 	var integrationName, integrationVersion string
 	if initParams.InitializationOptions.IntegrationName != "" {
 		integrationName = initParams.InitializationOptions.IntegrationName
@@ -514,7 +513,7 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 
 		if len(filteredIssues) > 0 {
 			logger.Info().Msg("Sending cached issues")
-			diagnosticParams := lsp.PublishDiagnosticsParams{
+			diagnosticParams := types.PublishDiagnosticsParams{
 				URI:         params.TextDocument.URI,
 				Diagnostics: converter.ToDiagnostics(filteredIssues[filePath]),
 			}
@@ -574,7 +573,7 @@ func textDocumentHover() jrpc2.Handler {
 }
 
 func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
-	return handler.New(func(_ context.Context, params lsp.WorkdoneProgressCancelParams) (any, error) {
+	return handler.New(func(_ context.Context, params types.WorkdoneProgressCancelParams) (any, error) {
 		c := config.CurrentConfig()
 		c.Logger().Info().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
 		CancelProgress(params.Token)
@@ -582,7 +581,7 @@ func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 	})
 }
 
-func codeActionResolveHandler(server lsp.Server) handler.Func {
+func codeActionResolveHandler(server types.Server) handler.Func {
 	c := config.CurrentConfig()
 	return handler.New(codeaction.ResolveCodeActionHandler(c, di.CodeActionService(), server))
 }

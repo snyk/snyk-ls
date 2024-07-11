@@ -17,6 +17,7 @@
 package notification
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -24,9 +25,9 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -47,12 +48,20 @@ func NewScanNotifier(c *config.Config, notifier notification.Notifier) (snyk.Sca
 }
 
 func (n *scanNotifier) SendError(product product.Product, folderPath string, errorMessage string) {
+	cliError := &types.CliError{}
+	err := json.Unmarshal([]byte(errorMessage), cliError)
+	if err != nil {
+		// no structured info available
+		cliError = nil
+	}
+
 	n.notifier.Send(
-		lsp.SnykScanParams{
-			Status:       lsp.ErrorStatus,
+		types.SnykScanParams{
+			Status:       types.ErrorStatus,
 			Product:      product.ToProductCodename(),
 			FolderPath:   folderPath,
 			ErrorMessage: errorMessage,
+			CliError:     cliError,
 		},
 	)
 }
@@ -93,7 +102,7 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 		return
 	}
 
-	var scanIssues []lsp.ScanIssue
+	var scanIssues []types.ScanIssue
 	// check product type
 	if pr == product.ProductInfrastructureAsCode {
 		scanIssues = n.appendIacIssues(scanIssues, issues)
@@ -104,8 +113,8 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 	}
 
 	n.notifier.Send(
-		lsp.SnykScanParams{
-			Status:     lsp.Success,
+		types.SnykScanParams{
+			Status:     types.Success,
 			Product:    pr.ToProductCodename(),
 			FolderPath: folderPath,
 			Issues:     scanIssues,
@@ -113,18 +122,18 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 	)
 }
 
-func (n *scanNotifier) appendOssIssues(scanIssues []lsp.ScanIssue, issues []snyk.Issue) []lsp.ScanIssue {
+func (n *scanNotifier) appendOssIssues(scanIssues []types.ScanIssue, issues []snyk.Issue) []types.ScanIssue {
 	for _, issue := range issues {
 		additionalData, ok := issue.AdditionalData.(snyk.OssIssueData)
 		if !ok {
 			continue // skip non-oss issues
 		}
 
-		matchingIssues := make([]lsp.OssIssueData, len(additionalData.MatchingIssues))
+		matchingIssues := make([]types.OssIssueData, len(additionalData.MatchingIssues))
 		for i, matchingIssue := range additionalData.MatchingIssues {
-			matchingIssues[i] = lsp.OssIssueData{
+			matchingIssues[i] = types.OssIssueData{
 				License: matchingIssue.License,
-				Identifiers: lsp.OssIdentifiers{
+				Identifiers: types.OssIdentifiers{
 					CWE: issue.CWEs,
 					CVE: issue.CVEs,
 				},
@@ -148,16 +157,16 @@ func (n *scanNotifier) appendOssIssues(scanIssues []lsp.ScanIssue, issues []snyk
 			}
 		}
 
-		scanIssues = append(scanIssues, lsp.ScanIssue{
+		scanIssues = append(scanIssues, types.ScanIssue{
 			Id:       additionalData.Key,
 			Title:    additionalData.Title,
 			Severity: issue.Severity.String(),
 			FilePath: issue.AffectedFilePath,
 			Range:    converter.ToRange(issue.Range),
-			AdditionalData: lsp.OssIssueData{
+			AdditionalData: types.OssIssueData{
 				RuleId:  issue.ID,
 				License: additionalData.License,
-				Identifiers: lsp.OssIdentifiers{
+				Identifiers: types.OssIdentifiers{
 					CWE: issue.CWEs,
 					CVE: issue.CVEs,
 				},
@@ -187,20 +196,20 @@ func (n *scanNotifier) appendOssIssues(scanIssues []lsp.ScanIssue, issues []snyk
 	return scanIssues
 }
 
-func (n *scanNotifier) appendIacIssues(scanIssues []lsp.ScanIssue, issues []snyk.Issue) []lsp.ScanIssue {
+func (n *scanNotifier) appendIacIssues(scanIssues []types.ScanIssue, issues []snyk.Issue) []types.ScanIssue {
 	for _, issue := range issues {
 		additionalData, ok := issue.AdditionalData.(snyk.IaCIssueData)
 		if !ok {
 			continue // skip non-iac issues
 		}
 
-		scanIssues = append(scanIssues, lsp.ScanIssue{
+		scanIssues = append(scanIssues, types.ScanIssue{
 			Id:       additionalData.Key,
 			Title:    additionalData.Title,
 			Severity: issue.Severity.String(),
 			FilePath: issue.AffectedFilePath,
 			Range:    converter.ToRange(issue.Range),
-			AdditionalData: lsp.IacIssueData{
+			AdditionalData: types.IacIssueData{
 				PublicId:      additionalData.PublicId,
 				Documentation: additionalData.Documentation,
 				LineNumber:    additionalData.LineNumber,
@@ -215,35 +224,35 @@ func (n *scanNotifier) appendIacIssues(scanIssues []lsp.ScanIssue, issues []snyk
 	return scanIssues
 }
 
-func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, issues []snyk.Issue) []lsp.ScanIssue {
+func (n *scanNotifier) appendCodeIssues(scanIssues []types.ScanIssue, issues []snyk.Issue) []types.ScanIssue {
 	for _, issue := range issues {
 		additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 		if !ok {
 			continue // skip non-code issues
 		}
 
-		exampleCommitFixes := make([]lsp.ExampleCommitFix, 0, len(additionalData.ExampleCommitFixes))
+		exampleCommitFixes := make([]types.ExampleCommitFix, 0, len(additionalData.ExampleCommitFixes))
 		for i := range additionalData.ExampleCommitFixes {
-			lines := make([]lsp.CommitChangeLine, 0, len(additionalData.ExampleCommitFixes[i].Lines))
+			lines := make([]types.CommitChangeLine, 0, len(additionalData.ExampleCommitFixes[i].Lines))
 			for j := range additionalData.ExampleCommitFixes[i].Lines {
-				lines = append(lines, lsp.CommitChangeLine{
+				lines = append(lines, types.CommitChangeLine{
 					Line:       additionalData.ExampleCommitFixes[i].Lines[j].Line,
 					LineNumber: additionalData.ExampleCommitFixes[i].Lines[j].LineNumber,
 					LineChange: additionalData.ExampleCommitFixes[i].Lines[j].LineChange,
 				})
 			}
-			exampleCommitFixes = append(exampleCommitFixes, lsp.ExampleCommitFix{
+			exampleCommitFixes = append(exampleCommitFixes, types.ExampleCommitFix{
 				CommitURL: additionalData.ExampleCommitFixes[i].CommitURL,
 				Lines:     lines,
 			})
 		}
 
-		markers := make([]lsp.Marker, 0, len(additionalData.Markers))
+		markers := make([]types.Marker, 0, len(additionalData.Markers))
 		for _, marker := range additionalData.Markers {
-			positions := make([]lsp.MarkerPosition, 0)
+			positions := make([]types.MarkerPosition, 0)
 			for _, pos := range marker.Pos {
-				positions = append(positions, lsp.MarkerPosition{
-					Position: lsp.Position{
+				positions = append(positions, types.MarkerPosition{
+					Position: types.Position{
 						Rows: pos.Rows,
 						Cols: pos.Cols,
 					},
@@ -251,15 +260,15 @@ func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, issues []sny
 				})
 			}
 
-			markers = append(markers, lsp.Marker{
+			markers = append(markers, types.Marker{
 				Msg: marker.Msg,
 				Pos: positions,
 			})
 		}
 
-		dataFlow := make([]lsp.DataflowElement, 0, len(additionalData.DataFlow))
+		dataFlow := make([]types.DataflowElement, 0, len(additionalData.DataFlow))
 		for _, flow := range additionalData.DataFlow {
-			dataFlow = append(dataFlow, lsp.DataflowElement{
+			dataFlow = append(dataFlow, types.DataflowElement{
 				Position:  flow.Position,
 				FilePath:  flow.FilePath,
 				FlowRange: converter.ToRange(flow.FlowRange),
@@ -267,14 +276,14 @@ func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, issues []sny
 			})
 		}
 
-		scanIssue := lsp.ScanIssue{
+		scanIssue := types.ScanIssue{
 			Id:        additionalData.Key,
 			Title:     issue.Message,
 			Severity:  issue.Severity.String(),
 			FilePath:  issue.AffectedFilePath,
 			Range:     converter.ToRange(issue.Range),
 			IsIgnored: issue.IsIgnored,
-			AdditionalData: lsp.CodeIssueData{
+			AdditionalData: types.CodeIssueData{
 				Message:            additionalData.Message,
 				Rule:               additionalData.Rule,
 				RuleId:             additionalData.RuleId,
@@ -295,7 +304,7 @@ func (n *scanNotifier) appendCodeIssues(scanIssues []lsp.ScanIssue, issues []sny
 		}
 		if scanIssue.IsIgnored {
 			scanIssue.IgnoreDetails =
-				lsp.IgnoreDetails{
+				types.IgnoreDetails{
 					Category:   issue.IgnoreDetails.Category,
 					Reason:     issue.IgnoreDetails.Reason,
 					Expiration: issue.IgnoreDetails.Expiration,
@@ -332,8 +341,8 @@ func (n *scanNotifier) SendInProgress(folderPath string) {
 		}
 
 		n.notifier.Send(
-			lsp.SnykScanParams{
-				Status:     lsp.InProgress,
+			types.SnykScanParams{
+				Status:     types.InProgress,
 				Product:    pr.ToProductCodename(),
 				FolderPath: folderPath,
 				Issues:     nil,

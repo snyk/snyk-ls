@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package lsp
+package types
 
 import (
 	"time"
@@ -1034,6 +1034,8 @@ type SnykScanParams struct {
 	Issues []ScanIssue `json:"issues"`
 	// Error Message
 	ErrorMessage string `json:"errorMessage,omitempty"`
+	// CliError contains structured error information from the CLI
+	CliError *CliError `json:"cliError,omitempty"`
 }
 
 type ScanIssue struct { // TODO - convert this to a generic type

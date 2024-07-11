@@ -26,7 +26,6 @@ import (
 	notification2 "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	lsp2 "github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -36,7 +35,7 @@ import (
 type sendMessageTestCase struct {
 	name           string
 	act            func(scanNotifier snyk.ScanNotifier)
-	expectedStatus lsp2.ScanStatus
+	expectedStatus types.ScanStatus
 }
 
 func Test_SendMessage(t *testing.T) {
@@ -51,21 +50,21 @@ func Test_SendMessage(t *testing.T) {
 			act: func(scanNotifier snyk.ScanNotifier) {
 				scanNotifier.SendInProgress(folderPath)
 			},
-			expectedStatus: lsp2.InProgress,
+			expectedStatus: types.InProgress,
 		},
 		{
 			name: "SendSuccessMessage",
 			act: func(scanNotifier snyk.ScanNotifier) {
 				scanNotifier.SendSuccess(product.ProductCode, folderPath, []snyk.Issue{})
 			},
-			expectedStatus: lsp2.Success,
+			expectedStatus: types.Success,
 		},
 		{
 			name: "SendErrorMessage",
 			act: func(scanNotifier snyk.ScanNotifier) {
 				scanNotifier.SendError(product.ProductCode, folderPath, "")
 			},
-			expectedStatus: lsp2.ErrorStatus,
+			expectedStatus: types.ErrorStatus,
 		},
 	}
 
@@ -109,14 +108,14 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 	}
 	lspTestRange := converter.ToRange(testRange)
 
-	expectedIacIssue := []lsp2.ScanIssue{
+	expectedIacIssue := []types.ScanIssue{
 		{
 			Id:       "098f6bcd4621d373cade4e832627b4f6",
 			Title:    "iacTitle",
 			Severity: "critical",
 			FilePath: "iacAffectedFilePath",
 			Range:    lspTestRange,
-			AdditionalData: lsp2.IacIssueData{
+			AdditionalData: types.IacIssueData{
 				PublicId:      "iacID",
 				Documentation: "iacDocumentation",
 				LineNumber:    1,
@@ -127,28 +126,28 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 		},
 	}
 
-	expectedCodeIssue := []lsp2.ScanIssue{
+	expectedCodeIssue := []types.ScanIssue{
 		{
 			Id:       "5a105e8b9d40e1329780d62ea2265d8a",
 			Title:    "codeMessage",
 			Severity: "low",
 			FilePath: "codeAffectedFilePath",
 			Range:    lspTestRange,
-			AdditionalData: lsp2.CodeIssueData{
+			AdditionalData: types.CodeIssueData{
 				Message:            "codeMessage",
 				Rule:               "codeRule",
 				RuleId:             "codeRuleID",
 				RepoDatasetSize:    2,
-				ExampleCommitFixes: []lsp2.ExampleCommitFix{},
+				ExampleCommitFixes: []types.ExampleCommitFix{},
 				CWE:                []string{},
 				IsSecurityType:     false,
 				Text:               "codeText",
-				Cols:               lsp2.Point{1, 1},
-				Rows:               lsp2.Point{1, 1},
-				Markers:            []lsp2.Marker{},
+				Cols:               types.Point{1, 1},
+				Rows:               types.Point{1, 1},
+				Markers:            []types.Marker{},
 				PriorityScore:      880,
 				HasAIFix:           true,
-				DataFlow: []lsp2.DataflowElement{
+				DataFlow: []types.DataflowElement{
 					{FilePath: "testFile", FlowRange: converter.ToRange(testRange), Content: "testContent"},
 				},
 			},
@@ -220,13 +219,13 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 
 	// Assert - check the messages matches the expected message for each product
 	for _, msg := range mockNotifier.SentMessages() {
-		if msg.(lsp2.SnykScanParams).Product == "code" {
-			actualCodeIssue := msg.(lsp2.SnykScanParams).Issues
+		if msg.(types.SnykScanParams).Product == "code" {
+			actualCodeIssue := msg.(types.SnykScanParams).Issues
 			assert.Equal(t, expectedCodeIssue, actualCodeIssue)
 			return
 		}
-		if msg.(lsp2.SnykScanParams).Product == "iac" {
-			actualIacIssue := msg.(lsp2.SnykScanParams).Issues
+		if msg.(types.SnykScanParams).Product == "iac" {
+			actualIacIssue := msg.(types.SnykScanParams).Issues
 			assert.Equal(t, expectedIacIssue, actualIacIssue)
 			return
 		}
@@ -253,17 +252,17 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 	}
 	lspTestRange := converter.ToRange(r)
 
-	expectedUIScanIssue := []lsp2.ScanIssue{
+	expectedUIScanIssue := []types.ScanIssue{
 		{
 			Id:       "OSS Key",
 			Title:    "OSS Title",
 			Severity: "critical",
 			FilePath: "/test/oss/folderPath/ossAffectedFilePath",
 			Range:    lspTestRange,
-			AdditionalData: lsp2.OssIssueData{
+			AdditionalData: types.OssIssueData{
 				RuleId:  "SNYK-JS-BABELTRAVERSE-5962463",
 				License: "OSS License",
-				Identifiers: lsp2.OssIdentifiers{
+				Identifiers: types.OssIdentifiers{
 					CWE: []string{"CWE-184"},
 					CVE: []string{"CVE-2023-45133"},
 				},
@@ -287,7 +286,7 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 				ProjectName:       "OSS ProjectName",
 				DisplayTargetFile: "OSS DisplayTargetFile",
 				Details:           "",
-				MatchingIssues:    []lsp2.OssIssueData{},
+				MatchingIssues:    []types.OssIssueData{},
 				Lesson:            "test",
 			},
 		},
@@ -349,7 +348,7 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 
 	// Assert - check the messages matches the expected message for each product
 	for _, msg := range mockNotifier.SentMessages() {
-		actualUIOssIssue := msg.(lsp2.SnykScanParams).Issues
+		actualUIOssIssue := msg.(types.SnykScanParams).Issues
 		assert.Equal(t, expectedUIScanIssue, actualUIOssIssue)
 		return
 	}
@@ -374,26 +373,26 @@ func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
 	}
 	lspTestRange := converter.ToRange(r)
 
-	expectedCodeIssue := []lsp2.ScanIssue{
+	expectedCodeIssue := []types.ScanIssue{
 		{
 			Id:       "5a105e8b9d40e1329780d62ea2265d8a",
 			Title:    "codeMessage",
 			Severity: "low",
 			FilePath: "codeAffectedFilePath",
 			Range:    lspTestRange,
-			AdditionalData: lsp2.CodeIssueData{
+			AdditionalData: types.CodeIssueData{
 				Message:            "codeMessage",
 				Rule:               "codeRule",
 				RuleId:             "codeRuleID",
 				RepoDatasetSize:    2,
-				ExampleCommitFixes: []lsp2.ExampleCommitFix{},
+				ExampleCommitFixes: []types.ExampleCommitFix{},
 				CWE:                []string{},
 				IsSecurityType:     false,
 				Text:               "codeText",
-				Cols:               lsp2.Point{1, 1},
-				Rows:               lsp2.Point{1, 1},
-				Markers:            []lsp2.Marker{},
-				DataFlow: []lsp2.DataflowElement{
+				Cols:               types.Point{1, 1},
+				Rows:               types.Point{1, 1},
+				Markers:            []types.Marker{},
+				DataFlow: []types.DataflowElement{
 					{FilePath: "testFile", FlowRange: converter.ToRange(r), Content: "testContent"},
 				},
 			},
@@ -439,7 +438,7 @@ func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
 
 	// Assert - check the messages matches the expected message for each product
 	for _, msg := range mockNotifier.SentMessages() {
-		actualCodeIssue := msg.(lsp2.SnykScanParams).Issues
+		actualCodeIssue := msg.(types.SnykScanParams).Issues
 		assert.Equal(t, expectedCodeIssue, actualCodeIssue)
 		return
 	}
@@ -465,7 +464,7 @@ func Test_SendSuccess_SendsForSnykCode_WithIgnores(t *testing.T) {
 	lspTestRange := converter.ToRange(r)
 
 	ignoredOn := time.Now()
-	expectedCodeIssue := []lsp2.ScanIssue{
+	expectedCodeIssue := []types.ScanIssue{
 		{
 			Id:        "5a105e8b9d40e1329780d62ea2265d8a",
 			Title:     "codeMessage",
@@ -473,25 +472,25 @@ func Test_SendSuccess_SendsForSnykCode_WithIgnores(t *testing.T) {
 			FilePath:  "codeAffectedFilePath",
 			Range:     lspTestRange,
 			IsIgnored: true,
-			IgnoreDetails: lsp2.IgnoreDetails{
+			IgnoreDetails: types.IgnoreDetails{
 				Category:   "category",
 				Reason:     "reason",
 				Expiration: "expiration",
 				IgnoredOn:  ignoredOn,
 				IgnoredBy:  "ignoredBy",
-			}, AdditionalData: lsp2.CodeIssueData{
+			}, AdditionalData: types.CodeIssueData{
 				Message:            "codeMessage",
 				Rule:               "codeRule",
 				RuleId:             "codeRuleID",
 				RepoDatasetSize:    2,
-				ExampleCommitFixes: []lsp2.ExampleCommitFix{},
+				ExampleCommitFixes: []types.ExampleCommitFix{},
 				CWE:                []string{},
 				IsSecurityType:     false,
 				Text:               "codeText",
-				Cols:               lsp2.Point{1, 1},
-				Rows:               lsp2.Point{1, 1},
-				Markers:            []lsp2.Marker{},
-				DataFlow: []lsp2.DataflowElement{
+				Cols:               types.Point{1, 1},
+				Rows:               types.Point{1, 1},
+				Markers:            []types.Marker{},
+				DataFlow: []types.DataflowElement{
 					{FilePath: "testFile", FlowRange: converter.ToRange(r), Content: "testContent"},
 				},
 				Details: "<!-- Data Flow -->\n <span class=\"data-flow-filepath\">testFile/data-subject.service.ts:27</span>\n\t\t",
@@ -547,7 +546,7 @@ func Test_SendSuccess_SendsForSnykCode_WithIgnores(t *testing.T) {
 
 	// Assert - check the messages matches the expected message for each product
 	for _, msg := range mockNotifier.SentMessages() {
-		actualCodeIssue := msg.(lsp2.SnykScanParams).Issues
+		actualCodeIssue := msg.(types.SnykScanParams).Issues
 		assert.Equal(t, expectedCodeIssue, actualCodeIssue)
 		return
 	}
@@ -573,14 +572,14 @@ func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
 	lspTestRange := converter.ToRange(r)
 
 	// expected message uses lsp2.ScanIssue && lsp2.CodeIssueData
-	expectedIacIssue := []lsp2.ScanIssue{
+	expectedIacIssue := []types.ScanIssue{
 		{
 			Id:       "098f6bcd4621d373cade4e832627b4f6",
 			Title:    "iacTitle",
 			Severity: "critical",
 			FilePath: "/test/iac/folderPath/iacAffectedFilePath",
 			Range:    lspTestRange,
-			AdditionalData: lsp2.IacIssueData{
+			AdditionalData: types.IacIssueData{
 				PublicId:      "iacID",
 				Documentation: "iacDocumentation",
 				LineNumber:    1,
@@ -623,7 +622,7 @@ func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
 
 	// Assert - check the messages matches the expected message for each product
 	for _, msg := range mockNotifier.SentMessages() {
-		actualIacIssue := msg.(lsp2.SnykScanParams).Issues
+		actualIacIssue := msg.(types.SnykScanParams).Issues
 		assert.Equal(t, expectedIacIssue, actualIacIssue)
 		return
 	}
@@ -694,7 +693,7 @@ func containsMatchingMessage(t *testing.T,
 	folderPath string,
 ) bool {
 	t.Helper()
-	scanMessage, ok := msg.(lsp2.SnykScanParams)
+	scanMessage, ok := msg.(types.SnykScanParams)
 	if ok &&
 		scanMessage.Status == testCase.expectedStatus &&
 		scanMessage.Product == expectedProduct &&

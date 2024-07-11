@@ -27,11 +27,10 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-
-	"github.com/snyk/snyk-ls/internal/lsp"
 )
 
 func TestSetToken(t *testing.T) {
@@ -47,7 +46,7 @@ func TestSetToken(t *testing.T) {
 	t.Run("OAuth Token authentication", func(t *testing.T) {
 		config := New()
 		SetCurrentConfig(config)
-		config.authenticationMethod = lsp.OAuthAuthentication
+		config.authenticationMethod = types.OAuthAuthentication
 		marshal, err := json.Marshal(oauth2.Token{AccessToken: t.Name()})
 		assert.NoError(t, err)
 		oauthString := string(marshal)
@@ -70,10 +69,10 @@ func TestConfigDefaults(t *testing.T) {
 	assert.True(t, c.IsSnykOssEnabled(), "Snyk Open Source should be enabled by default")
 	assert.True(t, c.IsSnykIacEnabled(), "Snyk IaC should be enabled by default")
 	assert.Equal(t, "", c.LogPath(), "Logpath should be empty by default")
-	assert.Equal(t, "md", c.Format(), "Output format should be md by default")
-	assert.Equal(t, lsp.DefaultSeverityFilter(), c.FilterSeverity(), "All severities should be enabled by default")
+	assert.Equal(t, "md", c.Format(), "Message format should be md by default")
+	assert.Equal(t, types.DefaultSeverityFilter(), c.FilterSeverity(), "All severities should be enabled by default")
 	assert.Empty(t, c.trustedFolders)
-	assert.Equal(t, lsp.TokenAuthentication, c.authenticationMethod)
+	assert.Equal(t, types.TokenAuthentication, c.authenticationMethod)
 }
 
 func Test_TokenChanged_ChannelsInformed(t *testing.T) {
@@ -206,13 +205,13 @@ func TestSnykCodeApi(t *testing.T) {
 func Test_SetSeverityFilter(t *testing.T) {
 	t.Run("Saves filter", func(t *testing.T) {
 		c := New()
-		c.SetSeverityFilter(lsp.NewSeverityFilter(true, true, false, false))
-		assert.Equal(t, lsp.NewSeverityFilter(true, true, false, false), c.FilterSeverity())
+		c.SetSeverityFilter(types.NewSeverityFilter(true, true, false, false))
+		assert.Equal(t, types.NewSeverityFilter(true, true, false, false), c.FilterSeverity())
 	})
 
 	t.Run("Returns correctly", func(t *testing.T) {
 		c := New()
-		lowExcludedFilter := lsp.NewSeverityFilter(true, true, false, false)
+		lowExcludedFilter := types.NewSeverityFilter(true, true, false, false)
 
 		modified := c.SetSeverityFilter(lowExcludedFilter)
 		assert.True(t, modified)

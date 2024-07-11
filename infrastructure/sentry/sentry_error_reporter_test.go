@@ -24,9 +24,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -62,11 +62,11 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 	c := testutil.UnitTest(t)
 	path := "testPath"
 	text := "test error"
-	channel := make(chan lsp.PublishDiagnosticsParams)
+	channel := make(chan types.PublishDiagnosticsParams)
 	notifier := notification.NewNotifier()
 	notifier.CreateListener(func(params any) {
 		switch p := params.(type) {
-		case lsp.PublishDiagnosticsParams:
+		case types.PublishDiagnosticsParams:
 			channel <- p
 		default:
 			c.Logger().Debug().Msgf("Unexpected notification: %v", params)
@@ -86,7 +86,7 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 
 	diagnosticsParams := <-channel
 	assert.Equal(t, text, diagnosticsParams.Diagnostics[0].Message)
-	assert.Equal(t, lsp.DiagnosticsSeverityWarning, diagnosticsParams.Diagnostics[0].Severity)
+	assert.Equal(t, types.DiagnosticsSeverityWarning, diagnosticsParams.Diagnostics[0].Severity)
 	assert.Equal(t, diagnosticsParams.URI, uri.PathToUri(path))
-	assert.Equal(t, diagnosticsParams.Diagnostics[0].CodeDescription.Href, lsp.Uri("https://snyk.io/user-hub"))
+	assert.Equal(t, diagnosticsParams.Diagnostics[0].CodeDescription.Href, types.Uri("https://snyk.io/user-hub"))
 }
