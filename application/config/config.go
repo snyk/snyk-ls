@@ -249,7 +249,7 @@ func New() *Config {
 func initWorkFlowEngine(c *Config) {
 	conf := configuration.NewInMemory()
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
-	enableOAuth := c.authenticationMethod == lsp.OAuthAuthentication
+	enableOAuth := c.authenticationMethod == types.OAuthAuthentication
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, enableOAuth)
 
 	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
