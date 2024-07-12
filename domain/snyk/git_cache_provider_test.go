@@ -55,7 +55,7 @@ func TestLoadCache_NotEmpty(t *testing.T) {
 	cp.LoadCache()
 
 	assert.Nil(t, err)
-	assert.Equal(t, commitHash, cp.cache[hashedFolderPath])
+	assert.Equal(t, commitHash, cp.cache[hashedFolderPath][p])
 }
 
 func TestAddToCache_NewCommit(t *testing.T) {
@@ -79,7 +79,7 @@ func TestAddToCache_NewCommit(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotEmpty(t, list)
 	assert.Contains(t, hashedFolderPath, cp.cache)
-	assert.Equal(t, commitHash, cp.cache[hashedFolderPath])
+	assert.Equal(t, commitHash, cp.cache[hashedFolderPath][p])
 }
 
 func TestAddToCache_ExistingCommit_ShouldNotPersist(t *testing.T) {
@@ -127,10 +127,10 @@ func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
 	cp := NewGitCacheProvider(&logger, appFs)
 
 	err = cp.AddToCache(folderPath, commitHash, issueList, p)
-	commitHash, err = cp.GetCommitHashFor(folderPath)
+	actualCommitHash, err := cp.getProductCommitHash(folderPath, p)
 
 	assert.Nil(t, err)
-	assert.Equal(t, commitHash, cp.cache[hashedFolderPath])
+	assert.Equal(t, actualCommitHash, cp.cache[hashedFolderPath][p])
 }
 
 func TestGetPersistedIssueList_ReturnsValidIssueListForProduct(t *testing.T) {
