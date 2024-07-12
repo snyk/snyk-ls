@@ -78,7 +78,6 @@ func TestAddToCache_NewCommit(t *testing.T) {
 
 	assert.Nil(t, err)
 	assert.NotEmpty(t, list)
-	assert.Contains(t, hashedFolderPath, cp.cache)
 	assert.Equal(t, commitHash, cp.cache[hashedFolderPath][p])
 }
 
@@ -233,6 +232,7 @@ func TestClearIssues_ExistingCacheNonExistingProduct(t *testing.T) {
 	appFs := afero.NewMemMapFs()
 	logger := zerolog.New(nil)
 	folderPath := "/home/myusr/testrepo"
+	hashedFolderPath, _ := hashPath(folderPath)
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
 	cp := NewGitCacheProvider(&logger, appFs)
@@ -242,6 +242,7 @@ func TestClearIssues_ExistingCacheNonExistingProduct(t *testing.T) {
 
 	assert.Nil(t, err)
 	assert.NotEmpty(t, cp.cache)
+	assert.NotEmpty(t, cp.cache[hashedFolderPath][pc])
 }
 
 func TestClearIssues_NonExistingCacheNonExistingProduct(t *testing.T) {
@@ -263,4 +264,88 @@ func TestClearIssues_NonExistingCacheNonExistingProduct(t *testing.T) {
 
 	assert.Nil(t, err)
 	assert.NotEmpty(t, cp.cache)
+}
+
+func TestCreateOrAppendToCache_NewCache(t *testing.T) {
+	appFs := afero.NewMemMapFs()
+	logger := zerolog.New(nil)
+	folderPath := "/home/myusr/testrepo"
+	hashedFolderPath, _ := hashPath(folderPath)
+	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	pc := product.ProductCode
+
+	cp := NewGitCacheProvider(&logger, appFs)
+	cp.createOrAppendToCache(hashedFolderPath, commitHash, pc)
+
+	assert.NotEmpty(t, cp.cache)
+}
+
+func TestCreateOrAppendToCache_ExistingCacheSameProductSameHash(t *testing.T) {
+	appFs := afero.NewMemMapFs()
+	logger := zerolog.New(nil)
+	folderPath := "/home/myusr/testrepo"
+	hashedFolderPath, _ := hashPath(folderPath)
+	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	pc := product.ProductCode
+
+	cp := NewGitCacheProvider(&logger, appFs)
+	cp.createOrAppendToCache(hashedFolderPath, commitHash, pc)
+	cp.createOrAppendToCache(hashedFolderPath, commitHash, pc)
+
+	assert.Equal(t, commitHash, cp.cache[hashedFolderPath][pc])
+}
+
+func TestCreateOrAppendToCache_ExistingCacheDifferentProductSameHash(t *testing.T) {
+	appFs := afero.NewMemMapFs()
+	logger := zerolog.New(nil)
+	folderPath := "/home/myusr/testrepo"
+	hashedFolderPath, _ := hashPath(folderPath)
+	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	pc := product.ProductCode
+	po := product.ProductOpenSource
+
+	cp := NewGitCacheProvider(&logger, appFs)
+	cp.createOrAppendToCache(hashedFolderPath, commitHash, pc)
+	cp.createOrAppendToCache(hashedFolderPath, commitHash, po)
+
+	assert.Equal(t, commitHash, cp.cache[hashedFolderPath][pc])
+	assert.Equal(t, commitHash, cp.cache[hashedFolderPath][po])
+}
+
+func TestCreateOrAppendToCache_ExistingCacheDifferentProductDifferentHash(t *testing.T) {
+	appFs := afero.NewMemMapFs()
+	logger := zerolog.New(nil)
+	folderPath := "/home/myusr/testrepo"
+	hashedFolderPath, _ := hashPath(folderPath)
+	pcCommitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	poCommitHash := "wwwwf18c4432b2a41e0f8e6c9831fe33be92b3db"
+	pc := product.ProductCode
+	po := product.ProductOpenSource
+
+	cp := NewGitCacheProvider(&logger, appFs)
+	cp.createOrAppendToCache(hashedFolderPath, pcCommitHash, pc)
+	cp.createOrAppendToCache(hashedFolderPath, poCommitHash, po)
+
+	assert.Equal(t, pcCommitHash, cp.cache[hashedFolderPath][pc])
+	assert.Equal(t, poCommitHash, cp.cache[hashedFolderPath][po])
+}
+
+func TestCreateOrAppendToCache_ExistingCacheDifferentPathDifferentProductDifferentHash(t *testing.T) {
+	appFs := afero.NewMemMapFs()
+	logger := zerolog.New(nil)
+	folderPath := "/home/myusr/testrepo"
+	hashedFolderPath, _ := hashPath(folderPath)
+	otherFolderPath := "/home/myusr/newrepo"
+	otherHashPath, _ := hashPath(otherFolderPath)
+	pcCommitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	poCommitHash := "wwwwf18c4432b2a41e0f8e6c9831fe33be92b3db"
+	pc := product.ProductCode
+	po := product.ProductOpenSource
+
+	cp := NewGitCacheProvider(&logger, appFs)
+	cp.createOrAppendToCache(hashedFolderPath, pcCommitHash, pc)
+	cp.createOrAppendToCache(otherHashPath, poCommitHash, po)
+
+	assert.Equal(t, pcCommitHash, cp.cache[hashedFolderPath][pc])
+	assert.Equal(t, poCommitHash, cp.cache[otherHashPath][po])
 }

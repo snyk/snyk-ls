@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	CacheFolder   = "snyk_scan"
+	CacheFolder   = "snyk"
 	SchemaVersion = "v1"
 )
 
@@ -80,8 +80,8 @@ func (gcp *GitCacheProvider) deleteAllPersistedFilesForPath(filePath string) {
 		return
 	}
 	if pchm, exists := gcp.cache[filePathHash]; exists {
-		for p, pch := range pchm {
-			err = gcp.deletePersistedFile(filePathHash, pch, p)
+		for p, commitHash := range pchm {
+			err = gcp.deletePersistedFile(filePathHash, commitHash, p)
 			if err != nil {
 				gcp.logger.Error().Err(err).Msg("failed remove file " + filePath)
 			}
@@ -101,11 +101,11 @@ func (gcp *GitCacheProvider) ClearIssues(path string, p product.Product) {
 		return
 	}
 
-	pch, pchExists := pchm[p]
+	commitHash, pchExists := pchm[p]
 	if !pchExists {
 		return
 	}
-	err = gcp.deletePersistedFile(hash, pch, p)
+	err = gcp.deletePersistedFile(hash, commitHash, p)
 	if err != nil {
 		gcp.logger.Error().Err(err).Msg("failed to remove file: " + path)
 	}
@@ -120,12 +120,12 @@ func (gcp *GitCacheProvider) LoadCache() {
 	for _, filePath := range filePaths {
 		s := strings.Split(filePath, ".")
 		p := product.ToProduct(s[3])
-		gcp.CreateOrAppendToCache(s[1], s[2], p)
+		gcp.createOrAppendToCache(s[1], s[2], p)
 	}
 }
 
 func (gcp *GitCacheProvider) GetPersistedIssueList(folderPath string, p product.Product) ([]Issue, error) {
-	pch, err := gcp.getProductCommitHash(folderPath, p)
+	commitHash, err := gcp.getProductCommitHash(folderPath, p)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +134,7 @@ func (gcp *GitCacheProvider) GetPersistedIssueList(folderPath string, p product.
 	if err != nil {
 		return nil, err
 	}
-	filePath := getLocalFilePath(hashedFolderPath, pch, p)
+	filePath := getLocalFilePath(hashedFolderPath, commitHash, p)
 	content, err := afero.ReadFile(gcp.fs, filePath)
 	if err != nil {
 		return nil, err
@@ -191,7 +191,7 @@ func (gcp *GitCacheProvider) AddToCache(folderPath, commitHash string, issueList
 		return err
 	}
 
-	gcp.CreateOrAppendToCache(hash, commitHash, p)
+	gcp.createOrAppendToCache(hash, commitHash, p)
 
 	return nil
 }
@@ -202,27 +202,27 @@ func (gcp *GitCacheProvider) checkAndRemoveExistingFile(folderPathHash string, c
 		return true
 	}
 
-	ch, pchExists := pchm[p]
-	if !pchExists {
-		return true
+	ch, commitHashExists := pchm[p]
+	if !commitHashExists {
+		return false
 	}
 
 	if ch == commitHash {
-		return false
+		return true
 	}
 
 	filePath := getLocalFilePath(folderPathHash, ch, p)
 	err := gcp.fs.Remove(filePath)
 	if err != nil {
 		gcp.logger.Error().Err(err).Msg("failed to remove file " + filePath)
-		return true
+		return false
 	}
 	delete(gcp.cache, folderPathHash)
 
-	return true
+	return false
 }
 
-func (gcp *GitCacheProvider) CreateOrAppendToCache(pathHash string, commitHash string, product product.Product) {
+func (gcp *GitCacheProvider) createOrAppendToCache(pathHash string, commitHash string, product product.Product) {
 	pchm, exists := gcp.cache[pathHash]
 	if !exists {
 		pchm = make(productCommitHashMap)
