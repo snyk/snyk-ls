@@ -82,3 +82,18 @@ func (f FilterableIssueType) ToProduct() Product {
 		return ProductUnknown
 	}
 }
+
+func ToProduct(productName string) Product {
+	switch productName {
+	case "oss":
+		return ProductOpenSource
+	case "code":
+		return ProductCode
+	case "iac":
+		return ProductInfrastructureAsCode
+	case "container":
+		return ProductContainer
+	default:
+		return ProductUnknown
+	}
+}
