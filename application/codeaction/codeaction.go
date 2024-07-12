@@ -64,22 +64,82 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	issues := c.IssuesProvider.IssuesForRange(path, r)
 	logMsg := fmt.Sprint("Found ", len(issues), " issues for path ", path, " and range ", r)
 	c.logger.Info().Msg(logMsg)
-	actions := converter.ToCodeActions(issues)
 
-	for _, issue := range issues {
-		for _, action := range issue.CodeActions {
-			if action.Uuid != nil {
-				cached := cachedAction{
-					issue:  issue,
-					action: action,
-				}
-				c.actionsCache[*action.Uuid] = cached
-			}
-		}
+	quickFixGroupables := c.getQuickFixGroupablesAndCache(issues)
+
+	updatedIssues := []snyk.Issue{}
+	if len(quickFixGroupables) != 0 {
+		updatedIssues = c.updateIssuesWithQuickFix(quickFixGroupables, issues)
+	} else {
+		updatedIssues = issues
 	}
 
+	actions := converter.ToCodeActions(updatedIssues)
 	c.logger.Info().Msg(fmt.Sprint("Returning ", len(actions), " code actions"))
 	return actions
+}
+
+func (c *CodeActionsService) updateIssuesWithQuickFix(quickFixGroupables []types.Groupable, issues []snyk.Issue) []snyk.Issue {
+	// we only allow one quickfix, so it needs to be grouped
+	quickFix := c.getQuickFixAction(quickFixGroupables)
+
+	var updatedIssues []snyk.Issue
+	for _, issue := range issues {
+		groupedActions := []snyk.CodeAction{}
+		if quickFix != nil {
+			groupedActions = append(groupedActions, *quickFix)
+		}
+
+		for _, action := range issue.CodeActions {
+			if action.GroupingType == types.Quickfix {
+				continue
+			}
+			groupedActions = append(groupedActions, action)
+		}
+
+		issue.CodeActions = groupedActions
+		updatedIssues = append(updatedIssues, issue)
+	}
+
+	return updatedIssues
+}
+
+func (c *CodeActionsService) getQuickFixAction(quickFixGroupables []types.Groupable) *snyk.CodeAction {
+	// right now we can always group by max semver version, as
+	// code only has one quickfix available, and iac none at all
+	var quickFix *snyk.CodeAction
+	qf, ok := types.MaxSemver()(quickFixGroupables).(snyk.CodeAction)
+	if !ok {
+		c.logger.Warn().Msg("grouping quick fix actions failed")
+		quickFix = nil
+	} else {
+		quickFix = &qf
+	}
+	c.logger.Debug().Msgf("chose quickfix %s", quickFix.Title)
+	return quickFix
+}
+
+func (c *CodeActionsService) getQuickFixGroupablesAndCache(issues []snyk.Issue) []types.Groupable {
+	quickFixGroupables := []types.Groupable{}
+	for _, issue := range issues {
+		for _, action := range issue.CodeActions {
+			if action.GroupingType == types.Quickfix {
+				quickFixGroupables = append(quickFixGroupables, action)
+			}
+			c.cacheCodeAction(action, issue)
+		}
+	}
+	return quickFixGroupables
+}
+
+func (c *CodeActionsService) cacheCodeAction(action snyk.CodeAction, issue snyk.Issue) {
+	if action.Uuid != nil {
+		cached := cachedAction{
+			issue:  issue,
+			action: action,
+		}
+		c.actionsCache[*action.Uuid] = cached
+	}
 }
 
 func (c *CodeActionsService) ResolveCodeAction(action types.CodeAction, server types.Server) (types.CodeAction, error) {

@@ -275,9 +275,7 @@ func (i *ossIssue) ToIssueSeverity() snyk.Severity {
 	}
 	return sev
 }
-func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter,
-	affectedFilePath string, issueRange snyk.Range) (actions []snyk.
-	CodeAction) {
+func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath string, issueRange snyk.Range) (actions []snyk.CodeAction) {
 	quickFixAction := i.AddQuickFixAction(affectedFilePath, issueRange)
 	if quickFixAction != nil {
 		actions = append(actions, *quickFixAction)
@@ -350,7 +348,10 @@ func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Ra
 		return edit
 	}
 
-	action, err := snyk.NewDeferredCodeAction(upgradeMessage, &autofixEditCallback, nil)
+	// out grouping key for oss quickfixes is the dependency name
+	groupingKey, groupingValue := i.getUpgradedPathParts()
+
+	action, err := snyk.NewDeferredCodeAction(upgradeMessage, &autofixEditCallback, nil, types.Key(groupingKey), groupingValue)
 	if err != nil {
 		log.Error().Msg("failed to create deferred quickfix code action")
 		return nil
@@ -366,9 +367,7 @@ func (i *ossIssue) getQuickfixEdit(affectedFilePath string) string {
 
 	// UpgradePath[0] is the upgrade for the package that was scanned
 	// UpgradePath[1] is the upgrade for the root dependency
-	rootDependencyUpgrade := strings.Split(i.UpgradePath[1].(string), "@")
-	depName := strings.Join(rootDependencyUpgrade[:len(rootDependencyUpgrade)-1], "@")
-	depVersion := rootDependencyUpgrade[len(rootDependencyUpgrade)-1]
+	depName, depVersion := i.getUpgradedPathParts()
 	if i.PackageManager == "npm" || i.PackageManager == "yarn" || i.PackageManager == "yarn-workspace" {
 		return fmt.Sprintf("\"%s\": \"%s\"", depName, depVersion)
 	} else if i.PackageManager == "maven" {
@@ -389,6 +388,13 @@ func (i *ossIssue) getQuickfixEdit(affectedFilePath string) string {
 	}
 
 	return ""
+}
+
+func (i *ossIssue) getUpgradedPathParts() (string, string) {
+	rootDependencyUpgrade := strings.Split(i.UpgradePath[1].(string), "@")
+	depName := strings.Join(rootDependencyUpgrade[:len(rootDependencyUpgrade)-1], "@")
+	depVersion := rootDependencyUpgrade[len(rootDependencyUpgrade)-1]
+	return depName, depVersion
 }
 
 type licensesPolicy struct {
