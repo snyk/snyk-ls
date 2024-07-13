@@ -123,10 +123,10 @@ func TestBuildCLICmd(t *testing.T) {
 		c := testutil.UnitTest(t)
 		ctx := context.Background()
 		provider := &CliAuthenticationProvider{c: c}
-		config.CurrentConfig().UpdateApiEndpoints("https://app.snyk.io/api")
+		config.CurrentConfig().UpdateApiEndpoints("https://api.eu.snyk.io")
 
 		cmd := provider.buildCLICmd(ctx, "auth")
 
-		assert.Contains(t, cmd.Env, "SNYK_API=https://app.snyk.io/api")
+		assert.Contains(t, cmd.Env, "SNYK_API=https://api.eu.snyk.io")
 	})
 }

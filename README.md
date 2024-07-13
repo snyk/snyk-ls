@@ -331,7 +331,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
   "sendErrorReports": "true",
   // Whether to report errors to Snyk - defaults to true
   "organization": "a string",
-  // The name of your organization, e.g. the output of: curl -H "Authorization: token $(snyk config get api)"  https://snyk.io/api/cli-config/settings/sast | jq .org
+  // The name of your organization, e.g. the output of: curl -H "Authorization: token $(snyk config get api)"  https://api.snyk.io/v1/cli-config/settings/sast | jq .org
   "enableTelemetry": "true",
   // Whether user analytics can be tracked
   "manageBinariesAutomatically": "true",

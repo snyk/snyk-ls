@@ -51,7 +51,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
 		c.SetOrganization("testOrg")
-		c.UpdateApiEndpoints("https://app.snyk.io/api")
+		c.UpdateApiEndpoints("https://api.eu.snyk.io")
 		c.SetIntegrationName(expectedIntegrationName)
 		c.SetIntegrationVersion(expectedIntegrationVersion)
 		c.SetIdeVersion(expectedIdeVersion)
@@ -68,7 +68,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
-		assert.Contains(t, updatedEnv, ApiEnvVar+"=https://app.snyk.io/api")
+		assert.Contains(t, updatedEnv, ApiEnvVar+"=https://api.eu.snyk.io")
 		token, err := c.TokenAsOAuthToken()
 		require.NoError(t, err)
 		assert.Contains(t, updatedEnv, SnykOauthTokenEnvVar+"="+token.AccessToken)
