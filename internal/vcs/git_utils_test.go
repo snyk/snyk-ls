@@ -69,8 +69,9 @@ func TestClone_DifferentBranchNames_ShouldClone(t *testing.T) {
 	mgo.On("Head", repo).Return(headRef, nil)
 	mgo.On("PlainClone", mock.Anything, false, mock.AnythingOfType("*git.CloneOptions")).Return(repo, nil)
 
-	err := Clone(repoPath, tmpRepoPath, baseBranchName, &logger, mgo)
+	repo, err := Clone(repoPath, tmpRepoPath, baseBranchName, &logger, mgo)
 
+	assert.NotNil(t, repo)
 	assert.Nil(t, err)
 	mgo.AssertExpectations(t)
 }
@@ -84,8 +85,9 @@ func TestClone_InvalidGitRepo(t *testing.T) {
 
 	mgo.On("PlainOpen", repoPath).Return(nil, errors.New("failed to open repository"))
 
-	err := Clone(repoPath, tmpRepoPath, branchName, &logger, mgo)
+	repo, err := Clone(repoPath, tmpRepoPath, branchName, &logger, mgo)
 
+	assert.Nil(t, repo)
 	assert.NotNil(t, err)
 	mgo.AssertExpectations(t)
 }
@@ -101,8 +103,9 @@ func TestClone_InvalidGitRepo_FailedHead(t *testing.T) {
 	mgo.On("PlainOpen", repoPath).Return(repo, nil)
 	mgo.On("Head", repo).Return(nil, errors.New("failed to fetch head"))
 
-	err := Clone(repoPath, tmpRepoPath, branchName, &logger, mgo)
+	repo, err := Clone(repoPath, tmpRepoPath, branchName, &logger, mgo)
 
+	assert.Nil(t, repo)
 	assert.NotNil(t, err)
 	mgo.AssertExpectations(t)
 }
@@ -120,8 +123,9 @@ func TestClone_SameBranchNames_SkipClone(t *testing.T) {
 	headRef := plumbing.NewHashReference(currentBranchName, plumbing.NewHash("abc123"))
 	mgo.On("Head", repo).Return(headRef, nil)
 
-	err := Clone(repoPath, tmpRepoPath, baseBranchName, &logger, mgo)
+	repo, err := Clone(repoPath, tmpRepoPath, baseBranchName, &logger, mgo)
 
+	assert.Nil(t, repo)
 	assert.Nil(t, err)
 	mgo.AssertNotCalled(t, "PlainClone", mock.Anything, mock.AnythingOfType("*git.CloneOptions"))
 	mgo.AssertExpectations(t)
@@ -141,8 +145,9 @@ func TestClone_DifferentBranchNames_FailedClone(t *testing.T) {
 	mgo.On("Head", repo).Return(headRef, nil)
 	mgo.On("PlainClone", mock.Anything, false, mock.AnythingOfType("*git.CloneOptions")).Return(nil, errors.New("failed to clone repo"))
 
-	err := Clone(repoPath, tmpRepoPath, baseBranchName, &logger, mgo)
+	repo, err := Clone(repoPath, tmpRepoPath, baseBranchName, &logger, mgo)
 
+	assert.Nil(t, repo)
 	assert.NotNil(t, err)
 	mgo.AssertExpectations(t)
 }
