@@ -137,6 +137,10 @@ func (s *SarifConverter) getCodeFlow(r codeClientSarif.Result, baseDir string) (
 				method := "getCodeFlow"
 				physicalLoc := tFlowLocation.Location.PhysicalLocation
 				path := physicalLoc.ArtifactLocation.URI
+				decodedPath, err := url.QueryUnescape(path)
+				if err != nil {
+					decodedPath = path // Handle the error
+				}
 				region := physicalLoc.Region
 				myRange :=
 					snyk.Range{
@@ -149,11 +153,11 @@ func (s *SarifConverter) getCodeFlow(r codeClientSarif.Result, baseDir string) (
 							Character: region.EndColumn,
 						}}
 
-				key := fmt.Sprintf("%sL%4d", path, region.StartLine)
+				key := fmt.Sprintf("%sL%4d", decodedPath, region.StartLine)
 				if !dedupMap[key] {
 					fileUtil := filesystem.New()
-					filePath := filepath.Join(baseDir, path)
-					content, err := fileUtil.GetLineOfCode(filePath, myRange.Start.Line+1)
+					filePath := filepath.Join(baseDir, decodedPath)
+					content, err := fileUtil.GetLineOfCode(decodedPath, myRange.Start.Line+1)
 					if err != nil {
 						s.c.Logger().Warn().Str("method", "code.getCodeFlow").Err(err).Msg("cannot load line Content from file")
 					}
