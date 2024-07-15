@@ -18,6 +18,7 @@ package persistence
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog"
@@ -47,6 +48,7 @@ type ScanSnapshotPersister interface {
 	Init()
 	Add(folderPath, commitHash string, issueList []snyk.Issue, p product.Product) error
 	GetPersistedIssueList(folderPath string, p product.Product) ([]snyk.Issue, error)
+	SnapshotExists(folderPath, commitHash string, p product.Product) bool
 }
 
 type productCommitHashMap map[product.Product]string
@@ -147,6 +149,9 @@ func (gpp *GitPersistenceProvider) GetPersistedIssueList(folderPath string, p pr
 	filePath := getLocalFilePath(hashedFolderPath, commitHash, p)
 	content, err := afero.ReadFile(gpp.fs, filePath)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			delete(gpp.cache, hashedFolderPath)
+		}
 		return nil, err
 	}
 
@@ -158,6 +163,25 @@ func (gpp *GitPersistenceProvider) GetPersistedIssueList(folderPath string, p pr
 	}
 
 	return results, nil
+}
+
+func (gpp *GitPersistenceProvider) SnapshotExists(folderPath, commitHash string, p product.Product) bool {
+	existingCommitHash, err := gpp.getProductCommitHash(folderPath, p)
+	if err != nil || existingCommitHash != commitHash {
+		return false
+	}
+
+	hashedFolderPath, err := hashPath(folderPath)
+	if err != nil {
+		return false
+	}
+
+	filePath := getLocalFilePath(hashedFolderPath, commitHash, p)
+	if _, err = gpp.fs.Stat(filePath); os.IsNotExist(err) {
+		return false
+	}
+
+	return true
 }
 
 func (gpp *GitPersistenceProvider) getProductCommitHash(folderPath string, p product.Product) (commitHash string, err error) {

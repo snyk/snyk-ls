@@ -32,6 +32,10 @@ type GitOps interface {
 type GitWrapper struct {
 }
 
+func NewGitWrapper() *GitWrapper {
+	return &GitWrapper{}
+}
+
 func (g *GitWrapper) PlainOpen(path string) (*git.Repository, error) {
 	return git.PlainOpen(path)
 }

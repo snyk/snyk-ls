@@ -26,6 +26,10 @@ var _ ScanSnapshotPersister = (*NopScanPersister)(nil)
 type NopScanPersister struct {
 }
 
+func (n NopScanPersister) SnapshotExists(_, _ string, _ product.Product) bool {
+	return false
+}
+
 func (n NopScanPersister) Clear() {
 	return
 }

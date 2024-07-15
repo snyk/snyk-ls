@@ -55,11 +55,29 @@ func Clone(repoPath string, destinationPath string, branchName string, logger *z
 	return clonedRepo, nil
 }
 
-func GetCommitHashForRepo(repo *git.Repository) (string, error) {
+func CommitHashForRepo(repo *git.Repository) (string, error) {
 	head, err := repo.Head()
 	if err != nil {
 		return "", err
 	}
 	commitHash := head.Hash().String()
 	return commitHash, nil
+}
+
+func CommitHashForBranch(repoPath, branchName string, logger *zerolog.Logger, gitOps GitOps) (string, error) {
+	repo, err := gitOps.PlainOpen(repoPath)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to open repository")
+		return "", err
+	}
+	branchReferenceName := plumbing.NewBranchReferenceName(branchName)
+
+	ref, err := repo.Reference(branchReferenceName, true)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to get reference")
+		return "", err
+	}
+
+	commitHash := ref.Hash()
+	return commitHash.String(), nil
 }
