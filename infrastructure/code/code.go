@@ -228,7 +228,7 @@ func scanAndPersistBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Sc
 		return err
 	}
 
-	snapshotExists := sc.scanPersister.SnapshotExists(folderPath, headCommit, sc.Product())
+	snapshotExists := sc.scanPersister.Exists(folderPath, headCommit, sc.Product())
 	if snapshotExists {
 		return nil
 	}

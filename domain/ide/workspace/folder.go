@@ -467,8 +467,7 @@ func appendTestResults(sic snyk.SeverityIssueCounts, results []json_schemas.Test
 }
 
 func (f *Folder) FilterAndPublishDiagnostics(p *product.Product) {
-	productIssuesByFile := f.IssuesByProduct()
-	productIssuesByFile = f.getDelta(productIssuesByFile, p)
+	productIssuesByFile := f.getDelta(f.IssuesByProduct(), p)
 	if p != nil {
 		filteredIssues := f.filterDiagnostics(productIssuesByFile[*p])
 		f.publishDiagnostics(*p, filteredIssues)
@@ -495,7 +494,7 @@ func (f *Folder) getDelta(productIssueByFile snyk.ProductIssuesByFile, p *produc
 	if len(baseIssueList) == 0 {
 		return productIssueByFile
 	}
-	
+
 	df := snyk.NewDeltaFinderForProduct(*p)
 
 	currentFlatIssueList := getFlatIssueList(productIssueByFile, p)
@@ -512,7 +511,7 @@ func (f *Folder) getDelta(productIssueByFile snyk.ProductIssuesByFile, p *produc
 
 	if err != nil {
 		logger.Error().Err(err).Msg("couldn't calculate delta")
-		return nil
+		return productIssueByFile
 	}
 
 	deltaSnykIssues := make([]snyk.Issue, len(diff))
@@ -554,7 +553,7 @@ func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
 }
 
 func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[product.FilterableIssueType]bool) snyk.
-IssuesByFile {
+	IssuesByFile {
 	logger := f.c.Logger().With().Str("method", "FilterIssues").Logger()
 
 	filteredIssues := snyk.IssuesByFile{}

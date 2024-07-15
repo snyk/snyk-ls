@@ -30,17 +30,19 @@ func NewNopScanPersister() *NopScanPersister {
 	return &NopScanPersister{}
 }
 
-func (n NopScanPersister) SnapshotExists(_, _ string, _ product.Product) bool {
+func (n NopScanPersister) Exists(_, _ string, _ product.Product) bool {
 	return false
 }
 
 func (n NopScanPersister) Clear() {
 }
 
-func (n NopScanPersister) ClearForProduct(_ string, _ product.Product) {
+func (n NopScanPersister) ClearForProduct(_ string, _ string, _ product.Product) error {
+	return nil
 }
 
-func (n NopScanPersister) Init() {
+func (n NopScanPersister) Init() error {
+	return nil
 }
 
 func (n NopScanPersister) Add(_, _ string, _ []snyk.Issue, _ product.Product) error {

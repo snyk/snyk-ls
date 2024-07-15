@@ -123,7 +123,6 @@ func initInfrastructure(c *config.Config) {
 	snykApiClient = snyk_api.NewSnykApiClient(c, networkAccess.GetHttpClient)
 	gafConfiguration := c.Engine().GetConfiguration()
 	scanPersister = persistence.NewGitPersistenceProvider(c.Logger(), afero.NewOsFs())
-	scanPersister.Init()
 	// we initialize the service without providers
 	authenticationService = authentication.NewAuthenticationService(c, nil, errorReporter, notifier)
 	// after having an instance, we pass it into the default configuration method
@@ -167,6 +166,7 @@ func initInfrastructure(c *config.Config) {
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,
 		authInitializer,
+		scanPersister,
 	)
 }
 
