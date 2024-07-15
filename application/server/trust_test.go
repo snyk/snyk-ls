@@ -41,7 +41,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScan(t *testing.
 	scanner := &snyk.TestScanner{}
 	c := config.CurrentConfig()
 	c.SetTrustedFolderFeatureEnabled(true)
-	w.AddFolder(workspace.NewFolder(c, "dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))
+	w.AddFolder(workspace.NewFolder(c, "dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 	command.HandleUntrustedFolders(context.Background(), loc.Server)
 
 	assert.True(t, checkTrustMessageRequest(jsonRPCRecorder))
@@ -54,7 +54,7 @@ func Test_handleUntrustedFolders_shouldNotTriggerTrustRequestWhenAlreadyRequesti
 	scanner := &snyk.TestScanner{}
 	c := config.CurrentConfig()
 	c.SetTrustedFolderFeatureEnabled(true)
-	w.AddFolder(workspace.NewFolder(c, "dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))
+	w.AddFolder(workspace.NewFolder(c, "dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 	w.StartRequestTrustCommunication()
 
 	command.HandleUntrustedFolders(context.Background(), loc.Server)
@@ -75,7 +75,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 	w := workspace.Get()
 	scanner := &snyk.TestScanner{}
 	c.SetTrustedFolderFeatureEnabled(true)
-	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))
+	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 
 	command.HandleUntrustedFolders(context.Background(), loc.Server)
 
@@ -95,7 +95,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 	registerNotifier(c, loc.Server)
 	w := workspace.Get()
 	scanner := &snyk.TestScanner{}
-	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier()))
+	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 	c.SetTrustedFolderFeatureEnabled(true)
 
 	command.HandleUntrustedFolders(context.Background(), loc.Server)

@@ -38,11 +38,11 @@ func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
 	scanner := &snyk.TestScanner{}
 	scanNotifier := snyk.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
-	w := New(c, performance.NewInstrumentor(), scanner, nil, nil, notifier)
+	w := New(c, performance.NewInstrumentor(), scanner, nil, nil, notifier, nil)
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetTrustedFolders([]string{trustedDummy})
-	w.AddFolder(NewFolder(c, trustedDummy, trustedDummy, scanner, nil, scanNotifier, notifier))
-	w.AddFolder(NewFolder(c, untrustedDummy, untrustedDummy, scanner, nil, scanNotifier, notifier))
+	w.AddFolder(NewFolder(c, trustedDummy, trustedDummy, scanner, nil, scanNotifier, notifier, nil))
+	w.AddFolder(NewFolder(c, untrustedDummy, untrustedDummy, scanner, nil, scanNotifier, notifier, nil))
 
 	trusted, untrusted := w.GetFolderTrust()
 
@@ -57,11 +57,11 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 	scanner := &snyk.TestScanner{}
 	scanNotifier := snyk.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
-	w := New(c, performance.NewInstrumentor(), scanner, nil, nil, notifier)
+	w := New(c, performance.NewInstrumentor(), scanner, nil, nil, notifier, nil)
 	c.SetTrustedFolderFeatureEnabled(true)
-	trustedFolder := NewFolder(c, trustedDummy, trustedDummy, scanner, nil, scanNotifier, notifier)
+	trustedFolder := NewFolder(c, trustedDummy, trustedDummy, scanner, nil, scanNotifier, notifier, nil)
 	w.AddFolder(trustedFolder)
-	untrustedFolder := NewFolder(c, untrustedDummy, untrustedDummy, scanner, nil, scanNotifier, notifier)
+	untrustedFolder := NewFolder(c, untrustedDummy, untrustedDummy, scanner, nil, scanNotifier, notifier, nil)
 	w.AddFolder(untrustedFolder)
 
 	w.TrustFoldersAndScan(context.Background(), []*Folder{trustedFolder})
@@ -83,8 +83,8 @@ func Test_AddAndRemoveFoldersAndTriggerScan(t *testing.T) {
 
 	scanner := &snyk.TestScanner{}
 	scanNotifier := snyk.NewMockScanNotifier()
-	w := New(c, performance.NewInstrumentor(), scanner, nil, scanNotifier, notification.NewNotifier())
-	toBeRemovedFolder := NewFolder(c, toBeRemovedAbsolutePathAfterConversions, toBeRemoved, scanner, nil, scanNotifier, notification.NewNotifier())
+	w := New(c, performance.NewInstrumentor(), scanner, nil, scanNotifier, notification.NewNotifier(), nil)
+	toBeRemovedFolder := NewFolder(c, toBeRemovedAbsolutePathAfterConversions, toBeRemoved, scanner, nil, scanNotifier, notification.NewNotifier(), nil)
 	w.AddFolder(toBeRemovedFolder)
 
 	c.SetTrustedFolderFeatureEnabled(true)
@@ -113,13 +113,13 @@ func Test_AddAndRemoveFoldersAndTriggerScan(t *testing.T) {
 
 func Test_Get(t *testing.T) {
 	c := testutil.UnitTest(t)
-	New(c, nil, nil, nil, nil, nil)
+	New(c, nil, nil, nil, nil, nil, nil)
 	assert.Equal(t, instance, Get())
 }
 
 func Test_Set(t *testing.T) {
 	c := testutil.UnitTest(t)
-	w := New(c, nil, nil, nil, nil, nil)
+	w := New(c, nil, nil, nil, nil, nil, nil)
 	Set(w)
 	assert.Equal(t, w, instance)
 }
