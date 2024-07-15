@@ -69,7 +69,6 @@ func Default(c *config.Config, errorReporter error_reporting.ErrorReporter, auth
 			openBrowserFunc,
 		),
 	)
-	authProviders = append(authProviders, NewCliAuthenticationProvider(c, errorReporter))
 	return authProviders
 }
 
