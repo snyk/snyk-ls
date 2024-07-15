@@ -22,26 +22,26 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func Clone(repoPath string, destinationPath string, branchName string, logger *zerolog.Logger, gitOps GitOps) error {
+func Clone(repoPath string, destinationPath string, branchName string, logger *zerolog.Logger, gitOps GitOps) (*git.Repository, error) {
 	baseBranchName := plumbing.NewBranchReferenceName(branchName)
 	currentRepo, err := gitOps.PlainOpen(repoPath)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to open current repo in go-git " + repoPath)
-		return err
+		return nil, err
 	}
 
 	currentRepoBranch, err := gitOps.Head(currentRepo)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to get HEAD for " + repoPath)
-		return err
+		return nil, err
 	}
 
 	if currentRepoBranch.Name() == baseBranchName {
 		logger.Info().Msg("Current branch is the same as base. Skipping cloning")
-		return nil
+		return nil, nil
 	}
 
-	_, err = gitOps.PlainClone(destinationPath, false, &git.CloneOptions{
+	clonedRepo, err := gitOps.PlainClone(destinationPath, false, &git.CloneOptions{
 		URL:           repoPath,
 		ReferenceName: baseBranchName,
 		SingleBranch:  true,
@@ -49,8 +49,17 @@ func Clone(repoPath string, destinationPath string, branchName string, logger *z
 
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to clone base in temp repo with go-git " + destinationPath)
-		return err
+		return nil, err
 	}
 
-	return nil
+	return clonedRepo, nil
+}
+
+func GetCommitHashForRepo(repo *git.Repository) (string, error) {
+	head, err := repo.Head()
+	if err != nil {
+		return "", err
+	}
+	commitHash := head.Hash().String()
+	return commitHash, nil
 }

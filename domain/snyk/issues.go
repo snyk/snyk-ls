@@ -17,6 +17,7 @@
 package snyk
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/snyk/snyk-ls/internal/delta"
 	"net/url"
@@ -67,7 +68,7 @@ type Issue struct {
 	// A slice of the CVEs of the issue
 	CVEs []string
 	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
-	AdditionalData IssueAdditionalData
+	AdditionalData IssueAdditionalData `json:"additionalData"`
 	// Learn Service Lesson URL
 	LessonUrl      string `json:"url"`
 	Fingerprint    string
@@ -334,6 +335,52 @@ func (s Severity) String() string {
 	default:
 		return "unknown"
 	}
+}
+
+func (i *Issue) UnmarshalJSON(data []byte) error {
+	type IssueAlias Issue
+	temp := &struct {
+		AdditionalData json.RawMessage `json:"additionalData"`
+		*IssueAlias
+	}{
+		IssueAlias: (*IssueAlias)(i),
+	}
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+
+	var additionalType struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(temp.AdditionalData, &additionalType); err != nil {
+		return err
+	}
+
+	switch additionalType.Type {
+	case "CodeIssueData":
+		var codeData CodeIssueData
+		if err := json.Unmarshal(temp.AdditionalData, &codeData); err != nil {
+			return err
+		}
+		i.AdditionalData = codeData
+	case "IaCIssueData":
+		var iacData IaCIssueData
+		if err := json.Unmarshal(temp.AdditionalData, &iacData); err != nil {
+			return err
+		}
+		i.AdditionalData = iacData
+	case "OssIssueData":
+		var ossData OssIssueData
+		if err := json.Unmarshal(temp.AdditionalData, &ossData); err != nil {
+			return err
+		}
+		i.AdditionalData = ossData
+	case "":
+		return nil
+	default:
+		return fmt.Errorf("unknown additional data type: %s", additionalType.Type)
+	}
+	return nil
 }
 
 const (

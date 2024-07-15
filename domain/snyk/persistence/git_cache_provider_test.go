@@ -14,30 +14,31 @@
  * limitations under the License.
  */
 
-package snyk
+package persistence
 
 import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func TestLoadCache_Empty(t *testing.T) {
+func TestLoad_Empty(t *testing.T) {
 	appFs := afero.NewMemMapFs()
 	logger := zerolog.New(nil)
 
-	cp := NewGitCacheProvider(&logger, appFs)
+	cp := NewGitPersistenceProvider(&logger, appFs)
 
-	cp.LoadCache()
+	cp.Init()
 
 	assert.Empty(t, cp.cache)
 }
 
-func TestLoadCache_NotEmpty(t *testing.T) {
-	issueList := []Issue{
+func TestLoad_NotEmpty(t *testing.T) {
+	issueList := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -49,17 +50,17 @@ func TestLoadCache_NotEmpty(t *testing.T) {
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	p := product.ProductCode
 
-	cp := NewGitCacheProvider(&logger, appFs)
+	cp := NewGitPersistenceProvider(&logger, appFs)
 
-	err := cp.AddToCache(folderPath, commitHash, issueList, p)
-	cp.LoadCache()
+	err := cp.Add(folderPath, commitHash, issueList, p)
+	cp.Init()
 
 	assert.Nil(t, err)
 	assert.Equal(t, commitHash, cp.cache[hashedFolderPath][p])
 }
 
-func TestAddToCache_NewCommit(t *testing.T) {
-	issueList := []Issue{
+func TestAddTo_NewCommit(t *testing.T) {
+	issueList := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -71,9 +72,9 @@ func TestAddToCache_NewCommit(t *testing.T) {
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	p := product.ProductCode
 
-	cp := NewGitCacheProvider(&logger, appFs)
+	cp := NewGitPersistenceProvider(&logger, appFs)
 
-	err := cp.AddToCache(folderPath, commitHash, issueList, p)
+	err := cp.Add(folderPath, commitHash, issueList, p)
 	list, _ := cp.GetPersistedIssueList(folderPath, p)
 
 	assert.Nil(t, err)
@@ -82,12 +83,12 @@ func TestAddToCache_NewCommit(t *testing.T) {
 }
 
 func TestAddToCache_ExistingCommit_ShouldNotPersist(t *testing.T) {
-	issueList := []Issue{
+	issueList := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
 	}
-	newIssueList := []Issue{
+	newIssueList := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -98,10 +99,10 @@ func TestAddToCache_ExistingCommit_ShouldNotPersist(t *testing.T) {
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	p := product.ProductCode
 
-	cp := NewGitCacheProvider(&logger, appFs)
+	cp := NewGitPersistenceProvider(&logger, appFs)
 
-	err := cp.AddToCache(folderPath, commitHash, issueList, p)
-	err = cp.AddToCache(folderPath, commitHash, newIssueList, p)
+	err := cp.Add(folderPath, commitHash, issueList, p)
+	err = cp.Add(folderPath, commitHash, newIssueList, p)
 	list, _ := cp.GetPersistedIssueList(folderPath, p)
 
 	assert.Nil(t, err)
@@ -111,7 +112,7 @@ func TestAddToCache_ExistingCommit_ShouldNotPersist(t *testing.T) {
 }
 
 func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
-	issueList := []Issue{
+	issueList := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -123,9 +124,9 @@ func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
 	hashedFolderPath, err := hashPath(folderPath)
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	p := product.ProductCode
-	cp := NewGitCacheProvider(&logger, appFs)
+	cp := NewGitPersistenceProvider(&logger, appFs)
 
-	err = cp.AddToCache(folderPath, commitHash, issueList, p)
+	err = cp.Add(folderPath, commitHash, issueList, p)
 	actualCommitHash, err := cp.getProductCommitHash(folderPath, p)
 
 	assert.Nil(t, err)
@@ -133,12 +134,12 @@ func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
 }
 
 func TestGetPersistedIssueList_ReturnsValidIssueListForProduct(t *testing.T) {
-	existingCodeIssues := []Issue{
+	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
 	}
-	existingOssIssues := []Issue{
+	existingOssIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -150,10 +151,10 @@ func TestGetPersistedIssueList_ReturnsValidIssueListForProduct(t *testing.T) {
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
 	po := product.ProductOpenSource
-	cp := NewGitCacheProvider(&logger, appFs)
+	cp := NewGitPersistenceProvider(&logger, appFs)
 
-	err := cp.AddToCache(folderPath, commitHash, existingCodeIssues, pc)
-	err = cp.AddToCache(folderPath, commitHash, existingOssIssues, po)
+	err := cp.Add(folderPath, commitHash, existingCodeIssues, pc)
+	err = cp.Add(folderPath, commitHash, existingOssIssues, po)
 	actualCodeIssues, err := cp.GetPersistedIssueList(folderPath, pc)
 
 	assert.Nil(t, err)
@@ -161,7 +162,7 @@ func TestGetPersistedIssueList_ReturnsValidIssueListForProduct(t *testing.T) {
 }
 
 func TestClear_ExistingCache(t *testing.T) {
-	existingCodeIssues := []Issue{
+	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -171,9 +172,9 @@ func TestClear_ExistingCache(t *testing.T) {
 	folderPath := "/home/myusr/testrepo"
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
-	cp := NewGitCacheProvider(&logger, appFs)
+	cp := NewGitPersistenceProvider(&logger, appFs)
 
-	err := cp.AddToCache(folderPath, commitHash, existingCodeIssues, pc)
+	err := cp.Add(folderPath, commitHash, existingCodeIssues, pc)
 	cp.Clear()
 
 	assert.Nil(t, err)
@@ -181,7 +182,7 @@ func TestClear_ExistingCache(t *testing.T) {
 }
 
 func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
-	existingCodeIssues := []Issue{
+	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -192,9 +193,9 @@ func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 	folderPath := "/home/myusr/testrepo"
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
-	cp := NewGitCacheProvider(&logger, appFs)
+	cp := NewGitPersistenceProvider(&logger, appFs)
 
-	err := cp.AddToCache(folderPath, commitHash, existingCodeIssues, pc)
+	err := cp.Add(folderPath, commitHash, existingCodeIssues, pc)
 	cp.Clear()
 
 	assert.Nil(t, err)
@@ -202,7 +203,7 @@ func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 }
 
 func TestClearIssues_ExistingCacheExistingProduct(t *testing.T) {
-	existingCodeIssues := []Issue{
+	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -213,17 +214,17 @@ func TestClearIssues_ExistingCacheExistingProduct(t *testing.T) {
 	folderPath := "/home/myusr/testrepo"
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
-	cp := NewGitCacheProvider(&logger, appFs)
+	cp := NewGitPersistenceProvider(&logger, appFs)
 
-	err := cp.AddToCache(folderPath, commitHash, existingCodeIssues, pc)
-	cp.ClearIssues(folderPath, pc)
+	err := cp.Add(folderPath, commitHash, existingCodeIssues, pc)
+	cp.ClearForProduct(folderPath, pc)
 
 	assert.Nil(t, err)
 	assert.Empty(t, cp.cache)
 }
 
 func TestClearIssues_ExistingCacheNonExistingProduct(t *testing.T) {
-	existingCodeIssues := []Issue{
+	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -235,10 +236,10 @@ func TestClearIssues_ExistingCacheNonExistingProduct(t *testing.T) {
 	hashedFolderPath, _ := hashPath(folderPath)
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
-	cp := NewGitCacheProvider(&logger, appFs)
+	cp := NewGitPersistenceProvider(&logger, appFs)
 
-	err := cp.AddToCache(folderPath, commitHash, existingCodeIssues, pc)
-	cp.ClearIssues(folderPath, product.ProductUnknown)
+	err := cp.Add(folderPath, commitHash, existingCodeIssues, pc)
+	cp.ClearForProduct(folderPath, product.ProductUnknown)
 
 	assert.Nil(t, err)
 	assert.NotEmpty(t, cp.cache)
@@ -246,7 +247,7 @@ func TestClearIssues_ExistingCacheNonExistingProduct(t *testing.T) {
 }
 
 func TestClearIssues_NonExistingCacheNonExistingProduct(t *testing.T) {
-	existingCodeIssues := []Issue{
+	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -257,10 +258,10 @@ func TestClearIssues_NonExistingCacheNonExistingProduct(t *testing.T) {
 	folderPath := "/home/myusr/testrepo"
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
-	cp := NewGitCacheProvider(&logger, appFs)
+	cp := NewGitPersistenceProvider(&logger, appFs)
 
-	err := cp.AddToCache(folderPath, commitHash, existingCodeIssues, pc)
-	cp.ClearIssues("/invalid/folder/path", product.ProductUnknown)
+	err := cp.Add(folderPath, commitHash, existingCodeIssues, pc)
+	cp.ClearForProduct("/invalid/folder/path", product.ProductUnknown)
 
 	assert.Nil(t, err)
 	assert.NotEmpty(t, cp.cache)
@@ -274,7 +275,7 @@ func TestCreateOrAppendToCache_NewCache(t *testing.T) {
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
 
-	cp := NewGitCacheProvider(&logger, appFs)
+	cp := NewGitPersistenceProvider(&logger, appFs)
 	cp.createOrAppendToCache(hashedFolderPath, commitHash, pc)
 
 	assert.NotEmpty(t, cp.cache)
@@ -288,7 +289,7 @@ func TestCreateOrAppendToCache_ExistingCacheSameProductSameHash(t *testing.T) {
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
 
-	cp := NewGitCacheProvider(&logger, appFs)
+	cp := NewGitPersistenceProvider(&logger, appFs)
 	cp.createOrAppendToCache(hashedFolderPath, commitHash, pc)
 	cp.createOrAppendToCache(hashedFolderPath, commitHash, pc)
 
@@ -304,7 +305,7 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentProductSameHash(t *testing.
 	pc := product.ProductCode
 	po := product.ProductOpenSource
 
-	cp := NewGitCacheProvider(&logger, appFs)
+	cp := NewGitPersistenceProvider(&logger, appFs)
 	cp.createOrAppendToCache(hashedFolderPath, commitHash, pc)
 	cp.createOrAppendToCache(hashedFolderPath, commitHash, po)
 
@@ -322,7 +323,7 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentProductDifferentHash(t *tes
 	pc := product.ProductCode
 	po := product.ProductOpenSource
 
-	cp := NewGitCacheProvider(&logger, appFs)
+	cp := NewGitPersistenceProvider(&logger, appFs)
 	cp.createOrAppendToCache(hashedFolderPath, pcCommitHash, pc)
 	cp.createOrAppendToCache(hashedFolderPath, poCommitHash, po)
 
@@ -342,7 +343,7 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentPathDifferentProductDiffere
 	pc := product.ProductCode
 	po := product.ProductOpenSource
 
-	cp := NewGitCacheProvider(&logger, appFs)
+	cp := NewGitPersistenceProvider(&logger, appFs)
 	cp.createOrAppendToCache(hashedFolderPath, pcCommitHash, pc)
 	cp.createOrAppendToCache(otherHashPath, poCommitHash, po)
 

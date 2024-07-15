@@ -396,7 +396,7 @@ func addWorkspaceFolders(c *config.Config, params lsp.InitializeParams, w *works
 				di.HoverService(),
 				di.ScanNotifier(),
 				di.Notifier(),
-			)
+				di.ScanPersister())
 			w.AddFolder(f)
 		}
 	} else {
@@ -408,7 +408,8 @@ func addWorkspaceFolders(c *config.Config, params lsp.InitializeParams, w *works
 				di.Scanner(),
 				di.HoverService(),
 				di.ScanNotifier(),
-				di.Notifier())
+				di.Notifier(),
+				di.ScanPersister())
 			w.AddFolder(f)
 		} else if params.RootPath != "" {
 			f := workspace.NewFolder(
@@ -418,7 +419,8 @@ func addWorkspaceFolders(c *config.Config, params lsp.InitializeParams, w *works
 				di.Scanner(),
 				di.HoverService(),
 				di.ScanNotifier(),
-				di.Notifier())
+				di.Notifier(),
+				di.ScanPersister())
 			w.AddFolder(f)
 		}
 	}
