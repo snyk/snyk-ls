@@ -156,9 +156,10 @@ func TestGetPersistedIssueList_ReturnsValidIssueListForProduct(t *testing.T) {
 	cp := NewGitPersistenceProvider(&logger, appFs)
 
 	err := cp.Add(folderPath, commitHash, existingCodeIssues, pc)
+	assert.Nil(t, err)
 	err = cp.Add(folderPath, commitHash, existingOssIssues, po)
+	assert.Nil(t, err)
 	actualCodeIssues, err := cp.GetPersistedIssueList(folderPath, pc)
-
 	assert.Nil(t, err)
 	assert.Equal(t, existingCodeIssues[0].GetGlobalIdentity(), actualCodeIssues[0].GetGlobalIdentity())
 }
