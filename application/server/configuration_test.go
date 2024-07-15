@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -174,7 +175,7 @@ func Test_UpdateSettings(t *testing.T) {
 			ActivateSnykCode:            "false",
 			ActivateSnykIac:             "false",
 			Insecure:                    "true",
-			Endpoint:                    "https://snyk.io/api",
+			Endpoint:                    "https://api.snyk.io",
 			AdditionalParams:            "--all-projects -d",
 			AdditionalEnv:               "a=b;c=d",
 			Path:                        "addPath",
@@ -202,7 +203,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, false, c.IsSnykIacEnabled())
 		assert.Equal(t, true, c.CliSettings().Insecure)
 		assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalOssParameters)
-		assert.Equal(t, "https://snyk.io/api", c.SnykApi())
+		assert.Equal(t, "https://api.snyk.io", c.SnykApi())
 		assert.Equal(t, "b", os.Getenv("a"))
 		assert.Equal(t, "d", os.Getenv("c"))
 		assert.True(t, strings.HasPrefix(os.Getenv("PATH"), "addPath"+string(os.PathListSeparator)))
