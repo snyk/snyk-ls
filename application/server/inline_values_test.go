@@ -27,8 +27,8 @@ import (
 
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -38,7 +38,7 @@ func Test_textDocumentInlineValues_shouldBeServed(t *testing.T) {
 	rsp, err := loc.Client.Call(ctx, "textDocument/inlineValue", nil)
 	assert.NoError(t, err)
 
-	var result []lsp.InlineValue
+	var result []types.InlineValue
 	err = rsp.UnmarshalResult(&result)
 	assert.NoError(t, err)
 }
@@ -51,9 +51,9 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 	assert.NoError(t, err)
 
 	discovery := install.Discovery{}
-	clientParams := lsp.InitializeParams{
+	clientParams := types.InitializeParams{
 		RootURI: uri.PathToUri(dir),
-		InitializationOptions: lsp.Settings{
+		InitializationOptions: types.Settings{
 			ActivateSnykCode:            "false",
 			ActivateSnykOpenSource:      "true",
 			ActivateSnykIac:             "false",
@@ -70,13 +70,13 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 
 	// wait for scan
 	assert.Eventually(t, func() bool {
-		rsp, err := loc.Client.Call(ctx, "textDocument/inlineValue", lsp.InlineValueParams{
+		rsp, err := loc.Client.Call(ctx, "textDocument/inlineValue", types.InlineValueParams{
 			TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filepath.Join(dir, "package.json"))},
 			Range:        sglsp.Range{Start: sglsp.Position{Line: 17}, End: sglsp.Position{Line: 17}},
 		})
 		assert.NoError(t, err)
 
-		var inlineValues []lsp.InlineValue
+		var inlineValues []types.InlineValue
 		err = rsp.UnmarshalResult(&inlineValues)
 		assert.NoError(t, err)
 

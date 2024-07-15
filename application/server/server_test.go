@@ -49,7 +49,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -181,7 +180,7 @@ func Test_initialize_shouldBeServed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var result lsp.InitializeResult
+	var result types.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +201,7 @@ func Test_initialize_containsServerInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var result lsp.InitializeResult
+	var result types.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
 		t.Fatal(err)
 	}
@@ -212,15 +211,15 @@ func Test_initialize_containsServerInfo(t *testing.T) {
 func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
 	loc, jsonRpcRecorder := setupServer(t)
 
-	params := lsp.InitializeParams{
-		InitializationOptions: lsp.Settings{RequiredProtocolVersion: "22"},
+	params := types.InitializeParams{
+		InitializationOptions: types.Settings{RequiredProtocolVersion: "22"},
 	}
 
 	config.LsProtocolVersion = "12"
 
 	rsp, err := loc.Client.Call(ctx, "initialize", params)
 	require.NoError(t, err)
-	var result lsp.InitializeResult
+	var result types.InitializeResult
 	err = rsp.UnmarshalResult(&result)
 	require.NoError(t, err)
 
@@ -240,7 +239,7 @@ func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var result lsp.InitializeResult
+	var result types.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +269,7 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var result lsp.InitializeResult
+	var result types.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +285,7 @@ func Test_initialize_shouldSupportCodeLenses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var result lsp.InitializeResult
+	var result types.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
 		t.Fatal(err)
 	}
@@ -296,9 +295,9 @@ func Test_initialize_shouldSupportCodeLenses(t *testing.T) {
 func Test_initialized_shouldInitializeAndTriggerCliDownload(t *testing.T) {
 	loc, _ := setupServer(t)
 
-	settings := lsp.Settings{ManageBinariesAutomatically: "true", CliPath: filepath.Join(t.TempDir(), "notexistent")}
+	settings := types.Settings{ManageBinariesAutomatically: "true", CliPath: filepath.Join(t.TempDir(), "notexistent")}
 
-	_, err := loc.Client.Call(ctx, "initialize", lsp.InitializeParams{InitializationOptions: settings})
+	_, err := loc.Client.Call(ctx, "initialize", types.InitializeParams{InitializationOptions: settings})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,11 +321,11 @@ func Test_initialized_shouldRedactToken(t *testing.T) {
 	})
 
 	toBeRedacted := "uhuhuhu"
-	settings := lsp.Settings{Token: toBeRedacted}
+	settings := types.Settings{Token: toBeRedacted}
 
 	os.Stderr, _ = file, err
 
-	_, err = loc.Client.Call(ctx, "initialize", lsp.InitializeParams{InitializationOptions: settings})
+	_, err = loc.Client.Call(ctx, "initialize", types.InitializeParams{InitializationOptions: settings})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,9 +343,9 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
-	clientParams := lsp.InitializeParams{
+	clientParams := types.InitializeParams{
 		RootURI: uri.PathToUri(dir),
-		InitializationOptions: lsp.Settings{
+		InitializationOptions: types.Settings{
 			ActivateSnykCode:            "true",
 			ActivateSnykOpenSource:      "false",
 			ActivateSnykIac:             "false",
@@ -354,7 +353,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "true",
 			CliPath:                     "",
-			FilterSeverity:              lsp.DefaultSeverityFilter(),
+			FilterSeverity:              types.DefaultSeverityFilter(),
 			EnableTrustedFoldersFeature: "false",
 		},
 	}
@@ -401,9 +400,9 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeFixLenses(t *testing.T
 	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
-	clientParams := lsp.InitializeParams{
+	clientParams := types.InitializeParams{
 		RootURI: uri.PathToUri(dir),
-		InitializationOptions: lsp.Settings{
+		InitializationOptions: types.Settings{
 			ActivateSnykCode:            "true",
 			ActivateSnykOpenSource:      "false",
 			ActivateSnykIac:             "false",
@@ -411,7 +410,7 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeFixLenses(t *testing.T
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "true",
 			CliPath:                     "",
-			FilterSeverity:              lsp.DefaultSeverityFilter(),
+			FilterSeverity:              types.DefaultSeverityFilter(),
 			EnableTrustedFoldersFeature: "false",
 		},
 	}
@@ -460,11 +459,11 @@ func Test_initialize_updatesSettings(t *testing.T) {
 	orgUuid, _ := uuid.NewRandom()
 	expectedOrgId := orgUuid.String()
 
-	clientParams := lsp.InitializeParams{
-		InitializationOptions: lsp.Settings{
+	clientParams := types.InitializeParams{
+		InitializationOptions: types.Settings{
 			Organization:   expectedOrgId,
 			Token:          "xxx",
-			FilterSeverity: lsp.DefaultSeverityFilter(),
+			FilterSeverity: types.DefaultSeverityFilter(),
 		},
 	}
 
@@ -472,7 +471,7 @@ func Test_initialize_updatesSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var result lsp.InitializeResult
+	var result types.InitializeResult
 	if err := rsp.UnmarshalResult(&result); err != nil {
 		t.Fatal(err)
 	}
@@ -490,8 +489,8 @@ func Test_initialize_integrationInInitializationOptions_readFromInitializationOp
 	t.Setenv(cli.IntegrationVersionEnvVarKey, "NOT_"+expectedIntegrationVersion)
 
 	loc, _ := setupServer(t)
-	clientParams := lsp.InitializeParams{
-		InitializationOptions: lsp.Settings{
+	clientParams := types.InitializeParams{
+		InitializationOptions: types.Settings{
 			IntegrationName:    expectedIntegrationName,
 			IntegrationVersion: expectedIntegrationVersion,
 		},
@@ -524,12 +523,12 @@ func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
 	t.Setenv(cli.IntegrationVersionEnvVarKey, "NOT_"+expectedIdeVersion)
 
 	loc, _ := setupServer(t)
-	clientParams := lsp.InitializeParams{
+	clientParams := types.InitializeParams{
 		ClientInfo: sglsp.ClientInfo{
 			Name:    expectedIntegrationName,
 			Version: expectedIdeVersion,
 		},
-		InitializationOptions: lsp.Settings{
+		InitializationOptions: types.Settings{
 			IntegrationName:    expectedIntegrationName,
 			IntegrationVersion: expectedIntegrationVersion,
 		},
@@ -586,7 +585,7 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var result lsp.InitializeResult
+	var result types.InitializeResult
 	err = rsp.UnmarshalResult(&result)
 	if err != nil {
 		t.Fatal(err)
@@ -603,8 +602,8 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 	t.Run("true when not included", func(t *testing.T) {
 		loc, _ := setupServer(t)
-		initializationOptions := lsp.Settings{}
-		params := lsp.InitializeParams{InitializationOptions: initializationOptions}
+		initializationOptions := types.Settings{}
+		params := types.InitializeParams{InitializationOptions: initializationOptions}
 		_, err := loc.Client.Call(ctx, "initialize", params)
 
 		assert.Nil(t, err)
@@ -613,10 +612,10 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 
 	t.Run("Parses true value", func(t *testing.T) {
 		loc, _ := setupServer(t)
-		initializationOptions := lsp.Settings{
+		initializationOptions := types.Settings{
 			AutomaticAuthentication: "true",
 		}
-		params := lsp.InitializeParams{InitializationOptions: initializationOptions}
+		params := types.InitializeParams{InitializationOptions: initializationOptions}
 		_, err := loc.Client.Call(ctx, "initialize", params)
 
 		assert.Nil(t, err)
@@ -626,10 +625,10 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 	t.Run("Parses false value", func(t *testing.T) {
 		loc, _ := setupServer(t)
 
-		initializationOptions := lsp.Settings{
+		initializationOptions := types.Settings{
 			AutomaticAuthentication: "false",
 		}
-		params := lsp.InitializeParams{InitializationOptions: initializationOptions}
+		params := types.InitializeParams{InitializationOptions: initializationOptions}
 		_, err := loc.Client.Call(ctx, "initialize", params)
 		assert.Nil(t, err)
 		assert.False(t, config.CurrentConfig().AutomaticAuthentication())
@@ -638,12 +637,12 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 
 func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
-	initializationOptions := lsp.Settings{
+	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 	}
-	params := lsp.InitializeParams{
+	params := types.InitializeParams{
 		InitializationOptions: initializationOptions,
-		WorkspaceFolders:      []lsp.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
+		WorkspaceFolders:      []types.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
 	_, err := loc.Client.Call(ctx, "initialize", params)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
@@ -660,7 +659,7 @@ func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testi
 
 func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
-	initializationOptions := lsp.Settings{
+	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 		Token:                       "token",
 	}
@@ -668,9 +667,9 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
-	params := lsp.InitializeParams{
+	params := types.InitializeParams{
 		InitializationOptions: initializationOptions,
-		WorkspaceFolders:      []lsp.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
+		WorkspaceFolders:      []types.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
 	_, err := loc.Client.Call(ctx, "initialize", params)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
@@ -687,12 +686,12 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 
 func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
-	initializationOptions := lsp.Settings{
+	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 	}
-	params := lsp.InitializeParams{
+	params := types.InitializeParams{
 		InitializationOptions: initializationOptions,
-		WorkspaceFolders:      []lsp.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
+		WorkspaceFolders:      []types.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
 	_, err := loc.Client.Call(ctx, "initialize", params)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
@@ -758,7 +757,7 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 	loc, jsonRPCRecorder := setupServer(t)
 	c := config.CurrentConfig()
 	c.SetSnykCodeEnabled(false)
-	c.SetAuthenticationMethod(lsp.FakeAuthentication)
+	c.SetAuthenticationMethod(types.FakeAuthentication)
 	di.AuthenticationService().ConfigureProviders(c)
 
 	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0]
@@ -920,10 +919,10 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	file := testutil.CreateTempFile(t, t.TempDir())
 	w := workspace.Get()
 
-	f := lsp.WorkspaceFolder{Name: filepath.Dir(file.Name()), Uri: uri.PathToUri(file.Name())}
-	_, err := loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", lsp.DidChangeWorkspaceFoldersParams{
-		Event: lsp.WorkspaceFoldersChangeEvent{
-			Added: []lsp.WorkspaceFolder{f},
+	f := types.WorkspaceFolder{Name: filepath.Dir(file.Name()), Uri: uri.PathToUri(file.Name())}
+	_, err := loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+		Event: types.WorkspaceFoldersChangeEvent{
+			Added: []types.WorkspaceFolder{f},
 		},
 	})
 	if err != nil {
@@ -935,9 +934,9 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 		return folder != nil && folder.IsScanned()
 	}, 120*time.Second, time.Millisecond)
 
-	_, err = loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", lsp.DidChangeWorkspaceFoldersParams{
-		Event: lsp.WorkspaceFoldersChangeEvent{
-			Removed: []lsp.WorkspaceFolder{f},
+	_, err = loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+		Event: types.WorkspaceFoldersChangeEvent{
+			Removed: []types.WorkspaceFolder{f},
 		},
 	})
 	if err != nil {
@@ -960,7 +959,7 @@ func Test_CodeActionResolve_ShouldExecuteCommands(t *testing.T) {
 	serviceMock := types.NewCommandServiceMock()
 	command.SetService(serviceMock)
 
-	_, err = loc.Client.Call(ctx, "codeAction/resolve", lsp.CodeAction{
+	_, err = loc.Client.Call(ctx, "codeAction/resolve", types.CodeAction{
 		Title: "My super duper test action",
 		Command: &sglsp.Command{
 			Title:     expected,
@@ -985,7 +984,7 @@ func checkForPublishedDiagnostics(t *testing.T, testPath string, expectedNumber 
 			return false
 		}
 		for _, n := range notifications {
-			diagnosticsParams := lsp.PublishDiagnosticsParams{}
+			diagnosticsParams := types.PublishDiagnosticsParams{}
 			_ = n.UnmarshalParams(&diagnosticsParams)
 			if diagnosticsParams.URI == uri.PathToUri(testPath) {
 				f := w.GetFolderContaining(testPath)
@@ -1019,12 +1018,12 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
-	folder := lsp.WorkspaceFolder{
+	folder := types.WorkspaceFolder{
 		Name: "Test Repo",
 		Uri:  uri.PathToUri(cloneTargetDir),
 	}
-	clientParams := lsp.InitializeParams{
-		WorkspaceFolders: []lsp.WorkspaceFolder{folder},
+	clientParams := types.InitializeParams{
+		WorkspaceFolders: []types.WorkspaceFolder{folder},
 	}
 
 	_, err = loc.Client.Call(ctx, "initialize", clientParams)

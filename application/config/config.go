@@ -30,11 +30,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
-	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
-	"github.com/snyk/snyk-ls/internal/logging"
-	storage2 "github.com/snyk/snyk-ls/internal/storage"
-
 	"github.com/adrg/xdg"
 	"github.com/denisbrodbeck/machineid"
 	"github.com/rs/zerolog"
@@ -47,12 +42,16 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/concurrency"
-	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/logging"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/storage"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -61,7 +60,7 @@ const (
 	FormatHtml            = "html"
 	FormatMd              = "md"
 	snykCodeTimeoutKey    = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
-	DefaultSnykApiUrl     = "https://snyk.io/api"
+	DefaultSnykApiUrl     = "https://api.snyk.io"
 	DefaultSnykUiUrl      = "https://app.snyk.io"
 	DefaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
 	pathListSeparator     = string(os.PathListSeparator)
@@ -170,12 +169,12 @@ type Config struct {
 	snykCodeApiUrl                   string
 	token                            string
 	deviceId                         string
-	clientCapabilities               lsp.ClientCapabilities
+	clientCapabilities               types.ClientCapabilities
 	path                             string
 	defaultDirs                      []string
 	automaticAuthentication          bool
 	tokenChangeChannels              []chan string
-	filterSeverity                   lsp.SeverityFilter
+	filterSeverity                   types.SeverityFilter
 	trustedFolders                   []string
 	trustedFoldersFeatureEnabled     bool
 	activateSnykCodeSecurity         bool
@@ -185,13 +184,13 @@ type Config struct {
 	runtimeName                      string
 	runtimeVersion                   string
 	automaticScanning                bool
-	authenticationMethod             lsp.AuthenticationMethod
+	authenticationMethod             types.AuthenticationMethod
 	engine                           workflow.Engine
 	enableSnykLearnCodeActions       bool
 	enableSnykOSSQuickFixCodeActions bool
 	enableDeltaFindings              bool
 	logger                           *zerolog.Logger
-	storage                          storage2.StorageWithCallbacks
+	storage                          storage.StorageWithCallbacks
 	m                                sync.Mutex
 	clientProtocolVersion            string
 }
@@ -236,11 +235,11 @@ func New() *Config {
 	c.token = ""
 	c.trustedFoldersFeatureEnabled = true
 	c.automaticScanning = true
-	c.authenticationMethod = lsp.TokenAuthentication
+	c.authenticationMethod = types.TokenAuthentication
 	initWorkFlowEngine(c)
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
-	c.filterSeverity = lsp.DefaultSeverityFilter()
+	c.filterSeverity = types.DefaultSeverityFilter()
 	c.UpdateApiEndpoints(DefaultSnykApiUrl)
 	c.enableSnykLearnCodeActions = true
 	c.clientSettingsFromEnv()
@@ -250,7 +249,7 @@ func New() *Config {
 func initWorkFlowEngine(c *Config) {
 	conf := configuration.NewInMemory()
 	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
-	c.storage = storage2.NewStorage()
+	c.storage = storage.NewStorage()
 	conf.SetStorage(c.storage)
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
@@ -387,7 +386,7 @@ func (c *Config) IntegrationName() string {
 func (c *Config) IntegrationVersion() string {
 	return c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_VERSION)
 }
-func (c *Config) FilterSeverity() lsp.SeverityFilter { return c.filterSeverity }
+func (c *Config) FilterSeverity() types.SeverityFilter { return c.filterSeverity }
 func (c *Config) Token() string {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -457,8 +456,8 @@ func (c *Config) SetSnykContainerEnabled(enabled bool) { c.isSnykContainerEnable
 
 func (c *Config) SetSnykAdvisorEnabled(enabled bool) { c.isSnykAdvisorEnabled.Set(enabled) }
 
-func (c *Config) SetSeverityFilter(severityFilter lsp.SeverityFilter) bool {
-	emptySeverityFilter := lsp.SeverityFilter{}
+func (c *Config) SetSeverityFilter(severityFilter types.SeverityFilter) bool {
+	emptySeverityFilter := types.SeverityFilter{}
 	if severityFilter == emptySeverityFilter {
 		return false
 	}
@@ -524,7 +523,7 @@ func (c *Config) SetLogPath(logPath string) {
 	c.logPath = logPath
 }
 
-func (c *Config) ConfigureLogging(server lsp.Server) {
+func (c *Config) ConfigureLogging(server types.Server) {
 	var logLevel zerolog.Level
 	var err error
 
@@ -707,11 +706,11 @@ func (c *Config) SetDeviceID(deviceId string) {
 	c.deviceId = deviceId
 }
 
-func (c *Config) ClientCapabilities() lsp.ClientCapabilities {
+func (c *Config) ClientCapabilities() types.ClientCapabilities {
 	return c.clientCapabilities
 }
 
-func (c *Config) SetClientCapabilities(capabilities lsp.ClientCapabilities) {
+func (c *Config) SetClientCapabilities(capabilities types.ClientCapabilities) {
 	c.clientCapabilities = capabilities
 }
 
@@ -900,7 +899,7 @@ func (c *Config) TokenAsOAuthToken() (oauth2.Token, error) {
 	return oauthToken, nil
 }
 
-func (c *Config) Storage() storage2.StorageWithCallbacks {
+func (c *Config) Storage() storage.StorageWithCallbacks {
 	return c.storage
 }
 
@@ -934,10 +933,10 @@ func (c *Config) SetClientProtocolVersion(requiredProtocolVersion string) {
 	c.clientProtocolVersion = requiredProtocolVersion
 }
 
-func (c *Config) AuthenticationMethod() lsp.AuthenticationMethod {
+func (c *Config) AuthenticationMethod() types.AuthenticationMethod {
 	return c.authenticationMethod
 }
 
-func (c *Config) SetAuthenticationMethod(authMethod lsp.AuthenticationMethod) {
+func (c *Config) SetAuthenticationMethod(authMethod types.AuthenticationMethod) {
 	c.authenticationMethod = authMethod
 }

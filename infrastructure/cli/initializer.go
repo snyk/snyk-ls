@@ -28,9 +28,9 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type Initializer struct {
@@ -80,7 +80,7 @@ func (i *Initializer) Init() error {
 		if i.isOutdatedCli() {
 			go i.updateCli()
 		}
-		i.notifier.Send(lsp.SnykIsAvailableCli{CliPath: cliPathInConfig()})
+		i.notifier.Send(types.SnykIsAvailableCli{CliPath: cliPathInConfig()})
 		return nil
 	}
 
@@ -135,7 +135,7 @@ func (i *Initializer) installCli() {
 	}
 
 	if cliPath != "" {
-		i.notifier.Send(lsp.SnykIsAvailableCli{CliPath: cliPath})
+		i.notifier.Send(types.SnykIsAvailableCli{CliPath: cliPath})
 		logger.Info().Str("method", "installCli").Str("snyk", cliPath).Msg("Snyk CLI found.")
 	} else {
 		i.notifier.SendShowMessage(sglsp.Warning, "Could not find, nor install Snyk CLI")

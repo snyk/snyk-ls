@@ -15,7 +15,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -54,7 +53,7 @@ func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirty
 	}
 }
 
-func (c *CodeActionsService) GetCodeActions(params lsp.CodeActionParams) []lsp.CodeAction {
+func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []types.CodeAction {
 	c.logger.Info().Msg("Received code action request")
 	if c.fileWatcher.IsDirty(params.TextDocument.URI) {
 		c.logger.Info().Msg("File is dirty, skipping code actions")
@@ -83,7 +82,7 @@ func (c *CodeActionsService) GetCodeActions(params lsp.CodeActionParams) []lsp.C
 	return actions
 }
 
-func (c *CodeActionsService) ResolveCodeAction(action lsp.CodeAction, server lsp.Server) (lsp.CodeAction, error) {
+func (c *CodeActionsService) ResolveCodeAction(action types.CodeAction, server types.Server) (types.CodeAction, error) {
 	c.logger.Info().Msg("Received code action resolve request")
 	t := time.Now()
 
@@ -93,7 +92,7 @@ func (c *CodeActionsService) ResolveCodeAction(action lsp.CodeAction, server lsp
 	}
 
 	if action.Data == nil {
-		return lsp.CodeAction{}, missingKeyError{}
+		return types.CodeAction{}, missingKeyError{}
 	}
 
 	key := uuid.UUID(*action.Data)
@@ -101,7 +100,7 @@ func (c *CodeActionsService) ResolveCodeAction(action lsp.CodeAction, server lsp
 	// only delete cache entry after it's been resolved
 	defer delete(c.actionsCache, key)
 	if !found {
-		return lsp.CodeAction{}, errors.New(fmt.Sprint("could not find cached action for uuid ", key))
+		return types.CodeAction{}, errors.New(fmt.Sprint("could not find cached action for uuid ", key))
 	}
 
 	edit := (*cached.action.DeferredEdit)()
@@ -115,7 +114,7 @@ func (c *CodeActionsService) ResolveCodeAction(action lsp.CodeAction, server lsp
 	return codeAction, nil
 }
 
-func (c *CodeActionsService) handleCommand(action lsp.CodeAction, server lsp.Server) (lsp.CodeAction, error) {
+func (c *CodeActionsService) handleCommand(action types.CodeAction, server types.Server) (types.CodeAction, error) {
 	c.logger.Info().Str("method", "codeaction.handleCommand").Msgf("handling command %s", action.Command.Command)
 	cmd := types.CommandData{
 		Title:     action.Command.Title,
@@ -124,9 +123,9 @@ func (c *CodeActionsService) handleCommand(action lsp.CodeAction, server lsp.Ser
 	}
 	_, err := command.Service().ExecuteCommandData(context.Background(), cmd, server)
 	if err != nil {
-		return lsp.CodeAction{}, err
+		return types.CodeAction{}, err
 	}
-	return lsp.CodeAction{}, nil
+	return types.CodeAction{}, nil
 }
 
 type missingKeyError struct{}

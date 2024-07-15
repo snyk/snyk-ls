@@ -5,7 +5,7 @@ import (
 
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -50,13 +50,13 @@ func (n *notifierImpl) SendError(err error) {
 }
 
 func (n *notifierImpl) SendErrorDiagnostic(path string, err error) {
-	n.Send(lsp.PublishDiagnosticsParams{
+	n.Send(types.PublishDiagnosticsParams{
 		URI: uri.PathToUri(path),
-		Diagnostics: []lsp.Diagnostic{{
+		Diagnostics: []types.Diagnostic{{
 			Range:           sglsp.Range{},
-			Severity:        lsp.DiagnosticsSeverityWarning,
+			Severity:        types.DiagnosticsSeverityWarning,
 			Code:            "Snyk Error",
-			CodeDescription: lsp.CodeDescription{Href: "https://snyk.io/user-hub"},
+			CodeDescription: types.CodeDescription{Href: "https://snyk.io/user-hub"},
 			Message:         err.Error(),
 		}},
 	})

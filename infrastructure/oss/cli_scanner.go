@@ -40,6 +40,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/scans"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -145,12 +146,8 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, path string, _ string) (
 	}
 	return cliScanner.scanInternal(ctx, path, cliScanner.prepareScanCommand)
 }
-func (cliScanner *CLIScanner) scanInternal(
-	ctx context.Context,
-	path string,
-	commandFunc func(args []string, parameterBlacklist map[string]bool) []string,
-) (issues []snyk.Issue,
-	err error) {
+
+func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, commandFunc func(args []string, parameterBlacklist map[string]bool) []string) (issues []snyk.Issue, errorInfo error) {
 	method := "cliScanner.Scan"
 	logger := cliScanner.config.Logger().With().Str("method", method).Logger()
 
@@ -171,8 +168,8 @@ func (cliScanner *CLIScanner) scanInternal(
 	p.BeginUnquantifiableLength("Scanning for Snyk Open Source issues", path)
 	defer p.EndWithMessage("Snyk Open Source scan completed.")
 
-	path, err = filepath.Abs(path)
-	if err != nil {
+	path, err := filepath.Abs(path)
+	if errorInfo != nil {
 		logger.Err(err).Str("method", method).
 			Msg("Error while extracting file absolutePath")
 	}
@@ -198,12 +195,13 @@ func (cliScanner *CLIScanner) scanInternal(
 	cliScanner.mutex.Unlock()
 
 	cmd := commandFunc([]string{workDir}, map[string]bool{"": true})
-	res, err := cliScanner.cli.Execute(ctx, cmd, workDir)
+	res, scanErr := cliScanner.cli.Execute(ctx, cmd, workDir)
 	noCancellation := ctx.Err() == nil
-	if err != nil {
+	if scanErr != nil {
 		if noCancellation {
-			if cliScanner.handleError(path, err, res, cmd) {
-				return nil, err
+			cliFailed, handledErr := cliScanner.handleError(path, scanErr, res, cmd)
+			if cliFailed {
+				return nil, handledErr
 			}
 		} else { // If scan was canceled, return empty results
 			return []snyk.Issue{}, nil
@@ -286,14 +284,14 @@ func (cliScanner *CLIScanner) unmarshallOssJson(res []byte) (scanResults []scanR
 	if strings.HasPrefix(output, "[") {
 		err = json.Unmarshal(res, &scanResults)
 		if err != nil {
-			err = errors.Join(err, fmt.Errorf("Couldn't unmarshal CLI response. Input: %s", output))
+			err = errors.Join(err, fmt.Errorf("couldn't unmarshal CLI response. Input: %s", output))
 			return nil, err
 		}
 	} else {
 		var result scanResult
 		err = json.Unmarshal(res, &result)
 		if err != nil {
-			err = errors.Join(err, fmt.Errorf("Couldn't unmarshal CLI response. Input: %s", output))
+			err = errors.Join(err, fmt.Errorf("couldn't unmarshal CLI response. Input: %s", output))
 			return nil, err
 		}
 		scanResults = append(scanResults, result)
@@ -302,7 +300,16 @@ func (cliScanner *CLIScanner) unmarshallOssJson(res []byte) (scanResults []scanR
 }
 
 // Returns true if CLI run failed, false otherwise
-func (cliScanner *CLIScanner) handleError(path string, err error, res []byte, cmd []string) bool {
+func (cliScanner *CLIScanner) handleError(path string, err error, res []byte, cmd []string) (bool, error) {
+	cliError := &types.CliError{}
+	unmarshalErr := json.Unmarshal(res, cliError)
+	if unmarshalErr != nil {
+		cliError.ErrorMessage = string(res)
+		cliError.Command = fmt.Sprintf("%v", cmd)
+	}
+
+	logger := cliScanner.config.Logger().With().Str("method", "cliScanner.Scan").Str("output", cliError.ErrorMessage).Logger()
+
 	var errorType *exec.ExitError
 	switch {
 	case errors.As(err, &errorType):
@@ -315,32 +322,25 @@ func (cliScanner *CLIScanner) handleError(path string, err error, res []byte, cm
 		//  3: failure, no supported projects detected
 		var exitError *exec.ExitError
 		errors.As(err, &exitError)
-		errorOutput := string(res) + "\n\n\nSTDERR:\n" + string(exitError.Stderr)
-		newError := fmt.Errorf("Snyk CLI error returned status code > 0 for command %v. Output: %s", cmd, errorOutput)
-		newError = errors.Join(newError, err)
 		switch errorType.ExitCode() {
 		case 1:
-			return false
+			return false, nil
 		case 2:
-			cliScanner.config.Logger().Err(newError).Str("method", "cliScanner.Scan").Str("output",
-				errorOutput).Msg("Error while calling Snyk CLI")
+			logger.Err(err).Msg("Error while calling Snyk CLI")
 			// we want a user notification, but don't want to send it to sentry
-			cliScanner.notifier.SendErrorDiagnostic(path, newError)
-			return true
+			cliScanner.notifier.SendErrorDiagnostic(path, err)
 		case 3:
-			cliScanner.config.Logger().Debug().Str("method", "cliScanner.Scan").Msg("no supported projects/files detected.")
-			return true
+			logger.Debug().Msg("no supported projects/files detected.")
 		default:
-			cliScanner.config.Logger().Err(newError).Str("method", "cliScanner.Scan").Msg("Error while calling Snyk CLI")
-			cliScanner.errorReporter.CaptureErrorAndReportAsIssue(path, newError)
+			logger.Err(err).Msg("Error while calling Snyk CLI")
+			cliScanner.errorReporter.CaptureErrorAndReportAsIssue(path, err)
 		}
 	default:
 		if !errors.Is(err, context.Canceled) {
 			cliScanner.errorReporter.CaptureErrorAndReportAsIssue(path, err)
 		}
-		return true
 	}
-	return true
+	return true, cliError
 }
 
 func (cliScanner *CLIScanner) determineTargetFile(displayTargetFile string) string {

@@ -31,14 +31,15 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
+	"github.com/snyk/snyk-ls/internal/types"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-var sampleSettings = lsp.Settings{
+var sampleSettings = types.Settings{
 	ActivateSnykOpenSource:     "false",
 	ActivateSnykCode:           "false",
 	ActivateSnykIac:            "false",
@@ -73,7 +74,7 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 
 	t.Setenv("a", "")
 	t.Setenv("c", "")
-	params := lsp.DidChangeConfigurationParams{Settings: sampleSettings}
+	params := types.DidChangeConfigurationParams{Settings: sampleSettings}
 	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
 	if err != nil {
 		t.Fatal(err, "error calling server")
@@ -101,9 +102,9 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	loc, _ := setupCustomServer(t, callBackMock)
 	c := config.CurrentConfig()
 
-	_, err := loc.Client.Call(ctx, "initialize", lsp.InitializeParams{
-		Capabilities: lsp.ClientCapabilities{
-			Workspace: lsp.WorkspaceClientCapabilities{
+	_, err := loc.Client.Call(ctx, "initialize", types.InitializeParams{
+		Capabilities: types.ClientCapabilities{
+			Workspace: types.WorkspaceClientCapabilities{
 				Configuration: true,
 			},
 		},
@@ -112,7 +113,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 		t.Fatal(err, "error calling server")
 	}
 
-	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{}}
+	params := types.DidChangeConfigurationParams{Settings: types.Settings{}}
 	_, err = loc.Client.Call(context.Background(), "workspace/didChangeConfiguration", params)
 	if err != nil {
 		t.Fatal(err, "error calling server")
@@ -136,7 +137,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 
 func callBackMock(_ context.Context, request *jrpc2.Request) (any, error) {
 	if request.Method() == "workspace/configuration" {
-		return []lsp.Settings{sampleSettings}, nil
+		return []types.Settings{sampleSettings}, nil
 	}
 	return nil, nil
 }
@@ -146,7 +147,7 @@ func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
 
 	loc, jsonRPCRecorder := setupCustomServer(t, callBackMock)
 
-	params := lsp.DidChangeConfigurationParams{Settings: lsp.Settings{}}
+	params := types.DidChangeConfigurationParams{Settings: types.Settings{}}
 	var updated = true
 	err := loc.Client.CallResult(context.Background(), "workspace/didChangeConfiguration", params, &updated)
 	if err != nil {
@@ -169,12 +170,12 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("All settings are updated", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		settings := lsp.Settings{
+		settings := types.Settings{
 			ActivateSnykOpenSource:      "false",
 			ActivateSnykCode:            "false",
 			ActivateSnykIac:             "false",
 			Insecure:                    "true",
-			Endpoint:                    "https://snyk.io/api",
+			Endpoint:                    "https://api.snyk.io",
 			AdditionalParams:            "--all-projects -d",
 			AdditionalEnv:               "a=b;c=d",
 			Path:                        "addPath",
@@ -184,14 +185,14 @@ func Test_UpdateSettings(t *testing.T) {
 			ManageBinariesAutomatically: "false",
 			CliPath:                     "C:\\Users\\CliPath\\snyk-ls.exe",
 			Token:                       "a fancy token",
-			FilterSeverity:              lsp.DefaultSeverityFilter(),
+			FilterSeverity:              types.DefaultSeverityFilter(),
 			TrustedFolders:              []string{"trustedPath1", "trustedPath2"},
 			OsPlatform:                  "windows",
 			OsArch:                      "amd64",
 			RuntimeName:                 "java",
 			RuntimeVersion:              "1.8.0_275",
 			ScanningMode:                "manual",
-			AuthenticationMethod:        lsp.OAuthAuthentication,
+			AuthenticationMethod:        types.OAuthAuthentication,
 			SnykCodeApi:                 sampleSettings.SnykCodeApi,
 		}
 
@@ -202,7 +203,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, false, c.IsSnykIacEnabled())
 		assert.Equal(t, true, c.CliSettings().Insecure)
 		assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalOssParameters)
-		assert.Equal(t, "https://snyk.io/api", c.SnykApi())
+		assert.Equal(t, "https://api.snyk.io", c.SnykApi())
 		assert.Equal(t, "b", os.Getenv("a"))
 		assert.Equal(t, "d", os.Getenv("c"))
 		assert.True(t, strings.HasPrefix(os.Getenv("PATH"), "addPath"+string(os.PathListSeparator)))
@@ -211,7 +212,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.False(t, c.ManageBinariesAutomatically())
 		assert.Equal(t, "C:\\Users\\CliPath\\snyk-ls.exe", c.CliSettings().Path())
 		assert.Equal(t, "a fancy token", c.Token())
-		assert.Equal(t, lsp.DefaultSeverityFilter(), c.FilterSeverity())
+		assert.Equal(t, types.DefaultSeverityFilter(), c.FilterSeverity())
 		assert.Subset(t, []string{"trustedPath1", "trustedPath2"}, c.TrustedFolders())
 		assert.Equal(t, settings.OsPlatform, c.OsPlatform())
 		assert.Equal(t, settings.OsArch, c.OsArch())
@@ -224,7 +225,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("empty snyk code api is ignored and default is used", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, lsp.Settings{})
+		UpdateSettings(c, types.Settings{})
 
 		assert.Equal(t, config.DefaultDeeproxyApiUrl, c.SnykCodeApi())
 	})
@@ -233,7 +234,7 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		c.SetOrganization(expectedOrgId)
 
-		UpdateSettings(c, lsp.Settings{Organization: " "})
+		UpdateSettings(c, types.Settings{Organization: " "})
 
 		assert.Equal(t, expectedOrgId, c.Organization())
 	})
@@ -241,7 +242,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("incomplete env vars", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, lsp.Settings{AdditionalEnv: "a="})
+		UpdateSettings(c, types.Settings{AdditionalEnv: "a="})
 
 		assert.Empty(t, os.Getenv("a"))
 	})
@@ -250,7 +251,7 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		varCount := len(os.Environ())
 
-		UpdateSettings(c, lsp.Settings{AdditionalEnv: " "})
+		UpdateSettings(c, types.Settings{AdditionalEnv: " "})
 
 		assert.Equal(t, varCount, len(os.Environ()))
 	})
@@ -258,7 +259,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("broken env variables", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, lsp.Settings{AdditionalEnv: "a=; b"})
+		UpdateSettings(c, types.Settings{AdditionalEnv: "a=; b"})
 
 		assert.Empty(t, os.Getenv("a"))
 		assert.Empty(t, os.Getenv("b"))
@@ -267,7 +268,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("trusted folders", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, lsp.Settings{TrustedFolders: []string{"/a/b", "/b/c"}})
+		UpdateSettings(c, types.Settings{TrustedFolders: []string{"/a/b", "/b/c"}})
 
 		assert.Contains(t, c.TrustedFolders(), "/a/b")
 		assert.Contains(t, c.TrustedFolders(), "/b/c")
@@ -276,14 +277,14 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("manage binaries automatically", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		t.Run("true", func(t *testing.T) {
-			UpdateSettings(c, lsp.Settings{
+			UpdateSettings(c, types.Settings{
 				ManageBinariesAutomatically: "true",
 			})
 
 			assert.True(t, config.CurrentConfig().ManageBinariesAutomatically())
 		})
 		t.Run("false", func(t *testing.T) {
-			UpdateSettings(c, lsp.Settings{
+			UpdateSettings(c, types.Settings{
 				ManageBinariesAutomatically: "false",
 			})
 
@@ -291,11 +292,11 @@ func Test_UpdateSettings(t *testing.T) {
 		})
 
 		t.Run("invalid value does not update", func(t *testing.T) {
-			UpdateSettings(c, lsp.Settings{
+			UpdateSettings(c, types.Settings{
 				ManageBinariesAutomatically: "true",
 			})
 
-			UpdateSettings(c, lsp.Settings{
+			UpdateSettings(c, types.Settings{
 				ManageBinariesAutomatically: "dog",
 			})
 
@@ -306,47 +307,47 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("activateSnykCodeSecurity is passed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, lsp.Settings{ActivateSnykCodeSecurity: "true"})
+		UpdateSettings(c, types.Settings{ActivateSnykCodeSecurity: "true"})
 
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 	})
 	t.Run("activateSnykCodeSecurity is not passed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, lsp.Settings{})
+		UpdateSettings(c, types.Settings{})
 
 		assert.Equal(t, false, c.IsSnykCodeSecurityEnabled())
 
 		c.EnableSnykCodeSecurity(true)
 
-		UpdateSettings(c, lsp.Settings{})
+		UpdateSettings(c, types.Settings{})
 
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 	})
 	t.Run("activateSnykCodeQuality is passed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, lsp.Settings{ActivateSnykCodeQuality: "true"})
+		UpdateSettings(c, types.Settings{ActivateSnykCodeQuality: "true"})
 
 		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
 	})
 	t.Run("activateSnykCodeQuality is not passed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, lsp.Settings{})
+		UpdateSettings(c, types.Settings{})
 
 		assert.Equal(t, false, c.IsSnykCodeQualityEnabled())
 
 		c.EnableSnykCodeQuality(true)
 
-		UpdateSettings(c, lsp.Settings{})
+		UpdateSettings(c, types.Settings{})
 
 		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
 	})
 	t.Run("activateSnykCode sets SnykCodeQuality and SnykCodeSecurity", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, lsp.Settings{
+		UpdateSettings(c, types.Settings{
 			ActivateSnykCode: "true",
 		})
 
@@ -358,8 +359,8 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("severity filter", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		t.Run("filtering gets passed", func(t *testing.T) {
-			mixedSeverityFilter := lsp.NewSeverityFilter(true, false, true, false)
-			UpdateSettings(c, lsp.Settings{FilterSeverity: mixedSeverityFilter})
+			mixedSeverityFilter := types.NewSeverityFilter(true, false, true, false)
+			UpdateSettings(c, types.Settings{FilterSeverity: mixedSeverityFilter})
 
 			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
 		})
@@ -373,7 +374,7 @@ func Test_InitializeSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		deviceId := "test-device-id"
 
-		InitializeSettings(c, lsp.Settings{DeviceId: deviceId})
+		InitializeSettings(c, types.Settings{DeviceId: deviceId})
 
 		assert.Equal(t, deviceId, c.DeviceID())
 	})
@@ -382,7 +383,7 @@ func Test_InitializeSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		deviceId := c.DeviceID()
 
-		InitializeSettings(c, lsp.Settings{})
+		InitializeSettings(c, types.Settings{})
 
 		assert.Equal(t, deviceId, c.DeviceID())
 	})
@@ -390,40 +391,40 @@ func Test_InitializeSettings(t *testing.T) {
 	t.Run("activateSnykCodeSecurity is passed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		InitializeSettings(c, lsp.Settings{ActivateSnykCodeSecurity: "true"})
+		InitializeSettings(c, types.Settings{ActivateSnykCodeSecurity: "true"})
 
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 	})
 	t.Run("activateSnykCodeSecurity is not passed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		InitializeSettings(c, lsp.Settings{})
+		InitializeSettings(c, types.Settings{})
 
 		assert.Equal(t, false, c.IsSnykCodeSecurityEnabled())
 
 		c.EnableSnykCodeSecurity(true)
 
-		InitializeSettings(c, lsp.Settings{})
+		InitializeSettings(c, types.Settings{})
 
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 	})
 	t.Run("activateSnykCodeQuality is passed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		InitializeSettings(c, lsp.Settings{ActivateSnykCodeQuality: "true"})
+		InitializeSettings(c, types.Settings{ActivateSnykCodeQuality: "true"})
 
 		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
 	})
 	t.Run("activateSnykCodeQuality is not passed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		InitializeSettings(c, lsp.Settings{})
+		InitializeSettings(c, types.Settings{})
 
 		assert.Equal(t, false, c.IsSnykCodeQualityEnabled())
 
 		c.EnableSnykCodeQuality(true)
 
-		InitializeSettings(c, lsp.Settings{})
+		InitializeSettings(c, types.Settings{})
 
 		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
 	})
@@ -439,16 +440,16 @@ func Test_InitializeSettings(t *testing.T) {
 		t.Setenv(caseSensitivePathKey, "something_meaningful")
 
 		// update path to hold a custom value
-		UpdateSettings(c, lsp.Settings{Path: first})
+		UpdateSettings(c, types.Settings{Path: first})
 		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), first+string(os.PathListSeparator)))
 
 		// update path to hold another value
-		UpdateSettings(c, lsp.Settings{Path: second})
+		UpdateSettings(c, types.Settings{Path: second})
 		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), second+string(os.PathListSeparator)))
 		assert.False(t, strings.Contains(os.Getenv(upperCasePathKey), first))
 
 		// reset path with non-empty settings
-		UpdateSettings(c, lsp.Settings{Path: "", AuthenticationMethod: "token"})
+		UpdateSettings(c, types.Settings{Path: "", AuthenticationMethod: "token"})
 		assert.False(t, strings.Contains(os.Getenv(upperCasePathKey), second))
 
 		assert.True(t, keyFoundInEnv(upperCasePathKey))

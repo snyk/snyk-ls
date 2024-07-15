@@ -25,10 +25,10 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var (
@@ -263,14 +263,14 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
 
 				scanSpan := sc.instrumentor.StartSpan(span.Context(), "scan")
-				foundIssues, err := s.Scan(scanSpan.Context(), path, folderPath)
+				foundIssues, scanError := s.Scan(scanSpan.Context(), path, folderPath)
 				sc.instrumentor.Finish(scanSpan)
 
 				// now process
 				data := ScanData{
 					Product:           s.Product(),
 					Issues:            foundIssues,
-					Err:               err,
+					Err:               scanError,
 					DurationMs:        time.Duration(scanSpan.GetDurationMs()),
 					TimestampFinished: time.Now().UTC(),
 					Path:              folderPath,
@@ -285,7 +285,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	logger.Debug().Msgf("All product scanners started for %s", path)
 	waitGroup.Wait()
 	c.Logger().Debug().Msgf("All product scanners finished for %s", path)
-	sc.notifier.Send(lsp.InlineValueRefresh{})
-	sc.notifier.Send(lsp.CodeLensRefresh{})
+	sc.notifier.Send(types.InlineValueRefresh{})
+	sc.notifier.Send(types.CodeLensRefresh{})
 	// TODO: handle learn actions centrally instead of in each scanner
 }

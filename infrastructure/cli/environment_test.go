@@ -26,15 +26,15 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestAddConfigValuesToEnv(t *testing.T) {
 	t.Run("Adds legacy token to env", func(t *testing.T) {
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
-		c.SetAuthenticationMethod(lsp.TokenAuthentication)
+		c.SetAuthenticationMethod(types.TokenAuthentication)
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
@@ -51,7 +51,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
 		c.SetOrganization("testOrg")
-		c.UpdateApiEndpoints("https://app.snyk.io/api")
+		c.UpdateApiEndpoints("https://api.eu.snyk.io")
 		c.SetIntegrationName(expectedIntegrationName)
 		c.SetIntegrationVersion(expectedIntegrationVersion)
 		c.SetIdeVersion(expectedIdeVersion)
@@ -68,7 +68,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
-		assert.Contains(t, updatedEnv, ApiEnvVar+"=https://app.snyk.io/api")
+		assert.Contains(t, updatedEnv, ApiEnvVar+"=https://api.eu.snyk.io")
 		token, err := c.TokenAsOAuthToken()
 		require.NoError(t, err)
 		assert.Contains(t, updatedEnv, SnykOauthTokenEnvVar+"="+token.AccessToken)

@@ -21,8 +21,8 @@ import (
 	"github.com/rs/zerolog/log"
 
 	codeClientScan "github.com/snyk/code-client-go/scan"
+	"github.com/snyk/snyk-ls/internal/types"
 
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/progress"
 )
 
@@ -38,13 +38,13 @@ func (t trackerFactory) GenerateTracker() codeClientScan.Tracker {
 }
 
 type tracker struct {
-	token         lsp.ProgressToken
+	token         types.ProgressToken
 	finished      bool
-	channel       chan lsp.ProgressParams
-	cancelChannel chan lsp.ProgressToken
+	channel       chan types.ProgressParams
+	cancelChannel chan types.ProgressToken
 }
 
-func newCodeTracker(channel chan lsp.ProgressParams, cancelChannel chan lsp.ProgressToken) codeClientScan.Tracker {
+func newCodeTracker(channel chan types.ProgressParams, cancelChannel chan types.ProgressToken) codeClientScan.Tracker {
 	return &tracker{
 		channel:       channel,
 		cancelChannel: cancelChannel,
@@ -53,17 +53,17 @@ func newCodeTracker(channel chan lsp.ProgressParams, cancelChannel chan lsp.Prog
 }
 
 func (t *tracker) Begin(title, message string) {
-	t.token = lsp.ProgressToken(uuid.New().String())
+	t.token = types.ProgressToken(uuid.New().String())
 
-	t.send(lsp.ProgressParams{
+	t.send(types.ProgressParams{
 		Token: t.token,
 		Value: nil,
 	})
 
-	t.send(lsp.ProgressParams{
+	t.send(types.ProgressParams{
 		Token: t.token,
-		Value: lsp.WorkDoneProgressBegin{
-			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: lsp.WorkDoneProgressBeginKind},
+		Value: types.WorkDoneProgressBegin{
+			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressBeginKind},
 			Title:                title,
 			Message:              message,
 			Cancellable:          false,
@@ -77,16 +77,16 @@ func (t *tracker) End(message string) {
 		panic("Called end progress twice. This breaks LSP in Eclipse. Fix me now and avoid headaches later")
 	}
 	t.finished = true
-	t.send(lsp.ProgressParams{
+	t.send(types.ProgressParams{
 		Token: t.token,
-		Value: lsp.WorkDoneProgressEnd{
-			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: lsp.WorkDoneProgressEndKind},
+		Value: types.WorkDoneProgressEnd{
+			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressEndKind},
 			Message:              message,
 		},
 	})
 }
 
-func (t *tracker) send(progress lsp.ProgressParams) {
+func (t *tracker) send(progress types.ProgressParams) {
 	if progress.Token == "" {
 		log.Error().Str("method", "send").Msg("progress token must be set")
 	}

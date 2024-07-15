@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited
+ * © 2023-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,28 +14,14 @@
  * limitations under the License.
  */
 
-package command
+package types
 
-import (
-	"context"
+import "github.com/snyk/snyk-ls/internal/data_structure"
 
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/internal/types"
-)
+type MessageAction string
 
-type workspaceScanCommand struct {
-	command types.CommandData
-	srv     types.Server
-}
-
-func (cmd *workspaceScanCommand) Command() types.CommandData {
-	return cmd.command
-}
-
-func (cmd *workspaceScanCommand) Execute(ctx context.Context) (any, error) {
-	w := workspace.Get()
-	w.Clear()
-	w.ScanWorkspace(ctx)
-	HandleUntrustedFolders(ctx, cmd.srv)
-	return nil, nil
+type ShowMessageRequest struct {
+	Message string                                                 `json:"message"`
+	Type    MessageType                                            `json:"type"`
+	Actions *data_structure.OrderedMap[MessageAction, CommandData] `json:"actions"`
 }

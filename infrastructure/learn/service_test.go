@@ -31,7 +31,7 @@ import (
 func Test_GetLearnEndpoint(t *testing.T) {
 	testutil.UnitTest(t)
 	c := config.CurrentConfig()
-	c.UpdateApiEndpoints("https://snyk.io/api")
+	c.UpdateApiEndpoints("https://api.snyk.io")
 	cut := New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient, errorreporting.NewTestErrorReporter())
 
 	endpoint, err := cut.LearnEndpoint(c)
@@ -60,7 +60,7 @@ func getRealCodeLookupParams() LessonLookupParams {
 
 func Test_GetLesson(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
-	c.UpdateApiEndpoints("https://snyk.io/api")
+	c.UpdateApiEndpoints("https://api.snyk.io")
 	cut := New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient, errorreporting.NewTestErrorReporter())
 	t.Run("OSS vulnerability - lesson returned", func(t *testing.T) {
 		params := getRealOSSLookupParams()

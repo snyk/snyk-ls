@@ -27,7 +27,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -167,7 +166,7 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 
 	// Verify workspace edit is sent to the client
 	workspaceEdit := converter.ToWorkspaceEdit(mockEdit)
-	assert.Equal(t, []any{lsp.ApplyWorkspaceEditParams{Label: "Snyk Code fix", Edit: workspaceEdit}, lsp.CodeLensRefresh{}}, mockNotifier.SentMessages())
+	assert.Equal(t, []any{types.ApplyWorkspaceEditParams{Label: "Snyk Code fix", Edit: workspaceEdit}, types.CodeLensRefresh{}}, mockNotifier.SentMessages())
 }
 
 func Test_fixCodeIssue_noEdit(t *testing.T) {

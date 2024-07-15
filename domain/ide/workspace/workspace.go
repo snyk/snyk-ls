@@ -24,10 +24,10 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -173,7 +173,7 @@ func (w *Workspace) ScanWorkspace(ctx context.Context) {
 
 // ChangeWorkspaceFolders clears the "Removed" folders, adds the "New" folders,
 // and starts an automatic scan if auto-scans are enabled.
-func (w *Workspace) ChangeWorkspaceFolders(ctx context.Context, params lsp.DidChangeWorkspaceFoldersParams) {
+func (w *Workspace) ChangeWorkspaceFolders(ctx context.Context, params types.DidChangeWorkspaceFoldersParams) {
 	for _, folder := range params.Event.Removed {
 		w.RemoveFolder(uri.PathFromUri(folder.Uri))
 	}
@@ -205,7 +205,7 @@ func (w *Workspace) TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted 
 		currentConfig.SetTrustedFolders(trustedFolderPaths)
 		go f.ScanFolder(ctx)
 	}
-	w.notifier.Send(lsp.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
+	w.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
 }
 
 func (w *Workspace) GetFolderTrust() (trusted []*Folder, untrusted []*Folder) {

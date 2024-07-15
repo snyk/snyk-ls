@@ -21,18 +21,18 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestBeginProgress(t *testing.T) {
-	channel := make(chan lsp.ProgressParams, 2)
+	channel := make(chan types.ProgressParams, 2)
 	progress := NewTestTracker(channel, nil)
 
 	progress.BeginWithMessage("title", "message")
 
 	assert.Equal(
 		t,
-		lsp.ProgressParams{
+		types.ProgressParams{
 			Token: progress.token,
 			Value: nil,
 		},
@@ -41,10 +41,10 @@ func TestBeginProgress(t *testing.T) {
 
 	assert.Equal(
 		t,
-		lsp.ProgressParams{
+		types.ProgressParams{
 			Token: progress.token,
-			Value: lsp.WorkDoneProgressBegin{
-				WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "begin"},
+			Value: types.WorkDoneProgressBegin{
+				WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: "begin"},
 				Title:                "title",
 				Cancellable:          true,
 				Message:              "message",
@@ -56,52 +56,52 @@ func TestBeginProgress(t *testing.T) {
 }
 
 func TestReportProgress(t *testing.T) {
-	output := lsp.ProgressParams{
+	output := types.ProgressParams{
 		Token: "token",
-		Value: lsp.WorkDoneProgressReport{
-			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "report"},
+		Value: types.WorkDoneProgressReport{
+			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: "report"},
 			Percentage:           10,
 		},
 	}
-	channel := make(chan lsp.ProgressParams, 2)
+	channel := make(chan types.ProgressParams, 2)
 	progress := NewTestTracker(channel, nil)
 
-	workProgressReport := output.Value.(lsp.WorkDoneProgressReport)
+	workProgressReport := output.Value.(types.WorkDoneProgressReport)
 	progress.Report(workProgressReport.Percentage)
 
 	assert.Equal(t, output, <-channel)
 }
 
 func TestEndProgress(t *testing.T) {
-	output := lsp.ProgressParams{
+	output := types.ProgressParams{
 		Token: "token",
-		Value: lsp.WorkDoneProgressEnd{
-			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "end"},
+		Value: types.WorkDoneProgressEnd{
+			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: "end"},
 			Message:              "end message",
 		},
 	}
 
-	channel := make(chan lsp.ProgressParams, 2)
+	channel := make(chan types.ProgressParams, 2)
 	progress := NewTestTracker(channel, nil)
 
-	workProgressEnd := output.Value.(lsp.WorkDoneProgressEnd)
+	workProgressEnd := output.Value.(types.WorkDoneProgressEnd)
 	progress.EndWithMessage(workProgressEnd.Message)
 
 	assert.Equal(t, output, <-channel)
 }
 
 func TestEndProgressTwice(t *testing.T) {
-	output := lsp.ProgressParams{
-		Value: lsp.WorkDoneProgressEnd{
-			WorkDoneProgressKind: lsp.WorkDoneProgressKind{Kind: "end"},
+	output := types.ProgressParams{
+		Value: types.WorkDoneProgressEnd{
+			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: "end"},
 			Message:              "end message",
 		},
 	}
 
-	channel := make(chan lsp.ProgressParams, 2)
+	channel := make(chan types.ProgressParams, 2)
 	progress := NewTestTracker(channel, nil)
 
-	workProgressEnd := output.Value.(lsp.WorkDoneProgressEnd)
+	workProgressEnd := output.Value.(types.WorkDoneProgressEnd)
 	progress.EndWithMessage(workProgressEnd.Message)
 
 	assert.Panics(t, func() {

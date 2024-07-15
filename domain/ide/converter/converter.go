@@ -24,7 +24,6 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -43,7 +42,7 @@ func FromPosition(pos sglsp.Position) snyk.Position {
 	}
 }
 
-func ToCodeActions(issues []snyk.Issue) (actions []lsp.CodeAction) {
+func ToCodeActions(issues []snyk.Issue) (actions []types.CodeAction) {
 	for _, issue := range issues {
 		for _, action := range issue.CodeActions {
 			actions = append(actions, ToCodeAction(issue, action))
@@ -52,15 +51,15 @@ func ToCodeActions(issues []snyk.Issue) (actions []lsp.CodeAction) {
 	return actions
 }
 
-func ToCodeAction(issue snyk.Issue, action snyk.CodeAction) lsp.CodeAction {
-	var id *lsp.CodeActionData = nil
+func ToCodeAction(issue snyk.Issue, action snyk.CodeAction) types.CodeAction {
+	var id *types.CodeActionData = nil
 	if action.Uuid != nil {
-		i := lsp.CodeActionData(*action.Uuid)
+		i := types.CodeActionData(*action.Uuid)
 		id = &i
 	}
-	return lsp.CodeAction{
+	return types.CodeAction{
 		Title:       action.Title,
-		Kind:        lsp.QuickFix,
+		Kind:        types.QuickFix,
 		Diagnostics: ToDiagnostics([]snyk.Issue{issue}),
 		IsPreferred: action.IsPreferred,
 		Edit:        ToWorkspaceEdit(action.Edit),
@@ -69,14 +68,14 @@ func ToCodeAction(issue snyk.Issue, action snyk.CodeAction) lsp.CodeAction {
 	}
 }
 
-func ToInlineValue(inlineValue snyk.InlineValue) lsp.InlineValue {
-	return lsp.InlineValue{
+func ToInlineValue(inlineValue snyk.InlineValue) types.InlineValue {
+	return types.InlineValue{
 		Range: ToRange(inlineValue.Range()),
 		Text:  inlineValue.Text(),
 	}
 }
 
-func ToInlineValues(inlineValues []snyk.InlineValue) (values []lsp.InlineValue) {
+func ToInlineValues(inlineValues []snyk.InlineValue) (values []types.InlineValue) {
 	for _, inlineValue := range inlineValues {
 		values = append(values, ToInlineValue(inlineValue))
 	}
@@ -121,18 +120,18 @@ func ToTextEdit(edit snyk.TextEdit) sglsp.TextEdit {
 	}
 }
 
-func ToSeverity(severity snyk.Severity) lsp.DiagnosticSeverity {
+func ToSeverity(severity snyk.Severity) types.DiagnosticSeverity {
 	switch severity {
 	case snyk.Critical:
-		return lsp.DiagnosticsSeverityError
+		return types.DiagnosticsSeverityError
 	case snyk.High:
-		return lsp.DiagnosticsSeverityError
+		return types.DiagnosticsSeverityError
 	case snyk.Medium:
-		return lsp.DiagnosticsSeverityWarning
+		return types.DiagnosticsSeverityWarning
 	case snyk.Low:
-		return lsp.DiagnosticsSeverityInformation
+		return types.DiagnosticsSeverityInformation
 	default:
-		return lsp.DiagnosticsSeverityHint
+		return types.DiagnosticsSeverityHint
 	}
 }
 
@@ -150,25 +149,25 @@ func ToPosition(p snyk.Position) sglsp.Position {
 	}
 }
 
-func ToDiagnostics(issues []snyk.Issue) []lsp.Diagnostic {
+func ToDiagnostics(issues []snyk.Issue) []types.Diagnostic {
 	// In JSON, `nil` serializes to `null`, while an empty slice serializes to `[]`.
 	// Sending null instead of an empty array leads to stored diagnostics not being cleared.
 	// Do not prefer nil over an empty slice in this case. The next line ensures that even if issues is empty,
 	// the return value of this function will not be null.
-	diagnostics := []lsp.Diagnostic{}
+	diagnostics := []types.Diagnostic{}
 
 	for _, issue := range issues {
 		s := ""
 		if issue.IssueDescriptionURL != nil {
 			s = issue.IssueDescriptionURL.String()
 		}
-		diagnostics = append(diagnostics, lsp.Diagnostic{
+		diagnostics = append(diagnostics, types.Diagnostic{
 			Range:           ToRange(issue.Range),
 			Severity:        ToSeverity(issue.Severity),
 			Code:            issue.ID,
 			Source:          string(issue.Product),
 			Message:         issue.Message,
-			CodeDescription: lsp.CodeDescription{Href: lsp.Uri(s)},
+			CodeDescription: types.CodeDescription{Href: types.Uri(s)},
 		})
 	}
 	return diagnostics

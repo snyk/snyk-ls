@@ -27,7 +27,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -71,7 +70,7 @@ func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 				return nil, nil
 			}
 
-			cmd.notifier.Send(lsp.ApplyWorkspaceEditParams{
+			cmd.notifier.Send(types.ApplyWorkspaceEditParams{
 				Label: "Snyk Code fix",
 				Edit:  converter.ToWorkspaceEdit(edit),
 			})
@@ -81,7 +80,7 @@ func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 
 			// Give client some time to apply edit, then refresh code lenses to hide stale codelens for the fixed issue
 			time.Sleep(1 * time.Second)
-			cmd.notifier.Send(lsp.CodeLensRefresh{})
+			cmd.notifier.Send(types.CodeLensRefresh{})
 			return nil, nil
 		}
 	}

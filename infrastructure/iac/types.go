@@ -17,7 +17,7 @@
 package iac
 
 import (
-	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type iacScanResult struct {
@@ -37,7 +37,7 @@ type iacIssue struct {
 	Title          string         `json:"title"`
 	Severity       string         `json:"severity"`
 	LineNumber     int            `json:"lineNumber"`
-	Documentation  lsp.Uri        `json:"documentation"`
+	Documentation  types.Uri      `json:"documentation"`
 	IacDescription iacDescription `json:"iacDescription"`
 	Path           []any          `json:"path"`
 	References     []string       `json:"references"`

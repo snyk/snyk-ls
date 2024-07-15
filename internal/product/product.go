@@ -36,8 +36,8 @@ const (
 	FilterableIssueTypeContainer            FilterableIssueType = "Container"
 )
 
-func ToProductCodename(product Product) string {
-	switch product {
+func (p Product) ToProductCodename() string {
+	switch p {
 	case ProductOpenSource:
 		return "oss"
 	case ProductCode:

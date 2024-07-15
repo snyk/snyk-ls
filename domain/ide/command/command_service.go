@@ -27,7 +27,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
-	"github.com/snyk/snyk-ls/internal/lsp"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -72,7 +71,7 @@ func Service() types.CommandService {
 	return instance
 }
 
-func (service *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.CommandData, server lsp.Server) (any, error) {
+func (service *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.CommandData, server types.Server) (any, error) {
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", "command.serviceImpl.ExecuteCommandData").Logger()
 

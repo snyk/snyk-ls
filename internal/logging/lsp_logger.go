@@ -23,21 +23,21 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/snyk/snyk-ls/internal/lsp"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type lspWriter struct {
-	writeChan chan lsp.LogMessageParams
+	writeChan chan types.LogMessageParams
 	readyChan chan bool
-	server    lsp.Server
+	server    types.Server
 }
 
-func New(server lsp.Server) zerolog.LevelWriter {
+func New(server types.Server) zerolog.LevelWriter {
 	if server != nil {
 		_, _ = os.Stderr.WriteString("LSP logger: starting with non-nil server \n")
 	}
 	readyChan := make(chan bool)
-	writeChan := make(chan lsp.LogMessageParams, 1000000)
+	writeChan := make(chan types.LogMessageParams, 1000000)
 	w := &lspWriter{
 		writeChan: writeChan,
 		readyChan: readyChan,
@@ -58,7 +58,7 @@ func (w *lspWriter) Write(p []byte) (n int, err error) {
 func (w *lspWriter) WriteLevel(level zerolog.Level, p []byte) (n int, err error) {
 	levelEnabled := level > zerolog.TraceLevel && level < zerolog.NoLevel
 	if w.server != nil && levelEnabled {
-		w.writeChan <- lsp.LogMessageParams{
+		w.writeChan <- types.LogMessageParams{
 			Type:    mapLogLevel(level),
 			Message: string(p),
 		}
@@ -84,20 +84,20 @@ func (w *lspWriter) startServerSenderRoutine() {
 	fmt.Printf("LSP logger (%p) stopped", w)
 }
 
-func mapLogLevel(level zerolog.Level) (mt lsp.MessageType) {
+func mapLogLevel(level zerolog.Level) (mt types.MessageType) {
 	switch level {
 	case zerolog.PanicLevel:
 		fallthrough
 	case zerolog.FatalLevel:
 		fallthrough
 	case zerolog.ErrorLevel:
-		mt = lsp.Error
+		mt = types.Error
 	case zerolog.WarnLevel:
-		mt = lsp.Warning
+		mt = types.Warning
 	case zerolog.InfoLevel:
-		mt = lsp.Info
+		mt = types.Info
 	case zerolog.DebugLevel:
-		mt = lsp.Log
+		mt = types.Log
 	default:
 		mt = 0
 	}
