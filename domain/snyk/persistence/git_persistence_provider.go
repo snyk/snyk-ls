@@ -313,7 +313,7 @@ func getCacheDirPath() string {
 }
 
 func getLocalFilePath(filePathHash string, commitHash string, p product.Product) string {
-	productName := product.ToProductCodename(p)
+	productName := p.ToProductCodename()
 	return filepath.Join(getCacheDirPath(), fmt.Sprintf("%s.%s.%s.%s.json", SchemaVersion, filePathHash, commitHash, productName))
 }
 
