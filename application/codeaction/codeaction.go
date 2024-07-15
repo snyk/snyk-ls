@@ -67,7 +67,7 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 
 	quickFixGroupables := c.getQuickFixGroupablesAndCache(issues)
 
-	updatedIssues := []snyk.Issue{}
+	var updatedIssues []snyk.Issue
 	if len(quickFixGroupables) != 0 {
 		updatedIssues = c.updateIssuesWithQuickFix(quickFixGroupables, issues)
 	} else {

@@ -100,7 +100,7 @@ func Test_Logout(t *testing.T) {
 	tokenResetReceived := false
 	callback := func(params any) {
 		switch p := params.(type) {
-		case lsp.AuthenticationParams:
+		case types.AuthenticationParams:
 			require.Empty(t, p.Token)
 			tokenResetReceived = true
 		}
