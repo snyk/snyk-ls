@@ -222,7 +222,7 @@ func scanAndPersistBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Sc
 	mainBranchName := getBaseBranchName()
 	gw := vcs.NewGitWrapper()
 
-	headCommit, err := vcs.CommitHashForBranch(folderPath, mainBranchName, gw)
+	headCommit, err := vcs.CommitHashForBranch(folderPath, mainBranchName, &logger, gw)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to fetch commit hash for main branch")
 		return err
