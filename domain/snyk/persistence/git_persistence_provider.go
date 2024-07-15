@@ -79,7 +79,8 @@ func (gpp *GitPersistenceProvider) Clear() {
 		gpp.logger.Error().Err(err).Msg("failed to load cached file paths")
 	}
 	for _, filePath := range filePaths {
-		err = gpp.deleteFile(filePath)
+		fullPath := filepath.Join(getCacheDirPath(), filePath)
+		err = gpp.deleteFile(fullPath)
 		if err != nil {
 			gpp.logger.Error().Err(err).Msg("failed to remove file " + filePath)
 		}
@@ -87,9 +88,9 @@ func (gpp *GitPersistenceProvider) Clear() {
 	gpp.cache = make(map[hashedFolderPath]productCommitHashMap)
 }
 
-func (gpp *GitPersistenceProvider) deleteFile(filePath string) error {
-	gpp.logger.Debug().Msg("deleting cached scan file " + filePath)
-	err := gpp.fs.Remove(filePath)
+func (gpp *GitPersistenceProvider) deleteFile(fullPath string) error {
+	gpp.logger.Debug().Msg("deleting cached scan file " + fullPath)
+	err := gpp.fs.Remove(fullPath)
 	if err != nil {
 		return err
 	}
@@ -108,6 +109,7 @@ func (gpp *GitPersistenceProvider) ClearForProduct(folderPath, commitHash string
 	err = gpp.deleteFromCache(hash, commitHash, p)
 	if err != nil {
 		gpp.logger.Error().Err(err).Msg("failed to delete cached scan for product: " + p.ToProductCodename() + " for folder: " + folderPath)
+		return err
 	}
 
 	filePath := getLocalFilePath(hash, commitHash, p)
@@ -122,12 +124,16 @@ func (gpp *GitPersistenceProvider) ClearForProduct(folderPath, commitHash string
 func (gpp *GitPersistenceProvider) deleteFromCache(hash hashedFolderPath, commitHash string, p product.Product) error {
 	pchm, exists := gpp.cache[hash]
 	if !exists {
-		return nil
+		return errors.New("hashed folder path doesn't exist in cache")
 	}
 
 	currentCommitHash, pchExists := pchm[p]
-	if !pchExists || currentCommitHash != commitHash {
-		return nil
+	if !pchExists {
+		return errors.New("product doesn't exist in cache")
+	}
+
+	if currentCommitHash != commitHash {
+		return errors.New("commit hashes don't match")
 	}
 
 	delete(gpp.cache[hash], p)
@@ -138,6 +144,12 @@ func (gpp *GitPersistenceProvider) deleteFromCache(hash hashedFolderPath, commit
 func (gpp *GitPersistenceProvider) Init() error {
 	gpp.mutex.Lock()
 	defer gpp.mutex.Unlock()
+
+	err := gpp.ensureCacheDirExists()
+	if err != nil {
+		gpp.logger.Error().Err(err).Msg("could not create cache dir")
+		return err
+	}
 
 	filePaths, err := gpp.getPersistedCachedFilePaths()
 	if err != nil {

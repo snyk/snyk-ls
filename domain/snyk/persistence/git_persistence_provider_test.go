@@ -210,15 +210,20 @@ func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 	appFs := afero.NewMemMapFs()
 	logger := zerolog.New(nil)
 	folderPath := "/home/myusr/testrepo"
+	hash, err := hashPath(folderPath)
+	assert.NoError(t, err)
+
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
 	cut := NewGitPersistenceProvider(&logger, appFs)
 
-	err := cut.Add(folderPath, commitHash, existingCodeIssues, pc)
+	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	cut.Clear()
 
 	assert.Nil(t, err)
 	assert.Empty(t, cut.cache)
+	assert.False(t, cut.scanSnapshotExistsOnDisk(hash, commitHash, pc))
+
 }
 
 func TestClearIssues_ExistingCacheExistingProduct(t *testing.T) {
@@ -245,6 +250,7 @@ func TestClearIssues_ExistingCacheExistingProduct(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Empty(t, cut.cache[hash][pc])
+	assert.False(t, cut.scanSnapshotExistsOnDisk(hash, commitHash, pc))
 }
 
 func TestClearIssues_ExistingCacheNonExistingProduct(t *testing.T) {
@@ -268,10 +274,11 @@ func TestClearIssues_ExistingCacheNonExistingProduct(t *testing.T) {
 	assert.NoError(t, err)
 
 	err = cut.ClearForProduct(folderPath, commitHash, product.ProductUnknown)
-	assert.NoError(t, err)
+	assert.Error(t, err)
 
 	assert.NotEmpty(t, cut.cache)
 	assert.NotEmpty(t, cut.cache[hash][pc])
+	assert.True(t, cut.scanSnapshotExistsOnDisk(hash, commitHash, pc))
 }
 
 func TestClearIssues_NonExistingCacheNonExistingProduct(t *testing.T) {
@@ -284,17 +291,21 @@ func TestClearIssues_NonExistingCacheNonExistingProduct(t *testing.T) {
 	appFs := afero.NewMemMapFs()
 	logger := zerolog.New(nil)
 	folderPath := "/home/myusr/testrepo"
+	hash, err := hashPath(folderPath)
+	assert.NoError(t, err)
+
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
 	cut := NewGitPersistenceProvider(&logger, appFs)
 
-	err := cut.Add(folderPath, commitHash, existingCodeIssues, pc)
+	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
 
 	err = cut.ClearForProduct("/invalid/folder/path", commitHash, product.ProductUnknown)
-	assert.NoError(t, err)
+	assert.Error(t, err)
 
 	assert.NotEmpty(t, cut.cache)
+	assert.True(t, cut.scanSnapshotExistsOnDisk(hash, commitHash, pc))
 }
 
 func TestCreateOrAppendToCache_NewCache(t *testing.T) {
