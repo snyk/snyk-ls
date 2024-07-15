@@ -60,6 +60,9 @@ func toIssue(
 					affectedFilePath,
 					issueRange,
 				},
+				GroupingKey:   codeAction.GroupingKey,
+				GroupingType:  codeAction.GroupingType,
+				GroupingValue: codeAction.GroupingValue,
 			})
 		}
 	}

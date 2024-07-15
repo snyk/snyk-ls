@@ -32,17 +32,46 @@ func GetFor(filePath string) (lenses []sglsp.CodeLens) {
 	}
 
 	issues := f.IssuesForFile(filePath)
+
+	// group by range first
+	lensesByRange := make(map[snyk.Range][]types.Groupable)
 	for _, issue := range issues {
-		for _, command := range issue.CodelensCommands {
-			lenses = append(lenses, getCodeLensFromCommand(issue, command))
+		for _, lens := range issue.CodelensCommands {
+			commands := lensesByRange[issue.Range]
+			if commands == nil {
+				commands = []types.Groupable{}
+			}
+			commands = append(commands, lens)
+			lensesByRange[issue.Range] = commands
 		}
 	}
+
+	for r, commands := range lensesByRange {
+		quickFixLensCommand := getQuickFixLensCommand(commands)
+		if quickFixLensCommand != nil {
+			lenses = append(lenses, getCodeLensFromCommand(r, *quickFixLensCommand))
+		}
+	}
+
 	return lenses
 }
 
-func getCodeLensFromCommand(issue snyk.Issue, command types.CommandData) sglsp.CodeLens {
+func getQuickFixLensCommand(groupables []types.Groupable) *types.CommandData {
+	// right now we can always group by max semver version, as
+	// code only has one quickfix available, and iac none at all
+	var quickFix *types.CommandData
+	qf, ok := types.MaxSemver()(groupables).(types.CommandData)
+	if !ok {
+		quickFix = nil
+	} else {
+		quickFix = &qf
+	}
+	return quickFix
+}
+
+func getCodeLensFromCommand(r snyk.Range, command types.CommandData) sglsp.CodeLens {
 	return sglsp.CodeLens{
-		Range: converter.ToRange(issue.Range),
+		Range: converter.ToRange(r),
 		Command: sglsp.Command{
 			Title:     command.Title,
 			Command:   command.CommandId,
