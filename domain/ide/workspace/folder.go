@@ -482,27 +482,23 @@ func (f *Folder) FilterAndPublishDiagnostics(p *product.Product) {
 
 func (f *Folder) getDelta(productIssueByFile snyk.ProductIssuesByFile, p *product.Product) snyk.ProductIssuesByFile {
 	logger := f.c.Logger().With().Str("method", "getDelta").Logger()
-	if *p != product.ProductCode {
-		return productIssueByFile
-	}
 
 	if !f.c.IsDeltaFindingsEnabled() {
 		return productIssueByFile
 	}
-
-	currentFlatIssueList := getFlatIssueList(productIssueByFile, p)
 
 	baseIssueList, err := f.scanPersister.GetPersistedIssueList(f.path, *p)
 	if err != nil {
 		logger.Err(err).Msg("Error getting persisted issue list")
 		return productIssueByFile
 	}
+	if len(baseIssueList) == 0 {
+		return productIssueByFile
+	}
+	
+	df := snyk.NewDeltaFinderForProduct(*p)
 
-	df := delta.NewFinder(
-		delta.WithEnricher(delta.NewFindingsEnricher()),
-		delta.WithMatcher(delta.NewCodeMatcher()),
-		delta.WithDiffer(delta.NewFindingsDiffer()))
-
+	currentFlatIssueList := getFlatIssueList(productIssueByFile, p)
 	baseFindingIdentifiable := make([]delta.Identifiable, len(baseIssueList))
 	for i := range baseIssueList {
 		baseFindingIdentifiable[i] = &baseIssueList[i]
@@ -511,7 +507,9 @@ func (f *Folder) getDelta(productIssueByFile snyk.ProductIssuesByFile, p *produc
 	for i := range currentFlatIssueList {
 		currentFindingIdentifiable[i] = &currentFlatIssueList[i]
 	}
+
 	diff, err := df.Diff(baseFindingIdentifiable, currentFindingIdentifiable)
+
 	if err != nil {
 		logger.Error().Err(err).Msg("couldn't calculate delta")
 		return nil
@@ -556,7 +554,7 @@ func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
 }
 
 func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[product.FilterableIssueType]bool) snyk.
-	IssuesByFile {
+IssuesByFile {
 	logger := f.c.Logger().With().Str("method", "FilterIssues").Logger()
 
 	filteredIssues := snyk.IssuesByFile{}

@@ -138,7 +138,7 @@ func (gpp *GitPersistenceProvider) Init() {
 
 func (gpp *GitPersistenceProvider) GetPersistedIssueList(folderPath string, p product.Product) ([]snyk.Issue, error) {
 	commitHash, err := gpp.getProductCommitHash(folderPath, p)
-	if err != nil {
+	if commitHash == "" || err != nil {
 		return nil, err
 	}
 
