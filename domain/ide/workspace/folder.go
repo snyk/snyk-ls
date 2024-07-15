@@ -530,9 +530,7 @@ func getFlatIssueList(productIssueByFile snyk.ProductIssuesByFile, p *product.Pr
 	issueByFile := productIssueByFile[*p]
 	var currentFlatIssueList []snyk.Issue
 	for _, issueList := range issueByFile {
-		for _, issue := range issueList {
-			currentFlatIssueList = append(currentFlatIssueList, issue)
-		}
+		currentFlatIssueList = append(currentFlatIssueList, issueList...)
 	}
 	return currentFlatIssueList
 }
@@ -558,7 +556,7 @@ func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
 }
 
 func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[product.FilterableIssueType]bool) snyk.
-IssuesByFile {
+	IssuesByFile {
 	logger := f.c.Logger().With().Str("method", "FilterIssues").Logger()
 
 	filteredIssues := snyk.IssuesByFile{}

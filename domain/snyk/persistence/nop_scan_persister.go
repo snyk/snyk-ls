@@ -35,15 +35,12 @@ func (n NopScanPersister) SnapshotExists(_, _ string, _ product.Product) bool {
 }
 
 func (n NopScanPersister) Clear() {
-	return
 }
 
 func (n NopScanPersister) ClearForProduct(_ string, _ product.Product) {
-	return
 }
 
 func (n NopScanPersister) Init() {
-	return
 }
 
 func (n NopScanPersister) Add(_, _ string, _ []snyk.Issue, _ product.Product) error {
