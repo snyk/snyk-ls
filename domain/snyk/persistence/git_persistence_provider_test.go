@@ -223,7 +223,6 @@ func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Empty(t, cut.cache)
 	assert.False(t, cut.scanSnapshotExistsOnDisk(hash, commitHash, pc))
-
 }
 
 func TestClearIssues_ExistingCacheExistingProduct(t *testing.T) {

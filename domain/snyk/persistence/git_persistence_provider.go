@@ -102,8 +102,8 @@ func (gpp *GitPersistenceProvider) ClearForProduct(folderPath, commitHash string
 	defer gpp.mutex.Unlock()
 
 	hash, err := hashPath(folderPath)
-	gpp.logger.Error().Err(err).Msg("failed to hash path " + folderPath)
 	if err != nil {
+		gpp.logger.Error().Err(err).Msg("failed to hash path " + folderPath)
 	}
 
 	err = gpp.deleteFromCache(hash, commitHash, p)
