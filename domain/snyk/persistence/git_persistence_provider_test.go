@@ -102,10 +102,10 @@ func TestAddToCache_ExistingCommit_ShouldNotPersist(t *testing.T) {
 	cp := NewGitPersistenceProvider(&logger, appFs)
 
 	err := cp.Add(folderPath, commitHash, issueList, p)
-	err = cp.Add(folderPath, commitHash, newIssueList, p)
-	list, _ := cp.GetPersistedIssueList(folderPath, p)
-
 	assert.Nil(t, err)
+	err = cp.Add(folderPath, commitHash, newIssueList, p)
+	assert.Nil(t, err)
+	list, _ := cp.GetPersistedIssueList(folderPath, p)
 	assert.NotEmpty(t, list)
 	assert.Equal(t, issueList[0].GetGlobalIdentity(), list[0].GetGlobalIdentity())
 	assert.NotEqual(t, newIssueList[0].GetGlobalIdentity(), list[0].GetGlobalIdentity())
@@ -122,11 +122,13 @@ func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
 	logger := zerolog.New(nil)
 	folderPath := "/home/myusr/testrepo"
 	hashedFolderPath, err := hashPath(folderPath)
+	assert.Nil(t, err)
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	p := product.ProductCode
 	cp := NewGitPersistenceProvider(&logger, appFs)
 
 	err = cp.Add(folderPath, commitHash, issueList, p)
+	assert.Nil(t, err)
 	actualCommitHash, err := cp.getProductCommitHash(folderPath, p)
 
 	assert.Nil(t, err)
