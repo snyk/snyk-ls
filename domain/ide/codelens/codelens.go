@@ -34,12 +34,12 @@ func GetFor(filePath string) (lenses []sglsp.CodeLens) {
 	issues := f.IssuesForFile(filePath)
 
 	// group by range first
-	lensesByRange := make(map[snyk.Range][]types.Groupable)
+	lensesByRange := make(map[snyk.Range][]types.CommandData)
 	for _, issue := range issues {
 		for _, lens := range issue.CodelensCommands {
 			commands := lensesByRange[issue.Range]
 			if commands == nil {
-				commands = []types.Groupable{}
+				commands = []types.CommandData{}
 			}
 			commands = append(commands, lens)
 			lensesByRange[issue.Range] = commands
@@ -47,26 +47,46 @@ func GetFor(filePath string) (lenses []sglsp.CodeLens) {
 	}
 
 	for r, commands := range lensesByRange {
-		quickFixLensCommand := getQuickFixLensCommand(commands)
-		if quickFixLensCommand != nil {
-			lenses = append(lenses, getCodeLensFromCommand(r, *quickFixLensCommand))
+		lensCommands := getLensCommands(commands)
+		for _, command := range lensCommands {
+			lenses = append(lenses, getCodeLensFromCommand(r, command))
 		}
 	}
 
 	return lenses
 }
 
-func getQuickFixLensCommand(groupables []types.Groupable) *types.CommandData {
-	// right now we can always group by max semver version, as
-	// code only has one quickfix available, and iac none at all
-	var quickFix *types.CommandData
-	qf, ok := types.MaxSemver()(groupables).(types.CommandData)
-	if !ok {
-		quickFix = nil
-	} else {
-		quickFix = &qf
+func getLensCommands(inputCommands []types.CommandData) (lenses []types.CommandData) {
+	groupableByType := map[types.GroupingType][]types.Groupable{}
+	for _, groupable := range inputCommands {
+		commands := groupableByType[groupable.GetGroupingType()]
+		if commands == nil {
+			commands = []types.Groupable{}
+		}
+
+		groupableByType[groupable.GetGroupingType()] = append(commands, groupable)
 	}
-	return quickFix
+
+	for groupingType, lensCommands := range groupableByType {
+		if groupingType == types.Quickfix {
+			// right now we can always group by max semver version, as
+			// code only has one quickfix available, and iac none at all
+			qf, ok := types.MaxSemver()(lensCommands).(types.CommandData)
+			if ok {
+				lenses = append(lenses, qf)
+			}
+		} else {
+			// add all other lenses
+			for _, lensCommand := range lensCommands {
+				lens, ok := lensCommand.(types.CommandData)
+				if ok {
+					lenses = append(lenses, lens)
+				}
+			}
+		}
+	}
+
+	return lenses
 }
 
 func getCodeLensFromCommand(r snyk.Range, command types.CommandData) sglsp.CodeLens {
