@@ -130,7 +130,7 @@ func (w *Workspace) AddFolder(f *Folder) {
 		return
 	}
 
-	w.notifier.Send(folderConfig)
+	w.notifier.Send(*folderConfig)
 }
 
 func (w *Workspace) IssuesForFile(path string) []snyk.Issue {
