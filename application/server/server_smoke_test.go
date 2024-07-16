@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -422,11 +423,7 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 
 	cloneTargetDir := setupRepoAndInitialize(t, repo, commit, loc, c)
 
-	// wait till the whole workspace is scanned
-	assert.Eventually(t, func() bool {
-		f := workspace.Get().GetFolderContaining(cloneTargetDir)
-		return f != nil && f.IsScanned()
-	}, maxIntegTestDuration, 2*time.Millisecond)
+	waitForScan(t, cloneTargetDir)
 
 	jsonRPCRecorder.ClearNotifications()
 	var testPath string
@@ -440,17 +437,108 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 	jsonRPCRecorder.ClearNotifications()
 	testPath = filepath.Join(cloneTargetDir, file2)
 	textDocumentDidSave(t, &loc, testPath)
-
 	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 
-	// check for snyk scan message & check autofix
+	// check for snyk code scan message
+	snykCodeScanParams := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+
+	// check for autofix diff on mt-us
+	if hasVulns {
+		checkAutofixDiffs(t, c, snykCodeScanParams, loc)
+	}
+
+	checkFeatureFlagStatus(t, c, &loc)
+
+	// check we only have one quickfix action in open source per line
+	if c.IsSnykOssEnabled() {
+		checkOnlyOneQuickFixCodeAction(t, jsonRPCRecorder, cloneTargetDir, loc)
+		checkOnlyOneCodeLens(t, jsonRPCRecorder, cloneTargetDir, loc)
+	}
+}
+
+func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, cloneTargetDir string, loc server.Local) {
+	t.Helper()
+	ossScanParams := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
+	atLeastOneQuickfixActionFound := false
+	for _, issue := range ossScanParams.Issues {
+		params := sglsp.CodeActionParams{
+			TextDocument: sglsp.TextDocumentIdentifier{
+				URI: uri.PathToUri(issue.FilePath),
+			},
+			Range: issue.Range,
+		}
+		response, err := loc.Client.Call(context.Background(), "textDocument/codeAction", params)
+		assert.NoError(t, err)
+		var actions []types.CodeAction
+		err = response.UnmarshalResult(&actions)
+		assert.NoError(t, err)
+
+		quickFixCount := 0
+		for _, action := range actions {
+			if strings.Contains(action.Title, "Upgrade to") {
+				quickFixCount++
+				atLeastOneQuickfixActionFound = true
+			}
+		}
+		// no issues should have more than one quickfix
+		if quickFixCount > 1 {
+			t.FailNow()
+		}
+
+		// code action requests are debounced (50ms), so we need to wait
+		time.Sleep(60 * time.Millisecond)
+	}
+	assert.True(t, atLeastOneQuickfixActionFound)
+}
+
+func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, cloneTargetDir string, loc server.Local) {
+	t.Helper()
+	ossScanParams := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
+	atLeastOneOneIssueWithCodeLensFound := false
+	for _, issue := range ossScanParams.Issues {
+		params := sglsp.CodeLensParams{
+			TextDocument: sglsp.TextDocumentIdentifier{
+				URI: uri.PathToUri(issue.FilePath),
+			},
+		}
+		response, err := loc.Client.Call(context.Background(), "textDocument/codeLens", params)
+		assert.NoError(t, err)
+		var lenses []sglsp.CodeLens
+		err = response.UnmarshalResult(&lenses)
+		assert.NoError(t, err)
+
+		lensCount := 0
+		for _, lens := range lenses {
+			if lensCount > 1 {
+				t.FailNow()
+			}
+			if issue.Range.Start.Line == lens.Range.Start.Line {
+				lensCount++
+				atLeastOneOneIssueWithCodeLensFound = true
+			}
+		}
+	}
+	assert.True(t, atLeastOneOneIssueWithCodeLensFound)
+}
+
+func waitForScan(t *testing.T, cloneTargetDir string) {
+	t.Helper()
+	// wait till the whole workspace is scanned
+	assert.Eventually(t, func() bool {
+		f := workspace.Get().GetFolderContaining(cloneTargetDir)
+		return f != nil && f.IsScanned()
+	}, maxIntegTestDuration, 2*time.Millisecond)
+}
+
+func checkForScanParams(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, cloneTargetDir string, p product.Product) types.SnykScanParams {
+	t.Helper()
 	var notifications []jrpc2.Request
 	var scanParams types.SnykScanParams
 	assert.Eventually(t, func() bool {
 		notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
 		for _, n := range notifications {
 			_ = n.UnmarshalParams(&scanParams)
-			if scanParams.Product != "code" ||
+			if scanParams.Product != p.ToProductCodename() ||
 				scanParams.FolderPath != cloneTargetDir ||
 				scanParams.Status != "success" {
 				continue
@@ -459,34 +547,32 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 		}
 		return false
 	}, 10*time.Second, 10*time.Millisecond)
+	return scanParams
+}
 
-	if config.CurrentConfig().SnykCodeApi() != "https://deeproxy.snyk.io" {
+func checkAutofixDiffs(t *testing.T, c *config.Config, snykCodeScanParams types.SnykScanParams, loc server.Local) {
+	t.Helper()
+	if c.SnykCodeApi() != "https://deeproxy.snyk.io" {
 		return
 	}
-
-	// check for autofix diff on mt-us
-	if hasVulns {
-		assert.Greater(t, len(scanParams.Issues), 0)
-		for _, issue := range scanParams.Issues {
-			codeIssueData, ok := issue.AdditionalData.(map[string]interface{})
-			if !ok || codeIssueData["hasAIFix"] == false || codeIssueData["rule"] != "WebCookieSecureDisabledByDefault" {
-				continue
-			}
-			call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
-				Command:   types.CodeFixDiffsCommand,
-				Arguments: []any{uri.PathToUri(scanParams.FolderPath), uri.PathToUri(issue.FilePath), issue.Id},
-			})
-			assert.NoError(t, err)
-			var unifiedDiffs []code.AutofixUnifiedDiffSuggestion
-			err = call.UnmarshalResult(&unifiedDiffs)
-			assert.NoError(t, err)
-			assert.Greater(t, len(unifiedDiffs), 0)
-			// don't check for all issues, just the first
-			break
+	assert.Greater(t, len(snykCodeScanParams.Issues), 0)
+	for _, issue := range snykCodeScanParams.Issues {
+		codeIssueData, ok := issue.AdditionalData.(map[string]interface{})
+		if !ok || codeIssueData["hasAIFix"] == false || codeIssueData["rule"] != "WebCookieSecureDisabledByDefault" {
+			continue
 		}
+		call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+			Command:   types.CodeFixDiffsCommand,
+			Arguments: []any{uri.PathToUri(snykCodeScanParams.FolderPath), uri.PathToUri(issue.FilePath), issue.Id},
+		})
+		assert.NoError(t, err)
+		var unifiedDiffs []code.AutofixUnifiedDiffSuggestion
+		err = call.UnmarshalResult(&unifiedDiffs)
+		assert.NoError(t, err)
+		assert.Greater(t, len(unifiedDiffs), 0)
+		// don't check for all issues, just the first
+		break
 	}
-
-	checkFeatureFlagStatus(t, &loc, c)
 }
 
 func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server.Local, c *config.Config) string {
@@ -523,7 +609,7 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server
 	return cloneTargetDir
 }
 
-func checkFeatureFlagStatus(t *testing.T, loc *server.Local, c *config.Config) {
+func checkFeatureFlagStatus(t *testing.T, c *config.Config, loc *server.Local) {
 	t.Helper()
 
 	call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{

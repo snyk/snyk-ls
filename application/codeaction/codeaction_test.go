@@ -84,7 +84,7 @@ func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
 			},
 		},
 	}
-	service, codeActionsParam, _ := setupWithSingleIssue(expectedIssue)
+	service, codeActionsParam, _ := setupWithSingleIssue(t, expectedIssue)
 
 	// Act
 	actions := service.GetCodeActions(codeActionsParam)
@@ -104,7 +104,7 @@ func Test_GetCodeActions_FileIsDirty_ReturnsEmptyResults(t *testing.T) {
 			},
 		},
 	}
-	service, codeActionsParam, w := setupWithSingleIssue(fakeIssue)
+	service, codeActionsParam, w := setupWithSingleIssue(t, fakeIssue)
 	w.SetFileAsChanged(codeActionsParam.TextDocument.URI) // File is dirty until it is saved
 
 	// Act
@@ -169,7 +169,7 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 			},
 		},
 	}
-	service, codeActionsParam, _ := setupWithSingleIssue(expectedIssue)
+	service, codeActionsParam, _ := setupWithSingleIssue(t, expectedIssue)
 
 	// Act
 	actions := service.GetCodeActions(codeActionsParam)
@@ -187,7 +187,7 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
 	testutil.UnitTest(t)
 	// Arrange
-	service := setupService()
+	service := setupService(t)
 
 	id := types.CodeActionData(uuid.New())
 	ca := types.CodeAction{
@@ -208,7 +208,7 @@ func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
 func Test_ResolveCodeAction_UnknownCommandIsReported(t *testing.T) {
 	testutil.UnitTest(t)
 	// Arrange
-	service := setupService()
+	service := setupService(t)
 	command.SetService(command.NewService(
 		nil,
 		nil,
@@ -243,7 +243,7 @@ func Test_ResolveCodeAction_UnknownCommandIsReported(t *testing.T) {
 func Test_ResolveCodeAction_CommandIsExecuted(t *testing.T) {
 	testutil.UnitTest(t)
 	// Arrange
-	service := setupService()
+	service := setupService(t)
 
 	id := types.CodeActionData(uuid.New())
 	command.SetService(types.NewCommandServiceMock())
@@ -269,7 +269,7 @@ func Test_ResolveCodeAction_CommandIsExecuted(t *testing.T) {
 
 func Test_ResolveCodeAction_KeyIsNull_ReturnsError(t *testing.T) {
 	testutil.UnitTest(t)
-	service := setupService()
+	service := setupService(t)
 
 	ca := types.CodeAction{
 		Title:   "Made up CA",
@@ -283,7 +283,8 @@ func Test_ResolveCodeAction_KeyIsNull_ReturnsError(t *testing.T) {
 	assert.True(t, codeaction.IsMissingKeyError(err))
 }
 
-func setupService() *codeaction.CodeActionsService {
+func setupService(t *testing.T) *codeaction.CodeActionsService {
+	t.Helper()
 	providerMock := new(mockIssuesProvider)
 	providerMock.On("IssuesForRange", mock.Anything, mock.Anything).Return([]snyk.Issue{})
 	fakeClient := &code.FakeSnykCodeClient{C: config.CurrentConfig()}
@@ -292,7 +293,8 @@ func setupService() *codeaction.CodeActionsService {
 	return service
 }
 
-func setupWithSingleIssue(issue snyk.Issue) (*codeaction.CodeActionsService, types.CodeActionParams, *watcher.FileWatcher) {
+func setupWithSingleIssue(t *testing.T, issue snyk.Issue) (*codeaction.CodeActionsService, types.CodeActionParams, *watcher.FileWatcher) {
+	t.Helper()
 	r := exampleRange
 	uriPath := documentUriExample
 	path := uri.PathFromUri(uriPath)

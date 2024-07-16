@@ -31,7 +31,6 @@ import (
 	"github.com/shirou/gopsutil/process"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/codelens"
@@ -583,12 +582,12 @@ func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 
 func codeActionResolveHandler(server types.Server) handler.Func {
 	c := config.CurrentConfig()
-	return handler.New(codeaction.ResolveCodeActionHandler(c, di.CodeActionService(), server))
+	return handler.New(ResolveCodeActionHandler(c, di.CodeActionService(), server))
 }
 
 func textDocumentCodeActionHandler() handler.Func {
 	c := config.CurrentConfig()
-	return handler.New(codeaction.GetCodeActionHandler(c, di.CodeActionService()))
+	return handler.New(GetCodeActionHandler(c))
 }
 
 func noOpHandler() jrpc2.Handler {
