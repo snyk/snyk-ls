@@ -181,7 +181,6 @@ func Test_UpdateSettings(t *testing.T) {
 			Path:                        "addPath",
 			SendErrorReports:            "true",
 			Organization:                expectedOrgId,
-			EnableTelemetry:             "false",
 			ManageBinariesAutomatically: "false",
 			CliPath:                     "C:\\Users\\CliPath\\snyk-ls.exe",
 			Token:                       "a fancy token",
