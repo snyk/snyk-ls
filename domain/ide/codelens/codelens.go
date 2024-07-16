@@ -56,7 +56,7 @@ func GetFor(filePath string) (lenses []sglsp.CodeLens) {
 	return lenses
 }
 
-func getLensCommands(inputCommands []types.CommandData) (lenses []types.CommandData) {
+func getLensCommands(inputCommands []types.CommandData) []types.CommandData {
 	groupableByType := map[types.GroupingType][]types.Groupable{}
 	for _, groupable := range inputCommands {
 		commands := groupableByType[groupable.GetGroupingType()]
@@ -67,6 +67,7 @@ func getLensCommands(inputCommands []types.CommandData) (lenses []types.CommandD
 		groupableByType[groupable.GetGroupingType()] = append(commands, groupable)
 	}
 
+	lenses := []types.CommandData{}
 	for groupingType, lensCommands := range groupableByType {
 		if groupingType == types.Quickfix {
 			// right now we can always group by max semver version, as
