@@ -19,13 +19,16 @@ package code
 import (
 	"context"
 	"fmt"
-	"github.com/rs/zerolog"
-	"github.com/snyk/snyk-ls/internal/delta"
-	"github.com/snyk/snyk-ls/internal/vcs"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog"
+
+	"github.com/snyk/snyk-ls/internal/delta"
+	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
+	"github.com/snyk/snyk-ls/internal/vcs"
 
 	"github.com/erni27/imcache"
 	"github.com/pkg/errors"
@@ -217,7 +220,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath string, logger ze
 }
 
 func scanBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Scanner, folderPath string) ([]snyk.Issue, error) {
-	mainBranchName := getBaseBranchName()
+	mainBranchName := getBaseBranchName(folderPath)
 	tmpFolderName := fmt.Sprintf("snyk_delta_%s_%s", mainBranchName, filepath.Base(folderPath))
 	destinationPath, err := os.MkdirTemp("", tmpFolderName)
 	logger.Info().Msg("Creating tmp directory for base branch")
@@ -257,8 +260,12 @@ func scanBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Scanner, fol
 	return results, nil
 }
 
-func getBaseBranchName() string {
-	return "master"
+func getBaseBranchName(folderPath string) string {
+	folderConfig, err := gitconfig.GetOrCreateFolderConfig(folderPath)
+	if err != nil {
+		return "master"
+	}
+	return folderConfig.BaseBranch
 }
 
 func getDelta(zlog *zerolog.Logger, baseIssueList []snyk.Issue, currentIssueList []snyk.Issue) []snyk.Issue {
