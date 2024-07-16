@@ -17,25 +17,31 @@
 package persistence
 
 import (
+	"github.com/adrg/xdg"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
 func TestInit_Empty(t *testing.T) {
 	appFs := afero.NewMemMapFs()
 	logger := zerolog.New(nil)
-
+	folderPath := "/home/myusr/testrepo"
+	expectedCacheDir := filepath.Join(xdg.CacheHome, CacheFolder)
 	cut := NewGitPersistenceProvider(&logger, appFs)
-
-	err := cut.Init()
+	actualCacheDir, err := cut.init(folderPath)
 
 	assert.NoError(t, err)
 	assert.Empty(t, cut.cache)
+	assert.Equal(t, expectedCacheDir, actualCacheDir)
 }
 
 func TestInit_NotEmpty(t *testing.T) {
@@ -47,6 +53,7 @@ func TestInit_NotEmpty(t *testing.T) {
 	appFs := afero.NewMemMapFs()
 	logger := zerolog.New(nil)
 	folderPath := "/home/myusr/testrepo"
+	expectedCacheDir := filepath.Join(xdg.CacheHome, CacheFolder)
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
@@ -59,10 +66,11 @@ func TestInit_NotEmpty(t *testing.T) {
 	err = cut.Add(folderPath, commitHash, issueList, p)
 	assert.NoError(t, err)
 
-	err = cut.Init()
+	actualCacheDir, err := cut.init(folderPath)
 	assert.NoError(t, err)
 
 	assert.Equal(t, commitHash, cut.cache[hash][p])
+	assert.Equal(t, expectedCacheDir, actualCacheDir)
 }
 
 func TestAddTo_NewCommit(t *testing.T) {
@@ -186,6 +194,7 @@ func TestClear_ExistingCache(t *testing.T) {
 	logger := zerolog.New(nil)
 	folderPath := "/home/myusr/testrepo"
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	cacheDir := filepath.Join(xdg.CacheHome, CacheFolder)
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 	pc := product.ProductCode
@@ -194,10 +203,10 @@ func TestClear_ExistingCache(t *testing.T) {
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
 
-	cut.Clear()
+	cut.Clear(folderPath)
 
 	assert.Empty(t, cut.cache)
-	assert.False(t, cut.scanSnapshotExistsOnDisk(hash, commitHash, pc))
+	assert.False(t, cut.snapshotExistsOnDisk(cacheDir, hash, commitHash, pc))
 }
 
 func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
@@ -210,6 +219,7 @@ func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 	appFs := afero.NewMemMapFs()
 	logger := zerolog.New(nil)
 	folderPath := "/home/myusr/testrepo"
+	cacheDir := filepath.Join(xdg.CacheHome, CacheFolder)
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
@@ -218,11 +228,11 @@ func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 	cut := NewGitPersistenceProvider(&logger, appFs)
 
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
-	cut.Clear()
+	cut.Clear(folderPath)
 
 	assert.Nil(t, err)
 	assert.Empty(t, cut.cache)
-	assert.False(t, cut.scanSnapshotExistsOnDisk(hash, commitHash, pc))
+	assert.False(t, cut.snapshotExistsOnDisk(cacheDir, hash, commitHash, pc))
 }
 
 func TestClearIssues_ExistingCacheExistingProduct(t *testing.T) {
@@ -235,6 +245,7 @@ func TestClearIssues_ExistingCacheExistingProduct(t *testing.T) {
 	appFs := afero.NewMemMapFs()
 	logger := zerolog.New(nil)
 	folderPath := "/home/myusr/testrepo"
+	cacheDir := filepath.Join(xdg.CacheHome, CacheFolder)
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
@@ -249,7 +260,7 @@ func TestClearIssues_ExistingCacheExistingProduct(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Empty(t, cut.cache[hash][pc])
-	assert.False(t, cut.scanSnapshotExistsOnDisk(hash, commitHash, pc))
+	assert.False(t, cut.snapshotExistsOnDisk(cacheDir, hash, commitHash, pc))
 }
 
 func TestClearIssues_ExistingCacheNonExistingProduct(t *testing.T) {
@@ -262,6 +273,7 @@ func TestClearIssues_ExistingCacheNonExistingProduct(t *testing.T) {
 	appFs := afero.NewMemMapFs()
 	logger := zerolog.New(nil)
 	folderPath := "/home/myusr/testrepo"
+	cacheDir := filepath.Join(xdg.CacheHome, CacheFolder)
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
@@ -277,7 +289,7 @@ func TestClearIssues_ExistingCacheNonExistingProduct(t *testing.T) {
 
 	assert.NotEmpty(t, cut.cache)
 	assert.NotEmpty(t, cut.cache[hash][pc])
-	assert.True(t, cut.scanSnapshotExistsOnDisk(hash, commitHash, pc))
+	assert.True(t, cut.snapshotExistsOnDisk(cacheDir, hash, commitHash, pc))
 }
 
 func TestClearIssues_NonExistingCacheNonExistingProduct(t *testing.T) {
@@ -290,6 +302,7 @@ func TestClearIssues_NonExistingCacheNonExistingProduct(t *testing.T) {
 	appFs := afero.NewMemMapFs()
 	logger := zerolog.New(nil)
 	folderPath := "/home/myusr/testrepo"
+	cacheDir := filepath.Join(xdg.CacheHome, CacheFolder)
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
@@ -304,7 +317,7 @@ func TestClearIssues_NonExistingCacheNonExistingProduct(t *testing.T) {
 	assert.Error(t, err)
 
 	assert.NotEmpty(t, cut.cache)
-	assert.True(t, cut.scanSnapshotExistsOnDisk(hash, commitHash, pc))
+	assert.True(t, cut.snapshotExistsOnDisk(cacheDir, hash, commitHash, pc))
 }
 
 func TestCreateOrAppendToCache_NewCache(t *testing.T) {
@@ -399,4 +412,50 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentPathDifferentProductDiffere
 
 	assert.Equal(t, pcCommitHash, cut.cache[hash][pc])
 	assert.Equal(t, poCommitHash, cut.cache[otherHashPath][po])
+}
+
+func TestEnsureCacheDirExists_DefaultCase(t *testing.T) {
+	appFs := afero.NewMemMapFs()
+	logger := zerolog.New(nil)
+	folderPath := "/home/myusr/testrepo"
+	expectedCacheDir := filepath.Join(xdg.CacheHome, CacheFolder)
+	cut := NewGitPersistenceProvider(&logger, appFs)
+
+	actualCacheDir, err := cut.ensureCacheDirExists(folderPath)
+
+	assert.NoError(t, err)
+	assert.Empty(t, cut.cache)
+	assert.Equal(t, expectedCacheDir, actualCacheDir)
+}
+
+type MockFs struct {
+	mock.Mock
+	afero.Fs
+}
+
+func (m *MockFs) Stat(name string) (os.FileInfo, error) {
+	args := m.Called(name)
+	return nil, args.Error(1)
+}
+
+func (m *MockFs) Mkdir(name string, perm os.FileMode) error {
+	args := m.Called(name, perm)
+	return args.Error(0)
+}
+
+func TestEnsureCacheDirExists_CacheDirIsReadonly_FallbackToGitDir(t *testing.T) {
+	c := testutil.UnitTest(t)
+	tmpDir := t.TempDir()
+	xdg.CacheHome = tmpDir
+	appFs := afero.NewOsFs()
+
+	folderPath := "/home/myusr/testrepo"
+	gitSnykCacheDir := filepath.Join(filepath.Join(folderPath, ".git"), CacheFolder)
+	cut := NewGitPersistenceProvider(c.Logger(), appFs)
+
+	actualCacheDir, err := cut.ensureCacheDirExists(folderPath)
+
+	assert.NoError(t, err)
+	assert.Empty(t, cut.cache)
+	assert.Equal(t, gitSnykCacheDir, actualCacheDir)
 }
