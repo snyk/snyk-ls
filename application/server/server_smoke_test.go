@@ -552,7 +552,7 @@ func checkForScanParams(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder,
 
 func checkAutofixDiffs(t *testing.T, c *config.Config, snykCodeScanParams types.SnykScanParams, loc server.Local) {
 	t.Helper()
-	if c.SnykCodeApi() != "https://deeproxy.snyk.io" {
+	if isNotStandardRegion(c) {
 		return
 	}
 	assert.Greater(t, len(snykCodeScanParams.Issues), 0)
@@ -573,6 +573,10 @@ func checkAutofixDiffs(t *testing.T, c *config.Config, snykCodeScanParams types.
 		// don't check for all issues, just the first
 		break
 	}
+}
+
+func isNotStandardRegion(c *config.Config) bool {
+	return c.SnykCodeApi() != "https://deeproxy.snyk.io"
 }
 
 func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server.Local, c *config.Config) string {
@@ -611,7 +615,10 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server
 
 func checkFeatureFlagStatus(t *testing.T, c *config.Config, loc *server.Local) {
 	t.Helper()
-
+	if isNotStandardRegion(c) {
+		return
+	}
+	// only check on mt-us
 	call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
 		Command:   types.GetFeatureFlagStatus,
 		Arguments: []any{"bitbucketConnectApp"},
@@ -631,7 +638,7 @@ func checkFeatureFlagStatus(t *testing.T, c *config.Config, loc *server.Local) {
 	}
 
 	ok, _ := result["ok"].(bool)
-	assert.True(t, ok)
+	assert.Truef(t, ok, "expected feature flag bitbucketConnectApp to be enabled")
 }
 
 func Test_SmokeSnykCodeFileScan(t *testing.T) {
