@@ -92,13 +92,26 @@ func Test_IsAuthenticated(t *testing.T) {
 func Test_Logout(t *testing.T) {
 	c := testutil.IntegTest(t)
 	provider := FakeAuthenticationProvider{IsAuthenticated: true}
-	service := NewAuthenticationService(c, []AuthenticationProvider{&provider}, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+	notifier := notification.NewNotifier()
+	service := NewAuthenticationService(c, []AuthenticationProvider{&provider}, error_reporting.NewTestErrorReporter(), notifier)
 
 	// act
 	service.Logout(context.Background())
+	tokenResetReceived := false
+	callback := func(params any) {
+		switch p := params.(type) {
+		case types.AuthenticationParams:
+			require.Empty(t, p.Token)
+			tokenResetReceived = true
+		}
+	}
+	go notifier.CreateListener(callback)
 
 	// assert
 	assert.False(t, provider.IsAuthenticated)
+	assert.Eventuallyf(t, func() bool {
+		return tokenResetReceived
+	}, time.Second*10, time.Millisecond, "did not receive a token reset")
 }
 
 func TestHandleInvalidCredentials(t *testing.T) {
@@ -112,7 +125,6 @@ func TestHandleInvalidCredentials(t *testing.T) {
 		c.SetToken("invalidCreds")
 		cut := NewAuthenticationService(c, providers, errorReporter, notifier).(*AuthenticationServiceImpl)
 		messageRequestReceived := false
-		tokenResetReceived := false
 		callback := func(params any) {
 			switch p := params.(type) {
 			case types.ShowMessageRequest:
@@ -125,22 +137,15 @@ func TestHandleInvalidCredentials(t *testing.T) {
 				require.True(t, ok)
 				require.Empty(t, cancelAction.CommandId)
 				messageRequestReceived = true
-			case types.AuthenticationParams:
-				require.Empty(t, p.Token)
-				tokenResetReceived = true
 			}
 		}
 		go notifier.CreateListener(callback)
 
-		cut.HandleInvalidCredentials(c)
+		cut.HandleInvalidCredentials()
 
 		maxWait := time.Second * 10
 		assert.Eventuallyf(t, func() bool {
 			return messageRequestReceived
 		}, maxWait, time.Millisecond, "didn't receive show message request to re-authenticate")
-
-		assert.Eventuallyf(t, func() bool {
-			return tokenResetReceived
-		}, maxWait, time.Millisecond, "didn't receive token reset")
 	})
 }

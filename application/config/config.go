@@ -248,11 +248,13 @@ func New() *Config {
 
 func initWorkFlowEngine(c *Config) {
 	conf := configuration.NewInMemory()
+	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
+	enableOAuth := c.authenticationMethod == types.OAuthAuthentication
+	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, enableOAuth)
+
 	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
 	c.storage = storage.NewStorage()
 	conf.SetStorage(c.storage)
-	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
-	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 
 	err := localworkflows.InitWhoAmIWorkflow(c.engine)
 	if err != nil {
@@ -283,7 +285,7 @@ func getNewScrubbingLogger(c *Config) *zerolog.Logger {
 func (c *Config) AddBinaryLocationsToPath(searchDirectories []string) {
 	c.defaultDirs = searchDirectories
 	c.determineJavaHome()
-	c.determineMavenHome()
+	c.mavenDefaults()
 }
 
 func (c *Config) determineDeviceId() string {
@@ -738,7 +740,7 @@ func (c *Config) addDefaults() {
 		c.updatePath(xdg.Home + "/bin")
 	}
 	c.determineJavaHome()
-	c.determineMavenHome()
+	c.mavenDefaults()
 }
 
 func (c *Config) SetIntegrationName(integrationName string) {

@@ -33,6 +33,7 @@ import (
 
 // Token authentication configures token only authentication
 func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) []AuthenticationProvider {
+	c.Engine().GetConfiguration().Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
 	return []AuthenticationProvider{NewCliAuthenticationProvider(c, errorReporter)}
 }
 
@@ -68,7 +69,6 @@ func Default(c *config.Config, errorReporter error_reporting.ErrorReporter, auth
 			openBrowserFunc,
 		),
 	)
-	authProviders = append(authProviders, NewCliAuthenticationProvider(c, errorReporter))
 	return authProviders
 }
 

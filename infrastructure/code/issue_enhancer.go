@@ -124,7 +124,7 @@ func (b *IssueEnhancer) createDeferredAutofixCodeAction(ctx context.Context, iss
 	bundleHash string) *snyk.CodeAction {
 	autofixEditCallback := b.autofixFunc(ctx, issue, bundleHash)
 
-	action, err := snyk.NewDeferredCodeAction("⚡ Fix this issue: "+issueTitle(issue)+" (Snyk)", &autofixEditCallback, nil)
+	action, err := snyk.NewDeferredCodeAction("⚡ Fix this issue: "+issueTitle(issue)+" (Snyk)", &autofixEditCallback, nil, "", "")
 	if err != nil {
 		b.c.Logger().Error().Msg("failed to create deferred autofix code action")
 		b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please contact Snyk support.")

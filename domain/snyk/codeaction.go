@@ -24,6 +24,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+var _ types.Groupable = (*CodeAction)(nil)
+
 // CodeAction represents a code action that can be executed by the client using an in-document menu.
 // This type should be created by the NewCodeAction or NewDeferredCodeAction functions.
 //
@@ -55,6 +57,27 @@ type CodeAction struct {
 
 	// UUID is a unique identifier for this code action. This is used for deferred resolution of a command or edit.
 	Uuid *uuid.UUID
+
+	// GroupingKey allows to identify the grouping criterium in a code action
+	GroupingKey types.Key
+
+	// The value of the grouping key
+	GroupingValue any
+
+	// The type of grouping to determine the grouping function to be used
+	GroupingType types.GroupingType
+}
+
+func (c CodeAction) GetGroupingKey() types.Key {
+	return c.GroupingKey
+}
+
+func (c CodeAction) GetGroupingValue() any {
+	return c.GroupingValue
+}
+
+func (c CodeAction) GetGroupingType() types.GroupingType {
+	return c.GroupingType
 }
 
 func NewCodeAction(title string, edit *WorkspaceEdit, command *types.CommandData) (CodeAction, error) {
@@ -70,20 +93,29 @@ func NewCodeAction(title string, edit *WorkspaceEdit, command *types.CommandData
 	return action, nil
 }
 
-func NewDeferredCodeAction(title string,
+func NewDeferredCodeAction(
+	title string,
 	deferredEdit *func() *WorkspaceEdit,
 	deferredCommand *func() *types.CommandData,
+	groupingKey types.Key,
+	groupingValue any,
 ) (CodeAction, error) {
 	if deferredEdit == nil && deferredCommand == nil {
 		return CodeAction{}, errors.New("deferredEdit and deferredCommand cannot both be nil")
 	}
 	id := uuid.New()
-
+	// if no grouping key is given, we use the uuid, that way it's never grouped
+	if groupingKey == "" || groupingValue == nil {
+		groupingKey = types.Key(id.String())
+	}
 	action := CodeAction{
 		Title:           title,
 		DeferredEdit:    deferredEdit,
 		DeferredCommand: deferredCommand,
 		Uuid:            &id,
+		GroupingKey:     groupingKey,
+		GroupingValue:   groupingValue,
+		GroupingType:    types.Quickfix,
 	}
 	return action, nil
 }

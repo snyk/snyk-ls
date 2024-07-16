@@ -17,6 +17,7 @@
 package config
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -61,7 +62,12 @@ func (c *Config) normalizePath(foundPath string) (string, bool) {
 	return path, false
 }
 
-func (c *Config) determineMavenHome() {
+func (c *Config) mavenDefaults() {
+	// explicitly and always use headless mode
+	mavenOptsVarName := "MAVEN_OPTS"
+	mavenOpts := fmt.Sprintf("%s %s", os.Getenv(mavenOptsVarName), "-Djava.awt.headless=true")
+	_ = os.Setenv(mavenOptsVarName, mavenOpts)
+
 	mavenHome := os.Getenv("MAVEN_HOME")
 	if mavenHome != "" {
 		c.updatePath(mavenHome + string(os.PathSeparator) + "bin")
@@ -76,7 +82,7 @@ func (c *Config) determineMavenHome() {
 		return
 	}
 	c.updatePath(filepath.Dir(path))
-	c.Logger().Info().Str("method", "determineMavenHome").Msgf("detected maven binary at %s", path)
+	c.Logger().Info().Str("method", "mavenDefaults").Msgf("detected maven binary at %s", path)
 }
 
 func getJavaBinaryName() string {

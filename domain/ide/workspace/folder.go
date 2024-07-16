@@ -492,12 +492,9 @@ func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[
 			continue
 		}
 		for _, issue := range issueSlice {
-			// Logging here might hurt performance, should benchmark if filtering is slow
+			// Logging here will spam the logs
 			if isVisibleSeverity(issue) && supportedIssueTypes[issue.GetFilterableIssueType()] {
-				logger.Trace().Msgf("Including visible severity issue: %v", issue)
 				filteredIssues[path] = append(filteredIssues[path], issue)
-			} else {
-				logger.Trace().Msgf("Filtering out issue %v", issue)
 			}
 		}
 	}
