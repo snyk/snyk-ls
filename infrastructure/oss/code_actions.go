@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"golang.org/x/mod/semver"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -124,7 +125,10 @@ func (i *ossIssue) getQuickfixEdit(affectedFilePath string) string {
 	// UpgradePath[0] is the upgrade for the package that was scanned
 	// UpgradePath[1] is the upgrade for the root dependency
 	depName, depVersion := i.getUpgradedPathParts()
-	if depVersion == i.Version {
+	logger.Debug().Msgf("comparing %s with %s", i.UpgradePath[1], i.From[1])
+	// from[1] contains the package that caused this issue
+	normalizedCurrentVersion := strings.Split(i.From[1], "@")[1]
+	if semver.Compare("v"+depVersion, "v"+normalizedCurrentVersion) == 0 {
 		logger.Warn().Msg("proposed upgrade version is the same version as the current, not adding quickfix")
 		return ""
 	}
