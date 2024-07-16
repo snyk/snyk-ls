@@ -488,7 +488,7 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testutil.Json
 		// code action requests are debounced (50ms), so we need to wait
 		time.Sleep(60 * time.Millisecond)
 	}
-	assert.True(t, atLeastOneQuickfixActionFound)
+	assert.Truef(t, atLeastOneQuickfixActionFound, "expected to find at least one code action")
 }
 
 func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, cloneTargetDir string, loc server.Local) {
@@ -518,7 +518,7 @@ func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorde
 			}
 		}
 	}
-	assert.True(t, atLeastOneOneIssueWithCodeLensFound)
+	assert.Truef(t, atLeastOneOneIssueWithCodeLensFound, "expected to find at least one code lens")
 }
 
 func waitForScan(t *testing.T, cloneTargetDir string) {
