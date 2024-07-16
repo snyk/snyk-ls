@@ -141,7 +141,7 @@ func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
 
 	err = cut.Add(folderPath, commitHash, issueList, p)
 	assert.NoError(t, err)
-	actualCommitHash, err := cut.getProductCommitHash(folderPath, p)
+	actualCommitHash, err := cut.getCommitHashForProduct(folderPath, p)
 
 	assert.NoError(t, err)
 	assert.Equal(t, cut.cache[hash][p], actualCommitHash)

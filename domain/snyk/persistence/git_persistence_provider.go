@@ -70,11 +70,38 @@ func NewGitPersistenceProvider(logger *zerolog.Logger, fs afero.Fs) *GitPersiste
 	}
 }
 
+func (gpp *GitPersistenceProvider) Init() error {
+	gpp.mutex.Lock()
+	defer gpp.mutex.Unlock()
+
+	err := gpp.ensureCacheDirExists()
+	if err != nil {
+		gpp.logger.Error().Err(err).Msg("could not create cache dir")
+		return err
+	}
+
+	filePaths, err := gpp.getPersistedFiles()
+	if err != nil {
+		gpp.logger.Error().Err(err).Msg("failed to load cached file paths")
+		return err
+	}
+	for _, filePath := range filePaths {
+		// file name structure is schema.hashedFolderPath.commitHash.productName.json
+		s := strings.Split(filePath, ".")
+		hash := hashedFolderPath(s[1])
+		commitHash := s[2]
+		p := product.ToProduct(s[3])
+		gpp.createOrAppendToCache(hash, commitHash, p)
+	}
+
+	return nil
+}
+
 func (gpp *GitPersistenceProvider) Clear() {
 	gpp.mutex.Lock()
 	defer gpp.mutex.Unlock()
 
-	filePaths, err := gpp.getPersistedCachedFilePaths()
+	filePaths, err := gpp.getPersistedFiles()
 	if err != nil {
 		gpp.logger.Error().Err(err).Msg("failed to load cached file paths")
 	}
@@ -86,15 +113,6 @@ func (gpp *GitPersistenceProvider) Clear() {
 		}
 	}
 	gpp.cache = make(map[hashedFolderPath]productCommitHashMap)
-}
-
-func (gpp *GitPersistenceProvider) deleteFile(fullPath string) error {
-	gpp.logger.Debug().Msg("deleting cached scan file " + fullPath)
-	err := gpp.fs.Remove(fullPath)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (gpp *GitPersistenceProvider) ClearForProduct(folderPath, commitHash string, p product.Product) error {
@@ -121,55 +139,8 @@ func (gpp *GitPersistenceProvider) ClearForProduct(folderPath, commitHash string
 	return err
 }
 
-func (gpp *GitPersistenceProvider) deleteFromCache(hash hashedFolderPath, commitHash string, p product.Product) error {
-	pchm, exists := gpp.cache[hash]
-	if !exists {
-		return errors.New("hashed folder path doesn't exist in cache")
-	}
-
-	currentCommitHash, pchExists := pchm[p]
-	if !pchExists {
-		return errors.New("product doesn't exist in cache")
-	}
-
-	if currentCommitHash != commitHash {
-		return errors.New("commit hashes don't match")
-	}
-
-	delete(gpp.cache[hash], p)
-
-	return nil
-}
-
-func (gpp *GitPersistenceProvider) Init() error {
-	gpp.mutex.Lock()
-	defer gpp.mutex.Unlock()
-
-	err := gpp.ensureCacheDirExists()
-	if err != nil {
-		gpp.logger.Error().Err(err).Msg("could not create cache dir")
-		return err
-	}
-
-	filePaths, err := gpp.getPersistedCachedFilePaths()
-	if err != nil {
-		gpp.logger.Error().Err(err).Msg("failed to load cached file paths")
-		return err
-	}
-	for _, filePath := range filePaths {
-		// file name structure is schema.hashedFolderPath.commitHash.productName.json
-		s := strings.Split(filePath, ".")
-		hash := hashedFolderPath(s[1])
-		commitHash := s[2]
-		p := product.ToProduct(s[3])
-		gpp.createOrAppendToCache(hash, commitHash, p)
-	}
-
-	return nil
-}
-
 func (gpp *GitPersistenceProvider) GetPersistedIssueList(folderPath string, p product.Product) ([]snyk.Issue, error) {
-	commitHash, err := gpp.getProductCommitHash(folderPath, p)
+	commitHash, err := gpp.getCommitHashForProduct(folderPath, p)
 	if commitHash == "" || err != nil {
 		return nil, err
 	}
@@ -178,6 +149,7 @@ func (gpp *GitPersistenceProvider) GetPersistedIssueList(folderPath string, p pr
 	if err != nil {
 		return nil, err
 	}
+
 	filePath := getLocalFilePath(hash, commitHash, p)
 	content, err := afero.ReadFile(gpp.fs, filePath)
 	if err != nil {
@@ -200,8 +172,47 @@ func (gpp *GitPersistenceProvider) GetPersistedIssueList(folderPath string, p pr
 	return results, nil
 }
 
+func (gpp *GitPersistenceProvider) Add(folderPath, commitHash string, issueList []snyk.Issue, p product.Product) error {
+	gpp.mutex.Lock()
+	defer gpp.mutex.Unlock()
+
+	err := gpp.ensureCacheDirExists()
+	if err != nil {
+		gpp.logger.Error().Err(err).Msg("could not create cache dir")
+		return err
+	}
+
+	hash, err := hashPath(folderPath)
+	if err != nil {
+		gpp.logger.Error().Err(err).Msg("could not hash path" + folderPath)
+		return err
+	}
+
+	shouldPersist := gpp.shouldPersistOnDisk(hash, commitHash, p)
+	if !shouldPersist {
+		return nil
+	}
+
+	err = gpp.deleteFileIfDifferentHash(hash, commitHash, p)
+	if err != nil {
+		gpp.logger.Error().Err(err).Msg("failed to delete file from disk in " + folderPath)
+		return err
+	}
+
+	err = gpp.persistToDisk(hash, commitHash, p, issueList)
+	if err != nil {
+		gpp.logger.Error().Err(err).Msg("failed to persist cache to disk for commitHash " + commitHash)
+		return err
+	}
+
+	gpp.createOrAppendToCache(hash, commitHash, p)
+
+	return nil
+}
+
 func (gpp *GitPersistenceProvider) Exists(folderPath, commitHash string, p product.Product) bool {
-	existingCommitHash, err := gpp.getProductCommitHash(folderPath, p)
+	existingCommitHash, err := gpp.getCommitHashForProduct(folderPath, p)
+
 	if err != nil || existingCommitHash != commitHash {
 		return false
 	}
@@ -215,6 +226,35 @@ func (gpp *GitPersistenceProvider) Exists(folderPath, commitHash string, p produ
 	return exists
 }
 
+func (gpp *GitPersistenceProvider) deleteFile(fullPath string) error {
+	gpp.logger.Debug().Msg("deleting cached scan file " + fullPath)
+	err := gpp.fs.Remove(fullPath)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (gpp *GitPersistenceProvider) deleteFromCache(hash hashedFolderPath, commitHash string, p product.Product) error {
+	pchm, exists := gpp.cache[hash]
+	if !exists {
+		return errors.New("hashed folder path doesn't exist in cache")
+	}
+
+	currentCommitHash, pchExists := pchm[p]
+	if !pchExists {
+		return errors.New("product doesn't exist in cache")
+	}
+
+	if currentCommitHash != commitHash {
+		return errors.New("commit hashes don't match")
+	}
+
+	delete(gpp.cache[hash], p)
+
+	return nil
+}
+
 func (gpp *GitPersistenceProvider) scanSnapshotExistsOnDisk(hash hashedFolderPath, commitHash string, p product.Product) bool {
 	filePath := getLocalFilePath(hash, commitHash, p)
 	if _, err := gpp.fs.Stat(filePath); os.IsNotExist(err) {
@@ -223,7 +263,7 @@ func (gpp *GitPersistenceProvider) scanSnapshotExistsOnDisk(hash hashedFolderPat
 	return true
 }
 
-func (gpp *GitPersistenceProvider) getProductCommitHash(folderPath string, p product.Product) (commitHash string, err error) {
+func (gpp *GitPersistenceProvider) getCommitHashForProduct(folderPath string, p product.Product) (commitHash string, err error) {
 	gpp.mutex.Lock()
 	defer gpp.mutex.Unlock()
 
@@ -239,42 +279,7 @@ func (gpp *GitPersistenceProvider) getProductCommitHash(folderPath string, p pro
 	return commitHash, nil
 }
 
-func (gpp *GitPersistenceProvider) Add(folderPath, commitHash string, issueList []snyk.Issue, p product.Product) error {
-	gpp.mutex.Lock()
-	defer gpp.mutex.Unlock()
-
-	err := gpp.ensureCacheDirExists()
-	if err != nil {
-		gpp.logger.Error().Err(err).Msg("could not create cache dir")
-		return err
-	}
-	hash, err := hashPath(folderPath)
-	if err != nil {
-		gpp.logger.Error().Err(err).Msg("could not hash path" + folderPath)
-		return err
-	}
-
-	shouldPersist := gpp.shouldPersist(hash, commitHash, p)
-	if !shouldPersist {
-		return nil
-	}
-	err = gpp.deleteFileIfDifferentHash(hash, commitHash, p)
-	if err != nil {
-		gpp.logger.Error().Err(err).Msg("failed to delete file from disk in " + folderPath)
-		return err
-	}
-	err = gpp.persistToDisk(hash, commitHash, p, issueList)
-	if err != nil {
-		gpp.logger.Error().Err(err).Msg("failed to persist cache to disk for commitHash " + commitHash)
-		return err
-	}
-
-	gpp.createOrAppendToCache(hash, commitHash, p)
-
-	return nil
-}
-
-func (gpp *GitPersistenceProvider) shouldPersist(folderPathHash hashedFolderPath, commitHash string, p product.Product) bool {
+func (gpp *GitPersistenceProvider) shouldPersistOnDisk(folderPathHash hashedFolderPath, commitHash string, p product.Product) bool {
 	pchm, pchmExists := gpp.cache[folderPathHash]
 	if !pchmExists {
 		return true
@@ -330,10 +335,10 @@ func (gpp *GitPersistenceProvider) createOrAppendToCache(pathHash hashedFolderPa
 	gpp.cache[pathHash] = pchm
 }
 
-func (gpp *GitPersistenceProvider) getPersistedCachedFilePaths() (cachedFilePaths []string, err error) {
+func (gpp *GitPersistenceProvider) getPersistedFiles() (persistedFiles []string, err error) {
 	entries, err := afero.ReadDir(gpp.fs, getCacheDirPath())
 	if err != nil {
-		return cachedFilePaths, err
+		return persistedFiles, err
 	}
 
 	for _, entry := range entries {
@@ -343,10 +348,10 @@ func (gpp *GitPersistenceProvider) getPersistedCachedFilePaths() (cachedFilePath
 		}
 		s := strings.Split(fileName, ".")
 		if len(s) == 5 {
-			cachedFilePaths = append(cachedFilePaths, fileName)
+			persistedFiles = append(persistedFiles, fileName)
 		}
 	}
-	return cachedFilePaths, nil
+	return persistedFiles, nil
 }
 
 func (gpp *GitPersistenceProvider) persistToDisk(folderHashedPath hashedFolderPath, commitHash string, p product.Product, inputToCache []snyk.Issue) error {
