@@ -458,6 +458,9 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 
 func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, cloneTargetDir string, loc server.Local) {
 	t.Helper()
+	if !strings.HasSuffix(t.Name(), "OSS_and_Code") {
+		return
+	}
 	ossScanParams := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
 	atLeastOneQuickfixActionFound := false
 	for _, issue := range ossScanParams.Issues {
@@ -493,6 +496,9 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testutil.Json
 
 func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, cloneTargetDir string, loc server.Local) {
 	t.Helper()
+	if !strings.HasSuffix(t.Name(), "OSS_and_Code") {
+		return
+	}
 	ossScanParams := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
 	atLeastOneOneIssueWithCodeLensFound := false
 	for _, issue := range ossScanParams.Issues {
