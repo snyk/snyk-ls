@@ -27,15 +27,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog"
-
-	"github.com/snyk/snyk-ls/internal/delta"
-	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
-	"github.com/snyk/snyk-ls/internal/vcs"
-
 	"github.com/erni27/imcache"
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
+	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 
 	codeClient "github.com/snyk/code-client-go"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
@@ -190,7 +185,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 
 	results, err := internalScan(ctx, sc, folderPath, logger, filesToBeScanned)
 
-	if err != nil && c.IsDeltaFindingsEnabled() {
+	if err == nil && c.IsDeltaFindingsEnabled() {
 		err = scanAndPersistBaseBranch(ctx, logger, sc, folderPath)
 		if err != nil {
 			logger.Error().Err(err).Msg("couldn't scan base branch for folder " + folderPath)
@@ -225,16 +220,16 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath string, logger ze
 }
 
 func scanAndPersistBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Scanner, folderPath string) error {
-	mainBranchName := getBaseBranchName()
+	mainBranchName := getBaseBranchName(folderPath)
 	gw := vcs.NewGitWrapper()
 
-	headCommit, err := vcs.CommitHashForBranch(folderPath, mainBranchName, &logger, gw)
+	headRef, err := vcs.HeadRefHashForBranch(folderPath, mainBranchName, &logger, gw)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to fetch commit hash for main branch")
 		return err
 	}
 
-	snapshotExists := sc.scanPersister.Exists(folderPath, headCommit, sc.Product())
+	snapshotExists := sc.scanPersister.Exists(folderPath, headRef, sc.Product())
 	if snapshotExists {
 		return nil
 	}
@@ -273,7 +268,7 @@ func scanAndPersistBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Sc
 	if err != nil {
 		return err
 	}
-	commitHash, err := vcs.CommitHashForRepo(repo)
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	if err != nil {
 		logger.Error().Err(err).Msg("could not get commit hash for repo in folder " + folderPath)
 		return err

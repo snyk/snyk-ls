@@ -59,7 +59,7 @@ func Clone(repoPath string, destinationPath string, branchName string, logger *z
 	return clonedRepo, nil
 }
 
-func CommitHashForRepo(repo *git.Repository) (string, error) {
+func HeadRefHashForRepo(repo *git.Repository) (string, error) {
 	head, err := repo.Head()
 	if err != nil {
 		return "", err
@@ -68,7 +68,7 @@ func CommitHashForRepo(repo *git.Repository) (string, error) {
 	return commitHash, nil
 }
 
-func CommitHashForBranch(repoPath, branchName string, logger *zerolog.Logger, gitOps GitOps) (string, error) {
+func HeadRefHashForBranch(repoPath, branchName string, logger *zerolog.Logger, gitOps GitOps) (string, error) {
 	repo, err := gitOps.PlainOpen(repoPath)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to open repository")
