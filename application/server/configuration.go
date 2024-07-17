@@ -30,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -116,7 +117,7 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
 	updateToken(settings.Token)
 	updateEnvironment(c, settings)
 	updatePathFromSettings(c, settings)
-	updateTelemetry(c, settings)
+	updateErrorReporting(c, settings)
 	updateOrganization(c, settings)
 	manageBinariesAutomatically(c, settings)
 	updateTrustedFolders(c, settings)
@@ -127,6 +128,11 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
 	updateSnykLearnCodeActions(c, settings)
 	updateSnykOSSQuickFixCodeActions(c, settings)
 	updateDeltaFindings(c, settings)
+	updateFolderConfig(settings)
+}
+
+func updateFolderConfig(settings types.Settings) {
+	gitconfig.SetBaseBranch(settings.FolderConfig)
 }
 
 func updateAuthenticationMethod(c *config.Config, settings types.Settings) {
@@ -240,7 +246,7 @@ func updateOrganization(c *config.Config, settings types.Settings) {
 	}
 }
 
-func updateTelemetry(c *config.Config, settings types.Settings) {
+func updateErrorReporting(c *config.Config, settings types.Settings) {
 	parseBool, err := strconv.ParseBool(settings.SendErrorReports)
 	if err != nil {
 		c.Logger().Debug().Msgf("couldn't read send error reports %s", settings.SendErrorReports)
