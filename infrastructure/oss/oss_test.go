@@ -103,7 +103,7 @@ func Test_toIssue_LearnParameterConversion(t *testing.T) {
 		learnService: getLearnMock(t),
 	}
 
-	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{Start: snyk.Position{Line: 1}}, scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, sampleOssIssue.Identifiers.CWE, issue.CWEs)
