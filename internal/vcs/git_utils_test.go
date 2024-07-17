@@ -18,11 +18,16 @@ package vcs
 
 import (
 	"errors"
+	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/cache"
+	"github.com/go-git/go-git/v5/storage/filesystem"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -43,7 +48,7 @@ func TestClone_DifferentBranchNames_ShouldClone(t *testing.T) {
 	repo, err := Clone(repoPath, tmpRepoPath, baseBranchName, &logger, mgo)
 
 	assert.NotNil(t, repo)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	mgo.AssertExpectations(t)
 }
 
@@ -97,7 +102,7 @@ func TestClone_SameBranchNames_SkipClone(t *testing.T) {
 	repo, err := Clone(repoPath, tmpRepoPath, baseBranchName, &logger, mgo)
 
 	assert.Nil(t, repo)
-	assert.Nil(t, err)
+	assert.Error(t, err)
 	mgo.AssertNotCalled(t, "PlainClone", mock.Anything, mock.AnythingOfType("*git.CloneOptions"))
 	mgo.AssertExpectations(t)
 }
@@ -119,6 +124,28 @@ func TestClone_DifferentBranchNames_FailedClone(t *testing.T) {
 	repo, err := Clone(repoPath, tmpRepoPath, baseBranchName, &logger, mgo)
 
 	assert.Nil(t, repo)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	mgo.AssertExpectations(t)
+}
+
+func TestClone_HasUncommittedChanges(t *testing.T) {
+	repoPath := t.TempDir()
+
+	fs := filesystem.NewStorage(osfs.New(repoPath), cache.NewObjectLRUDefault())
+
+	repo, err := git.Init(fs, fs.Filesystem())
+	assert.NoError(t, err)
+
+	absoluteFileName := filepath.Join(repoPath, "testFile.txt")
+	err = os.WriteFile(absoluteFileName, []byte("testData"), 0600)
+	assert.NoError(t, err)
+	worktree, err := repo.Worktree()
+	assert.NoError(t, err)
+
+	_, err = worktree.Add(filepath.Base(absoluteFileName))
+	assert.NoError(t, err)
+
+	hasChanges := hasUncommitedChanges(repo)
+
+	assert.True(t, hasChanges)
 }

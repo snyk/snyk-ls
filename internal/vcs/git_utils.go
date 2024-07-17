@@ -18,6 +18,7 @@ package vcs
 
 import (
 	"errors"
+	"fmt"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/storage/filesystem"
@@ -40,9 +41,8 @@ func Clone(repoPath string, destinationPath string, branchName string, logger *z
 		return nil, err
 	}
 
-	if currentRepoBranch.Name() == baseBranchName {
-		logger.Info().Msg("Current branch is the same as base. Skipping cloning")
-		return nil, nil
+	if currentRepoBranch.Name() == baseBranchName && !hasUncommitedChanges(currentRepo) {
+		return nil, fmt.Errorf("current branch is the same as base branch")
 	}
 
 	clonedRepo, err := gitOps.PlainClone(destinationPath, false, &git.CloneOptions{
@@ -109,4 +109,23 @@ func GitRepoFolderPath(folderPath string, logger *zerolog.Logger, gitOps GitOps)
 	}
 
 	return repoPath, nil
+}
+
+func hasUncommitedChanges(repo *git.Repository) bool {
+	worktree, err := repo.Worktree()
+	if err != nil {
+		return false
+	}
+
+	status, err := worktree.Status()
+	if err != nil {
+		return false
+	}
+
+	for _, st := range status {
+		if st.Staging != git.Unmodified || st.Worktree != git.Unmodified {
+			return true
+		}
+	}
+	return false
 }
