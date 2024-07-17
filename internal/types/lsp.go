@@ -516,20 +516,25 @@ type WorkspaceFoldersChangeEvent struct {
 	Removed []WorkspaceFolder `json:"Removed,omitempty"`
 }
 
+// FolderConfig is exchanged between IDE and LS
+// IDE sends this as part of the settings/initialization
+// LS sends this via the $/snyk.FolderConfig notification
+type FolderConfig struct {
+	FolderPath    string   `json:"folderPath"`
+	BaseBranch    string   `json:"baseBranch"`
+	LocalBranches []string `json:"localBranches,omitempty"`
+}
+
 // Settings is the struct that is parsed from the InitializationParams.InitializationOptions field
 type Settings struct {
+	// global settings start
 	ActivateSnykOpenSource           string               `json:"activateSnykOpenSource,omitempty"`
 	ActivateSnykCode                 string               `json:"activateSnykCode,omitempty"`
 	ActivateSnykIac                  string               `json:"activateSnykIac,omitempty"`
 	Insecure                         string               `json:"insecure,omitempty"`
 	Endpoint                         string               `json:"endpoint,omitempty"`
-	AdditionalParams                 string               `json:"additionalParams,omitempty"`
-	AdditionalEnv                    string               `json:"additionalEnv,omitempty"`
-	Path                             string               `json:"path,omitempty"`
-	SendErrorReports                 string               `json:"sendErrorReports,omitempty"`
 	Organization                     string               `json:"organization,omitempty"`
-	EnableTelemetry                  string               `json:"enableTelemetry,omitempty"`
-	ManageBinariesAutomatically      string               `json:"manageBinariesAutomatically,omitempty"`
+	Path                             string               `json:"path,omitempty"`
 	CliPath                          string               `json:"cliPath,omitempty"`
 	Token                            string               `json:"token,omitempty"`
 	IntegrationName                  string               `json:"integrationName,omitempty"`
@@ -537,8 +542,9 @@ type Settings struct {
 	AutomaticAuthentication          string               `json:"automaticAuthentication,omitempty"`
 	DeviceId                         string               `json:"deviceId,omitempty"`
 	FilterSeverity                   SeverityFilter       `json:"filterSeverity,omitempty"`
+	SendErrorReports                 string               `json:"sendErrorReports,omitempty"`
+	ManageBinariesAutomatically      string               `json:"manageBinariesAutomatically,omitempty"`
 	EnableTrustedFoldersFeature      string               `json:"enableTrustedFoldersFeature,omitempty"`
-	TrustedFolders                   []string             `json:"trustedFolders,omitempty"`
 	ActivateSnykCodeSecurity         string               `json:"activateSnykCodeSecurity,omitempty"`
 	ActivateSnykCodeQuality          string               `json:"activateSnykCodeQuality,omitempty"`
 	OsPlatform                       string               `json:"osPlatform,omitempty"`
@@ -550,8 +556,15 @@ type Settings struct {
 	SnykCodeApi                      string               `json:"snykCodeApi,omitempty"`
 	EnableSnykLearnCodeActions       string               `json:"enableSnykLearnCodeActions,omitempty"`
 	EnableSnykOSSQuickFixCodeActions string               `json:"enableSnykOSSQuickFixCodeActions,omitempty"`
-	EnableDeltaFindings              string               `json:"enableDeltaFindings,omitempty"`
+	EnableDeltaFindings              string               `json:"enableDeltaFindings,omitempty"` // should this be global?
 	RequiredProtocolVersion          string               `json:"requiredProtocolVersion,omitempty"`
+	// global settings end
+	// folder specific settings start
+	AdditionalParams string         `json:"additionalParams,omitempty"` // TODO make folder specific, move to folder config
+	AdditionalEnv    string         `json:"additionalEnv,omitempty"`    // TODO make folder specific, move to folder config
+	TrustedFolders   []string       `json:"trustedFolders,omitempty"`   // TODO make folder specific, move to folder config
+	FolderConfig     []FolderConfig `json:"folderConfig,omitempty"`
+	// folder specific settings end
 }
 
 type AuthenticationMethod string

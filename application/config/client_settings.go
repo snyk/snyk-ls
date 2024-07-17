@@ -29,7 +29,6 @@ const (
 	ActivateSnykAdvisorKey   = "ACTIVATE_SNYK_ADVISOR"
 	SendErrorReportsKey      = "SEND_ERROR_REPORTS"
 	Organization             = "SNYK_CFG_ORG"
-	EnableTelemetry          = "SNYK_CFG_DISABLE_ANALYTICS"
 )
 
 func (c *Config) clientSettingsFromEnv() {

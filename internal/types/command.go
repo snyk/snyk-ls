@@ -67,7 +67,22 @@ type CommandData struct {
 	 * Arguments that the command handler should be
 	 * invoked with.
 	 */
-	Arguments []any
+	Arguments     []any
+	GroupingKey   Key
+	GroupingType  GroupingType
+	GroupingValue any
+}
+
+func (c CommandData) GetGroupingKey() Key {
+	return c.GroupingKey
+}
+
+func (c CommandData) GetGroupingValue() any {
+	return c.GroupingValue
+}
+
+func (c CommandData) GetGroupingType() GroupingType {
+	return c.GroupingType
 }
 
 type CommandName string

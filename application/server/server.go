@@ -31,7 +31,6 @@ import (
 	"github.com/shirou/gopsutil/process"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/codelens"
@@ -142,30 +141,23 @@ func codeLensHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.CodeLensParams) ([]sglsp.CodeLens, error) {
 		c := config.CurrentConfig()
 		c.Logger().Info().Str("method", "CodeLensHandler").Msg("RECEIVING")
-		defer c.Logger().Info().Str("method", "CodeLensHandler").Msg("SENDING")
 
 		lenses := codelens.GetFor(uri.PathFromUri(params.TextDocument.URI))
 
 		// Do not return Snyk Code Fix codelens when a doc is dirty
 		isDirtyFile := di.FileWatcher().IsDirty(params.TextDocument.URI)
+
+		defer c.Logger().Info().Str("method", "CodeLensHandler").
+			Bool("isDirtyFile", isDirtyFile).
+			Int("lensCount", len(lenses)).
+			Msg("SENDING")
+
 		if !isDirtyFile {
 			return lenses, nil
 		}
-
-		return filterCodeFixCodelens(lenses), nil
+		// if dirty, lenses don't make sense
+		return nil, nil
 	})
-}
-
-func filterCodeFixCodelens(lenses []sglsp.CodeLens) []sglsp.CodeLens {
-	var filteredLenses []sglsp.CodeLens
-	for _, lense := range lenses {
-		if lense.Command.Command == types.CodeFixCommand {
-			continue
-		}
-
-		filteredLenses = append(filteredLenses, lense)
-	}
-	return filteredLenses
 }
 
 func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler {
@@ -585,12 +577,12 @@ func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 
 func codeActionResolveHandler(server types.Server) handler.Func {
 	c := config.CurrentConfig()
-	return handler.New(codeaction.ResolveCodeActionHandler(c, di.CodeActionService(), server))
+	return handler.New(ResolveCodeActionHandler(c, di.CodeActionService(), server))
 }
 
 func textDocumentCodeActionHandler() handler.Func {
 	c := config.CurrentConfig()
-	return handler.New(codeaction.GetCodeActionHandler(c, di.CodeActionService()))
+	return handler.New(GetCodeActionHandler(c))
 }
 
 func noOpHandler() jrpc2.Handler {

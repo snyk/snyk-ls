@@ -19,6 +19,7 @@ package authentication
 import (
 	"context"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/erni27/imcache"
@@ -37,16 +38,17 @@ type AuthenticationServiceImpl struct {
 	c             *config.Config
 	// key = token, value = isAuthenticated
 	authCache *imcache.Cache[string, bool]
+	m         sync.Mutex
 }
 
 func NewAuthenticationService(c *config.Config, authProviders []AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
 	cache := imcache.New[string, bool]()
 	return &AuthenticationServiceImpl{
-		authProviders,
-		errorReporter,
-		notifier,
-		c,
-		cache,
+		providers:     authProviders,
+		errorReporter: errorReporter,
+		notifier:      notifier,
+		c:             c,
+		authCache:     cache,
 	}
 }
 
@@ -76,8 +78,10 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 
 	// remove old token from cache, but don't add new token, as we want the entry only when
 	// checks are performed - e.g. in IsAuthenticated or Authenticate which call the API to check for real
+	a.m.Lock()
 	a.authCache.Remove(oldToken)
 	c.SetToken(newToken)
+	a.m.Unlock()
 
 	if sendNotification {
 		a.notifier.Send(types.AuthenticationParams{Token: newToken})
@@ -99,21 +103,27 @@ func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
 // If the token is set, but not valid IsAuthenticated returns false and the reported error
 func (a *AuthenticationServiceImpl) IsAuthenticated() (bool, error) {
 	logger := a.c.Logger().With().Str("method", "AuthenticationService.IsAuthenticated").Logger()
-	if !a.c.NonEmptyToken() {
-		logger.Info().Str("method", "IsAuthenticated").Msg("no credentials found")
-		return false, nil
-	}
+	a.m.Lock()
 
 	_, found := a.authCache.Get(a.c.Token())
 	if found {
 		a.c.Logger().Debug().Msg("IsAuthenticated (found in cache)")
+		a.m.Unlock()
 		return true, nil
+	}
+
+	noToken := !a.c.NonEmptyToken()
+	if noToken {
+		logger.Info().Str("method", "IsAuthenticated").Msg("no credentials found")
+		a.m.Unlock()
+		return false, nil
 	}
 
 	var user string
 	var err error
 	for _, provider := range a.providers {
 		providerType := reflect.TypeOf(provider).String()
+
 		user, err = provider.GetCheckAuthenticationFunction()()
 		if user == "" || err != nil {
 			a.c.Logger().
@@ -127,13 +137,17 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() (bool, error) {
 	}
 
 	if user == "" {
-		a.HandleInvalidCredentials(a.c)
+		a.m.Unlock()
+		logger.Debug().Msg("logging out")
+		a.Logout(context.Background())
+		a.HandleInvalidCredentials()
 		return false, err
 	}
 
-	// we cache the API auth ok for up to 12 hours after last access. Afterwards, a new check is performed.
-	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute*5))
+	// we cache the API auth ok for up to 1 minutes after last access. Afterwards, a new check is performed.
+	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute))
 	a.c.Logger().Debug().Msg("IsAuthenticated: " + user + ", adding to cache.")
+	a.m.Unlock()
 	return true, nil
 }
 
@@ -161,11 +175,8 @@ func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
 	}
 }
 
-func (a *AuthenticationServiceImpl) HandleInvalidCredentials(c *config.Config) {
-	logger := c.Logger().With().Str("method", "AuthenticationServiceImpl.HandleInvalidCredentials").Logger()
+func (a *AuthenticationServiceImpl) HandleInvalidCredentials() {
 	msg := "Your authentication credentials cannot be validated. Automatically clearing credentials. You need to re-authenticate to use Snyk."
-	logger.Debug().Msg("logging out")
-	a.Logout(context.Background())
 
 	actions := data_structure.OrderedMap[types.MessageAction, types.CommandData]{}
 	actions.Add("Authenticate", types.CommandData{

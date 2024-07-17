@@ -393,7 +393,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	assert.Equal(t, lenses[0].Command.Command, code.FakeCommand.CommandId)
 }
 
-func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeFixLenses(t *testing.T) {
+func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 	testutil.IntegTest(t) // this needs an authenticated user
 	loc, _ := setupServer(t)
 	didOpenParams, dir := didOpenTextParams(t)
@@ -448,9 +448,7 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeFixLenses(t *testing.T
 	if err := rsp.UnmarshalResult(&lenses); err != nil {
 		t.Fatal(err)
 	}
-	assert.NotNil(t, lenses)
-	assert.Len(t, lenses, 1)
-	assert.Equal(t, lenses[0].Command.Command, code.FakeCommand.CommandId)
+	assert.Len(t, lenses, 0)
 }
 
 func Test_initialize_updatesSettings(t *testing.T) {

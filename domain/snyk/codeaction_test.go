@@ -40,7 +40,7 @@ func Test_NewCodeAction_NoEditOrCommand_Errors(t *testing.T) {
 }
 
 func Test_NewDeferredCodeAction_NoEditOrCommand_Errors(t *testing.T) {
-	_, err := snyk.NewDeferredCodeAction("title", nil, nil)
+	_, err := snyk.NewDeferredCodeAction("title", nil, nil, "", nil)
 	assert.Error(t, err)
 }
 
@@ -50,7 +50,7 @@ func Test_NewCodeAction(t *testing.T) {
 }
 
 func Test_NewDeferredCodeAction(t *testing.T) {
-	action, err := snyk.NewDeferredCodeAction("title", &mockDeferredEdit, &mockDeferredCommand)
+	action, err := snyk.NewDeferredCodeAction("title", &mockDeferredEdit, &mockDeferredCommand, "", nil)
 
 	assertActionsInitializedCorrectly(t,
 		err,

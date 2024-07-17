@@ -136,7 +136,16 @@ func (s *SarifConverter) getCodeFlow(r codeClientSarif.Result, baseDir string) (
 			for _, tFlowLocation := range tFlow.Locations {
 				method := "getCodeFlow"
 				physicalLoc := tFlowLocation.Location.PhysicalLocation
-				path := physicalLoc.ArtifactLocation.URI
+				path, err := DecodePath(ToAbsolutePath(baseDir, physicalLoc.ArtifactLocation.URI))
+				if err != nil {
+					s.c.Logger().Error().
+						Err(err).
+						Msg("failed to convert URI to absolute path: base directory: " +
+							baseDir +
+							", URI: " +
+							physicalLoc.ArtifactLocation.URI)
+					continue
+				}
 				region := physicalLoc.Region
 				myRange :=
 					snyk.Range{
@@ -153,7 +162,7 @@ func (s *SarifConverter) getCodeFlow(r codeClientSarif.Result, baseDir string) (
 				if !dedupMap[key] {
 					fileUtil := filesystem.New()
 					filePath := filepath.Join(baseDir, path)
-					content, err := fileUtil.GetLineOfCode(filePath, myRange.Start.Line+1)
+					content, err := fileUtil.GetLineOfCode(path, myRange.Start.Line+1)
 					if err != nil {
 						s.c.Logger().Warn().Str("method", "code.getCodeFlow").Err(err).Msg("cannot load line Content from file")
 					}

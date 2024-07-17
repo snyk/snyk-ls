@@ -27,6 +27,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
+
+	"github.com/snyk/snyk-ls/internal/delta"
+	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
+	"github.com/snyk/snyk-ls/internal/vcs"
+
 	"github.com/erni27/imcache"
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
@@ -279,8 +285,12 @@ func scanAndPersistBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Sc
 	return nil
 }
 
-func getBaseBranchName() string {
-	return "master"
+func getBaseBranchName(folderPath string) string {
+	folderConfig, err := gitconfig.GetOrCreateFolderConfig(folderPath)
+	if err != nil {
+		return "master"
+	}
+	return folderConfig.BaseBranch
 }
 
 // Populate HTML template

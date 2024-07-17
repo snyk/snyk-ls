@@ -20,17 +20,23 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/creachadair/jrpc2"
+	"github.com/go-git/go-billy/v5/osfs"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/cache"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/storage/filesystem"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-
+	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -170,6 +176,8 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("All settings are updated", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
+		tempDir1 := filepath.Join(t.TempDir(), "tempDir1")
+		tempDir2 := filepath.Join(t.TempDir(), "tempDir2")
 		settings := types.Settings{
 			ActivateSnykOpenSource:      "false",
 			ActivateSnykCode:            "false",
@@ -181,7 +189,6 @@ func Test_UpdateSettings(t *testing.T) {
 			Path:                        "addPath",
 			SendErrorReports:            "true",
 			Organization:                expectedOrgId,
-			EnableTelemetry:             "false",
 			ManageBinariesAutomatically: "false",
 			CliPath:                     "C:\\Users\\CliPath\\snyk-ls.exe",
 			Token:                       "a fancy token",
@@ -194,6 +201,16 @@ func Test_UpdateSettings(t *testing.T) {
 			ScanningMode:                "manual",
 			AuthenticationMethod:        types.OAuthAuthentication,
 			SnykCodeApi:                 sampleSettings.SnykCodeApi,
+			FolderConfig: []types.FolderConfig{
+				{
+					FolderPath: tempDir1,
+					BaseBranch: "testBaseBranch1",
+				},
+				{
+					FolderPath: tempDir2,
+					BaseBranch: "testBaseBranch2",
+				},
+			},
 		}
 
 		UpdateSettings(c, settings)
@@ -220,6 +237,18 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, settings.RuntimeVersion, c.RuntimeVersion())
 		assert.False(t, c.IsAutoScanEnabled())
 		assert.Equal(t, sampleSettings.SnykCodeApi, c.SnykCodeApi())
+
+		err := initTestRepo(t, tempDir1)
+		assert.NoError(t, err)
+		folderConfig1, err := gitconfig.GetOrCreateFolderConfig(tempDir1)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, folderConfig1.BaseBranch)
+
+		err = initTestRepo(t, tempDir2)
+		assert.NoError(t, err)
+		folderConfig2, err := gitconfig.GetOrCreateFolderConfig(tempDir2)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, folderConfig2.BaseBranch)
 	})
 
 	t.Run("empty snyk code api is ignored and default is used", func(t *testing.T) {
@@ -365,6 +394,25 @@ func Test_UpdateSettings(t *testing.T) {
 			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
 		})
 	})
+}
+
+func initTestRepo(t *testing.T, tempDir string) error {
+	t.Helper()
+	fs := filesystem.NewStorage(osfs.New(tempDir), cache.NewObjectLRU(cache.FileSize(1024)))
+	repo1, err := git.Init(fs, fs.Filesystem())
+	assert.NoError(t, err)
+	absoluteFileName := filepath.Join(tempDir, "testFile")
+	err = os.WriteFile(absoluteFileName, []byte("testData"), 0600)
+	assert.NoError(t, err)
+	worktree, err := repo1.Worktree()
+	assert.NoError(t, err)
+	_, err = worktree.Add(filepath.Base(absoluteFileName))
+	assert.NoError(t, err)
+	_, err = worktree.Commit("testCommit", &git.CommitOptions{
+		Author: &object.Signature{Name: t.Name()},
+	})
+	assert.NoError(t, err)
+	return err
 }
 
 func Test_InitializeSettings(t *testing.T) {

@@ -43,9 +43,14 @@ func FromPosition(pos sglsp.Position) snyk.Position {
 }
 
 func ToCodeActions(issues []snyk.Issue) (actions []types.CodeAction) {
+	dedupMap := map[string]bool{}
 	for _, issue := range issues {
 		for _, action := range issue.CodeActions {
-			actions = append(actions, ToCodeAction(issue, action))
+			if !dedupMap[action.Title] {
+				codeAction := ToCodeAction(issue, action)
+				actions = append(actions, codeAction)
+				dedupMap[action.Title] = true
+			}
 		}
 	}
 	return actions

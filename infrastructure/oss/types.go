@@ -22,15 +22,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/gomarkdown/markdown"
-	"github.com/pkg/errors"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -274,121 +270,6 @@ func (i *ossIssue) ToIssueSeverity() snyk.Severity {
 		return snyk.Low
 	}
 	return sev
-}
-func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter,
-	affectedFilePath string, issueRange snyk.Range) (actions []snyk.
-	CodeAction) {
-	quickFixAction := i.AddQuickFixAction(affectedFilePath, issueRange)
-	if quickFixAction != nil {
-		actions = append(actions, *quickFixAction)
-	}
-
-	title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", i.Title, i.PackageName)
-	command := &types.CommandData{
-		Title:     title,
-		CommandId: types.OpenBrowserCommand,
-		Arguments: []any{i.CreateIssueURL().String()},
-	}
-
-	action, _ := snyk.NewCodeAction(title, nil, command)
-	actions = append(actions, action)
-
-	codeAction := i.AddSnykLearnAction(learnService, ep)
-	if codeAction != nil {
-		actions = append(actions, *codeAction)
-	}
-
-	return actions
-}
-
-func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_reporting.ErrorReporter) (action *snyk.
-	CodeAction) {
-	if config.CurrentConfig().IsSnykLearnCodeActionsEnabled() {
-		lesson, err := learnService.GetLesson(i.PackageManager, i.Id, i.Identifiers.CWE, i.Identifiers.CVE, snyk.DependencyVulnerability)
-		if err != nil {
-			msg := "failed to get lesson"
-			config.CurrentConfig().Logger().Err(err).Msg(msg)
-			ep.CaptureError(errors.WithMessage(err, msg))
-			return nil
-		}
-
-		if lesson != nil && lesson.Url != "" {
-			title := fmt.Sprintf("Learn more about %s (Snyk)", i.Title)
-			action = &snyk.CodeAction{
-				Title: title,
-				Command: &types.CommandData{
-					Title:     title,
-					CommandId: types.OpenBrowserCommand,
-					Arguments: []any{lesson.Url},
-				},
-			}
-			i.lesson = lesson
-			config.CurrentConfig().Logger().Debug().Str("method", "oss.issue.AddSnykLearnAction").Msgf("Learn action: %v", action)
-		}
-	}
-	return action
-}
-
-func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Range) *snyk.CodeAction {
-	if !config.CurrentConfig().IsSnyOSSQuickFixCodeActionsEnabled() {
-		return nil
-	}
-	log.Debug().Msg("create deferred quickfix code action")
-	quickfixEdit := i.getQuickfixEdit(affectedFilePath)
-	if quickfixEdit == "" {
-		return nil
-	}
-	upgradeMessage := "Upgrade to " + quickfixEdit + " (Snyk)"
-	autofixEditCallback := func() *snyk.WorkspaceEdit {
-		edit := &snyk.WorkspaceEdit{}
-		singleTextEdit := snyk.TextEdit{
-			Range:   issueRange,
-			NewText: quickfixEdit,
-		}
-		edit.Changes = make(map[string][]snyk.TextEdit)
-		edit.Changes[affectedFilePath] = []snyk.TextEdit{singleTextEdit}
-		return edit
-	}
-
-	action, err := snyk.NewDeferredCodeAction(upgradeMessage, &autofixEditCallback, nil)
-	if err != nil {
-		log.Error().Msg("failed to create deferred quickfix code action")
-		return nil
-	}
-	return &action
-}
-
-func (i *ossIssue) getQuickfixEdit(affectedFilePath string) string {
-	hasUpgradePath := len(i.UpgradePath) > 1
-	if !hasUpgradePath {
-		return ""
-	}
-
-	// UpgradePath[0] is the upgrade for the package that was scanned
-	// UpgradePath[1] is the upgrade for the root dependency
-	rootDependencyUpgrade := strings.Split(i.UpgradePath[1].(string), "@")
-	depName := strings.Join(rootDependencyUpgrade[:len(rootDependencyUpgrade)-1], "@")
-	depVersion := rootDependencyUpgrade[len(rootDependencyUpgrade)-1]
-	if i.PackageManager == "npm" || i.PackageManager == "yarn" || i.PackageManager == "yarn-workspace" {
-		return fmt.Sprintf("\"%s\": \"%s\"", depName, depVersion)
-	} else if i.PackageManager == "maven" {
-		depNameSplit := strings.Split(depName, ":")
-		depName = depNameSplit[len(depNameSplit)-1]
-		// TODO: remove once https://snyksec.atlassian.net/browse/OSM-1775 is fixed
-		if strings.Contains(affectedFilePath, "build.gradle") {
-			return fmt.Sprintf("%s:%s", depName, depVersion)
-		}
-		return depVersion
-	} else if i.PackageManager == "gradle" {
-		depNameSplit := strings.Split(depName, ":")
-		depName = depNameSplit[len(depNameSplit)-1]
-		return fmt.Sprintf("%s:%s", depName, depVersion)
-	}
-	if i.PackageManager == "gomodules" {
-		return fmt.Sprintf("v%s", depVersion)
-	}
-
-	return ""
 }
 
 type licensesPolicy struct {

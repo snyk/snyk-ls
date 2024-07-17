@@ -89,6 +89,9 @@ func registerNotifier(c *config.Config, srv types.Server) {
 	logger := c.Logger().With().Str("method", "registerNotifier").Logger()
 	callbackFunction := func(params any) {
 		switch params := params.(type) {
+		case types.FolderConfig:
+			notifier(c, srv, "$/snyk.folderConfig", params)
+			logger.Info().Any("folderConfig", params).Msg("sending folderConfig to client")
 		case types.AuthenticationParams:
 			notifier(c, srv, "$/snyk.hasAuthenticated", params)
 			logger.Info().Msg("sending token")

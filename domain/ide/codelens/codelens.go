@@ -32,17 +32,67 @@ func GetFor(filePath string) (lenses []sglsp.CodeLens) {
 	}
 
 	issues := f.IssuesForFile(filePath)
+
+	// group by range first
+	lensesByRange := make(map[snyk.Range][]types.CommandData)
 	for _, issue := range issues {
-		for _, command := range issue.CodelensCommands {
-			lenses = append(lenses, getCodeLensFromCommand(issue, command))
+		for _, lens := range issue.CodelensCommands {
+			commands := lensesByRange[issue.Range]
+			if commands == nil {
+				commands = []types.CommandData{}
+			}
+			commands = append(commands, lens)
+			lensesByRange[issue.Range] = commands
 		}
 	}
+
+	for r, commands := range lensesByRange {
+		lensCommands := getLensCommands(commands)
+		for _, command := range lensCommands {
+			lenses = append(lenses, getCodeLensFromCommand(r, command))
+		}
+	}
+
 	return lenses
 }
 
-func getCodeLensFromCommand(issue snyk.Issue, command types.CommandData) sglsp.CodeLens {
+func getLensCommands(inputCommands []types.CommandData) []types.CommandData {
+	groupableByType := map[types.GroupingType][]types.Groupable{}
+	for _, groupable := range inputCommands {
+		commands := groupableByType[groupable.GetGroupingType()]
+		if commands == nil {
+			commands = []types.Groupable{}
+		}
+
+		groupableByType[groupable.GetGroupingType()] = append(commands, groupable)
+	}
+
+	lenses := []types.CommandData{}
+	for groupingType, lensCommands := range groupableByType {
+		if groupingType == types.Quickfix {
+			// right now we can always group by max semver version, as
+			// code only has one quickfix available, and iac none at all
+			qf, ok := types.MaxSemver()(lensCommands).(types.CommandData)
+			if ok {
+				lenses = append(lenses, qf)
+			}
+		} else {
+			// add all other lenses
+			for _, lensCommand := range lensCommands {
+				lens, ok := lensCommand.(types.CommandData)
+				if ok {
+					lenses = append(lenses, lens)
+				}
+			}
+		}
+	}
+
+	return lenses
+}
+
+func getCodeLensFromCommand(r snyk.Range, command types.CommandData) sglsp.CodeLens {
 	return sglsp.CodeLens{
-		Range: converter.ToRange(issue.Range),
+		Range: converter.ToRange(r),
 		Command: sglsp.Command{
 			Title:     command.Title,
 			Command:   command.CommandId,
