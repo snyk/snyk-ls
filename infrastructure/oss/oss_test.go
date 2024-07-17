@@ -122,7 +122,7 @@ func Test_toIssue_CodeActions_WithNPMFix(t *testing.T) {
 	}
 	sampleOssIssue.UpgradePath = []any{"false", "pkg@v2"}
 
-	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{Start: snyk.Position{Line: 1}}, scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 3, len(issue.CodeActions))
