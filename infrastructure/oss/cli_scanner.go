@@ -263,10 +263,15 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 	}
 
 	for _, scanResult := range scanResults {
-		targetFilePath := path
 		targetFile := cliScanner.determineTargetFile(scanResult.DisplayTargetFile)
-		if targetFile != "" {
-			targetFilePath = filepath.Join(workDir, targetFile)
+		targetFilePath := scanResult.Path
+		if targetFilePath == "" {
+			targetFilePath = workDir
+		}
+		if targetFilePath == "" {
+			targetFilePath = targetFile
+		} else {
+			targetFilePath = filepath.Join(targetFilePath, targetFile)
 		}
 		fileContent, err := os.ReadFile(targetFilePath)
 		if err != nil {
@@ -355,12 +360,12 @@ func (cliScanner *CLIScanner) determineTargetFile(displayTargetFile string) stri
 
 func (cliScanner *CLIScanner) retrieveIssues(
 	res *scanResult,
-	path string,
+	targetFilePath string,
 	fileContent []byte,
 ) []snyk.Issue {
 	issues := convertScanResultToIssues(
 		res,
-		path,
+		targetFilePath,
 		fileContent,
 		cliScanner.learnService,
 		cliScanner.errorReporter,

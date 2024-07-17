@@ -42,7 +42,7 @@ func TestCLIScanner_ScanPackages_WithoutContent(t *testing.T) {
 
 	scanner.ScanPackages(context.Background(), c, testFilePath, "")
 
-	assert.Len(t, scanner.inlineValues, 1)
+	assert.Len(t, scanner.inlineValues, 2)
 	assert.Len(t, scanner.packageIssueCache, 2)
 	assert.NotContainsf(t, cliExecutor.GetCommand(), "--all-projects", "expected --all-projects NOT to be set")
 }
@@ -58,7 +58,7 @@ func TestCLIScanner_ScanPackages_WithContent(t *testing.T) {
 
 	scanner.ScanPackages(context.Background(), c, testFilePath, fileContent)
 
-	assert.Len(t, scanner.inlineValues, 1)
+	assert.Len(t, scanner.inlineValues, 2)
 	assert.Len(t, scanner.packageIssueCache, 2)
 }
 
