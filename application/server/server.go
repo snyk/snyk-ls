@@ -43,6 +43,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/internal/data_structure"
+	"github.com/snyk/snyk-ls/internal/debounce"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -102,20 +103,32 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map) {
 }
 
 func textDocumentDidChangeHandler() jrpc2.Handler {
+	debouncerMap := make(map[string]*debounce.Debouncer)
 	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (any, error) {
 		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "TextDocumentDidChangeHandler").Logger()
-		logger.Trace().Msg("RECEIVING")
-		defer logger.Trace().Msg("SENDING")
+		pathFromUri := uri.PathFromUri(params.TextDocument.URI)
+		logger.Trace().Msgf("RECEIVING for %s", pathFromUri)
 
 		di.FileWatcher().SetFileAsChanged(params.TextDocument.URI)
 
-		for _, change := range params.ContentChanges {
-			if packageScanner, ok := di.Scanner().(snyk.PackageScanner); ok {
-				packageScanner.ScanPackages(ctx, c, uri.PathFromUri(params.TextDocument.URI), change.Text)
+		debouncedCallback := func() {
+			for _, change := range params.ContentChanges {
+				if packageScanner, ok := di.Scanner().(snyk.PackageScanner); ok {
+					packageScanner.ScanPackages(ctx, c, pathFromUri, change.Text)
+				}
 			}
 		}
 
+		var debouncer = debouncerMap[pathFromUri]
+		if debouncer == nil {
+			debouncer = debounce.NewDebouncer(time.Millisecond*500, debouncedCallback)
+			debouncerMap[pathFromUri] = debouncer
+		} else {
+			debouncer.UpdateDebounceCallback(debouncedCallback)
+		}
+
+		debouncer.Debounce()
 		return nil, nil
 	})
 }
