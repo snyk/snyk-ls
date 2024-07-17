@@ -117,7 +117,7 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
 	updateToken(settings.Token)
 	updateEnvironment(c, settings)
 	updatePathFromSettings(c, settings)
-	updateTelemetry(c, settings)
+	updateErrorReporting(c, settings)
 	updateOrganization(c, settings)
 	manageBinariesAutomatically(c, settings)
 	updateTrustedFolders(c, settings)
@@ -246,7 +246,7 @@ func updateOrganization(c *config.Config, settings types.Settings) {
 	}
 }
 
-func updateTelemetry(c *config.Config, settings types.Settings) {
+func updateErrorReporting(c *config.Config, settings types.Settings) {
 	parseBool, err := strconv.ParseBool(settings.SendErrorReports)
 	if err != nil {
 		c.Logger().Debug().Msgf("couldn't read send error reports %s", settings.SendErrorReports)

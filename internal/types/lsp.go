@@ -560,11 +560,10 @@ type Settings struct {
 	RequiredProtocolVersion          string               `json:"requiredProtocolVersion,omitempty"`
 	// global settings end
 	// folder specific settings start
-	FolderConfig []FolderConfig `json:"folderConfig,omitempty"`
-
-	AdditionalParams string   `json:"additionalParams,omitempty"` // TODO make folder specific, move to folder config
-	AdditionalEnv    string   `json:"additionalEnv,omitempty"`    // TODO make folder specific, move to folder config
-	TrustedFolders   []string `json:"trustedFolders,omitempty"`   // TODO make folder specific, move to folder config
+	AdditionalParams string         `json:"additionalParams,omitempty"` // TODO make folder specific, move to folder config
+	AdditionalEnv    string         `json:"additionalEnv,omitempty"`    // TODO make folder specific, move to folder config
+	TrustedFolders   []string       `json:"trustedFolders,omitempty"`   // TODO make folder specific, move to folder config
+	FolderConfig     []FolderConfig `json:"folderConfig,omitempty"`
 	// folder specific settings end
 }
 

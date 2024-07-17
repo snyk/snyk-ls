@@ -321,67 +321,47 @@ within `initializationOptions?: LSPAny;` we support the following settings:
 
 ```json5
 {
-  "activateSnykOpenSource": "true",
-  // Enables Snyk Open Source - defaults to true
-  "activateSnykCode": "false",
-  // Enables Snyk Code, if enabled for your organization - defaults to false, deprecated in favor of specific Snyk Code analysis types
-  "activateSnykIac": "true",
-  // Enables Infrastructure as Code - defaults to true
-  "insecure": "false",
-  // Allows custom CAs (Certification Authorities)
-  "endpoint": "https://example.com",
-  // Snyk API Endpoint required for non-default multi-tenant and single-tenant setups
-  "additionalParams": "--all-projects",
-  // Any extra params for Open Source scans using the Snyk CLI, separated by spaces
-  "additionalEnv": "MAVEN_OPTS=-Djava.awt.headless=true;FOO=BAR",
-  // Additional environment variables, separated by semicolons
-  "path": "/usr/local/bin",
-  // Adds to the system path used by the CLI
-  "sendErrorReports": "true",
-  // Whether to report errors to Snyk - defaults to true
-  "organization": "a string",
-  // The name of your organization, e.g. the output of: curl -H "Authorization: token $(snyk config get api)"  https://api.snyk.io/v1/cli-config/settings/sast | jq .org
-  "enableTelemetry": "true",
-  // Whether user analytics can be tracked
-  "manageBinariesAutomatically": "true",
-  // Whether CLI/LS binaries will be downloaded & updated automatically
-  "cliPath": "/a/patch/snyk-cli",
-  // The path where the CLI can be found, or where it should be downloaded to
-  "token": "secret-token",
-  // The Snyk token, e.g.: snyk config get api or a token from authentication flow
-  "automaticAuthentication": "true",
-  // Whether LS will automatically authenticate on scan start (default: true)
-  "enableTrustedFoldersFeature": "true",
-  // Whether LS will prompt to trust a folder (default: true)
-  "trustedFolders": [
-    "/a/trusted/path",
-    "/another/trusted/path"
-  ],
-  // An array of folder that should be trusted
-  "activateSnykCodeSecurity": "false",
-  // Enables Snyk Code Security reporting
-  "activateSnykCodeQuality": "false",
-  // Enable Snyk Code Quality issue reporting (Beta, only in IDEs and LS)
-  "deviceId": "a UUID",
-  // A unique ID from the running the LS, used for telemetry
-  "integrationName": "ECLIPSE",
-  // The name of the IDE or editor the LS is running in
-  "integrationVersion": "1.0.0",
-  // The version of the IDE or editor the LS is running in
-  "filterSeverity": {
-    // Filters to be applied for the determined issues
+  "activateSnykOpenSource": "true", // Enables Snyk Open Source - defaults to true
+  "activateSnykCode": "false", // Enables Snyk Code, if enabled for your organization - defaults to false, deprecated in favor of specific Snyk Code analysis types
+  "activateSnykIac": "true", // Enables Infrastructure as Code - defaults to true
+  "insecure": "false", // Allows custom CAs (Certification Authorities)
+  "endpoint": "https://api.eu.snyk.io", // Snyk API Endpoint required for non-default multi-tenant and single-tenant setups
+  "organization": "a string", // The name of your organization, e.g. the output of: curl -H "Authorization: token $(snyk config get api)"  https://api.snyk.io/v1/cli-config/settings/sast | jq .org
+  "path": "/usr/local/bin", // Adds to the system path used by the CLI
+  "cliPath": "/a/patch/snyk-cli", // The path where the CLI can be found, or where it should be downloaded to
+  "token": "secret-token", // The Snyk token, e.g.: snyk config get api or a token from authentication flow
+  "integrationName": "ECLIPSE", // The name of the IDE or editor the LS is running in
+  "integrationVersion": "1.0.0", // The version of the IDE or editor the LS is running in
+  "automaticAuthentication": "true", // Whether LS will automatically authenticate on scan start (default: true)
+  "deviceId": "a UUID", // A unique ID from the running the LS, used for telemetry
+  "filterSeverity": { // Filters to be applied for the determined issues
     "critical": true,
     "high": true,
     "medium": true,
     "low": true,
   },
-  "scanningMode": "auto",
-  // Specifies the mode for scans: "auto" for background scans or "manual" for scans on command
-  "authenticationMethod": "token",
-  // Specifies the authentication method to use: "token" for Snyk API token or "authentication" for Snyk OAuth flow. Default is token.
-  "snykCodeApi": "https://deeproxy.snyk.io",
-  // Specifies the Snyk Code API endpoint to use. Default is https://deeproxy.snyk.io
-  "requiredProtocolVersion": "11"
+  "sendErrorReports": "true", // Whether to report errors to Snyk - defaults to true
+  "manageBinariesAutomatically": "true", // Whether CLI/LS binaries will be downloaded & updated automatically
+  "enableTrustedFoldersFeature": "true", // Whether LS will prompt to trust a folder (default: true)
+  "activateSnykCodeSecurity": "false", // Enables Snyk Code Security reporting
+  "activateSnykCodeQuality": "false", // Enable Snyk Code Quality issue reporting (Beta, only in IDEs and LS)
+  "scanningMode": "auto", // Specifies the mode for scans: "auto" for background scans or "manual" for scans on command
+  "authenticationMethod": "oauth", // Specifies the authentication method to use: "token" for Snyk API token or "oauth" for Snyk OAuth flow. Default is token.
+  "snykCodeApi": "https://deeproxy.snyk.io", // Specifies the Snyk Code API endpoint to use. Default is https://deeproxy.snyk.io
+  "enableSnykLearnCodeActions": "true", // show snyk learns code actions
+  "enableSnykOSSQuickFixCodeActions": "true", // show quickfixes for supported OSS package manager issues
+  "enableDeltaFindings": "false", // only display issues that are not new and thus not on the base branch
+  "requiredProtocolVersion": "11",
+  "additionalParams": "--all-projects", // Any extra params for Open Source scans using the Snyk CLI, separated by spaces
+  "additionalEnv": "MAVEN_OPTS=-Djava.awt.headless=true;FOO=BAR", // Additional environment variables, separated by semicolons
+  "trustedFolders": [
+    "/a/trusted/path",
+    "/another/trusted/path"
+  ], // An array of folder that should be trusted
+  "folderConfig": [{
+    "baseBranch": "main",
+    "folderPath": "a/b/c",
+  }], // an array of folder configurations, defining the desired base branch of a workspaceFolder 
 }
 ```
 
