@@ -329,10 +329,6 @@ func TestClearIssues_NonExistingCacheNonExistingProduct(t *testing.T) {
 	assert.NoError(t, err)
 
 	invalidPath := "/invalid/folder/path"
-	invalidRepo := &git.Repository{}
-	storer := filesystem.NewStorage(osfs.New(invalidPath), cache.NewObjectLRUDefault())
-	invalidRepo.Storer = storer
-
 	mgo.On("PlainOpen", invalidPath).Return(nil, errors.New("doesn't exist"))
 	err = cut.ClearForProduct(invalidPath, commitHash, product.ProductUnknown)
 	assert.Error(t, err)
