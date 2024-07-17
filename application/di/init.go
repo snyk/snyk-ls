@@ -18,6 +18,7 @@ package di
 
 import (
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/internal/vcs"
 	"github.com/spf13/afero"
 	"path/filepath"
 	"runtime"
@@ -122,7 +123,7 @@ func initInfrastructure(c *config.Config) {
 	instrumentor = performance2.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient(c, networkAccess.GetHttpClient)
 	gafConfiguration := c.Engine().GetConfiguration()
-	scanPersister = persistence.NewGitPersistenceProvider(c.Logger(), afero.NewOsFs())
+	scanPersister = persistence.NewGitPersistenceProvider(c.Logger(), afero.NewOsFs(), vcs.NewGitWrapper())
 	// we initialize the service without providers
 	authenticationService = authentication.NewAuthenticationService(c, nil, errorReporter, notifier)
 	// after having an instance, we pass it into the default configuration method
@@ -166,7 +167,6 @@ func initInfrastructure(c *config.Config) {
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,
 		authInitializer,
-		scanPersister,
 	)
 }
 

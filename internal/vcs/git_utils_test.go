@@ -26,38 +26,9 @@ import (
 	"testing"
 )
 
-type mockGitOps struct {
-	mock.Mock
-}
-
-var _ GitOps = (*mockGitOps)(nil)
-
-func (m *mockGitOps) PlainOpen(path string) (*git.Repository, error) {
-	args := m.Called(path)
-	if repo, ok := args.Get(0).(*git.Repository); ok {
-		return repo, args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
-func (m *mockGitOps) PlainClone(path string, isBare bool, options *git.CloneOptions) (*git.Repository, error) {
-	args := m.Called(path, isBare, options)
-	if repo, ok := args.Get(0).(*git.Repository); ok {
-		return repo, args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-func (m *mockGitOps) Head(repo *git.Repository) (*plumbing.Reference, error) {
-	args := m.Called(repo)
-	if ref, ok := args.Get(0).(*plumbing.Reference); ok {
-		return ref, args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
 func TestClone_DifferentBranchNames_ShouldClone(t *testing.T) {
 	logger := zerolog.Nop()
-	mgo := &mockGitOps{}
+	mgo := NewMockGitOps()
 	repoPath := "/path/to/repo"
 	tmpRepoPath := "/tmp/path/to/repo"
 	baseBranchName := "main"
@@ -78,7 +49,7 @@ func TestClone_DifferentBranchNames_ShouldClone(t *testing.T) {
 
 func TestClone_InvalidGitRepo(t *testing.T) {
 	logger := zerolog.Nop()
-	mgo := &mockGitOps{}
+	mgo := NewMockGitOps()
 	repoPath := "/path/to/repo"
 	tmpRepoPath := "/path/to/repo"
 	branchName := "feat/foobar"
@@ -94,7 +65,7 @@ func TestClone_InvalidGitRepo(t *testing.T) {
 
 func TestClone_InvalidGitRepo_FailedHead(t *testing.T) {
 	logger := zerolog.Nop()
-	mgo := &mockGitOps{}
+	mgo := NewMockGitOps()
 	repoPath := "/path/to/repo"
 	tmpRepoPath := "/path/to/repo"
 	branchName := "feat/foobar"
@@ -112,7 +83,7 @@ func TestClone_InvalidGitRepo_FailedHead(t *testing.T) {
 
 func TestClone_SameBranchNames_SkipClone(t *testing.T) {
 	logger := zerolog.Nop()
-	mgo := &mockGitOps{}
+	mgo := NewMockGitOps()
 	repoPath := "/path/to/repo"
 	tmpRepoPath := "/tmp/path/to/repo"
 	baseBranchName := "main"
@@ -133,7 +104,7 @@ func TestClone_SameBranchNames_SkipClone(t *testing.T) {
 
 func TestClone_DifferentBranchNames_FailedClone(t *testing.T) {
 	logger := zerolog.Nop()
-	mgo := &mockGitOps{}
+	mgo := NewMockGitOps()
 	repoPath := "/path/to/repo"
 	tmpRepoPath := "/tmp/path/to/repo"
 	baseBranchName := "main"

@@ -17,9 +17,13 @@
 package vcs
 
 import (
+	"errors"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/storage/filesystem"
 	"github.com/rs/zerolog"
+	"path/filepath"
+	"strings"
 )
 
 func Clone(repoPath string, destinationPath string, branchName string, logger *zerolog.Logger, gitOps GitOps) (*git.Repository, error) {
@@ -80,4 +84,29 @@ func CommitHashForBranch(repoPath, branchName string, logger *zerolog.Logger, gi
 
 	commitHash := ref.Hash()
 	return commitHash.String(), nil
+}
+
+func GitRepoFolderPath(folderPath string, logger *zerolog.Logger, gitOps GitOps) (string, error) {
+	repo, err := gitOps.PlainOpen(folderPath)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to open repository: " + folderPath)
+		return "", err
+	}
+
+	fsStorer, ok := repo.Storer.(*filesystem.Storage)
+	if !ok {
+		err = errors.New("repository storage is not a filesystem storage")
+		logger.Error().Err(err).Msg("Faild to get fs storage for: " + folderPath)
+		return "", err
+	}
+	repoPath := fsStorer.Filesystem().Root()
+	if repoPath == "" {
+		return "", errors.New("repository path is empty")
+	}
+
+	if !strings.HasSuffix(repoPath, ".git") {
+		repoPath = filepath.Join(repoPath, ".git")
+	}
+
+	return repoPath, nil
 }

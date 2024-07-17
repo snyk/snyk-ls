@@ -20,10 +20,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/adrg/xdg"
 	"github.com/rs/zerolog"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/vcs"
 	"github.com/spaolacci/murmur3"
 	"github.com/spf13/afero"
 	"os"
@@ -59,14 +59,16 @@ type GitPersistenceProvider struct {
 	mutex       sync.Mutex
 	fs          afero.Fs
 	initialized bool
+	gitOps      vcs.GitOps
 }
 
-func NewGitPersistenceProvider(logger *zerolog.Logger, fs afero.Fs) *GitPersistenceProvider {
+func NewGitPersistenceProvider(logger *zerolog.Logger, fs afero.Fs, gitOps vcs.GitOps) *GitPersistenceProvider {
 	return &GitPersistenceProvider{
 		cache:  make(map[hashedFolderPath]productCommitHashMap),
 		logger: logger,
 		mutex:  sync.Mutex{},
 		fs:     fs,
+		gitOps: gitOps,
 	}
 }
 
@@ -394,29 +396,20 @@ func (g *GitPersistenceProvider) persistToDisk(cacheDir string, folderHashedPath
 }
 
 func (g *GitPersistenceProvider) ensureCacheDirExists(folderPath string) (string, error) {
-	cacheDirPath := filepath.Join(xdg.CacheHome, CacheFolder)
-	gitFolder := filepath.Join(folderPath, ".git")
-	fallbackCacheDirPath := filepath.Join(gitFolder, CacheFolder)
-
-	if _, err := g.fs.Stat(cacheDirPath); err == nil {
-		return cacheDirPath, nil
-	}
-
-	g.logger.Info().Msg("attempting to create cache dir " + cacheDirPath)
-	err := g.fs.Mkdir(cacheDirPath, 0600)
-	// Fallback to git dir
+	g.logger.Info().Msg("attempting to determine .git folder path")
+	gitFolder, err := vcs.GitRepoFolderPath(folderPath, g.logger, g.gitOps)
 	if err != nil {
-		g.logger.Info().Msg("attempting to create fallback cache dir " + fallbackCacheDirPath)
-		if _, err = g.fs.Stat(fallbackCacheDirPath); os.IsNotExist(err) {
-			err = g.fs.Mkdir(fallbackCacheDirPath, 0600)
-			if err != nil {
-				return "", err
-			}
-		}
-		return fallbackCacheDirPath, nil
+		return "", err
 	}
+	cacheDir := filepath.Join(gitFolder, CacheFolder)
 
-	return cacheDirPath, nil
+	if _, err = g.fs.Stat(cacheDir); os.IsNotExist(err) {
+		err = g.fs.Mkdir(cacheDir, 0600)
+		if err != nil {
+			return "", err
+		}
+	}
+	return cacheDir, nil
 }
 
 func getLocalFilePath(cacheDir string, folderPathHash hashedFolderPath, commitHash string, p product.Product) string {
