@@ -18,6 +18,7 @@ package workspace
 
 import (
 	"context"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"sync"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -46,6 +47,7 @@ type Workspace struct {
 	trustRequestOngoing bool // for debouncing
 	notifier            noti.Notifier
 	c                   *config.Config
+	scanPersister       persistence.ScanSnapshotPersister
 }
 
 func (w *Workspace) Issues() snyk.IssuesByFile {
@@ -75,15 +77,17 @@ func New(
 	hoverService hover.Service,
 	scanNotifier snyk.ScanNotifier,
 	notifier noti.Notifier,
+	scanPersister persistence.ScanSnapshotPersister,
 ) *Workspace {
 	return &Workspace{
-		folders:      make(map[string]*Folder),
-		instrumentor: instrumentor,
-		scanner:      scanner,
-		hoverService: hoverService,
-		scanNotifier: scanNotifier,
-		notifier:     notifier,
-		c:            c,
+		folders:       make(map[string]*Folder),
+		instrumentor:  instrumentor,
+		scanner:       scanner,
+		hoverService:  hoverService,
+		scanNotifier:  scanNotifier,
+		notifier:      notifier,
+		c:             c,
+		scanPersister: scanPersister,
 	}
 }
 
@@ -184,7 +188,7 @@ func (w *Workspace) ChangeWorkspaceFolders(ctx context.Context, params types.Did
 	}
 
 	for _, folder := range params.Event.Added {
-		f := NewFolder(w.c, uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier)
+		f := NewFolder(w.c, uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier, w.scanPersister)
 		w.AddFolder(f)
 		if config.CurrentConfig().IsAutoScanEnabled() {
 			f.ScanFolder(ctx)

@@ -689,7 +689,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	testPath := filepath.Join(cloneTargetDir, "app.js")
 
 	w := workspace.Get()
-	f := workspace.NewFolder(c, cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier())
+	f := workspace.NewFolder(c, cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister())
 	w.AddFolder(f)
 
 	_ = textDocumentDidSave(t, &loc, testPath)

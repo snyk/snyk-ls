@@ -17,6 +17,9 @@
 package di
 
 import (
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/internal/vcs"
+	"github.com/spf13/afero"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -73,6 +76,7 @@ var initMutex = &sync.Mutex{}
 var notifier notification.Notifier
 var codeInstrumentor codeClientObservability.Instrumentor
 var codeErrorReporter codeClientObservability.ErrorReporter
+var scanPersister persistence.ScanSnapshotPersister
 
 func Init() {
 	initMutex.Lock()
@@ -119,7 +123,7 @@ func initInfrastructure(c *config.Config) {
 	instrumentor = performance2.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient(c, networkAccess.GetHttpClient)
 	gafConfiguration := c.Engine().GetConfiguration()
-
+	scanPersister = persistence.NewGitPersistenceProvider(c.Logger(), afero.NewOsFs(), vcs.NewGitWrapper())
 	// we initialize the service without providers
 	authenticationService = authentication.NewAuthenticationService(c, nil, errorReporter, notifier)
 	// after having an instance, we pass it into the default configuration method
@@ -157,7 +161,7 @@ func initInfrastructure(c *config.Config) {
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
 	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
-	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner)
+	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner, scanPersister)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
 	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
@@ -167,7 +171,7 @@ func initInfrastructure(c *config.Config) {
 }
 
 func initApplication(c *config.Config) {
-	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier) // don't use getters or it'll deadlock
+	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister) // don't use getters or it'll deadlock
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, snykCodeClient)
@@ -208,6 +212,12 @@ func HoverService() hover.Service {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return hoverService
+}
+
+func ScanPersister() persistence.ScanSnapshotPersister {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return scanPersister
 }
 
 func ScanNotifier() snyk.ScanNotifier {

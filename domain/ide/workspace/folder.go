@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/internal/delta"
 	"strings"
 	"sync"
 
@@ -69,6 +71,7 @@ type Folder struct {
 	scanNotifier            snyk.ScanNotifier
 	notifier                noti.Notifier
 	c                       *config.Config
+	scanPersister           persistence.ScanSnapshotPersister
 }
 
 func (f *Folder) Issue(key string) snyk.Issue {
@@ -236,16 +239,18 @@ func NewFolder(
 	hoverService hover.Service,
 	scanNotifier snyk.ScanNotifier,
 	notifier noti.Notifier,
+	scanPersister persistence.ScanSnapshotPersister,
 ) *Folder {
 	folder := Folder{
-		scanner:      scanner,
-		path:         strings.TrimSuffix(path, "/"),
-		name:         name,
-		status:       Unscanned,
-		hoverService: hoverService,
-		scanNotifier: scanNotifier,
-		notifier:     notifier,
-		c:            c,
+		scanner:       scanner,
+		path:          strings.TrimSuffix(path, "/"),
+		name:          name,
+		status:        Unscanned,
+		hoverService:  hoverService,
+		scanNotifier:  scanNotifier,
+		notifier:      notifier,
+		c:             c,
+		scanPersister: scanPersister,
 	}
 	folder.documentDiagnosticCache = xsync.NewMapOf[string, []snyk.Issue]()
 	if cacheProvider, isCacheProvider := scanner.(snyk.CacheProvider); isCacheProvider {
@@ -305,7 +310,6 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 			Msg("Product returned an error")
 		return
 	}
-
 	// this also updates the severity counts in scan data, therefore we pass a pointer
 	f.updateGlobalCacheAndSeverityCounts(&scanData)
 
@@ -463,7 +467,7 @@ func appendTestResults(sic snyk.SeverityIssueCounts, results []json_schemas.Test
 }
 
 func (f *Folder) FilterAndPublishDiagnostics(p *product.Product) {
-	productIssuesByFile := f.IssuesByProduct()
+	productIssuesByFile := f.getDelta(f.IssuesByProduct(), p)
 	if p != nil {
 		filteredIssues := f.filterDiagnostics(productIssuesByFile[*p])
 		f.publishDiagnostics(*p, filteredIssues)
@@ -473,6 +477,73 @@ func (f *Folder) FilterAndPublishDiagnostics(p *product.Product) {
 			f.publishDiagnostics(p, filteredIssues)
 		}
 	}
+}
+
+func (f *Folder) getDelta(productIssueByFile snyk.ProductIssuesByFile, p *product.Product) snyk.ProductIssuesByFile {
+	logger := f.c.Logger().With().Str("method", "getDelta").Logger()
+
+	if !f.c.IsDeltaFindingsEnabled() {
+		return productIssueByFile
+	}
+
+	baseIssueList, err := f.scanPersister.GetPersistedIssueList(f.path, *p)
+	if err != nil {
+		logger.Err(err).Msg("Error getting persisted issue list")
+		return productIssueByFile
+	}
+	if len(baseIssueList) == 0 {
+		return productIssueByFile
+	}
+
+	df := snyk.NewDeltaFinderForProduct(*p)
+
+	currentFlatIssueList := getFlatIssueList(productIssueByFile, p)
+	baseFindingIdentifiable := make([]delta.Identifiable, len(baseIssueList))
+	for i := range baseIssueList {
+		baseFindingIdentifiable[i] = &baseIssueList[i]
+	}
+	currentFindingIdentifiable := make([]delta.Identifiable, len(currentFlatIssueList))
+	for i := range currentFlatIssueList {
+		currentFindingIdentifiable[i] = &currentFlatIssueList[i]
+	}
+
+	diff, err := df.Diff(baseFindingIdentifiable, currentFindingIdentifiable)
+
+	if err != nil {
+		logger.Error().Err(err).Msg("couldn't calculate delta")
+		return productIssueByFile
+	}
+
+	deltaSnykIssues := make([]snyk.Issue, len(diff))
+	for i := range diff {
+		deltaSnykIssues[i] = *diff[i].(*snyk.Issue)
+	}
+	productIssueByFile[*p] = getIssuePerFileFromFlatList(deltaSnykIssues)
+
+	return productIssueByFile
+}
+
+func getFlatIssueList(productIssueByFile snyk.ProductIssuesByFile, p *product.Product) []snyk.Issue {
+	issueByFile := productIssueByFile[*p]
+	var currentFlatIssueList []snyk.Issue
+	for _, issueList := range issueByFile {
+		currentFlatIssueList = append(currentFlatIssueList, issueList...)
+	}
+	return currentFlatIssueList
+}
+
+func getIssuePerFileFromFlatList(issueList []snyk.Issue) snyk.IssuesByFile {
+	issueByFile := make(snyk.IssuesByFile)
+	for _, issue := range issueList {
+		list, exists := issueByFile[issue.AffectedFilePath]
+		if !exists {
+			list = []snyk.Issue{issue}
+		} else {
+			list = append(list, issue)
+		}
+		issueByFile[issue.AffectedFilePath] = list
+	}
+	return issueByFile
 }
 
 func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {

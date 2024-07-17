@@ -576,7 +576,8 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 		scanner,
 		di.HoverService(),
 		di.ScanNotifier(),
-		di.Notifier()))
+		di.Notifier(),
+		di.ScanPersister()))
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -793,7 +794,8 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 		URI: uri.PathToUri(filePath),
 	}}
 
-	folder := workspace.NewFolder(c, fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier())
+	folder := workspace.NewFolder(c, fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(),
+		di.ScanPersister())
 	workspace.Get().AddFolder(folder)
 
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
@@ -879,7 +881,8 @@ func sendFileSavedMessage(t *testing.T, filePath, fileDir string, loc server.Loc
 		di.Scanner(),
 		di.HoverService(),
 		di.ScanNotifier(),
-		di.Notifier()))
+		di.Notifier(),
+		di.ScanPersister()))
 
 	_, err := loc.Client.Call(ctx, textDocumentDidSaveOperation, didSaveParams)
 	if err != nil {

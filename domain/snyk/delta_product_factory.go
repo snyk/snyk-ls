@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,21 @@
  * limitations under the License.
  */
 
-package workspace
+package snyk
 
 import (
-	"testing"
-
-	"github.com/stretchr/testify/assert"
-
-	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/delta"
+	"github.com/snyk/snyk-ls/internal/product"
 )
 
-func TestWorkspace_TrustRequests(t *testing.T) {
-	c := testutil.UnitTest(t)
-	w := New(c, nil, nil, nil, nil, nil, nil)
-	w.StartRequestTrustCommunication()
-	w.IsTrustRequestOngoing()
-	assert.True(t, w.IsTrustRequestOngoing())
-	w.EndRequestTrustCommunication()
-	assert.False(t, w.IsTrustRequestOngoing())
+func NewDeltaFinderForProduct(p product.Product) *delta.Finder {
+	switch p {
+	case product.ProductCode:
+		return delta.NewFinder(
+			delta.WithEnricher(delta.NewFindingsEnricher()),
+			delta.WithMatcher(delta.NewCodeMatcher()),
+			delta.WithDiffer(delta.NewFindingsDiffer()))
+	default:
+		return delta.NewFinder(delta.WithDiffer(delta.NewFindingsDiffer()))
+	}
 }

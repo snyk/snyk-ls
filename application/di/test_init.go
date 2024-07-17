@@ -17,6 +17,7 @@
 package di
 
 import (
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -80,15 +81,16 @@ func TestInit(t *testing.T) {
 		Return(&learn.Lesson{}, nil).AnyTimes()
 	learnService = learnMock
 	codeClientScanner := &code.FakeCodeScannerClient{}
+	scanPersister = persistence.NopScanPersister{}
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
-	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner)
+	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner, scanPersister)
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
 	scanner = snyk.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
 	hoverService = hover.NewDefaultService(c)
 	command.SetService(&types.CommandServiceMock{})
 	// don't use getters or it'll deadlock
-	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier)
+	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister)
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, snykCodeClient)

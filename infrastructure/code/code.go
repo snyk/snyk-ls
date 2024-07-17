@@ -19,20 +19,18 @@ package code
 import (
 	"context"
 	"fmt"
+	"github.com/rs/zerolog"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/internal/vcs"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog"
-
-	"github.com/snyk/snyk-ls/internal/delta"
-	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
-	"github.com/snyk/snyk-ls/internal/vcs"
-
 	"github.com/erni27/imcache"
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
+	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 
 	codeClient "github.com/snyk/code-client-go"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
@@ -91,9 +89,10 @@ type Scanner struct {
 	issueCache          *imcache.Cache[string, []snyk.Issue]
 	cacheRemovalHandler func(path string)
 	c                   *config.Config
+	scanPersister       persistence.ScanSnapshotPersister
 }
 
-func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeScanner codeClient.CodeScanner) *Scanner {
+func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeScanner codeClient.CodeScanner, scanPersister persistence.ScanSnapshotPersister) *Scanner {
 	sc := &Scanner{
 		BundleUploader: bundleUploader,
 		SnykApiClient:  apiClient,
@@ -106,6 +105,7 @@ func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, repor
 		BundleHashes:   map[string]string{},
 		codeScanner:    codeScanner,
 		c:              bundleUploader.c,
+		scanPersister:  scanPersister,
 	}
 	sc.issueCache = imcache.New[string, []snyk.Issue](
 		imcache.WithDefaultExpirationOption[string, []snyk.Issue](time.Hour * 12),
@@ -185,10 +185,10 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 
 	results, err := internalScan(ctx, sc, folderPath, logger, filesToBeScanned)
 
-	if c.IsDeltaFindingsEnabled() {
-		baseScanResults, baseScanErr := scanBaseBranch(ctx, logger, sc, folderPath)
-		if baseScanErr == nil {
-			results = getDelta(c.Logger(), baseScanResults, results)
+	if err == nil && c.IsDeltaFindingsEnabled() {
+		err = scanAndPersistBaseBranch(ctx, logger, sc, folderPath)
+		if err != nil {
+			logger.Error().Err(err).Msg("couldn't scan base branch for folder " + folderPath)
 		}
 	}
 
@@ -219,23 +219,35 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath string, logger ze
 	return results, err
 }
 
-func scanBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Scanner, folderPath string) ([]snyk.Issue, error) {
+func scanAndPersistBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Scanner, folderPath string) error {
 	mainBranchName := getBaseBranchName(folderPath)
+	gw := vcs.NewGitWrapper()
+
+	headRef, err := vcs.HeadRefHashForBranch(folderPath, mainBranchName, &logger, gw)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to fetch commit hash for main branch")
+		return err
+	}
+
+	snapshotExists := sc.scanPersister.Exists(folderPath, headRef, sc.Product())
+	if snapshotExists {
+		return nil
+	}
+
 	tmpFolderName := fmt.Sprintf("snyk_delta_%s_%s", mainBranchName, filepath.Base(folderPath))
 	destinationPath, err := os.MkdirTemp("", tmpFolderName)
 	logger.Info().Msg("Creating tmp directory for base branch")
 
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to create tmp directory for base branch")
-		return []snyk.Issue{}, err
+		return err
 	}
 
-	gw := &vcs.GitWrapper{}
-	err = vcs.Clone(folderPath, destinationPath, mainBranchName, &logger, gw)
+	repo, err := vcs.Clone(folderPath, destinationPath, mainBranchName, &logger, gw)
 
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to clone base branch")
-		return []snyk.Issue{}, err
+		return err
 	}
 
 	defer func() {
@@ -254,10 +266,18 @@ func scanBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Scanner, fol
 	results, err := internalScan(ctx, sc, destinationPath, logger, filesToBeScanned)
 
 	if err != nil {
-		return []snyk.Issue{}, err
+		return err
 	}
-
-	return results, nil
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	if err != nil {
+		logger.Error().Err(err).Msg("could not get commit hash for repo in folder " + folderPath)
+		return err
+	}
+	err = sc.scanPersister.Add(folderPath, commitHash, results, product.ProductCode)
+	if err != nil {
+		logger.Error().Err(err).Msg("could not persist issue list for folder: " + folderPath)
+	}
+	return nil
 }
 
 func getBaseBranchName(folderPath string) string {
@@ -266,36 +286,6 @@ func getBaseBranchName(folderPath string) string {
 		return "master"
 	}
 	return folderConfig.BaseBranch
-}
-
-func getDelta(zlog *zerolog.Logger, baseIssueList []snyk.Issue, currentIssueList []snyk.Issue) []snyk.Issue {
-	logger := zlog.With().Str("method", "getDelta").Logger()
-
-	df := delta.NewFinder(
-		delta.WithEnricher(delta.NewFindingsEnricher()),
-		delta.WithMatcher(delta.NewCodeMatcher()),
-		delta.WithDiffer(delta.NewFindingsDiffer()))
-
-	baseFindingIdentifiable := make([]delta.Identifiable, len(baseIssueList))
-	for i := range baseIssueList {
-		baseFindingIdentifiable[i] = &baseIssueList[i]
-	}
-	currentFindingIdentifiable := make([]delta.Identifiable, len(currentIssueList))
-	for i := range currentIssueList {
-		currentFindingIdentifiable[i] = &currentIssueList[i]
-	}
-	diff, err := df.Diff(baseFindingIdentifiable, currentFindingIdentifiable)
-	if err != nil {
-		logger.Error().Err(err).Msg("couldn't calculate delta")
-		return nil
-	}
-
-	deltaSnykIssues := make([]snyk.Issue, len(diff))
-	for i := range diff {
-		deltaSnykIssues[i] = *diff[i].(*snyk.Issue)
-	}
-
-	return deltaSnykIssues
 }
 
 // Populate HTML template
