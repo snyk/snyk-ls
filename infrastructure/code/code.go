@@ -186,7 +186,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	results, err := internalScan(ctx, sc, folderPath, logger, filesToBeScanned)
 
 	if err == nil && c.IsDeltaFindingsEnabled() {
-		err = scanAndPersistBaseBranch(ctx, logger, sc, folderPath)
+		err = scanAndPersistBaseBranch(ctx, sc, folderPath)
 		if err != nil {
 			logger.Error().Err(err).Msg("couldn't scan base branch for folder " + folderPath)
 		}
@@ -219,11 +219,23 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath string, logger ze
 	return results, err
 }
 
-func scanAndPersistBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Scanner, folderPath string) error {
-	mainBranchName := getBaseBranchName(folderPath)
+func scanAndPersistBaseBranch(ctx context.Context, sc *Scanner, folderPath string) error {
+	logger := sc.c.Logger().With().Str("method", "scanAndPersistBaseBranch").Logger()
+
+	baseBranchName := getBaseBranchName(folderPath)
 	gw := vcs.NewGitWrapper()
 
-	headRef, err := vcs.HeadRefHashForBranch(folderPath, mainBranchName, &logger, gw)
+	shouldClone, err := vcs.ShouldClone(folderPath, gw, &logger, baseBranchName)
+	if err != nil {
+		return err
+	}
+
+	if !shouldClone {
+		return nil
+	}
+
+	headRef, err := vcs.HeadRefHashForBranch(folderPath, baseBranchName, &logger, gw)
+
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to fetch commit hash for main branch")
 		return err
@@ -234,7 +246,7 @@ func scanAndPersistBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Sc
 		return nil
 	}
 
-	tmpFolderName := fmt.Sprintf("snyk_delta_%s_%s", mainBranchName, filepath.Base(folderPath))
+	tmpFolderName := fmt.Sprintf("snyk_delta_%s_%s", baseBranchName, filepath.Base(folderPath))
 	destinationPath, err := os.MkdirTemp("", tmpFolderName)
 	logger.Info().Msg("Creating tmp directory for base branch")
 
@@ -243,7 +255,7 @@ func scanAndPersistBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Sc
 		return err
 	}
 
-	repo, err := vcs.Clone(folderPath, destinationPath, mainBranchName, &logger, gw)
+	repo, err := vcs.Clone(folderPath, destinationPath, baseBranchName, &logger, gw)
 
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to clone base branch")
@@ -268,15 +280,18 @@ func scanAndPersistBaseBranch(ctx context.Context, logger zerolog.Logger, sc *Sc
 	if err != nil {
 		return err
 	}
+
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	if err != nil {
 		logger.Error().Err(err).Msg("could not get commit hash for repo in folder " + folderPath)
 		return err
 	}
+
 	err = sc.scanPersister.Add(folderPath, commitHash, results, product.ProductCode)
 	if err != nil {
 		logger.Error().Err(err).Msg("could not persist issue list for folder: " + folderPath)
 	}
+
 	return nil
 }
 
