@@ -27,11 +27,8 @@ import (
 	"time"
 
 	"github.com/creachadair/jrpc2"
-	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing/cache"
 	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/go-git/go-git/v5/storage/filesystem"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
@@ -398,8 +395,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 func initTestRepo(t *testing.T, tempDir string) error {
 	t.Helper()
-	fs := filesystem.NewStorage(osfs.New(tempDir), cache.NewObjectLRU(cache.FileSize(1024)))
-	repo1, err := git.Init(fs, fs.Filesystem())
+	repo1, err := git.PlainInit(tempDir, false)
 	assert.NoError(t, err)
 	absoluteFileName := filepath.Join(tempDir, "testFile")
 	err = os.WriteFile(absoluteFileName, []byte("testData"), 0600)

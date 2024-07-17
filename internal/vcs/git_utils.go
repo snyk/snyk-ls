@@ -28,23 +28,6 @@ import (
 
 func Clone(repoPath string, destinationPath string, branchName string, logger *zerolog.Logger, gitOps GitOps) (*git.Repository, error) {
 	baseBranchName := plumbing.NewBranchReferenceName(branchName)
-	currentRepo, err := gitOps.PlainOpen(repoPath)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to open current repo in go-git " + repoPath)
-		return nil, err
-	}
-
-	currentRepoBranch, err := gitOps.Head(currentRepo)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to get HEAD for " + repoPath)
-		return nil, err
-	}
-
-	if currentRepoBranch.Name() == baseBranchName {
-		logger.Info().Msg("Current branch is the same as base. Skipping cloning")
-		return nil, nil
-	}
-
 	clonedRepo, err := gitOps.PlainClone(destinationPath, false, &git.CloneOptions{
 		URL:           repoPath,
 		ReferenceName: baseBranchName,
@@ -57,6 +40,26 @@ func Clone(repoPath string, destinationPath string, branchName string, logger *z
 	}
 
 	return clonedRepo, nil
+}
+
+func ShouldClone(repoPath string, gitOps GitOps, logger *zerolog.Logger, branchName string) (bool, error) {
+	currentRepo, err := gitOps.PlainOpen(repoPath)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to open current repo in go-git " + repoPath)
+		return false, err
+	}
+
+	currentRepoBranch, err := gitOps.Head(currentRepo)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to get HEAD for " + repoPath)
+		return false, err
+	}
+
+	if currentRepoBranch.Name().Short() != branchName || hasUncommitedChanges(currentRepo) {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func HeadRefHashForRepo(repo *git.Repository) (string, error) {
@@ -109,4 +112,23 @@ func GitRepoFolderPath(folderPath string, logger *zerolog.Logger, gitOps GitOps)
 	}
 
 	return repoPath, nil
+}
+
+func hasUncommitedChanges(repo *git.Repository) bool {
+	worktree, err := repo.Worktree()
+	if err != nil {
+		return false
+	}
+
+	status, err := worktree.Status()
+	if err != nil {
+		return false
+	}
+
+	for _, st := range status {
+		if st.Staging != git.Unmodified || st.Worktree != git.Unmodified {
+			return true
+		}
+	}
+	return false
 }
