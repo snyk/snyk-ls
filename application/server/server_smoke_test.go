@@ -427,12 +427,13 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 
 	notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
 	assert.Len(t, notifications, 1)
-	var folderConfig types.FolderConfig
-	err := notifications[0].UnmarshalParams(&folderConfig)
+	var folderConfigsParam types.FolderConfigsParam
+	err := notifications[0].UnmarshalParams(&folderConfigsParam)
 	assert.NoError(t, err)
-	assert.Equal(t, cloneTargetDir, folderConfig.FolderPath)
-	assert.NotEmpty(t, folderConfig.BaseBranch)
-	assert.NotEmpty(t, folderConfig.LocalBranches)
+	assert.Len(t, folderConfigsParam.FolderConfigs, 1)
+	assert.Equal(t, cloneTargetDir, folderConfigsParam.FolderConfigs[0].FolderPath)
+	assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].BaseBranch)
+	assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].LocalBranches)
 
 	jsonRPCRecorder.ClearNotifications()
 	var testPath string
