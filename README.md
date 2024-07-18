@@ -350,6 +350,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
   "snykCodeApi": "https://deeproxy.snyk.io", // Specifies the Snyk Code API endpoint to use. Default is https://deeproxy.snyk.io
   "enableSnykLearnCodeActions": "true", // show snyk learns code actions
   "enableSnykOSSQuickFixCodeActions": "true", // show quickfixes for supported OSS package manager issues
+  "enableSnykOpenBrowserActions": "false", // show code actions to open issue descriptions
   "enableDeltaFindings": "false", // only display issues that are not new and thus not on the base branch
   "requiredProtocolVersion": "11",
   "additionalParams": "--all-projects", // Any extra params for Open Source scans using the Snyk CLI, separated by spaces

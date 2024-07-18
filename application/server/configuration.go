@@ -127,8 +127,18 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
 	updateAutoScan(c, settings)
 	updateSnykLearnCodeActions(c, settings)
 	updateSnykOSSQuickFixCodeActions(c, settings)
+	updateSnykOpenBrowserCodeActions(c, settings)
 	updateDeltaFindings(c, settings)
 	updateFolderConfig(settings)
+}
+
+func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings) {
+	enable := false
+	if settings.EnableSnykOpenBrowserActions == "true" {
+		enable = true
+	}
+
+	c.SetSnykOpenBrowserActionsEnabled(enable)
 }
 
 func updateFolderConfig(settings types.Settings) {

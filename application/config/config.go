@@ -193,6 +193,7 @@ type Config struct {
 	storage                          storage.StorageWithCallbacks
 	m                                sync.Mutex
 	clientProtocolVersion            string
+	isOpenBrowserActionEnabled       bool
 }
 
 func CurrentConfig() *Config {
@@ -849,7 +850,7 @@ func (c *Config) SetSnykLearnCodeActionsEnabled(enabled bool) {
 	c.enableSnykLearnCodeActions = enabled
 }
 
-func (c *Config) IsSnyOSSQuickFixCodeActionsEnabled() bool {
+func (c *Config) IsSnykOSSQuickFixCodeActionsEnabled() bool {
 	return c.enableSnykOSSQuickFixCodeActions
 }
 
@@ -941,4 +942,12 @@ func (c *Config) AuthenticationMethod() types.AuthenticationMethod {
 
 func (c *Config) SetAuthenticationMethod(authMethod types.AuthenticationMethod) {
 	c.authenticationMethod = authMethod
+}
+
+func (c *Config) IsSnykOpenBrowserActionEnabled() bool {
+	return c.isOpenBrowserActionEnabled
+}
+
+func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
+	c.isOpenBrowserActionEnabled = enable
 }
