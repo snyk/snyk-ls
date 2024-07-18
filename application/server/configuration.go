@@ -142,7 +142,7 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings)
 }
 
 func updateFolderConfig(settings types.Settings) {
-	gitconfig.SetBaseBranch(settings.FolderConfig)
+	gitconfig.SetBaseBranch(settings.FolderConfigs)
 }
 
 func updateAuthenticationMethod(c *config.Config, settings types.Settings) {

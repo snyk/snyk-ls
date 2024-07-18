@@ -38,7 +38,10 @@ const (
 )
 
 var (
-	_ ScanSnapshotPersister = (*GitPersistenceProvider)(nil)
+	ErrPathHashDoesntExist                       = errors.New("hashed folder path doesn't exist in cache")
+	ErrProductDoesntExist                        = errors.New("product doesn't exist in cache")
+	ErrCommitDoesntExist                         = errors.New("commit doesn't exist in cache")
+	_                      ScanSnapshotPersister = (*GitPersistenceProvider)(nil)
 )
 
 type hashedFolderPath string
@@ -247,7 +250,7 @@ func (g *GitPersistenceProvider) Exists(folderPath, commitHash string, p product
 
 	existingCommitHash, err := g.getCommitHashForProduct(folderPath, p)
 
-	if err != nil || existingCommitHash != commitHash {
+	if err != nil || existingCommitHash != commitHash || existingCommitHash == "" {
 		return false
 	}
 
@@ -257,7 +260,17 @@ func (g *GitPersistenceProvider) Exists(folderPath, commitHash string, p product
 	}
 
 	exists := g.snapshotExistsOnDisk(cacheDir, hash, commitHash, p)
-	return exists
+	if exists {
+		return true
+	}
+
+	g.logger.Debug().Msg("entry exists in cache but not on disk. Maybe file was deleted? " + folderPath)
+
+	err = g.deleteFromCache(hash, commitHash, p)
+	if err != nil {
+		g.logger.Error().Err(err).Msg("failed to remove file from cache: " + folderPath)
+	}
+	return false
 }
 
 func (g *GitPersistenceProvider) deleteFile(fullPath string) error {
@@ -272,16 +285,16 @@ func (g *GitPersistenceProvider) deleteFile(fullPath string) error {
 func (g *GitPersistenceProvider) deleteFromCache(hash hashedFolderPath, commitHash string, p product.Product) error {
 	pchm, exists := g.cache[hash]
 	if !exists {
-		return errors.New("hashed folder path doesn't exist in cache")
+		return ErrPathHashDoesntExist
 	}
 
 	currentCommitHash, pchExists := pchm[p]
 	if !pchExists {
-		return errors.New("product doesn't exist in cache")
+		return ErrProductDoesntExist
 	}
 
 	if currentCommitHash != commitHash {
-		return errors.New("commit hashes don't match")
+		return ErrCommitDoesntExist
 	}
 
 	delete(g.cache[hash], p)
@@ -304,7 +317,7 @@ func (g *GitPersistenceProvider) getCommitHashForProduct(folderPath string, p pr
 	}
 	pchMap, ok := g.cache[hash]
 	if !ok {
-		return "", nil
+		return "", ErrPathHashDoesntExist
 	}
 	commitHash = pchMap[p]
 	return commitHash, nil

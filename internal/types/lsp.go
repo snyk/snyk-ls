@@ -518,7 +518,7 @@ type WorkspaceFoldersChangeEvent struct {
 
 // FolderConfig is exchanged between IDE and LS
 // IDE sends this as part of the settings/initialization
-// LS sends this via the $/snyk.FolderConfig notification
+// LS sends this via the $/snyk.folderConfig notification
 type FolderConfig struct {
 	FolderPath    string   `json:"folderPath"`
 	BaseBranch    string   `json:"baseBranch"`
@@ -564,7 +564,7 @@ type Settings struct {
 	AdditionalParams string         `json:"additionalParams,omitempty"` // TODO make folder specific, move to folder config
 	AdditionalEnv    string         `json:"additionalEnv,omitempty"`    // TODO make folder specific, move to folder config
 	TrustedFolders   []string       `json:"trustedFolders,omitempty"`   // TODO make folder specific, move to folder config
-	FolderConfig     []FolderConfig `json:"folderConfig,omitempty"`
+	FolderConfigs    []FolderConfig `json:"folderConfigs,omitempty"`
 	// folder specific settings end
 }
 
