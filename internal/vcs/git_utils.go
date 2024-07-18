@@ -28,7 +28,7 @@ import (
 
 func Clone(repoPath string, destinationPath string, branchName string, logger *zerolog.Logger, gitOps GitOps) (*git.Repository, error) {
 	baseBranchName := plumbing.NewBranchReferenceName(branchName)
-	clonedRepo, err := gitOps.PlainClone(destinationPath, true, &git.CloneOptions{
+	clonedRepo, err := gitOps.PlainClone(destinationPath, false, &git.CloneOptions{
 		URL:           repoPath,
 		ReferenceName: baseBranchName,
 		SingleBranch:  true,
