@@ -53,7 +53,7 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
-	filePath, dir := code.TempWorkdirWithVulnerabilities(t)
+	filePath, dir := code.TempWorkdirWithIssues(t)
 	folder := workspace.NewFolder(c, dir, "dummy", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister())
 	workspace.Get().AddFolder(folder)
 	folder.ScanFile(context.Background(), filePath)

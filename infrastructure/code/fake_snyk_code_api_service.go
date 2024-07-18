@@ -94,7 +94,7 @@ var (
 	FakeFilters = []string{".cjs", ".ejs", ".es", ".es6", ".htm", ".html", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".vue", ".java", ".erb", ".haml", ".rb", ".rhtml", ".slim", ".kt", ".swift", ".cls", ".config", ".pom", ".wxs", ".xml", ".xsd", ".aspx", ".cs", ".py", ".go", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".php", ".phtml"}
 )
 
-func TempWorkdirWithVulnerabilities(t *testing.T) (filePath string, folderPath string) {
+func TempWorkdirWithIssues(t *testing.T) (filePath string, folderPath string) {
 	t.Helper()
 	FakeSnykCodeApiServiceMutex.Lock()
 	defer FakeSnykCodeApiServiceMutex.Unlock()

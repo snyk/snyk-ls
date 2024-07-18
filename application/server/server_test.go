@@ -70,7 +70,7 @@ var (
 
 func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, string) {
 	t.Helper()
-	filePath, dirPath := code.TempWorkdirWithVulnerabilities(t)
+	filePath, dirPath := code.TempWorkdirWithIssues(t)
 	didOpenParams := sglsp.DidOpenTextDocumentParams{
 		TextDocument: sglsp.TextDocumentItem{URI: uri.PathToUri(filePath)},
 	}
@@ -714,7 +714,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 		t.Fatal(err)
 	}
 
-	filePath, fileDir := code.TempWorkdirWithVulnerabilities(t)
+	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, filePath, fileDir, loc)
 
 	// wait for publish
@@ -788,7 +788,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	filePath, fileDir := code.TempWorkdirWithVulnerabilities(t)
+	filePath, fileDir := code.TempWorkdirWithIssues(t)
 
 	didOpenParams := sglsp.DidOpenTextDocumentParams{TextDocument: sglsp.TextDocumentItem{
 		URI: uri.PathToUri(filePath),
@@ -817,7 +817,7 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	filePath, fileDir := code.TempWorkdirWithVulnerabilities(t)
+	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, filePath, fileDir, loc)
 
 	assert.Eventually(
@@ -859,7 +859,7 @@ func Test_textDocumentDidSave_manualScanningMode_doesNotScan(t *testing.T) {
 	}
 	config.CurrentConfig().SetAutomaticScanning(false)
 
-	filePath, fileDir := code.TempWorkdirWithVulnerabilities(t)
+	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, filePath, fileDir, loc)
 
 	assert.Never(
