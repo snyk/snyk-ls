@@ -29,12 +29,11 @@ import (
 func Clone(repoPath string, destinationPath string, branchName string, logger *zerolog.Logger, gitOps GitOps) (*git.Repository, error) {
 	baseBranchName := plumbing.NewBranchReferenceName(branchName)
 	clonedRepo, err := gitOps.PlainClone(destinationPath, true, &git.CloneOptions{
-		URL: repoPath,
-		//ReferenceName: baseBranchName,
-		//SingleBranch:  true,
-		//Shared:        true,
+		URL:           repoPath,
+		ReferenceName: baseBranchName,
+		SingleBranch:  true,
 	})
-	//plumbing.ErrReferenceNotFound
+
 	if err != nil {
 		logger.Error().Err(err).Msgf("Failed to clone base branch: %s in temp repo with go-git: %s", baseBranchName, destinationPath)
 		return nil, err
