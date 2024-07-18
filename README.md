@@ -62,13 +62,18 @@ Right now the language server supports the following actions:
 
 ### Custom additions to Language Server Protocol
 - Folder Config Notification
-  - method: `$/snyk.folderConfig`
+  - method: `$/snyk.folderConfigs`
   - payload:
   ```json5
   {
-    "folderPath": "the/folder/path",
-    "baseBranch": "the-base-branch", // e.g. main
-    "localBranches": [ "branch1", "branch2" ] 
+      "folderConfigs":
+      [
+        {
+          "folderPath": "the/folder/path",
+          "baseBranch": "the-base-branch", // e.g. main
+          "localBranches": [ "branch1", "branch2" ]
+        }
+      ]
   }
   ```
 - Authentication Notification

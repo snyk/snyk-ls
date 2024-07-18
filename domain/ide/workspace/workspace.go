@@ -24,7 +24,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -127,14 +126,6 @@ func (w *Workspace) AddFolder(f *Folder) {
 		w.folders = map[string]*Folder{}
 	}
 	w.folders[f.Path()] = f
-	// get & send folder config to client
-	folderConfig, err := gitconfig.GetOrCreateFolderConfig(f.path)
-	if err != nil {
-		w.c.Logger().Warn().Err(err).Msg("error determining folder config")
-		return
-	}
-
-	w.notifier.Send(*folderConfig)
 }
 
 func (w *Workspace) IssuesForFile(path string) []snyk.Issue {

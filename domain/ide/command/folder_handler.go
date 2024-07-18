@@ -19,6 +19,8 @@ package command
 import (
 	"context"
 	"fmt"
+	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
+	noti "github.com/snyk/snyk-ls/internal/notification"
 
 	"github.com/pkg/errors"
 
@@ -29,6 +31,27 @@ import (
 
 const DoTrust = "Trust folders and continue"
 const DontTrust = "Don't trust folders"
+
+func HandleFolders(ctx context.Context, srv types.Server, notifier noti.Notifier) {
+	go sendFolderConfigsNotification(notifier)
+	HandleUntrustedFolders(ctx, srv)
+}
+
+func sendFolderConfigsNotification(notifier noti.Notifier) {
+	logger := config.CurrentConfig().Logger().With().Str("method", "HandleFolders").Logger()
+	ws := workspace.Get()
+	var folderConfigs []types.FolderConfig
+	for _, f := range ws.Folders() {
+		folderConfig, err := gitconfig.GetOrCreateFolderConfig(f.Path())
+		if err != nil {
+			logger.Warn().Err(err).Msg("error determining folder config")
+			continue
+		}
+		folderConfigs = append(folderConfigs, *folderConfig)
+	}
+	folderConfigsParam := types.FolderConfigsParam{FolderConfigs: folderConfigs}
+	notifier.Send(folderConfigsParam)
+}
 
 func HandleUntrustedFolders(ctx context.Context, srv types.Server) {
 	w := workspace.Get()

@@ -171,7 +171,7 @@ func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler 
 		logger.Info().Msg("RECEIVING")
 		defer logger.Info().Msg("SENDING")
 		workspace.Get().ChangeWorkspaceFolders(bgCtx, params)
-		command.HandleUntrustedFolders(bgCtx, srv)
+		command.HandleFolders(bgCtx, srv, di.Notifier())
 		return nil, nil
 	})
 }
@@ -369,7 +369,7 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		}
 
 		logger.Debug().Msg("trying to get trusted status for untrusted folders")
-		go command.HandleUntrustedFolders(context.Background(), srv)
+		go command.HandleFolders(context.Background(), srv, di.Notifier())
 		return nil, nil
 	})
 }
