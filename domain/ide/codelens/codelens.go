@@ -17,6 +17,8 @@
 package codelens
 
 import (
+	"fmt"
+
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/domain/ide/converter"
@@ -24,6 +26,11 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+type lensesWithIssueCount struct {
+	lensCommands []types.CommandData
+	issueCount   int
+}
 
 func GetFor(filePath string) (lenses []sglsp.CodeLens) {
 	f := workspace.Get().GetFolderContaining(filePath)
@@ -34,31 +41,36 @@ func GetFor(filePath string) (lenses []sglsp.CodeLens) {
 	issues := f.IssuesForFile(filePath)
 
 	// group by range first
-	lensesByRange := make(map[snyk.Range][]types.CommandData)
+	lensesByRange := make(map[snyk.Range]*lensesWithIssueCount)
 	for _, issue := range issues {
 		for _, lens := range issue.CodelensCommands {
-			commands := lensesByRange[issue.Range]
-			if commands == nil {
-				commands = []types.CommandData{}
+			lensesWithIssueCountsForRange := lensesByRange[issue.Range]
+			if lensesWithIssueCountsForRange == nil {
+				lensesWithIssueCountsForRange = &lensesWithIssueCount{
+					lensCommands: []types.CommandData{},
+					issueCount:   0,
+				}
 			}
-			commands = append(commands, lens)
-			lensesByRange[issue.Range] = commands
+			lensesWithIssueCountsForRange.lensCommands = append(lensesWithIssueCountsForRange.lensCommands, lens)
+			lensesWithIssueCountsForRange.issueCount++
+			lensesByRange[issue.Range] = lensesWithIssueCountsForRange
 		}
 	}
 
 	for r, commands := range lensesByRange {
 		lensCommands := getLensCommands(commands)
 		for _, command := range lensCommands {
-			lenses = append(lenses, getCodeLensFromCommand(r, command))
+			lens := getCodeLensFromCommand(r, command)
+			lenses = append(lenses, lens)
 		}
 	}
 
 	return lenses
 }
 
-func getLensCommands(inputCommands []types.CommandData) []types.CommandData {
+func getLensCommands(lensesWithIssueCount *lensesWithIssueCount) []types.CommandData {
 	groupableByType := map[types.GroupingType][]types.Groupable{}
-	for _, groupable := range inputCommands {
+	for _, groupable := range lensesWithIssueCount.lensCommands {
 		commands := groupableByType[groupable.GetGroupingType()]
 		if commands == nil {
 			commands = []types.Groupable{}
@@ -73,6 +85,7 @@ func getLensCommands(inputCommands []types.CommandData) []types.CommandData {
 			// right now we can always group by max semver version, as
 			// code only has one quickfix available, and iac none at all
 			qf, ok := types.MaxSemver()(lensCommands).(types.CommandData)
+			qf.Title = fmt.Sprintf("%s and fix %d issues", qf.Title, lensesWithIssueCount.issueCount)
 			if ok {
 				lenses = append(lenses, qf)
 			}

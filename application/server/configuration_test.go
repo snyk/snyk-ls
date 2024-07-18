@@ -176,29 +176,30 @@ func Test_UpdateSettings(t *testing.T) {
 		tempDir1 := filepath.Join(t.TempDir(), "tempDir1")
 		tempDir2 := filepath.Join(t.TempDir(), "tempDir2")
 		settings := types.Settings{
-			ActivateSnykOpenSource:      "false",
-			ActivateSnykCode:            "false",
-			ActivateSnykIac:             "false",
-			Insecure:                    "true",
-			Endpoint:                    "https://api.snyk.io",
-			AdditionalParams:            "--all-projects -d",
-			AdditionalEnv:               "a=b;c=d",
-			Path:                        "addPath",
-			SendErrorReports:            "true",
-			Organization:                expectedOrgId,
-			ManageBinariesAutomatically: "false",
-			CliPath:                     "C:\\Users\\CliPath\\snyk-ls.exe",
-			Token:                       "a fancy token",
-			FilterSeverity:              types.DefaultSeverityFilter(),
-			TrustedFolders:              []string{"trustedPath1", "trustedPath2"},
-			OsPlatform:                  "windows",
-			OsArch:                      "amd64",
-			RuntimeName:                 "java",
-			RuntimeVersion:              "1.8.0_275",
-			ScanningMode:                "manual",
-			AuthenticationMethod:        types.OAuthAuthentication,
-			SnykCodeApi:                 sampleSettings.SnykCodeApi,
-			FolderConfigs: []types.FolderConfig{
+			ActivateSnykOpenSource:       "false",
+			ActivateSnykCode:             "false",
+			ActivateSnykIac:              "false",
+			Insecure:                     "true",
+			Endpoint:                     "https://api.snyk.io",
+			AdditionalParams:             "--all-projects -d",
+			AdditionalEnv:                "a=b;c=d",
+			Path:                         "addPath",
+			SendErrorReports:             "true",
+			Organization:                 expectedOrgId,
+			ManageBinariesAutomatically:  "false",
+			CliPath:                      "C:\\Users\\CliPath\\snyk-ls.exe",
+			Token:                        "a fancy token",
+			FilterSeverity:               types.DefaultSeverityFilter(),
+			TrustedFolders:               []string{"trustedPath1", "trustedPath2"},
+			OsPlatform:                   "windows",
+			OsArch:                       "amd64",
+			RuntimeName:                  "java",
+			RuntimeVersion:               "1.8.0_275",
+			ScanningMode:                 "manual",
+			AuthenticationMethod:         types.OAuthAuthentication,
+			SnykCodeApi:                  sampleSettings.SnykCodeApi,
+			EnableSnykOpenBrowserActions: "true",
+			FolderConfig: []types.FolderConfigs{
 				{
 					FolderPath: tempDir1,
 					BaseBranch: "testBaseBranch1",
@@ -234,6 +235,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, settings.RuntimeVersion, c.RuntimeVersion())
 		assert.False(t, c.IsAutoScanEnabled())
 		assert.Equal(t, sampleSettings.SnykCodeApi, c.SnykCodeApi())
+		assert.Equal(t, true, c.IsSnykOpenBrowserActionEnabled())
 
 		err := initTestRepo(t, tempDir1)
 		assert.NoError(t, err)

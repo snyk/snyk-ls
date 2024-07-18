@@ -32,9 +32,10 @@ import (
 )
 
 func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath string, issueRange snyk.Range) (actions []snyk.CodeAction) {
+	c := config.CurrentConfig()
 	if reflect.DeepEqual(issueRange, snyk.Range{}) {
-		config.CurrentConfig().Logger().Debug().Str("issue", i.Id).Msg("skipping adding code action, as issueRange is empty")
-		return
+		c.Logger().Debug().Str("issue", i.Id).Msg("skipping adding code action, as issueRange is empty")
+		return actions
 	}
 
 	quickFixAction := i.AddQuickFixAction(affectedFilePath, issueRange)
@@ -42,15 +43,21 @@ func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting
 		actions = append(actions, *quickFixAction)
 	}
 
-	title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", i.Title, i.PackageName)
-	command := &types.CommandData{
-		Title:     title,
-		CommandId: types.OpenBrowserCommand,
-		Arguments: []any{i.CreateIssueURL().String()},
-	}
+	if c.IsSnykOpenBrowserActionEnabled() {
+		title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", i.Title, i.PackageName)
+		command := &types.CommandData{
+			Title:     title,
+			CommandId: types.OpenBrowserCommand,
+			Arguments: []any{i.CreateIssueURL().String()},
+		}
 
-	action, _ := snyk.NewCodeAction(title, nil, command)
-	actions = append(actions, action)
+		action, err := snyk.NewCodeAction(title, nil, command)
+		if err != nil {
+			c.Logger().Err(err).Msgf("could not create code action %s", title)
+		} else {
+			actions = append(actions, action)
+		}
+	}
 
 	codeAction := i.AddSnykLearnAction(learnService, ep)
 	if codeAction != nil {
@@ -90,7 +97,7 @@ func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_repor
 
 func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Range) *snyk.CodeAction {
 	logger := config.CurrentConfig().Logger().With().Str("method", "oss.AddQuickFixAction").Logger()
-	if !config.CurrentConfig().IsSnyOSSQuickFixCodeActionsEnabled() {
+	if !config.CurrentConfig().IsSnykOSSQuickFixCodeActionsEnabled() {
 		return nil
 	}
 	logger.Debug().Msg("create deferred quickfix code action")
@@ -98,7 +105,7 @@ func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Ra
 	if quickfixEdit == "" {
 		return nil
 	}
-	upgradeMessage := "Upgrade to " + quickfixEdit + " (Snyk)"
+	upgradeMessage := "⚡️ Upgrade to " + quickfixEdit
 	autofixEditCallback := func() *snyk.WorkspaceEdit {
 		edit := &snyk.WorkspaceEdit{}
 		singleTextEdit := snyk.TextEdit{
