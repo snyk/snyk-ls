@@ -35,7 +35,7 @@ func Clone(repoPath string, destinationPath string, branchName string, logger *z
 	})
 
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to clone base in temp repo with go-git " + destinationPath)
+		logger.Error().Err(err).Msgf("Failed to clone base branch: %s in temp repo with go-git: %s", baseBranchName, destinationPath)
 		return nil, err
 	}
 

@@ -364,7 +364,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
     "/a/trusted/path",
     "/another/trusted/path"
   ], // An array of folder that should be trusted
-  "folderConfig": [{
+  "folderConfigs": [{
     "baseBranch": "main",
     "folderPath": "a/b/c",
   }], // an array of folder configurations, defining the desired base branch of a workspaceFolder 
