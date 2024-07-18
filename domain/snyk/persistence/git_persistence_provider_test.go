@@ -469,6 +469,7 @@ func TestExists_ExistsInCacheButNotInFs(t *testing.T) {
 	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
 
 	err := cut.Add(folderPath, commitHash, existingCodeIssues, pc)
+	assert.NoError(t, err)
 	err = appFs.RemoveAll(cacheDir)
 	assert.NoError(t, err)
 

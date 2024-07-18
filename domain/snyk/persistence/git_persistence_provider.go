@@ -370,29 +370,6 @@ func (g *GitPersistenceProvider) deleteFileIfDifferentHash(cacheDir string, fold
 	return nil
 }
 
-func (g *GitPersistenceProvider) existsInCacheNotOnDisk(cacheDir string, folderPathHash hashedFolderPath, commitHash string, p product.Product) bool {
-	pchm, pchmExists := g.cache[folderPathHash]
-	if !pchmExists {
-		return false
-	}
-
-	ch, commitHashExists := pchm[p]
-	if !commitHashExists {
-		return false
-	}
-
-	if commitHash != ch {
-		return false
-	}
-
-	filePath := getLocalFilePath(cacheDir, folderPathHash, commitHash, p)
-	if _, err := g.fs.Stat(filePath); os.IsNotExist(err) {
-		return true
-	}
-
-	return false
-}
-
 func (g *GitPersistenceProvider) createOrAppendToCache(pathHash hashedFolderPath, commitHash string, product product.Product) {
 	pchm, exists := g.cache[pathHash]
 	if !exists {
