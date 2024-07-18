@@ -115,7 +115,7 @@ func textDocumentDidChangeHandler() jrpc2.Handler {
 		debouncedCallback := func() {
 			for _, change := range params.ContentChanges {
 				if packageScanner, ok := di.Scanner().(snyk.PackageScanner); ok {
-					packageScanner.ScanPackages(ctx, c, pathFromUri, change.Text)
+					go packageScanner.ScanPackages(ctx, c, pathFromUri, change.Text)
 				}
 			}
 		}
