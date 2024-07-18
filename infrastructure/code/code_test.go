@@ -18,7 +18,6 @@ package code
 
 import (
 	"context"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -26,6 +25,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 
 	"github.com/erni27/imcache"
 	"github.com/golang/mock/gomock"
@@ -288,7 +289,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 		"should retrieve from backend", func(t *testing.T) {
 			snykCodeMock := &FakeSnykCodeClient{C: c}
 			scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{}, persistence.NewNopScanPersister())
-			filePath, path := TempWorkdirWithVulnerabilities(t)
+			filePath, path := TempWorkdirWithIssues(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
 			files := []string{filePath}
 
@@ -326,7 +327,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	testutil.UnitTest(t)
 	snykCodeMock := &FakeSnykCodeClient{C: c}
 
-	diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
+	diagnosticUri, path := TempWorkdirWithIssues(t)
 	defer func(path string) { _ = os.RemoveAll(path) }(path)
 	files := []string{diagnosticUri}
 	fakeCodeScanner := &FakeCodeScannerClient{rootPath: diagnosticUri}
@@ -693,7 +694,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 
 			snykCodeMock := &FakeSnykCodeClient{C: c}
 			scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{}, persistence.NewNopScanPersister())
-			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
+			diagnosticUri, path := TempWorkdirWithIssues(t)
 			t.Cleanup(
 				func() {
 					_ = os.RemoveAll(path)
@@ -720,7 +721,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			snykCodeMock.NoFixSuggestions = true
 
 			scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{}, persistence.NewNopScanPersister())
-			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
+			diagnosticUri, path := TempWorkdirWithIssues(t)
 			t.Cleanup(
 				func() {
 					_ = os.RemoveAll(path)
@@ -744,7 +745,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 
 			snykCodeMock := &FakeSnykCodeClient{C: c}
 			scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{}, persistence.NewNopScanPersister())
-			diagnosticUri, path := TempWorkdirWithVulnerabilities(t)
+			diagnosticUri, path := TempWorkdirWithIssues(t)
 			t.Cleanup(
 				func() {
 					_ = os.RemoveAll(path)

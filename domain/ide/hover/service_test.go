@@ -95,10 +95,10 @@ func Test_GetHoverMultiline(t *testing.T) {
 				Start: snyk.Position{Line: 3, Character: 56},
 				End:   snyk.Position{Line: 5, Character: 80},
 			},
-				Message: "## Vulnerabilities found"}},
+				Message: "## Issues found"}},
 			query: snyk.Position{Line: 4, Character: 66},
 			expected: Result{Contents: MarkupContent{
-				Kind: "markdown", Value: "## Vulnerabilities found"},
+				Kind: "markdown", Value: "## Issues found"},
 			},
 		},
 		// exact line but within character range
@@ -107,10 +107,10 @@ func Test_GetHoverMultiline(t *testing.T) {
 				Start: snyk.Position{Line: 4, Character: 56},
 				End:   snyk.Position{Line: 4, Character: 80},
 			},
-				Message: "## Vulnerabilities found"}},
+				Message: "## Issues found"}},
 			query: snyk.Position{Line: 4, Character: 66},
 			expected: Result{Contents: MarkupContent{
-				Kind: "markdown", Value: "## Vulnerabilities found"},
+				Kind: "markdown", Value: "## Issues found"},
 			},
 		},
 		// exact line and exact character
@@ -119,10 +119,10 @@ func Test_GetHoverMultiline(t *testing.T) {
 				Start: snyk.Position{Line: 4, Character: 56},
 				End:   snyk.Position{Line: 4, Character: 56},
 			},
-				Message: "## Vulnerabilities found"}},
+				Message: "## Issues found"}},
 			query: snyk.Position{Line: 4, Character: 56},
 			expected: Result{Contents: MarkupContent{
-				Kind: "markdown", Value: "## Vulnerabilities found"},
+				Kind: "markdown", Value: "## Issues found"},
 			},
 		},
 		// hover left of the character position on exact line
@@ -131,7 +131,7 @@ func Test_GetHoverMultiline(t *testing.T) {
 				Start: snyk.Position{Line: 4, Character: 56},
 				End:   snyk.Position{Line: 4, Character: 86},
 			},
-				Message: "## Vulnerabilities found"}},
+				Message: "## Issues found"}},
 			query: snyk.Position{Line: 4, Character: 45},
 			expected: Result{Contents: MarkupContent{
 				Kind: "markdown", Value: ""},
@@ -143,7 +143,7 @@ func Test_GetHoverMultiline(t *testing.T) {
 				Start: snyk.Position{Line: 4, Character: 56},
 				End:   snyk.Position{Line: 4, Character: 86},
 			},
-				Message: "## Vulnerabilities found"}},
+				Message: "## Issues found"}},
 			query: snyk.Position{Line: 4, Character: 105},
 			expected: Result{Contents: MarkupContent{
 				Kind: "markdown", Value: ""},

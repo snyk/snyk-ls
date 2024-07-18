@@ -104,7 +104,7 @@ func GetTrustMessage(untrusted []*workspace.Folder) string {
 	for _, folder := range untrusted {
 		untrustedFolderString += folder.Path() + "\n"
 	}
-	return fmt.Sprintf("When scanning for vulnerabilities, Snyk may automatically execute code such as invoking "+
+	return fmt.Sprintf("When scanning for issues, Snyk may automatically execute code such as invoking "+
 		"the package manager to get dependency information. You should only scan folders you trust."+
 		"\n\nUntrusted Folders: \n%s\n\n", untrustedFolderString)
 }

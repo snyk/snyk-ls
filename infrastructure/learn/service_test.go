@@ -62,7 +62,7 @@ func Test_GetLesson(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
 	c.UpdateApiEndpoints("https://api.snyk.io")
 	cut := New(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient, errorreporting.NewTestErrorReporter())
-	t.Run("OSS vulnerability - lesson returned", func(t *testing.T) {
+	t.Run("OSS issue - lesson returned", func(t *testing.T) {
 		params := getRealOSSLookupParams()
 
 		lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, snyk.DependencyVulnerability)

@@ -54,7 +54,7 @@ func TestScanner_Cache(t *testing.T) {
 	t.Run("should add scan results to cache", func(t *testing.T) {
 		scanner.issueCache.RemoveAll()
 		scanner.issueCache.Set("file2.java", []snyk.Issue{{ID: "issue2"}}, imcache.WithDefaultExpiration())
-		filePath, folderPath := TempWorkdirWithVulnerabilities(t)
+		filePath, folderPath := TempWorkdirWithIssues(t)
 
 		_, err := scanner.Scan(context.Background(), filePath, folderPath)
 		require.NoError(t, err)
@@ -70,7 +70,7 @@ func TestScanner_Cache(t *testing.T) {
 			}()
 		}))
 		scanner.issueCache.Set("file2.java", []snyk.Issue{{ID: "issue2"}}, imcache.WithDefaultExpiration())
-		filePath, folderPath := TempWorkdirWithVulnerabilities(t)
+		filePath, folderPath := TempWorkdirWithIssues(t)
 
 		// first scan should add issues to the cache
 		_, err := scanner.Scan(context.Background(), filePath, folderPath)
@@ -98,7 +98,7 @@ func TestScanner_Cache(t *testing.T) {
 		testEvictionHandler := func(path string) {
 			go func() { evictionChan <- path }()
 		}
-		filePath, folderPath := TempWorkdirWithVulnerabilities(t)
+		filePath, folderPath := TempWorkdirWithIssues(t)
 		scanner.RegisterCacheRemovalHandler(testEvictionHandler)
 		scanner.issueCache.Set(filePath, []snyk.Issue{{ID: "issue2"}}, imcache.WithDefaultExpiration())
 
@@ -126,7 +126,7 @@ func TestScanner_Cache(t *testing.T) {
 			go func() { evictionChan <- path }()
 		}
 		scanner.RegisterCacheRemovalHandler(testEvictionHandler)
-		filePath, folderPath := TempWorkdirWithVulnerabilities(t)
+		filePath, folderPath := TempWorkdirWithIssues(t)
 		scanner.issueCache.Set(filePath, []snyk.Issue{{ID: "issue2"}}, imcache.WithDefaultExpiration())
 
 		// first scan should add issues to the cache

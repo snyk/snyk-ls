@@ -316,8 +316,8 @@ func (cliScanner *CLIScanner) handleError(path string, err error, res []byte, cm
 		// Exit codes
 		//  Possible exit codes and their meaning:
 		//
-		//  0: success, no vulnerabilities found
-		//  1: action_needed, vulnerabilities found
+		//  0: success, no issues found
+		//  1: action_needed, issues found
 		//  2: failure, try to re-run command
 		//  3: failure, no supported projects detected
 		var exitError *exec.ExitError

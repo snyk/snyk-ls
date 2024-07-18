@@ -19,17 +19,20 @@ package code
 import (
 	"context"
 	"fmt"
-	"github.com/rs/zerolog"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	"github.com/snyk/snyk-ls/internal/vcs"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
+
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/internal/vcs"
+
 	"github.com/erni27/imcache"
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
+
 	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 
 	codeClient "github.com/snyk/code-client-go"
@@ -163,7 +166,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	scanStatus := NewScanStatus()
 	isAlreadyWaiting := sc.waitForScanToFinish(scanStatus, folderPath)
 	if isAlreadyWaiting {
-		return []snyk.Issue{}, nil // Returning an empty slice implies that no vulnerabilities were found
+		return []snyk.Issue{}, nil // Returning an empty slice implies that no issues were found
 	}
 	defer func() {
 		sc.scanStatusMutex.Lock()
