@@ -19,7 +19,6 @@ package command
 import (
 	"context"
 	"fmt"
-	"github.com/rs/zerolog"
 	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 
@@ -34,12 +33,12 @@ const DoTrust = "Trust folders and continue"
 const DontTrust = "Don't trust folders"
 
 func HandleFolders(ctx context.Context, srv types.Server, notifier noti.Notifier) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "HandleFolders").Logger()
-	go sendFolderConfigsNotification(&logger, notifier)
+	go sendFolderConfigsNotification(notifier)
 	HandleUntrustedFolders(ctx, srv)
 }
 
-func sendFolderConfigsNotification(logger *zerolog.Logger, notifier noti.Notifier) {
+func sendFolderConfigsNotification(notifier noti.Notifier) {
+	logger := config.CurrentConfig().Logger().With().Str("method", "HandleFolders").Logger()
 	ws := workspace.Get()
 	var folderConfigs []types.FolderConfig
 	for _, f := range ws.Folders() {
