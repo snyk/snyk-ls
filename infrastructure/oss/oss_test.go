@@ -103,7 +103,7 @@ func Test_toIssue_LearnParameterConversion(t *testing.T) {
 		learnService: getLearnMock(t),
 	}
 
-	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{Start: snyk.Position{Line: 1}}, scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, sampleOssIssue.Identifiers.CWE, issue.CWEs)
@@ -122,7 +122,7 @@ func Test_toIssue_CodeActions_WithNPMFix(t *testing.T) {
 	}
 	sampleOssIssue.UpgradePath = []any{"false", "pkg@v2"}
 
-	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{Start: snyk.Position{Line: 1}}, scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 3, len(issue.CodeActions))
@@ -144,7 +144,7 @@ func Test_toIssue_CodeActions_WithScopedNPMFix(t *testing.T) {
 	}
 	sampleOssIssue.UpgradePath = []any{"false", "@org/pkg@v2"}
 
-	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{Start: snyk.Position{Line: 1}}, scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 3, len(issue.CodeActions))
@@ -166,13 +166,17 @@ func Test_toIssue_CodeActions_WithGomodFix(t *testing.T) {
 	sampleOssIssue.PackageManager = "gomodules"
 	sampleOssIssue.UpgradePath = []any{"false", "pkg@v2"}
 
-	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyRange(), scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 3, len(issue.CodeActions))
 	assert.Equal(t, "Upgrade to vv2 (Snyk)", issue.CodeActions[0].Title)
 	assert.Equal(t, 1, len(issue.CodelensCommands))
 	assert.Equal(t, "⚡ Fix this issue: Upgrade to vv2 (Snyk)", issue.CodelensCommands[0].Title)
+}
+
+func nonEmptyRange() snyk.Range {
+	return snyk.Range{Start: snyk.Position{Line: 1}}
 }
 
 func Test_toIssue_CodeActions_WithMavenFix(t *testing.T) {
@@ -185,7 +189,7 @@ func Test_toIssue_CodeActions_WithMavenFix(t *testing.T) {
 	sampleOssIssue.PackageManager = "maven"
 	sampleOssIssue.UpgradePath = []any{"false", "pkg@v2"}
 
-	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyRange(), scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 3, len(issue.CodeActions))
@@ -204,7 +208,7 @@ func Test_toIssue_CodeActions_WithMavenFixForBuildGradle(t *testing.T) {
 	sampleOssIssue.PackageManager = "maven"
 	sampleOssIssue.UpgradePath = []any{"false", "a:pkg@v2"}
 
-	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyRange(), scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 3, len(issue.CodeActions))
@@ -213,7 +217,7 @@ func Test_toIssue_CodeActions_WithMavenFixForBuildGradle(t *testing.T) {
 	assert.Equal(t, "⚡ Fix this issue: Upgrade to v2 (Snyk)", issue.CodelensCommands[0].Title)
 
 	// TODO: remove once https://snyksec.atlassian.net/browse/OSM-1775 is fixed
-	issue = toIssue("build.gradle", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+	issue = toIssue("build.gradle", sampleOssIssue, &scanResult{}, nonEmptyRange(), scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 3, len(issue.CodeActions))
@@ -222,7 +226,7 @@ func Test_toIssue_CodeActions_WithMavenFixForBuildGradle(t *testing.T) {
 	assert.Equal(t, "⚡ Fix this issue: Upgrade to pkg:v2 (Snyk)", issue.CodelensCommands[0].Title)
 
 	// TODO: remove once https://snyksec.atlassian.net/browse/OSM-1775 is fixed
-	issue = toIssue("build.gradle.kts", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+	issue = toIssue("build.gradle.kts", sampleOssIssue, &scanResult{}, nonEmptyRange(), scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 3, len(issue.CodeActions))
@@ -241,7 +245,7 @@ func Test_toIssue_CodeActions_WithGradleFix(t *testing.T) {
 	sampleOssIssue.PackageManager = "gradle"
 	sampleOssIssue.UpgradePath = []any{"false", "a:pkg@v2"}
 
-	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyRange(), scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 3, len(issue.CodeActions))
@@ -257,7 +261,7 @@ func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
 	}
 	sampleOssIssue.UpgradePath = []any{"*"}
 
-	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{}, scanner.learnService, scanner.errorReporter)
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyRange(), scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 2, len(issue.CodeActions))

@@ -18,6 +18,7 @@ package oss
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -31,6 +32,11 @@ import (
 )
 
 func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath string, issueRange snyk.Range) (actions []snyk.CodeAction) {
+	if reflect.DeepEqual(issueRange, snyk.Range{}) {
+		config.CurrentConfig().Logger().Debug().Str("issue", i.Id).Msg("skipping adding code action, as issueRange is empty")
+		return
+	}
+
 	quickFixAction := i.AddQuickFixAction(affectedFilePath, issueRange)
 	if quickFixAction != nil {
 		actions = append(actions, *quickFixAction)
