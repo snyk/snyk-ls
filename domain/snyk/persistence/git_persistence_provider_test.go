@@ -452,6 +452,31 @@ func TestEnsureCacheDirExists_DefaultCase(t *testing.T) {
 	assert.Equal(t, expectedCacheDir, actualCacheDir)
 }
 
+func TestExists_ExistsInCacheButNotInFs(t *testing.T) {
+	c := testutil.UnitTest(t)
+	existingCodeIssues := []snyk.Issue{
+		{
+			GlobalIdentity: uuid.New().String(),
+		},
+	}
+
+	appFs := afero.NewMemMapFs()
+	folderPath := "/home/myusr/testrepo"
+	mgo := getMockedGitOpsWithRepoConfig(folderPath)
+	cacheDir := filepath.Join(filepath.Join(folderPath, ".git"), CacheFolder)
+	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	pc := product.ProductCode
+	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+
+	err := cut.Add(folderPath, commitHash, existingCodeIssues, pc)
+	err = appFs.RemoveAll(cacheDir)
+	assert.NoError(t, err)
+
+	exists := cut.Exists(folderPath, commitHash, pc)
+
+	assert.False(t, exists)
+}
+
 func getMockedGitOpsWithRepoConfig(folderPath string) *vcs.MockGitOps {
 	storer := filesystem.NewStorage(osfs.New(folderPath), cache.NewObjectLRUDefault())
 	repo := &git.Repository{}
