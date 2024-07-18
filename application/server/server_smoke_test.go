@@ -425,7 +425,7 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 
 	waitForScan(t, cloneTargetDir)
 
-	notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfig")
+	notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
 	assert.Len(t, notifications, 1)
 	var folderConfig types.FolderConfig
 	err := notifications[0].UnmarshalParams(&folderConfig)
