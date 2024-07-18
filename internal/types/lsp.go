@@ -556,6 +556,7 @@ type Settings struct {
 	SnykCodeApi                      string               `json:"snykCodeApi,omitempty"`
 	EnableSnykLearnCodeActions       string               `json:"enableSnykLearnCodeActions,omitempty"`
 	EnableSnykOSSQuickFixCodeActions string               `json:"enableSnykOSSQuickFixCodeActions,omitempty"`
+	EnableSnykOpenBrowserActions     string               `json:"enableSnykOpenBrowserActions,omitempty"`
 	EnableDeltaFindings              string               `json:"enableDeltaFindings,omitempty"` // should this be global?
 	RequiredProtocolVersion          string               `json:"requiredProtocolVersion,omitempty"`
 	// global settings end
