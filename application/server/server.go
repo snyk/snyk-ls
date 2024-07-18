@@ -376,7 +376,6 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 
 func addWorkspaceFolders(c *config.Config, params types.InitializeParams, w *workspace.Workspace) {
 	const method = "addWorkspaceFolders"
-	time.Sleep(time.Second * 5)
 	if len(params.WorkspaceFolders) > 0 {
 		for _, workspaceFolder := range params.WorkspaceFolders {
 			c.Logger().Info().Str("method", method).Msgf("Adding workspaceFolder %v", workspaceFolder)
