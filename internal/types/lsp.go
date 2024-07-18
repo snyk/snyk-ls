@@ -525,6 +525,10 @@ type FolderConfig struct {
 	LocalBranches []string `json:"localBranches,omitempty"`
 }
 
+type FolderConfigsParam struct {
+	FolderConfigs []FolderConfig `json:"folderConfigs"`
+}
+
 // Settings is the struct that is parsed from the InitializationParams.InitializationOptions field
 type Settings struct {
 	// global settings start
