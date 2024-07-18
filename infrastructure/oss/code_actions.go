@@ -105,7 +105,7 @@ func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Ra
 	if quickfixEdit == "" {
 		return nil
 	}
-	upgradeMessage := "Upgrade to " + quickfixEdit + " (Snyk)"
+	upgradeMessage := "⚡️ Upgrade to " + quickfixEdit
 	autofixEditCallback := func() *snyk.WorkspaceEdit {
 		edit := &snyk.WorkspaceEdit{}
 		singleTextEdit := snyk.TextEdit{

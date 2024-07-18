@@ -53,7 +53,7 @@ func toIssue(
 	for _, codeAction := range codeActions {
 		if strings.Contains(codeAction.Title, "Upgrade to") {
 			codelensCommands = append(codelensCommands, types.CommandData{
-				Title:     "⚡ Fix this issue: " + codeAction.Title,
+				Title:     codeAction.Title,
 				CommandId: types.CodeFixCommand,
 				Arguments: []any{
 					codeAction.Uuid,

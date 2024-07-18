@@ -117,6 +117,7 @@ func nonEmptyRange() snyk.Range {
 }
 
 func Test_toIssue_CodeActions(t *testing.T) {
+	const flashy = "⚡️ "
 	tests := []struct {
 		name               string
 		packageName        string
@@ -124,12 +125,12 @@ func Test_toIssue_CodeActions(t *testing.T) {
 		expectedUpgrade    string
 		openBrowserEnabled bool
 	}{
-		{"WithNPMFix", "pkg@v2", "npm", "Upgrade to \"pkg\": \"v2\" (Snyk)", false},
-		{"WithScopedNPMFix", "@org/pkg@v2", "npm", "Upgrade to \"@org/pkg\": \"v2\" (Snyk)", true},
-		{"WithGomodFix", "pkg@v2", "gomodules", "Upgrade to vv2 (Snyk)", true},
-		{"WithMavenFix", "pkg@v2", "maven", "Upgrade to v2 (Snyk)", true},
-		{"WithMavenFixForBuildGradle", "a:pkg@v2", "maven", "Upgrade to v2 (Snyk)", true},
-		{"WithGradleFix", "a:pkg@v2", "gradle", "Upgrade to pkg:v2 (Snyk)", true},
+		{"WithNPMFix", "pkg@v2", "npm", "Upgrade to \"pkg\": \"v2\"", false},
+		{"WithScopedNPMFix", "@org/pkg@v2", "npm", "Upgrade to \"@org/pkg\": \"v2\"", true},
+		{"WithGomodFix", "pkg@v2", "gomodules", "Upgrade to vv2", true},
+		{"WithMavenFix", "pkg@v2", "maven", "Upgrade to v2", true},
+		{"WithMavenFixForBuildGradle", "a:pkg@v2", "maven", "Upgrade to v2", true},
+		{"WithGradleFix", "a:pkg@v2", "gradle", "Upgrade to pkg:v2", true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -146,9 +147,9 @@ func Test_toIssue_CodeActions(t *testing.T) {
 			issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{Start: snyk.Position{Line: 1}}, scanner.learnService, scanner.errorReporter)
 
 			assert.Equal(t, sampleOssIssue.Id, issue.ID)
-			assert.Equal(t, test.expectedUpgrade, issue.CodeActions[0].Title)
+			assert.Equal(t, flashy+test.expectedUpgrade, issue.CodeActions[0].Title)
 			assert.Equal(t, 1, len(issue.CodelensCommands))
-			assert.Equal(t, "⚡ Fix this issue: "+test.expectedUpgrade, issue.CodelensCommands[0].Title)
+			assert.Equal(t, flashy+test.expectedUpgrade, issue.CodelensCommands[0].Title)
 
 			if test.openBrowserEnabled {
 				assert.Equal(t, 3, len(issue.CodeActions))
