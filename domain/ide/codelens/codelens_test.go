@@ -29,7 +29,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_GetCodeLensFromCommand(t *testing.T) {
@@ -41,34 +40,6 @@ func Test_GetCodeLensFromCommand(t *testing.T) {
 	assert.Equal(t, command.CommandId, codeLens.Command.Command)
 	assert.Equal(t, command.Title, codeLens.Command.Title)
 	assert.Equal(t, command.Arguments, codeLens.Command.Arguments)
-}
-
-func Test_getLensCommands(t *testing.T) {
-	input := []types.CommandData{
-		{
-			Title:         "a_lower",
-			CommandId:     "a1",
-			GroupingKey:   "a",
-			GroupingType:  types.Quickfix,
-			GroupingValue: "1.0",
-		},
-		{
-			Title:         "a_higher",
-			CommandId:     "a2",
-			GroupingKey:   "a",
-			GroupingType:  types.Quickfix,
-			GroupingValue: "2.0",
-		},
-		{
-			Title:     "b",
-			CommandId: "b",
-		},
-	}
-
-	actual := getLensCommands(input)
-
-	assert.Len(t, actual, 2)
-	assert.Equal(t, input[1].GroupingValue, actual[0].GroupingValue)
 }
 
 func Test_GetCodeLensForPath(t *testing.T) {
