@@ -198,7 +198,7 @@ func Test_UpdateSettings(t *testing.T) {
 			ScanningMode:                "manual",
 			AuthenticationMethod:        types.OAuthAuthentication,
 			SnykCodeApi:                 sampleSettings.SnykCodeApi,
-			FolderConfig: []types.FolderConfig{
+			FolderConfigs: []types.FolderConfig{
 				{
 					FolderPath: tempDir1,
 					BaseBranch: "testBaseBranch1",

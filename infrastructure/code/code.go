@@ -259,7 +259,9 @@ func scanAndPersistBaseBranch(ctx context.Context, sc *Scanner, folderPath strin
 
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to clone base branch")
-		return err
+		//x := "Could not determine difference in issues. Please check if your git repository is in detached HEAD state."
+		//sc.notifier()
+		return nil
 	}
 
 	defer func() {
