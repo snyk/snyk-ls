@@ -113,7 +113,7 @@ func SetBaseBranch(logger *zerolog.Logger, config []types.FolderConfig) {
 			logger.Error().Err(err).Msg("could not get git config for folder " + folderConfig.FolderPath)
 			continue
 		}
-		subsection.AddOption(baseBranchKey, folderConfig.BaseBranch)
+		subsection.SetOption(baseBranchKey, folderConfig.BaseBranch)
 		err = repo.Storer.SetConfig(repoConfig)
 		if err != nil {
 			logger.Error().Err(err).Msg("could not store base branch configuration for folder " + folderConfig.FolderPath)
