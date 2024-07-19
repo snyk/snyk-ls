@@ -347,21 +347,22 @@ func (g *GitPersistenceProvider) deleteFileIfDifferentHash(cacheDir string, fold
 		return nil
 	}
 
-	ch, commitHashExists := pchm[p]
+	cachedCommitHash, commitHashExists := pchm[p]
 	if !commitHashExists {
 		return nil
 	}
 
-	if ch == commitHash {
+	if cachedCommitHash == commitHash {
 		return nil
 	}
-	filePath := getLocalFilePath(cacheDir, folderPathHash, commitHash, p)
+
+	filePath := getLocalFilePath(cacheDir, folderPathHash, cachedCommitHash, p)
 	err := g.deleteFile(filePath)
 	if err != nil {
 		g.logger.Error().Err(err).Msg("failed to remove persisted scan file for product " + p.ToProductCodename())
 	}
 
-	err = g.deleteFromCache(folderPathHash, commitHash, p)
+	err = g.deleteFromCache(folderPathHash, cachedCommitHash, p)
 	if err != nil {
 		g.logger.Error().Err(err).Msg("failed to delete cached scan for product: " + p.ToProductCodename())
 		return err
