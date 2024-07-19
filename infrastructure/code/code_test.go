@@ -861,6 +861,15 @@ func TestScanner_getFilesToBeScanned(t *testing.T) {
 	})
 }
 
+func TestNormalizeBranchName(t *testing.T) {
+	branchName := " feat/new -"
+	expectedBranchName := "featnew_-"
+
+	normaliedBranchName := normalizeBranchName(branchName)
+
+	assert.Equal(t, expectedBranchName, normaliedBranchName)
+}
+
 func getInterfileTestCodeIssueData() snyk.CodeIssueData {
 	return snyk.CodeIssueData{
 		DataFlow: []snyk.DataFlowElement{

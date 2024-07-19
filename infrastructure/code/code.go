@@ -305,7 +305,7 @@ func normalizeBranchName(branchName string) string {
 	normalized := strings.TrimSpace(branchName)
 	normalized = strings.ToLower(normalized)
 	normalized = strings.ReplaceAll(normalized, " ", "_")
-	reg, err := regexp.Compile("[^a-z0-9_\\-]+")
+	reg, err := regexp.Compile(`[^a-z0-9_\-]+`)
 	if err != nil {
 		return ""
 	}
