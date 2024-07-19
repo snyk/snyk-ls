@@ -10,7 +10,6 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/erni27/imcache v1.2.0
 	github.com/getsentry/sentry-go v0.28.1
-	github.com/go-git/go-billy/v5 v5.5.0
 	github.com/go-git/go-git/v5 v5.12.0
 	github.com/golang/mock v1.6.0
 	github.com/gomarkdown/markdown v0.0.0-20240626202925-2eda941fd024
@@ -28,7 +27,6 @@ require (
 	github.com/snyk/go-application-framework v0.0.0-20240627194757-cc0fb551c613
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spaolacci/murmur3 v1.1.0
-	github.com/spf13/afero v1.11.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.9.0
 	github.com/subosito/gotenv v1.6.0
@@ -58,6 +56,7 @@ require (
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/getkin/kin-openapi v0.124.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
+	github.com/go-git/go-billy/v5 v5.5.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
@@ -100,6 +99,7 @@ require (
 	github.com/skeema/knownhosts v1.2.2 // indirect
 	github.com/snyk/error-catalog-golang-public v0.0.0-20240527112826-2b77438d25f1 // indirect
 	github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 // indirect
+	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/cobra v1.8.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect

@@ -17,30 +17,26 @@
 package persistence
 
 import (
-	"errors"
 	"github.com/adrg/xdg"
-	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing/cache"
-	"github.com/go-git/go-git/v5/storage/filesystem"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/google/uuid"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/vcs"
-	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"path/filepath"
 	"testing"
 )
 
 func TestInit_Empty(t *testing.T) {
 	c := testutil.UnitTest(t)
-	appFs := afero.NewMemMapFs()
-	folderPath := "/home/myusr/testrepo"
+	folderPath := t.TempDir()
+	initGitRepo(t, folderPath, false)
 	expectedCacheDir := filepath.Join(filepath.Join(folderPath, ".git", CacheFolder))
-	mgo := getMockedGitOpsWithRepoConfig(folderPath)
-	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 	actualCacheDir, err := cut.init(folderPath)
 
 	assert.NoError(t, err)
@@ -50,14 +46,14 @@ func TestInit_Empty(t *testing.T) {
 
 func TestInit_NotEmpty(t *testing.T) {
 	c := testutil.UnitTest(t)
+	folderPath := t.TempDir()
+	initGitRepo(t, folderPath, false)
+
 	issueList := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
 	}
-	appFs := afero.NewMemMapFs()
-	folderPath := "/home/myusr/testrepo"
-	mgo := getMockedGitOpsWithRepoConfig(folderPath)
 	expectedCacheDir := filepath.Join(filepath.Join(folderPath, ".git", CacheFolder))
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
@@ -65,7 +61,7 @@ func TestInit_NotEmpty(t *testing.T) {
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	p := product.ProductCode
 
-	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
 	// Here we call Add before init to make sure we have files already created
 	err = cut.Add(folderPath, commitHash, issueList, p)
@@ -80,21 +76,21 @@ func TestInit_NotEmpty(t *testing.T) {
 
 func TestAddTo_NewCommit(t *testing.T) {
 	c := testutil.UnitTest(t)
+	folderPath := t.TempDir()
+	initGitRepo(t, folderPath, false)
+
 	issueList := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
 	}
-	appFs := afero.NewMemMapFs()
-	folderPath := "/home/myusr/testrepo"
-	mgo := getMockedGitOpsWithRepoConfig(folderPath)
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	p := product.ProductCode
 
-	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
 	err = cut.Add(folderPath, commitHash, issueList, p)
 	assert.NoError(t, err)
@@ -108,6 +104,8 @@ func TestAddTo_NewCommit(t *testing.T) {
 
 func TestAddToCache_ExistingCommit_ShouldNotOverrideExistingSnapshots(t *testing.T) {
 	c := testutil.UnitTest(t)
+	folderPath := t.TempDir()
+	initGitRepo(t, folderPath, false)
 
 	issueList := []snyk.Issue{
 		{
@@ -119,13 +117,11 @@ func TestAddToCache_ExistingCommit_ShouldNotOverrideExistingSnapshots(t *testing
 			GlobalIdentity: uuid.New().String(),
 		},
 	}
-	appFs := afero.NewMemMapFs()
-	folderPath := "/home/myusr/testrepo"
-	mgo := getMockedGitOpsWithRepoConfig(folderPath)
+
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	p := product.ProductCode
 
-	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
 	err := cut.Add(folderPath, commitHash, issueList, p)
 	assert.NoError(t, err)
@@ -141,20 +137,20 @@ func TestAddToCache_ExistingCommit_ShouldNotOverrideExistingSnapshots(t *testing
 
 func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
 	c := testutil.UnitTest(t)
+	folderPath := t.TempDir()
+	initGitRepo(t, folderPath, false)
+
 	issueList := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
 	}
 
-	appFs := afero.NewMemMapFs()
-	folderPath := "/home/myusr/testrepo"
-	mgo := getMockedGitOpsWithRepoConfig(folderPath)
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	p := product.ProductCode
-	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
 	err = cut.Add(folderPath, commitHash, issueList, p)
 	assert.NoError(t, err)
@@ -166,6 +162,8 @@ func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
 
 func TestGetPersistedIssueList_ReturnsValidIssueListForProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
+	folderPath := t.TempDir()
+	initGitRepo(t, folderPath, false)
 	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
@@ -177,13 +175,10 @@ func TestGetPersistedIssueList_ReturnsValidIssueListForProduct(t *testing.T) {
 		},
 	}
 
-	appFs := afero.NewMemMapFs()
-	folderPath := "/home/myusr/testrepo"
-	mgo := getMockedGitOpsWithRepoConfig(folderPath)
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
 	po := product.ProductOpenSource
-	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
 	err := cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
@@ -196,20 +191,21 @@ func TestGetPersistedIssueList_ReturnsValidIssueListForProduct(t *testing.T) {
 
 func TestClear_ExistingCache(t *testing.T) {
 	c := testutil.UnitTest(t)
+	folderPath := t.TempDir()
+	initGitRepo(t, folderPath, false)
+
 	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
 	}
-	appFs := afero.NewMemMapFs()
-	folderPath := "/home/myusr/testrepo"
-	mgo := getMockedGitOpsWithRepoConfig(folderPath)
+
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	cacheDir := filepath.Join(xdg.CacheHome, CacheFolder)
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 	pc := product.ProductCode
-	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
@@ -222,22 +218,21 @@ func TestClear_ExistingCache(t *testing.T) {
 
 func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
+	folderPath := t.TempDir()
+	initGitRepo(t, folderPath, false)
 	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
 	}
 
-	appFs := afero.NewMemMapFs()
-	folderPath := "/home/myusr/testrepo"
-	mgo := getMockedGitOpsWithRepoConfig(folderPath)
 	cacheDir := filepath.Join(xdg.CacheHome, CacheFolder)
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
-	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	cut.Clear(folderPath)
@@ -249,22 +244,21 @@ func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 
 func TestClearIssues_ExistingCacheExistingProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
+	folderPath := t.TempDir()
+	initGitRepo(t, folderPath, false)
 	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
 	}
 
-	appFs := afero.NewMemMapFs()
-	folderPath := "/home/myusr/testrepo"
-	mgo := getMockedGitOpsWithRepoConfig(folderPath)
 	cacheDir := filepath.Join(xdg.CacheHome, CacheFolder)
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
-	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
@@ -278,22 +272,21 @@ func TestClearIssues_ExistingCacheExistingProduct(t *testing.T) {
 
 func TestClearIssues_ExistingCacheNonExistingProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
+	folderPath := t.TempDir()
+	initGitRepo(t, folderPath, false)
 	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
 	}
 
-	appFs := afero.NewMemMapFs()
-	folderPath := "/home/myusr/testrepo"
-	mgo := getMockedGitOpsWithRepoConfig(folderPath)
 	cacheDir := filepath.Join(filepath.Join(folderPath, ".git", CacheFolder))
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
-	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
@@ -308,28 +301,26 @@ func TestClearIssues_ExistingCacheNonExistingProduct(t *testing.T) {
 
 func TestClearIssues_NonExistingCacheNonExistingProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
+	folderPath := t.TempDir()
+	initGitRepo(t, folderPath, false)
 	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
 	}
 
-	appFs := afero.NewMemMapFs()
-	folderPath := "/home/myusr/testrepo"
-	mgo := getMockedGitOpsWithRepoConfig(folderPath)
 	cacheDir := filepath.Join(filepath.Join(folderPath, ".git", CacheFolder))
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
-	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
 
 	invalidPath := "/invalid/folder/path"
-	mgo.On("PlainOpen", invalidPath).Return(nil, errors.New("doesn't exist"))
 	err = cut.ClearForProduct(invalidPath, commitHash, product.ProductUnknown)
 	assert.Error(t, err)
 
@@ -339,16 +330,16 @@ func TestClearIssues_NonExistingCacheNonExistingProduct(t *testing.T) {
 
 func TestCreateOrAppendToCache_NewCache(t *testing.T) {
 	c := testutil.UnitTest(t)
-	appFs := afero.NewMemMapFs()
-	folderPath := "/home/myusr/testrepo"
-	mgo := getMockedGitOpsWithRepoConfig(folderPath)
+	folderPath := t.TempDir()
+	initGitRepo(t, folderPath, false)
+
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
 
-	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 	cut.createOrAppendToCache(hash, commitHash, pc)
 
 	assert.NotEmpty(t, cut.cache)
@@ -356,16 +347,16 @@ func TestCreateOrAppendToCache_NewCache(t *testing.T) {
 
 func TestCreateOrAppendToCache_ExistingCacheSameProductSameHash(t *testing.T) {
 	c := testutil.UnitTest(t)
-	appFs := afero.NewMemMapFs()
-	folderPath := "/home/myusr/testrepo"
-	mgo := getMockedGitOpsWithRepoConfig(folderPath)
+	folderPath := t.TempDir()
+	initGitRepo(t, folderPath, false)
+
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
 
-	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 	cut.createOrAppendToCache(hash, commitHash, pc)
 	cut.createOrAppendToCache(hash, commitHash, pc)
 
@@ -374,9 +365,9 @@ func TestCreateOrAppendToCache_ExistingCacheSameProductSameHash(t *testing.T) {
 
 func TestCreateOrAppendToCache_ExistingCacheDifferentProductSameHash(t *testing.T) {
 	c := testutil.UnitTest(t)
-	appFs := afero.NewMemMapFs()
-	folderPath := "/home/myusr/testrepo"
-	mgo := getMockedGitOpsWithRepoConfig(folderPath)
+	folderPath := t.TempDir()
+	initGitRepo(t, folderPath, false)
+
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
@@ -384,7 +375,7 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentProductSameHash(t *testing.
 	pc := product.ProductCode
 	po := product.ProductOpenSource
 
-	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 	cut.createOrAppendToCache(hash, commitHash, pc)
 	cut.createOrAppendToCache(hash, commitHash, po)
 
@@ -394,9 +385,9 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentProductSameHash(t *testing.
 
 func TestCreateOrAppendToCache_ExistingCacheDifferentProductDifferentHash(t *testing.T) {
 	c := testutil.UnitTest(t)
-	appFs := afero.NewMemMapFs()
-	folderPath := "/home/myusr/testrepo"
-	mgo := getMockedGitOpsWithRepoConfig(folderPath)
+	folderPath := t.TempDir()
+	initGitRepo(t, folderPath, false)
+
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
@@ -405,7 +396,7 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentProductDifferentHash(t *tes
 	pc := product.ProductCode
 	po := product.ProductOpenSource
 
-	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 	cut.createOrAppendToCache(hash, pcCommitHash, pc)
 	cut.createOrAppendToCache(hash, poCommitHash, po)
 
@@ -415,9 +406,8 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentProductDifferentHash(t *tes
 
 func TestCreateOrAppendToCache_ExistingCacheDifferentPathDifferentProductDifferentHash(t *testing.T) {
 	c := testutil.UnitTest(t)
-	appFs := afero.NewMemMapFs()
-	folderPath := "/home/myusr/testrepo"
-	mgo := getMockedGitOpsWithRepoConfig(folderPath)
+	folderPath := t.TempDir()
+	initGitRepo(t, folderPath, false)
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
@@ -428,7 +418,7 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentPathDifferentProductDiffere
 	pc := product.ProductCode
 	po := product.ProductOpenSource
 
-	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 	cut.createOrAppendToCache(hash, pcCommitHash, pc)
 	cut.createOrAppendToCache(otherHashPath, poCommitHash, po)
 
@@ -438,12 +428,11 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentPathDifferentProductDiffere
 
 func TestEnsureCacheDirExists_DefaultCase(t *testing.T) {
 	c := testutil.UnitTest(t)
-	appFs := afero.NewMemMapFs()
-	folderPath := "/home/myusr/testrepo"
-	mgo := getMockedGitOpsWithRepoConfig(folderPath)
+	folderPath := t.TempDir()
+	initGitRepo(t, folderPath, false)
 
 	expectedCacheDir := filepath.Join(filepath.Join(folderPath, ".git", CacheFolder))
-	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
 	actualCacheDir, err := cut.ensureCacheDirExists(folderPath)
 
@@ -454,23 +443,22 @@ func TestEnsureCacheDirExists_DefaultCase(t *testing.T) {
 
 func TestExists_ExistsInCacheButNotInFs(t *testing.T) {
 	c := testutil.UnitTest(t)
+	folderPath := t.TempDir()
+	initGitRepo(t, folderPath, false)
 	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
 	}
 
-	appFs := afero.NewMemMapFs()
-	folderPath := "/home/myusr/testrepo"
-	mgo := getMockedGitOpsWithRepoConfig(folderPath)
 	cacheDir := filepath.Join(filepath.Join(folderPath, ".git"), CacheFolder)
 	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	pc := product.ProductCode
-	cut := NewGitPersistenceProvider(c.Logger(), appFs, mgo)
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
 	err := cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
-	err = appFs.RemoveAll(cacheDir)
+	err = os.RemoveAll(cacheDir)
 	assert.NoError(t, err)
 
 	exists := cut.Exists(folderPath, commitHash, pc)
@@ -478,11 +466,36 @@ func TestExists_ExistsInCacheButNotInFs(t *testing.T) {
 	assert.False(t, exists)
 }
 
-func getMockedGitOpsWithRepoConfig(folderPath string) *vcs.MockGitOps {
-	storer := filesystem.NewStorage(osfs.New(folderPath), cache.NewObjectLRUDefault())
-	repo := &git.Repository{}
-	repo.Storer = storer
-	mgo := vcs.NewMockGitOps()
-	mgo.On("PlainOpen", folderPath).Return(repo, nil)
-	return mgo
+func initGitRepo(t *testing.T, repoPath string, isModified bool) *git.Repository {
+	t.Helper()
+	repo, err := git.PlainInit(repoPath, false)
+	assert.NoError(t, err)
+
+	absoluteFileName := filepath.Join(repoPath, "testFile.txt")
+	err = os.WriteFile(absoluteFileName, []byte("testData"), 0600)
+	assert.NoError(t, err)
+	worktree, err := repo.Worktree()
+	assert.NoError(t, err)
+	_, err = worktree.Add(filepath.Base(absoluteFileName))
+	assert.NoError(t, err)
+
+	_, err = worktree.Commit("init", &git.CommitOptions{
+		Author: &object.Signature{Name: t.Name()},
+	})
+	assert.NoError(t, err)
+
+	testfile2 := filepath.Join(repoPath, "testFile2.txt")
+	err = os.WriteFile(testfile2, []byte("testData"), 0600)
+	assert.NoError(t, err)
+
+	_, err = worktree.Add(filepath.Base(testfile2))
+	assert.NoError(t, err)
+
+	if !isModified {
+		_, err = worktree.Commit("testCommit", &git.CommitOptions{
+			Author: &object.Signature{Name: t.Name()},
+		})
+		assert.NoError(t, err)
+	}
+	return repo
 }
