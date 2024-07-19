@@ -415,7 +415,7 @@ func (g *GitPersistenceProvider) ensureCacheDirExists(folderPath string) (string
 	cacheDir := filepath.Join(gitFolder, CacheFolder)
 
 	if _, err = os.Stat(cacheDir); os.IsNotExist(err) {
-		err = os.Mkdir(cacheDir, 0600)
+		err = os.Mkdir(cacheDir, 0700)
 		if err != nil {
 			return "", err
 		}
