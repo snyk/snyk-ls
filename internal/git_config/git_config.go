@@ -18,6 +18,7 @@ package gitconfig
 
 import (
 	"fmt"
+	"github.com/rs/zerolog"
 
 	"github.com/go-git/go-git/v5"
 	config2 "github.com/go-git/go-git/v5/config"
@@ -105,12 +106,17 @@ func getLocalBranches(repository *git.Repository) ([]string, error) {
 	return localBranches, nil
 }
 
-func SetBaseBranch(config []types.FolderConfig) {
+func SetBaseBranch(logger *zerolog.Logger, config []types.FolderConfig) {
 	for _, folderConfig := range config {
-		_, _, _, subsection, err := getConfigSection(folderConfig.FolderPath)
+		repo, repoConfig, _, subsection, err := getConfigSection(folderConfig.FolderPath)
 		if err != nil {
+			logger.Error().Err(err).Msg("could not get git config for folder " + folderConfig.FolderPath)
 			continue
 		}
 		subsection.AddOption(baseBranchKey, folderConfig.BaseBranch)
+		err = repo.Storer.SetConfig(repoConfig)
+		if err != nil {
+			logger.Error().Err(err).Msg("could not store base branch configuration for folder " + folderConfig.FolderPath)
+		}
 	}
 }

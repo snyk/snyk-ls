@@ -129,7 +129,7 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
 	updateSnykOSSQuickFixCodeActions(c, settings)
 	updateSnykOpenBrowserCodeActions(c, settings)
 	updateDeltaFindings(c, settings)
-	updateFolderConfig(settings)
+	updateFolderConfig(c, settings)
 }
 
 func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings) {
@@ -141,8 +141,8 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings)
 	c.SetSnykOpenBrowserActionsEnabled(enable)
 }
 
-func updateFolderConfig(settings types.Settings) {
-	gitconfig.SetBaseBranch(settings.FolderConfigs)
+func updateFolderConfig(c *config.Config, settings types.Settings) {
+	gitconfig.SetBaseBranch(c.Logger(), settings.FolderConfigs)
 }
 
 func updateAuthenticationMethod(c *config.Config, settings types.Settings) {
