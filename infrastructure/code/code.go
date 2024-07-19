@@ -19,8 +19,10 @@ package code
 import (
 	"context"
 	"fmt"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"os"
-	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -189,8 +191,9 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	results, err := internalScan(ctx, sc, folderPath, logger, filesToBeScanned)
 
 	if err == nil && c.IsDeltaFindingsEnabled() {
-		err = scanAndPersistBaseBranch(ctx, sc, folderPath)
-		if err != nil {
+		baseScanErr := scanAndPersistBaseBranch(ctx, sc, folderPath)
+		if baseScanErr != nil {
+			sc.notifier.SendShowMessage(sglsp.MTError, "Couldn't determine the diff between current and base branch. Falling back to showing full scan results.")
 			logger.Error().Err(err).Msg("couldn't scan base branch for folder " + folderPath)
 		}
 	}
@@ -249,7 +252,7 @@ func scanAndPersistBaseBranch(ctx context.Context, sc *Scanner, folderPath strin
 		return nil
 	}
 
-	tmpFolderName := fmt.Sprintf("snyk_delta_%s_%s", baseBranchName, filepath.Base(folderPath))
+	tmpFolderName := fmt.Sprintf("snyk_delta_%s", normalizeBranchName(baseBranchName))
 	destinationPath, err := os.MkdirTemp("", tmpFolderName)
 	logger.Info().Msg("Creating tmp directory for base branch")
 
@@ -296,6 +299,19 @@ func scanAndPersistBaseBranch(ctx context.Context, sc *Scanner, folderPath strin
 	}
 
 	return nil
+}
+
+func normalizeBranchName(branchName string) string {
+	normalized := strings.TrimSpace(branchName)
+	normalized = strings.ToLower(normalized)
+	normalized = strings.ReplaceAll(normalized, " ", "_")
+	reg, err := regexp.Compile("[^a-z0-9_\\-]+")
+	if err != nil {
+		return ""
+	}
+	normalized = reg.ReplaceAllString(normalized, "")
+
+	return normalized
 }
 
 func getBaseBranchName(folderPath string) string {
