@@ -47,7 +47,7 @@ func TestInit_Empty(t *testing.T) {
 func TestInit_NotEmpty(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
-	initGitRepo(t, folderPath, false)
+	repo := initGitRepo(t, folderPath, false)
 
 	issueList := []snyk.Issue{
 		{
@@ -58,7 +58,8 @@ func TestInit_NotEmpty(t *testing.T) {
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
-	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
 	p := product.ProductCode
 
 	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
@@ -74,10 +75,10 @@ func TestInit_NotEmpty(t *testing.T) {
 	assert.Equal(t, expectedCacheDir, actualCacheDir)
 }
 
-func TestAddTo_NewCommit(t *testing.T) {
+func TestAdd_NewCommit(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
-	initGitRepo(t, folderPath, false)
+	repo := initGitRepo(t, folderPath, false)
 
 	issueList := []snyk.Issue{
 		{
@@ -87,7 +88,8 @@ func TestAddTo_NewCommit(t *testing.T) {
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
-	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
 	p := product.ProductCode
 
 	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
@@ -102,10 +104,10 @@ func TestAddTo_NewCommit(t *testing.T) {
 	assert.Equal(t, commitHash, cut.cache[hash][p])
 }
 
-func TestAddToCache_ExistingCommit_ShouldNotOverrideExistingSnapshots(t *testing.T) {
+func TestAdd_ExistingCommit_ShouldNotOverrideExistingSnapshots(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
-	initGitRepo(t, folderPath, false)
+	repo := initGitRepo(t, folderPath, false)
 
 	issueList := []snyk.Issue{
 		{
@@ -118,12 +120,14 @@ func TestAddToCache_ExistingCommit_ShouldNotOverrideExistingSnapshots(t *testing
 		},
 	}
 
-	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
+
 	p := product.ProductCode
 
 	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
-	err := cut.Add(folderPath, commitHash, issueList, p)
+	err = cut.Add(folderPath, commitHash, issueList, p)
 	assert.NoError(t, err)
 	err = cut.Add(folderPath, commitHash, newIssueList, p)
 	assert.NoError(t, err)
@@ -135,10 +139,66 @@ func TestAddToCache_ExistingCommit_ShouldNotOverrideExistingSnapshots(t *testing
 	assert.NotEqual(t, newIssueList[0].GetGlobalIdentity(), list[0].GetGlobalIdentity())
 }
 
+func TestAdd_ExistingCommit_ShouldOverrideExistingSnapshots(t *testing.T) {
+	c := testutil.UnitTest(t)
+	folderPath := t.TempDir()
+	repo := initGitRepo(t, folderPath, true)
+
+	issueList := []snyk.Issue{
+		{
+			GlobalIdentity: uuid.New().String(),
+		},
+	}
+	newIssueList := []snyk.Issue{
+		{
+			GlobalIdentity: uuid.New().String(),
+		},
+	}
+
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
+
+	p := product.ProductCode
+
+	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+
+	err = cut.Add(folderPath, commitHash, issueList, p)
+	assert.NoError(t, err)
+	wt, err := repo.Worktree()
+	assert.NoError(t, err)
+	_, err = wt.Commit("testCommit", &git.CommitOptions{
+		Author: &object.Signature{Name: t.Name()},
+	})
+	assert.NoError(t, err)
+	newCommitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
+
+	err = cut.Add(folderPath, newCommitHash, newIssueList, p)
+	assert.NoError(t, err)
+	list, err := cut.GetPersistedIssueList(folderPath, p)
+	assert.NoError(t, err)
+
+	assert.NotEmpty(t, list)
+	assert.Equal(t, newIssueList[0].GetGlobalIdentity(), list[0].GetGlobalIdentity())
+	assert.NotEqual(t, issueList[0].GetGlobalIdentity(), list[0].GetGlobalIdentity())
+	cacheDir := filepath.Join(folderPath, ".git", CacheFolder)
+	hash, err := hashPath(folderPath)
+	assert.NoError(t, err)
+	newIssuesExist := cut.Exists(folderPath, newCommitHash, p)
+	assert.True(t, newIssuesExist)
+	oldIssuesExist := cut.Exists(folderPath, commitHash, p)
+	assert.False(t, oldIssuesExist)
+
+	newFileExists := issuesFileExists(cacheDir, hash, newCommitHash, p)
+	assert.True(t, newFileExists)
+	oldFileExists := issuesFileExists(cacheDir, hash, commitHash, p)
+	assert.False(t, oldFileExists)
+}
+
 func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
-	initGitRepo(t, folderPath, false)
+	repo := initGitRepo(t, folderPath, false)
 
 	issueList := []snyk.Issue{
 		{
@@ -148,7 +208,8 @@ func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
 
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
-	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
 	p := product.ProductCode
 	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
@@ -163,7 +224,7 @@ func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
 func TestGetPersistedIssueList_ReturnsValidIssueListForProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
-	initGitRepo(t, folderPath, false)
+	repo := initGitRepo(t, folderPath, false)
 	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
@@ -175,12 +236,13 @@ func TestGetPersistedIssueList_ReturnsValidIssueListForProduct(t *testing.T) {
 		},
 	}
 
-	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
 	pc := product.ProductCode
 	po := product.ProductOpenSource
 	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
-	err := cut.Add(folderPath, commitHash, existingCodeIssues, pc)
+	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
 	err = cut.Add(folderPath, commitHash, existingOssIssues, po)
 	assert.NoError(t, err)
@@ -192,7 +254,7 @@ func TestGetPersistedIssueList_ReturnsValidIssueListForProduct(t *testing.T) {
 func TestClear_ExistingCache(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
-	initGitRepo(t, folderPath, false)
+	repo := initGitRepo(t, folderPath, false)
 
 	existingCodeIssues := []snyk.Issue{
 		{
@@ -200,7 +262,8 @@ func TestClear_ExistingCache(t *testing.T) {
 		},
 	}
 
-	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
 	cacheDir := filepath.Join(xdg.CacheHome, CacheFolder)
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
@@ -219,7 +282,7 @@ func TestClear_ExistingCache(t *testing.T) {
 func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
-	initGitRepo(t, folderPath, false)
+	repo := initGitRepo(t, folderPath, false)
 	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
@@ -230,7 +293,8 @@ func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
-	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
 	pc := product.ProductCode
 	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
@@ -245,7 +309,7 @@ func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 func TestClearIssues_ExistingCacheExistingProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
-	initGitRepo(t, folderPath, false)
+	repo := initGitRepo(t, folderPath, false)
 	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
@@ -256,7 +320,8 @@ func TestClearIssues_ExistingCacheExistingProduct(t *testing.T) {
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
-	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
 	pc := product.ProductCode
 	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
@@ -273,7 +338,7 @@ func TestClearIssues_ExistingCacheExistingProduct(t *testing.T) {
 func TestClearIssues_ExistingCacheNonExistingProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
-	initGitRepo(t, folderPath, false)
+	repo := initGitRepo(t, folderPath, false)
 	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
@@ -284,7 +349,8 @@ func TestClearIssues_ExistingCacheNonExistingProduct(t *testing.T) {
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
-	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
 	pc := product.ProductCode
 	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
@@ -302,7 +368,7 @@ func TestClearIssues_ExistingCacheNonExistingProduct(t *testing.T) {
 func TestClearIssues_NonExistingCacheNonExistingProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
-	initGitRepo(t, folderPath, false)
+	repo := initGitRepo(t, folderPath, false)
 	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
@@ -313,7 +379,8 @@ func TestClearIssues_NonExistingCacheNonExistingProduct(t *testing.T) {
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
-	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
 	pc := product.ProductCode
 	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
@@ -331,12 +398,13 @@ func TestClearIssues_NonExistingCacheNonExistingProduct(t *testing.T) {
 func TestCreateOrAppendToCache_NewCache(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
-	initGitRepo(t, folderPath, false)
+	repo := initGitRepo(t, folderPath, false)
 
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
-	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
 	pc := product.ProductCode
 
 	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
@@ -348,12 +416,13 @@ func TestCreateOrAppendToCache_NewCache(t *testing.T) {
 func TestCreateOrAppendToCache_ExistingCacheSameProductSameHash(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
-	initGitRepo(t, folderPath, false)
+	repo := initGitRepo(t, folderPath, false)
 
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
-	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
 	pc := product.ProductCode
 
 	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
@@ -366,12 +435,13 @@ func TestCreateOrAppendToCache_ExistingCacheSameProductSameHash(t *testing.T) {
 func TestCreateOrAppendToCache_ExistingCacheDifferentProductSameHash(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
-	initGitRepo(t, folderPath, false)
+	repo := initGitRepo(t, folderPath, false)
 
 	hash, err := hashPath(folderPath)
 	assert.NoError(t, err)
 
-	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
 	pc := product.ProductCode
 	po := product.ProductOpenSource
 
@@ -444,26 +514,31 @@ func TestEnsureCacheDirExists_DefaultCase(t *testing.T) {
 func TestExists_ExistsInCacheButNotInFs(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
-	initGitRepo(t, folderPath, false)
+	hash, err := hashPath(folderPath)
+	assert.NoError(t, err)
+	repo := initGitRepo(t, folderPath, false)
 	existingCodeIssues := []snyk.Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
 	}
-
 	cacheDir := filepath.Join(filepath.Join(folderPath, ".git"), CacheFolder)
-	commitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
+
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
+
 	pc := product.ProductCode
 	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
 
-	err := cut.Add(folderPath, commitHash, existingCodeIssues, pc)
+	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
 	err = os.RemoveAll(cacheDir)
 	assert.NoError(t, err)
 
 	exists := cut.Exists(folderPath, commitHash, pc)
-
 	assert.False(t, exists)
+	fileExists := issuesFileExists(cacheDir, hash, commitHash, pc)
+	assert.False(t, fileExists)
 }
 
 func initGitRepo(t *testing.T, repoPath string, isModified bool) *git.Repository {
@@ -498,4 +573,10 @@ func initGitRepo(t *testing.T, repoPath string, isModified bool) *git.Repository
 		assert.NoError(t, err)
 	}
 	return repo
+}
+
+func issuesFileExists(cacheDir string, hash hashedFolderPath, newCommitHash string, p product.Product) bool {
+	newIssuesFile := getLocalFilePath(cacheDir, hash, newCommitHash, p)
+	_, err := os.Stat(newIssuesFile)
+	return err == nil
 }
