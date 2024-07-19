@@ -194,7 +194,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 		baseScanErr := scanAndPersistBaseBranch(ctx, sc, folderPath)
 		if baseScanErr != nil {
 			sc.notifier.SendShowMessage(sglsp.MTError, "Couldn't determine the diff between current and base branch. Falling back to showing full scan results.")
-			logger.Error().Err(err).Msg("couldn't scan base branch for folder " + folderPath)
+			logger.Error().Err(baseScanErr).Msg("couldn't scan base branch for folder " + folderPath)
 		}
 	}
 
