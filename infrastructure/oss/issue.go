@@ -119,7 +119,7 @@ func toIssue(
 
 func convertScanResultToIssues(
 	res *scanResult,
-	path string,
+	targetFilePath string,
 	fileContent []byte,
 	ls learn.Service,
 	ep error_reporting.ErrorReporter,
@@ -131,12 +131,12 @@ func convertScanResultToIssues(
 
 	for _, issue := range res.Vulnerabilities {
 		packageKey := issue.PackageName + "@" + issue.Version
-		duplicateKey := issue.Id + "|" + issue.PackageName
+		duplicateKey := targetFilePath + "|" + issue.Id + "|" + issue.PackageName
 		if duplicateCheckMap[duplicateKey] {
 			continue
 		}
-		issueRange := findRange(issue, path, fileContent)
-		snykIssue := toIssue(path, issue, res, issueRange, ls, ep)
+		issueRange := findRange(issue, targetFilePath, fileContent)
+		snykIssue := toIssue(targetFilePath, issue, res, issueRange, ls, ep)
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		issues = append(issues, snykIssue)
 		duplicateCheckMap[duplicateKey] = true
