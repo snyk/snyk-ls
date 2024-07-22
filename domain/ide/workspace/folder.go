@@ -473,7 +473,7 @@ func (f *Folder) FilterAndPublishDiagnostics(p *product.Product) {
 	if err != nil {
 		f.c.Logger().Error().Err(err).Msg("Error getting delta for product issues")
 		if errors.Is(err, delta.ErrNoDeltaCalculated) {
-			f.notifier.SendShowMessage(sglsp.MTError, fmt.Sprintf("Couldn't determine the difference between current and base branch for %s scan. Falling back to showing full scan results", p.ToFilterableIssueType()))
+			f.notifier.SendShowMessage(sglsp.MTError, fmt.Sprintf("Couldn't determine the difference between current and base branch for %s scan. Falling back to showing full scan results", p.ToProductNamesString()))
 		}
 	}
 	if p != nil {

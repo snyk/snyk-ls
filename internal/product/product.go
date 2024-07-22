@@ -16,6 +16,8 @@
 
 package product
 
+import "strings"
+
 type Product string
 type ProductAttributes map[string]any
 type FilterableIssueType string
@@ -96,4 +98,13 @@ func ToProduct(productName string) Product {
 	default:
 		return ProductUnknown
 	}
+}
+
+func (p Product) ToProductNamesString() string {
+	filterIssues := p.ToFilterableIssueType()
+	var productNames []string
+	for _, i := range filterIssues {
+		productNames = append(productNames, string(i))
+	}
+	return strings.Join(productNames, ",")
 }
