@@ -34,7 +34,7 @@ func TestClone_ShouldClone(t *testing.T) {
 
 	tmpFolderPath := t.TempDir()
 	cloneTargetBranchName := "master"
-	repo, err := Clone(repoPath, tmpFolderPath, cloneTargetBranchName, c.Logger())
+	repo, err := Clone(c.Logger(), repoPath, tmpFolderPath, cloneTargetBranchName)
 
 	assert.NotNil(t, repo)
 	assert.NoError(t, err)
@@ -47,7 +47,7 @@ func TestClone_InvalidBranchName(t *testing.T) {
 
 	tmpFolderPath := t.TempDir()
 	cloneTargetBranchName := "foobar"
-	repo, err := Clone(repoPath, tmpFolderPath, cloneTargetBranchName, c.Logger())
+	repo, err := Clone(c.Logger(), repoPath, tmpFolderPath, cloneTargetBranchName)
 
 	assert.Nil(t, repo)
 	assert.Error(t, err)
@@ -69,7 +69,7 @@ func TestClone_DetachedHead_TargetBranchExists(t *testing.T) {
 	err = worktree.Checkout(&git.CheckoutOptions{Hash: currentHead.Hash()})
 	assert.NoError(t, err)
 	cloneTargetBranchName := "master"
-	cloneRepo, err := Clone(repoPath, destinationPath, cloneTargetBranchName, c.Logger())
+	cloneRepo, err := Clone(c.Logger(), repoPath, destinationPath, cloneTargetBranchName)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, cloneRepo)
@@ -91,7 +91,7 @@ func TestClone_DetachedHead_TargetBranchDoesNotExists(t *testing.T) {
 	err = worktree.Checkout(&git.CheckoutOptions{Hash: currentHead.Hash()})
 	assert.NoError(t, err)
 	cloneTargetBranchName := "feat/feat"
-	cloneRepo, err := Clone(repoPath, destinationPath, cloneTargetBranchName, c.Logger())
+	cloneRepo, err := Clone(c.Logger(), repoPath, destinationPath, cloneTargetBranchName)
 
 	assert.Error(t, err)
 	assert.Nil(t, cloneRepo)
@@ -118,7 +118,7 @@ func TestClone_DetachedHead_TargetBranchExists_OpenChanges(t *testing.T) {
 	assert.NoError(t, err)
 
 	cloneTargetBranchName := "master"
-	cloneRepo, err := Clone(repoPath, destinationPath, cloneTargetBranchName, c.Logger())
+	cloneRepo, err := Clone(c.Logger(), repoPath, destinationPath, cloneTargetBranchName)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, cloneRepo)
@@ -131,7 +131,7 @@ func TestClone_InvalidGitRepo(t *testing.T) {
 	tmpFolderPath := t.TempDir()
 	branchName := "feat/foobar"
 
-	repo, err := Clone(repoPath, tmpFolderPath, branchName, c.Logger())
+	repo, err := Clone(c.Logger(), repoPath, tmpFolderPath, branchName)
 
 	assert.Nil(t, repo)
 	assert.Error(t, err)

@@ -255,7 +255,7 @@ func scanAndPersistBaseBranch(ctx context.Context, sc *Scanner, folderPath strin
 		return err
 	}
 
-	repo, err := vcs.Clone(folderPath, destinationPath, baseBranchName, &logger)
+	repo, err := vcs.Clone(&logger, folderPath, destinationPath, baseBranchName)
 
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to clone base branch")

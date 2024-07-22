@@ -25,7 +25,7 @@ import (
 	"strings"
 )
 
-func Clone(srcRepoPath string, destinationPath string, targetBranchName string, logger *zerolog.Logger) (*git.Repository, error) {
+func Clone(logger *zerolog.Logger, srcRepoPath string, destinationPath string, targetBranchName string) (*git.Repository, error) {
 	targetBranchReferenceName := plumbing.NewBranchReferenceName(targetBranchName)
 	clonedRepo, err := git.PlainClone(destinationPath, false, &git.CloneOptions{
 		URL:           srcRepoPath,
