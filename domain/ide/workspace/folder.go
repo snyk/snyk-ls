@@ -514,7 +514,7 @@ func (f *Folder) getDelta(productIssueByFile snyk.ProductIssuesByFile, p *produc
 		currentFindingIdentifiable[i] = &currentFlatIssueList[i]
 	}
 
-	df := snyk.NewDeltaFinderForProduct(p)
+	df := snyk.NewDeltaFinderForProduct(currentProduct)
 	diff, err := df.Diff(baseFindingIdentifiable, currentFindingIdentifiable)
 
 	if err != nil {
@@ -526,7 +526,7 @@ func (f *Folder) getDelta(productIssueByFile snyk.ProductIssuesByFile, p *produc
 	for i := range diff {
 		deltaSnykIssues[i] = *diff[i].(*snyk.Issue)
 	}
-	productIssueByFile[p] = getIssuePerFileFromFlatList(deltaSnykIssues)
+	productIssueByFile[currentProduct] = getIssuePerFileFromFlatList(deltaSnykIssues)
 
 	return productIssueByFile, nil
 }
