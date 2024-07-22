@@ -22,7 +22,6 @@ import (
 	"math"
 	"net/url"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -161,14 +160,13 @@ func (s *SarifConverter) getCodeFlow(r codeClientSarif.Result, baseDir string) (
 				key := fmt.Sprintf("%sL%4d", path, region.StartLine)
 				if !dedupMap[key] {
 					fileUtil := filesystem.New()
-					filePath := filepath.Join(baseDir, path)
 					content, err := fileUtil.GetLineOfCode(path, myRange.Start.Line+1)
 					if err != nil {
 						s.c.Logger().Warn().Str("method", "code.getCodeFlow").Err(err).Msg("cannot load line Content from file")
 					}
 					d := snyk.DataFlowElement{
 						Position:  len(dataflow),
-						FilePath:  filePath,
+						FilePath:  path,
 						FlowRange: myRange,
 						Content:   content,
 					}
