@@ -18,6 +18,7 @@ package code
 
 import (
 	"context"
+	"github.com/snyk/snyk-ls/internal/vcs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -862,10 +863,10 @@ func TestScanner_getFilesToBeScanned(t *testing.T) {
 }
 
 func TestNormalizeBranchName(t *testing.T) {
-	branchName := " feat/new -"
+	branchName := " feat/new -$#@$#@$#@$@#"
 	expectedBranchName := "featnew_-"
 
-	normaliedBranchName := normalizeBranchName(branchName)
+	normaliedBranchName := vcs.NormalizeBranchName(branchName)
 
 	assert.Equal(t, expectedBranchName, normaliedBranchName)
 }

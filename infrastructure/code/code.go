@@ -20,8 +20,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"regexp"
-	"strings"
 	"sync"
 	"time"
 
@@ -250,7 +248,7 @@ func scanAndPersistBaseBranch(ctx context.Context, sc *Scanner, folderPath strin
 		return nil
 	}
 
-	tmpFolderName := fmt.Sprintf("snyk_delta_%s", normalizeBranchName(baseBranchName))
+	tmpFolderName := fmt.Sprintf("snyk_delta_%s", vcs.NormalizeBranchName(baseBranchName))
 	destinationPath, err := os.MkdirTemp("", tmpFolderName)
 	logger.Info().Msg("Creating tmp directory for base branch")
 
@@ -297,19 +295,6 @@ func scanAndPersistBaseBranch(ctx context.Context, sc *Scanner, folderPath strin
 	}
 
 	return nil
-}
-
-func normalizeBranchName(branchName string) string {
-	normalized := strings.TrimSpace(branchName)
-	normalized = strings.ToLower(normalized)
-	normalized = strings.ReplaceAll(normalized, " ", "_")
-	reg, err := regexp.Compile(`[^a-z0-9_\-]+`)
-	if err != nil {
-		return ""
-	}
-	normalized = reg.ReplaceAllString(normalized, "")
-
-	return normalized
 }
 
 func getBaseBranchName(folderPath string) string {
