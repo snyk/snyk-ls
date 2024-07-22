@@ -105,7 +105,7 @@ func Test_unmarshalGradleMultiProject(t *testing.T) {
 	sampleApiCount := 0
 	sampleCommonCount := 0
 	for _, issue := range issues {
-		switch issue.AffectedFilePath {
+		switch filepath.ToSlash(issue.AffectedFilePath) {
 		case "/Users/bdoetsch/workspace/gradle-multi-module/build.gradle":
 			gradleRootCount++
 		case "/Users/bdoetsch/workspace/gradle-multi-module/sample-admin/build.gradle":
