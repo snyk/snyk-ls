@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	ValidBranchNameRegex, _ = regexp.Compile(`[^a-z0-9_\-]+`)
+	InvalidBranchNameRegex, _ = regexp.Compile(`[^a-z0-9_\-]+`)
 )
 
 func Clone(repoPath string, destinationPath string, branchName string, logger *zerolog.Logger, gitOps GitOps) (*git.Repository, error) {
@@ -143,7 +143,7 @@ func NormalizeBranchName(branchName string) string {
 	normalized = strings.ToLower(normalized)
 	normalized = strings.ReplaceAll(normalized, " ", "_")
 
-	normalized = ValidBranchNameRegex.ReplaceAllString(normalized, "")
+	normalized = InvalidBranchNameRegex.ReplaceAllString(normalized, "")
 
 	return normalized
 }
