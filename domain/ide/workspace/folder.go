@@ -469,7 +469,7 @@ func appendTestResults(sic snyk.SeverityIssueCounts, results []json_schemas.Test
 }
 
 func (f *Folder) FilterAndPublishDiagnostics(p *product.Product) {
-	productIssuesByFile, err := f.getDelta(f.IssuesByProduct(), *p)
+	productIssuesByFile, err := f.getDelta(f.IssuesByProduct(), p)
 	if err != nil {
 		f.c.Logger().Error().Err(err).Msg("Error getting delta for product issues")
 		if errors.Is(err, delta.ErrNoDeltaCalculated) {
@@ -487,15 +487,15 @@ func (f *Folder) FilterAndPublishDiagnostics(p *product.Product) {
 	}
 }
 
-func (f *Folder) getDelta(productIssueByFile snyk.ProductIssuesByFile, p product.Product) (snyk.ProductIssuesByFile, error) {
+func (f *Folder) getDelta(productIssueByFile snyk.ProductIssuesByFile, p *product.Product) (snyk.ProductIssuesByFile, error) {
 	logger := f.c.Logger().With().Str("method", "getDelta").Logger()
-
+	currentProduct := *p
 	// Delete product check when base scanning is implemented for other products
-	if !f.c.IsDeltaFindingsEnabled() || p != product.ProductCode {
+	if !f.c.IsDeltaFindingsEnabled() || currentProduct != product.ProductCode {
 		return productIssueByFile, nil
 	}
 
-	baseIssueList, err := f.scanPersister.GetPersistedIssueList(f.path, p)
+	baseIssueList, err := f.scanPersister.GetPersistedIssueList(f.path, currentProduct)
 	if err != nil {
 		logger.Err(err).Msg("Error getting persisted issue list")
 		return productIssueByFile, delta.ErrNoDeltaCalculated
@@ -504,7 +504,7 @@ func (f *Folder) getDelta(productIssueByFile snyk.ProductIssuesByFile, p product
 		return productIssueByFile, delta.ErrNoDeltaCalculated
 	}
 
-	currentFlatIssueList := getFlatIssueList(productIssueByFile, p)
+	currentFlatIssueList := getFlatIssueList(productIssueByFile, currentProduct)
 	baseFindingIdentifiable := make([]delta.Identifiable, len(baseIssueList))
 	for i := range baseIssueList {
 		baseFindingIdentifiable[i] = &baseIssueList[i]
