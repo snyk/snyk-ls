@@ -19,7 +19,6 @@ package code
 import (
 	"context"
 	"fmt"
-	sglsp "github.com/sourcegraph/go-lsp"
 	"os"
 	"regexp"
 	"strings"
@@ -193,7 +192,6 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	if err == nil && c.IsDeltaFindingsEnabled() {
 		baseScanErr := scanAndPersistBaseBranch(ctx, sc, folderPath)
 		if baseScanErr != nil {
-			go sc.notifier.SendShowMessage(sglsp.MTError, "Couldn't determine the diff between current and base branch. Falling back to showing full scan results.")
 			logger.Error().Err(baseScanErr).Msg("couldn't scan base branch for folder " + folderPath)
 		}
 	}
