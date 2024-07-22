@@ -19,6 +19,7 @@ package oss
 import (
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -107,7 +108,13 @@ type Annotation struct {
 
 func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []snyk.OssIssueData) snyk.OssIssueData {
 	var additionalData snyk.OssIssueData
-	additionalData.Key = util.GetIssueKey(i.Id, scanResult.DisplayTargetFile, i.LineNumber, i.LineNumber, 0, 0)
+
+	targetFilePath := filepath.Base(scanResult.DisplayTargetFile)
+	if scanResult.Path != "" {
+		targetFilePath = filepath.Join(scanResult.Path, targetFilePath)
+	}
+
+	additionalData.Key = util.GetIssueKey(i.Id, targetFilePath, i.LineNumber, i.LineNumber, 0, 0)
 	additionalData.Title = i.Title
 	additionalData.Name = i.Name
 	additionalData.Identifiers = snyk.Identifiers{
@@ -130,7 +137,7 @@ func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []sny
 	additionalData.Exploit = i.Exploit
 	additionalData.IsPatchable = i.IsPatchable
 	additionalData.ProjectName = scanResult.ProjectName
-	additionalData.DisplayTargetFile = scanResult.DisplayTargetFile
+	additionalData.DisplayTargetFile = targetFilePath
 	additionalData.Language = i.Language
 	additionalData.MatchingIssues = matchingIssues
 	if i.lesson != nil {

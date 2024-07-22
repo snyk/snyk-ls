@@ -17,14 +17,20 @@
 package oss
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -67,21 +73,72 @@ func Test_ossIssue_toAdditionalData_ConvertsSeverityChange(t *testing.T) {
 	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.SeverityChange.Reason)
 }
 
+func Test_unmarshalGradleMultiProject(t *testing.T) {
+	c := testutil.UnitTest(t)
+	fileName := "gradle-multi-project.json"
+	testDir := "testdata"
+	file := filepath.Join(testDir, fileName)
+	inputJson, err := os.ReadFile(file)
+	require.NoError(t, err)
+
+	var sc []scanResult
+	err = json.Unmarshal(inputJson, &sc)
+	require.NoError(t, err)
+
+	assert.Len(t, sc, 4)
+
+	scanner := NewCLIScanner(
+		c,
+		performance.NewInstrumentor(),
+		error_reporting.NewTestErrorReporter(),
+		cli.NewTestExecutor(),
+		getLearnMock(t),
+		notification.NewNotifier(),
+	).(*CLIScanner)
+
+	issues := scanner.unmarshallAndRetrieveAnalysis(context.Background(), inputJson, testDir, file)
+
+	assert.Len(t, issues, 315)
+
+	gradleRootCount := 0
+	sampleAdminCount := 0
+	sampleApiCount := 0
+	sampleCommonCount := 0
+	for _, issue := range issues {
+		switch filepath.ToSlash(issue.AffectedFilePath) {
+		case "/Users/bdoetsch/workspace/gradle-multi-module/build.gradle":
+			gradleRootCount++
+		case "/Users/bdoetsch/workspace/gradle-multi-module/sample-admin/build.gradle":
+			sampleAdminCount++
+		case "/Users/bdoetsch/workspace/gradle-multi-module/sample-api/build.gradle":
+			sampleApiCount++
+		case "/Users/bdoetsch/workspace/gradle-multi-module/sample-common/build.gradle":
+			sampleCommonCount++
+		default:
+			require.FailNow(t, "Unexpected file path", issue.AffectedFilePath)
+		}
+	}
+
+	assert.Equal(t, 135, sampleAdminCount)
+	assert.Equal(t, 135, sampleApiCount)
+	assert.Equal(t, 45, sampleCommonCount)
+}
+
 func setupOssIssueWithPolicyAnnotations(t *testing.T) ossIssue {
 	t.Helper()
 	name := filepath.Join("testdata", "policyAnnotationsInputData.json")
-	issue := unmarshalFromFile(t, name)
+	issue := unmarshalIssueFromFile(t, name)
 	return issue
 }
 
 func setupOssIssueWithSeverityChangePolicy(t *testing.T) ossIssue {
 	t.Helper()
 	name := filepath.Join("testdata", "policySeverityChangeInputData.json")
-	issue := unmarshalFromFile(t, name)
+	issue := unmarshalIssueFromFile(t, name)
 	return issue
 }
 
-func unmarshalFromFile(t *testing.T, name string) ossIssue {
+func unmarshalIssueFromFile(t *testing.T, name string) ossIssue {
 	t.Helper()
 	inputJson, err := os.ReadFile(name)
 	require.NoError(t, err)
