@@ -142,7 +142,7 @@ func TestShouldClone_SameBranchNames_NoModification_SkipClone(t *testing.T) {
 	repoPath := t.TempDir()
 	initGitRepo(t, repoPath, false)
 	cloneTargetBranchName := "master"
-	shouldclone, err := ShouldClone(repoPath, c.Logger(), cloneTargetBranchName)
+	shouldclone, err := ShouldClone(c.Logger(), repoPath, cloneTargetBranchName)
 
 	assert.NoError(t, err)
 	assert.False(t, shouldclone)
@@ -153,7 +153,7 @@ func TestShouldClone_SameBranchNames_WithModification_Clone(t *testing.T) {
 	repoPath := t.TempDir()
 	initGitRepo(t, repoPath, true)
 	cloneTargetBranchName := "master"
-	shouldclone, err := ShouldClone(repoPath, c.Logger(), cloneTargetBranchName)
+	shouldclone, err := ShouldClone(c.Logger(), repoPath, cloneTargetBranchName)
 
 	assert.NoError(t, err)
 	assert.True(t, shouldclone)
@@ -165,7 +165,7 @@ func TestShouldClone_DifferentBranchNames_Clone(t *testing.T) {
 	initGitRepo(t, repoPath, true)
 	cloneTargetBranchName := "feat/new"
 
-	shouldclone, err := ShouldClone(repoPath, c.Logger(), cloneTargetBranchName)
+	shouldclone, err := ShouldClone(c.Logger(), repoPath, cloneTargetBranchName)
 
 	assert.True(t, shouldclone)
 	assert.NoError(t, err)

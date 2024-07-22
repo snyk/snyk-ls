@@ -390,7 +390,7 @@ func (g *GitPersistenceProvider) persistToDisk(cacheDir string, folderHashedPath
 
 func (g *GitPersistenceProvider) ensureCacheDirExists(folderPath string) (string, error) {
 	g.logger.Info().Msg("attempting to determine .git folder path")
-	gitFolder, err := vcs.GitRepoFolderPath(folderPath, g.logger)
+	gitFolder, err := vcs.GitRepoFolderPath(g.logger, folderPath)
 	if err != nil {
 		return "", err
 	}

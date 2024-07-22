@@ -225,7 +225,7 @@ func scanAndPersistBaseBranch(ctx context.Context, sc *Scanner, folderPath strin
 	logger := sc.c.Logger().With().Str("method", "scanAndPersistBaseBranch").Logger()
 
 	baseBranchName := getBaseBranchName(folderPath)
-	shouldClone, err := vcs.ShouldClone(folderPath, &logger, baseBranchName)
+	shouldClone, err := vcs.ShouldClone(&logger, folderPath, baseBranchName)
 	if err != nil {
 		return err
 	}
@@ -234,7 +234,7 @@ func scanAndPersistBaseBranch(ctx context.Context, sc *Scanner, folderPath strin
 		return nil
 	}
 
-	headRef, err := vcs.HeadRefHashForBranch(folderPath, baseBranchName, &logger)
+	headRef, err := vcs.HeadRefHashForBranch(&logger, folderPath, baseBranchName)
 
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to fetch commit hash for main branch")

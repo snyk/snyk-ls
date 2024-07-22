@@ -40,7 +40,7 @@ func HeadRefHashForRepo(repo *git.Repository) (string, error) {
 	return commitHash, nil
 }
 
-func HeadRefHashForBranch(repoPath, branchName string, logger *zerolog.Logger) (string, error) {
+func HeadRefHashForBranch(logger *zerolog.Logger, repoPath, branchName string) (string, error) {
 	repo, err := git.PlainOpen(repoPath)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to open repository")
@@ -58,7 +58,7 @@ func HeadRefHashForBranch(repoPath, branchName string, logger *zerolog.Logger) (
 	return commitHash.String(), nil
 }
 
-func GitRepoFolderPath(folderPath string, logger *zerolog.Logger) (string, error) {
+func GitRepoFolderPath(logger *zerolog.Logger, folderPath string) (string, error) {
 	repo, err := git.PlainOpen(folderPath)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to open repository: " + folderPath)

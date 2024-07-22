@@ -19,7 +19,7 @@ package vcs
 import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	copy2 "github.com/otiai10/copy"
+	"github.com/otiai10/copy"
 	"github.com/rs/zerolog"
 	"path/filepath"
 	"strings"
@@ -40,8 +40,8 @@ func Clone(srcRepoPath string, destinationPath string, targetBranchName string, 
 			return nil, err
 		}
 		// Repository might be in a detached head state.
-		logger.Debug().Msg("Clone operation failed. Maybe repo is in detached HEAD mode?")
-		targetRepo := cloneRepoWithFsCopy(srcRepoPath, destinationPath, targetBranchName, logger, targetBranchReferenceName)
+		logger.Debug().Msg("Clone operation failed. Maybe repo is in detached HEAD state?")
+		targetRepo := cloneRepoWithFsCopy(logger, srcRepoPath, destinationPath, targetBranchReferenceName)
 		if targetRepo == nil {
 			return nil, err
 		}
@@ -50,34 +50,34 @@ func Clone(srcRepoPath string, destinationPath string, targetBranchName string, 
 	return clonedRepo, nil
 }
 
-func cloneRepoWithFsCopy(srcRepoPath string, destinationPath string, targetBranchName string, logger *zerolog.Logger, targetBranchReferenceName plumbing.ReferenceName) *git.Repository {
+func cloneRepoWithFsCopy(logger *zerolog.Logger, srcRepoPath string, destinationRepoPath string, targetBranchReferenceName plumbing.ReferenceName) *git.Repository {
 	repo, err := git.PlainOpen(srcRepoPath)
 	if err != nil {
 		return nil
 	}
 	branchExists := targetBranchExists(targetBranchReferenceName, repo)
 	if !branchExists {
-		logger.Debug().Msgf("Branch %s does not exist in repo %s. Exiting", targetBranchName, srcRepoPath)
+		logger.Debug().Msgf("Branch %s does not exist in repo %s. Exiting", targetBranchReferenceName.Short(), srcRepoPath)
 		return nil
 	}
 	gitSrcRepoPath := filepath.Join(srcRepoPath, ".git")
-	gitDestRepoPath := filepath.Join(destinationPath, ".git")
+	gitDestRepoPath := filepath.Join(destinationRepoPath, ".git")
 	logger.Debug().Msgf("Attemping to copy repo .git folder from: %s to: %s ", gitSrcRepoPath, gitDestRepoPath)
-	err = copy2.Copy(gitSrcRepoPath, gitDestRepoPath)
+	err = copy.Copy(gitSrcRepoPath, gitDestRepoPath)
 	if err != nil {
 		logger.Debug().Err(err).Msgf("Copy operation failed. Exiting")
 		return nil
 	}
 	logger.Debug().Msg("Copy operation succeeded")
-	targetRepo, checkOutErr := resetAndCheckoutRepo(destinationPath, targetBranchReferenceName)
+	targetRepo, checkOutErr := resetAndCheckoutRepo(destinationRepoPath, targetBranchReferenceName)
 	if checkOutErr != nil {
-		logger.Debug().Err(checkOutErr).Msgf("Could not checkout target branch %s. Exiting", targetBranchName)
+		logger.Debug().Err(checkOutErr).Msgf("Could not checkout target branch %s. Exiting", targetBranchReferenceName.Short())
 		return nil
 	}
 	return targetRepo
 }
 
-func ShouldClone(repoPath string, logger *zerolog.Logger, branchName string) (bool, error) {
+func ShouldClone(logger *zerolog.Logger, repoPath string, branchName string) (bool, error) {
 	currentRepo, err := git.PlainOpen(repoPath)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to open current repo " + repoPath)
