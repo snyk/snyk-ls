@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/internal/delta"
-	sglsp "github.com/sourcegraph/go-lsp"
 	"strings"
 	"sync"
 
@@ -473,7 +472,9 @@ func (f *Folder) FilterAndPublishDiagnostics(p *product.Product) {
 	if err != nil {
 		f.c.Logger().Error().Err(err).Msg("Error getting delta for product issues")
 		if errors.Is(err, delta.ErrNoDeltaCalculated) {
-			f.notifier.SendShowMessage(sglsp.MTError, fmt.Sprintf("Couldn't determine the difference between current and base branch for %s scan. Falling back to showing full scan results", p.ToProductNamesString()))
+			deltaErr := fmt.Errorf("Couldn't determine the difference between current and base branch for %s scan. %s"+
+				"Falling back to showing full scan results. Please check the error log for more information.", p.ToProductNamesString(), err)
+			f.notifier.SendErrorDiagnostic(f.path, deltaErr)
 		}
 	}
 	if p != nil {

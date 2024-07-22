@@ -376,6 +376,7 @@ func updateSeverityFilter(c *config.Config, s types.SeverityFilter) {
 		}
 
 		for _, folder := range ws.Folders() {
+			// Nil means send for all products found in reported issues.
 			folder.FilterAndPublishDiagnostics(nil)
 		}
 	}
