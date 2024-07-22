@@ -40,7 +40,6 @@ func Clone(srcRepoPath string, destinationPath string, targetBranchName string, 
 			return nil, err
 		}
 		// Repository might be in a detached head state.
-		// We will copy the repo to target repo
 		logger.Debug().Msg("Clone operation failed. Maybe repo is in detached HEAD mode?")
 		targetRepo := cloneRepoWithFsCopy(srcRepoPath, destinationPath, targetBranchName, logger, targetBranchReferenceName)
 		if targetRepo == nil {
@@ -63,7 +62,7 @@ func cloneRepoWithFsCopy(srcRepoPath string, destinationPath string, targetBranc
 	}
 	gitSrcRepoPath := filepath.Join(srcRepoPath, ".git")
 	gitDestRepoPath := filepath.Join(destinationPath, ".git")
-	logger.Debug().Msgf("Attemping to copy repo %s from %s to", gitSrcRepoPath, gitDestRepoPath)
+	logger.Debug().Msgf("Attemping to copy repo .git folder from: %s to: %s ", gitSrcRepoPath, gitDestRepoPath)
 	err = copy2.Copy(gitSrcRepoPath, gitDestRepoPath)
 	if err != nil {
 		logger.Debug().Err(err).Msgf("Copy operation failed. Exiting")
@@ -72,7 +71,7 @@ func cloneRepoWithFsCopy(srcRepoPath string, destinationPath string, targetBranc
 	logger.Debug().Msg("Copy operation succeeded")
 	targetRepo, checkOutErr := resetAndCheckoutRepo(destinationPath, targetBranchReferenceName)
 	if checkOutErr != nil {
-		logger.Debug().Err(checkOutErr).Msgf("Could not force checkout target branch %s. Exiting", targetBranchName)
+		logger.Debug().Err(checkOutErr).Msgf("Could not checkout target branch %s. Exiting", targetBranchName)
 		return nil
 	}
 	return targetRepo
@@ -81,7 +80,7 @@ func cloneRepoWithFsCopy(srcRepoPath string, destinationPath string, targetBranc
 func ShouldClone(repoPath string, logger *zerolog.Logger, branchName string) (bool, error) {
 	currentRepo, err := git.PlainOpen(repoPath)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to open current repo in go-git " + repoPath)
+		logger.Error().Err(err).Msg("Failed to open current repo " + repoPath)
 		return false, err
 	}
 
