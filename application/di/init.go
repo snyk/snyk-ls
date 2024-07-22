@@ -18,7 +18,6 @@ package di
 
 import (
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	"github.com/snyk/snyk-ls/internal/vcs"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -122,7 +121,7 @@ func initInfrastructure(c *config.Config) {
 	instrumentor = performance2.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient(c, networkAccess.GetHttpClient)
 	gafConfiguration := c.Engine().GetConfiguration()
-	scanPersister = persistence.NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	scanPersister = persistence.NewGitPersistenceProvider(c.Logger())
 	// we initialize the service without providers
 	authenticationService = authentication.NewAuthenticationService(c, nil, errorReporter, notifier)
 	// after having an instance, we pass it into the default configuration method

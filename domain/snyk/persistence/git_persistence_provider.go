@@ -60,15 +60,13 @@ type GitPersistenceProvider struct {
 	logger      *zerolog.Logger
 	mutex       sync.Mutex
 	initialized bool
-	gitOps      vcs.GitOps
 }
 
-func NewGitPersistenceProvider(logger *zerolog.Logger, gitOps vcs.GitOps) *GitPersistenceProvider {
+func NewGitPersistenceProvider(logger *zerolog.Logger) *GitPersistenceProvider {
 	return &GitPersistenceProvider{
 		cache:  make(map[hashedFolderPath]productCommitHashMap),
 		logger: logger,
 		mutex:  sync.Mutex{},
-		gitOps: gitOps,
 	}
 }
 
@@ -392,7 +390,7 @@ func (g *GitPersistenceProvider) persistToDisk(cacheDir string, folderHashedPath
 
 func (g *GitPersistenceProvider) ensureCacheDirExists(folderPath string) (string, error) {
 	g.logger.Info().Msg("attempting to determine .git folder path")
-	gitFolder, err := vcs.GitRepoFolderPath(folderPath, g.logger, g.gitOps)
+	gitFolder, err := vcs.GitRepoFolderPath(folderPath, g.logger)
 	if err != nil {
 		return "", err
 	}

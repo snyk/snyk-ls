@@ -225,9 +225,7 @@ func scanAndPersistBaseBranch(ctx context.Context, sc *Scanner, folderPath strin
 	logger := sc.c.Logger().With().Str("method", "scanAndPersistBaseBranch").Logger()
 
 	baseBranchName := getBaseBranchName(folderPath)
-	gw := vcs.NewGitWrapper()
-
-	shouldClone, err := vcs.ShouldClone(folderPath, gw, &logger, baseBranchName)
+	shouldClone, err := vcs.ShouldClone(folderPath, &logger, baseBranchName)
 	if err != nil {
 		return err
 	}
@@ -236,7 +234,7 @@ func scanAndPersistBaseBranch(ctx context.Context, sc *Scanner, folderPath strin
 		return nil
 	}
 
-	headRef, err := vcs.HeadRefHashForBranch(folderPath, baseBranchName, &logger, gw)
+	headRef, err := vcs.HeadRefHashForBranch(folderPath, baseBranchName, &logger)
 
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to fetch commit hash for main branch")
@@ -257,7 +255,7 @@ func scanAndPersistBaseBranch(ctx context.Context, sc *Scanner, folderPath strin
 		return err
 	}
 
-	repo, err := vcs.Clone(folderPath, destinationPath, baseBranchName, &logger, gw)
+	repo, err := vcs.Clone(folderPath, destinationPath, baseBranchName, &logger)
 
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to clone base branch")
