@@ -23,7 +23,12 @@ import (
 	"github.com/go-git/go-git/v5/storage/filesystem"
 	"github.com/rs/zerolog"
 	"path/filepath"
+	"regexp"
 	"strings"
+)
+
+var (
+	InvalidBranchNameRegex, _ = regexp.Compile(`[^a-z0-9_\-]+`)
 )
 
 func Clone(repoPath string, destinationPath string, branchName string, logger *zerolog.Logger, gitOps GitOps) (*git.Repository, error) {
@@ -131,4 +136,14 @@ func hasUncommitedChanges(repo *git.Repository) bool {
 		}
 	}
 	return false
+}
+
+func NormalizeBranchName(branchName string) string {
+	normalized := strings.TrimSpace(branchName)
+	normalized = strings.ToLower(normalized)
+	normalized = strings.ReplaceAll(normalized, " ", "_")
+
+	normalized = InvalidBranchNameRegex.ReplaceAllString(normalized, "")
+
+	return normalized
 }

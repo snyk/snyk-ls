@@ -23,9 +23,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/util"
 	"github.com/snyk/snyk-ls/internal/vcs"
-	"github.com/spaolacci/murmur3"
-	"github.com/spf13/afero"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,17 +59,15 @@ type GitPersistenceProvider struct {
 	cache       map[hashedFolderPath]productCommitHashMap
 	logger      *zerolog.Logger
 	mutex       sync.Mutex
-	fs          afero.Fs
 	initialized bool
 	gitOps      vcs.GitOps
 }
 
-func NewGitPersistenceProvider(logger *zerolog.Logger, fs afero.Fs, gitOps vcs.GitOps) *GitPersistenceProvider {
+func NewGitPersistenceProvider(logger *zerolog.Logger, gitOps vcs.GitOps) *GitPersistenceProvider {
 	return &GitPersistenceProvider{
 		cache:  make(map[hashedFolderPath]productCommitHashMap),
 		logger: logger,
 		mutex:  sync.Mutex{},
-		fs:     fs,
 		gitOps: gitOps,
 	}
 }
@@ -141,10 +138,7 @@ func (g *GitPersistenceProvider) ClearForProduct(folderPath, commitHash string, 
 		g.logger.Error().Err(err).Msg("failed to initialize git persistence provider")
 	}
 
-	hash, err := hashPath(folderPath)
-	if err != nil {
-		g.logger.Error().Err(err).Msg("failed to hash path " + folderPath)
-	}
+	hash := hashedFolderPath(util.Murmur(folderPath))
 
 	err = g.deleteFromCache(hash, commitHash, p)
 	if err != nil {
@@ -175,13 +169,10 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath string, p prod
 		return nil, err
 	}
 
-	hash, err := hashPath(folderPath)
-	if err != nil {
-		return nil, err
-	}
+	hash := hashedFolderPath(util.Murmur(folderPath))
 
 	filePath := getLocalFilePath(cacheDir, hash, commitHash, p)
-	content, err := afero.ReadFile(g.fs, filePath)
+	content, err := os.ReadFile(filePath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			err = g.deleteFromCache(hash, commitHash, p)
@@ -211,18 +202,14 @@ func (g *GitPersistenceProvider) Add(folderPath, commitHash string, issueList []
 		g.logger.Error().Err(err).Msg("failed to initialize git persistence provider")
 	}
 
-	hash, err := hashPath(folderPath)
-	if err != nil {
-		g.logger.Error().Err(err).Msg("could not hash path" + folderPath)
-		return err
-	}
+	hash := hashedFolderPath(util.Murmur(folderPath))
 
 	shouldPersist := g.shouldPersistOnDisk(hash, commitHash, p)
 	if !shouldPersist {
 		return nil
 	}
 
-	err = g.deleteFileIfDifferentHash(cacheDir, hash, commitHash, p)
+	err = g.deleteExistingCachedSnapshot(cacheDir, hash, commitHash, p)
 	if err != nil {
 		g.logger.Error().Err(err).Msg("failed to delete file from disk in " + folderPath)
 		return err
@@ -254,11 +241,7 @@ func (g *GitPersistenceProvider) Exists(folderPath, commitHash string, p product
 		return false
 	}
 
-	hash, err := hashPath(folderPath)
-	if err != nil {
-		return false
-	}
-
+	hash := hashedFolderPath(util.Murmur(folderPath))
 	exists := g.snapshotExistsOnDisk(cacheDir, hash, commitHash, p)
 	if exists {
 		return true
@@ -275,7 +258,7 @@ func (g *GitPersistenceProvider) Exists(folderPath, commitHash string, p product
 
 func (g *GitPersistenceProvider) deleteFile(fullPath string) error {
 	g.logger.Debug().Msg("deleting cached scan file " + fullPath)
-	err := g.fs.Remove(fullPath)
+	err := os.Remove(fullPath)
 	if err != nil {
 		return err
 	}
@@ -304,17 +287,15 @@ func (g *GitPersistenceProvider) deleteFromCache(hash hashedFolderPath, commitHa
 
 func (g *GitPersistenceProvider) snapshotExistsOnDisk(cacheDir string, hash hashedFolderPath, commitHash string, p product.Product) bool {
 	filePath := getLocalFilePath(cacheDir, hash, commitHash, p)
-	if _, err := g.fs.Stat(filePath); os.IsNotExist(err) {
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		return false
 	}
 	return true
 }
 
 func (g *GitPersistenceProvider) getCommitHashForProduct(folderPath string, p product.Product) (commitHash string, err error) {
-	hash, err := hashPath(folderPath)
-	if err != nil {
-		return "", err
-	}
+	hash := hashedFolderPath(util.Murmur(folderPath))
+
 	pchMap, ok := g.cache[hash]
 	if !ok {
 		return "", ErrPathHashDoesntExist
@@ -341,27 +322,28 @@ func (g *GitPersistenceProvider) shouldPersistOnDisk(folderPathHash hashedFolder
 	return true
 }
 
-func (g *GitPersistenceProvider) deleteFileIfDifferentHash(cacheDir string, folderPathHash hashedFolderPath, commitHash string, p product.Product) error {
+func (g *GitPersistenceProvider) deleteExistingCachedSnapshot(cacheDir string, folderPathHash hashedFolderPath, commitHash string, p product.Product) error {
 	pchm, pchmExists := g.cache[folderPathHash]
 	if !pchmExists {
 		return nil
 	}
 
-	ch, commitHashExists := pchm[p]
+	cachedCommitHash, commitHashExists := pchm[p]
 	if !commitHashExists {
 		return nil
 	}
 
-	if ch == commitHash {
+	if cachedCommitHash == commitHash {
 		return nil
 	}
-	filePath := getLocalFilePath(cacheDir, folderPathHash, commitHash, p)
+
+	filePath := getLocalFilePath(cacheDir, folderPathHash, cachedCommitHash, p)
 	err := g.deleteFile(filePath)
 	if err != nil {
 		g.logger.Error().Err(err).Msg("failed to remove persisted scan file for product " + p.ToProductCodename())
 	}
 
-	err = g.deleteFromCache(folderPathHash, commitHash, p)
+	err = g.deleteFromCache(folderPathHash, cachedCommitHash, p)
 	if err != nil {
 		g.logger.Error().Err(err).Msg("failed to delete cached scan for product: " + p.ToProductCodename())
 		return err
@@ -380,7 +362,7 @@ func (g *GitPersistenceProvider) createOrAppendToCache(pathHash hashedFolderPath
 }
 
 func (g *GitPersistenceProvider) getPersistedFiles(cacheDir string) (persistedFiles []string, err error) {
-	entries, err := afero.ReadDir(g.fs, cacheDir)
+	entries, err := os.ReadDir(cacheDir)
 	if err != nil {
 		return persistedFiles, err
 	}
@@ -405,7 +387,7 @@ func (g *GitPersistenceProvider) persistToDisk(cacheDir string, folderHashedPath
 		return err
 	}
 	g.logger.Debug().Msg("persisting scan results in file " + filePath)
-	return afero.WriteFile(g.fs, filePath, data, 0644)
+	return os.WriteFile(filePath, data, 0644)
 }
 
 func (g *GitPersistenceProvider) ensureCacheDirExists(folderPath string) (string, error) {
@@ -416,8 +398,8 @@ func (g *GitPersistenceProvider) ensureCacheDirExists(folderPath string) (string
 	}
 	cacheDir := filepath.Join(gitFolder, CacheFolder)
 
-	if _, err = g.fs.Stat(cacheDir); os.IsNotExist(err) {
-		err = g.fs.Mkdir(cacheDir, 0600)
+	if _, err = os.Stat(cacheDir); os.IsNotExist(err) {
+		err = os.Mkdir(cacheDir, 0700)
 		if err != nil {
 			return "", err
 		}
@@ -428,14 +410,4 @@ func (g *GitPersistenceProvider) ensureCacheDirExists(folderPath string) (string
 func getLocalFilePath(cacheDir string, folderPathHash hashedFolderPath, commitHash string, p product.Product) string {
 	productName := p.ToProductCodename()
 	return filepath.Join(cacheDir, fmt.Sprintf("%s.%s.%s.%s.json", SchemaVersion, folderPathHash, commitHash, productName))
-}
-
-func hashPath(path string) (hashedFolderPath, error) {
-	h := murmur3.New64()
-	_, err := h.Write([]byte(path))
-	if err != nil {
-		return "", err
-	}
-	hash := fmt.Sprintf("%x", h.Sum64())
-	return hashedFolderPath(hash), nil
 }

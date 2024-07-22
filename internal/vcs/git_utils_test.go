@@ -17,103 +17,72 @@
 package vcs
 
 import (
-	"errors"
 	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/rs/zerolog"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
 func TestClone_ShouldClone(t *testing.T) {
-	logger := zerolog.Nop()
-	mgo := NewMockGitOps()
-	repoPath := "/path/to/repo"
-	tmpRepoPath := "/tmp/path/to/repo"
-	baseBranchName := "main"
-	repo := &git.Repository{}
+	c := testutil.UnitTest(t)
+	repoPath := t.TempDir()
+	initGitRepo(t, repoPath, false)
 
-	mgo.On("PlainClone", mock.Anything, false, mock.AnythingOfType("*git.CloneOptions")).Return(repo, nil)
-
-	repo, err := Clone(repoPath, tmpRepoPath, baseBranchName, &logger, mgo)
+	tmpFolderPath := t.TempDir()
+	baseBranchName := "master"
+	repo, err := Clone(repoPath, tmpFolderPath, baseBranchName, c.Logger(), NewGitWrapper())
 
 	assert.NotNil(t, repo)
 	assert.NoError(t, err)
-	mgo.AssertExpectations(t)
 }
 
 func TestClone_InvalidGitRepo(t *testing.T) {
-	logger := zerolog.Nop()
-	mgo := NewMockGitOps()
-	repoPath := "/path/to/repo"
-	tmpRepoPath := "/path/to/repo"
+	c := testutil.UnitTest(t)
+	repoPath := t.TempDir()
+	tmpFolderPath := t.TempDir()
 	branchName := "feat/foobar"
 
-	mgo.On("PlainClone", mock.Anything, false, mock.AnythingOfType("*git.CloneOptions")).Return(nil, errors.New("failed to clone"))
-
-	repo, err := Clone(repoPath, tmpRepoPath, branchName, &logger, mgo)
+	repo, err := Clone(repoPath, tmpFolderPath, branchName, c.Logger(), NewGitWrapper())
 
 	assert.Nil(t, repo)
-	assert.NotNil(t, err)
-	mgo.AssertExpectations(t)
+	assert.Error(t, err)
 }
 
 func TestShouldClone_SameBranchNames_NoModification_SkipClone(t *testing.T) {
-	logger := zerolog.Nop()
-	mgo := NewMockGitOps()
-	repoPath := "/path/to/repo"
-	baseBranchName := "main"
-	currentBranchName := plumbing.ReferenceName("refs/heads/main")
-	repo := &git.Repository{}
+	c := testutil.UnitTest(t)
+	repoPath := t.TempDir()
+	initGitRepo(t, repoPath, false)
+	baseBranchName := "master"
+	shouldclone, err := ShouldClone(repoPath, NewGitWrapper(), c.Logger(), baseBranchName)
 
-	mgo.On("PlainOpen", repoPath).Return(repo, nil)
-	headRef := plumbing.NewHashReference(currentBranchName, plumbing.NewHash("abc123"))
-	mgo.On("Head", repo).Return(headRef, nil)
-
-	shouldclone, err := ShouldClone(repoPath, mgo, &logger, baseBranchName)
-
-	assert.False(t, shouldclone)
 	assert.NoError(t, err)
-	mgo.AssertNotCalled(t, "PlainClone", mock.Anything, mock.AnythingOfType("*git.CloneOptions"))
-	mgo.AssertExpectations(t)
+	assert.False(t, shouldclone)
 }
 
 func TestShouldClone_SameBranchNames_WithModification_Clone(t *testing.T) {
-	logger := zerolog.Nop()
-	gw := NewGitWrapper()
-	folderPath := t.TempDir()
-	_ = initGitRepo(t, folderPath, true)
-
+	c := testutil.UnitTest(t)
+	repoPath := t.TempDir()
+	initGitRepo(t, repoPath, true)
 	baseBranchName := "master"
+	shouldclone, err := ShouldClone(repoPath, NewGitWrapper(), c.Logger(), baseBranchName)
 
-	shouldclone, err := ShouldClone(folderPath, gw, &logger, baseBranchName)
-
-	assert.True(t, shouldclone)
 	assert.NoError(t, err)
+	assert.True(t, shouldclone)
 }
 
 func TestShouldClone_DifferentBranchNames_Clone(t *testing.T) {
-	logger := zerolog.Nop()
-	mgo := NewMockGitOps()
-	repoPath := "/path/to/repo"
-	baseBranchName := "main"
-	currentBranchName := plumbing.ReferenceName("refs/heads/feat/abc")
-	repo := &git.Repository{}
+	c := testutil.UnitTest(t)
+	repoPath := t.TempDir()
+	initGitRepo(t, repoPath, true)
+	baseBranchName := "feat/new"
 
-	mgo.On("PlainOpen", repoPath).Return(repo, nil)
-	headRef := plumbing.NewHashReference(currentBranchName, plumbing.NewHash("abc123"))
-	mgo.On("Head", repo).Return(headRef, nil)
-
-	shouldclone, err := ShouldClone(repoPath, mgo, &logger, baseBranchName)
+	shouldclone, err := ShouldClone(repoPath, NewGitWrapper(), c.Logger(), baseBranchName)
 
 	assert.True(t, shouldclone)
 	assert.NoError(t, err)
-	mgo.AssertNotCalled(t, "PlainClone", mock.Anything, mock.AnythingOfType("*git.CloneOptions"))
-	mgo.AssertExpectations(t)
 }
 
 func TestShouldClone_HasUncommittedChanges(t *testing.T) {
@@ -149,7 +118,6 @@ func initGitRepo(t *testing.T, repoPath string, isModified bool) *git.Repository
 		Author: &object.Signature{Name: t.Name()},
 	})
 	assert.NoError(t, err)
-
 	testfile2 := filepath.Join(repoPath, "testFile2.txt")
 	err = os.WriteFile(testfile2, []byte("testData"), 0600)
 	assert.NoError(t, err)

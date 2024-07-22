@@ -18,6 +18,7 @@ package code
 
 import (
 	"context"
+	"github.com/snyk/snyk-ls/internal/vcs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -859,6 +860,15 @@ func TestScanner_getFilesToBeScanned(t *testing.T) {
 		require.Contains(t, files, changedFile)
 		require.Contains(t, files, fromChangeAffectedFile)
 	})
+}
+
+func TestNormalizeBranchName(t *testing.T) {
+	branchName := " feat/new -$#@$#@$#@$@#"
+	expectedBranchName := "featnew_-"
+
+	normaliedBranchName := vcs.NormalizeBranchName(branchName)
+
+	assert.Equal(t, expectedBranchName, normaliedBranchName)
 }
 
 func getInterfileTestCodeIssueData() snyk.CodeIssueData {

@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -189,9 +188,9 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	results, err := internalScan(ctx, sc, folderPath, logger, filesToBeScanned)
 
 	if err == nil && c.IsDeltaFindingsEnabled() {
-		err = scanAndPersistBaseBranch(ctx, sc, folderPath)
-		if err != nil {
-			logger.Error().Err(err).Msg("couldn't scan base branch for folder " + folderPath)
+		baseScanErr := scanAndPersistBaseBranch(ctx, sc, folderPath)
+		if baseScanErr != nil {
+			logger.Error().Err(baseScanErr).Msg("couldn't scan base branch for folder " + folderPath)
 		}
 	}
 
@@ -249,7 +248,7 @@ func scanAndPersistBaseBranch(ctx context.Context, sc *Scanner, folderPath strin
 		return nil
 	}
 
-	tmpFolderName := fmt.Sprintf("snyk_delta_%s_%s", baseBranchName, filepath.Base(folderPath))
+	tmpFolderName := fmt.Sprintf("snyk_delta_%s", vcs.NormalizeBranchName(baseBranchName))
 	destinationPath, err := os.MkdirTemp("", tmpFolderName)
 	logger.Info().Msg("Creating tmp directory for base branch")
 
