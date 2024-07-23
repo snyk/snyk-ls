@@ -52,7 +52,7 @@ func Test_SmokeInstanceTest(t *testing.T) {
 	if endpoint == "" {
 		t.Setenv("SNYK_API", "https://api.snyk.io")
 	}
-	runSmokeTest(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", ossFile, codeFile, false, true, endpoint)
+	runSmokeTest(t, nodejsGoof, "0336589", ossFile, codeFile, false, true, endpoint)
 }
 
 func Test_SmokeWorkspaceScan(t *testing.T) {
@@ -80,7 +80,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	tests := []test{
 		{
 			name:                 "OSS_and_Code",
-			repo:                 "https://github.com/snyk-labs/nodejs-goof",
+			repo:                 nodejsGoof,
 			commit:               "0336589",
 			file1:                ossFile,
 			file2:                codeFile,
@@ -89,7 +89,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 		},
 		{
 			name:                 "OSS_and_Code_with_V1_endpoint",
-			repo:                 "https://github.com/snyk-labs/nodejs-goof",
+			repo:                 nodejsGoof,
 			commit:               "0336589",
 			file1:                ossFile,
 			file2:                codeFile,
@@ -98,7 +98,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 		},
 		{
 			name:                 "OSS_and_Code_with_consistent_ignores",
-			repo:                 "https://github.com/snyk-labs/nodejs-goof",
+			repo:                 nodejsGoof,
 			commit:               "0336589",
 			file1:                ossFile,
 			file2:                codeFile,
@@ -168,7 +168,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.SetSnykIacEnabled(false)
 		di.Init()
 
-		var cloneTargetDirGoof = setupRepoAndInitialize(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", loc, c)
+		var cloneTargetDirGoof = setupRepoAndInitialize(t, nodejsGoof, "0336589", loc, c)
 		folderGoof := workspace.Get().GetFolderContaining(cloneTargetDirGoof)
 
 		// wait till the whole workspace is scanned
@@ -230,7 +230,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.SetSnykIacEnabled(false)
 		di.Init()
 
-		var cloneTargetDirGoof = setupRepoAndInitialize(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", loc, c)
+		var cloneTargetDirGoof = setupRepoAndInitialize(t, nodejsGoof, "0336589", loc, c)
 		folderGoof := workspace.Get().GetFolderContaining(cloneTargetDirGoof)
 
 		// wait till the whole workspace is scanned
@@ -708,7 +708,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 
-	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
+	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
 	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
