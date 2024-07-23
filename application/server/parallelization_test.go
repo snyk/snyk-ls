@@ -49,7 +49,8 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 
 	var workspaceFolders []types.WorkspaceFolder
 	for i := 0; i < 10; i++ {
-		repo, err := testutil.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "", c.Logger())
+		dir := t.TempDir()
+		repo, err := testutil.SetupCustomTestRepo(t, dir, nodejsGoof, "", c.Logger())
 		require.NoError(t, err)
 		folder := types.WorkspaceFolder{
 			Name: fmt.Sprintf("Test Repo %d", i),
