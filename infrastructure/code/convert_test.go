@@ -629,6 +629,7 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	references := referencesForSampleSarifResponse()
 
 	issue := issues[0]
+	codeIssueData := issue.AdditionalData.(snyk.CodeIssueData)
 
 	assert.Equal(t,
 		"DontUsePrintStackTrace: Printing the stack trace of java.lang.InterruptedException. Production code ...",
@@ -636,17 +637,21 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	assert.Equal(t, snyk.CodeQualityIssue, issue.IssueType)
 	assert.Equal(t, snyk.Low, issue.Severity)
 	assert.Equal(t, path, issue.AffectedFilePath)
-	assert.Equal(t, snyk.Range{Start: snyk.Position{Line: 5, Character: 6}, End: snyk.Position{Line: 5,
-		Character: 6}}, issue.Range)
+	assert.Equal(t, snyk.Range{Start: snyk.Position{Line: 5, Character: 6}, End: snyk.Position{Line: 5, Character: 6}}, issue.Range)
 	assert.Equal(t, product.ProductCode, issue.Product)
 	assert.Equal(t, issueDescriptionURL, issue.IssueDescriptionURL)
 	assert.Equal(t, references, issue.References)
 	assert.Contains(t, issue.FormattedMessage, "Example Commit Fixes")
-	assert.Equal(t, markersForSampleSarifResponse(path), issue.AdditionalData.(snyk.CodeIssueData).Markers)
-	assert.Equal(t, 550, issue.AdditionalData.(snyk.CodeIssueData).PriorityScore)
+	assert.Equal(t, markersForSampleSarifResponse(path), codeIssueData.Markers)
+	assert.Equal(t, 550, codeIssueData.PriorityScore)
 	assert.Equal(t, resp.Sarif.Runs[0].Tool.Driver.Rules[0].Properties.Cwe, issue.CWEs)
-	assert.Nil(t, issues[0].IgnoreDetails)
-	assert.False(t, issues[0].IsIgnored)
+	assert.Nil(t, issue.IgnoreDetails)
+	assert.False(t, issue.IsIgnored)
+	dataFlow := codeIssueData.DataFlow
+	assert.Equal(t, issue.AffectedFilePath, dataFlow[0].FilePath)
+	assert.Equal(t, issue.AffectedFilePath, dataFlow[1].FilePath)
+	assert.Equal(t, issue.AffectedFilePath, dataFlow[2].FilePath)
+	assert.Equal(t, issue.AffectedFilePath, dataFlow[3].FilePath)
 }
 
 func referencesForSampleSarifResponse() []snyk.Reference {
