@@ -37,7 +37,7 @@ func TestInit_Empty(t *testing.T) {
 	folderPath := t.TempDir()
 	initGitRepo(t, folderPath, false)
 	expectedCacheDir := filepath.Join(filepath.Join(folderPath, ".git", CacheFolder))
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 	actualCacheDir, err := cut.init(folderPath)
 
 	assert.NoError(t, err)
@@ -62,7 +62,7 @@ func TestInit_NotEmpty(t *testing.T) {
 	assert.NoError(t, err)
 	p := product.ProductCode
 
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 
 	// Here we call Add before init to make sure we have files already created
 	err = cut.Add(folderPath, commitHash, issueList, p)
@@ -91,7 +91,7 @@ func TestAdd_NewCommit(t *testing.T) {
 	assert.NoError(t, err)
 	p := product.ProductCode
 
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 
 	err = cut.Add(folderPath, commitHash, issueList, p)
 	assert.NoError(t, err)
@@ -124,7 +124,7 @@ func TestAdd_ExistingCommit_ShouldNotOverrideExistingSnapshots(t *testing.T) {
 
 	p := product.ProductCode
 
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 
 	err = cut.Add(folderPath, commitHash, issueList, p)
 	assert.NoError(t, err)
@@ -159,7 +159,7 @@ func TestAdd_ExistingCommit_ShouldOverrideExistingSnapshots(t *testing.T) {
 
 	p := product.ProductCode
 
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 
 	err = cut.Add(folderPath, commitHash, issueList, p)
 	assert.NoError(t, err)
@@ -209,7 +209,7 @@ func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
 	p := product.ProductCode
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 
 	err = cut.Add(folderPath, commitHash, issueList, p)
 	assert.NoError(t, err)
@@ -238,7 +238,7 @@ func TestGetPersistedIssueList_ReturnsValidIssueListForProduct(t *testing.T) {
 	assert.NoError(t, err)
 	pc := product.ProductCode
 	po := product.ProductOpenSource
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
@@ -266,7 +266,7 @@ func TestClear_ExistingCache(t *testing.T) {
 	hash := hashedFolderPath(util.Murmur(folderPath))
 	assert.NoError(t, err)
 	pc := product.ProductCode
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
@@ -293,7 +293,7 @@ func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
 	pc := product.ProductCode
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	cut.Clear(folderPath)
@@ -319,7 +319,7 @@ func TestClearIssues_ExistingCacheExistingProduct(t *testing.T) {
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
 	pc := product.ProductCode
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
@@ -347,7 +347,7 @@ func TestClearIssues_ExistingCacheNonExistingProduct(t *testing.T) {
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
 	pc := product.ProductCode
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
@@ -376,7 +376,7 @@ func TestClearIssues_NonExistingCacheNonExistingProduct(t *testing.T) {
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
 	pc := product.ProductCode
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
@@ -400,7 +400,7 @@ func TestCreateOrAppendToCache_NewCache(t *testing.T) {
 	assert.NoError(t, err)
 	pc := product.ProductCode
 
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 	cut.createOrAppendToCache(hash, commitHash, pc)
 
 	assert.NotEmpty(t, cut.cache)
@@ -417,7 +417,7 @@ func TestCreateOrAppendToCache_ExistingCacheSameProductSameHash(t *testing.T) {
 	assert.NoError(t, err)
 	pc := product.ProductCode
 
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 	cut.createOrAppendToCache(hash, commitHash, pc)
 	cut.createOrAppendToCache(hash, commitHash, pc)
 
@@ -436,7 +436,7 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentProductSameHash(t *testing.
 	pc := product.ProductCode
 	po := product.ProductOpenSource
 
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 	cut.createOrAppendToCache(hash, commitHash, pc)
 	cut.createOrAppendToCache(hash, commitHash, po)
 
@@ -456,7 +456,7 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentProductDifferentHash(t *tes
 	pc := product.ProductCode
 	po := product.ProductOpenSource
 
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 	cut.createOrAppendToCache(hash, pcCommitHash, pc)
 	cut.createOrAppendToCache(hash, poCommitHash, po)
 
@@ -477,7 +477,7 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentPathDifferentProductDiffere
 	pc := product.ProductCode
 	po := product.ProductOpenSource
 
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 	cut.createOrAppendToCache(hash, pcCommitHash, pc)
 	cut.createOrAppendToCache(otherHashPath, poCommitHash, po)
 
@@ -491,7 +491,7 @@ func TestEnsureCacheDirExists_DefaultCase(t *testing.T) {
 	initGitRepo(t, folderPath, false)
 
 	expectedCacheDir := filepath.Join(filepath.Join(folderPath, ".git", CacheFolder))
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 
 	actualCacheDir, err := cut.ensureCacheDirExists(folderPath)
 
@@ -516,7 +516,7 @@ func TestExists_ExistsInCacheButNotInFs(t *testing.T) {
 	assert.NoError(t, err)
 
 	pc := product.ProductCode
-	cut := NewGitPersistenceProvider(c.Logger(), vcs.NewGitWrapper())
+	cut := NewGitPersistenceProvider(c.Logger())
 
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)

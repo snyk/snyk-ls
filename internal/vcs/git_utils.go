@@ -31,42 +31,6 @@ var (
 	InvalidBranchNameRegex, _ = regexp.Compile(`[^a-z0-9_\-]+`)
 )
 
-func Clone(repoPath string, destinationPath string, branchName string, logger *zerolog.Logger, gitOps GitOps) (*git.Repository, error) {
-	baseBranchName := plumbing.NewBranchReferenceName(branchName)
-	clonedRepo, err := gitOps.PlainClone(destinationPath, false, &git.CloneOptions{
-		URL:           repoPath,
-		ReferenceName: baseBranchName,
-		SingleBranch:  true,
-	})
-
-	if err != nil {
-		logger.Error().Err(err).Msgf("Failed to clone base branch: %s in temp repo with go-git: %s", baseBranchName, destinationPath)
-		return nil, err
-	}
-
-	return clonedRepo, nil
-}
-
-func ShouldClone(repoPath string, gitOps GitOps, logger *zerolog.Logger, branchName string) (bool, error) {
-	currentRepo, err := gitOps.PlainOpen(repoPath)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to open current repo in go-git " + repoPath)
-		return false, err
-	}
-
-	currentRepoBranch, err := gitOps.Head(currentRepo)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to get HEAD for " + repoPath)
-		return false, err
-	}
-
-	if currentRepoBranch.Name().Short() != branchName || hasUncommitedChanges(currentRepo) {
-		return true, nil
-	}
-
-	return false, nil
-}
-
 func HeadRefHashForRepo(repo *git.Repository) (string, error) {
 	head, err := repo.Head()
 	if err != nil {
@@ -76,8 +40,8 @@ func HeadRefHashForRepo(repo *git.Repository) (string, error) {
 	return commitHash, nil
 }
 
-func HeadRefHashForBranch(repoPath, branchName string, logger *zerolog.Logger, gitOps GitOps) (string, error) {
-	repo, err := gitOps.PlainOpen(repoPath)
+func HeadRefHashForBranch(logger *zerolog.Logger, repoPath, branchName string) (string, error) {
+	repo, err := git.PlainOpen(repoPath)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to open repository")
 		return "", err
@@ -94,8 +58,8 @@ func HeadRefHashForBranch(repoPath, branchName string, logger *zerolog.Logger, g
 	return commitHash.String(), nil
 }
 
-func GitRepoFolderPath(folderPath string, logger *zerolog.Logger, gitOps GitOps) (string, error) {
-	repo, err := gitOps.PlainOpen(folderPath)
+func GitRepoFolderPath(logger *zerolog.Logger, folderPath string) (string, error) {
+	repo, err := git.PlainOpen(folderPath)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to open repository: " + folderPath)
 		return "", err
@@ -146,4 +110,44 @@ func NormalizeBranchName(branchName string) string {
 	normalized = InvalidBranchNameRegex.ReplaceAllString(normalized, "")
 
 	return normalized
+}
+
+func targetBranchExists(branchName plumbing.ReferenceName, repo *git.Repository) bool {
+	branchExists := false
+	referenceList, err := repo.References()
+	if err != nil {
+		return false
+	}
+	defer referenceList.Close()
+
+	_ = referenceList.ForEach(func(reference *plumbing.Reference) error {
+		if reference.Name() == branchName {
+			branchExists = true
+		}
+		return nil
+	})
+
+	return branchExists
+}
+
+func resetAndCheckoutRepo(repoPath string, branchName plumbing.ReferenceName) (*git.Repository, error) {
+	repo, err := git.PlainOpen(repoPath)
+	if err != nil {
+		return nil, err
+	}
+	workTree, err := repo.Worktree()
+	if err != nil {
+		return nil, err
+	}
+
+	err = workTree.Reset(&git.ResetOptions{Mode: git.HardReset})
+	if err != nil {
+		return nil, err
+	}
+
+	err = workTree.Checkout(&git.CheckoutOptions{Force: true, Branch: branchName})
+	if err != nil {
+		return nil, err
+	}
+	return repo, nil
 }
