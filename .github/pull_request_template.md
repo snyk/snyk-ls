@@ -8,9 +8,3 @@ _Provide description of this PR and changes, if linked Jira ticket doesn't cover
 - [ ] Linted
 - [ ] README.md updated, if user-facing
 - [ ] License file updated, if new 3rd-party dependency is introduced
-
-🚨After having merged, please update the CLI go.mod to pull in latest language server.
-
-### Screenshots / GIFs
-
-_Visuals that may help the reviewer. Please add screenshots for any UI change. GIFs are most welcome!_
