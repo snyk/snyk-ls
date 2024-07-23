@@ -18,11 +18,17 @@ package testutil
 
 import (
 	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime"
 	"testing"
 
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 const (
@@ -143,4 +149,35 @@ func OnlyEnableCode() {
 	config.CurrentConfig().SetSnykIacEnabled(false)
 	config.CurrentConfig().SetSnykOssEnabled(false)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
+}
+
+func SetupCustomTestRepo(t *testing.T, rootDir string, url string, targetCommit string, logger *zerolog.Logger) (string, error) {
+	t.Helper()
+	tempDir := filepath.Join(rootDir, util.Murmur(t.Name()))
+	assert.NoError(t, os.MkdirAll(tempDir, 0755))
+	repoDir := "1"
+	absoluteCloneRepoDir := filepath.Join(tempDir, repoDir)
+	cmd := []string{"clone", url, repoDir}
+	logger.Debug().Interface("cmd", cmd).Msg("clone command")
+	clone := exec.Command("git", cmd...)
+	clone.Dir = tempDir
+	reset := exec.Command("git", "reset", "--hard", targetCommit)
+	reset.Dir = absoluteCloneRepoDir
+
+	clean := exec.Command("git", "clean", "--force")
+	clean.Dir = absoluteCloneRepoDir
+
+	output, err := clone.CombinedOutput()
+	if err != nil {
+		t.Fatal(err, "clone didn't work")
+	}
+
+	logger.Debug().Msg(string(output))
+	output, _ = reset.CombinedOutput()
+
+	logger.Debug().Msg(string(output))
+	output, err = clean.CombinedOutput()
+
+	logger.Debug().Msg(string(output))
+	return absoluteCloneRepoDir, err
 }

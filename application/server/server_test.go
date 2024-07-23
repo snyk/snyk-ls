@@ -1011,7 +1011,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
-	var cloneTargetDir, err = setupCustomTestRepo(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
+	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
 	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
@@ -1065,36 +1065,6 @@ func Test_IntegrationHoverResults(t *testing.T) {
 		hoverResult.Contents.Value,
 		di.HoverService().GetHover(testPath, converter.FromPosition(testPosition)).Contents.Value)
 	assert.Equal(t, hoverResult.Contents.Kind, "markdown")
-}
-
-func setupCustomTestRepo(t *testing.T, url string, targetCommit string, logger *zerolog.Logger) (string, error) {
-	t.Helper()
-	tempDir := t.TempDir()
-	repoDir := "1"
-	absoluteCloneRepoDir := filepath.Join(tempDir, repoDir)
-	cmd := []string{"clone", url, repoDir}
-	logger.Debug().Interface("cmd", cmd).Msg("clone command")
-	clone := exec.Command("git", cmd...)
-	clone.Dir = tempDir
-	reset := exec.Command("git", "reset", "--hard", targetCommit)
-	reset.Dir = absoluteCloneRepoDir
-
-	clean := exec.Command("git", "clean", "--force")
-	clean.Dir = absoluteCloneRepoDir
-
-	output, err := clone.CombinedOutput()
-	if err != nil {
-		t.Fatal(err, "clone didn't work")
-	}
-
-	logger.Debug().Msg(string(output))
-	output, _ = reset.CombinedOutput()
-
-	logger.Debug().Msg(string(output))
-	output, err = clean.CombinedOutput()
-
-	logger.Debug().Msg(string(output))
-	return absoluteCloneRepoDir, err
 }
 
 //goland:noinspection ALL

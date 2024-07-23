@@ -275,7 +275,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 
 func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, c *config.Config) *workspace.Folder {
 	t.Helper()
-	var cloneTargetDirJuice, err = setupCustomTestRepo(t, "https://github.com/juice-shop/juice-shop", "bc9cef127", c.Logger())
+	var cloneTargetDirJuice, err = testutil.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/juice-shop/juice-shop", "bc9cef127", c.Logger())
 	require.NoError(t, err)
 
 	juiceLspWorkspaceFolder := types.WorkspaceFolder{Uri: uri.PathToUri(cloneTargetDirJuice), Name: "juicy-mac-juice-face"}
@@ -597,7 +597,7 @@ func isNotStandardRegion(c *config.Config) bool {
 
 func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server.Local, c *config.Config) string {
 	t.Helper()
-	var cloneTargetDir, err = setupCustomTestRepo(t, repo, commit, c.Logger())
+	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), repo, commit, c.Logger())
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -664,7 +664,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 
-	var cloneTargetDir, err = setupCustomTestRepo(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
+	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
 	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
