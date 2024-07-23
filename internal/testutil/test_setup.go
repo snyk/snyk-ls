@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/progress"
@@ -153,6 +154,7 @@ func OnlyEnableCode() {
 func SetupCustomTestRepo(t *testing.T, rootDir string, url string, targetCommit string, logger *zerolog.Logger) (string, error) {
 	t.Helper()
 	tempDir := filepath.Join(rootDir, util.Murmur(t.Name()))
+	assert.NoError(t, os.MkdirAll(tempDir, 0755))
 	repoDir := "1"
 	absoluteCloneRepoDir := filepath.Join(tempDir, repoDir)
 	cmd := []string{"clone", url, repoDir}

@@ -21,10 +21,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	"github.com/snyk/snyk-ls/internal/delta"
 	"strings"
 	"sync"
+
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/internal/delta"
 
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -669,9 +670,8 @@ func (f *Folder) IsTrusted() bool {
 	if !config.CurrentConfig().IsTrustedFolderFeatureEnabled() {
 		return true
 	}
-
 	for _, path := range config.CurrentConfig().TrustedFolders() {
-		if strings.HasPrefix(f.path, path) {
+		if uri.FolderContains(path, f.path) {
 			return true
 		}
 	}

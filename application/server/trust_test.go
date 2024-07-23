@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -137,6 +138,46 @@ func Test_DidWorkspaceFolderChange_shouldCallHandleUntrustedFolders(t *testing.T
 			Removed: []types.WorkspaceFolder{},
 		},
 	})
+
+	assert.NoError(t, err)
+	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder) }, time.Second, time.Millisecond)
+}
+
+func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
+	loc, jsonRPCRecorder := setupServer(t)
+
+	c := config.CurrentConfig()
+	c.SetTrustedFolderFeatureEnabled(true)
+	c.SetTrustedFolderFeatureEnabled(true)
+
+	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider.IsAuthenticated = true
+
+	rootDir := t.TempDir()
+
+	// create trusted repo
+	repo1, err := testutil.SetupCustomTestRepo(t, rootDir, "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
+	assert.NoError(t, err)
+
+	// create untrusted directory in same rootDir with the exact prefix
+	exploitDir := repo1 + "-exploit"
+	err = os.MkdirAll(exploitDir, 0755)
+	assert.NoError(t, err)
+
+	// only trust first dir
+	c.SetTrustedFolders([]string{repo1})
+
+	_, err = loc.Client.Call(context.Background(), "initialize", types.InitializeParams{
+		RootURI: uri.PathToUri(exploitDir),
+	})
+	if err != nil {
+		t.Fatal(err, "couldn't send initialized")
+	}
+
+	_, err = loc.Client.Call(ctx, "initialized", nil)
+	if err != nil {
+		t.Fatal(err, "couldn't send initialized")
+	}
 
 	assert.NoError(t, err)
 	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder) }, time.Second, time.Millisecond)
