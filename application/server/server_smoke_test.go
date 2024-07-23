@@ -418,7 +418,7 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykIacEnabled(true)
 	c.SetSnykOssEnabled(true)
-	c.SetDeltaFindingsEnabled(true)
+	c.SetDeltaFindingsEnabled(deltaFindingsEnabled)
 	cleanupChannels()
 	di.Init()
 
