@@ -153,7 +153,7 @@ func OnlyEnableCode() {
 
 func SetupCustomTestRepo(t *testing.T, rootDir string, url string, targetCommit string, logger *zerolog.Logger) (string, error) {
 	t.Helper()
-	tempDir := filepath.Join(rootDir, util.Murmur(t.Name()))
+	tempDir := filepath.Join(rootDir, util.Sha256First16Hash(t.Name()))
 	assert.NoError(t, os.MkdirAll(tempDir, 0755))
 	repoDir := "1"
 	absoluteCloneRepoDir := filepath.Join(tempDir, repoDir)

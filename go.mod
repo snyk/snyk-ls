@@ -15,6 +15,7 @@ require (
 	github.com/gomarkdown/markdown v0.0.0-20240626202925-2eda941fd024
 	github.com/google/uuid v1.6.0
 	github.com/hexops/gotextdiff v1.0.3
+	github.com/otiai10/copy v1.14.0
 	github.com/pact-foundation/pact-go v1.10.0
 	github.com/pingcap/errors v0.11.4
 	github.com/pkg/errors v0.9.1
@@ -26,7 +27,6 @@ require (
 	github.com/snyk/code-client-go v1.8.0
 	github.com/snyk/go-application-framework v0.0.0-20240627194757-cc0fb551c613
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
-	github.com/spaolacci/murmur3 v1.1.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.9.0
 	github.com/subosito/gotenv v1.6.0
@@ -87,7 +87,6 @@ require (
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.15.2 // indirect
 	github.com/oapi-codegen/runtime v1.1.1 // indirect
-	github.com/otiai10/copy v1.14.0 // indirect
 	github.com/pact-foundation/pact-go/v2 v2.0.5 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.9 // indirect

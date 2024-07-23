@@ -56,7 +56,7 @@ func TestInit_NotEmpty(t *testing.T) {
 		},
 	}
 	expectedCacheDir := filepath.Join(filepath.Join(folderPath, ".git", CacheFolder))
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
@@ -85,7 +85,7 @@ func TestAdd_NewCommit(t *testing.T) {
 			GlobalIdentity: uuid.New().String(),
 		},
 	}
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
@@ -181,7 +181,7 @@ func TestAdd_ExistingCommit_ShouldOverrideExistingSnapshots(t *testing.T) {
 	assert.Equal(t, newIssueList[0].GetGlobalIdentity(), list[0].GetGlobalIdentity())
 	assert.NotEqual(t, issueList[0].GetGlobalIdentity(), list[0].GetGlobalIdentity())
 	cacheDir := filepath.Join(folderPath, ".git", CacheFolder)
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 	assert.NoError(t, err)
 	newIssuesExist := cut.Exists(folderPath, newCommitHash, p)
 	assert.True(t, newIssuesExist)
@@ -205,7 +205,7 @@ func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
 		},
 	}
 
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
 	p := product.ProductCode
@@ -263,7 +263,7 @@ func TestClear_ExistingCache(t *testing.T) {
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
 	cacheDir := filepath.Join(xdg.CacheHome, CacheFolder)
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 	assert.NoError(t, err)
 	pc := product.ProductCode
 	cut := NewGitPersistenceProvider(c.Logger())
@@ -288,7 +288,7 @@ func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 	}
 
 	cacheDir := filepath.Join(xdg.CacheHome, CacheFolder)
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
@@ -314,7 +314,7 @@ func TestClearIssues_ExistingCacheExistingProduct(t *testing.T) {
 	}
 
 	cacheDir := filepath.Join(xdg.CacheHome, CacheFolder)
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
@@ -342,7 +342,7 @@ func TestClearIssues_ExistingCacheNonExistingProduct(t *testing.T) {
 	}
 
 	cacheDir := filepath.Join(filepath.Join(folderPath, ".git", CacheFolder))
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
@@ -371,7 +371,7 @@ func TestClearIssues_NonExistingCacheNonExistingProduct(t *testing.T) {
 	}
 
 	cacheDir := filepath.Join(filepath.Join(folderPath, ".git", CacheFolder))
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
@@ -394,7 +394,7 @@ func TestCreateOrAppendToCache_NewCache(t *testing.T) {
 	folderPath := t.TempDir()
 	repo := initGitRepo(t, folderPath, false)
 
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
@@ -411,7 +411,7 @@ func TestCreateOrAppendToCache_ExistingCacheSameProductSameHash(t *testing.T) {
 	folderPath := t.TempDir()
 	repo := initGitRepo(t, folderPath, false)
 
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
@@ -429,7 +429,7 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentProductSameHash(t *testing.
 	folderPath := t.TempDir()
 	repo := initGitRepo(t, folderPath, false)
 
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
@@ -449,7 +449,7 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentProductDifferentHash(t *tes
 	folderPath := t.TempDir()
 	initGitRepo(t, folderPath, false)
 
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 
 	pcCommitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	poCommitHash := "wwwwf18c4432b2a41e0f8e6c9831fe33be92b3db"
@@ -468,10 +468,10 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentPathDifferentProductDiffere
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
 	initGitRepo(t, folderPath, false)
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 
 	otherFolderPath := "/home/myusr/newrepo"
-	otherHashPath := hashedFolderPath(util.Murmur(otherFolderPath))
+	otherHashPath := hashedFolderPath(util.Sha256First16Hash(otherFolderPath))
 	pcCommitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	poCommitHash := "wwwwf18c4432b2a41e0f8e6c9831fe33be92b3db"
 	pc := product.ProductCode
@@ -503,7 +503,7 @@ func TestEnsureCacheDirExists_DefaultCase(t *testing.T) {
 func TestExists_ExistsInCacheButNotInFs(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 	repo := initGitRepo(t, folderPath, false)
 	existingCodeIssues := []snyk.Issue{
 		{
