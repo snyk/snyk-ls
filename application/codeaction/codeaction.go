@@ -82,8 +82,18 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 func (c *CodeActionsService) updateIssuesWithQuickFix(quickFixGroupables []types.Groupable, issues []snyk.Issue) []snyk.Issue {
 	// we only allow one quickfix, so it needs to be grouped
 	quickFix := c.getQuickFixAction(quickFixGroupables)
+	fixable := len(quickFixGroupables)
+	unfixable := len(issues) - fixable
 	// update title with number of issues
-	quickFix.Title = fmt.Sprintf("%s and fix %d issues", quickFix.Title, len(quickFixGroupables))
+	plural := ""
+	if fixable > 1 {
+		plural = "s"
+	}
+	unfixableSuffix := ""
+	if unfixable > 0 {
+		unfixableSuffix = fmt.Sprintf("(%d unfixable)", unfixable)
+	}
+	quickFix.Title = fmt.Sprintf("%s and fix %d issue%s%s", quickFix.Title, fixable, plural, unfixableSuffix)
 
 	var updatedIssues []snyk.Issue
 	for _, issue := range issues {

@@ -85,7 +85,12 @@ func getLensCommands(lensesWithIssueCount *lensesWithIssueCount) []types.Command
 			// right now we can always group by max semver version, as
 			// code only has one quickfix available, and iac none at all
 			qf, ok := types.MaxSemver()(lensCommands).(types.CommandData)
-			qf.Title = fmt.Sprintf("%s and fix %d issues", qf.Title, lensesWithIssueCount.issueCount)
+			plural := ""
+			fixable := lensesWithIssueCount.issueCount
+			if fixable > 1 {
+				plural = "s"
+			}
+			qf.Title = fmt.Sprintf("%s and fix %d issue%s", qf.Title, fixable, plural)
 			if ok {
 				lenses = append(lenses, qf)
 			}
