@@ -25,10 +25,10 @@ jobs:
       - name: Prepare git
         run: git config --global core.autocrlf false
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version-file: "./go.mod"
 
@@ -37,7 +37,7 @@ jobs:
 
       - name: Cache Pact CLI tools
         id: cache-pact
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/pact
           key: ${{ runner.os }}-pact
@@ -49,7 +49,7 @@ jobs:
           make tools
 
       - name: Cache Go modules
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cache/go-build
@@ -86,17 +86,17 @@ jobs:
       - name: Prepare git
         run: git config --global core.autocrlf false
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version-file: "./go.mod"
 
       - name: Cache Pact CLI tools
         if: matrix.os != 'windows-latest'
         id: cache-pact
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/pact
           key: ${{ runner.os }}-pact
@@ -151,7 +151,7 @@ jobs:
     name: proxy-test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Run proxy tests
         env:
@@ -167,14 +167,14 @@ jobs:
       - name: Prepare git
         run: git config --global core.autocrlf false
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
           token: ${{ secrets.HAMMERHEAD_GITHUB_PAT_SNYKLS }}
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version-file: "./go.mod"
 
@@ -195,7 +195,7 @@ jobs:
     name: test-release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # does an unshallow checkout with tags & branches
 
@@ -204,7 +204,7 @@ jobs:
           sed -En 's/^go[[:space:]]+([[:digit:].]+)$/GO_VERSION=\1/p' go.mod >> $GITHUB_ENV
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
 
@@ -219,11 +219,11 @@ jobs:
           echo $LICENSES
 
       - name: Do test release with goreleaser
-        uses: goreleaser/goreleaser-action@v3
+        uses: goreleaser/goreleaser-action@v6
         env:
           LICENSES: ${{ steps.create_license_report.outputs.LICENSES }}
         with:
-          args: release --clean --snapshot --skip=publish
+          args: release --clean --snapshot
 
       - name: Output compiled licenses
         run: |

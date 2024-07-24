@@ -44,6 +44,17 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
+func Test_SmokeInstanceTest(t *testing.T) {
+	ossFile := "package.json"
+	codeFile := "app.js"
+	testutil.CreateDummyProgressListener(t)
+	endpoint := os.Getenv("SNYK_API")
+	if endpoint == "" {
+		t.Setenv("SNYK_API", "https://api.snyk.io")
+	}
+	runSmokeTest(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", ossFile, codeFile, false, true, endpoint)
+}
+
 func Test_SmokeWorkspaceScan(t *testing.T) {
 	ossFile := "package.json"
 	iacFile := "main.tf"
@@ -68,7 +79,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 
 	tests := []test{
 		{
-			name:                 "OSS and Code",
+			name:                 "OSS_and_Code",
 			repo:                 "https://github.com/snyk-labs/nodejs-goof",
 			commit:               "0336589",
 			file1:                ossFile,
@@ -77,7 +88,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			hasVulns:             true,
 		},
 		{
-			name:                 "OSS and Code with V1 endpoint",
+			name:                 "OSS_and_Code_with_V1_endpoint",
 			repo:                 "https://github.com/snyk-labs/nodejs-goof",
 			commit:               "0336589",
 			file1:                ossFile,
@@ -86,7 +97,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			endpoint:             path.Join(endpoint, "/v1"),
 		},
 		{
-			name:                 "OSS and Code with consistent ignores",
+			name:                 "OSS_and_Code_with_consistent_ignores",
 			repo:                 "https://github.com/snyk-labs/nodejs-goof",
 			commit:               "0336589",
 			file1:                ossFile,
@@ -95,7 +106,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			hasVulns:             true,
 		},
 		{
-			name:                 "IaC and Code",
+			name:                 "IaC_and_Code",
 			repo:                 "https://github.com/deepcodeg/snykcon-goof.git",
 			commit:               "eba8407",
 			file1:                iacFile,
@@ -104,7 +115,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			hasVulns:             true,
 		},
 		{
-			name:                 "Code without vulns",
+			name:                 "Code_without_vulns",
 			repo:                 "https://github.com/imagec/simple-repo",
 			commit:               "75bcc55",
 			file1:                "",
@@ -113,7 +124,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			hasVulns:             false,
 		},
 		{
-			name:                 "IaC and Code with consistent ignores",
+			name:                 "IaC_and_Code_with_consistent_ignores",
 			repo:                 "https://github.com/deepcodeg/snykcon-goof.git",
 			commit:               "eba8407",
 			file1:                iacFile,
@@ -122,7 +133,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			hasVulns:             true,
 		},
 		{
-			name:                 "Two upload batches",
+			name:                 "Two_upload_batches",
 			repo:                 "https://github.com/apache/maven",
 			commit:               "18725ec1e",
 			file1:                "",
@@ -497,9 +508,21 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testutil.Json
 
 		quickFixCount := 0
 		for _, action := range actions {
-			if strings.Contains(action.Title, "Upgrade to") {
+			isQuickfixAction := strings.Contains(action.Title, "Upgrade to")
+			if isQuickfixAction {
 				quickFixCount++
 				atLeastOneQuickfixActionFound = true
+			}
+
+			// "cfenv": "^1.0.4", 1 fixable issue
+			if issue.Range.Start.Line == 19 && isQuickfixAction {
+				assert.Contains(t, action.Title, "and fix 1 issue")
+				assert.NotContains(t, action.Title, "and fix 1 issues")
+			}
+
+			// "tap": "^11.1.3", 12 fixable, 11 unfixable
+			if issue.Range.Start.Line == 46 && isQuickfixAction {
+				assert.Contains(t, action.Title, "and fix 12 issues (11 unfixable)")
 			}
 		}
 		// no issues should have more than one quickfix
@@ -540,6 +563,16 @@ func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorde
 			if issue.Range.Start.Line == lens.Range.Start.Line {
 				lensCount++
 				atLeastOneOneIssueWithCodeLensFound = true
+			}
+			// "cfenv": "^1.0.4", 1 fixable issue
+			if lens.Range.Start.Line == 19 {
+				assert.Contains(t, lens.Command.Title, "and fix 1 issue")
+				assert.NotContains(t, lens.Command.Title, "and fix 1 issues")
+			}
+
+			// "tap": "^11.1.3", 12 fixable, 11 unfixable
+			if lens.Range.Start.Line == 46 {
+				assert.Contains(t, lens.Command.Title, "and fix 12 issues (11 unfixable)")
 			}
 		}
 	}

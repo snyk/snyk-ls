@@ -26,20 +26,20 @@ jobs:
   instance-tests:
     strategy:
       matrix:
-        environment: [MT1, MT3]
+        environment: [Standard, MT1, MT3]
     name: instance tests
     environment: ${{matrix.environment}}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version-file: "./go.mod"
 
       - name: Cache Go modules
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cache/go-build
@@ -50,41 +50,12 @@ jobs:
       - name: Run Instance Tests
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-          SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES }}
           SNYK_API: ${{ secrets.SNYK_API }}
         run: |
           make instance-test
 
-  instance-standard-test:
-    name: instance tests (Standard)
-    runs-on: ubuntu-latest
-    environment: Standard
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Go
-        uses: actions/setup-go@v3
-        with:
-          go-version-file: "./go.mod"
-
-      - name: Cache Go modules
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: ${{ runner.os }}-go-
-
-      - name: Run Instance Tests on Standard Environment
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-          SNYK_API: ${{ secrets.SNYK_API }}
-        run: |
-          make instance-standard-test
-
   slackNotification:
-    needs: [instance-tests, instance-standard-test]
+    needs: [instance-tests]
     runs-on: ubuntu-latest
     if: ${{ github.ref == 'refs/heads/main' && (needs.instance-tests.result != 'success' || needs.instance-standard-test.result != 'success') }}
     steps:
