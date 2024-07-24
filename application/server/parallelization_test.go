@@ -33,7 +33,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-// run 10 cli scans in parallel - 5 IaC, 5 OSS
 func Test_Concurrent_CLI_Runs(t *testing.T) {
 	srv, jsonRPCRecorder := setupServer(t)
 	c := testutil.SmokeTest(t, false)
