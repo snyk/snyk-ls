@@ -136,7 +136,7 @@ func (g *GitPersistenceProvider) ClearForProduct(folderPath, commitHash string, 
 		g.logger.Error().Err(err).Msg("failed to initialize git persistence provider")
 	}
 
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 
 	err = g.deleteFromCache(hash, commitHash, p)
 	if err != nil {
@@ -167,7 +167,7 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath string, p prod
 		return nil, err
 	}
 
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 
 	filePath := getLocalFilePath(cacheDir, hash, commitHash, p)
 	content, err := os.ReadFile(filePath)
@@ -200,7 +200,7 @@ func (g *GitPersistenceProvider) Add(folderPath, commitHash string, issueList []
 		g.logger.Error().Err(err).Msg("failed to initialize git persistence provider")
 	}
 
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 
 	shouldPersist := g.shouldPersistOnDisk(hash, commitHash, p)
 	if !shouldPersist {
@@ -239,7 +239,7 @@ func (g *GitPersistenceProvider) Exists(folderPath, commitHash string, p product
 		return false
 	}
 
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 	exists := g.snapshotExistsOnDisk(cacheDir, hash, commitHash, p)
 	if exists {
 		return true
@@ -292,7 +292,7 @@ func (g *GitPersistenceProvider) snapshotExistsOnDisk(cacheDir string, hash hash
 }
 
 func (g *GitPersistenceProvider) getCommitHashForProduct(folderPath string, p product.Product) (commitHash string, err error) {
-	hash := hashedFolderPath(util.Murmur(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 
 	pchMap, ok := g.cache[hash]
 	if !ok {

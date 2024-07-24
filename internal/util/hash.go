@@ -20,8 +20,6 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
-	"github.com/spaolacci/murmur3"
 	"io"
 
 	"golang.org/x/net/html/charset"
@@ -39,12 +37,7 @@ func Hash(content []byte) string {
 	return sum256
 }
 
-func Murmur(path string) string {
-	h := murmur3.New64()
-	_, err := h.Write([]byte(path))
-	if err != nil {
-		return path
-	}
-	hash := fmt.Sprintf("%x", h.Sum64())
-	return hash
+func Sha256First16Hash(input string) string {
+	sum256 := Hash([]byte(input))
+	return sum256[:16]
 }

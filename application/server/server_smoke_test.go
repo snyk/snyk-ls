@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -466,6 +467,14 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 	}
 }
 
+func newTestFileWithVulns(t *testing.T, cloneTargetDir string, fileName string) {
+	t.Helper()
+
+	testFile := filepath.Join(cloneTargetDir, fileName)
+	err := os.WriteFile(testFile, []byte("var token = 'SECRET_TOKEN_f8ed84e8f41e4146403dd4a6bbcea5e418d23a9';"), 0600)
+	assert.NoError(t, err)
+}
+
 func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, cloneTargetDir string, loc server.Local) {
 	t.Helper()
 	if !strings.HasSuffix(t.Name(), "OSS_and_Code") {
@@ -602,6 +611,16 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server
 		t.Fatal(err, "Couldn't setup test repo")
 	}
 
+	initParams := prepareInitParams(t, cloneTargetDir, c)
+
+	ensureInitialized(t, loc, initParams)
+
+	return cloneTargetDir
+}
+
+func prepareInitParams(t *testing.T, cloneTargetDir string, c *config.Config) types.InitializeParams {
+	t.Helper()
+
 	folder := types.WorkspaceFolder{
 		Name: "Test Repo",
 		Uri:  uri.PathToUri(cloneTargetDir),
@@ -615,18 +634,10 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server
 			EnableTrustedFoldersFeature: "false",
 			FilterSeverity:              types.DefaultSeverityFilter(),
 			AuthenticationMethod:        types.TokenAuthentication,
+			EnableDeltaFindings:         strconv.FormatBool(c.IsDeltaFindingsEnabled()),
 		},
 	}
-
-	_, err = loc.Client.Call(ctx, "initialize", clientParams)
-	if err != nil {
-		t.Fatal(err, "Initialize failed")
-	}
-	_, err = loc.Client.Call(ctx, "initialized", nil)
-	if err != nil {
-		t.Fatal(err, "Initialized failed")
-	}
-	return cloneTargetDir
+	return clientParams
 }
 
 func checkFeatureFlagStatus(t *testing.T, c *config.Config, loc *server.Local) {
@@ -696,6 +707,41 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	_ = textDocumentDidSave(t, &loc, testPath)
 
 	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, 6, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
+}
+
+func Test_SmokeSnykCodeDelta_OneNewVuln(t *testing.T) {
+	loc, jsonRPCRecorder := setupServer(t)
+	c := testutil.SmokeTest(t, false)
+	c.SetSnykCodeEnabled(true)
+	c.SetDeltaFindingsEnabled(true)
+	cleanupChannels()
+	di.Init()
+
+	fileWithNewVulns := "vulns.js"
+	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
+	assert.NoError(t, err)
+
+	newTestFileWithVulns(t, cloneTargetDir, fileWithNewVulns)
+
+	initParams := prepareInitParams(t, cloneTargetDir, c)
+
+	ensureInitialized(t, loc, initParams)
+
+	waitForScan(t, cloneTargetDir)
+
+	snykCodeScanParams := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+
+	assert.Equal(t, len(snykCodeScanParams.Issues), 1)
+	assert.Contains(t, snykCodeScanParams.Issues[0].FilePath, fileWithNewVulns)
+}
+
+func ensureInitialized(t *testing.T, loc server.Local, initParams types.InitializeParams) {
+	t.Helper()
+
+	_, err := loc.Client.Call(ctx, "initialize", initParams)
+	assert.NoError(t, err)
+	_, err = loc.Client.Call(ctx, "initialized", nil)
+	assert.NoError(t, err)
 }
 
 func textDocumentDidSave(t *testing.T, loc *server.Local, testPath string) sglsp.DidSaveTextDocumentParams {
