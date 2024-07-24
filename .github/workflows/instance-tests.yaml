@@ -57,7 +57,7 @@ jobs:
   slackNotification:
     needs: [instance-tests]
     runs-on: ubuntu-latest
-    if: ${{ github.ref == 'refs/heads/main' && (needs.instance-tests.result != 'success' || needs.instance-standard-test.result != 'success') }}
+    if: ${{ github.ref == 'refs/heads/main' && needs.instance-tests.result != 'success' }}
     steps:
       - name: Slack Notification
         uses: slackapi/slack-github-action@v1.24
