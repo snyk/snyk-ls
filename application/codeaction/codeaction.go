@@ -91,7 +91,7 @@ func (c *CodeActionsService) updateIssuesWithQuickFix(quickFixGroupables []types
 	}
 	unfixableSuffix := ""
 	if unfixable > 0 {
-		unfixableSuffix = fmt.Sprintf("(%d unfixable)", unfixable)
+		unfixableSuffix = fmt.Sprintf(" (%d unfixable)", unfixable)
 	}
 	quickFix.Title = fmt.Sprintf("%s and fix %d issue%s%s", quickFix.Title, fixable, plural, unfixableSuffix)
 

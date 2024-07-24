@@ -30,6 +30,7 @@ import (
 type lensesWithIssueCount struct {
 	lensCommands []types.CommandData
 	issueCount   int
+	totalIssues  int
 }
 
 func GetFor(filePath string) (lenses []sglsp.CodeLens) {
@@ -49,6 +50,7 @@ func GetFor(filePath string) (lenses []sglsp.CodeLens) {
 				lensesWithIssueCountsForRange = &lensesWithIssueCount{
 					lensCommands: []types.CommandData{},
 					issueCount:   0,
+					totalIssues:  len(f.IssuesForRange(filePath, issue.Range)),
 				}
 			}
 			lensesWithIssueCountsForRange.lensCommands = append(lensesWithIssueCountsForRange.lensCommands, lens)
@@ -87,10 +89,15 @@ func getLensCommands(lensesWithIssueCount *lensesWithIssueCount) []types.Command
 			qf, ok := types.MaxSemver()(lensCommands).(types.CommandData)
 			plural := ""
 			fixable := lensesWithIssueCount.issueCount
+			unfixable := lensesWithIssueCount.totalIssues - fixable
 			if fixable > 1 {
 				plural = "s"
 			}
-			qf.Title = fmt.Sprintf("%s and fix %d issue%s", qf.Title, fixable, plural)
+			unfixableSuffix := ""
+			if unfixable > 1 {
+				unfixableSuffix = fmt.Sprintf(" (%d unfixable)", unfixable)
+			}
+			qf.Title = fmt.Sprintf("%s and fix %d issue%s%s", qf.Title, fixable, plural, unfixableSuffix)
 			if ok {
 				lenses = append(lenses, qf)
 			}
