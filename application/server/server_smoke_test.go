@@ -706,7 +706,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, 6, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 }
 
-func Test_SmokeSnykCodeDeltas(t *testing.T) {
+func Test_SmokeSnykCodeDelta(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
 	c := testutil.SmokeTest(t, false)
 	c.SetSnykCodeEnabled(true)
