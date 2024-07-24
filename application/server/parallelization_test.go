@@ -42,7 +42,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 
 	lspClient := srv.Client
 
-	// create 5 clones and make them workspace folders
+	// create clones and make them workspace folders
 	type scanParamsTuple map[product.Product]bool
 	successfulScans := map[string]scanParamsTuple{}
 
