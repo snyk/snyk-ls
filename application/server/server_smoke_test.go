@@ -44,6 +44,17 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
+func Test_SmokeInstanceTest(t *testing.T) {
+	ossFile := "package.json"
+	codeFile := "app.js"
+	testutil.CreateDummyProgressListener(t)
+	endpoint := os.Getenv("SNYK_API")
+	if endpoint == "" {
+		t.Setenv("SNYK_API", "https://api.snyk.io")
+	}
+	runSmokeTest(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", ossFile, codeFile, false, true, endpoint)
+}
+
 func Test_SmokeWorkspaceScan(t *testing.T) {
 	ossFile := "package.json"
 	iacFile := "main.tf"
@@ -68,7 +79,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 
 	tests := []test{
 		{
-			name:                 "OSS and Code",
+			name:                 "OSS_and_Code",
 			repo:                 "https://github.com/snyk-labs/nodejs-goof",
 			commit:               "0336589",
 			file1:                ossFile,
@@ -77,7 +88,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			hasVulns:             true,
 		},
 		{
-			name:                 "OSS and Code with V1 endpoint",
+			name:                 "OSS_and_Code_with_V1_endpoint",
 			repo:                 "https://github.com/snyk-labs/nodejs-goof",
 			commit:               "0336589",
 			file1:                ossFile,
@@ -86,7 +97,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			endpoint:             path.Join(endpoint, "/v1"),
 		},
 		{
-			name:                 "OSS and Code with consistent ignores",
+			name:                 "OSS_and_Code_with_consistent_ignores",
 			repo:                 "https://github.com/snyk-labs/nodejs-goof",
 			commit:               "0336589",
 			file1:                ossFile,
@@ -95,7 +106,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			hasVulns:             true,
 		},
 		{
-			name:                 "IaC and Code",
+			name:                 "IaC_and_Code",
 			repo:                 "https://github.com/deepcodeg/snykcon-goof.git",
 			commit:               "eba8407",
 			file1:                iacFile,
@@ -104,7 +115,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			hasVulns:             true,
 		},
 		{
-			name:                 "Code without vulns",
+			name:                 "Code_without_vulns",
 			repo:                 "https://github.com/imagec/simple-repo",
 			commit:               "75bcc55",
 			file1:                "",
@@ -113,7 +124,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			hasVulns:             false,
 		},
 		{
-			name:                 "IaC and Code with consistent ignores",
+			name:                 "IaC_and_Code_with_consistent_ignores",
 			repo:                 "https://github.com/deepcodeg/snykcon-goof.git",
 			commit:               "eba8407",
 			file1:                iacFile,
@@ -122,7 +133,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			hasVulns:             true,
 		},
 		{
-			name:                 "Two upload batches",
+			name:                 "Two_upload_batches",
 			repo:                 "https://github.com/apache/maven",
 			commit:               "18725ec1e",
 			file1:                "",
