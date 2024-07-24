@@ -219,11 +219,11 @@ jobs:
           echo $LICENSES
 
       - name: Do test release with goreleaser
-        uses: goreleaser/goreleaser-action@v3
+        uses: goreleaser/goreleaser-action@v6
         env:
           LICENSES: ${{ steps.create_license_report.outputs.LICENSES }}
         with:
-          args: release --clean --snapshot --skip=publish
+          args: release --clean --snapshot
 
       - name: Output compiled licenses
         run: |
