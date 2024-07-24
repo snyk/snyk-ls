@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -56,7 +57,6 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 		file1                string
 		file2                string
 		useConsistentIgnores bool
-		deltaFindingsEnabled bool
 		hasVulns             bool
 		endpoint             string
 	}
@@ -77,12 +77,13 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			hasVulns:             true,
 		},
 		{
-			name:                 "Code with Delta",
+			name:                 "OSS and Code with V1 endpoint",
 			repo:                 "https://github.com/snyk-labs/nodejs-goof",
 			commit:               "0336589",
-			deltaFindingsEnabled: true,
+			file1:                ossFile,
+			file2:                codeFile,
 			useConsistentIgnores: false,
-			hasVulns:             true,
+			endpoint:             path.Join(endpoint, "/v1"),
 		},
 		{
 			name:                 "OSS and Code with consistent ignores",
@@ -141,7 +142,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			runSmokeTest(t, tc.repo, tc.commit, tc.file1, tc.file2, tc.useConsistentIgnores, tc.deltaFindingsEnabled, tc.hasVulns, "")
+			runSmokeTest(t, tc.repo, tc.commit, tc.file1, tc.file2, tc.useConsistentIgnores, tc.hasVulns, "")
 		})
 	}
 }
@@ -407,7 +408,7 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 	}, time.Second*5, time.Second)
 }
 
-func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 string, useConsistentIgnores bool, deltaFindingsEnabled bool,
+func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 string, useConsistentIgnores bool,
 	hasVulns bool, endpoint string) {
 	t.Helper()
 	if endpoint != "" && endpoint != "/v1" {
@@ -418,16 +419,10 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykIacEnabled(true)
 	c.SetSnykOssEnabled(true)
-	c.SetDeltaFindingsEnabled(true)
 	cleanupChannels()
 	di.Init()
 
 	cloneTargetDir := setupRepoAndInitialize(t, repo, commit, loc, c)
-
-	fileWithNewVulns := "vulns.js"
-	if deltaFindingsEnabled {
-		newTestFileWithVulns(t, cloneTargetDir, fileWithNewVulns)
-	}
 
 	waitForScan(t, cloneTargetDir)
 
@@ -441,21 +436,19 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 	assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].BaseBranch)
 	assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].LocalBranches)
 
+	jsonRPCRecorder.ClearNotifications()
 	var testPath string
 	if file1 != "" {
-		jsonRPCRecorder.ClearNotifications()
 		testPath = filepath.Join(cloneTargetDir, file1)
 		textDocumentDidSave(t, &loc, testPath)
 		// serve diagnostics from file scan
 		assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 	}
 
-	if file2 != "" {
-		jsonRPCRecorder.ClearNotifications()
-		testPath = filepath.Join(cloneTargetDir, file2)
-		textDocumentDidSave(t, &loc, testPath)
-		assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
-	}
+	jsonRPCRecorder.ClearNotifications()
+	testPath = filepath.Join(cloneTargetDir, file2)
+	textDocumentDidSave(t, &loc, testPath)
+	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 
 	// check for snyk code scan message
 	snykCodeScanParams := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
@@ -464,9 +457,7 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 	if hasVulns {
 		checkAutofixDiffs(t, c, snykCodeScanParams, loc)
 	}
-	if deltaFindingsEnabled {
-		checkForDelta(t, snykCodeScanParams, fileWithNewVulns)
-	}
+
 	checkFeatureFlagStatus(t, c, &loc)
 
 	// check we only have one quickfix action in open source per line
@@ -607,13 +598,6 @@ func checkAutofixDiffs(t *testing.T, c *config.Config, snykCodeScanParams types.
 	}
 }
 
-func checkForDelta(t *testing.T, snykCodeScanParams types.SnykScanParams, fileWithVulns string) {
-	t.Helper()
-
-	assert.Equal(t, len(snykCodeScanParams.Issues), 1)
-	assert.Contains(t, snykCodeScanParams.Issues[0].FilePath, fileWithVulns)
-}
-
 func isNotStandardRegion(c *config.Config) bool {
 	return c.SnykCodeApi() != "https://deeproxy.snyk.io"
 }
@@ -720,6 +704,27 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	_ = textDocumentDidSave(t, &loc, testPath)
 
 	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, 6, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
+}
+
+func Test_SmokeSnykCodeDeltas(t *testing.T) {
+	loc, jsonRPCRecorder := setupServer(t)
+	c := testutil.SmokeTest(t, false)
+	c.SetSnykCodeEnabled(true)
+	c.SetDeltaFindingsEnabled(true)
+	cleanupChannels()
+	di.Init()
+
+	cloneTargetDir := setupRepoAndInitialize(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", loc, c)
+
+	fileWithNewVulns := "vulns.js"
+	newTestFileWithVulns(t, cloneTargetDir, fileWithNewVulns)
+
+	waitForScan(t, cloneTargetDir)
+
+	snykCodeScanParams := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+
+	assert.Equal(t, len(snykCodeScanParams.Issues), 1)
+	assert.Contains(t, snykCodeScanParams.Issues[0].FilePath, fileWithNewVulns)
 }
 
 func textDocumentDidSave(t *testing.T, loc *server.Local, testPath string) sglsp.DidSaveTextDocumentParams {
