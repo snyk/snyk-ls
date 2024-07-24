@@ -611,6 +611,16 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server
 		t.Fatal(err, "Couldn't setup test repo")
 	}
 
+	initParams := prepareInitParams(t, cloneTargetDir, c)
+
+	ensureInitialized(t, loc, initParams)
+
+	return cloneTargetDir
+}
+
+func prepareInitParams(t *testing.T, cloneTargetDir string, c *config.Config) types.InitializeParams {
+	t.Helper()
+
 	folder := types.WorkspaceFolder{
 		Name: "Test Repo",
 		Uri:  uri.PathToUri(cloneTargetDir),
@@ -627,16 +637,7 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server
 			EnableDeltaFindings:         strconv.FormatBool(c.IsDeltaFindingsEnabled()),
 		},
 	}
-
-	_, err = loc.Client.Call(ctx, "initialize", clientParams)
-	if err != nil {
-		t.Fatal(err, "Initialize failed")
-	}
-	_, err = loc.Client.Call(ctx, "initialized", nil)
-	if err != nil {
-		t.Fatal(err, "Initialized failed")
-	}
-	return cloneTargetDir
+	return clientParams
 }
 
 func checkFeatureFlagStatus(t *testing.T, c *config.Config, loc *server.Local) {
@@ -708,7 +709,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, 6, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 }
 
-func Test_SmokeSnykCodeDelta(t *testing.T) {
+func Test_SmokeSnykCodeDelta_OneNewVuln(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
 	c := testutil.SmokeTest(t, false)
 	c.SetSnykCodeEnabled(true)
@@ -716,10 +717,15 @@ func Test_SmokeSnykCodeDelta(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 
-	cloneTargetDir := setupRepoAndInitialize(t, "https://github.com/snyk-labs/nodejs-goof", "0336589", loc, c)
-
 	fileWithNewVulns := "vulns.js"
+	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
+	assert.NoError(t, err)
+
 	newTestFileWithVulns(t, cloneTargetDir, fileWithNewVulns)
+
+	initParams := prepareInitParams(t, cloneTargetDir, c)
+
+	ensureInitialized(t, loc, initParams)
 
 	waitForScan(t, cloneTargetDir)
 
@@ -727,6 +733,15 @@ func Test_SmokeSnykCodeDelta(t *testing.T) {
 
 	assert.Equal(t, len(snykCodeScanParams.Issues), 1)
 	assert.Contains(t, snykCodeScanParams.Issues[0].FilePath, fileWithNewVulns)
+}
+
+func ensureInitialized(t *testing.T, loc server.Local, initParams types.InitializeParams) {
+	t.Helper()
+
+	_, err := loc.Client.Call(ctx, "initialize", initParams)
+	assert.NoError(t, err)
+	_, err = loc.Client.Call(ctx, "initialized", nil)
+	assert.NoError(t, err)
 }
 
 func textDocumentDidSave(t *testing.T, loc *server.Local, testPath string) sglsp.DidSaveTextDocumentParams {
