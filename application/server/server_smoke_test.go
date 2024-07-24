@@ -497,9 +497,21 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testutil.Json
 
 		quickFixCount := 0
 		for _, action := range actions {
-			if strings.Contains(action.Title, "Upgrade to") {
+			isQuickfixAction := strings.Contains(action.Title, "Upgrade to")
+			if isQuickfixAction {
 				quickFixCount++
 				atLeastOneQuickfixActionFound = true
+			}
+
+			// "cfenv": "^1.0.4", 1 fixable issue
+			if issue.Range.Start.Line == 19 && isQuickfixAction {
+				assert.Contains(t, action.Title, "and fix 1 issue")
+				assert.NotContains(t, action.Title, "and fix 1 issues")
+			}
+
+			// "tap": "^11.1.3", 12 fixable, 11 unfixable
+			if issue.Range.Start.Line == 46 && isQuickfixAction {
+				assert.Contains(t, action.Title, "and fix 12 issues (11 unfixable)")
 			}
 		}
 		// no issues should have more than one quickfix
@@ -540,6 +552,16 @@ func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorde
 			if issue.Range.Start.Line == lens.Range.Start.Line {
 				lensCount++
 				atLeastOneOneIssueWithCodeLensFound = true
+			}
+			// "cfenv": "^1.0.4", 1 fixable issue
+			if lens.Range.Start.Line == 19 {
+				assert.Contains(t, lens.Command.Title, "and fix 1 issue")
+				assert.NotContains(t, lens.Command.Title, "and fix 1 issues")
+			}
+
+			// "tap": "^11.1.3", 12 fixable, 11 unfixable
+			if lens.Range.Start.Line == 46 {
+				assert.Contains(t, lens.Command.Title, "and fix 12 issues (11 unfixable)")
 			}
 		}
 	}
