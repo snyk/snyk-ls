@@ -468,6 +468,8 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 }
 
 func newTestFileWithVulns(t *testing.T, cloneTargetDir string, fileName string) {
+	t.Helper()
+
 	testFile := filepath.Join(cloneTargetDir, fileName)
 	err := os.WriteFile(testFile, []byte("var token = 'SECRET_TOKEN_f8ed84e8f41e4146403dd4a6bbcea5e418d23a9';"), 0600)
 	assert.NoError(t, err)
