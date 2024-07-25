@@ -141,8 +141,7 @@ func TestBaseBranchDifferentFromCurrentBranch_SameBranchNames_NoModification_Ski
 	c := testutil.UnitTest(t)
 	repoPath := t.TempDir()
 	initGitRepo(t, repoPath, false)
-	cloneTargetBranchName := "master"
-	shouldclone, err := LocalRepoHasChanges(c.Logger(), repoPath, cloneTargetBranchName)
+	shouldclone, err := LocalRepoHasChanges(c.Logger(), repoPath)
 
 	assert.NoError(t, err)
 	assert.False(t, shouldclone)
@@ -152,8 +151,7 @@ func TestBaseBranchDifferentFromCurrentBranch_SameBranchNames_WithModification_C
 	c := testutil.UnitTest(t)
 	repoPath := t.TempDir()
 	initGitRepo(t, repoPath, true)
-	cloneTargetBranchName := "master"
-	shouldclone, err := LocalRepoHasChanges(c.Logger(), repoPath, cloneTargetBranchName)
+	shouldclone, err := LocalRepoHasChanges(c.Logger(), repoPath)
 
 	assert.NoError(t, err)
 	assert.True(t, shouldclone)
@@ -162,10 +160,16 @@ func TestBaseBranchDifferentFromCurrentBranch_SameBranchNames_WithModification_C
 func TestBaseBranchDifferentFromCurrentBranch_DifferentBranchNames_Clone(t *testing.T) {
 	c := testutil.UnitTest(t)
 	repoPath := t.TempDir()
-	initGitRepo(t, repoPath, true)
-	cloneTargetBranchName := "feat/new"
+	repo, _ := initGitRepo(t, repoPath, true)
+	wt, err := repo.Worktree()
+	assert.NoError(t, err)
+	err = wt.Checkout(&git.CheckoutOptions{
+		Branch: "feat/new",
+		Create: true,
+	})
+	assert.NoError(t, err)
 
-	shouldclone, err := LocalRepoHasChanges(c.Logger(), repoPath, cloneTargetBranchName)
+	shouldclone, err := LocalRepoHasChanges(c.Logger(), repoPath)
 
 	assert.True(t, shouldclone)
 	assert.NoError(t, err)
