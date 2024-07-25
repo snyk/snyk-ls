@@ -160,27 +160,48 @@ func (a *AuthenticationServiceImpl) setProviders(providers []AuthenticationProvi
 }
 
 func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
+	authProviderChange := false
 	var as []AuthenticationProvider
 	switch c.AuthenticationMethod() {
-	case types.FakeAuthentication:
-		a.setProviders([]AuthenticationProvider{NewFakeCliAuthenticationProvider(c)})
-	case types.TokenAuthentication:
-		as = Token(c, a.errorReporter)
-		a.setProviders(as)
-	case "":
-		// don't do anything
 	default:
+		// if err != nil, previous token was legacy. So we had a provider change
+		_, err := c.TokenAsOAuthToken()
+		if err != nil && c.NonEmptyToken() {
+			authProviderChange = true
+		}
+
 		as = Default(c, a.errorReporter, a)
 		a.setProviders(as)
+	case types.TokenAuthentication:
+		// if err == nil, previous token was oauth2. So we had a provider change
+		_, err := c.TokenAsOAuthToken()
+		if err == nil && c.NonEmptyToken() {
+			authProviderChange = true
+		}
+
+		as = Token(c, a.errorReporter)
+		a.setProviders(as)
+	case types.FakeAuthentication:
+		a.setProviders([]AuthenticationProvider{NewFakeCliAuthenticationProvider(c)})
+	case "":
+		// don't do anything
+	}
+
+	if authProviderChange {
+		a.Logout(context.Background())
+		a.sendAuthenticationRequest("Your authentication method has changed. Please re-authenticate to continue using Snyk.", "Re-authenticate")
 	}
 }
 
 func (a *AuthenticationServiceImpl) HandleInvalidCredentials() {
 	msg := "Your authentication credentials cannot be validated. Automatically clearing credentials. You need to re-authenticate to use Snyk."
+	a.sendAuthenticationRequest(msg, "Authenticate")
+}
 
+func (a *AuthenticationServiceImpl) sendAuthenticationRequest(msg string, actionName string) {
 	actions := data_structure.OrderedMap[types.MessageAction, types.CommandData]{}
-	actions.Add("Authenticate", types.CommandData{
-		Title:     "Authenticate",
+	actions.Add(types.MessageAction(actionName), types.CommandData{
+		Title:     actionName,
 		CommandId: types.LoginCommand,
 	})
 	actions.Add("Cancel", types.CommandData{})

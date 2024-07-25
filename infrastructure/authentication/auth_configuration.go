@@ -37,8 +37,7 @@ func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) []Auth
 	return []AuthenticationProvider{NewCliAuthenticationProvider(c, errorReporter)}
 }
 
-// Default authentication configures two authenticators, the first OAuth2,
-// the second, as fallback, CLI Token auth
+// Default authentication configures an OAuth2 authenticator,
 // the auth service parameter is needed, as the oauth2 provider needs a callback function
 func Default(c *config.Config, errorReporter error_reporting.ErrorReporter, authenticationService AuthenticationService) []AuthenticationProvider {
 	authProviders := []AuthenticationProvider{}
@@ -60,7 +59,6 @@ func Default(c *config.Config, errorReporter error_reporting.ErrorReporter, auth
 		types.DefaultOpenBrowserFunc(url)
 	}
 
-	// add both OAuth2 and CLI, with preference to OAuth2
 	authProviders = append(authProviders,
 		NewOAuthProvider(
 			c,
