@@ -467,11 +467,11 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 	}
 }
 
-func newTestFileWithVulns(t *testing.T, cloneTargetDir string, fileName string) {
+func newFileInCurrentDir(t *testing.T, cloneTargetDir string, fileName string, content string) {
 	t.Helper()
 
 	testFile := filepath.Join(cloneTargetDir, fileName)
-	err := os.WriteFile(testFile, []byte("var token = 'SECRET_TOKEN_f8ed84e8f41e4146403dd4a6bbcea5e418d23a9';"), 0600)
+	err := os.WriteFile(testFile, []byte(content), 0600)
 	assert.NoError(t, err)
 }
 
@@ -721,7 +721,7 @@ func Test_SmokeSnykCodeDelta_OneNewVuln(t *testing.T) {
 	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
 	assert.NoError(t, err)
 
-	newTestFileWithVulns(t, cloneTargetDir, fileWithNewVulns)
+	newFileInCurrentDir(t, cloneTargetDir, fileWithNewVulns, "var token = 'SECRET_TOKEN_f8ed84e8f41e4146403dd4a6bbcea5e418d23a9';")
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 
@@ -733,6 +733,53 @@ func Test_SmokeSnykCodeDelta_OneNewVuln(t *testing.T) {
 
 	assert.Equal(t, len(snykCodeScanParams.Issues), 1)
 	assert.Contains(t, snykCodeScanParams.Issues[0].FilePath, fileWithNewVulns)
+}
+
+func Test_SmokeSnykCodeDelta_NoScanNecessary(t *testing.T) {
+	loc, jsonRPCRecorder := setupServer(t)
+	c := testutil.SmokeTest(t, false)
+	c.SetSnykCodeEnabled(true)
+	c.SetDeltaFindingsEnabled(true)
+	cleanupChannels()
+	di.Init()
+
+	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
+	assert.NoError(t, err)
+
+	initParams := prepareInitParams(t, cloneTargetDir, c)
+
+	ensureInitialized(t, loc, initParams)
+
+	waitForScan(t, cloneTargetDir)
+
+	snykCodeScanParams := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+
+	assert.Equal(t, len(snykCodeScanParams.Issues), 0)
+}
+
+func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
+	loc, jsonRPCRecorder := setupServer(t)
+	c := testutil.SmokeTest(t, false)
+	c.SetSnykCodeEnabled(true)
+	c.SetDeltaFindingsEnabled(true)
+	cleanupChannels()
+	di.Init()
+
+	fileWithNewVulns := "vulns.js"
+	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
+	assert.NoError(t, err)
+
+	newFileInCurrentDir(t, cloneTargetDir, fileWithNewVulns, "// no problems")
+
+	initParams := prepareInitParams(t, cloneTargetDir, c)
+
+	ensureInitialized(t, loc, initParams)
+
+	waitForScan(t, cloneTargetDir)
+
+	snykCodeScanParams := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+
+	assert.Equal(t, len(snykCodeScanParams.Issues), 0)
 }
 
 func ensureInitialized(t *testing.T, loc server.Local, initParams types.InitializeParams) {

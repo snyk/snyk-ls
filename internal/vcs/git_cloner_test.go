@@ -137,41 +137,41 @@ func TestClone_InvalidGitRepo(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestShouldClone_SameBranchNames_NoModification_SkipClone(t *testing.T) {
+func TestBaseBranchDifferentFromCurrentBranch_SameBranchNames_NoModification_SkipClone(t *testing.T) {
 	c := testutil.UnitTest(t)
 	repoPath := t.TempDir()
 	initGitRepo(t, repoPath, false)
 	cloneTargetBranchName := "master"
-	shouldclone, err := ShouldClone(c.Logger(), repoPath, cloneTargetBranchName)
+	shouldclone, err := LocalRepoHasChanges(c.Logger(), repoPath, cloneTargetBranchName)
 
 	assert.NoError(t, err)
 	assert.False(t, shouldclone)
 }
 
-func TestShouldClone_SameBranchNames_WithModification_Clone(t *testing.T) {
+func TestBaseBranchDifferentFromCurrentBranch_SameBranchNames_WithModification_Clone(t *testing.T) {
 	c := testutil.UnitTest(t)
 	repoPath := t.TempDir()
 	initGitRepo(t, repoPath, true)
 	cloneTargetBranchName := "master"
-	shouldclone, err := ShouldClone(c.Logger(), repoPath, cloneTargetBranchName)
+	shouldclone, err := LocalRepoHasChanges(c.Logger(), repoPath, cloneTargetBranchName)
 
 	assert.NoError(t, err)
 	assert.True(t, shouldclone)
 }
 
-func TestShouldClone_DifferentBranchNames_Clone(t *testing.T) {
+func TestBaseBranchDifferentFromCurrentBranch_DifferentBranchNames_Clone(t *testing.T) {
 	c := testutil.UnitTest(t)
 	repoPath := t.TempDir()
 	initGitRepo(t, repoPath, true)
 	cloneTargetBranchName := "feat/new"
 
-	shouldclone, err := ShouldClone(c.Logger(), repoPath, cloneTargetBranchName)
+	shouldclone, err := LocalRepoHasChanges(c.Logger(), repoPath, cloneTargetBranchName)
 
 	assert.True(t, shouldclone)
 	assert.NoError(t, err)
 }
 
-func TestShouldClone_HasUncommittedChanges(t *testing.T) {
+func TestBaseBranchDifferentFromCurrentBranch_HasUncommittedChanges(t *testing.T) {
 	repo, _ := initGitRepo(t, t.TempDir(), true)
 
 	hasChanges := hasUncommitedChanges(repo)
@@ -179,7 +179,7 @@ func TestShouldClone_HasUncommittedChanges(t *testing.T) {
 	assert.True(t, hasChanges)
 }
 
-func TestShouldClone_HasCommittedChanges(t *testing.T) {
+func TestBaseBranchDifferentFromCurrentBranch_HasCommittedChanges(t *testing.T) {
 	repo, _ := initGitRepo(t, t.TempDir(), false)
 
 	hasChanges := hasUncommitedChanges(repo)

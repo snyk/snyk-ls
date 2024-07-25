@@ -19,7 +19,6 @@ package workspace
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -305,11 +304,7 @@ func (f *Folder) scan(ctx context.Context, path string) {
 
 func (f *Folder) processResults(scanData snyk.ScanData) {
 	if scanData.Err != nil {
-		f.scanNotifier.SendError(scanData.Product, f.path, scanData.Err.Error())
-		f.c.Logger().Err(scanData.Err).
-			Str("method", "processResults").
-			Str("product", string(scanData.Product)).
-			Msg("Product returned an error")
+		f.sendScanError(scanData.Product, scanData.Err)
 		return
 	}
 	// this also updates the severity counts in scan data, therefore we pass a pointer
@@ -319,6 +314,15 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 
 	// Filter and publish cached diagnostics
 	f.FilterAndPublishDiagnostics(&scanData.Product)
+}
+
+func (f *Folder) sendScanError(product product.Product, err error) {
+	f.scanNotifier.SendError(product, f.path, err.Error())
+	f.c.Logger().Err(err).
+		Str("method", "processResults").
+		Str("product", string(product)).
+		Msg("Product returned an error")
+	f.notifier.SendErrorDiagnostic(f.path, err)
 }
 
 func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *snyk.ScanData) {
@@ -471,12 +475,10 @@ func appendTestResults(sic snyk.SeverityIssueCounts, results []json_schemas.Test
 func (f *Folder) FilterAndPublishDiagnostics(p *product.Product) {
 	productIssuesByFile, err := f.getDelta(f.IssuesByProduct(), p)
 	if err != nil {
-		f.c.Logger().Error().Err(err).Msg("Error getting delta for product issues")
-		if errors.Is(err, delta.ErrNoDeltaCalculated) {
-			deltaErr := fmt.Errorf("Couldn't determine the difference between current and base branch for %s scan. %s"+
-				"Falling back to showing full scan results. Please check the error log for more information.", p.ToProductNamesString(), err)
-			f.notifier.SendErrorDiagnostic(f.path, deltaErr)
-		}
+		// Error can only be returned from delta analysis. Other non delta scans are skipped with no errors.
+		deltaErr := fmt.Errorf("couldn't determine the difference between current and base branch for %s scan. %w", p.ToProductNamesString(), err)
+		f.sendScanError(*p, deltaErr)
+		return
 	}
 	if p != nil {
 		filteredIssues := f.filterDiagnostics(productIssuesByFile[*p])
@@ -489,21 +491,26 @@ func (f *Folder) FilterAndPublishDiagnostics(p *product.Product) {
 	}
 }
 
+// Error can only be returned from delta analysis. Other non delta scans are skipped with no errors.
 func (f *Folder) getDelta(productIssueByFile snyk.ProductIssuesByFile, p *product.Product) (snyk.ProductIssuesByFile, error) {
 	logger := f.c.Logger().With().Str("method", "getDelta").Logger()
 	currentProduct := *p
+
 	// Delete product check when base scanning is implemented for other products
 	if !f.c.IsDeltaFindingsEnabled() || currentProduct != product.ProductCode {
+		return productIssueByFile, nil
+	}
+
+	if len(productIssueByFile[currentProduct]) == 0 {
+		// If no issues found in current branch scan. We can't have deltas.
 		return productIssueByFile, nil
 	}
 
 	baseIssueList, err := f.scanPersister.GetPersistedIssueList(f.path, currentProduct)
 	if err != nil {
 		logger.Err(err).Msg("Error getting persisted issue list")
-		return productIssueByFile, delta.ErrNoDeltaCalculated
-	}
-	if len(baseIssueList) == 0 {
-		return productIssueByFile, delta.ErrNoDeltaCalculated
+		productIssueByFile[currentProduct] = nil
+		return nil, delta.ErrNoDeltaCalculated
 	}
 
 	currentFlatIssueList := getFlatIssueList(productIssueByFile, currentProduct)
