@@ -50,7 +50,7 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	// this is using the real progress channel, so we need to listen to it
 	dummyProgressListeners(t)
 
-	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	filePath, dir := code.TempWorkdirWithIssues(t)

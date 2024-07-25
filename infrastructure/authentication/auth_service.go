@@ -26,7 +26,7 @@ type AuthenticationService interface {
 	// Authenticate attempts to authenticate the user, and sends a notification to the client when successful
 	Authenticate(ctx context.Context) (string, error)
 
-	Providers() []AuthenticationProvider
+	Provider() AuthenticationProvider
 
 	// UpdateCredentials stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
 	// client if sendNotification is true
@@ -38,7 +38,7 @@ type AuthenticationService interface {
 	IsAuthenticated() (bool, error)
 
 	// AddProvider sets the authentication provider
-	AddProvider(provider AuthenticationProvider)
+	SetProvider(provider AuthenticationProvider)
 
 	// ConfigureProviders updates the providers based on the stored configuration
 	ConfigureProviders(c *config.Config)

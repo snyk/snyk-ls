@@ -107,7 +107,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 func Test_initializeHandler_shouldCallHandleUntrustedFolders(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
-	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	_, err := loc.Client.Call(context.Background(), "initialize", types.InitializeParams{
@@ -150,7 +150,7 @@ func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetTrustedFolderFeatureEnabled(true)
 
-	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	rootDir := t.TempDir()

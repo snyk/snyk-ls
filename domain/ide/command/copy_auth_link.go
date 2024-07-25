@@ -39,13 +39,8 @@ func (cmd *copyAuthLinkCommand) Command() types.CommandData {
 }
 
 func (cmd *copyAuthLinkCommand) Execute(ctx context.Context) (any, error) {
-	var url string
-	for _, provider := range cmd.authService.Providers() {
-		url = provider.AuthURL(ctx)
-		if url != "" {
-			break
-		}
-	}
+	url := cmd.authService.Provider().AuthURL(ctx)
+
 	cmd.logger.Debug().Str("method", "copyAuthLinkCommand.Execute").
 		Str("url", url).
 		Msgf("copying auth link to clipboard")

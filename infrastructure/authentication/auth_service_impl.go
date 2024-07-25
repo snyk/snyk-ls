@@ -32,7 +32,7 @@ import (
 )
 
 type AuthenticationServiceImpl struct {
-	providers     []AuthenticationProvider
+	provider      AuthenticationProvider
 	errorReporter error_reporting.ErrorReporter
 	notifier      noti.Notifier
 	c             *config.Config
@@ -41,10 +41,10 @@ type AuthenticationServiceImpl struct {
 	m         sync.Mutex
 }
 
-func NewAuthenticationService(c *config.Config, authProviders []AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
+func NewAuthenticationService(c *config.Config, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
 	cache := imcache.New[string, bool]()
 	return &AuthenticationServiceImpl{
-		providers:     authProviders,
+		provider:      authProviders,
 		errorReporter: errorReporter,
 		notifier:      notifier,
 		c:             c,
@@ -52,20 +52,17 @@ func NewAuthenticationService(c *config.Config, authProviders []AuthenticationPr
 	}
 }
 
-func (a *AuthenticationServiceImpl) Providers() []AuthenticationProvider {
-	return a.providers
+func (a *AuthenticationServiceImpl) Provider() AuthenticationProvider {
+	return a.provider
 }
 
 func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token string, err error) {
-	for _, provider := range a.providers {
-		token, err = provider.Authenticate(ctx)
-		if token == "" || err != nil {
-			a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(provider))
-			continue
-		}
-		a.UpdateCredentials(token, true)
+	token, err = a.provider.Authenticate(ctx)
+	if token == "" || err != nil {
+		a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.provider))
 		return token, err
 	}
+	a.UpdateCredentials(token, true)
 	return token, err
 }
 
@@ -89,12 +86,10 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 }
 
 func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
-	for _, provider := range a.providers {
-		err := provider.ClearAuthentication(ctx)
-		if err != nil {
-			a.c.Logger().Warn().Err(err).Str("method", "Logout").Msg("Failed to log out.")
-			a.errorReporter.CaptureError(err)
-		}
+	err := a.provider.ClearAuthentication(ctx)
+	if err != nil {
+		a.c.Logger().Warn().Err(err).Str("method", "Logout").Msg("Failed to log out.")
+		a.errorReporter.CaptureError(err)
 	}
 	a.UpdateCredentials("", true)
 }
@@ -121,26 +116,35 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() (bool, error) {
 
 	var user string
 	var err error
-	for _, provider := range a.providers {
-		providerType := reflect.TypeOf(provider).String()
 
-		user, err = provider.GetCheckAuthenticationFunction()()
-		if user == "" || err != nil {
-			a.c.Logger().
-				Err(err).
-				Str("method", "AuthenticationService.IsAuthenticated").
-				Str("authProvider", providerType).
-				Msg("Failed to get active user")
-		} else {
-			break
-		}
-	}
+	user, err = a.provider.GetCheckAuthenticationFunction()()
+	if user == "" || err != nil {
+		a.c.Logger().
+			Err(err).
+			Str("method", "AuthenticationService.IsAuthenticated").
+			Msg("Failed to get active user")
 
-	if user == "" {
 		a.m.Unlock()
+		invalidToken, isLegacyTokenErr := a.c.TokenAsOAuthToken()
+
+		// we always log out
 		logger.Debug().Msg("logging out")
 		a.Logout(context.Background())
-		a.HandleInvalidCredentials()
+
+		// determine the right error message
+		if isLegacyTokenErr == nil {
+			// it is an oauth token
+			if invalidToken.Expiry.Before(time.Now()) {
+				// access token expired and refresh failed
+				a.sendAuthenticationRequest("Your authentication failed due to token expiration. Please re-authenticate to continue using Snyk.", "Re-authenticate")
+			} else {
+				// access token not expired, but creds still not work
+				a.HandleInvalidCredentials()
+			}
+		} else {
+			// legacy token does not work
+			a.HandleInvalidCredentials()
+		}
 		return false, err
 	}
 
@@ -151,17 +155,13 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() (bool, error) {
 	return true, nil
 }
 
-func (a *AuthenticationServiceImpl) AddProvider(provider AuthenticationProvider) {
-	a.providers = append(a.providers, provider)
-}
-
-func (a *AuthenticationServiceImpl) setProviders(providers []AuthenticationProvider) {
-	a.providers = providers
+func (a *AuthenticationServiceImpl) SetProvider(provider AuthenticationProvider) {
+	a.provider = provider
 }
 
 func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
 	authProviderChange := false
-	var as []AuthenticationProvider
+	var p AuthenticationProvider
 	switch c.AuthenticationMethod() {
 	default:
 		// if err != nil, previous token was legacy. So we had a provider change
@@ -170,8 +170,8 @@ func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
 			authProviderChange = true
 		}
 
-		as = Default(c, a.errorReporter, a)
-		a.setProviders(as)
+		p = Default(c, a.errorReporter, a)
+		a.SetProvider(p)
 	case types.TokenAuthentication:
 		// if err == nil, previous token was oauth2. So we had a provider change
 		_, err := c.TokenAsOAuthToken()
@@ -179,10 +179,10 @@ func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
 			authProviderChange = true
 		}
 
-		as = Token(c, a.errorReporter)
-		a.setProviders(as)
+		p = Token(c, a.errorReporter)
+		a.SetProvider(p)
 	case types.FakeAuthentication:
-		a.setProviders([]AuthenticationProvider{NewFakeCliAuthenticationProvider(c)})
+		a.SetProvider(NewFakeCliAuthenticationProvider(c))
 	case "":
 		// don't do anything
 	}

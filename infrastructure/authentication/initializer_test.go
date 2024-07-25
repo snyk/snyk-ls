@@ -39,9 +39,8 @@ func getAutoAuthenticationTest(autoAuthentication bool, expectError bool) func(t
 		c.SetAutomaticAuthentication(autoAuthentication)
 
 		provider := NewFakeCliAuthenticationProvider(c)
-		providers := []AuthenticationProvider{provider}
 		notifier := notification.NewNotifier()
-		authenticator := NewAuthenticationService(c, providers, errorreporting.NewTestErrorReporter(), notifier)
+		authenticator := NewAuthenticationService(c, provider, errorreporting.NewTestErrorReporter(), notifier)
 		initializer := NewInitializer(c, authenticator, errorreporting.NewTestErrorReporter(), notifier)
 
 		// Act

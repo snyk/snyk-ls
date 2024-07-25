@@ -138,7 +138,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = false
 	params := lsp.ExecuteCommandParams{Command: types.LoginCommand}
 

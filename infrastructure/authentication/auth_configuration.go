@@ -32,16 +32,14 @@ import (
 )
 
 // Token authentication configures token only authentication
-func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) []AuthenticationProvider {
+func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) AuthenticationProvider {
 	c.Engine().GetConfiguration().Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
-	return []AuthenticationProvider{NewCliAuthenticationProvider(c, errorReporter)}
+	return NewCliAuthenticationProvider(c, errorReporter)
 }
 
 // Default authentication configures an OAuth2 authenticator,
 // the auth service parameter is needed, as the oauth2 provider needs a callback function
-func Default(c *config.Config, errorReporter error_reporting.ErrorReporter, authenticationService AuthenticationService) []AuthenticationProvider {
-	authProviders := []AuthenticationProvider{}
-
+func Default(c *config.Config, errorReporter error_reporting.ErrorReporter, authenticationService AuthenticationService) AuthenticationProvider {
 	credentialsUpdateCallback := func(_ string, value any) {
 		newToken, ok := value.(string)
 		if !ok {
@@ -53,21 +51,17 @@ func Default(c *config.Config, errorReporter error_reporting.ErrorReporter, auth
 	}
 
 	openBrowserFunc := func(url string) {
-		for _, provider := range authenticationService.Providers() {
-			provider.SetAuthURL(url)
-		}
+		authenticationService.Provider().SetAuthURL(url)
 		types.DefaultOpenBrowserFunc(url)
 	}
 
-	authProviders = append(authProviders,
-		NewOAuthProvider(
-			c,
-			auth.RefreshToken,
-			credentialsUpdateCallback,
-			openBrowserFunc,
-		),
+	authProvider := NewOAuthProvider(
+		c,
+		auth.RefreshToken,
+		credentialsUpdateCallback,
+		openBrowserFunc,
 	)
-	return authProviders
+	return authProvider
 }
 
 func NewOAuthProvider(
