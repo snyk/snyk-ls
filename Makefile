@@ -83,12 +83,7 @@ proxy-test:
 
 instance-test:
 	@echo "==> Running instance tests"
-	@export SMOKE_TESTS=1 && cd application/server && go test $(TIMEOUT) -failfast -run Test_SmokeWorkspaceScan && cd -
-
-instance-standard-test:
-	@echo "==> Running instance tests for the standard environment"
-	@export SMOKE_TESTS=1 && cd application/server && go test $(TIMEOUT) -failfast -run Test_Smoke && cd -
-	@echo "==> Checking Eclipse storage buckets..."
+	@export SMOKE_TESTS=1 && cd application/server && go test $(TIMEOUT) -failfast -run Test_SmokeInstanceTest && cd -
 	@curl -sSL https://static.snyk.io/eclipse/stable/p2.index
 
 ## build: Build binary for default local system's OS and architecture.
