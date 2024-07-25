@@ -32,8 +32,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
 
-	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
-
 	codeClient "github.com/snyk/code-client-go"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/snyk/code-client-go/scan"
@@ -185,12 +183,30 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	filesToBeScanned := sc.getFilesToBeScanned(folderPath)
 	sc.changedFilesMutex.Unlock()
 
-	results, err := internalScan(ctx, sc, folderPath, logger, filesToBeScanned)
+	if c.IsDeltaFindingsEnabled() {
+		hasChanges, gitErr := vcs.LocalRepoHasChanges(c.Logger(), folderPath)
+		if gitErr != nil {
+			logger.Error().Err(gitErr).Msg("couldn't check if working dir is clean")
+			return nil, gitErr
+		}
+		if !hasChanges {
+			// If delta is enabled but there are no changes. There can be no delta.
+			// else it should start scanning.
+			logger.Debug().Msg("skipping scanning. working dir is clean")
+			return []snyk.Issue{}, nil // Returning an empty slice implies that no issues were found
+		}
+	}
 
-	if err == nil && c.IsDeltaFindingsEnabled() {
-		baseScanErr := scanAndPersistBaseBranch(ctx, sc, folderPath)
-		if baseScanErr != nil {
-			logger.Error().Err(baseScanErr).Msg("couldn't scan base branch for folder " + folderPath)
+	results, err := internalScan(ctx, sc, folderPath, logger, filesToBeScanned)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.IsDeltaFindingsEnabled() && len(results) > 0 {
+		err = scanAndPersistBaseBranch(ctx, sc, folderPath)
+		if err != nil {
+			logger.Error().Err(err).Msg("couldn't scan base branch for folder " + folderPath)
+			return nil, err
 		}
 	}
 
@@ -224,16 +240,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath string, logger ze
 func scanAndPersistBaseBranch(ctx context.Context, sc *Scanner, folderPath string) error {
 	logger := sc.c.Logger().With().Str("method", "scanAndPersistBaseBranch").Logger()
 
-	baseBranchName := getBaseBranchName(folderPath)
-	shouldClone, err := vcs.ShouldClone(&logger, folderPath, baseBranchName)
-	if err != nil {
-		return err
-	}
-
-	if !shouldClone {
-		return nil
-	}
-
+	baseBranchName := vcs.GetBaseBranchName(folderPath)
 	headRef, err := vcs.HeadRefHashForBranch(&logger, folderPath, baseBranchName)
 
 	if err != nil {
@@ -293,14 +300,6 @@ func scanAndPersistBaseBranch(ctx context.Context, sc *Scanner, folderPath strin
 	}
 
 	return nil
-}
-
-func getBaseBranchName(folderPath string) string {
-	folderConfig, err := gitconfig.GetOrCreateFolderConfig(folderPath)
-	if err != nil {
-		return "master"
-	}
-	return folderConfig.BaseBranch
 }
 
 // Populate HTML template
