@@ -137,7 +137,7 @@ func TestClone_InvalidGitRepo(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestBaseBranchDifferentFromCurrentBranch_SameBranchNames_NoModification_SkipClone(t *testing.T) {
+func TestLocalRepoHasChanges_SameBranchNames_NoModification_SkipClone(t *testing.T) {
 	c := testutil.UnitTest(t)
 	repoPath := t.TempDir()
 	initGitRepo(t, repoPath, false)
@@ -147,7 +147,7 @@ func TestBaseBranchDifferentFromCurrentBranch_SameBranchNames_NoModification_Ski
 	assert.False(t, shouldclone)
 }
 
-func TestBaseBranchDifferentFromCurrentBranch_SameBranchNames_WithModification_Clone(t *testing.T) {
+func TestLocalRepoHasChanges_SameBranchNames_WithModification_Clone(t *testing.T) {
 	c := testutil.UnitTest(t)
 	repoPath := t.TempDir()
 	initGitRepo(t, repoPath, true)
@@ -157,7 +157,7 @@ func TestBaseBranchDifferentFromCurrentBranch_SameBranchNames_WithModification_C
 	assert.True(t, shouldclone)
 }
 
-func TestBaseBranchDifferentFromCurrentBranch_DifferentBranchNames_Clone(t *testing.T) {
+func TestLocalRepoHasChanges_DifferentBranchNames_Clone(t *testing.T) {
 	c := testutil.UnitTest(t)
 	repoPath := t.TempDir()
 	repo, _ := initGitRepo(t, repoPath, true)
@@ -175,7 +175,7 @@ func TestBaseBranchDifferentFromCurrentBranch_DifferentBranchNames_Clone(t *test
 	assert.NoError(t, err)
 }
 
-func TestBaseBranchDifferentFromCurrentBranch_HasUncommittedChanges(t *testing.T) {
+func TestLocalRepoHasChanges_HasUncommittedChanges(t *testing.T) {
 	repo, _ := initGitRepo(t, t.TempDir(), true)
 
 	hasChanges := hasUncommitedChanges(repo)
@@ -183,7 +183,7 @@ func TestBaseBranchDifferentFromCurrentBranch_HasUncommittedChanges(t *testing.T
 	assert.True(t, hasChanges)
 }
 
-func TestBaseBranchDifferentFromCurrentBranch_HasCommittedChanges(t *testing.T) {
+func TestLocalRepoHasChanges_HasCommittedChanges(t *testing.T) {
 	repo, _ := initGitRepo(t, t.TempDir(), false)
 
 	hasChanges := hasUncommitedChanges(repo)
