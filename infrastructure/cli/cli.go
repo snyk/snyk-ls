@@ -18,8 +18,10 @@ package cli
 
 import (
 	"context"
+	"math"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -42,7 +44,8 @@ type SnykCli struct {
 var Mutex = &sync.Mutex{}
 
 func NewExecutor(c *config.Config, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) Executor {
-	concurrencyLimit := 2
+	// minimum 1 cpu, max cores - 2
+	concurrencyLimit := int(math.Max(1, float64(runtime.NumCPU()-2)))
 
 	return &SnykCli{
 		errorReporter,

@@ -156,7 +156,7 @@ func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 	rootDir := t.TempDir()
 
 	// create trusted repo
-	repo1, err := testutil.SetupCustomTestRepo(t, rootDir, "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
+	repo1, err := testutil.SetupCustomTestRepo(t, rootDir, nodejsGoof, "0336589", c.Logger())
 	assert.NoError(t, err)
 
 	// create untrusted directory in same rootDir with the exact prefix

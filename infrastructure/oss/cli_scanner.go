@@ -363,6 +363,9 @@ func (cliScanner *CLIScanner) retrieveIssues(
 	targetFilePath string,
 	fileContent []byte,
 ) []snyk.Issue {
+	// we are updating the cli scanner maps/attributes in parallel, so we need to lock
+	cliScanner.mutex.Lock()
+	defer cliScanner.mutex.Unlock()
 	issues := convertScanResultToIssues(
 		res,
 		targetFilePath,
