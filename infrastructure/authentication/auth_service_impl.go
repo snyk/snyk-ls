@@ -31,6 +31,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+const TokenExpirationMsg = "Your authentication failed due to token expiration. Please re-authenticate to continue using Snyk."
+
 type AuthenticationServiceImpl struct {
 	provider      AuthenticationProvider
 	errorReporter error_reporting.ErrorReporter
@@ -95,8 +97,8 @@ func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
 }
 
 // IsAuthenticated returns true if the token is verified
-// If the token is set, but not valid IsAuthenticated returns false and the reported error
-func (a *AuthenticationServiceImpl) IsAuthenticated() (bool, error) {
+// If the token is set, but not valid IsAuthenticated returns false
+func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 	logger := a.c.Logger().With().Str("method", "AuthenticationService.IsAuthenticated").Logger()
 	a.m.Lock()
 
@@ -104,14 +106,14 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() (bool, error) {
 	if found {
 		a.c.Logger().Debug().Msg("IsAuthenticated (found in cache)")
 		a.m.Unlock()
-		return true, nil
+		return true
 	}
 
 	noToken := !a.c.NonEmptyToken()
 	if noToken {
 		logger.Info().Str("method", "IsAuthenticated").Msg("no credentials found")
 		a.m.Unlock()
-		return false, nil
+		return false
 	}
 
 	var user string
@@ -144,19 +146,19 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() (bool, error) {
 			// legacy token does not work
 			a.HandleInvalidCredentials()
 		}
-		return false, err
+		return false
 	}
 
 	// we cache the API auth ok for up to 1 minutes after last access. Afterwards, a new check is performed.
 	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute))
 	a.c.Logger().Debug().Msg("IsAuthenticated: " + user + ", adding to cache.")
 	a.m.Unlock()
-	return true, nil
+	return true
 }
 
 func (a *AuthenticationServiceImpl) handleFailedRefresh() {
 	// access token expired and refresh failed
-	a.sendAuthenticationRequest("Your authentication failed due to token expiration. Please re-authenticate to continue using Snyk.", "Re-authenticate")
+	a.sendAuthenticationRequest(TokenExpirationMsg, "Re-authenticate")
 }
 
 func (a *AuthenticationServiceImpl) SetProvider(provider AuthenticationProvider) {

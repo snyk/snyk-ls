@@ -63,7 +63,7 @@ func Default(c *config.Config, errorReporter error_reporting.ErrorReporter, auth
 			logger.Err(err).Msg("failed to refresh oauth2 token")
 			// call authservice to handle notifications and such
 			// we don't need the returned values, as we know it will either return false, nil or false, err
-			_, _ = authenticationService.IsAuthenticated()
+			_ = authenticationService.IsAuthenticated()
 		}
 		return refreshToken, err
 	}

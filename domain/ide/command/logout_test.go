@@ -76,7 +76,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	_, err := cmd.Execute(ctx)
 
 	assert.NoError(t, err)
-	authenticated, err := authenticationService.IsAuthenticated()
+	authenticated := authenticationService.IsAuthenticated()
 	assert.NoError(t, err)
 	assert.False(t, authenticated)
 	assert.Empty(t, folder.IssuesForFile(t.TempDir()))

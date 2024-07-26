@@ -35,7 +35,7 @@ type AuthenticationService interface {
 	Logout(ctx context.Context)
 
 	// IsAuthenticated returns true if the token is verified
-	IsAuthenticated() (bool, error)
+	IsAuthenticated() bool
 
 	// AddProvider sets the authentication provider
 	SetProvider(provider AuthenticationProvider)

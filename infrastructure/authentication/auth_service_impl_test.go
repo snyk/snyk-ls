@@ -69,10 +69,9 @@ func Test_IsAuthenticated(t *testing.T) {
 		provider := FakeAuthenticationProvider{IsAuthenticated: true, C: c}
 		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
 
-		isAuthenticated, err := service.IsAuthenticated()
+		isAuthenticated := service.IsAuthenticated()
 
 		assert.True(t, isAuthenticated)
-		assert.NoError(t, err)
 	})
 
 	t.Run("User is not authenticated", func(t *testing.T) {
@@ -80,10 +79,9 @@ func Test_IsAuthenticated(t *testing.T) {
 		provider := FakeAuthenticationProvider{IsAuthenticated: false, C: c}
 		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
 
-		isAuthenticated, err := service.IsAuthenticated()
+		isAuthenticated := service.IsAuthenticated()
 
 		assert.False(t, isAuthenticated)
-		assert.Equal(t, err.Error(), "Authentication failed. Please update your token.")
 	})
 }
 
