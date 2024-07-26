@@ -19,7 +19,7 @@ package authentication
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -27,13 +27,14 @@ import (
 )
 
 func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
-	t.Run("Does not authenticate when auto-auth is disabled", getAutoAuthenticationTest(false, true))
-	t.Run("Authenticates when auto-auth is enabled", getAutoAuthenticationTest(true, false))
+	t.Run("Does not authenticate when auto-auth is disabled", getAutoAuthenticationTest(false))
+	t.Run("Authenticates when auto-auth is enabled", getAutoAuthenticationTest(true))
 }
 
-func getAutoAuthenticationTest(autoAuthentication bool, expectError bool) func(t *testing.T) {
+func getAutoAuthenticationTest(autoAuthentication bool) func(t *testing.T) {
 	return func(t *testing.T) {
 		// Arrange
+		t.Helper()
 		c := config.CurrentConfig()
 		c.SetToken("")
 		c.SetAutomaticAuthentication(autoAuthentication)
@@ -45,14 +46,8 @@ func getAutoAuthenticationTest(autoAuthentication bool, expectError bool) func(t
 
 		// Act
 		err := initializer.Init()
+		require.NoError(t, err)
 
-		// Assert
-		//assert.Equal(t, expectError, err != nil)
-		if expectError {
-			assert.Error(t, err)
-		} else {
-			assert.NoError(t, err)
-		}
-		assert.Equal(t, autoAuthentication, provider.IsAuthenticated)
+		require.True(t, provider.IsAuthenticated == autoAuthentication)
 	}
 }

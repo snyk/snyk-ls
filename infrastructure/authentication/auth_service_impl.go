@@ -31,7 +31,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-const TokenExpirationMsg = "Your authentication failed due to token expiration. Please re-authenticate to continue using Snyk."
+const ExpirationMsg = "Your authentication failed due to token expiration. Please re-authenticate to continue using Snyk."
+const InvalidCredsMessage = "Your authentication credentials cannot be validated. Automatically clearing credentials. You need to re-authenticate to use Snyk."
 
 type AuthenticationServiceImpl struct {
 	provider      AuthenticationProvider
@@ -158,7 +159,7 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 
 func (a *AuthenticationServiceImpl) handleFailedRefresh() {
 	// access token expired and refresh failed
-	a.sendAuthenticationRequest(TokenExpirationMsg, "Re-authenticate")
+	a.sendAuthenticationRequest(ExpirationMsg, "Re-authenticate")
 }
 
 func (a *AuthenticationServiceImpl) SetProvider(provider AuthenticationProvider) {
@@ -200,7 +201,7 @@ func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
 }
 
 func (a *AuthenticationServiceImpl) HandleInvalidCredentials() {
-	msg := "Your authentication credentials cannot be validated. Automatically clearing credentials. You need to re-authenticate to use Snyk."
+	msg := InvalidCredsMessage
 	a.sendAuthenticationRequest(msg, "Authenticate")
 }
 

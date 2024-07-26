@@ -19,7 +19,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -37,28 +36,46 @@ import (
 
 func Test_InvalidExpiredCredentialsSendMessageRequest(t *testing.T) {
 	// how to process the expected callback
+	token := getDummyOAuth2Token(time.Now().Add(-time.Hour))
+	tokenBytes, marshallingErr := json.Marshal(token)
+	require.NoError(t, marshallingErr)
+
+	checkInvalidCredentialsMessageRequest(t, authentication.ExpirationMsg, string(tokenBytes))
+}
+
+func Test_InvalidCredentialsNotExpiredSendMessageRequest(t *testing.T) {
+	token := getDummyOAuth2Token(time.Now().Add(+time.Hour))
+	tokenBytes, marshallingErr := json.Marshal(token)
+	require.NoError(t, marshallingErr)
+
+	checkInvalidCredentialsMessageRequest(t, authentication.InvalidCredsMessage, string(tokenBytes))
+}
+
+func getDummyOAuth2Token(expiry time.Time) oauth2.Token {
+	token := oauth2.Token{
+		AccessToken:  "a",
+		TokenType:    "bearer",
+		RefreshToken: "c",
+		Expiry:       expiry,
+	}
+	return token
+}
+
+func checkInvalidCredentialsMessageRequest(t *testing.T, expected string, tokenString string) {
+	t.Helper()
 	srv, jsonRpcRecorder := setupServer(t)
 
 	c := testutil.SmokeTest(t, false)
 	c.SetSnykIacEnabled(false)
 	c.SetSnykOssEnabled(true)
+	// we have to reset the token, as smoketest automatically grab it from env
+	c.SetToken("")
 	di.Init()
-
-	token := oauth2.Token{
-		AccessToken:  "a",
-		TokenType:    "bearer",
-		RefreshToken: "c",
-		Expiry:       time.Now().Add(-time.Hour),
-	}
-
-	tokenBytes, marshallingErr := json.Marshal(token)
-	require.NoError(t, marshallingErr)
 
 	clientParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{{Uri: uri.PathToUri(t.TempDir()), Name: t.Name()}},
 		InitializationOptions: types.Settings{
-			Endpoint:                    os.Getenv("SNYK_API"),
-			Token:                       string(tokenBytes),
+			Token:                       tokenString,
 			EnableTrustedFoldersFeature: "false",
 			FilterSeverity:              types.DefaultSeverityFilter(),
 			AuthenticationMethod:        types.OAuthAuthentication,
@@ -67,6 +84,7 @@ func Test_InvalidExpiredCredentialsSendMessageRequest(t *testing.T) {
 	}
 
 	lspClient := srv.Client
+	jsonRpcRecorder.ClearCallbacks()
 
 	_, err := lspClient.Call(context.Background(), "initialize", clientParams)
 	require.NoError(t, err)
@@ -74,10 +92,12 @@ func Test_InvalidExpiredCredentialsSendMessageRequest(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Eventuallyf(t, func() bool {
-		callbacks := jsonRpcRecorder.Callbacks()
+		callbacks := jsonRpcRecorder.FindCallbacksByMethod("window/showMessageRequest")
 		for _, callback := range callbacks {
-			if strings.Contains(callback.ParamString(), authentication.TokenExpirationMsg) {
+			if strings.Contains(callback.ParamString(), expected) {
 				return true
+			} else {
+				t.Error("wrong callback received", callback.ParamString())
 			}
 		}
 		return false
