@@ -135,8 +135,7 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() (bool, error) {
 		if isLegacyTokenErr == nil {
 			// it is an oauth token
 			if invalidToken.Expiry.Before(time.Now()) {
-				// access token expired and refresh failed
-				a.sendAuthenticationRequest("Your authentication failed due to token expiration. Please re-authenticate to continue using Snyk.", "Re-authenticate")
+				a.handleFailedRefresh()
 			} else {
 				// access token not expired, but creds still not work
 				a.HandleInvalidCredentials()
@@ -153,6 +152,11 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() (bool, error) {
 	a.c.Logger().Debug().Msg("IsAuthenticated: " + user + ", adding to cache.")
 	a.m.Unlock()
 	return true, nil
+}
+
+func (a *AuthenticationServiceImpl) handleFailedRefresh() {
+	// access token expired and refresh failed
+	a.sendAuthenticationRequest("Your authentication failed due to token expiration. Please re-authenticate to continue using Snyk.", "Re-authenticate")
 }
 
 func (a *AuthenticationServiceImpl) SetProvider(provider AuthenticationProvider) {

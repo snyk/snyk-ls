@@ -55,9 +55,21 @@ func Default(c *config.Config, errorReporter error_reporting.ErrorReporter, auth
 		types.DefaultOpenBrowserFunc(url)
 	}
 
+	refresherFunc := func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
+		logger := c.Logger().With().Str("method", "oauth.refresherFunc").Logger()
+		logger.Info().Msg("refreshing oauth2 token")
+		refreshToken, err := auth.RefreshToken(ctx, oauthConfig, token)
+		if err != nil {
+			logger.Err(err).Msg("failed to refresh oauth2 token")
+			// call authservice to handle notifications and such
+			// we don't need the returned values, as we know it will either return false, nil or false, err
+			_, _ = authenticationService.IsAuthenticated()
+		}
+		return refreshToken, err
+	}
 	authProvider := NewOAuthProvider(
 		c,
-		auth.RefreshToken,
+		refresherFunc,
 		credentialsUpdateCallback,
 		openBrowserFunc,
 	)
