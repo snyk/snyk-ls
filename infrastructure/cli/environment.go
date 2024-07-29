@@ -23,19 +23,21 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/application/config"
 )
 
-const (
-	ApiEnvVar                           = "SNYK_API"
-	TokenEnvVar                         = "SNYK_TOKEN"
-	DisableAnalyticsEnvVar              = "SNYK_CFG_DISABLE_ANALYTICS"
+var (
+	ApiEnvVar                           = strings.ToUpper(configuration.API_URL)
+	TokenEnvVar                         = strings.ToUpper(configuration.AUTHENTICATION_TOKEN)
+	DisableAnalyticsEnvVar              = strings.ToUpper(configuration.ANALYTICS_DISABLED)
+	SnykOauthTokenEnvVar                = strings.ToUpper(configuration.AUTHENTICATION_BEARER_TOKEN)
+	OAuthEnabledEnvVar                  = strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED)
 	IntegrationNameEnvVarKey            = "SNYK_INTEGRATION_NAME"
 	IntegrationVersionEnvVarKey         = "SNYK_INTEGRATION_VERSION"
 	IntegrationEnvironmentEnvVarKey     = "SNYK_INTEGRATION_ENVIRONMENT"
 	IntegrationEnvironmentVersionEnvVar = "SNYK_INTEGRATION_ENVIRONMENT_VERSION"
-	SnykOauthTokenEnvVar                = "SNYK_OAUTH_TOKEN"
 )
 
 // AppendCliEnvironmentVariables Returns the input array with additional variables used in the CLI run in the form of "key=value".
@@ -49,12 +51,12 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) []stri
 
 	// remove any existing env vars that we are going to set
 	valuesToRemove := map[string]bool{
-		ApiEnvVar:                                true,
-		TokenEnvVar:                              true,
-		SnykOauthTokenEnvVar:                     true,
-		DisableAnalyticsEnvVar:                   true,
-		auth.CONFIG_KEY_OAUTH_TOKEN:              true,
-		configuration.FF_OAUTH_AUTH_FLOW_ENABLED: true,
+		ApiEnvVar:                   true,
+		TokenEnvVar:                 true,
+		SnykOauthTokenEnvVar:        true,
+		DisableAnalyticsEnvVar:      true,
+		auth.CONFIG_KEY_OAUTH_TOKEN: true,
+		OAuthEnabledEnvVar:          true,
 	}
 
 	for _, s := range currentEnv {
@@ -66,15 +68,18 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) []stri
 	}
 
 	if appendToken && currentConfig.NonEmptyToken() {
-		// default to authentication, if not there, try to set the api key
-		oAuthToken, err := currentConfig.TokenAsOAuthToken()
-		if err == nil && len(oAuthToken.AccessToken) > 0 {
+		if currentConfig.AuthenticationMethod() == types.OAuthAuthentication {
 			logger.Debug().Msg("using oauth2 authentication")
+			oAuthToken, err := currentConfig.TokenAsOAuthToken()
+			if err != nil {
+				logger.Err(err).Msg("trying to add OAuth2 creds to CLI call and the token cannot be unmarshalled. This should never happen.")
+			}
 			updatedEnv = append(updatedEnv, SnykOauthTokenEnvVar+"="+oAuthToken.AccessToken)
+			updatedEnv = append(updatedEnv, OAuthEnabledEnvVar+"=1")
 		} else {
-			// fallback to token if existent
 			logger.Debug().Msg("falling back to API key authentication")
 			updatedEnv = append(updatedEnv, TokenEnvVar+"="+currentConfig.Token())
+			updatedEnv = append(updatedEnv, OAuthEnabledEnvVar+"=0")
 		}
 	}
 

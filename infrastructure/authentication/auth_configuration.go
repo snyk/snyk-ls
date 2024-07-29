@@ -33,13 +33,19 @@ import (
 
 // Token authentication configures token only authentication
 func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) AuthenticationProvider {
-	c.Engine().GetConfiguration().Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
+	conf.Unset(configuration.AUTHENTICATION_BEARER_TOKEN)
+	conf.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
 	return NewCliAuthenticationProvider(c, errorReporter)
 }
 
 // Default authentication configures an OAuth2 authenticator,
 // the auth service parameter is needed, as the oauth2 provider needs a callback function
 func Default(c *config.Config, errorReporter error_reporting.ErrorReporter, authenticationService AuthenticationService) AuthenticationProvider {
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	conf.Unset(configuration.AUTHENTICATION_TOKEN)
 	credentialsUpdateCallback := func(_ string, value any) {
 		newToken, ok := value.(string)
 		if !ok {

@@ -50,6 +50,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
+		c.SetAuthenticationMethod(types.OAuthAuthentication)
 		c.SetOrganization("testOrg")
 		c.UpdateApiEndpoints("https://api.eu.snyk.io")
 		c.SetIntegrationName(expectedIntegrationName)
@@ -82,6 +83,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
 		c.SetToken("{\"access_token\": \"testToken\"}")
+		c.SetAuthenticationMethod(types.OAuthAuthentication)
 		tokenVar := TokenEnvVar + "={asdf}"
 		inputEnv := []string{tokenVar}
 
@@ -108,6 +110,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
 		c.SetToken("testToken")
+		c.SetAuthenticationMethod(types.TokenAuthentication)
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
@@ -117,6 +120,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 	t.Run("Adds OAuth Token to env", func(t *testing.T) {
 		testutil.UnitTest(t)
 		c := config.CurrentConfig()
+		c.SetAuthenticationMethod(types.OAuthAuthentication)
 		c.SetToken("{\"access_token\": \"testToken\"}")
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
