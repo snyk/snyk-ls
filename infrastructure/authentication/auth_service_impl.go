@@ -76,12 +76,15 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 		return
 	}
 
+	// unlock when leaving if we locked ourselves
+	if a.m.TryLock() {
+		defer a.m.Unlock()
+	}
+
 	// remove old token from cache, but don't add new token, as we want the entry only when
 	// checks are performed - e.g. in IsAuthenticated or Authenticate which call the API to check for real
-	a.m.Lock()
 	a.authCache.Remove(oldToken)
 	c.SetToken(newToken)
-	a.m.Unlock()
 
 	if sendNotification {
 		a.notifier.Send(types.AuthenticationParams{Token: newToken})
@@ -89,6 +92,9 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 }
 
 func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
+	if a.m.TryLock() {
+		defer a.m.Unlock()
+	}
 	err := a.provider.ClearAuthentication(ctx)
 	if err != nil {
 		a.c.Logger().Warn().Err(err).Str("method", "Logout").Msg("Failed to log out.")
@@ -101,19 +107,19 @@ func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
 // If the token is set, but not valid IsAuthenticated returns false
 func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 	logger := a.c.Logger().With().Str("method", "AuthenticationService.IsAuthenticated").Logger()
-	a.m.Lock()
+	if a.m.TryLock() {
+		defer a.m.Unlock()
+	}
 
 	_, found := a.authCache.Get(a.c.Token())
 	if found {
 		a.c.Logger().Debug().Msg("IsAuthenticated (found in cache)")
-		a.m.Unlock()
 		return true
 	}
 
 	noToken := !a.c.NonEmptyToken()
 	if noToken {
 		logger.Info().Str("method", "IsAuthenticated").Msg("no credentials found")
-		a.m.Unlock()
 		return false
 	}
 
@@ -127,7 +133,6 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 			Str("method", "AuthenticationService.IsAuthenticated").
 			Msg("Failed to get active user")
 
-		a.m.Unlock()
 		invalidToken, isLegacyTokenErr := a.c.TokenAsOAuthToken()
 
 		// we always log out
@@ -153,7 +158,6 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 	// we cache the API auth ok for up to 1 minutes after last access. Afterwards, a new check is performed.
 	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute))
 	a.c.Logger().Debug().Msg("IsAuthenticated: " + user + ", adding to cache.")
-	a.m.Unlock()
 	return true
 }
 
@@ -167,6 +171,9 @@ func (a *AuthenticationServiceImpl) SetProvider(provider AuthenticationProvider)
 }
 
 func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
+	if a.m.TryLock() {
+		defer a.m.Unlock()
+	}
 	authProviderChange := false
 	var p AuthenticationProvider
 	switch c.AuthenticationMethod() {
