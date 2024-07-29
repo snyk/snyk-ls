@@ -115,6 +115,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
 		assert.Contains(t, updatedEnv, "SNYK_TOKEN="+c.Token())
+		assert.Contains(t, updatedEnv, OAuthEnabledEnvVar+"=0")
 	})
 
 	t.Run("Adds OAuth Token to env", func(t *testing.T) {
@@ -128,5 +129,6 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		token, err := c.TokenAsOAuthToken()
 		assert.NoError(t, err)
 		assert.Contains(t, updatedEnv, SnykOauthTokenEnvVar+"="+token.AccessToken)
+		assert.Contains(t, updatedEnv, OAuthEnabledEnvVar+"=1")
 	})
 }
