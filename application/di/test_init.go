@@ -17,8 +17,9 @@
 package di
 
 import (
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"testing"
+
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 
 	"github.com/golang/mock/gomock"
 
@@ -60,7 +61,7 @@ func TestInit(t *testing.T) {
 	installer = install.NewFakeInstaller()
 	authProvider := authentication.NewFakeCliAuthenticationProvider(c)
 	snykApiClient = &snyk_api.FakeApiClient{CodeEnabled: true}
-	authenticationService = authentication.NewAuthenticationService(c, []authentication.AuthenticationProvider{authProvider}, errorReporter, notifier)
+	authenticationService = authentication.NewAuthenticationService(c, authProvider, errorReporter, notifier)
 	snykCli := cli.NewExecutor(c, errorReporter, notifier)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
 	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, notifier)

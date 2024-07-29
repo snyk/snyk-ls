@@ -51,20 +51,14 @@ func (i *Initializer) Init() error {
 	const errorMessage = "Auth Initializer failed to authenticate."
 	c := config.CurrentConfig()
 	if c.NonEmptyToken() {
-		authenticated, err := i.authenticationService.IsAuthenticated()
+		authenticated := i.authenticationService.IsAuthenticated()
 		if authenticated {
 			c.Logger().Info().Str("method", "auth.initializer.init").Msg("Skipping authentication - user is already authenticated")
 			return nil
 		}
-		return err
 	}
 
-	// token is empty from here on
 	if !c.AutomaticAuthentication() {
-		err := i.handleNotAuthenticatedAndManualAuthActive()
-		if err != nil {
-			return err
-		}
 		return nil
 	}
 
@@ -94,13 +88,4 @@ func (i *Initializer) authenticate(authenticationService AuthenticationService, 
 		return err
 	}
 	return nil
-}
-
-func (i *Initializer) handleNotAuthenticatedAndManualAuthActive() error {
-	msg := "Skipping scan - user is not authenticated and automatic authentication is disabled"
-	i.c.Logger().Info().Msg(msg)
-
-	// If the user is not authenticated and auto-authentication is disabled, return an error to indicate the user
-	// could not be authenticated and the scan cannot start
-	return errors.New(msg)
 }

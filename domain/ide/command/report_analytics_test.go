@@ -62,7 +62,7 @@ func setupReportAnalyticsCommand(t *testing.T, c *config.Config, testInput strin
 		},
 		authenticationService: authentication.NewAuthenticationService(
 			c,
-			[]authentication.AuthenticationProvider{provider},
+			provider,
 			error_reporting.NewTestErrorReporter(),
 			notification.NewNotifier(),
 		)}

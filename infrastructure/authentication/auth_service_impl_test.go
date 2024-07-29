@@ -67,25 +67,21 @@ func Test_IsAuthenticated(t *testing.T) {
 		c := testutil.UnitTest(t)
 
 		provider := FakeAuthenticationProvider{IsAuthenticated: true, C: c}
-		providers := []AuthenticationProvider{&provider}
-		service := NewAuthenticationService(c, providers, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
 
-		isAuthenticated, err := service.IsAuthenticated()
+		isAuthenticated := service.IsAuthenticated()
 
 		assert.True(t, isAuthenticated)
-		assert.NoError(t, err)
 	})
 
 	t.Run("User is not authenticated", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		provider := FakeAuthenticationProvider{IsAuthenticated: false, C: c}
-		providers := []AuthenticationProvider{&provider}
-		service := NewAuthenticationService(c, providers, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
 
-		isAuthenticated, err := service.IsAuthenticated()
+		isAuthenticated := service.IsAuthenticated()
 
 		assert.False(t, isAuthenticated)
-		assert.Equal(t, err.Error(), "Authentication failed. Please update your token.")
 	})
 }
 
@@ -93,7 +89,7 @@ func Test_Logout(t *testing.T) {
 	c := testutil.IntegTest(t)
 	provider := FakeAuthenticationProvider{IsAuthenticated: true}
 	notifier := notification.NewNotifier()
-	service := NewAuthenticationService(c, []AuthenticationProvider{&provider}, error_reporting.NewTestErrorReporter(), notifier)
+	service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notifier)
 
 	// act
 	service.Logout(context.Background())
@@ -121,9 +117,8 @@ func TestHandleInvalidCredentials(t *testing.T) {
 		notifier := notification.NewNotifier()
 		provider := NewFakeCliAuthenticationProvider(c)
 		provider.IsAuthenticated = false
-		providers := []AuthenticationProvider{provider}
 		c.SetToken("invalidCreds")
-		cut := NewAuthenticationService(c, providers, errorReporter, notifier).(*AuthenticationServiceImpl)
+		cut := NewAuthenticationService(c, provider, errorReporter, notifier).(*AuthenticationServiceImpl)
 		messageRequestReceived := false
 		callback := func(params any) {
 			switch p := params.(type) {

@@ -366,7 +366,7 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		err := di.Scanner().Init()
 		if err != nil {
 			logger.Error().Err(err).Msg("Scan initialization error, canceling scan")
-			return nil, err
+			return nil, nil
 		}
 
 		autoScanEnabled := c.IsAutoScanEnabled()

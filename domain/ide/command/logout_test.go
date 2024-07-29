@@ -18,9 +18,10 @@ package command
 
 import (
 	"context"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"path/filepath"
 	"testing"
+
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 
 	"github.com/stretchr/testify/assert"
 
@@ -43,7 +44,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	provider.IsAuthenticated = true
 	scanNotifier := snyk.NewMockScanNotifier()
 	scanPersister := persistence.NewNopScanPersister()
-	authenticationService := authentication.NewAuthenticationService(c, []authentication.AuthenticationProvider{provider}, error_reporting.NewTestErrorReporter(), notifier)
+	authenticationService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notifier)
 	cmd := logoutCommand{
 		command:     types.CommandData{CommandId: types.LogoutCommand},
 		authService: authenticationService,
@@ -75,7 +76,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	_, err := cmd.Execute(ctx)
 
 	assert.NoError(t, err)
-	authenticated, err := authenticationService.IsAuthenticated()
+	authenticated := authenticationService.IsAuthenticated()
 	assert.NoError(t, err)
 	assert.False(t, authenticated)
 	assert.Empty(t, folder.IssuesForFile(t.TempDir()))

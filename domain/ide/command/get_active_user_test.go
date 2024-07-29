@@ -63,7 +63,7 @@ func setupCommandWithAuthService(t *testing.T, c *config.Config) *getActiveUser 
 		},
 		authenticationService: authentication.NewAuthenticationService(
 			c,
-			[]authentication.AuthenticationProvider{provider},
+			provider,
 			error_reporting.NewTestErrorReporter(),
 			notification.NewNotifier(),
 		),

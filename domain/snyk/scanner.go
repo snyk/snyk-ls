@@ -217,10 +217,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", method).Logger()
 
-	authenticated, err := sc.authService.IsAuthenticated()
-	if err != nil {
-		logger.Err(err).Msg("Error checking authentication status")
-	}
+	authenticated := sc.authService.IsAuthenticated()
 
 	if !authenticated {
 		logger.Info().Msgf("Not authenticated, not scanning.")

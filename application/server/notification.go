@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"reflect"
 
 	"github.com/rs/zerolog"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -30,7 +31,7 @@ import (
 )
 
 func notifier(c *config.Config, srv types.Server, method string, params any) {
-	c.Logger().Debug().Str("method", "notifier").Msgf("Notifying")
+	c.Logger().Debug().Str("method", "notifier").Str("type", reflect.TypeOf(params).String()).Msgf("Notifying")
 	err := srv.Notify(context.Background(), method, params)
 	logError(c.Logger(), err, "notifier")
 }

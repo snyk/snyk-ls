@@ -39,10 +39,7 @@ func (cmd *featureFlagStatus) Command() types.CommandData {
 
 func (cmd *featureFlagStatus) Execute(_ context.Context) (any, error) {
 	logger := config.CurrentConfig().Logger().With().Str("method", "featureFlagStatus.Execute").Logger()
-	isAuthenticated, err := cmd.authenticationService.IsAuthenticated()
-	if err != nil {
-		logger.Warn().Err(err).Msg("error checking auth status")
-	}
+	isAuthenticated := cmd.authenticationService.IsAuthenticated()
 
 	if !isAuthenticated {
 		message := "not authenticated, cannot retrieve feature flags"

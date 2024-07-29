@@ -40,10 +40,7 @@ func (cmd *getActiveUser) Command() types.CommandData {
 
 func (cmd *getActiveUser) Execute(_ context.Context) (any, error) {
 	logger := config.CurrentConfig().Logger().With().Str("method", "getActiveUser.Execute").Logger()
-	isAuthenticated, err := cmd.authenticationService.IsAuthenticated()
-	if err != nil {
-		logger.Warn().Err(err).Msg("error checking auth status")
-	}
+	isAuthenticated := cmd.authenticationService.IsAuthenticated()
 
 	if !isAuthenticated {
 		logger.Info().Msg("not authenticated, skipping user retrieval")

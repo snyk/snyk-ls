@@ -39,10 +39,7 @@ func (cmd *reportAnalyticsCommand) Execute(_ context.Context) (any, error) {
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", "reportAnalyticsCommand.Execute").Logger()
 
-	isAuthenticated, err := cmd.authenticationService.IsAuthenticated()
-	if err != nil {
-		logger.Warn().Err(err).Msg("error checking auth status")
-	}
+	isAuthenticated := cmd.authenticationService.IsAuthenticated()
 
 	if !isAuthenticated {
 		logger.Info().Msg("not authenticated, skipping analytics reporting")

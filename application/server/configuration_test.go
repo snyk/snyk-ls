@@ -165,13 +165,12 @@ func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
 }
 
 func Test_UpdateSettings(t *testing.T) {
-	di.TestInit(t)
-
 	orgUuid, _ := uuid.NewRandom()
 	expectedOrgId := orgUuid.String()
 
 	t.Run("All settings are updated", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		di.TestInit(t)
 
 		tempDir1 := filepath.Join(t.TempDir(), "tempDir1")
 		tempDir2 := filepath.Join(t.TempDir(), "tempDir2")
@@ -196,7 +195,7 @@ func Test_UpdateSettings(t *testing.T) {
 			RuntimeName:                  "java",
 			RuntimeVersion:               "1.8.0_275",
 			ScanningMode:                 "manual",
-			AuthenticationMethod:         types.OAuthAuthentication,
+			AuthenticationMethod:         types.FakeAuthentication,
 			SnykCodeApi:                  sampleSettings.SnykCodeApi,
 			EnableSnykOpenBrowserActions: "true",
 			FolderConfigs: []types.FolderConfig{
@@ -226,7 +225,6 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, expectedOrgId, c.Organization())
 		assert.False(t, c.ManageBinariesAutomatically())
 		assert.Equal(t, "C:\\Users\\CliPath\\snyk-ls.exe", c.CliSettings().Path())
-		assert.Equal(t, "a fancy token", c.Token())
 		assert.Equal(t, types.DefaultSeverityFilter(), c.FilterSeverity())
 		assert.Subset(t, []string{"trustedPath1", "trustedPath2"}, c.TrustedFolders())
 		assert.Equal(t, settings.OsPlatform, c.OsPlatform())
@@ -248,6 +246,8 @@ func Test_UpdateSettings(t *testing.T) {
 		folderConfig2, err := gitconfig.GetOrCreateFolderConfig(tempDir2)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, folderConfig2.BaseBranch)
+
+		assert.Eventually(t, func() bool { return "a fancy token" == c.Token() }, time.Second*5, time.Millisecond)
 	})
 
 	t.Run("empty snyk code api is ignored and default is used", func(t *testing.T) {
