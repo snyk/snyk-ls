@@ -18,8 +18,6 @@ package authentication
 
 import (
 	"context"
-	"errors"
-	"fmt"
 
 	"golang.org/x/oauth2"
 
@@ -42,17 +40,13 @@ func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) Authen
 
 // Default authentication configures an OAuth2 authenticator,
 // the auth service parameter is needed, as the oauth2 provider needs a callback function
-func Default(c *config.Config, errorReporter error_reporting.ErrorReporter, authenticationService AuthenticationService) AuthenticationProvider {
+func Default(c *config.Config, authenticationService AuthenticationService) AuthenticationProvider {
 	conf := c.Engine().GetConfiguration()
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 	conf.Unset(configuration.AUTHENTICATION_TOKEN)
 	credentialsUpdateCallback := func(_ string, value any) {
-		newToken, ok := value.(string)
-		if !ok {
-			msg := fmt.Sprintf("Failed to cast creds of type %T to string", value)
-			errorReporter.CaptureError(errors.New(msg))
-			return
-		}
+		// an empty struct marks an empty token, so we stay with empty string if the cast fails
+		newToken, _ := value.(string)
 		go authenticationService.UpdateCredentials(newToken, true)
 	}
 

@@ -49,6 +49,7 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 		cmd.logger.Debug().Str("method", "loginCommand.Execute").
 			Str("hashed token", util.Hash([]byte(token))[0:16]).
 			Msgf("authentication successful, received token")
+		return token, nil
 	}
 	return nil, err
 }
