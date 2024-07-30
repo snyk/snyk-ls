@@ -40,7 +40,7 @@ func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) Authen
 
 // Default authentication configures an OAuth2 authenticator,
 // the auth service parameter is needed, as the oauth2 provider needs a callback function
-func Default(c *config.Config, errorReporter error_reporting.ErrorReporter, authenticationService AuthenticationService) AuthenticationProvider {
+func Default(c *config.Config, authenticationService AuthenticationService) AuthenticationProvider {
 	conf := c.Engine().GetConfiguration()
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 	conf.Unset(configuration.AUTHENTICATION_TOKEN)

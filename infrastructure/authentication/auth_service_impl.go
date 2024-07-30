@@ -184,7 +184,7 @@ func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
 			authProviderChange = true
 		}
 
-		p = Default(c, a.errorReporter, a)
+		p = Default(c, a)
 		a.SetProvider(p)
 	case types.TokenAuthentication:
 		// if err == nil, previous token was oauth2. So we had a provider change
