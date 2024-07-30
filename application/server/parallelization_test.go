@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -47,17 +48,27 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	successfulScans := map[string]scanParamsTuple{}
 
 	var workspaceFolders []types.WorkspaceFolder
+	wg := sync.WaitGroup{}
+	mu := sync.Mutex{}
 	for i := 0; i < 10; i++ {
-		dir := t.TempDir()
-		repo, err := testutil.SetupCustomTestRepo(t, dir, nodejsGoof, "", c.Logger())
-		require.NoError(t, err)
-		folder := types.WorkspaceFolder{
-			Name: fmt.Sprintf("Test Repo %d", i),
-			Uri:  uri.PathToUri(repo),
-		}
-		workspaceFolders = append(workspaceFolders, folder)
-		successfulScans[repo] = scanParamsTuple{}
+		intermediateIndex := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			dir := t.TempDir()
+			repo, err := testutil.SetupCustomTestRepo(t, dir, nodejsGoof, "", c.Logger())
+			require.NoError(t, err)
+			folder := types.WorkspaceFolder{
+				Name: fmt.Sprintf("Test Repo %d", intermediateIndex),
+				Uri:  uri.PathToUri(repo),
+			}
+			mu.Lock()
+			workspaceFolders = append(workspaceFolders, folder)
+			successfulScans[repo] = scanParamsTuple{}
+			mu.Unlock()
+		}()
 	}
+	wg.Wait()
 
 	clientParams := types.InitializeParams{
 		WorkspaceFolders: workspaceFolders,
@@ -71,8 +82,8 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 		},
 	}
 
-	lspClient.Call(context.Background(), "initialize", clientParams)
-	lspClient.Call(context.Background(), "initialized", nil)
+	_, _ = lspClient.Call(context.Background(), "initialize", clientParams)
+	_, _ = lspClient.Call(context.Background(), "initialized", nil)
 
 	// check if all scan params were sent
 	assert.Eventuallyf(t, func() bool {
