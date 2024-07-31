@@ -576,7 +576,7 @@ func (c *Config) ConfigureLogging(server types.Server) {
 	// overwrite a potential already existing writer, so we have the latest settings
 	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(writers...), c.scrubbingDict)
 	writer := c.getConsoleWriter(c.scrubbingWriter)
-	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
+	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger().Level(logLevel)
 	c.logger = &logger
 	c.engine.SetLogger(&logger)
 }
