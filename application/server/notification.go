@@ -92,13 +92,13 @@ func registerNotifier(c *config.Config, srv types.Server) {
 		switch params := params.(type) {
 		case types.FolderConfigsParam:
 			notifier(c, srv, "$/snyk.folderConfigs", params)
-			logger.Info().Any("folderConfig", params).Msg("sending folderConfig to client")
+			logger.Debug().Any("folderConfig", params).Msg("sending folderConfig to client")
 		case types.AuthenticationParams:
 			notifier(c, srv, "$/snyk.hasAuthenticated", params)
-			logger.Info().Msg("sending token")
+			logger.Debug().Msg("sending token")
 		case types.SnykIsAvailableCli:
 			notifier(c, srv, "$/snyk.isAvailableCli", params)
-			logger.Info().Msg("sending cli path")
+			logger.Debug().Msg("sending cli path")
 		case sglsp.ShowMessageParams:
 			notifier(c, srv, "window/showMessage", params)
 			logger.Info().Interface("message", params).Msg("showing message")
@@ -108,7 +108,7 @@ func registerNotifier(c *config.Config, srv types.Server) {
 			if len(params.Diagnostics) > 0 {
 				source = params.Diagnostics[0].Source
 			}
-			logger.Info().
+			logger.Debug().
 				Interface("documentURI", params.URI).
 				Interface("source", source).
 				Interface("diagnosticCount", len(params.Diagnostics)).
@@ -130,15 +130,15 @@ func registerNotifier(c *config.Config, srv types.Server) {
 			logger.Info().Msg("sending show message request to client")
 		case types.ApplyWorkspaceEditParams:
 			handleApplyWorkspaceEdit(srv, params, &logger)
-			logger.Info().
+			logger.Debug().
 				Msg("sending apply workspace edit request to client")
 		case types.CodeLensRefresh:
 			handleCodelensRefresh(srv, &logger)
-			logger.Info().
+			logger.Debug().
 				Msg("sending codelens refresh request to client")
 		case types.InlineValueRefresh:
 			handleInlineValueRefresh(srv, &logger)
-			logger.Info().
+			logger.Debug().
 				Msg("sending inline value refresh request to client")
 		default:
 			logger.Warn().

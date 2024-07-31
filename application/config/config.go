@@ -473,15 +473,17 @@ func (c *Config) SetSeverityFilter(severityFilter types.SeverityFilter) bool {
 
 func (c *Config) SetToken(token string) {
 	c.m.Lock()
-
 	oldToken := c.token
+
 	// always update the token and auth method in the engine
 	c.token = token
 	c.m.Unlock()
 
-	_, err := c.TokenAsOAuthToken()
+	oauthToken, err := c.TokenAsOAuthToken()
 	isOauthToken := err == nil
 	conf := c.engine.GetConfiguration()
+
+	// propagate token to gaf
 	if !isOauthToken && conf.GetString(configuration.AUTHENTICATION_TOKEN) != token {
 		c.Logger().Info().Msg("Setting legacy authentication in GAF")
 		conf.Set(configuration.AUTHENTICATION_TOKEN, token)
@@ -492,16 +494,21 @@ func (c *Config) SetToken(token string) {
 		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, token)
 	}
 
+	// ensure scrubbing of new token
+	if w, ok := c.scrubbingWriter.(frameworkLogging.ScrubbingLogWriter); ok {
+		w.AddTerm(token, 0)
+		if isOauthToken {
+			w.AddTerm(oauthToken.AccessToken, 0)
+			w.AddTerm(oauthToken.RefreshToken, 0)
+		}
+	}
+
 	// return if the token hasn't changed
 	if oldToken == token {
 		return
 	}
 
 	c.m.Lock()
-	if w, ok := c.scrubbingWriter.(frameworkLogging.ScrubbingLogWriter); ok {
-		w.AddTerm(token, 0)
-	}
-
 	for _, channel := range c.tokenChangeChannels {
 		select {
 		case channel <- token:
