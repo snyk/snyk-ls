@@ -263,16 +263,7 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 	}
 
 	for _, scanResult := range scanResults {
-		targetFile := cliScanner.determineTargetFile(scanResult.DisplayTargetFile)
-		targetFilePath := scanResult.Path
-		if targetFilePath == "" {
-			targetFilePath = workDir
-		}
-		if targetFilePath == "" {
-			targetFilePath = targetFile
-		} else {
-			targetFilePath = filepath.Join(targetFilePath, targetFile)
-		}
+		targetFilePath := getAbsTargetFilePath(scanResult, workDir)
 		fileContent, err := os.ReadFile(targetFilePath)
 		if err != nil {
 			// don't fail the scan if we can't read the file. No annotations with ranges, though.
@@ -282,6 +273,31 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 	}
 
 	return issues
+}
+
+func getAbsTargetFilePath(scanResult scanResult, workDir string) string {
+	displayTargetFile := determineTargetFile(scanResult.DisplayTargetFile)
+
+	// if displayTargetFile is an absolute path, no need to do antyhing more
+	isAbs := filepath.IsAbs(displayTargetFile)
+	if isAbs {
+		return displayTargetFile
+	}
+
+	pathJoinedToBaseName := filepath.Join(scanResult.Path, displayTargetFile)
+
+	// if displayTargetFile is a subpath to the workdir add rel path to workdir
+	if uri.FolderContains(workDir, displayTargetFile) {
+		relative, err := filepath.Rel(workDir, displayTargetFile)
+		if err != nil {
+			// if displayTargetFile is not relative, we need to join path with basename
+			return pathJoinedToBaseName
+		}
+		return filepath.Join(workDir, relative)
+	}
+
+	// if displayTargetFile is just a basename, we need to join path with basename
+	return pathJoinedToBaseName
 }
 
 func (cliScanner *CLIScanner) unmarshallOssJson(res []byte) (scanResults []scanResult, err error) {
@@ -348,14 +364,13 @@ func (cliScanner *CLIScanner) handleError(path string, err error, res []byte, cm
 	return true, cliError
 }
 
-func (cliScanner *CLIScanner) determineTargetFile(displayTargetFile string) string {
+func determineTargetFile(displayTargetFile string) string {
 	fileName := filepath.Base(displayTargetFile)
-	targetFileName := lockFilesToManifestMap[fileName]
-	if targetFileName == "" {
+	manifestFileName := lockFilesToManifestMap[fileName]
+	if manifestFileName == "" {
 		return displayTargetFile
 	}
-	targetFileName = strings.Replace(displayTargetFile, fileName, targetFileName, 1)
-	return targetFileName
+	return strings.Replace(displayTargetFile, fileName, manifestFileName, 1)
 }
 
 func (cliScanner *CLIScanner) retrieveIssues(
