@@ -278,22 +278,26 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 func getAbsTargetFilePath(scanResult scanResult, workDir string) string {
 	displayTargetFile := determineTargetFile(scanResult.DisplayTargetFile)
 
-	// if displayTargetFile is NOT an absolute path, we need to join it with the path
-	// if filepath is relative, but relative to workdir, we need to join workdir with the relative path
-	// if filepath is not relative (just a basename), we need to join path with basename
+	// if displayTargetFile is an absolute path, no need to do antyhing more
 	isAbs := filepath.IsAbs(displayTargetFile)
 	if isAbs {
 		return displayTargetFile
 	}
-	notRelativeToWorkDir := filepath.Join(scanResult.Path, displayTargetFile)
+
+	pathJoinedToBaseName := filepath.Join(scanResult.Path, displayTargetFile)
+
+	// if displayTargetFile is a subpath to the workdir add rel path to workdir
 	if uri.FolderContains(workDir, displayTargetFile) {
 		relative, err := filepath.Rel(workDir, displayTargetFile)
 		if err != nil {
-			return notRelativeToWorkDir
+			// if displayTargetFile is not relative, we need to join path with basename
+			return pathJoinedToBaseName
 		}
 		return filepath.Join(workDir, relative)
 	}
-	return notRelativeToWorkDir
+
+	// if displayTargetFile is just a basename, we need to join path with basename
+	return pathJoinedToBaseName
 }
 
 func (cliScanner *CLIScanner) unmarshallOssJson(res []byte) (scanResults []scanResult, err error) {

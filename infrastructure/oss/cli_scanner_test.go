@@ -20,40 +20,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-// Project: snyk-intellij-plugin
-// "packageManager": "gomodules",
-// "summary": "No known vulnerabilities",
-// "filesystemPolicy": false,
-// "uniqueCount": 0,
-// "targetFile": "build/resources/test/test-fixtures/oss/annotator/go.mod",
-// "projectName": "snyk-intellij-plugin",
-// "displayTargetFile": "build/resources/test/test-fixtures/oss/annotator/go.mod",
-// "hasUnknownVersions": false,
-// "path": "/Users/cata/git/snyk/hammerhead/snyk-intellij-plugin"
-
-func TestCLIScanner_getAbsTargetFilePath(t *testing.T) {
-	t.Run("go.mod", func(t *testing.T) {
-		displayTargetFile := "build/resources/test/test-fixtures/oss/annotator/go.mod"
-		path := "/Users/bdoetsch/workspace/snyk-intellij-plugin"
-		// workDir is calculated in scanInternal
-		workDir := "/Users/bdoetsch/workspace/snyk-intellij-plugin"
-		// workDir := calculateWorkDir(path)
-
-		actual := getAbsTargetFilePath(
-			scanResult{
-				DisplayTargetFile: displayTargetFile,
-				Path:              path,
-			},
-			workDir,
-		)
-		// workDir + displayTargetFile
-		assert.Equal(t, "/Users/bdoetsch/workspace/snyk-intellij-plugin/build/resources/test/test-fixtures/oss/annotator/go.mod", actual)
-	})
-}
-
 func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
+	testutil.NotOnWindows(t, "filepaths are os dependent")
 	testCases := []struct {
 		name              string
 		displayTargetFile string
@@ -96,7 +68,63 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 			path:              "/Users/cata/git/snyk/hammerhead/snyk-intellij-plugin",
 			expected:          "/Users/cata/git/snyk/hammerhead/snyk-intellij-plugin/src/test/resources/test-fixtures/oss/annotator/pom.xml",
 		},
-		// // Edge cases:
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := getAbsTargetFilePath(
+				scanResult{DisplayTargetFile: tc.displayTargetFile, Path: tc.path},
+				tc.workDir,
+			)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
+func TestCLIScanner_getAbsTargetFilePathForPackageManagers_Windows(t *testing.T) {
+	testutil.OnlyOnWindows(t, "filepaths are os dependent")
+	testCases := []struct {
+		name              string
+		displayTargetFile string
+		workDir           string
+		path              string
+		expected          string
+	}{
+		{
+			name:              "NPM root directory",
+			displayTargetFile: "package-lock.json",
+			workDir:           "C:\\a\\cataa\\gita\\playgrounda\\juice-shop",
+			path:              "C:\\a\\cataa\\gita\\playgrounda\\juice-shop",
+			expected:          "C:\\a\\cataa\\gita\\playgrounda\\juice-shopa\\package.json",
+		},
+		{
+			name:              "Poetry Sub Project (below the working directory)",
+			displayTargetFile: "poetry-samplea\\pyproject.toml",
+			workDir:           "C:\\a\\cataa\\gita\\playgrounda\\python-goof",
+			path:              "C:\\a\\cataa\\gita\\playgrounda\\python-goof",
+			expected:          "C:\\a\\cataa\\gita\\playgrounda\\python-goofa\\poetry-samplea\\pyproject.toml",
+		},
+		{
+			name:              "Gradle multi-module",
+			displayTargetFile: "build.gradle",
+			workDir:           "C:\\a\\bdoetscha\\workspacea\\gradle-multi-module",
+			path:              "C:\\a\\bdoetscha\\workspacea\\gradle-multi-modulea\\sample-api",
+			expected:          "C:\\a\\bdoetscha\\workspacea\\gradle-multi-modulea\\sample-apia\\build.gradle",
+		},
+		{
+			name:              "Go Modules deeply nested",
+			displayTargetFile: "builda\\resourcesa\\testa\\test-fixturesa\\ossa\\annotatora\\go.mod",
+			workDir:           "C:\\a\\cataa\\gita\\snyka\\hammerheada\\snyk-intellij-plugin",
+			path:              "C:\\a\\cataa\\gita\\snyka\\hammerheada\\snyk-intellij-plugin",
+			expected:          "C:\\a\\cataa\\gita\\snyka\\hammerheada\\snyk-intellij-plugina\\builda\\resourcesa\\testa\\test-fixturesa\\ossa\\annotatora\\go.mod",
+		},
+		{
+			name:              "Maven test fixtures",
+			displayTargetFile: "srca\\testa\\resourcesa\\test-fixturesa\\ossa\\annotatora\\pom.xml",
+			workDir:           "C:\\a\\cataa\\gita\\snyka\\hammerheada\\snyk-intellij-plugin",
+			path:              "C:\\a\\cataa\\gita\\snyka\\hammerheada\\snyk-intellij-plugin",
+			expected:          "C:\\a\\cataa\\gita\\snyka\\hammerheada\\snyk-intellij-plugina\\srca\\testa\\resourcesa\\test-fixturesa\\ossa\\annotatora\\pom.xml",
+		},
 	}
 
 	for _, tc := range testCases {
