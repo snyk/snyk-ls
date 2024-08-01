@@ -28,7 +28,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-//nolint:dupl // not a real duplicate
 func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 	testutil.NotOnWindows(t, "filepaths are os dependent")
 	testCases := []struct {
