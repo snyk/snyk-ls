@@ -284,20 +284,45 @@ func getAbsTargetFilePath(scanResult scanResult, workDir string) string {
 		return displayTargetFile
 	}
 
-	pathJoinedToBaseName := filepath.Join(scanResult.Path, displayTargetFile)
-
-	// if displayTargetFile is a subpath to the workdir add rel path to workdir
-	if uri.FolderContains(workDir, displayTargetFile) {
-		relative, err := filepath.Rel(workDir, displayTargetFile)
-		if err != nil {
-			// if displayTargetFile is not relative, we need to join path with basename
-			return pathJoinedToBaseName
+	relative, err := filepath.Rel(workDir, displayTargetFile)
+	if err != nil {
+		// now we try out stuff
+		// if displayTargetFile is not relative, let's try to join path with basename
+		tryOutPath := filepath.Join(scanResult.Path, filepath.Base(displayTargetFile))
+		_, tryOutErr := os.Stat(tryOutPath)
+		if tryOutErr != nil {
+			// if that doesn't work, let's try full path and full display target file
+			tryOutPath = filepath.Join(scanResult.Path, displayTargetFile)
+			_, tryOutErr = os.Stat(tryOutPath)
+			if tryOutErr != nil {
+				tryOutPath = filepath.Join(workDir, displayTargetFile)
+				_, tryOutErr = os.Stat(tryOutPath)
+				if tryOutErr != nil {
+					tryOutPath = displayTargetFile // we give up and return the display target file
+				}
+			}
 		}
-		return filepath.Join(workDir, relative)
+		return tryOutPath
 	}
 
-	// if displayTargetFile is just a basename, we need to join path with basename
-	return pathJoinedToBaseName
+	// it's relative, we can now just return it!
+	joinedRelative := filepath.Join(workDir, relative)
+	_, statErr := os.Stat(joinedRelative)
+	if statErr != nil {
+		abs, err := filepath.Abs(joinedRelative)
+		if err != nil {
+			return ""
+		}
+
+		_, statErr = os.Stat(abs)
+		if statErr != nil {
+			return ""
+		}
+
+		return abs
+	}
+	// we really can't figure it out, we return empty
+	return ""
 }
 
 func (cliScanner *CLIScanner) unmarshallOssJson(res []byte) (scanResults []scanResult, err error) {
