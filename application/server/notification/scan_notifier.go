@@ -283,6 +283,7 @@ func (n *scanNotifier) appendCodeIssues(scanIssues []types.ScanIssue, issues []s
 			FilePath:  issue.AffectedFilePath,
 			Range:     converter.ToRange(issue.Range),
 			IsIgnored: issue.IsIgnored,
+			IsNew:     issue.IsNew,
 			AdditionalData: types.CodeIssueData{
 				Message:            additionalData.Message,
 				Rule:               additionalData.Rule,
