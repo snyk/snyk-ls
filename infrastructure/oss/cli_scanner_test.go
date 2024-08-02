@@ -132,7 +132,8 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 			}
 
 			base := t.TempDir()
-			expected := filepath.Join(base, tc.expected)
+			after, _ := strings.CutPrefix(tc.expected, "C:")
+			expected := filepath.Join(base, after)
 			dir := filepath.Dir(expected)
 			require.NoError(t, os.MkdirAll(dir, 0770))
 			require.NoError(t, os.WriteFile(expected, []byte(expected), 0666))
