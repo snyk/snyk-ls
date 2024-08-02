@@ -38,10 +38,7 @@ func (cmd *sastEnabled) Command() types.CommandData {
 }
 
 func (cmd *sastEnabled) Execute(_ context.Context) (any, error) {
-	isAuthenticated, err := cmd.authenticationService.IsAuthenticated()
-	if err != nil {
-		cmd.logger.Warn().Err(err).Str("method", "sastEnabled.Execute").Msg("error checking auth status")
-	}
+	isAuthenticated := cmd.authenticationService.IsAuthenticated()
 
 	if !isAuthenticated {
 		cmd.logger.Info().Str("method", "sastEnabled.Execute").Msg("not authenticated, skipping sast check")

@@ -58,12 +58,10 @@ func Test_toIssueSeverity(t *testing.T) {
 }
 
 func Test_determineTargetFile(t *testing.T) {
-	c := testutil.UnitTest(t)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(), getLearnMock(t), notification.NewNotifier()).(*CLIScanner)
-	assert.Equal(t, "package.json", scanner.determineTargetFile("package-lock.json"))
-	assert.Equal(t, "pom.xml", scanner.determineTargetFile("pom.xml"))
-	assert.Equal(t, "asdf", scanner.determineTargetFile("asdf"))
-	assert.Equal(t, "js/package.json", scanner.determineTargetFile("js/package-lock.json"))
+	assert.Equal(t, "package.json", determineTargetFile("package-lock.json"))
+	assert.Equal(t, "pom.xml", determineTargetFile("pom.xml"))
+	assert.Equal(t, "asdf", determineTargetFile("asdf"))
+	assert.Equal(t, "js/package.json", determineTargetFile("js/package-lock.json"))
 }
 
 func Test_FindRange(t *testing.T) {

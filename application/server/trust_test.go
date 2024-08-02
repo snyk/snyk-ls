@@ -107,7 +107,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 func Test_initializeHandler_shouldCallHandleUntrustedFolders(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
-	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	_, err := loc.Client.Call(context.Background(), "initialize", types.InitializeParams{
@@ -150,13 +150,13 @@ func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetTrustedFolderFeatureEnabled(true)
 
-	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	rootDir := t.TempDir()
 
 	// create trusted repo
-	repo1, err := testutil.SetupCustomTestRepo(t, rootDir, "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
+	repo1, err := testutil.SetupCustomTestRepo(t, rootDir, nodejsGoof, "0336589", c.Logger())
 	assert.NoError(t, err)
 
 	// create untrusted directory in same rootDir with the exact prefix

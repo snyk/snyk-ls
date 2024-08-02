@@ -48,7 +48,7 @@ jobs:
 
       - name: Cache Pact CLI tools
         id: cache-pact
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/pact
           key: ${{ runner.os }}-pact
@@ -60,7 +60,7 @@ jobs:
           make tools
 
       - name: Cache Go modules
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cache/go-build

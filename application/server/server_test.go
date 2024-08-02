@@ -340,7 +340,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	testutil.IntegTest(t) // this needs an authenticated user
 	loc, _ := setupServer(t)
 	didOpenParams, dir := didOpenTextParams(t)
-	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	clientParams := types.InitializeParams{
@@ -397,7 +397,7 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 	testutil.IntegTest(t) // this needs an authenticated user
 	loc, _ := setupServer(t)
 	didOpenParams, dir := didOpenTextParams(t)
-	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	clientParams := types.InitializeParams{
@@ -662,7 +662,7 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 		Token:                       "token",
 	}
 
-	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	params := types.InitializeParams{
@@ -706,7 +706,7 @@ func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
-	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
@@ -758,7 +758,7 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 	c.SetAuthenticationMethod(types.FakeAuthentication)
 	di.AuthenticationService().ConfigureProviders(c)
 
-	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0]
+	fakeAuthenticationProvider := di.AuthenticationService().Provider()
 	fakeAuthenticationProvider.(*authentication.FakeAuthenticationProvider).IsAuthenticated = true
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
@@ -810,7 +810,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
-	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -1008,10 +1008,10 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	loc, _ := setupServer(t)
 	c := testutil.IntegTest(t)
 
-	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
-	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
+	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
 	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")

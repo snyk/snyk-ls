@@ -22,6 +22,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/storage/filesystem"
 	"github.com/rs/zerolog"
+	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -100,6 +101,14 @@ func hasUncommitedChanges(repo *git.Repository) bool {
 		}
 	}
 	return false
+}
+
+func GetBaseBranchName(folderPath string) string {
+	folderConfig, err := gitconfig.GetOrCreateFolderConfig(folderPath)
+	if err != nil {
+		return "master"
+	}
+	return folderConfig.BaseBranch
 }
 
 func NormalizeBranchName(branchName string) string {

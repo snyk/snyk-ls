@@ -55,7 +55,7 @@ func setupSastEnabledCommand(t *testing.T, c *config.Config, fakeApiClient *snyk
 		apiClient: fakeApiClient,
 		authenticationService: authentication.NewAuthenticationService(
 			c,
-			[]authentication.AuthenticationProvider{provider},
+			provider,
 			error_reporting.NewTestErrorReporter(),
 			notification.NewNotifier(),
 		),

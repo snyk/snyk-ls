@@ -18,8 +18,6 @@ package authentication
 
 import (
 	"context"
-	"errors"
-	"fmt"
 
 	"golang.org/x/oauth2"
 
@@ -32,44 +30,50 @@ import (
 )
 
 // Token authentication configures token only authentication
-func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) []AuthenticationProvider {
-	c.Engine().GetConfiguration().Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
-	return []AuthenticationProvider{NewCliAuthenticationProvider(c, errorReporter)}
+func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) AuthenticationProvider {
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
+	conf.Unset(configuration.AUTHENTICATION_BEARER_TOKEN)
+	conf.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+	return NewCliAuthenticationProvider(c, errorReporter)
 }
 
-// Default authentication configures two authenticators, the first OAuth2,
-// the second, as fallback, CLI Token auth
+// Default authentication configures an OAuth2 authenticator,
 // the auth service parameter is needed, as the oauth2 provider needs a callback function
-func Default(c *config.Config, errorReporter error_reporting.ErrorReporter, authenticationService AuthenticationService) []AuthenticationProvider {
-	authProviders := []AuthenticationProvider{}
-
+func Default(c *config.Config, authenticationService AuthenticationService) AuthenticationProvider {
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	conf.Unset(configuration.AUTHENTICATION_TOKEN)
 	credentialsUpdateCallback := func(_ string, value any) {
-		newToken, ok := value.(string)
-		if !ok {
-			msg := fmt.Sprintf("Failed to cast creds of type %T to string", value)
-			errorReporter.CaptureError(errors.New(msg))
-			return
-		}
+		// an empty struct marks an empty token, so we stay with empty string if the cast fails
+		newToken, _ := value.(string)
 		go authenticationService.UpdateCredentials(newToken, true)
 	}
 
 	openBrowserFunc := func(url string) {
-		for _, provider := range authenticationService.Providers() {
-			provider.SetAuthURL(url)
-		}
+		authenticationService.Provider().SetAuthURL(url)
 		types.DefaultOpenBrowserFunc(url)
 	}
 
-	// add both OAuth2 and CLI, with preference to OAuth2
-	authProviders = append(authProviders,
-		NewOAuthProvider(
-			c,
-			auth.RefreshToken,
-			credentialsUpdateCallback,
-			openBrowserFunc,
-		),
+	refresherFunc := func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
+		logger := c.Logger().With().Str("method", "oauth.refresherFunc").Logger()
+		logger.Info().Msg("refreshing oauth2 token")
+		refreshToken, err := auth.RefreshToken(ctx, oauthConfig, token)
+		if err != nil {
+			logger.Err(err).Msg("failed to refresh oauth2 token")
+			// call authservice to handle notifications and such
+			// we don't need the returned values, as we know it will either return false, nil or false, err
+			_ = authenticationService.IsAuthenticated()
+		}
+		return refreshToken, err
+	}
+	authProvider := NewOAuthProvider(
+		c,
+		refresherFunc,
+		credentialsUpdateCallback,
+		openBrowserFunc,
 	)
-	return authProviders
+	return authProvider
 }
 
 func NewOAuthProvider(

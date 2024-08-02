@@ -138,17 +138,18 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fakeAuthenticationProvider := di.AuthenticationService().Providers()[0].(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = false
 	params := lsp.ExecuteCommandParams{Command: types.LoginCommand}
 
 	// Act
-	_, err = loc.Client.Call(ctx, "workspace/executeCommand", params)
+	tokenResponse, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Assert
+	assert.NotEmpty(t, tokenResponse.ResultString())
 	assert.True(t, fakeAuthenticationProvider.IsAuthenticated)
 	assert.Eventually(t, func() bool { return len(jsonRPCRecorder.Notifications()) > 0 }, 5*time.Second, 50*time.Millisecond)
 	assert.Equal(t, 1, len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated")))

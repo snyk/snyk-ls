@@ -47,6 +47,7 @@ func Clone(logger *zerolog.Logger, srcRepoPath string, destinationPath string, t
 		}
 		return targetRepo, nil
 	}
+
 	return clonedRepo, nil
 }
 
@@ -77,12 +78,14 @@ func cloneRepoWithFsCopy(logger *zerolog.Logger, srcRepoPath string, destination
 	return targetRepo
 }
 
-func ShouldClone(logger *zerolog.Logger, repoPath string, branchName string) (bool, error) {
+func LocalRepoHasChanges(logger *zerolog.Logger, repoPath string) (bool, error) {
 	currentRepo, err := git.PlainOpen(repoPath)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to open current repo " + repoPath)
 		return false, err
 	}
+
+	branchName := GetBaseBranchName(repoPath)
 
 	currentRepoBranch, err := currentRepo.Head()
 	if err != nil {

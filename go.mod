@@ -25,7 +25,7 @@ require (
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/snyk/code-client-go v1.8.0
-	github.com/snyk/go-application-framework v0.0.0-20240627194757-cc0fb551c613
+	github.com/snyk/go-application-framework v0.0.0-20240730165042-1f5ebaba13a9
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.9.0
@@ -97,7 +97,7 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.2.2 // indirect
-	github.com/snyk/error-catalog-golang-public v0.0.0-20240527112826-2b77438d25f1 // indirect
+	github.com/snyk/error-catalog-golang-public v0.0.0-20240724122202-c7d3fb545c88 // indirect
 	github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
