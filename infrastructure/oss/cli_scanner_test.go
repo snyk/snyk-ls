@@ -17,16 +17,18 @@
 package oss
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-//nolint:dupl // not a real duplicate
 func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
-	testutil.NotOnWindows(t, "filepaths are os dependent")
 	testCases := []struct {
 		name              string
 		displayTargetFile string
@@ -69,73 +71,85 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 			path:              "/Users/cata/git/snyk/hammerhead/snyk-intellij-plugin",
 			expected:          "/Users/cata/git/snyk/hammerhead/snyk-intellij-plugin/src/test/resources/test-fixtures/oss/annotator/pom.xml",
 		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			actual := getAbsTargetFilePath(
-				scanResult{DisplayTargetFile: tc.displayTargetFile, Path: tc.path},
-				tc.workDir,
-			)
-			assert.Equal(t, tc.expected, actual)
-		})
-	}
-}
-
-//nolint:dupl // not a real duplicate
-func TestCLIScanner_getAbsTargetFilePathForPackageManagers_Windows(t *testing.T) {
-	testutil.OnlyOnWindows(t, "filepaths are os dependent")
-	testCases := []struct {
-		name              string
-		displayTargetFile string
-		workDir           string
-		path              string
-		expected          string
-	}{
 		{
-			name:              "NPM root directory",
+			name:              "Gemfile deep below working dir",
+			displayTargetFile: ".bin/pact/lib/vendor/Gemfile.lock",
+			workDir:           "/Users/bdoetsch/workspace/snyk-ls",
+			path:              "/Users/bdoetsch/workspace/snyk-ls/.bin/pact/lib/vendor",
+			expected:          "/Users/bdoetsch/workspace/snyk-ls/.bin/pact/lib/vendor/Gemfile",
+		},
+		{
+			name:              "(win) NPM root directory",
 			displayTargetFile: "package-lock.json",
 			workDir:           "C:\\a\\cata\\git\\playground\\juice-shop",
 			path:              "C:\\a\\cata\\git\\playground\\juice-shop",
 			expected:          "C:\\a\\cata\\git\\playground\\juice-shop\\package.json",
 		},
 		{
-			name:              "Poetry Sub Project (below the working directory)",
+			name:              "(win) Poetry Sub Project (below the working directory)",
 			displayTargetFile: "poetry-sample\\pyproject.toml",
 			workDir:           "C:\\a\\cata\\git\\playground\\python-goof",
 			path:              "C:\\a\\cata\\git\\playground\\python-goof",
 			expected:          "C:\\a\\cata\\git\\playground\\python-goof\\poetry-sample\\pyproject.toml",
 		},
 		{
-			name:              "Gradle multi-module",
+			name:              "(win) Gradle multi-module",
 			displayTargetFile: "build.gradle",
 			workDir:           "C:\\a\\bdoetsch\\workspace\\gradle-multi-module",
 			path:              "C:\\a\\bdoetsch\\workspace\\gradle-multi-module\\sample-api",
 			expected:          "C:\\a\\bdoetsch\\workspace\\gradle-multi-module\\sample-api\\build.gradle",
 		},
 		{
-			name:              "Go Modules deeply nested",
+			name:              "(win) Go Modules deeply nested",
 			displayTargetFile: "build\\resources\\test\\test-fixtures\\oss\\annotator\\go.mod",
 			workDir:           "C:\\a\\cata\\git\\snyk\\hammerhead\\snyk-intellij-plugin",
 			path:              "C:\\a\\cata\\git\\snyk\\hammerhead\\snyk-intellij-plugin",
 			expected:          "C:\\a\\cata\\git\\snyk\\hammerhead\\snyk-intellij-plugin\\build\\resources\\test\\test-fixtures\\oss\\annotator\\go.mod",
 		},
 		{
-			name:              "Maven test fixtures",
+			name:              "(win) Maven test fixtures",
 			displayTargetFile: "src\\test\\resources\\test-fixtures\\oss\\annotator\\pom.xml",
 			workDir:           "C:\\a\\cata\\git\\snyk\\hammerhead\\snyk-intellij-plugin",
 			path:              "C:\\a\\cata\\git\\snyk\\hammerhead\\snyk-intellij-plugin",
 			expected:          "C:\\a\\cata\\git\\snyk\\hammerhead\\snyk-intellij-plugin\\src\\test\\resources\\test-fixtures\\oss\\annotator\\pom.xml",
 		},
+		{
+			name:              "(win) Gemfile deep below working dir",
+			displayTargetFile: ".bin\\pact\\lib\\vendor\\Gemfile.lock",
+			workDir:           "C:\\Users\\bdoetsch\\workspace\\snyk-ls",
+			path:              "C:\\Users\\bdoetsch\\workspace\\snyk-ls\\.bin\\pact\\lib\\vendor",
+			expected:          "C:\\Users\\bdoetsch\\workspace\\snyk-ls\\.bin\\pact\\lib\\vendor\\Gemfile",
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			skipReason := "filepath is os dependent"
+			prefix := "C:"
+			if strings.HasPrefix(tc.workDir, prefix) {
+				testutil.OnlyOnWindows(t, skipReason)
+			} else {
+				testutil.NotOnWindows(t, skipReason)
+			}
+
+			base := t.TempDir()
+			adjustedExpected, _ := strings.CutPrefix(tc.expected, prefix)
+			adjustedWorkDir, _ := strings.CutPrefix(tc.workDir, prefix)
+			adjustedPath, _ := strings.CutPrefix(tc.path, prefix)
+			expected := filepath.Join(base, adjustedExpected)
+			dir := filepath.Dir(expected)
+			require.NoError(t, os.MkdirAll(dir, 0770))
+			require.NoError(t, os.WriteFile(expected, []byte(expected), 0666))
+
 			actual := getAbsTargetFilePath(
-				scanResult{DisplayTargetFile: tc.displayTargetFile, Path: tc.path},
-				tc.workDir,
+				scanResult{
+					DisplayTargetFile: tc.displayTargetFile,
+					Path:              filepath.Join(base, adjustedPath),
+				},
+				filepath.Join(base, adjustedWorkDir),
+				filepath.Join(base, adjustedPath),
 			)
-			assert.Equal(t, tc.expected, actual)
+			assert.Equal(t, expected, actual)
 		})
 	}
 }
