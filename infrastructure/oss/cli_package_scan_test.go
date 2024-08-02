@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/maps"
@@ -42,7 +43,7 @@ func TestCLIScanner_ScanPackages_WithoutContent(t *testing.T) {
 
 	scanner.ScanPackages(context.Background(), c, testFilePath, "")
 
-	assert.Len(t, scanner.inlineValues, 2)
+	assert.Eventuallyf(t, func() bool { return len(scanner.inlineValues[testFilePath]) == 2 }, time.Second*5, 10*time.Millisecond, "expected 2 values, got %d", len(scanner.inlineValues))
 	assert.Len(t, scanner.packageIssueCache, 2)
 	assert.NotContainsf(t, cliExecutor.GetCommand(), "--all-projects", "expected --all-projects NOT to be set")
 }
@@ -58,7 +59,7 @@ func TestCLIScanner_ScanPackages_WithContent(t *testing.T) {
 
 	scanner.ScanPackages(context.Background(), c, testFilePath, fileContent)
 
-	assert.Len(t, scanner.inlineValues, 2)
+	assert.Len(t, scanner.inlineValues[testFilePath], 2)
 	assert.Len(t, scanner.packageIssueCache, 2)
 }
 

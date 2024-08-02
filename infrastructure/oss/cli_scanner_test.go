@@ -29,7 +29,6 @@ import (
 )
 
 func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
-	testutil.NotOnWindows(t, "filepaths are os dependent")
 	testCases := []struct {
 		name              string
 		displayTargetFile string
@@ -137,13 +136,10 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 			dir := filepath.Dir(expected)
 			require.NoError(t, os.MkdirAll(dir, 0770))
 			require.NoError(t, os.WriteFile(expected, []byte(expected), 0666))
-			actual := getAbsTargetFilePath(
-				scanResult{
-					DisplayTargetFile: tc.displayTargetFile,
-					Path:              filepath.Join(base, tc.path),
-				},
-				filepath.Join(base, tc.workDir),
-			)
+			actual := getAbsTargetFilePath(scanResult{
+				DisplayTargetFile: tc.displayTargetFile,
+				Path:              filepath.Join(base, tc.path),
+			}, filepath.Join(base, tc.workDir), "")
 			assert.Equal(t, expected, actual)
 		})
 	}

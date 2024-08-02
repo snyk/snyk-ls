@@ -263,7 +263,7 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 	}
 
 	for _, scanResult := range scanResults {
-		targetFilePath := getAbsTargetFilePath(scanResult, workDir)
+		targetFilePath := getAbsTargetFilePath(scanResult, workDir, path)
 		fileContent, err := os.ReadFile(targetFilePath)
 		if err != nil {
 			// don't fail the scan if we can't read the file. No annotations with ranges, though.
@@ -275,7 +275,10 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 	return issues
 }
 
-func getAbsTargetFilePath(scanResult scanResult, workDir string) string {
+func getAbsTargetFilePath(scanResult scanResult, workDir string, path string) string {
+	if scanResult.DisplayTargetFile == "" && path != "" {
+		return path
+	}
 	displayTargetFile := determineTargetFile(scanResult.DisplayTargetFile)
 
 	// if displayTargetFile is an absolute path, no need to do antyhing more
@@ -285,7 +288,7 @@ func getAbsTargetFilePath(scanResult scanResult, workDir string) string {
 	}
 
 	relative, err := filepath.Rel(workDir, displayTargetFile)
-	if err != nil {
+	if err != nil || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		// now we try out stuff
 		// if displayTargetFile is not relative, let's try to join path with basename
 		tryOutPath := filepath.Join(scanResult.Path, filepath.Base(displayTargetFile))
