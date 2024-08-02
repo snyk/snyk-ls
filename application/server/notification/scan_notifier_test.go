@@ -55,7 +55,7 @@ func Test_SendMessage(t *testing.T) {
 		{
 			name: "SendSuccessMessage",
 			act: func(scanNotifier snyk.ScanNotifier) {
-				scanNotifier.SendSuccess(product.ProductCode, folderPath, []snyk.Issue{})
+				scanNotifier.SendSuccess(product.ProductCode, folderPath)
 			},
 			expectedStatus: types.Success,
 		},
@@ -215,7 +215,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 	}
 
 	// Act - run the test
-	scanNotifier.SendSuccessForAllProducts(folderPath, scanIssues)
+	scanNotifier.SendSuccessForAllProducts(folderPath)
 
 	// Assert - check the messages matches the expected message for each product
 	for _, msg := range mockNotifier.SentMessages() {
@@ -341,7 +341,7 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 	}
 
 	// Act - run the test
-	scanNotifier.SendSuccess(product.ProductOpenSource, folderPath, issues)
+	scanNotifier.SendSuccess(product.ProductOpenSource, folderPath)
 
 	// Assert - check that there are messages sent
 	assert.NotEmpty(t, mockNotifier.SentMessages())
@@ -434,7 +434,7 @@ func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
 	}
 
 	// Act - run the test
-	scanNotifier.SendSuccess(product.ProductCode, folderPath, scanIssues)
+	scanNotifier.SendSuccess(product.ProductCode, folderPath)
 
 	// Assert - check the messages matches the expected message for each product
 	for _, msg := range mockNotifier.SentMessages() {
@@ -542,7 +542,7 @@ func Test_SendSuccess_SendsForSnykCode_WithIgnores(t *testing.T) {
 	}
 
 	// Act - run the test
-	scanNotifier.SendSuccess(product.ProductCode, folderPath, scanIssues)
+	scanNotifier.SendSuccess(product.ProductCode, folderPath)
 
 	// Assert - check the messages matches the expected message for each product
 	for _, msg := range mockNotifier.SentMessages() {
@@ -618,7 +618,7 @@ func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
 	}
 
 	// Act - run the test
-	scanNotifier.SendSuccess(product.ProductInfrastructureAsCode, folderPath, scanIssues)
+	scanNotifier.SendSuccess(product.ProductInfrastructureAsCode, folderPath)
 
 	// Assert - check the messages matches the expected message for each product
 	for _, msg := range mockNotifier.SentMessages() {

@@ -1048,8 +1048,6 @@ type SnykScanParams struct {
 	Product string `json:"product"`
 	// FolderPath is the root-folder of the current scan
 	FolderPath string `json:"folderPath"`
-	// Issues contain the scan results in the common issues model
-	Issues []ScanIssue `json:"issues"`
 	// Error Message
 	ErrorMessage string `json:"errorMessage,omitempty"`
 	// CliError contains structured error information from the CLI

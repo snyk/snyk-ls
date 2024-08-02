@@ -210,7 +210,7 @@ func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssue
 		if len(previousIssues) != len(newIssues) {
 			if f.Contains(filePath) {
 				f.documentDiagnosticCache.Store(filePath, newIssues)
-				f.sendDiagnosticsForFile(filePath, newIssues)
+				f.sendDiagnosticsForFile(removedType.ToProduct(), filePath, newIssues)
 				f.sendHoversForFile(filePath, newIssues)
 			} else {
 				panic("this should never happen")
@@ -263,7 +263,7 @@ func NewFolder(
 
 func (f *Folder) sendEmptyDiagnosticForFile(path string) {
 	config.CurrentConfig().Logger().Debug().Str("filePath", path).Msg("sending empty diagnostic for file")
-	f.sendDiagnosticsForFile(path, []snyk.Issue{})
+	f.sendDiagnosticsForFile(product.ProductUnknown, path, []snyk.Issue{})
 }
 
 func (f *Folder) IsScanned() bool {
@@ -602,9 +602,9 @@ func isVisibleSeverity(issue snyk.Issue) bool {
 }
 
 func (f *Folder) publishDiagnostics(product product.Product, issuesByFile snyk.IssuesByFile) {
-	f.sendDiagnostics(issuesByFile)
-	f.sendScanResults(product, issuesByFile)
-	f.sendHovers(issuesByFile) // TODO: this locks up the thread, need to investigate
+	f.sendHovers(issuesByFile)
+	f.sendDiagnostics(product, issuesByFile)
+	f.sendSuccess(product)
 }
 
 func (f *Folder) getUniqueIssueID(issue snyk.Issue) string {
@@ -612,20 +612,20 @@ func (f *Folder) getUniqueIssueID(issue snyk.Issue) string {
 	return uniqueID
 }
 
-func (f *Folder) sendDiagnostics(issuesByFile snyk.IssuesByFile) {
+func (f *Folder) sendDiagnostics(product product.Product, issuesByFile snyk.IssuesByFile) {
 	for path, issues := range issuesByFile {
-		f.sendDiagnosticsForFile(path, issues)
+		f.sendDiagnosticsForFile(product, path, issues)
 	}
 }
 
-func (f *Folder) sendDiagnosticsForFile(path string, issues []snyk.Issue) {
+func (f *Folder) sendDiagnosticsForFile(pr product.Product, path string, issues []snyk.Issue) {
 	f.c.Logger().Debug().
 		Str("method", "sendDiagnosticsForFile").
 		Str("affectedFilePath", path).Int("issueCount", len(issues)).Send()
 
 	f.notifier.Send(types.PublishDiagnosticsParams{
 		URI:         uri.PathToUri(path),
-		Diagnostics: converter.ToDiagnostics(issues),
+		Diagnostics: converter.ToDiagnostics(issues, pr),
 	})
 }
 
@@ -634,9 +634,11 @@ func (f *Folder) sendHovers(issuesByFile snyk.IssuesByFile) {
 		f.sendHoversForFile(path, issues)
 	}
 }
+
 func (f *Folder) sendHoversForFile(path string, issues []snyk.Issue) {
 	f.hoverService.Channel() <- converter.ToHoversDocument(path, issues)
 }
+
 func (f *Folder) Path() string { return f.path }
 
 func (f *Folder) Name() string { return f.name }
@@ -678,15 +680,10 @@ func (f *Folder) IsTrusted() bool {
 	return false
 }
 
-func (f *Folder) sendScanResults(processedProduct product.Product, issuesByFile snyk.IssuesByFile) {
-	var productIssues []snyk.Issue
-	for _, issues := range issuesByFile {
-		productIssues = append(productIssues, issues...)
-	}
-
+func (f *Folder) sendSuccess(processedProduct product.Product) {
 	if processedProduct != "" {
-		f.scanNotifier.SendSuccess(processedProduct, f.Path(), productIssues)
+		f.scanNotifier.SendSuccess(processedProduct, f.Path())
 	} else {
-		f.scanNotifier.SendSuccessForAllProducts(f.Path(), productIssues)
+		f.scanNotifier.SendSuccessForAllProducts(f.Path())
 	}
 }

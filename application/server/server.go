@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/snyk/snyk-ls/internal/product"
 	"os"
 	"runtime"
 	"strings"
@@ -522,7 +523,7 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 			logger.Info().Msg("Sending cached issues")
 			diagnosticParams := types.PublishDiagnosticsParams{
 				URI:         params.TextDocument.URI,
-				Diagnostics: converter.ToDiagnostics(filteredIssues[filePath]),
+				Diagnostics: converter.ToDiagnostics(filteredIssues[filePath], product.ProductUnknown),
 			}
 			di.Notifier().Send(diagnosticParams)
 		}
