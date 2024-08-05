@@ -1,0 +1,217 @@
+<!--
+  ~ © 2024 Snyk Limited
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self' ${cspSource}; style-src 'self' 'nonce-${nonce}' ${cspSource}; script-src 'nonce-${nonce}' ${cspSource};">
+
+  <style nonce="${nonce}">
+    :root {
+      --default-font: ui-sans-serif, "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
+    }
+
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #595a5c;
+    }
+
+    body {
+      font-family: var(--default-font), ui-sans-serif;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    h2 {
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    section {
+      padding: 0px 20px 5px 20px;
+    }
+
+    .styled-link {
+      text-decoration: none;
+    }
+
+    .styled-link:hover {
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    .issue {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+    }
+
+    .issue .issue-text {
+      margin-bottom: 0.8rem;
+      font-size: 1.8rem;
+      font-weight: 500;
+      line-height: 2.4rem;
+    }
+
+    .severity {
+      display: flex;
+      flex-direction: column;
+      flex-grow: 0;
+      float: left;
+      margin: 0 1rem 0 0;
+      text-align: center;
+    }
+
+    .severity .icon {
+      width: 32px;
+      height: 32px;
+    }
+
+    .icon {
+      vertical-align: middle;
+      width: 16px;
+      height: 16px;
+    }
+
+    .clickable:hover {
+      cursor: pointer;
+    }
+
+    .delimiter {
+      width: 0;
+      height: 1.3rem;
+      margin: 0 0.8rem 0 0.8rem;
+      line-height: 1rem;
+    }
+
+    .summary .summary-item {
+      display: flex;
+      margin: 0.3em 0 0.3em 0;
+    }
+
+    .summary .label {
+      width: 160px;
+    }
+
+    .summary .content {
+      flex: 70%;
+    }
+
+    .summary .remediation {
+      margin-bottom: 1.6rem
+    }
+
+    .summary .detailed-path:last-child .remediation {
+      margin-bottom: 0
+    }
+
+    .issue-overview pre {
+      padding: 8px 16px;
+      overflow-x: auto;
+      border-radius: 4px;
+    }
+  </style>
+
+  ${headerEnd}
+
+  ${ideStyle}
+</head>
+
+<body>
+<div class="tab">
+  <button id="all-issues-button" class="tablinks">All Issues</button>
+  <button id="new-new-issues-button" class="tablinks">Net new Issues</button>
+</div>
+
+
+<div id="allIssues" class="tree">
+  {{range $index, issue := .Issues}}
+  <section class="issue--header">
+    <div class="severity">
+      {{$issue.SeverityIcon}}
+    </div>
+    <div class="issue-text">{{$issue.IssueTitle}}</div>
+  </section>
+  {{ end }}
+</div>
+
+<div id="netNewIssues" class="tree">
+  {{range $index, issue := .Issues}}
+  <section class="issue--header">
+    <div class="severity">
+      {{$issue.SeverityIcon}}
+    </div>
+    <div class="issue-text">{{$issue.IssueTitle}}</div>
+  </section>
+  {{ end }}
+</div>
+
+<script nonce="${nonce}">
+  let allIssuesButton = document.getElementById("all-issues-button");
+  let netNewIssuesButton = document.getElementById("net-new-issues-button");
+  if (allIssuesButton) {
+    allIssuesButton.addEventListener('click', () => {
+      const tree = document.getElementsByClassName("tree");
+      for (let i = 0; i < tree.length; i++) {
+        tree[i].style.display = "none";
+      }
+
+      // Get all elements with class="tablinks" and remove the class "active"
+      const tablinks = document.getElementsByClassName("tablinks");
+      for (let i = 0; i < tablinks.length; i++) {
+        tablinks[i].className = tablinks[i].className.replace(" active", "");
+      }
+
+      // Show the current tab, and add an "active" class to the button that opened the tab
+      allIssuesButton.style.display = "block";
+      allIssuesButton.currentTarget.className += " active";
+    })
+  }
+  if (netNewIssuesButton) {
+    netNewIssuesButton.addEventListener('click', () => {
+      const tree = document.getElementsByClassName("tree");
+      for (let i = 0; i < tree.length; i++) {
+        tree[i].style.display = "none";
+      }
+
+      // Get all elements with class="tablinks" and remove the class "active"
+      const tablinks = document.getElementsByClassName("tablinks");
+      for (let i = 0; i < tablinks.length; i++) {
+        tablinks[i].className = tablinks[i].className.replace(" active", "");
+      }
+
+      // Show the current tab, and add an "active" class to the button that opened the tab
+      netNewIssuesButton.style.display = "block";
+      netNewIssuesButton.currentTarget.className += " active";
+    })
+  }
+</script>
+</body>
+
+</html>
