@@ -30,6 +30,11 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
+type IacHtmlRender struct {
+	Config         *config.Config
+	GlobalTemplate *template.Template
+}
+
 type TemplateData struct {
 	Styles       template.CSS
 	Issue        snyk.Issue
@@ -43,14 +48,17 @@ var detailsHtmlTemplate string
 //go:embed template/styles.css
 var stylesCSS string
 
-var globalTemplate *template.Template
-
-func init() {
-	var err error
-	globalTemplate, err = template.New(string(product.ProductInfrastructureAsCode)).Parse(detailsHtmlTemplate)
+func NewIacHtmlRender(cfg *config.Config) (*IacHtmlRender, error) {
+	tmp, err := template.New(string(product.ProductInfrastructureAsCode)).Parse(detailsHtmlTemplate)
 	if err != nil {
-		config.CurrentConfig().Logger().Error().Msgf("Failed to parse IaC template: %s", err)
+		cfg.Logger().Error().Msgf("Failed to parse IaC template: %s", err)
+		return nil, err
 	}
+
+	return &IacHtmlRender{
+		Config:         cfg,
+		GlobalTemplate: tmp,
+	}, nil
 }
 
 func getStyles() template.CSS {
@@ -58,12 +66,12 @@ func getStyles() template.CSS {
 }
 
 // Function to get the rendered HTML with issue details and CSS
-func getDetailsHtml(issue snyk.Issue) string {
+func (service *IacHtmlRender) getDetailsHtml(issue snyk.Issue) string {
 	var html bytes.Buffer
 
 	nonce, err := generateSecurityNonce()
 	if err != nil {
-		config.CurrentConfig().Logger().Warn().Msgf("Failed to generate nonce: %s", err)
+		service.Config.Logger().Warn().Msgf("Failed to generate nonce: %s", err)
 		return ""
 	}
 
@@ -74,9 +82,9 @@ func getDetailsHtml(issue snyk.Issue) string {
 		Nonce:        nonce,
 	}
 
-	err = globalTemplate.Execute(&html, data)
+	err = service.GlobalTemplate.Execute(&html, data)
 	if err != nil {
-		config.CurrentConfig().Logger().Error().Msgf("Failed to execute IaC template: %s", err)
+		service.Config.Logger().Error().Msgf("Failed to execute IaC template: %s", err)
 	}
 
 	return html.String()

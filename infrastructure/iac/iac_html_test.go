@@ -6,11 +6,16 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 func Test_IaC_Html_getIacHtml(t *testing.T) {
-	iacPanelHtml := getDetailsHtml(createIacIssueSample())
+	cfg := &config.Config{}
+
+	// Initialise the IaC service
+	service, _ := NewIacHtmlRender(cfg)
+	iacPanelHtml := service.getDetailsHtml(createIacIssueSample())
 
 	// assert
 	assert.Contains(t, iacPanelHtml, "<!DOCTYPE html>", "HTML should contain the doctype declaration")
