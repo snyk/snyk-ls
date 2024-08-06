@@ -209,7 +209,7 @@ func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssue
 		if len(previousIssues) != len(newIssues) {
 			if f.Contains(filePath) {
 				f.documentDiagnosticCache.Store(filePath, newIssues)
-				f.sendDiagnosticsForFile(removedType.ToProduct(), filePath, newIssues)
+				f.sendDiagnosticsForFile(filePath, newIssues)
 				f.sendHoversForFile(filePath, newIssues)
 			} else {
 				panic("this should never happen")
@@ -262,7 +262,7 @@ func NewFolder(
 
 func (f *Folder) sendEmptyDiagnosticForFile(path string) {
 	config.CurrentConfig().Logger().Debug().Str("filePath", path).Msg("sending empty diagnostic for file")
-	f.sendDiagnosticsForFile(product.ProductUnknown, path, []snyk.Issue{})
+	f.sendDiagnosticsForFile(path, []snyk.Issue{})
 }
 
 func (f *Folder) IsScanned() bool {
@@ -609,7 +609,7 @@ func isVisibleSeverity(issue snyk.Issue) bool {
 
 func (f *Folder) publishDiagnostics(product product.Product, issuesByFile snyk.IssuesByFile) {
 	f.sendHovers(issuesByFile)
-	f.sendDiagnostics(product, issuesByFile)
+	f.sendDiagnostics(issuesByFile)
 	f.sendSuccess(product)
 }
 
@@ -618,20 +618,20 @@ func (f *Folder) getUniqueIssueID(issue snyk.Issue) string {
 	return uniqueID
 }
 
-func (f *Folder) sendDiagnostics(product product.Product, issuesByFile snyk.IssuesByFile) {
+func (f *Folder) sendDiagnostics(issuesByFile snyk.IssuesByFile) {
 	for path, issues := range issuesByFile {
-		f.sendDiagnosticsForFile(product, path, issues)
+		f.sendDiagnosticsForFile(path, issues)
 	}
 }
 
-func (f *Folder) sendDiagnosticsForFile(pr product.Product, path string, issues []snyk.Issue) {
+func (f *Folder) sendDiagnosticsForFile(path string, issues []snyk.Issue) {
 	f.c.Logger().Debug().
 		Str("method", "sendDiagnosticsForFile").
 		Str("affectedFilePath", path).Int("issueCount", len(issues)).Send()
 
 	f.notifier.Send(types.PublishDiagnosticsParams{
 		URI:         uri.PathToUri(path),
-		Diagnostics: converter.ToDiagnostics(issues, pr),
+		Diagnostics: converter.ToDiagnostics(issues),
 	})
 }
 

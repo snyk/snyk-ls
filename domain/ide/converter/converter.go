@@ -67,7 +67,7 @@ func ToCodeAction(issue snyk.Issue, action snyk.CodeAction) types.CodeAction {
 	return types.CodeAction{
 		Title:       action.Title,
 		Kind:        types.QuickFix,
-		Diagnostics: ToDiagnostics([]snyk.Issue{issue}, product.ProductUnknown),
+		Diagnostics: ToDiagnostics([]snyk.Issue{issue}),
 		IsPreferred: action.IsPreferred,
 		Edit:        ToWorkspaceEdit(action.Edit),
 		Command:     ToCommand(action.Command),
@@ -156,7 +156,7 @@ func ToPosition(p snyk.Position) sglsp.Position {
 	}
 }
 
-func ToDiagnostics(issues []snyk.Issue, pr product.Product) []types.Diagnostic {
+func ToDiagnostics(issues []snyk.Issue) []types.Diagnostic {
 	// In JSON, `nil` serializes to `null`, while an empty slice serializes to `[]`.
 	// Sending null instead of an empty array leads to stored diagnostics not being cleared.
 	// Do not prefer nil over an empty slice in this case. The next line ensures that even if issues is empty,
@@ -178,11 +178,11 @@ func ToDiagnostics(issues []snyk.Issue, pr product.Product) []types.Diagnostic {
 			CodeDescription: types.CodeDescription{Href: types.Uri(s)},
 		}
 		var scanIssue types.ScanIssue
-		if pr == product.ProductInfrastructureAsCode {
+		if issue.Product == product.ProductInfrastructureAsCode {
 			scanIssue = getIacIssue(issues[i])
-		} else if pr == product.ProductCode {
+		} else if issue.Product == product.ProductCode {
 			scanIssue = getCodeIssue(issues[i])
-		} else if pr == product.ProductOpenSource {
+		} else if issue.Product == product.ProductOpenSource {
 			scanIssue = getOssIssue(issues[i])
 		}
 		diagnostic.Data = scanIssue
