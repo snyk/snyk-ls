@@ -157,7 +157,7 @@ func getRootNodes(c *config.Config, p product.Product, issuesByFile snyk.IssuesB
 			plural = "s"
 		}
 		rootNodes = append(rootNodes, Node{
-			Text: template.HTML(fmt.Sprintf("%d issue%s can be fixed automatically", fixableCount, plural)),
+			Text: template.HTML(fmt.Sprintf("⚡️ %d issue%s can be fixed automatically", fixableCount, plural)),
 		})
 	}
 
