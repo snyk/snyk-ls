@@ -145,6 +145,20 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 	assert.Equal(t, expectedAdditionalData, issue.AdditionalData)
 }
 
+func Test_toIssue_issueHasHtmlTemplate(t *testing.T) {
+	c := testutil.UnitTest(t)
+	sampleIssue := sampleIssue()
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor())
+	issue, err := scanner.toIssue("test.yml", sampleIssue, "")
+
+	assert.NoError(t, err)
+
+	// Assert the Details field contains the HTML template and expected content
+	additionalData := issue.AdditionalData.(snyk.IaCIssueData)
+	assert.NotEmpty(t, additionalData.Details, "HTML Details should not be empty")
+	assert.Contains(t, additionalData.Details, "PublicID", "HTML should contain the PublicID")
+}
+
 func Test_getIssueId(t *testing.T) {
 	affectedFilePath := "path/to/file/test.yml"
 	id := getIssueKey(affectedFilePath, sampleIssue())

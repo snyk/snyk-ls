@@ -19,9 +19,10 @@ package snyk
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/snyk/snyk-ls/internal/delta"
 	"net/url"
 	"time"
+
+	"github.com/snyk/snyk-ls/internal/delta"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -274,6 +275,8 @@ type IaCIssueData struct {
 	Path []string `json:"path"`
 	// References: List of reference URLs
 	References []string `json:"references,omitempty"`
+	// Details: IaC HTML template
+	Details string `json:"details"`
 }
 
 func (i IaCIssueData) GetKey() string {

@@ -363,7 +363,7 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		return snyk.Issue{}, errors.Wrap(err, "unable to create IaC issue additional data")
 	}
 
-	return snyk.Issue{
+	iacIssue := snyk.Issue{
 		ID: issue.PublicID,
 		Range: snyk.Range{
 			Start: snyk.Position{Line: issue.LineNumber, Character: rangeStart},
@@ -378,7 +378,18 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		IssueType:           snyk.InfrastructureIssue,
 		CodeActions:         []snyk.CodeAction{action},
 		AdditionalData:      additionalData,
-	}, nil
+	}
+
+	htmlRender, err := NewIacHtmlRender(iac.c)
+	if err != nil {
+		iac.c.Logger().Err(err).Msg("Cannot create IaC HTML render")
+		return snyk.Issue{}, err
+	}
+
+	additionalData.Details = htmlRender.getDetailsHtml(iacIssue)
+	iacIssue.AdditionalData = additionalData
+
+	return iacIssue, nil
 }
 
 func (iac *Scanner) toAdditionalData(affectedFilePath string, issue iacIssue) (snyk.IaCIssueData, error) {
