@@ -55,7 +55,7 @@ func Test_DiagnosticsOverview(t *testing.T) {
 		}, time.Second*5, time.Millisecond)
 	})
 
-	t.Run("adds trees with div for each file name", func(t *testing.T) {
+	t.Run("adds unordered list for issues", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		issuesByFile := snyk.IssuesByFile{}
 		expectedTitle := "Fixable Great Title!"
