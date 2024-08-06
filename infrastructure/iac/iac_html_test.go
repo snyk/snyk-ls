@@ -13,7 +13,7 @@ import (
 func Test_IaC_Html_getIacHtml(t *testing.T) {
 	cfg := &config.Config{}
 
-	// Initialise the IaC service
+	// Initialize the IaC service
 	service, _ := NewIacHtmlRender(cfg)
 	iacPanelHtml := service.getDetailsHtml(createIacIssueSample())
 
