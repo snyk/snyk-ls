@@ -219,7 +219,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		// OSS: empty, package.json goof, package.json juice = 3
 		// Code: empty, app.js = 2
 		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 2, 3, c)
-		//checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderJuice, folderGoof, c)
+		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderJuice, folderGoof, c)
 	})
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
 		loc, jsonRPCRecorder := setupServer(t)
@@ -305,59 +305,61 @@ func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, c *config.Con
 
 // check that $/snyk.scan messages are sent
 // check that they only contain issues that belong to the scanned folder
-//func checkScanResultsPublishingForCachingSmokeTest(
-//	t *testing.T,
-//	jsonRPCRecorder *testutil.JsonRPCRecorder,
-//	folderJuice *workspace.Folder,
-//	folderGoof *workspace.Folder,
-//	c *config.Config,
-//) {
-//	t.Helper()
-//
-//	require.Eventually(t, func() bool {
-//		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
-//		scanResultCodeJuiceShopFound := false
-//		onlyIssuesForJuiceShop := false
-//		scanResultCodeGoofFound := false
-//		onlyIssuesForGoof := false
-//
-//		for _, notification := range notifications {
-//			var scanResult types.SnykScanParams
-//			require.NoError(t, json.Unmarshal([]byte(notification.ParamString()), &scanResult))
-//			if scanResult.Status != types.Success {
-//				continue
-//			}
-//			if scanResult.Product == product.ProductCode.ToProductCodename() {
-//				switch scanResult.FolderPath {
-//				case folderGoof.Path():
-//					scanResultCodeGoofFound = true
-//					onlyIssuesForGoof = true
-//					for _, issue := range scanResult.Issues {
-//						issueContainedInGoof := folderGoof.Contains(issue.FilePath)
-//						onlyIssuesForGoof = onlyIssuesForGoof && issueContainedInGoof
-//					}
-//				case folderJuice.Path():
-//					scanResultCodeJuiceShopFound = true
-//					onlyIssuesForJuiceShop = true
-//					for _, issue := range scanResult.Issues {
-//						issueContainedInJuiceShop := folderJuice.Contains(issue.FilePath)
-//						onlyIssuesForJuiceShop = onlyIssuesForJuiceShop && issueContainedInJuiceShop
-//					}
-//				default:
-//					t.FailNow()
-//				}
-//			}
-//		}
-//		c.Logger().Debug().Bool("scanResultCodeGoofFound", scanResultCodeGoofFound).Send()
-//		c.Logger().Debug().Bool("scanResultCodeJuiceShopFound", scanResultCodeJuiceShopFound).Send()
-//		c.Logger().Debug().Bool("onlyIssuesForGoof", onlyIssuesForGoof).Send()
-//		c.Logger().Debug().Bool("onlyIssuesForJuiceShop", onlyIssuesForJuiceShop).Send()
-//		return scanResultCodeGoofFound &&
-//			scanResultCodeJuiceShopFound &&
-//			onlyIssuesForGoof &&
-//			onlyIssuesForJuiceShop
-//	}, time.Second*5, time.Second)
-//}
+func checkScanResultsPublishingForCachingSmokeTest(
+	t *testing.T,
+	jsonRPCRecorder *testutil.JsonRPCRecorder,
+	folderJuice *workspace.Folder,
+	folderGoof *workspace.Folder,
+	c *config.Config,
+) {
+	t.Helper()
+
+	require.Eventually(t, func() bool {
+		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
+		scanResultCodeJuiceShopFound := false
+		onlyIssuesForJuiceShop := false
+		scanResultCodeGoofFound := false
+		onlyIssuesForGoof := false
+
+		for _, notification := range notifications {
+			var scanResult types.SnykScanParams
+			require.NoError(t, json.Unmarshal([]byte(notification.ParamString()), &scanResult))
+			if scanResult.Status != types.Success {
+				continue
+			}
+			if scanResult.Product == product.ProductCode.ToProductCodename() {
+				switch scanResult.FolderPath {
+				case folderGoof.Path():
+					issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, scanResult.FolderPath)
+					scanResultCodeGoofFound = true
+					onlyIssuesForGoof = true
+					for _, issue := range issueList {
+						issueContainedInGoof := folderGoof.Contains(issue.FilePath)
+						onlyIssuesForGoof = onlyIssuesForGoof && issueContainedInGoof
+					}
+				case folderJuice.Path():
+					issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, scanResult.FolderPath)
+					scanResultCodeJuiceShopFound = true
+					onlyIssuesForJuiceShop = true
+					for _, issue := range issueList {
+						issueContainedInJuiceShop := folderJuice.Contains(issue.FilePath)
+						onlyIssuesForJuiceShop = onlyIssuesForJuiceShop && issueContainedInJuiceShop
+					}
+				default:
+					t.FailNow()
+				}
+			}
+		}
+		c.Logger().Debug().Bool("scanResultCodeGoofFound", scanResultCodeGoofFound).Send()
+		c.Logger().Debug().Bool("scanResultCodeJuiceShopFound", scanResultCodeJuiceShopFound).Send()
+		c.Logger().Debug().Bool("onlyIssuesForGoof", onlyIssuesForGoof).Send()
+		c.Logger().Debug().Bool("onlyIssuesForJuiceShop", onlyIssuesForJuiceShop).Send()
+		return scanResultCodeGoofFound &&
+			scanResultCodeJuiceShopFound &&
+			onlyIssuesForGoof &&
+			onlyIssuesForJuiceShop
+	}, time.Second*5, time.Second)
+}
 
 // check that notifications are sent
 // we expect one empty publishDiagnostics per changed file, and one for the new findings
@@ -462,11 +464,12 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 
 	// check for snyk code scan message
-	snykCodeScanParams := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
 	// check for autofix diff on mt-us
 	if hasVulns {
-		checkAutofixDiffs(t, c, snykCodeScanParams, loc)
+		checkAutofixDiffs(t, c, issueList, loc)
 	}
 
 	checkFeatureFlagStatus(t, c, &loc)
@@ -491,7 +494,8 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testutil.Json
 	if !strings.HasSuffix(t.Name(), "OSS_and_Code") {
 		return
 	}
-	issueList := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
+	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, cloneTargetDir)
 	atLeastOneQuickfixActionFound := false
 	for _, issue := range issueList {
 		params := sglsp.CodeActionParams{
@@ -541,7 +545,9 @@ func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorde
 	if !strings.HasSuffix(t.Name(), "OSS_and_Code") {
 		return
 	}
-	issueList := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
+	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, cloneTargetDir)
+
 	atLeastOneOneIssueWithCodeLensFound := false
 	for _, issue := range issueList {
 		params := sglsp.CodeLensParams{
@@ -588,7 +594,7 @@ func waitForScan(t *testing.T, cloneTargetDir string) {
 	}, maxIntegTestDuration, 2*time.Millisecond)
 }
 
-func checkForScanParams(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, cloneTargetDir string, p product.Product) []types.ScanIssue {
+func checkForScanParams(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, cloneTargetDir string, p product.Product) {
 	t.Helper()
 	var notifications []jrpc2.Request
 	assert.Eventually(t, func() bool {
@@ -605,20 +611,27 @@ func checkForScanParams(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder,
 		}
 		return false
 	}, 10*time.Second, 10*time.Millisecond)
+}
+
+func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, p product.Product, folderPath string) []types.ScanIssue {
+	t.Helper()
 
 	var issueList []types.ScanIssue
-
-	notifications = jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
+	notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
 	for _, n := range notifications {
 		diagnosticsParams := types.PublishDiagnosticsParams{}
 		_ = n.UnmarshalParams(&diagnosticsParams)
-		for _, diagnostics := range diagnosticsParams.Diagnostics {
-			if diagnostics.Source != string(p) || filepath.Dir(uri.PathFromUri(diagnosticsParams.URI)) != cloneTargetDir {
+		for _, diagnostic := range diagnosticsParams.Diagnostics {
+			diagnosticCode, ok := diagnostic.Code.(string)
+			if ok && diagnosticCode == "Snyk Error" {
+				continue
+			}
+			if diagnostic.Source != string(p) || filepath.Dir(uri.PathFromUri(diagnosticsParams.URI)) != folderPath {
 				continue
 			}
 
 			var issue types.ScanIssue
-			err := mapSerializedIssueToStruct(diagnostics.Data, &issue)
+			err := mapSerializedIssueToStruct(diagnostic.Data, &issue)
 
 			if err != nil {
 				continue
@@ -799,7 +812,8 @@ func Test_SmokeSnykCodeDelta_OneNewVuln(t *testing.T) {
 
 	waitForScan(t, cloneTargetDir)
 
-	issueList := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
 	assert.Equal(t, len(issueList), 1)
 	assert.Contains(t, issueList[0].FilePath, fileWithNewVulns)
@@ -822,7 +836,8 @@ func Test_SmokeSnykCodeDelta_NoScanNecessary(t *testing.T) {
 
 	waitForScan(t, cloneTargetDir)
 
-	issueList := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
 	assert.Equal(t, len(issueList), 0)
 }
@@ -847,7 +862,8 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 
 	waitForScan(t, cloneTargetDir)
 
-	issueList := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
 	assert.Equal(t, len(issueList), 0)
 }
