@@ -187,6 +187,7 @@ func ToDiagnostics(issues []snyk.Issue, pr product.Product) []types.Diagnostic {
 			Message:         issue.Message,
 			CodeDescription: types.CodeDescription{Href: types.Uri(s)},
 		}
+		// TODO: This is not future proof. Find a better way to match.
 		if len(issueListForDiagnostic) == len(issues) {
 			diagnostic.Data = issueListForDiagnostic[i]
 		}
