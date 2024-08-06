@@ -177,16 +177,13 @@ func ToDiagnostics(issues []snyk.Issue) []types.Diagnostic {
 			Message:         issue.Message,
 			CodeDescription: types.CodeDescription{Href: types.Uri(s)},
 		}
-		var scanIssue types.ScanIssue
 		if issue.Product == product.ProductInfrastructureAsCode {
-			scanIssue = getIacIssue(issues[i])
+			diagnostic.Data = getIacIssue(issues[i])
 		} else if issue.Product == product.ProductCode {
-			scanIssue = getCodeIssue(issues[i])
+			diagnostic.Data = getCodeIssue(issues[i])
 		} else if issue.Product == product.ProductOpenSource {
-			scanIssue = getOssIssue(issues[i])
+			diagnostic.Data = getOssIssue(issues[i])
 		}
-		diagnostic.Data = scanIssue
-
 		diagnostics = append(diagnostics, diagnostic)
 	}
 	return diagnostics
