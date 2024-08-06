@@ -21,126 +21,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self' ${cspSource}; style-src 'self' 'nonce-${nonce}' ${cspSource}; script-src 'nonce-${nonce}' ${cspSource};">
+        content="default-src 'none'; style-src 'self' 'nonce-{{.Nonce}}'; script-src 'nonce-{{.Nonce}}';">
 
-  <style nonce="${nonce}">
-    :root {
-      --default-font: ui-sans-serif, "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
+  <!--noformat-->
+  <style nonce="{{.Nonce}}">
+    {
+    {
+    .Styles
+
     }
-
-    ::-webkit-scrollbar {
-      width: 8px;
-    }
-
-    ::-webkit-scrollbar-thumb {
-      border-radius: 10px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: #595a5c;
-    }
-
-    body {
-      font-family: var(--default-font), ui-sans-serif;
-      overflow-y: auto;
-      overflow-x: hidden;
-    }
-
-    h2 {
-      font-weight: 600;
-      margin-bottom: 10px;
-    }
-
-    section {
-      padding: 0px 20px 5px 20px;
-    }
-
-    .styled-link {
-      text-decoration: none;
-    }
-
-    .styled-link:hover {
-      cursor: pointer;
-      text-decoration: underline;
-    }
-
-    .issue {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      width: 100%;
-      height: 100%;
-    }
-
-    .issue .issue-text {
-      margin-bottom: 0.8rem;
-      font-size: 1.8rem;
-      font-weight: 500;
-      line-height: 2.4rem;
-    }
-
-    .severity {
-      display: flex;
-      flex-direction: column;
-      flex-grow: 0;
-      float: left;
-      margin: 0 1rem 0 0;
-      text-align: center;
-    }
-
-    .severity .icon {
-      width: 32px;
-      height: 32px;
-    }
-
-    .icon {
-      vertical-align: middle;
-      width: 16px;
-      height: 16px;
-    }
-
-    .clickable:hover {
-      cursor: pointer;
-    }
-
-    .delimiter {
-      width: 0;
-      height: 1.3rem;
-      margin: 0 0.8rem 0 0.8rem;
-      line-height: 1rem;
-    }
-
-    .summary .summary-item {
-      display: flex;
-      margin: 0.3em 0 0.3em 0;
-    }
-
-    .summary .label {
-      width: 160px;
-    }
-
-    .summary .content {
-      flex: 70%;
-    }
-
-    .summary .remediation {
-      margin-bottom: 1.6rem
-    }
-
-    .summary .detailed-path:last-child .remediation {
-      margin-bottom: 0
-    }
-
-    .issue-overview pre {
-      padding: 8px 16px;
-      overflow-x: auto;
-      border-radius: 4px;
     }
   </style>
-
-  ${headerEnd}
-
-  ${ideStyle}
+  <!--noformat-->
 </head>
 
 <body>
@@ -151,25 +43,31 @@
 
 
 <div id="allIssues" class="tree">
-  {{range $index, issue := .Issues}}
-  <section class="issue--header">
-    <div class="severity">
-      {{$issue.SeverityIcon}}
-    </div>
-    <div class="issue-text">{{$issue.IssueTitle}}</div>
-  </section>
-  {{ end }}
+  <!--  root nodes-->
+  <ul>
+    {{range $index, $node := .RootNodes}}
+    <li class="issue-overview">
+      {{$node.Icon}} {{$node.Text}}
+    </li>
+    {{ end }}
+  </ul>
+
+  <!--  file nodes -->
+  <ul>
+    {{range $node, $issueNodes := .Issues}}
+    <li class="issue-overview">
+      {{ $node.Icon }} {{ $node.Text }}
+      <ul>
+        {{range $index, $issue := $issueNodes}}
+        <li class="issue-overview">{{$issue.Icon}} {{$issue.Text}}</li>
+        {{ end }}
+      </ul>
+    </li>
+    {{ end }}
+  </ul>
 </div>
 
 <div id="netNewIssues" class="tree">
-  {{range $index, issue := .Issues}}
-  <section class="issue--header">
-    <div class="severity">
-      {{$issue.SeverityIcon}}
-    </div>
-    <div class="issue-text">{{$issue.IssueTitle}}</div>
-  </section>
-  {{ end }}
 </div>
 
 <script nonce="${nonce}">

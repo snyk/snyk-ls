@@ -102,6 +102,10 @@ func registerNotifier(c *config.Config, srv types.Server) {
 		case sglsp.ShowMessageParams:
 			notifier(c, srv, "window/showMessage", params)
 			logger.Info().Interface("message", params).Msg("showing message")
+		case types.DiagnosticsOverviewParams:
+			notifier(c, srv, "$/snyk.diagnosticsOverview", params)
+			logger.Debug().
+				Msgf("publishing diagnostics overview for %s", params.Product)
 		case types.PublishDiagnosticsParams:
 			notifier(c, srv, "textDocument/publishDiagnostics", params)
 			source := "LSP"

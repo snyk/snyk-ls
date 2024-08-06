@@ -60,7 +60,16 @@ Right now the language server supports the following actions:
 - window/logMessage
 - window/showMessage
 
-### Custom additions to Language Server Protocol
+### Custom additions to Language Server Protocol (server -> client)
+- Diagnostics Overview (tabbed tree view)
+  - method: `$/snyk.diagnosticsOverview`
+  - payload:
+  ```json5
+  {
+  "product": "oss", // or "code" or "iac"
+  "html": "<html>...</html>", // the html to display the overview tabs/tree
+  }
+  ```
 - Folder Config Notification
   - method: `$/snyk.folderConfigs`
   - payload:

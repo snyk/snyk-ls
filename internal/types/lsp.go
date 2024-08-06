@@ -1056,7 +1056,7 @@ type SnykScanParams struct {
 	CliError *CliError `json:"cliError,omitempty"`
 }
 
-type TreeParams struct {
+type DiagnosticsOverviewParams struct {
 	Product string `json:"product"`
 	Html    string `json:"html"`
 }

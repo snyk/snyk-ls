@@ -611,7 +611,7 @@ func isVisibleSeverity(issue snyk.Issue) bool {
 func (f *Folder) publishDiagnostics(product product.Product, issuesByFile snyk.IssuesByFile) {
 	f.sendDiagnostics(issuesByFile)
 	// send tree FIXME
-	ui.SendTree(f.c, product, issuesByFile, f.notifier)
+	ui.SendDiagnosticsOverview(f.c, product, issuesByFile, f.notifier)
 	f.sendScanResults(product, issuesByFile)
 	f.sendHovers(issuesByFile) // TODO: this locks up the thread, need to investigate
 }
