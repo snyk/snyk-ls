@@ -1174,4 +1174,5 @@ type IacIssueData struct {
 	Resolve       string   `json:"resolve,omitempty"`
 	Path          []string `json:"path"`
 	References    []string `json:"references,omitempty"`
+	Details       string   `json:"details,omitempty"`
 }

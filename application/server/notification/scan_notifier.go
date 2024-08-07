@@ -218,6 +218,7 @@ func (n *scanNotifier) appendIacIssues(scanIssues []types.ScanIssue, issues []sn
 				Resolve:       additionalData.Resolve,
 				Path:          additionalData.Path,
 				References:    additionalData.References,
+				Details:       additionalData.Details,
 			},
 		})
 	}
