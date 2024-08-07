@@ -626,7 +626,7 @@ func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorde
 			if ok && diagnosticCode == "Snyk Error" {
 				continue
 			}
-			if diagnostic.Source != string(p) || uri.FolderContains(folderPath, uri.PathFromUri(diagnosticsParams.URI)) {
+			if diagnostic.Source != string(p) || !uri.FolderContains(folderPath, uri.PathFromUri(diagnosticsParams.URI)) {
 				continue
 			}
 
