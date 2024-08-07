@@ -469,7 +469,7 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 
 	// check for autofix diff on mt-us
 	if hasVulns {
-		checkAutofixDiffs(t, c, issueList, loc)
+		checkAutofixDiffs(t, c, issueList, loc, cloneTargetDir)
 	}
 
 	checkFeatureFlagStatus(t, c, &loc)
@@ -626,7 +626,7 @@ func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorde
 			if ok && diagnosticCode == "Snyk Error" {
 				continue
 			}
-			if diagnostic.Source != string(p) || filepath.Dir(uri.PathFromUri(diagnosticsParams.URI)) != folderPath {
+			if diagnostic.Source != string(p) || uri.FolderContains(folderPath, uri.PathFromUri(diagnosticsParams.URI)) {
 				continue
 			}
 
@@ -634,7 +634,7 @@ func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorde
 			err := mapSerializedIssueToStruct(diagnostic.Data, &issue)
 
 			if err != nil {
-				continue
+				t.FailNow()
 			}
 			issueList = append(issueList, issue)
 		}
@@ -658,7 +658,7 @@ func mapSerializedIssueToStruct(m any, result *types.ScanIssue) error {
 	return nil
 }
 
-func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIssue, loc server.Local) {
+func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIssue, loc server.Local, folderPath string) {
 	t.Helper()
 	if isNotStandardRegion(c) {
 		return
@@ -671,7 +671,7 @@ func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIss
 		}
 		call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   types.CodeFixDiffsCommand,
-			Arguments: []any{path.Base(issue.FilePath), uri.PathToUri(issue.FilePath), issue.Id},
+			Arguments: []any{uri.PathToUri(folderPath), uri.PathToUri(issue.FilePath), issue.Id},
 		})
 		assert.NoError(t, err)
 		var unifiedDiffs []code.AutofixUnifiedDiffSuggestion
