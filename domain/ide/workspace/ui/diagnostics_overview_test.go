@@ -17,7 +17,6 @@
 package ui
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -68,7 +67,7 @@ func Test_DiagnosticsOverview(t *testing.T) {
 			case types.DiagnosticsOverviewParams:
 				require.Equal(t, product.ProductOpenSource.ToProductCodename(), p.Product)
 				require.Contains(t, p.Html, "1 unique issue: 1 critical")
-				require.Contains(t, p.Html, fmt.Sprintf("%s", expectedTitle))
+				require.Contains(t, p.Html, expectedTitle)
 				os.WriteFile(filepath.Base(t.Name()+".html"), []byte(p.Html), 0644)
 				notificationChannel <- true
 			}

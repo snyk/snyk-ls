@@ -54,9 +54,10 @@ type TemplateData struct {
 	// Root nodes
 	RootNodes []Node
 	// File node with underlying slice of issue nodes
-	Issues map[Node][]Node
-	Styles template.CSS
-	Nonce  string
+	Issues               map[Node][]Node
+	Styles               template.CSS
+	Nonce                string
+	DeltaFindingsEnabled bool
 }
 
 // Node represents a tree node
@@ -78,10 +79,11 @@ func SendDiagnosticsOverview(c *config.Config, p product.Product, issuesByFile s
 		fileNodes := getFileNodes(issuesByFile)
 
 		data := TemplateData{
-			RootNodes: rootNodes,
-			Issues:    fileNodes,
-			Styles:    template.CSS(diagnosticsOverviewTemplateCSS),
-			Nonce:     nonce,
+			RootNodes:            rootNodes,
+			Issues:               fileNodes,
+			Styles:               template.CSS(diagnosticsOverviewTemplateCSS),
+			Nonce:                nonce,
+			DeltaFindingsEnabled: c.IsDeltaFindingsEnabled(),
 		}
 
 		var htmlBuffer bytes.Buffer
