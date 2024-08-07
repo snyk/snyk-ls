@@ -41,7 +41,7 @@ type Issue struct {
 	Severity  Severity
 	IssueType Type
 	IsIgnored bool // If not explicitly it will default to false, so it doesn't break backwards
-	isNew     bool
+	IsNew     bool
 	// compatibility
 	IgnoreDetails *IgnoreDetails // It defaults to nil, so it doesn't break backwards compatibility
 	// Range identifies the location of this issue in its source of origin (e.g. line & character start & end)
@@ -97,12 +97,12 @@ func (i *Issue) EndColumn() int {
 	return i.Range.End.Character
 }
 
-func (i *Issue) IsNew() bool {
-	return i.isNew
+func (i *Issue) GetIsNew() bool {
+	return i.IsNew
 }
 
 func (i *Issue) SetIsNew(isNew bool) {
-	i.isNew = isNew
+	i.IsNew = isNew
 }
 
 func (i *Issue) GetGlobalIdentity() string {
