@@ -608,9 +608,9 @@ func isVisibleSeverity(issue snyk.Issue) bool {
 }
 
 func (f *Folder) publishDiagnostics(product product.Product, issuesByFile snyk.IssuesByFile) {
+	f.sendHovers(issuesByFile)
 	f.sendDiagnostics(issuesByFile)
-	f.sendScanResults(product, issuesByFile)
-	f.sendHovers(issuesByFile) // TODO: this locks up the thread, need to investigate
+	f.sendSuccess(product)
 }
 
 func (f *Folder) getUniqueIssueID(issue snyk.Issue) string {
@@ -640,9 +640,11 @@ func (f *Folder) sendHovers(issuesByFile snyk.IssuesByFile) {
 		f.sendHoversForFile(path, issues)
 	}
 }
+
 func (f *Folder) sendHoversForFile(path string, issues []snyk.Issue) {
 	f.hoverService.Channel() <- converter.ToHoversDocument(path, issues)
 }
+
 func (f *Folder) Path() string { return f.path }
 
 func (f *Folder) Name() string { return f.name }
@@ -684,15 +686,10 @@ func (f *Folder) IsTrusted() bool {
 	return false
 }
 
-func (f *Folder) sendScanResults(processedProduct product.Product, issuesByFile snyk.IssuesByFile) {
-	var productIssues []snyk.Issue
-	for _, issues := range issuesByFile {
-		productIssues = append(productIssues, issues...)
-	}
-
+func (f *Folder) sendSuccess(processedProduct product.Product) {
 	if processedProduct != "" {
-		f.scanNotifier.SendSuccess(processedProduct, f.Path(), productIssues)
+		f.scanNotifier.SendSuccess(processedProduct, f.Path())
 	} else {
-		f.scanNotifier.SendSuccessForAllProducts(f.Path(), productIssues)
+		f.scanNotifier.SendSuccessForAllProducts(f.Path())
 	}
 }

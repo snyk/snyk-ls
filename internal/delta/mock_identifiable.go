@@ -65,7 +65,7 @@ func (m *mockIdentifiable) SetIsNew(isNew bool) {
 	m.isNew = isNew
 }
 
-func (m *mockIdentifiable) IsNew() bool {
+func (m *mockIdentifiable) GetIsNew() bool {
 	return m.isNew
 }
 

@@ -18,7 +18,9 @@ package converter
 
 import (
 	"fmt"
+	"github.com/snyk/snyk-ls/internal/product"
 	"regexp"
+	"strconv"
 
 	sglsp "github.com/sourcegraph/go-lsp"
 
@@ -166,16 +168,215 @@ func ToDiagnostics(issues []snyk.Issue) []types.Diagnostic {
 		if issue.IssueDescriptionURL != nil {
 			s = issue.IssueDescriptionURL.String()
 		}
-		diagnostics = append(diagnostics, types.Diagnostic{
+		diagnostic := types.Diagnostic{
 			Range:           ToRange(issue.Range),
 			Severity:        ToSeverity(issue.Severity),
 			Code:            issue.ID,
 			Source:          string(issue.Product),
 			Message:         issue.Message,
 			CodeDescription: types.CodeDescription{Href: types.Uri(s)},
-		})
+		}
+		if issue.Product == product.ProductInfrastructureAsCode {
+			diagnostic.Data = getIacIssue(issue)
+		} else if issue.Product == product.ProductCode {
+			diagnostic.Data = getCodeIssue(issue)
+		} else if issue.Product == product.ProductOpenSource {
+			diagnostic.Data = getOssIssue(issue)
+		}
+		diagnostics = append(diagnostics, diagnostic)
 	}
 	return diagnostics
+}
+
+func getOssIssue(issue snyk.Issue) types.ScanIssue {
+	additionalData, ok := issue.AdditionalData.(snyk.OssIssueData)
+	if !ok {
+		return types.ScanIssue{}
+	}
+
+	matchingIssues := make([]types.OssIssueData, len(additionalData.MatchingIssues))
+	for i, matchingIssue := range additionalData.MatchingIssues {
+		matchingIssues[i] = types.OssIssueData{
+			License: matchingIssue.License,
+			Identifiers: types.OssIdentifiers{
+				CWE: issue.CWEs,
+				CVE: issue.CVEs,
+			},
+			Description:       matchingIssue.Description,
+			Language:          matchingIssue.Language,
+			PackageManager:    matchingIssue.PackageManager,
+			PackageName:       matchingIssue.PackageName,
+			Name:              matchingIssue.Name,
+			Version:           matchingIssue.Version,
+			Exploit:           matchingIssue.Exploit,
+			CVSSv3:            matchingIssue.CVSSv3,
+			CvssScore:         strconv.FormatFloat(matchingIssue.CvssScore, 'f', 2, 64), // convert float64 to string with 2 decimal places
+			FixedIn:           matchingIssue.FixedIn,
+			From:              matchingIssue.From,
+			UpgradePath:       matchingIssue.UpgradePath,
+			IsPatchable:       matchingIssue.IsPatchable,
+			IsUpgradable:      matchingIssue.IsUpgradable,
+			ProjectName:       matchingIssue.ProjectName,
+			DisplayTargetFile: matchingIssue.DisplayTargetFile,
+			Details:           matchingIssue.Details,
+		}
+	}
+
+	scanIssue := types.ScanIssue{
+		Id:       additionalData.Key,
+		Title:    additionalData.Title,
+		Severity: issue.Severity.String(),
+		FilePath: issue.AffectedFilePath,
+		Range:    ToRange(issue.Range),
+		AdditionalData: types.OssIssueData{
+			RuleId:  issue.ID,
+			License: additionalData.License,
+			Identifiers: types.OssIdentifiers{
+				CWE: issue.CWEs,
+				CVE: issue.CVEs,
+			},
+			Description:       additionalData.Description,
+			Language:          additionalData.Language,
+			PackageManager:    additionalData.PackageManager,
+			PackageName:       additionalData.PackageName,
+			Name:              additionalData.Name,
+			Version:           additionalData.Version,
+			Exploit:           additionalData.Exploit,
+			CVSSv3:            additionalData.CVSSv3,
+			CvssScore:         strconv.FormatFloat(additionalData.CvssScore, 'f', 2, 64), // convert float64 to string with 2 decimal places
+			FixedIn:           additionalData.FixedIn,
+			From:              additionalData.From,
+			UpgradePath:       additionalData.UpgradePath,
+			IsPatchable:       additionalData.IsPatchable,
+			IsUpgradable:      additionalData.IsUpgradable,
+			ProjectName:       additionalData.ProjectName,
+			DisplayTargetFile: additionalData.DisplayTargetFile,
+			Details:           additionalData.Details,
+			MatchingIssues:    matchingIssues,
+			Lesson:            additionalData.Lesson,
+		},
+	}
+
+	return scanIssue
+}
+
+func getIacIssue(issue snyk.Issue) types.ScanIssue {
+	additionalData, ok := issue.AdditionalData.(snyk.IaCIssueData)
+	if !ok {
+		return types.ScanIssue{}
+	}
+
+	scanIssue := types.ScanIssue{
+		Id:       additionalData.Key,
+		Title:    additionalData.Title,
+		Severity: issue.Severity.String(),
+		FilePath: issue.AffectedFilePath,
+		Range:    ToRange(issue.Range),
+		AdditionalData: types.IacIssueData{
+			PublicId:      additionalData.PublicId,
+			Documentation: additionalData.Documentation,
+			LineNumber:    additionalData.LineNumber,
+			Issue:         additionalData.Issue,
+			Impact:        additionalData.Impact,
+			Resolve:       additionalData.Resolve,
+			Path:          additionalData.Path,
+			References:    additionalData.References,
+		},
+	}
+
+	return scanIssue
+}
+
+func getCodeIssue(issue snyk.Issue) types.ScanIssue {
+	additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+	if !ok {
+		return types.ScanIssue{}
+	}
+
+	exampleCommitFixes := make([]types.ExampleCommitFix, 0, len(additionalData.ExampleCommitFixes))
+	for i := range additionalData.ExampleCommitFixes {
+		lines := make([]types.CommitChangeLine, 0, len(additionalData.ExampleCommitFixes[i].Lines))
+		for j := range additionalData.ExampleCommitFixes[i].Lines {
+			lines = append(lines, types.CommitChangeLine{
+				Line:       additionalData.ExampleCommitFixes[i].Lines[j].Line,
+				LineNumber: additionalData.ExampleCommitFixes[i].Lines[j].LineNumber,
+				LineChange: additionalData.ExampleCommitFixes[i].Lines[j].LineChange,
+			})
+		}
+		exampleCommitFixes = append(exampleCommitFixes, types.ExampleCommitFix{
+			CommitURL: additionalData.ExampleCommitFixes[i].CommitURL,
+			Lines:     lines,
+		})
+	}
+
+	markers := make([]types.Marker, 0, len(additionalData.Markers))
+	for _, marker := range additionalData.Markers {
+		positions := make([]types.MarkerPosition, 0)
+		for _, pos := range marker.Pos {
+			positions = append(positions, types.MarkerPosition{
+				Position: types.Position{
+					Rows: pos.Rows,
+					Cols: pos.Cols,
+				},
+				File: pos.File,
+			})
+		}
+
+		markers = append(markers, types.Marker{
+			Msg: marker.Msg,
+			Pos: positions,
+		})
+	}
+
+	dataFlow := make([]types.DataflowElement, 0, len(additionalData.DataFlow))
+	for _, flow := range additionalData.DataFlow {
+		dataFlow = append(dataFlow, types.DataflowElement{
+			Position:  flow.Position,
+			FilePath:  flow.FilePath,
+			FlowRange: ToRange(flow.FlowRange),
+			Content:   flow.Content,
+		})
+	}
+
+	scanIssue := types.ScanIssue{
+		Id:        additionalData.Key,
+		Title:     issue.Message,
+		Severity:  issue.Severity.String(),
+		FilePath:  issue.AffectedFilePath,
+		Range:     ToRange(issue.Range),
+		IsIgnored: issue.IsIgnored,
+		IsNew:     issue.IsNew,
+		AdditionalData: types.CodeIssueData{
+			Message:            additionalData.Message,
+			Rule:               additionalData.Rule,
+			RuleId:             additionalData.RuleId,
+			RepoDatasetSize:    additionalData.RepoDatasetSize,
+			ExampleCommitFixes: exampleCommitFixes,
+			CWE:                additionalData.CWE,
+			IsSecurityType:     additionalData.IsSecurityType,
+			Text:               additionalData.Text,
+			Cols:               additionalData.Cols,
+			Rows:               additionalData.Rows,
+			PriorityScore:      additionalData.PriorityScore,
+			Markers:            markers,
+			LeadURL:            "",
+			HasAIFix:           additionalData.HasAIFix,
+			DataFlow:           dataFlow,
+			Details:            additionalData.Details,
+		},
+	}
+	if scanIssue.IsIgnored {
+		scanIssue.IgnoreDetails =
+			types.IgnoreDetails{
+				Category:   issue.IgnoreDetails.Category,
+				Reason:     issue.IgnoreDetails.Reason,
+				Expiration: issue.IgnoreDetails.Expiration,
+				IgnoredOn:  issue.IgnoreDetails.IgnoredOn,
+				IgnoredBy:  issue.IgnoreDetails.IgnoredBy,
+			}
+	}
+
+	return scanIssue
 }
 
 func ToHoversDocument(path string, issues []snyk.Issue) hover.DocumentHovers {

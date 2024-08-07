@@ -19,7 +19,6 @@ package notification
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strconv"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -28,7 +27,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 type scanNotifier struct {
@@ -67,49 +65,23 @@ func (n *scanNotifier) SendError(product product.Product, folderPath string, err
 }
 
 // SendSuccessForAllProducts reports success for all enabled products
-func (n *scanNotifier) SendSuccessForAllProducts(folderPath string, issues []snyk.Issue) {
+func (n *scanNotifier) SendSuccessForAllProducts(folderPath string) {
 	for _, p := range n.supportedProducts() {
 		if n.isProductEnabled(p) {
-			n.sendSuccess(p, folderPath, issues)
+			n.sendSuccess(p, folderPath)
 		}
 	}
 }
 
 // SendSuccess sends scan success message for a single enabled product
-func (n *scanNotifier) SendSuccess(reportedProduct product.Product, folderPath string, issues []snyk.Issue) {
+func (n *scanNotifier) SendSuccess(product product.Product, folderPath string) {
 	// If no issues found, we still should send success message the reported product
-	productIssues := make([]snyk.Issue, 0)
-
-	for _, issue := range issues {
-		p := issue.Product
-		if !n.isProductEnabled(p) {
-			continue // skip disabled products
-		}
-
-		if uri.FolderContains(folderPath, issue.AffectedFilePath) {
-			productIssues = append(productIssues, issue)
-		} else {
-			msg := fmt.Sprintf("got an issue that is not contained in the folder: %v", issue)
-			n.c.Logger().Error().Str("method", "scanNotifier.SendSuccess").Msgf(msg)
-		}
-	}
-
-	n.sendSuccess(reportedProduct, folderPath, productIssues)
+	n.sendSuccess(product, folderPath)
 }
 
-func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues []snyk.Issue) {
+func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string) {
 	if !n.isProductEnabled(pr) {
 		return
-	}
-
-	var scanIssues []types.ScanIssue
-	// check product type
-	if pr == product.ProductInfrastructureAsCode {
-		scanIssues = n.appendIacIssues(scanIssues, issues)
-	} else if pr == product.ProductCode {
-		scanIssues = n.appendCodeIssues(scanIssues, issues)
-	} else if pr == product.ProductOpenSource {
-		scanIssues = n.appendOssIssues(scanIssues, issues)
 	}
 
 	n.notifier.Send(
@@ -117,7 +89,6 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string, issues
 			Status:     types.Success,
 			Product:    pr.ToProductCodename(),
 			FolderPath: folderPath,
-			Issues:     scanIssues,
 		},
 	)
 }
@@ -346,7 +317,6 @@ func (n *scanNotifier) SendInProgress(folderPath string) {
 				Status:     types.InProgress,
 				Product:    pr.ToProductCodename(),
 				FolderPath: folderPath,
-				Issues:     nil,
 			},
 		)
 	}
