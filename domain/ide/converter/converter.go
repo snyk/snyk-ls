@@ -163,7 +163,7 @@ func ToDiagnostics(issues []snyk.Issue) []types.Diagnostic {
 	// the return value of this function will not be null.
 	diagnostics := []types.Diagnostic{}
 
-	for i, issue := range issues {
+	for _, issue := range issues {
 		s := ""
 		if issue.IssueDescriptionURL != nil {
 			s = issue.IssueDescriptionURL.String()
@@ -177,11 +177,11 @@ func ToDiagnostics(issues []snyk.Issue) []types.Diagnostic {
 			CodeDescription: types.CodeDescription{Href: types.Uri(s)},
 		}
 		if issue.Product == product.ProductInfrastructureAsCode {
-			diagnostic.Data = getIacIssue(issues[i])
+			diagnostic.Data = getIacIssue(issue)
 		} else if issue.Product == product.ProductCode {
-			diagnostic.Data = getCodeIssue(issues[i])
+			diagnostic.Data = getCodeIssue(issue)
 		} else if issue.Product == product.ProductOpenSource {
-			diagnostic.Data = getOssIssue(issues[i])
+			diagnostic.Data = getOssIssue(issue)
 		}
 		diagnostics = append(diagnostics, diagnostic)
 	}
