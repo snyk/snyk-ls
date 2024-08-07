@@ -33,7 +33,7 @@
 <body>
 <div class="tab">
   <button id="all-issues-button" class="tablinks">All Issues</button>
-  <button id="new-new-issues-button" class="tablinks">Net new Issues</button>
+  <button id="net-new-issues-button" class="tablinks">Net new Issues</button>
 </div>
 
 
@@ -65,16 +65,12 @@
 <div id="netNewIssues" class="tree">
 </div>
 
-<script nonce="${nonce}">
+<script nonce="{{.Nonce}}">
   let allIssuesButton = document.getElementById("all-issues-button");
   let netNewIssuesButton = document.getElementById("net-new-issues-button");
   if (allIssuesButton) {
     allIssuesButton.addEventListener('click', () => {
-      const tree = document.getElementsByClassName("tree");
-      for (let i = 0; i < tree.length; i++) {
-        tree[i].style.display = "none";
-      }
-
+      console.log("entered all, somebody clicked")
       // Get all elements with class="tablinks" and remove the class "active"
       const tablinks = document.getElementsByClassName("tablinks");
       for (let i = 0; i < tablinks.length; i++) {
@@ -82,17 +78,14 @@
       }
 
       // Show the current tab, and add an "active" class to the button that opened the tab
-      allIssuesButton.style.display = "block";
-      allIssuesButton.currentTarget.className += " active";
+      document.getElementById("netNewIssues").style.display = "none";
+      document.getElementById("allIssues").style.display = "block";
+      allIssuesButton.className += " active";
     })
   }
   if (netNewIssuesButton) {
     netNewIssuesButton.addEventListener('click', () => {
-      const tree = document.getElementsByClassName("tree");
-      for (let i = 0; i < tree.length; i++) {
-        tree[i].style.display = "none";
-      }
-
+      console.log("entered netnew, somebody clicked")
       // Get all elements with class="tablinks" and remove the class "active"
       const tablinks = document.getElementsByClassName("tablinks");
       for (let i = 0; i < tablinks.length; i++) {
@@ -100,8 +93,9 @@
       }
 
       // Show the current tab, and add an "active" class to the button that opened the tab
-      netNewIssuesButton.style.display = "block";
-      netNewIssuesButton.currentTarget.className += " active";
+      document.getElementById("allIssues").style.display = "none"
+      document.getElementById("netNewIssues").style.display = "block"
+      netNewIssuesButton.className += " active";
     })
   }
 </script>
