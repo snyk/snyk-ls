@@ -161,8 +161,7 @@ func ToDiagnostics(issues []snyk.Issue) []types.Diagnostic {
 	// Sending null instead of an empty array leads to stored diagnostics not being cleared.
 	// Do not prefer nil over an empty slice in this case. The next line ensures that even if issues is empty,
 	// the return value of this function will not be null.
-
-	var diagnostics []types.Diagnostic
+	diagnostics := []types.Diagnostic{}
 
 	for i, issue := range issues {
 		s := ""

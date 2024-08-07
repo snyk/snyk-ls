@@ -118,7 +118,7 @@ type Diagnostic struct {
 	*
 	* @since 3.16.0
 	 */
-	Data any `json:"data,omitempty"`
+	Data ScanIssue `json:"data,omitempty"`
 }
 
 type DiagnosticTag int

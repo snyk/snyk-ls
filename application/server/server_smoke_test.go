@@ -630,32 +630,11 @@ func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorde
 				continue
 			}
 
-			var issue types.ScanIssue
-			err := mapSerializedIssueToStruct(diagnostic.Data, &issue)
-
-			if err != nil {
-				t.FailNow()
-			}
-			issueList = append(issueList, issue)
+			issueList = append(issueList, diagnostic.Data)
 		}
 	}
 
 	return issueList
-}
-
-func mapSerializedIssueToStruct(m any, result *types.ScanIssue) error {
-	// Serialize the map to JSON
-	serializedMap, err := json.Marshal(m)
-	if err != nil {
-		return err
-	}
-
-	// Deserialize the JSON back to the struct
-	if err = json.Unmarshal(serializedMap, result); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIssue, loc server.Local, folderPath string) {
