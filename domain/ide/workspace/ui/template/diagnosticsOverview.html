@@ -25,12 +25,7 @@
 
   <!--noformat-->
   <style nonce="{{.Nonce}}">
-    {
-    {
-    .Styles
-
-    }
-    }
+    {{.Styles}}
   </style>
   <!--noformat-->
 </head>
@@ -47,7 +42,7 @@
   <ul>
     {{range $index, $node := .RootNodes}}
     <li class="issue-overview">
-      <span class="issue-clickable">{{$node.Icon}} {{$node.Text}}</span>
+      <span class="issue-clickable-{{$node.ProductEnabled}}">{{$node.Icon}} {{$node.Text}}</span>
     </li>
     {{ end }}
   </ul>

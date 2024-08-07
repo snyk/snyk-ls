@@ -45,6 +45,7 @@
 }
 
 .issue-overview {}
-.issue-clickable {}
+.issue-clickable-true {}
+.issue-clickable-false {}
 .issue-file-node {}
 .tree {}

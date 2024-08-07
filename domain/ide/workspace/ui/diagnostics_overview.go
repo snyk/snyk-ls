@@ -62,8 +62,9 @@ type TemplateData struct {
 
 // Node represents a tree node
 type Node struct {
-	Icon template.HTML
-	Text template.HTML
+	Icon           template.HTML
+	Text           template.HTML
+	ProductEnabled bool
 }
 
 func SendDiagnosticsOverview(c *config.Config, p product.Product, issuesByFile snyk.IssuesByFile, notifier notification.Notifier) {
@@ -139,7 +140,8 @@ func generateSecurityNonce() (string, error) {
 func getRootNodes(c *config.Config, p product.Product, issuesByFile snyk.IssuesByFile) []Node {
 	var icon template.HTML
 
-	if isProductEnabled(c, p) {
+	productEnabled := isProductEnabled(c, p)
+	if productEnabled {
 		icon = html.GetProductIcon(p)
 	} else {
 		icon = html.GetProductIconDisabled(p)
@@ -148,8 +150,9 @@ func getRootNodes(c *config.Config, p product.Product, issuesByFile snyk.IssuesB
 	rootNodeTitle := getRootNodeText(issuesByFile, p)
 
 	rootNodes := append([]Node{}, Node{
-		Icon: icon,
-		Text: template.HTML(rootNodeTitle),
+		Icon:           icon,
+		Text:           template.HTML(rootNodeTitle),
+		ProductEnabled: productEnabled,
 	})
 
 	fixableCount := issuesByFile.FixableCount()
