@@ -330,16 +330,18 @@ func checkScanResultsPublishingForCachingSmokeTest(
 			if scanResult.Product == product.ProductCode.ToProductCodename() {
 				switch scanResult.FolderPath {
 				case folderGoof.Path():
+					issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, scanResult.FolderPath)
 					scanResultCodeGoofFound = true
 					onlyIssuesForGoof = true
-					for _, issue := range scanResult.Issues {
+					for _, issue := range issueList {
 						issueContainedInGoof := folderGoof.Contains(issue.FilePath)
 						onlyIssuesForGoof = onlyIssuesForGoof && issueContainedInGoof
 					}
 				case folderJuice.Path():
+					issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, scanResult.FolderPath)
 					scanResultCodeJuiceShopFound = true
 					onlyIssuesForJuiceShop = true
-					for _, issue := range scanResult.Issues {
+					for _, issue := range issueList {
 						issueContainedInJuiceShop := folderJuice.Contains(issue.FilePath)
 						onlyIssuesForJuiceShop = onlyIssuesForJuiceShop && issueContainedInJuiceShop
 					}
@@ -462,11 +464,12 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 
 	// check for snyk code scan message
-	snykCodeScanParams := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
 	// check for autofix diff on mt-us
 	if hasVulns {
-		checkAutofixDiffs(t, c, snykCodeScanParams, loc)
+		checkAutofixDiffs(t, c, issueList, loc, cloneTargetDir)
 	}
 
 	checkFeatureFlagStatus(t, c, &loc)
@@ -491,9 +494,10 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testutil.Json
 	if !strings.HasSuffix(t.Name(), "OSS_and_Code") {
 		return
 	}
-	ossScanParams := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
+	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, cloneTargetDir)
 	atLeastOneQuickfixActionFound := false
-	for _, issue := range ossScanParams.Issues {
+	for _, issue := range issueList {
 		params := sglsp.CodeActionParams{
 			TextDocument: sglsp.TextDocumentIdentifier{
 				URI: uri.PathToUri(issue.FilePath),
@@ -541,9 +545,11 @@ func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorde
 	if !strings.HasSuffix(t.Name(), "OSS_and_Code") {
 		return
 	}
-	ossScanParams := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
+	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, cloneTargetDir)
+
 	atLeastOneOneIssueWithCodeLensFound := false
-	for _, issue := range ossScanParams.Issues {
+	for _, issue := range issueList {
 		params := sglsp.CodeLensParams{
 			TextDocument: sglsp.TextDocumentIdentifier{
 				URI: uri.PathToUri(issue.FilePath),
@@ -588,13 +594,13 @@ func waitForScan(t *testing.T, cloneTargetDir string) {
 	}, maxIntegTestDuration, 2*time.Millisecond)
 }
 
-func checkForScanParams(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, cloneTargetDir string, p product.Product) types.SnykScanParams {
+func checkForScanParams(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, cloneTargetDir string, p product.Product) {
 	t.Helper()
 	var notifications []jrpc2.Request
-	var scanParams types.SnykScanParams
 	assert.Eventually(t, func() bool {
 		notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
 		for _, n := range notifications {
+			var scanParams types.SnykScanParams
 			_ = n.UnmarshalParams(&scanParams)
 			if scanParams.Product != p.ToProductCodename() ||
 				scanParams.FolderPath != cloneTargetDir ||
@@ -605,23 +611,46 @@ func checkForScanParams(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder,
 		}
 		return false
 	}, 10*time.Second, 10*time.Millisecond)
-	return scanParams
 }
 
-func checkAutofixDiffs(t *testing.T, c *config.Config, snykCodeScanParams types.SnykScanParams, loc server.Local) {
+func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, p product.Product, folderPath string) []types.ScanIssue {
+	t.Helper()
+
+	var issueList []types.ScanIssue
+	notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
+	for _, n := range notifications {
+		diagnosticsParams := types.PublishDiagnosticsParams{}
+		_ = n.UnmarshalParams(&diagnosticsParams)
+		for _, diagnostic := range diagnosticsParams.Diagnostics {
+			diagnosticCode, ok := diagnostic.Code.(string)
+			if ok && diagnosticCode == "Snyk Error" {
+				continue
+			}
+			if diagnostic.Source != string(p) || !uri.FolderContains(folderPath, uri.PathFromUri(diagnosticsParams.URI)) {
+				continue
+			}
+
+			issueList = append(issueList, diagnostic.Data)
+		}
+	}
+
+	return issueList
+}
+
+func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIssue, loc server.Local, folderPath string) {
 	t.Helper()
 	if isNotStandardRegion(c) {
 		return
 	}
-	assert.Greater(t, len(snykCodeScanParams.Issues), 0)
-	for _, issue := range snykCodeScanParams.Issues {
+	assert.Greater(t, len(issueList), 0)
+	for _, issue := range issueList {
 		codeIssueData, ok := issue.AdditionalData.(map[string]interface{})
 		if !ok || codeIssueData["hasAIFix"] == false || codeIssueData["rule"] != "WebCookieSecureDisabledByDefault" {
 			continue
 		}
 		call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   types.CodeFixDiffsCommand,
-			Arguments: []any{uri.PathToUri(snykCodeScanParams.FolderPath), uri.PathToUri(issue.FilePath), issue.Id},
+			Arguments: []any{uri.PathToUri(folderPath), uri.PathToUri(issue.FilePath), issue.Id},
 		})
 		assert.NoError(t, err)
 		var unifiedDiffs []code.AutofixUnifiedDiffSuggestion
@@ -762,10 +791,11 @@ func Test_SmokeSnykCodeDelta_OneNewVuln(t *testing.T) {
 
 	waitForScan(t, cloneTargetDir)
 
-	snykCodeScanParams := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
-	assert.Equal(t, len(snykCodeScanParams.Issues), 1)
-	assert.Contains(t, snykCodeScanParams.Issues[0].FilePath, fileWithNewVulns)
+	assert.Equal(t, len(issueList), 1)
+	assert.Contains(t, issueList[0].FilePath, fileWithNewVulns)
 }
 
 func Test_SmokeSnykCodeDelta_NoScanNecessary(t *testing.T) {
@@ -785,9 +815,10 @@ func Test_SmokeSnykCodeDelta_NoScanNecessary(t *testing.T) {
 
 	waitForScan(t, cloneTargetDir)
 
-	snykCodeScanParams := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
-	assert.Equal(t, len(snykCodeScanParams.Issues), 0)
+	assert.Equal(t, len(issueList), 0)
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
@@ -810,9 +841,10 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 
 	waitForScan(t, cloneTargetDir)
 
-	snykCodeScanParams := checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
-	assert.Equal(t, len(snykCodeScanParams.Issues), 0)
+	assert.Equal(t, len(issueList), 0)
 }
 
 func ensureInitialized(t *testing.T, loc server.Local, initParams types.InitializeParams) {

@@ -36,7 +36,7 @@ type DefaultHoverService struct {
 	hovers       map[string][]Hover[Context]
 	hoverIndexes map[string]bool
 	hoverChan    chan DocumentHovers
-	mutex        *sync.Mutex
+	mutex        *sync.RWMutex
 	c            *config.Config
 }
 
@@ -44,8 +44,8 @@ func NewDefaultService(c *config.Config) Service {
 	s := &DefaultHoverService{}
 	s.hovers = map[string][]Hover[Context]{}
 	s.hoverIndexes = map[string]bool{}
-	s.hoverChan = make(chan DocumentHovers, 100)
-	s.mutex = &sync.Mutex{}
+	s.hoverChan = make(chan DocumentHovers, 10000)
+	s.mutex = &sync.RWMutex{}
 	s.c = c
 	go s.createHoverListener()
 	return s
@@ -110,8 +110,8 @@ func (s *DefaultHoverService) ClearAllHovers() {
 }
 
 func (s *DefaultHoverService) GetHover(path string, pos snyk.Position) Result {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
 
 	var hoverMessage string
 	for _, hover := range s.hovers[path] {

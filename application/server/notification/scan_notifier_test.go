@@ -17,19 +17,14 @@
 package notification_test
 
 import (
-	"net/url"
-	"testing"
-	"time"
-
-	"github.com/stretchr/testify/assert"
-
 	notification2 "github.com/snyk/snyk-ls/application/server/notification"
-	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 type sendMessageTestCase struct {
@@ -55,7 +50,7 @@ func Test_SendMessage(t *testing.T) {
 		{
 			name: "SendSuccessMessage",
 			act: func(scanNotifier snyk.ScanNotifier) {
-				scanNotifier.SendSuccess(product.ProductCode, folderPath, []snyk.Issue{})
+				scanNotifier.SendSuccess(product.ProductCode, folderPath)
 			},
 			expectedStatus: types.Success,
 		},
@@ -96,139 +91,14 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 
 	const folderPath = "/test/iac/folderPath"
 
-	testRange := snyk.Range{
-		Start: snyk.Position{
-			Line:      1,
-			Character: 1,
-		},
-		End: snyk.Position{
-			Line:      1,
-			Character: 2,
-		},
-	}
-	lspTestRange := converter.ToRange(testRange)
-
-	expectedIacIssue := []types.ScanIssue{
-		{
-			Id:       "098f6bcd4621d373cade4e832627b4f6",
-			Title:    "iacTitle",
-			Severity: "critical",
-			FilePath: "iacAffectedFilePath",
-			Range:    lspTestRange,
-			AdditionalData: types.IacIssueData{
-				PublicId:      "iacID",
-				Documentation: "iacDocumentation",
-				LineNumber:    1,
-				Issue:         "iacIssue",
-				Impact:        "iacImpact",
-				Path:          []string{"iacPath"},
-			},
-		},
-	}
-
-	expectedCodeIssue := []types.ScanIssue{
-		{
-			Id:       "5a105e8b9d40e1329780d62ea2265d8a",
-			Title:    "codeMessage",
-			Severity: "low",
-			FilePath: "codeAffectedFilePath",
-			Range:    lspTestRange,
-			AdditionalData: types.CodeIssueData{
-				Message:            "codeMessage",
-				Rule:               "codeRule",
-				RuleId:             "codeRuleID",
-				RepoDatasetSize:    2,
-				ExampleCommitFixes: []types.ExampleCommitFix{},
-				CWE:                []string{},
-				IsSecurityType:     false,
-				Text:               "codeText",
-				Cols:               types.Point{1, 1},
-				Rows:               types.Point{1, 1},
-				Markers:            []types.Marker{},
-				PriorityScore:      880,
-				HasAIFix:           true,
-				DataFlow: []types.DataflowElement{
-					{FilePath: "testFile", FlowRange: converter.ToRange(testRange), Content: "testContent"},
-				},
-			},
-		},
-	}
-
-	scanIssues := []snyk.Issue{
-		{ // IaC issue
-			ID:                  "iacID",
-			Severity:            snyk.Critical,
-			IssueType:           1,
-			Range:               testRange,
-			Message:             "iacMessage",
-			FormattedMessage:    "iacFormattedMessage",
-			AffectedFilePath:    "iacAffectedFilePath",
-			Product:             product.ProductInfrastructureAsCode,
-			References:          []snyk.Reference{},
-			IssueDescriptionURL: &url.URL{},
-			CodeActions:         []snyk.CodeAction{},
-			CodelensCommands:    []types.CommandData{},
-			AdditionalData: snyk.IaCIssueData{
-				Key:           "098f6bcd4621d373cade4e832627b4f6",
-				Title:         "iacTitle",
-				PublicId:      "iacID",
-				Documentation: "iacDocumentation",
-				LineNumber:    1,
-				Issue:         "iacIssue",
-				Impact:        "iacImpact",
-				Path:          []string{"iacPath"},
-			},
-		},
-		{ // Code issue
-			ID:                  "codeID",
-			Severity:            snyk.Low,
-			IssueType:           1,
-			Range:               testRange,
-			Message:             "codeMessage",
-			FormattedMessage:    "codeFormattedMessage",
-			AffectedFilePath:    "codeAffectedFilePath",
-			Product:             product.ProductCode,
-			References:          []snyk.Reference{},
-			IssueDescriptionURL: &url.URL{},
-			CodeActions:         []snyk.CodeAction{},
-			CodelensCommands:    []types.CommandData{},
-			AdditionalData: snyk.CodeIssueData{
-				Key:                "5a105e8b9d40e1329780d62ea2265d8a",
-				Message:            "codeMessage",
-				Rule:               "codeRule",
-				RuleId:             "codeRuleID",
-				RepoDatasetSize:    2,
-				ExampleCommitFixes: []snyk.ExampleCommitFix{},
-				CWE:                []string{},
-				IsSecurityType:     false,
-				Text:               "codeText",
-				Cols:               snyk.CodePoint{1, 1},
-				Rows:               snyk.CodePoint{1, 1},
-				Markers:            []snyk.Marker{},
-				PriorityScore:      880,
-				HasAIFix:           true,
-				DataFlow: []snyk.DataFlowElement{
-					{FilePath: "testFile", FlowRange: testRange, Content: "testContent"},
-				},
-			},
-		},
-	}
-
 	// Act - run the test
-	scanNotifier.SendSuccessForAllProducts(folderPath, scanIssues)
+	scanNotifier.SendSuccessForAllProducts(folderPath)
 
-	// Assert - check the messages matches the expected message for each product
+	// Assert
 	for _, msg := range mockNotifier.SentMessages() {
-		if msg.(types.SnykScanParams).Product == "code" {
-			actualCodeIssue := msg.(types.SnykScanParams).Issues
-			assert.Equal(t, expectedCodeIssue, actualCodeIssue)
-			return
-		}
-		if msg.(types.SnykScanParams).Product == "iac" {
-			actualIacIssue := msg.(types.SnykScanParams).Issues
-			assert.Equal(t, expectedIacIssue, actualIacIssue)
-			return
-		}
+		scanParam := msg.(types.SnykScanParams)
+		assert.Equal(t, types.Success, scanParam.Status)
+		assert.Equal(t, folderPath, scanParam.FolderPath)
 	}
 }
 
@@ -240,117 +110,18 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 
 	const folderPath = "/test/oss/folderPath"
 
-	r := snyk.Range{
-		Start: snyk.Position{
-			Line:      1,
-			Character: 1,
-		},
-		End: snyk.Position{
-			Line:      1,
-			Character: 2,
-		},
-	}
-	lspTestRange := converter.ToRange(r)
-
-	expectedUIScanIssue := []types.ScanIssue{
-		{
-			Id:       "OSS Key",
-			Title:    "OSS Title",
-			Severity: "critical",
-			FilePath: "/test/oss/folderPath/ossAffectedFilePath",
-			Range:    lspTestRange,
-			AdditionalData: types.OssIssueData{
-				RuleId:  "SNYK-JS-BABELTRAVERSE-5962463",
-				License: "OSS License",
-				Identifiers: types.OssIdentifiers{
-					CWE: []string{"CWE-184"},
-					CVE: []string{"CVE-2023-45133"},
-				},
-				Description:    "OSS Description",
-				Language:       "js",
-				PackageManager: "OSS PackageManager",
-				PackageName:    "OSS PackageName",
-				Name:           "OSS Name",
-				Version:        "OSS Version",
-				Exploit:        "OSS Exploit",
-				CVSSv3:         "OSS CVSSv3",
-				CvssScore:      "9.90",
-				FixedIn:        []string{},
-				From:           []string{"babel/transverse@6.26.0"},
-				UpgradePath: []any{
-					true,
-					"babel-traverse@6.26.0",
-				},
-				IsPatchable:       false,
-				IsUpgradable:      false,
-				ProjectName:       "OSS ProjectName",
-				DisplayTargetFile: "OSS DisplayTargetFile",
-				Details:           "",
-				MatchingIssues:    []types.OssIssueData{},
-				Lesson:            "test",
-			},
-		},
-	}
-
-	issues := []snyk.Issue{
-		{ // OSS issue
-			ID:                  "SNYK-JS-BABELTRAVERSE-5962463",
-			Severity:            snyk.Critical,
-			IssueType:           1,
-			Range:               r,
-			Message:             "Incomplete List of Disallowed Inputs",
-			FormattedMessage:    "Incomplete List of Disallowed Inputs",
-			AffectedFilePath:    "/test/oss/folderPath/ossAffectedFilePath",
-			Product:             product.ProductOpenSource,
-			References:          []snyk.Reference{},
-			IssueDescriptionURL: &url.URL{},
-			CodeActions:         []snyk.CodeAction{},
-			CodelensCommands:    []types.CommandData{},
-			Ecosystem:           "OSS Ecosystem",
-			CWEs:                []string{"CWE-184"},
-			CVEs:                []string{"CVE-2023-45133"},
-			AdditionalData: snyk.OssIssueData{
-				Key:            "OSS Key",
-				Title:          "OSS Title",
-				Name:           "OSS Name",
-				LineNumber:     1,
-				Description:    "OSS Description",
-				References:     []snyk.Reference{},
-				Version:        "OSS Version",
-				License:        "OSS License",
-				PackageManager: "OSS PackageManager",
-				PackageName:    "OSS PackageName",
-				From:           []string{"babel/transverse@6.26.0"},
-				FixedIn:        []string{},
-				UpgradePath: []any{
-					true,
-					"babel-traverse@6.26.0",
-				},
-				IsUpgradable:      false,
-				CVSSv3:            "OSS CVSSv3",
-				CvssScore:         9.9,
-				Exploit:           "OSS Exploit",
-				IsPatchable:       false,
-				ProjectName:       "OSS ProjectName",
-				DisplayTargetFile: "OSS DisplayTargetFile",
-				Language:          "js",
-				Details:           "",
-				Lesson:            "test",
-			},
-		},
-	}
-
 	// Act - run the test
-	scanNotifier.SendSuccess(product.ProductOpenSource, folderPath, issues)
+	scanNotifier.SendSuccess(product.ProductOpenSource, folderPath)
 
 	// Assert - check that there are messages sent
 	assert.NotEmpty(t, mockNotifier.SentMessages())
 
-	// Assert - check the messages matches the expected message for each product
+	// Assert
 	for _, msg := range mockNotifier.SentMessages() {
-		actualUIOssIssue := msg.(types.SnykScanParams).Issues
-		assert.Equal(t, expectedUIScanIssue, actualUIOssIssue)
-		return
+		scanParam := msg.(types.SnykScanParams)
+		assert.Equal(t, types.Success, scanParam.Status)
+		assert.Equal(t, folderPath, scanParam.FolderPath)
+		assert.Equal(t, product.ProductOpenSource.ToProductCodename(), scanParam.Product)
 	}
 }
 
@@ -361,86 +132,16 @@ func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
 	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
 	const folderPath = "/test/iac/folderPath"
-	r := snyk.Range{
-		Start: snyk.Position{
-			Line:      1,
-			Character: 1,
-		},
-		End: snyk.Position{
-			Line:      1,
-			Character: 2,
-		},
-	}
-	lspTestRange := converter.ToRange(r)
-
-	expectedCodeIssue := []types.ScanIssue{
-		{
-			Id:       "5a105e8b9d40e1329780d62ea2265d8a",
-			Title:    "codeMessage",
-			Severity: "low",
-			FilePath: "codeAffectedFilePath",
-			Range:    lspTestRange,
-			AdditionalData: types.CodeIssueData{
-				Message:            "codeMessage",
-				Rule:               "codeRule",
-				RuleId:             "codeRuleID",
-				RepoDatasetSize:    2,
-				ExampleCommitFixes: []types.ExampleCommitFix{},
-				CWE:                []string{},
-				IsSecurityType:     false,
-				Text:               "codeText",
-				Cols:               types.Point{1, 1},
-				Rows:               types.Point{1, 1},
-				Markers:            []types.Marker{},
-				DataFlow: []types.DataflowElement{
-					{FilePath: "testFile", FlowRange: converter.ToRange(r), Content: "testContent"},
-				},
-			},
-		},
-	}
-
-	scanIssues := []snyk.Issue{
-		{ // Code issue
-			ID:                  "codeID",
-			Severity:            snyk.Low,
-			IssueType:           1,
-			Range:               r,
-			Message:             "codeMessage",
-			FormattedMessage:    "codeFormattedMessage",
-			AffectedFilePath:    "codeAffectedFilePath",
-			Product:             product.ProductCode,
-			References:          []snyk.Reference{},
-			IssueDescriptionURL: &url.URL{},
-			CodeActions:         []snyk.CodeAction{},
-			CodelensCommands:    []types.CommandData{},
-			AdditionalData: snyk.CodeIssueData{
-				Key:                "5a105e8b9d40e1329780d62ea2265d8a",
-				Message:            "codeMessage",
-				Rule:               "codeRule",
-				RuleId:             "codeRuleID",
-				RepoDatasetSize:    2,
-				ExampleCommitFixes: []snyk.ExampleCommitFix{},
-				CWE:                []string{},
-				IsSecurityType:     false,
-				Text:               "codeText",
-				Cols:               snyk.CodePoint{1, 1},
-				Rows:               snyk.CodePoint{1, 1},
-				Markers:            []snyk.Marker{},
-				DataFlow: []snyk.DataFlowElement{
-					{FilePath: "testFile", FlowRange: r, Content: "testContent"},
-				},
-			},
-		},
-	}
 
 	// Act - run the test
-	scanNotifier.SendSuccess(product.ProductCode, folderPath, scanIssues)
+	scanNotifier.SendSuccess(product.ProductCode, folderPath)
 
 	// Assert - check the messages matches the expected message for each product
 	for _, msg := range mockNotifier.SentMessages() {
-		actualCodeIssue := msg.(types.SnykScanParams).Issues
-		assert.Equal(t, expectedCodeIssue, actualCodeIssue)
-		return
+		scanParam := msg.(types.SnykScanParams)
+		assert.Equal(t, types.Success, scanParam.Status)
+		assert.Equal(t, folderPath, scanParam.FolderPath)
+		assert.Equal(t, product.ProductCode.ToProductCodename(), scanParam.Product)
 	}
 }
 
@@ -451,104 +152,16 @@ func Test_SendSuccess_SendsForSnykCode_WithIgnores(t *testing.T) {
 	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
 	const folderPath = "/test/iac/folderPath"
-	r := snyk.Range{
-		Start: snyk.Position{
-			Line:      1,
-			Character: 1,
-		},
-		End: snyk.Position{
-			Line:      1,
-			Character: 2,
-		},
-	}
-	lspTestRange := converter.ToRange(r)
-
-	ignoredOn := time.Now()
-	expectedCodeIssue := []types.ScanIssue{
-		{
-			Id:        "5a105e8b9d40e1329780d62ea2265d8a",
-			Title:     "codeMessage",
-			Severity:  "low",
-			FilePath:  "codeAffectedFilePath",
-			Range:     lspTestRange,
-			IsIgnored: true,
-			IgnoreDetails: types.IgnoreDetails{
-				Category:   "category",
-				Reason:     "reason",
-				Expiration: "expiration",
-				IgnoredOn:  ignoredOn,
-				IgnoredBy:  "ignoredBy",
-			}, AdditionalData: types.CodeIssueData{
-				Message:            "codeMessage",
-				Rule:               "codeRule",
-				RuleId:             "codeRuleID",
-				RepoDatasetSize:    2,
-				ExampleCommitFixes: []types.ExampleCommitFix{},
-				CWE:                []string{},
-				IsSecurityType:     false,
-				Text:               "codeText",
-				Cols:               types.Point{1, 1},
-				Rows:               types.Point{1, 1},
-				Markers:            []types.Marker{},
-				DataFlow: []types.DataflowElement{
-					{FilePath: "testFile", FlowRange: converter.ToRange(r), Content: "testContent"},
-				},
-				Details: "<!-- Data Flow -->\n <span class=\"data-flow-filepath\">testFile/data-subject.service.ts:27</span>\n\t\t",
-			},
-		},
-	}
-
-	scanIssues := []snyk.Issue{
-		{ // Code issue
-			ID:        "codeID",
-			Severity:  snyk.Low,
-			IssueType: 1,
-			Range:     r,
-			Message:   "codeMessage",
-			IsIgnored: true,
-			IgnoreDetails: &snyk.IgnoreDetails{
-				Category:   "category",
-				Reason:     "reason",
-				Expiration: "expiration",
-				IgnoredOn:  ignoredOn,
-				IgnoredBy:  "ignoredBy",
-			},
-			FormattedMessage:    "codeFormattedMessage",
-			AffectedFilePath:    "codeAffectedFilePath",
-			Product:             product.ProductCode,
-			References:          []snyk.Reference{},
-			IssueDescriptionURL: &url.URL{},
-			CodeActions:         []snyk.CodeAction{},
-			CodelensCommands:    []types.CommandData{},
-			AdditionalData: snyk.CodeIssueData{
-				Key:                "5a105e8b9d40e1329780d62ea2265d8a",
-				Message:            "codeMessage",
-				Rule:               "codeRule",
-				RuleId:             "codeRuleID",
-				RepoDatasetSize:    2,
-				ExampleCommitFixes: []snyk.ExampleCommitFix{},
-				CWE:                []string{},
-				IsSecurityType:     false,
-				Text:               "codeText",
-				Cols:               snyk.CodePoint{1, 1},
-				Rows:               snyk.CodePoint{1, 1},
-				Markers:            []snyk.Marker{},
-				DataFlow: []snyk.DataFlowElement{
-					{FilePath: "testFile", FlowRange: r, Content: "testContent"},
-				},
-				Details: "<!-- Data Flow -->\n <span class=\"data-flow-filepath\">testFile/data-subject.service.ts:27</span>\n\t\t",
-			},
-		},
-	}
 
 	// Act - run the test
-	scanNotifier.SendSuccess(product.ProductCode, folderPath, scanIssues)
+	scanNotifier.SendSuccess(product.ProductCode, folderPath)
 
 	// Assert - check the messages matches the expected message for each product
 	for _, msg := range mockNotifier.SentMessages() {
-		actualCodeIssue := msg.(types.SnykScanParams).Issues
-		assert.Equal(t, expectedCodeIssue, actualCodeIssue)
-		return
+		scanParam := msg.(types.SnykScanParams)
+		assert.Equal(t, types.Success, scanParam.Status)
+		assert.Equal(t, folderPath, scanParam.FolderPath)
+		assert.Equal(t, product.ProductCode.ToProductCodename(), scanParam.Product)
 	}
 }
 
@@ -559,71 +172,16 @@ func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
 	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
 	const folderPath = "/test/iac/folderPath"
-	r := snyk.Range{
-		Start: snyk.Position{
-			Line:      1,
-			Character: 1,
-		},
-		End: snyk.Position{
-			Line:      1,
-			Character: 2,
-		},
-	}
-	lspTestRange := converter.ToRange(r)
-
-	// expected message uses lsp2.ScanIssue && lsp2.CodeIssueData
-	expectedIacIssue := []types.ScanIssue{
-		{
-			Id:       "098f6bcd4621d373cade4e832627b4f6",
-			Title:    "iacTitle",
-			Severity: "critical",
-			FilePath: "/test/iac/folderPath/iacAffectedFilePath",
-			Range:    lspTestRange,
-			AdditionalData: types.IacIssueData{
-				PublicId:      "iacID",
-				Documentation: "iacDocumentation",
-				LineNumber:    1,
-				Issue:         "iacIssue",
-				Impact:        "iacImpact",
-				Path:          []string{"iacPath"},
-			},
-		},
-	}
-
-	scanIssues := []snyk.Issue{
-		{ // IaC issue
-			ID:                  "iacID",
-			Severity:            snyk.Critical,
-			IssueType:           1,
-			Range:               r,
-			Message:             "iacMessage",
-			FormattedMessage:    "iacFormattedMessage",
-			AffectedFilePath:    "/test/iac/folderPath/iacAffectedFilePath",
-			Product:             product.ProductInfrastructureAsCode,
-			References:          []snyk.Reference{},
-			IssueDescriptionURL: &url.URL{},
-			CodeActions:         []snyk.CodeAction{},
-			CodelensCommands:    []types.CommandData{},
-			AdditionalData: snyk.IaCIssueData{
-				Key:           "098f6bcd4621d373cade4e832627b4f6",
-				Title:         "iacTitle",
-				PublicId:      "iacID",
-				Documentation: "iacDocumentation",
-				LineNumber:    1,
-				Issue:         "iacIssue",
-				Impact:        "iacImpact",
-				Path:          []string{"iacPath"},
-			},
-		},
-	}
 
 	// Act - run the test
-	scanNotifier.SendSuccess(product.ProductInfrastructureAsCode, folderPath, scanIssues)
+	scanNotifier.SendSuccess(product.ProductInfrastructureAsCode, folderPath)
 
 	// Assert - check the messages matches the expected message for each product
 	for _, msg := range mockNotifier.SentMessages() {
-		actualIacIssue := msg.(types.SnykScanParams).Issues
-		assert.Equal(t, expectedIacIssue, actualIacIssue)
+		scanParam := msg.(types.SnykScanParams)
+		assert.Equal(t, types.Success, scanParam.Status)
+		assert.Equal(t, folderPath, scanParam.FolderPath)
+		assert.Equal(t, product.ProductInfrastructureAsCode.ToProductCodename(), scanParam.Product)
 		return
 	}
 }

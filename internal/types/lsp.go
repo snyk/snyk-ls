@@ -118,7 +118,7 @@ type Diagnostic struct {
 	*
 	* @since 3.16.0
 	 */
-	Data any `json:"data,omitempty"`
+	Data ScanIssue `json:"data,omitempty"`
 }
 
 type DiagnosticTag int
@@ -1048,8 +1048,6 @@ type SnykScanParams struct {
 	Product string `json:"product"`
 	// FolderPath is the root-folder of the current scan
 	FolderPath string `json:"folderPath"`
-	// Issues contain the scan results in the common issues model
-	Issues []ScanIssue `json:"issues"`
 	// Error Message
 	ErrorMessage string `json:"errorMessage,omitempty"`
 	// CliError contains structured error information from the CLI
@@ -1064,6 +1062,7 @@ type ScanIssue struct { // TODO - convert this to a generic type
 	FilePath       string        `json:"filePath"`
 	Range          sglsp.Range   `json:"range"`
 	IsIgnored      bool          `json:"isIgnored"`
+	IsNew          bool          `json:"isNew"`
 	IgnoreDetails  IgnoreDetails `json:"ignoreDetails"`
 	AdditionalData any           `json:"additionalData,omitempty"`
 }

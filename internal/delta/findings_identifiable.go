@@ -39,5 +39,5 @@ type Identifiable interface {
 	GetGlobalIdentity() string
 	SetGlobalIdentity(globalIdentity string)
 	SetIsNew(isNew bool)
-	IsNew() bool
+	GetIsNew() bool
 }
