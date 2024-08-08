@@ -36,11 +36,11 @@
     <!-- Tabs Issue Overview Container -->
     <article class="issues-overview">
         <div class="main-tabs-nav">
-      <span data-tab="all-issues" id="all-issues-button"
+      <span data-tab="all-issues" id="all-issues-tab"
             class="tab-item {{if not .DeltaFindingsEnabled}} is-selected {{end}} all-issues-tab">
           All Issues
       </span>
-            <span data-tab="net-new-issues" id="net-new-issues-button"
+            <span data-tab="net-new-issues" id="net-new-issues-tab"
                   class="tab-item {{if .DeltaFindingsEnabled}} is-selected {{end}} net-new-issues-tab">
           Net new issues
       </span>
@@ -92,22 +92,18 @@
         </div>
     </article>
 </main>
-<!--<div class="tab">-->
-<!--  <button id="all-issues-button" class="tablinks">All Issues</button>-->
-<!--  <button id="net-new-issues-button" class="tablinks">Net new Issues</button>-->
-<!--</div>-->
 
 <script nonce="{{.Nonce}}">
-    const allIssuesButton = document.getElementById("all-issues-button");
-    const netNewIssuesButton = document.getElementById("net-new-issues-button");
+    const allIssuesTab = document.getElementById("all-issues-tab");
+    const netNewIssuesTab = document.getElementById("net-new-issues-tab");
     const deltaFindingsEnabled = Boolean("{{.DeltaFindingsEnabled}}");
 
     // event listeners for switching tabs
-    netNewIssuesButton.addEventListener("click", () => {
+    netNewIssuesTab.addEventListener("click", () => {
         retrieveIssues(true)
     })
 
-    allIssuesButton.addEventListener("click", () => {
+    allIssuesTab.addEventListener("click", () => {
         retrieveIssues(false)
     })
 
@@ -119,9 +115,9 @@
     }
 
     if (deltaFindingsEnabled) {
-        netNewIssuesButton.className.replace(" active", "")
+        netNewIssuesTab.className.replace(" active", "")
     } else {
-        allIssuesButton.className += " active"
+        allIssuesTab.className += " active"
     }
 </script>
 </body>
