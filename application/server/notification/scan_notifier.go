@@ -19,6 +19,7 @@ package notification
 import (
 	"encoding/json"
 	"errors"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -64,7 +65,7 @@ func (n *scanNotifier) SendError(product product.Product, folderPath string, err
 // SendSuccessForAllProducts reports success for all enabled products
 func (n *scanNotifier) SendSuccessForAllProducts(folderPath string) {
 	for _, p := range n.supportedProducts() {
-		if n.isProductEnabled(p) {
+		if n.c.IsProductEnabled(p) {
 			n.sendSuccess(p, folderPath)
 		}
 	}
@@ -77,7 +78,7 @@ func (n *scanNotifier) SendSuccess(product product.Product, folderPath string) {
 }
 
 func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string) {
-	if !n.isProductEnabled(pr) {
+	if !n.c.IsProductEnabled(pr) {
 		return
 	}
 
@@ -90,25 +91,11 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string) {
 	)
 }
 
-func (n *scanNotifier) isProductEnabled(p product.Product) bool {
-	c := config.CurrentConfig()
-	switch p {
-	case product.ProductCode:
-		return c.IsSnykCodeEnabled() || c.IsSnykCodeQualityEnabled() || c.IsSnykCodeSecurityEnabled()
-	case product.ProductOpenSource:
-		return c.IsSnykOssEnabled()
-	case product.ProductInfrastructureAsCode:
-		return c.IsSnykIacEnabled()
-	default:
-		return false
-	}
-}
-
 // SendInProgress Notifies all snyk/scan enabled product messages
 func (n *scanNotifier) SendInProgress(folderPath string) {
 	products := n.supportedProducts()
 	for _, pr := range products {
-		if !n.isProductEnabled(pr) {
+		if !n.c.IsProductEnabled(pr) {
 			continue
 		}
 

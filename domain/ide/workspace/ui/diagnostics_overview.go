@@ -130,7 +130,7 @@ func getFileTypeIcon() template.HTML {
 func getRootNodes(c *config.Config, p product.Product, issuesByFile snyk.IssuesByFile) []Node {
 	var icon template.HTML
 
-	productEnabled := isProductEnabled(c, p)
+	productEnabled := c.IsProductEnabled(p)
 	if productEnabled {
 		icon = html.GetProductIcon(p)
 	} else {
@@ -178,17 +178,4 @@ func getRootNodeText(issuesByFile snyk.IssuesByFile, p product.Product) string {
 		)
 	}
 	return rootNodeTitle
-}
-
-func isProductEnabled(c *config.Config, p product.Product) bool {
-	switch p {
-	case product.ProductOpenSource:
-		return c.IsSnykOssEnabled()
-	case product.ProductCode:
-		return c.IsSnykCodeEnabled()
-	case product.ProductInfrastructureAsCode:
-		return c.IsSnykIacEnabled()
-	default:
-		return false
-	}
 }
