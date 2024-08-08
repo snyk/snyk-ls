@@ -18,9 +18,7 @@ package ui
 
 import (
 	"bytes"
-	"crypto/rand"
 	_ "embed"
-	"encoding/base64"
 	"fmt"
 	"html/template"
 
@@ -69,38 +67,41 @@ type Node struct {
 
 func SendDiagnosticsOverview(c *config.Config, p product.Product, issuesByFile snyk.IssuesByFile, notifier notification.Notifier) {
 	logger := c.Logger().With().Str("method", "ui.SendDiagnosticsOverview").Logger()
-	if p != "" {
-		rootNodes := getRootNodes(c, p, issuesByFile)
-		nonce, err := generateSecurityNonce()
-		if err != nil {
-			logger.Err(err).Msgf("Failed to generate nonce")
-			return
-		}
-
-		fileNodes := getFileNodes(issuesByFile)
-
-		data := TemplateData{
-			RootNodes:            rootNodes,
-			Issues:               fileNodes,
-			Styles:               template.CSS(diagnosticsOverviewTemplateCSS),
-			Nonce:                nonce,
-			DeltaFindingsEnabled: c.IsDeltaFindingsEnabled(),
-		}
-
-		var htmlBuffer bytes.Buffer
-		if err = diagnosticsOverviewTemplate.Execute(&htmlBuffer, data); err != nil {
-			logger.Error().Msgf("Failed to generate tree htmlBuffer with tree template: %v", err)
-			return
-		}
-
-		diagnosticsOverviewParams := types.DiagnosticsOverviewParams{Product: p.ToProductCodename(), Html: htmlBuffer.String()}
-		notifier.Send(diagnosticsOverviewParams)
-		logger.Debug().Msgf("sent diagnostics overview htmlBuffer for product %s", p)
-		logger.Trace().
-			Int("issueCount", len(issuesByFile)).
-			Any("diagnosticsOverviewParams", diagnosticsOverviewParams).
-			Msg("detailed tree data")
+	if p == "" {
+		logger.Warn().Str("method", "ui.sendDiagnosticsOverview").Msg("no product specified, this is unexpected")
+		return
 	}
+
+	rootNodes := getRootNodes(c, p, issuesByFile)
+	nonce, err := html.GenerateSecurityNonce()
+	if err != nil {
+		logger.Err(err).Msgf("Failed to generate nonce")
+		return
+	}
+
+	fileNodes := getFileNodes(issuesByFile)
+
+	data := TemplateData{
+		RootNodes:            rootNodes,
+		Issues:               fileNodes,
+		Styles:               template.CSS(diagnosticsOverviewTemplateCSS),
+		Nonce:                nonce,
+		DeltaFindingsEnabled: c.IsDeltaFindingsEnabled(),
+	}
+
+	var htmlBuffer bytes.Buffer
+	if err = diagnosticsOverviewTemplate.Execute(&htmlBuffer, data); err != nil {
+		logger.Error().Msgf("Failed to generate tree htmlBuffer with tree template: %v", err)
+		return
+	}
+
+	diagnosticsOverviewParams := types.DiagnosticsOverviewParams{Product: p.ToProductCodename(), Html: htmlBuffer.String()}
+	notifier.Send(diagnosticsOverviewParams)
+	logger.Debug().Msgf("sent diagnostics overview htmlBuffer for product %s", p)
+	logger.Trace().
+		Int("issueCount", len(issuesByFile)).
+		Any("diagnosticsOverviewParams", diagnosticsOverviewParams).
+		Msg("detailed tree data")
 }
 
 func getFileNodes(issuesByFile snyk.IssuesByFile) map[Node][]Node {
@@ -124,17 +125,6 @@ func getFileNodes(issuesByFile snyk.IssuesByFile) map[Node][]Node {
 
 func getFileTypeIcon() template.HTML {
 	return ""
-}
-
-// generateSecurityNonce generates a cryptographically secure random nonce.
-// A nonce is used in the Content Security Policy (CSP) to allow specific
-// inline styles and scripts, helping to prevent Cross-Site Scripting (XSS) attacks.
-func generateSecurityNonce() (string, error) {
-	nonceBytes := make([]byte, 16)
-	if _, err := rand.Read(nonceBytes); err != nil {
-		return "", fmt.Errorf("error generating nonce: %v", err)
-	}
-	return base64.StdEncoding.EncodeToString(nonceBytes), nil
 }
 
 func getRootNodes(c *config.Config, p product.Product, issuesByFile snyk.IssuesByFile) []Node {
