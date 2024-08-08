@@ -63,7 +63,7 @@ func (cmd *navigateToRangeCommand) Execute(ctx context.Context) (any, error) {
 		Selection: converter.ToRange(myRange),
 	}
 
-	cmd.logger.Info().
+	cmd.logger.Debug().
 		Str("method", method).
 		Interface("params", params).
 		Msg("showing Document")

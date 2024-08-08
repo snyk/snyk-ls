@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/internal/notification"
@@ -35,7 +36,7 @@ import (
 
 type SnykCli struct {
 	errorReporter error_reporting.ErrorReporter
-	semaphore     chan int
+	semaphore     *semaphore.Weighted
 	cliTimeout    time.Duration
 	notifier      noti.Notifier
 	c             *config.Config
@@ -43,13 +44,14 @@ type SnykCli struct {
 
 var Mutex = &sync.Mutex{}
 
+// minimum 1 cpu, max cores - 4
+var concurrencyLimit = int(math.Max(1, float64(runtime.NumCPU()-4)))
+
 func NewExecutor(c *config.Config, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) Executor {
-	// minimum 1 cpu, max cores - 2
-	concurrencyLimit := int(math.Max(1, float64(runtime.NumCPU()-2)))
 
 	return &SnykCli{
 		errorReporter,
-		make(chan int, concurrencyLimit),
+		semaphore.NewWeighted(int64(concurrencyLimit)),
 		90 * time.Minute, // TODO: add preference to make this configurable [ROAD-1184]
 		notifier,
 		c,
@@ -69,13 +71,12 @@ func (c SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(c.cliTimeout))
 	defer cancel()
 
-	// handle concurrency limit, and when context is canceled
-	select {
-	case c.semaphore <- 1:
-		defer func() { <-c.semaphore }()
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	// handle concurrency limit and cancellations
+	err = c.semaphore.Acquire(ctx, 1)
+	if err != nil {
+		return nil, err
 	}
+	defer c.semaphore.Release(1)
 
 	output, err := c.doExecute(ctx, cmd, workingDir)
 	c.c.Logger().Trace().Str("method", method).Str("response", string(output))

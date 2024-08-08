@@ -101,7 +101,7 @@ func registerNotifier(c *config.Config, srv types.Server) {
 			logger.Debug().Msg("sending cli path")
 		case sglsp.ShowMessageParams:
 			notifier(c, srv, "window/showMessage", params)
-			logger.Info().Interface("message", params).Msg("showing message")
+			logger.Debug().Interface("message", params).Msg("showing message")
 		case types.DiagnosticsOverviewParams:
 			notifier(c, srv, "$/snyk.diagnosticsOverview", params)
 			logger.Debug().
@@ -131,7 +131,7 @@ func registerNotifier(c *config.Config, srv types.Server) {
 		case types.ShowMessageRequest:
 			// Function blocks on callback, so we need to run it in a separate goroutine
 			go handleShowMessageRequest(srv, params, &logger)
-			logger.Info().Msg("sending show message request to client")
+			logger.Debug().Msg("sending show message request to client")
 		case types.ApplyWorkspaceEditParams:
 			handleApplyWorkspaceEdit(srv, params, &logger)
 			logger.Debug().
@@ -151,7 +151,7 @@ func registerNotifier(c *config.Config, srv types.Server) {
 		}
 	}
 	di.Notifier().CreateListener(callbackFunction)
-	logger.Info().Str("method", "registerNotifier").Msg("registered notifier")
+	logger.Debug().Str("method", "registerNotifier").Msg("registered notifier")
 }
 
 func handleInlineValueRefresh(srv types.Server, logger *zerolog.Logger) {
@@ -160,7 +160,7 @@ func handleInlineValueRefresh(srv types.Server, logger *zerolog.Logger) {
 		logger.Debug().Str("method", method).Msg("inlineValue/refresh not supported by client, not sending request")
 		return
 	}
-	logger.Info().Str("method", method).Msg("sending inline value refresh request to client")
+	logger.Debug().Str("method", method).Msg("sending inline value refresh request to client")
 
 	_, err := srv.Callback(context.Background(), "workspace/inlineValue/refresh", nil)
 	if err != nil {
@@ -176,7 +176,7 @@ func handleCodelensRefresh(srv types.Server, logger *zerolog.Logger) {
 		logger.Debug().Str("method", method).Msg("codelens/refresh not supported by client, not sending request")
 		return
 	}
-	logger.Info().Str("method", method).Msg("sending codelens refresh request to client")
+	logger.Debug().Str("method", method).Msg("sending codelens refresh request to client")
 
 	_, err := srv.Callback(context.Background(), "workspace/codeLens/refresh", nil)
 	if err != nil {
@@ -208,7 +208,7 @@ func handleApplyWorkspaceEdit(srv types.Server, params types.ApplyWorkspaceEditP
 		return
 	}
 
-	logger.Info().Str("method", method).
+	logger.Debug().Str("method", method).
 		Msgf("Workspace edit applied %t. %s", editResult.Applied, editResult.FailureReason)
 }
 
@@ -223,7 +223,7 @@ func handleShowMessageRequest(srv types.Server, params types.ShowMessageRequest,
 			Title: string(action),
 		})
 	}
-	logger.Info().
+	logger.Debug().
 		Str("method", "registerNotifier").
 		Interface("message", requestParams).
 		Msg("showing message request")
@@ -249,7 +249,7 @@ func handleShowMessageRequest(srv types.Server, params types.ShowMessageRequest,
 
 		selectedCommand, ok := params.Actions.Get(types.MessageAction(actionItem.Title))
 		if !ok {
-			logger.Info().Str("method", "registerNotifier").Msg("Action map key not found")
+			logger.Warn().Str("method", "registerNotifier").Msg("Action map key not found")
 			return
 		}
 		if selectedCommand.CommandId == "" {

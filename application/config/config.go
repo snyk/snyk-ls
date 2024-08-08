@@ -322,7 +322,7 @@ func (c *Config) Load() {
 func (c *Config) loadFile(fileName string) {
 	file, err := os.Open(fileName)
 	if err != nil {
-		c.Logger().Info().Str("method", "loadFile").Msg("Couldn't load " + fileName)
+		c.Logger().Debug().Str("method", "loadFile").Msg("Couldn't load " + fileName)
 		return
 	}
 	defer func(file *os.File) { _ = file.Close() }(file)

@@ -66,7 +66,7 @@ func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 			// execute autofix codeaction
 			edit := (*action.DeferredEdit)()
 			if edit == nil {
-				cmd.logger.Info().Msg("No fix could be computed.")
+				cmd.logger.Debug().Msg("No fix could be computed.")
 				return nil, nil
 			}
 
