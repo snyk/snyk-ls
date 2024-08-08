@@ -21,6 +21,7 @@ import (
 	_ "embed"
 	"fmt"
 	"html/template"
+	"sync"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -36,17 +37,7 @@ var diagnosticsOverviewTemplatePath string
 //go:embed template/diagnosticsOverview.css
 var diagnosticsOverviewTemplateCSS string
 var diagnosticsOverviewTemplate *template.Template
-
-func init() {
-	logger := config.CurrentConfig().Logger().With().Str("method", "ui.init").Logger()
-	funcMap := map[string]any{}
-	var err error
-	diagnosticsOverviewTemplate, err = template.New("diagnosticsOverviewTemplate").Funcs(funcMap).Parse(diagnosticsOverviewTemplatePath)
-	if err != nil {
-		logger.Err(err).Msg("failed to parse template")
-		return
-	}
-}
+var templateParsingMutex sync.RWMutex
 
 type TemplateData struct {
 	// Root nodes
@@ -67,6 +58,12 @@ type Node struct {
 
 func SendDiagnosticsOverview(c *config.Config, p product.Product, issuesByFile snyk.IssuesByFile, notifier notification.Notifier) {
 	logger := c.Logger().With().Str("method", "ui.SendDiagnosticsOverview").Logger()
+	err := initializeTemplate()
+	if err != nil {
+		logger.Err(err).Msg("failed to initialize diagnostics overview template. Not sending overview")
+		return
+	}
+
 	if p == "" {
 		logger.Warn().Str("method", "ui.sendDiagnosticsOverview").Msg("no product specified, this is unexpected")
 		return
@@ -102,6 +99,24 @@ func SendDiagnosticsOverview(c *config.Config, p product.Product, issuesByFile s
 		Int("issueCount", len(issuesByFile)).
 		Any("diagnosticsOverviewParams", diagnosticsOverviewParams).
 		Msg("detailed tree data")
+}
+
+func initializeTemplate() error {
+	templateParsingMutex.RLock()
+	if diagnosticsOverviewTemplate == nil {
+		templateParsingMutex.RUnlock()
+		templateParsingMutex.Lock()
+		defer templateParsingMutex.Unlock()
+
+		funcMap := map[string]any{}
+		var err error
+
+		diagnosticsOverviewTemplate, err = template.New("diagnosticsOverviewTemplate").Funcs(funcMap).Parse(diagnosticsOverviewTemplatePath)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func getFileNodes(issuesByFile snyk.IssuesByFile) map[Node][]Node {
