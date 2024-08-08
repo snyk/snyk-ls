@@ -18,76 +18,111 @@
 <html lang="en">
 
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; style-src 'self' 'nonce-{{.Nonce}}'; script-src 'nonce-{{.Nonce}}';">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; style-src 'self' 'nonce-{{.Nonce}}'; script-src 'nonce-{{.Nonce}}';">
 
-  <!--noformat-->
-  <style nonce="{{.Nonce}}">
-    {{.Styles}}
-  </style>
-  <!--noformat-->
+    <!--noformat-->
+    <style nonce="{{.Nonce}}">
+        {{.Styles}}
+    </style>
+    <!--noformat-->
 </head>
 
 <body>
-<div class="tab">
-  <button id="all-issues-button" class="tablinks">All Issues</button>
-  <button id="net-new-issues-button" class="tablinks">Net new Issues</button>
-</div>
 
+<main class="issues-overview-container">
+    <!-- Tabs Issue Overview Container -->
+    <article class="issues-overview">
+        <div class="main-tabs-nav">
+      <span data-tab="all-issues" id="all-issues-button"
+            class="tab-item {{if not .DeltaFindingsEnabled}} is-selected {{end}} all-issues-tab">
+          All Issues
+      </span>
+            <span data-tab="net-new-issues" id="net-new-issues-button"
+                  class="tab-item {{if .DeltaFindingsEnabled}} is-selected {{end}} net-new-issues-tab">
+          Net new issues
+      </span>
+        </div>
 
-<div id="issueTree" class="tree">
-  <!--  root nodes-->
-  <ul>
-    {{range $index, $node := .RootNodes}}
-    <li class="issue-overview">
-      <span class="issue-clickable-{{$node.ProductEnabled}}">{{$node.Icon}} {{$node.Text}}</span>
-    </li>
-    {{ end }}
-  </ul>
+        <!-- Dynamic Content Sections -->
+        <div class="tab-container">
+            <!-- all-issues content -->
+            <div data-content="all-issues" id="all-issues-content"
+                 class="tab-content main-tab-content {{if not .DeltaFindingsEnabled}} is-selected {{end}}">
+                <section class="issue-overview delimiter-top">
+                    <div id="issueTree" class="sn-tree">
+                        <!--  root nodes-->
+                        <ul class="sn-list">
+                            {{range $index, $node := .RootNodes}}
+                            <li class="sn-list-item is-clickable-{{$node.ProductEnabled}}">
+                                <span class="sn-icon">{{$node.Icon}}</span><span class="sn-label">{{$node.Text}}</span>
+                            </li>
+                            {{ end }}
+                        </ul>
 
-  <!--  file nodes -->
-  <ul>
-    {{range $node, $issueNodes := .Issues}}
-    <li class="issue-overview">
-      <span class="issue-file-node">{{ $node.Icon }} {{ $node.Text }}</span>
-      <ul>
-        {{range $index, $issue := $issueNodes}}
-        <span class="issue-clickable">{{$issue.Icon}} {{$issue.Text}}</span>
-        {{ end }}
-      </ul>
-    </li>
-    {{ end }}
-  </ul>
-</div>
+                        <!--  file nodes -->
+                        <ul class="sn-list">
+                            {{range $node, $issueNodes := .Issues}}
+                            <li class="sn-list-item is-expandable is-clickable-{{$node.ProductEnabled}} is-expanded">
+                                <!-- file node-->
+                                <span class="sn-icon">{{$node.Icon}}</span><span class="sn-label">{{$node.Text}}</span>
+                                <!-- issue tree nodes -->
+                                <ul class="sn-list">
+                                    {{range $index, $issue := $issueNodes}}
+                                    <li class="sn-list-item is-clickable={{$node.ProductEnabled}}">
+                                        <span class="sn-icon">{{$issue.Icon}}</span><span class="sn-label">{{$issue.Text}}</span>
+                                    </li>
+                                    {{ end }}
+                                </ul>
+                            </li>
+                            {{ end }}
+                        </ul>
+                    </div>
+                </section>
+                <!-- Content for Vulnerability Overview -->
+            </div>
+            <!-- End all-issues-content -->
+            <!-- net-new issues content -->
+            <div data-content="net-new-issues" id="net-new-issues-content"
+                 class="tab-content {{if .DeltaFindingsEnabled}} is-selected {{end}} main-tab-content">
+            </div>
+            <!-- End net-new-issues-content -->
+        </div>
+    </article>
+</main>
+<!--<div class="tab">-->
+<!--  <button id="all-issues-button" class="tablinks">All Issues</button>-->
+<!--  <button id="net-new-issues-button" class="tablinks">Net new Issues</button>-->
+<!--</div>-->
 
 <script nonce="{{.Nonce}}">
-  const allIssuesButton = document.getElementById("all-issues-button");
-  const netNewIssuesButton = document.getElementById("net-new-issues-button");
-  const deltaFindingsEnabled = Boolean("{{.DeltaFindingsEnabled}}");
+    const allIssuesButton = document.getElementById("all-issues-button");
+    const netNewIssuesButton = document.getElementById("net-new-issues-button");
+    const deltaFindingsEnabled = Boolean("{{.DeltaFindingsEnabled}}");
 
-  // event listeners for switching tabs
-  netNewIssuesButton.addEventListener("click", () => {
-    retrieveIssues(true)
-  })
+    // event listeners for switching tabs
+    netNewIssuesButton.addEventListener("click", () => {
+        retrieveIssues(true)
+    })
 
-  allIssuesButton.addEventListener("click", () => {
-    retrieveIssues(false)
-  })
+    allIssuesButton.addEventListener("click", () => {
+        retrieveIssues(false)
+    })
 
-  function retrieveIssues(deltaFindingsEnabled) {
-    // retrieve issues, injected/overwritten by IDE
-    // this should force a reload & resending to the client.
-    // also the backend must update its config
-    console.log(`i should be retrieving values. delta: ${deltaFindingsEnabled}`)
-  }
+    function retrieveIssues(deltaFindingsEnabled) {
+        // retrieve issues, injected/overwritten by IDE
+        // this should force a reload & resending to the client.
+        // also the backend must update its config
+        console.log(`i should be retrieving values. delta: ${deltaFindingsEnabled}`)
+    }
 
-  if (deltaFindingsEnabled) {
-    netNewIssuesButton.className.replace(" active", "")
-  } else {
-    allIssuesButton.className += " active"
-  }
+    if (deltaFindingsEnabled) {
+        netNewIssuesButton.className.replace(" active", "")
+    } else {
+        allIssuesButton.className += " active"
+    }
 </script>
 </body>
 
