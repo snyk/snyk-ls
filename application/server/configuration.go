@@ -51,7 +51,7 @@ func workspaceDidChangeConfiguration(srv *jrpc2.Server) jrpc2.Handler {
 
 		// client expects settings pull. E.g. VS Code uses pull model & sends empty settings when configuration is updated.
 		if !c.ClientCapabilities().Workspace.Configuration {
-			c.Logger().Info().Msg("Pull model for workspace configuration not supported, ignoring workspace/didChangeConfiguration notification.")
+			c.Logger().Debug().Msg("Pull model for workspace configuration not supported, ignoring workspace/didChangeConfiguration notification.")
 			return false, nil
 		}
 
@@ -302,13 +302,13 @@ func updatePathFromSettings(c *config.Config, settings types.Settings) {
 	if len(settings.Path) > 0 {
 		_ = os.Unsetenv("Path") // unset the path first to work around issues on Windows OS, where PATH can be Path
 		err := os.Setenv("PATH", settings.Path+string(os.PathListSeparator)+cachedOriginalPath)
-		c.Logger().Info().Str("method", "updatePathFromSettings").Msgf("added configured path to PATH Environment Variable '%s'", os.Getenv("PATH"))
+		c.Logger().Debug().Str("method", "updatePathFromSettings").Msgf("added configured path to PATH Environment Variable '%s'", os.Getenv("PATH"))
 		if err != nil {
 			c.Logger().Err(err).Str("method", "updatePathFromSettings").Msgf("couldn't add path %s", settings.Path)
 		}
 	} else {
 		_ = os.Setenv("PATH", cachedOriginalPath)
-		c.Logger().Info().Str("method", "updatePathFromSettings").Msgf("restore initial path '%s'", os.Getenv("PATH"))
+		c.Logger().Debug().Str("method", "updatePathFromSettings").Msgf("restore initial path '%s'", os.Getenv("PATH"))
 	}
 }
 

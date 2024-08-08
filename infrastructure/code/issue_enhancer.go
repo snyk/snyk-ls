@@ -76,8 +76,8 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 
 	autoFixEnabled := getCodeSettings().isAutofixEnabled.Get()
 	learnEnabled := config.CurrentConfig().IsSnykLearnCodeActionsEnabled()
-	b.c.Logger().Info().Str("method", method).Msg("Autofix is enabled: " + strconv.FormatBool(autoFixEnabled))
-	b.c.Logger().Info().Str("method", method).Msg("Snyk Learn is enabled: " + strconv.FormatBool(learnEnabled))
+	b.c.Logger().Debug().Str("method", method).Msg("Autofix is enabled: " + strconv.FormatBool(autoFixEnabled))
+	b.c.Logger().Debug().Str("method", method).Msg("Snyk Learn is enabled: " + strconv.FormatBool(learnEnabled))
 
 	if !autoFixEnabled && !learnEnabled {
 		b.c.Logger().Trace().Msg("Autofix | Snyk Learn code actions are disabled, not adding code actions")
@@ -182,7 +182,7 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 					// TODO(alex.gronskiy): currently, only the first ([0]) fix suggestion goes into the fix
 					fix = &fixSuggestions[0]
 				} else {
-					b.c.Logger().Info().Str("method", method).Str("requestId", b.requestId).Msg("No good fix could be computed.")
+					b.c.Logger().Debug().Str("method", method).Str("requestId", b.requestId).Msg("No good fix could be computed.")
 				}
 				complete = true
 			}

@@ -54,16 +54,16 @@ func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirty
 }
 
 func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []types.CodeAction {
-	c.logger.Info().Msg("Received code action request")
+	c.logger.Debug().Msg("Received code action request")
 	if c.fileWatcher.IsDirty(params.TextDocument.URI) {
-		c.logger.Info().Msg("File is dirty, skipping code actions")
+		c.logger.Debug().Msg("File is dirty, skipping code actions")
 		return nil
 	}
 	path := uri.PathFromUri(params.TextDocument.URI)
 	r := converter.FromRange(params.Range)
 	issues := c.IssuesProvider.IssuesForRange(path, r)
 	logMsg := fmt.Sprint("Found ", len(issues), " issues for path ", path, " and range ", r)
-	c.logger.Info().Msg(logMsg)
+	c.logger.Debug().Msg(logMsg)
 
 	quickFixGroupables := c.getQuickFixGroupablesAndCache(issues)
 
@@ -75,7 +75,7 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	}
 
 	actions := converter.ToCodeActions(updatedIssues)
-	c.logger.Info().Msg(fmt.Sprint("Returning ", len(actions), " code actions"))
+	c.logger.Debug().Msg(fmt.Sprint("Returning ", len(actions), " code actions"))
 	return actions
 }
 
@@ -155,7 +155,7 @@ func (c *CodeActionsService) cacheCodeAction(action snyk.CodeAction, issue snyk.
 }
 
 func (c *CodeActionsService) ResolveCodeAction(action types.CodeAction, server types.Server) (types.CodeAction, error) {
-	c.logger.Info().Msg("Received code action resolve request")
+	c.logger.Debug().Msg("Received code action resolve request")
 	t := time.Now()
 
 	if action.Command != nil {
@@ -182,12 +182,12 @@ func (c *CodeActionsService) ResolveCodeAction(action types.CodeAction, server t
 	elapsedSeconds := int(elapsed.Seconds())
 	codeAction := converter.ToCodeAction(cached.issue, resolvedAction)
 
-	c.logger.Info().Msg(fmt.Sprint("Resolved code action in ", elapsedSeconds, " seconds:\n", codeAction))
+	c.logger.Debug().Msg(fmt.Sprint("Resolved code action in ", elapsedSeconds, " seconds:\n", codeAction))
 	return codeAction, nil
 }
 
 func (c *CodeActionsService) handleCommand(action types.CodeAction, server types.Server) (types.CodeAction, error) {
-	c.logger.Info().Str("method", "codeaction.handleCommand").Msgf("handling command %s", action.Command.Command)
+	c.logger.Debug().Str("method", "codeaction.handleCommand").Msgf("handling command %s", action.Command.Command)
 	cmd := types.CommandData{
 		Title:     action.Command.Title,
 		CommandId: action.Command.Command,

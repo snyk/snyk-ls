@@ -122,13 +122,13 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 		data["IgnoreReason"] = issue.IgnoreDetails.Reason
 	}
 
-	var html bytes.Buffer
-	if err := globalTemplate.Execute(&html, data); err != nil {
+	var buffer bytes.Buffer
+	if err := globalTemplate.Execute(&buffer, data); err != nil {
 		c.Logger().Error().Msgf("Failed to execute main details template: %v", err)
 		return ""
 	}
 
-	return html.String()
+	return buffer.String()
 }
 
 func getLineToIgnoreAction(issue snyk.Issue) int {
