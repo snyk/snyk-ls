@@ -48,7 +48,6 @@ var Mutex = &sync.Mutex{}
 var concurrencyLimit = int(math.Max(1, float64(runtime.NumCPU()-4)))
 
 func NewExecutor(c *config.Config, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) Executor {
-
 	return &SnykCli{
 		errorReporter,
 		semaphore.NewWeighted(int64(concurrencyLimit)),
