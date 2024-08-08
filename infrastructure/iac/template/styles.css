@@ -32,7 +32,6 @@ section {
 .styled-link {
   display: inline-block;
   text-decoration: none;
-  color: inherit;
   font-weight: normal;
   margin-bottom: 8px;
 }

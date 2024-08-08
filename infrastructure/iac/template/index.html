@@ -21,12 +21,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; style-src 'self' 'nonce-{{.Nonce}}'; script-src 'nonce-{{.Nonce}}';">
+    content="default-src 'none'; style-src 'self' 'nonce-{{.Nonce}}' 'nonce-ideNonce'; script-src 'nonce-{{.Nonce}}';">
   <!--noformat-->
   <style nonce="{{.Nonce}}">
     {{.Styles}}
   </style>
   <!--noformat-->
+  <!-- The following <style> tag is a placeholder that will be replaced by IDE-specific styles.
+    IDEs can inject their own styles dynamically by replacing this tag using the data-ide-style attribute. -->
+  <style nonce="ideNonce" data-ide-style></style>
 </head>
 
 <body>
@@ -44,19 +47,19 @@
       </div>
     </section>
     <section class="delimiter-top summary">
-      <div class="summary-item module">
+      <div class="summary-item description">
         <div class="label">Description</div>
         <div class="content">
           {{.Issue.Message}}
         </div>
       </div>
-      <div class="summary-item introduced-through">
+      <div class="summary-item impact">
         <div class="label">Impact</div>
         <div class="content">
           {{.Issue.AdditionalData.Impact}}
         </div>
       </div>
-      <div class="summary-item fixed-in">
+      <div class="summary-item path">
         <div class="label">Path</div>
         <div class="content">
           {{.Issue.AdditionalData.Path}}
