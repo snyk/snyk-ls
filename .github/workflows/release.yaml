@@ -133,6 +133,7 @@ jobs:
           AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
           LICENSES: ${{ steps.create_license_report.outputs.LICENSES }}
         with:
+          version: "~> v2"
           args: release --clean
 
       - name: Output compiled licenses
