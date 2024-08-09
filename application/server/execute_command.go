@@ -36,8 +36,8 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 		bgCtx := context.Background()
 		c := config.CurrentConfig()
 		method := "ExecuteCommandHandler"
-		c.Logger().Info().Str("method", method).Interface("command", params).Msg("RECEIVING")
-		defer c.Logger().Info().Str("method", method).Interface("command", params).Msg("SENDING")
+		c.Logger().Debug().Str("method", method).Interface("command", params).Msg("RECEIVING")
+		defer c.Logger().Debug().Str("method", method).Interface("command", params).Msg("SENDING")
 
 		commandData := types.CommandData{CommandId: params.Command, Arguments: params.Arguments, Title: params.Command}
 

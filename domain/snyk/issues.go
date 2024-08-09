@@ -19,9 +19,10 @@ package snyk
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/snyk/snyk-ls/internal/delta"
 	"net/url"
 	"time"
+
+	"github.com/snyk/snyk-ls/internal/delta"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -130,6 +131,7 @@ func (i *Issue) RuleId() string {
 type IssueAdditionalData interface {
 	GetKey() string
 	GetTitle() string
+	IsFixable() bool
 }
 
 type IgnoreDetails struct {
@@ -160,6 +162,10 @@ type CodeIssueData struct {
 	HasAIFix           bool               `json:"hasAIFix"`
 	DataFlow           []DataFlowElement  `json:"dataFlow,omitempty"`
 	Details            string             `json:"details"`
+}
+
+func (c CodeIssueData) IsFixable() bool {
+	return c.HasAIFix
 }
 
 func (c CodeIssueData) GetKey() string {
@@ -224,6 +230,14 @@ type OssIssueData struct {
 	AppliedPolicyRules AppliedPolicyRules `json:"appliedPolicyRules,omitempty"`
 }
 
+func (o OssIssueData) IsFixable() bool {
+	return o.IsUpgradable &&
+		o.IsPatchable &&
+		len(o.UpgradePath) > 1 &&
+		len(o.From) > 1 &&
+		o.UpgradePath[1] != o.From[1]
+}
+
 type SeverityChange struct {
 	OriginalSeverity string `json:"originalSeverity"`
 	NewSeverity      string `json:"newSeverity"`
@@ -274,6 +288,10 @@ type IaCIssueData struct {
 	Path []string `json:"path"`
 	// References: List of reference URLs
 	References []string `json:"references,omitempty"`
+}
+
+func (i IaCIssueData) IsFixable() bool {
+	return false
 }
 
 func (i IaCIssueData) GetKey() string {

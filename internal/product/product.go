@@ -58,7 +58,7 @@ func (p Product) ToFilterableIssueType() []FilterableIssueType {
 	case ProductOpenSource:
 		return []FilterableIssueType{FilterableIssueTypeOpenSource}
 	case ProductCode:
-		return []FilterableIssueType{FilterableIssueTypeCodeQuality, FilterableIssueTypeCodeSecurity}
+		return []FilterableIssueType{FilterableIssueTypeCodeSecurity, FilterableIssueTypeCodeQuality}
 	case ProductInfrastructureAsCode:
 		return []FilterableIssueType{FilterableIssueTypeInfrastructureAsCode}
 	case ProductContainer:
