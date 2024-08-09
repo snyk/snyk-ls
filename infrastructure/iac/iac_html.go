@@ -18,15 +18,13 @@ package iac
 
 import (
 	"bytes"
-	"crypto/rand"
 	_ "embed"
-	"encoding/base64"
-	"fmt"
 	"html/template"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	iac "github.com/snyk/snyk-ls/infrastructure/iac/template/assets"
+	"github.com/snyk/snyk-ls/internal/html"
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -67,9 +65,9 @@ func getStyles() template.CSS {
 
 // Function to get the rendered HTML with issue details and CSS
 func (service *IacHtmlRender) getCustomUIContent(issue snyk.Issue) string {
-	var html bytes.Buffer
+	var htmlTemplate bytes.Buffer
 
-	nonce, err := generateSecurityNonce()
+	nonce, err := html.GenerateSecurityNonce()
 	if err != nil {
 		service.Config.Logger().Warn().Msgf("Failed to generate nonce: %s", err)
 		return ""
@@ -82,21 +80,10 @@ func (service *IacHtmlRender) getCustomUIContent(issue snyk.Issue) string {
 		Nonce:        nonce,
 	}
 
-	err = service.GlobalTemplate.Execute(&html, data)
+	err = service.GlobalTemplate.Execute(&htmlTemplate, data)
 	if err != nil {
 		service.Config.Logger().Error().Msgf("Failed to execute IaC template: %s", err)
 	}
 
-	return html.String()
-}
-
-// generateSecurityNonce generates a cryptographically secure random nonce.
-// A nonce is used in the Content Security Policy (CSP) to allow specific
-// inline styles and scripts, helping to prevent Cross-Site Scripting (XSS) attacks.
-func generateSecurityNonce() (string, error) {
-	nonceBytes := make([]byte, 16)
-	if _, err := rand.Read(nonceBytes); err != nil {
-		return "", fmt.Errorf("error generating nonce: %v", err)
-	}
-	return base64.StdEncoding.EncodeToString(nonceBytes), nil
+	return htmlTemplate.String()
 }
