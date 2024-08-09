@@ -1,51 +1,57 @@
-:root {
-  --default-font: ui-sans-serif, "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
-}
+.issues-overview{}
 
-::-webkit-scrollbar {
-  width: 8px;
-}
-
-::-webkit-scrollbar-thumb {
-  border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #595a5c;
-}
-
-.issue {
-  position: relative;
+.main-tabs-nav, .tabs-nav {
   display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
+  list-style-type: none;
+  overflow: hidden;
+  padding: 0;
 }
 
-.issue .issue-text {
-  margin-bottom: 0.8rem;
-  font-size: 1.8rem;
-  font-weight: 500;
-  line-height: 2.4rem;
+.tab-content {
+  display: none;
+  border-top-style: hidden;
 }
 
-.severity .icon {
-  width: 8px;
-  height: 8px;
+.tab-content.is-selected {
+  display: block;
 }
 
-.icon {
+.tab-item-icon {
   vertical-align: middle;
-  width: 8px;
-  height: 8px;
 }
 
-.clickable:hover {
+.tab-item {
+  font-weight: 500;
+  float: left;
+  display: block;
+  text-align: center;
+  padding: 10px 16px 8px 16px;
+  text-decoration: none;
+  margin-right: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s, border-color 0.3s;
+}
+
+.tab-item-icon {
+  color: inherit;
+}
+
+.sn-tree {}
+.sn-list {}
+.sn-list-item{}
+
+.is-clickable-true{
   cursor: pointer;
 }
-
-.issue-overview {}
-.issue-clickable-true {}
-.issue-clickable-false {}
-.issue-file-node {}
-.tree {}
+.is-clickable-false{
+  cursor: not-allowed;
+}
+.sn-icon{}
+.sn-label{}
+.sn-list-item.is-expandable {}
+.sn-list-item.is-expanded .sn-list {
+  display: block;
+}
+.sn-list-item .sn-list {
+  display: none;
+}
