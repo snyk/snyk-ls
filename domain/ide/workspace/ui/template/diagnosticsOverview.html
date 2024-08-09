@@ -1,0 +1,94 @@
+<!--
+  ~ © 2024 Snyk Limited
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; style-src 'self' 'nonce-{{.Nonce}}'; script-src 'nonce-{{.Nonce}}';">
+
+  <!--noformat-->
+  <style nonce="{{.Nonce}}">
+    {{.Styles}}
+  </style>
+  <!--noformat-->
+</head>
+
+<body>
+<div class="tab">
+  <button id="all-issues-button" class="tablinks">All Issues</button>
+  <button id="net-new-issues-button" class="tablinks">Net new Issues</button>
+</div>
+
+
+<div id="issueTree" class="tree">
+  <!--  root nodes-->
+  <ul>
+    {{range $index, $node := .RootNodes}}
+    <li class="issue-overview">
+      <span class="issue-clickable-{{$node.ProductEnabled}}">{{$node.Icon}} {{$node.Text}}</span>
+    </li>
+    {{ end }}
+  </ul>
+
+  <!--  file nodes -->
+  <ul>
+    {{range $node, $issueNodes := .Issues}}
+    <li class="issue-overview">
+      <span class="issue-file-node">{{ $node.Icon }} {{ $node.Text }}</span>
+      <ul>
+        {{range $index, $issue := $issueNodes}}
+        <span class="issue-clickable">{{$issue.Icon}} {{$issue.Text}}</span>
+        {{ end }}
+      </ul>
+    </li>
+    {{ end }}
+  </ul>
+</div>
+
+<script nonce="{{.Nonce}}">
+  const allIssuesButton = document.getElementById("all-issues-button");
+  const netNewIssuesButton = document.getElementById("net-new-issues-button");
+  const deltaFindingsEnabled = Boolean("{{.DeltaFindingsEnabled}}");
+
+  // event listeners for switching tabs
+  netNewIssuesButton.addEventListener("click", () => {
+    retrieveIssues(true)
+  })
+
+  allIssuesButton.addEventListener("click", () => {
+    retrieveIssues(false)
+  })
+
+  function retrieveIssues(deltaFindingsEnabled) {
+    // retrieve issues, injected/overwritten by IDE
+    // this should force a reload & resending to the client.
+    // also the backend must update its config
+    console.log(`i should be retrieving values. delta: ${deltaFindingsEnabled}`)
+  }
+
+  if (deltaFindingsEnabled) {
+    netNewIssuesButton.className.replace(" active", "")
+  } else {
+    allIssuesButton.className += " active"
+  }
+</script>
+</body>
+
+</html>

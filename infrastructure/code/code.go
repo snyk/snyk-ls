@@ -255,7 +255,7 @@ func scanAndPersistBaseBranch(ctx context.Context, sc *Scanner, folderPath strin
 
 	tmpFolderName := fmt.Sprintf("snyk_delta_%s", vcs.NormalizeBranchName(baseBranchName))
 	destinationPath, err := os.MkdirTemp("", tmpFolderName)
-	logger.Info().Msg("Creating tmp directory for base branch")
+	logger.Debug().Msg("Creating tmp directory for base branch")
 
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to create tmp directory for base branch")
@@ -274,7 +274,7 @@ func scanAndPersistBaseBranch(ctx context.Context, sc *Scanner, folderPath strin
 			return
 		}
 		err = os.RemoveAll(destinationPath)
-		logger.Info().Msg("removing base branch tmp dir " + destinationPath)
+		logger.Debug().Msg("removing base branch tmp dir " + destinationPath)
 
 		if err != nil {
 			logger.Error().Err(err).Msg("couldn't remove tmp dir " + destinationPath)
@@ -443,7 +443,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files <-chan string, pa
 	}
 
 	if uploadedBundle.BundleHash == "" {
-		sc.c.Logger().Info().Msg("empty bundle, no Snyk Code analysis")
+		sc.c.Logger().Debug().Msg("empty bundle, no Snyk Code analysis")
 		return issues, nil
 	}
 

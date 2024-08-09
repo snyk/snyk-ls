@@ -1,0 +1,51 @@
+:root {
+  --default-font: ui-sans-serif, "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #595a5c;
+}
+
+.issue {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.issue .issue-text {
+  margin-bottom: 0.8rem;
+  font-size: 1.8rem;
+  font-weight: 500;
+  line-height: 2.4rem;
+}
+
+.severity .icon {
+  width: 8px;
+  height: 8px;
+}
+
+.icon {
+  vertical-align: middle;
+  width: 8px;
+  height: 8px;
+}
+
+.clickable:hover {
+  cursor: pointer;
+}
+
+.issue-overview {}
+.issue-clickable-true {}
+.issue-clickable-false {}
+.issue-file-node {}
+.tree {}

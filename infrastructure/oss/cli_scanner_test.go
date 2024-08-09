@@ -124,6 +124,7 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			c := testutil.UnitTest(t)
 			skipReason := "filepath is os dependent"
 			prefix := "C:"
 			if strings.HasPrefix(tc.workDir, prefix) {
@@ -141,14 +142,10 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 			require.NoError(t, os.MkdirAll(dir, 0770))
 			require.NoError(t, os.WriteFile(expected, []byte(expected), 0666))
 
-			actual := getAbsTargetFilePath(
-				scanResult{
-					DisplayTargetFile: tc.displayTargetFile,
-					Path:              filepath.Join(base, adjustedPath),
-				},
-				filepath.Join(base, adjustedWorkDir),
-				filepath.Join(base, adjustedPath),
-			)
+			actual := getAbsTargetFilePath(c, scanResult{
+				DisplayTargetFile: tc.displayTargetFile,
+				Path:              filepath.Join(base, adjustedPath),
+			}, filepath.Join(base, adjustedWorkDir), filepath.Join(base, adjustedPath))
 			assert.Equal(t, expected, actual)
 		})
 	}

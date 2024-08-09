@@ -131,6 +131,7 @@ func (i *Issue) RuleId() string {
 type IssueAdditionalData interface {
 	GetKey() string
 	GetTitle() string
+	IsFixable() bool
 }
 
 type IgnoreDetails struct {
@@ -161,6 +162,10 @@ type CodeIssueData struct {
 	HasAIFix           bool               `json:"hasAIFix"`
 	DataFlow           []DataFlowElement  `json:"dataFlow,omitempty"`
 	Details            string             `json:"details"`
+}
+
+func (c CodeIssueData) IsFixable() bool {
+	return c.HasAIFix
 }
 
 func (c CodeIssueData) GetKey() string {
@@ -225,6 +230,14 @@ type OssIssueData struct {
 	AppliedPolicyRules AppliedPolicyRules `json:"appliedPolicyRules,omitempty"`
 }
 
+func (o OssIssueData) IsFixable() bool {
+	return o.IsUpgradable &&
+		o.IsPatchable &&
+		len(o.UpgradePath) > 1 &&
+		len(o.From) > 1 &&
+		o.UpgradePath[1] != o.From[1]
+}
+
 type SeverityChange struct {
 	OriginalSeverity string `json:"originalSeverity"`
 	NewSeverity      string `json:"newSeverity"`
@@ -277,6 +290,10 @@ type IaCIssueData struct {
 	References []string `json:"references,omitempty"`
 	// CustomUIContent: IaC HTML template
 	CustomUIContent string `json:"customUIContent"`
+}
+
+func (i IaCIssueData) IsFixable() bool {
+	return false
 }
 
 func (i IaCIssueData) GetKey() string {
