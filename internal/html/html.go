@@ -17,10 +17,12 @@
 package html
 
 import (
-	"github.com/gomarkdown/markdown"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"html/template"
 	"strings"
+
+	"github.com/gomarkdown/markdown"
+
+	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 func MarkdownToHTML(md string) template.HTML {

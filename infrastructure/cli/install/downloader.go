@@ -98,7 +98,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 		return fmt.Errorf("no builds found for current OS")
 	}
 
-	logger.Info().Str("download_url", downloadURL).Msgf("Snyk CLI %s in progress...", kindStr)
+	logger.Debug().Str("download_url", downloadURL).Msgf("Snyk CLI %s in progress...", kindStr)
 
 	if isUpdate {
 		d.progressTracker.BeginWithMessage("Updating Snyk CLI...", "")
@@ -120,7 +120,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 		d.progressTracker.CancelOrDone(func() {
 			_ = body.Close()
 
-			logger.Info().Msgf("Cancellation received. Aborting %s.", kindStr)
+			logger.Debug().Msgf("Cancellation received. Aborting %s.", kindStr)
 		}, doneCh)
 	}(resp.Body)
 
@@ -132,7 +132,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
 		doneCh <- true
-		logger.Info().Msgf("finished Snyk CLI %s", kindStr)
+		logger.Debug().Msgf("finished Snyk CLI %s", kindStr)
 	}(resp.Body)
 
 	// pipe stream
@@ -164,7 +164,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	if err != nil {
 		return err
 	}
-	logger.Info().Int64("bytes_copied", bytesCopied).Msgf("copied to %s", cliTmpFile.Name())
+	logger.Debug().Int64("bytes_copied", bytesCopied).Msgf("copied to %s", cliTmpFile.Name())
 
 	expectedChecksum, err := expectedChecksum(r, &cliDiscovery)
 	if err != nil {
@@ -228,7 +228,7 @@ func (d *Downloader) moveToDestination(destinationFileName string, sourceFilePat
 		}
 	}
 
-	logger.Info().Str("tempFilePath", sourceFilePath).Msg("tempfile path")
+	logger.Debug().Str("tempFilePath", sourceFilePath).Msg("tempfile path")
 	err = os.Rename(sourceFilePath, destinationFilePath)
 	if err != nil {
 		returnErr :=

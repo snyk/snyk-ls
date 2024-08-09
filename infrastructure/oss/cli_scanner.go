@@ -252,6 +252,7 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 	workDir string,
 	path string,
 ) (issues []snyk.Issue) {
+	logger := cliScanner.config.Logger().With().Str("method", "getAbsTargetFilePath").Logger()
 	if ctx.Err() != nil {
 		return nil
 	}
@@ -263,11 +264,13 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 	}
 
 	for _, scanResult := range scanResults {
-		targetFilePath := getAbsTargetFilePath(scanResult, workDir, path)
+		targetFilePath := getAbsTargetFilePath(cliScanner.config, scanResult, workDir, path)
 		fileContent, err := os.ReadFile(targetFilePath)
 		if err != nil {
-			// don't fail the scan if we can't read the file. No annotations with ranges, though.
-			fileContent = []byte{}
+			reportedErr := fmt.Errorf("skipping scanResult for path: %s displayTargetFile: %s in workDir: %s as we can't determine the absolute filesystem path. %v", scanResult.Path, scanResult.DisplayTargetFile, workDir, err)
+			cliScanner.errorReporter.CaptureErrorAndReportAsIssue(targetFilePath, reportedErr)
+			logger.Error().Err(reportedErr).Send()
+			continue
 		}
 		issues = append(issues, cliScanner.retrieveIssues(&scanResult, targetFilePath, fileContent)...)
 	}
@@ -275,13 +278,14 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 	return issues
 }
 
-func getAbsTargetFilePath(scanResult scanResult, workDir string, path string) string {
+func getAbsTargetFilePath(c *config.Config, scanResult scanResult, workDir string, path string) string {
+	logger := c.Logger().With().Str("method", "getAbsTargetFilePath").Logger()
 	if scanResult.DisplayTargetFile == "" && path != "" {
 		return path
 	}
 	displayTargetFile := determineTargetFile(scanResult.DisplayTargetFile)
 
-	// if displayTargetFile is an absolute path, no need to do antyhing more
+	// if displayTargetFile is an absolute path, no need to do anything more
 	isAbs := filepath.IsAbs(displayTargetFile)
 	if isAbs {
 		return displayTargetFile
@@ -289,21 +293,37 @@ func getAbsTargetFilePath(scanResult scanResult, workDir string, path string) st
 
 	relative, err := filepath.Rel(workDir, displayTargetFile)
 	if err != nil || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		logger.Trace().Err(err).Msgf("path is not relative to %s", workDir)
 		// now we try out stuff
 		// if displayTargetFile is not relative, let's try to join path with basename
-		tryOutPath := filepath.Join(scanResult.Path, filepath.Base(displayTargetFile))
+		basePath := filepath.Base(displayTargetFile)
+		scanResultPath := scanResult.Path
+		tryOutPath := filepath.Join(scanResultPath, basePath)
 		_, tryOutErr := os.Stat(tryOutPath)
 		if tryOutErr != nil {
+			logger.Trace().Err(err).Msgf("joining basePath: %s to path: %s failed", basePath, scanResultPath)
 			// if that doesn't work, let's try full path and full display target file
-			tryOutPath = filepath.Join(scanResult.Path, displayTargetFile)
+			tryOutPath = filepath.Join(scanResultPath, displayTargetFile)
 			_, tryOutErr = os.Stat(tryOutPath)
 			if tryOutErr != nil {
+				logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to path: %s failed", displayTargetFile, scanResultPath)
 				tryOutPath = filepath.Join(workDir, displayTargetFile)
 				_, tryOutErr = os.Stat(tryOutPath)
 				if tryOutErr != nil {
-					tryOutPath = displayTargetFile // we give up and return the display target file
+					logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to workDir: %s failed.", displayTargetFile, workDir)
+					tryOutPath = filepath.Join(workDir, basePath)
+					_, tryOutErr = os.Stat(tryOutPath)
+					if tryOutErr != nil {
+						logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to workDir: %s failed. Falling back to returning: %s", displayTargetFile, workDir, displayTargetFile)
+						tryOutPath = displayTargetFile // we give up and return the display target file
+					}
 				}
 			}
+		}
+		isAbs = filepath.IsAbs(tryOutPath)
+		if !isAbs {
+			logger.Error().Msgf("couldn't determine absolute file path for: %s", scanResult.DisplayTargetFile)
+			return ""
 		}
 		return tryOutPath
 	}

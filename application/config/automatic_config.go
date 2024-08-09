@@ -28,7 +28,7 @@ import (
 func (c *Config) determineJavaHome() {
 	javaHome := os.Getenv("JAVA_HOME")
 	if javaHome != "" {
-		c.Logger().Info().Str("method", "determineJavaHome").Msgf("using JAVA_HOME from env %s", javaHome)
+		c.Logger().Debug().Str("method", "determineJavaHome").Msgf("using JAVA_HOME from env %s", javaHome)
 		c.updatePath(javaHome + string(os.PathSeparator) + "bin")
 		return
 	}
@@ -40,11 +40,11 @@ func (c *Config) determineJavaHome() {
 	if done {
 		return
 	}
-	c.Logger().Info().Str("method", "determineJavaHome").Msgf("detected java binary at %s", path)
+	c.Logger().Debug().Str("method", "determineJavaHome").Msgf("detected java binary at %s", path)
 	binDir := filepath.Dir(path)
 	javaHome = filepath.Dir(binDir)
 	c.updatePath(binDir)
-	c.Logger().Info().Str("method", "determineJavaHome").Msgf("setting JAVA_HOME to %s", javaHome)
+	c.Logger().Debug().Str("method", "determineJavaHome").Msgf("setting JAVA_HOME to %s", javaHome)
 	_ = os.Setenv("JAVA_HOME", javaHome)
 }
 
@@ -82,7 +82,7 @@ func (c *Config) mavenDefaults() {
 		return
 	}
 	c.updatePath(filepath.Dir(path))
-	c.Logger().Info().Str("method", "mavenDefaults").Msgf("detected maven binary at %s", path)
+	c.Logger().Debug().Str("method", "mavenDefaults").Msgf("detected maven binary at %s", path)
 }
 
 func getJavaBinaryName() string {

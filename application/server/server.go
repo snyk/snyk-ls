@@ -153,14 +153,14 @@ func workspaceWillDeleteFilesHandler() jrpc2.Handler {
 func codeLensHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.CodeLensParams) ([]sglsp.CodeLens, error) {
 		c := config.CurrentConfig()
-		c.Logger().Info().Str("method", "CodeLensHandler").Msg("RECEIVING")
+		c.Logger().Debug().Str("method", "CodeLensHandler").Msg("RECEIVING")
 
 		lenses := codelens.GetFor(uri.PathFromUri(params.TextDocument.URI))
 
 		// Do not return Snyk Code Fix codelens when a doc is dirty
 		isDirtyFile := di.FileWatcher().IsDirty(params.TextDocument.URI)
 
-		defer c.Logger().Info().Str("method", "CodeLensHandler").
+		defer c.Logger().Debug().Str("method", "CodeLensHandler").
 			Bool("isDirtyFile", isDirtyFile).
 			Int("lensCount", len(lenses)).
 			Msg("SENDING")
@@ -519,7 +519,7 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 		filteredIssues := folder.FilterIssues(folder.Issues(), config.CurrentConfig().DisplayableIssueTypes())
 
 		if len(filteredIssues) > 0 {
-			logger.Info().Msg("Sending cached issues")
+			logger.Debug().Msg("Sending cached issues")
 			diagnosticParams := types.PublishDiagnosticsParams{
 				URI:         params.TextDocument.URI,
 				Diagnostics: converter.ToDiagnostics(filteredIssues[filePath]),
@@ -541,7 +541,7 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		bgCtx := context.Background()
 		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "TextDocumentDidSaveHandler").Logger()
-		logger.Info().Interface("params", params).Msg("Receiving")
+		logger.Debug().Interface("params", params).Msg("Receiving")
 
 		autoScanEnabled := c.IsAutoScanEnabled()
 
@@ -571,7 +571,7 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 func textDocumentHover() jrpc2.Handler {
 	return handler.New(func(_ context.Context, params hover.Params) (hover.Result, error) {
 		c := config.CurrentConfig()
-		c.Logger().Info().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
+		c.Logger().Debug().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
 
 		pathFromUri := uri.PathFromUri(params.TextDocument.URI)
 		hoverResult := di.HoverService().GetHover(pathFromUri, converter.FromPosition(params.Position))
@@ -582,7 +582,7 @@ func textDocumentHover() jrpc2.Handler {
 func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 	return handler.New(func(_ context.Context, params types.WorkdoneProgressCancelParams) (any, error) {
 		c := config.CurrentConfig()
-		c.Logger().Info().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
+		c.Logger().Debug().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
 		CancelProgress(params.Token)
 		return nil, nil
 	})
@@ -601,7 +601,7 @@ func textDocumentCodeActionHandler() handler.Func {
 func noOpHandler() jrpc2.Handler {
 	return handler.New(func(_ context.Context, params sglsp.DidCloseTextDocumentParams) (any, error) {
 		c := config.CurrentConfig()
-		c.Logger().Info().Str("method", "NoOpHandler").Interface("params", params).Msg("RECEIVING")
+		c.Logger().Debug().Str("method", "NoOpHandler").Interface("params", params).Msg("RECEIVING")
 		return nil, nil
 	})
 }
