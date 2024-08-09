@@ -14,8 +14,8 @@ func Test_IaC_Html_getIacHtml(t *testing.T) {
 	cfg := &config.Config{}
 
 	// Initialize the IaC service
-	service, _ := NewIacHtmlRender(cfg)
-	iacPanelHtml := service.getDetailsHtml(createIacIssueSample())
+	service, _ := NewIacHtmlRenderer(cfg)
+	iacPanelHtml := service.getCustomUIContent(createIacIssueSample())
 
 	// assert
 	assert.Contains(t, iacPanelHtml, "<!DOCTYPE html>", "HTML should contain the doctype declaration")

@@ -380,13 +380,13 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		AdditionalData:      additionalData,
 	}
 
-	htmlRender, err := NewIacHtmlRender(iac.c)
+	htmlRender, err := NewIacHtmlRenderer(iac.c)
 	if err != nil {
 		iac.c.Logger().Err(err).Msg("Cannot create IaC HTML render")
 		return snyk.Issue{}, err
 	}
 
-	additionalData.Details = htmlRender.getDetailsHtml(iacIssue)
+	additionalData.CustomUIContent = htmlRender.getCustomUIContent(iacIssue)
 	iacIssue.AdditionalData = additionalData
 
 	return iacIssue, nil

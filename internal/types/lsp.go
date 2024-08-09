@@ -1165,13 +1165,13 @@ type CodeActionOptions struct {
 }
 
 type IacIssueData struct {
-	PublicId      string   `json:"publicId"`
-	Documentation string   `json:"documentation"`
-	LineNumber    int      `json:"lineNumber"`
-	Issue         string   `json:"issue"`
-	Impact        string   `json:"impact"`
-	Resolve       string   `json:"resolve,omitempty"`
-	Path          []string `json:"path"`
-	References    []string `json:"references,omitempty"`
-	Details       string   `json:"details,omitempty"`
+	PublicId        string   `json:"publicId"`
+	Documentation   string   `json:"documentation"`
+	LineNumber      int      `json:"lineNumber"`
+	Issue           string   `json:"issue"`
+	Impact          string   `json:"impact"`
+	Resolve         string   `json:"resolve,omitempty"`
+	Path            []string `json:"path"`
+	References      []string `json:"references,omitempty"`
+	CustomUIContent string   `json:"customUIContent,omitempty"`
 }

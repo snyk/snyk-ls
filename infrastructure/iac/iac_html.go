@@ -48,7 +48,7 @@ var detailsHtmlTemplate string
 //go:embed template/styles.css
 var stylesCSS string
 
-func NewIacHtmlRender(cfg *config.Config) (*IacHtmlRender, error) {
+func NewIacHtmlRenderer(cfg *config.Config) (*IacHtmlRender, error) {
 	tmp, err := template.New(string(product.ProductInfrastructureAsCode)).Parse(detailsHtmlTemplate)
 	if err != nil {
 		cfg.Logger().Error().Msgf("Failed to parse IaC template: %s", err)
@@ -66,7 +66,7 @@ func getStyles() template.CSS {
 }
 
 // Function to get the rendered HTML with issue details and CSS
-func (service *IacHtmlRender) getDetailsHtml(issue snyk.Issue) string {
+func (service *IacHtmlRender) getCustomUIContent(issue snyk.Issue) string {
 	var html bytes.Buffer
 
 	nonce, err := generateSecurityNonce()

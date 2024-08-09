@@ -156,9 +156,9 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 	assert.Equal(t, expectedAdditionalData.Resolve, actualAdditionalData.Resolve)
 	assert.Equal(t, expectedAdditionalData.References, actualAdditionalData.References)
 
-	assert.NotEmpty(t, actualAdditionalData.Details, "Details field should not be empty")
-	assert.Contains(t, actualAdditionalData.Details, "<!DOCTYPE html>", "Details should contain HTML doctype declaration")
-	assert.Contains(t, actualAdditionalData.Details, "PublicID", "Details should contain the PublicID")
+	assert.NotEmpty(t, actualAdditionalData.CustomUIContent, "Details field should not be empty")
+	assert.Contains(t, actualAdditionalData.CustomUIContent, "<!DOCTYPE html>", "Details should contain HTML doctype declaration")
+	assert.Contains(t, actualAdditionalData.CustomUIContent, "PublicID", "Details should contain the PublicID")
 }
 
 func Test_toIssue_issueHasHtmlTemplate(t *testing.T) {
@@ -171,8 +171,8 @@ func Test_toIssue_issueHasHtmlTemplate(t *testing.T) {
 
 	// Assert the Details field contains the HTML template and expected content
 	additionalData := issue.AdditionalData.(snyk.IaCIssueData)
-	assert.NotEmpty(t, additionalData.Details, "HTML Details should not be empty")
-	assert.Contains(t, additionalData.Details, "PublicID", "HTML should contain the PublicID")
+	assert.NotEmpty(t, additionalData.CustomUIContent, "HTML Details should not be empty")
+	assert.Contains(t, additionalData.CustomUIContent, "PublicID", "HTML should contain the PublicID")
 }
 
 func Test_getIssueId(t *testing.T) {

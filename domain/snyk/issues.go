@@ -275,8 +275,8 @@ type IaCIssueData struct {
 	Path []string `json:"path"`
 	// References: List of reference URLs
 	References []string `json:"references,omitempty"`
-	// Details: IaC HTML template
-	Details string `json:"details"`
+	// CustomUIContent: IaC HTML template
+	CustomUIContent string `json:"customUIContent"`
 }
 
 func (i IaCIssueData) GetKey() string {
