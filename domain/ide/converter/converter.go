@@ -18,9 +18,10 @@ package converter
 
 import (
 	"fmt"
-	"github.com/snyk/snyk-ls/internal/product"
 	"regexp"
 	"strconv"
+
+	"github.com/snyk/snyk-ls/internal/product"
 
 	sglsp "github.com/sourcegraph/go-lsp"
 
@@ -273,14 +274,15 @@ func getIacIssue(issue snyk.Issue) types.ScanIssue {
 		FilePath: issue.AffectedFilePath,
 		Range:    ToRange(issue.Range),
 		AdditionalData: types.IacIssueData{
-			PublicId:      additionalData.PublicId,
-			Documentation: additionalData.Documentation,
-			LineNumber:    additionalData.LineNumber,
-			Issue:         additionalData.Issue,
-			Impact:        additionalData.Impact,
-			Resolve:       additionalData.Resolve,
-			Path:          additionalData.Path,
-			References:    additionalData.References,
+			PublicId:        additionalData.PublicId,
+			Documentation:   additionalData.Documentation,
+			LineNumber:      additionalData.LineNumber,
+			Issue:           additionalData.Issue,
+			Impact:          additionalData.Impact,
+			Resolve:         additionalData.Resolve,
+			Path:            additionalData.Path,
+			References:      additionalData.References,
+			CustomUIContent: additionalData.CustomUIContent,
 		},
 	}
 
