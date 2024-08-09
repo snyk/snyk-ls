@@ -23,7 +23,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	iac "github.com/snyk/snyk-ls/infrastructure/iac/template/assets"
 	"github.com/snyk/snyk-ls/internal/html"
 	"github.com/snyk/snyk-ls/internal/product"
 )
@@ -76,7 +75,7 @@ func (service *IacHtmlRender) getCustomUIContent(issue snyk.Issue) string {
 	data := TemplateData{
 		Styles:       getStyles(),
 		Issue:        issue,
-		SeverityIcon: iac.GetSeverityIconSvg(issue),
+		SeverityIcon: html.SeverityIcon(issue),
 		Nonce:        nonce,
 	}
 
