@@ -610,7 +610,7 @@ func checkForScanParams(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder,
 			return true
 		}
 		return false
-	}, 20*time.Minute, 10*time.Millisecond)
+	}, 10*time.Second, 10*time.Millisecond)
 }
 
 func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, p product.Product, folderPath string) []types.ScanIssue {
