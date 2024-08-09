@@ -23,11 +23,13 @@
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'none'; style-src 'self' 'nonce-{{.Nonce}}'; script-src 'nonce-{{.Nonce}}';">
 
+    <!-- see docs/ui-rendering.md  -->
     <!--noformat-->
     <!-- @formatter:off -->
     <style nonce="{{.Nonce}}">
         {{.Styles}}
     </style>
+    <style nonce="ideNonce" data-ide-style></style>
     <!-- @formatter:on -->
     <!--noformat-->
 </head>
