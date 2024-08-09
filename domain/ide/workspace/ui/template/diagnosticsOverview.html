@@ -24,9 +24,11 @@
           content="default-src 'none'; style-src 'self' 'nonce-{{.Nonce}}'; script-src 'nonce-{{.Nonce}}';">
 
     <!--noformat-->
+    <!-- @formatter:off -->
     <style nonce="{{.Nonce}}">
         {{.Styles}}
     </style>
+    <!-- @formatter:on -->
     <!--noformat-->
 </head>
 
