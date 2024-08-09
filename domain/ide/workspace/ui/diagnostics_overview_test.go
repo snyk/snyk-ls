@@ -17,8 +17,6 @@
 package ui
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -68,7 +66,6 @@ func Test_DiagnosticsOverview(t *testing.T) {
 				require.Equal(t, product.ProductOpenSource.ToProductCodename(), p.Product)
 				require.Contains(t, p.Html, "1 unique issue: 1 critical")
 				require.Contains(t, p.Html, expectedTitle)
-				os.WriteFile(filepath.Base(t.Name()+".html"), []byte(p.Html), 0644)
 				notificationChannel <- true
 			}
 		}

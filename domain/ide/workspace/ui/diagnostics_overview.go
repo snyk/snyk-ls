@@ -129,7 +129,7 @@ func getFileNodes(issuesByFile snyk.IssuesByFile) map[Node][]Node {
 		issueNodes := []Node{}
 		for _, issue := range issues {
 			issueNodes = append(issueNodes, Node{
-				Icon: html.GetSeverityIconSvg(issue),
+				Icon: html.SeverityIcon(issue),
 				Text: template.HTML(issue.AdditionalData.GetTitle()),
 			})
 		}
