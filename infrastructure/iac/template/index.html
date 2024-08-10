@@ -34,18 +34,18 @@
 
 <body>
   <div class="suggestion">
-    <section class="suggestion--header">
-      <div class="severity">
+    <!-- Panel header -->
+    <header class="panel-header">
+      <div class="severity-container">
         {{.SeverityIcon}}
+        <h2 class="severity-title">{{.Issue.AdditionalData.Title}}</h2>
       </div>
-      <div class="suggestion-text">{{.Issue.AdditionalData.Title}}</div>
-      <div class="identifiers">
-        Issue
+      <div class="severity-type-container">
+        <div class="severity-type">Issue</div>
         <span class="delimiter"></span>
-        <a class="cve styled-link" target="_blank" rel="noopener noreferrer"
+        <a class="styled-link" target="_blank" rel="noopener noreferrer"
           href="{{.Issue.AdditionalData.Documentation}}">{{.Issue.ID}}</a>
-      </div>
-    </section>
+    </header>
     <section class="delimiter-top summary">
       <div class="summary-item description">
         <div class="label">Description</div>

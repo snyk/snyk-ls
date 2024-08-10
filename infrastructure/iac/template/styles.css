@@ -33,7 +33,6 @@ section {
   display: inline-block;
   text-decoration: none;
   font-weight: normal;
-  margin-bottom: 8px;
 }
 
 .styled-link:hover {
@@ -109,4 +108,32 @@ div.remediation {
 
 div.remediation p {
   margin-bottom: 0;
+}
+
+header {
+  padding: 0px 20px 5px 20px;
+}
+
+.panel-header {
+  display: flex;
+  flex-direction: column;
+}
+
+.severity-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 3px;
+}
+
+.severity-title {
+  padding-left: 8px;
+}
+
+.severity-type-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 1em;
+  line-height: 1em;
 }
