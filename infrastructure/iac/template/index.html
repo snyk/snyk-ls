@@ -68,14 +68,14 @@
     </section>
     <section class="delimiter-top summary">
       <h2>Remediation</h2>
-      <div class="summary-item module">
-        <div class="content">
+      <div class="summary-item remediation remediation-box">
+        <code>
           {{.Issue.AdditionalData.Resolve}}
-        </div>
+        </code>
     </section>
     <section class="delimiter-top">
       <h2>References</h2>
-      <div class="vulnerability-overview">
+      <div class="summary-items">
         {{range .Issue.AdditionalData.References}}
         <a class="styled-link" target="_blank" rel="noopener noreferrer" href="{{.}}">{{.}}</a>
         {{end}}

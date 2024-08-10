@@ -1,5 +1,5 @@
 :root {
-  --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Tahoma, Geneva, Verdana, sans-serif;
+  --default-font: ui-sans-serif, "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
 }
 
 ::-webkit-scrollbar {
@@ -97,12 +97,8 @@ section {
   margin-bottom: 1.6rem
 }
 
-.summary .detailed-path:last-child .remediation {
-  margin-bottom: 0
-}
-
-.vulnerability-overview pre {
-  padding: 8px 16px;
-  overflow-x: auto;
-  border-radius: 4px;
+code {
+  width: 100%;
+  padding: 16px 8px;
+  border-radius: 2px;
 }
