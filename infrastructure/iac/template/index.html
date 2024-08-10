@@ -62,16 +62,15 @@
       <div class="summary-item path">
         <div class="label">Path</div>
         <div class="content">
-          {{.Issue.AdditionalData.Path}}
+          <pre><code class="path">{{.Issue.AdditionalData.Path}}</code></pre>
         </div>
       </div>
     </section>
     <section class="delimiter-top summary">
       <h2>Remediation</h2>
-      <div class="summary-item remediation remediation-box">
-        <code>
-          {{.Issue.AdditionalData.Resolve}}
-        </code>
+      <div class="summary-item sn-fix-wrapper">
+        <div class="remediation">{{.Remediation}}</div>
+      </div>
     </section>
     <section class="delimiter-top">
       <h2>References</h2>

@@ -36,6 +36,7 @@ type TemplateData struct {
 	Styles       template.CSS
 	Issue        snyk.Issue
 	SeverityIcon template.HTML
+	Remediation  template.HTML
 	Nonce        string
 }
 
@@ -76,6 +77,7 @@ func (service *IacHtmlRender) getCustomUIContent(issue snyk.Issue) string {
 		Styles:       getStyles(),
 		Issue:        issue,
 		SeverityIcon: html.SeverityIcon(issue),
+		Remediation:  html.MarkdownToHTML(issue.AdditionalData.(snyk.IaCIssueData).Resolve),
 		Nonce:        nonce,
 	}
 

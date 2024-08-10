@@ -97,8 +97,6 @@ section {
   margin-bottom: 1.6rem
 }
 
-code {
-  width: 100%;
-  padding: 16px 8px;
-  border-radius: 2px;
+.summary .summary-item.path pre {
+  margin: 0;
 }
