@@ -28,6 +28,9 @@ func Test_IaC_Html_getIacHtml(t *testing.T) {
 	assert.Contains(t, iacPanelHtml, "The role uses wildcards, which grant the role permissions to the whole cluster", "HTML should contain the issue description")
 	assert.Contains(t, iacPanelHtml, "Set only the necessary permissions required", "HTML should contain the remediation instructions")
 
+	// Path is correctly formatted
+	assert.Contains(t, iacPanelHtml, "[DocId: 5] > rules[0] > verbs", "HTML should contain the path to the affected file")
+
 	// Issue ID is present and linked correctly
 	assert.Contains(t, iacPanelHtml, `href="https://security.snyk.io/rules/cloud/SNYK-CC-K8S-44">SNYK-CC-K8S-44</a>`, "HTML should contain a link to the issue documentation")
 

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	_ "embed"
 	"html/template"
+	"strings"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -36,7 +37,9 @@ type TemplateData struct {
 	Styles       template.CSS
 	Issue        snyk.Issue
 	SeverityIcon template.HTML
+	Description  template.HTML
 	Remediation  template.HTML
+	Path         template.HTML
 	Nonce        string
 }
 
@@ -77,7 +80,9 @@ func (service *IacHtmlRender) getCustomUIContent(issue snyk.Issue) string {
 		Styles:       getStyles(),
 		Issue:        issue,
 		SeverityIcon: html.SeverityIcon(issue),
+		Description:  html.MarkdownToHTML(issue.Message),
 		Remediation:  html.MarkdownToHTML(issue.AdditionalData.(snyk.IaCIssueData).Resolve),
+		Path:         formatPath(issue.AdditionalData.(snyk.IaCIssueData).Path),
 		Nonce:        nonce,
 	}
 
@@ -87,4 +92,8 @@ func (service *IacHtmlRender) getCustomUIContent(issue snyk.Issue) string {
 	}
 
 	return htmlTemplate.String()
+}
+
+func formatPath(path []string) template.HTML {
+	return template.HTML(strings.Join(path, " > "))
 }
