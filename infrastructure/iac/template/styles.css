@@ -93,10 +93,20 @@ section {
   flex: 70%;
 }
 
-.summary .remediation {
-  margin-bottom: 1.6rem
-}
-
 .summary .summary-item.path pre {
   margin: 0;
+}
+
+.summary-item.path pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+div.remediation {
+  padding: 16px 0 16px 8px;
+}
+
+div.remediation p {
+  margin-bottom: 0;
 }
