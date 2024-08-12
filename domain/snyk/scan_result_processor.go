@@ -29,6 +29,7 @@ type ScanData struct {
 	DurationMs        time.Duration
 	TimestampFinished time.Time
 	Path              string
+	IsDeltaScan       bool
 }
 
 type ScanResultProcessor = func(scanData ScanData)

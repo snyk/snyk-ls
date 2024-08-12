@@ -19,11 +19,12 @@ package workspace
 import (
 	"context"
 	"errors"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
