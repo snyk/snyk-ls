@@ -79,7 +79,7 @@ race-test:
 proxy-test:
 	@echo "==> Running integration tests with proxy"
 	@docker build -t "snyk-ls:$(VERSION)" -f .github/docker-based-tests/Dockerfile .
-	@docker run --rm --cap-add=NET_ADMIN --name "snyk-ls" --env "SNYK_TOKEN=$(SNYK_TOKEN)" snyk-ls:$(VERSION) go test -failfast $(NOCACHE) $(TIMEOUT) ./...
+	@docker run --rm --cap-add=NET_ADMIN --name "snyk-ls" --env "SNYK_TOKEN=$(SNYK_TOKEN)" snyk-ls:$(VERSION) make instance-test
 
 instance-test:
 	@echo "==> Running instance tests"
