@@ -17,11 +17,15 @@
 package delta
 
 import (
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/adrg/strutil"
 	"github.com/adrg/strutil/metrics"
 	"math"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -45,6 +49,7 @@ var weights = struct {
 	FilePositionDistance        float64
 	RecentHistoryDistance       float64
 	FingerprintConfidence       float64
+	FromListConfidence          float64
 	PathSimilarity              float64
 	LineSimilarity              float64
 
@@ -56,6 +61,7 @@ var weights = struct {
 	FilePositionDistance:        0.3,
 	RecentHistoryDistance:       0.2,
 	FingerprintConfidence:       0.5,
+	FromListConfidence:          0.5,
 
 	PathSimilarity: 0.8,
 	LineSimilarity: 0.2,
@@ -123,10 +129,11 @@ func findMatches(currentIssue Identifiable, index int, baseIssues []Identifiable
 		//We will always return 1.
 		hd := historicDistance()
 		fd := fingerprintDistance(baseIssue, currentIssue)
-
+		frd := fromDistance(baseIssue, currentIssue)
 		overallConfidence := fpd*weights.FilePositionDistance +
 			hd*weights.RecentHistoryDistance +
-			fd*weights.FingerprintConfidence
+			fd*weights.FingerprintConfidence +
+			frd*weights.FromListConfidence
 
 		if overallConfidence == 1 {
 			similarIssues = append(similarIssues, IssueConfidence{
@@ -186,6 +193,53 @@ func fingerprintDistance(baseFingerprints, currentFingerprints Identifiable) flo
 		return 0
 	}
 	return float64(similar) / float64(totalParts)
+}
+
+func fromDistance(baseFrom, currentFrom Identifiable) float64 {
+	baseFromable, ok := baseFrom.(Fromable)
+	if !ok {
+		return 0
+	}
+	currentFromable, ok := currentFrom.(Fromable)
+	if !ok {
+		return 0
+	}
+	if baseFromable.GetFrom() == nil || currentFromable.GetFrom() == nil {
+		return 1
+	}
+
+	baseHash, err := createHashFromArray(baseFromable.GetFrom())
+	if err != nil {
+		return 0
+	}
+	currentHash, err := createHashFromArray(currentFromable.GetFrom())
+	if err != nil {
+		return 0
+	}
+	if baseHash != currentHash {
+		return 0
+	}
+	return 1
+}
+func createHashFromArray(array []string) (string, error) {
+	normalizedArray := normalizeArray(array)
+	arrayBytes, err := json.Marshal(normalizedArray)
+	if err != nil {
+		return "", err
+	}
+
+	hash := sha256.Sum256(arrayBytes)
+	return fmt.Sprintf("%x", hash), nil
+}
+
+func normalizeArray(array []string) []string {
+	normalized := make([]string, len(array))
+	// Normalize spaces
+	for i, item := range array {
+		normalized[i] = strings.Join(strings.Fields(item), " ")
+	}
+	sort.Strings(normalized)
+	return normalized
 }
 
 func filePositionDistance(baseIssue, currentIssue Identifiable) float64 {
