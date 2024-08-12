@@ -21,8 +21,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -43,7 +41,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	hoverService := hover.NewFakeHoverService()
 	provider.IsAuthenticated = true
 	scanNotifier := snyk.NewMockScanNotifier()
-	scanPersister := persistence.NewNopScanPersister()
+	scanPersister := snyk.NewNopScanPersister()
 	authenticationService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notifier)
 	cmd := logoutCommand{
 		command:     types.CommandData{CommandId: types.LogoutCommand},

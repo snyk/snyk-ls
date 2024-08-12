@@ -23,7 +23,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/internal/delta"
 
 	"github.com/snyk/snyk-ls/internal/types"
@@ -72,7 +71,7 @@ type Folder struct {
 	scanNotifier            snyk.ScanNotifier
 	notifier                noti.Notifier
 	c                       *config.Config
-	scanPersister           persistence.ScanSnapshotPersister
+	scanPersister           snyk.ScanSnapshotPersister
 }
 
 func (f *Folder) Issue(key string) snyk.Issue {
@@ -240,7 +239,7 @@ func NewFolder(
 	hoverService hover.Service,
 	scanNotifier snyk.ScanNotifier,
 	notifier noti.Notifier,
-	scanPersister persistence.ScanSnapshotPersister,
+	scanPersister snyk.ScanSnapshotPersister,
 ) *Folder {
 	folder := Folder{
 		scanner:       scanner,
@@ -496,8 +495,7 @@ func (f *Folder) getDelta(productIssueByFile snyk.ProductIssuesByFile, p *produc
 	logger := f.c.Logger().With().Str("method", "getDelta").Logger()
 	currentProduct := *p
 
-	// Delete product check when base scanning is implemented for other products
-	if !f.c.IsDeltaFindingsEnabled() || currentProduct != product.ProductCode {
+	if !f.c.IsDeltaFindingsEnabled() {
 		return productIssueByFile, nil
 	}
 

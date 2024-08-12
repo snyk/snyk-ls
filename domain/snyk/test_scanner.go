@@ -18,6 +18,7 @@ package snyk
 
 import (
 	"context"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"sync"
 	"time"
 
@@ -78,7 +79,7 @@ func (s *TestScanner) Calls() int {
 
 func (s *TestScanner) AddTestIssue(issue Issue) {
 	if issue.AdditionalData == nil {
-		issue.AdditionalData = CodeIssueData{
+		issue.AdditionalData = snyk.CodeIssueData{
 			Key: util.Result(uuid.NewUUID()).String(),
 		}
 		issue.Product = product.ProductCode

@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-package persistence
+package snyk
 
 import (
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -45,10 +44,10 @@ func (n NopScanPersister) Init() error {
 	return nil
 }
 
-func (n NopScanPersister) Add(_, _ string, _ []snyk.Issue, _ product.Product) error {
+func (n NopScanPersister) Add(_, _ string, _ []Issue, _ product.Product) error {
 	return nil
 }
 
-func (n NopScanPersister) GetPersistedIssueList(_ string, _ product.Product) ([]snyk.Issue, error) {
+func (n NopScanPersister) GetPersistedIssueList(_ string, _ product.Product) ([]Issue, error) {
 	return nil, nil
 }

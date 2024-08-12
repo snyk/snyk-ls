@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-package persistence
+package snyk
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/rs/zerolog"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/util"
 	"github.com/snyk/snyk-ls/internal/vcs"
@@ -48,8 +47,8 @@ type hashedFolderPath string
 type ScanSnapshotPersister interface {
 	Clear(folderPath string)
 	ClearForProduct(folderPath string, commitHash string, p product.Product) error
-	Add(folderPath, commitHash string, issueList []snyk.Issue, p product.Product) error
-	GetPersistedIssueList(folderPath string, p product.Product) ([]snyk.Issue, error)
+	Add(folderPath, commitHash string, issueList []Issue, p product.Product) error
+	GetPersistedIssueList(folderPath string, p product.Product) ([]Issue, error)
 	Exists(folderPath, commitHash string, p product.Product) bool
 }
 
@@ -153,7 +152,7 @@ func (g *GitPersistenceProvider) ClearForProduct(folderPath, commitHash string, 
 	return err
 }
 
-func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath string, p product.Product) ([]snyk.Issue, error) {
+func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath string, p product.Product) ([]Issue, error) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 
@@ -181,7 +180,7 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath string, p prod
 		return nil, err
 	}
 
-	var results []snyk.Issue
+	var results []Issue
 	err = json.Unmarshal(content, &results)
 
 	if err != nil {
@@ -191,7 +190,7 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath string, p prod
 	return results, nil
 }
 
-func (g *GitPersistenceProvider) Add(folderPath, commitHash string, issueList []snyk.Issue, p product.Product) error {
+func (g *GitPersistenceProvider) Add(folderPath, commitHash string, issueList []Issue, p product.Product) error {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 
@@ -378,7 +377,7 @@ func (g *GitPersistenceProvider) getPersistedFiles(cacheDir string) (persistedFi
 	return persistedFiles, nil
 }
 
-func (g *GitPersistenceProvider) persistToDisk(cacheDir string, folderHashedPath hashedFolderPath, commitHash string, p product.Product, inputToCache []snyk.Issue) error {
+func (g *GitPersistenceProvider) persistToDisk(cacheDir string, folderHashedPath hashedFolderPath, commitHash string, p product.Product, inputToCache []Issue) error {
 	filePath := getLocalFilePath(cacheDir, folderHashedPath, commitHash, p)
 	data, err := json.Marshal(inputToCache)
 	if err != nil {

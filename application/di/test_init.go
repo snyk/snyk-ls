@@ -19,8 +19,6 @@ package di
 import (
 	"testing"
 
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-
 	"github.com/golang/mock/gomock"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
@@ -82,12 +80,12 @@ func TestInit(t *testing.T) {
 		Return(&learn.Lesson{}, nil).AnyTimes()
 	learnService = learnMock
 	codeClientScanner := &code.FakeCodeScannerClient{}
-	scanPersister = persistence.NopScanPersister{}
+	scanPersister = snyk.NopScanPersister{}
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
-	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner, scanPersister)
+	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner)
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
-	scanner = snyk.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
+	scanner = snyk.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
 	hoverService = hover.NewDefaultService(c)
 	command.SetService(&types.CommandServiceMock{})
 	// don't use getters or it'll deadlock

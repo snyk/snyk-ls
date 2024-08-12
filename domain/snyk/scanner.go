@@ -18,6 +18,9 @@ package snyk
 
 import (
 	"context"
+	"fmt"
+	"github.com/snyk/snyk-ls/internal/vcs"
+	"os"
 	"sync"
 	"time"
 
@@ -63,6 +66,7 @@ type DelegatingConcurrentScanner struct {
 	authService   authentication.AuthenticationService
 	notifier      notification.Notifier
 	c             *config.Config
+	scanPersister ScanSnapshotPersister
 }
 
 func (sc *DelegatingConcurrentScanner) Issue(key string) Issue {
@@ -169,7 +173,7 @@ func (sc *DelegatingConcurrentScanner) ScanPackages(ctx context.Context, config 
 	}
 }
 
-func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanners ...ProductScanner) Scanner {
+func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister ScanSnapshotPersister, scanners ...ProductScanner) Scanner {
 	return &DelegatingConcurrentScanner{
 		instrumentor:  instrumentor,
 		initializer:   initializer,
@@ -178,6 +182,7 @@ func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, 
 		scanners:      scanners,
 		authService:   authService,
 		notifier:      notifier,
+		scanPersister: scanPersister,
 		c:             c,
 	}
 }
@@ -214,8 +219,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	folderPath string,
 ) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
-	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", method).Logger()
+	logger := sc.c.Logger().With().Str("method", method).Logger()
 
 	authenticated := sc.authService.IsAuthenticated()
 
@@ -224,7 +228,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 		return
 	}
 
-	tokenChangeChannel := c.TokenChangesChannel()
+	tokenChangeChannel := sc.c.TokenChangesChannel()
 	done := make(chan bool)
 	defer close(done)
 	ctx, cancelFunc := context.WithCancel(ctx)
@@ -260,7 +264,8 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
 
 				scanSpan := sc.instrumentor.StartSpan(span.Context(), "scan")
-				foundIssues, scanError := s.Scan(scanSpan.Context(), path, folderPath)
+
+				foundIssues, scanError := sc.internalScan(scanSpan.Context(), s, path, folderPath)
 				sc.instrumentor.Finish(scanSpan)
 
 				// now process
@@ -281,8 +286,105 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	}
 	logger.Debug().Msgf("All product scanners started for %s", path)
 	waitGroup.Wait()
-	c.Logger().Debug().Msgf("All product scanners finished for %s", path)
+	logger.Debug().Msgf("All product scanners finished for %s", path)
 	sc.notifier.Send(types.InlineValueRefresh{})
 	sc.notifier.Send(types.CodeLensRefresh{})
 	// TODO: handle learn actions centrally instead of in each scanner
+}
+
+func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s ProductScanner, path string, folderPath string) (issues []Issue, err error) {
+	logger := sc.c.Logger().With().Str("method", "ide.workspace.folder.DelegatingConcurrentScanner.internalScan").Logger()
+
+	var foundIssues []Issue
+	if sc.c.IsDeltaFindingsEnabled() {
+		hasChanges, gitErr := vcs.LocalRepoHasChanges(sc.c.Logger(), folderPath)
+		if gitErr != nil {
+			logger.Error().Err(gitErr).Msg("couldn't check if working dir is clean")
+			return nil, gitErr
+		}
+		if !hasChanges {
+			// If delta is enabled but there are no changes. There can be no delta.
+			// else it should start scanning.
+			logger.Debug().Msg("skipping scanning. working dir is clean")
+			return foundIssues, nil // Returning an empty slice implies that no issues were found
+		}
+	}
+
+	foundIssues, err = s.Scan(ctx, path, folderPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if sc.c.IsDeltaFindingsEnabled() && len(foundIssues) > 0 {
+		err = sc.scanAndPersistBaseBranch(ctx, s, path, folderPath)
+		if err != nil {
+			logger.Error().Err(err).Msg("couldn't scan base branch for folder " + folderPath)
+			return nil, err
+		}
+	}
+	return foundIssues, nil
+}
+
+func (sc *DelegatingConcurrentScanner) scanAndPersistBaseBranch(ctx context.Context, s ProductScanner, path, folderPath string) error {
+	logger := sc.c.Logger().With().Str("method", "scanAndPersistBaseBranch").Logger()
+
+	baseBranchName := vcs.GetBaseBranchName(folderPath)
+	headRef, err := vcs.HeadRefHashForBranch(&logger, folderPath, baseBranchName)
+
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to fetch commit hash for main branch")
+		return err
+	}
+
+	snapshotExists := sc.scanPersister.Exists(folderPath, headRef, s.Product())
+	if snapshotExists {
+		return nil
+	}
+
+	tmpFolderName := fmt.Sprintf("snyk_delta_%s", vcs.NormalizeBranchName(baseBranchName))
+	destinationPath, err := os.MkdirTemp("", tmpFolderName)
+	logger.Info().Msg("Creating tmp directory for base branch")
+
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to create tmp directory for base branch")
+		return err
+	}
+
+	repo, err := vcs.Clone(&logger, folderPath, destinationPath, baseBranchName)
+
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to clone base branch")
+		return err
+	}
+
+	defer func() {
+		if destinationPath == "" {
+			return
+		}
+		err = os.RemoveAll(destinationPath)
+		logger.Info().Msg("removing base branch tmp dir " + destinationPath)
+
+		if err != nil {
+			logger.Error().Err(err).Msg("couldn't remove tmp dir " + destinationPath)
+		}
+	}()
+
+	results, err := s.Scan(ctx, path, destinationPath)
+
+	if err != nil {
+		return err
+	}
+
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	if err != nil {
+		logger.Error().Err(err).Msg("could not get commit hash for repo in folder " + folderPath)
+		return err
+	}
+
+	err = sc.scanPersister.Add(folderPath, commitHash, results, s.Product())
+	if err != nil {
+		logger.Error().Err(err).Msg("could not persist issue list for folder: " + folderPath)
+	}
+
+	return nil
 }

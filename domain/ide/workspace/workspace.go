@@ -18,7 +18,6 @@ package workspace
 
 import (
 	"context"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"sync"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -46,7 +45,7 @@ type Workspace struct {
 	trustRequestOngoing bool // for debouncing
 	notifier            noti.Notifier
 	c                   *config.Config
-	scanPersister       persistence.ScanSnapshotPersister
+	scanPersister       snyk.ScanSnapshotPersister
 }
 
 func (w *Workspace) Issues() snyk.IssuesByFile {
@@ -76,7 +75,7 @@ func New(
 	hoverService hover.Service,
 	scanNotifier snyk.ScanNotifier,
 	notifier noti.Notifier,
-	scanPersister persistence.ScanSnapshotPersister,
+	scanPersister snyk.ScanSnapshotPersister,
 ) *Workspace {
 	return &Workspace{
 		folders:       make(map[string]*Folder),

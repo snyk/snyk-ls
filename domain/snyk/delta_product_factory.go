@@ -28,6 +28,16 @@ func NewDeltaFinderForProduct(p product.Product) *delta.Finder {
 			delta.WithEnricher(delta.NewFindingsEnricher()),
 			delta.WithMatcher(delta.NewCodeMatcher()),
 			delta.WithDiffer(delta.NewFindingsDiffer()))
+	case product.ProductOpenSource:
+		return delta.NewFinder(
+			delta.WithEnricher(delta.NewFindingsEnricher()),
+			delta.WithMatcher(delta.NewCodeMatcher()),
+			delta.WithDiffer(delta.NewFindingsDiffer()))
+	case product.ProductInfrastructureAsCode:
+		return delta.NewFinder(
+			delta.WithEnricher(delta.NewFindingsEnricher()),
+			delta.WithMatcher(delta.NewCodeMatcher()),
+			delta.WithDiffer(delta.NewFindingsDiffer()))
 	default:
 		return delta.NewFinder(delta.WithDiffer(delta.NewFindingsDiffer()))
 	}

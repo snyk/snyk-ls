@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-package persistence
+package snyk
 
 import (
 	"github.com/adrg/xdg"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/google/uuid"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -50,7 +49,7 @@ func TestInit_NotEmpty(t *testing.T) {
 	folderPath := t.TempDir()
 	repo := initGitRepo(t, folderPath, false)
 
-	issueList := []snyk.Issue{
+	issueList := []Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -80,7 +79,7 @@ func TestAdd_NewCommit(t *testing.T) {
 	folderPath := t.TempDir()
 	repo := initGitRepo(t, folderPath, false)
 
-	issueList := []snyk.Issue{
+	issueList := []Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -108,12 +107,12 @@ func TestAdd_ExistingCommit_ShouldNotOverrideExistingSnapshots(t *testing.T) {
 	folderPath := t.TempDir()
 	repo := initGitRepo(t, folderPath, false)
 
-	issueList := []snyk.Issue{
+	issueList := []Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
 	}
-	newIssueList := []snyk.Issue{
+	newIssueList := []Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -143,12 +142,12 @@ func TestAdd_ExistingCommit_ShouldOverrideExistingSnapshots(t *testing.T) {
 	folderPath := t.TempDir()
 	repo := initGitRepo(t, folderPath, true)
 
-	issueList := []snyk.Issue{
+	issueList := []Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
 	}
-	newIssueList := []snyk.Issue{
+	newIssueList := []Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -199,7 +198,7 @@ func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
 	folderPath := t.TempDir()
 	repo := initGitRepo(t, folderPath, false)
 
-	issueList := []snyk.Issue{
+	issueList := []Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -223,12 +222,12 @@ func TestGetPersistedIssueList_ReturnsValidIssueListForProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
 	repo := initGitRepo(t, folderPath, false)
-	existingCodeIssues := []snyk.Issue{
+	existingCodeIssues := []Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
 	}
-	existingOssIssues := []snyk.Issue{
+	existingOssIssues := []Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -254,7 +253,7 @@ func TestClear_ExistingCache(t *testing.T) {
 	folderPath := t.TempDir()
 	repo := initGitRepo(t, folderPath, false)
 
-	existingCodeIssues := []snyk.Issue{
+	existingCodeIssues := []Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -281,7 +280,7 @@ func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
 	repo := initGitRepo(t, folderPath, false)
-	existingCodeIssues := []snyk.Issue{
+	existingCodeIssues := []Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -307,7 +306,7 @@ func TestClearIssues_ExistingCacheExistingProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
 	repo := initGitRepo(t, folderPath, false)
-	existingCodeIssues := []snyk.Issue{
+	existingCodeIssues := []Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -335,7 +334,7 @@ func TestClearIssues_ExistingCacheNonExistingProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
 	repo := initGitRepo(t, folderPath, false)
-	existingCodeIssues := []snyk.Issue{
+	existingCodeIssues := []Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -364,7 +363,7 @@ func TestClearIssues_NonExistingCacheNonExistingProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()
 	repo := initGitRepo(t, folderPath, false)
-	existingCodeIssues := []snyk.Issue{
+	existingCodeIssues := []Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},
@@ -505,7 +504,7 @@ func TestExists_ExistsInCacheButNotInFs(t *testing.T) {
 	folderPath := t.TempDir()
 	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 	repo := initGitRepo(t, folderPath, false)
-	existingCodeIssues := []snyk.Issue{
+	existingCodeIssues := []Issue{
 		{
 			GlobalIdentity: uuid.New().String(),
 		},

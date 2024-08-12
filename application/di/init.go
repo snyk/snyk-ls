@@ -17,7 +17,6 @@
 package di
 
 import (
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -74,7 +73,7 @@ var initMutex = &sync.Mutex{}
 var notifier notification.Notifier
 var codeInstrumentor codeClientObservability.Instrumentor
 var codeErrorReporter codeClientObservability.ErrorReporter
-var scanPersister persistence.ScanSnapshotPersister
+var scanPersister snyk.ScanSnapshotPersister
 
 func Init() {
 	initMutex.Lock()
@@ -87,7 +86,7 @@ func Init() {
 
 func initDomain(c *config.Config) {
 	hoverService = hover.NewDefaultService(c)
-	scanner = snyk.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
+	scanner = snyk.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
 }
 
 func initInfrastructure(c *config.Config) {
@@ -121,7 +120,7 @@ func initInfrastructure(c *config.Config) {
 	instrumentor = performance2.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient(c, networkAccess.GetHttpClient)
 	gafConfiguration := c.Engine().GetConfiguration()
-	scanPersister = persistence.NewGitPersistenceProvider(c.Logger())
+	scanPersister = snyk.NewGitPersistenceProvider(c.Logger())
 	// we initialize the service without providers
 	authenticationService = authentication.NewAuthenticationService(c, nil, errorReporter, notifier)
 	// after having an instance, we pass it into the default configuration method
@@ -159,7 +158,7 @@ func initInfrastructure(c *config.Config) {
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
 	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
-	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner, scanPersister)
+	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
 	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
@@ -212,7 +211,7 @@ func HoverService() hover.Service {
 	return hoverService
 }
 
-func ScanPersister() persistence.ScanSnapshotPersister {
+func ScanPersister() snyk.ScanSnapshotPersister {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return scanPersister
