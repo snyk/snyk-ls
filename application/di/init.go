@@ -17,6 +17,8 @@
 package di
 
 import (
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -34,7 +36,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/snyk"
+	scanner2 "github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
@@ -64,16 +66,16 @@ var instrumentor performance2.Instrumentor
 var errorReporter er.ErrorReporter
 var installer install.Installer
 var hoverService hover.Service
-var scanner snyk.Scanner
+var scanner scanner2.Scanner
 var cliInitializer *cli.Initializer
-var scanNotifier snyk.ScanNotifier
+var scanNotifier scanner2.ScanNotifier
 var codeActionService *codeaction.CodeActionsService
 var fileWatcher *watcher.FileWatcher
 var initMutex = &sync.Mutex{}
 var notifier notification.Notifier
 var codeInstrumentor codeClientObservability.Instrumentor
 var codeErrorReporter codeClientObservability.ErrorReporter
-var scanPersister snyk.ScanSnapshotPersister
+var scanPersister persistence.ScanSnapshotPersister
 
 func Init() {
 	initMutex.Lock()
@@ -86,7 +88,7 @@ func Init() {
 
 func initDomain(c *config.Config) {
 	hoverService = hover.NewDefaultService(c)
-	scanner = snyk.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
+	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
 }
 
 func initInfrastructure(c *config.Config) {
@@ -120,7 +122,7 @@ func initInfrastructure(c *config.Config) {
 	instrumentor = performance2.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient(c, networkAccess.GetHttpClient)
 	gafConfiguration := c.Engine().GetConfiguration()
-	scanPersister = snyk.NewGitPersistenceProvider(c.Logger())
+	scanPersister = persistence.NewGitPersistenceProvider(c.Logger())
 	// we initialize the service without providers
 	authenticationService = authentication.NewAuthenticationService(c, nil, errorReporter, notifier)
 	// after having an instance, we pass it into the default configuration method
@@ -211,19 +213,19 @@ func HoverService() hover.Service {
 	return hoverService
 }
 
-func ScanPersister() snyk.ScanSnapshotPersister {
+func ScanPersister() persistence.ScanSnapshotPersister {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return scanPersister
 }
 
-func ScanNotifier() snyk.ScanNotifier {
+func ScanNotifier() scanner2.ScanNotifier {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return scanNotifier
 }
 
-func Scanner() snyk.Scanner {
+func Scanner() scanner2.Scanner {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return scanner

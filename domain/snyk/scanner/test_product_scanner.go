@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-package snyk
+package scanner
 
 import (
 	"context"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"sync"
 	"time"
 
@@ -44,11 +45,11 @@ type TestProductScanner struct {
 	c            *config.Config
 }
 
-func (t *TestProductScanner) GetInlineValues(_ string, _ Range) ([]InlineValue, error) {
-	return []InlineValue{}, nil
+func (t *TestProductScanner) GetInlineValues(_ string, _ snyk.Range) ([]snyk.InlineValue, error) {
+	return []snyk.InlineValue{}, nil
 }
 
-func (t *TestProductScanner) Scan(ctx context.Context, _ string, _ string) (issues []Issue, err error) {
+func (t *TestProductScanner) Scan(ctx context.Context, _ string, _ string) (issues []snyk.Issue, err error) {
 	t.c.Logger().Debug().Msg("Test product scanner running scan")
 	defer t.c.Logger().Debug().Msg("Test product scanner scan finished")
 
@@ -71,7 +72,7 @@ func (t *TestProductScanner) Scan(ctx context.Context, _ string, _ string) (issu
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	t.scans++
-	return []Issue{}, nil
+	return []snyk.Issue{}, nil
 }
 
 func (t *TestProductScanner) Scans() int {

@@ -18,12 +18,12 @@ package workspace
 
 import (
 	"context"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -35,8 +35,8 @@ func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 	const trustedDummy = "trustedDummy"
 	const untrustedDummy = "untrustedDummy"
-	scanner := &snyk.TestScanner{}
-	scanNotifier := snyk.NewMockScanNotifier()
+	scanner := &scanner.TestScanner{}
+	scanNotifier := scanner.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
 	w := New(c, performance.NewInstrumentor(), scanner, nil, nil, notifier, nil)
 	c.SetTrustedFolderFeatureEnabled(true)
@@ -54,8 +54,8 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 	c := testutil.UnitTest(t)
 	const trustedDummy = "trustedDummy"
 	const untrustedDummy = "untrustedDummy"
-	scanner := &snyk.TestScanner{}
-	scanNotifier := snyk.NewMockScanNotifier()
+	scanner := &scanner.TestScanner{}
+	scanNotifier := scanner.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
 	w := New(c, performance.NewInstrumentor(), scanner, nil, nil, notifier, nil)
 	c.SetTrustedFolderFeatureEnabled(true)
@@ -81,8 +81,8 @@ func Test_AddAndRemoveFoldersAndTriggerScan(t *testing.T) {
 	trustedPathAfterConversions := uri.PathFromUri(uri.PathToUri(trustedDummy))
 	toBeRemovedAbsolutePathAfterConversions := uri.PathFromUri(uri.PathToUri(toBeRemoved))
 
-	scanner := &snyk.TestScanner{}
-	scanNotifier := snyk.NewMockScanNotifier()
+	scanner := &scanner.TestScanner{}
+	scanNotifier := scanner.NewMockScanNotifier()
 	w := New(c, performance.NewInstrumentor(), scanner, nil, scanNotifier, notification.NewNotifier(), nil)
 	toBeRemovedFolder := NewFolder(c, toBeRemovedAbsolutePathAfterConversions, toBeRemoved, scanner, nil, scanNotifier, notification.NewNotifier(), nil)
 	w.AddFolder(toBeRemovedFolder)

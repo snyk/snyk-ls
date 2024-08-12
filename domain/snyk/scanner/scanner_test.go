@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-package snyk
+package scanner
 
 import (
 	"context"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"testing"
 	"time"
 
@@ -41,7 +42,7 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	disabledScanner := NewTestProductScanner(product.ProductOpenSource, false)
 	scanner, _ := setupScanner(enabledScanner, disabledScanner)
 
-	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
+	scanner.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
 
 	assert.Eventually(
 		t,
@@ -53,12 +54,12 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	)
 }
 
-func setupScanner(testProductScanners ...ProductScanner) (
+func setupScanner(testProductScanners ...snyk.ProductScanner) (
 	scanner Scanner,
 	scanNotifier ScanNotifier,
 ) {
 	c := config.CurrentConfig()
-	scanNotifier = NewMockScanNotifier()
+	scanNotifier = scanner.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
 	apiClient := &snyk_api.FakeApiClient{CodeEnabled: false}
 	er := error_reporting.NewTestErrorReporter()
@@ -77,7 +78,7 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 	emptyToken := !config.CurrentConfig().NonEmptyToken()
 
 	// Act
-	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
+	scanner.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
 
 	// Assert
 	assert.True(t, emptyToken)
@@ -94,7 +95,7 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 
 	// Act
 	go func() {
-		scanner.Scan(context.Background(), "", NoopResultProcessor, "")
+		scanner.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
 		done <- true
 	}()
 	time.Sleep(500 * time.Millisecond) // Wait for the product scanner to start running
@@ -112,9 +113,9 @@ func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	enabledScanner := NewTestProductScanner(product.ProductCode, true)
 	scanner, scanNotifier := setupScanner(enabledScanner)
-	mockScanNotifier := scanNotifier.(*MockScanNotifier)
+	mockScanNotifier := scanNotifier.(*scanner.MockScanNotifier)
 
-	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
+	scanner.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
 
 	assert.NotEmpty(t, mockScanNotifier.InProgressCalls())
 }

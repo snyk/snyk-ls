@@ -18,6 +18,8 @@ package server
 
 import (
 	"context"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"testing"
 	"time"
 
@@ -28,7 +30,6 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -37,7 +38,7 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 	loc, _ := setupServerWithCustomDI(t, false)
 	c := config.CurrentConfig()
 
-	scanner := &snyk.TestScanner{}
+	scanner := &scanner.TestScanner{}
 	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 
 	params := lsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
@@ -54,7 +55,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceip
 	loc, _ := setupServerWithCustomDI(t, false)
 	c := config.CurrentConfig()
 
-	scanner := &snyk.TestScanner{}
+	scanner := &scanner.TestScanner{}
 	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 
 	params := lsp.ExecuteCommandParams{Command: types.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
@@ -71,8 +72,8 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 	loc, _ := setupServerWithCustomDI(t, false)
 	c := config.CurrentConfig()
 
-	scannerForFolder := snyk.NewTestScanner()
-	scannerForDontClear := snyk.NewTestScanner()
+	scannerForFolder := scanner.NewTestScanner()
+	scannerForDontClear := scanner.NewTestScanner()
 	folder := workspace.NewFolder(c, "dummy", "dummy", scannerForFolder, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister())
 	dontClear := workspace.NewFolder(c, "dontclear", "dontclear", scannerForDontClear, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister())
 
@@ -104,7 +105,7 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 	loc, jsonRPCRecorder := setupServerWithCustomDI(t, false)
 	c := config.CurrentConfig()
 
-	scanner := &snyk.TestScanner{}
+	scanner := &scanner.TestScanner{}
 	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 	// explicitly enable folder trust which is disabled by default in tests
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)

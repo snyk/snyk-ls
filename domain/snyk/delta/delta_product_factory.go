@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package snyk
+package delta
 
 import (
 	"github.com/snyk/snyk-ls/internal/delta"
