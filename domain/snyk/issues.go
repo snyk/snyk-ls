@@ -288,6 +288,8 @@ type IaCIssueData struct {
 	Path []string `json:"path"`
 	// References: List of reference URLs
 	References []string `json:"references,omitempty"`
+	// CustomUIContent: IaC HTML template
+	CustomUIContent string `json:"customUIContent"`
 }
 
 func (i IaCIssueData) IsFixable() bool {
