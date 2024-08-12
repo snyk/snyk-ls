@@ -405,6 +405,7 @@ func sendAnalytics(data *snyk.ScanData) {
 	ic.SetTargetId(targetId)
 
 	ic.AddExtension("device_id", c.DeviceID())
+	ic.AddExtension("is_delta_scan", data.IsDeltaScan)
 
 	//Populate the runtime attribute of the analytics event
 	ua := util.GetUserAgent(gafConfig, config.Version)
