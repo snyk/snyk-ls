@@ -24,8 +24,6 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/snyk/snyk-ls/internal/vcs"
-
 	"github.com/erni27/imcache"
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
@@ -178,20 +176,6 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 
 	filesToBeScanned := sc.getFilesToBeScanned(folderPath)
 	sc.changedFilesMutex.Unlock()
-
-	if c.IsDeltaFindingsEnabled() {
-		hasChanges, gitErr := vcs.LocalRepoHasChanges(c.Logger(), folderPath)
-		if gitErr != nil {
-			logger.Error().Err(gitErr).Msg("couldn't check if working dir is clean")
-			return nil, gitErr
-		}
-		if !hasChanges {
-			// If delta is enabled but there are no changes. There can be no delta.
-			// else it should start scanning.
-			logger.Debug().Msg("skipping scanning. working dir is clean")
-			return []snyk.Issue{}, nil // Returning an empty slice implies that no issues were found
-		}
-	}
 
 	results, err := internalScan(ctx, sc, folderPath, logger, filesToBeScanned)
 	if err != nil {

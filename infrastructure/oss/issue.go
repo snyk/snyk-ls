@@ -17,8 +17,10 @@
 package oss
 
 import (
+	"crypto/sha256"
 	_ "embed"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/gomarkdown/markdown"
@@ -110,11 +112,40 @@ func toIssue(
 		CVEs:                issue.Identifiers.CVE,
 		AdditionalData:      additionalData,
 	}
-
 	additionalData.Details = getDetailsHtml(d)
 	d.AdditionalData = additionalData
+	d.SetFingerPrint(calculateFingerprint(d))
 
 	return d
+}
+
+func calculateFingerprint(issue snyk.Issue) string {
+	additionalData, ok := issue.AdditionalData.(snyk.OssIssueData)
+	if !ok {
+		return ""
+	}
+
+	dependencyChainHash := normalizedFromArray(additionalData.From)
+	// Fingerprint for OSS Issues is: name@version@fromArrayHash
+	preHash := fmt.Sprintf("%s|%s|%s", additionalData.PackageName, additionalData.Version, dependencyChainHash)
+	hash := sha256.Sum256([]byte(preHash))
+	return fmt.Sprintf("%x", hash)
+}
+
+func normalizedFromArray(array []string) string {
+	normalizedArray := normalizeArray(array)
+	joinedArray := strings.Join(normalizedArray, "|")
+	return joinedArray
+}
+
+func normalizeArray(array []string) []string {
+	normalized := make([]string, len(array))
+	// Normalize spaces
+	for i, item := range array {
+		normalized[i] = strings.Join(strings.Fields(item), "|")
+	}
+	sort.Strings(normalized)
+	return normalized
 }
 
 func convertScanResultToIssues(

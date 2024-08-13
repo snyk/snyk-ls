@@ -17,15 +17,11 @@
 package delta
 
 import (
-	"crypto/sha256"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/adrg/strutil"
 	"github.com/adrg/strutil/metrics"
 	"math"
 	"path/filepath"
-	"sort"
 	"strings"
 )
 
@@ -61,7 +57,6 @@ var weights = struct {
 	FilePositionDistance:        0.3,
 	RecentHistoryDistance:       0.2,
 	FingerprintConfidence:       0.5,
-	FromListConfidence:          0.5,
 
 	PathSimilarity: 0.8,
 	LineSimilarity: 0.2,
@@ -129,11 +124,9 @@ func findMatches(currentIssue Identifiable, index int, baseIssues []Identifiable
 		//We will always return 1.
 		hd := historicDistance()
 		fd := fingerprintDistance(baseIssue, currentIssue)
-		frd := fromDistance(baseIssue, currentIssue)
 		overallConfidence := fpd*weights.FilePositionDistance +
 			hd*weights.RecentHistoryDistance +
-			fd*weights.FingerprintConfidence +
-			frd*weights.FromListConfidence
+			fd*weights.FingerprintConfidence
 
 		if overallConfidence == 1 {
 			similarIssues = append(similarIssues, IssueConfidence{
@@ -178,10 +171,17 @@ func fingerprintDistance(baseFingerprints, currentFingerprints Identifiable) flo
 	if !ok {
 		return 0
 	}
-
+	baseFingerprint := baseFingerprintable.GetFingerprint()
+	currentFingerprint := currentFingerprintable.GetFingerprint()
+	if !strings.Contains(baseFingerprint, ".") && !strings.Contains(currentFingerprint, ".") {
+		if baseFingerprint == currentFingerprint {
+			return 1
+		}
+		return 0
+	}
 	// Split into parts and compare
-	parts1 := strings.Split(baseFingerprintable.GetFingerprint(), ".")
-	parts2 := strings.Split(currentFingerprintable.GetFingerprint(), ".")
+	parts1 := strings.Split(baseFingerprint, ".")
+	parts2 := strings.Split(currentFingerprint, ".")
 	similar := 0
 	for i := 0; i < len(parts1) && i < len(parts2); i++ {
 		if parts1[i] == parts2[i] {
@@ -195,53 +195,6 @@ func fingerprintDistance(baseFingerprints, currentFingerprints Identifiable) flo
 	return float64(similar) / float64(totalParts)
 }
 
-func fromDistance(baseFrom, currentFrom Identifiable) float64 {
-	baseFromable, ok := baseFrom.(Fromable)
-	if !ok {
-		return 0
-	}
-	currentFromable, ok := currentFrom.(Fromable)
-	if !ok {
-		return 0
-	}
-	if baseFromable.GetFrom() == nil || currentFromable.GetFrom() == nil {
-		return 1
-	}
-
-	baseHash, err := createHashFromArray(baseFromable.GetFrom())
-	if err != nil {
-		return 0
-	}
-	currentHash, err := createHashFromArray(currentFromable.GetFrom())
-	if err != nil {
-		return 0
-	}
-	if baseHash != currentHash {
-		return 0
-	}
-	return 1
-}
-func createHashFromArray(array []string) (string, error) {
-	normalizedArray := normalizeArray(array)
-	arrayBytes, err := json.Marshal(normalizedArray)
-	if err != nil {
-		return "", err
-	}
-
-	hash := sha256.Sum256(arrayBytes)
-	return fmt.Sprintf("%x", hash), nil
-}
-
-func normalizeArray(array []string) []string {
-	normalized := make([]string, len(array))
-	// Normalize spaces
-	for i, item := range array {
-		normalized[i] = strings.Join(strings.Fields(item), " ")
-	}
-	sort.Strings(normalized)
-	return normalized
-}
-
 func filePositionDistance(baseIssue, currentIssue Identifiable) float64 {
 	basePathable, ok := baseIssue.(Pathable)
 	if !ok {
@@ -252,15 +205,15 @@ func filePositionDistance(baseIssue, currentIssue Identifiable) float64 {
 		return 0
 	}
 
-	dirSimilarity := checkDirs(basePathable.Path(), currentPathable.Path())
-	fileNameSimilarity := fileNameSimilarity(basePathable.Path(), currentPathable.Path())
-	fileExtSimilarity := fileExtSimilarity(filepath.Ext(basePathable.Path()),
+	ds := checkDirs(basePathable.Path(), currentPathable.Path())
+	fns := fileNameSimilarity(basePathable.Path(), currentPathable.Path())
+	fes := fileExtSimilarity(filepath.Ext(basePathable.Path()),
 		filepath.Ext(currentPathable.Path()))
 
 	pathSimilarity :=
-		dirSimilarity*weights.DirSimilarity +
-			fileNameSimilarity*weights.FileNameSimilarity +
-			fileExtSimilarity*weights.FileExtensionSimilarity
+		ds*weights.DirSimilarity +
+			fns*weights.FileNameSimilarity +
+			fes*weights.FileExtensionSimilarity
 
 	startLineSimilarity, startColumnSimilarity, endColumnSimilarity, endLineSimilarity :=
 		matchDistance(baseIssue, currentIssue)

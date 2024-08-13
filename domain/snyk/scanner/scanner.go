@@ -318,7 +318,7 @@ func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.
 	}
 
 	if sc.c.IsDeltaFindingsEnabled() && len(foundIssues) > 0 {
-		err = sc.scanAndPersistBaseBranch(ctx, s, path, folderPath)
+		err = sc.scanAndPersistBaseBranch(ctx, s, folderPath)
 		if err != nil {
 			logger.Error().Err(err).Msg("couldn't scan base branch for folder " + folderPath)
 			return nil, err
@@ -327,7 +327,7 @@ func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.
 	return foundIssues, nil
 }
 
-func (sc *DelegatingConcurrentScanner) scanAndPersistBaseBranch(ctx context.Context, s snyk.ProductScanner, path, folderPath string) error {
+func (sc *DelegatingConcurrentScanner) scanAndPersistBaseBranch(ctx context.Context, s snyk.ProductScanner, folderPath string) error {
 	logger := sc.c.Logger().With().Str("method", "scanAndPersistBaseBranch").Logger()
 
 	baseBranchName := vcs.GetBaseBranchName(folderPath)
@@ -344,7 +344,7 @@ func (sc *DelegatingConcurrentScanner) scanAndPersistBaseBranch(ctx context.Cont
 	}
 
 	tmpFolderName := fmt.Sprintf("snyk_delta_%s", vcs.NormalizeBranchName(baseBranchName))
-	destinationPath, err := os.MkdirTemp("", tmpFolderName)
+	baseBranchFolderPath, err := os.MkdirTemp("", tmpFolderName)
 	logger.Info().Msg("Creating tmp directory for base branch")
 
 	if err != nil {
@@ -352,7 +352,7 @@ func (sc *DelegatingConcurrentScanner) scanAndPersistBaseBranch(ctx context.Cont
 		return err
 	}
 
-	repo, err := vcs.Clone(&logger, folderPath, destinationPath, baseBranchName)
+	repo, err := vcs.Clone(&logger, folderPath, baseBranchFolderPath, baseBranchName)
 
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to clone base branch")
@@ -360,18 +360,23 @@ func (sc *DelegatingConcurrentScanner) scanAndPersistBaseBranch(ctx context.Cont
 	}
 
 	defer func() {
-		if destinationPath == "" {
+		if baseBranchFolderPath == "" {
 			return
 		}
-		err = os.RemoveAll(destinationPath)
-		logger.Info().Msg("removing base branch tmp dir " + destinationPath)
+		err = os.RemoveAll(baseBranchFolderPath)
+		logger.Info().Msg("removing base branch tmp dir " + baseBranchFolderPath)
 
 		if err != nil {
-			logger.Error().Err(err).Msg("couldn't remove tmp dir " + destinationPath)
+			logger.Error().Err(err).Msg("couldn't remove tmp dir " + baseBranchFolderPath)
 		}
 	}()
 
-	results, err := s.Scan(ctx, path, destinationPath)
+	var results []snyk.Issue
+	if s.Product() == product.ProductCode {
+		results, err = s.Scan(ctx, "", baseBranchFolderPath)
+	} else {
+		results, err = s.Scan(ctx, baseBranchFolderPath, "")
+	}
 
 	if err != nil {
 		return err

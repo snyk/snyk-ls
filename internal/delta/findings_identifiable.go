@@ -21,11 +21,6 @@ type Fingerprintable interface {
 	GetFingerprint() string
 }
 
-type Fromable interface {
-	Identifiable
-	GetFrom() []string
-}
-
 type Locatable interface {
 	Identifiable
 	StartLine() int

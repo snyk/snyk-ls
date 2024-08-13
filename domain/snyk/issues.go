@@ -75,19 +75,10 @@ type Issue struct {
 	GlobalIdentity string
 }
 
-func (i *Issue) GetFrom() []string {
-	ossIssueData, ok := i.AdditionalData.(OssIssueData)
-	if !ok {
-		return nil
-	}
-	return ossIssueData.From
-}
-
 var _ delta.Identifiable = (*Issue)(nil)
 var _ delta.Fingerprintable = (*Issue)(nil)
 var _ delta.Locatable = (*Issue)(nil)
 var _ delta.Pathable = (*Issue)(nil)
-var _ delta.Fromable = (*Issue)(nil)
 
 func (i *Issue) StartLine() int {
 	return i.Range.Start.Line
@@ -128,6 +119,7 @@ func (i *Issue) Path() string {
 func (i *Issue) GetFingerprint() string {
 	return i.Fingerprint
 }
+
 func (i *Issue) SetFingerPrint(fingerprint string) {
 	i.Fingerprint = fingerprint
 }
@@ -137,6 +129,7 @@ func (i *Issue) RuleId() string {
 }
 
 type IssueAdditionalData interface {
+	json.Marshaler
 	GetKey() string
 	GetTitle() string
 }
@@ -273,21 +266,18 @@ func (i *Issue) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		i.AdditionalData = codeData
-		break
 	case "IaCIssueData":
 		var iacData IaCIssueData
 		if err := json.Unmarshal(temp.AdditionalData, &iacData); err != nil {
 			return err
 		}
 		i.AdditionalData = iacData
-		break
 	case "OssIssueData":
 		var ossData OssIssueData
 		if err := json.Unmarshal(temp.AdditionalData, &ossData); err != nil {
 			return err
 		}
 		i.AdditionalData = ossData
-		break
 	case "":
 		return nil
 	default:
