@@ -39,11 +39,12 @@ func Test_StorageCallsRegisterCallbacksForKeys(t *testing.T) {
 	value := "test"
 	callbacks[key] = myCallback
 	s, err := NewStorageWithCallbacks(WithCallbacks(callbacks), WithStorageFile(file))
+	require.NoError(t, err)
 
 	err = s.Set(key, value)
 
-	assert.NoError(t, err)
-	assert.Eventuallyf(t, func() bool {
+	require.NoError(t, err)
+	require.Eventuallyf(t, func() bool {
 		return <-called
 	}, 5*time.Second, time.Millisecond, "callback was not called")
 }
@@ -58,8 +59,8 @@ func Test_ParallelFileLocking(t *testing.T) {
 
 		// we should not get concurrent writes to the backing map here
 		var parallelism = 100
-		for i := range parallelism {
-			go func() {
+		for i := 0; i < parallelism; i++ {
+			go func(count int) {
 				cut, _ := NewStorageWithCallbacks(WithStorageFile(file))
 				lockErr := cut.Lock(context.Background(), time.Millisecond*100)
 				require.NoError(t, lockErr)
@@ -68,10 +69,10 @@ func Test_ParallelFileLocking(t *testing.T) {
 					require.NoError(t, unlockErr)
 				}(cut)
 
-				err = cut.Set(fmt.Sprintf("test-%d", i), i)
+				err = cut.Set(fmt.Sprintf("test-%d", count), count)
 
 				require.NoError(t, err)
-			}()
+			}(i)
 		}
 
 		assert.Eventually(t, func() bool {
