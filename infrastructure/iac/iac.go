@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"net/url"
 	"os"
 	"os/exec"
@@ -363,7 +364,7 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		return snyk.Issue{}, errors.Wrap(err, "unable to create IaC issue additional data")
 	}
 
-	return snyk.Issue{
+	res := snyk.Issue{
 		ID: issue.PublicID,
 		Range: snyk.Range{
 			Start: snyk.Position{Line: issue.LineNumber, Character: rangeStart},
@@ -378,7 +379,11 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		IssueType:           snyk.InfrastructureIssue,
 		CodeActions:         []snyk.CodeAction{action},
 		AdditionalData:      additionalData,
-	}, nil
+	}
+	fingerprint := utils.CalculateFingerprintFromAdditionalData(res)
+	res.SetFingerPrint(fingerprint)
+
+	return res, nil
 }
 
 func (iac *Scanner) toAdditionalData(affectedFilePath string, issue iacIssue) (snyk.IaCIssueData, error) {
