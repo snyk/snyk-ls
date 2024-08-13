@@ -66,11 +66,11 @@ func (s *storage) Set(key string, value any) error {
 	return nil
 }
 
-func NewStorage(opts ...storageOption) StorageWithCallbacks {
+func NewStorageWithCallbacks(opts ...storageOption) (StorageWithCallbacks, error) {
 	// we ignore the error and just work without locking
 	file, err := xdg.ConfigFile("snyk/ls-config")
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	s := &storage{
@@ -81,7 +81,7 @@ func NewStorage(opts ...storageOption) StorageWithCallbacks {
 	for _, opt := range opts {
 		opt(s)
 	}
-	return s
+	return s, err
 }
 
 func (s *storage) RegisterCallback(key string, callback StorageCallbackFunc) {

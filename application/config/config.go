@@ -253,7 +253,11 @@ func initWorkFlowEngine(c *Config) {
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, enableOAuth)
 
 	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
-	c.storage = storage.NewStorage()
+	var storageCreationErr error
+	c.storage, storageCreationErr = storage.NewStorageWithCallbacks()
+	if storageCreationErr != nil {
+		c.logger.Err(storageCreationErr).Msg("unable to create a configuration storage object")
+	}
 	conf.SetStorage(c.storage)
 
 	err := localworkflows.InitWhoAmIWorkflow(c.engine)
