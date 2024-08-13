@@ -34,7 +34,6 @@ type StorageWithCallbacks interface {
 }
 
 type storage struct {
-	data        map[string]any
 	callbacks   map[string]StorageCallbackFunc
 	jsonStorage *configuration.JsonStorage
 }
@@ -55,7 +54,6 @@ type storageOption func(*storage)
 
 func (s *storage) Set(key string, value any) error {
 	callback := s.callbacks[key]
-	s.data[key] = value
 
 	if callback != nil {
 		callback(key, value)
@@ -76,7 +74,6 @@ func NewStorage(opts ...storageOption) StorageWithCallbacks {
 	}
 
 	s := &storage{
-		data:        make(map[string]any),
 		callbacks:   make(map[string]StorageCallbackFunc),
 		jsonStorage: configuration.NewJsonStorage(file),
 	}
