@@ -46,7 +46,6 @@ type OssIssueData struct {
 	Lesson             string             `json:"lesson,omitempty"`
 	Remediation        string             `json:"remediation"`
 	AppliedPolicyRules AppliedPolicyRules `json:"appliedPolicyRules,omitempty"`
-	Type               string             `json:"type,omitempty"`
 }
 
 func (o OssIssueData) GetKey() string {
@@ -55,6 +54,14 @@ func (o OssIssueData) GetKey() string {
 
 func (o OssIssueData) GetTitle() string {
 	return o.Title
+}
+
+func (o OssIssueData) IsFixable() bool {
+	return o.IsUpgradable &&
+		o.IsPatchable &&
+		len(o.UpgradePath) > 1 &&
+		len(o.From) > 1 &&
+		o.UpgradePath[1] != o.From[1]
 }
 
 func (o OssIssueData) MarshalJSON() ([]byte, error) {

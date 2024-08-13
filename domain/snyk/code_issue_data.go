@@ -38,7 +38,6 @@ type CodeIssueData struct {
 	HasAIFix           bool               `json:"hasAIFix"`
 	DataFlow           []DataFlowElement  `json:"dataFlow,omitempty"`
 	Details            string             `json:"details"`
-	Type               string             `json:"type,omitempty"`
 }
 
 func (c CodeIssueData) GetKey() string {
@@ -47,6 +46,10 @@ func (c CodeIssueData) GetKey() string {
 
 func (c CodeIssueData) GetTitle() string {
 	return c.Title
+}
+
+func (c CodeIssueData) IsFixable() bool {
+	return c.HasAIFix
 }
 
 func (c CodeIssueData) MarshalJSON() ([]byte, error) {

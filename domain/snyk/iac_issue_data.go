@@ -39,7 +39,8 @@ type IaCIssueData struct {
 	Path []string `json:"path"`
 	// References: List of reference URLs
 	References []string `json:"references,omitempty"`
-	Type       string   `json:"type,omitempty"`
+	// CustomUIContent: IaC HTML template
+	CustomUIContent string `json:"customUIContent"`
 }
 
 func (i IaCIssueData) GetKey() string {
@@ -48,6 +49,10 @@ func (i IaCIssueData) GetKey() string {
 
 func (i IaCIssueData) GetTitle() string {
 	return i.Title
+}
+
+func (i IaCIssueData) IsFixable() bool {
+	return false
 }
 
 func (i IaCIssueData) MarshalJSON() ([]byte, error) {
