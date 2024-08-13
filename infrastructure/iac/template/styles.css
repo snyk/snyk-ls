@@ -1,0 +1,139 @@
+:root {
+  --default-font: ui-sans-serif, "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #595a5c;
+}
+
+body {
+  font-family: var(--default-font);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+h2 {
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+section {
+  padding: 0px 20px 5px 20px;
+}
+
+.styled-link {
+  display: inline-block;
+  text-decoration: none;
+  font-weight: normal;
+}
+
+.styled-link:hover {
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.suggestion {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.suggestion .suggestion-text {
+  font-size: larger;
+  margin-bottom: 0.8rem;
+  font-size: 1.8rem;
+  font-weight: 500;
+  line-height: 2.4rem;
+}
+
+.severity {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 0;
+  float: left;
+  margin: 0 1rem 0 0;
+  text-align: center;
+}
+
+.severity .icon {
+  width: 32px;
+  height: 32px;
+}
+
+.delimiter {
+  display: inline-block;
+  width: 1px;
+  height: 1.3rem;
+  background-color: #ccc;
+  margin: 0 0.8rem;
+  vertical-align: middle;
+}
+
+.summary .summary-item {
+  display: flex;
+  margin: 0.3em 0 0.3em 0;
+}
+
+.summary .label {
+  width: 160px;
+}
+
+.summary .content {
+  flex: 70%;
+}
+
+.summary .summary-item.path pre {
+  margin: 0;
+}
+
+.summary-item.path pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+div.remediation {
+  padding: 16px 0 16px 8px;
+}
+
+div.remediation p {
+  margin-bottom: 0;
+}
+
+header {
+  padding: 0px 20px 5px 20px;
+}
+
+.panel-header {
+  display: flex;
+  flex-direction: column;
+}
+
+.severity-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 3px;
+}
+
+.severity-title {
+  padding-left: 8px;
+}
+
+.severity-type-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 1em;
+  line-height: 1em;
+}

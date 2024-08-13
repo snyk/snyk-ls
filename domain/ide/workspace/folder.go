@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/snyk/snyk-ls/domain/ide/workspace/ui"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	delta2 "github.com/snyk/snyk-ls/domain/snyk/delta"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
@@ -332,7 +333,7 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *snyk.ScanData) {
 	var dedupMap = map[string]bool{}
 	for _, issue := range scanData.Issues {
 		if !f.Contains(issue.AffectedFilePath) {
-			panic("issue found in scanData that does not pertain to folder")
+			panic("issue found in scanData " + issue.AffectedFilePath + " that does not pertain to folder: " + f.path)
 		}
 		uniqueIssueID := f.getUniqueIssueID(issue)
 
@@ -406,6 +407,7 @@ func sendAnalytics(data *snyk.ScanData) {
 	ic.SetTargetId(targetId)
 
 	ic.AddExtension("device_id", c.DeviceID())
+	ic.AddExtension("is_delta_scan", data.IsDeltaScan)
 
 	//Populate the runtime attribute of the analytics event
 	ua := util.GetUserAgent(gafConfig, config.Version)
@@ -610,6 +612,7 @@ func isVisibleSeverity(issue snyk.Issue) bool {
 func (f *Folder) publishDiagnostics(product product.Product, issuesByFile snyk.IssuesByFile) {
 	f.sendHovers(issuesByFile)
 	f.sendDiagnostics(issuesByFile)
+	ui.SendDiagnosticsOverview(f.c, product, issuesByFile, f.notifier)
 	f.sendSuccess(product)
 }
 

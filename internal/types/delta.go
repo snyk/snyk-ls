@@ -14,24 +14,8 @@
  * limitations under the License.
  */
 
-package html
+package types
 
-import (
-	"html/template"
-	"strings"
-
-	"github.com/gomarkdown/markdown"
-)
-
-func MarkdownToHTML(md string) template.HTML {
-	html := markdown.ToHTML([]byte(md), nil, nil)
-	return template.HTML(html)
-}
-
-func IdxMinusOne(n int) int {
-	return n - 1
-}
-
-func TrimCWEPrefix(cwe string) string {
-	return strings.TrimPrefix(cwe, "CWE-")
+type DeltaScanner interface {
+	DeltaScanningEnabled() bool
 }

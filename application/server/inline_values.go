@@ -34,8 +34,8 @@ func textDocumentInlineValueHandler() jrpc2.Handler {
 		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "textDocumentInlineValueHandler").Logger()
 		documentURI := params.TextDocument.URI
-		logger.Info().Msgf("Request for %s:%s RECEIVED", documentURI, params.Range.String())
-		defer logger.Info().Msgf("Request for %s:%s DONE", documentURI, params.Range.String())
+		logger.Debug().Msgf("Request for %s:%s RECEIVED", documentURI, params.Range.String())
+		defer logger.Debug().Msgf("Request for %s:%s DONE", documentURI, params.Range.String())
 		if s, ok := di.Scanner().(snyk.InlineValueProvider); ok {
 			filePath := uri.PathFromUri(documentURI)
 			values, err := s.GetInlineValues(filePath, converter.FromRange(params.Range))

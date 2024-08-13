@@ -16,22 +16,8 @@
 
 package html
 
-import (
-	"html/template"
-	"strings"
+import "html/template"
 
-	"github.com/gomarkdown/markdown"
-)
-
-func MarkdownToHTML(md string) template.HTML {
-	html := markdown.ToHTML([]byte(md), nil, nil)
-	return template.HTML(html)
-}
-
-func IdxMinusOne(n int) int {
-	return n - 1
-}
-
-func TrimCWEPrefix(cwe string) string {
-	return strings.TrimPrefix(cwe, "CWE-")
+func FileIcon() template.HTML {
+	return template.HTML(`<svg class="data-flow-file-icon" width="16" height="16" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none""><path d="M20.414,2H5V30H27V8.586ZM7,28V4H19v6h6V28Z" fill="#888"/></svg>`)
 }

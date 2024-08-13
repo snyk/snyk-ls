@@ -17,21 +17,18 @@
 package html
 
 import (
-	"html/template"
-	"strings"
-
-	"github.com/gomarkdown/markdown"
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
 )
 
-func MarkdownToHTML(md string) template.HTML {
-	html := markdown.ToHTML([]byte(md), nil, nil)
-	return template.HTML(html)
-}
-
-func IdxMinusOne(n int) int {
-	return n - 1
-}
-
-func TrimCWEPrefix(cwe string) string {
-	return strings.TrimPrefix(cwe, "CWE-")
+// GenerateSecurityNonce generates a cryptographically secure random nonce.
+// A nonce is used in the web browser's Content Security Policy (CSP) to allow specific
+// inline styles and scripts, helping to prevent Cross-Site Scripting (XSS) attacks.
+func GenerateSecurityNonce() (string, error) {
+	nonceBytes := make([]byte, 16)
+	if _, err := rand.Read(nonceBytes); err != nil {
+		return "", fmt.Errorf("error generating nonce: %v", err)
+	}
+	return base64.StdEncoding.EncodeToString(nonceBytes), nil
 }

@@ -142,7 +142,37 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, issue.AdditionalData)
-	assert.Equal(t, expectedAdditionalData, issue.AdditionalData)
+
+	actualAdditionalData, ok := issue.AdditionalData.(snyk.IaCIssueData)
+	assert.True(t, ok)
+
+	assert.Equal(t, expectedAdditionalData.Key, actualAdditionalData.Key)
+	assert.Equal(t, expectedAdditionalData.Title, actualAdditionalData.Title)
+	assert.Equal(t, expectedAdditionalData.PublicId, actualAdditionalData.PublicId)
+	assert.Equal(t, expectedAdditionalData.Documentation, actualAdditionalData.Documentation)
+	assert.Equal(t, expectedAdditionalData.LineNumber, actualAdditionalData.LineNumber)
+	assert.Equal(t, expectedAdditionalData.Issue, actualAdditionalData.Issue)
+	assert.Equal(t, expectedAdditionalData.Impact, actualAdditionalData.Impact)
+	assert.Equal(t, expectedAdditionalData.Resolve, actualAdditionalData.Resolve)
+	assert.Equal(t, expectedAdditionalData.References, actualAdditionalData.References)
+
+	assert.NotEmpty(t, actualAdditionalData.CustomUIContent, "Details field should not be empty")
+	assert.Contains(t, actualAdditionalData.CustomUIContent, "<!DOCTYPE html>", "Details should contain HTML doctype declaration")
+	assert.Contains(t, actualAdditionalData.CustomUIContent, "PublicID", "Details should contain the PublicID")
+}
+
+func Test_toIssue_issueHasHtmlTemplate(t *testing.T) {
+	c := testutil.UnitTest(t)
+	sampleIssue := sampleIssue()
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor())
+	issue, err := scanner.toIssue("test.yml", sampleIssue, "")
+
+	assert.NoError(t, err)
+
+	// Assert the Details field contains the HTML template and expected content
+	additionalData := issue.AdditionalData.(snyk.IaCIssueData)
+	assert.NotEmpty(t, additionalData.CustomUIContent, "HTML Details should not be empty")
+	assert.Contains(t, additionalData.CustomUIContent, "PublicID", "HTML should contain the PublicID")
 }
 
 func Test_getIssueId(t *testing.T) {

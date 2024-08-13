@@ -1054,6 +1054,11 @@ type SnykScanParams struct {
 	CliError *CliError `json:"cliError,omitempty"`
 }
 
+type DiagnosticsOverviewParams struct {
+	Product string `json:"product"`
+	Html    string `json:"html"`
+}
+
 type ScanIssue struct { // TODO - convert this to a generic type
 	// Unique key identifying an issue in the whole result set. Not the same as the Snyk issue ID.
 	Id             string        `json:"id"`
@@ -1165,12 +1170,13 @@ type CodeActionOptions struct {
 }
 
 type IacIssueData struct {
-	PublicId      string   `json:"publicId"`
-	Documentation string   `json:"documentation"`
-	LineNumber    int      `json:"lineNumber"`
-	Issue         string   `json:"issue"`
-	Impact        string   `json:"impact"`
-	Resolve       string   `json:"resolve,omitempty"`
-	Path          []string `json:"path"`
-	References    []string `json:"references,omitempty"`
+	PublicId        string   `json:"publicId"`
+	Documentation   string   `json:"documentation"`
+	LineNumber      int      `json:"lineNumber"`
+	Issue           string   `json:"issue"`
+	Impact          string   `json:"impact"`
+	Resolve         string   `json:"resolve,omitempty"`
+	Path            []string `json:"path"`
+	References      []string `json:"references,omitempty"`
+	CustomUIContent string   `json:"customUIContent,omitempty"`
 }

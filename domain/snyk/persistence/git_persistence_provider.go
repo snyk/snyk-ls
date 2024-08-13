@@ -20,15 +20,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog"
-	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/product"
-	"github.com/snyk/snyk-ls/internal/util"
-	"github.com/snyk/snyk-ls/internal/vcs"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/rs/zerolog"
+
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/util"
+	"github.com/snyk/snyk-ls/internal/vcs"
 )
 
 const (
@@ -389,7 +391,7 @@ func (g *GitPersistenceProvider) persistToDisk(cacheDir string, folderHashedPath
 }
 
 func (g *GitPersistenceProvider) ensureCacheDirExists(folderPath string) (string, error) {
-	g.logger.Info().Msg("attempting to determine .git folder path")
+	g.logger.Debug().Msg("attempting to determine .git folder path")
 	gitFolder, err := vcs.GitRepoFolderPath(g.logger, folderPath)
 	if err != nil {
 		return "", err

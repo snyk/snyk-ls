@@ -1,0 +1,129 @@
+<!--
+  ~ © 2024 Snyk Limited
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; style-src 'self' 'nonce-{{.Nonce}}'; script-src 'nonce-{{.Nonce}}';">
+
+    <!-- see docs/ui-rendering.md  -->
+    <!--noformat-->
+    <!-- @formatter:off -->
+    <style nonce="{{.Nonce}}">
+        {{.Styles}}
+    </style>
+    <style nonce="ideNonce" data-ide-style></style>
+    <!-- @formatter:on -->
+    <!--noformat-->
+</head>
+
+<body>
+
+<main class="issues-overview-container">
+    <!-- Tabs Issue Overview Container -->
+    <article class="issues-overview">
+        <div class="main-tabs-nav">
+      <span data-tab="all-issues" id="all-issues-tab"
+            class="tab-item {{if not .DeltaFindingsEnabled}} is-selected {{end}} all-issues-tab">
+          All Issues
+      </span>
+            <span data-tab="net-new-issues" id="net-new-issues-tab"
+                  class="tab-item {{if .DeltaFindingsEnabled}} is-selected {{end}} net-new-issues-tab">
+          Net new issues
+      </span>
+        </div>
+
+        <!-- Dynamic Content Sections -->
+        <div class="tab-container">
+            <!-- all-issues content -->
+            <div data-content="all-issues" id="all-issues-content"
+                 class="tab-content main-tab-content {{if not .DeltaFindingsEnabled}} is-selected {{end}}">
+                <section class="issue-overview delimiter-top">
+                    <div id="issueTree" class="sn-tree">
+                        <!--  root nodes-->
+                        <ul class="sn-list">
+                            {{range $index, $node := .RootNodes}}
+                            <li class="sn-list-item is-clickable-{{$node.ProductEnabled}}">
+                                <span class="sn-icon">{{$node.Icon}}</span><span class="sn-label">{{$node.Text}}</span>
+                            </li>
+                            {{ end }}
+                        </ul>
+
+                        <!--  file nodes -->
+                        <ul class="sn-list">
+                            {{range $node, $issueNodes := .Issues}}
+                            <li class="sn-list-item is-expandable is-clickable-{{$node.ProductEnabled}} is-expanded">
+                                <!-- file node-->
+                                <span class="sn-icon">{{$node.Icon}}</span><span class="sn-label">{{$node.Text}}</span>
+                                <!-- issue tree nodes -->
+                                <ul class="sn-list">
+                                    {{range $index, $issue := $issueNodes}}
+                                    <li class="sn-list-item is-clickable={{$node.ProductEnabled}}">
+                                        <span class="sn-icon">{{$issue.Icon}}</span><span class="sn-label">{{$issue.Text}}</span>
+                                    </li>
+                                    {{ end }}
+                                </ul>
+                            </li>
+                            {{ end }}
+                        </ul>
+                    </div>
+                </section>
+                <!-- Content for Vulnerability Overview -->
+            </div>
+            <!-- End all-issues-content -->
+            <!-- net-new issues content -->
+            <div data-content="net-new-issues" id="net-new-issues-content"
+                 class="tab-content {{if .DeltaFindingsEnabled}} is-selected {{end}} main-tab-content">
+            </div>
+            <!-- End net-new-issues-content -->
+        </div>
+    </article>
+</main>
+
+<script nonce="{{.Nonce}}">
+    const allIssuesTab = document.getElementById("all-issues-tab");
+    const netNewIssuesTab = document.getElementById("net-new-issues-tab");
+    const deltaFindingsEnabled = Boolean("{{.DeltaFindingsEnabled}}");
+
+    // event listeners for switching tabs
+    netNewIssuesTab.addEventListener("click", () => {
+        retrieveIssues(true)
+    })
+
+    allIssuesTab.addEventListener("click", () => {
+        retrieveIssues(false)
+    })
+
+    function retrieveIssues(deltaFindingsEnabled) {
+        // retrieve issues, injected/overwritten by IDE
+        // this should force a reload & resending to the client.
+        // also the backend must update its config
+        console.log(`i should be retrieving values. delta: ${deltaFindingsEnabled}`)
+    }
+
+    if (deltaFindingsEnabled) {
+        netNewIssuesTab.className.replace(" active", "")
+    } else {
+        allIssuesTab.className += " active"
+    }
+</script>
+</body>
+
+</html>

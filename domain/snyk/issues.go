@@ -19,9 +19,10 @@ package snyk
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/snyk/snyk-ls/internal/delta"
 	"net/url"
 	"time"
+
+	"github.com/snyk/snyk-ls/internal/delta"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -132,6 +133,7 @@ type IssueAdditionalData interface {
 	json.Marshaler
 	GetKey() string
 	GetTitle() string
+	IsFixable() bool
 }
 
 type IgnoreDetails struct {

@@ -58,7 +58,7 @@ func (s *GDPRAwareSentryErrorReporter) sendToSentry(err error) (reportedToSentry
 	if s.c.IsErrorReportingEnabled() {
 		eventId := sentry.CaptureException(err)
 		if eventId != nil {
-			s.c.Logger().Info().Err(err).Str("method", "CaptureError").Msgf("Sent error to Sentry (ID: %v)", *eventId)
+			s.c.Logger().Error().Err(err).Str("method", "CaptureError").Msgf("Sent error to Sentry (ID: %v)", *eventId)
 			return true
 		}
 	}

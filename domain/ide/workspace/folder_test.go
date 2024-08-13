@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"

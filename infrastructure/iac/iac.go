@@ -364,7 +364,7 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		return snyk.Issue{}, errors.Wrap(err, "unable to create IaC issue additional data")
 	}
 
-	res := snyk.Issue{
+	iacIssue := snyk.Issue{
 		ID: issue.PublicID,
 		Range: snyk.Range{
 			Start: snyk.Position{Line: issue.LineNumber, Character: rangeStart},
@@ -380,10 +380,19 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		CodeActions:         []snyk.CodeAction{action},
 		AdditionalData:      additionalData,
 	}
-	fingerprint := utils.CalculateFingerprintFromAdditionalData(res)
-	res.SetFingerPrint(fingerprint)
 
-	return res, nil
+	htmlRender, err := NewIacHtmlRenderer(iac.c)
+	if err != nil {
+		iac.c.Logger().Err(err).Msg("Cannot create IaC HTML render")
+		return snyk.Issue{}, err
+	}
+
+	additionalData.CustomUIContent = htmlRender.getCustomUIContent(iacIssue)
+	iacIssue.AdditionalData = additionalData
+	fingerprint := utils.CalculateFingerprintFromAdditionalData(iacIssue)
+	iacIssue.SetFingerPrint(fingerprint)
+
+	return iacIssue, nil
 }
 
 func (iac *Scanner) toAdditionalData(affectedFilePath string, issue iacIssue) (snyk.IaCIssueData, error) {

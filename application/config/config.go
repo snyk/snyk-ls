@@ -49,7 +49,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/logging"
-	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -323,7 +322,7 @@ func (c *Config) Load() {
 func (c *Config) loadFile(fileName string) {
 	file, err := os.Open(fileName)
 	if err != nil {
-		c.Logger().Info().Str("method", "loadFile").Msg("Couldn't load " + fileName)
+		c.Logger().Debug().Str("method", "loadFile").Msg("Couldn't load " + fileName)
 		return
 	}
 	defer func(file *os.File) { _ = file.Close() }(file)
@@ -772,21 +771,6 @@ func (c *Config) TrustedFolders() []string {
 
 func (c *Config) SetTrustedFolders(folderPaths []string) {
 	c.trustedFolders = folderPaths
-}
-
-func (c *Config) DisplayableIssueTypes() map[product.FilterableIssueType]bool {
-	enabled := make(map[product.FilterableIssueType]bool)
-	enabled[product.FilterableIssueTypeOpenSource] = c.IsSnykOssEnabled()
-
-	// Handle backwards compatibility.
-	// Older configurations had a single value for both snyk code issue types (security & quality)
-	// New configurations have 1 for each, and should ignore the general IsSnykCodeEnabled value.
-	enabled[product.FilterableIssueTypeCodeSecurity] = c.IsSnykCodeEnabled() || c.IsSnykCodeSecurityEnabled()
-	enabled[product.FilterableIssueTypeCodeQuality] = c.IsSnykCodeEnabled() || c.IsSnykCodeQualityEnabled()
-
-	enabled[product.FilterableIssueTypeInfrastructureAsCode] = c.IsSnykIacEnabled()
-
-	return enabled
 }
 
 func (c *Config) IsSnykCodeSecurityEnabled() bool {

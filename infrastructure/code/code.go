@@ -44,6 +44,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
+var _ types.DeltaScanner = (*Scanner)(nil)
+
 type ScanStatus struct {
 	// finished channel is closed once the scan has finished
 	finished chan bool
@@ -87,7 +89,11 @@ type Scanner struct {
 	c                   *config.Config
 }
 
-func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeScanner codeClient.CodeScanner) *Scanner {
+func (sc *Scanner) DeltaScanningEnabled() bool {
+	return sc.c.IsDeltaFindingsEnabled()
+}
+
+func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeScanner codeClient.CodeScanner, scanPersister persistence.ScanSnapshotPersister) *Scanner {
 	sc := &Scanner{
 		BundleUploader: bundleUploader,
 		SnykApiClient:  apiClient,
@@ -350,7 +356,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files <-chan string, pa
 	}
 
 	if uploadedBundle.BundleHash == "" {
-		sc.c.Logger().Info().Msg("empty bundle, no Snyk Code analysis")
+		sc.c.Logger().Debug().Msg("empty bundle, no Snyk Code analysis")
 		return issues, nil
 	}
 

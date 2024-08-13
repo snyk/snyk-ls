@@ -35,7 +35,7 @@ func ResolveCodeActionHandler(c *config.Config, service *codeaction.CodeActionsS
 	logger := c.Logger().With().Str("method", "ResolveCodeActionHandler").Logger()
 	return func(ctx context.Context, params types.CodeAction) (*types.CodeAction, error) {
 		logger = logger.With().Interface("request", params).Logger()
-		logger.Info().Msg("RECEIVING")
+		logger.Debug().Msg("RECEIVING")
 
 		action, err := service.ResolveCodeAction(params, server)
 		if err != nil {
@@ -46,7 +46,7 @@ func ResolveCodeActionHandler(c *config.Config, service *codeaction.CodeActionsS
 			logger.Error().Err(err).Msg("unable to resolve code action")
 			return nil, err
 		}
-		logger.Info().Any("response", action).Msg("SENDING")
+		logger.Debug().Any("response", action).Msg("SENDING")
 		return &action, nil
 	}
 }
@@ -78,7 +78,7 @@ func GetCodeActionHandler(c *config.Config) TextDocumentCodeActionHandler {
 			logger.Debug().Msg("Canceled textDocument/codeAction")
 			return nil, nil
 		case <-time.After(debounceDuration):
-			logger.Info().Any("request", params).Msg("RECEIVING")
+			logger.Debug().Any("request", params).Msg("RECEIVING")
 		}
 
 		// Get code actions
@@ -93,7 +93,7 @@ func GetCodeActionHandler(c *config.Config) TextDocumentCodeActionHandler {
 
 		// Fetch & return the code actions
 		codeActions := di.CodeActionService().GetCodeActions(params)
-		logger.Info().Any("response", codeActions).Msg("SENDING")
+		logger.Debug().Any("response", codeActions).Msg("SENDING")
 		return codeActions, nil
 	}
 }

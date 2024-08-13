@@ -279,6 +279,12 @@ func (sc *DelegatingConcurrentScanner) Scan(
 					TimestampFinished: time.Now().UTC(),
 					Path:              folderPath,
 				}
+
+				// in case of delta scans, we add additional fields
+				if deltaScanner, ok := s.(types.DeltaScanner); ok {
+					data.IsDeltaScan = deltaScanner.DeltaScanningEnabled()
+				}
+
 				processResults(data)
 				logger.Info().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
 			}(scanner)
