@@ -25,21 +25,18 @@ import (
 )
 
 func CalculateFingerprintFromAdditionalData(issue snyk.Issue) string {
-	additionalDataOss, isOssAdditionalData := issue.AdditionalData.(snyk.OssIssueData)
-	additionalDataIaC, isIaCAdditionalData := issue.AdditionalData.(snyk.IaCIssueData)
-	// No need to calculate for Code since it comes with a fingerprint already
-
 	var preHash string
-	if isOssAdditionalData {
-		dependencyChainHash := normalizeArray(additionalDataOss.From)
+	switch additionalData := issue.AdditionalData.(type) {
+	case snyk.OssIssueData:
+		dependencyChainHash := normalizeArray(additionalData.From)
 		// Fingerprint for OSS Issues is: name@version@fromArrayHash
-		preHash = fmt.Sprintf("%s|%s|%s", additionalDataOss.PackageName, additionalDataOss.Version, dependencyChainHash)
-	} else if isIaCAdditionalData {
+		preHash = fmt.Sprintf("%s|%s|%s", additionalData.PackageName, additionalData.Version, dependencyChainHash)
+	case snyk.IaCIssueData:
 		// No need to normalize and change order of the array for IaC since order matters
-		dependencyChainHash := strings.Join(additionalDataIaC.Path, "|")
+		dependencyChainHash := strings.Join(additionalData.Path, "|")
 		// Fingerprint for OSS Issues is: name@version@fromArrayHash
 		preHash = dependencyChainHash
-	} else {
+	default:
 		return ""
 	}
 
