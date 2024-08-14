@@ -58,23 +58,21 @@ func TestCheckoutHandler_AlreadyCreated(t *testing.T) {
 	ch := NewCheckoutHandler()
 
 	err := ch.CheckoutBaseBranch(c.Logger(), repoPath)
-	assert.Error(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, ch.CleanupFunc())
 	assert.NotNil(t, ch.Repo())
 	assert.NotEmpty(t, ch.BaseFolderPath())
 
 	firstRunPath := ch.BaseFolderPath()
 	firstRunRepo := ch.Repo()
-	firstRunCleanupFunc := ch.CleanupFunc()
 
 	err = ch.CheckoutBaseBranch(c.Logger(), repoPath)
-	assert.Error(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, ch.CleanupFunc())
 	assert.NotEmpty(t, ch.Repo())
 	assert.NotEmpty(t, ch.BaseFolderPath())
 
-	assert.Equal(t, firstRunPath, firstRunRepo)
-	assert.Equal(t, firstRunPath, firstRunPath)
-	assert.Equal(t, firstRunCleanupFunc, firstRunCleanupFunc)
+	assert.Equal(t, firstRunRepo, ch.Repo())
+	assert.Equal(t, firstRunPath, ch.BaseFolderPath())
 	ch.CleanupFunc()()
 }
