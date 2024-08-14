@@ -109,6 +109,8 @@ github.com/gobwas/httphead v0.0.0-20180130184737-2c6c146eadee/go.mod h1:L0fX3K22
 github.com/gobwas/pool v0.2.0/go.mod h1:q8bcK0KcYlCgd9e7WYLm9LpyS+YeLd8JVDW6WezmKEw=
 github.com/gobwas/ws v1.0.2/go.mod h1:szmBTxLgaFppYjEmNtny/v3w89xOydFnnZMcgRRu/EM=
 github.com/godbus/dbus/v5 v5.0.4/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=
+github.com/gofrs/flock v0.12.1 h1:MTLVXXHf8ekldpJk3AKicLij9MdwOWkZ+a/jHHZby9E=
+github.com/gofrs/flock v0.12.1/go.mod h1:9zxTsyu5xtJ9DK+1tFZyibEV7y3uwDxPPfbxeeHCoD0=
 github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b/go.mod h1:SBH7ygxi8pfUlaOkMMuAQtPIUF8ecWP5IEl/CR7VP2Q=
 github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da h1:oI5xCqsCo564l8iNU+DwB5epxmsaqB+rhGL0m5jtYqE=
 github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da/go.mod h1:cIg4eruTrX1D+g88fzRXU5OdNfaM+9IcxsU14FzY7Hc=
@@ -283,10 +285,10 @@ github.com/skeema/knownhosts v1.2.2 h1:Iug2P4fLmDw9f41PB6thxUkNUkJzB5i+1/exaj40L
 github.com/skeema/knownhosts v1.2.2/go.mod h1:xYbVRSPxqBZFrdmDyMmsOs+uX1UZC3nTN3ThzgDxUwo=
 github.com/snyk/code-client-go v1.8.0 h1:6H883KAn7ybiSIxhvL2QR9yEyHgAwA2+9WVHMDNEKa8=
 github.com/snyk/code-client-go v1.8.0/go.mod h1:orU911flV1kJQOlxxx0InUQkAfpBrcERsb2olfnlI8s=
-github.com/snyk/error-catalog-golang-public v0.0.0-20240724122202-c7d3fb545c88 h1:ZiFV5IDPI2p1wx1D3B2iSC/8nxTGvlKuyUekZlm1ptU=
-github.com/snyk/error-catalog-golang-public v0.0.0-20240724122202-c7d3fb545c88/go.mod h1:Ytttq7Pw4vOCu9NtRQaOeDU2dhBYUyNBe6kX4+nIIQ4=
-github.com/snyk/go-application-framework v0.0.0-20240805133359-9b7c985cfc80 h1:WbOtJt49aR3uN2RU9mBTfjW8wGbqZhW8AmX6H3QTgAc=
-github.com/snyk/go-application-framework v0.0.0-20240805133359-9b7c985cfc80/go.mod h1:3DhXDHbBbGWRRZESbYVZyunyIDaet9SOtuOZCK7AC3g=
+github.com/snyk/error-catalog-golang-public v0.0.0-20240809094525-c48d19c27edb h1:w9tJhpTFxWqAhLeraGsMExDjGK9x5Dwj1NRFwb+t+QE=
+github.com/snyk/error-catalog-golang-public v0.0.0-20240809094525-c48d19c27edb/go.mod h1:Ytttq7Pw4vOCu9NtRQaOeDU2dhBYUyNBe6kX4+nIIQ4=
+github.com/snyk/go-application-framework v0.0.0-20240814101709-b335a1ce00ac h1:Dr+hPN5kI4CDjHxsCHkonI4tJDYrAfoG4QvqHCMhrKY=
+github.com/snyk/go-application-framework v0.0.0-20240814101709-b335a1ce00ac/go.mod h1:zgYTVG71nX7zTb3ELeRlnwE/uKQxeOyQmAHtg6bC4uU=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 h1:s9PHNkL6ueYRiAKNfd8OVxlUOqU3qY0VDbgCD1f6WQY=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530/go.mod h1:88KbbvGYlmLgee4OcQ19yr0bNpXpOr2kciOthaSzCAg=
 github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd h1:Dq5WSzWsP1TbVi10zPWBI5LKEBDg4Y1OhWEph1wr5WQ=

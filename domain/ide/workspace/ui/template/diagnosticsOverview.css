@@ -1,6 +1,7 @@
-.issues-overview{}
+.issues-overview {}
 
-.main-tabs-nav, .tabs-nav {
+.main-tabs-nav,
+.tabs-nav {
   display: flex;
   list-style-type: none;
   overflow: hidden;
@@ -37,21 +38,29 @@
 }
 
 .sn-tree {}
-.sn-list {}
-.sn-list-item{}
 
-.is-clickable-true{
+.sn-list {}
+
+.sn-list-item {}
+
+.is-clickable-true {
   cursor: pointer;
 }
-.is-clickable-false{
+
+.is-clickable-false {
   cursor: not-allowed;
 }
-.sn-icon{}
-.sn-label{}
+
+.sn-icon {}
+
+.sn-label {}
+
 .sn-list-item.is-expandable {}
+
 .sn-list-item.is-expanded .sn-list {
   display: block;
 }
+
 .sn-list-item .sn-list {
   display: none;
 }
