@@ -17,6 +17,7 @@
 package ui
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -84,6 +85,10 @@ type mockAddData struct {
 	isFixable bool
 	key       string
 	title     string
+}
+
+func (m mockAddData) MarshalJSON() ([]byte, error) {
+	return json.Marshal(m)
 }
 
 func (m mockAddData) GetKey() string {

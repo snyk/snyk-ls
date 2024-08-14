@@ -19,6 +19,7 @@ package scanner
 import (
 	"context"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"testing"
 	"time"
 
@@ -55,19 +56,20 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 }
 
 func setupScanner(testProductScanners ...snyk.ProductScanner) (
-	scanner Scanner,
+	sc Scanner,
 	scanNotifier ScanNotifier,
 ) {
 	c := config.CurrentConfig()
-	scanNotifier = scanner.NewMockScanNotifier()
+	scanNotifier = NewMockScanNotifier()
 	notifier := notification.NewNotifier()
 	apiClient := &snyk_api.FakeApiClient{CodeEnabled: false}
+	persister := persistence.NewNopScanPersister()
 	er := error_reporting.NewTestErrorReporter()
 	authenticationProvider := authentication.NewFakeCliAuthenticationProvider(c)
 	authenticationProvider.IsAuthenticated = true
 	authenticationService := authentication.NewAuthenticationService(c, authenticationProvider, er, notifier)
-	scanner = NewDelegatingScanner(c, initialize.NewDelegatingInitializer(), performance.NewInstrumentor(), scanNotifier, apiClient, authenticationService, notifier, testProductScanners...)
-	return scanner, scanNotifier
+	sc = NewDelegatingScanner(c, initialize.NewDelegatingInitializer(), performance.NewInstrumentor(), scanNotifier, apiClient, authenticationService, notifier, persister, testProductScanners...)
+	return sc, scanNotifier
 }
 
 func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
@@ -112,10 +114,10 @@ func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
 	testutil.UnitTest(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	enabledScanner := NewTestProductScanner(product.ProductCode, true)
-	scanner, scanNotifier := setupScanner(enabledScanner)
-	mockScanNotifier := scanNotifier.(*scanner.MockScanNotifier)
+	sc, scanNotifier := setupScanner(enabledScanner)
+	mockScanNotifier := scanNotifier.(*MockScanNotifier)
 
-	scanner.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
+	sc.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
 
 	assert.NotEmpty(t, mockScanNotifier.InProgressCalls())
 }

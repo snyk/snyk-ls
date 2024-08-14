@@ -281,7 +281,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				}
 
 				// in case of delta scans, we add additional fields
-				if deltaScanner, ok := s.(types.DeltaScanner); ok {
+				if enabled, deltaScanner := isDeltaScanEnabled(s); enabled {
 					data.IsDeltaScan = deltaScanner.DeltaScanningEnabled()
 				}
 
@@ -300,11 +300,18 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	// TODO: handle learn actions centrally instead of in each scanner
 }
 
+func isDeltaScanEnabled(s snyk.ProductScanner) (bool, types.DeltaScanner) {
+	if deltaScanner, ok := s.(types.DeltaScanner); ok {
+		return deltaScanner.DeltaScanningEnabled(), deltaScanner
+	}
+	return false, nil
+}
+
 func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.ProductScanner, path string, folderPath string) (issues []snyk.Issue, err error) {
 	logger := sc.c.Logger().With().Str("method", "ide.workspace.folder.DelegatingConcurrentScanner.internalScan").Logger()
 
 	var foundIssues []snyk.Issue
-	if sc.c.IsDeltaFindingsEnabled() {
+	if enabled, _ := isDeltaScanEnabled(s); enabled {
 		hasChanges, gitErr := vcs.LocalRepoHasChanges(sc.c.Logger(), folderPath)
 		if gitErr != nil {
 			logger.Error().Err(gitErr).Msg("couldn't check if working dir is clean")
@@ -323,7 +330,7 @@ func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.
 		return nil, err
 	}
 
-	if sc.c.IsDeltaFindingsEnabled() && len(foundIssues) > 0 {
+	if enabled, _ := isDeltaScanEnabled(s); enabled && len(foundIssues) > 0 {
 		err = sc.scanAndPersistBaseBranch(ctx, s, folderPath)
 		if err != nil {
 			logger.Error().Err(err).Msg("couldn't scan base branch for folder " + folderPath)
