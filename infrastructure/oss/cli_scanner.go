@@ -151,7 +151,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, path string, _ string) (
 	return cliScanner.scanInternal(ctx, path, cliScanner.prepareScanCommand)
 }
 
-func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, commandFunc func(args []string, parameterBlacklist map[string]bool) []string) (issues []snyk.Issue, errorInfo error) {
+func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, commandFunc func(args []string, parameterBlacklist map[string]bool) []string) ([]snyk.Issue, error) {
 	method := "cliScanner.Scan"
 	logger := cliScanner.config.Logger().With().Str("method", method).Logger()
 
@@ -162,7 +162,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 
 	if ctx.Err() != nil {
 		logger.Debug().Msg("Canceling OSS scan - OSS scanner received cancellation signal")
-		return issues, nil
+		return []snyk.Issue{}, nil
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -173,7 +173,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	defer p.EndWithMessage("Snyk Open Source scan completed.")
 
 	path, err := filepath.Abs(path)
-	if errorInfo != nil {
+	if err != nil {
 		logger.Err(err).Str("method", method).
 			Msg("Error while extracting file absolutePath")
 	}
@@ -212,7 +212,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 		}
 	}
 
-	issues = cliScanner.unmarshallAndRetrieveAnalysis(ctx, res, workDir, path)
+	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, res, workDir, path)
 
 	cliScanner.mutex.Lock()
 	logger.Debug().Msgf("Scan %v is done", i)
