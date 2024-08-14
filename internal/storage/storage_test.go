@@ -62,16 +62,14 @@ func Test_ParallelFileLocking(t *testing.T) {
 		for i := 0; i < parallelism; i++ {
 			go func(count int) {
 				cut, _ := NewStorageWithCallbacks(WithStorageFile(file))
-				lockErr := cut.Lock(context.Background(), time.Millisecond*100)
+				lockErr := cut.Lock(context.Background(), time.Millisecond)
 				require.NoError(t, lockErr)
-				defer func(cut StorageWithCallbacks) {
-					unlockErr := cut.Unlock()
-					require.NoError(t, unlockErr)
-				}(cut)
 
 				err = cut.Set(fmt.Sprintf("test-%d", count), count)
-
 				require.NoError(t, err)
+
+				unlockErr := cut.Unlock()
+				require.NoError(t, unlockErr)
 			}(i)
 		}
 
