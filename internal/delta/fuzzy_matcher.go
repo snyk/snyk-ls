@@ -25,7 +25,7 @@ import (
 	"strings"
 )
 
-var _ Matcher = (*CodeMatcher)(nil)
+var _ Matcher = (*FuzzyMatcher)(nil)
 
 type IssueConfidence struct {
 	BaseUUID           string
@@ -66,14 +66,14 @@ var weights = struct {
 	FileExtensionSimilarity: 0.2,
 }
 
-type CodeMatcher struct {
+type FuzzyMatcher struct {
 }
 
-func NewCodeMatcher() *CodeMatcher {
-	return &CodeMatcher{}
+func NewFuzzyMatcher() *FuzzyMatcher {
+	return &FuzzyMatcher{}
 }
 
-func (_ CodeMatcher) Match(baseIssueList, currentIssueList []Identifiable) ([]Identifiable, error) {
+func (_ FuzzyMatcher) Match(baseIssueList, currentIssueList []Identifiable) ([]Identifiable, error) {
 	if len(currentIssueList) == 0 || len(baseIssueList) == 0 {
 		return nil, errors.New("base or current issue list is empty")
 	}
