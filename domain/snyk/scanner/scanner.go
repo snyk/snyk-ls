@@ -18,11 +18,9 @@ package scanner
 
 import (
 	"context"
-	"fmt"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/internal/vcs"
-	"os"
 	"sync"
 	"time"
 
@@ -253,7 +251,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	}
 
 	sc.scanNotifier.SendInProgress(folderPath)
-
+	gitCheckoutHandler := vcs.NewCheckoutHandler()
 	waitGroup := &sync.WaitGroup{}
 	for _, scanner := range sc.scanners {
 		if scanner.IsEnabled() {
@@ -267,7 +265,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 
 				scanSpan := sc.instrumentor.StartSpan(span.Context(), "scan")
 
-				foundIssues, scanError := sc.internalScan(scanSpan.Context(), s, path, folderPath)
+				foundIssues, scanError := sc.internalScan(scanSpan.Context(), s, path, folderPath, gitCheckoutHandler)
 				sc.instrumentor.Finish(scanSpan)
 
 				// now process
@@ -294,6 +292,12 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	}
 	logger.Debug().Msgf("All product scanners started for %s", path)
 	waitGroup.Wait()
+
+	if gitCheckoutHandler.CleanupFunc() != nil {
+		logger.Debug().Msg("Calling cleanup func for base folder")
+		gitCheckoutHandler.CleanupFunc()()
+	}
+
 	logger.Debug().Msgf("All product scanners finished for %s", path)
 	sc.notifier.Send(types.InlineValueRefresh{})
 	sc.notifier.Send(types.CodeLensRefresh{})
@@ -307,7 +311,7 @@ func isDeltaScanEnabled(s snyk.ProductScanner) (bool, types.DeltaScanner) {
 	return false, nil
 }
 
-func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.ProductScanner, path string, folderPath string) (issues []snyk.Issue, err error) {
+func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.ProductScanner, path string, folderPath string, checkoutHandler *vcs.CheckoutHandler) (issues []snyk.Issue, err error) {
 	logger := sc.c.Logger().With().Str("method", "ide.workspace.folder.DelegatingConcurrentScanner.internalScan").Logger()
 
 	var foundIssues []snyk.Issue
@@ -331,7 +335,7 @@ func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.
 	}
 
 	if enabled, _ := isDeltaScanEnabled(s); enabled && len(foundIssues) > 0 {
-		err = sc.scanAndPersistBaseBranch(ctx, s, folderPath)
+		err = sc.scanBaseBranch(ctx, s, folderPath, checkoutHandler)
 		if err != nil {
 			logger.Error().Err(err).Msg("couldn't scan base branch for folder " + folderPath)
 			return nil, err
@@ -340,14 +344,14 @@ func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.
 	return foundIssues, nil
 }
 
-func (sc *DelegatingConcurrentScanner) scanAndPersistBaseBranch(ctx context.Context, s snyk.ProductScanner, folderPath string) error {
-	logger := sc.c.Logger().With().Str("method", "scanAndPersistBaseBranch").Logger()
+func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s snyk.ProductScanner, folderPath string, checkoutHandler *vcs.CheckoutHandler) error {
+	logger := sc.c.Logger().With().Str("method", "scanBaseBranch").Logger()
 
 	baseBranchName := vcs.GetBaseBranchName(folderPath)
 	headRef, err := vcs.HeadRefHashForBranch(&logger, folderPath, baseBranchName)
 
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to fetch commit hash for main branch")
+		logger.Error().Err(err).Msg("couldn't get head ref for base branch")
 		return err
 	}
 
@@ -356,46 +360,23 @@ func (sc *DelegatingConcurrentScanner) scanAndPersistBaseBranch(ctx context.Cont
 		return nil
 	}
 
-	tmpFolderName := fmt.Sprintf("snyk_delta_%s", vcs.NormalizeBranchName(baseBranchName))
-	baseBranchFolderPath, err := os.MkdirTemp("", tmpFolderName)
-	logger.Info().Msg("Creating tmp directory for base branch")
-
+	err = checkoutHandler.CheckoutBaseBranch(&logger, folderPath)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to create tmp directory for base branch")
-		return err
+		logger.Error().Err(err).Msg("couldn't check out base branch")
 	}
-
-	repo, err := vcs.Clone(&logger, folderPath, baseBranchFolderPath, baseBranchName)
-
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to clone base branch")
-		return err
-	}
-
-	defer func() {
-		if baseBranchFolderPath == "" {
-			return
-		}
-		err = os.RemoveAll(baseBranchFolderPath)
-		logger.Info().Msg("removing base branch tmp dir " + baseBranchFolderPath)
-
-		if err != nil {
-			logger.Error().Err(err).Msg("couldn't remove tmp dir " + baseBranchFolderPath)
-		}
-	}()
 
 	var results []snyk.Issue
 	if s.Product() == product.ProductCode {
-		results, err = s.Scan(ctx, "", baseBranchFolderPath)
+		results, err = s.Scan(ctx, "", checkoutHandler.BaseFolderPath())
 	} else {
-		results, err = s.Scan(ctx, baseBranchFolderPath, "")
+		results, err = s.Scan(ctx, checkoutHandler.BaseFolderPath(), "")
 	}
 
 	if err != nil {
 		return err
 	}
 
-	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	commitHash, err := vcs.HeadRefHashForRepo(checkoutHandler.Repo())
 	if err != nil {
 		logger.Error().Err(err).Msg("could not get commit hash for repo in folder " + folderPath)
 		return err
