@@ -1,6 +1,8 @@
 module github.com/snyk/snyk-ls
 
-go 1.21
+go 1.22
+
+toolchain go1.22.5
 
 require (
 	github.com/adrg/strutil v0.3.1
@@ -25,7 +27,7 @@ require (
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/snyk/code-client-go v1.8.0
-	github.com/snyk/go-application-framework v0.0.0-20240805133359-9b7c985cfc80
+	github.com/snyk/go-application-framework v0.0.0-20240814101709-b335a1ce00ac
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.9.0
@@ -61,6 +63,7 @@ require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
+	github.com/gofrs/flock v0.12.1 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
@@ -98,7 +101,7 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.2.2 // indirect
-	github.com/snyk/error-catalog-golang-public v0.0.0-20240724122202-c7d3fb545c88 // indirect
+	github.com/snyk/error-catalog-golang-public v0.0.0-20240809094525-c48d19c27edb // indirect
 	github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.5.0 // indirect

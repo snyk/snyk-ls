@@ -17,27 +17,76 @@
 package storage
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_StorageCallsRegisterCallbacksForKeys(t *testing.T) {
 	called := make(chan bool, 1)
 	callbacks := map[string]StorageCallbackFunc{}
+	file := filepath.Join(t.TempDir(), t.Name())
 	myCallback := func(_ string, _ any) { called <- true }
 
 	key := "test"
 	value := "test"
 	callbacks[key] = myCallback
-	s := NewStorage(WithCallbacks(callbacks)).(*storage)
+	s, err := NewStorageWithCallbacks(WithCallbacks(callbacks), WithStorageFile(file))
+	require.NoError(t, err)
 
-	err := s.Set(key, value)
+	err = s.Set(key, value)
 
-	assert.NoError(t, err)
-	assert.Equal(t, value, s.data[key])
-	assert.Eventuallyf(t, func() bool {
+	require.NoError(t, err)
+	require.Eventuallyf(t, func() bool {
 		return <-called
 	}, 5*time.Second, time.Millisecond, "callback was not called")
+}
+
+func Test_ParallelFileLocking(t *testing.T) {
+	t.Run("should respect locking order", func(t *testing.T) {
+		file := filepath.Join(t.TempDir(), t.Name())
+		err := os.MkdirAll(filepath.Dir(file), 0755)
+		require.NoError(t, err)
+		err = os.WriteFile(file, []byte("{}"), 0644)
+		require.NoError(t, err)
+
+		// we should not get concurrent writes to the backing map here
+		var parallelism = 100
+		for i := 0; i < parallelism; i++ {
+			go func(count int) {
+				cut, _ := NewStorageWithCallbacks(WithStorageFile(file))
+
+				lockErr := cut.Lock(context.Background(), time.Millisecond)
+				require.NoError(t, lockErr)
+				defer func() {
+					unlockErr := cut.Unlock()
+					require.NoError(t, unlockErr)
+				}()
+
+				err = cut.Set(fmt.Sprintf("test-%d", count), count)
+				require.NoError(t, err)
+			}(i)
+		}
+
+		assert.Eventually(t, func() bool {
+			bytes, readErr := os.ReadFile(file)
+			if readErr != nil {
+				return false
+			}
+			var result map[string]any
+			unmarshalErr := json.Unmarshal(bytes, &result)
+			if unmarshalErr != nil {
+				return false
+			}
+
+			return parallelism == len(result)
+		}, time.Second*time.Duration(parallelism), time.Millisecond)
+	})
 }

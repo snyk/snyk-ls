@@ -16,7 +16,14 @@
 
 package storage
 
-import "github.com/snyk/go-application-framework/pkg/configuration"
+import (
+	"context"
+	"time"
+
+	"github.com/adrg/xdg"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
+)
 
 type StorageCallbackFunc func(string, any)
 
@@ -27,32 +34,54 @@ type StorageWithCallbacks interface {
 }
 
 type storage struct {
-	data      map[string]any
-	callbacks map[string]StorageCallbackFunc
+	callbacks   map[string]StorageCallbackFunc
+	jsonStorage *configuration.JsonStorage
+}
+
+func (s *storage) Refresh(config configuration.Configuration, key string) error {
+	return s.jsonStorage.Refresh(config, key)
+}
+
+func (s *storage) Lock(ctx context.Context, retryDelay time.Duration) error {
+	return s.jsonStorage.Lock(ctx, retryDelay)
+}
+
+func (s *storage) Unlock() error {
+	return s.jsonStorage.Unlock()
 }
 
 type storageOption func(*storage)
 
 func (s *storage) Set(key string, value any) error {
 	callback := s.callbacks[key]
-	s.data[key] = value
 
 	if callback != nil {
 		callback(key, value)
 	}
+
+	err := s.jsonStorage.Set(key, value)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
-func NewStorage(opts ...storageOption) StorageWithCallbacks {
+func NewStorageWithCallbacks(opts ...storageOption) (StorageWithCallbacks, error) {
+	// we ignore the error and just work without locking
+	file, err := xdg.ConfigFile("snyk/ls-config")
+	if err != nil {
+		return nil, err
+	}
+
 	s := &storage{
-		data:      make(map[string]any),
-		callbacks: make(map[string]StorageCallbackFunc),
+		callbacks:   make(map[string]StorageCallbackFunc),
+		jsonStorage: configuration.NewJsonStorage(file),
 	}
 
 	for _, opt := range opts {
 		opt(s)
 	}
-	return s
+	return s, err
 }
 
 func (s *storage) RegisterCallback(key string, callback StorageCallbackFunc) {
@@ -66,5 +95,11 @@ func (s *storage) UnRegisterCallback(key string) {
 func WithCallbacks(callbacks map[string]StorageCallbackFunc) func(*storage) {
 	return func(s *storage) {
 		s.callbacks = callbacks
+	}
+}
+
+func WithStorageFile(file string) func(*storage) {
+	return func(s *storage) {
+		s.jsonStorage = configuration.NewJsonStorage(file)
 	}
 }

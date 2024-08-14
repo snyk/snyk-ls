@@ -62,7 +62,7 @@ func Test_Scan(t *testing.T) {
 	scanner := oss.NewCLIScanner(c, instrumentor, er, cliExecutor, di.LearnService(), notification.NewNotifier())
 
 	workingDir, _ := os.Getwd()
-	path, _ := filepath.Abs(workingDir + "/testdata/package.json")
+	path, _ := filepath.Abs(filepath.Join(workingDir, "testdata", "package.json"))
 
 	issues, _ := scanner.Scan(ctx, path, workingDir)
 
