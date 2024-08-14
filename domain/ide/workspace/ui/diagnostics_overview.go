@@ -45,7 +45,7 @@ type TemplateData struct {
 	// File node with underlying slice of issue nodes
 	Issues               map[Node][]Node
 	Styles               template.CSS
-	Nonce                string
+	Nonce                template.HTML
 	DeltaFindingsEnabled bool
 }
 
@@ -82,7 +82,7 @@ func SendDiagnosticsOverview(c *config.Config, p product.Product, issuesByFile s
 		RootNodes:            rootNodes,
 		Issues:               fileNodes,
 		Styles:               template.CSS(diagnosticsOverviewTemplateCSS),
-		Nonce:                nonce,
+		Nonce:                template.HTML(nonce),
 		DeltaFindingsEnabled: c.IsDeltaFindingsEnabled(),
 	}
 
