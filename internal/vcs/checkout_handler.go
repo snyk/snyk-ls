@@ -65,7 +65,6 @@ func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderPath
 		logger.Error().Err(err).Msg("Failed to create tmp directory for base branch")
 		return err
 	}
-	ch.baseFolderPath = baseBranchFolderPath
 
 	repo, err := Clone(logger, folderPath, baseBranchFolderPath, baseBranchName)
 
@@ -73,9 +72,8 @@ func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderPath
 		logger.Error().Err(err).Msg("Failed to clone base branch")
 		return err
 	}
-	ch.repository = repo
 
-	ch.cleanupFunc = func() {
+	cleanupFunc := func() {
 		if baseBranchFolderPath == "" {
 			return
 		}
@@ -87,5 +85,8 @@ func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderPath
 		}
 	}
 
+	ch.baseFolderPath = baseBranchFolderPath
+	ch.repository = repo
+	ch.cleanupFunc = cleanupFunc
 	return nil
 }
