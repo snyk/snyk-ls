@@ -45,7 +45,6 @@ var weights = struct {
 	FilePositionDistance        float64
 	RecentHistoryDistance       float64
 	FingerprintConfidence       float64
-	FromListConfidence          float64
 	PathSimilarity              float64
 	LineSimilarity              float64
 
