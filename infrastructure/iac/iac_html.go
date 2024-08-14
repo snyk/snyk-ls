@@ -40,7 +40,7 @@ type TemplateData struct {
 	Description  template.HTML
 	Remediation  template.HTML
 	Path         template.HTML
-	Nonce        string
+	Nonce        template.HTML
 }
 
 //go:embed template/index.html
@@ -83,7 +83,7 @@ func (service *IacHtmlRender) getCustomUIContent(issue snyk.Issue) string {
 		Description:  html.MarkdownToHTML(issue.Message),
 		Remediation:  html.MarkdownToHTML(issue.AdditionalData.(snyk.IaCIssueData).Resolve),
 		Path:         formatPath(issue.AdditionalData.(snyk.IaCIssueData).Path),
-		Nonce:        nonce,
+		Nonce:        template.HTML(nonce),
 	}
 
 	err = service.GlobalTemplate.Execute(&htmlTemplate, data)
